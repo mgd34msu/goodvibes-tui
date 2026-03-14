@@ -477,7 +477,12 @@ export class InputHandler {
 
     for (let s = 0; s < segments.length; s++) {
       const { rawStart, length } = segments[s];
-      if (this.cursorPos >= rawStart && this.cursorPos < rawStart + length) {
+      if (length === 0 && this.cursorPos === rawStart) {
+        // Empty segment (blank line) — cursor lands here
+        cursorWrappedLine = s;
+        cursorCol = 0;
+        break;
+      } else if (this.cursorPos >= rawStart && this.cursorPos < rawStart + length) {
         // Cursor is strictly inside this segment
         cursorWrappedLine = s;
         cursorCol = this.cursorPos - rawStart;
