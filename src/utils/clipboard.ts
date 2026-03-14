@@ -1,5 +1,4 @@
 import { logger } from './logger.ts';
-import { execSync } from 'child_process';
 
 /**
  * copyToClipboard - Uses OSC 52 escape sequence to copy text.
@@ -12,8 +11,8 @@ export function copyToClipboard(text: string) {
     const sequence = `\x1b]52;c;${base64}\x07`;
     process.stdout.write(sequence);
     logger.info('Clipboard: OSC 52 sequence written');
-  } catch (err: any) {
-    logger.error('Clipboard: OSC 52 copy failed', { error: err.message });
+  } catch (err: unknown) {
+    logger.error('Clipboard: OSC 52 copy failed', { error: err instanceof Error ? err.message : String(err) });
   }
 }
 
@@ -24,16 +23,37 @@ export function pasteFromClipboard(): string {
   try {
     if (process.platform === 'linux') {
       // Try wl-paste (Wayland) then xclip (X11)
-      try {
-        return execSync('wl-paste --no-newline', { stdio: ['ignore', 'pipe', 'ignore'] }).toString();
-      } catch {
-        return execSync('xclip -selection clipboard -o', { stdio: ['ignore', 'pipe', 'ignore'] }).toString();
+      const wl = Bun.spawnSync(['wl-paste', '--no-newline'], {
+        stdin: 'ignore',
+        stdout: 'pipe',
+        stderr: 'ignore',
+        timeout: 3000,
+      });
+      if (wl.exitCode === 0 && wl.stdout) {
+        return Buffer.from(wl.stdout).toString();
+      }
+      const xclip = Bun.spawnSync(['xclip', '-selection', 'clipboard', '-o'], {
+        stdin: 'ignore',
+        stdout: 'pipe',
+        stderr: 'ignore',
+        timeout: 3000,
+      });
+      if (xclip.exitCode === 0 && xclip.stdout) {
+        return Buffer.from(xclip.stdout).toString();
       }
     } else if (process.platform === 'darwin') {
-      return execSync('pbpaste').toString();
+      const pb = Bun.spawnSync(['pbpaste'], {
+        stdin: 'ignore',
+        stdout: 'pipe',
+        stderr: 'ignore',
+        timeout: 3000,
+      });
+      if (pb.exitCode === 0 && pb.stdout) {
+        return Buffer.from(pb.stdout).toString();
+      }
     }
-  } catch (err: any) {
-    logger.error('Clipboard: Paste failed', { error: err.message });
+  } catch (err: unknown) {
+    logger.error('Clipboard: Paste failed', { error: err instanceof Error ? err.message : String(err) });
   }
   return '';
 }

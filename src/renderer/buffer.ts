@@ -28,7 +28,7 @@ export class TerminalBuffer {
 
   public clone(): TerminalBuffer {
     const newBuf = new TerminalBuffer(this.width, this.height);
-    newBuf.cells = this.cells.map(line => [...line]);
+    newBuf.cells = this.cells.map(line => line.map(cell => ({ ...cell })));
     return newBuf;
   }
 }

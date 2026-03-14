@@ -10,6 +10,13 @@ export class DiffEngine {
   private lastBold = false;
   private lastDim = false;
 
+  public reset(): void {
+    this.lastFg = '';
+    this.lastBg = '';
+    this.lastBold = false;
+    this.lastDim = false;
+  }
+
   public diff(oldBuffer: TerminalBuffer | null, newBuffer: TerminalBuffer): string {
     let output = '';
     
