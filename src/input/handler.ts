@@ -309,15 +309,23 @@ export class InputHandler {
           if (this.cursorPos > 0) {
             this.prompt = this.prompt.slice(0, this.cursorPos - 1) + this.prompt.slice(this.cursorPos);
             this.cursorPos--;
+            this.ensureInputCursorVisible(this.contentWidth);
           }
         } else if (token.logicalName === 'delete') {
           if (this.cursorPos < this.prompt.length) {
             this.prompt = this.prompt.slice(0, this.cursorPos) + this.prompt.slice(this.cursorPos + 1);
+            this.ensureInputCursorVisible(this.contentWidth);
           }
         } else if (token.logicalName === 'left') {
-          if (this.cursorPos > 0) this.cursorPos--;
+          if (this.cursorPos > 0) {
+            this.cursorPos--;
+            this.ensureInputCursorVisible(this.contentWidth);
+          }
         } else if (token.logicalName === 'right') {
-          if (this.cursorPos < this.prompt.length) this.cursorPos++;
+          if (this.cursorPos < this.prompt.length) {
+            this.cursorPos++;
+            this.ensureInputCursorVisible(this.contentWidth);
+          }
         } else if (token.logicalName === 'home') {
           this.cursorPos = 0;
         } else if (token.logicalName === 'end') {
