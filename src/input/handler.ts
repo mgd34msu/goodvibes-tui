@@ -435,55 +435,65 @@ export class InputHandler {
     cursorWrappedLine: number;
     cursorCol: number;
     visibleLines: string[];
-    visibleCursorLine: number; // -1 if cursor is not in visible window
+    visibleCursorLine: number;
     visibleCursorCol: number;
   } {
     const rawLines = this.prompt.split('\n');
     const wrappedLines: string[] = [];
-    let cursorWrappedLine = 0;
-    let cursorCol = 0;
-    let charsSeen = 0;
+    // Segment table: maps each wrapped line to its raw prompt offset
+    const segments: { rawStart: number; length: number }[] = [];
+    let rawOffset = 0;
 
     for (let r = 0; r < rawLines.length; r++) {
       const rawLine = rawLines[r];
-      const rawLineStart = charsSeen;
       const wrapped = this.wordWrapLine(rawLine, contentWidth);
-
-      // Track position within the raw line directly (not via segment lengths)
-      // to correctly handle both space-breaks and force-breaks
-      let posInRawLine = 0;
+      let posInRaw = 0;
 
       for (let w = 0; w < wrapped.length; w++) {
-        const wLine = wrapped[w];
-        const lineStartInPrompt = rawLineStart + posInRawLine;
-        const lineEndInPrompt = lineStartInPrompt + wLine.length;
-
-        if (this.cursorPos >= lineStartInPrompt && this.cursorPos <= lineEndInPrompt) {
-          if (this.cursorPos < lineEndInPrompt || w === wrapped.length - 1) {
-            cursorWrappedLine = wrappedLines.length;
-            cursorCol = this.cursorPos - lineStartInPrompt;
-          }
-        }
-
-        wrappedLines.push(wLine);
-        posInRawLine += wLine.length;
-
-        // Skip the space consumed at a word-wrap break (but NOT at force-breaks)
-        if (w < wrapped.length - 1) {
-          if (posInRawLine < rawLine.length && rawLine[posInRawLine] === ' ') {
-            posInRawLine++;
-          }
+        const seg = wrapped[w];
+        segments.push({ rawStart: rawOffset + posInRaw, length: seg.length });
+        wrappedLines.push(seg);
+        posInRaw += seg.length;
+        // Skip consumed space at word-wrap break (not at force-break)
+        if (w < wrapped.length - 1 && posInRaw < rawLine.length && rawLine[posInRaw] === ' ') {
+          posInRaw++;
         }
       }
 
-      charsSeen = rawLineStart + rawLine.length;
-      // Account for the \n between raw lines (except after the last)
-      if (r < rawLines.length - 1) {
-        charsSeen++;
+      rawOffset += rawLine.length;
+      if (r < rawLines.length - 1) rawOffset++; // \n
+    }
+
+    // Map cursorPos to wrapped coordinates using the segment table
+    let cursorWrappedLine = wrappedLines.length > 0 ? wrappedLines.length - 1 : 0;
+    let cursorCol = 0;
+
+    for (let s = 0; s < segments.length; s++) {
+      const { rawStart, length } = segments[s];
+      if (this.cursorPos >= rawStart && this.cursorPos < rawStart + length) {
+        // Cursor is strictly inside this segment
+        cursorWrappedLine = s;
+        cursorCol = this.cursorPos - rawStart;
+        break;
+      } else if (this.cursorPos === rawStart + length) {
+        // Cursor is at the end of this segment
+        if (s === segments.length - 1 || segments[s + 1].rawStart > this.cursorPos) {
+          // Last segment or next segment starts later (gap = consumed space/newline)
+          // Show cursor at end of this segment
+          cursorWrappedLine = s;
+          cursorCol = length;
+          break;
+        }
+        // Otherwise cursor is at the start of the next segment — let loop continue
+      } else if (this.cursorPos < rawStart) {
+        // Cursor is in a gap before this segment (consumed space/newline)
+        // Snap to start of this segment
+        cursorWrappedLine = s;
+        cursorCol = 0;
+        break;
       }
     }
 
-    // Visible window
     const maxRows = InputHandler.MAX_INPUT_ROWS;
     const visibleLines = wrappedLines.slice(this.inputScrollTop, this.inputScrollTop + maxRows);
     const visibleCursorLine = cursorWrappedLine - this.inputScrollTop;
