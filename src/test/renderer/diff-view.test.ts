@@ -1,11 +1,10 @@
 import { describe, test, expect } from 'bun:test';
 import { renderDiffView } from '../../renderer/diff-view.ts';
+import { lineToString } from '../setup.ts';
 
 const WIDTH = 80;
 
-function lineText(line: import('../../types/grid.ts').Line): string {
-  return line.map((c) => c.char).join('').trimEnd();
-}
+const lineText = lineToString;
 
 const SAMPLE_DIFF = [
   '--- old.ts (original)',

@@ -1,16 +1,15 @@
 import { describe, test, expect } from 'bun:test';
 import { renderMarkdown, renderInlineMarkdown } from '../../renderer/markdown.ts';
+import { lineToString, linesToText } from '../setup.ts';
 
 const WIDTH = 80;
 
 /** Extract plain text from a Line (Cell[]). */
-function lineText(line: import('../../types/grid.ts').Line): string {
-  return line.map((c) => c.char).join('').trimEnd();
-}
+const lineText = lineToString;
 
 /** Get all non-empty text lines from a render result. */
 function textLines(lines: import('../../types/grid.ts').Line[]): string[] {
-  return lines.map(lineText).filter((t) => t.length > 0);
+  return linesToText(lines).filter((t) => t.length > 0);
 }
 
 describe('renderMarkdown', () => {

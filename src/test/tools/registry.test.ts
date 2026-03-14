@@ -101,6 +101,7 @@ describe('ToolRegistry', () => {
     });
 
     test('ToolError wraps original message', async () => {
+      expect.assertions(2);
       registry.register(makeFailingTool('broken_tool', 'original message'));
       try {
         await registry.execute('call-3', 'broken_tool', {});

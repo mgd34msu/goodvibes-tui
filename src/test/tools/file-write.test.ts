@@ -2,6 +2,7 @@ import { describe, test, expect, beforeEach, afterEach } from 'bun:test';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { FileWriteTool } from '../../tools/file-write.ts';
+import { writeTempFile } from '../setup.ts';
 
 const PROJECT_ROOT = process.cwd();
 
