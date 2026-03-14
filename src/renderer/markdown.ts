@@ -152,87 +152,182 @@ export function renderMarkdown(text: string, width: number): Line[] {
   return lines;
 }
 
-/** Render a markdown table with box-drawing borders. */
+/**
+ * Strip markdown formatting from text for width measurement.
+ * Removes **, *, `, ~~ markers but keeps the inner text.
+ */
+function stripMarkdown(text: string): string {
+  return text
+    .replace(/\*\*(.+?)\*\*/g, '$1')  // bold
+    .replace(/\*(.+?)\*/g, '$1')      // italic
+    .replace(/~~(.+?)~~/g, '$1')      // strikethrough
+    .replace(/`(.+?)`/g, '$1');       // inline code
+}
+
+/**
+ * Render a markdown table with box-drawing borders.
+ * Parses inline markdown in cells, fits to terminal width,
+ * truncates long content, and renders with proper styling.
+ */
 function renderTable(rows: string[], width: number, indent: number): Line[] {
   const lines: Line[] = [];
-  const parsedRows: string[][] = [];
-  let separatorIdx = -1;
 
-  for (let r = 0; r < rows.length; r++) {
-    const row = rows[r].trim();
-    if (/^[\s|:-]+$/.test(row) && row.includes('-')) {
-      separatorIdx = r;
+  // Parse rows into cells, skip separator
+  const parsedRows: string[][] = [];
+  let hasSeparator = false;
+  for (const row of rows) {
+    const trimmed = row.trim();
+    if (/^[\s|:-]+$/.test(trimmed) && trimmed.includes('-')) {
+      hasSeparator = true;
       continue;
     }
-    const cells = row.split('|').map(c => c.trim()).filter((_, i, arr) => {
-      if (i === 0 && arr[i] === '') return false;
-      if (i === arr.length - 1 && arr[i] === '') return false;
-      return true;
-    });
-    parsedRows.push(cells);
+    const cells = trimmed.split('|').map(c => c.trim());
+    // Remove empty leading/trailing from outer pipes
+    if (cells.length > 0 && cells[0] === '') cells.shift();
+    if (cells.length > 0 && cells[cells.length - 1] === '') cells.pop();
+    if (cells.length > 0) parsedRows.push(cells);
   }
 
   if (parsedRows.length === 0) return lines;
 
   const colCount = Math.max(...parsedRows.map(r => r.length));
-  const colWidths: number[] = new Array(colCount).fill(0);
-  for (const row of parsedRows) {
-    for (let c = 0; c < row.length; c++) {
-      colWidths[c] = Math.max(colWidths[c], getDisplayWidth(row[c]));
-    }
-  }
-
-  const borderChars = colCount + 1;
-  const padding = colCount * 2;
-  const totalTableW = colWidths.reduce((a, b) => a + b, 0) + borderChars + padding;
   const availW = width - indent;
 
-  if (totalTableW > availW) {
-    const contentW = availW - borderChars - padding;
-    const totalContent = colWidths.reduce((a, b) => a + b, 0);
-    if (totalContent > 0) {
-      for (let c = 0; c < colCount; c++) {
-        colWidths[c] = Math.max(3, Math.floor((colWidths[c] / totalContent) * contentW));
-      }
+  // Measure column widths using stripped text (no markdown markers)
+  const naturalWidths: number[] = new Array(colCount).fill(0);
+  for (const row of parsedRows) {
+    for (let c = 0; c < row.length; c++) {
+      naturalWidths[c] = Math.max(naturalWidths[c], getDisplayWidth(stripMarkdown(row[c])));
     }
   }
 
-  const pad = ' '.repeat(indent);
-  const bc = '240';
+  // Budget: availW minus borders (colCount+1) minus padding (2 per col)
+  const overhead = (colCount + 1) + (colCount * 2);
+  const contentBudget = Math.max(colCount, availW - overhead);
+  const totalNatural = naturalWidths.reduce((a, b) => a + b, 0);
 
-  let top = pad + '\u250c';
-  for (let c = 0; c < colCount; c++) {
-    top += '\u2500'.repeat(colWidths[c] + 2) + (c < colCount - 1 ? '\u252c' : '\u2510');
+  // Compute final column widths
+  const colWidths: number[] = new Array(colCount).fill(0);
+  if (totalNatural <= contentBudget) {
+    // Everything fits
+    for (let c = 0; c < colCount; c++) colWidths[c] = naturalWidths[c];
+  } else {
+    // Proportionally shrink, with minimum of 4 chars per column
+    const minW = 4;
+    for (let c = 0; c < colCount; c++) {
+      colWidths[c] = Math.max(minW, Math.floor((naturalWidths[c] / totalNatural) * contentBudget));
+    }
+    // Distribute leftover from rounding
+    let used = colWidths.reduce((a, b) => a + b, 0);
+    for (let c = 0; c < colCount && used < contentBudget; c++) {
+      colWidths[c]++;
+      used++;
+    }
   }
-  lines.push(UIFactory.stringToLine(top, width, { fg: bc }));
 
+  const bc = '240'; // border color
+  const emptyLine = createEmptyLine(width);
+
+  // Helper: build a border line
+  const makeBorder = (left: string, mid: string, right: string, horiz: string): Line => {
+    let s = ' '.repeat(indent) + left;
+    for (let c = 0; c < colCount; c++) {
+      s += horiz.repeat(colWidths[c] + 2) + (c < colCount - 1 ? mid : right);
+    }
+    return UIFactory.stringToLine(s, width, { fg: bc });
+  };
+
+  // Helper: render a cell's content with inline markdown into Cell[]
+  const renderCellContent = (raw: string, maxW: number, isHdr: boolean): Cell[] => {
+    const cells: Cell[] = [];
+    const tokens = renderInlineMarkdown(raw);
+    let w = 0;
+
+    for (const token of tokens) {
+      const text = token.text;
+      for (const ch of text) {
+        const cw = getDisplayWidth(ch);
+        if (w + cw > maxW) {
+          // Truncate with ellipsis
+          if (cells.length > 0) cells[cells.length - 1] = createStyledCell('\u2026', cells[cells.length - 1]);
+          return cells;
+        }
+        let style: Partial<Cell> = {};
+        if (token.type === 'code') {
+          style = { fg: '#ffcc00', bg: '#1a1a1a' };
+        } else if (token.type === 'link') {
+          style = { fg: '#00aaff', underline: true };
+        } else {
+          style = { ...token.style };
+        }
+        if (isHdr) {
+          style.fg = style.fg || '#00ffff';
+          style.bold = true;
+        } else {
+          style.fg = style.fg || '252';
+        }
+        cells.push(createStyledCell(ch, style));
+        if (cw === 2) cells.push(createStyledCell('', style)); // wide char placeholder
+        w += cw;
+      }
+    }
+
+    // Pad remaining space
+    while (w < maxW) {
+      cells.push(createStyledCell(' ', isHdr ? { fg: '#00ffff' } : { fg: '252' }));
+      w++;
+    }
+    return cells;
+  };
+
+  // Top border
+  lines.push(makeBorder('\u250c', '\u252c', '\u2510', '\u2500'));
+
+  // Rows
   for (let r = 0; r < parsedRows.length; r++) {
     const row = parsedRows[r];
-    const isHeader = separatorIdx > 0 ? r === 0 : false;
+    const isHeader = hasSeparator && r === 0;
 
-    let rowStr = pad + '\u2502';
+    // Build the row line cell-by-cell
+    const line = new Array(width).fill(null).map(() => createStyledCell(' ')) as Cell[];
+    let x = indent;
+
+    // Left border
+    if (x < width) line[x] = createStyledCell('\u2502', { fg: bc });
+    x++;
+
     for (let c = 0; c < colCount; c++) {
-      const cell = c < row.length ? row[c] : '';
-      const cellW = getDisplayWidth(cell);
-      const padR = Math.max(0, colWidths[c] - cellW);
-      rowStr += ' ' + cell + ' '.repeat(padR) + ' \u2502';
-    }
-    lines.push(UIFactory.stringToLine(rowStr, width, { fg: isHeader ? '#00ffff' : '252', bold: isHeader }));
+      // Space before content
+      if (x < width) line[x] = createStyledCell(' ');
+      x++;
 
-    if (isHeader) {
-      let mid = pad + '\u251c';
-      for (let c = 0; c < colCount; c++) {
-        mid += '\u2500'.repeat(colWidths[c] + 2) + (c < colCount - 1 ? '\u253c' : '\u2524');
+      // Cell content
+      const raw = c < row.length ? row[c] : '';
+      const cellContent = renderCellContent(raw, colWidths[c], isHeader);
+      for (const cell of cellContent) {
+        if (x < width) line[x] = cell;
+        x++;
       }
-      lines.push(UIFactory.stringToLine(mid, width, { fg: bc }));
+
+      // Space after content
+      if (x < width) line[x] = createStyledCell(' ');
+      x++;
+
+      // Column separator
+      if (x < width) line[x] = createStyledCell('\u2502', { fg: bc });
+      x++;
+    }
+
+    lines.push(line);
+
+    // Header separator
+    if (isHeader) {
+      lines.push(makeBorder('\u251c', '\u253c', '\u2524', '\u2500'));
     }
   }
 
-  let bottom = pad + '\u2514';
-  for (let c = 0; c < colCount; c++) {
-    bottom += '\u2500'.repeat(colWidths[c] + 2) + (c < colCount - 1 ? '\u2534' : '\u2518');
-  }
-  lines.push(UIFactory.stringToLine(bottom, width, { fg: bc }));
+  // Bottom border
+  lines.push(makeBorder('\u2514', '\u2534', '\u2518', '\u2500'));
 
   return lines;
 }
