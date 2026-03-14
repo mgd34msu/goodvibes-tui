@@ -2,9 +2,8 @@ import { InfiniteBuffer } from './history.ts';
 import { UIFactory } from '../renderer/ui-factory.ts';
 import { renderMarkdown } from '../renderer/markdown.ts';
 import { renderToolCallBlock } from '../renderer/tool-call.ts';
-import { createEmptyLine } from '../types/grid.ts';
+import { createEmptyLine, type Line, type Cell } from '../types/grid.ts';
 import { getSplashLines, type SplashOptions } from '../utils/splash-lines.ts';
-import { type Line, type Cell } from '../types/grid.ts';
 import { interpolateColor, getDisplayWidth, wrapText } from '../utils/terminal-width.ts';
 import type { ToolCall, ToolResult } from '../types/tools.ts';
 import type { ProviderMessage } from '../providers/interface.ts';
@@ -162,7 +161,7 @@ export class ConversationManager {
         // Render tool calls using the tool-call block renderer
         if (m.toolCalls && m.toolCalls.length > 0) {
           for (const tc of m.toolCalls) {
-            const status = m.content ? 'done' : 'running';
+            const status = 'done'; // Historical messages are always complete
             this.history.addLines(renderToolCallBlock(tc, status, undefined, width));
           }
         }
