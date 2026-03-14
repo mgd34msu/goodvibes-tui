@@ -169,6 +169,7 @@ async function main() {
   };
 
   input.setCommandRegistry(commandRegistry, commandContext);
+  input.setContentWidth(getPromptContentWidth());
 
   // --- Splash options ---
   const toolCount = toolRegistry.list().length;
@@ -307,6 +308,7 @@ async function main() {
   });
   process.on('SIGINT', () => input.feed('\x03'));
   stdout.on('resize', () => {
+    input.setContentWidth(getPromptContentWidth());
     compositor.resetDiff();
     render();
   });
