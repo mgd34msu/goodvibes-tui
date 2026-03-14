@@ -135,28 +135,42 @@ export class UIFactory {
     promptLines.forEach((text, i) => {
       const contentW = boxWidth - 4;
       const prefix = i === 0 ? ' › ' : '   ';
-      // Insert cursor block at cursorPos within the prompt text
-      let displayText = text;
-      if (cursorPos !== undefined && i === promptLines.length - 1) {
-        // Calculate cursor offset within this line
-        let lineStart = 0;
-        for (let li = 0; li < i; li++) lineStart += promptLines[li].length + 1; // +1 for \n
-        const posInLine = cursorPos - lineStart;
-        if (posInLine >= 0 && posInLine <= text.length) {
-          displayText = text.slice(0, posInLine) + '\u2588' + text.slice(posInLine);
-        } else {
-          displayText = text + '\u2588';
-        }
-      } else if (i === promptLines.length - 1) {
-        displayText = text + '\u2588';
-      }
-      const rawText = `${prefix}${displayText}`;
+      // Render text without cursor insertion — cursor is overlaid after
+      const rawText = `${prefix}${text}`;
       const paddedText = rawText.padEnd(contentW);
       const contentLine = createBaseLine();
       for (let x = 0; x < boxWidth; x++) {
         const char = (x >= 2 && x < boxWidth - 2) ? paddedText[x - 2] || ' ' : ' ';
         contentLine[boxStartX + x] = { char, fg: (x < 5 && i === 0) ? '135' : TEXT_COLOR, bg: BG_COLOR, bold: false, dim: false, underline: false, italic: false, strikethrough: false };
       }
+
+      // Overlay cursor: find if cursorPos falls on this line, invert that cell
+      if (cursorPos !== undefined) {
+        let lineStart = 0;
+        for (let li = 0; li < i; li++) lineStart += promptLines[li].length + 1;
+        const posInLine = cursorPos - lineStart;
+        if (posInLine >= 0 && posInLine <= text.length) {
+          // Cursor column in cell coordinates: prefix width (3) + posInLine + box padding (2)
+          const cursorX = boxStartX + 2 + prefix.length + posInLine;
+          if (cursorX < boxStartX + boxWidth - 2) {
+            const cell = contentLine[cursorX];
+            // Invert: bright fg on the text bg, swap to make cursor visible
+            contentLine[cursorX] = {
+              char: cell.char === ' ' ? '\u2588' : cell.char,
+              fg: cell.char === ' ' ? '252' : '#000000',
+              bg: cell.char === ' ' ? BG_COLOR : '#ffffff',
+              bold: false, dim: false, underline: false, italic: false, strikethrough: false
+            };
+          }
+        }
+      } else if (i === promptLines.length - 1) {
+        // No cursorPos provided — show block at end (fallback)
+        const endX = boxStartX + 2 + prefix.length + text.length;
+        if (endX < boxStartX + boxWidth - 2) {
+          contentLine[endX] = { char: '\u2588', fg: '252', bg: BG_COLOR, bold: false, dim: false, underline: false, italic: false, strikethrough: false };
+        }
+      }
+
       lines.push(contentLine);
     });
     const bottomLine = createBaseLine();
