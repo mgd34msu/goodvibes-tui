@@ -136,10 +136,11 @@ export class OpenAICompatProvider implements LLMProvider {
           });
         }
       } catch (err: unknown) {
-        const status = (err as { status?: number }).status;
+        const { hasStatus } = await import('../utils/retry.ts');
+        const status = hasStatus(err) ? err.status : undefined;
         throw new ProviderError(
           err instanceof Error ? err.message : String(err),
-          typeof status === 'number' ? status : undefined,
+          status,
         );
       }
 

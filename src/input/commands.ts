@@ -49,10 +49,6 @@ export function registerBuiltinCommands(registry: CommandRegistry): void {
     aliases: ['h', '?'],
     description: 'Show available commands and keyboard shortcuts',
     handler(_args, ctx) {
-      const cmds = ctx.eventBus  // access via ctx to keep handler pure
-        ? '' // resolved below
-        : '';
-      void cmds; // unused
       const lines = [
         'Slash commands:',
         '  /model [id]       Select LLM model',

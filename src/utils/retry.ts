@@ -14,7 +14,7 @@ const DEFAULT_CONFIG: RetryConfig = {
 };
 
 /** Type guard: checks if an unknown value has a numeric `statusCode` property. */
-function hasStatusCode(err: unknown): err is { statusCode: number } {
+export function hasStatusCode(err: unknown): err is { statusCode: number } {
   return (
     typeof err === 'object' &&
     err !== null &&
@@ -24,7 +24,7 @@ function hasStatusCode(err: unknown): err is { statusCode: number } {
 }
 
 /** Type guard: checks if an unknown value has a numeric `status` property. */
-function hasStatus(err: unknown): err is { status: number } {
+export function hasStatus(err: unknown): err is { status: number } {
   return (
     typeof err === 'object' &&
     err !== null &&
