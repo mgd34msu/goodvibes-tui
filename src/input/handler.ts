@@ -6,6 +6,7 @@ import type { InfiniteBuffer } from '../core/history.ts';
 import type { CommandRegistry, CommandContext } from './command-registry.ts';
 import { AutocompleteEngine } from './autocomplete.ts';
 import { FilePickerModal } from './file-picker.ts';
+import { InputHistory } from './input-history.ts';
 
 /**
  * InputHandler - Owns prompt text, paste registry, and keyboard/mouse handling.
@@ -31,6 +32,11 @@ export class InputHandler {
   private commandContext: CommandContext | null = null;
   public autocomplete: AutocompleteEngine | null = null;
   public filePicker = new FilePickerModal();
+  private inputHistory: InputHistory | null = null;
+
+  /** Pasted images: maps marker IDs to base64 image data. */
+  private imageRegistry = new Map<string, { data: string; mediaType: string }>();
+  private nextImageId = 1;
 
   constructor(
     private bus: EventBus,
@@ -41,6 +47,14 @@ export class InputHandler {
     private scroll: (delta: number) => void,
     private exitApp: () => void,
   ) {}
+
+  /**
+   * setHistory - Wire in the InputHistory instance.
+   * Optional; if not set, history navigation is disabled.
+   */
+  public setHistory(history: InputHistory): void {
+    this.inputHistory = history;
+  }
 
   /**
    * setCommandRegistry - Wire in the slash command registry and context.
@@ -54,8 +68,24 @@ export class InputHandler {
 
   /**
    * registerPaste - Stores multi-line content and returns a visual marker string.
+   * Also detects base64 image data (PNG or JPEG) and registers it as an image.
    */
   public registerPaste(content: string): string {
+    // Detect base64-encoded image data
+    const trimmed = content.trim();
+    if (trimmed.length > 100 && trimmed.startsWith('iVBORw0KGgo')) {
+      // PNG base64 header
+      const id = `img${this.nextImageId++}`;
+      this.imageRegistry.set(id, { data: trimmed, mediaType: 'image/png' });
+      return `[IMAGE:${id} clipboard]`;
+    }
+    if (trimmed.length > 100 && trimmed.startsWith('/9j/')) {
+      // JPEG base64 header
+      const id = `img${this.nextImageId++}`;
+      this.imageRegistry.set(id, { data: trimmed, mediaType: 'image/jpeg' });
+      return `[IMAGE:${id} clipboard]`;
+    }
+
     const lines = content.split('\n');
     if (lines.length <= 8) return content;
     const id = `p${this.nextPasteId++}`;
@@ -90,6 +120,19 @@ export class InputHandler {
     for (const id of this.pasteRegistry.keys()) {
       if (!foundIds.has(id)) {
         this.pasteRegistry.delete(id);
+      }
+    }
+
+    // Clean up stale image registry entries
+    const imageMarkerRegex = /\[IMAGE:(img\d+) clipboard\]/g;
+    const foundImageIds = new Set<string>();
+    let imageMatch;
+    while ((imageMatch = imageMarkerRegex.exec(expanded)) !== null) {
+      foundImageIds.add(imageMatch[1]);
+    }
+    for (const id of this.imageRegistry.keys()) {
+      if (!foundImageIds.has(id)) {
+        this.imageRegistry.delete(id);
       }
     }
 
@@ -213,6 +256,10 @@ export class InputHandler {
       }
 
       if (token.type === 'text') {
+        // Reset history browsing when user types
+        if (this.inputHistory?.isBrowsing) {
+          this.inputHistory.resetPosition();
+        }
         const text = this.registerPaste(token.value);
         this.prompt = this.prompt.slice(0, this.cursorPos) + text + this.prompt.slice(this.cursorPos);
         this.cursorPos += text.length;
@@ -260,6 +307,49 @@ export class InputHandler {
         // Ctrl+L: clear screen (re-render)
         if (token.logicalName === 'l' && token.ctrl) {
           this.bus.emit('render:request');
+          continue;
+        }
+        // Ctrl+W: delete word backward
+        if (token.logicalName === 'w' && token.ctrl) {
+          let pos = this.cursorPos;
+          // Skip trailing whitespace
+          while (pos > 0 && this.prompt[pos - 1] === ' ') pos--;
+          // Skip word characters
+          while (pos > 0 && this.prompt[pos - 1] !== ' ') pos--;
+          this.prompt = this.prompt.slice(0, pos) + this.prompt.slice(this.cursorPos);
+          this.cursorPos = pos;
+          this.ensureInputCursorVisible();
+          continue;
+        }
+        // Ctrl+A: move to start of line
+        if (token.logicalName === 'a' && token.ctrl) {
+          // In multiline, move to start of current wrapped line
+          const info = this.getWrappedPromptInfo(this.contentWidth);
+          if (info.wrappedLines.length > 1) {
+            this.cursorPos = info.segments[info.cursorWrappedLine].rawStart;
+          } else {
+            this.cursorPos = 0;
+          }
+          this.ensureInputCursorVisible();
+          continue;
+        }
+        // Ctrl+E: move to end of line
+        if (token.logicalName === 'e' && token.ctrl) {
+          // In multiline, move to end of current wrapped line
+          const info = this.getWrappedPromptInfo(this.contentWidth);
+          if (info.wrappedLines.length > 1) {
+            const seg = info.segments[info.cursorWrappedLine];
+            this.cursorPos = seg.rawStart + seg.length;
+          } else {
+            this.cursorPos = this.prompt.length;
+          }
+          this.ensureInputCursorVisible();
+          continue;
+        }
+        // Ctrl+K: kill to end of line
+        if (token.logicalName === 'k' && token.ctrl) {
+          this.prompt = this.prompt.slice(0, this.cursorPos);
+          this.ensureInputCursorVisible();
           continue;
         }
         // Ctrl+U: clear prompt line
@@ -360,6 +450,7 @@ export class InputHandler {
               return;
             }
             if (text) {
+              this.inputHistory?.add(text);
               this.prompt = '';
               this.cursorPos = 0;
               const fullText = this.expandPrompt(text);
@@ -400,20 +491,41 @@ export class InputHandler {
           if (!this.moveCursorVertical(-1)) {
             const info = this.getWrappedPromptInfo(this.contentWidth);
             if (info.wrappedLines.length <= 1) {
-              this.scroll(-3);
+              // Single-line: try history recall first
+              if (this.inputHistory) {
+                const recalled = this.inputHistory.up(this.prompt);
+                if (recalled !== null) {
+                  this.prompt = recalled;
+                  this.cursorPos = recalled.length;
+                  this.ensureInputCursorVisible();
+                  // Don't scroll viewport when recalling history
+                } else {
+                  this.scroll(-3);
+                }
+              } else {
+                this.scroll(-3);
+              }
             }
           }
         } else if (token.logicalName === 'down') {
           if (!this.moveCursorVertical(1)) {
             const info = this.getWrappedPromptInfo(this.contentWidth);
             if (info.wrappedLines.length <= 1) {
-              this.scroll(3);
+              // Single-line: try history recall first
+              if (this.inputHistory?.isBrowsing) {
+                const recalled = this.inputHistory.down();
+                if (recalled !== null) {
+                  this.prompt = recalled;
+                  this.cursorPos = recalled.length;
+                  this.ensureInputCursorVisible();
+                } else {
+                  this.scroll(3);
+                }
+              } else {
+                this.scroll(3);
+              }
             }
           }
-        } else if (token.logicalName === 'pageup') {
-          this.scroll(-this.getViewportHeight());
-        } else if (token.logicalName === 'pagedown') {
-          this.scroll(this.getViewportHeight());
         }
       } else if (token.type === 'mouse') {
         const headerH = 2;
