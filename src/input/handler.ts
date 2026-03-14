@@ -323,13 +323,20 @@ export class InputHandler {
         } else if (token.logicalName === 'end') {
           this.cursorPos = this.prompt.length;
         } else if (token.logicalName === 'up') {
-          // In multiline input: move cursor up within text. At top: scroll viewport.
+          // In multiline input: move cursor up. At boundary: no-op.
+          // Only scroll viewport if input is single-line.
           if (!this.moveCursorVertical(-1)) {
-            this.scroll(-3);
+            const info = this.getWrappedPromptInfo(this.contentWidth);
+            if (info.wrappedLines.length <= 1) {
+              this.scroll(-3);
+            }
           }
         } else if (token.logicalName === 'down') {
           if (!this.moveCursorVertical(1)) {
-            this.scroll(3);
+            const info = this.getWrappedPromptInfo(this.contentWidth);
+            if (info.wrappedLines.length <= 1) {
+              this.scroll(3);
+            }
           }
         } else if (token.logicalName === 'pageup') {
           this.scroll(-this.getViewportHeight());
