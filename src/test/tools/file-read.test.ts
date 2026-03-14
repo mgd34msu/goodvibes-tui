@@ -2,6 +2,7 @@ import { describe, test, expect, beforeEach, afterEach } from 'bun:test';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { FileReadTool } from '../../tools/file-read.ts';
+import { writeTempFile } from '../setup.ts';
 
 // config.workingDir defaults to process.cwd() which is the project root.
 // We create temp dirs INSIDE the project root so path-safety validation passes.

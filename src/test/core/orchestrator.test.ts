@@ -1,6 +1,7 @@
 import { describe, test, expect, beforeEach, mock } from 'bun:test';
 import { EventBus } from '../../core/event-bus.ts';
 import { ToolRegistry } from '../../tools/registry.ts';
+import { MockLLMProvider } from '../setup.ts';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -13,6 +14,8 @@ interface MockChatResponse {
   stopReason: 'end' | 'tool_use';
 }
 
+// MockLLMProvider is imported from setup.ts for shared usage.
+// _makeMockProvider retained below for tests that use bun:test mock() directly.
 function _makeMockProvider(responses: MockChatResponse[]) {
   let idx = 0;
   return {
