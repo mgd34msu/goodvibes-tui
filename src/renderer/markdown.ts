@@ -70,6 +70,21 @@ export function renderMarkdown(text: string, width: number): Line[] {
       continue;
     }
 
+    // --- Task list ---
+    const taskMatch = raw.match(/^(\s*)[-*] \[([ xX])\] (.+)/);
+    if (taskMatch) {
+      const listIndent = Math.floor(taskMatch[1].length / 2);
+      const checked = taskMatch[2] !== ' ';
+      const bulletX = indent + listIndent * 2;
+      const textStartX = bulletX + 4;
+      const checkbox = checked ? '\u2611 ' : '\u2610 '; // ☑ or ☐
+      const rendered = renderInlineMarkdown(taskMatch[3]);
+      const prefix = ' '.repeat(bulletX) + checkbox;
+      const style = checked ? { fg: '244', strikethrough: true } : {};
+      lines.push(...compositeInlineLine(prefix, rendered, width, { fg: checked ? '#22c55e' : '252', ...style }, textStartX));
+      continue;
+    }
+
     // --- Unordered list ---
     const ulMatch = raw.match(/^(\s*)[-*] (.+)/);
     if (ulMatch) {

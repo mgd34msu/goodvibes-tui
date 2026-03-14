@@ -179,7 +179,7 @@ export class UIFactory {
     let currentColumn = 0;
     for (const char of text) {
       if (currentColumn >= width) break;
-      const code = char.charCodeAt(0);
+      const code = char.codePointAt(0) ?? 0;
       if (code < 32 || code === 127) continue;
       const charWidth = getDisplayWidth(char);
       line[currentColumn] = {

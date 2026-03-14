@@ -1,18 +1,74 @@
 /**
  * Calculates the visual width of a string in the terminal.
+ * Handles CJK characters, emoji (including ZWJ sequences), and
+ * variation selectors correctly as double-width.
  */
 export function getDisplayWidth(text: string): number {
   let width = 0;
-  for (const char of text) {
-    const code = char.charCodeAt(0);
-    if (code < 32 || code === 127) continue;
+  let i = 0;
+  while (i < text.length) {
+    const code = text.codePointAt(i)!;
+    const charLen = code > 0xFFFF ? 2 : 1; // surrogate pair = 2 JS chars
+
+    if (code < 32 || code === 127) {
+      i += charLen;
+      continue;
+    }
+
+    // Zero-width joiners, variation selectors, combining marks — 0 width
     if (
-      (code >= 0x1100 && code <= 0x115F) || 
-      (code >= 0x2E80 && code <= 0xA4CF && code !== 0x303F) || 
-      (code >= 0xAC00 && code <= 0xD7A3) || 
-      (code >= 0xF900 && code <= 0xFAFF) || 
-      (code >= 0xFF00 && code <= 0xFF60)
-    ) { width += 2; } else { width += 1; }
+      code === 0x200D || // ZWJ
+      code === 0xFE0F || // emoji variation selector
+      code === 0xFE0E || // text variation selector
+      (code >= 0x0300 && code <= 0x036F) || // combining diacriticals
+      (code >= 0x1AB0 && code <= 0x1AFF) || // combining diacriticals ext
+      (code >= 0x20D0 && code <= 0x20FF) || // combining marks for symbols
+      (code >= 0xFE20 && code <= 0xFE2F) || // combining half marks
+      (code >= 0xE0100 && code <= 0xE01EF) // variation selectors supplement
+    ) {
+      i += charLen;
+      continue;
+    }
+
+    // Emoji and pictographic — double width in most terminals
+    if (
+      (code >= 0x1F300 && code <= 0x1F9FF) || // misc symbols, emoticons, supplemental
+      (code >= 0x1FA00 && code <= 0x1FAFF) || // chess, symbols ext-A
+      (code >= 0x2600 && code <= 0x27BF) ||   // misc symbols, dingbats
+      (code >= 0x2300 && code <= 0x23FF) ||   // misc technical (hourglass, etc)
+      (code >= 0x2B50 && code <= 0x2B55) ||   // stars, circles
+      (code >= 0xFE00 && code <= 0xFE0F) ||   // variation selectors (handled above but safe)
+      (code >= 0x1F000 && code <= 0x1F02F) || // mahjong, dominos
+      (code >= 0x1F680 && code <= 0x1F6FF) || // transport symbols
+      code === 0x200D ||                       // ZWJ (handled above)
+      (code >= 0xE000 && code <= 0xF8FF) ||   // private use area (some terminals render wide)
+      code === 0x2764 || code === 0x2763 ||   // hearts
+      code === 0x270A || code === 0x270B || code === 0x270C || // hand gestures
+      code === 0x261D || code === 0x2639 || code === 0x263A    // misc
+    ) {
+      width += 2;
+      i += charLen;
+      continue;
+    }
+
+    // CJK and fullwidth — double width
+    if (
+      (code >= 0x1100 && code <= 0x115F) ||   // Hangul Jamo
+      (code >= 0x2E80 && code <= 0xA4CF && code !== 0x303F) || // CJK
+      (code >= 0xAC00 && code <= 0xD7A3) ||   // Hangul syllables
+      (code >= 0xF900 && code <= 0xFAFF) ||   // CJK compat ideographs
+      (code >= 0xFF00 && code <= 0xFF60) ||    // fullwidth forms
+      (code >= 0x20000 && code <= 0x2FFFD) ||  // CJK unified ext B+
+      (code >= 0x30000 && code <= 0x3FFFD)     // CJK unified ext G+
+    ) {
+      width += 2;
+      i += charLen;
+      continue;
+    }
+
+    // Everything else — single width
+    width += 1;
+    i += charLen;
   }
   return width;
 }
