@@ -86,6 +86,11 @@ export class AnthropicProvider implements LLMProvider {
         const budget = REASONING_BUDGET_MAP[reasoningEffort];
         if (budget !== undefined && budget > 0) {
           body['thinking'] = { type: 'enabled', budget_tokens: budget };
+          // max_tokens must be strictly greater than thinking.budget_tokens
+          const currentMax = (body['max_tokens'] as number) ?? 8192;
+          if (currentMax <= budget) {
+            body['max_tokens'] = budget + 4096;
+          }
         }
       }
 
