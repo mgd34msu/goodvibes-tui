@@ -32,8 +32,12 @@ export class UIFactory {
    * createMessageBar - Renders a historical user message.
    * Logic: Calculates the longest line to create a "hugging" block.
    */
-  public static createMessageBar(width: number, text: string): Line[] {
-    return this.createGenericBar(width, text, '#2a2a2a', '252', ' › ');
+  public static createMessageBar(
+    width: number, text: string,
+    bgColor = '#2a2a2a', textColor = '252', prefixStr = ' › ',
+    strikethrough = false
+  ): Line[] {
+    return this.createGenericBar(width, text, bgColor, textColor, prefixStr, strikethrough);
   }
 
   /**
@@ -47,7 +51,7 @@ export class UIFactory {
    * createGenericBar - Shared logic for "Ghost Box" style bars.
    * Correctly handles multi-line hugging by finding the max line width.
    */
-  private static createGenericBar(width: number, text: string, bgColor: string, textColor: string, prefixStr: string): Line[] {
+  private static createGenericBar(width: number, text: string, bgColor: string, textColor: string, prefixStr: string, strikethrough = false): Line[] {
     const lines: Line[] = [];
     const boxMargin = 2;
     const prefixW = getDisplayWidth(prefixStr);
@@ -90,7 +94,7 @@ export class UIFactory {
           dim: false,
           underline: false,
           italic: false,
-          strikethrough: false
+          strikethrough: strikethrough && x >= prefixW
         };
       }
       lines.push(contentLine);

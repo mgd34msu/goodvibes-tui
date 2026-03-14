@@ -203,8 +203,9 @@ export class Orchestrator {
       }
     } catch (err: unknown) {
       if (this.abortController?.signal.aborted) {
-        // Remove any partial messages added during this turn
+        // Remove any partial LLM response, keep user message but mark it cancelled
         this.conversation.removeMessagesAfter(this.turnStartMessageCount);
+        this.conversation.markLastUserMessageCancelled();
         this.conversation.addSystemMessage('[Response cancelled]');
         this.bus.emit('turn:error', { error: new Error('Cancelled') });
         return;
