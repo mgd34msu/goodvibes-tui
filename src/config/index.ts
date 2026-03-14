@@ -15,6 +15,7 @@ export { ConfigError } from '../types/errors.ts';
 import { readFileSync } from 'fs';
 import { ConfigManager } from './manager.ts';
 import type { GoodVibesConfig } from './schema.ts';
+import { logger } from '../utils/logger.ts';
 
 /**
  * AppConfig - Backward-compatible interface.
@@ -56,22 +57,25 @@ export const config: AppConfig & Readonly<GoodVibesConfig> = new Proxy(
   {} as AppConfig & Readonly<GoodVibesConfig>,
   {
     get(_target, prop: string) {
-      const all = configManager.getAll();
+      const raw = getConfigManager().getRaw();
       // AppConfig compat properties
-      if (prop === 'provider') return all.provider.provider;
-      if (prop === 'model') return all.provider.model;
+      if (prop === 'provider') return raw.provider.provider;
+      if (prop === 'model') return raw.provider.model;
       if (prop === 'apiKeys') return loadEnvApiKeys();
-      if (prop === 'autoApprove') return all.behavior.autoApprove;
+      if (prop === 'autoApprove') return raw.behavior.autoApprove;
       if (prop === 'workingDir') return process.cwd();
       if (prop === 'systemPrompt') {
-        const file = all.provider.systemPromptFile;
+        const file = raw.provider.systemPromptFile;
         if (!file) return undefined;
         try {
           return readFileSync(file, 'utf-8') as string;
-        } catch { return undefined; }
+        } catch (err) {
+          logger.debug('systemPrompt file read failed (non-fatal)', { file, error: String(err) });
+          return undefined;
+        }
       }
       // GoodVibesConfig nested access (display, behavior, provider categories)
-      if (prop in all) return all[prop as keyof typeof all];
+      if (prop in raw) return raw[prop as keyof typeof raw];
       return undefined;
     },
   }
