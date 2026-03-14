@@ -1,4 +1,4 @@
-import { type Line, type Cell, createEmptyCell, createEmptyLine } from '../types/grid.ts';
+import { type Line, createEmptyLine } from '../types/grid.ts';
 
 /**
  * InfiniteBuffer - Manages the complete conversation history as a list of lines.

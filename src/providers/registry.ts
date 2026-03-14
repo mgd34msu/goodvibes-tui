@@ -178,6 +178,7 @@ export class ProviderRegistry {
     const apiKey = (name: string): string => {
       const key = config.apiKeys[name] ?? '';
       if (!key) {
+        // Using console here as logger may not be initialized during module-level construction
         console.warn(`[registry] API key for provider '${name}' is empty — requests will fail.`);
       }
       return key;
