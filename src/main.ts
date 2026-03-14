@@ -173,6 +173,7 @@ async function main() {
   };
 
   input.setCommandRegistry(commandRegistry, commandContext);
+  input.setConversationManager(conversation);
   input.setContentWidth(getPromptContentWidth());
   input.filePicker.setOnUpdate(() => bus.emit('render:request'));
 

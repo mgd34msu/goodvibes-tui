@@ -389,7 +389,7 @@ export function registerBuiltinCommands(registry: CommandRegistry): void {
     },
   });
 
-  // ─4 /lines ────────────────────────────────────────────
+  // ── /lines ────────────────────────────────────────────
   registry.register({
     name: 'lines',
     aliases: [],

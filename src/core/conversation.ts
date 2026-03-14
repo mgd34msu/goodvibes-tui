@@ -9,6 +9,7 @@ import type { ToolCall, ToolResult } from '../types/tools.ts';
 import type { ProviderMessage } from '../providers/interface.ts';
 import { logger } from '../utils/logger.ts';
 import type { ProviderRegistry } from '../providers/registry.ts';
+import type { ConfigManager } from '../config/manager.ts';
 
 /** Rough token estimate: 4 chars ≈ 1 token. */
 const estimateTokens = (text: string): number => Math.ceil(text.length / 4);
@@ -27,6 +28,25 @@ type Message =
   | { role: 'system'; content: string }
   | { role: 'tool'; callId: string; content: string; toolName?: string };
 
+/** Metadata for a rendered block (code, tool, or diff). */
+export interface BlockMeta {
+  /** Index of this block (increments per renderable block). */
+  blockIndex: number;
+  /** Type of block content. */
+  type: 'tool' | 'code' | 'diff';
+  /** First rendered line index in the history buffer. */
+  startLine: number;
+  /** Number of rendered lines (when not collapsed). */
+  lineCount: number;
+  /** Raw text content (code source, tool output, diff text). */
+  rawContent: string;
+  /** File path for diff blocks. */
+  filePath?: string;
+  /** Parsed diff for apply: original/updated sections. */
+  diffOriginal?: string;
+  diffUpdated?: string;
+}
+
 export class ConversationManager {
   public history = new InfiniteBuffer();
   private messages: Message[] = [];
@@ -37,9 +57,26 @@ export class ConversationManager {
   private dirty = true;
   /** Index of the first message not yet appended to the buffer. */
   private appendedUpTo = 0;
+  /** Optional config manager for display settings. */
+  private configManager: ConfigManager | null = null;
+  /** Collapse state: blockIndex -> collapsed (true = collapsed). */
+  private collapseState: Map<number, boolean> = new Map();
+  /** Block registry: track rendered blocks for copy/apply. */
+  private blockRegistry: BlockMeta[] = [];
+  /** Block counter, incremented each time a block is rendered. */
+  private blockCounter = 0;
 
-  constructor(getWidth: () => number = () => process.stdout.columns || 80) {
+  constructor(
+    getWidth: () => number = () => process.stdout.columns || 80,
+    configManager?: ConfigManager,
+  ) {
     this.getWidth = getWidth;
+    this.configManager = configManager ?? null;
+  }
+
+  /** Wire in a config manager after construction (e.g. from main.ts). */
+  public setConfigManager(cm: ConfigManager): void {
+    this.configManager = cm;
   }
 
   /** Returns messages formatted for LLM provider consumption. */
@@ -158,6 +195,8 @@ export class ConversationManager {
   public rebuildHistory(): void {
     this.history.clear();
     this.appendedUpTo = 0;
+    this.blockRegistry = [];
+    this.blockCounter = 0;
     const width = this.getWidth();
     this.lastRenderedWidth = width;
     this.dirty = false;
@@ -190,6 +229,9 @@ export class ConversationManager {
 
   /** Render a slice of messages into the history buffer. */
   private appendMessages(messages: Message[], width: number): void {
+    const showLineNumbers = this.configManager?.get('display.lineNumbers') ?? false;
+    const collapseThreshold = this.configManager?.get('display.collapseThreshold') ?? 30;
+
     for (const m of messages) {
       if (m.role === 'user') {
         if (m.cancelled) {
@@ -200,8 +242,23 @@ export class ConversationManager {
       } else if (m.role === 'assistant') {
         // Render assistant content using the markdown renderer
         if (m.content) {
-          const lines = renderMarkdown(m.content, width);
-          this.history.addLines(lines);
+          const rendered = renderMarkdown(m.content, width);
+          if (showLineNumbers) {
+            // Prepend dimmed 4-char gutter: '  1 |', '  2 |', etc.
+            const numbered = rendered.map((line, i) => {
+              const label = String(i + 1).padStart(3) + ' |';
+              const gutterLine = UIFactory.stringToLine(label, width, { fg: '238', dim: true });
+              // Overlay gutter at start of line (first 5 cells)
+              const combined = [...line];
+              for (let ci = 0; ci < Math.min(5, gutterLine.length, combined.length); ci++) {
+                combined[ci] = gutterLine[ci];
+              }
+              return combined;
+            });
+            this.history.addLines(numbered);
+          } else {
+            this.history.addLines(rendered);
+          }
         }
         // Render tool calls using the tool-call block renderer
         if (m.toolCalls && m.toolCalls.length > 0) {
@@ -214,13 +271,117 @@ export class ConversationManager {
         const lines = this.textToLines(m.content, width, { fg: '196' });
         this.history.addLines(lines);
       } else if (m.role === 'tool') {
-        // Show tool results collapsed
-        const content = m.content.length > 200 ? m.content.slice(0, 200) + '\u2026' : m.content;
-        const lines = this.textToLines(`[tool result] ${content}`, width, { fg: '244', dim: true });
-        this.history.addLines(lines);
+        // Collapsible tool result block
+        const blockIdx = this.blockCounter++;
+        const startLine = this.history.getLineCount();
+        const contentLines = m.content.split('\n');
+        const lineCount = contentLines.length;
+        const hasDiffHeader = contentLines.some(l => l.startsWith('--- ')) && contentLines.some(l => l.startsWith('+++ '));
+        const hasHunk = contentLines.some(l => l.startsWith('@@ '));
+        const isDiff = hasDiffHeader && hasHunk;
+        const blockType: 'diff' | 'tool' = isDiff ? 'diff' : 'tool';
+
+        // Auto-collapse tool results by default (unless explicitly expanded)
+        const isCollapsed = this.collapseState.has(blockIdx)
+          ? this.collapseState.get(blockIdx)!
+          : lineCount > collapseThreshold;
+
+        // Set default collapse state
+        if (!this.collapseState.has(blockIdx) && lineCount > collapseThreshold) {
+          this.collapseState.set(blockIdx, true);
+        }
+
+        if (isCollapsed) {
+          // Show header line + collapsed indicator
+          const preview = contentLines[0].slice(0, width - 30);
+          const hiddenCount = lineCount - 1;
+          const collapsedText = hiddenCount > 0
+            ? `[tool result] ${preview}…  [+${hiddenCount} lines — Tab to expand]`
+            : `[tool result] ${preview}`;
+          const lines = this.textToLines(collapsedText, width, { fg: '244', dim: true });
+          this.history.addLines(lines);
+        } else {
+          // Show full content (no truncation when expanded)
+          const expandedLines = this.textToLines(`[tool result] ${m.content}`, width, { fg: '244', dim: true });
+          this.history.addLines(expandedLines);
+        }
+
+        // Register this block for copy/apply
+        const renderedLineCount = this.history.getLineCount() - startLine;
+        let meta: BlockMeta = {
+          blockIndex: blockIdx,
+          type: blockType,
+          startLine,
+          lineCount: renderedLineCount,
+          rawContent: m.content,
+        };
+
+        // Parse diff for apply
+        if (isDiff) {
+          meta = { ...meta, ...parseDiffForApply(m.content) };
+        }
+
+        this.blockRegistry.push(meta);
       }
       this.history.addLine(createEmptyLine(width));
     }
+  }
+
+  /** Find the nearest block to a given line index, optionally filtered by type. */
+  private findNearestBlock(lineIndex: number, typeFilter?: string): BlockMeta | null {
+    let nearest: BlockMeta | null = null;
+    let nearestDist = Infinity;
+    for (const block of this.blockRegistry) {
+      if (typeFilter !== undefined && block.type !== typeFilter) continue;
+      const dist = Math.abs(block.startLine - lineIndex);
+      if (dist < nearestDist) {
+        nearestDist = dist;
+        nearest = block;
+      }
+    }
+    return nearest;
+  }
+
+  /**
+   * isCollapsed - Returns whether the block at blockIndex is collapsed.
+   */
+  public isCollapsed(blockIndex: number): boolean {
+    return this.collapseState.get(blockIndex) ?? false;
+  }
+
+  /**
+   * getBlockContentAtLine - Find the nearest block to the given line index.
+   * Returns the raw content of the block, or null if not found.
+   */
+  public getBlockContentAtLine(lineIndex: number): string | null {
+    return this.findNearestBlock(lineIndex)?.rawContent ?? null;
+  }
+
+  /**
+   * getDiffAtLine - Find the diff block nearest the given line index.
+   * Returns file path and original/updated content for applying.
+   */
+  public getDiffAtLine(lineIndex: number): { filePath: string; original: string; updated: string } | null {
+    const nearest = this.findNearestBlock(lineIndex, 'diff');
+    if (!nearest || !nearest.filePath) return null;
+    return {
+      filePath: nearest.filePath,
+      original: nearest.diffOriginal ?? '',
+      updated: nearest.diffUpdated ?? '',
+    };
+  }
+
+  /**
+   * toggleCollapseAtLine - Toggle the collapse state of the nearest block to the given line.
+   * Triggers a rebuild. Returns the blockIndex toggled, or -1 if none found.
+   */
+  public toggleCollapseAtLine(lineIndex: number): number {
+    const nearest = this.findNearestBlock(lineIndex);
+    if (!nearest) return -1;
+    const current = this.collapseState.get(nearest.blockIndex) ?? false;
+    this.collapseState.set(nearest.blockIndex, !current);
+    this.markDirty();
+    return nearest.blockIndex;
   }
 
   /** Options passed to the splash screen renderer. Set externally. */
@@ -301,6 +462,9 @@ export class ConversationManager {
     this.appendedUpTo = 0;
     this.lastRenderedWidth = 0;
     this.dirty = true;
+    this.collapseState.clear();
+    this.blockRegistry = [];
+    this.blockCounter = 0;
   }
 
   /**
@@ -376,4 +540,71 @@ export class ConversationManager {
     this.lastRenderedWidth = 0;
     this.dirty = true;
   }
+}
+
+/**
+ * parseDiffForApply - Extract file path, original, and updated content from a unified diff.
+ * Returns partial BlockMeta fields for diff blocks.
+ */
+export function parseDiffForApply(diffText: string): Pick<BlockMeta, 'filePath' | 'diffOriginal' | 'diffUpdated'> {
+  const lines = diffText.split('\n');
+  let filePath: string | undefined;
+
+  // Extract file path from +++ line
+  for (const line of lines) {
+    if (line.startsWith('+++ ')) {
+      // '+++ b/src/foo.ts' or '+++ src/foo.ts (updated)'
+      const raw = line.slice(4).trim();
+      const path = raw.startsWith('b/') ? raw.slice(2) : raw.split(' ')[0];
+      if (path && path !== '/dev/null') filePath = path;
+      break;
+    }
+  }
+
+  // Build original and updated from diff hunks
+  const originalLines: string[] = [];
+  const updatedLines: string[] = [];
+
+  for (const line of lines) {
+    if (line.startsWith('---') || line.startsWith('+++') || line.startsWith('@@')) continue;
+    if (line.startsWith('-')) {
+      originalLines.push(line.slice(1));
+    } else if (line.startsWith('+')) {
+      updatedLines.push(line.slice(1));
+    } else {
+      // Context line — belongs to both
+      const content = line.startsWith(' ') ? line.slice(1) : line;
+      originalLines.push(content);
+      updatedLines.push(content);
+    }
+  }
+
+  return {
+    filePath,
+    diffOriginal: originalLines.join('\n'),
+    diffUpdated: updatedLines.join('\n'),
+  };
+}
+
+/**
+ * applyDiffContent - Apply a diff's original→updated replacement to file content.
+ * Returns the new content on success, or an error string if the pattern is not found
+ * or is ambiguous (appears more than once).
+ */
+export function applyDiffContent(
+  fileContent: string,
+  original: string,
+  updated: string,
+): { ok: true; content: string } | { ok: false; error: string } {
+  if (!original) {
+    return { ok: false, error: 'empty original pattern' };
+  }
+  if (!fileContent.includes(original)) {
+    return { ok: false, error: 'original text not found in file' };
+  }
+  const occurrenceCount = fileContent.split(original).length - 1;
+  if (occurrenceCount > 1) {
+    return { ok: false, error: `ambiguous: pattern found ${occurrenceCount} times` };
+  }
+  return { ok: true, content: fileContent.replace(original, updated) };
 }

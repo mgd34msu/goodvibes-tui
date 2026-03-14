@@ -7,6 +7,9 @@ import type { CommandRegistry, CommandContext } from './command-registry.ts';
 import { AutocompleteEngine } from './autocomplete.ts';
 import { FilePickerModal } from './file-picker.ts';
 import { InputHistory } from './input-history.ts';
+import type { ConversationManager } from '../core/conversation.ts';
+import type { PermissionCategory } from '../permissions/manager.ts';
+import { readFileSync, writeFileSync } from 'node:fs';
 
 /**
  * InputHandler - Owns prompt text, paste registry, and keyboard/mouse handling.
@@ -33,6 +36,9 @@ export class InputHandler {
   public autocomplete: AutocompleteEngine | null = null;
   public filePicker = new FilePickerModal();
   private inputHistory: InputHistory | null = null;
+  private conversationManager: ConversationManager | null = null;
+  /** Time of last [COPIED] block feedback, for brief display. */
+  public lastBlockCopyTime = 0;
 
   /** Pasted images: maps marker IDs to base64 image data. */
   private imageRegistry = new Map<string, { data: string; mediaType: string }>();
@@ -64,6 +70,13 @@ export class InputHandler {
     this.commandRegistry = registry;
     this.commandContext = context;
     this.autocomplete = new AutocompleteEngine(registry);
+  }
+
+  /**
+   * setConversationManager - Wire in the conversation manager for block copy/apply/collapse.
+   */
+  public setConversationManager(cm: ConversationManager): void {
+    this.conversationManager = cm;
   }
 
   /**
@@ -146,6 +159,81 @@ export class InputHandler {
       this.bus.emit('render:request');
       setTimeout(() => this.bus.emit('render:request'), 2005);
     }
+  }
+
+  /**
+   * handleBlockCopy - Ctrl+Y: Copy the content of the nearest code/tool block.
+   */
+  private handleBlockCopy(): void {
+    const cm = this.conversationManager;
+    if (!cm) return;
+    const lineIndex = this.getScrollTop();
+    const content = cm.getBlockContentAtLine(lineIndex);
+    if (content) {
+      copyToClipboard(content);
+      this.lastBlockCopyTime = Date.now();
+      this.bus.emit('render:request');
+      setTimeout(() => this.bus.emit('render:request'), 2005);
+    }
+  }
+
+  /**
+   * handleBlockToggle - Tab (non-command mode): Toggle collapse of nearest block.
+   */
+  private handleBlockToggle(): void {
+    const cm = this.conversationManager;
+    if (!cm) return;
+    const lineIndex = this.getScrollTop();
+    const blockIdx = cm.toggleCollapseAtLine(lineIndex);
+    if (blockIdx >= 0) {
+      this.bus.emit('block:toggle-collapse', { blockIndex: blockIdx });
+      this.bus.emit('render:request');
+    }
+  }
+
+  /**
+   * handleDiffApply - Ctrl+A when a diff block is nearest: Apply the diff via EventBus.
+   * Returns true if a diff was found and applied (so caller can skip default Ctrl+A).
+   */
+  private handleDiffApply(): boolean {
+    const cm = this.conversationManager;
+    if (!cm) return false;
+    const lineIndex = this.getScrollTop();
+    const diff = cm.getDiffAtLine(lineIndex);
+    if (!diff || !diff.filePath) return false;
+
+    // Apply the diff using the file_edit permission flow via EventBus
+    this.bus.emit('permission:request', {
+      callId: `diff-apply-${Date.now()}`,
+      tool: 'file_edit',
+      args: { path: diff.filePath, original: diff.original, updated: diff.updated },
+      category: 'write' as PermissionCategory,
+      resolve: (approved: boolean) => {
+        if (!approved) return;
+        // Apply the diff using the imported fs functions
+        try {
+          const content = readFileSync(diff.filePath, 'utf-8');
+          if (diff.original && content.includes(diff.original)) {
+            // Count occurrences to prevent ambiguous replacement
+            const occurrenceCount = content.split(diff.original).length - 1;
+            if (occurrenceCount > 1) {
+              cm.log(`[Diff apply failed: pattern found ${occurrenceCount} times in ${diff.filePath} — ambiguous]`, { fg: '#ef4444' });
+            } else {
+              const newContent = content.replace(diff.original, diff.updated);
+              writeFileSync(diff.filePath, newContent, 'utf-8');
+              cm.log(`[Applied diff to ${diff.filePath}]`, { fg: '#22c55e' });
+            }
+          } else {
+            cm.log(`[Diff apply failed: original text not found in ${diff.filePath}]`, { fg: '#ef4444' });
+          }
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          cm.log(`[Diff apply error: ${msg}]`, { fg: '#ef4444' });
+        }
+        this.bus.emit('render:request');
+      },
+    });
+    return true;
   }
 
   /**
@@ -309,6 +397,11 @@ export class InputHandler {
           this.bus.emit('render:request');
           continue;
         }
+        // Ctrl+Y: copy nearest code/tool block to clipboard
+        if (token.logicalName === 'y' && token.ctrl && !this.commandMode) {
+          this.handleBlockCopy();
+          continue;
+        }
         // Ctrl+W: delete word backward
         if (token.logicalName === 'w' && token.ctrl) {
           let pos = this.cursorPos;
@@ -321,8 +414,11 @@ export class InputHandler {
           this.ensureInputCursorVisible();
           continue;
         }
-        // Ctrl+A: move to start of line
+        // Ctrl+A: apply nearest diff block if one is nearby, else move to start of line
         if (token.logicalName === 'a' && token.ctrl) {
+          if (!this.commandMode && this.handleDiffApply()) {
+            continue; // Diff found and apply initiated — skip cursor move
+          }
           // In multiline, move to start of current wrapped line
           const info = this.getWrappedPromptInfo(this.contentWidth);
           if (info.wrappedLines.length > 1) {
@@ -438,6 +534,11 @@ export class InputHandler {
         }
 
         // --- Normal mode ---
+        // Tab: toggle collapse of nearest block (when not in command mode)
+        if (token.logicalName === 'tab' && !this.commandMode) {
+          this.handleBlockToggle();
+          continue;
+        }
         if (token.logicalName === 'enter') {
           if (token.shift) {
             this.prompt = this.prompt.slice(0, this.cursorPos) + '\n' + this.prompt.slice(this.cursorPos);
@@ -558,7 +659,6 @@ export class InputHandler {
     }
     this.bus.emit('render:request');
   }
-
 
   /** Content width for wrapping — set by main.ts via setContentWidth(). */
   private contentWidth = 76;
