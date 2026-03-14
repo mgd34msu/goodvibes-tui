@@ -181,6 +181,14 @@ async function main() {
 
     // Flush any pending message renders before taking snapshot
     conversation.getDisplayBlocks();
+
+    // Auto-scroll to bottom when orchestrator is active (thinking or just completed)
+    // This ensures new content is visible after flush adds lines to the buffer
+    const maxScroll = Math.max(0, conversation.history.getLineCount() - vHeight);
+    if (orchestrator.isThinking || scrollTop >= maxScroll - 3) {
+      scrollTop = maxScroll;
+    }
+
     const viewport = conversation.history.getSnapshot(scrollTop, vHeight, width);
 
     if (orchestrator.isThinking) {
