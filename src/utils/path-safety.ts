@@ -1,5 +1,5 @@
 import { resolve, relative } from 'node:path';
-import { config } from '../config.ts';
+import { config } from '../config/index.ts';
 
 /**
  * Resolves an input path against the working directory and validates it is

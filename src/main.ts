@@ -8,7 +8,7 @@ import { ConversationManager } from './core/conversation.ts';
 import { Orchestrator } from './core/orchestrator.ts';
 import { InputHandler } from './input/handler.ts';
 import { SelectionManager } from './input/selection.ts';
-import { config } from './config.ts';
+import { config, configManager } from './config/index.ts';
 import { providerRegistry } from './providers/registry.ts';
 import { ToolRegistry } from './tools/registry.ts';
 import { FileReadTool } from './tools/file-read.ts';
@@ -78,10 +78,11 @@ async function main() {
 
   // --- Runtime state (mutable, can be changed by slash commands) ---
   const runtime = {
-    model: config.model,
-    provider: config.provider,
+    model: configManager.get('provider.model'),
+    provider: configManager.get('provider.provider'),
     debugMode: false,
     systemPrompt: config.systemPrompt ?? '',
+    reasoningEffort: configManager.get('provider.reasoningEffort'),
   };
 
   /** Content width inside the prompt box (box width minus padding). */
@@ -160,6 +161,7 @@ async function main() {
     providerRegistry,
     conversationManager: conversation,
     config,
+    configManager,
     runtime,
     renderRequest: () => bus.emit('render:request'),
     print: (text: string) => {

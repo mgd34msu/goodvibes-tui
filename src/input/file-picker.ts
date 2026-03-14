@@ -1,6 +1,6 @@
 import { readdir, stat } from 'node:fs/promises';
 import { join, relative } from 'node:path';
-import { config } from '../config.ts';
+import { config } from '../config/index.ts';
 
 /**
  * FilePickerModal - Fuzzy file finder triggered by @ in the input area.
