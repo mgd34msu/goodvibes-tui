@@ -1,7 +1,12 @@
 import { TerminalBuffer } from './buffer.ts';
 import { DiffEngine } from './diff.ts';
 import { type Line } from '../types/grid.ts';
-import { state } from '../core/state.ts';
+
+export interface SelectionInfo {
+  isCellSelected: (col: number, absoluteRow: number) => boolean;
+  scrollTop: number;
+  lineCount: number;
+}
 
 export interface CompositeRequest {
   width: number;
@@ -9,10 +14,12 @@ export interface CompositeRequest {
   header: Line[];
   viewport: Line[];
   footer: Line[];
+  selection?: SelectionInfo;
 }
 
 /**
  * Compositor - Authoritative TUI layout engine with Selection Overlay.
+ * Decoupled from global state — all needed data is passed as parameters.
  */
 export class Compositor {
   private lastBuffer: TerminalBuffer | null = null;
@@ -20,8 +27,13 @@ export class Compositor {
 
   constructor(private stdout: NodeJS.WriteStream) {}
 
+  public resetDiff(): void {
+    this.diffEngine.reset();
+    this.lastBuffer = null;
+  }
+
   public composite(params: CompositeRequest) {
-    const { width, height, header, viewport, footer } = params;
+    const { width, height, header, viewport, footer, selection } = params;
     const newBuffer = new TerminalBuffer(width, height);
 
     // 1. Draw Header (Rows 0-1)
@@ -29,10 +41,10 @@ export class Compositor {
 
     // 2. Draw Viewport (Starting at Row 2)
     const viewportStartY = 2;
-    const lineCount = state.history.getLineCount();
     const vHeight = height - header.length - footer.length;
-    
+
     // Calculate the offset for bottom-anchored short history
+    const lineCount = selection?.lineCount ?? 0;
     const offset = Math.max(0, vHeight - lineCount);
 
     viewport.forEach((line, i) => {
@@ -40,18 +52,18 @@ export class Compositor {
       if (screenY >= height) return;
       newBuffer.blitLine(screenY, line);
 
-      // Audit Fix: Apply Selection Highlighting Overlay
+      // Apply Selection Highlighting Overlay
       // Only highlight rows that actually contain history (past the bottom-anchor offset)
-      if (i >= offset) {
-        const absoluteRow = state.scrollTop + (i - offset);
+      if (selection && i >= offset) {
+        const absoluteRow = selection.scrollTop + (i - offset);
         for (let x = 0; x < width; x++) {
-          if (state.isCellSelected(x, absoluteRow)) {
+          if (selection.isCellSelected(x, absoluteRow)) {
             newBuffer.setCell(x, screenY, { bg: '4', fg: '0', bold: false, dim: false });
           }
         }
       }
     });
-    
+
     // 3. Draw Footer (Pinned to Bottom)
     const footerStart = height - footer.length;
     footer.forEach((line, i) => {
