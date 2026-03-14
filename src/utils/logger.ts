@@ -16,7 +16,7 @@ class ActivityLogger {
     this.logPath = join(logDir, 'activity.md');
   }
 
-  private write(level: string, message: string, data?: any) {
+  private write(level: string, message: string, data?: Record<string, unknown>) {
     const timestamp = new Date().toISOString();
     let entry = `[${timestamp}] [${level}] ${message}\n`;
     if (data) {
@@ -25,9 +25,9 @@ class ActivityLogger {
     appendFileSync(this.logPath, entry);
   }
 
-  info(message: string, data?: any) { this.write('INFO', message, data); }
-  error(message: string, data?: any) { this.write('ERROR', message, data); }
-  debug(message: string, data?: any) { this.write('DEBUG', message, data); }
+  info(message: string, data?: Record<string, unknown>) { this.write('INFO', message, data); }
+  error(message: string, data?: Record<string, unknown>) { this.write('ERROR', message, data); }
+  debug(message: string, data?: Record<string, unknown>) { this.write('DEBUG', message, data); }
 }
 
 export const logger = new ActivityLogger();

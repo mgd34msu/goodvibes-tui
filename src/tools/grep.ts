@@ -191,7 +191,3 @@ async function walkDir(
   }
 }
 
-/** @deprecated Use resolveAndValidatePath from path-safety.ts */
-export function _resolveSearchPath(rawPath: string): string {
-  return resolve(rawPath);
-}
