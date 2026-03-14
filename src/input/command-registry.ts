@@ -1,7 +1,8 @@
 import type { EventBus } from '../core/event-bus.ts';
 import type { ProviderRegistry } from '../providers/registry.ts';
 import type { ConversationManager } from '../core/conversation.ts';
-import type { AppConfig } from '../config.ts';
+import type { AppConfig } from '../config/index.ts';
+import type { ConfigManager } from '../config/index.ts';
 
 /**
  * CommandContext - Passed to every slash command handler so commands can
@@ -12,12 +13,14 @@ export interface CommandContext {
   providerRegistry: ProviderRegistry;
   conversationManager: ConversationManager;
   config: AppConfig;
+  configManager: ConfigManager;
   /** Mutable runtime state — commands can mutate these in-place. */
   runtime: {
     model: string;
     provider: string;
     debugMode: boolean;
     systemPrompt: string;
+    reasoningEffort: string;
   };
   /** Request a re-render. */
   renderRequest: () => void;

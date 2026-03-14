@@ -1,7 +1,7 @@
 import { describe, test, expect, beforeEach } from 'bun:test';
 import { PermissionManager } from '../../permissions/manager.ts';
 import { EventBus } from '../../core/event-bus.ts';
-import { config } from '../../config.ts';
+import { config } from '../../config/index.ts';
 
 // config.autoApprove reflects the --no-worries-just-vibes flag.
 // In the test environment (no CLI flag), it is false.

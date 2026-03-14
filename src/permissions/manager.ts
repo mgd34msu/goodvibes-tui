@@ -1,5 +1,5 @@
 import type { EventBus } from '../core/event-bus.ts';
-import { config } from '../config.ts';
+import { config } from '../config/index.ts';
 
 export type PermissionCategory = 'read' | 'write' | 'execute' | 'delegate';
 

@@ -1,7 +1,6 @@
-import { writeFileSync, readFileSync, mkdirSync, existsSync } from 'fs';
-import { join } from 'path';
-import { homedir } from 'os';
 import type { CommandRegistry, CommandContext } from './command-registry.ts';
+import type { ConfigKey } from '../config/index.ts';
+import { CONFIG_SCHEMA } from '../config/index.ts';
 
 /**
  * registerBuiltinCommands - Register all built-in slash commands into the registry.
@@ -9,7 +8,7 @@ import type { CommandRegistry, CommandContext } from './command-registry.ts';
  */
 export function registerBuiltinCommands(registry: CommandRegistry): void {
 
-  // ── /model ───────────────────────────────────────────────────────────────
+  // ── /model ──────────────────────────────────────────────
   registry.register({
     name: 'model',
     aliases: ['m'],
@@ -17,7 +16,6 @@ export function registerBuiltinCommands(registry: CommandRegistry): void {
     usage: '[model-id]',
     handler(args, ctx) {
       if (args.length === 0) {
-        // List selectable models
         const models = ctx.providerRegistry.getSelectableModels();
         const current = ctx.runtime.model;
         const lines = ['Available models:', ...models.map(m =>
@@ -31,9 +29,8 @@ export function registerBuiltinCommands(registry: CommandRegistry): void {
           const def = ctx.providerRegistry.getCurrentModel();
           ctx.runtime.model = def.id;
           ctx.runtime.provider = def.provider;
-          // Persist to config
-          saveConfigKey('model', modelId);
-          saveConfigKey('provider', def.provider);
+          ctx.configManager.set('provider.model', def.id);
+          ctx.configManager.set('provider.provider', def.provider);
           ctx.print(`Switched to model: ${def.displayName} (${def.provider})`);
           ctx.eventBus.emit('command:model-changed', { provider: def.provider, model: def.id });
         } catch (e) {
@@ -43,7 +40,7 @@ export function registerBuiltinCommands(registry: CommandRegistry): void {
     },
   });
 
-  // ── /help ────────────────────────────────────────────────────────────────
+  // ── /help ──────────────────────────────────────────────
   registry.register({
     name: 'help',
     aliases: ['h', '?'],
@@ -51,16 +48,25 @@ export function registerBuiltinCommands(registry: CommandRegistry): void {
     handler(_args, ctx) {
       const lines = [
         'Slash commands:',
-        '  /model [id]       Select LLM model',
-        '  /provider [name]  Switch provider',
-        '  /clear            Clear display (keep context)',
-        '  /reset            Clear display + context',
-        '  /compact          Summarize conversation to free context',
-        '  /config [k] [v]   Show or set config values',
-        '  /tools            List available tools',
-        '  /debug            Toggle debug mode',
-        '  /help             Show this help',
-        '  /quit             Exit',
+        '',
+        '  Model & Provider:',
+        '    /model [id]       Select LLM model',
+        '    /provider [name]  Switch provider',
+        '',
+        '  Config & Display:',
+        '    /config [key] [value]   Show or set config values',
+        '    /config reset [key]     Reset config key or all to defaults',
+        '    /debug            Toggle debug mode',
+        '',
+        '  Conversation:',
+        '    /clear            Clear display (keep context)',
+        '    /reset            Clear display + context',
+        '    /compact          Summarize conversation to free context',
+        '',
+        '  Tools & System:',
+        '    /tools            List available tools',
+        '    /help             Show this help',
+        '    /quit             Exit',
         '',
         'Keyboard shortcuts:',
         '  Enter             Send message',
@@ -79,7 +85,7 @@ export function registerBuiltinCommands(registry: CommandRegistry): void {
     },
   });
 
-  // ── /clear ───────────────────────────────────────────────────────────────
+  // ── /clear ─────────────────────────────────────────────
   registry.register({
     name: 'clear',
     aliases: ['cls'],
@@ -90,7 +96,7 @@ export function registerBuiltinCommands(registry: CommandRegistry): void {
     },
   });
 
-  // ── /reset ───────────────────────────────────────────────────────────────
+  // ── /reset ─────────────────────────────────────────────
   registry.register({
     name: 'reset',
     aliases: [],
@@ -101,7 +107,7 @@ export function registerBuiltinCommands(registry: CommandRegistry): void {
     },
   });
 
-  // ── /compact ─────────────────────────────────────────────────────────────
+  // ── /compact ───────────────────────────────────────────
   registry.register({
     name: 'compact',
     aliases: [],
@@ -114,35 +120,136 @@ export function registerBuiltinCommands(registry: CommandRegistry): void {
     },
   });
 
-  // ── /config ──────────────────────────────────────────────────────────────
+  // ── /config ────────────────────────────────────────────
   registry.register({
     name: 'config',
     aliases: ['cfg'],
     description: 'Show or set config values',
-    usage: '[key] [value]',
+    usage: '[category|key] [value] | reset [key]',
     handler(args, ctx) {
+      const cm = ctx.configManager;
+      const all = cm.getAll();
+      const categories = ['display', 'provider', 'behavior'] as const;
+
+      // /config reset [key]
+      if (args[0] === 'reset') {
+        const resetKey = args[1] as ConfigKey | undefined;
+        if (resetKey) {
+          try {
+            cm.reset(resetKey);
+            const schema = CONFIG_SCHEMA.find(s => s.key === resetKey);
+            const defaultVal = schema ? schema.default : '?';
+            ctx.print(`Reset ${resetKey} to default: ${String(defaultVal)}`);
+          } catch (e) {
+            ctx.print(`Error: ${(e as Error).message}`);
+          }
+        } else {
+          cm.reset();
+          ctx.print('All config reset to defaults.');
+        }
+        return;
+      }
+
+      // /config (no args) — show all settings grouped by category
       if (args.length === 0) {
-        // Show current config (mask API keys)
-        const lines = [
-          `provider:     ${ctx.runtime.provider}`,
-          `model:        ${ctx.runtime.model}`,
-          `autoApprove:  ${ctx.config.autoApprove}`,
-          `workingDir:   ${ctx.config.workingDir}`,
-          `systemPrompt: ${ctx.runtime.systemPrompt ? ctx.runtime.systemPrompt.slice(0, 60) + '...' : '(none)'}`,
-          `debug:        ${ctx.runtime.debugMode}`,
-        ];
+        const lines: string[] = ['Config settings:'];
+        for (const cat of categories) {
+          lines.push(`  [${cat}]`);
+          const catObj = all[cat] as Record<string, unknown>;
+          for (const [field, val] of Object.entries(catObj)) {
+            const key = `${cat}.${field}`;
+            const schema = CONFIG_SCHEMA.find(s => s.key === key);
+            const desc = schema ? ` — ${schema.description}` : '';
+            lines.push(`    ${key.padEnd(36)} ${String(val)}${desc}`);
+          }
+        }
         ctx.print(lines.join('\n'));
-      } else if (args.length === 1) {
-        ctx.print(`Usage: /config <key> <value>`);
-      } else {
+        return;
+      }
+
+      // /config <category> — show one category
+      const firstArg = args[0];
+      if (categories.includes(firstArg as typeof categories[number]) && args.length === 1) {
+        const cat = firstArg as typeof categories[number];
+        const catObj = all[cat] as Record<string, unknown>;
+        const lines: string[] = [`[${cat}]`];
+        for (const [field, val] of Object.entries(catObj)) {
+          const key = `${cat}.${field}`;
+          const schema = CONFIG_SCHEMA.find(s => s.key === key);
+          const desc = schema ? ` — ${schema.description}` : '';
+          lines.push(`  ${key.padEnd(36)} ${String(val)}${desc}`);
+        }
+        ctx.print(lines.join('\n'));
+        return;
+      }
+
+      // /config <dot.key> — show one setting
+      if (args.length === 1 && firstArg.includes('.')) {
+        const key = firstArg as ConfigKey;
+        const schema = CONFIG_SCHEMA.find(s => s.key === key);
+        if (!schema) {
+          ctx.print(`Unknown config key: ${key}\nRun /config to see all keys.`);
+          return;
+        }
+        try {
+          const val = cm.get(key);
+          const defaultVal = schema.default;
+          const lines = [
+            `${key}`,
+            `  value:   ${String(val)}`,
+            `  default: ${String(defaultVal)}`,
+            `  type:    ${schema.type}${schema.enumValues ? ` (${schema.enumValues.join(', ')})` : ''}`,
+            `  desc:    ${schema.description}`,
+          ];
+          ctx.print(lines.join('\n'));
+        } catch (e) {
+          ctx.print(`Error: ${(e as Error).message}`);
+        }
+        return;
+      }
+
+      // /config <dot.key> <value> — set value
+      if (args.length >= 2 && firstArg.includes('.')) {
+        const key = firstArg as ConfigKey;
+        const rawValue = args.slice(1).join(' ');
+        const schema = CONFIG_SCHEMA.find(s => s.key === key);
+        if (!schema) {
+          ctx.print(`Unknown config key: ${key}\nRun /config to see all keys.`);
+          return;
+        }
+
+        let coerced: unknown;
+        try {
+          coerced = coerceValue(rawValue, schema.type, schema.enumValues);
+        } catch (e) {
+          ctx.print(`Invalid value for ${key}: ${(e as Error).message}`);
+          return;
+        }
+
+        try {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          cm.set(key, coerced as any);
+          ctx.print(`Set ${key} = ${String(coerced)}`);
+
+          // Keep runtime in sync for live fields
+          if (key === 'provider.model') ctx.runtime.model = coerced as string;
+          if (key === 'provider.provider') ctx.runtime.provider = coerced as string;
+          if (key === 'provider.reasoningEffort') ctx.runtime.reasoningEffort = coerced as string;
+        } catch (e) {
+          ctx.print(`Error: ${(e as Error).message}`);
+        }
+        return;
+      }
+
+      // Fallback: legacy model/provider/system shortcuts
+      if (args.length >= 2) {
         const [key, ...rest] = args;
         const value = rest.join(' ');
         switch (key) {
           case 'system':
           case 'systemPrompt':
             ctx.runtime.systemPrompt = value;
-            saveConfigKey('systemPrompt', value);
-            ctx.print(`System prompt updated.`);
+            ctx.print(`System prompt updated (runtime only; use provider.systemPromptFile for persistence).`);
             break;
           case 'model':
             try {
@@ -150,27 +257,28 @@ export function registerBuiltinCommands(registry: CommandRegistry): void {
               const def = ctx.providerRegistry.getCurrentModel();
               ctx.runtime.model = def.id;
               ctx.runtime.provider = def.provider;
-              saveConfigKey('model', value);
+              cm.set('provider.model', value);
               ctx.print(`Model set to: ${def.displayName}`);
             } catch (e) {
               ctx.print(`Error: ${(e as Error).message}`);
             }
             break;
           default:
-            ctx.print(`Unknown config key: ${key}`);
+            ctx.print(`Unknown config key: ${key}\nRun /config to see all keys.`);
         }
+        return;
       }
+
+      ctx.print(`Usage: /config [category|key] [value]\n/config reset [key]`);
     },
   });
 
-  // ── /tools ───────────────────────────────────────────────────────────────
+  // ── /tools ────────────────────────────────────────────
   registry.register({
     name: 'tools',
     aliases: ['t'],
     description: 'List available tools',
     handler(_args, ctx) {
-      // Tools are accessible via the orchestrator; we emit an event to request the list
-      // For now, show the registered tool names from config context
       const toolNames = [
         'file-read', 'file-write', 'file-edit',
         'shell-exec', 'grep', 'list-dir', 'glob',
@@ -180,7 +288,7 @@ export function registerBuiltinCommands(registry: CommandRegistry): void {
     },
   });
 
-  // ── /provider ────────────────────────────────────────────────────────────
+  // ── /provider ──────────────────────────────────────────
   registry.register({
     name: 'provider',
     aliases: ['p'],
@@ -195,7 +303,6 @@ export function registerBuiltinCommands(registry: CommandRegistry): void {
         )].join('\n'));
       } else {
         const providerName = args[0];
-        // Find a selectable model for the requested provider
         const models = ctx.providerRegistry.getSelectableModels();
         const match = models.find(m => m.provider === providerName);
         if (!match) {
@@ -206,8 +313,8 @@ export function registerBuiltinCommands(registry: CommandRegistry): void {
           ctx.providerRegistry.setCurrentModel(match.id);
           ctx.runtime.model = match.id;
           ctx.runtime.provider = providerName;
-          saveConfigKey('provider', providerName);
-          saveConfigKey('model', match.id);
+          ctx.configManager.set('provider.provider', providerName);
+          ctx.configManager.set('provider.model', match.id);
           ctx.print(`Switched to provider: ${providerName} (model: ${match.id})`);
           ctx.eventBus.emit('command:model-changed', { provider: providerName, model: match.id });
         } catch (e) {
@@ -217,7 +324,7 @@ export function registerBuiltinCommands(registry: CommandRegistry): void {
     },
   });
 
-  // ── /quit ────────────────────────────────────────────────────────────────
+  // ── /quit ─────────────────────────────────────────────
   registry.register({
     name: 'quit',
     aliases: ['q', ':q'],
@@ -227,7 +334,7 @@ export function registerBuiltinCommands(registry: CommandRegistry): void {
     },
   });
 
-  // ── /debug ───────────────────────────────────────────────────────────────
+  // ── /debug ────────────────────────────────────────────
   registry.register({
     name: 'debug',
     aliases: [],
@@ -239,22 +346,31 @@ export function registerBuiltinCommands(registry: CommandRegistry): void {
   });
 }
 
-/**
- * saveConfigKey - Persist a single config key to the global config file.
- * Creates the directory and file if they don't exist.
- */
-export function saveConfigKey(key: string, value: string): void {
-  try {
-    const configDir = join(homedir(), '.config', 'goodvibes');
-    const configPath = join(configDir, 'config.json');
-    mkdirSync(configDir, { recursive: true });
-    let existing: Record<string, unknown> = {};
-    try {
-      if (existsSync(configPath)) {
-        existing = JSON.parse(readFileSync(configPath, 'utf-8')) as Record<string, unknown>;
+/** Coerce a string value to the appropriate type for a config setting. */
+function coerceValue(
+  raw: string,
+  type: 'boolean' | 'number' | 'string' | 'enum',
+  enumValues?: string[]
+): unknown {
+  switch (type) {
+    case 'boolean': {
+      if (raw === 'true' || raw === '1' || raw === 'yes') return true;
+      if (raw === 'false' || raw === '0' || raw === 'no') return false;
+      throw new Error(`Expected true/false, got: ${raw}`);
+    }
+    case 'number': {
+      const n = Number(raw);
+      if (isNaN(n)) throw new Error(`Expected a number, got: ${raw}`);
+      return n;
+    }
+    case 'enum': {
+      if (enumValues && !enumValues.includes(raw)) {
+        throw new Error(`Expected one of: ${enumValues.join(', ')}; got: ${raw}`);
       }
-    } catch { /* file may not exist yet or may be malformed */ }
-    existing[key] = value;
-    writeFileSync(configPath, JSON.stringify(existing, null, 2) + '\n', 'utf-8');
-  } catch { /* non-fatal: config save failure */ }
+      return raw;
+    }
+    case 'string':
+      return raw;
+  }
 }
+

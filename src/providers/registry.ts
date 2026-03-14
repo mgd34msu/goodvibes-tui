@@ -3,7 +3,7 @@ import { OpenAIProvider } from './openai.ts';
 import { OpenAICompatProvider } from './openai-compat.ts';
 import { AnthropicProvider } from './anthropic.ts';
 import { GeminiProvider } from './gemini.ts';
-import { config } from '../config.ts';
+import { config } from '../config/index.ts';
 
 /** Describes a selectable model and its capabilities. */
 export interface ModelDefinition {

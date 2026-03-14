@@ -5,7 +5,7 @@ import type { ToolCall, ToolResult } from '../types/tools.ts';
 import { PermissionError, ProviderError, ToolError } from '../types/errors.ts';
 import { providerRegistry } from '../providers/registry.ts';
 import type { LLMProvider } from '../providers/interface.ts';
-import { config } from '../config.ts';
+import { config } from '../config/index.ts';
 import type { PermissionManager } from '../permissions/manager.ts';
 import type { AcpManager } from '../acp/manager.ts';
 import type { SubagentTask } from '../acp/protocol.ts';
