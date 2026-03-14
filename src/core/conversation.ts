@@ -9,11 +9,21 @@ import { interpolateColor, getDisplayWidth, wrapText } from '../utils/terminal-w
  * ConversationManager - Owns conversation messages and the rendered history buffer.
  * Extracted from StateManager.
  */
+interface Message {
+  role: 'user' | 'assistant' | 'system';
+  content: string;
+}
+
 export class ConversationManager {
   public history = new InfiniteBuffer();
-  private messages: { role: string; content: string }[] = [];
+  private messages: Message[] = [];
+  private getWidth: () => number;
 
-  public getMessagesForLLM(): { role: string; content: string }[] {
+  constructor(getWidth: () => number = () => process.stdout.columns || 80) {
+    this.getWidth = getWidth;
+  }
+
+  public getMessagesForLLM(): { role: 'user' | 'assistant' | 'system'; content: string }[] {
     return this.messages.map(m => ({ role: m.role, content: m.content }));
   }
 
@@ -42,7 +52,7 @@ export class ConversationManager {
    */
   public rebuildHistory(): void {
     this.history.clear();
-    const width = process.stdout.columns || 80;
+    const width = this.getWidth();
 
     if (this.messages.length === 0) {
       this.addSplashScreen(width);
@@ -104,7 +114,7 @@ export class ConversationManager {
   }
 
   public log(text: string, style: Partial<Cell> = {}, indent = '  '): void {
-    const width = process.stdout.columns || 80;
+    const width = this.getWidth();
     const lines = text.split('\n').map((l, i) =>
       UIFactory.stringToLine((i === 0 ? l : indent + l), width, style)
     );

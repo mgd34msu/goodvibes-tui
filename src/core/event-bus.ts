@@ -1,5 +1,3 @@
-import type { Cell } from '../types/grid.ts';
-
 export interface EventMap {
   // Orchestrator lifecycle
   'turn:start': { prompt: string };

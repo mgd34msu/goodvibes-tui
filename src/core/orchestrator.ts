@@ -1,8 +1,8 @@
-import { InceptionProvider } from './inception.ts';
-import { config } from '../config.ts';
 import type { ConversationManager } from './conversation.ts';
 import type { EventBus } from './event-bus.ts';
 import { ProviderError } from '../types/errors.ts';
+import { providerRegistry } from '../providers/registry.ts';
+import type { LLMProvider } from '../providers/interface.ts';
 
 const SPINNER_FRAMES = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
 
@@ -16,7 +16,6 @@ export class Orchestrator {
   public usage = { up: 0, down: 0 };
   public messageQueue: string[] = [];
 
-  private llm: InceptionProvider;
   private animInterval: ReturnType<typeof setInterval> | null = null;
 
   constructor(
@@ -24,11 +23,7 @@ export class Orchestrator {
     private conversation: ConversationManager,
     private getViewportHeight: () => number,
     private scrollToEnd: (vHeight: number) => void,
-    private getInputQueue: () => string[],
-  ) {
-    const apiKey = config.apiKeys['inceptionlabs'] ?? '';
-    this.llm = new InceptionProvider(apiKey);
-  }
+  ) {}
 
   public getSpinner(): string {
     return SPINNER_FRAMES[this.thinkingFrame % SPINNER_FRAMES.length];
@@ -48,6 +43,12 @@ export class Orchestrator {
     }
 
     await this.runTurn(text);
+
+    // Process any messages queued while the LLM was thinking (iterative, not recursive)
+    while (this.messageQueue.length > 0) {
+      const next = this.messageQueue.shift()!;
+      await this.runTurn(next);
+    }
   }
 
   private async runTurn(text: string): Promise<void> {
@@ -66,9 +67,18 @@ export class Orchestrator {
     this.bus.emit('render:request');
 
     try {
-      const response = await this.llm.sendMessage({
-        messages: this.conversation.getMessagesForLLM(),
-        onText: () => {},
+      const model = providerRegistry.getCurrentModel();
+      const provider: LLMProvider = providerRegistry.getForModel(model.id);
+      const rawMessages = this.conversation.getMessagesForLLM();
+      // Map ConversationManager's simple messages to the ProviderMessage union type
+      const providerMessages = rawMessages
+        .filter((m) => m.role === 'user' || m.role === 'assistant')
+        .map((m) => ({ role: m.role as 'user' | 'assistant', content: m.content }));
+
+      const response = await provider.chat({
+        model: model.id,
+        messages: providerMessages,
+        reasoningEffort: model.capabilities.reasoning ? 'medium' : undefined,
       });
 
       this.conversation.addAssistantMessage(response.content);
@@ -87,11 +97,6 @@ export class Orchestrator {
       this.scrollToEnd(this.getViewportHeight());
       this.bus.emit('render:request');
 
-      // Process queued messages
-      const next = this.messageQueue.shift();
-      if (next) {
-        await this.runTurn(next);
-      }
     }
   }
 }

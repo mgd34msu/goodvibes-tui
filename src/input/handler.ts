@@ -5,12 +5,11 @@ import type { EventBus } from '../core/event-bus.ts';
 import type { InfiniteBuffer } from '../core/history.ts';
 
 /**
- * InputHandler - Owns prompt text, paste registry, message queue, and keyboard/mouse handling.
+ * InputHandler - Owns prompt text, paste registry, and keyboard/mouse handling.
  * Extracted from main.ts and StateManager.
  */
 export class InputHandler {
   public prompt = '';
-  public messageQueue: string[] = [];
   public showExitNotice = false;
   public lastCopyTime = 0;
 
@@ -71,16 +70,6 @@ export class InputHandler {
     }
 
     return expanded;
-  }
-
-  public pullFromQueue(): boolean {
-    if (this.messageQueue.length === 0) return false;
-    const lastMsg = this.messageQueue.pop();
-    if (lastMsg !== undefined) {
-      this.prompt = lastMsg;
-      return true;
-    }
-    return false;
   }
 
   private handleCopy(): void {
@@ -150,8 +139,7 @@ export class InputHandler {
         if (token.logicalName === 'backspace') {
           this.prompt = this.prompt.slice(0, -1);
         } else if (token.logicalName === 'up') {
-          if (this.messageQueue.length > 0) this.pullFromQueue();
-          else this.scroll(-3);
+          this.scroll(-3);
         } else if (token.logicalName === 'down') {
           this.scroll(3);
         }
