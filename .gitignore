@@ -1,0 +1,19 @@
+# Environment
+.env
+.env.*
+
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+
+# GoodVibes runtime
+.goodvibes/
+
+# Bun
+bun.lock
+
+# OS
+.DS_Store
+Thumbs.db
