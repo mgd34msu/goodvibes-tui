@@ -1,4 +1,4 @@
-import { type Line } from '../types/grid.ts';
+import { type Line, createStyledCell } from '../types/grid.ts';
 import { UIFactory } from './ui-factory.ts';
 import { getDisplayWidth } from '../utils/terminal-width.ts';
 
@@ -91,7 +91,7 @@ export function renderFileTree(
       for (const ch of sizeStr) {
         if (cx >= width) break;
         const cw = getDisplayWidth(ch);
-        line[cx] = { char: ch, fg: '240', bg: '', bold: false, dim: true, underline: false, italic: false, strikethrough: false };
+        line[cx] = createStyledCell(ch, { fg: '240', dim: true });
         if (cw === 2 && cx + 1 < width) line[cx + 1] = { ...line[cx], char: '' };
         cx += cw;
       }
