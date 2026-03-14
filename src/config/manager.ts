@@ -80,9 +80,14 @@ export class ConfigManager {
     return structuredClone(this.config) as DeepReadonly<GoodVibesConfig>;
   }
 
-  /** Return a config category. */
+  /** Return a deep-cloned snapshot of a config category. */
   getCategory(category: 'display' | 'provider' | 'behavior'): Readonly<GoodVibesConfig[typeof category]> {
-    return this.config[category];
+    return structuredClone(this.config[category]);
+  }
+
+  /** Return the live internal config reference. For Proxy/internal use only — do NOT mutate. */
+  getRaw(): GoodVibesConfig {
+    return this.config;
   }
 
   /** Return the full schema. */
