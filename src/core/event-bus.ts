@@ -7,6 +7,11 @@ export interface EventMap {
   'turn:complete': { response: string };
   'turn:error': { error: Error };
 
+  // Streaming events
+  'turn:stream-start': void;
+  'turn:stream-delta': { content: string; accumulated: string; reasoning?: string; toolCalls?: import('../providers/interface.ts').PartialToolCall[] };
+  'turn:stream-end': void;
+
   // Subagent events
   'subagent:spawned': { id: string; task: string };
   'subagent:update': { id: string; update: import('../acp/protocol.ts').SessionNotification };

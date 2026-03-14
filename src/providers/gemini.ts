@@ -1,6 +1,7 @@
 import type { LLMProvider, ChatRequest, ChatResponse } from './interface.ts';
 import { ProviderError } from '../types/errors.ts';
 import { withRetry } from '../utils/retry.ts';
+import { logger } from '../utils/logger.ts';
 import {
   toGeminiFunctionDeclarations,
   toGeminiContents,
@@ -27,6 +28,7 @@ interface GeminiResponseBody {
  * GeminiProvider — calls the Gemini generateContent API directly via fetch.
  * Tools are `functionDeclarations` inside a `tools` array.
  * Tool calls come as `functionCall` parts; results as `functionResponse` parts.
+ * Uses streamGenerateContent for real-time token delivery when onDelta is provided.
  */
 export class GeminiProvider implements LLMProvider {
   readonly name = 'gemini';
@@ -44,7 +46,7 @@ export class GeminiProvider implements LLMProvider {
   }
 
   async chat(params: ChatRequest): Promise<ChatResponse> {
-    const { messages, tools, model, maxTokens, signal, systemPrompt } = params;
+    const { messages, tools, model, maxTokens, signal, systemPrompt, onDelta } = params;
 
     return withRetry(async () => {
       const { contents, systemInstruction } = toGeminiContents(messages, systemPrompt);
@@ -65,7 +67,8 @@ export class GeminiProvider implements LLMProvider {
         body['generationConfig'] = { maxOutputTokens: maxTokens };
       }
 
-      const url = `${GEMINI_API_BASE}/models/${model}:generateContent`;
+      // Always use streaming endpoint; parse NDJSON chunks
+      const url = `${GEMINI_API_BASE}/models/${model}:streamGenerateContent?alt=sse`;
 
       let res: Response;
       try {
@@ -89,23 +92,82 @@ export class GeminiProvider implements LLMProvider {
         throw new ProviderError(`Gemini API error ${res.status}: ${text}`, res.status);
       }
 
-      const data = (await res.json()) as GeminiResponseBody;
-      const candidate = data.candidates?.[0];
-      const parts = candidate?.content?.parts ?? [];
-      const { text, toolCalls } = fromGeminiParts(parts);
+      // Accumulate state from streaming chunks
+      const allParts: GeminiPart[] = [];
+      let inputTokens = 0;
+      let outputTokens = 0;
+      let lastFinishReason = '';
+      let streamedText = '';
+
+      const reader = res.body?.getReader();
+      if (!reader) throw new ProviderError('No response body');
+
+      const decoder = new TextDecoder();
+      let buffer = '';
+
+      try {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split('\n');
+          buffer = lines.pop() ?? '';
+
+          for (const line of lines) {
+            if (!line.startsWith('data: ')) continue;
+            const data = line.slice(6).trim();
+            if (!data || data === '[DONE]') continue;
+
+            let chunk: GeminiResponseBody;
+            try {
+              chunk = JSON.parse(data) as GeminiResponseBody;
+            } catch {
+              logger.debug('Gemini SSE: failed to parse JSON chunk', { data });
+              continue;
+            }
+
+            const candidate = chunk.candidates?.[0];
+            if (candidate) {
+              const parts = candidate.content?.parts ?? [];
+              for (const part of parts) {
+                allParts.push(part);
+                if (part.text && onDelta) {
+                  streamedText += part.text;
+                  onDelta({ content: part.text });
+                }
+                if (part.functionCall && onDelta) {
+                  onDelta({ toolCalls: [{ index: 0, name: part.functionCall.name, arguments: JSON.stringify(part.functionCall.args) }] });
+                }
+              }
+              if (candidate.finishReason) {
+                lastFinishReason = candidate.finishReason;
+              }
+            }
+
+            if (chunk.usageMetadata) {
+              inputTokens = chunk.usageMetadata.promptTokenCount ?? inputTokens;
+              outputTokens = chunk.usageMetadata.candidatesTokenCount ?? outputTokens;
+            }
+          }
+        }
+      } finally {
+        reader.releaseLock();
+      }
+
+      // Use streamed text directly if available (avoids re-parsing duplicated text parts)
+      const { text: parsedText, toolCalls } = fromGeminiParts(allParts);
+      // Prefer streamedText for content; fall back to parsed if no streaming happened
+      const text = streamedText || parsedText;
 
       let stopReason: ChatResponse['stopReason'] = 'end';
-      const finish = candidate?.finishReason;
-      if (finish === 'MAX_TOKENS') stopReason = 'max_tokens';
+      if (lastFinishReason === 'MAX_TOKENS') stopReason = 'max_tokens';
       else if (toolCalls.length > 0) stopReason = 'tool_use';
 
       return {
         content: text,
         toolCalls,
-        usage: {
-          inputTokens: data.usageMetadata?.promptTokenCount ?? 0,
-          outputTokens: data.usageMetadata?.candidatesTokenCount ?? 0,
-        },
+        usage: { inputTokens, outputTokens },
         stopReason,
       };
     });

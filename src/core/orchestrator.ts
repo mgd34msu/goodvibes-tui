@@ -4,8 +4,8 @@ import type { ToolRegistry } from '../tools/registry.ts';
 import type { ToolCall, ToolResult } from '../types/tools.ts';
 import { PermissionError, ProviderError, ToolError } from '../types/errors.ts';
 import { providerRegistry } from '../providers/registry.ts';
-import type { LLMProvider } from '../providers/interface.ts';
-import { config } from '../config/index.ts';
+import type { LLMProvider, StreamDelta } from '../providers/interface.ts';
+import { config, configManager } from '../config/index.ts';
 import type { PermissionManager } from '../permissions/manager.ts';
 import type { AcpManager } from '../acp/manager.ts';
 import type { SubagentTask } from '../acp/protocol.ts';
@@ -27,6 +27,8 @@ export class Orchestrator {
   private acpManager: AcpManager | null = null;
   /** Message count at the start of a turn, used to rollback on cancel. */
   private turnStartMessageCount = 0;
+  /** Whether a streaming block is currently active (for cleanup on abort). */
+  private isStreaming = false;
 
   constructor(
     private bus: EventBus,
@@ -163,9 +165,34 @@ export class Orchestrator {
       const model = providerRegistry.getCurrentModel();
       const provider: LLMProvider = providerRegistry.getForModel(model.id);
       const toolDefinitions = this.toolRegistry.getToolDefinitions();
+      const streamEnabled = configManager.get('display.stream') as boolean;
 
       let continueLoop = true;
       while (continueLoop) {
+        // Wire up streaming delta handler when streaming is enabled
+        let streamAccumulated = '';
+        const onDelta = streamEnabled
+          ? (delta: StreamDelta) => {
+              if (delta.content) {
+                streamAccumulated += delta.content;
+                this.conversation.updateStreamingBlock(streamAccumulated);
+              }
+              this.bus.emit('turn:stream-delta', {
+                content: delta.content ?? '',
+                accumulated: streamAccumulated,
+                ...(delta.reasoning !== undefined ? { reasoning: delta.reasoning } : {}),
+                ...(delta.toolCalls !== undefined ? { toolCalls: delta.toolCalls } : {}),
+              });
+              this.bus.emit('render:request');
+            }
+          : undefined;
+
+        if (onDelta) {
+          this.isStreaming = true;
+          this.conversation.startStreamingBlock();
+          this.bus.emit('turn:stream-start');
+        }
+
         const response = await provider.chat({
           model: model.id,
           messages: this.conversation.getMessagesForLLM(),
@@ -173,7 +200,14 @@ export class Orchestrator {
           systemPrompt: config.systemPrompt,
           reasoningEffort: model.capabilities.reasoning ? 'medium' : undefined,
           signal: this.abortController?.signal,
+          onDelta,
         });
+
+        if (onDelta) {
+          this.isStreaming = false;
+          this.conversation.finalizeStreamingBlock();
+          this.bus.emit('turn:stream-end');
+        }
 
         this.usage.input += response.usage.inputTokens;
         this.usage.output += response.usage.outputTokens;
@@ -205,6 +239,12 @@ export class Orchestrator {
       }
     } catch (err: unknown) {
       if (this.abortController?.signal.aborted) {
+        // Clean up streaming block if one was active when aborted
+        if (this.isStreaming) {
+          this.isStreaming = false;
+          this.conversation.finalizeStreamingBlock();
+          this.bus.emit('turn:stream-end');
+        }
         // Remove any partial LLM response, keep user message but mark it cancelled
         this.conversation.removeMessagesAfter(this.turnStartMessageCount);
         this.conversation.markLastUserMessageCancelled();

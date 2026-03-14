@@ -109,6 +109,43 @@ export class ConversationManager {
     this.markDirty();
   }
 
+  /**
+   * startStreamingBlock - Add a placeholder assistant message for incremental display.
+   * Called when streaming begins.
+   */
+  public startStreamingBlock(): void {
+    this.messages.push({ role: 'assistant', content: '' });
+    this.markDirty();
+  }
+
+  /**
+   * updateStreamingBlock - Update the in-progress streaming block with accumulated content.
+   * Called per-delta during streaming.
+   */
+  public updateStreamingBlock(content: string): void {
+    for (let i = this.messages.length - 1; i >= 0; i--) {
+      if (this.messages[i].role === 'assistant') {
+        (this.messages[i] as { role: 'assistant'; content: string }).content = content;
+        this.markDirty();
+        return;
+      }
+    }
+  }
+
+  /**
+   * finalizeStreamingBlock - Remove the streaming placeholder.
+   * The orchestrator calls addAssistantMessage immediately after with the final content.
+   */
+  public finalizeStreamingBlock(): void {
+    for (let i = this.messages.length - 1; i >= 0; i--) {
+      if (this.messages[i].role === 'assistant') {
+        this.messages.splice(i, 1);
+        break;
+      }
+    }
+    this.markDirty();
+  }
+
   public getDisplayBlocks(): Line[] {
     this.flushHistory();
     return this.history.getAllLines();

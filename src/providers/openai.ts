@@ -30,7 +30,7 @@ export class OpenAIProvider implements LLMProvider {
   }
 
   async chat(params: ChatRequest): Promise<ChatResponse> {
-    const { messages, tools, model, maxTokens, signal, systemPrompt } = params;
+    const { messages, tools, model, maxTokens, signal, systemPrompt, onDelta } = params;
 
     return withRetry(async () => {
       let responseText = '';
@@ -62,6 +62,7 @@ export class OpenAIProvider implements LLMProvider {
 
           if (delta?.content) {
             responseText += delta.content;
+            if (onDelta) onDelta({ content: delta.content });
           }
 
           // Accumulate streaming tool_calls deltas
@@ -75,6 +76,9 @@ export class OpenAIProvider implements LLMProvider {
               if (tc.id) entry.id = tc.id;
               if (tc.function?.name) entry.name = tc.function.name;
               if (tc.function?.arguments) entry.args += tc.function.arguments;
+              if (onDelta) {
+                onDelta({ toolCalls: [{ index: idx, id: tc.id, name: tc.function?.name, arguments: tc.function?.arguments }] });
+              }
             }
           }
 

@@ -49,6 +49,7 @@ export class OpenAICompatProvider implements LLMProvider {
       systemPrompt,
       reasoningEffort,
       reasoningSummary,
+      onDelta,
     } = params;
 
     return withRetry(async () => {
@@ -97,11 +98,13 @@ export class OpenAICompatProvider implements LLMProvider {
 
           if (delta?.content) {
             responseText += delta.content;
+            if (onDelta) onDelta({ content: delta.content });
           }
 
-          // Mercury-2: reasoning_summary may appear on the chunk root
+          // Mercury-2: reasoning_summary may appear on any chunk — capture and emit
           if (raw.reasoning_summary) {
             reasoningSummaryText = raw.reasoning_summary;
+            if (onDelta) onDelta({ reasoning: raw.reasoning_summary });
           }
 
           // Accumulate streaming tool_calls deltas
@@ -115,6 +118,9 @@ export class OpenAICompatProvider implements LLMProvider {
               if (tc.id) entry.id = tc.id;
               if (tc.function?.name) entry.name = tc.function.name;
               if (tc.function?.arguments) entry.args += tc.function.arguments;
+              if (onDelta) {
+                onDelta({ toolCalls: [{ index: idx, id: tc.id, name: tc.function?.name, arguments: tc.function?.arguments }] });
+              }
             }
           }
 
