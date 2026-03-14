@@ -466,14 +466,12 @@ export class InputHandler {
         wrappedLines.push(wLine);
         charsSeen += wLine.length;
 
-        // Account for spaces eaten by word-wrap between segments
-        // If the next wrapped segment exists and the raw line continues,
-        // we may have consumed a space at the break point
+        // Account for the space consumed at each word-wrap break point.
+        // wordWrapLine splits "abc def|ghi jkl" into ["abc def", "ghi jkl"]
+        // The space between "def" and "ghi" is in the raw string but in
+        // neither wrapped segment. Increment charsSeen to skip past it.
         if (w < wrapped.length - 1) {
-          // Check if the break point was at a space
-          if (charsSeen < rawLine.length + (r > 0 ? 1 : 0) && rawLine[charsSeen - (charsSeen - rawLine.length > 0 ? 0 : 0)] === ' ') {
-            // Skip — wrapLine handles this
-          }
+          charsSeen++; // the consumed space at the break point
         }
       }
 
