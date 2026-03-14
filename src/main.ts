@@ -26,7 +26,7 @@ async function main() {
 
   // --- Module wiring ---
   const bus = new EventBus();
-  const conversation = new ConversationManager();
+  const conversation = new ConversationManager(() => stdout.columns || 80);
   const compositor = new Compositor(stdout);
   const selection = new SelectionManager();
 
@@ -58,7 +58,6 @@ async function main() {
     conversation,
     getViewportHeight,
     scrollToEnd,
-    () => input.messageQueue,
   );
 
   const input = new InputHandler(
@@ -84,7 +83,7 @@ async function main() {
       viewport.push(...thinking);
     }
 
-    input.messageQueue.forEach(msg => {
+    orchestrator.messageQueue.forEach(msg => {
       viewport.push(...UIFactory.createQueuedMessageFragment(width, msg));
     });
 
