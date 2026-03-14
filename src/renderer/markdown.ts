@@ -226,7 +226,6 @@ function renderTable(rows: string[], width: number, indent: number): Line[] {
   }
 
   const bc = '240'; // border color
-  const emptyLine = createEmptyLine(width);
 
   // Helper: build a border line
   const makeBorder = (left: string, mid: string, right: string, horiz: string): Line => {
