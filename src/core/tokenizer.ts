@@ -85,6 +85,13 @@ export class InputTokenizer {
           if (charCode === 99 || charCode === 67 || charCode === 3) logicalName = 'c';
           if (suffix === 'A') logicalName = 'up';
           if (suffix === 'B') logicalName = 'down';
+          if (suffix === 'C') logicalName = 'right';
+          if (suffix === 'D') logicalName = 'left';
+          if (suffix === 'H') logicalName = 'home';
+          if (suffix === 'F') logicalName = 'end';
+          if (suffix === '~' && charCode === 5) logicalName = 'pageup';
+          if (suffix === '~' && charCode === 6) logicalName = 'pagedown';
+          if (suffix === '~' && charCode === 3) logicalName = 'delete';
           tokens.push({ type: 'key', name: full, logicalName, ctrl, shift, meta });
           this.buffer = this.buffer.slice(full.length);
           continue;

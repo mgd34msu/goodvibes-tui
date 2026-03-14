@@ -12,6 +12,7 @@ import { AutocompleteEngine } from './autocomplete.ts';
  */
 export class InputHandler {
   public prompt = '';
+  public cursorPos = 0;
   public showExitNotice = false;
   public lastCopyTime = 0;
   /** True when the user has entered slash-command mode (prompt starts with '/'). */
@@ -126,7 +127,8 @@ export class InputHandler {
     for (const token of tokens) {
       if (token.type === 'text') {
         const text = this.registerPaste(token.value);
-        this.prompt += text;
+        this.prompt = this.prompt.slice(0, this.cursorPos) + text + this.prompt.slice(this.cursorPos);
+        this.cursorPos += text.length;
         // Detect slash-command mode: '/' typed into empty prompt
         if (this.prompt === '/' && this.commandRegistry) {
           this.commandMode = true;
@@ -161,6 +163,7 @@ export class InputHandler {
         // Ctrl+U: clear prompt line
         if (token.logicalName === 'u' && token.ctrl) {
           this.prompt = '';
+          this.cursorPos = 0;
           if (this.commandMode) {
             this.commandMode = false;
             this.autocomplete?.reset();
@@ -184,6 +187,7 @@ export class InputHandler {
           if (token.logicalName === 'escape') {
             // Exit command mode without executing
             this.prompt = '';
+            this.cursorPos = 0;
             this.commandMode = false;
             this.autocomplete?.reset();
             this.bus.emit('command:mode-exit');
@@ -224,6 +228,7 @@ export class InputHandler {
             // Execute the command
             const raw = this.prompt.trim();
             this.prompt = '';
+            this.cursorPos = 0;
             this.commandMode = false;
             this.autocomplete?.reset();
             this.bus.emit('command:mode-exit');
@@ -243,7 +248,8 @@ export class InputHandler {
         // --- Normal mode ---
         if (token.logicalName === 'enter') {
           if (token.shift) {
-            this.prompt += '\n';
+            this.prompt = this.prompt.slice(0, this.cursorPos) + '\n' + this.prompt.slice(this.cursorPos);
+            this.cursorPos++;
           } else {
             const text = this.prompt.trim();
             if (text === ':q') {
@@ -252,6 +258,7 @@ export class InputHandler {
             }
             if (text) {
               this.prompt = '';
+              this.cursorPos = 0;
               const fullText = this.expandPrompt(text);
               this.bus.emit('input:submit', { text: fullText });
             }
@@ -260,11 +267,30 @@ export class InputHandler {
         }
 
         if (token.logicalName === 'backspace') {
-          this.prompt = this.prompt.slice(0, -1);
+          if (this.cursorPos > 0) {
+            this.prompt = this.prompt.slice(0, this.cursorPos - 1) + this.prompt.slice(this.cursorPos);
+            this.cursorPos--;
+          }
+        } else if (token.logicalName === 'delete') {
+          if (this.cursorPos < this.prompt.length) {
+            this.prompt = this.prompt.slice(0, this.cursorPos) + this.prompt.slice(this.cursorPos + 1);
+          }
+        } else if (token.logicalName === 'left') {
+          if (this.cursorPos > 0) this.cursorPos--;
+        } else if (token.logicalName === 'right') {
+          if (this.cursorPos < this.prompt.length) this.cursorPos++;
+        } else if (token.logicalName === 'home') {
+          this.cursorPos = 0;
+        } else if (token.logicalName === 'end') {
+          this.cursorPos = this.prompt.length;
         } else if (token.logicalName === 'up') {
           this.scroll(-3);
         } else if (token.logicalName === 'down') {
           this.scroll(3);
+        } else if (token.logicalName === 'pageup') {
+          this.scroll(-this.getViewportHeight());
+        } else if (token.logicalName === 'pagedown') {
+          this.scroll(this.getViewportHeight());
         }
       } else if (token.type === 'mouse') {
         const headerH = 2;
@@ -275,7 +301,10 @@ export class InputHandler {
 
         if (token.button === 1 && token.action === 'press') {
           const text = pasteFromClipboard();
-          if (text) this.prompt += text;
+          if (text) {
+            this.prompt = this.prompt.slice(0, this.cursorPos) + text + this.prompt.slice(this.cursorPos);
+            this.cursorPos += text.length;
+          }
           this.bus.emit('render:request');
           continue;
         }

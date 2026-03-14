@@ -113,7 +113,8 @@ export class UIFactory {
     showExitNotice: boolean,
     lastCopyTime: number,
     model?: string,
-    toolCount?: number
+    toolCount?: number,
+    cursorPos?: number
   ): Line[] {
     const lines: Line[] = [];
     const promptLines = prompt.split('\n');
@@ -130,8 +131,22 @@ export class UIFactory {
     promptLines.forEach((text, i) => {
       const contentW = boxWidth - 4;
       const prefix = i === 0 ? ' › ' : '   ';
-      const suffix = i === promptLines.length - 1 ? '█' : '';
-      const rawText = `${prefix}${text}${suffix}`;
+      // Insert cursor block at cursorPos within the prompt text
+      let displayText = text;
+      if (cursorPos !== undefined && i === promptLines.length - 1) {
+        // Calculate cursor offset within this line
+        let lineStart = 0;
+        for (let li = 0; li < i; li++) lineStart += promptLines[li].length + 1; // +1 for \n
+        const posInLine = cursorPos - lineStart;
+        if (posInLine >= 0 && posInLine <= text.length) {
+          displayText = text.slice(0, posInLine) + '\u2588' + text.slice(posInLine);
+        } else {
+          displayText = text + '\u2588';
+        }
+      } else if (i === promptLines.length - 1) {
+        displayText = text + '\u2588';
+      }
+      const rawText = `${prefix}${displayText}`;
       const paddedText = rawText.padEnd(contentW);
       const contentLine = createBaseLine();
       for (let x = 0; x < boxWidth; x++) {
