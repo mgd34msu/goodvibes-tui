@@ -472,17 +472,29 @@ export class InputHandler {
         break;
       } else if (this.cursorPos === rawStart + length) {
         // Cursor is at the end of this segment
-        if (s === segments.length - 1 || segments[s + 1].rawStart > this.cursorPos) {
-          // Last segment or next segment starts later (gap = consumed space/newline)
-          // Show cursor at end of this segment
+        if (s === segments.length - 1) {
+          // Last segment — cursor at end
           cursorWrappedLine = s;
           cursorCol = length;
           break;
         }
-        // Otherwise cursor is at the start of the next segment — let loop continue
+        if (segments[s + 1].rawStart > this.cursorPos) {
+          // Gap between segments. Check if it's a \n or a consumed space.
+          const gapChar = this.prompt[this.cursorPos];
+          if (gapChar === '\n') {
+            // Newline gap: cursor should show at start of next line
+            cursorWrappedLine = s + 1;
+            cursorCol = 0;
+            break;
+          }
+          // Consumed space from word-wrap: cursor at end of this line
+          cursorWrappedLine = s;
+          cursorCol = length;
+          break;
+        }
+        // No gap — cursor is at start of next segment, let loop continue
       } else if (this.cursorPos < rawStart) {
-        // Cursor is in a gap before this segment (consumed space/newline)
-        // Snap to start of this segment
+        // Cursor is in a gap before this segment
         cursorWrappedLine = s;
         cursorCol = 0;
         break;
