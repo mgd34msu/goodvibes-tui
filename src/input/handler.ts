@@ -223,7 +223,7 @@ export class InputHandler {
           const charBefore = this.cursorPos >= 2 ? this.prompt[this.cursorPos - 2] : undefined;
           if (charBefore === undefined || charBefore === ' ' || charBefore === '\n') {
             // @ is at word start — open file picker
-            void this.filePicker.open(this.cursorPos - 1);
+            this.filePicker.open(this.cursorPos - 1);
           }
         }
 

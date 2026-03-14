@@ -19,17 +19,32 @@ export class FilePickerModal {
   private filesCached = false;
   private maxResults = 15;
 
+  private onUpdate: (() => void) | null = null;
+
+  /** Set a callback to trigger re-render when file list loads. */
+  setOnUpdate(fn: () => void): void {
+    this.onUpdate = fn;
+  }
+
   /** Activate the file picker at the given prompt position. */
-  async open(insertPos: number): Promise<void> {
+  open(insertPos: number): void {
     this.active = true;
     this.query = '';
     this.selectedIndex = 0;
     this.insertPos = insertPos;
 
-    if (!this.filesCached) {
-      await this.loadFiles();
+    if (this.filesCached) {
+      this.updateResults();
+    } else {
+      // Show "Loading..." immediately, load files in background
+      this.results = [];
+      this.loadFiles().then(() => {
+        if (this.active) {
+          this.updateResults();
+          this.onUpdate?.();
+        }
+      });
     }
-    this.updateResults();
   }
 
   /** Close the file picker without selecting. */

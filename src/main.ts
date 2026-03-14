@@ -171,6 +171,7 @@ async function main() {
 
   input.setCommandRegistry(commandRegistry, commandContext);
   input.setContentWidth(getPromptContentWidth());
+  input.filePicker.setOnUpdate(() => bus.emit('render:request'));
 
   // --- Splash options ---
   const toolCount = toolRegistry.list().length;
