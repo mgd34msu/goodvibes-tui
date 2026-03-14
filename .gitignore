@@ -20,3 +20,6 @@ bun.lock
 # OS
 .DS_Store
 Thumbs.db
+
+# Unrelated project files
+task_scheduler/
