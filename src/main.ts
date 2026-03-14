@@ -71,6 +71,9 @@ async function main() {
   let pendingPermission: PermissionRequest | null = null;
 
   let scrollTop = 0;
+  /** When true, view auto-scrolls to bottom on every render.
+   *  False when user manually scrolls up. Reset on user input. */
+  let scrollLocked = true;
 
   // --- Runtime state (mutable, can be changed by slash commands) ---
   const runtime = {
@@ -89,6 +92,8 @@ async function main() {
     const vHeight = getViewportHeight();
     const maxScroll = Math.max(0, conversation.history.getLineCount() - vHeight);
     scrollTop = Math.max(0, Math.min(scrollTop + delta, maxScroll));
+    // Re-lock if user scrolled to bottom, otherwise unlock
+    scrollLocked = scrollTop >= maxScroll;
   };
 
   const scrollToEnd = (vHeight: number) => {
@@ -193,7 +198,7 @@ async function main() {
 
     // Auto-scroll to bottom when orchestrator is active or user was near bottom
     const maxScroll = Math.max(0, conversation.history.getLineCount() - effectiveVHeight);
-    if (orchestrator.isThinking || scrollTop >= maxScroll - 3) {
+    if (scrollLocked) {
       scrollTop = maxScroll;
     }
 
@@ -227,7 +232,10 @@ async function main() {
 
   // --- Event wiring ---
   bus.on('render:request', render);
-  bus.on('input:submit', ({ text }) => { orchestrator.handleUserInput(text); });
+  bus.on('input:submit', ({ text }) => {
+    scrollLocked = true; // Re-lock on any user input
+    orchestrator.handleUserInput(text);
+  });
 
   // Permission prompt wiring — store the pending request and trigger a render.
   // The orchestrator's Promise is blocked until resolve() is called.
