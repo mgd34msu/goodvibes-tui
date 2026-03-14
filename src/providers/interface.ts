@@ -23,7 +23,7 @@ export interface ChatRequest {
 export interface ChatResponse {
   content: string;
   toolCalls: ToolCall[];
-  usage: { inputTokens: number; outputTokens: number };
+  usage: { inputTokens: number; outputTokens: number; cacheReadTokens?: number; cacheWriteTokens?: number };
   stopReason: 'end' | 'tool_use' | 'max_tokens' | 'error';
   /** Mercury-2 specific: condensed chain-of-thought, if requested. */
   reasoningSummary?: string;

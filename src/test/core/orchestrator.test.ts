@@ -65,8 +65,8 @@ describe('Orchestrator', () => {
 
     test('usage starts at zero', async () => {
       const { orch } = await buildOrchestrator();
-      expect(orch.usage.up).toBe(0);
-      expect(orch.usage.down).toBe(0);
+      expect(orch.usage.input).toBe(0);
+      expect(orch.usage.output).toBe(0);
     });
 
     test('abort() does not throw when not thinking', async () => {

@@ -19,7 +19,7 @@ const SPINNER_FRAMES = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', 
 export class Orchestrator {
   public isThinking = false;
   public thinkingFrame = 0;
-  public usage = { up: 0, down: 0 };
+  public usage = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 };
   public messageQueue: string[] = [];
 
   private animInterval: ReturnType<typeof setInterval> | null = null;
@@ -175,8 +175,10 @@ export class Orchestrator {
           signal: this.abortController?.signal,
         });
 
-        this.usage.up += response.usage.inputTokens;
-        this.usage.down += response.usage.outputTokens;
+        this.usage.input += response.usage.inputTokens;
+        this.usage.output += response.usage.outputTokens;
+        this.usage.cacheRead += response.usage.cacheReadTokens ?? 0;
+        this.usage.cacheWrite += response.usage.cacheWriteTokens ?? 0;
 
         this.bus.emit('turn:llm-response', {
           content: response.content,

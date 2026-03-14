@@ -239,11 +239,12 @@ async function main() {
           orchestrator.usage,
           input.showExitNotice,
           input.lastCopyTime,
-          undefined, undefined,
+          runtime.model, toolCount,
           info.visibleCursorLine >= 0
             ? info.visibleLines.slice(0, info.visibleCursorLine).reduce((s, l) => s + l.length + 1, 0) + info.visibleCursorCol
             : undefined,
-          config.workingDir
+          config.workingDir,
+          runtime.provider
         );
       })(),
       selection: {
