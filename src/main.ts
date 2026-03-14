@@ -179,6 +179,8 @@ async function main() {
     const height = stdout.rows || 24;
     const vHeight = getViewportHeight();
 
+    // Flush any pending message renders before taking snapshot
+    conversation.getDisplayBlocks();
     const viewport = conversation.history.getSnapshot(scrollTop, vHeight, width);
 
     if (orchestrator.isThinking) {
