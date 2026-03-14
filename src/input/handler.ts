@@ -446,17 +446,19 @@ export class InputHandler {
 
     for (let r = 0; r < rawLines.length; r++) {
       const rawLine = rawLines[r];
-      // Word-wrap this raw line
+      const rawLineStart = charsSeen;
       const wrapped = this.wordWrapLine(rawLine, contentWidth);
+
+      // Track position within the raw line directly (not via segment lengths)
+      // to correctly handle both space-breaks and force-breaks
+      let posInRawLine = 0;
 
       for (let w = 0; w < wrapped.length; w++) {
         const wLine = wrapped[w];
-        const lineStartInPrompt = charsSeen;
-        const lineEndInPrompt = charsSeen + wLine.length;
+        const lineStartInPrompt = rawLineStart + posInRawLine;
+        const lineEndInPrompt = lineStartInPrompt + wLine.length;
 
-        // Check if cursor falls in this wrapped segment
         if (this.cursorPos >= lineStartInPrompt && this.cursorPos <= lineEndInPrompt) {
-          // Only assign if this is the tightest match (cursor at boundary goes to earlier line end)
           if (this.cursorPos < lineEndInPrompt || w === wrapped.length - 1) {
             cursorWrappedLine = wrappedLines.length;
             cursorCol = this.cursorPos - lineStartInPrompt;
@@ -464,20 +466,20 @@ export class InputHandler {
         }
 
         wrappedLines.push(wLine);
-        charsSeen += wLine.length;
+        posInRawLine += wLine.length;
 
-        // Account for the space consumed at each word-wrap break point.
-        // wordWrapLine splits "abc def|ghi jkl" into ["abc def", "ghi jkl"]
-        // The space between "def" and "ghi" is in the raw string but in
-        // neither wrapped segment. Increment charsSeen to skip past it.
+        // Skip the space consumed at a word-wrap break (but NOT at force-breaks)
         if (w < wrapped.length - 1) {
-          charsSeen++; // the consumed space at the break point
+          if (posInRawLine < rawLine.length && rawLine[posInRawLine] === ' ') {
+            posInRawLine++;
+          }
         }
       }
 
+      charsSeen = rawLineStart + rawLine.length;
       // Account for the \n between raw lines (except after the last)
       if (r < rawLines.length - 1) {
-        charsSeen++; // the \n character
+        charsSeen++;
       }
     }
 
