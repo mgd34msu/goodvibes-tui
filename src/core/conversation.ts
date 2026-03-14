@@ -10,6 +10,10 @@ import type { ProviderMessage } from '../providers/interface.ts';
 /**
  * ConversationManager - Owns conversation messages and the rendered history buffer.
  * Supports tool-use messages (assistant with tool calls, tool results).
+ *
+ * History is rebuilt lazily: a dirty flag is set on every message mutation and
+ * the buffer is only actually reconstructed when getDisplayBlocks() is called
+ * or when the width changes. This avoids O(n) rebuilds per turn in long sessions.
  */
 type Message =
   | { role: 'user'; content: string }
@@ -21,6 +25,12 @@ export class ConversationManager {
   public history = new InfiniteBuffer();
   private messages: Message[] = [];
   private getWidth: () => number;
+  /** Tracks the rendered width; a change invalidates the full history. */
+  private lastRenderedWidth = 0;
+  /** When true the buffer needs to be rebuilt before the next display. */
+  private dirty = true;
+  /** Index of the first message not yet appended to the buffer. */
+  private appendedUpTo = 0;
 
   constructor(getWidth: () => number = () => process.stdout.columns || 80) {
     this.getWidth = getWidth;
@@ -44,13 +54,13 @@ export class ConversationManager {
 
   public addUserMessage(content: string): void {
     this.messages.push({ role: 'user', content });
-    this.rebuildHistory();
+    this.markDirty();
   }
 
   /** Add an assistant message, optionally with tool calls (when the LLM invoked tools). */
   public addAssistantMessage(content: string, toolCalls?: ToolCall[]): void {
     this.messages.push({ role: 'assistant', content, toolCalls });
-    this.rebuildHistory();
+    this.markDirty();
   }
 
   /** Add a batch of tool results after tool calls have been executed. */
@@ -61,25 +71,29 @@ export class ConversationManager {
         : `Error: ${r.error ?? 'Unknown error'}`;
       this.messages.push({ role: 'tool', callId: r.callId, content });
     }
-    this.rebuildHistory();
+    this.markDirty();
   }
 
   public addSystemMessage(content: string): void {
     this.messages.push({ role: 'system', content });
-    this.rebuildHistory();
+    this.markDirty();
   }
 
   public getDisplayBlocks(): Line[] {
+    this.flushHistory();
     return this.history.getAllLines();
   }
 
   /**
-   * rebuildHistory - Clears and reconstructs the InfiniteBuffer from current messages.
-   * Called after every message mutation.
+   * rebuildHistory - Full rebuild. Called when width changes or on first render.
+   * For incremental appends use flushHistory().
    */
   public rebuildHistory(): void {
     this.history.clear();
+    this.appendedUpTo = 0;
     const width = this.getWidth();
+    this.lastRenderedWidth = width;
+    this.dirty = false;
 
     const displayMessages = this.messages.filter(
       (m) => m.role !== 'tool', // Tool results are internal; not shown directly
@@ -90,7 +104,46 @@ export class ConversationManager {
       return;
     }
 
-    this.messages.forEach(m => {
+    this.appendMessages(this.messages, width);
+    this.appendedUpTo = this.messages.length;
+  }
+
+  /**
+   * flushHistory - Incremental update. Appends only newly added messages.
+   * Falls back to a full rebuild when the terminal width has changed.
+   */
+  private flushHistory(): void {
+    if (!this.dirty) return;
+
+    const width = this.getWidth();
+
+    if (width !== this.lastRenderedWidth || this.appendedUpTo > this.messages.length) {
+      // Width changed or messages were removed — must do a full rebuild
+      this.rebuildHistory();
+      return;
+    }
+
+    // Splash screen case: if we had no messages before and now we do, rebuild
+    const hadNoMessages = this.appendedUpTo === 0;
+    if (hadNoMessages && this.messages.length > 0) {
+      this.rebuildHistory();
+      return;
+    }
+
+    // Append only the new messages
+    const newMessages = this.messages.slice(this.appendedUpTo);
+    this.appendMessages(newMessages, width);
+    this.appendedUpTo = this.messages.length;
+    this.dirty = false;
+  }
+
+  private markDirty(): void {
+    this.dirty = true;
+  }
+
+  /** Render a slice of messages into the history buffer. */
+  private appendMessages(messages: Message[], width: number): void {
+    for (const m of messages) {
       if (m.role === 'user') {
         this.history.addLines(UIFactory.createMessageBar(width, m.content));
       } else if (m.role === 'assistant') {
@@ -114,12 +167,12 @@ export class ConversationManager {
         this.history.addLines(lines);
       } else if (m.role === 'tool') {
         // Show tool results collapsed
-        const content = m.content.length > 200 ? m.content.slice(0, 200) + '…' : m.content;
+        const content = m.content.length > 200 ? m.content.slice(0, 200) + '\u2026' : m.content;
         const lines = this.textToLines(`[tool result] ${content}`, width, { fg: '244', dim: true });
         this.history.addLines(lines);
       }
       this.history.addLine(createEmptyLine(width));
-    });
+    }
   }
 
   private addSplashScreen(width: number): void {

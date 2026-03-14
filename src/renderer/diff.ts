@@ -9,12 +9,18 @@ export class DiffEngine {
   private lastBg = '';
   private lastBold = false;
   private lastDim = false;
+  private lastUnderline = false;
+  private lastItalic = false;
+  private lastStrikethrough = false;
 
   public reset(): void {
     this.lastFg = '';
     this.lastBg = '';
     this.lastBold = false;
     this.lastDim = false;
+    this.lastUnderline = false;
+    this.lastItalic = false;
+    this.lastStrikethrough = false;
   }
 
   public diff(oldBuffer: TerminalBuffer | null, newBuffer: TerminalBuffer): string {
@@ -40,7 +46,8 @@ export class DiffEngine {
 
   private isCellDifferent(a: Cell | undefined, b: Cell): boolean {
     if (!a) return true;
-    return a.char !== b.char || a.fg !== b.fg || a.bg !== b.bg || a.bold !== b.bold || a.dim !== b.dim;
+    return a.char !== b.char || a.fg !== b.fg || a.bg !== b.bg || a.bold !== b.bold || a.dim !== b.dim ||
+      a.underline !== b.underline || a.italic !== b.italic || a.strikethrough !== b.strikethrough;
   }
 
   private sanitizeColor(color: string): string {
@@ -58,11 +65,19 @@ export class DiffEngine {
     const fg = this.sanitizeColor(cell.fg);
     const bg = this.sanitizeColor(cell.bg);
 
-    if (fg !== this.lastFg || bg !== this.lastBg || cell.bold !== this.lastBold || cell.dim !== this.lastDim) {
-      style += '\x1b[0m'; // Reset
+    const changed = fg !== this.lastFg || bg !== this.lastBg ||
+      cell.bold !== this.lastBold || cell.dim !== this.lastDim ||
+      cell.underline !== this.lastUnderline || cell.italic !== this.lastItalic ||
+      cell.strikethrough !== this.lastStrikethrough;
+
+    if (changed) {
+      style += '\x1b[0m'; // Reset all attributes
       if (cell.bold) style += '\x1b[1m';
       if (cell.dim) style += '\x1b[2m';
-      
+      if (cell.italic) style += '\x1b[3m';
+      if (cell.underline) style += '\x1b[4m';
+      if (cell.strikethrough) style += '\x1b[9m';
+
       if (fg) {
         const isRgb = fg.includes(';');
         style += isRgb ? `\x1b[38;2;${fg}m` : `\x1b[38;5;${fg}m`;
@@ -71,11 +86,14 @@ export class DiffEngine {
         const isRgb = bg.includes(';');
         style += isRgb ? `\x1b[48;2;${bg}m` : `\x1b[48;5;${bg}m`;
       }
-      
+
       this.lastFg = fg;
       this.lastBg = bg;
       this.lastBold = cell.bold;
       this.lastDim = cell.dim;
+      this.lastUnderline = cell.underline;
+      this.lastItalic = cell.italic;
+      this.lastStrikethrough = cell.strikethrough;
     }
     return style;
   }

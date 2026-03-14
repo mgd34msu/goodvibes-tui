@@ -1,5 +1,6 @@
 import type { Tool, ToolDefinition, ToolResult } from '../types/tools.ts';
 import { ToolError } from '../types/errors.ts';
+import { resolveAndValidatePath } from '../utils/path-safety.ts';
 
 /**
  * FileReadTool - Read a file's contents, optionally restricted to a line range.
@@ -31,15 +32,22 @@ export class FileReadTool implements Tool {
     },
   };
 
-  async execute(args: Record<string, unknown>): Promise<ToolResult> {
+  async execute(args: Record<string, unknown>): Promise<Omit<ToolResult, 'callId'>> {
     const path = args['path'];
     if (typeof path !== 'string' || !path) {
-      return { callId: '', success: false, error: 'Missing required argument: path' };
+      return { success: false, error: 'Missing required argument: path' };
+    }
+
+    let resolvedPath: string;
+    try {
+      resolvedPath = resolveAndValidatePath(path);
+    } catch (err) {
+      return { success: false, error: err instanceof Error ? err.message : String(err) };
     }
 
     let text: string;
     try {
-      text = await Bun.file(path).text();
+      text = await Bun.file(resolvedPath).text();
     } catch (err) {
       throw new ToolError(
         `Failed to read file '${path}': ${err instanceof Error ? err.message : String(err)}`,
@@ -71,7 +79,6 @@ export class FileReadTool implements Tool {
       .join('\n');
 
     return {
-      callId: '',
       success: true,
       output: `File: ${path}${rangeNote}\n${numbered}`,
     };

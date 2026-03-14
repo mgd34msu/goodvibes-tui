@@ -2,6 +2,8 @@ import type { Tool, ToolDefinition, ToolResult } from '../types/tools.ts';
 import { ToolError } from '../types/errors.ts';
 import { readdir, stat, readFile } from 'node:fs/promises';
 import { join, relative, resolve } from 'node:path';
+import { resolveAndValidatePath } from '../utils/path-safety.ts';
+import { globToRegex } from '../utils/glob-to-regex.ts';
 
 /**
  * ListDirTool - List directory contents, respecting .gitignore patterns.
@@ -33,26 +35,33 @@ export class ListDirTool implements Tool {
     },
   };
 
-  async execute(args: Record<string, unknown>): Promise<ToolResult> {
-    const dirPath = typeof args['path'] === 'string' ? args['path'] : process.cwd();
+  async execute(args: Record<string, unknown>): Promise<Omit<ToolResult, 'callId'>> {
+    const rawPath = typeof args['path'] === 'string' ? args['path'] : process.cwd();
     const recursive = args['recursive'] === true;
     const maxDepth = typeof args['maxDepth'] === 'number' ? args['maxDepth'] : 5;
+
+    let dirPath: string;
+    try {
+      dirPath = resolveAndValidatePath(rawPath);
+    } catch (err) {
+      return { success: false, error: err instanceof Error ? err.message : String(err) };
+    }
 
     // Load .gitignore patterns from the root
     const ignorePatterns = await loadGitignore(process.cwd());
 
     try {
       const lines: string[] = [];
-      await listDir(resolve(dirPath), lines, recursive, maxDepth, 0, ignorePatterns, dirPath);
+      await listDir(dirPath, lines, recursive, maxDepth, 0, ignorePatterns, rawPath);
 
       if (lines.length === 0) {
-        return { callId: '', success: true, output: '(empty directory)' };
+        return { success: true, output: '(empty directory)' };
       }
 
-      return { callId: '', success: true, output: lines.join('\n') };
+      return { success: true, output: lines.join('\n') };
     } catch (err) {
       throw new ToolError(
-        `Failed to list directory '${dirPath}': ${err instanceof Error ? err.message : String(err)}`,
+        `Failed to list directory '${rawPath}': ${err instanceof Error ? err.message : String(err)}`,
         'list_dir',
       );
     }
@@ -81,7 +90,8 @@ async function listDir(
 
     // Skip ignored paths
     if (isIgnored(relPath, ignorePatterns)) continue;
-    if (entry.name.startsWith('.') && entry.name !== '.env') continue; // skip dotfiles except .env
+    // Skip all dotfiles (no exceptions)
+    if (entry.name.startsWith('.')) continue;
 
     const indent = '  '.repeat(depth);
 
@@ -115,19 +125,7 @@ async function loadGitignore(cwd: string): Promise<RegExp[]> {
       const trimmed = line.trim();
       if (!trimmed || trimmed.startsWith('#')) continue;
       try {
-        // Simple glob-to-regex for .gitignore patterns
-        // Escape character-by-character to avoid TS regex literal parsing issues
-        const specials = new Set(['.', '+', '^', '$', '{', '}', '(', ')', '|', '[', ']', '\\']);
-        let escaped = '';
-        for (const ch of trimmed) {
-          if (specials.has(ch)) {
-            escaped += '\\' + ch;
-          } else {
-            escaped += ch;
-          }
-        }
-        escaped = escaped.replace(/\*/g, '[^/]*').replace(/\?/g, '[^/]');
-        patterns.push(new RegExp(`(^|/)${escaped}(/|$)`));
+        patterns.push(globToRegex(trimmed));
       } catch { /* skip invalid patterns */ }
     }
   } catch { /* no .gitignore */ }

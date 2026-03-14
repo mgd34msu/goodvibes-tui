@@ -14,9 +14,7 @@ export interface EventMap {
   'subagent:error': { id: string; error: Error };
 
   // Permission flow
-  'permission:request': { callId: string; tool: string; args: Record<string, unknown>; resolve: (approved: boolean) => void };
-  'permission:response': { callId: string; approved: boolean };
-
+  'permission:request': { callId: string; tool: string; args: Record<string, unknown>; category: import('../permissions/manager.ts').PermissionCategory; resolve: (approved: boolean, remember?: boolean) => void };
   // UI events
   'render:request': void;
   'input:submit': { text: string };
