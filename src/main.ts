@@ -25,6 +25,7 @@ import type { PermissionRequest } from './permissions/prompt.ts';
 import { CommandRegistry } from './input/command-registry.ts';
 import { renderFilePickerOverlay } from './renderer/file-picker-overlay.ts';
 import { registerBuiltinCommands } from './input/commands.ts';
+import { InputHistory } from './input/input-history.ts';
 
 const ALT_SCREEN_ENTER = '\x1b[?1049h';
 const ALT_SCREEN_EXIT  = '\x1b[?1049l';
@@ -174,6 +175,11 @@ async function main() {
   input.setCommandRegistry(commandRegistry, commandContext);
   input.setContentWidth(getPromptContentWidth());
   input.filePicker.setOnUpdate(() => bus.emit('render:request'));
+
+  // --- Input history ---
+  const saveHistory = configManager.get('behavior.saveHistory');
+  const inputHistory = new InputHistory(undefined, saveHistory);
+  input.setHistory(inputHistory);
 
   // --- Splash options ---
   const toolCount = toolRegistry.list().length;
