@@ -683,7 +683,170 @@ Multi-provider LLM support WITH function/tool calling. Every provider must suppo
 | OpenAI | gpt-5.4, gpt-5.3-chat-latest, gpt-5-mini, gpt-5-nano, gpt-oss-120b | OpenAI native | `tools` array in request, `tool_calls` in response |
 | Google Gemini | gemini-3.1-pro-preview, gemini-3-flash, gemini-3.1-flash-lite-preview, gemini-2.5-pro | Gemini API | `functionDeclarations` in request, `functionCall` parts in response |
 | Anthropic | claude-opus-4-6, claude-sonnet-4-6, claude-haiku-4-5 | Messages API | `tools` array in request, `tool_use` content blocks in response |
-| InceptionLabs | mercury-2 | OpenAI-compatible | Same as OpenAI |
+| InceptionLabs | mercury-2, mercury-edit (tool backend only) | OpenAI-compatible | Same as OpenAI |
+
+### Model Registry
+
+The model registry is a static data structure that powers both the `/model` selector UI and provider auto-detection. Each model entry contains metadata used for display, selection, and routing.
+
+```typescript
+interface ModelDefinition {
+  id: string;                    // Wire ID sent to the API (e.g., "gpt-5.4")
+  provider: 'openai' | 'anthropic' | 'gemini' | 'inceptionlabs';
+  displayName: string;           // Human-readable name for the UI
+  description: string;           // One-line description for /model menu
+  capabilities: {
+    toolCalling: boolean;        // Can the model call tools?
+    codeEditing: boolean;        // Specialized for code edits (FIM/apply-edit)?
+    reasoning: boolean;          // Extended thinking / chain-of-thought?
+    multimodal: boolean;         // Image/audio input support?
+  };
+  contextWindow: number;         // Max tokens (used for context budget display)
+  selectable: boolean;           // Can be chosen as main model? (false for mercury-edit)
+  reasoningEffort?: string[];    // Available effort levels (e.g., ['instant','low','medium','high'])
+}
+```
+
+**Full model catalog:**
+
+```typescript
+const MODEL_REGISTRY: ModelDefinition[] = [
+  // --- InceptionLabs ---
+  {
+    id: 'mercury-2',
+    provider: 'inceptionlabs',
+    displayName: 'Mercury 2',
+    description: 'Reasoning model with tool calling, reasoning_effort control',
+    capabilities: { toolCalling: true, codeEditing: false, reasoning: true, multimodal: false },
+    contextWindow: 65536,
+    selectable: true,
+    reasoningEffort: ['instant', 'low', 'medium', 'high'],
+  },
+  {
+    id: 'mercury-edit',
+    provider: 'inceptionlabs',
+    displayName: 'Mercury Edit',
+    description: 'Specialized code editing (FIM, apply-edit, next-edit) -- tool backend only',
+    capabilities: { toolCalling: false, codeEditing: true, reasoning: false, multimodal: false },
+    contextWindow: 65536,
+    selectable: false,  // Not selectable as main model
+  },
+
+  // --- OpenAI ---
+  {
+    id: 'gpt-5.4',
+    provider: 'openai',
+    displayName: 'GPT-5.4',
+    description: 'Flagship, complex reasoning',
+    capabilities: { toolCalling: true, codeEditing: false, reasoning: true, multimodal: true },
+    contextWindow: 256000,
+    selectable: true,
+  },
+  {
+    id: 'gpt-5.3-chat-latest',
+    provider: 'openai',
+    displayName: 'GPT-5.3 Chat',
+    description: 'High-speed, 400K context',
+    capabilities: { toolCalling: true, codeEditing: false, reasoning: true, multimodal: true },
+    contextWindow: 400000,
+    selectable: true,
+  },
+  {
+    id: 'gpt-5-mini',
+    provider: 'openai',
+    displayName: 'GPT-5 Mini',
+    description: 'Low latency, cost-efficient',
+    capabilities: { toolCalling: true, codeEditing: false, reasoning: false, multimodal: true },
+    contextWindow: 128000,
+    selectable: true,
+  },
+  {
+    id: 'gpt-5-nano',
+    provider: 'openai',
+    displayName: 'GPT-5 Nano',
+    description: 'Fastest, most affordable',
+    capabilities: { toolCalling: true, codeEditing: false, reasoning: false, multimodal: false },
+    contextWindow: 128000,
+    selectable: true,
+  },
+  {
+    id: 'gpt-oss-120b',
+    provider: 'openai',
+    displayName: 'GPT OSS 120B',
+    description: 'Open-weight model',
+    capabilities: { toolCalling: true, codeEditing: false, reasoning: false, multimodal: false },
+    contextWindow: 128000,
+    selectable: true,
+  },
+
+  // --- Google Gemini ---
+  {
+    id: 'gemini-3.1-pro-preview',
+    provider: 'gemini',
+    displayName: 'Gemini 3.1 Pro',
+    description: 'Flagship, multimodal',
+    capabilities: { toolCalling: true, codeEditing: false, reasoning: true, multimodal: true },
+    contextWindow: 2000000,
+    selectable: true,
+  },
+  {
+    id: 'gemini-3-flash',
+    provider: 'gemini',
+    displayName: 'Gemini 3 Flash',
+    description: 'Balanced intelligence/speed',
+    capabilities: { toolCalling: true, codeEditing: false, reasoning: true, multimodal: true },
+    contextWindow: 1000000,
+    selectable: true,
+  },
+  {
+    id: 'gemini-3.1-flash-lite-preview',
+    provider: 'gemini',
+    displayName: 'Gemini 3.1 Flash Lite',
+    description: 'High-volume, low-cost',
+    capabilities: { toolCalling: true, codeEditing: false, reasoning: false, multimodal: true },
+    contextWindow: 1000000,
+    selectable: true,
+  },
+  {
+    id: 'gemini-2.5-pro',
+    provider: 'gemini',
+    displayName: 'Gemini 2.5 Pro',
+    description: 'Previous stable flagship',
+    capabilities: { toolCalling: true, codeEditing: false, reasoning: true, multimodal: true },
+    contextWindow: 1000000,
+    selectable: true,
+  },
+
+  // --- Anthropic ---
+  {
+    id: 'claude-opus-4-6',
+    provider: 'anthropic',
+    displayName: 'Claude Opus 4.6',
+    description: 'Flagship, 1M context, adaptive reasoning',
+    capabilities: { toolCalling: true, codeEditing: false, reasoning: true, multimodal: true },
+    contextWindow: 1000000,
+    selectable: true,
+  },
+  {
+    id: 'claude-sonnet-4-6',
+    provider: 'anthropic',
+    displayName: 'Claude Sonnet 4.6',
+    description: 'High-speed professional',
+    capabilities: { toolCalling: true, codeEditing: false, reasoning: true, multimodal: true },
+    contextWindow: 200000,
+    selectable: true,
+  },
+  {
+    id: 'claude-haiku-4-5',
+    provider: 'anthropic',
+    displayName: 'Claude Haiku 4.5',
+    description: 'Fastest, cost-effective',
+    capabilities: { toolCalling: true, codeEditing: false, reasoning: false, multimodal: true },
+    contextWindow: 200000,
+    selectable: true,
+  },
+];
+```
 
 ### Changes
 
@@ -773,15 +936,21 @@ Multi-provider LLM support WITH function/tool calling. Every provider must suppo
 
 #### 4.7 Provider Registry
 - **File**: `src/providers/registry.ts` (CREATE)
-- **Purpose**: Config-driven provider selection
+- **Purpose**: Config-driven provider selection + model registry hosting
   ```typescript
   class ProviderRegistry {
     register(provider: LLMProvider): void;
     get(name: string): LLMProvider;
     getForModel(model: string): LLMProvider;  // Auto-detect from model name
-    listModels(): { provider: string; model: string }[];
+    listModels(): ModelDefinition[];           // Full model catalog for /model UI
+    getSelectableModels(): ModelDefinition[];  // Only user-selectable models
+    getModelsByProvider(provider: string): ModelDefinition[];
+    getCurrentModel(): ModelDefinition;
+    setCurrentModel(modelId: string): void;   // Switch model + emit command:model-changed
   }
   ```
+- **Model registry**: Hosts the `MODEL_REGISTRY` array (see Model Registry section above)
+- **Model switching**: `setCurrentModel()` validates the model exists, updates config, and emits `command:model-changed` event so the header/footer can update
 
 #### 4.8 Delete Old Provider Files
 - **Files**: `src/core/provider.ts` (DELETE), `src/core/inception.ts` (DELETE)
@@ -914,7 +1083,64 @@ type ConversationBlock =
   - Tool execution progress: `[2/5] Editing src/config.ts...`
   - Token usage bar in footer
 
-#### 5.8 Extend Cell Type
+#### 5.8 Modal Menu Renderer
+- **File**: `src/renderer/modal-menu.ts` (CREATE)
+- **Purpose**: Generic modal menu overlay for commands like `/model`
+- **Features**:
+  - Centered overlay with border, title, and item list
+  - Items grouped by category (e.g., provider name)
+  - Arrow key navigation with highlighted current selection
+  - Current/active item indicated with checkmark
+  - Escape to dismiss, Enter to select
+  - Renders as `Line[]` that the compositor overlays on top of the conversation
+  ```
+  ┌─ Select Model ──────────────────────────────────┐
+  │                                                  │
+  │  InceptionLabs                                   │
+  │    Mercury 2          Reasoning, tool calling    │
+  │                                                  │
+  │  OpenAI                                          │
+  │    GPT-5.4            Flagship, complex reasoning│
+  │    GPT-5.3 Chat       High-speed, 400K context   │
+  │    GPT-5 Mini         Low latency, cost-efficient│
+  │    GPT-5 Nano         Fastest, most affordable   │
+  │    GPT OSS 120B       Open-weight                │
+  │                                                  │
+  │  Google Gemini                                   │
+  │  > Gemini 3.1 Pro     Flagship, multimodal    *  │
+  │    Gemini 3 Flash     Balanced speed/intel.      │
+  │    Gemini 3.1 Lite    High-volume, low-cost      │
+  │    Gemini 2.5 Pro     Previous stable flagship   │
+  │                                                  │
+  │  Anthropic                                       │
+  │    Claude Opus 4.6    Flagship, 1M context       │
+  │    Claude Sonnet 4.6  High-speed professional    │
+  │    Claude Haiku 4.5   Fastest, cost-effective    │
+  │                                                  │
+  │  [Arrow keys] Navigate  [Enter] Select  [Esc] Cancel │
+  └──────────────────────────────────────────────────┘
+  ```
+- **Generic design**: Accepts `ModalMenuConfig { title, groups: { label, items: { id, name, description, active?, disabled? }[] }[] }` so it can be reused for future modals
+
+#### 5.9 Autocomplete Menu Renderer
+- **File**: `src/renderer/autocomplete-menu.ts` (CREATE)
+- **Purpose**: Dropdown overlay for slash command autocomplete
+- **Features**:
+  - Appears directly above or below the prompt line
+  - Shows fuzzy-matched commands as user types after `/`
+  - Each entry: command name (bold) + description (dimmed)
+  - Arrow key highlight for current selection
+  - Dynamically filters as user types
+  ```
+  > /mo
+  ┌─────────────────────────────────────────┐
+  │  /model        Select LLM model        │
+  │  /compact      Summarize conversation   │
+  └─────────────────────────────────────────┘
+  ```
+- **Rendering**: Produces `Line[]` positioned relative to the prompt. Compositor must support overlaying these lines at a specific row.
+
+#### 5.10 Extend Cell Type
 - **File**: `src/types/grid.ts` (MODIFY)
 - **Add**: `underline: boolean`, `italic: boolean`, `strikethrough: boolean` to `Cell`
 - **Impact**: Update `createEmptyCell`, `DiffEngine.applyStyles`, all Cell creation sites
@@ -1114,26 +1340,92 @@ CLI flag that auto-accepts ALL permissions without prompting. For users who trus
 
 ---
 
-## Phase 9: UX Polish
+## Phase 9: UX Polish & Slash Commands
 
-**Priority**: LOW (nice-to-have, makes the product feel complete)
-**Complexity**: M
-**Dependencies**: Phase 5 (rendering)
+**Priority**: MEDIUM (slash commands are core UX, not just polish)
+**Complexity**: L
+**Dependencies**: Phase 1 (input handler, event bus), Phase 4 (model registry), Phase 5 (modal menu, autocomplete menu)
 
 ### Changes
 
-#### 9.1 Slash Commands
-- **File**: `src/input/commands.ts` (CREATE)
-- **Commands**:
-  - `/help` -- show available commands and shortcuts
-  - `/clear` -- clear conversation history display
-  - `/model <name>` -- switch LLM model
-  - `/provider <name>` -- switch provider
-  - `/compact` -- summarize conversation to free context
-  - `/tools` -- list available tools
-  - `/quit` or `:q` -- exit
+#### 9.1 Slash Command Registry
+- **File**: `src/input/command-registry.ts` (CREATE)
+- **Purpose**: Extensible registry for slash commands. New commands are added by registering a `SlashCommand` definition.
+  ```typescript
+  interface SlashCommand {
+    name: string;                  // Primary name (e.g., 'model')
+    aliases: string[];             // Alternative triggers (e.g., ['m'])
+    description: string;           // Shown in autocomplete and /help
+    usage?: string;                // Usage hint (e.g., '/model [name]')
+    handler: (args: string[], context: CommandContext) => void | Promise<void>;
+  }
 
-#### 9.2 Configuration File
+  interface CommandContext {
+    eventBus: EventBus;
+    providerRegistry: ProviderRegistry;
+    conversationManager: ConversationManager;
+    config: AppConfig;
+    renderRequest: () => void;     // Trigger re-render after command
+  }
+
+  class CommandRegistry {
+    register(command: SlashCommand): void;
+    unregister(name: string): void;
+    get(name: string): SlashCommand | undefined;  // Lookup by name or alias
+    getAll(): SlashCommand[];
+    fuzzyMatch(query: string): SlashCommand[];     // For autocomplete
+  }
+  ```
+- **Extensibility**: The registry is open -- plugins or future features can register new commands at runtime
+- **Fuzzy matching**: Uses simple substring + Levenshtein distance for autocomplete ranking
+
+#### 9.2 Command Autocomplete Logic
+- **File**: `src/input/autocomplete.ts` (CREATE)
+- **Purpose**: Fuzzy-match engine for command mode
+- **Behavior**:
+  - Activated when input handler detects `/` at empty prompt (line start)
+  - As user types characters after `/`, filters `CommandRegistry.fuzzyMatch(query)`
+  - Returns ranked list of `{ command: SlashCommand; score: number }` for the autocomplete menu renderer
+  - Handles arrow key navigation state (selected index)
+  - Enter on a selected item: fill the command and execute
+  - Escape: exit command mode, clear the `/` prefix
+  - If user types a full valid command name and presses Enter, execute immediately without autocomplete
+
+#### 9.3 Built-in Slash Commands
+- **File**: `src/input/commands.ts` (CREATE)
+- **Purpose**: Register all built-in commands on startup
+- **Commands**:
+
+  | Command | Aliases | Description | Implementation |
+  |---------|---------|-------------|----------------|
+  | `/model` | `/m` | Select LLM model from provider-grouped list | Opens modal menu (Phase 5.8), calls `ProviderRegistry.setCurrentModel()` on selection |
+  | `/help` | `/h`, `/?` | Show available commands and keyboard shortcuts | Renders a system message block with command table |
+  | `/clear` | `/cls` | Clear conversation display | Clears `ConversationManager` display blocks, keeps LLM context |
+  | `/config` | `/cfg` | Show or set configuration values | `/config` shows current config, `/config key value` sets a value |
+  | `/compact` | | Summarize conversation to free context window | Sends summarization prompt to LLM, replaces old messages |
+  | `/tools` | `/t` | List available tools with descriptions | Renders tool registry as a system message |
+  | `/quit` | `/q`, `:q` | Exit the TUI | Clean shutdown: save conversation, close providers |
+  | `/provider` | `/p` | Switch provider (keeps current model if compatible) | Validates API key exists, switches provider |
+  | `/reset` | | Reset conversation (clear context + display) | Full reset: new conversation, clear display |
+  | `/debug` | | Toggle debug mode (show raw LLM responses) | Toggles config flag, re-renders |
+
+#### 9.4 `/model` Command (First Slash Command)
+- **Purpose**: The flagship slash command that demonstrates the full system
+- **Flow**:
+  1. User types `/model` (or `/m`) and presses Enter
+  2. Command handler calls `ProviderRegistry.getSelectableModels()` to get the model list
+  3. Groups models by provider using `ModelDefinition.provider`
+  4. Opens modal menu (Phase 5.8) with grouped model list
+  5. Input handler yields keypresses to modal menu navigation
+  6. On Enter: calls `ProviderRegistry.setCurrentModel(selectedId)`
+  7. Emits `command:model-changed` event
+  8. Footer/header re-renders with new model name
+  9. On Escape: dismisses modal, no change
+- **Direct invocation**: `/model gpt-5.4` skips the modal and switches directly (if model ID is valid)
+- **Config persistence**: Model selection is written to `config.json` so it persists across sessions
+- **Validation**: If the selected model's provider has no API key configured, show a warning message instead of switching
+
+#### 9.5 Configuration File
 - **File**: `src/config.ts` (MODIFY from Phase 0)
 - **Format**: JSON
 - **Location**: `~/.config/goodvibes/config.json` or `./goodvibes.config.json`
@@ -1152,7 +1444,7 @@ CLI flag that auto-accepts ALL permissions without prompting. For users who trus
   }
   ```
 
-#### 9.3 Keyboard Shortcuts
+#### 9.6 Keyboard Shortcuts
 - **File**: `src/input/handler.ts` (MODIFY)
 - **Shortcuts**:
   - `Ctrl+L` -- clear screen (re-render)
@@ -1162,14 +1454,14 @@ CLI flag that auto-accepts ALL permissions without prompting. For users who trus
   - `Escape` -- dismiss permission prompt
   - `PageUp` / `PageDown` -- scroll by page
 
-#### 9.4 Token Budget Display
+#### 9.7 Token Budget Display
 - **File**: `src/renderer/ui-factory.ts` (MODIFY footer)
 - **Change**: Show context window usage:
   ```
   Tokens: [████████░░░░░░░░] 52,340 / 128,000 (41%)  │  Model: gpt-5.4  │  Tools: 7
   ```
 
-#### 9.5 Welcome Screen Enhancement
+#### 9.8 Welcome Screen Enhancement
 - **File**: `src/utils/splash-lines.ts` (MODIFY)
 - **Change**: Show:
   - Working directory
@@ -1177,13 +1469,13 @@ CLI flag that auto-accepts ALL permissions without prompting. For users who trus
   - Available tools count
   - Quick help: key shortcuts
 
-#### 9.6 Context Management
+#### 9.9 Context Management
 - **Purpose**: Manage conversation length to stay within token budget
 - **Approach**: Token counting (estimate: 4 chars = 1 token) + sliding window
 - **Summarization**: `/compact` command sends old messages to LLM with summarization prompt, replaces with summary
 - **Auto-compact**: Trigger when token usage exceeds 80% of model's context window
 
-#### 9.7 Conversation Persistence
+#### 9.10 Conversation Persistence
 - **Purpose**: Save/resume conversations across sessions
 - **Format**: JSON file in `.goodvibes/conversations/`
 - **Features**: Auto-save on exit, resume with `--resume` flag
@@ -1258,16 +1550,16 @@ In practice, Phase 2 and Phase 4 are developed together as a single sprint.
 | Phase | Complexity | Est. Files | Est. LOC |
 |-------|-----------|------------|----------|
 | 0 - Security & Hygiene | S | 4 modify, 1 create, 1 delete | ~100 |
-| 1 - Architecture Redesign | XL | 5 create, 4 modify, 1 delete | ~500 |
+| 1 - Architecture Redesign | XL | 5 create, 4 modify, 1 delete | ~550 |
 | 2 - Agent Core & Tool System | XL | 9 create, 1 modify | ~900 |
 | 3 - ACP Integration | L | 3 create, 1 modify | ~400 |
-| 4 - Provider Abstraction | L | 7 create, 2 delete | ~600 |
-| 5 - Structured Rendering | XL | 8 create, 2 modify | ~900 |
+| 4 - Provider Abstraction | L | 7 create, 2 delete | ~750 |
+| 5 - Structured Rendering | XL | 10 create, 2 modify | ~1100 |
 | 6 - Permission Model | M | 2 create | ~250 |
 | 7 - Error Handling & Resilience | M | 3 create, 2 modify | ~200 |
-| 8 - Testing | L | 12 create, 2 delete | ~1000 |
-| 9 - UX Polish | M | 3 create, 3 modify | ~500 |
-| **Total** | | **~55 files** | **~5350 LOC** |
+| 8 - Testing | L | 14 create, 2 delete | ~1100 |
+| 9 - UX Polish & Slash Commands | L | 5 create, 3 modify | ~750 |
+| **Total** | | **~63 files** | **~6100 LOC** |
 
 ---
 
@@ -1284,6 +1576,7 @@ In practice, Phase 2 and Phase 4 are developed together as a single sprint.
 ### Sprint 2: Orchestrator Core (Phases 4 + 2)
 - Implement provider interface with function calling support
 - Build OpenAI + Anthropic + Gemini + InceptionLabs providers
+- Build model registry with full model catalog and capabilities metadata
 - Implement tool type system and registry
 - Build core tools (file-read, file-write, file-edit, shell-exec, grep, list-dir, glob)
 - Complete the orchestrator agent loop
@@ -1292,6 +1585,8 @@ In practice, Phase 2 and Phase 4 are developed together as a single sprint.
 ### Sprint 3: Rendering + Permissions (Phases 5 + 6)
 - Markdown renderer, code blocks, diff views
 - Tool call block renderer (status, content, results)
+- Modal menu component (generic, reusable for /model and future commands)
+- Autocomplete menu overlay for slash commands
 - Permission manager with modal prompts
 - `--no-worries-just-vibes` flag
 - Progress indicators
@@ -1300,11 +1595,14 @@ In practice, Phase 2 and Phase 4 are developed together as a single sprint.
 ### Sprint 4: ACP + Polish (Phases 3 + 9)
 - ACP manager for subagent spawning and lifecycle
 - Subagent activity panel rendering
-- Slash commands, keyboard shortcuts
-- Config file support
+- Slash command registry and autocomplete engine
+- Built-in commands: /model, /help, /clear, /config, /compact, /tools, /quit, /provider, /reset, /debug
+- `/model` modal selector with provider-grouped model list
+- Keyboard shortcuts
+- Config file support with model persistence
 - Context management and summarization
 - Welcome screen with model/tool info
-- **Deliverable**: Full-featured coding agent TUI with delegation capability
+- **Deliverable**: Full-featured coding agent TUI with delegation capability and model switching
 
 ### Sprint 5: Quality (Phase 8)
 - Test infrastructure with mock LLM and mock tools
