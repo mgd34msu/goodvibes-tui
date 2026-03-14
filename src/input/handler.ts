@@ -5,6 +5,7 @@ import type { EventBus } from '../core/event-bus.ts';
 import type { InfiniteBuffer } from '../core/history.ts';
 import type { CommandRegistry, CommandContext } from './command-registry.ts';
 import { AutocompleteEngine } from './autocomplete.ts';
+import { FilePickerModal } from './file-picker.ts';
 
 /**
  * InputHandler - Owns prompt text, paste registry, and keyboard/mouse handling.
@@ -29,6 +30,7 @@ export class InputHandler {
   private commandRegistry: CommandRegistry | null = null;
   private commandContext: CommandContext | null = null;
   public autocomplete: AutocompleteEngine | null = null;
+  public filePicker = new FilePickerModal();
 
   constructor(
     private bus: EventBus,
@@ -138,6 +140,11 @@ export class InputHandler {
    * - If prompt is empty: cancel generation (double-tap not needed)
    */
   private handleEscape(): void {
+    // If file picker is active, close it (don't clear input)
+    if (this.filePicker.active) {
+      this.filePicker.close();
+      return;
+    }
     if (this.prompt.length > 0) {
       this.prompt = '';
       this.cursorPos = 0;
@@ -158,11 +165,68 @@ export class InputHandler {
     const lineCount = history.getLineCount();
 
     for (const token of tokens) {
+      // --- File picker has focus: intercept all input ---
+      if (this.filePicker.active) {
+        if (token.type === 'text') {
+          if (token.value === ' ' && this.filePicker.query === '') {
+            // Space immediately after @ — treat @ as literal, close picker
+            this.filePicker.close();
+            // The @ is already in the prompt from when we opened the picker
+          } else {
+            this.filePicker.setQuery(this.filePicker.query + token.value);
+          }
+        } else if (token.type === 'key') {
+          if (token.logicalName === 'escape') {
+            // Close picker, keep @ in prompt (user can delete it manually)
+            this.filePicker.close();
+          } else if (token.logicalName === 'enter') {
+            const selected = this.filePicker.getSelected();
+            if (selected) {
+              // Replace @query with the selected file path
+              const atPos = this.filePicker.insertPos;
+              const queryLen = this.filePicker.query.length + 1; // +1 for the @
+              this.prompt = this.prompt.slice(0, atPos) + '@' + selected + this.prompt.slice(atPos + queryLen);
+              this.cursorPos = atPos + selected.length + 1; // +1 for @
+              this.ensureInputCursorVisible();
+            }
+            this.filePicker.close();
+          } else if (token.logicalName === 'up') {
+            this.filePicker.moveUp();
+          } else if (token.logicalName === 'down') {
+            this.filePicker.moveDown();
+          } else if (token.logicalName === 'backspace') {
+            if (this.filePicker.query.length > 0) {
+              this.filePicker.setQuery(this.filePicker.query.slice(0, -1));
+            } else {
+              // Backspace with empty query — remove the @ and close
+              if (this.cursorPos > 0) {
+                this.prompt = this.prompt.slice(0, this.cursorPos - 1) + this.prompt.slice(this.cursorPos);
+                this.cursorPos--;
+              }
+              this.filePicker.close();
+            }
+          }
+          // All other keys ignored while picker is active
+        }
+        this.bus.emit('render:request');
+        continue;
+      }
+
       if (token.type === 'text') {
         const text = this.registerPaste(token.value);
         this.prompt = this.prompt.slice(0, this.cursorPos) + text + this.prompt.slice(this.cursorPos);
         this.cursorPos += text.length;
         this.ensureInputCursorVisible();
+
+        // Detect @ at start of word — open file picker
+        if (token.value === '@' && !this.commandMode) {
+          const charBefore = this.cursorPos >= 2 ? this.prompt[this.cursorPos - 2] : undefined;
+          if (charBefore === undefined || charBefore === ' ' || charBefore === '\n') {
+            // @ is at word start — open file picker
+            void this.filePicker.open(this.cursorPos - 1);
+          }
+        }
+
         // Detect slash-command mode: '/' typed into empty prompt
         if (this.prompt === '/' && this.commandRegistry) {
           this.commandMode = true;

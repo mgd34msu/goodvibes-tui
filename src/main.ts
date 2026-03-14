@@ -23,6 +23,7 @@ import { AcpManager } from './acp/manager.ts';
 import { PermissionPromptUI } from './permissions/prompt.ts';
 import type { PermissionRequest } from './permissions/prompt.ts';
 import { CommandRegistry } from './input/command-registry.ts';
+import { renderFilePickerOverlay } from './renderer/file-picker-overlay.ts';
 import { registerBuiltinCommands } from './input/commands.ts';
 
 const ALT_SCREEN_ENTER = '\x1b[?1049h';
@@ -225,6 +226,10 @@ async function main() {
     orchestrator.messageQueue.forEach(msg => {
       viewport.push(...UIFactory.createQueuedMessageFragment(width, msg));
     });
+
+    if (input.filePicker.active) {
+      viewport.push(...renderFilePickerOverlay(input.filePicker, width));
+    }
 
     compositor.composite({
       width, height,
