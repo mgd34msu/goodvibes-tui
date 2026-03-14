@@ -4,5 +4,4 @@ export type {
   SubagentTask,
   SubagentStatus,
 } from './protocol.ts';
-export { AcpConnection } from './connection.ts';
 export { AcpManager } from './manager.ts';

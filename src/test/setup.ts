@@ -1,0 +1,116 @@
+/**
+ * Test infrastructure: mock providers, event bus helpers, and filesystem utilities.
+ */
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import type { LLMProvider, ChatRequest, ChatResponse } from '../providers/interface.ts';
+import type { EventBus, EventMap } from '../core/event-bus.ts';
+import type { ToolCall } from '../types/tools.ts';
+
+// ---------------------------------------------------------------------------
+// Mock LLM Provider
+// ---------------------------------------------------------------------------
+
+export interface MockResponse {
+  content: string;
+  toolCalls?: ToolCall[];
+}
+
+/**
+ * MockLLMProvider returns pre-programmed canned responses in order.
+ * Useful for testing the orchestrator agent loop.
+ */
+export class MockLLMProvider implements LLMProvider {
+  readonly name = 'mock';
+  readonly models = ['mock-model'];
+
+  private responses: MockResponse[];
+  private callIndex = 0;
+  public callLog: ChatRequest[] = [];
+
+  constructor(responses: MockResponse[] = [{ content: 'Hello from mock' }]) {
+    this.responses = responses;
+  }
+
+  async chat(params: ChatRequest): Promise<ChatResponse> {
+    this.callLog.push(params);
+    const resp = this.responses[this.callIndex] ?? this.responses[this.responses.length - 1];
+    this.callIndex++;
+
+    return {
+      content: resp.content,
+      toolCalls: resp.toolCalls ?? [],
+      usage: { inputTokens: 10, outputTokens: 5 },
+      stopReason: (resp.toolCalls?.length ?? 0) > 0 ? 'tool_use' : 'end',
+    };
+  }
+
+  reset(): void {
+    this.callIndex = 0;
+    this.callLog = [];
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Event Bus spy helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * Collect all events emitted on a bus for a given key during a test.
+ * Returns a cleanup function.
+ */
+export function collectEvents<K extends keyof EventMap>(
+  bus: EventBus,
+  event: K,
+): { events: EventMap[K][]; cleanup: () => void } {
+  const events: EventMap[K][] = [];
+  const unsub = bus.on(event, ((data: EventMap[K]) => {
+    events.push(data);
+  }) as Parameters<typeof bus.on<K>>[1]);
+  return { events, cleanup: unsub };
+}
+
+// ---------------------------------------------------------------------------
+// Filesystem helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * Create a temporary directory and return its path.
+ * Also returns an async cleanup function.
+ */
+export async function makeTempDir(): Promise<{ dir: string; cleanup: () => Promise<void> }> {
+  const dir = await mkdtemp(join(tmpdir(), 'gv-test-'));
+  return {
+    dir,
+    cleanup: () => rm(dir, { recursive: true, force: true }),
+  };
+}
+
+/**
+ * Write a file into a temp directory and return the full path.
+ */
+export async function writeTempFile(dir: string, name: string, content: string): Promise<string> {
+  const path = join(dir, name);
+  await Bun.write(path, content);
+  return path;
+}
+
+// ---------------------------------------------------------------------------
+// Line helpers for renderer tests
+// ---------------------------------------------------------------------------
+
+/**
+ * Extract plain text string from a Line (Cell[]).
+ * Joins all cell characters, trims trailing spaces.
+ */
+export function lineToString(line: import('../types/grid.ts').Line): string {
+  return line.map((c) => c.char).join('').trimEnd();
+}
+
+/**
+ * Extract plain text from an array of Lines.
+ */
+export function linesToText(lines: import('../types/grid.ts').Line[]): string[] {
+  return lines.map(lineToString);
+}

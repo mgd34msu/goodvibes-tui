@@ -19,6 +19,7 @@ import { GrepTool } from './tools/grep.ts';
 import { ListDirTool } from './tools/list-dir.ts';
 import { GlobTool } from './tools/glob-tool.ts';
 import { PermissionManager } from './permissions/manager.ts';
+import { AcpManager } from './acp/manager.ts';
 import { PermissionPromptUI } from './permissions/prompt.ts';
 import type { PermissionRequest } from './permissions/prompt.ts';
 import { CommandRegistry } from './input/command-registry.ts';
@@ -122,6 +123,9 @@ async function main() {
     toolRegistry,
     permissionManager,
   );
+
+  const acpManager = new AcpManager(bus);
+  orchestrator.registerDelegateTool(acpManager);
 
   const input = new InputHandler(
     bus,
