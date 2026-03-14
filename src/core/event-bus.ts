@@ -25,6 +25,7 @@ export interface EventMap {
   'input:submit': { text: string };
   'cancel:generation': void;
   'scroll:delta': { delta: number };
+  'block:toggle-collapse': { blockIndex: number };
 
   // Slash command events
   'command:mode-enter': void;
