@@ -7,6 +7,26 @@ export interface LLMProvider {
   chat(params: ChatRequest): Promise<ChatResponse>;
 }
 
+/** Incremental tool call data received during streaming. */
+export interface PartialToolCall {
+  index: number;
+  id?: string;
+  name?: string;
+  arguments?: string;  // Partial JSON string
+}
+
+/** A single streaming delta from the provider. */
+export interface StreamDelta {
+  content?: string;           // Text content delta
+  toolCalls?: PartialToolCall[];  // Incremental tool call data
+  reasoning?: string;         // Reasoning/thinking delta
+}
+
+/** A content part for multimodal messages (future Phase C). */
+export type ContentPart =
+  | { type: 'text'; text: string }
+  | { type: 'image'; data: string; mediaType: string };
+
 export interface ChatRequest {
   messages: ProviderMessage[];
   tools?: ToolDefinition[];
@@ -18,6 +38,8 @@ export interface ChatRequest {
   reasoningEffort?: 'instant' | 'low' | 'medium' | 'high';
   /** Mercury-2 specific: whether to include a reasoning summary in the response. */
   reasoningSummary?: boolean;
+  /** Called per-chunk during streaming when streaming is enabled. */
+  onDelta?: (delta: StreamDelta) => void;
 }
 
 export interface ChatResponse {
