@@ -368,38 +368,32 @@ export class InputHandler {
     this.bus.emit('render:request');
   }
 
-  /**
-   * Get the line number (0-based) the cursor is currently on.
-   */
-  private getCursorLine(): number {
-    return this.prompt.slice(0, this.cursorPos).split('\n').length - 1;
+
+  /** Content width for wrapping — set by main.ts via setContentWidth(). */
+  private contentWidth = 76;
+
+  /** Set the content width used for wrapping calculations. Call from main.ts. */
+  public setContentWidth(w: number): void {
+    this.contentWidth = w;
   }
 
   /**
-   * Move cursor up or down by one line within multiline input.
-   * Returns true if the cursor moved (input had another line to go to),
-   * false if at boundary (caller should scroll viewport instead).
+   * Move cursor up or down by one WRAPPED line.
+   * Uses the segment table to navigate visual lines, not raw \n lines.
+   * Returns true if the cursor moved, false if at boundary.
    */
   private moveCursorVertical(direction: -1 | 1): boolean {
-    const lines = this.prompt.split('\n');
-    if (lines.length <= 1) return false; // Single line — can't move vertically
+    const info = this.getWrappedPromptInfo(this.contentWidth);
+    if (info.wrappedLines.length <= 1) return false;
 
-    const cursorLine = this.getCursorLine();
-    const targetLine = cursorLine + direction;
+    const targetLine = info.cursorWrappedLine + direction;
+    if (targetLine < 0 || targetLine >= info.wrappedLines.length) return false;
 
-    if (targetLine < 0 || targetLine >= lines.length) return false; // At boundary
+    // Preserve column, clamped to target line length
+    const col = Math.min(info.cursorCol, info.segments[targetLine].length);
+    this.cursorPos = info.segments[targetLine].rawStart + col;
 
-    // Calculate column offset within current line
-    let lineStart = 0;
-    for (let i = 0; i < cursorLine; i++) lineStart += lines[i].length + 1;
-    const col = this.cursorPos - lineStart;
-
-    // Calculate new cursor position in target line
-    let targetStart = 0;
-    for (let i = 0; i < targetLine; i++) targetStart += lines[i].length + 1;
-    this.cursorPos = targetStart + Math.min(col, lines[targetLine].length);
-
-    this.ensureInputCursorVisible();
+    this.ensureInputCursorVisible(this.contentWidth);
     return true;
   }
 
@@ -407,7 +401,7 @@ export class InputHandler {
    * Ensure the cursor's wrapped line is visible within the input scroll window.
    */
   public ensureInputCursorVisible(contentWidth?: number): void {
-    const info = this.getWrappedPromptInfo(contentWidth ?? 76);
+    const info = this.getWrappedPromptInfo(contentWidth ?? this.contentWidth);
     const maxRows = InputHandler.MAX_INPUT_ROWS;
     if (info.cursorWrappedLine < this.inputScrollTop) {
       this.inputScrollTop = info.cursorWrappedLine;
@@ -432,6 +426,7 @@ export class InputHandler {
    */
   public getWrappedPromptInfo(contentWidth: number): {
     wrappedLines: string[];
+    segments: { rawStart: number; length: number }[];
     cursorWrappedLine: number;
     cursorCol: number;
     visibleLines: string[];
@@ -501,6 +496,7 @@ export class InputHandler {
 
     return {
       wrappedLines,
+      segments,
       cursorWrappedLine,
       cursorCol,
       visibleLines,
