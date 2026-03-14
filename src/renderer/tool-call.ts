@@ -27,13 +27,14 @@ type ToolStatus = 'pending' | 'running' | 'done' | 'failed';
 
 /** Icon map by tool name. */
 const TOOL_ICONS: Record<string, string> = {
-  'file-read': '📖',
-  'file-write': '✏️',
-  'file-edit': '📝',
-  'shell-exec': '⚡',
+  'file_read': '📖',
+  'file_write': '✏️',
+  'file_edit': '📝',
+  'shell_exec': '⚡',
   'grep': '🔍',
-  'list-dir': '📁',
+  'list_dir': '📁',
   'glob': '🔎',
+  'delegate': '🤖',
 };
 
 /** Status badge styles. */
@@ -50,13 +51,14 @@ const STATUS_STYLES: Record<ToolStatus, { label: string; fg: string; bold: boole
  */
 function getToolTitle(name: string, args: Record<string, unknown>): string {
   const verbs: Record<string, string> = {
-    'file-read':  'Reading',
-    'file-write': 'Writing',
-    'file-edit':  'Editing',
-    'shell-exec': 'Running',
+    'file_read':  'Reading',
+    'file_write': 'Writing',
+    'file_edit':  'Editing',
+    'shell_exec': 'Running',
     'grep':       'Searching',
-    'list-dir':   'Listing',
+    'list_dir':   'Listing',
     'glob':       'Globbing',
+    'delegate':   'Delegating',
   };
   const verb = verbs[name] || name;
   const key = (args.path ?? args.command ?? args.pattern ?? args.directory ?? '') as string;
@@ -105,7 +107,7 @@ export function renderToolCallBlock(
         lines.push(...renderDiffView(output, width));
       }
       // Detect code output (from shell-exec, etc.)
-      else if (toolCall.name === 'shell-exec' && output.split('\n').length > 1) {
+      else if (toolCall.name === 'shell_exec' && output.split('\n').length > 1) {
         lines.push(...renderCodeBlock(output.split('\n'), 'bash', width));
       }
       // Short output: show inline
