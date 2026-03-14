@@ -3,6 +3,8 @@ import { SelectionManager } from './selection.ts';
 import { copyToClipboard, pasteFromClipboard } from '../utils/clipboard.ts';
 import type { EventBus } from '../core/event-bus.ts';
 import type { InfiniteBuffer } from '../core/history.ts';
+import type { CommandRegistry, CommandContext } from './command-registry.ts';
+import { AutocompleteEngine } from './autocomplete.ts';
 
 /**
  * InputHandler - Owns prompt text, paste registry, and keyboard/mouse handling.
@@ -12,11 +14,16 @@ export class InputHandler {
   public prompt = '';
   public showExitNotice = false;
   public lastCopyTime = 0;
+  /** True when the user has entered slash-command mode (prompt starts with '/'). */
+  public commandMode = false;
 
   private tokenizer = new InputTokenizer();
   private pasteRegistry = new Map<string, string>();
   private nextPasteId = 1;
   private lastCtrlCTime = 0;
+  private commandRegistry: CommandRegistry | null = null;
+  private commandContext: CommandContext | null = null;
+  public autocomplete: AutocompleteEngine | null = null;
 
   constructor(
     private bus: EventBus,
@@ -27,6 +34,16 @@ export class InputHandler {
     private scroll: (delta: number) => void,
     private exitApp: () => void,
   ) {}
+
+  /**
+   * setCommandRegistry - Wire in the slash command registry and context.
+   * Must be called before commands can be processed.
+   */
+  public setCommandRegistry(registry: CommandRegistry, context: CommandContext): void {
+    this.commandRegistry = registry;
+    this.commandContext = context;
+    this.autocomplete = new AutocompleteEngine(registry);
+  }
 
   /**
    * registerPaste - Stores multi-line content and returns a visual marker string.
@@ -108,8 +125,26 @@ export class InputHandler {
 
     for (const token of tokens) {
       if (token.type === 'text') {
-        this.prompt += this.registerPaste(token.value);
+        const text = this.registerPaste(token.value);
+        this.prompt += text;
+        // Detect slash-command mode: '/' typed into empty prompt
+        if (this.prompt === '/' && this.commandRegistry) {
+          this.commandMode = true;
+          this.autocomplete?.update('');
+          this.bus.emit('command:mode-enter');
+        } else if (this.commandMode && this.commandRegistry) {
+          // Update autocomplete with text after '/'
+          const query = this.prompt.startsWith('/') ? this.prompt.slice(1) : '';
+          const spaceIdx = query.indexOf(' ');
+          // Only autocomplete while still typing the command name (no space yet)
+          if (spaceIdx === -1) {
+            this.autocomplete?.update(query);
+          }
+          this.bus.emit('command:autocomplete', { query });
+        }
+        continue;
       } else if (token.type === 'key') {
+        // --- Global shortcuts (always active) ---
         if (token.logicalName === 'c' && token.ctrl && token.shift) {
           this.handleCopy();
           continue;
@@ -118,6 +153,94 @@ export class InputHandler {
           this.handleCtrlC();
           continue;
         }
+        // Ctrl+L: clear screen (re-render)
+        if (token.logicalName === 'l' && token.ctrl) {
+          this.bus.emit('render:request');
+          continue;
+        }
+        // Ctrl+U: clear prompt line
+        if (token.logicalName === 'u' && token.ctrl) {
+          this.prompt = '';
+          if (this.commandMode) {
+            this.commandMode = false;
+            this.autocomplete?.reset();
+            this.bus.emit('command:mode-exit');
+          }
+          continue;
+        }
+        // PageUp: scroll by viewport page
+        if (token.logicalName === 'pageup') {
+          this.scroll(-Math.max(1, vHeight - 2));
+          continue;
+        }
+        // PageDown: scroll by viewport page
+        if (token.logicalName === 'pagedown') {
+          this.scroll(Math.max(1, vHeight - 2));
+          continue;
+        }
+
+        // --- Command mode routing ---
+        if (this.commandMode) {
+          if (token.logicalName === 'escape') {
+            // Exit command mode without executing
+            this.prompt = '';
+            this.commandMode = false;
+            this.autocomplete?.reset();
+            this.bus.emit('command:mode-exit');
+            continue;
+          }
+          if (token.logicalName === 'up') {
+            this.autocomplete?.moveUp();
+            continue;
+          }
+          if (token.logicalName === 'down') {
+            this.autocomplete?.moveDown();
+            continue;
+          }
+          if (token.logicalName === 'tab') {
+            // Tab: autocomplete to selected command
+            const selected = this.autocomplete?.getSelected();
+            if (selected) {
+              this.prompt = `/${selected.name} `;
+              this.autocomplete?.reset();
+            }
+            continue;
+          }
+          if (token.logicalName === 'backspace') {
+            this.prompt = this.prompt.slice(0, -1);
+            if (this.prompt === '') {
+              // Erased the '/' — exit command mode
+              this.commandMode = false;
+              this.autocomplete?.reset();
+              this.bus.emit('command:mode-exit');
+            } else {
+              const query = this.prompt.startsWith('/') ? this.prompt.slice(1) : '';
+              const spaceIdx = query.indexOf(' ');
+              if (spaceIdx === -1) this.autocomplete?.update(query);
+            }
+            continue;
+          }
+          if (token.logicalName === 'enter') {
+            // Execute the command
+            const raw = this.prompt.trim();
+            this.prompt = '';
+            this.commandMode = false;
+            this.autocomplete?.reset();
+            this.bus.emit('command:mode-exit');
+
+            if (raw.startsWith('/') && this.commandRegistry && this.commandContext) {
+              const parts = raw.slice(1).trim().split(/\s+/);
+              const name = parts[0];
+              const args = parts.slice(1);
+              void this.commandRegistry.execute(name, args, this.commandContext);
+              this.bus.emit('command:execute', { name, args });
+            }
+            continue;
+          }
+          continue; // in command mode: let text tokens handle character typing
+        }
+
+        // --- Normal mode ---
         if (token.logicalName === 'enter') {
           if (token.shift) {
             this.prompt += '\n';

@@ -1,11 +1,18 @@
 import { InfiniteBuffer } from './history.ts';
 import { UIFactory } from '../renderer/ui-factory.ts';
+import { renderMarkdown } from '../renderer/markdown.ts';
+import { renderToolCallBlock } from '../renderer/tool-call.ts';
 import { createEmptyLine } from '../types/grid.ts';
-import { getSplashLines } from '../utils/splash-lines.ts';
+import { getSplashLines, type SplashOptions } from '../utils/splash-lines.ts';
 import { type Line, type Cell } from '../types/grid.ts';
 import { interpolateColor, getDisplayWidth, wrapText } from '../utils/terminal-width.ts';
 import type { ToolCall, ToolResult } from '../types/tools.ts';
 import type { ProviderMessage } from '../providers/interface.ts';
+import { logger } from '../utils/logger.ts';
+import type { ProviderRegistry } from '../providers/registry.ts';
+
+/** Rough token estimate: 4 chars ≈ 1 token. */
+const estimateTokens = (text: string): number => Math.ceil(text.length / 4);
 
 /**
  * ConversationManager - Owns conversation messages and the rendered history buffer.
@@ -147,19 +154,16 @@ export class ConversationManager {
       if (m.role === 'user') {
         this.history.addLines(UIFactory.createMessageBar(width, m.content));
       } else if (m.role === 'assistant') {
-        // Show tool calls as a brief indicator
-        if (m.toolCalls && m.toolCalls.length > 0 && !m.content) {
-          const toolNames = m.toolCalls.map((tc) => tc.name).join(', ');
-          const indicator = this.textToLines(`[calling tools: ${toolNames}]`, width, { fg: '244', dim: true });
-          this.history.addLines(indicator);
-        } else if (m.content) {
-          const lines = this.textToLines(m.content, width, { fg: '15' });
+        // Render assistant content using the markdown renderer
+        if (m.content) {
+          const lines = renderMarkdown(m.content, width);
           this.history.addLines(lines);
-          // If there were also tool calls, show the indicator after content
-          if (m.toolCalls && m.toolCalls.length > 0) {
-            const toolNames = m.toolCalls.map((tc) => tc.name).join(', ');
-            const indicator = this.textToLines(`[called tools: ${toolNames}]`, width, { fg: '244', dim: true });
-            this.history.addLines(indicator);
+        }
+        // Render tool calls using the tool-call block renderer
+        if (m.toolCalls && m.toolCalls.length > 0) {
+          for (const tc of m.toolCalls) {
+            const status = m.content ? 'done' : 'running';
+            this.history.addLines(renderToolCallBlock(tc, status, undefined, width));
           }
         }
       } else if (m.role === 'system') {
@@ -175,8 +179,11 @@ export class ConversationManager {
     }
   }
 
+  /** Options passed to the splash screen renderer. Set externally. */
+  public splashOptions: SplashOptions = {};
+
   private addSplashScreen(width: number): void {
-    const splashStrings = getSplashLines(width);
+    const splashStrings = getSplashLines(width, this.splashOptions);
     const CYAN = '#00ffff';
     const PURPLE = '#d000ff';
     const GREY = '244';
@@ -222,5 +229,107 @@ export class ConversationManager {
       UIFactory.stringToLine((i === 0 ? l : indent + l), width, style)
     );
     this.history.addLines(lines);
+  }
+
+  /**
+   * clearDisplay - Clear the visual history buffer without touching the LLM context messages.
+   * The next render will show a blank conversation area.
+   */
+  public clearDisplay(): void {
+    this.history.clear();
+    this.appendedUpTo = 0;
+    this.dirty = true;
+    // Re-render from existing messages to rebuild buffer
+    const width = this.getWidth();
+    this.lastRenderedWidth = width;
+    this.dirty = false;
+    this.appendMessages(this.messages, width);
+    this.appendedUpTo = this.messages.length;
+  }
+
+  /**
+   * resetAll - Clear both the display buffer and all conversation messages.
+   * This is a full reset; the LLM context is wiped.
+   */
+  public resetAll(): void {
+    this.messages = [];
+    this.history.clear();
+    this.appendedUpTo = 0;
+    this.lastRenderedWidth = 0;
+    this.dirty = true;
+  }
+
+  /**
+   * estimateTotalTokens - Rough estimate of tokens in all messages.
+   * Uses 4-chars-per-token heuristic.
+   */
+  public estimateTotalTokens(): number {
+    return this.messages.reduce((sum, m) => sum + estimateTokens(m.content), 0);
+  }
+
+  /**
+   * compact - Summarize the conversation to free context window.
+   * Sends a summarization prompt to the LLM and replaces message history
+   * with the summary as a single system message.
+   */
+  public async compact(registry: ProviderRegistry, modelId: string): Promise<void> {
+    if (this.messages.length === 0) return;
+
+    const fullText = this.messages
+      .filter(m => m.role !== 'system')
+      .map(m => {
+        const role = m.role === 'tool' ? 'tool-result' : m.role;
+        return `[${role}]: ${m.content}`;
+      })
+      .join('\n\n');
+
+    const prompt = [
+      'Please provide a concise summary of the following conversation.',
+      'Include: key topics discussed, decisions made, files modified, and current state.',
+      'Format as bullet points. Be terse.',
+      '',
+      fullText,
+    ].join('\n');
+
+    try {
+      const provider = registry.getForModel(modelId);
+      const response = await provider.chat({
+        messages: [{ role: 'user', content: prompt }],
+        model: modelId,
+      });
+      const summary = response.content;
+
+      if (summary) {
+        // Replace all messages with the summary
+        this.messages = [
+          { role: 'system', content: `[Conversation summary]\n${summary}` },
+        ];
+        this.history.clear();
+        this.appendedUpTo = 0;
+        this.lastRenderedWidth = 0;
+        this.dirty = true;
+      }
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      logger.error('Compact failed', { error: msg });
+    }
+  }
+
+  /**
+   * toJSON - Serialize conversation for persistence.
+   */
+  public toJSON(): object {
+    return { messages: this.messages, timestamp: Date.now() };
+  }
+
+  /**
+   * fromJSON - Restore conversation from persisted data.
+   */
+  public fromJSON(data: { messages: Message[] }): void {
+    this.messages = data.messages ?? [];
+    this.history.clear();
+    this.appendedUpTo = 0;
+    this.lastRenderedWidth = 0;
+    this.dirty = true;
   }
 }

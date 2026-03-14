@@ -1,4 +1,4 @@
-import { type Line, type Cell } from '../types/grid.ts';
+import { type Line, type Cell, createStyledCell } from '../types/grid.ts';
 import { UIFactory } from './ui-factory.ts';
 import { getDisplayWidth } from '../utils/terminal-width.ts';
 
@@ -172,24 +172,22 @@ function tokenizeBash(line: string): SyntaxToken[] {
       i = j + 1;
       continue;
     }
+    if (line[i] === '$') {
+      let j = i + 1;
+      while (j < line.length && /[\w{}_]/.test(line[j])) j++;
+      tokens.push({ text: line.slice(i, j), fg: '#9cdcfe' });
+      i = j;
+      continue;
+    }
     if (/[a-zA-Z_]/.test(line[i])) {
       let j = i;
       while (j < line.length && /[\w-]/.test(line[j])) j++;
       const word = line.slice(i, j);
       if (BASH_KEYWORDS.has(word)) {
         tokens.push({ text: word, fg: '#569cd6', bold: true });
-      } else if (word.startsWith('$')) {
-        tokens.push({ text: word, fg: '#9cdcfe' });
       } else {
         tokens.push({ text: word, fg: '' });
       }
-      i = j;
-      continue;
-    }
-    if (line[i] === '$') {
-      let j = i + 1;
-      while (j < line.length && /[\w{}_]/.test(line[j])) j++;
-      tokens.push({ text: line.slice(i, j), fg: '#9cdcfe' });
       i = j;
       continue;
     }
@@ -249,8 +247,13 @@ function tokenizeYaml(line: string): SyntaxToken[] {
     tokens.push({ text: keyMatch[3], fg: '244' });
     if (keyMatch[4]) {
       const val = keyMatch[4];
-      const isStr = /^\s*['"]/.test(val);
-      tokens.push({ text: val, fg: isStr ? '#ce9178' : '#ce9178' });
+      const trimVal = val.trimStart();
+      // Differentiate YAML value types for syntax highlighting
+      const isStr = /^['"]/.test(trimVal);
+      const isBool = trimVal === 'true' || trimVal === 'false' || trimVal === 'null' || trimVal === 'yes' || trimVal === 'no';
+      const isNum = /^-?[0-9]/.test(trimVal);
+      const valFg = isStr ? '#ce9178' : isBool ? '#569cd6' : isNum ? '#b5cea8' : '';
+      tokens.push({ text: val, fg: valFg });
     }
     return tokens;
   }
@@ -298,17 +301,15 @@ export function renderCodeBlock(codeLines: string[], lang: string, width: number
     const lineNum = String(i + 1).padStart(lineNumW);
     const tokens = tokenize(rawLine);
 
-    const line: Cell[] = new Array(width).fill(null).map(() => ({
-      char: ' ', fg: '', bg: BG, bold: false, dim: false, underline: false, italic: false, strikethrough: false
-    })) as Cell[];
+    const line: Cell[] = new Array(width).fill(null).map(() => createStyledCell(' ', { bg: BG }));
 
     // Line number
     let cx = 0;
     for (const ch of lineNum) {
       if (cx >= contentStartX) break;
-      line[cx++] = { char: ch, fg: LINE_NUM_FG, bg: BG, bold: false, dim: true, underline: false, italic: false, strikethrough: false };
+      line[cx++] = createStyledCell(ch, { fg: LINE_NUM_FG, bg: BG, dim: true });
     }
-    line[cx++] = { char: ' ', fg: '', bg: BG, bold: false, dim: false, underline: false, italic: false, strikethrough: false };
+    line[cx++] = createStyledCell(' ', { bg: BG });
 
     // Syntax tokens
     for (const token of tokens) {
@@ -320,16 +321,7 @@ export function renderCodeBlock(codeLines: string[], lang: string, width: number
           cx++;
           continue;
         }
-        line[cx] = {
-          char: ch,
-          fg: token.fg,
-          bg: BG,
-          bold: token.bold || false,
-          dim: false,
-          underline: false,
-          italic: token.italic || false,
-          strikethrough: false
-        };
+        line[cx] = createStyledCell(ch, { fg: token.fg, bg: BG, bold: token.bold, italic: token.italic });
         if (cw === 2 && cx + 1 < width) line[cx + 1] = { ...line[cx], char: '' };
         cx += cw;
       }

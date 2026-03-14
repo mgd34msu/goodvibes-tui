@@ -6,6 +6,23 @@ import { renderCodeBlock } from './code-block.ts';
 import { getDisplayWidth } from '../utils/terminal-width.ts';
 import type { ToolCall, ToolResult } from '../types/tools.ts';
 
+/**
+ * truncateToDisplayWidth - Truncate a string to at most `maxW` display columns.
+ * Unlike String.slice(), this is safe for multi-byte emoji and CJK characters.
+ */
+function truncateToDisplayWidth(text: string, maxW: number, ellipsis = '…'): string {
+  const ellipsisW = getDisplayWidth(ellipsis);
+  let w = 0;
+  let cutPoint = 0;
+  for (const ch of text) {
+    const cw = getDisplayWidth(ch);
+    if (w + cw > maxW - ellipsisW) break;
+    w += cw;
+    cutPoint += ch.length;
+  }
+  return text.slice(0, cutPoint) + ellipsis;
+}
+
 type ToolStatus = 'pending' | 'running' | 'done' | 'failed';
 
 /** Icon map by tool name. */
@@ -67,7 +84,7 @@ export function renderToolCallBlock(
   const headerPrefix = ` ${icon} ${title}`;
   const maxTitleW = width - badgeW - 2;
   const truncatedHeader = getDisplayWidth(headerPrefix) > maxTitleW
-    ? headerPrefix.slice(0, maxTitleW - 1) + '…'
+    ? truncateToDisplayWidth(headerPrefix, maxTitleW)
     : headerPrefix;
 
   const paddingW = width - getDisplayWidth(truncatedHeader) - badgeW;

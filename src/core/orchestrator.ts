@@ -7,6 +7,8 @@ import { providerRegistry } from '../providers/registry.ts';
 import type { LLMProvider } from '../providers/interface.ts';
 import { config } from '../config.ts';
 import type { PermissionManager } from '../permissions/manager.ts';
+import type { AcpManager } from '../acp/manager.ts';
+import type { SubagentTask } from '../acp/protocol.ts';
 
 const SPINNER_FRAMES = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
 
@@ -22,6 +24,7 @@ export class Orchestrator {
 
   private animInterval: ReturnType<typeof setInterval> | null = null;
   private abortController: AbortController | null = null;
+  private acpManager: AcpManager | null = null;
 
   constructor(
     private bus: EventBus,
@@ -31,6 +34,70 @@ export class Orchestrator {
     private toolRegistry: ToolRegistry,
     private permissionManager: PermissionManager,
   ) {}
+
+  /**
+   * Attach an AcpManager and register the 'delegate' tool into the ToolRegistry.
+   * Call this after construction, before the first turn.
+   */
+  public registerDelegateTool(manager: AcpManager): void {
+    this.acpManager = manager;
+
+    this.toolRegistry.register({
+      definition: {
+        name: 'delegate',
+        description:
+          'Delegate a task to a subagent child process via ACP. ' +
+          'The subagent runs autonomously and reports results when complete. ' +
+          'Returns the subagent ID immediately; results are delivered via subagent events.',
+        parameters: {
+          type: 'object',
+          required: ['description', 'context', 'tools'],
+          properties: {
+            description: {
+              type: 'string',
+              description: 'Clear description of the task for the subagent to complete.',
+            },
+            context: {
+              type: 'string',
+              description: 'Additional context, constraints, or background information.',
+            },
+            tools: {
+              type: 'array',
+              items: { type: 'string' },
+              description: 'Tool names the subagent is allowed to use.',
+            },
+            model: {
+              type: 'string',
+              description: 'Optional model override (e.g. "claude-sonnet-4-5").',
+            },
+            provider: {
+              type: 'string',
+              description: 'Optional provider override (e.g. "anthropic").',
+            },
+          },
+        },
+      },
+      execute: async (args): Promise<{ success: boolean; output: string }> => {
+        if (!this.acpManager) {
+          return { success: false, output: 'ACP manager not initialized' };
+        }
+
+        const task: SubagentTask = {
+          description: String(args.description ?? ''),
+          context: String(args.context ?? ''),
+          tools: Array.isArray(args.tools) ? args.tools.map(String) : [],
+          model: args.model ? String(args.model) : undefined,
+          provider: args.provider ? String(args.provider) : undefined,
+        };
+
+        const id = await this.acpManager.spawn(task);
+        return {
+          success: true,
+          output: `Subagent spawned with ID: ${id}. Task: "${task.description}". The subagent is running in the background.`,
+        };
+      },
+    });
+  }
 
   public getSpinner(): string {
     return SPINNER_FRAMES[this.thinkingFrame % SPINNER_FRAMES.length];
