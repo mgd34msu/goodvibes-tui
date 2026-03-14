@@ -154,8 +154,8 @@ export class Orchestrator {
 
   private async runTurn(text: string): Promise<void> {
     this.bus.emit('turn:start', { prompt: text });
-    this.turnStartMessageCount = this.conversation.getMessageCount();
     this.conversation.addUserMessage(text);
+    this.turnStartMessageCount = this.conversation.getMessageCount();
     this.scrollToEnd(this.getViewportHeight());
     this.startThinking();
 
