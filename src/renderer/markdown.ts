@@ -110,6 +110,19 @@ export function renderMarkdown(text: string, width: number): Line[] {
       continue;
     }
 
+    // --- Table ---
+    if (raw.includes('|') && i + 1 < rawLines.length && /^[\s|:-]+$/.test(rawLines[i + 1])) {
+      const tableRows: string[] = [];
+      let j = i;
+      while (j < rawLines.length && rawLines[j].includes('|')) {
+        tableRows.push(rawLines[j]);
+        j++;
+      }
+      i = j - 1;
+      lines.push(...renderTable(tableRows, width, indent));
+      continue;
+    }
+
     // --- Normal paragraph ---
     const rendered = renderInlineMarkdown(raw);
     lines.push(...compositeInlineLine(' '.repeat(indent), rendered, width, {}, indent));
@@ -120,6 +133,91 @@ export function renderMarkdown(text: string, width: number): Line[] {
     const rendered = renderCodeBlock(codeBlockLines, codeBlockLang, width);
     lines.push(...rendered);
   }
+
+  return lines;
+}
+
+/** Render a markdown table with box-drawing borders. */
+function renderTable(rows: string[], width: number, indent: number): Line[] {
+  const lines: Line[] = [];
+  const parsedRows: string[][] = [];
+  let separatorIdx = -1;
+
+  for (let r = 0; r < rows.length; r++) {
+    const row = rows[r].trim();
+    if (/^[\s|:-]+$/.test(row) && row.includes('-')) {
+      separatorIdx = r;
+      continue;
+    }
+    const cells = row.split('|').map(c => c.trim()).filter((_, i, arr) => {
+      if (i === 0 && arr[i] === '') return false;
+      if (i === arr.length - 1 && arr[i] === '') return false;
+      return true;
+    });
+    parsedRows.push(cells);
+  }
+
+  if (parsedRows.length === 0) return lines;
+
+  const colCount = Math.max(...parsedRows.map(r => r.length));
+  const colWidths: number[] = new Array(colCount).fill(0);
+  for (const row of parsedRows) {
+    for (let c = 0; c < row.length; c++) {
+      colWidths[c] = Math.max(colWidths[c], getDisplayWidth(row[c]));
+    }
+  }
+
+  const borderChars = colCount + 1;
+  const padding = colCount * 2;
+  const totalTableW = colWidths.reduce((a, b) => a + b, 0) + borderChars + padding;
+  const availW = width - indent;
+
+  if (totalTableW > availW) {
+    const contentW = availW - borderChars - padding;
+    const totalContent = colWidths.reduce((a, b) => a + b, 0);
+    if (totalContent > 0) {
+      for (let c = 0; c < colCount; c++) {
+        colWidths[c] = Math.max(3, Math.floor((colWidths[c] / totalContent) * contentW));
+      }
+    }
+  }
+
+  const pad = ' '.repeat(indent);
+  const bc = '240';
+
+  let top = pad + '\u250c';
+  for (let c = 0; c < colCount; c++) {
+    top += '\u2500'.repeat(colWidths[c] + 2) + (c < colCount - 1 ? '\u252c' : '\u2510');
+  }
+  lines.push(UIFactory.stringToLine(top, width, { fg: bc }));
+
+  for (let r = 0; r < parsedRows.length; r++) {
+    const row = parsedRows[r];
+    const isHeader = separatorIdx > 0 ? r === 0 : false;
+
+    let rowStr = pad + '\u2502';
+    for (let c = 0; c < colCount; c++) {
+      const cell = c < row.length ? row[c] : '';
+      const cellW = getDisplayWidth(cell);
+      const padR = Math.max(0, colWidths[c] - cellW);
+      rowStr += ' ' + cell + ' '.repeat(padR) + ' \u2502';
+    }
+    lines.push(UIFactory.stringToLine(rowStr, width, { fg: isHeader ? '#00ffff' : '252', bold: isHeader }));
+
+    if (isHeader) {
+      let mid = pad + '\u251c';
+      for (let c = 0; c < colCount; c++) {
+        mid += '\u2500'.repeat(colWidths[c] + 2) + (c < colCount - 1 ? '\u253c' : '\u2524');
+      }
+      lines.push(UIFactory.stringToLine(mid, width, { fg: bc }));
+    }
+  }
+
+  let bottom = pad + '\u2514';
+  for (let c = 0; c < colCount; c++) {
+    bottom += '\u2500'.repeat(colWidths[c] + 2) + (c < colCount - 1 ? '\u2534' : '\u2518');
+  }
+  lines.push(UIFactory.stringToLine(bottom, width, { fg: bc }));
 
   return lines;
 }
