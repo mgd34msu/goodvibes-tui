@@ -118,7 +118,7 @@ export class ConversationManager {
    * flushHistory - Incremental update. Appends only newly added messages.
    * Falls back to a full rebuild when the terminal width has changed.
    */
-  private flushHistory(): void {
+  public flushHistory(): void {
     if (!this.dirty) return;
 
     const width = this.getWidth();
