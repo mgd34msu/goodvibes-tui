@@ -1,4 +1,4 @@
-import { type Line, type Cell } from '../types/grid.ts';
+import { type Line, type Cell, createStyledCell } from '../types/grid.ts';
 import { UIFactory } from './ui-factory.ts';
 import { getDisplayWidth } from '../utils/terminal-width.ts';
 
@@ -34,13 +34,13 @@ export function renderDiffView(diffText: string, width: number, filename?: strin
         oldLineNo = parseInt(hunkMatch[1], 10) - 1;
         newLineNo = parseInt(hunkMatch[2], 10) - 1;
       }
-      lines.push(makeStyledLine(raw, width, '#00bcd4', '#0f1f1f', false, ''));
+      lines.push(makeStyledLine(raw, width, '#00bcd4', '#0f1f1f', false));
       continue;
     }
 
     // File headers: --- and +++
     if (raw.startsWith('--- ') || raw.startsWith('+++ ')) {
-      lines.push(makeStyledLine(raw, width, '244', BG, false, ''));
+      lines.push(makeStyledLine(raw, width, '244', BG, false));
       continue;
     }
 
@@ -88,12 +88,12 @@ function makeGutterLine(
   let cx = 0;
 
   // Gutter char
-  line[cx++] = { char: gutter, fg, bg, bold: gutter !== ' ', dim: false, underline: false, italic: false, strikethrough: false };
+  line[cx++] = createStyledCell(gutter, { fg, bg, bold: gutter !== ' ' });
 
   // Line number
   for (const ch of lineLabel) {
     if (cx >= width) break;
-    line[cx++] = { char: ch, fg: '238', bg, bold: false, dim: true, underline: false, italic: false, strikethrough: false };
+    line[cx++] = createStyledCell(ch, { fg: '238', bg, dim: true });
   }
 
   // Content
@@ -102,7 +102,7 @@ function makeGutterLine(
     const cw = getDisplayWidth(ch);
     const code = ch.charCodeAt(0);
     if (code < 32) { cx++; continue; }
-    line[cx] = { char: ch, fg, bg, bold: false, dim: false, underline: false, italic: false, strikethrough: false };
+    line[cx] = createStyledCell(ch, { fg, bg });
     if (cw === 2 && cx + 1 < width) line[cx + 1] = { ...line[cx], char: '' };
     cx += cw;
   }
@@ -111,7 +111,7 @@ function makeGutterLine(
 }
 
 /** Build a simple styled line from text. */
-function makeStyledLine(text: string, width: number, fg: string, bg: string, bold: boolean, _prefix: string): Line {
+function makeStyledLine(text: string, width: number, fg: string, bg: string, bold: boolean): Line {
   const line = makeFilledLine(width, bg);
   let cx = 0;
   for (const ch of text) {
@@ -119,7 +119,7 @@ function makeStyledLine(text: string, width: number, fg: string, bg: string, bol
     const cw = getDisplayWidth(ch);
     const code = ch.charCodeAt(0);
     if (code < 32) { cx++; continue; }
-    line[cx] = { char: ch, fg, bg, bold, dim: false, underline: false, italic: false, strikethrough: false };
+    line[cx] = createStyledCell(ch, { fg, bg, bold });
     if (cw === 2 && cx + 1 < width) line[cx + 1] = { ...line[cx], char: '' };
     cx += cw;
   }
@@ -128,7 +128,5 @@ function makeStyledLine(text: string, width: number, fg: string, bg: string, bol
 
 /** Create a line filled with bg color. */
 function makeFilledLine(width: number, bg: string): Cell[] {
-  return Array.from({ length: width }, () => ({
-    char: ' ', fg: '', bg, bold: false, dim: false, underline: false, italic: false, strikethrough: false
-  }));
+  return Array.from({ length: width }, () => createStyledCell(' ', { bg }));
 }

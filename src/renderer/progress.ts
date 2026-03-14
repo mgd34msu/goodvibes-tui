@@ -72,8 +72,6 @@ export function renderTokenBar(
   const barTextW = getDisplayWidth(barText);
   const spacingW = Math.max(1, width - statsW - barTextW - 2);
 
-  const fullLine = statsText + ' '.repeat(spacingW) + barText + '  ';
-
   // Build with mixed colors
   const line = UIFactory.stringToLine(statsText + ' '.repeat(spacingW), width, { fg: '244', dim: true });
 

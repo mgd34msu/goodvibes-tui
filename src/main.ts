@@ -1,4 +1,6 @@
 #!/usr/bin/env bun
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
+import { join } from 'path';
 import { Compositor } from './renderer/compositor.ts';
 import { UIFactory } from './renderer/ui-factory.ts';
 import { EventBus } from './core/event-bus.ts';
@@ -7,6 +9,7 @@ import { Orchestrator } from './core/orchestrator.ts';
 import { InputHandler } from './input/handler.ts';
 import { SelectionManager } from './input/selection.ts';
 import { config } from './config.ts';
+import { providerRegistry } from './providers/registry.ts';
 import { ToolRegistry } from './tools/registry.ts';
 import { FileReadTool } from './tools/file-read.ts';
 import { FileWriteTool } from './tools/file-write.ts';
@@ -18,6 +21,8 @@ import { GlobTool } from './tools/glob-tool.ts';
 import { PermissionManager } from './permissions/manager.ts';
 import { PermissionPromptUI } from './permissions/prompt.ts';
 import type { PermissionRequest } from './permissions/prompt.ts';
+import { CommandRegistry } from './input/command-registry.ts';
+import { registerBuiltinCommands } from './input/commands.ts';
 
 const ALT_SCREEN_ENTER = '\x1b[?1049h';
 const ALT_SCREEN_EXIT  = '\x1b[?1049l';
@@ -30,6 +35,26 @@ const KEYBOARD_EXT_ENABLE  = '\x1b[>4;2m' + '\x1b[?1u';
 const KEYBOARD_EXT_DISABLE = '\x1b[>4;0m' + '\x1b[?1l';
 const PASTE_ENABLE     = '\x1b[?2004h';
 const PASTE_DISABLE    = '\x1b[?2004l';
+
+/** Conversation persistence directory. */
+const CONV_DIR = join(process.cwd(), '.goodvibes', 'conversations');
+const LAST_CONV_FILE = join(CONV_DIR, 'last.json');
+
+function saveConversation(data: object): void {
+  try {
+    mkdirSync(CONV_DIR, { recursive: true });
+    writeFileSync(LAST_CONV_FILE, JSON.stringify(data, null, 2), 'utf-8');
+  } catch { /* non-fatal */ }
+}
+
+function loadLastConversation(): { messages: never[] } | null {
+  try {
+    if (existsSync(LAST_CONV_FILE)) {
+      return JSON.parse(readFileSync(LAST_CONV_FILE, 'utf-8')) as { messages: never[] };
+    }
+  } catch { /* non-fatal */ }
+  return null;
+}
 
 async function main() {
   const stdout = process.stdout;
@@ -45,6 +70,14 @@ async function main() {
   let pendingPermission: PermissionRequest | null = null;
 
   let scrollTop = 0;
+
+  // --- Runtime state (mutable, can be changed by slash commands) ---
+  const runtime = {
+    model: config.model,
+    provider: config.provider,
+    debugMode: false,
+    systemPrompt: config.systemPrompt ?? '',
+  };
 
   const getViewportHeight = () => {
     const promptLines = input.prompt.split('\n').length;
@@ -62,6 +95,8 @@ async function main() {
   };
 
   const exitApp = () => {
+    // Save conversation on exit
+    saveConversation(conversation.toJSON());
     stdout.write(PASTE_DISABLE + KEYBOARD_EXT_DISABLE + MOUSE_DISABLE + CURSOR_SHOW + ALT_SCREEN_EXIT);
     stdin.setRawMode(false);
     process.exit(0);
@@ -97,6 +132,42 @@ async function main() {
     scroll,
     exitApp,
   );
+
+  // --- Command registry ---
+  const commandRegistry = new CommandRegistry();
+  registerBuiltinCommands(commandRegistry);
+
+  const commandContext = {
+    eventBus: bus,
+    providerRegistry,
+    conversationManager: conversation,
+    config,
+    runtime,
+    renderRequest: () => bus.emit('render:request'),
+    print: (text: string) => {
+      conversation.log(text, { fg: '135' });
+      bus.emit('render:request');
+    },
+    exit: exitApp,
+  };
+
+  input.setCommandRegistry(commandRegistry, commandContext);
+
+  // --- Splash options ---
+  const toolCount = toolRegistry.list().length;
+  conversation.splashOptions = {
+    workingDir: config.workingDir,
+    model: runtime.model,
+    provider: runtime.provider,
+    toolCount,
+  };
+
+  // --- Resume flag ---
+  const shouldResume = process.argv.includes('--resume');
+  if (shouldResume) {
+    const saved = loadLastConversation();
+    if (saved) conversation.fromJSON(saved);
+  }
 
   // --- Render function ---
   const render = () => {

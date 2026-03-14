@@ -22,8 +22,15 @@ const TAGLINE       = '[ ｇｏｏｄ ｖｉｂｅｓ ・ Ａ Ｉ ・ いい雰�
 
 const VERSION_LINE  = ` ✦ v${VERSION}  █  terminal AI assistant  █  自動ｺｰﾄﾞ ✦ `;
 
-export function getSplashLines(columns: number): string[] {
-  return [
+export interface SplashOptions {
+  workingDir?: string;
+  model?: string;
+  provider?: string;
+  toolCount?: number;
+}
+
+export function getSplashLines(columns: number, opts: SplashOptions = {}): string[] {
+  const lines = [
     center(TOP_BORDER,   columns),
     center(ART_LINES[0], columns),
     center(ART_LINES[1], columns),
@@ -35,4 +42,19 @@ export function getSplashLines(columns: number): string[] {
     center(TAGLINE,      columns),
     center(VERSION_LINE, columns),
   ];
+
+  // Context info line
+  const ctxParts: string[] = [];
+  if (opts.workingDir) ctxParts.push(`📂 ${opts.workingDir}`);
+  if (opts.model) ctxParts.push(`🤖 ${opts.model}${opts.provider ? ` (${opts.provider})` : ''}`);
+  if (opts.toolCount !== undefined) ctxParts.push(`🔧 ${opts.toolCount} tools`);
+
+  if (ctxParts.length > 0) {
+    const ctxLine = ctxParts.join('  ·  ');
+    lines.push(center(ctxLine, columns));
+  }
+
+  lines.push(center('Type /help for commands, or start chatting', columns));
+
+  return lines;
 }

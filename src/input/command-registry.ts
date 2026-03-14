@@ -1,0 +1,136 @@
+import type { EventBus } from '../core/event-bus.ts';
+import type { ProviderRegistry } from '../providers/registry.ts';
+import type { ConversationManager } from '../core/conversation.ts';
+import type { AppConfig } from '../config.ts';
+
+/**
+ * CommandContext - Passed to every slash command handler so commands can
+ * interact with the full application without circular-import issues.
+ */
+export interface CommandContext {
+  eventBus: EventBus;
+  providerRegistry: ProviderRegistry;
+  conversationManager: ConversationManager;
+  config: AppConfig;
+  /** Mutable runtime state — commands can mutate these in-place. */
+  runtime: {
+    model: string;
+    provider: string;
+    debugMode: boolean;
+    systemPrompt: string;
+  };
+  /** Request a re-render. */
+  renderRequest: () => void;
+  /** Print a message to the conversation as a system note. */
+  print: (text: string) => void;
+  /** Exit the application cleanly. */
+  exit: () => void;
+}
+
+/**
+ * SlashCommand - A single slash command definition.
+ */
+export interface SlashCommand {
+  /** Primary name, e.g. "model". Full invocation is "/model". */
+  name: string;
+  /** Alternate names, e.g. ["m"]. */
+  aliases: string[];
+  /** One-line description shown in /help output. */
+  description: string;
+  /** Optional usage hint, e.g. "<model-id>". */
+  usage?: string;
+  /** The function executed when the command is invoked. */
+  handler: (args: string[], context: CommandContext) => void | Promise<void>;
+}
+
+/**
+ * CommandRegistry - Central registry for all slash commands.
+ * Supports fuzzy prefix matching for autocomplete.
+ */
+export class CommandRegistry {
+  private commands = new Map<string, SlashCommand>();
+
+  /** Register a command. Also indexes all aliases. */
+  register(command: SlashCommand): void {
+    this.commands.set(command.name, command);
+  }
+
+  /** Remove a command by primary name. */
+  unregister(name: string): void {
+    this.commands.delete(name);
+  }
+
+  /**
+   * get - Look up a command by its primary name or any alias.
+   */
+  get(name: string): SlashCommand | undefined {
+    // Try primary name first
+    const direct = this.commands.get(name);
+    if (direct) return direct;
+    // Search aliases
+    for (const cmd of this.commands.values()) {
+      if (cmd.aliases.includes(name)) return cmd;
+    }
+    return undefined;
+  }
+
+  /** All registered commands. */
+  getAll(): SlashCommand[] {
+    return Array.from(this.commands.values());
+  }
+
+  /**
+   * fuzzyMatch - Return commands ranked by how well `query` matches their
+   * name or aliases. Returns all commands when query is empty.
+   */
+  fuzzyMatch(query: string): Array<{ command: SlashCommand; score: number }> {
+    const q = query.toLowerCase();
+    const results: Array<{ command: SlashCommand; score: number }> = [];
+
+    for (const cmd of this.commands.values()) {
+      const names = [cmd.name, ...cmd.aliases];
+      let bestScore = 0;
+
+      for (const candidate of names) {
+        const score = scoreMatch(q, candidate);
+        if (score > bestScore) bestScore = score;
+      }
+
+      if (bestScore > 0 || q === '') {
+        results.push({ command: cmd, score: q === '' ? 1 : bestScore });
+      }
+    }
+
+    // Sort: higher score first, then alphabetically
+    results.sort((a, b) => b.score - a.score || a.command.name.localeCompare(b.command.name));
+    return results;
+  }
+
+  /**
+   * execute - Look up and run a command. Returns true if found, false otherwise.
+   */
+  async execute(rawName: string, args: string[], context: CommandContext): Promise<boolean> {
+    const cmd = this.get(rawName);
+    if (!cmd) return false;
+    await cmd.handler(args, context);
+    return true;
+  }
+}
+
+/**
+ * scoreMatch - Simple prefix/subsequence scorer.
+ * Returns 0 if no match, higher is better.
+ */
+function scoreMatch(query: string, candidate: string): number {
+  if (query === '') return 1;
+  if (candidate === query) return 100;
+  if (candidate.startsWith(query)) return 80;
+
+  // Subsequence check
+  let qi = 0;
+  for (let ci = 0; ci < candidate.length && qi < query.length; ci++) {
+    if (candidate[ci] === query[qi]) qi++;
+  }
+  if (qi === query.length) return 40 - query.length; // shorter query → higher score
+  return 0;
+}

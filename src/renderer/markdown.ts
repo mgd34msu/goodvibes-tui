@@ -1,7 +1,10 @@
-import { type Line, type Cell } from '../types/grid.ts';
+import { type Line, type Cell, createStyledCell } from '../types/grid.ts';
 import { UIFactory } from './ui-factory.ts';
 import { renderCodeBlock } from './code-block.ts';
 import { getDisplayWidth } from '../utils/terminal-width.ts';
+
+/** Module-level set of inline markdown special characters (hoisted out of hot loop). */
+const INLINE_SPECIAL_CHARS = new Set(['[', '`', '*', '_', '~']);
 
 /**
  * renderMarkdown - Parse markdown text into styled Line[] using a line-by-line state machine.
@@ -73,8 +76,7 @@ export function renderMarkdown(text: string, width: number): Line[] {
       const listIndent = Math.floor(ulMatch[1].length / 2);
       const bulletX = indent + listIndent * 2;
       const textStartX = bulletX + 2;
-      const availableW = width - textStartX;
-      const rendered = renderInlineMarkdown(ulMatch[2], availableW);
+      const rendered = renderInlineMarkdown(ulMatch[2]);
       const prefix = ' '.repeat(bulletX) + '• ';
       lines.push(...compositeInlineLine(prefix, rendered, width, { fg: '135', bold: false }, textStartX));
       continue;
@@ -87,8 +89,7 @@ export function renderMarkdown(text: string, width: number): Line[] {
       const numStr = olMatch[2] + '. ';
       const bulletX = indent + listIndent * 2;
       const textStartX = bulletX + numStr.length;
-      const availableW = width - textStartX;
-      const rendered = renderInlineMarkdown(olMatch[3], availableW);
+      const rendered = renderInlineMarkdown(olMatch[3]);
       const prefix = ' '.repeat(bulletX) + numStr;
       lines.push(...compositeInlineLine(prefix, rendered, width, { fg: '135', bold: false }, textStartX));
       continue;
@@ -103,15 +104,14 @@ export function renderMarkdown(text: string, width: number): Line[] {
     // --- Blockquote ---
     const bqMatch = raw.match(/^> (.*)/);
     if (bqMatch) {
-      const bqAvailW = contentWidth - 3;
-      const rendered = renderInlineMarkdown(bqMatch[1], bqAvailW);
+      const rendered = renderInlineMarkdown(bqMatch[1]);
       const prefix = ' '.repeat(indent) + '┃ ';
       lines.push(...compositeInlineLine(prefix, rendered, width, { fg: '244', italic: true }, indent + 3));
       continue;
     }
 
     // --- Normal paragraph ---
-    const rendered = renderInlineMarkdown(raw, contentWidth);
+    const rendered = renderInlineMarkdown(raw);
     lines.push(...compositeInlineLine(' '.repeat(indent), rendered, width, {}, indent));
   }
 
@@ -136,7 +136,7 @@ type InlineToken =
  * renderInlineMarkdown - Parse inline markdown (bold, italic, inline code, links)
  * and return a flat array of tokens with style info.
  */
-export function renderInlineMarkdown(text: string, _availWidth: number): InlineToken[] {
+export function renderInlineMarkdown(text: string): InlineToken[] {
   const tokens: InlineToken[] = [];
   let i = 0;
 
@@ -208,9 +208,8 @@ export function renderInlineMarkdown(text: string, _availWidth: number): InlineT
     }
 
     // Plain text — accumulate until next special char
-    const specialChars = new Set(['[', '`', '*', '_', '~']);
     let end = i + 1;
-    while (end < text.length && !specialChars.has(text[end])) end++;
+    while (end < text.length && !INLINE_SPECIAL_CHARS.has(text[end])) end++;
     tokens.push({ type: 'text', text: text.slice(i, end), style: {} });
     i = end;
   }
@@ -253,23 +252,21 @@ function compositeInlineLine(
   let lineW = 0;
 
   const flushLine = (isFirst: boolean) => {
-    const line = new Array(width).fill(null).map(() => ({
-      char: ' ', fg: '', bg: '', bold: false, dim: false, underline: false, italic: false, strikethrough: false
-    })) as Cell[];
+    const line = new Array(width).fill(null).map(() => createStyledCell(' ')) as Cell[];
     // Write prefix on first line
     if (isFirst) {
       let px = 0;
       for (const ch of prefix) {
         if (px >= width) break;
         const cw = getDisplayWidth(ch);
-        line[px] = { char: ch, fg: prefixStyle.fg || '', bg: prefixStyle.bg || '', bold: prefixStyle.bold || false, dim: prefixStyle.dim || false, underline: prefixStyle.underline || false, italic: prefixStyle.italic || false, strikethrough: prefixStyle.strikethrough || false };
+        line[px] = createStyledCell(ch, { fg: prefixStyle.fg, bg: prefixStyle.bg, bold: prefixStyle.bold, dim: prefixStyle.dim, underline: prefixStyle.underline, italic: prefixStyle.italic, strikethrough: prefixStyle.strikethrough });
         if (cw === 2 && px + 1 < width) line[px + 1] = { ...line[px], char: '' };
         px += cw;
       }
     } else {
       // indent-only for continuation lines
       for (let x = 0; x < textStartX && x < width; x++) {
-        line[x] = { char: ' ', fg: '', bg: '', bold: false, dim: false, underline: false, italic: false, strikethrough: false };
+        line[x] = createStyledCell(' ');
       }
     }
     // Write content chars
@@ -277,16 +274,7 @@ function compositeInlineLine(
     for (const sc of lineChars) {
       if (cx >= width) break;
       const cw = getDisplayWidth(sc.char);
-      line[cx] = {
-        char: sc.char,
-        fg: sc.style.fg || '',
-        bg: sc.style.bg || '',
-        bold: sc.style.bold || false,
-        dim: sc.style.dim || false,
-        underline: sc.style.underline || false,
-        italic: sc.style.italic || false,
-        strikethrough: sc.style.strikethrough || false
-      };
+      line[cx] = createStyledCell(sc.char, sc.style);
       if (cw === 2 && cx + 1 < width) line[cx + 1] = { ...line[cx], char: '' };
       cx += cw;
     }

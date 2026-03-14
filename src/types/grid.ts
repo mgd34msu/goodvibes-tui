@@ -30,3 +30,18 @@ export const createEmptyCell = (): Cell => ({
 
 export const createEmptyLine = (width: number): Line => 
   Array.from({ length: width }, createEmptyCell);
+
+/**
+ * createStyledCell - Create a Cell with all defaults, applying only the provided overrides.
+ * Eliminates the need to write out all 8 Cell properties at every call site.
+ */
+export const createStyledCell = (char: string, overrides: Partial<Omit<Cell, 'char'>> = {}): Cell => ({
+  char,
+  fg: overrides.fg ?? '',
+  bg: overrides.bg ?? '',
+  bold: overrides.bold ?? false,
+  dim: overrides.dim ?? false,
+  underline: overrides.underline ?? false,
+  italic: overrides.italic ?? false,
+  strikethrough: overrides.strikethrough ?? false,
+});

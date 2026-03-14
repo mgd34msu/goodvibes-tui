@@ -127,13 +127,26 @@ export function parseListDirOutput(output: string, rootDir: string): FileTreeEnt
     });
   }
 
-  // Mark isLast for each entry (simple: last sibling at same depth)
+  // Mark isLast for each entry (last sibling at same depth under same parent)
   for (let i = 0; i < entries.length; i++) {
     const nextSameOrLower = entries.slice(i + 1).findIndex(
       e => e.depth <= entries[i].depth
     );
     entries[i].isLast = nextSameOrLower === 0 || nextSameOrLower === -1;
-    entries[i].isLastAtDepth = entries[i].isLast ? [true] : [false];
+
+    // Build isLastAtDepth[d] = true if the ancestor at depth d was the last child
+    // of its parent. This governs whether to draw '│  ' or '   ' vertical bars.
+    const isLastAtDepth: boolean[] = new Array(entries[i].depth).fill(false);
+    for (let d = 0; d < entries[i].depth; d++) {
+      // Walk backwards to find the most recent ancestor at depth d
+      for (let j = i - 1; j >= 0; j--) {
+        if (entries[j].depth === d) {
+          isLastAtDepth[d] = entries[j].isLast;
+          break;
+        }
+      }
+    }
+    entries[i].isLastAtDepth = isLastAtDepth;
   }
 
   return entries;
