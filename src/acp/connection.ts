@@ -16,6 +16,22 @@ import type {
 } from './protocol.ts';
 import type { EventBus } from '../core/event-bus.ts';
 import type { SubagentInfo, SubagentResult, SubagentTask } from './protocol.ts';
+import type { PermissionCategory } from '../permissions/manager.ts';
+import { logger } from '../utils/logger.ts';
+
+/** Shape of an agent_message_chunk session update that carries text content. */
+interface MessageChunkUpdate {
+  sessionUpdate: 'agent_message_chunk';
+  content?: Array<{ type: string; text?: string }>;
+}
+
+/** Runtime type guard for agent_message_chunk updates. */
+function isMessageChunk(update: { sessionUpdate?: unknown }): update is MessageChunkUpdate {
+  return (
+    update.sessionUpdate === 'agent_message_chunk' &&
+    ('content' in update)
+  );
+}
 
 /**
  * AcpConnection manages the lifecycle of a single subagent child process.
@@ -141,8 +157,9 @@ export class AcpConnection {
     if (this.conn && this.sessionId) {
       try {
         await this.conn.cancel({ sessionId: this.sessionId });
-      } catch {
+      } catch (err) {
         // Best-effort — kill the child if cancel fails
+        logger.error('AcpConnection.cancel: failed to send cancel to subagent', { id: this.id, err: String(err) });
       }
     }
     this.info.status = 'cancelled';
@@ -152,8 +169,8 @@ export class AcpConnection {
   private cleanup(): void {
     try {
       this.childProcess?.kill();
-    } catch {
-      // ignore
+    } catch (err) {
+      logger.error('AcpConnection.cleanup: failed to kill child process', { id: this.id, err: String(err) });
     }
     this.childProcess = null;
     this.conn = null;
@@ -168,7 +185,7 @@ export class AcpConnection {
        */
       requestPermission: (params: RequestPermissionRequest): Promise<RequestPermissionResponse> => {
         return new Promise((resolve) => {
-          const category = 'medium' as import('../permissions/manager.ts').PermissionCategory;
+          const category: PermissionCategory = 'delegate';
           const callId = `acp-${this.id}-${Date.now()}`;
 
           // Extract a human-readable tool name from the tool call
@@ -210,14 +227,13 @@ export class AcpConnection {
         }
 
         // Collect streamed text chunks as progress
-        if (update.sessionUpdate === 'agent_message_chunk' && 'content' in update) {
-          const chunk = update as unknown as { sessionUpdate: string; content?: Array<{ type: string; text?: string }> };
-          const text = chunk.content
+        if (isMessageChunk(update)) {
+          const text = update.content
             ?.filter((c) => c.type === 'text')
             .map((c) => c.text ?? '')
             .join('') ?? '';
           if (text) {
-            this.lastProgressText += text;
+            this.lastProgressText = (this.lastProgressText + text).slice(-1000);
             this.info.progress = this.lastProgressText.slice(-200);
           }
         }

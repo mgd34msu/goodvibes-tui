@@ -9,8 +9,8 @@ export interface EventMap {
 
   // Subagent events
   'subagent:spawned': { id: string; task: string };
-  'subagent:update': { id: string; update: unknown };
-  'subagent:complete': { id: string; result: unknown };
+  'subagent:update': { id: string; update: import('../acp/protocol.ts').SessionNotification };
+  'subagent:complete': { id: string; result: import('../acp/protocol.ts').SubagentResult };
   'subagent:error': { id: string; error: Error };
 
   // Permission flow
