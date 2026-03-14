@@ -449,10 +449,7 @@ export class InputHandler {
         segments.push({ rawStart: rawOffset + posInRaw, length: seg.length });
         wrappedLines.push(seg);
         posInRaw += seg.length;
-        // Skip consumed space at word-wrap break (not at force-break)
-        if (w < wrapped.length - 1 && posInRaw < rawLine.length && rawLine[posInRaw] === ' ') {
-          posInRaw++;
-        }
+        // New wrapper preserves all whitespace in segments — no consumed spaces to skip
       }
 
       rawOffset += rawLine.length;
@@ -525,39 +522,49 @@ export class InputHandler {
     if (maxW <= 0) return [line];
     if (line.length === 0) return [''];
 
+    // Character-by-character wrap that preserves ALL whitespace.
+    // split(' ') drops leading/trailing/consecutive spaces, causing cursor drift.
     const result: string[] = [];
-    const words = line.split(' ');
     let current = '';
+    let wordBuf = '';
 
-    for (const word of words) {
-      if (current.length === 0) {
-        if (word.length > maxW) {
-          // Force-break long word
-          let remaining = word;
-          while (remaining.length > maxW) {
-            result.push(remaining.slice(0, maxW));
-            remaining = remaining.slice(maxW);
-          }
-          current = remaining;
-        } else {
-          current = word;
-        }
-      } else if (current.length + 1 + word.length <= maxW) {
-        current += ' ' + word;
-      } else {
+    const flushWord = () => {
+      if (wordBuf.length === 0) return;
+      if (current.length > 0 && current.length + wordBuf.length > maxW) {
+        // Word doesn't fit on current line — push current, start new
         result.push(current);
-        if (word.length > maxW) {
-          let remaining = word;
-          while (remaining.length > maxW) {
-            result.push(remaining.slice(0, maxW));
-            remaining = remaining.slice(maxW);
-          }
-          current = remaining;
-        } else {
-          current = word;
+        current = '';
+      }
+      // Force-break words wider than maxW
+      while (wordBuf.length > maxW) {
+        if (current.length > 0) {
+          result.push(current);
+          current = '';
         }
+        result.push(wordBuf.slice(0, maxW));
+        wordBuf = wordBuf.slice(maxW);
+      }
+      current += wordBuf;
+      wordBuf = '';
+    };
+
+    for (let i = 0; i < line.length; i++) {
+      const ch = line[i];
+      if (ch === ' ') {
+        flushWord();
+        // Add the space to current line (spaces are never break points —
+        // the break happens BEFORE the next word if it won't fit)
+        if (current.length >= maxW) {
+          result.push(current);
+          current = ' ';
+        } else {
+          current += ' ';
+        }
+      } else {
+        wordBuf += ch;
       }
     }
+    flushWord();
     if (current.length > 0 || result.length === 0) {
       result.push(current);
     }
