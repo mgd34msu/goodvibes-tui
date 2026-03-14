@@ -1,4 +1,5 @@
 import type { LLMProvider, ChatRequest, ChatResponse } from './interface.ts';
+import { REASONING_BUDGET_MAP } from './interface.ts';
 import { ProviderError } from '../types/errors.ts';
 import { withRetry } from '../utils/retry.ts';
 import { logger } from '../utils/logger.ts';
@@ -63,7 +64,7 @@ export class AnthropicProvider implements LLMProvider {
   }
 
   async chat(params: ChatRequest): Promise<ChatResponse> {
-    const { messages, tools, model, maxTokens, signal, systemPrompt, onDelta } = params;
+    const { messages, tools, model, maxTokens, signal, systemPrompt, onDelta, reasoningEffort } = params;
 
     return withRetry(async () => {
       const body: Record<string, unknown> = {
@@ -79,6 +80,13 @@ export class AnthropicProvider implements LLMProvider {
 
       if (tools && tools.length > 0) {
         body['tools'] = toAnthropicTools(tools);
+      }
+
+      if (reasoningEffort && reasoningEffort !== 'instant') {
+        const budget = REASONING_BUDGET_MAP[reasoningEffort];
+        if (budget !== undefined && budget > 0) {
+          body['thinking'] = { type: 'enabled', budget_tokens: budget };
+        }
       }
 
       let res: Response;

@@ -1,4 +1,5 @@
 import type { LLMProvider, ChatRequest, ChatResponse } from './interface.ts';
+import { REASONING_BUDGET_MAP } from './interface.ts';
 import { ProviderError } from '../types/errors.ts';
 import { withRetry } from '../utils/retry.ts';
 import { logger } from '../utils/logger.ts';
@@ -46,7 +47,7 @@ export class GeminiProvider implements LLMProvider {
   }
 
   async chat(params: ChatRequest): Promise<ChatResponse> {
-    const { messages, tools, model, maxTokens, signal, systemPrompt, onDelta } = params;
+    const { messages, tools, model, maxTokens, signal, systemPrompt, onDelta, reasoningEffort } = params;
 
     return withRetry(async () => {
       const { contents, systemInstruction } = toGeminiContents(messages, systemPrompt);
@@ -65,6 +66,16 @@ export class GeminiProvider implements LLMProvider {
 
       if (maxTokens) {
         body['generationConfig'] = { maxOutputTokens: maxTokens };
+      }
+
+      if (reasoningEffort) {
+        const budget = REASONING_BUDGET_MAP[reasoningEffort];
+        if (budget !== undefined) {
+          body['generationConfig'] = {
+            ...(body['generationConfig'] as Record<string, unknown> ?? {}),
+            thinking_config: { thinking_budget: budget },
+          };
+        }
       }
 
       // Always use streaming endpoint; parse NDJSON chunks
