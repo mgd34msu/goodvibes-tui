@@ -99,7 +99,21 @@ export class InputHandler {
     }
   }
 
+  /**
+   * Handle Ctrl+C:
+   * - If prompt has text: clear it
+   * - If prompt is empty and LLM is thinking: cancel generation
+   * - If prompt is empty and idle: show exit notice (double = exit)
+   */
   private handleCtrlC(): void {
+    if (this.prompt.length > 0) {
+      // Clear the input
+      this.prompt = '';
+      this.cursorPos = 0;
+      return;
+    }
+    // Prompt is empty — try to cancel or exit
+    this.bus.emit('cancel:generation');
     const now = Date.now();
     if (now - this.lastCtrlCTime < 1000) {
       this.exitApp();
@@ -112,6 +126,21 @@ export class InputHandler {
         this.bus.emit('render:request');
       }, 1000);
     }
+  }
+
+  /**
+   * Handle Escape:
+   * - If prompt has text: clear it
+   * - If prompt is empty: cancel generation (double-tap not needed)
+   */
+  private handleEscape(): void {
+    if (this.prompt.length > 0) {
+      this.prompt = '';
+      this.cursorPos = 0;
+      return;
+    }
+    // Prompt is empty — cancel generation
+    this.bus.emit('cancel:generation');
   }
 
   /**
@@ -153,6 +182,10 @@ export class InputHandler {
         }
         if (token.logicalName === 'c' && token.ctrl && !token.shift) {
           this.handleCtrlC();
+          continue;
+        }
+        if (token.logicalName === 'escape') {
+          this.handleEscape();
           continue;
         }
         // Ctrl+L: clear screen (re-render)

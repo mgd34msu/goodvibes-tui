@@ -18,6 +18,7 @@ export interface EventMap {
   // UI events
   'render:request': void;
   'input:submit': { text: string };
+  'cancel:generation': void;
   'scroll:delta': { delta: number };
 
   // Slash command events
