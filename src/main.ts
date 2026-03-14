@@ -198,11 +198,14 @@ async function main() {
     // Flush any pending message renders before taking snapshot
     conversation.getDisplayBlocks();
 
-    // Calculate how many rows are consumed by overlays (thinking, permissions, queue)
+    // Calculate how many rows are consumed by overlays (thinking, permissions, queue, file picker)
     let overlayRows = 0;
     if (orchestrator.isThinking) overlayRows += 2; // spinner + blank
     if (pendingPermission) overlayRows += 8; // permission prompt
     overlayRows += orchestrator.messageQueue.length * 3; // queued messages
+    if (input.filePicker.active) {
+      overlayRows += Math.min(input.filePicker.results.length, 12) + 4; // results + borders/search
+    }
 
     // Shrink viewport to make room for overlays
     const effectiveVHeight = vHeight - overlayRows;
