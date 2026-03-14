@@ -110,6 +110,21 @@ export function renderMarkdown(text: string, width: number): Line[] {
       continue;
     }
 
+    // --- Table ---
+    // Detect table: current line has pipes AND next line is a separator row (|---|---|
+    if (raw.includes('|') && i + 1 < rawLines.length && /^[\s|:-]+$/.test(rawLines[i + 1])) {
+      // Collect all table rows (header + separator + data rows)
+      const tableRows: string[] = [];
+      let j = i;
+      while (j < rawLines.length && rawLines[j].includes('|')) {
+        tableRows.push(rawLines[j]);
+        j++;
+      }
+      i = j - 1; // outer loop will i++ past the last table row
+      lines.push(...renderTable(tableRows, width, indent));
+      continue;
+    }
+
     // --- Normal paragraph ---
     const rendered = renderInlineMarkdown(raw);
     lines.push(...compositeInlineLine(' '.repeat(indent), rendered, width, {}, indent));
@@ -335,6 +350,113 @@ function compositeInlineLine(
   if (lineChars.length > 0 || isFirstLine) {
     flushLine(isFirstLine);
   }
+
+  return lines;
+}
+
+/**
+ * renderTable - Render a markdown table with box-drawing borders.
+ * Parses pipe-separated rows, calculates column widths, and renders
+ * with header styling and aligned columns.
+ */
+function renderTable(rows: string[], width: number, indent: number): Line[] {
+  const lines: Line[] = [];
+
+  // Parse rows into cells
+  const parsedRows: string[][] = [];
+  let separatorIdx = -1;
+  for (let r = 0; r < rows.length; r++) {
+    const row = rows[r].trim();
+    // Check if this is the separator row (|---|---| or |:---:|---:| etc)
+    if (/^[\s|:-]+$/.test(row) && row.includes('-')) {
+      separatorIdx = r;
+      continue; // skip separator row
+    }
+    // Split by pipe, trim each cell, remove empty leading/trailing from outer pipes
+    const cells = row.split('|').map(c => c.trim()).filter((_, i, arr) => {
+      // Remove empty strings from leading/trailing pipes
+      if (i === 0 && arr[i] === '') return false;
+      if (i === arr.length - 1 && arr[i] === '') return false;
+      return true;
+    });
+    parsedRows.push(cells);
+  }
+
+  if (parsedRows.length === 0) return lines;
+
+  // Calculate column widths
+  const colCount = Math.max(...parsedRows.map(r => r.length));
+  const colWidths: number[] = new Array(colCount).fill(0);
+  for (const row of parsedRows) {
+    for (let c = 0; c < row.length; c++) {
+      colWidths[c] = Math.max(colWidths[c], getDisplayWidth(row[c]));
+    }
+  }
+
+  // Clamp total width to available space
+  const borderChars = colCount + 1; // one | per column + 1
+  const padding = colCount * 2; // 1 space each side per cell
+  const totalTableW = colWidths.reduce((a, b) => a + b, 0) + borderChars + padding;
+  const availW = width - indent;
+
+  // If table is too wide, proportionally shrink columns
+  if (totalTableW > availW) {
+    const contentW = availW - borderChars - padding;
+    const totalContent = colWidths.reduce((a, b) => a + b, 0);
+    if (totalContent > 0) {
+      for (let c = 0; c < colCount; c++) {
+        colWidths[c] = Math.max(3, Math.floor((colWidths[c] / totalContent) * contentW));
+      }
+    }
+  }
+
+  const pad = ' '.repeat(indent);
+  const borderColor = '240';
+  const headerFg = '#00ffff';
+  const cellFg = '252';
+
+  // Top border: ┌───┬───┐
+  let topBorder = pad + '\u250c';
+  for (let c = 0; c < colCount; c++) {
+    topBorder += '\u2500'.repeat(colWidths[c] + 2);
+    topBorder += c < colCount - 1 ? '\u252c' : '\u2510';
+  }
+  lines.push(UIFactory.stringToLine(topBorder, width, { fg: borderColor }));
+
+  // Render each row
+  for (let r = 0; r < parsedRows.length; r++) {
+    const row = parsedRows[r];
+    const isHeader = separatorIdx > 0 ? r === 0 : false;
+    const fg = isHeader ? headerFg : cellFg;
+    const bold = isHeader;
+
+    let rowStr = pad + '\u2502';
+    for (let c = 0; c < colCount; c++) {
+      const cell = c < row.length ? row[c] : '';
+      const cellW = getDisplayWidth(cell);
+      const padR = Math.max(0, colWidths[c] - cellW);
+      rowStr += ' ' + cell + ' '.repeat(padR) + ' \u2502';
+    }
+    lines.push(UIFactory.stringToLine(rowStr, width, { fg, bold }));
+
+    // After header row, draw a mid-border: ├───┼───┤
+    if (isHeader) {
+      let midBorder = pad + '\u251c';
+      for (let c = 0; c < colCount; c++) {
+        midBorder += '\u2500'.repeat(colWidths[c] + 2);
+        midBorder += c < colCount - 1 ? '\u253c' : '\u2524';
+      }
+      lines.push(UIFactory.stringToLine(midBorder, width, { fg: borderColor }));
+    }
+  }
+
+  // Bottom border: └───┴───┘
+  let bottomBorder = pad + '\u2514';
+  for (let c = 0; c < colCount; c++) {
+    bottomBorder += '\u2500'.repeat(colWidths[c] + 2);
+    bottomBorder += c < colCount - 1 ? '\u2534' : '\u2518';
+  }
+  lines.push(UIFactory.stringToLine(bottomBorder, width, { fg: borderColor }));
 
   return lines;
 }
