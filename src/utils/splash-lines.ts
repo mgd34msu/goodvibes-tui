@@ -43,18 +43,8 @@ export function getSplashLines(columns: number, opts: SplashOptions = {}): strin
     center(VERSION_LINE, columns),
   ];
 
-  // Context info line
-  const ctxParts: string[] = [];
-  if (opts.workingDir) ctxParts.push(`📂 ${opts.workingDir}`);
-  if (opts.model) ctxParts.push(`🤖 ${opts.model}${opts.provider ? ` (${opts.provider})` : ''}`);
-  if (opts.toolCount !== undefined) ctxParts.push(`🔧 ${opts.toolCount} tools`);
-
-  if (ctxParts.length > 0) {
-    const ctxLine = ctxParts.join('  ·  ');
-    lines.push(center(ctxLine, columns));
-  }
-
-  lines.push(center('Type /help for commands, or start chatting', columns));
+  // Just a simple hint on the splash
+  lines.push(center('start chatting or type /help for commands', columns));
 
   return lines;
 }
