@@ -120,27 +120,7 @@ export class ConversationManager {
    */
   public flushHistory(): void {
     if (!this.dirty) return;
-
-    const width = this.getWidth();
-
-    if (width !== this.lastRenderedWidth || this.appendedUpTo > this.messages.length) {
-      // Width changed or messages were removed — must do a full rebuild
-      this.rebuildHistory();
-      return;
-    }
-
-    // Splash screen case: if we had no messages before and now we do, rebuild
-    const hadNoMessages = this.appendedUpTo === 0;
-    if (hadNoMessages && this.messages.length > 0) {
-      this.rebuildHistory();
-      return;
-    }
-
-    // Append only the new messages
-    const newMessages = this.messages.slice(this.appendedUpTo);
-    this.appendMessages(newMessages, width);
-    this.appendedUpTo = this.messages.length;
-    this.dirty = false;
+    this.rebuildHistory();
   }
 
   private markDirty(): void {
