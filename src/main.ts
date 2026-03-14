@@ -182,14 +182,22 @@ async function main() {
     // Flush any pending message renders before taking snapshot
     conversation.getDisplayBlocks();
 
-    // Auto-scroll to bottom when orchestrator is active (thinking or just completed)
-    // This ensures new content is visible after flush adds lines to the buffer
-    const maxScroll = Math.max(0, conversation.history.getLineCount() - vHeight);
+    // Calculate how many rows are consumed by overlays (thinking, permissions, queue)
+    let overlayRows = 0;
+    if (orchestrator.isThinking) overlayRows += 2; // spinner + blank
+    if (pendingPermission) overlayRows += 8; // permission prompt
+    overlayRows += orchestrator.messageQueue.length * 3; // queued messages
+
+    // Shrink viewport to make room for overlays
+    const effectiveVHeight = vHeight - overlayRows;
+
+    // Auto-scroll to bottom when orchestrator is active or user was near bottom
+    const maxScroll = Math.max(0, conversation.history.getLineCount() - effectiveVHeight);
     if (orchestrator.isThinking || scrollTop >= maxScroll - 3) {
       scrollTop = maxScroll;
     }
 
-    const viewport = conversation.history.getSnapshot(scrollTop, vHeight, width);
+    const viewport = conversation.history.getSnapshot(scrollTop, effectiveVHeight, width);
 
     if (orchestrator.isThinking) {
       const thinking = UIFactory.createThinkingFragment(width, orchestrator.getSpinner());

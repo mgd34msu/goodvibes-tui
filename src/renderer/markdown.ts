@@ -283,16 +283,55 @@ function compositeInlineLine(
     lineW = 0;
   };
 
+  // Word-aware line breaking: accumulate words, break at spaces
   let isFirstLine = true;
-  for (const sc of chars) {
-    const cw = getDisplayWidth(sc.char);
-    if (lineW + cw > availW && lineW > 0) {
+  let wordChars: StyledChar[] = [];
+  let wordW = 0;
+
+  const flushWord = () => {
+    // If the word doesn't fit on the current line, wrap first
+    if (lineW > 0 && lineW + wordW > availW) {
       flushLine(isFirstLine);
       isFirstLine = false;
     }
-    lineChars.push(sc);
-    lineW += cw;
+    // If a single word is wider than availW, force-break it character by character
+    if (wordW > availW) {
+      for (const sc of wordChars) {
+        const cw = getDisplayWidth(sc.char);
+        if (lineW + cw > availW && lineW > 0) {
+          flushLine(isFirstLine);
+          isFirstLine = false;
+        }
+        lineChars.push(sc);
+        lineW += cw;
+      }
+    } else {
+      lineChars.push(...wordChars);
+      lineW += wordW;
+    }
+    wordChars = [];
+    wordW = 0;
+  };
+
+  for (const sc of chars) {
+    const cw = getDisplayWidth(sc.char);
+    if (sc.char === ' ') {
+      // Space: flush current word, then add the space
+      flushWord();
+      if (lineW + cw > availW && lineW > 0) {
+        flushLine(isFirstLine);
+        isFirstLine = false;
+      }
+      lineChars.push(sc);
+      lineW += cw;
+    } else {
+      // Non-space: accumulate into current word
+      wordChars.push(sc);
+      wordW += cw;
+    }
   }
+  // Flush remaining word
+  if (wordChars.length > 0) flushWord();
   if (lineChars.length > 0 || isFirstLine) {
     flushLine(isFirstLine);
   }
