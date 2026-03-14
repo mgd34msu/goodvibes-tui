@@ -221,7 +221,7 @@ async function main() {
       width, height,
       header: UIFactory.createHeader(width, runtime.model, runtime.provider),
       viewport,
-      footer: UIFactory.createFooter(width, input.prompt, orchestrator.usage, input.showExitNotice, input.lastCopyTime),
+      footer: UIFactory.createFooter(width, input.prompt, orchestrator.usage, input.showExitNotice, input.lastCopyTime, undefined, undefined, input.cursorPos),
       selection: {
         isCellSelected: (col, row) => selection.isCellSelected(col, row),
         scrollTop,
