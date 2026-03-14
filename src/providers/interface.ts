@@ -32,4 +32,4 @@ export interface ChatResponse {
 export type ProviderMessage =
   | { role: 'user'; content: string }
   | { role: 'assistant'; content: string; toolCalls?: ToolCall[] }
-  | { role: 'tool'; callId: string; content: string };
+  | { role: 'tool'; callId: string; content: string; name?: string };

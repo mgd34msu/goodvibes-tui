@@ -7,6 +7,14 @@ import { Orchestrator } from './core/orchestrator.ts';
 import { InputHandler } from './input/handler.ts';
 import { SelectionManager } from './input/selection.ts';
 import { config } from './config.ts';
+import { ToolRegistry } from './tools/registry.ts';
+import { FileReadTool } from './tools/file-read.ts';
+import { FileWriteTool } from './tools/file-write.ts';
+import { FileEditTool } from './tools/file-edit.ts';
+import { ShellExecTool } from './tools/shell-exec.ts';
+import { GrepTool } from './tools/grep.ts';
+import { ListDirTool } from './tools/list-dir.ts';
+import { GlobTool } from './tools/glob-tool.ts';
 
 const ALT_SCREEN_ENTER = '\x1b[?1049h';
 const ALT_SCREEN_EXIT  = '\x1b[?1049l';
@@ -53,11 +61,22 @@ async function main() {
     process.exit(0);
   };
 
+  // --- Tool registry ---
+  const toolRegistry = new ToolRegistry();
+  toolRegistry.register(new FileReadTool());
+  toolRegistry.register(new FileWriteTool());
+  toolRegistry.register(new FileEditTool());
+  toolRegistry.register(new ShellExecTool());
+  toolRegistry.register(new GrepTool());
+  toolRegistry.register(new ListDirTool());
+  toolRegistry.register(new GlobTool());
+
   const orchestrator = new Orchestrator(
     bus,
     conversation,
     getViewportHeight,
     scrollToEnd,
+    toolRegistry,
   );
 
   const input = new InputHandler(

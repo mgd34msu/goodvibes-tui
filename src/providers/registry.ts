@@ -175,7 +175,13 @@ export class ProviderRegistry {
   }
 
   private registerBuiltins(): void {
-    const apiKey = (name: string) => config.apiKeys[name] ?? '';
+    const apiKey = (name: string): string => {
+      const key = config.apiKeys[name] ?? '';
+      if (!key) {
+        console.warn(`[registry] API key for provider '${name}' is empty — requests will fail.`);
+      }
+      return key;
+    };
 
     this.register(
       new OpenAICompatProvider({

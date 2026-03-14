@@ -42,7 +42,7 @@ export class AnthropicProvider implements LLMProvider {
     return withRetry(async () => {
       const body: Record<string, unknown> = {
         model,
-        max_tokens: maxTokens ?? 8096,
+        max_tokens: maxTokens ?? 8192,
         messages: toAnthropicMessages(messages),
       };
 
