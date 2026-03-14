@@ -83,8 +83,16 @@ async function main() {
     systemPrompt: config.systemPrompt ?? '',
   };
 
+  /** Content width inside the prompt box (box width minus padding). */
+  const getPromptContentWidth = () => {
+    const w = stdout.columns || 80;
+    const boxMargin = 2;
+    const boxWidth = w - (boxMargin * 2);
+    return boxWidth - 4 - 3; // minus padding (4) minus prefix width (3: ' > ')
+  };
+
   const getViewportHeight = () => {
-    const promptLines = input.getVisiblePromptLineCount();
+    const promptLines = input.getVisiblePromptLineCount(getPromptContentWidth());
     return (stdout.rows || 24) - 2 - (7 + promptLines);
   };
 
@@ -221,16 +229,21 @@ async function main() {
       width, height,
       header: UIFactory.createHeader(width, runtime.model, runtime.provider),
       viewport,
-      footer: UIFactory.createFooter(
-        width,
-        input.getVisiblePromptLines().join('\n'),
-        orchestrator.usage,
-        input.showExitNotice,
-        input.lastCopyTime,
-        undefined, undefined,
-        // Adjust cursor position relative to the visible window
-        Math.max(0, input.cursorPos - input.prompt.split('\n').slice(0, input.inputScrollTop).reduce((sum, l) => sum + l.length + 1, 0))
-      ),
+      footer: (() => {
+        const cw = getPromptContentWidth();
+        const info = input.getWrappedPromptInfo(cw);
+        return UIFactory.createFooter(
+          width,
+          info.visibleLines.join('\n'),
+          orchestrator.usage,
+          input.showExitNotice,
+          input.lastCopyTime,
+          undefined, undefined,
+          info.visibleCursorLine >= 0
+            ? info.visibleLines.slice(0, info.visibleCursorLine).reduce((s, l) => s + l.length + 1, 0) + info.visibleCursorCol
+            : undefined
+        );
+      })(),
       selection: {
         isCellSelected: (col, row) => selection.isCellSelected(col, row),
         scrollTop,

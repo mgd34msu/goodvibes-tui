@@ -404,32 +404,145 @@ export class InputHandler {
   }
 
   /**
-   * Ensure the cursor's line is visible within the input scroll window.
+   * Ensure the cursor's wrapped line is visible within the input scroll window.
    */
-  public ensureInputCursorVisible(): void {
-    const cursorLine = this.getCursorLine();
+  public ensureInputCursorVisible(contentWidth?: number): void {
+    const info = this.getWrappedPromptInfo(contentWidth ?? 76);
     const maxRows = InputHandler.MAX_INPUT_ROWS;
-    if (cursorLine < this.inputScrollTop) {
-      this.inputScrollTop = cursorLine;
-    } else if (cursorLine >= this.inputScrollTop + maxRows) {
-      this.inputScrollTop = cursorLine - maxRows + 1;
+    if (info.cursorWrappedLine < this.inputScrollTop) {
+      this.inputScrollTop = info.cursorWrappedLine;
+    } else if (info.cursorWrappedLine >= this.inputScrollTop + maxRows) {
+      this.inputScrollTop = info.cursorWrappedLine - maxRows + 1;
     }
   }
 
   /**
-   * Get the number of visible prompt lines (capped at MAX_INPUT_ROWS).
+   * Get the number of visible prompt lines (capped at MAX_INPUT_ROWS),
+   * accounting for word-wrapping within the content width.
    */
-  public getVisiblePromptLineCount(): number {
-    const totalLines = this.prompt.split('\n').length;
-    return Math.min(totalLines, InputHandler.MAX_INPUT_ROWS);
+  public getVisiblePromptLineCount(contentWidth?: number): number {
+    const info = this.getWrappedPromptInfo(contentWidth ?? 76);
+    return Math.min(info.wrappedLines.length, InputHandler.MAX_INPUT_ROWS);
   }
 
   /**
-   * Get the prompt lines that should be displayed (respecting inputScrollTop).
+   * Word-wrap the prompt and compute cursor display coordinates.
+   * Returns wrapped lines, the cursor's position in wrapped coordinates,
+   * and the visible slice respecting inputScrollTop.
    */
-  public getVisiblePromptLines(): string[] {
-    const allLines = this.prompt.split('\n');
+  public getWrappedPromptInfo(contentWidth: number): {
+    wrappedLines: string[];
+    cursorWrappedLine: number;
+    cursorCol: number;
+    visibleLines: string[];
+    visibleCursorLine: number; // -1 if cursor is not in visible window
+    visibleCursorCol: number;
+  } {
+    const rawLines = this.prompt.split('\n');
+    const wrappedLines: string[] = [];
+    let cursorWrappedLine = 0;
+    let cursorCol = 0;
+    let charsSeen = 0;
+
+    for (let r = 0; r < rawLines.length; r++) {
+      const rawLine = rawLines[r];
+      // Word-wrap this raw line
+      const wrapped = this.wordWrapLine(rawLine, contentWidth);
+
+      for (let w = 0; w < wrapped.length; w++) {
+        const wLine = wrapped[w];
+        const lineStartInPrompt = charsSeen;
+        const lineEndInPrompt = charsSeen + wLine.length;
+
+        // Check if cursor falls in this wrapped segment
+        if (this.cursorPos >= lineStartInPrompt && this.cursorPos <= lineEndInPrompt) {
+          // Only assign if this is the tightest match (cursor at boundary goes to earlier line end)
+          if (this.cursorPos < lineEndInPrompt || w === wrapped.length - 1) {
+            cursorWrappedLine = wrappedLines.length;
+            cursorCol = this.cursorPos - lineStartInPrompt;
+          }
+        }
+
+        wrappedLines.push(wLine);
+        charsSeen += wLine.length;
+
+        // Account for spaces eaten by word-wrap between segments
+        // If the next wrapped segment exists and the raw line continues,
+        // we may have consumed a space at the break point
+        if (w < wrapped.length - 1) {
+          // Check if the break point was at a space
+          if (charsSeen < rawLine.length + (r > 0 ? 1 : 0) && rawLine[charsSeen - (charsSeen - rawLine.length > 0 ? 0 : 0)] === ' ') {
+            // Skip — wrapLine handles this
+          }
+        }
+      }
+
+      // Account for the \n between raw lines (except after the last)
+      if (r < rawLines.length - 1) {
+        charsSeen++; // the \n character
+      }
+    }
+
+    // Visible window
     const maxRows = InputHandler.MAX_INPUT_ROWS;
-    return allLines.slice(this.inputScrollTop, this.inputScrollTop + maxRows);
+    const visibleLines = wrappedLines.slice(this.inputScrollTop, this.inputScrollTop + maxRows);
+    const visibleCursorLine = cursorWrappedLine - this.inputScrollTop;
+    const isVisible = visibleCursorLine >= 0 && visibleCursorLine < maxRows;
+
+    return {
+      wrappedLines,
+      cursorWrappedLine,
+      cursorCol,
+      visibleLines,
+      visibleCursorLine: isVisible ? visibleCursorLine : -1,
+      visibleCursorCol: isVisible ? cursorCol : 0,
+    };
+  }
+
+  /**
+   * Word-wrap a single line to fit within maxW columns.
+   * Breaks at spaces; words wider than maxW are force-broken.
+   */
+  private wordWrapLine(line: string, maxW: number): string[] {
+    if (maxW <= 0) return [line];
+    if (line.length === 0) return [''];
+
+    const result: string[] = [];
+    const words = line.split(' ');
+    let current = '';
+
+    for (const word of words) {
+      if (current.length === 0) {
+        if (word.length > maxW) {
+          // Force-break long word
+          let remaining = word;
+          while (remaining.length > maxW) {
+            result.push(remaining.slice(0, maxW));
+            remaining = remaining.slice(maxW);
+          }
+          current = remaining;
+        } else {
+          current = word;
+        }
+      } else if (current.length + 1 + word.length <= maxW) {
+        current += ' ' + word;
+      } else {
+        result.push(current);
+        if (word.length > maxW) {
+          let remaining = word;
+          while (remaining.length > maxW) {
+            result.push(remaining.slice(0, maxW));
+            remaining = remaining.slice(maxW);
+          }
+          current = remaining;
+        } else {
+          current = word;
+        }
+      }
+    }
+    if (current.length > 0 || result.length === 0) {
+      result.push(current);
+    }
+    return result;
   }
 }
