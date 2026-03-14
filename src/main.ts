@@ -237,6 +237,13 @@ async function main() {
     orchestrator.handleUserInput(text);
   });
 
+  // Cancel generation when requested by input handler
+  bus.on('cancel:generation', () => {
+    if (orchestrator.isThinking) {
+      orchestrator.abort();
+    }
+  });
+
   // Permission prompt wiring — store the pending request and trigger a render.
   // The orchestrator's Promise is blocked until resolve() is called.
   bus.on('permission:request', (req) => {

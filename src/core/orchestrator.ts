@@ -25,6 +25,8 @@ export class Orchestrator {
   private animInterval: ReturnType<typeof setInterval> | null = null;
   private abortController: AbortController | null = null;
   private acpManager: AcpManager | null = null;
+  /** Message count at the start of a turn, used to rollback on cancel. */
+  private turnStartMessageCount = 0;
 
   constructor(
     private bus: EventBus,
@@ -152,6 +154,7 @@ export class Orchestrator {
 
   private async runTurn(text: string): Promise<void> {
     this.bus.emit('turn:start', { prompt: text });
+    this.turnStartMessageCount = this.conversation.getMessageCount();
     this.conversation.addUserMessage(text);
     this.scrollToEnd(this.getViewportHeight());
     this.startThinking();
@@ -200,7 +203,9 @@ export class Orchestrator {
       }
     } catch (err: unknown) {
       if (this.abortController?.signal.aborted) {
-        this.conversation.addSystemMessage('[Request cancelled]');
+        // Remove any partial messages added during this turn
+        this.conversation.removeMessagesAfter(this.turnStartMessageCount);
+        this.conversation.addSystemMessage('[Response cancelled]');
         this.bus.emit('turn:error', { error: new Error('Cancelled') });
         return;
       }

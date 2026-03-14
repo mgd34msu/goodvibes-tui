@@ -80,6 +80,19 @@ export class ConversationManager {
     this.markDirty();
   }
 
+  /** Returns the current number of messages (for rollback tracking). */
+  public getMessageCount(): number {
+    return this.messages.length;
+  }
+
+  /** Remove all messages after the given index (for cancellation rollback). */
+  public removeMessagesAfter(count: number): void {
+    if (count < this.messages.length) {
+      this.messages.length = count;
+      this.markDirty();
+    }
+  }
+
   public addSystemMessage(content: string): void {
     this.messages.push({ role: 'system', content });
     this.markDirty();

@@ -97,8 +97,10 @@ export class InputTokenizer {
           continue;
         }
         
-        if (this.buffer.length > 1 && !this.buffer.startsWith('\x1b[')) {
-          this.buffer = this.buffer.slice(2);
+        // Bare escape key (not followed by [)
+        if (this.buffer.length === 1 || !this.buffer.startsWith('\x1b[')) {
+          tokens.push({ type: 'key', name: '\x1b', logicalName: 'escape', ctrl: false, shift: false, meta: false });
+          this.buffer = this.buffer.slice(1);
           continue;
         }
         break; 

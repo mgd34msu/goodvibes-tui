@@ -175,16 +175,13 @@ describe('InputTokenizer', () => {
   });
 
   describe('sequential feed calls', () => {
-    test('accumulates state across feed calls', () => {
-      // partial escape then completion
+    test('bare escape emits escape key token', () => {
       const t1 = tokenizer.feed('\x1b');
-      // Buffer has ESC, waiting for more
-      expect(t1).toHaveLength(0);
-
-      // Complete the focus-in sequence
-      const t2 = tokenizer.feed('[I');
-      expect(t2).toHaveLength(1);
-      expect(t2[0].type).toBe('focus');
+      expect(t1).toHaveLength(1);
+      expect(t1[0].type).toBe('key');
+      if (t1[0].type === 'key') {
+        expect(t1[0].logicalName).toBe('escape');
+      }
     });
 
     test('multiple text chars feed sequentially produce all tokens', () => {
