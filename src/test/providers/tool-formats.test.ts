@@ -1,0 +1,268 @@
+import { describe, test, expect } from 'bun:test';
+import {
+  toOpenAITools,
+  fromOpenAIToolCalls,
+  toOpenAIMessages,
+  toAnthropicTools,
+  fromAnthropicContent,
+  toAnthropicMessages,
+  toGeminiFunctionDeclarations,
+  fromGeminiParts,
+  toGeminiContents,
+} from '../../providers/tool-formats.ts';
+import type { ToolDefinition, ToolCall } from '../../types/tools.ts';
+import type { ProviderMessage } from '../../providers/interface.ts';
+
+const sampleTool: ToolDefinition = {
+  name: 'file_read',
+  description: 'Read a file',
+  parameters: { type: 'object', properties: { path: { type: 'string' } }, required: ['path'] },
+};
+
+const sampleToolCall: ToolCall = {
+  id: 'call-1',
+  name: 'file_read',
+  arguments: { path: 'src/main.ts' },
+};
+
+// ---------------------------------------------------------------------------
+// OpenAI format
+// ---------------------------------------------------------------------------
+describe('toOpenAITools', () => {
+  test('converts tool definition to OpenAI tool format', () => {
+    const [result] = toOpenAITools([sampleTool]);
+    expect(result.type).toBe('function');
+    expect(result.function.name).toBe('file_read');
+    expect(result.function.description).toBe('Read a file');
+    expect(result.function.parameters).toBe(sampleTool.parameters);
+  });
+
+  test('handles empty tools array', () => {
+    expect(toOpenAITools([])).toEqual([]);
+  });
+
+  test('converts multiple tools', () => {
+    const tools = [
+      sampleTool,
+      { name: 'file_write', description: 'Write a file', parameters: {} },
+    ];
+    const result = toOpenAITools(tools);
+    expect(result).toHaveLength(2);
+    expect(result[1].function.name).toBe('file_write');
+  });
+});
+
+describe('fromOpenAIToolCalls', () => {
+  test('parses OpenAI tool calls into internal ToolCall format', () => {
+    const openAICalls = [
+      { id: 'c1', type: 'function' as const, function: { name: 'file_read', arguments: '{"path":"foo.ts"}' } },
+    ];
+    const [result] = fromOpenAIToolCalls(openAICalls);
+    expect(result.id).toBe('c1');
+    expect(result.name).toBe('file_read');
+    expect(result.arguments).toEqual({ path: 'foo.ts' });
+  });
+
+  test('handles malformed JSON arguments gracefully', () => {
+    const openAICalls = [
+      { id: 'c2', type: 'function' as const, function: { name: 'tool', arguments: 'not-json' } },
+    ];
+    const [result] = fromOpenAIToolCalls(openAICalls);
+    expect(result.arguments).toEqual({});
+  });
+});
+
+describe('toOpenAIMessages', () => {
+  test('converts user message', () => {
+    const msgs: ProviderMessage[] = [{ role: 'user', content: 'hello' }];
+    const [result] = toOpenAIMessages(msgs);
+    expect(result.role).toBe('user');
+    expect(result.content).toBe('hello');
+  });
+
+  test('injects system prompt at start when provided', () => {
+    const msgs: ProviderMessage[] = [{ role: 'user', content: 'hi' }];
+    const result = toOpenAIMessages(msgs, 'Be helpful.');
+    expect(result[0].role).toBe('system');
+    expect(result[0].content).toBe('Be helpful.');
+    expect(result[1].role).toBe('user');
+  });
+
+  test('converts assistant message with tool calls', () => {
+    const msgs: ProviderMessage[] = [{
+      role: 'assistant',
+      content: 'calling tool',
+      toolCalls: [sampleToolCall],
+    }];
+    const [result] = toOpenAIMessages(msgs);
+    expect(result.role).toBe('assistant');
+    expect(result.tool_calls).toHaveLength(1);
+    expect(result.tool_calls![0].function.name).toBe('file_read');
+  });
+
+  test('converts tool result messages', () => {
+    const msgs: ProviderMessage[] = [
+      { role: 'tool', callId: 'c1', content: 'file content' },
+    ];
+    const [result] = toOpenAIMessages(msgs);
+    expect(result.role).toBe('tool');
+    expect(result.tool_call_id).toBe('c1');
+    expect(result.content).toBe('file content');
+  });
+
+  test('assistant with no tool calls has null tool_calls', () => {
+    const msgs: ProviderMessage[] = [{ role: 'assistant', content: 'done' }];
+    const [result] = toOpenAIMessages(msgs);
+    expect(result.tool_calls).toBeUndefined();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Anthropic format
+// ---------------------------------------------------------------------------
+describe('toAnthropicTools', () => {
+  test('converts tool to Anthropic format with input_schema', () => {
+    const [result] = toAnthropicTools([sampleTool]);
+    expect(result.name).toBe('file_read');
+    expect(result.description).toBe('Read a file');
+    expect(result.input_schema).toBe(sampleTool.parameters);
+  });
+});
+
+describe('fromAnthropicContent', () => {
+  test('extracts text from text blocks', () => {
+    const content = [{ type: 'text' as const, text: 'hello world' }];
+    const { text, toolCalls } = fromAnthropicContent(content);
+    expect(text).toBe('hello world');
+    expect(toolCalls).toHaveLength(0);
+  });
+
+  test('extracts tool_use blocks as ToolCalls', () => {
+    const content = [{
+      type: 'tool_use' as const,
+      id: 'tu-1',
+      name: 'file_read',
+      input: { path: 'src/main.ts' },
+    }];
+    const { text, toolCalls } = fromAnthropicContent(content);
+    expect(text).toBe('');
+    expect(toolCalls).toHaveLength(1);
+    expect(toolCalls[0]).toEqual({ id: 'tu-1', name: 'file_read', arguments: { path: 'src/main.ts' } });
+  });
+
+  test('handles mixed text and tool_use blocks', () => {
+    const content = [
+      { type: 'text' as const, text: 'I will read the file.' },
+      { type: 'tool_use' as const, id: 'tu-2', name: 'file_read', input: {} },
+    ];
+    const { text, toolCalls } = fromAnthropicContent(content);
+    expect(text).toBe('I will read the file.');
+    expect(toolCalls).toHaveLength(1);
+  });
+});
+
+describe('toAnthropicMessages', () => {
+  test('converts user message to string content', () => {
+    const msgs: ProviderMessage[] = [{ role: 'user', content: 'hi' }];
+    const [result] = toAnthropicMessages(msgs);
+    expect(result.role).toBe('user');
+    expect(result.content).toBe('hi');
+  });
+
+  test('merges consecutive tool results into one user message', () => {
+    const msgs: ProviderMessage[] = [
+      { role: 'assistant', content: '', toolCalls: [sampleToolCall] },
+      { role: 'tool', callId: 'call-1', content: 'file content' },
+      { role: 'tool', callId: 'call-2', content: 'other content' },
+    ];
+    const result = toAnthropicMessages(msgs);
+    // Last message should be a user message with two tool_result blocks
+    const last = result[result.length - 1];
+    expect(last.role).toBe('user');
+    expect(Array.isArray(last.content)).toBe(true);
+    const blocks = last.content as Array<{ type: string }>;
+    expect(blocks.filter((b) => b.type === 'tool_result')).toHaveLength(2);
+  });
+
+  test('assistant with tool calls becomes content blocks', () => {
+    const msgs: ProviderMessage[] = [{
+      role: 'assistant',
+      content: 'calling tool',
+      toolCalls: [sampleToolCall],
+    }];
+    const [result] = toAnthropicMessages(msgs);
+    expect(result.role).toBe('assistant');
+    expect(Array.isArray(result.content)).toBe(true);
+    const blocks = result.content as Array<{ type: string }>;
+    expect(blocks.some((b) => b.type === 'tool_use')).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Gemini format
+// ---------------------------------------------------------------------------
+describe('toGeminiFunctionDeclarations', () => {
+  test('converts tool to Gemini function declaration', () => {
+    const [result] = toGeminiFunctionDeclarations([sampleTool]);
+    expect(result.name).toBe('file_read');
+    expect(result.description).toBe('Read a file');
+    expect(result.parameters).toBe(sampleTool.parameters);
+  });
+});
+
+describe('fromGeminiParts', () => {
+  test('extracts text from text parts', () => {
+    const parts = [{ text: 'response text' }];
+    const { text, toolCalls } = fromGeminiParts(parts);
+    expect(text).toBe('response text');
+    expect(toolCalls).toHaveLength(0);
+  });
+
+  test('extracts functionCall parts as ToolCalls', () => {
+    const parts = [{ functionCall: { name: 'file_read', args: { path: 'main.ts' } } }];
+    const { text, toolCalls } = fromGeminiParts(parts);
+    expect(text).toBe('');
+    expect(toolCalls).toHaveLength(1);
+    expect(toolCalls[0].name).toBe('file_read');
+    expect(toolCalls[0].arguments).toEqual({ path: 'main.ts' });
+  });
+
+  test('assigns a UUID to each tool call', () => {
+    const parts = [{ functionCall: { name: 'tool', args: {} } }];
+    const { toolCalls } = fromGeminiParts(parts);
+    expect(typeof toolCalls[0].id).toBe('string');
+    expect(toolCalls[0].id.length).toBeGreaterThan(0);
+  });
+});
+
+describe('toGeminiContents', () => {
+  test('converts user message to user content with text part', () => {
+    const msgs: ProviderMessage[] = [{ role: 'user', content: 'hello' }];
+    const { contents } = toGeminiContents(msgs);
+    expect(contents[0].role).toBe('user');
+    expect(contents[0].parts[0].text).toBe('hello');
+  });
+
+  test('injects system instruction when systemPrompt provided', () => {
+    const { systemInstruction } = toGeminiContents([], 'Be helpful.');
+    expect(systemInstruction).toBeDefined();
+    expect(systemInstruction!.parts[0].text).toBe('Be helpful.');
+  });
+
+  test('converts assistant message to model role', () => {
+    const msgs: ProviderMessage[] = [{ role: 'assistant', content: 'response' }];
+    const { contents } = toGeminiContents(msgs);
+    expect(contents[0].role).toBe('model');
+  });
+
+  test('merges tool results into user functionResponse parts', () => {
+    const msgs: ProviderMessage[] = [
+      { role: 'assistant', content: '', toolCalls: [sampleToolCall] },
+      { role: 'tool', callId: 'call-1', content: 'result', name: 'file_read' },
+    ];
+    const { contents } = toGeminiContents(msgs);
+    const last = contents[contents.length - 1];
+    expect(last.role).toBe('user');
+    expect(last.parts.some((p) => p.functionResponse !== undefined)).toBe(true);
+  });
+});
