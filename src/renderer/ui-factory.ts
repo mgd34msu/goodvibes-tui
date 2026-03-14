@@ -2,6 +2,15 @@ import { type Line, type Cell, createEmptyLine, createEmptyCell } from '../types
 import { VERSION } from '../version.ts';
 import { getDisplayWidth, wrapText } from '../utils/terminal-width.ts';
 
+/** Format a number: up to 999, then 1.0k, 1.0M, 1.0B, 1.0T */
+function fmtNum(n: number): string {
+  if (n < 1000) return String(n);
+  if (n < 1_000_000) return (n / 1000).toFixed(1) + 'k';
+  if (n < 1_000_000_000) return (n / 1_000_000).toFixed(1) + 'M';
+  if (n < 1_000_000_000_000) return (n / 1_000_000_000).toFixed(1) + 'B';
+  return (n / 1_000_000_000_000).toFixed(1) + 'T';
+}
+
 /**
  * UIFactory - Generates standard UI fragments without needing Ink/React overhead.
  */
@@ -119,7 +128,8 @@ export class UIFactory {
     model?: string,
     toolCount?: number,
     cursorPos?: number,
-    workingDir?: string
+    workingDir?: string,
+    provider?: string
   ): Line[] {
     const lines: Line[] = [];
     const promptLines = prompt.split('\n');
@@ -179,21 +189,29 @@ export class UIFactory {
     lines.push(bottomLine);
     lines.push(createBaseLine());
     const isRecentlyCopied = Date.now() - lastCopyTime < 2000;
-    const total = usage.up + usage.down;
-    const pct = usage.max ? Math.min(100, Math.round((total / usage.max) * 100)) : null;
-    const modelStr = model ? `  ${model}` : '';
-    const toolStr = toolCount ? `  tools:${toolCount}` : '';
-    const pctStr = pct !== null ? `  ctx:${pct}%` : '';
-    const stats = ` Tokens: ${total}${modelStr}${toolStr}${pctStr} `;
-    const copiedNotice = isRecentlyCopied ? ` [COPIED TO CLIPBOARD] ` : '';
-    const statsLine = '  ' + stats + ' '.repeat(Math.max(0, width - 4 - getDisplayWidth(stats) - getDisplayWidth(copiedNotice))) + copiedNotice;
+    // Token usage line
+    const u = usage as { input?: number; output?: number; cacheRead?: number; cacheWrite?: number; up?: number; down?: number };
+    const inp = u.input ?? u.up ?? 0;
+    const out = u.output ?? u.down ?? 0;
+    const cr = u.cacheRead ?? 0;
+    const cw = u.cacheWrite ?? 0;
+    const total = inp + out + cr + cw;
+    const tokenLine = ` Token Usage [ Input: ${fmtNum(inp)} | Output: ${fmtNum(out)} | Cache Read: ${fmtNum(cr)} | Cache Write: ${fmtNum(cw)} | Total: ${fmtNum(total)} ]`;
+    const copiedNotice = isRecentlyCopied ? ` [COPIED] ` : '';
+    const statsLine = '  ' + tokenLine + ' '.repeat(Math.max(0, width - 4 - getDisplayWidth(tokenLine) - getDisplayWidth(copiedNotice))) + copiedNotice;
     lines.push(this.stringToLine(statsLine, width, { fg: isRecentlyCopied ? '81' : '244', bold: isRecentlyCopied }));
-    // Context info line (working dir, model, tools)
+    // Context info line (working dir, model+provider, tools)
     if (workingDir || model) {
+      const home = typeof process !== 'undefined' ? process.env.HOME ?? '' : '';
+      const displayDir = workingDir && home && workingDir.startsWith(home)
+        ? '~' + workingDir.slice(home.length)
+        : workingDir ?? '';
       const ctxParts: string[] = [];
-      if (workingDir) ctxParts.push(`\u{1F4C2} ${workingDir}`);
-      if (model) ctxParts.push(`\u{1F916} ${model}`);
-      if (toolCount) ctxParts.push(`\u{1F527} ${toolCount} tools`);
+      if (displayDir) ctxParts.push(displayDir);
+      if (model) {
+        ctxParts.push(model + (provider ? ` (${provider})` : ''));
+      }
+      if (toolCount) ctxParts.push(`${toolCount} tools`);
       const ctxLine = '  ' + ctxParts.join('  \u00B7  ');
       lines.push(this.stringToLine(ctxLine.slice(0, width), width, { fg: '240', dim: true }));
     }
@@ -201,7 +219,7 @@ export class UIFactory {
       const notice = `   !!! Press Ctrl+C again to exit !!! `;
       lines.push(this.stringToLine(notice.padEnd(width), width, { fg: '196', bold: true }));
     } else {
-      const help = `   Enter=send  Shift+Enter=newline  Ctrl+C=quit  /help `;
+      const help = `   /help for commands  -  Ctrl+C to quit `;
       lines.push(this.stringToLine(help.padEnd(width), width, { fg: '240', dim: true }));
     }
     lines.push(createBaseLine());
