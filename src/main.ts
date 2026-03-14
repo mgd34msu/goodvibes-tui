@@ -84,7 +84,7 @@ async function main() {
   };
 
   const getViewportHeight = () => {
-    const promptLines = input.prompt.split('\n').length;
+    const promptLines = input.getVisiblePromptLineCount();
     return (stdout.rows || 24) - 2 - (7 + promptLines);
   };
 
@@ -221,7 +221,16 @@ async function main() {
       width, height,
       header: UIFactory.createHeader(width, runtime.model, runtime.provider),
       viewport,
-      footer: UIFactory.createFooter(width, input.prompt, orchestrator.usage, input.showExitNotice, input.lastCopyTime, undefined, undefined, input.cursorPos),
+      footer: UIFactory.createFooter(
+        width,
+        input.getVisiblePromptLines().join('\n'),
+        orchestrator.usage,
+        input.showExitNotice,
+        input.lastCopyTime,
+        undefined, undefined,
+        // Adjust cursor position relative to the visible window
+        Math.max(0, input.cursorPos - input.prompt.split('\n').slice(0, input.inputScrollTop).reduce((sum, l) => sum + l.length + 1, 0))
+      ),
       selection: {
         isCellSelected: (col, row) => selection.isCellSelected(col, row),
         scrollTop,

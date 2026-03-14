@@ -14,6 +14,10 @@ export class InputHandler {
   public prompt = '';
   public cursorPos = 0;
   public showExitNotice = false;
+  /** Max visible rows for the input area. Content beyond this scrolls internally. */
+  public static readonly MAX_INPUT_ROWS = 8;
+  /** Internal scroll offset for the input area when content exceeds MAX_INPUT_ROWS. */
+  public inputScrollTop = 0;
   public lastCopyTime = 0;
   /** True when the user has entered slash-command mode (prompt starts with '/'). */
   public commandMode = false;
@@ -158,6 +162,7 @@ export class InputHandler {
         const text = this.registerPaste(token.value);
         this.prompt = this.prompt.slice(0, this.cursorPos) + text + this.prompt.slice(this.cursorPos);
         this.cursorPos += text.length;
+        this.ensureInputCursorVisible();
         // Detect slash-command mode: '/' typed into empty prompt
         if (this.prompt === '/' && this.commandRegistry) {
           this.commandMode = true;
@@ -283,6 +288,7 @@ export class InputHandler {
           if (token.shift) {
             this.prompt = this.prompt.slice(0, this.cursorPos) + '\n' + this.prompt.slice(this.cursorPos);
             this.cursorPos++;
+            this.ensureInputCursorVisible();
           } else {
             const text = this.prompt.trim();
             if (text === ':q') {
@@ -317,9 +323,14 @@ export class InputHandler {
         } else if (token.logicalName === 'end') {
           this.cursorPos = this.prompt.length;
         } else if (token.logicalName === 'up') {
-          this.scroll(-3);
+          // In multiline input: move cursor up within text. At top: scroll viewport.
+          if (!this.moveCursorVertical(-1)) {
+            this.scroll(-3);
+          }
         } else if (token.logicalName === 'down') {
-          this.scroll(3);
+          if (!this.moveCursorVertical(1)) {
+            this.scroll(3);
+          }
         } else if (token.logicalName === 'pageup') {
           this.scroll(-this.getViewportHeight());
         } else if (token.logicalName === 'pagedown') {
@@ -333,10 +344,12 @@ export class InputHandler {
         else if (token.button === 65) this.scroll(3);
 
         if (token.button === 1 && token.action === 'press') {
-          const text = pasteFromClipboard();
-          if (text) {
+          const raw = pasteFromClipboard();
+          if (raw) {
+            const text = this.registerPaste(raw);
             this.prompt = this.prompt.slice(0, this.cursorPos) + text + this.prompt.slice(this.cursorPos);
             this.cursorPos += text.length;
+            this.ensureInputCursorVisible();
           }
           this.bus.emit('render:request');
           continue;
@@ -353,5 +366,70 @@ export class InputHandler {
       }
     }
     this.bus.emit('render:request');
+  }
+
+  /**
+   * Get the line number (0-based) the cursor is currently on.
+   */
+  private getCursorLine(): number {
+    return this.prompt.slice(0, this.cursorPos).split('\n').length - 1;
+  }
+
+  /**
+   * Move cursor up or down by one line within multiline input.
+   * Returns true if the cursor moved (input had another line to go to),
+   * false if at boundary (caller should scroll viewport instead).
+   */
+  private moveCursorVertical(direction: -1 | 1): boolean {
+    const lines = this.prompt.split('\n');
+    if (lines.length <= 1) return false; // Single line — can't move vertically
+
+    const cursorLine = this.getCursorLine();
+    const targetLine = cursorLine + direction;
+
+    if (targetLine < 0 || targetLine >= lines.length) return false; // At boundary
+
+    // Calculate column offset within current line
+    let lineStart = 0;
+    for (let i = 0; i < cursorLine; i++) lineStart += lines[i].length + 1;
+    const col = this.cursorPos - lineStart;
+
+    // Calculate new cursor position in target line
+    let targetStart = 0;
+    for (let i = 0; i < targetLine; i++) targetStart += lines[i].length + 1;
+    this.cursorPos = targetStart + Math.min(col, lines[targetLine].length);
+
+    this.ensureInputCursorVisible();
+    return true;
+  }
+
+  /**
+   * Ensure the cursor's line is visible within the input scroll window.
+   */
+  public ensureInputCursorVisible(): void {
+    const cursorLine = this.getCursorLine();
+    const maxRows = InputHandler.MAX_INPUT_ROWS;
+    if (cursorLine < this.inputScrollTop) {
+      this.inputScrollTop = cursorLine;
+    } else if (cursorLine >= this.inputScrollTop + maxRows) {
+      this.inputScrollTop = cursorLine - maxRows + 1;
+    }
+  }
+
+  /**
+   * Get the number of visible prompt lines (capped at MAX_INPUT_ROWS).
+   */
+  public getVisiblePromptLineCount(): number {
+    const totalLines = this.prompt.split('\n').length;
+    return Math.min(totalLines, InputHandler.MAX_INPUT_ROWS);
+  }
+
+  /**
+   * Get the prompt lines that should be displayed (respecting inputScrollTop).
+   */
+  public getVisiblePromptLines(): string[] {
+    const allLines = this.prompt.split('\n');
+    const maxRows = InputHandler.MAX_INPUT_ROWS;
+    return allLines.slice(this.inputScrollTop, this.inputScrollTop + maxRows);
   }
 }
