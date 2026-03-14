@@ -22,7 +22,7 @@ const estimateTokens = (text: string): number => Math.ceil(text.length / 4);
  * or when the width changes. This avoids O(n) rebuilds per turn in long sessions.
  */
 type Message =
-  | { role: 'user'; content: string }
+  | { role: 'user'; content: string; cancelled?: boolean }
   | { role: 'assistant'; content: string; toolCalls?: ToolCall[] }
   | { role: 'system'; content: string }
   | { role: 'tool'; callId: string; content: string; toolName?: string };
@@ -93,6 +93,17 @@ export class ConversationManager {
     }
   }
 
+  /** Mark the last user message as cancelled (red + strikethrough in display). */
+  public markLastUserMessageCancelled(): void {
+    for (let i = this.messages.length - 1; i >= 0; i--) {
+      if (this.messages[i].role === 'user') {
+        (this.messages[i] as { cancelled?: boolean }).cancelled = true;
+        this.markDirty();
+        return;
+      }
+    }
+  }
+
   public addSystemMessage(content: string): void {
     this.messages.push({ role: 'system', content });
     this.markDirty();
@@ -144,7 +155,11 @@ export class ConversationManager {
   private appendMessages(messages: Message[], width: number): void {
     for (const m of messages) {
       if (m.role === 'user') {
-        this.history.addLines(UIFactory.createMessageBar(width, m.content));
+        if (m.cancelled) {
+          this.history.addLines(UIFactory.createMessageBar(width, m.content, '#3a1a1a', '196', ' × ', true));
+        } else {
+          this.history.addLines(UIFactory.createMessageBar(width, m.content));
+        }
       } else if (m.role === 'assistant') {
         // Render assistant content using the markdown renderer
         if (m.content) {
