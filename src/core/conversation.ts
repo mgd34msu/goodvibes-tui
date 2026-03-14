@@ -4,15 +4,18 @@ import { createEmptyLine } from '../types/grid.ts';
 import { getSplashLines } from '../utils/splash-lines.ts';
 import { type Line, type Cell } from '../types/grid.ts';
 import { interpolateColor, getDisplayWidth, wrapText } from '../utils/terminal-width.ts';
+import type { ToolCall, ToolResult } from '../types/tools.ts';
+import type { ProviderMessage } from '../providers/interface.ts';
 
 /**
  * ConversationManager - Owns conversation messages and the rendered history buffer.
- * Extracted from StateManager.
+ * Supports tool-use messages (assistant with tool calls, tool results).
  */
-interface Message {
-  role: 'user' | 'assistant' | 'system';
-  content: string;
-}
+type Message =
+  | { role: 'user'; content: string }
+  | { role: 'assistant'; content: string; toolCalls?: ToolCall[] }
+  | { role: 'system'; content: string }
+  | { role: 'tool'; callId: string; content: string; toolName?: string };
 
 export class ConversationManager {
   public history = new InfiniteBuffer();
@@ -23,8 +26,20 @@ export class ConversationManager {
     this.getWidth = getWidth;
   }
 
-  public getMessagesForLLM(): { role: 'user' | 'assistant' | 'system'; content: string }[] {
-    return this.messages.map(m => ({ role: m.role, content: m.content }));
+  /** Returns messages formatted for LLM provider consumption. */
+  public getMessagesForLLM(): ProviderMessage[] {
+    const result: ProviderMessage[] = [];
+    for (const m of this.messages) {
+      if (m.role === 'system') continue; // System messages go via systemPrompt param
+      if (m.role === 'user') {
+        result.push({ role: 'user', content: m.content });
+      } else if (m.role === 'assistant') {
+        result.push({ role: 'assistant', content: m.content, toolCalls: m.toolCalls });
+      } else if (m.role === 'tool') {
+        result.push({ role: 'tool', callId: m.callId, content: m.content });
+      }
+    }
+    return result;
   }
 
   public addUserMessage(content: string): void {
@@ -32,8 +47,20 @@ export class ConversationManager {
     this.rebuildHistory();
   }
 
-  public addAssistantMessage(content: string): void {
-    this.messages.push({ role: 'assistant', content });
+  /** Add an assistant message, optionally with tool calls (when the LLM invoked tools). */
+  public addAssistantMessage(content: string, toolCalls?: ToolCall[]): void {
+    this.messages.push({ role: 'assistant', content, toolCalls });
+    this.rebuildHistory();
+  }
+
+  /** Add a batch of tool results after tool calls have been executed. */
+  public addToolResults(results: ToolResult[]): void {
+    for (const r of results) {
+      const content = r.success
+        ? (r.output ?? 'Tool completed successfully.')
+        : `Error: ${r.error ?? 'Unknown error'}`;
+      this.messages.push({ role: 'tool', callId: r.callId, content });
+    }
     this.rebuildHistory();
   }
 
@@ -54,7 +81,11 @@ export class ConversationManager {
     this.history.clear();
     const width = this.getWidth();
 
-    if (this.messages.length === 0) {
+    const displayMessages = this.messages.filter(
+      (m) => m.role !== 'tool', // Tool results are internal; not shown directly
+    );
+
+    if (displayMessages.length === 0) {
       this.addSplashScreen(width);
       return;
     }
@@ -62,12 +93,31 @@ export class ConversationManager {
     this.messages.forEach(m => {
       if (m.role === 'user') {
         this.history.addLines(UIFactory.createMessageBar(width, m.content));
-      } else {
-        const color = m.role === 'system' ? '196' : '15';
-        const lines = this.textToLines(m.content, width, { fg: color });
+      } else if (m.role === 'assistant') {
+        // Show tool calls as a brief indicator
+        if (m.toolCalls && m.toolCalls.length > 0 && !m.content) {
+          const toolNames = m.toolCalls.map((tc) => tc.name).join(', ');
+          const indicator = this.textToLines(`[calling tools: ${toolNames}]`, width, { fg: '244', dim: true });
+          this.history.addLines(indicator);
+        } else if (m.content) {
+          const lines = this.textToLines(m.content, width, { fg: '15' });
+          this.history.addLines(lines);
+          // If there were also tool calls, show the indicator after content
+          if (m.toolCalls && m.toolCalls.length > 0) {
+            const toolNames = m.toolCalls.map((tc) => tc.name).join(', ');
+            const indicator = this.textToLines(`[called tools: ${toolNames}]`, width, { fg: '244', dim: true });
+            this.history.addLines(indicator);
+          }
+        }
+      } else if (m.role === 'system') {
+        const lines = this.textToLines(m.content, width, { fg: '196' });
+        this.history.addLines(lines);
+      } else if (m.role === 'tool') {
+        // Show tool results collapsed
+        const content = m.content.length > 200 ? m.content.slice(0, 200) + '…' : m.content;
+        const lines = this.textToLines(`[tool result] ${content}`, width, { fg: '244', dim: true });
         this.history.addLines(lines);
       }
-      this.history.addLine(createEmptyLine(width));
       this.history.addLine(createEmptyLine(width));
     });
   }

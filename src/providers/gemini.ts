@@ -65,13 +65,16 @@ export class GeminiProvider implements LLMProvider {
         body['generationConfig'] = { maxOutputTokens: maxTokens };
       }
 
-      const url = `${GEMINI_API_BASE}/models/${model}:generateContent?key=${this.apiKey}`;
+      const url = `${GEMINI_API_BASE}/models/${model}:generateContent`;
 
       let res: Response;
       try {
         res = await fetch(url, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json',
+            'x-goog-api-key': this.apiKey,
+          },
           body: JSON.stringify(body),
           signal,
         });

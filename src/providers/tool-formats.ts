@@ -220,7 +220,7 @@ export function fromGeminiParts(parts: GeminiPart[]): {
       text += part.text;
     } else if (part.functionCall) {
       toolCalls.push({
-        id: `gemini-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+        id: crypto.randomUUID(),
         name: part.functionCall.name,
         arguments: part.functionCall.args,
       });
@@ -264,10 +264,9 @@ export function toGeminiContents(
       }
       contents.push({ role: 'model', parts });
     } else if (msg.role === 'tool') {
-      // We don't know the function name at this point; store as content
       pendingFunctionResponses.push({
         functionResponse: {
-          name: msg.callId,
+          name: msg.name ?? msg.callId,
           response: { content: msg.content },
         },
       });
@@ -285,7 +284,8 @@ export function toGeminiContents(
 function parseJson(raw: string): Record<string, unknown> {
   try {
     return JSON.parse(raw) as Record<string, unknown>;
-  } catch {
+  } catch (err) {
+    console.warn('[tool-formats] Failed to parse JSON argument string:', err, '| raw:', raw);
     return {};
   }
 }
