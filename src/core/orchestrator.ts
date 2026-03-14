@@ -2,10 +2,11 @@ import type { ConversationManager } from './conversation.ts';
 import type { EventBus } from './event-bus.ts';
 import type { ToolRegistry } from '../tools/registry.ts';
 import type { ToolCall, ToolResult } from '../types/tools.ts';
-import { ProviderError, ToolError } from '../types/errors.ts';
+import { PermissionError, ProviderError, ToolError } from '../types/errors.ts';
 import { providerRegistry } from '../providers/registry.ts';
 import type { LLMProvider } from '../providers/interface.ts';
 import { config } from '../config.ts';
+import type { PermissionManager } from '../permissions/manager.ts';
 
 const SPINNER_FRAMES = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
 
@@ -28,6 +29,7 @@ export class Orchestrator {
     private getViewportHeight: () => number,
     private scrollToEnd: (vHeight: number) => void,
     private toolRegistry: ToolRegistry,
+    private permissionManager: PermissionManager,
   ) {}
 
   public getSpinner(): string {
@@ -130,7 +132,7 @@ export class Orchestrator {
         }
       }
     } catch (err: unknown) {
-      if ((err as { name?: string }).name === 'AbortError') {
+      if (this.abortController?.signal.aborted) {
         this.conversation.addSystemMessage('[Request cancelled]');
         this.bus.emit('turn:error', { error: new Error('Cancelled') });
         return;
@@ -149,6 +151,19 @@ export class Orchestrator {
     const results: ToolResult[] = [];
 
     for (const call of calls) {
+      // Check permission before announcing or executing the tool
+      const approved = await this.permissionManager.check(call.name, call.arguments);
+      if (!approved) {
+        const err = new PermissionError(`Permission denied for tool '${call.name}'`);
+        results.push({
+          callId: call.id,
+          success: false,
+          error: err.message,
+        });
+        this.bus.emit('turn:tool-result', { callId: call.id, result: { callId: call.id, success: false, error: err.message } });
+        continue;
+      }
+
       this.bus.emit('turn:tool-executing', {
         callId: call.id,
         tool: call.name,

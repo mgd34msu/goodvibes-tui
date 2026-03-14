@@ -3,10 +3,13 @@
  */
 export interface Cell {
   char: string;
-  fg: string; // ANSI 256-color code
+  fg: string; // ANSI 256-color code or RGB hex
   bg: string;
   bold: boolean;
   dim: boolean;
+  underline: boolean;
+  italic: boolean;
+  strikethrough: boolean;
 }
 
 /**
@@ -19,7 +22,10 @@ export const createEmptyCell = (): Cell => ({
   fg: '',
   bg: '',
   bold: false,
-  dim: false
+  dim: false,
+  underline: false,
+  italic: false,
+  strikethrough: false
 });
 
 export const createEmptyLine = (width: number): Line => 

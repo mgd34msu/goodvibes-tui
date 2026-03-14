@@ -16,13 +16,13 @@ export class UIFactory {
     const prov = `(${provider}) `;
     const line = createEmptyLine(width);
     let curX = 0;
-    for (const char of brand) { line[curX++] = { char, fg: CYAN, bg: '', bold: true, dim: false }; }
-    for (const char of ver) { line[curX++] = { char, fg: GREY, bg: '', bold: false, dim: true }; }
+    for (const char of brand) { line[curX++] = { char, fg: CYAN, bg: '', bold: true, dim: false, underline: false, italic: false, strikethrough: false }; }
+    for (const char of ver) { line[curX++] = { char, fg: GREY, bg: '', bold: false, dim: true, underline: false, italic: false, strikethrough: false }; }
     const rightSideText = stats + prov;
     const rightSideW = getDisplayWidth(rightSideText);
     let rightX = width - rightSideW;
-    for (const char of stats) { if (rightX < width) line[rightX++] = { char, fg: CYAN, bg: '', bold: true, dim: false }; }
-    for (const char of prov) { if (rightX < width) line[rightX++] = { char, fg: GREY, bg: '', bold: false, dim: true }; }
+    for (const char of stats) { if (rightX < width) line[rightX++] = { char, fg: CYAN, bg: '', bold: true, dim: false, underline: false, italic: false, strikethrough: false }; }
+    for (const char of prov) { if (rightX < width) line[rightX++] = { char, fg: GREY, bg: '', bold: false, dim: true, underline: false, italic: false, strikethrough: false }; }
     lines.push(line);
     lines.push(this.stringToLine('━'.repeat(width), width, { fg: '244' }));
     return lines;
@@ -72,7 +72,7 @@ export class UIFactory {
     // 1. Top
     const topLine = createBaseLine();
     for (let x = 0; x < internalWidth; x++) {
-      topLine[boxStartX + x] = { char: '▄', fg: bgColor, bg: '', bold: false, dim: false };
+      topLine[boxStartX + x] = { char: '▄', fg: bgColor, bg: '', bold: false, dim: false, underline: false, italic: false, strikethrough: false };
     }
     lines.push(topLine);
 
@@ -82,12 +82,15 @@ export class UIFactory {
       const contentLine = createBaseLine();
       for (let x = 0; x < internalWidth; x++) {
         const char = (x >= prefixW && x < internalWidth - 1) ? lineText[x - prefixW] || ' ' : (x < prefixW ? prefix[x] : ' ');
-        contentLine[boxStartX + x] = { 
-          char, 
-          fg: (x < prefixW && i === 0) ? '135' : textColor, 
-          bg: bgColor, 
-          bold: false, 
-          dim: false 
+        contentLine[boxStartX + x] = {
+          char,
+          fg: (x < prefixW && i === 0) ? '135' : textColor,
+          bg: bgColor,
+          bold: false,
+          dim: false,
+          underline: false,
+          italic: false,
+          strikethrough: false
         };
       }
       lines.push(contentLine);
@@ -96,14 +99,22 @@ export class UIFactory {
     // 3. Bottom
     const bottomLine = createBaseLine();
     for (let x = 0; x < internalWidth; x++) {
-      bottomLine[boxStartX + x] = { char: '▀', fg: bgColor, bg: '', bold: false, dim: false };
+      bottomLine[boxStartX + x] = { char: '▀', fg: bgColor, bg: '', bold: false, dim: false, underline: false, italic: false, strikethrough: false };
     }
     lines.push(bottomLine);
 
     return lines;
   }
 
-  public static createFooter(width: number, prompt: string, usage: { up: number, down: number }, showExitNotice: boolean, lastCopyTime: number): Line[] {
+  public static createFooter(
+    width: number,
+    prompt: string,
+    usage: { up: number; down: number; max?: number },
+    showExitNotice: boolean,
+    lastCopyTime: number,
+    model?: string,
+    toolCount?: number
+  ): Line[] {
     const lines: Line[] = [];
     const promptLines = prompt.split('\n');
     const TEXT_COLOR = '252'; const BG_COLOR = '#2a2a2a'; 
@@ -114,7 +125,7 @@ export class UIFactory {
       return l;
     };
     const topLine = createBaseLine();
-    for (let x = 0; x < boxWidth; x++) topLine[boxStartX + x] = { char: '▄', fg: BG_COLOR, bg: '', bold: false, dim: false };
+    for (let x = 0; x < boxWidth; x++) topLine[boxStartX + x] = { char: '▄', fg: BG_COLOR, bg: '', bold: false, dim: false, underline: false, italic: false, strikethrough: false };
     lines.push(topLine);
     promptLines.forEach((text, i) => {
       const contentW = boxWidth - 4;
@@ -125,16 +136,21 @@ export class UIFactory {
       const contentLine = createBaseLine();
       for (let x = 0; x < boxWidth; x++) {
         const char = (x >= 2 && x < boxWidth - 2) ? paddedText[x - 2] || ' ' : ' ';
-        contentLine[boxStartX + x] = { char, fg: (x < 5 && i === 0) ? '135' : TEXT_COLOR, bg: BG_COLOR, bold: false, dim: false };
+        contentLine[boxStartX + x] = { char, fg: (x < 5 && i === 0) ? '135' : TEXT_COLOR, bg: BG_COLOR, bold: false, dim: false, underline: false, italic: false, strikethrough: false };
       }
       lines.push(contentLine);
     });
     const bottomLine = createBaseLine();
-    for (let x = 0; x < boxWidth; x++) bottomLine[boxStartX + x] = { char: '▀', fg: BG_COLOR, bg: '', bold: false, dim: false };
+    for (let x = 0; x < boxWidth; x++) bottomLine[boxStartX + x] = { char: '▀', fg: BG_COLOR, bg: '', bold: false, dim: false, underline: false, italic: false, strikethrough: false };
     lines.push(bottomLine);
     lines.push(createBaseLine());
     const isRecentlyCopied = Date.now() - lastCopyTime < 2000;
-    const stats = ` Tokens: ↑${usage.up}  ↓${usage.down}  Σ${usage.up + usage.down} `;
+    const total = usage.up + usage.down;
+    const pct = usage.max ? Math.min(100, Math.round((total / usage.max) * 100)) : null;
+    const modelStr = model ? `  ${model}` : '';
+    const toolStr = toolCount ? `  tools:${toolCount}` : '';
+    const pctStr = pct !== null ? `  ctx:${pct}%` : '';
+    const stats = ` Tokens: ${total}${modelStr}${toolStr}${pctStr} `;
     const copiedNotice = isRecentlyCopied ? ` [COPIED TO CLIPBOARD] ` : '';
     const statsLine = '  ' + stats + ' '.repeat(Math.max(0, width - 4 - getDisplayWidth(stats) - getDisplayWidth(copiedNotice))) + copiedNotice;
     lines.push(this.stringToLine(statsLine, width, { fg: isRecentlyCopied ? '81' : '244', bold: isRecentlyCopied }));
@@ -167,11 +183,14 @@ export class UIFactory {
       if (code < 32 || code === 127) continue;
       const charWidth = getDisplayWidth(char);
       line[currentColumn] = {
-        char, 
-        fg: style.fg || '', 
+        char,
+        fg: style.fg || '',
         bg: style.bg || '',
-        bold: style.bold || false, 
-        dim: style.dim || false
+        bold: style.bold || false,
+        dim: style.dim || false,
+        underline: style.underline || false,
+        italic: style.italic || false,
+        strikethrough: style.strikethrough || false
       };
       if (charWidth === 2 && currentColumn + 1 < width) {
         line[currentColumn + 1] = { ...line[currentColumn], char: '' };

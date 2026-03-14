@@ -15,6 +15,9 @@ import { ShellExecTool } from './tools/shell-exec.ts';
 import { GrepTool } from './tools/grep.ts';
 import { ListDirTool } from './tools/list-dir.ts';
 import { GlobTool } from './tools/glob-tool.ts';
+import { PermissionManager } from './permissions/manager.ts';
+import { PermissionPromptUI } from './permissions/prompt.ts';
+import type { PermissionRequest } from './permissions/prompt.ts';
 
 const ALT_SCREEN_ENTER = '\x1b[?1049h';
 const ALT_SCREEN_EXIT  = '\x1b[?1049l';
@@ -37,6 +40,9 @@ async function main() {
   const conversation = new ConversationManager(() => stdout.columns || 80);
   const compositor = new Compositor(stdout);
   const selection = new SelectionManager();
+
+  // Permission state — set while a permission prompt is blocking the orchestrator
+  let pendingPermission: PermissionRequest | null = null;
 
   let scrollTop = 0;
 
@@ -71,12 +77,15 @@ async function main() {
   toolRegistry.register(new ListDirTool());
   toolRegistry.register(new GlobTool());
 
+  const permissionManager = new PermissionManager(bus);
+
   const orchestrator = new Orchestrator(
     bus,
     conversation,
     getViewportHeight,
     scrollToEnd,
     toolRegistry,
+    permissionManager,
   );
 
   const input = new InputHandler(
@@ -102,6 +111,10 @@ async function main() {
       viewport.push(...thinking);
     }
 
+    if (pendingPermission) {
+      viewport.push(...PermissionPromptUI.createPromptLines(width, pendingPermission));
+    }
+
     orchestrator.messageQueue.forEach(msg => {
       viewport.push(...UIFactory.createQueuedMessageFragment(width, msg));
     });
@@ -123,13 +136,45 @@ async function main() {
   bus.on('render:request', render);
   bus.on('input:submit', ({ text }) => { orchestrator.handleUserInput(text); });
 
+  // Permission prompt wiring — store the pending request and trigger a render.
+  // The orchestrator's Promise is blocked until resolve() is called.
+  bus.on('permission:request', (req) => {
+    pendingPermission = req;
+    bus.emit('render:request');
+  });
+
   // --- Terminal setup ---
   stdin.setRawMode(true);
   stdin.resume();
   stdin.setEncoding('utf8');
   stdout.write(ALT_SCREEN_ENTER + CLEAR_SCREEN + CURSOR_HIDE + MOUSE_ENABLE + KEYBOARD_EXT_ENABLE + PASTE_ENABLE);
 
-  stdin.on('data', (data: string) => input.feed(data));
+  stdin.on('data', (data: string) => {
+    // When a permission prompt is active, intercept all input and handle Y/A/N/Escape.
+    // Normal input handling is fully paused during this state.
+    if (pendingPermission) {
+      const req = pendingPermission;
+      const key = data.toLowerCase().trim();
+
+      if (key === 'y') {
+        pendingPermission = null;
+        req.resolve(true, false);
+      } else if (key === 'a') {
+        pendingPermission = null;
+        req.resolve(true, true);
+      } else if (key === 'n' || data === '\x1b' || data === '\x03') {
+        // n, Escape, or Ctrl+C all deny and abort the current turn
+        pendingPermission = null;
+        req.resolve(false, false);
+        orchestrator.abort();
+      }
+      // Any other key: ignore, keep showing the prompt
+      bus.emit('render:request');
+      return;
+    }
+
+    input.feed(data);
+  });
   process.on('SIGINT', () => input.feed('\x03'));
   stdout.on('resize', () => {
     compositor.resetDiff();

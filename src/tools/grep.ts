@@ -1,9 +1,14 @@
 import type { Tool, ToolDefinition, ToolResult } from '../types/tools.ts';
 import { ToolError } from '../types/errors.ts';
 import { readdir, readFile, stat } from 'node:fs/promises';
-import { join, relative } from 'node:path';
+import { join, relative, resolve } from 'node:path';
+import { resolveAndValidatePath } from '../utils/path-safety.ts';
+import { buildGlobMatcher } from '../utils/glob-to-regex.ts';
 
 const DEFAULT_MAX_RESULTS = 100;
+const MAX_PATTERN_LENGTH = 500;
+const MAX_FILE_SIZE_BYTES = 1024 * 1024; // 1MB
+const BINARY_PROBE_BYTES = 8192;
 
 /**
  * GrepTool - Search file contents using a regex pattern.
@@ -38,27 +43,44 @@ export class GrepTool implements Tool {
     },
   };
 
-  async execute(args: Record<string, unknown>): Promise<ToolResult> {
+  async execute(args: Record<string, unknown>): Promise<Omit<ToolResult, 'callId'>> {
     const pattern = args['pattern'];
     if (typeof pattern !== 'string' || !pattern) {
-      return { callId: '', success: false, error: 'Missing required argument: pattern' };
+      return { success: false, error: 'Missing required argument: pattern' };
+    }
+
+    if (pattern.length > MAX_PATTERN_LENGTH) {
+      return {
+        success: false,
+        error: `Pattern exceeds maximum length of ${MAX_PATTERN_LENGTH} characters`,
+      };
     }
 
     let regex: RegExp;
     try {
       regex = new RegExp(pattern, 'g');
+      // Quick validation: test on empty string to catch some catastrophic patterns
+      regex.test('');
+      regex.lastIndex = 0;
     } catch (err) {
       return {
-        callId: '',
         success: false,
         error: `Invalid regex pattern: ${err instanceof Error ? err.message : String(err)}`,
       };
     }
 
-    const searchPath = typeof args['path'] === 'string' ? args['path'] : process.cwd();
+    const rawPath = typeof args['path'] === 'string' ? args['path'] : process.cwd();
     const glob = typeof args['glob'] === 'string' ? args['glob'] : undefined;
     const maxResults =
       typeof args['maxResults'] === 'number' ? args['maxResults'] : DEFAULT_MAX_RESULTS;
+
+    // Validate the search path is within the project root
+    let searchPath: string;
+    try {
+      searchPath = resolveAndValidatePath(rawPath);
+    } catch (err) {
+      return { success: false, error: err instanceof Error ? err.message : String(err) };
+    }
 
     try {
       const files = await collectFiles(searchPath, glob);
@@ -67,9 +89,22 @@ export class GrepTool implements Tool {
       for (const file of files) {
         if (matches.length >= maxResults) break;
 
+        // Skip files over the size limit
+        let fileStat: Awaited<ReturnType<typeof stat>>;
+        try {
+          fileStat = await stat(file);
+        } catch {
+          continue;
+        }
+        if (fileStat.size > MAX_FILE_SIZE_BYTES) continue;
+
+        // Skip binary files by checking for null bytes in first BINARY_PROBE_BYTES
         let content: string;
         try {
-          content = await readFile(file, 'utf-8');
+          const raw = await readFile(file);
+          const probe = raw.subarray(0, BINARY_PROBE_BYTES);
+          if (probe.includes(0)) continue; // null byte found — binary file
+          content = raw.toString('utf-8');
         } catch {
           continue; // Skip unreadable files
         }
@@ -86,12 +121,11 @@ export class GrepTool implements Tool {
       }
 
       if (matches.length === 0) {
-        return { callId: '', success: true, output: 'No matches found.' };
+        return { success: true, output: 'No matches found.' };
       }
 
       const truncated = matches.length >= maxResults ? `\n(results truncated at ${maxResults})` : '';
       return {
-        callId: '',
         success: true,
         output: matches.join('\n') + truncated,
       };
@@ -157,26 +191,7 @@ async function walkDir(
   }
 }
 
-// Build a simple glob-to-regex matcher for patterns like "*.ts" or "src/**".
-function buildGlobMatcher(glob: string): (path: string) => boolean {
-  // Escape regex special chars (except * and ?) character-by-character to avoid
-  // TypeScript's strict parsing of character class literals inside regex literals.
-  const specials = new Set(['.', '+', '^', '$', '{', '}', '(', ')', '|', '[', ']', '\\']);
-  let escaped = '';
-  for (const ch of glob) {
-    if (specials.has(ch)) {
-      escaped += '\\' + ch;
-    } else {
-      escaped += ch;
-    }
-  }
-  // Now handle glob wildcards
-  escaped = escaped
-    .replace(/\*/g, '__STAR__')
-    .replace(/__STAR____STAR__\//g, '(?:.+/)?') // **/ => any path prefix
-    .replace(/__STAR____STAR__/g, '.+')         // ** => any chars
-    .replace(/__STAR__/g, '[^/]*')              // *  => filename chars only
-    .replace(/\?/g, '[^/]');                    // ?  => single non-slash char
-  const regex = new RegExp(`(^|/)${escaped}$`);
-  return (path: string) => regex.test(path.replace(/\\/g, '/'));
+/** @deprecated Use resolveAndValidatePath from path-safety.ts */
+export function _resolveSearchPath(rawPath: string): string {
+  return resolve(rawPath);
 }

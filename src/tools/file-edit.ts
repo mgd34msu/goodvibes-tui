@@ -1,5 +1,6 @@
 import type { Tool, ToolDefinition, ToolResult } from '../types/tools.ts';
 import { ToolError } from '../types/errors.ts';
+import { resolveAndValidatePath } from '../utils/path-safety.ts';
 
 /**
  * FileEditTool - Find an exact string in a file and replace it.
@@ -32,24 +33,31 @@ export class FileEditTool implements Tool {
     },
   };
 
-  async execute(args: Record<string, unknown>): Promise<ToolResult> {
+  async execute(args: Record<string, unknown>): Promise<Omit<ToolResult, 'callId'>> {
     const path = args['path'];
     const find = args['find'];
     const replace = args['replace'];
 
     if (typeof path !== 'string' || !path) {
-      return { callId: '', success: false, error: 'Missing required argument: path' };
+      return { success: false, error: 'Missing required argument: path' };
     }
     if (typeof find !== 'string') {
-      return { callId: '', success: false, error: 'Missing required argument: find' };
+      return { success: false, error: 'Missing required argument: find' };
     }
     if (typeof replace !== 'string') {
-      return { callId: '', success: false, error: 'Missing required argument: replace' };
+      return { success: false, error: 'Missing required argument: replace' };
+    }
+
+    let resolvedPath: string;
+    try {
+      resolvedPath = resolveAndValidatePath(path);
+    } catch (err) {
+      return { success: false, error: err instanceof Error ? err.message : String(err) };
     }
 
     let original: string;
     try {
-      original = await Bun.file(path).text();
+      original = await Bun.file(resolvedPath).text();
     } catch (err) {
       throw new ToolError(
         `Failed to read file '${path}': ${err instanceof Error ? err.message : String(err)}`,
@@ -60,14 +68,12 @@ export class FileEditTool implements Tool {
     const occurrences = countOccurrences(original, find);
     if (occurrences === 0) {
       return {
-        callId: '',
         success: false,
         error: `String not found in '${path}'. The find string must match exactly.`,
       };
     }
     if (occurrences > 1) {
       return {
-        callId: '',
         success: false,
         error: `String found ${occurrences} times in '${path}'. The find string must be unique.`,
       };
@@ -76,7 +82,7 @@ export class FileEditTool implements Tool {
     const updated = original.replace(find, replace);
 
     try {
-      await Bun.write(path, updated);
+      await Bun.write(resolvedPath, updated);
     } catch (err) {
       throw new ToolError(
         `Failed to write file '${path}': ${err instanceof Error ? err.message : String(err)}`,
@@ -85,7 +91,7 @@ export class FileEditTool implements Tool {
     }
 
     const diff = buildUnifiedDiff(path, original, updated);
-    return { callId: '', success: true, output: diff };
+    return { success: true, output: diff };
   }
 }
 

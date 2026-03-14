@@ -1,5 +1,6 @@
 import type { Tool, ToolDefinition, ToolResult } from '../types/tools.ts';
 import { ToolError } from '../types/errors.ts';
+import { resolveAndValidatePath } from '../utils/path-safety.ts';
 
 const DEFAULT_TIMEOUT_MS = 30_000;
 
@@ -33,15 +34,23 @@ export class ShellExecTool implements Tool {
     },
   };
 
-  async execute(args: Record<string, unknown>): Promise<ToolResult> {
+  async execute(args: Record<string, unknown>): Promise<Omit<ToolResult, 'callId'>> {
     const command = args['command'];
     if (typeof command !== 'string' || !command) {
-      return { callId: '', success: false, error: 'Missing required argument: command' };
+      return { success: false, error: 'Missing required argument: command' };
     }
 
-    const cwd = typeof args['cwd'] === 'string' ? args['cwd'] : process.cwd();
+    const rawCwd = typeof args['cwd'] === 'string' ? args['cwd'] : process.cwd();
     const timeout =
       typeof args['timeout'] === 'number' ? args['timeout'] : DEFAULT_TIMEOUT_MS;
+
+    // Validate that the cwd is within the project root
+    let cwd: string;
+    try {
+      cwd = resolveAndValidatePath(rawCwd);
+    } catch (err) {
+      return { success: false, error: err instanceof Error ? err.message : String(err) };
+    }
 
     let proc: ReturnType<typeof Bun.spawn>;
     try {
@@ -58,9 +67,13 @@ export class ShellExecTool implements Tool {
     }
 
     // Race between process completion and timeout
-    const timeoutPromise = new Promise<never>((_, reject) =>
-      setTimeout(() => reject(new Error(`Command timed out after ${timeout}ms`)), timeout),
-    );
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
+    const timeoutPromise = new Promise<never>((_, reject) => {
+      timeoutId = setTimeout(
+        () => reject(new Error(`Command timed out after ${timeout}ms`)),
+        timeout,
+      );
+    });
 
     try {
       const [stdout, stderr, exitCode] = await Promise.race([
@@ -72,6 +85,9 @@ export class ShellExecTool implements Tool {
         timeoutPromise,
       ]);
 
+      // Clear the timeout timer now that the process completed successfully
+      if (timeoutId !== null) clearTimeout(timeoutId);
+
       const output = [
         `Exit code: ${exitCode}`,
         stdout ? `--- stdout ---\n${stdout.trimEnd()}` : '',
@@ -80,12 +96,12 @@ export class ShellExecTool implements Tool {
         .filter(Boolean)
         .join('\n');
 
-      return { callId: '', success: exitCode === 0, output };
+      return { success: exitCode === 0, output };
     } catch (err) {
       // Kill on timeout
       try { proc.kill(); } catch { /* ignore */ }
       const message = err instanceof Error ? err.message : String(err);
-      return { callId: '', success: false, error: message };
+      return { success: false, error: message };
     }
   }
 }

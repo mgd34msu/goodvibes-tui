@@ -42,7 +42,9 @@ export class ToolRegistry {
       return { ...result, callId };
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      throw new ToolError(message, name);
+      const toolErr = new ToolError(message, name);
+      if (err instanceof Error) toolErr.cause = err;
+      throw toolErr;
     }
   }
 

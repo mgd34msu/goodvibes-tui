@@ -23,5 +23,6 @@ export interface ToolResult {
 /** A registered tool with its definition and executor. */
 export interface Tool {
   definition: ToolDefinition;
-  execute(args: Record<string, unknown>): Promise<ToolResult>;
+  /** Tools return a result without callId — the registry injects callId when wrapping. */
+  execute(args: Record<string, unknown>): Promise<Omit<ToolResult, 'callId'>>;
 }

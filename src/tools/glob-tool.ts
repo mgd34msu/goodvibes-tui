@@ -1,6 +1,8 @@
 import type { Tool, ToolDefinition, ToolResult } from '../types/tools.ts';
 import { ToolError } from '../types/errors.ts';
-import { resolve } from 'node:path';
+import { resolveAndValidatePath } from '../utils/path-safety.ts';
+
+const DEFAULT_MAX_RESULTS = 1000;
 
 /**
  * GlobTool - Find files matching glob patterns using Bun's built-in Glob.
@@ -23,26 +25,42 @@ export class GlobTool implements Tool {
           type: 'string',
           description: 'Directory to search from. Defaults to current directory.',
         },
+        maxResults: {
+          type: 'integer',
+          description: `Maximum number of files to return. Defaults to ${DEFAULT_MAX_RESULTS}.`,
+        },
       },
       required: ['patterns'],
     },
   };
 
-  async execute(args: Record<string, unknown>): Promise<ToolResult> {
+  async execute(args: Record<string, unknown>): Promise<Omit<ToolResult, 'callId'>> {
     const patterns = args['patterns'];
     if (!Array.isArray(patterns) || patterns.length === 0) {
-      return { callId: '', success: false, error: 'Missing required argument: patterns (array)' };
+      return { success: false, error: 'Missing required argument: patterns (array)' };
     }
 
-    const cwd = typeof args['cwd'] === 'string' ? resolve(args['cwd']) : process.cwd();
+    const rawCwd = typeof args['cwd'] === 'string' ? args['cwd'] : process.cwd();
+    const maxResults =
+      typeof args['maxResults'] === 'number' ? args['maxResults'] : DEFAULT_MAX_RESULTS;
+
+    let cwd: string;
+    try {
+      cwd = resolveAndValidatePath(rawCwd);
+    } catch (err) {
+      return { success: false, error: err instanceof Error ? err.message : String(err) };
+    }
+
     const allMatches = new Set<string>();
 
     try {
       for (const pattern of patterns) {
         if (typeof pattern !== 'string') continue;
+        if (allMatches.size >= maxResults) break;
         const globber = new Bun.Glob(pattern);
         for await (const match of globber.scan({ cwd, onlyFiles: true })) {
           allMatches.add(match);
+          if (allMatches.size >= maxResults) break;
         }
       }
     } catch (err) {
@@ -55,13 +73,13 @@ export class GlobTool implements Tool {
     const sorted = Array.from(allMatches).sort();
 
     if (sorted.length === 0) {
-      return { callId: '', success: true, output: 'No files matched the given patterns.' };
+      return { success: true, output: 'No files matched the given patterns.' };
     }
 
+    const truncated = sorted.length >= maxResults ? `\n(results truncated at ${maxResults})` : '';
     return {
-      callId: '',
       success: true,
-      output: sorted.join('\n'),
+      output: sorted.join('\n') + truncated,
     };
   }
 }
