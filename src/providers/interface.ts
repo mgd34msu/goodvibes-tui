@@ -1,5 +1,13 @@
 import type { ToolDefinition, ToolCall } from '../types/tools.ts';
 
+/** Shared budget token map for reasoning effort levels. */
+export const REASONING_BUDGET_MAP: Record<string, number> = {
+  instant: 0,
+  low: 2048,
+  medium: 8192,
+  high: 32768,
+};
+
 /** Contract all LLM providers must implement. */
 export interface LLMProvider {
   readonly name: string;

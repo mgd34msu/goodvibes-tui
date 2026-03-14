@@ -30,7 +30,8 @@ export class OpenAIProvider implements LLMProvider {
   }
 
   async chat(params: ChatRequest): Promise<ChatResponse> {
-    const { messages, tools, model, maxTokens, signal, systemPrompt, onDelta } = params;
+    const { messages, tools, model, maxTokens, signal, systemPrompt, onDelta, reasoningEffort: _reasoningEffort } = params;
+    // Note: OpenAI GPT-5 does not expose reasoning effort as a configurable API parameter
 
     return withRetry(async () => {
       let responseText = '';

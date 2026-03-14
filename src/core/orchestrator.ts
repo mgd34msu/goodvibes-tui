@@ -198,7 +198,11 @@ export class Orchestrator {
           messages: this.conversation.getMessagesForLLM(),
           tools: toolDefinitions.length > 0 ? toolDefinitions : undefined,
           systemPrompt: config.systemPrompt,
-          reasoningEffort: model.capabilities.reasoning ? 'medium' : undefined,
+          reasoningEffort: (() => {
+            const configured = configManager.get('provider.reasoningEffort') as string | undefined;
+            if (configured) return configured as 'instant' | 'low' | 'medium' | 'high';
+            return model.capabilities.reasoning ? 'medium' : undefined;
+          })(),
           signal: this.abortController?.signal,
           onDelta,
         });

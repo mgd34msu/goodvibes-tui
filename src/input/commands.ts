@@ -1,6 +1,7 @@
 import type { CommandRegistry, CommandContext } from './command-registry.ts';
 import type { ConfigKey } from '../config/index.ts';
 import { CONFIG_SCHEMA } from '../config/index.ts';
+import { REASONING_BUDGET_MAP } from '../providers/interface.ts';
 
 /**
  * registerBuiltinCommands - Register all built-in slash commands into the registry.
@@ -52,11 +53,13 @@ export function registerBuiltinCommands(registry: CommandRegistry): void {
         '  Model & Provider:',
         '    /model [id]       Select LLM model',
         '    /provider [name]  Switch provider',
+        '    /effort [level]   Show or set reasoning effort (instant/low/medium/high)',
         '',
         '  Config & Display:',
         '    /config [key] [value]   Show or set config values',
         '    /config reset [key]     Reset config key or all to defaults',
         '    /debug            Toggle debug mode',
+        '    /lines            Toggle line numbers on/off',
         '',
         '  Conversation:',
         '    /clear            Clear display (keep context)',
@@ -80,6 +83,9 @@ export function registerBuiltinCommands(registry: CommandRegistry): void {
         '  Left click        Middle-click paste',
         '  Click drag        Select text',
         '  Ctrl+Shift+C      Copy selection',
+        '  Tab               Toggle collapse of nearest block',
+        '  Ctrl+Y            Copy nearest code/tool block',
+        '  Ctrl+A            Apply nearest diff block',
       ];
       ctx.print(lines.join('\n'));
     },
@@ -342,6 +348,57 @@ export function registerBuiltinCommands(registry: CommandRegistry): void {
     handler(_args, ctx) {
       ctx.runtime.debugMode = !ctx.runtime.debugMode;
       ctx.print(`Debug mode: ${ctx.runtime.debugMode ? 'ON' : 'OFF'}`);
+    },
+  });
+
+  // ── /effort ───────────────────────────────────────────
+  registry.register({
+    name: 'effort',
+    aliases: ['e'],
+    description: 'Show or set reasoning effort level',
+    usage: '[instant|low|medium|high]',
+    handler(args, ctx) {
+      const VALID_LEVELS = ['instant', 'low', 'medium', 'high'] as const;
+      type EffortLevel = typeof VALID_LEVELS[number];
+
+      if (args.length === 0) {
+        const current = (ctx.runtime.reasoningEffort || ctx.configManager.get('provider.reasoningEffort') || 'medium') as string;
+        const budget = REASONING_BUDGET_MAP[current];
+        const lines = [
+          `Reasoning effort: ${current}`,
+          `  Mercury-2:  reasoning_effort = '${current}'`,
+          `  Claude:     thinking.budget_tokens = ${budget}`,
+          `  Gemini:     thinking_config.thinking_budget = ${budget}`,
+          `  GPT-5:      (no-op)`,
+          ``,
+          `Levels: instant (fastest/cheapest), low, medium (default), high (most thorough)`,
+        ];
+        ctx.print(lines.join('\n'));
+        return;
+      }
+
+      const level = args[0] as EffortLevel;
+      if (!VALID_LEVELS.includes(level)) {
+        ctx.print(`Invalid effort level: ${level}\nValid levels: ${VALID_LEVELS.join(', ')}`);
+        return;
+      }
+
+      ctx.runtime.reasoningEffort = level;
+      ctx.configManager.set('provider.reasoningEffort', level);
+      ctx.print(`Reasoning effort set to: ${level}`);
+    },
+  });
+
+  // ─4 /lines ────────────────────────────────────────────
+  registry.register({
+    name: 'lines',
+    aliases: [],
+    description: 'Toggle line numbers on/off',
+    handler(_args, ctx) {
+      const current = ctx.configManager.get('display.lineNumbers');
+      ctx.configManager.set('display.lineNumbers', !current);
+      ctx.print(`Line numbers: ${!current ? 'ON' : 'OFF'}`);
+      ctx.renderRequest();
     },
   });
 }
