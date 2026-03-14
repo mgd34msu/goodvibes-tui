@@ -242,7 +242,8 @@ async function main() {
           undefined, undefined,
           info.visibleCursorLine >= 0
             ? info.visibleLines.slice(0, info.visibleCursorLine).reduce((s, l) => s + l.length + 1, 0) + info.visibleCursorCol
-            : undefined
+            : undefined,
+          config.workingDir
         );
       })(),
       selection: {

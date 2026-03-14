@@ -118,7 +118,8 @@ export class UIFactory {
     lastCopyTime: number,
     model?: string,
     toolCount?: number,
-    cursorPos?: number
+    cursorPos?: number,
+    workingDir?: string
   ): Line[] {
     const lines: Line[] = [];
     const promptLines = prompt.split('\n');
@@ -187,12 +188,20 @@ export class UIFactory {
     const copiedNotice = isRecentlyCopied ? ` [COPIED TO CLIPBOARD] ` : '';
     const statsLine = '  ' + stats + ' '.repeat(Math.max(0, width - 4 - getDisplayWidth(stats) - getDisplayWidth(copiedNotice))) + copiedNotice;
     lines.push(this.stringToLine(statsLine, width, { fg: isRecentlyCopied ? '81' : '244', bold: isRecentlyCopied }));
-    lines.push(createBaseLine());
+    // Context info line (working dir, model, tools)
+    if (workingDir || model) {
+      const ctxParts: string[] = [];
+      if (workingDir) ctxParts.push(`\u{1F4C2} ${workingDir}`);
+      if (model) ctxParts.push(`\u{1F916} ${model}`);
+      if (toolCount) ctxParts.push(`\u{1F527} ${toolCount} tools`);
+      const ctxLine = '  ' + ctxParts.join('  \u00B7  ');
+      lines.push(this.stringToLine(ctxLine.slice(0, width), width, { fg: '240', dim: true }));
+    }
     if (showExitNotice) {
       const notice = `   !!! Press Ctrl+C again to exit !!! `;
       lines.push(this.stringToLine(notice.padEnd(width), width, { fg: '196', bold: true }));
     } else {
-      const help = `   Enter=send  Shift+Enter=newline  Ctrl+C=quit `;
+      const help = `   Enter=send  Shift+Enter=newline  Ctrl+C=quit  /help `;
       lines.push(this.stringToLine(help.padEnd(width), width, { fg: '240', dim: true }));
     }
     lines.push(createBaseLine());
