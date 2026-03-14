@@ -196,7 +196,7 @@ async function main() {
 
     compositor.composite({
       width, height,
-      header: UIFactory.createHeader(width, config.model, config.provider),
+      header: UIFactory.createHeader(width, runtime.model, runtime.provider),
       viewport,
       footer: UIFactory.createFooter(width, input.prompt, orchestrator.usage, input.showExitNotice, input.lastCopyTime),
       selection: {

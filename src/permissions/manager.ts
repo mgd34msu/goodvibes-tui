@@ -15,7 +15,7 @@ const TOOL_CATEGORIES: Record<string, PermissionCategory> = {
   file_read: 'read',
   grep: 'read',
   list_dir: 'read',
-  glob_search: 'read',
+  glob: 'read',
   // write
   file_write: 'write',
   file_edit: 'write',
