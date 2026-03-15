@@ -1,15 +1,11 @@
 import type { EventBus } from '../core/event-bus.ts';
 import { config } from '../config/index.ts';
+import type { PermissionAction, PermissionsToolConfig } from '../config/schema.ts';
+export type { PermissionMode } from '../config/schema.ts';
 
 export type PermissionCategory = 'read' | 'write' | 'execute' | 'delegate';
 
-/**
- * Maps tool names to permission categories.
- * read    - auto-approved; no prompt
- * write   - requires user confirmation
- * execute - requires user confirmation
- * delegate - requires user confirmation
- */
+/** Maps tool names to permission categories and config tool keys. */
 const TOOL_CATEGORIES: Record<string, PermissionCategory> = {
   // read
   file_read: 'read',
@@ -23,14 +19,26 @@ const TOOL_CATEGORIES: Record<string, PermissionCategory> = {
   shell_exec: 'execute',
 };
 
+/** Maps tool names to their key in PermissionsToolConfig. */
+const TOOL_CONFIG_KEYS: Record<string, keyof PermissionsToolConfig> = {
+  file_read: 'file_read',
+  file_write: 'file_write',
+  file_edit: 'file_edit',
+  shell_exec: 'shell_exec',
+  grep: 'grep',
+  list_dir: 'list_dir',
+  glob: 'glob',
+};
+
 /**
  * PermissionManager - Controls tool execution approval.
  *
  * Approval logic (priority order):
- *   1. --no-worries-just-vibes flag -> auto-approve everything
- *   2. Tool category is 'read'     -> auto-approve
- *   3. Session approval cache hit  -> use cached decision
- *   4. Emit 'permission:request' event and block until user responds
+ *   1. --no-worries-just-vibes flag OR mode='allow-all' -> auto-approve everything
+ *   2. mode='custom' -> check per-tool config action ('allow'/'prompt'/'deny')
+ *   3. mode='prompt' (default) -> auto-approve reads, prompt for writes/execute/delegate
+ *   4. Session approval cache hit -> use cached decision
+ *   5. Emit 'permission:request' event and block until user responds
  */
 export class PermissionManager {
   private sessionApprovals = new Map<string, boolean>();
@@ -40,26 +48,43 @@ export class PermissionManager {
   /**
    * check - Returns a Promise that resolves to true (approved) or false (denied).
    * Blocks orchestrator until the user responds when a prompt is needed.
-   *
-   * Session approvals: when the user selects "Always allow" (remember=true), the
-   * decision is cached in `sessionApprovals` for the lifetime of the process.
-   * There is no undo mechanism — the approval persists until the process exits.
    */
   async check(toolName: string, args: Record<string, unknown>): Promise<boolean> {
     // 1. Auto-approve when --no-worries-just-vibes is active
     if (config.autoApprove) return true;
 
-    // 2. Auto-approve read operations
-    const category = this.getCategory(toolName);
-    if (category === 'read') return true;
+    const permsConfig = config.permissions;
+    const mode = permsConfig?.mode ?? 'prompt';
 
-    // 3. Check session approval cache
+    // 2. allow-all mode: auto-approve everything
+    if (mode === 'allow-all') return true;
+
+    const category = this.getCategory(toolName);
+
+    // 3. custom mode: check per-tool setting
+    if (mode === 'custom') {
+      if (TOOL_CONFIG_KEYS[toolName] !== undefined) {
+        const toolKey = TOOL_CONFIG_KEYS[toolName];
+        const action: PermissionAction = permsConfig?.tools?.[toolKey] ?? 'prompt';
+        if (action === 'allow') return true;
+        if (action === 'deny') return false;
+        // action === 'prompt': fall through to cache + prompt
+      } else {
+        // Unknown tool in custom mode: default to 'prompt' behavior
+        // Fall through to cache + prompt
+      }
+    } else {
+      // 4. prompt mode: auto-approve read operations
+      if (category === 'read') return true;
+    }
+
+    // 5. Check session approval cache
     const key = this.getApprovalKey(toolName, args);
     if (this.sessionApprovals.has(key)) {
       return this.sessionApprovals.get(key)!;
     }
 
-    // 4. Prompt user via event bus - blocks until resolve() is called
+    // 6. Prompt user via event bus - blocks until resolve() is called
     return new Promise<boolean>((resolve) => {
       this.eventBus.emit('permission:request', {
         callId: crypto.randomUUID(),

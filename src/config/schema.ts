@@ -2,6 +2,20 @@
  * Config schema definitions and metadata for goodvibes-tui.
  */
 
+export type PermissionMode = 'prompt' | 'allow-all' | 'custom';
+export type PermissionAction = 'allow' | 'prompt' | 'deny';
+
+export interface PermissionsToolConfig {
+  file_read: PermissionAction;   // default: 'allow'
+  file_write: PermissionAction;  // default: 'prompt'
+  file_edit: PermissionAction;   // default: 'prompt'
+  shell_exec: PermissionAction;  // default: 'prompt'
+  grep: PermissionAction;        // default: 'allow'
+  list_dir: PermissionAction;    // default: 'allow'
+  glob: PermissionAction;        // default: 'allow'
+  delegate: PermissionAction;    // default: 'prompt'
+}
+
 export interface GoodVibesConfig {
   display: {
     stream: boolean;            // default: true
@@ -19,6 +33,10 @@ export interface GoodVibesConfig {
     autoApprove: boolean;       // default: false
     autoCompactThreshold: number; // default: 80
     saveHistory: boolean;       // default: true
+  };
+  permissions: {
+    mode: PermissionMode;       // default: 'prompt'
+    tools: PermissionsToolConfig;
   };
 }
 
@@ -43,7 +61,16 @@ export type ConfigKey =
   | 'provider.systemPromptFile'
   | 'behavior.autoApprove'
   | 'behavior.autoCompactThreshold'
-  | 'behavior.saveHistory';
+  | 'behavior.saveHistory'
+  | 'permissions.mode'
+  | 'permissions.tools.file_read'
+  | 'permissions.tools.file_write'
+  | 'permissions.tools.file_edit'
+  | 'permissions.tools.shell_exec'
+  | 'permissions.tools.grep'
+  | 'permissions.tools.list_dir'
+  | 'permissions.tools.glob'
+  | 'permissions.tools.delegate';
 
 /** Maps a ConfigKey to its value type. */
 export type ConfigValue<K extends ConfigKey> =
@@ -58,6 +85,15 @@ export type ConfigValue<K extends ConfigKey> =
   K extends 'behavior.autoApprove' ? boolean :
   K extends 'behavior.autoCompactThreshold' ? number :
   K extends 'behavior.saveHistory' ? boolean :
+  K extends 'permissions.mode' ? PermissionMode :
+  K extends 'permissions.tools.file_read' ? PermissionAction :
+  K extends 'permissions.tools.file_write' ? PermissionAction :
+  K extends 'permissions.tools.file_edit' ? PermissionAction :
+  K extends 'permissions.tools.shell_exec' ? PermissionAction :
+  K extends 'permissions.tools.grep' ? PermissionAction :
+  K extends 'permissions.tools.list_dir' ? PermissionAction :
+  K extends 'permissions.tools.glob' ? PermissionAction :
+  K extends 'permissions.tools.delegate' ? PermissionAction :
   never;
 
 export const DEFAULT_CONFIG: GoodVibesConfig = {
@@ -77,6 +113,19 @@ export const DEFAULT_CONFIG: GoodVibesConfig = {
     autoApprove: false,
     autoCompactThreshold: 80,
     saveHistory: true,
+  },
+  permissions: {
+    mode: 'prompt',
+    tools: {
+      file_read: 'allow',
+      file_write: 'prompt',
+      file_edit: 'prompt',
+      shell_exec: 'prompt',
+      grep: 'allow',
+      list_dir: 'allow',
+      glob: 'allow',
+      delegate: 'prompt',
+    },
   },
 };
 
@@ -149,5 +198,68 @@ export const CONFIG_SCHEMA: ConfigSetting[] = [
     type: 'boolean',
     default: true,
     description: 'Persist conversation history to disk',
+  },
+  {
+    key: 'permissions.mode',
+    type: 'enum',
+    default: 'prompt',
+    description: 'Permission approval mode: prompt (default), allow-all, or custom',
+    enumValues: ['prompt', 'allow-all', 'custom'],
+  },
+  {
+    key: 'permissions.tools.file_read',
+    type: 'enum',
+    default: 'allow',
+    description: 'Permission for file_read tool',
+    enumValues: ['allow', 'prompt', 'deny'],
+  },
+  {
+    key: 'permissions.tools.file_write',
+    type: 'enum',
+    default: 'prompt',
+    description: 'Permission for file_write tool',
+    enumValues: ['allow', 'prompt', 'deny'],
+  },
+  {
+    key: 'permissions.tools.file_edit',
+    type: 'enum',
+    default: 'prompt',
+    description: 'Permission for file_edit tool',
+    enumValues: ['allow', 'prompt', 'deny'],
+  },
+  {
+    key: 'permissions.tools.shell_exec',
+    type: 'enum',
+    default: 'prompt',
+    description: 'Permission for shell_exec tool',
+    enumValues: ['allow', 'prompt', 'deny'],
+  },
+  {
+    key: 'permissions.tools.grep',
+    type: 'enum',
+    default: 'allow',
+    description: 'Permission for grep tool',
+    enumValues: ['allow', 'prompt', 'deny'],
+  },
+  {
+    key: 'permissions.tools.list_dir',
+    type: 'enum',
+    default: 'allow',
+    description: 'Permission for list_dir tool',
+    enumValues: ['allow', 'prompt', 'deny'],
+  },
+  {
+    key: 'permissions.tools.glob',
+    type: 'enum',
+    default: 'allow',
+    description: 'Permission for glob tool',
+    enumValues: ['allow', 'prompt', 'deny'],
+  },
+  {
+    key: 'permissions.tools.delegate',
+    type: 'enum',
+    default: 'prompt',
+    description: 'Permission for delegate/unknown tools',
+    enumValues: ['allow', 'prompt', 'deny'],
   },
 ];

@@ -95,14 +95,21 @@ export class ConfigManager {
     }
   }
 
-  /** Get a config value by dot-path key. */
+  /** Get a config value by dot-path key. Supports 2-level (a.b) and 3-level (a.b.c) keys. */
   get<K extends ConfigKey>(key: K): ConfigValue<K> {
-    const [category, field] = key.split('.');
+    const parts = key.split('.');
+    if (parts.length === 3) {
+      const [section, subsection, field] = parts;
+      const sect = this.config[section as keyof GoodVibesConfig] as Record<string, Record<string, unknown>>;
+      if (!sect?.[subsection]) return undefined as ConfigValue<K>;
+      return sect[subsection][field] as ConfigValue<K>;
+    }
+    const [category, field] = parts;
     const cat = this.config[category as keyof GoodVibesConfig] as Record<string, unknown>;
     return cat[field] as ConfigValue<K>;
   }
 
-  /** Set a config value by dot-path key and auto-save to disk. */
+  /** Set a config value by dot-path key and auto-save to disk. Supports 2-level and 3-level keys. */
   set<K extends ConfigKey>(key: K, value: ConfigValue<K>): void {
     const schema = CONFIG_SCHEMA.find(s => s.key === key);
     if (schema?.validate && !schema.validate(value)) {
@@ -112,7 +119,15 @@ export class ConfigManager {
       throw new ConfigError(`Invalid value for ${key}: "${String(value)}". Allowed: ${schema.enumValues.join(', ')}`);
     }
 
-    const [category, field] = key.split('.');
+    const parts = key.split('.');
+    if (parts.length === 3) {
+      const [section, subsection, field] = parts;
+      const sect = this.config[section as keyof GoodVibesConfig] as Record<string, Record<string, unknown>>;
+      sect[subsection][field] = value;
+      this.save();
+      return;
+    }
+    const [category, field] = parts;
     const cat = this.config[category as keyof GoodVibesConfig] as Record<string, unknown>;
     cat[field] = value;
     this.save();
@@ -124,7 +139,7 @@ export class ConfigManager {
   }
 
   /** Return a deep-cloned snapshot of a config category. */
-  getCategory(category: 'display' | 'provider' | 'behavior'): Readonly<GoodVibesConfig[typeof category]> {
+  getCategory(category: 'display' | 'provider' | 'behavior' | 'permissions'): Readonly<GoodVibesConfig[typeof category]> {
     return structuredClone(this.config[category]);
   }
 
@@ -202,10 +217,18 @@ export class ConfigManager {
     } else {
       const schema = CONFIG_SCHEMA.find(s => s.key === key);
       if (!schema) throw new ConfigError(`Unknown config key: ${key}`);
-      const [category, field] = key.split('.');
-      const cat = this.config[category as keyof GoodVibesConfig] as Record<string, unknown>;
-      const defaultCat = DEFAULT_CONFIG[category as keyof GoodVibesConfig] as Record<string, unknown>;
-      cat[field] = defaultCat[field];
+      const parts = key.split('.');
+      if (parts.length === 3) {
+        const [section, subsection, field] = parts;
+        const sect = this.config[section as keyof GoodVibesConfig] as Record<string, Record<string, unknown>>;
+        const defaultSect = DEFAULT_CONFIG[section as keyof GoodVibesConfig] as Record<string, Record<string, unknown>>;
+        sect[subsection][field] = defaultSect[subsection][field];
+      } else {
+        const [category, field] = parts;
+        const cat = this.config[category as keyof GoodVibesConfig] as Record<string, unknown>;
+        const defaultCat = DEFAULT_CONFIG[category as keyof GoodVibesConfig] as Record<string, unknown>;
+        cat[field] = defaultCat[field];
+      }
     }
     this.save();
   }
