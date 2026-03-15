@@ -140,10 +140,14 @@ export function registerBuiltinCommands(registry: CommandRegistry): void {
           if (!result) return;
           // Keyboard shortcuts (id starts with 'k:') are informational only
           if (result.item.id.startsWith('k:')) return;
-          // Execute the selected command
+          // Execute the selected command through the command registry
           const cmd = result.item.id;
           if (cmd.startsWith('/')) {
-            ctx.eventBus.emit('input:submit', { text: cmd });
+            const parts = cmd.slice(1).trim().split(/\s+/);
+            const name = parts[0];
+            const cmdArgs = parts.slice(1);
+            void registry.execute(name, cmdArgs, ctx);
+            ctx.eventBus.emit('command:execute', { name, args: cmdArgs });
           }
         });
         return;
