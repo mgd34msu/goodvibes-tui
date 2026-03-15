@@ -24,6 +24,7 @@ export interface EventMap {
   'render:request': void;
   'input:submit': { text: string; content?: import('../providers/interface.ts').ContentPart[] };
   'cancel:generation': void;
+  'clear:screen': void;
   'scroll:delta': { delta: number };
   'block:toggle-collapse': { blockIndex: number };
 
