@@ -555,6 +555,14 @@ export class InputHandler {
       this.filePicker.close();
       return;
     }
+    // If selection modal is active, close it
+    if (this.selectionModal.active) {
+      const cb = this.selectionCallback;
+      this.selectionCallback = null;
+      this.selectionModal.close();
+      cb?.(null);
+      return;
+    }
     if (this.prompt.length > 0) {
       this.saveUndoState();
       this.prompt = '';
@@ -697,12 +705,13 @@ export class InputHandler {
             this.selectionModal.close();
             cb?.(null);
           } else if (token.logicalName === 'enter') {
+            const customAction = this.selectionModal.customActions.get('enter');
             const selected = this.selectionModal.getSelected();
             if (selected) {
               const cb = this.selectionCallback;
               this.selectionCallback = null;
               this.selectionModal.close();
-              cb?.({ item: selected, action: 'select' });
+              cb?.({ item: selected, action: customAction ?? 'select' });
             }
           } else if (token.logicalName === 'up') {
             this.selectionModal.moveUp();
@@ -714,6 +723,7 @@ export class InputHandler {
               this.selectionModal.setQuery(this.selectionModal.query.slice(0, -1));
             }
           } else if (token.logicalName && token.logicalName.length === 1) {
+            // Custom action keys must be single characters (e.g., 'd', 'e'). Multi-char keys like 'enter' are handled separately above.
             // Check custom action keys (single-char key names like 'd', 'e')
             const action = this.selectionModal.customActions.get(token.logicalName);
             if (action) {
