@@ -24,6 +24,8 @@ export interface GoodVibesConfig {
     theme: string;              // default: 'vaporwave'
     showThinking: boolean;      // default: false
     showReasoningSummary: boolean; // default: false
+    showTokenSpeed: boolean;    // default: false
+    showToolPreview: boolean;   // default: false
   };
   provider: {
     reasoningEffort: 'instant' | 'low' | 'medium' | 'high'; // default: 'medium'
@@ -35,6 +37,7 @@ export interface GoodVibesConfig {
     autoApprove: boolean;       // default: false
     autoCompactThreshold: number; // default: 80
     saveHistory: boolean;       // default: true
+    notifyOnComplete: boolean;  // default: true
   };
   permissions: {
     mode: PermissionMode;       // default: 'prompt'
@@ -59,6 +62,8 @@ export type ConfigKey =
   | 'display.theme'
   | 'display.showThinking'
   | 'display.showReasoningSummary'
+  | 'display.showTokenSpeed'
+  | 'display.showToolPreview'
   | 'provider.reasoningEffort'
   | 'provider.model'
   | 'provider.provider'
@@ -66,6 +71,7 @@ export type ConfigKey =
   | 'behavior.autoApprove'
   | 'behavior.autoCompactThreshold'
   | 'behavior.saveHistory'
+  | 'behavior.notifyOnComplete'
   | 'permissions.mode'
   | 'permissions.tools.file_read'
   | 'permissions.tools.file_write'
@@ -84,6 +90,8 @@ export type ConfigValue<K extends ConfigKey> =
   K extends 'display.theme' ? string :
   K extends 'display.showThinking' ? boolean :
   K extends 'display.showReasoningSummary' ? boolean :
+  K extends 'display.showTokenSpeed' ? boolean :
+  K extends 'display.showToolPreview' ? boolean :
   K extends 'provider.reasoningEffort' ? 'instant' | 'low' | 'medium' | 'high' :
   K extends 'provider.model' ? string :
   K extends 'provider.provider' ? string :
@@ -91,6 +99,7 @@ export type ConfigValue<K extends ConfigKey> =
   K extends 'behavior.autoApprove' ? boolean :
   K extends 'behavior.autoCompactThreshold' ? number :
   K extends 'behavior.saveHistory' ? boolean :
+  K extends 'behavior.notifyOnComplete' ? boolean :
   K extends 'permissions.mode' ? PermissionMode :
   K extends 'permissions.tools.file_read' ? PermissionAction :
   K extends 'permissions.tools.file_write' ? PermissionAction :
@@ -110,6 +119,8 @@ export const DEFAULT_CONFIG: GoodVibesConfig = {
     theme: 'vaporwave',
     showThinking: false,
     showReasoningSummary: false,
+    showTokenSpeed: false,
+    showToolPreview: false,
   },
   provider: {
     reasoningEffort: 'medium',
@@ -121,6 +132,7 @@ export const DEFAULT_CONFIG: GoodVibesConfig = {
     autoApprove: false,
     autoCompactThreshold: 80,
     saveHistory: true,
+    notifyOnComplete: true,
   },
   permissions: {
     mode: 'prompt',
@@ -176,6 +188,18 @@ export const CONFIG_SCHEMA: ConfigSetting[] = [
     description: 'Show reasoning summary (Mercury-2) in a dimmed block above assistant responses',
   },
   {
+    key: 'display.showTokenSpeed',
+    type: 'boolean',
+    default: false,
+    description: 'Show streaming tokens/sec counter during generation',
+  },
+  {
+    key: 'display.showToolPreview',
+    type: 'boolean',
+    default: false,
+    description: 'Show partial tool call preview while streaming',
+  },
+  {
     key: 'provider.reasoningEffort',
     type: 'enum',
     default: 'medium',
@@ -218,6 +242,12 @@ export const CONFIG_SCHEMA: ConfigSetting[] = [
     type: 'boolean',
     default: true,
     description: 'Persist conversation history to disk',
+  },
+  {
+    key: 'behavior.notifyOnComplete',
+    type: 'boolean',
+    default: true,
+    description: 'Emit terminal bell and desktop notification when a long turn completes',
   },
   {
     key: 'permissions.mode',

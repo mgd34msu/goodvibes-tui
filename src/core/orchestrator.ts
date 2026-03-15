@@ -7,6 +7,7 @@ import { formatProviderError } from '../utils/error-display.ts';
 import { providerRegistry } from '../providers/registry.ts';
 import type { LLMProvider, StreamDelta, ContentPart } from '../providers/interface.ts';
 import { config, configManager } from '../config/index.ts';
+import { notifyCompletion } from '../utils/notify.ts';
 import type { PermissionManager } from '../permissions/manager.ts';
 import type { AcpManager } from '../acp/manager.ts';
 import type { SubagentTask } from '../acp/protocol.ts';
@@ -161,6 +162,7 @@ export class Orchestrator {
   }
 
   private async runTurn(text: string, content?: ContentPart[]): Promise<void> {
+    const turnStartTime = Date.now();
     this.bus.emit('turn:start', { prompt: text });
 
     // Capability check: if model doesn't support multimodal, strip images and warn
@@ -259,7 +261,7 @@ export class Orchestrator {
 
         if (response.toolCalls.length > 0) {
           // Add assistant turn (may include both content and tool calls)
-          this.conversation.addAssistantMessage(response.content, { toolCalls: response.toolCalls, reasoningContent: reasoningForMsg, reasoningSummary: reasoningSummaryForMsg });
+          this.conversation.addAssistantMessage(response.content, { toolCalls: response.toolCalls, reasoningContent: reasoningForMsg, reasoningSummary: reasoningSummaryForMsg, usage: response.usage });
 
           // Execute tools and collect results
           const results = await this.executeToolCalls(response.toolCalls);
@@ -270,7 +272,7 @@ export class Orchestrator {
           // Loop continues: send results back to LLM
         } else {
           // No tool calls — final response
-          this.conversation.addAssistantMessage(response.content, { reasoningContent: reasoningForMsg, reasoningSummary: reasoningSummaryForMsg });
+          this.conversation.addAssistantMessage(response.content, { reasoningContent: reasoningForMsg, reasoningSummary: reasoningSummaryForMsg, usage: response.usage });
           this.bus.emit('turn:complete', { response: response.content });
           continueLoop = false;
         }
@@ -315,6 +317,11 @@ export class Orchestrator {
       this.bus.emit('turn:error', { error });
     } finally {
       this.stopThinking();
+      const durationMs = Date.now() - turnStartTime;
+      const notifyEnabled = configManager.get('behavior.notifyOnComplete') as boolean | undefined;
+      if (notifyEnabled !== false) {
+        notifyCompletion('GoodVibes', `Response complete (${Math.round(durationMs / 1000)}s)`, durationMs);
+      }
     }
   }
 

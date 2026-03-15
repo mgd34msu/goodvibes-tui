@@ -22,7 +22,9 @@ const estimateTokens = (text: string): number => Math.ceil(text.length / 4);
  * the buffer is only actually reconstructed when getDisplayBlocks() is called
  * or when the width changes. This avoids O(n) rebuilds per turn in long sessions.
  */
-type AssistantMessage = { role: 'assistant'; content: string; toolCalls?: ToolCall[]; reasoningContent?: string; reasoningSummary?: string };
+export type TokenUsage = { inputTokens: number; outputTokens: number; cacheReadTokens?: number; cacheWriteTokens?: number };
+
+type AssistantMessage = { role: 'assistant'; content: string; toolCalls?: ToolCall[]; reasoningContent?: string; reasoningSummary?: string; usage?: TokenUsage };
 
 type Message =
   | { role: 'user'; content: string | ContentPart[]; cancelled?: boolean }
@@ -125,8 +127,8 @@ export class ConversationManager {
   }
 
   /** Add an assistant message, optionally with tool calls (when the LLM invoked tools). */
-  public addAssistantMessage(content: string, opts?: { toolCalls?: ToolCall[]; reasoningContent?: string; reasoningSummary?: string }): void {
-    this.messages.push({ role: 'assistant', content, toolCalls: opts?.toolCalls, reasoningContent: opts?.reasoningContent, reasoningSummary: opts?.reasoningSummary });
+  public addAssistantMessage(content: string, opts?: { toolCalls?: ToolCall[]; reasoningContent?: string; reasoningSummary?: string; usage?: TokenUsage }): void {
+    this.messages.push({ role: 'assistant', content, toolCalls: opts?.toolCalls, reasoningContent: opts?.reasoningContent, reasoningSummary: opts?.reasoningSummary, usage: opts?.usage });
     this.markDirty();
   }
 
