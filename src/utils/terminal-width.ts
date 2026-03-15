@@ -31,8 +31,10 @@ export function getDisplayWidth(text: string): number {
     }
 
     // Emoji and pictographic — double width in most terminals
+    // Note: 💭 (U+1F4AD) and 🧠 (U+1F9E0) are both in the 0x1F300–0x1F9FF range,
+    // so they are correctly handled as width 2 here.
     if (
-      (code >= 0x1F300 && code <= 0x1F9FF) || // misc symbols, emoticons, supplemental
+      (code >= 0x1F300 && code <= 0x1F9FF) || // misc symbols, emoticons, supplemental (includes 💭 U+1F4AD, 🧠 U+1F9E0)
       (code >= 0x1FA00 && code <= 0x1FAFF) || // chess, symbols ext-A
       (code >= 0x2600 && code <= 0x27BF) ||   // misc symbols, dingbats
       (code >= 0x2300 && code <= 0x23FF) ||   // misc technical (hourglass, etc)

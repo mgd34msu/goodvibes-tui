@@ -33,7 +33,7 @@ describe('ConversationManager', () => {
 
     test('addAssistantMessage with tool calls includes them', () => {
       const toolCalls = [{ id: 'c1', name: 'file_read', arguments: { path: 'foo.ts' } }];
-      cm.addAssistantMessage('calling tool', toolCalls);
+      cm.addAssistantMessage('calling tool', { toolCalls });
       const msgs = cm.getMessagesForLLM();
       expect(msgs[0]).toMatchObject({ role: 'assistant', toolCalls });
     });
@@ -65,7 +65,7 @@ describe('ConversationManager', () => {
 
     test('message order is preserved', () => {
       cm.addUserMessage('question');
-      cm.addAssistantMessage('calling', [{ id: 'c1', name: 'tool', arguments: {} }]);
+      cm.addAssistantMessage('calling', { toolCalls: [{ id: 'c1', name: 'tool', arguments: {} }] });
       cm.addToolResults([{ callId: 'c1', success: true, output: 'result' }]);
       cm.addAssistantMessage('final answer');
 

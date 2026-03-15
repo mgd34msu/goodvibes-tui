@@ -103,9 +103,17 @@ async function main() {
     return boxWidth - 4 - 3; // minus padding (4) minus prefix width (3: ' > ')
   };
 
+  /** Base footer row count: separator + prompt box (top+content+bottom) + blank +
+   *  token line + ctx bar + compact bar + context line (blank+info+blank) + help/exit line + trailing blank.
+   */
+  const FOOTER_BASE_ROWS = 9;
+
   const getViewportHeight = () => {
     const promptLines = input.getVisiblePromptLineCount(getPromptContentWidth());
-    return (stdout.rows || 24) - 2 - (9 + promptLines);
+    // FOOTER_BASE_ROWS base footer rows + 2 progress bars (always shown when model has contextWindow) + prompt lines
+    const currentModel = providerRegistry.getCurrentModel();
+    const hasProgressBars = currentModel.contextWindow > 0 ? 2 : 0;
+    return (stdout.rows || 24) - 2 - (FOOTER_BASE_ROWS + promptLines + hasProgressBars);
   };
 
   const scroll = (delta: number) => {
@@ -281,7 +289,9 @@ async function main() {
             ? info.visibleLines.slice(0, info.visibleCursorLine).reduce((s, l) => s + l.length + 1, 0) + info.visibleCursorCol
             : undefined,
           config.workingDir,
-          runtime.provider
+          runtime.provider,
+          providerRegistry.getCurrentModel().contextWindow,
+          configManager.get('behavior.autoCompactThreshold') as number
         );
       })(),
       selection: {
