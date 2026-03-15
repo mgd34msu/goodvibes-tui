@@ -473,61 +473,109 @@ export class InputHandler {
     const lineCount = history.getLineCount();
 
     for (const token of tokens) {
-      // --- Search mode has focus: intercept input for query typing ---
+      // --- Search mode has focus: two phases ---
+      // Phase 1 (unlocked): typing query, text goes to search, Enter/Tab locks
+      // Phase 2 (locked): navigation with arrows/comma/period, Esc closes
       if (this.searchManager.active) {
-        if (token.type === 'text') {
-          const newQuery = this.searchManager.query + token.value;
-          this.searchManager.search(newQuery, history);
-          this.bus.emit('search:update', {
-            query: this.searchManager.query,
-            matchCount: this.searchManager.matches.length,
-            currentMatch: this.searchManager.currentMatch,
-          });
-        } else if (token.type === 'key') {
-          if (token.logicalName === 'escape') {
-            this.searchManager.close();
-            this.bus.emit('search:end');
-          } else if (token.logicalName === 'enter') {
-            // Keep current match position and close search
-            this.searchManager.close();
-            this.bus.emit('search:end');
-          } else if (token.logicalName === 'backspace') {
-            const newQuery = this.searchManager.query.slice(0, -1);
+        if (!this.searchManager.locked) {
+          // --- Typing phase: build the query ---
+          if (token.type === 'text') {
+            const newQuery = this.searchManager.query + token.value;
             this.searchManager.search(newQuery, history);
             this.bus.emit('search:update', {
               query: this.searchManager.query,
               matchCount: this.searchManager.matches.length,
               currentMatch: this.searchManager.currentMatch,
             });
-          } else if (token.logicalName === 'n' && !token.ctrl) {
-            this.searchManager.nextMatch();
-            {
+          } else if (token.type === 'key') {
+            if (token.logicalName === 'escape') {
+              this.searchManager.close();
+              this.bus.emit('search:end');
+            } else if (token.logicalName === 'enter' || token.logicalName === 'tab') {
+              // Lock the query — switch to navigation mode
+              if (this.searchManager.query.length > 0) {
+                this.searchManager.lock();
+                // Scroll to first match
+                const matchLine = this.searchManager.getCurrentMatchLine();
+                if (matchLine >= 0) {
+                  this.scroll(matchLine - this.getScrollTop() - Math.floor(this.getViewportHeight() / 2));
+                }
+                this.bus.emit('search:update', {
+                  query: this.searchManager.query,
+                  matchCount: this.searchManager.matches.length,
+                  currentMatch: this.searchManager.currentMatch,
+                });
+              }
+            } else if (token.logicalName === 'backspace') {
+              const newQuery = this.searchManager.query.slice(0, -1);
+              this.searchManager.search(newQuery, history);
+              this.bus.emit('search:update', {
+                query: this.searchManager.query,
+                matchCount: this.searchManager.matches.length,
+                currentMatch: this.searchManager.currentMatch,
+              });
+            } else if (token.logicalName === 'f' && token.ctrl) {
+              this.searchManager.close();
+              this.bus.emit('search:end');
+            }
+          }
+        } else {
+          // --- Navigation phase: locked query, navigate matches ---
+          if (token.type === 'key') {
+            if (token.logicalName === 'escape' || (token.logicalName === 'f' && token.ctrl)) {
+              this.searchManager.close();
+              this.bus.emit('search:end');
+            } else if (token.logicalName === 'right' || token.logicalName === 'down') {
+              this.searchManager.nextMatch();
               const matchLine = this.searchManager.getCurrentMatchLine();
               if (matchLine >= 0) {
                 this.scroll(matchLine - this.getScrollTop() - Math.floor(this.getViewportHeight() / 2));
               }
-            }
-            this.bus.emit('search:update', {
-              query: this.searchManager.query,
-              matchCount: this.searchManager.matches.length,
-              currentMatch: this.searchManager.currentMatch,
-            });
-          } else if ((token.logicalName === 'n' && token.shift) || token.logicalName === 'N') {
-            this.searchManager.prevMatch();
-            {
+              this.bus.emit('search:update', {
+                query: this.searchManager.query,
+                matchCount: this.searchManager.matches.length,
+                currentMatch: this.searchManager.currentMatch,
+              });
+            } else if (token.logicalName === 'left' || token.logicalName === 'up') {
+              this.searchManager.prevMatch();
               const matchLine = this.searchManager.getCurrentMatchLine();
               if (matchLine >= 0) {
                 this.scroll(matchLine - this.getScrollTop() - Math.floor(this.getViewportHeight() / 2));
               }
+              this.bus.emit('search:update', {
+                query: this.searchManager.query,
+                matchCount: this.searchManager.matches.length,
+                currentMatch: this.searchManager.currentMatch,
+              });
+            } else if (token.logicalName === 'backspace') {
+              // Unlock — go back to typing mode
+              this.searchManager.unlock();
             }
-            this.bus.emit('search:update', {
-              query: this.searchManager.query,
-              matchCount: this.searchManager.matches.length,
-              currentMatch: this.searchManager.currentMatch,
-            });
-          } else if (token.logicalName === 'f' && token.ctrl) {
-            this.searchManager.close();
-            this.bus.emit('search:end');
+          } else if (token.type === 'text') {
+            // . for next, , for previous
+            if (token.value === '.') {
+              this.searchManager.nextMatch();
+              const matchLine = this.searchManager.getCurrentMatchLine();
+              if (matchLine >= 0) {
+                this.scroll(matchLine - this.getScrollTop() - Math.floor(this.getViewportHeight() / 2));
+              }
+              this.bus.emit('search:update', {
+                query: this.searchManager.query,
+                matchCount: this.searchManager.matches.length,
+                currentMatch: this.searchManager.currentMatch,
+              });
+            } else if (token.value === ',') {
+              this.searchManager.prevMatch();
+              const matchLine = this.searchManager.getCurrentMatchLine();
+              if (matchLine >= 0) {
+                this.scroll(matchLine - this.getScrollTop() - Math.floor(this.getViewportHeight() / 2));
+              }
+              this.bus.emit('search:update', {
+                query: this.searchManager.query,
+                matchCount: this.searchManager.matches.length,
+                currentMatch: this.searchManager.currentMatch,
+              });
+            }
           }
         }
         this.bus.emit('render:request');
