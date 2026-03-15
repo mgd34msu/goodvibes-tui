@@ -1,0 +1,138 @@
+/**
+ * Per-language configuration for CodeIntelligence.
+ *
+ * Config is loaded from (in priority order, higher overrides lower):
+ *   1. .goodvibes/tui/languages/{langId}.json  (project-level)
+ *   2. ~/.goodvibes/tui/languages/{langId}.json (user-level)
+ *   3. Built-in defaults (this file)
+ */
+import { existsSync, readFileSync } from 'fs';
+import { join } from 'path';
+import { homedir } from 'os';
+import { logger } from '../utils/logger.ts';
+
+export interface LanguageConfig {
+  lsp?: {
+    command: string;
+    args: string[];
+    initializationOptions?: Record<string, unknown>;
+  };
+  /** Grammar ID passed to the tree-sitter service (usually the same as langId). */
+  treeSitter?: string;
+  formatter?: { command: string; args: string[] };
+  linter?: { command: string; args: string[] };
+}
+
+// ---------------------------------------------------------------------------
+// Default configurations
+// ---------------------------------------------------------------------------
+
+/**
+ * Built-in defaults for common languages.
+ * These are used when no user or project override exists.
+ */
+export function getDefaultConfigs(): Map<string, LanguageConfig> {
+  const defaults = new Map<string, LanguageConfig>();
+
+  defaults.set('typescript', {
+    lsp: { command: 'typescript-language-server', args: ['--stdio'] },
+    treeSitter: 'typescript',
+  });
+
+  defaults.set('javascript', {
+    lsp: { command: 'typescript-language-server', args: ['--stdio'] },
+    treeSitter: 'javascript',
+  });
+
+  defaults.set('python', {
+    lsp: { command: 'pyright-langserver', args: ['--stdio'] },
+    treeSitter: 'python',
+  });
+
+  defaults.set('rust', {
+    lsp: { command: 'rust-analyzer', args: [] },
+    treeSitter: 'rust',
+  });
+
+  defaults.set('go', {
+    lsp: { command: 'gopls', args: ['serve'] },
+    treeSitter: 'go',
+  });
+
+  defaults.set('bash', {
+    lsp: { command: 'bash-language-server', args: ['start'] },
+    treeSitter: 'bash',
+  });
+
+  return defaults;
+}
+
+// ---------------------------------------------------------------------------
+// Config loading
+// ---------------------------------------------------------------------------
+
+/**
+ * Read a JSON config file from disk, returning null on any error.
+ */
+function readConfigFile(filePath: string): LanguageConfig | null {
+  try {
+    if (!existsSync(filePath)) return null;
+    const raw = readFileSync(filePath, 'utf-8');
+    return JSON.parse(raw) as LanguageConfig;
+  } catch (err) {
+    logger.debug('config: failed to read language config', {
+      filePath,
+      error: String(err),
+    });
+    return null;
+  }
+}
+
+/**
+ * Load all language configs, merging defaults with user and project overrides.
+ * Project-level configs override user-level, which override defaults.
+ */
+export function loadLanguageConfigs(): Map<string, LanguageConfig> {
+  const result = getDefaultConfigs();
+
+  const userDir = join(homedir(), '.goodvibes', 'tui', 'languages');
+  const projectDir = join(process.cwd(), '.goodvibes', 'tui', 'languages');
+
+  // Collect all known language IDs (from defaults + scan would go here).
+  // For now we apply overrides only for IDs we already know about.
+  for (const [langId, defaultCfg] of result.entries()) {
+    // User-level override
+    const userCfg = readConfigFile(join(userDir, `${langId}.json`));
+    // Project-level override
+    const projectCfg = readConfigFile(join(projectDir, `${langId}.json`));
+
+    // Merge: defaults < user < project
+    const merged: LanguageConfig = {
+      ...defaultCfg,
+      ...(userCfg ?? {}),
+      ...(projectCfg ?? {}),
+    };
+    result.set(langId, merged);
+  }
+
+  return result;
+}
+
+// Module-level cache
+let _cached: Map<string, LanguageConfig> | null = null;
+
+/**
+ * Get config for a specific language ID.
+ * Loads and caches configs on first call.
+ */
+export function getLanguageConfig(langId: string): LanguageConfig | null {
+  if (!_cached) {
+    _cached = loadLanguageConfigs();
+  }
+  return _cached.get(langId) ?? null;
+}
+
+/** Reset the module-level cache (used in tests). */
+export function _resetConfigCache(): void {
+  _cached = null;
+}
