@@ -935,12 +935,16 @@ export class InputHandler {
             const selected = this.autocomplete?.getSelected();
             if (selected) {
               this.prompt = `/${selected.name} `;
+              this.cursorPos = this.prompt.length;
               this.autocomplete?.reset();
             }
             continue;
           }
           if (token.logicalName === 'backspace') {
-            this.prompt = this.prompt.slice(0, -1);
+            if (this.cursorPos > 0) {
+              this.prompt = this.prompt.slice(0, this.cursorPos - 1) + this.prompt.slice(this.cursorPos);
+              this.cursorPos--;
+            }
             if (this.prompt === '') {
               // Erased the '/' — exit command mode
               this.commandMode = false;
