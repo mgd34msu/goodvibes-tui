@@ -1,5 +1,14 @@
 import { logger } from './logger.ts';
 
+export const MIN_IMAGE_BYTES = 100;
+
+const IMAGE_MIME_TYPES: { mime: string; mediaType: string }[] = [
+  { mime: 'image/png', mediaType: 'image/png' },
+  { mime: 'image/jpeg', mediaType: 'image/jpeg' },
+  { mime: 'image/webp', mediaType: 'image/webp' },
+  { mime: 'image/gif', mediaType: 'image/gif' },
+];
+
 /**
  * copyToClipboard - Uses OSC 52 escape sequence to copy text.
  */
@@ -65,34 +74,38 @@ export function pasteFromClipboard(): string {
 export function pasteImageFromClipboard(): { data: string; mediaType: string } | null {
   try {
     if (process.platform === 'linux') {
-      // Try wl-paste for Wayland (image/png)
-      const wl = Bun.spawnSync(['wl-paste', '--type', 'image/png', '--no-newline'], {
-        stdin: 'ignore',
-        stdout: 'pipe',
-        stderr: 'ignore',
-        timeout: 3000,
-      });
-      if (wl.exitCode === 0 && wl.stdout) {
-        const wlBuf = Buffer.from(wl.stdout);
-        if (wlBuf.length > 100) {
-          return { data: wlBuf.toString('base64'), mediaType: 'image/png' };
+      // Try wl-paste (Wayland) for each supported MIME type
+      for (const { mime, mediaType } of IMAGE_MIME_TYPES) {
+        const wl = Bun.spawnSync(['wl-paste', '--type', mime, '--no-newline'], {
+          stdin: 'ignore',
+          stdout: 'pipe',
+          stderr: 'ignore',
+          timeout: 3000,
+        });
+        if (wl.exitCode === 0 && wl.stdout) {
+          const buf = Buffer.from(wl.stdout);
+          if (buf.length > MIN_IMAGE_BYTES) {
+            return { data: buf.toString('base64'), mediaType };
+          }
         }
       }
-      // Try xclip for X11
-      const xclip = Bun.spawnSync(['xclip', '-selection', 'clipboard', '-t', 'image/png', '-o'], {
-        stdin: 'ignore',
-        stdout: 'pipe',
-        stderr: 'ignore',
-        timeout: 3000,
-      });
-      if (xclip.exitCode === 0 && xclip.stdout) {
-        const xclipBuf = Buffer.from(xclip.stdout);
-        if (xclipBuf.length > 100) {
-          return { data: xclipBuf.toString('base64'), mediaType: 'image/png' };
+      // Try xclip (X11) for each supported MIME type
+      for (const { mime, mediaType } of IMAGE_MIME_TYPES) {
+        const xclip = Bun.spawnSync(['xclip', '-selection', 'clipboard', '-t', mime, '-o'], {
+          stdin: 'ignore',
+          stdout: 'pipe',
+          stderr: 'ignore',
+          timeout: 3000,
+        });
+        if (xclip.exitCode === 0 && xclip.stdout) {
+          const buf = Buffer.from(xclip.stdout);
+          if (buf.length > MIN_IMAGE_BYTES) {
+            return { data: buf.toString('base64'), mediaType };
+          }
         }
       }
     } else if (process.platform === 'darwin') {
-      // macOS: try pngpaste
+      // macOS: pngpaste always outputs PNG regardless of source format
       const pp = Bun.spawnSync(['pngpaste', '-'], {
         stdin: 'ignore',
         stdout: 'pipe',
@@ -101,13 +114,13 @@ export function pasteImageFromClipboard(): { data: string; mediaType: string } |
       });
       if (pp.exitCode === 0 && pp.stdout) {
         const ppBuf = Buffer.from(pp.stdout);
-        if (ppBuf.length > 100) {
+        if (ppBuf.length > MIN_IMAGE_BYTES) {
           return { data: ppBuf.toString('base64'), mediaType: 'image/png' };
         }
       }
     }
-  } catch {
-    // Clipboard image access failed — not a fatal error
+  } catch (err: unknown) {
+    logger.debug('Clipboard image access failed', { error: String(err) });
   }
   return null;
 }

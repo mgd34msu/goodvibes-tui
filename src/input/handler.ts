@@ -58,6 +58,18 @@ export class InputHandler {
     { prefix: 'R0lGOD', mediaType: 'image/gif' },
   ];
 
+  /** Data-driven binary image magic byte detection. */
+  private static readonly BINARY_IMAGE_MAGIC: {
+    magic: number[];
+    mediaType: string;
+    extraCheck?: (b: Buffer) => boolean;
+  }[] = [
+    { magic: [0x89, 0x50, 0x4E, 0x47], mediaType: 'image/png' },
+    { magic: [0xFF, 0xD8, 0xFF], mediaType: 'image/jpeg' },
+    { magic: [0x52, 0x49, 0x46, 0x46], mediaType: 'image/webp', extraCheck: (b: Buffer) => b.length > 11 && b[8] === 0x57 && b[9] === 0x45 && b[10] === 0x42 && b[11] === 0x50 },
+    { magic: [0x47, 0x49, 0x46], mediaType: 'image/gif' },
+  ];
+
   /** Image file extensions handled as image attachments. */
   private static readonly IMAGE_EXTENSIONS = ['.png', '.jpg', '.jpeg', '.webp', '.gif'];
 
@@ -122,6 +134,20 @@ export class InputHandler {
    * Detects base64 image data (PNG, JPEG, WebP, GIF), image file paths, and text pastes.
    */
   public registerPaste(content: string): string {
+    // Detect raw binary image data (pasted from clipboard as binary)
+    const bytes = Buffer.from(content, 'binary');
+    if (bytes.length > 100) {
+      for (const { magic, mediaType, extraCheck } of InputHandler.BINARY_IMAGE_MAGIC) {
+        if (magic.every((b, i) => bytes[i] === b) && (!extraCheck || extraCheck(bytes))) {
+          const id = `img${this.nextImageId++}`;
+          const base64 = bytes.toString('base64');
+          const sizeKB = Math.round(bytes.length / 1024);
+          this.imageRegistry.set(id, { data: base64, mediaType });
+          return `[IMAGE: ${id}, clipboard, ${sizeKB}KB]`;
+        }
+      }
+    }
+
     // Detect base64-encoded image data (data-driven prefix check)
     const trimmed = content.trim();
     if (trimmed.length > 100) {
@@ -615,6 +641,11 @@ export class InputHandler {
           }
           continue;
         }
+        // Ctrl+V: paste (image first, then text)
+        if (token.logicalName === 'v' && token.ctrl) {
+          this.handlePaste();
+          continue;
+        }
         // PageUp: scroll by viewport page
         if (token.logicalName === 'pageup') {
           this.scroll(-Math.max(1, vHeight - 2));
@@ -830,26 +861,7 @@ export class InputHandler {
         else if (token.button === 65) this.scroll(3);
 
         if (token.button === 1 && token.action === 'press') {
-          const raw = pasteFromClipboard();
-          if (raw) {
-            const text = this.registerPaste(raw);
-            this.prompt = this.prompt.slice(0, this.cursorPos) + text + this.prompt.slice(this.cursorPos);
-            this.cursorPos += text.length;
-            this.ensureInputCursorVisible();
-          } else {
-            // No text in clipboard — try image clipboard
-            const img = pasteImageFromClipboard();
-            if (img) {
-              const id = `img${this.nextImageId++}`;
-              const sizeBytes = Math.round(img.data.length * 3 / 4);
-              this.imageRegistry.set(id, img);
-              const marker = `[IMAGE: clipboard, ${InputHandler.formatFileSize(sizeBytes)}]`;
-              this.prompt = this.prompt.slice(0, this.cursorPos) + marker + this.prompt.slice(this.cursorPos);
-              this.cursorPos += marker.length;
-              this.ensureInputCursorVisible();
-            }
-          }
-          this.bus.emit('render:request');
+          this.handlePaste();
           continue;
         }
 
@@ -863,6 +875,31 @@ export class InputHandler {
         }
       }
     }
+    this.bus.emit('render:request');
+  }
+
+  /**
+   * handlePaste - Shared paste logic for Ctrl+V and middle-click.
+   * Tries image clipboard first, falls back to text paste.
+   */
+  private handlePaste(): void {
+    const img = pasteImageFromClipboard();
+    if (img) {
+      const id = `img${this.nextImageId++}`;
+      const sizeKB = Math.round(img.data.length * 3 / 4 / 1024);
+      this.imageRegistry.set(id, img);
+      const marker = `[IMAGE: ${id}, clipboard, ${sizeKB}KB]`;
+      this.prompt = this.prompt.slice(0, this.cursorPos) + marker + this.prompt.slice(this.cursorPos);
+      this.cursorPos += marker.length;
+    } else {
+      const raw = pasteFromClipboard();
+      if (raw) {
+        const text = this.registerPaste(raw);
+        this.prompt = this.prompt.slice(0, this.cursorPos) + text + this.prompt.slice(this.cursorPos);
+        this.cursorPos += text.length;
+      }
+    }
+    this.ensureInputCursorVisible();
     this.bus.emit('render:request');
   }
 
