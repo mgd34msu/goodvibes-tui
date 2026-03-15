@@ -143,6 +143,9 @@ export function registerBuiltinCommands(registry: CommandRegistry): void {
         '  Ctrl+B            Bookmark/unbookmark nearest block',
         '  Ctrl+S            Save nearest block content to file',
         '  Ctrl+V            Paste (image or text)',
+        '  Ctrl+F            Search conversation output',
+        '  Ctrl+Z            Undo last prompt edit',
+        '  Ctrl+Shift+Z      Redo prompt edit',
       ];
       ctx.print(lines.join('\n'));
     },
