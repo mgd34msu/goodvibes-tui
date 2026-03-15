@@ -83,6 +83,9 @@ export function registerBuiltinCommands(registry: CommandRegistry): void {
         '    /save [name]      Save current session to .goodvibes/tui/sessions/',
         '    /load <name>      Load a saved session',
         '    /sessions         List saved sessions',
+        '    /undo             Remove the last user+assistant turn',
+        '    /redo             Restore the last undone turn',
+        '    /retry [text]     Re-send the last user message (optionally modified)',
         '',
         '  Tools & System:',
         '    /tools            List available tools',
@@ -532,6 +535,59 @@ export function registerBuiltinCommands(registry: CommandRegistry): void {
       } catch (e) {
         ctx.print(`Failed to load session: ${(e as Error).message}`);
       }
+    },
+  });
+
+  // ── /undo ──────────────────────────────────────────────
+  registry.register({
+    name: 'undo',
+    aliases: ['u'],
+    description: 'Remove the last user+assistant turn',
+    handler(_args, ctx) {
+      const success = ctx.conversationManager.undo();
+      if (success) {
+        ctx.print('Last turn undone. Use /redo to restore.');
+        ctx.renderRequest();
+      } else {
+        ctx.print('Nothing to undo.');
+      }
+    },
+  });
+
+  // ── /redo ──────────────────────────────────────────────
+  registry.register({
+    name: 'redo',
+    aliases: [],
+    description: 'Restore the last undone turn',
+    handler(_args, ctx) {
+      const success = ctx.conversationManager.redo();
+      if (success) {
+        ctx.print('Turn restored.');
+        ctx.renderRequest();
+      } else {
+        ctx.print('Nothing to redo.');
+      }
+    },
+  });
+
+  // ── /retry ─────────────────────────────────────────────
+  registry.register({
+    name: 'retry',
+    aliases: ['r'],
+    description: 'Re-send the last user message',
+    usage: '[modified text]',
+    handler(args, ctx) {
+      const lastMsg = ctx.conversationManager.getLastUserMessage();
+      if (!lastMsg) {
+        ctx.print('No message to retry.');
+        return;
+      }
+      // Remove the last turn (user + response)
+      ctx.conversationManager.undo();
+      // Use modified text if provided, otherwise original
+      const retryText = args.length > 0 ? args.join(' ') : lastMsg;
+      // Submit as new input
+      ctx.eventBus.emit('input:submit', { text: retryText });
     },
   });
 

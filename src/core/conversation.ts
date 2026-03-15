@@ -69,6 +69,8 @@ export class ConversationManager {
   private blockRegistry: BlockMeta[] = [];
   /** Streaming block start line in history buffer (for incremental streaming update). */
   private streamingStartLine = -1;
+  /** Undo stack: each entry is a turn (user msg + all subsequent non-user msgs until next user). */
+  private undoStack: Message[][] = [];
 
   constructor(
     getWidth: () => number = () => process.stdout.columns || 80,
@@ -115,6 +117,8 @@ export class ConversationManager {
       }
     }
     this.messages.push({ role: 'user', content });
+    // Clear undo stack when new user input is added (can't redo past new input)
+    this.undoStack = [];
     this.markDirty();
   }
 
@@ -133,6 +137,55 @@ export class ConversationManager {
       this.messages.push({ role: 'tool', callId: r.callId, content });
     }
     this.markDirty();
+  }
+
+  /**
+   * undo - Remove the last complete turn (the last user message and all subsequent
+   * non-user messages). Pushes the removed messages onto the undo stack.
+   * Returns true if a turn was removed, false if there was nothing to undo.
+   */
+  public undo(): boolean {
+    // Find the index of the last user message
+    let lastUserIdx = -1;
+    for (let i = this.messages.length - 1; i >= 0; i--) {
+      if (this.messages[i].role === 'user') {
+        lastUserIdx = i;
+        break;
+      }
+    }
+    if (lastUserIdx === -1) return false;
+
+    // Collect the turn: user message + everything that follows (assistant, tool)
+    const turn = this.messages.splice(lastUserIdx);
+    this.undoStack.push(turn);
+    this.markDirty();
+    return true;
+  }
+
+  /**
+   * redo - Restore the most recently undone turn.
+   * Returns true if a turn was restored, false if the undo stack is empty.
+   */
+  public redo(): boolean {
+    if (this.undoStack.length === 0) return false;
+    const turn = this.undoStack.pop()!;
+    this.messages.push(...turn);
+    this.markDirty();
+    return true;
+  }
+
+  /**
+   * getLastUserMessage - Returns the content of the last user message, or null
+   * if there are no user messages or the content is not a plain string.
+   */
+  public getLastUserMessage(): string | null {
+    for (let i = this.messages.length - 1; i >= 0; i--) {
+      if (this.messages[i].role === 'user') {
+        const content = this.messages[i].content;
+        return typeof content === 'string' ? content : null;
+      }
+    }
+    return null;
   }
 
   /** Returns the current number of messages (for rollback tracking). */
@@ -510,6 +563,7 @@ export class ConversationManager {
   public resetAll(): void {
     this.messages = [];
     this.title = '';
+    this.undoStack = [];
     this.history.clear();
     this.appendedUpTo = 0;
     this.lastRenderedWidth = 0;
