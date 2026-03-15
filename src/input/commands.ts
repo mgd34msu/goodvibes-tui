@@ -112,7 +112,6 @@ export function registerBuiltinCommands(registry: CommandRegistry): void {
     description: 'Clear the conversation display (keeps LLM context)',
     handler(_args, ctx) {
       ctx.conversationManager.clearDisplay();
-      ctx.conversationManager.rebuildHistory();
       ctx.renderRequest();
     },
   });
@@ -305,11 +304,8 @@ export function registerBuiltinCommands(registry: CommandRegistry): void {
     aliases: ['t'],
     description: 'List available tools',
     handler(_args, ctx) {
-      const toolNames = [
-        'file-read', 'file-write', 'file-edit',
-        'shell-exec', 'grep', 'list-dir', 'glob',
-      ];
-      const lines = ['Available tools:', ...toolNames.map(n => `  • ${n}`)];
+      const tools = ctx.toolRegistry.list();
+      const lines = ['Available tools:', ...tools.map(t => `  • ${t.definition.name}`)];
       ctx.print(lines.join('\n'));
     },
   });

@@ -10,6 +10,7 @@ import { InputHistory } from './input-history.ts';
 import type { ConversationManager } from '../core/conversation.ts';
 import type { PermissionCategory } from '../permissions/manager.ts';
 import { readFileSync, writeFileSync } from 'node:fs';
+import { resolveAndValidatePath } from '../utils/path-safety.ts';
 
 /**
  * InputHandler - Owns prompt text, paste registry, and keyboard/mouse handling.
@@ -43,6 +44,9 @@ export class InputHandler {
   /** Pasted images: maps marker IDs to base64 image data. */
   private imageRegistry = new Map<string, { data: string; mediaType: string }>();
   private nextImageId = 1;
+
+  /** Regex matching atomic markers in the prompt. Used by findMarkerAtPos and expandPrompt. */
+  private static readonly MARKER_REGEX = /\[(TEXT|IMAGE): [^\]]+\]/g;
 
   constructor(
     private bus: EventBus,
@@ -90,37 +94,38 @@ export class InputHandler {
       // PNG base64 header
       const id = `img${this.nextImageId++}`;
       this.imageRegistry.set(id, { data: trimmed, mediaType: 'image/png' });
-      return `[IMAGE:${id} clipboard]`;
+      return `[IMAGE: clipboard]`;
     }
     if (trimmed.length > 100 && trimmed.startsWith('/9j/')) {
       // JPEG base64 header
       const id = `img${this.nextImageId++}`;
       this.imageRegistry.set(id, { data: trimmed, mediaType: 'image/jpeg' });
-      return `[IMAGE:${id} clipboard]`;
+      return `[IMAGE: clipboard]`;
     }
 
     const lines = content.split('\n');
     if (lines.length <= 8) return content;
     const id = `p${this.nextPasteId++}`;
     this.pasteRegistry.set(id, content);
-    return `[PASTE:${id} (${lines.length} lines)]`;
+    return `[TEXT: ${id}, ${lines.length} lines]`;
   }
 
   /**
    * expandPrompt - Replaces paste markers with actual content.
+   * Image markers are replaced with a human-readable description.
    */
   private expandPrompt(text: string): string {
-    const foundIds = new Set<string>();
-    const markerRegex = /\[PASTE:(p\d+) \(\d+ lines\)\]/g;
+    const foundPasteIds = new Set<string>();
+    const markerRegex = /\[TEXT: (p\d+), (\d+) lines\]/g;
 
-    const replacements: { marker: string; index: number; content: string; id: string }[] = [];
+    const replacements: { marker: string; index: number; content: string }[] = [];
     let match;
     while ((match = markerRegex.exec(text)) !== null) {
-      const id = match[1];
+      const id = match[1]; // e.g. 'p1'
       const content = this.pasteRegistry.get(id);
       if (content) {
-        replacements.push({ marker: match[0], index: match.index, content, id });
-        foundIds.add(id);
+        replacements.push({ marker: match[0], index: match.index, content });
+        foundPasteIds.add(id);
       }
     }
 
@@ -131,25 +136,45 @@ export class InputHandler {
     }
 
     for (const id of this.pasteRegistry.keys()) {
-      if (!foundIds.has(id)) {
+      if (!foundPasteIds.has(id)) {
         this.pasteRegistry.delete(id);
       }
     }
 
-    // Clean up stale image registry entries
-    const imageMarkerRegex = /\[IMAGE:(img\d+) clipboard\]/g;
-    const foundImageIds = new Set<string>();
-    let imageMatch;
-    while ((imageMatch = imageMarkerRegex.exec(expanded)) !== null) {
-      foundImageIds.add(imageMatch[1]);
-    }
-    for (const id of this.imageRegistry.keys()) {
-      if (!foundImageIds.has(id)) {
-        this.imageRegistry.delete(id);
-      }
+    // Replace image markers with descriptive text; keep registry entry
+    expanded = expanded.replace(/\[IMAGE: clipboard\]/g, '[Image: clipboard paste]');
+
+    // Clean up stale image registry entries (no markers remain)
+    if (!expanded.includes('[Image: clipboard paste]')) {
+      this.imageRegistry.clear();
     }
 
     return expanded;
+  }
+
+  /**
+   * getImageAttachments - Returns a copy of the current image registry.
+   * Callers can use this to attach images when building LLM messages.
+   */
+  public getImageAttachments(): Map<string, { data: string; mediaType: string }> {
+    return new Map(this.imageRegistry);
+  }
+
+  /**
+   * findMarkerAtPos - Returns the start/end of an atomic marker if pos is inside one.
+   * Used to make backspace/delete/arrow treat markers as single units.
+   */
+  private findMarkerAtPos(pos: number): { start: number; end: number } | null {
+    const markerRegex = new RegExp(InputHandler.MARKER_REGEX.source, 'g');
+    let m;
+    while ((m = markerRegex.exec(this.prompt)) !== null) {
+      const start = m.index;
+      const end = m.index + m[0].length;
+      if (pos > start && pos <= end) {
+        return { start, end };
+      }
+    }
+    return null;
   }
 
   private handleCopy(): void {
@@ -211,8 +236,15 @@ export class InputHandler {
       resolve: (approved: boolean) => {
         if (!approved) return;
         // Apply the diff using the imported fs functions
+        let resolvedPath: string;
         try {
-          const content = readFileSync(diff.filePath, 'utf-8');
+          resolvedPath = resolveAndValidatePath(diff.filePath);
+        } catch (err) {
+          cm.log(`[Diff apply failed: ${err instanceof Error ? err.message : err}]`, { fg: '#ef4444' });
+          return;
+        }
+        try {
+          const content = readFileSync(resolvedPath, 'utf-8');
           if (diff.original && content.includes(diff.original)) {
             // Count occurrences to prevent ambiguous replacement
             const occurrenceCount = content.split(diff.original).length - 1;
@@ -220,7 +252,7 @@ export class InputHandler {
               cm.log(`[Diff apply failed: pattern found ${occurrenceCount} times in ${diff.filePath} — ambiguous]`, { fg: '#ef4444' });
             } else {
               const newContent = content.replace(diff.original, diff.updated);
-              writeFileSync(diff.filePath, newContent, 'utf-8');
+              writeFileSync(resolvedPath, newContent, 'utf-8');
               cm.log(`[Applied diff to ${diff.filePath}]`, { fg: '#22c55e' });
             }
           } else {
@@ -563,23 +595,48 @@ export class InputHandler {
 
         if (token.logicalName === 'backspace') {
           if (this.cursorPos > 0) {
-            this.prompt = this.prompt.slice(0, this.cursorPos - 1) + this.prompt.slice(this.cursorPos);
-            this.cursorPos--;
+            const marker = this.findMarkerAtPos(this.cursorPos);
+            if (marker) {
+              // Delete entire atomic marker
+              this.prompt = this.prompt.slice(0, marker.start) + this.prompt.slice(marker.end);
+              this.cursorPos = marker.start;
+            } else {
+              this.prompt = this.prompt.slice(0, this.cursorPos - 1) + this.prompt.slice(this.cursorPos);
+              this.cursorPos--;
+            }
             this.ensureInputCursorVisible(this.contentWidth);
           }
         } else if (token.logicalName === 'delete') {
           if (this.cursorPos < this.prompt.length) {
-            this.prompt = this.prompt.slice(0, this.cursorPos) + this.prompt.slice(this.cursorPos + 1);
+            const marker = this.findMarkerAtPos(this.cursorPos + 1);
+            if (marker) {
+              // Delete entire atomic marker
+              this.prompt = this.prompt.slice(0, marker.start) + this.prompt.slice(marker.end);
+            } else {
+              this.prompt = this.prompt.slice(0, this.cursorPos) + this.prompt.slice(this.cursorPos + 1);
+            }
             this.ensureInputCursorVisible(this.contentWidth);
           }
         } else if (token.logicalName === 'left') {
           if (this.cursorPos > 0) {
-            this.cursorPos--;
+            const marker = this.findMarkerAtPos(this.cursorPos);
+            if (marker) {
+              // Skip to before the marker
+              this.cursorPos = marker.start;
+            } else {
+              this.cursorPos--;
+            }
             this.ensureInputCursorVisible(this.contentWidth);
           }
         } else if (token.logicalName === 'right') {
           if (this.cursorPos < this.prompt.length) {
-            this.cursorPos++;
+            const marker = this.findMarkerAtPos(this.cursorPos + 1);
+            if (marker) {
+              // Skip to after the marker
+              this.cursorPos = marker.end;
+            } else {
+              this.cursorPos++;
+            }
             this.ensureInputCursorVisible(this.contentWidth);
           }
         } else if (token.logicalName === 'home') {

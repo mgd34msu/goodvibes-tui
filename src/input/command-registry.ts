@@ -3,6 +3,7 @@ import type { ProviderRegistry } from '../providers/registry.ts';
 import type { ConversationManager } from '../core/conversation.ts';
 import type { AppConfig } from '../config/index.ts';
 import type { ConfigManager } from '../config/index.ts';
+import type { ToolRegistry } from '../tools/registry.ts';
 
 /**
  * CommandContext - Passed to every slash command handler so commands can
@@ -30,6 +31,8 @@ export interface CommandContext {
   exit: () => void;
   /** Reload system prompt from file (if configured). Returns new prompt string. */
   reloadSystemPrompt?: () => string;
+  /** Registry of all available tools. */
+  toolRegistry: ToolRegistry;
 }
 
 /**

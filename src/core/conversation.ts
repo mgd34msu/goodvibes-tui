@@ -40,6 +40,8 @@ export interface BlockMeta {
   lineCount: number;
   /** Raw text content (code source, tool output, diff text). */
   rawContent: string;
+  /** Stable key for collapse state persistence across rebuilds (e.g. msg_N). */
+  collapseKey: string;
   /** File path for diff blocks. */
   filePath?: string;
   /** Parsed diff for apply: original/updated sections. */
@@ -61,12 +63,12 @@ export class ConversationManager {
   private appendedUpTo = 0;
   /** Optional config manager for display settings. */
   private configManager: ConfigManager | null = null;
-  /** Collapse state: blockIndex -> collapsed (true = collapsed). */
-  private collapseState: Map<number, boolean> = new Map();
+  /** Collapse state: stable key (msg_N) -> collapsed (true = collapsed). */
+  private collapseState: Map<string, boolean> = new Map();
   /** Block registry: track rendered blocks for copy/apply. */
   private blockRegistry: BlockMeta[] = [];
-  /** Block counter, incremented each time a block is rendered. */
-  private blockCounter = 0;
+  /** Streaming block start line in history buffer (for incremental streaming update). */
+  private streamingStartLine = -1;
 
   constructor(
     getWidth: () => number = () => process.stdout.columns || 80,
@@ -165,17 +167,27 @@ export class ConversationManager {
   public startStreamingBlock(): void {
     this.messages.push({ role: 'assistant', content: '' });
     this.markDirty();
+    // Record the line where the streaming block starts so updates can be incremental
+    this.flushHistory();
+    this.streamingStartLine = this.history.getLineCount();
   }
 
   /**
    * updateStreamingBlock - Update the in-progress streaming block with accumulated content.
-   * Called per-delta during streaming.
+   * Called per-delta during streaming. Does NOT trigger a full rebuild — instead it
+   * directly updates the history buffer from streamingStartLine onward.
    */
   public updateStreamingBlock(content: string): void {
     for (let i = this.messages.length - 1; i >= 0; i--) {
       if (this.messages[i].role === 'assistant') {
         (this.messages[i] as { role: 'assistant'; content: string }).content = content;
-        this.markDirty();
+        // Incrementally update the history buffer instead of full rebuild
+        if (this.streamingStartLine >= 0) {
+          const width = this.getWidth();
+          this.history.truncateToLine(this.streamingStartLine);
+          const rendered = renderMarkdown(content, width);
+          this.history.addLines(rendered);
+        }
         return;
       }
     }
@@ -192,6 +204,7 @@ export class ConversationManager {
         break;
       }
     }
+    this.streamingStartLine = -1;
     this.markDirty();
   }
 
@@ -208,13 +221,15 @@ export class ConversationManager {
     this.history.clear();
     this.appendedUpTo = 0;
     this.blockRegistry = [];
-    this.blockCounter = 0;
     const width = this.getWidth();
     this.lastRenderedWidth = width;
     this.dirty = false;
 
+    // Tool messages ARE rendered (as collapsed blocks); this filter is only
+    // for determining whether to show the splash screen (tool-only messages
+    // don't count as visible conversation content for splash purposes).
     const displayMessages = this.messages.filter(
-      (m) => m.role !== 'tool', // Tool results are internal; not shown directly
+      (m) => m.role !== 'tool',
     );
 
     if (displayMessages.length === 0) {
@@ -244,7 +259,8 @@ export class ConversationManager {
     const showLineNumbers = this.configManager?.get('display.lineNumbers') ?? false;
     const collapseThreshold = this.configManager?.get('display.collapseThreshold') ?? 30;
 
-    for (const m of messages) {
+    for (let msgIdx = 0; msgIdx < messages.length; msgIdx++) {
+      const m = messages[msgIdx];
       if (m.role === 'user') {
         if (m.cancelled) {
           this.history.addLines(UIFactory.createMessageBar(width, m.content, '#3a1a1a', '196', ' × ', true));
@@ -284,7 +300,10 @@ export class ConversationManager {
         this.history.addLines(lines);
       } else if (m.role === 'tool') {
         // Collapsible tool result block
-        const blockIdx = this.blockCounter++;
+        // Use the message's index in this.messages as a stable collapse key
+        const msgIndex = this.messages.indexOf(m);
+        const collapseKey = `msg_${msgIndex >= 0 ? msgIndex : msgIdx}`;
+        const blockIdx = this.blockRegistry.length;
         const startLine = this.history.getLineCount();
         const contentLines = m.content.split('\n');
         const lineCount = contentLines.length;
@@ -294,13 +313,13 @@ export class ConversationManager {
         const blockType: 'diff' | 'tool' = isDiff ? 'diff' : 'tool';
 
         // Auto-collapse tool results by default (unless explicitly expanded)
-        const isCollapsed = this.collapseState.has(blockIdx)
-          ? this.collapseState.get(blockIdx)!
+        const isCollapsed = this.collapseState.has(collapseKey)
+          ? this.collapseState.get(collapseKey)!
           : lineCount > collapseThreshold;
 
         // Set default collapse state
-        if (!this.collapseState.has(blockIdx) && lineCount > collapseThreshold) {
-          this.collapseState.set(blockIdx, true);
+        if (!this.collapseState.has(collapseKey) && lineCount > collapseThreshold) {
+          this.collapseState.set(collapseKey, true);
         }
 
         if (isCollapsed) {
@@ -322,6 +341,7 @@ export class ConversationManager {
         const renderedLineCount = this.history.getLineCount() - startLine;
         let meta: BlockMeta = {
           blockIndex: blockIdx,
+          collapseKey,
           type: blockType,
           startLine,
           lineCount: renderedLineCount,
@@ -358,7 +378,9 @@ export class ConversationManager {
    * isCollapsed - Returns whether the block at blockIndex is collapsed.
    */
   public isCollapsed(blockIndex: number): boolean {
-    return this.collapseState.get(blockIndex) ?? false;
+    const block = this.blockRegistry[blockIndex];
+    if (!block) return false;
+    return this.collapseState.get(block.collapseKey) ?? false;
   }
 
   /**
@@ -390,8 +412,8 @@ export class ConversationManager {
   public toggleCollapseAtLine(lineIndex: number): number {
     const nearest = this.findNearestBlock(lineIndex);
     if (!nearest) return -1;
-    const current = this.collapseState.get(nearest.blockIndex) ?? false;
-    this.collapseState.set(nearest.blockIndex, !current);
+    const current = this.collapseState.get(nearest.collapseKey) ?? false;
+    this.collapseState.set(nearest.collapseKey, !current);
     this.markDirty();
     return nearest.blockIndex;
   }
@@ -477,7 +499,7 @@ export class ConversationManager {
     this.dirty = true;
     this.collapseState.clear();
     this.blockRegistry = [];
-    this.blockCounter = 0;
+    this.streamingStartLine = -1;
   }
 
   /**

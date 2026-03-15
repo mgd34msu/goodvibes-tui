@@ -40,6 +40,7 @@ export class Orchestrator {
     private scrollToEnd: (vHeight: number) => void,
     private toolRegistry: ToolRegistry,
     private permissionManager: PermissionManager,
+    private getSystemPrompt: () => string = () => '',
   ) {}
 
   /**
@@ -200,7 +201,7 @@ export class Orchestrator {
           model: model.id,
           messages: this.conversation.getMessagesForLLM(),
           tools: toolDefinitions.length > 0 ? toolDefinitions : undefined,
-          systemPrompt: config.systemPrompt,
+          systemPrompt: this.getSystemPrompt(),
           reasoningEffort: (() => {
             const configured = configManager.get('provider.reasoningEffort') as string | undefined;
             if (configured) return configured as 'instant' | 'low' | 'medium' | 'high';

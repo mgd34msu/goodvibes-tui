@@ -1,5 +1,5 @@
 import type { ToolDefinition, ToolCall } from '../types/tools.ts';
-import type { ProviderMessage } from './interface.ts';
+import type { ProviderMessage, ContentPart } from './interface.ts';
 
 // ---------------------------------------------------------------------------
 // OpenAI wire format
@@ -20,9 +20,13 @@ export interface OpenAIToolCall {
   function: { name: string; arguments: string };
 }
 
+export type OpenAIContentPart =
+  | { type: 'text'; text: string }
+  | { type: 'image_url'; image_url: { url: string } };
+
 export interface OpenAIMessage {
   role: 'system' | 'user' | 'assistant' | 'tool';
-  content: string | null;
+  content: string | OpenAIContentPart[] | null;
   tool_calls?: OpenAIToolCall[];
   tool_call_id?: string;
 }
@@ -61,7 +65,16 @@ export function toOpenAIMessages(
 
   for (const msg of messages) {
     if (msg.role === 'user') {
-      result.push({ role: 'user', content: msg.content });
+      if (Array.isArray(msg.content)) {
+        // ContentPart[] — convert to OpenAI multimodal parts
+        const parts: OpenAIContentPart[] = msg.content.map((part: ContentPart) => {
+          if (part.type === 'text') return { type: 'text', text: part.text };
+          return { type: 'image_url', image_url: { url: `data:${part.mediaType};base64,${part.data}` } };
+        });
+        result.push({ role: 'user', content: parts });
+      } else {
+        result.push({ role: 'user', content: msg.content });
+      }
     } else if (msg.role === 'assistant') {
       const m: OpenAIMessage = { role: 'assistant', content: msg.content || null };
       if (msg.toolCalls && msg.toolCalls.length > 0) {
@@ -96,6 +109,7 @@ export interface AnthropicTool {
 
 export type AnthropicContentBlock =
   | { type: 'text'; text: string }
+  | { type: 'image'; source: { type: 'base64'; media_type: 'image/png' | 'image/jpeg' | 'image/gif' | 'image/webp'; data: string } }
   | { type: 'tool_use'; id: string; name: string; input: Record<string, unknown> }
   | { type: 'tool_result'; tool_use_id: string; content: string };
 
@@ -149,7 +163,19 @@ export function toAnthropicMessages(messages: ProviderMessage[]): AnthropicMessa
   for (const msg of messages) {
     if (msg.role === 'user') {
       flushToolResults();
-      result.push({ role: 'user', content: msg.content });
+      if (Array.isArray(msg.content)) {
+        // ContentPart[] — convert to Anthropic content blocks
+        const blocks: AnthropicContentBlock[] = msg.content.map((part: ContentPart) => {
+          if (part.type === 'text') return { type: 'text' as const, text: part.text };
+          return {
+            type: 'image' as const,
+            source: { type: 'base64' as const, media_type: part.mediaType as 'image/png' | 'image/jpeg' | 'image/gif' | 'image/webp', data: part.data },
+          };
+        });
+        result.push({ role: 'user', content: blocks });
+      } else {
+        result.push({ role: 'user', content: msg.content });
+      }
     } else if (msg.role === 'assistant') {
       flushToolResults();
       if (msg.toolCalls && msg.toolCalls.length > 0) {
@@ -187,6 +213,7 @@ export interface GeminiFunctionDeclaration {
 
 export interface GeminiPart {
   text?: string;
+  inlineData?: { mimeType: string; data: string };
   functionCall?: { name: string; args: Record<string, unknown> };
   functionResponse?: { name: string; response: { content: string } };
 }
@@ -252,7 +279,16 @@ export function toGeminiContents(
   for (const msg of messages) {
     if (msg.role === 'user') {
       flushFunctionResponses();
-      contents.push({ role: 'user', parts: [{ text: msg.content }] });
+      if (Array.isArray(msg.content)) {
+        // ContentPart[] — convert to Gemini parts
+        const parts: GeminiPart[] = msg.content.map((part: ContentPart) => {
+          if (part.type === 'text') return { text: part.text };
+          return { inlineData: { mimeType: part.mediaType, data: part.data } };
+        });
+        contents.push({ role: 'user', parts });
+      } else {
+        contents.push({ role: 'user', parts: [{ text: msg.content }] });
+      }
     } else if (msg.role === 'assistant') {
       flushFunctionResponses();
       const parts: GeminiPart[] = [];
