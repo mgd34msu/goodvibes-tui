@@ -28,6 +28,8 @@ export interface CommandContext {
   print: (text: string) => void;
   /** Exit the application cleanly. */
   exit: () => void;
+  /** Reload system prompt from file (if configured). Returns new prompt string. */
+  reloadSystemPrompt?: () => string;
 }
 
 /**

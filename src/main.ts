@@ -26,6 +26,34 @@ import { CommandRegistry } from './input/command-registry.ts';
 import { renderFilePickerOverlay } from './renderer/file-picker-overlay.ts';
 import { registerBuiltinCommands } from './input/commands.ts';
 import { InputHistory } from './input/input-history.ts';
+import { logger } from './utils/logger.ts';
+
+/** Load system prompt from CLI arg, config, or auto-detected file. */
+function loadSystemPromptFile(): string {
+  // 1. CLI arg
+  const argIdx = process.argv.indexOf('--system-prompt-file');
+  if (argIdx !== -1 && process.argv[argIdx + 1]) {
+    const p = process.argv[argIdx + 1];
+    try { return readFileSync(p, 'utf-8'); } catch (err) {
+      console.error(`Warning: --system-prompt-file '${p}' could not be read: ${err instanceof Error ? err.message : err}`);
+    }
+  }
+  // 2. Config
+  const configPath = configManager.get('provider.systemPromptFile');
+  if (typeof configPath === 'string' && configPath) {
+    try { return readFileSync(configPath, 'utf-8'); } catch (err) {
+      logger.debug('Could not read system prompt from config path', { path: configPath, error: String(err) });
+    }
+  }
+  // 3. Auto-detect
+  const autoPath = join(process.cwd(), '.goodvibes', 'system-prompt.md');
+  if (existsSync(autoPath)) {
+    try { return readFileSync(autoPath, 'utf-8'); } catch (err) {
+      logger.debug('Could not read auto-detected system prompt', { path: autoPath, error: String(err) });
+    }
+  }
+  return '';
+}
 
 const ALT_SCREEN_ENTER = '\x1b[?1049h';
 const ALT_SCREEN_EXIT  = '\x1b[?1049l';
@@ -82,7 +110,7 @@ async function main() {
     model: configManager.get('provider.model'),
     provider: configManager.get('provider.provider'),
     debugMode: false,
-    systemPrompt: config.systemPrompt ?? '',
+    systemPrompt: loadSystemPromptFile() || config.systemPrompt || '',
     reasoningEffort: configManager.get('provider.reasoningEffort'),
   };
 
@@ -170,6 +198,7 @@ async function main() {
       bus.emit('render:request');
     },
     exit: exitApp,
+    reloadSystemPrompt: loadSystemPromptFile,
   };
 
   input.setCommandRegistry(commandRegistry, commandContext);
@@ -246,7 +275,7 @@ async function main() {
 
     compositor.composite({
       width, height,
-      header: UIFactory.createHeader(width, runtime.model, runtime.provider),
+      header: UIFactory.createHeader(width, runtime.model, runtime.provider, conversation.title || undefined),
       viewport,
       footer: (() => {
         const cw = getPromptContentWidth();

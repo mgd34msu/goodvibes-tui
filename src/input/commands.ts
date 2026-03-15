@@ -2,6 +2,18 @@ import type { CommandRegistry, CommandContext } from './command-registry.ts';
 import type { ConfigKey } from '../config/index.ts';
 import { CONFIG_SCHEMA } from '../config/index.ts';
 import { REASONING_BUDGET_MAP } from '../providers/interface.ts';
+import { join } from 'path';
+
+/** Exportable conversation shape returned by ConversationManager.toJSON(). */
+interface ExportableConversation {
+  messages: Array<{
+    role: string;
+    content: string;
+    toolCalls?: Array<{ name: string; arguments: unknown }>;
+    callId?: string;
+    toolName?: string;
+  }>;
+}
 
 /**
  * registerBuiltinCommands - Register all built-in slash commands into the registry.
@@ -65,6 +77,8 @@ export function registerBuiltinCommands(registry: CommandRegistry): void {
         '    /clear            Clear display (keep context)',
         '    /reset            Clear display + context',
         '    /compact          Summarize conversation to free context',
+        '    /export [file]    Export conversation as markdown',
+        '    /title [text]     Show or set conversation title',
         '',
         '  Tools & System:',
         '    /tools            List available tools',
@@ -98,6 +112,7 @@ export function registerBuiltinCommands(registry: CommandRegistry): void {
     description: 'Clear the conversation display (keeps LLM context)',
     handler(_args, ctx) {
       ctx.conversationManager.clearDisplay();
+      ctx.conversationManager.rebuildHistory();
       ctx.renderRequest();
     },
   });
@@ -109,7 +124,12 @@ export function registerBuiltinCommands(registry: CommandRegistry): void {
     description: 'Full reset: clear display and conversation context',
     handler(_args, ctx) {
       ctx.conversationManager.resetAll();
-      ctx.print('Conversation reset.');
+      // Reload system prompt from file on reset
+      if (ctx.reloadSystemPrompt) {
+        ctx.runtime.systemPrompt = ctx.reloadSystemPrompt();
+      }
+      ctx.conversationManager.rebuildHistory();
+      ctx.renderRequest();
     },
   });
 
@@ -399,6 +419,65 @@ export function registerBuiltinCommands(registry: CommandRegistry): void {
       ctx.configManager.set('display.lineNumbers', !current);
       ctx.print(`Line numbers: ${!current ? 'ON' : 'OFF'}`);
       ctx.renderRequest();
+    },
+  });
+
+  // ── /export ───────────────────────────────────────────
+  registry.register({
+    name: 'export',
+    aliases: [],
+    description: 'Export conversation as markdown',
+    usage: '[filename.md]',
+    async handler(args, ctx) {
+      const messages = ctx.conversationManager.toJSON() as ExportableConversation;
+      const lines: string[] = [];
+
+      for (const msg of messages.messages) {
+        if (msg.role === 'user') {
+          lines.push(`## User\n\n${msg.content}\n`);
+        } else if (msg.role === 'assistant') {
+          lines.push(`## Assistant\n\n${msg.content}\n`);
+          if (msg.toolCalls && msg.toolCalls.length > 0) {
+            for (const tc of msg.toolCalls) {
+              lines.push(`### Tool Call: ${tc.name}\n\n\`\`\`json\n${JSON.stringify(tc.arguments, null, 2)}\n\`\`\`\n`);
+            }
+          }
+        } else if (msg.role === 'tool') {
+          const name = msg.toolName ?? msg.callId ?? 'tool';
+          lines.push(`## Tool: ${name}\n\n\`\`\`\n${msg.content}\n\`\`\`\n`);
+        } else if (msg.role === 'system') {
+          lines.push(`## System\n\n${msg.content}\n`);
+        }
+      }
+
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+      const filename = args[0] ?? `goodvibes-export-${timestamp}.md`;
+      const filepath = join(process.cwd(), filename);
+      try {
+        const { writeFile } = await import('fs/promises');
+        await writeFile(filepath, lines.join('\n'), 'utf-8');
+        ctx.print(`Conversation exported to: ${filepath}`);
+      } catch (e) {
+        ctx.print(`Export failed: ${(e as Error).message}`);
+      }
+    },
+  });
+
+  // ── /title ────────────────────────────────────────────
+  registry.register({
+    name: 'title',
+    aliases: [],
+    description: 'Show or set the conversation title',
+    usage: '[text]',
+    handler(args, ctx) {
+      if (args.length === 0) {
+        const current = ctx.conversationManager.title;
+        ctx.print(current ? `Conversation title: ${current}` : 'No title set.');
+      } else {
+        ctx.conversationManager.title = args.join(' ');
+        ctx.print(`Title set to: ${ctx.conversationManager.title}`);
+        ctx.renderRequest();
+      }
     },
   });
 }
