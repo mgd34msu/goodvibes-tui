@@ -12,6 +12,8 @@ export interface SearchMatch {
  */
 export class SearchManager {
   public active = false;
+  /** When true, the query is locked and arrow/comma/period navigate matches. */
+  public locked = false;
   public query = '';
   public matches: SearchMatch[] = [];
   public currentMatch = 0;
@@ -19,14 +21,26 @@ export class SearchManager {
   /** Open search mode. */
   open(): void {
     this.active = true;
+    this.locked = false;
     this.query = '';
     this.matches = [];
     this.currentMatch = 0;
   }
 
+  /** Lock the query — switches from typing mode to navigation mode. */
+  lock(): void {
+    this.locked = true;
+  }
+
+  /** Unlock — return to typing mode. */
+  unlock(): void {
+    this.locked = false;
+  }
+
   /** Close search mode. */
   close(): void {
     this.active = false;
+    this.locked = false;
   }
 
   /** Update query and find matches in the history buffer. */

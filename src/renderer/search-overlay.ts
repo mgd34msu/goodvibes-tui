@@ -17,10 +17,13 @@ export function renderSearchOverlay(
       ? '[no matches]'
       : '';
 
-  const cursor = '\u2588'; // block cursor
+  const locked = manager.locked;
+  const cursor = locked ? '' : '\u2588'; // block cursor only when typing
   const queryDisplay = manager.query + cursor;
-  const hints = '  [n] next  [N] prev  [Esc] close';
-  const label = ' Find: ';
+  const hints = locked
+    ? '  [\u2190\u2192] or [,/.] navigate  [Bksp] edit  [Esc] close'
+    : '  [Enter/Tab] lock  [Esc] close';
+  const label = locked ? ' Find: ' : ' Find: ';
   const matchStr = matchInfo ? ` ${matchInfo}` : '';
 
   const contentPart = label + queryDisplay + matchStr;
