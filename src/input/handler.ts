@@ -935,9 +935,9 @@ export class InputHandler {
           this.handleEscape();
           continue;
         }
-        // Ctrl+L: clear screen (re-render)
+        // Ctrl+L: clear screen (full repaint)
         if (token.logicalName === 'l' && token.ctrl) {
-          this.bus.emit('render:request');
+          this.bus.emit('clear:screen');
           continue;
         }
         // Ctrl+F: toggle search mode

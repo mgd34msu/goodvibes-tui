@@ -404,6 +404,11 @@ async function main() {
 
   // --- Event wiring ---
   bus.on('render:request', render);
+  bus.on('clear:screen', () => {
+    compositor.resetDiff();
+    stdout.write(CLEAR_SCREEN);
+    render();
+  });
   bus.on('input:submit', ({ text, content }) => {
     scrollLocked = true; // Re-lock on any user input
     orchestrator.handleUserInput(text, content);
