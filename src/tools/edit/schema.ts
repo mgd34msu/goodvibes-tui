@@ -1,0 +1,137 @@
+/** JSON Schema definition for the edit tool input. */
+export const editSchema = {
+  type: 'object',
+  required: ['edits'],
+  properties: {
+    edits: {
+      type: 'array',
+      minItems: 1,
+      items: {
+        type: 'object',
+        required: ['path', 'find', 'replace'],
+        properties: {
+          path: {
+            type: 'string',
+            description: 'File path to edit (relative to project root or absolute within it)',
+          },
+          find: {
+            type: 'string',
+            description: 'Text to find in the file',
+          },
+          find_base64: {
+            type: 'string',
+            description: 'Base64-encoded text to find (alternative to find for binary-safe transport)',
+          },
+          replace: {
+            type: 'string',
+            description: 'Replacement text',
+          },
+          replace_base64: {
+            type: 'string',
+            description: 'Base64-encoded replacement text (alternative to replace for binary-safe transport)',
+          },
+          id: {
+            type: 'string',
+            description: 'Optional identifier for this edit, used in result tracking',
+          },
+          occurrence: {
+            oneOf: [
+              {
+                type: 'string',
+                enum: ['first', 'last', 'all'],
+                description: 'Which occurrence to replace: first, last, or all',
+              },
+              {
+                type: 'integer',
+                minimum: 1,
+                description: 'Replace the Nth occurrence (1-based)',
+              },
+            ],
+            description:
+              'Which occurrence to replace. Default: error if 0 or 2+ matches (ambiguity guard). ' +
+              'Set to first/last/all/N to override.',
+          },
+          hints: {
+            type: 'object',
+            properties: {
+              near_line: {
+                type: 'integer',
+                minimum: 1,
+                description: 'Prefer the occurrence closest to this line number',
+              },
+              in_function: {
+                type: 'string',
+                description: 'Only match within a function with this name',
+              },
+              in_class: {
+                type: 'string',
+                description: 'Only match within a class with this name',
+              },
+            },
+            additionalProperties: false,
+          },
+        },
+        additionalProperties: false,
+      },
+    },
+    match: {
+      type: 'object',
+      properties: {
+        mode: {
+          type: 'string',
+          enum: ['exact', 'fuzzy', 'regex'],
+          description: 'Match mode. exact: literal string match. fuzzy: whitespace-insensitive. regex: treat find as regex.',
+          default: 'exact',
+        },
+        case_sensitive: {
+          type: 'boolean',
+          description: 'Whether matching is case-sensitive. Default: true.',
+          default: true,
+        },
+        whitespace_sensitive: {
+          type: 'boolean',
+          description: 'Whether whitespace differences matter. When false in exact mode, delegates to fuzzy matching algorithm. Default: true.',
+          default: true,
+        },
+      },
+      additionalProperties: false,
+    },
+    transaction: {
+      type: 'object',
+      properties: {
+        mode: {
+          type: 'string',
+          enum: ['atomic', 'partial', 'none'],
+          description:
+            'atomic: all edits succeed or all fail (default). ' +
+            'partial: apply succeeding edits, skip failures. ' +
+            'none: apply each edit independently with no rollback.',
+          default: 'atomic',
+        },
+      },
+      additionalProperties: false,
+    },
+    output: {
+      type: 'object',
+      properties: {
+        format: {
+          type: 'string',
+          enum: ['count_only', 'minimal', 'with_diff', 'verbose'],
+          description:
+            'count_only: only total edits applied. ' +
+            'minimal: per-edit success/failure summary (default). ' +
+            'with_diff: include unified diff per edit. ' +
+            'verbose: full detail including pre/post content.',
+          default: 'minimal',
+        },
+      },
+      additionalProperties: false,
+    },
+    dry_run: {
+      type: 'boolean',
+      description: 'Compute all replacements and return diffs without writing to disk. Default: false.',
+      default: false,
+    },
+  },
+  additionalProperties: false,
+} as const;
