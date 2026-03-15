@@ -25,7 +25,8 @@ export function renderSelectionModalOverlay(
 
   // ── Search input (always shown when allowSearch is true) ───────────────────
   if (modal.allowSearch) {
-    const queryDisplay = modal.query;
+    const queryRaw = modal.query;
+    const queryDisplay = queryRaw.length > contentW - 3 ? queryRaw.slice(0, contentW - 4) + '\u2026' : queryRaw;
     const searchLine = pad + '\u2502 \u2315 ' + queryDisplay + '\u2588' +
       ' '.repeat(Math.max(0, contentW - queryDisplay.length - 3)) + '\u2502';
     lines.push(UIFactory.stringToLine(searchLine, width, { fg: '252' }));
@@ -107,10 +108,16 @@ export function renderSelectionModalOverlay(
 
     // Scroll indicator if truncated
     if (items.length > maxVisible) {
-      const remaining = items.length - endIdx;
-      const scrollHint = remaining > 0
-        ? `  ... ${remaining} more below`
-        : `  (${startIdx} above)`;
+      const above = startIdx;
+      const below = items.length - endIdx;
+      let scrollHint: string;
+      if (above > 0 && below > 0) {
+        scrollHint = `  (${above} above, ${below} below)`;
+      } else if (below > 0) {
+        scrollHint = `  (${below} below)`;
+      } else {
+        scrollHint = `  (${above} above)`;
+      }
       const hintLine = pad + '\u2502 ' + scrollHint.padEnd(contentW) + ' \u2502';
       lines.push(UIFactory.stringToLine(hintLine, width, { fg: '240', dim: true }));
     }
