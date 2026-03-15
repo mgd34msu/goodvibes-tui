@@ -80,6 +80,7 @@ export function registerBuiltinCommands(registry: CommandRegistry): void {
         '',
         '  Config & Display:',
         '    /config [key] [value]   Show or set config values',
+        '    /config diff            Show settings that differ from defaults',
         '    /config reset [key]     Reset config key or all to defaults',
         '    /config profile save <name>   Save TUI settings as a profile',
         '    /config profile load <name>   Load a saved profile',
@@ -295,6 +296,25 @@ export function registerBuiltinCommands(registry: CommandRegistry): void {
         }
 
         ctx.print(`Unknown profile subcommand: ${sub}\nUsage: /config profile save|load|list|delete <name>`);
+        return;
+      }
+
+      // /config diff — show settings that differ from defaults
+      if (args[0] === 'diff') {
+        const diffs: string[] = [];
+        for (const setting of CONFIG_SCHEMA) {
+          const currentVal = cm.get(setting.key as ConfigKey);
+          const defaultVal = setting.default;
+          // JSON.stringify comparison is safe here: all config values are primitives (boolean, number, string)
+          if (JSON.stringify(currentVal) !== JSON.stringify(defaultVal)) {
+            diffs.push(`  ${setting.key.padEnd(36)} ${String(defaultVal)} → ${String(currentVal)}`);
+          }
+        }
+        if (diffs.length === 0) {
+          ctx.print('All settings at defaults.');
+        } else {
+          ctx.print(['Settings changed from defaults:', ...diffs].join('\n'));
+        }
         return;
       }
 

@@ -290,11 +290,12 @@ export class UIFactory {
   private static readonly THINK_GRADIENT_START = '#00ffff';
   private static readonly THINK_GRADIENT_END = '#d000ff';
 
-  public static createThinkingFragment(width: number, spinner: string, frame: number = 0): Line[] {
+  public static createThinkingFragment(width: number, spinner: string, frame: number = 0, tokenSpeed?: number, toolPreview?: string): Line[] {
     // Rotate phrase every ~3 seconds (frame ticks at 80ms, so ~37 frames)
     const phraseIndex = Math.floor(frame / 37) % this.THINKING_PHRASES.length;
     const phrase = this.THINKING_PHRASES[phraseIndex];
-    const text = `  ${spinner} ${phrase} `;
+    const speedSuffix = (tokenSpeed !== undefined && tokenSpeed > 0) ? ` (${Math.round(tokenSpeed)} tok/s)` : '';
+    const text = `  ${spinner} ${phrase}${speedSuffix} `;
 
     // Build line with animated gradient
     const line = createEmptyLine(width);
@@ -311,11 +312,27 @@ export class UIFactory {
       col++;
     }
 
-    return [
+    const lines: Line[] = [
       this.stringToLine(' '.repeat(width), width),
       line,
-      this.stringToLine(' '.repeat(width), width),
     ];
+
+    if (toolPreview) {
+      // Build the tool preview line with display-width-aware truncation
+      const previewText = `  🔧 ${toolPreview}`;
+      let truncated = '';
+      let w = 0;
+      for (const ch of previewText) {
+        const cw = getDisplayWidth(ch);
+        if (w + cw > width) break;
+        truncated += ch;
+        w += cw;
+      }
+      lines.push(this.stringToLine(truncated.padEnd(width), width, { fg: '243', dim: true }));
+    }
+
+    lines.push(this.stringToLine(' '.repeat(width), width));
+    return lines;
   }
 
   /**
