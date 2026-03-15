@@ -22,6 +22,8 @@ export interface GoodVibesConfig {
     lineNumbers: boolean;       // default: false
     collapseThreshold: number;  // default: 30
     theme: string;              // default: 'vaporwave'
+    showThinking: boolean;      // default: false
+    showReasoningSummary: boolean; // default: false
   };
   provider: {
     reasoningEffort: 'instant' | 'low' | 'medium' | 'high'; // default: 'medium'
@@ -55,6 +57,8 @@ export type ConfigKey =
   | 'display.lineNumbers'
   | 'display.collapseThreshold'
   | 'display.theme'
+  | 'display.showThinking'
+  | 'display.showReasoningSummary'
   | 'provider.reasoningEffort'
   | 'provider.model'
   | 'provider.provider'
@@ -78,6 +82,8 @@ export type ConfigValue<K extends ConfigKey> =
   K extends 'display.lineNumbers' ? boolean :
   K extends 'display.collapseThreshold' ? number :
   K extends 'display.theme' ? string :
+  K extends 'display.showThinking' ? boolean :
+  K extends 'display.showReasoningSummary' ? boolean :
   K extends 'provider.reasoningEffort' ? 'instant' | 'low' | 'medium' | 'high' :
   K extends 'provider.model' ? string :
   K extends 'provider.provider' ? string :
@@ -102,6 +108,8 @@ export const DEFAULT_CONFIG: GoodVibesConfig = {
     lineNumbers: false,
     collapseThreshold: 30,
     theme: 'vaporwave',
+    showThinking: false,
+    showReasoningSummary: false,
   },
   provider: {
     reasoningEffort: 'medium',
@@ -154,6 +162,18 @@ export const CONFIG_SCHEMA: ConfigSetting[] = [
     type: 'string',
     default: 'vaporwave',
     description: 'Color theme name',
+  },
+  {
+    key: 'display.showThinking',
+    type: 'boolean',
+    default: false,
+    description: 'Show reasoning/thinking content in a dimmed block above assistant responses',
+  },
+  {
+    key: 'display.showReasoningSummary',
+    type: 'boolean',
+    default: false,
+    description: 'Show reasoning summary (Mercury-2) in a dimmed block above assistant responses',
   },
   {
     key: 'provider.reasoningEffort',

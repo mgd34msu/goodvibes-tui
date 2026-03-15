@@ -197,11 +197,15 @@ export class Orchestrator {
       while (continueLoop) {
         // Wire up streaming delta handler when streaming is enabled
         let streamAccumulated = '';
+        let reasoningAccumulated = '';
         const onDelta = streamEnabled
           ? (delta: StreamDelta) => {
               if (delta.content) {
                 streamAccumulated += delta.content;
                 this.conversation.updateStreamingBlock(streamAccumulated);
+              }
+              if (delta.reasoning) {
+                reasoningAccumulated += delta.reasoning;
               }
               this.bus.emit('turn:stream-delta', {
                 content: delta.content ?? '',
@@ -249,9 +253,13 @@ export class Orchestrator {
           toolCalls: response.toolCalls,
         });
 
+        // Gather reasoning/thinking content from stream or response
+        const reasoningForMsg = reasoningAccumulated || undefined;
+        const reasoningSummaryForMsg = response.reasoningSummary || undefined;
+
         if (response.toolCalls.length > 0) {
           // Add assistant turn (may include both content and tool calls)
-          this.conversation.addAssistantMessage(response.content, response.toolCalls);
+          this.conversation.addAssistantMessage(response.content, { toolCalls: response.toolCalls, reasoningContent: reasoningForMsg, reasoningSummary: reasoningSummaryForMsg });
 
           // Execute tools and collect results
           const results = await this.executeToolCalls(response.toolCalls);
@@ -262,7 +270,7 @@ export class Orchestrator {
           // Loop continues: send results back to LLM
         } else {
           // No tool calls — final response
-          this.conversation.addAssistantMessage(response.content);
+          this.conversation.addAssistantMessage(response.content, { reasoningContent: reasoningForMsg, reasoningSummary: reasoningSummaryForMsg });
           this.bus.emit('turn:complete', { response: response.content });
           continueLoop = false;
         }

@@ -60,7 +60,7 @@ describe('ConversationManager — undo/redo/getLastUserMessage', () => {
 
   test('undo: handles tool messages in the turn (removes all after user)', () => {
     cm.addUserMessage('use tools');
-    cm.addAssistantMessage('calling tool', [{ id: 'c1', name: 'myTool', arguments: {} }]);
+    cm.addAssistantMessage('calling tool', { toolCalls: [{ id: 'c1', name: 'myTool', arguments: {} }] });
     cm.addToolResults([{ callId: 'c1', success: true, output: 'done' }]);
     cm.addAssistantMessage('done using tools');
     expect(cm.getMessageCount()).toBe(4);

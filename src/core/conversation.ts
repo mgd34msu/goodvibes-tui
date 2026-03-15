@@ -22,9 +22,11 @@ const estimateTokens = (text: string): number => Math.ceil(text.length / 4);
  * the buffer is only actually reconstructed when getDisplayBlocks() is called
  * or when the width changes. This avoids O(n) rebuilds per turn in long sessions.
  */
+type AssistantMessage = { role: 'assistant'; content: string; toolCalls?: ToolCall[]; reasoningContent?: string; reasoningSummary?: string };
+
 type Message =
   | { role: 'user'; content: string | ContentPart[]; cancelled?: boolean }
-  | { role: 'assistant'; content: string; toolCalls?: ToolCall[] }
+  | AssistantMessage
   | { role: 'system'; content: string }
   | { role: 'tool'; callId: string; content: string; toolName?: string };
 
@@ -123,8 +125,8 @@ export class ConversationManager {
   }
 
   /** Add an assistant message, optionally with tool calls (when the LLM invoked tools). */
-  public addAssistantMessage(content: string, toolCalls?: ToolCall[]): void {
-    this.messages.push({ role: 'assistant', content, toolCalls });
+  public addAssistantMessage(content: string, opts?: { toolCalls?: ToolCall[]; reasoningContent?: string; reasoningSummary?: string }): void {
+    this.messages.push({ role: 'assistant', content, toolCalls: opts?.toolCalls, reasoningContent: opts?.reasoningContent, reasoningSummary: opts?.reasoningSummary });
     this.markDirty();
   }
 
@@ -335,6 +337,23 @@ export class ConversationManager {
           this.history.addLines(UIFactory.createMessageBar(width, displayText));
         }
       } else if (m.role === 'assistant') {
+        // Render reasoning/thinking block if enabled and present
+        const showThinking = this.configManager?.get('display.showThinking') ?? false;
+        const showReasoningSummary = this.configManager?.get('display.showReasoningSummary') ?? false;
+        if (showThinking && m.reasoningContent) {
+          const thinkingHeader = this.textToLines('💭 Thinking:', width, { fg: '238', dim: true, italic: true });
+          this.history.addLines(thinkingHeader);
+          const thinkingLines = this.textToLines(m.reasoningContent, width, { fg: '238', dim: true, italic: true });
+          this.history.addLines(thinkingLines);
+          this.history.addLine(createEmptyLine(width));
+        }
+        if (showReasoningSummary && m.reasoningSummary) {
+          const summaryHeader = this.textToLines('🧠 Reasoning Summary:', width, { fg: '238', dim: true, italic: true });
+          this.history.addLines(summaryHeader);
+          const summaryLines = this.textToLines(m.reasoningSummary, width, { fg: '238', dim: true, italic: true });
+          this.history.addLines(summaryLines);
+          this.history.addLine(createEmptyLine(width));
+        }
         // Render assistant content using the markdown renderer
         if (m.content) {
           const rendered = renderMarkdown(m.content, width);
