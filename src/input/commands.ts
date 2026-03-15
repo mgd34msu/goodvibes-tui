@@ -4,6 +4,13 @@ import { CONFIG_SCHEMA } from '../config/index.ts';
 import { REASONING_BUDGET_MAP } from '../providers/interface.ts';
 import { join } from 'path';
 import { getSessionManager } from '../sessions/manager.ts';
+import { TemplateManager, parseTemplateArgs } from '../templates/manager.ts';
+
+let _templateManager: TemplateManager | undefined;
+function getTemplateManager(): TemplateManager {
+  if (!_templateManager) _templateManager = new TemplateManager();
+  return _templateManager;
+}
 
 /** Exportable conversation shape returned by ConversationManager.toJSON(). */
 interface ExportableConversation {
@@ -87,8 +94,16 @@ export function registerBuiltinCommands(registry: CommandRegistry): void {
         '    /redo             Restore the last undone turn',
         '    /retry [text]     Re-send the last user message (optionally modified)',
         '',
+        '  Templates:',
+        '    /template save <name>              Save current prompt as template',
+        '    /template use <name> [args...]     Execute template with variable substitution',
+        '    /template list                     List available templates',
+        '    /template edit <name>              Show template content',
+        '    /template delete <name>            Delete a template',
+        '',
         '  Tools & System:',
         '    /tools            List available tools',
+        '    /permissions      Show or set permission mode and per-tool settings',
         '    /help             Show this help',
         '    /quit             Exit',
         '',
@@ -610,6 +625,168 @@ export function registerBuiltinCommands(registry: CommandRegistry): void {
         lines.push(`  ${s.name.padEnd(30)} ${title.padEnd(24)} ${date}  (${s.messageCount} msgs)`);
       }
       ctx.print(lines.join('\n'));
+    },
+  });
+
+  // ── /template ───────────────────────────────────────
+  registry.register({
+    name: 'template',
+    aliases: ['tmpl'],
+    description: 'Manage and use prompt templates',
+    usage: 'save <name> | use <name> [args] | list | edit <name> | delete <name>',
+    handler(args, ctx) {
+      const sub = args[0];
+      const rest = args.slice(1);
+
+      if (!sub || sub === 'list') {
+        const templates = getTemplateManager().list();
+        if (templates.length === 0) {
+          ctx.print('No templates saved.\nUse /template save <name> to save the current prompt as a template.');
+          return;
+        }
+        const lines = ['Templates:', ''];
+        for (const t of templates) {
+          const scopeTag = t.scope === 'project' ? '[project]' : '[global] ';
+          lines.push(`  ${scopeTag} ${t.name.padEnd(28)} ${t.preview}`);
+        }
+        ctx.print(lines.join('\n'));
+        return;
+      }
+
+      if (sub === 'save') {
+        const name = rest[0];
+        if (!name) {
+          ctx.print('Usage: /template save <name>');
+          return;
+        }
+        const lastMsg = ctx.conversationManager.getLastUserMessage();
+        const content = lastMsg || '# Template\n\nReplace this with your template content.\n';
+        try {
+          getTemplateManager().save(name, content);
+          ctx.print(`Template saved: ${name}`);
+        } catch (e) {
+          ctx.print(`Failed to save template: ${(e as Error).message}`);
+        }
+        return;
+      }
+
+      if (sub === 'use') {
+        const name = rest[0];
+        if (!name) {
+          ctx.print('Usage: /template use <name> [args...]');
+          return;
+        }
+        const templateContent = getTemplateManager().load(name);
+        if (templateContent === null) {
+          ctx.print(`Template not found: ${name}\nRun /template list to see available templates.`);
+          return;
+        }
+        const templateArgs = parseTemplateArgs(rest.slice(1));
+        const expanded = getTemplateManager().expand(templateContent, templateArgs);
+        ctx.eventBus.emit('input:submit', { text: expanded });
+        return;
+      }
+
+      if (sub === 'edit') {
+        const name = rest[0];
+        if (!name) {
+          ctx.print('Usage: /template edit <name>');
+          return;
+        }
+        const content = getTemplateManager().load(name);
+        if (content === null) {
+          ctx.print(`Template not found: ${name}`);
+          return;
+        }
+        ctx.print(`Template: ${name}\n\n${content}`);
+        return;
+      }
+
+      if (sub === 'delete') {
+        const name = rest[0];
+        if (!name) {
+          ctx.print('Usage: /template delete <name>');
+          return;
+        }
+        const deleted = getTemplateManager().delete(name);
+        if (deleted) {
+          ctx.print(`Template deleted: ${name}`);
+        } else {
+          ctx.print(`Template not found: ${name}`);
+        }
+        return;
+      }
+
+      ctx.print(`Unknown subcommand: ${sub}\nUsage: /template save|use|list|edit|delete`);
+    },
+  });
+
+  // ── /permissions ───────────────────────────────────
+  registry.register({
+    name: 'permissions',
+    aliases: ['perms'],
+    description: 'Show or set permission mode and per-tool settings',
+    usage: '[allow-all|prompt|custom] | [tool <name> allow|prompt|deny]',
+    handler(args, ctx) {
+      const cm = ctx.configManager;
+      const VALID_MODES = ['allow-all', 'prompt', 'custom'] as const;
+      const VALID_ACTIONS = ['allow', 'prompt', 'deny'] as const;
+      const VALID_TOOLS = ['file_read', 'file_write', 'file_edit', 'shell_exec', 'grep', 'list_dir', 'glob', 'delegate'] as const;
+      type PermTool = typeof VALID_TOOLS[number];
+
+      if (args.length === 0) {
+        const mode = cm.get('permissions.mode');
+        const lines = [`Permission mode: ${mode}`, '  Tool settings:'];
+        for (const tool of VALID_TOOLS) {
+          const toolKey = `permissions.tools.${tool}` as Parameters<typeof cm.get>[0];
+          const action = cm.get(toolKey);
+          lines.push(`    ${tool.padEnd(16)} ${action}`);
+        }
+        lines.push('');
+        lines.push('  Modes: prompt (default), allow-all, custom');
+        lines.push('  Usage: /permissions <mode> | /permissions tool <name> allow|prompt|deny');
+        ctx.print(lines.join('\n'));
+        return;
+      }
+
+      if (args[0] === 'tool') {
+        const toolName = args[1];
+        const action = args[2];
+        if (!toolName || !action) {
+          ctx.print('Usage: /permissions tool <name> allow|prompt|deny');
+          return;
+        }
+        if (!VALID_TOOLS.includes(toolName as PermTool)) {
+          ctx.print(`Unknown tool: ${toolName}\nValid tools: ${VALID_TOOLS.join(', ')}`);
+          return;
+        }
+        if (!VALID_ACTIONS.includes(action as typeof VALID_ACTIONS[number])) {
+          ctx.print(`Invalid action: ${action}\nValid actions: allow, prompt, deny`);
+          return;
+        }
+        try {
+          const toolKey = `permissions.tools.${toolName}` as Parameters<typeof cm.set>[0];
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          cm.set(toolKey, action as any);
+          ctx.print(`Permission for ${toolName} set to: ${action}`);
+        } catch (e) {
+          ctx.print(`Error: ${(e as Error).message}`);
+        }
+        return;
+      }
+
+      const newMode = args[0];
+      if (!VALID_MODES.includes(newMode as typeof VALID_MODES[number])) {
+        ctx.print(`Invalid mode: ${newMode}\nValid modes: ${VALID_MODES.join(', ')}`);
+        return;
+      }
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        cm.set('permissions.mode', newMode as any);
+        ctx.print(`Permission mode set to: ${newMode}`);
+      } catch (e) {
+        ctx.print(`Error: ${(e as Error).message}`);
+      }
     },
   });
 }
