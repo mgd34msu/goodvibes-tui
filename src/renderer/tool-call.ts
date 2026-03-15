@@ -47,7 +47,7 @@ const STATUS_STYLES: Record<ToolStatus, { label: string; fg: string; bold: boole
 
 /**
  * getToolTitle - Derive a human-readable title from a tool call.
- * E.g. file-read + { path: 'src/main.ts' } => "Reading src/main.ts"
+ * E.g. read + { path: 'src/main.ts' } => "Reading src/main.ts"
  */
 function getToolTitle(name: string, args: Record<string, unknown>): string {
   const verbs: Record<string, string> = {
@@ -106,8 +106,8 @@ export function renderToolCallBlock(
       if (output.includes('--- ') && output.includes('+++ ') && output.includes('@@')) {
         lines.push(...renderDiffView(output, width));
       }
-      // Detect code output (from shell-exec, etc.)
-      else if (toolCall.name === 'shell_exec' && output.split('\n').length > 1) {
+      // Detect code output (from exec, etc.)
+      else if (toolCall.name === 'exec' && output.split('\n').length > 1) {
         lines.push(...renderCodeBlock(output.split('\n'), 'bash', width));
       }
       // Short output: show inline

@@ -43,6 +43,20 @@ export interface GoodVibesConfig {
     mode: PermissionMode;       // default: 'prompt'
     tools: PermissionsToolConfig;
   };
+  danger: {
+    agentRecursion: boolean;        // default: false — allow agents to spawn subagents
+    maxGlobalAgents: number;        // default: 8 — total agents across all levels
+    maxRecursionDepth: number;      // default: 0 — 0=off, 1=one level (max allowed)
+    daemon: boolean;                // default: false — enable daemon mode
+    httpListener: boolean;          // default: false — enable HTTP webhook listener
+  };
+  tools: {
+    llmProvider: string;            // default: '' — provider for tool LLM calls (empty = use current)
+    llmModel: string;               // default: '' — model for tool LLM calls (empty = fastest available)
+    autoHeal: boolean;              // default: false — auto-fix syntax errors on write/edit
+    defaultTokenBudget: number;     // default: 5000 — default token budget for read operations
+    hooksFile: string;              // default: 'hooks.json' — hook configuration file name
+  };
 }
 
 export interface ConfigSetting {
@@ -80,7 +94,17 @@ export type ConfigKey =
   | 'permissions.tools.grep'
   | 'permissions.tools.list_dir'
   | 'permissions.tools.glob'
-  | 'permissions.tools.delegate';
+  | 'permissions.tools.delegate'
+  | 'danger.agentRecursion'
+  | 'danger.maxGlobalAgents'
+  | 'danger.maxRecursionDepth'
+  | 'danger.daemon'
+  | 'danger.httpListener'
+  | 'tools.llmProvider'
+  | 'tools.llmModel'
+  | 'tools.autoHeal'
+  | 'tools.defaultTokenBudget'
+  | 'tools.hooksFile';
 
 /** Maps a ConfigKey to its value type. */
 export type ConfigValue<K extends ConfigKey> =
@@ -109,6 +133,16 @@ export type ConfigValue<K extends ConfigKey> =
   K extends 'permissions.tools.list_dir' ? PermissionAction :
   K extends 'permissions.tools.glob' ? PermissionAction :
   K extends 'permissions.tools.delegate' ? PermissionAction :
+  K extends 'danger.agentRecursion' ? boolean :
+  K extends 'danger.maxGlobalAgents' ? number :
+  K extends 'danger.maxRecursionDepth' ? number :
+  K extends 'danger.daemon' ? boolean :
+  K extends 'danger.httpListener' ? boolean :
+  K extends 'tools.llmProvider' ? string :
+  K extends 'tools.llmModel' ? string :
+  K extends 'tools.autoHeal' ? boolean :
+  K extends 'tools.defaultTokenBudget' ? number :
+  K extends 'tools.hooksFile' ? string :
   never;
 
 export const DEFAULT_CONFIG: GoodVibesConfig = {
@@ -146,6 +180,20 @@ export const DEFAULT_CONFIG: GoodVibesConfig = {
       glob: 'allow',
       delegate: 'prompt',
     },
+  },
+  danger: {
+    agentRecursion: false,
+    maxGlobalAgents: 8,
+    maxRecursionDepth: 0,
+    daemon: false,
+    httpListener: false,
+  },
+  tools: {
+    llmProvider: '',
+    llmModel: '',
+    autoHeal: false,
+    defaultTokenBudget: 5000,
+    hooksFile: 'hooks.json',
   },
 };
 
@@ -311,5 +359,68 @@ export const CONFIG_SCHEMA: ConfigSetting[] = [
     default: 'prompt',
     description: 'Permission for delegate/unknown tools',
     enumValues: ['allow', 'prompt', 'deny'],
+  },
+  {
+    key: 'danger.agentRecursion',
+    type: 'boolean',
+    default: false,
+    description: 'Allow agents to spawn subagents (dangerous: can cause runaway recursion)',
+  },
+  {
+    key: 'danger.maxGlobalAgents',
+    type: 'number',
+    default: 8,
+    description: 'Total concurrent agents allowed across all recursion levels',
+    validate: (v) => typeof v === 'number' && v >= 1 && v <= 20,
+  },
+  {
+    key: 'danger.maxRecursionDepth',
+    type: 'number',
+    default: 0,
+    description: 'Maximum agent recursion depth: 0=disabled, 1=one level (maximum allowed)',
+    validate: (v) => typeof v === 'number' && (v === 0 || v === 1),
+  },
+  {
+    key: 'danger.daemon',
+    type: 'boolean',
+    default: false,
+    description: 'Enable daemon mode (runs goodvibes-tui as a background service)',
+  },
+  {
+    key: 'danger.httpListener',
+    type: 'boolean',
+    default: false,
+    description: 'Enable HTTP webhook listener for receiving external events',
+  },
+  {
+    key: 'tools.llmProvider',
+    type: 'string',
+    default: '',
+    description: 'Provider for tool LLM calls (empty = use currently selected provider)',
+  },
+  {
+    key: 'tools.llmModel',
+    type: 'string',
+    default: '',
+    description: 'Model for tool LLM calls (empty = fastest available for the provider)',
+  },
+  {
+    key: 'tools.autoHeal',
+    type: 'boolean',
+    default: false,
+    description: 'Automatically fix syntax errors on precision write/edit operations',
+  },
+  {
+    key: 'tools.defaultTokenBudget',
+    type: 'number',
+    default: 5000,
+    description: 'Default token budget for precision read operations',
+    validate: (v) => typeof v === 'number' && v >= 100 && v <= 100000,
+  },
+  {
+    key: 'tools.hooksFile',
+    type: 'string',
+    default: 'hooks.json',
+    description: 'Hook configuration file name (relative to .goodvibes/tui/)',
   },
 ];

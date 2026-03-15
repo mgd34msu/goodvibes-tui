@@ -1,0 +1,268 @@
+import { readFileSync, statSync } from 'fs';
+import type { HookDefinition, HookChain, HookEvent, HookResult } from './types.ts';
+import { matchesEventPath, matchesMatcher } from './matcher.ts';
+import { logger } from '../utils/logger.ts';
+import type { HooksConfig } from './types.ts';
+import * as commandRunner from './runners/command.ts';
+import * as promptRunner from './runners/prompt.ts';
+import * as agentRunner from './runners/agent.ts';
+import * as httpRunner from './runners/http.ts';
+import * as tsRunner from './runners/typescript.ts';
+
+/** Global timeout: if cumulative hook time exceeds this, skip remaining */
+const GLOBAL_TIMEOUT_MS = 120_000;
+
+function runHook(hook: HookDefinition, event: HookEvent): Promise<HookResult> {
+  switch (hook.type) {
+    case 'command': return commandRunner.run(hook, event);
+    case 'prompt': return promptRunner.run(hook, event);
+    case 'agent': return agentRunner.run(hook, event);
+    case 'http': return httpRunner.run(hook, event);
+    case 'ts': return tsRunner.run(hook, event);
+    default:
+      return Promise.resolve({ ok: false, error: `unknown hook type: ${(hook as HookDefinition).type}` });
+  }
+}
+
+export class HookDispatcher {
+  private hooks = new Map<string, HookDefinition[]>();
+  private chains: HookChain[] = [];
+
+  /** Load hooks from hooks.json file */
+  loadFromFile(filePath: string): void {
+    try {
+      // Warn if hooks.json is world-writable — it is a trust boundary.
+      try {
+        const st = statSync(filePath);
+        // st.mode & 0o002 is the world-writable bit
+        if ((st.mode & 0o002) !== 0) {
+          logger.info(
+            'HookDispatcher: hooks.json is world-writable — only load trusted hooks files',
+            { filePath },
+          );
+        }
+      } catch {
+        // Stat failure is non-fatal; proceed with load
+      }
+
+      const raw = readFileSync(filePath, 'utf-8');
+      const parsed = JSON.parse(raw) as Record<string, unknown>;
+
+      const VALID_HOOK_TYPES = new Set(['command', 'prompt', 'agent', 'http', 'ts']);
+
+      // Validate and load hooks
+      if (parsed.hooks !== undefined) {
+        if (typeof parsed.hooks !== 'object' || parsed.hooks === null || Array.isArray(parsed.hooks)) {
+          logger.info('HookDispatcher: hooks.json "hooks" field must be an object, skipping', { filePath });
+        } else {
+          for (const [pattern, defs] of Object.entries(parsed.hooks as Record<string, unknown>)) {
+            if (!Array.isArray(defs)) {
+              logger.info('HookDispatcher: hook pattern value must be an array, skipping', { filePath, pattern });
+              continue;
+            }
+            for (const def of defs as unknown[]) {
+              if (typeof def !== 'object' || def === null) {
+                logger.info('HookDispatcher: hook definition must be an object, skipping', { filePath, pattern });
+                continue;
+              }
+              const d = def as Record<string, unknown>;
+              if (typeof d.type !== 'string' || !VALID_HOOK_TYPES.has(d.type)) {
+                logger.info('HookDispatcher: hook missing valid "type" field, skipping', { filePath, pattern, type: d.type });
+                continue;
+              }
+              if (typeof d.match !== 'string') {
+                logger.info('HookDispatcher: hook missing "match" field, skipping', { filePath, pattern });
+                continue;
+              }
+              this.register(pattern, d as unknown as import('./types.ts').HookDefinition);
+            }
+          }
+        }
+      }
+
+      // Validate and load chains
+      if (parsed.chains !== undefined) {
+        if (!Array.isArray(parsed.chains)) {
+          logger.info('HookDispatcher: hooks.json "chains" field must be an array, skipping', { filePath });
+        } else {
+          for (const chain of parsed.chains as unknown[]) {
+            if (typeof chain !== 'object' || chain === null) {
+              logger.info('HookDispatcher: chain entry must be an object, skipping', { filePath });
+              continue;
+            }
+            const c = chain as Record<string, unknown>;
+            if (typeof c.name !== 'string') {
+              logger.info('HookDispatcher: chain missing "name" field, skipping', { filePath });
+              continue;
+            }
+            if (!Array.isArray(c.steps)) {
+              logger.info('HookDispatcher: chain missing "steps" array, skipping', { filePath, name: c.name });
+              continue;
+            }
+            if (typeof c.action !== 'object' || c.action === null) {
+              logger.info('HookDispatcher: chain missing "action" object, skipping', { filePath, name: c.name });
+              continue;
+            }
+            const action = c.action as Record<string, unknown>;
+            if (typeof action.type !== 'string' || !VALID_HOOK_TYPES.has(action.type)) {
+              logger.info('HookDispatcher: chain action missing valid "type" field, skipping', { filePath, name: c.name });
+              continue;
+            }
+            if (typeof action.match !== 'string') {
+              logger.info('HookDispatcher: chain action missing "match" field, skipping', { filePath, name: c.name });
+              continue;
+            }
+            this.registerChain(c as unknown as import('./types.ts').HookChain);
+          }
+        }
+      }
+    } catch (err) {
+      logger.error('HookDispatcher: failed to load hooks file', {
+        filePath,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+
+  /** Register a hook programmatically */
+  register(eventPattern: string, hook: HookDefinition): void {
+    const existing = this.hooks.get(eventPattern);
+    if (existing) {
+      existing.push(hook);
+    } else {
+      this.hooks.set(eventPattern, [hook]);
+    }
+  }
+
+  /** Register a chain programmatically */
+  registerChain(chain: HookChain): void {
+    this.chains.push(chain);
+  }
+
+  /**
+   * Fire an event and run all matching hooks.
+   *
+   * All matching hooks run sequentially. For Pre phase, the first deny sets
+   * the aggregated decision; subsequent hooks still execute (for
+   * logging/auditing) but their deny decisions don't change the outcome.
+   * For all hooks: additionalContext strings are concatenated.
+   * Once hooks are auto-removed after first execution.
+   * Async hooks fire and forget.
+   */
+  async fire(event: HookEvent): Promise<HookResult> {
+    const matchingEntries: Array<{ pattern: string; hook: HookDefinition }> = [];
+
+    for (const [pattern, defs] of this.hooks.entries()) {
+      if (matchesEventPath(pattern, event.path)) {
+        for (const hook of defs) {
+          const specificValue = event.specific;
+          if (matchesMatcher(hook.matcher, specificValue)) {
+            matchingEntries.push({ pattern, hook });
+          }
+        }
+      }
+    }
+
+    if (matchingEntries.length === 0) {
+      return { ok: true };
+    }
+
+    const aggregated: HookResult = { ok: true };
+    const contextParts: string[] = [];
+    let updatedInput: Record<string, unknown> | undefined;
+    const onceToRemove: Array<{ pattern: string; hook: HookDefinition }> = [];
+    const startTime = Date.now();
+
+    for (const { pattern, hook } of matchingEntries) {
+      // Global timeout check
+      if (Date.now() - startTime > GLOBAL_TIMEOUT_MS) {
+        logger.error('HookDispatcher: global timeout exceeded, skipping remaining hooks', {
+          path: event.path,
+        });
+        break;
+      }
+
+      // Async hooks fire and forget
+      if (hook.async) {
+        runHook(hook, event).catch((err) => {
+          logger.error('HookDispatcher: async hook error', {
+            path: event.path,
+            error: err instanceof Error ? err.message : String(err),
+          });
+        });
+        if (hook.once) onceToRemove.push({ pattern, hook });
+        continue;
+      }
+
+      let result: HookResult;
+      try {
+        result = await runHook(hook, event);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        logger.error('HookDispatcher: hook threw unexpectedly', {
+          path: event.path,
+          error: message,
+        });
+        result = { ok: false, error: message };
+      }
+
+      if (hook.once) onceToRemove.push({ pattern, hook });
+
+      if (!result.ok) {
+        aggregated.ok = false;
+        if (!aggregated.error) aggregated.error = result.error;
+      }
+
+      // For Pre hooks: first deny wins
+      if (event.phase === 'Pre' && result.decision === 'deny') {
+        if (aggregated.decision !== 'deny') {
+          aggregated.decision = 'deny';
+          aggregated.reason = result.reason;
+        }
+      } else if (result.decision && aggregated.decision !== 'deny') {
+        aggregated.decision = result.decision;
+        if (result.reason) aggregated.reason = result.reason;
+      }
+
+      // Last updatedInput wins
+      if (result.updatedInput) {
+        updatedInput = result.updatedInput;
+      }
+
+      if (result.additionalContext) {
+        contextParts.push(result.additionalContext);
+      }
+    }
+
+    // Remove once hooks
+    for (const { pattern, hook } of onceToRemove) {
+      const defs = this.hooks.get(pattern);
+      if (defs) {
+        const idx = defs.indexOf(hook);
+        if (idx !== -1) defs.splice(idx, 1);
+        if (defs.length === 0) this.hooks.delete(pattern);
+      }
+    }
+
+    if (updatedInput) aggregated.updatedInput = updatedInput;
+    if (contextParts.length > 0) aggregated.additionalContext = contextParts.join('\n');
+
+    return aggregated;
+  }
+
+  /** Get all registered hooks (for debugging/inspection) */
+  getHooks(): Map<string, HookDefinition[]> {
+    return new Map(this.hooks);
+  }
+
+  /** Get all registered chains */
+  getChains(): HookChain[] {
+    return [...this.chains];
+  }
+
+  /** Remove all hooks (for testing) */
+  clear(): void {
+    this.hooks.clear();
+    this.chains = [];
+  }
+}

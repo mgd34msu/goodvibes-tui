@@ -139,7 +139,7 @@ export class ConfigManager {
   }
 
   /** Return a deep-cloned snapshot of a config category. */
-  getCategory(category: 'display' | 'provider' | 'behavior' | 'permissions'): Readonly<GoodVibesConfig[typeof category]> {
+  getCategory<C extends keyof GoodVibesConfig>(category: C): Readonly<GoodVibesConfig[C]> {
     return structuredClone(this.config[category]);
   }
 
