@@ -1,8 +1,7 @@
 /**
  * Test infrastructure: mock providers, event bus helpers, and filesystem utilities.
  */
-import { mkdtemp, rm } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
+import { mkdtemp, rm, mkdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { LLMProvider, ChatRequest, ChatResponse } from '../providers/interface.ts';
 import type { EventBus, EventMap } from '../core/event-bus.ts';
@@ -80,7 +79,9 @@ export function collectEvents<K extends keyof EventMap>(
  * Also returns an async cleanup function.
  */
 export async function makeTempDir(): Promise<{ dir: string; cleanup: () => Promise<void> }> {
-  const dir = await mkdtemp(join(tmpdir(), 'gv-test-'));
+  const tmpBase = join(process.cwd(), 'tmp');
+  await mkdir(tmpBase, { recursive: true });
+  const dir = await mkdtemp(join(tmpBase, 'gv-test-'));
   return {
     dir,
     cleanup: () => rm(dir, { recursive: true, force: true }),

@@ -22,5 +22,8 @@ bun.lock
 .DS_Store
 Thumbs.db
 
+# Test temp directories
+tmp/
+
 # Unrelated project files
 task_scheduler/
