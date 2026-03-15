@@ -1,5 +1,5 @@
 import { describe, test, expect, beforeEach, afterEach } from 'bun:test';
-import { mkdirSync, rmSync, existsSync, writeFileSync } from 'fs';
+import { mkdirSync, rmSync, existsSync, writeFileSync, readFileSync } from 'fs';
 import { join } from 'path';
 import { mkdtempSync } from 'fs';
 import { tmpdir } from 'os';
@@ -306,7 +306,6 @@ describe('KVState.dispose', () => {
     const stateDir = join(tmpDir, '.goodvibes', 'state');
     const filePath = join(stateDir, `session_${kv.getSessionId()}.json`);
     expect(existsSync(filePath)).toBe(true);
-    const { readFileSync } = require('fs');
     const data = JSON.parse(readFileSync(filePath, 'utf-8'));
     expect(data.disposeKey).toBe('disposeVal');
   });
@@ -360,7 +359,6 @@ describe('KVState ensureLoaded race condition', () => {
     const stateDir = join(tmpDir, '.goodvibes', 'state');
     mkdirSync(stateDir, { recursive: true });
     const id = 'deadbeef';
-    const { writeFileSync } = require('fs');
     writeFileSync(join(stateDir, `session_${id}.json`), 'not valid json', 'utf-8');
 
     const kv = new KVState(id, tmpDir);
