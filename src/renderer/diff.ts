@@ -12,6 +12,7 @@ export class DiffEngine {
   private lastUnderline = false;
   private lastItalic = false;
   private lastStrikethrough = false;
+  private lastLink = '';
 
   public reset(): void {
     this.lastFg = '';
@@ -21,6 +22,7 @@ export class DiffEngine {
     this.lastUnderline = false;
     this.lastItalic = false;
     this.lastStrikethrough = false;
+    this.lastLink = '';
   }
 
   public diff(oldBuffer: TerminalBuffer | null, newBuffer: TerminalBuffer): string {
@@ -41,13 +43,20 @@ export class DiffEngine {
       }
     }
 
+    // Close any open OSC 8 hyperlink at end of frame
+    if (this.lastLink) {
+      output += '\x1b]8;;\x1b\\';
+      this.lastLink = '';
+    }
+
     return output;
   }
 
   private isCellDifferent(a: Cell | undefined, b: Cell): boolean {
     if (!a) return true;
     return a.char !== b.char || a.fg !== b.fg || a.bg !== b.bg || a.bold !== b.bold || a.dim !== b.dim ||
-      a.underline !== b.underline || a.italic !== b.italic || a.strikethrough !== b.strikethrough;
+      a.underline !== b.underline || a.italic !== b.italic || a.strikethrough !== b.strikethrough ||
+      (a.link ?? '') !== (b.link ?? '');
   }
 
   private sanitizeColor(color: string): string {
@@ -64,6 +73,7 @@ export class DiffEngine {
     let style = '';
     const fg = this.sanitizeColor(cell.fg);
     const bg = this.sanitizeColor(cell.bg);
+    const link = cell.link ?? '';
 
     const changed = fg !== this.lastFg || bg !== this.lastBg ||
       cell.bold !== this.lastBold || cell.dim !== this.lastDim ||
@@ -95,6 +105,19 @@ export class DiffEngine {
       this.lastItalic = cell.italic;
       this.lastStrikethrough = cell.strikethrough;
     }
+
+    // OSC 8 hyperlink: emit open/close/change sequences only when link changes
+    if (link !== this.lastLink) {
+      if (link) {
+        // Open new hyperlink (close previous if any was open)
+        style += `\x1b]8;;${link}\x1b\\`;
+      } else {
+        // Close hyperlink
+        style += `\x1b]8;;\x1b\\`;
+      }
+      this.lastLink = link;
+    }
+
     return style;
   }
 }

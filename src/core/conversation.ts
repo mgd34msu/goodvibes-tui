@@ -35,7 +35,7 @@ export interface BlockMeta {
   /** Index of this block (increments per renderable block). */
   blockIndex: number;
   /** Type of block content. */
-  type: 'tool' | 'code' | 'diff';
+  type: 'tool' | 'code' | 'diff' | 'thinking';
   /** First rendered line index in the history buffer. */
   startLine: number;
   /** Number of rendered lines (when not collapsed). */
@@ -68,7 +68,7 @@ export class ConversationManager {
   /** Collapse state: stable key (msg_N) -> collapsed (true = collapsed). */
   private collapseState: Map<string, boolean> = new Map();
   /** Block registry: track rendered blocks for copy/apply. */
-  private blockRegistry: BlockMeta[] = [];
+  protected blockRegistry: BlockMeta[] = [];
   /** Streaming block start line in history buffer (for incremental streaming update). */
   private streamingStartLine = -1;
   /** Undo stack: each entry is a turn (user msg + all subsequent non-user msgs until next user). */
@@ -341,11 +341,23 @@ export class ConversationManager {
         const showThinking = this.configManager?.get('display.showThinking') ?? false;
         const showReasoningSummary = this.configManager?.get('display.showReasoningSummary') ?? false;
         if (showThinking && m.reasoningContent) {
+          const thinkingStartLine = this.history.getLineCount();
+          const thinkingBlockIdx = this.blockRegistry.length;
+          const thinkingCollapseKey = `msg_${msgIdx}_thinking`;
           const thinkingHeader = this.textToLines('💭 Thinking:', width, { fg: '238', dim: true, italic: true });
           this.history.addLines(thinkingHeader);
           const thinkingLines = this.textToLines(m.reasoningContent, width, { fg: '238', dim: true, italic: true });
           this.history.addLines(thinkingLines);
           this.history.addLine(createEmptyLine(width));
+          const thinkingRenderedLines = this.history.getLineCount() - thinkingStartLine;
+          this.blockRegistry.push({
+            blockIndex: thinkingBlockIdx,
+            collapseKey: thinkingCollapseKey,
+            type: 'thinking',
+            startLine: thinkingStartLine,
+            lineCount: thinkingRenderedLines,
+            rawContent: m.reasoningContent,
+          });
         }
         if (showReasoningSummary && m.reasoningSummary) {
           const summaryHeader = this.textToLines('🧠 Reasoning Summary:', width, { fg: '238', dim: true, italic: true });
@@ -446,7 +458,7 @@ export class ConversationManager {
   }
 
   /** Find the nearest block to a given line index, optionally filtered by type. */
-  private findNearestBlock(lineIndex: number, typeFilter?: string): BlockMeta | null {
+  public findNearestBlock(lineIndex: number, typeFilter?: string): BlockMeta | null {
     let nearest: BlockMeta | null = null;
     let nearestDist = Infinity;
     for (const block of this.blockRegistry) {
@@ -505,6 +517,11 @@ export class ConversationManager {
   }
 
   /** Options passed to the splash screen renderer. Set externally. */
+  /** Returns a read-only view of the block registry for external consumers. */
+  public getBlockRegistry(): readonly BlockMeta[] {
+    return this.blockRegistry;
+  }
+
   public splashOptions: SplashOptions = {};
 
   private addSplashScreen(width: number): void {

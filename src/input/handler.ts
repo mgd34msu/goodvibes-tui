@@ -11,6 +11,7 @@ import { InputHistory } from './input-history.ts';
 import type { ConversationManager } from '../core/conversation.ts';
 import type { PermissionCategory } from '../permissions/manager.ts';
 import { readFileSync, writeFileSync, existsSync } from 'node:fs';
+import { getBookmarkManager } from '../bookmarks/manager.ts';
 import { resolveAndValidatePath } from '../utils/path-safety.ts';
 import type { ContentPart } from '../providers/interface.ts';
 import { logger } from '../utils/logger.ts';
@@ -360,6 +361,61 @@ export class InputHandler {
       this.bus.emit('render:request');
       setTimeout(() => this.bus.emit('render:request'), 2005);
     }
+  }
+
+  /**
+   * handleBookmark - Ctrl+B: Toggle bookmark on the nearest block.
+   */
+  private handleBookmark(): void {
+    const cm = this.conversationManager;
+    if (!cm) return;
+    const lineIndex = this.getScrollTop();
+    // Access blockRegistry via findNearestBlock (uses private findNearestBlock)
+    // We'll call getBlockContentAtLine to determine if there's a nearby block,
+    // then use the block's collapseKey as bookmark key.
+    const nearest = cm.findNearestBlock(lineIndex);
+    if (!nearest) {
+      cm.log('[Ctrl+B: No block found nearby]', { fg: '240' });
+      this.bus.emit('render:request');
+      return;
+    }
+    const bm = getBookmarkManager();
+    const label = `${nearest.type}: ${nearest.rawContent.slice(0, 40).replace(/\n/g, ' ')}`;
+    const added = bm.toggle(nearest.collapseKey, label);
+    const msg = added
+      ? `[Bookmarked: ${nearest.collapseKey}]`
+      : `[Bookmark removed: ${nearest.collapseKey}]`;
+    cm.log(msg, { fg: added ? '#22c55e' : '244' });
+    this.bus.emit('render:request');
+  }
+
+  /**
+   * handleBlockSave - Ctrl+S: Save nearest block content to a file.
+   */
+  private handleBlockSave(): void {
+    const cm = this.conversationManager;
+    if (!cm) return;
+    const lineIndex = this.getScrollTop();
+    const content = cm.getBlockContentAtLine(lineIndex);
+    if (!content) {
+      cm.log('[Ctrl+S: No block found nearby]', { fg: '240' });
+      this.bus.emit('render:request');
+      return;
+    }
+    const nearest = cm.findNearestBlock(lineIndex);
+    const label = nearest?.type ?? 'block';
+    try {
+      const bm = getBookmarkManager();
+      const filePath = bm.saveToFile(content, label);
+      // Show tilde path for readability
+      const homePath = process.env.HOME || process.env.USERPROFILE || '';
+      const displayPath = homePath ? filePath.replace(homePath, '~') : filePath;
+      cm.log(`[Saved to: ${displayPath}]`, { fg: '#22c55e' });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      cm.log(`[Save failed: ${msg}]`, { fg: '#ef4444' });
+    }
+    this.bus.emit('render:request');
   }
 
   /**
@@ -757,6 +813,16 @@ export class InputHandler {
         // Ctrl+Y: copy nearest code/tool block to clipboard
         if (token.logicalName === 'y' && token.ctrl && !this.commandMode) {
           this.handleBlockCopy();
+          continue;
+        }
+        // Ctrl+B: bookmark/unbookmark nearest block
+        if (token.logicalName === 'b' && token.ctrl && !this.commandMode) {
+          this.handleBookmark();
+          continue;
+        }
+        // Ctrl+S: save nearest block content to file
+        if (token.logicalName === 's' && token.ctrl && !this.commandMode) {
+          this.handleBlockSave();
           continue;
         }
         // Ctrl+W: delete word backward
