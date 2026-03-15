@@ -1,6 +1,6 @@
 import { type Line, type Cell, createEmptyLine, createEmptyCell } from '../types/grid.ts';
 import { VERSION } from '../version.ts';
-import { getDisplayWidth, wrapText } from '../utils/terminal-width.ts';
+import { getDisplayWidth, wrapText, interpolateColor } from '../utils/terminal-width.ts';
 
 /** Format a number: up to 999, then 1.0k, 1.0M, 1.0B, 1.0T */
 function fmtNum(n: number): string {
@@ -234,8 +234,10 @@ export class UIFactory {
         ctxParts.push(model + (provider ? ` (${provider})` : ''));
       }
       if (toolCount) ctxParts.push(`${toolCount} tools`);
-      const ctxLine = '  ' + ctxParts.join('  \u00B7  ');
+      const ctxLine = '   ' + ctxParts.join('  \u00B7  ');
+      lines.push(createBaseLine());
       lines.push(this.stringToLine(ctxLine.slice(0, width), width, { fg: '240', dim: true }));
+      lines.push(createBaseLine());
     }
     if (showExitNotice) {
       const notice = `   !!! Press Ctrl+C again to exit !!! `;
@@ -248,11 +250,59 @@ export class UIFactory {
     return lines;
   }
 
-  public static createThinkingFragment(width: number, spinner: string): Line[] {
-    const label = ` ${spinner} Thinking... `;
+  /** Rotating thinking phrases — vaporwave / good vibes themed. */
+  private static readonly THINKING_PHRASES = [
+    'Thinking...',
+    'Vibing...',
+    'Manifesting...',
+    'Channeling energy...',
+    'Tuning frequencies...',
+    'Riding the wave...',
+    'Aligning chakras...',
+    'Entering flow state...',
+    'Consulting the void...',
+    'Absorbing aesthetics...',
+    'Synthesizing vibes...',
+    'Transcending...',
+    'Dreaming in neon...',
+    'Parsing the cosmos...',
+    'Loading good vibes...',
+    'Meditating...',
+    'Catching a vibe...',
+    'Harmonizing...',
+    'Feeling it...',
+    'In the zone...',
+  ];
+
+  /** Gradient colors for thinking text — cyan to purple (matches splash). */
+  private static readonly THINK_GRADIENT_START = '#00ffff';
+  private static readonly THINK_GRADIENT_END = '#d000ff';
+
+  public static createThinkingFragment(width: number, spinner: string, frame: number = 0): Line[] {
+    // Rotate phrase every ~3 seconds (frame ticks at 80ms, so ~37 frames)
+    const phraseIndex = Math.floor(frame / 37) % this.THINKING_PHRASES.length;
+    const phrase = this.THINKING_PHRASES[phraseIndex];
+    const text = `  ${spinner} ${phrase} `;
+
+    // Build line with animated gradient
+    const line = createEmptyLine(width);
+    let col = 0;
+    for (const char of text) {
+      if (col >= width) break;
+      const code = char.codePointAt(0) ?? 0;
+      if (code < 32 || code === 127) continue;
+      // Animated gradient: ping-pong (triangle wave) for smooth cyan↔purple sweep
+      const raw = (col / Math.max(1, getDisplayWidth(text) - 1) - frame * 0.02 + 100) % 1.0;
+      const gradientPos = raw <= 0.5 ? raw * 2 : (1 - raw) * 2; // triangle wave: 0→1→0
+      const fg = interpolateColor(this.THINK_GRADIENT_START, this.THINK_GRADIENT_END, gradientPos);
+      line[col] = { char, fg, bg: '', bold: true, dim: false, underline: false, italic: false, strikethrough: false };
+      col++;
+    }
+
     return [
-      this.stringToLine(label.padEnd(width), width, { fg: '135', bold: true }),
-      this.stringToLine(' '.repeat(width), width)
+      this.stringToLine(' '.repeat(width), width),
+      line,
+      this.stringToLine(' '.repeat(width), width),
     ];
   }
 
