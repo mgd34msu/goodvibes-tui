@@ -286,7 +286,7 @@ async function main() {
       overlayRows += input.modelPicker.getItemCount() + 7; // items + title/empty/divider/detail/bottom
     }
     if (input.selectionModal.active) {
-      overlayRows += Math.min(input.selectionModal.filteredItems.length, 12) + 6; // items + title/search/sep/hints/bottom/pad
+      overlayRows += Math.min(input.selectionModal.filteredItems.length, 12) + 8; // items + title/search/sep/hints/bottom/pad + 2 spacing lines above
     }
     if (input.searchManager.active) {
       overlayRows += 1; // search bar
