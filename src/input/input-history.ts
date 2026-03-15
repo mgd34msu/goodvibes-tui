@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
+import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
 import { dirname, join } from 'path';
 import { homedir } from 'os';
 import { logger } from '../utils/logger.ts';
@@ -24,7 +24,18 @@ export class InputHistory {
 
   constructor(persistPath?: string, persist = true) {
     this.persist = persist;
-    this.historyPath = persistPath ?? join(homedir(), '.config', 'goodvibes', 'input-history.json');
+    const newDefault = join(homedir(), '.goodvibes', 'tui', 'input-history.json');
+    const oldDefault = join(homedir(), '.config', 'goodvibes', 'input-history.json');
+    // Auto-migrate: copy old path to new path if old exists and new doesn't
+    if (existsSync(oldDefault) && !existsSync(newDefault)) {
+      mkdirSync(dirname(newDefault), { recursive: true });
+      try {
+        copyFileSync(oldDefault, newDefault);
+      } catch (_err) {
+        // Non-fatal: proceed with new path regardless
+      }
+    }
+    this.historyPath = persistPath ?? newDefault;
     if (this.persist) {
       this.load();
     }
