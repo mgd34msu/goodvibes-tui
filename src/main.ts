@@ -194,7 +194,7 @@ async function main() {
     runtime,
     renderRequest: () => bus.emit('render:request'),
     print: (text: string) => {
-      conversation.log(text, { fg: '135' });
+      conversation.log(text, { fg: '252' });
       bus.emit('render:request');
     },
     exit: exitApp,

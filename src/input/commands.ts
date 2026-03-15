@@ -128,7 +128,7 @@ export function registerBuiltinCommands(registry: CommandRegistry): void {
         'Keyboard shortcuts:',
         '  Enter             Send message',
         '  Shift+Enter       Insert newline',
-        '  Ctrl+C x2        Exit',
+        '  Ctrl+C x2         Exit',
         '  Ctrl+L            Clear screen',
         '  Ctrl+U            Clear prompt line',
         '  PageUp/PageDown   Scroll by page',
