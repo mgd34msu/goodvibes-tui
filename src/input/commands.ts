@@ -362,20 +362,41 @@ export function registerBuiltinCommands(registry: CommandRegistry): void {
               });
             }
           }
-          ctx.openSelection('Select Config', items, { allowSearch: true }, (result) => {
+          const spaceAction = new Map<string, import('./selection-modal.ts').SelectionAction>([[' ', 'toggle']]);
+          ctx.openSelection('Config Settings  [Space] toggle/cycle', items, { allowSearch: true, customActions: spaceAction }, (result) => {
             if (!result) return;
             const key = result.item.id as import('../config/index.ts').ConfigKey;
             const schema = CONFIG_SCHEMA.find(s => s.key === key);
-            const val = cm.get(key);
-            const defaultVal = schema ? schema.default : '?';
-            const lines = [
-              `${key}`,
-              `  value:   ${String(val)}`,
-              `  default: ${String(defaultVal)}`,
-              `  type:    ${schema ? schema.type : 'unknown'}${schema?.enumValues ? ` (${schema.enumValues.join(', ')})` : ''}`,
-              `  desc:    ${schema ? schema.description : ''}`,
-            ];
-            ctx.print(lines.join('\n'));
+            if (result.action === 'toggle' && schema) {
+              // Toggle boolean or cycle enum
+              const currentVal = cm.get(key);
+              if (schema.type === 'boolean') {
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                cm.set(key, !currentVal as any);
+                ctx.print(`${key} = ${!currentVal}`);
+              } else if (schema.type === 'enum' && schema.enumValues) {
+                const idx = schema.enumValues.indexOf(String(currentVal));
+                const next = schema.enumValues[(idx + 1) % schema.enumValues.length];
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                cm.set(key, next as any);
+                if (key === 'provider.reasoningEffort') ctx.runtime.reasoningEffort = next;
+                ctx.print(`${key} = ${next}`);
+              } else {
+                ctx.print(`${key}: ${String(currentVal)} (use /config ${key} <value> to change)`);
+              }
+            } else {
+              // Select = show detail
+              const val = cm.get(key);
+              const defaultVal = schema ? schema.default : '?';
+              const lines = [
+                `${key}`,
+                `  value:   ${String(val)}`,
+                `  default: ${String(defaultVal)}`,
+                `  type:    ${schema ? schema.type : 'unknown'}${schema?.enumValues ? ` (${schema.enumValues.join(', ')})` : ''}`,
+                `  desc:    ${schema ? schema.description : ''}`,
+              ];
+              ctx.print(lines.join('\n'));
+            }
           });
           return;
         }
