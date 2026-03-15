@@ -138,7 +138,7 @@ export const MODEL_REGISTRY: ModelDefinition[] = [
     displayName: 'Claude Opus 4.6',
     description: 'Anthropic most powerful model.',
     capabilities: { toolCalling: true, codeEditing: true, reasoning: true, multimodal: true },
-    contextWindow: 200000,
+    contextWindow: 1000000,
     selectable: true,
   },
   {
@@ -147,7 +147,7 @@ export const MODEL_REGISTRY: ModelDefinition[] = [
     displayName: 'Claude Sonnet 4.6',
     description: 'Anthropic balanced model — fast and capable.',
     capabilities: { toolCalling: true, codeEditing: true, reasoning: true, multimodal: true },
-    contextWindow: 200000,
+    contextWindow: 1000000,
     selectable: true,
   },
   {
