@@ -815,18 +815,16 @@ export function registerBuiltinCommands(registry: CommandRegistry): void {
     async handler(_args, ctx) {
       const sessionManager = getSessionManager();
       const sessions = sessionManager.list();
-      if (sessions.length === 0) {
-        ctx.print('No saved sessions.\nUse /save [name] to save the current session.');
-        return;
-      }
       if (ctx.openSelection) {
         const deleteAction = new Map([['d', 'delete' as const]]);
-        const items: SelectionItem[] = sessions.map(s => ({
-          id: s.name,
-          label: s.name,
-          detail: s.title || '(untitled)',
-          actions: '[d] delete',
-        }));
+        const items: SelectionItem[] = sessions.length === 0
+          ? [{ id: '_empty', label: 'No saved sessions', detail: 'Use /save [name] to save' }]
+          : sessions.map(s => ({
+            id: s.name,
+            label: s.name,
+            detail: s.title || '(untitled)',
+            actions: '[d] delete',
+          }));
         ctx.openSelection('Sessions', items, { allowSearch: true, customActions: deleteAction }, (result) => {
           if (!result) return;
           if (result.action === 'delete') {
@@ -878,19 +876,17 @@ export function registerBuiltinCommands(registry: CommandRegistry): void {
 
       if (!sub || sub === 'list') {
         const templates = getTemplateManager().list();
-        if (templates.length === 0) {
-          ctx.print('No templates saved.\nUse /template save <name> to save the current prompt as a template.');
-          return;
-        }
         if (ctx.openSelection) {
           const deleteAction = new Map([['d', 'delete' as const], ['e', 'edit' as const]]);
-          const items: SelectionItem[] = templates.map(t => ({
-            id: t.name,
-            label: t.name,
-            detail: t.preview,
-            category: t.scope === 'project' ? 'project' : 'global',
-            actions: '[d] delete  [e] edit',
-          }));
+          const items: SelectionItem[] = templates.length === 0
+            ? [{ id: '_empty', label: 'No templates saved', detail: 'Use /template save <name>' }]
+            : templates.map(t => ({
+              id: t.name,
+              label: t.name,
+              detail: t.preview,
+              category: t.scope === 'project' ? 'project' : 'global',
+              actions: '[d] delete  [e] edit',
+            }));
           ctx.openSelection('Templates', items, { allowSearch: true, customActions: deleteAction }, (result) => {
             if (!result) return;
             if (result.action === 'delete') {
@@ -1182,18 +1178,16 @@ export function registerBuiltinCommands(registry: CommandRegistry): void {
     handler(_args, ctx) {
       const bm = getBookmarkManager();
       const entries = bm.list();
-      if (entries.length === 0) {
-        ctx.print('No bookmarks.\nUse Ctrl+B to bookmark the nearest block.');
-        return;
-      }
       if (ctx.openSelection) {
         const deleteAction = new Map([['d', 'delete' as const]]);
-        const items: SelectionItem[] = entries.map(entry => ({
-          id: entry.key,
-          label: entry.label,
-          detail: new Date(entry.timestamp).toLocaleTimeString(),
-          actions: '[d] delete',
-        }));
+        const items: SelectionItem[] = entries.length === 0
+          ? [{ id: '_empty', label: 'No bookmarks', detail: 'Use Ctrl+B to bookmark' }]
+          : entries.map(entry => ({
+            id: entry.key,
+            label: entry.label,
+            detail: new Date(entry.timestamp).toLocaleTimeString(),
+            actions: '[d] delete',
+          }));
         ctx.openSelection('Bookmarks', items, { allowSearch: true, customActions: deleteAction }, (result) => {
           if (!result) return;
           if (result.action === 'delete') {
