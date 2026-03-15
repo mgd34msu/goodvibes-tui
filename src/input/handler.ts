@@ -6,6 +6,7 @@ import type { InfiniteBuffer } from '../core/history.ts';
 import type { CommandRegistry, CommandContext } from './command-registry.ts';
 import { AutocompleteEngine } from './autocomplete.ts';
 import { FilePickerModal } from './file-picker.ts';
+import { ModelPickerModal } from './model-picker.ts';
 import { SearchManager } from './search.ts';
 import { InputHistory } from './input-history.ts';
 import type { ConversationManager } from '../core/conversation.ts';
@@ -40,6 +41,7 @@ export class InputHandler {
   private commandContext: CommandContext | null = null;
   public autocomplete: AutocompleteEngine | null = null;
   public filePicker = new FilePickerModal();
+  public modelPicker = new ModelPickerModal();
   public searchManager = new SearchManager();
   private inputHistory: InputHistory | null = null;
   private conversationManager: ConversationManager | null = null;
@@ -520,6 +522,11 @@ export class InputHandler {
    * - If prompt is empty: cancel generation (double-tap not needed)
    */
   private handleEscape(): void {
+    // If model picker is active, close it
+    if (this.modelPicker.active) {
+      this.modelPicker.close();
+      return;
+    }
     // If file picker is active, close it (don't clear input)
     if (this.filePicker.active) {
       this.filePicker.close();
@@ -650,6 +657,49 @@ export class InputHandler {
               });
             }
           }
+        }
+        this.bus.emit('render:request');
+        continue;
+      }
+
+      // --- Model picker has focus: intercept all input ---
+      if (this.modelPicker.active) {
+        if (token.type === 'key') {
+          if (token.logicalName === 'escape') {
+            this.modelPicker.close();
+          } else if (token.logicalName === 'enter') {
+            const mode = this.modelPicker.mode;
+            const idx = this.modelPicker.selectedIndex;
+            if (mode === 'model') {
+              // Model chosen — move to effort picker
+              const selected = this.modelPicker.models[idx];
+              if (selected) {
+                this.modelPicker.showEffortPicker(selected, this.commandContext?.runtime.reasoningEffort ?? 'medium');
+              }
+            } else if (mode === 'provider') {
+              // Provider chosen — show that provider's models
+              const selectedProvider = this.modelPicker.providers[idx];
+              if (selectedProvider) {
+                const models = this.commandContext
+                  ? this.commandContext.providerRegistry.getSelectableModels().filter(m => m.provider === selectedProvider)
+                  : [];
+                this.modelPicker.showModelsForProvider(models, selectedProvider);
+              }
+            } else if (mode === 'effort') {
+              // Effort chosen — emit complete and close
+              const model = this.modelPicker.pendingModel;
+              const effort = this.modelPicker.effortLevels[idx];
+              if (model && effort) {
+                this.bus.emit('model-picker:complete', { model, effort });
+              }
+              this.modelPicker.close();
+            }
+          } else if (token.logicalName === 'up') {
+            this.modelPicker.moveUp();
+          } else if (token.logicalName === 'down') {
+            this.modelPicker.moveDown();
+          }
+          // All other keys ignored while model picker is active
         }
         this.bus.emit('render:request');
         continue;

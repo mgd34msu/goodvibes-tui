@@ -37,6 +37,10 @@ export interface EventMap {
   'command:execute': { name: string; args: string[] };
   'command:model-changed': { provider: string; model: string };
 
+  // Model picker events
+  'model-picker:select': { model: { id: string; provider: string; displayName: string } };
+  'model-picker:complete': { model: { id: string; provider: string; displayName: string }; effort: string };
+
   // Search events
   'search:start': void;
   'search:update': { query: string; matchCount: number; currentMatch: number };

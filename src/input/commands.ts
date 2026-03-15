@@ -40,12 +40,17 @@ export function registerBuiltinCommands(registry: CommandRegistry): void {
     usage: '[model-id]',
     handler(args, ctx) {
       if (args.length === 0) {
-        const models = ctx.providerRegistry.getSelectableModels();
-        const current = ctx.runtime.model;
-        const lines = ['Available models:', ...models.map(m =>
-          `  ${m.id === current ? '▶' : ' '} ${m.id.padEnd(36)} ${m.displayName} (${m.provider})`
-        )];
-        ctx.print(lines.join('\n'));
+        // Open the interactive model picker if available, else fall back to list
+        if (ctx.openModelPicker) {
+          ctx.openModelPicker();
+        } else {
+          const models = ctx.providerRegistry.getSelectableModels();
+          const current = ctx.runtime.model;
+          const lines = ['Available models:', ...models.map(m =>
+            `  ${m.id === current ? '▶' : ' '} ${m.id.padEnd(36)} ${m.displayName} (${m.provider})`
+          )];
+          ctx.print(lines.join('\n'));
+        }
       } else {
         const modelId = args[0];
         try {
@@ -480,6 +485,11 @@ export function registerBuiltinCommands(registry: CommandRegistry): void {
     usage: '[provider-name]',
     handler(args, ctx) {
       if (args.length === 0) {
+        // Open the interactive provider picker if available, else fall back to list
+        if (ctx.openProviderPicker) {
+          ctx.openProviderPicker();
+          return;
+        }
         const providers = ['openai', 'anthropic', 'gemini', 'inceptionlabs'];
         const current = ctx.runtime.provider;
         ctx.print(['Available providers:', ...providers.map(p =>
