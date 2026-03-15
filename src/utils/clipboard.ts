@@ -57,3 +57,57 @@ export function pasteFromClipboard(): string {
   }
   return '';
 }
+
+/**
+ * pasteImageFromClipboard - Attempts to read image data from system clipboard.
+ * Returns base64-encoded image data and mediaType, or null if no image is available.
+ */
+export function pasteImageFromClipboard(): { data: string; mediaType: string } | null {
+  try {
+    if (process.platform === 'linux') {
+      // Try wl-paste for Wayland (image/png)
+      const wl = Bun.spawnSync(['wl-paste', '--type', 'image/png', '--no-newline'], {
+        stdin: 'ignore',
+        stdout: 'pipe',
+        stderr: 'ignore',
+        timeout: 3000,
+      });
+      if (wl.exitCode === 0 && wl.stdout) {
+        const wlBuf = Buffer.from(wl.stdout);
+        if (wlBuf.length > 100) {
+          return { data: wlBuf.toString('base64'), mediaType: 'image/png' };
+        }
+      }
+      // Try xclip for X11
+      const xclip = Bun.spawnSync(['xclip', '-selection', 'clipboard', '-t', 'image/png', '-o'], {
+        stdin: 'ignore',
+        stdout: 'pipe',
+        stderr: 'ignore',
+        timeout: 3000,
+      });
+      if (xclip.exitCode === 0 && xclip.stdout) {
+        const xclipBuf = Buffer.from(xclip.stdout);
+        if (xclipBuf.length > 100) {
+          return { data: xclipBuf.toString('base64'), mediaType: 'image/png' };
+        }
+      }
+    } else if (process.platform === 'darwin') {
+      // macOS: try pngpaste
+      const pp = Bun.spawnSync(['pngpaste', '-'], {
+        stdin: 'ignore',
+        stdout: 'pipe',
+        stderr: 'ignore',
+        timeout: 3000,
+      });
+      if (pp.exitCode === 0 && pp.stdout) {
+        const ppBuf = Buffer.from(pp.stdout);
+        if (ppBuf.length > 100) {
+          return { data: ppBuf.toString('base64'), mediaType: 'image/png' };
+        }
+      }
+    }
+  } catch {
+    // Clipboard image access failed — not a fatal error
+  }
+  return null;
+}

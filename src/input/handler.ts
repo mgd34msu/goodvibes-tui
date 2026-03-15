@@ -1,6 +1,6 @@
 import { InputTokenizer } from '../core/tokenizer.ts';
 import { SelectionManager } from './selection.ts';
-import { copyToClipboard, pasteFromClipboard } from '../utils/clipboard.ts';
+import { copyToClipboard, pasteFromClipboard, pasteImageFromClipboard } from '../utils/clipboard.ts';
 import type { EventBus } from '../core/event-bus.ts';
 import type { InfiniteBuffer } from '../core/history.ts';
 import type { CommandRegistry, CommandContext } from './command-registry.ts';
@@ -9,8 +9,10 @@ import { FilePickerModal } from './file-picker.ts';
 import { InputHistory } from './input-history.ts';
 import type { ConversationManager } from '../core/conversation.ts';
 import type { PermissionCategory } from '../permissions/manager.ts';
-import { readFileSync, writeFileSync } from 'node:fs';
+import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { resolveAndValidatePath } from '../utils/path-safety.ts';
+import type { ContentPart } from '../providers/interface.ts';
+import { logger } from '../utils/logger.ts';
 
 /**
  * InputHandler - Owns prompt text, paste registry, and keyboard/mouse handling.
@@ -48,6 +50,17 @@ export class InputHandler {
   /** Regex matching atomic markers in the prompt. Used by findMarkerAtPos and expandPrompt. */
   private static readonly MARKER_REGEX = /\[(TEXT|IMAGE): [^\]]+\]/g;
 
+  /** Data-driven base64 image prefix detection. */
+  private static readonly IMAGE_PREFIXES: { prefix: string; mediaType: string }[] = [
+    { prefix: 'iVBORw0KGgo', mediaType: 'image/png' },
+    { prefix: '/9j/', mediaType: 'image/jpeg' },
+    { prefix: 'UklGR', mediaType: 'image/webp' },
+    { prefix: 'R0lGOD', mediaType: 'image/gif' },
+  ];
+
+  /** Image file extensions handled as image attachments. */
+  private static readonly IMAGE_EXTENSIONS = ['.png', '.jpg', '.jpeg', '.webp', '.gif'];
+
   constructor(
     private bus: EventBus,
     private selection: SelectionManager,
@@ -84,23 +97,61 @@ export class InputHandler {
   }
 
   /**
+   * formatFileSize - Format bytes into a human-readable size string.
+   */
+  private static formatFileSize(bytes: number): string {
+    if (bytes < 1024) return `${bytes}B`;
+    if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)}KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)}MB`;
+  }
+
+  /**
+   * mediaTypeFromExt - Get image mediaType from file extension.
+   */
+  private static mediaTypeFromExt(ext: string): string {
+    switch (ext.toLowerCase()) {
+      case '.png': return 'image/png';
+      case '.webp': return 'image/webp';
+      case '.gif': return 'image/gif';
+      default: return 'image/jpeg';
+    }
+  }
+
+  /**
    * registerPaste - Stores multi-line content and returns a visual marker string.
-   * Also detects base64 image data (PNG or JPEG) and registers it as an image.
+   * Detects base64 image data (PNG, JPEG, WebP, GIF), image file paths, and text pastes.
    */
   public registerPaste(content: string): string {
-    // Detect base64-encoded image data
+    // Detect base64-encoded image data (data-driven prefix check)
     const trimmed = content.trim();
-    if (trimmed.length > 100 && trimmed.startsWith('iVBORw0KGgo')) {
-      // PNG base64 header
-      const id = `img${this.nextImageId++}`;
-      this.imageRegistry.set(id, { data: trimmed, mediaType: 'image/png' });
-      return `[IMAGE: clipboard]`;
+    if (trimmed.length > 100) {
+      for (const { prefix, mediaType } of InputHandler.IMAGE_PREFIXES) {
+        if (trimmed.startsWith(prefix)) {
+          const id = `img${this.nextImageId++}`;
+          const sizeKB = Math.round(trimmed.length * 3 / 4 / 1024);
+          this.imageRegistry.set(id, { data: trimmed, mediaType });
+          return `[IMAGE: ${id}, clipboard, ${sizeKB}KB]`;
+        }
+      }
     }
-    if (trimmed.length > 100 && trimmed.startsWith('/9j/')) {
-      // JPEG base64 header
-      const id = `img${this.nextImageId++}`;
-      this.imageRegistry.set(id, { data: trimmed, mediaType: 'image/jpeg' });
-      return `[IMAGE: clipboard]`;
+
+    // Detect pasted file paths that are images
+    if (InputHandler.IMAGE_EXTENSIONS.some(ext => trimmed.toLowerCase().endsWith(ext))) {
+      try {
+        const resolvedPath = resolveAndValidatePath(trimmed);
+        if (existsSync(resolvedPath)) {
+          const data = readFileSync(resolvedPath);
+          const base64 = data.toString('base64');
+          const ext = trimmed.slice(trimmed.lastIndexOf('.'));
+          const mediaType = InputHandler.mediaTypeFromExt(ext);
+          const filename = trimmed.split('/').pop() ?? 'image';
+          const id = `img${this.nextImageId++}`;
+          this.imageRegistry.set(id, { data: base64, mediaType });
+          return `[IMAGE: ${id}, ${filename}, ${InputHandler.formatFileSize(data.length)}]`;
+        }
+      } catch (err) {
+        logger.debug('registerPaste: could not read image file path', { err });
+      }
     }
 
     const lines = content.split('\n');
@@ -112,9 +163,10 @@ export class InputHandler {
 
   /**
    * expandPrompt - Replaces paste markers with actual content.
-   * Image markers are replaced with a human-readable description.
+   * If image markers are present, returns ContentPart[] for multimodal delivery.
+   * Otherwise returns a plain string.
    */
-  private expandPrompt(text: string): string {
+  private expandPrompt(text: string): string | ContentPart[] {
     const foundPasteIds = new Set<string>();
     const markerRegex = /\[TEXT: (p\d+), (\d+) lines\]/g;
 
@@ -141,15 +193,53 @@ export class InputHandler {
       }
     }
 
-    // Replace image markers with descriptive text; keep registry entry
-    expanded = expanded.replace(/\[IMAGE: clipboard\]/g, '[Image: clipboard paste]');
-
-    // Clean up stale image registry entries (no markers remain)
-    if (!expanded.includes('[Image: clipboard paste]')) {
-      this.imageRegistry.clear();
+    // Check for image markers — extract ID from each marker and look up directly
+    const imageMarkerRegex = /\[IMAGE: (img\d+), [^\]]+\]/g;
+    const imageMarkers: { marker: string; index: number; id: string }[] = [];
+    let imgMatch;
+    while ((imgMatch = imageMarkerRegex.exec(expanded)) !== null) {
+      imageMarkers.push({ marker: imgMatch[0], index: imgMatch.index, id: imgMatch[1] });
     }
 
-    return expanded;
+    if (imageMarkers.length === 0) {
+      // No images — clean up stale registry and return plain string
+      this.imageRegistry.clear();
+      return expanded;
+    }
+
+    // Build ContentPart array: interleave text segments and image parts
+    // Images are looked up by ID extracted from the marker
+    const parts: ContentPart[] = [];
+    let lastIndex = 0;
+    const usedIds = new Set<string>();
+
+    for (const { marker, index, id } of imageMarkers) {
+      // Text before this image marker
+      if (index > lastIndex) {
+        const textSegment = expanded.slice(lastIndex, index);
+        if (textSegment) parts.push({ type: 'text', text: textSegment });
+      }
+      // Image part — look up by ID
+      const img = this.imageRegistry.get(id);
+      if (img) {
+        parts.push({ type: 'image', data: img.data, mediaType: img.mediaType });
+        usedIds.add(id);
+      }
+      lastIndex = index + marker.length;
+    }
+
+    // Trailing text after last image marker
+    if (lastIndex < expanded.length) {
+      const textSegment = expanded.slice(lastIndex);
+      if (textSegment) parts.push({ type: 'text', text: textSegment });
+    }
+
+    // Keep only used image ids in registry
+    for (const id of this.imageRegistry.keys()) {
+      if (!usedIds.has(id)) this.imageRegistry.delete(id);
+    }
+
+    return parts;
   }
 
   /**
@@ -164,6 +254,17 @@ export class InputHandler {
    * findMarkerAtPos - Returns the start/end of an atomic marker if pos is inside one.
    * Used to make backspace/delete/arrow treat markers as single units.
    */
+  /**
+   * cleanupMarkerRegistry - If the given marker text is an IMAGE marker,
+   * parses its ID and removes it from imageRegistry.
+   */
+  private cleanupMarkerRegistry(markerText: string): void {
+    const match = /^\[IMAGE: (img\d+),/.exec(markerText);
+    if (match) {
+      this.imageRegistry.delete(match[1]);
+    }
+  }
+
   private findMarkerAtPos(pos: number): { start: number; end: number } | null {
     const markerRegex = new RegExp(InputHandler.MARKER_REGEX.source, 'g');
     let m;
@@ -345,11 +446,34 @@ export class InputHandler {
           } else if (token.logicalName === 'enter') {
             const selected = this.filePicker.getSelected();
             if (selected) {
-              // Replace @query with the selected file path
               const atPos = this.filePicker.insertPos;
               const queryLen = this.filePicker.query.length + 1; // +1 for the @
-              this.prompt = this.prompt.slice(0, atPos) + '@' + selected + this.prompt.slice(atPos + queryLen);
-              this.cursorPos = atPos + selected.length + 1; // +1 for @
+              // Check if selected file is an image
+              const ext = selected.slice(selected.lastIndexOf('.'));
+              if (InputHandler.IMAGE_EXTENSIONS.some(e => e === ext.toLowerCase())) {
+                // Image file — read and store in imageRegistry, insert marker
+                try {
+                  const resolvedPath = resolveAndValidatePath(selected);
+                  const data = readFileSync(resolvedPath);
+                  const base64 = data.toString('base64');
+                  const mediaType = InputHandler.mediaTypeFromExt(ext);
+                  const filename = selected.split('/').pop() ?? selected;
+                  const id = `img${this.nextImageId++}`;
+                  this.imageRegistry.set(id, { data: base64, mediaType });
+                  const marker = `[IMAGE: ${id}, ${filename}, ${InputHandler.formatFileSize(data.length)}]`;
+                  this.prompt = this.prompt.slice(0, atPos) + marker + this.prompt.slice(atPos + queryLen);
+                  this.cursorPos = atPos + marker.length;
+                } catch (err) {
+                  logger.debug('file-picker: could not read image file', { err });
+                  // Fallback: insert as text path if file read fails
+                  this.prompt = this.prompt.slice(0, atPos) + '@' + selected + this.prompt.slice(atPos + queryLen);
+                  this.cursorPos = atPos + selected.length + 1;
+                }
+              } else {
+                // Non-image file — insert @path as before
+                this.prompt = this.prompt.slice(0, atPos) + '@' + selected + this.prompt.slice(atPos + queryLen);
+                this.cursorPos = atPos + selected.length + 1; // +1 for @
+              }
               this.ensureInputCursorVisible();
             }
             this.filePicker.close();
@@ -586,8 +710,17 @@ export class InputHandler {
               this.inputHistory?.add(text);
               this.prompt = '';
               this.cursorPos = 0;
-              const fullText = this.expandPrompt(text);
-              this.bus.emit('input:submit', { text: fullText });
+              const expanded = this.expandPrompt(text);
+              if (typeof expanded === 'string') {
+                this.bus.emit('input:submit', { text: expanded });
+              } else {
+                // ContentPart[] — extract text portions for display/history
+                const textOnly = expanded
+                  .filter((p): p is { type: 'text'; text: string } => p.type === 'text')
+                  .map(p => p.text)
+                  .join('');
+                this.bus.emit('input:submit', { text: textOnly, content: expanded });
+              }
             }
           }
           continue;
@@ -597,7 +730,9 @@ export class InputHandler {
           if (this.cursorPos > 0) {
             const marker = this.findMarkerAtPos(this.cursorPos);
             if (marker) {
-              // Delete entire atomic marker
+              // Delete entire atomic marker and clean up registry
+              const markerText = this.prompt.slice(marker.start, marker.end);
+              this.cleanupMarkerRegistry(markerText);
               this.prompt = this.prompt.slice(0, marker.start) + this.prompt.slice(marker.end);
               this.cursorPos = marker.start;
             } else {
@@ -610,7 +745,9 @@ export class InputHandler {
           if (this.cursorPos < this.prompt.length) {
             const marker = this.findMarkerAtPos(this.cursorPos + 1);
             if (marker) {
-              // Delete entire atomic marker
+              // Delete entire atomic marker and clean up registry
+              const markerText = this.prompt.slice(marker.start, marker.end);
+              this.cleanupMarkerRegistry(markerText);
               this.prompt = this.prompt.slice(0, marker.start) + this.prompt.slice(marker.end);
             } else {
               this.prompt = this.prompt.slice(0, this.cursorPos) + this.prompt.slice(this.cursorPos + 1);
@@ -699,6 +836,18 @@ export class InputHandler {
             this.prompt = this.prompt.slice(0, this.cursorPos) + text + this.prompt.slice(this.cursorPos);
             this.cursorPos += text.length;
             this.ensureInputCursorVisible();
+          } else {
+            // No text in clipboard — try image clipboard
+            const img = pasteImageFromClipboard();
+            if (img) {
+              const id = `img${this.nextImageId++}`;
+              const sizeBytes = Math.round(img.data.length * 3 / 4);
+              this.imageRegistry.set(id, img);
+              const marker = `[IMAGE: clipboard, ${InputHandler.formatFileSize(sizeBytes)}]`;
+              this.prompt = this.prompt.slice(0, this.cursorPos) + marker + this.prompt.slice(this.cursorPos);
+              this.cursorPos += marker.length;
+              this.ensureInputCursorVisible();
+            }
           }
           this.bus.emit('render:request');
           continue;

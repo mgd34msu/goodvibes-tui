@@ -106,7 +106,7 @@ describe('Orchestrator', () => {
       // This should queue, not call LLM (which would fail without a valid provider)
       orch.handleUserInput('queued message');
 
-      expect(orch.messageQueue).toContain('queued message');
+      expect(orch.messageQueue.map(m => m.text)).toContain('queued message');
       expect(renderCount).toBeGreaterThan(0);
     });
 
@@ -126,7 +126,7 @@ describe('Orchestrator', () => {
       orch.handleUserInput('second');
       orch.handleUserInput('third');
 
-      expect(orch.messageQueue).toEqual(['first', 'second', 'third']);
+      expect(orch.messageQueue.map(m => m.text)).toEqual(['first', 'second', 'third']);
     });
   });
 

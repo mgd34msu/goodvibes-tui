@@ -5,7 +5,7 @@ import type { ToolCall, ToolResult } from '../types/tools.ts';
 import { PermissionError, ProviderError, ToolError } from '../types/errors.ts';
 import { formatProviderError } from '../utils/error-display.ts';
 import { providerRegistry } from '../providers/registry.ts';
-import type { LLMProvider, StreamDelta } from '../providers/interface.ts';
+import type { LLMProvider, StreamDelta, ContentPart } from '../providers/interface.ts';
 import { config, configManager } from '../config/index.ts';
 import type { PermissionManager } from '../permissions/manager.ts';
 import type { AcpManager } from '../acp/manager.ts';
@@ -21,7 +21,7 @@ export class Orchestrator {
   public isThinking = false;
   public thinkingFrame = 0;
   public usage = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 };
-  public messageQueue: string[] = [];
+  public messageQueue: { text: string; content?: ContentPart[] }[] = [];
 
   private animInterval: ReturnType<typeof setInterval> | null = null;
   private abortController: AbortController | null = null;
@@ -119,22 +119,24 @@ export class Orchestrator {
   /**
    * handleUserInput - Entry point for a user-submitted message.
    * Queues if already thinking, otherwise kicks off the LLM turn.
+   * @param text - Plain text representation (for display and queuing).
+   * @param content - Optional ContentPart[] for multimodal messages.
    */
-  public async handleUserInput(text: string): Promise<void> {
-    if (!text.trim()) return;
+  public async handleUserInput(text: string, content?: ContentPart[]): Promise<void> {
+    if (!text.trim() && !content?.length) return;
 
     if (this.isThinking) {
-      this.messageQueue.push(text);
+      this.messageQueue.push({ text, content });
       this.bus.emit('render:request');
       return;
     }
 
-    await this.runTurn(text);
+    await this.runTurn(text, content);
 
     // Process any messages queued while the LLM was thinking (iterative, not recursive)
     while (this.messageQueue.length > 0) {
       const next = this.messageQueue.shift()!;
-      await this.runTurn(next);
+      await this.runTurn(next.text, next.content);
     }
   }
 
@@ -158,9 +160,29 @@ export class Orchestrator {
     this.bus.emit('render:request');
   }
 
-  private async runTurn(text: string): Promise<void> {
+  private async runTurn(text: string, content?: ContentPart[]): Promise<void> {
     this.bus.emit('turn:start', { prompt: text });
-    this.conversation.addUserMessage(text);
+
+    // Capability check: if model doesn't support multimodal, strip images and warn
+    if (content && content.some(p => p.type === 'image')) {
+      const model = providerRegistry.getCurrentModel();
+      if (!model.capabilities.multimodal) {
+        this.conversation.addSystemMessage(
+          `Warning: ${model.displayName} does not support image input. Images have been removed from this message.`
+        );
+        // Keep only text parts
+        const textOnly = content
+          .filter((p): p is { type: 'text'; text: string } => p.type === 'text')
+          .map(p => p.text)
+          .join('');
+        this.conversation.addUserMessage(textOnly || text);
+      } else {
+        this.conversation.addUserMessage(content);
+      }
+    } else {
+      this.conversation.addUserMessage(content ?? text);
+    }
+
     this.turnStartMessageCount = this.conversation.getMessageCount();
     this.scrollToEnd(this.getViewportHeight());
     this.startThinking();
