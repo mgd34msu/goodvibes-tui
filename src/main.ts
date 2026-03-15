@@ -125,7 +125,7 @@ async function main() {
 
   const getViewportHeight = () => {
     const promptLines = input.getVisiblePromptLineCount(getPromptContentWidth());
-    return (stdout.rows || 24) - 2 - (7 + promptLines);
+    return (stdout.rows || 24) - 2 - (9 + promptLines);
   };
 
   const scroll = (delta: number) => {
@@ -260,7 +260,7 @@ async function main() {
     const viewport = conversation.history.getSnapshot(scrollTop, effectiveVHeight, width);
 
     if (orchestrator.isThinking) {
-      const thinking = UIFactory.createThinkingFragment(width, orchestrator.getSpinner());
+      const thinking = UIFactory.createThinkingFragment(width, orchestrator.getSpinner(), orchestrator.thinkingFrame);
       viewport.push(...thinking);
     }
 

@@ -463,6 +463,9 @@ export class ConversationManager {
     });
     this.history.addLine(createEmptyLine(width));
     this.history.addLine(createEmptyLine(width));
+    this.history.addLine(createEmptyLine(width));
+    this.history.addLine(createEmptyLine(width));
+    this.history.addLine(createEmptyLine(width));
   }
 
   public textToLines(text: string, width: number, style: Partial<Cell> = {}): Line[] {

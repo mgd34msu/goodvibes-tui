@@ -41,6 +41,7 @@ export function getSplashLines(columns: number, opts: SplashOptions = {}): strin
     center(SEPARATOR, columns),
     center(TAGLINE, columns),
     center(VERSION_LINE, columns),
+    '',
   ];
 
   // Just a simple hint on the splash
