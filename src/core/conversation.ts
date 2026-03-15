@@ -370,18 +370,23 @@ export class ConversationManager {
         }
         // Render assistant content using the markdown renderer
         if (m.content) {
-          const rendered = renderMarkdown(m.content, width);
+          const gutterW = 6; // '  1 | ' = 6 chars
+          const contentWidth = showLineNumbers ? width - gutterW : width;
+          const rendered = renderMarkdown(m.content, contentWidth);
           if (showLineNumbers) {
-            // Prepend dimmed 4-char gutter: '  1 |', '  2 |', etc.
+            // Prepend dimmed gutter and shift content right
             const numbered = rendered.map((line, i) => {
-              const label = String(i + 1).padStart(3) + ' |';
-              const gutterLine = UIFactory.stringToLine(label, width, { fg: '238', dim: true });
-              // Overlay gutter at start of line (first 5 cells)
-              const combined = [...line];
-              for (let ci = 0; ci < Math.min(5, gutterLine.length, combined.length); ci++) {
-                combined[ci] = gutterLine[ci];
+              const label = String(i + 1).padStart(4) + ' \u2502 ';
+              const gutterCells = UIFactory.stringToLine(label, gutterW, { fg: '238', dim: true });
+              // Build full-width line: gutter + content
+              const fullLine = createEmptyLine(width);
+              for (let ci = 0; ci < gutterW && ci < gutterCells.length; ci++) {
+                fullLine[ci] = gutterCells[ci];
               }
-              return combined;
+              for (let ci = 0; ci < line.length && gutterW + ci < width; ci++) {
+                fullLine[gutterW + ci] = line[ci];
+              }
+              return fullLine;
             });
             this.history.addLines(numbered);
           } else {
