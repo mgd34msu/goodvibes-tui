@@ -224,15 +224,14 @@ export class UIFactory {
     const copiedNotice = isRecentlyCopied ? ` [COPIED] ` : '';
     const statsLine = '  ' + tokenLine + ' '.repeat(Math.max(0, width - 4 - getDisplayWidth(tokenLine) - getDisplayWidth(copiedNotice))) + copiedNotice;
     lines.push(this.stringToLine(statsLine, width, { fg: isRecentlyCopied ? '81' : '244', bold: isRecentlyCopied }));
-    // Progress bars: token budget and compact threshold
+    // Context usage progress bar
     if (contextWindow && contextWindow > 0) {
-      const barWidth = Math.max(10, Math.min(30, width - 20));
+      const label = '   Context Usage: ';
+      const suffix = ` [ ${fmtNum(total)} / ${fmtNum(contextWindow)} ]`;
+      const barWidth = Math.max(10, Math.min(30, width - getDisplayWidth(label) - getDisplayWidth(suffix) - 8));
       const ctxPct = Math.min(1, total / contextWindow);
-      lines.push(this.createProgressBarLine('  ctx     ', ctxPct, barWidth, width));
-      const thresholdPct = compactThreshold ?? 80;
-      const threshold = thresholdPct / 100;
-      const compactPct = Math.min(1, ctxPct / Math.max(0.01, threshold));
-      lines.push(this.createProgressBarLine(`  to compact (${thresholdPct}%) `, compactPct, barWidth, width));
+      lines.push(createBaseLine());
+      lines.push(this.createProgressBarLine(label, ctxPct, barWidth, width, suffix));
     }
     // Context info line (working dir, model+provider, tools)
     if (workingDir || model) {
@@ -342,13 +341,14 @@ export class UIFactory {
    * @param barWidth - Number of bar characters
    * @param lineWidth - Total terminal width to slice to
    */
-  private static createProgressBarLine(label: string, pct: number, barWidth: number, lineWidth: number): Line {
+  private static createProgressBarLine(label: string, pct: number, barWidth: number, lineWidth: number, suffix?: string): Line {
     const pctDisplay = Math.round(pct * 100);
     const filled = Math.round(pct * barWidth);
     const color = pct < 0.6 ? '82' : pct < 0.85 ? '220' : '196';
     const bar = '\u2588'.repeat(filled) + '\u2591'.repeat(barWidth - filled);
     const pctStr = `  ${pctDisplay}%`;
-    return this.stringToLine((label + bar + pctStr).slice(0, lineWidth), lineWidth, { fg: color, dim: true });
+    const full = label + bar + pctStr + (suffix ?? '');
+    return this.stringToLine(full.slice(0, lineWidth), lineWidth, { fg: color, dim: true });
   }
 
   public static stringToLine(text: string, width: number, style: Partial<Cell> = {}): Line {
