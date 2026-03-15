@@ -24,6 +24,7 @@ import { PermissionPromptUI } from './permissions/prompt.ts';
 import type { PermissionRequest } from './permissions/prompt.ts';
 import { CommandRegistry } from './input/command-registry.ts';
 import { renderFilePickerOverlay } from './renderer/file-picker-overlay.ts';
+import { renderModelPickerOverlay } from './renderer/model-picker-overlay.ts';
 import { renderSearchOverlay } from './renderer/search-overlay.ts';
 import { registerBuiltinCommands } from './input/commands.ts';
 import { InputHistory } from './input/input-history.ts';
@@ -205,6 +206,39 @@ async function main() {
   input.setContentWidth(getPromptContentWidth());
   input.filePicker.setOnUpdate(() => bus.emit('render:request'));
 
+  // --- Model picker wiring ---
+  commandContext.openModelPicker = () => {
+    const models = providerRegistry.getSelectableModels();
+    input.modelPicker.open(models, runtime.model);
+    bus.emit('render:request');
+  };
+
+  commandContext.openProviderPicker = () => {
+    const providers = ['openai', 'anthropic', 'gemini', 'inceptionlabs'];
+    input.modelPicker.openProviders(providers, runtime.provider);
+    bus.emit('render:request');
+  };
+
+  // When model+effort selection is complete via the picker, apply both
+  bus.on('model-picker:complete', (data) => {
+    const def = data.model;
+    const effort = data.effort;
+    try {
+      providerRegistry.setCurrentModel(def.id);
+      runtime.model = def.id;
+      runtime.provider = def.provider;
+      runtime.reasoningEffort = effort;
+      configManager.set('provider.model', def.id);
+      configManager.set('provider.provider', def.provider);
+      configManager.set('provider.reasoningEffort', effort);
+      conversation.log(`Switched to model: ${def.displayName} (${def.provider}), effort: ${effort}`, { fg: '135' });
+      bus.emit('command:model-changed', { provider: def.provider, model: def.id });
+    } catch (e) {
+      conversation.log(`Error switching model: ${(e as Error).message}`, { fg: '#ef4444' });
+    }
+    bus.emit('render:request');
+  });
+
   // --- Input history ---
   const saveHistory = configManager.get('behavior.saveHistory');
   const inputHistory = new InputHistory(undefined, saveHistory);
@@ -242,6 +276,9 @@ async function main() {
     overlayRows += orchestrator.messageQueue.length * 3; // queued messages
     if (input.filePicker.active) {
       overlayRows += Math.min(input.filePicker.results.length, 12) + 4; // results + borders/search
+    }
+    if (input.modelPicker.active) {
+      overlayRows += input.modelPicker.getItemCount() + 7; // items + title/empty/divider/detail/bottom
     }
     if (input.searchManager.active) {
       overlayRows += 1; // search bar
@@ -281,6 +318,10 @@ async function main() {
 
     if (input.filePicker.active) {
       viewport.push(...renderFilePickerOverlay(input.filePicker, width));
+    }
+
+    if (input.modelPicker.active) {
+      viewport.push(...renderModelPickerOverlay(input.modelPicker, width));
     }
 
     if (input.searchManager.active) {

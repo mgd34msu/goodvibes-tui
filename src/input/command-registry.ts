@@ -31,6 +31,10 @@ export interface CommandContext {
   exit: () => void;
   /** Reload system prompt from file (if configured). Returns new prompt string. */
   reloadSystemPrompt?: () => string;
+  /** Open the model picker modal. */
+  openModelPicker?: () => void;
+  /** Open the provider picker modal. */
+  openProviderPicker?: () => void;
   /** Registry of all available tools. */
   toolRegistry: ToolRegistry;
 }
