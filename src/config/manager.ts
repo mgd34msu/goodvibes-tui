@@ -1,5 +1,5 @@
-import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'fs';
-import { join } from 'path';
+import { readFileSync, writeFileSync, existsSync, mkdirSync, copyFileSync } from 'fs';
+import { join, dirname } from 'path';
 import { homedir } from 'os';
 import type { GoodVibesConfig, ConfigKey, ConfigValue, ConfigSetting } from './schema.ts';
 import { DEFAULT_CONFIG, CONFIG_SCHEMA } from './schema.ts';
@@ -20,19 +20,62 @@ export interface ConfigOverrides {
   workingDir?: string;
 }
 
+/** Auto-migrate: copy old path to new path if old exists and new doesn't. */
+function migrateIfNeeded(oldPath: string, newPath: string): void {
+  if (existsSync(oldPath) && !existsSync(newPath)) {
+    mkdirSync(dirname(newPath), { recursive: true });
+    try {
+      copyFileSync(oldPath, newPath);
+      logger.debug('Migrated config', { from: oldPath, to: newPath });
+    } catch (err: unknown) {
+      // Silently ignore EEXIST — newPath was created between check and copy
+      if ((err as NodeJS.ErrnoException).code !== 'EEXIST') throw err;
+    }
+  }
+}
+
+/**
+ * Ensure the shared ~/.goodvibes/goodvibes.json exists (empty object if not).
+ * This is reserved for future cross-app use — no TUI settings go here.
+ */
+function ensureSharedConfig(): void {
+  const sharedPath = join(homedir(), '.goodvibes', 'goodvibes.json');
+  if (!existsSync(sharedPath)) {
+    mkdirSync(dirname(sharedPath), { recursive: true });
+    try {
+      writeFileSync(sharedPath, '{}\n', 'utf-8');
+    } catch (err) {
+      logger.debug('Could not create shared goodvibes.json (non-fatal)', { error: String(err) });
+    }
+  }
+}
+
 /**
  * ConfigManager — Layered, mutable, persistent config system.
  *
- * Load order: defaults < global config file < CLI overrides
+ * Load order: defaults < global TUI settings < project TUI settings < CLI overrides
  * API keys are never persisted — loaded from env vars only.
  */
 export class ConfigManager {
   private config: GoodVibesConfig;
   private readonly configPath: string;
+  private readonly projectConfigPath: string;
 
   constructor(overrides?: ConfigOverrides) {
-    this.configPath = join(homedir(), '.config', 'goodvibes', 'config.json');
+    this.configPath = join(homedir(), '.goodvibes', 'tui', 'settings.json');
+    const projectRoot = overrides?.workingDir ?? process.cwd();
+    this.projectConfigPath = join(projectRoot, '.goodvibes', 'tui', 'settings.json');
     this.config = deepMerge(DEFAULT_CONFIG, {}) as GoodVibesConfig;
+
+    // Auto-migrate from old path if needed
+    migrateIfNeeded(
+      join(homedir(), '.config', 'goodvibes', 'config.json'),
+      this.configPath
+    );
+
+    // Ensure shared config exists
+    ensureSharedConfig();
+
     this.load();
 
     // Apply constructor overrides (CLI args, etc.) after load
@@ -85,9 +128,9 @@ export class ConfigManager {
     return structuredClone(this.config[category]);
   }
 
-  /** Return the live internal config reference. For Proxy/internal use only — do NOT mutate. */
-  getRaw(): GoodVibesConfig {
-    return this.config;
+  /** Return a shallow-frozen reference to the live internal config. For Proxy/internal use only — do NOT mutate. */
+  getRaw(): Readonly<GoodVibesConfig> {
+    return Object.freeze(this.config);
   }
 
   /** Return the full schema. */
@@ -95,37 +138,57 @@ export class ConfigManager {
     return CONFIG_SCHEMA;
   }
 
-  /** Persist current config to disk. Never writes apiKeys. */
+  /** Persist current config to global TUI settings file. */
   save(): void {
     try {
-      const dir = join(homedir(), '.config', 'goodvibes');
-      mkdirSync(dir, { recursive: true });
-      // Persist only the nested config structure (no apiKeys)
+      mkdirSync(dirname(this.configPath), { recursive: true });
       writeFileSync(this.configPath, JSON.stringify(this.config, null, 2) + '\n', 'utf-8');
     } catch (err) {
       logger.debug('Config save failed (non-fatal)', { error: String(err) });
     }
   }
 
-  /** Load config from disk and deep-merge with defaults. */
-  load(): void {
-    if (!existsSync(this.configPath)) return;
+  /** Persist current config to project-level TUI settings file (.goodvibes/tui/settings.json). */
+  saveProject(): void {
     try {
-      const raw = readFileSync(this.configPath, 'utf-8');
-      const parsed = JSON.parse(raw) as Record<string, unknown>;
-
-      // Auto-migrate: detect old flat format (has top-level 'model' or 'provider' string keys)
-      if (typeof parsed.model === 'string' || typeof parsed.provider === 'string') {
-        const migrated = migrateOldConfig(parsed);
-        this.config = deepMerge(DEFAULT_CONFIG, migrated) as GoodVibesConfig;
-        // Save the migrated format
-        this.save();
-        return;
-      }
-
-      this.config = deepMerge(DEFAULT_CONFIG, parsed) as GoodVibesConfig;
+      mkdirSync(dirname(this.projectConfigPath), { recursive: true });
+      writeFileSync(this.projectConfigPath, JSON.stringify(this.config, null, 2) + '\n', 'utf-8');
     } catch (err) {
-      logger.debug('Config load failed (non-fatal, using defaults)', { error: String(err) });
+      logger.debug('Project config save failed (non-fatal)', { error: String(err) });
+    }
+  }
+
+  /** Load config from disk: global then project (project wins). Deep-merges with defaults. */
+  load(): void {
+    // Load global settings
+    if (existsSync(this.configPath)) {
+      try {
+        const raw = readFileSync(this.configPath, 'utf-8');
+        const parsed = JSON.parse(raw) as Record<string, unknown>;
+
+        // Auto-migrate: detect old flat format (has top-level 'model' or 'provider' string keys)
+        if (typeof parsed.model === 'string' || typeof parsed.provider === 'string') {
+          const migrated = migrateOldConfig(parsed);
+          this.config = deepMerge(DEFAULT_CONFIG, migrated) as GoodVibesConfig;
+          // Save the migrated format
+          this.save();
+        } else {
+          this.config = deepMerge(DEFAULT_CONFIG, parsed) as GoodVibesConfig;
+        }
+      } catch (err) {
+        logger.debug('Global config load failed (non-fatal, using defaults)', { error: String(err) });
+      }
+    }
+
+    // Load project settings and deep-merge on top (project wins)
+    if (existsSync(this.projectConfigPath)) {
+      try {
+        const raw = readFileSync(this.projectConfigPath, 'utf-8');
+        const parsed = JSON.parse(raw) as Record<string, unknown>;
+        this.config = deepMerge(this.config, parsed) as GoodVibesConfig;
+      } catch (err) {
+        logger.debug('Project config load failed (non-fatal)', { error: String(err) });
+      }
     }
   }
 
@@ -148,16 +211,18 @@ export class ConfigManager {
   }
 }
 
-/** Deep-merge source into target. Returns a new object. */
+/** Deep-merge source into target. Returns a new object. Source non-objects are ignored — target clone is returned.
+ * Non-object source values will not overwrite object target values (type-safe merge). */
 function deepMerge(target: unknown, source: unknown): unknown {
-  if (!isObject(target) || !isObject(source)) return target;
-  const result: Record<string, unknown> = { ...target };
+  const result: Record<string, unknown> = isObject(target) ? { ...target } : {};
+  if (!isObject(source)) return result;
   for (const key of Object.keys(source)) {
     const sv = source[key];
-    const tv = target[key as keyof typeof target];
+    const tv = result[key];
     if (isObject(sv) && isObject(tv)) {
       result[key] = deepMerge(tv, sv);
-    } else if (sv !== undefined) {
+    } else if (sv !== undefined && !isObject(tv)) {
+      // Only overwrite non-object target values — never replace an object with a scalar
       result[key] = sv;
     }
   }

@@ -3,6 +3,7 @@ import type { ConfigKey } from '../config/index.ts';
 import { CONFIG_SCHEMA } from '../config/index.ts';
 import { REASONING_BUDGET_MAP } from '../providers/interface.ts';
 import { join } from 'path';
+import { getSessionManager } from '../sessions/manager.ts';
 
 /** Exportable conversation shape returned by ConversationManager.toJSON(). */
 interface ExportableConversation {
@@ -79,6 +80,9 @@ export function registerBuiltinCommands(registry: CommandRegistry): void {
         '    /compact          Summarize conversation to free context',
         '    /export [file]    Export conversation as markdown',
         '    /title [text]     Show or set conversation title',
+        '    /save [name]      Save current session to .goodvibes/tui/sessions/',
+        '    /load <name>      Load a saved session',
+        '    /sessions         List saved sessions',
         '',
         '  Tools & System:',
         '    /tools            List available tools',
@@ -475,6 +479,81 @@ export function registerBuiltinCommands(registry: CommandRegistry): void {
         ctx.print(`Title set to: ${ctx.conversationManager.title}`);
         ctx.renderRequest();
       }
+    },
+  });
+
+  // ── /save ─────────────────────────────────────────────
+  registry.register({
+    name: 'save',
+    aliases: [],
+    description: 'Save current session to .goodvibes/tui/sessions/',
+    usage: '[name]',
+    handler(args, ctx) {
+      const sessionManager = getSessionManager();
+      const rawName = args[0] || ctx.conversationManager.title || `session-${Date.now()}`;
+      const exportData = ctx.conversationManager.toJSON() as { messages: object[]; timestamp?: number };
+      const messages = exportData.messages ?? [];
+      const meta = {
+        title: ctx.conversationManager.title,
+        model: ctx.runtime.model,
+        provider: ctx.runtime.provider,
+        timestamp: Date.now(),
+      };
+      try {
+        const { filePath, sanitizedName } = sessionManager.save(rawName, messages, meta);
+        const nameNote = sanitizedName !== rawName ? ` (saved as "${sanitizedName}")` : '';
+        ctx.print(`Session saved: ${rawName}${nameNote}\n  → ${filePath}`);
+      } catch (e) {
+        ctx.print(`Failed to save session: ${(e as Error).message}`);
+      }
+    },
+  });
+
+  // ── /load ─────────────────────────────────────────────
+  registry.register({
+    name: 'load',
+    aliases: [],
+    description: 'Load a saved session',
+    usage: '<name>',
+    handler(args, ctx) {
+      if (!args[0]) {
+        ctx.print('Usage: /load <session-name>\nRun /sessions to list available sessions.');
+        return;
+      }
+      const sessionManager = getSessionManager();
+      try {
+        const { meta, messages } = sessionManager.load(args[0]);
+        ctx.conversationManager.resetAll();
+        ctx.conversationManager.fromJSON({ messages: messages as never[] });
+        if (meta.title) ctx.conversationManager.title = meta.title;
+        ctx.conversationManager.rebuildHistory();
+        ctx.renderRequest();
+        ctx.print(`Session loaded: ${args[0]} (${messages.length} messages)`);
+      } catch (e) {
+        ctx.print(`Failed to load session: ${(e as Error).message}`);
+      }
+    },
+  });
+
+  // ── /sessions ─────────────────────────────────────────
+  registry.register({
+    name: 'sessions',
+    aliases: [],
+    description: 'List saved sessions',
+    handler(_args, ctx) {
+      const sessionManager = getSessionManager();
+      const sessions = sessionManager.list();
+      if (sessions.length === 0) {
+        ctx.print('No saved sessions.\nUse /save [name] to save the current session.');
+        return;
+      }
+      const lines = ['Saved sessions:', ''];
+      for (const s of sessions) {
+        const date = new Date(s.timestamp).toLocaleString();
+        const title = s.title || '(untitled)';
+        lines.push(`  ${s.name.padEnd(30)} ${title.padEnd(24)} ${date}  (${s.messageCount} msgs)`);
+      }
+      ctx.print(lines.join('\n'));
     },
   });
 }
