@@ -553,7 +553,7 @@ export class InputHandler {
             }
           } else if (token.type === 'text') {
             // . for next, , for previous
-            if (token.value === '.') {
+            if (token.value === 'j' || token.value === 'l') {
               this.searchManager.nextMatch();
               const matchLine = this.searchManager.getCurrentMatchLine();
               if (matchLine >= 0) {
@@ -564,7 +564,7 @@ export class InputHandler {
                 matchCount: this.searchManager.matches.length,
                 currentMatch: this.searchManager.currentMatch,
               });
-            } else if (token.value === ',') {
+            } else if (token.value === 'k' || token.value === 'h') {
               this.searchManager.prevMatch();
               const matchLine = this.searchManager.getCurrentMatchLine();
               if (matchLine >= 0) {

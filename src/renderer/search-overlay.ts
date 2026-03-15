@@ -21,7 +21,7 @@ export function renderSearchOverlay(
   const cursor = locked ? '' : '\u2588'; // block cursor only when typing
   const queryDisplay = manager.query + cursor;
   const hints = locked
-    ? '  [\u2190\u2192] or [,/.] navigate  [Bksp] edit  [Esc] close'
+    ? '  [\u2191\u2193] or [jk] navigate  [Bksp] edit  [Esc] close'
     : '  [Enter/Tab] lock  [Esc] close';
   const label = locked ? ' Find: ' : ' Find: ';
   const matchStr = matchInfo ? ` ${matchInfo}` : '';
