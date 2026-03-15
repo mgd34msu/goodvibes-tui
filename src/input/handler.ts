@@ -696,8 +696,20 @@ export class InputHandler {
       // --- Selection modal has focus: intercept all input ---
       if (this.selectionModal.active) {
         if (token.type === 'text') {
-          // Text input goes to fuzzy search query
-          this.selectionModal.setQuery(this.selectionModal.query + token.value);
+          // Space = toggle/cycle action on selected item
+          if (token.value === ' ') {
+            const selected = this.selectionModal.getSelected();
+            if (selected) {
+              const customAction = this.selectionModal.customActions.get(' ') ?? 'toggle';
+              const cb = this.selectionCallback;
+              this.selectionCallback = null;
+              this.selectionModal.close();
+              cb?.({ item: selected, action: customAction });
+            }
+          } else {
+            // Other text input goes to fuzzy search query
+            this.selectionModal.setQuery(this.selectionModal.query + token.value);
+          }
         } else if (token.type === 'key') {
           if (token.logicalName === 'escape') {
             const cb = this.selectionCallback;
