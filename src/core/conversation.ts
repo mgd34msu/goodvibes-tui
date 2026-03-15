@@ -370,13 +370,17 @@ export class ConversationManager {
         }
         // Render assistant content using the markdown renderer
         if (m.content) {
-          const gutterW = 6; // '  1 | ' = 6 chars
+          // Calculate gutter width dynamically based on total line count
+          const preRendered = showLineNumbers ? renderMarkdown(m.content, width) : null;
+          const totalLines = preRendered?.length ?? 0;
+          const numWidth = Math.max(3, String(totalLines).length); // minimum 3 digits wide
+          const gutterW = numWidth + 3; // digits + ' │ '
           const contentWidth = showLineNumbers ? width - gutterW : width;
-          const rendered = renderMarkdown(m.content, contentWidth);
+          const rendered = showLineNumbers ? renderMarkdown(m.content, contentWidth) : renderMarkdown(m.content, width);
           if (showLineNumbers) {
             // Prepend dimmed gutter and shift content right
             const numbered = rendered.map((line, i) => {
-              const label = String(i + 1).padStart(4) + ' \u2502 ';
+              const label = String(i + 1).padStart(numWidth) + ' \u2502 ';
               const gutterCells = UIFactory.stringToLine(label, gutterW, { fg: '238', dim: true });
               // Build full-width line: gutter + content
               const fullLine = createEmptyLine(width);
