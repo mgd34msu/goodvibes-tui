@@ -696,15 +696,12 @@ export class InputHandler {
       // --- Selection modal has focus: intercept all input ---
       if (this.selectionModal.active) {
         if (token.type === 'text') {
-          // Space = toggle/cycle action on selected item
+          // Space = toggle/cycle action on selected item (stays open)
           if (token.value === ' ') {
             const selected = this.selectionModal.getSelected();
-            if (selected) {
-              const customAction = this.selectionModal.customActions.get(' ') ?? 'toggle';
-              const cb = this.selectionCallback;
-              this.selectionCallback = null;
-              this.selectionModal.close();
-              cb?.({ item: selected, action: customAction });
+            if (selected && this.selectionCallback) {
+              // Fire callback with toggle action but DON'T close the modal
+              this.selectionCallback({ item: selected, action: 'toggle' });
             }
           } else {
             // Other text input goes to fuzzy search query

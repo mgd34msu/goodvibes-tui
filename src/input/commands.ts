@@ -368,22 +368,24 @@ export function registerBuiltinCommands(registry: CommandRegistry): void {
             const key = result.item.id as import('../config/index.ts').ConfigKey;
             const schema = CONFIG_SCHEMA.find(s => s.key === key);
             if (result.action === 'toggle' && schema) {
-              // Toggle boolean or cycle enum
+              // Toggle boolean or cycle enum — update value and refresh item detail in-place
               const currentVal = cm.get(key);
+              let newVal: unknown = currentVal;
               if (schema.type === 'boolean') {
+                newVal = !currentVal;
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                cm.set(key, !currentVal as any);
-                ctx.print(`${key} = ${!currentVal}`);
+                cm.set(key, newVal as any);
               } else if (schema.type === 'enum' && schema.enumValues) {
                 const idx = schema.enumValues.indexOf(String(currentVal));
-                const next = schema.enumValues[(idx + 1) % schema.enumValues.length];
+                newVal = schema.enumValues[(idx + 1) % schema.enumValues.length];
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                cm.set(key, next as any);
-                if (key === 'provider.reasoningEffort') ctx.runtime.reasoningEffort = next;
-                ctx.print(`${key} = ${next}`);
-              } else {
-                ctx.print(`${key}: ${String(currentVal)} (use /config ${key} <value> to change)`);
+                cm.set(key, newVal as any);
+                if (key === 'provider.reasoningEffort') ctx.runtime.reasoningEffort = String(newVal);
               }
+              // Update the item's detail text so the modal shows the new value
+              result.item.detail = String(newVal);
+              ctx.renderRequest();
+              return; // Don't close — stay in modal
             } else {
               // Select = show detail
               const val = cm.get(key);
