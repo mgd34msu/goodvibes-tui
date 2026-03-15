@@ -6,6 +6,7 @@ import type { InfiniteBuffer } from '../core/history.ts';
 import type { CommandRegistry, CommandContext } from './command-registry.ts';
 import { AutocompleteEngine } from './autocomplete.ts';
 import { FilePickerModal } from './file-picker.ts';
+import { SearchManager } from './search.ts';
 import { InputHistory } from './input-history.ts';
 import type { ConversationManager } from '../core/conversation.ts';
 import type { PermissionCategory } from '../permissions/manager.ts';
@@ -38,6 +39,7 @@ export class InputHandler {
   private commandContext: CommandContext | null = null;
   public autocomplete: AutocompleteEngine | null = null;
   public filePicker = new FilePickerModal();
+  public searchManager = new SearchManager();
   private inputHistory: InputHistory | null = null;
   private conversationManager: ConversationManager | null = null;
   /** Time of last [COPIED] block feedback, for brief display. */
@@ -216,6 +218,22 @@ export class InputHandler {
     for (const id of this.pasteRegistry.keys()) {
       if (!foundPasteIds.has(id)) {
         this.pasteRegistry.delete(id);
+      }
+    }
+
+    // Expand !@path content injection markers — only match !@ at word start
+    const injectRegex = /(?:^|(?<=\s))!@(\S+)/g;
+    let injectMatch;
+    while ((injectMatch = injectRegex.exec(expanded)) !== null) {
+      const filePath = injectMatch[1];
+      try {
+        const resolvedPath = resolveAndValidatePath(filePath);
+        const content = readFileSync(resolvedPath, 'utf-8');
+        expanded = expanded.slice(0, injectMatch.index) + content + expanded.slice(injectMatch.index + injectMatch[0].length);
+        injectRegex.lastIndex = injectMatch.index + content.length;
+      } catch (err) {
+        // Leave the marker if file can't be read
+        logger.debug('expandPrompt: failed to read injected file', { path: filePath, error: String(err) });
       }
     }
 
@@ -455,6 +473,67 @@ export class InputHandler {
     const lineCount = history.getLineCount();
 
     for (const token of tokens) {
+      // --- Search mode has focus: intercept input for query typing ---
+      if (this.searchManager.active) {
+        if (token.type === 'text') {
+          const newQuery = this.searchManager.query + token.value;
+          this.searchManager.search(newQuery, history);
+          this.bus.emit('search:update', {
+            query: this.searchManager.query,
+            matchCount: this.searchManager.matches.length,
+            currentMatch: this.searchManager.currentMatch,
+          });
+        } else if (token.type === 'key') {
+          if (token.logicalName === 'escape') {
+            this.searchManager.close();
+            this.bus.emit('search:end');
+          } else if (token.logicalName === 'enter') {
+            // Keep current match position and close search
+            this.searchManager.close();
+            this.bus.emit('search:end');
+          } else if (token.logicalName === 'backspace') {
+            const newQuery = this.searchManager.query.slice(0, -1);
+            this.searchManager.search(newQuery, history);
+            this.bus.emit('search:update', {
+              query: this.searchManager.query,
+              matchCount: this.searchManager.matches.length,
+              currentMatch: this.searchManager.currentMatch,
+            });
+          } else if (token.logicalName === 'n' && !token.ctrl) {
+            this.searchManager.nextMatch();
+            {
+              const matchLine = this.searchManager.getCurrentMatchLine();
+              if (matchLine >= 0) {
+                this.scroll(matchLine - this.getScrollTop() - Math.floor(this.getViewportHeight() / 2));
+              }
+            }
+            this.bus.emit('search:update', {
+              query: this.searchManager.query,
+              matchCount: this.searchManager.matches.length,
+              currentMatch: this.searchManager.currentMatch,
+            });
+          } else if ((token.logicalName === 'n' && token.shift) || token.logicalName === 'N') {
+            this.searchManager.prevMatch();
+            {
+              const matchLine = this.searchManager.getCurrentMatchLine();
+              if (matchLine >= 0) {
+                this.scroll(matchLine - this.getScrollTop() - Math.floor(this.getViewportHeight() / 2));
+              }
+            }
+            this.bus.emit('search:update', {
+              query: this.searchManager.query,
+              matchCount: this.searchManager.matches.length,
+              currentMatch: this.searchManager.currentMatch,
+            });
+          } else if (token.logicalName === 'f' && token.ctrl) {
+            this.searchManager.close();
+            this.bus.emit('search:end');
+          }
+        }
+        this.bus.emit('render:request');
+        continue;
+      }
+
       // --- File picker has focus: intercept all input ---
       if (this.filePicker.active) {
         if (token.type === 'text') {
@@ -473,10 +552,13 @@ export class InputHandler {
             const selected = this.filePicker.getSelected();
             if (selected) {
               const atPos = this.filePicker.insertPos;
-              const queryLen = this.filePicker.query.length + 1; // +1 for the @
-              // Check if selected file is an image
+              const injectMode = this.filePicker.injectMode;
+              // queryLen: the @ (or !@) plus the typed query characters
+              const prefixLen = injectMode ? 2 : 1; // '!@' = 2, '@' = 1
+              const queryLen = this.filePicker.query.length + prefixLen;
+              // Check if selected file is an image (only for normal @ mode)
               const ext = selected.slice(selected.lastIndexOf('.'));
-              if (InputHandler.IMAGE_EXTENSIONS.some(e => e === ext.toLowerCase())) {
+              if (!injectMode && InputHandler.IMAGE_EXTENSIONS.some(e => e === ext.toLowerCase())) {
                 // Image file — read and store in imageRegistry, insert marker
                 try {
                   const resolvedPath = resolveAndValidatePath(selected);
@@ -487,18 +569,23 @@ export class InputHandler {
                   const id = `img${this.nextImageId++}`;
                   this.imageRegistry.set(id, { data: base64, mediaType });
                   const marker = `[IMAGE: ${id}, ${filename}, ${InputHandler.formatFileSize(data.length)}]`;
-                  this.prompt = this.prompt.slice(0, atPos) + marker + this.prompt.slice(atPos + queryLen);
-                  this.cursorPos = atPos + marker.length;
+                  this.prompt = this.prompt.slice(0, atPos) + marker + ' ' + this.prompt.slice(atPos + queryLen);
+                  this.cursorPos = atPos + marker.length + 1;
                 } catch (err) {
                   logger.debug('file-picker: could not read image file', { err });
                   // Fallback: insert as text path if file read fails
-                  this.prompt = this.prompt.slice(0, atPos) + '@' + selected + this.prompt.slice(atPos + queryLen);
-                  this.cursorPos = atPos + selected.length + 1;
+                  this.prompt = this.prompt.slice(0, atPos) + '@' + selected + ' ' + this.prompt.slice(atPos + queryLen);
+                  this.cursorPos = atPos + selected.length + 2;
                 }
+              } else if (injectMode) {
+                // Inject mode — insert !@path marker (expanded at submit time)
+                const marker = `!@${selected}`;
+                this.prompt = this.prompt.slice(0, atPos) + marker + ' ' + this.prompt.slice(atPos + queryLen);
+                this.cursorPos = atPos + marker.length + 1;
               } else {
-                // Non-image file — insert @path as before
-                this.prompt = this.prompt.slice(0, atPos) + '@' + selected + this.prompt.slice(atPos + queryLen);
-                this.cursorPos = atPos + selected.length + 1; // +1 for @
+                // Non-image file — insert @path with trailing space for multi-@ support
+                this.prompt = this.prompt.slice(0, atPos) + '@' + selected + ' ' + this.prompt.slice(atPos + queryLen);
+                this.cursorPos = atPos + selected.length + 2; // +1 for @, +1 for space
               }
               this.ensureInputCursorVisible();
             }
@@ -511,10 +598,11 @@ export class InputHandler {
             if (this.filePicker.query.length > 0) {
               this.filePicker.setQuery(this.filePicker.query.slice(0, -1));
             } else {
-              // Backspace with empty query — remove the @ and close
-              if (this.cursorPos > 0) {
-                this.prompt = this.prompt.slice(0, this.cursorPos - 1) + this.prompt.slice(this.cursorPos);
-                this.cursorPos--;
+              // Backspace with empty query — remove the @ (and ! if inject mode) and close
+              const removeCount = this.filePicker.injectMode ? 2 : 1;
+              if (this.cursorPos >= removeCount) {
+                this.prompt = this.prompt.slice(0, this.cursorPos - removeCount) + this.prompt.slice(this.cursorPos);
+                this.cursorPos -= removeCount;
               }
               this.filePicker.close();
             }
@@ -536,9 +624,14 @@ export class InputHandler {
         this.ensureInputCursorVisible();
 
         // Detect @ at start of word — open file picker
+        // Also detect !@ sequence for inject mode
         if (token.value === '@' && !this.commandMode) {
           const charBefore = this.cursorPos >= 2 ? this.prompt[this.cursorPos - 2] : undefined;
-          if (charBefore === undefined || charBefore === ' ' || charBefore === '\n') {
+          if (charBefore === '!') {
+            // !@ sequence — open file picker in inject mode
+            // insertPos points to the '!' character
+            this.filePicker.open(this.cursorPos - 2, true);
+          } else if (charBefore === undefined || charBefore === ' ' || charBefore === '\n') {
             // @ is at word start — open file picker
             this.filePicker.open(this.cursorPos - 1);
           }
@@ -576,6 +669,18 @@ export class InputHandler {
         }
         // Ctrl+L: clear screen (re-render)
         if (token.logicalName === 'l' && token.ctrl) {
+          this.bus.emit('render:request');
+          continue;
+        }
+        // Ctrl+F: toggle search mode
+        if (token.logicalName === 'f' && token.ctrl) {
+          if (this.searchManager.active) {
+            this.searchManager.close();
+            this.bus.emit('search:end');
+          } else {
+            this.searchManager.open();
+            this.bus.emit('search:start');
+          }
           this.bus.emit('render:request');
           continue;
         }
