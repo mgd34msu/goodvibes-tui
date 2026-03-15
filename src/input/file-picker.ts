@@ -14,6 +14,8 @@ export class FilePickerModal {
   public selectedIndex = 0;
   /** Position in the prompt where @ was typed — used to replace @query with the selected path */
   public insertPos = 0;
+  /** When true, selected file inserts as !@path (inject mode) instead of @path */
+  public injectMode = false;
 
   private allFiles: string[] = [];
   private filesCached = false;
@@ -27,11 +29,12 @@ export class FilePickerModal {
   }
 
   /** Activate the file picker at the given prompt position. */
-  open(insertPos: number): void {
+  open(insertPos: number, injectMode = false): void {
     this.active = true;
     this.query = '';
     this.selectedIndex = 0;
     this.insertPos = insertPos;
+    this.injectMode = injectMode;
 
     if (this.filesCached) {
       this.updateResults();
@@ -53,6 +56,7 @@ export class FilePickerModal {
     this.query = '';
     this.results = [];
     this.selectedIndex = 0;
+    this.injectMode = false;
   }
 
   /** Update the search query and re-filter results. */
@@ -139,9 +143,9 @@ export class FilePickerModal {
     if (depth > 8) return; // Limit depth
     if (files.length > 5000) return; // Limit total files
 
-    let entries: Awaited<ReturnType<typeof readdir>>;
+    let entries: import('node:fs').Dirent[];
     try {
-      entries = await readdir(dir, { withFileTypes: true });
+      entries = (await readdir(dir, { withFileTypes: true })) as unknown as import('node:fs').Dirent[];
     } catch {
       return;
     }

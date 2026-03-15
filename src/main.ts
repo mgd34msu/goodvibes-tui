@@ -24,6 +24,7 @@ import { PermissionPromptUI } from './permissions/prompt.ts';
 import type { PermissionRequest } from './permissions/prompt.ts';
 import { CommandRegistry } from './input/command-registry.ts';
 import { renderFilePickerOverlay } from './renderer/file-picker-overlay.ts';
+import { renderSearchOverlay } from './renderer/search-overlay.ts';
 import { registerBuiltinCommands } from './input/commands.ts';
 import { InputHistory } from './input/input-history.ts';
 import { loadSystemPrompt as _loadSystemPrompt } from './utils/prompt-loader.ts';
@@ -226,6 +227,9 @@ async function main() {
     if (input.filePicker.active) {
       overlayRows += Math.min(input.filePicker.results.length, 12) + 4; // results + borders/search
     }
+    if (input.searchManager.active) {
+      overlayRows += 1; // search bar
+    }
 
     // Shrink viewport to make room for overlays
     const effectiveVHeight = vHeight - overlayRows;
@@ -255,6 +259,10 @@ async function main() {
       viewport.push(...renderFilePickerOverlay(input.filePicker, width));
     }
 
+    if (input.searchManager.active) {
+      viewport.push(...renderSearchOverlay(input.searchManager, width));
+    }
+
     compositor.composite({
       width, height,
       header: UIFactory.createHeader(width, runtime.model, runtime.provider, conversation.title || undefined),
@@ -281,6 +289,11 @@ async function main() {
         scrollTop,
         lineCount: conversation.history.getLineCount(),
       },
+      search: input.searchManager.active ? {
+        manager: input.searchManager,
+        scrollTop,
+        viewportStartY: 2,
+      } : undefined,
     });
   };
 

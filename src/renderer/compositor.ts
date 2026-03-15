@@ -1,11 +1,18 @@
 import { TerminalBuffer } from './buffer.ts';
 import { DiffEngine } from './diff.ts';
 import { type Line } from '../types/grid.ts';
+import type { SearchManager } from '../input/search.ts';
 
 export interface SelectionInfo {
   isCellSelected: (col: number, absoluteRow: number) => boolean;
   scrollTop: number;
   lineCount: number;
+}
+
+export interface SearchInfo {
+  manager: SearchManager;
+  scrollTop: number;
+  viewportStartY: number;
 }
 
 export interface CompositeRequest {
@@ -15,6 +22,7 @@ export interface CompositeRequest {
   viewport: Line[];
   footer: Line[];
   selection?: SelectionInfo;
+  search?: SearchInfo;
 }
 
 /**
@@ -33,7 +41,7 @@ export class Compositor {
   }
 
   public composite(params: CompositeRequest) {
-    const { width, height, header, viewport, footer, selection } = params;
+    const { width, height, header, viewport, footer, selection, search } = params;
     const newBuffer = new TerminalBuffer(width, height);
 
     // 1. Draw Header (Rows 0-1)
@@ -59,6 +67,22 @@ export class Compositor {
         for (let x = 0; x < width; x++) {
           if (selection.isCellSelected(x, absoluteRow)) {
             newBuffer.setCell(x, screenY, { bg: '4', fg: '0', bold: false, dim: false });
+          }
+        }
+      }
+
+      // Apply Search Match Highlighting Overlay
+      if (search && search.manager.active && search.manager.query.length > 0 && i >= offset) {
+        const absoluteRow = search.scrollTop + (i - offset);
+        const lineMatches = search.manager.getMatchesOnLine(absoluteRow);
+        for (const match of lineMatches) {
+          const isCurrent = search.manager.isCurrentMatch(absoluteRow, match.col);
+          for (let x = match.col; x < match.col + match.length && x < width; x++) {
+            if (isCurrent) {
+              newBuffer.setCell(x, screenY, { bg: '#ffff00', fg: '#000000', bold: true, dim: false });
+            } else {
+              newBuffer.setCell(x, screenY, { bg: '#806600', fg: '#ffffff', bold: false, dim: false });
+            }
           }
         }
       }

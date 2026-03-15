@@ -36,6 +36,11 @@ export interface EventMap {
   'command:autocomplete': { query: string };
   'command:execute': { name: string; args: string[] };
   'command:model-changed': { provider: string; model: string };
+
+  // Search events
+  'search:start': void;
+  'search:update': { query: string; matchCount: number; currentMatch: number };
+  'search:end': void;
 }
 
 type Listener<T> = T extends void ? () => void : (data: T) => void;
