@@ -94,12 +94,13 @@ export function registerBuiltinCommands(registry: CommandRegistry): void {
         '  PageUp/PageDown   Scroll by page',
         '  Arrow Up/Down     Scroll 3 lines',
         '  Mouse wheel       Scroll',
-        '  Left click        Middle-click paste',
+        '  Middle click      Paste (image or text)',
         '  Click drag        Select text',
         '  Ctrl+Shift+C      Copy selection',
         '  Tab               Toggle collapse of nearest block',
         '  Ctrl+Y            Copy nearest code/tool block',
         '  Ctrl+A            Apply nearest diff block',
+        '  Ctrl+V            Paste (image or text)',
       ];
       ctx.print(lines.join('\n'));
     },
