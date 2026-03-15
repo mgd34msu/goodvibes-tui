@@ -81,6 +81,14 @@ async function main() {
   // Permission state — set while a permission prompt is blocking the orchestrator
   let pendingPermission: PermissionRequest | null = null;
 
+  // --- Streaming speed tracking (B2) ---
+  let streamStartTime = 0;
+  let streamDeltaCount = 0;
+  let streamTokenSpeed = 0;
+
+  // --- Partial tool call preview tracking (B3) ---
+  let partialToolPreview: string | undefined = undefined;
+
   let scrollTop = 0;
   /** When true, view auto-scrolls to bottom on every render.
    *  False when user manually scrolls up. Reset on user input. */
@@ -251,7 +259,15 @@ async function main() {
     const viewport = conversation.history.getSnapshot(scrollTop, effectiveVHeight, width);
 
     if (orchestrator.isThinking) {
-      const thinking = UIFactory.createThinkingFragment(width, orchestrator.getSpinner(), orchestrator.thinkingFrame);
+      const showSpeed = configManager.get('display.showTokenSpeed') as boolean;
+      const showPreview = configManager.get('display.showToolPreview') as boolean;
+      const thinking = UIFactory.createThinkingFragment(
+        width,
+        orchestrator.getSpinner(),
+        orchestrator.thinkingFrame,
+        showSpeed ? streamTokenSpeed : undefined,
+        showPreview ? partialToolPreview : undefined,
+      );
       viewport.push(...thinking);
     }
 
@@ -306,6 +322,32 @@ async function main() {
       } : undefined,
     });
   };
+
+  // --- Streaming speed + tool preview wiring ---
+  bus.on('turn:stream-start', () => {
+    streamStartTime = Date.now();
+    streamDeltaCount = 0;
+    streamTokenSpeed = 0;
+    partialToolPreview = undefined;
+  });
+  bus.on('turn:stream-delta', (data) => {
+    streamDeltaCount++;
+    const elapsed = (Date.now() - streamStartTime) / 1000;
+    // Note: counts stream deltas, not actual tokens. ~1 delta per token for most providers.
+    streamTokenSpeed = elapsed > 0 ? streamDeltaCount / elapsed : 0;
+    // Extract most recent partial tool call for preview
+    if (data.toolCalls && data.toolCalls.length > 0) {
+      const last = data.toolCalls[data.toolCalls.length - 1];
+      const name = last.name ?? '';
+      const args = last.arguments ?? '';
+      // Show first 60 chars of args to keep preview compact
+      const preview = args.length > 60 ? args.slice(0, 57) + '...' : args;
+      partialToolPreview = name ? `${name}(${preview})` : undefined;
+    }
+  });
+  bus.on('turn:stream-end', () => {
+    partialToolPreview = undefined;
+  });
 
   // --- Event wiring ---
   bus.on('render:request', render);
