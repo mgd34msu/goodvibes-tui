@@ -4,7 +4,7 @@ All notable changes to GoodVibes TUI.
 
 ---
 
-## [Unreleased]
+## [0.2.0]
 
 ### Interactive Modals
 - **Model picker** — `/model` opens bordered modal with all models, capability details, provider → model → effort multi-step flow
