@@ -208,7 +208,7 @@ describe('SessionManager', () => {
       expect(sessions[0].messageCount).toBe(3);
     });
 
-    test('excluded removed messages from count', () => {
+    test('excludes removed messages from count', () => {
       const messages = [
         { role: 'user', content: 'keep' },
         { role: 'assistant', content: 'removed', removed: true },

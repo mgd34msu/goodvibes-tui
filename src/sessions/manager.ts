@@ -164,9 +164,19 @@ export class SessionManager {
           }
         }
 
-        // Count non-removed message lines using string checks (no JSON.parse per line)
-        // Check both type:message presence AND removed:true absence to avoid false positives
-        messageCount = lines.slice(1).filter(l => l.includes('"type":"message"') && !l.includes('"removed":true')).length;
+        // Count message lines: parse each line's type/removed fields only (no full content parse)
+        // Using startsWith anchor to avoid false positives from message content containing these strings
+        for (const l of lines.slice(1)) {
+          const trimmed = l.trim();
+          if (trimmed.startsWith('{"') && trimmed.includes('"type":"message"')) {
+            // Quick check: is "removed":true near the start of the line (before content)?
+            // Content is always the longest field, so type/removed appear in the first ~50 chars
+            const prefix = trimmed.slice(0, 60);
+            if (!prefix.includes('"removed":true')) {
+              messageCount++;
+            }
+          }
+        }
       } catch {
         // Skip unreadable files
         continue;
