@@ -92,6 +92,13 @@ export class InputTokenizer {
           if (suffix === '~' && charCode === 5) logicalName = 'pageup';
           if (suffix === '~' && charCode === 6) logicalName = 'pagedown';
           if (suffix === '~' && charCode === 3) logicalName = 'delete';
+          if (suffix === '~' && charCode === 2) logicalName = 'insert';
+          if (charCode === 9) logicalName = 'tab';
+          if (charCode === 27) logicalName = 'escape';
+          if (charCode === 127) logicalName = 'backspace';
+          // CSI u: map printable ASCII charCodes to their lowercase letter name
+          if (logicalName === full && charCode >= 97 && charCode <= 122) logicalName = String.fromCharCode(charCode);
+          if (logicalName === full && charCode >= 65 && charCode <= 90) logicalName = String.fromCharCode(charCode + 32);
           tokens.push({ type: 'key', name: full, logicalName, ctrl, shift, meta });
           this.buffer = this.buffer.slice(full.length);
           continue;
