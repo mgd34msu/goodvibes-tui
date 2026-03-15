@@ -307,9 +307,9 @@ async function main() {
 
   // --- Event wiring ---
   bus.on('render:request', render);
-  bus.on('input:submit', ({ text }) => {
+  bus.on('input:submit', ({ text, content }) => {
     scrollLocked = true; // Re-lock on any user input
-    orchestrator.handleUserInput(text);
+    orchestrator.handleUserInput(text, content);
   });
 
   // Cancel generation when requested by input handler

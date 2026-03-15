@@ -6,7 +6,7 @@ import { createEmptyLine, type Line, type Cell } from '../types/grid.ts';
 import { getSplashLines, type SplashOptions } from '../utils/splash-lines.ts';
 import { interpolateColor, getDisplayWidth, wrapText } from '../utils/terminal-width.ts';
 import type { ToolCall, ToolResult } from '../types/tools.ts';
-import type { ProviderMessage } from '../providers/interface.ts';
+import type { ProviderMessage, ContentPart } from '../providers/interface.ts';
 import { logger } from '../utils/logger.ts';
 import type { ProviderRegistry } from '../providers/registry.ts';
 import type { ConfigManager } from '../config/manager.ts';
@@ -23,7 +23,7 @@ const estimateTokens = (text: string): number => Math.ceil(text.length / 4);
  * or when the width changes. This avoids O(n) rebuilds per turn in long sessions.
  */
 type Message =
-  | { role: 'user'; content: string; cancelled?: boolean }
+  | { role: 'user'; content: string | ContentPart[]; cancelled?: boolean }
   | { role: 'assistant'; content: string; toolCalls?: ToolCall[] }
   | { role: 'system'; content: string }
   | { role: 'tool'; callId: string; content: string; toolName?: string };
@@ -89,7 +89,7 @@ export class ConversationManager {
     for (const m of this.messages) {
       if (m.role === 'system') continue; // System messages go via systemPrompt param
       if (m.role === 'user') {
-        result.push({ role: 'user', content: m.content });
+        result.push({ role: 'user', content: m.content as string | ContentPart[] });
       } else if (m.role === 'assistant') {
         result.push({ role: 'assistant', content: m.content, toolCalls: m.toolCalls });
       } else if (m.role === 'tool') {
@@ -99,13 +99,17 @@ export class ConversationManager {
     return result;
   }
 
-  public addUserMessage(content: string): void {
+  public addUserMessage(content: string | ContentPart[]): void {
+    // Extract plain text for title generation and display
+    const textContent = typeof content === 'string'
+      ? content
+      : content.filter((p): p is { type: 'text'; text: string } => p.type === 'text').map(p => p.text).join('');
     if (this.title === '') {
       // Auto-generate title from first user message (max 50 chars, truncated at word boundary)
-      if (content.length <= 50) {
-        this.title = content;
+      if (textContent.length <= 50) {
+        this.title = textContent;
       } else {
-        const truncated = content.slice(0, 50);
+        const truncated = textContent.slice(0, 50);
         const lastSpace = truncated.lastIndexOf(' ');
         this.title = lastSpace > 10 ? truncated.slice(0, lastSpace) : truncated;
       }
@@ -262,10 +266,20 @@ export class ConversationManager {
     for (let msgIdx = 0; msgIdx < messages.length; msgIdx++) {
       const m = messages[msgIdx];
       if (m.role === 'user') {
+        // Flatten ContentPart[] to display text for user messages
+        const displayText = typeof m.content === 'string'
+          ? m.content
+          : (m.content as ContentPart[])
+              .filter((p): p is { type: 'text'; text: string } => p.type === 'text')
+              .map(p => p.text)
+              .join('')
+            + ((m.content as ContentPart[]).filter(p => p.type === 'image').length > 0
+              ? ` [+${(m.content as ContentPart[]).filter(p => p.type === 'image').length} image(s)]`
+              : '');
         if (m.cancelled) {
-          this.history.addLines(UIFactory.createMessageBar(width, m.content, '#3a1a1a', '196', ' × ', true));
+          this.history.addLines(UIFactory.createMessageBar(width, displayText, '#3a1a1a', '196', ' × ', true));
         } else {
-          this.history.addLines(UIFactory.createMessageBar(width, m.content));
+          this.history.addLines(UIFactory.createMessageBar(width, displayText));
         }
       } else if (m.role === 'assistant') {
         // Render assistant content using the markdown renderer
@@ -507,7 +521,16 @@ export class ConversationManager {
    * Uses 4-chars-per-token heuristic.
    */
   public estimateTotalTokens(): number {
-    return this.messages.reduce((sum, m) => sum + estimateTokens(m.content), 0);
+    return this.messages.reduce((sum, m) => {
+      if (typeof m.content === 'string') return sum + estimateTokens(m.content);
+      // ContentPart[] — sum text parts only (images add tokens via visual encoding, rough estimate)
+      const textContent = (m.content as ContentPart[])
+        .filter((p): p is { type: 'text'; text: string } => p.type === 'text')
+        .map(p => p.text)
+        .join('');
+      const imageCount = (m.content as ContentPart[]).filter(p => p.type === 'image').length;
+      return sum + estimateTokens(textContent) + imageCount * 1000; // ~1000 tokens per image rough estimate
+    }, 0);
   }
 
   /**
@@ -522,7 +545,10 @@ export class ConversationManager {
       .filter(m => m.role !== 'system')
       .map(m => {
         const role = m.role === 'tool' ? 'tool-result' : m.role;
-        return `[${role}]: ${m.content}`;
+        const contentText = typeof m.content === 'string'
+          ? m.content
+          : (m.content as ContentPart[]).filter((p): p is { type: 'text'; text: string } => p.type === 'text').map(p => p.text).join('');
+        return `[${role}]: ${contentText}`;
       })
       .join('\n\n');
 

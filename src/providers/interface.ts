@@ -30,7 +30,7 @@ export interface StreamDelta {
   reasoning?: string;         // Reasoning/thinking delta
 }
 
-/** A content part for multimodal messages (future Phase C). */
+/** Content part for multimodal messages. */
 export type ContentPart =
   | { type: 'text'; text: string }
   | { type: 'image'; data: string; mediaType: string };

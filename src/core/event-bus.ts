@@ -22,7 +22,7 @@ export interface EventMap {
   'permission:request': { callId: string; tool: string; args: Record<string, unknown>; category: import('../permissions/manager.ts').PermissionCategory; resolve: (approved: boolean, remember?: boolean) => void };
   // UI events
   'render:request': void;
-  'input:submit': { text: string };
+  'input:submit': { text: string; content?: import('../providers/interface.ts').ContentPart[] };
   'cancel:generation': void;
   'scroll:delta': { delta: number };
   'block:toggle-collapse': { blockIndex: number };
