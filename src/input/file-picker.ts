@@ -17,7 +17,7 @@ export class FilePickerModal {
   /** When true, selected file inserts as !@path (inject mode) instead of @path */
   public injectMode = false;
 
-  private allFiles: string[] = [];
+  public allFiles: string[] = [];
   private filesCached = false;
   private maxResults = 15;
 
