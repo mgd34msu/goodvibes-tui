@@ -136,7 +136,16 @@ export function registerBuiltinCommands(registry: CommandRegistry): void {
           { id: 'k:drag', label: 'Click drag', detail: 'Select text', category: 'Keyboard Shortcuts' },
           { id: 'k:copy', label: 'Ctrl+Shift+C', detail: 'Copy selection', category: 'Keyboard Shortcuts' },
         ];
-        ctx.openSelection('Help  —  Commands & Shortcuts', items, { allowSearch: true }, () => {});
+        ctx.openSelection('Help  —  Commands & Shortcuts', items, { allowSearch: true }, (result) => {
+          if (!result) return;
+          // Keyboard shortcuts (id starts with 'k:') are informational only
+          if (result.item.id.startsWith('k:')) return;
+          // Execute the selected command
+          const cmd = result.item.id;
+          if (cmd.startsWith('/')) {
+            ctx.eventBus.emit('input:submit', { text: cmd });
+          }
+        });
         return;
       }
       // Fallback: print text
