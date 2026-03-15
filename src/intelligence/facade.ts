@@ -12,9 +12,11 @@ import { resolve } from 'path';
 import { pathToFileURL, fileURLToPath } from 'url';
 import { loadLanguageConfigs } from './config.ts';
 import { TreeSitterService } from './tree-sitter/service.ts';
-/** Result of parsing a file with tree-sitter. */
-export interface ParseResult { tree: any; language: any; lang: string; }
+
 import type { Tree, Language } from 'web-tree-sitter';
+
+/** Result of parsing a file with tree-sitter. */
+export interface ParseResult { tree: Tree; language: Language; lang: string; }
 import { LspService } from './lsp/service.ts';
 import { detectLanguage } from './tree-sitter/languages.ts';
 import { extractSymbols, extractOutline, findEnclosingScope } from './tree-sitter/queries.ts';
@@ -223,7 +225,7 @@ export class CodeIntelligence {
     if (!lang) return false;
     try {
       return await this.lsp.isAvailable(lang);
-    } catch {
+    } catch (err) { logger.debug('hasLsp error', { error: String(err) });
       return false;
     }
   }

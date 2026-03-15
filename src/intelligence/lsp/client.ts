@@ -49,8 +49,7 @@ export class LspClient {
     const id = this.nextId++;
     const msg: JsonRpcRequest = { jsonrpc: '2.0', id, method, params };
     const json = JSON.stringify(msg);
-    const bytes = Buffer.byteLength(json, 'utf-8');
-    const frame = `Content-Length: ${bytes}\r\n\r\n${json}`;
+    const frame = LspClient.encodeFrame(json);
 
     return new Promise<T>((resolve, reject) => {
       const timeoutMs = this.options?.timeout ?? DEFAULT_TIMEOUT_MS;
@@ -81,8 +80,7 @@ export class LspClient {
     try {
       const msg: JsonRpcNotification = { jsonrpc: '2.0', method, params };
       const json = JSON.stringify(msg);
-      const bytes = Buffer.byteLength(json, 'utf-8');
-      const frame = `Content-Length: ${bytes}\r\n\r\n${json}`;
+      const frame = LspClient.encodeFrame(json);
       this.proc.stdin.write(frame);
     } catch (err) {
       logger.error('LspClient: failed to send notification', { method, err: String(err) });

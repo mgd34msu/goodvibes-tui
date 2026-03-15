@@ -1,3 +1,4 @@
+import { pathToFileURL } from 'url';
 import { logger } from '../../utils/logger.ts';
 import { LspClient } from './client.ts';
 
@@ -74,7 +75,7 @@ export class LspService {
     const client = new LspClient(config.command, config.args);
     try {
       await client.start();
-      await this._initializeServer(langId, client);
+      await this._initializeServer(client);
       this.clients.set(langId, client);
       logger.info('LspService: started server', { langId, command: config.command });
       return client;
@@ -101,11 +102,10 @@ export class LspService {
   }
 
   /** Initialize a server with the LSP handshake. */
-  private async _initializeServer(langId: string, client: LspClient): Promise<void> {
-    void langId; // used in caller for logging
+  private async _initializeServer(client: LspClient): Promise<void> {
     await client.request('initialize', {
       processId: process.pid,
-      rootUri: new URL(`file://${process.cwd()}`).href,
+      rootUri: pathToFileURL(process.cwd()).href,
       capabilities: {
         textDocument: {
           documentSymbol: { hierarchicalDocumentSymbolSupport: true },
