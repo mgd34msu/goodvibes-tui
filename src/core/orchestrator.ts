@@ -3,6 +3,7 @@ import type { EventBus } from './event-bus.ts';
 import type { ToolRegistry } from '../tools/registry.ts';
 import type { ToolCall, ToolResult } from '../types/tools.ts';
 import { PermissionError, ProviderError, ToolError } from '../types/errors.ts';
+import { formatProviderError } from '../utils/error-display.ts';
 import { providerRegistry } from '../providers/registry.ts';
 import type { LLMProvider, StreamDelta } from '../providers/interface.ts';
 import { config, configManager } from '../config/index.ts';
@@ -29,6 +30,8 @@ export class Orchestrator {
   private turnStartMessageCount = 0;
   /** Whether a streaming block is currently active (for cleanup on abort). */
   private isStreaming = false;
+  /** Last token warning bracket (multiples of 10%) to avoid repeat warnings at same level. */
+  private lastWarningBracket = 0;
 
   constructor(
     private bus: EventBus,
@@ -241,6 +244,24 @@ export class Orchestrator {
           continueLoop = false;
         }
       }
+
+      // Token budget warning: check context usage after turn completes
+      const totalTokens = this.conversation.estimateTotalTokens();
+      const currentModel = providerRegistry.getCurrentModel();
+      const maxTokens = currentModel.contextWindow;
+      if (maxTokens > 0) {
+        const usagePct = Math.round((totalTokens / maxTokens) * 100);
+        const threshold = configManager.get('behavior.autoCompactThreshold') as number;
+        const bracket = Math.floor(usagePct / 10) * 10;
+        if (usagePct >= threshold && bracket > this.lastWarningBracket) {
+          this.lastWarningBracket = bracket;
+          this.conversation.addSystemMessage(
+            `Context usage at ${usagePct}% (${totalTokens}/${maxTokens} tokens). Consider running /compact to free space.`
+          );
+          this.bus.emit('context:warning', { usage: usagePct, threshold });
+          this.bus.emit('render:request');
+        }
+      }
     } catch (err: unknown) {
       if (this.abortController?.signal.aborted) {
         // Clean up streaming block if one was active when aborted
@@ -258,7 +279,7 @@ export class Orchestrator {
       }
 
       const error = err instanceof Error ? err : new Error(String(err));
-      const msg = error instanceof ProviderError ? error.message : `Error: ${error.message}`;
+      const msg = error instanceof ProviderError ? formatProviderError(error) : `Error: ${error.message}`;
       this.conversation.addSystemMessage(msg);
       this.bus.emit('turn:error', { error });
     } finally {

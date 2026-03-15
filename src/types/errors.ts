@@ -22,8 +22,23 @@ export class ConfigError extends AppError {
 
 /** Thrown when an LLM provider API call fails. Recoverable when statusCode is in RETRYABLE_STATUS_CODES. */
 export class ProviderError extends AppError {
+  public readonly retryAfterMs?: number;
+  public readonly guidance?: string;
+
   constructor(message: string, public readonly statusCode?: number) {
     super(message, 'PROVIDER_ERROR', statusCode !== undefined && RETRYABLE_STATUS_CODES.includes(statusCode));
+
+    if (statusCode === 429) {
+      this.guidance = 'Rate limited. The request will be retried automatically.';
+      const match = message.match(/retry[-_\s]?after[:\s]+(\d+)/i);
+      if (match) this.retryAfterMs = parseInt(match[1], 10) * 1000;
+    } else if (statusCode === 401 || statusCode === 403) {
+      this.guidance = 'Authentication failed. Check your API key for this provider.';
+    } else if (statusCode === 408 || message.includes('timeout')) {
+      this.guidance = 'Request timed out. Check your network connection.';
+    } else if (message.includes('ECONNREFUSED') || message.includes('ENOTFOUND') || message.includes('fetch failed')) {
+      this.guidance = 'Connection failed. Check your network connection.';
+    }
   }
 }
 
