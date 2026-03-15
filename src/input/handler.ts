@@ -7,6 +7,8 @@ import type { CommandRegistry, CommandContext } from './command-registry.ts';
 import { AutocompleteEngine } from './autocomplete.ts';
 import { FilePickerModal } from './file-picker.ts';
 import { ModelPickerModal } from './model-picker.ts';
+import { SelectionModal } from './selection-modal.ts';
+import type { SelectionResult, SelectionAction } from './selection-modal.ts';
 import { SearchManager } from './search.ts';
 import { InputHistory } from './input-history.ts';
 import type { ConversationManager } from '../core/conversation.ts';
@@ -42,9 +44,11 @@ export class InputHandler {
   public autocomplete: AutocompleteEngine | null = null;
   public filePicker = new FilePickerModal();
   public modelPicker = new ModelPickerModal();
+  public selectionModal = new SelectionModal();
   public searchManager = new SearchManager();
   private inputHistory: InputHistory | null = null;
   private conversationManager: ConversationManager | null = null;
+  private selectionCallback: ((result: SelectionResult | null) => void) | null = null;
   /** Time of last [COPIED] block feedback, for brief display. */
   public lastBlockCopyTime = 0;
 
@@ -126,6 +130,25 @@ export class InputHandler {
    */
   public setConversationManager(cm: ConversationManager): void {
     this.conversationManager = cm;
+  }
+
+  /**
+   * openSelection - Open the generic selection modal with a callback.
+   * The callback receives SelectionResult on selection, or null on cancel/escape.
+   */
+  public openSelection(
+    title: string,
+    items: import('./selection-modal.ts').SelectionItem[],
+    opts: {
+      preSelectId?: string;
+      allowSearch?: boolean;
+      customActions?: Map<string, SelectionAction>;
+    } | undefined,
+    callback: (result: SelectionResult | null) => void,
+  ): void {
+    this.selectionModal.open(title, items, opts);
+    this.selectionCallback = callback;
+    this.bus.emit('render:request');
   }
 
   /**
@@ -657,6 +680,53 @@ export class InputHandler {
               });
             }
           }
+        }
+        this.bus.emit('render:request');
+        continue;
+      }
+
+      // --- Selection modal has focus: intercept all input ---
+      if (this.selectionModal.active) {
+        if (token.type === 'text') {
+          // Text input goes to fuzzy search query
+          this.selectionModal.setQuery(this.selectionModal.query + token.value);
+        } else if (token.type === 'key') {
+          if (token.logicalName === 'escape') {
+            const cb = this.selectionCallback;
+            this.selectionCallback = null;
+            this.selectionModal.close();
+            cb?.(null);
+          } else if (token.logicalName === 'enter') {
+            const selected = this.selectionModal.getSelected();
+            if (selected) {
+              const cb = this.selectionCallback;
+              this.selectionCallback = null;
+              this.selectionModal.close();
+              cb?.({ item: selected, action: 'select' });
+            }
+          } else if (token.logicalName === 'up') {
+            this.selectionModal.moveUp();
+          } else if (token.logicalName === 'down') {
+            this.selectionModal.moveDown();
+          } else if (token.logicalName === 'backspace') {
+            // Edit search query
+            if (this.selectionModal.query.length > 0) {
+              this.selectionModal.setQuery(this.selectionModal.query.slice(0, -1));
+            }
+          } else if (token.logicalName && token.logicalName.length === 1) {
+            // Check custom action keys (single-char key names like 'd', 'e')
+            const action = this.selectionModal.customActions.get(token.logicalName);
+            if (action) {
+              const selected = this.selectionModal.getSelected();
+              if (selected) {
+                const cb = this.selectionCallback;
+                this.selectionCallback = null;
+                this.selectionModal.close();
+                cb?.({ item: selected, action });
+              }
+            }
+          }
+          // All other keys ignored while selection modal is active
         }
         this.bus.emit('render:request');
         continue;
