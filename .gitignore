@@ -1,6 +1,7 @@
 # Environment
 .env
 .env.*
+*.secrets.*
 
 # Dependencies
 node_modules/
