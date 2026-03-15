@@ -11,13 +11,6 @@ import { SelectionManager } from './input/selection.ts';
 import { config, configManager } from './config/index.ts';
 import { providerRegistry } from './providers/registry.ts';
 import { ToolRegistry } from './tools/registry.ts';
-import { FileReadTool } from './tools/file-read.ts';
-import { FileWriteTool } from './tools/file-write.ts';
-import { FileEditTool } from './tools/file-edit.ts';
-import { ShellExecTool } from './tools/shell-exec.ts';
-import { GrepTool } from './tools/grep.ts';
-import { ListDirTool } from './tools/list-dir.ts';
-import { GlobTool } from './tools/glob-tool.ts';
 import { PermissionManager } from './permissions/manager.ts';
 import { AcpManager } from './acp/manager.ts';
 import { PermissionPromptUI } from './permissions/prompt.ts';
@@ -148,13 +141,7 @@ async function main() {
 
   // --- Tool registry ---
   const toolRegistry = new ToolRegistry();
-  toolRegistry.register(new FileReadTool());
-  toolRegistry.register(new FileWriteTool());
-  toolRegistry.register(new FileEditTool());
-  toolRegistry.register(new ShellExecTool());
-  toolRegistry.register(new GrepTool());
-  toolRegistry.register(new ListDirTool());
-  toolRegistry.register(new GlobTool());
+  // Tool registration — new tools (read, write, edit, find, exec, fetch, analyze, inspect, agent, state, workflow, registry) will replace old tools. See tool-updates-v3.md
 
   const permissionManager = new PermissionManager(bus);
 

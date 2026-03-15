@@ -14,8 +14,8 @@ describe('resolveAndValidatePath', () => {
   });
 
   test('resolves a nested relative path', () => {
-    const result = resolveAndValidatePath('src/tools/file-read.ts');
-    expect(result).toBe(join(PROJECT_ROOT, 'src/tools/file-read.ts'));
+    const result = resolveAndValidatePath('src/tools/registry.ts');
+    expect(result).toBe(join(PROJECT_ROOT, 'src/tools/registry.ts'));
   });
 
   test('resolves current directory (.)', () => {

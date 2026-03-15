@@ -104,7 +104,7 @@ export function renderFileTree(
 }
 
 /**
- * parseListDirOutput - Convert a simple list-dir tool output string to FileTreeEntry[].
+ * parseListDirOutput - Convert a simple list directory output string to FileTreeEntry[].
  * Expects one path per line, relative paths with '/' for directories.
  */
 export function parseListDirOutput(output: string, rootDir: string): FileTreeEntry[] {
