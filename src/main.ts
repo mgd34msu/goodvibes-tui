@@ -167,6 +167,7 @@ async function main() {
     scrollToEnd,
     toolRegistry,
     permissionManager,
+    () => runtime.systemPrompt,
   );
 
   const acpManager = new AcpManager(bus);
@@ -200,6 +201,7 @@ async function main() {
     },
     exit: exitApp,
     reloadSystemPrompt: loadSystemPromptFile,
+    toolRegistry,
   };
 
   input.setCommandRegistry(commandRegistry, commandContext);

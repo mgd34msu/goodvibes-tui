@@ -94,15 +94,20 @@ export class AnthropicProvider implements LLMProvider {
         }
       }
 
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+        'x-api-key': this.apiKey,
+        'anthropic-version': ANTHROPIC_API_VERSION,
+      };
+      if (body['thinking']) {
+        headers['anthropic-beta'] = 'interleaved-thinking-2025-05-14';
+      }
+
       let res: Response;
       try {
         res = await fetch(`${ANTHROPIC_API_BASE}/messages`, {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'x-api-key': this.apiKey,
-            'anthropic-version': ANTHROPIC_API_VERSION,
-          },
+          headers,
           body: JSON.stringify(body),
           signal,
         });

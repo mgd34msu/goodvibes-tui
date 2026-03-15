@@ -43,4 +43,11 @@ export class InfiniteBuffer {
   public clear() {
     this.lines = [];
   }
+
+  /** Truncate the buffer to the given line count (remove all lines from lineIndex onward). */
+  public truncateToLine(lineIndex: number): void {
+    if (lineIndex >= 0 && lineIndex < this.lines.length) {
+      this.lines.length = lineIndex;
+    }
+  }
 }

@@ -60,6 +60,6 @@ export interface ChatResponse {
 }
 
 export type ProviderMessage =
-  | { role: 'user'; content: string }
+  | { role: 'user'; content: string | ContentPart[] }
   | { role: 'assistant'; content: string; toolCalls?: ToolCall[] }
   | { role: 'tool'; callId: string; content: string; name?: string };
