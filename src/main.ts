@@ -94,6 +94,7 @@ async function main() {
   // --- Module wiring ---
   const bus = new EventBus();
   const conversation = new ConversationManager(() => stdout.columns || 80);
+  conversation.setConfigManager(configManager);
   const compositor = new Compositor(stdout);
   const selection = new SelectionManager();
 
