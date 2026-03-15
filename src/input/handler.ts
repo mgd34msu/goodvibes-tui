@@ -49,6 +49,21 @@ export class InputHandler {
   private imageRegistry = new Map<string, { data: string; mediaType: string }>();
   private nextImageId = 1;
 
+  // ── Undo / Redo ────────────────────────────────────────────────────────────
+  private undoStack: Array<{ prompt: string; cursorPos: number }> = [];
+  private redoStack: Array<{ prompt: string; cursorPos: number }> = [];
+  private static readonly MAX_UNDO = 50;
+
+  // ── Path completion (Tab on path-like token) ───────────────────────────────
+  /** Current list of path completions cycling on repeated Tab presses. */
+  private pathCompletions: string[] = [];
+  /** Index into pathCompletions for Tab cycling. */
+  private pathCompletionIndex = -1;
+  /** The raw prefix that triggered path completion (e.g. 'src/in'). */
+  private pathCompletionPrefix = '';
+  /** Start offset in prompt where the path token begins. */
+  private pathCompletionStart = 0;
+
   /** Regex matching atomic markers in the prompt. Used by findMarkerAtPos and expandPrompt. */
   private static readonly MARKER_REGEX = /\[(TEXT|IMAGE): [^\]]+\]/g;
 
@@ -422,6 +437,7 @@ export class InputHandler {
   private handleCtrlC(): void {
     if (this.prompt.length > 0) {
       // Clear the input
+      this.saveUndoState();
       this.prompt = '';
       this.cursorPos = 0;
       return;
@@ -454,6 +470,7 @@ export class InputHandler {
       return;
     }
     if (this.prompt.length > 0) {
+      this.saveUndoState();
       this.prompt = '';
       this.cursorPos = 0;
       return;
@@ -599,6 +616,7 @@ export class InputHandler {
           } else if (token.logicalName === 'enter') {
             const selected = this.filePicker.getSelected();
             if (selected) {
+              this.saveUndoState();
               const atPos = this.filePicker.insertPos;
               const injectMode = this.filePicker.injectMode;
               // queryLen: the @ (or !@) plus the typed query characters
@@ -666,6 +684,10 @@ export class InputHandler {
         if (this.inputHistory?.isBrowsing) {
           this.inputHistory.resetPosition();
         }
+        this.saveUndoState();
+        // Reset path completion state on any new typing
+        this.pathCompletions = [];
+        this.pathCompletionIndex = -1;
         const text = this.registerPaste(token.value);
         this.prompt = this.prompt.slice(0, this.cursorPos) + text + this.prompt.slice(this.cursorPos);
         this.cursorPos += text.length;
@@ -739,6 +761,7 @@ export class InputHandler {
         }
         // Ctrl+W: delete word backward
         if (token.logicalName === 'w' && token.ctrl) {
+          this.saveUndoState();
           let pos = this.cursorPos;
           // Skip trailing whitespace
           while (pos > 0 && this.prompt[pos - 1] === ' ') pos--;
@@ -779,12 +802,14 @@ export class InputHandler {
         }
         // Ctrl+K: kill to end of line
         if (token.logicalName === 'k' && token.ctrl) {
+          this.saveUndoState();
           this.prompt = this.prompt.slice(0, this.cursorPos);
           this.ensureInputCursorVisible();
           continue;
         }
         // Ctrl+U: clear prompt line
         if (token.logicalName === 'u' && token.ctrl) {
+          this.saveUndoState();
           this.prompt = '';
           this.cursorPos = 0;
           if (this.commandMode) {
@@ -792,6 +817,16 @@ export class InputHandler {
             this.autocomplete?.reset();
             this.bus.emit('command:mode-exit');
           }
+          continue;
+        }
+        // Ctrl+Z: undo last prompt edit
+        if (token.logicalName === 'z' && token.ctrl && !token.shift) {
+          this.handleUndo();
+          continue;
+        }
+        // Ctrl+Shift+Z: redo
+        if (token.logicalName === 'z' && token.ctrl && token.shift) {
+          this.handleRedo();
           continue;
         }
         // Ctrl+V: paste (image first, then text)
@@ -874,9 +909,14 @@ export class InputHandler {
         }
 
         // --- Normal mode ---
-        // Tab: toggle collapse of nearest block (when not in command mode)
+        // Tab: path completion if cursor is in a path-like token, else block toggle
         if (token.logicalName === 'tab' && !this.commandMode) {
-          this.handleBlockToggle();
+          if (!this.handlePathCompletion()) {
+            // No path token — reset any stale completion state and toggle block
+            this.pathCompletions = [];
+            this.pathCompletionIndex = -1;
+            this.handleBlockToggle();
+          }
           continue;
         }
         if (token.logicalName === 'enter') {
@@ -912,6 +952,7 @@ export class InputHandler {
 
         if (token.logicalName === 'backspace') {
           if (this.cursorPos > 0) {
+            this.saveUndoState();
             const marker = this.findMarkerAtPos(this.cursorPos);
             if (marker) {
               // Delete entire atomic marker and clean up registry
@@ -927,6 +968,7 @@ export class InputHandler {
           }
         } else if (token.logicalName === 'delete') {
           if (this.cursorPos < this.prompt.length) {
+            this.saveUndoState();
             const marker = this.findMarkerAtPos(this.cursorPos + 1);
             if (marker) {
               // Delete entire atomic marker and clean up registry
@@ -1036,6 +1078,7 @@ export class InputHandler {
    * Tries image clipboard first, falls back to text paste.
    */
   private handlePaste(): void {
+    this.saveUndoState();
     const img = pasteImageFromClipboard();
     if (img) {
       const id = `img${this.nextImageId++}`;
@@ -1204,6 +1247,138 @@ export class InputHandler {
       visibleCursorLine: isVisible ? visibleCursorLine : -1,
       visibleCursorCol: isVisible ? cursorCol : 0,
     };
+  }
+
+  // ── Undo / Redo methods ─────────────────────────────────────────────────
+
+  /**
+   * saveUndoState - Snapshot current prompt + cursor onto the undo stack.
+   * Clears the redo stack because a new edit invalidates future states.
+   */
+  private saveUndoState(): void {
+    this.undoStack.push({ prompt: this.prompt, cursorPos: this.cursorPos });
+    if (this.undoStack.length > InputHandler.MAX_UNDO) this.undoStack.shift();
+    this.redoStack = [];
+  }
+
+  /**
+   * handleUndo - Ctrl+Z: pop from undo stack, push current to redo stack.
+   */
+  private handleUndo(): void {
+    if (this.undoStack.length === 0) return;
+    this.redoStack.push({ prompt: this.prompt, cursorPos: this.cursorPos });
+    if (this.redoStack.length > InputHandler.MAX_UNDO) this.redoStack.shift();
+    const state = this.undoStack.pop()!;
+    this.prompt = state.prompt;
+    this.cursorPos = state.cursorPos;
+    this.ensureInputCursorVisible();
+  }
+
+  /**
+   * handleRedo - Ctrl+Shift+Z: pop from redo stack, push current to undo stack.
+   */
+  private handleRedo(): void {
+    if (this.redoStack.length === 0) return;
+    this.undoStack.push({ prompt: this.prompt, cursorPos: this.cursorPos });
+    const state = this.redoStack.pop()!;
+    this.prompt = state.prompt;
+    this.cursorPos = state.cursorPos;
+    this.ensureInputCursorVisible();
+  }
+
+  // ── Path completion methods ─────────────────────────────────────────────
+
+  /**
+   * findPathToken - Scan backward from cursor to find a path-like token.
+   * Detects:
+   *   - !@<partial>  (inject mode)
+   *   - @<partial>   (normal file ref)
+   *   - plain word containing '/'
+   * Returns { start, prefix } or null if no path token found.
+   */
+  private findPathToken(): { start: number; prefix: string } | null {
+    const pos = this.cursorPos;
+    const p = this.prompt;
+
+    // Scan backward to find the start of the current word (stop at whitespace/newline)
+    let start = pos;
+    while (start > 0 && p[start - 1] !== ' ' && p[start - 1] !== '\n') {
+      start--;
+    }
+
+    const word = p.slice(start, pos);
+    if (word.length === 0) return null;
+
+    // Must look like a path: starts with @, !@, or contains '/'
+    if (word.startsWith('!@') || word.startsWith('@') || word.includes('/')) {
+      // Strip leading @ or !@ to get the raw partial path
+      let prefix = word;
+      if (prefix.startsWith('!@')) prefix = prefix.slice(2);
+      else if (prefix.startsWith('@')) prefix = prefix.slice(1);
+      return { start, prefix };
+    }
+    return null;
+  }
+
+  /**
+   * handlePathCompletion - Tab on a path-like token: fuzzy-complete from filePicker.allFiles.
+   * Repeated Tab cycles through matches.
+   * Returns true if path completion was performed.
+   */
+  private handlePathCompletion(): boolean {
+    const token = this.findPathToken();
+    if (!token) return false;
+
+    const { start, prefix } = token;
+    const word = this.prompt.slice(start, this.cursorPos);
+
+    // Determine whether this is a new completion or continuing a cycle.
+    // After Tab replaces text, findPathToken returns the completed path as prefix,
+    // so we cannot compare prefix content — use start position only.
+    const isContinuing =
+      this.pathCompletions.length > 0 &&
+      this.pathCompletionStart === start;
+
+    if (!isContinuing) {
+      // Fresh completion: build the list
+      const allFiles = this.filePicker.allFiles;
+      if (allFiles.length === 0) return false; // Files not yet loaded
+
+      const lowerPrefix = prefix.toLowerCase();
+      const matches = allFiles
+        .filter(f => f.toLowerCase().includes(lowerPrefix))
+        .sort((a, b) => {
+          // Prefer matches where the filename itself starts with the prefix
+          const aFile = a.slice(a.lastIndexOf('/') + 1).toLowerCase();
+          const bFile = b.slice(b.lastIndexOf('/') + 1).toLowerCase();
+          const aScore = aFile.startsWith(lowerPrefix) ? 2 : a.toLowerCase().startsWith(lowerPrefix) ? 1 : 0;
+          const bScore = bFile.startsWith(lowerPrefix) ? 2 : b.toLowerCase().startsWith(lowerPrefix) ? 1 : 0;
+          return bScore - aScore;
+        });
+
+      if (matches.length === 0) return false;
+
+      this.pathCompletions = matches;
+      this.pathCompletionIndex = 0;
+      this.pathCompletionPrefix = prefix;
+      this.pathCompletionStart = start;
+    } else {
+      // Cycle to next match
+      this.pathCompletionIndex = (this.pathCompletionIndex + 1) % this.pathCompletions.length;
+    }
+
+    const completed = this.pathCompletions[this.pathCompletionIndex];
+    // Determine the prefix characters to keep (@ or !@)
+    let leader = '';
+    if (word.startsWith('!@')) leader = '!@';
+    else if (word.startsWith('@')) leader = '@';
+
+    const replacement = leader + completed;
+    this.saveUndoState();
+    this.prompt = this.prompt.slice(0, start) + replacement + this.prompt.slice(this.cursorPos);
+    this.cursorPos = start + replacement.length;
+    this.ensureInputCursorVisible();
+    return true;
   }
 
   /**
