@@ -89,7 +89,9 @@ export function renderModelPickerOverlay(
       if (caps.multimodal) capParts.push('Vision: \u2713');
       if (caps.toolCalling) capParts.push('Tools: \u2713');
       if (caps.codeEditing) capParts.push('Code: \u2713');
-      const capLine = pad + '\u2502 ' + capParts.join('  ').padEnd(contentW) + ' \u2502';
+      const capText = capParts.join('  ');
+      const capPadded = capText + ' '.repeat(Math.max(0, contentW - getDisplayWidth(capText)));
+      const capLine = pad + '\u2502 ' + capPadded + ' \u2502';
       lines.push(UIFactory.stringToLine(capLine, width, { fg: '244' }));
     } else {
       lines.push(UIFactory.stringToLine(emptyRow, width, { fg: '240' }));

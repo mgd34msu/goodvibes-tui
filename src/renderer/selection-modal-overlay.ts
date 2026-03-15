@@ -12,6 +12,9 @@ export function renderSelectionModalOverlay(
   width: number,
 ): Line[] {
   const lines: Line[] = [];
+  // Add spacing above modal
+  lines.push(UIFactory.stringToLine(' '.repeat(width), width));
+  lines.push(UIFactory.stringToLine(' '.repeat(width), width));
   const boxMargin = 4;
   const boxW = Math.min(width - boxMargin * 2, 72);
   const contentW = boxW - 4; // 2 border chars + 2 padding chars each side
