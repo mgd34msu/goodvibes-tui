@@ -4,6 +4,7 @@ import type { ConversationManager } from '../core/conversation.ts';
 import type { AppConfig } from '../config/index.ts';
 import type { ConfigManager } from '../config/index.ts';
 import type { ToolRegistry } from '../tools/registry.ts';
+import type { SelectionItem, SelectionResult, SelectionAction } from './selection-modal.ts';
 
 /**
  * CommandContext - Passed to every slash command handler so commands can
@@ -35,6 +36,13 @@ export interface CommandContext {
   openModelPicker?: () => void;
   /** Open the provider picker modal. */
   openProviderPicker?: () => void;
+  /** Open the generic selection modal and call back with the result. */
+  openSelection?: (
+    title: string,
+    items: SelectionItem[],
+    opts: { preSelectId?: string; allowSearch?: boolean; customActions?: Map<string, SelectionAction> } | undefined,
+    callback: (result: SelectionResult | null) => void,
+  ) => void;
   /** Registry of all available tools. */
   toolRegistry: ToolRegistry;
 }

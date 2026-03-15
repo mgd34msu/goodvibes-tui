@@ -1,8 +1,10 @@
 import type { CommandRegistry, CommandContext } from './command-registry.ts';
+import type { SelectionItem } from './selection-modal.ts';
 import type { ConfigKey } from '../config/index.ts';
 import { CONFIG_SCHEMA } from '../config/index.ts';
 import { REASONING_BUDGET_MAP } from '../providers/interface.ts';
 import { join } from 'path';
+import { unlinkSync } from 'node:fs';
 import { getSessionManager } from '../sessions/manager.ts';
 import { TemplateManager, parseTemplateArgs } from '../templates/manager.ts';
 import { getBookmarkManager } from '../bookmarks/manager.ts';
@@ -342,8 +344,41 @@ export function registerBuiltinCommands(registry: CommandRegistry): void {
         return;
       }
 
-      // /config (no args) — show all settings grouped by category
+      // /config (no args) — open modal if available, else show text listing
       if (args.length === 0) {
+        if (ctx.openSelection) {
+          const items: SelectionItem[] = [];
+          for (const cat of categories) {
+            const catObj = all[cat] as Record<string, unknown>;
+            for (const [field, val] of Object.entries(catObj)) {
+              const key = `${cat}.${field}`;
+              const schema = CONFIG_SCHEMA.find(s => s.key === key);
+              items.push({
+                id: key,
+                label: key,
+                detail: String(val),
+                category: cat,
+                actions: schema ? `[type] description: ${schema.description}` : undefined,
+              });
+            }
+          }
+          ctx.openSelection('Select Config', items, { allowSearch: true }, (result) => {
+            if (!result) return;
+            const key = result.item.id as import('../config/index.ts').ConfigKey;
+            const schema = CONFIG_SCHEMA.find(s => s.key === key);
+            const val = cm.get(key);
+            const defaultVal = schema ? schema.default : '?';
+            const lines = [
+              `${key}`,
+              `  value:   ${String(val)}`,
+              `  default: ${String(defaultVal)}`,
+              `  type:    ${schema ? schema.type : 'unknown'}${schema?.enumValues ? ` (${schema.enumValues.join(', ')})` : ''}`,
+              `  desc:    ${schema ? schema.description : ''}`,
+            ];
+            ctx.print(lines.join('\n'));
+          });
+          return;
+        }
         const lines: string[] = ['Config settings:'];
         for (const cat of categories) {
           lines.push(`  [${cat}]`);
@@ -472,6 +507,23 @@ export function registerBuiltinCommands(registry: CommandRegistry): void {
     description: 'List available tools',
     handler(_args, ctx) {
       const tools = ctx.toolRegistry.list();
+      if (ctx.openSelection) {
+        const items: SelectionItem[] = tools.map(t => ({
+          id: t.definition.name,
+          label: t.definition.name,
+          detail: typeof t.definition.description === 'string'
+            ? t.definition.description.slice(0, 50)
+            : '',
+        }));
+        ctx.openSelection('Available Tools', items, { allowSearch: true }, (result) => {
+          if (!result) return;
+          const tool = tools.find(t2 => t2.definition.name === result.item.id);
+          if (tool) {
+            ctx.print(`Tool: ${tool.definition.name}\n  ${tool.definition.description ?? ''}`);
+          }
+        });
+        return;
+      }
       const lines = ['Available tools:', ...tools.map(t => `  • ${t.definition.name}`)];
       ctx.print(lines.join('\n'));
     },
@@ -760,11 +812,48 @@ export function registerBuiltinCommands(registry: CommandRegistry): void {
     name: 'sessions',
     aliases: [],
     description: 'List saved sessions',
-    handler(_args, ctx) {
+    async handler(_args, ctx) {
       const sessionManager = getSessionManager();
       const sessions = sessionManager.list();
       if (sessions.length === 0) {
         ctx.print('No saved sessions.\nUse /save [name] to save the current session.');
+        return;
+      }
+      if (ctx.openSelection) {
+        const deleteAction = new Map([['d', 'delete' as const]]);
+        const items: SelectionItem[] = sessions.map(s => ({
+          id: s.name,
+          label: s.name,
+          detail: s.title || '(untitled)',
+          actions: '[d] delete',
+        }));
+        ctx.openSelection('Sessions', items, { allowSearch: true, customActions: deleteAction }, (result) => {
+          if (!result) return;
+          if (result.action === 'delete') {
+            try {
+              const sessionInfo = sessions.find(s => s.name === result.item.id);
+              if (sessionInfo) {
+                unlinkSync(sessionInfo.filePath);
+                ctx.print(`Session deleted: ${result.item.id}`);
+              }
+            } catch (e) {
+              ctx.print(`Failed to delete session: ${(e as Error).message}`);
+            }
+          } else {
+            // select = load
+            try {
+              const { meta, messages } = sessionManager.load(result.item.id);
+              ctx.conversationManager.resetAll();
+              ctx.conversationManager.fromJSON({ messages: messages as never[] });
+              if (meta.title) ctx.conversationManager.title = meta.title;
+              ctx.conversationManager.rebuildHistory();
+              ctx.renderRequest();
+              ctx.print(`Session loaded: ${result.item.id} (${messages.length} messages)`);
+            } catch (e) {
+              ctx.print(`Failed to load session: ${(e as Error).message}`);
+            }
+          }
+        });
         return;
       }
       const lines = ['Saved sessions:', ''];
@@ -791,6 +880,39 @@ export function registerBuiltinCommands(registry: CommandRegistry): void {
         const templates = getTemplateManager().list();
         if (templates.length === 0) {
           ctx.print('No templates saved.\nUse /template save <name> to save the current prompt as a template.');
+          return;
+        }
+        if (ctx.openSelection) {
+          const deleteAction = new Map([['d', 'delete' as const], ['e', 'edit' as const]]);
+          const items: SelectionItem[] = templates.map(t => ({
+            id: t.name,
+            label: t.name,
+            detail: t.preview,
+            category: t.scope === 'project' ? 'project' : 'global',
+            actions: '[d] delete  [e] edit',
+          }));
+          ctx.openSelection('Templates', items, { allowSearch: true, customActions: deleteAction }, (result) => {
+            if (!result) return;
+            if (result.action === 'delete') {
+              const deleted = getTemplateManager().delete(result.item.id);
+              ctx.print(deleted ? `Template deleted: ${result.item.id}` : `Template not found: ${result.item.id}`);
+            } else if (result.action === 'edit') {
+              const content = getTemplateManager().load(result.item.id);
+              if (content !== null) {
+                ctx.print(`Template: ${result.item.id}\n\n${content}`);
+              } else {
+                ctx.print(`Template not found: ${result.item.id}`);
+              }
+            } else {
+              // select = use template
+              const content = getTemplateManager().load(result.item.id);
+              if (content !== null) {
+                ctx.eventBus.emit('input:submit', { text: content });
+              } else {
+                ctx.print(`Template not found: ${result.item.id}`);
+              }
+            }
+          });
           return;
         }
         const lines = ['Templates:', ''];
@@ -884,6 +1006,47 @@ export function registerBuiltinCommands(registry: CommandRegistry): void {
       type PermTool = typeof VALID_TOOLS[number];
 
       if (args.length === 0) {
+        if (ctx.openSelection) {
+          const cycleActions = new Map([['enter', 'toggle' as const]]);
+          const items: SelectionItem[] = VALID_TOOLS.map(tool => {
+            const toolKey = `permissions.tools.${tool}` as Parameters<typeof cm.get>[0];
+            const action = cm.get(toolKey) as string;
+            return {
+              id: tool,
+              label: tool,
+              detail: action,
+              category: 'tools',
+              actions: '[Enter] cycle allow/prompt/deny',
+            };
+          });
+          // Also add the mode item at the top
+          const mode = cm.get('permissions.mode') as string;
+          items.unshift({
+            id: '__mode__',
+            label: 'permission mode',
+            detail: mode,
+            category: 'global',
+            actions: '[Enter] cycle allow-all/prompt/custom',
+          });
+          ctx.openSelection('Permissions', items, { allowSearch: true, customActions: cycleActions }, (result) => {
+            if (!result) return;
+            if (result.item.id === '__mode__') {
+              const currentMode = cm.get('permissions.mode') as string;
+              const nextMode = VALID_MODES[(VALID_MODES.indexOf(currentMode as typeof VALID_MODES[number]) + 1) % VALID_MODES.length];
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              cm.set('permissions.mode', nextMode as any);
+              ctx.print(`Permission mode set to: ${nextMode}`);
+            } else {
+              const toolKey = `permissions.tools.${result.item.id}` as Parameters<typeof cm.get>[0];
+              const currentAction = cm.get(toolKey) as string;
+              const nextAction = VALID_ACTIONS[(VALID_ACTIONS.indexOf(currentAction as typeof VALID_ACTIONS[number]) + 1) % VALID_ACTIONS.length];
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              cm.set(toolKey as Parameters<typeof cm.set>[0], nextAction as any);
+              ctx.print(`Permission for ${result.item.id} set to: ${nextAction}`);
+            }
+          });
+          return;
+        }
         const mode = cm.get('permissions.mode');
         const lines = [`Permission mode: ${mode}`, '  Tool settings:'];
         for (const tool of VALID_TOOLS) {
@@ -1021,6 +1184,26 @@ export function registerBuiltinCommands(registry: CommandRegistry): void {
       const entries = bm.list();
       if (entries.length === 0) {
         ctx.print('No bookmarks.\nUse Ctrl+B to bookmark the nearest block.');
+        return;
+      }
+      if (ctx.openSelection) {
+        const deleteAction = new Map([['d', 'delete' as const]]);
+        const items: SelectionItem[] = entries.map(entry => ({
+          id: entry.key,
+          label: entry.label,
+          detail: new Date(entry.timestamp).toLocaleTimeString(),
+          actions: '[d] delete',
+        }));
+        ctx.openSelection('Bookmarks', items, { allowSearch: true, customActions: deleteAction }, (result) => {
+          if (!result) return;
+          if (result.action === 'delete') {
+            bm.toggle(result.item.id); // toggle off (removes it)
+            ctx.print(`Bookmark removed: ${result.item.id}`);
+          } else {
+            // select = scroll to bookmark
+            ctx.eventBus.emit('bookmark:jump', { key: result.item.id });
+          }
+        });
         return;
       }
       const lines = ['Bookmarks:', ''];

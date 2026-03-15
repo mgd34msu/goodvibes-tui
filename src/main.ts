@@ -26,6 +26,7 @@ import { CommandRegistry } from './input/command-registry.ts';
 import { renderFilePickerOverlay } from './renderer/file-picker-overlay.ts';
 import { renderModelPickerOverlay } from './renderer/model-picker-overlay.ts';
 import { renderSearchOverlay } from './renderer/search-overlay.ts';
+import { renderSelectionModalOverlay } from './renderer/selection-modal-overlay.ts';
 import { registerBuiltinCommands } from './input/commands.ts';
 import { InputHistory } from './input/input-history.ts';
 import { loadSystemPrompt as _loadSystemPrompt } from './utils/prompt-loader.ts';
@@ -219,6 +220,10 @@ async function main() {
     bus.emit('render:request');
   };
 
+  commandContext.openSelection = (title, items, opts, callback) => {
+    input.openSelection(title, items, opts, callback);
+  };
+
   // When model+effort selection is complete via the picker, apply both
   bus.on('model-picker:complete', (data) => {
     const def = data.model;
@@ -280,6 +285,9 @@ async function main() {
     if (input.modelPicker.active) {
       overlayRows += input.modelPicker.getItemCount() + 7; // items + title/empty/divider/detail/bottom
     }
+    if (input.selectionModal.active) {
+      overlayRows += Math.min(input.selectionModal.filteredItems.length, 12) + 5; // items + title/search/sep/bottom
+    }
     if (input.searchManager.active) {
       overlayRows += 1; // search bar
     }
@@ -322,6 +330,10 @@ async function main() {
 
     if (input.modelPicker.active) {
       viewport.push(...renderModelPickerOverlay(input.modelPicker, width));
+    }
+
+    if (input.selectionModal.active) {
+      viewport.push(...renderSelectionModalOverlay(input.selectionModal, width));
     }
 
     if (input.searchManager.active) {
