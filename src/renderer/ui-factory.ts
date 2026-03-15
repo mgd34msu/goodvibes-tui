@@ -15,10 +15,11 @@ function fmtNum(n: number): string {
  * UIFactory - Generates standard UI fragments without needing Ink/React overhead.
  */
 export class UIFactory {
-  public static createHeader(width: number, model: string, provider: string): Line[] {
+  public static createHeader(width: number, model: string, provider: string, title?: string): Line[] {
     const lines: Line[] = [];
     const CYAN = '#00ffff';
     const GREY = '244';
+    const TITLE_COLOR = '250';
     const brand = ` GoodVibes `;
     const ver = `v${VERSION} `;
     const stats = ` ${model} `;
@@ -27,6 +28,27 @@ export class UIFactory {
     let curX = 0;
     for (const char of brand) { line[curX++] = { char, fg: CYAN, bg: '', bold: true, dim: false, underline: false, italic: false, strikethrough: false }; }
     for (const char of ver) { line[curX++] = { char, fg: GREY, bg: '', bold: false, dim: true, underline: false, italic: false, strikethrough: false }; }
+    // Optional conversation title — shown after brand/ver, truncated to fit
+    if (title) {
+      const titleStr = `| ${title} `;
+      const rightReserved = getDisplayWidth(stats + prov);
+      const maxTitleW = width - curX - rightReserved - 1;
+      let displayTitle: string;
+      if (getDisplayWidth(titleStr) <= maxTitleW) {
+        displayTitle = titleStr;
+      } else {
+        let truncated = '';
+        let w = 0;
+        for (const ch of titleStr) {
+          const cw = getDisplayWidth(ch);
+          if (w + cw > maxTitleW - 1) { truncated += '…'; break; }
+          truncated += ch;
+          w += cw;
+        }
+        displayTitle = truncated;
+      }
+      for (const char of displayTitle) { if (curX < width) line[curX++] = { char, fg: TITLE_COLOR, bg: '', bold: false, dim: true, underline: false, italic: false, strikethrough: false }; }
+    }
     const rightSideText = stats + prov;
     const rightSideW = getDisplayWidth(rightSideText);
     let rightX = width - rightSideW;

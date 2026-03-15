@@ -49,6 +49,8 @@ export interface BlockMeta {
 
 export class ConversationManager {
   public history = new InfiniteBuffer();
+  /** Auto-generated or manually set conversation title. */
+  public title = '';
   private messages: Message[] = [];
   private getWidth: () => number;
   /** Tracks the rendered width; a change invalidates the full history. */
@@ -96,6 +98,16 @@ export class ConversationManager {
   }
 
   public addUserMessage(content: string): void {
+    if (this.title === '') {
+      // Auto-generate title from first user message (max 50 chars, truncated at word boundary)
+      if (content.length <= 50) {
+        this.title = content;
+      } else {
+        const truncated = content.slice(0, 50);
+        const lastSpace = truncated.lastIndexOf(' ');
+        this.title = lastSpace > 10 ? truncated.slice(0, lastSpace) : truncated;
+      }
+    }
     this.messages.push({ role: 'user', content });
     this.markDirty();
   }
@@ -458,6 +470,7 @@ export class ConversationManager {
    */
   public resetAll(): void {
     this.messages = [];
+    this.title = '';
     this.history.clear();
     this.appendedUpTo = 0;
     this.lastRenderedWidth = 0;
@@ -527,7 +540,7 @@ export class ConversationManager {
    * toJSON - Serialize conversation for persistence.
    */
   public toJSON(): object {
-    return { messages: this.messages, timestamp: Date.now() };
+    return { messages: structuredClone(this.messages), timestamp: Date.now() };
   }
 
   /**

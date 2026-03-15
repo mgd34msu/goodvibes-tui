@@ -27,6 +27,9 @@ export interface EventMap {
   'scroll:delta': { delta: number };
   'block:toggle-collapse': { blockIndex: number };
 
+  // Context warnings
+  'context:warning': { usage: number; threshold: number };
+
   // Slash command events
   'command:mode-enter': void;
   'command:mode-exit': void;
