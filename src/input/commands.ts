@@ -5,6 +5,9 @@ import { REASONING_BUDGET_MAP } from '../providers/interface.ts';
 import { join } from 'path';
 import { getSessionManager } from '../sessions/manager.ts';
 import { TemplateManager, parseTemplateArgs } from '../templates/manager.ts';
+import { getBookmarkManager } from '../bookmarks/manager.ts';
+import { getProfileManager } from '../profiles/manager.ts';
+import type { BlockMeta } from '../core/conversation.ts';
 
 let _templateManager: TemplateManager | undefined;
 function getTemplateManager(): TemplateManager {
@@ -78,8 +81,15 @@ export function registerBuiltinCommands(registry: CommandRegistry): void {
         '  Config & Display:',
         '    /config [key] [value]   Show or set config values',
         '    /config reset [key]     Reset config key or all to defaults',
+        '    /config profile save <name>   Save TUI settings as a profile',
+        '    /config profile load <name>   Load a saved profile',
+        '    /config profile list          List saved profiles',
+        '    /config profile delete <name> Delete a profile',
         '    /debug            Toggle debug mode',
         '    /lines            Toggle line numbers on/off',
+        '    /expand [type]    Expand blocks (all|thinking|tool|code)',
+        '    /collapse [type]  Collapse blocks (all|thinking|tool|code)',
+        '    /bookmarks        List bookmarked blocks',
         '',
         '  Conversation:',
         '    /clear            Clear display (keep context)',
@@ -122,6 +132,8 @@ export function registerBuiltinCommands(registry: CommandRegistry): void {
         '  Tab               Toggle collapse of nearest block',
         '  Ctrl+Y            Copy nearest code/tool block',
         '  Ctrl+A            Apply nearest diff block',
+        '  Ctrl+B            Bookmark/unbookmark nearest block',
+        '  Ctrl+S            Save nearest block content to file',
         '  Ctrl+V            Paste (image or text)',
       ];
       ctx.print(lines.join('\n'));
@@ -178,6 +190,113 @@ export function registerBuiltinCommands(registry: CommandRegistry): void {
       const cm = ctx.configManager;
       const all = cm.getAll();
       const categories = ['display', 'provider', 'behavior'] as const;
+
+      // /config profile save|load|list|delete
+      if (args[0] === 'profile') {
+        const sub = args[1];
+        const profileName = args[2];
+        const pm = getProfileManager();
+        const currentConfig = cm.getAll();
+
+        if (!sub || sub === 'list') {
+          const profiles = pm.list();
+          if (profiles.length === 0) {
+            ctx.print('No saved profiles.\nUse /config profile save <name> to save current settings.');
+            return;
+          }
+          const lines = ['Saved profiles:', ''];
+          for (const p of profiles) {
+            const date = new Date(p.timestamp).toLocaleString();
+            lines.push(`  ${p.name.padEnd(28)} ${date}`);
+          }
+          ctx.print(lines.join('\n'));
+          return;
+        }
+
+        if (sub === 'save') {
+          if (!profileName) {
+            ctx.print('Usage: /config profile save <name>');
+            return;
+          }
+          try {
+            const data = {
+              display: currentConfig.display,
+              provider: { model: currentConfig.provider.model, reasoningEffort: currentConfig.provider.reasoningEffort },
+              behavior: currentConfig.behavior,
+            };
+            const filePath = pm.save(profileName, data);
+            ctx.print(`Profile saved: ${profileName}\n  → ${filePath}`);
+          } catch (e) {
+            ctx.print(`Failed to save profile: ${(e as Error).message}`);
+          }
+          return;
+        }
+
+        if (sub === 'load') {
+          if (!profileName) {
+            ctx.print('Usage: /config profile load <name>');
+            return;
+          }
+          try {
+            const { data } = pm.load(profileName);
+            // Apply display settings
+            if (data.display) {
+              for (const [field, val] of Object.entries(data.display)) {
+                try {
+                  cm.set(`display.${field}` as Parameters<typeof cm.set>[0], val as never);
+                } catch (e) { ctx.print(`Warning: failed to apply display.${field}: ${(e as Error).message}`); }
+              }
+            }
+            // Apply behavior settings
+            if (data.behavior) {
+              for (const [field, val] of Object.entries(data.behavior)) {
+                try {
+                  cm.set(`behavior.${field}` as Parameters<typeof cm.set>[0], val as never);
+                } catch (e) { ctx.print(`Warning: failed to apply behavior.${field}: ${(e as Error).message}`); }
+              }
+            }
+            // Apply provider settings (model + reasoningEffort only)
+            if (data.provider) {
+              if (data.provider.model && typeof data.provider.model === 'string') {
+                try {
+                  ctx.providerRegistry.setCurrentModel(data.provider.model);
+                  const def = ctx.providerRegistry.getCurrentModel();
+                  ctx.runtime.model = def.id;
+                  ctx.runtime.provider = def.provider;
+                  cm.set('provider.model', def.id);
+                  cm.set('provider.provider', def.provider);
+                } catch { /* skip invalid model */ }
+              }
+              if (data.provider.reasoningEffort && typeof data.provider.reasoningEffort === 'string') {
+                ctx.runtime.reasoningEffort = data.provider.reasoningEffort;
+                cm.set('provider.reasoningEffort', data.provider.reasoningEffort);
+              }
+            }
+            ctx.print(`Profile loaded: ${profileName}`);
+            ctx.renderRequest();
+          } catch (e) {
+            ctx.print(`Failed to load profile: ${(e as Error).message}`);
+          }
+          return;
+        }
+
+        if (sub === 'delete') {
+          if (!profileName) {
+            ctx.print('Usage: /config profile delete <name>');
+            return;
+          }
+          const deleted = pm.delete(profileName);
+          if (deleted) {
+            ctx.print(`Profile deleted: ${profileName}`);
+          } else {
+            ctx.print(`Profile not found: ${profileName}`);
+          }
+          return;
+        }
+
+        ctx.print(`Unknown profile subcommand: ${sub}\nUsage: /config profile save|load|list|delete <name>`);
+        return;
+      }
 
       // /config reset [key]
       if (args[0] === 'reset') {
@@ -787,6 +906,99 @@ export function registerBuiltinCommands(registry: CommandRegistry): void {
       } catch (e) {
         ctx.print(`Error: ${(e as Error).message}`);
       }
+    },
+  });
+
+  // ── /expand ────────────────────────────────────────────
+  registry.register({
+    name: 'expand',
+    aliases: [],
+    description: 'Expand blocks by type',
+    usage: '[all|thinking|tool|code]',
+    handler(args, ctx) {
+      const typeFilter = args[0] || 'all';
+      const VALID_TYPES = ['all', 'thinking', 'tool', 'code'] as const;
+      if (!VALID_TYPES.includes(typeFilter as typeof VALID_TYPES[number])) {
+        ctx.print(`Unknown type: ${typeFilter}\nValid types: ${VALID_TYPES.join(', ')}`);
+        return;
+      }
+      const registry = ctx.conversationManager.getBlockRegistry();
+      if (!registry || registry.length === 0) {
+        ctx.print('No blocks found.');
+        return;
+      }
+      let count = 0;
+      for (let i = 0; i < registry.length; i++) {
+        const block = registry[i];
+        const matchesType = typeFilter === 'all' ||
+          (typeFilter === 'tool' && block.type === 'tool') ||
+          (typeFilter === 'code' && block.type === 'code') ||
+          (typeFilter === 'thinking' && block.type === 'thinking');
+        if (!matchesType) continue;
+        if (ctx.conversationManager.isCollapsed(i)) {
+          ctx.conversationManager.toggleCollapseAtLine(block.startLine);
+          count++;
+        }
+      }
+      ctx.print(`Expanded ${count} block${count !== 1 ? 's' : ''}${typeFilter !== 'all' ? ` (${typeFilter})` : ''}.`);
+      ctx.renderRequest();
+    },
+  });
+
+  // ── /collapse ──────────────────────────────────────────
+  registry.register({
+    name: 'collapse',
+    aliases: [],
+    description: 'Collapse blocks by type',
+    usage: '[all|thinking|tool|code]',
+    handler(args, ctx) {
+      const typeFilter = args[0] || 'all';
+      const VALID_TYPES = ['all', 'thinking', 'tool', 'code'] as const;
+      if (!VALID_TYPES.includes(typeFilter as typeof VALID_TYPES[number])) {
+        ctx.print(`Unknown type: ${typeFilter}\nValid types: ${VALID_TYPES.join(', ')}`);
+        return;
+      }
+      const registry = ctx.conversationManager.getBlockRegistry();
+      if (!registry || registry.length === 0) {
+        ctx.print('No blocks found.');
+        return;
+      }
+      let count = 0;
+      for (let i = 0; i < registry.length; i++) {
+        const block = registry[i];
+        const matchesType = typeFilter === 'all' ||
+          (typeFilter === 'tool' && block.type === 'tool') ||
+          (typeFilter === 'code' && block.type === 'code') ||
+          (typeFilter === 'thinking' && block.type === 'thinking');
+        if (!matchesType) continue;
+        if (!ctx.conversationManager.isCollapsed(i)) {
+          ctx.conversationManager.toggleCollapseAtLine(block.startLine);
+          count++;
+        }
+      }
+      ctx.print(`Collapsed ${count} block${count !== 1 ? 's' : ''}${typeFilter !== 'all' ? ` (${typeFilter})` : ''}.`);
+      ctx.renderRequest();
+    },
+  });
+
+  // ── /bookmarks ─────────────────────────────────────────
+  registry.register({
+    name: 'bookmarks',
+    aliases: ['bm'],
+    description: 'List bookmarked blocks',
+    handler(_args, ctx) {
+      const bm = getBookmarkManager();
+      const entries = bm.list();
+      if (entries.length === 0) {
+        ctx.print('No bookmarks.\nUse Ctrl+B to bookmark the nearest block.');
+        return;
+      }
+      const lines = ['Bookmarks:', ''];
+      for (const entry of entries) {
+        const date = new Date(entry.timestamp).toLocaleTimeString();
+        lines.push(`  ${entry.key.padEnd(32)} ${entry.label}  (${date})`);
+      }
+      ctx.print(lines.join('\n'));
     },
   });
 }

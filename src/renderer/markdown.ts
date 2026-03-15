@@ -414,10 +414,31 @@ export function renderInlineMarkdown(text: string): InlineToken[] {
       }
     }
 
-    // Plain text — accumulate until next special char
+    // Plain text — accumulate until next special char, detect bare URLs and file paths
     let end = i + 1;
     while (end < text.length && !INLINE_SPECIAL_CHARS.has(text[end])) end++;
-    tokens.push({ type: 'text', text: text.slice(i, end), style: {} });
+    const plainText = text.slice(i, end);
+
+    // Detect http/https URLs in plain text
+    const urlMatch = plainText.match(/^(https?:\/\/[^\s,)>"]+)/);
+    if (urlMatch) {
+      const url = urlMatch[1];
+      tokens.push({ type: 'link', text: url, url });
+      i += url.length;
+      continue;
+    }
+
+    // Detect absolute file paths in plain text (require at least one directory separator)
+    const fileMatch = plainText.match(/^(\/[^\s,)>"]+\/[^\s,)>"]+(?:\.[a-zA-Z0-9]+)?)/);
+    if (fileMatch) {
+      const filePath = fileMatch[1];
+      const fileUrl = `file://${filePath}`;
+      tokens.push({ type: 'link', text: filePath, url: fileUrl });
+      i += filePath.length;
+      continue;
+    }
+
+    tokens.push({ type: 'text', text: plainText, style: {} });
     i = end;
   }
 
@@ -447,7 +468,12 @@ function compositeInlineLine(
     } else if (token.type === 'code') {
       for (const ch of token.text) chars.push({ char: ch, style: { fg: '#ffcc00', bg: '#1a1a1a' } });
     } else if (token.type === 'link') {
-      for (const ch of token.text) chars.push({ char: ch, style: { fg: '#00aaff', underline: true } });
+      // Resolve URL: if url is empty or relative, treat as text; if it's a file path, use file:// protocol
+      let resolvedUrl = token.url;
+      if (resolvedUrl && !resolvedUrl.startsWith('http') && !resolvedUrl.startsWith('file://') && resolvedUrl.startsWith('/')) {
+        resolvedUrl = `file://${resolvedUrl}`;
+      }
+      for (const ch of token.text) chars.push({ char: ch, style: { fg: '#00aaff', underline: true, link: resolvedUrl || undefined } });
     }
   }
 

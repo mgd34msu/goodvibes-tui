@@ -10,6 +10,8 @@ export interface Cell {
   underline: boolean;
   italic: boolean;
   strikethrough: boolean;
+  /** OSC 8 hyperlink URL. If set, the DiffEngine wraps this cell with OSC 8 sequences. */
+  link?: string;
 }
 
 /**
@@ -44,4 +46,5 @@ export const createStyledCell = (char: string, overrides: Partial<Omit<Cell, 'ch
   underline: overrides.underline ?? false,
   italic: overrides.italic ?? false,
   strikethrough: overrides.strikethrough ?? false,
+  link: overrides.link,
 });
