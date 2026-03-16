@@ -153,7 +153,7 @@ export function registerBuiltinCommands(registry: CommandRegistry): void {
           { id: '/shortcuts', label: '/shortcuts', detail: 'View keyboard shortcuts reference', category: 'Tools & System' },
           { id: '/commands', label: '/commands', detail: 'Browse all commands in a scrollable list', category: 'Tools & System' },
           { id: '/secrets', label: '/secrets set|get|list|delete', detail: 'Manage encrypted API key secrets', category: 'Tools & System' },
-          { id: '/danger', label: '/danger [key] [value]', detail: '⚠ Danger zone settings', category: 'Tools & System', fg: '#ef4444' },
+          { id: '/danger', label: '/danger [key] [value]', detail: 'DANGEROUS SETTINGS', category: 'Tools & System', fg: '#ef4444' },
           { id: '/help', label: '/help', detail: 'This help', category: 'Tools & System' },
           { id: '/quit', label: '/quit', detail: 'Exit', category: 'Tools & System' }
         ];
@@ -654,6 +654,28 @@ export function registerBuiltinCommands(registry: CommandRegistry): void {
 
       if (args.length === 0) {
         const current = (ctx.runtime.reasoningEffort || ctx.configManager.get('provider.reasoningEffort') || 'medium') as string;
+        if (ctx.openSelection) {
+          const descriptions: Record<string, string> = {
+            instant: 'Fastest, minimal reasoning',
+            low: 'Quick with light reasoning',
+            medium: 'Balanced speed and quality (default)',
+            high: 'Thorough, deep reasoning',
+          };
+          const items: SelectionItem[] = VALID_LEVELS.map(level => ({
+            id: level,
+            label: level,
+            detail: level === current ? `\u25c9 ${descriptions[level]}` : descriptions[level],
+          }));
+          ctx.openSelection('Reasoning Effort', items, { preSelectId: current, allowSearch: false }, (result) => {
+            if (!result) return;
+            const level = result.item.id as EffortLevel;
+            ctx.runtime.reasoningEffort = level;
+            ctx.configManager.set('provider.reasoningEffort', level);
+            ctx.print(`Reasoning effort set to: ${level}`);
+            ctx.renderRequest();
+          });
+          return;
+        }
         const budget = REASONING_BUDGET_MAP[current];
         const lines = [
           `Reasoning effort: ${current}`,
