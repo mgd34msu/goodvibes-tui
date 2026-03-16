@@ -49,7 +49,7 @@ export class InputHandler {
   private nextPasteId = 1;
   private lastCtrlCTime = 0;
   private commandRegistry: CommandRegistry | null = null;
-  private commandContext: CommandContext | null = null;
+  private commandContext: CommandContext | undefined = undefined;
   public autocomplete: AutocompleteEngine | null = null;
   public filePicker = new FilePickerModal();
   public modelPicker = new ModelPickerModal();
@@ -66,6 +66,9 @@ export class InputHandler {
   public profilePickerModal = new ProfilePickerModal();
   /** True when the help overlay is visible. */
   public helpOverlayActive = false;
+  public helpScrollOffset = 0;
+  public shortcutsOverlayActive = false;
+  public shortcutsScrollOffset = 0;
   private inputHistory: InputHistory | null = null;
   private conversationManager: ConversationManager | null = null;
   private selectionCallback: ((result: SelectionResult | null) => void) | null = null;
@@ -600,6 +603,14 @@ export class InputHandler {
     // If help overlay is open, close it
     if (this.helpOverlayActive) {
       this.helpOverlayActive = false;
+      this.helpScrollOffset = 0;
+      this.bus.emit('render:request');
+      return;
+    }
+    // If shortcuts overlay is open, close it
+    if (this.shortcutsOverlayActive) {
+      this.shortcutsOverlayActive = false;
+      this.shortcutsScrollOffset = 0;
       this.bus.emit('render:request');
       return;
     }
@@ -1014,14 +1025,31 @@ export class InputHandler {
         if (token.type === 'key') {
           if (token.logicalName === 'escape') {
             this.helpOverlayActive = false;
+            this.helpScrollOffset = 0;
           } else if (token.logicalName === 'up') {
-            // Help overlay scroll is handled by the renderer/compositor — emit scroll event
-            this.bus.emit('help:scroll', { delta: -3 });
+            this.helpScrollOffset = Math.max(0, this.helpScrollOffset - 1);
           } else if (token.logicalName === 'down') {
-            this.bus.emit('help:scroll', { delta: 3 });
+            this.helpScrollOffset += 1;
           }
         } else if (token.type === 'text' && token.value === '?') {
           this.helpOverlayActive = false;
+          this.helpScrollOffset = 0;
+        }
+        this.bus.emit('render:request');
+        continue;
+      }
+
+      // --- Shortcuts overlay has focus ---
+      if (this.shortcutsOverlayActive) {
+        if (token.type === 'key') {
+          if (token.logicalName === 'escape') {
+            this.shortcutsOverlayActive = false;
+            this.shortcutsScrollOffset = 0;
+          } else if (token.logicalName === 'up') {
+            this.shortcutsScrollOffset = Math.max(0, this.shortcutsScrollOffset - 1);
+          } else if (token.logicalName === 'down') {
+            this.shortcutsScrollOffset += 1;
+          }
         }
         this.bus.emit('render:request');
         continue;
@@ -1080,7 +1108,7 @@ export class InputHandler {
             this.liveTailModal.scrollUp();
           } else if (token.logicalName === 'down') {
             this.liveTailModal.scrollDown();
-          } else if (token.logicalName === 'k' || (token.type === 'text' && token.value === 'k')) {
+          } else if (token.logicalName === 'k') {
             this.liveTailModal.killProcess();
             this.liveTailModal.close();
             this.processModal.open();

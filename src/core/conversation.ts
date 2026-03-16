@@ -327,14 +327,12 @@ export class ConversationManager {
       const m = messages[msgIdx];
       if (m.role === 'user') {
         // Flatten ContentPart[] to display text for user messages
+        const parts = Array.isArray(m.content) ? m.content as ContentPart[] : [];
         const displayText = typeof m.content === 'string'
           ? m.content
-          : (m.content as ContentPart[])
-              .filter((p): p is { type: 'text'; text: string } => p.type === 'text')
-              .map(p => p.text)
-              .join('')
-            + ((m.content as ContentPart[]).filter(p => p.type === 'image').length > 0
-              ? ` [+${(m.content as ContentPart[]).filter(p => p.type === 'image').length} image(s)]`
+          : parts.filter((p): p is { type: 'text'; text: string } => p.type === 'text').map(p => p.text).join('')
+            + (parts.filter(p => p.type === 'image').length > 0
+              ? ` [+${parts.filter(p => p.type === 'image').length} image(s)]`
               : '');
         if (m.cancelled) {
           this.history.addLines(UIFactory.createMessageBar(width, displayText, '#3a1a1a', '196', ' × ', true));
@@ -442,8 +440,7 @@ export class ConversationManager {
       } else if (m.role === 'tool') {
         // Collapsible tool result block
         // Use the message's index in this.messages as a stable collapse key
-        const msgIndex = this.messages.indexOf(m);
-        const collapseKey = `msg_${msgIndex >= 0 ? msgIndex : msgIdx}`;
+        const collapseKey = `msg_${msgIdx}`;
         const blockIdx = this.blockRegistry.length;
         const startLine = this.history.getLineCount();
         const contentLines = m.content.split('\n');

@@ -24,7 +24,7 @@ export function renderFilePickerOverlay(
   lines.push(UIFactory.stringToLine(titleLine, width, { fg: '#00ffff' }));
 
   // Search input
-  const searchLine = pad + '\u2502 @ ' + queryDisplay + '\u2588' + ' '.repeat(Math.max(0, contentW - queryDisplay.length - 3)) + '\u2502';
+  const searchLine = pad + '\u2502 @ ' + queryDisplay + '\u2588' + ' '.repeat(Math.max(0, contentW - getDisplayWidth(queryDisplay) - 3)) + '\u2502';
   lines.push(UIFactory.stringToLine(searchLine, width, { fg: '252' }));
 
   // Separator

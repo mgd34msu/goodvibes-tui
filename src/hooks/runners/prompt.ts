@@ -48,7 +48,7 @@ export async function run(hook: HookDefinition, event: HookEvent): Promise<HookR
 
     try {
       const result = JSON.parse(trimmed) as HookResult;
-      return { ok: result.ok ?? true, ...result };
+      return { ...result, ok: result.ok ?? true };
     } catch {
       // Non-JSON LLM output — fire-and-forget semantics
       return { ok: true };

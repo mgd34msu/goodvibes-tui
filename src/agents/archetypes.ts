@@ -263,7 +263,7 @@ export class ArchetypeLoader {
 
         this.cache.set(name, archetype);
       } catch (err) {
-        logger.warn('ArchetypeLoader: failed to parse agent file', {
+        logger.error('ArchetypeLoader: failed to parse agent file', {
           file,
           error: err instanceof Error ? err.message : String(err),
         });

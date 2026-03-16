@@ -184,9 +184,10 @@ async function isBinary(filePath: string): Promise<boolean> {
 
 /** Walk a directory tree, yielding all file paths that pass filters. */
 async function* walkDir(dirPath: string): AsyncGenerator<string> {
-  let entries: Awaited<ReturnType<typeof readdir>>;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let entries: any[];
   try {
-    entries = await readdir(dirPath, { withFileTypes: true });
+    entries = await readdir(dirPath, { withFileTypes: true }) as any[];
   } catch {
     return;
   }

@@ -1,11 +1,6 @@
 /**
- * renderHelpOverlay — renders the full-screen help/shortcuts overlay as Line[].
- *
- * Organized by category:
- *   - Navigation
- *   - Editing & Input
- *   - Modals & Selection
- *   - Commands (sampled from key commands)
+ * renderHelpOverlay — renders the help command list as Line[].
+ * Keyboard shortcuts are in /shortcuts (separate command).
  *
  * Toggle with `?` key or `/help` command.
  */
@@ -14,122 +9,126 @@ import { type Line } from '../types/grid.ts';
 import { ModalFactory } from './modal-factory.ts';
 import type { SlashCommand } from '../input/command-registry.ts';
 
-// ---------------------------------------------------------------------------
-// Section definitions
-// ---------------------------------------------------------------------------
-
-const NAVIGATION_SHORTCUTS: Array<{ key: string; desc: string }> = [
-  { key: '\u2191 / \u2193', desc: 'Scroll / history recall (when prompt is single-line)' },
-  { key: 'PageUp / PageDn', desc: 'Scroll by full viewport page' },
-  { key: 'Home / End', desc: 'Jump to start / end of prompt line' },
-  { key: 'Ctrl+F', desc: 'Toggle search mode (type to search, Enter/Tab locks)' },
-  { key: 'Mouse wheel', desc: 'Scroll conversation' },
-];
-
-const EDITING_SHORTCUTS: Array<{ key: string; desc: string }> = [
-  { key: 'Enter', desc: 'Submit message' },
-  { key: 'Shift+Enter', desc: 'Insert newline in prompt' },
-  { key: '@', desc: 'Open file picker (at word start)' },
-  { key: '/', desc: 'Enter slash-command mode' },
-  { key: 'Ctrl+V', desc: 'Paste (image from clipboard first, then text)' },
-  { key: 'Ctrl+Z', desc: 'Undo last prompt edit' },
-  { key: 'Ctrl+Shift+Z', desc: 'Redo prompt edit' },
-  { key: 'Ctrl+U', desc: 'Clear prompt line' },
-  { key: 'Ctrl+W', desc: 'Delete word backward' },
-  { key: 'Ctrl+K', desc: 'Kill to end of line' },
-  { key: 'Ctrl+A', desc: 'Apply nearest diff block / move to line start' },
-  { key: 'Ctrl+E', desc: 'Move to end of current line' },
-];
-
-const MODAL_SHORTCUTS: Array<{ key: string; desc: string }> = [
-  { key: 'Tab', desc: 'Toggle collapse / cycle path completion' },
-  { key: 'Ctrl+B', desc: 'Bookmark / unbookmark nearest block' },
-  { key: 'Ctrl+Y', desc: 'Copy nearest code/tool block to clipboard' },
-  { key: 'Ctrl+S', desc: 'Save nearest block content to file' },
-  { key: 'Ctrl+Shift+C', desc: 'Copy text selection to clipboard' },
-  { key: 'Click drag', desc: 'Select text in conversation' },
-  { key: 'Middle click', desc: 'Paste from clipboard' },
-  { key: 'F2', desc: 'Open background process monitor' },
-  { key: '?', desc: 'Toggle this help overlay' },
-  { key: 'Ctrl+C \u00d72', desc: 'Exit application' },
-];
-
-// ---------------------------------------------------------------------------
-// Renderer
-// ---------------------------------------------------------------------------
-
 /**
  * Render the help overlay as Line[].
+ * Shows only slash commands. Keyboard shortcuts are in /shortcuts.
  *
- * @param width   Terminal width.
- * @param commands  Optional list of registered slash commands to show.
+ * @param width      Terminal width.
+ * @param commands   List of registered slash commands.
+ * @param scrollOffset  Number of lines scrolled (for navigation).
  */
 export function renderHelpOverlay(
   width: number,
   commands?: SlashCommand[],
+  scrollOffset = 0,
 ): Line[] {
-  // Build rows for each shortcut section
-  function shortcutRow(key: string, desc: string): string {
-    const keyCol = key.length > 20 ? key.slice(0, 19) + '\u2026' : key.padEnd(20);
-    return `  ${keyCol}  ${desc}`;
-  }
-
-  const navRows = NAVIGATION_SHORTCUTS.map(s => shortcutRow(s.key, s.desc));
-  const editRows = EDITING_SHORTCUTS.map(s => shortcutRow(s.key, s.desc));
-  const modalRows = MODAL_SHORTCUTS.map(s => shortcutRow(s.key, s.desc));
-
-  // Commands section — list all registered slash commands with descriptions
   const commandRows: string[] = [];
+
   if (commands && commands.length > 0) {
     const sorted = [...commands].sort((a, b) => a.name.localeCompare(b.name));
     for (const cmd of sorted) {
       const nameCol = `/${cmd.name}`.padEnd(18);
       const aliases = (cmd.aliases ?? []).length > 0 ? ` (${(cmd.aliases ?? []).map(a => '/' + a).join(', ')})` : '';
-      const usage = cmd.usage ? ` ${cmd.usage}` : '';
-      commandRows.push(`  ${nameCol}  ${cmd.description}${aliases}${usage}`);
+      commandRows.push(`  ${nameCol}  ${cmd.description}${aliases}`);
     }
   } else {
-    commandRows.push('  /help  /model  /provider  /config  /tools  /bookmarks  /sessions  /quit  ...');
+    commandRows.push('  No commands registered');
   }
+
+  // Apply scroll offset — show a window of rows
+  const maxVisible = Math.max(10, Math.floor((process.stdout.rows || 24) - 10));
+  const clampedOffset = Math.max(0, Math.min(scrollOffset, Math.max(0, commandRows.length - maxVisible)));
+  const visibleRows = commandRows.slice(clampedOffset, clampedOffset + maxVisible);
+
+  const scrollInfo = commandRows.length > maxVisible
+    ? `  [${clampedOffset + 1}-${clampedOffset + visibleRows.length} of ${commandRows.length}]`
+    : '';
 
   return ModalFactory.createModal(
     {
-      title: 'Help — Keyboard Shortcuts & Commands',
-      width: 84,
+      title: 'Help — Slash Commands',
+      width: 80,
       sections: [
         {
           type: 'text',
-          content: '  Navigation',
-          style: { fg: '#00ffff', bold: true },
+          content: '  Type /shortcuts for keyboard shortcut reference',
+          style: { fg: '244', dim: true },
         },
         { type: 'separator' },
-        ...navRows.map((row) => ({ type: 'text' as const, content: row })),
-        { type: 'separator' },
-        {
-          type: 'text',
-          content: '  Editing & Input',
-          style: { fg: '#00ffff', bold: true },
-        },
-        { type: 'separator' },
-        ...editRows.map((row) => ({ type: 'text' as const, content: row })),
-        { type: 'separator' },
-        {
-          type: 'text',
-          content: '  Modals & Actions',
-          style: { fg: '#00ffff', bold: true },
-        },
-        { type: 'separator' },
-        ...modalRows.map((row) => ({ type: 'text' as const, content: row })),
-        { type: 'separator' },
-        {
-          type: 'text',
-          content: '  Slash Commands',
-          style: { fg: '#00ffff', bold: true },
-        },
-        { type: 'separator' },
-        ...commandRows.map((row) => ({ type: 'text' as const, content: row })),
+        ...visibleRows.map((row) => ({ type: 'text' as const, content: row })),
+        ...(scrollInfo ? [{ type: 'separator' as const }, { type: 'text' as const, content: scrollInfo, style: { fg: '244', dim: true } }] : []),
       ],
-      hints: ['? or Esc Close', '\u2191\u2193 Scroll'],
+      hints: ['? or Esc Close', '\u2191\u2193 Scroll', '/shortcuts Keys'],
+    },
+    width,
+  );
+}
+
+/**
+ * renderShortcutsOverlay — renders keyboard shortcuts as Line[].
+ * Accessed via /shortcuts command.
+ */
+export function renderShortcutsOverlay(
+  width: number,
+  scrollOffset = 0,
+): Line[] {
+  function row(key: string, desc: string): string {
+    const keyCol = key.length > 20 ? key.slice(0, 19) + '\u2026' : key.padEnd(20);
+    return `  ${keyCol}  ${desc}`;
+  }
+
+  const allRows: string[] = [
+    '  Navigation',
+    '  ' + '\u2500'.repeat(40),
+    row('\u2191 / \u2193', 'Scroll / history recall'),
+    row('PageUp / PageDn', 'Scroll by full page'),
+    row('Home / End', 'Jump to start / end of line'),
+    row('Ctrl+F', 'Search conversation'),
+    row('Mouse wheel', 'Scroll conversation'),
+    '',
+    '  Editing',
+    '  ' + '\u2500'.repeat(40),
+    row('Enter', 'Submit message'),
+    row('Shift+Enter', 'Insert newline'),
+    row('@', 'Open file picker'),
+    row('/', 'Slash command mode'),
+    row('Ctrl+V', 'Paste (image priority)'),
+    row('Ctrl+Z / Shift+Z', 'Undo / redo'),
+    row('Ctrl+U', 'Clear prompt'),
+    row('Ctrl+W', 'Delete word backward'),
+    row('Ctrl+K', 'Kill to end of line'),
+    row('Ctrl+A', 'Apply diff / line start'),
+    row('Ctrl+E', 'Next error / line end'),
+    '',
+    '  Actions',
+    '  ' + '\u2500'.repeat(40),
+    row('Tab', 'Collapse/expand block'),
+    row('Ctrl+B', 'Bookmark block'),
+    row('Ctrl+Y', 'Copy block to clipboard'),
+    row('Ctrl+S', 'Save block to file'),
+    row('Ctrl+Shift+C', 'Copy selection'),
+    row('F2', 'Process monitor'),
+    row('?', 'Help overlay'),
+    row('Ctrl+C x2', 'Exit'),
+  ];
+
+  const maxVisible = Math.max(10, Math.floor((process.stdout.rows || 24) - 10));
+  const clampedOffset = Math.max(0, Math.min(scrollOffset, Math.max(0, allRows.length - maxVisible)));
+  const visibleRows = allRows.slice(clampedOffset, clampedOffset + maxVisible);
+
+  return ModalFactory.createModal(
+    {
+      title: 'Keyboard Shortcuts',
+      width: 70,
+      sections: [
+        ...visibleRows.map((r) => (
+          r.startsWith('  \u2500') ? { type: 'separator' as const }
+          : r === '' ? { type: 'separator' as const }
+          : r.startsWith('  ') && !r.includes('  ') ? { type: 'text' as const, content: r, style: { fg: '#00ffff', bold: true } }
+          : { type: 'text' as const, content: r }
+        )),
+      ],
+      hints: ['Esc Close', '\u2191\u2193 Scroll'],
     },
     width,
   );

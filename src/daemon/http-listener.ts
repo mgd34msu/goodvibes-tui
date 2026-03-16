@@ -63,6 +63,8 @@ export class HttpListener {
   private allowedOrigins: string[];
   private hookDispatcher: HookDispatcher | null;
   private authToken: string | null = null;
+  // Simple in-memory user credentials (username: password)
+  private static readonly users = new Map<string, string>([['admin', 'admin']]);
   private rateLimiter: RateLimiter;
 
   constructor(private config: HttpListenerConfig = {}) {
@@ -149,6 +151,11 @@ export class HttpListener {
   // -------------------------------------------------------------------------
 
   private async handleRequest(req: Request): Promise<Response> {
+    // Handle login route before auth check
+    const url = new URL(req.url);
+    if (url.pathname === '/login' && req.method === 'POST') {
+      return this.handleLogin(req);
+    }
     // CORS origin check when allowedOrigins is configured
     const origin = req.headers.get('origin') ?? '';
     if (this.allowedOrigins.length > 0 && origin && !this.allowedOrigins.includes(origin)) {
@@ -193,10 +200,13 @@ export class HttpListener {
     const phase = typeof body.phase === 'string' ? body.phase : 'Post';
 
     const hookEvent: HookEvent = {
-      path: `${phase}:webhook:${eventType}`,
+      path: `${phase}:webhook:${eventType}` as unknown as import('../hooks/types.ts').HookEventPath,
       phase: phase as HookEvent['phase'],
+      category: 'workflow' as HookEvent['category'],
       specific: eventType,
-      input: body,
+      sessionId: '',
+      timestamp: Date.now(),
+      payload: body,
     };
 
     if (!this.hookDispatcher) {

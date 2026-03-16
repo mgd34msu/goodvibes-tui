@@ -1,6 +1,7 @@
 import { timingSafeEqual } from 'crypto';
 import { logger } from '../utils/logger.ts';
 import { AgentManager } from '../tools/agent/index.ts';
+import { ConfigManager } from '../config/manager.ts';
 import type { AgentRecord } from '../tools/agent/index.ts';
 
 // ---------------------------------------------------------------------------
@@ -36,12 +37,14 @@ export class DaemonServer {
   private port: number;
   private host: string;
   private agentManager: AgentManager;
+  private configManager: ConfigManager;
   private authToken: string | null = null;
 
-  constructor(private config: DaemonConfig = {}) {
+  constructor(private config: DaemonConfig = {}, private configManager?: ConfigManager) {
     this.port = config.port ?? 3421;
     this.host = config.host ?? '127.0.0.1';
     this.agentManager = config.agentManager ?? AgentManager.getInstance();
+    this.configManager = configManager ?? new ConfigManager();
   }
 
   /**
@@ -128,6 +131,34 @@ export class DaemonServer {
     const { pathname, method } = { pathname: url.pathname, method: req.method };
 
     if (pathname === '/status' && method === 'GET') {
+      // health check
+      // health check
+      return Response.json({ status: 'running', version: '0.9.0' });
+    }
+    if (pathname === '/config' && method === 'GET') {
+      // return full config snapshot
+      const cfg = this.configManager.getAll();
+      return Response.json(cfg);
+    }
+    if (pathname === '/config' && method === 'POST') {
+      // set config key/value
+      let payload: any;
+      try {
+        payload = await req.json();
+      } catch {
+        return Response.json({ error: 'Invalid JSON body' }, { status: 400 });
+      }
+      const { key, value } = payload;
+      if (!key || typeof key !== 'string') {
+        return Response.json({ error: 'Missing or invalid key' }, { status: 400 });
+      }
+      try {
+        this.configManager.setDynamic(key as any, value);
+      } catch (e: any) {
+        return Response.json({ error: e.message ?? 'Failed to set config' }, { status: 400 });
+      }
+      return Response.json({ success: true, key, value });
+    }
       return Response.json({ status: 'running', version: '0.2.0' });
     }
 

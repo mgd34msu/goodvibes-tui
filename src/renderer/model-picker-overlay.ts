@@ -58,6 +58,8 @@ export function renderModelPickerOverlay(
           ? model.id.slice(0, maxIdLen - 1) + '\u2026'
           : model.id.padEnd(maxIdLen);
         const remaining = contentW - maxIdLen - 4; // 4 = indicator + gap
+        // NOTE: padEnd uses .length (byte width), not display width — CJK chars
+        // may cause slight misalignment. Use ASCII-safe model names where possible.
         const nameStr = model.displayName.length > remaining
           ? model.displayName.slice(0, remaining - 1) + '\u2026'
           : model.displayName.padEnd(remaining);

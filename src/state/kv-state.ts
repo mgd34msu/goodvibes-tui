@@ -1,4 +1,5 @@
 import { existsSync, mkdirSync, readdirSync, statSync, unlinkSync } from 'fs';
+import { PersistentStore } from './persistent-store.ts';
 import { promises as fs } from 'fs';
 import { join } from 'path';
 import { logger } from '../utils/logger.ts';
@@ -27,13 +28,16 @@ export class KVState {
   private data: Record<string, unknown> | null = null; // null = not yet loaded
   private persistTimer: ReturnType<typeof setTimeout> | null = null;
   private loadPromise: Promise<void> | null = null;
+  private readonly store: PersistentStore<Record<string, unknown>>;
 
   constructor(sessionId?: string, baseDir?: string) {
     this.sessionId = sessionId ?? KVState.generateId();
     const root = baseDir ?? process.cwd();
     this.stateDir = join(root, '.goodvibes', 'state');
     this.filePath = join(this.stateDir, `session_${this.sessionId}.json`);
+    this.store = new PersistentStore(this.filePath);
   }
+
 
   // ---------------------------------------------------------------------------
   // Core operations
@@ -115,22 +119,13 @@ export class KVState {
    * Called automatically on first operation (lazy load).
    */
   async load(): Promise<void> {
-    if (!existsSync(this.filePath)) {
-      this.data = {
-        id: this.sessionId,
-        started_at: new Date().toISOString(),
-      };
-      return;
-    }
-    try {
-      const raw = await fs.readFile(this.filePath, 'utf-8');
-      const parsed = JSON.parse(raw) as Record<string, unknown>;
-      this.data = parsed;
+    const loaded = await this.store.load();
+    if (loaded) {
+      this.data = loaded as Record<string, unknown>;
       // Ensure reserved keys are present
       if (!this.data.id) this.data.id = this.sessionId;
       if (!this.data.started_at) this.data.started_at = new Date().toISOString();
-    } catch (err) {
-      logger.debug('KVState: failed to load from disk, starting fresh', { error: String(err) });
+    } else {
       this.data = {
         id: this.sessionId,
         started_at: new Date().toISOString(),
@@ -144,16 +139,7 @@ export class KVState {
    */
   async persist(): Promise<void> {
     if (this.data === null) return; // Nothing loaded, nothing to persist
-    try {
-      mkdirSync(this.stateDir, { recursive: true });
-      const tmpPath = `${this.filePath}.tmp`;
-      const content = JSON.stringify(this.data, null, 2) + '\n';
-      // Use sync write + rename for atomicity
-      await fs.writeFile(tmpPath, content, 'utf-8');
-      await fs.rename(tmpPath, this.filePath);
-    } catch (err) {
-      logger.debug('KVState: persist failed (non-fatal)', { error: String(err) });
-    }
+    await this.store.persist(this.data as Record<string, unknown>);
   }
 
   // ---------------------------------------------------------------------------

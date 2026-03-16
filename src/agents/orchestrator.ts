@@ -77,7 +77,7 @@ export class AgentOrchestrator {
       record.progress = 'Thinking…';
 
       while (continueLoop) {
-        if (record.status === 'cancelled') {
+        if ((record as { status: string }).status === 'cancelled') {
           return;
         }
         if (++turn > MAX_TURNS) {

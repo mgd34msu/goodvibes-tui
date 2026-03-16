@@ -6,6 +6,7 @@ import { join } from 'node:path';
 import type { LLMProvider, ChatRequest, ChatResponse } from '../providers/interface.ts';
 import type { EventBus, EventMap } from '../core/event-bus.ts';
 import type { ToolCall } from '../types/tools.ts';
+import { ConfigManager } from '../config/manager.ts';
 
 // ---------------------------------------------------------------------------
 // Mock LLM Provider
@@ -68,6 +69,27 @@ export function collectEvents<K extends keyof EventMap>(
     events.push(data);
   }) as Parameters<typeof bus.on<K>>[1]);
   return { events, cleanup: unsub };
+}
+
+// ---------------------------------------------------------------------------
+// Config test isolation
+// ---------------------------------------------------------------------------
+
+/**
+ * Redirect ConfigManager's config file to a temp directory for the duration
+ * of a test suite. Returns a cleanup function that restores the default path.
+ *
+ * Usage in a test file:
+ *   const cleanup = await setupConfigTestMode();
+ *   afterAll(cleanup);
+ */
+export async function setupConfigTestMode(): Promise<() => Promise<void>> {
+  const { dir, cleanup } = await makeTempDir();
+  ConfigManager.setTestMode(dir);
+  return async () => {
+    ConfigManager.setTestMode(undefined);
+    await cleanup();
+  };
 }
 
 // ---------------------------------------------------------------------------

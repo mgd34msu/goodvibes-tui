@@ -189,7 +189,8 @@ export class GitService {
       if (options?.amend) flags.push('--amend');
       if (options?.noVerify) flags.push('--no-verify');
 
-      const result = await this.git.commit(message, undefined, flags);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const result = await (this.git as any).commit(message, undefined, flags);
       const output = { hash: result.commit, summary: JSON.stringify(result.summary) };
       await this.firePost('commit', { message, ...output });
       return output;

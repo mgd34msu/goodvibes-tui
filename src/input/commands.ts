@@ -13,6 +13,12 @@ import type { BlockMeta } from '../core/conversation.ts';
 import { ServiceRegistry } from '../config/service-registry.ts';
 import { getSecretsManager } from '../config/secrets.ts';
 
+let _serviceRegistry: ServiceRegistry | undefined;
+function getServiceRegistry(): ServiceRegistry {
+  if (!_serviceRegistry) _serviceRegistry = new ServiceRegistry();
+  return _serviceRegistry;
+}
+
 let _templateManager: TemplateManager | undefined;
 function getTemplateManager(): TemplateManager {
   if (!_templateManager) _templateManager = new TemplateManager();
@@ -70,6 +76,20 @@ export function registerBuiltinCommands(registry: CommandRegistry): void {
           ctx.print(`Error: ${(e as Error).message}`);
         }
       }
+    },
+  });
+
+  // ── /shortcuts ──────────────────────────────────────────
+  registry.register({
+    name: 'shortcuts',
+    aliases: ['keys', 'keybinds'],
+    description: 'Show keyboard shortcuts reference',
+    handler(_args, ctx) {
+      if (ctx.openShortcutsOverlay) {
+        ctx.openShortcutsOverlay();
+        return;
+      }
+      ctx.print('Use ? key or /help for shortcuts');
     },
   });
 
@@ -1155,14 +1175,14 @@ export function registerBuiltinCommands(registry: CommandRegistry): void {
         ctx.print(`Unknown type: ${typeFilter}\nValid types: ${VALID_TYPES.join(', ')}`);
         return;
       }
-      const registry = ctx.conversationManager.getBlockRegistry();
-      if (!registry || registry.length === 0) {
+      const blockRegistry = ctx.conversationManager.getBlockRegistry();
+      if (!blockRegistry || blockRegistry.length === 0) {
         ctx.print('No blocks found.');
         return;
       }
       let count = 0;
-      for (let i = 0; i < registry.length; i++) {
-        const block = registry[i];
+      for (let i = 0; i < blockRegistry.length; i++) {
+        const block = blockRegistry[i];
         const matchesType = typeFilter === 'all' ||
           (typeFilter === 'tool' && block.type === 'tool') ||
           (typeFilter === 'code' && block.type === 'code') ||
@@ -1191,14 +1211,14 @@ export function registerBuiltinCommands(registry: CommandRegistry): void {
         ctx.print(`Unknown type: ${typeFilter}\nValid types: ${VALID_TYPES.join(', ')}`);
         return;
       }
-      const registry = ctx.conversationManager.getBlockRegistry();
-      if (!registry || registry.length === 0) {
+      const blockRegistry = ctx.conversationManager.getBlockRegistry();
+      if (!blockRegistry || blockRegistry.length === 0) {
         ctx.print('No blocks found.');
         return;
       }
       let count = 0;
-      for (let i = 0; i < registry.length; i++) {
-        const block = registry[i];
+      for (let i = 0; i < blockRegistry.length; i++) {
+        const block = blockRegistry[i];
         const matchesType = typeFilter === 'all' ||
           (typeFilter === 'tool' && block.type === 'tool') ||
           (typeFilter === 'code' && block.type === 'code') ||
@@ -1261,6 +1281,7 @@ export function registerBuiltinCommands(registry: CommandRegistry): void {
   // ── /secrets ──────────────────────────────────────────────
   registry.register({
     name: 'secrets',
+    aliases: [],
     description: 'Manage encrypted API key secrets',
     usage: 'set <KEY> <value> | get <KEY> | list | delete <KEY>',
     async handler(args, ctx) {
@@ -1325,7 +1346,7 @@ export function registerBuiltinCommands(registry: CommandRegistry): void {
     aliases: ['svc'],
     description: 'Manage API service configurations',
     handler(_args, ctx) {
-      const svcRegistry = new ServiceRegistry();
+      const svcRegistry = getServiceRegistry();
       const all = svcRegistry.getAll();
       const keys = Object.keys(all);
 
@@ -1415,36 +1436,6 @@ export function registerBuiltinCommands(registry: CommandRegistry): void {
     },
   });
 
-  // ── /sessions (enhanced: opens dedicated picker modal) ────────
-  // (Note: /sessions is already registered above as the list/selection command.
-  //  The dedicated SessionPickerModal is opened via ctx.openSessionPicker below.)
-
-  // ── /profiles ────────────────────────────────────────────────
-  registry.register({
-    name: 'profiles',
-    aliases: ['prof'],
-    description: 'Open the profile picker modal (load/save/delete profiles)',
-    handler(_args, ctx) {
-      if (ctx.openProfilePicker) {
-        ctx.openProfilePicker();
-      } else {
-        // Fallback: delegate to /config profile list
-        const pm = getProfileManager();
-        const profiles = pm.list();
-        if (profiles.length === 0) {
-          ctx.print('No saved profiles.\nUse /config profile save <name> to save current settings.');
-          return;
-        }
-        const lines = ['Saved profiles:', ''];
-        for (const p of profiles) {
-          const date = new Date(p.timestamp).toLocaleString();
-          lines.push(`  ${p.name.padEnd(28)} ${date}`);
-        }
-        ctx.print(lines.join('\n'));
-      }
-    },
-  });
-
   // ── /context ─────────────────────────────────────────────────────
   registry.register({
     name: 'context',
@@ -1487,7 +1478,7 @@ export function registerBuiltinCommands(registry: CommandRegistry): void {
     description: 'Jump to the next error message in the conversation',
     handler(_args, ctx) {
       const cm = ctx.conversationManager;
-      const scrollTop = (ctx as unknown as { getScrollTop?: () => number }).getScrollTop?.() ?? 0;
+      const scrollTop = ctx.getScrollTop?.() ?? 0;
       const nextLine = cm.nextErrorLine(scrollTop);
       if (nextLine < 0) {
         ctx.print('[No error messages found in conversation]');
@@ -1525,7 +1516,7 @@ export function registerBuiltinCommands(registry: CommandRegistry): void {
     description: 'Jump to the previous error message in the conversation',
     handler(_args, ctx) {
       const cm = ctx.conversationManager;
-      const scrollTop = (ctx as unknown as { getScrollTop?: () => number }).getScrollTop?.() ?? 0;
+      const scrollTop = ctx.getScrollTop?.() ?? 0;
       const prevLine = cm.prevErrorLine(scrollTop);
       if (prevLine < 0) {
         ctx.print('[No error messages found in conversation]');

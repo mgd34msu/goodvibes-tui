@@ -79,7 +79,7 @@ export async function run(hook: HookDefinition, event: HookEvent): Promise<HookR
     try {
       const result = JSON.parse(trimmed) as HookResult;
       // Use the parsed ok value if present, default to true otherwise
-      return { ok: result.ok ?? true, ...result };
+      return { ...result, ok: result.ok ?? true };
     } catch {
       // Non-JSON output is acceptable; treat as success
       return { ok: true };

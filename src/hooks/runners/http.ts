@@ -46,7 +46,7 @@ export async function run(hook: HookDefinition, event: HookEvent): Promise<HookR
 
     try {
       const result = JSON.parse(text) as HookResult;
-      return { ok: true, ...result };
+      return { ...result, ok: result.ok ?? true };
     } catch {
       return { ok: true };
     }

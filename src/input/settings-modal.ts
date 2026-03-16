@@ -228,7 +228,7 @@ export class SettingsModal {
         }
       }
     } catch (e) {
-      logger.debug('SettingsModal._setValue: config set rejected', { error: String(e) });
+      console.warn('SettingsModal._setValue: config set rejected', { error: String(e) });
     }
   }
 }
