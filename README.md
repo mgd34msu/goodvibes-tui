@@ -40,6 +40,7 @@ The agent system runs subagents in-process, each with its own conversation histo
 
 ### 12 Built-In Tools
 Read, write, edit, find, exec, fetch, analyze, inspect, agent, state, workflow, registry.
+Language intelligence powered by bundled LSP servers (TypeScript, Python, Bash, CSS, HTML, JSON) and tree-sitter grammars — no manual setup required. Rust and Go LSP servers auto-download on first use.
 
 ### Agent System
 - In-process subagents with isolated conversation history
@@ -105,6 +106,8 @@ Mercury 2 supports configurable reasoning effort levels: `instant`, `low`, `medi
 ### Prerequisites
 
 - [Bun](https://bun.sh) v1.0 or later
+- **Optional**: [Go](https://go.dev) for Go LSP support (gopls auto-installs via `go install`)
+- **Optional**: For Rust development, `rust-analyzer` is auto-downloaded from GitHub releases (no Rust toolchain required)
 
 ### Install
 
@@ -601,6 +604,7 @@ src/
 - **Raw ANSI renderer** — no framework dependency in the rendering path, direct control over every byte sent to the terminal
 - **In-process agents** — agents share the same process and memory, avoiding IPC overhead while maintaining isolation through scoped registries and namespaced state
 - **Tree-sitter for code intelligence** — TypeScript, JavaScript, Python, JSON, and CSS grammars for structural analysis, outline extraction, and AST-level edits
+- **Bundled language servers** — TypeScript, Python, Bash, CSS, HTML, and JSON language servers ship as npm dependencies and work out of the box. Rust (`rust-analyzer`) and Go (`gopls`) are downloaded automatically on first use with SHA256 integrity verification. No manual LSP setup required.
 - **SQL.js for analytics** — WASM SQLite for in-process tool call telemetry without a database server
 
 ---
