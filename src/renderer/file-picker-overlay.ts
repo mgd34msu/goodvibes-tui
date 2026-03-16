@@ -67,5 +67,8 @@ export function renderFilePickerOverlay(
   const bottomLine = pad + '\u2514' + hints + '\u2500'.repeat(Math.max(0, boxW - 2 - getDisplayWidth(hints))) + '\u2518';
   lines.push(UIFactory.stringToLine(bottomLine, width, { fg: '240' }));
 
+  // Trailing empty line — ensures 1 row gap between modal bottom and input area
+  lines.push(UIFactory.stringToLine('', width));
+
   return lines;
 }
