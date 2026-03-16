@@ -131,6 +131,9 @@ export class ModalFactory {
       : (config.footer ?? '');
     lines.push(ModalFactory.renderHints(boxW, margin, hintStr, terminalWidth, style));
 
+    // Trailing empty line — ensures 1 row gap between modal bottom and input area
+    lines.push(UIFactory.stringToLine('', terminalWidth));
+
     return lines;
   }
 
