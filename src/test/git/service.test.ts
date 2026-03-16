@@ -316,9 +316,6 @@ describe('GitService', () => {
   // -------------------------------------------------------------------------
 
   describe('hook emission', () => {
-
-
-
     /**
      * Register a spy that captures every fired event for the given pattern.
      * Uses the 'ts' runner indirectly by registering a programmatic hook.
@@ -591,6 +588,7 @@ describe('GitService', () => {
       spy.events.length = 0;
       await hookedSvc.stash('list');
       expect(spy.events.length).toBe(0);
+      hookedSvc.dispose();
     });
 
     test('merge rethrows non-conflict errors', async () => {
@@ -608,6 +606,7 @@ describe('GitService', () => {
       expect(threw).toBe(true);
       const failEvents = spy.events.filter((e) => e.phase === 'Fail');
       expect(failEvents.length).toBeGreaterThan(0);
+      hookedSvc.dispose();
     });
   });
 
