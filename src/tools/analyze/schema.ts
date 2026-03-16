@@ -12,7 +12,10 @@ export const analyzeSchema: ToolDefinition = {
     'dependencies (import graph / circular detection), dead_code (unreferenced exports), ' +
     'security (hardcoded secrets/env audit), coverage (lcov parse), ' +
     'surface (public API exports), preview (diff without writing), ' +
-    'diff (git ref diff), bundle (stats.json parse).',
+    'diff (git ref diff), bundle (stats.json parse), ' +
+    'breaking (API breaking changes between refs), semantic_diff (LLM-powered diff summary), ' +
+    'upgrade (npm registry version check), permissions (dangerous pattern scan), ' +
+    'env_audit (.env file key comparison), test_find (locate test files for source files).',
   parameters: {
     type: 'object',
     required: ['mode'],
@@ -29,6 +32,12 @@ export const analyzeSchema: ToolDefinition = {
           'preview',
           'diff',
           'surface',
+          'breaking',
+          'semantic_diff',
+          'upgrade',
+          'permissions',
+          'env_audit',
+          'test_find',
         ],
         description: 'Analysis mode to run.',
       },
@@ -75,6 +84,12 @@ export const analyzeSchema: ToolDefinition = {
       replace: {
         type: 'string',
         description: 'Replacement string (mode: preview).',
+      },
+      // mode: upgrade
+      packages: {
+        type: 'array',
+        items: { type: 'string' },
+        description: 'Package names to check (mode: upgrade). Defaults to all packages in package.json.',
       },
       // mode: surface
       include: {

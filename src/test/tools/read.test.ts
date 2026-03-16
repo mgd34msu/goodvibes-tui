@@ -4,12 +4,13 @@
  * Temp files are created inside the project root (a .test-tmp/ subdirectory)
  * because resolveAndValidatePath() enforces the project root boundary.
  */
-import { describe, test, expect, beforeEach, afterEach } from 'bun:test';
+import { describe, test, expect, beforeEach, afterEach, spyOn } from 'bun:test';
 import { mkdirSync, writeFileSync, rmSync, mkdtempSync, existsSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { ReadTool } from '../../tools/read/index.ts';
 import { FileStateCache } from '../../state/file-cache.ts';
 import { ProjectIndex } from '../../state/project-index.ts';
+import { CodeIntelligence } from '../../intelligence/facade.ts';
 
 // ---------------------------------------------------------------------------
 // Test helpers
@@ -271,14 +272,35 @@ describe('ReadTool', () => {
       expect(c).toContain('external');
       expect(c).not.toContain('internal');
     });
+
+    test('uses tree-sitter path (getSymbols called) for a .ts file', async () => {
+      // Verify that the tree-sitter code path (ci.getSymbols) is invoked for a
+      // TypeScript file, not just the regex fallback.
+      const ci = CodeIntelligence.getInstance();
+      const spy = spyOn(ci, 'getSymbols');
+      const src = 'export function doStuff(): void {}\nexport const VALUE = 42;\n';
+      const rel = writeRelative(tmpDir, 'sym-spy.ts', src);
+      const r = await exec(tool, {
+        files: [{ path: rel, extract: 'symbols' }],
+      });
+      const parsed = (r as { parsed: { files: Array<{ content: string }> } }).parsed;
+      const c = parsed.files[0].content;
+      // getSymbols must have been called
+      expect(spy).toHaveBeenCalled();
+      // Result should contain the exported symbol names
+      expect(c).toContain('doStuff');
+      spy.mockRestore();
+    });
   });
 
   // -------------------------------------------------------------------------
-  // AST mode (Phase 3 placeholder)
+  // AST mode (tree-sitter with regex fallback)
   // -------------------------------------------------------------------------
 
   describe('ast mode', () => {
-    test('returns a note and falls back to outline', async () => {
+    test('returns content containing the function name', async () => {
+      // ast mode uses tree-sitter when available, falls back to outline.
+      // Either path should include the exported function name.
       const src = 'export function foo() {}\n';
       const rel = writeRelative(tmpDir, 'ast.ts', src);
       const r = await exec(tool, {
@@ -286,8 +308,40 @@ describe('ReadTool', () => {
       });
       const parsed = (r as { parsed: { files: Array<{ content: string }> } }).parsed;
       const c = parsed.files[0].content;
-      expect(c).toContain('Phase 3');
+      expect(typeof c).toBe('string');
       expect(c).toContain('foo');
+    });
+
+    test('falls back gracefully when tree-sitter has no grammar', async () => {
+      // Use a file extension with no tree-sitter grammar to force the fallback.
+      const src = 'export function bar() {}\n';
+      const rel = writeRelative(tmpDir, 'fallback.unknownlang', src);
+      const r = await exec(tool, {
+        files: [{ path: rel, extract: 'ast' }],
+      });
+      const parsed = (r as { parsed: { files: Array<{ content: string }> } }).parsed;
+      const c = parsed.files[0].content;
+      // Fallback note should be present
+      expect(c).toContain('unavailable');
+    });
+
+    test('uses tree-sitter path (getOutline called) for a .ts file', async () => {
+      // Verify that the tree-sitter code path (ci.getOutline) is invoked for a
+      // TypeScript file, not just the regex fallback.
+      const ci = CodeIntelligence.getInstance();
+      const spy = spyOn(ci, 'getOutline');
+      const src = 'export function myFn() {}\n';
+      const rel = writeRelative(tmpDir, 'ts-path.ts', src);
+      const r = await exec(tool, {
+        files: [{ path: rel, extract: 'ast' }],
+      });
+      const parsed = (r as { parsed: { files: Array<{ content: string }> } }).parsed;
+      const c = parsed.files[0].content;
+      // getOutline must have been called
+      expect(spy).toHaveBeenCalled();
+      // Result should contain the function name regardless of which path ran
+      expect(c).toContain('myFn');
+      spy.mockRestore();
     });
   });
 
@@ -591,6 +645,241 @@ describe('ReadTool', () => {
       const entry = idx.getFile(absPath);
       expect(entry).not.toBeNull();
       expect(entry!.tokens).toBeGreaterThan(0);
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // Image support
+  // -------------------------------------------------------------------------
+
+  describe('image support', () => {
+    test('reads a PNG file as base64 with image=true and mediaType', async () => {
+      // Create a minimal 1x1 PNG (89 bytes, valid header)
+      const pngHeader = Buffer.from(
+        '89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c489000000' +
+        '0a49444154789c6260000000000200011e2163660000000049454e44ae426082',
+        'hex',
+      );
+      const absPath = join(tmpDir, 'test.png');
+      const { writeFileSync: wf } = await import('node:fs');
+      wf(absPath, pngHeader);
+      const rel = absPath.slice(PROJECT_ROOT.length + 1);
+      const r = await exec(tool, { files: [{ path: rel }] });
+      expect(r.success).toBe(true);
+      const parsed = (r as { parsed: { files: Array<Record<string, unknown>> } }).parsed;
+      const f = parsed.files[0];
+      expect(f.image).toBe(true);
+      expect(f.binary).toBe(false);
+      expect(f.mediaType).toBe('image/png');
+      expect(typeof f.content).toBe('string');
+      // content should be valid base64
+      expect(() => Buffer.from(f.content as string, 'base64')).not.toThrow();
+    });
+
+    test('reads a JPEG file and sets mediaType=image/jpeg', async () => {
+      // Minimal valid JPEG: SOI + EOI markers
+      const jpegBuf = Buffer.from([0xff, 0xd8, 0xff, 0xd9]);
+      const absPath = join(tmpDir, 'test.jpg');
+      const { writeFileSync: wf } = await import('node:fs');
+      wf(absPath, jpegBuf);
+      const rel = absPath.slice(PROJECT_ROOT.length + 1);
+      const r = await exec(tool, { files: [{ path: rel }] });
+      expect(r.success).toBe(true);
+      const parsed = (r as { parsed: { files: Array<Record<string, unknown>> } }).parsed;
+      const f = parsed.files[0];
+      expect(f.image).toBe(true);
+      expect(f.mediaType).toBe('image/jpeg');
+    });
+
+    test('reads a .webp file and sets mediaType=image/webp', async () => {
+      const webpBuf = Buffer.from('RIFF....WEBP', 'ascii');
+      const absPath = join(tmpDir, 'test.webp');
+      const { writeFileSync: wf } = await import('node:fs');
+      wf(absPath, webpBuf);
+      const rel = absPath.slice(PROJECT_ROOT.length + 1);
+      const r = await exec(tool, { files: [{ path: rel }] });
+      const parsed = (r as { parsed: { files: Array<Record<string, unknown>> } }).parsed;
+      expect(parsed.files[0].mediaType).toBe('image/webp');
+    });
+
+    test('reads a .svg file as base64 with mediaType=image/svg+xml', async () => {
+      const svgContent = '<svg xmlns="http://www.w3.org/2000/svg"><circle r="5"/></svg>';
+      const rel = writeRelative(tmpDir, 'test.svg', svgContent);
+      const r = await exec(tool, { files: [{ path: rel }] });
+      const parsed = (r as { parsed: { files: Array<Record<string, unknown>> } }).parsed;
+      const f = parsed.files[0];
+      expect(f.image).toBe(true);
+      expect(f.mediaType).toBe('image/svg+xml');
+      // Decoded base64 should equal the original SVG content
+      expect(Buffer.from(f.content as string, 'base64').toString('utf-8')).toBe(svgContent);
+    });
+
+    test('image files are counted as files_read (not binary) in summary', async () => {
+      const svgContent = '<svg/>';
+      const rel = writeRelative(tmpDir, 'icon.svg', svgContent);
+      const r = await exec(tool, { files: [{ path: rel }] });
+      const parsed = (r as { parsed: { summary: Record<string, number> } }).parsed;
+      expect(parsed.summary.files_binary).toBe(0);
+      expect(parsed.summary.files_read).toBe(1);
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // PDF support
+  // -------------------------------------------------------------------------
+
+  describe('PDF support', () => {
+    /** Build a minimal PDF with BT...ET text block. */
+    function makePdf(text: string): string {
+      return [
+        '%PDF-1.4',
+        '1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj',
+        '2 0 obj<</Type/Pages/Kids[3 0 R]/Count 1>>endobj',
+        '3 0 obj<</Type/Page/MediaBox[0 0 612 792]/Contents 4 0 R/Resources<<>>>>endobj',
+        '4 0 obj',
+        '<</Length 44>>',
+        'stream',
+        `BT /F1 12 Tf 100 700 Td (${text}) Tj ET`,
+        'endstream',
+        'endobj',
+        'xref',
+        '%%EOF',
+      ].join('\n');
+    }
+
+    test('extracts text from a PDF file', async () => {
+      const rel = writeRelative(tmpDir, 'test.pdf', makePdf('Hello PDF'));
+      const r = await exec(tool, { files: [{ path: rel }] });
+      expect(r.success).toBe(true);
+      const parsed = (r as { parsed: { files: Array<Record<string, unknown>> } }).parsed;
+      expect(typeof parsed.files[0].content).toBe('string');
+      expect(parsed.files[0].content).toContain('Hello PDF');
+    });
+
+    test('accepts pages parameter and includes it in output', async () => {
+      const rel = writeRelative(tmpDir, 'paged.pdf', makePdf('Page text'));
+      const r = await exec(tool, { files: [{ path: rel, pages: '1-2' }] });
+      const parsed = (r as { parsed: { files: Array<Record<string, unknown>> } }).parsed;
+      const content = parsed.files[0].content as string;
+      expect(content).toContain('[pages: 1-2]');
+      expect(content).toContain('Page text');
+    });
+
+    test('returns fallback note for unreadable PDF streams', async () => {
+      const rel = writeRelative(tmpDir, 'empty.pdf', '%PDF-1.4\n%%EOF');
+      const r = await exec(tool, { files: [{ path: rel }] });
+      const parsed = (r as { parsed: { files: Array<Record<string, unknown>> } }).parsed;
+      // No readable streams → JSON fallback note
+      expect(parsed.files[0].content).toContain('No readable text streams found');
+    });
+
+    test('PDF is not counted as binary', async () => {
+      const rel = writeRelative(tmpDir, 'counted.pdf', makePdf('x'));
+      const r = await exec(tool, { files: [{ path: rel }] });
+      const parsed = (r as { parsed: { summary: Record<string, number> } }).parsed;
+      expect(parsed.summary.files_binary).toBe(0);
+    });
+
+    test('PDF content not returned in count_only format', async () => {
+      const rel = writeRelative(tmpDir, 'countonly.pdf', makePdf('x'));
+      const r = await exec(tool, { files: [{ path: rel }], output: { format: 'count_only' } });
+      const parsed = (r as { parsed: { files?: unknown } }).parsed;
+      expect(parsed.files).toBeUndefined();
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // Jupyter notebook support
+  // -------------------------------------------------------------------------
+
+  describe('Jupyter notebook support', () => {
+    function makeNotebook(
+      cells: Array<{ cell_type: string; source: string; outputs?: unknown[] }>,
+    ): string {
+      return JSON.stringify({
+        nbformat: 4,
+        nbformat_minor: 5,
+        metadata: {},
+        cells: cells.map((c) => ({
+          cell_type: c.cell_type,
+          source: c.source,
+          outputs: c.outputs ?? [],
+          metadata: {},
+        })),
+      });
+    }
+
+    test('formats code cell with source', async () => {
+      const nb = makeNotebook([{ cell_type: 'code', source: 'print("hello")' }]);
+      const rel = writeRelative(tmpDir, 'test.ipynb', nb);
+      const r = await exec(tool, { files: [{ path: rel }] });
+      const parsed = (r as { parsed: { files: Array<Record<string, unknown>> } }).parsed;
+      const content = parsed.files[0].content as string;
+      expect(content).toContain('[cell 1] (code):');
+      expect(content).toContain('print("hello")');
+    });
+
+    test('formats markdown cell', async () => {
+      const nb = makeNotebook([{ cell_type: 'markdown', source: '# Title' }]);
+      const rel = writeRelative(tmpDir, 'md.ipynb', nb);
+      const r = await exec(tool, { files: [{ path: rel }] });
+      const parsed = (r as { parsed: { files: Array<Record<string, unknown>> } }).parsed;
+      expect(parsed.files[0].content).toContain('[cell 1] (markdown):');
+      expect(parsed.files[0].content).toContain('# Title');
+    });
+
+    test('includes cell output for code cells', async () => {
+      const nb = makeNotebook([{
+        cell_type: 'code',
+        source: 'print(42)',
+        outputs: [{ output_type: 'stream', text: ['42\n'] }],
+      }]);
+      const rel = writeRelative(tmpDir, 'output.ipynb', nb);
+      const r = await exec(tool, { files: [{ path: rel }] });
+      const parsed = (r as { parsed: { files: Array<Record<string, unknown>> } }).parsed;
+      const content = parsed.files[0].content as string;
+      expect(content).toContain('[output]:');
+      expect(content).toContain('42');
+    });
+
+    test('handles array source field', async () => {
+      const nb = JSON.stringify({
+        nbformat: 4, nbformat_minor: 5, metadata: {},
+        cells: [{ cell_type: 'code', source: ['x = 1\n', 'print(x)'], outputs: [], metadata: {} }],
+      });
+      const rel = writeRelative(tmpDir, 'arraysrc.ipynb', nb);
+      const r = await exec(tool, { files: [{ path: rel }] });
+      const parsed = (r as { parsed: { files: Array<Record<string, unknown>> } }).parsed;
+      expect(parsed.files[0].content).toContain('x = 1');
+      expect(parsed.files[0].content).toContain('print(x)');
+    });
+
+    test('handles invalid JSON gracefully', async () => {
+      const rel = writeRelative(tmpDir, 'bad.ipynb', 'not json {{{');
+      const r = await exec(tool, { files: [{ path: rel }] });
+      const parsed = (r as { parsed: { files: Array<Record<string, unknown>> } }).parsed;
+      expect(parsed.files[0].content).toContain('invalid notebook JSON');
+    });
+
+    test('notebook not counted as binary', async () => {
+      const nb = makeNotebook([{ cell_type: 'code', source: 'x = 1' }]);
+      const rel = writeRelative(tmpDir, 'binary-check.ipynb', nb);
+      const r = await exec(tool, { files: [{ path: rel }] });
+      const parsed = (r as { parsed: { summary: Record<string, number> } }).parsed;
+      expect(parsed.summary.files_binary).toBe(0);
+    });
+
+    test('includes display_data output from code cell', async () => {
+      const nb = makeNotebook([{
+        cell_type: 'code',
+        source: 'display(42)',
+        outputs: [{ output_type: 'display_data', data: { 'text/plain': ['42'] } }],
+      }]);
+      const rel = writeRelative(tmpDir, 'display.ipynb', nb);
+      const r = await exec(tool, { files: [{ path: rel }] });
+      const parsed = (r as { parsed: { files: Array<Record<string, unknown>> } }).parsed;
+      expect(parsed.files[0].content).toContain('[output]:');
+      expect(parsed.files[0].content).toContain('42');
     });
   });
 

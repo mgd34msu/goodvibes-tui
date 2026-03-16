@@ -1,6 +1,8 @@
 import { ToolRegistry } from './registry.ts';
 import { FileStateCache } from '../state/file-cache.ts';
 import { ProjectIndex } from '../state/project-index.ts';
+import { ModeManager } from '../state/mode-manager.ts';
+import { HookDispatcher } from '../hooks/dispatcher.ts';
 import { ReadTool } from './read/index.ts';
 import { createWriteTool } from './write/index.ts';
 import { createEditTool } from './edit/index.ts';
@@ -33,7 +35,9 @@ export function registerAllTools(registry: ToolRegistry): void {
   registry.register(new InspectTool());
   registry.register(agentTool);
   const kvState = new KVState();
-  registry.register(createStateTool(kvState, projectIndex));
+  const hookDispatcher = new HookDispatcher();
+  const modeManager = ModeManager.getInstance();
+  registry.register(createStateTool(kvState, projectIndex, hookDispatcher, modeManager));
   registry.register(workflowTool);
   registry.register(fetchTool);
   registry.register(createRegistryTool(registry));

@@ -1,6 +1,8 @@
-import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, statSync, unlinkSync, writeFileSync } from 'fs';
+import { existsSync, mkdirSync, readdirSync, statSync, unlinkSync } from 'fs';
+import { promises as fs } from 'fs';
 import { join } from 'path';
 import { logger } from '../utils/logger.ts';
+import { randomBytes } from 'crypto';
 
 /**
  * Reserved keys that cannot be set by callers.
@@ -121,7 +123,7 @@ export class KVState {
       return;
     }
     try {
-      const raw = readFileSync(this.filePath, 'utf-8');
+      const raw = await fs.readFile(this.filePath, 'utf-8');
       const parsed = JSON.parse(raw) as Record<string, unknown>;
       this.data = parsed;
       // Ensure reserved keys are present
@@ -147,8 +149,8 @@ export class KVState {
       const tmpPath = `${this.filePath}.tmp`;
       const content = JSON.stringify(this.data, null, 2) + '\n';
       // Use sync write + rename for atomicity
-      writeFileSync(tmpPath, content, 'utf-8');
-      renameSync(tmpPath, this.filePath);
+      await fs.writeFile(tmpPath, content, 'utf-8');
+      await fs.rename(tmpPath, this.filePath);
     } catch (err) {
       logger.debug('KVState: persist failed (non-fatal)', { error: String(err) });
     }
@@ -220,8 +222,8 @@ export class KVState {
   // Private helpers
   // ---------------------------------------------------------------------------
 
-  private ensureLoaded(): Promise<void> {
-    if (this.data !== null) return Promise.resolve();
+  private async ensureLoaded(): Promise<void> {
+    if (this.data !== null) return;
     if (!this.loadPromise) {
       this.loadPromise = this.load().then(() => { this.loadPromise = null; });
     }
@@ -251,7 +253,9 @@ export class KVState {
   private static generateId(): string {
     // Generate 4 random bytes -> 8-char hex
     const bytes = new Uint8Array(4);
-    crypto.getRandomValues(bytes);
+    const rand = randomBytes(4);
+    bytes.set(rand);
+
     return Array.from(bytes)
       .map(b => b.toString(16).padStart(2, '0'))
       .join('');

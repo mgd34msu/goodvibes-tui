@@ -26,7 +26,9 @@ export interface EventMap {
   'cancel:generation': void;
   'clear:screen': void;
   'scroll:delta': { delta: number };
+  'scroll:to': { line: number };
   'block:toggle-collapse': { blockIndex: number };
+  'block:rerun': { blockIndex: number; content: string };
 
   // Context warnings
   'context:warning': { usage: number; threshold: number };

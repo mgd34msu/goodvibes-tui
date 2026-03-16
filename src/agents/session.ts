@@ -1,0 +1,96 @@
+import { appendFileSync, mkdirSync } from 'fs';
+import { join, dirname } from 'path';
+import { ConversationManager } from '../core/conversation.ts';
+import { KVState } from '../state/kv-state.ts';
+import { logger } from '../utils/logger.ts';
+
+/**
+ * AgentSession — Isolated session context for a spawned agent.
+ *
+ * Each agent gets its own ConversationManager, KVState namespace,
+ * and JSONL message log file.
+ */
+export class AgentSession {
+  /** The agent's unique identifier. */
+  readonly agentId: string;
+
+  /** Guard to ensure session directory is only created once. */
+  private dirCreated = false;
+
+  /** Isolated conversation history for this agent. */
+  readonly conversation: ConversationManager;
+
+  /** KV state namespaced under agent-{agentId}. */
+  readonly kvState: KVState;
+
+  /** Path to the agent's JSONL message log. */
+  readonly sessionFile: string;
+
+  constructor(agentId: string, model: string, provider: string) {
+    this.agentId = agentId;
+
+    // Own ConversationManager — not shared with main session
+    this.conversation = new ConversationManager();
+
+    // KV state namespaced to this agent
+    this.kvState = new KVState(`agent-${agentId}`);
+
+    // JSONL log path
+    this.sessionFile = join(
+      process.cwd(),
+      '.goodvibes',
+      'tui',
+      'sessions',
+      `agent-${agentId}.jsonl`,
+    );
+
+    // Write a session-start entry
+    this._ensureSessionDir();
+    this.appendMessage({
+      type: 'session_start',
+      agentId,
+      model,
+      provider,
+      timestamp: new Date().toISOString(),
+    });
+
+    logger.debug('AgentSession created', { agentId, model, provider });
+  }
+
+  /**
+   * Append a message record to the agent's JSONL log.
+   * Each record is written as a single JSON line.
+   */
+  appendMessage(msg: Record<string, unknown>): void {
+    try {
+      if (!this.dirCreated) {
+        this._ensureSessionDir();
+      }
+      appendFileSync(this.sessionFile, JSON.stringify(msg) + '\n', 'utf-8');
+    } catch (err) {
+      logger.error('AgentSession.appendMessage failed', { agentId: this.agentId, error: String(err) });
+    }
+  }
+
+  /**
+   * Clean up resources held by this session.
+   * Flushes and disposes the KV state.
+   */
+  async dispose(): Promise<void> {
+    try {
+      await this.kvState.dispose();
+    } catch (err) {
+      logger.error('AgentSession.dispose failed', { agentId: this.agentId, error: String(err) });
+    }
+    logger.debug('AgentSession disposed', { agentId: this.agentId });
+  }
+
+  // ---------------------------------------------------------------------------
+  // Private helpers
+  // ---------------------------------------------------------------------------
+
+  private _ensureSessionDir(): void {
+    mkdirSync(dirname(this.sessionFile), { recursive: true });
+    this.dirCreated = true;
+  }
+}

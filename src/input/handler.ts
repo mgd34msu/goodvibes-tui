@@ -18,6 +18,15 @@ import { getBookmarkManager } from '../bookmarks/manager.ts';
 import { resolveAndValidatePath } from '../utils/path-safety.ts';
 import type { ContentPart } from '../providers/interface.ts';
 import { logger } from '../utils/logger.ts';
+import { ProcessModal } from '../renderer/process-modal.ts';
+import { LiveTailModal } from '../renderer/live-tail-modal.ts';
+import { BlockActionsMenu } from '../renderer/block-actions.ts';
+import { AgentDetailModal } from '../renderer/agent-detail-modal.ts';
+import { ContextInspectorModal } from '../renderer/context-inspector.ts';
+import { BookmarkModal } from './bookmark-modal.ts';
+import { SettingsModal } from './settings-modal.ts';
+import { SessionPickerModal } from './session-picker-modal.ts';
+import { ProfilePickerModal } from './profile-picker-modal.ts';
 
 /**
  * InputHandler - Owns prompt text, paste registry, and keyboard/mouse handling.
@@ -46,6 +55,17 @@ export class InputHandler {
   public modelPicker = new ModelPickerModal();
   public selectionModal = new SelectionModal();
   public searchManager = new SearchManager();
+  public processModal = new ProcessModal();
+  public liveTailModal = new LiveTailModal();
+  public agentDetailModal = new AgentDetailModal();
+  public contextInspectorModal = new ContextInspectorModal();
+  public bookmarkModal = new BookmarkModal();
+  public blockActionsMenu = new BlockActionsMenu();
+  public settingsModal = new SettingsModal();
+  public sessionPickerModal = new SessionPickerModal();
+  public profilePickerModal = new ProfilePickerModal();
+  /** True when the help overlay is visible. */
+  public helpOverlayActive = false;
   private inputHistory: InputHistory | null = null;
   private conversationManager: ConversationManager | null = null;
   private selectionCallback: ((result: SelectionResult | null) => void) | null = null;
@@ -444,6 +464,38 @@ export class InputHandler {
   }
 
   /**
+   * executeBlockAction - Execute a block action ID on the nearest block.
+   * Called when the user selects an action from the BlockActionsMenu.
+   */
+  private executeBlockAction(actionId: string): void {
+    switch (actionId) {
+      case 'copy':     this.handleBlockCopy(); break;
+      case 'bookmark': this.handleBookmark(); break;
+      case 'toggle':   this.handleBlockToggle(); break;
+      case 'apply':    this.handleDiffApply(); break;
+      case 'rerun':    this.handleBlockRerun(); break;
+    }
+  }
+
+  /**
+   * handleBlockRerun - Re-run the tool call for the nearest tool block.
+   * Emits a tool-rerun event for the orchestrator to handle.
+   */
+  private handleBlockRerun(): void {
+    const cm = this.conversationManager;
+    if (!cm) return;
+    const lineIndex = this.getScrollTop();
+    const nearest = cm.findNearestBlock(lineIndex, 'tool');
+    if (!nearest) {
+      cm.log('[Re-run: No tool block found nearby]', { fg: '240' });
+      this.bus.emit('render:request');
+      return;
+    }
+    this.bus.emit('block:rerun', { blockIndex: nearest.blockIndex, content: nearest.rawContent });
+    this.bus.emit('render:request');
+  }
+
+  /**
    * handleBlockToggle - Tab (non-command mode): Toggle collapse of nearest block.
    */
   private handleBlockToggle(): void {
@@ -545,6 +597,62 @@ export class InputHandler {
    * - If prompt is empty: cancel generation (double-tap not needed)
    */
   private handleEscape(): void {
+    // If help overlay is open, close it
+    if (this.helpOverlayActive) {
+      this.helpOverlayActive = false;
+      this.bus.emit('render:request');
+      return;
+    }
+    // If bookmark modal is open, close it
+    if (this.bookmarkModal.active) {
+      this.bookmarkModal.close();
+      this.bus.emit('render:request');
+      return;
+    }
+    // If agent detail modal is open, go back to process list
+    if (this.agentDetailModal.active) {
+      this.agentDetailModal.close();
+      this.processModal.open();
+      return;
+    }
+    // If live-tail peek is open, go back to process list
+    if (this.liveTailModal.active) {
+      this.liveTailModal.close();
+      this.processModal.open();
+      return;
+    }
+    // If settings modal is open, handle Esc — cancel edit if editing, else close
+    if (this.settingsModal.active) {
+      if (this.settingsModal.editingMode) {
+        this.settingsModal.cancelEdit();
+      } else {
+        this.settingsModal.close();
+      }
+      this.bus.emit('render:request');
+      return;
+    }
+    // If session picker is open, close it
+    if (this.sessionPickerModal.active) {
+      this.sessionPickerModal.close();
+      this.bus.emit('render:request');
+      return;
+    }
+    // If profile picker is open, close it
+    if (this.profilePickerModal.active) {
+      this.profilePickerModal.close();
+      this.bus.emit('render:request');
+      return;
+    }
+    // If context inspector is open, close it
+    if (this.contextInspectorModal.active) {
+      this.contextInspectorModal.close();
+      return;
+    }
+    // If process modal is open, close it
+    if (this.processModal.active) {
+      this.processModal.close();
+      return;
+    }
     // If model picker is active, close it
     if (this.modelPicker.active) {
       this.modelPicker.close();
@@ -751,6 +859,174 @@ export class InputHandler {
         continue;
       }
 
+      // --- Bookmark modal has focus: intercept all input ---
+      if (this.bookmarkModal.active) {
+        if (token.type === 'key') {
+          if (token.logicalName === 'escape') {
+            this.bookmarkModal.close();
+          } else if (token.logicalName === 'up') {
+            this.bookmarkModal.moveUp();
+          } else if (token.logicalName === 'down') {
+            this.bookmarkModal.moveDown();
+          } else if (token.logicalName === 'enter') {
+            // Jump to block in conversation
+            const entry = this.bookmarkModal.getSelected();
+            if (entry) {
+              this.bus.emit('bookmark:jump', { key: entry.key });
+            }
+            this.bookmarkModal.close();
+          } else if (token.logicalName === 'd') {
+            // Remove selected bookmark
+            const removed = this.bookmarkModal.removeSelected();
+            if (removed) {
+              this.bus.emit('bookmark:removed', { key: removed.key });
+            }
+            if (this.bookmarkModal.entries.length === 0) {
+              this.bookmarkModal.close();
+            }
+          } else if (token.logicalName === 'o') {
+            // Open saved file content (emits event, not directly opening a viewer here)
+            const content = this.bookmarkModal.openSelectedFile();
+            if (content) {
+              const entry = this.bookmarkModal.getSelected();
+              this.bus.emit('bookmark:open-file', { key: entry?.key ?? '', content });
+            }
+          }
+        } else if (token.type === 'text') {
+          if (token.value === 'd') {
+            const removed = this.bookmarkModal.removeSelected();
+            if (removed) {
+              this.bus.emit('bookmark:removed', { key: removed.key });
+            }
+            if (this.bookmarkModal.entries.length === 0) {
+              this.bookmarkModal.close();
+            }
+          } else if (token.value === 'o') {
+            const content = this.bookmarkModal.openSelectedFile();
+            if (content) {
+              const entry = this.bookmarkModal.getSelected();
+              this.bus.emit('bookmark:open-file', { key: entry?.key ?? '', content });
+            }
+          }
+        }
+        this.bus.emit('render:request');
+        continue;
+      }
+
+      // --- Settings modal has focus: intercept all input ---
+      if (this.settingsModal.active) {
+        if (token.type === 'key') {
+          if (token.logicalName === 'escape') {
+            if (this.settingsModal.editingMode) {
+              this.settingsModal.cancelEdit();
+            } else {
+              this.settingsModal.close();
+            }
+          } else if (token.logicalName === 'enter') {
+            if (this.settingsModal.editingMode) {
+              this.settingsModal.commitEdit();
+            } else {
+              this.settingsModal.activateSelected();
+            }
+          } else if (token.logicalName === 'up') {
+            this.settingsModal.moveUp();
+          } else if (token.logicalName === 'down') {
+            this.settingsModal.moveDown();
+          } else if (token.logicalName === 'tab') {
+            this.settingsModal.nextCategory();
+          } else if (token.logicalName === 'backspace') {
+            if (this.settingsModal.editingMode) {
+              this.settingsModal.editBackspace();
+            }
+          }
+        } else if (token.type === 'text') {
+          if (this.settingsModal.editingMode) {
+            this.settingsModal.editChar(token.value);
+          }
+        }
+        this.bus.emit('render:request');
+        continue;
+      }
+
+      // --- Session picker has focus: intercept all input ---
+      if (this.sessionPickerModal.active) {
+        if (token.type === 'key') {
+          if (token.logicalName === 'escape') {
+            this.sessionPickerModal.close();
+          } else if (token.logicalName === 'enter') {
+            if (this.commandContext?.conversationManager) {
+              this.sessionPickerModal.loadSelected(this.commandContext.conversationManager);
+            }
+          } else if (token.logicalName === 'up') {
+            this.sessionPickerModal.moveUp();
+          } else if (token.logicalName === 'down') {
+            this.sessionPickerModal.moveDown();
+          } else if (token.logicalName === 'd') {
+            this.sessionPickerModal.deleteSelected();
+          }
+        } else if (token.type === 'text') {
+          if (token.value === 'd') {
+            this.sessionPickerModal.deleteSelected();
+          }
+        }
+        this.bus.emit('render:request');
+        continue;
+      }
+
+      // --- Profile picker has focus: intercept all input ---
+      if (this.profilePickerModal.active) {
+        if (token.type === 'key') {
+          if (token.logicalName === 'escape') {
+            this.profilePickerModal.close();
+          } else if (token.logicalName === 'enter') {
+            if (this.commandContext?.configManager) {
+              this.profilePickerModal.loadSelected(this.commandContext.configManager);
+            }
+          } else if (token.logicalName === 'up') {
+            this.profilePickerModal.moveUp();
+          } else if (token.logicalName === 'down') {
+            this.profilePickerModal.moveDown();
+          } else if (token.logicalName === 'd') {
+            this.profilePickerModal.deleteSelected();
+          } else if (token.logicalName === 's') {
+            // Save current config as a new profile (prompt via statusMessage flow)
+            if (this.commandContext?.configManager) {
+              const name = `profile-${Date.now()}`;
+              this.profilePickerModal.saveCurrentAs(name, this.commandContext.configManager);
+            }
+          }
+        } else if (token.type === 'text') {
+          if (token.value === 'd') {
+            this.profilePickerModal.deleteSelected();
+          } else if (token.value === 's') {
+            if (this.commandContext?.configManager) {
+              const name = `profile-${Date.now()}`;
+              this.profilePickerModal.saveCurrentAs(name, this.commandContext.configManager);
+            }
+          }
+        }
+        this.bus.emit('render:request');
+        continue;
+      }
+
+      // --- Help overlay has focus: intercept all input (? or Esc closes) ---
+      if (this.helpOverlayActive) {
+        if (token.type === 'key') {
+          if (token.logicalName === 'escape') {
+            this.helpOverlayActive = false;
+          } else if (token.logicalName === 'up') {
+            // Help overlay scroll is handled by the renderer/compositor — emit scroll event
+            this.bus.emit('help:scroll', { delta: -3 });
+          } else if (token.logicalName === 'down') {
+            this.bus.emit('help:scroll', { delta: 3 });
+          }
+        } else if (token.type === 'text' && token.value === '?') {
+          this.helpOverlayActive = false;
+        }
+        this.bus.emit('render:request');
+        continue;
+      }
+
       // --- Model picker has focus: intercept all input ---
       if (this.modelPicker.active) {
         if (token.type === 'key') {
@@ -789,6 +1065,81 @@ export class InputHandler {
             this.modelPicker.moveDown();
           }
           // All other keys ignored while model picker is active
+        }
+        this.bus.emit('render:request');
+        continue;
+      }
+
+      // --- Live-tail peek modal has focus: intercept all input ---
+      if (this.liveTailModal.active) {
+        if (token.type === 'key') {
+          if (token.logicalName === 'escape') {
+            this.liveTailModal.close();
+            this.processModal.open();
+          } else if (token.logicalName === 'up') {
+            this.liveTailModal.scrollUp();
+          } else if (token.logicalName === 'down') {
+            this.liveTailModal.scrollDown();
+          } else if (token.logicalName === 'k' || (token.type === 'text' && token.value === 'k')) {
+            this.liveTailModal.killProcess();
+            this.liveTailModal.close();
+            this.processModal.open();
+          }
+        } else if (token.type === 'text') {
+          if (token.value === 'k') {
+            this.liveTailModal.killProcess();
+            this.liveTailModal.close();
+            this.processModal.open();
+          }
+        }
+        this.bus.emit('render:request');
+        continue;
+      }
+
+      // --- Agent detail modal has focus: intercept all input ---
+      if (this.agentDetailModal.active) {
+        if (token.type === 'key' && token.logicalName === 'escape') {
+          this.agentDetailModal.close();
+          this.processModal.open();
+        }
+        this.bus.emit('render:request');
+        continue;
+      }
+
+      // --- Context inspector modal has focus: intercept all input ---
+      if (this.contextInspectorModal.active) {
+        if (token.type === 'key' && token.logicalName === 'escape') {
+          this.contextInspectorModal.close();
+        }
+        this.bus.emit('render:request');
+        continue;
+      }
+
+      // --- Process modal has focus: intercept all input ---
+      if (this.processModal.active) {
+        if (token.type === 'key') {
+          if (token.logicalName === 'escape') {
+            this.processModal.close();
+          } else if (token.logicalName === 'up') {
+            this.processModal.moveUp();
+          } else if (token.logicalName === 'down') {
+            this.processModal.moveDown();
+          } else if (token.logicalName === 'enter') {
+            const entry = this.processModal.getSelected();
+            if (entry) {
+              this.processModal.close();
+              if (entry.type === 'agent') {
+                this.agentDetailModal.open(entry.id);
+              } else {
+                this.liveTailModal.open(entry);
+              }
+            }
+          }
+        } else if (token.type === 'text') {
+          if (token.value === 'k') {
+            const killed = this.processModal.killSelected();
+            if (killed) this.processModal.refresh();
+          }
         }
         this.bus.emit('render:request');
         continue;
@@ -874,7 +1225,45 @@ export class InputHandler {
         continue;
       }
 
+      // --- Block actions menu has focus: intercept all input ---
+      if (this.blockActionsMenu.active) {
+        if (token.type === 'key') {
+          if (token.logicalName === 'escape') {
+            this.blockActionsMenu.close();
+          } else if (token.logicalName === 'up') {
+            this.blockActionsMenu.moveUp();
+          } else if (token.logicalName === 'down') {
+            this.blockActionsMenu.moveDown();
+          } else if (token.logicalName === 'enter') {
+            const action = this.blockActionsMenu.getSelected();
+            this.blockActionsMenu.close();
+            if (action) this.executeBlockAction(action.id);
+          } else if (token.logicalName === 'tab') {
+            const action = this.blockActionsMenu.getActionForKey('Tab');
+            this.blockActionsMenu.close();
+            if (action) this.executeBlockAction(action.id);
+          }
+        } else if (token.type === 'text') {
+          const action = this.blockActionsMenu.getActionForKey(token.value);
+          this.blockActionsMenu.close();
+          if (action) this.executeBlockAction(action.id);
+        }
+        this.bus.emit('render:request');
+        continue;
+      }
+
       if (token.type === 'text') {
+        // '?' with empty prompt in normal mode: toggle help overlay
+        if (token.value === '?' && this.prompt === '' && !this.commandMode) {
+          this.helpOverlayActive = !this.helpOverlayActive;
+          this.bus.emit('render:request');
+          continue;
+        }
+        // 'a' with empty prompt in normal mode: apply nearest diff block
+        if (token.value === 'a' && this.prompt === '' && !this.commandMode) {
+          this.handleDiffApply();
+          continue;
+        }
         // Reset history browsing when user types
         if (this.inputHistory?.isBrowsing) {
           this.inputHistory.resetPosition();
@@ -992,8 +1381,19 @@ export class InputHandler {
           this.ensureInputCursorVisible();
           continue;
         }
-        // Ctrl+E: move to end of line
+        // Ctrl+E: navigate to next error when prompt is empty; else move to end of line
         if (token.logicalName === 'e' && token.ctrl) {
+          if (this.prompt === '' && !this.commandMode) {
+            const cm = this.conversationManager;
+            if (cm) {
+              const nextLine = cm.nextErrorLine(this.getScrollTop());
+              if (nextLine >= 0) {
+                this.scroll(nextLine - this.getScrollTop());
+                this.bus.emit('render:request');
+                continue;
+              }
+            }
+          }
           // In multiline, move to end of current wrapped line
           const info = this.getWrappedPromptInfo(this.contentWidth);
           if (info.wrappedLines.length > 1) {
@@ -1135,6 +1535,19 @@ export class InputHandler {
             this.ensureInputCursorVisible();
           } else {
             const text = this.prompt.trim();
+            // Enter with empty prompt in normal mode: open block actions menu
+            if (!text && !this.commandMode) {
+              const cm = this.conversationManager;
+              if (cm) {
+                const lineIndex = this.getScrollTop();
+                const nearest = cm.findNearestBlock(lineIndex);
+                if (nearest) {
+                  this.blockActionsMenu.open(nearest);
+                  this.bus.emit('render:request');
+                  continue;
+                }
+              }
+            }
             if (text === ':q') {
               this.exitApp();
               return;
@@ -1256,6 +1669,9 @@ export class InputHandler {
               }
             }
           }
+        } else if (token.logicalName === 'f2') {
+          // F2: open the background process monitor
+          this.processModal.open();
         }
       } else if (token.type === 'mouse') {
         const headerH = 2;

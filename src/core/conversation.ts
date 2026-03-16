@@ -1,6 +1,6 @@
 import { InfiniteBuffer } from './history.ts';
 import { UIFactory } from '../renderer/ui-factory.ts';
-import { renderMarkdown } from '../renderer/markdown.ts';
+import { renderMarkdown, renderMarkdownTracked } from '../renderer/markdown.ts';
 import { renderToolCallBlock } from '../renderer/tool-call.ts';
 import { createEmptyLine, type Line, type Cell } from '../types/grid.ts';
 import { getSplashLines, type SplashOptions } from '../utils/splash-lines.ts';
@@ -71,6 +71,8 @@ export class ConversationManager {
   private collapseState: Map<string, boolean> = new Map();
   /** Block registry: track rendered blocks for copy/apply. */
   protected blockRegistry: BlockMeta[] = [];
+  /** Registry of rendered line indices for system messages matching /error/i. */
+  private errorLineRegistry: number[] = [];
   /** Streaming block start line in history buffer (for incremental streaming update). */
   private streamingStartLine = -1;
   /** Undo stack: each entry is a turn (user msg + all subsequent non-user msgs until next user). */
@@ -282,6 +284,7 @@ export class ConversationManager {
     this.history.clear();
     this.appendedUpTo = 0;
     this.blockRegistry = [];
+    this.errorLineRegistry = [];
     const width = this.getWidth();
     this.lastRenderedWidth = width;
     this.dirty = false;
@@ -376,7 +379,32 @@ export class ConversationManager {
           const numWidth = Math.max(3, String(totalLines).length); // minimum 3 digits wide
           const gutterW = numWidth + 3; // digits + ' │ '
           const contentWidth = showLineNumbers ? width - gutterW : width;
-          const rendered = showLineNumbers ? renderMarkdown(m.content, contentWidth) : renderMarkdown(m.content, width);
+          const renderWidth = showLineNumbers ? contentWidth : width;
+
+          // Use tracked render to register code blocks in blockRegistry
+          const { lines: tracked, codeBlocks } = renderMarkdownTracked(m.content, renderWidth);
+
+          // Register each code block found in this message
+          const msgBaseLineOffset = this.history.getLineCount();
+          for (const cb of codeBlocks) {
+            const blockStartLine = msgBaseLineOffset + cb.startOffset;
+            const blockIdx = this.blockRegistry.length;
+            const collapseKey = `code_${msgIdx}_${blockIdx}`;
+            const isAutoCollapsed = cb.rawContent.split('\n').length > collapseThreshold;
+            if (isAutoCollapsed && !this.collapseState.has(collapseKey)) {
+              this.collapseState.set(collapseKey, true);
+            }
+            this.blockRegistry.push({
+              blockIndex: blockIdx,
+              collapseKey,
+              type: 'code',
+              startLine: blockStartLine,
+              lineCount: cb.lineCount,
+              rawContent: cb.rawContent,
+            });
+          }
+
+          const rendered = showLineNumbers ? tracked : tracked;
           if (showLineNumbers) {
             // Prepend dimmed gutter and shift content right
             const numbered = rendered.map((line, i) => {
@@ -405,8 +433,12 @@ export class ConversationManager {
           }
         }
       } else if (m.role === 'system') {
+        const sysStartLine = this.history.getLineCount();
         const lines = this.textToLines(m.content, width, { fg: '196' });
         this.history.addLines(lines);
+        if (/error/i.test(m.content)) {
+          this.errorLineRegistry.push(sysStartLine);
+        }
       } else if (m.role === 'tool') {
         // Collapsible tool result block
         // Use the message's index in this.messages as a stable collapse key
@@ -527,10 +559,41 @@ export class ConversationManager {
     return nearest.blockIndex;
   }
 
-  /** Options passed to the splash screen renderer. Set externally. */
   /** Returns a read-only view of the block registry for external consumers. */
   public getBlockRegistry(): readonly BlockMeta[] {
     return this.blockRegistry;
+  }
+
+  /**
+   * getErrorLines - Returns line indices in the rendered history buffer for
+   * system messages that contain 'error' (case-insensitive).
+   * Triggers a history flush if dirty.
+   */
+  public getErrorLines(): number[] {
+    this.flushHistory();
+    return [...this.errorLineRegistry];
+  }
+
+  /**
+   * nextErrorLine - Find the next error line after currentLine (wraps around).
+   * Returns -1 if there are no error lines.
+   */
+  public nextErrorLine(currentLine: number): number {
+    const errors = this.getErrorLines();
+    if (errors.length === 0) return -1;
+    const after = errors.find(l => l > currentLine);
+    return after ?? errors[0];
+  }
+
+  /**
+   * prevErrorLine - Find the previous error line before currentLine (wraps around).
+   * Returns -1 if there are no error lines.
+   */
+  public prevErrorLine(currentLine: number): number {
+    const errors = this.getErrorLines();
+    if (errors.length === 0) return -1;
+    const before = [...errors].reverse().find(l => l < currentLine);
+    return before ?? errors[errors.length - 1];
   }
 
   public splashOptions: SplashOptions = {};

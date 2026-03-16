@@ -71,6 +71,10 @@ export interface HookDefinition {
   once?: boolean;
   /** Description for documentation */
   description?: string;
+  /** Optional name for programmatic enable/disable/remove */
+  name?: string;
+  /** Whether the hook is enabled (default: true) */
+  enabled?: boolean;
 }
 
 /** Hook chain step */

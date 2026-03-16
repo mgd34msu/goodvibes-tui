@@ -2,6 +2,10 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 
 import { join } from 'node:path';
 import { KVState } from '../../state/kv-state.ts';
 import { ProjectIndex } from '../../state/project-index.ts';
+import { ModeManager } from '../../state/mode-manager.ts';
+import { HookDispatcher } from '../../hooks/dispatcher.ts';
+import { TelemetryDB } from '../../state/telemetry.ts';
+import type { TelemetryFilter } from '../../state/telemetry.ts';
 import { logger } from '../../utils/logger.ts';
 import type { Tool, ToolDefinition } from '../../types/tools.ts';
 import { STATE_TOOL_SCHEMA } from './schema.ts';
@@ -41,6 +45,9 @@ function sanitizeMemoryKey(key: string): string | null {
 export function createStateTool(
   kvState: KVState,
   projectIndex: ProjectIndex,
+  hookDispatcher?: HookDispatcher,
+  modeManager?: ModeManager,
+  telemetryDB?: TelemetryDB,
 ): Tool {
   // Session start time and telemetry are scoped per-instance so multiple
   // createStateTool() calls don't share state.
@@ -55,7 +62,9 @@ export function createStateTool(
     description:
       'Access and manipulate session state. Modes: get/set/list/clear operate on KVState;'
       + ' budget reports token usage; context reports conversation info;'
-      + ' memory reads/writes persistent .goodvibes/memory files; telemetry reports session metrics.',
+      + ' memory reads/writes persistent .goodvibes/memory files; telemetry reports session metrics;'
+      + ' hooks manages registered hooks (list/enable/disable/add/remove);'
+      + ' mode manages output verbosity mode (get/set/list).',
     parameters: STATE_TOOL_SCHEMA as unknown as Record<string, unknown>,
   };
 
@@ -80,6 +89,9 @@ export function createStateTool(
         case 'context': return runContext(kvState, projectIndex);
         case 'memory': return runMemory(input);
         case 'telemetry': return runTelemetry();
+        case 'hooks': return runHooks(input, hookDispatcher);
+        case 'mode': return runMode(input, modeManager);
+        case 'analytics': return runAnalytics(input, telemetryDB);
         default: {
           _telemetry.errors++;
           return { success: false, error: `Unknown mode: ${String(mode)}` };
@@ -110,8 +122,259 @@ export function createStateTool(
 }
 
 // ---------------------------------------------------------------------------
+// Analytics handler
+// ---------------------------------------------------------------------------
+
+async function runAnalytics(
+  input: StateInput,
+  db: TelemetryDB | undefined,
+): Promise<{ success: boolean; output?: string; error?: string }> {
+  if (!db) {
+    return {
+      success: false,
+      error: 'analytics mode requires a TelemetryDB instance (not provided at startup)',
+    };
+  }
+
+  if (!db.isReady) {
+    try {
+      await db.init();
+    } catch (err) {
+      return {
+        success: false,
+        error: `TelemetryDB init failed: ${err instanceof Error ? err.message : String(err)}`,
+      };
+    }
+  }
+
+  const action = input.analyticsAction ?? 'summary';
+
+  if (action === 'record') {
+    const tool = input.analyticsTool;
+    if (!tool) return { success: false, error: 'analytics action "record" requires "analyticsTool"' };
+    const args = input.analyticsArgs ?? {};
+    const result = input.analyticsResult ?? {};
+    const duration = input.analyticsDuration ?? 0;
+    const tokens = input.analyticsTokens ?? 0;
+    try {
+      db.recordToolCall(tool, args, result, duration, tokens);
+      return {
+        success: true,
+        output: JSON.stringify({ mode: 'analytics', action: 'record', tool, duration, tokens }),
+      };
+    } catch (err) {
+      return { success: false, error: `record failed: ${err instanceof Error ? err.message : String(err)}` };
+    }
+  }
+
+  if (action === 'query') {
+    const rawFilter = input.analyticsFilter ?? {};
+    const filter: TelemetryFilter = {
+      tool: typeof rawFilter.tool === 'string' ? rawFilter.tool : undefined,
+      status: rawFilter.status === 'ok' || rawFilter.status === 'error' ? rawFilter.status : undefined,
+      since: typeof rawFilter.since === 'number' ? rawFilter.since : undefined,
+      until: typeof rawFilter.until === 'number' ? rawFilter.until : undefined,
+      limit: typeof rawFilter.limit === 'number' ? rawFilter.limit : undefined,
+    };
+    try {
+      const records = db.query(filter);
+      return {
+        success: true,
+        output: JSON.stringify({ mode: 'analytics', action: 'query', count: records.length, records }),
+      };
+    } catch (err) {
+      return { success: false, error: `query failed: ${err instanceof Error ? err.message : String(err)}` };
+    }
+  }
+
+  if (action === 'summary') {
+    try {
+      const summary = db.getSummary();
+      return {
+        success: true,
+        output: JSON.stringify({ mode: 'analytics', action: 'summary', ...summary }),
+      };
+    } catch (err) {
+      return { success: false, error: `summary failed: ${err instanceof Error ? err.message : String(err)}` };
+    }
+  }
+
+  if (action === 'export') {
+    const format = input.analyticsFormat ?? 'json';
+    try {
+      const data = db.export(format);
+      return {
+        success: true,
+        output: JSON.stringify({ mode: 'analytics', action: 'export', format, data }),
+      };
+    } catch (err) {
+      return { success: false, error: `export failed: ${err instanceof Error ? err.message : String(err)}` };
+    }
+  }
+
+  if (action === 'dashboard') {
+    try {
+      const summary = db.getSummary();
+      const recentRecords = db.query({ limit: 10 });
+      return {
+        success: true,
+        output: JSON.stringify({
+          mode: 'analytics',
+          action: 'dashboard',
+          summary,
+          recent: recentRecords,
+        }),
+      };
+    } catch (err) {
+      return { success: false, error: `dashboard failed: ${err instanceof Error ? err.message : String(err)}` };
+    }
+  }
+
+  if (action === 'sync') {
+    try {
+      const saved = await db.save();
+      return {
+        success: true,
+        output: JSON.stringify({ mode: 'analytics', action: 'sync', persisted: saved }),
+      };
+    } catch (err) {
+      return { success: false, error: `sync failed: ${err instanceof Error ? err.message : String(err)}` };
+    }
+  }
+
+  return { success: false, error: `Unknown analytics action: ${String(action)}` };
+}
+
+// ---------------------------------------------------------------------------
 // Mode handlers
 // ---------------------------------------------------------------------------
+
+function runHooks(
+  input: StateInput,
+  dispatcher: HookDispatcher | undefined,
+): { success: boolean; output?: string; error?: string } {
+  if (!dispatcher) {
+    return { success: false, error: 'hooks mode requires a HookDispatcher (not provided at startup)' };
+  }
+
+  const action = input.hookAction ?? 'list';
+
+  if (action === 'list') {
+    const entries = dispatcher.listHooks();
+    return {
+      success: true,
+      output: JSON.stringify({
+        mode: 'hooks',
+        action: 'list',
+        count: entries.length,
+        hooks: entries.map(({ pattern, hook }) => ({
+          pattern,
+          name: hook.name ?? null,
+          type: hook.type,
+          match: hook.match,
+          enabled: hook.enabled !== false,
+          description: hook.description ?? null,
+        })),
+      }),
+    };
+  }
+
+  if (action === 'enable') {
+    const name = input.hookName;
+    if (!name) return { success: false, error: 'hooks action "enable" requires "hookName"' };
+    const found = dispatcher.enableHook(name);
+    if (!found) return { success: false, error: `No hook named "${name}" found` };
+    return { success: true, output: JSON.stringify({ mode: 'hooks', action: 'enable', name, enabled: true }) };
+  }
+
+  if (action === 'disable') {
+    const name = input.hookName;
+    if (!name) return { success: false, error: 'hooks action "disable" requires "hookName"' };
+    const found = dispatcher.disableHook(name);
+    if (!found) return { success: false, error: `No hook named "${name}" found` };
+    return { success: true, output: JSON.stringify({ mode: 'hooks', action: 'disable', name, enabled: false }) };
+  }
+
+  if (action === 'remove') {
+    const name = input.hookName;
+    if (!name) return { success: false, error: 'hooks action "remove" requires "hookName"' };
+    const removed = dispatcher.unregister(name);
+    if (!removed) return { success: false, error: `No hook named "${name}" found` };
+    return { success: true, output: JSON.stringify({ mode: 'hooks', action: 'remove', name }) };
+  }
+
+  if (action === 'add') {
+    const def = input.hookDefinition;
+    if (!def) return { success: false, error: 'hooks action "add" requires "hookDefinition"' };
+    const { eventPattern, ...hookDef } = def;
+    if (!eventPattern) return { success: false, error: 'hookDefinition.eventPattern is required' };
+    if (!hookDef.type) return { success: false, error: 'hookDefinition.type is required' };
+    if (!hookDef.match) return { success: false, error: 'hookDefinition.match is required' };
+    const VALID_HOOK_TYPES = new Set(['command', 'http', 'ts']);
+    if (!VALID_HOOK_TYPES.has(hookDef.type)) {
+      return { success: false, error: `hookDefinition.type must be one of: command, http, ts` };
+    }
+    dispatcher.register(eventPattern, hookDef as import('../../hooks/types.ts').HookDefinition);
+    return {
+      success: true,
+      output: JSON.stringify({ mode: 'hooks', action: 'add', eventPattern, name: hookDef.name ?? null }),
+    };
+  }
+
+  return { success: false, error: `Unknown hooks action: ${String(action)}` };
+}
+
+function runMode(
+  input: StateInput,
+  manager: ModeManager | undefined,
+): { success: boolean; output?: string; error?: string } {
+  const mm = manager ?? ModeManager.getInstance();
+  const action = input.modeAction ?? 'get';
+
+  if (action === 'get') {
+    const name = mm.getMode();
+    const verbosityDefaults = mm.getVerbosityDefaults();
+    return {
+      success: true,
+      output: JSON.stringify({ mode: 'mode', action: 'get', name, verbosityDefaults }),
+    };
+  }
+
+  if (action === 'list') {
+    const modes = mm.listModes();
+    return {
+      success: true,
+      output: JSON.stringify({
+        mode: 'mode',
+        action: 'list',
+        count: modes.length,
+        modes: modes.map((m) => ({
+          name: m.name,
+          description: m.description,
+          verbosityDefaults: m.verbosityDefaults,
+          enforcement: m.enforcement,
+        })),
+      }),
+    };
+  }
+
+  if (action === 'set') {
+    const name = input.modeName;
+    if (!name) return { success: false, error: 'mode action "set" requires "modeName"' };
+    try {
+      mm.setMode(name);
+    } catch (err) {
+      return { success: false, error: err instanceof Error ? err.message : String(err) };
+    }
+    const verbosityDefaults = mm.getVerbosityDefaults();
+    return {
+      success: true,
+      output: JSON.stringify({ mode: 'mode', action: 'set', name, verbosityDefaults }),
+    };
+  }
+
+  return { success: false, error: `Unknown mode action: ${String(action)}` };
+}
 
 async function runGet(
   input: StateInput,

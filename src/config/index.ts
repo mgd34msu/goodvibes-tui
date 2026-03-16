@@ -16,6 +16,7 @@ import { readFileSync } from 'fs';
 import { ConfigManager } from './manager.ts';
 import type { GoodVibesConfig } from './schema.ts';
 import { logger } from '../utils/logger.ts';
+import { getSecretsManager } from './secrets.ts';
 
 /**
  * AppConfig - Backward-compatible interface.
@@ -98,4 +99,54 @@ function loadEnvApiKeys(): Record<string, string> {
     if (value) keys[prov] = value;
   }
   return keys;
+}
+
+/**
+ * resolveApiKeys — three-tier async resolution for all provider API keys.
+ *
+ * Resolution order per key:
+ *   1. Environment variable (process.env)
+ *   2. SecretsManager encrypted store (.goodvibes/tui/secrets.enc)
+ *   3. Omitted from result (null → skip)
+ *
+ * Returns a map of provider → apiKey for all providers where a key is found.
+ */
+export async function resolveApiKeys(): Promise<Record<string, string>> {
+  const secrets = getSecretsManager();
+  const mapping: Array<{ prov: string; envVars: string[] }> = [
+    { prov: 'openai',       envVars: ['OPENAI_API_KEY', 'OPENAI_KEY'] },
+    { prov: 'anthropic',    envVars: ['ANTHROPIC_API_KEY', 'CLAUDE_API_KEY'] },
+    { prov: 'gemini',       envVars: ['GEMINI_API_KEY', 'GOOGLE_API_KEY', 'GOOGLE_GEMINI_API_KEY'] },
+    { prov: 'inceptionlabs', envVars: ['INCEPTION_API_KEY'] },
+  ];
+
+  const result: Record<string, string> = {};
+
+  for (const { prov, envVars } of mapping) {
+    // Tier 1: environment variables
+    let value: string | null = null;
+    for (const envVar of envVars) {
+      if (process.env[envVar]) {
+        value = process.env[envVar]!;
+        break;
+      }
+    }
+
+    // Tier 2: SecretsManager encrypted store
+    if (value === null) {
+      for (const envVar of envVars) {
+        const stored = await secrets.get(envVar);
+        if (stored !== null) {
+          value = stored;
+          break;
+        }
+      }
+    }
+
+    if (value !== null) {
+      result[prov] = value;
+    }
+  }
+
+  return result;
 }

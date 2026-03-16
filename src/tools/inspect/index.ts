@@ -18,6 +18,31 @@ import type {
   A11yIssue,
   ScaffoldPlan,
   ScaffoldFile,
+  ApiSpec,
+  OpenApiParameter,
+  ApiValidateResult,
+  FetchCall,
+  ApiSyncResult,
+  ComponentStateInfo,
+  StateVar,
+  RenderTriggersInfo,
+  RenderTrigger,
+  HooksInfo,
+  HookDep,
+  OverflowInfo,
+  OverflowIssue,
+  SizingInfo,
+  SizingItem,
+  StackingInfo,
+  ZIndexItem,
+  ResponsiveInfo,
+  BreakpointUsage,
+  EventsInfo,
+  EventHandler,
+  TailwindInfo,
+  TailwindConflict,
+  ClientBoundaryInfo,
+  ErrorBoundaryInfo,
 } from './schema.ts';
 
 // ---------------------------------------------------------------------------
@@ -313,6 +338,23 @@ async function inspectApi(root: string, framework: ApiFramework): Promise<ApiRou
 // Mode: database
 // ---------------------------------------------------------------------------
 
+function parseModelFields(body: string): DbField[] {
+  const fields: DbField[] = [];
+  const FIELD_RE = /^\s*(\w+)\s+(\w+)(\[\])?([?!])?/;
+  for (const line of body.split('\n')) {
+    const m = FIELD_RE.exec(line.trim());
+    if (!m) continue;
+    const name = m[1];
+    // Skip keywords
+    if (['@@', '@'].some((p) => name.startsWith(p))) continue;
+    const type = m[2];
+    const isOptional = m[4] === '?';
+    const isRelation = /^[A-Z]/.test(type);
+    fields.push({ name, type, isRelation, isOptional });
+  }
+  return fields;
+}
+
 function parsePrismaSchema(content: string): DatabaseInfo {
   const models: DbModel[] = [];
   const enums: DbEnum[] = [];
@@ -341,33 +383,6 @@ function parsePrismaSchema(content: string): DatabaseInfo {
   }
 
   return { models, enums };
-}
-
-function parseModelFields(body: string): DbField[] {
-  const fields: DbField[] = [];
-  // Prisma field: name Type modifiers attributes
-  // e.g.: id String @id @default(cuid())
-  //       posts Post[]
-  //       userId String?
-  const FIELD_RE = /^\s*(\w+)\s+(\w+)(\[\])?([?!])?/;
-  const PRISMA_SCALARS = new Set([
-    'String', 'Int', 'Float', 'Boolean', 'DateTime',
-    'BigInt', 'Bytes', 'Decimal', 'Json',
-  ]);
-
-  for (const line of body.split('\n')) {
-    const trimmed = line.trim();
-    if (!trimmed || trimmed.startsWith('//') || trimmed.startsWith('@')) continue;
-    const fm = FIELD_RE.exec(trimmed);
-    if (!fm) continue;
-    const fieldName = fm[1];
-    const fieldType = fm[2] + (fm[3] || '');
-    const isOptional = fm[4] === '?';
-    // Relation: uppercase type that is not a Prisma scalar, or has @relation
-    const isRelation = (!PRISMA_SCALARS.has(fm[2]) && /^[A-Z]/.test(fm[2])) || trimmed.includes('@relation');
-    fields.push({ name: fieldName, type: fieldType, isRelation, isOptional });
-  }
-  return fields;
 }
 
 // ---------------------------------------------------------------------------
@@ -590,15 +605,20 @@ function buildScaffold(
     },
     {
       path: `src/${kebab}/types.ts`,
-      content: `export interface ${pascal} {\n  id: string;\n}\n\nexport interface ${pascal}Input {\n  // TODO: define input fields\n}\n`,
+      content: `export interface ${pascal} {\n  id: string;\n}\n\nexport interface ${pascal}Input {\n    name: string;
+  // add more fields as needed\n}\n`,
     },
     {
       path: `src/${kebab}/${kebab}.ts`,
-      content: `import type { ${pascal}, ${pascal}Input } from './types.ts';\n\nexport function create${pascal}(input: ${pascal}Input): ${pascal} {\n  // TODO: implement\n  throw new Error('Not implemented');\n}\n`,
+      content: `import type { ${pascal}, ${pascal}Input } from './types.ts';\n\nexport function create${pascal}(input: ${pascal}Input): ${pascal} {\n    // Simple implementation: generate a random id and spread input
+  return { id: crypto.randomUUID(), ...input };
+\n  throw new Error('Not implemented');\n}\n`,
     },
     {
       path: `src/${kebab}/${kebab}.test.ts`,
-      content: `import { describe, test, expect } from 'bun:test';\nimport { create${pascal} } from './${kebab}.ts';\n\ndescribe('${pascal}', () => {\n  test('TODO', () => {\n    expect(true).toBe(true);\n  });\n});\n`,
+      content: `import { describe, test, expect } from 'bun:test';\nimport { create${pascal} } from './${kebab}.ts';\n\ndescribe('${pascal}', () => {\n  test('creates a ${pascal} object with id and input fields', () => {\n    const result = create${pascal}({ name: 'test' });
+    expect(result).toHaveProperty('id');
+    expect(result.name).toBe('test');\n  });\n});\n`,
     },
   ];
 
@@ -614,6 +634,535 @@ function buildScaffold(
 }
 
 // ---------------------------------------------------------------------------
+// Mode: api_spec
+// ---------------------------------------------------------------------------
+
+/**
+ * Convert an Express-style path (e.g. /users/:id) to an OpenAPI path (/users/{id})
+ * and extract path parameter names.
+ */
+function toOpenApiPath(path: string): { openApiPath: string; params: string[] } {
+  const params: string[] = [];
+  const openApiPath = path.replace(/:([\w]+)/g, (_, name) => {
+    params.push(name);
+    return `{${name}}`;
+  });
+  return { openApiPath, params };
+}
+
+function generateApiSpec(routes: ApiRoute[], title = 'API', version = '1.0.0'): ApiSpec {
+  const paths: ApiSpec['paths'] = {};
+
+  for (const route of routes) {
+    const { openApiPath, params } = toOpenApiPath(route.path);
+    if (!paths[openApiPath]) paths[openApiPath] = {};
+
+    const method = route.method.toLowerCase();
+    if (method === 'any') {
+      // Pages Router catch-all: emit GET as representative
+      const opId = `get_${openApiPath.replace(/[^a-zA-Z0-9]/g, '_').replace(/_+/g, '_').replace(/^_|_$/g, '')}`;
+      const parameters: OpenApiParameter[] = params.map((p) => ({
+        name: p,
+        in: 'path',
+        required: true,
+        schema: { type: 'string' },
+      }));
+      paths[openApiPath]['get'] = {
+        operationId: opId,
+        ...(parameters.length ? { parameters } : {}),
+        responses: { '200': { description: 'OK' } },
+      };
+      continue;
+    }
+
+    const opId = `${method}_${openApiPath.replace(/[^a-zA-Z0-9]/g, '_').replace(/_+/g, '_').replace(/^_|_$/g, '')}`;
+    const parameters: OpenApiParameter[] = params.map((p) => ({
+      name: p,
+      in: 'path',
+      required: true,
+      schema: { type: 'string' },
+    }));
+
+    paths[openApiPath][method] = {
+      operationId: opId,
+      ...(parameters.length ? { parameters } : {}),
+      responses: { '200': { description: 'OK' } },
+    };
+  }
+
+  return { openapi: '3.0.0', info: { title, version }, paths };
+}
+
+// ---------------------------------------------------------------------------
+// Mode: api_validate
+// ---------------------------------------------------------------------------
+
+function validateApiSpec(specContent: string, routes: ApiRoute[]): ApiValidateResult {
+  let specObj: Record<string, unknown>;
+  try {
+    specObj = JSON.parse(specContent);
+  } catch {
+    throw new Error('specPath must be a valid JSON OpenAPI spec file');
+  }
+
+  const specPaths = (specObj.paths ?? {}) as Record<string, Record<string, unknown>>;
+
+  // Build a map of path -> Set<method> from the spec
+  const specRouteMap = new Map<string, Set<string>>();
+  for (const [rawPath, pathItem] of Object.entries(specPaths)) {
+    // Normalize OpenAPI {param} -> :param for comparison
+    const normalPath = rawPath.replace(/\{([^}]+)\}/g, ':$1');
+    const methods = new Set(
+      Object.keys(pathItem)
+        .filter((k) => ['get', 'post', 'put', 'patch', 'delete', 'head', 'options'].includes(k))
+        .map((m) => m.toUpperCase()),
+    );
+    specRouteMap.set(normalPath, methods);
+  }
+
+  // Build a map of path -> Set<method> from discovered code routes
+  const codeRouteMap = new Map<string, Set<string>>();
+  for (const route of routes) {
+    const methods = codeRouteMap.get(route.path) ?? new Set<string>();
+    if (route.method !== 'ANY') methods.add(route.method);
+    codeRouteMap.set(route.path, methods);
+  }
+
+  const missing_from_spec: string[] = [];
+  const missing_from_code: string[] = [];
+  const mismatched_methods: ApiValidateResult['mismatched_methods'] = [];
+
+  // Routes in code but not in spec (or method mismatch)
+  for (const [path, codeMethods] of codeRouteMap) {
+    const specMethods = specRouteMap.get(path);
+    if (!specMethods) {
+      for (const m of codeMethods) {
+        missing_from_spec.push(`${m} ${path}`);
+      }
+    } else {
+      const specArr = [...specMethods];
+      const codeArr = [...codeMethods];
+      const onlyInSpec = specArr.filter((m) => !codeMethods.has(m));
+      const onlyInCode = codeArr.filter((m) => !specMethods.has(m));
+      if (onlyInSpec.length || onlyInCode.length) {
+        mismatched_methods.push({ path, spec_methods: specArr, code_methods: codeArr });
+      }
+    }
+  }
+
+  // Routes in spec but not in code
+  for (const [path, specMethods] of specRouteMap) {
+    if (!codeRouteMap.has(path)) {
+      for (const m of specMethods) {
+        missing_from_code.push(`${m} ${path}`);
+      }
+    }
+  }
+
+  const valid = missing_from_spec.length === 0 && missing_from_code.length === 0 && mismatched_methods.length === 0;
+  return { valid, missing_from_spec, missing_from_code, mismatched_methods };
+}
+
+// ---------------------------------------------------------------------------
+// Mode: api_sync
+// ---------------------------------------------------------------------------
+
+/**
+ * Scan frontend directories for fetch() calls and extract URL strings.
+ * Heuristic: look for fetch("/...") or fetch(`/...`) patterns.
+ */
+async function findFetchCalls(root: string): Promise<FetchCall[]> {
+  const calls: FetchCall[] = [];
+  // Scan common frontend dirs
+  const frontendDirs = ['src/app', 'src/pages', 'app', 'pages'].map((d) => join(root, d));
+  const dirsToScan = frontendDirs.filter(existsSync);
+  if (dirsToScan.length === 0) {
+    // Fallback: scan src/ broadly
+    dirsToScan.push(join(root, 'src'));
+  }
+
+  const FETCH_RE = /fetch\(\s*[`'"](\/[^`'"?#]*)[`'"]/g;
+
+  for (const dir of dirsToScan) {
+    if (!existsSync(dir)) continue;
+    const files = await walk(dir, (p) => /\.[tj]sx?$/.test(p));
+    for (const file of files) {
+      const content = safeRead(file);
+      const relFile = relative(root, file);
+      const lines = content.split('\n');
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i];
+        let m: RegExpExecArray | null;
+        const re = new RegExp(FETCH_RE.source, 'g');
+        while ((m = re.exec(line)) !== null) {
+          calls.push({ url: m[1], file: relFile, line: i + 1 });
+        }
+      }
+    }
+  }
+
+  return calls;
+}
+
+/**
+ * Normalize a URL for comparison: strip trailing slash, convert {param} and :param
+ * to a placeholder so /users/123 and /users/:id can be compared.
+ */
+function normalizeUrlForMatch(url: string): string {
+  return url
+    .replace(/\/:\w+/g, '/:p')
+    .replace(/\/\{\w+\}/g, '/:p')
+    .replace(/\/$/, '') || '/';
+}
+
+async function inspectApiSync(root: string, framework: ApiFramework): Promise<ApiSyncResult> {
+  const [routes, fetchCalls] = await Promise.all([
+    inspectApi(root, framework),
+    findFetchCalls(root),
+  ]);
+
+  const normalizedRoutes = routes.map((r) => ({
+    ...r,
+    _normalized: normalizeUrlForMatch(r.path),
+  }));
+
+  const unmatched_fetches: FetchCall[] = [];
+  const matchedRouteNorms = new Set<string>();
+
+  for (const fc of fetchCalls) {
+    const norm = normalizeUrlForMatch(fc.url);
+    const matched = normalizedRoutes.some((r) => r._normalized === norm);
+    if (matched) {
+      matchedRouteNorms.add(norm);
+    } else {
+      unmatched_fetches.push(fc);
+    }
+  }
+
+  // Routes not matched by any fetch call
+  const unmatched_routes = normalizedRoutes
+    .filter((r) => !matchedRouteNorms.has(r._normalized))
+    .map(({ _normalized: _, ...rest }) => rest);
+
+  const drift_detected = unmatched_fetches.length > 0;
+
+  return { fetch_calls: fetchCalls, unmatched_fetches, unmatched_routes, drift_detected };
+}
+
+// ---------------------------------------------------------------------------
+// Frontend analysis functions (C12)
+// ---------------------------------------------------------------------------
+
+/** Trace state/props through React components via useState/useReducer/useContext. */
+function inspectComponentState(content: string, file: string): ComponentStateInfo {
+  const lines = content.split('\n');
+  const stateVars: StateVar[] = [];
+  const useStateRe = /const\s*\[\s*(\w+)\s*,/;
+  const useContextRe = /(?:const|let|var)\s+(\w+)\s*=\s*useContext\s*\(/;
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    const ln = i + 1;
+    if (/\buseState\s*\(/.test(line)) {
+      const m = useStateRe.exec(line);
+      stateVars.push({ name: m ? m[1] : '(unknown)', kind: 'useState', line: ln });
+    } else if (/\buseReducer\s*\(/.test(line)) {
+      const m = useStateRe.exec(line);
+      stateVars.push({ name: m ? m[1] : '(unknown)', kind: 'useReducer', line: ln });
+    } else if (/\buseContext\s*\(/.test(line)) {
+      const m = useContextRe.exec(line);
+      stateVars.push({ name: m ? m[1] : '(unknown)', kind: 'useContext', line: ln });
+    }
+  }
+  return { file, stateVars, count: stateVars.length };
+}
+
+/** Find what causes re-renders: state setters, effect deps, memo boundaries. */
+function inspectRenderTriggers(content: string, file: string): RenderTriggersInfo {
+  const lines = content.split('\n');
+  const triggers: RenderTrigger[] = [];
+  const setterRe = /const\s*\[\s*\w+\s*,\s*(set\w+)\s*\]/;
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    const ln = i + 1;
+    if (setterRe.test(line)) {
+      const m = setterRe.exec(line);
+      if (m) triggers.push({ kind: 'state_setter', name: m[1], line: ln });
+    }
+    if (/\buseEffect\s*\(/.test(line)) triggers.push({ kind: 'effect_dep', name: 'useEffect', line: ln });
+    if (/\buseMemo\s*\(/.test(line)) triggers.push({ kind: 'memo_dep', name: 'useMemo', line: ln });
+    if (/\buseCallback\s*\(/.test(line)) triggers.push({ kind: 'callback_dep', name: 'useCallback', line: ln });
+    if (/(?:React\.memo|\bmemo)\s*\(/.test(line)) triggers.push({ kind: 'memo_boundary', name: 'memo', line: ln });
+  }
+  return { file, triggers, count: triggers.length };
+}
+
+/** Analyze hook dependency arrays; flag variables potentially missing from deps. */
+function inspectHooks(content: string, file: string): HooksInfo {
+  const lines = content.split('\n');
+  const hooks: HookDep[] = [];
+  let missingDepsCount = 0;
+  const hookRe = /\b(useEffect|useMemo|useCallback)\s*\(/;
+  const inlineDepsRe = /[},]\s*\[([^\]]*)\]\s*\)/;
+  const skipKeywords = new Set(['useEffect', 'useMemo', 'useCallback', 'return', 'const', 'let', 'var', 'if', 'else', 'for', 'while', 'true', 'false', 'null', 'undefined', 'async', 'await', 'function', 'new', 'this', 'of', 'in', 'console', 'Math', 'JSON', 'Array', 'Object', 'Promise', 'setTimeout', 'setInterval', 'clearTimeout', 'clearInterval', 'window', 'document', 'fetch', 'NaN', 'Infinity', 'Error', 'RegExp', 'Date', 'Map', 'Set', 'parseInt', 'parseFloat']);
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    const hm = hookRe.exec(line);
+    if (!hm) continue;
+    const hookKind = hm[1] as 'useEffect' | 'useMemo' | 'useCallback';
+    const ln = i + 1;
+    const body = lines.slice(i, Math.min(i + 30, lines.length)).join('\n');
+    const dm = inlineDepsRe.exec(body);
+    const deps = dm ? dm[1].split(',').map(d => d.trim()).filter(Boolean) : [];
+    const callbackBody = body.slice(0, body.lastIndexOf(']'));
+    const usedVarsRe = /\b([a-zA-Z_$][\w$]*)\b/g;
+    const usedVars = new Set<string>();
+    let vm: RegExpExecArray | null;
+    while ((vm = usedVarsRe.exec(callbackBody)) !== null) {
+      if (!skipKeywords.has(vm[1]) && vm[1].length > 1) usedVars.add(vm[1]);
+    }
+    const missing = [...usedVars].filter(v => !deps.includes(v) && /^[a-z]/.test(v)).slice(0, 5);
+    if (missing.length) missingDepsCount++;
+    hooks.push({ hookKind, line: ln, deps, missing });
+  }
+  return { file, hooks, missingDepsCount };
+}
+
+/** Find CSS overflow issues. */
+function inspectOverflow(content: string, file: string): OverflowInfo {
+  const lines = content.split('\n');
+  const issues: OverflowIssue[] = [];
+  const hasHeightRe = /\b(?:h-|max-h-|height)\b/;
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    const ln = i + 1;
+    if (/\boverflow-hidden\b/.test(line) || /overflow\s*:\s*hidden/.test(line)) {
+      if (!hasHeightRe.test(line)) {
+        issues.push({ line: ln, kind: 'hidden_clip', snippet: line.trim().slice(0, 80) });
+      }
+    } else if (/\b(?:overflow-(?:scroll|auto|y-scroll|y-auto|x-scroll|x-auto))\b/.test(line) || /overflow(?:-y|-x)?\s*:\s*(?:scroll|auto)/.test(line)) {
+      if (!hasHeightRe.test(line)) {
+        issues.push({ line: ln, kind: 'scroll_no_height', snippet: line.trim().slice(0, 80) });
+      }
+    }
+  }
+  return { file, issues, count: issues.length };
+}
+
+/** Analyze sizing strategy: fixed px, percentages, flex/grid, viewport units. */
+function inspectSizing(content: string, file: string): SizingInfo {
+  const lines = content.split('\n');
+  const items: SizingItem[] = [];
+  let hardcodedCount = 0;
+  const tailwindFixedRe = /\b(?:w|h|min-w|max-w|min-h|max-h)-(\d+)\b/g;
+  const tailwindPctRe = /\b(?:w|h)-(\d+\/\d+|full|screen)\b/g;
+  const tailwindFlexRe = /\bflex-(?:1|auto|none|initial|grow|shrink)\b/g;
+  const tailwindGridRe = /\bgrid-cols-\d+\b/g;
+  const tailwindVpRe = /\b(?:w|h)-(?:screen|lvh|svh|dvh)\b/g;
+  const cssPxRe = /(?:width|height|min-width|max-width|min-height|max-height)\s*:\s*(\d+)px/g;
+  const cssPctRe = /(?:width|height)\s*:\s*(\d+%)/g;
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    const ln = i + 1;
+    let m: RegExpExecArray | null;
+    tailwindFixedRe.lastIndex = 0;
+    while ((m = tailwindFixedRe.exec(line)) !== null) {
+      const val = parseInt(m[1]);
+      const flagged = val > 96;
+      if (flagged) hardcodedCount++;
+      items.push({ line: ln, kind: 'fixed_px', value: m[0], flagged });
+    }
+    tailwindPctRe.lastIndex = 0;
+    while ((m = tailwindPctRe.exec(line)) !== null) {
+      items.push({ line: ln, kind: 'percentage', value: m[0], flagged: false });
+    }
+    tailwindFlexRe.lastIndex = 0;
+    while ((m = tailwindFlexRe.exec(line)) !== null) {
+      items.push({ line: ln, kind: 'flex', value: m[0], flagged: false });
+    }
+    tailwindGridRe.lastIndex = 0;
+    while ((m = tailwindGridRe.exec(line)) !== null) {
+      items.push({ line: ln, kind: 'grid', value: m[0], flagged: false });
+    }
+    tailwindVpRe.lastIndex = 0;
+    while ((m = tailwindVpRe.exec(line)) !== null) {
+      items.push({ line: ln, kind: 'viewport', value: m[0], flagged: false });
+    }
+    cssPxRe.lastIndex = 0;
+    while ((m = cssPxRe.exec(line)) !== null) {
+      const flagged = parseInt(m[1]) > 200;
+      if (flagged) hardcodedCount++;
+      items.push({ line: ln, kind: 'fixed_px', value: m[0], flagged });
+    }
+    cssPctRe.lastIndex = 0;
+    while ((m = cssPctRe.exec(line)) !== null) {
+      items.push({ line: ln, kind: 'percentage', value: m[0], flagged: false });
+    }
+  }
+  return { file, items, hardcodedCount };
+}
+
+/** Z-index and stacking context analysis. */
+function inspectStacking(content: string, file: string): StackingInfo {
+  const lines = content.split('\n');
+  const zIndexItems: ZIndexItem[] = [];
+  const tailwindZRe = /-?z-(\d+|auto)\b/g;
+  const cssZRe = /z-index\s*:\s*(-?\d+)/g;
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    const ln = i + 1;
+    let m: RegExpExecArray | null;
+    tailwindZRe.lastIndex = 0;
+    while ((m = tailwindZRe.exec(line)) !== null) {
+      zIndexItems.push({ line: ln, value: m[0], context: line.trim().slice(0, 60) });
+    }
+    cssZRe.lastIndex = 0;
+    while ((m = cssZRe.exec(line)) !== null) {
+      zIndexItems.push({ line: ln, value: m[0], context: line.trim().slice(0, 60) });
+    }
+  }
+  const byValue = new Map<string, number[]>();
+  for (const item of zIndexItems) {
+    const existing = byValue.get(item.value) ?? [];
+    existing.push(item.line);
+    byValue.set(item.value, existing);
+  }
+  const potentialConflicts: Array<{ values: string[]; lines: number[] }> = [];
+  for (const [val, lineNums] of byValue) {
+    if (lineNums.length > 1) potentialConflicts.push({ values: [val], lines: lineNums });
+  }
+  return { file, zIndexItems, potentialConflicts };
+}
+
+/** Tailwind responsive breakpoint analysis. */
+function inspectResponsive(content: string, file: string): ResponsiveInfo {
+  const lines = content.split('\n');
+  const prefixes = ['sm', 'md', 'lg', 'xl', '2xl'] as const;
+  const breakpointMap = new Map<string, string[]>();
+  for (const p of prefixes) breakpointMap.set(p, []);
+  const re = /\b(sm|md|lg|xl|2xl):([-\w/[\]]+)/g;
+  for (const line of lines) {
+    re.lastIndex = 0;
+    let m: RegExpExecArray | null;
+    while ((m = re.exec(line)) !== null) {
+      const arr = breakpointMap.get(m[1])!;
+      arr.push(m[0]);
+    }
+  }
+  const breakpoints: BreakpointUsage[] = [];
+  for (const p of prefixes) {
+    const classes = breakpointMap.get(p)!;
+    if (classes.length) breakpoints.push({ prefix: p, count: classes.length, classes: [...new Set(classes)].slice(0, 20) });
+  }
+  return { file, breakpoints, hasMobileFirst: (breakpointMap.get('sm')?.length ?? 0) > 0 };
+}
+
+/** Event handling analysis. */
+function inspectEvents(content: string, file: string): EventsInfo {
+  const lines = content.split('\n');
+  const handlers: EventHandler[] = [];
+  const eventRe = /\bon(Click|Change|Submit|KeyDown|KeyUp|KeyPress|Focus|Blur|MouseEnter|MouseLeave|Input|Scroll|Resize)\s*[={]/gi;
+  const preventDefaultRe = /\.preventDefault\s*\(/;
+  const stopPropagationRe = /\.stopPropagation\s*\(/;
+  const delegationRe = /(?:document|window)\s*\.\s*addEventListener\s*\(/;
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    eventRe.lastIndex = 0;
+    let m: RegExpExecArray | null;
+    while ((m = eventRe.exec(line)) !== null) {
+      const ln = i + 1;
+      const ctx = lines.slice(Math.max(0, i - 1), Math.min(lines.length, i + 4)).join('\n');
+      handlers.push({
+        line: ln,
+        event: m[0].slice(0, -1).trim(),
+        hasPreventDefault: preventDefaultRe.test(ctx),
+        hasStopPropagation: stopPropagationRe.test(ctx),
+        isDelegated: delegationRe.test(line),
+      });
+    }
+  }
+  return { file, handlers, count: handlers.length };
+}
+
+/** Detect contradictory Tailwind classes. */
+function inspectTailwind(content: string, file: string): TailwindInfo {
+  const lines = content.split('\n');
+  const conflicts: TailwindConflict[] = [];
+  const conflictGroups: Array<{ pattern: RegExp; name: string }> = [
+    { pattern: /\bp-(\d+|px|py|\w+)\b/g, name: 'padding' },
+    { pattern: /\bm-(\d+|px|py|auto|\w+)\b/g, name: 'margin' },
+    { pattern: /\btext-(red|blue|green|yellow|purple|pink|gray|black|white|slate|zinc|neutral|stone|orange|amber|lime|emerald|teal|cyan|sky|violet|fuchsia|rose)-(\d+)\b/g, name: 'text-color' },
+    { pattern: /\bbg-(red|blue|green|yellow|purple|pink|gray|black|white|slate|zinc|neutral|stone|orange|amber|lime|emerald|teal|cyan|sky|violet|fuchsia|rose)-(\d+)?\b/g, name: 'background' },
+    { pattern: /\b(?:block|inline-block|inline|flex|inline-flex|grid|inline-grid|hidden|contents|flow-root|list-item)\b/g, name: 'display' },
+    { pattern: /\btext-(xs|sm|base|lg|xl|2xl|3xl|4xl|5xl|6xl|7xl|8xl|9xl)\b/g, name: 'font-size' },
+    { pattern: /\bfont-(thin|extralight|light|normal|medium|semibold|bold|extrabold|black)\b/g, name: 'font-weight' },
+    { pattern: /\bjustify-(start|end|center|between|around|evenly|stretch)\b/g, name: 'justify-content' },
+    { pattern: /\bitems-(start|end|center|baseline|stretch)\b/g, name: 'align-items' },
+    { pattern: /\bw-(\d+|\/\w+|full|screen|auto|min|max|fit)\b/g, name: 'width' },
+    { pattern: /\bh-(\d+|\/\w+|full|screen|auto|min|max|fit)\b/g, name: 'height' },
+  ];
+  const classNameRe = /className\s*=\s*["']([^"']+)["']/g;
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    let cm: RegExpExecArray | null;
+    classNameRe.lastIndex = 0;
+    while ((cm = classNameRe.exec(line)) !== null) {
+      const classStr = cm[1];
+      for (const { pattern, name } of conflictGroups) {
+        const found: string[] = [];
+        pattern.lastIndex = 0;
+        let mm: RegExpExecArray | null;
+        while ((mm = pattern.exec(classStr)) !== null) found.push(mm[0]);
+        if (found.length > 1) {
+          conflicts.push({ line: i + 1, classes: found, reason: `Multiple ${name} classes: ${found.join(', ')}` });
+        }
+      }
+    }
+  }
+  return { file, conflicts, count: conflicts.length };
+}
+
+/** Next.js 'use client'/'use server' directive analysis. */
+function inspectClientBoundary(content: string, file: string): ClientBoundaryInfo {
+  const lines = content.split('\n');
+  let directive: 'use client' | 'use server' | null = null;
+  const serverOnlyModules = ['server-only', 'next/headers', 'next-auth/server'];
+  const serverOnlyImports: string[] = [];
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+    if (trimmed === "'use client';" || trimmed === '"use client";' || trimmed === "'use client'" || trimmed === '"use client"') { directive = 'use client'; break; }
+    if (trimmed === "'use server';" || trimmed === '"use server";' || trimmed === "'use server'" || trimmed === '"use server"') { directive = 'use server'; break; }
+    break;
+  }
+  const importRe = /import\s+[\s\S]*?from\s+['"]([^'"]+)['"]/g;
+  let im: RegExpExecArray | null;
+  while ((im = importRe.exec(content)) !== null) {
+    if (serverOnlyModules.some(mod => im![1] === mod || im![1].startsWith(mod + '/'))) serverOnlyImports.push(im[1]);
+  }
+  return { file, directive, importsServerOnly: serverOnlyImports.length > 0, serverOnlyImports };
+}
+
+/** Error boundary coverage analysis. */
+function inspectErrorBoundary(content: string, file: string): ErrorBoundaryInfo {
+  const boundaryComponents: string[] = [];
+  const coveredRoutes: string[] = [];
+  const errorBoundaryRe = /(?:class\s+(\w*ErrorBoundary\w*)\s+extends|<(\w*ErrorBoundary\w*)|import\s+.*?(\w*ErrorBoundary\w*).*?from)/g;
+  let m: RegExpExecArray | null;
+  while ((m = errorBoundaryRe.exec(content)) !== null) {
+    const name = m[1] || m[2] || m[3];
+    if (name && !boundaryComponents.includes(name)) boundaryComponents.push(name);
+  }
+  if (/(?:^|[\/\\])error\.[jt]sx?$/.test(file)) boundaryComponents.push('error.tsx (Next.js App Router)');
+  const wrappedRouteRe = /<(?:\w*ErrorBoundary\w*)[^>]*>[\s\S]*?<\/(?:\w*ErrorBoundary\w*)>/g;
+  let wr: RegExpExecArray | null;
+  while ((wr = wrappedRouteRe.exec(content)) !== null) {
+    const routeMatch = /<(\w+)/.exec(wr[0].slice(wr[0].indexOf('>') + 1));
+    if (routeMatch && !coveredRoutes.includes(routeMatch[1])) coveredRoutes.push(routeMatch[1]);
+  }
+  return { file, hasErrorBoundary: boundaryComponents.length > 0, boundaryComponents, coveredRoutes };
+}
+
+// ---------------------------------------------------------------------------
 // Tool class
 // ---------------------------------------------------------------------------
 
@@ -622,6 +1171,8 @@ export class InspectTool implements Tool {
     name: 'inspect',
     description:
       'Inspect and analyze a project or file. Modes: project (structure), api (routes),'
+      + ' api_spec (generate OpenAPI 3.0 spec), api_validate (compare spec to code),'
+      + ' api_sync (detect frontend/backend drift),'
       + ' database (schema), components (React), layout (CSS/Tailwind),'
       + ' accessibility (a11y issues), scaffold (module skeleton generator).',
     parameters: INSPECT_TOOL_SCHEMA,
@@ -632,9 +1183,9 @@ export class InspectTool implements Tool {
       return { success: false, error: 'mode is required' };
     }
 
-    const input = args as InspectInput;
+    const input = args as unknown as InspectInput;
 
-    const VALID_MODES = ['project', 'api', 'database', 'components', 'layout', 'accessibility', 'scaffold'];
+    const VALID_MODES = ['project', 'api', 'api_spec', 'api_validate', 'api_sync', 'database', 'components', 'layout', 'accessibility', 'scaffold', 'component_state', 'render_triggers', 'hooks', 'overflow', 'sizing', 'stacking', 'responsive', 'events', 'tailwind', 'client_boundary', 'error_boundary'];
     if (!VALID_MODES.includes(input.mode)) {
       return { success: false, error: `Invalid mode: ${input.mode}. Valid modes: ${VALID_MODES.join(', ')}` };
     }
@@ -711,6 +1262,34 @@ export class InspectTool implements Tool {
           };
         }
 
+        case 'api_spec': {
+          const framework: ApiFramework = (input.framework ?? 'auto') as ApiFramework;
+          const routes = await inspectApi(projectRoot, framework);
+          const spec = generateApiSpec(routes);
+          return { success: true, output: JSON.stringify(spec, null, format === 'json' ? 2 : 0) };
+        }
+
+        case 'api_validate': {
+          if (!input.specPath) {
+            return { success: false, error: 'specPath is required for api_validate mode' };
+          }
+          const resolvedSpec = resolvePath(projectRoot, input.specPath);
+          if (!existsSync(resolvedSpec)) {
+            return { success: false, error: `Spec file not found at: ${resolvedSpec}` };
+          }
+          const specContent = safeRead(resolvedSpec);
+          const framework: ApiFramework = (input.framework ?? 'auto') as ApiFramework;
+          const routes = await inspectApi(projectRoot, framework);
+          const validationResult = validateApiSpec(specContent, routes);
+          return { success: true, output: JSON.stringify(validationResult, null, format === 'json' ? 2 : 0) };
+        }
+
+        case 'api_sync': {
+          const framework: ApiFramework = (input.framework ?? 'auto') as ApiFramework;
+          const syncResult = await inspectApiSync(projectRoot, framework);
+          return { success: true, output: JSON.stringify(syncResult, null, format === 'json' ? 2 : 0) };
+        }
+
         case 'scaffold': {
           if (!input.moduleName) {
             return { success: false, error: 'moduleName is required for scaffold mode' };
@@ -718,6 +1297,105 @@ export class InspectTool implements Tool {
           const dryRun = input.dryRun !== false; // default true
           const plan = buildScaffold(input.moduleName, projectRoot, dryRun);
           return { success: true, output: JSON.stringify(plan, null, format === 'json' ? 2 : 0) };
+        }
+
+        case 'component_state': {
+          if (!input.file) return { success: false, error: 'file is required for component_state mode' };
+          const filePath = resolvePath(projectRoot, input.file);
+          if (!existsSync(filePath)) return { success: false, error: `File not found: ${filePath}` };
+          const content = safeRead(filePath);
+          const result = inspectComponentState(content, input.file);
+          return { success: true, output: JSON.stringify(result, null, format === 'json' ? 2 : 0) };
+        }
+
+        case 'render_triggers': {
+          if (!input.file) return { success: false, error: 'file is required for render_triggers mode' };
+          const filePath = resolvePath(projectRoot, input.file);
+          if (!existsSync(filePath)) return { success: false, error: `File not found: ${filePath}` };
+          const content = safeRead(filePath);
+          const result = inspectRenderTriggers(content, input.file);
+          return { success: true, output: JSON.stringify(result, null, format === 'json' ? 2 : 0) };
+        }
+
+        case 'hooks': {
+          if (!input.file) return { success: false, error: 'file is required for hooks mode' };
+          const filePath = resolvePath(projectRoot, input.file);
+          if (!existsSync(filePath)) return { success: false, error: `File not found: ${filePath}` };
+          const content = safeRead(filePath);
+          const result = inspectHooks(content, input.file);
+          return { success: true, output: JSON.stringify(result, null, format === 'json' ? 2 : 0) };
+        }
+
+        case 'overflow': {
+          if (!input.file) return { success: false, error: 'file is required for overflow mode' };
+          const filePath = resolvePath(projectRoot, input.file);
+          if (!existsSync(filePath)) return { success: false, error: `File not found: ${filePath}` };
+          const content = safeRead(filePath);
+          const result = inspectOverflow(content, input.file);
+          return { success: true, output: JSON.stringify(result, null, format === 'json' ? 2 : 0) };
+        }
+
+        case 'sizing': {
+          if (!input.file) return { success: false, error: 'file is required for sizing mode' };
+          const filePath = resolvePath(projectRoot, input.file);
+          if (!existsSync(filePath)) return { success: false, error: `File not found: ${filePath}` };
+          const content = safeRead(filePath);
+          const result = inspectSizing(content, input.file);
+          return { success: true, output: JSON.stringify(result, null, format === 'json' ? 2 : 0) };
+        }
+
+        case 'stacking': {
+          if (!input.file) return { success: false, error: 'file is required for stacking mode' };
+          const filePath = resolvePath(projectRoot, input.file);
+          if (!existsSync(filePath)) return { success: false, error: `File not found: ${filePath}` };
+          const content = safeRead(filePath);
+          const result = inspectStacking(content, input.file);
+          return { success: true, output: JSON.stringify(result, null, format === 'json' ? 2 : 0) };
+        }
+
+        case 'responsive': {
+          if (!input.file) return { success: false, error: 'file is required for responsive mode' };
+          const filePath = resolvePath(projectRoot, input.file);
+          if (!existsSync(filePath)) return { success: false, error: `File not found: ${filePath}` };
+          const content = safeRead(filePath);
+          const result = inspectResponsive(content, input.file);
+          return { success: true, output: JSON.stringify(result, null, format === 'json' ? 2 : 0) };
+        }
+
+        case 'events': {
+          if (!input.file) return { success: false, error: 'file is required for events mode' };
+          const filePath = resolvePath(projectRoot, input.file);
+          if (!existsSync(filePath)) return { success: false, error: `File not found: ${filePath}` };
+          const content = safeRead(filePath);
+          const result = inspectEvents(content, input.file);
+          return { success: true, output: JSON.stringify(result, null, format === 'json' ? 2 : 0) };
+        }
+
+        case 'tailwind': {
+          if (!input.file) return { success: false, error: 'file is required for tailwind mode' };
+          const filePath = resolvePath(projectRoot, input.file);
+          if (!existsSync(filePath)) return { success: false, error: `File not found: ${filePath}` };
+          const content = safeRead(filePath);
+          const result = inspectTailwind(content, input.file);
+          return { success: true, output: JSON.stringify(result, null, format === 'json' ? 2 : 0) };
+        }
+
+        case 'client_boundary': {
+          if (!input.file) return { success: false, error: 'file is required for client_boundary mode' };
+          const filePath = resolvePath(projectRoot, input.file);
+          if (!existsSync(filePath)) return { success: false, error: `File not found: ${filePath}` };
+          const content = safeRead(filePath);
+          const result = inspectClientBoundary(content, input.file);
+          return { success: true, output: JSON.stringify(result, null, format === 'json' ? 2 : 0) };
+        }
+
+        case 'error_boundary': {
+          if (!input.file) return { success: false, error: 'file is required for error_boundary mode' };
+          const filePath = resolvePath(projectRoot, input.file);
+          if (!existsSync(filePath)) return { success: false, error: `File not found: ${filePath}` };
+          const content = safeRead(filePath);
+          const result = inspectErrorBoundary(content, input.file);
+          return { success: true, output: JSON.stringify(result, null, format === 'json' ? 2 : 0) };
         }
 
         default: {

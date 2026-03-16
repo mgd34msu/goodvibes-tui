@@ -245,10 +245,25 @@ describe('PermissionManager — config-driven modes', () => {
       cm.set('permissions.tools.file_write', original as any);
     });
 
-    test('DEFAULT_CONFIG has correct permission defaults', () => {
+    test('DEFAULT_CONFIG has correct permission defaults for new tool names', () => {
       // Read defaults directly from schema rather than from ConfigManager (avoids disk state)
       const { DEFAULT_CONFIG } = require('../../config/schema.ts');
       expect(DEFAULT_CONFIG.permissions.mode).toBe('prompt');
+      // New tool names
+      expect(DEFAULT_CONFIG.permissions.tools.read).toBe('allow');
+      expect(DEFAULT_CONFIG.permissions.tools.write).toBe('prompt');
+      expect(DEFAULT_CONFIG.permissions.tools.edit).toBe('prompt');
+      expect(DEFAULT_CONFIG.permissions.tools.exec).toBe('prompt');
+      expect(DEFAULT_CONFIG.permissions.tools.find).toBe('allow');
+      expect(DEFAULT_CONFIG.permissions.tools.fetch).toBe('prompt');
+      expect(DEFAULT_CONFIG.permissions.tools.analyze).toBe('allow');
+      expect(DEFAULT_CONFIG.permissions.tools.inspect).toBe('allow');
+      expect(DEFAULT_CONFIG.permissions.tools.agent).toBe('prompt');
+      expect(DEFAULT_CONFIG.permissions.tools.state).toBe('allow');
+      expect(DEFAULT_CONFIG.permissions.tools.workflow).toBe('prompt');
+      expect(DEFAULT_CONFIG.permissions.tools.registry).toBe('allow');
+      expect(DEFAULT_CONFIG.permissions.tools.delegate).toBe('prompt');
+      // Legacy tool names (backward compat)
       expect(DEFAULT_CONFIG.permissions.tools.file_read).toBe('allow');
       expect(DEFAULT_CONFIG.permissions.tools.file_write).toBe('prompt');
       expect(DEFAULT_CONFIG.permissions.tools.file_edit).toBe('prompt');
@@ -256,7 +271,142 @@ describe('PermissionManager — config-driven modes', () => {
       expect(DEFAULT_CONFIG.permissions.tools.grep).toBe('allow');
       expect(DEFAULT_CONFIG.permissions.tools.list_dir).toBe('allow');
       expect(DEFAULT_CONFIG.permissions.tools.glob).toBe('allow');
-      expect(DEFAULT_CONFIG.permissions.tools.delegate).toBe('prompt');
+    });
+  });
+
+  // ── new tool names config keys ───────────────────────────────────────────
+
+  describe('new tool name config keys', () => {
+    test('permissions.tools.read config key stores allow correctly', () => {
+      const cm = new ConfigManager();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      cm.set('permissions.tools.read', 'allow' as any);
+      expect(cm.get('permissions.tools.read')).toBe('allow');
+    });
+
+    test('permissions.tools.write config key stores deny correctly', () => {
+      const cm = new ConfigManager();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      cm.set('permissions.tools.write', 'deny' as any);
+      expect(cm.get('permissions.tools.write')).toBe('deny');
+    });
+
+    test('permissions.tools.edit config key stores prompt correctly', () => {
+      const cm = new ConfigManager();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      cm.set('permissions.tools.edit', 'prompt' as any);
+      expect(cm.get('permissions.tools.edit')).toBe('prompt');
+    });
+
+    test('permissions.tools.exec config key stores allow correctly', () => {
+      const cm = new ConfigManager();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      cm.set('permissions.tools.exec', 'allow' as any);
+      expect(cm.get('permissions.tools.exec')).toBe('allow');
+    });
+
+    test('permissions.tools.find config key stores allow correctly', () => {
+      const cm = new ConfigManager();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      cm.set('permissions.tools.find', 'allow' as any);
+      expect(cm.get('permissions.tools.find')).toBe('allow');
+    });
+
+    test('permissions.tools.fetch config key stores deny correctly', () => {
+      const cm = new ConfigManager();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      cm.set('permissions.tools.fetch', 'deny' as any);
+      expect(cm.get('permissions.tools.fetch')).toBe('deny');
+    });
+
+    test('permissions.tools.analyze config key stores allow correctly', () => {
+      const cm = new ConfigManager();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      cm.set('permissions.tools.analyze', 'allow' as any);
+      expect(cm.get('permissions.tools.analyze')).toBe('allow');
+    });
+
+    test('permissions.tools.inspect config key stores prompt correctly', () => {
+      const cm = new ConfigManager();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      cm.set('permissions.tools.inspect', 'prompt' as any);
+      expect(cm.get('permissions.tools.inspect')).toBe('prompt');
+    });
+
+    test('permissions.tools.agent config key stores deny correctly', () => {
+      const cm = new ConfigManager();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      cm.set('permissions.tools.agent', 'deny' as any);
+      expect(cm.get('permissions.tools.agent')).toBe('deny');
+    });
+
+    test('permissions.tools.state config key stores allow correctly', () => {
+      const cm = new ConfigManager();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      cm.set('permissions.tools.state', 'allow' as any);
+      expect(cm.get('permissions.tools.state')).toBe('allow');
+    });
+
+    test('permissions.tools.workflow config key stores prompt correctly', () => {
+      const cm = new ConfigManager();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      cm.set('permissions.tools.workflow', 'prompt' as any);
+      expect(cm.get('permissions.tools.workflow')).toBe('prompt');
+    });
+
+    test('permissions.tools.registry config key stores allow correctly', () => {
+      const cm = new ConfigManager();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      cm.set('permissions.tools.registry', 'allow' as any);
+      expect(cm.get('permissions.tools.registry')).toBe('allow');
+    });
+
+    test('custom mode respects exec=deny: blocks tool execution', async () => {
+      let eventFired = false;
+      bus.on('permission:request', ({ resolve }: { resolve: (v: boolean) => void }) => {
+        eventFired = true;
+        resolve(true);
+      });
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      configManager.set('permissions.mode', 'custom' as any);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      configManager.set('permissions.tools.exec', 'deny' as any);
+
+      const result = await manager.check('exec', { command: 'rm -rf /' });
+      expect(result).toBe(false);
+      expect(eventFired).toBe(false);
+    });
+
+    test('custom mode respects write=allow: auto-approves without prompt', async () => {
+      let eventFired = false;
+      bus.on('permission:request', ({ resolve }: { resolve: (v: boolean) => void }) => {
+        eventFired = true;
+        resolve(true);
+      });
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      configManager.set('permissions.mode', 'custom' as any);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      configManager.set('permissions.tools.write', 'allow' as any);
+
+      const result = await manager.check('write', { path: 'out.ts' });
+      expect(result).toBe(true);
+      expect(eventFired).toBe(false);
+    });
+
+    test('prompt mode auto-approves read tool', async () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      configManager.set('permissions.mode', 'prompt' as any);
+      const result = await manager.check('read', { path: 'src/index.ts' });
+      expect(result).toBe(true);
+    });
+
+    test('prompt mode auto-approves find tool', async () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      configManager.set('permissions.mode', 'prompt' as any);
+      const result = await manager.check('find', { pattern: 'foo' });
+      expect(result).toBe(true);
     });
   });
 });

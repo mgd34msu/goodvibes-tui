@@ -1,5 +1,5 @@
 import { describe, test, expect, beforeEach, afterEach } from 'bun:test';
-import { mkdtempSync, writeFileSync, existsSync, mkdirSync } from 'node:fs';
+import { mkdtempSync, writeFileSync, existsSync, mkdirSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { execTool, _resetProcessManager } from '../../tools/exec/index.ts';
@@ -607,5 +607,162 @@ describe('exec tool — env vars', () => {
     expect(result.success).toBe(true);
     const out = parseOutput(result.output);
     expect((out.stdout as string).trim()).toBe('custom_value_xyz');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 18. fail_fast / stop_on_error
+// ---------------------------------------------------------------------------
+
+describe('exec tool — fail_fast', () => {
+  test('fail_fast: stops on first failure and marks remaining as skipped', async () => {
+    const result = await execTool.execute({
+      commands: [
+        { cmd: 'echo first' },
+        { cmd: 'false' },
+        { cmd: 'echo should_be_skipped' },
+        { cmd: 'echo also_skipped' },
+      ],
+      fail_fast: true,
+    });
+    expect(result.success).toBe(false);
+    const out = parseOutput(result.output);
+    const cmds = out.commands as Array<Record<string, unknown>>;
+    expect(cmds).toHaveLength(4);
+    // First command succeeded
+    expect(cmds[0].success).toBe(true);
+    expect((cmds[0].stdout as string).trim()).toBe('first');
+    // Second command failed
+    expect(cmds[1].success).toBe(false);
+    expect(cmds[1].skipped).toBeUndefined();
+    // Third and fourth are skipped
+    expect(cmds[2].skipped).toBe(true);
+    expect(cmds[2].success).toBe(false);
+    expect(cmds[3].skipped).toBe(true);
+  });
+
+  test('stop_on_error alias: behaves same as fail_fast', async () => {
+    const result = await execTool.execute({
+      commands: [
+        { cmd: 'false' },
+        { cmd: 'echo should_skip' },
+      ],
+      stop_on_error: true,
+    });
+    expect(result.success).toBe(false);
+    const out = parseOutput(result.output);
+    const cmds = out.commands as Array<Record<string, unknown>>;
+    expect(cmds[1].skipped).toBe(true);
+  });
+
+  test('fail_fast: false runs all commands despite failures (default behavior)', async () => {
+    const result = await execTool.execute({
+      commands: [
+        { cmd: 'echo first' },
+        { cmd: 'false' },
+        { cmd: 'echo after_failure' },
+      ],
+      fail_fast: false,
+    });
+    expect(result.success).toBe(false);
+    const out = parseOutput(result.output);
+    const cmds = out.commands as Array<Record<string, unknown>>;
+    // All three commands ran
+    expect(cmds).toHaveLength(3);
+    expect(cmds[2].skipped).toBeUndefined();
+    expect((cmds[2].stdout as string).trim()).toBe('after_failure');
+  });
+
+  test('fail_fast: default (false) runs all commands without skipping', async () => {
+    const result = await execTool.execute({
+      commands: [
+        { cmd: 'false' },
+        { cmd: 'echo ran_anyway' },
+      ],
+    });
+    const out = parseOutput(result.output);
+    const cmds = out.commands as Array<Record<string, unknown>>;
+    expect(cmds[1].skipped).toBeUndefined();
+    expect((cmds[1].stdout as string).trim()).toBe('ran_anyway');
+  });
+
+  test('fail_fast with expectation error triggers skip', async () => {
+    const result = await execTool.execute({
+      commands: [
+        { cmd: 'true', expect: { exit_code: 1 } }, // expectation fails
+        { cmd: 'echo should_skip' },
+      ],
+      fail_fast: true,
+    });
+    expect(result.success).toBe(false);
+    const out = parseOutput(result.output);
+    const cmds = out.commands as Array<Record<string, unknown>>;
+    expect(cmds[0].expectation_error).toBeDefined();
+    expect(cmds[1].skipped).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 19. Progress tracking
+// ---------------------------------------------------------------------------
+
+describe('exec tool — progress tracking', () => {
+  test('progress: true adds progress_file to result', async () => {
+    const result = await execTool.execute({
+      commands: [{
+        cmd: 'echo progress_line_1 && echo progress_line_2',
+        progress: true,
+      }],
+    });
+    expect(result.success).toBe(true);
+    const out = parseOutput(result.output);
+    expect(typeof out.progress_file).toBe('string');
+    expect((out.progress_file as string)).toContain('-progress.txt');
+  });
+
+  test('progress file contains stdout output', async () => {
+    const result = await execTool.execute({
+      commands: [{
+        cmd: 'printf "line_a\nline_b\nline_c\n"',
+        progress: true,
+      }],
+    });
+    expect(result.success).toBe(true);
+    const out = parseOutput(result.output);
+    const progressFilePath = out.progress_file as string;
+    expect(existsSync(progressFilePath)).toBe(true);
+    const progressContent = readFileSync(progressFilePath, 'utf-8');
+    expect(progressContent).toContain('line_a');
+    expect(progressContent).toContain('line_b');
+    expect(progressContent).toContain('line_c');
+  });
+
+  test('progress auto-enabled for timeout_ms > 30000', async () => {
+    const result = await execTool.execute({
+      commands: [{
+        cmd: 'echo auto_progress',
+        timeout_ms: 31000,
+      }],
+    });
+    expect(result.success).toBe(true);
+    const out = parseOutput(result.output);
+    // Should have progress_file automatically
+    expect(typeof out.progress_file).toBe('string');
+  }, 35000);
+
+  test('progress_file included in batch results', async () => {
+    const result = await execTool.execute({
+      commands: [
+        { cmd: 'echo batch_a', progress: true },
+        { cmd: 'echo batch_b', progress: true },
+      ],
+    });
+    expect(result.success).toBe(true);
+    const out = parseOutput(result.output);
+    const cmds = out.commands as Array<Record<string, unknown>>;
+    expect(typeof cmds[0].progress_file).toBe('string');
+    expect(typeof cmds[1].progress_file).toBe('string');
+    // Each command gets its own progress file
+    expect(cmds[0].progress_file).not.toBe(cmds[1].progress_file);
   });
 });

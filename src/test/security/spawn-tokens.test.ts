@@ -252,6 +252,57 @@ describe('revoke', () => {
 });
 
 // ---------------------------------------------------------------------------
+// Token expiry
+// ---------------------------------------------------------------------------
+
+describe('token expiry', () => {
+  test('orchestrator token has expiresAt in the future', () => {
+    const manager = SpawnTokenManager.getInstance('sess-exp-001');
+    const before = Date.now();
+    const token = manager.createOrchestratorToken();
+    expect(token.expiresAt).toBeGreaterThan(before);
+  });
+
+  test('agent token has expiresAt in the future', () => {
+    const manager = SpawnTokenManager.getInstance('sess-exp-002');
+    const orchestrator = manager.createOrchestratorToken();
+    const agentToken = manager.generateAgentToken(orchestrator, 'agent-exp-001')!;
+    expect(agentToken.expiresAt).toBeGreaterThan(Date.now());
+  });
+
+  test('expired orchestrator token fails validate', () => {
+    const manager = SpawnTokenManager.getInstance('sess-exp-003');
+    const token = manager.createOrchestratorToken(/* ttlMs= */ -1);
+    const result = manager.validate(token);
+    expect(result.valid).toBe(false);
+    expect(result.reason).toContain('expired');
+  });
+
+  test('expired token prevents generateAgentToken', () => {
+    const manager = SpawnTokenManager.getInstance('sess-exp-004');
+    const expired = manager.createOrchestratorToken(/* ttlMs= */ -1);
+    const result = manager.generateAgentToken(expired, 'agent-x');
+    expect(result).toBeNull();
+  });
+
+  test('expiresAt is included in HMAC signature (tampered expiresAt rejected)', () => {
+    const manager = SpawnTokenManager.getInstance('sess-exp-005');
+    const token = manager.createOrchestratorToken();
+    // Move expiresAt far into future — signature should no longer match
+    const tampered: SpawnToken = { ...token, expiresAt: token.expiresAt + 999_999_999 };
+    const result = manager.validate(tampered);
+    expect(result.valid).toBe(false);
+  });
+
+  test('non-expired token validates successfully', () => {
+    const manager = SpawnTokenManager.getInstance('sess-exp-006');
+    const token = manager.createOrchestratorToken(3_600_000);
+    const result = manager.validate(token);
+    expect(result.valid).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Token type correctness
 // ---------------------------------------------------------------------------
 

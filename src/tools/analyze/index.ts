@@ -4,6 +4,8 @@ import { existsSync } from 'node:fs';
 import type { Tool } from '../../types/tools.ts';
 import { analyzeSchema } from './schema.ts';
 import { CodeIntelligence } from '../../intelligence/facade.ts';
+import { GitService } from '../../git/service.ts';
+import { toolLLM } from '../../config/tool-llm.ts';
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
@@ -18,7 +20,13 @@ export interface AnalyzeInput {
     | 'bundle'
     | 'preview'
     | 'diff'
-    | 'surface';
+    | 'surface'
+    | 'breaking'
+    | 'semantic_diff'
+    | 'upgrade'
+    | 'permissions'
+    | 'env_audit'
+    | 'test_find';
   files?: string[];
   projectRoot?: string;
   changes?: string;
@@ -29,6 +37,7 @@ export interface AnalyzeInput {
   find?: string;
   replace?: string;
   include?: string[];
+  packages?: string[];
   output?: {
     format?: 'summary' | 'detailed' | 'json';
     max_tokens?: number;
@@ -868,6 +877,42 @@ function generateUnifiedDiff(filename: string, before: string, after: string): s
 }
 
 // ---------------------------------------------------------------------------
+// Shared git helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * Validate that both git refs are safe (no shell injection).
+ * Returns an error object if either ref is invalid, otherwise null.
+ */
+function validateGitRefs(
+  before: string,
+  after: string,
+): { error: string; before: string; after: string } | null {
+  const safeRefPattern = /^[a-zA-Z0-9_.\-~/^@{}:]+$/;
+  if (!safeRefPattern.test(before) || !safeRefPattern.test(after)) {
+    return { error: 'Invalid git ref format', before, after };
+  }
+  return null;
+}
+
+/**
+ * Truncate a git diff string at the last clean hunk or file boundary before
+ * `maxChars`, and append a note indicating how many bytes were omitted.
+ * Returns the original string unchanged if it fits within `maxChars`.
+ */
+function truncateDiffAtBoundary(diff: string, maxChars: number): string {
+  if (diff.length <= maxChars) return diff;
+
+  const window = diff.slice(0, maxChars);
+  // Prefer cutting at a file boundary
+  const fileIdx = window.lastIndexOf('\ndiff --git');
+  const hunkIdx = window.lastIndexOf('\n@@');
+  const cutAt = fileIdx >= 0 ? fileIdx : hunkIdx >= 0 ? hunkIdx : maxChars;
+  const omitted = diff.length - cutAt;
+  return diff.slice(0, cutAt) + `\n[...truncated, ${omitted} additional bytes omitted]`;
+}
+
+// ---------------------------------------------------------------------------
 // Mode: diff
 // ---------------------------------------------------------------------------
 
@@ -878,36 +923,27 @@ async function runDiff(
   const before = input.before ?? 'HEAD~1';
   const after = input.after ?? 'HEAD';
 
-  // Validate ref format to prevent argument injection (allow alphanumeric, dots, slashes, dashes, tildes, carets)
-  const safeRefPattern = /^[a-zA-Z0-9_.\-~/^@{}:]+$/;
-  if (!safeRefPattern.test(before) || !safeRefPattern.test(after)) {
-    return { error: 'Invalid git ref format', before, after };
+  const refError = validateGitRefs(before, after);
+  if (refError) return refError;
+
+  const git = GitService.getInstance(projectRoot);
+
+  let statOutput: string;
+  try {
+    statOutput = await git.diffStat(before, after);
+  } catch (err) {
+    return { error: `git diff failed: ${err instanceof Error ? err.message : String(err)}`, before, after };
   }
 
-  const proc = Bun.spawn(
-    ['git', 'diff', '--stat', before, after],
-    { cwd: projectRoot, stdout: 'pipe', stderr: 'pipe' },
-  );
-
-  const stdout = await new Response(proc.stdout).text();
-  const stderr = await new Response(proc.stderr).text();
-  const exitCode = await proc.exited;
-
-  if (exitCode !== 0) {
-    return { error: `git diff failed: ${stderr.trim()}`, before, after };
+  let fullDiff: string;
+  try {
+    fullDiff = await git.diffBetween(before, after, input.files);
+  } catch {
+    fullDiff = '';
   }
-
-  // Also get the full diff
-  const fullProc = Bun.spawn(
-    ['git', 'diff', '--', before, after, '--', ...(input.files ?? [])],
-    { cwd: projectRoot, stdout: 'pipe', stderr: 'pipe' },
-  );
-
-  const fullDiff = await new Response(fullProc.stdout).text();
-  await fullProc.exited;
 
   // Parse stat output into structured form
-  const statLines = stdout.trim().split('\n');
+  const statLines = statOutput.trim().split('\n');
   const files: Array<{ file: string; insertions: number; deletions: number }> = [];
 
   for (const line of statLines) {
@@ -923,7 +959,567 @@ async function runDiff(
     }
   }
 
-  return { before, after, stat: stdout.trim(), files, diff: fullDiff.slice(0, 10000) };
+  return { before, after, stat: statOutput.trim(), files, diff: fullDiff.slice(0, 10000) };
+}
+
+// ---------------------------------------------------------------------------
+// Mode: breaking
+// ---------------------------------------------------------------------------
+
+/**
+ * Extract exported function/class signatures from a diff hunk.
+ * Returns a map of name -> signature string for changed items.
+ *
+ * Handles multiline signatures by accumulating continuation lines
+ * (lines that start with the same diff marker and do not start a new
+ * declaration) until a `{` or `;` terminator is reached.
+ */
+function extractSignaturesFromDiff(diff: string): {
+  before: Map<string, string>;
+  after: Map<string, string>;
+} {
+  const before = new Map<string, string>();
+  const after = new Map<string, string>();
+
+  const lines = diff.split('\n');
+
+  // Pattern for the opening line of an exported declaration
+  const exportLinePattern =
+    /^([+-])\s*export\s+(?:(?:async|default|declare)\s+)*(?:function\*?|class|const|let|var|type|interface|enum)\s+(\w+)(.*)/;
+
+  for (let i = 0; i < lines.length; i++) {
+    const m = lines[i].match(exportLinePattern);
+    if (!m) continue;
+
+    const marker = m[1] as '-' | '+';
+    const name = m[2];
+    let rest = m[3];
+
+    // Accumulate continuation lines until we hit a `{` or `;` terminator
+    if (!rest.includes('{') && !rest.includes(';')) {
+      for (let j = i + 1; j < lines.length; j++) {
+        const contLine = lines[j];
+        // Must start with the same diff marker (or a space for context lines)
+        if (!contLine.startsWith(marker) && !contLine.startsWith(' ')) break;
+        const stripped = contLine.startsWith(marker)
+          ? contLine.slice(1)
+          : contLine.slice(1);
+        rest += ' ' + stripped.trim();
+        if (stripped.includes('{') || stripped.includes(';')) break;
+      }
+    }
+
+    // Strip body content after `{` — we only want the signature
+    const braceIdx = rest.indexOf('{');
+    const sig = `${name}${braceIdx >= 0 ? rest.slice(0, braceIdx).trimEnd() : rest.replace(/;.*$/, '').trimEnd()}`;
+
+    if (marker === '-') {
+      before.set(name, sig);
+    } else {
+      after.set(name, sig);
+    }
+  }
+
+  return { before, after };
+}
+
+async function runBreaking(
+  input: AnalyzeInput,
+  projectRoot: string,
+): Promise<Record<string, unknown>> {
+  const before = input.before ?? 'HEAD~1';
+  const after = input.after ?? 'HEAD';
+
+  const refError = validateGitRefs(before, after);
+  if (refError) return refError;
+
+  const git = GitService.getInstance(projectRoot);
+
+  let fullDiff: string;
+  try {
+    fullDiff = await git.diffBetween(before, after, input.files);
+  } catch (err) {
+    return { error: `git diff failed: ${err instanceof Error ? err.message : String(err)}`, before, after };
+  }
+
+  const { before: beforeSigs, after: afterSigs } = extractSignaturesFromDiff(fullDiff);
+
+  const breaking_changes: Array<{ name: string; before: string; after: string; reason: string }> = [];
+  const additions: Array<{ name: string; signature: string }> = [];
+  const safe_modifications: Array<{ name: string; before: string; after: string }> = [];
+
+  // Names removed from exports = breaking
+  for (const [name, sig] of beforeSigs) {
+    if (!afterSigs.has(name)) {
+      breaking_changes.push({
+        name,
+        before: sig,
+        after: '(removed)',
+        reason: 'export removed',
+      });
+    } else {
+      const newSig = afterSigs.get(name)!;
+      if (sig !== newSig) {
+        // Signature changed — treat as breaking (caller must update)
+        breaking_changes.push({
+          name,
+          before: sig,
+          after: newSig,
+          reason: 'signature changed',
+        });
+      } else {
+        safe_modifications.push({ name, before: sig, after: newSig });
+      }
+    }
+  }
+
+  // Names only in after = additions (non-breaking)
+  for (const [name, sig] of afterSigs) {
+    if (!beforeSigs.has(name)) {
+      additions.push({ name, signature: sig });
+    }
+  }
+
+  return {
+    before,
+    after,
+    breaking_changes,
+    additions,
+    safe_modifications,
+    total_breaking: breaking_changes.length,
+    total_additions: additions.length,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Mode: semantic_diff
+// ---------------------------------------------------------------------------
+
+async function runSemanticDiff(
+  input: AnalyzeInput,
+  projectRoot: string,
+): Promise<Record<string, unknown>> {
+  const before = input.before ?? 'HEAD~1';
+  const after = input.after ?? 'HEAD';
+
+  const refError = validateGitRefs(before, after);
+  if (refError) return refError;
+
+  const git = GitService.getInstance(projectRoot);
+
+  let fullDiff: string;
+  let statOutput: string;
+  try {
+    fullDiff = await git.diffBetween(before, after, input.files);
+    statOutput = await git.diffStat(before, after);
+  } catch (err) {
+    return { error: `git diff failed: ${err instanceof Error ? err.message : String(err)}`, before, after };
+  }
+
+  // Parse changed files for impact analysis
+  const changedFiles: string[] = [];
+  for (const line of statOutput.trim().split('\n')) {
+    const m = line.match(/^\s*(.+?)\s+\|/);
+    if (m) changedFiles.push(m[1].trim());
+  }
+
+  // Build LLM prompt with diff context
+  const truncatedDiff = truncateDiffAtBoundary(fullDiff, 6000);
+  const prompt =
+    `You are a code reviewer. Analyze the following git diff and provide:
+1. A concise summary of what changed and why (2-4 sentences)
+2. Impact analysis: list the downstream functions/modules/callers that may be affected
+3. Risk level: low (pure additions/docs), medium (refactors, optional param changes), or high (API removals, signature changes, behavior changes)
+
+Respond in JSON with fields: summary (string), impact (array of strings), risk ("low"|"medium"|"high")
+
+Diff (${before}..${after}):
+${truncatedDiff}`;
+
+  const llmResponse = await toolLLM.chat(prompt, { maxTokens: 512 });
+
+  // Parse LLM JSON response, with fallback for unparseable responses
+  let summary = 'LLM unavailable — diff available in raw_diff field.';
+  let impact: string[] = changedFiles.map((f) => `Changed file: ${f}`);
+  let risk: 'low' | 'medium' | 'high' = 'medium';
+
+  if (llmResponse) {
+    try {
+      // Strip markdown code fences if present
+      const cleaned = llmResponse.replace(/^```(?:json)?\s*/m, '').replace(/\s*```$/m, '').trim();
+      const parsed = JSON.parse(cleaned) as {
+        summary?: string;
+        impact?: unknown[];
+        risk?: string;
+      };
+      if (typeof parsed.summary === 'string') summary = parsed.summary;
+      if (Array.isArray(parsed.impact)) {
+        impact = parsed.impact.map((i) => String(i));
+      }
+      if (parsed.risk === 'low' || parsed.risk === 'medium' || parsed.risk === 'high') {
+        risk = parsed.risk;
+      }
+    } catch {
+      // LLM returned non-JSON prose — use raw as summary
+      summary = llmResponse.slice(0, 500);
+    }
+  }
+
+  return {
+    before,
+    after,
+    summary,
+    impact,
+    risk,
+    changed_files: changedFiles,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Mode: upgrade
+// ---------------------------------------------------------------------------
+
+/** Parse a semver string like "1.2.3" or "^1.2.3" into [major, minor, patch]. */
+function parseSemver(version: string): [number, number, number] {
+  const clean = version.replace(/^[^0-9]*/, '');
+  const parts = clean.split('.').map((p) => parseInt(p, 10) || 0);
+  return [parts[0] ?? 0, parts[1] ?? 0, parts[2] ?? 0];
+}
+
+/** Returns true if upgrading from `current` to `latest` is a breaking (major) bump. */
+function isBreakingUpgrade(current: string, latest: string): boolean {
+  const [currentMajor] = parseSemver(current);
+  const [latestMajor] = parseSemver(latest);
+  // 0.x.y -> 0.z.y is treated as potentially breaking (semver pre-1.0 convention)
+  if (currentMajor === 0 && latestMajor === 0) {
+    const [, currentMinor] = parseSemver(current);
+    const [, latestMinor] = parseSemver(latest);
+    return latestMinor > currentMinor;
+  }
+  return latestMajor > currentMajor;
+}
+
+async function runUpgrade(
+  input: AnalyzeInput,
+  projectRoot: string,
+): Promise<Record<string, unknown>> {
+  // Determine package list: use input.packages[] or read from package.json
+  let packageNames: string[];
+
+  if (input.packages && input.packages.length > 0) {
+    packageNames = input.packages;
+  } else {
+    // Read package.json from projectRoot
+    const pkgPath = join(projectRoot, 'package.json');
+    if (!existsSync(pkgPath)) {
+      return { error: 'No package.json found and no packages specified', projectRoot };
+    }
+    let pkgJson: Record<string, unknown>;
+    try {
+      pkgJson = await Bun.file(pkgPath).json();
+    } catch {
+      return { error: 'Failed to parse package.json' };
+    }
+    const deps = {
+      ...((pkgJson.dependencies as Record<string, string>) ?? {}),
+      ...((pkgJson.devDependencies as Record<string, string>) ?? {}),
+    };
+    packageNames = Object.keys(deps);
+    if (packageNames.length === 0) {
+      return { packages: [], total: 0, outdated: 0, breaking: 0 };
+    }
+  }
+
+  // Build a map of current versions from package.json (if available)
+  const currentVersions: Record<string, string> = {};
+  const pkgPath = join(projectRoot, 'package.json');
+  if (existsSync(pkgPath)) {
+    try {
+      const pkgJson = await Bun.file(pkgPath).json() as Record<string, unknown>;
+      const allDeps = {
+        ...((pkgJson.dependencies as Record<string, string>) ?? {}),
+        ...((pkgJson.devDependencies as Record<string, string>) ?? {}),
+      };
+      for (const [name, ver] of Object.entries(allDeps)) {
+        currentVersions[name] = ver;
+      }
+    } catch {
+      // Ignore parse errors
+    }
+  }
+
+  // Fetch latest versions from npm registry in parallel (cap at 20 to avoid flooding)
+  const BATCH_SIZE = 20;
+  const batch = packageNames.slice(0, BATCH_SIZE);
+  const results: Array<{ name: string; current: string; latest: string; breaking: boolean }> = [];
+
+  await Promise.all(
+    batch.map(async (name) => {
+      const current = currentVersions[name] ?? 'unknown';
+      try {
+        const res = await fetch(`https://registry.npmjs.org/${encodeURIComponent(name)}/latest`, {
+          signal: AbortSignal.timeout(8000),
+          headers: { Accept: 'application/json' },
+        });
+        if (!res.ok) {
+          results.push({ name, current, latest: 'unknown', breaking: false });
+          return;
+        }
+        const data = await res.json() as { version?: string };
+        const latest = data.version ?? 'unknown';
+        const breaking = current !== 'unknown' && latest !== 'unknown'
+          ? isBreakingUpgrade(current, latest)
+          : false;
+        results.push({ name, current, latest, breaking });
+      } catch {
+        results.push({ name, current, latest: 'fetch_failed', breaking: false });
+      }
+    }),
+  );
+
+  // Sort: breaking first, then by name
+  results.sort((a, b) => {
+    if (a.breaking !== b.breaking) return a.breaking ? -1 : 1;
+    return a.name.localeCompare(b.name);
+  });
+
+  return {
+    packages: results,
+    total: results.length,
+    outdated: results.filter((r) => r.latest !== 'unknown' && r.latest !== r.current && r.latest !== 'fetch_failed').length,
+    breaking: results.filter((r) => r.breaking).length,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Mode: permissions
+// ---------------------------------------------------------------------------
+
+const DANGEROUS_PATTERNS: Array<{ name: string; regex: RegExp; severity: 'high' | 'medium' | 'low' }> = [
+  { name: 'eval', regex: /\beval\s*\(/, severity: 'high' },
+  { name: 'new_Function', regex: /\bnew\s+Function\s*\(/, severity: 'high' },
+  { name: 'child_process_exec', regex: /\bexec\s*\(|\bexecSync\s*\(|\bspawn\s*\(/, severity: 'high' },
+  { name: 'fs_chmod_777', regex: /chmod\s*\([^)]*0?777/, severity: 'high' },
+  { name: 'dangerouslySetInnerHTML', regex: /dangerouslySetInnerHTML/, severity: 'medium' },
+  { name: 'document_write', regex: /\bdocument\.write\s*\(/, severity: 'medium' },
+  { name: 'innerHTML_assign', regex: /\.innerHTML\s*=(?!=)/, severity: 'medium' },
+  { name: 'unsafe_regex', regex: /new\s+RegExp\s*\(\s*[^"'`]/, severity: 'low' },
+];
+
+async function runPermissions(
+  input: AnalyzeInput,
+  projectRoot: string,
+): Promise<Record<string, unknown>> {
+  const scanRoot =
+    input.files && input.files.length > 0
+      ? resolve(projectRoot, input.files[0])
+      : projectRoot;
+
+  const deadline = Date.now() + MAX_SCAN_MS;
+  const files = await collectTextFiles(scanRoot, MAX_SCAN_FILES, deadline);
+
+  const findings: Array<{ file: string; line: number; pattern: string; severity: string; match: string }> = [];
+
+  for (const file of files) {
+    if (Date.now() > deadline) break;
+    let content: string;
+    try {
+      content = await Bun.file(file).text();
+    } catch {
+      continue;
+    }
+
+    const lines = content.split('\n');
+    for (let i = 0; i < lines.length; i++) {
+      for (const { name, regex, severity } of DANGEROUS_PATTERNS) {
+        const m = lines[i].match(regex);
+        if (m) {
+          findings.push({
+            file: relative(projectRoot, file),
+            line: i + 1,
+            pattern: name,
+            severity,
+            match: lines[i].trim().slice(0, 100),
+          });
+        }
+      }
+    }
+  }
+
+  const byFile: Record<string, number> = {};
+  for (const f of findings) {
+    byFile[f.file] = (byFile[f.file] ?? 0) + 1;
+  }
+
+  return {
+    findings,
+    total: findings.length,
+    files_affected: Object.keys(byFile).length,
+    by_severity: {
+      high: findings.filter((f) => f.severity === 'high').length,
+      medium: findings.filter((f) => f.severity === 'medium').length,
+      low: findings.filter((f) => f.severity === 'low').length,
+    },
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Mode: env_audit
+// ---------------------------------------------------------------------------
+
+/** Parse a .env-style file into a set of key names. */
+function parseEnvKeys(content: string): Set<string> {
+  const keys = new Set<string>();
+  for (const line of content.split('\n')) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith('#')) continue;
+    const eqIdx = trimmed.indexOf('=');
+    if (eqIdx > 0) {
+      keys.add(trimmed.slice(0, eqIdx).trim());
+    }
+  }
+  return keys;
+}
+
+async function runEnvAudit(
+  _input: AnalyzeInput,
+  projectRoot: string,
+): Promise<Record<string, unknown>> {
+  const ENV_FILENAMES = ['.env', '.env.example', '.env.local', '.env.production', '.env.development', '.env.test'];
+
+  const found: Array<{ name: string; keys: string[] }> = [];
+
+  for (const name of ENV_FILENAMES) {
+    const p = join(projectRoot, name);
+    if (!existsSync(p)) continue;
+    try {
+      const content = await Bun.file(p).text();
+      const keys = Array.from(parseEnvKeys(content)).sort();
+      found.push({ name, keys });
+    } catch {
+      continue;
+    }
+  }
+
+  if (found.length === 0) {
+    return { files: [], missing: [], extra: [], message: 'No .env files found' };
+  }
+
+  // Use .env.example (or first file) as the reference set
+  const reference = found.find((f) => f.name === '.env.example') ?? found[0];
+  const referenceKeys = new Set(reference!.keys);
+
+  const missing: Array<{ key: string; present_in: string; missing_from: string[] }> = [];
+  const extra: Array<{ key: string; only_in: string }> = [];
+
+  for (const file of found) {
+    if (file.name === reference!.name) continue;
+    const fileKeys = new Set(file.keys);
+
+    // Keys in reference but not in this file
+    for (const key of referenceKeys) {
+      if (!fileKeys.has(key)) {
+        const existing = missing.find((m) => m.key === key);
+        if (existing) {
+          existing.missing_from.push(file.name);
+        } else {
+          missing.push({ key, present_in: reference!.name, missing_from: [file.name] });
+        }
+      }
+    }
+
+    // Keys in this file but not in reference
+    for (const key of fileKeys) {
+      if (!referenceKeys.has(key)) {
+        extra.push({ key, only_in: file.name });
+      }
+    }
+  }
+
+  return {
+    files: found.map((f) => ({ name: f.name, key_count: f.keys.length })),
+    reference: reference!.name,
+    missing,
+    extra,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Mode: test_find
+// ---------------------------------------------------------------------------
+
+/** Derive candidate test file paths for a given source file. */
+function testCandidates(sourceFile: string, projectRoot: string): string[] {
+  const rel = relative(projectRoot, resolve(projectRoot, sourceFile));
+  const candidates: string[] = [];
+
+  // Strip extension
+  const noExt = rel.replace(/\.[^.]+$/, '');
+  const basename = noExt.split('/').pop() ?? noExt;
+  const dir = noExt.split('/').slice(0, -1).join('/');
+
+  const extensions = ['.test.ts', '.test.tsx', '.test.js', '.spec.ts', '.spec.tsx', '.spec.js'];
+
+  for (const ext of extensions) {
+    // Same directory: src/foo.ts -> src/foo.test.ts
+    candidates.push(join(projectRoot, noExt + ext));
+    // __tests__ subdirectory: src/__tests__/foo.test.ts
+    if (dir) {
+      candidates.push(join(projectRoot, dir, '__tests__', basename + ext));
+    } else {
+      candidates.push(join(projectRoot, '__tests__', basename + ext));
+    }
+    // test/ at project root: test/foo.test.ts
+    candidates.push(join(projectRoot, 'test', noExt.replace('src/', '') + ext));
+    candidates.push(join(projectRoot, 'test', basename + ext));
+    // src/test/: mirrors src/ layout under src/test/
+    if (rel.startsWith('src/')) {
+      const withoutSrc = rel.replace(/^src\//, '').replace(/\.[^.]+$/, '');
+      candidates.push(join(projectRoot, 'src', 'test', withoutSrc + ext));
+    }
+  }
+
+  // Deduplicate while preserving order
+  return [...new Set(candidates)];
+}
+
+async function runTestFind(
+  input: AnalyzeInput,
+  projectRoot: string,
+): Promise<Record<string, unknown>> {
+  const sourceFiles = input.files ?? [];
+
+  if (sourceFiles.length === 0) {
+    return { error: 'test_find mode requires at least one file in files[]' };
+  }
+
+  const mappings: Array<{ source: string; test: string | null; exists: boolean; candidates_checked: number }> = [];
+
+  for (const srcFile of sourceFiles) {
+    const candidates = testCandidates(srcFile, projectRoot);
+    let foundTest: string | null = null;
+
+    for (const candidate of candidates) {
+      if (existsSync(candidate)) {
+        foundTest = relative(projectRoot, candidate);
+        break;
+      }
+    }
+
+    mappings.push({
+      source: srcFile,
+      test: foundTest,
+      exists: foundTest !== null,
+      candidates_checked: candidates.length,
+    });
+  }
+
+  return {
+    mappings,
+    total: mappings.length,
+    found: mappings.filter((m) => m.exists).length,
+    missing: mappings.filter((m) => !m.exists).length,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -974,6 +1570,24 @@ export const analyzeTool: Tool = {
           break;
         case 'diff':
           result = await runDiff(input, projectRoot);
+          break;
+        case 'breaking':
+          result = await runBreaking(input, projectRoot);
+          break;
+        case 'semantic_diff':
+          result = await runSemanticDiff(input, projectRoot);
+          break;
+        case 'upgrade':
+          result = await runUpgrade(input, projectRoot);
+          break;
+        case 'permissions':
+          result = await runPermissions(input, projectRoot);
+          break;
+        case 'env_audit':
+          result = await runEnvAudit(input, projectRoot);
+          break;
+        case 'test_find':
+          result = await runTestFind(input, projectRoot);
           break;
         default: {
           const exhaustive: never = input.mode;

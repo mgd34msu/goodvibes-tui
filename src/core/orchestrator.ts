@@ -3,14 +3,21 @@ import type { EventBus } from './event-bus.ts';
 import type { ToolRegistry } from '../tools/registry.ts';
 import type { ToolCall, ToolResult } from '../types/tools.ts';
 import { PermissionError, ProviderError, ToolError } from '../types/errors.ts';
+import type { HookEvent, HookResult } from '../hooks/types.ts';
 import { formatProviderError } from '../utils/error-display.ts';
 import { providerRegistry } from '../providers/registry.ts';
 import type { LLMProvider, StreamDelta, ContentPart } from '../providers/interface.ts';
 import { config, configManager } from '../config/index.ts';
 import { notifyCompletion } from '../utils/notify.ts';
+import { logger } from '../utils/logger.ts';
 import type { PermissionManager } from '../permissions/manager.ts';
 import type { AcpManager } from '../acp/manager.ts';
 import type { SubagentTask } from '../acp/protocol.ts';
+
+/** Minimal interface for hook dispatch — allows any compatible implementation */
+interface HookDispatcherLike {
+  fire(event: HookEvent): Promise<HookResult>;
+}
 
 const SPINNER_FRAMES = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
 
@@ -34,6 +41,9 @@ export class Orchestrator {
   /** Last token warning bracket (multiples of 10%) to avoid repeat warnings at same level. */
   private lastWarningBracket = 0;
 
+  /** Session ID for hook events — unique per Orchestrator instance */
+  private readonly sessionId = crypto.randomUUID();
+
   constructor(
     private bus: EventBus,
     private conversation: ConversationManager,
@@ -42,6 +52,7 @@ export class Orchestrator {
     private toolRegistry: ToolRegistry,
     private permissionManager: PermissionManager,
     private getSystemPrompt: () => string = () => '',
+    private hookDispatcher: HookDispatcherLike | null = null,
   ) {}
 
   /**
@@ -348,6 +359,37 @@ export class Orchestrator {
         args: call.arguments,
       });
 
+      // --- Pre hook ---
+      if (this.hookDispatcher) {
+        try {
+          const preEvent: HookEvent = {
+            path: `Pre:tool:${call.name}`,
+            phase: 'Pre',
+            category: 'tool',
+            specific: call.name,
+            sessionId: this.sessionId,
+            timestamp: Date.now(),
+            payload: { callId: call.id, tool: call.name, args: call.arguments },
+          };
+          const preResult = await this.hookDispatcher.fire(preEvent);
+          if (preResult.decision === 'deny') {
+            const deniedResult: ToolResult = {
+              callId: call.id,
+              success: false,
+              error: preResult.reason ?? `Tool '${call.name}' denied by hook`,
+            };
+            this.bus.emit('turn:tool-result', { callId: call.id, result: deniedResult });
+            results.push(deniedResult);
+            continue;
+          }
+        } catch (hookErr) {
+          logger.error('Orchestrator: Pre hook error', {
+            tool: call.name,
+            error: hookErr instanceof Error ? hookErr.message : String(hookErr),
+          });
+        }
+      }
+
       let result: ToolResult;
       try {
         result = await this.toolRegistry.execute(call.id, call.name, call.arguments);
@@ -363,6 +405,48 @@ export class Orchestrator {
           success: false,
           error: message,
         };
+
+        // --- Fail hook ---
+        if (this.hookDispatcher) {
+          try {
+            const failEvent: HookEvent = {
+              path: `Fail:tool:${call.name}`,
+              phase: 'Fail',
+              category: 'tool',
+              specific: call.name,
+              sessionId: this.sessionId,
+              timestamp: Date.now(),
+              payload: { callId: call.id, tool: call.name, error: message },
+            };
+            await this.hookDispatcher.fire(failEvent);
+          } catch (hookErr) {
+            logger.error('Orchestrator: Fail hook error', {
+              tool: call.name,
+              error: hookErr instanceof Error ? hookErr.message : String(hookErr),
+            });
+          }
+        }
+      }
+
+      // --- Post hook (only on success) ---
+      if (this.hookDispatcher && result.success === true) {
+        try {
+          const postEvent: HookEvent = {
+            path: `Post:tool:${call.name}`,
+            phase: 'Post',
+            category: 'tool',
+            specific: call.name,
+            sessionId: this.sessionId,
+            timestamp: Date.now(),
+            payload: { callId: call.id, tool: call.name, result },
+          };
+          await this.hookDispatcher.fire(postEvent);
+        } catch (hookErr) {
+          logger.error('Orchestrator: Post hook error', {
+            tool: call.name,
+            error: hookErr instanceof Error ? hookErr.message : String(hookErr),
+          });
+        }
       }
 
       this.bus.emit('turn:tool-result', { callId: call.id, result });

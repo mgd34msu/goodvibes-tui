@@ -68,22 +68,23 @@ describe('command runner', () => {
   });
 });
 
-describe('agent runner stub', () => {
-  test('returns ok:false with descriptive error', async () => {
+describe('agent runner', () => {
+  test('returns ok:false with error when prompt field is missing', async () => {
     const hook: HookDefinition = { match: '*:*:*', type: 'agent' };
     const result = await runAgent(hook, makeEvent());
     expect(result.ok).toBe(false);
     expect(result.error).toBeTruthy();
-    expect(result.error).toContain('not yet implemented');
+    expect(result.error).toContain('prompt');
   });
 });
 
-describe('prompt runner stub', () => {
-  test('returns ok:false with descriptive error', async () => {
+describe('prompt runner', () => {
+  test('returns ok:false when prompt field is missing', async () => {
+    // prompt runner requires hook.prompt template; missing template returns error
     const hook: HookDefinition = { match: '*:*:*', type: 'prompt' };
     const result = await runPrompt(hook, makeEvent());
     expect(result.ok).toBe(false);
     expect(result.error).toBeTruthy();
-    expect(result.error).toContain('not yet implemented');
+    expect(result.error).toContain('prompt');
   });
 });

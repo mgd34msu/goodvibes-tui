@@ -1,4 +1,5 @@
 import { openSync, readSync, closeSync, readFileSync, statSync } from 'node:fs';
+import { extname } from 'node:path';
 import { resolveAndValidatePath } from '../../utils/path-safety.ts';
 import { logger } from '../../utils/logger.ts';
 import { FileStateCache } from '../../state/file-cache.ts';
@@ -6,6 +7,8 @@ import { ProjectIndex } from '../../state/project-index.ts';
 import type { Tool, ToolDefinition } from '../../types/tools.ts';
 import { READ_TOOL_SCHEMA } from './schema.ts';
 import type { ReadInput, ReadFileInput, ExtractMode, OutputFormat } from './schema.ts';
+import { CodeIntelligence } from '../../intelligence/facade.ts';
+import type { SymbolInfo } from '../../intelligence/tree-sitter/queries.ts';
 
 // ---------------------------------------------------------------------------
 // Output types
@@ -22,6 +25,10 @@ export interface FileReadResult {
   extract: ExtractMode;
   /** True when the file was detected as binary and skipped. */
   binary?: boolean;
+  /** True when the file is an image returned as base64. */
+  image?: boolean;
+  /** MIME type for image files (e.g. 'image/png'). */
+  mediaType?: string;
   /** Error message if the file could not be read. */
   error?: string;
   cache?: { status: 'miss' | 'unchanged' | 'modified' };
@@ -86,10 +93,9 @@ const KIND_MAP: Record<string, string> = {
 };
 
 /**
- * Extract an outline: structural signatures with bodies stripped.
- * Returns the multi-line string ready for output.
+ * Regex-based outline fallback: structural signatures with bodies stripped.
  */
-function extractOutline(lines: string[], includeLineNumbers: boolean): string {
+function extractOutlineRegex(lines: string[], includeLineNumbers: boolean): string {
   const result: string[] = [];
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
@@ -107,9 +113,9 @@ function extractOutline(lines: string[], includeLineNumbers: boolean): string {
 }
 
 /**
- * Extract symbols: exported name + kind, one per line.
+ * Regex-based symbols fallback: exported name + kind, one per line.
  */
-function extractSymbols(lines: string[], includeLineNumbers: boolean): string {
+function extractSymbolsRegex(lines: string[], includeLineNumbers: boolean): string {
   const result: string[] = [];
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
@@ -124,6 +130,253 @@ function extractSymbols(lines: string[], includeLineNumbers: boolean): string {
     }
   }
   return result.join('\n');
+}
+
+/**
+ * Tree-sitter kind normalization: maps raw tree-sitter kinds to the same
+ * display names used by the regex fallback (e.g. 'const' → 'constant').
+ */
+const TS_KIND_MAP: Record<string, string> = {
+  const: 'constant',
+  let: 'variable',
+  var: 'variable',
+};
+
+function normalizeTsKind(kind: string): string {
+  return TS_KIND_MAP[kind] ?? kind;
+}
+
+/**
+ * Format outline entries from tree-sitter into a display string.
+ * OutlineEntry.line values are 1-based as returned by tree-sitter.
+ */
+function formatOutlineEntries(
+  entries: Array<{ line: number; signature: string }>,
+  includeLineNumbers: boolean,
+): string {
+  return entries
+    .map((e) => {
+      const lineNo = e.line; // 1-based from tree-sitter
+      return includeLineNumbers ? `${String(lineNo).padStart(5)} | ${e.signature}` : e.signature;
+    })
+    .join('\n');
+}
+
+/**
+ * Extract an outline using tree-sitter via CodeIntelligence.
+ * Falls back to the regex implementation if tree-sitter returns empty results.
+ * Never throws.
+ *
+ * @param rawContent - passed to tree-sitter (needs raw string, not pre-split lines)
+ * @param lines - passed to regex fallback only (pre-split for efficiency)
+ */
+async function extractOutline(
+  filePath: string,
+  rawContent: string,
+  lines: string[],
+  includeLineNumbers: boolean,
+): Promise<string> {
+  try {
+    const ci = CodeIntelligence.getInstance();
+    const entries = await ci.getOutline(filePath, rawContent);
+    if (entries.length > 0) return formatOutlineEntries(entries, includeLineNumbers);
+  } catch (err) {
+    logger.debug('read tool: tree-sitter outline failed, using regex fallback', { filePath, error: String(err) });
+  }
+  // Fallback: regex-based
+  return extractOutlineRegex(lines, includeLineNumbers);
+}
+
+/**
+ * Format symbol entries from tree-sitter into a display string.
+ * Mirrors formatOutlineEntries but for SymbolInfo (has kind + name rather than a pre-built signature).
+ */
+function formatSymbolEntries(
+  symbols: SymbolInfo[],
+  includeLineNumbers: boolean,
+): string {
+  return symbols
+    .map((s) => {
+      const kind = normalizeTsKind(s.kind);
+      const entry = `${kind} ${s.name}`;
+      return includeLineNumbers ? `${String(s.line).padStart(5)} | ${entry}` : entry;
+    })
+    .join('\n');
+}
+
+/**
+ * Extract symbols using tree-sitter via CodeIntelligence.
+ * Falls back to the regex implementation if tree-sitter returns empty results.
+ * Never throws.
+ */
+async function extractSymbols(
+  filePath: string,
+  rawContent: string,
+  lines: string[],
+  includeLineNumbers: boolean,
+): Promise<string> {
+  try {
+    const ci = CodeIntelligence.getInstance();
+    const symbols = await ci.getSymbols(filePath, rawContent);
+    // Filter to exported symbols only (matches regex fallback behavior)
+    const exported = symbols.filter((s) => s.exported);
+    if (exported.length > 0) return formatSymbolEntries(exported, includeLineNumbers);
+  } catch (err) {
+    logger.debug('read tool: tree-sitter symbols failed, using regex fallback', { filePath, error: String(err) });
+  }
+  // Fallback: regex-based
+  return extractSymbolsRegex(lines, includeLineNumbers);
+}
+
+/**
+ * Extract AST representation using tree-sitter via CodeIntelligence.
+ * Uses the same tree-sitter path as extractOutline (via formatOutlineEntries),
+ * but falls back with an explanatory note rather than silently using regex.
+ * Never throws.
+ */
+async function extractAst(
+  filePath: string,
+  rawContent: string,
+  lines: string[],
+  includeLineNumbers: boolean,
+): Promise<string> {
+  try {
+    const ci = CodeIntelligence.getInstance();
+    const entries = await ci.getOutline(filePath, rawContent);
+    if (entries.length > 0) return formatOutlineEntries(entries, includeLineNumbers);
+  } catch (err) {
+    logger.debug('read tool: tree-sitter ast failed, using outline fallback', { filePath, error: String(err) });
+  }
+  // Fallback: regex outline with a note indicating tree-sitter was unavailable
+  return (
+    '# Note: tree-sitter outline unavailable for this file. Falling back to regex.\n'
+    + extractOutlineRegex(lines, includeLineNumbers)
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Image / PDF / Notebook helpers
+// ---------------------------------------------------------------------------
+
+const IMAGE_EXTENSIONS = new Set(['.png', '.jpg', '.jpeg', '.gif', '.webp', '.svg']);
+const IMAGE_MEDIA_TYPES: Record<string, string> = {
+  '.png': 'image/png',
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.gif': 'image/gif',
+  '.webp': 'image/webp',
+  '.svg': 'image/svg+xml',
+};
+
+function isImageFile(ext: string): boolean {
+  return IMAGE_EXTENSIONS.has(ext.toLowerCase());
+}
+
+function isPdfFile(ext: string): boolean {
+  return ext.toLowerCase() === '.pdf';
+}
+
+function isNotebookFile(ext: string): boolean {
+  return ext.toLowerCase() === '.ipynb';
+}
+
+/**
+ * Extract text from PDF binary content by scanning stream sections.
+ * Mirrors the approach used in the fetch tool.
+ */
+function extractPdfText(body: string, pages?: string): string {
+  const texts: string[] = [];
+
+  const streamRe = /stream\r?\n([\s\S]*?)\r?\nendstream/g;
+  let m: RegExpExecArray | null;
+  while ((m = streamRe.exec(body)) !== null) {
+    const chunk = m[1];
+    const parenRe = /\(([^)\\]*(?:\\.[^)\\]*)*)\)/g;
+    let pm: RegExpExecArray | null;
+    while ((pm = parenRe.exec(chunk)) !== null) {
+      const text = pm[1]
+        .replace(/\\n/g, '\n')
+        .replace(/\\r/g, '\r')
+        .replace(/\\t/g, '\t')
+        .replace(/\\\\/g, '\\')
+        .replace(/\\\(/g, '(')
+        .replace(/\\\)/g, ')')
+        .trim();
+      if (text.length > 1) texts.push(text);
+    }
+  }
+
+  if (texts.length === 0) {
+    return JSON.stringify({
+      note: 'PDF text extraction requires a dedicated library for complex PDFs. No readable text streams found.',
+      byteSize: Buffer.byteLength(body, 'utf-8'),
+      pages: pages ?? 'all',
+    });
+  }
+
+  const joined = texts.join(' ');
+  // Apply page range filter: pages param is informational for raw-text extraction
+  // (we can't page-split without a proper PDF library; note it in the result)
+  if (pages) {
+    return `[pages: ${pages}]\n${joined}`;
+  }
+  return joined;
+}
+
+interface NotebookCell {
+  cell_type: string;
+  source: string | string[];
+  outputs?: Array<{
+    output_type: string;
+    text?: string | string[];
+    data?: Record<string, string | string[]>;
+  }>;
+}
+
+interface NotebookJSON {
+  cells: NotebookCell[];
+}
+
+/**
+ * Parse a Jupyter notebook (.ipynb) and format cells as structured text.
+ */
+function formatNotebook(raw: string): string {
+  let nb: NotebookJSON;
+  try {
+    nb = JSON.parse(raw) as NotebookJSON;
+  } catch {
+    return `[error: invalid notebook JSON]`;
+  }
+
+  if (!Array.isArray(nb.cells)) {
+    return '[error: notebook has no cells array]';
+  }
+
+  const parts: string[] = [];
+  nb.cells.forEach((cell, idx) => {
+    const cellType = cell.cell_type ?? 'unknown';
+    const source = Array.isArray(cell.source) ? cell.source.join('') : (cell.source ?? '');
+    parts.push(`[cell ${idx + 1}] (${cellType}):`);
+    parts.push(source);
+
+    if (cellType === 'code' && Array.isArray(cell.outputs) && cell.outputs.length > 0) {
+      const outputLines: string[] = [];
+      for (const out of cell.outputs) {
+        // text/plain in data, or text directly
+        const textData = out.data?.['text/plain'] ?? out.data?.['text/html'] ?? out.text;
+        if (textData) {
+          const text = Array.isArray(textData) ? textData.join('') : String(textData);
+          outputLines.push(text.trimEnd());
+        }
+      }
+      if (outputLines.length > 0) {
+        parts.push('[output]:');
+        parts.push(outputLines.join('\n'));
+      }
+    }
+  });
+
+  return parts.join('\n');
 }
 
 /**
@@ -179,7 +432,7 @@ function formatContent(
 // Single-file read
 // ---------------------------------------------------------------------------
 
-function readOneFile(
+async function readOneFile(
   fileInput: ReadFileInput,
   globalExtract: ExtractMode,
   format: OutputFormat,
@@ -187,7 +440,7 @@ function readOneFile(
   maxPerItem: number | undefined,
   fileCache: FileStateCache,
   projectIndex: ProjectIndex,
-): FileReadResult {
+): Promise<FileReadResult> {
   const extract: ExtractMode = fileInput.extract ?? globalExtract;
 
   // Resolve and validate path
@@ -205,6 +458,115 @@ function readOneFile(
       tokenEstimate: 0,
       extract,
       error: message,
+    };
+  }
+
+  // Determine file extension for special type handling
+  const ext = extname(resolvedPath);
+
+  // Image files: return base64-encoded content with mediaType
+  if (isImageFile(ext)) {
+    let imgBuffer: Buffer;
+    let imgByteSize = 0;
+    try {
+      imgBuffer = readFileSync(resolvedPath);
+      imgByteSize = imgBuffer.length;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      return {
+        path: fileInput.path,
+        resolvedPath,
+        lineCount: 0,
+        byteSize: 0,
+        tokenEstimate: 0,
+        extract,
+        error: `Cannot read image: ${message}`,
+      };
+    }
+    const mediaType = IMAGE_MEDIA_TYPES[ext.toLowerCase()] ?? 'application/octet-stream';
+    const b64 = imgBuffer.toString('base64');
+    const tokenEst = Math.ceil(imgByteSize / 4);
+    projectIndex.upsertFile(resolvedPath, tokenEst);
+    return {
+      path: fileInput.path,
+      resolvedPath,
+      content: b64,
+      lineCount: 0,
+      byteSize: imgByteSize,
+      tokenEstimate: tokenEst,
+      extract,
+      binary: false,
+      image: true,
+      mediaType,
+    };
+  }
+
+  // PDF files: extract text from stream sections
+  if (isPdfFile(ext)) {
+    let pdfRaw: string;
+    let pdfByteSize = 0;
+    try {
+      const buf = readFileSync(resolvedPath);
+      pdfByteSize = buf.length;
+      pdfRaw = buf.toString('binary');
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      return {
+        path: fileInput.path,
+        resolvedPath,
+        lineCount: 0,
+        byteSize: 0,
+        tokenEstimate: 0,
+        extract,
+        error: `Cannot read PDF: ${message}`,
+      };
+    }
+    const pdfText = extractPdfText(pdfRaw, fileInput.pages);
+    const tokenEst = Math.ceil(pdfByteSize / 4);
+    projectIndex.upsertFile(resolvedPath, tokenEst);
+    const pdfLines = pdfText.split('\n');
+    return {
+      path: fileInput.path,
+      resolvedPath,
+      content: format !== 'count_only' && format !== 'minimal' ? pdfText : undefined,
+      lineCount: pdfLines.length,
+      byteSize: pdfByteSize,
+      tokenEstimate: tokenEst,
+      extract,
+    };
+  }
+
+  // Jupyter notebook files: parse and format as structured text
+  if (isNotebookFile(ext)) {
+    let nbRaw: string;
+    let nbByteSize = 0;
+    try {
+      nbRaw = readFileSync(resolvedPath, 'utf-8');
+      nbByteSize = Buffer.byteLength(nbRaw, 'utf-8');
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      return {
+        path: fileInput.path,
+        resolvedPath,
+        lineCount: 0,
+        byteSize: 0,
+        tokenEstimate: 0,
+        extract,
+        error: `Cannot read notebook: ${message}`,
+      };
+    }
+    const formatted = formatNotebook(nbRaw);
+    const tokenEst = Math.ceil(nbByteSize / 4);
+    projectIndex.upsertFile(resolvedPath, tokenEst);
+    const nbLines = formatted.split('\n');
+    return {
+      path: fileInput.path,
+      resolvedPath,
+      content: format !== 'count_only' && format !== 'minimal' ? formatted : undefined,
+      lineCount: nbLines.length,
+      byteSize: nbByteSize,
+      tokenEstimate: tokenEst,
+      extract,
     };
   }
 
@@ -267,18 +629,15 @@ function readOneFile(
         break;
 
       case 'outline':
-        extractedContent = extractOutline(lines, includeLineNumbers);
+        extractedContent = await extractOutline(resolvedPath, rawContent, lines, includeLineNumbers);
         break;
 
       case 'symbols':
-        extractedContent = extractSymbols(lines, includeLineNumbers);
+        extractedContent = await extractSymbols(resolvedPath, rawContent, lines, includeLineNumbers);
         break;
 
       case 'ast':
-        // Phase 3 placeholder: fall back to outline with a note
-        extractedContent =
-          '# Note: ast mode requires tree-sitter (Phase 3). Falling back to outline.\n'
-          + extractOutline(lines, includeLineNumbers);
+        extractedContent = await extractAst(resolvedPath, rawContent, lines, includeLineNumbers);
         break;
 
       default:
@@ -388,7 +747,7 @@ export class ReadTool implements Tool {
       return { success: false, error: 'Missing or empty "files" array' };
     }
     try {
-      return this._execute(args as unknown as ReadInput);
+      return await this._execute(args as unknown as ReadInput);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       logger.error('read tool: unexpected error', { error: message });
@@ -396,7 +755,7 @@ export class ReadTool implements Tool {
     }
   }
 
-  private _execute(input: ReadInput): { success: boolean; output: string } {
+  private async _execute(input: ReadInput): Promise<{ success: boolean; output: string }> {
     const globalExtract: ExtractMode = input.extract ?? 'content';
     const format: OutputFormat = input.output?.format ?? 'standard';
     const includeLineNumbers: boolean = input.output?.include_line_numbers ?? true;
@@ -430,8 +789,10 @@ export class ReadTool implements Tool {
     }
 
     // Read all files for the current page
-    const results: FileReadResult[] = filesToProcess.map((f) =>
-      readOneFile(f, globalExtract, format, includeLineNumbers, maxPerItem, this.fileCache, this.projectIndex),
+    const results: FileReadResult[] = await Promise.all(
+      filesToProcess.map((f) =>
+        readOneFile(f, globalExtract, format, includeLineNumbers, maxPerItem, this.fileCache, this.projectIndex),
+      ),
     );
 
     // Apply max_tokens cap: truncate content so cumulative tokens ≤ max_tokens

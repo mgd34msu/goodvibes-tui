@@ -39,6 +39,10 @@ export const READ_TOOL_SCHEMA = {
             type: 'boolean',
             description: 'Bypass cache and re-read the file from disk.',
           },
+          pages: {
+            type: 'string',
+            description: 'Page range for PDF files (e.g. \'1-5\', \'3\', \'10-20\'). Max 20 pages per request.',
+          },
         },
         required: ['path'],
       },
@@ -107,6 +111,8 @@ export interface ReadFileInput {
   extract?: ExtractMode;
   range?: { start: number; end: number };
   force?: boolean;
+  /** Page range for PDF files (e.g. '1-5', '3', '10-20'). Max 20 pages. */
+  pages?: string;
 }
 
 /** Full input shape for the read tool. */

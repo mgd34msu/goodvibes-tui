@@ -1,11 +1,13 @@
 import { existsSync, mkdirSync, renameSync, writeFileSync, copyFileSync, unlinkSync } from 'node:fs';
-import { dirname, join, relative, resolve } from 'node:path';
+import { dirname, extname, join, relative, resolve } from 'node:path';
 import { randomBytes } from 'node:crypto';
 import type { Tool, ToolDefinition } from '../../types/tools.ts';
 import { WRITE_SCHEMA, type WriteInput, type WriteFileInput, type WriteMode } from './schema.ts';
 import { resolveAndValidatePath } from '../../utils/path-safety.ts';
 import { FileStateCache } from '../../state/file-cache.ts';
 import { ProjectIndex } from '../../state/project-index.ts';
+import { configManager } from '../../config/index.ts';
+import { autoHealer } from '../shared/auto-heal.ts';
 import { logger } from '../../utils/logger.ts';
 
 // ---------------------------------------------------------------------------
@@ -281,7 +283,40 @@ export function createWriteTool(options?: {
 
         // State integration — only for real writes, not dry runs
         if (!dryRun) {
-          const content = outcome.result._content ?? '';
+          let content = outcome.result._content ?? '';
+
+          // Auto-heal: if file is JS/TS and auto-heal is enabled, run syntax check
+          if (configManager.get('tools.autoHeal')) {
+            const ext = extname(outcome.result.resolved_path).toLowerCase();
+            const isJsTs = ['.js', '.ts', '.jsx', '.tsx', '.mjs', '.cjs'].includes(ext);
+            if (isJsTs) {
+              try {
+                const loader = (ext === '.mjs' || ext === '.cjs') ? 'js' : ext.slice(1) as 'ts' | 'tsx' | 'js' | 'jsx';
+                const transpiler = new Bun.Transpiler({ loader });
+                transpiler.transformSync(content);
+              } catch (syntaxErr) {
+                const syntaxErrors = [String(syntaxErr)];
+                const healResult = await autoHealer.heal(outcome.result.resolved_path, content, syntaxErrors);
+                if (healResult.healed) {
+                  logger.debug('write tool: auto-heal succeeded', {
+                    path: outcome.result.resolved_path,
+                    method: healResult.method,
+                  });
+                  content = healResult.content;
+                  // Rewrite file with healed content
+                  try {
+                    atomicWrite(outcome.result.resolved_path, content);
+                  } catch (writeErr) {
+                    logger.debug('write tool: auto-heal rewrite failed (non-fatal)', {
+                      path: outcome.result.resolved_path,
+                      error: String(writeErr),
+                    });
+                  }
+                }
+              }
+            }
+          }
+
           const byteSize = Buffer.byteLength(content, 'utf-8');
           const tokenEstimate = Math.ceil(byteSize / 4);
 

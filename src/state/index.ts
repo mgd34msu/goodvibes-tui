@@ -3,3 +3,6 @@ export { FileStateCache } from './file-cache.ts';
 export type { CacheEntry, CacheStatus, ConflictInfo } from './file-cache.ts';
 export { ProjectIndex } from './project-index.ts';
 export type { FileEntry } from './project-index.ts';
+export { ModeManager } from './mode-manager.ts';
+export type { ModeDefinition } from './mode-manager.ts';
+export { FileWatcher } from './file-watcher.ts';

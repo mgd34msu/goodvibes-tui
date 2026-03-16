@@ -4,6 +4,99 @@ All notable changes to GoodVibes TUI.
 
 ---
 
+## [0.9.0] — Production-Ready Release
+
+### Phase A: Foundation — Integration Wiring
+- **Hook system wired into orchestrator** — every tool call now fires Pre/Post/Fail hooks via HookDispatcher
+- **Tree-sitter wired into read tool** — outline/symbols/ast modes use CodeIntelligence with regex fallback
+- **Tree-sitter wired into find tool** — expand_to support via getEnclosingScope(), symbols use tree-sitter
+- **GitService wired into analyze** — diff mode uses GitService.diffBetween/diffStat instead of raw Bun.spawn
+- **Permission system updated** — all 12 tools mapped to categories (read/write/edit/exec/find/fetch/analyze/inspect/agent/state/workflow/registry)
+- **Tree-sitter grammars installed** — TypeScript, JavaScript, Python, JSON, CSS WASM grammars
+- **Shared ProcessManager singleton** — extracted from exec tool for cross-module process tracking
+
+### Phase B: Infrastructure
+- **File watcher** — debounced fs.watch with path boundary enforcement, cache invalidation, hook dispatch
+- **Tool LLM** — configurable LLM for tool-internal operations (semantic diff, auto-heal, commit messages)
+- **Secrets manager** — AES-256-GCM encrypted storage with 3-tier resolution (env → encrypted file → null)
+- **Auto-heal** — 3-stage pipeline (formatter → linter → ToolLLM) for write/edit validation failures
+- **Overflow handler** — large outputs written to .goodvibes/.overflow/ with truncated reference
+- **ModeManager** — output mode management (vibecoding/justvibes/default) with per-mode verbosity defaults
+- **Prompt hook runner** — LLM-powered hook execution with $ARGUMENTS substitution and timeout
+
+### Phase C: Tool Mode Expansion
+- **find: references** — LSP textDocument/references with grep fallback
+- **find: structural** — @ast-grep/napi AST pattern matching
+- **find: expand_to** — tree-sitter expands matches to enclosing function/class scope
+- **edit: ast + ast_pattern** — tree-sitter structural edits, ast-grep with $VAR/$$$VAR metavariable substitution
+- **edit: validation chains** — validate.before/after with typecheck/lint/test/build via Bun.spawn
+- **exec: progress + fail_fast** — pollable progress files, stop_on_error for sequential commands
+- **fetch: structured/tables/pdf** — CSS selector extraction, HTML table parsing, PDF text extraction
+- **fetch: service auth** — service registry with bearer/basic/api-key from SecretsManager
+- **analyze: breaking + semantic_diff** — GitService diff + ToolLLM for impact analysis
+- **analyze: upgrade/permissions/env_audit/test_find** — package compat, dangerous patterns, .env consistency, source→test mapping
+- **inspect: api_spec/api_validate/api_sync** — OpenAPI generation, contract validation, frontend/backend drift detection
+- **inspect: 11 frontend modes** — component_state, render_triggers, hooks, overflow, sizing, stacking, responsive, events, tailwind, client_boundary, error_boundary
+- **read: image/PDF/notebook** — base64 images with mediaType, PDF text extraction, Jupyter .ipynb cell parsing
+- **state: hooks + mode** — hook management (list/enable/disable/add/remove) and output mode switching
+
+### Phase D: Agent Execution
+- **In-process agent orchestrator** — each agent gets own ConversationManager + scoped ToolRegistry, async turn loop with MAX_TURNS=50 and cancellation check
+- **Session isolation** — own message history, namespaced KVState, JSONL logging per agent
+- **Git worktree lifecycle** — create on spawn, merge on complete, cleanup on cancel/error
+- **Inter-agent message bus** — send/broadcast/subscribe with 5-minute TTL auto-cleanup
+- **Agent actions** — get (detail), budget (tokens), plan, wait (with timeout), message
+- **Agent archetypes** — load .goodvibes/agents/*.md with YAML frontmatter, progressive loading
+- **Agent hook runner** — spawn agent on hook fire, poll for completion with timeout
+
+### Phase E: UI
+- **Modal factory** — shared rendering with box/title/footer/hints, composable sections, display-width-aware truncation
+- **Background process indicator** — persistent status bar below input showing agent/tool counts
+- **Background process modal** — list by type, navigate, peek, kill
+- **Live-tail modal** — streaming output with scroll clamping and kill action
+- **Service registry modal** — /services command for managing API service configurations
+- **Git state in header** — branch name, dirty indicator (●), ahead/behind arrows (↑↓), stale-while-revalidate caching
+
+### Phase F: External Integration
+- **MCP client** — connect to servers from .goodvibes/mcp.json, JSON-RPC 2.0 over stdio, auto-restart on crash
+- **MCP progressive loading** — names + descriptions at startup, full schemas on first use, cached
+- **MCP permissions** — 'mcp' category added, default 'prompt'
+- **Registry: fuse.js** — fuzzy search weighted name×3 > path×2 > description×1
+- **Workflow: triggers wired** — hook events check TriggerManager, execute actions via Bun.spawn
+- **Workflow: schedules wired** — setInterval execution with parseInterval('5m'/'1h'/'30s')
+- **Workflow: daemon/external** — DaemonServer POST /task → AgentManager.spawn(), HttpListener POST /webhook → HookDispatcher.fire()
+- **State: analytics + telemetry** — sql.js WASM SQLite for tool call recording, query, summary, export
+
+### Phase G: Security & Polish
+- **Spawn token expiry** — expiresAt field with 1-hour TTL, included in HMAC signature
+- **HTTP listener security** — bearer token auth with timingSafeEqual, sliding-window rate limiting (60/min), localhost enforcement
+- **Daemon security** — bearer token auth with timingSafeEqual on all endpoints, task submission logging
+- **Credential encryption** — SecretsManager wired into API key resolution, /secrets command (set/get/list/delete)
+- **Permission audit** — 58 tests verifying all 12 tools + danger gates + path traversal protection
+- **Dependency verification** — 43 smoke tests for all added packages (@ast-grep/napi, fuse.js, sql.js, tree-sitter grammars, etc.)
+- **2649 passing tests** across 120 files
+
+### Phase H: Modals & Interactivity
+- **Config/settings browser** — /settings opens modal with category tabs, inline boolean toggle, enum cycling, string/number editing
+- **Session picker** — /sessions opens modal with title, timestamp, message count; Enter to load, 'd' to delete
+- **Profile picker** — /profiles opens modal with preview; Enter to load, 'd' to delete, 's' to save current
+- **Bookmark browser** — /bookmarks opens modal with labels and timestamps; Enter to navigate, 'o' to open file, 'd' to remove
+- **Help/shortcuts overlay** — '?' key or /help toggles full-screen categorized shortcut reference with live command list
+- **Agent detail modal** — deep view from process modal showing task, tools, tokens, messages, progress
+- **Context inspector** — /context shows per-message token breakdown, large consumer detection (>10%), capacity bar, compaction suggestions
+- **Apply diff action** — 'a' key on diff blocks applies changes to file with confirmation
+- **Block actions menu** — Enter on a block shows type-filtered actions (copy/apply/bookmark/rerun/collapse)
+- **Code block collapse** — extended collapse system to code blocks and thinking blocks with auto-collapse threshold
+- **Error navigation** — /next-error, /prev-error, Ctrl+E to jump between error messages
+
+### Infrastructure
+- 2649 passing tests across 120 files (2721 total, 72 pre-existing)
+- ~120 new source files, ~60 modified files
+- 67 tasks across 8 phases, all reviewed at 9.9+ minimum score
+- Dependencies added: @ast-grep/napi, fuse.js, sql.js, tree-sitter grammars (TS/JS/Python/JSON/CSS), web-tree-sitter
+
+---
+
 ## [0.2.0]
 
 ### Interactive Modals

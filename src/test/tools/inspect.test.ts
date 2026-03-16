@@ -602,3 +602,668 @@ describe('inspect — error cases', () => {
       expect(result.error).toContain('outside the project root');
     });
   });
+
+// ---------------------------------------------------------------------------
+// api_spec mode
+// ---------------------------------------------------------------------------
+
+describe('inspect — api_spec mode', () => {
+  test('generates OpenAPI 3.0 spec from Next.js routes', async () => {
+    write(tmpDir, 'app/users/route.ts',
+      'export async function GET(req: Request) {}\nexport async function POST(req: Request) {}\n');
+    write(tmpDir, 'app/users/[id]/route.ts',
+      'export async function GET(req: Request) {}\nexport async function DELETE(req: Request) {}\n');
+
+    const r = await exec(tool, { mode: 'api_spec', projectRoot: tmpDir, framework: 'nextjs' });
+    expect(r.success).toBe(true);
+    const spec = r.data as any;
+    expect(spec.openapi).toBe('3.0.0');
+    expect(spec.info).toBeDefined();
+    expect(spec.paths).toBeDefined();
+
+    // /users path should have get and post
+    expect(spec.paths['/users']).toBeDefined();
+    expect(spec.paths['/users']['get']).toBeDefined();
+    expect(spec.paths['/users']['post']).toBeDefined();
+  });
+
+  test('converts path params from :id to {id} in OpenAPI format', async () => {
+    write(tmpDir, 'app/posts/[id]/route.ts',
+      'export async function GET(req: Request) {}\n');
+
+    const r = await exec(tool, { mode: 'api_spec', projectRoot: tmpDir, framework: 'nextjs' });
+    expect(r.success).toBe(true);
+    const spec = r.data as any;
+
+    // Should have {id} path, not :id
+    const pathKeys = Object.keys(spec.paths);
+    const paramPath = pathKeys.find((k) => k.includes('{id}'));
+    expect(paramPath).toBeDefined();
+
+    // Parameter should be defined in the operation
+    const op = spec.paths[paramPath!]['get'];
+    expect(op.parameters).toBeDefined();
+    expect(op.parameters.some((p: any) => p.name === 'id' && p.in === 'path' && p.required === true)).toBe(true);
+  });
+
+  test('includes operationId on each operation', async () => {
+    write(tmpDir, 'app/items/route.ts',
+      'export async function POST(req: Request) {}\n');
+
+    const r = await exec(tool, { mode: 'api_spec', projectRoot: tmpDir, framework: 'nextjs' });
+    expect(r.success).toBe(true);
+    const spec = r.data as any;
+    const op = spec.paths['/items']?.['post'];
+    expect(op).toBeDefined();
+    expect(typeof op.operationId).toBe('string');
+    expect(op.operationId.length).toBeGreaterThan(0);
+  });
+
+  test('generates spec from Express routes', async () => {
+    write(tmpDir, 'src/routes.ts',
+      'app.get("/health", handler);\napp.post("/items", handler);\napp.delete("/items/:id", handler);\n');
+
+    const r = await exec(tool, { mode: 'api_spec', projectRoot: tmpDir, framework: 'express' });
+    expect(r.success).toBe(true);
+    const spec = r.data as any;
+    expect(spec.openapi).toBe('3.0.0');
+    expect(Object.keys(spec.paths).length).toBeGreaterThanOrEqual(2);
+  });
+
+  test('returns empty paths for project with no routes', async () => {
+    write(tmpDir, 'package.json', JSON.stringify({ name: 'empty-project' }));
+
+    const r = await exec(tool, { mode: 'api_spec', projectRoot: tmpDir, framework: 'nextjs' });
+    expect(r.success).toBe(true);
+    const spec = r.data as any;
+    expect(spec.paths).toBeDefined();
+    expect(Object.keys(spec.paths)).toHaveLength(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// api_validate mode
+// ---------------------------------------------------------------------------
+
+describe('inspect — api_validate mode', () => {
+  test('reports valid when spec matches code routes', async () => {
+    write(tmpDir, 'app/users/route.ts',
+      'export async function GET(req: Request) {}\nexport async function POST(req: Request) {}\n');
+
+    const specJson = JSON.stringify({
+      openapi: '3.0.0',
+      info: { title: 'API', version: '1.0.0' },
+      paths: {
+        '/users': {
+          get: { operationId: 'get_users', responses: { '200': { description: 'OK' } } },
+          post: { operationId: 'post_users', responses: { '200': { description: 'OK' } } },
+        },
+      },
+    });
+    write(tmpDir, 'openapi.json', specJson);
+
+    const r = await exec(tool, {
+      mode: 'api_validate',
+      projectRoot: tmpDir,
+      framework: 'nextjs',
+      specPath: join(tmpDir, 'openapi.json'),
+    });
+    expect(r.success).toBe(true);
+    const d = r.data as any;
+    expect(d.valid).toBe(true);
+    expect(d.missing_from_spec).toHaveLength(0);
+    expect(d.missing_from_code).toHaveLength(0);
+  });
+
+  test('detects routes in code missing from spec', async () => {
+    write(tmpDir, 'app/users/route.ts',
+      'export async function GET(req: Request) {}\nexport async function POST(req: Request) {}\n');
+    write(tmpDir, 'app/posts/route.ts',
+      'export async function GET(req: Request) {}\n');
+
+    const specJson = JSON.stringify({
+      openapi: '3.0.0',
+      info: { title: 'API', version: '1.0.0' },
+      paths: {
+        '/users': {
+          get: { operationId: 'get_users', responses: { '200': { description: 'OK' } } },
+          post: { operationId: 'post_users', responses: { '200': { description: 'OK' } } },
+        },
+        // /posts intentionally missing
+      },
+    });
+    write(tmpDir, 'openapi.json', specJson);
+
+    const r = await exec(tool, {
+      mode: 'api_validate',
+      projectRoot: tmpDir,
+      framework: 'nextjs',
+      specPath: join(tmpDir, 'openapi.json'),
+    });
+    expect(r.success).toBe(true);
+    const d = r.data as any;
+    expect(d.valid).toBe(false);
+    expect(d.missing_from_spec.some((s: string) => s.includes('/posts'))).toBe(true);
+  });
+
+  test('detects routes in spec missing from code', async () => {
+    write(tmpDir, 'app/users/route.ts',
+      'export async function GET(req: Request) {}\n');
+
+    const specJson = JSON.stringify({
+      openapi: '3.0.0',
+      info: { title: 'API', version: '1.0.0' },
+      paths: {
+        '/users': {
+          get: { operationId: 'get_users', responses: { '200': { description: 'OK' } } },
+        },
+        '/admin': {
+          delete: { operationId: 'delete_admin', responses: { '200': { description: 'OK' } } },
+        },
+      },
+    });
+    write(tmpDir, 'openapi.json', specJson);
+
+    const r = await exec(tool, {
+      mode: 'api_validate',
+      projectRoot: tmpDir,
+      framework: 'nextjs',
+      specPath: join(tmpDir, 'openapi.json'),
+    });
+    expect(r.success).toBe(true);
+    const d = r.data as any;
+    expect(d.valid).toBe(false);
+    expect(d.missing_from_code.some((s: string) => s.includes('/admin'))).toBe(true);
+  });
+
+  test('returns error when specPath is not provided', async () => {
+    const r = await exec(tool, { mode: 'api_validate', projectRoot: tmpDir });
+    expect(r.success).toBe(false);
+    expect(r.error).toMatch(/specPath is required/i);
+  });
+
+  test('returns error when spec file does not exist', async () => {
+    const r = await exec(tool, {
+      mode: 'api_validate',
+      projectRoot: tmpDir,
+      specPath: join(tmpDir, 'nonexistent.json'),
+    });
+    expect(r.success).toBe(false);
+    expect(r.error).toMatch(/not found/i);
+  });
+
+  test('rejects path traversal in specPath', async () => {
+    const r = await tool.execute({
+      mode: 'api_validate',
+      projectRoot: tmpDir,
+      specPath: '../../../../etc/passwd',
+    });
+    expect(r.success).toBe(false);
+    expect(r.error).toContain('outside the project root');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// api_sync mode
+// ---------------------------------------------------------------------------
+
+describe('inspect — api_sync mode', () => {
+  test('detects no drift when fetch calls match routes', async () => {
+    write(tmpDir, 'app/users/route.ts',
+      'export async function GET(req: Request) {}\n');
+    write(tmpDir, 'app/page.tsx',
+      'export default function Page() {\n  fetch("/users");\n  return null;\n}\n');
+
+    const r = await exec(tool, { mode: 'api_sync', projectRoot: tmpDir, framework: 'nextjs' });
+    expect(r.success).toBe(true);
+    const d = r.data as any;
+    expect(d.fetch_calls.length).toBeGreaterThanOrEqual(1);
+    expect(d.fetch_calls.some((fc: any) => fc.url === '/users')).toBe(true);
+    expect(d.drift_detected).toBe(false);
+  });
+
+  test('detects drift when fetch calls reference unknown routes', async () => {
+    write(tmpDir, 'app/users/route.ts',
+      'export async function GET(req: Request) {}\n');
+    write(tmpDir, 'app/page.tsx',
+      'export default function Page() {\n  fetch("/users");\n  fetch("/nonexistent-endpoint");\n  return null;\n}\n');
+
+    const r = await exec(tool, { mode: 'api_sync', projectRoot: tmpDir, framework: 'nextjs' });
+    expect(r.success).toBe(true);
+    const d = r.data as any;
+    expect(d.drift_detected).toBe(true);
+    expect(d.unmatched_fetches.some((fc: any) => fc.url === '/nonexistent-endpoint')).toBe(true);
+  });
+
+  test('extracts fetch calls with file and line number', async () => {
+    write(tmpDir, 'app/users/route.ts',
+      'export async function GET(req: Request) {}\n');
+    write(tmpDir, 'app/dashboard/page.tsx',
+      'export default function Dashboard() {\n  const data = fetch("/users");\n  return null;\n}\n');
+
+    const r = await exec(tool, { mode: 'api_sync', projectRoot: tmpDir, framework: 'nextjs' });
+    expect(r.success).toBe(true);
+    const d = r.data as any;
+    const call = d.fetch_calls.find((fc: any) => fc.url === '/users');
+    expect(call).toBeDefined();
+    expect(typeof call.file).toBe('string');
+    expect(typeof call.line).toBe('number');
+    expect(call.line).toBeGreaterThan(0);
+  });
+
+  test('returns empty results for project with no fetch calls', async () => {
+    write(tmpDir, 'app/users/route.ts',
+      'export async function GET(req: Request) {}\n');
+    write(tmpDir, 'app/page.tsx',
+      'export default function Page() { return null; }\n');
+
+    const r = await exec(tool, { mode: 'api_sync', projectRoot: tmpDir, framework: 'nextjs' });
+    expect(r.success).toBe(true);
+    const d = r.data as any;
+    expect(d.fetch_calls).toHaveLength(0);
+    expect(d.drift_detected).toBe(false);
+  });
+
+  test('result has required shape fields', async () => {
+    const r = await exec(tool, { mode: 'api_sync', projectRoot: tmpDir, framework: 'nextjs' });
+    expect(r.success).toBe(true);
+    const d = r.data as any;
+    expect(Array.isArray(d.fetch_calls)).toBe(true);
+    expect(Array.isArray(d.unmatched_fetches)).toBe(true);
+    expect(Array.isArray(d.unmatched_routes)).toBe(true);
+    expect(typeof d.drift_detected).toBe('boolean');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// component_state mode
+// ---------------------------------------------------------------------------
+
+describe('inspect — component_state mode', () => {
+  test('finds useState calls and names state variables', async () => {
+    write(tmpDir, 'MyComp.tsx', [
+      "import React, { useState } from 'react';",
+      'function MyComp() {',
+      '  const [count, setCount] = useState(0);',
+      '  const [name, setName] = useState(\'\');',
+      '  return <div>{count}</div>;',
+      '}',
+    ].join('\n'));
+
+    const r = await exec(tool, { mode: 'component_state', projectRoot: tmpDir, file: 'MyComp.tsx' });
+    expect(r.success).toBe(true);
+    const d = r.data as any;
+    expect(d.count).toBe(2);
+    expect(d.stateVars[0].kind).toBe('useState');
+    expect(d.stateVars[0].name).toBe('count');
+    expect(d.stateVars[1].name).toBe('name');
+  });
+
+  test('finds useReducer and useContext calls', async () => {
+    write(tmpDir, 'Comp2.tsx', [
+      "import React, { useReducer, useContext } from 'react';",
+      'function Comp2() {',
+      '  const [state, dispatch] = useReducer(reducer, {});',
+      '  const theme = useContext(ThemeContext);',
+      '  return <div />;',
+      '}',
+    ].join('\n'));
+
+    const r = await exec(tool, { mode: 'component_state', projectRoot: tmpDir, file: 'Comp2.tsx' });
+    expect(r.success).toBe(true);
+    const d = r.data as any;
+    expect(d.stateVars.some((v: any) => v.kind === 'useReducer')).toBe(true);
+    expect(d.stateVars.some((v: any) => v.kind === 'useContext')).toBe(true);
+  });
+
+  test('returns empty for file with no state hooks', async () => {
+    write(tmpDir, 'NoState.tsx', 'function Pure() { return <div>hello</div>; }');
+    const r = await exec(tool, { mode: 'component_state', projectRoot: tmpDir, file: 'NoState.tsx' });
+    expect(r.success).toBe(true);
+    expect((r.data as any).count).toBe(0);
+  });
+
+  test('returns error when file param is missing', async () => {
+    const r = await tool.execute({ mode: 'component_state', projectRoot: tmpDir });
+    expect(r.success).toBe(false);
+    expect(r.error).toMatch(/file is required/);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// render_triggers mode
+// ---------------------------------------------------------------------------
+
+describe('inspect — render_triggers mode', () => {
+  test('finds state setters and effect/memo/callback hooks', async () => {
+    write(tmpDir, 'Triggers.tsx', [
+      "import { useState, useEffect, useMemo, useCallback, memo } from 'react';",
+      'const Comp = memo(() => {',
+      '  const [x, setX] = useState(0);',
+      '  useEffect(() => {}, [x]);',
+      '  const val = useMemo(() => x * 2, [x]);',
+      '  const cb = useCallback(() => setX(1), []);',
+      '  return <div>{val}</div>;',
+      '});',
+    ].join('\n'));
+
+    const r = await exec(tool, { mode: 'render_triggers', projectRoot: tmpDir, file: 'Triggers.tsx' });
+    expect(r.success).toBe(true);
+    const d = r.data as any;
+    expect(d.triggers.some((t: any) => t.kind === 'state_setter')).toBe(true);
+    expect(d.triggers.some((t: any) => t.kind === 'effect_dep')).toBe(true);
+    expect(d.triggers.some((t: any) => t.kind === 'memo_dep')).toBe(true);
+    expect(d.triggers.some((t: any) => t.kind === 'callback_dep')).toBe(true);
+    expect(d.triggers.some((t: any) => t.kind === 'memo_boundary')).toBe(true);
+  });
+
+  test('returns empty triggers for plain component', async () => {
+    write(tmpDir, 'Plain.tsx', 'function Plain({ x }: { x: number }) { return <span>{x}</span>; }');
+    const r = await exec(tool, { mode: 'render_triggers', projectRoot: tmpDir, file: 'Plain.tsx' });
+    expect(r.success).toBe(true);
+    expect((r.data as any).count).toBe(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// hooks mode
+// ---------------------------------------------------------------------------
+
+describe('inspect — hooks mode', () => {
+  test('detects useEffect with dependency array', async () => {
+    write(tmpDir, 'Hooks.tsx', [
+      "import { useEffect } from 'react';",
+      'function Comp({ id }: { id: number }) {',
+      '  useEffect(() => { console.log(id); }, [id]);',
+      '}',
+    ].join('\n'));
+
+    const r = await exec(tool, { mode: 'hooks', projectRoot: tmpDir, file: 'Hooks.tsx' });
+    expect(r.success).toBe(true);
+    const d = r.data as any;
+    expect(d.hooks.length).toBeGreaterThan(0);
+    expect(d.hooks[0].hookKind).toBe('useEffect');
+    expect(d.hooks[0].deps).toContain('id');
+  });
+
+  test('returns empty hooks for file without hooks', async () => {
+    write(tmpDir, 'NoHooks.tsx', 'function Pure() { return null; }');
+    const r = await exec(tool, { mode: 'hooks', projectRoot: tmpDir, file: 'NoHooks.tsx' });
+    expect(r.success).toBe(true);
+    expect((r.data as any).hooks).toHaveLength(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// overflow mode
+// ---------------------------------------------------------------------------
+
+describe('inspect — overflow mode', () => {
+  test('flags overflow-hidden without height', async () => {
+    write(tmpDir, 'Overflow.tsx', [
+      'function Card() {',
+      '  return <div className="overflow-hidden p-4">content</div>;',
+      '}',
+    ].join('\n'));
+
+    const r = await exec(tool, { mode: 'overflow', projectRoot: tmpDir, file: 'Overflow.tsx' });
+    expect(r.success).toBe(true);
+    const d = r.data as any;
+    expect(d.count).toBeGreaterThan(0);
+    expect(d.issues[0].kind).toBe('hidden_clip');
+  });
+
+  test('no issues when overflow-hidden has height class', async () => {
+    write(tmpDir, 'OverflowOk.tsx', [
+      'function Card() {',
+      '  return <div className="overflow-hidden h-64 p-4">content</div>;',
+      '}',
+    ].join('\n'));
+
+    const r = await exec(tool, { mode: 'overflow', projectRoot: tmpDir, file: 'OverflowOk.tsx' });
+    expect(r.success).toBe(true);
+    expect((r.data as any).count).toBe(0);
+  });
+
+  test('flags overflow-scroll without height', async () => {
+    write(tmpDir, 'OverflowScroll.tsx', 'function L() { return <div className="overflow-scroll">x</div>; }');
+    const r = await exec(tool, { mode: 'overflow', projectRoot: tmpDir, file: 'OverflowScroll.tsx' });
+    expect(r.success).toBe(true);
+    const d = r.data as any;
+    expect(d.issues[0].kind).toBe('scroll_no_height');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// sizing mode
+// ---------------------------------------------------------------------------
+
+describe('inspect — sizing mode', () => {
+  test('detects tailwind fixed, flex, percentage and viewport sizing', async () => {
+    write(tmpDir, 'Sizing.tsx', [
+      'function Layout() {',
+      '  return (',
+      '    <div className="w-full h-screen flex-1">',
+      '      <aside className="w-64">side</aside>',
+      '      <main className="w-1/2">main</main>',
+      '    </div>',
+      '  );',
+      '}',
+    ].join('\n'));
+
+    const r = await exec(tool, { mode: 'sizing', projectRoot: tmpDir, file: 'Sizing.tsx' });
+    expect(r.success).toBe(true);
+    const d = r.data as any;
+    expect(d.items.some((i: any) => i.kind === 'percentage')).toBe(true);
+    expect(d.items.some((i: any) => i.kind === 'flex')).toBe(true);
+    expect(d.items.some((i: any) => i.kind === 'viewport')).toBe(true);
+  });
+
+  test('returns empty items for plain component', async () => {
+    write(tmpDir, 'NoSizing.tsx', 'function X() { return <span>hi</span>; }');
+    const r = await exec(tool, { mode: 'sizing', projectRoot: tmpDir, file: 'NoSizing.tsx' });
+    expect(r.success).toBe(true);
+    expect((r.data as any).items).toHaveLength(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// stacking mode
+// ---------------------------------------------------------------------------
+
+describe('inspect — stacking mode', () => {
+  test('finds tailwind z-index classes', async () => {
+    write(tmpDir, 'Stacking.tsx', [
+      'function Modal() {',
+      '  return (',
+      '    <div className="z-50 fixed inset-0">',
+      '      <div className="z-10 relative">content</div>',
+      '    </div>',
+      '  );',
+      '}',
+    ].join('\n'));
+
+    const r = await exec(tool, { mode: 'stacking', projectRoot: tmpDir, file: 'Stacking.tsx' });
+    expect(r.success).toBe(true);
+    const d = r.data as any;
+    expect(d.zIndexItems.length).toBeGreaterThan(0);
+    expect(d.zIndexItems.some((z: any) => z.value.includes('z-50') || z.value === 'z-50')).toBe(true);
+  });
+
+  test('returns empty for file with no z-index', async () => {
+    write(tmpDir, 'NoStack.tsx', 'function P() { return <div>flat</div>; }');
+    const r = await exec(tool, { mode: 'stacking', projectRoot: tmpDir, file: 'NoStack.tsx' });
+    expect(r.success).toBe(true);
+    expect((r.data as any).zIndexItems).toHaveLength(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// responsive mode
+// ---------------------------------------------------------------------------
+
+describe('inspect — responsive mode', () => {
+  test('finds Tailwind responsive breakpoint classes', async () => {
+    write(tmpDir, 'Responsive.tsx', [
+      'function Hero() {',
+      '  return <div className="text-sm sm:text-lg md:text-xl lg:text-2xl xl:text-3xl">title</div>;',
+      '}',
+    ].join('\n'));
+
+    const r = await exec(tool, { mode: 'responsive', projectRoot: tmpDir, file: 'Responsive.tsx' });
+    expect(r.success).toBe(true);
+    const d = r.data as any;
+    expect(d.breakpoints.length).toBeGreaterThan(0);
+    expect(d.hasMobileFirst).toBe(true);
+    const prefixes = d.breakpoints.map((b: any) => b.prefix);
+    expect(prefixes).toContain('sm');
+    expect(prefixes).toContain('lg');
+  });
+
+  test('returns no breakpoints for non-responsive file', async () => {
+    write(tmpDir, 'NoResp.tsx', 'function X() { return <div className="text-xl">x</div>; }');
+    const r = await exec(tool, { mode: 'responsive', projectRoot: tmpDir, file: 'NoResp.tsx' });
+    expect(r.success).toBe(true);
+    expect((r.data as any).breakpoints).toHaveLength(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// events mode
+// ---------------------------------------------------------------------------
+
+describe('inspect — events mode', () => {
+  test('finds onClick and onChange event handlers', async () => {
+    write(tmpDir, 'Events.tsx', [
+      'function Form() {',
+      '  return (',
+      '    <form onSubmit={handleSubmit}>',
+      '      <input onChange={handleChange} />',
+      '      <button onClick={handleClick}>submit</button>',
+      '    </form>',
+      '  );',
+      '}',
+    ].join('\n'));
+
+    const r = await exec(tool, { mode: 'events', projectRoot: tmpDir, file: 'Events.tsx' });
+    expect(r.success).toBe(true);
+    const d = r.data as any;
+    expect(d.count).toBeGreaterThan(0);
+    expect(d.handlers.some((h: any) => h.event.toLowerCase().includes('click'))).toBe(true);
+  });
+
+  test('returns empty for component with no event handlers', async () => {
+    write(tmpDir, 'NoEvents.tsx', 'function Static() { return <div>static</div>; }');
+    const r = await exec(tool, { mode: 'events', projectRoot: tmpDir, file: 'NoEvents.tsx' });
+    expect(r.success).toBe(true);
+    expect((r.data as any).count).toBe(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// tailwind mode
+// ---------------------------------------------------------------------------
+
+describe('inspect — tailwind mode', () => {
+  test('detects conflicting display classes on same element', async () => {
+    write(tmpDir, 'TwConflict.tsx', [
+      'function X() {',
+      '  return <div className="block flex">content</div>;',
+      '}',
+    ].join('\n'));
+
+    const r = await exec(tool, { mode: 'tailwind', projectRoot: tmpDir, file: 'TwConflict.tsx' });
+    expect(r.success).toBe(true);
+    const d = r.data as any;
+    expect(d.count).toBeGreaterThan(0);
+    expect(d.conflicts[0].reason).toMatch(/display/i);
+  });
+
+  test('no conflicts for well-formed className', async () => {
+    write(tmpDir, 'TwOk.tsx', 'function X() { return <div className="flex items-center p-4 text-sm">ok</div>; }');
+    const r = await exec(tool, { mode: 'tailwind', projectRoot: tmpDir, file: 'TwOk.tsx' });
+    expect(r.success).toBe(true);
+    expect((r.data as any).count).toBe(0);
+  });
+
+  test('detects conflicting font-size classes', async () => {
+    write(tmpDir, 'TwFontConflict.tsx', 'function X() { return <p className="text-sm text-xl">hi</p>; }');
+    const r = await exec(tool, { mode: 'tailwind', projectRoot: tmpDir, file: 'TwFontConflict.tsx' });
+    expect(r.success).toBe(true);
+    expect((r.data as any).count).toBeGreaterThan(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// client_boundary mode
+// ---------------------------------------------------------------------------
+
+describe('inspect — client_boundary mode', () => {
+  test("detects 'use client' directive", async () => {
+    write(tmpDir, 'Client.tsx', [
+      "'use client';",
+      "import { useState } from 'react';",
+      'export function Comp() { return <div />; }',
+    ].join('\n'));
+
+    const r = await exec(tool, { mode: 'client_boundary', projectRoot: tmpDir, file: 'Client.tsx' });
+    expect(r.success).toBe(true);
+    const d = r.data as any;
+    expect(d.directive).toBe('use client');
+    expect(d.importsServerOnly).toBe(false);
+  });
+
+  test("detects 'use server' directive", async () => {
+    write(tmpDir, 'Server.tsx', [
+      "'use server';",
+      "import { headers } from 'next/headers';",
+      'export async function action() {}',
+    ].join('\n'));
+
+    const r = await exec(tool, { mode: 'client_boundary', projectRoot: tmpDir, file: 'Server.tsx' });
+    expect(r.success).toBe(true);
+    const d = r.data as any;
+    expect(d.directive).toBe('use server');
+    expect(d.importsServerOnly).toBe(true);
+    expect(d.serverOnlyImports).toContain('next/headers');
+  });
+
+  test('returns null directive for plain component', async () => {
+    write(tmpDir, 'Plain.tsx', "import React from 'react';\nexport function X() { return null; }");
+    const r = await exec(tool, { mode: 'client_boundary', projectRoot: tmpDir, file: 'Plain.tsx' });
+    expect(r.success).toBe(true);
+    expect((r.data as any).directive).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// error_boundary mode
+// ---------------------------------------------------------------------------
+
+describe('inspect — error_boundary mode', () => {
+  test('finds ErrorBoundary component usage', async () => {
+    write(tmpDir, 'App.tsx', [
+      "import { ErrorBoundary } from 'react-error-boundary';",
+      'export function App() {',
+      '  return (',
+      '    <ErrorBoundary fallback={<div>error</div>}>',
+      '      <Main />',
+      '    </ErrorBoundary>',
+      '  );',
+      '}',
+    ].join('\n'));
+
+    const r = await exec(tool, { mode: 'error_boundary', projectRoot: tmpDir, file: 'App.tsx' });
+    expect(r.success).toBe(true);
+    const d = r.data as any;
+    expect(d.hasErrorBoundary).toBe(true);
+    expect(d.boundaryComponents.some((c: string) => c.includes('ErrorBoundary'))).toBe(true);
+  });
+
+  test('returns hasErrorBoundary false for plain component', async () => {
+    write(tmpDir, 'NoEB.tsx', 'function X() { return <div>no boundary</div>; }');
+    const r = await exec(tool, { mode: 'error_boundary', projectRoot: tmpDir, file: 'NoEB.tsx' });
+    expect(r.success).toBe(true);
+    expect((r.data as any).hasErrorBoundary).toBe(false);
+  });
+});

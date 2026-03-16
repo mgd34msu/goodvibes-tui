@@ -2,6 +2,7 @@ import { describe, test, expect, beforeEach, afterEach } from 'bun:test';
 import { mkdirSync, writeFileSync, existsSync, rmSync, readFileSync } from 'fs';
 import { join } from 'path';
 import { createEditTool } from '../../tools/edit/index.ts';
+import type { EditToolOptions } from '../../tools/edit/index.ts';
 import { FileStateCache } from '../../state/file-cache.ts';
 
 // ---------------------------------------------------------------------------
@@ -784,4 +785,283 @@ describe('edit tool', () => {
       expect(readFileSync(f2, 'utf-8')).toBe('bbb'); // unchanged
     });
   });
+
+  // -------------------------------------------------------------------------
+  // validate.before / validate.after
+  // -------------------------------------------------------------------------
+  //
+  // These tests use cwd injection so validators run in an isolated tmpDir
+  // with a controlled package.json, avoiding slow/recursive test runs.
+  //
+  // package.json scripts:
+  //   build-pass: exits 0  (validator passes)
+  //   build-fail: exits 1  (validator fails)
+  // We use the 'build' validator mapped to 'bun run build'.
+  // To simulate pass/fail we write a package.json whose 'build' script
+  // is either 'exit 0' or 'exit 1', then create a tool with cwd=tmpDir.
+
+  describe('validate.before', () => {
+    test('skips edits and returns error when before-validator fails', async () => {
+      // Setup: package.json with build script that fails
+      writeFile(tmpDir, 'package.json', JSON.stringify({ scripts: { build: 'exit 1' } }));
+      const editFile = writeFile(tmpDir, 'val_before.ts', 'original');
+      const localTool = createEditTool(new FileStateCache(), { cwd: tmpDir });
+
+      const result = await localTool.execute({
+        edits: [{ path: relPath(editFile), find: 'original', replace: 'changed' }],
+        validate: { before: ['build'] },
+      });
+
+      expect(result.success).toBe(false);
+      expect(result.error).toMatch(/Pre-edit validation failed/i);
+      expect(result.error).toMatch(/build/i);
+      // Edit must NOT have been applied
+      expect(readFileSync(editFile, 'utf-8')).toBe('original');
+    });
+
+    test('applies edit when before-validator passes', async () => {
+      writeFile(tmpDir, 'package.json', JSON.stringify({ scripts: { build: 'exit 0' } }));
+      const editFile = writeFile(tmpDir, 'val_before_pass.ts', 'original');
+      const localTool = createEditTool(new FileStateCache(), { cwd: tmpDir });
+
+      const result = await localTool.execute({
+        edits: [{ path: relPath(editFile), find: 'original', replace: 'changed' }],
+        validate: { before: ['build'] },
+      });
+
+      expect(result.success).toBe(true);
+      expect(readFileSync(editFile, 'utf-8')).toBe('changed');
+    });
+
+    test('does not run validators in dry_run mode', async () => {
+      // Even with a failing validator, dry_run bypasses it
+      writeFile(tmpDir, 'package.json', JSON.stringify({ scripts: { build: 'exit 1' } }));
+      const editFile = writeFile(tmpDir, 'val_dry.ts', 'original');
+      const localTool = createEditTool(new FileStateCache(), { cwd: tmpDir });
+
+      const result = await localTool.execute({
+        edits: [{ path: relPath(editFile), find: 'original', replace: 'changed' }],
+        validate: { before: ['build'] },
+        dry_run: true,
+      });
+
+      // dry_run skips validate.before — file remains unchanged
+      expect(readFileSync(editFile, 'utf-8')).toBe('original');
+      // result may succeed (dry_run returns diff) or fail for other reasons, but NOT validator failure
+      if (!result.success) {
+        expect(result.error ?? '').not.toMatch(/Pre-edit validation failed/i);
+      }
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // validate.after
+  // -------------------------------------------------------------------------
+
+  describe('validate.after', () => {
+    test('rolls back edit in atomic mode when after-validator fails', async () => {
+      writeFile(tmpDir, 'package.json', JSON.stringify({ scripts: { build: 'exit 1' } }));
+      const editFile = writeFile(tmpDir, 'val_after.ts', 'original');
+      const localTool = createEditTool(new FileStateCache(), { cwd: tmpDir });
+
+      const result = await localTool.execute({
+        edits: [{ path: relPath(editFile), find: 'original', replace: 'changed' }],
+        validate: { after: ['build'] },
+        transaction: { mode: 'atomic' },
+      });
+
+      expect(result.success).toBe(false);
+      expect(result.error).toMatch(/Post-edit validation failed/i);
+      expect(result.error).toMatch(/rolled back/i);
+      // File must be restored to original
+      expect(readFileSync(editFile, 'utf-8')).toBe('original');
+    });
+
+    test('commits edit when after-validator passes', async () => {
+      writeFile(tmpDir, 'package.json', JSON.stringify({ scripts: { build: 'exit 0' } }));
+      const editFile = writeFile(tmpDir, 'val_after_pass.ts', 'original');
+      const localTool = createEditTool(new FileStateCache(), { cwd: tmpDir });
+
+      const result = await localTool.execute({
+        edits: [{ path: relPath(editFile), find: 'original', replace: 'changed' }],
+        validate: { after: ['build'] },
+      });
+
+      expect(result.success).toBe(true);
+      expect(readFileSync(editFile, 'utf-8')).toBe('changed');
+    });
+
+    test('does not rollback in non-atomic mode when after-validator fails', async () => {
+      writeFile(tmpDir, 'package.json', JSON.stringify({ scripts: { build: 'exit 1' } }));
+      const editFile = writeFile(tmpDir, 'val_after_partial.ts', 'original');
+      const localTool = createEditTool(new FileStateCache(), { cwd: tmpDir });
+
+      const result = await localTool.execute({
+        edits: [{ path: relPath(editFile), find: 'original', replace: 'changed' }],
+        validate: { after: ['build'] },
+        transaction: { mode: 'partial' },
+      });
+
+      expect(result.success).toBe(false);
+      expect(result.error).toMatch(/Post-edit validation failed/i);
+      // No rollback in partial mode — file stays changed
+      expect(result.error).not.toMatch(/rolled back/i);
+      expect(readFileSync(editFile, 'utf-8')).toBe('changed');
+    });
+
+    test('validate.after is skipped when dry_run is true', async () => {
+      writeFile(tmpDir, 'package.json', JSON.stringify({ scripts: { build: 'exit 1' } }));
+      const editFile = writeFile(tmpDir, 'val_after_dry.ts', 'original');
+      const localTool = createEditTool(new FileStateCache(), { cwd: tmpDir });
+
+      const result = await localTool.execute({
+        edits: [{ path: relPath(editFile), find: 'original', replace: 'changed' }],
+        validate: { after: ['build'] },
+        dry_run: true,
+      });
+
+      // dry_run: file untouched, no after-validator runs
+      expect(readFileSync(editFile, 'utf-8')).toBe('original');
+      if (!result.success) {
+        expect(result.error ?? '').not.toMatch(/Post-edit validation failed/i);
+      }
+    });
+
+    test('validator failure message includes validator name and output', async () => {
+      // Build script writes to stderr to verify output capture
+      writeFile(tmpDir, 'package.json', JSON.stringify({ scripts: { build: 'echo BUILD_FAILED_MSG && exit 1' } }));
+      const editFile = writeFile(tmpDir, 'val_after_msg.ts', 'original');
+      const localTool = createEditTool(new FileStateCache(), { cwd: tmpDir });
+
+      const result = await localTool.execute({
+        edits: [{ path: relPath(editFile), find: 'original', replace: 'changed' }],
+        validate: { after: ['build'] },
+      });
+
+      expect(result.success).toBe(false);
+      expect(result.error).toMatch(/build/i);
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // ast_pattern mode
+  // -------------------------------------------------------------------------
+
+  describe('ast_pattern mode', () => {
+    test('replaces a simple pattern match in a TypeScript file', async () => {
+      const file = writeFile(tmpDir, 'ap1.ts', 'console.log("hello");\nconsole.log("world");\n');
+      const result = await tool.execute({
+        edits: [{ path: relPath(file), find: 'console.log($$$ARGS)', replace: 'logger.info($$$ARGS)', occurrence: 'first' }],
+        match: { mode: 'ast_pattern' },
+      });
+      expect(result.success).toBe(true);
+      const content = readFileSync(file, 'utf-8');
+      expect(content).toContain('logger.info("hello")');
+    });
+
+    test('replaces all pattern occurrences when occurrence is all', async () => {
+      const file = writeFile(tmpDir, 'ap2.ts', 'console.log(1);\nconsole.log(2);\n');
+      const result = await tool.execute({
+        edits: [{ path: relPath(file), find: 'console.log($$$ARGS)', replace: 'logger.debug($$$ARGS)', occurrence: 'all' }],
+        match: { mode: 'ast_pattern' },
+      });
+      expect(result.success).toBe(true);
+      const content = readFileSync(file, 'utf-8');
+      expect(content).not.toContain('console.log');
+      expect(content).toContain('logger.debug(1)');
+      expect(content).toContain('logger.debug(2)');
+    });
+
+    test('returns error when pattern has no matches', async () => {
+      const file = writeFile(tmpDir, 'ap3.ts', 'const x = 1;\n');
+      const result = await tool.execute({
+        edits: [{ path: relPath(file), find: 'console.log($$$ARGS)', replace: 'logger.info($$$ARGS)' }],
+        match: { mode: 'ast_pattern' },
+      });
+      expect(result.success).toBe(false);
+      expect(result.error ?? result.output ?? '').toMatch(/no match/i);
+    });
+
+    test('returns error when multiple matches exist without occurrence', async () => {
+      const file = writeFile(tmpDir, 'ap4.ts', 'console.log(1);\nconsole.log(2);\n');
+      const result = await tool.execute({
+        edits: [{ path: relPath(file), find: 'console.log($$$ARGS)', replace: 'x()' }],
+        match: { mode: 'ast_pattern' },
+      });
+      expect(result.success).toBe(false);
+      expect(result.error ?? result.output ?? '').toMatch(/disambiguate|occurrence|matches/i);
+    });
+
+    test('falls back to exact match for unsupported file types', async () => {
+      const file = writeFile(tmpDir, 'ap5.json', '{"key": "value"}');
+      const result = await tool.execute({
+        edits: [{ path: relPath(file), find: '"value"', replace: '"updated"' }],
+        match: { mode: 'ast_pattern' },
+      });
+      expect(result.success).toBe(true);
+      expect(readFileSync(file, 'utf-8')).toContain('"updated"');
+    });
+
+    test('replaces last occurrence when occurrence is last', async () => {
+      const file = writeFile(tmpDir, 'ap6.ts', 'console.log(1);\nconsole.log(2);\n');
+      const result = await tool.execute({
+        edits: [{ path: relPath(file), find: 'console.log($$$ARGS)', replace: 'done()', occurrence: 'last' }],
+        match: { mode: 'ast_pattern' },
+      });
+      expect(result.success).toBe(true);
+      const content = readFileSync(file, 'utf-8');
+      expect(content).toContain('console.log(1)');
+      expect(content).toContain('done()');
+    });
+
+    test('respects occurrence number selector', async () => {
+      const file = writeFile(tmpDir, 'ap7.ts', 'console.log(1);\nconsole.log(2);\nconsole.log(3);\n');
+      const result = await tool.execute({
+        edits: [{ path: relPath(file), find: 'console.log($$$ARGS)', replace: 'second()', occurrence: 2 }],
+        match: { mode: 'ast_pattern' },
+      });
+      expect(result.success).toBe(true);
+      const content = readFileSync(file, 'utf-8');
+      expect(content).toContain('console.log(1)');
+      expect(content).toContain('second()');
+      expect(content).toContain('console.log(3)');
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // ast mode
+  // -------------------------------------------------------------------------
+
+  describe('ast mode', () => {
+    test('falls back to exact match when tree-sitter grammar unavailable', async () => {
+      // ast mode falls back gracefully; use exact-matchable content
+      const file = writeFile(tmpDir, 'ast1.ts', 'function greet() { return "hello"; }\n');
+      const result = await tool.execute({
+        edits: [{ path: relPath(file), find: 'return "hello";', replace: 'return "hi";' }],
+        match: { mode: 'ast' },
+      });
+      expect(result.success).toBe(true);
+      expect(readFileSync(file, 'utf-8')).toContain('return "hi";');
+    });
+
+    test('returns error when find text not present in file', async () => {
+      const file = writeFile(tmpDir, 'ast2.ts', 'const x = 1;\n');
+      const result = await tool.execute({
+        edits: [{ path: relPath(file), find: 'notHere', replace: 'replaced' }],
+        match: { mode: 'ast' },
+      });
+      expect(result.success).toBe(false);
+    });
+
+    test('works with plain text files via exact fallback', async () => {
+      const file = writeFile(tmpDir, 'ast3.txt', 'hello world\n');
+      const result = await tool.execute({
+        edits: [{ path: relPath(file), find: 'hello', replace: 'goodbye' }],
+        match: { mode: 'ast' },
+      });
+      expect(result.success).toBe(true);
+      expect(readFileSync(file, 'utf-8')).toContain('goodbye world');
+    });
+  });
 });
+

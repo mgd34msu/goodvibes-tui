@@ -1,6 +1,7 @@
 import { describe, test, expect, beforeEach } from 'bun:test';
 import { agentTool } from '../../tools/agent/index.ts';
 import { AgentManager } from '../../tools/agent/index.ts';
+import { AgentMessageBus } from '../../agents/message-bus.ts';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -22,6 +23,7 @@ async function runAgentMayFail(args: Record<string, unknown>) {
 
 beforeEach(() => {
   AgentManager.resetInstance();
+  AgentMessageBus.resetInstance();
 });
 
 // ---------------------------------------------------------------------------
@@ -116,7 +118,8 @@ describe('status mode', () => {
     const status = await runAgent({ mode: 'status', agentId });
     expect(status.id).toBe(agentId);
     expect(status.task).toBe('Check status');
-    expect(status.status).toBe('pending');
+    // Agent is immediately handed to orchestrator, so status progresses past 'pending'
+    expect(['pending', 'running', 'completed', 'failed', 'cancelled']).toContain(status.status);
     expect(typeof status.durationMs).toBe('number');
     expect(typeof status.toolCallCount).toBe('number');
   });
@@ -261,6 +264,246 @@ describe('templates mode', () => {
       expect(Array.isArray(t.defaultTools)).toBe(true);
       expect(t.defaultTools.length).toBeGreaterThan(0);
     }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// get
+// ---------------------------------------------------------------------------
+
+describe('get mode', () => {
+  test('get returns detailed agent info', async () => {
+    const spawned = await runAgent({ mode: 'spawn', task: 'Detailed task', template: 'engineer' });
+    const agentId = spawned.agentId as string;
+
+    const result = await runAgent({ mode: 'get', agentId });
+    expect(result.id).toBe(agentId);
+    expect(result.task).toBe('Detailed task');
+    expect(result.template).toBe('engineer');
+    expect(Array.isArray(result.tools)).toBe(true);
+    expect(typeof result.status).toBe('string');
+    expect(typeof result.durationMs).toBe('number');
+    expect(typeof result.toolCallCount).toBe('number');
+  });
+
+  test('get includes recentMessages field', async () => {
+    const spawned = await runAgent({ mode: 'spawn', task: 'Task with messages' });
+    const agentId = spawned.agentId as string;
+
+    const result = await runAgent({ mode: 'get', agentId });
+    expect(Array.isArray(result.recentMessages)).toBe(true);
+  });
+
+  test('get includes messages sent to agent', async () => {
+    const spawned = await runAgent({ mode: 'spawn', task: 'Task for messaging' });
+    const agentId = spawned.agentId as string;
+
+    // Send a message via the tool
+    await runAgent({ mode: 'message', agentId, message: 'Hello agent!' });
+
+    const result = await runAgent({ mode: 'get', agentId });
+    const messages = result.recentMessages as Array<{ from: string; content: string; timestamp: number }>;
+    expect(messages.some((m) => m.content === 'Hello agent!')).toBe(true);
+  });
+
+  test('get returns error for unknown agent', async () => {
+    const result = await runAgentMayFail({ mode: 'get', agentId: 'agent-unknown99' });
+    expect(result.success).toBe(false);
+    expect(result.error).toContain('agent-unknown99');
+  });
+
+  test('get requires agentId', async () => {
+    const result = await runAgentMayFail({ mode: 'get' });
+    expect(result.success).toBe(false);
+    expect(result.error).toContain('agentId');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// budget
+// ---------------------------------------------------------------------------
+
+describe('budget mode', () => {
+  test('budget returns token usage fields', async () => {
+    const spawned = await runAgent({ mode: 'spawn', task: 'Budget task' });
+    const agentId = spawned.agentId as string;
+
+    const result = await runAgent({ mode: 'budget', agentId });
+    expect(result.agentId).toBe(agentId);
+    expect(typeof result.inputTokens).toBe('number');
+    expect(typeof result.outputTokens).toBe('number');
+    expect(typeof result.totalTokens).toBe('number');
+    expect(typeof result.toolCallCount).toBe('number');
+    expect(result.totalTokens).toBe((result.inputTokens as number) + (result.outputTokens as number));
+  });
+
+  test('budget returns error for unknown agent', async () => {
+    const result = await runAgentMayFail({ mode: 'budget', agentId: 'agent-budgetfail' });
+    expect(result.success).toBe(false);
+    expect(result.error).toContain('agent-budgetfail');
+  });
+
+  test('budget requires agentId', async () => {
+    const result = await runAgentMayFail({ mode: 'budget' });
+    expect(result.success).toBe(false);
+    expect(result.error).toContain('agentId');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// plan
+// ---------------------------------------------------------------------------
+
+describe('plan mode', () => {
+  test('plan returns task, template, and tools', async () => {
+    const spawned = await runAgent({ mode: 'spawn', task: 'Plan task', template: 'reviewer' });
+    const agentId = spawned.agentId as string;
+
+    const result = await runAgent({ mode: 'plan', agentId });
+    expect(result.agentId).toBe(agentId);
+    expect(result.task).toBe('Plan task');
+    expect(result.template).toBe('reviewer');
+    expect(Array.isArray(result.tools)).toBe(true);
+    expect(typeof result.templateDescription).toBe('string');
+  });
+
+  test('plan returns model and provider as null when not set', async () => {
+    const spawned = await runAgent({ mode: 'spawn', task: 'Plan without model' });
+    const agentId = spawned.agentId as string;
+
+    const result = await runAgent({ mode: 'plan', agentId });
+    expect(result.model).toBeNull();
+    expect(result.provider).toBeNull();
+  });
+
+  test('plan returns error for unknown agent', async () => {
+    const result = await runAgentMayFail({ mode: 'plan', agentId: 'agent-planfail' });
+    expect(result.success).toBe(false);
+    expect(result.error).toContain('agent-planfail');
+  });
+
+  test('plan requires agentId', async () => {
+    const result = await runAgentMayFail({ mode: 'plan' });
+    expect(result.success).toBe(false);
+    expect(result.error).toContain('agentId');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// wait
+// ---------------------------------------------------------------------------
+
+describe('wait mode', () => {
+  test('wait returns immediately when agent is already completed', async () => {
+    const spawned = await runAgent({ mode: 'spawn', task: 'Already done' });
+    const agentId = spawned.agentId as string;
+
+    // Manually mark as completed
+    const manager = AgentManager.getInstance();
+    const record = manager.getStatus(agentId);
+    if (record) {
+      record.status = 'completed';
+      record.completedAt = Date.now();
+    }
+
+    const result = await runAgent({ mode: 'wait', agentId, timeoutMs: 5000 });
+    expect(result.agentId).toBe(agentId);
+    expect(result.status).toBe('completed');
+    expect(result.timedOut).toBe(false);
+  });
+
+  test('wait times out when agent stays pending', async () => {
+    const spawned = await runAgent({ mode: 'spawn', task: 'Stuck task' });
+    const agentId = spawned.agentId as string;
+
+    // Agent remains 'pending' — wait with very short timeout
+    const result = await runAgent({ mode: 'wait', agentId, timeoutMs: 50 });
+    expect(result.agentId).toBe(agentId);
+    expect(result.timedOut).toBe(true);
+  });
+
+  test('wait returns immediately when agent is cancelled', async () => {
+    const spawned = await runAgent({ mode: 'spawn', task: 'To be cancelled' });
+    const agentId = spawned.agentId as string;
+    await runAgent({ mode: 'cancel', agentId });
+
+    const result = await runAgent({ mode: 'wait', agentId, timeoutMs: 5000 });
+    expect(result.status).toBe('cancelled');
+    expect(result.timedOut).toBe(false);
+  });
+
+  test('wait returns error for unknown agent', async () => {
+    const result = await runAgentMayFail({ mode: 'wait', agentId: 'agent-waitfail' });
+    expect(result.success).toBe(false);
+    expect(result.error).toContain('agent-waitfail');
+  });
+
+  test('wait requires agentId', async () => {
+    const result = await runAgentMayFail({ mode: 'wait' });
+    expect(result.success).toBe(false);
+    expect(result.error).toContain('agentId');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// message
+// ---------------------------------------------------------------------------
+
+describe('message mode', () => {
+  test('message sends to agent and returns sent=true', async () => {
+    const spawned = await runAgent({ mode: 'spawn', task: 'Receive messages' });
+    const agentId = spawned.agentId as string;
+
+    const result = await runAgent({ mode: 'message', agentId, message: 'Hello from orchestrator' });
+    expect(result.agentId).toBe(agentId);
+    expect(result.sent).toBe(true);
+    expect(result.content).toBe('Hello from orchestrator');
+  });
+
+  test('message is visible via getMessages on the bus', async () => {
+    const spawned = await runAgent({ mode: 'spawn', task: 'Bus test' });
+    const agentId = spawned.agentId as string;
+
+    await runAgent({ mode: 'message', agentId, message: 'Check the bus' });
+
+    const bus = AgentMessageBus.getInstance();
+    const msgs = bus.getMessages(agentId);
+    expect(msgs.some((m) => m.content === 'Check the bus')).toBe(true);
+    expect(msgs.find((m) => m.content === 'Check the bus')?.from).toBe('orchestrator');
+  });
+
+  test('message returns error for unknown agent', async () => {
+    const result = await runAgentMayFail({
+      mode: 'message',
+      agentId: 'agent-msgfail',
+      message: 'Test',
+    });
+    expect(result.success).toBe(false);
+    expect(result.error).toContain('agent-msgfail');
+  });
+
+  test('message requires agentId', async () => {
+    const result = await runAgentMayFail({ mode: 'message', message: 'No target' });
+    expect(result.success).toBe(false);
+    expect(result.error).toContain('agentId');
+  });
+
+  test('message requires message content', async () => {
+    const spawned = await runAgent({ mode: 'spawn', task: 'Empty msg target' });
+    const agentId = spawned.agentId as string;
+
+    const result = await runAgentMayFail({ mode: 'message', agentId });
+    expect(result.success).toBe(false);
+    expect(result.error).toContain('message');
+  });
+
+  test('message with empty string returns error', async () => {
+    const spawned = await runAgent({ mode: 'spawn', task: 'Whitespace message target' });
+    const agentId = spawned.agentId as string;
+
+    const result = await runAgentMayFail({ mode: 'message', agentId, message: '   ' });
+    expect(result.success).toBe(false);
+    expect(result.error).toContain('message');
   });
 });
 

@@ -9,6 +9,8 @@ import { mkdirSync, existsSync, rmSync, mkdtempSync, readFileSync } from 'node:f
 import { join } from 'node:path';
 import { KVState } from '../../state/kv-state.ts';
 import { ProjectIndex } from '../../state/project-index.ts';
+import { ModeManager } from '../../state/mode-manager.ts';
+import { HookDispatcher } from '../../hooks/dispatcher.ts';
 import { createStateTool } from '../../tools/state/index.ts';
 
 // ---------------------------------------------------------------------------
@@ -372,6 +374,234 @@ describe('StateTool', () => {
     const res = await tool.execute({ mode: 'bogusMode' });
     expect(res.success).toBe(false);
     expect(res.error).toContain('bogusMode');
+  });
+
+  // -------------------------------------------------------------------------
+  // hooks mode
+  // -------------------------------------------------------------------------
+
+  describe('hooks mode', () => {
+    let dispatcher: HookDispatcher;
+    let hookTool: ReturnType<typeof createStateTool>;
+
+    beforeEach(() => {
+      dispatcher = new HookDispatcher();
+      hookTool = createStateTool(kvState, projectIndex, dispatcher);
+    });
+
+    test('hooks list returns empty when no hooks registered', async () => {
+      const res = await run(hookTool, { mode: 'hooks', hookAction: 'list' });
+      expect(res.parsed.mode).toBe('hooks');
+      expect(res.parsed.action).toBe('list');
+      expect(res.parsed.count).toBe(0);
+      expect(res.parsed.hooks).toEqual([]);
+    });
+
+    test('hooks list defaults when no hookAction provided', async () => {
+      const res = await run(hookTool, { mode: 'hooks' });
+      expect(res.parsed.action).toBe('list');
+    });
+
+    test('hooks list shows registered hooks', async () => {
+      dispatcher.register('Pre:tool:*', { name: 'myHook', type: 'command', match: 'Pre:tool:*', command: 'echo hi' });
+      const res = await run(hookTool, { mode: 'hooks', hookAction: 'list' });
+      expect(res.parsed.count).toBe(1);
+      expect(res.parsed.hooks[0].name).toBe('myHook');
+      expect(res.parsed.hooks[0].type).toBe('command');
+      expect(res.parsed.hooks[0].enabled).toBe(true);
+    });
+
+    test('hooks enable sets hook enabled to true', async () => {
+      dispatcher.register('Pre:tool:*', { name: 'toggleHook', type: 'command', match: 'Pre:tool:*', command: 'echo hi', enabled: false });
+      const res = await run(hookTool, { mode: 'hooks', hookAction: 'enable', hookName: 'toggleHook' });
+      expect(res.parsed.enabled).toBe(true);
+      // Verify via list
+      const list = await run(hookTool, { mode: 'hooks', hookAction: 'list' });
+      expect(list.parsed.hooks[0].enabled).toBe(true);
+    });
+
+    test('hooks disable sets hook enabled to false', async () => {
+      dispatcher.register('Pre:tool:*', { name: 'disableMe', type: 'command', match: 'Pre:tool:*', command: 'echo hi' });
+      const res = await run(hookTool, { mode: 'hooks', hookAction: 'disable', hookName: 'disableMe' });
+      expect(res.parsed.enabled).toBe(false);
+    });
+
+    test('hooks enable returns error when hook not found', async () => {
+      const res = await hookTool.execute({ mode: 'hooks', hookAction: 'enable', hookName: 'noSuchHook' });
+      expect(res.success).toBe(false);
+      expect(res.error).toContain('noSuchHook');
+    });
+
+    test('hooks disable returns error when hook not found', async () => {
+      const res = await hookTool.execute({ mode: 'hooks', hookAction: 'disable', hookName: 'noSuchHook' });
+      expect(res.success).toBe(false);
+      expect(res.error).toContain('noSuchHook');
+    });
+
+    test('hooks enable requires hookName', async () => {
+      const res = await hookTool.execute({ mode: 'hooks', hookAction: 'enable' });
+      expect(res.success).toBe(false);
+      expect(res.error).toContain('hookName');
+    });
+
+    test('hooks add registers a new hook', async () => {
+      const res = await run(hookTool, {
+        mode: 'hooks',
+        hookAction: 'add',
+        hookDefinition: {
+          eventPattern: 'Post:tool:*',
+          name: 'addedHook',
+          type: 'command',
+          match: 'Post:tool:*',
+          command: 'echo done',
+        },
+      });
+      expect(res.parsed.action).toBe('add');
+      expect(res.parsed.name).toBe('addedHook');
+      // Verify it appears in list
+      const list = await run(hookTool, { mode: 'hooks', hookAction: 'list' });
+      expect(list.parsed.count).toBe(1);
+      expect(list.parsed.hooks[0].name).toBe('addedHook');
+    });
+
+    test('hooks add requires hookDefinition', async () => {
+      const res = await hookTool.execute({ mode: 'hooks', hookAction: 'add' });
+      expect(res.success).toBe(false);
+      expect(res.error).toContain('hookDefinition');
+    });
+
+    test('hooks add requires eventPattern', async () => {
+      const res = await hookTool.execute({
+        mode: 'hooks',
+        hookAction: 'add',
+        hookDefinition: { eventPattern: '', type: 'command', match: 'Pre:tool:*', command: 'echo' },
+      });
+      expect(res.success).toBe(false);
+      expect(res.error).toContain('eventPattern');
+    });
+
+    test('hooks add rejects invalid type', async () => {
+      const res = await hookTool.execute({
+        mode: 'hooks',
+        hookAction: 'add',
+        hookDefinition: { eventPattern: 'Pre:tool:*', type: 'prompt' as 'command', match: 'Pre:tool:*' },
+      });
+      expect(res.success).toBe(false);
+      expect(res.error).toContain('type');
+    });
+
+    test('hooks remove deletes a named hook', async () => {
+      dispatcher.register('Pre:tool:*', { name: 'removeMe', type: 'command', match: 'Pre:tool:*', command: 'echo' });
+      const res = await run(hookTool, { mode: 'hooks', hookAction: 'remove', hookName: 'removeMe' });
+      expect(res.parsed.action).toBe('remove');
+      expect(res.parsed.name).toBe('removeMe');
+      // Verify removed
+      const list = await run(hookTool, { mode: 'hooks', hookAction: 'list' });
+      expect(list.parsed.count).toBe(0);
+    });
+
+    test('hooks remove returns error when not found', async () => {
+      const res = await hookTool.execute({ mode: 'hooks', hookAction: 'remove', hookName: 'missing' });
+      expect(res.success).toBe(false);
+      expect(res.error).toContain('missing');
+    });
+
+    test('hooks remove requires hookName', async () => {
+      const res = await hookTool.execute({ mode: 'hooks', hookAction: 'remove' });
+      expect(res.success).toBe(false);
+      expect(res.error).toContain('hookName');
+    });
+
+    test('hooks mode returns error when no dispatcher provided', async () => {
+      const noDispatcherTool = createStateTool(kvState, projectIndex);
+      const res = await noDispatcherTool.execute({ mode: 'hooks' });
+      expect(res.success).toBe(false);
+      expect(res.error).toContain('HookDispatcher');
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // mode mode
+  // -------------------------------------------------------------------------
+
+  describe('mode mode', () => {
+    let modeMgr: ModeManager;
+    let modeTool: ReturnType<typeof createStateTool>;
+
+    beforeEach(() => {
+      ModeManager.resetInstance();
+      modeMgr = ModeManager.getInstance();
+      modeTool = createStateTool(kvState, projectIndex, undefined, modeMgr);
+    });
+
+    afterEach(() => {
+      ModeManager.resetInstance();
+    });
+
+    test('mode get returns current mode name and verbosityDefaults', async () => {
+      const res = await run(modeTool, { mode: 'mode', modeAction: 'get' });
+      expect(res.parsed.mode).toBe('mode');
+      expect(res.parsed.action).toBe('get');
+      expect(res.parsed.name).toBe('default');
+      expect(typeof res.parsed.verbosityDefaults).toBe('object');
+    });
+
+    test('mode get defaults when no modeAction provided', async () => {
+      const res = await run(modeTool, { mode: 'mode' });
+      expect(res.parsed.action).toBe('get');
+      expect(res.parsed.name).toBe('default');
+    });
+
+    test('mode list returns all available modes', async () => {
+      const res = await run(modeTool, { mode: 'mode', modeAction: 'list' });
+      expect(res.parsed.action).toBe('list');
+      expect(res.parsed.count).toBeGreaterThanOrEqual(3);
+      const names = res.parsed.modes.map((m: { name: string }) => m.name);
+      expect(names).toContain('default');
+      expect(names).toContain('vibecoding');
+      expect(names).toContain('justvibes');
+    });
+
+    test('mode list includes verbosityDefaults per mode', async () => {
+      const res = await run(modeTool, { mode: 'mode', modeAction: 'list' });
+      const def = res.parsed.modes.find((m: { name: string }) => m.name === 'default');
+      expect(typeof def.verbosityDefaults).toBe('object');
+      expect(typeof def.verbosityDefaults.write).toBe('string');
+    });
+
+    test('mode set switches to vibecoding', async () => {
+      await modeTool.execute({ mode: 'mode', modeAction: 'set', modeName: 'vibecoding' });
+      const res = await run(modeTool, { mode: 'mode', modeAction: 'get' });
+      expect(res.parsed.name).toBe('vibecoding');
+    });
+
+    test('mode set returns new verbosityDefaults', async () => {
+      const res = await run(modeTool, { mode: 'mode', modeAction: 'set', modeName: 'vibecoding' });
+      expect(res.parsed.name).toBe('vibecoding');
+      expect(res.parsed.verbosityDefaults.write).toBe('count_only');
+    });
+
+    test('mode set unknown mode returns error', async () => {
+      const res = await modeTool.execute({ mode: 'mode', modeAction: 'set', modeName: 'bogusMode' });
+      expect(res.success).toBe(false);
+      expect(res.error).toContain('bogusMode');
+    });
+
+    test('mode set requires modeName', async () => {
+      const res = await modeTool.execute({ mode: 'mode', modeAction: 'set' });
+      expect(res.success).toBe(false);
+      expect(res.error).toContain('modeName');
+    });
+
+    test('mode uses ModeManager singleton when none provided', async () => {
+      ModeManager.resetInstance();
+      const singleton = ModeManager.getInstance();
+      singleton.setMode('justvibes');
+      const noMgrTool = createStateTool(kvState, projectIndex);
+      const res = await run(noMgrTool, { mode: 'mode', modeAction: 'get' });
+      expect(res.parsed.name).toBe('justvibes');
+      ModeManager.resetInstance();
+    });
   });
 
   // -------------------------------------------------------------------------
