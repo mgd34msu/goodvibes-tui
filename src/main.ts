@@ -376,12 +376,7 @@ async function main() {
     if (orchestrator.isThinking) overlayRows += 2; // spinner + blank
     if (pendingPermission) overlayRows += 8; // permission prompt
     overlayRows += orchestrator.messageQueue.length * 3; // queued messages
-    if (input.filePicker.active) {
-      overlayRows += Math.min(input.filePicker.results.length, 12) + 4;
-    }
-    if (input.modelPicker.active) {
-      overlayRows += input.modelPicker.getItemCount() + 7;
-    }
+    // File picker and model picker overlay rows computed from actual rendered line count below
     // Selection modal overlay rows are computed from actual rendered line count below
     if (input.searchManager.active) {
       overlayRows += 1;
@@ -420,11 +415,19 @@ async function main() {
     });
 
     if (input.filePicker.active) {
-      viewport.push(...renderFilePickerOverlay(input.filePicker, width));
+      const fpLines = renderFilePickerOverlay(input.filePicker, width);
+      const fpStart = Math.max(0, vHeight - fpLines.length);
+      viewport.length = Math.min(viewport.length, fpStart);
+      while (viewport.length < fpStart) viewport.push(createEmptyLine(width));
+      viewport.push(...fpLines);
     }
 
     if (input.modelPicker.active) {
-      viewport.push(...renderModelPickerOverlay(input.modelPicker, width));
+      const mpLines = renderModelPickerOverlay(input.modelPicker, width);
+      const mpStart = Math.max(0, vHeight - mpLines.length);
+      viewport.length = Math.min(viewport.length, mpStart);
+      while (viewport.length < mpStart) viewport.push(createEmptyLine(width));
+      viewport.push(...mpLines);
     }
 
     if (input.selectionModal.active) {
