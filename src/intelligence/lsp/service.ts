@@ -1,6 +1,24 @@
+import { existsSync } from 'fs';
+import { join } from 'path';
 import { pathToFileURL } from 'url';
 import { logger } from '../../utils/logger.ts';
 import { LspClient } from './client.ts';
+
+/**
+ * Resolve a server command: check node_modules/.bin/ first (bundled),
+ * then fall back to system PATH via Bun.which().
+ * Returns the resolved command path, or the original command if neither found.
+ */
+function resolveCommand(command: string): string {
+  // Try node_modules/.bin in project root
+  const bundled = join(process.cwd(), 'node_modules', '.bin', command);
+  if (existsSync(bundled)) return bundled;
+  // Try system PATH
+  const system = Bun.which(command);
+  if (system) return system;
+  // Return as-is — spawn will fail with a clear error
+  return command;
+}
 
 export interface LspServerConfig {
   command: string;
@@ -14,10 +32,11 @@ const WELL_KNOWN_SERVERS: Array<{ command: string; langIds: string[]; args: stri
   { command: 'pyright-langserver', langIds: ['python'], args: ['--stdio'] },
   { command: 'pylsp', langIds: ['python'], args: [] },
   { command: 'rust-analyzer', langIds: ['rust'], args: [] },
-  { command: 'gopls', langIds: ['go'], args: [] },
+  { command: 'gopls', langIds: ['go'], args: ['serve'] },
   { command: 'bash-language-server', langIds: ['bash'], args: ['start'] },
-  { command: 'vscode-css-languageserver', langIds: ['css'], args: ['--stdio'] },
-  { command: 'vscode-html-languageserver', langIds: ['html'], args: ['--stdio'] },
+  { command: 'vscode-css-language-server', langIds: ['css'], args: ['--stdio'] },
+  { command: 'vscode-html-language-server', langIds: ['html'], args: ['--stdio'] },
+  { command: 'vscode-json-language-server', langIds: ['json'], args: ['--stdio'] },
 ];
 
 export class LspService {
@@ -72,7 +91,8 @@ export class LspService {
     const config = this.configs.get(langId);
     if (!config) return null;
 
-    const client = new LspClient(config.command, config.args);
+    const resolvedCommand = resolveCommand(config.command);
+    const client = new LspClient(resolvedCommand, config.args);
     try {
       await client.start();
       await this._initializeServer(client);
@@ -93,6 +113,10 @@ export class LspService {
   async isAvailable(langId: string): Promise<boolean> {
     const config = this.configs.get(langId);
     if (!config) return false;
+    // Check bundled first
+    const bundled = join(process.cwd(), 'node_modules', '.bin', config.command);
+    if (existsSync(bundled)) return true;
+    // Then system PATH
     try {
       const resolved = Bun.which(config.command);
       return resolved !== null;
@@ -137,10 +161,16 @@ export class LspService {
 
     for (const { command, langIds, args } of WELL_KNOWN_SERVERS) {
       let found = false;
-      try {
-        found = Bun.which(command) !== null;
-      } catch {
-        found = false;
+      // Check bundled first, then system PATH
+      const bundledPath = join(process.cwd(), 'node_modules', '.bin', command);
+      if (existsSync(bundledPath)) {
+        found = true;
+      } else {
+        try {
+          found = Bun.which(command) !== null;
+        } catch {
+          found = false;
+        }
       }
 
       if (found) {

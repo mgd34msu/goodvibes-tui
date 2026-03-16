@@ -39,6 +39,11 @@ export function getDefaultConfigs(): Map<string, LanguageConfig> {
     treeSitter: 'typescript',
   });
 
+  defaults.set('tsx', {
+    lsp: { command: 'typescript-language-server', args: ['--stdio'] },
+    treeSitter: 'tsx',
+  });
+
   defaults.set('javascript', {
     lsp: { command: 'typescript-language-server', args: ['--stdio'] },
     treeSitter: 'javascript',
@@ -62,6 +67,21 @@ export function getDefaultConfigs(): Map<string, LanguageConfig> {
   defaults.set('bash', {
     lsp: { command: 'bash-language-server', args: ['start'] },
     treeSitter: 'bash',
+  });
+
+  defaults.set('css', {
+    lsp: { command: 'vscode-css-language-server', args: ['--stdio'] },
+    treeSitter: 'css',
+  });
+
+  defaults.set('html', {
+    lsp: { command: 'vscode-html-language-server', args: ['--stdio'] },
+    treeSitter: 'html',
+  });
+
+  defaults.set('json', {
+    lsp: { command: 'vscode-json-language-server', args: ['--stdio'] },
+    treeSitter: 'json',
   });
 
   return defaults;
