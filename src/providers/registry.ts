@@ -254,4 +254,7 @@ export const providerRegistry: ProviderRegistry = new Proxy({} as ProviderRegist
   get(_target, prop: string | symbol) {
     return (getProviderRegistry() as unknown as Record<string | symbol, unknown>)[prop];
   },
+  has(_target, prop: string | symbol) {
+    return prop in (getProviderRegistry() as unknown as Record<string | symbol, unknown>);
+  },
 });

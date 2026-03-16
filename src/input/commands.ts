@@ -79,6 +79,20 @@ export function registerBuiltinCommands(registry: CommandRegistry): void {
     },
   });
 
+  // ── /commands ────────────────────────────────────────────
+  registry.register({
+    name: 'commands',
+    aliases: ['cmds'],
+    description: 'Browse all commands in a scrollable list',
+    handler(_args, ctx) {
+      if (ctx.openHelpOverlay) {
+        ctx.openHelpOverlay();
+        return;
+      }
+      ctx.print('Use /help for interactive command list');
+    },
+  });
+
   // ── /shortcuts ──────────────────────────────────────────
   registry.register({
     name: 'shortcuts',
@@ -99,11 +113,8 @@ export function registerBuiltinCommands(registry: CommandRegistry): void {
     aliases: ['h', '?'],
     description: 'Show available commands and keyboard shortcuts',
     handler(_args, ctx) {
-      // Prefer dedicated help overlay if available
-      if (ctx.openHelpOverlay) {
-        ctx.openHelpOverlay();
-        return;
-      }
+      // Use selection modal for interactive command picker
+      // The ? key still opens the quick text overlay via handler.ts
       if (ctx.openSelection) {
         const items: import('./selection-modal.ts').SelectionItem[] = [
           // Model & Provider
@@ -142,32 +153,11 @@ export function registerBuiltinCommands(registry: CommandRegistry): void {
           { id: '/secrets', label: '/secrets set|get|list|delete', detail: 'Manage encrypted API key secrets', category: 'Tools & System' },
           { id: '/help', label: '/help', detail: 'This help', category: 'Tools & System' },
           { id: '/quit', label: '/quit', detail: 'Exit', category: 'Tools & System' },
-          // Keyboard shortcuts
-          { id: 'k:enter', label: 'Enter', detail: 'Send message', category: 'Keyboard Shortcuts' },
-          { id: 'k:shift-enter', label: 'Shift+Enter', detail: 'Insert newline', category: 'Keyboard Shortcuts' },
-          { id: 'k:ctrl-c', label: 'Ctrl+C x2', detail: 'Exit', category: 'Keyboard Shortcuts' },
-          { id: 'k:ctrl-l', label: 'Ctrl+L', detail: 'Clear screen', category: 'Keyboard Shortcuts' },
-          { id: 'k:ctrl-u', label: 'Ctrl+U', detail: 'Clear prompt line', category: 'Keyboard Shortcuts' },
-          { id: 'k:ctrl-f', label: 'Ctrl+F', detail: 'Search conversation', category: 'Keyboard Shortcuts' },
-          { id: 'k:ctrl-z', label: 'Ctrl+Z', detail: 'Undo prompt edit', category: 'Keyboard Shortcuts' },
-          { id: 'k:ctrl-sz', label: 'Ctrl+Shift+Z', detail: 'Redo prompt edit', category: 'Keyboard Shortcuts' },
-          { id: 'k:ctrl-v', label: 'Ctrl+V', detail: 'Paste (image or text)', category: 'Keyboard Shortcuts' },
-          { id: 'k:ctrl-y', label: 'Ctrl+Y', detail: 'Copy nearest block', category: 'Keyboard Shortcuts' },
-          { id: 'k:ctrl-a', label: 'Ctrl+A', detail: 'Apply nearest diff', category: 'Keyboard Shortcuts' },
-          { id: 'k:ctrl-b', label: 'Ctrl+B', detail: 'Bookmark block', category: 'Keyboard Shortcuts' },
-          { id: 'k:ctrl-s', label: 'Ctrl+S', detail: 'Save block to file', category: 'Keyboard Shortcuts' },
-          { id: 'k:tab', label: 'Tab', detail: 'Toggle collapse / path completion', category: 'Keyboard Shortcuts' },
-          { id: 'k:page', label: 'PageUp/Down', detail: 'Scroll by page', category: 'Keyboard Shortcuts' },
-          { id: 'k:arrows', label: 'Arrow Up/Down', detail: 'Scroll / history recall', category: 'Keyboard Shortcuts' },
-          { id: 'k:mouse', label: 'Mouse wheel', detail: 'Scroll', category: 'Keyboard Shortcuts' },
-          { id: 'k:middle', label: 'Middle click', detail: 'Paste', category: 'Keyboard Shortcuts' },
-          { id: 'k:drag', label: 'Click drag', detail: 'Select text', category: 'Keyboard Shortcuts' },
-          { id: 'k:copy', label: 'Ctrl+Shift+C', detail: 'Copy selection', category: 'Keyboard Shortcuts' },
+          { id: '/shortcuts', label: '/shortcuts', detail: 'View keyboard shortcuts reference', category: 'Tools & System' },
+          { id: '/commands', label: '/commands', detail: 'Browse all commands in a scrollable list', category: 'Tools & System' },
         ];
-        ctx.openSelection('Help  —  Commands & Shortcuts', items, { allowSearch: true }, (result) => {
+        ctx.openSelection('Help  —  Commands', items, { allowSearch: true }, (result) => {
           if (!result) return;
-          // Keyboard shortcuts (id starts with 'k:') are informational only
-          if (result.item.id.startsWith('k:')) return;
           // Execute the selected command through the command registry
           const cmd = result.item.id;
           if (cmd.startsWith('/')) {
@@ -1162,6 +1152,41 @@ export function registerBuiltinCommands(registry: CommandRegistry): void {
     },
   });
 
+  // ── /expand + /collapse shared helper ────────────────────
+  function toggleBlocks(
+    typeFilter: string,
+    collapsed: boolean,
+    ctx: CommandContext,
+  ): void {
+    const VALID_TYPES = ['all', 'thinking', 'tool', 'code'] as const;
+    if (!VALID_TYPES.includes(typeFilter as typeof VALID_TYPES[number])) {
+      ctx.print(`Unknown type: ${typeFilter}\nValid types: ${VALID_TYPES.join(', ')}`);
+      return;
+    }
+    const blockRegistry = ctx.conversationManager.getBlockRegistry();
+    if (!blockRegistry || blockRegistry.length === 0) {
+      ctx.print('No blocks found.');
+      return;
+    }
+    let count = 0;
+    for (let i = 0; i < blockRegistry.length; i++) {
+      const block = blockRegistry[i];
+      const matchesType = typeFilter === 'all' ||
+        (typeFilter === 'tool' && block.type === 'tool') ||
+        (typeFilter === 'code' && block.type === 'code') ||
+        (typeFilter === 'thinking' && block.type === 'thinking');
+      if (!matchesType) continue;
+      const isCurrentlyCollapsed = ctx.conversationManager.isCollapsed(i);
+      if (collapsed ? !isCurrentlyCollapsed : isCurrentlyCollapsed) {
+        ctx.conversationManager.toggleCollapseAtLine(block.startLine);
+        count++;
+      }
+    }
+    const verb = collapsed ? 'Collapsed' : 'Expanded';
+    ctx.print(`${verb} ${count} block${count !== 1 ? 's' : ''}${typeFilter !== 'all' ? ` (${typeFilter})` : ''}.`);
+    ctx.renderRequest();
+  }
+
   // ── /expand ────────────────────────────────────────────
   registry.register({
     name: 'expand',
@@ -1169,32 +1194,7 @@ export function registerBuiltinCommands(registry: CommandRegistry): void {
     description: 'Expand blocks by type',
     usage: '[all|thinking|tool|code]',
     handler(args, ctx) {
-      const typeFilter = args[0] || 'all';
-      const VALID_TYPES = ['all', 'thinking', 'tool', 'code'] as const;
-      if (!VALID_TYPES.includes(typeFilter as typeof VALID_TYPES[number])) {
-        ctx.print(`Unknown type: ${typeFilter}\nValid types: ${VALID_TYPES.join(', ')}`);
-        return;
-      }
-      const blockRegistry = ctx.conversationManager.getBlockRegistry();
-      if (!blockRegistry || blockRegistry.length === 0) {
-        ctx.print('No blocks found.');
-        return;
-      }
-      let count = 0;
-      for (let i = 0; i < blockRegistry.length; i++) {
-        const block = blockRegistry[i];
-        const matchesType = typeFilter === 'all' ||
-          (typeFilter === 'tool' && block.type === 'tool') ||
-          (typeFilter === 'code' && block.type === 'code') ||
-          (typeFilter === 'thinking' && block.type === 'thinking');
-        if (!matchesType) continue;
-        if (ctx.conversationManager.isCollapsed(i)) {
-          ctx.conversationManager.toggleCollapseAtLine(block.startLine);
-          count++;
-        }
-      }
-      ctx.print(`Expanded ${count} block${count !== 1 ? 's' : ''}${typeFilter !== 'all' ? ` (${typeFilter})` : ''}.`);
-      ctx.renderRequest();
+      toggleBlocks(args[0] || 'all', false, ctx);
     },
   });
 
@@ -1205,32 +1205,7 @@ export function registerBuiltinCommands(registry: CommandRegistry): void {
     description: 'Collapse blocks by type',
     usage: '[all|thinking|tool|code]',
     handler(args, ctx) {
-      const typeFilter = args[0] || 'all';
-      const VALID_TYPES = ['all', 'thinking', 'tool', 'code'] as const;
-      if (!VALID_TYPES.includes(typeFilter as typeof VALID_TYPES[number])) {
-        ctx.print(`Unknown type: ${typeFilter}\nValid types: ${VALID_TYPES.join(', ')}`);
-        return;
-      }
-      const blockRegistry = ctx.conversationManager.getBlockRegistry();
-      if (!blockRegistry || blockRegistry.length === 0) {
-        ctx.print('No blocks found.');
-        return;
-      }
-      let count = 0;
-      for (let i = 0; i < blockRegistry.length; i++) {
-        const block = blockRegistry[i];
-        const matchesType = typeFilter === 'all' ||
-          (typeFilter === 'tool' && block.type === 'tool') ||
-          (typeFilter === 'code' && block.type === 'code') ||
-          (typeFilter === 'thinking' && block.type === 'thinking');
-        if (!matchesType) continue;
-        if (!ctx.conversationManager.isCollapsed(i)) {
-          ctx.conversationManager.toggleCollapseAtLine(block.startLine);
-          count++;
-        }
-      }
-      ctx.print(`Collapsed ${count} block${count !== 1 ? 's' : ''}${typeFilter !== 'all' ? ` (${typeFilter})` : ''}.`);
-      ctx.renderRequest();
+      toggleBlocks(args[0] || 'all', true, ctx);
     },
   });
 
