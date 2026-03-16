@@ -1,3 +1,19 @@
-venv/\n__pycache__/\n*.pyc\n.env
+# Dependencies
+node_modules/
+venv/
+__pycache__/
+*.pyc
+
+# Build output
+dist/
+
+# Environment & secrets
+.env
 .env.*
 *.enc
+
+# Runtime state
+.goodvibes/
+
+# Artifacts
+scripts/reset-suite.sh

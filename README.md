@@ -186,20 +186,133 @@ Per-tool values: `allow`, `prompt`, `deny`.
 
 ## Tools
 
-| Tool | Description |
-|------|-------------|
-| `read` | Read files with multiple extract modes: content, outline, symbols, AST, or line ranges. Supports images, PDFs, and Jupyter notebooks. Batched reads in a single call. |
-| `write` | Write files to disk. Supports batch writes, overwrite modes, and auto-heal on validation failure. |
-| `edit` | Apply targeted edits to existing files using exact, fuzzy, regex, or AST matching. Atomic transaction support with rollback. |
-| `find` | Search the codebase with glob patterns, regex content search, or symbol extraction. Supports multiple queries per call. |
-| `exec` | Run shell commands. Sequential or parallel execution, progress tracking, background processes, retry, and fail-fast. |
-| `fetch` | HTTP fetch with batch URL support. Extract modes: raw, text, JSON, markdown, structured (CSS selectors), tables, PDF. Service registry auth. |
-| `analyze` | Multi-mode code analysis: impact (blast radius), dependencies, dead code, security, coverage, breaking changes, semantic diff, upgrade compatibility. |
-| `inspect` | Project-level inspection: API spec generation and validation, database schema, frontend component state, render triggers, layout hierarchy, accessibility, responsive breakpoints, and more. |
-| `agent` | Spawn and manage in-process subagents. Modes: spawn, status, cancel, list, get, budget, plan, wait, message. |
-| `state` | Session-scoped key-value store with analytics, telemetry, hook management, output mode switching, context inspection, and memory operations. |
-| `workflow` | Workflow state machines, automation triggers, and scheduled tasks. Start, transition, cancel, and monitor workflow instances. |
-| `registry` | Search and introspect the tool registry. Fuzzy search by name, path, or description. Retrieve tool schemas and dependency info. |
+goodvibes-tui ships 12 built-in tools that go well beyond the read/write/exec primitives found in Claude Code, Gemini CLI, and Codex. Each tool is designed for agentic workloads: batch operations, token-efficient extraction, structural code understanding, and composable automation — not just wrapping shell commands.
+
+### read
+
+Read files with token-efficient extraction modes. Not just cat-to-context.
+
+- 5 extract modes: `content` (full text), `outline` (signatures only, significant token savings), `symbols` (exported names, even greater savings), `ast` (structural), `lines` (specific ranges)
+- Tree-sitter powered outline and symbol extraction with regex fallback
+- Token-budget pagination for large batch reads — request N files, get pages that fit within a budget
+- Built-in image, PDF, and Jupyter notebook reading
+- Per-file caching with optimistic concurrency control (OCC) conflict detection — tracks what you've read and warns if it changed externally
+
+### write
+
+Write files with atomic operations, backup modes, and auto-heal.
+
+- Atomic writes via temp file + rename — no partial writes on crash
+- Three overwrite modes: `fail_if_exists`, `overwrite`, `backup` (copies original to `.goodvibes/.backups/`)
+- Auto-heal pipeline: if a written file has syntax errors and `tools.autoHeal` is enabled, runs formatter → linter → LLM fix automatically
+- Base64 content support for files with special characters
+- Batch writes in a single call with per-file mode control
+
+### edit
+
+Structural code editing with AST matching, scope hints, and transactional rollback.
+
+- 5 match modes: `exact`, `fuzzy` (whitespace-insensitive), `regex` (with capture groups), `ast` (tree-sitter structural), `ast_pattern` (ast-grep with metavariables like `$VAR` and `$$$ARGS`)
+- Scope hints: `in_function`, `in_class`, `near_line` — disambiguate matches without increasing context
+- Occurrence selection: `first`, `last`, `all`, or specific Nth occurrence — with ambiguity guard by default
+- Atomic transactions: all edits succeed or all roll back. Also supports `partial` and `none` modes
+- Pre/post validation: run `typecheck`, `lint`, `test`, or `build` before and after edits — auto-rollback on failure
+- Auto-heal on validation failure (same pipeline as write)
+
+### find
+
+Multi-mode search: files, content, symbols, references, and structural AST patterns.
+
+- 5 search modes in one tool: `files` (glob), `content` (regex grep), `symbols` (exported declarations), `references` (find all references via LSP with grep fallback), `structural` (AST pattern matching via ast-grep)
+- Structural search uses ast-grep to find code patterns like `console.log($$$ARGS)` across TypeScript, JavaScript, CSS, and HTML
+- Scope expansion: expand content matches to their enclosing `function` or `class` using tree-sitter
+- Multiple queries per call executed in parallel
+- Progressive output: `count_only` → `files_only` → `locations` → `matches` → `context`
+
+### exec
+
+Shell execution with background processes, retry, progress tracking, and file operations.
+
+- Background execution with process tracking — spawn, poll status, read output, kill
+- Retry with exponential backoff on transient failures
+- `until` pattern: watch stdout for a regex match, then stop or promote to background
+- Pre-command file operations: copy, move, delete files before running commands
+- Progress file streaming for long-running commands (auto-enabled above 30s)
+- Fail-fast mode: stop sequential execution on first failure, report remaining as skipped
+
+### fetch
+
+HTTP client with extraction modes, service registry auth, and batch operations.
+
+- 11 extraction modes: `raw`, `text`, `json`, `markdown`, `readable` (strips nav/sidebar/footer), `code_blocks`, `links`, `tables`, `metadata` (og-tags), `structured` (CSS selectors), `pdf`
+- Named service registry: configure API credentials once in `.goodvibes/tui/services.json`, reference by name in fetch calls
+- Inline auth: `bearer`, `basic`, `api-key` per-request
+- Batch parallel fetches in a single tool call
+
+### analyze
+
+14-mode code analysis suite — from impact analysis to upgrade compatibility.
+
+- `impact`: trace exported symbols across the project to find what breaks when you change a file
+- `dependencies`: build import graph, detect circular dependencies, list external packages
+- `dead_code`: find exported symbols with zero references outside their own file
+- `security`: scan for hardcoded secrets, world-writable files, and missing .env keys
+- `breaking`: compare git refs and detect removed/changed export signatures
+- `semantic_diff`: LLM-powered diff summary with risk assessment (low/medium/high)
+- `upgrade`: check npm registry for outdated packages and flag breaking version bumps
+- Also: `coverage` (lcov/istanbul parse), `bundle` (stats.json), `surface` (public API), `preview` (dry-run edit), `diff` (git ref diff), `permissions` (dangerous pattern scan), `env_audit` (.env key comparison), `test_find` (locate test files for source files)
+
+### inspect
+
+21-mode project and frontend inspection tool.
+
+- `project`: detect project type, package manager, test framework, entry points, monorepo status
+- `api` + `api_spec` + `api_validate` + `api_sync`: discover API routes across Next.js (App + Pages Router), Express, Fastify, and Hono → generate OpenAPI 3.0 specs → validate specs against code → detect frontend/backend drift by scanning fetch() calls
+- `database`: parse Prisma schemas into structured model/field/relation data
+- `components`: extract React component tree with props, hooks, and child components
+- `scaffold`: generate module skeleton (types, implementation, tests, barrel export) with dry-run
+- Frontend analysis: `layout` (CSS/Tailwind layout hierarchy), `accessibility` (a11y issue detection), `component_state` (useState/useReducer/useContext tracing), `render_triggers` (what causes re-renders), `hooks` (dependency array auditing with missing-dep detection), `overflow`/`sizing`/`stacking` (CSS issue detection), `responsive` (Tailwind breakpoint analysis), `events` (handler analysis), `tailwind` (class conflict detection), `client_boundary` (Next.js directive analysis), `error_boundary` (coverage analysis)
+
+### agent
+
+In-process subagent system with 10 management modes.
+
+- Spawn agents from named archetypes (`engineer`, `reviewer`, `tester`, `researcher`, `general`) or custom archetypes from `.goodvibes/agents/*.md`
+- Full lifecycle management: `spawn`, `status`, `cancel`, `list`, `get` (detailed view with recent messages), `wait` (block until completion with timeout)
+- Inter-agent messaging via `message` mode
+- Token budget estimation via `budget` mode
+- Execution plan introspection via `plan` mode
+- Git worktree isolation: each agent can work in its own branch, merged back on completion
+
+### state
+
+Session state, persistent memory, telemetry, hooks, and output modes — all in one tool.
+
+- KV state: session-scoped key-value store with atomic persistence
+- Persistent memory: read/write `.goodvibes/memory/` files that survive across sessions
+- Hook management: list, enable, disable, add, and remove hooks at runtime
+- Output mode switching: switch between `default`, `vibecoding`, and `justvibes` verbosity presets
+- Analytics: record tool calls, query by filter, export as JSON/CSV, dashboard view — backed by WASM SQLite
+- Context and budget reporting for token usage awareness
+
+### workflow
+
+Workflow state machines, automation triggers, and scheduled tasks.
+
+- Named workflow definitions: `wrfc` (work-review-fix cycle), `fix_loop`, `test_then_fix`, `review_only`
+- State machine with validated transitions — prevents invalid state changes
+- Automation triggers: fire shell commands when specific hook events occur, with optional JS conditions
+- Scheduled tasks: run commands on recurring intervals (`30s`, `5m`, `1h`) with automatic process tracking
+- Full lifecycle: start, transition, cancel, list active instances
+
+### registry
+
+Discover and introspect skills, agents, and tools.
+
+- Fuzzy search across skills (`.goodvibes/skills/*.md`), agents (`.goodvibes/agents/*.md`), and built-in tools
+- Task-based recommendations: describe what you want to do, get ranked suggestions
+- Dependency chain resolution for skills
+- Full content retrieval for any registry item
 
 ---
 

@@ -24,7 +24,7 @@ export const READ_TOOL_SCHEMA = {
               'Extraction mode. Overrides the global extract for this file.'
               + ' content: full text; outline: signatures without bodies;'
               + ' symbols: exported names only; lines: specific line range;'
-              + ' ast: structural outline (Phase 3 placeholder).',
+              + ' ast: structural outline via tree-sitter (falls back to regex if grammar unavailable).',
           },
           range: {
             type: 'object',
