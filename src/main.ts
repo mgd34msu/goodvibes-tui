@@ -330,10 +330,45 @@ async function main() {
   const render = () => {
     const width = stdout.columns || 80;
     const height = stdout.rows || 24;
-    const vHeight = getViewportHeight();
-
     // Flush any pending message renders before taking snapshot
     conversation.getDisplayBlocks();
+
+    // Build header and footer FIRST so we know the exact viewport height
+    const headerLines = UIFactory.createHeader(width, runtime.model, runtime.provider, conversation.title || undefined, lastGitInfo);
+    const runningAgentCount = AgentManager.getInstance().list().filter((a) => a.status === 'running' || a.status === 'pending').length;
+    const runningProcessCount = ProcessManager.getInstance().list().length;
+    const processIndicatorLines = renderProcessIndicator(width, runningAgentCount, runningProcessCount);
+    const cw = getPromptContentWidth();
+    const promptInfo = input.getWrappedPromptInfo(cw);
+    const footerContentLines = UIFactory.createFooter(
+      width,
+      promptInfo.visibleLines.join('\n'),
+      orchestrator.usage as unknown as { up: number; down: number; max?: number },
+      input.showExitNotice,
+      input.lastCopyTime,
+      runtime.model, toolRegistry.list().length,
+      promptInfo.visibleCursorLine >= 0
+        ? promptInfo.visibleLines.slice(0, promptInfo.visibleCursorLine).reduce((s, l) => s + l.length + 1, 0) + promptInfo.visibleCursorCol
+        : undefined,
+      config.workingDir,
+      runtime.provider,
+      providerRegistry.getCurrentModel().contextWindow,
+      configManager.get('behavior.autoCompactThreshold') as number,
+      (() => {
+        if (configManager.get('behavior.autoApprove')) return true;
+        const permMode = configManager.get('permissions.mode');
+        if (permMode === 'allow-all') return true;
+        if (permMode === 'custom') {
+          const tools = configManager.getCategory('permissions').tools;
+          if (Object.values(tools).every(v => v === 'allow')) return true;
+        }
+        return false;
+      })()
+    );
+    const footerLines = [...processIndicatorLines, ...footerContentLines];
+
+    // Exact viewport height from actual header/footer sizes
+    const vHeight = Math.max(0, height - headerLines.length - footerLines.length);
 
     // Calculate how many rows are consumed by overlays (thinking, permissions, queue, file picker)
     let overlayRows = 0;
@@ -341,16 +376,16 @@ async function main() {
     if (pendingPermission) overlayRows += 8; // permission prompt
     overlayRows += orchestrator.messageQueue.length * 3; // queued messages
     if (input.filePicker.active) {
-      overlayRows += Math.min(input.filePicker.results.length, 12) + 4; // results + borders/search
+      overlayRows += Math.min(input.filePicker.results.length, 12) + 4;
     }
     if (input.modelPicker.active) {
-      overlayRows += input.modelPicker.getItemCount() + 7; // items + title/empty/divider/detail/bottom
+      overlayRows += input.modelPicker.getItemCount() + 7;
     }
     if (input.selectionModal.active) {
-      overlayRows += Math.min(input.selectionModal.filteredItems.length, 12) + 4; // items + title/sep/hints/bottom
+      overlayRows += Math.min(input.selectionModal.filteredItems.length, 12) + 4;
     }
     if (input.searchManager.active) {
-      overlayRows += 1; // search bar
+      overlayRows += 1;
     }
 
     // Shrink viewport to make room for overlays
@@ -431,49 +466,11 @@ async function main() {
       viewport.push(...shortcutLines);
     }
 
-    const runningAgentCount = AgentManager.getInstance().list().filter((a) => a.status === 'running' || a.status === 'pending').length;
-    const runningProcessCount = ProcessManager.getInstance().list().length;
-
     compositor.composite({
       width, height,
-      header: UIFactory.createHeader(width, runtime.model, runtime.provider, conversation.title || undefined, lastGitInfo),
+      header: headerLines,
       viewport,
-      footer: (() => {
-        const processIndicatorLines = renderProcessIndicator(
-          width,
-          runningAgentCount,
-          runningProcessCount,
-        );
-        const cw = getPromptContentWidth();
-        const info = input.getWrappedPromptInfo(cw);
-        return [...processIndicatorLines, ...UIFactory.createFooter(
-          width,
-          info.visibleLines.join('\n'),
-          orchestrator.usage as unknown as { up: number; down: number; max?: number },
-          input.showExitNotice,
-          input.lastCopyTime,
-          runtime.model, toolRegistry.list().length,
-          info.visibleCursorLine >= 0
-            ? info.visibleLines.slice(0, info.visibleCursorLine).reduce((s, l) => s + l.length + 1, 0) + info.visibleCursorCol
-            : undefined,
-          config.workingDir,
-          runtime.provider,
-          providerRegistry.getCurrentModel().contextWindow,
-          configManager.get('behavior.autoCompactThreshold') as number,
-          (() => {
-            // Danger mode: autoApprove, allow-all, or all individual tools set to allow
-            if (configManager.get('behavior.autoApprove')) return true;
-            const permMode = configManager.get('permissions.mode');
-            if (permMode === 'allow-all') return true;
-            if (permMode === 'custom') {
-              const tools = configManager.getCategory('permissions').tools;
-              const allAllow = Object.values(tools).every(v => v === 'allow');
-              if (allAllow) return true;
-            }
-            return false;
-          })()
-        )];
-      })(),
+      footer: footerLines,
       selection: {
         isCellSelected: (col, row) => selection.isCellSelected(col, row),
         scrollTop,
