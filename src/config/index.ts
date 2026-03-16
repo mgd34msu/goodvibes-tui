@@ -94,6 +94,7 @@ function loadEnvApiKeys(): Record<string, string> {
     // Fallback env var names
     if (!value && prov === 'gemini') value = process.env['GOOGLE_API_KEY'] ?? process.env['GOOGLE_GEMINI_API_KEY'];
     if (!value && prov === 'openai') value = process.env['OPENAI_KEY'];
+    if (!value && prov === 'anthropic') value = process.env['CLAUDE_API_KEY'];
     if (value) keys[prov] = value;
   }
   return keys;
