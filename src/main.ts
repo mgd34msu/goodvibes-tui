@@ -11,6 +11,7 @@ import { SelectionManager } from './input/selection.ts';
 import { config, configManager } from './config/index.ts';
 import { providerRegistry } from './providers/registry.ts';
 import { ToolRegistry } from './tools/registry.ts';
+import { registerAllTools } from './tools/index.ts';
 import { PermissionManager } from './permissions/manager.ts';
 import { AcpManager } from './acp/manager.ts';
 import { PermissionPromptUI } from './permissions/prompt.ts';
@@ -141,7 +142,7 @@ async function main() {
 
   // --- Tool registry ---
   const toolRegistry = new ToolRegistry();
-  // Tool registration — new tools (read, write, edit, find, exec, fetch, analyze, inspect, agent, state, workflow, registry) will replace old tools. See tool-updates-v3.md
+  registerAllTools(toolRegistry);
 
   const permissionManager = new PermissionManager(bus);
 
