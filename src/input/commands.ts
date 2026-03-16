@@ -1471,7 +1471,8 @@ export function registerBuiltinCommands(registry: CommandRegistry): void {
                 cm.set(key, newVal as any);
               } else if (schema.type === 'number') {
                 // Cycle common values for number settings
-                ctx.print(`Current: ${key} = ${String(currentVal)}. Use /danger ${field} <value> to set.`);
+                const fieldName = key.replace('danger.', '');
+                ctx.print(`Current: ${key} = ${String(currentVal)}. Use /danger ${fieldName} <value> to set.`);
                 return;
               }
               result.item.detail = String(newVal);
