@@ -133,7 +133,7 @@ export class DaemonServer {
     if (pathname === '/status' && method === 'GET') {
       // health check
       // health check
-      return Response.json({ status: 'running', version: '0.9.0' });
+      return Response.json({ status: 'running', version: '0.9.3' });
     }
     if (pathname === '/config' && method === 'GET') {
       // return full config snapshot
@@ -159,7 +159,7 @@ export class DaemonServer {
       }
       return Response.json({ success: true, key, value });
     }
-      return Response.json({ status: 'running', version: '0.2.0' });
+      return Response.json({ status: 'running', version: '0.9.3' });
     }
 
     if (pathname === '/task' && method === 'POST') {
