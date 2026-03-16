@@ -1,1303 +1,903 @@
-# Full Suite Test Instructions
-
-This document drives an AI agent through a complete proof-of-function run for all 12 native tools. Every test requires the AI to call a specific tool with specific parameters, extract a unique piece of data from the actual response, and record that data in `full-suite/TEST-RESULTS.md`.
-
-"Verify" is not acceptable. Proof means real output captured into the results file.
-
-**Fixture root:** `/home/buzzkill/Projects/goodvibes-tui/full-suite/`
-**Project root:** `/home/buzzkill/Projects/goodvibes-tui/`
-**Results file:** `/home/buzzkill/Projects/goodvibes-tui/full-suite/TEST-RESULTS.md`
+# Native Tool Test Suite
+> Follow these instructions top-to-bottom. Record all proof data in TEST-RESULTS.md.
+> Do NOT skip setup. Do NOT skip ahead. Do NOT re-use files across tests.
 
 ---
 
-## Section 1: Setup
+## Setup (do this first)
 
-Before running any tests, perform these two steps.
+Before running any tests:
 
-### 1.1 Create TEST-RESULTS.md
-
-**Call:** `write` tool with:
+1. Create `full-suite/TEST-RESULTS.md` with this exact header:
 ```
-path: full-suite/TEST-RESULTS.md
-mode: overwrite
-content: (the full markdown skeleton below)
-```
+# Test Results
 
-Initial content for TEST-RESULTS.md:
-```markdown
-# Tool Test Results
-Generated: {REPLACE_WITH_ACTUAL_TIMESTAMP}
-
-## read
-| Test | Proof | Status |
-|------|-------|--------|
-
-## write
-| Test | Proof | Status |
-|------|-------|--------|
-
-## edit
-| Test | Proof | Status |
-|------|-------|--------|
-
-## find
-| Test | Proof | Status |
-|------|-------|--------|
-
-## exec
-| Test | Proof | Status |
-|------|-------|--------|
-
-## fetch
-| Test | Proof | Status |
-|------|-------|--------|
-
-## analyze
-| Test | Proof | Status |
-|------|-------|--------|
-
-## inspect
-| Test | Proof | Status |
-|------|-------|--------|
-
-## agent
-| Test | Proof | Status |
-|------|-------|--------|
-
-## state
-| Test | Proof | Status |
-|------|-------|--------|
-
-## workflow
-| Test | Proof | Status |
-|------|-------|--------|
-
-## registry
-| Test | Proof | Status |
-|------|-------|--------|
-
-## Summary
-| Metric | Value |
-|--------|-------|
-| Total tests | 0 |
-| Passed | 0 |
-| Failed | 0 |
+| ID | Name | Captured Value | Result |
+|----|------|----------------|--------|
 ```
 
-**Capture:** The `bytes_written` field from the response and the `path` field.
-**Record:** Append this to the `write` section immediately after (this is also the first write test).
+2. Create directory `full-suite/output/` (for write tests — all writes go here, never to src/)
 
-### 1.2 Create output directory
+3. Create directory `full-suite/edit-tests/` and copy `full-suite/src/index.ts` to each of the following:
+   - `full-suite/edit-tests/test-1.ts`
+   - `full-suite/edit-tests/test-2.ts`
+   - `full-suite/edit-tests/test-3.ts`
+   - `full-suite/edit-tests/test-4.ts`
+   - `full-suite/edit-tests/test-5.ts`
+   - `full-suite/edit-tests/test-6.ts`
 
-**Call:** `write` tool with:
-```
-path: full-suite/output/.keep
-mode: overwrite
-content: (empty string)
-```
-
-**Capture:** Confirm the file was created without error.
-**Record:** Note the result inline; this is not a scored test.
+   Each edit test operates on its own copy. They MUST NOT share a file.
 
 ---
 
-## Section 2: `read` Tool (6 tests)
+## Phase 1: Read-Only Tests
 
-For each test, append a row to the `## read` table in TEST-RESULTS.md.
-
-### 2.1 content mode
-
-**Call:** `read` tool with:
-```
-files: [{ path: "full-suite/src/index.ts" }]
-extract: "content"
-```
-
-**Capture from response:**
-- The exact line count returned (e.g., `42`)
-- The name of the first exported function found on line 1 or nearby (e.g., `greet`)
-
-**Record row:**
-```
-| content mode | Line count: {N}, First export: `{name}` | PASS/FAIL |
-```
-
-### 2.2 outline mode
-
-**Call:** `read` tool with:
-```
-files: [{ path: "full-suite/src/index.ts", extract: "outline" }]
-```
-
-**Capture from response:**
-- The complete list of symbol names that appear in the outline (e.g., `greet, add, VERSION, UserService, unusedHelper`)
-
-**Record row:**
-```
-| outline mode | Symbols in outline: {comma-separated list} | PASS/FAIL |
-```
-
-### 2.3 symbols mode
-
-**Call:** `read` tool with:
-```
-files: [{ path: "full-suite/src/index.ts", extract: "symbols" }]
-```
-
-**Capture from response:**
-- The exact count of exported symbols returned (e.g., `5`)
-
-**Record row:**
-```
-| symbols mode | Exported symbol count: {N} | PASS/FAIL |
-```
-
-### 2.4 lines mode with range
-
-**Call:** `read` tool with:
-```
-files: [{ path: "full-suite/src/index.ts", extract: "lines", range: { start: 1, end: 10 } }]
-```
-
-**Capture from response:**
-- The exact text of line 1 as returned in the response
-
-**Record row:**
-```
-| lines mode (1-10) | Line 1: `{exact text}` | PASS/FAIL |
-```
-
-### 2.5 batch read (two files)
-
-**Call:** `read` tool with:
-```
-files: [
-  { path: "full-suite/src/index.ts" },
-  { path: "full-suite/src/auth.ts" }
-]
-```
-
-**Capture from response:**
-- The count of files returned in the response (must be `2`)
-- The total line count across both files combined
-
-**Record row:**
-```
-| batch read 2 files | Files returned: {N}, Total lines: {N} | PASS/FAIL |
-```
-
-### 2.6 count_only output format
-
-**Call:** `read` tool with:
-```
-files: [{ path: "full-suite/src/index.ts" }]
-output: { format: "count_only" }
-```
-
-**Capture from response:**
-- The token estimate number returned
-
-**Record row:**
-```
-| count_only format | Token estimate: {N} | PASS/FAIL |
-```
+> These tests do not modify any files. Run them first.
 
 ---
 
-## Section 3: `write` Tool (5 tests)
+### 1. read tool (7 tests)
 
-For each test, append a row to the `## write` table in TEST-RESULTS.md.
-
-### 3.1 Create new file
-
-**Call:** `write` tool with:
+#### Test 1.1: content mode
+**Call:** `read` with parameters:
+```json
+{ "files": [{ "path": "full-suite/src/index.ts", "extract": "content" }], "verbosity": "standard" }
 ```
-path: "full-suite/output/test-write.txt"
-mode: "fail_if_exists"
-content: "hello world"
-```
-
-**Capture from response:**
-- The `bytes_written` value
-- The `path` value as returned (resolved path)
-
-**Record row:**
-```
-| create new file | bytes_written: {N}, path: {path} | PASS/FAIL |
-```
-
-### 3.2 fail_if_exists guard
-
-**Call:** `write` tool with:
-```
-path: "full-suite/output/test-write.txt"
-mode: "fail_if_exists"
-content: "this should not overwrite"
-```
-
-**Capture from response:**
-- The exact error message text returned (must contain something like "already exists")
-
-**Record row:**
-```
-| fail_if_exists | Error: "{exact error text}" | PASS/FAIL |
-```
-
-### 3.3 overwrite mode
-
-**Call:** `write` tool with:
-```
-path: "full-suite/output/test-write.txt"
-mode: "overwrite"
-content: "overwritten content"
-```
-
-**Capture from response:**
-- The new `bytes_written` value (must differ from test 3.1)
-
-**Record row:**
-```
-| overwrite mode | bytes_written: {N} (differs from 3.1) | PASS/FAIL |
-```
-
-### 3.4 base64 content write
-
-**Call:** `write` tool with:
-```
-path: "full-suite/output/test-base64.txt"
-mode: "fail_if_exists"
-content_base64: {base64 encoding of "base64 proof content"}
-```
-
-The base64 value for "base64 proof content" is: `YmFzZTY0IHByb29mIGNvbnRlbnQ=`
-
-**Capture from response:**
-- The `bytes_written` value returned
-
-**Record row:**
-```
-| base64 write | bytes_written: {N} | PASS/FAIL |
-```
-
-### 3.5 dry_run mode
-
-**Call:** `write` tool with:
-```
-path: "full-suite/output/test-dry-run.txt"
-dry_run: true
-content: "this should never be written"
-```
-
-**Capture from response:**
-- Confirmation that dry_run was acknowledged (e.g., a `dry_run: true` field or equivalent in the response)
-
-Then immediately call `read` on `full-suite/output/test-dry-run.txt` and confirm it returns a "file not found" error.
-
-**Capture from read response:**
-- The error confirming the file does not exist
-
-**Record row:**
-```
-| dry_run write | dry_run acknowledged, file not found on read: "{error}" | PASS/FAIL |
-```
+**Capture:** From the response, extract `summary.line_count` and the first line of the file content.
+**Record:**
+| 1.1 | read content mode | lineCount=<N>, firstLine=<exact text> | PASS/FAIL |
 
 ---
 
-## Section 4: `edit` Tool (6 tests)
-
-Before running edit tests, copy `full-suite/src/index.ts` to `full-suite/output/edit-test.ts` using the `write` tool (read the source first, write to output). Each edit test should work on `full-suite/output/edit-test.ts` to preserve the original.
-
-For each test, append a row to the `## edit` table in TEST-RESULTS.md.
-
-### 4.1 Exact find/replace
-
-**Call:** `edit` tool with:
+#### Test 1.2: outline mode
+**Call:** `read` with parameters:
+```json
+{ "files": [{ "path": "full-suite/src/index.ts", "extract": "outline" }], "verbosity": "standard" }
 ```
-edits: [{
-  path: "full-suite/output/edit-test.ts",
-  find: "hello",
-  replace: "hello_edited"
-}]
-```
-
-(If "hello" does not appear in index.ts, use an actual string that does appear — read the file first to confirm.)
-
-**Capture from response:**
-- A line from the generated diff output showing the replacement (the `+` line)
-
-**Record row:**
-```
-| exact find/replace | Diff line: `{+ line from diff}` | PASS/FAIL |
-```
-
-### 4.2 Regex replace
-
-**Call:** `edit` tool with:
-```
-edits: [{
-  path: "full-suite/output/edit-test.ts",
-  find: "export function (\\w+)",
-  replace: "export function $1_v2",
-  regex: true,
-  occurrence: "first"
-}]
-```
-
-**Capture from response:**
-- The matched pattern text (the original text that was matched)
-
-**Record row:**
-```
-| regex replace | Matched: `{original matched text}` | PASS/FAIL |
-```
-
-### 4.3 occurrence: all
-
-First reset `full-suite/output/edit-test.ts` by writing the original content back (overwrite).
-
-**Call:** `edit` tool with:
-```
-edits: [{
-  path: "full-suite/output/edit-test.ts",
-  find: "export",
-  replace: "export",
-  occurrence: "all"
-}]
-```
-
-(This is a no-op replacement that still exercises the `occurrence: all` code path.)
-
-**Capture from response:**
-- The count of replacements made (how many occurrences were processed)
-
-**Record row:**
-```
-| occurrence: all | Replacements made: {N} | PASS/FAIL |
-```
-
-### 4.4 Fuzzy/whitespace-insensitive match
-
-**Call:** `edit` tool with an `options` field enabling whitespace-insensitive matching:
-```
-edits: [{
-  path: "full-suite/output/edit-test.ts",
-  find: "export   function   greet",
-  replace: "export function greet",
-  options: { whitespace_insensitive: true }
-}]
-```
-
-(The find string has extra spaces; the whitespace-insensitive mode should still match.)
-
-**Capture from response:**
-- Confirmation that the match succeeded despite the whitespace difference (e.g., a diff line or `matched: true`)
-
-**Record row:**
-```
-| fuzzy/whitespace match | Matched despite extra spaces: {evidence} | PASS/FAIL |
-```
-
-### 4.5 dry_run edit
-
-**Call:** `edit` tool with:
-```
-edits: [{
-  path: "full-suite/output/edit-test.ts",
-  find: "greet",
-  replace: "greet_DRY_RUN"
-}]
-dry_run: true
-```
-
-**Capture from response:**
-- A line from the diff preview showing the proposed change
-
-Then immediately call `read` on `full-suite/output/edit-test.ts` and confirm `greet_DRY_RUN` does NOT appear in the content.
-
-**Capture from read response:**
-- Confirmation that `greet_DRY_RUN` is absent
-
-**Record row:**
-```
-| dry_run edit | Diff preview: `{+ line}`, file unchanged: `greet_DRY_RUN` absent | PASS/FAIL |
-```
-
-### 4.6 Atomic transaction — one bad edit aborts all
-
-**Call:** `edit` tool with two edits in a single call:
-```
-edits: [
-  {
-    path: "full-suite/output/edit-test.ts",
-    find: "greet",
-    replace: "greet_ATOMIC"
-  },
-  {
-    path: "full-suite/output/edit-test.ts",
-    find: "THIS_STRING_DOES_NOT_EXIST_IN_THE_FILE",
-    replace: "should never apply"
-  }
-]
-```
-
-**Capture from response:**
-- The error returned for the second edit
-
-Then immediately call `read` on `full-suite/output/edit-test.ts` and confirm `greet_ATOMIC` does NOT appear (rollback succeeded).
-
-**Capture from read response:**
-- Confirmation that `greet_ATOMIC` is absent
-
-**Record row:**
-```
-| atomic rollback | Error: "{error text}", `greet_ATOMIC` absent from file | PASS/FAIL |
-```
+**Capture:** The list of symbol names shown in the outline (function/class/const names).
+**Record:**
+| 1.2 | read outline mode | symbols=<comma-separated names> | PASS/FAIL |
 
 ---
 
-## Section 5: `find` Tool (7 tests)
-
-For each test, append a row to the `## find` table in TEST-RESULTS.md.
-
-### 5.1 files mode — glob for .ts files
-
-**Call:** `find` tool with:
+#### Test 1.3: symbols mode
+**Call:** `read` with parameters:
+```json
+{ "files": [{ "path": "full-suite/src/index.ts", "extract": "symbols" }], "verbosity": "standard" }
 ```
-mode: "files"
-glob: "full-suite/src/**/*.ts"
-```
-
-**Capture from response:**
-- The exact count of .ts files found
-
-**Record row:**
-```
-| files glob *.ts | File count: {N} | PASS/FAIL |
-```
-
-### 5.2 files mode — glob for .tsx files
-
-**Call:** `find` tool with:
-```
-mode: "files"
-glob: "full-suite/src/**/*.tsx"
-```
-
-**Capture from response:**
-- The exact file path(s) returned (even if just one file)
-
-**Record row:**
-```
-| files glob *.tsx | Paths: {exact paths} | PASS/FAIL |
-```
-
-### 5.3 content mode — search for pattern
-
-**Call:** `find` tool with:
-```
-mode: "content"
-pattern: "export function"
-glob: "full-suite/src/**/*.ts"
-```
-
-**Capture from response:**
-- The total match count returned
-
-**Record row:**
-```
-| content search "export function" | Match count: {N} | PASS/FAIL |
-```
-
-### 5.4 content mode — count_only format
-
-**Call:** `find` tool with:
-```
-mode: "content"
-pattern: "export"
-glob: "full-suite/src/**/*.ts"
-output: { format: "count_only" }
-```
-
-**Capture from response:**
-- The single number returned (the match count)
-
-**Record row:**
-```
-| content count_only | Count: {N} | PASS/FAIL |
-```
-
-### 5.5 content mode — files_only format
-
-**Call:** `find` tool with:
-```
-mode: "content"
-pattern: "export"
-glob: "full-suite/src/**/*.ts"
-output: { format: "files_only" }
-```
-
-**Capture from response:**
-- The list of file paths returned (no line numbers, just paths)
-
-**Record row:**
-```
-| content files_only | Files: {list of paths} | PASS/FAIL |
-```
-
-### 5.6 symbols mode — find all functions
-
-**Call:** `find` tool with:
-```
-mode: "symbols"
-glob: "full-suite/src/**/*.ts"
-kinds: ["function"]
-```
-
-**Capture from response:**
-- The symbol names returned (e.g., `greet, add, unusedHelper`)
-
-**Record row:**
-```
-| symbols functions | Names: {comma-separated} | PASS/FAIL |
-```
-
-### 5.7 batch query — files + content in one call
-
-**Call:** `find` tool with two queries in a single call (using `queries` array if supported, or two separate `mode` values if the tool supports it):
-```
-queries: [
-  { id: "ts_files", mode: "files", glob: "full-suite/src/**/*.ts" },
-  { id: "exports", mode: "content", pattern: "export", glob: "full-suite/src/**/*.ts" }
-]
-```
-
-**Capture from response:**
-- Both result IDs (`ts_files` and `exports`) present in the response
-- The count for each
-
-**Record row:**
-```
-| batch find query | ts_files count: {N}, exports count: {N} | PASS/FAIL |
-```
+**Capture:** Count of exported symbols returned.
+**Record:**
+| 1.3 | read symbols mode | symbol_count=<N> | PASS/FAIL |
 
 ---
 
-## Section 6: `exec` Tool (5 tests)
-
-For each test, append a row to the `## exec` table in TEST-RESULTS.md.
-
-### 6.1 echo command
-
-**Call:** `exec` tool with:
+#### Test 1.4: lines mode (range 1-5)
+**Call:** `read` with parameters:
+```json
+{ "files": [{ "path": "full-suite/src/index.ts", "extract": "lines", "range": { "start": 1, "end": 5 } }], "verbosity": "standard" }
 ```
-commands: [{ cmd: "echo proof_token_exec_works" }]
-```
-
-**Capture from response:**
-- The exact stdout content returned (must be `proof_token_exec_works`)
-
-**Record row:**
-```
-| echo command | stdout: `{exact output}` | PASS/FAIL |
-```
-
-### 6.2 Read a file via cat with exit code
-
-**Call:** `exec` tool with:
-```
-commands: [{ cmd: "cat full-suite/package.json" }]
-```
-
-**Capture from response:**
-- The `exit_code` from the response
-- The first line of stdout (must start with `{`)
-
-**Record row:**
-```
-| cat package.json | exit_code: {N}, stdout line 1: `{text}` | PASS/FAIL |
-```
-
-### 6.3 Exit code expectation — success
-
-**Call:** `exec` tool with:
-```
-commands: [{
-  cmd: "node --version",
-  expect: { exit_code: 0 }
-}]
-```
-
-**Capture from response:**
-- The `success: true` field (or equivalent) confirming expectation was met
-- The Node.js version string from stdout
-
-**Record row:**
-```
-| exit_code expectation | success: {value}, node version: `{v...}` | PASS/FAIL |
-```
-
-### 6.4 file_ops copy
-
-**Call:** `exec` tool with a `file_ops` copy operation (or equivalent):
-```
-file_ops: [{
-  op: "copy",
-  src: "full-suite/src/index.ts",
-  dest: "full-suite/output/index-copy.ts"
-}]
-```
-
-If `file_ops` is not supported by exec, use `cmd: "cp full-suite/src/index.ts full-suite/output/index-copy.ts"`.
-
-**Capture from response:**
-- Confirmation the operation succeeded (exit_code or success field)
-
-Then immediately call `read` on `full-suite/output/index-copy.ts` to confirm it exists.
-
-**Capture from read response:**
-- The line count of the copied file (proving it is non-empty)
-
-**Record row:**
-```
-| file_ops copy | Copy succeeded, read confirmed line count: {N} | PASS/FAIL |
-```
-
-### 6.5 Background mode
-
-**Call:** `exec` tool with:
-```
-commands: [{
-  cmd: "sleep 2 && echo background_done",
-  background: true
-}]
-```
-
-**Capture from response:**
-- The `process_id` (or job ID) returned in the response
-
-**Record row:**
-```
-| background mode | process_id: `{ID}` | PASS/FAIL |
-```
+**Capture:** The exact text of line 1.
+**Record:**
+| 1.4 | read lines mode | line1=<exact text> | PASS/FAIL |
 
 ---
 
-## Section 7: `fetch` Tool (4 tests)
-
-For each test, append a row to the `## fetch` table in TEST-RESULTS.md.
-
-### 7.1 GET request
-
-**Call:** `fetch` tool with:
-```
-urls: [{ url: "https://httpbin.org/get" }]
-```
-
-**Capture from response:**
-- The HTTP status code returned (should be `200`)
-- The value of the `url` field in the JSON body (should be `https://httpbin.org/get`)
-
-**Record row:**
-```
-| GET request | status: {N}, url field: `{value}` | PASS/FAIL |
-```
-
-### 7.2 POST request with JSON body
-
-**Call:** `fetch` tool with:
-```
-urls: [{
-  url: "https://httpbin.org/post",
-  method: "POST",
-  body: { proof_key: "fetch_post_works" },
-  headers: { "Content-Type": "application/json" }
-}]
-```
-
-**Capture from response:**
-- The value of `json.proof_key` from the echoed response body (must be `fetch_post_works`)
-
-**Record row:**
-```
-| POST with body | json.proof_key: `{value}` | PASS/FAIL |
-```
-
-### 7.3 extract: json mode
-
-**Call:** `fetch` tool with:
-```
-urls: [{
-  url: "https://httpbin.org/json",
-  extract: "json"
-}]
-```
-
-**Capture from response:**
-- A specific top-level field name from the parsed JSON object returned
-
-**Record row:**
-```
-| extract json | Top-level field: `{field_name}` | PASS/FAIL |
-```
-
-### 7.4 Batch fetch two URLs
-
-**Call:** `fetch` tool with:
-```
-urls: [
-  { url: "https://httpbin.org/status/200" },
-  { url: "https://httpbin.org/status/201" }
-]
-```
-
-**Capture from response:**
-- The status code for the first URL (must be `200`)
-- The status code for the second URL (must be `201`)
-
-**Record row:**
-```
-| batch 2 URLs | URL1 status: 200, URL2 status: 201 | PASS/FAIL |
-```
-
----
-
-## Section 8: `analyze` Tool (6 tests)
-
-For each test, append a row to the `## analyze` table in TEST-RESULTS.md.
-
-### 8.1 dependencies mode
-
-**Call:** `analyze` tool with:
-```
-mode: "dependencies"
-path: "full-suite/"
-```
-
-**Capture from response:**
-- At least one import path found (e.g., `./auth` or `./utils`)
-
-**Record row:**
-```
-| dependencies | Import found: `{path}` | PASS/FAIL |
-```
-
-### 8.2 circular deps mode
-
-**Call:** `analyze` tool with:
-```
-mode: "circular"
-path: "full-suite/"
-```
-
-**Capture from response:**
-- The full circular chain detected (e.g., `utils → auth → utils`)
-
-**Record row:**
-```
-| circular deps | Chain: `{A → B → A}` | PASS/FAIL |
-```
-
-### 8.3 dead_code mode
-
-**Call:** `analyze` tool with:
-```
-mode: "dead_code"
-path: "full-suite/"
-```
-
-**Capture from response:**
-- The name `unusedHelper` appearing in the list of dead exports
-
-**Record row:**
-```
-| dead_code | Dead export found: `unusedHelper` | PASS/FAIL |
-```
-
-### 8.4 security mode
-
-**Call:** `analyze` tool with:
-```
-mode: "security"
-path: "full-suite/"
-```
-
-**Capture from response:**
-- The detected secret pattern (e.g., `AKIA...` for AWS key or `sk-secret...` for API key) and the file it was found in
-
-**Record row:**
-```
-| security | Pattern: `{pattern}` in `{file}` | PASS/FAIL |
-```
-
-### 8.5 surface mode
-
-**Call:** `analyze` tool with:
-```
-mode: "surface"
-path: "full-suite/src/index.ts"
-```
-
-**Capture from response:**
-- The complete list of exported symbol names from the surface analysis
-
-**Record row:**
-```
-| surface | Exports: {list} | PASS/FAIL |
-```
-
-### 8.6 preview mode (proposed edit)
-
-**Call:** `analyze` tool with:
-```
-mode: "preview"
-path: "full-suite/src/index.ts"
-proposed_edit: {
-  find: "unusedHelper",
-  replace: "unusedHelper_renamed"
+#### Test 1.5: batch read two files
+**Call:** `read` with parameters:
+```json
+{
+  "files": [
+    { "path": "full-suite/src/index.ts", "extract": "outline" },
+    { "path": "full-suite/src/auth.ts", "extract": "outline" }
+  ],
+  "verbosity": "standard"
 }
 ```
-
-**Capture from response:**
-- A line from the diff preview showing the rename (the `+` line)
-
-**Record row:**
-```
-| preview edit | Diff: `{+ line showing rename}` | PASS/FAIL |
-```
+**Capture:** The `files_read` count from the summary (should be 2).
+**Record:**
+| 1.5 | read batch two files | files_read=<N> | PASS/FAIL |
 
 ---
 
-## Section 9: `inspect` Tool (5 tests)
-
-For each test, append a row to the `## inspect` table in TEST-RESULTS.md.
-
-### 9.1 project mode
-
-**Call:** `inspect` tool with:
+#### Test 1.6: count_only format
+**Call:** `read` with parameters:
+```json
+{ "files": [{ "path": "full-suite/src/index.ts", "extract": "content" }], "verbosity": "count_only" }
 ```
-mode: "project"
-path: "/home/buzzkill/Projects/goodvibes-tui"
-```
-
-**Capture from response:**
-- The detected project type (e.g., `node`, `typescript`, `nextjs`)
-- The detected package manager (e.g., `npm`, `pnpm`, `yarn`)
-
-**Record row:**
-```
-| project inspect | Type: `{type}`, Package manager: `{pm}` | PASS/FAIL |
-```
-
-### 9.2 database mode
-
-**Call:** `inspect` tool with:
-```
-mode: "database"
-path: "/home/buzzkill/Projects/goodvibes-tui"
-```
-
-**Capture from response:**
-- Model names found in the Prisma schema (e.g., `User`, `Post`)
-
-**Record row:**
-```
-| database inspect | Models: `{name1}, {name2}` | PASS/FAIL |
-```
-
-### 9.3 components mode
-
-**Call:** `inspect` tool with:
-```
-mode: "components"
-path: "full-suite/src/Button.tsx"
-```
-
-**Capture from response:**
-- The component name found (e.g., `Button`)
-- At least one prop name detected (e.g., `onClick`, `label`)
-
-**Record row:**
-```
-| components inspect | Component: `{name}`, Props: `{list}` | PASS/FAIL |
-```
-
-### 9.4 accessibility mode
-
-**Call:** `inspect` tool with:
-```
-mode: "accessibility"
-path: "full-suite/src/Button.tsx"
-```
-
-**Capture from response:**
-- The specific accessibility issue detected (e.g., `img element missing alt attribute` or `div with onClick lacks role or keyboard handler`)
-
-**Record row:**
-```
-| accessibility | Issue: `{exact issue description}` | PASS/FAIL |
-```
-
-### 9.5 scaffold mode (dry_run)
-
-**Call:** `inspect` tool with:
-```
-mode: "scaffold"
-template: "component"
-name: "ProofComponent"
-dry_run: true
-```
-
-**Capture from response:**
-- The list of file paths that would be generated (e.g., `src/components/ProofComponent/index.tsx`, `src/components/ProofComponent/ProofComponent.tsx`)
-
-**Record row:**
-```
-| scaffold dry_run | Would generate: {file1}, {file2} | PASS/FAIL |
-```
+**Capture:** The `total_tokens` value from the summary.
+**Record:**
+| 1.6 | read count_only | total_tokens=<N> | PASS/FAIL |
 
 ---
 
-## Section 10: `agent` Tool (4 tests)
-
-For each test, append a row to the `## agent` table in TEST-RESULTS.md.
-
-### 10.1 Spawn agent
-
-**Call:** `agent` tool with:
+#### Test 1.7: cache test (read same file again)
+**Call:** `read` with parameters:
+```json
+{ "files": [{ "path": "full-suite/src/index.ts", "extract": "content" }], "verbosity": "standard" }
 ```
-action: "spawn"
-template: "researcher"
-task: "proof test: just respond with OK"
-```
-
-**Capture from response:**
-- The generated agent ID (format: `agent-XXXX`)
-
-**Record row:**
-```
-| spawn agent | agent_id: `{agent-XXXX}` | PASS/FAIL |
-```
-
-### 10.2 Status check on spawned agent
-
-**Call:** `agent` tool with:
-```
-action: "status"
-agent_id: "{agent-XXXX from test 10.1}"
-```
-
-**Capture from response:**
-- The `status` field value (e.g., `running`, `pending`, `complete`)
-
-**Record row:**
-```
-| agent status | status: `{value}` | PASS/FAIL |
-```
-
-### 10.3 List templates
-
-**Call:** `agent` tool with:
-```
-action: "templates"
-```
-
-**Capture from response:**
-- The total count of templates available
-- At least two template names
-
-**Record row:**
-```
-| list templates | Count: {N}, Examples: `{name1}`, `{name2}` | PASS/FAIL |
-```
-
-### 10.4 Cancel agent
-
-**Call:** `agent` tool with:
-```
-action: "cancel"
-agent_id: "{agent-XXXX from test 10.1}"
-```
-
-**Capture from response:**
-- Confirmation that status changed (e.g., `status: "cancelled"` or `success: true`)
-
-**Record row:**
-```
-| cancel agent | Result: `{status or success field}` | PASS/FAIL |
-```
+**Capture:** The `cache.status` field or equivalent cache indicator. Expected value: `"unchanged"` or `"cached"`.
+**Record:**
+| 1.7 | read cache status | cache.status=<value> | PASS/FAIL |
 
 ---
 
-## Section 11: `state` Tool (5 tests)
+### 2. find tool (8 tests)
 
-For each test, append a row to the `## state` table in TEST-RESULTS.md.
+> Known issue: `max_results` has a count/matches mismatch bug. Do NOT test `max_results` in this suite.
 
-### 11.1 Set a key
-
-**Call:** `state` tool with:
+#### Test 2.1: files mode — *.ts in src/
+**Call:** `find` with parameters:
+```json
+{ "type": "files", "patterns": ["full-suite/src/*.ts"] }
 ```
-action: "set"
-keys: { test_proof: "working" }
-```
-
-**Capture from response:**
-- The `keys_written` count (must be `1`)
-
-**Record row:**
-```
-| state set | keys_written: {N} | PASS/FAIL |
-```
-
-### 11.2 Get the key back
-
-**Call:** `state` tool with:
-```
-action: "get"
-keys: ["test_proof"]
-```
-
-**Capture from response:**
-- The value of `test_proof` (must be `"working"`)
-
-**Record row:**
-```
-| state get | test_proof: `working` | PASS/FAIL |
-```
-
-### 11.3 Budget mode
-
-**Call:** `state` tool with:
-```
-action: "budget"
-```
-
-**Capture from response:**
-- The session start time OR the current token estimate from the response
-
-**Record row:**
-```
-| state budget | Session start or token estimate: `{value}` | PASS/FAIL |
-```
-
-### 11.4 List mode
-
-**Call:** `state` tool with:
-```
-action: "list"
-```
-
-**Capture from response:**
-- Confirm that `test_proof` appears in the list of keys
-
-**Record row:**
-```
-| state list | `test_proof` in keys: true | PASS/FAIL |
-```
-
-### 11.5 Clear a key
-
-**Call:** `state` tool with:
-```
-action: "clear"
-keys: ["test_proof"]
-```
-
-Then immediately call `state` with `action: "get"` and `keys: ["test_proof"]`.
-
-**Capture from get response:**
-- That `test_proof` is now absent or returns null/undefined
-
-**Record row:**
-```
-| state clear | After clear, get returns: `{null/empty/absent}` | PASS/FAIL |
-```
+**Capture:** Count of files returned.
+**Record:**
+| 2.1 | find files *.ts | file_count=<N> | PASS/FAIL |
 
 ---
 
-## Section 12: `workflow` Tool (5 tests)
-
-For each test, append a row to the `## workflow` table in TEST-RESULTS.md.
-
-### 12.1 Start a WRFC workflow
-
-**Call:** `workflow` tool with:
+#### Test 2.2: files mode — *.tsx paths
+**Call:** `find` with parameters:
+```json
+{ "type": "files", "patterns": ["full-suite/src/*.tsx"] }
 ```
-action: "start"
-template: "WRFC"
-task: "proof test workflow"
-```
-
-**Capture from response:**
-- The generated workflow ID (format: `wf-XXXX`)
-
-**Record row:**
-```
-| workflow start | workflow_id: `{wf-XXXX}` | PASS/FAIL |
-```
-
-### 12.2 Status check — initial state is gather
-
-**Call:** `workflow` tool with:
-```
-action: "status"
-workflow_id: "{wf-XXXX from test 12.1}"
-```
-
-**Capture from response:**
-- The `currentState` field (must be `"gather"`)
-
-**Record row:**
-```
-| workflow status | currentState: `gather` | PASS/FAIL |
-```
-
-### 12.3 Transition to plan state
-
-**Call:** `workflow` tool with:
-```
-action: "transition"
-workflow_id: "{wf-XXXX from test 12.1}"
-target_state: "plan"
-```
-
-**Capture from response:**
-- The `success: true` field
-- The new state value (must be `"plan"`)
-
-**Record row:**
-```
-| workflow transition | success: true, new state: `plan` | PASS/FAIL |
-```
-
-### 12.4 Add a trigger
-
-**Call:** `workflow` tool with:
-```
-action: "trigger"
-workflow_id: "{wf-XXXX from test 12.1}"
-trigger: { event: "test_event", condition: "always" }
-```
-
-**Capture from response:**
-- The generated trigger ID (format: `trg-XXXX`)
-
-**Record row:**
-```
-| workflow trigger | trigger_id: `{trg-XXXX}` | PASS/FAIL |
-```
-
-### 12.5 Cancel the workflow
-
-**Call:** `workflow` tool with:
-```
-action: "cancel"
-workflow_id: "{wf-XXXX from test 12.1}"
-```
-
-**Capture from response:**
-- Confirmation that status changed to cancelled (e.g., `status: "cancelled"` or `success: true`)
-
-**Record row:**
-```
-| workflow cancel | Result: `{status or success field}` | PASS/FAIL |
-```
+**Capture:** The exact file paths returned (e.g. `full-suite/src/Button.tsx`).
+**Record:**
+| 2.2 | find files *.tsx | paths=<list> | PASS/FAIL |
 
 ---
 
-## Section 13: `registry` Tool (4 tests)
-
-For each test, append a row to the `## registry` table in TEST-RESULTS.md.
-
-### 13.1 Search for a skill by name
-
-**Call:** `registry` tool with:
+#### Test 2.3: content mode — search "export function"
+**Call:** `find` with parameters:
+```json
+{ "type": "content", "pattern": "export function", "path": "full-suite/src/" }
 ```
-action: "search"
-query: "code-review"
-type: "skills"
-```
-
-**Capture from response:**
-- The exact skill name returned (must include or equal `code-review`)
-
-**Record row:**
-```
-| search skills | Skill found: `{name}` | PASS/FAIL |
-```
-
-### 13.2 Search for tools — count
-
-**Call:** `registry` tool with:
-```
-action: "search"
-type: "tools"
-```
-
-**Capture from response:**
-- The total count of tools found (expected: `12`)
-
-**Record row:**
-```
-| search tools | Count: {N} | PASS/FAIL |
-```
-
-### 13.3 Get skill content
-
-**Call:** `registry` tool with:
-```
-action: "content"
-name: "code-review"
-```
-
-**Capture from response:**
-- A verbatim line from the skill content (any line that proves real content was returned)
-
-**Record row:**
-```
-| skill content | Line from content: `{exact line}` | PASS/FAIL |
-```
-
-### 13.4 Skill dependencies
-
-**Call:** `registry` tool with:
-```
-action: "dependencies"
-name: "code-review"
-```
-
-**Capture from response:**
-- Confirm that `testing-strategy` appears in the dependency list
-
-**Record row:**
-```
-| skill dependencies | `testing-strategy` in deps: true | PASS/FAIL |
-```
+**Capture:** The total match count across all files.
+**Record:**
+| 2.3 | find content match count | match_count=<N> | PASS/FAIL |
 
 ---
 
-## Section 14: Summary
-
-After all tests are complete:
-
-1. Count the total number of test rows across all 12 tool sections (not counting setup).
-2. Count the number of rows with `PASS`.
-3. Count the number of rows with `FAIL`.
-4. Update the `## Summary` table at the bottom of TEST-RESULTS.md with the final counts.
-
-**Call:** `edit` tool to overwrite the Summary table with actual values:
+#### Test 2.4: content mode — count_only output
+**Call:** `find` with parameters:
+```json
+{ "type": "content", "pattern": "export function", "path": "full-suite/src/", "output": { "format": "count_only" } }
 ```
-find: the existing Summary table
-replace: the completed Summary table with real counts
-```
+**Capture:** The numeric count value.
+**Record:**
+| 2.4 | find content count_only | count=<N> | PASS/FAIL |
 
-**The final Summary table must contain:**
-```markdown
+---
+
+#### Test 2.5: content mode — files_only output
+**Call:** `find` with parameters:
+```json
+{ "type": "content", "pattern": "export function", "path": "full-suite/src/", "output": { "format": "files_only" } }
+```
+**Capture:** The list of file paths returned (no line content, just paths).
+**Record:**
+| 2.5 | find content files_only | files=<list> | PASS/FAIL |
+
+---
+
+#### Test 2.6: symbols mode — all symbols
+**Call:** `find` with parameters:
+```json
+{ "type": "symbols", "path": "full-suite/src/" }
+```
+**Capture:** Symbol names and total count.
+**Record:**
+| 2.6 | find symbols all | symbol_count=<N>, names=<list> | PASS/FAIL |
+
+---
+
+#### Test 2.7: symbols mode — filter kind=class
+**Call:** `find` with parameters:
+```json
+{ "type": "symbols", "path": "full-suite/src/", "filter": { "kind": "class" } }
+```
+**Capture:** Verify `UserService` appears in the result.
+**Record:**
+| 2.7 | find symbols class filter | contains_UserService=<true/false> | PASS/FAIL |
+
+---
+
+#### Test 2.8: batch query — two queries with IDs
+**Call:** `find` with parameters:
+```json
+{
+  "queries": [
+    { "id": "q1", "type": "files", "patterns": ["full-suite/src/*.ts"] },
+    { "id": "q2", "type": "content", "pattern": "import", "path": "full-suite/src/" }
+  ]
+}
+```
+**Capture:** Both result IDs (`q1` and `q2`) present in the response.
+**Record:**
+| 2.8 | find batch two queries | result_ids=q1,q2 present=<true/false> | PASS/FAIL |
+
+---
+
+### 3. analyze tool (6 tests)
+
+#### Test 3.1: dependencies
+**Call:** `analyze` with parameters:
+```json
+{ "type": "dependencies", "path": "full-suite/src/" }
+```
+**Capture:** One import path from the dependency graph (e.g. `"./auth"` or similar).
+**Record:**
+| 3.1 | analyze dependencies | import_path=<value> | PASS/FAIL |
+
+---
+
+#### Test 3.2: circular dependencies
+**Call:** `analyze` with parameters:
+```json
+{ "type": "circular", "path": "full-suite/src/" }
+```
+**Capture:** The cycle chain string (e.g. `a.ts → b.ts → a.ts`).
+**Record:**
+| 3.2 | analyze circular deps | cycle=<chain> | PASS/FAIL |
+
+---
+
+#### Test 3.3: dead code
+**Call:** `analyze` with parameters:
+```json
+{ "type": "dead_code", "path": "full-suite/src/" }
+```
+**Capture:** Verify `unusedHelper` appears as a dead export.
+**Record:**
+| 3.3 | analyze dead code | unusedHelper_found=<true/false> | PASS/FAIL |
+
+---
+
+#### Test 3.4: security scan
+**Call:** `analyze` with parameters:
+```json
+{ "type": "security", "path": "full-suite/src/" }
+```
+**Capture:** The detected secret pattern (should match `AKIA...` or `sk-secret...`).
+**Record:**
+| 3.4 | analyze security | secret_pattern=<value> | PASS/FAIL |
+
+---
+
+#### Test 3.5: surface on single file
+**Call:** `analyze` with parameters:
+```json
+{ "type": "surface", "path": "full-suite/src/index.ts" }
+```
+**Capture:** The exported symbol names from the public surface.
+**Record:**
+| 3.5 | analyze surface | exports=<list> | PASS/FAIL |
+
+---
+
+#### Test 3.6: preview proposed change
+**Call:** `analyze` with parameters:
+```json
+{ "type": "preview", "path": "full-suite/src/index.ts", "find": "greet", "replace": "hello" }
+```
+**Capture:** A diff line showing the proposed change (e.g. `-greet` / `+hello`).
+**Record:**
+| 3.6 | analyze preview diff | diff_line=<value> | PASS/FAIL |
+
+---
+
+### 4. inspect tool (5 tests)
+
+#### Test 4.1: project mode
+**Call:** `inspect` with parameters:
+```json
+{ "type": "project", "path": "full-suite/" }
+```
+**Capture:** The detected `type` (e.g. `"node"`) and `package_manager` (e.g. `"npm"`).
+**Record:**
+| 4.1 | inspect project | type=<value>, pm=<value> | PASS/FAIL |
+
+---
+
+#### Test 4.2: database mode
+**Call:** `inspect` with parameters:
+```json
+{ "type": "database", "path": "full-suite/" }
+```
+**Capture:** Model names found (should include `User` and `Post`).
+**Record:**
+| 4.2 | inspect database | models=<list> | PASS/FAIL |
+
+---
+
+#### Test 4.3: components mode
+**Call:** `inspect` with parameters:
+```json
+{ "type": "components", "path": "full-suite/src/Button.tsx" }
+```
+**Capture:** The component name and its prop names.
+**Record:**
+| 4.3 | inspect components | component=<name>, props=<list> | PASS/FAIL |
+
+---
+
+#### Test 4.4: accessibility on Button.tsx
+**Call:** `inspect` with parameters:
+```json
+{ "type": "accessibility", "path": "full-suite/src/Button.tsx" }
+```
+**Capture:** The specific issue text (should mention `img` without `alt` or similar).
+**Record:**
+| 4.4 | inspect accessibility | issue=<exact text> | PASS/FAIL |
+
+---
+
+#### Test 4.5: scaffold dry_run
+**Call:** `inspect` with parameters:
+```json
+{ "type": "scaffold", "template": "component", "name": "DryWidget", "dry_run": true }
+```
+**Capture:** The list of files that would be created (dry run only — no files should actually exist).
+**Record:**
+| 4.5 | inspect scaffold dry_run | would_create=<list> | PASS/FAIL |
+
+---
+
+### 5. registry tool (4 tests)
+
+#### Test 5.1: list all tools
+**Call:** `registry` with parameters:
+```json
+{ "action": "list" }
+```
+**Capture:** Total count of tools registered.
+**Record:**
+| 5.1 | registry list | tool_count=<N> | PASS/FAIL |
+
+---
+
+#### Test 5.2: get schema for read tool
+**Call:** `registry` with parameters:
+```json
+{ "action": "schema", "tool": "read" }
+```
+**Capture:** One required parameter name from the schema.
+**Record:**
+| 5.2 | registry schema read | required_param=<name> | PASS/FAIL |
+
+---
+
+#### Test 5.3: search for write tool
+**Call:** `registry` with parameters:
+```json
+{ "action": "search", "query": "write" }
+```
+**Capture:** Verify `write` tool appears in search results.
+**Record:**
+| 5.3 | registry search write | write_found=<true/false> | PASS/FAIL |
+
+---
+
+#### Test 5.4: capabilities
+**Call:** `registry` with parameters:
+```json
+{ "action": "capabilities" }
+```
+**Capture:** One capability category name from the response.
+**Record:**
+| 5.4 | registry capabilities | category=<name> | PASS/FAIL |
+
+---
+
+## Phase 2: Write Tests
+
+> All writes go to `full-suite/output/`. NEVER write to `src/`.
+
+---
+
+### 6. write tool (5 tests)
+
+#### Test 6.1: create new file
+**Call:** `write` with parameters:
+```json
+{ "files": [{ "path": "full-suite/output/hello.txt", "content": "hello from write test", "mode": "fail_if_exists" }] }
+```
+**Capture:** The `bytes_written` value from the response.
+**Record:**
+| 6.1 | write create new file | bytes_written=<N> | PASS/FAIL |
+
+---
+
+#### Test 6.2: fail_if_exists on existing file
+**Call:** `write` with parameters:
+```json
+{ "files": [{ "path": "full-suite/output/hello.txt", "content": "should fail", "mode": "fail_if_exists" }] }
+```
+**Capture:** The exact error message text returned.
+**Record:**
+| 6.2 | write fail_if_exists | error=<exact text> | PASS/FAIL |
+
+---
+
+#### Test 6.3: overwrite with different content
+**Call:** `write` with parameters:
+```json
+{ "files": [{ "path": "full-suite/output/hello.txt", "content": "overwritten content — different length!!", "mode": "overwrite" }] }
+```
+**Capture:** The new `bytes_written` value. It MUST differ from Test 6.1's value.
+**Record:**
+| 6.3 | write overwrite | new_bytes_written=<N> (differs from 6.1=<N>) | PASS/FAIL |
+
+---
+
+#### Test 6.4: base64 write
+**Call:** `write` with parameters:
+```json
+{ "files": [{ "path": "full-suite/output/b64.txt", "content_base64": "aGVsbG8gYmFzZTY0", "mode": "fail_if_exists" }] }
+```
+(Note: `aGVsbG8gYmFzZTY0` decodes to `hello base64`)
+**Capture:** The `bytes_written` value.
+**Record:**
+| 6.4 | write base64 | bytes_written=<N> | PASS/FAIL |
+
+---
+
+#### Test 6.5: dry_run — verify no file created
+**Call:** `write` with parameters:
+```json
+{ "files": [{ "path": "full-suite/output/dry.txt", "content": "this should not exist" }], "dry_run": true }
+```
+**Capture:** Verify `dry_run: true` in the response.
+Then immediately call `read` on `full-suite/output/dry.txt` — it must return a file-not-found error.
+**Record:**
+| 6.5 | write dry_run | dry_run=true, file_exists=false | PASS/FAIL |
+
+---
+
+## Phase 3: Edit Tests
+
+> CRITICAL: Each test uses its own file copy. test-1.ts through test-6.ts were created in Setup.
+> NEVER share a file across edit tests. NEVER edit src/index.ts directly.
+
+---
+
+### 7. edit tool (6 tests)
+
+#### Test 7.1: exact match replacement
+File: `full-suite/edit-tests/test-1.ts`
+**Call:** `edit` with parameters:
+```json
+{
+  "edits": [{
+    "path": "full-suite/edit-tests/test-1.ts",
+    "find": "greet",
+    "replace": "hello",
+    "match": "exact"
+  }]
+}
+```
+**Capture:** The replacement count or diff showing `greet` → `hello`.
+**Record:**
+| 7.1 | edit exact match | replacements=<N> or diff=<line> | PASS/FAIL |
+
+---
+
+#### Test 7.2: regex replacement
+File: `full-suite/edit-tests/test-2.ts`
+**Call:** `edit` with parameters:
+```json
+{
+  "edits": [{
+    "path": "full-suite/edit-tests/test-2.ts",
+    "find": "string",
+    "replace": "str",
+    "match": "regex"
+  }]
+}
+```
+**Capture:** The total replacement count (all occurrences of `string` replaced).
+**Record:**
+| 7.2 | edit regex match | replacement_count=<N> | PASS/FAIL |
+
+---
+
+#### Test 7.3: occurrence=first (only first match)
+File: `full-suite/edit-tests/test-3.ts`
+**Call:** `edit` with parameters:
+```json
+{
+  "edits": [{
+    "path": "full-suite/edit-tests/test-3.ts",
+    "find": "return",
+    "replace": "yield",
+    "match": "exact",
+    "occurrence": "first"
+  }]
+}
+```
+**Capture:** Replacement count must be exactly 1 (only first `return` changed).
+Verify with a `read` of test-3.ts — remaining `return` keywords should still exist.
+**Record:**
+| 7.3 | edit occurrence first | replacements=1, others_unchanged=<true/false> | PASS/FAIL |
+
+---
+
+#### Test 7.4: fuzzy match (whitespace insensitive)
+File: `full-suite/edit-tests/test-4.ts`
+**Call:** `edit` with parameters:
+```json
+{
+  "edits": [{
+    "path": "full-suite/edit-tests/test-4.ts",
+    "find": "export  function",
+    "replace": "export function",
+    "match": "fuzzy"
+  }]
+}
+```
+(The double space in find string tests whitespace-insensitive matching)
+**Capture:** Success indicator or replacement count.
+**Record:**
+| 7.4 | edit fuzzy match | success=<true/false> or replacements=<N> | PASS/FAIL |
+
+---
+
+#### Test 7.5: dry_run — verify file unchanged
+File: `full-suite/edit-tests/test-5.ts`
+**Call:** `edit` with parameters:
+```json
+{
+  "edits": [{
+    "path": "full-suite/edit-tests/test-5.ts",
+    "find": "greet",
+    "replace": "dryReplaced",
+    "match": "exact"
+  }],
+  "dry_run": true
+}
+```
+**Capture:** The diff output from dry_run.
+Then call `read` on `full-suite/edit-tests/test-5.ts` to confirm `dryReplaced` does NOT appear.
+**Record:**
+| 7.5 | edit dry_run | diff_shown=<true/false>, file_unchanged=<true/false> | PASS/FAIL |
+
+---
+
+#### Test 7.6: atomic failure — one good + one bad edit
+File: `full-suite/edit-tests/test-6.ts`
+**Call:** `edit` with parameters:
+```json
+{
+  "edits": [
+    { "path": "full-suite/edit-tests/test-6.ts", "find": "greet", "replace": "hello", "match": "exact" },
+    { "path": "full-suite/edit-tests/test-6.ts", "find": "THIS_STRING_DOES_NOT_EXIST_XYZ", "replace": "fail", "match": "exact" }
+  ]
+}
+```
+**Capture:** The error message returned.
+Then call `read` on `full-suite/edit-tests/test-6.ts` — the file must be unchanged (atomic rollback means `greet` must still be `greet`).
+**Record:**
+| 7.6 | edit atomic failure | error=<text>, file_unchanged=<true/false> | PASS/FAIL |
+
+---
+
+## Phase 4: Exec Tests
+
+> These run shell commands. Output goes to stdout/stderr only, not to files unless explicitly stated.
+
+---
+
+### 8. exec tool (5 tests)
+
+#### Test 8.1: echo command
+**Call:** `exec` with parameters:
+```json
+{ "commands": [{ "cmd": "echo 'hello from exec'" }] }
+```
+**Capture:** The exact stdout text.
+**Record:**
+| 8.1 | exec echo | stdout=<exact text> | PASS/FAIL |
+
+---
+
+#### Test 8.2: cat package.json
+**Call:** `exec` with parameters:
+```json
+{ "commands": [{ "cmd": "cat full-suite/package.json" }] }
+```
+**Capture:** The `exit_code` (should be 0) and the first line of stdout.
+**Record:**
+| 8.2 | exec cat package.json | exit_code=<N>, first_line=<text> | PASS/FAIL |
+
+---
+
+#### Test 8.3: echo with exit_code expectation
+**Call:** `exec` with parameters:
+```json
+{ "commands": [{ "cmd": "echo 'checking expectations'", "expect": { "exit_code": 0 } }] }
+```
+**Capture:** The `success: true` indicator from the expectation check.
+**Record:**
+| 8.3 | exec with expectation | success=<true/false> | PASS/FAIL |
+
+---
+
+#### Test 8.4: file_ops — copy file
+**Call:** `exec` with parameters:
+```json
+{ "commands": [{ "cmd": "cp full-suite/src/index.ts full-suite/output/copied.ts" }] }
+```
+Then call `read` on `full-suite/output/copied.ts` to verify it exists and has content.
+**Capture:** That the file exists and the first line matches the original.
+**Record:**
+| 8.4 | exec copy file | file_exists=<true/false>, first_line=<text> | PASS/FAIL |
+
+---
+
+#### Test 8.5: ls src directory
+**Call:** `exec` with parameters:
+```json
+{ "commands": [{ "cmd": "ls full-suite/src/" }] }
+```
+**Capture:** The full file listing from stdout.
+**Record:**
+| 8.5 | exec ls | file_list=<list> | PASS/FAIL |
+
+---
+
+## Phase 5: In-Memory Tests
+
+> These tests use in-memory state, workflow, and agent systems. No file conflicts.
+
+---
+
+### 9. state tool (5 tests)
+
+#### Test 9.1: set a value
+**Call:** `state` with parameters:
+```json
+{ "action": "set", "key": "test_proof", "value": "working" }
+```
+**Capture:** The `keys_written` count (should be 1).
+**Record:**
+| 9.1 | state set | keys_written=<N> | PASS/FAIL |
+
+---
+
+#### Test 9.2: get the value back
+**Call:** `state` with parameters:
+```json
+{ "action": "get", "key": "test_proof" }
+```
+**Capture:** The value returned. Must be exactly `"working"`.
+**Record:**
+| 9.2 | state get | value=<exact> | PASS/FAIL |
+
+---
+
+#### Test 9.3: budget info
+**Call:** `state` with parameters:
+```json
+{ "action": "budget" }
+```
+**Capture:** Any numeric field from the response (e.g. `tokens_used`, `session_time_seconds`, etc.).
+**Record:**
+| 9.3 | state budget | field=<name>, value=<N> | PASS/FAIL |
+
+---
+
+#### Test 9.4: list all keys
+**Call:** `state` with parameters:
+```json
+{ "action": "list" }
+```
+**Capture:** Verify `test_proof` appears in the key list.
+**Record:**
+| 9.4 | state list | test_proof_present=<true/false> | PASS/FAIL |
+
+---
+
+#### Test 9.5: clear and verify gone
+**Call:** `state` with parameters:
+```json
+{ "action": "clear", "key": "test_proof" }
+```
+Then immediately call `state` with `{ "action": "get", "key": "test_proof" }` and verify it returns null or not-found.
+**Capture:** The get-after-clear result (must be null/missing).
+**Record:**
+| 9.5 | state clear | value_after_clear=<null or not-found> | PASS/FAIL |
+
+---
+
+### 10. workflow tool (5 tests)
+
+#### Test 10.1: start a WRFC workflow
+**Call:** `workflow` with parameters:
+```json
+{ "action": "start", "type": "wrfc" }
+```
+**Capture:** The workflow ID (format: `wf-XXXX`).
+**Record:**
+| 10.1 | workflow start | wf_id=<wf-XXXX> | PASS/FAIL |
+
+---
+
+#### Test 10.2: get workflow status
+**Call:** `workflow` with parameters:
+```json
+{ "action": "status", "id": "<wf-XXXX from 10.1>" }
+```
+**Capture:** The `currentState` field. Expected: `"gather"`.
+**Record:**
+| 10.2 | workflow status | currentState=<value> | PASS/FAIL |
+
+---
+
+#### Test 10.3: transition to plan state
+**Call:** `workflow` with parameters:
+```json
+{ "action": "transition", "id": "<wf-XXXX from 10.1>", "to": "plan" }
+```
+**Capture:** The success indicator and the new state value.
+**Record:**
+| 10.3 | workflow transition | success=<true/false>, new_state=<value> | PASS/FAIL |
+
+---
+
+#### Test 10.4: add a trigger
+**Call:** `workflow` with parameters:
+```json
+{ "action": "triggers", "subaction": "add", "id": "<wf-XXXX from 10.1>", "trigger": { "event": "file_change", "pattern": "*.ts" } }
+```
+**Capture:** The trigger ID (format: `trg-XXXX`).
+**Record:**
+| 10.4 | workflow triggers add | trg_id=<trg-XXXX> | PASS/FAIL |
+
+---
+
+#### Test 10.5: cancel workflow
+**Call:** `workflow` with parameters:
+```json
+{ "action": "cancel", "id": "<wf-XXXX from 10.1>" }
+```
+Then call `workflow` with `{ "action": "status", "id": "<wf-XXXX>" }` and capture the new status.
+**Capture:** The status after cancel (should be `"cancelled"` or `"terminated"`).
+**Record:**
+| 10.5 | workflow cancel | status_after=<value> | PASS/FAIL |
+
+---
+
+### 11. agent tool (4 tests)
+
+#### Test 11.1: spawn a researcher agent
+**Call:** `agent` with parameters:
+```json
+{ "action": "spawn", "template": "researcher", "task": "find all exported functions in full-suite/src/" }
+```
+**Capture:** The agent ID (format: `agent-XXXX`).
+**Record:**
+| 11.1 | agent spawn | agent_id=<agent-XXXX> | PASS/FAIL |
+
+---
+
+#### Test 11.2: get agent status
+**Call:** `agent` with parameters:
+```json
+{ "action": "status", "id": "<agent-XXXX from 11.1>" }
+```
+**Capture:** The `status` field value (e.g. `"running"`, `"pending"`, `"complete"`).
+**Record:**
+| 11.2 | agent status | status=<value> | PASS/FAIL |
+
+---
+
+#### Test 11.3: list templates
+**Call:** `agent` with parameters:
+```json
+{ "action": "templates" }
+```
+**Capture:** The count of available templates (expected: 5).
+**Record:**
+| 11.3 | agent templates | template_count=<N> | PASS/FAIL |
+
+---
+
+#### Test 11.4: cancel the agent
+**Call:** `agent` with parameters:
+```json
+{ "action": "cancel", "id": "<agent-XXXX from 11.1>" }
+```
+Then call `agent` with `{ "action": "status", "id": "<agent-XXXX>" }` and capture the new status.
+**Capture:** The status after cancel (should be `"cancelled"` or `"terminated"`).
+**Record:**
+| 11.4 | agent cancel | status_after=<value> | PASS/FAIL |
+
+---
+
+## Phase 6: Network Tests
+
+> These tests make real HTTP requests. Requires network access.
+
+---
+
+### 12. fetch tool (4 tests)
+
+#### Test 12.1: GET request
+**Call:** `fetch` with parameters:
+```json
+{ "urls": [{ "url": "https://httpbin.org/get" }] }
+```
+**Capture:** The `url` field from the response JSON (should echo back `https://httpbin.org/get`).
+**Record:**
+| 12.1 | fetch GET | url_field=<value> | PASS/FAIL |
+
+---
+
+#### Test 12.2: POST request with body
+**Call:** `fetch` with parameters:
+```json
+{
+  "urls": [{
+    "url": "https://httpbin.org/post",
+    "method": "POST",
+    "body": { "test_key": "test_value_probe" }
+  }]
+}
+```
+**Capture:** The echoed `json.test_key` value from the response (should be `"test_value_probe"`).
+**Record:**
+| 12.2 | fetch POST body | json.test_key=<value> | PASS/FAIL |
+
+---
+
+#### Test 12.3: extract json mode
+**Call:** `fetch` with parameters:
+```json
+{ "urls": [{ "url": "https://httpbin.org/json", "extract": "json" }] }
+```
+**Capture:** Any top-level key name from the parsed JSON response.
+**Record:**
+| 12.3 | fetch extract json | key=<name> | PASS/FAIL |
+
+---
+
+#### Test 12.4: batch fetch two URLs
+**Call:** `fetch` with parameters:
+```json
+{
+  "urls": [
+    { "url": "https://httpbin.org/get" },
+    { "url": "https://httpbin.org/uuid" }
+  ]
+}
+```
+**Capture:** The count of results returned (must be 2).
+**Record:**
+| 12.4 | fetch batch 2 URLs | result_count=<N> | PASS/FAIL |
+
+---
+
 ## Summary
-| Metric | Value |
-|--------|-------|
-| Total tests | {N} |
-| Passed | {N} |
-| Failed | {N} |
+
+After completing all 58 tests:
+
+1. Count rows in TEST-RESULTS.md
+2. Count PASSes and FAILs
+3. Add this final line to TEST-RESULTS.md:
+
+```
+## Final Score
+- Total: 58
+- Passed: <N>
+- Failed: <N>
+- Pass rate: <N>%
 ```
 
-The test run is complete when TEST-RESULTS.md exists, all tables are populated with real proof data, and the Summary section contains accurate counts.
+4. If any test FAILed, add a `## Failures` section listing each failed test ID and the captured value that indicated failure.
+
+---
+
+## Known Issues
+
+- **Test 2.x — max_results bug**: The `max_results` parameter has a count/matches mismatch. It is intentionally NOT tested in this suite.
+- **Test 12.x — network dependency**: fetch tests require live network access to httpbin.org. If httpbin.org is unreachable, mark those tests as SKIP not FAIL.
