@@ -61,8 +61,20 @@ export class ConfigManager {
   private readonly configPath: string;
   private readonly projectConfigPath: string;
 
+  /**
+   * Override the config directory for test isolation.
+   * Call before instantiating ConfigManager in tests.
+   * Resets on process exit or explicit call with undefined.
+   */
+  private static testConfigDir: string | undefined = undefined;
+
+  static setTestMode(tempDir: string | undefined): void {
+    ConfigManager.testConfigDir = tempDir;
+  }
+
   constructor(overrides?: ConfigOverrides) {
-    this.configPath = join(homedir(), '.goodvibes', 'tui', 'settings.json');
+    const base = ConfigManager.testConfigDir ?? join(homedir(), '.goodvibes', 'tui');
+    this.configPath = join(base, 'settings.json');
     const projectRoot = overrides?.workingDir ?? process.cwd();
     this.projectConfigPath = join(projectRoot, '.goodvibes', 'tui', 'settings.json');
     this.config = deepMerge(DEFAULT_CONFIG, {}) as GoodVibesConfig;
@@ -100,8 +112,8 @@ export class ConfigManager {
     const parts = key.split('.');
     if (parts.length === 3) {
       const [section, subsection, field] = parts;
-      const sect = this.config[section as keyof GoodVibesConfig] as Record<string, Record<string, unknown>>;
-      if (!sect?.[subsection]) return undefined as ConfigValue<K>;
+      const sect = this.config[section as keyof GoodVibesConfig] as unknown as Record<string, Record<string, unknown>>;
+      if (!sect?.[subsection]) return undefined as unknown as ConfigValue<K>;
       return sect[subsection][field] as ConfigValue<K>;
     }
     const [category, field] = parts;
@@ -122,7 +134,7 @@ export class ConfigManager {
     const parts = key.split('.');
     if (parts.length === 3) {
       const [section, subsection, field] = parts;
-      const sect = this.config[section as keyof GoodVibesConfig] as Record<string, Record<string, unknown>>;
+      const sect = this.config[section as keyof GoodVibesConfig] as unknown as Record<string, Record<string, unknown>>;
       sect[subsection][field] = value;
       this.save();
       return;
@@ -229,8 +241,8 @@ export class ConfigManager {
       const parts = key.split('.');
       if (parts.length === 3) {
         const [section, subsection, field] = parts;
-        const sect = this.config[section as keyof GoodVibesConfig] as Record<string, Record<string, unknown>>;
-        const defaultSect = DEFAULT_CONFIG[section as keyof GoodVibesConfig] as Record<string, Record<string, unknown>>;
+        const sect = this.config[section as keyof GoodVibesConfig] as unknown as Record<string, Record<string, unknown>>;
+        const defaultSect = DEFAULT_CONFIG[section as keyof GoodVibesConfig] as unknown as Record<string, Record<string, unknown>>;
         sect[subsection][field] = defaultSect[subsection][field];
       } else {
         const [category, field] = parts;

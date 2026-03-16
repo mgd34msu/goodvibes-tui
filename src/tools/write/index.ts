@@ -250,7 +250,7 @@ export function createWriteTool(options?: {
   return {
     definition,
     async execute(args: Record<string, unknown>) {
-      const input = args as WriteInput;
+      const input = args as unknown as WriteInput;
       const verbosity = input.verbosity ?? 'count_only';
       const dryRun = input.dry_run ?? false;
       const projectRoot = resolve(process.cwd());

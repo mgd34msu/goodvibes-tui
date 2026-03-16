@@ -168,7 +168,7 @@ export const agentTool: Tool = {
     if (!('mode' in args) || typeof (args as Record<string, unknown>).mode !== 'string') {
       return { success: false, error: 'Missing required parameter: mode' };
     }
-    const input = args as AgentInput;
+    const input = args as unknown as AgentInput;
 
     if (!input.mode) {
       return { success: false, error: 'Missing required parameter: mode' };

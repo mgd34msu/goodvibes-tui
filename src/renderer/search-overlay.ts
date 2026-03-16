@@ -11,7 +11,7 @@ export function renderSearchOverlay(
   manager: SearchManager,
   width: number
 ): Line[] {
-  const matchInfo = manager.matches.length > 0
+  const matchInfo = manager.matches?.length > 0
     ? `[${manager.currentMatch + 1}/${manager.matches.length}]`
     : manager.query.length > 0
       ? '[no matches]'

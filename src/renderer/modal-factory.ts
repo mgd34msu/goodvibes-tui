@@ -100,7 +100,7 @@ export class ModalFactory {
   static createModal(config: ModalConfig, terminalWidth: number): Line[] {
     const margin = config.margin ?? 4;
     const maxBoxW = config.width ?? 72;
-    const boxW = Math.min(terminalWidth - margin * 2, maxBoxW);
+    const boxW = Math.max(4, Math.min(terminalWidth - margin * 2, maxBoxW));
     const style = { ...DEFAULT_STYLE, ...(config.style ?? {}) };
     const lines: Line[] = [];
 

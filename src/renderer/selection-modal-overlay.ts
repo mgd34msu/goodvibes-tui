@@ -29,9 +29,9 @@ export function renderSelectionModalOverlay(
   // ── Search input (always shown when allowSearch is true) ───────────────────
   if (modal.allowSearch) {
     const queryRaw = modal.query;
-    const queryDisplay = queryRaw.length > contentW - 3 ? queryRaw.slice(0, contentW - 4) + '\u2026' : queryRaw;
+    const queryDisplay = getDisplayWidth(queryRaw) > contentW - 3 ? queryRaw.slice(0, contentW - 4) + '\u2026' : queryRaw;
     const searchLine = pad + '\u2502 \u2315 ' + queryDisplay + '\u2588' +
-      ' '.repeat(Math.max(0, contentW - queryDisplay.length - 3)) + '\u2502';
+      ' '.repeat(Math.max(0, contentW - getDisplayWidth(queryDisplay) - 3)) + '\u2502';
     lines.push(UIFactory.stringToLine(searchLine, width, { fg: '252' }));
 
     // Separator after search

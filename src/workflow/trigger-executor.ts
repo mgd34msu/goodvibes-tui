@@ -76,7 +76,7 @@ function evaluateCondition(condition: string, event: HookEvent): boolean {
     // Build a minimal sandbox — Function constructor, no node globals
     // eslint-disable-next-line no-new-func
     const fn = new Function('event', 'payload', `return !!(${condition})`);
-    const result = fn(event, event.data ?? {});
+    const result = fn(event, event.payload ?? {});
     return Boolean(result);
   } catch (err) {
     logger.debug('TriggerExecutor: condition evaluation error', {

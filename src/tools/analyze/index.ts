@@ -70,9 +70,10 @@ async function isBinary(filePath: string): Promise<boolean> {
 }
 
 async function* walkDir(dirPath: string): AsyncGenerator<string> {
-  let entries: Awaited<ReturnType<typeof readdir>>;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let entries: any[];
   try {
-    entries = await readdir(dirPath, { withFileTypes: true });
+    entries = await readdir(dirPath, { withFileTypes: true }) as any[];
   } catch {
     return;
   }

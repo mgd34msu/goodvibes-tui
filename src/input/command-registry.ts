@@ -57,6 +57,10 @@ export interface CommandContext {
   openProfilePicker?: () => void;
   /** Registry of all available tools. */
   toolRegistry: ToolRegistry;
+  /** Toggle the shortcuts/keyboard overlay. */
+  openShortcutsOverlay?: () => void;
+  /** Return the current scroll top line of the viewport. */
+  getScrollTop?: () => number;
 }
 
 /**
@@ -66,7 +70,7 @@ export interface SlashCommand {
   /** Primary name, e.g. "model". Full invocation is "/model". */
   name: string;
   /** Alternate names, e.g. ["m"]. */
-  aliases: string[];
+  aliases?: string[];
   /** One-line description shown in /help output. */
   description: string;
   /** Optional usage hint, e.g. "<model-id>". */
@@ -81,29 +85,32 @@ export interface SlashCommand {
  */
 export class CommandRegistry {
   private commands = new Map<string, SlashCommand>();
+  private aliasIndex = new Map<string, SlashCommand>();
 
-  /** Register a command. Also indexes all aliases. */
+  /** Register a command. Also indexes all aliases for O(1) lookup. */
   register(command: SlashCommand): void {
     this.commands.set(command.name, command);
+    for (const alias of command.aliases ?? []) {
+      this.aliasIndex.set(alias, command);
+    }
   }
 
-  /** Remove a command by primary name. */
+  /** Remove a command by primary name. Also removes its alias entries. */
   unregister(name: string): void {
+    const cmd = this.commands.get(name);
+    if (cmd) {
+      for (const alias of cmd.aliases ?? []) {
+        this.aliasIndex.delete(alias);
+      }
+    }
     this.commands.delete(name);
   }
 
   /**
-   * get - Look up a command by its primary name or any alias.
+   * get - Look up a command by its primary name or any alias. O(1) for both.
    */
   get(name: string): SlashCommand | undefined {
-    // Try primary name first
-    const direct = this.commands.get(name);
-    if (direct) return direct;
-    // Search aliases
-    for (const cmd of this.commands.values()) {
-      if (cmd.aliases?.includes(name)) return cmd;
-    }
-    return undefined;
+    return this.commands.get(name) ?? this.aliasIndex.get(name);
   }
 
   /** All registered commands. */

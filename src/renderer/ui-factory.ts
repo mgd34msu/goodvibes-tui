@@ -80,7 +80,7 @@ export class UIFactory {
     const rightSideText = stats + prov;
     const rightSideW = getDisplayWidth(rightSideText) + getDisplayWidth(gitStr);
     let rightX = width - rightSideW;
-    for (const char of gitStr) { if (rightX < width) line[rightX++] = { char, fg: gitFg, bg: '', bold: false, dim: !gitInfo?.dirty && !(gitInfo?.ahead || gitInfo?.behind), underline: false, italic: false, strikethrough: false }; }
+    for (const char of gitStr) { if (rightX >= 0 && rightX < width) line[rightX++] = { char, fg: gitFg, bg: '', bold: false, dim: !gitInfo?.dirty && !(gitInfo?.ahead || gitInfo?.behind), underline: false, italic: false, strikethrough: false }; }
     for (const char of stats) { if (rightX < width) line[rightX++] = { char, fg: CYAN, bg: '', bold: true, dim: false, underline: false, italic: false, strikethrough: false }; }
     for (const char of prov) { if (rightX < width) line[rightX++] = { char, fg: GREY, bg: '', bold: false, dim: true, underline: false, italic: false, strikethrough: false }; }
     lines.push(line);
@@ -123,7 +123,7 @@ export class UIFactory {
     const wrappedLines = wrapText(text, maxAvailableContentW);
     
     // 3. Find the longest resulting line to determine the "hug" width
-    const maxContentW = Math.max(...wrappedLines.map(l => getDisplayWidth(l)));
+    const maxContentW = wrappedLines.length > 0 ? Math.max(...wrappedLines.map(l => getDisplayWidth(l))) : 0;
     const internalWidth = maxContentW + prefixW + 2;
     const boxStartX = boxMargin;
 

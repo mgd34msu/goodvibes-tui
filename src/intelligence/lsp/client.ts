@@ -65,7 +65,7 @@ export class LspClient {
       });
 
       try {
-        this.proc!.stdin.write(frame);
+        (this.proc!.stdin as import('bun').FileSink).write(frame);
       } catch (err) {
         clearTimeout(timer);
         this.pendingRequests.delete(id);
@@ -81,7 +81,7 @@ export class LspClient {
       const msg: JsonRpcNotification = { jsonrpc: '2.0', method, params };
       const json = JSON.stringify(msg);
       const frame = LspClient.encodeFrame(json);
-      this.proc.stdin.write(frame);
+      (this.proc.stdin as import('bun').FileSink).write(frame);
     } catch (err) {
       logger.error('LspClient: failed to send notification', { method, err: String(err) });
     }
@@ -97,7 +97,7 @@ export class LspClient {
       this.pendingRequests.delete(id);
     }
     try {
-      this.proc.stdin.end();
+      (this.proc.stdin as import('bun').FileSink).end();
       this.proc.kill();
       await this.proc.exited;
     } catch {
@@ -133,7 +133,7 @@ export class LspClient {
 
     (async () => {
       try {
-        const reader = proc.stdout.getReader();
+        const reader = (proc.stdout as ReadableStream<Uint8Array>).getReader();
         while (true) {
           const { done, value } = await reader.read();
           if (done) break;

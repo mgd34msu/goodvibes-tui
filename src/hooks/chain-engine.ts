@@ -314,7 +314,7 @@ export class ChainEngine {
               try {
                 await this.dispatcher.fire({
                   ...pendingEvent,
-                  path: chain.action.match as `${string}:${string}:${string}`,
+                  path: chain.action.match as unknown as import('./types.ts').HookEventPath,
                 });
               } catch (err) {
                 logger.error('ChainEngine: chain action error', {
@@ -341,7 +341,7 @@ export class ChainEngine {
       if (state.currentStep >= chain.steps.length) {
         const actionEvent: HookEvent = {
           ...event,
-          path: chain.action.match as `${string}:${string}:${string}`,
+          path: chain.action.match as unknown as import('./types.ts').HookEventPath,
         };
         try {
           result = await this.dispatcher.fire(actionEvent);

@@ -454,7 +454,7 @@ export function findEnclosingScope(
 
     if (targetRow < start || targetRow > end) return;
 
-    if (scopeTypes.has(node.type)) {
+    if (scopeTypes && scopeTypes.has(node.type)) {
       const size = end - start;
       if (size < bestSize) {
         bestSize = size;

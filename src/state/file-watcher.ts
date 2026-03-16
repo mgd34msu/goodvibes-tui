@@ -90,8 +90,13 @@ export class FileWatcher {
     // Watch .goodvibes/ directory tree (recursive)
     this.addPath(join(this.projectRoot, '.goodvibes'));
 
-    // Watch all files currently in ProjectIndex
+    // Watch all files currently in ProjectIndex (cap at MAX_WATCHERS to avoid unbounded growth)
+    const MAX_WATCHERS = 500;
     for (const entry of this.projectIndex.getFiles()) {
+      if (this.watchedPaths.size >= MAX_WATCHERS) {
+        logger.debug('FileWatcher: MAX_WATCHERS cap reached, skipping remaining files', { cap: MAX_WATCHERS });
+        break;
+      }
       const absPath = entry.path.startsWith('/')
         ? entry.path
         : join(this.projectRoot, entry.path);

@@ -49,7 +49,7 @@ export function renderBookmarkModal(
 ): Line[] {
   const visRows = BookmarkModal.VISIBLE_ROWS;
   const visible = modal.entries.slice(modal.scrollOffset, modal.scrollOffset + visRows);
-  const relSelected = modal.selectedIndex - modal.scrollOffset;
+  const relSelected = Math.max(0, modal.selectedIndex - modal.scrollOffset);
 
   const items = visible.length === 0
     ? [{ label: 'No bookmarks — use Ctrl+B to bookmark a block', selected: false }]

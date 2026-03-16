@@ -259,6 +259,8 @@ export class ScheduleManager {
   private schedules = new Map<string, ScheduleEntry>();
   /** Timer IDs keyed by schedule name */
   private timers = new Map<string, ReturnType<typeof setInterval>>();
+  /** Spawned process handles tracked for cleanup in destroy() */
+  private spawnedProcs: Array<{ pid: number; proc: ReturnType<typeof Bun.spawn> }> = [];
 
   static getInstance(): ScheduleManager {
     if (!ScheduleManager._instance) {
@@ -337,6 +339,11 @@ export class ScheduleManager {
       this._clearTimer(name);
     }
     this.schedules.clear();
+    // Kill any still-running spawned processes
+    for (const { proc } of this.spawnedProcs) {
+      try { proc.kill(); } catch { /* non-fatal */ }
+    }
+    this.spawnedProcs = [];
   }
 
   /** Execute a schedule tick: run the command and update lastRun/nextRun. */
@@ -359,7 +366,13 @@ export class ScheduleManager {
         stdout: 'ignore',
         stderr: 'ignore',
       });
-      proc.exited.catch(() => { /* fire-and-forget */ });
+      const pid = proc.pid;
+      this.spawnedProcs.push({ pid, proc });
+      proc.exited.then(() => {
+        // Remove from tracking once the process has exited
+        const idx = this.spawnedProcs.findIndex(p => p.pid === pid);
+        if (idx !== -1) this.spawnedProcs.splice(idx, 1);
+      }).catch(() => { /* non-fatal */ });
     } catch {
       // Spawn failure is non-fatal for the scheduler
     }

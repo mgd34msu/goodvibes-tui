@@ -244,5 +244,14 @@ export class ProviderRegistry {
   }
 }
 
-/** Singleton registry — import and use everywhere. */
-export const providerRegistry = new ProviderRegistry();
+/** Lazy singleton — instantiated on first access. */
+let _providerRegistry: ProviderRegistry | undefined;
+export function getProviderRegistry(): ProviderRegistry {
+  if (!_providerRegistry) _providerRegistry = new ProviderRegistry();
+  return _providerRegistry;
+}
+export const providerRegistry: ProviderRegistry = new Proxy({} as ProviderRegistry, {
+  get(_target, prop: string | symbol) {
+    return (getProviderRegistry() as unknown as Record<string | symbol, unknown>)[prop];
+  },
+});

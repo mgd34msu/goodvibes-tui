@@ -160,7 +160,7 @@ export class McpClient {
     this.pendingRequests.clear();
 
     try {
-      this.proc.stdin.end();
+      (this.proc.stdin as import('bun').FileSink).end();
       this.proc.kill();
       await this.proc.exited;
     } catch {
@@ -240,7 +240,7 @@ export class McpClient {
       });
 
       try {
-        this.proc!.stdin.write(line);
+        (this.proc!.stdin as import('bun').FileSink).write(line);
       } catch (err) {
         clearTimeout(timer);
         this.pendingRequests.delete(id);
@@ -254,7 +254,7 @@ export class McpClient {
     if (!this.proc || !this.isConnected) return;
     try {
       const msg = { jsonrpc: '2.0', method, params };
-      this.proc.stdin.write(JSON.stringify(msg) + '\n');
+      (this.proc.stdin as import('bun').FileSink).write(JSON.stringify(msg) + '\n');
     } catch (err) {
       logger.debug('McpClient: failed to send notification', { method, err: String(err) });
     }
@@ -269,7 +269,7 @@ export class McpClient {
 
     (async () => {
       try {
-        const reader = proc.stdout.getReader();
+        const reader = (proc.stdout as ReadableStream<Uint8Array>).getReader();
         while (true) {
           const { done, value } = await reader.read();
           if (done) break;

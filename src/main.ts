@@ -2,6 +2,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
 import { join } from 'path';
 import { Compositor } from './renderer/compositor.ts';
+import { createEmptyLine } from './types/grid.ts';
 import { UIFactory } from './renderer/ui-factory.ts';
 import { EventBus } from './core/event-bus.ts';
 import { ConversationManager } from './core/conversation.ts';
@@ -18,6 +19,7 @@ import { HookDispatcher } from './hooks/dispatcher.ts';
 import { PermissionPromptUI } from './permissions/prompt.ts';
 import type { PermissionRequest } from './permissions/prompt.ts';
 import { CommandRegistry } from './input/command-registry.ts';
+import type { CommandContext } from './input/command-registry.ts';
 import { renderFilePickerOverlay } from './renderer/file-picker-overlay.ts';
 import { renderModelPickerOverlay } from './renderer/model-picker-overlay.ts';
 import { renderSearchOverlay } from './renderer/search-overlay.ts';
@@ -26,11 +28,12 @@ import { AgentManager } from './tools/agent/index.ts';
 import { ProcessManager } from './tools/shared/process-manager.ts';
 import { renderSelectionModalOverlay } from './renderer/selection-modal-overlay.ts';
 import { registerBuiltinCommands } from './input/commands.ts';
+import { ScheduleManager } from './tools/workflow/index.ts';
 import { InputHistory } from './input/input-history.ts';
 import { loadSystemPrompt as _loadSystemPrompt } from './utils/prompt-loader.ts';
 import { GitStatusProvider } from './renderer/git-status.ts';
 import type { GitHeaderInfo } from './renderer/git-status.ts';
-import { renderHelpOverlay } from './renderer/help-overlay.ts';
+import { renderHelpOverlay, renderShortcutsOverlay } from './renderer/help-overlay.ts';
 import { renderSettingsModal } from './renderer/settings-modal.ts';
 import { renderSessionPickerModal } from './renderer/session-picker-modal.ts';
 import { renderProfilePickerModal } from './renderer/profile-picker-modal.ts';
@@ -151,9 +154,14 @@ async function main() {
     scrollTop = Math.max(0, conversation.history.getLineCount() - vHeight);
   };
 
+  // Populated after bus.on() calls below — used to clean up listeners on exit
+  const unsubs: Array<() => void> = [];
+
   const exitApp = () => {
+    unsubs.forEach(fn => fn());
     // Save conversation on exit
     saveConversation(conversation.toJSON());
+    try { ScheduleManager.getInstance().destroy(); } catch { /* non-fatal */ }
     stdout.write(PASTE_DISABLE + KEYBOARD_EXT_DISABLE + MOUSE_DISABLE + CURSOR_SHOW + ALT_SCREEN_EXIT);
     stdin.setRawMode(false);
     process.exit(0);
@@ -166,6 +174,16 @@ async function main() {
   const permissionManager = new PermissionManager(bus);
 
   const hookDispatcher = new HookDispatcher();
+
+  const input = new InputHandler(
+    bus,
+    selection,
+    () => scrollTop,
+    getViewportHeight,
+    () => conversation.history,
+    scroll,
+    exitApp,
+  );
 
   const orchestrator = new Orchestrator(
     bus,
@@ -181,21 +199,11 @@ async function main() {
   const acpManager = new AcpManager(bus);
   orchestrator.registerDelegateTool(acpManager);
 
-  const input = new InputHandler(
-    bus,
-    selection,
-    () => scrollTop,
-    getViewportHeight,
-    () => conversation.history,
-    scroll,
-    exitApp,
-  );
-
   // --- Command registry ---
   const commandRegistry = new CommandRegistry();
   registerBuiltinCommands(commandRegistry);
 
-  const commandContext = {
+  const commandContext: CommandContext = {
     eventBus: bus,
     providerRegistry,
     conversationManager: conversation,
@@ -246,6 +254,11 @@ async function main() {
 
   commandContext.openHelpOverlay = () => {
     input.helpOverlayActive = !input.helpOverlayActive;
+    input.helpScrollOffset = 0;
+  };
+  (commandContext as Record<string, unknown>).openShortcutsOverlay = () => {
+    input.shortcutsOverlayActive = !input.shortcutsOverlayActive;
+    input.shortcutsScrollOffset = 0;
     bus.emit('render:request');
   };
 
@@ -271,16 +284,17 @@ async function main() {
 
   // When model+effort selection is complete via the picker, apply both
   bus.on('model-picker:complete', (data) => {
+    if (!data?.model) return;
     const def = data.model;
     const effort = data.effort;
     try {
       providerRegistry.setCurrentModel(def.id);
       runtime.model = def.id;
       runtime.provider = def.provider;
-      runtime.reasoningEffort = effort;
+      runtime.reasoningEffort = effort as 'instant' | 'low' | 'medium' | 'high';
       configManager.set('provider.model', def.id);
       configManager.set('provider.provider', def.provider);
-      configManager.set('provider.reasoningEffort', effort);
+      configManager.set('provider.reasoningEffort', effort as 'instant' | 'low' | 'medium' | 'high');
       conversation.log(`Switched to model: ${def.displayName} (${def.provider}), effort: ${effort}`, { fg: '135' });
       bus.emit('command:model-changed', { provider: def.provider, model: def.id });
     } catch (e) {
@@ -338,7 +352,7 @@ async function main() {
     }
 
     // Shrink viewport to make room for overlays
-    const effectiveVHeight = vHeight - overlayRows;
+    const effectiveVHeight = Math.max(0, vHeight - overlayRows);
 
     // Auto-scroll to bottom when orchestrator is active or user was near bottom
     const maxScroll = Math.max(0, conversation.history.getLineCount() - effectiveVHeight);
@@ -366,7 +380,7 @@ async function main() {
     }
 
     orchestrator.messageQueue.forEach(msg => {
-      viewport.push(...UIFactory.createQueuedMessageFragment(width, msg));
+      viewport.push(...UIFactory.createQueuedMessageFragment(width, msg.text));
     });
 
     if (input.filePicker.active) {
@@ -398,7 +412,18 @@ async function main() {
     }
 
     if (input.helpOverlayActive) {
-      viewport.push(...renderHelpOverlay(width, commandRegistry.getAll()));
+      viewport.length = 0;
+      const helpLines = renderHelpOverlay(width, commandRegistry.getAll(), input.helpScrollOffset);
+      // Pad to fill viewport so modal sits flush above input
+      while (helpLines.length < effectiveVHeight) helpLines.push(createEmptyLine(width));
+      viewport.push(...helpLines);
+    }
+
+    if (input.shortcutsOverlayActive) {
+      viewport.length = 0;
+      const shortcutLines = renderShortcutsOverlay(width, input.shortcutsScrollOffset);
+      while (shortcutLines.length < effectiveVHeight) shortcutLines.push(createEmptyLine(width));
+      viewport.push(...shortcutLines);
     }
 
     compositor.composite({
@@ -406,17 +431,19 @@ async function main() {
       header: UIFactory.createHeader(width, runtime.model, runtime.provider, conversation.title || undefined, lastGitInfo),
       viewport,
       footer: (() => {
+        const runningAgents = AgentManager.getInstance().list().filter((a) => a.status === 'running' || a.status === 'pending').length;
+        const runningProcesses = ProcessManager.getInstance().list().length;
         const processIndicatorLines = renderProcessIndicator(
           width,
-          AgentManager.getInstance().list().filter((a) => a.status === 'running' || a.status === 'pending').length,
-          ProcessManager.getInstance().list().length,
+          runningAgents,
+          runningProcesses,
         );
         const cw = getPromptContentWidth();
         const info = input.getWrappedPromptInfo(cw);
         return [...processIndicatorLines, ...UIFactory.createFooter(
           width,
           info.visibleLines.join('\n'),
-          orchestrator.usage,
+          orchestrator.usage as unknown as { up: number; down: number; max?: number },
           input.showExitNotice,
           input.lastCopyTime,
           runtime.model, toolCount,
@@ -444,26 +471,26 @@ async function main() {
 
   // --- Streaming speed + tool preview wiring ---
   // Refresh git status after each turn completes or after tool results arrive
-  bus.on('turn:complete', () => {
+  unsubs.push(bus.on('turn:complete', () => {
     gitStatusProvider.refresh().then((info) => {
       lastGitInfo = info;
       bus.emit('render:request');
     }).catch(() => { /* non-fatal */ });
-  });
-  bus.on('turn:tool-result', () => {
+  }));
+  unsubs.push(bus.on('turn:tool-result', () => {
     gitStatusProvider.refresh().then((info) => {
       lastGitInfo = info;
       bus.emit('render:request');
     }).catch(() => { /* non-fatal */ });
-  });
+  }));
 
-  bus.on('turn:stream-start', () => {
+  unsubs.push(bus.on('turn:stream-start', () => {
     streamStartTime = Date.now();
     streamDeltaCount = 0;
     streamTokenSpeed = 0;
     partialToolPreview = undefined;
-  });
-  bus.on('turn:stream-delta', (data) => {
+  }));
+  unsubs.push(bus.on('turn:stream-delta', (data) => {
     streamDeltaCount++;
     const elapsed = (Date.now() - streamStartTime) / 1000;
     // Note: counts stream deltas, not actual tokens. ~1 delta per token for most providers.
@@ -477,36 +504,36 @@ async function main() {
       const preview = args.length > 60 ? args.slice(0, 57) + '...' : args;
       partialToolPreview = name ? `${name}(${preview})` : undefined;
     }
-  });
-  bus.on('turn:stream-end', () => {
+  }));
+  unsubs.push(bus.on('turn:stream-end', () => {
     partialToolPreview = undefined;
-  });
+  }));
 
   // --- Event wiring ---
-  bus.on('render:request', render);
-  bus.on('clear:screen', () => {
+  unsubs.push(bus.on('render:request', render));
+  unsubs.push(bus.on('clear:screen', () => {
     compositor.resetDiff();
     stdout.write(CLEAR_SCREEN);
     render();
-  });
-  bus.on('input:submit', ({ text, content }) => {
+  }));
+  unsubs.push(bus.on('input:submit', ({ text, content }) => {
     scrollLocked = true; // Re-lock on any user input
     orchestrator.handleUserInput(text, content);
-  });
+  }));
 
   // Cancel generation when requested by input handler
-  bus.on('cancel:generation', () => {
+  unsubs.push(bus.on('cancel:generation', () => {
     if (orchestrator.isThinking) {
       orchestrator.abort();
     }
-  });
+  }));
 
   // Permission prompt wiring — store the pending request and trigger a render.
   // The orchestrator's Promise is blocked until resolve() is called.
-  bus.on('permission:request', (req) => {
+  unsubs.push(bus.on('permission:request', (req) => {
     pendingPermission = req;
     bus.emit('render:request');
-  });
+  }));
 
   // --- Terminal setup ---
   stdin.setRawMode(true);

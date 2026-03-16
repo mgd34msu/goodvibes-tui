@@ -49,7 +49,7 @@ export class Compositor {
 
     // 2. Draw Viewport (Starting at Row 2)
     const viewportStartY = 2;
-    const vHeight = height - header.length - footer.length;
+    const vHeight = Math.max(0, height - header.length - footer.length);
 
     // Calculate the offset for bottom-anchored short history
     const lineCount = selection?.lineCount ?? 0;

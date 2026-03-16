@@ -48,6 +48,14 @@ export interface EventMap {
   'search:start': void;
   'search:update': { query: string; matchCount: number; currentMatch: number };
   'search:end': void;
+
+  // Bookmark events
+  'bookmark:jump': { key: string };
+  'bookmark:removed': { key: string };
+  'bookmark:open-file': { key: string; content: string };
+
+  // Help overlay events
+  'help:scroll': { delta: number };
 }
 
 type Listener<T> = T extends void ? () => void : (data: T) => void;
@@ -68,7 +76,9 @@ export class EventBus {
   }
 
   public off<K extends keyof EventMap>(event: K, listener: Listener<EventMap[K]>): void {
-    this.listeners.get(event)?.delete(listener as (...args: unknown[]) => void);
+    const set = this.listeners.get(event);
+    set?.delete(listener as (...args: unknown[]) => void);
+    if (set?.size === 0) this.listeners.delete(event);
   }
 
   public emit<K extends keyof EventMap>(
