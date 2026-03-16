@@ -71,6 +71,10 @@ export class AgentManager {
 
   /** Spawn a new agent and return its record. */
   spawn(input: AgentInput): AgentRecord {
+    const task = input.task;
+    if (!task || typeof task !== 'string' || task.trim() === '') {
+      throw new Error('spawn() requires a non-empty task string');
+    }
     const template = input.template ?? 'general';
     const templateDef = AGENT_TEMPLATES[template] ?? AGENT_TEMPLATES.general;
     const tools = input.tools ?? [...templateDef.defaultTools];
@@ -78,7 +82,7 @@ export class AgentManager {
     const id = `agent-${crypto.randomUUID().slice(0, 8)}`;
     const record: AgentRecord = {
       id,
-      task: input.task!,
+      task,
       template,
       model: input.model,
       provider: input.provider,
@@ -211,9 +215,10 @@ export const agentTool: Tool = {
           return { success: false, error: `Unknown agent: '${input.agentId}'` };
         }
 
+        const record = manager.getStatus(input.agentId);
         return {
           success: true,
-          output: JSON.stringify({ agentId: input.agentId, status: 'cancelled' }),
+          output: JSON.stringify({ agentId: input.agentId, status: record?.status ?? 'unknown' }),
         };
       }
 

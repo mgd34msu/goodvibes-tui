@@ -41,6 +41,15 @@ beforeAll(() => {
         return Response.json({ received: body });
       }
 
+      if (url.pathname === '/echo') {
+        const body = await req.text();
+        return Response.json({
+          method: req.method,
+          body,
+          headers: Object.fromEntries(req.headers),
+        });
+      }
+
       return new Response('Not Found', { status: 404 });
     },
   });
@@ -339,6 +348,138 @@ describe('fetch tool - verbosity', () => {
     const out = JSON.parse(result.output!);
     expect(out.results[0].status).toBe(200);
     expect(typeof out.results[0].content).toBe('string');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// HTTP methods
+// ---------------------------------------------------------------------------
+
+describe('fetch tool - HTTP methods', () => {
+  test('PUT method is sent correctly', async () => {
+    const result = await fetchTool.execute({
+      urls: [{ url: `${base}/echo`, method: 'PUT', body: 'put-body', extract: 'json' }],
+    });
+    expect(result.success).toBe(true);
+    const out = JSON.parse(result.output!);
+    const echo = JSON.parse(out.results[0].content);
+    expect(echo.method).toBe('PUT');
+    expect(echo.body).toBe('put-body');
+  });
+
+  test('DELETE method is sent correctly', async () => {
+    const result = await fetchTool.execute({
+      urls: [{ url: `${base}/echo`, method: 'DELETE', extract: 'json' }],
+    });
+    expect(result.success).toBe(true);
+    const out = JSON.parse(result.output!);
+    const echo = JSON.parse(out.results[0].content);
+    expect(echo.method).toBe('DELETE');
+  });
+
+  test('PATCH method is sent correctly', async () => {
+    const result = await fetchTool.execute({
+      urls: [{ url: `${base}/echo`, method: 'PATCH', body: 'patch-data', extract: 'json' }],
+    });
+    expect(result.success).toBe(true);
+    const out = JSON.parse(result.output!);
+    const echo = JSON.parse(out.results[0].content);
+    expect(echo.method).toBe('PATCH');
+    expect(echo.body).toBe('patch-data');
+  });
+
+  test('HEAD method returns empty body and 200 status', async () => {
+    const result = await fetchTool.execute({
+      urls: [{ url: `${base}/text`, method: 'HEAD' }],
+    });
+    expect(result.success).toBe(true);
+    const out = JSON.parse(result.output!);
+    expect(out.results[0].status).toBe(200);
+    // HEAD responses have no body
+    const content: string = out.results[0].content ?? '';
+    expect(content).toBe('');
+  });
+
+  test('OPTIONS method is sent correctly', async () => {
+    const result = await fetchTool.execute({
+      urls: [{ url: `${base}/echo`, method: 'OPTIONS', extract: 'json' }],
+    });
+    expect(result.success).toBe(true);
+    const out = JSON.parse(result.output!);
+    const echo = JSON.parse(out.results[0].content);
+    expect(echo.method).toBe('OPTIONS');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Body types and custom headers
+// ---------------------------------------------------------------------------
+
+describe('fetch tool - body_type and headers', () => {
+  test('body_type form sets Content-Type application/x-www-form-urlencoded', async () => {
+    const result = await fetchTool.execute({
+      urls: [{
+        url: `${base}/echo`,
+        method: 'POST',
+        body: 'key=value&other=123',
+        body_type: 'form',
+        extract: 'json',
+      }],
+    });
+    expect(result.success).toBe(true);
+    const out = JSON.parse(result.output!);
+    const echo = JSON.parse(out.results[0].content);
+    expect(echo.headers['content-type']).toContain('application/x-www-form-urlencoded');
+    expect(echo.body).toBe('key=value&other=123');
+  });
+
+  test('custom request headers are sent to server', async () => {
+    const result = await fetchTool.execute({
+      urls: [{
+        url: `${base}/echo`,
+        method: 'GET',
+        headers: { 'x-custom-header': 'my-value', 'x-another': 'test' },
+        extract: 'json',
+      }],
+    });
+    expect(result.success).toBe(true);
+    const out = JSON.parse(result.output!);
+    const echo = JSON.parse(out.results[0].content);
+    expect(echo.headers['x-custom-header']).toBe('my-value');
+    expect(echo.headers['x-another']).toBe('test');
+  });
+
+  test('body_type json sets Content-Type application/json', async () => {
+    const result = await fetchTool.execute({
+      urls: [{
+        url: `${base}/echo`,
+        method: 'POST',
+        body: JSON.stringify({ test: true }),
+        body_type: 'json',
+        extract: 'json',
+      }],
+    });
+    expect(result.success).toBe(true);
+    const out = JSON.parse(result.output!);
+    const echo = JSON.parse(out.results[0].content);
+    expect(echo.headers['content-type']).toContain('application/json');
+  });
+
+  test('explicit Content-Type header is not overridden by body_type', async () => {
+    const result = await fetchTool.execute({
+      urls: [{
+        url: `${base}/echo`,
+        method: 'POST',
+        body: 'custom',
+        body_type: 'json',
+        headers: { 'Content-Type': 'text/plain' },
+        extract: 'json',
+      }],
+    });
+    expect(result.success).toBe(true);
+    const out = JSON.parse(result.output!);
+    const echo = JSON.parse(out.results[0].content);
+    expect(echo.headers['content-type']).toContain('text/plain');
   });
 });
 

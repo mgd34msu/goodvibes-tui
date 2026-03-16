@@ -3,10 +3,10 @@ import { ToolRegistry } from '../../tools/registry.ts';
 import { registerAllTools } from '../../tools/index.ts';
 
 describe('registerAllTools', () => {
-  test('registers exactly 11 tools', () => {
+  test('registers exactly 12 tools', () => {
     const registry = new ToolRegistry();
     registerAllTools(registry);
-    expect(registry.list()).toHaveLength(11);
+    expect(registry.list()).toHaveLength(12);
   });
 
   test('registers a tool named "read"', () => {
@@ -73,6 +73,12 @@ describe('registerAllTools', () => {
     const registry = new ToolRegistry();
     registerAllTools(registry);
     expect(registry.has('fetch')).toBe(true);
+  });
+
+  test('registers a tool named "registry"', () => {
+    const registry = new ToolRegistry();
+    registerAllTools(registry);
+    expect(registry.has('registry')).toBe(true);
   });
 
   test('each tool has a definition with name and description', () => {
