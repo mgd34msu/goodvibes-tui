@@ -37,6 +37,7 @@ import { renderHelpOverlay, renderShortcutsOverlay } from './renderer/help-overl
 import { renderSettingsModal } from './renderer/settings-modal.ts';
 import { renderSessionPickerModal } from './renderer/session-picker-modal.ts';
 import { renderProfilePickerModal } from './renderer/profile-picker-modal.ts';
+import { renderBookmarkModal } from './renderer/bookmark-modal.ts';
 
 function loadSystemPrompt(): string {
   return _loadSystemPrompt(
@@ -450,6 +451,14 @@ async function main() {
 
     if (input.profilePickerModal.active) {
       viewport.push(...renderProfilePickerModal(input.profilePickerModal, width));
+    }
+
+    if (input.bookmarkModal.active) {
+      const bmLines = renderBookmarkModal(input.bookmarkModal, width);
+      const bmStart = Math.max(0, vHeight - bmLines.length);
+      viewport.length = Math.min(viewport.length, bmStart);
+      while (viewport.length < bmStart) viewport.push(createEmptyLine(width));
+      viewport.push(...bmLines);
     }
 
     if (input.helpOverlayActive) {
