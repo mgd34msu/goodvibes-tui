@@ -306,6 +306,47 @@ describe('StateTool', () => {
       const res = await run(tool, { mode: 'memory' });
       expect(res.parsed.action).toBe('list');
     });
+
+    test('memory get rejects path traversal in memoryKey', async () => {
+      const res = await tool.execute({
+        mode: 'memory',
+        memoryAction: 'get',
+        memoryKey: '../../etc/passwd',
+      });
+      expect(res.success).toBe(false);
+      expect(res.error).toContain('Invalid memoryKey');
+    });
+
+    test('memory set rejects path traversal in memoryKey', async () => {
+      const res = await tool.execute({
+        mode: 'memory',
+        memoryAction: 'set',
+        memoryKey: '../../../.env',
+        memoryValue: 'malicious',
+      });
+      expect(res.success).toBe(false);
+      expect(res.error).toContain('Invalid memoryKey');
+    });
+
+    test('memory get rejects memoryKey with forward slash', async () => {
+      const res = await tool.execute({
+        mode: 'memory',
+        memoryAction: 'get',
+        memoryKey: 'sub/dir',
+      });
+      expect(res.success).toBe(false);
+      expect(res.error).toContain('Invalid memoryKey');
+    });
+
+    test('memory get rejects memoryKey with null byte', async () => {
+      const res = await tool.execute({
+        mode: 'memory',
+        memoryAction: 'get',
+        memoryKey: 'valid\x00extra',
+      });
+      expect(res.success).toBe(false);
+      expect(res.error).toContain('Invalid memoryKey');
+    });
   });
 
   // -------------------------------------------------------------------------

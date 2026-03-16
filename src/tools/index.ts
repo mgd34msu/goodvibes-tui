@@ -12,6 +12,7 @@ import { agentTool } from './agent/index.ts';
 import { fetchTool } from './fetch/index.ts';
 import { createStateTool } from './state/index.ts';
 import { workflowTool } from './workflow/index.ts';
+import { createRegistryTool } from './registry-tool/index.ts';
 import { KVState } from '../state/kv-state.ts';
 
 /**
@@ -35,4 +36,5 @@ export function registerAllTools(registry: ToolRegistry): void {
   registry.register(createStateTool(kvState, projectIndex));
   registry.register(workflowTool);
   registry.register(fetchTool);
+  registry.register(createRegistryTool(registry));
 }

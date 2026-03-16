@@ -8,19 +8,25 @@ import { STATE_TOOL_SCHEMA } from './schema.ts';
 import type { StateInput } from './schema.ts';
 
 // ---------------------------------------------------------------------------
-// Session start time (module-level, set once per process).
+// Helpers
 // ---------------------------------------------------------------------------
 
-const SESSION_START_MS = Date.now();
+/**
+ * Reserved keys that KVState silently drops on set.
+ * Duplicated here to filter them out of `keys_written` reporting.
+ */
+const RESERVED_KEYS = new Set(['id', 'started_at', '__proto__', 'constructor', 'prototype']);
 
-// ---------------------------------------------------------------------------
-// Tool call telemetry (module-level counters).
-// ---------------------------------------------------------------------------
-
-const _telemetry = {
-  toolCalls: 0,
-  errors: 0,
-};
+/**
+ * Sanitize a memory key to prevent path traversal.
+ * Only alphanumeric characters, hyphens, and underscores are allowed.
+ * Returns null if the key is invalid.
+ */
+function sanitizeMemoryKey(key: string): string | null {
+  if (!key) return null;
+  if (!/^[a-zA-Z0-9_-]+$/.test(key)) return null;
+  return key;
+}
 
 // ---------------------------------------------------------------------------
 // Factory
@@ -36,6 +42,14 @@ export function createStateTool(
   kvState: KVState,
   projectIndex: ProjectIndex,
 ): Tool {
+  // Session start time and telemetry are scoped per-instance so multiple
+  // createStateTool() calls don't share state.
+  const SESSION_START_MS = Date.now();
+  const _telemetry = {
+    toolCalls: 0,
+    errors: 0,
+  };
+
   const definition: ToolDefinition = {
     name: 'state',
     description:
@@ -50,6 +64,10 @@ export function createStateTool(
   ): Promise<{ success: boolean; output?: string; error?: string }> {
     _telemetry.toolCalls++;
     try {
+      if (typeof args.mode !== 'string') {
+        _telemetry.errors++;
+        return { success: false, error: 'Missing or invalid "mode" field (string required)' };
+      }
       const input = args as unknown as StateInput;
       const { mode } = input;
 
@@ -73,6 +91,19 @@ export function createStateTool(
       logger.debug('state tool: unexpected error', { error: message });
       return { success: false, error: `Unexpected error: ${message}` };
     }
+  }
+
+  function runTelemetry(): { success: boolean; output?: string; error?: string } {
+    const durationMs = Date.now() - SESSION_START_MS;
+    return {
+      success: true,
+      output: JSON.stringify({
+        mode: 'telemetry',
+        session_duration_ms: durationMs,
+        tool_calls: _telemetry.toolCalls,
+        errors: _telemetry.errors,
+      }),
+    };
   }
 
   return { definition, execute };
@@ -103,12 +134,14 @@ async function runSet(
     return { success: false, error: 'mode "set" requires a "values" object' };
   }
   await kvState.set(values);
+  // Only report keys that KVState actually persists (exclude reserved keys).
+  const written = Object.keys(values).filter((k) => !RESERVED_KEYS.has(k));
   return {
     success: true,
     output: JSON.stringify({
       mode: 'set',
-      keys_written: Object.keys(values).length,
-      keys: Object.keys(values),
+      keys_written: written.length,
+      keys: written,
     }),
   };
 }
@@ -198,7 +231,7 @@ async function runContext(
   };
 }
 
-function runMemory(
+async function runMemory(
   input: StateInput,
 ): Promise<{ success: boolean; output?: string; error?: string }> {
   const action = input.memoryAction ?? 'list';
@@ -207,38 +240,42 @@ function runMemory(
   if (action === 'list') {
     try {
       if (!existsSync(memoryDir)) {
-        return Promise.resolve({
+        return {
           success: true,
           output: JSON.stringify({ mode: 'memory', action: 'list', keys: [] }),
-        });
+        };
       }
       const keys = readdirSync(memoryDir)
         .filter(f => f.endsWith('.json'))
         .map(f => f.slice(0, -5)); // strip .json
-      return Promise.resolve({
+      return {
         success: true,
         output: JSON.stringify({ mode: 'memory', action: 'list', keys }),
-      });
+      };
     } catch (err) {
-      return Promise.resolve({
+      return {
         success: false,
         error: `Memory list failed: ${err instanceof Error ? err.message : String(err)}`,
-      });
+      };
     }
   }
 
   if (action === 'get') {
     const key = input.memoryKey;
     if (!key) {
-      return Promise.resolve({ success: false, error: 'memory action "get" requires "memoryKey"' });
+      return { success: false, error: 'memory action "get" requires "memoryKey"' };
     }
-    const filePath = join(memoryDir, `${key}.json`);
+    const safeKey = sanitizeMemoryKey(key);
+    if (!safeKey) {
+      return { success: false, error: 'Invalid memoryKey: must be alphanumeric, hyphens, or underscores only' };
+    }
+    const filePath = join(memoryDir, `${safeKey}.json`);
     try {
       if (!existsSync(filePath)) {
-        return Promise.resolve({
+        return {
           success: true,
-          output: JSON.stringify({ mode: 'memory', action: 'get', key, value: null }),
-        });
+          output: JSON.stringify({ mode: 'memory', action: 'get', key: safeKey, value: null }),
+        };
       }
       const raw = readFileSync(filePath, 'utf-8');
       let value: unknown;
@@ -247,15 +284,15 @@ function runMemory(
       } catch {
         value = raw;
       }
-      return Promise.resolve({
+      return {
         success: true,
-        output: JSON.stringify({ mode: 'memory', action: 'get', key, value }),
-      });
+        output: JSON.stringify({ mode: 'memory', action: 'get', key: safeKey, value }),
+      };
     } catch (err) {
-      return Promise.resolve({
+      return {
         success: false,
         error: `Memory get failed: ${err instanceof Error ? err.message : String(err)}`,
-      });
+      };
     }
   }
 
@@ -263,43 +300,34 @@ function runMemory(
     const key = input.memoryKey;
     const value = input.memoryValue;
     if (!key) {
-      return Promise.resolve({ success: false, error: 'memory action "set" requires "memoryKey"' });
+      return { success: false, error: 'memory action "set" requires "memoryKey"' };
+    }
+    const safeKey = sanitizeMemoryKey(key);
+    if (!safeKey) {
+      return { success: false, error: 'Invalid memoryKey: must be alphanumeric, hyphens, or underscores only' };
     }
     if (value === undefined || value === null) {
-      return Promise.resolve({ success: false, error: 'memory action "set" requires "memoryValue"' });
+      return { success: false, error: 'memory action "set" requires "memoryValue"' };
     }
     try {
       mkdirSync(memoryDir, { recursive: true });
-      const filePath = join(memoryDir, `${key}.json`);
+      const filePath = join(memoryDir, `${safeKey}.json`);
       // Write as-is; allow caller to pass JSON string or plain text
       writeFileSync(filePath, value, 'utf-8');
-      return Promise.resolve({
+      return {
         success: true,
-        output: JSON.stringify({ mode: 'memory', action: 'set', key, bytes_written: value.length }),
-      });
+        output: JSON.stringify({ mode: 'memory', action: 'set', key: safeKey, bytes_written: value.length }),
+      };
     } catch (err) {
-      return Promise.resolve({
+      return {
         success: false,
         error: `Memory set failed: ${err instanceof Error ? err.message : String(err)}`,
-      });
+      };
     }
   }
 
-  return Promise.resolve({
+  return {
     success: false,
     error: `Unknown memory action: ${String(action)}`,
-  });
-}
-
-function runTelemetry(): Promise<{ success: boolean; output?: string; error?: string }> {
-  const durationMs = Date.now() - SESSION_START_MS;
-  return Promise.resolve({
-    success: true,
-    output: JSON.stringify({
-      mode: 'telemetry',
-      session_duration_ms: durationMs,
-      tool_calls: _telemetry.toolCalls,
-      errors: _telemetry.errors,
-    }),
-  });
+  };
 }

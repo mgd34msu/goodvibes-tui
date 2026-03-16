@@ -72,9 +72,12 @@ function htmlToMarkdown(html: string): string {
     .replace(/<(em|i)[^>]*>([\s\S]*?)<\/(em|i)>/gi, '_$2_')
     // Links
     .replace(/<a[^>]+href=["']([^"']*)["'][^>]*>([\s\S]*?)<\/a>/gi, '[$2]($1)')
-    // Images
-    .replace(/<img[^>]+alt=["']([^"']*)["'][^>]+src=["']([^"']*)["'][^>]*>/gi, '![$1]($2)')
-    .replace(/<img[^>]+src=["']([^"']*)["'][^>]*>/gi, '![]($1)')
+    // Images (handle any attribute order for src/alt)
+    .replace(/<img[^>]*>/gi, (match) => {
+      const alt = match.match(/\balt=["']([^"']*)["']/i)?.[1] ?? '';
+      const src = match.match(/\bsrc=["']([^"']*)["']/i)?.[1] ?? '';
+      return alt ? `![${alt}](${src})` : `![](${src})`;
+    })
     // Lists
     .replace(/<li[^>]*>([\s\S]*?)<\/li>/gi, '- $1')
     .replace(/<ul[^>]*>/gi, '\n').replace(/<\/ul>/gi, '\n')
@@ -124,9 +127,10 @@ function extractCodeBlocks(html: string): string {
   while ((m = preRe.exec(html)) !== null) {
     blocks.push(stripHtml(m[1]));
   }
-  // Also standalone <code> blocks not inside <pre>
+  // Strip <pre> blocks before scanning for standalone <code> to avoid duplication
+  const withoutPre = html.replace(/<pre[\s\S]*?<\/pre>/gi, '');
   const codeRe = /<code[^>]*>([\s\S]*?)<\/code>/gi;
-  while ((m = codeRe.exec(html)) !== null) {
+  while ((m = codeRe.exec(withoutPre)) !== null) {
     const code = stripHtml(m[1]);
     if (code.trim()) blocks.push(code);
   }
@@ -235,10 +239,13 @@ async function fetchOne(
   let body: string | undefined;
   if (urlInput.body !== undefined) {
     body = urlInput.body;
-    if (urlInput.body_type === 'json' && !headers['content-type'] && !headers['Content-Type']) {
-      headers['Content-Type'] = 'application/json';
-    } else if (urlInput.body_type === 'form' && !headers['content-type'] && !headers['Content-Type']) {
-      headers['Content-Type'] = 'application/x-www-form-urlencoded';
+    const hasContentType = Object.keys(headers).some((k) => k.toLowerCase() === 'content-type');
+    if (!hasContentType) {
+      if (urlInput.body_type === 'json') {
+        headers['Content-Type'] = 'application/json';
+      } else if (urlInput.body_type === 'form') {
+        headers['Content-Type'] = 'application/x-www-form-urlencoded';
+      }
     }
   }
 

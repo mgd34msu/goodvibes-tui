@@ -12,7 +12,7 @@ interface WorkflowDefinition {
   description: string;
 }
 
-export const WORKFLOW_DEFINITIONS: Record<string, WorkflowDefinition> = {
+export const WORKFLOW_DEFINITIONS: Readonly<Record<string, WorkflowDefinition>> = Object.freeze({
   wrfc: {
     name: 'WRFC Loop',
     states: ['gather', 'plan', 'apply', 'review', 'revision', 'complete'],
@@ -43,7 +43,7 @@ export const WORKFLOW_DEFINITIONS: Record<string, WorkflowDefinition> = {
     transitions: { review: ['complete'] },
     description: 'Skip to review phase',
   },
-};
+});
 
 // ---------------------------------------------------------------------------
 // WorkflowManager
@@ -55,15 +55,18 @@ export interface WorkflowInstance {
   currentState: string;
   task: string;
   startedAt: number;
+  completedAt?: number;
   transitions: number;
   context: Record<string, unknown>;
   cancelled?: boolean;
 }
 
+const WORKFLOW_EVICT_AFTER_MS = 60 * 60 * 1000; // 1 hour
+const WORKFLOW_MAX_COMPLETED = 50;
+
 export class WorkflowManager {
   private static _instance: WorkflowManager | null = null;
   private workflows = new Map<string, WorkflowInstance>();
-  private idCounter = 0;
 
   static getInstance(): WorkflowManager {
     if (!WorkflowManager._instance) {
@@ -83,7 +86,7 @@ export class WorkflowManager {
       throw new Error(`Unknown workflow definition: ${definition}`);
     }
 
-    const id = `wf_${Date.now()}_${++this.idCounter}`;
+    const id = `wf-${crypto.randomUUID().slice(0, 8)}`;
     const instance: WorkflowInstance = {
       id,
       definition,
@@ -123,6 +126,9 @@ export class WorkflowManager {
 
     instance.currentState = targetState;
     instance.transitions += 1;
+    if (targetState === 'complete') {
+      instance.completedAt = Date.now();
+    }
     return { success: true };
   }
 
@@ -130,10 +136,26 @@ export class WorkflowManager {
     const instance = this.workflows.get(id);
     if (!instance) return false;
     instance.cancelled = true;
+    instance.completedAt = Date.now();
     return true;
   }
 
   list(): WorkflowInstance[] {
+    const now = Date.now();
+    // Evict old completed/cancelled workflows
+    for (const [id, wf] of this.workflows) {
+      if (wf.completedAt !== undefined && now - wf.completedAt > WORKFLOW_EVICT_AFTER_MS) {
+        this.workflows.delete(id);
+      }
+    }
+    // Cap completed workflows at max
+    const all = Array.from(this.workflows.values());
+    const completed = all.filter(w => w.completedAt !== undefined);
+    if (completed.length > WORKFLOW_MAX_COMPLETED) {
+      completed.sort((a, b) => (a.completedAt ?? 0) - (b.completedAt ?? 0));
+      const toEvict = completed.slice(0, completed.length - WORKFLOW_MAX_COMPLETED);
+      for (const wf of toEvict) this.workflows.delete(wf.id);
+    }
     return Array.from(this.workflows.values());
   }
 }
@@ -153,7 +175,6 @@ export interface TriggerDefinition {
 export class TriggerManager {
   private static _instance: TriggerManager | null = null;
   private triggers = new Map<string, TriggerDefinition>();
-  private idCounter = 0;
 
   static getInstance(): TriggerManager {
     if (!TriggerManager._instance) {
@@ -168,7 +189,7 @@ export class TriggerManager {
   }
 
   add(def: { event: string; condition?: string; action: string }): TriggerDefinition {
-    const id = `trig_${Date.now()}_${++this.idCounter}`;
+    const id = `trg-${crypto.randomUUID().slice(0, 8)}`;
     const trigger: TriggerDefinition = {
       id,
       event: def.event,
@@ -245,6 +266,20 @@ export class ScheduleManager {
 
   remove(name: string): boolean {
     return this.schedules.delete(name);
+  }
+
+  enable(name: string): boolean {
+    const entry = this.schedules.get(name);
+    if (!entry) return false;
+    entry.enabled = true;
+    return true;
+  }
+
+  disable(name: string): boolean {
+    const entry = this.schedules.get(name);
+    if (!entry) return false;
+    entry.enabled = false;
+    return true;
   }
 
   list(): ScheduleEntry[] {

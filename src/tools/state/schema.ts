@@ -46,6 +46,7 @@ export const STATE_TOOL_SCHEMA = {
     },
   },
   required: ['mode'],
+  additionalProperties: false,
 } as const;
 
 /** All valid operation modes for the state tool. */

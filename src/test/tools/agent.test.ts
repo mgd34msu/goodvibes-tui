@@ -163,6 +163,27 @@ describe('cancel mode', () => {
     expect(result.success).toBe(false);
     expect(result.error).toContain('agentId');
   });
+
+  test('cancel on completed agent reports actual status (not forced cancelled)', async () => {
+    // Spawn an agent, then manually advance its status to 'completed' via the manager.
+    const spawned = await runAgent({ mode: 'spawn', task: 'Already done task' });
+    const agentId = spawned.agentId as string;
+
+    // Simulate completion by directly mutating the manager record.
+    const manager = AgentManager.getInstance();
+    const record = manager.getStatus(agentId);
+    if (record) {
+      record.status = 'completed';
+      record.completedAt = Date.now();
+    }
+
+    // Cancel should succeed (agent found) but report 'completed' since it was already done.
+    const result = await runAgentMayFail({ mode: 'cancel', agentId });
+    expect(result.success).toBe(true);
+    const parsed = JSON.parse(result.output!) as Record<string, unknown>;
+    // AgentManager.cancel() only overwrites 'pending'/'running' — so status stays 'completed'.
+    expect(parsed.status).toBe('completed');
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -258,5 +279,15 @@ describe('error cases', () => {
     const result = await runAgentMayFail({});
     expect(result.success).toBe(false);
     expect(result.error).toContain('mode');
+  });
+
+  test('spawn with invalid template returns error', async () => {
+    const result = await runAgentMayFail({
+      mode: 'spawn',
+      task: 'Some task',
+      template: 'nonexistent-template',
+    });
+    expect(result.success).toBe(false);
+    expect(result.error).toContain('nonexistent-template');
   });
 });

@@ -1,0 +1,376 @@
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
+import { join, resolve, isAbsolute } from 'node:path';
+import { homedir } from 'node:os';
+import { logger } from '../../utils/logger.ts';
+import type { Tool, ToolDefinition } from '../../types/tools.ts';
+import type { ToolRegistry } from '../registry.ts';
+import { REGISTRY_TOOL_SCHEMA } from './schema.ts';
+import type { RegistryInput } from './schema.ts';
+
+// ---------------------------------------------------------------------------
+// Frontmatter parser
+// ---------------------------------------------------------------------------
+
+function parseFrontmatter(content: string): Record<string, string> {
+  const match = content.match(/^---\n([\s\S]*?)\n---/);
+  if (!match) return {};
+  const result: Record<string, string> = {};
+  for (const line of match[1].split('\n')) {
+    const [key, ...rest] = line.split(':');
+    if (key && rest.length) result[key.trim()] = rest.join(':').trim();
+  }
+  return result;
+}
+
+// ---------------------------------------------------------------------------
+// Directory scanning helpers
+// ---------------------------------------------------------------------------
+
+interface RegistryMatch {
+  name: string;
+  type: 'skill' | 'agent' | 'tool';
+  description: string;
+  path: string;
+}
+
+function scanDirectory(
+  dir: string,
+  itemType: 'skill' | 'agent',
+  query: string,
+): RegistryMatch[] {
+  if (!existsSync(dir)) return [];
+  const results: RegistryMatch[] = [];
+  let entries: string[];
+  try {
+    entries = readdirSync(dir);
+  } catch {
+    return [];
+  }
+  const lowerQuery = query.toLowerCase();
+  for (const entry of entries) {
+    if (!entry.endsWith('.md')) continue;
+    const filePath = join(dir, entry);
+    let content = '';
+    try {
+      content = readFileSync(filePath, 'utf-8');
+    } catch {
+      continue;
+    }
+    const frontmatter = parseFrontmatter(content);
+    const name = frontmatter['name'] ?? entry.replace(/\.md$/, '');
+    const description = frontmatter['description'] ?? '';
+    const searchTarget = `${name} ${description} ${entry}`.toLowerCase();
+    if (!lowerQuery || searchTarget.includes(lowerQuery)) {
+      results.push({ name, type: itemType, description, path: filePath });
+    }
+  }
+  return results;
+}
+
+function scanDirectoryAll(
+  dir: string,
+  itemType: 'skill' | 'agent',
+): RegistryMatch[] {
+  return scanDirectory(dir, itemType, '');
+}
+
+function getSkillDirs(cwd: string): string[] {
+  return [
+    join(cwd, '.goodvibes', 'skills'),
+    join(homedir(), '.goodvibes', 'skills'),
+  ];
+}
+
+function getAgentDirs(cwd: string): string[] {
+  return [
+    join(cwd, '.goodvibes', 'agents'),
+    join(homedir(), '.goodvibes', 'agents'),
+  ];
+}
+
+// ---------------------------------------------------------------------------
+// Factory
+// ---------------------------------------------------------------------------
+
+/**
+ * Create the `registry` tool bound to the given ToolRegistry.
+ *
+ * Returns a Tool object conforming to the Tool interface.
+ * Never throws from execute().
+ */
+export function createRegistryTool(toolRegistry: ToolRegistry): Tool {
+  const definition: ToolDefinition = {
+    name: 'registry',
+    description:
+      'Discover and inspect skills, agents, and tools.'
+      + ' Modes: search finds items by keyword; recommend lists items sorted by relevance;'
+      + ' dependencies reads a skill\'s dependency chain; content returns full markdown file.',
+    parameters: REGISTRY_TOOL_SCHEMA as unknown as Record<string, unknown>,
+  };
+
+  async function execute(
+    args: Record<string, unknown>,
+  ): Promise<{ success: boolean; output?: string; error?: string }> {
+    try {
+      if (!args.mode || typeof args.mode !== 'string') {
+        return { success: false, error: 'Missing required "mode" field' };
+      }
+      const input = args as unknown as RegistryInput;
+      const { mode } = input;
+
+      switch (mode) {
+        case 'search':       return runSearch(input, toolRegistry);
+        case 'recommend':    return runRecommend(input, toolRegistry);
+        case 'dependencies': return runDependencies(input);
+        case 'content':      return runContent(input);
+        default: {
+          return { success: false, error: `Unknown mode: ${String(mode)}` };
+        }
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      logger.debug('registry tool: unexpected error', { error: message });
+      return { success: false, error: `Unexpected error: ${message}` };
+    }
+  }
+
+  return { definition, execute };
+}
+
+// ---------------------------------------------------------------------------
+// Mode handlers
+// ---------------------------------------------------------------------------
+
+function runSearch(
+  input: RegistryInput,
+  toolRegistry: ToolRegistry,
+): Promise<{ success: boolean; output?: string; error?: string }> {
+  const query = input.query ?? '';
+  const typeFilter = input.type ?? 'all';
+  const cwd = process.cwd();
+  const matches: RegistryMatch[] = [];
+
+  if (typeFilter === 'skills' || typeFilter === 'all') {
+    for (const dir of getSkillDirs(cwd)) {
+      matches.push(...scanDirectory(dir, 'skill', query));
+    }
+  }
+
+  if (typeFilter === 'agents' || typeFilter === 'all') {
+    for (const dir of getAgentDirs(cwd)) {
+      matches.push(...scanDirectory(dir, 'agent', query));
+    }
+  }
+
+  if (typeFilter === 'tools' || typeFilter === 'all') {
+    const lowerQuery = query.toLowerCase();
+    for (const tool of toolRegistry.list()) {
+      const { name, description } = tool.definition;
+      const searchTarget = `${name} ${description}`.toLowerCase();
+      if (!lowerQuery || searchTarget.includes(lowerQuery)) {
+        matches.push({ name, type: 'tool', description, path: '' });
+      }
+    }
+  }
+
+  // Deduplicate: project-local entries override global (first seen wins)
+  const seen = new Set<string>();
+  const deduped = matches.filter((r) => {
+    const key = `${r.type}:${r.name}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+
+  return Promise.resolve({
+    success: true,
+    output: JSON.stringify({
+      mode: 'search',
+      query,
+      count: deduped.length,
+      results: deduped,
+    }),
+  });
+}
+
+function runRecommend(
+  input: RegistryInput,
+  toolRegistry: ToolRegistry,
+): Promise<{ success: boolean; output?: string; error?: string }> {
+  const task = input.task ?? '';
+  const scope = input.scope ?? 'skills';
+  const cwd = process.cwd();
+  const lowerTask = task.toLowerCase();
+
+  let candidates: RegistryMatch[];
+
+  if (scope === 'tools') {
+    candidates = toolRegistry.list().map((t) => ({
+      name: t.definition.name,
+      type: 'tool' as const,
+      description: t.definition.description,
+      path: '',
+    }));
+  } else {
+    candidates = [];
+    for (const dir of getSkillDirs(cwd)) {
+      candidates.push(...scanDirectoryAll(dir, 'skill'));
+    }
+    // Deduplicate: project-local entries override global (first seen wins)
+    const seen = new Set<string>();
+    candidates = candidates.filter((r) => {
+      const key = `${r.type}:${r.name}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  }
+
+  // Score by keyword overlap with task description
+  const taskWords = lowerTask.split(/\s+/).filter(Boolean);
+  const scored = candidates.map((item) => {
+    const target = `${item.name} ${item.description}`.toLowerCase();
+    const score = taskWords.reduce((acc, word) => acc + (target.includes(word) ? 1 : 0), 0);
+    return { ...item, score };
+  });
+
+  // Sort descending by score, then alphabetically by name for stable output
+  scored.sort((a, b) => b.score - a.score || a.name.localeCompare(b.name));
+
+  return Promise.resolve({
+    success: true,
+    output: JSON.stringify({
+      mode: 'recommend',
+      task,
+      scope,
+      count: scored.length,
+      results: scored.map(({ score: _score, ...item }) => item),
+    }),
+  });
+}
+
+function runDependencies(
+  input: RegistryInput,
+): Promise<{ success: boolean; output?: string; error?: string }> {
+  const skillName = input.skillName;
+  if (!skillName) {
+    return Promise.resolve({
+      success: false,
+      error: 'mode "dependencies" requires "skillName"',
+    });
+  }
+
+  const cwd = process.cwd();
+  let filePath: string | null = null;
+
+  for (const dir of getSkillDirs(cwd)) {
+    const candidate = join(dir, `${skillName}.md`);
+    if (existsSync(candidate)) {
+      filePath = candidate;
+      break;
+    }
+    // Also try exact match without .md appended (caller may have included extension)
+    const candidateExact = join(dir, skillName);
+    if (existsSync(candidateExact)) {
+      filePath = candidateExact;
+      break;
+    }
+  }
+
+  if (!filePath) {
+    return Promise.resolve({
+      success: false,
+      error: `Skill not found: ${skillName}`,
+    });
+  }
+
+  let content: string;
+  try {
+    content = readFileSync(filePath, 'utf-8');
+  } catch (err) {
+    return Promise.resolve({
+      success: false,
+      error: `Failed to read skill file: ${err instanceof Error ? err.message : String(err)}`,
+    });
+  }
+
+  const frontmatter = parseFrontmatter(content);
+
+  // Parse depends_on: can be a comma-separated string or single name
+  const dependsOnRaw = frontmatter['depends_on'] ?? '';
+  const dependencies = dependsOnRaw
+    ? dependsOnRaw.split(',').map((s) => s.trim()).filter(Boolean)
+    : [];
+
+  // Also check for @ include directives in the body (strip frontmatter first)
+  const body = content.replace(/^---\n[\s\S]*?\n---\n?/, '');
+  const includeRegex = /^@([\w/-]+)/gm;
+  const includes: string[] = [];
+  let includeMatch: RegExpExecArray | null;
+  while ((includeMatch = includeRegex.exec(body)) !== null) {
+    includes.push(includeMatch[1]);
+  }
+
+  return Promise.resolve({
+    success: true,
+    output: JSON.stringify({
+      mode: 'dependencies',
+      skillName,
+      path: filePath,
+      depends_on: dependencies,
+      includes,
+    }),
+  });
+}
+
+function runContent(
+  input: RegistryInput,
+): Promise<{ success: boolean; output?: string; error?: string }> {
+  const filePath = input.path;
+  if (!filePath) {
+    return Promise.resolve({
+      success: false,
+      error: 'mode "content" requires "path"',
+    });
+  }
+
+  const resolvedPath = isAbsolute(filePath)
+    ? filePath
+    : resolve(process.cwd(), filePath);
+
+  if (!resolvedPath.includes('.goodvibes/')) {
+    return Promise.resolve({
+      success: false,
+      error: 'content mode can only read files within .goodvibes/ directories',
+    });
+  }
+
+  if (!existsSync(resolvedPath)) {
+    return Promise.resolve({
+      success: false,
+      error: `File not found: ${resolvedPath}`,
+    });
+  }
+
+  let content: string;
+  try {
+    content = readFileSync(resolvedPath, 'utf-8');
+  } catch (err) {
+    return Promise.resolve({
+      success: false,
+      error: `Failed to read file: ${err instanceof Error ? err.message : String(err)}`,
+    });
+  }
+
+  const frontmatter = parseFrontmatter(content);
+
+  return Promise.resolve({
+    success: true,
+    output: JSON.stringify({
+      mode: 'content',
+      path: resolvedPath,
+      metadata: frontmatter,
+      content,
+    }),
+  });
+}
