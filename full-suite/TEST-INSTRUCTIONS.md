@@ -1,914 +1,1303 @@
 # Full Suite Test Instructions
 
-This document is a self-contained checklist for an AI agent to verify every mode and option of all 12 native tools in goodvibes-tui. Work through each section top-to-bottom. Mark each item `[x]` when verified. The fixture files you need are all in this directory (`full-suite/`).
+This document drives an AI agent through a complete proof-of-function run for all 12 native tools. Every test requires the AI to call a specific tool with specific parameters, extract a unique piece of data from the actual response, and record that data in `full-suite/TEST-RESULTS.md`.
+
+"Verify" is not acceptable. Proof means real output captured into the results file.
 
 **Fixture root:** `/home/buzzkill/Projects/goodvibes-tui/full-suite/`
 **Project root:** `/home/buzzkill/Projects/goodvibes-tui/`
+**Results file:** `/home/buzzkill/Projects/goodvibes-tui/full-suite/TEST-RESULTS.md`
 
 ---
 
-## 1. `read` — File Reading
+## Section 1: Setup
 
-Tool schema: `src/tools/read/schema.ts`. Fields: `files[]` (required), `extract`, `output`, `token_budget`, `page`.
+Before running any tests, perform these two steps.
 
-### 1.1 content mode (default)
-- [ ] Call `read` with `files: [{ path: "full-suite/src/index.ts" }]` and no `extract` field.
-  - **Expected:** Full file content returned with line numbers. Should see `greet`, `add`, `VERSION`, `UserService`, `unusedHelper`.
+### 1.1 Create TEST-RESULTS.md
 
-### 1.2 outline mode
-- [ ] Call `read` with `files: [{ path: "full-suite/src/index.ts", extract: "outline" }]`.
-  - **Expected:** Function/class signatures without bodies. Should list `greet`, `add`, `UserService`, `unusedHelper` — no implementation lines.
+**Call:** `write` tool with:
+```
+path: full-suite/TEST-RESULTS.md
+mode: overwrite
+content: (the full markdown skeleton below)
+```
 
-### 1.3 symbols mode
-- [ ] Call `read` with `files: [{ path: "full-suite/src/index.ts", extract: "symbols" }]`.
-  - **Expected:** Only exported symbol names. Should list: `greet`, `add`, `VERSION`, `UserService`, `unusedHelper`.
+Initial content for TEST-RESULTS.md:
+```markdown
+# Tool Test Results
+Generated: {REPLACE_WITH_ACTUAL_TIMESTAMP}
 
-### 1.4 lines mode with range
-- [ ] Call `read` with `files: [{ path: "full-suite/src/index.ts", extract: "lines", range: { start: 1, end: 5 } }]`.
-  - **Expected:** Only lines 1–5 returned. Should show the `greet` function definition only.
+## read
+| Test | Proof | Status |
+|------|-------|--------|
 
-### 1.5 ast mode
-- [ ] Call `read` with `files: [{ path: "full-suite/src/auth.ts", extract: "ast" }]`.
-  - **Expected:** Structural AST outline. May show imports, declarations, and constants.
+## write
+| Test | Proof | Status |
+|------|-------|--------|
 
-### 1.6 batch read — multiple files
-- [ ] Call `read` with `files` containing three entries:
-  ```json
-  [
-    { "path": "full-suite/src/index.ts", "extract": "symbols" },
-    { "path": "full-suite/src/utils.ts", "extract": "outline" },
-    { "path": "full-suite/src/auth.ts", "extract": "content" }
-  ]
-  ```
-  - **Expected:** All three files returned in one response. Each uses its own extract mode.
+## edit
+| Test | Proof | Status |
+|------|-------|--------|
 
-### 1.7 output format: count_only
-- [ ] Call `read` with `files: [{ path: "full-suite/src/index.ts" }]` and `output: { format: "count_only" }`.
-  - **Expected:** Only file count and total line count — no file content.
+## find
+| Test | Proof | Status |
+|------|-------|--------|
 
-### 1.8 output format: minimal
-- [ ] Call `read` with `files: [{ path: "full-suite/src/index.ts" }]` and `output: { format: "minimal" }`.
-  - **Expected:** File path and line count only — no content.
+## exec
+| Test | Proof | Status |
+|------|-------|--------|
 
-### 1.9 output format: verbose
-- [ ] Call `read` with `files: [{ path: "full-suite/package.json" }]` and `output: { format: "verbose" }`.
-  - **Expected:** Full content plus metadata (encoding, size, etc.).
+## fetch
+| Test | Proof | Status |
+|------|-------|--------|
 
-### 1.10 max_per_item truncation
-- [ ] Call `read` with `files: [{ path: "full-suite/src/index.ts" }]` and `output: { max_per_item: 5 }`.
-  - **Expected:** At most 5 lines returned for the file.
+## analyze
+| Test | Proof | Status |
+|------|-------|--------|
 
-### 1.11 token_budget pagination
-- [ ] Call `read` with `files: [{ path: "full-suite/src/index.ts" }, { path: "full-suite/src/auth.ts" }]`, `token_budget: 100`, `page: 1`.
-  - **Expected:** First page of results fitting within the token budget. Note the total page count.
-- [ ] If total pages > 1, repeat with `page: 2`.
-  - **Expected:** Second page with remaining files.
+## inspect
+| Test | Proof | Status |
+|------|-------|--------|
 
-### 1.12 force — bypass cache
-- [ ] Call `read` with `files: [{ path: "full-suite/src/index.ts", force: true }]`.
-  - **Expected:** File re-read from disk regardless of cache state.
+## agent
+| Test | Proof | Status |
+|------|-------|--------|
 
-### 1.13 global extract override with per-file override
-- [ ] Call `read` with global `extract: "symbols"` and `files: [{ path: "full-suite/src/index.ts" }, { path: "full-suite/src/auth.ts", extract: "outline" }]`.
-  - **Expected:** `index.ts` uses `symbols` (global), `auth.ts` uses `outline` (per-file override).
+## state
+| Test | Proof | Status |
+|------|-------|--------|
 
----
+## workflow
+| Test | Proof | Status |
+|------|-------|--------|
 
-## 2. `write` — File Writing
+## registry
+| Test | Proof | Status |
+|------|-------|--------|
 
-Tool schema: `src/tools/write/schema.ts`. Fields: `files[]` (required), `verbosity`, `dry_run`.
+## Summary
+| Metric | Value |
+|--------|-------|
+| Total tests | 0 |
+| Passed | 0 |
+| Failed | 0 |
+```
 
-### 2.1 create a new file
-- [ ] Call `write` with:
-  ```json
-  {
-    "files": [{ "path": "full-suite/write-test/new-file.txt", "content": "Hello from write test" }]
-  }
-  ```
-  - **Expected:** File created successfully. Verify by calling `read` on `full-suite/write-test/new-file.txt`.
+**Capture:** The `bytes_written` field from the response and the `path` field.
+**Record:** Append this to the `write` section immediately after (this is also the first write test).
 
-### 2.2 fail_if_exists (default) — should fail
-- [ ] Call `write` again on the same file `full-suite/write-test/new-file.txt` with `mode: "fail_if_exists"` (or omit mode).
-  - **Expected:** Error returned because file already exists.
+### 1.2 Create output directory
 
-### 2.3 overwrite mode
-- [ ] Call `write` with `mode: "overwrite"` on `full-suite/write-test/new-file.txt` with new content `"Overwritten content"`.
-  - **Expected:** File successfully overwritten. Verify via `read`.
+**Call:** `write` tool with:
+```
+path: full-suite/output/.keep
+mode: overwrite
+content: (empty string)
+```
 
-### 2.4 backup mode
-- [ ] Call `write` with `mode: "backup"` on `full-suite/write-test/new-file.txt` with content `"Backup version"`.
-  - **Expected:** Original file backed up to `.goodvibes/.backups/`, new content written. Check `.goodvibes/.backups/` for the backup file.
-
-### 2.5 dry_run
-- [ ] Call `write` with `dry_run: true` and `files: [{ path: "full-suite/write-test/dry-run-file.txt", content: "Should not exist" }]`.
-  - **Expected:** Response shows what would be written but no file created. Confirm by trying to `read` the file — it should not exist.
-
-### 2.6 verbosity: count_only
-- [ ] Call `write` with a new file and `verbosity: "count_only"`.
-  - **Expected:** Only a count of files written — no paths or content.
-
-### 2.7 verbosity: minimal
-- [ ] Call `write` with a new file and `verbosity: "minimal"`.
-  - **Expected:** File paths and basic status — no full content echo.
-
-### 2.8 verbosity: verbose
-- [ ] Call `write` with a new file and `verbosity: "verbose"`.
-  - **Expected:** Full details including paths, byte counts, and modes.
-
-### 2.9 content_base64
-- [ ] Call `write` with `content_base64` containing the base64 encoding of `"Base64 content test"`.
-  - Encode: `echo -n "Base64 content test" | base64` → `QmFzZTY0IGNvbnRlbnQgdGVzdA==`
-  - **Expected:** File created with decoded content. Verify via `read`.
-
-### 2.10 batch write — multiple files
-- [ ] Call `write` with `files` array containing 3 new files at once in `full-suite/write-test/`.
-  - **Expected:** All 3 files created in one call.
+**Capture:** Confirm the file was created without error.
+**Record:** Note the result inline; this is not a scored test.
 
 ---
 
-## 3. `edit` — File Editing
+## Section 2: `read` Tool (6 tests)
 
-Tool schema: `src/tools/edit/schema.ts`. Fields: `edits[]` (required), `match`, `transaction`, `output`, `dry_run`.
+For each test, append a row to the `## read` table in TEST-RESULTS.md.
 
-**Setup:** Use `full-suite/src/index.ts` for edits. Read it first to confirm current content.
+### 2.1 content mode
 
-### 3.1 exact match (default)
-- [ ] Call `edit` with:
-  ```json
-  {
-    "edits": [{
-      "path": "full-suite/src/index.ts",
-      "find": "return `Hello, ${name}!`;",
-      "replace": "return `Hello, ${name}! (edited)`;"
-    }]
-  }
-  ```
-  - **Expected:** Exact string replaced. Verify via `read`.
-- [ ] Revert: edit it back to `return \`Hello, ${name}!\`;`
+**Call:** `read` tool with:
+```
+files: [{ path: "full-suite/src/index.ts" }]
+extract: "content"
+```
 
-### 3.2 fuzzy match mode
-- [ ] Call `edit` with `match: { mode: "fuzzy" }` and a `find` string with slightly different whitespace than the actual file content.
-  - **Example:** `find: "return  `Hello,  ${name}!`;"` (extra spaces)
-  - **Expected:** Match succeeds despite whitespace differences.
+**Capture from response:**
+- The exact line count returned (e.g., `42`)
+- The name of the first exported function found on line 1 or nearby (e.g., `greet`)
 
-### 3.3 regex match mode
-- [ ] Call `edit` with `match: { mode: "regex" }` and `find: "export const VERSION = '.*';"`.
-  - Replace with `"export const VERSION = '2.0.0';"`
-  - **Expected:** Regex matches and replaces the VERSION constant.
-- [ ] Revert to `'1.0.0'`.
+**Record row:**
+```
+| content mode | Line count: {N}, First export: `{name}` | PASS/FAIL |
+```
 
-### 3.4 occurrence: first
-- [ ] Add a second occurrence of the word `users` by reading and editing `full-suite/src/index.ts`. Then call `edit` with `occurrence: "first"` to replace only the first occurrence.
-  - **Expected:** Only the first match replaced.
+### 2.2 outline mode
 
-### 3.5 occurrence: last
-- [ ] Call `edit` with `occurrence: "last"` to replace only the last occurrence of a repeated string.
-  - **Expected:** Only the last match replaced.
+**Call:** `read` tool with:
+```
+files: [{ path: "full-suite/src/index.ts", extract: "outline" }]
+```
 
-### 3.6 occurrence: all
-- [ ] Call `edit` with `occurrence: "all"` targeting a pattern that appears multiple times.
-  - **Expected:** All occurrences replaced.
+**Capture from response:**
+- The complete list of symbol names that appear in the outline (e.g., `greet, add, VERSION, UserService, unusedHelper`)
 
-### 3.7 occurrence: N (specific number)
-- [ ] Call `edit` with `occurrence: 2` to replace the 2nd occurrence of a repeated string.
-  - **Expected:** Only the 2nd occurrence replaced.
+**Record row:**
+```
+| outline mode | Symbols in outline: {comma-separated list} | PASS/FAIL |
+```
 
-### 3.8 hints: near_line
-- [ ] Call `edit` with a `hints: { near_line: 10 }` to prefer the match closest to line 10.
-  - **Expected:** The match closest to line 10 is replaced.
+### 2.3 symbols mode
 
-### 3.9 hints: in_function
-- [ ] Call `edit` with `hints: { in_function: "greet" }` to restrict match to within the `greet` function.
-  - **Expected:** Only matches inside `greet` are replaced.
+**Call:** `read` tool with:
+```
+files: [{ path: "full-suite/src/index.ts", extract: "symbols" }]
+```
 
-### 3.10 hints: in_class
-- [ ] Call `edit` with `hints: { in_class: "UserService" }` to restrict match to within the `UserService` class.
-  - **Expected:** Only matches inside `UserService` are replaced.
+**Capture from response:**
+- The exact count of exported symbols returned (e.g., `5`)
 
-### 3.11 transaction: atomic (default)
-- [ ] Call `edit` with two edits where the second one uses an invalid `find` string.
-  - **Expected:** Both edits rolled back — no partial changes applied.
+**Record row:**
+```
+| symbols mode | Exported symbol count: {N} | PASS/FAIL |
+```
 
-### 3.12 transaction: partial
-- [ ] Call `edit` with `transaction: { mode: "partial" }` and two edits where one is invalid.
-  - **Expected:** The valid edit is applied; the invalid one is skipped and reported as failed.
+### 2.4 lines mode with range
 
-### 3.13 transaction: none
-- [ ] Call `edit` with `transaction: { mode: "none" }` and two edits where one is invalid.
-  - **Expected:** Each edit applied independently; failed edit does not affect others.
+**Call:** `read` tool with:
+```
+files: [{ path: "full-suite/src/index.ts", extract: "lines", range: { start: 1, end: 10 } }]
+```
 
-### 3.14 dry_run
-- [ ] Call `edit` with `dry_run: true` and a valid edit.
-  - **Expected:** Diff shown but no file changes. Verify via `read` that file is unchanged.
+**Capture from response:**
+- The exact text of line 1 as returned in the response
 
-### 3.15 output: with_diff
-- [ ] Call `edit` with `output: { format: "with_diff" }` and a real change.
-  - **Expected:** Response includes a unified diff showing before/after.
+**Record row:**
+```
+| lines mode (1-10) | Line 1: `{exact text}` | PASS/FAIL |
+```
 
-### 3.16 output: verbose
-- [ ] Call `edit` with `output: { format: "verbose" }` and a real change.
-  - **Expected:** Full detail including pre/post content for each edit.
+### 2.5 batch read (two files)
 
-### 3.17 id field for tracking
-- [ ] Call `edit` with `edits: [{ id: "my-edit-1", path: "...", find: "...", replace: "..." }]`.
-  - **Expected:** Result includes `id: "my-edit-1"` keying the result entry.
+**Call:** `read` tool with:
+```
+files: [
+  { path: "full-suite/src/index.ts" },
+  { path: "full-suite/src/auth.ts" }
+]
+```
 
-### 3.18 base64 find/replace
-- [ ] Call `edit` with `find_base64` and `replace_base64` fields instead of `find`/`replace`.
-  - **Expected:** Edit succeeds using base64-decoded strings.
+**Capture from response:**
+- The count of files returned in the response (must be `2`)
+- The total line count across both files combined
 
----
+**Record row:**
+```
+| batch read 2 files | Files returned: {N}, Total lines: {N} | PASS/FAIL |
+```
 
-## 4. `find` — Codebase Search
+### 2.6 count_only output format
 
-Tool schema: `src/tools/find/schema.ts`. Fields: `queries[]` (required), `output`, `parallel`.
+**Call:** `read` tool with:
+```
+files: [{ path: "full-suite/src/index.ts" }]
+output: { format: "count_only" }
+```
 
-### 4.1 mode: files — glob pattern
-- [ ] Call `find` with:
-  ```json
-  {
-    "queries": [{ "id": "ts-files", "mode": "files", "patterns": ["full-suite/src/**/*.ts"] }]
-  }
-  ```
-  - **Expected:** Lists `index.ts`, `utils.ts`, `auth.ts` and `test/index.test.ts`.
+**Capture from response:**
+- The token estimate number returned
 
-### 4.2 mode: files — with exclude
-- [ ] Call `find` with `patterns: ["full-suite/src/**/*"]` and `exclude: ["full-suite/src/components/**"]`.
-  - **Expected:** Returns TypeScript files but excludes the `components/` directory.
-
-### 4.3 mode: content — basic grep
-- [ ] Call `find` with:
-  ```json
-  {
-    "queries": [{ "id": "exports", "mode": "content", "pattern": "export function", "glob": "full-suite/src/**/*.ts" }]
-  }
-  ```
-  - **Expected:** All files containing `export function` — should match `index.ts`, `utils.ts`, `auth.ts`.
-
-### 4.4 mode: content — case_sensitive: false
-- [ ] Call `find` with `pattern: "EXPORT FUNCTION"` and `case_sensitive: false`.
-  - **Expected:** Same results as case-sensitive search on `"export function"`.
-
-### 4.5 mode: content — whole_word
-- [ ] Call `find` with `pattern: "add"` and `whole_word: true` in `full-suite/src/`.
-  - **Expected:** Matches `add` as a whole word, not `addUser`.
-
-### 4.6 mode: content — multiline
-- [ ] Call `find` with `multiline: true` and a pattern spanning two lines, e.g. `"export class UserService\\s*\\{"` in `full-suite/src/index.ts`.
-  - **Expected:** Matches the class declaration across line boundaries.
-
-### 4.7 mode: content — negate
-- [ ] Call `find` with `pattern: "import"` and `negate: true` in `full-suite/src/**/*.ts`.
-  - **Expected:** Returns files that do NOT contain `import` — should include `index.ts` (no imports at top level).
-
-### 4.8 mode: symbols — all symbols
-- [ ] Call `find` with:
-  ```json
-  {
-    "queries": [{ "id": "all-syms", "mode": "symbols", "path": "full-suite/src/" }]
-  }
-  ```
-  - **Expected:** All symbols across all TS files in `src/`.
-
-### 4.9 mode: symbols — by name query
-- [ ] Call `find` with `query: "User"` in symbols mode.
-  - **Expected:** Returns `UserService`, `getUser`, `addUser`, `listUsers`, `formatUserName`.
-
-### 4.10 mode: symbols — by kinds
-- [ ] Call `find` with `kinds: ["class"]` in symbols mode over `full-suite/src/`.
-  - **Expected:** Only class declarations — `UserService`.
-
-### 4.11 mode: symbols — exported_only
-- [ ] Call `find` with `exported_only: true` in symbols mode.
-  - **Expected:** Only exported symbols. Private fields of `UserService` (`users`) should be excluded.
-
-### 4.12 output: count_only
-- [ ] Call `find` with `output: { format: "count_only" }` on a content query.
-  - **Expected:** Only match counts — no file paths or line content.
-
-### 4.13 output: files_only
-- [ ] Call `find` with `output: { format: "files_only" }` on a content query.
-  - **Expected:** Only file paths — no line numbers or matched text.
-
-### 4.14 output: locations
-- [ ] Call `find` with `output: { format: "locations" }` on a content query.
-  - **Expected:** File paths with line numbers for each match.
-
-### 4.15 output: matches
-- [ ] Call `find` with `output: { format: "matches" }` on a content query.
-  - **Expected:** File paths, line numbers, and the matched line text.
-
-### 4.16 output: context
-- [ ] Call `find` with `output: { format: "context" }`, `context_before: 2`, `context_after: 2`.
-  - **Expected:** Each match shown with 2 lines before and after.
-
-### 4.17 max_results limit
-- [ ] Call `find` with `output: { max_results: 1 }` on a query with multiple expected matches.
-  - **Expected:** At most 1 result returned.
-
-### 4.18 max_per_item limit
-- [ ] Call `find` with `output: { max_per_item: 1 }` on a multi-match query.
-  - **Expected:** At most 1 match per file.
-
-### 4.19 batch queries — multiple in parallel
-- [ ] Call `find` with two queries in the `queries` array and `parallel: true`.
-  - **Expected:** Both queries execute and both results returned in one response.
-
-### 4.20 path scoping
-- [ ] Call `find` with `path: "full-suite/src/components/"` for a content query.
-  - **Expected:** Search scoped to the `components/` subdirectory.
+**Record row:**
+```
+| count_only format | Token estimate: {N} | PASS/FAIL |
+```
 
 ---
 
-## 5. `exec` — Command Execution
+## Section 3: `write` Tool (5 tests)
 
-Tool schema: `src/tools/exec/schema.ts`. Fields: `commands[]` (required), `parallel`, `working_dir`, `timeout_ms`, `verbosity`, `file_ops`.
+For each test, append a row to the `## write` table in TEST-RESULTS.md.
 
-### 5.1 basic command
-- [ ] Call `exec` with `commands: [{ cmd: "echo hello" }]`.
-  - **Expected:** stdout contains `hello`, exit code 0.
+### 3.1 Create new file
 
-### 5.2 working_dir
-- [ ] Call `exec` with `working_dir: "/home/buzzkill/Projects/goodvibes-tui/full-suite"` and `cmd: "pwd"`.
-  - **Expected:** stdout is the full-suite directory path.
+**Call:** `write` tool with:
+```
+path: "full-suite/output/test-write.txt"
+mode: "fail_if_exists"
+content: "hello world"
+```
 
-### 5.3 per-command cwd override
-- [ ] Call `exec` with `commands: [{ cmd: "pwd", cwd: "/tmp" }]`.
-  - **Expected:** stdout is `/tmp`.
+**Capture from response:**
+- The `bytes_written` value
+- The `path` value as returned (resolved path)
 
-### 5.4 env vars
-- [ ] Call `exec` with `commands: [{ cmd: "echo $MY_VAR", env: { "MY_VAR": "test-value" } }]`.
-  - **Expected:** stdout contains `test-value`.
+**Record row:**
+```
+| create new file | bytes_written: {N}, path: {path} | PASS/FAIL |
+```
 
-### 5.5 expect: exit_code
-- [ ] Call `exec` with `expect: { exit_code: 0 }` on a successful command.
-  - **Expected:** No expectation error.
-- [ ] Call `exec` with `expect: { exit_code: 0 }` on a failing command (e.g. `cmd: "exit 1"`).
-  - **Expected:** Expectation error reported in the result.
+### 3.2 fail_if_exists guard
 
-### 5.6 expect: stdout_contains
-- [ ] Call `exec` with `expect: { stdout_contains: "passed" }` and `cmd: "npm test"` in `full-suite/`.
-  - **Expected:** No expectation error because `npm test` echoes `all tests passed`.
+**Call:** `write` tool with:
+```
+path: "full-suite/output/test-write.txt"
+mode: "fail_if_exists"
+content: "this should not overwrite"
+```
 
-### 5.7 expect: stderr_contains
-- [ ] Call `exec` with a command that writes to stderr, e.g. `cmd: ">&2 echo 'warn'"`, and `expect: { stderr_contains: "warn" }`.
-  - **Expected:** No expectation error.
+**Capture from response:**
+- The exact error message text returned (must contain something like "already exists")
 
-### 5.8 timeout_ms
-- [ ] Call `exec` with `commands: [{ cmd: "sleep 5", timeout_ms: 100 }]`.
-  - **Expected:** Command times out, `timed_out: true` in result.
+**Record row:**
+```
+| fail_if_exists | Error: "{exact error text}" | PASS/FAIL |
+```
 
-### 5.9 background execution
-- [ ] Call `exec` with `commands: [{ cmd: "sleep 2", background: true }]`.
-  - **Expected:** Returns immediately with a `process_id`. Note the `process_id`.
+### 3.3 overwrite mode
 
-### 5.10 retry
-- [ ] Call `exec` with `commands: [{ cmd: "exit 1", retry: { max: 2, delay_ms: 100, backoff: "fixed" } }]`.
-  - **Expected:** Command retried 2 times before failing. Result includes `retries: 2`.
+**Call:** `write` tool with:
+```
+path: "full-suite/output/test-write.txt"
+mode: "overwrite"
+content: "overwritten content"
+```
 
-### 5.11 retry with exponential backoff
-- [ ] Call `exec` with `retry: { max: 2, delay_ms: 50, backoff: "exponential" }` on a failing command.
-  - **Expected:** Retried with increasing delays.
+**Capture from response:**
+- The new `bytes_written` value (must differ from test 3.1)
 
-### 5.12 until — pattern-based early termination
-- [ ] Call `exec` with `until: { pattern: "passed", timeout_ms: 5000 }` and `cmd: "npm test"` in `full-suite/`.
-  - **Expected:** Command terminates early when `passed` appears in output.
+**Record row:**
+```
+| overwrite mode | bytes_written: {N} (differs from 3.1) | PASS/FAIL |
+```
 
-### 5.13 until — kill_after: true
-- [ ] Call `exec` with `until: { pattern: "complete", kill_after: true }` and a long-running command.
-  - **Expected:** Process killed after pattern match.
+### 3.4 base64 content write
 
-### 5.14 parallel execution
-- [ ] Call `exec` with `parallel: true` and two commands: `echo A` and `echo B`.
-  - **Expected:** Both run concurrently, both results returned.
+**Call:** `write` tool with:
+```
+path: "full-suite/output/test-base64.txt"
+mode: "fail_if_exists"
+content_base64: {base64 encoding of "base64 proof content"}
+```
 
-### 5.15 batch sequential commands
-- [ ] Call `exec` with three sequential commands: `echo step1`, `echo step2`, `echo step3`.
-  - **Expected:** All three run in order, all results returned.
+The base64 value for "base64 proof content" is: `YmFzZTY0IHByb29mIGNvbnRlbnQ=`
 
-### 5.16 verbosity: count_only
-- [ ] Call `exec` with `verbosity: "count_only"` on a command.
-  - **Expected:** Only exit code(s) — no stdout/stderr content.
+**Capture from response:**
+- The `bytes_written` value returned
 
-### 5.17 verbosity: minimal
-- [ ] Call `exec` with `verbosity: "minimal"`.
-  - **Expected:** Exit codes plus first line of stdout/stderr.
+**Record row:**
+```
+| base64 write | bytes_written: {N} | PASS/FAIL |
+```
 
-### 5.18 verbosity: verbose
-- [ ] Call `exec` with `verbosity: "verbose"`.
-  - **Expected:** Full output plus timing, cwd, and env details.
+### 3.5 dry_run mode
 
-### 5.19 file_ops: copy before command
-- [ ] Call `exec` with:
-  ```json
-  {
-    "file_ops": [{ "op": "copy", "source": "full-suite/data/sample.json", "destination": "full-suite/write-test/sample-copy.json" }],
-    "commands": [{ "cmd": "echo copied" }]
-  }
-  ```
-  - **Expected:** File is copied before the command runs. Verify the copy exists.
+**Call:** `write` tool with:
+```
+path: "full-suite/output/test-dry-run.txt"
+dry_run: true
+content: "this should never be written"
+```
 
-### 5.20 file_ops: delete
-- [ ] Call `exec` with `file_ops: [{ "op": "delete", "source": "full-suite/write-test/sample-copy.json" }]` and a command.
-  - **Expected:** File deleted before command runs.
+**Capture from response:**
+- Confirmation that dry_run was acknowledged (e.g., a `dry_run: true` field or equivalent in the response)
 
-### 5.21 file_ops: move
-- [ ] Call `exec` with `file_ops: [{ "op": "move", "source": "full-suite/write-test/new-file.txt", "destination": "full-suite/write-test/moved-file.txt" }]`.
-  - **Expected:** File moved; original no longer exists, destination created.
+Then immediately call `read` on `full-suite/output/test-dry-run.txt` and confirm it returns a "file not found" error.
 
-### 5.22 npm scripts from full-suite
-- [ ] Call `exec` with `cmd: "npm run build"` in `full-suite/`.
-  - **Expected:** stdout contains `build complete`.
-- [ ] Call `exec` with `cmd: "npm run lint"` in `full-suite/`.
-  - **Expected:** stdout contains `no lint errors`.
+**Capture from read response:**
+- The error confirming the file does not exist
+
+**Record row:**
+```
+| dry_run write | dry_run acknowledged, file not found on read: "{error}" | PASS/FAIL |
+```
 
 ---
 
-## 6. `fetch` — HTTP Requests
+## Section 4: `edit` Tool (6 tests)
 
-Tool schema: `src/tools/fetch/schema.ts`. Fields: `urls[]` (required), `extract`, `parallel`, `verbosity`.
+Before running edit tests, copy `full-suite/src/index.ts` to `full-suite/output/edit-test.ts` using the `write` tool (read the source first, write to output). Each edit test should work on `full-suite/output/edit-test.ts` to preserve the original.
 
-### 6.1 GET request — raw extract
-- [ ] Call `fetch` with:
-  ```json
+For each test, append a row to the `## edit` table in TEST-RESULTS.md.
+
+### 4.1 Exact find/replace
+
+**Call:** `edit` tool with:
+```
+edits: [{
+  path: "full-suite/output/edit-test.ts",
+  find: "hello",
+  replace: "hello_edited"
+}]
+```
+
+(If "hello" does not appear in index.ts, use an actual string that does appear — read the file first to confirm.)
+
+**Capture from response:**
+- A line from the generated diff output showing the replacement (the `+` line)
+
+**Record row:**
+```
+| exact find/replace | Diff line: `{+ line from diff}` | PASS/FAIL |
+```
+
+### 4.2 Regex replace
+
+**Call:** `edit` tool with:
+```
+edits: [{
+  path: "full-suite/output/edit-test.ts",
+  find: "export function (\\w+)",
+  replace: "export function $1_v2",
+  regex: true,
+  occurrence: "first"
+}]
+```
+
+**Capture from response:**
+- The matched pattern text (the original text that was matched)
+
+**Record row:**
+```
+| regex replace | Matched: `{original matched text}` | PASS/FAIL |
+```
+
+### 4.3 occurrence: all
+
+First reset `full-suite/output/edit-test.ts` by writing the original content back (overwrite).
+
+**Call:** `edit` tool with:
+```
+edits: [{
+  path: "full-suite/output/edit-test.ts",
+  find: "export",
+  replace: "export",
+  occurrence: "all"
+}]
+```
+
+(This is a no-op replacement that still exercises the `occurrence: all` code path.)
+
+**Capture from response:**
+- The count of replacements made (how many occurrences were processed)
+
+**Record row:**
+```
+| occurrence: all | Replacements made: {N} | PASS/FAIL |
+```
+
+### 4.4 Fuzzy/whitespace-insensitive match
+
+**Call:** `edit` tool with an `options` field enabling whitespace-insensitive matching:
+```
+edits: [{
+  path: "full-suite/output/edit-test.ts",
+  find: "export   function   greet",
+  replace: "export function greet",
+  options: { whitespace_insensitive: true }
+}]
+```
+
+(The find string has extra spaces; the whitespace-insensitive mode should still match.)
+
+**Capture from response:**
+- Confirmation that the match succeeded despite the whitespace difference (e.g., a diff line or `matched: true`)
+
+**Record row:**
+```
+| fuzzy/whitespace match | Matched despite extra spaces: {evidence} | PASS/FAIL |
+```
+
+### 4.5 dry_run edit
+
+**Call:** `edit` tool with:
+```
+edits: [{
+  path: "full-suite/output/edit-test.ts",
+  find: "greet",
+  replace: "greet_DRY_RUN"
+}]
+dry_run: true
+```
+
+**Capture from response:**
+- A line from the diff preview showing the proposed change
+
+Then immediately call `read` on `full-suite/output/edit-test.ts` and confirm `greet_DRY_RUN` does NOT appear in the content.
+
+**Capture from read response:**
+- Confirmation that `greet_DRY_RUN` is absent
+
+**Record row:**
+```
+| dry_run edit | Diff preview: `{+ line}`, file unchanged: `greet_DRY_RUN` absent | PASS/FAIL |
+```
+
+### 4.6 Atomic transaction — one bad edit aborts all
+
+**Call:** `edit` tool with two edits in a single call:
+```
+edits: [
   {
-    "urls": [{ "url": "https://httpbin.org/get", "extract": "raw" }]
-  }
-  ```
-  - **Expected:** Raw HTTP response body (JSON from httpbin).
-
-### 6.2 GET request — text extract
-- [ ] Call `fetch` with `extract: "text"` on `https://example.com`.
-  - **Expected:** Plain text with HTML tags stripped.
-
-### 6.3 GET request — json extract
-- [ ] Call `fetch` with `extract: "json"` on `https://httpbin.org/get`.
-  - **Expected:** Parsed and formatted JSON response.
-
-### 6.4 GET request — markdown extract
-- [ ] Call `fetch` with `extract: "markdown"` on `https://example.com`.
-  - **Expected:** HTML converted to markdown format.
-
-### 6.5 GET request — readable extract
-- [ ] Call `fetch` with `extract: "readable"` on a page with nav/footer (e.g. `https://example.com`).
-  - **Expected:** Main article content extracted, nav/sidebar/footer stripped.
-
-### 6.6 GET request — links extract
-- [ ] Call `fetch` with `extract: "links"` on `https://example.com`.
-  - **Expected:** List of all URLs found on the page.
-
-### 6.7 GET request — metadata extract
-- [ ] Call `fetch` with `extract: "metadata"` on `https://example.com`.
-  - **Expected:** Title, og-tags, and other head metadata.
-
-### 6.8 POST request with JSON body
-- [ ] Call `fetch` with:
-  ```json
+    path: "full-suite/output/edit-test.ts",
+    find: "greet",
+    replace: "greet_ATOMIC"
+  },
   {
-    "urls": [{
-      "url": "https://httpbin.org/post",
-      "method": "POST",
-      "body": "{\"key\": \"value\"}",
-      "body_type": "json",
-      "extract": "json"
-    }]
+    path: "full-suite/output/edit-test.ts",
+    find: "THIS_STRING_DOES_NOT_EXIST_IN_THE_FILE",
+    replace: "should never apply"
   }
-  ```
-  - **Expected:** httpbin echoes the posted JSON back; verify `key: value` in response.
+]
+```
 
-### 6.9 POST request with form body
-- [ ] Call `fetch` with `method: "POST"`, `body: "field=hello"`, `body_type: "form"` on `https://httpbin.org/post`.
-  - **Expected:** Form data echoed in httpbin response.
+**Capture from response:**
+- The error returned for the second edit
 
-### 6.10 custom headers
-- [ ] Call `fetch` with `headers: { "X-Custom-Header": "test-value" }` on `https://httpbin.org/headers`.
-  - **Expected:** Response includes `X-Custom-Header: test-value`.
+Then immediately call `read` on `full-suite/output/edit-test.ts` and confirm `greet_ATOMIC` does NOT appear (rollback succeeded).
 
-### 6.11 per-URL timeout
-- [ ] Call `fetch` with `timeout_ms: 100` on a slow endpoint.
-  - **Expected:** Request times out with a timeout error.
+**Capture from read response:**
+- Confirmation that `greet_ATOMIC` is absent
 
-### 6.12 parallel fetch
-- [ ] Call `fetch` with two URLs and `parallel: true`.
-  - **Expected:** Both fetched concurrently, both results in one response.
-
-### 6.13 verbosity: count_only
-- [ ] Call `fetch` with `verbosity: "count_only"`.
-  - **Expected:** Only total URL count and status codes.
-
-### 6.14 verbosity: minimal
-- [ ] Call `fetch` with `verbosity: "minimal"`.
-  - **Expected:** URL, status code, and byte size — no content.
-
-### 6.15 verbosity: verbose
-- [ ] Call `fetch` with `verbosity: "verbose"`.
-  - **Expected:** All metadata including headers, timing, redirects.
-
-### 6.16 global extract with per-URL override
-- [ ] Call `fetch` with global `extract: "text"` and one URL overriding to `extract: "json"`.
-  - **Expected:** First URL uses `text`, overriding URL uses `json`.
+**Record row:**
+```
+| atomic rollback | Error: "{error text}", `greet_ATOMIC` absent from file | PASS/FAIL |
+```
 
 ---
 
-## 7. `analyze` — Code Analysis
+## Section 5: `find` Tool (7 tests)
 
-Tool schema: `src/tools/analyze/schema.ts`. Fields: `mode` (required), `files`, `projectRoot`, `changes`, `submode`, `securityScope`, `before`, `after`, `find`, `replace`, `include`, `output`.
+For each test, append a row to the `## find` table in TEST-RESULTS.md.
 
-**Note:** Use `projectRoot: "/home/buzzkill/Projects/goodvibes-tui/full-suite"` or `files: ["full-suite/src/"]` for all tests.
+### 5.1 files mode — glob for .ts files
 
-### 7.1 mode: dependencies — analyze
-- [ ] Call `analyze` with `mode: "dependencies"`, `submode: "analyze"`, `files: ["full-suite/src/"]`.
-  - **Expected:** Dependency graph showing imports between `index.ts`, `utils.ts`, `auth.ts`, and `components/`.
+**Call:** `find` tool with:
+```
+mode: "files"
+glob: "full-suite/src/**/*.ts"
+```
 
-### 7.2 mode: dependencies — circular
-- [ ] Call `analyze` with `mode: "dependencies"`, `submode: "circular"`, `files: ["full-suite/src/"]`.
-  - **Expected:** Circular dependency detected between `utils.ts` and `auth.ts`.
+**Capture from response:**
+- The exact count of .ts files found
 
-### 7.3 mode: dead_code
-- [ ] Call `analyze` with `mode: "dead_code"`, `files: ["full-suite/src/"]`.
-  - **Expected:** `unusedHelper` in `index.ts` flagged as unreferenced export.
+**Record row:**
+```
+| files glob *.ts | File count: {N} | PASS/FAIL |
+```
 
-### 7.4 mode: security — all
-- [ ] Call `analyze` with `mode: "security"`, `securityScope: "all"`, `files: ["full-suite/src/"]`.
-  - **Expected:** Hardcoded secrets detected in `auth.ts`: `SECRET_TOKEN` (`sk-secret-...`) and `API_KEY` (`AKIA...`).
+### 5.2 files mode — glob for .tsx files
 
-### 7.5 mode: security — secrets only
-- [ ] Call `analyze` with `mode: "security"`, `securityScope: "secrets"`, `files: ["full-suite/src/auth.ts"]`.
-  - **Expected:** Reports the two hardcoded secret strings in `auth.ts`.
+**Call:** `find` tool with:
+```
+mode: "files"
+glob: "full-suite/src/**/*.tsx"
+```
 
-### 7.6 mode: security — env
-- [ ] Call `analyze` with `mode: "security"`, `securityScope: "env"`, `files: ["full-suite/"]`.
-  - **Expected:** Detects `.env.example` with placeholder secrets; reports env usage patterns.
+**Capture from response:**
+- The exact file path(s) returned (even if just one file)
 
-### 7.7 mode: surface
-- [ ] Call `analyze` with `mode: "surface"`, `files: ["full-suite/src/"]`.
-  - **Expected:** Summary of all public exports: functions, classes, constants.
+**Record row:**
+```
+| files glob *.tsx | Paths: {exact paths} | PASS/FAIL |
+```
 
-### 7.8 mode: surface — with include sections
-- [ ] Call `analyze` with `mode: "surface"`, `include: ["deps", "security", "api"]`.
-  - **Expected:** Surface output includes dependency, security, and API sections.
+### 5.3 content mode — search for pattern
 
-### 7.9 mode: preview
-- [ ] Call `analyze` with `mode: "preview"`, `files: ["full-suite/src/index.ts"]`, `find: "VERSION = '1.0.0'"`, `replace: "VERSION = '2.0.0'"`.
-  - **Expected:** Diff shown without writing. File unchanged after call.
+**Call:** `find` tool with:
+```
+mode: "content"
+pattern: "export function"
+glob: "full-suite/src/**/*.ts"
+```
 
-### 7.10 mode: diff — git ref
-- [ ] Call `analyze` with `mode: "diff"`, `before: "HEAD~1"`, `after: "HEAD"`, `files: ["full-suite/"]`.
-  - **Expected:** Git diff between the two refs for files in `full-suite/`. (May show no changes if no recent commits touch this dir.)
+**Capture from response:**
+- The total match count returned
 
-### 7.11 mode: impact
-- [ ] Call `analyze` with `mode: "impact"`, `files: ["full-suite/src/utils.ts"]`, `changes: "Rename formatVersion to formatSemVer"`.
-  - **Expected:** Impact report showing which files import `formatVersion` and would be affected.
+**Record row:**
+```
+| content search "export function" | Match count: {N} | PASS/FAIL |
+```
 
-### 7.12 output: summary format
-- [ ] Call `analyze` with `output: { format: "summary" }` on any mode.
-  - **Expected:** Condensed overview output.
+### 5.4 content mode — count_only format
 
-### 7.13 output: detailed format
-- [ ] Call `analyze` with `output: { format: "detailed" }` on any mode.
-  - **Expected:** Full analysis detail.
+**Call:** `find` tool with:
+```
+mode: "content"
+pattern: "export"
+glob: "full-suite/src/**/*.ts"
+output: { format: "count_only" }
+```
 
-### 7.14 output: json format
-- [ ] Call `analyze` with `output: { format: "json" }` on any mode.
-  - **Expected:** Raw JSON structure returned.
+**Capture from response:**
+- The single number returned (the match count)
 
----
+**Record row:**
+```
+| content count_only | Count: {N} | PASS/FAIL |
+```
 
-## 8. `inspect` — Project Inspection
+### 5.5 content mode — files_only format
 
-Tool schema: `src/tools/inspect/schema.ts`. Fields: `mode` (required), `projectRoot`, `file`, `framework`, `schemaPath`, `moduleName`, `dryRun`, `output`.
+**Call:** `find` tool with:
+```
+mode: "content"
+pattern: "export"
+glob: "full-suite/src/**/*.ts"
+output: { format: "files_only" }
+```
 
-### 8.1 mode: project
-- [ ] Call `inspect` with `mode: "project"`, `projectRoot: "/home/buzzkill/Projects/goodvibes-tui/full-suite"`.
-  - **Expected:** Project info: type `nodejs`, name `full-suite-test`, version `1.0.0`, TypeScript enabled, scripts listed.
+**Capture from response:**
+- The list of file paths returned (no line numbers, just paths)
 
-### 8.2 mode: api — auto-detect framework
-- [ ] Call `inspect` with `mode: "api"`, `framework: "auto"`, `projectRoot: "/home/buzzkill/Projects/goodvibes-tui/full-suite"`.
-  - **Expected:** Framework detected (likely `nodejs`/unknown), any route definitions scanned.
+**Record row:**
+```
+| content files_only | Files: {list of paths} | PASS/FAIL |
+```
 
-### 8.3 mode: database — default prisma path
-- [ ] Call `inspect` with `mode: "database"`, `projectRoot: "/home/buzzkill/Projects/goodvibes-tui/full-suite"`.
-  - **Expected:** Parses `prisma/schema.prisma`. Returns models: `User` (fields: id, email, name, posts, createdAt) and `Post` (fields: id, title, content, author, authorId, published).
+### 5.6 symbols mode — find all functions
 
-### 8.4 mode: database — explicit schemaPath
-- [ ] Call `inspect` with `mode: "database"`, `schemaPath: "/home/buzzkill/Projects/goodvibes-tui/full-suite/prisma/schema.prisma"`.
-  - **Expected:** Same result as 8.3.
+**Call:** `find` tool with:
+```
+mode: "symbols"
+glob: "full-suite/src/**/*.ts"
+kinds: ["function"]
+```
 
-### 8.5 mode: components
-- [ ] Call `inspect` with `mode: "components"`, `file: "/home/buzzkill/Projects/goodvibes-tui/full-suite/src/components/Button.tsx"`.
-  - **Expected:** Component info: name `Button`, props `label`, `onClick`, `variant`, hooks `useState`, `useCallback`.
+**Capture from response:**
+- The symbol names returned (e.g., `greet, add, unusedHelper`)
 
-### 8.6 mode: components — Card component
-- [ ] Call `inspect` with `mode: "components"`, `file: "/home/buzzkill/Projects/goodvibes-tui/full-suite/src/components/Card.tsx"`.
-  - **Expected:** Component info: name `Card`, props `title`, `children`, children includes `Button`.
+**Record row:**
+```
+| symbols functions | Names: {comma-separated} | PASS/FAIL |
+```
 
-### 8.7 mode: layout
-- [ ] Call `inspect` with `mode: "layout"`, `file: "/home/buzzkill/Projects/goodvibes-tui/full-suite/styles/main.css"`.
-  - **Expected:** Layout info: display `flex`, flex props `flex-direction: column`, sizing `max-width: 1200px`, overflow `overflow-y: auto`.
+### 5.7 batch query — files + content in one call
 
-### 8.8 mode: accessibility
-- [ ] Call `inspect` with `mode: "accessibility"`, `file: "/home/buzzkill/Projects/goodvibes-tui/full-suite/src/components/Button.tsx"`.
-  - **Expected:** A11y issues found: (1) `<div>` with `onClick` is not keyboard accessible (WCAG 2.1.1), (2) `<img>` missing `alt` attribute (WCAG 1.1.1).
+**Call:** `find` tool with two queries in a single call (using `queries` array if supported, or two separate `mode` values if the tool supports it):
+```
+queries: [
+  { id: "ts_files", mode: "files", glob: "full-suite/src/**/*.ts" },
+  { id: "exports", mode: "content", pattern: "export", glob: "full-suite/src/**/*.ts" }
+]
+```
 
-### 8.9 mode: scaffold — dry run
-- [ ] Call `inspect` with `mode: "scaffold"`, `moduleName: "payment"`, `dryRun: true`, `projectRoot: "/home/buzzkill/Projects/goodvibes-tui/full-suite"`.
-  - **Expected:** Returns file plan (paths and content templates) for a `payment` module without writing anything.
+**Capture from response:**
+- Both result IDs (`ts_files` and `exports`) present in the response
+- The count for each
 
-### 8.10 mode: scaffold — write files
-- [ ] Call `inspect` with `mode: "scaffold"`, `moduleName: "payment"`, `dryRun: false`, `projectRoot: "/home/buzzkill/Projects/goodvibes-tui/full-suite"`.
-  - **Expected:** Scaffold files actually written. Verify with `find` or `read`.
-
-### 8.11 output: summary
-- [ ] Call `inspect` with `output: { format: "summary" }` on any mode.
-  - **Expected:** Condensed output.
-
-### 8.12 output: json
-- [ ] Call `inspect` with `output: { format: "json" }` on any mode.
-  - **Expected:** Raw JSON structure.
-
----
-
-## 9. `agent` — Subagent Management
-
-Tool schema: `src/tools/agent/schema.ts`. Fields: `mode` (required), `task`, `template`, `model`, `provider`, `tools`, `context`, `agentId`.
-
-### 9.1 mode: templates
-- [ ] Call `agent` with `mode: "templates"`.
-  - **Expected:** Lists available templates: `engineer`, `reviewer`, `tester`, `researcher`, `general`. Each with its default tool set.
-
-### 9.2 mode: list — empty
-- [ ] Call `agent` with `mode: "list"` before spawning anything.
-  - **Expected:** Empty list or message indicating no agents running.
-
-### 9.3 mode: spawn — general template
-- [ ] Call `agent` with:
-  ```json
-  {
-    "mode": "spawn",
-    "task": "List all TypeScript files in full-suite/src/ and return their names.",
-    "template": "general"
-  }
-  ```
-  - **Expected:** Returns an `agentId`. Note it for subsequent calls.
-
-### 9.4 mode: status
-- [ ] Call `agent` with `mode: "status"`, `agentId: "<id from 9.3>"`.
-  - **Expected:** Status returned: one of `running`, `completed`, `failed`. If completed, output included.
-
-### 9.5 mode: list — active agents
-- [ ] Call `agent` with `mode: "list"` after spawning.
-  - **Expected:** Lists the spawned agent with its ID and current status.
-
-### 9.6 mode: spawn — researcher template
-- [ ] Call `agent` with `mode: "spawn"`, `template: "researcher"`, `task: "What exports does full-suite/src/index.ts have?"`.
-  - **Expected:** Returns agentId for a researcher-template agent.
-
-### 9.7 mode: spawn — engineer template with tools override
-- [ ] Call `agent` with `mode: "spawn"`, `template: "engineer"`, `tools: ["read", "write"]`, `task: "Read full-suite/README.md and summarize it."`.
-  - **Expected:** Agent spawned with only `read` and `write` tools.
-
-### 9.8 mode: spawn — with context
-- [ ] Call `agent` with `mode: "spawn"`, `context: "The project uses TypeScript and React."`, `task: "Describe the component structure in full-suite/src/components/."` 
-  - **Expected:** Agent receives the additional context in its prompt.
-
-### 9.9 mode: spawn — with model override
-- [ ] Call `agent` with `mode: "spawn"`, `model: "haiku"` (or any valid model name), `task: "Echo: test complete.".
-  - **Expected:** Agent spawned using the specified model.
-
-### 9.10 mode: cancel
-- [ ] Spawn a long-running agent task (`task: "Wait 30 seconds then say done."`), note the agentId.
-- [ ] Immediately call `agent` with `mode: "cancel"`, `agentId: "<id>"`.
-  - **Expected:** Agent cancelled. Subsequent `status` call shows `cancelled` or `failed`.
+**Record row:**
+```
+| batch find query | ts_files count: {N}, exports count: {N} | PASS/FAIL |
+```
 
 ---
 
-## 10. `state` — Session State & Memory
+## Section 6: `exec` Tool (5 tests)
 
-Tool schema: `src/tools/state/schema.ts`. Fields: `mode` (required), `keys`, `values`, `prefix`, `clearKeys`, `memoryAction`, `memoryKey`, `memoryValue`.
+For each test, append a row to the `## exec` table in TEST-RESULTS.md.
 
-### 10.1 mode: set
-- [ ] Call `state` with:
-  ```json
-  {
-    "mode": "set",
-    "values": { "test_key": "hello", "test_count": 42, "test_flag": true }
-  }
-  ```
-  - **Expected:** Values stored. Success confirmation returned.
+### 6.1 echo command
 
-### 10.2 mode: get
-- [ ] Call `state` with `mode: "get"`, `keys: ["test_key", "test_count"]`.
-  - **Expected:** Returns `{ test_key: "hello", test_count: 42 }`.
+**Call:** `exec` tool with:
+```
+commands: [{ cmd: "echo proof_token_exec_works" }]
+```
 
-### 10.3 mode: get — missing key
-- [ ] Call `state` with `mode: "get"`, `keys: ["nonexistent_key"]`.
-  - **Expected:** Key is missing or null — no error thrown.
+**Capture from response:**
+- The exact stdout content returned (must be `proof_token_exec_works`)
 
-### 10.4 mode: list
-- [ ] Call `state` with `mode: "list"`.
-  - **Expected:** Lists all keys currently in session state — should include `test_key`, `test_count`, `test_flag`.
+**Record row:**
+```
+| echo command | stdout: `{exact output}` | PASS/FAIL |
+```
 
-### 10.5 mode: list — with prefix filter
-- [ ] Call `state` with `mode: "list"`, `prefix: "test_"`.
-  - **Expected:** Only keys starting with `test_` returned.
+### 6.2 Read a file via cat with exit code
 
-### 10.6 mode: clear — specific keys
-- [ ] Call `state` with `mode: "clear"`, `clearKeys: ["test_flag"]`.
-  - **Expected:** `test_flag` removed. Verify with `mode: "get"`.
+**Call:** `exec` tool with:
+```
+commands: [{ cmd: "cat full-suite/package.json" }]
+```
 
-### 10.7 mode: clear — all keys
-- [ ] Call `state` with `mode: "clear"` and no `clearKeys` (or empty array).
-  - **Expected:** All session state cleared (or all test keys removed per implementation).
+**Capture from response:**
+- The `exit_code` from the response
+- The first line of stdout (must start with `{`)
 
-### 10.8 mode: budget
-- [ ] Call `state` with `mode: "budget"`.
-  - **Expected:** Returns current token usage stats for the session: tokens used, remaining budget, cost estimate.
+**Record row:**
+```
+| cat package.json | exit_code: {N}, stdout line 1: `{text}` | PASS/FAIL |
+```
 
-### 10.9 mode: context
-- [ ] Call `state` with `mode: "context"`.
-  - **Expected:** Returns conversation metadata: session ID, turn count, model, provider.
+### 6.3 Exit code expectation — success
 
-### 10.10 mode: memory — list
-- [ ] Call `state` with `mode: "memory"`, `memoryAction: "list"`.
-  - **Expected:** Lists all `.goodvibes/memory/` keys available.
+**Call:** `exec` tool with:
+```
+commands: [{
+  cmd: "node --version",
+  expect: { exit_code: 0 }
+}]
+```
 
-### 10.11 mode: memory — set
-- [ ] Call `state` with `mode: "memory"`, `memoryAction: "set"`, `memoryKey: "test-memory"`, `memoryValue: "{\"note\": \"test memory entry\"}"` .
-  - **Expected:** Memory file `test-memory.json` (or similar) written to `.goodvibes/memory/`.
+**Capture from response:**
+- The `success: true` field (or equivalent) confirming expectation was met
+- The Node.js version string from stdout
 
-### 10.12 mode: memory — get
-- [ ] Call `state` with `mode: "memory"`, `memoryAction: "get"`, `memoryKey: "test-memory"`.
-  - **Expected:** Returns the value written in 10.11.
+**Record row:**
+```
+| exit_code expectation | success: {value}, node version: `{v...}` | PASS/FAIL |
+```
 
-### 10.13 mode: telemetry
-- [ ] Call `state` with `mode: "telemetry"`.
-  - **Expected:** Returns session telemetry: tool call counts, success/failure rates, token usage per tool.
+### 6.4 file_ops copy
 
----
+**Call:** `exec` tool with a `file_ops` copy operation (or equivalent):
+```
+file_ops: [{
+  op: "copy",
+  src: "full-suite/src/index.ts",
+  dest: "full-suite/output/index-copy.ts"
+}]
+```
 
-## 11. `workflow` — Workflow State Machines
+If `file_ops` is not supported by exec, use `cmd: "cp full-suite/src/index.ts full-suite/output/index-copy.ts"`.
 
-Tool schema: `src/tools/workflow/schema.ts`. Fields: `mode` (required), `definition`, `task`, `workflowId`, `targetState`, `triggerAction`, `triggerId`, `triggerDefinition`, `scheduleAction`, `scheduleName`, `scheduleInterval`, `scheduleCommand`.
+**Capture from response:**
+- Confirmation the operation succeeded (exit_code or success field)
 
-### 11.1 mode: list — empty
-- [ ] Call `workflow` with `mode: "list"` before starting any workflows.
-  - **Expected:** Empty list or no active workflows message.
+Then immediately call `read` on `full-suite/output/index-copy.ts` to confirm it exists.
 
-### 11.2 mode: start — wrfc workflow
-- [ ] Call `workflow` with:
-  ```json
-  {
-    "mode": "start",
-    "definition": "wrfc",
-    "task": "Add a formatDate utility function to full-suite/src/utils.ts"
-  }
-  ```
-  - **Expected:** Workflow created with a `workflowId`. Note it.
+**Capture from read response:**
+- The line count of the copied file (proving it is non-empty)
 
-### 11.3 mode: status
-- [ ] Call `workflow` with `mode: "status"`, `workflowId: "<id from 11.2>"`.
-  - **Expected:** Current state of the workflow (e.g. `waiting`, `running`, `review`).
+**Record row:**
+```
+| file_ops copy | Copy succeeded, read confirmed line count: {N} | PASS/FAIL |
+```
 
-### 11.4 mode: list — active workflows
-- [ ] Call `workflow` with `mode: "list"` after starting one.
-  - **Expected:** Lists the active workflow with its ID, definition, and state.
+### 6.5 Background mode
 
-### 11.5 mode: transition
-- [ ] Call `workflow` with `mode: "transition"`, `workflowId: "<id>"`, `targetState: "review"` (or whatever valid next state exists).
-  - **Expected:** Workflow transitions to the target state.
+**Call:** `exec` tool with:
+```
+commands: [{
+  cmd: "sleep 2 && echo background_done",
+  background: true
+}]
+```
 
-### 11.6 mode: start — fix_loop workflow
-- [ ] Call `workflow` with `mode: "start"`, `definition: "fix_loop"`, `task: "Fix TypeScript errors in full-suite/src/"`.
-  - **Expected:** New workflow started. Returns new `workflowId`.
+**Capture from response:**
+- The `process_id` (or job ID) returned in the response
 
-### 11.7 mode: start — review_only workflow
-- [ ] Call `workflow` with `mode: "start"`, `definition: "review_only"`, `task: "Review full-suite/src/auth.ts for security issues"`.
-  - **Expected:** New workflow started.
-
-### 11.8 mode: cancel
-- [ ] Call `workflow` with `mode: "cancel"`, `workflowId: "<id from 11.6>"`.
-  - **Expected:** Workflow cancelled. Subsequent `status` shows `cancelled`.
-
-### 11.9 mode: triggers — list
-- [ ] Call `workflow` with `mode: "triggers"`, `triggerAction: "list"`.
-  - **Expected:** Lists all registered automation triggers (may be empty).
-
-### 11.10 mode: triggers — add
-- [ ] Call `workflow` with:
-  ```json
-  {
-    "mode": "triggers",
-    "triggerAction": "add",
-    "triggerDefinition": {
-      "event": "Post:file:write",
-      "condition": "payload.path.endsWith('.ts')",
-      "action": "echo TypeScript file written"
-    }
-  }
-  ```
-  - **Expected:** Trigger registered. Returns a `triggerId`.
-
-### 11.11 mode: triggers — enable/disable
-- [ ] Call `workflow` with `mode: "triggers"`, `triggerAction: "disable"`, `triggerId: "<id from 11.10>"`.
-  - **Expected:** Trigger disabled.
-- [ ] Re-enable with `triggerAction: "enable"`.
-  - **Expected:** Trigger re-enabled.
-
-### 11.12 mode: triggers — remove
-- [ ] Call `workflow` with `mode: "triggers"`, `triggerAction: "remove"`, `triggerId: "<id from 11.10>"`.
-  - **Expected:** Trigger removed. No longer in list.
-
-### 11.13 mode: schedule — list
-- [ ] Call `workflow` with `mode: "schedule"`, `scheduleAction: "list"`.
-  - **Expected:** Lists all scheduled tasks (may be empty).
-
-### 11.14 mode: schedule — add
-- [ ] Call `workflow` with:
-  ```json
-  {
-    "mode": "schedule",
-    "scheduleAction": "add",
-    "scheduleName": "heartbeat",
-    "scheduleInterval": "5m",
-    "scheduleCommand": "echo heartbeat tick"
-  }
-  ```
-  - **Expected:** Schedule entry `heartbeat` created.
-
-### 11.15 mode: schedule — remove
-- [ ] Call `workflow` with `mode: "schedule"`, `scheduleAction: "remove"`, `scheduleName: "heartbeat"`.
-  - **Expected:** Schedule entry removed.
+**Record row:**
+```
+| background mode | process_id: `{ID}` | PASS/FAIL |
+```
 
 ---
 
-## 12. `registry` — Skill & Agent Registry
+## Section 7: `fetch` Tool (4 tests)
 
-Tool schema: `src/tools/registry-tool/schema.ts`. Fields: `mode` (required), `query`, `type`, `task`, `scope`, `skillName`, `path`.
+For each test, append a row to the `## fetch` table in TEST-RESULTS.md.
 
-**Note:** For content tests, use the fixture files in `full-suite/.goodvibes/` as local registry items. The registry also reads from the global `.goodvibes/` directory.
+### 7.1 GET request
 
-### 12.1 mode: search — skills
-- [ ] Call `registry` with `mode: "search"`, `query: "code"`, `type: "skills"`.
-  - **Expected:** Returns skills matching `code` — should include the fixture `code-review` skill.
+**Call:** `fetch` tool with:
+```
+urls: [{ url: "https://httpbin.org/get" }]
+```
 
-### 12.2 mode: search — agents
-- [ ] Call `registry` with `mode: "search"`, `query: "researcher"`, `type: "agents"`.
-  - **Expected:** Returns the `researcher` agent from the fixture.
+**Capture from response:**
+- The HTTP status code returned (should be `200`)
+- The value of the `url` field in the JSON body (should be `https://httpbin.org/get`)
 
-### 12.3 mode: search — all types
-- [ ] Call `registry` with `mode: "search"`, `query: "review"`, `type: "all"`.
-  - **Expected:** Returns matching skills, agents, and tools.
+**Record row:**
+```
+| GET request | status: {N}, url field: `{value}` | PASS/FAIL |
+```
 
-### 12.4 mode: search — tools
-- [ ] Call `registry` with `mode: "search"`, `query: "read"`, `type: "tools"`.
-  - **Expected:** Returns native tools related to reading.
+### 7.2 POST request with JSON body
 
-### 12.5 mode: recommend — skills
-- [ ] Call `registry` with `mode: "recommend"`, `task: "Review code for security vulnerabilities"`, `scope: "skills"`.
-  - **Expected:** Sorted list of skills relevant to security review — `code-review` should rank highly.
+**Call:** `fetch` tool with:
+```
+urls: [{
+  url: "https://httpbin.org/post",
+  method: "POST",
+  body: { proof_key: "fetch_post_works" },
+  headers: { "Content-Type": "application/json" }
+}]
+```
 
-### 12.6 mode: recommend — tools
-- [ ] Call `registry` with `mode: "recommend"`, `task: "Search for files matching a pattern"`, `scope: "tools"`.
-  - **Expected:** `find` tool should rank near the top.
+**Capture from response:**
+- The value of `json.proof_key` from the echoed response body (must be `fetch_post_works`)
 
-### 12.7 mode: dependencies — skill with depends_on
-- [ ] Call `registry` with `mode: "dependencies"`, `skillName: "code-review"`.
-  - **Expected:** Returns `depends_on: ["testing-strategy"]` as defined in the fixture skill.
+**Record row:**
+```
+| POST with body | json.proof_key: `{value}` | PASS/FAIL |
+```
 
-### 12.8 mode: dependencies — skill without depends_on
-- [ ] Call `registry` with `mode: "dependencies"`, `skillName: "researcher"` (the agent from the fixture).
-  - **Expected:** Empty dependencies or appropriate message.
+### 7.3 extract: json mode
 
-### 12.9 mode: content — local skill file
-- [ ] Call `registry` with `mode: "content"`, `path: "/home/buzzkill/Projects/goodvibes-tui/full-suite/.goodvibes/skills/code-review.md"`.
-  - **Expected:** Full markdown content of the skill file returned, plus parsed metadata (name, description, triggers, depends_on).
+**Call:** `fetch` tool with:
+```
+urls: [{
+  url: "https://httpbin.org/json",
+  extract: "json"
+}]
+```
 
-### 12.10 mode: content — local agent file
-- [ ] Call `registry` with `mode: "content"`, `path: "/home/buzzkill/Projects/goodvibes-tui/full-suite/.goodvibes/agents/researcher.md"`.
-  - **Expected:** Full markdown content plus parsed metadata (name, archetype, description).
+**Capture from response:**
+- A specific top-level field name from the parsed JSON object returned
 
-### 12.11 mode: search — no results
-- [ ] Call `registry` with `mode: "search"`, `query: "xyznonexistent"`, `type: "all"`.
-  - **Expected:** Empty results with no error.
+**Record row:**
+```
+| extract json | Top-level field: `{field_name}` | PASS/FAIL |
+```
+
+### 7.4 Batch fetch two URLs
+
+**Call:** `fetch` tool with:
+```
+urls: [
+  { url: "https://httpbin.org/status/200" },
+  { url: "https://httpbin.org/status/201" }
+]
+```
+
+**Capture from response:**
+- The status code for the first URL (must be `200`)
+- The status code for the second URL (must be `201`)
+
+**Record row:**
+```
+| batch 2 URLs | URL1 status: 200, URL2 status: 201 | PASS/FAIL |
+```
 
 ---
 
-## Summary Checklist
+## Section 8: `analyze` Tool (6 tests)
 
-After completing all sections, verify:
+For each test, append a row to the `## analyze` table in TEST-RESULTS.md.
 
-- [ ] All 12 tools exercised
-- [ ] `read`: 5 extract modes + batch + output formats + pagination + force tested
-- [ ] `write`: create + overwrite + backup + dry_run + base64 + verbosity tested
-- [ ] `edit`: exact/fuzzy/regex + occurrence + hints + transaction modes + dry_run tested
-- [ ] `find`: files/content/symbols modes + all 5 output formats + negate + batch tested
-- [ ] `exec`: basic + working_dir + env + expect + timeout + background + retry + until + parallel + file_ops + verbosity tested
-- [ ] `fetch`: GET + POST + all extract modes + headers + timeout + parallel + verbosity tested
-- [ ] `analyze`: all 9 modes (dependencies/circular/dead_code/security/surface/preview/diff/impact/coverage) + output formats tested
-- [ ] `inspect`: all 7 modes (project/api/database/components/layout/accessibility/scaffold) + dry_run tested
-- [ ] `agent`: spawn + status + list + cancel + templates + context + model override + tools override tested
-- [ ] `state`: get/set/list/clear + budget + context + memory (get/set/list) + telemetry tested
-- [ ] `workflow`: start (all definitions) + status + transition + cancel + list + triggers (add/enable/disable/remove) + schedule (add/remove/list) tested
-- [ ] `registry`: search (all types) + recommend (skills/tools) + dependencies + content tested
+### 8.1 dependencies mode
 
-**Total test items: ~140**
+**Call:** `analyze` tool with:
+```
+mode: "dependencies"
+path: "full-suite/"
+```
+
+**Capture from response:**
+- At least one import path found (e.g., `./auth` or `./utils`)
+
+**Record row:**
+```
+| dependencies | Import found: `{path}` | PASS/FAIL |
+```
+
+### 8.2 circular deps mode
+
+**Call:** `analyze` tool with:
+```
+mode: "circular"
+path: "full-suite/"
+```
+
+**Capture from response:**
+- The full circular chain detected (e.g., `utils → auth → utils`)
+
+**Record row:**
+```
+| circular deps | Chain: `{A → B → A}` | PASS/FAIL |
+```
+
+### 8.3 dead_code mode
+
+**Call:** `analyze` tool with:
+```
+mode: "dead_code"
+path: "full-suite/"
+```
+
+**Capture from response:**
+- The name `unusedHelper` appearing in the list of dead exports
+
+**Record row:**
+```
+| dead_code | Dead export found: `unusedHelper` | PASS/FAIL |
+```
+
+### 8.4 security mode
+
+**Call:** `analyze` tool with:
+```
+mode: "security"
+path: "full-suite/"
+```
+
+**Capture from response:**
+- The detected secret pattern (e.g., `AKIA...` for AWS key or `sk-secret...` for API key) and the file it was found in
+
+**Record row:**
+```
+| security | Pattern: `{pattern}` in `{file}` | PASS/FAIL |
+```
+
+### 8.5 surface mode
+
+**Call:** `analyze` tool with:
+```
+mode: "surface"
+path: "full-suite/src/index.ts"
+```
+
+**Capture from response:**
+- The complete list of exported symbol names from the surface analysis
+
+**Record row:**
+```
+| surface | Exports: {list} | PASS/FAIL |
+```
+
+### 8.6 preview mode (proposed edit)
+
+**Call:** `analyze` tool with:
+```
+mode: "preview"
+path: "full-suite/src/index.ts"
+proposed_edit: {
+  find: "unusedHelper",
+  replace: "unusedHelper_renamed"
+}
+```
+
+**Capture from response:**
+- A line from the diff preview showing the rename (the `+` line)
+
+**Record row:**
+```
+| preview edit | Diff: `{+ line showing rename}` | PASS/FAIL |
+```
+
+---
+
+## Section 9: `inspect` Tool (5 tests)
+
+For each test, append a row to the `## inspect` table in TEST-RESULTS.md.
+
+### 9.1 project mode
+
+**Call:** `inspect` tool with:
+```
+mode: "project"
+path: "/home/buzzkill/Projects/goodvibes-tui"
+```
+
+**Capture from response:**
+- The detected project type (e.g., `node`, `typescript`, `nextjs`)
+- The detected package manager (e.g., `npm`, `pnpm`, `yarn`)
+
+**Record row:**
+```
+| project inspect | Type: `{type}`, Package manager: `{pm}` | PASS/FAIL |
+```
+
+### 9.2 database mode
+
+**Call:** `inspect` tool with:
+```
+mode: "database"
+path: "/home/buzzkill/Projects/goodvibes-tui"
+```
+
+**Capture from response:**
+- Model names found in the Prisma schema (e.g., `User`, `Post`)
+
+**Record row:**
+```
+| database inspect | Models: `{name1}, {name2}` | PASS/FAIL |
+```
+
+### 9.3 components mode
+
+**Call:** `inspect` tool with:
+```
+mode: "components"
+path: "full-suite/src/Button.tsx"
+```
+
+**Capture from response:**
+- The component name found (e.g., `Button`)
+- At least one prop name detected (e.g., `onClick`, `label`)
+
+**Record row:**
+```
+| components inspect | Component: `{name}`, Props: `{list}` | PASS/FAIL |
+```
+
+### 9.4 accessibility mode
+
+**Call:** `inspect` tool with:
+```
+mode: "accessibility"
+path: "full-suite/src/Button.tsx"
+```
+
+**Capture from response:**
+- The specific accessibility issue detected (e.g., `img element missing alt attribute` or `div with onClick lacks role or keyboard handler`)
+
+**Record row:**
+```
+| accessibility | Issue: `{exact issue description}` | PASS/FAIL |
+```
+
+### 9.5 scaffold mode (dry_run)
+
+**Call:** `inspect` tool with:
+```
+mode: "scaffold"
+template: "component"
+name: "ProofComponent"
+dry_run: true
+```
+
+**Capture from response:**
+- The list of file paths that would be generated (e.g., `src/components/ProofComponent/index.tsx`, `src/components/ProofComponent/ProofComponent.tsx`)
+
+**Record row:**
+```
+| scaffold dry_run | Would generate: {file1}, {file2} | PASS/FAIL |
+```
+
+---
+
+## Section 10: `agent` Tool (4 tests)
+
+For each test, append a row to the `## agent` table in TEST-RESULTS.md.
+
+### 10.1 Spawn agent
+
+**Call:** `agent` tool with:
+```
+action: "spawn"
+template: "researcher"
+task: "proof test: just respond with OK"
+```
+
+**Capture from response:**
+- The generated agent ID (format: `agent-XXXX`)
+
+**Record row:**
+```
+| spawn agent | agent_id: `{agent-XXXX}` | PASS/FAIL |
+```
+
+### 10.2 Status check on spawned agent
+
+**Call:** `agent` tool with:
+```
+action: "status"
+agent_id: "{agent-XXXX from test 10.1}"
+```
+
+**Capture from response:**
+- The `status` field value (e.g., `running`, `pending`, `complete`)
+
+**Record row:**
+```
+| agent status | status: `{value}` | PASS/FAIL |
+```
+
+### 10.3 List templates
+
+**Call:** `agent` tool with:
+```
+action: "templates"
+```
+
+**Capture from response:**
+- The total count of templates available
+- At least two template names
+
+**Record row:**
+```
+| list templates | Count: {N}, Examples: `{name1}`, `{name2}` | PASS/FAIL |
+```
+
+### 10.4 Cancel agent
+
+**Call:** `agent` tool with:
+```
+action: "cancel"
+agent_id: "{agent-XXXX from test 10.1}"
+```
+
+**Capture from response:**
+- Confirmation that status changed (e.g., `status: "cancelled"` or `success: true`)
+
+**Record row:**
+```
+| cancel agent | Result: `{status or success field}` | PASS/FAIL |
+```
+
+---
+
+## Section 11: `state` Tool (5 tests)
+
+For each test, append a row to the `## state` table in TEST-RESULTS.md.
+
+### 11.1 Set a key
+
+**Call:** `state` tool with:
+```
+action: "set"
+keys: { test_proof: "working" }
+```
+
+**Capture from response:**
+- The `keys_written` count (must be `1`)
+
+**Record row:**
+```
+| state set | keys_written: {N} | PASS/FAIL |
+```
+
+### 11.2 Get the key back
+
+**Call:** `state` tool with:
+```
+action: "get"
+keys: ["test_proof"]
+```
+
+**Capture from response:**
+- The value of `test_proof` (must be `"working"`)
+
+**Record row:**
+```
+| state get | test_proof: `working` | PASS/FAIL |
+```
+
+### 11.3 Budget mode
+
+**Call:** `state` tool with:
+```
+action: "budget"
+```
+
+**Capture from response:**
+- The session start time OR the current token estimate from the response
+
+**Record row:**
+```
+| state budget | Session start or token estimate: `{value}` | PASS/FAIL |
+```
+
+### 11.4 List mode
+
+**Call:** `state` tool with:
+```
+action: "list"
+```
+
+**Capture from response:**
+- Confirm that `test_proof` appears in the list of keys
+
+**Record row:**
+```
+| state list | `test_proof` in keys: true | PASS/FAIL |
+```
+
+### 11.5 Clear a key
+
+**Call:** `state` tool with:
+```
+action: "clear"
+keys: ["test_proof"]
+```
+
+Then immediately call `state` with `action: "get"` and `keys: ["test_proof"]`.
+
+**Capture from get response:**
+- That `test_proof` is now absent or returns null/undefined
+
+**Record row:**
+```
+| state clear | After clear, get returns: `{null/empty/absent}` | PASS/FAIL |
+```
+
+---
+
+## Section 12: `workflow` Tool (5 tests)
+
+For each test, append a row to the `## workflow` table in TEST-RESULTS.md.
+
+### 12.1 Start a WRFC workflow
+
+**Call:** `workflow` tool with:
+```
+action: "start"
+template: "WRFC"
+task: "proof test workflow"
+```
+
+**Capture from response:**
+- The generated workflow ID (format: `wf-XXXX`)
+
+**Record row:**
+```
+| workflow start | workflow_id: `{wf-XXXX}` | PASS/FAIL |
+```
+
+### 12.2 Status check — initial state is gather
+
+**Call:** `workflow` tool with:
+```
+action: "status"
+workflow_id: "{wf-XXXX from test 12.1}"
+```
+
+**Capture from response:**
+- The `currentState` field (must be `"gather"`)
+
+**Record row:**
+```
+| workflow status | currentState: `gather` | PASS/FAIL |
+```
+
+### 12.3 Transition to plan state
+
+**Call:** `workflow` tool with:
+```
+action: "transition"
+workflow_id: "{wf-XXXX from test 12.1}"
+target_state: "plan"
+```
+
+**Capture from response:**
+- The `success: true` field
+- The new state value (must be `"plan"`)
+
+**Record row:**
+```
+| workflow transition | success: true, new state: `plan` | PASS/FAIL |
+```
+
+### 12.4 Add a trigger
+
+**Call:** `workflow` tool with:
+```
+action: "trigger"
+workflow_id: "{wf-XXXX from test 12.1}"
+trigger: { event: "test_event", condition: "always" }
+```
+
+**Capture from response:**
+- The generated trigger ID (format: `trg-XXXX`)
+
+**Record row:**
+```
+| workflow trigger | trigger_id: `{trg-XXXX}` | PASS/FAIL |
+```
+
+### 12.5 Cancel the workflow
+
+**Call:** `workflow` tool with:
+```
+action: "cancel"
+workflow_id: "{wf-XXXX from test 12.1}"
+```
+
+**Capture from response:**
+- Confirmation that status changed to cancelled (e.g., `status: "cancelled"` or `success: true`)
+
+**Record row:**
+```
+| workflow cancel | Result: `{status or success field}` | PASS/FAIL |
+```
+
+---
+
+## Section 13: `registry` Tool (4 tests)
+
+For each test, append a row to the `## registry` table in TEST-RESULTS.md.
+
+### 13.1 Search for a skill by name
+
+**Call:** `registry` tool with:
+```
+action: "search"
+query: "code-review"
+type: "skills"
+```
+
+**Capture from response:**
+- The exact skill name returned (must include or equal `code-review`)
+
+**Record row:**
+```
+| search skills | Skill found: `{name}` | PASS/FAIL |
+```
+
+### 13.2 Search for tools — count
+
+**Call:** `registry` tool with:
+```
+action: "search"
+type: "tools"
+```
+
+**Capture from response:**
+- The total count of tools found (expected: `12`)
+
+**Record row:**
+```
+| search tools | Count: {N} | PASS/FAIL |
+```
+
+### 13.3 Get skill content
+
+**Call:** `registry` tool with:
+```
+action: "content"
+name: "code-review"
+```
+
+**Capture from response:**
+- A verbatim line from the skill content (any line that proves real content was returned)
+
+**Record row:**
+```
+| skill content | Line from content: `{exact line}` | PASS/FAIL |
+```
+
+### 13.4 Skill dependencies
+
+**Call:** `registry` tool with:
+```
+action: "dependencies"
+name: "code-review"
+```
+
+**Capture from response:**
+- Confirm that `testing-strategy` appears in the dependency list
+
+**Record row:**
+```
+| skill dependencies | `testing-strategy` in deps: true | PASS/FAIL |
+```
+
+---
+
+## Section 14: Summary
+
+After all tests are complete:
+
+1. Count the total number of test rows across all 12 tool sections (not counting setup).
+2. Count the number of rows with `PASS`.
+3. Count the number of rows with `FAIL`.
+4. Update the `## Summary` table at the bottom of TEST-RESULTS.md with the final counts.
+
+**Call:** `edit` tool to overwrite the Summary table with actual values:
+```
+find: the existing Summary table
+replace: the completed Summary table with real counts
+```
+
+**The final Summary table must contain:**
+```markdown
+## Summary
+| Metric | Value |
+|--------|-------|
+| Total tests | {N} |
+| Passed | {N} |
+| Failed | {N} |
+```
+
+The test run is complete when TEST-RESULTS.md exists, all tables are populated with real proof data, and the Summary section contains accurate counts.
