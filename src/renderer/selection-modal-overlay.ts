@@ -92,7 +92,7 @@ export function renderSelectionModalOverlay(
           : item.detail.padStart(detailSpace);
         const rowText = pad + '\u2502 ' + indicator + labelStr.padEnd(maxLabelLen) + '  ' + detailStr + ' \u2502';
         lines.push(UIFactory.stringToLine(rowText, width, {
-          fg: isSelected ? '#00ffff' : '252',
+          fg: isSelected ? '#00ffff' : (item.fg ?? '252'),
           bold: isSelected,
           bg: isSelected ? '#1a2a3a' : '',
         }));
@@ -102,7 +102,7 @@ export function renderSelectionModalOverlay(
           : item.label;
         const rowText = pad + '\u2502 ' + indicator + labelStr.padEnd(contentW - 2) + '\u2502';
         lines.push(UIFactory.stringToLine(rowText, width, {
-          fg: isSelected ? '#00ffff' : '252',
+          fg: isSelected ? '#00ffff' : (item.fg ?? '252'),
           bold: isSelected,
           bg: isSelected ? '#1a2a3a' : '',
         }));

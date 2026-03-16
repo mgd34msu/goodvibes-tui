@@ -153,7 +153,7 @@ export function registerBuiltinCommands(registry: CommandRegistry): void {
           { id: '/shortcuts', label: '/shortcuts', detail: 'View keyboard shortcuts reference', category: 'Tools & System' },
           { id: '/commands', label: '/commands', detail: 'Browse all commands in a scrollable list', category: 'Tools & System' },
           { id: '/secrets', label: '/secrets set|get|list|delete', detail: 'Manage encrypted API key secrets', category: 'Tools & System' },
-          { id: '/danger', label: '/danger [key] [value]', detail: '⚠ Danger zone settings', category: 'Tools & System' },
+          { id: '/danger', label: '/danger [key] [value]', detail: '⚠ Danger zone settings', category: 'Tools & System', fg: '#ef4444' },
           { id: '/help', label: '/help', detail: 'This help', category: 'Tools & System' },
           { id: '/quit', label: '/quit', detail: 'Exit', category: 'Tools & System' }
         ];
@@ -1420,14 +1420,43 @@ export function registerBuiltinCommands(registry: CommandRegistry): void {
     usage: '[key] [value]',
     handler(args, ctx) {
       if (args.length === 0) {
-        // Open settings modal at danger tab
-        if (ctx.openSettingsModal) {
-          ctx.openSettingsModal();
-          // We need to set the category index to danger (index 4 in SETTINGS_CATEGORIES)
-          // This requires the settings modal to support opening at a specific category
-          // For now, just open and let user Tab to danger
+        if (ctx.openSelection) {
+          const cm = ctx.configManager;
+          const all = cm.getAll();
+          const dangerObj = all.danger as Record<string, unknown>;
+          const toggleAction = new Map<string, import('./selection-modal.ts').SelectionAction>([['enter', 'toggle' as const]]);
+          const items: SelectionItem[] = Object.entries(dangerObj).map(([field, val]) => {
+            const key = `danger.${field}`;
+            const schema = CONFIG_SCHEMA.find(s => s.key === key);
+            return {
+              id: key,
+              label: key,
+              detail: String(val),
+              fg: '#ef4444',
+              actions: schema ? `[Enter] toggle  ${schema.description}` : undefined,
+            };
+          });
+          ctx.openSelection('⚠ Danger Zone', items, { allowSearch: false, customActions: toggleAction }, (result) => {
+            if (!result) return;
+            const key = result.item.id as import('../config/index.ts').ConfigKey;
+            const schema = CONFIG_SCHEMA.find(s => s.key === key);
+            if (result.action === 'toggle' && schema) {
+              const currentVal = cm.get(key);
+              let newVal: unknown = currentVal;
+              if (schema.type === 'boolean') {
+                newVal = !currentVal;
+                cm.set(key, newVal as any);
+              } else if (schema.type === 'number') {
+                // Cycle common values for number settings
+                ctx.print(`Current: ${key} = ${String(currentVal)}. Use /danger ${field} <value> to set.`);
+                return;
+              }
+              result.item.detail = String(newVal);
+              ctx.renderRequest();
+              return;
+            }
+          });
         } else {
-          // Fallback: show danger settings as text
           const cm = ctx.configManager;
           const all = cm.getAll();
           const lines: string[] = ['⚠ Danger Zone Settings:', ''];
