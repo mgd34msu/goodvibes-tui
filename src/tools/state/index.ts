@@ -64,7 +64,10 @@ export function createStateTool(
       + ' budget reports token usage; context reports conversation info;'
       + ' memory reads/writes persistent .goodvibes/memory files; telemetry reports session metrics;'
       + ' hooks manages registered hooks (list/enable/disable/add/remove);'
-      + ' mode manages output verbosity mode (get/set/list).',
+      + ' mode manages output verbosity mode (get/set/list).'
+      + ' Discovery: use mode=list to see existing KV keys, mode=hooks hookAction=list to see registered hooks,'
+      + ' mode=mode modeAction=get to see the current output mode.'
+      + ' Also: mode=memory memoryAction=list to list persistent memory keys, mode=analytics analyticsAction=summary for session metrics.',
     parameters: STATE_TOOL_SCHEMA as unknown as Record<string, unknown>,
   };
 
