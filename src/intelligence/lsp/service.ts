@@ -3,6 +3,7 @@ import { join } from 'path';
 import { pathToFileURL } from 'url';
 import { logger } from '../../utils/logger.ts';
 import { LspClient } from './client.ts';
+import { getBinaryPath, ensureBinary } from './binary-downloader.ts';
 
 /**
  * Resolve a server command: check node_modules/.bin/ first (bundled),
@@ -13,6 +14,9 @@ function resolveCommand(command: string): string {
   // Try node_modules/.bin in project root
   const bundled = join(process.cwd(), 'node_modules', '.bin', command);
   if (existsSync(bundled)) return bundled;
+  // Try .goodvibes/bin/ (downloaded binaries)
+  const downloaded = getBinaryPath(command);
+  if (existsSync(downloaded)) return downloaded;
   // Try system PATH
   const system = Bun.which(command);
   if (system) return system;
@@ -88,6 +92,10 @@ export class LspService {
   }
 
   private async _startClient(langId: string): Promise<LspClient | null> {
+    // Ensure binary is available (may trigger download for rust-analyzer/gopls).
+    // Called here so it's covered by the dedup guard in getClient().
+    await this.ensureServer(langId);
+
     const config = this.configs.get(langId);
     if (!config) return null;
 
@@ -116,6 +124,9 @@ export class LspService {
     // Check bundled first
     const bundled = join(process.cwd(), 'node_modules', '.bin', config.command);
     if (existsSync(bundled)) return true;
+    // Check downloaded binaries
+    const downloaded = getBinaryPath(config.command);
+    if (existsSync(downloaded)) return true;
     // Then system PATH
     try {
       const resolved = Bun.which(config.command);
@@ -161,11 +172,17 @@ export class LspService {
 
     for (const { command, langIds, args } of WELL_KNOWN_SERVERS) {
       let found = false;
-      // Check bundled first, then system PATH
+      // Check bundled first, then .goodvibes/bin/, then system PATH
       const bundledPath = join(process.cwd(), 'node_modules', '.bin', command);
       if (existsSync(bundledPath)) {
         found = true;
-      } else {
+      }
+      // Check .goodvibes/bin/ (downloaded binaries)
+      if (!found) {
+        const downloaded = getBinaryPath(command);
+        found = existsSync(downloaded);
+      }
+      if (!found) {
         try {
           found = Bun.which(command) !== null;
         } catch {
@@ -190,6 +207,23 @@ export class LspService {
     }
 
     return detected;
+  }
+
+  /**
+   * Ensure a server binary is available for the given language.
+   * Downloads the binary if it's a known downloadable server (rust-analyzer, gopls)
+   * and not already available. Non-blocking for bundled/PATH servers.
+   */
+  async ensureServer(langId: string): Promise<void> {
+    const config = this.configs.get(langId);
+    if (!config) return;
+
+    // Only try download for servers that aren't already available
+    const available = await this.isAvailable(langId);
+    if (available) return;
+
+    // Try to download/install the binary
+    await ensureBinary(config.command);
   }
 
   /** Reset singleton (for testing only). */
