@@ -19,7 +19,7 @@ export class FilePickerModal {
 
   public allFiles: string[] = [];
   private filesCached = false;
-  private maxResults = 15;
+  
 
   private onUpdate: (() => void) | null = null;
 
@@ -115,7 +115,7 @@ export class FilePickerModal {
 
   private updateResults(): void {
     if (this.query.length === 0) {
-      this.results = this.allFiles.slice(0, this.maxResults);
+      this.results = this.allFiles;
       return;
     }
 
@@ -123,7 +123,7 @@ export class FilePickerModal {
       .map(f => ({ file: f, ...this.fuzzyMatch(this.query, f) }))
       .filter(r => r.match)
       .sort((a, b) => b.score - a.score)
-      .slice(0, this.maxResults);
+      ;
 
     this.results = scored.map(r => r.file);
     if (this.selectedIndex >= this.results.length) {
