@@ -416,8 +416,9 @@ async function main() {
     if (input.helpOverlayActive) {
       viewport.length = 0;
       const helpLines = renderHelpOverlay(width, commandRegistry.getAll(), input.helpScrollOffset);
-      // Pad BEFORE content so modal sits flush above input area
-      const helpPad = Math.max(0, effectiveVHeight - helpLines.length + 1);
+      // Use vHeight (not effectiveVHeight) — full-screen overlays aren't affected by other overlay reservations
+      // Bottom of modal content should be 1 row above the input area
+      const helpPad = Math.max(0, vHeight - helpLines.length - 1);
       for (let i = 0; i < helpPad; i++) viewport.push(createEmptyLine(width));
       viewport.push(...helpLines);
     }
@@ -425,7 +426,7 @@ async function main() {
     if (input.shortcutsOverlayActive) {
       viewport.length = 0;
       const shortcutLines = renderShortcutsOverlay(width, input.shortcutsScrollOffset);
-      const scPad = Math.max(0, effectiveVHeight - shortcutLines.length - 1);
+      const scPad = Math.max(0, vHeight - shortcutLines.length - 1);
       for (let i = 0; i < scPad; i++) viewport.push(createEmptyLine(width));
       viewport.push(...shortcutLines);
     }
