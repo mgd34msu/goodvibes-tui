@@ -195,15 +195,137 @@ The 12 tools exist as standalone implementations but are not connected to infras
 
 ---
 
-## Priority Order for Next Implementation
+## Execution Plan
 
-1. **Hooks → tools wiring** — Highest impact, enables the entire hook ecosystem
-2. **Tree-sitter → tools wiring** — Upgrades read/find from regex to AST-aware
-3. **Background process UI** — Users need visibility into running agents
-4. **Agent execution** — The spawn framework exists, needs actual orchestrator
-5. **Git header + PreCompact/PostCompact** — Key workflow improvement
-6. **File watcher** — Keeps index/cache fresh on external changes
-7. **Missing tool modes** — Incremental feature additions per tool
-8. **MCP integration** — Ecosystem connectivity
-9. **Secrets manager** — Better credential management
-10. **Remaining UI** — Modal factory, service registry modal
+7 phases with dependency ordering. Phases parallelize internally where possible.
+
+### Phase A: Integration Wiring (Week 1)
+
+Everything depends on this. The tools and infrastructure exist but aren't connected.
+
+| # | Task | Depends On | Parallel |
+|---|------|------------|----------|
+| A1 | **Wire hooks into orchestrator** — Every tool call fires Pre/Post/Fail hooks. Modify orchestrator.ts to wrap executeToolCalls(). | — | Yes |
+| A2 | **Wire tree-sitter into read** — Replace regex outline/symbols with TreeSitterService. | — | Yes |
+| A3 | **Wire tree-sitter into find** — Add expand_to support using findEnclosingScope(). | — | Yes |
+| A4 | **Wire GitService into analyze** — Replace git subprocess with GitService. Add PreCompact/PostCompact. | — | Yes |
+| A5 | **Update permission system** — Map new tool names to permission categories. | — | Yes |
+| A6 | **Git state in header** — Branch + dirty indicator in header bar. Debounced. | — | Yes |
+
+**Deliverable:** Hooks fire on every tool call. Tree-sitter active. Git in header. Permissions updated.
+
+---
+
+### Phase B: Missing Infrastructure (Week 2)
+
+| # | Task | Depends On | Parallel |
+|---|------|------------|----------|
+| B1 | **File watcher** — Watch key files, invalidate cache, update index, fire Change:file:external hooks. | A1 | Yes |
+| B2 | **Tool LLM model** — Config resolution for tool-internal LLM calls (semantic diff, auto-heal, commit messages). | — | Yes |
+| B3 | **Secrets manager** — Env var → encrypted file → session prompt. Three-tier resolution. | — | Yes |
+| B4 | **Auto-heal** — On write/edit validation failure: formatter → linter → tool LLM. Opt-in. | B2 | No |
+| B5 | **Overflow handler** — Large outputs write to .goodvibes/.overflow/, return truncated + reference. | — | Yes |
+| B6 | **Install tree-sitter grammars** — typescript, javascript, python, json, css WASM files. | — | Yes |
+
+**Deliverable:** File changes auto-detected. Tool LLM available. Secrets managed. Grammars installed.
+
+---
+
+### Phase C: Tool Mode Expansion (Weeks 3-4)
+
+| # | Task | Depends On |
+|---|------|------------|
+| C1 | **find: references** — LSP textDocument/references. Fall back to tree-sitter. | A3 |
+| C2 | **find: structural** — Install @ast-grep/napi. AST pattern matching. | A3 |
+| C3 | **find: batch** — Heterogeneous queries[] with IDs. | — |
+| C4 | **find: expand_to** — Tree-sitter expands matches to enclosing function/class. | A3, B6 |
+| C5 | **edit: ast + ast_pattern** — Tree-sitter structural edits. LSP rename. | A2, B6 |
+| C6 | **edit: validation chains** — Post-edit typecheck/lint/test. | — |
+| C7 | **exec: progress** — Milestones + pollable progress file. | B5 |
+| C8 | **fetch: remaining extracts** — structured, tables, readable, pdf. | — |
+| C9 | **fetch: service auth** — Wire secrets manager for bearer/api-key resolution. | B3 |
+| C10 | **analyze: breaking + semantic_diff** — GitService + tool LLM for impact analysis. | A4, B2 |
+| C11 | **analyze: remaining modes** — upgrade, permissions, env_audit, test_find. | — |
+| C12 | **inspect: frontend modes** — Port 15 modes from frontend-engine regex patterns. | — |
+| C13 | **inspect: api_spec + api_validate** — OpenAPI generation and validation. | — |
+| C14 | **read: image/PDF/notebook** — Base64 images, PDF text, .ipynb cells. | — |
+| C15 | **state: hooks + mode management** — Wire to HookDispatcher and ModeManager. | A1 |
+
+**Deliverable:** All critical tool modes working. LSP references. Structural search. LLM analysis.
+
+---
+
+### Phase D: Agent Execution (Week 5)
+
+| # | Task | Depends On |
+|---|------|------------|
+| D1 | **In-process agent orchestrator** — Each agent gets own ConversationManager + tool set. Async execution loop. | A1 |
+| D2 | **Session isolation** — Own message history, agent- prefix, own KVState namespace, JSONL file. | D1 |
+| D3 | **Git worktree lifecycle** — Create on spawn, set cwd, merge on complete, cleanup. | D1 |
+| D4 | **Inter-agent message bus** — send, broadcast, subscribe. Messages injected into agent context. | D1 |
+| D5 | **Wire remaining agent actions** — get, budget, plan, wait, message. | D1, D4 |
+| D6 | **Agent archetypes + markdown** — Load .goodvibes/agents/*.md, parse frontmatter, inject into system prompt. | D1 |
+
+**Deliverable:** Agents execute in background with worktrees, sessions, and communication.
+
+---
+
+### Phase E: UI (Week 6)
+
+| # | Task | Depends On |
+|---|------|------------|
+| E1 | **Modal factory** — Shared rendering: box, title, footer, focus, composable sections. Refactor existing modals. | — |
+| E2 | **Background process indicator** — Below input area. Agent/tool count. Down arrow → Enter opens modal. | D1, E1 |
+| E3 | **Background process modal** — List by type. Navigate, peek, kill, close. | E1, E2 |
+| E4 | **Live-tail peek modal** — Streaming output. Auto-scroll. Kill from here. | E1, E3 |
+| E5 | **Service registry modal** — /services command. Add, edit, delete, test API services. | E1, B3 |
+
+**Deliverable:** Users see and manage background work. Modal system unified.
+
+---
+
+### Phase F: External Integration (Week 7)
+
+| # | Task | Depends On |
+|---|------|------------|
+| F1 | **MCP client** — Connect to servers from .goodvibes/mcp.json. Register tools with mcp: namespace. | — |
+| F2 | **MCP progressive loading** — Names + descriptions at startup. Full schemas on first use. | F1 |
+| F3 | **MCP permissions** — New 'mcp' category, default 'prompt'. | F1, A5 |
+| F4 | **Registry: fuse.js** — Fuzzy search weighted: name > description > keywords. | — |
+| F5 | **Workflow: wire triggers** — Hook events check TriggerManager. Execute actions. | A1, D1 |
+| F6 | **Workflow: wire schedules** — setInterval/setTimeout. Execute via exec tool. | — |
+| F7 | **Workflow: wire daemon/external** — Danger-gated start of DaemonServer/HttpListener. | — |
+| F8 | **State: analytics + telemetry** — Install sql.js. Record and query tool calls. | — |
+
+**Deliverable:** MCP connected. Triggers fire. Schedules run. Analytics tracked.
+
+---
+
+### Phase G: Security & Polish (Week 8)
+
+| # | Task | Depends On |
+|---|------|------------|
+| G1 | **Spawn token expiry** — expires_at field, reject expired. Default 1 hour. | — |
+| G2 | **HTTP listener security** — Bearer token, localhost, rate limiting, logging. | — |
+| G3 | **Daemon security** — Auth token on all endpoints, task logging. | — |
+| G4 | **Credential encryption** — Encrypt API creds at rest, decrypt on access. | B3 |
+| G5 | **Permission audit** — Verify all tools check permissions. Verify danger gates. Path traversal. | A5 |
+| G6 | **Install remaining deps** — @ast-grep/napi, sql.js, fuse.js, chokidar, grammars. | — |
+| G7 | **Test expansion** — Integration tests for all pipelines. Target: 2000+ total. | All |
+
+**Deliverable:** Security hardened. All deps installed. 2000+ tests. Production-ready.
+
+---
+
+### Phase Summary
+
+| Phase | Week | Tasks | Key Deliverable |
+|-------|------|-------|----------------|
+| A | 1 | 6 | Hooks fire, tree-sitter active, git in header |
+| B | 2 | 6 | File watcher, tool LLM, secrets, auto-heal |
+| C | 3-4 | 15 | All critical modes across all 12 tools |
+| D | 5 | 6 | Agents run in background with worktrees |
+| E | 6 | 5 | Background process visibility, modal factory |
+| F | 7 | 8 | MCP, triggers, schedules, analytics |
+| G | 8 | 7 | Token expiry, auth, encryption, 2000+ tests |
+| **Total** | **8 weeks** | **53 tasks** | **Production-ready v1.0** |
