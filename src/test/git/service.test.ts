@@ -153,6 +153,50 @@ describe('GitService', () => {
       const d = await svc.diff(firstHash);
       expect(d).toContain('v2');
     });
+
+    test('diffBetween returns full diff between two refs', async () => {
+      addCommit(tmpDir, 'file.txt', 'v1', 'initial');
+      addCommit(tmpDir, 'file.txt', 'v2', 'update');
+      const entries = await svc.log();
+      const beforeRef = entries[1].hash;
+      const afterRef = entries[0].hash;
+      const d = await svc.diffBetween(beforeRef, afterRef);
+      expect(d).toContain('+v2');
+      expect(d).toContain('-v1');
+    });
+
+    test('diffBetween scoped to specific files returns only those files', async () => {
+      addCommit(tmpDir, 'a.txt', 'a1', 'add a');
+      addCommit(tmpDir, 'b.txt', 'b1', 'add b');
+      addCommit(tmpDir, 'a.txt', 'a2', 'update a');
+      const entries = await svc.log();
+      // Diff from second-to-last to last, scoped to a.txt
+      const beforeRef = entries[1].hash;
+      const afterRef = entries[0].hash;
+      const d = await svc.diffBetween(beforeRef, afterRef, ['a.txt']);
+      expect(d).toContain('a.txt');
+      expect(d).not.toContain('b.txt');
+    });
+
+    test('diffStat returns stat summary between two refs', async () => {
+      addCommit(tmpDir, 'stat-file.txt', 'line1\nline2', 'initial');
+      addCommit(tmpDir, 'stat-file.txt', 'line1\nline2\nline3', 'add line');
+      const entries = await svc.log();
+      const beforeRef = entries[1].hash;
+      const afterRef = entries[0].hash;
+      const stat = await svc.diffStat(beforeRef, afterRef);
+      expect(stat).toContain('stat-file.txt');
+      // stat format includes change count and insertion markers
+      expect(stat).toMatch(/\d+ insertion/);
+    });
+
+    test('diffStat returns empty string when refs are identical', async () => {
+      addCommit(tmpDir, 'same.txt', 'content', 'commit');
+      const entries = await svc.log();
+      const hash = entries[0].hash;
+      const stat = await svc.diffStat(hash, hash);
+      expect(stat.trim()).toBe('');
+    });
   });
 
   // -------------------------------------------------------------------------

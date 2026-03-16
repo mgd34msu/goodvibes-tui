@@ -152,6 +152,82 @@ export function renderMarkdown(text: string, width: number): Line[] {
   return lines;
 }
 
+export interface CodeBlockSpan {
+  /** Line offset from the start of renderMarkdown output where this block begins. */
+  startOffset: number;
+  /** Number of rendered lines occupied by this code block. */
+  lineCount: number;
+  /** Raw source lines inside the fence (no fence markers). */
+  rawContent: string;
+}
+
+/**
+ * renderMarkdownTracked - Same as renderMarkdown but also returns metadata
+ * about every code block encountered, keyed by their line offset in the output.
+ * Used by ConversationManager to register code blocks in the blockRegistry.
+ */
+export function renderMarkdownTracked(
+  text: string,
+  width: number,
+): { lines: ReturnType<typeof renderMarkdown>; codeBlocks: CodeBlockSpan[] } {
+  const lines: ReturnType<typeof renderMarkdown> = [];
+  const codeBlocks: CodeBlockSpan[] = [];
+  const rawLines = text.split('\n');
+
+  let inCodeBlock = false;
+  let codeBlockLang = '';
+  let codeBlockLines: string[] = [];
+  const indent = 2;
+
+  for (let i = 0; i < rawLines.length; i++) {
+    const raw = rawLines[i];
+
+    const fenceMatch = raw.match(/^```(\w*)/);
+    if (fenceMatch && !inCodeBlock) {
+      inCodeBlock = true;
+      codeBlockLang = fenceMatch[1] || '';
+      codeBlockLines = [];
+      continue;
+    }
+    if (inCodeBlock) {
+      if (raw.trimStart().startsWith('```')) {
+        const blockStart = lines.length;
+        const rendered = renderCodeBlock(codeBlockLines, codeBlockLang, width);
+        codeBlocks.push({
+          startOffset: blockStart,
+          lineCount: rendered.length,
+          rawContent: codeBlockLines.join('\n'),
+        });
+        lines.push(...rendered);
+        inCodeBlock = false;
+        codeBlockLang = '';
+        codeBlockLines = [];
+      } else {
+        codeBlockLines.push(raw);
+      }
+      continue;
+    }
+    // Delegate non-code-block lines to renderMarkdown by rendering one chunk at a time.
+    // For efficiency, re-use the full renderMarkdown for non-fence lines.
+    // We push the single line through a minimal inline render.
+    const singleLine = renderMarkdown(raw, width);
+    lines.push(...singleLine);
+  }
+
+  if (inCodeBlock && codeBlockLines.length > 0) {
+    const blockStart = lines.length;
+    const rendered = renderCodeBlock(codeBlockLines, codeBlockLang, width);
+    codeBlocks.push({
+      startOffset: blockStart,
+      lineCount: rendered.length,
+      rawContent: codeBlockLines.join('\n'),
+    });
+    lines.push(...rendered);
+  }
+
+  return { lines, codeBlocks };
+}
+
 /**
  * Strip markdown formatting from text for width measurement.
  * Removes **, *, `, ~~ markers but keeps the inner text.

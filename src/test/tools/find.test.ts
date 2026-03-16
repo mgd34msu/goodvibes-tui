@@ -457,6 +457,33 @@ describe('symbols mode', () => {
     expect(Array.isArray(r.files)).toBe(true);
     expect(r.files.every((f: string) => typeof f === 'string')).toBe(true);
   });
+
+  test('tree-sitter fallback: regex extraction still works when tree-sitter has no grammar', async () => {
+    // The test environment does not initialize tree-sitter WASM grammars.
+    // CodeIntelligence.getSymbols() returns [] for unloaded grammars, and
+    // executeSymbolsQuery falls back to regex. Symbols should still be found.
+    const results = await find({
+      queries: [{ id: 'fn', mode: 'symbols', kinds: ['function'], path: dir }],
+    });
+    const r = queryResult<{ symbols: Array<{ name: string; kind: string }> }>(results, 'fn');
+    // Even without tree-sitter, regex fallback should find exported functions
+    expect(r.symbols.length).toBeGreaterThan(0);
+    expect(r.symbols.every((s) => s.kind === 'function')).toBe(true);
+  });
+
+  test('tree-sitter fallback: exported_only still filters correctly', async () => {
+    await writeTempFile(
+      dir,
+      'src/mixed.ts',
+      'function internalFn() {}\nexport function exportedFn() {}\n',
+    );
+    const results = await find({
+      queries: [{ id: 'exp', mode: 'symbols', exported_only: true, path: dir }],
+    });
+    const r = queryResult<{ symbols: Array<{ name: string; exported: boolean }> }>(results, 'exp');
+    expect(r.symbols.every((s) => s.exported === true)).toBe(true);
+    expect(r.symbols.every((s) => s.name !== 'internalFn')).toBe(true);
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -507,6 +534,205 @@ describe('batch queries', () => {
     expect(Object.keys(results)).toContain('query_one');
     expect(Object.keys(results)).toContain('query_two');
     expect(Object.keys(results)).toHaveLength(2);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// expand_to
+// ---------------------------------------------------------------------------
+
+describe('expand_to', () => {
+  test('expand_to without tree-sitter: matches still returned, no startLine/endLine', async () => {
+    // Tree-sitter is not initialized in the test environment, so getEnclosingScope
+    // returns null. expand_to should be silently ignored; basic match fields still present.
+    const results = await find({
+      queries: [{ id: 'exp', mode: 'content', pattern: 'return', path: dir }],
+      output: { format: 'matches', expand_to: 'function' },
+    });
+    const r = queryResult<{ matches: Array<{ file: string; line: number; text: string; startLine?: number; endLine?: number }> }>(results, 'exp');
+    expect(r.matches.length).toBeGreaterThan(0);
+    // All matches must still have the core fields
+    expect(r.matches.every((m) => typeof m.file === 'string')).toBe(true);
+    expect(r.matches.every((m) => typeof m.line === 'number')).toBe(true);
+    expect(r.matches.every((m) => typeof m.text === 'string')).toBe(true);
+  });
+
+  test('expand_to: line and block values accepted without error', async () => {
+    // 'line' and 'block' are valid schema values but currently have no expansion effect.
+    const results = await find({
+      queries: [{ id: 'exp', mode: 'content', pattern: 'export', path: dir }],
+      output: { format: 'matches', expand_to: 'line' },
+    });
+    const r = queryResult<{ matches: unknown[]; count: number }>(results, 'exp');
+    expect(r.count).toBeGreaterThan(0);
+    expect(Array.isArray(r.matches)).toBe(true);
+  });
+
+  test('expand_to: count_only format unaffected by expand_to', async () => {
+    const results = await find({
+      queries: [{ id: 'exp', mode: 'content', pattern: 'export', path: dir }],
+      output: { format: 'count_only', expand_to: 'function' },
+    });
+    const r = queryResult<{ count: number; file_count: number }>(results, 'exp');
+    expect(typeof r.count).toBe('number');
+    expect(r.count).toBeGreaterThan(0);
+  });
+
+  test('expand_to: files_only format unaffected by expand_to', async () => {
+    const results = await find({
+      queries: [{ id: 'exp', mode: 'content', pattern: 'export', path: dir }],
+      output: { format: 'files_only', expand_to: 'class' },
+    });
+    const r = queryResult<{ files: string[] }>(results, 'exp');
+    expect(Array.isArray(r.files)).toBe(true);
+    expect(r.files.length).toBeGreaterThan(0);
+  });
+
+  test('schema: expand_to description no longer says Phase 3', () => {
+    const params = findTool.definition.parameters as Record<string, unknown>;
+    const output = (params.properties as Record<string, unknown>).output as Record<string, unknown>;
+    const outputProps = (output.properties as Record<string, unknown>);
+    const expandTo = outputProps.expand_to as Record<string, unknown>;
+    expect(expandTo.description as string).not.toContain('Phase 3');
+    expect(expandTo.description as string).not.toContain('not yet implemented');
+    expect(expandTo.description as string).toContain('startLine');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// references mode
+// ---------------------------------------------------------------------------
+
+describe('references mode', () => {
+  test('fallback grep — finds references by symbol name', async () => {
+    // No LSP available in test env, so falls back to grep-based search.
+    // The temp dir has files that import/use the symbol name.
+    const results = await find({
+      queries: [{
+        id: 'refs',
+        mode: 'references',
+        symbol: 'formatDate',
+        file: join(dir, 'src/utils/helper.ts'),
+        line: 0,
+        column: 0,
+      }],
+    });
+    const r = queryResult<{ locations: Array<{ file: string; line: number }>; count: number; source: string }>(results, 'refs');
+    expect(r.source).toBe('fallback');
+    // Should find the declaration in src/utils/helper.ts
+    expect(r.count).toBeGreaterThan(0);
+    expect(r.locations.some((l) => l.file.endsWith('helper.ts'))).toBe(true);
+    expect(r.locations.every((l) => typeof l.file === 'string' && typeof l.line === 'number')).toBe(true);
+  });
+
+  test('fallback grep — symbol with no matches returns empty locations', async () => {
+    // Use a symbol that is guaranteed not to appear anywhere in the codebase.
+    // Prefix with __TEST__ and a random hex suffix to avoid false positives.
+    const unique = `__TEST_NOSYM_${Math.random().toString(36).slice(2)}_${Date.now().toString(36)}`;
+    const results = await find({
+      queries: [{
+        id: 'refs',
+        mode: 'references',
+        symbol: unique,
+        file: join(dir, 'src/index.ts'),
+        line: 0,
+        column: 0,
+      }],
+    });
+    const r = queryResult<{ locations: unknown[]; count: number; source: string }>(results, 'refs');
+    expect(r.count).toBe(0);
+    expect(r.locations).toHaveLength(0);
+    expect(r.source).toBe('fallback');
+  });
+
+  test('count_only format returns count only', async () => {
+    const results = await find({
+      queries: [{
+        id: 'refs',
+        mode: 'references',
+        symbol: 'main',
+        file: join(dir, 'src/index.ts'),
+        line: 0,
+        column: 0,
+      }],
+      output: { format: 'count_only' },
+    });
+    const r = queryResult<{ count: number }>(results, 'refs');
+    expect(typeof r.count).toBe('number');
+    expect(r).not.toHaveProperty('locations');
+  });
+
+  test('files_only format returns unique files', async () => {
+    const results = await find({
+      queries: [{
+        id: 'refs',
+        mode: 'references',
+        symbol: 'export',
+        file: join(dir, 'src/index.ts'),
+        line: 0,
+        column: 0,
+      }],
+      output: { format: 'files_only' },
+    });
+    const r = queryResult<{ files: string[]; count: number }>(results, 'refs');
+    expect(Array.isArray(r.files)).toBe(true);
+    // Unique files: no duplicates
+    expect(new Set(r.files).size).toBe(r.files.length);
+  });
+
+  test('max_results limits reference output', async () => {
+    const results = await find({
+      queries: [{
+        id: 'refs',
+        mode: 'references',
+        symbol: 'export',
+        file: join(dir, 'src/index.ts'),
+        line: 0,
+        column: 0,
+      }],
+      output: { max_results: 2 },
+    });
+    const r = queryResult<{ locations: unknown[]; count: number }>(results, 'refs');
+    expect(r.count).toBeLessThanOrEqual(2);
+    expect(r.locations.length).toBeLessThanOrEqual(2);
+  });
+
+  test('result locations have file and line properties', async () => {
+    const results = await find({
+      queries: [{
+        id: 'refs',
+        mode: 'references',
+        symbol: 'Button',
+        file: join(dir, 'src/components/Button.tsx'),
+        line: 0,
+        column: 0,
+      }],
+    });
+    const r = queryResult<{ locations: Array<Record<string, unknown>>; count: number }>(results, 'refs');
+    for (const loc of r.locations) {
+      expect(typeof loc.file).toBe('string');
+      expect(typeof loc.line).toBe('number');
+      expect(loc.line).toBeGreaterThan(0);
+    }
+  });
+
+  test('outside-root path is blocked when symbol file is outside root', async () => {
+    // This test ensures path security still works: the fallback searches projectRoot,
+    // not the supplied file path, so no path validation issue. But the file param
+    // can be anything — LSP would reject it anyway, and grep searches project root.
+    // Verify tool still succeeds gracefully.
+    const result = await findTool.execute({
+      queries: [{
+        id: 'refs',
+        mode: 'references',
+        symbol: 'test',
+        file: '/etc/passwd',
+        line: 0,
+        column: 0,
+      }],
+    });
+    // Tool should succeed (LSP returns empty, grep fallback runs on project root)
+    expect(result.success).toBe(true);
   });
 });
 
@@ -592,5 +818,149 @@ describe('edge cases', () => {
       expect(parsed.blocked).toHaveProperty('error');
       expect((parsed.blocked as { error: string }).error).toMatch(/outside the project root/);
     }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// structural mode
+// ---------------------------------------------------------------------------
+
+describe('structural mode', () => {
+  test('finds function calls matching AST pattern', async () => {
+    await writeTempFile(dir, 'src/calls.ts', 'console.log("hello");\nconsole.error("oops");\nfoo.bar(42);\n');
+    const results = await find({
+      queries: [{ id: 'logs', mode: 'structural', pattern: 'console.log($$$ARGS)', lang: 'ts', path: dir }],
+    });
+    const r = queryResult<{ matches: Array<{ file: string; line: number; text: string }>; count: number }>(results, 'logs');
+    expect(r.count).toBeGreaterThan(0);
+    expect(r.matches.length).toBeGreaterThan(0);
+    expect(r.matches[0]).toHaveProperty('file');
+    expect(r.matches[0]).toHaveProperty('line');
+    expect(r.matches[0]).toHaveProperty('text');
+    expect(r.matches[0].text).toContain('console.log');
+  });
+
+  test('line numbers are 1-indexed', async () => {
+    await writeTempFile(dir, 'src/lines.ts', 'const a = 1;\nconsole.log(a);\nconst b = 2;\n');
+    const results = await find({
+      queries: [{ id: 'ln', mode: 'structural', pattern: 'console.log($A)', lang: 'ts', path: dir }],
+    });
+    const r = queryResult<{ matches: Array<{ line: number }> }>(results, 'ln');
+    expect(r.matches.length).toBeGreaterThan(0);
+    expect(r.matches[0].line).toBe(2); // second line, 1-indexed
+  });
+
+  test('matches exported functions with AST pattern', async () => {
+    const results = await find({
+      queries: [{ id: 'fns', mode: 'structural', pattern: 'export function $NAME($$$PARAMS) { $$$BODY }', lang: 'ts', path: dir }],
+    });
+    const r = queryResult<{ matches: Array<{ file: string; text: string }>; count: number }>(results, 'fns');
+    expect(r.count).toBeGreaterThan(0);
+    expect(r.matches.every((m) => m.text.startsWith('export function'))).toBe(true);
+  });
+
+  test('count_only format returns count and file_count', async () => {
+    const results = await find({
+      queries: [{ id: 'cnt', mode: 'structural', pattern: 'export function $NAME($$$) { $$$BODY }', lang: 'ts', path: dir }],
+      output: { format: 'count_only' },
+    });
+    const r = queryResult<{ count: number; file_count: number }>(results, 'cnt');
+    expect(typeof r.count).toBe('number');
+    expect(typeof r.file_count).toBe('number');
+    expect(r.count).toBeGreaterThan(0);
+  });
+
+  test('files_only format returns matched file paths', async () => {
+    const results = await find({
+      queries: [{ id: 'fo', mode: 'structural', pattern: 'export function $NAME($$$) { $$$BODY }', lang: 'ts', path: dir }],
+      output: { format: 'files_only' },
+    });
+    const r = queryResult<{ files: string[]; count: number }>(results, 'fo');
+    expect(Array.isArray(r.files)).toBe(true);
+    expect(r.files.every((f: string) => typeof f === 'string')).toBe(true);
+    expect(r.count).toBeGreaterThan(0);
+  });
+
+  test('locations format returns file and line', async () => {
+    const results = await find({
+      queries: [{ id: 'loc', mode: 'structural', pattern: 'export function $NAME($$$) { $$$BODY }', lang: 'ts', path: dir }],
+      output: { format: 'locations' },
+    });
+    const r = queryResult<{ locations: Array<{ file: string; line: number }>; count: number }>(results, 'loc');
+    expect(Array.isArray(r.locations)).toBe(true);
+    expect(r.locations[0]).toHaveProperty('file');
+    expect(r.locations[0]).toHaveProperty('line');
+    expect(typeof r.locations[0].line).toBe('number');
+  });
+
+  test('lang auto-detection from file extension', async () => {
+    // .ts files should be parsed as TypeScript without explicit lang
+    const results = await find({
+      queries: [{ id: 'auto', mode: 'structural', pattern: 'export function $NAME($$$) { $$$BODY }', path: dir }],
+    });
+    const r = queryResult<{ count: number }>(results, 'auto');
+    expect(r.count).toBeGreaterThan(0); // should find .ts files via auto-detection
+  });
+
+  test('glob filter restricts files searched', async () => {
+    await writeTempFile(dir, 'src/extra.js', 'function jsFunc() { return 1; }');
+    const tsOnly = await find({
+      queries: [{ id: 'ts', mode: 'structural', pattern: 'function $NAME($$$) { $$$BODY }', lang: 'ts', path: dir }],
+      output: { format: 'count_only' },
+    });
+    const allLangs = await find({
+      queries: [{ id: 'all', mode: 'structural', pattern: 'function $NAME($$$) { $$$BODY }', path: dir }],
+      output: { format: 'count_only' },
+    });
+    const tsCount = queryResult<{ count: number }>(tsOnly, 'ts').count;
+    const allCount = queryResult<{ count: number }>(allLangs, 'all').count;
+    // With no lang filter, .js files are also parsed and may contribute more matches
+    expect(allCount).toBeGreaterThanOrEqual(tsCount);
+  });
+
+  test('max_results limits total matches', async () => {
+    const results = await find({
+      queries: [{ id: 'lim', mode: 'structural', pattern: '$A', lang: 'ts', path: dir }],
+      output: { max_results: 2, format: 'matches' },
+    });
+    const r = queryResult<{ matches: unknown[] }>(results, 'lim');
+    expect(r.matches.length).toBeLessThanOrEqual(2);
+  });
+
+  test('no matches returns empty result', async () => {
+    const results = await find({
+      queries: [{ id: 'none', mode: 'structural', pattern: 'DOES_NOT_MATCH_ANYTHING_XYZ_9999()', lang: 'ts', path: dir }],
+      output: { format: 'count_only' },
+    });
+    const r = queryResult<{ count: number }>(results, 'none');
+    expect(r.count).toBe(0);
+  });
+
+  test('missing pattern returns error', async () => {
+    const result = await findTool.execute({
+      queries: [{ id: 'nopattern', mode: 'structural', path: dir }],
+    });
+    expect(result.success).toBe(true);
+    const parsed = JSON.parse(result.output!);
+    expect(parsed.nopattern).toHaveProperty('error');
+  });
+
+  test('unsupported file extensions are skipped silently', async () => {
+    // .xyz files are not supported — should produce no matches, not an error
+    await writeTempFile(dir, 'src/data.xyz', 'export function foo() {}');
+    const results = await find({
+      queries: [{ id: 'xyz', mode: 'structural', pattern: 'export function $NAME($$$) {}', path: dir }],
+      output: { format: 'count_only' },
+    });
+    const r = queryResult<{ count: number }>(results, 'xyz');
+    expect(typeof r.count).toBe('number'); // no error, just zero or more results from supported files
+  });
+
+  test('schema includes structural in mode enum', () => {
+    const params = findTool.definition.parameters as Record<string, unknown>;
+    const queries = (params.properties as Record<string, unknown>).queries as Record<string, unknown>;
+    const items = (queries.items as Record<string, unknown>);
+    const modeEnum = ((items.properties as Record<string, unknown>).mode as Record<string, unknown>).enum as string[];
+    expect(modeEnum).toContain('structural');
   });
 });

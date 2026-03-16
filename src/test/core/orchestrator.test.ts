@@ -1,7 +1,10 @@
-import { describe, test, expect, beforeEach, mock } from 'bun:test';
+import { describe, test, expect, beforeEach, afterEach, mock } from 'bun:test';
 import { EventBus } from '../../core/event-bus.ts';
 import { ToolRegistry } from '../../tools/registry.ts';
 import { MockLLMProvider } from '../setup.ts';
+import { HookDispatcher } from '../../hooks/dispatcher.ts';
+import type { HookEvent, HookResult } from '../../hooks/types.ts';
+import { config, configManager } from '../../config/index.ts';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -48,8 +51,35 @@ describe('Orchestrator', () => {
     const { PermissionManager } = await import('../../permissions/manager.ts');
     const cm = new ConversationManager(() => 80);
     const pm = new PermissionManager(bus);
+    // hookDispatcher is the optional 8th param; omitting it tests backward compat
     const orch = new Orchestrator(bus, cm, () => 24, () => {}, toolRegistry, pm);
     return { orch, cm, pm };
+  }
+
+  async function buildOrchestratorWithHooks(hookDispatcher: HookDispatcher) {
+    const { Orchestrator } = await import('../../core/orchestrator.ts');
+    const { ConversationManager } = await import('../../core/conversation.ts');
+    const { PermissionManager } = await import('../../permissions/manager.ts');
+    const cm = new ConversationManager(() => 80);
+    const pm = new PermissionManager(bus);
+    const orch = new Orchestrator(bus, cm, () => 24, () => {}, toolRegistry, pm, () => '', hookDispatcher);
+    return { orch, cm, pm };
+  }
+
+  /** Helper: register a tool that resolves successfully */
+  function registerSuccessTool(name: string, output = 'ok'): void {
+    toolRegistry.register({
+      definition: { name, description: name, parameters: { type: 'object', properties: {} } },
+      execute: async () => ({ success: true, output }),
+    });
+  }
+
+  /** Helper: register a tool that throws */
+  function registerThrowingTool(name: string, message = 'boom'): void {
+    toolRegistry.register({
+      definition: { name, description: name, parameters: { type: 'object', properties: {} } },
+      execute: async () => { throw new Error(message); },
+    });
   }
 
   describe('Orchestrator state', () => {
@@ -200,6 +230,156 @@ describe('Orchestrator', () => {
 
       expect(result.success).toBe(false);
       expect(result.output).toContain('not initialized');
+    });
+  });
+
+  describe('Hook firing', () => {
+    // executeToolCalls calls permissionManager.check() which blocks in 'prompt' mode.
+    // Set autoApprove=true so all tools are auto-approved during hook tests.
+    let savedAutoApprove: boolean;
+
+    beforeEach(() => {
+      savedAutoApprove = config.autoApprove ?? false;
+      configManager.set('behavior.autoApprove', true);
+    });
+
+    afterEach(() => {
+      configManager.set('behavior.autoApprove', savedAutoApprove);
+    });
+
+    /** Directly call the private executeToolCalls method via type cast */
+    type OrchestratorInternal = {
+      executeToolCalls: (calls: Array<{ id: string; name: string; arguments: Record<string, unknown> }>) => Promise<Array<{ callId: string; success: boolean; output?: string; error?: string }>>;
+    };
+
+    test('Pre hook fires before tool execution with correct event shape', async () => {
+      const dispatcher = new HookDispatcher();
+      const firedEvents: HookEvent[] = [];
+      dispatcher.register('Pre:tool:mytool', {
+        type: 'ts',
+        match: 'Pre:tool:mytool',
+        path: '',
+      });
+      // Spy on fire instead of registering a real runner
+      const origFire = dispatcher.fire.bind(dispatcher);
+      const firedPaths: string[] = [];
+      dispatcher.fire = async (event: HookEvent): Promise<HookResult> => {
+        firedEvents.push(event);
+        firedPaths.push(event.path);
+        return origFire(event);
+      };
+
+      registerSuccessTool('mytool');
+      const { orch } = await buildOrchestratorWithHooks(dispatcher);
+      const internal = orch as unknown as OrchestratorInternal;
+      await internal.executeToolCalls([{ id: 'c1', name: 'mytool', arguments: {} }]);
+
+      const preEvent = firedEvents.find(e => e.phase === 'Pre');
+      expect(preEvent).toBeDefined();
+      expect(preEvent!.path).toBe('Pre:tool:mytool');
+      expect(preEvent!.category).toBe('tool');
+      expect(preEvent!.specific).toBe('mytool');
+      expect(preEvent!.payload).toMatchObject({ callId: 'c1', tool: 'mytool' });
+      expect(typeof preEvent!.sessionId).toBe('string');
+      expect(preEvent!.sessionId.length).toBeGreaterThan(0);
+    });
+
+    test('Post hook fires after successful execution', async () => {
+      const dispatcher = new HookDispatcher();
+      const firedEvents: HookEvent[] = [];
+      dispatcher.fire = async (event: HookEvent): Promise<HookResult> => {
+        firedEvents.push(event);
+        return { ok: true };
+      };
+
+      registerSuccessTool('goodtool', 'done');
+      const { orch } = await buildOrchestratorWithHooks(dispatcher);
+      const internal = orch as unknown as OrchestratorInternal;
+      const results = await internal.executeToolCalls([{ id: 'c2', name: 'goodtool', arguments: {} }]);
+
+      expect(results[0].success).toBe(true);
+      const postEvent = firedEvents.find(e => e.phase === 'Post');
+      expect(postEvent).toBeDefined();
+      expect(postEvent!.path).toBe('Post:tool:goodtool');
+      expect(postEvent!.payload).toMatchObject({ callId: 'c2', tool: 'goodtool' });
+    });
+
+    test('Fail hook fires when tool throws', async () => {
+      const dispatcher = new HookDispatcher();
+      const firedEvents: HookEvent[] = [];
+      dispatcher.fire = async (event: HookEvent): Promise<HookResult> => {
+        firedEvents.push(event);
+        return { ok: true };
+      };
+
+      registerThrowingTool('badtool', 'something went wrong');
+      const { orch } = await buildOrchestratorWithHooks(dispatcher);
+      const internal = orch as unknown as OrchestratorInternal;
+      const results = await internal.executeToolCalls([{ id: 'c3', name: 'badtool', arguments: {} }]);
+
+      expect(results[0].success).toBe(false);
+      expect(results[0].error).toContain('something went wrong');
+
+      const failEvent = firedEvents.find(e => e.phase === 'Fail');
+      expect(failEvent).toBeDefined();
+      expect(failEvent!.path).toBe('Fail:tool:badtool');
+      expect(failEvent!.payload).toMatchObject({ callId: 'c3', tool: 'badtool', error: 'something went wrong' });
+
+      // Post hook must NOT fire on failure
+      const postEvent = firedEvents.find(e => e.phase === 'Post');
+      expect(postEvent).toBeUndefined();
+    });
+
+    test('Pre hook deny skips execution and returns denied ToolResult', async () => {
+      const dispatcher = new HookDispatcher();
+      const executeMock = mock(async () => ({ success: true, output: 'should not run' }));
+      dispatcher.fire = async (event: HookEvent): Promise<HookResult> => {
+        if (event.phase === 'Pre') {
+          return { ok: true, decision: 'deny', reason: 'blocked by policy' };
+        }
+        return { ok: true };
+      };
+
+      // Register the tool but track whether it ran
+      toolRegistry.register({
+        definition: { name: 'restricted', description: 'restricted', parameters: { type: 'object', properties: {} } },
+        execute: executeMock,
+      });
+
+      const { orch } = await buildOrchestratorWithHooks(dispatcher);
+      const internal = orch as unknown as OrchestratorInternal;
+      const results = await internal.executeToolCalls([{ id: 'c4', name: 'restricted', arguments: {} }]);
+
+      expect(results[0].success).toBe(false);
+      expect(results[0].error).toContain('blocked by policy');
+      // Tool execute should never have been called
+      expect(executeMock).not.toHaveBeenCalled();
+    });
+
+    test('no hooks: tool executes normally when hookDispatcher is null', async () => {
+      registerSuccessTool('plaintool', 'plain result');
+      const { orch } = await buildOrchestrator();
+      const internal = orch as unknown as OrchestratorInternal;
+      const results = await internal.executeToolCalls([{ id: 'c5', name: 'plaintool', arguments: {} }]);
+
+      expect(results[0].success).toBe(true);
+      expect(results[0].output).toBe('plain result');
+    });
+
+    test('hook fire() failure does not block tool execution', async () => {
+      const dispatcher = new HookDispatcher();
+      dispatcher.fire = async (_event: HookEvent): Promise<HookResult> => {
+        throw new Error('hook system exploded');
+      };
+
+      registerSuccessTool('robusttool', 'still works');
+      const { orch } = await buildOrchestratorWithHooks(dispatcher);
+      const internal = orch as unknown as OrchestratorInternal;
+      const results = await internal.executeToolCalls([{ id: 'c6', name: 'robusttool', arguments: {} }]);
+
+      // Tool should still execute and succeed despite hook failure
+      expect(results[0].success).toBe(true);
+      expect(results[0].output).toBe('still works');
     });
   });
 });

@@ -2,6 +2,13 @@ import { createHmac, randomBytes } from 'crypto';
 import { logger } from '../utils/logger.ts';
 
 // ---------------------------------------------------------------------------
+// Constants
+// ---------------------------------------------------------------------------
+
+/** Default TTL for spawn tokens: 1 hour in milliseconds. */
+const DEFAULT_TOKEN_TTL_MS = 3_600_000;
+
+// ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
 
@@ -13,6 +20,7 @@ export interface SpawnToken {
   depth: number;            // 0 for orchestrator, 1 for agent tokens
   maxDepth: number;         // from config, always 0 or 1
   canGenerate: boolean;     // true for orchestrator, false for agent
+  expiresAt: number;        // Unix ms timestamp — Date.now() + TTL
   signature: string;        // HMAC-SHA256
 }
 
@@ -42,7 +50,7 @@ interface CanSpawnResult {
  * Security model (3 layers):
  *   1. Config gate   — agentRecursion must be true
  *   2. Capacity gate — currentAgentCount < maxGlobalAgents && depth <= maxRecursionDepth
- *   3. Token gate    — token must be valid, authentic, and canGenerate
+ *   3. Token gate    — token must be valid, authentic, not expired, and canGenerate
  */
 export class SpawnTokenManager {
   private static instance: SpawnTokenManager | null = null;
@@ -87,6 +95,7 @@ export class SpawnTokenManager {
       depth: token.depth,
       maxDepth: token.maxDepth,
       canGenerate: token.canGenerate,
+      expiresAt: token.expiresAt,
     });
     return createHmac('sha256', this.secret).update(payload).digest('hex');
   }
@@ -110,7 +119,7 @@ export class SpawnTokenManager {
    * Create the orchestrator token. Called once at session start.
    * The orchestrator token can generate agent tokens.
    */
-  createOrchestratorToken(): SpawnToken {
+  createOrchestratorToken(ttlMs: number = DEFAULT_TOKEN_TTL_MS): SpawnToken {
     const partial: Omit<SpawnToken, 'signature'> = {
       type: 'orchestrator',
       sessionId: this.secret.split(':')[0],
@@ -119,6 +128,7 @@ export class SpawnTokenManager {
       depth: 0,
       maxDepth: 1,
       canGenerate: true,
+      expiresAt: Date.now() + ttlMs,
     };
     const token: SpawnToken = { ...partial, signature: this.sign(partial) };
     this.tokens.set(token.signature, token);
@@ -129,7 +139,11 @@ export class SpawnTokenManager {
    * Generate an agent token from an orchestrator token.
    * Returns null if the orchestrator token is invalid or cannot generate.
    */
-  generateAgentToken(orchestratorToken: SpawnToken, agentId: string): SpawnToken | null {
+  generateAgentToken(
+    orchestratorToken: SpawnToken,
+    agentId: string,
+    ttlMs: number = DEFAULT_TOKEN_TTL_MS,
+  ): SpawnToken | null {
     const validation = this.validate(orchestratorToken);
     if (!validation.valid) {
       logger.info('generateAgentToken: orchestrator token invalid', { reason: validation.reason });
@@ -152,6 +166,7 @@ export class SpawnTokenManager {
       depth: 1,
       maxDepth: orchestratorToken.maxDepth,
       canGenerate: false,   // agents cannot generate further tokens
+      expiresAt: Date.now() + ttlMs,
     };
     const token: SpawnToken = { ...partial, signature: this.sign(partial) };
     this.tokens.set(token.signature, token);
@@ -159,7 +174,7 @@ export class SpawnTokenManager {
   }
 
   /**
-   * Validate a token is authentic (correct HMAC) and registered.
+   * Validate a token is authentic (correct HMAC), registered, and not expired.
    */
   validate(token: SpawnToken): ValidateResult {
     if (!token || typeof token !== 'object') {
@@ -173,6 +188,9 @@ export class SpawnTokenManager {
     }
     if (!this.verifySignature(token)) {
       return { valid: false, reason: 'signature mismatch — token tampered' };
+    }
+    if (Date.now() > token.expiresAt) {
+      return { valid: false, reason: 'token expired' };
     }
     return { valid: true };
   }

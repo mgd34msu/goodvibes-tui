@@ -10,14 +10,19 @@ export const AGENT_TOOL_SCHEMA: ToolDefinition = {
     'Manages in-process subagents. Modes: spawn (create a new agent task), ' +
     'status (check agent progress by ID), cancel (stop a running agent), ' +
     'list (show all agents and their status), ' +
-    'templates (list available agent templates with default tool sets).',
+    'templates (list available agent templates with default tool sets), ' +
+    'get (detailed agent info including messages), ' +
+    'budget (token usage for an agent), ' +
+    'plan (execution plan: task + template + tools), ' +
+    'wait (block until agent completes, with timeout), ' +
+    'message (send a message to an agent).',
   parameters: {
     type: 'object',
     required: ['mode'],
     properties: {
       mode: {
         type: 'string',
-        enum: ['spawn', 'status', 'cancel', 'list', 'templates'],
+        enum: ['spawn', 'status', 'cancel', 'list', 'templates', 'get', 'budget', 'plan', 'wait', 'message'],
         description: 'Operation mode.',
       },
       // mode: spawn
@@ -51,10 +56,20 @@ export const AGENT_TOOL_SCHEMA: ToolDefinition = {
         type: 'string',
         description: 'Additional context to provide to the spawned agent (mode: spawn).',
       },
-      // mode: status / cancel
+      // mode: status / cancel / get / budget / plan / wait / message
       agentId: {
         type: 'string',
-        description: 'Agent ID to query or cancel (mode: status, cancel).',
+        description: 'Agent ID to query, cancel, get, budget, plan, wait, or message (mode: status, cancel, get, budget, plan, wait, message).',
+      },
+      // mode: wait
+      timeoutMs: {
+        type: 'number',
+        description: 'Timeout in milliseconds for the wait action (mode: wait). Default: 30000.',
+      },
+      // mode: message
+      message: {
+        type: 'string',
+        description: 'Message content to send to an agent (mode: message).',
       },
     },
   },
@@ -62,7 +77,7 @@ export const AGENT_TOOL_SCHEMA: ToolDefinition = {
 
 /** Input shape for the agent tool. */
 export interface AgentInput {
-  mode: 'spawn' | 'status' | 'cancel' | 'list' | 'templates';
+  mode: 'spawn' | 'status' | 'cancel' | 'list' | 'templates' | 'get' | 'budget' | 'plan' | 'wait' | 'message';
   // spawn
   task?: string;
   template?: string;
@@ -70,6 +85,10 @@ export interface AgentInput {
   provider?: string;
   tools?: string[];
   context?: string;
-  // status / cancel
+  // status / cancel / get / budget / plan / wait / message
   agentId?: string;
+  // wait
+  timeoutMs?: number;
+  // message
+  message?: string;
 }

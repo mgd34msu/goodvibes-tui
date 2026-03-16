@@ -14,16 +14,26 @@ import { ToolRegistry } from './tools/registry.ts';
 import { registerAllTools } from './tools/index.ts';
 import { PermissionManager } from './permissions/manager.ts';
 import { AcpManager } from './acp/manager.ts';
+import { HookDispatcher } from './hooks/dispatcher.ts';
 import { PermissionPromptUI } from './permissions/prompt.ts';
 import type { PermissionRequest } from './permissions/prompt.ts';
 import { CommandRegistry } from './input/command-registry.ts';
 import { renderFilePickerOverlay } from './renderer/file-picker-overlay.ts';
 import { renderModelPickerOverlay } from './renderer/model-picker-overlay.ts';
 import { renderSearchOverlay } from './renderer/search-overlay.ts';
+import { renderProcessIndicator } from './renderer/process-indicator.ts';
+import { AgentManager } from './tools/agent/index.ts';
+import { ProcessManager } from './tools/shared/process-manager.ts';
 import { renderSelectionModalOverlay } from './renderer/selection-modal-overlay.ts';
 import { registerBuiltinCommands } from './input/commands.ts';
 import { InputHistory } from './input/input-history.ts';
 import { loadSystemPrompt as _loadSystemPrompt } from './utils/prompt-loader.ts';
+import { GitStatusProvider } from './renderer/git-status.ts';
+import type { GitHeaderInfo } from './renderer/git-status.ts';
+import { renderHelpOverlay } from './renderer/help-overlay.ts';
+import { renderSettingsModal } from './renderer/settings-modal.ts';
+import { renderSessionPickerModal } from './renderer/session-picker-modal.ts';
+import { renderProfilePickerModal } from './renderer/profile-picker-modal.ts';
 
 function loadSystemPrompt(): string {
   return _loadSystemPrompt(
@@ -90,6 +100,15 @@ async function main() {
    *  False when user manually scrolls up. Reset on user input. */
   let scrollLocked = true;
 
+  // --- Git status provider ---
+  const gitStatusProvider = new GitStatusProvider();
+  let lastGitInfo: GitHeaderInfo | undefined = undefined;
+  // Prime the cache on startup (non-blocking)
+  gitStatusProvider.getStatus().then((info) => {
+    lastGitInfo = info;
+    bus.emit('render:request');
+  }).catch(() => { /* non-fatal */ });
+
   // --- Runtime state (mutable, can be changed by slash commands) ---
   const runtime = {
     model: configManager.get('provider.model'),
@@ -146,6 +165,8 @@ async function main() {
 
   const permissionManager = new PermissionManager(bus);
 
+  const hookDispatcher = new HookDispatcher();
+
   const orchestrator = new Orchestrator(
     bus,
     conversation,
@@ -154,6 +175,7 @@ async function main() {
     toolRegistry,
     permissionManager,
     () => runtime.systemPrompt,
+    hookDispatcher,
   );
 
   const acpManager = new AcpManager(bus);
@@ -210,6 +232,41 @@ async function main() {
 
   commandContext.openSelection = (title, items, opts, callback) => {
     input.openSelection(title, items, opts, callback);
+  };
+
+  commandContext.openContextInspector = () => {
+    input.contextInspectorModal.open();
+    bus.emit('render:request');
+  };
+
+  commandContext.openBookmarkModal = () => {
+    input.bookmarkModal.open();
+    bus.emit('render:request');
+  };
+
+  commandContext.openHelpOverlay = () => {
+    input.helpOverlayActive = !input.helpOverlayActive;
+    bus.emit('render:request');
+  };
+
+  commandContext.openProfilePicker = () => {
+    input.profilePickerModal.open();
+    bus.emit('render:request');
+  };
+
+  commandContext.openSettingsModal = () => {
+    input.settingsModal.open(configManager);
+    bus.emit('render:request');
+  };
+
+  commandContext.openSessionPicker = () => {
+    input.sessionPickerModal.open();
+    bus.emit('render:request');
+  };
+
+  commandContext.openProfilePicker = () => {
+    input.profilePickerModal.open();
+    bus.emit('render:request');
   };
 
   // When model+effort selection is complete via the picker, apply both
@@ -328,14 +385,35 @@ async function main() {
       viewport.push(...renderSearchOverlay(input.searchManager, width));
     }
 
+    if (input.settingsModal.active) {
+      viewport.push(...renderSettingsModal(input.settingsModal, width));
+    }
+
+    if (input.sessionPickerModal.active) {
+      viewport.push(...renderSessionPickerModal(input.sessionPickerModal, width));
+    }
+
+    if (input.profilePickerModal.active) {
+      viewport.push(...renderProfilePickerModal(input.profilePickerModal, width));
+    }
+
+    if (input.helpOverlayActive) {
+      viewport.push(...renderHelpOverlay(width, commandRegistry.getAll()));
+    }
+
     compositor.composite({
       width, height,
-      header: UIFactory.createHeader(width, runtime.model, runtime.provider, conversation.title || undefined),
+      header: UIFactory.createHeader(width, runtime.model, runtime.provider, conversation.title || undefined, lastGitInfo),
       viewport,
       footer: (() => {
+        const processIndicatorLines = renderProcessIndicator(
+          width,
+          AgentManager.getInstance().list().filter((a) => a.status === 'running' || a.status === 'pending').length,
+          ProcessManager.getInstance().list().length,
+        );
         const cw = getPromptContentWidth();
         const info = input.getWrappedPromptInfo(cw);
-        return UIFactory.createFooter(
+        return [...processIndicatorLines, ...UIFactory.createFooter(
           width,
           info.visibleLines.join('\n'),
           orchestrator.usage,
@@ -349,7 +427,7 @@ async function main() {
           runtime.provider,
           providerRegistry.getCurrentModel().contextWindow,
           configManager.get('behavior.autoCompactThreshold') as number
-        );
+        )];
       })(),
       selection: {
         isCellSelected: (col, row) => selection.isCellSelected(col, row),
@@ -365,6 +443,20 @@ async function main() {
   };
 
   // --- Streaming speed + tool preview wiring ---
+  // Refresh git status after each turn completes or after tool results arrive
+  bus.on('turn:complete', () => {
+    gitStatusProvider.refresh().then((info) => {
+      lastGitInfo = info;
+      bus.emit('render:request');
+    }).catch(() => { /* non-fatal */ });
+  });
+  bus.on('turn:tool-result', () => {
+    gitStatusProvider.refresh().then((info) => {
+      lastGitInfo = info;
+      bus.emit('render:request');
+    }).catch(() => { /* non-fatal */ });
+  });
+
   bus.on('turn:stream-start', () => {
     streamStartTime = Date.now();
     streamDeltaCount = 0;

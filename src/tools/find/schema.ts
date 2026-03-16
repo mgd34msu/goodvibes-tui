@@ -25,8 +25,8 @@ export const findSchema: ToolDefinition = {
             },
             mode: {
               type: 'string',
-              enum: ['files', 'content', 'symbols'],
-              description: 'Search mode: files (glob), content (grep), symbols (regex extraction).',
+              enum: ['files', 'content', 'symbols', 'references', 'structural'],
+              description: 'Search mode: files (glob), content (grep), symbols (regex extraction), references (find all references via LSP with grep fallback), structural (AST pattern matching via ast-grep).',
             },
             // files mode
             patterns: {
@@ -72,6 +72,25 @@ export const findSchema: ToolDefinition = {
               type: 'boolean',
               description: 'Return files that do NOT match the pattern (mode: content).',
             },
+            // references mode
+            symbol: {
+              type: 'string',
+              description: 'Symbol name to search for references to (mode: references).',
+            },
+            file: {
+              type: 'string',
+              description: 'File path containing the symbol (mode: references).',
+            },
+            line: {
+              type: 'integer',
+              minimum: 0,
+              description: 'Zero-based line number of the symbol (mode: references).',
+            },
+            column: {
+              type: 'integer',
+              minimum: 0,
+              description: 'Zero-based column offset of the symbol (mode: references).',
+            },
             // symbols mode
             query: {
               type: 'string',
@@ -88,6 +107,14 @@ export const findSchema: ToolDefinition = {
             exported_only: {
               type: 'boolean',
               description: 'Only return exported symbols (mode: symbols). Default: false.',
+            },
+            // structural mode
+            lang: {
+              type: 'string',
+              enum: ['ts', 'tsx', 'js', 'jsx', 'css', 'html'],
+              description:
+                'Language for AST parsing (mode: structural). Auto-detected from file extension when omitted. ' +
+                'Supported: ts, tsx, js, jsx, css, html. Files with unrecognized extensions are skipped.',
             },
           },
         },
@@ -115,7 +142,12 @@ export const findSchema: ToolDefinition = {
           expand_to: {
             type: 'string',
             enum: ['line', 'block', 'function', 'class'],
-            description: 'Phase 3 — not yet implemented. Currently ignored.',
+            description:
+              'Expand each content match to its enclosing scope. ' +
+              "'function' expands to the enclosing function/method, 'class' to the enclosing class. " +
+              'Adds startLine and endLine fields to each match. ' +
+              'Requires tree-sitter grammar for the file language; silently ignored otherwise. ' +
+              "'line' and 'block' are accepted but currently behave the same as no expansion.",
           },
           max_results: {
             type: 'integer',

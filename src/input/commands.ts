@@ -10,6 +10,8 @@ import { TemplateManager, parseTemplateArgs } from '../templates/manager.ts';
 import { getBookmarkManager } from '../bookmarks/manager.ts';
 import { getProfileManager } from '../profiles/manager.ts';
 import type { BlockMeta } from '../core/conversation.ts';
+import { ServiceRegistry } from '../config/service-registry.ts';
+import { getSecretsManager } from '../config/secrets.ts';
 
 let _templateManager: TemplateManager | undefined;
 function getTemplateManager(): TemplateManager {
@@ -77,6 +79,11 @@ export function registerBuiltinCommands(registry: CommandRegistry): void {
     aliases: ['h', '?'],
     description: 'Show available commands and keyboard shortcuts',
     handler(_args, ctx) {
+      // Prefer dedicated help overlay if available
+      if (ctx.openHelpOverlay) {
+        ctx.openHelpOverlay();
+        return;
+      }
       if (ctx.openSelection) {
         const items: import('./selection-modal.ts').SelectionItem[] = [
           // Model & Provider
@@ -112,6 +119,7 @@ export function registerBuiltinCommands(registry: CommandRegistry): void {
           // Tools & System
           { id: '/tools', label: '/tools', detail: 'List available tools', category: 'Tools & System' },
           { id: '/permissions', label: '/permissions', detail: 'Permission settings', category: 'Tools & System' },
+          { id: '/secrets', label: '/secrets set|get|list|delete', detail: 'Manage encrypted API key secrets', category: 'Tools & System' },
           { id: '/help', label: '/help', detail: 'This help', category: 'Tools & System' },
           { id: '/quit', label: '/quit', detail: 'Exit', category: 'Tools & System' },
           // Keyboard shortcuts
@@ -1212,6 +1220,11 @@ export function registerBuiltinCommands(registry: CommandRegistry): void {
     aliases: ['bm'],
     description: 'List bookmarked blocks',
     handler(_args, ctx) {
+      // Prefer dedicated bookmark modal if available
+      if (ctx.openBookmarkModal) {
+        ctx.openBookmarkModal();
+        return;
+      }
       const bm = getBookmarkManager();
       const entries = bm.list();
       if (ctx.openSelection) {
@@ -1242,6 +1255,283 @@ export function registerBuiltinCommands(registry: CommandRegistry): void {
         lines.push(`  ${entry.key.padEnd(32)} ${entry.label}  (${date})`);
       }
       ctx.print(lines.join('\n'));
+    },
+  });
+
+  // ── /secrets ──────────────────────────────────────────────
+  registry.register({
+    name: 'secrets',
+    description: 'Manage encrypted API key secrets',
+    usage: 'set <KEY> <value> | get <KEY> | list | delete <KEY>',
+    async handler(args, ctx) {
+      const mgr = getSecretsManager();
+      const [sub, ...rest] = args;
+
+      if (!sub || sub === 'list') {
+        const keys = await mgr.list();
+        if (keys.length === 0) {
+          ctx.print('[secrets] No secrets stored. Use: /secrets set <KEY> <value>');
+        } else {
+          ctx.print(['[secrets] Stored keys (values are encrypted at rest):', ...keys.map(k => `  ${k}`)].join('\n'));
+        }
+        return;
+      }
+
+      if (sub === 'set') {
+        const [key, ...valueParts] = rest;
+        if (!key || valueParts.length === 0) {
+          ctx.print('[secrets] Usage: /secrets set <KEY> <value>');
+          return;
+        }
+        const value = valueParts.join(' ');
+        await mgr.set(key, value);
+        ctx.print(`[secrets] Stored: ${key} (encrypted at rest)`);
+        return;
+      }
+
+      if (sub === 'get') {
+        const [key] = rest;
+        if (!key) {
+          ctx.print('[secrets] Usage: /secrets get <KEY>');
+          return;
+        }
+        const value = await mgr.get(key);
+        if (value === null) {
+          ctx.print(`[secrets] Not found: ${key}`);
+        } else {
+          ctx.print(`[secrets] ${key} = <stored> (use /secrets list to see all keys)`);
+        }
+        return;
+      }
+
+      if (sub === 'delete') {
+        const [key] = rest;
+        if (!key) {
+          ctx.print('[secrets] Usage: /secrets delete <KEY>');
+          return;
+        }
+        await mgr.delete(key);
+        ctx.print(`[secrets] Deleted: ${key}`);
+        return;
+      }
+
+      ctx.print('[secrets] Usage: /secrets set <KEY> <value> | get <KEY> | list | delete <KEY>');
+    },
+  });
+
+  // ── /services ──────────────────────────────────────────────
+  registry.register({
+    name: 'services',
+    aliases: ['svc'],
+    description: 'Manage API service configurations',
+    handler(_args, ctx) {
+      const svcRegistry = new ServiceRegistry();
+      const all = svcRegistry.getAll();
+      const keys = Object.keys(all);
+
+      if (ctx.openSelection) {
+        const testAction = new Map<string, import('./selection-modal.ts').SelectionAction>([
+          ['t', 'select' as const],
+        ]);
+        const items: SelectionItem[] = keys.length === 0
+          ? [{ id: '_empty', label: 'No services configured', detail: '.goodvibes/tui/services.json' }]
+          : keys.map((key) => {
+              const svc = all[key];
+              return {
+                id: key,
+                label: svc.name ?? key,
+                detail: `${svc.authType}  ${svc.baseUrl ?? '(no url)'}`,
+                actions: '[t] test',
+              };
+            });
+
+        ctx.openSelection('Services', items, { allowSearch: true, customActions: testAction }, (result) => {
+          if (!result || result.item.id === '_empty') return;
+          // Test action: attempt GET to baseUrl/health
+          const svc = all[result.item.id];
+          if (!svc) return;
+          const baseUrl = svc.baseUrl ?? '';
+          if (!baseUrl) {
+            ctx.print(`[services] ${result.item.id}: no baseUrl configured`);
+            return;
+          }
+          const testUrl = baseUrl.replace(/\/$/, '') + '/health';
+          ctx.print(`[services] Testing ${result.item.id} → GET ${testUrl} …`);
+          void svcRegistry.resolveAuth(result.item.id).then(async (headers) => {
+            const reqHeaders: Record<string, string> = {
+              Accept: 'application/json',
+              ...(headers ?? {}),
+            };
+            try {
+              const resp = await fetch(testUrl, {
+                method: 'GET',
+                headers: reqHeaders,
+                signal: AbortSignal.timeout(5000),
+              });
+              ctx.print(`[services] ${result.item.id}: HTTP ${resp.status} ${resp.ok ? '\u2713 OK' : '\u2717 error'}`);
+            } catch (err) {
+              // Fallback to baseUrl
+              try {
+                const resp2 = await fetch(baseUrl, {
+                  method: 'GET',
+                  headers: reqHeaders,
+                  signal: AbortSignal.timeout(5000),
+                });
+                ctx.print(`[services] ${result.item.id}: HTTP ${resp2.status} ${resp2.ok ? '\u2713 OK' : '\u2717 error'}`);
+              } catch (err2) {
+                ctx.print(`[services] ${result.item.id}: error \u2014 ${(err2 as Error).message}`);
+              }
+            }
+            ctx.renderRequest();
+          });
+        });
+        return;
+      }
+
+      // Fallback: print to conversation
+      if (keys.length === 0) {
+        ctx.print('[services] No services configured. Add entries to .goodvibes/tui/services.json');
+        return;
+      }
+      const lines = ['Services:', ''];
+      for (const key of keys) {
+        const svc = all[key];
+        lines.push(`  ${key.padEnd(20)} ${svc.authType.padEnd(10)} ${svc.baseUrl ?? '(no url)'}`);
+      }
+      ctx.print(lines.join('\n'));
+    },
+  });
+  // ── /settings ────────────────────────────────────────────────
+  registry.register({
+    name: 'settings',
+    aliases: ['cfg-ui'],
+    description: 'Open the config/settings browser modal',
+    handler(_args, ctx) {
+      if (ctx.openSettingsModal) {
+        ctx.openSettingsModal();
+      } else {
+        ctx.print('Settings modal not available. Use /config to view or set values.');
+      }
+    },
+  });
+
+  // ── /sessions (enhanced: opens dedicated picker modal) ────────
+  // (Note: /sessions is already registered above as the list/selection command.
+  //  The dedicated SessionPickerModal is opened via ctx.openSessionPicker below.)
+
+  // ── /profiles ────────────────────────────────────────────────
+  registry.register({
+    name: 'profiles',
+    aliases: ['prof'],
+    description: 'Open the profile picker modal (load/save/delete profiles)',
+    handler(_args, ctx) {
+      if (ctx.openProfilePicker) {
+        ctx.openProfilePicker();
+      } else {
+        // Fallback: delegate to /config profile list
+        const pm = getProfileManager();
+        const profiles = pm.list();
+        if (profiles.length === 0) {
+          ctx.print('No saved profiles.\nUse /config profile save <name> to save current settings.');
+          return;
+        }
+        const lines = ['Saved profiles:', ''];
+        for (const p of profiles) {
+          const date = new Date(p.timestamp).toLocaleString();
+          lines.push(`  ${p.name.padEnd(28)} ${date}`);
+        }
+        ctx.print(lines.join('\n'));
+      }
+    },
+  });
+
+  // ── /context ─────────────────────────────────────────────────────
+  registry.register({
+    name: 'context',
+    aliases: ['ctx'],
+    description: 'Inspect context window usage (token breakdown per message)',
+    handler: (_args, ctx) => {
+      if (ctx.openContextInspector) {
+        ctx.openContextInspector();
+      } else {
+        // Fallback: print summary to conversation
+        const msgs = ctx.conversationManager.getMessagesForLLM();
+        if (msgs.length === 0) {
+          ctx.print('[context] No messages in conversation.');
+          return;
+        }
+        const estimateTokens = (text: string): number => Math.ceil(text.length / 4);
+        let total = 0;
+        const lines: string[] = ['Context breakdown:'];
+        for (const m of msgs) {
+          const text = typeof m.content === 'string'
+            ? m.content
+            : (m.content as Array<{ type: string; text?: string }>)
+                .filter((p) => p.type === 'text')
+                .map((p) => p.text ?? '')
+                .join('');
+          const t = estimateTokens(text);
+          total += t;
+          lines.push(`  ${m.role.padEnd(12)} ~${t.toLocaleString()} tokens`);
+        }
+        lines.push(`  ${'Total'.padEnd(12)} ~${total.toLocaleString()} tokens (${msgs.length} messages)`);
+        ctx.print(lines.join('\n'));
+      }
+    },
+  });
+
+  // ── /next-error ───────────────────────────────────────────────
+  registry.register({
+    name: 'next-error',
+    aliases: ['ne'],
+    description: 'Jump to the next error message in the conversation',
+    handler(_args, ctx) {
+      const cm = ctx.conversationManager;
+      const scrollTop = (ctx as unknown as { getScrollTop?: () => number }).getScrollTop?.() ?? 0;
+      const nextLine = cm.nextErrorLine(scrollTop);
+      if (nextLine < 0) {
+        ctx.print('[No error messages found in conversation]');
+      } else {
+        ctx.eventBus.emit('scroll:to', { line: nextLine });
+      }
+    },
+  });
+
+  // ── /profiles ─────────────────────────────────────────────────
+  registry.register({
+    name: 'profiles',
+    aliases: ['profile'],
+    description: 'Browse and load config profiles',
+    handler(_args, ctx) {
+      if (ctx.openProfilePicker) {
+        ctx.openProfilePicker();
+      } else {
+        const manager = getProfileManager();
+        const profiles = manager.list();
+        if (profiles.length === 0) {
+          ctx.print('No profiles saved. Use /config profile save <name> to create one.');
+        } else {
+          const lines = ['Saved profiles:', ...profiles.map(p => `  ${p.name}`)];
+          ctx.print(lines.join('\n'));
+        }
+      }
+    },
+  });
+
+  // ── /prev-error ───────────────────────────────────────────────
+  registry.register({
+    name: 'prev-error',
+    aliases: ['pe'],
+    description: 'Jump to the previous error message in the conversation',
+    handler(_args, ctx) {
+      const cm = ctx.conversationManager;
+      const scrollTop = (ctx as unknown as { getScrollTop?: () => number }).getScrollTop?.() ?? 0;
+      const prevLine = cm.prevErrorLine(scrollTop);
+      if (prevLine < 0) {
+        ctx.print('[No error messages found in conversation]');
+      } else {
+        ctx.eventBus.emit('scroll:to', { line: prevLine });
+      }
     },
   });
 }

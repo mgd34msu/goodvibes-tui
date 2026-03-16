@@ -10,12 +10,21 @@ export const INSPECT_TOOL_SCHEMA = {
   properties: {
     mode: {
       type: 'string',
-      enum: ['project', 'api', 'database', 'components', 'layout', 'accessibility', 'scaffold'],
+      enum: ['project', 'api', 'api_spec', 'api_validate', 'api_sync', 'database', 'components', 'layout', 'accessibility', 'scaffold', 'component_state', 'render_triggers', 'hooks', 'overflow', 'sizing', 'stacking', 'responsive', 'events', 'tailwind', 'client_boundary', 'error_boundary'],
       description:
         'Analysis mode. project: detect project type and structure; api: scan route definitions;'
+        + ' api_spec: generate OpenAPI 3.0 spec from discovered routes;'
+        + ' api_validate: compare existing OpenAPI spec against discovered routes;'
+        + ' api_sync: detect frontend/backend type drift via fetch() call analysis;'
         + ' database: parse schema models; components: extract React components;'
         + ' layout: analyze CSS/Tailwind layout; accessibility: detect a11y issues;'
-        + ' scaffold: generate module skeleton.',
+        + ' scaffold: generate module skeleton;'
+        + ' component_state: trace useState/useReducer/useContext; render_triggers: find re-render causes;'
+        + ' hooks: analyze hook dependency arrays; overflow: find CSS overflow issues;'
+        + ' sizing: analyze sizing strategy; stacking: z-index and stacking context;'
+        + ' responsive: Tailwind breakpoint analysis; events: event handling analysis;'
+        + ' tailwind: detect class conflicts; client_boundary: Next.js directive analysis;'
+        + ' error_boundary: error boundary coverage.',
     },
     projectRoot: {
       type: 'string',
@@ -75,11 +84,25 @@ export const INSPECT_TOOL_SCHEMA = {
 export type InspectMode =
   | 'project'
   | 'api'
+  | 'api_spec'
+  | 'api_validate'
+  | 'api_sync'
   | 'database'
   | 'components'
   | 'layout'
   | 'accessibility'
-  | 'scaffold';
+  | 'scaffold'
+  | 'component_state'
+  | 'render_triggers'
+  | 'hooks'
+  | 'overflow'
+  | 'sizing'
+  | 'stacking'
+  | 'responsive'
+  | 'events'
+  | 'tailwind'
+  | 'client_boundary'
+  | 'error_boundary';
 
 export type ApiFramework = 'auto' | 'nextjs' | 'express' | 'fastify' | 'hono';
 export type OutputFormat = 'summary' | 'detailed' | 'json';
@@ -95,6 +118,7 @@ export interface InspectInput {
   file?: string;
   framework?: ApiFramework;
   schemaPath?: string;
+  specPath?: string;
   moduleName?: string;
   dryRun?: boolean;
   output?: InspectOutput;
@@ -181,4 +205,189 @@ export interface ScaffoldPlan {
   moduleName: string;
   dryRun: boolean;
   files: ScaffoldFile[];
+}
+
+// ---------------------------------------------------------------------------
+// api_spec result types
+// ---------------------------------------------------------------------------
+
+export interface OpenApiParameter {
+  name: string;
+  in: 'path' | 'query';
+  required: boolean;
+  schema: { type: string };
+}
+
+export interface OpenApiOperation {
+  operationId: string;
+  parameters?: OpenApiParameter[];
+  responses: Record<string, { description: string }>;
+}
+
+export interface OpenApiPathItem {
+  [method: string]: OpenApiOperation;
+}
+
+export interface ApiSpec {
+  openapi: '3.0.0';
+  info: { title: string; version: string };
+  paths: Record<string, OpenApiPathItem>;
+}
+
+// ---------------------------------------------------------------------------
+// api_validate result types
+// ---------------------------------------------------------------------------
+
+export interface ApiValidateResult {
+  valid: boolean;
+  missing_from_spec: string[];
+  missing_from_code: string[];
+  mismatched_methods: Array<{ path: string; spec_methods: string[]; code_methods: string[] }>;
+}
+
+// ---------------------------------------------------------------------------
+// api_sync result types
+// ---------------------------------------------------------------------------
+
+export interface FetchCall {
+  url: string;
+  file: string;
+  line: number;
+}
+
+export interface ApiSyncResult {
+  fetch_calls: FetchCall[];
+  unmatched_fetches: FetchCall[];
+  unmatched_routes: ApiRoute[];
+  drift_detected: boolean;
+}
+
+// ---------------------------------------------------------------------------
+// Frontend analysis result types (C12)
+// ---------------------------------------------------------------------------
+
+export interface StateVar {
+  name: string;
+  kind: 'useState' | 'useReducer' | 'useContext';
+  line: number;
+}
+
+export interface ComponentStateInfo {
+  file: string;
+  stateVars: StateVar[];
+  count: number;
+}
+
+export interface RenderTrigger {
+  kind: 'state_setter' | 'effect_dep' | 'memo_dep' | 'callback_dep' | 'memo_boundary';
+  name: string;
+  line: number;
+}
+
+export interface RenderTriggersInfo {
+  file: string;
+  triggers: RenderTrigger[];
+  count: number;
+}
+
+export interface HookDep {
+  hookKind: 'useEffect' | 'useMemo' | 'useCallback';
+  line: number;
+  deps: string[];
+  missing: string[];
+}
+
+export interface HooksInfo {
+  file: string;
+  hooks: HookDep[];
+  missingDepsCount: number;
+}
+
+export interface OverflowIssue {
+  line: number;
+  kind: 'hidden_clip' | 'scroll_no_height';
+  snippet: string;
+}
+
+export interface OverflowInfo {
+  file: string;
+  issues: OverflowIssue[];
+  count: number;
+}
+
+export interface SizingItem {
+  line: number;
+  kind: 'fixed_px' | 'fixed_rem' | 'percentage' | 'flex' | 'grid' | 'viewport';
+  value: string;
+  flagged: boolean;
+}
+
+export interface SizingInfo {
+  file: string;
+  items: SizingItem[];
+  hardcodedCount: number;
+}
+
+export interface ZIndexItem {
+  line: number;
+  value: string;
+  context: string;
+}
+
+export interface StackingInfo {
+  file: string;
+  zIndexItems: ZIndexItem[];
+  potentialConflicts: Array<{ values: string[]; lines: number[] }>;
+}
+
+export interface BreakpointUsage {
+  prefix: string;
+  count: number;
+  classes: string[];
+}
+
+export interface ResponsiveInfo {
+  file: string;
+  breakpoints: BreakpointUsage[];
+  hasMobileFirst: boolean;
+}
+
+export interface EventHandler {
+  line: number;
+  event: string;
+  hasPreventDefault: boolean;
+  hasStopPropagation: boolean;
+  isDelegated: boolean;
+}
+
+export interface EventsInfo {
+  file: string;
+  handlers: EventHandler[];
+  count: number;
+}
+
+export interface TailwindConflict {
+  line: number;
+  classes: string[];
+  reason: string;
+}
+
+export interface TailwindInfo {
+  file: string;
+  conflicts: TailwindConflict[];
+  count: number;
+}
+
+export interface ClientBoundaryInfo {
+  file: string;
+  directive: 'use client' | 'use server' | null;
+  importsServerOnly: boolean;
+  serverOnlyImports: string[];
+}
+
+export interface ErrorBoundaryInfo {
+  file: string;
+  hasErrorBoundary: boolean;
+  boundaryComponents: string[];
+  coveredRoutes: string[];
 }

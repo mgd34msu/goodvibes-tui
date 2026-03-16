@@ -6,14 +6,29 @@ export type PermissionMode = 'prompt' | 'allow-all' | 'custom';
 export type PermissionAction = 'allow' | 'prompt' | 'deny';
 
 export interface PermissionsToolConfig {
-  file_read: PermissionAction;   // default: 'allow'
-  file_write: PermissionAction;  // default: 'prompt'
-  file_edit: PermissionAction;   // default: 'prompt'
-  shell_exec: PermissionAction;  // default: 'prompt'
-  grep: PermissionAction;        // default: 'allow'
-  list_dir: PermissionAction;    // default: 'allow'
-  glob: PermissionAction;        // default: 'allow'
-  delegate: PermissionAction;    // default: 'prompt'
+  // New tool names
+  read?: PermissionAction;        // default: 'allow'
+  write?: PermissionAction;       // default: 'prompt'
+  edit?: PermissionAction;        // default: 'prompt'
+  exec?: PermissionAction;        // default: 'prompt'
+  find?: PermissionAction;        // default: 'allow'
+  fetch?: PermissionAction;       // default: 'prompt'
+  analyze?: PermissionAction;     // default: 'allow'
+  inspect?: PermissionAction;     // default: 'allow'
+  agent?: PermissionAction;       // default: 'prompt'
+  state?: PermissionAction;       // default: 'allow'
+  workflow?: PermissionAction;    // default: 'prompt'
+  registry?: PermissionAction;    // default: 'allow'
+  delegate?: PermissionAction;    // default: 'prompt'
+  mcp?: PermissionAction;         // default: 'prompt'
+  // Legacy tool names (backward compat)
+  file_read?: PermissionAction;   // default: 'allow'
+  file_write?: PermissionAction;  // default: 'prompt'
+  file_edit?: PermissionAction;   // default: 'prompt'
+  shell_exec?: PermissionAction;  // default: 'prompt'
+  grep?: PermissionAction;        // default: 'allow'
+  list_dir?: PermissionAction;    // default: 'allow'
+  glob?: PermissionAction;        // default: 'allow'
 }
 
 export interface GoodVibesConfig {
@@ -87,6 +102,20 @@ export type ConfigKey =
   | 'behavior.saveHistory'
   | 'behavior.notifyOnComplete'
   | 'permissions.mode'
+  | 'permissions.tools.read'
+  | 'permissions.tools.write'
+  | 'permissions.tools.edit'
+  | 'permissions.tools.exec'
+  | 'permissions.tools.find'
+  | 'permissions.tools.fetch'
+  | 'permissions.tools.analyze'
+  | 'permissions.tools.inspect'
+  | 'permissions.tools.agent'
+  | 'permissions.tools.state'
+  | 'permissions.tools.workflow'
+  | 'permissions.tools.registry'
+  | 'permissions.tools.delegate'
+  | 'permissions.tools.mcp'
   | 'permissions.tools.file_read'
   | 'permissions.tools.file_write'
   | 'permissions.tools.file_edit'
@@ -94,7 +123,6 @@ export type ConfigKey =
   | 'permissions.tools.grep'
   | 'permissions.tools.list_dir'
   | 'permissions.tools.glob'
-  | 'permissions.tools.delegate'
   | 'danger.agentRecursion'
   | 'danger.maxGlobalAgents'
   | 'danger.maxRecursionDepth'
@@ -125,6 +153,20 @@ export type ConfigValue<K extends ConfigKey> =
   K extends 'behavior.saveHistory' ? boolean :
   K extends 'behavior.notifyOnComplete' ? boolean :
   K extends 'permissions.mode' ? PermissionMode :
+  K extends 'permissions.tools.read' ? PermissionAction :
+  K extends 'permissions.tools.write' ? PermissionAction :
+  K extends 'permissions.tools.edit' ? PermissionAction :
+  K extends 'permissions.tools.exec' ? PermissionAction :
+  K extends 'permissions.tools.find' ? PermissionAction :
+  K extends 'permissions.tools.fetch' ? PermissionAction :
+  K extends 'permissions.tools.analyze' ? PermissionAction :
+  K extends 'permissions.tools.inspect' ? PermissionAction :
+  K extends 'permissions.tools.agent' ? PermissionAction :
+  K extends 'permissions.tools.state' ? PermissionAction :
+  K extends 'permissions.tools.workflow' ? PermissionAction :
+  K extends 'permissions.tools.registry' ? PermissionAction :
+  K extends 'permissions.tools.delegate' ? PermissionAction :
+  K extends 'permissions.tools.mcp' ? PermissionAction :
   K extends 'permissions.tools.file_read' ? PermissionAction :
   K extends 'permissions.tools.file_write' ? PermissionAction :
   K extends 'permissions.tools.file_edit' ? PermissionAction :
@@ -132,7 +174,6 @@ export type ConfigValue<K extends ConfigKey> =
   K extends 'permissions.tools.grep' ? PermissionAction :
   K extends 'permissions.tools.list_dir' ? PermissionAction :
   K extends 'permissions.tools.glob' ? PermissionAction :
-  K extends 'permissions.tools.delegate' ? PermissionAction :
   K extends 'danger.agentRecursion' ? boolean :
   K extends 'danger.maxGlobalAgents' ? number :
   K extends 'danger.maxRecursionDepth' ? number :
@@ -171,6 +212,22 @@ export const DEFAULT_CONFIG: GoodVibesConfig = {
   permissions: {
     mode: 'prompt',
     tools: {
+      // New tool names
+      read: 'allow',
+      write: 'prompt',
+      edit: 'prompt',
+      exec: 'prompt',
+      find: 'allow',
+      fetch: 'prompt',
+      analyze: 'allow',
+      inspect: 'allow',
+      agent: 'prompt',
+      state: 'allow',
+      workflow: 'prompt',
+      registry: 'allow',
+      delegate: 'prompt',
+      mcp: 'prompt',
+      // Legacy tool names (backward compat)
       file_read: 'allow',
       file_write: 'prompt',
       file_edit: 'prompt',
@@ -178,7 +235,6 @@ export const DEFAULT_CONFIG: GoodVibesConfig = {
       grep: 'allow',
       list_dir: 'allow',
       glob: 'allow',
-      delegate: 'prompt',
     },
   },
   danger: {
@@ -305,59 +361,150 @@ export const CONFIG_SCHEMA: ConfigSetting[] = [
     enumValues: ['prompt', 'allow-all', 'custom'],
   },
   {
+    key: 'permissions.tools.read',
+    type: 'enum',
+    default: 'allow',
+    description: 'Permission for file read operations (read, find, analyze)',
+    enumValues: ['allow', 'prompt', 'deny'],
+  },
+  {
+    key: 'permissions.tools.write',
+    type: 'enum',
+    default: 'prompt',
+    description: 'Permission for file write operations',
+    enumValues: ['allow', 'prompt', 'deny'],
+  },
+  {
+    key: 'permissions.tools.edit',
+    type: 'enum',
+    default: 'prompt',
+    description: 'Permission for file edit/patch operations',
+    enumValues: ['allow', 'prompt', 'deny'],
+  },
+  {
+    key: 'permissions.tools.exec',
+    type: 'enum',
+    default: 'prompt',
+    description: 'Permission for shell command execution',
+    enumValues: ['allow', 'prompt', 'deny'],
+  },
+  {
+    key: 'permissions.tools.find',
+    type: 'enum',
+    default: 'allow',
+    description: 'Permission for file/directory search operations',
+    enumValues: ['allow', 'prompt', 'deny'],
+  },
+  {
+    key: 'permissions.tools.fetch',
+    type: 'enum',
+    default: 'prompt',
+    description: 'Permission for outbound network fetch requests (custom mode only)',
+    enumValues: ['allow', 'prompt', 'deny'],
+  },
+  {
+    key: 'permissions.tools.analyze',
+    type: 'enum',
+    default: 'allow',
+    description: 'Permission for code/project analysis operations',
+    enumValues: ['allow', 'prompt', 'deny'],
+  },
+  {
+    key: 'permissions.tools.inspect',
+    type: 'enum',
+    default: 'allow',
+    description: 'Permission for inspecting runtime state and objects',
+    enumValues: ['allow', 'prompt', 'deny'],
+  },
+  {
+    key: 'permissions.tools.agent',
+    type: 'enum',
+    default: 'prompt',
+    description: 'Permission for spawning subagents or delegating tasks',
+    enumValues: ['allow', 'prompt', 'deny'],
+  },
+  {
+    key: 'permissions.tools.state',
+    type: 'enum',
+    default: 'allow',
+    description: 'Permission for reading runtime/session state',
+    enumValues: ['allow', 'prompt', 'deny'],
+  },
+  {
+    key: 'permissions.tools.workflow',
+    type: 'enum',
+    default: 'prompt',
+    description: 'Permission for executing multi-step workflow automation',
+    enumValues: ['allow', 'prompt', 'deny'],
+  },
+  {
+    key: 'permissions.tools.registry',
+    type: 'enum',
+    default: 'allow',
+    description: 'Permission for querying the tool/skill registry',
+    enumValues: ['allow', 'prompt', 'deny'],
+  },
+  {
+    key: 'permissions.tools.mcp',
+    type: 'enum',
+    default: 'prompt',
+    description: 'Permission for MCP tool calls (external server tools)',
+    enumValues: ['allow', 'prompt', 'deny'],
+  },
+  {
     key: 'permissions.tools.file_read',
     type: 'enum',
     default: 'allow',
-    description: 'Permission for file_read tool',
+    description: 'Permission for legacy file read operations (backward compat)',
     enumValues: ['allow', 'prompt', 'deny'],
   },
   {
     key: 'permissions.tools.file_write',
     type: 'enum',
     default: 'prompt',
-    description: 'Permission for file_write tool',
+    description: 'Permission for legacy file write operations (backward compat)',
     enumValues: ['allow', 'prompt', 'deny'],
   },
   {
     key: 'permissions.tools.file_edit',
     type: 'enum',
     default: 'prompt',
-    description: 'Permission for file_edit tool',
+    description: 'Permission for legacy file edit operations (backward compat)',
     enumValues: ['allow', 'prompt', 'deny'],
   },
   {
     key: 'permissions.tools.shell_exec',
     type: 'enum',
     default: 'prompt',
-    description: 'Permission for shell_exec tool',
+    description: 'Permission for legacy shell execution (backward compat)',
     enumValues: ['allow', 'prompt', 'deny'],
   },
   {
     key: 'permissions.tools.grep',
     type: 'enum',
     default: 'allow',
-    description: 'Permission for grep tool',
+    description: 'Permission for legacy grep/search operations (backward compat)',
     enumValues: ['allow', 'prompt', 'deny'],
   },
   {
     key: 'permissions.tools.list_dir',
     type: 'enum',
     default: 'allow',
-    description: 'Permission for list_dir tool',
+    description: 'Permission for legacy directory listing (backward compat)',
     enumValues: ['allow', 'prompt', 'deny'],
   },
   {
     key: 'permissions.tools.glob',
     type: 'enum',
     default: 'allow',
-    description: 'Permission for glob tool',
+    description: 'Permission for legacy glob pattern matching (backward compat)',
     enumValues: ['allow', 'prompt', 'deny'],
   },
   {
     key: 'permissions.tools.delegate',
     type: 'enum',
     default: 'prompt',
-    description: 'Permission for delegate/unknown tools',
+    description: 'Permission for unknown or unregistered tools (safe default: prompt)',
     enumValues: ['allow', 'prompt', 'deny'],
   },
   {

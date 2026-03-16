@@ -133,6 +133,15 @@ export class ConfigManager {
     this.save();
   }
 
+  /**
+   * Set a config value from a validated ConfigKey with unknown value type.
+   * Used when iterating schema entries where the value type cannot be statically
+   * inferred. Runtime validation is still applied by the underlying set() method.
+   */
+  setDynamic(key: ConfigKey, value: unknown): void {
+    this.set(key, value as never);
+  }
+
   /** Return a deep-readonly snapshot of the full config. Nested objects are immutable. */
   getAll(): DeepReadonly<GoodVibesConfig> {
     return structuredClone(this.config) as DeepReadonly<GoodVibesConfig>;

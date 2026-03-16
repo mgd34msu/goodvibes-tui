@@ -2,6 +2,8 @@ import { describe, test, expect, beforeEach, afterEach } from 'bun:test';
 import { DaemonServer } from '../../daemon/server.ts';
 import { HttpListener } from '../../daemon/http-listener.ts';
 
+const TEST_TOKEN = 'test-secret-token-abc123';
+
 // ---------------------------------------------------------------------------
 // DaemonServer
 // ---------------------------------------------------------------------------
@@ -28,30 +30,30 @@ describe('DaemonServer', () => {
   });
 
   test('enable returns false when danger.daemon is false', () => {
-    const result = daemon.enable({ daemon: false });
+    const result = daemon.enable({ daemon: false }, TEST_TOKEN);
     expect(result).toBe(false);
   });
 
   test('enable returns true when danger.daemon is true', () => {
-    const result = daemon.enable({ daemon: true });
+    const result = daemon.enable({ daemon: true }, TEST_TOKEN);
     expect(result).toBe(true);
   });
 
   test('starts when enabled', async () => {
-    daemon.enable({ daemon: true });
+    daemon.enable({ daemon: true }, TEST_TOKEN);
     await daemon.start();
     expect(daemon.isRunning).toBe(true);
   });
 
   test('start is idempotent — does not throw when called twice', async () => {
-    daemon.enable({ daemon: true });
+    daemon.enable({ daemon: true }, TEST_TOKEN);
     await daemon.start();
     await daemon.start(); // second call should be a no-op
     expect(daemon.isRunning).toBe(true);
   });
 
   test('stop works when running', async () => {
-    daemon.enable({ daemon: true });
+    daemon.enable({ daemon: true }, TEST_TOKEN);
     await daemon.start();
     await daemon.stop();
     expect(daemon.isRunning).toBe(false);
@@ -63,21 +65,53 @@ describe('DaemonServer', () => {
     expect(daemon.isRunning).toBe(false);
   });
 
-  test('GET /status returns running status', async () => {
-    daemon.enable({ daemon: true });
+  test('GET /status returns 401 without token', async () => {
+    daemon.enable({ daemon: true }, TEST_TOKEN);
     await daemon.start();
     const res = await fetch('http://127.0.0.1:39421/status');
+    expect(res.status).toBe(401);
+  });
+
+  test('GET /status returns 401 with wrong token', async () => {
+    daemon.enable({ daemon: true }, TEST_TOKEN);
+    await daemon.start();
+    const res = await fetch('http://127.0.0.1:39421/status', {
+      headers: { Authorization: 'Bearer wrong-token' },
+    });
+    expect(res.status).toBe(401);
+  });
+
+  test('GET /status returns running status with valid token', async () => {
+    daemon.enable({ daemon: true }, TEST_TOKEN);
+    await daemon.start();
+    const res = await fetch('http://127.0.0.1:39421/status', {
+      headers: { Authorization: `Bearer ${TEST_TOKEN}` },
+    });
     expect(res.status).toBe(200);
     const body = await res.json() as Record<string, unknown>;
     expect(body.status).toBe('running');
   });
 
-  test('POST /task returns 202 acknowledgement', async () => {
-    daemon.enable({ daemon: true });
+  test('POST /task returns 401 without token', async () => {
+    daemon.enable({ daemon: true }, TEST_TOKEN);
     await daemon.start();
     const res = await fetch('http://127.0.0.1:39421/task', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ task: 'do something' }),
+    });
+    expect(res.status).toBe(401);
+  });
+
+  test('POST /task returns 202 acknowledgement with valid token', async () => {
+    daemon.enable({ daemon: true }, TEST_TOKEN);
+    await daemon.start();
+    const res = await fetch('http://127.0.0.1:39421/task', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${TEST_TOKEN}`,
+      },
       body: JSON.stringify({ task: 'do something' }),
     });
     expect(res.status).toBe(202);
@@ -85,10 +119,12 @@ describe('DaemonServer', () => {
     expect(body.acknowledged).toBe(true);
   });
 
-  test('unknown route returns 404', async () => {
-    daemon.enable({ daemon: true });
+  test('unknown route returns 404 with valid token', async () => {
+    daemon.enable({ daemon: true }, TEST_TOKEN);
     await daemon.start();
-    const res = await fetch('http://127.0.0.1:39421/does-not-exist');
+    const res = await fetch('http://127.0.0.1:39421/does-not-exist', {
+      headers: { Authorization: `Bearer ${TEST_TOKEN}` },
+    });
     expect(res.status).toBe(404);
   });
 });
@@ -118,23 +154,23 @@ describe('HttpListener', () => {
   });
 
   test('enable returns false when danger.httpListener is false', () => {
-    const result = listener.enable({ httpListener: false });
+    const result = listener.enable({ httpListener: false }, TEST_TOKEN);
     expect(result).toBe(false);
   });
 
   test('enable returns true when danger.httpListener is true', () => {
-    const result = listener.enable({ httpListener: true });
+    const result = listener.enable({ httpListener: true }, TEST_TOKEN);
     expect(result).toBe(true);
   });
 
   test('starts when enabled', async () => {
-    listener.enable({ httpListener: true });
+    listener.enable({ httpListener: true }, TEST_TOKEN);
     await listener.start();
     expect(listener.isRunning).toBe(true);
   });
 
   test('stop works when running', async () => {
-    listener.enable({ httpListener: true });
+    listener.enable({ httpListener: true }, TEST_TOKEN);
     await listener.start();
     await listener.stop();
     expect(listener.isRunning).toBe(false);
@@ -145,12 +181,40 @@ describe('HttpListener', () => {
     expect(listener.isRunning).toBe(false);
   });
 
-  test('POST /webhook returns 202 acknowledgement', async () => {
-    listener.enable({ httpListener: true });
+  test('POST /webhook returns 401 without token', async () => {
+    listener.enable({ httpListener: true }, TEST_TOKEN);
     await listener.start();
     const res = await fetch('http://127.0.0.1:39422/webhook', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ event: 'push' }),
+    });
+    expect(res.status).toBe(401);
+  });
+
+  test('POST /webhook returns 401 with wrong token', async () => {
+    listener.enable({ httpListener: true }, TEST_TOKEN);
+    await listener.start();
+    const res = await fetch('http://127.0.0.1:39422/webhook', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: 'Bearer wrong-token',
+      },
+      body: JSON.stringify({ event: 'push' }),
+    });
+    expect(res.status).toBe(401);
+  });
+
+  test('POST /webhook returns 202 acknowledgement with valid token', async () => {
+    listener.enable({ httpListener: true }, TEST_TOKEN);
+    await listener.start();
+    const res = await fetch('http://127.0.0.1:39422/webhook', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${TEST_TOKEN}`,
+      },
       body: JSON.stringify({ event: 'push' }),
     });
     expect(res.status).toBe(202);
@@ -158,19 +222,52 @@ describe('HttpListener', () => {
     expect(body.acknowledged).toBe(true);
   });
 
-  test('GET /health returns 200', async () => {
-    listener.enable({ httpListener: true });
+  test('GET /health returns 200 with valid token', async () => {
+    listener.enable({ httpListener: true }, TEST_TOKEN);
     await listener.start();
-    const res = await fetch('http://127.0.0.1:39422/health');
+    const res = await fetch('http://127.0.0.1:39422/health', {
+      headers: { Authorization: `Bearer ${TEST_TOKEN}` },
+    });
     expect(res.status).toBe(200);
     const body = await res.json() as Record<string, unknown>;
     expect(body.status).toBe('ok');
   });
 
-  test('unknown route returns 404', async () => {
-    listener.enable({ httpListener: true });
+  test('GET /health returns 401 without token', async () => {
+    listener.enable({ httpListener: true }, TEST_TOKEN);
     await listener.start();
-    const res = await fetch('http://127.0.0.1:39422/unknown-path');
+    const res = await fetch('http://127.0.0.1:39422/health');
+    expect(res.status).toBe(401);
+  });
+
+  test('unknown route returns 404 with valid token', async () => {
+    listener.enable({ httpListener: true }, TEST_TOKEN);
+    await listener.start();
+    const res = await fetch('http://127.0.0.1:39422/unknown-path', {
+      headers: { Authorization: `Bearer ${TEST_TOKEN}` },
+    });
     expect(res.status).toBe(404);
+  });
+
+  test('rate limit: 61st request within window returns 429', async () => {
+    // Use a fresh instance to get a clean rate-limit counter
+    const rl = new HttpListener({ port: 39423, host: '127.0.0.1' });
+    rl.enable({ httpListener: true }, TEST_TOKEN);
+    await rl.start();
+    try {
+      // Send 60 requests — all should succeed (or 404, not 429)
+      for (let i = 0; i < 60; i++) {
+        await fetch('http://127.0.0.1:39423/health', {
+          headers: { Authorization: `Bearer ${TEST_TOKEN}` },
+        });
+      }
+      // 61st request should be throttled
+      const res = await fetch('http://127.0.0.1:39423/health', {
+        headers: { Authorization: `Bearer ${TEST_TOKEN}` },
+      });
+      expect(res.status).toBe(429);
+    } finally {
+      await rl.stop();
+    }
   });
 });

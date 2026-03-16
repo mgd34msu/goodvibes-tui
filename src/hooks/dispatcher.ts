@@ -8,6 +8,8 @@ import * as promptRunner from './runners/prompt.ts';
 import * as agentRunner from './runners/agent.ts';
 import * as httpRunner from './runners/http.ts';
 import * as tsRunner from './runners/typescript.ts';
+import { fireTriggers } from '../workflow/trigger-executor.ts';
+import type { TriggerManagerLike } from '../workflow/trigger-executor.ts';
 
 /** Global timeout: if cumulative hook time exceeds this, skip remaining */
 const GLOBAL_TIMEOUT_MS = 120_000;
@@ -27,6 +29,12 @@ function runHook(hook: HookDefinition, event: HookEvent): Promise<HookResult> {
 export class HookDispatcher {
   private hooks = new Map<string, HookDefinition[]>();
   private chains: HookChain[] = [];
+  private triggerManager: TriggerManagerLike | null = null;
+
+  /** Attach a TriggerManager so hook events automatically fire matching triggers. */
+  setTriggerManager(tm: TriggerManagerLike | null): void {
+    this.triggerManager = tm;
+  }
 
   /** Load hooks from hooks.json file */
   loadFromFile(filePath: string): void {
@@ -247,6 +255,16 @@ export class HookDispatcher {
     if (updatedInput) aggregated.updatedInput = updatedInput;
     if (contextParts.length > 0) aggregated.additionalContext = contextParts.join('\n');
 
+    // Fire matching triggers (fire-and-forget)
+    if (this.triggerManager) {
+      fireTriggers(event, this.triggerManager).catch((err) => {
+        logger.debug('HookDispatcher: trigger fire error', {
+          path: event.path,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      });
+    }
+
     return aggregated;
   }
 
@@ -264,5 +282,66 @@ export class HookDispatcher {
   clear(): void {
     this.hooks.clear();
     this.chains = [];
+  }
+
+  /**
+   * List all registered hooks as a flat array with their event pattern included.
+   */
+  listHooks(): Array<{ pattern: string; hook: HookDefinition }> {
+    const result: Array<{ pattern: string; hook: HookDefinition }> = [];
+    for (const [pattern, defs] of this.hooks.entries()) {
+      for (const hook of defs) {
+        result.push({ pattern, hook });
+      }
+    }
+    return result;
+  }
+
+  /**
+   * Enable a named hook (sets enabled: true).
+   * Returns true if found, false if no hook with that name exists.
+   */
+  enableHook(name: string): boolean {
+    for (const defs of this.hooks.values()) {
+      for (const hook of defs) {
+        if (hook.name === name) {
+          hook.enabled = true;
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+
+  /**
+   * Disable a named hook (sets enabled: false).
+   * Returns true if found, false if no hook with that name exists.
+   */
+  disableHook(name: string): boolean {
+    for (const defs of this.hooks.values()) {
+      for (const hook of defs) {
+        if (hook.name === name) {
+          hook.enabled = false;
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+
+  /**
+   * Remove a named hook from the registry.
+   * Returns true if removed, false if not found.
+   */
+  unregister(name: string): boolean {
+    for (const [pattern, defs] of this.hooks.entries()) {
+      const idx = defs.findIndex((h) => h.name === name);
+      if (idx !== -1) {
+        defs.splice(idx, 1);
+        if (defs.length === 0) this.hooks.delete(pattern);
+        return true;
+      }
+    }
+    return false;
   }
 }

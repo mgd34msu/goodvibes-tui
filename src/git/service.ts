@@ -107,6 +107,26 @@ export class GitService {
     return this.git.diff();
   }
 
+  /**
+   * Get the full diff between two refs, optionally scoped to specific files.
+   * Read-only — no hooks emitted.
+   */
+  async diffBetween(before: string, after: string, files?: string[]): Promise<string> {
+    const args = [before, after];
+    if (files && files.length > 0) {
+      args.push('--', ...files);
+    }
+    return this.git.diff(args);
+  }
+
+  /**
+   * Get the --stat summary between two refs.
+   * Read-only — no hooks emitted.
+   */
+  async diffStat(before: string, after: string): Promise<string> {
+    return this.git.raw(['diff', '--stat', before, after]);
+  }
+
   async blame(
     filePath: string,
   ): Promise<Array<{ hash: string; author: string; line: number; content: string }>> {
@@ -356,6 +376,11 @@ export class GitService {
       instances.set(key, instance);
     }
     return instance;
+  }
+
+  /** Return the working directory this instance is bound to. */
+  getCwd(): string {
+    return this.cwd;
   }
 
   /** Remove this instance from the singleton registry and release resources. */

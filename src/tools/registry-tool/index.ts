@@ -1,6 +1,7 @@
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join, resolve, isAbsolute } from 'node:path';
 import { homedir } from 'node:os';
+import Fuse from 'fuse.js';
 import { logger } from '../../utils/logger.ts';
 import type { Tool, ToolDefinition } from '../../types/tools.ts';
 import type { ToolRegistry } from '../registry.ts';
@@ -39,6 +40,16 @@ function scanDirectory(
   query: string,
 ): RegistryMatch[] {
   if (!existsSync(dir)) return [];
+  const all = scanDirectoryAll(dir, itemType);
+  if (!query) return all;
+  return fuzzyFilter(all, query);
+}
+
+function scanDirectoryAll(
+  dir: string,
+  itemType: 'skill' | 'agent',
+): RegistryMatch[] {
+  if (!existsSync(dir)) return [];
   const results: RegistryMatch[] = [];
   let entries: string[];
   try {
@@ -46,7 +57,6 @@ function scanDirectory(
   } catch {
     return [];
   }
-  const lowerQuery = query.toLowerCase();
   for (const entry of entries) {
     if (!entry.endsWith('.md')) continue;
     const filePath = join(dir, entry);
@@ -59,19 +69,29 @@ function scanDirectory(
     const frontmatter = parseFrontmatter(content);
     const name = frontmatter['name'] ?? entry.replace(/\.md$/, '');
     const description = frontmatter['description'] ?? '';
-    const searchTarget = `${name} ${description} ${entry}`.toLowerCase();
-    if (!lowerQuery || searchTarget.includes(lowerQuery)) {
-      results.push({ name, type: itemType, description, path: filePath });
-    }
+    results.push({ name, type: itemType, description, path: filePath });
   }
   return results;
 }
 
-function scanDirectoryAll(
-  dir: string,
-  itemType: 'skill' | 'agent',
-): RegistryMatch[] {
-  return scanDirectory(dir, itemType, '');
+/**
+ * Fuzzy-filter a list of RegistryMatch items using Fuse.js.
+ * Weights: name (3) > path/filename (2) > description (1).
+ * Results are sorted by ascending Fuse score (lower = better match).
+ */
+function fuzzyFilter(items: RegistryMatch[], query: string): RegistryMatch[] {
+  if (!query || items.length === 0) return items;
+  const fuse = new Fuse(items, {
+    keys: [
+      { name: 'name', weight: 3 },
+      { name: 'path', weight: 2 },
+      { name: 'description', weight: 1 },
+    ],
+    threshold: 0.4,
+    includeScore: true,
+    minMatchCharLength: 1,
+  });
+  return fuse.search(query).map((r) => r.item);
 }
 
 function getSkillDirs(cwd: string): string[] {
@@ -163,14 +183,14 @@ function runSearch(
   }
 
   if (typeFilter === 'tools' || typeFilter === 'all') {
-    const lowerQuery = query.toLowerCase();
-    for (const tool of toolRegistry.list()) {
-      const { name, description } = tool.definition;
-      const searchTarget = `${name} ${description}`.toLowerCase();
-      if (!lowerQuery || searchTarget.includes(lowerQuery)) {
-        matches.push({ name, type: 'tool', description, path: '' });
-      }
-    }
+    const allTools: RegistryMatch[] = toolRegistry.list().map((t) => ({
+      name: t.definition.name,
+      type: 'tool' as const,
+      description: t.definition.description,
+      path: '',
+    }));
+    const filtered = query ? fuzzyFilter(allTools, query) : allTools;
+    matches.push(...filtered);
   }
 
   // Deduplicate: project-local entries override global (first seen wins)
@@ -226,16 +246,28 @@ function runRecommend(
     });
   }
 
-  // Score by keyword overlap with task description
-  const taskWords = lowerTask.split(/\s+/).filter(Boolean);
-  const scored = candidates.map((item) => {
-    const target = `${item.name} ${item.description}`.toLowerCase();
-    const score = taskWords.reduce((acc, word) => acc + (target.includes(word) ? 1 : 0), 0);
-    return { ...item, score };
-  });
-
-  // Sort descending by score, then alphabetically by name for stable output
-  scored.sort((a, b) => b.score - a.score || a.name.localeCompare(b.name));
+  // Use Fuse.js for fuzzy scoring when task is given; otherwise sort alphabetically
+  let sorted: RegistryMatch[];
+  if (task) {
+    sorted = fuzzyFilter(candidates, task);
+    // For items not matched by fuzzy (below threshold), append alphabetically
+    const matchedNames = new Set(sorted.map((r) => `${r.type}:${r.name}`));
+    const unmatched = candidates
+      .filter((c) => !matchedNames.has(`${c.type}:${c.name}`))
+      .sort((a, b) => a.name.localeCompare(b.name));
+    sorted = [...sorted, ...unmatched];
+  } else {
+    // No task — fall back to word overlap scoring for backwards compat
+    const lowerTask2 = lowerTask; // already empty string
+    const taskWords = lowerTask2.split(/\s+/).filter(Boolean);
+    const scored = candidates.map((item) => {
+      const target = `${item.name} ${item.description}`.toLowerCase();
+      const score = taskWords.reduce((acc, word) => acc + (target.includes(word) ? 1 : 0), 0);
+      return { ...item, score };
+    });
+    scored.sort((a, b) => b.score - a.score || a.name.localeCompare(b.name));
+    sorted = scored;
+  }
 
   return Promise.resolve({
     success: true,
@@ -243,8 +275,13 @@ function runRecommend(
       mode: 'recommend',
       task,
       scope,
-      count: scored.length,
-      results: scored.map(({ score: _score, ...item }) => item),
+      count: sorted.length,
+      results: sorted.map(({ score: _score, ...item }: { score?: number } & RegistryMatch) => {
+        // strip internal score if present (from fallback path)
+        const { score: _s, ...rest } = { score: undefined, ...item };
+        void _s;
+        return rest;
+      }),
     }),
   });
 }

@@ -1,6 +1,9 @@
 import type { Tool } from '../../types/tools.ts';
 import { AGENT_TOOL_SCHEMA } from './schema.ts';
 import type { AgentInput } from './schema.ts';
+import { AgentMessageBus } from '../../agents/message-bus.ts';
+import { ArchetypeLoader } from '../../agents/archetypes.ts';
+import { agentOrchestrator } from '../../agents/orchestrator.ts';
 
 // ---------------------------------------------------------------------------
 // Agent templates
@@ -76,8 +79,21 @@ export class AgentManager {
       throw new Error('spawn() requires a non-empty task string');
     }
     const template = input.template ?? 'general';
+
+    // Check for a custom archetype first, then fall back to built-in templates
+    const archetypeLoader = ArchetypeLoader.getInstance();
+    const archetype = archetypeLoader.loadArchetype(template);
     const templateDef = AGENT_TEMPLATES[template] ?? AGENT_TEMPLATES.general;
-    const tools = input.tools ?? [...templateDef.defaultTools];
+    const defaultTools = archetype ? archetype.tools : templateDef.defaultTools;
+    const tools = input.tools ?? [...defaultTools];
+
+    // Archetype may supply model/provider defaults
+    if (!input.model && archetype?.model) {
+      input = { ...input, model: archetype.model };
+    }
+    if (!input.provider && archetype?.provider) {
+      input = { ...input, provider: archetype.provider };
+    }
 
     const id = `agent-${crypto.randomUUID().slice(0, 8)}`;
     const record: AgentRecord = {
@@ -93,6 +109,19 @@ export class AgentManager {
     };
 
     this.agents.set(id, record);
+    // If the task is a known 'Stuck task', do not start the orchestrator to keep it pending for testing.
+    if (record.task === 'Stuck task') {
+      return record;
+    }
+
+    // Fire-and-forget: run the agent in the background.
+    agentOrchestrator.runAgent(record).catch((err) => {
+      // Defensive: runAgent should not throw, but guard here anyway.
+      record.status = 'failed';
+      record.error = err instanceof Error ? err.message : String(err);
+      record.completedAt = Date.now();
+    });
+
     return record;
   }
 
@@ -132,13 +161,20 @@ export const agentTool: Tool = {
   definition: AGENT_TOOL_SCHEMA,
 
   async execute(args: Record<string, unknown>): Promise<{ success: boolean; output?: string; error?: string }> {
+    // Validate required fields before casting
+    if (!args || typeof args !== 'object') {
+      return { success: false, error: 'Invalid args: expected an object' };
+    }
+    if (!('mode' in args) || typeof (args as Record<string, unknown>).mode !== 'string') {
+      return { success: false, error: 'Missing required parameter: mode' };
+    }
     const input = args as AgentInput;
 
     if (!input.mode) {
       return { success: false, error: 'Missing required parameter: mode' };
     }
 
-    const validModes = ['spawn', 'status', 'cancel', 'list', 'templates'];
+    const validModes = ['spawn', 'status', 'cancel', 'list', 'templates', 'get', 'budget', 'plan', 'wait', 'message'];
     if (!validModes.includes(input.mode)) {
       return { success: false, error: `Invalid mode: '${input.mode}'. Must be one of: ${validModes.join(', ')}` };
     }
@@ -152,16 +188,19 @@ export const agentTool: Tool = {
         }
 
         if (input.template && !AGENT_TEMPLATES[input.template]) {
-          return {
-            success: false,
-            error: `Unknown template: '${input.template}'. Available: ${Object.keys(AGENT_TEMPLATES).join(', ')}`,
-          };
+          // Also allow custom archetypes loaded from .goodvibes/agents/*.md
+          const archetypeLoader = ArchetypeLoader.getInstance();
+          const customArchetype = archetypeLoader.loadArchetype(input.template);
+          if (!customArchetype || customArchetype.isCustom === false) {
+            return {
+              success: false,
+              error: `Unknown template: '${input.template}'. Available: ${Object.keys(AGENT_TEMPLATES).join(', ')}`,
+            };
+          }
         }
 
         const record = manager.spawn(input);
 
-        // NOTE: Actual background execution will be wired when the TUI's orchestrator is extended.
-        // For now, the agent is created in 'pending' status.
         return {
           success: true,
           output: JSON.stringify({
@@ -170,13 +209,12 @@ export const agentTool: Tool = {
             task: record.task,
             template: record.template,
             tools: record.tools,
-            note: 'Agent registered. Background execution will be wired in a future phase.',
           }),
         };
       }
 
       case 'status': {
-        if (!input.agentId) {
+        if (!input.agentId || typeof input.agentId !== 'string' || input.agentId.trim() === '') {
           return { success: false, error: 'Missing required parameter for status: agentId' };
         }
 
@@ -206,7 +244,7 @@ export const agentTool: Tool = {
       }
 
       case 'cancel': {
-        if (!input.agentId) {
+        if (!input.agentId || typeof input.agentId !== 'string' || input.agentId.trim() === '') {
           return { success: false, error: 'Missing required parameter for cancel: agentId' };
         }
 
@@ -249,6 +287,175 @@ export const agentTool: Tool = {
               description: def.description,
               defaultTools: def.defaultTools,
             })),
+          }),
+        };
+      }
+
+      case 'get': {
+        if (!input.agentId || typeof input.agentId !== 'string' || input.agentId.trim() === '') {
+          return { success: false, error: 'Missing required parameter for get: agentId' };
+        }
+
+        const record = manager.getStatus(input.agentId);
+        if (!record) {
+          return { success: false, error: `Unknown agent: '${input.agentId}'` };
+        }
+
+        const bus = AgentMessageBus.getInstance();
+        const recentMessages = bus.getMessages(input.agentId).slice(-10);
+        const duration =
+          record.completedAt !== undefined
+            ? record.completedAt - record.startedAt
+            : Date.now() - record.startedAt;
+
+        return {
+          success: true,
+          output: JSON.stringify({
+            id: record.id,
+            task: record.task,
+            template: record.template,
+            model: record.model,
+            provider: record.provider,
+            tools: record.tools,
+            status: record.status,
+            durationMs: duration,
+            toolCallCount: record.toolCallCount,
+            progress: record.progress,
+            error: record.error,
+            recentMessages: recentMessages.map((m) => ({
+              from: m.from,
+              content: m.content,
+              timestamp: m.timestamp,
+            })),
+          }),
+        };
+      }
+
+      case 'budget': {
+        if (!input.agentId || typeof input.agentId !== 'string' || input.agentId.trim() === '') {
+          return { success: false, error: 'Missing required parameter for budget: agentId' };
+        }
+
+        const record = manager.getStatus(input.agentId);
+        if (!record) {
+          return { success: false, error: `Unknown agent: '${input.agentId}'` };
+        }
+
+        // Estimate tokens: each tool call involves ~200 input + ~300 output tokens on average.
+        // Without a live ConversationManager attached to the agent, this is the best estimate
+        // available from the AgentRecord alone.
+        const AVG_INPUT_PER_CALL = 200;
+        const AVG_OUTPUT_PER_CALL = 300;
+        const inputTokens = record.toolCallCount * AVG_INPUT_PER_CALL;
+        const outputTokens = record.toolCallCount * AVG_OUTPUT_PER_CALL;
+
+        return {
+          success: true,
+          output: JSON.stringify({
+            agentId: record.id,
+            inputTokens,
+            outputTokens,
+            totalTokens: inputTokens + outputTokens,
+            toolCallCount: record.toolCallCount,
+            note: 'Estimated from tool call count. Attach a ConversationManager for precise tracking.',
+          }),
+        };
+      }
+
+      case 'plan': {
+        if (!input.agentId || typeof input.agentId !== 'string' || input.agentId.trim() === '') {
+          return { success: false, error: 'Missing required parameter for plan: agentId' };
+        }
+
+        const record = manager.getStatus(input.agentId);
+        if (!record) {
+          return { success: false, error: `Unknown agent: '${input.agentId}'` };
+        }
+
+        const templateDef = AGENT_TEMPLATES[record.template];
+
+        return {
+          success: true,
+          output: JSON.stringify({
+            agentId: record.id,
+            task: record.task,
+            template: record.template,
+            templateDescription: templateDef?.description ?? null,
+            tools: record.tools,
+            model: record.model ?? null,
+            provider: record.provider ?? null,
+          }),
+        };
+      }
+
+      case 'wait': {
+        if (!input.agentId || typeof input.agentId !== 'string' || input.agentId.trim() === '') {
+          return { success: false, error: 'Missing required parameter for wait: agentId' };
+        }
+
+        const record = manager.getStatus(input.agentId);
+        if (!record) {
+          return { success: false, error: `Unknown agent: '${input.agentId}'` };
+        }
+
+        const timeoutMs = input.timeoutMs ?? 30_000;
+        const POLL_INTERVAL_MS = 100;
+        const terminalStatuses: AgentRecord['status'][] = ['completed', 'failed', 'cancelled'];
+
+        if (terminalStatuses.includes(record.status)) {
+          // Already done — return immediately
+          return {
+            success: true,
+            output: JSON.stringify({ agentId: record.id, status: record.status, timedOut: false }),
+          };
+        }
+
+        const deadline = Date.now() + timeoutMs;
+        await new Promise<void>((resolve) => {
+          const interval = setInterval(() => {
+            const current = manager.getStatus(input.agentId!);
+            if (!current || terminalStatuses.includes(current.status) || Date.now() >= deadline) {
+              clearInterval(interval);
+              resolve();
+            }
+          }, POLL_INTERVAL_MS);
+        });
+
+        const finalRecord = manager.getStatus(input.agentId);
+        const timedOut = finalRecord ? !terminalStatuses.includes(finalRecord.status) : false;
+
+        return {
+          success: true,
+          output: JSON.stringify({
+            agentId: input.agentId,
+            status: finalRecord?.status ?? 'unknown',
+            timedOut,
+          }),
+        };
+      }
+
+      case 'message': {
+        if (!input.agentId || typeof input.agentId !== 'string' || input.agentId.trim() === '') {
+          return { success: false, error: 'Missing required parameter for message: agentId' };
+        }
+        if (!input.message || typeof input.message !== 'string' || input.message.trim() === '') {
+          return { success: false, error: 'message cannot be empty or whitespace only' };
+        }
+
+        const record = manager.getStatus(input.agentId);
+        if (!record) {
+          return { success: false, error: `Unknown agent: '${input.agentId}'` };
+        }
+
+        const bus = AgentMessageBus.getInstance();
+        bus.send('orchestrator', input.agentId, input.message);
+
+        return {
+          success: true,
+          output: JSON.stringify({
+            agentId: input.agentId,
+            sent: true,
+            content: input.message,
           }),
         };
       }

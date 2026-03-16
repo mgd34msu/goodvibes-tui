@@ -7,20 +7,55 @@ export type PermissionCategory = 'read' | 'write' | 'execute' | 'delegate';
 
 /** Maps tool names to permission categories and config tool keys. */
 const TOOL_CATEGORIES: Record<string, PermissionCategory> = {
-  // read
+  // read — new tool names
+  read: 'read',
+  find: 'read',
+  fetch: 'read',
+  analyze: 'read',
+  inspect: 'read',
+  state: 'read',
+  registry: 'read',
+  // write — new tool names
+  write: 'write',
+  edit: 'write',
+  // execute — new tool name
+  exec: 'execute',
+  // delegate — new tool names
+  agent: 'delegate',
+  delegate: 'delegate',
+  workflow: 'delegate',
+  // mcp — external server tools, treated as delegate category
+  mcp: 'delegate',
+  // read — legacy tool names (backward compat)
   file_read: 'read',
   grep: 'read',
   list_dir: 'read',
   glob: 'read',
-  // write
+  // write — legacy tool names (backward compat)
   file_write: 'write',
   file_edit: 'write',
-  // execute
+  // execute — legacy tool name (backward compat)
   shell_exec: 'execute',
 };
 
 /** Maps tool names to their key in PermissionsToolConfig. */
 const TOOL_CONFIG_KEYS: Record<string, keyof PermissionsToolConfig> = {
+  // New tool names
+  read: 'read',
+  write: 'write',
+  edit: 'edit',
+  exec: 'exec',
+  find: 'find',
+  fetch: 'fetch',
+  analyze: 'analyze',
+  inspect: 'inspect',
+  agent: 'agent',
+  state: 'state',
+  workflow: 'workflow',
+  registry: 'registry',
+  delegate: 'delegate',
+  mcp: 'mcp',
+  // Legacy tool names (backward compat)
   file_read: 'file_read',
   file_write: 'file_write',
   file_edit: 'file_edit',

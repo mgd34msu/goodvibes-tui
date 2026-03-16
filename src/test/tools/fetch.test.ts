@@ -36,6 +36,42 @@ beforeAll(() => {
         return new Response('done');
       }
 
+      if (url.pathname === '/structured') {
+        return new Response(
+          '<html><body>'
+          + '<h1 class="title">Main Title</h1>'
+          + '<h2>Sub Heading</h2>'
+          + '<p class="intro">Intro paragraph</p>'
+          + '<p>Other paragraph</p>'
+          + '<span id="note">A note</span>'
+          + '</body></html>',
+          { headers: { 'content-type': 'text/html; charset=utf-8' } },
+        );
+      }
+
+      if (url.pathname === '/tables') {
+        return new Response(
+          '<html><body>'
+          + '<table>'
+          + '<tr><th>Name</th><th>Age</th></tr>'
+          + '<tr><td>Alice</td><td>30</td></tr>'
+          + '<tr><td>Bob</td><td>25</td></tr>'
+          + '</table>'
+          + '<table>'
+          + '<tr><th>City</th><th>Country</th></tr>'
+          + '<tr><td>Paris</td><td>France</td></tr>'
+          + '</table>'
+          + '</body></html>',
+          { headers: { 'content-type': 'text/html; charset=utf-8' } },
+        );
+      }
+
+      if (url.pathname === '/pdf') {
+        // Minimal synthetic PDF with a text stream
+        const pdfBody = '%PDF-1.4\nstream\n(Hello PDF World) Tj\n(Second line) Tj\nendstream\n%%EOF';
+        return new Response(pdfBody, { headers: { 'content-type': 'application/pdf' } });
+      }
+
       if (url.pathname === '/post' && req.method === 'POST') {
         const body = await req.text();
         return Response.json({ received: body });
@@ -149,6 +185,151 @@ describe('fetch tool - basic requests', () => {
     // Nav should be stripped
     expect(content).not.toContain('Nav');
     expect(content).toContain('Hello');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Structured extraction
+// ---------------------------------------------------------------------------
+
+describe('fetch tool - structured extraction', () => {
+  test('extracts elements by tag name', async () => {
+    const result = await fetchTool.execute({
+      urls: [{ url: `${base}/structured`, extract: 'structured', selectors: ['h1'] }],
+    });
+    expect(result.success).toBe(true);
+    const out = JSON.parse(result.output!);
+    const items: string[] = JSON.parse(out.results[0].content);
+    expect(items).toContain('Main Title');
+    expect(items.length).toBeGreaterThanOrEqual(1);
+  });
+
+  test('extracts elements by class selector', async () => {
+    const result = await fetchTool.execute({
+      urls: [{ url: `${base}/structured`, extract: 'structured', selectors: ['.intro'] }],
+    });
+    expect(result.success).toBe(true);
+    const out = JSON.parse(result.output!);
+    const items: string[] = JSON.parse(out.results[0].content);
+    expect(items).toContain('Intro paragraph');
+  });
+
+  test('extracts elements by id selector', async () => {
+    const result = await fetchTool.execute({
+      urls: [{ url: `${base}/structured`, extract: 'structured', selectors: ['#note'] }],
+    });
+    expect(result.success).toBe(true);
+    const out = JSON.parse(result.output!);
+    const items: string[] = JSON.parse(out.results[0].content);
+    expect(items).toContain('A note');
+  });
+
+  test('extracts multiple selectors combined', async () => {
+    const result = await fetchTool.execute({
+      urls: [{ url: `${base}/structured`, extract: 'structured', selectors: ['h1', 'h2'] }],
+    });
+    expect(result.success).toBe(true);
+    const out = JSON.parse(result.output!);
+    const items: string[] = JSON.parse(out.results[0].content);
+    expect(items).toContain('Main Title');
+    expect(items).toContain('Sub Heading');
+  });
+
+  test('returns empty array when no selectors provided', async () => {
+    const result = await fetchTool.execute({
+      urls: [{ url: `${base}/structured`, extract: 'structured' }],
+    });
+    expect(result.success).toBe(true);
+    const out = JSON.parse(result.output!);
+    const items: string[] = JSON.parse(out.results[0].content);
+    expect(items).toEqual([]);
+  });
+
+  test('returns empty array for non-HTML content', async () => {
+    const result = await fetchTool.execute({
+      urls: [{ url: `${base}/text`, extract: 'structured', selectors: ['p'] }],
+    });
+    expect(result.success).toBe(true);
+    const out = JSON.parse(result.output!);
+    const items: string[] = JSON.parse(out.results[0].content);
+    expect(items).toEqual([]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Tables extraction
+// ---------------------------------------------------------------------------
+
+describe('fetch tool - tables extraction', () => {
+  test('parses table headers and rows', async () => {
+    const result = await fetchTool.execute({
+      urls: [{ url: `${base}/tables`, extract: 'tables' }],
+    });
+    expect(result.success).toBe(true);
+    const out = JSON.parse(result.output!);
+    const tables: Array<{ headers: string[]; rows: string[][] }> = JSON.parse(out.results[0].content);
+    expect(tables.length).toBe(2);
+    expect(tables[0].headers).toEqual(['Name', 'Age']);
+    expect(tables[0].rows).toEqual([['Alice', '30'], ['Bob', '25']]);
+  });
+
+  test('parses multiple tables', async () => {
+    const result = await fetchTool.execute({
+      urls: [{ url: `${base}/tables`, extract: 'tables' }],
+    });
+    expect(result.success).toBe(true);
+    const out = JSON.parse(result.output!);
+    const tables: Array<{ headers: string[]; rows: string[][] }> = JSON.parse(out.results[0].content);
+    expect(tables.length).toBe(2);
+    expect(tables[1].headers).toEqual(['City', 'Country']);
+    expect(tables[1].rows).toEqual([['Paris', 'France']]);
+  });
+
+  test('returns empty array for non-HTML content', async () => {
+    const result = await fetchTool.execute({
+      urls: [{ url: `${base}/text`, extract: 'tables' }],
+    });
+    expect(result.success).toBe(true);
+    const out = JSON.parse(result.output!);
+    const tables: unknown[] = JSON.parse(out.results[0].content);
+    expect(tables).toEqual([]);
+  });
+
+  test('returns empty array for HTML with no tables', async () => {
+    const result = await fetchTool.execute({
+      urls: [{ url: `${base}/html`, extract: 'tables' }],
+    });
+    expect(result.success).toBe(true);
+    const out = JSON.parse(result.output!);
+    const tables: unknown[] = JSON.parse(out.results[0].content);
+    expect(tables).toEqual([]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// PDF extraction
+// ---------------------------------------------------------------------------
+
+describe('fetch tool - pdf extraction', () => {
+  test('extracts text from PDF content streams', async () => {
+    const result = await fetchTool.execute({
+      urls: [{ url: `${base}/pdf`, extract: 'pdf' }],
+    });
+    expect(result.success).toBe(true);
+    const out = JSON.parse(result.output!);
+    const content: string = out.results[0].content;
+    expect(content).toContain('Hello PDF World');
+    expect(content).toContain('Second line');
+  });
+
+  test('returns limitation note for non-PDF content-type', async () => {
+    const result = await fetchTool.execute({
+      urls: [{ url: `${base}/html`, extract: 'pdf' }],
+    });
+    expect(result.success).toBe(true);
+    const out = JSON.parse(result.output!);
+    const note = JSON.parse(out.results[0].content);
+    expect(note.note).toContain('PDF extraction only applies');
   });
 });
 

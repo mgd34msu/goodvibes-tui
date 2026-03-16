@@ -1,7 +1,8 @@
 import { logger } from '../../utils/logger.ts';
 import type { Tool, ToolDefinition } from '../../types/tools.ts';
 import { FETCH_TOOL_SCHEMA } from './schema.ts';
-import type { FetchInput, FetchUrlInput, FetchExtractMode, FetchVerbosity } from './schema.ts';
+import type { FetchInput, FetchUrlInput, FetchAuthInput, FetchExtractMode, FetchVerbosity } from './schema.ts';
+import { resolveServiceAuth } from '../../config/service-registry.ts';
 
 // ---------------------------------------------------------------------------
 // Output types
@@ -148,6 +149,143 @@ function extractLinks(html: string): string {
   return links.join('\n');
 }
 
+/**
+ * Extract text content from HTML elements matching simplified CSS selectors.
+ * Supports: tag names (e.g. 'h1'), class selectors ('.classname'),
+ * id selectors ('#id'), and tag+class combos ('tag.class').
+ */
+function extractStructured(html: string, selectors: string[]): string {
+  const results: string[] = [];
+
+  for (const selector of selectors) {
+    const trimmed = selector.trim();
+    let tagPattern: string | null = null;
+    let classFilter: string | null = null;
+    let idFilter: string | null = null;
+
+    if (trimmed.startsWith('#')) {
+      // id selector: #foo
+      idFilter = trimmed.slice(1);
+      tagPattern = '[a-z][a-z0-9]*';
+    } else if (trimmed.startsWith('.')) {
+      // class selector: .foo
+      classFilter = trimmed.slice(1);
+      tagPattern = '[a-z][a-z0-9]*';
+    } else if (trimmed.includes('.')) {
+      // tag.class selector: div.foo
+      const [tag, cls] = trimmed.split('.');
+      tagPattern = tag || '[a-z][a-z0-9]*';
+      classFilter = cls;
+    } else {
+      // plain tag selector: h1, p, div, etc.
+      tagPattern = trimmed || '[a-z][a-z0-9]*';
+    }
+
+    let attrClause = '';
+    if (idFilter) {
+      attrClause = `(?=[^>]*\\bid=["']${idFilter}["'])`;
+    } else if (classFilter) {
+      attrClause = `(?=[^>]*\\bclass=["'][^"']*\\b${classFilter}\\b[^"']*["'])`;
+    }
+
+    const re = new RegExp(
+      `<(${tagPattern})${attrClause}[^>]*>([\\s\\S]*?)<\/\\1>`,
+      'gi',
+    );
+
+    let m: RegExpExecArray | null;
+    while ((m = re.exec(html)) !== null) {
+      const text = stripHtml(m[2]).trim();
+      if (text) results.push(text);
+    }
+  }
+
+  return JSON.stringify(results);
+}
+
+/**
+ * Parse HTML <table> elements and return as JSON array.
+ * Each table becomes { headers: string[], rows: string[][] }.
+ */
+function extractTables(html: string): string {
+  const tables: Array<{ headers: string[]; rows: string[][] }> = [];
+
+  const tableRe = /<table[^>]*>([\s\S]*?)<\/table>/gi;
+  let tableM: RegExpExecArray | null;
+
+  while ((tableM = tableRe.exec(html)) !== null) {
+    const tableHtml = tableM[1];
+    const headers: string[] = [];
+    const rows: string[][] = [];
+
+    // Extract header cells from <thead> or first <tr> with <th>
+    const thRe = /<th[^>]*>([\s\S]*?)<\/th>/gi;
+    let thM: RegExpExecArray | null;
+    while ((thM = thRe.exec(tableHtml)) !== null) {
+      headers.push(stripHtml(thM[1]).trim());
+    }
+
+    // Extract data rows — skip rows that only contain th
+    const trRe = /<tr[^>]*>([\s\S]*?)<\/tr>/gi;
+    let trM: RegExpExecArray | null;
+    while ((trM = trRe.exec(tableHtml)) !== null) {
+      const rowHtml = trM[1];
+      // Skip header rows (those with <th> elements)
+      if (/<th[^>]*>/i.test(rowHtml)) continue;
+      const cells: string[] = [];
+      const tdRe = /<td[^>]*>([\s\S]*?)<\/td>/gi;
+      let tdM: RegExpExecArray | null;
+      while ((tdM = tdRe.exec(rowHtml)) !== null) {
+        cells.push(stripHtml(tdM[1]).trim());
+      }
+      if (cells.length > 0) rows.push(cells);
+    }
+
+    tables.push({ headers, rows });
+  }
+
+  return JSON.stringify(tables);
+}
+
+/**
+ * Extract text from a PDF response body.
+ * Attempts to extract readable text between stream/endstream markers.
+ * Falls back to a limitation notice if no text streams found.
+ */
+function extractPdf(body: string): string {
+  const texts: string[] = [];
+
+  // Extract content between stream and endstream markers
+  const streamRe = /stream\r?\n([\s\S]*?)\r?\nendstream/g;
+  let m: RegExpExecArray | null;
+  while ((m = streamRe.exec(body)) !== null) {
+    const chunk = m[1];
+    // Extract parenthesised text strings: (Hello World)
+    const parenRe = /\(([^)\\]*(?:\\.[^)\\]*)*)\)/g;
+    let pm: RegExpExecArray | null;
+    while ((pm = parenRe.exec(chunk)) !== null) {
+      const text = pm[1]
+        .replace(/\\n/g, '\n')
+        .replace(/\\r/g, '\r')
+        .replace(/\\t/g, '\t')
+        .replace(/\\\\/g, '\\')
+        .replace(/\\\(/g, '(')
+        .replace(/\\\)/g, ')')
+        .trim();
+      if (text.length > 1) texts.push(text);
+    }
+  }
+
+  if (texts.length === 0) {
+    return JSON.stringify({
+      note: 'PDF text extraction requires a dedicated library for complex PDFs. No readable text streams found.',
+      byteSize: Buffer.byteLength(body, 'utf-8'),
+    });
+  }
+
+  return texts.join(' ');
+}
+
 /** Extract title, meta description, and og: tags from HTML <head>. */
 function extractMetadata(html: string): string {
   const result: Record<string, string> = {};
@@ -179,7 +317,12 @@ function extractMetadata(html: string): string {
 // Apply extract mode to raw response text
 // ---------------------------------------------------------------------------
 
-function applyExtract(body: string, contentType: string, mode: FetchExtractMode): string {
+function applyExtract(
+  body: string,
+  contentType: string,
+  mode: FetchExtractMode,
+  opts?: { selectors?: string[] },
+): string {
   const isHtml = /text\/html/i.test(contentType);
 
   switch (mode) {
@@ -212,8 +355,58 @@ function applyExtract(body: string, contentType: string, mode: FetchExtractMode)
     case 'metadata':
       return isHtml ? extractMetadata(body) : '{}';
 
+    case 'structured': {
+      const selectors = opts?.selectors ?? [];
+      if (selectors.length === 0) return JSON.stringify([]);
+      return isHtml ? extractStructured(body, selectors) : JSON.stringify([]);
+    }
+
+    case 'tables':
+      return isHtml ? extractTables(body) : JSON.stringify([]);
+
+    case 'pdf': {
+      const isPdf = /application\/pdf/i.test(contentType);
+      return isPdf ? extractPdf(body) : JSON.stringify({
+        note: 'PDF extraction only applies to application/pdf responses.',
+      });
+    }
+
     default:
       return body;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Auth helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * Apply auth headers to the mutable headers map based on an inline FetchAuthInput.
+ * Mutates headers in place.
+ */
+function applyAuthHeaders(headers: Record<string, string>, auth: FetchAuthInput): void {
+  switch (auth.type) {
+    case 'bearer':
+      if (auth.token) {
+        headers['Authorization'] = `Bearer ${auth.token}`;
+      }
+      break;
+
+    case 'basic': {
+      const user = auth.username ?? '';
+      const pass = auth.password ?? '';
+      const encoded = Buffer.from(`${user}:${pass}`).toString('base64');
+      headers['Authorization'] = `Basic ${encoded}`;
+      break;
+    }
+
+    case 'api-key': {
+      const headerName = auth.header ?? 'X-API-Key';
+      if (auth.key) {
+        headers[headerName] = auth.key;
+      }
+      break;
+    }
   }
 }
 
@@ -234,6 +427,17 @@ async function fetchOne(
 
   // Build headers
   const headers: Record<string, string> = { ...urlInput.headers };
+
+  // Apply inline auth
+  if (urlInput.auth) {
+    applyAuthHeaders(headers, urlInput.auth);
+  } else if (urlInput.service) {
+    // Service registry auth — looked up from secrets
+    const serviceHeaders = await resolveServiceAuth(urlInput.service);
+    if (serviceHeaders) {
+      Object.assign(headers, serviceHeaders);
+    }
+  }
 
   // Build body
   let body: string | undefined;
@@ -280,7 +484,7 @@ async function fetchOne(
     result.byteSize = byteSize;
 
     if (verbosity !== 'minimal') {
-      result.content = applyExtract(rawBody, contentType, extractMode);
+      result.content = applyExtract(rawBody, contentType, extractMode, { selectors: urlInput.selectors });
     }
 
     if (verbosity === 'verbose') {
@@ -326,7 +530,8 @@ export const fetchTool: Tool = {
     description:
       'Fetch one or more URLs via HTTP. Supports batch parallel/sequential requests,'
       + ' per-URL method/headers/body, extraction modes (raw, text, json, markdown,'
-      + ' readable, code_blocks, links, metadata), per-URL timeouts, and verbosity control.',
+      + ' readable, code_blocks, links, metadata, structured, tables, pdf),'
+      + ' per-URL timeouts, and verbosity control.',
     parameters: FETCH_TOOL_SCHEMA as unknown as Record<string, unknown>,
   },
 

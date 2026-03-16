@@ -1,0 +1,106 @@
+import { describe, test, expect } from 'bun:test';
+import { renderProcessIndicator } from '../../renderer/process-indicator.ts';
+import { lineToString } from '../setup.ts';
+
+const W = 100;
+
+describe('renderProcessIndicator', () => {
+  test('returns a single Line when idle (0 agents, 0 tools)', () => {
+    const lines = renderProcessIndicator(W, 0, 0);
+    expect(lines.length).toBe(1);
+  });
+
+  test('idle line has correct terminal width', () => {
+    const lines = renderProcessIndicator(W, 0, 0);
+    expect(lines[0].length).toBe(W);
+  });
+
+  test('idle state contains idle label text', () => {
+    const lines = renderProcessIndicator(W, 0, 0);
+    const text = lineToString(lines[0]);
+    expect(text).toContain('No background processes');
+  });
+
+  test('idle state cells are dimmed', () => {
+    const lines = renderProcessIndicator(W, 0, 0);
+    const dimCells = lines[0].filter((c) => c.char !== ' ' && c.dim);
+    expect(dimCells.length).toBeGreaterThan(0);
+  });
+
+  test('returns a single Line when active', () => {
+    const lines = renderProcessIndicator(W, 2, 1);
+    expect(lines.length).toBe(1);
+  });
+
+  test('active line has correct terminal width', () => {
+    const lines = renderProcessIndicator(W, 2, 1);
+    expect(lines[0].length).toBe(W);
+  });
+
+  test('active state shows agent count', () => {
+    const lines = renderProcessIndicator(W, 2, 0);
+    const text = lineToString(lines[0]);
+    expect(text).toContain('2 agents');
+  });
+
+  test('active state shows tool count', () => {
+    const lines = renderProcessIndicator(W, 0, 3);
+    const text = lineToString(lines[0]);
+    expect(text).toContain('3 tools running');
+  });
+
+  test('active state shows both agents and tools', () => {
+    const lines = renderProcessIndicator(W, 1, 2);
+    const text = lineToString(lines[0]);
+    expect(text).toContain('1 agent');
+    expect(text).toContain('2 tools running');
+  });
+
+  test('pluralization: 1 agent singular', () => {
+    const lines = renderProcessIndicator(W, 1, 0);
+    const text = lineToString(lines[0]);
+    expect(text).toContain('1 agent');
+    expect(text).not.toContain('1 agents');
+  });
+
+  test('pluralization: 2 agents plural', () => {
+    const lines = renderProcessIndicator(W, 2, 0);
+    const text = lineToString(lines[0]);
+    expect(text).toContain('2 agents');
+  });
+
+  test('pluralization: 1 tool singular', () => {
+    const lines = renderProcessIndicator(W, 0, 1);
+    const text = lineToString(lines[0]);
+    expect(text).toContain('1 tool running');
+    expect(text).not.toContain('1 tools running');
+  });
+
+  test('down arrow hint present when active', () => {
+    const lines = renderProcessIndicator(W, 1, 0);
+    const text = lineToString(lines[0]);
+    // hint contains ↓ and "Enter to view" text
+    expect(text).toContain('\u2193');
+    expect(text).toContain('Enter to view');
+  });
+
+  test('down arrow hint not present when idle', () => {
+    const lines = renderProcessIndicator(W, 0, 0);
+    const text = lineToString(lines[0]);
+    expect(text).not.toContain('\u2193');
+  });
+
+  test('width handling: narrow terminal (40 cols)', () => {
+    const narrow = 40;
+    const lines = renderProcessIndicator(narrow, 2, 1);
+    expect(lines.length).toBe(1);
+    expect(lines[0].length).toBe(narrow);
+  });
+
+  test('active label cells are cyan + bold', () => {
+    const lines = renderProcessIndicator(W, 1, 0);
+    // Find a cell with cyan foreground from the label
+    const cyanBold = lines[0].filter((c) => c.fg === '#00ffff' && c.bold);
+    expect(cyanBold.length).toBeGreaterThan(0);
+  });
+});

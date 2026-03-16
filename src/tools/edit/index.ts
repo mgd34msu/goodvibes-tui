@@ -1,8 +1,12 @@
 import { readFileSync, writeFileSync } from 'node:fs';
+import { extname } from 'node:path';
 import type { Tool, ToolDefinition } from '../../types/tools.ts';
 import { FileStateCache, unifiedDiff } from '../../state/file-cache.ts';
 import { resolveAndValidatePath } from '../../utils/path-safety.ts';
 import { editSchema } from './schema.ts';
+import { autoHealer } from '../shared/auto-heal.ts';
+import * as astGrep from '@ast-grep/napi';
+import { CodeIntelligence } from '../../intelligence/index.ts';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -25,10 +29,12 @@ interface EditItem {
   };
 }
 
+type ValidatorName = 'typecheck' | 'lint' | 'test' | 'build';
+
 interface EditInput {
   edits: EditItem[];
   match?: {
-    mode?: 'exact' | 'fuzzy' | 'regex';
+    mode?: 'exact' | 'fuzzy' | 'regex' | 'ast' | 'ast_pattern';
     case_sensitive?: boolean;
     whitespace_sensitive?: boolean;
   };
@@ -39,6 +45,10 @@ interface EditInput {
     format?: 'count_only' | 'minimal' | 'with_diff' | 'verbose';
   };
   dry_run?: boolean;
+  validate?: {
+    before?: ValidatorName[];
+    after?: ValidatorName[];
+  };
 }
 
 interface EditResult {
@@ -56,6 +66,90 @@ interface EditResult {
 
 function decodeBase64(value: string): string {
   return Buffer.from(value, 'base64').toString('utf-8');
+}
+
+/** Map validator name to shell command. */
+const VALIDATOR_COMMANDS: Record<ValidatorName, string[]> = {
+  typecheck: ['npx', 'tsc', '--noEmit'],
+  lint: ['npx', 'eslint', '--no-error-on-unmatched-pattern'],
+  test: ['bun', 'test'],
+  build: ['bun', 'run', 'build'],
+};
+
+interface ValidatorResult {
+  validator: ValidatorName;
+  passed: boolean;
+  stdout: string;
+  stderr: string;
+  exitCode: number;
+}
+
+/**
+ * Run a single validator via Bun.spawn. Times out after 30 seconds.
+ */
+async function runValidator(name: ValidatorName, cwd: string): Promise<ValidatorResult> {
+  const cmd = VALIDATOR_COMMANDS[name];
+  const TIMEOUT_MS = 30_000;
+
+  const proc = Bun.spawn(cmd, {
+    cwd,
+    stdout: 'pipe',
+    stderr: 'pipe',
+  });
+
+  let timedOut = false;
+  const timeoutHandle = setTimeout(() => {
+    timedOut = true;
+    proc.kill();
+  }, TIMEOUT_MS);
+
+  const [exitCode, stdoutBuf, stderrBuf] = await Promise.all([
+    proc.exited,
+    new Response(proc.stdout).text(),
+    new Response(proc.stderr).text(),
+  ]);
+
+  clearTimeout(timeoutHandle);
+
+  if (timedOut) {
+    return {
+      validator: name,
+      passed: false,
+      stdout: '',
+      stderr: `Validator '${name}' timed out after ${TIMEOUT_MS}ms`,
+      exitCode: -1,
+    };
+  }
+
+  return {
+    validator: name,
+    passed: exitCode === 0,
+    stdout: stdoutBuf,
+    stderr: stderrBuf,
+    exitCode,
+  };
+}
+
+/**
+ * Run all validators in sequence. Returns first failure, or null if all pass.
+ */
+async function runValidators(
+  validators: ValidatorName[],
+  cwd: string,
+): Promise<ValidatorResult | null> {
+  for (const name of validators) {
+    const result = await runValidator(name, cwd);
+    if (!result.passed) return result;
+  }
+  return null;
+}
+
+/** Format a validator failure into a human-readable message. */
+function formatValidatorFailure(result: ValidatorResult): string {
+  const parts = [`Validator '${result.validator}' failed (exit ${result.exitCode}):`];
+  if (result.stderr.trim()) parts.push(result.stderr.trim());
+  if (result.stdout.trim()) parts.push(result.stdout.trim());
+  return parts.join('\n');
 }
 
 /**
@@ -325,6 +419,225 @@ function applyReplacements(
  * Compute the edit for a single EditItem against file content.
  * Returns the new content and metadata, or an error.
  */
+// ---------------------------------------------------------------------------
+// AST-grep language resolver (mirrors find tool)
+// ---------------------------------------------------------------------------
+
+type AstGrepNode = {
+  text(): string;
+  range(): { start: { line: number; column: number; index: number }; end: { line: number; column: number; index: number } };
+  getMatch(name: string): AstGrepNode | null;
+  getMultipleMatches(name: string): AstGrepNode[];
+};
+type AstGrepParser = { parse: (src: string) => { root(): { findAll(pat: string): AstGrepNode[] } } };
+
+function getAstGrepLang(filePath: string): AstGrepParser | null {
+  const lang = extname(filePath).slice(1).toLowerCase();
+  switch (lang) {
+    case 'ts': return astGrep.ts as unknown as AstGrepParser;
+    case 'tsx': return astGrep.tsx as unknown as AstGrepParser;
+    case 'js': case 'mjs': case 'cjs': return astGrep.js as unknown as AstGrepParser;
+    case 'jsx': return astGrep.jsx as unknown as AstGrepParser;
+    case 'css': return astGrep.css as unknown as AstGrepParser;
+    case 'html': return astGrep.html as unknown as AstGrepParser;
+    default: return null;
+  }
+}
+
+/**
+ * ast_pattern mode: use @ast-grep/napi to find all pattern matches and replace them.
+ * Supports metavariables like $VAR, $$$ARGS.
+ * The file path is used to determine the language parser.
+ * Falls back to exact matching if the parser is unavailable or an error occurs.
+ */
+function computeAstPatternEdit(
+  fileContent: string,
+  item: EditItem,
+  filePath: string,
+): { newContent: string; occurrencesReplaced: number } | { error: string } {
+  const findStr = item.find_base64 ? decodeBase64(item.find_base64) : item.find;
+  const replaceStr = item.replace_base64 ? decodeBase64(item.replace_base64) : item.replace;
+
+  const parser = getAstGrepLang(filePath);
+  if (!parser) {
+    // Fall back to exact matching for unknown file types
+    return computeExactEdit(fileContent, item);
+  }
+
+  let root: ReturnType<AstGrepParser['parse']>;
+  try {
+    root = parser.parse(fileContent);
+  } catch {
+    return computeExactEdit(fileContent, item);
+  }
+
+  let matches: AstGrepNode[];
+  try {
+    matches = root.root().findAll(findStr);
+  } catch (err) {
+    return { error: `ast_pattern: invalid pattern '${findStr}': ${err instanceof Error ? err.message : String(err)}` };
+  }
+
+  if (matches.length === 0) {
+    return { error: `ast_pattern: no matches found for pattern '${findStr}'` };
+  }
+
+  // Select occurrences
+  const positions = matches.map((m) => ({
+    start: m.range().start.index,
+    end: m.range().end.index,
+    text: m.text(),
+    node: m,
+  }));
+
+  const occSpec = item.occurrence;
+  let selected: typeof positions;
+  if (occSpec === undefined) {
+    if (positions.length > 1) {
+      return { error: `ast_pattern: ${positions.length} matches found — set occurrence to 'first', 'last', 'all', or N to disambiguate` };
+    }
+    selected = positions;
+  } else if (occSpec === 'all') {
+    selected = positions;
+  } else if (occSpec === 'first') {
+    selected = positions.slice(0, 1);
+  } else if (occSpec === 'last') {
+    selected = positions.slice(-1);
+  } else if (typeof occSpec === 'number') {
+    if (occSpec < 1 || occSpec > positions.length) {
+      return { error: `ast_pattern: occurrence ${occSpec} out of range (found ${positions.length} matches)` };
+    }
+    selected = [positions[occSpec - 1]];
+  } else {
+    selected = positions;
+  }
+
+  // Apply replacements in reverse order to preserve offsets.
+  // Substitute metavariables in the replace string for each match:
+  // $$$VAR -> joined text of getMultipleMatches('VAR'), $VAR -> getMatch('VAR').text()
+  const sorted = [...selected].sort((a, b) => b.start - a.start);
+  let newContent = fileContent;
+  for (const pos of sorted) {
+    let replacement = replaceStr;
+    // Substitute $$$ (multi-match) first to avoid partial replacement by $ substitution
+    replacement = replacement.replace(/\$\$\$([A-Z_][A-Z0-9_]*)/g, (_, varName: string) => {
+      const nodes = pos.node.getMultipleMatches(varName);
+      return nodes.map((n) => n.text()).join(', ');
+    });
+    // Substitute single $ metavariables
+    replacement = replacement.replace(/\$([A-Z_][A-Z0-9_]*)/g, (_, varName: string) => {
+      const node = pos.node.getMatch(varName);
+      return node ? node.text() : _;
+    });
+    newContent = newContent.slice(0, pos.start) + replacement + newContent.slice(pos.end);
+  }
+
+  return { newContent, occurrencesReplaced: selected.length };
+}
+
+/**
+ * ast mode: use tree-sitter via CodeIntelligence to find structural matches.
+ * The find string is interpreted as a code snippet and matched as a substring
+ * of the parsed AST node text (structural equivalence via text normalization).
+ * Falls back to exact matching if tree-sitter is unavailable.
+ */
+async function computeAstEdit(
+  fileContent: string,
+  item: EditItem,
+  filePath: string,
+): Promise<{ newContent: string; occurrencesReplaced: number } | { error: string }> {
+  const findStr = item.find_base64 ? decodeBase64(item.find_base64) : item.find;
+  const replaceStr = item.replace_base64 ? decodeBase64(item.replace_base64) : item.replace;
+
+  let intel: CodeIntelligence;
+  try {
+    intel = CodeIntelligence.getInstance();
+  } catch {
+    return computeExactEdit(fileContent, item);
+  }
+
+  if (!intel.hasTreeSitter(filePath)) {
+    return computeExactEdit(fileContent, item);
+  }
+
+  // Use tree-sitter to get the parse tree, then find nodes whose text
+  // matches the normalized find string (whitespace-insensitive structural match)
+  let symbols: Awaited<ReturnType<typeof intel.getSymbols>>;
+  try {
+    symbols = await intel.getSymbols(filePath, fileContent);
+  } catch {
+    return computeExactEdit(fileContent, item);
+  }
+
+  // Build positions from lines where symbol text matches the find string
+  // (normalizing whitespace for structural equivalence)
+  const normalizedFind = findStr.replace(/\s+/g, ' ').trim();
+
+  const positions: { start: number; end: number }[] = [];
+  const lines = fileContent.split('\n');
+
+  for (const symbol of symbols) {
+    // Check if the symbol's name or signature includes the normalized find
+    const sig = (symbol.signature ?? symbol.name ?? '').replace(/\s+/g, ' ').trim();
+    if (sig.includes(normalizedFind) || normalizedFind.includes(sig)) {
+      // Find the line offset in the file
+      let lineOffset = 0;
+      for (let i = 0; i < symbol.line - 1 && i < lines.length; i++) {
+        lineOffset += lines[i].length + 1; // +1 for '\n'
+      }
+      const lineText = lines[symbol.line - 1] ?? '';
+      const col = lineText.indexOf(findStr);
+      if (col >= 0) {
+        positions.push({ start: lineOffset + col, end: lineOffset + col + findStr.length });
+      }
+    }
+  }
+
+  // If no structural match found, fall back to finding the text literally in the file
+  if (positions.length === 0) {
+    // Try a broader match: find the find string as a substring in the file
+    // (normalized-whitespace aware)
+    return computeExactEdit(fileContent, item);
+  }
+
+  // Select occurrences
+  const selResult = selectOccurrences(positions, item.occurrence);
+  if ('error' in selResult) return selResult;
+
+  const newContent = applyReplacements(
+    fileContent,
+    selResult.selected,
+    findStr,
+    replaceStr,
+    'exact',
+    true,
+  );
+
+  return { newContent, occurrencesReplaced: selResult.selected.length };
+}
+
+/**
+ * Pure exact-match edit (no AST). Used as the fallback from ast/ast_pattern modes.
+ */
+function computeExactEdit(
+  fileContent: string,
+  item: EditItem,
+): { newContent: string; occurrencesReplaced: number } | { error: string } {
+  const findStr = item.find_base64 ? decodeBase64(item.find_base64) : item.find;
+  const replaceStr = item.replace_base64 ? decodeBase64(item.replace_base64) : item.replace;
+
+  const positions = findAllPositions(fileContent, findStr, 'exact', true, true);
+  if (positions.length === 0) {
+    return { error: `No match found for '${findStr}'` };
+  }
+
+  const selResult = selectOccurrences(positions, item.occurrence);
+  if ('error' in selResult) return selResult;
+
+  const newContent = applyReplacements(fileContent, selResult.selected, findStr, replaceStr, 'exact', true);
+  return { newContent, occurrencesReplaced: selResult.selected.length };
+}
+
 function computeSingleEdit(
   fileContent: string,
   item: EditItem,
@@ -417,7 +730,12 @@ function formatOutput(
 // Tool implementation
 // ---------------------------------------------------------------------------
 
-export function createEditTool(fileCache: FileStateCache): Tool {
+export interface EditToolOptions {
+  /** Working directory for validator commands. Defaults to process.cwd(). */
+  cwd?: string;
+}
+
+export function createEditTool(fileCache: FileStateCache, options?: EditToolOptions): Tool {
   const definition: ToolDefinition = {
     name: 'edit',
     description:
@@ -448,6 +766,20 @@ export function createEditTool(fileCache: FileStateCache): Tool {
     const transactionMode = input.transaction?.mode ?? 'atomic';
     const outputFormat = input.output?.format ?? 'minimal';
     const dryRun = input.dry_run ?? false;
+    const validateBefore = input.validate?.before ?? [];
+    const validateAfter = input.validate?.after ?? [];
+    const cwd = options?.cwd ?? process.cwd();
+
+    // Run validate.before
+    if (!dryRun && validateBefore.length > 0) {
+      const failure = await runValidators(validateBefore, cwd);
+      if (failure) {
+        return {
+          success: false,
+          error: `Pre-edit validation failed. ${formatValidatorFailure(failure)}`,
+        };
+      }
+    }
 
     // Resolve all paths upfront
     const resolvedPaths: Map<string, string> = new Map();
@@ -551,7 +883,14 @@ export function createEditTool(fileCache: FileStateCache): Tool {
         continue;
       }
 
-      const editResult = computeSingleEdit(currentContent, item, matchMode, caseSensitive, whitespaceSensitive);
+      let editResult: { newContent: string; occurrencesReplaced: number } | { error: string };
+      if (matchMode === 'ast_pattern') {
+        editResult = computeAstPatternEdit(currentContent, item, resolvedPath);
+      } else if (matchMode === 'ast') {
+        editResult = await computeAstEdit(currentContent, item, resolvedPath);
+      } else {
+        editResult = computeSingleEdit(currentContent, item, matchMode, caseSensitive, whitespaceSensitive);
+      }
 
       if ('error' in editResult) {
         results.push({
@@ -637,6 +976,54 @@ export function createEditTool(fileCache: FileStateCache): Tool {
     }
 
     const anySuccess = results.some((r) => r.success);
+
+    // Run validate.after (only if edits were actually written to disk)
+    if (!dryRun && anySuccess && validateAfter.length > 0) {
+      const failure = await runValidators(validateAfter, cwd);
+      if (failure) {
+        // Try auto-heal on each written file before reporting failure
+        let healed = false;
+        const failureMessages = [formatValidatorFailure(failure)];
+        for (const [resolvedPath, originalContent] of fileContents) {
+          const newContent = workingContents.get(resolvedPath);
+          if (newContent === undefined || newContent === originalContent) continue;
+          const healResult = await autoHealer.heal(resolvedPath, newContent, failureMessages);
+          if (healResult.healed) {
+            try {
+              writeFileSync(resolvedPath, healResult.content, 'utf-8');
+              fileCache.update(resolvedPath, healResult.content);
+              healed = true;
+            } catch {
+              // Best-effort heal write
+            }
+          }
+        }
+        if (healed) {
+          // Re-run validators after heal
+          const healFailure = await runValidators(validateAfter, cwd);
+          if (!healFailure) {
+            // Healed successfully — report as success
+            return { success: true, output: formatOutput(results, outputFormat, dryRun) };
+          }
+        }
+        // Rollback in atomic mode: restore original file contents
+        if (transactionMode === 'atomic') {
+          for (const [resolvedPath, originalContent] of fileContents) {
+            try {
+              writeFileSync(resolvedPath, originalContent, 'utf-8');
+              fileCache.update(resolvedPath, originalContent);
+            } catch {
+              // Best-effort rollback
+            }
+          }
+        }
+        return {
+          success: false,
+          error: `Post-edit validation failed${transactionMode === 'atomic' ? ' — edits rolled back' : ''}. ${formatValidatorFailure(failure)}`,
+        };
+      }
+    }
+
     const output = formatOutput(results, outputFormat, dryRun);
 
     return {

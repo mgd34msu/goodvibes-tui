@@ -36,6 +36,12 @@ export interface CommandContext {
   openModelPicker?: () => void;
   /** Open the provider picker modal. */
   openProviderPicker?: () => void;
+  /** Open the context inspector modal. */
+  openContextInspector?: () => void;
+  /** Open the bookmark browser modal. */
+  openBookmarkModal?: () => void;
+  /** Toggle the help/shortcuts overlay. */
+  openHelpOverlay?: () => void;
   /** Open the generic selection modal and call back with the result. */
   openSelection?: (
     title: string,
@@ -43,6 +49,12 @@ export interface CommandContext {
     opts: { preSelectId?: string; allowSearch?: boolean; customActions?: Map<string, SelectionAction> } | undefined,
     callback: (result: SelectionResult | null) => void,
   ) => void;
+  /** Open the settings config browser modal. */
+  openSettingsModal?: () => void;
+  /** Open the dedicated session picker modal. */
+  openSessionPicker?: () => void;
+  /** Open the dedicated profile picker modal. */
+  openProfilePicker?: () => void;
   /** Registry of all available tools. */
   toolRegistry: ToolRegistry;
 }
@@ -89,7 +101,7 @@ export class CommandRegistry {
     if (direct) return direct;
     // Search aliases
     for (const cmd of this.commands.values()) {
-      if (cmd.aliases.includes(name)) return cmd;
+      if (cmd.aliases?.includes(name)) return cmd;
     }
     return undefined;
   }
@@ -108,7 +120,7 @@ export class CommandRegistry {
     const results: Array<{ command: SlashCommand; score: number }> = [];
 
     for (const cmd of this.commands.values()) {
-      const names = [cmd.name, ...cmd.aliases];
+      const names = [cmd.name, ...(cmd.aliases ?? [])];
       let bestScore = 0;
 
       for (const candidate of names) {

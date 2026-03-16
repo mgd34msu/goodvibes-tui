@@ -237,9 +237,28 @@ export interface ScheduleEntry {
   enabled: boolean;
 }
 
+/**
+ * Parse an interval string like '30s', '5m', '1h' to milliseconds.
+ * Returns null if the format is unrecognised.
+ */
+export function parseInterval(interval: string): number | null {
+  const match = interval.trim().match(/^(\d+(?:\.\d+)?)(s|m|h|d)$/);
+  if (!match) return null;
+  const value = parseFloat(match[1]);
+  switch (match[2]) {
+    case 's': return value * 1_000;
+    case 'm': return value * 60_000;
+    case 'h': return value * 3_600_000;
+    case 'd': return value * 86_400_000;
+    default: return null;
+  }
+}
+
 export class ScheduleManager {
   private static _instance: ScheduleManager | null = null;
   private schedules = new Map<string, ScheduleEntry>();
+  /** Timer IDs keyed by schedule name */
+  private timers = new Map<string, ReturnType<typeof setInterval>>();
 
   static getInstance(): ScheduleManager {
     if (!ScheduleManager._instance) {
@@ -250,28 +269,52 @@ export class ScheduleManager {
 
   /** Reset singleton — for testing only. */
   static _resetForTest(): void {
+    if (ScheduleManager._instance) {
+      ScheduleManager._instance.destroy();
+    }
     ScheduleManager._instance = null;
   }
 
   add(name: string, interval: string, command: string): ScheduleEntry {
+    // Clear existing timer if re-adding
+    this._clearTimer(name);
+
+    const now = Date.now();
+    const intervalMs = parseInterval(interval);
     const entry: ScheduleEntry = {
       name,
       interval,
       command,
       enabled: true,
+      nextRun: intervalMs !== null ? now + intervalMs : undefined,
     };
     this.schedules.set(name, entry);
+
+    if (intervalMs !== null) {
+      const timer = setInterval(() => this._tick(name), intervalMs);
+      this.timers.set(name, timer);
+    }
+
     return entry;
   }
 
   remove(name: string): boolean {
+    this._clearTimer(name);
     return this.schedules.delete(name);
   }
 
   enable(name: string): boolean {
     const entry = this.schedules.get(name);
     if (!entry) return false;
+    if (entry.enabled) return true;
     entry.enabled = true;
+    // Restart timer
+    const intervalMs = parseInterval(entry.interval);
+    if (intervalMs !== null && !this.timers.has(name)) {
+      entry.nextRun = Date.now() + intervalMs;
+      const timer = setInterval(() => this._tick(name), intervalMs);
+      this.timers.set(name, timer);
+    }
     return true;
   }
 
@@ -279,11 +322,55 @@ export class ScheduleManager {
     const entry = this.schedules.get(name);
     if (!entry) return false;
     entry.enabled = false;
+    this._clearTimer(name);
+    entry.nextRun = undefined;
     return true;
   }
 
   list(): ScheduleEntry[] {
     return Array.from(this.schedules.values());
+  }
+
+  /** Stop all timers and clear state (called on singleton reset). */
+  destroy(): void {
+    for (const name of this.timers.keys()) {
+      this._clearTimer(name);
+    }
+    this.schedules.clear();
+  }
+
+  /** Execute a schedule tick: run the command and update lastRun/nextRun. */
+  private _tick(name: string): void {
+    const entry = this.schedules.get(name);
+    if (!entry || !entry.enabled) return;
+
+    const now = Date.now();
+    entry.lastRun = now;
+    const intervalMs = parseInterval(entry.interval);
+    entry.nextRun = intervalMs !== null ? now + intervalMs : undefined;
+
+    // Parse command string
+    const parts = entry.command.split(/\s+/).filter(Boolean);
+    if (parts.length === 0) return;
+
+    try {
+      const proc = Bun.spawn(parts, {
+        env: { ...process.env, GV_SCHEDULE_NAME: name },
+        stdout: 'ignore',
+        stderr: 'ignore',
+      });
+      proc.exited.catch(() => { /* fire-and-forget */ });
+    } catch {
+      // Spawn failure is non-fatal for the scheduler
+    }
+  }
+
+  private _clearTimer(name: string): void {
+    const timer = this.timers.get(name);
+    if (timer !== undefined) {
+      clearInterval(timer);
+      this.timers.delete(name);
+    }
   }
 }
 

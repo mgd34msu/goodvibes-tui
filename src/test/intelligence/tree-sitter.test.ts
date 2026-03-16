@@ -42,6 +42,18 @@ function tsGrammarAvailable(): boolean {
   );
 }
 
+/** Returns true if the JavaScript grammar WASM is available. */
+function jsGrammarAvailable(): boolean {
+  return existsSync(
+    join(
+      process.cwd(),
+      'node_modules',
+      'tree-sitter-javascript',
+      'tree-sitter-javascript.wasm',
+    ),
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Language detection
 // ---------------------------------------------------------------------------
@@ -353,8 +365,8 @@ describe('extractSymbols (TypeScript grammar)', () => {
       await svc.initialize();
       const tree = await svc.parse('x.ts', TS_CODE, 'typescript');
       const lang = svc['languages'].get('typescript')!;
-      // Line 3 is inside the Greeter class body
-      const scope = findEnclosingScope(tree!, lang, 'typescript', 3);
+      // Line 2 is the class declaration line — inside the class, outside any method
+      const scope = findEnclosingScope(tree!, lang, 'typescript', 2);
       expect(scope).not.toBeNull();
       expect(scope!.name).toBe('Greeter');
     },
@@ -376,6 +388,117 @@ describe('extractSymbols: unsupported language', () => {
       const symbols = extractSymbols(tree!, lang, 'haskell');
       expect(symbols).toEqual([]);
       svc2.dispose();
+    },
+  );
+});
+
+// ---------------------------------------------------------------------------
+// Grammar installation verification
+// (Verify that grammar packages are installed and functional)
+// ---------------------------------------------------------------------------
+
+describe('Grammar loading (installed packages)', () => {
+  let svc: TreeSitterService;
+
+  beforeEach(() => {
+    svc = new TreeSitterService();
+  });
+
+  afterEach(() => {
+    svc.dispose();
+  });
+
+  test.skipIf(!wasmAvailable())(
+    'initialize() succeeds with installed web-tree-sitter',
+    async () => {
+      await svc.initialize();
+      // If we reach here without throwing, initialization succeeded.
+      // A second call must also succeed (idempotent).
+      await svc.initialize();
+    },
+  );
+
+  test.skipIf(!wasmAvailable() || !tsGrammarAvailable())(
+    'typescript grammar loads from node_modules',
+    async () => {
+      await svc.initialize();
+      const lang = await svc.loadLanguage('typescript');
+      expect(lang).not.toBeNull();
+      expect(svc.loadedLanguages).toContain('typescript');
+    },
+  );
+
+  test.skipIf(!wasmAvailable() || !jsGrammarAvailable())(
+    'javascript grammar loads from node_modules',
+    async () => {
+      await svc.initialize();
+      const lang = await svc.loadLanguage('javascript');
+      expect(lang).not.toBeNull();
+      expect(svc.loadedLanguages).toContain('javascript');
+    },
+  );
+
+  test.skipIf(!wasmAvailable() || !tsGrammarAvailable())(
+    'parsing a TypeScript file returns a non-null tree',
+    async () => {
+      await svc.initialize();
+      const code = [
+        'interface User { id: number; name: string; }',
+        'function getUser(id: number): User {',
+        '  return { id, name: "Alice" };',
+        '}',
+        'export const DEFAULT_USER: User = getUser(1);',
+      ].join('\n');
+      const tree = await svc.parse('user.ts', code, 'typescript');
+      expect(tree).not.toBeNull();
+      expect(tree!.rootNode.type).toBe('program');
+    },
+  );
+
+  test.skipIf(!wasmAvailable() || !jsGrammarAvailable())(
+    'parsing a JavaScript file returns a non-null tree',
+    async () => {
+      await svc.initialize();
+      const code = [
+        'function add(a, b) { return a + b; }',
+        'const result = add(1, 2);',
+        'module.exports = { add };',
+      ].join('\n');
+      const tree = await svc.parse('math.js', code, 'javascript');
+      expect(tree).not.toBeNull();
+      expect(tree!.rootNode.type).toBe('program');
+    },
+  );
+
+  test.skipIf(!wasmAvailable() || !tsGrammarAvailable())(
+    'symbol extraction from a parsed TypeScript tree returns results',
+    async () => {
+      await svc.initialize();
+      const code = [
+        'export function multiply(a: number, b: number): number { return a * b; }',
+        'export class Calculator {',
+        '  add(a: number, b: number): number { return a + b; }',
+        '}',
+        'export const PI = 3.14159;',
+      ].join('\n');
+      const tree = await svc.parse('calc.ts', code, 'typescript');
+      expect(tree).not.toBeNull();
+      const lang = svc['languages'].get('typescript')!;
+      const symbols = extractSymbols(tree!, lang, 'typescript');
+      expect(symbols.length).toBeGreaterThan(0);
+      expect(symbols.find((s) => s.name === 'multiply' && s.kind === 'function')).toBeDefined();
+      expect(symbols.find((s) => s.name === 'Calculator' && s.kind === 'class')).toBeDefined();
+      expect(symbols.find((s) => s.name === 'PI')).toBeDefined();
+    },
+  );
+
+  test.skipIf(!wasmAvailable() || !tsGrammarAvailable())(
+    'tsx grammar loads from tree-sitter-typescript package',
+    async () => {
+      await svc.initialize();
+      const lang = await svc.loadLanguage('tsx');
+      expect(lang).not.toBeNull();
+      expect(svc.loadedLanguages).toContain('tsx');
     },
   );
 });

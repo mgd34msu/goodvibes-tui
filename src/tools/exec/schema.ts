@@ -103,6 +103,12 @@ export const EXEC_TOOL_SCHEMA = {
             },
             required: ['pattern'],
           },
+          progress: {
+            type: 'boolean',
+            description:
+              'Stream stdout lines to a pollable progress file at .goodvibes/.overflow/{id}-progress.txt.'
+              + ' Auto-enabled when timeout_ms > 30000. The result includes a progress_file path.',
+          },
         },
         // cmd or cmd_base64 required — validated at runtime
       },
@@ -128,6 +134,19 @@ export const EXEC_TOOL_SCHEMA = {
         'count_only: exit codes only; minimal: exit codes + first line stdout/stderr;'
         + ' standard: full stdout/stderr + exit code (default);'
         + ' verbose: everything + timing, env, cwd.',
+    },
+    stop_on_error: {
+      type: 'boolean',
+      description:
+        'Alias for fail_fast. Stop sequential execution on first failed command.'
+        + ' Unexecuted commands appear as {skipped: true} entries. Default: false.',
+    },
+    fail_fast: {
+      type: 'boolean',
+      description:
+        'Stop sequential execution on first failed command (non-zero exit, timed_out, or expectation_error).'
+        + ' Unexecuted commands appear as {skipped: true} entries. Default: false.'
+        + ' Alias: stop_on_error.',
     },
     file_ops: {
       type: 'array',
@@ -199,6 +218,8 @@ export interface ExecCommandInput {
   background?: boolean;
   retry?: ExecRetry;
   until?: ExecUntil;
+  /** Stream stdout to a pollable progress file. Auto-enabled when timeout_ms > 30000. */
+  progress?: boolean;
 }
 
 export interface ExecInput {
@@ -208,6 +229,13 @@ export interface ExecInput {
   timeout_ms?: number;
   verbosity?: ExecVerbosity;
   file_ops?: ExecFileOp[];
+  /**
+   * Stop sequential execution on first failed command.
+   * Unexecuted commands appear as {skipped: true} entries. Default: false.
+   */
+  fail_fast?: boolean;
+  /** Alias for fail_fast. */
+  stop_on_error?: boolean;
 }
 
 // ─── Result interfaces ────────────────────────────────────────────────────────
@@ -234,15 +262,11 @@ export interface ExecCommandResult {
   stderr_truncated?: boolean;
   /** Number of retry attempts used. */
   retries?: number;
+  /** Set when this command was not executed due to fail_fast/stop_on_error. */
+  skipped?: boolean;
+  /** Path to the pollable progress file when progress tracking is enabled. */
+  progress_file?: string;
 }
 
-export interface BackgroundProcess {
-  id: string;
-  pid: number;
-  cmd: string;
-  startTime: number;
-  stdout: string[];
-  stderr: string[];
-  exitCode: number | null;
-  done: boolean;
-}
+// BackgroundProcess is defined in shared/process-manager and re-exported here for backward compat.
+export type { BackgroundProcess } from '../shared/process-manager.ts';

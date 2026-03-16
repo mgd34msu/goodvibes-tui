@@ -1,7 +1,9 @@
-import { resolve, relative, join } from 'node:path';
+import { resolve, relative, join, extname } from 'node:path';
 import { readdir, stat, readFile } from 'node:fs/promises';
 import type { Tool } from '../../types/tools.ts';
 import { findSchema } from './schema.ts';
+import { CodeIntelligence, uriToPath } from '../../intelligence/index.ts';
+import * as astGrep from '@ast-grep/napi';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -12,7 +14,7 @@ export type SymbolKind = 'function' | 'class' | 'interface' | 'type' | 'variable
 
 export interface QueryBase {
   id: string;
-  mode: 'files' | 'content' | 'symbols';
+  mode: 'files' | 'content' | 'symbols' | 'references' | 'structural';
   path?: string;
 }
 
@@ -40,7 +42,22 @@ export interface SymbolsQuery extends QueryBase {
   exported_only?: boolean;
 }
 
-export type FindQuery = FilesQuery | ContentQuery | SymbolsQuery;
+export interface ReferencesQuery extends QueryBase {
+  mode: 'references';
+  symbol: string;
+  file: string;
+  line: number;
+  column: number;
+}
+
+export interface StructuralQuery extends QueryBase {
+  mode: 'structural';
+  pattern: string;
+  lang?: 'ts' | 'tsx' | 'js' | 'jsx' | 'css' | 'html';
+  glob?: string;
+}
+
+export type FindQuery = FilesQuery | ContentQuery | SymbolsQuery | ReferencesQuery | StructuralQuery;
 
 export interface OutputOptions {
   format?: OutputFormat;
@@ -60,11 +77,92 @@ export interface FindInput {
 }
 
 // ---------------------------------------------------------------------------
+// Mode: references
+// ---------------------------------------------------------------------------
+
+async function executeReferencesQuery(
+  query: ReferencesQuery,
+  output: OutputOptions,
+): Promise<Record<string, unknown>> {
+  const projectRoot = process.cwd();
+  const maxResults = output.max_results ?? 100;
+
+  interface ReferenceLocation { file: string; line: number; }
+  let locations: ReferenceLocation[] = [];
+
+  // Try LSP first
+  const ci = CodeIntelligence.getInstance();
+  try {
+    const lspLocations = await ci.getReferences(query.file, query.line, query.column);
+    if (lspLocations.length > 0) {
+      for (const loc of lspLocations) {
+        if (locations.length >= maxResults) break;
+        try {
+          const filePath = uriToPath(loc.uri);
+          // LSP uses zero-based lines; add 1 for display
+          locations.push({ file: filePath, line: loc.range.start.line + 1 });
+        } catch {
+          // Skip unparseable URIs
+        }
+      }
+
+      if (output.format === 'count_only') return { count: locations.length };
+      if (output.format === 'files_only') {
+        const uniqueFiles = [...new Set(locations.map((l) => l.file))];
+        return { files: uniqueFiles, count: locations.length };
+      }
+      return { locations, count: locations.length };
+    }
+  } catch {
+    // LSP unavailable — fall through to grep fallback
+  }
+
+  // Grep fallback: search for symbol name across all project text files
+  if (!query.symbol) {
+    return { locations: [], count: 0, source: 'fallback' };
+  }
+
+  let regex: RegExp;
+  try {
+    regex = new RegExp(`\\b${query.symbol.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'g');
+  } catch {
+    return { error: `Invalid symbol name: ${query.symbol}` };
+  }
+
+  const files = await collectTextFiles(projectRoot);
+  for (const file of files) {
+    if (locations.length >= maxResults) break;
+    let content: string;
+    try {
+      content = await Bun.file(file).text();
+    } catch {
+      continue;
+    }
+    const lines = content.split('\n');
+    for (let i = 0; i < lines.length; i++) {
+      if (locations.length >= maxResults) break;
+      regex.lastIndex = 0;
+      if (regex.test(lines[i])) {
+        locations.push({ file, line: i + 1 });
+      }
+    }
+  }
+
+  if (output.format === 'count_only') return { count: locations.length, source: 'fallback' };
+  if (output.format === 'files_only') {
+    const uniqueFiles = [...new Set(locations.map((l) => l.file))];
+    return { files: uniqueFiles, count: locations.length, source: 'fallback' };
+  }
+  return { locations, count: locations.length, source: 'fallback' };
+}
+
+// ---------------------------------------------------------------------------
 // File walking utilities
 // ---------------------------------------------------------------------------
 
 const SKIP_DIRS = new Set(['.git', 'node_modules', 'dist', '.next', '.nuxt', '.cache', '__pycache__']);
 const MAX_FILE_SIZE = 1024 * 1024; // 1MB
+const VALID_SYMBOL_KINDS = new Set(['function', 'class', 'interface', 'type', 'variable', 'constant', 'enum']);
 const BINARY_CHECK_BYTES = 8192;
 
 /** Detect binary files by checking for null bytes in the first 8KB. */
@@ -216,6 +314,8 @@ interface ContentMatch {
   file: string;
   line: number;
   text: string;
+  startLine?: number;
+  endLine?: number;
   context_before?: string[];
   context_after?: string[];
 }
@@ -303,7 +403,7 @@ async function executeContentQuery(
   }
 
   // Normal matching
-  const matchedFiles = new Map<string, ContentMatch[]>();
+  const matchedFiles = new Map<string, { content: string; matches: ContentMatch[] }>();
   let totalMatches = 0;
 
   outer: for (const file of files) {
@@ -341,7 +441,28 @@ async function executeContentQuery(
     }
 
     if (fileMatches.length > 0) {
-      matchedFiles.set(file, fileMatches);
+      matchedFiles.set(file, { content, matches: fileMatches });
+    }
+  }
+
+  // expand_to: use CodeIntelligence.getEnclosingScope() to expand matches to
+  // their enclosing function or class scope. Silently ignored if tree-sitter
+  // grammar is unavailable for a file (scope will be null).
+  const expandTo = output.expand_to;
+  if (expandTo === 'function' || expandTo === 'class') {
+    const ci = CodeIntelligence.getInstance();
+    for (const [file, { content, matches }] of matchedFiles) {
+      for (const m of matches) {
+        try {
+          const scope = await ci.getEnclosingScope(file, content, m.line);
+          if (scope) {
+            m.startLine = scope.startLine;
+            m.endLine = scope.endLine;
+          }
+        } catch {
+          // Silently ignore failures — tree-sitter may not be available
+        }
+      }
     }
   }
 
@@ -353,9 +474,10 @@ async function executeContentQuery(
     return { files: Array.from(matchedFiles.keys()), count: matchedFiles.size };
   }
 
+
   if (format === 'locations') {
     const locations: Array<{ file: string; line: number }> = [];
-    for (const [file, matches] of matchedFiles) {
+    for (const [file, { matches }] of matchedFiles) {
       for (const m of matches) {
         locations.push({ file, line: m.line });
       }
@@ -368,12 +490,16 @@ async function executeContentQuery(
       file: string;
       line: number;
       text: string;
+      startLine?: number;
+      endLine?: number;
       context_before?: string[];
       context_after?: string[];
     }> = [];
-    for (const [, matches] of matchedFiles) {
+    for (const [, { matches }] of matchedFiles) {
       for (const m of matches) {
         const entry: (typeof results)[number] = { file: m.file, line: m.line, text: m.text };
+        if (m.startLine !== undefined) entry.startLine = m.startLine;
+        if (m.endLine !== undefined) entry.endLine = m.endLine;
         if (format === 'context') {
           entry.context_before = m.context_before;
           entry.context_after = m.context_after;
@@ -447,6 +573,8 @@ async function executeSymbolsQuery(
     }
   }
 
+  const ci = CodeIntelligence.getInstance();
+
   for (const file of files) {
     if (symbols.length >= maxResults) break;
 
@@ -457,6 +585,35 @@ async function executeSymbolsQuery(
       continue;
     }
 
+    // Try tree-sitter first for richer, more accurate symbol extraction.
+    // Falls back to regex patterns if tree-sitter returns empty results
+    // (e.g. no grammar loaded for this language).
+    let usedTreeSitter = false;
+    try {
+      const tsSymbols = await ci.getSymbols(file, content);
+      if (tsSymbols.length > 0) {
+        usedTreeSitter = true;
+        for (const sym of tsSymbols) {
+          if (symbols.length >= maxResults) break;
+          // Map tree-sitter SymbolInfo kinds to our SymbolKind (filter unknowns)
+          const kindMap: Record<string, string> = { method: 'function', property: 'variable', namespace: 'variable' };
+          const mappedKind = kindMap[sym.kind ?? ''] ?? (sym.kind ?? 'variable');
+          const kind: SymbolKind = VALID_SYMBOL_KINDS.has(mappedKind) ? (mappedKind as SymbolKind) : 'variable';
+
+          if (kindFilter && !kindFilter.has(kind)) continue;
+          if (query.exported_only && !sym.exported) continue;
+          if (queryRegex && !queryRegex.test(sym.name)) continue;
+
+          symbols.push({ name: sym.name, kind, file, line: sym.line, exported: sym.exported });
+        }
+      }
+    } catch {
+      // tree-sitter error — fall through to regex
+    }
+
+    if (usedTreeSitter) continue;
+
+    // Regex fallback
     const lines = content.split('\n');
 
     for (let i = 0; i < lines.length; i++) {
@@ -496,6 +653,129 @@ async function executeSymbolsQuery(
 }
 
 // ---------------------------------------------------------------------------
+// Mode: structural
+// ---------------------------------------------------------------------------
+
+/** Map file extension to ast-grep language parser. Returns null for unsupported extensions. */
+function getAstGrepLang(
+  filePath: string,
+  override?: StructuralQuery['lang'],
+): { parse: (src: string) => { root(): { findAll(pat: string): Array<{ text(): string; range(): { start: { line: number } } }> } } } | null {
+  const lang = override ?? extname(filePath).slice(1).toLowerCase();
+  switch (lang) {
+    case 'ts': return astGrep.ts;
+    case 'tsx': return astGrep.tsx;
+    case 'js': case 'mjs': case 'cjs': return astGrep.js;
+    case 'jsx': return astGrep.jsx;
+    case 'css': return astGrep.css;
+    case 'html': return astGrep.html;
+    default: return null;
+  }
+}
+
+async function executeStructuralQuery(
+  query: StructuralQuery,
+  output: OutputOptions,
+): Promise<Record<string, unknown>> {
+  const projectRoot = process.cwd();
+  const validatedPath = validateSearchPath(query.path, projectRoot);
+  if (typeof validatedPath === 'object') return validatedPath;
+  const basePath = validatedPath;
+
+  if (!query.pattern) {
+    return { error: 'structural mode requires pattern' };
+  }
+
+  const format = output.format ?? 'matches';
+  const maxPerFile = output.max_per_item ?? 10;
+  const maxTotal = output.max_total_matches ?? output.max_results ?? 100;
+
+  // Collect files to search
+  let files: string[];
+  if (query.glob) {
+    const glob = new Bun.Glob(query.glob);
+    files = [];
+    try {
+      for await (const file of glob.scan({ cwd: basePath, onlyFiles: true, absolute: true })) {
+        const rel = relative(basePath, file);
+        const segments = rel.split('/');
+        const inSkippedDir = segments.some(
+          (seg) => SKIP_DIRS.has(seg) || (seg.startsWith('.') && seg !== '.'),
+        );
+        if (!inSkippedDir) files.push(file);
+      }
+    } catch {
+      files = [];
+    }
+  } else {
+    files = await collectTextFiles(basePath);
+  }
+
+  interface StructuralMatch { file: string; line: number; text: string }
+  const allMatches: StructuralMatch[] = [];
+  const matchedFiles = new Set<string>();
+  let totalMatches = 0;
+
+  outer: for (const file of files) {
+    if (totalMatches >= maxTotal) break;
+
+    const parser = getAstGrepLang(file, query.lang);
+    if (!parser) continue; // unsupported extension
+
+    let content: string;
+    try {
+      content = await Bun.file(file).text();
+    } catch {
+      continue;
+    }
+
+    let root: ReturnType<typeof parser.parse>;
+    try {
+      root = parser.parse(content);
+    } catch {
+      continue;
+    }
+
+    let matches: ReturnType<ReturnType<typeof parser.parse>['root']>['findAll'] extends (p: string) => infer R ? R : never;
+    try {
+      matches = root.root().findAll(query.pattern);
+    } catch {
+      continue;
+    }
+
+    let fileMatchCount = 0;
+    for (const match of matches) {
+      if (fileMatchCount >= maxPerFile) break;
+      if (totalMatches >= maxTotal) break outer;
+
+      const text = match.text();
+      const line = match.range().start.line + 1; // ast-grep uses 0-indexed lines
+
+      allMatches.push({ file, line, text });
+      matchedFiles.add(file);
+      fileMatchCount++;
+      totalMatches++;
+    }
+  }
+
+  if (format === 'count_only') {
+    return { count: totalMatches, file_count: matchedFiles.size };
+  }
+
+  if (format === 'files_only') {
+    return { files: Array.from(matchedFiles), count: matchedFiles.size };
+  }
+
+  if (format === 'locations') {
+    const locations = allMatches.map((m) => ({ file: m.file, line: m.line }));
+    return { locations, count: totalMatches };
+  }
+
+  // matches / context (context is same as matches for structural — no line-level context available)
+  return { matches: allMatches, count: totalMatches };
+}
+
+// ---------------------------------------------------------------------------
 // Main tool
 // ---------------------------------------------------------------------------
 
@@ -525,6 +805,12 @@ export const findTool: Tool = {
             break;
           case 'symbols':
             result = await executeSymbolsQuery(query, output);
+            break;
+          case 'references':
+            result = await executeReferencesQuery(query, output);
+            break;
+          case 'structural':
+            result = await executeStructuralQuery(query, output);
             break;
           default: {
             const exhaustive: never = query;

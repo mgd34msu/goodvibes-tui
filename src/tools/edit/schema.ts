@@ -79,8 +79,11 @@ export const editSchema = {
       properties: {
         mode: {
           type: 'string',
-          enum: ['exact', 'fuzzy', 'regex'],
-          description: 'Match mode. exact: literal string match. fuzzy: whitespace-insensitive. regex: treat find as regex.',
+          enum: ['exact', 'fuzzy', 'regex', 'ast', 'ast_pattern'],
+          description:
+            'Match mode. exact: literal string match. fuzzy: whitespace-insensitive. regex: treat find as regex. ' +
+            'ast: structural match using tree-sitter (falls back to exact if unavailable). ' +
+            'ast_pattern: pattern matching using @ast-grep/napi metavariables like $VAR or $$$ARGS (falls back to exact if unavailable).',
           default: 'exact',
         },
         case_sensitive: {
@@ -131,6 +134,29 @@ export const editSchema = {
       type: 'boolean',
       description: 'Compute all replacements and return diffs without writing to disk. Default: false.',
       default: false,
+    },
+    validate: {
+      type: 'object',
+      description: 'Run validators before and/or after applying edits.',
+      properties: {
+        before: {
+          type: 'array',
+          description: 'Validators to run before applying edits. If any fail, edits are not applied.',
+          items: {
+            type: 'string',
+            enum: ['typecheck', 'lint', 'test', 'build'],
+          },
+        },
+        after: {
+          type: 'array',
+          description: 'Validators to run after applying edits. If any fail in atomic mode, edits are rolled back.',
+          items: {
+            type: 'string',
+            enum: ['typecheck', 'lint', 'test', 'build'],
+          },
+        },
+      },
+      additionalProperties: false,
     },
   },
   additionalProperties: false,
