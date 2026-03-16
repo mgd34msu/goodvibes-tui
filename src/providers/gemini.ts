@@ -33,6 +33,8 @@ interface GeminiResponseBody {
  */
 export class GeminiProvider implements LLMProvider {
   readonly name = 'gemini';
+  /** Maps function call name → thoughtSignature for the current turn. */
+  private thoughtSignatures = new Map<string, string>();
   readonly models = [
     'gemini-3.1-pro-preview',
     'gemini-3-flash',
@@ -51,6 +53,24 @@ export class GeminiProvider implements LLMProvider {
 
     return withRetry(async () => {
       const { contents, systemInstruction } = toGeminiContents(messages, systemPrompt);
+
+      // Inject thoughtSignatures into both model functionCall parts and user functionResponse parts
+      // (Gemini thinking models require the signature on both sides of the round-trip)
+      for (const c of contents) {
+        for (const part of c.parts) {
+          const p = part as Record<string, unknown>;
+          if (p.functionCall) {
+            const fc = p.functionCall as { name: string };
+            const sig = this.thoughtSignatures.get(fc.name);
+            if (sig) p.thoughtSignature = sig;
+          }
+          if (p.functionResponse) {
+            const fr = p.functionResponse as { name: string };
+            const sig = this.thoughtSignatures.get(fr.name);
+            if (sig) p.thoughtSignature = sig;
+          }
+        }
+      }
 
       const body: Record<string, unknown> = { contents };
 
@@ -147,8 +167,14 @@ export class GeminiProvider implements LLMProvider {
                   streamedText += part.text;
                   onDelta({ content: part.text });
                 }
-                if (part.functionCall && onDelta) {
-                  onDelta({ toolCalls: [{ index: 0, name: part.functionCall.name, arguments: JSON.stringify(part.functionCall.args) }] });
+                if (part.functionCall) {
+                  // Capture thoughtSignature if present (Gemini thinking models)
+                  if ((part as Record<string, unknown>).thoughtSignature) {
+                    this.thoughtSignatures.set(part.functionCall.name, (part as Record<string, unknown>).thoughtSignature as string);
+                  }
+                  if (onDelta) {
+                    onDelta({ toolCalls: [{ index: 0, name: part.functionCall.name, arguments: JSON.stringify(part.functionCall.args) }] });
+                  }
                 }
               }
               if (candidate.finishReason) {
@@ -174,6 +200,12 @@ export class GeminiProvider implements LLMProvider {
       let stopReason: ChatResponse['stopReason'] = 'end';
       if (lastFinishReason === 'MAX_TOKENS') stopReason = 'max_tokens';
       else if (toolCalls.length > 0) stopReason = 'tool_use';
+
+      // Clear old signatures — new ones were captured from this response's functionCall parts
+      // (kept across calls within a tool-use loop, cleared when no new functionCalls arrive)
+      if (toolCalls.length === 0) {
+        this.thoughtSignatures.clear();
+      }
 
       return {
         content: text,
