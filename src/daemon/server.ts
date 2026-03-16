@@ -1,5 +1,6 @@
 import { timingSafeEqual } from 'crypto';
 import { logger } from '../utils/logger.ts';
+import { VERSION } from '../version.ts';
 import { AgentManager } from '../tools/agent/index.ts';
 import { ConfigManager } from '../config/manager.ts';
 import type { AgentRecord } from '../tools/agent/index.ts';
@@ -133,7 +134,7 @@ export class DaemonServer {
     if (pathname === '/status' && method === 'GET') {
       // health check
       // health check
-      return Response.json({ status: 'running', version: '0.9.3' });
+      return Response.json({ status: 'running', version: VERSION });
     }
     if (pathname === '/config' && method === 'GET') {
       // return full config snapshot
@@ -159,7 +160,7 @@ export class DaemonServer {
       }
       return Response.json({ success: true, key, value });
     }
-      return Response.json({ status: 'running', version: '0.9.3' });
+      return Response.json({ status: 'running', version: VERSION });
     }
 
     if (pathname === '/task' && method === 'POST') {
