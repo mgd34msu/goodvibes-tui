@@ -150,11 +150,12 @@ export function registerBuiltinCommands(registry: CommandRegistry): void {
           // Tools & System
           { id: '/tools', label: '/tools', detail: 'List available tools', category: 'Tools & System' },
           { id: '/permissions', label: '/permissions', detail: 'Permission settings', category: 'Tools & System' },
-          { id: '/secrets', label: '/secrets set|get|list|delete', detail: 'Manage encrypted API key secrets', category: 'Tools & System' },
-          { id: '/help', label: '/help', detail: 'This help', category: 'Tools & System' },
-          { id: '/quit', label: '/quit', detail: 'Exit', category: 'Tools & System' },
           { id: '/shortcuts', label: '/shortcuts', detail: 'View keyboard shortcuts reference', category: 'Tools & System' },
           { id: '/commands', label: '/commands', detail: 'Browse all commands in a scrollable list', category: 'Tools & System' },
+          { id: '/secrets', label: '/secrets set|get|list|delete', detail: 'Manage encrypted API key secrets', category: 'Tools & System' },
+          { id: '/danger', label: '/danger [key] [value]', detail: '⚠ Danger zone settings', category: 'Tools & System' },
+          { id: '/help', label: '/help', detail: 'This help', category: 'Tools & System' },
+          { id: '/quit', label: '/quit', detail: 'Exit', category: 'Tools & System' }
         ];
         ctx.openSelection('Help  —  Commands', items, { allowSearch: true }, (result) => {
           if (!result) return;
@@ -224,7 +225,7 @@ export function registerBuiltinCommands(registry: CommandRegistry): void {
     handler(args, ctx) {
       const cm = ctx.configManager;
       const all = cm.getAll();
-      const categories = ['display', 'provider', 'behavior'] as const;
+      const categories = ['display', 'provider', 'behavior', 'permissions', 'danger', 'tools'] as const;
 
       // /config profile save|load|list|delete
       if (args[0] === 'profile') {
@@ -1332,14 +1333,14 @@ export function registerBuiltinCommands(registry: CommandRegistry): void {
         const items: SelectionItem[] = keys.length === 0
           ? [{ id: '_empty', label: 'No services configured', detail: '.goodvibes/tui/services.json' }]
           : keys.map((key) => {
-              const svc = all[key];
-              return {
-                id: key,
-                label: svc.name ?? key,
-                detail: `${svc.authType}  ${svc.baseUrl ?? '(no url)'}`,
-                actions: '[t] test',
-              };
-            });
+            const svc = all[key];
+            return {
+              id: key,
+              label: svc.name ?? key,
+              detail: `${svc.authType}  ${svc.baseUrl ?? '(no url)'}`,
+              actions: '[t] test',
+            };
+          });
 
         ctx.openSelection('Services', items, { allowSearch: true, customActions: testAction }, (result) => {
           if (!result || result.item.id === '_empty') return;
@@ -1411,6 +1412,68 @@ export function registerBuiltinCommands(registry: CommandRegistry): void {
     },
   });
 
+  // ── /danger ──────────────────────────────────────────────────────
+  registry.register({
+    name: 'danger',
+    aliases: [],
+    description: '⚠ Danger zone settings (agent recursion, daemon, HTTP listener)',
+    usage: '[key] [value]',
+    handler(args, ctx) {
+      if (args.length === 0) {
+        // Open settings modal at danger tab
+        if (ctx.openSettingsModal) {
+          ctx.openSettingsModal();
+          // We need to set the category index to danger (index 4 in SETTINGS_CATEGORIES)
+          // This requires the settings modal to support opening at a specific category
+          // For now, just open and let user Tab to danger
+        } else {
+          // Fallback: show danger settings as text
+          const cm = ctx.configManager;
+          const all = cm.getAll();
+          const lines: string[] = ['⚠ Danger Zone Settings:', ''];
+          const dangerObj = all.danger as Record<string, unknown>;
+          for (const [field, val] of Object.entries(dangerObj)) {
+            const key = `danger.${field}`;
+            lines.push(`  ${key.padEnd(36)} ${String(val)}`);
+          }
+          ctx.print(lines.join('\n'));
+        }
+        return;
+      }
+      // /danger <key> <value> — shorthand for /config danger.<key> <value>
+      const key = args[0].startsWith('danger.') ? args[0] : `danger.${args[0]}`;
+      if (args.length === 1) {
+        // Show single key
+        try {
+          const val = ctx.configManager.get(key as any);
+          ctx.print(`${key} = ${String(val)}`);
+        } catch (e) {
+          ctx.print(`Error: ${(e as Error).message}`);
+        }
+      } else {
+        // Set value
+        const rawValue = args.slice(1).join(' ');
+        try {
+          const schema = CONFIG_SCHEMA.find(s => s.key === key);
+          if (!schema) {
+            ctx.print(`Unknown danger key: ${key}`);
+            return;
+          }
+          let coerced: unknown = rawValue;
+          if (schema.type === 'boolean') {
+            coerced = rawValue === 'true' || rawValue === '1' || rawValue === 'yes';
+          } else if (schema.type === 'number') {
+            coerced = Number(rawValue);
+          }
+          ctx.configManager.set(key as any, coerced as any);
+          ctx.print(`⚠ Set ${key} = ${String(coerced)}`);
+        } catch (e) {
+          ctx.print(`Error: ${(e as Error).message}`);
+        }
+      }
+    },
+  });
+
   // ── /context ─────────────────────────────────────────────────────
   registry.register({
     name: 'context',
@@ -1433,9 +1496,9 @@ export function registerBuiltinCommands(registry: CommandRegistry): void {
           const text = typeof m.content === 'string'
             ? m.content
             : (m.content as Array<{ type: string; text?: string }>)
-                .filter((p) => p.type === 'text')
-                .map((p) => p.text ?? '')
-                .join('');
+              .filter((p) => p.type === 'text')
+              .map((p) => p.text ?? '')
+              .join('');
           const t = estimateTokens(text);
           total += t;
           lines.push(`  ${m.role.padEnd(12)} ~${t.toLocaleString()} tokens`);

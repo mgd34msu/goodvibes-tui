@@ -59,10 +59,11 @@ export function renderSettingsModal(
     return isActive ? `[${cat.toUpperCase()}]` : ` ${cat} `;
   });
   const tabLine = tabParts.join('  ');
+  const isDangerTab = SETTINGS_CATEGORIES[modal.categoryIndex] === 'danger';
   sections.push({
     type: 'text',
     content: tabLine,
-    style: { fg: '#00ffff', bold: true },
+    style: { fg: isDangerTab ? '#ef4444' : '#00ffff', bold: true },
   });
 
   sections.push({ type: 'separator' });
@@ -91,6 +92,7 @@ export function renderSettingsModal(
     });
     sections.push({ type: 'separator' });
 
+    const isDangerCategory = modal.currentCategory === 'danger';
     const listItems: import('./modal-factory.ts').ModalListItem[] = items.map((entry, idx) => {
       const isSelected = idx === modal.selectedIndex;
 
@@ -116,7 +118,7 @@ export function renderSettingsModal(
       return {
         label,
         selected: isSelected,
-        style: isSelected ? undefined : { fg: valueColor(entry) },
+        style: isSelected ? undefined : { fg: isDangerCategory ? '#ef4444' : valueColor(entry) },
       };
     });
 
