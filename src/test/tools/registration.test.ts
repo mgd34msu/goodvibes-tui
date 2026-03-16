@@ -3,10 +3,10 @@ import { ToolRegistry } from '../../tools/registry.ts';
 import { registerAllTools } from '../../tools/index.ts';
 
 describe('registerAllTools', () => {
-  test('registers exactly 7 tools', () => {
+  test('registers exactly 11 tools', () => {
     const registry = new ToolRegistry();
     registerAllTools(registry);
-    expect(registry.list()).toHaveLength(7);
+    expect(registry.list()).toHaveLength(11);
   });
 
   test('registers a tool named "read"', () => {
@@ -49,6 +49,30 @@ describe('registerAllTools', () => {
     const registry = new ToolRegistry();
     registerAllTools(registry);
     expect(registry.has('inspect')).toBe(true);
+  });
+
+  test('registers a tool named "agent"', () => {
+    const registry = new ToolRegistry();
+    registerAllTools(registry);
+    expect(registry.has('agent')).toBe(true);
+  });
+
+  test('registers a tool named "state"', () => {
+    const registry = new ToolRegistry();
+    registerAllTools(registry);
+    expect(registry.has('state')).toBe(true);
+  });
+
+  test('registers a tool named "workflow"', () => {
+    const registry = new ToolRegistry();
+    registerAllTools(registry);
+    expect(registry.has('workflow')).toBe(true);
+  });
+
+  test('registers a tool named "fetch"', () => {
+    const registry = new ToolRegistry();
+    registerAllTools(registry);
+    expect(registry.has('fetch')).toBe(true);
   });
 
   test('each tool has a definition with name and description', () => {
