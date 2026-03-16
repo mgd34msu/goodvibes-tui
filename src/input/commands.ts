@@ -387,6 +387,7 @@ export function registerBuiltinCommands(registry: CommandRegistry): void {
                 detail: String(val),
                 category: cat,
                 actions: schema ? `[type] description: ${schema.description}` : undefined,
+                ...(cat === 'danger' ? { fg: '#ef4444' } : {}),
               });
             }
           }
