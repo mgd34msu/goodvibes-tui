@@ -36,7 +36,17 @@ export function renderFilePickerOverlay(
     const noResults = pad + '\u2502 ' + 'No matching files'.padEnd(contentW) + ' \u2502';
     lines.push(UIFactory.stringToLine(noResults, width, { fg: '244', dim: true }));
   } else {
-    for (let i = 0; i < picker.results.length && i < 12; i++) {
+    const maxVisible = 12;
+    let startIdx = 0;
+    if (picker.results.length > maxVisible) {
+      startIdx = Math.max(0, Math.min(
+        picker.selectedIndex - Math.floor(maxVisible / 2),
+        picker.results.length - maxVisible,
+      ));
+    }
+    const endIdx = Math.min(startIdx + maxVisible, picker.results.length);
+
+    for (let i = startIdx; i < endIdx; i++) {
       const file = picker.results[i];
       const isSelected = i === picker.selectedIndex;
       const indicator = isSelected ? '\u25b6 ' : '  ';
