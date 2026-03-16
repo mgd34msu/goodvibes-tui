@@ -206,7 +206,7 @@ describe('toGeminiFunctionDeclarations', () => {
     const [result] = toGeminiFunctionDeclarations([sampleTool]);
     expect(result.name).toBe('file_read');
     expect(result.description).toBe('Read a file');
-    expect(result.parameters).toBe(sampleTool.parameters);
+    expect(result.parameters).toEqual(sampleTool.parameters);
   });
 });
 

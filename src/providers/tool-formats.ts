@@ -223,6 +223,20 @@ export interface GeminiContent {
   parts: GeminiPart[];
 }
 
+/** Strip properties that Gemini's API doesn't support (e.g. additionalProperties). */
+function stripUnsupportedProperties(obj: unknown): unknown {
+  if (Array.isArray(obj)) return obj.map(stripUnsupportedProperties);
+  if (obj !== null && typeof obj === 'object') {
+    const result: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(obj as Record<string, unknown>)) {
+      if (key === 'additionalProperties') continue;
+      result[key] = stripUnsupportedProperties(value);
+    }
+    return result;
+  }
+  return obj;
+}
+
 /** Convert internal ToolDefinitions to Gemini functionDeclarations. */
 export function toGeminiFunctionDeclarations(
   tools: ToolDefinition[],
@@ -230,7 +244,7 @@ export function toGeminiFunctionDeclarations(
   return tools.map((t) => ({
     name: t.name,
     description: t.description,
-    parameters: t.parameters,
+    parameters: stripUnsupportedProperties(t.parameters) as Record<string, unknown>,
   }));
 }
 
