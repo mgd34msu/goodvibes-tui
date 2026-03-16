@@ -417,7 +417,7 @@ async function main() {
       viewport.length = 0;
       const helpLines = renderHelpOverlay(width, commandRegistry.getAll(), input.helpScrollOffset);
       // Pad BEFORE content so modal sits flush above input area
-      const helpPad = Math.max(0, effectiveVHeight - helpLines.length - 2);
+      const helpPad = Math.max(0, effectiveVHeight - helpLines.length + 1);
       for (let i = 0; i < helpPad; i++) viewport.push(createEmptyLine(width));
       viewport.push(...helpLines);
     }
