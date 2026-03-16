@@ -458,7 +458,19 @@ async function main() {
           config.workingDir,
           runtime.provider,
           providerRegistry.getCurrentModel().contextWindow,
-          configManager.get('behavior.autoCompactThreshold') as number
+          configManager.get('behavior.autoCompactThreshold') as number,
+          (() => {
+            // Danger mode: autoApprove, allow-all, or all individual tools set to allow
+            if (configManager.get('behavior.autoApprove')) return true;
+            const permMode = configManager.get('permissions.mode');
+            if (permMode === 'allow-all') return true;
+            if (permMode === 'custom') {
+              const tools = configManager.getCategory('permissions').tools;
+              const allAllow = Object.values(tools).every(v => v === 'allow');
+              if (allAllow) return true;
+            }
+            return false;
+          })()
         )];
       })(),
       selection: {

@@ -182,7 +182,8 @@ export class UIFactory {
     workingDir?: string,
     provider?: string,
     contextWindow?: number,
-    compactThreshold?: number
+    compactThreshold?: number,
+    dangerMode?: boolean
   ): Line[] {
     const lines: Line[] = [];
     const promptLines = prompt.split('\n');
@@ -284,7 +285,24 @@ export class UIFactory {
       lines.push(this.stringToLine(notice.padEnd(width), width, { fg: '196', bold: true }));
     } else {
       const help = `   /help for commands  -  Ctrl+C to quit `;
-      lines.push(this.stringToLine(help.padEnd(width), width, { fg: '240', dim: true }));
+      const dangerWarn = dangerMode ? `⚠ DANGER MODE — ALL CHANGES AUTO-APPROVED ` : '';
+      const helpW = getDisplayWidth(help);
+      const dangerW = getDisplayWidth(dangerWarn);
+      const spacerW = Math.max(0, width - helpW - dangerW);
+      const combinedLine = help + ' '.repeat(spacerW) + dangerWarn;
+      const line = this.stringToLine(combinedLine.slice(0, width), width, { fg: '240', dim: true });
+      // Overlay the danger warning in red bold
+      if (dangerMode && dangerW > 0) {
+        let col = helpW + spacerW;
+        for (const ch of dangerWarn) {
+          if (col >= width) break;
+          const cw = getDisplayWidth(ch);
+          line[col] = { char: ch, fg: '#ef4444', bg: '', bold: true, dim: false, underline: false, italic: false, strikethrough: false };
+          if (cw === 2 && col + 1 < width) line[col + 1] = { ...line[col], char: '' };
+          col += cw;
+        }
+      }
+      lines.push(line);
     }
     lines.push(createBaseLine());
     return lines;
