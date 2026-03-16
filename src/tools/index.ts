@@ -8,6 +8,11 @@ import { findTool } from './find/index.ts';
 import { execTool } from './exec/index.ts';
 import { analyzeTool } from './analyze/index.ts';
 import { InspectTool } from './inspect/index.ts';
+import { agentTool } from './agent/index.ts';
+import { fetchTool } from './fetch/index.ts';
+import { createStateTool } from './state/index.ts';
+import { workflowTool } from './workflow/index.ts';
+import { KVState } from '../state/kv-state.ts';
 
 /**
  * Register all built-in tools into the given registry.
@@ -25,4 +30,9 @@ export function registerAllTools(registry: ToolRegistry): void {
   registry.register(execTool);
   registry.register(analyzeTool);
   registry.register(new InspectTool());
+  registry.register(agentTool);
+  const kvState = new KVState();
+  registry.register(createStateTool(kvState, projectIndex));
+  registry.register(workflowTool);
+  registry.register(fetchTool);
 }
