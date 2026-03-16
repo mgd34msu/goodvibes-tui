@@ -381,9 +381,7 @@ async function main() {
     if (input.modelPicker.active) {
       overlayRows += input.modelPicker.getItemCount() + 7;
     }
-    if (input.selectionModal.active) {
-      overlayRows += Math.min(input.selectionModal.filteredItems.length, 12) + 4;
-    }
+    // Selection modal overlay rows are computed from actual rendered line count below
     if (input.searchManager.active) {
       overlayRows += 1;
     }
@@ -429,7 +427,13 @@ async function main() {
     }
 
     if (input.selectionModal.active) {
-      viewport.push(...renderSelectionModalOverlay(input.selectionModal, width));
+      const selLines = renderSelectionModalOverlay(input.selectionModal, width);
+      // Replace the bottom of the viewport with the modal, keeping conversation above
+      const targetStart = Math.max(0, vHeight - selLines.length);
+      viewport.length = Math.min(viewport.length, targetStart);
+      // Pad if viewport is shorter than targetStart
+      while (viewport.length < targetStart) viewport.push(createEmptyLine(width));
+      viewport.push(...selLines);
     }
 
     if (input.searchManager.active) {
@@ -451,9 +455,8 @@ async function main() {
     if (input.helpOverlayActive) {
       viewport.length = 0;
       const helpLines = renderHelpOverlay(width, commandRegistry.getAll(), input.helpScrollOffset);
-      // Use vHeight (not effectiveVHeight) — full-screen overlays aren't affected by other overlay reservations
-      // Bottom of modal content should be 1 row above the input area
       const helpPad = Math.max(0, vHeight - helpLines.length);
+
       for (let i = 0; i < helpPad; i++) viewport.push(createEmptyLine(width));
       viewport.push(...helpLines);
     }
