@@ -162,6 +162,8 @@ async function main() {
     // Save conversation on exit
     saveConversation(conversation.toJSON());
     try { ScheduleManager.getInstance().destroy(); } catch { /* non-fatal */ }
+    stdin.removeAllListeners('data');
+    stdout.removeAllListeners('resize');
     stdout.write(PASTE_DISABLE + KEYBOARD_EXT_DISABLE + MOUSE_DISABLE + CURSOR_SHOW + ALT_SCREEN_EXIT);
     stdin.setRawMode(false);
     process.exit(0);
@@ -283,7 +285,7 @@ async function main() {
   };
 
   // When model+effort selection is complete via the picker, apply both
-  bus.on('model-picker:complete', (data) => {
+  unsubs.push(bus.on('model-picker:complete', (data) => {
     if (!data?.model) return;
     const def = data.model;
     const effort = data.effort;
@@ -301,7 +303,7 @@ async function main() {
       conversation.log(`Error switching model: ${(e as Error).message}`, { fg: '#ef4444' });
     }
     bus.emit('render:request');
-  });
+  }));
 
   // --- Input history ---
   const saveHistory = configManager.get('behavior.saveHistory');
@@ -345,7 +347,7 @@ async function main() {
       overlayRows += input.modelPicker.getItemCount() + 7; // items + title/empty/divider/detail/bottom
     }
     if (input.selectionModal.active) {
-      overlayRows += Math.min(input.selectionModal.filteredItems.length, 12) + 8; // items + title/search/sep/hints/bottom/pad + 2 spacing lines above
+      overlayRows += Math.min(input.selectionModal.filteredItems.length, 12) + 10; // items + title/search/sep/hints/bottom/pad + extra room
     }
     if (input.searchManager.active) {
       overlayRows += 1; // search bar
@@ -414,29 +416,32 @@ async function main() {
     if (input.helpOverlayActive) {
       viewport.length = 0;
       const helpLines = renderHelpOverlay(width, commandRegistry.getAll(), input.helpScrollOffset);
-      // Pad to fill viewport so modal sits flush above input
-      while (helpLines.length < effectiveVHeight) helpLines.push(createEmptyLine(width));
+      // Pad BEFORE content so modal sits flush above input area
+      const helpPad = Math.max(0, effectiveVHeight - helpLines.length - 1);
+      for (let i = 0; i < helpPad; i++) viewport.push(createEmptyLine(width));
       viewport.push(...helpLines);
     }
 
     if (input.shortcutsOverlayActive) {
       viewport.length = 0;
       const shortcutLines = renderShortcutsOverlay(width, input.shortcutsScrollOffset);
-      while (shortcutLines.length < effectiveVHeight) shortcutLines.push(createEmptyLine(width));
+      const scPad = Math.max(0, effectiveVHeight - shortcutLines.length - 1);
+      for (let i = 0; i < scPad; i++) viewport.push(createEmptyLine(width));
       viewport.push(...shortcutLines);
     }
+
+    const runningAgentCount = AgentManager.getInstance().list().filter((a) => a.status === 'running' || a.status === 'pending').length;
+    const runningProcessCount = ProcessManager.getInstance().list().length;
 
     compositor.composite({
       width, height,
       header: UIFactory.createHeader(width, runtime.model, runtime.provider, conversation.title || undefined, lastGitInfo),
       viewport,
       footer: (() => {
-        const runningAgents = AgentManager.getInstance().list().filter((a) => a.status === 'running' || a.status === 'pending').length;
-        const runningProcesses = ProcessManager.getInstance().list().length;
         const processIndicatorLines = renderProcessIndicator(
           width,
-          runningAgents,
-          runningProcesses,
+          runningAgentCount,
+          runningProcessCount,
         );
         const cw = getPromptContentWidth();
         const info = input.getWrappedPromptInfo(cw);
@@ -446,7 +451,7 @@ async function main() {
           orchestrator.usage as unknown as { up: number; down: number; max?: number },
           input.showExitNotice,
           input.lastCopyTime,
-          runtime.model, toolCount,
+          runtime.model, toolRegistry.list().length,
           info.visibleCursorLine >= 0
             ? info.visibleLines.slice(0, info.visibleCursorLine).reduce((s, l) => s + l.length + 1, 0) + info.visibleCursorCol
             : undefined,

@@ -27,7 +27,7 @@ export function renderModelPickerOverlay(
 ): Line[] {
   const lines: Line[] = [];
   const boxMargin = 4;
-  const boxW = Math.min(width - boxMargin * 2, 72);
+  const boxW = Math.max(4, Math.min(width - boxMargin * 2, 72));
   const contentW = boxW - 4; // 2 border chars + 2 padding chars each side
   const pad = ' '.repeat(boxMargin);
 

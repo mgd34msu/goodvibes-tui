@@ -13,7 +13,7 @@ export function renderFilePickerOverlay(
 ): Line[] {
   const lines: Line[] = [];
   const boxMargin = 4;
-  const boxW = Math.min(width - boxMargin * 2, 70);
+  const boxW = Math.max(4, Math.min(width - boxMargin * 2, 70));
   const contentW = boxW - 4;
   const pad = ' '.repeat(boxMargin);
 

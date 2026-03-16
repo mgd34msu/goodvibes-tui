@@ -1029,7 +1029,7 @@ export class InputHandler {
           } else if (token.logicalName === 'up') {
             this.helpScrollOffset = Math.max(0, this.helpScrollOffset - 1);
           } else if (token.logicalName === 'down') {
-            this.helpScrollOffset += 1;
+            this.helpScrollOffset = Math.min(this.helpScrollOffset + 1, 100);
           }
         } else if (token.type === 'text' && token.value === '?') {
           this.helpOverlayActive = false;
@@ -1048,7 +1048,7 @@ export class InputHandler {
           } else if (token.logicalName === 'up') {
             this.shortcutsScrollOffset = Math.max(0, this.shortcutsScrollOffset - 1);
           } else if (token.logicalName === 'down') {
-            this.shortcutsScrollOffset += 1;
+            this.shortcutsScrollOffset = Math.min(this.shortcutsScrollOffset + 1, 50);
           }
         }
         this.bus.emit('render:request');
@@ -1283,7 +1283,10 @@ export class InputHandler {
       if (token.type === 'text') {
         // '?' with empty prompt in normal mode: toggle help overlay
         if (token.value === '?' && this.prompt === '' && !this.commandMode) {
-          this.helpOverlayActive = !this.helpOverlayActive;
+          // ? key opens the same selection modal as /help
+          if (this.commandContext?.openSelection) {
+            this.commandRegistry?.execute('help', [], this.commandContext!);
+          }
           this.bus.emit('render:request');
           continue;
         }

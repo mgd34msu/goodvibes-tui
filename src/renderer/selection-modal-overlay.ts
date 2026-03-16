@@ -16,7 +16,7 @@ export function renderSelectionModalOverlay(
   lines.push(UIFactory.stringToLine(' '.repeat(width), width));
   lines.push(UIFactory.stringToLine(' '.repeat(width), width));
   const boxMargin = 4;
-  const boxW = Math.min(width - boxMargin * 2, 72);
+  const boxW = Math.max(4, Math.min(width - boxMargin * 2, 72));
   const contentW = boxW - 4; // 2 border chars + 2 padding chars each side
   const pad = ' '.repeat(boxMargin);
 
@@ -83,11 +83,11 @@ export function renderSelectionModalOverlay(
       if (item.detail) {
         // Left: label, right: detail right-aligned
         const maxLabelLen = Math.floor(contentW * 0.6) - 2;
-        const labelStr = item.label.length > maxLabelLen
+        const labelStr = getDisplayWidth(item.label) > maxLabelLen
           ? item.label.slice(0, maxLabelLen - 1) + '\u2026'
           : item.label;
         const detailSpace = contentW - maxLabelLen - 4; // indicator(2) + gap(2)
-        const detailStr = item.detail.length > detailSpace
+        const detailStr = getDisplayWidth(item.detail) > detailSpace
           ? item.detail.slice(0, detailSpace - 1) + '\u2026'
           : item.detail.padStart(detailSpace);
         const rowText = pad + '\u2502 ' + indicator + labelStr.padEnd(maxLabelLen) + '  ' + detailStr + ' \u2502';
@@ -97,7 +97,7 @@ export function renderSelectionModalOverlay(
           bg: isSelected ? '#1a2a3a' : '',
         }));
       } else {
-        const labelStr = item.label.length > contentW - 2
+        const labelStr = getDisplayWidth(item.label) > contentW - 2
           ? item.label.slice(0, contentW - 3) + '\u2026'
           : item.label;
         const rowText = pad + '\u2502 ' + indicator + labelStr.padEnd(contentW - 2) + '\u2502';
