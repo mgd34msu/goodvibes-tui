@@ -76,7 +76,7 @@ export function toOpenAIMessages(
         result.push({ role: 'user', content: msg.content });
       }
     } else if (msg.role === 'assistant') {
-      const m: OpenAIMessage = { role: 'assistant', content: msg.content || null };
+      const m: OpenAIMessage = { role: 'assistant', content: msg.content ?? '' };
       if (msg.toolCalls && msg.toolCalls.length > 0) {
         m.tool_calls = msg.toolCalls.map((tc) => ({
           id: tc.id,
