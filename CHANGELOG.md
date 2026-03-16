@@ -4,6 +4,45 @@ All notable changes to GoodVibes TUI.
 
 ---
 
+## [0.9.3] — 2026-03-16
+
+### Bundled LSP Servers
+- **Zero-config language intelligence** — TypeScript, Python, Bash, CSS, HTML, and JSON language servers ship as npm dependencies
+- **Lazy binary download** — rust-analyzer auto-downloads from GitHub releases with SHA256 verification on first use
+- **gopls auto-install** — installed via `go install` with GOBIN override if Go is on PATH
+- **resolveCommand()** — 3-tier server resolution: node_modules/.bin → .goodvibes/bin → system PATH
+- Fixed CSS/HTML server names (camelCase → hyphenated), added JSON server, added tsx config entry
+- Fixed gopls args (added missing `serve` subcommand)
+
+### Danger Zone
+- **`/danger` command** — dedicated slash command for viewing/toggling danger settings
+- **Red danger styling** — danger settings render in red (#ef4444) in `/help`, `/config`, and `/settings` modals
+- **DANGER MODE warning** — persistent red "\u26a0 DANGER MODE \u2014 ALL CHANGES AUTO-APPROVED" in footer when autoApprove, allow-all, or all individual permissions are set to allow
+- **`/danger` selection modal** — dedicated modal with Enter-to-toggle for boolean danger settings
+
+### UI / UX
+- **`/config` shows all 6 categories** — was hardcoded to only display/provider/behavior; now includes permissions, danger, tools
+- **`/effort` selection modal** — interactive picker with descriptions, pre-selected on current level
+- **Per-item color in selection modals** — `SelectionItem.fg` field enables per-item foreground color overrides
+- **Bookmark modal wired** — `renderBookmarkModal` was never called in the render loop; now properly rendered
+- **Bottom-anchored modal positioning** — all overlay modals (selection, file-picker, model-picker, bookmark) use actual rendered line counts instead of estimated overlayRows
+- **Viewport height from actual sizes** — vHeight computed from real header/footer line counts, not hardcoded FOOTER_BASE_ROWS estimate
+
+### Tool Improvements
+- **Discovery hints** — tool descriptions now include "Discovery:" hints telling the AI how to discover runtime state (state, workflow, fetch, registry, agent tools)
+- **read tool ast mode** — fixed description from "Phase 3 placeholder" to accurately describe tree-sitter implementation
+
+### Documentation
+- **README tools section rewrite** — flat table replaced with per-tool subsections highlighting differentiators vs Claude Code/Gemini CLI/Codex
+- **LSP documentation** — bundled servers, auto-download, and optional prerequisites documented
+- **Updated .gitignore** — added node_modules/, dist/, .goodvibes/, scripts/reset-suite.sh
+
+### Cleanup
+- Removed full-suite/ test fixtures and tool-updates-v3.md
+- Removed stale package-lock.json (project uses bun.lock)
+
+---
+
 ## [0.9.0] — Production-Ready Release
 
 ### Phase A: Foundation — Integration Wiring
