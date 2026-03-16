@@ -1063,14 +1063,18 @@ export function registerBuiltinCommands(registry: CommandRegistry): void {
               const nextMode = VALID_MODES[(VALID_MODES.indexOf(currentMode as typeof VALID_MODES[number]) + 1) % VALID_MODES.length];
               // eslint-disable-next-line @typescript-eslint/no-explicit-any
               cm.set('permissions.mode', nextMode as any);
-              ctx.print(`Permission mode set to: ${nextMode}`);
+              result.item.detail = nextMode;
+              ctx.renderRequest();
+              return; // Stay in modal
             } else {
               const toolKey = `permissions.tools.${result.item.id}` as Parameters<typeof cm.get>[0];
               const currentAction = cm.get(toolKey) as string;
               const nextAction = VALID_ACTIONS[(VALID_ACTIONS.indexOf(currentAction as typeof VALID_ACTIONS[number]) + 1) % VALID_ACTIONS.length];
               // eslint-disable-next-line @typescript-eslint/no-explicit-any
               cm.set(toolKey as Parameters<typeof cm.set>[0], nextAction as any);
-              ctx.print(`Permission for ${result.item.id} set to: ${nextAction}`);
+              result.item.detail = nextAction;
+              ctx.renderRequest();
+              return; // Stay in modal
             }
           });
           return;
