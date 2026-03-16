@@ -347,7 +347,7 @@ async function main() {
       overlayRows += input.modelPicker.getItemCount() + 7; // items + title/empty/divider/detail/bottom
     }
     if (input.selectionModal.active) {
-      overlayRows += Math.min(input.selectionModal.filteredItems.length, 12) + 6; // items + title/sep/hints/bottom + padding
+      overlayRows += Math.min(input.selectionModal.filteredItems.length, 12) + 4; // items + title/sep/hints/bottom
     }
     if (input.searchManager.active) {
       overlayRows += 1; // search bar
@@ -417,7 +417,7 @@ async function main() {
       viewport.length = 0;
       const helpLines = renderHelpOverlay(width, commandRegistry.getAll(), input.helpScrollOffset);
       // Pad BEFORE content so modal sits flush above input area
-      const helpPad = Math.max(0, effectiveVHeight - helpLines.length - 1);
+      const helpPad = Math.max(0, effectiveVHeight - helpLines.length - 2);
       for (let i = 0; i < helpPad; i++) viewport.push(createEmptyLine(width));
       viewport.push(...helpLines);
     }
