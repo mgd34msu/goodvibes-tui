@@ -65,7 +65,7 @@ export const FETCH_TOOL_SCHEMA = {
           },
           service: {
             type: 'string',
-            description: 'Named service for automatic credential lookup from the service registry.',
+            description: 'Named service for automatic credential lookup from the service registry. Services are configured in .goodvibes/tui/services.json. Use the registry tool or check .goodvibes/tui/services.json to discover available service names.',
           },
           auth: {
             type: 'object',

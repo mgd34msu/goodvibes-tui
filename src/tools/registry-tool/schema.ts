@@ -11,7 +11,9 @@ export const REGISTRY_TOOL_SCHEMA = {
         'Operation mode: search finds skills/agents/tools by query;'
         + ' recommend lists items sorted by relevance to a task;'
         + ' dependencies reads a skill\'s depends_on;'
-        + ' content returns the full markdown file and parsed metadata.',
+        + ' content returns the full markdown file and parsed metadata.'
+        + ' Discovery: use mode=search with no query to list all available items;'
+        + ' use mode=search type=skills to list skills, type=agents for agents, type=tools for tools.',
     },
     query: {
       type: 'string',
