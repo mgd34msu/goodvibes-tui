@@ -9,6 +9,7 @@ export interface SelectionItem {
   detail?: string;        // shown to the right of label
   category?: string;      // optional grouping header
   actions?: string;       // hint text for available actions (e.g., "[d] delete")
+  fg?: string;             // optional foreground color override for this item
 }
 
 export type SelectionAction = 'select' | 'delete' | 'edit' | 'toggle';
