@@ -1,7 +1,9 @@
+import { existsSync } from 'node:fs';
+import { join } from 'node:path';
 import { EventBus } from '../core/event-bus.ts';
 import { AgentManager, type AgentRecord } from '../tools/agent/index.ts';
 import { type CompletionReport, type ReviewerReport, parseCompletionReport } from './completion-report.ts';
-import type { WrfcChain, WrfcState, QualityGateResult } from './wrfc-types.ts';
+import type { WrfcChain, WrfcState, QualityGateResult, QueuedChain } from './wrfc-types.ts';
 import { AgentWorktree } from './worktree.ts';
 import { configManager } from '../config/index.ts';
 import { logger } from '../utils/logger.ts';
@@ -13,8 +15,9 @@ import { logger } from '../utils/logger.ts';
  *   1. Agent spawned without skipWrfc → createChain() → state: engineering
  *   2. Engineer completes → parse report → spawn reviewer → state: reviewing
  *   3. Reviewer completes → check score vs threshold
- *      a. Score >= threshold → run quality gates → state: gating
+ *      a. Score >= threshold → state: awaiting_gates (wait for all sibling chains to finish)
  *      b. Score < threshold → spawn fixer → state: fixing → back to step 2
+ *   3b. All active chains reach awaiting_gates → run gates ONCE → state: gating
  *   4. Gates pass → auto-commit → state: passed
  *   5. Gates fail → spawn new chain for gate failures (current chain: passed)
  *
@@ -27,13 +30,21 @@ import { logger } from '../utils/logger.ts';
 // ---------------------------------------------------------------------------
 
 const VALID_TRANSITIONS: Partial<Record<WrfcState, WrfcState[]>> = {
-  pending:     ['engineering'],
-  engineering: ['reviewing', 'failed'],
-  reviewing:   ['fixing', 'gating', 'failed'],
-  fixing:      ['reviewing', 'failed'],
-  gating:      ['passed', 'failed', 'committing'],
-  committing:  ['passed', 'failed'],
+  pending:        ['engineering'],
+  engineering:    ['reviewing', 'failed'],
+  reviewing:      ['fixing', 'awaiting_gates', 'failed'],
+  fixing:         ['reviewing', 'failed'],
+  awaiting_gates: ['gating', 'failed'],
+  gating:         ['passed', 'failed', 'committing'],
+  committing:     ['passed', 'failed'],
 };
+
+// ---------------------------------------------------------------------------
+// Constants
+// ---------------------------------------------------------------------------
+
+/** Maximum number of concurrently active (non-terminal) WRFC chains. */
+const MAX_ACTIVE_CHAINS = 6;
 
 // ---------------------------------------------------------------------------
 // WrfcController
@@ -42,8 +53,13 @@ const VALID_TRANSITIONS: Partial<Record<WrfcState, WrfcState[]>> = {
 export class WrfcController {
   private static instance: WrfcController | null = null;
   private chains = new Map<string, WrfcChain>();
+  private chainQueue: QueuedChain[] = [];
   private eventBus: EventBus;
   private unsubscribers: Array<() => void> = [];
+  /** Counter of currently active (non-terminal) chains — avoids linear scan on every spawn. */
+  private activeChainCount = 0;
+  /** Pending parent chain IDs for follow-up agents: agentId → parentChainId. */
+  private pendingParentChainIds = new Map<string, string>();
 
   private constructor(eventBus: EventBus) {
     this.eventBus = eventBus;
@@ -78,6 +94,45 @@ export class WrfcController {
    * Sets chain state to 'engineering' and links the record.
    */
   createChain(engineerRecord: AgentRecord): WrfcChain {
+    // Check active chain cap — queue if at limit
+    const activeCount = this.activeChainCount;
+
+    if (activeCount >= MAX_ACTIVE_CHAINS) {
+      // Enqueue and return a placeholder pending chain
+      const id = this.generateWrfcId();
+      const chain: WrfcChain = {
+        id,
+        state: 'pending',
+        task: engineerRecord.task,
+        engineerAgentId: engineerRecord.id,
+        allAgentIds: [engineerRecord.id],
+        fixAttempts: 0,
+        reviewCycles: 0,
+        createdAt: Date.now(),
+      };
+      this.chains.set(id, chain);
+      engineerRecord.wrfcId = id;
+
+      // Check if a parent chain was pre-registered for this agent
+      const pendingParentId = this.pendingParentChainIds.get(engineerRecord.id);
+      if (pendingParentId) {
+        chain.parentChainId = pendingParentId;
+        this.pendingParentChainIds.delete(engineerRecord.id);
+      }
+
+      this.chainQueue.push({ record: engineerRecord, queuedAt: Date.now() });
+
+      logger.debug('WrfcController.createChain: at cap, queued', {
+        chainId: id,
+        agentId: engineerRecord.id,
+        activeCount,
+        queueLength: this.chainQueue.length,
+      });
+
+      this.eventBus.emit('wrfc:chain-created', { chainId: id, task: chain.task });
+      return chain;
+    }
+
     const id = this.generateWrfcId();
 
     const chain: WrfcChain = {
@@ -96,7 +151,15 @@ export class WrfcController {
     // Link the agent record to this chain
     engineerRecord.wrfcId = id;
 
+    // Check if a parent chain was pre-registered for this agent
+    const pendingParentId = this.pendingParentChainIds.get(engineerRecord.id);
+    if (pendingParentId) {
+      chain.parentChainId = pendingParentId;
+      this.pendingParentChainIds.delete(engineerRecord.id);
+    }
+
     // Transition immediately to 'engineering'
+    this.activeChainCount++;
     this.transition(chain, 'engineering');
 
     this.eventBus.emit('wrfc:chain-created', { chainId: id, task: chain.task });
@@ -186,6 +249,16 @@ export class WrfcController {
       outputLength: rawOutput.length,
     });
 
+    if (chain.state === 'pending') {
+      // Agent completed while chain was still queued — buffer the result for when it's dequeued
+      chain.bufferedCompletion = { agentId, fullOutput: rawOutput };
+      logger.debug('WrfcController.onAgentComplete: chain pending, buffering completion', {
+        chainId: chain.id,
+        agentId,
+      });
+      return;
+    }
+
     if (chain.state === 'engineering' || chain.state === 'fixing') {
       // Engineer or fixer completed — parse report and start review
       let report = parseCompletionReport(rawOutput);
@@ -225,11 +298,20 @@ export class WrfcController {
         };
       }
 
-      chain.reviewerReport = reviewerReport;
+      const narrowedReport = reviewerReport as ReviewerReport;
+      chain.reviewerReport = narrowedReport;
       chain.reviewCycles += 1;
 
-      await this.processReview(chain, reviewerReport);
+      await this.processReview(chain, narrowedReport);
     }
+
+    // After any agent completion, re-check if all chains are now ready for gates.
+    // This covers the case where a fixer finishes and all siblings are already awaiting_gates.
+    // Skip redundant check if chain already moved past awaiting_gates.
+    if (chain && (chain.state === 'gating' || chain.state === 'passed' || chain.state === 'committing')) {
+      return;
+    }
+    await this.checkAndRunGatesForAll();
   }
 
   private onAgentFailed(agentId: string, errorMessage?: string): void {
@@ -293,7 +375,6 @@ export class WrfcController {
 
   private async processReview(chain: WrfcChain, review: ReviewerReport): Promise<void> {
     const threshold = configManager.get('wrfc.scoreThreshold') as number;
-    const maxFixes = configManager.get('wrfc.maxFixAttempts') as number;
 
     this.eventBus.emit('wrfc:review-complete', {
       chainId: chain.id,
@@ -306,18 +387,15 @@ export class WrfcController {
       score: review.score,
       threshold,
       fixAttempts: chain.fixAttempts,
-      maxFixes,
     });
 
     if (review.score >= threshold) {
-      await this.runAndProcessGates(chain);
-    } else if (chain.fixAttempts < maxFixes) {
-      this.startFix(chain, review);
+      this.transition(chain, 'awaiting_gates');
+      await this.checkAndRunGatesForAll();
     } else {
-      this.failChain(
-        chain,
-        `Review score ${review.score} below threshold ${threshold} after ${chain.fixAttempts} fix attempts`
-      );
+      // Fix attempts are unlimited — only same-error detection (in processGateResults)
+      // stops the chain when identical failures repeat
+      this.startFix(chain, review);
     }
   }
 
@@ -396,10 +474,70 @@ export class WrfcController {
       gateCount: gates.length,
     });
 
+    // Read package.json once for script-based gate checks
+    const cwd = process.cwd();
+    let pkgScripts: Record<string, string> = {};
+    const pkgPath = join(cwd, 'package.json');
+    if (existsSync(pkgPath)) {
+      try {
+        const pkgJson = JSON.parse(await Bun.file(pkgPath).text()) as { scripts?: Record<string, string> };
+        pkgScripts = pkgJson.scripts ?? {};
+      } catch {
+        // Malformed package.json — treat as no scripts
+      }
+    }
+
     const results: QualityGateResult[] = [];
     const GATE_TIMEOUT_MS = 120_000;
 
     for (const gate of gates) {
+      // Gate auto-detection: skip gates whose required config files are absent
+      let skipReason: string | null = null;
+
+      if (gate.name === 'typecheck') {
+        if (!existsSync(join(cwd, 'tsconfig.json'))) {
+          skipReason = 'Skipped: no tsconfig.json found';
+        }
+      } else if (gate.name === 'lint') {
+        const lintConfigs = [
+          'eslint.config.js', 'eslint.config.mjs', 'eslint.config.cjs', 'eslint.config.ts',
+          '.eslintrc.json', '.eslintrc.js', '.eslintrc.yml', '.eslintrc.yaml', '.eslintrc',
+        ];
+        if (!lintConfigs.some((f) => existsSync(join(cwd, f)))) {
+          skipReason = 'Skipped: no ESLint config found';
+        }
+      } else if (gate.name === 'test') {
+        if (!pkgScripts['test']) {
+          skipReason = 'Skipped: no test script in package.json';
+        }
+      } else if (gate.name === 'build') {
+        if (!pkgScripts['build']) {
+          skipReason = 'Skipped: no build script in package.json';
+        }
+      }
+
+      if (skipReason !== null) {
+        const result: QualityGateResult = {
+          gate: gate.name,
+          passed: true,
+          output: skipReason,
+          durationMs: 0,
+        };
+        results.push(result);
+        chain.gateResults = results.slice();
+        this.eventBus.emit('wrfc:gate-result', {
+          chainId: chain.id,
+          gate: gate.name,
+          passed: true,
+        });
+        logger.debug('WrfcController.gate-skipped', {
+          chainId: chain.id,
+          gate: gate.name,
+          reason: skipReason,
+        });
+        continue;
+      }
+
       const startedAt = Date.now();
       let passed = false;
       let output = '';
@@ -475,18 +613,64 @@ export class WrfcController {
       if (autoCommit) {
         await this.autoCommit(chain);
       } else {
+        this.activeChainCount = Math.max(0, this.activeChainCount - 1);
         this.transition(chain, 'passed');
         this.eventBus.emit('wrfc:chain-passed', { chainId: chain.id });
         chain.completedAt = Date.now();
+        this.scheduleChainCleanup(chain);
+        this.dequeueNext().catch((err) => {
+          logger.error('WrfcController.dequeueNext unhandled error', { error: String(err) });
+        });
       }
     } else {
       // Gate(s) failed — this chain's review passed, but we spawn a new engineer
       // chain (without skipWrfc) to address the gate failures.
+
+      const failedGates = results.filter((r) => !r.passed);
+
+      // Build fingerprint from failed gate names + first 200 chars of each output
+      const fingerprint = failedGates
+        .map((r) => `${r.gate}:${r.output.slice(0, 200)}`) 
+        .join('|');
+
+      // Same-error detection: walk up parentChainId ancestry (up to 3 levels)
+      // and check if any ancestor had the same gate failure fingerprint.
+      let identicalAncestorCount = 0;
+      let ancestorId = chain.parentChainId;
+      for (let depth = 0; depth < 3 && ancestorId; depth++) {
+        const ancestor = this.chains.get(ancestorId);
+        if (!ancestor) break;
+        if (ancestor.gateFailureFingerprint === fingerprint) {
+          identicalAncestorCount++;
+        }
+        ancestorId = ancestor.parentChainId;
+      }
+
+      // Store fingerprint on current chain before transitioning
+      chain.gateFailureFingerprint = fingerprint;
+
+      this.activeChainCount = Math.max(0, this.activeChainCount - 1);
       this.transition(chain, 'passed');
       this.eventBus.emit('wrfc:chain-passed', { chainId: chain.id });
       chain.completedAt = Date.now();
+      this.scheduleChainCleanup(chain);
+      this.dequeueNext().catch((err) => {
+        logger.error('WrfcController.dequeueNext unhandled error', { error: String(err) });
+      });
 
-      const failedGates = results.filter((r) => !r.passed);
+      if (identicalAncestorCount >= 1) {
+        // An ancestor already had the same failures — 2 consecutive identical failures, abort to prevent cascade
+        logger.error(
+          'WrfcController.processGateResults: identical gate failures in consecutive chains, manual intervention required',
+          { chainId: chain.id, fingerprint }
+        );
+        this.eventBus.emit('wrfc:cascade-abort', {
+          chainId: chain.id,
+          reason: 'Identical gate failures detected in consecutive chains. Manual intervention required.',
+        });
+        return;
+      }
+
       const gateFailureSummary = failedGates
         .map((r) => `- ${r.gate}: ${r.output.slice(0, 300)}`)
         .join('\n');
@@ -507,6 +691,10 @@ export class WrfcController {
       ].join('\n');
 
       const manager = AgentManager.getInstance();
+      // Register parent chain ID — handles both sync createChain (during spawn) and async createChain (after spawn)
+      const parentChainIdForFollowUp = chain.id;
+
+      // We don't know the follow-up record's ID yet — register after spawn
       const followUpRecord = manager.spawn({
         mode: 'spawn',
         task: followUpTask,
@@ -514,11 +702,13 @@ export class WrfcController {
         // No skipWrfc — gets its own full WRFC chain
       });
 
-      // The new agent will get a new chain via the orchestrator's spawn hook (Phase 10).
-      // Record parentage so the UI can show the relationship.
+      // If createChain was called synchronously during spawn, the chain already exists.
+      // Otherwise, pre-register so createChain will pick up the parent when called.
       const followUpChain = this.findChainByAgentId(followUpRecord.id);
       if (followUpChain) {
-        followUpChain.parentChainId = chain.id;
+        followUpChain.parentChainId = parentChainIdForFollowUp;
+      } else {
+        this.pendingParentChainIds.set(followUpRecord.id, parentChainIdForFollowUp);
       }
 
       logger.debug('WrfcController.processGateResults: gate failure — spawned follow-up agent', {
@@ -528,9 +718,58 @@ export class WrfcController {
     }
   }
 
-  private async runAndProcessGates(chain: WrfcChain): Promise<void> {
-    const results = await this.runGates(chain);
-    await this.processGateResults(chain, results);
+  /**
+   * Check whether all active work chains (engineering/reviewing/fixing) have finished.
+   * If so, transition all awaiting_gates chains to gating and run gates once for all of them.
+   */
+  private scheduleChainCleanup(chain: WrfcChain): void {
+    setTimeout(() => {
+      if (chain.state === 'passed' || chain.state === 'failed') {
+        this.chains.delete(chain.id);
+      }
+    }, 60_000);
+  }
+
+  private async checkAndRunGatesForAll(): Promise<void> {
+    // Exclude terminal chains from the scan to keep it bounded
+    const allChains = Array.from(this.chains.values()).filter(
+      (c) => c.state !== 'passed' && c.state !== 'failed'
+    );
+
+    // Any chain still doing active work (including pending/queued)? If yes, bail — not time yet.
+    const activeWorkChains = allChains.filter((c) =>
+      c.state === 'pending' || c.state === 'engineering' || c.state === 'reviewing' || c.state === 'fixing'
+    );
+
+    if (activeWorkChains.length > 0) {
+      logger.debug('WrfcController.checkAndRunGatesForAll: waiting for active chains', {
+        activeWork: activeWorkChains.length,
+        awaitingGates: allChains.filter((c) => c.state === 'awaiting_gates').length,
+      });
+      return;
+    }
+
+    // Collect all chains ready for gates
+    const readyChains = allChains.filter((c) => c.state === 'awaiting_gates');
+
+    if (readyChains.length === 0) return;
+
+    logger.debug('WrfcController.checkAndRunGatesForAll: all chains ready, running gates', {
+      readyCount: readyChains.length,
+    });
+
+    // Use first ready chain as the gate runner (gates are project-wide)
+    const gateRunner = readyChains[0];
+    const results = await this.runGates(gateRunner);
+
+    // Transition all sibling chains from awaiting_gates → gating, then process
+    for (const chain of readyChains) {
+      if (chain.id !== gateRunner.id) {
+        this.transition(chain, 'gating');
+        chain.gateResults = results;
+      }
+      await this.processGateResults(chain, results);
+    }
   }
 
   // ---------------------------------------------------------------------------
@@ -555,11 +794,16 @@ export class WrfcController {
     try {
       const merged = await worktree.merge(agentId);
 
+      this.activeChainCount = Math.max(0, this.activeChainCount - 1);
       this.transition(chain, 'passed');
       chain.completedAt = Date.now();
+      this.scheduleChainCleanup(chain);
 
       this.eventBus.emit('wrfc:auto-commit', { chainId: chain.id });
       this.eventBus.emit('wrfc:chain-passed', { chainId: chain.id });
+      this.dequeueNext().catch((err) => {
+        logger.error('WrfcController.dequeueNext unhandled error', { error: String(err) });
+      });
 
       logger.debug('WrfcController.autoCommit: success', {
         chainId: chain.id,
@@ -588,11 +832,21 @@ export class WrfcController {
   // ---------------------------------------------------------------------------
 
   private failChain(chain: WrfcChain, reason: string): void {
+    // Remove from queue if chain was pending (never started)
+    if (chain.state === 'pending') {
+      this.chainQueue = this.chainQueue.filter(q => q.record.id !== chain.engineerAgentId);
+    }
+
+    const wasActive = chain.state !== 'passed' && chain.state !== 'failed' && chain.state !== 'pending';
     try {
       this.transition(chain, 'failed');
     } catch {
       // Already failed or in a state that can't transition — force it
       chain.state = 'failed';
+    }
+
+    if (wasActive) {
+      this.activeChainCount = Math.max(0, this.activeChainCount - 1);
     }
 
     chain.error = reason;
@@ -601,6 +855,52 @@ export class WrfcController {
     this.eventBus.emit('wrfc:chain-failed', { chainId: chain.id, reason });
 
     logger.error('WrfcController.failChain', { chainId: chain.id, reason });
+
+    this.scheduleChainCleanup(chain);
+
+    this.dequeueNext().catch((err) => {
+      logger.error('WrfcController.dequeueNext unhandled error', { error: String(err) });
+    });
+  }
+
+  // ---------------------------------------------------------------------------
+  // Queue management
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Dequeue the next waiting chain and start it, if the active cap allows.
+   * Called whenever a chain reaches a terminal state (passed or failed).
+   */
+  private async dequeueNext(): Promise<void> {
+    if (this.chainQueue.length === 0) return;
+
+    if (this.activeChainCount >= MAX_ACTIVE_CHAINS) return;
+
+    const queued = this.chainQueue.shift()!;
+    const chain = this.chains.get(queued.record.wrfcId ?? '');
+
+    if (!chain) {
+      logger.warn('WrfcController.dequeueNext: queued chain not found, discarding', {
+        agentId: queued.record.id,
+      });
+      return;
+    }
+
+    logger.debug('WrfcController.dequeueNext: starting queued chain', {
+      chainId: chain.id,
+      agentId: queued.record.id,
+      waitedMs: Date.now() - queued.queuedAt,
+    });
+
+    this.activeChainCount++;
+    this.transition(chain, 'engineering');
+
+    // Process any buffered completion from while the chain was queued
+    if (chain.bufferedCompletion) {
+      const buffered = chain.bufferedCompletion;
+      chain.bufferedCompletion = undefined;
+      await this.onAgentComplete(buffered.agentId);
+    }
   }
 
   // ---------------------------------------------------------------------------

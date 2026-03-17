@@ -185,6 +185,53 @@ async function main() {
   agentOrchestrator.setEventBus(bus);
   WrfcController.getInstance(bus);
 
+  // Notify the user when a WRFC cascade abort occurs (identical gate failures in consecutive chains)
+  unsubs.push(bus.on('wrfc:cascade-abort', ({ chainId, reason }: { chainId: string; reason: string }) => {
+    conversation.log(`[WRFC] Cascade abort: ${reason} (chain ${chainId})`, { fg: '#ef4444' });
+    bus.emit('render:request');
+  }));
+
+  // WRFC chain lifecycle — bubble events to conversation
+  unsubs.push(bus.on('wrfc:chain-created', ({ chainId, task }: { chainId: string; task: string }) => {
+    conversation.log(`[WRFC] Chain ${chainId.slice(0, 12)} started: ${task.slice(0, 60)}`, { fg: '244', dim: true });
+    bus.emit('render:request');
+  }));
+
+  unsubs.push(bus.on('wrfc:review-complete', ({ chainId, score, passed }: { chainId: string; score: number; passed: boolean }) => {
+    const icon = passed ? '\u2713' : '\u2717';
+    const color = passed ? '#22c55e' : '#ef4444';
+    conversation.log(`[WRFC] ${icon} Review ${chainId.slice(0, 12)}: ${score}/10 ${passed ? 'PASSED' : 'FAILED'}`, { fg: color });
+    bus.emit('render:request');
+  }));
+
+  unsubs.push(bus.on('wrfc:fix-attempt', ({ chainId, attempt, maxAttempts }: { chainId: string; attempt: number; maxAttempts: number }) => {
+    conversation.log(`[WRFC] Fix attempt ${attempt}/${maxAttempts} for ${chainId.slice(0, 12)}`, { fg: '#eab308' });
+    bus.emit('render:request');
+  }));
+
+  unsubs.push(bus.on('wrfc:chain-passed', ({ chainId }: { chainId: string }) => {
+    conversation.log(`[WRFC] \u2713 Chain ${chainId.slice(0, 12)} PASSED — all gates clear`, { fg: '#22c55e', bold: true });
+    bus.emit('render:request');
+  }));
+
+  unsubs.push(bus.on('wrfc:chain-failed', ({ chainId, reason }: { chainId: string; reason: string }) => {
+    conversation.log(`[WRFC] \u2717 Chain ${chainId.slice(0, 12)} FAILED: ${reason.slice(0, 80)}`, { fg: '#ef4444' });
+    bus.emit('render:request');
+  }));
+
+  unsubs.push(bus.on('wrfc:auto-commit', ({ chainId, commitHash }: { chainId: string; commitHash?: string }) => {
+    const suffix = commitHash ? ` (${commitHash.slice(0, 7)})` : '';
+    conversation.log(`[WRFC] Auto-committed chain ${chainId.slice(0, 12)}${suffix}`, { fg: '#22c55e' });
+    bus.emit('render:request');
+  }));
+
+  unsubs.push(bus.on('wrfc:gate-result', ({ chainId, gate, passed }: { chainId: string; gate: string; passed: boolean }) => {
+    const icon = passed ? '\u2713' : '\u2717';
+    const color = passed ? '#22c55e' : '#ef4444';
+    conversation.log(`[WRFC]   ${icon} Gate: ${gate} ${passed ? 'passed' : 'FAILED'}`, { fg: color, dim: passed });
+    bus.emit('render:request');
+  }));
+
   // Start watching for custom provider file changes so hot-reload works.
   providerRegistry.startWatching(bus);
 
