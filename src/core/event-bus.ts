@@ -28,6 +28,7 @@ export interface EventMap {
   'wrfc:chain-passed': { chainId: string };
   'wrfc:chain-failed': { chainId: string; reason: string };
   'wrfc:auto-commit': { chainId: string; commitHash?: string };
+  'wrfc:cascade-abort': { chainId: string; reason: string };
 
   // Permission flow
   'permission:request': { callId: string; tool: string; args: Record<string, unknown>; category: import('../permissions/manager.ts').PermissionCategory; resolve: (approved: boolean, remember?: boolean) => void };

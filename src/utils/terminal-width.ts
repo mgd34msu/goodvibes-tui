@@ -30,6 +30,23 @@ export function getDisplayWidth(text: string): number {
       continue;
     }
 
+    // Dingbat symbols (✓ ✗ ✔ ✘) that fall in the 0x2700-0x27BF range which is
+    // classified as double-width below, but terminals render them as single-width.
+    // Also includes defensive entries for box drawing and block elements.
+    if (
+      code === 0x2713 || // ✓ check mark
+      code === 0x2717 || // ✗ ballot x
+      code === 0x2714 || // ✔ heavy check mark
+      code === 0x2718 || // ✘ heavy ballot x
+      code === 0x2022 || // • bullet
+      code === 0x258D || // ▍ left five eighths block
+      (code >= 0x2500 && code <= 0x257F) // box drawing block (all single-width)
+    ) {
+      width += 1;
+      i += charLen;
+      continue;
+    }
+
     // Emoji and pictographic — double width in most terminals
     // Note: 💭 (U+1F4AD) and 🧠 (U+1F9E0) are both in the 0x1F300–0x1F9FF range,
     // so they are correctly handled as width 2 here.

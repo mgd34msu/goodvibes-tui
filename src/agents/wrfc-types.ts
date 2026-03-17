@@ -1,4 +1,11 @@
 import type { CompletionReport, ReviewerReport } from './completion-report.ts';
+import type { AgentRecord } from '../tools/agent/index.ts';
+
+/** Queued chain waiting to start. */
+export interface QueuedChain {
+  record: AgentRecord;
+  queuedAt: number;
+}
 
 /** WRFC chain lifecycle states. */
 export type WrfcState =
@@ -6,6 +13,7 @@ export type WrfcState =
   | 'engineering'
   | 'reviewing'
   | 'fixing'
+  | 'awaiting_gates'
   | 'gating'
   | 'passed'
   | 'failed'
@@ -31,7 +39,11 @@ export interface WrfcChain {
   parentChainId?: string;
   /** Whether quality gates passed. Only meaningful when state is 'passed'. */
   gatesPassed?: boolean;
+  /** Fingerprint of gate failures: used for same-error detection across chained chains. */
+  gateFailureFingerprint?: string;
   error?: string;
+  /** Buffered agent completion — set when agent finishes while chain is still queued/pending. */
+  bufferedCompletion?: { agentId: string; fullOutput?: string };
 }
 
 /** Quality gate definition. */
