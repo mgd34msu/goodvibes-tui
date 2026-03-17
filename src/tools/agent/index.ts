@@ -418,16 +418,28 @@ export const agentTool: Tool = {
           return { success: false, error: `Unknown agent: '${input.agentId}'` };
         }
 
-        const timeoutMs = input.timeoutMs ?? 30_000;
+        const timeoutMs = input.timeoutMs ?? 600_000; // 10 min default — must cover WRFC review/fix cycles
         const POLL_INTERVAL_MS = 100;
         const terminalStatuses: AgentRecord['status'][] = ['completed', 'failed', 'cancelled'];
 
         if (terminalStatuses.includes(record.status)) {
-          // Already done — return immediately
-          return {
-            success: true,
-            output: JSON.stringify({ agentId: record.id, status: record.status, timedOut: false }),
-          };
+          // Agent done — but check if WRFC chain is still running
+          let wrfcStillRunning = false;
+          if (record.wrfcId) {
+            try {
+              const chain = WrfcController.getInstance().getChain(record.wrfcId);
+              if (chain && chain.state !== 'passed' && chain.state !== 'failed') {
+                wrfcStillRunning = true;
+              }
+            } catch { /* non-fatal */ }
+          }
+          if (!wrfcStillRunning) {
+            return {
+              success: true,
+              output: JSON.stringify({ agentId: record.id, status: record.status, timedOut: false }),
+            };
+          }
+          // WRFC still running — fall through to polling below
         }
 
         const deadline = Date.now() + timeoutMs;
@@ -444,12 +456,40 @@ export const agentTool: Tool = {
         const finalRecord = manager.getStatus(input.agentId);
         const timedOut = finalRecord ? !terminalStatuses.includes(finalRecord.status) : false;
 
+        // If agent completed and has a WRFC chain, also wait for WRFC to finish
+        if (!timedOut && finalRecord?.wrfcId && Date.now() < deadline) {
+          await new Promise<void>((resolve) => {
+            const wrfcInterval = setInterval(() => {
+              try {
+                const chain = WrfcController.getInstance().getChain(finalRecord.wrfcId!);
+                if (!chain || chain.state === 'passed' || chain.state === 'failed' || Date.now() >= deadline) {
+                  clearInterval(wrfcInterval);
+                  resolve();
+                }
+              } catch {
+                clearInterval(wrfcInterval);
+                resolve();
+              }
+            }, POLL_INTERVAL_MS);
+          });
+        }
+
+        // Include WRFC status in response
+        let wrfcStatus: string | undefined;
+        if (finalRecord?.wrfcId) {
+          try {
+            const chain = WrfcController.getInstance().getChain(finalRecord.wrfcId);
+            wrfcStatus = chain?.state ?? 'unknown';
+          } catch { /* non-fatal */ }
+        }
+
         return {
           success: true,
           output: JSON.stringify({
             agentId: input.agentId,
             status: finalRecord?.status ?? 'unknown',
             timedOut,
+            ...(wrfcStatus ? { wrfcStatus } : {}),
           }),
         };
       }
