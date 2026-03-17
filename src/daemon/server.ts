@@ -3,7 +3,9 @@ import { logger } from '../utils/logger.ts';
 import { VERSION } from '../version.ts';
 import { AgentManager } from '../tools/agent/index.ts';
 import { ConfigManager } from '../config/manager.ts';
+import type { ConfigKey } from '../config/schema.ts';
 import type { AgentRecord } from '../tools/agent/index.ts';
+import { UserAuthManager } from '../security/user-auth.ts';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -40,12 +42,14 @@ export class DaemonServer {
   private agentManager: AgentManager;
   private configManager: ConfigManager;
   private authToken: string | null = null;
+  private userAuth: UserAuthManager;
 
   constructor(private config: DaemonConfig = {}, private configManager?: ConfigManager) {
     this.port = config.port ?? 3421;
     this.host = config.host ?? '127.0.0.1';
     this.agentManager = config.agentManager ?? AgentManager.getInstance();
     this.configManager = configManager ?? new ConfigManager();
+    this.userAuth = new UserAuthManager();
   }
 
   /**
@@ -113,10 +117,15 @@ export class DaemonServer {
   // -------------------------------------------------------------------------
 
   private checkAuth(req: Request): boolean {
-    if (!this.authToken) return true; // no token configured = open
     const bearer = req.headers.get('authorization')?.replace('Bearer ', '') ?? '';
-    if (bearer.length !== this.authToken.length) return false;
-    return timingSafeEqual(Buffer.from(bearer), Buffer.from(this.authToken));
+
+    if (this.authToken) {
+      if (bearer.length !== this.authToken.length) return false;
+      return timingSafeEqual(Buffer.from(bearer), Buffer.from(this.authToken));
+    }
+
+    if (!bearer) return true;
+    return this.userAuth.validateSession(bearer) !== null;
   }
 
   // -------------------------------------------------------------------------
@@ -124,11 +133,16 @@ export class DaemonServer {
   // -------------------------------------------------------------------------
 
   private async handleRequest(req: Request): Promise<Response> {
+    const url = new URL(req.url);
+
+    if (url.pathname === '/login' && req.method === 'POST') {
+      return this.handleLogin(req);
+    }
+
     if (!this.checkAuth(req)) {
       return Response.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const url = new URL(req.url);
     const { pathname, method } = { pathname: url.pathname, method: req.method };
 
     if (pathname === '/status' && method === 'GET') {
@@ -143,9 +157,9 @@ export class DaemonServer {
     }
     if (pathname === '/config' && method === 'POST') {
       // set config key/value
-      let payload: any;
+      let payload: { key?: string; value?: unknown };
       try {
-        payload = await req.json();
+        payload = await req.json() as { key?: string; value?: unknown };
       } catch {
         return Response.json({ error: 'Invalid JSON body' }, { status: 400 });
       }
@@ -154,13 +168,11 @@ export class DaemonServer {
         return Response.json({ error: 'Missing or invalid key' }, { status: 400 });
       }
       try {
-        this.configManager.setDynamic(key as any, value);
-      } catch (e: any) {
-        return Response.json({ error: e.message ?? 'Failed to set config' }, { status: 400 });
+        this.configManager.setDynamic(key as ConfigKey, value);
+      } catch (e: unknown) {
+        return Response.json({ error: e instanceof Error ? e.message : 'Failed to set config' }, { status: 400 });
       }
       return Response.json({ success: true, key, value });
-    }
-      return Response.json({ status: 'running', version: VERSION });
     }
 
     if (pathname === '/task' && method === 'POST') {
@@ -174,6 +186,31 @@ export class DaemonServer {
     }
 
     return Response.json({ error: 'Not found' }, { status: 404 });
+  }
+
+  private async handleLogin(req: Request): Promise<Response> {
+    let body: Record<string, unknown>;
+    try {
+      body = await req.json() as Record<string, unknown>;
+    } catch {
+      return Response.json({ error: 'Invalid JSON body' }, { status: 400 });
+    }
+
+    const username = typeof body.username === 'string' ? body.username : '';
+    const password = typeof body.password === 'string' ? body.password : '';
+    const user = this.userAuth.authenticate(username, password);
+
+    if (!user) {
+      return Response.json({ error: 'Invalid credentials' }, { status: 401 });
+    }
+
+    const session = this.userAuth.createSession(user.username);
+    return Response.json({
+      authenticated: true,
+      token: session.token,
+      username: session.username,
+      expiresAt: session.expiresAt,
+    });
   }
 
   private async handlePostTask(req: Request): Promise<Response> {

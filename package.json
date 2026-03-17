@@ -1,13 +1,15 @@
 {
   "name": "goodvibes-tui",
-  "version": "0.9.3",
+  "version": "0.9.4",
   "type": "module",
   "main": "src/main.ts",
   "scripts": {
     "dev": "bun run src/main.ts",
     "prebuild": "bun run scripts/prebuild.ts",
     "build": "bun build src/main.ts --compile --outfile dist/goodvibes",
-    "test": "bun test"
+    "test": "bun test",
+    "postinstall": "bun run scripts/postinstall.ts",
+    "postbuild": "bun run scripts/postinstall.ts"
   },
   "dependencies": {
     "@agentclientprotocol/sdk": "^0.16.1",

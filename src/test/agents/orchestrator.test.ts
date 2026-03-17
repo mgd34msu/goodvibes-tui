@@ -2,6 +2,8 @@ import { describe, test, expect, beforeEach, mock } from 'bun:test';
 import { AgentOrchestrator } from '../../agents/orchestrator.ts';
 import type { AgentRecord } from '../../tools/agent/index.ts';
 import type { LLMProvider, ChatRequest, ChatResponse } from '../../providers/interface.ts';
+import { getProviderRegistry, _resetProviderRegistryForTesting } from '../../providers/registry.ts';
+import type { ProviderRegistry } from '../../providers/registry.ts';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -55,20 +57,31 @@ const MOCK_MODEL = {
 };
 
 /**
- * Run `fn` with providerRegistry patched to use the given provider.
+ * Return the actual ProviderRegistry instance that the proxy delegates to.
+ *
+ * `providerRegistry` is a Proxy with a get-only trap -- property assignments
+ * on it target an empty object and are invisible to the registry.  We must
+ * patch the underlying instance returned by `getProviderRegistry()` instead.
+ */
+function getActualRegistry(): ProviderRegistry {
+  return getProviderRegistry();
+}
+
+/**
+ * Run `fn` with the actual ProviderRegistry patched to use the given provider.
  * Restores originals in a finally block.
  */
 async function withMockProvider<T>(provider: LLMProvider, fn: () => Promise<T>): Promise<T> {
-  const { providerRegistry } = await import('../../providers/registry.ts');
-  const origGetForModel = providerRegistry.getForModel.bind(providerRegistry);
-  const origGetCurrentModel = providerRegistry.getCurrentModel.bind(providerRegistry);
-  providerRegistry.getForModel = mock(() => provider);
-  providerRegistry.getCurrentModel = mock(() => MOCK_MODEL);
+  const reg = getActualRegistry();
+  const origGetForModel = reg.getForModel.bind(reg);
+  const origGetCurrentModel = reg.getCurrentModel.bind(reg);
+  reg.getForModel = mock(() => provider);
+  reg.getCurrentModel = mock(() => MOCK_MODEL);
   try {
     return await fn();
   } finally {
-    providerRegistry.getForModel = origGetForModel;
-    providerRegistry.getCurrentModel = origGetCurrentModel;
+    reg.getForModel = origGetForModel;
+    reg.getCurrentModel = origGetCurrentModel;
   }
 }
 
@@ -77,10 +90,34 @@ async function withMockProvider<T>(provider: LLMProvider, fn: () => Promise<T>):
 // ---------------------------------------------------------------------------
 
 describe('AgentOrchestrator', () => {
+  async function getSystemPrompt(record: AgentRecord): Promise<string> {
+    let captured: ChatRequest | null = null;
+    const captureProvider: LLMProvider = {
+      name: 'mock',
+      models: ['mock-model'],
+      chat: mock(async (params: ChatRequest): Promise<ChatResponse> => {
+        captured = params;
+        return {
+          content: 'Task done.',
+          toolCalls: [],
+          usage: { inputTokens: 10, outputTokens: 5 },
+          stopReason: 'end',
+        };
+      }),
+    };
+
+    await withMockProvider(captureProvider, async () => {
+      await orchestrator.runAgent(record);
+    });
+
+    return captured?.systemPrompt ?? '';
+  }
+
   let orchestrator: AgentOrchestrator;
 
   beforeEach(() => {
     AgentOrchestrator.resetInstance();
+    _resetProviderRegistryForTesting();
     orchestrator = new AgentOrchestrator();
   });
 
@@ -93,27 +130,7 @@ describe('AgentOrchestrator', () => {
       const provider = makeMockProvider([{ content: 'Task done.' }]);
       const record = makeRecord();
 
-      // Inject mock provider via providerRegistry mock
-      const { providerRegistry } = await import('../../providers/registry.ts');
-      const originalGetForModel = providerRegistry.getForModel.bind(providerRegistry);
-      const originalGetCurrentModel = providerRegistry.getCurrentModel.bind(providerRegistry);
-      providerRegistry.getForModel = mock(() => provider);
-      providerRegistry.getCurrentModel = mock(() => ({
-        id: 'mock-model',
-        provider: 'mock',
-        displayName: 'Mock',
-        description: '',
-        capabilities: { toolCalling: true, codeEditing: false, reasoning: false, multimodal: false },
-        contextWindow: 8192,
-        selectable: true,
-      }));
-
-      try {
-        await orchestrator.runAgent(record);
-      } finally {
-        providerRegistry.getForModel = originalGetForModel;
-        providerRegistry.getCurrentModel = originalGetCurrentModel;
-      }
+      await withMockProvider(provider, () => orchestrator.runAgent(record));
 
       expect(record.status).toBe('completed');
       expect(record.completedAt).toBeDefined();
@@ -121,33 +138,14 @@ describe('AgentOrchestrator', () => {
     });
 
     test('sets status to failed when provider throws', async () => {
-      const { providerRegistry } = await import('../../providers/registry.ts');
-      const originalGetForModel = providerRegistry.getForModel.bind(providerRegistry);
-      const originalGetCurrentModel = providerRegistry.getCurrentModel.bind(providerRegistry);
-
       const errorProvider: LLMProvider = {
         name: 'error-provider',
         models: ['mock-model'],
         chat: mock(async () => { throw new Error('API unavailable'); }),
       };
-      providerRegistry.getForModel = mock(() => errorProvider);
-      providerRegistry.getCurrentModel = mock(() => ({
-        id: 'mock-model',
-        provider: 'mock',
-        displayName: 'Mock',
-        description: '',
-        capabilities: { toolCalling: false, codeEditing: false, reasoning: false, multimodal: false },
-        contextWindow: 8192,
-        selectable: true,
-      }));
 
       const record = makeRecord();
-      try {
-        await orchestrator.runAgent(record);
-      } finally {
-        providerRegistry.getForModel = originalGetForModel;
-        providerRegistry.getCurrentModel = originalGetCurrentModel;
-      }
+      await withMockProvider(errorProvider, () => orchestrator.runAgent(record));
 
       expect(record.status).toBe('failed');
       expect(record.error).toContain('API unavailable');
@@ -155,19 +153,30 @@ describe('AgentOrchestrator', () => {
     });
 
     test('sets status to failed when model is not in registry', async () => {
-      const record = makeRecord({ model: 'nonexistent-model-xyz' });
-      await orchestrator.runAgent(record);
-
-      expect(record.status).toBe('failed');
-      expect(record.error).toContain('nonexistent-model-xyz');
+      const origWarn = console.warn;
+      console.warn = () => {};
+      try {
+        const record = makeRecord({ model: 'nonexistent-model-xyz' });
+        await orchestrator.runAgent(record);
+        expect(record.status).toBe('failed');
+        expect(record.error).toContain('nonexistent-model-xyz');
+      } finally {
+        console.warn = origWarn;
+      }
     });
 
     test('never throws — all errors captured in record.error', async () => {
-      const record = makeRecord({ model: 'completely-invalid-model' });
+      const origWarn = console.warn;
+      console.warn = () => {};
+      try {
+        const record = makeRecord({ model: 'completely-invalid-model' });
 
-      // Must not throw
-      await expect(orchestrator.runAgent(record)).resolves.toBeUndefined();
-      expect(record.status).toBe('failed');
+        // Must not throw
+        await expect(orchestrator.runAgent(record)).resolves.toBeUndefined();
+        expect(record.status).toBe('failed');
+      } finally {
+        console.warn = origWarn;
+      }
     });
   });
 
@@ -175,26 +184,40 @@ describe('AgentOrchestrator', () => {
   // Turn loop
   // -------------------------------------------------------------------------
 
+  describe('system prompt', () => {
+    test('includes project context and tool guidance', async () => {
+      const prompt = await getSystemPrompt(makeRecord({
+        template: 'engineer',
+        task: 'Inspect the repository',
+        tools: ['read', 'find', 'edit', 'exec', 'agent'],
+      }));
+
+      expect(prompt).toContain('## Project');
+      expect(prompt).toContain('- Directory:');
+      expect(prompt).toContain('- Package manager: bun');
+      expect(prompt).toContain('- TypeScript: yes');
+      expect(prompt).toContain('- Entry points: src/main.ts');
+      expect(prompt).not.toContain('Available tools: read, find, edit, exec, agent');
+      expect(prompt).toContain('You have access to: read, find, edit, exec');
+    });
+
+    test('includes archetype-specific system prompt content when available', async () => {
+      const prompt = await getSystemPrompt(makeRecord({
+        template: 'engineer',
+        task: 'Implement a feature',
+        tools: ['read'],
+      }));
+
+      expect(prompt).toContain('## Role: Engineer');
+    });
+  });
+
   describe('turn loop', () => {
     test('single turn with no tool calls completes immediately', async () => {
       const provider = makeMockProvider([{ content: 'Hello world!' }]);
-      const { providerRegistry } = await import('../../providers/registry.ts');
-      const originalGetForModel = providerRegistry.getForModel.bind(providerRegistry);
-      const originalGetCurrentModel = providerRegistry.getCurrentModel.bind(providerRegistry);
-      providerRegistry.getForModel = mock(() => provider);
-      providerRegistry.getCurrentModel = mock(() => ({
-        id: 'mock-model', provider: 'mock', displayName: 'Mock', description: '',
-        capabilities: { toolCalling: true, codeEditing: false, reasoning: false, multimodal: false },
-        contextWindow: 8192, selectable: true,
-      }));
-
       const record = makeRecord();
-      try {
-        await orchestrator.runAgent(record);
-      } finally {
-        providerRegistry.getForModel = originalGetForModel;
-        providerRegistry.getCurrentModel = originalGetCurrentModel;
-      }
+
+      await withMockProvider(provider, () => orchestrator.runAgent(record));
 
       expect(record.status).toBe('completed');
       expect(record.toolCallCount).toBe(0);
@@ -213,23 +236,8 @@ describe('AgentOrchestrator', () => {
         { content: 'All done.' },
       ]);
 
-      const { providerRegistry } = await import('../../providers/registry.ts');
-      const originalGetForModel = providerRegistry.getForModel.bind(providerRegistry);
-      const originalGetCurrentModel = providerRegistry.getCurrentModel.bind(providerRegistry);
-      providerRegistry.getForModel = mock(() => provider);
-      providerRegistry.getCurrentModel = mock(() => ({
-        id: 'mock-model', provider: 'mock', displayName: 'Mock', description: '',
-        capabilities: { toolCalling: true, codeEditing: false, reasoning: false, multimodal: false },
-        contextWindow: 8192, selectable: true,
-      }));
-
       const record = makeRecord();
-      try {
-        await orchestrator.runAgent(record);
-      } finally {
-        providerRegistry.getForModel = originalGetForModel;
-        providerRegistry.getCurrentModel = originalGetCurrentModel;
-      }
+      await withMockProvider(provider, () => orchestrator.runAgent(record));
 
       expect(record.status).toBe('completed');
       // toolCallCount incremented for each tool call attempted
@@ -247,23 +255,8 @@ describe('AgentOrchestrator', () => {
         { content: 'Handled.' },
       ]);
 
-      const { providerRegistry } = await import('../../providers/registry.ts');
-      const originalGetForModel = providerRegistry.getForModel.bind(providerRegistry);
-      const originalGetCurrentModel = providerRegistry.getCurrentModel.bind(providerRegistry);
-      providerRegistry.getForModel = mock(() => provider);
-      providerRegistry.getCurrentModel = mock(() => ({
-        id: 'mock-model', provider: 'mock', displayName: 'Mock', description: '',
-        capabilities: { toolCalling: true, codeEditing: false, reasoning: false, multimodal: false },
-        contextWindow: 8192, selectable: true,
-      }));
-
       const record = makeRecord({ tools: [] });
-      try {
-        await orchestrator.runAgent(record);
-      } finally {
-        providerRegistry.getForModel = originalGetForModel;
-        providerRegistry.getCurrentModel = originalGetCurrentModel;
-      }
+      await withMockProvider(provider, () => orchestrator.runAgent(record));
 
       // Agent completes (doesn't fail just because a tool was not found)
       expect(record.status).toBe('completed');
@@ -282,23 +275,8 @@ describe('AgentOrchestrator', () => {
         { content: 'Done.' },
       ]);
 
-      const { providerRegistry } = await import('../../providers/registry.ts');
-      const originalGetForModel = providerRegistry.getForModel.bind(providerRegistry);
-      const originalGetCurrentModel = providerRegistry.getCurrentModel.bind(providerRegistry);
-      providerRegistry.getForModel = mock(() => provider);
-      providerRegistry.getCurrentModel = mock(() => ({
-        id: 'mock-model', provider: 'mock', displayName: 'Mock', description: '',
-        capabilities: { toolCalling: true, codeEditing: false, reasoning: false, multimodal: false },
-        contextWindow: 8192, selectable: true,
-      }));
-
       const record = makeRecord();
-      try {
-        await orchestrator.runAgent(record);
-      } finally {
-        providerRegistry.getForModel = originalGetForModel;
-        providerRegistry.getCurrentModel = originalGetCurrentModel;
-      }
+      await withMockProvider(provider, () => orchestrator.runAgent(record));
 
       expect(record.toolCallCount).toBe(2);
     });
@@ -365,34 +343,19 @@ describe('AgentOrchestrator', () => {
 
   describe('scoped tool registry', () => {
     test('agent tool (agent) is excluded from scoped registry to prevent recursion', async () => {
-      const provider = makeMockProvider([{ content: 'Done.' }]);
-      const { providerRegistry } = await import('../../providers/registry.ts');
-      const originalGetForModel = providerRegistry.getForModel.bind(providerRegistry);
-      const originalGetCurrentModel = providerRegistry.getCurrentModel.bind(providerRegistry);
-
       let receivedTools: string[] = [];
-      providerRegistry.getForModel = mock(() => ({
+      const captureToolsProvider: LLMProvider = {
         name: 'mock',
         models: ['mock-model'],
         chat: mock(async (params: ChatRequest): Promise<ChatResponse> => {
           receivedTools = (params.tools ?? []).map((t) => t.name);
           return { content: 'Done.', toolCalls: [], usage: { inputTokens: 5, outputTokens: 3 }, stopReason: 'end' };
         }),
-      }));
-      providerRegistry.getCurrentModel = mock(() => ({
-        id: 'mock-model', provider: 'mock', displayName: 'Mock', description: '',
-        capabilities: { toolCalling: true, codeEditing: false, reasoning: false, multimodal: false },
-        contextWindow: 8192, selectable: true,
-      }));
+      };
 
       // Ask for 'agent' to be included — it should be filtered out
       const record = makeRecord({ tools: ['agent', 'find'] });
-      try {
-        await orchestrator.runAgent(record);
-      } finally {
-        providerRegistry.getForModel = originalGetForModel;
-        providerRegistry.getCurrentModel = originalGetCurrentModel;
-      }
+      await withMockProvider(captureToolsProvider, () => orchestrator.runAgent(record));
 
       expect(receivedTools).not.toContain('agent');
     });
@@ -405,23 +368,9 @@ describe('AgentOrchestrator', () => {
   describe('progress tracking', () => {
     test('progress is updated during execution', async () => {
       const provider = makeMockProvider([{ content: 'Completed task.' }]);
-      const { providerRegistry } = await import('../../providers/registry.ts');
-      const originalGetForModel = providerRegistry.getForModel.bind(providerRegistry);
-      const originalGetCurrentModel = providerRegistry.getCurrentModel.bind(providerRegistry);
-      providerRegistry.getForModel = mock(() => provider);
-      providerRegistry.getCurrentModel = mock(() => ({
-        id: 'mock-model', provider: 'mock', displayName: 'Mock', description: '',
-        capabilities: { toolCalling: false, codeEditing: false, reasoning: false, multimodal: false },
-        contextWindow: 8192, selectable: true,
-      }));
-
       const record = makeRecord();
-      try {
-        await orchestrator.runAgent(record);
-      } finally {
-        providerRegistry.getForModel = originalGetForModel;
-        providerRegistry.getCurrentModel = originalGetCurrentModel;
-      }
+
+      await withMockProvider(provider, () => orchestrator.runAgent(record));
 
       // After completion, progress should reflect the final response
       expect(record.progress).toBeDefined();

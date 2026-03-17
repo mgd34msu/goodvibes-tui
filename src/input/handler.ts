@@ -43,6 +43,8 @@ export class InputHandler {
   public lastCopyTime = 0;
   /** True when the user has entered slash-command mode (prompt starts with '/'). */
   public commandMode = false;
+  /** True when the process indicator bar has keyboard focus. */
+  public indicatorFocused = false;
 
   private tokenizer = new InputTokenizer();
   private pasteRegistry = new Map<string, string>();
@@ -1280,6 +1282,31 @@ export class InputHandler {
         continue;
       }
 
+      // --- Process indicator has focus: intercept keys ---
+      if (this.indicatorFocused) {
+        if (token.type === 'key') {
+          if (token.logicalName === 'up' || token.logicalName === 'escape') {
+            this.indicatorFocused = false;
+            this.bus.emit('render:request');
+            continue;
+          } else if (token.logicalName === 'enter') {
+            this.indicatorFocused = false;
+            this.processModal.open();
+            this.bus.emit('render:request');
+            continue;
+          } else if (token.ctrl) {
+            // Ctrl-combos should work globally; unfocus and fall through
+            this.indicatorFocused = false;
+            // Don't continue -- let the key reach global shortcuts below
+          } else {
+            this.bus.emit('render:request');
+            continue;
+          }
+        }
+        // Text input: unfocus and fall through
+        this.indicatorFocused = false;
+      }
+
       if (token.type === 'text') {
         // '?' with empty prompt in normal mode: toggle help overlay
         if (token.value === '?' && this.prompt === '' && !this.commandMode) {
@@ -1693,15 +1720,19 @@ export class InputHandler {
                   this.cursorPos = recalled.length;
                   this.ensureInputCursorVisible();
                 } else {
-                  this.scroll(3);
+                  this.indicatorFocused = true;
                 }
               } else {
-                this.scroll(3);
+                this.indicatorFocused = true;
               }
+            } else {
+              // Multiline: cursor at bottom wrapped line, focus indicator
+              this.indicatorFocused = true;
             }
           }
         } else if (token.logicalName === 'f2') {
           // F2: open the background process monitor
+          this.indicatorFocused = false;  // clear focus if it was set
           this.processModal.open();
         }
       } else if (token.type === 'mouse') {

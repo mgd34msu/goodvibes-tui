@@ -72,6 +72,14 @@ export interface GoodVibesConfig {
     defaultTokenBudget: number;     // default: 5000 — default token budget for read operations
     hooksFile: string;              // default: 'hooks.json' — hook configuration file name
   };
+  wrfc: {
+    scoreThreshold: number;
+    maxFixAttempts: number;
+    autoCommit: boolean;
+    // NOTE: gates is an array of objects and does not fit the scalar-value dot-path config API.
+    // Access via configManager.getCategory('wrfc').gates — not via ConfigKey/ConfigValue.
+    gates: Array<{ name: string; command: string; enabled: boolean }>;
+  };
 }
 
 export interface ConfigSetting {
@@ -132,7 +140,10 @@ export type ConfigKey =
   | 'tools.llmModel'
   | 'tools.autoHeal'
   | 'tools.defaultTokenBudget'
-  | 'tools.hooksFile';
+  | 'tools.hooksFile'
+  | 'wrfc.scoreThreshold'
+  | 'wrfc.maxFixAttempts'
+  | 'wrfc.autoCommit';
 
 /** Maps a ConfigKey to its value type. */
 export type ConfigValue<K extends ConfigKey> =
@@ -184,6 +195,9 @@ export type ConfigValue<K extends ConfigKey> =
   K extends 'tools.autoHeal' ? boolean :
   K extends 'tools.defaultTokenBudget' ? number :
   K extends 'tools.hooksFile' ? string :
+  K extends 'wrfc.scoreThreshold' ? number :
+  K extends 'wrfc.maxFixAttempts' ? number :
+  K extends 'wrfc.autoCommit' ? boolean :
   never;
 
 export const DEFAULT_CONFIG: GoodVibesConfig = {
@@ -250,6 +264,17 @@ export const DEFAULT_CONFIG: GoodVibesConfig = {
     autoHeal: false,
     defaultTokenBudget: 5000,
     hooksFile: 'hooks.json',
+  },
+  wrfc: {
+    scoreThreshold: 9.9,
+    maxFixAttempts: 3,
+    autoCommit: true,
+    gates: [
+      { name: 'typecheck', command: 'npx tsc --noEmit', enabled: true },
+      { name: 'lint', command: 'npx eslint . --max-warnings 0', enabled: true },
+      { name: 'test', command: 'npm test', enabled: true },
+      { name: 'build', command: 'npm run build', enabled: false },
+    ],
   },
 };
 
@@ -569,5 +594,25 @@ export const CONFIG_SCHEMA: ConfigSetting[] = [
     type: 'string',
     default: 'hooks.json',
     description: 'Hook configuration file name (relative to .goodvibes/tui/)',
+  },
+  {
+    key: 'wrfc.scoreThreshold',
+    type: 'number',
+    default: 9.9,
+    description: 'Minimum review score to pass WRFC (0-10)',
+    validate: (v) => typeof v === 'number' && v >= 0 && v <= 10,
+  },
+  {
+    key: 'wrfc.maxFixAttempts',
+    type: 'number',
+    default: 3,
+    description: 'Maximum fix attempts per WRFC review cycle',
+    validate: (v) => typeof v === 'number' && v >= 1 && v <= 10,
+  },
+  {
+    key: 'wrfc.autoCommit',
+    type: 'boolean',
+    default: true,
+    description: 'Auto-commit when WRFC chain passes review and quality gates',
   },
 ];

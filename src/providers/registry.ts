@@ -4,11 +4,13 @@ import { OpenAICompatProvider } from './openai-compat.ts';
 import { AnthropicProvider } from './anthropic.ts';
 import { GeminiProvider } from './gemini.ts';
 import { config } from '../config/index.ts';
+import type { EventBus } from '../core/event-bus.ts';
+import { loadCustomProviders, watchCustomProviders } from './custom-loader.ts';
 
 /** Describes a selectable model and its capabilities. */
 export interface ModelDefinition {
   id: string;
-  provider: 'openai' | 'anthropic' | 'gemini' | 'inceptionlabs';
+  provider: string;
   displayName: string;
   description: string;
   capabilities: {
@@ -24,7 +26,7 @@ export interface ModelDefinition {
   reasoningEffort?: string[];
 }
 
-export const MODEL_REGISTRY: ModelDefinition[] = [
+const BUILTIN_MODEL_REGISTRY: ModelDefinition[] = [
   // --- InceptionLabs ---
   {
     id: 'mercury-2',
@@ -161,6 +163,27 @@ export const MODEL_REGISTRY: ModelDefinition[] = [
   },
 ];
 
+/** Mutable array of custom-loaded model definitions. */
+let customModels: ModelDefinition[] = [];
+
+/**
+ * Returns the combined model registry: custom models take precedence over built-ins
+ * when a custom model has the same ID as a built-in.
+ */
+export function getModelRegistry(): ModelDefinition[] {
+  const builtinFiltered = BUILTIN_MODEL_REGISTRY.filter(
+    (b) => !customModels.some((c) => c.id === b.id),
+  );
+  return [...customModels, ...builtinFiltered];
+}
+
+/**
+ * Backward-compatible export. Prefer getModelRegistry() for live model lists.
+ * This refers to the built-in models only and does NOT include custom providers.
+ * @deprecated Use getModelRegistry() to include custom providers.
+ */
+export const MODEL_REGISTRY: ModelDefinition[] = BUILTIN_MODEL_REGISTRY;
+
 /**
  * ProviderRegistry — manages LLM provider instances and model selection.
  * Lazily instantiates providers on first use.
@@ -213,43 +236,176 @@ export class ProviderRegistry {
 
   /** Return the provider responsible for a given model ID. */
   getForModel(modelId: string): LLMProvider {
-    const def = MODEL_REGISTRY.find((m) => m.id === modelId);
+    const def = getModelRegistry().find((m) => m.id === modelId);
     if (!def) throw new Error(`No model '${modelId}' in registry.`);
     return this.get(def.provider);
   }
 
   /** All registered model definitions. */
   listModels(): ModelDefinition[] {
-    return MODEL_REGISTRY;
+    return getModelRegistry();
   }
 
   /** Only the models the user can switch to. */
   getSelectableModels(): ModelDefinition[] {
-    return MODEL_REGISTRY.filter((m) => m.selectable);
+    return getModelRegistry().filter((m) => m.selectable);
   }
 
   /** Currently active model definition. */
   getCurrentModel(): ModelDefinition {
-    const def = MODEL_REGISTRY.find((m) => m.id === this.currentModelId);
+    const def = getModelRegistry().find((m) => m.id === this.currentModelId);
     if (!def) throw new Error(`Current model '${this.currentModelId}' not in registry.`);
     return def;
   }
 
   /** Switch to a different model. Throws if the model is not selectable. */
   setCurrentModel(modelId: string): void {
-    const def = MODEL_REGISTRY.find((m) => m.id === modelId);
+    const def = getModelRegistry().find((m) => m.id === modelId);
     if (!def) throw new Error(`Model '${modelId}' not found.`);
     if (!def.selectable) throw new Error(`Model '${modelId}' is not selectable.`);
     this.currentModelId = modelId;
   }
+
+  /**
+   * Load custom providers from ~/.goodvibes/tui/providers/ and merge them
+   * into the live model registry. Returns any warnings collected during loading.
+   * Call this after construction to populate custom providers.
+   */
+  async loadCustomProviders(): Promise<{ warnings: string[]; added: string[]; removed: string[]; updated: string[] }> {
+    const result = await loadCustomProviders();
+    const previousIds = new Set(customModels.map((m) => m.id));
+    const newIds = new Set(result.models.map((m) => m.id));
+
+    const added: string[] = [];
+    const removed: string[] = [];
+    const updated: string[] = [];
+
+    for (const id of newIds) {
+      if (!previousIds.has(id)) {
+        added.push(id);
+      } else {
+        // Only mark as updated if the model definition actually changed
+        const oldModel = customModels.find((m) => m.id === id);
+        const newModel = result.models.find((m) => m.id === id);
+        if (stableStringify(oldModel) !== stableStringify(newModel)) {
+          updated.push(id);
+        }
+      }
+    }
+    for (const id of previousIds) {
+      if (!newIds.has(id)) removed.push(id);
+    }
+
+    // Warn about collisions with built-in models
+    for (const model of result.models) {
+      const isBuiltin = BUILTIN_MODEL_REGISTRY.some((b) => b.id === model.id);
+      if (isBuiltin) {
+        const msg = `[registry] Custom model '${model.id}' from provider '${model.provider}' overrides built-in model.`;
+        result.warnings.push(msg);
+        console.warn(msg);
+      }
+    }
+
+    // Register provider instances
+    for (const { provider } of result.providers) {
+      this.register(provider);
+    }
+
+    // Swap custom models
+    customModels = result.models;
+
+    return { warnings: result.warnings, added, removed, updated };
+  }
+
+  /**
+   * Start watching ~/.goodvibes/tui/providers/ for file changes.
+   * On change, reloads custom providers and emits 'providers:changed' on the bus.
+   * Safe to call multiple times — stops the previous watcher first.
+   */
+  startWatching(bus: EventBus): void {
+    this.stopWatching();
+    this._watcher = watchCustomProviders(bus, async () => {
+      const result = await this.loadCustomProviders();
+      for (const msg of result.warnings) {
+        bus.emit('providers:warning', { message: msg });
+      }
+      bus.emit('providers:changed', {
+        added: result.added,
+        removed: result.removed,
+        updated: result.updated,
+      });
+    });
+  }
+
+  /** Stop the file watcher started by startWatching(). */
+  stopWatching(): void {
+    if (this._watcher) {
+      this._watcher.close();
+      this._watcher = undefined;
+    }
+  }
+
+  private _watcher: { close: () => void } | undefined;
+
+  /**
+   * Returns a promise that resolves when the initial custom provider load
+   * completes. Callers can await this before calling getForModel() with a
+   * custom model ID to avoid a "model not found" race window.
+   */
+  ready(): Promise<void> {
+    return this._readyPromise ?? Promise.resolve();
+  }
+
+  private _readyPromise: Promise<void> | null = null;
+
+  /** Kick off async custom provider loading. Called once from singleton factory. */
+  initCustomProviders(): void {
+    this._readyPromise = this.loadCustomProviders()
+      .then((result) => {
+        for (const w of result.warnings) console.warn(w);
+        this._readyPromise = null;
+      })
+      .catch((err) => {
+        console.warn('[registry] Failed to load custom providers:', err);
+        this._readyPromise = null;
+      });
+  }
+}
+
+/**
+ * Key-order-independent JSON serialisation used for model diff comparisons.
+ * Recursively sorts object keys so that { a: 1, b: 2 } and { b: 2, a: 1 }
+ * produce the same string.
+ */
+function stableStringify(value: unknown): string {
+  if (value === null || typeof value !== 'object') return JSON.stringify(value);
+  if (Array.isArray(value)) return '[' + value.map(stableStringify).join(',') + ']';
+  const sorted = Object.keys(value as Record<string, unknown>).sort();
+  return '{' + sorted.map((k) => JSON.stringify(k) + ':' + stableStringify((value as Record<string, unknown>)[k])).join(',') + '}';
 }
 
 /** Lazy singleton — instantiated on first access. */
 let _providerRegistry: ProviderRegistry | undefined;
 export function getProviderRegistry(): ProviderRegistry {
-  if (!_providerRegistry) _providerRegistry = new ProviderRegistry();
+  if (!_providerRegistry) {
+    _providerRegistry = new ProviderRegistry();
+    // Kick off custom provider loading asynchronously.
+    // The registry is immediately usable with built-in providers; custom
+    // providers will be available shortly after the first access.
+    // Callers can await providerRegistry.ready() to wait for completion.
+    _providerRegistry.initCustomProviders();
+  }
   return _providerRegistry;
 }
+/** Reset singleton — for testing only. */
+export function _resetProviderRegistryForTesting(): void {
+  _providerRegistry = undefined;
+  customModels = [];
+}
+
+// Note: this Proxy only traps `get` and `has`. Direct property assignments
+// and other traps (set, deleteProperty, etc.) are not forwarded — treat the
+// providerRegistry export as read-only and call methods via the returned instance.
 export const providerRegistry: ProviderRegistry = new Proxy({} as ProviderRegistry, {
   get(_target, prop: string | symbol) {
     return (getProviderRegistry() as unknown as Record<string | symbol, unknown>)[prop];

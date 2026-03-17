@@ -58,18 +58,37 @@ function scanDirectoryAll(
     return [];
   }
   for (const entry of entries) {
-    if (!entry.endsWith('.md')) continue;
-    const filePath = join(dir, entry);
-    let content = '';
-    try {
-      content = readFileSync(filePath, 'utf-8');
-    } catch {
+    // Strategy 1: flat .md file (e.g., skills/foo.md)
+    if (entry.endsWith('.md')) {
+      const filePath = join(dir, entry);
+      let content = '';
+      try {
+        content = readFileSync(filePath, 'utf-8');
+      } catch {
+        continue;
+      }
+      const frontmatter = parseFrontmatter(content);
+      const name = frontmatter['name'] ?? entry.replace(/\.md$/, '');
+      const description = frontmatter['description'] ?? '';
+      results.push({ name, type: itemType, description, path: filePath });
       continue;
     }
-    const frontmatter = parseFrontmatter(content);
-    const name = frontmatter['name'] ?? entry.replace(/\.md$/, '');
-    const description = frontmatter['description'] ?? '';
-    results.push({ name, type: itemType, description, path: filePath });
+
+    // Strategy 2: directory with SKILL.md or AGENT.md (e.g., skills/foo/SKILL.md)
+    const markerFile = itemType === 'skill' ? 'SKILL.md' : 'AGENT.md';
+    const markerPath = join(dir, entry, markerFile);
+    if (existsSync(markerPath)) {
+      let content = '';
+      try {
+        content = readFileSync(markerPath, 'utf-8');
+      } catch {
+        continue;
+      }
+      const frontmatter = parseFrontmatter(content);
+      const name = frontmatter['name'] ?? entry;
+      const description = frontmatter['description'] ?? '';
+      results.push({ name, type: itemType, description, path: markerPath });
+    }
   }
   return results;
 }
@@ -97,14 +116,18 @@ function fuzzyFilter(items: RegistryMatch[], query: string): RegistryMatch[] {
 function getSkillDirs(cwd: string): string[] {
   return [
     join(cwd, '.goodvibes', 'skills'),
+    join(cwd, '.goodvibes', 'tui', 'skills'),
     join(homedir(), '.goodvibes', 'skills'),
+    join(homedir(), '.goodvibes', 'tui', 'skills'),
   ];
 }
 
 function getAgentDirs(cwd: string): string[] {
   return [
     join(cwd, '.goodvibes', 'agents'),
+    join(cwd, '.goodvibes', 'tui', 'agents'),
     join(homedir(), '.goodvibes', 'agents'),
+    join(homedir(), '.goodvibes', 'tui', 'agents'),
   ];
 }
 

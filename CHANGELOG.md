@@ -4,6 +4,66 @@ All notable changes to GoodVibes TUI.
 
 ---
 
+## [0.9.5] — 2026-03-17
+
+### Automated WRFC Chains (Section 8)
+- **WrfcController** — event-driven state machine that automates Work-Review-Fix-Complete chains. Every agent spawned without `skipWrfc` gets an auto-generated WRFC chain.
+- **10-dimension reviewer** — dedicated reviewer archetype with scoring rubric (Correctness, Type Safety, Error Handling, Security, Performance, Code Quality, Testing, Documentation, Completeness, Integration). Each dimension 0-1.0, minimum threshold configurable (default 9.9).
+- **Automated fix cycles** — when review score falls below threshold, a fixer agent is spawned with the full issue list and point values. Max fix attempts configurable (default 3).
+- **Quality gates** — after review passes, configurable gates run (typecheck, lint, test, build). Gate failures spawn a new WRFC chain to fix them.
+- **Auto-commit** — when review passes and all gates pass, changes are auto-committed via AgentWorktree.
+- **Structured completion reports** — agents produce typed JSON reports (EngineerReport, ReviewerReport, TesterReport, GenericReport) parsed by the controller.
+- **WRFC chain tracing** — every chain gets a `wrfc-{uuid}` ID. All agents in a chain (engineer, reviewer, fixer) share the same ID for post-hoc traceability.
+
+### Agent Communication (Section 7)
+- **User-message injection** — AgentMessageBus messages now injected as user messages (not system), so agents acknowledge and can respond to inter-agent communication.
+- **Full output capture** — `AgentRecord.fullOutput` stores the complete final assistant response (no more 200-char truncation). Captured on success, failure, and max-turns paths.
+- **skipWrfc flag** — agents spawned with `skipWrfc: true` bypass the WRFC chain (for utility agents, reviewers, fixers).
+
+### Custom Providers
+- **Custom provider loader** — loads `*.json` configs from `~/.goodvibes/tui/providers/` to add OpenAI-compatible providers (OpenRouter, Ollama, Together, Groq, LM Studio, Fireworks, vLLM).
+- **Hot-reload** — file watcher auto-reloads provider configs on change with 300ms debounce.
+- **Add Provider skill** — bundled interactive skill guiding users through provider setup with smart defaults for 7 providers.
+
+### Registry & Deployment
+- **Directory-based skills/agents** — registry tool now discovers `skills/foo/SKILL.md` and `agents/foo/AGENT.md` in addition to flat `.md` files.
+- **Expanded search paths** — registry searches `.goodvibes/skills/`, `.goodvibes/tui/skills/`, `~/.goodvibes/skills/`, and `~/.goodvibes/tui/skills/` (same for agents).
+- **Postinstall script** — `scripts/postinstall.ts` deploys bundled skills and agents to `~/.goodvibes/tui/` without overwriting existing files.
+- **Git tracking** — `.goodvibes/skills/` and `.goodvibes/agents/` are now tracked in git (rest of `.goodvibes/` remains ignored).
+
+### Configuration
+- **WRFC config section** — `wrfc.scoreThreshold` (default 9.9), `wrfc.maxFixAttempts` (default 3), `wrfc.autoCommit` (default true), `wrfc.gates` array.
+- **WRFC events** — 8 new EventBus events for chain lifecycle (chain-created, state-changed, review-complete, fix-attempt, gate-result, chain-passed, chain-failed, auto-commit).
+
+---
+
+## [0.9.4] — 2026-03-17
+
+### Agent System
+- **Agent session JSONL logging** — every agent run produces a full session log at `.goodvibes/tui/sessions/agent-{id}.jsonl` with LLM requests/responses, tool calls (name, args, result preview), and lifecycle events (start, complete, fail, cancel, max turns)
+- **Rich agent system prompt** — 5-layer prompt: base autonomy instructions, archetype overlay (from `.goodvibes/agents/*.md` or built-in fallbacks), project context (auto-detected), coding conventions (from `.goodvibes/GOODVIBES.md`), and task description
+- **Dynamic tool descriptions** — agent prompts only include descriptions for tools the agent actually has access to, with all 11 tool types covered (read, write, edit, find, exec, analyze, inspect, state, fetch, workflow, registry)
+- **Project context auto-detection** — agents receive working directory, project type, package manager, TypeScript status, test framework, entry points, and available scripts
+- **Recovery strategy** — agents instructed to try own knowledge, search context7 MCP docs if available, read local files, then try alternatives before reporting failure
+- **Shared file state** — `FileStateCache` and `ProjectIndex` passed through to agent-scoped tool registries so agents share cache/OCC state with the main session
+
+### Process Monitor
+- **Process indicator below input** — moved from above to below the input area, focusable via down arrow from the prompt
+- **Keyboard navigation** — down arrow focuses indicator, Enter opens process list (same as F2), up arrow returns to input, Ctrl shortcuts fall through to global handlers, works from both single-line and multiline input
+- **Full-width process list** — F2 modal uses full terminal width with dynamic label sizing
+- **All agent statuses visible** — completed, failed, and cancelled agents remain in the process list with status icons
+- **Full-width detail modals** — agent detail and live tail modals use full terminal width
+- **Session log in detail view** — agent detail modal displays last 10 JSONL session events with timestamps, loaded async on open
+
+### Infrastructure
+- **`logger.warn()` method** — added to `ActivityLogger` alongside existing info/error/debug
+- **Partial dependency warning** — `AgentOrchestrator.getFullRegistry()` logs a warning when only one of FileStateCache/ProjectIndex is injected
+- **Project context caching** — `buildProjectContext()` result cached per session, not recomputed per agent
+- **`bun.lock` detection** — package manager detection recognizes both `bun.lockb` and text-based `bun.lock`
+- **`formatDuration` shared utility** — extracted from duplicated implementations into `modal-utils.ts`
+- **Named constants** — magic numbers replaced with descriptive constants across process-modal and agent-detail-modal
+
+
 ## [0.9.3] — 2026-03-16
 
 ### Bundled LSP Servers

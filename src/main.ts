@@ -13,6 +13,7 @@ import { config, configManager } from './config/index.ts';
 import { providerRegistry } from './providers/registry.ts';
 import { ToolRegistry } from './tools/registry.ts';
 import { registerAllTools } from './tools/index.ts';
+import { agentOrchestrator } from './agents/orchestrator.ts';
 import { PermissionManager } from './permissions/manager.ts';
 import { AcpManager } from './acp/manager.ts';
 import { HookDispatcher } from './hooks/dispatcher.ts';
@@ -25,6 +26,7 @@ import { renderModelPickerOverlay } from './renderer/model-picker-overlay.ts';
 import { renderSearchOverlay } from './renderer/search-overlay.ts';
 import { renderProcessIndicator } from './renderer/process-indicator.ts';
 import { AgentManager } from './tools/agent/index.ts';
+import { WrfcController } from './agents/wrfc-controller.ts';
 import { ProcessManager } from './tools/shared/process-manager.ts';
 import { renderSelectionModalOverlay } from './renderer/selection-modal-overlay.ts';
 import { registerBuiltinCommands } from './input/commands.ts';
@@ -38,6 +40,10 @@ import { renderSettingsModal } from './renderer/settings-modal.ts';
 import { renderSessionPickerModal } from './renderer/session-picker-modal.ts';
 import { renderProfilePickerModal } from './renderer/profile-picker-modal.ts';
 import { renderBookmarkModal } from './renderer/bookmark-modal.ts';
+import { renderProcessModal } from './renderer/process-modal.ts';
+import { renderAgentDetailModal } from './renderer/agent-detail-modal.ts';
+import { renderLiveTailModal } from './renderer/live-tail-modal.ts';
+import { renderContextInspector } from './renderer/context-inspector.ts';
 
 function loadSystemPrompt(): string {
   return _loadSystemPrompt(
@@ -163,6 +169,7 @@ async function main() {
     // Save conversation on exit
     saveConversation(conversation.toJSON());
     try { ScheduleManager.getInstance().destroy(); } catch { /* non-fatal */ }
+    try { providerRegistry.stopWatching(); } catch { /* non-fatal */ }
     stdin.removeAllListeners('data');
     stdout.removeAllListeners('resize');
     stdout.write(PASTE_DISABLE + KEYBOARD_EXT_DISABLE + MOUSE_DISABLE + CURSOR_SHOW + ALT_SCREEN_EXIT);
@@ -172,7 +179,14 @@ async function main() {
 
   // --- Tool registry ---
   const toolRegistry = new ToolRegistry();
-  registerAllTools(toolRegistry);
+  const { fileCache, projectIndex } = registerAllTools(toolRegistry);
+  agentOrchestrator.setDependencies(fileCache, projectIndex);
+  // Initialize WrfcController with EventBus and wire to AgentOrchestrator
+  agentOrchestrator.setEventBus(bus);
+  WrfcController.getInstance(bus);
+
+  // Start watching for custom provider file changes so hot-reload works.
+  providerRegistry.startWatching(bus);
 
   const permissionManager = new PermissionManager(bus);
 
@@ -227,6 +241,7 @@ async function main() {
   input.setConversationManager(conversation);
   input.setContentWidth(getPromptContentWidth());
   input.filePicker.setOnUpdate(() => bus.emit('render:request'));
+  input.agentDetailModal.setOnRefresh(() => bus.emit('render:request'));
 
   // --- Model picker wiring ---
   commandContext.openModelPicker = () => {
@@ -334,11 +349,14 @@ async function main() {
     // Flush any pending message renders before taking snapshot
     conversation.getDisplayBlocks();
 
+    // Cache the current model for consistent values across the entire render frame
+    const currentModel = providerRegistry.getCurrentModel();
+
     // Build header and footer FIRST so we know the exact viewport height
-    const headerLines = UIFactory.createHeader(width, runtime.model, runtime.provider, conversation.title || undefined, lastGitInfo);
+    const headerLines = UIFactory.createHeader(width, currentModel.id, currentModel.provider, conversation.title || undefined, lastGitInfo);
     const runningAgentCount = AgentManager.getInstance().list().filter((a) => a.status === 'running' || a.status === 'pending').length;
     const runningProcessCount = ProcessManager.getInstance().list().length;
-    const processIndicatorLines = renderProcessIndicator(width, runningAgentCount, runningProcessCount);
+    const processIndicatorLines = renderProcessIndicator(width, runningAgentCount, runningProcessCount, input.indicatorFocused);
     const cw = getPromptContentWidth();
     const promptInfo = input.getWrappedPromptInfo(cw);
     const footerContentLines = UIFactory.createFooter(
@@ -353,7 +371,7 @@ async function main() {
         : undefined,
       config.workingDir,
       runtime.provider,
-      providerRegistry.getCurrentModel().contextWindow,
+      currentModel.contextWindow,
       configManager.get('behavior.autoCompactThreshold') as number,
       (() => {
         if (configManager.get('behavior.autoApprove')) return true;
@@ -366,7 +384,10 @@ async function main() {
         return false;
       })()
     );
-    const footerLines = [...processIndicatorLines, ...footerContentLines];
+    // Insert process indicator directly after the input box (top border + content rows + bottom border)
+    const inputBoxRows = promptInfo.visibleLines.length + 2;
+    footerContentLines.splice(inputBoxRows, 0, ...processIndicatorLines);
+    const footerLines = footerContentLines;
 
     // Exact viewport height from actual header/footer sizes
     const vHeight = Math.max(0, height - headerLines.length - footerLines.length);
@@ -444,6 +465,38 @@ async function main() {
       viewport.push(...renderSearchOverlay(input.searchManager, width));
     }
 
+
+    if (input.processModal.active) {
+      const pmLines = renderProcessModal(input.processModal, width);
+      const pmStart = Math.max(0, vHeight - pmLines.length);
+      viewport.length = Math.min(viewport.length, pmStart);
+      while (viewport.length < pmStart) viewport.push(createEmptyLine(width));
+      viewport.push(...pmLines);
+    }
+
+    if (input.agentDetailModal.active) {
+      const adLines = renderAgentDetailModal(input.agentDetailModal, width);
+      const adStart = Math.max(0, vHeight - adLines.length);
+      viewport.length = Math.min(viewport.length, adStart);
+      while (viewport.length < adStart) viewport.push(createEmptyLine(width));
+      viewport.push(...adLines);
+    }
+
+    if (input.liveTailModal.active) {
+      const ltLines = renderLiveTailModal(input.liveTailModal, width);
+      const ltStart = Math.max(0, vHeight - ltLines.length);
+      viewport.length = Math.min(viewport.length, ltStart);
+      while (viewport.length < ltStart) viewport.push(createEmptyLine(width));
+      viewport.push(...ltLines);
+    }
+
+    if (input.contextInspectorModal.active) {
+      const ciLines = renderContextInspector(conversation, width, undefined, currentModel.contextWindow);
+      const ciStart = Math.max(0, vHeight - ciLines.length);
+      viewport.length = Math.min(viewport.length, ciStart);
+      while (viewport.length < ciStart) viewport.push(createEmptyLine(width));
+      viewport.push(...ciLines);
+    }
     if (input.settingsModal.active) {
       viewport.push(...renderSettingsModal(input.settingsModal, width));
     }

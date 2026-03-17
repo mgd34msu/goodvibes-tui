@@ -111,7 +111,8 @@ export function renderLiveTailModal(
   const visibleLines = allLines.slice(startIdx, endIdx);
 
   const typeTag = entry.type === 'agent' ? '[agent]' : '[exec]';
-  const title = `${typeTag} ${entry.label.slice(0, 50)}`;
+  const maxLabelW = Math.max(20, width - 30);
+  const title = `${typeTag} ${entry.label.slice(0, maxLabelW)}`;
 
   // Build scroll indicator for text section header
   const scrollInfo = totalLines > maxOutputLines
@@ -131,7 +132,7 @@ export function renderLiveTailModal(
 
   return ModalFactory.createModal({
     title,
-    width: 76,
+    width: width - 4,
     margin: 2,
     sections,
     hints: ['[↑↓] Scroll', '[k] Kill', '[Esc] Back'],

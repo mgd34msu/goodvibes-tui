@@ -54,6 +54,12 @@ export class InputTokenizer {
         if (this.buffer.startsWith('\x1b[I')) { tokens.push({ type: 'focus', action: 'in' }); this.buffer = this.buffer.slice(3); continue; }
         if (this.buffer.startsWith('\x1b[O')) { tokens.push({ type: 'focus', action: 'out' }); this.buffer = this.buffer.slice(3); continue; }
 
+        // SS3 function keys: \x1bOP (F1), \x1bOQ (F2), \x1bOR (F3), \x1bOS (F4)
+        if (this.buffer.startsWith('\x1bOP')) { tokens.push({ type: 'key', name: '\x1bOP', logicalName: 'f1', ctrl: false, shift: false, meta: false }); this.buffer = this.buffer.slice(3); continue; }
+        if (this.buffer.startsWith('\x1bOQ')) { tokens.push({ type: 'key', name: '\x1bOQ', logicalName: 'f2', ctrl: false, shift: false, meta: false }); this.buffer = this.buffer.slice(3); continue; }
+        if (this.buffer.startsWith('\x1bOR')) { tokens.push({ type: 'key', name: '\x1bOR', logicalName: 'f3', ctrl: false, shift: false, meta: false }); this.buffer = this.buffer.slice(3); continue; }
+        if (this.buffer.startsWith('\x1bOS')) { tokens.push({ type: 'key', name: '\x1bOS', logicalName: 'f4', ctrl: false, shift: false, meta: false }); this.buffer = this.buffer.slice(3); continue; }
+
         const mouseMatch = /^\x1b\[<(\d+);(\d+);(\d+)([Mm])/.exec(this.buffer);
         if (mouseMatch) {
           tokens.push({
@@ -93,6 +99,18 @@ export class InputTokenizer {
           if (suffix === '~' && charCode === 6) logicalName = 'pagedown';
           if (suffix === '~' && charCode === 3) logicalName = 'delete';
           if (suffix === '~' && charCode === 2) logicalName = 'insert';
+          if (suffix === '~' && charCode === 11) logicalName = 'f1';
+          if (suffix === '~' && charCode === 12) logicalName = 'f2';
+          if (suffix === '~' && charCode === 13) logicalName = 'f3';
+          if (suffix === '~' && charCode === 14) logicalName = 'f4';
+          if (suffix === '~' && charCode === 15) logicalName = 'f5';
+          if (suffix === '~' && charCode === 17) logicalName = 'f6';
+          if (suffix === '~' && charCode === 18) logicalName = 'f7';
+          if (suffix === '~' && charCode === 19) logicalName = 'f8';
+          if (suffix === '~' && charCode === 20) logicalName = 'f9';
+          if (suffix === '~' && charCode === 21) logicalName = 'f10';
+          if (suffix === '~' && charCode === 23) logicalName = 'f11';
+          if (suffix === '~' && charCode === 24) logicalName = 'f12';
           if (charCode === 9) logicalName = 'tab';
           if (charCode === 27) logicalName = 'escape';
           if (charCode === 127) logicalName = 'backspace';

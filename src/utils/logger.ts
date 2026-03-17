@@ -26,6 +26,7 @@ class ActivityLogger {
   }
 
   info(message: string, data?: Record<string, unknown>) { this.write('INFO', message, data); }
+  warn(message: string, data?: Record<string, unknown>) { this.write('WARN', message, data); }
   error(message: string, data?: Record<string, unknown>) { this.write('ERROR', message, data); }
   debug(message: string, data?: Record<string, unknown>) { this.write('DEBUG', message, data); }
 }

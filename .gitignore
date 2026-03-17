@@ -13,7 +13,9 @@ dist/
 *.enc
 
 # Runtime state
-.goodvibes/
+.goodvibes/*
+!.goodvibes/skills/
+!.goodvibes/agents/
 
 # Artifacts
 scripts/reset-suite.sh

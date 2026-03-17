@@ -72,6 +72,20 @@ describe('DaemonServer', () => {
     expect(res.status).toBe(401);
   });
 
+  test('POST /login returns session token for valid credentials', async () => {
+    daemon.enable({ daemon: true });
+    await daemon.start();
+    const res = await fetch('http://127.0.0.1:39421/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username: 'admin', password: 'admin' }),
+    });
+    expect(res.status).toBe(200);
+    const body = await res.json() as Record<string, unknown>;
+    expect(body.authenticated).toBe(true);
+    expect(typeof body.token).toBe('string');
+  });
+
   test('GET /status returns 401 with wrong token', async () => {
     daemon.enable({ daemon: true }, TEST_TOKEN);
     await daemon.start();
@@ -190,6 +204,20 @@ describe('HttpListener', () => {
       body: JSON.stringify({ event: 'push' }),
     });
     expect(res.status).toBe(401);
+  });
+
+  test('POST /login returns session token for valid credentials', async () => {
+    listener.enable({ httpListener: true });
+    await listener.start();
+    const res = await fetch('http://127.0.0.1:39422/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username: 'admin', password: 'admin' }),
+    });
+    expect(res.status).toBe(200);
+    const body = await res.json() as Record<string, unknown>;
+    expect(body.authenticated).toBe(true);
+    expect(typeof body.token).toBe('string');
   });
 
   test('POST /webhook returns 401 with wrong token', async () => {

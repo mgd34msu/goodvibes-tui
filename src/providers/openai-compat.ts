@@ -15,6 +15,8 @@ export interface OpenAICompatOptions {
   apiKey: string;
   defaultModel: string;
   models: string[];
+  /** Optional extra HTTP headers sent with every request to this provider. */
+  defaultHeaders?: Record<string, string>;
 }
 
 /**
@@ -36,6 +38,7 @@ export class OpenAICompatProvider implements LLMProvider {
     this.client = new OpenAI({
       apiKey: opts.apiKey,
       baseURL: opts.baseURL,
+      ...(opts.defaultHeaders ? { defaultHeaders: opts.defaultHeaders } : {}),
     });
   }
 
