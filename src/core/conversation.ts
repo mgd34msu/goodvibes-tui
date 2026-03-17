@@ -2,12 +2,15 @@ import { InfiniteBuffer } from './history.ts';
 import { UIFactory } from '../renderer/ui-factory.ts';
 import { renderMarkdown, renderMarkdownTracked } from '../renderer/markdown.ts';
 import { renderToolCallBlock } from '../renderer/tool-call.ts';
+import { renderThinkingBlock } from '../renderer/thinking.ts';
+import { renderSystemMessage } from '../renderer/system-message.ts';
 import { createEmptyLine, type Line, type Cell } from '../types/grid.ts';
 import { getSplashLines, type SplashOptions } from '../utils/splash-lines.ts';
 import { interpolateColor, getDisplayWidth, wrapText } from '../utils/terminal-width.ts';
 import type { ToolCall, ToolResult } from '../types/tools.ts';
 import type { ProviderMessage, ContentPart } from '../providers/interface.ts';
 import { logger } from '../utils/logger.ts';
+import { LAYOUT } from '../renderer/layout.ts';
 import type { ProviderRegistry } from '../providers/registry.ts';
 import type { ConfigManager } from '../config/manager.ts';
 
@@ -347,9 +350,7 @@ export class ConversationManager {
           const thinkingStartLine = this.history.getLineCount();
           const thinkingBlockIdx = this.blockRegistry.length;
           const thinkingCollapseKey = `msg_${msgIdx}_thinking`;
-          const thinkingHeader = this.textToLines('💭 Thinking:', width, { fg: '238', dim: true, italic: true });
-          this.history.addLines(thinkingHeader);
-          const thinkingLines = this.textToLines(m.reasoningContent, width, { fg: '238', dim: true, italic: true });
+          const thinkingLines = renderThinkingBlock(m.reasoningContent, width);
           this.history.addLines(thinkingLines);
           this.history.addLine(createEmptyLine(width));
           const thinkingRenderedLines = this.history.getLineCount() - thinkingStartLine;
@@ -363,9 +364,7 @@ export class ConversationManager {
           });
         }
         if (showReasoningSummary && m.reasoningSummary) {
-          const summaryHeader = this.textToLines('🧠 Reasoning Summary:', width, { fg: '238', dim: true, italic: true });
-          this.history.addLines(summaryHeader);
-          const summaryLines = this.textToLines(m.reasoningSummary, width, { fg: '238', dim: true, italic: true });
+          const summaryLines = renderThinkingBlock(m.reasoningSummary, width);
           this.history.addLines(summaryLines);
           this.history.addLine(createEmptyLine(width));
         }
@@ -432,14 +431,12 @@ export class ConversationManager {
         }
       } else if (m.role === 'system') {
         const sysStartLine = this.history.getLineCount();
-        const lines = this.textToLines(m.content, width, { fg: '196' });
-        this.history.addLines(lines);
+        const sysLines = renderSystemMessage(m.content, width);
+        this.history.addLines(sysLines);
         if (/error/i.test(m.content)) {
           this.errorLineRegistry.push(sysStartLine);
         }
       } else if (m.role === 'tool') {
-        // Collapsible tool result block
-        // Use the message's index in this.messages as a stable collapse key
         const collapseKey = `msg_${msgIdx}`;
         const blockIdx = this.blockRegistry.length;
         const startLine = this.history.getLineCount();
@@ -450,32 +447,43 @@ export class ConversationManager {
         const isDiff = hasDiffHeader && hasHunk;
         const blockType: 'diff' | 'tool' = isDiff ? 'diff' : 'tool';
 
-        // Auto-collapse tool results by default (unless explicitly expanded)
         const isCollapsed = this.collapseState.has(collapseKey)
           ? this.collapseState.get(collapseKey)!
-          : lineCount > collapseThreshold;
+          : true;  // Collapsed by default
 
-        // Set default collapse state
-        if (!this.collapseState.has(collapseKey) && lineCount > collapseThreshold) {
+        if (!this.collapseState.has(collapseKey)) {
           this.collapseState.set(collapseKey, true);
         }
 
         if (isCollapsed) {
-          // Show header line + collapsed indicator
-          const preview = contentLines[0].slice(0, width - 30);
+          // Collapsed: single dim line with preview
+          const COLLAPSE_SUFFIX_RESERVE = 30; // space for '… [+N lines]' suffix
+          const preview = contentLines[0].slice(0, width - LAYOUT.LEFT_MARGIN - LAYOUT.RIGHT_MARGIN - COLLAPSE_SUFFIX_RESERVE);
           const hiddenCount = lineCount - 1;
           const collapsedText = hiddenCount > 0
-            ? `[tool result] ${preview}…  [+${hiddenCount} lines — Tab to expand]`
-            : `[tool result] ${preview}`;
-          const lines = this.textToLines(collapsedText, width, { fg: '244', dim: true });
-          this.history.addLines(lines);
+            ? `${preview}…  [+${hiddenCount} lines]`
+            : preview;
+          const rendered = renderSystemMessage(collapsedText, width, 'info');
+          this.history.addLines(rendered);
         } else {
-          // Show full content (no truncation when expanded)
-          const expandedLines = this.textToLines(`[tool result] ${m.content}`, width, { fg: '244', dim: true });
-          this.history.addLines(expandedLines);
+          // Expanded: render through markdown pipeline
+          let contentToRender = m.content;
+
+          // If the content is valid JSON, wrap in a json code fence for syntax highlighting
+          const trimmed = contentToRender.trimStart();
+          if ((trimmed.startsWith('{') || trimmed.startsWith('[')) && contentToRender.length < 100_000) {
+            try {
+              JSON.parse(contentToRender);
+              contentToRender = '```json\n' + contentToRender + '\n```';
+            } catch {
+              // Not valid JSON — render as-is through markdown
+            }
+          }
+
+          const rendered = renderMarkdown(contentToRender, width);
+          this.history.addLines(rendered);
         }
 
-        // Register this block for copy/apply
         const renderedLineCount = this.history.getLineCount() - startLine;
         let meta: BlockMeta = {
           blockIndex: blockIdx,
@@ -486,7 +494,6 @@ export class ConversationManager {
           rawContent: m.content,
         };
 
-        // Parse diff for apply
         if (isDiff) {
           meta = { ...meta, ...parseDiffForApply(m.content) };
         }
@@ -629,17 +636,16 @@ export class ConversationManager {
   }
 
   public textToLines(text: string, width: number, style: Partial<Cell> = {}): Line[] {
-    const tabWidth = 4;
-    const contentWidth = width - tabWidth - 2;
+    const contentWidth = LAYOUT.contentWidth(width);
     const wrapped = wrapText(text, contentWidth);
 
     return wrapped.map((l, i) => {
-      const prefix = i === 0 ? '>   ' : '    ';
+      const prefix = i === 0 ? '>' + ' '.repeat(LAYOUT.LEFT_MARGIN - 1) : ' '.repeat(LAYOUT.LEFT_MARGIN);
       return UIFactory.stringToLine(prefix + l, width, style);
     });
   }
 
-  public log(text: string, style: Partial<Cell> = {}, indent = '  '): void {
+  public log(text: string, style: Partial<Cell> = {}, indent = ' '.repeat(LAYOUT.LEFT_MARGIN)): void {
     const width = this.getWidth();
     const lines = text.split('\n').map((l, i) =>
       UIFactory.stringToLine((i === 0 ? l : indent + l), width, style)

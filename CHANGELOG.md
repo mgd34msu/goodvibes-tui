@@ -4,6 +4,29 @@ All notable changes to GoodVibes TUI.
 
 ---
 
+## [0.9.6] — 2026-03-17
+
+### Visual Redesign
+- **Consistent margins** — 4-char left margin, 2-char right margin on all assistant content, tool results, system messages, and thinking blocks. Centralized in `src/renderer/layout.ts` as single source of truth.
+- **Tool call collapsed format** — replaced full-width black bars with clean single-line format: status icon (✓/✗/⠋) + tool name + key argument + result summary + duration. Collapsed by default.
+- **Tool results through markdown** — expanded tool results now render through the markdown pipeline with syntax highlighting. JSON results auto-wrapped in code fences.
+- **Thinking blocks** — replaced emoji prefix with dim purple left border (`▍`), italic dimmed text. Cleaner, less noisy.
+- **System message types** — differentiated by type: red border for errors, yellow for warnings, cyan for info. Replaces the old all-red styling.
+- **Click-to-toggle** — single click on collapsed/expanded blocks toggles them. Distinguishes clicks from drag-to-select (2-cell threshold).
+- **Code block right margin** — code blocks now respect the 2-char right margin instead of running edge-to-edge.
+- **Code block left margin** — code blocks (header, content, footer) now start at column 4 with no bg bleed into margin area.
+- **Bold markdown fix** — `**bold**` now renders correctly after emoji (surrogate pair handling in plain text accumulator).
+- **Skill slash commands** — `/add-provider` (and any skill with matching triggers) now works as a slash command.
+- **Registry search paths** — skill/agent discovery now searches `.goodvibes/tui/skills/` and directory-based `SKILL.md`/`AGENT.md` formats.
+- **Version propagation** — version is now 0.9.6 everywhere (package.json is single source of truth via prebuild).
+
+### New Files
+- `src/renderer/layout.ts` — LAYOUT, TOOL_STATUS, BORDERS constants
+- `src/renderer/thinking.ts` — thinking block renderer with left border
+- `src/renderer/system-message.ts` — system message renderer with typed borders
+
+---
+
 ## [0.9.5] — 2026-03-17
 
 ### Automated WRFC Chains (Section 8)

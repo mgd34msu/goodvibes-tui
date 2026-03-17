@@ -41,7 +41,13 @@ export function getConfigManager(): ConfigManager {
 /** Backward-compatible export — delegates to the lazy singleton. */
 export const configManager: ConfigManager = new Proxy({} as ConfigManager, {
   get(_target, prop: string | symbol) {
-    return (getConfigManager() as unknown as Record<string | symbol, unknown>)[prop];
+    const manager = getConfigManager();
+    const value = (manager as unknown as Record<string | symbol, unknown>)[prop];
+    // Bind methods to the singleton so `this` is correct when called via the proxy.
+    if (typeof value === 'function') {
+      return (value as Function).bind(manager);
+    }
+    return value;
   },
   set(_target, prop: string | symbol, value: unknown) {
     (getConfigManager() as unknown as Record<string | symbol, unknown>)[prop] = value;

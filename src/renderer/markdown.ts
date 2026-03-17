@@ -2,6 +2,7 @@ import { type Line, type Cell, createStyledCell } from '../types/grid.ts';
 import { UIFactory } from './ui-factory.ts';
 import { renderCodeBlock } from './code-block.ts';
 import { getDisplayWidth } from '../utils/terminal-width.ts';
+import { LAYOUT } from './layout.ts';
 
 /** Module-level set of inline markdown special characters (hoisted out of hot loop). */
 const INLINE_SPECIAL_CHARS = new Set(['[', '`', '*', '_', '~']);
@@ -17,8 +18,8 @@ export function renderMarkdown(text: string, width: number): Line[] {
   let inCodeBlock = false;
   let codeBlockLang = '';
   let codeBlockLines: string[] = [];
-  const indent = 2;
-  const contentWidth = width - indent;
+  const indent = LAYOUT.LEFT_MARGIN;
+  const contentWidth = LAYOUT.contentWidth(width);
 
   for (let i = 0; i < rawLines.length; i++) {
     const raw = rawLines[i];
@@ -177,7 +178,7 @@ export function renderMarkdownTracked(
   let inCodeBlock = false;
   let codeBlockLang = '';
   let codeBlockLines: string[] = [];
-  const indent = 2;
+  const indent = LAYOUT.LEFT_MARGIN;
 
   for (let i = 0; i < rawLines.length; i++) {
     const raw = rawLines[i];
@@ -492,7 +493,10 @@ export function renderInlineMarkdown(text: string): InlineToken[] {
 
     // Plain text — accumulate until next special char, detect bare URLs and file paths
     let end = i + 1;
-    while (end < text.length && !INLINE_SPECIAL_CHARS.has(text[end])) end++;
+    while (end < text.length && !INLINE_SPECIAL_CHARS.has(text[end])) {
+      const code = text.charCodeAt(end);
+      end += (code >= 0xD800 && code <= 0xDBFF) ? 2 : 1;
+    }
     const plainText = text.slice(i, end);
 
     // Detect http/https URLs in plain text
