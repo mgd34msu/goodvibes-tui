@@ -94,6 +94,11 @@ export class WrfcController {
    * Sets chain state to 'engineering' and links the record.
    */
   createChain(engineerRecord: AgentRecord): WrfcChain {
+    logger.info('WrfcController.createChain: called', {
+      agentId: engineerRecord.id,
+      task: engineerRecord.task.slice(0, 60),
+      activeChainCount: this.activeChainCount,
+    });
     // Check active chain cap — queue if at limit
     const activeCount = this.activeChainCount;
 
@@ -786,6 +791,21 @@ export class WrfcController {
 
     if (!agentId) {
       this.failChain(chain, 'autoCommit: no agent ID found on chain');
+      return;
+    }
+
+    // Check if project is a git repo before attempting worktree operations
+    if (!existsSync(join(process.cwd(), '.git'))) {
+      logger.debug('WrfcController.autoCommit: not a git repo, skipping commit', { chainId: chain.id });
+      this.activeChainCount = Math.max(0, this.activeChainCount - 1);
+      // No actual commit — intentionally skip wrfc:auto-commit event (commit didn't happen)
+      this.transition(chain, 'passed');
+      chain.completedAt = Date.now();
+      this.eventBus.emit('wrfc:chain-passed', { chainId: chain.id });
+      this.scheduleChainCleanup(chain);
+      this.dequeueNext().catch((err) => {
+        logger.error('WrfcController.dequeueNext unhandled error', { error: String(err) });
+      });
       return;
     }
 

@@ -12,6 +12,7 @@ import type { AgentRecord } from '../tools/agent/index.ts';
 import type { LLMProvider } from '../providers/interface.ts';
 import type { EventBus } from '../core/event-bus.ts';
 import { existsSync, readFileSync } from 'node:fs';
+import { ProcessManager } from '../tools/shared/process-manager.ts';
 import { join } from 'node:path';
 
 // ---------------------------------------------------------------------------
@@ -65,6 +66,7 @@ export class AgentOrchestrator {
 
     let session: AgentSession | null = null;
     let conversation: ConversationManager | null = null;
+    const preAgentProcessIds = new Set(ProcessManager.getInstance().list().map(p => p.id));
 
     try {
       // --- Resolve model and provider ---
@@ -148,6 +150,20 @@ export class AgentOrchestrator {
             record.progress = `Executing tool: ${call.name}`;
             record.toolCallCount++;
 
+            // Sanitize exec args for agent context: force inline execution, 10-min TTL
+            if (call.name === 'exec' || call.name === 'precision_exec') {
+              const execArgs = call.arguments as Record<string, unknown>;
+              // Force all commands to run inline (no background leaks)
+              if (Array.isArray(execArgs.commands)) {
+                for (const cmd of execArgs.commands as Record<string, unknown>[]) {
+                  cmd.background = false;
+                  if (!cmd.timeout_ms) cmd.timeout_ms = 600_000; // 10 min default
+                }
+              }
+              // Set global timeout default
+              if (!execArgs.timeout_ms) execArgs.timeout_ms = 600_000;
+            }
+
             try {
               const result = await toolRegistry.execute(call.id, call.name, call.arguments);
               results.push(result);
@@ -176,6 +192,13 @@ export class AgentOrchestrator {
 
       record.status = 'completed';
       record.completedAt = Date.now();
+      // Kill any background processes leaked by this agent
+      const pm = ProcessManager.getInstance();
+      for (const p of pm.list()) {
+        if (!preAgentProcessIds.has(p.id)) {
+          pm.stop(p.id);
+        }
+      }
       // Emit completion event for WrfcController
       if (this.eventBus) {
         this.eventBus.emit('subagent:complete', {
@@ -205,6 +228,13 @@ export class AgentOrchestrator {
       record.status = 'failed';
       record.error = message;
       record.completedAt = Date.now();
+      // Kill any background processes leaked by this agent
+      const pm = ProcessManager.getInstance();
+      for (const p of pm.list()) {
+        if (!preAgentProcessIds.has(p.id)) {
+          pm.stop(p.id);
+        }
+      }
       // Emit error event for WrfcController
       if (this.eventBus) {
         this.eventBus.emit('subagent:error', {
