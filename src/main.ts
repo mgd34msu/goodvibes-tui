@@ -200,12 +200,9 @@ async function main() {
   unsubs.push(bus.on('wrfc:review-complete', ({ chainId, score, passed }: { chainId: string; score: number; passed: boolean }) => {
     const icon = passed ? '\u2713' : '\u2717';
     const color = passed ? '#22c55e' : '#ef4444';
-    conversation.log(`[WRFC] ${icon} Review ${chainId.slice(0, 12)}: ${score}/10 ${passed ? 'PASSED' : 'FAILED'}`, { fg: color });
-    bus.emit('render:request');
-  }));
-
-  unsubs.push(bus.on('wrfc:fix-attempt', ({ chainId, attempt, maxAttempts }: { chainId: string; attempt: number; maxAttempts: number }) => {
-    conversation.log(`[WRFC] Fix attempt ${attempt}/${maxAttempts} for ${chainId.slice(0, 12)}`, { fg: '#eab308' });
+    const threshold = configManager.get('wrfc.scoreThreshold') as number;
+    const suffix = passed ? '' : ` - Minimum score is ${threshold}/10, spawning a fix agent ...`;
+    conversation.log(`[WRFC] ${icon} Review ${chainId.slice(0, 12)}: ${score}/10${suffix}`, { fg: color });
     bus.emit('render:request');
   }));
 
@@ -405,7 +402,7 @@ async function main() {
     // Build header and footer FIRST so we know the exact viewport height
     const headerLines = UIFactory.createHeader(width, currentModel.id, currentModel.provider, conversation.title || undefined, lastGitInfo);
     const runningAgentCount = AgentManager.getInstance().list().filter((a) => a.status === 'running' || a.status === 'pending').length;
-    const runningProcessCount = ProcessManager.getInstance().list().length;
+    const runningProcessCount = ProcessManager.getInstance().list().filter((p) => !p.status.startsWith('done')).length;
     const processIndicatorLines = renderProcessIndicator(width, runningAgentCount, runningProcessCount, input.indicatorFocused);
     const cw = getPromptContentWidth();
     const promptInfo = input.getWrappedPromptInfo(cw);

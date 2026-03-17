@@ -134,10 +134,12 @@ export function renderAgentDetailModal(
 
   const sections: import('./modal-factory.ts').ModalSection[] = [];
 
-  // Task
+  // Task — show first line only, capped at 120 chars
+  const taskFirstLine = rec.task.split('\n')[0].replace(/^(WRFC\s+(Fix|Review)\s+Request\s*)/i, '').trim();
+  const taskDisplay = taskFirstLine.length > 120 ? taskFirstLine.slice(0, 117) + '\u2026' : taskFirstLine;
   sections.push({
     type: 'text',
-    content: `Task: ${rec.task}`,
+    content: `Task: ${taskDisplay}`,
     style: { bold: true },
   });
   sections.push({ type: 'separator' });

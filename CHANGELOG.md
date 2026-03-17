@@ -4,6 +4,42 @@ All notable changes to GoodVibes TUI.
 
 ---
 
+## [0.9.7] — 2026-03-17
+
+### WRFC Safety & Reliability
+- **Active chain cap with FIFO queue** — max 6 concurrent WRFC chains, excess queued and dequeued on completion
+- **Same-error detection** — fingerprints gate failures, aborts cascade after 1 identical ancestor match
+- **Gate auto-detection** — skips typecheck (no tsconfig.json), lint (no eslint config), test/build (no npm scripts)
+- **Buffered completions** — agents that finish while their chain is queued are processed on dequeue
+- **Unlimited fix attempts** — removed hard cap on review fix cycles; same-error detection is the only halt mechanism
+- **awaiting_gates state** — gates wait for ALL active chains to finish review/fix before running; prevents premature gate execution on incomplete work
+- **Pending chains block gates** — queued (not-yet-started) chains also prevent gate execution
+- **Terminal chain cleanup** — passed/failed chains pruned from memory after 60 seconds
+- **parentChainId linkage** — gate-failure follow-up chains correctly linked to parent via pendingParentChainIds map
+- **activeChainCount O(1)** — counter replaces O(n) filter for chain cap checks
+
+### WRFC Conversation Integration
+- **8 lifecycle listeners** — chain-created, review-complete, fix-attempt, chain-passed, chain-failed, auto-commit, gate-result, cascade-abort all bubble to the conversation
+- **Cleaner review messages** — failed reviews show score + threshold + "spawning a fix agent" instead of separate fix-attempt lines
+- **Left margin on all log lines** — conversation.log() now applies LAYOUT.LEFT_MARGIN to all lines including the first
+- **Proxy method binding fix** — providerRegistry and configManager Proxy exports now bind methods to singleton, fixing model/config switch not applying
+
+### Agent Execution
+- **Inline exec for agents** — agent exec calls forced to `background: false` with 10-minute default timeout; no more leaked background processes
+- **Process cleanup on completion** — orphaned background processes killed when agent finishes (safety net)
+- **Non-git repo failsafe** — autoCommit gracefully passes WRFC chain when project has no `.git` directory instead of crashing
+
+### Process Modal & UI
+- **Smart agent labels** — process modal shows `[Engineer]`, `[Review]`, `[Fix #N]` with original task description and score info (e.g. `8.4 → 9.9/10`)
+- **Completed processes hidden** — finished agents and done exec processes filtered from process modal and footer indicator
+- **Agent detail modal truncated** — task text capped to first line (120 chars) instead of dumping full WRFC request
+
+### Rendering Fixes
+- **Symbol width fix** — ✓ ✗ ✔ ✘ and box drawing characters correctly treated as single-width in getDisplayWidth()
+- **ReviewerReport type narrowing** — fixed TypeScript errors in wrfc-controller.ts
+
+---
+
 ## [0.9.6] — 2026-03-17
 
 ### Visual Redesign

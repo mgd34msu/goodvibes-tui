@@ -647,8 +647,8 @@ export class ConversationManager {
 
   public log(text: string, style: Partial<Cell> = {}, indent = ' '.repeat(LAYOUT.LEFT_MARGIN)): void {
     const width = this.getWidth();
-    const lines = text.split('\n').map((l, i) =>
-      UIFactory.stringToLine((i === 0 ? l : indent + l), width, style)
+    const lines = text.split('\n').map((l) =>
+      UIFactory.stringToLine(indent + l, width, style)
     );
     this.history.addLines(lines);
   }

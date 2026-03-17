@@ -2,7 +2,8 @@ import { type Line } from '../types/grid.ts';
 import { ModalFactory } from './modal-factory.ts';
 import { formatDuration } from './modal-utils.ts';
 import { ProcessManager } from '../tools/shared/process-manager.ts';
-import { AgentManager } from '../tools/agent/index.ts';
+import { AgentManager, type AgentRecord } from '../tools/agent/index.ts';
+import { WrfcController } from '../agents/wrfc-controller.ts';
 
 // ─── ProcessEntry ─────────────────────────────────────────────────────────────
 
@@ -32,6 +33,64 @@ const MODAL_BORDER_WIDTH = 8;
 /** Minimum width for the dynamic process label column. */
 const MIN_LABEL_WIDTH = 20;
 
+/** Build a display label for an agent based on its task and template. */
+function buildAgentLabel(rec: AgentRecord): string {
+  const task = rec.task;
+
+  // Look up the original task from the WRFC chain if available
+  const originalTask = getChainTask(rec.wrfcId);
+
+  // WRFC Review agent
+  if (task.startsWith('WRFC Review Request')) {
+    const thresholdMatch = task.match(/threshold is (\d+(?:\.\d+)?)/);
+    const threshold = thresholdMatch ? thresholdMatch[1] : '9.9';
+    const desc = truncateFirst(originalTask ?? 'review in progress', 50);
+    return `[Review] ${desc}  (target: ${threshold}/10)`;
+  }
+
+  // WRFC Fix agent
+  if (task.startsWith('WRFC Fix Request')) {
+    const scoreMatch = task.match(/Review score:\s*(\d+(?:\.\d+)?)\/(\d+)\s*\(threshold:\s*(\d+(?:\.\d+)?)/);
+    const fromScore = scoreMatch ? scoreMatch[1] : '?';
+    const toScore = scoreMatch ? scoreMatch[3] : '?';
+    const attemptMatch = task.match(/Fix attempt:\s*(\d+)/);
+    const attempt = attemptMatch ? attemptMatch[1] : '?';
+    const desc = truncateFirst(originalTask ?? 'fix in progress', 45);
+    return `[Fix #${attempt}] ${desc}  (${fromScore} \u2192 ${toScore}/10)`;
+  }
+
+  // Regular agent — show template and truncated first line
+  const templateLabels: Record<string, string> = {
+    engineer: 'Engineer', reviewer: 'Reviewer', tester: 'Tester',
+    researcher: 'Researcher', general: 'Agent',
+  };
+  const tag = templateLabels[rec.template] ?? 'Agent';
+  const maxDesc = MAX_LABEL_LENGTH - tag.length - 3;
+  return `[${tag}] ${truncateFirst(task, maxDesc)}`;
+}
+
+/** Get the original task description from a WRFC chain. */
+function getChainTask(wrfcId: string | undefined): string | null {
+  if (!wrfcId) return null;
+  try {
+    const chain = WrfcController.getInstance().getChain(wrfcId);
+    return chain?.task ?? null;
+  } catch { return null; }
+}
+
+/** Truncate to first line, capped at max chars. */
+function truncateFirst(text: string, max: number): string {
+  const line = text.split('\n')[0].trim();
+  return line.length > max ? line.slice(0, max - 1) + '\u2026' : line;
+}
+
+/** Truncate a command string to first line, capped at MAX_LABEL_LENGTH. */
+function truncateCmd(text: string): string {
+  const firstLine = text.split('\n')[0].trim();
+  if (firstLine.length > MAX_LABEL_LENGTH) return firstLine.slice(0, MAX_LABEL_LENGTH - 3) + '\u2026';
+  return firstLine;
+}
+
 // ─── ProcessModalState ────────────────────────────────────────────────────────
 
 /**
@@ -60,24 +119,26 @@ export class ProcessModal {
     const now = Date.now();
     const result: ProcessEntry[] = [];
 
-    // Agents
+    // Agents — only show active (pending/running)
     for (const a of AgentManager.getInstance().list()) {
+      if (a.status === 'completed' || a.status === 'failed' || a.status === 'cancelled') continue;
       result.push({
         id: a.id,
-        label: a.task.length > MAX_LABEL_LENGTH ? a.task.slice(0, MAX_LABEL_LENGTH - 3) + '\u2026' : a.task,
+        label: buildAgentLabel(a),
         type: 'agent',
         status: a.status,
         elapsedMs: now - a.startedAt,
       });
     }
 
-    // Background exec processes
+    // Background exec processes — only show running
     const pm = ProcessManager.getInstance();
     for (const p of pm.list()) {
+      if (p.status.startsWith('done')) continue;
       const startTime = pm.getStatus(p.id)?.startTime ?? now;
       result.push({
         id: p.id,
-        label: p.cmd.length > MAX_LABEL_LENGTH ? p.cmd.slice(0, MAX_LABEL_LENGTH - 3) + '\u2026' : p.cmd,
+        label: truncateCmd(p.cmd),
         type: 'exec',
         status: p.status,
         elapsedMs: now - startTime,
