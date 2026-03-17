@@ -1,4 +1,5 @@
 import { type Line, type Cell, createEmptyLine, createEmptyCell } from '../types/grid.ts';
+import { LAYOUT } from './layout.ts';
 import { VERSION } from '../version.ts';
 import { getDisplayWidth, wrapText, interpolateColor } from '../utils/terminal-width.ts';
 import type { GitHeaderInfo } from './git-status.ts';
@@ -113,7 +114,7 @@ export class UIFactory {
    */
   private static createGenericBar(width: number, text: string, bgColor: string, textColor: string, prefixStr: string, strikethrough = false): Line[] {
     const lines: Line[] = [];
-    const boxMargin = 2;
+    const boxMargin = LAYOUT.USER_BOX_MARGIN;
     const prefixW = getDisplayWidth(prefixStr);
     
     // 1. Calculate max available content space

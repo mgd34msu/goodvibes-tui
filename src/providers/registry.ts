@@ -408,7 +408,13 @@ export function _resetProviderRegistryForTesting(): void {
 // providerRegistry export as read-only and call methods via the returned instance.
 export const providerRegistry: ProviderRegistry = new Proxy({} as ProviderRegistry, {
   get(_target, prop: string | symbol) {
-    return (getProviderRegistry() as unknown as Record<string | symbol, unknown>)[prop];
+    const registry = getProviderRegistry();
+    const value = (registry as unknown as Record<string | symbol, unknown>)[prop];
+    // Bind methods to the singleton so `this` is correct when called via the proxy.
+    if (typeof value === 'function') {
+      return (value as Function).bind(registry);
+    }
+    return value;
   },
   has(_target, prop: string | symbol) {
     return prop in (getProviderRegistry() as unknown as Record<string | symbol, unknown>);

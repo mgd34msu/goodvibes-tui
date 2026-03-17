@@ -1,145 +1,175 @@
-import { type Line } from '../types/grid.ts';
-import { UIFactory } from './ui-factory.ts';
-import { renderMarkdown } from './markdown.ts';
-import { renderDiffView } from './diff-view.ts';
-import { renderCodeBlock } from './code-block.ts';
+import { type Line, createStyledCell, createEmptyLine } from '../types/grid.ts';
+import { LAYOUT, TOOL_STATUS } from './layout.ts';
 import { getDisplayWidth } from '../utils/terminal-width.ts';
-import type { ToolCall, ToolResult } from '../types/tools.ts';
+import type { ToolCall } from '../types/tools.ts';
+
+const KEY_ARG_RIGHT_RESERVE = 20;
+const SUMMARY_RIGHT_RESERVE = 8;
 
 /**
- * truncateToDisplayWidth - Truncate a string to at most `maxW` display columns.
- * Unlike String.slice(), this is safe for multi-byte emoji and CJK characters.
+ * Extract the most meaningful argument from a tool call for display.
  */
-function truncateToDisplayWidth(text: string, maxW: number, ellipsis = '…'): string {
-  const ellipsisW = getDisplayWidth(ellipsis);
-  let w = 0;
-  let cutPoint = 0;
-  for (const ch of text) {
-    const cw = getDisplayWidth(ch);
-    if (w + cw > maxW - ellipsisW) break;
-    w += cw;
-    cutPoint += ch.length;
+function extractKeyArg(toolCall: ToolCall): string {
+  const args = toolCall.arguments;
+  // Path-based tools
+  if (typeof args.path === 'string') return args.path;
+  if (typeof args.file === 'string') return args.file;
+  // Array-based (read/write)
+  if (Array.isArray(args.files) && args.files.length > 0) {
+    const first = args.files[0];
+    if (typeof first === 'string') return first;
+    if (first && typeof first === 'object' && typeof (first as Record<string, unknown>).path === 'string')
+      return (first as Record<string, unknown>).path as string;
   }
-  return text.slice(0, cutPoint) + ellipsis;
-}
-
-type ToolStatus = 'pending' | 'running' | 'done' | 'failed';
-
-/** Icon map by tool name. */
-const TOOL_ICONS: Record<string, string> = {
-  'file_read': '📖',
-  'file_write': '✏️',
-  'file_edit': '📝',
-  'shell_exec': '⚡',
-  'grep': '🔍',
-  'list_dir': '📁',
-  'glob': '🔎',
-  'delegate': '🤖',
-};
-
-/** Status badge styles. */
-const STATUS_STYLES: Record<ToolStatus, { label: string; fg: string; bold: boolean }> = {
-  pending: { label: 'PENDING', fg: '244',     bold: false },
-  running: { label: 'RUNNING', fg: '#ffcc00', bold: true  },
-  done:    { label: 'DONE',    fg: '#22c55e', bold: true  },
-  failed:  { label: 'FAILED',  fg: '#ef4444', bold: true  },
-};
-
-/**
- * getToolTitle - Derive a human-readable title from a tool call.
- * E.g. read + { path: 'src/main.ts' } => "Reading src/main.ts"
- */
-function getToolTitle(name: string, args: Record<string, unknown>): string {
-  const verbs: Record<string, string> = {
-    'file_read':  'Reading',
-    'file_write': 'Writing',
-    'file_edit':  'Editing',
-    'shell_exec': 'Running',
-    'grep':       'Searching',
-    'list_dir':   'Listing',
-    'glob':       'Globbing',
-    'delegate':   'Delegating',
-  };
-  const verb = verbs[name] || name;
-  const key = (args.path ?? args.command ?? args.pattern ?? args.directory ?? '') as string;
-  return key ? `${verb} ${String(key)}` : verb;
+  // Exec
+  if (typeof args.command === 'string') return args.command;
+  if (Array.isArray(args.commands) && args.commands.length > 0) {
+    const first = args.commands[0];
+    if (first && typeof first === 'object' && typeof (first as Record<string, unknown>).cmd === 'string')
+      return (first as Record<string, unknown>).cmd as string;
+  }
+  // Find/grep
+  if (typeof args.pattern === 'string') return args.pattern;
+  if (Array.isArray(args.queries) && args.queries.length > 0) {
+    const first = args.queries[0];
+    if (first && typeof first === 'object' && typeof (first as Record<string, unknown>).pattern === 'string')
+      return (first as Record<string, unknown>).pattern as string;
+  }
+  // Fetch
+  if (Array.isArray(args.urls) && args.urls.length > 0) {
+    const first = args.urls[0];
+    if (first && typeof first === 'object' && typeof (first as Record<string, unknown>).url === 'string')
+      return (first as Record<string, unknown>).url as string;
+  }
+  // Agent
+  if (typeof args.task === 'string') return args.task.slice(0, 40);
+  if (typeof args.mode === 'string') return args.mode;
+  // Fallback: first string value
+  for (const val of Object.values(args)) {
+    if (typeof val === 'string' && val.length > 0) return val.slice(0, 40);
+  }
+  return '';
 }
 
 /**
- * renderToolCallBlock - Render a tool call (with optional result) as Line[].
- * Compact header + optional result expansion.
+ * Render a tool call as a single collapsed line.
+ *
+ * Layout: [margin] [icon] [space] [tool name padded] [key arg] [summary] [duration]
+ *
+ * @param toolCall - The tool call being executed
+ * @param status - 'executing' | 'done' | 'error'
+ * @param resultSummary - Optional brief summary (e.g., "3 files", "exit 0")
+ * @param width - Terminal width
+ * @param durationMs - Optional duration in milliseconds
+ * @param errorMsg - Optional error message for failed calls
  */
 export function renderToolCallBlock(
   toolCall: ToolCall,
-  status: ToolStatus,
-  result?: ToolResult,
-  width: number = 80
+  status: 'executing' | 'done' | 'error',
+  resultSummary: string | undefined,
+  width: number,
+  durationMs?: number,
+  errorMsg?: string,
+  frameIndex?: number,
 ): Line[] {
-  const lines: Line[] = [];
-  const icon = TOOL_ICONS[toolCall.name] || '🔧';
-  const title = getToolTitle(toolCall.name, toolCall.arguments);
-  const { label: statusLabel, fg: statusFg, bold: statusBold } = STATUS_STYLES[status];
+  const line = createEmptyLine(width);
+  const margin = LAYOUT.LEFT_MARGIN;
+  const rightMargin = LAYOUT.RIGHT_MARGIN;
 
-  // Header line: icon + title + [STATUS]
-  const badgeText = `[${statusLabel}]`;
-  const badgeW = getDisplayWidth(badgeText);
-  const headerPrefix = ` ${icon} ${title}`;
-  const maxTitleW = width - badgeW - 2;
-  const truncatedHeader = getDisplayWidth(headerPrefix) > maxTitleW
-    ? truncateToDisplayWidth(headerPrefix, maxTitleW)
-    : headerPrefix;
+  let col = margin;
 
-  const paddingW = width - getDisplayWidth(truncatedHeader) - badgeW;
-  const headerText = truncatedHeader + ' '.repeat(Math.max(0, paddingW)) + badgeText;
+  // Status icon
+  const icon = status === 'done' ? TOOL_STATUS.SUCCESS_ICON
+    : status === 'error' ? TOOL_STATUS.FAIL_ICON
+    : TOOL_STATUS.SPINNER_FRAMES[(frameIndex ?? 0) % TOOL_STATUS.SPINNER_FRAMES.length];
+  const iconColor = status === 'done' ? '#22c55e'
+    : status === 'error' ? '#ef4444'
+    : '244';
 
-  lines.push(UIFactory.stringToLine(headerText, width, { fg: statusFg, bold: statusBold, bg: '#141414' }));
+  if (col < width - rightMargin) {
+    line[col] = createStyledCell(icon, { fg: iconColor, bold: status !== 'executing' });
+  }
+  col += 2; // icon + space
 
-  // Result rendering (collapsed if large, expanded for diffs/code)
-  if (result) {
-    if (!result.success) {
-      const errText = result.error || 'Unknown error';
-      lines.push(UIFactory.stringToLine(`  ⚠ ${errText}`, width, { fg: '#ef4444', dim: true }));
-    } else if (result.output) {
-      const output = result.output;
+  // Tool name (padded to TOOL_NAME_PAD) — extract short name for long MCP tool names
+  const rawName = toolCall.name.includes('__')
+    ? toolCall.name.split('__').pop()!
+    : toolCall.name;
+  const toolName = rawName.slice(0, TOOL_STATUS.TOOL_NAME_PAD).padEnd(TOOL_STATUS.TOOL_NAME_PAD);
+  for (const ch of toolName) {
+    if (col >= width - rightMargin) break;
+    line[col] = createStyledCell(ch, { fg: '#00ffcc', bold: true });
+    col++;
+  }
 
-      // Detect diff output
-      if (output.includes('--- ') && output.includes('+++ ') && output.includes('@@')) {
-        lines.push(...renderDiffView(output, width));
-      }
-      // Detect code output (from exec, etc.)
-      else if (toolCall.name === 'exec' && output.split('\n').length > 1) {
-        lines.push(...renderCodeBlock(output.split('\n'), 'bash', width));
-      }
-      // Short output: show inline
-      else if (output.length <= 200) {
-        lines.push(UIFactory.stringToLine(`  ${output}`, width, { fg: '244', dim: true }));
-      }
-      // Long output: truncate with count
-      else {
-        const preview = output.slice(0, 120).replace(/\n/g, ' ');
-        const lc = output.split('\n').length;
-        lines.push(UIFactory.stringToLine(`  ${preview}… (${lc} lines)`, width, { fg: '240', dim: true }));
-      }
+  // Key argument — leave room for summary + duration on the right
+  const keyArg = extractKeyArg(toolCall);
+  if (keyArg) {
+    for (const ch of keyArg) {
+      if (col >= width - rightMargin - KEY_ARG_RIGHT_RESERVE) break;
+      line[col] = createStyledCell(ch, { fg: '252' });
+      col++;
     }
   }
 
-  return lines;
+  // Error message (for failed calls)
+  if (status === 'error' && errorMsg) {
+    const errText = ' — ' + errorMsg.slice(0, 40);
+    for (const ch of errText) {
+      if (col >= width - rightMargin) break;
+      line[col] = createStyledCell(ch, { fg: '#ef4444', dim: true });
+      col++;
+    }
+  }
+
+  // Result summary in parens (for completed calls)
+  if (status === 'done' && resultSummary) {
+    const summaryText = '  (' + resultSummary + ')';
+    for (const ch of summaryText) {
+      if (col >= width - rightMargin - SUMMARY_RIGHT_RESERVE) break;
+      line[col] = createStyledCell(ch, { fg: '244', dim: true });
+      col++;
+    }
+  }
+
+  // Duration right-aligned
+  if (durationMs !== undefined && status === 'done') {
+    const durText = durationMs < 1000
+      ? `${durationMs}ms`
+      : `${(durationMs / 1000).toFixed(1)}s`;
+    const durW = getDisplayWidth(durText);
+    const durStartCol = width - rightMargin - durW;
+    let durCol = Math.max(col + 1, durStartCol);
+    for (const ch of durText) {
+      if (durCol >= width - rightMargin) break;
+      line[durCol] = createStyledCell(ch, { fg: '238', dim: true });
+      durCol++;
+    }
+  } else if (status === 'executing') {
+    const dots = '...';
+    const dotsStartCol = width - rightMargin - 3;
+    let dotsCol = Math.max(col + 1, dotsStartCol);
+    for (const ch of dots) {
+      if (dotsCol >= width - rightMargin) break;
+      line[dotsCol] = createStyledCell(ch, { fg: '238', dim: true });
+      dotsCol++;
+    }
+  }
+
+  return [line];
 }
 
 /**
- * renderToolCallList - Render a list of tool calls with their statuses.
+ * Render a list of tool calls. All calls are treated as completed (done).
+ * Used for historical message rendering where status/timing is unavailable.
  */
 export function renderToolCallList(
   toolCalls: ToolCall[],
-  results: Map<string, ToolResult>,
-  statusMap: Map<string, ToolStatus>,
-  width: number
+  width: number,
 ): Line[] {
   const lines: Line[] = [];
   for (const tc of toolCalls) {
-    const status = statusMap.get(tc.id) || 'pending';
-    const result = results.get(tc.id);
-    lines.push(...renderToolCallBlock(tc, status, result, width));
+    lines.push(...renderToolCallBlock(tc, 'done', undefined, width));
   }
   return lines;
 }

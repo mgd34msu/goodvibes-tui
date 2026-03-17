@@ -77,6 +77,8 @@ export class InputHandler {
   private selectionCallback: ((result: SelectionResult | null) => void) | null = null;
   /** Time of last [COPIED] block feedback, for brief display. */
   public lastBlockCopyTime = 0;
+  private mouseDownRow = -1;
+  private mouseDownCol = -1;
 
   /** Pasted images: maps marker IDs to base64 image data. */
   private imageRegistry = new Map<string, { data: string; mediaType: string }>();
@@ -1762,12 +1764,35 @@ export class InputHandler {
         }
 
         if (token.button === 0 && token.action === 'press') {
+          this.mouseDownRow = token.row;
+          this.mouseDownCol = token.col;
           this.selection.startSelection(token.col, viewportRow, scrollTop, vHeight, lineCount);
         } else if (token.button === 32) {
           this.selection.extendSelection(token.col, viewportRow, scrollTop, vHeight, lineCount);
         } else if (token.action === 'release') {
+          const moved = Math.abs(token.row - this.mouseDownRow) + Math.abs(token.col - this.mouseDownCol);
+          if (moved <= 2 && this.conversationManager) {
+            // Click (not drag) — toggle nearest block
+            // Convert viewport row to absolute line index
+            const offset = Math.max(0, vHeight - lineCount);
+            const absoluteLine = scrollTop + (viewportRow - offset);
+            if (absoluteLine >= 0) {
+              const blockIdx = this.conversationManager.toggleCollapseAtLine(absoluteLine);
+              if (blockIdx >= 0) {
+                this.selection.clearSelection();
+                this.bus.emit('block:toggle-collapse', { blockIndex: blockIdx });
+                this.bus.emit('render:request');
+                this.mouseDownRow = -1;
+                this.mouseDownCol = -1;
+                continue;
+              }
+            }
+          }
+          // Normal release — copy selection if any
           this.handleCopy();
           this.selection.endSelection();
+          this.mouseDownRow = -1;
+          this.mouseDownCol = -1;
         }
       }
     }

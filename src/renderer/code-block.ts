@@ -1,6 +1,7 @@
-import { type Line, type Cell, createStyledCell } from '../types/grid.ts';
+import { type Line, type Cell, createStyledCell, createEmptyLine } from '../types/grid.ts';
 import { UIFactory } from './ui-factory.ts';
 import { getDisplayWidth } from '../utils/terminal-width.ts';
+import { LAYOUT } from './layout.ts';
 
 // ─── Language Keyword Maps ───────────────────────────────────────────────────
 
@@ -273,10 +274,12 @@ function tokenizePlain(line: string): SyntaxToken[] {
 export function renderCodeBlock(codeLines: string[], lang: string, width: number): Line[] {
   const lines: Line[] = [];
   const language = detectLanguage(lang);
+  const leftMargin = LAYOUT.LEFT_MARGIN;
   const lineNumW = String(codeLines.length).length + 1; // e.g. "10 "
-  const contentStartX = lineNumW + 1;
+  const contentStartX = leftMargin + lineNumW + 1;
   const BG = '#0d0d0d';
   const LINE_NUM_FG = '238';
+  const effectiveWidth = width - LAYOUT.RIGHT_MARGIN;
 
   // Tokenizer selection
   const tokenize = (line: string): SyntaxToken[] => {
@@ -292,8 +295,15 @@ export function renderCodeBlock(codeLines: string[], lang: string, width: number
 
   // Header bar: language label
   const langLabel = lang ? ` ${lang} ` : ' code ';
-  const headerText = langLabel.padEnd(width);
-  lines.push(UIFactory.stringToLine(headerText, width, { fg: '#1a1a1a', bg: '#4ec9b0', bold: true }));
+  const headerLine = createEmptyLine(width);
+  const headerStr = langLabel.padEnd(effectiveWidth - leftMargin);
+  let hx = leftMargin;
+  for (const ch of headerStr) {
+    if (hx >= effectiveWidth) break;
+    headerLine[hx] = createStyledCell(ch, { fg: '#1a1a1a', bg: '#4ec9b0', bold: true });
+    hx++;
+  }
+  lines.push(headerLine);
 
   // Code lines
   for (let i = 0; i < codeLines.length; i++) {
@@ -302,9 +312,13 @@ export function renderCodeBlock(codeLines: string[], lang: string, width: number
     const tokens = tokenize(rawLine);
 
     const line: Cell[] = new Array(width).fill(null).map(() => createStyledCell(' ', { bg: BG }));
+    // Clear left margin — no code block bg in margin area
+    for (let m = 0; m < leftMargin; m++) {
+      line[m] = createStyledCell(' ');
+    }
 
-    // Line number
-    let cx = 0;
+    // Line number (offset by left margin)
+    let cx = leftMargin;
     for (const ch of lineNum) {
       if (cx >= contentStartX) break;
       line[cx++] = createStyledCell(ch, { fg: LINE_NUM_FG, bg: BG, dim: true });
@@ -314,7 +328,7 @@ export function renderCodeBlock(codeLines: string[], lang: string, width: number
     // Syntax tokens
     for (const token of tokens) {
       for (const ch of token.text) {
-        if (cx >= width) break;
+        if (cx >= effectiveWidth) break;
         const cw = getDisplayWidth(ch);
         const code = ch.charCodeAt(0);
         if (code < 32 || code === 127) {
@@ -331,8 +345,11 @@ export function renderCodeBlock(codeLines: string[], lang: string, width: number
   }
 
   // Footer line
-  const footerText = ' '.repeat(width);
-  lines.push(UIFactory.stringToLine(footerText, width, { bg: '#0d0d0d' }));
+  const footerLine = createEmptyLine(width);
+  for (let fx = leftMargin; fx < effectiveWidth; fx++) {
+    footerLine[fx] = createStyledCell(' ', { bg: '#0d0d0d' });
+  }
+  lines.push(footerLine);
 
   return lines;
 }
