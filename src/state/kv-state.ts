@@ -1,9 +1,8 @@
-import { existsSync, mkdirSync, readdirSync, statSync, unlinkSync } from 'fs';
-import { PersistentStore } from './persistent-store.ts';
-import { promises as fs } from 'fs';
+import { existsSync, readdirSync, statSync, unlinkSync } from 'fs';
 import { join } from 'path';
 import { logger } from '../utils/logger.ts';
 import { randomBytes } from 'crypto';
+import { JsonFileStore } from './json-file-store.ts';
 
 /**
  * Reserved keys that cannot be set by callers.
@@ -25,28 +24,19 @@ export class KVState {
   private sessionId: string;
   private stateDir: string;
   private filePath: string;
-  private data: Record<string, unknown> | null = null; // null = not yet loaded
+  private data: Record<string, unknown> | null = null;
   private persistTimer: ReturnType<typeof setTimeout> | null = null;
   private loadPromise: Promise<void> | null = null;
-  private readonly store: PersistentStore<Record<string, unknown>>;
+  private readonly store: JsonFileStore<Record<string, unknown>>;
 
   constructor(sessionId?: string, baseDir?: string) {
     this.sessionId = sessionId ?? KVState.generateId();
     const root = baseDir ?? process.cwd();
     this.stateDir = join(root, '.goodvibes', 'state');
     this.filePath = join(this.stateDir, `session_${this.sessionId}.json`);
-    this.store = new PersistentStore(this.filePath);
+    this.store = new JsonFileStore(this.filePath);
   }
 
-
-  // ---------------------------------------------------------------------------
-  // Core operations
-  // ---------------------------------------------------------------------------
-
-  /**
-   * Get values for the given keys.
-   * Returns a record of key -> value; missing keys are omitted.
-   */
   async get(keys: string[]): Promise<Record<string, unknown>> {
     await this.ensureLoaded();
     const result: Record<string, unknown> = {};
@@ -58,11 +48,6 @@ export class KVState {
     return result;
   }
 
-  /**
-   * Set multiple key-value pairs.
-   * Silently ignores reserved keys.
-   * Triggers debounced auto-persist.
-   */
   async set(values: Record<string, unknown>): Promise<void> {
     await this.ensureLoaded();
     for (const [key, value] of Object.entries(values)) {
@@ -75,14 +60,12 @@ export class KVState {
     this.schedulePersist();
   }
 
-  /**
-   * List all key-value pairs, optionally filtered by prefix.
-   */
   async list(prefix?: string): Promise<Record<string, unknown>> {
     await this.ensureLoaded();
     if (!prefix) {
       return { ...this.data! };
     }
+
     const result: Record<string, unknown> = {};
     for (const [key, value] of Object.entries(this.data!)) {
       if (key.startsWith(prefix)) {
@@ -92,11 +75,6 @@ export class KVState {
     return result;
   }
 
-  /**
-   * Remove the given keys from the store.
-   * Reserved keys are silently skipped.
-   * Triggers debounced auto-persist.
-   */
   async clear(keys: string[]): Promise<void> {
     await this.ensureLoaded();
     let changed = false;
@@ -110,49 +88,30 @@ export class KVState {
     if (changed) this.schedulePersist();
   }
 
-  // ---------------------------------------------------------------------------
-  // Lifecycle
-  // ---------------------------------------------------------------------------
-
-  /**
-   * Explicitly load state from disk.
-   * Called automatically on first operation (lazy load).
-   */
   async load(): Promise<void> {
     const loaded = await this.store.load();
     if (loaded) {
-      this.data = loaded as Record<string, unknown>;
-      // Ensure reserved keys are present
+      this.data = loaded;
       if (!this.data.id) this.data.id = this.sessionId;
       if (!this.data.started_at) this.data.started_at = new Date().toISOString();
-    } else {
-      this.data = {
-        id: this.sessionId,
-        started_at: new Date().toISOString(),
-      };
+      return;
     }
+
+    this.data = {
+      id: this.sessionId,
+      started_at: new Date().toISOString(),
+    };
   }
 
-  /**
-   * Atomically persist current state to disk.
-   * Writes to a temp file then renames to the final path.
-   */
   async persist(): Promise<void> {
-    if (this.data === null) return; // Nothing loaded, nothing to persist
-    await this.store.persist(this.data as Record<string, unknown>);
+    if (this.data === null) return;
+    await this.store.save(this.data);
   }
-
-  // ---------------------------------------------------------------------------
-  // Session management
-  // ---------------------------------------------------------------------------
 
   getSessionId(): string {
     return this.sessionId;
   }
 
-  /**
-   * List all session IDs found in the state directory.
-   */
   static listSessions(baseDir?: string): string[] {
     const stateDir = join(baseDir ?? process.cwd(), '.goodvibes', 'state');
     if (!existsSync(stateDir)) return [];
@@ -166,11 +125,6 @@ export class KVState {
     }
   }
 
-  /**
-   * Delete old session files, keeping only the most recent `keepCount`.
-   * Sessions are ordered by filename (which encodes creation order via random ID).
-   * Uses mtime for ordering when available.
-   */
   static cleanupOldSessions(keepCount: number, baseDir?: string): void {
     const stateDir = join(baseDir ?? process.cwd(), '.goodvibes', 'state');
     if (!existsSync(stateDir)) return;
@@ -188,7 +142,7 @@ export class KVState {
             }
           })(),
         }))
-        .sort((a, b) => b.mtime - a.mtime); // newest first
+        .sort((a, b) => b.mtime - a.mtime);
 
       const toDelete = files.slice(keepCount);
       for (const f of toDelete) {
@@ -204,24 +158,22 @@ export class KVState {
     }
   }
 
-  // ---------------------------------------------------------------------------
-  // Private helpers
-  // ---------------------------------------------------------------------------
-
-  private async ensureLoaded(): Promise<void> {
-    if (this.data !== null) return;
-    if (!this.loadPromise) {
-      this.loadPromise = this.load().then(() => { this.loadPromise = null; });
-    }
-    return this.loadPromise;
-  }
-
   async dispose(): Promise<void> {
     if (this.persistTimer !== null) {
       clearTimeout(this.persistTimer);
       this.persistTimer = null;
     }
     await this.persist();
+  }
+
+  private async ensureLoaded(): Promise<void> {
+    if (this.data !== null) return;
+    if (!this.loadPromise) {
+      this.loadPromise = this.load().then(() => {
+        this.loadPromise = null;
+      });
+    }
+    return this.loadPromise;
   }
 
   private schedulePersist(): void {
@@ -237,7 +189,6 @@ export class KVState {
   }
 
   private static generateId(): string {
-    // Generate 4 random bytes -> 8-char hex
     const bytes = new Uint8Array(4);
     const rand = randomBytes(4);
     bytes.set(rand);

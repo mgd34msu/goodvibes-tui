@@ -2,6 +2,7 @@ import { timingSafeEqual } from 'crypto';
 import { logger } from '../utils/logger.ts';
 import { HookDispatcher } from '../hooks/dispatcher.ts';
 import type { HookEvent } from '../hooks/types.ts';
+import { UserAuthManager } from '../security/user-auth.ts';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -63,8 +64,7 @@ export class HttpListener {
   private allowedOrigins: string[];
   private hookDispatcher: HookDispatcher | null;
   private authToken: string | null = null;
-  // Simple in-memory user credentials (username: password)
-  private static readonly users = new Map<string, string>([['admin', 'admin']]);
+  private userAuth: UserAuthManager;
   private rateLimiter: RateLimiter;
 
   constructor(private config: HttpListenerConfig = {}) {
@@ -72,6 +72,7 @@ export class HttpListener {
     this.host = config.host ?? '127.0.0.1';
     this.allowedOrigins = config.allowedOrigins ?? [];
     this.hookDispatcher = config.hookDispatcher ?? null;
+    this.userAuth = new UserAuthManager();
     this.rateLimiter = new RateLimiter(config.rateLimit ?? 60);
   }
 
@@ -140,10 +141,15 @@ export class HttpListener {
   // -------------------------------------------------------------------------
 
   private checkAuth(req: Request): boolean {
-    if (!this.authToken) return true; // no token configured = open
     const bearer = req.headers.get('authorization')?.replace('Bearer ', '') ?? '';
-    if (bearer.length !== this.authToken.length) return false;
-    return timingSafeEqual(Buffer.from(bearer), Buffer.from(this.authToken));
+
+    if (this.authToken) {
+      if (bearer.length !== this.authToken.length) return false;
+      return timingSafeEqual(Buffer.from(bearer), Buffer.from(this.authToken));
+    }
+
+    if (!bearer) return true;
+    return this.userAuth.validateSession(bearer) !== null;
   }
 
   // -------------------------------------------------------------------------
@@ -185,6 +191,31 @@ export class HttpListener {
     }
 
     return Response.json({ error: 'Not found' }, { status: 404 });
+  }
+
+  private async handleLogin(req: Request): Promise<Response> {
+    let body: Record<string, unknown>;
+    try {
+      body = await req.json() as Record<string, unknown>;
+    } catch {
+      return Response.json({ error: 'Invalid JSON body' }, { status: 400 });
+    }
+
+    const username = typeof body.username === 'string' ? body.username : '';
+    const password = typeof body.password === 'string' ? body.password : '';
+    const user = this.userAuth.authenticate(username, password);
+
+    if (!user) {
+      return Response.json({ error: 'Invalid credentials' }, { status: 401 });
+    }
+
+    const session = this.userAuth.createSession(user.username);
+    return Response.json({
+      authenticated: true,
+      token: session.token,
+      username: session.username,
+      expiresAt: session.expiresAt,
+    });
   }
 
   private async handleWebhook(req: Request): Promise<Response> {

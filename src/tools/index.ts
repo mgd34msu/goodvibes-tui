@@ -22,9 +22,12 @@ import { KVState } from '../state/kv-state.ts';
  * Creates shared FileStateCache and ProjectIndex instances so read/write/edit
  * tools share cache state within a session.
  */
-export function registerAllTools(registry: ToolRegistry): void {
-  const fileCache = new FileStateCache();
-  const projectIndex = ProjectIndex.getInstance();
+export function registerAllTools(
+  registry: ToolRegistry,
+  deps?: { fileCache?: FileStateCache; projectIndex?: ProjectIndex },
+): { fileCache: FileStateCache; projectIndex: ProjectIndex } {
+  const fileCache = deps?.fileCache ?? new FileStateCache();
+  const projectIndex = deps?.projectIndex ?? ProjectIndex.getInstance();
 
   registry.register(new ReadTool(fileCache, projectIndex));
   registry.register(createWriteTool({ fileCache, projectIndex }));
@@ -41,4 +44,5 @@ export function registerAllTools(registry: ToolRegistry): void {
   registry.register(workflowTool);
   registry.register(fetchTool);
   registry.register(createRegistryTool(registry));
+  return { fileCache, projectIndex };
 }

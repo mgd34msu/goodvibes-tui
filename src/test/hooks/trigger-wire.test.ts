@@ -20,7 +20,11 @@ describe('HookDispatcher trigger wiring', () => {
     const result = await dispatcher.fire({
       path: 'Post:tool:read',
       phase: 'Post',
-      data: {},
+      category: 'tool',
+      specific: 'read',
+      sessionId: 'trigger-wire-test',
+      timestamp: Date.now(),
+      payload: {},
     });
     expect(result.ok).toBe(true);
   });
@@ -52,7 +56,11 @@ describe('HookDispatcher trigger wiring', () => {
     const result = await dispatcher.fire({
       path: 'Post:tool:read',
       phase: 'Post',
-      data: {},
+      category: 'tool',
+      specific: 'read',
+      sessionId: 'trigger-wire-test',
+      timestamp: Date.now(),
+      payload: {},
     });
     expect(result.ok).toBe(true);
   });
@@ -66,7 +74,11 @@ describe('HookDispatcher trigger wiring', () => {
     const result = await dispatcher.fire({
       path: 'Post:tool:write',
       phase: 'Post',
-      data: {},
+      category: 'tool',
+      specific: 'write',
+      sessionId: 'trigger-wire-test',
+      timestamp: Date.now(),
+      payload: {},
     });
     // Trigger fires async; hook result is still clean
     expect(result.ok).toBe(true);

@@ -8,7 +8,16 @@ import type { HookEvent } from '../../hooks/types.ts';
 // ---------------------------------------------------------------------------
 
 function makeEvent(path: string, phase: HookEvent['phase'] = 'Post'): HookEvent {
-  return { path, phase, data: {} };
+  const [, category = 'tool', specific = '*'] = path.split(':');
+  return {
+    path,
+    phase,
+    category: category as HookEvent['category'],
+    specific,
+    sessionId: 'test-trigger-session',
+    timestamp: Date.now(),
+    payload: {},
+  };
 }
 
 function makeTrigger(overrides: Partial<TriggerDefinition> = {}): TriggerDefinition {

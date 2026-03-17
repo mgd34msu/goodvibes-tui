@@ -2,7 +2,7 @@
 
 A terminal UI coding agent substrate built with Bun. Multi-provider LLM support, 12 built-in tools, a cell-based renderer, an agent system, a hook system, and MCP integration.
 
-Version: **0.9.3**
+Version: **0.9.4**
 
 <!-- screenshot -->
 

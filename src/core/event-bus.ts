@@ -18,6 +18,17 @@ export interface EventMap {
   'subagent:complete': { id: string; result: import('../acp/protocol.ts').SubagentResult };
   'subagent:error': { id: string; error: Error };
 
+  // WRFC chain events
+  'wrfc:chain-created': { chainId: string; task: string };
+  'wrfc:state-changed': { chainId: string; from: import('../agents/wrfc-types.ts').WrfcState; to: import('../agents/wrfc-types.ts').WrfcState };
+  'wrfc:review-complete': { chainId: string; score: number; passed: boolean };
+  'wrfc:fix-attempt': { chainId: string; attempt: number; maxAttempts: number };
+  // gate corresponds to QualityGate['name'] (string) from wrfc-types.ts
+  'wrfc:gate-result': { chainId: string; gate: string; passed: boolean };
+  'wrfc:chain-passed': { chainId: string };
+  'wrfc:chain-failed': { chainId: string; reason: string };
+  'wrfc:auto-commit': { chainId: string; commitHash?: string };
+
   // Permission flow
   'permission:request': { callId: string; tool: string; args: Record<string, unknown>; category: import('../permissions/manager.ts').PermissionCategory; resolve: (approved: boolean, remember?: boolean) => void };
   // UI events
@@ -32,6 +43,10 @@ export interface EventMap {
 
   // Context warnings
   'context:warning': { usage: number; threshold: number };
+
+  // Custom provider events
+  'providers:changed': { added: string[]; removed: string[]; updated: string[] };
+  'providers:warning': { message: string };
 
   // Slash command events
   'command:mode-enter': void;

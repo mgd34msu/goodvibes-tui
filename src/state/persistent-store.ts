@@ -35,12 +35,12 @@ export class PersistentStore<T extends Record<string, unknown>> {
   /** Atomically persist data to disk. */
   async persist(data: T): Promise<void> {
     try {
-      mkdirSync(this.dir, { recursive: true });
+      await fs.mkdir(this.dir, { recursive: true });
       const tmpPath = `${this.filePath}.tmp`;
       const content = JSON.stringify(data, null, 2) + '\n';
       await fs.writeFile(tmpPath, content, 'utf-8');
       // renameSync is atomic on POSIX
-      renameSync(tmpPath, this.filePath);
+      await fs.rename(tmpPath, this.filePath);
     } catch (err) {
       logger.debug('PersistentStore: persist failed (non-fatal)', { file: this.filePath, error: String(err) });
     }

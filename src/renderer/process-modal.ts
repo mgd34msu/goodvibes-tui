@@ -1,5 +1,6 @@
 import { type Line } from '../types/grid.ts';
 import { ModalFactory } from './modal-factory.ts';
+import { formatDuration } from './modal-utils.ts';
 import { ProcessManager } from '../tools/shared/process-manager.ts';
 import { AgentManager } from '../tools/agent/index.ts';
 
@@ -22,8 +23,14 @@ export interface ProcessEntry {
 
 /** Maximum characters from agent task / exec command stored in ProcessEntry.label. */
 const MAX_LABEL_LENGTH = 80;
-/** Maximum characters of the label rendered in the process list modal row. */
-const RENDER_LABEL_WIDTH = 44;
+/** Columns subtracted from terminal width to derive the dynamic label width. */
+const LABEL_WIDTH_SUBTRACT = 40;
+/** Fixed-width columns reserved for status, duration, and padding in the process list row. */
+const STATUS_COLUMNS_WIDTH = 25;
+/** Border and margin width subtracted from terminal width to get modal content width. */
+const MODAL_BORDER_WIDTH = 8;
+/** Minimum width for the dynamic process label column. */
+const MIN_LABEL_WIDTH = 20;
 
 // ─── ProcessModalState ────────────────────────────────────────────────────────
 
@@ -55,15 +62,13 @@ export class ProcessModal {
 
     // Agents
     for (const a of AgentManager.getInstance().list()) {
-      if (a.status === 'running' || a.status === 'pending') {
-        result.push({
-          id: a.id,
-          label: a.task.length > MAX_LABEL_LENGTH ? a.task.slice(0, MAX_LABEL_LENGTH - 3) + '\u2026' : a.task,
-          type: 'agent',
-          status: a.status,
-          elapsedMs: now - a.startedAt,
-        });
-      }
+      result.push({
+        id: a.id,
+        label: a.task.length > MAX_LABEL_LENGTH ? a.task.slice(0, MAX_LABEL_LENGTH - 3) + '\u2026' : a.task,
+        type: 'agent',
+        status: a.status,
+        elapsedMs: now - a.startedAt,
+      });
     }
 
     // Background exec processes
@@ -119,16 +124,6 @@ export class ProcessModal {
 
 // ─── renderProcessModal ───────────────────────────────────────────────────────
 
-/** Format elapsed milliseconds as a compact duration string. */
-function formatDuration(ms: number): string {
-  if (ms < 1000) return `${ms}ms`;
-  const secs = Math.floor(ms / 1000);
-  if (secs < 60) return `${secs}s`;
-  const mins = Math.floor(secs / 60);
-  const remSecs = secs % 60;
-  return `${mins}m${remSecs}s`;
-}
-
 /**
  * Render the process list modal as Line[] for overlay in the viewport.
  *
@@ -138,11 +133,14 @@ function formatDuration(ms: number): string {
 export function renderProcessModal(modal: ProcessModal, width: number): Line[] {
   modal.refresh();
 
+  const modalContentW = Math.max(4, width - MODAL_BORDER_WIDTH); // borders + margin
+  const dynamicLabelW = Math.min(Math.max(MIN_LABEL_WIDTH, width - LABEL_WIDTH_SUBTRACT), modalContentW - STATUS_COLUMNS_WIDTH);
+
   if (modal.entries.length === 0) {
     return ModalFactory.createModal({
       title: 'Background Processes',
-      width: 72,
-      margin: 4,
+      width: width - 4,
+      margin: 2,
       sections: [
         { type: 'text', content: 'No background processes running.' },
       ],
@@ -151,9 +149,16 @@ export function renderProcessModal(modal: ProcessModal, width: number): Line[] {
   }
 
   const items = modal.entries.map((e, i) => {
+    const statusIcon = {
+      running: '\u25cf',
+      pending: '\u25cb',
+      completed: '\u2713',
+      failed: '\u2717',
+      cancelled: '\u2298',
+    }[e.status] ?? '\u25cf';
     const typeTag = e.type === 'agent' ? '[agent]' : '[exec]';
     const dur = formatDuration(e.elapsedMs);
-    const label = `${typeTag} ${e.label.slice(0, RENDER_LABEL_WIDTH)}  ${e.status}  ${dur}`;
+    const label = `${statusIcon} ${typeTag} ${e.label.slice(0, dynamicLabelW)}  ${e.status}  ${dur}`;
     return {
       label,
       selected: i === modal.selectedIndex,
@@ -162,8 +167,8 @@ export function renderProcessModal(modal: ProcessModal, width: number): Line[] {
 
   return ModalFactory.createModal({
     title: 'Background Processes',
-    width: 72,
-    margin: 4,
+    width: width - 4,
+    margin: 2,
     sections: [
       { type: 'list', items },
     ],

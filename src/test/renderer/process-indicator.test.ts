@@ -103,4 +103,40 @@ describe('renderProcessIndicator', () => {
     const cyanBold = lines[0].filter((c) => c.fg === '#00ffff' && c.bold);
     expect(cyanBold.length).toBeGreaterThan(0);
   });
+
+  test('focused with zero processes shows arrow prefix', () => {
+    const lines = renderProcessIndicator(80, 0, 0, true);
+    expect(lines.length).toBe(1);
+    const text = lines[0].map(c => c.char).join('');
+    expect(text).toContain('\u25b6');
+    expect(text).toContain('No background processes');
+  });
+
+  test('focused with active processes shows Enter hint', () => {
+    const lines = renderProcessIndicator(80, 2, 0, true);
+    expect(lines.length).toBe(1);
+    const text = lines[0].map(c => c.char).join('');
+    expect(text).toContain('Enter to open');
+    expect(text).toContain('back to input');
+  });
+
+  test('focused line uses cyan bold styling', () => {
+    const lines = renderProcessIndicator(80, 1, 0, true);
+    const firstNonSpace = lines[0].find(c => c.char.trim() !== '');
+    expect(firstNonSpace?.fg).toBe('#00ffff');
+    expect(firstNonSpace?.bold).toBe(true);
+  });
+
+  test('focused line respects terminal width', () => {
+    const lines = renderProcessIndicator(120, 1, 0, true);
+    expect(lines[0].length).toBe(120);
+  });
+
+  test('unfocused with explicit false matches default behavior', () => {
+    const defaultLines = renderProcessIndicator(80, 1, 0);
+    const explicitLines = renderProcessIndicator(80, 1, 0, false);
+    const defaultText = defaultLines[0].map(c => c.char).join('');
+    const explicitText = explicitLines[0].map(c => c.char).join('');
+    expect(defaultText).toBe(explicitText);
+  });
 });

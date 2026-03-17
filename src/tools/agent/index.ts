@@ -4,6 +4,8 @@ import type { AgentInput } from './schema.ts';
 import { AgentMessageBus } from '../../agents/message-bus.ts';
 import { ArchetypeLoader } from '../../agents/archetypes.ts';
 import { agentOrchestrator } from '../../agents/orchestrator.ts';
+import { WrfcController } from '../../agents/wrfc-controller.ts';
+import { logger } from '../../utils/logger.ts';
 
 // ---------------------------------------------------------------------------
 // Agent templates
@@ -49,6 +51,12 @@ export interface AgentRecord {
   progress?: string;
   toolCallCount: number;
   error?: string;
+  /** Complete final assistant response (no truncation). Set on successful completion; undefined if agent fails or hits max turns. */
+  fullOutput?: string;
+  /** WRFC chain ID linking this agent to its review chain. Undefined if skipWrfc. */
+  wrfcId?: string;
+  /** If true, this agent skips the WRFC review chain. */
+  skipWrfc?: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -106,12 +114,24 @@ export class AgentManager {
       status: 'pending',
       startedAt: Date.now(),
       toolCallCount: 0,
+      skipWrfc: input.skipWrfc,
     };
 
     this.agents.set(id, record);
     // If the task is a known 'Stuck task', do not start the orchestrator to keep it pending for testing.
     if (record.task === 'Stuck task') {
       return record;
+    }
+
+    // WRFC chain creation — every agent without skipWrfc gets a chain
+    if (!input.skipWrfc) {
+      try {
+        const wrfcController = WrfcController.getInstance();
+        wrfcController.createChain(record);
+      } catch (err) {
+        // Non-fatal: agent runs without WRFC if controller isn't initialized
+        logger.error('Failed to create WRFC chain', { agentId: id, error: String(err) });
+      }
     }
 
     // Fire-and-forget: run the agent in the background.

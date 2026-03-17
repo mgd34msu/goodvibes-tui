@@ -1,3 +1,4 @@
+export { JsonFileStore } from './json-file-store.ts';
 export { KVState } from './kv-state.ts';
 export { FileStateCache } from './file-cache.ts';
 export type { CacheEntry, CacheStatus, ConflictInfo } from './file-cache.ts';
@@ -6,3 +7,6 @@ export type { FileEntry } from './project-index.ts';
 export { ModeManager } from './mode-manager.ts';
 export type { ModeDefinition } from './mode-manager.ts';
 export { FileWatcher } from './file-watcher.ts';
+export { SQLiteStore } from './sqlite-store.ts';
+export { TelemetryDB } from './telemetry.ts';
+export type { ToolCallRecord, TelemetryFilter, TelemetrySummary } from './telemetry.ts';

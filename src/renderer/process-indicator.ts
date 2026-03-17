@@ -27,8 +27,25 @@ export function renderProcessIndicator(
   width: number,
   agentCount: number,
   toolCount: number,
+  focused: boolean = false,
 ): Line[] {
   const total = agentCount + toolCount;
+
+  // --- Focused state: always render before idle/active branches ---
+  if (focused) {
+    const parts: string[] = [];
+    if (agentCount > 0) parts.push(`${agentCount} agent${agentCount !== 1 ? 's' : ''}`);
+    if (toolCount > 0) parts.push(`${toolCount} tool${toolCount !== 1 ? 's' : ''} running`);
+    const focusLabel = total === 0
+      ? '  \u25b6 No background processes'
+      : `  \u25b6 ${parts.join(' \u00b7 ')}`;
+    const focusHint = total === 0
+      ? '  \u2191 back to input  '
+      : '  Enter to open  \u2191 back to input  ';
+    const fullText = focusLabel + ' '.repeat(Math.max(1, width - getDisplayWidth(focusLabel) - getDisplayWidth(focusHint))) + focusHint;
+    const line = UIFactory.stringToLine(truncateToWidth(fullText.padEnd(width), width), width, { fg: '#00ffff', bold: true });
+    return [line];
+  }
 
   if (total === 0) {
     // Show a dimmed idle line
