@@ -18,6 +18,7 @@ import { getBookmarkManager } from '../bookmarks/manager.ts';
 import { resolveAndValidatePath } from '../utils/path-safety.ts';
 import type { ContentPart } from '../providers/interface.ts';
 import { logger } from '../utils/logger.ts';
+import { loadSkillByTrigger } from '../tools/registry-tool/skill-loader.ts';
 import { ProcessModal } from '../renderer/process-modal.ts';
 import { LiveTailModal } from '../renderer/live-tail-modal.ts';
 import { BlockActionsMenu } from '../renderer/block-actions.ts';
@@ -1567,8 +1568,21 @@ export class InputHandler {
               const parts = raw.slice(1).trim().split(/\s+/);
               const name = parts[0];
               const args = parts.slice(1);
-              void this.commandRegistry.execute(name, args, this.commandContext);
-              this.bus.emit('command:execute', { name, args });
+              const ctx = this.commandContext;
+              this.commandRegistry.execute(name, args, ctx).then((handled) => {
+                if (handled) {
+                  this.bus.emit('command:execute', { name, args });
+                } else {
+                  // Fallback: check if this matches a skill trigger
+                  const skillContent = loadSkillByTrigger('/' + name);
+                  if (skillContent) {
+                    this.bus.emit('input:submit', { text: skillContent });
+                  } else {
+                    this.conversationManager?.log(`Unknown command: /${name}. Type /help for available commands.`, { fg: '#ef4444' });
+                    this.bus.emit('render:request');
+                  }
+                }
+              });
             }
             continue;
           }

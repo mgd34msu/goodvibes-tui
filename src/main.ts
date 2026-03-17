@@ -318,6 +318,8 @@ async function main() {
     } catch (e) {
       conversation.log(`Error switching model: ${(e as Error).message}`, { fg: '#ef4444' });
     }
+    // Full screen redraw to ensure all UI elements (including context bar) reflect the new model
+    compositor.resetDiff();
     bus.emit('render:request');
   }));
 
@@ -351,6 +353,7 @@ async function main() {
 
     // Cache the current model for consistent values across the entire render frame
     const currentModel = providerRegistry.getCurrentModel();
+
 
     // Build header and footer FIRST so we know the exact viewport height
     const headerLines = UIFactory.createHeader(width, currentModel.id, currentModel.provider, conversation.title || undefined, lastGitInfo);
