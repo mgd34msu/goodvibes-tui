@@ -1,8 +1,8 @@
 # goodvibes-tui
 
-A terminal UI coding agent substrate built with Bun. Multi-provider LLM support, 12 built-in tools, a cell-based renderer, an agent system, a hook system, and MCP integration.
+A terminal UI coding agent substrate built with Bun. Multi-provider LLM support (built-in + any OpenAI-compatible API), automated WRFC review chains, 12 built-in tools, a cell-based renderer, an agent system, a hook system, and MCP integration.
 
-Version: **0.9.4**
+Version: **0.9.5**
 
 <!-- screenshot -->
 
@@ -21,10 +21,13 @@ The agent system runs subagents in-process, each with its own conversation histo
 ## Features
 
 ### Multi-Provider LLM Support
-- Anthropic, OpenAI, Google Gemini, and InceptionLabs (diffusion LLM)
+- Built-in: Anthropic, OpenAI, Google Gemini, and InceptionLabs (diffusion LLM)
+- **Custom providers**: add any OpenAI-compatible API (OpenRouter, Ollama, Together, Groq, LM Studio, Fireworks, vLLM) via JSON config in `~/.goodvibes/tui/providers/`
+- Hot-reload: provider configs are watched and reloaded automatically on change
 - Hot-swap models mid-conversation with `/model` or the interactive model picker
 - Per-provider reasoning effort control (instant / low / medium / high)
 - Streaming responses with token speed display
+- Interactive `/add-provider` skill for guided setup
 
 ### Cell-Based TUI Renderer
 - Raw ANSI escape sequences — no Ink, no React
@@ -49,6 +52,16 @@ Language intelligence powered by bundled LSP servers (TypeScript, Python, Bash, 
 - Git worktree isolation per agent
 - Inter-agent message bus with TTL auto-cleanup
 - Agent detail modal and background process tracking
+
+### Automated WRFC Review Chains
+- **Work → Review → Fix → Complete** — every agent spawns an automated quality chain
+- 10-dimension reviewer with scored rubric (Correctness, Type Safety, Error Handling, Security, Performance, Code Quality, Testing, Documentation, Completeness, Integration)
+- Configurable minimum score threshold (default 9.9/10)
+- Automated fix cycles: fixer agent receives full issue list with point values
+- Quality gates after review: typecheck, lint, test, build (configurable)
+- Gate failures spawn new chains automatically
+- Auto-commit on chain completion via git worktree merge
+- `skipWrfc` flag for utility agents that don't need review
 
 ### Hook System
 - 5 lifecycle phases: Pre, Post, Fail, Change, Lifecycle
@@ -98,6 +111,36 @@ Language intelligence powered by bundled LSP servers (TypeScript, Python, Bash, 
 | Claude Haiku 4.5 | Anthropic | 200k | Yes | No | Yes | Yes |
 
 Mercury 2 supports configurable reasoning effort levels: `instant`, `low`, `medium`, `high`.
+
+### Custom Providers
+
+Any OpenAI-compatible API can be added by dropping a JSON file in `~/.goodvibes/tui/providers/`:
+
+```json
+{
+  "name": "openrouter",
+  "displayName": "OpenRouter",
+  "type": "openai-compat",
+  "baseURL": "https://openrouter.ai/api/v1",
+  "apiKeyEnv": "OPENROUTER_API_KEY",
+  "models": [
+    {
+      "id": "anthropic/claude-3.5-sonnet",
+      "displayName": "Claude 3.5 Sonnet (via OpenRouter)",
+      "description": "Anthropic Claude 3.5 Sonnet via OpenRouter",
+      "contextWindow": 200000,
+      "capabilities": {
+        "toolCalling": true,
+        "codeEditing": true,
+        "reasoning": true,
+        "multimodal": true
+      }
+    }
+  ]
+}
+```
+
+Provider configs are hot-reloaded on file change. Use the `/add-provider` skill for interactive guided setup with smart defaults for popular providers.
 
 ---
 
@@ -562,14 +605,18 @@ src/
 ├── core/
 │   └── orchestrator.ts  — Main conversation loop, tool dispatch, streaming
 ├── providers/
-│   ├── registry.ts      — MODEL_REGISTRY, ProviderRegistry
+│   ├── registry.ts      — MODEL_REGISTRY, ProviderRegistry, custom model merging
+│   ├── custom-loader.ts — Hot-reloadable custom provider loader from ~/.goodvibes/tui/providers/
 │   ├── anthropic.ts     — Anthropic SDK adapter
 │   ├── openai.ts        — OpenAI SDK adapter
-│   ├── openai-compat.ts — OpenAI-compatible endpoint adapter (InceptionLabs)
+│   ├── openai-compat.ts — OpenAI-compatible endpoint adapter (InceptionLabs + custom)
 │   └── gemini.ts        — Google Gemini adapter
 ├── tools/               — 12 built-in tools (read/write/edit/find/exec/fetch/analyze/inspect/agent/state/workflow/registry)
 ├── agents/
 │   ├── orchestrator.ts  — In-process agent runner with turn loop
+│   ├── wrfc-controller.ts — Automated WRFC chain state machine
+│   ├── wrfc-types.ts    — WRFC chain, gate, and event types
+│   ├── completion-report.ts — Structured agent output report types + parser
 │   ├── archetypes.ts    — Archetype loader from .goodvibes/agents/*.md
 │   ├── message-bus.ts   — Inter-agent messaging with TTL
 │   ├── session.ts       — Agent session isolation
