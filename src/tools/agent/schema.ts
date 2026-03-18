@@ -59,7 +59,7 @@ export const AGENT_TOOL_SCHEMA: ToolDefinition = {
         type: 'string',
         description: 'Additional context to provide to the spawned agent (mode: spawn).',
       },
-      skipWrfc: {
+      dangerously_disable_wrfc: {
         type: 'boolean',
         description: 'If true, skip the WRFC review chain for this agent (mode: spawn). Default: false.',
         default: false,
@@ -98,7 +98,7 @@ export interface AgentInput {
   provider?: string;
   tools?: string[];
   context?: string;
-  skipWrfc?: boolean;
+  dangerously_disable_wrfc?: boolean;
   // status / cancel / get / budget / plan / wait / message
   agentId?: string;
   // wait

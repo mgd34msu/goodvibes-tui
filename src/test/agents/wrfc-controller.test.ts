@@ -364,7 +364,7 @@ describe('WrfcController', () => {
       expect(spawnInput.task).toContain('Engineer completion report');
     });
 
-    test('reviewer record has skipWrfc=true and same wrfcId', async () => {
+    test('reviewer record has dangerously_disable_wrfc=true and same wrfcId', async () => {
       const controller = WrfcController.getInstance(eventBus);
       const engineerRecord = makeRecord();
       const chain = controller.createChain(engineerRecord);
@@ -379,8 +379,8 @@ describe('WrfcController', () => {
       eventBus.emit('subagent:complete', { id: engineerRecord.id, result: {} });
       await new Promise((r) => setTimeout(r, 10));
 
-      const spawnInput = mockSpawn.mock.calls[0][0] as { skipWrfc: boolean };
-      expect(spawnInput.skipWrfc).toBe(true);
+      const spawnInput = mockSpawn.mock.calls[0][0] as { dangerously_disable_wrfc: boolean };
+      expect(spawnInput.dangerously_disable_wrfc).toBe(true);
       expect(reviewerRecord.wrfcId).toBe(chain.id);
     });
 
@@ -498,7 +498,7 @@ describe('WrfcController', () => {
       expect(fixerTask).toContain('Missing error handling');
     });
 
-    test('fixer record has skipWrfc=true and same wrfcId', async () => {
+    test('fixer record has dangerously_disable_wrfc=true and same wrfcId', async () => {
       const controller = WrfcController.getInstance(eventBus);
       const engineerRecord = makeRecord();
       const chain = controller.createChain(engineerRecord);
@@ -533,8 +533,8 @@ describe('WrfcController', () => {
       await new Promise((r) => setTimeout(r, 10));
 
       // Second spawn is the fixer
-      const fixerInput = spawnInputs[1] as { skipWrfc: boolean };
-      expect(fixerInput.skipWrfc).toBe(true);
+      const fixerInput = spawnInputs[1] as { dangerously_disable_wrfc: boolean };
+      expect(fixerInput.dangerously_disable_wrfc).toBe(true);
 
       // Fixer record gets wrfcId set
       expect(spawnedRecords[1].wrfcId).toBe(chain.id);
@@ -822,7 +822,7 @@ describe('WrfcController', () => {
       expect(gateResultCalls.length).toBe(2);
     });
 
-    test('gate failure → new chain spawned (without skipWrfc)', async () => {
+    test('gate failure → new chain spawned (without dangerously_disable_wrfc)', async () => {
       mockConfigGetCategoryState.gates = [{ name: 'typecheck', command: 'exit 1', enabled: true }];
 
       const controller = WrfcController.getInstance(eventBus);
@@ -855,11 +855,11 @@ describe('WrfcController', () => {
       // Current chain should transition to passed (gate failure means CURRENT chain passed review)
       expect(chain.state).toBe('passed');
 
-      // A follow-up agent should have been spawned WITHOUT skipWrfc for the gate failure
-      // spawnInputs[0] = reviewer, spawnInputs[1] = follow-up engineer (no skipWrfc)
+      // A follow-up agent should have been spawned WITHOUT dangerously_disable_wrfc for the gate failure
+      // spawnInputs[0] = reviewer, spawnInputs[1] = follow-up engineer (no dangerously_disable_wrfc)
       expect(spawnInputs.length).toBeGreaterThanOrEqual(2);
-      const followUpInput = spawnInputs[1] as { skipWrfc?: boolean; task: string };
-      expect(followUpInput.skipWrfc).toBeUndefined();
+      const followUpInput = spawnInputs[1] as { dangerously_disable_wrfc?: boolean; task: string };
+      expect(followUpInput.dangerously_disable_wrfc).toBeUndefined();
       expect(followUpInput.task).toContain('WRFC Gate Failure Fix');
     });
   });
