@@ -194,7 +194,7 @@ export const agentTool: Tool = {
       return { success: false, error: 'Missing required parameter: mode' };
     }
 
-    const validModes = ['spawn', 'status', 'cancel', 'list', 'templates', 'get', 'budget', 'plan', 'wait', 'message'];
+    const validModes = ['spawn', 'status', 'cancel', 'list', 'templates', 'get', 'budget', 'plan', 'wait', 'message', 'wrfc-chains', 'wrfc-history'];
     if (!validModes.includes(input.mode)) {
       return { success: false, error: `Invalid mode: '${input.mode}'. Must be one of: ${validModes.join(', ')}` };
     }
@@ -449,6 +449,35 @@ export const agentTool: Tool = {
             content: input.message,
           }),
         };
+      }
+
+      case 'wrfc-chains': {
+        try {
+          const workmap = WrfcController.getInstance().getWorkmap();
+          const chains = workmap.listChains();
+          return {
+            success: true,
+            output: JSON.stringify({ mode: 'wrfc-chains', chains, count: chains.length }),
+          };
+        } catch (err) {
+          return { success: false, error: `Failed to list WRFC chains: ${err instanceof Error ? err.message : String(err)}` };
+        }
+      }
+
+      case 'wrfc-history': {
+        if (!input.wrfcId) {
+          return { success: false, error: 'wrfc-history requires wrfcId' };
+        }
+        try {
+          const workmap = WrfcController.getInstance().getWorkmap();
+          const events = workmap.read(input.wrfcId);
+          return {
+            success: true,
+            output: JSON.stringify({ mode: 'wrfc-history', wrfcId: input.wrfcId, events, count: events.length }),
+          };
+        } catch (err) {
+          return { success: false, error: `Failed to get WRFC history: ${err instanceof Error ? err.message : String(err)}` };
+        }
       }
 
       default: {
