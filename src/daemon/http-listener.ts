@@ -179,7 +179,6 @@ export class HttpListener {
       return Response.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const url = new URL(req.url);
     const { pathname, method } = { pathname: url.pathname, method: req.method };
 
     if (pathname === '/webhook' && method === 'POST') {

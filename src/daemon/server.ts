@@ -44,11 +44,11 @@ export class DaemonServer {
   private authToken: string | null = null;
   private userAuth: UserAuthManager;
 
-  constructor(private config: DaemonConfig = {}, private configManager?: ConfigManager) {
+  constructor(private config: DaemonConfig = {}, _configManager?: ConfigManager) {
     this.port = config.port ?? 3421;
     this.host = config.host ?? '127.0.0.1';
     this.agentManager = config.agentManager ?? AgentManager.getInstance();
-    this.configManager = configManager ?? new ConfigManager();
+    this.configManager = _configManager ?? new ConfigManager();
     this.userAuth = new UserAuthManager();
   }
 

@@ -13,13 +13,13 @@ function bufferFromLines(lines: string[]): InfiniteBuffer {
   for (const text of lines) {
     const cells: Cell[] = Array.from(text).map(ch => ({
       char: ch,
-      fg: undefined,
-      bg: undefined,
+      fg: '',
+      bg: '',
       bold: false,
       italic: false,
       underline: false,
       dim: false,
-      inverse: false,
+      strikethrough: false,
     }));
     buf.addLine(cells);
   }

@@ -39,7 +39,11 @@ describe('HookDispatcher trigger wiring', () => {
     const result = await dispatcher.fire({
       path: 'Post:tool:read',
       phase: 'Post',
-      data: {},
+      category: 'tool',
+      specific: 'read',
+      sessionId: '',
+      timestamp: Date.now(),
+      payload: {},
     });
     // Hook result is ok (no hooks registered, just triggers)
     expect(result.ok).toBe(true);

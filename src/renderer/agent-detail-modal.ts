@@ -27,8 +27,8 @@ export class AgentDetailModal {
   public agentId: string | null = null;
 
   /** Cached JSONL log entries, loaded on open(). */
-  private logEntries: Record<string, unknown>[] = [];
-  private logTotal = 0;
+  public logEntries: Record<string, unknown>[] = [];
+  public logTotal = 0;
 
   private refreshTimer: ReturnType<typeof setInterval> | null = null;
   private onRefresh: (() => void) | null = null;

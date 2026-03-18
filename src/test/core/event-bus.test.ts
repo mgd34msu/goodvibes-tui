@@ -115,11 +115,11 @@ describe('EventBus', () => {
     });
 
     test('error events carry Error objects', () => {
-      let err: Error | null = null;
+      let err: Error | undefined = undefined;
       bus.on('turn:error', ({ error }) => { err = error; });
       const testError = new Error('boom');
       bus.emit('turn:error', { error: testError });
-      expect(err).toBe(testError);
+      expect(err!).toBe(testError);
     });
   });
 });
