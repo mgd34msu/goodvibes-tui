@@ -1321,11 +1321,7 @@ export class InputHandler {
           this.bus.emit('render:request');
           continue;
         }
-        // 'a' with empty prompt in normal mode: apply nearest diff block
-        if (token.value === 'a' && this.prompt === '' && !this.commandMode) {
-          this.handleDiffApply();
-          continue;
-        }
+        // 'a' shortcut removed — use Ctrl+A for diff apply instead
         // Reset history browsing when user types
         if (this.inputHistory?.isBrowsing) {
           this.inputHistory.resetPosition();
