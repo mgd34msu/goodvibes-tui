@@ -103,6 +103,18 @@ export class AgentOrchestrator {
 
       while (continueLoop) {
         if ((record as { status: string }).status === 'cancelled') {
+          record.completedAt = Date.now();
+          if (this.eventBus) {
+            this.eventBus.emit('subagent:error', {
+              id: record.id,
+              error: new Error('Agent cancelled'),
+            });
+          }
+          // Kill any background processes leaked by this agent
+          const pm = ProcessManager.getInstance();
+          for (const p of pm.list()) {
+            if (!preAgentProcessIds.has(p.id)) pm.stop(p.id);
+          }
           if (session) {
             session.appendMessage({ type: 'session_end', status: 'cancelled', turn, timestamp: new Date().toISOString() });
             try { await session.dispose(); } catch { /* non-fatal */ }
