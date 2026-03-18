@@ -60,6 +60,7 @@ export const AGENT_TOOL_SCHEMA: ToolDefinition = {
       skipWrfc: {
         type: 'boolean',
         description: 'If true, skip the WRFC review chain for this agent (mode: spawn). Default: false.',
+        default: false,
       },
       // mode: status / cancel / get / budget / plan / wait / message
       agentId: {
