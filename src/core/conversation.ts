@@ -447,12 +447,15 @@ export class ConversationManager {
         const isDiff = hasDiffHeader && hasHunk;
         const blockType: 'diff' | 'tool' = isDiff ? 'diff' : 'tool';
 
-        const isCollapsed = this.collapseState.has(collapseKey)
-          ? this.collapseState.get(collapseKey)!
-          : true;  // Collapsed by default
+        // Short messages (≤200 chars) are never collapsible
+        const isShort = m.content.length <= 200;
+        const isCollapsed = isShort ? false
+          : this.collapseState.has(collapseKey)
+            ? this.collapseState.get(collapseKey)!
+            : true;  // Collapsed by default
 
         if (!this.collapseState.has(collapseKey)) {
-          this.collapseState.set(collapseKey, true);
+          this.collapseState.set(collapseKey, isShort ? false : true);
         }
 
         if (isCollapsed) {
