@@ -418,38 +418,15 @@ export const agentTool: Tool = {
           return { success: false, error: `Unknown agent: '${input.agentId}'` };
         }
 
-        const timeoutMs = input.timeoutMs ?? 600_000; // 10 min default — must cover WRFC review/fix cycles
-        const POLL_INTERVAL_MS = 100;
-        const terminalStatuses: AgentRecord['status'][] = ['completed', 'failed', 'cancelled'];
-
-        if (terminalStatuses.includes(record.status)) {
-          // Already done — return immediately (WRFC continues in background)
-          return {
-            success: true,
-            output: JSON.stringify({ agentId: record.id, status: record.status, timedOut: false }),
-          };
-        }
-
-        const deadline = Date.now() + timeoutMs;
-        await new Promise<void>((resolve) => {
-          const interval = setInterval(() => {
-            const current = manager.getStatus(input.agentId!);
-            if (!current || terminalStatuses.includes(current.status) || Date.now() >= deadline) {
-              clearInterval(interval);
-              resolve();
-            }
-          }, POLL_INTERVAL_MS);
-        });
-
-        const finalRecord = manager.getStatus(input.agentId);
-        const timedOut = finalRecord ? !terminalStatuses.includes(finalRecord.status) : false;
-
+        // Non-blocking: return current status immediately.
+        // Agents run in background. WRFC review/fix events stream to conversation.
         return {
           success: true,
           output: JSON.stringify({
-            agentId: input.agentId,
-            status: finalRecord?.status ?? 'unknown',
-            timedOut,
+            agentId: record.id,
+            status: record.status,
+            toolCallCount: record.toolCallCount,
+            progress: record.progress ?? null,
           }),
         };
       }
