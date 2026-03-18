@@ -16,6 +16,40 @@ import { ProcessManager } from '../tools/shared/process-manager.ts';
 import { join } from 'node:path';
 
 // ---------------------------------------------------------------------------
+// Network error detection
+// ---------------------------------------------------------------------------
+
+/**
+ * Returns true if the error looks like a transient network failure that
+ * may resolve on its own (dropped connection, DNS hiccup, etc.).
+ * These are distinct from API-level errors (4xx / 5xx) which should not
+ * be silently retried at this layer.
+ */
+function isNetworkError(err: unknown): boolean {
+  if (!(err instanceof Error)) return false;
+  const msg = err.message.toLowerCase();
+  return (
+    msg.includes('fetch failed') ||
+    msg.includes('econnrefused') ||
+    msg.includes('enotfound') ||
+    msg.includes('network error') ||
+    msg.includes('network timeout') ||
+    msg.includes('networkerror') ||
+    msg.includes('econnreset') ||
+    msg.includes('etimedout') ||
+    msg.includes('socket hang up') ||
+    msg.includes('dns') ||
+    msg.includes('connection lost') ||
+    msg.includes('epipe') ||
+    msg.includes('ehostunreach')
+  );
+}
+
+/** Backoff delays (ms) for agent-level network retries — longer than the
+ *  provider-level retries because we are waiting for the network to recover. */
+const NETWORK_RETRY_DELAYS_MS = [5_000, 10_000, 20_000, 40_000, 60_000];
+
+// ---------------------------------------------------------------------------
 // AgentOrchestrator
 // ---------------------------------------------------------------------------
 
@@ -144,12 +178,46 @@ export class AgentOrchestrator {
           // Inject as user message so LLM responds to inter-agent communication
           conversation.addUserMessage(`[Message from agent ${msg.from}]: ${msg.content}`);
         }
-        const response = await provider.chat({
-          model: modelId,
-          messages: conversation.getMessagesForLLM(),
-          tools: toolDefinitions.length > 0 ? toolDefinitions : undefined,
-          systemPrompt,
-        });
+        // --- Network-aware retry around the LLM call ---
+        // provider.chat() already has short provider-level retries (~30s total).
+        // This outer loop waits for the network to come back (up to ~2.5 min
+        // of additional wait) before giving up and failing the agent.
+        let response: Awaited<ReturnType<typeof provider.chat>>;
+        {
+          let networkAttempt = 0;
+          // eslint-disable-next-line no-constant-condition
+          while (true) {
+            try {
+              response = await provider.chat({
+                model: modelId,
+                messages: conversation.getMessagesForLLM(),
+                tools: toolDefinitions.length > 0 ? toolDefinitions : undefined,
+                systemPrompt,
+              });
+              break; // success — exit retry loop
+            } catch (chatErr) {
+              if (isNetworkError(chatErr) && networkAttempt < NETWORK_RETRY_DELAYS_MS.length) {
+                const delayMs = NETWORK_RETRY_DELAYS_MS[networkAttempt]!;
+                const delaySec = Math.round(delayMs / 1000);
+                logger.warn(
+                  `Agent ${record.id}: network error on turn ${turn}, retrying in ${delaySec}s (attempt ${networkAttempt + 1}/${NETWORK_RETRY_DELAYS_MS.length})`,
+                  { error: chatErr instanceof Error ? chatErr.message : String(chatErr) },
+                );
+                record.progress = `Network error, retrying in ${delaySec}s…`;
+                networkAttempt++;
+                await new Promise<void>((resolve) => setTimeout(resolve, delayMs));
+                if ((record as { status: string }).status === 'cancelled') {
+                  throw new Error('Agent cancelled during network retry');
+                }
+              } else {
+                // Not a network error, or all network retries exhausted — re-throw
+                // to let the outer catch handle it and fail the agent.
+                throw chatErr;
+              }
+            }
+          }
+          record.progress = 'Thinking…';
+        }
 
         session.appendMessage({ type: 'llm_response', turn, contentLength: response.content.length, toolCallCount: response.toolCalls.length, usage: response.usage, timestamp: new Date().toISOString() });
 
