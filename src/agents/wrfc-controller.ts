@@ -638,16 +638,14 @@ export class WrfcController {
         .map((r) => `${r.gate}:${r.output.slice(0, 200)}`) 
         .join('|');
 
-      // Same-error detection: walk up parentChainId ancestry (up to 3 levels)
-      // and check if any ancestor had the same gate failure fingerprint.
-      let identicalAncestorCount = 0;
+      // Count gate retry depth — walk up parentChainId ancestry
+      const maxGateRetries = configManager.get('wrfc.maxFixAttempts') as number;
+      let gateRetryDepth = 0;
       let ancestorId = chain.parentChainId;
-      for (let depth = 0; depth < 3 && ancestorId; depth++) {
+      while (ancestorId) {
         const ancestor = this.chains.get(ancestorId);
         if (!ancestor) break;
-        if (ancestor.gateFailureFingerprint === fingerprint) {
-          identicalAncestorCount++;
-        }
+        if (ancestor.gateFailureFingerprint) gateRetryDepth++;
         ancestorId = ancestor.parentChainId;
       }
 
@@ -663,15 +661,15 @@ export class WrfcController {
         logger.error('WrfcController.dequeueNext unhandled error', { error: String(err) });
       });
 
-      if (identicalAncestorCount >= 1) {
-        // An ancestor already had the same failures — 2 consecutive identical failures, abort to prevent cascade
+      if (gateRetryDepth >= maxGateRetries) {
+        // Hard cap on gate retries reached — fail, don't spawn more agents
         logger.error(
-          'WrfcController.processGateResults: identical gate failures in consecutive chains, manual intervention required',
-          { chainId: chain.id, fingerprint }
+          'WrfcController.processGateResults: gate retry limit reached, manual intervention required',
+          { chainId: chain.id, gateRetryDepth, maxGateRetries }
         );
         this.eventBus.emit('wrfc:cascade-abort', {
           chainId: chain.id,
-          reason: 'Identical gate failures detected in consecutive chains. Manual intervention required.',
+          reason: `Gate failures exceeded max retries (${gateRetryDepth}/${maxGateRetries}). Manual intervention required.`,
         });
         return;
       }
