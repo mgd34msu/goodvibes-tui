@@ -223,14 +223,7 @@ export const agentTool: Tool = {
 
         return {
           success: true,
-          output: JSON.stringify({
-            agentId: record.id,
-            status: 'spawned',
-            task: record.task,
-            template: record.template,
-            tools: record.tools,
-            note: 'Agent running in background. WRFC review/fix events appear in conversation automatically. End your response now — do not call wait or block.',
-          }),
+          output: `Agent ${record.id} spawned (${record.template}). Running in background — end your response now.`,
         };
       }
 
