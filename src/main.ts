@@ -187,45 +187,44 @@ async function main() {
 
   // Notify the user when a WRFC cascade abort occurs (identical gate failures in consecutive chains)
   unsubs.push(bus.on('wrfc:cascade-abort', ({ chainId, reason }: { chainId: string; reason: string }) => {
-    conversation.log(`[WRFC] Cascade abort: ${reason} (chain ${chainId})`, { fg: '#ef4444' });
+    conversation.addSystemMessage(`[WRFC] Cascade abort: ${reason} (chain ${chainId})`);
     bus.emit('render:request');
   }));
 
   // WRFC chain lifecycle — bubble events to conversation
   unsubs.push(bus.on('wrfc:chain-created', ({ chainId, task }: { chainId: string; task: string }) => {
-    conversation.log(`[WRFC] Chain ${chainId.slice(0, 12)} started: ${task.slice(0, 60)}`, { fg: '244', dim: true });
+    conversation.addSystemMessage(`[WRFC] Chain ${chainId.slice(0, 12)} started: ${task.slice(0, 60)}`);
     bus.emit('render:request');
   }));
 
   unsubs.push(bus.on('wrfc:review-complete', ({ chainId, score, passed }: { chainId: string; score: number; passed: boolean }) => {
     const icon = passed ? '\u2713' : '\u2717';
-    const color = passed ? '#22c55e' : '#ef4444';
     const threshold = configManager.get('wrfc.scoreThreshold') as number;
     const suffix = passed ? '' : ` - Minimum score is ${threshold}/10, spawning a fix agent ...`;
-    conversation.log(`[WRFC] ${icon} Review ${chainId.slice(0, 12)}: ${score}/10${suffix}`, { fg: color });
+    conversation.addSystemMessage(`[WRFC] ${icon} Review ${chainId.slice(0, 12)}: ${score}/10${suffix}`);
     bus.emit('render:request');
   }));
 
   unsubs.push(bus.on('wrfc:chain-passed', ({ chainId }: { chainId: string }) => {
-    conversation.log(`[WRFC] \u2713 Chain ${chainId.slice(0, 12)} PASSED — all gates clear`, { fg: '#22c55e', bold: true });
+    conversation.addSystemMessage(`[WRFC] \u2713 Chain ${chainId.slice(0, 12)} PASSED — all gates clear`);
     bus.emit('render:request');
   }));
 
   unsubs.push(bus.on('wrfc:chain-failed', ({ chainId, reason }: { chainId: string; reason: string }) => {
-    conversation.log(`[WRFC] \u2717 Chain ${chainId.slice(0, 12)} FAILED: ${reason.slice(0, 80)}`, { fg: '#ef4444' });
+    conversation.addSystemMessage(`[WRFC] \u2717 Chain ${chainId.slice(0, 12)} FAILED: ${reason.slice(0, 80)}`);
     bus.emit('render:request');
   }));
 
   unsubs.push(bus.on('wrfc:auto-commit', ({ chainId, commitHash }: { chainId: string; commitHash?: string }) => {
     const suffix = commitHash ? ` (${commitHash.slice(0, 7)})` : '';
-    conversation.log(`[WRFC] Auto-committed chain ${chainId.slice(0, 12)}${suffix}`, { fg: '#22c55e' });
+    conversation.addSystemMessage(`[WRFC] Auto-committed chain ${chainId.slice(0, 12)}${suffix}`);
     bus.emit('render:request');
   }));
 
   unsubs.push(bus.on('wrfc:gate-result', ({ chainId, gate, passed }: { chainId: string; gate: string; passed: boolean }) => {
     const icon = passed ? '\u2713' : '\u2717';
     const color = passed ? '#22c55e' : '#ef4444';
-    conversation.log(`[WRFC]   ${icon} Gate: ${gate} ${passed ? 'passed' : 'FAILED'}`, { fg: color, dim: passed });
+    conversation.addSystemMessage(`[WRFC]   ${icon} Gate: ${gate} ${passed ? 'passed' : 'FAILED'}`);
     bus.emit('render:request');
   }));
 
