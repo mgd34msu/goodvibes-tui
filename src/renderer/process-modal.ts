@@ -59,6 +59,12 @@ function buildAgentLabel(rec: AgentRecord): string {
     return `[Fix #${attempt}] ${desc}  (${fromScore} \u2192 ${toScore}/10)`;
   }
 
+  // WRFC Gate Failure Fix agent
+  if (task.startsWith('WRFC Gate Failure Fix')) {
+    const desc = truncateFirst(originalTask ?? 'gate fix in progress', 50);
+    return `[Gate Fix] ${desc}`;
+  }
+
   // Regular agent — show template and truncated first line
   const templateLabels: Record<string, string> = {
     engineer: 'Engineer', reviewer: 'Reviewer', tester: 'Tester',
