@@ -41,6 +41,10 @@ export interface WrfcChain {
   gatesPassed?: boolean;
   /** Fingerprint of gate failures: used for same-error detection across chained chains. */
   gateFailureFingerprint?: string;
+  /** How many gate-failure retry cycles deep this chain is. 0 = original chain. */
+  gateRetryDepth: number;
+  /** Review scores history — used to detect regression (2 consecutive below initial). */
+  reviewScores: number[];
   error?: string;
   /** Buffered agent completion — set when agent finishes while chain is still queued/pending. */
   bufferedCompletion?: { agentId: string; fullOutput?: string };

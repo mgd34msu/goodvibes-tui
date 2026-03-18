@@ -267,7 +267,7 @@ export const DEFAULT_CONFIG: GoodVibesConfig = {
   },
   wrfc: {
     scoreThreshold: 9.9,
-    maxFixAttempts: 3,
+    maxFixAttempts: 5,
     autoCommit: true,
     gates: [
       { name: 'typecheck', command: 'npx tsc --noEmit', enabled: true },
@@ -605,9 +605,9 @@ export const CONFIG_SCHEMA: ConfigSetting[] = [
   {
     key: 'wrfc.maxFixAttempts',
     type: 'number',
-    default: 3,
-    description: 'Maximum fix attempts per WRFC review cycle',
-    validate: (v) => typeof v === 'number' && v >= 1 && v <= 10,
+    default: 5,
+    description: 'Maximum gate retry depth before aborting WRFC chain',
+    validate: (v) => typeof v === 'number' && v >= 1 && v <= 20,
   },
   {
     key: 'wrfc.autoCommit',

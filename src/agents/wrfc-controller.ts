@@ -118,6 +118,8 @@ export class WrfcController {
         allAgentIds: [engineerRecord.id],
         fixAttempts: 0,
         reviewCycles: 0,
+        gateRetryDepth: 0,
+        reviewScores: [],
         createdAt: Date.now(),
       };
       this.chains.set(id, chain);
@@ -127,6 +129,8 @@ export class WrfcController {
       const pendingParentId = this.pendingParentChainIds.get(engineerRecord.id);
       if (pendingParentId) {
         chain.parentChainId = pendingParentId;
+        const parent = this.chains.get(pendingParentId);
+        if (parent) chain.gateRetryDepth = parent.gateRetryDepth + (parent.gateFailureFingerprint ? 1 : 0);
         this.pendingParentChainIds.delete(engineerRecord.id);
       }
 
@@ -153,6 +157,8 @@ export class WrfcController {
       allAgentIds: [engineerRecord.id],
       fixAttempts: 0,
       reviewCycles: 0,
+      gateRetryDepth: 0,
+      reviewScores: [],
       createdAt: Date.now(),
     };
 
@@ -165,6 +171,8 @@ export class WrfcController {
     const pendingParentId = this.pendingParentChainIds.get(engineerRecord.id);
     if (pendingParentId) {
       chain.parentChainId = pendingParentId;
+      const parent = this.chains.get(pendingParentId);
+      if (parent) chain.gateRetryDepth = parent.gateRetryDepth + (parent.gateFailureFingerprint ? 1 : 0);
       this.pendingParentChainIds.delete(engineerRecord.id);
     }
 
@@ -410,12 +418,26 @@ export class WrfcController {
       fixAttempts: chain.fixAttempts,
     });
 
+    // Track scores for regression detection
+    chain.reviewScores.push(review.score);
+
     if (review.score >= threshold) {
       this.transition(chain, 'awaiting_gates');
       await this.checkAndRunGatesForAll();
     } else {
-      // Fix attempts are unlimited — only same-error detection (in processGateResults)
-      // stops the chain when identical failures repeat
+      // Regression warning: 2 consecutive scores below the initial score
+      const scores = chain.reviewScores;
+      if (scores.length >= 3) {
+        const initial = scores[0];
+        const last2 = scores.slice(-2);
+        if (last2[0] < initial && last2[1] < initial) {
+          this.eventBus.emit('wrfc:cascade-abort', {
+            chainId: chain.id,
+            reason: `Score regression warning: initial ${initial}/10, last two ${last2[0]}/10, ${last2[1]}/10 — both below initial. Fix quality may be degrading.`,
+          });
+        }
+      }
+
       this.startFix(chain, review);
     }
   }
@@ -661,16 +683,8 @@ export class WrfcController {
         .map((r) => `${r.gate}:${r.output.slice(0, 200)}`) 
         .join('|');
 
-      // Count gate retry depth — walk up parentChainId ancestry
+      // Use stored depth — no ancestry walk needed (ancestors may be cleaned up after 60s)
       const maxGateRetries = configManager.get('wrfc.maxFixAttempts') as number;
-      let gateRetryDepth = 0;
-      let ancestorId = chain.parentChainId;
-      while (ancestorId) {
-        const ancestor = this.chains.get(ancestorId);
-        if (!ancestor) break;
-        if (ancestor.gateFailureFingerprint) gateRetryDepth++;
-        ancestorId = ancestor.parentChainId;
-      }
 
       // Store fingerprint on current chain before transitioning
       chain.gateFailureFingerprint = fingerprint;
@@ -684,11 +698,11 @@ export class WrfcController {
         logger.error('WrfcController.dequeueNext unhandled error', { error: String(err) });
       });
 
-      if (gateRetryDepth >= maxGateRetries) {
+      if (chain.gateRetryDepth >= maxGateRetries) {
         // Hard cap on gate retries reached — fail, don't spawn more agents
         logger.error(
           'WrfcController.processGateResults: gate retry limit reached, manual intervention required',
-          { chainId: chain.id, gateRetryDepth, maxGateRetries }
+          { chainId: chain.id, gateRetryDepth: chain.gateRetryDepth, maxGateRetries }
         );
         this.eventBus.emit('wrfc:cascade-abort', {
           chainId: chain.id,
