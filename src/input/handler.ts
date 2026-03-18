@@ -1153,6 +1153,7 @@ export class InputHandler {
         if (token.type === 'key') {
           if (token.logicalName === 'escape') {
             this.processModal.close();
+            this.indicatorFocused = false;
           } else if (token.logicalName === 'up') {
             this.processModal.moveUp();
           } else if (token.logicalName === 'down') {

@@ -225,6 +225,8 @@ export function renderProcessModal(modal: ProcessModal, width: number): Line[] {
     }, width);
   }
 
+  const maxLabelW = Math.max(10, (width - 4) - 8); // modal content minus borders/padding
+
   const items = modal.entries.map((e, i) => {
     const statusIcon = {
       running: '\u25cf',
@@ -235,7 +237,10 @@ export function renderProcessModal(modal: ProcessModal, width: number): Line[] {
     }[e.status] ?? '\u25cf';
     const typeTag = e.type === 'agent' ? '[agent]' : '[exec]';
     const dur = formatDuration(e.elapsedMs);
-    const label = `${statusIcon} ${typeTag} ${e.label.slice(0, dynamicLabelW)}  ${e.status}  ${dur}`;
+    const suffix = `  ${e.status}  ${dur}`;
+    const maxDescW = maxLabelW - typeTag.length - suffix.length - 4; // icon + spaces
+    const desc = e.label.length > maxDescW ? e.label.slice(0, maxDescW - 1) + '\u2026' : e.label;
+    const label = `${statusIcon} ${typeTag} ${desc}${suffix}`;
     return {
       label,
       selected: i === modal.selectedIndex,
