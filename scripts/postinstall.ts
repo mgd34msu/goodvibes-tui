@@ -5,7 +5,7 @@
  * Runs after `bun run build` or can be called manually.
  * Only copies if the destination doesn't exist. Never overwrites.
  */
-import { cpSync, existsSync, mkdirSync, readdirSync } from 'fs';
+import { cpSync, copyFileSync, existsSync, mkdirSync, readdirSync } from 'fs';
 import { join } from 'path';
 import { homedir } from 'os';
 
@@ -51,6 +51,18 @@ for (const { src, dest } of targets) {
       installed++;
     }
   }
+}
+
+// Deploy GOODVIBES.md to ~/.goodvibes/ (never overwrite)
+const goodvibesSrc = join(projectRoot, '.goodvibes', 'GOODVIBES.md');
+const goodvibesDest = join(home, '.goodvibes', 'GOODVIBES.md');
+if (existsSync(goodvibesSrc) && !existsSync(goodvibesDest)) {
+  mkdirSync(join(home, '.goodvibes'), { recursive: true });
+  copyFileSync(goodvibesSrc, goodvibesDest);
+  console.log(`  installed: ~/.goodvibes/GOODVIBES.md`);
+  installed++;
+} else if (existsSync(goodvibesDest)) {
+  skipped++;
 }
 
 if (installed > 0 || skipped > 0) {
