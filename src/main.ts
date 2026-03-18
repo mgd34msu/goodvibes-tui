@@ -295,7 +295,7 @@ async function main() {
   };
 
   commandContext.openProviderPicker = () => {
-    const providers = ['openai', 'anthropic', 'gemini', 'inceptionlabs'];
+    const providers = [...new Set(providerRegistry.listModels().map(m => m.provider))];
     input.modelPicker.openProviders(providers, runtime.provider);
     bus.emit('render:request');
   };
