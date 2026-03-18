@@ -2,7 +2,7 @@
 
 A terminal UI coding agent substrate built with Bun. Multi-provider LLM support (built-in + any OpenAI-compatible API), automated WRFC review chains, 12 built-in tools, a cell-based renderer, an agent system, a hook system, and MCP integration.
 
-Version: **0.9.7**
+Version: **0.9.8**
 
 <!-- screenshot -->
 

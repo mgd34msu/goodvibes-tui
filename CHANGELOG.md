@@ -4,6 +4,38 @@ All notable changes to GoodVibes TUI.
 
 ---
 
+## [0.9.8] — 2026-03-18
+
+### WRFC Workmap & Session Tracking
+- **WRFC workmap** — JSONL-based session workmap (`{sessionId}_workmap.jsonl`) tracks all WRFC lifecycle events: engineer_complete, review_complete, fix_started, gate_result, chain_passed, chain_failed
+- **wrfc-chains tool mode** — LLM can list all WRFC chains in current session with status, last score, and event count
+- **wrfc-history tool mode** — LLM can query detailed event history for any chain including review scores, issues, and gate results
+- **Gate retry hard cap** — gate failures stop spawning follow-up agents after `wrfc.maxFixAttempts` (default 3) retries through ancestry chain
+- **Cancelled agent events** — cancelled agents now emit `subagent:error` so WRFC chains don't get stuck in engineering state
+- **Non-blocking conversation** — turn loop ends immediately after agent spawn; WRFC review/fix runs fully in background
+- **Persistent WRFC messages** — WRFC lifecycle events use `addSystemMessage()` so they survive history rebuilds (click, scroll, resize)
+- **Minimal spawn output** — agent spawn returns plain text instead of JSON blob; no more green code blocks in conversation
+
+### Agent Execution
+- **Interruptible turn loop** — user input during tool execution breaks the turn loop; queued message processed immediately
+- **Force turn end on spawn** — orchestrator ends turn after any agent spawn; no more LLM thinking while agents run
+- **Workflow tool deterrence** — description updated to prevent LLM from confusing state tracker with task execution
+
+### Process Modal & UI
+- **Auto-refresh** — process modal refreshes every 1 second while open; running times tick live
+- **Smart WRFC labels** — review agents show `[Review] task... (target: 9.9/10)`, fix agents show `[Fix #N] task... (8.4 → 9.9/10)`
+- **Original task from chain** — WRFC agent labels look up the original task description from the WrfcController chain
+
+### System Prompt
+- **GOODVIBES.md** — bundled token efficiency guidelines deployed to `~/.goodvibes/GOODVIBES.md` via postinstall
+- **skipWrfc default** — schema now explicitly sets `default: false`
+
+### Fixes
+- **Resize crash** — null guard on cell access in diff engine prevents TypeError on terminal resize
+- **Markdown surrogate pairs** — fixed surrogate pair handling in inline text accumulator
+
+---
+
 ## [0.9.7] — 2026-03-17
 
 ### WRFC Safety & Reliability
