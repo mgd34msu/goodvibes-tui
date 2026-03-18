@@ -280,9 +280,12 @@ export class Orchestrator {
           // Add tool results — LLM sees them on next iteration
           this.conversation.addToolResults(results);
 
-          // If user typed something during tool execution, end turn early.
-          // Tool results are in history — the next turn will pick up where we left off.
-          if (this.messageQueue.length > 0) {
+          // If agents were spawned, end the turn — agents run in background, WRFC handles quality.
+          // Also end if user typed something during tool execution.
+          const spawnedAgents = response.toolCalls.some((tc: ToolCall) =>
+            tc.name === 'agent' && (tc.arguments as Record<string, unknown>).mode === 'spawn'
+          );
+          if (spawnedAgents || this.messageQueue.length > 0) {
             this.bus.emit('turn:complete', { response: response.content });
             continueLoop = false;
           }
