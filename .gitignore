@@ -16,6 +16,7 @@ dist/
 .goodvibes/*
 !.goodvibes/skills/
 !.goodvibes/agents/
+!.goodvibes/GOODVIBES.md
 
 # Artifacts
 scripts/reset-suite.sh
