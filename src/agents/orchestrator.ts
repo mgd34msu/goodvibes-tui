@@ -164,6 +164,8 @@ export class AgentOrchestrator {
 
             // Sanitize exec args for agent context: force inline execution, 10-min TTL
             if (call.name === 'exec' || call.name === 'precision_exec') {
+              // Clone arguments — LLM response objects may be frozen
+              call.arguments = structuredClone(call.arguments);
               const execArgs = call.arguments as Record<string, unknown>;
               // Force all commands to run inline (no background leaks)
               if (Array.isArray(execArgs.commands)) {
