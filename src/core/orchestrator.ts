@@ -280,6 +280,13 @@ export class Orchestrator {
           // Add tool results — LLM sees them on next iteration
           this.conversation.addToolResults(results);
 
+          // If user typed something during tool execution, end turn early.
+          // Tool results are in history — the next turn will pick up where we left off.
+          if (this.messageQueue.length > 0) {
+            this.bus.emit('turn:complete', { response: response.content });
+            continueLoop = false;
+          }
+
           // Loop continues: send results back to LLM
         } else {
           // No tool calls — final response
