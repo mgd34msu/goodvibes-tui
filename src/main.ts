@@ -318,7 +318,7 @@ async function main() {
     input.helpOverlayActive = !input.helpOverlayActive;
     input.helpScrollOffset = 0;
   };
-  (commandContext as Record<string, unknown>).openShortcutsOverlay = () => {
+  (commandContext as unknown as Record<string, unknown>).openShortcutsOverlay = () => {
     input.shortcutsOverlayActive = !input.shortcutsOverlayActive;
     input.shortcutsScrollOffset = 0;
     bus.emit('render:request');

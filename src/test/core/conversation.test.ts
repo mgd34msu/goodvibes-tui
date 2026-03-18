@@ -99,7 +99,7 @@ describe('ConversationManager', () => {
       const json = cm.toJSON() as { messages: Array<{ role: string; content: string }> };
 
       const cm2 = new ConversationManager(() => 80);
-      cm2.fromJSON(json);
+      cm2.fromJSON(json as { messages: never[] });
       expect(cm2.getMessagesForLLM()).toHaveLength(1);
       expect(cm2.getMessagesForLLM()[0]).toMatchObject({ role: 'user', content: 'original' });
     });

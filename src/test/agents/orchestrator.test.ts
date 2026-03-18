@@ -91,12 +91,13 @@ async function withMockProvider<T>(provider: LLMProvider, fn: () => Promise<T>):
 
 describe('AgentOrchestrator', () => {
   async function getSystemPrompt(record: AgentRecord): Promise<string> {
-    let captured: ChatRequest | null = null;
+    // eslint-disable-next-line prefer-const
+    let capturedRef: { value: ChatRequest | null } = { value: null };
     const captureProvider: LLMProvider = {
       name: 'mock',
       models: ['mock-model'],
       chat: mock(async (params: ChatRequest): Promise<ChatResponse> => {
-        captured = params;
+        capturedRef.value = params;
         return {
           content: 'Task done.',
           toolCalls: [],
@@ -110,7 +111,7 @@ describe('AgentOrchestrator', () => {
       await orchestrator.runAgent(record);
     });
 
-    return captured?.systemPrompt ?? '';
+    return capturedRef.value?.systemPrompt ?? '';
   }
 
   let orchestrator: AgentOrchestrator;

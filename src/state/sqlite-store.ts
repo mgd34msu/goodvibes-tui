@@ -71,6 +71,7 @@ export class SQLiteStore {
 
   private async initialize(schema: (db: SqlDatabase) => void): Promise<void> {
     try {
+      // @ts-ignore — no bundled types for sql.js in this environment
       const initSqlJs = (await import('sql.js')).default;
       const SQL = await initSqlJs() as SqlJsStatic;
 

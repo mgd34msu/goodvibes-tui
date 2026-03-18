@@ -706,7 +706,7 @@ export class WrfcController {
         );
         this.eventBus.emit('wrfc:cascade-abort', {
           chainId: chain.id,
-          reason: `Gate failures exceeded max retries (${gateRetryDepth}/${maxGateRetries}). Manual intervention required.`,
+          reason: `Gate failures exceeded max retries (${chain.gateRetryDepth}/${maxGateRetries}). Manual intervention required.`,
         });
         return;
       }
