@@ -53,10 +53,10 @@ export interface AgentRecord {
   error?: string;
   /** Complete final assistant response (no truncation). Set on successful completion; undefined if agent fails or hits max turns. */
   fullOutput?: string;
-  /** WRFC chain ID linking this agent to its review chain. Undefined if skipWrfc. */
+  /** WRFC chain ID linking this agent to its review chain. Undefined if dangerously_disable_wrfc. */
   wrfcId?: string;
   /** If true, this agent skips the WRFC review chain. */
-  skipWrfc?: boolean;
+  dangerously_disable_wrfc?: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -114,7 +114,7 @@ export class AgentManager {
       status: 'pending',
       startedAt: Date.now(),
       toolCallCount: 0,
-      skipWrfc: input.skipWrfc,
+      dangerously_disable_wrfc: input.dangerously_disable_wrfc,
     };
 
     this.agents.set(id, record);
@@ -123,8 +123,8 @@ export class AgentManager {
       return record;
     }
 
-    // WRFC chain creation — every agent without skipWrfc gets a chain
-    if (!input.skipWrfc) {
+    // WRFC chain creation — every agent without dangerously_disable_wrfc gets a chain
+    if (!input.dangerously_disable_wrfc) {
       try {
         const wrfcController = WrfcController.getInstance();
         wrfcController.createChain(record);

@@ -13,7 +13,7 @@ import { logger } from '../utils/logger.ts';
  * WrfcController — Event-driven state machine for automated WRFC chains.
  *
  * Lifecycle:
- *   1. Agent spawned without skipWrfc → createChain() → state: engineering
+ *   1. Agent spawned without dangerously_disable_wrfc → createChain() → state: engineering
  *   2. Engineer completes → parse report → spawn reviewer → state: reviewing
  *   3. Reviewer completes → check score vs threshold
  *      a. Score >= threshold → state: awaiting_gates (wait for all sibling chains to finish)
@@ -383,7 +383,7 @@ export class WrfcController {
       mode: 'spawn',
       task: reviewTask,
       template: 'reviewer',
-      skipWrfc: true,
+      dangerously_disable_wrfc: true,
     });
 
     chain.reviewerAgentId = reviewerRecord.id;
@@ -488,7 +488,7 @@ export class WrfcController {
       mode: 'spawn',
       task: fixTask,
       template: 'engineer',
-      skipWrfc: true,
+      dangerously_disable_wrfc: true,
     });
 
     chain.fixerAgentId = fixerRecord.id;
@@ -674,7 +674,7 @@ export class WrfcController {
       }
     } else {
       // Gate(s) failed — this chain's review passed, but we spawn a new engineer
-      // chain (without skipWrfc) to address the gate failures.
+      // chain (without dangerously_disable_wrfc) to address the gate failures.
 
       const failedGates = results.filter((r) => !r.passed);
 
@@ -739,7 +739,7 @@ export class WrfcController {
         mode: 'spawn',
         task: followUpTask,
         template: 'engineer',
-        // No skipWrfc — gets its own full WRFC chain
+        // No dangerously_disable_wrfc — gets its own full WRFC chain
       });
 
       // If createChain was called synchronously during spawn, the chain already exists.
