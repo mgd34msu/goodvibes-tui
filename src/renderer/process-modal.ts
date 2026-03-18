@@ -103,15 +103,31 @@ export class ProcessModal {
   public active = false;
   public selectedIndex = 0;
   public entries: ProcessEntry[] = [];
+  private refreshTimer: ReturnType<typeof setInterval> | null = null;
+  private onRefresh: (() => void) | null = null;
+
+  /** Set a callback to trigger re-render on timer tick. */
+  setOnRefresh(fn: () => void): void {
+    this.onRefresh = fn;
+  }
 
   open(): void {
     this.refresh();
     this.active = true;
     this.selectedIndex = 0;
+    if (this.refreshTimer) clearInterval(this.refreshTimer);
+    this.refreshTimer = setInterval(() => {
+      this.refresh();
+      this.onRefresh?.();
+    }, 1000);
   }
 
   close(): void {
     this.active = false;
+    if (this.refreshTimer) {
+      clearInterval(this.refreshTimer);
+      this.refreshTimer = null;
+    }
   }
 
   /** Rebuild entries from live singletons. */

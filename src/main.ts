@@ -286,6 +286,7 @@ async function main() {
   input.setContentWidth(getPromptContentWidth());
   input.filePicker.setOnUpdate(() => bus.emit('render:request'));
   input.agentDetailModal.setOnRefresh(() => bus.emit('render:request'));
+  input.processModal.setOnRefresh(() => bus.emit('render:request'));
 
   // --- Model picker wiring ---
   commandContext.openModelPicker = () => {
