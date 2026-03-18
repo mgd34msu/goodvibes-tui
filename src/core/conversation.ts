@@ -689,22 +689,6 @@ export class ConversationManager {
     this.streamingStartLine = -1;
   }
 
-  /**
-   * estimateTotalTokens - Rough estimate of tokens in all messages.
-   * Uses 4-chars-per-token heuristic.
-   */
-  public estimateTotalTokens(): number {
-    return this.messages.reduce((sum, m) => {
-      if (typeof m.content === 'string') return sum + estimateTokens(m.content);
-      // ContentPart[] — sum text parts only (images add tokens via visual encoding, rough estimate)
-      const textContent = (m.content as ContentPart[])
-        .filter((p): p is { type: 'text'; text: string } => p.type === 'text')
-        .map(p => p.text)
-        .join('');
-      const imageCount = (m.content as ContentPart[]).filter(p => p.type === 'image').length;
-      return sum + estimateTokens(textContent) + imageCount * 1000; // ~1000 tokens per image rough estimate
-    }, 0);
-  }
 
   /**
    * compact - Summarize the conversation to free context window.

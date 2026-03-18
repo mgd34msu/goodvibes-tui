@@ -29,6 +29,12 @@ export class Orchestrator {
   public isThinking = false;
   public thinkingFrame = 0;
   public usage = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 };
+  /**
+   * Input tokens from the most recent LLM response — represents current context window usage.
+   * Includes cache read/write tokens for accurate context window occupancy.
+   * Value is 0 before the first LLM response (context bar shows empty, which is correct).
+   */
+  public lastInputTokens = 0;
   public messageQueue: { text: string; content?: ContentPart[] }[] = [];
 
   private animInterval: ReturnType<typeof setInterval> | null = null;
@@ -260,6 +266,9 @@ export class Orchestrator {
         this.usage.output += response.usage.outputTokens;
         this.usage.cacheRead += response.usage.cacheReadTokens ?? 0;
         this.usage.cacheWrite += response.usage.cacheWriteTokens ?? 0;
+        this.lastInputTokens = response.usage.inputTokens
+          + (response.usage.cacheReadTokens ?? 0)
+          + (response.usage.cacheWriteTokens ?? 0);
 
         this.bus.emit('turn:llm-response', {
           content: response.content,
@@ -300,7 +309,7 @@ export class Orchestrator {
       }
 
       // Token budget warning: check context usage after turn completes
-      const totalTokens = this.conversation.estimateTotalTokens();
+      const totalTokens = this.lastInputTokens;
       const currentModel = providerRegistry.getCurrentModel();
       const maxTokens = currentModel.contextWindow;
       if (maxTokens > 0) {

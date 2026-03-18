@@ -53,7 +53,12 @@ export interface ChatRequest {
 export interface ChatResponse {
   content: string;
   toolCalls: ToolCall[];
-  usage: { inputTokens: number; outputTokens: number; cacheReadTokens?: number; cacheWriteTokens?: number };
+  usage: {
+    inputTokens: number;       // Billed input tokens (excludes cache tokens on Anthropic)
+    outputTokens: number;
+    cacheReadTokens?: number;  // Anthropic: tokens read from prompt cache
+    cacheWriteTokens?: number; // Anthropic: tokens written to prompt cache
+  };
   stopReason: 'end' | 'tool_use' | 'max_tokens' | 'error';
   /** Mercury-2 specific: condensed chain-of-thought, if requested. */
   reasoningSummary?: string;

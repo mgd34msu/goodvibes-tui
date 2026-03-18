@@ -38,9 +38,9 @@ interface AnthropicSSEEvent {
     thinking?: string;
   };
   message?: {
-    usage?: { input_tokens: number; output_tokens: number };
+    usage?: { input_tokens: number; output_tokens: number; cache_read_input_tokens?: number; cache_creation_input_tokens?: number };
   };
-  usage?: { input_tokens?: number; output_tokens?: number };
+  usage?: { input_tokens?: number; output_tokens?: number; cache_read_input_tokens?: number; cache_creation_input_tokens?: number };
 }
 
 /**
@@ -126,6 +126,8 @@ export class AnthropicProvider implements LLMProvider {
       let responseText = '';
       let inputTokens = 0;
       let outputTokens = 0;
+      let cacheReadTokens = 0;
+      let cacheWriteTokens = 0;
       let stopReason: ChatResponse['stopReason'] = 'end';
 
       // Accumulate tool use blocks by index
@@ -188,10 +190,14 @@ export class AnthropicProvider implements LLMProvider {
               if (event.delta?.stop_reason === 'tool_use') stopReason = 'tool_use';
               else if (event.delta?.stop_reason === 'max_tokens') stopReason = 'max_tokens';
               if (event.usage?.output_tokens) outputTokens = event.usage.output_tokens;
+              if (event.usage?.cache_read_input_tokens != null) cacheReadTokens = event.usage.cache_read_input_tokens;
+              if (event.usage?.cache_creation_input_tokens != null) cacheWriteTokens = event.usage.cache_creation_input_tokens;
             } else if (event.type === 'message_start') {
               if (event.message?.usage) {
                 inputTokens = event.message.usage.input_tokens;
                 outputTokens = event.message.usage.output_tokens;
+                cacheReadTokens = event.message.usage.cache_read_input_tokens ?? 0;
+                cacheWriteTokens = event.message.usage.cache_creation_input_tokens ?? 0;
               }
             }
           }
@@ -226,7 +232,7 @@ export class AnthropicProvider implements LLMProvider {
       return {
         content: text,
         toolCalls,
-        usage: { inputTokens, outputTokens },
+        usage: { inputTokens, outputTokens, cacheReadTokens, cacheWriteTokens },
         stopReason,
       };
     });

@@ -77,37 +77,12 @@ describe('ConversationManager', () => {
     });
   });
 
-  describe('estimateTotalTokens', () => {
-    test('returns 0 for empty conversation', () => {
-      expect(cm.estimateTotalTokens()).toBe(0);
-    });
-
-    test('estimates tokens for messages', () => {
-      cm.addUserMessage('hello world'); // 11 chars -> ceil(11/4) = 3
-      expect(cm.estimateTotalTokens()).toBeGreaterThan(0);
-    });
-
-    test('token count grows with more messages', () => {
-      cm.addUserMessage('hello');
-      const t1 = cm.estimateTotalTokens();
-      cm.addAssistantMessage('a longer response text');
-      const t2 = cm.estimateTotalTokens();
-      expect(t2).toBeGreaterThan(t1);
-    });
-  });
-
   describe('resetAll', () => {
     test('resets all messages', () => {
       cm.addUserMessage('test');
       cm.addAssistantMessage('response');
       cm.resetAll();
       expect(cm.getMessagesForLLM()).toEqual([]);
-    });
-
-    test('token estimate is 0 after reset', () => {
-      cm.addUserMessage('test content');
-      cm.resetAll();
-      expect(cm.estimateTotalTokens()).toBe(0);
     });
   });
 

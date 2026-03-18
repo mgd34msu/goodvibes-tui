@@ -429,7 +429,8 @@ async function main() {
           if (Object.values(tools).every(v => v === 'allow')) return true;
         }
         return false;
-      })()
+      })(),
+      orchestrator.lastInputTokens
     );
     // Insert process indicator directly after the input box (top border + content rows + bottom border)
     const inputBoxRows = promptInfo.visibleLines.length + 2;
