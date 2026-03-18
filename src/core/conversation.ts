@@ -476,8 +476,8 @@ export class ConversationManager {
           const trimmed = contentToRender.trimStart();
           if ((trimmed.startsWith('{') || trimmed.startsWith('[')) && contentToRender.length < 100_000) {
             try {
-              JSON.parse(contentToRender);
-              contentToRender = '```json\n' + contentToRender + '\n```';
+              const parsed = JSON.parse(contentToRender);
+              contentToRender = '```json\n' + JSON.stringify(parsed, null, 2) + '\n```';
             } catch {
               // Not valid JSON — render as-is through markdown
             }
