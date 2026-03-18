@@ -31,9 +31,8 @@ export class DiffEngine {
     for (let y = 0; y < newBuffer.height; y++) {
       for (let x = 0; x < newBuffer.width; x++) {
         const oldCell = oldBuffer?.getCell(x, y);
-        const newCell = newBuffer.cells[y][x];
-
-        if (newCell.char === '') continue;
+        const newCell = newBuffer.cells[y]?.[x];
+        if (!newCell || newCell.char === '') continue;
 
         if (this.isCellDifferent(oldCell, newCell)) {
           output += `\x1b[${y + 1};${x + 1}H`;
