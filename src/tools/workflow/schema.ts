@@ -7,13 +7,13 @@ import type { ToolDefinition } from '../../types/tools.ts';
 export const workflowSchema: ToolDefinition = {
   name: 'workflow',
   description:
-    'Manages workflow state machines, automation triggers, and scheduled tasks. ' +
-    'Modes: start (create a workflow instance), status (check workflow state), ' +
-    'transition (move to next state), cancel (stop a workflow), ' +
-    'list (all active workflows), triggers (manage event-driven automations), ' +
-    'schedule (manage recurring task schedules). ' +
-    'Discovery: use mode=list to see active workflows, mode=triggers triggerAction=list to see registered triggers,' +
-    ' mode=schedule scheduleAction=list to see scheduled tasks.',
+    'Internal automation plumbing — NOT for executing tasks or spawning agents. ' +
+    'To run work, use the agent tool instead. ' +
+    'This tool only manages: triggers (event-driven automations that fire shell commands on hook events), ' +
+    'schedule (recurring background commands on intervals), ' +
+    'and workflow state tracking (internal bookkeeping — does not execute anything). ' +
+    'Modes: triggers (manage event-driven automations), schedule (manage recurring tasks), ' +
+    'start/status/transition/cancel/list (state tracking only — no execution).',
   parameters: {
     type: 'object',
     required: ['mode'],
