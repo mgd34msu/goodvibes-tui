@@ -254,7 +254,15 @@ export class ProviderRegistry {
   /** Currently active model definition. */
   getCurrentModel(): ModelDefinition {
     const def = getModelRegistry().find((m) => m.id === this.currentModelId);
-    if (!def) throw new Error(`Current model '${this.currentModelId}' not in registry.`);
+    if (!def) {
+      // Fall back to first selectable model instead of crashing
+      const fallback = getModelRegistry().find((m) => m.selectable);
+      if (fallback) {
+        this.currentModelId = fallback.id;
+        return fallback;
+      }
+      throw new Error(`Current model '${this.currentModelId}' not in registry.`);
+    }
     return def;
   }
 
