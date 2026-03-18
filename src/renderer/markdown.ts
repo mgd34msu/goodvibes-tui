@@ -458,6 +458,11 @@ export function renderInlineMarkdown(text: string): InlineToken[] {
         i = end + 3;
         continue;
       }
+      // No closing *** found — emit the leading * as plain text so the ** bold
+      // check can handle the remaining ** on the next iteration.
+      tokens.push({ type: 'text', text: '*', style: {} });
+      i += 1;
+      continue;
     }
 
     // Bold: **text**
@@ -471,7 +476,14 @@ export function renderInlineMarkdown(text: string): InlineToken[] {
     }
 
     // Italic: *text* or _text_
-    if ((text[i] === '*' || text[i] === '_') && text[i - 1] !== '*') {
+    // Guard: text[i - 1] !== '*' prevents the second * of ** from starting italic.
+    // Guard: text[i + 1] !== text[i] prevents the first * of ** (or _ of __) from
+    // starting italic when bold/underscore-bold detection failed (e.g. unclosed **).
+    if (
+      (text[i] === '*' || text[i] === '_') &&
+      text[i - 1] !== text[i] &&
+      text[i + 1] !== text[i]
+    ) {
       const closer = text[i];
       const end = text.indexOf(closer, i + 1);
       if (end !== -1 && end > i + 1) {
