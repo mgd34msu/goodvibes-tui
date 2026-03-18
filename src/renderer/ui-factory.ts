@@ -184,7 +184,8 @@ export class UIFactory {
     provider?: string,
     contextWindow?: number,
     compactThreshold?: number,
-    dangerMode?: boolean
+    dangerMode?: boolean,
+    lastInputTokens?: number
   ): Line[] {
     const lines: Line[] = [];
     const promptLines = prompt.split('\n');
@@ -257,10 +258,11 @@ export class UIFactory {
     lines.push(this.stringToLine(statsLine, width, { fg: isRecentlyCopied ? '81' : '244', bold: isRecentlyCopied }));
     // Context usage progress bar
     if (contextWindow && contextWindow > 0) {
+      const ctxTokens = lastInputTokens ?? 0;
       const label = '   Context Usage: ';
-      const suffix = ` [ ${fmtNum(total)} / ${fmtNum(contextWindow)} ]`;
+      const suffix = ` [ ${fmtNum(ctxTokens)} / ${fmtNum(contextWindow)} ]`;
       const barWidth = Math.max(10, Math.min(30, width - getDisplayWidth(label) - getDisplayWidth(suffix) - 8));
-      const ctxPct = Math.min(1, total / contextWindow);
+      const ctxPct = Math.min(1, ctxTokens / contextWindow);
       lines.push(createBaseLine());
       lines.push(this.createProgressBarLine(label, ctxPct, barWidth, width, suffix));
     }
