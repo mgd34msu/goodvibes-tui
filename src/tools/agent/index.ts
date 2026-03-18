@@ -229,6 +229,7 @@ export const agentTool: Tool = {
             task: record.task,
             template: record.template,
             tools: record.tools,
+            note: 'Agent running in background. WRFC review/fix events appear in conversation automatically. End your response now — do not call wait or block.',
           }),
         };
       }

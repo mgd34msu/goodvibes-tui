@@ -14,7 +14,7 @@ export const AGENT_TOOL_SCHEMA: ToolDefinition = {
     'get (detailed agent info including messages), ' +
     'budget (token usage for an agent), ' +
     'plan (execution plan: task + template + tools), ' +
-    'wait (block until agent completes, with timeout), ' +
+    'wait (returns current status — non-blocking), ' +
     'message (send a message to an agent).' +
     ' Discovery: use mode=list to see all agents and their status, mode=templates to see available agent templates.',
   parameters: {
