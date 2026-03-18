@@ -223,7 +223,7 @@ export const agentTool: Tool = {
 
         return {
           success: true,
-          output: `Agent ${record.id} spawned (${record.template}). Running in background — end your response now.`,
+          output: `Agent ${record.id} spawned (${record.template}). Running in background.`,
         };
       }
 

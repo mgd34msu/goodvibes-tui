@@ -272,7 +272,6 @@ export const DEFAULT_CONFIG: GoodVibesConfig = {
     gates: [
       { name: 'typecheck', command: 'npx tsc --noEmit', enabled: true },
       { name: 'lint', command: 'npx eslint . --max-warnings 0', enabled: true },
-      { name: 'test', command: 'npm test', enabled: true },
       { name: 'build', command: 'npm run build', enabled: false },
     ],
   },

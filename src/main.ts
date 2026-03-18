@@ -193,7 +193,7 @@ async function main() {
 
   // WRFC chain lifecycle — bubble events to conversation
   unsubs.push(bus.on('wrfc:chain-created', ({ chainId, task }: { chainId: string; task: string }) => {
-    conversation.addSystemMessage(`[WRFC] Chain ${chainId.slice(0, 12)} started: ${task.slice(0, 60)}`);
+    conversation.addSystemMessage(`[WRFC] Chain ${chainId} started: ${task}`);
     bus.emit('render:request');
   }));
 
