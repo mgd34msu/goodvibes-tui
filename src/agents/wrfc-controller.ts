@@ -1,5 +1,6 @@
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
+import { WrfcWorkmap } from './wrfc-workmap.ts';
 import { EventBus } from '../core/event-bus.ts';
 import { AgentManager, type AgentRecord } from '../tools/agent/index.ts';
 import { type CompletionReport, type ReviewerReport, parseCompletionReport } from './completion-report.ts';
@@ -60,9 +61,13 @@ export class WrfcController {
   private activeChainCount = 0;
   /** Pending parent chain IDs for follow-up agents: agentId → parentChainId. */
   private pendingParentChainIds = new Map<string, string>();
+  private sessionId: string;
+  private workmap: WrfcWorkmap;
 
   private constructor(eventBus: EventBus) {
     this.eventBus = eventBus;
+    this.sessionId = crypto.randomUUID().slice(0, 8);
+    this.workmap = new WrfcWorkmap(this.sessionId);
     this.setupListeners();
   }
 
@@ -173,6 +178,10 @@ export class WrfcController {
     return chain;
   }
 
+  getSessionId(): string { return this.sessionId; }
+
+  getWorkmap(): WrfcWorkmap { return this.workmap; }
+
   getChain(chainId: string): WrfcChain | null {
     return this.chains.get(chainId) ?? null;
   }
@@ -280,6 +289,7 @@ export class WrfcController {
 
       if (chain.state === 'engineering') {
         chain.engineerReport = report;
+        this.workmap.append({ ts: new Date().toISOString(), wrfcId: chain.id, event: 'engineer_complete', agentId, task: chain.task });
       }
 
       this.startReview(chain, report);
@@ -387,6 +397,12 @@ export class WrfcController {
       passed: review.passed,
     });
 
+    this.workmap.append({
+      ts: new Date().toISOString(), wrfcId: chain.id, event: 'review_complete',
+      agentId: chain.reviewerAgentId, score: review.score, passed: review.score >= threshold,
+      issues: review.issues?.slice(0, 10).map(i => ({ severity: i.severity, description: i.description, file: i.file })),
+    });
+
     logger.debug('WrfcController.processReview', {
       chainId: chain.id,
       score: review.score,
@@ -456,6 +472,8 @@ export class WrfcController {
     chain.fixerAgentId = fixerRecord.id;
     chain.allAgentIds.push(fixerRecord.id);
     fixerRecord.wrfcId = chain.id;
+
+    this.workmap.append({ ts: new Date().toISOString(), wrfcId: chain.id, event: 'fix_started', agentId: fixerRecord.id, attempt: chain.fixAttempts });
 
     logger.debug('WrfcController.startFix', {
       chainId: chain.id,
@@ -613,7 +631,12 @@ export class WrfcController {
     const allPassed = results.length === 0 || results.every((r) => r.passed);
     const autoCommit = configManager.get('wrfc.autoCommit') as boolean;
 
+    for (const r of results) {
+      this.workmap.append({ ts: new Date().toISOString(), wrfcId: chain.id, event: 'gate_result', gate: r.gate, passed: r.passed, gateOutput: r.output.slice(0, 200) });
+    }
+
     if (allPassed) {
+      this.workmap.append({ ts: new Date().toISOString(), wrfcId: chain.id, event: 'chain_passed' });
       chain.gatesPassed = true;
       if (autoCommit) {
         await this.autoCommit(chain);
@@ -869,6 +892,8 @@ export class WrfcController {
 
     chain.error = reason;
     chain.completedAt = Date.now();
+
+    this.workmap.append({ ts: new Date().toISOString(), wrfcId: chain.id, event: 'chain_failed', reason });
 
     this.eventBus.emit('wrfc:chain-failed', { chainId: chain.id, reason });
 

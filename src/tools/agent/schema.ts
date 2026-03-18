@@ -15,7 +15,9 @@ export const AGENT_TOOL_SCHEMA: ToolDefinition = {
     'budget (token usage for an agent), ' +
     'plan (execution plan: task + template + tools), ' +
     'wait (returns current status — non-blocking), ' +
-    'message (send a message to an agent).' +
+    'message (send a message to an agent), ' +
+    'wrfc-chains (list all WRFC chains in current session with status/scores), ' +
+    'wrfc-history (detailed event history for a specific WRFC chain — reviews, scores, issues, gates).' +
     ' Discovery: use mode=list to see all agents and their status, mode=templates to see available agent templates.',
   parameters: {
     type: 'object',
@@ -23,7 +25,7 @@ export const AGENT_TOOL_SCHEMA: ToolDefinition = {
     properties: {
       mode: {
         type: 'string',
-        enum: ['spawn', 'status', 'cancel', 'list', 'templates', 'get', 'budget', 'plan', 'wait', 'message'],
+        enum: ['spawn', 'status', 'cancel', 'list', 'templates', 'get', 'budget', 'plan', 'wait', 'message', 'wrfc-chains', 'wrfc-history'],
         description: 'Operation mode.',
       },
       // mode: spawn
@@ -77,13 +79,18 @@ export const AGENT_TOOL_SCHEMA: ToolDefinition = {
         type: 'string',
         description: 'Message content to send to an agent (mode: message).',
       },
+      // mode: wrfc-history
+      wrfcId: {
+        type: 'string',
+        description: 'WRFC chain ID for wrfc-history mode.',
+      },
     },
   },
 };
 
 /** Input shape for the agent tool. */
 export interface AgentInput {
-  mode: 'spawn' | 'status' | 'cancel' | 'list' | 'templates' | 'get' | 'budget' | 'plan' | 'wait' | 'message';
+  mode: 'spawn' | 'status' | 'cancel' | 'list' | 'templates' | 'get' | 'budget' | 'plan' | 'wait' | 'message' | 'wrfc-chains' | 'wrfc-history';
   // spawn
   task?: string;
   template?: string;
@@ -98,4 +105,6 @@ export interface AgentInput {
   timeoutMs?: number;
   // message
   message?: string;
+  // wrfc-history
+  wrfcId?: string;
 }
