@@ -10,7 +10,7 @@ import type { HookEvent } from '../../hooks/types.ts';
 function makeEvent(path: string, phase: HookEvent['phase'] = 'Post'): HookEvent {
   const [, category = 'tool', specific = '*'] = path.split(':');
   return {
-    path,
+    path: path as HookEvent['path'],
     phase,
     category: category as HookEvent['category'],
     specific,

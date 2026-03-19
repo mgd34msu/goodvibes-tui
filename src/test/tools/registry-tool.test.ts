@@ -37,7 +37,7 @@ function makeTool(name: string, description = `Mock tool: ${name}`): Tool {
 async function run(
   tool: ReturnType<typeof createRegistryTool>,
   args: Record<string, unknown>,
-) {
+): Promise<Omit<Awaited<ReturnType<typeof tool.execute>>, 'callId'> & { parsed?: any }> {
   const result = await tool.execute(args);
   if (!result.success) return result;
   return { ...result, parsed: JSON.parse(result.output!) };

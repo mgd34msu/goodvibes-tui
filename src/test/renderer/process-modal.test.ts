@@ -15,7 +15,7 @@ beforeEach(() => {
 
 function seedAgent(task: string, status: 'running' | 'pending' = 'running'): string {
   const am = AgentManager.getInstance();
-  const rec = am.spawn({ task, template: 'default', tools: [] });
+  const rec = am.spawn({ mode: 'spawn', task, template: 'default', tools: [] });
   // Force status (spawn sets it to pending, then running — we update directly)
   (am as any).agents.get(rec.id).status = status;
   return rec.id;
@@ -55,7 +55,7 @@ describe('ProcessModal state', () => {
 
   test('refresh() skips completed agents', () => {
     const am = AgentManager.getInstance();
-    const rec = am.spawn({ task: 'Done task', template: 'default', tools: [] });
+    const rec = am.spawn({ mode: 'spawn', task: 'Done task', template: 'default', tools: [] });
     (am as any).agents.get(rec.id).status = 'completed';
     const modal = new ProcessModal();
     modal.refresh();

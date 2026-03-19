@@ -196,6 +196,7 @@ describe('web-tree-sitter', () => {
     // init() initialises the WASM runtime; call it and verify it does not throw
     let threw = false;
     try {
+      // @ts-ignore — web-tree-sitter typings don't include init() but it exists at runtime
       await Parser.init();
     } catch {
       threw = true;

@@ -417,7 +417,7 @@ describe('loadLanguageConfigs with project override', () => {
       configs = loadLanguageConfigs() as Map<string, { lsp?: { command?: string } }>;
     }).not.toThrow();
     // Python config falls back to default
-    const py = configs?.get('python');
+    const py = (configs as Map<string, { lsp?: { command?: string } }> | null)?.get('python');
     expect(py?.lsp?.command).toBe('pyright-langserver');
   });
 

@@ -91,7 +91,7 @@ describe('ProcessManager — getStatus', () => {
     const result = pm.spawn('sleep 5', undefined, undefined);
     const entry = pm.getStatus(result.process_id!);
     expect(entry).toBeDefined();
-    expect(entry!.id).toBe(result.process_id);
+    expect(entry!.id).toBe(result.process_id as string);
     expect(entry!.cmd).toBe('sleep 5');
   });
 

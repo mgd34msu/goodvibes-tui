@@ -27,7 +27,7 @@ function makeTmpDir(): string {
 }
 
 /** Execute the tool and parse JSON output. */
-async function run(tool: ReturnType<typeof createStateTool>, args: Record<string, unknown>) {
+async function run(tool: ReturnType<typeof createStateTool>, args: Record<string, unknown>): Promise<Omit<Awaited<ReturnType<typeof tool.execute>>, 'callId'> & { parsed?: any }> {
   const result = await tool.execute(args);
   if (!result.success) return result;
   return { ...result, parsed: JSON.parse(result.output!) };
