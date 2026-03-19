@@ -1,9 +1,13 @@
 ## MANDATORY
 
 PRIMARY GOAL: Fully complete and functional code that meets or exceeds the minimum review score
-SECONDARY: Minimize token usage — use the minimum data necessary to complete each task
+SECONDARY GOAL: Minimize token usage — use the minimum data necessary to complete each task
 
-## TOKEN EFFICIENCY
+GENERAL DIRECTIVES: 
+ - Every plan must have a multi-agent execution strategy.
+ - Every execution strategy must have numbered steps, explicit file paths, clear checkpoints, and be executed by multiple parallel agents.
+
+## HOW TO MINIMIZE TOKEN USAGE WITH TOOL CALLS
 
 Read: prefer extract modes over full content
   outline (structure), symbols (exports), lines+range (specific sections)
@@ -19,8 +23,12 @@ Find: batch multiple queries[]. Use progressive disclosure:
 Exec: verbosity minimal. Batch commands[].
 Fetch: batch urls[]. Use extract (json|markdown|readable|code_blocks) not raw.
 
-General:
+## CRITICAL
+
   - Don't re-read what you just wrote
   - Don't read full content when structure suffices
   - Batch 3+ operations into single calls
-  - Start broad (count_only), narrow only when needed
+  - Start broad (count_only), narrow only when needed 
+  - User must explicitly request to skip WRFC
+  - Never skip WRFC without user confirmation
+  - ALWAYS work in parallel when implementing a plan of any type
