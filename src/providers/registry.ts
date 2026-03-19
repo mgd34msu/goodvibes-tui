@@ -23,7 +23,7 @@ export interface ModelDefinition {
   contextWindow: number;
   /** Whether the user can select this model in the model picker. */
   selectable: boolean;
-  /** Available reasoning effort levels (InceptionLabs Mercury-2 only). */
+  /** Available reasoning effort levels for this model (controls UI effort picker). */
   reasoningEffort?: string[];
 }
 
@@ -105,6 +105,7 @@ const BUILTIN_MODEL_REGISTRY: ModelDefinition[] = [
     capabilities: { toolCalling: true, codeEditing: true, reasoning: true, multimodal: true },
     contextWindow: 1000000,
     selectable: true,
+    reasoningEffort: ['low', 'medium', 'high'],
   },
   {
     id: 'gemini-3-flash',
@@ -132,6 +133,7 @@ const BUILTIN_MODEL_REGISTRY: ModelDefinition[] = [
     capabilities: { toolCalling: true, codeEditing: true, reasoning: true, multimodal: true },
     contextWindow: 1000000,
     selectable: true,
+    reasoningEffort: ['low', 'medium', 'high'],
   },
 
   // --- OpenRouter (free) ---
@@ -143,6 +145,7 @@ const BUILTIN_MODEL_REGISTRY: ModelDefinition[] = [
     capabilities: { toolCalling: true, codeEditing: true, reasoning: true, multimodal: false },
     contextWindow: 200000,
     selectable: true,
+    reasoningEffort: ['low', 'medium', 'high'],
   },
   {
     id: 'arcee-ai/trinity-mini:free',
@@ -152,6 +155,7 @@ const BUILTIN_MODEL_REGISTRY: ModelDefinition[] = [
     capabilities: { toolCalling: true, codeEditing: true, reasoning: true, multimodal: false },
     contextWindow: 131072,
     selectable: true,
+    reasoningEffort: ['low', 'medium', 'high'],
   },
   {
     id: 'minimax/minimax-m2.5:free',
@@ -161,6 +165,7 @@ const BUILTIN_MODEL_REGISTRY: ModelDefinition[] = [
     capabilities: { toolCalling: true, codeEditing: true, reasoning: true, multimodal: false },
     contextWindow: 196608,
     selectable: true,
+    reasoningEffort: ['low', 'medium', 'high'],
   },
   {
     id: 'nvidia/nemotron-3-super-120b-a12b:free',
@@ -170,6 +175,7 @@ const BUILTIN_MODEL_REGISTRY: ModelDefinition[] = [
     capabilities: { toolCalling: true, codeEditing: true, reasoning: true, multimodal: false },
     contextWindow: 262144,
     selectable: true,
+    reasoningEffort: ['low', 'medium', 'high'],
   },
   {
     id: 'nvidia/nemotron-3-nano-30b-a3b:free',
@@ -179,6 +185,7 @@ const BUILTIN_MODEL_REGISTRY: ModelDefinition[] = [
     capabilities: { toolCalling: true, codeEditing: true, reasoning: true, multimodal: false },
     contextWindow: 256000,
     selectable: true,
+    reasoningEffort: ['low', 'medium', 'high'],
   },
   {
     id: 'nvidia/nemotron-nano-12b-v2-vl:free',
@@ -188,6 +195,7 @@ const BUILTIN_MODEL_REGISTRY: ModelDefinition[] = [
     capabilities: { toolCalling: true, codeEditing: true, reasoning: true, multimodal: true },
     contextWindow: 128000,
     selectable: true,
+    reasoningEffort: ['low', 'medium', 'high'],
   },
   {
     id: 'nvidia/nemotron-nano-9b-v2:free',
@@ -197,6 +205,7 @@ const BUILTIN_MODEL_REGISTRY: ModelDefinition[] = [
     capabilities: { toolCalling: true, codeEditing: true, reasoning: true, multimodal: false },
     contextWindow: 128000,
     selectable: true,
+    reasoningEffort: ['low', 'medium', 'high'],
   },
   {
     id: 'openai/gpt-oss-120b:free',
@@ -206,6 +215,7 @@ const BUILTIN_MODEL_REGISTRY: ModelDefinition[] = [
     capabilities: { toolCalling: true, codeEditing: true, reasoning: true, multimodal: false },
     contextWindow: 131072,
     selectable: true,
+    reasoningEffort: ['low', 'medium', 'high'],
   },
   {
     id: 'openai/gpt-oss-20b:free',
@@ -215,6 +225,7 @@ const BUILTIN_MODEL_REGISTRY: ModelDefinition[] = [
     capabilities: { toolCalling: true, codeEditing: true, reasoning: true, multimodal: false },
     contextWindow: 131072,
     selectable: true,
+    reasoningEffort: ['low', 'medium', 'high'],
   },
   {
     id: 'stepfun/step-3.5-flash:free',
@@ -224,6 +235,7 @@ const BUILTIN_MODEL_REGISTRY: ModelDefinition[] = [
     capabilities: { toolCalling: true, codeEditing: true, reasoning: true, multimodal: false },
     contextWindow: 256000,
     selectable: true,
+    reasoningEffort: ['low', 'medium', 'high'],
   },
   {
     id: 'z-ai/glm-4.5-air:free',
@@ -233,6 +245,7 @@ const BUILTIN_MODEL_REGISTRY: ModelDefinition[] = [
     capabilities: { toolCalling: true, codeEditing: true, reasoning: true, multimodal: false },
     contextWindow: 131072,
     selectable: true,
+    reasoningEffort: ['low', 'medium', 'high'],
   },
 
   // --- Anthropic ---
@@ -244,6 +257,7 @@ const BUILTIN_MODEL_REGISTRY: ModelDefinition[] = [
     capabilities: { toolCalling: true, codeEditing: true, reasoning: true, multimodal: true },
     contextWindow: 1000000,
     selectable: true,
+    reasoningEffort: ['low', 'medium', 'high'],
   },
   {
     id: 'claude-sonnet-4-6',
@@ -253,6 +267,7 @@ const BUILTIN_MODEL_REGISTRY: ModelDefinition[] = [
     capabilities: { toolCalling: true, codeEditing: true, reasoning: true, multimodal: true },
     contextWindow: 1000000,
     selectable: true,
+    reasoningEffort: ['low', 'medium', 'high'],
   },
   {
     id: 'claude-haiku-4-5',
@@ -325,6 +340,7 @@ export class ProviderRegistry {
         apiKey: apiKey('inceptionlabs'),
         defaultModel: 'mercury-2',
         models: ['mercury-2', 'mercury-edit'],
+        reasoningFormat: 'mercury',
       }),
     );
 
@@ -347,6 +363,7 @@ export class ProviderRegistry {
           'stepfun/step-3.5-flash:free',
           'z-ai/glm-4.5-air:free',
         ],
+        reasoningFormat: 'openrouter',
       }),
     );
 
@@ -376,6 +393,8 @@ export class ProviderRegistry {
     for (const server of servers) {
       // Skip if a non-discovered provider already holds this name
       if (this.providers.has(server.name)) continue;
+      // Skip servers with no models — defaultModel would be undefined
+      if (server.models.length === 0) continue;
 
       const provider = new OpenAICompatProvider({
         name: server.name,
@@ -400,7 +419,7 @@ export class ProviderRegistry {
             reasoning: false,
             multimodal: false,
           },
-          contextWindow: 0,
+          contextWindow: 8192,
           selectable: true,
         });
       }

@@ -1069,10 +1069,16 @@ export class InputHandler {
             const mode = this.modelPicker.mode;
             const idx = this.modelPicker.selectedIndex;
             if (mode === 'model') {
-              // Model chosen — move to effort picker
+              // Model chosen — move to effort picker only if model supports it
               const selected = this.modelPicker.models[idx];
               if (selected) {
-                this.modelPicker.showEffortPicker(selected, this.commandContext?.runtime.reasoningEffort ?? 'medium');
+                if (selected.reasoningEffort && selected.reasoningEffort.length > 0) {
+                  this.modelPicker.showEffortPicker(selected, this.commandContext?.runtime.reasoningEffort ?? 'medium');
+                } else {
+                  // No reasoning support — complete immediately with current effort
+                  this.bus.emit('model-picker:complete', { model: selected, effort: this.commandContext?.runtime.reasoningEffort ?? 'medium' });
+                  this.modelPicker.close();
+                }
               }
             } else if (mode === 'provider') {
               // Provider chosen — show that provider's models

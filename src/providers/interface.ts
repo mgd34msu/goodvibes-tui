@@ -42,7 +42,7 @@ export interface ChatRequest {
   maxTokens?: number;
   signal?: AbortSignal;
   systemPrompt?: string;
-  /** Mercury-2 specific: controls reasoning depth. */
+  /** Controls reasoning depth for models that support it. Format varies by provider. */
   reasoningEffort?: 'instant' | 'low' | 'medium' | 'high';
   /** Mercury-2 specific: whether to include a reasoning summary in the response. */
   reasoningSummary?: boolean;

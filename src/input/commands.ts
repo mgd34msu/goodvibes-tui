@@ -12,6 +12,7 @@ import { getProfileManager } from '../profiles/manager.ts';
 import type { BlockMeta } from '../core/conversation.ts';
 import { ServiceRegistry } from '../config/service-registry.ts';
 import { getSecretsManager } from '../config/secrets.ts';
+import { scan } from '../discovery/index.ts';
 
 let _serviceRegistry: ServiceRegistry | undefined;
 function getServiceRegistry(): ServiceRegistry {
@@ -648,10 +649,15 @@ export function registerBuiltinCommands(registry: CommandRegistry): void {
     name: 'effort',
     aliases: ['e'],
     description: 'Show or set reasoning effort level',
-    usage: '[instant|low|medium|high]',
+    usage: '[level]',
     handler(args, ctx) {
-      const VALID_LEVELS = ['instant', 'low', 'medium', 'high'] as const;
-      type EffortLevel = typeof VALID_LEVELS[number];
+      const currentModel = ctx.providerRegistry.getCurrentModel();
+      const VALID_LEVELS = currentModel.reasoningEffort ?? [];
+
+      if (VALID_LEVELS.length === 0) {
+        ctx.print(`Current model (${currentModel.displayName}) does not support configurable reasoning effort.`);
+        return;
+      }
 
       if (args.length === 0) {
         const current = (ctx.runtime.reasoningEffort || ctx.configManager.get('provider.reasoningEffort') || 'medium') as string;
@@ -665,11 +671,11 @@ export function registerBuiltinCommands(registry: CommandRegistry): void {
           const items: SelectionItem[] = VALID_LEVELS.map(level => ({
             id: level,
             label: level,
-            detail: level === current ? `\u25c9 ${descriptions[level]}` : descriptions[level],
+            detail: level === current ? `\u25c9 ${descriptions[level] ?? level}` : (descriptions[level] ?? level),
           }));
           ctx.openSelection('Reasoning Effort', items, { preSelectId: current, allowSearch: false }, (result) => {
             if (!result) return;
-            const level = result.item.id as EffortLevel;
+            const level = result.item.id as 'instant' | 'low' | 'medium' | 'high';
             ctx.runtime.reasoningEffort = level;
             ctx.configManager.set('provider.reasoningEffort', level);
             ctx.print(`Reasoning effort set to: ${level}`);
@@ -685,13 +691,13 @@ export function registerBuiltinCommands(registry: CommandRegistry): void {
           `  Gemini:     thinking_config.thinking_budget = ${budget}`,
           `  GPT-5:      (no-op)`,
           ``,
-          `Levels: instant (fastest/cheapest), low, medium (default), high (most thorough)`,
+          `Levels: ${VALID_LEVELS.join(', ')}`,
         ];
         ctx.print(lines.join('\n'));
         return;
       }
 
-      const level = args[0] as EffortLevel;
+      const level = args[0] as 'instant' | 'low' | 'medium' | 'high';
       if (!VALID_LEVELS.includes(level)) {
         ctx.print(`Invalid effort level: ${level}\nValid levels: ${VALID_LEVELS.join(', ')}`);
         return;
@@ -1623,9 +1629,6 @@ export function registerBuiltinCommands(registry: CommandRegistry): void {
     aliases: [],
     description: 'Scan localhost and LAN for local LLM servers',
     async handler(_args, ctx) {
-      // Dynamic import to avoid adding startup cost
-      const { scan } = await import('../discovery/index.ts');
-
       ctx.print('Scanning for local LLM servers...');
       ctx.renderRequest();
 

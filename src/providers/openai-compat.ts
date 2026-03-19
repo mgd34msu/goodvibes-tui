@@ -17,6 +17,8 @@ export interface OpenAICompatOptions {
   models: string[];
   /** Optional extra HTTP headers sent with every request to this provider. */
   defaultHeaders?: Record<string, string>;
+  /** How to send reasoning params. Default: 'none' (don't send). */
+  reasoningFormat?: 'mercury' | 'openrouter' | 'none';
 }
 
 /**
@@ -30,11 +32,13 @@ export class OpenAICompatProvider implements LLMProvider {
 
   private client: OpenAI;
   private defaultModel: string;
+  private reasoningFormat: 'mercury' | 'openrouter' | 'none';
 
   constructor(opts: OpenAICompatOptions) {
     this.name = opts.name;
     this.models = opts.models;
     this.defaultModel = opts.defaultModel;
+    this.reasoningFormat = opts.reasoningFormat ?? 'none';
     this.client = new OpenAI({
       apiKey: opts.apiKey,
       baseURL: opts.baseURL,
@@ -66,10 +70,16 @@ export class OpenAICompatProvider implements LLMProvider {
       const openaiMessages = toOpenAIMessages(messages, systemPrompt);
       const openaiTools = tools && tools.length > 0 ? toOpenAITools(tools) : undefined;
 
-      // Mercury-2 extra params passed as additional body properties
+      // Provider-specific reasoning params
       const extraBody: Record<string, unknown> = {};
-      if (reasoningEffort) extraBody['reasoning_effort'] = reasoningEffort;
-      if (reasoningSummary) {
+      if (reasoningEffort && this.reasoningFormat === 'mercury') {
+        extraBody['reasoning_effort'] = reasoningEffort;
+      } else if (reasoningEffort && this.reasoningFormat === 'openrouter') {
+        extraBody['reasoning'] = { effort: reasoningEffort };
+      }
+      // reasoningFormat === 'none' or undefined: don't send anything
+
+      if (reasoningSummary && this.reasoningFormat === 'mercury') {
         extraBody['reasoning_summary'] = true;
         // Wait for the full reasoning summary before streaming text
         extraBody['reasoning_summary_wait'] = true;

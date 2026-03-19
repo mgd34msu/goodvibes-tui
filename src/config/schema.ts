@@ -332,7 +332,7 @@ export const CONFIG_SCHEMA: ConfigSetting[] = [
     type: 'enum',
     default: 'medium',
     description: 'Reasoning effort level for models that support it',
-    enumValues: ['instant', 'low', 'medium', 'high'],
+    enumValues: ['instant', 'low', 'medium', 'high'], // Note: per-model levels may differ; /effort command uses model-specific list
   },
   {
     key: 'provider.model',
