@@ -1,4 +1,5 @@
 import type { LLMProvider } from './interface.ts';
+import type { DiscoveredServer } from '../discovery/scanner.ts';
 import { OpenAIProvider } from './openai.ts';
 import { OpenAICompatProvider } from './openai-compat.ts';
 import { AnthropicProvider } from './anthropic.ts';
@@ -267,6 +268,9 @@ const BUILTIN_MODEL_REGISTRY: ModelDefinition[] = [
 /** Mutable array of custom-loaded model definitions. */
 let customModels: ModelDefinition[] = [];
 
+/** Mutable array of discovered (scanned) model definitions — lowest priority. */
+let discoveredModels: ModelDefinition[] = [];
+
 /**
  * Returns the combined model registry: custom models take precedence over built-ins
  * when a custom model has the same ID as a built-in.
@@ -275,7 +279,12 @@ export function getModelRegistry(): ModelDefinition[] {
   const builtinFiltered = BUILTIN_MODEL_REGISTRY.filter(
     (b) => !customModels.some((c) => c.id === b.id),
   );
-  return [...customModels, ...builtinFiltered];
+  const discoveredFiltered = discoveredModels.filter(
+    (d) =>
+      !BUILTIN_MODEL_REGISTRY.some((b) => b.id === d.id) &&
+      !customModels.some((c) => c.id === d.id),
+  );
+  return [...customModels, ...builtinFiltered, ...discoveredFiltered];
 }
 
 /**
@@ -292,6 +301,7 @@ export const MODEL_REGISTRY: ModelDefinition[] = BUILTIN_MODEL_REGISTRY;
 export class ProviderRegistry {
   private providers: Map<string, LLMProvider> = new Map();
   private currentModelId: string;
+  private discoveredProviderNames: Set<string> = new Set();
 
   constructor() {
     this.currentModelId = config.model ?? 'openrouter/free';
@@ -348,6 +358,53 @@ export class ProviderRegistry {
   /** Register a provider. Overwrites any existing entry with the same name. */
   register(provider: LLMProvider): void {
     this.providers.set(provider.name, provider);
+  }
+
+  /**
+   * Register providers discovered by the local LLM scanner.
+   * Clears previously discovered providers before re-registering.
+   * Does not overwrite built-in or custom-loaded providers/models.
+   */
+  registerDiscoveredProviders(servers: DiscoveredServer[]): void {
+    // Unregister previously discovered providers
+    for (const name of this.discoveredProviderNames) {
+      this.providers.delete(name);
+    }
+    this.discoveredProviderNames.clear();
+    discoveredModels = [];
+
+    for (const server of servers) {
+      // Skip if a non-discovered provider already holds this name
+      if (this.providers.has(server.name)) continue;
+
+      const provider = new OpenAICompatProvider({
+        name: server.name,
+        baseURL: server.baseURL,
+        apiKey: '',
+        defaultModel: server.models[0],
+        models: server.models,
+      });
+
+      this.providers.set(server.name, provider);
+      this.discoveredProviderNames.add(server.name);
+
+      for (const modelId of server.models) {
+        discoveredModels.push({
+          id: modelId,
+          provider: server.name,
+          displayName: modelId,
+          description: `Discovered local model on ${server.baseURL}`,
+          capabilities: {
+            toolCalling: true,
+            codeEditing: true,
+            reasoning: false,
+            multimodal: false,
+          },
+          contextWindow: 0,
+          selectable: true,
+        });
+      }
+    }
   }
 
   /** Retrieve a provider by name. Throws if not found. */
@@ -532,6 +589,7 @@ export function getProviderRegistry(): ProviderRegistry {
 export function _resetProviderRegistryForTesting(): void {
   _providerRegistry = undefined;
   customModels = [];
+  discoveredModels = [];
 }
 
 // Note: this Proxy only traps `get` and `has`. Direct property assignments

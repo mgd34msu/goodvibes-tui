@@ -1616,6 +1616,51 @@ export function registerBuiltinCommands(registry: CommandRegistry): void {
       }
     },
   });
+
+  // ── /scan ─────────────────────────────────────────────────────
+  registry.register({
+    name: 'scan',
+    aliases: [],
+    description: 'Scan localhost and LAN for local LLM servers',
+    async handler(_args, ctx) {
+      // Dynamic import to avoid adding startup cost
+      const { scan } = await import('../discovery/index.ts');
+
+      ctx.print('Scanning for local LLM servers...');
+      ctx.renderRequest();
+
+      const result = await scan();
+
+      if (result.servers.length === 0) {
+        ctx.print(
+          `[Scan] No local LLM servers found (scanned ${result.scannedHosts} hosts, ` +
+          `${result.scannedPorts} ports in ${Math.round(result.durationMs / 1000)}s)`,
+        );
+      } else {
+        const lines = [
+          `[Scan] Found ${result.servers.length} server(s) in ${Math.round(result.durationMs / 1000)}s:`,
+          '',
+          ...result.servers.map((s) =>
+            `  ${s.name.padEnd(30)} ${s.models.length} model(s)  ${s.host}:${s.port}`,
+          ),
+          '',
+          'Use /model to select a discovered model.',
+        ];
+        ctx.print(lines.join('\n'));
+      }
+
+      // Register discovered providers into the registry
+      try {
+        ctx.providerRegistry.registerDiscoveredProviders(result.servers);
+      } catch (err) {
+        ctx.print(
+          `[Scan] Warning: failed to register some providers: ${(err as Error).message}`,
+        );
+      }
+
+      ctx.renderRequest();
+    },
+  });
 }
 
 /** Coerce a string value to the appropriate type for a config setting. */

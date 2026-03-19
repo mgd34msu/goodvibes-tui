@@ -44,6 +44,7 @@ import { renderProcessModal } from './renderer/process-modal.ts';
 import { renderAgentDetailModal } from './renderer/agent-detail-modal.ts';
 import { renderLiveTailModal } from './renderer/live-tail-modal.ts';
 import { renderContextInspector } from './renderer/context-inspector.ts';
+import { scan } from './discovery/index.ts';
 
 function loadSystemPrompt(): string {
   return _loadSystemPrompt(
@@ -708,6 +709,28 @@ async function main() {
   // Initial render
   conversation.rebuildHistory();
   render();
+
+  // --- Background local LLM discovery ---
+  scan().then((result) => {
+    if (result.servers.length > 0) {
+      // Register discovered providers
+      try {
+        providerRegistry.registerDiscoveredProviders(result.servers);
+      } catch (err) {
+        conversation.log(`Local LLM scan: registration failed: ${String(err)}`, { fg: '#ef4444' });
+      }
+
+      // Log discovered servers to conversation
+      for (const server of result.servers) {
+        conversation.addSystemMessage(
+          `[Scan] Found ${server.name} at ${server.host}:${server.port} (${server.models.length} model${server.models.length !== 1 ? 's' : ''})`
+        );
+      }
+      bus.emit('render:request');
+    }
+  }).catch(() => {
+    // Non-fatal: scan failure is expected when no local LLMs are running
+  });
 }
 
 main().catch(console.error);

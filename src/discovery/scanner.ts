@@ -1,0 +1,370 @@
+import { networkInterfaces } from 'node:os';
+import { logger } from '../utils/logger.ts';
+
+// ---------------------------------------------------------------------------
+// Types
+// ---------------------------------------------------------------------------
+
+export interface DiscoveredServer {
+  name: string;       // 'Ollama', 'LM Studio', 'local-192.168.1.50:8080'
+  host: string;       // '127.0.0.1' or '192.168.1.50'
+  port: number;
+  baseURL: string;    // 'http://192.168.1.50:11434/v1'
+  models: string[];   // ['llama3:latest', 'codellama:7b']
+  serverType: string; // 'ollama' | 'lm-studio' | 'vllm' | 'llamacpp' | 'localai' | 'tgi' | 'jan' | 'gpt4all' | 'koboldcpp' | 'aphrodite' | 'unknown'
+}
+
+export interface ScanResult {
+  servers: DiscoveredServer[];
+  scannedHosts: number;
+  scannedPorts: number;
+  durationMs: number;
+}
+
+// ---------------------------------------------------------------------------
+// Constants
+// ---------------------------------------------------------------------------
+
+const KNOWN_PORTS = [1234, 1337, 2242, 4891, 5000, 5001, 7860, 8000, 8001, 8080, 11434];
+const PROBE_TIMEOUT_MS = 200;
+const MAX_CONCURRENT_PROBES = 50;
+
+// ---------------------------------------------------------------------------
+// Internal Types
+// ---------------------------------------------------------------------------
+
+interface ProbeResult {
+  host: string;
+  port: number;
+  models: string[];
+  headers: Record<string, string>;
+  responseBody: unknown;
+}
+
+// ---------------------------------------------------------------------------
+// Concurrency
+// ---------------------------------------------------------------------------
+
+async function asyncPool<T>(
+  limit: number,
+  items: T[],
+  fn: (item: T) => Promise<void>,
+): Promise<void> {
+  const executing = new Set<Promise<void>>();
+  for (const item of items) {
+    const p: Promise<void> = fn(item).then(() => { executing.delete(p); });
+    executing.add(p);
+    if (executing.size >= limit) await Promise.race(executing);
+  }
+  await Promise.all(executing);
+}
+
+// ---------------------------------------------------------------------------
+// Subnet Detection
+// ---------------------------------------------------------------------------
+
+/**
+ * Returns all host IPs to scan from local network interfaces.
+ * Each non-internal, non-link-local IPv4 address yields its /24 subnet
+ * (192.168.1.1 ... 192.168.1.254).
+ */
+export function getLocalSubnets(): string[] {
+  const ips: string[] = [];
+  const ifaces = networkInterfaces();
+
+  for (const iface of Object.values(ifaces)) {
+    if (!iface) continue;
+    for (const addr of iface) {
+      if (addr.family !== 'IPv4' || addr.internal) continue;
+      // Skip link-local
+      if (addr.address.startsWith('169.254.')) continue;
+
+      const parts = addr.address.split('.');
+      const prefix = parts.slice(0, 3).join('.');
+      for (let i = 1; i <= 254; i++) {
+        ips.push(`${prefix}.${i}`);
+      }
+    }
+  }
+
+  // Deduplicate (multiple interfaces on same subnet)
+  return [...new Set(ips)];
+}
+
+// ---------------------------------------------------------------------------
+// Probe
+// ---------------------------------------------------------------------------
+
+/**
+ * Probes a single host:port. Returns probe result or null on any failure.
+ * Never throws.
+ */
+export async function probeHost(
+  host: string,
+  port: number,
+): Promise<ProbeResult | null> {
+  // Attempt 1: /v1/models (OpenAI-compatible)
+  const v1Result = await tryFetch(`http://${host}:${port}/v1/models`);
+  if (v1Result !== null) {
+    const models = extractV1Models(v1Result.body);
+    if (models !== null) {
+      return { host, port, models, headers: v1Result.headers, responseBody: v1Result.body };
+    }
+  }
+
+  // Attempt 2: Ollama native fallback (port 11434 only)
+  if (port === 11434) {
+    const tagsResult = await tryFetch(`http://${host}:${port}/api/tags`);
+    if (tagsResult !== null) {
+      const models = extractOllamaModels(tagsResult.body);
+      if (models !== null) {
+        return { host, port, models, headers: tagsResult.headers, responseBody: tagsResult.body };
+      }
+    }
+  }
+
+  return null;
+}
+
+interface FetchResult {
+  body: unknown;
+  headers: Record<string, string>;
+}
+
+async function tryFetch(url: string): Promise<FetchResult | null> {
+  try {
+    const res = await fetch(url, {
+      signal: AbortSignal.timeout(PROBE_TIMEOUT_MS),
+    });
+    if (!res.ok) return null;
+    const body: unknown = await res.json();
+    const headers: Record<string, string> = {};
+    res.headers.forEach((value, key) => { headers[key.toLowerCase()] = value.toLowerCase(); });
+    return { body, headers };
+  } catch {
+    return null;
+  }
+}
+
+function extractV1Models(body: unknown): string[] | null {
+  if (
+    typeof body === 'object' &&
+    body !== null &&
+    'data' in body &&
+    Array.isArray((body as Record<string, unknown>).data)
+  ) {
+    const data = (body as Record<string, unknown>).data as unknown[];
+    const ids = data
+      .filter((item): item is Record<string, unknown> =>
+        typeof item === 'object' && item !== null && 'id' in item && typeof (item as Record<string, unknown>).id === 'string',
+      )
+      .map((item) => item.id as string);
+    return ids;
+  }
+  return null;
+}
+
+function extractOllamaModels(body: unknown): string[] | null {
+  if (
+    typeof body === 'object' &&
+    body !== null &&
+    'models' in body &&
+    Array.isArray((body as Record<string, unknown>).models)
+  ) {
+    const models = (body as Record<string, unknown>).models as unknown[];
+    const names = models
+      .filter((item): item is Record<string, unknown> =>
+        typeof item === 'object' && item !== null && 'name' in item && typeof (item as Record<string, unknown>).name === 'string',
+      )
+      .map((item) => item.name as string);
+    return names;
+  }
+  return null;
+}
+
+// ---------------------------------------------------------------------------
+// Server Identification
+// ---------------------------------------------------------------------------
+
+/**
+ * Heuristic identification of the server software.
+ */
+export function identifyServer(
+  host: string,
+  port: number,
+  headers: Record<string, string>,
+  responseBody: unknown,
+): string {
+  void host; // reserved for future use
+
+  const headerValues = Object.entries(headers)
+    .map(([k, v]) => `${k}:${v}`)
+    .join(' ');
+
+  // Model IDs as a flat string for pattern matching
+  let modelIds = '';
+  if (
+    typeof responseBody === 'object' &&
+    responseBody !== null &&
+    'data' in responseBody &&
+    Array.isArray((responseBody as Record<string, unknown>).data)
+  ) {
+    modelIds = ((responseBody as Record<string, unknown>).data as unknown[])
+      .filter((item): item is Record<string, unknown> =>
+        typeof item === 'object' && item !== null && 'id' in item,
+      )
+      .map((item) => String(item.id))
+      .join(' ');
+  }
+
+  if (port === 11434) return 'ollama';
+  if (port === 1337) return 'jan';
+  if (port === 4891) return 'gpt4all';
+  if (port === 5001) return 'koboldcpp';
+  if (port === 2242) return 'aphrodite';
+
+  if (port === 1234 || headerValues.includes('lmstudio') || modelIds.includes('lmstudio')) {
+    return 'lm-studio';
+  }
+
+  if (Object.keys(headers).some((k) => k.startsWith('x-vllm'))) return 'vllm';
+
+  if (port === 8080) {
+    const serverHeader = headers['server'] ?? '';
+    if (serverHeader.includes('llama')) return 'llamacpp';
+    if (serverHeader.includes('localai')) return 'localai';
+  }
+
+  if (headerValues.includes('text-generation-inference')) return 'tgi';
+
+  return 'unknown';
+}
+
+// ---------------------------------------------------------------------------
+// Server Name
+// ---------------------------------------------------------------------------
+
+const SERVER_DISPLAY_NAMES: Record<string, string> = {
+  'ollama': 'Ollama',
+  'lm-studio': 'LM Studio',
+  'vllm': 'vLLM',
+  'llamacpp': 'llama.cpp',
+  'localai': 'LocalAI',
+  'tgi': 'TGI',
+  'jan': 'Jan',
+  'gpt4all': 'GPT4All',
+  'koboldcpp': 'KoboldCPP',
+  'aphrodite': 'Aphrodite',
+};
+
+/**
+ * Builds a human-friendly provider name.
+ */
+export function buildServerName(serverType: string, host: string, port: number): string {
+  const isLocal = host === '127.0.0.1' || host === 'localhost';
+
+  if (serverType === 'unknown') {
+    return `local-${host}:${port}`;
+  }
+
+  const display = SERVER_DISPLAY_NAMES[serverType] ?? serverType;
+  return isLocal ? display : `${display} (${host})`;
+}
+
+// ---------------------------------------------------------------------------
+// Scan Hosts
+// ---------------------------------------------------------------------------
+
+/**
+ * Scans a list of hosts across all known ports.
+ */
+export async function scanHosts(
+  hosts: string[],
+  onProgress?: (completed: number, total: number) => void,
+): Promise<DiscoveredServer[]> {
+  type Probe = { host: string; port: number };
+  const probes: Probe[] = [];
+  for (const host of hosts) {
+    for (const port of KNOWN_PORTS) {
+      probes.push({ host, port });
+    }
+  }
+
+  const total = probes.length;
+  let completed = 0;
+  const servers: DiscoveredServer[] = [];
+
+  await asyncPool(MAX_CONCURRENT_PROBES, probes, async ({ host, port }) => {
+    const result = await probeHost(host, port);
+    completed++;
+    onProgress?.(completed, total);
+
+    if (result === null) return;
+
+    const serverType = identifyServer(host, port, result.headers, result.responseBody);
+    const name = buildServerName(serverType, host, port);
+    const baseURL = `http://${host}:${port}/v1`;
+
+    servers.push({ name, host, port, baseURL, models: result.models, serverType });
+    logger.info(`[Scan] Found ${name} at ${host}:${port} (${result.models.length} models)`);
+  });
+
+  return servers;
+}
+
+// ---------------------------------------------------------------------------
+// Public API
+// ---------------------------------------------------------------------------
+
+/**
+ * Scans only localhost (fast, ~100ms).
+ */
+export async function scanLocalhost(): Promise<ScanResult> {
+  const start = Date.now();
+  const servers = await scanHosts(['127.0.0.1']);
+  return {
+    servers,
+    scannedHosts: 1,
+    scannedPorts: KNOWN_PORTS.length,
+    durationMs: Date.now() - start,
+  };
+}
+
+/**
+ * Full scan: localhost first, then all /24 subnet IPs.
+ * Returns merged, deduplicated results.
+ */
+export async function scan(
+  onProgress?: (completed: number, total: number) => void,
+): Promise<ScanResult> {
+  const start = Date.now();
+
+  // Scan localhost first
+  const localhostServers = await scanHosts(['127.0.0.1']);
+
+  // Collect subnet IPs, excluding loopback
+  const subnetIPs = getLocalSubnets().filter((ip) => ip !== '127.0.0.1');
+
+  const subnetServers = subnetIPs.length > 0
+    ? await scanHosts(subnetIPs, onProgress)
+    : [];
+
+  // Merge and deduplicate by host:port
+  const seen = new Set<string>();
+  const allServers: DiscoveredServer[] = [];
+  for (const server of [...localhostServers, ...subnetServers]) {
+    const key = `${server.host}:${server.port}`;
+    if (!seen.has(key)) {
+      seen.add(key);
+      allServers.push(server);
+    }
+  }
+
+  const scannedHosts = 1 + subnetIPs.length;
+  return {
+    servers: allServers,
+    scannedHosts,
+    scannedPorts: KNOWN_PORTS.length,
+    durationMs: Date.now() - start,
+  };
+}
