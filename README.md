@@ -1,6 +1,6 @@
 # goodvibes-tui
 
-A terminal UI coding agent substrate built with Bun. Multi-provider LLM support (built-in + any OpenAI-compatible API), automated WRFC review chains, 12 built-in tools, a cell-based renderer, an agent system, a hook system, and MCP integration.
+A terminal AI coding agent with automated write-review-fix-check pipelines, multi-provider LLM support, and a vaporwave aesthetic.
 
 Version: **0.9.9**
 
