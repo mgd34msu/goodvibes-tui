@@ -39,7 +39,7 @@ export interface CustomProviderConfig {
   /** Optional extra HTTP headers sent with every request */
   defaultHeaders?: Record<string, string>;
   /** How to send reasoning params. Default: 'none' (don't send). */
-  reasoningFormat?: 'mercury' | 'openrouter' | 'none';
+  reasoningFormat?: 'mercury' | 'openrouter' | 'llamacpp' | 'none';
   /** List of models exposed by this provider */
   models: Array<{
     id: string;
@@ -107,8 +107,8 @@ export function validateCustomProvider(data: unknown): { valid: boolean; errors:
   }
 
   if (obj['reasoningFormat'] !== undefined) {
-    if (!['mercury', 'openrouter', 'none'].includes(obj['reasoningFormat'] as string)) {
-      errors.push('"reasoningFormat" must be "mercury", "openrouter", or "none"');
+    if (!['mercury', 'openrouter', 'llamacpp', 'none'].includes(obj['reasoningFormat'] as string)) {
+      errors.push('"reasoningFormat" must be "mercury", "openrouter", "llamacpp", or "none"');
     }
   }
 

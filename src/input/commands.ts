@@ -12,7 +12,7 @@ import { getProfileManager } from '../profiles/manager.ts';
 import type { BlockMeta } from '../core/conversation.ts';
 import { ServiceRegistry } from '../config/service-registry.ts';
 import { getSecretsManager } from '../config/secrets.ts';
-import { scan } from '../discovery/index.ts';
+import { scan, persistProviders } from '../discovery/index.ts';
 
 let _serviceRegistry: ServiceRegistry | undefined;
 function getServiceRegistry(): ServiceRegistry {
@@ -1660,6 +1660,9 @@ export function registerBuiltinCommands(registry: CommandRegistry): void {
           `[Scan] Warning: failed to register some providers: ${(err as Error).message}`,
         );
       }
+
+      // Persist discovered servers for next session
+      persistProviders(result.servers);
 
       ctx.renderRequest();
     },
