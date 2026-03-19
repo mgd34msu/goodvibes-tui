@@ -1,1 +1,1 @@
-export { scan, scanLocalhost, type DiscoveredServer, type ScanResult, type ServerType } from './scanner.ts';
+export { scan, scanLocalhost, loadPersistedProviders, persistProviders, removePersistedProviders, type DiscoveredServer, type ScanResult, type ServerType } from './scanner.ts';

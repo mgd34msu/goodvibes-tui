@@ -1,4 +1,6 @@
 import { networkInterfaces } from 'node:os';
+import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs';
+import { join, dirname } from 'node:path';
 import { logger } from '../utils/logger.ts';
 
 // ---------------------------------------------------------------------------
@@ -21,6 +23,63 @@ export interface ScanResult {
   scannedHosts: number;
   scannedPorts: number;
   durationMs: number;
+}
+
+// ---------------------------------------------------------------------------
+// Persistence
+// ---------------------------------------------------------------------------
+
+const PERSISTED_PATH = join(process.cwd(), '.goodvibes', 'tui', 'discovered-providers.json');
+
+interface PersistedServer extends DiscoveredServer {
+  lastSeen: number; // Unix ms timestamp
+}
+
+/** Load previously discovered providers from disk. Returns empty array if file doesn't exist. */
+export function loadPersistedProviders(): DiscoveredServer[] {
+  try {
+    if (!existsSync(PERSISTED_PATH)) return [];
+    const raw = readFileSync(PERSISTED_PATH, 'utf-8');
+    const parsed = JSON.parse(raw) as unknown[];
+    if (!Array.isArray(parsed)) return [];
+    // Filter to only valid-shaped entries before trusting persisted data
+    return parsed.filter((item): item is DiscoveredServer =>
+      typeof item === 'object' && item !== null &&
+      typeof (item as Record<string, unknown>).host === 'string' &&
+      typeof (item as Record<string, unknown>).port === 'number' &&
+      Array.isArray((item as Record<string, unknown>).models)
+    );
+  } catch {
+    return [];
+  }
+}
+
+/** Save discovered providers to disk. Replaces file with current server list. */
+export function persistProviders(servers: DiscoveredServer[]): void {
+  try {
+    const now = Date.now();
+    const persisted: PersistedServer[] = servers.map(s => ({ ...s, lastSeen: now }));
+    mkdirSync(dirname(PERSISTED_PATH), { recursive: true });
+    writeFileSync(PERSISTED_PATH, JSON.stringify(persisted, null, 2) + '\n', 'utf-8');
+  } catch {
+    // Non-fatal — persistence is best-effort
+  }
+}
+
+/** Remove specific servers from the persisted file (by host:port). */
+export function removePersistedProviders(toRemove: Array<{ host: string; port: number }>): void {
+  if (toRemove.length === 0) return;
+  try {
+    if (!existsSync(PERSISTED_PATH)) return;
+    const raw = readFileSync(PERSISTED_PATH, 'utf-8');
+    const current = JSON.parse(raw) as PersistedServer[];
+    if (!Array.isArray(current)) return;
+    const removeKeys = new Set(toRemove.map(s => `${s.host}:${s.port}`));
+    const filtered = current.filter(s => !removeKeys.has(`${s.host}:${s.port}`));
+    writeFileSync(PERSISTED_PATH, JSON.stringify(filtered, null, 2) + '\n', 'utf-8');
+  } catch {
+    // Non-fatal
+  }
 }
 
 // ---------------------------------------------------------------------------

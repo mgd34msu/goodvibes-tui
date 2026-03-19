@@ -18,7 +18,7 @@ export interface OpenAICompatOptions {
   /** Optional extra HTTP headers sent with every request to this provider. */
   defaultHeaders?: Record<string, string>;
   /** How to send reasoning params. Default: 'none' (don't send). */
-  reasoningFormat?: 'mercury' | 'openrouter' | 'none';
+  reasoningFormat?: 'mercury' | 'openrouter' | 'llamacpp' | 'none';
 }
 
 /**
@@ -32,7 +32,7 @@ export class OpenAICompatProvider implements LLMProvider {
 
   private client: OpenAI;
   private defaultModel: string;
-  private reasoningFormat: 'mercury' | 'openrouter' | 'none';
+  private reasoningFormat: 'mercury' | 'openrouter' | 'llamacpp' | 'none';
 
   constructor(opts: OpenAICompatOptions) {
     this.name = opts.name;
@@ -76,8 +76,11 @@ export class OpenAICompatProvider implements LLMProvider {
         extraBody['reasoning_effort'] = reasoningEffort;
       } else if (reasoningEffort && this.reasoningFormat === 'openrouter') {
         extraBody['reasoning'] = { effort: reasoningEffort };
+      } else if (this.reasoningFormat === 'llamacpp') {
+        // llama.cpp auto-enables thinking for capable models; explicitly control it
+        extraBody['enable_thinking'] = reasoningEffort !== undefined && reasoningEffort !== 'instant';
       }
-      // reasoningFormat === 'none' or undefined: don't send anything
+      // reasoningFormat === 'none': don't send anything
 
       if (reasoningSummary && this.reasoningFormat === 'mercury') {
         extraBody['reasoning_summary'] = true;

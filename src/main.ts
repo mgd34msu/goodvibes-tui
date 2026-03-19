@@ -44,7 +44,7 @@ import { renderProcessModal } from './renderer/process-modal.ts';
 import { renderAgentDetailModal } from './renderer/agent-detail-modal.ts';
 import { renderLiveTailModal } from './renderer/live-tail-modal.ts';
 import { renderContextInspector } from './renderer/context-inspector.ts';
-import { scan } from './discovery/index.ts';
+import { scan, loadPersistedProviders, persistProviders, removePersistedProviders } from './discovery/index.ts';
 
 function loadSystemPrompt(): string {
   return _loadSystemPrompt(
@@ -710,22 +710,84 @@ async function main() {
   conversation.rebuildHistory();
   render();
 
-  // --- Background local LLM discovery ---
-  scan().then((result) => {
-    if (result.servers.length > 0) {
-      // Register discovered providers
-      try {
-        providerRegistry.registerDiscoveredProviders(result.servers);
-      } catch (err) {
-        conversation.log(`Local LLM scan: registration failed: ${String(err)}`, { fg: '#ef4444' });
-      }
-
-      // Log discovered servers to conversation
-      for (const server of result.servers) {
+  // --- Load persisted local LLM providers (instant, before background scan) ---
+  const persisted = loadPersistedProviders();
+  if (persisted.length > 0) {
+    try {
+      providerRegistry.registerDiscoveredProviders(persisted);
+      for (const server of persisted) {
         conversation.addSystemMessage(
-          `[Scan] Found ${server.name} at ${server.host}:${server.port} (${server.models.length} model${server.models.length !== 1 ? 's' : ''})`
+          `[Local] ${server.name} at ${server.host}:${server.port} (${server.models.length} model${server.models.length !== 1 ? 's' : ''}) — from last session`
         );
       }
+      bus.emit('render:request');
+    } catch {
+      // Non-fatal
+    }
+  }
+
+  // --- Background scan to verify persisted + discover new ---
+  scan().then((result) => {
+    const currentModel = configManager.get('provider.model') as string;
+
+    // Build sets for reconciliation
+    const foundKeys = new Set(result.servers.map(s => `${s.host}:${s.port}`));
+    const persistedKeys = new Set(persisted.map(s => `${s.host}:${s.port}`));
+
+    // Newly discovered servers (not previously persisted)
+    const newServers = result.servers.filter(s => !persistedKeys.has(`${s.host}:${s.port}`));
+
+    // Previously persisted but now unreachable
+    const removedServers = persisted.filter(s => !foundKeys.has(`${s.host}:${s.port}`));
+
+    // Register all found servers (re-registers persisted ones with fresh model lists)
+    if (result.servers.length > 0) {
+      try {
+        providerRegistry.registerDiscoveredProviders(result.servers);
+      } catch {
+        // Non-fatal
+      }
+    }
+
+    // Log newly discovered servers
+    for (const server of newServers) {
+      conversation.addSystemMessage(
+        `[Scan] Found ${server.name} at ${server.host}:${server.port} (${server.models.length} model${server.models.length !== 1 ? 's' : ''})`
+      );
+    }
+
+    // Handle removed servers
+    if (removedServers.length > 0) {
+      removePersistedProviders(removedServers);
+
+      for (const server of removedServers) {
+        conversation.addSystemMessage(
+          `[Scan] ${server.name} at ${server.host}:${server.port} is no longer reachable — removed`
+        );
+
+        // Check if the active model was on this removed server
+        const wasActive = server.models.includes(currentModel);
+        if (wasActive) {
+          configManager.set('provider.model', 'openrouter/free');
+          configManager.set('provider.provider', 'openrouter');
+          try {
+            providerRegistry.setCurrentModel('openrouter/free');
+            runtime.model = 'openrouter/free';
+            runtime.provider = 'openrouter';
+          } catch { /* non-fatal */ }
+          conversation.addSystemMessage(
+            `[Scan] Active model was on ${server.name} — switched to openrouter/free`
+          );
+        }
+      }
+    }
+
+    // Persist current state: writes found servers (may be empty if all were removed)
+    if (result.servers.length > 0 || removedServers.length > 0) {
+      persistProviders(result.servers);
+    }
+
+    if (newServers.length > 0 || removedServers.length > 0) {
       bus.emit('render:request');
     }
   }).catch(() => {
