@@ -135,6 +135,12 @@ export class AgentOrchestrator {
       let turn = 0;
       record.progress = 'Thinking…';
 
+      // --- Loop detection ---
+      const callHistory: string[] = [];
+      const LOOP_SYSTEM_THRESHOLD = 3;
+      const LOOP_USER_THRESHOLD = 5;
+      const CALL_HISTORY_WINDOW = 20;
+
       while (continueLoop) {
         if ((record as { status: string }).status === 'cancelled') {
           record.completedAt = Date.now();
@@ -246,6 +252,7 @@ export class AgentOrchestrator {
               if (!execArgs.timeout_ms) execArgs.timeout_ms = 600_000;
             }
 
+            const callSig = `${call.name}::${JSON.stringify(call.arguments)}`;
             try {
               const result = await toolRegistry.execute(call.id, call.name, call.arguments);
               results.push(result);
@@ -259,9 +266,43 @@ export class AgentOrchestrator {
               });
               session.appendMessage({ type: 'tool_execution', turn, toolName: call.name, toolCallId: call.id, success: false, args: JSON.stringify(call.arguments).slice(0, 500), resultPreview: toolErr.slice(0, 500), timestamp: new Date().toISOString() });
             }
+            callHistory.push(callSig);
+            if (callHistory.length > CALL_HISTORY_WINDOW) callHistory.shift();
           }
 
           conversation.addToolResults(results);
+
+          // --- Loop detection: nudge if any signature repeats ---
+          const sigCounts = new Map<string, { count: number; toolName: string }>();
+          for (const sig of callHistory) {
+            const name = sig.slice(0, sig.indexOf('::'));
+            const entry = sigCounts.get(sig);
+            if (entry) {
+              entry.count++;
+            } else {
+              sigCounts.set(sig, { count: 1, toolName: name });
+            }
+          }
+          // Find worst offender
+          let worstCount = 0;
+          let worstTool = '';
+          for (const [sig, { count, toolName }] of sigCounts) {
+            if (count > worstCount) {
+              worstCount = count;
+              worstTool = toolName;
+            }
+          }
+          if (worstCount >= LOOP_USER_THRESHOLD) {
+            logger.warn(`Agent ${record.id}: loop detected — ${worstTool} called ${worstCount} times with identical args`);
+            conversation.addUserMessage(
+              `You are repeating the same tool call. ${worstTool} has been called ${worstCount} times with identical arguments and results. Do NOT call ${worstTool} with these arguments again. Identify what you were trying to accomplish and take a different action.`,
+            );
+          } else if (worstCount >= LOOP_SYSTEM_THRESHOLD) {
+            logger.warn(`Agent ${record.id}: possible loop — ${worstTool} called ${worstCount} times with identical args`);
+            conversation.addSystemMessage(
+              `You have already executed this exact call (${worstTool}) ${worstCount} times with identical arguments. The results from your previous calls are already in your conversation history. Review them and proceed to the next step.`,
+            );
+          }
           record.progress = 'Thinking…';
         } else {
           // Final response — no more tool calls
