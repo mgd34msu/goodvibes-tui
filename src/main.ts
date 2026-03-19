@@ -161,15 +161,18 @@ async function main() {
 
   /** Base footer row count: separator + prompt box (top+content+bottom) + blank +
    *  token line + ctx bar + compact bar + context line (blank+info+blank) + help/exit line + trailing blank.
+   *  Process indicator (1 row, always shown) is accounted for separately in getViewportHeight.
    */
   const FOOTER_BASE_ROWS = 9;
 
   const getViewportHeight = () => {
     const promptLines = input.getVisiblePromptLineCount(getPromptContentWidth());
     // FOOTER_BASE_ROWS base footer rows + 2 progress bars (always shown when model has contextWindow) + prompt lines
+    // + 1 process indicator row (always shown: idle, focused, or active states)
     const currentModel = providerRegistry.getCurrentModel();
     const hasProgressBars = currentModel.contextWindow > 0 ? 2 : 0;
-    return (stdout.rows || 24) - 2 - (FOOTER_BASE_ROWS + promptLines + hasProgressBars);
+    const processIndicatorRows = 1; // always shown (idle, focused, or active)
+    return (stdout.rows || 24) - 2 - (FOOTER_BASE_ROWS + promptLines + hasProgressBars + processIndicatorRows);
   };
 
   const scroll = (delta: number) => {
