@@ -396,12 +396,19 @@ export class ProviderRegistry {
       // Skip servers with no models — defaultModel would be undefined
       if (server.models.length === 0) continue;
 
+      // Map serverType to reasoningFormat so discovered providers send correct params
+      const reasoningFormat = 
+        server.serverType === 'llamacpp' ? 'llamacpp' as const :
+        server.serverType === 'ollama' ? 'llamacpp' as const : // Ollama uses same enable_thinking param
+        'none' as const;
+
       const provider = new OpenAICompatProvider({
         name: server.name,
         baseURL: server.baseURL,
         apiKey: '',
         defaultModel: server.models[0],
         models: server.models,
+        reasoningFormat,
       });
 
       this.providers.set(server.name, provider);
@@ -416,9 +423,10 @@ export class ProviderRegistry {
           capabilities: {
             toolCalling: true,
             codeEditing: true,
-            reasoning: false,
+            reasoning: reasoningFormat !== 'none',
             multimodal: false,
           },
+          ...(reasoningFormat !== 'none' ? { reasoningEffort: ['low', 'medium', 'high'] } : {}),
           contextWindow: 8192,
           selectable: true,
         });
