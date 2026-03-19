@@ -154,23 +154,6 @@ function extractV1Models(body: unknown): string[] | null {
   return null;
 }
 
-function extractOllamaModels(body: unknown): string[] | null {
-  if (
-    typeof body === 'object' &&
-    body !== null &&
-    'models' in body &&
-    Array.isArray((body as Record<string, unknown>).models)
-  ) {
-    const models = (body as Record<string, unknown>).models as unknown[];
-    const names = models
-      .filter((item): item is Record<string, unknown> =>
-        typeof item === 'object' && item !== null && 'name' in item && typeof (item as Record<string, unknown>).name === 'string',
-      )
-      .map((item) => item.name as string);
-    return names;
-  }
-  return null;
-}
 
 // ---------------------------------------------------------------------------
 // Server Identification
