@@ -95,6 +95,7 @@ function loadEnvApiKeys(): Record<string, string> {
     anthropic: 'ANTHROPIC_API_KEY',
     gemini: 'GEMINI_API_KEY',
     inceptionlabs: 'INCEPTION_API_KEY',
+    openrouter: 'OPENROUTER_API_KEY',
   };
   for (const [prov, envVar] of Object.entries(mapping)) {
     let value = process.env[envVar];
@@ -124,6 +125,7 @@ export async function resolveApiKeys(): Promise<Record<string, string>> {
     { prov: 'anthropic',    envVars: ['ANTHROPIC_API_KEY', 'CLAUDE_API_KEY'] },
     { prov: 'gemini',       envVars: ['GEMINI_API_KEY', 'GOOGLE_API_KEY', 'GOOGLE_GEMINI_API_KEY'] },
     { prov: 'inceptionlabs', envVars: ['INCEPTION_API_KEY'] },
+    { prov: 'openrouter',    envVars: ['OPENROUTER_API_KEY'] },
   ];
 
   const result: Record<string, string> = {};

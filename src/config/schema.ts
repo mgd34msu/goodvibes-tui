@@ -44,8 +44,8 @@ export interface GoodVibesConfig {
   };
   provider: {
     reasoningEffort: 'instant' | 'low' | 'medium' | 'high'; // default: 'medium'
-    model: string;              // default: 'mercury-2'
-    provider: string;           // default: 'inceptionlabs'
+    model: string;              // default: 'openrouter/free'
+    provider: string;           // default: 'openrouter'
     systemPromptFile: string;   // default: ''
   };
   behavior: {
@@ -213,8 +213,8 @@ export const DEFAULT_CONFIG: GoodVibesConfig = {
   },
   provider: {
     reasoningEffort: 'medium',
-    model: 'mercury-2',
-    provider: 'inceptionlabs',
+    model: 'openrouter/free',
+    provider: 'openrouter',
     systemPromptFile: '',
   },
   behavior: {
@@ -337,13 +337,13 @@ export const CONFIG_SCHEMA: ConfigSetting[] = [
   {
     key: 'provider.model',
     type: 'string',
-    default: 'mercury-2',
+    default: 'openrouter/free',
     description: 'Default LLM model ID',
   },
   {
     key: 'provider.provider',
     type: 'string',
-    default: 'inceptionlabs',
+    default: 'openrouter',
     description: 'Default provider name',
   },
   {
