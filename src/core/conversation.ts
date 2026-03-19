@@ -296,7 +296,7 @@ export class ConversationManager {
     // for determining whether to show the splash screen (tool-only messages
     // don't count as visible conversation content for splash purposes).
     const displayMessages = this.messages.filter(
-      (m) => m.role !== 'tool',
+      (m) => m.role !== 'tool' && m.role !== 'system',
     );
 
     if (displayMessages.length === 0) {
