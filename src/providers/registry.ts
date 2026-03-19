@@ -462,7 +462,22 @@ export class ProviderRegistry {
   getCurrentModel(): ModelDefinition {
     const def = getModelRegistry().find((m) => m.id === this.currentModelId);
     if (!def) {
-      // Fall back to first selectable model instead of crashing
+      // Check if this is a discovered/custom model that hasn't loaded yet.
+      // Don't clobber currentModelId — return a placeholder so the saved ID is preserved
+      // until the discovered provider registers later.
+      const isBuiltin = BUILTIN_MODEL_REGISTRY.some((m) => m.id === this.currentModelId);
+      if (!isBuiltin && this.currentModelId) {
+        return {
+          id: this.currentModelId,
+          provider: config.provider ?? 'unknown',
+          displayName: this.currentModelId,
+          description: 'Waiting for provider discovery...',
+          capabilities: { toolCalling: false, codeEditing: false, reasoning: false, multimodal: false },
+          contextWindow: 0, // Unknown until provider discovery completes; 0 = no progress bar
+          selectable: true,
+        };
+      }
+      // Builtin model not found — genuinely broken, fall back to first selectable
       const fallback = getModelRegistry().find((m) => m.selectable);
       if (fallback) {
         this.currentModelId = fallback.id;

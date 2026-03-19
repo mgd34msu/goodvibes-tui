@@ -45,6 +45,28 @@ import { renderAgentDetailModal } from './renderer/agent-detail-modal.ts';
 import { renderLiveTailModal } from './renderer/live-tail-modal.ts';
 import { renderContextInspector } from './renderer/context-inspector.ts';
 import { scan, loadPersistedProviders, persistProviders, removePersistedProviders } from './discovery/index.ts';
+import { logger } from './utils/logger.ts';
+
+/**
+ * Attempt to restore a previously saved model selection after providers are registered.
+ * Non-fatal: logs on failure but does not throw.
+ */
+function restoreSavedModel(
+  savedModel: string,
+  savedProvider: string,
+  runtime: { model: string; provider: string },
+): void {
+  const modelDef = providerRegistry.listModels().find((m) => m.id === savedModel);
+  if (modelDef) {
+    try {
+      providerRegistry.setCurrentModel(savedModel);
+      runtime.model = savedModel;
+      runtime.provider = savedProvider;
+    } catch (err) {
+      logger.debug('Model restore failed (non-fatal)', { error: String(err) });
+    }
+  }
+}
 
 function loadSystemPrompt(): string {
   return _loadSystemPrompt(
@@ -715,6 +737,12 @@ async function main() {
   if (persisted.length > 0) {
     try {
       providerRegistry.registerDiscoveredProviders(persisted);
+      // Restore saved model now that persisted providers are registered
+      restoreSavedModel(
+        configManager.get('provider.model') as string,
+        configManager.get('provider.provider') as string,
+        runtime,
+      );
       for (const server of persisted) {
         conversation.addSystemMessage(
           `[Local] ${server.name} at ${server.host}:${server.port} (${server.models.length} model${server.models.length !== 1 ? 's' : ''}) — from last session`
@@ -744,6 +772,12 @@ async function main() {
     if (result.servers.length > 0) {
       try {
         providerRegistry.registerDiscoveredProviders(result.servers);
+        // Restore saved model now that scan providers are registered
+        restoreSavedModel(
+          configManager.get('provider.model') as string,
+          configManager.get('provider.provider') as string,
+          runtime,
+        );
       } catch {
         // Non-fatal
       }
