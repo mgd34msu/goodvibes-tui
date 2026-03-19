@@ -206,7 +206,7 @@ export class McpClient {
       await this._request('initialize', {
         protocolVersion: '2024-11-05',
         capabilities: {},
-        clientInfo: { name: 'goodvibes-tui', version: '0.2.0' },
+        clientInfo: { name: 'goodvibes-tui', version: '0.9.9' },
       });
       this._notify('notifications/initialized', {});
       this.initialized = true;

@@ -133,6 +133,107 @@ const BUILTIN_MODEL_REGISTRY: ModelDefinition[] = [
     selectable: true,
   },
 
+  // --- OpenRouter (free) ---
+  {
+    id: 'openrouter/free',
+    provider: 'openrouter',
+    displayName: 'Free Models Router',
+    description: 'Auto-routes to the best available free model on OpenRouter.',
+    capabilities: { toolCalling: true, codeEditing: true, reasoning: true, multimodal: false },
+    contextWindow: 200000,
+    selectable: true,
+  },
+  {
+    id: 'arcee-ai/trinity-mini:free',
+    provider: 'openrouter',
+    displayName: 'Arcee AI Trinity Mini',
+    description: 'Arcee AI Trinity Mini — free tier.',
+    capabilities: { toolCalling: true, codeEditing: true, reasoning: true, multimodal: false },
+    contextWindow: 131072,
+    selectable: true,
+  },
+  {
+    id: 'minimax/minimax-m2.5:free',
+    provider: 'openrouter',
+    displayName: 'MiniMax M2.5',
+    description: 'MiniMax M2.5 — free tier.',
+    capabilities: { toolCalling: true, codeEditing: true, reasoning: true, multimodal: false },
+    contextWindow: 196608,
+    selectable: true,
+  },
+  {
+    id: 'nvidia/nemotron-3-super-120b-a12b:free',
+    provider: 'openrouter',
+    displayName: 'Nemotron 3 Super 120B',
+    description: 'NVIDIA Nemotron 3 Super 120B MoE — free tier.',
+    capabilities: { toolCalling: true, codeEditing: true, reasoning: true, multimodal: false },
+    contextWindow: 262144,
+    selectable: true,
+  },
+  {
+    id: 'nvidia/nemotron-3-nano-30b-a3b:free',
+    provider: 'openrouter',
+    displayName: 'Nemotron 3 Nano 30B',
+    description: 'NVIDIA Nemotron 3 Nano 30B — free tier.',
+    capabilities: { toolCalling: true, codeEditing: true, reasoning: true, multimodal: false },
+    contextWindow: 256000,
+    selectable: true,
+  },
+  {
+    id: 'nvidia/nemotron-nano-12b-v2-vl:free',
+    provider: 'openrouter',
+    displayName: 'Nemotron Nano 12B V2 VL',
+    description: 'NVIDIA Nemotron Nano 12B V2 with vision — free tier.',
+    capabilities: { toolCalling: true, codeEditing: true, reasoning: true, multimodal: true },
+    contextWindow: 128000,
+    selectable: true,
+  },
+  {
+    id: 'nvidia/nemotron-nano-9b-v2:free',
+    provider: 'openrouter',
+    displayName: 'Nemotron Nano 9B V2',
+    description: 'NVIDIA Nemotron Nano 9B V2 — free tier.',
+    capabilities: { toolCalling: true, codeEditing: true, reasoning: true, multimodal: false },
+    contextWindow: 128000,
+    selectable: true,
+  },
+  {
+    id: 'openai/gpt-oss-120b:free',
+    provider: 'openrouter',
+    displayName: 'GPT OSS 120B',
+    description: 'OpenAI open-source 120B via OpenRouter — free tier.',
+    capabilities: { toolCalling: true, codeEditing: true, reasoning: true, multimodal: false },
+    contextWindow: 131072,
+    selectable: true,
+  },
+  {
+    id: 'openai/gpt-oss-20b:free',
+    provider: 'openrouter',
+    displayName: 'GPT OSS 20B',
+    description: 'OpenAI open-source 20B via OpenRouter — free tier.',
+    capabilities: { toolCalling: true, codeEditing: true, reasoning: true, multimodal: false },
+    contextWindow: 131072,
+    selectable: true,
+  },
+  {
+    id: 'stepfun/step-3.5-flash:free',
+    provider: 'openrouter',
+    displayName: 'Step 3.5 Flash',
+    description: 'StepFun Step 3.5 Flash — free tier.',
+    capabilities: { toolCalling: true, codeEditing: true, reasoning: true, multimodal: false },
+    contextWindow: 256000,
+    selectable: true,
+  },
+  {
+    id: 'z-ai/glm-4.5-air:free',
+    provider: 'openrouter',
+    displayName: 'GLM 4.5 Air',
+    description: 'Z.ai GLM 4.5 Air — free tier.',
+    capabilities: { toolCalling: true, codeEditing: true, reasoning: true, multimodal: false },
+    contextWindow: 131072,
+    selectable: true,
+  },
+
   // --- Anthropic ---
   {
     id: 'claude-opus-4-6',
@@ -193,7 +294,7 @@ export class ProviderRegistry {
   private currentModelId: string;
 
   constructor() {
-    this.currentModelId = config.model ?? 'mercury-2';
+    this.currentModelId = config.model ?? 'openrouter/free';
     this.registerBuiltins();
   }
 
@@ -214,6 +315,28 @@ export class ProviderRegistry {
         apiKey: apiKey('inceptionlabs'),
         defaultModel: 'mercury-2',
         models: ['mercury-2', 'mercury-edit'],
+      }),
+    );
+
+    this.register(
+      new OpenAICompatProvider({
+        name: 'openrouter',
+        baseURL: 'https://openrouter.ai/api/v1',
+        apiKey: apiKey('openrouter'),
+        defaultModel: 'openrouter/free',
+        models: [
+          'openrouter/free',
+          'arcee-ai/trinity-mini:free',
+          'minimax/minimax-m2.5:free',
+          'nvidia/nemotron-3-super-120b-a12b:free',
+          'nvidia/nemotron-3-nano-30b-a3b:free',
+          'nvidia/nemotron-nano-12b-v2-vl:free',
+          'nvidia/nemotron-nano-9b-v2:free',
+          'openai/gpt-oss-120b:free',
+          'openai/gpt-oss-20b:free',
+          'stepfun/step-3.5-flash:free',
+          'z-ai/glm-4.5-air:free',
+        ],
       }),
     );
 
