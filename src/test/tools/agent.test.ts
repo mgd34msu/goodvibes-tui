@@ -119,7 +119,7 @@ describe('status mode', () => {
     expect(status.id).toBe(agentId);
     expect(status.task).toBe('Check status');
     // Agent is immediately handed to orchestrator, so status progresses past 'pending'
-    expect(['pending', 'running', 'completed', 'failed', 'cancelled']).toContain(status.status);
+    expect(['pending', 'running', 'completed', 'failed', 'cancelled']).toContain(status.status as string);
     expect(typeof status.durationMs).toBe('number');
     expect(typeof status.toolCallCount).toBe('number');
   });

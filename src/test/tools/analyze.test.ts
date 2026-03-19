@@ -840,7 +840,7 @@ describe('semantic_diff mode', () => {
       after: 'HEAD',
     });
 
-    expect(['low', 'medium', 'high']).toContain(result.risk);
+    expect(['low', 'medium', 'high']).toContain(result.risk as string);
   });
 
   test('changed_files lists modified files', async () => {

@@ -172,7 +172,7 @@ describe('ServiceModal', () => {
       await modal.open();
       const sel = modal.getSelected();
       expect(sel).not.toBeNull();
-      expect(modal.entries[0]).toBe(sel);
+      expect(modal.entries[0] as typeof sel).toBe(sel);
     });
   });
 
@@ -201,9 +201,9 @@ describe('ServiceModal', () => {
     test('updates testStatus on network call', async () => {
       // Mock fetch to simulate a successful 200 response
       const originalFetch = globalThis.fetch;
-      globalThis.fetch = async (_url: RequestInfo | URL, _init?: RequestInit) => {
+      globalThis.fetch = (async (_url: RequestInfo | URL, _init?: RequestInit) => {
         return new Response('{}', { status: 200, headers: { 'Content-Type': 'application/json' } });
-      };
+      }) as typeof fetch;
       try {
         await modal.open();
         await modal.testSelected();
@@ -217,9 +217,9 @@ describe('ServiceModal', () => {
 
     test('updates testStatus to error on network failure', async () => {
       const originalFetch = globalThis.fetch;
-      globalThis.fetch = async () => {
+      globalThis.fetch = (async () => {
         throw new Error('Network unreachable');
-      };
+      }) as unknown as typeof fetch;
       try {
         await modal.open();
         await modal.testSelected();

@@ -27,7 +27,7 @@ function makeEntry(overrides: Partial<ProcessEntry> = {}): ProcessEntry {
 
 function seedAgent(task: string): string {
   const am = AgentManager.getInstance();
-  const rec = am.spawn({ task, template: 'default', tools: [] });
+  const rec = am.spawn({ mode: 'spawn', task, template: 'default', tools: [] });
   (am as any).agents.get(rec.id).status = 'running';
   return rec.id;
 }

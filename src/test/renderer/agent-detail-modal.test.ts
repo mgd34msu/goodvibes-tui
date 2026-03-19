@@ -15,7 +15,7 @@ beforeEach(() => {
 
 function seedAgent(task = 'Do something', status: 'running' | 'pending' = 'running'): string {
   const am = AgentManager.getInstance();
-  const rec = am.spawn({ task, template: 'general', tools: [] });
+  const rec = am.spawn({ mode: 'spawn', task, template: 'general', tools: [] });
   (am as any).agents.get(rec.id).status = status;
   return rec.id;
 }

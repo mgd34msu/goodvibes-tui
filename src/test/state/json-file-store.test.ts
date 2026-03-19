@@ -1,6 +1,6 @@
 // Tests for JsonFileStore
 import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
-import { JsonFileStore } from '../../src/state/json-file-store.ts';
+import { JsonFileStore } from '../../state/json-file-store.ts';
 import { makeTempDir, writeTempFile } from '../setup.ts';
 import { rm } from 'node:fs/promises';
 

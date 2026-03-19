@@ -154,7 +154,7 @@ describe('Unknown tools default to delegate category', () => {
       evt.resolve(true);
     });
     await mgr.check('mystery_tool', {});
-    expect(capturedCategory).toBe('delegate');
+    expect(capturedCategory as string | null).toBe('delegate');
   });
 });
 
@@ -472,7 +472,7 @@ describe('Tool-to-category mapping is complete for all 12 tools', () => {
 
   for (const [tool, expectedCategory] of Object.entries(EXPECTED)) {
     test(`${tool} maps to category '${expectedCategory}'`, () => {
-      expect(mgr.getCategory(tool)).toBe(expectedCategory);
+      expect(mgr.getCategory(tool) as string).toBe(expectedCategory);
     });
   }
 });
