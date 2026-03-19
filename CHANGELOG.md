@@ -4,6 +4,40 @@ All notable changes to GoodVibes TUI.
 
 ---
 
+## [0.9.9] — 2026-03-18
+
+### Token Counting
+- **Real provider-reported tokens** — context bar and warnings now use `lastInputTokens` from the most recent LLM response instead of the `text.length / 4` heuristic
+- **Anthropic cache tokens** — captures `cache_read_input_tokens` and `cache_creation_input_tokens` from SSE stream; `lastInputTokens` includes cache tokens for accurate context window occupancy
+- **Deleted `estimateTotalTokens()`** — the heuristic estimation method is gone; all token tracking uses real numbers
+- **Context bar fixed** — was comparing cumulative lifetime tokens against context window (meaningless); now shows current context usage from latest response
+
+### Agent Resilience
+- **Network-aware retry** — transient network errors no longer permanently kill WRFC chains; agent-level retry with 5s/10s/20s/40s/60s backoff waits for network recovery before failing
+- **Cancellation during retry** — cancelled agents are detected after each retry sleep, preventing up to 90s of wasted work
+- **Loop detection** — detects agents repeating the exact same tool call (same name + identical JSON args); system message nudge at 3 repetitions, firm user message at 5; never skips execution, only escalates messaging
+
+### Breaking Changes
+- **`skipWrfc` → `dangerously_disable_wrfc`** — renamed to discourage models from casually bypassing WRFC review chains
+
+### Bug Fixes
+- `getCurrentModel` falls back to first selectable model instead of crashing on unknown model ID
+- Fixed readonly property error in agent exec argument sanitization
+- Removed bare `a` keyboard shortcut that was swallowing the first character of input
+- Short tool results (≤200 chars) are no longer collapsible
+- JSON prettified in expanded tool results
+- WRFC chain IDs shown in full in UI messages
+- Dynamic provider list from registry (not hardcoded)
+
+### Code Health
+- **Zero TypeScript errors** — fixed all `npx tsc --noEmit` errors across source and test files
+- Added `sql.js` type declaration (`src/types/sql-js.d.ts`)
+- `ChatResponse.usage` fields documented with per-provider semantics
+- WRFC regression detection — warns when review scores decline across fix cycles
+- Gate retry depth stored per-chain (no ancestry walks needed)
+
+---
+
 ## [0.9.8] — 2026-03-18
 
 ### WRFC Workmap & Session Tracking
