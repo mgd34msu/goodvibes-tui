@@ -19,7 +19,7 @@ export class ModelPickerModal {
   public selectedIndex = 0;
   public models: ModelDefinition[] = [];
   public providers: string[] = [];
-  public effortLevels = ['instant', 'low', 'medium', 'high'];
+  public effortLevels: string[] = [];
   /** The model chosen in model-mode, awaiting effort selection. */
   public pendingModel: ModelDefinition | null = null;
 
@@ -53,6 +53,7 @@ export class ModelPickerModal {
   /** Transition to effort picker after model is chosen. */
   showEffortPicker(model: ModelDefinition, currentEffort: string): void {
     this.pendingModel = model;
+    this.effortLevels = model.reasoningEffort ?? [];
     this.mode = 'effort';
     const idx = this.effortLevels.indexOf(currentEffort);
     this.selectedIndex = idx >= 0 ? idx : 0;
@@ -88,7 +89,7 @@ export class ModelPickerModal {
       medium: 'Balanced speed and quality',
       high: 'Thorough, deep reasoning',
     };
-    return this.effortLevels.map(e => ({ id: e, label: e, detail: descriptions[e] }));
+    return this.effortLevels.map(e => ({ id: e, label: e, detail: descriptions[e] ?? '' }));
   }
 
   /** Get count of items in current mode. */

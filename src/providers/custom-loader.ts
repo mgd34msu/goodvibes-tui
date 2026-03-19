@@ -38,6 +38,8 @@ export interface CustomProviderConfig {
   apiKey?: string;
   /** Optional extra HTTP headers sent with every request */
   defaultHeaders?: Record<string, string>;
+  /** How to send reasoning params. Default: 'none' (don't send). */
+  reasoningFormat?: 'mercury' | 'openrouter' | 'none';
   /** List of models exposed by this provider */
   models: Array<{
     id: string;
@@ -102,6 +104,12 @@ export function validateCustomProvider(data: unknown): { valid: boolean; errors:
 
   if (typeof obj['baseURL'] !== 'string' || obj['baseURL'].trim() === '') {
     errors.push('"baseURL" must be a non-empty string');
+  }
+
+  if (obj['reasoningFormat'] !== undefined) {
+    if (!['mercury', 'openrouter', 'none'].includes(obj['reasoningFormat'] as string)) {
+      errors.push('"reasoningFormat" must be "mercury", "openrouter", or "none"');
+    }
   }
 
   if (!Array.isArray(obj['models']) || (obj['models'] as unknown[]).length === 0) {
@@ -238,6 +246,7 @@ export async function loadCustomProviders(): Promise<LoadCustomProvidersResult> 
         defaultModel: modelIds[0],
         models: modelIds,
         ...(cfg.defaultHeaders ? { defaultHeaders: cfg.defaultHeaders } : {}),
+        reasoningFormat: cfg.reasoningFormat ?? 'none',
       });
     } catch (err) {
       warnings.push(
