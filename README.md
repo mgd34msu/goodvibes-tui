@@ -10,7 +10,7 @@ Version: **0.9.9**
 
 ## What is this
 
-goodvibes-tui is a coding agent TUI in the same space as Claude Code, Gemini CLI, and Codex — but designed as a substrate you control. You run it locally, configure it however you want, and it operates entirely from your terminal.
+goodvibes-tui is a coding agent TUI in the same space as Claude Code, Gemini CLI, and Codex — but you run it locally, configure it however you want, and it operates entirely from your terminal.
 
 The interface is built around a cell-based renderer that writes directly to the alternate screen buffer using raw ANSI escape sequences — no framework, no virtual DOM. Every message, tool call, diff, and code block is a typed cell that can be collapsed, bookmarked, copied, or applied inline.
 
