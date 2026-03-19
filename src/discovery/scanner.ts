@@ -5,13 +5,15 @@ import { logger } from '../utils/logger.ts';
 // Types
 // ---------------------------------------------------------------------------
 
+export type ServerType = 'ollama' | 'lm-studio' | 'vllm' | 'llamacpp' | 'localai' | 'tgi' | 'jan' | 'gpt4all' | 'koboldcpp' | 'aphrodite' | 'unknown';
+
 export interface DiscoveredServer {
   name: string;       // 'Ollama', 'LM Studio', 'local-192.168.1.50:8080'
   host: string;       // '127.0.0.1' or '192.168.1.50'
   port: number;
   baseURL: string;    // 'http://192.168.1.50:11434/v1'
   models: string[];   // ['llama3:latest', 'codellama:7b']
-  serverType: 'ollama' | 'lm-studio' | 'vllm' | 'llamacpp' | 'localai' | 'tgi' | 'jan' | 'gpt4all' | 'koboldcpp' | 'aphrodite' | 'unknown';
+  serverType: ServerType;
 }
 
 export interface ScanResult {
@@ -68,7 +70,7 @@ async function asyncPool<T>(
  * Each non-internal, non-link-local IPv4 address yields its /24 subnet
  * (192.168.1.1 ... 192.168.1.254).
  */
-export function getLocalSubnets(): string[] {
+function getLocalSubnets(): string[] {
   const ips: string[] = [];
   const ifaces = networkInterfaces();
 
@@ -99,7 +101,7 @@ export function getLocalSubnets(): string[] {
  * Probes a single host:port. Returns probe result or null on any failure.
  * Never throws.
  */
-export async function probeHost(
+async function probeHost(
   host: string,
   port: number,
 ): Promise<ProbeResult | null> {
@@ -162,12 +164,11 @@ function extractV1Models(body: unknown): string[] | null {
 /**
  * Heuristic identification of the server software.
  */
-export function identifyServer(
-  _host: string,
+function identifyServer(
   port: number,
   headers: Record<string, string>,
   responseBody: unknown,
-): 'ollama' | 'lm-studio' | 'vllm' | 'llamacpp' | 'localai' | 'tgi' | 'jan' | 'gpt4all' | 'koboldcpp' | 'aphrodite' | 'unknown' {
+): ServerType {
 
   const headerValues = Object.entries(headers)
     .map(([k, v]) => `${k}:${v}`)
@@ -232,7 +233,7 @@ const SERVER_DISPLAY_NAMES: Record<string, string> = {
 /**
  * Builds a human-friendly provider name.
  */
-export function buildServerName(serverType: string, host: string, port: number): string {
+function buildServerName(serverType: ServerType, host: string, port: number): string {
   const isLocal = host === '127.0.0.1' || host === 'localhost';
 
   if (serverType === 'unknown') {
@@ -273,7 +274,7 @@ export async function scanHosts(
 
     if (result === null) return;
 
-    const serverType = identifyServer(host, port, result.headers, result.responseBody);
+    const serverType = identifyServer(port, result.headers, result.responseBody);
     const name = buildServerName(serverType, host, port);
     const baseURL = `http://${host}:${port}/v1`;
 
