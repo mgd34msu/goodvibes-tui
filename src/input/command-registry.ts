@@ -63,6 +63,8 @@ export interface CommandContext {
   openShortcutsOverlay?: () => void;
   /** Return the current scroll top line of the viewport. */
   getScrollTop?: () => number;
+  /** Toggle the panel sidebar (open/close). */
+  openPanelPicker?: () => void;
 }
 
 /**

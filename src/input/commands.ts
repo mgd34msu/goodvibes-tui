@@ -16,6 +16,7 @@ import { getSecretsManager } from '../config/secrets.ts';
 import { scan, persistProviders } from '../discovery/index.ts';
 import { planManager } from '../core/plan-manager-instance.ts';
 import { classifyIntent } from '../core/intent-classifier.ts';
+import { getPanelManager } from '../panels/panel-manager.ts';
 
 let _serviceRegistry: ServiceRegistry | undefined;
 function getServiceRegistry(): ServiceRegistry {
@@ -1450,6 +1451,64 @@ export function registerBuiltinCommands(registry: CommandRegistry): void {
         ctx.openSettingsModal();
       } else {
         ctx.print('Settings modal not available. Use /config to view or set values.');
+      }
+    },
+  });
+
+  // ── /panel ───────────────────────────────────────────────────
+  registry.register({
+    name: 'panel',
+    aliases: ['panels', 'p'],
+    description: 'Open, close, or list panels. Usage: /panel [open <id>|close <id>|list|toggle]',
+    usage: '[open <id>|close <id>|list|toggle]',
+    handler(args, ctx) {
+      const pm = getPanelManager();
+      const sub = args[0]?.toLowerCase() ?? '';
+      if (!sub || sub === 'toggle') {
+        if (ctx.openPanelPicker) {
+          ctx.openPanelPicker();
+        } else {
+          pm.toggle();
+          ctx.renderRequest();
+        }
+      } else if (sub === 'list') {
+        const types = pm.getRegisteredTypes();
+        const open = pm.getOpen().map(p => p.id);
+        const lines = ['Registered panels:', ...types.map(t =>
+          `  ${open.includes(t.id) ? '\u25cf' : '\u25e6'} ${t.id.padEnd(14)} ${t.icon}  ${t.name.padEnd(12)} [${t.category}] ${t.description}`
+        )];
+        ctx.print(lines.join('\n'));
+      } else if (sub === 'open') {
+        const id = args[1];
+        if (!id) { ctx.print('Usage: /panel open <panel-id>'); return; }
+        try {
+          pm.open(id);
+          pm.show();
+          ctx.renderRequest();
+          ctx.print(`Panel opened: ${id}`);
+        } catch (e) {
+          ctx.print(`Error: ${(e as Error).message}`);
+        }
+      } else if (sub === 'close') {
+        const id = args[1];
+        if (!id) { ctx.print('Usage: /panel close <panel-id>'); return; }
+        try {
+          pm.close(id);
+          ctx.renderRequest();
+          ctx.print(`Panel closed: ${id}`);
+        } catch (e) {
+          ctx.print(`Error: ${(e as Error).message}`);
+        }
+      } else {
+        // Treat bare argument as a panel id to open
+        const id = args[0]!;
+        try {
+          pm.open(id);
+          pm.show();
+          ctx.renderRequest();
+        } catch (e) {
+          ctx.print(`Unknown panel "${id}". Use /panel list to see available panels.`);
+        }
       }
     },
   });
