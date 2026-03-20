@@ -421,7 +421,16 @@ export class TaskScheduler {
   async runNow(taskId: string): Promise<string> {
     const task = this.tasks.get(taskId);
     if (!task) throw new Error(`Task not found: ${taskId}`);
-    return this.executeTask(task);
+    const result = await this.executeTask(task)
+      .catch((err) => {
+        logger.error('Scheduled task failed (manual run)', { taskId, error: String(err) });
+        return `Failed: ${String(err)}`;
+      });
+    // Reschedule for next cron time after manual run
+    if (task.enabled && this.running) {
+      this.scheduleNext(task);
+    }
+    return result;
   }
 
   // -------------------------------------------------------------------------
