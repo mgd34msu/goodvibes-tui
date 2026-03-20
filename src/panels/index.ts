@@ -1,4 +1,5 @@
 export type { Panel, PanelCategory, PanelRegistration } from './types.ts';
+export type { Pane } from './panel-manager.ts';
 export { BasePanel } from './base-panel.ts';
 export { PanelManager, getPanelManager } from './panel-manager.ts';
 export { TokenBudgetPanel } from './token-budget-panel.ts';

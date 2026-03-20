@@ -18,15 +18,29 @@ export function getPanelManager(): PanelManager {
 }
 
 // ---------------------------------------------------------------------------
+// Pane
+// ---------------------------------------------------------------------------
+
+export interface Pane {
+  panels: Panel[];
+  activeIndex: number;
+}
+
+// ---------------------------------------------------------------------------
 // PanelManager
 // ---------------------------------------------------------------------------
 
 export class PanelManager {
-  private panels: Panel[] = [];
   private registry: PanelRegistration[] = [];
-  private activeIndex: number = 0;
   private _visible: boolean = false;
   private _splitRatio: number = 0.6;
+
+  // Two panes for the top/bottom split within the panel area
+  private topPane: Pane = { panels: [], activeIndex: 0 };
+  private bottomPane: Pane = { panels: [], activeIndex: 0 };
+  private _focusedPane: 'top' | 'bottom' = 'top';
+  private _verticalSplitRatio: number = 0.5; // top gets 50% of panel height
+  private _bottomPaneVisible: boolean = false;
 
   // -------------------------------------------------------------------------
   // Registration
@@ -56,13 +70,16 @@ export class PanelManager {
   }
 
   // -------------------------------------------------------------------------
-  // Panel lifecycle
+  // Panel lifecycle — operates on a specific pane (defaults to focused)
   // -------------------------------------------------------------------------
 
-  open(panelId: string): Panel {
-    const existing = this.panels.find(p => p.id === panelId);
+  open(panelId: string, pane?: 'top' | 'bottom'): Panel {
+    const targetPane = pane ?? this._focusedPane;
+    const p = this._getPane(targetPane);
+
+    const existing = p.panels.find(panel => panel.id === panelId);
     if (existing) {
-      this.activateById(panelId);
+      this._activateByIdInPane(panelId, targetPane);
       return existing;
     }
 
@@ -71,89 +88,194 @@ export class PanelManager {
       throw new Error(`No panel type registered with id: ${panelId}`);
     }
 
-    const oldPanel = this.panels[this.activeIndex];
+    const oldPanel = p.panels[p.activeIndex];
     if (oldPanel) oldPanel.onDeactivate();
 
     const panel = registration.factory();
-    this.panels.push(panel);
-    this.activeIndex = this.panels.length - 1;
+    p.panels.push(panel);
+    p.activeIndex = p.panels.length - 1;
     this._visible = true;
+    // If opening into bottom pane, also make it visible
+    if (targetPane === 'bottom') {
+      this._bottomPaneVisible = true;
+      this._focusedPane = 'bottom';
+    } else {
+      this._focusedPane = 'top';
+    }
     panel.onActivate();
     return panel;
   }
 
   close(panelId: string): void {
-    const index = this.panels.findIndex(p => p.id === panelId);
-    if (index < 0) return;
+    // Search both panes
+    for (const which of ['top', 'bottom'] as const) {
+      const p = this._getPane(which);
+      const index = p.panels.findIndex(panel => panel.id === panelId);
+      if (index < 0) continue;
 
-    const panel = this.panels[index];
-    const wasActive = index === this.activeIndex;
-    if (wasActive) panel.onDeactivate();
-    panel.onDestroy();
-    this.panels.splice(index, 1);
+      const panel = p.panels[index];
+      const wasActive = index === p.activeIndex;
+      if (wasActive) panel.onDeactivate();
+      panel.onDestroy();
+      p.panels.splice(index, 1);
 
-    if (this.panels.length === 0) {
-      this.activeIndex = 0;
-      this._visible = false;
-    } else {
-      this.activeIndex = Math.min(this.activeIndex, this.panels.length - 1);
-      if (wasActive) {
-        const newActive = this.panels[this.activeIndex];
-        if (newActive) newActive.onActivate();
+      if (p.panels.length === 0) {
+        p.activeIndex = 0;
+        if (which === 'bottom') {
+          this._bottomPaneVisible = false;
+          // Move focus to top if we were focused on empty bottom
+          if (this._focusedPane === 'bottom') this._focusedPane = 'top';
+        }
+      } else {
+        p.activeIndex = Math.min(p.activeIndex, p.panels.length - 1);
+        if (wasActive) {
+          const newActive = p.panels[p.activeIndex];
+          if (newActive) newActive.onActivate();
+        }
       }
+
+      // Hide sidebar if no panels remain in either pane
+      if (this.topPane.panels.length === 0 && this.bottomPane.panels.length === 0) {
+        this._visible = false;
+      }
+      return;
     }
   }
 
-  getOpen(): Panel[] {
-    return [...this.panels];
+  /**
+   * Move a panel to a specific pane. If panelId is omitted, moves the active
+   * panel from the currently focused pane.
+   */
+  moveToPane(dest: 'top' | 'bottom', panelId?: string): void {
+    const srcPaneName = panelId
+      ? this._findPaneOf(panelId) ?? this._focusedPane
+      : this._focusedPane;
+    if (srcPaneName === dest) return; // already there
+    const dstPaneName = dest;
+    this._moveBetweenPanes(srcPaneName, dstPaneName, panelId);
   }
 
-  getActive(): Panel | null {
-    if (this.panels.length === 0) return null;
-    return this.panels[this.activeIndex] ?? null;
+  /**
+   * Move a panel to the other pane. If panelId is omitted, moves the active
+   * panel from the currently focused pane.
+   */
+  moveToOtherPane(panelId?: string): void {
+    const srcPaneName = panelId
+      ? this._findPaneOf(panelId) ?? this._focusedPane
+      : this._focusedPane;
+    const dstPaneName: 'top' | 'bottom' = srcPaneName === 'top' ? 'bottom' : 'top';
+    this._moveBetweenPanes(srcPaneName, dstPaneName, panelId);
   }
 
   // -------------------------------------------------------------------------
-  // Navigation
+  // Navigation — operates on focused pane
   // -------------------------------------------------------------------------
 
   nextPanel(): void {
-    if (this.panels.length === 0) return;
-    const oldPanel = this.panels[this.activeIndex];
+    const p = this._getFocusedPane();
+    if (p.panels.length === 0) return;
+    const oldPanel = p.panels[p.activeIndex];
     if (oldPanel) oldPanel.onDeactivate();
-    this.activeIndex = (this.activeIndex + 1) % this.panels.length;
-    const newPanel = this.panels[this.activeIndex];
+    p.activeIndex = (p.activeIndex + 1) % p.panels.length;
+    const newPanel = p.panels[p.activeIndex];
     if (newPanel) newPanel.onActivate();
   }
 
   prevPanel(): void {
-    if (this.panels.length === 0) return;
-    const oldPanel = this.panels[this.activeIndex];
+    const p = this._getFocusedPane();
+    if (p.panels.length === 0) return;
+    const oldPanel = p.panels[p.activeIndex];
     if (oldPanel) oldPanel.onDeactivate();
-    this.activeIndex = (this.activeIndex - 1 + this.panels.length) % this.panels.length;
-    const newPanel = this.panels[this.activeIndex];
+    p.activeIndex = (p.activeIndex - 1 + p.panels.length) % p.panels.length;
+    const newPanel = p.panels[p.activeIndex];
     if (newPanel) newPanel.onActivate();
   }
 
   activateByIndex(index: number): void {
-    if (index < 0 || index >= this.panels.length) return;
-    if (index === this.activeIndex) return;
-    const oldPanel = this.panels[this.activeIndex];
+    const p = this._getFocusedPane();
+    if (index < 0 || index >= p.panels.length) return;
+    if (index === p.activeIndex) return;
+    const oldPanel = p.panels[p.activeIndex];
     if (oldPanel) oldPanel.onDeactivate();
-    this.activeIndex = index;
-    const newPanel = this.panels[this.activeIndex];
+    p.activeIndex = index;
+    const newPanel = p.panels[p.activeIndex];
     if (newPanel) newPanel.onActivate();
   }
 
   activateById(panelId: string): void {
-    const index = this.panels.findIndex(p => p.id === panelId);
-    if (index >= 0 && index !== this.activeIndex) {
-      const oldPanel = this.panels[this.activeIndex];
-      if (oldPanel) oldPanel.onDeactivate();
-      this.activeIndex = index;
-      const newPanel = this.panels[this.activeIndex];
-      if (newPanel) newPanel.onActivate();
+    const which = this._findPaneOf(panelId);
+    if (!which) return;
+    this._activateByIdInPane(panelId, which);
+  }
+
+  // -------------------------------------------------------------------------
+  // Pane focus control
+  // -------------------------------------------------------------------------
+
+  focusPane(pane: 'top' | 'bottom'): void {
+    if (pane === 'bottom' && !this._bottomPaneVisible) return;
+    this._focusedPane = pane;
+  }
+
+  getFocusedPane(): 'top' | 'bottom' {
+    return this._focusedPane;
+  }
+
+  togglePaneFocus(): void {
+    if (!this._bottomPaneVisible || this.bottomPane.panels.length === 0) return;
+    this._focusedPane = this._focusedPane === 'top' ? 'bottom' : 'top';
+  }
+
+  // -------------------------------------------------------------------------
+  // Pane visibility
+  // -------------------------------------------------------------------------
+
+  toggleBottomPane(): void {
+    if (this._bottomPaneVisible) {
+      this._bottomPaneVisible = false;
+      if (this._focusedPane === 'bottom') this._focusedPane = 'top';
+    } else {
+      this._bottomPaneVisible = true;
     }
+  }
+
+  isBottomPaneVisible(): boolean {
+    return this._bottomPaneVisible && this.bottomPane.panels.length > 0;
+  }
+
+  // -------------------------------------------------------------------------
+  // Pane state accessors
+  // -------------------------------------------------------------------------
+
+  getTopPane(): Readonly<Pane> {
+    return this.topPane;
+  }
+
+  getBottomPane(): Readonly<Pane> {
+    return this.bottomPane;
+  }
+
+  // -------------------------------------------------------------------------
+  // Backward-compatible accessors (operate on focused pane)
+  // -------------------------------------------------------------------------
+
+  getOpen(): Panel[] {
+    const p = this._getFocusedPane();
+    return [...p.panels];
+  }
+
+  /**
+   * Returns all panels across both panes (top then bottom).
+   * Use this when you need to know if any panels exist at all.
+   */
+  getAllOpen(): Panel[] {
+    return [...this.topPane.panels, ...this.bottomPane.panels];
+  }
+
+  getActive(): Panel | null {
+    const p = this._getFocusedPane();
+    if (p.panels.length === 0) return null;
+    return p.panels[p.activeIndex] ?? null;
   }
 
   // -------------------------------------------------------------------------
@@ -177,7 +299,7 @@ export class PanelManager {
   }
 
   // -------------------------------------------------------------------------
-  // Split control
+  // Horizontal split control (left/right)
   // -------------------------------------------------------------------------
 
   getSplitRatio(): number {
@@ -205,15 +327,93 @@ export class PanelManager {
   }
 
   // -------------------------------------------------------------------------
+  // Vertical split control (top/bottom within panel area)
+  // -------------------------------------------------------------------------
+
+  getVerticalSplitRatio(): number {
+    return this._verticalSplitRatio;
+  }
+
+  setVerticalSplitRatio(ratio: number): void {
+    this._verticalSplitRatio = Math.max(0.2, Math.min(0.8, ratio));
+  }
+
+  // -------------------------------------------------------------------------
   // Cleanup
   // -------------------------------------------------------------------------
 
   destroyAll(): void {
-    for (const panel of this.panels) {
+    for (const panel of [...this.topPane.panels, ...this.bottomPane.panels]) {
       panel.onDestroy();
     }
-    this.panels = [];
-    this.activeIndex = 0;
+    this.topPane = { panels: [], activeIndex: 0 };
+    this.bottomPane = { panels: [], activeIndex: 0 };
+    this._focusedPane = 'top';
+    this._bottomPaneVisible = false;
     this._visible = false;
+  }
+
+  // -------------------------------------------------------------------------
+  // Private helpers
+  // -------------------------------------------------------------------------
+
+  private _getPane(which: 'top' | 'bottom'): Pane {
+    return which === 'top' ? this.topPane : this.bottomPane;
+  }
+
+  private _getFocusedPane(): Pane {
+    return this._getPane(this._focusedPane);
+  }
+
+  private _findPaneOf(panelId: string): 'top' | 'bottom' | null {
+    if (this.topPane.panels.some(p => p.id === panelId)) return 'top';
+    if (this.bottomPane.panels.some(p => p.id === panelId)) return 'bottom';
+    return null;
+  }
+
+  private _moveBetweenPanes(srcPaneName: 'top' | 'bottom', dstPaneName: 'top' | 'bottom', panelId?: string): void {
+    const src = this._getPane(srcPaneName);
+    const dst = this._getPane(dstPaneName);
+
+    const id = panelId ?? src.panels[src.activeIndex]?.id;
+    if (!id) return;
+
+    const index = src.panels.findIndex(p => p.id === id);
+    if (index < 0) return;
+
+    const panel = src.panels[index];
+    const wasActive = index === src.activeIndex;
+    if (wasActive) panel.onDeactivate();
+    src.panels.splice(index, 1);
+    src.activeIndex = Math.min(src.activeIndex, Math.max(0, src.panels.length - 1));
+
+    if (wasActive && src.panels.length > 0) {
+      src.panels[src.activeIndex]?.onActivate();
+    }
+
+    // Deactivate current active in dest
+    const oldDstActive = dst.panels[dst.activeIndex];
+    if (oldDstActive) oldDstActive.onDeactivate();
+
+    dst.panels.push(panel);
+    dst.activeIndex = dst.panels.length - 1;
+    panel.onActivate();
+
+    if (dstPaneName === 'bottom') {
+      this._bottomPaneVisible = true;
+    }
+    this._focusedPane = dstPaneName;
+  }
+
+  private _activateByIdInPane(panelId: string, which: 'top' | 'bottom'): void {
+    const p = this._getPane(which);
+    const index = p.panels.findIndex(panel => panel.id === panelId);
+    if (index >= 0 && index !== p.activeIndex) {
+      const oldPanel = p.panels[p.activeIndex];
+      if (oldPanel) oldPanel.onDeactivate();
+      p.activeIndex = index;
+      const newPanel = p.panels[p.activeIndex];
+      if (newPanel) newPanel.onActivate();
+    }
   }
 }

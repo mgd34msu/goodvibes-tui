@@ -6,6 +6,7 @@ import { getDisplayWidth } from '../utils/terminal-width.ts';
 // Color constants (vaporwave palette)
 // ---------------------------------------------------------------------------
 const ACTIVE_FG = '#00ffff';
+const ACTIVE_FG_UNFOCUSED = '36'; // dim cyan when pane is not focused
 const ACTIVE_BG = '#1a2a3a';
 const INACTIVE_FG = '244';
 const SEPARATOR_FG = '238';
@@ -73,6 +74,7 @@ export function renderPanelTabBar(
   panels: Panel[],
   activeIndex: number,
   width: number,
+  focused: boolean = true,
 ): Line {
   const line = createEmptyLine(width);
 
@@ -123,9 +125,9 @@ export function renderPanelTabBar(
     // Write tab content
     if (isActive) {
       writeString(line, tab.text, col, width, {
-        fg: ACTIVE_FG,
+        fg: focused ? ACTIVE_FG : ACTIVE_FG_UNFOCUSED,
         bg: ACTIVE_BG,
-        bold: true,
+        bold: focused,
       });
     } else {
       writeString(line, tab.text, col, width, {

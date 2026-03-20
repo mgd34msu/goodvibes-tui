@@ -753,6 +753,14 @@ export class InputHandler {
           }
           continue;
         }
+        // Ctrl+` (\x1b[96;5u CSI-u): toggle focus between top/bottom panes
+        if (token.ctrl && token.name.startsWith('\x1b[96;5')) {
+          if (pm.isVisible()) {
+            pm.togglePaneFocus();
+            this.bus.emit('render:request');
+          }
+          continue;
+        }
       }
 
       // --- Search mode has focus: two phases ---

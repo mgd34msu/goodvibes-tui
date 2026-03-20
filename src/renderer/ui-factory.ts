@@ -366,7 +366,7 @@ export class UIFactory {
   private static readonly THINK_GRADIENT_START = '#00ffff';
   private static readonly THINK_GRADIENT_END = '#d000ff';
 
-  public static createThinkingFragment(width: number, spinner: string, frame: number = 0, tokenSpeed?: number, toolPreview?: string): Line[] {
+  public static createThinkingFragment(width: number, spinner: string, frame: number = 0, tokenSpeed?: number, toolPreview?: string, inputTokens?: number, outputTokens?: number): Line[] {
     // Rotate phrase every ~3 seconds (frame ticks at 80ms, so ~37 frames)
     const phraseIndex = Math.floor(frame / 37) % this.THINKING_PHRASES.length;
     const phrase = this.THINKING_PHRASES[phraseIndex];
@@ -386,6 +386,25 @@ export class UIFactory {
       const fg = interpolateColor(this.THINK_GRADIENT_START, this.THINK_GRADIENT_END, gradientPos);
       line[col] = { char, fg, bg: '', bold: true, dim: false, underline: false, italic: false, strikethrough: false };
       col++;
+    }
+
+    // Append live token counter: ↑ <input> ↓ <output> (dim grey for input side, cyan for output side)
+    if (inputTokens !== undefined || outputTokens !== undefined) {
+      const inTok = inputTokens ?? 0;
+      const outTok = outputTokens ?? 0;
+      // Render input side in dim grey, output side in cyan
+      const inputPart = ` \u2191 ${fmtNum(inTok)} `;
+      const outputPart = `\u2193 ${fmtNum(outTok)}`;
+      for (const char of inputPart) {
+        if (col >= width) break;
+        line[col] = { char, fg: '243', bg: '', bold: false, dim: true, underline: false, italic: false, strikethrough: false };
+        col++;
+      }
+      for (const char of outputPart) {
+        if (col >= width) break;
+        line[col] = { char, fg: '#00ffff', bg: '', bold: false, dim: false, underline: false, italic: false, strikethrough: false };
+        col++;
+      }
     }
 
     const lines: Line[] = [

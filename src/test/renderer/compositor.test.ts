@@ -93,9 +93,9 @@ describe('Compositor — no panel', () => {
 
 describe('Compositor — with panel', () => {
   function makePanelData(): PanelCompositeData {
-    const tabBar = makeLine(PANEL_WIDTH, 'T');
-    const content = Array.from({ length: 5 }, () => makeLine(PANEL_WIDTH, 'P'));
-    return { tabBar, content, separator: true };
+    const topTabBar = makeLine(PANEL_WIDTH, 'T');
+    const topContent = Array.from({ length: 5 }, () => makeLine(PANEL_WIDTH, 'P'));
+    return { topTabBar, topContent, topFocused: true, separator: true, verticalSplitRatio: 0.5 };
   }
 
   test('separator drawn at correct column (sepX = leftWidth)', () => {
@@ -111,8 +111,8 @@ describe('Compositor — with panel', () => {
   test('panel tab bar renders at viewport row 0 (screen row 2)', () => {
     const { compositor } = makeCompositor();
     const panel = makePanelData();
-    // Stamp distinct char on tabBar col 0
-    panel.tabBar[0] = createStyledCell('T');
+    // Stamp distinct char on topTabBar col 0
+    panel.topTabBar[0] = createStyledCell('T');
     compositor.composite(makeBaseRequest({ panel, panelWidth: PANEL_WIDTH }));
     const panelStartX = (WIDTH - PANEL_WIDTH - 1) + 1; // = 25
     expect(cellAt(compositor, panelStartX, 2)?.char).toBe('T');
@@ -121,11 +121,11 @@ describe('Compositor — with panel', () => {
   test('panel content renders at viewport rows 1+ (screen rows 3+)', () => {
     const { compositor } = makeCompositor();
     const panel = makePanelData();
-    // Stamp distinct char on content[0] col 0
-    panel.content[0][0] = createStyledCell('C');
+    // Stamp distinct char on topContent[0] col 0
+    panel.topContent[0][0] = createStyledCell('C');
     compositor.composite(makeBaseRequest({ panel, panelWidth: PANEL_WIDTH }));
     const panelStartX = (WIDTH - PANEL_WIDTH - 1) + 1; // = 25
-    // viewport row 1 → screen row 3 → content[0]
+    // viewport row 1 → screen row 3 → topContent[0]
     expect(cellAt(compositor, panelStartX, 3)?.char).toBe('C');
   });
 
@@ -144,14 +144,131 @@ describe('Compositor — with panel', () => {
   });
 });
 
+describe('Compositor — dual-pane (top + bottom)', () => {
+  // Layout for these tests:
+  //   WIDTH=40, HEIGHT=14, PANEL_WIDTH=15
+  //   header=2, footer=2 → vHeight=10
+  //   verticalSplitRatio=0.5, contentRows=10-3=7
+  //   topPaneHeight=floor(7*0.5)=3, bottomPaneHeight=4
+  //   hSepRow = 1+3 = 4
+  //   Row layout (viewport i → screen row i+2):
+  //     i=0  → top tab bar        (screen 2)
+  //     i=1..3 → top content[0..2] (screen 3..5)
+  //     i=4  → horizontal sep     (screen 6)
+  //     i=5  → bottom tab bar     (screen 7)
+  //     i=6..9 → bottom content[0..3] (screen 8..11)
+
+  const DP_WIDTH = 40;
+  const DP_HEIGHT = 14;
+  const DP_PANEL_WIDTH = 15;
+  // leftWidth = 40 - 15 - 1 = 24, sepX = 24
+  const SEP_X = DP_WIDTH - DP_PANEL_WIDTH - 1; // = 24
+  const PANEL_START_X = SEP_X + 1; // = 25
+
+  function makeDualPaneRequest(overrides: Partial<CompositeRequest> = {}): CompositeRequest {
+    return {
+      width: DP_WIDTH,
+      height: DP_HEIGHT,
+      header: [makeLine(DP_WIDTH, 'H'), makeLine(DP_WIDTH, 'H')],
+      viewport: Array.from({ length: 10 }, () => makeLine(DP_WIDTH, '.')),
+      footer: [makeLine(DP_WIDTH, 'F'), makeLine(DP_WIDTH, 'F')],
+      ...overrides,
+    };
+  }
+
+  function makeDualPaneData(): PanelCompositeData {
+    return {
+      topTabBar: makeLine(DP_PANEL_WIDTH, 'T'),
+      topContent: Array.from({ length: 3 }, () => makeLine(DP_PANEL_WIDTH, 'P')),
+      topFocused: true,
+      bottomTabBar: makeLine(DP_PANEL_WIDTH, 'B'),
+      bottomContent: Array.from({ length: 4 }, () => makeLine(DP_PANEL_WIDTH, 'Q')),
+      bottomFocused: false,
+      separator: true,
+      verticalSplitRatio: 0.5,
+    };
+  }
+
+  test('horizontal separator drawn at correct row (hSepRow=4, screen row 6)', () => {
+    const { compositor } = makeCompositor();
+    const panel = makeDualPaneData();
+    compositor.composite(makeDualPaneRequest({ panel, panelWidth: DP_PANEL_WIDTH }));
+    // hSepRow = 4 → screenY = 2 + 4 = 6
+    // Horizontal separator char is ─ (\u2500) in panel area
+    expect(cellAt(compositor, PANEL_START_X, 6)?.char).toBe('\u2500');
+  });
+
+  test('T-junction (├) at sepX on separator row', () => {
+    const { compositor } = makeCompositor();
+    const panel = makeDualPaneData();
+    compositor.composite(makeDualPaneRequest({ panel, panelWidth: DP_PANEL_WIDTH }));
+    // sepX = 24, separator row screen 6
+    expect(cellAt(compositor, SEP_X, 6)?.char).toBe('\u251c');
+  });
+
+  test('bottom tab bar appears at hSepRow+1 (screen row 7)', () => {
+    const { compositor } = makeCompositor();
+    const panel = makeDualPaneData();
+    panel.bottomTabBar![0] = createStyledCell('Z');
+    compositor.composite(makeDualPaneRequest({ panel, panelWidth: DP_PANEL_WIDTH }));
+    // i=5 → screenY=7 → bottom tab bar
+    expect(cellAt(compositor, PANEL_START_X, 7)?.char).toBe('Z');
+  });
+
+  test('bottom content appears below bottom tab bar (screen row 8+)', () => {
+    const { compositor } = makeCompositor();
+    const panel = makeDualPaneData();
+    panel.bottomContent![0]![0] = createStyledCell('W');
+    compositor.composite(makeDualPaneRequest({ panel, panelWidth: DP_PANEL_WIDTH }));
+    // i=6 → screenY=8 → bottomContent[0]
+    expect(cellAt(compositor, PANEL_START_X, 8)?.char).toBe('W');
+  });
+
+  test('verticalSplitRatio=0.8 shifts separator row further down', () => {
+    const { compositor } = makeCompositor();
+    const panel = makeDualPaneData();
+    panel.verticalSplitRatio = 0.8;
+    // contentRows=7, topH=floor(7*0.8)=5, hSepRow=1+5=6 → screenY=8
+    compositor.composite(makeDualPaneRequest({ panel, panelWidth: DP_PANEL_WIDTH }));
+    expect(cellAt(compositor, PANEL_START_X, 8)?.char).toBe('\u2500');
+    expect(cellAt(compositor, SEP_X, 8)?.char).toBe('\u251c');
+  });
+
+  test('dual pane handles sparse content (fewer lines than pane height)', () => {
+    // topContent has 1 line but topPaneHeight is 3 — should render without crash
+    // bottomContent has 2 lines but bottomPaneHeight is 4
+    const { compositor } = makeCompositor();
+    const panel = makeDualPaneData();
+    panel.topContent = [makeLine(DP_PANEL_WIDTH, 'S')];
+    panel.bottomContent = [
+      makeLine(DP_PANEL_WIDTH, 'X'),
+      makeLine(DP_PANEL_WIDTH, 'X'),
+    ];
+    expect(() => {
+      compositor.composite(makeDualPaneRequest({ panel, panelWidth: DP_PANEL_WIDTH }));
+    }).not.toThrow();
+    // The single top content line should appear at screen row 3 (i=1)
+    expect(cellAt(compositor, PANEL_START_X, 3)?.char).toBe('S');
+    // Rows i=2 and i=3 are beyond topContent — cells should be undefined or base viewport
+    expect(cellAt(compositor, PANEL_START_X, 4)?.char).not.toBe('S');
+    // Bottom content rows i=6 and i=7 (screen 8, 9) should be populated
+    expect(cellAt(compositor, PANEL_START_X, 8)?.char).toBe('X');
+    expect(cellAt(compositor, PANEL_START_X, 9)?.char).toBe('X');
+    // Row i=8 (screen 10) is beyond bottomContent — should not crash
+    expect(cellAt(compositor, PANEL_START_X, 10)).toBeDefined();
+  });
+});
+
 describe('Compositor — degenerate panelWidth >= width', () => {
   test('leftWidth clamped to 1 when panelWidth >= width - 1', () => {
     const { compositor } = makeCompositor();
     // panelWidth = width - 1 → leftWidth would be -1 without clamp, clamped to 1
     const hugePanel: PanelCompositeData = {
-      tabBar: makeLine(WIDTH - 1, 'T'),
-      content: Array.from({ length: 6 }, () => makeLine(WIDTH - 1, 'P')),
+      topTabBar: makeLine(WIDTH - 1, 'T'),
+      topContent: Array.from({ length: 6 }, () => makeLine(WIDTH - 1, 'P')),
+      topFocused: true,
       separator: false,
+      verticalSplitRatio: 0.5,
     };
     // Should not throw
     expect(() => {
@@ -165,9 +282,11 @@ describe('Compositor — degenerate panelWidth >= width', () => {
   test('selection overlay constrained to clamped leftWidth', () => {
     const { compositor } = makeCompositor();
     const panel: PanelCompositeData = {
-      tabBar: makeLine(WIDTH, 'T'),
-      content: Array.from({ length: 6 }, () => makeLine(WIDTH, 'P')),
+      topTabBar: makeLine(WIDTH, 'T'),
+      topContent: Array.from({ length: 6 }, () => makeLine(WIDTH, 'P')),
+      topFocused: true,
       separator: false,
+      verticalSplitRatio: 0.5,
     };
     const selection: SelectionInfo = {
       isCellSelected: (col, _row) => col === 0,
