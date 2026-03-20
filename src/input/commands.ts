@@ -53,6 +53,7 @@ export function registerBuiltinCommands(registry: CommandRegistry): void {
     aliases: ['m'],
     description: 'Select or display the current LLM model',
     usage: '[model-id]',
+    argsHint: '[name]',
     handler(args, ctx) {
       if (args.length === 0) {
         // Open the interactive model picker if available, else fall back to list
@@ -117,6 +118,7 @@ export function registerBuiltinCommands(registry: CommandRegistry): void {
     name: 'help',
     aliases: ['h', '?'],
     description: 'Show available commands and keyboard shortcuts',
+    argsHint: '[command]',
     handler(_args, ctx) {
       // Use selection modal for interactive command picker
       // The ? key still opens the quick text overlay via handler.ts
@@ -237,6 +239,7 @@ export function registerBuiltinCommands(registry: CommandRegistry): void {
     aliases: ['cfg'],
     description: 'Show or set config values',
     usage: '[category|key] [value] | reset [key]',
+    argsHint: '<key> [value]',
     handler(args, ctx) {
       const cm = ctx.configManager;
       const all = cm.getAll();
@@ -602,6 +605,7 @@ export function registerBuiltinCommands(registry: CommandRegistry): void {
     aliases: ['p'],
     description: 'Switch provider',
     usage: '[provider-name]',
+    argsHint: '[name]',
     handler(args, ctx) {
       if (args.length === 0) {
         // Open the interactive provider picker if available, else fall back to list
@@ -664,6 +668,7 @@ export function registerBuiltinCommands(registry: CommandRegistry): void {
     aliases: ['e'],
     description: 'Show or set reasoning effort level',
     usage: '[level]',
+    argsHint: '<instant|low|medium|high>',
     handler(args, ctx) {
       const currentModel = ctx.providerRegistry.getCurrentModel();
       const VALID_LEVELS = currentModel.reasoningEffort ?? [];
@@ -742,6 +747,7 @@ export function registerBuiltinCommands(registry: CommandRegistry): void {
     aliases: [],
     description: 'Export conversation as markdown',
     usage: '[filename.md]',
+    argsHint: '[filename.md]',
     async handler(args, ctx) {
       const messages = ctx.conversationManager.toJSON() as ExportableConversation;
       const lines: string[] = [];
@@ -783,6 +789,7 @@ export function registerBuiltinCommands(registry: CommandRegistry): void {
     aliases: [],
     description: 'Show or set the conversation title',
     usage: '[text]',
+    argsHint: '[text]',
     handler(args, ctx) {
       if (args.length === 0) {
         const current = ctx.conversationManager.title;
@@ -801,6 +808,7 @@ export function registerBuiltinCommands(registry: CommandRegistry): void {
     aliases: [],
     description: 'Save current session to .goodvibes/tui/sessions/',
     usage: '[name]',
+    argsHint: '[name]',
     handler(args, ctx) {
       const sessionManager = getSessionManager();
       const rawName = args[0] || ctx.conversationManager.title || `session-${Date.now()}`;
@@ -828,6 +836,7 @@ export function registerBuiltinCommands(registry: CommandRegistry): void {
     aliases: [],
     description: 'Load a saved session',
     usage: '<name>',
+    argsHint: '<name>',
     handler(args, ctx) {
       if (!args[0]) {
         ctx.print('Usage: /load <session-name>\nRun /sessions to list available sessions.');
@@ -886,6 +895,7 @@ export function registerBuiltinCommands(registry: CommandRegistry): void {
     aliases: ['r'],
     description: 'Re-send the last user message',
     usage: '[modified text]',
+    argsHint: '[modified text]',
     handler(args, ctx) {
       const lastMsg = ctx.conversationManager.getLastUserMessage();
       if (!lastMsg) {
@@ -964,6 +974,7 @@ export function registerBuiltinCommands(registry: CommandRegistry): void {
     aliases: ['tmpl'],
     description: 'Manage and use prompt templates',
     usage: 'save <name> | use <name> [args] | list | edit <name> | delete <name>',
+    argsHint: '<save|use|list|edit|delete> [name]',
     handler(args, ctx) {
       const sub = args[0];
       const rest = args.slice(1);
@@ -1088,6 +1099,7 @@ export function registerBuiltinCommands(registry: CommandRegistry): void {
     aliases: ['perms'],
     description: 'Show or set permission mode and per-tool settings',
     usage: '[allow-all|prompt|custom] | [tool <name> allow|prompt|deny]',
+    argsHint: '[allow-all|prompt|custom]',
     handler(args, ctx) {
       const cm = ctx.configManager;
       const VALID_MODES = ['allow-all', 'prompt', 'custom'] as const;
@@ -1237,6 +1249,7 @@ export function registerBuiltinCommands(registry: CommandRegistry): void {
     aliases: [],
     description: 'Expand blocks by type',
     usage: '[all|thinking|tool|code]',
+    argsHint: '[all|thinking|tool|code]',
     handler(args, ctx) {
       toggleBlocks(args[0] || 'all', false, ctx);
     },
@@ -1248,6 +1261,7 @@ export function registerBuiltinCommands(registry: CommandRegistry): void {
     aliases: [],
     description: 'Collapse blocks by type',
     usage: '[all|thinking|tool|code]',
+    argsHint: '[all|thinking|tool|code]',
     handler(args, ctx) {
       toggleBlocks(args[0] || 'all', true, ctx);
     },
@@ -1303,6 +1317,7 @@ export function registerBuiltinCommands(registry: CommandRegistry): void {
     aliases: [],
     description: 'Manage encrypted API key secrets',
     usage: 'set <KEY> <value> | get <KEY> | list | delete <KEY>',
+    argsHint: '<set|get|list|delete> [KEY]',
     async handler(args, ctx) {
       const mgr = getSecretsManager();
       const [sub, ...rest] = args;
@@ -1461,6 +1476,7 @@ export function registerBuiltinCommands(registry: CommandRegistry): void {
     aliases: ['panels', 'p'],
     description: 'Open, close, or list panels. Usage: /panel [open <id>|close <id>|list|toggle]',
     usage: '[open <id>|close <id>|list|toggle]',
+    argsHint: '<open|close|list|toggle> [id]',
     handler(args, ctx) {
       const pm = getPanelManager();
       const sub = args[0]?.toLowerCase() ?? '';
@@ -1517,6 +1533,7 @@ export function registerBuiltinCommands(registry: CommandRegistry): void {
   registry.register({
     name: 'danger',
     aliases: [],
+    argsHint: '[key] [value]',
     description: '⚠ Danger zone settings (agent recursion, daemon, HTTP listener)',
     usage: '[key] [value]',
     handler(args, ctx) {
@@ -1746,6 +1763,7 @@ export function registerBuiltinCommands(registry: CommandRegistry): void {
     aliases: ['sess'],
     description: 'Manage sessions: list, rename, resume, fork, save, info, export, search, delete',
     usage: '[list | rename <name> | resume <id|name> | fork | save | info <id> | export <id> [format] | search <query> | delete <id>]',
+    argsHint: '<list|rename|resume|fork|save|info|export|search|delete>',
     async handler(args, ctx) {
       const sm = getSessionManager();
       const sub = args[0];
@@ -2020,6 +2038,7 @@ export function registerBuiltinCommands(registry: CommandRegistry): void {
     name: 'plan',
     description: 'Manage execution plans for multi-step tasks',
     usage: '[list | show <id> | <task description>]',
+    argsHint: '[list|show <id>|<task description>]',
     handler(args, ctx) {
       if (args.length === 0) {
         // Show active plan status

@@ -709,6 +709,52 @@ export class InputHandler {
     const lineCount = history.getLineCount();
 
     for (const token of tokens) {
+      // --- Panel keybindings (global — must run before any modal guard) ---
+      if (token.type === 'key') {
+        const pm = getPanelManager();
+        // Ctrl+\ (0x1c): toggle panel sidebar visibility
+        if (token.logicalName === '|' && token.ctrl) {
+          pm.toggle();
+          this.bus.emit('render:request');
+          continue;
+        }
+        // Ctrl+] (0x1d): next panel tab
+        if (token.logicalName === '}' && token.ctrl) {
+          if (pm.isVisible()) {
+            pm.nextPanel();
+            this.bus.emit('render:request');
+          }
+          continue;
+        }
+        // Ctrl+^ (0x1e): previous panel tab
+        // Note: Ctrl+[ cannot be used — it maps to ESC (0x1b) in all terminals.
+        if (token.logicalName === '~' && token.ctrl) {
+          if (pm.isVisible()) {
+            pm.prevPanel();
+            this.bus.emit('render:request');
+          }
+          continue;
+        }
+        // Ctrl+} / Ctrl+{ (CSI-u protocol only): resize panel sidebar
+        // These require a CSI-u capable terminal (e.g. kitty, foot, wezterm).
+        // Ctrl+} (\x1b[125;5u): widen left — shrink panel sidebar
+        if (token.ctrl && token.name.startsWith('\x1b[125;5')) {
+          if (pm.isVisible()) {
+            pm.widenLeft();
+            this.bus.emit('render:request');
+          }
+          continue;
+        }
+        // Ctrl+{ (\x1b[123;5u): widen right — grow panel sidebar
+        if (token.ctrl && token.name.startsWith('\x1b[123;5')) {
+          if (pm.isVisible()) {
+            pm.widenRight();
+            this.bus.emit('render:request');
+          }
+          continue;
+        }
+      }
+
       // --- Search mode has focus: two phases ---
       // Phase 1 (unlocked): typing query, text goes to search, Enter/Tab locks
       // Phase 2 (locked): navigation with arrows/comma/period, Esc closes
@@ -1520,50 +1566,6 @@ export class InputHandler {
         // PageDown: scroll by viewport page
         if (token.logicalName === 'pagedown') {
           this.scroll(Math.max(1, vHeight - 2));
-          continue;
-        }
-
-        // --- Panel keybindings ---
-        const pm = getPanelManager();
-        // Ctrl+\ (0x1c): toggle panel sidebar visibility
-        if (token.logicalName === '|' && token.ctrl) {
-          pm.toggle();
-          this.bus.emit('render:request');
-          continue;
-        }
-        // Ctrl+] (0x1d): next panel tab
-        if (token.logicalName === '}' && token.ctrl) {
-          if (pm.isVisible()) {
-            pm.nextPanel();
-            this.bus.emit('render:request');
-          }
-          continue;
-        }
-        // Ctrl+^ (0x1e): previous panel tab
-        // Note: Ctrl+[ cannot be used — it maps to ESC (0x1b) in all terminals.
-        if (token.logicalName === '~' && token.ctrl) {
-          if (pm.isVisible()) {
-            pm.prevPanel();
-            this.bus.emit('render:request');
-          }
-          continue;
-        }
-        // Ctrl+} / Ctrl+{ (CSI-u protocol only): resize panel sidebar
-        // These require a CSI-u capable terminal (e.g. kitty, foot, wezterm).
-        // Ctrl+} (\x1b[125;5u): widen left — shrink panel sidebar
-        if (token.ctrl && token.name.startsWith('\x1b[125;5')) {
-          if (pm.isVisible()) {
-            pm.widenLeft();
-            this.bus.emit('render:request');
-          }
-          continue;
-        }
-        // Ctrl+{ (\x1b[123;5u): widen right — grow panel sidebar
-        if (token.ctrl && token.name.startsWith('\x1b[123;5')) {
-          if (pm.isVisible()) {
-            pm.widenRight();
-            this.bus.emit('render:request');
-          }
           continue;
         }
 

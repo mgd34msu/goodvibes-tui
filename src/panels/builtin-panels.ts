@@ -10,9 +10,16 @@ import { DocsPanel } from './docs-panel.ts';
 import { ThinkingPanel } from './thinking-panel.ts';
 import { ToolInspectorPanel } from './tool-inspector-panel.ts';
 import { ContextVisualizerPanel } from './context-visualizer-panel.ts';
+import { FileExplorerPanel } from './file-explorer-panel.ts';
+import { FilePreviewPanel } from './file-preview-panel.ts';
+import { SymbolOutlinePanel } from './symbol-outline-panel.ts';
+import { AgentLogsPanel } from './agent-logs-panel.ts';
+import { TokenBudgetPanel } from './token-budget-panel.ts';
+import { WrfcPanel } from './wrfc-panel.ts';
 import type { EventBus } from '../core/event-bus.ts';
 import type { ToolRegistry } from '../tools/registry.ts';
 import type { ProviderRegistry } from '../providers/registry.ts';
+import type { Orchestrator } from '../core/orchestrator.ts';
 
 /**
  * Register all built-in panel types with the given PanelManager.
@@ -32,6 +39,10 @@ export interface BuiltinPanelDeps {
   providerRegistry?: ProviderRegistry;
   /** Context window size in tokens (for ContextVisualizerPanel). */
   contextWindow?: number;
+  /** Main Orchestrator instance for TokenBudgetPanel.wire(). */
+  orchestrator?: Orchestrator;
+  /** Callback returning the current model context window size (for TokenBudgetPanel). */
+  getCtxWindow?: () => number;
 }
 
 export function registerBuiltinPanels(manager: PanelManager, deps: BuiltinPanelDeps = {}): void {
@@ -142,5 +153,69 @@ export function registerBuiltinPanels(manager: PanelManager, deps: BuiltinPanelD
     category: 'session',
     description: 'Tool list, model capabilities, and keyboard shortcut reference',
     factory: () => new DocsPanel(deps.toolRegistry, deps.providerRegistry),
+  });
+
+  manager.registerType({
+    id: 'explorer',
+    name: 'Explorer',
+    icon: 'E',
+    category: 'development',
+    description: 'File system browser with keyboard navigation',
+    factory: () => new FileExplorerPanel(),
+  });
+
+  manager.registerType({
+    id: 'preview',
+    name: 'Preview',
+    icon: 'V',
+    category: 'development',
+    description: 'Syntax-highlighted file preview',
+    factory: () => new FilePreviewPanel(),
+  });
+
+  manager.registerType({
+    id: 'symbols',
+    name: 'Symbols',
+    icon: 'S',
+    category: 'development',
+    description: 'Symbol outline for the active file: functions, classes, and exports',
+    factory: () => new SymbolOutlinePanel(),
+  });
+
+  if (deps.bus) {
+    const { bus } = deps;
+
+    manager.registerType({
+      id: 'agent-logs',
+      name: 'Agent Logs',
+      icon: 'A',
+      category: 'agent',
+      description: 'Live log stream from all running agents',
+      factory: () => new AgentLogsPanel(bus),
+    });
+
+    manager.registerType({
+      id: 'wrfc',
+      name: 'WRFC',
+      icon: 'W',
+      category: 'agent',
+      description: 'WRFC chain view: write, review, fix, and confirm cycle status',
+      factory: () => new WrfcPanel(bus),
+    });
+  }
+
+  manager.registerType({
+    id: 'tokens',
+    name: 'Tokens',
+    icon: 'K',
+    category: 'monitoring',
+    description: 'Token budget tracker: per-turn and cumulative usage with context window gauge',
+    factory: () => {
+      const panel = new TokenBudgetPanel();
+      if (deps.orchestrator && deps.getCtxWindow) {
+        panel.wire(deps.orchestrator, deps.getCtxWindow);
+      }
+      return panel;
+    },
   });
 }
