@@ -79,6 +79,8 @@ export interface SlashCommand {
   description: string;
   /** Optional usage hint, e.g. "<model-id>". */
   usage?: string;
+  /** Short inline argument hint shown after cursor in dim grey, e.g. "[name]". Falls back to usage if not set. */
+  argsHint?: string;
   /** The function executed when the command is invoked. */
   handler: (args: string[], context: CommandContext) => void | Promise<void>;
 }

@@ -196,7 +196,14 @@ async function main() {
 
   // --- Module wiring ---
   const bus = new EventBus();
-  const conversation = new ConversationManager(() => stdout.columns || 80);
+  const conversation = new ConversationManager(() => {
+    const w = stdout.columns || 80;
+    const pm = getPanelManager();
+    if (pm.isVisible() && pm.getOpen().length > 0) {
+      return pm.getLeftWidth(w);
+    }
+    return w;
+  });
   conversation.setConfigManager(configManager);
   const compositor = new Compositor(stdout);
   const selection = new SelectionManager();
@@ -382,6 +389,8 @@ async function main() {
     toolRegistry,
     providerRegistry,
     contextWindow: providerRegistry.getCurrentModel().contextWindow,
+    orchestrator,
+    getCtxWindow: () => providerRegistry.getCurrentModel().contextWindow,
   });
 
   // Wire /plan command: when a plan is activated, forward the task to the orchestrator
@@ -567,6 +576,40 @@ async function main() {
     const processIndicatorLines = renderProcessIndicator(width, runningAgentCount, runningProcessCount, input.indicatorFocused);
     const cw = getPromptContentWidth();
     const promptInfo = input.getWrappedPromptInfo(cw);
+    // Compute args hint for slash commands — shown in dim grey after cursor
+    const commandArgsHint = (() => {
+      const p = input.prompt;
+      if (!p.startsWith('/')) return undefined;
+      // Extract the command name (everything up to first space)
+      const spaceIdx = p.indexOf(' ');
+      if (spaceIdx !== -1) {
+        // User has already typed args — check for subcommand hints
+        const cmdName = p.slice(1, spaceIdx);
+        const cmd = commandRegistry.get(cmdName);
+        if (!cmd) return undefined;
+        // Sub-command awareness: check if there's a matching sub-hint pattern
+        const afterCmd = p.slice(spaceIdx + 1);
+        const subSpaceIdx = afterCmd.indexOf(' ');
+        if (subSpaceIdx !== -1) return undefined; // deeper args, no hint
+        // User typed one subcommand word, check for known subcommand hints
+        const subHints: Record<string, Record<string, string>> = {
+          session: { rename: '<name>', resume: '<id|name>', info: '<id>', export: '<id> [format]', search: '<query>', delete: '<id>' },
+          template: { save: '<name>', use: '<name> [args]', edit: '<name>', delete: '<name>' },
+          secrets: { set: '<KEY> <value>', get: '<KEY>', delete: '<KEY>' },
+          permissions: { tool: '<name> allow|prompt|deny' },
+          config: { reset: '<key>' },
+          danger: {},
+        };
+        const subMap = subHints[cmdName];
+        if (subMap && afterCmd in subMap) return subMap[afterCmd];
+        return undefined;
+      }
+      // No space yet — user is still typing the command name
+      const cmdName = p.slice(1);
+      const cmd = commandRegistry.get(cmdName);
+      if (!cmd) return undefined;
+      return cmd.argsHint ?? cmd.usage;
+    })();
     const footerContentLines = UIFactory.createFooter(
       width,
       promptInfo.visibleLines.join('\n'),
@@ -591,7 +634,8 @@ async function main() {
         }
         return false;
       })(),
-      orchestrator.lastInputTokens
+      orchestrator.lastInputTokens,
+      commandArgsHint,
     );
     // Insert process indicator directly after the input box (top border + content rows + bottom border)
     const inputBoxRows = promptInfo.visibleLines.length + 2;

@@ -185,7 +185,8 @@ export class UIFactory {
     contextWindow?: number,
     compactThreshold?: number,
     dangerMode?: boolean,
-    lastInputTokens?: number
+    lastInputTokens?: number,
+    commandArgsHint?: string,
   ): Line[] {
     const lines: Line[] = [];
     const promptLines = prompt.split('\n');
@@ -235,6 +236,32 @@ export class UIFactory {
         const endX = boxStartX + 2 + prefix.length + text.length;
         if (endX < boxStartX + boxWidth - 2) {
           contentLine[endX] = { char: '\u2588', fg: '252', bg: BG_COLOR, bold: false, dim: false, underline: false, italic: false, strikethrough: false };
+        }
+      }
+
+      // Overlay args hint: dim grey text after cursor on the last prompt line.
+      // Only shown when a commandArgsHint is provided and cursor is at the end of input.
+      if (commandArgsHint && i === promptLines.length - 1) {
+        // Determine where the cursor sits on this line
+        let cursorColOnLine: number;
+        if (cursorPos !== undefined) {
+          let lineStart = 0;
+          for (let li = 0; li < i; li++) lineStart += promptLines[li].length + 1;
+          cursorColOnLine = cursorPos - lineStart;
+        } else {
+          cursorColOnLine = text.length;
+        }
+        // Only show hint when cursor is at end of the last line (no args typed yet)
+        if (cursorColOnLine >= text.length) {
+          // Hint starts one cell after the cursor block
+          const hintStartX = boxStartX + 2 + prefix.length + text.length + 1;
+          const hintText = ' ' + commandArgsHint;
+          let hx = hintStartX;
+          for (const ch of hintText) {
+            if (hx >= boxStartX + boxWidth - 2) break;
+            contentLine[hx] = { char: ch, fg: '238', bg: BG_COLOR, bold: false, dim: true, underline: false, italic: false, strikethrough: false };
+            hx++;
+          }
         }
       }
 

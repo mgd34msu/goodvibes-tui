@@ -22,7 +22,7 @@ export function renderAutocompleteOverlay(
   // boxMargin is intentionally 2 (not 4 like other overlays) so the autocomplete
   // docks close to the input rather than indenting deeply into the viewport.
   const boxMargin = 2;
-  const boxW = Math.max(20, Math.min(width - boxMargin * 2, 68));
+  const boxW = Math.max(20, Math.min(width - boxMargin * 2, 88));
   const contentW = boxW - 4; // 2 border chars + 2 padding chars each side
   const pad = ' '.repeat(boxMargin);
 
