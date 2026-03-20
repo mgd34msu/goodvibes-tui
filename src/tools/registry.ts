@@ -1,5 +1,6 @@
 import type { Tool, ToolDefinition, ToolResult } from '../types/tools.ts';
 import { ToolError } from '../types/errors.ts';
+import { repairToolCall } from './auto-repair.ts';
 
 /**
  * ToolRegistry - Central registry for all tools available to the LLM.
@@ -37,9 +38,26 @@ export class ToolRegistry {
     }
 
     try {
-      const result = await tool.execute(args);
+      // Attempt to repair malformed args before execution.
+      // Premium models that send correct calls pass through unchanged.
+      const repairResult = repairToolCall(name, args, tool.definition);
+      const effectiveArgs = repairResult.repaired ? repairResult.fixed : args;
+
+      const result = await tool.execute(effectiveArgs);
       // Tool.execute returns ToolResult without callId — inject it here
-      return { ...result, callId };
+      const toolResult = { ...result, callId };
+
+      // Surface repairs to the LLM so it knows what was auto-fixed
+      if (repairResult.repaired) {
+        const repairNote = `[Auto-repaired: ${repairResult.repairs.join(', ')}]`;
+        if (typeof toolResult.output === 'string') {
+          toolResult.output = `${repairNote}\n${toolResult.output}`;
+        } else {
+          toolResult.output = repairNote;
+        }
+      }
+
+      return toolResult;
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       const toolErr = new ToolError(message, name);

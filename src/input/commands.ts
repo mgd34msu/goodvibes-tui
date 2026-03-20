@@ -13,6 +13,8 @@ import type { BlockMeta } from '../core/conversation.ts';
 import { ServiceRegistry } from '../config/service-registry.ts';
 import { getSecretsManager } from '../config/secrets.ts';
 import { scan, persistProviders } from '../discovery/index.ts';
+import { planManager } from '../core/plan-manager-instance.ts';
+import { classifyIntent } from '../core/intent-classifier.ts';
 
 let _serviceRegistry: ServiceRegistry | undefined;
 function getServiceRegistry(): ServiceRegistry {
@@ -1665,6 +1667,78 @@ export function registerBuiltinCommands(registry: CommandRegistry): void {
       persistProviders(result.servers);
 
       ctx.renderRequest();
+    },
+  });
+
+  // ── /plan ─────────────────────────────────────────────────
+  registry.register({
+    name: 'plan',
+    description: 'Manage execution plans for multi-step tasks',
+    usage: '[list | show <id> | <task description>]',
+    handler(args, ctx) {
+      if (args.length === 0) {
+        // Show active plan status
+        const active = planManager.getActive();
+        if (!active) {
+          ctx.print('No active plan. Use /plan <task description> to create one.');
+          return;
+        }
+        const summary = planManager.getSummary(active);
+        ctx.print(`Active plan: "${active.title}" [${active.status.toUpperCase()}]\n${summary}`);
+        return;
+      }
+
+      if (args[0] === 'list') {
+        const plans = planManager.list();
+        if (plans.length === 0) {
+          ctx.print('No plans found.');
+          return;
+        }
+        const lines = plans.map((p) => {
+          const marker = p.status === 'active' ? '▶' : ' ';
+          return `  ${marker} ${p.id.slice(0, 8)}  [${p.status.padEnd(8)}]  ${p.title}`;
+        });
+        ctx.print(`Plans (${plans.length}):\n${lines.join('\n')}`);
+        return;
+      }
+
+      if (args[0] === 'show') {
+        const id = args[1];
+        if (!id) {
+          ctx.print('Usage: /plan show <plan-id>');
+          return;
+        }
+        // Support partial ID match
+        const plans = planManager.list();
+        const plan = plans.find((p) => p.id === id || p.id.startsWith(id));
+        if (!plan) {
+          ctx.print(`Plan not found: ${id}`);
+          return;
+        }
+        ctx.print(planManager.toMarkdown(plan));
+        return;
+      }
+
+      // Otherwise: treat args as task description — classify and force project mode
+      const taskDescription = args.join(' ');
+      const classification = classifyIntent(taskDescription);
+
+      // Create a draft plan immediately to track intent
+      const plan = planManager.create(taskDescription, [
+        { phase: 'Specification', description: 'Define spec and requirements' },
+        { phase: 'Planning', description: 'Create execution plan' },
+        { phase: 'Execution', description: 'Execute the plan' },
+      ]);
+
+      ctx.print(
+        `Plan created: "${plan.title}" (${plan.id.slice(0, 8)})\n` +
+        `Intent: ${classification.intent} (confidence: ${(classification.confidence * 100).toFixed(0)}%)\n` +
+        `Signals: ${classification.signals.join(', ') || 'none'}\n` +
+        `The model will create a spec and execution plan before executing.`
+      );
+
+      // Inject a system prompt instruction and send the message to the LLM
+      ctx.eventBus.emit('plan:activate', { planId: plan.id, task: taskDescription });
     },
   });
 }

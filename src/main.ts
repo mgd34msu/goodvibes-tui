@@ -33,6 +33,7 @@ import { registerBuiltinCommands } from './input/commands.ts';
 import { ScheduleManager } from './tools/workflow/index.ts';
 import { InputHistory } from './input/input-history.ts';
 import { loadSystemPrompt as _loadSystemPrompt } from './utils/prompt-loader.ts';
+import { getTierPromptSupplement } from './providers/tier-prompts.ts';
 import { GitStatusProvider } from './renderer/git-status.ts';
 import type { GitHeaderInfo } from './renderer/git-status.ts';
 import { renderHelpOverlay, renderShortcutsOverlay } from './renderer/help-overlay.ts';
@@ -278,12 +279,27 @@ async function main() {
     scrollToEnd,
     toolRegistry,
     permissionManager,
-    () => runtime.systemPrompt,
+    () => {
+      const tier = providerRegistry.getCurrentModel().tier ?? 'standard';
+      const supplement = getTierPromptSupplement(tier);
+      return supplement ? runtime.systemPrompt + '\n\n' + supplement : runtime.systemPrompt;
+    },
     hookDispatcher,
   );
 
   const acpManager = new AcpManager(bus);
   orchestrator.registerDelegateTool(acpManager);
+
+  // Wire /plan command: when a plan is activated, forward the task to the orchestrator
+  // as a user message so the model can create a spec and execution plan.
+  unsubs.push(bus.on('plan:activate', ({ task }: { task: string }) => {
+    // Use a short delay so the /plan command output renders before the LLM turn starts
+    setTimeout(() => {
+      orchestrator.handleUserInput(task).catch((err) => {
+        logger.debug('plan:activate handler failed', { error: String(err) });
+      });
+    }, 50);
+  }));
 
   // --- Command registry ---
   const commandRegistry = new CommandRegistry();

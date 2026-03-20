@@ -8,6 +8,7 @@ import type { WrfcChain, WrfcState, QualityGateResult, QueuedChain } from './wrf
 import { AgentWorktree } from './worktree.ts';
 import { configManager } from '../config/index.ts';
 import { logger } from '../utils/logger.ts';
+import { planManager } from '../core/plan-manager-instance.ts';
 
 /**
  * WrfcController — Event-driven state machine for automated WRFC chains.
@@ -326,6 +327,26 @@ export class WrfcController {
       chain.reviewCycles += 1;
 
       await this.processReview(chain, narrowedReport);
+    }
+
+    // Auto-update plan items referencing this agent ID to 'complete'.
+    const activePlan = planManager.getActive();
+    if (activePlan) {
+      const matchingItems = activePlan.items.filter(
+        item => item.agentId === agentId && item.status !== 'complete' && item.status !== 'failed'
+      );
+      for (const item of matchingItems) {
+        try {
+          planManager.updateItem(activePlan.id, item.id, 'complete', agentId);
+        } catch (err) {
+          logger.warn('WrfcController: failed to auto-update plan item', {
+            planId: activePlan.id,
+            itemId: item.id,
+            agentId,
+            error: String(err),
+          });
+        }
+      }
     }
 
     // After any agent completion, re-check if all chains are now ready for gates.

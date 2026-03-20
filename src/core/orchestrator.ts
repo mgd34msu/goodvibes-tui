@@ -13,6 +13,9 @@ import { logger } from '../utils/logger.ts';
 import type { PermissionManager } from '../permissions/manager.ts';
 import type { AcpManager } from '../acp/manager.ts';
 import type { SubagentTask } from '../acp/protocol.ts';
+import { planManager } from './plan-manager-instance.ts';
+import { classifyIntent } from './intent-classifier.ts';
+import { EventReplayQueue } from './event-replay.ts';
 
 /** Minimal interface for hook dispatch — allows any compatible implementation */
 interface HookDispatcherLike {
@@ -50,6 +53,12 @@ export class Orchestrator {
   /** Session ID for hook events — unique per Orchestrator instance */
   private readonly sessionId = crypto.randomUUID();
 
+  /** Event replay queue — ensures model acknowledges significant events */
+  private readonly replayQueue: EventReplayQueue;
+
+  /** Cleanup function returned by EventReplayQueue.attachTo() */
+  private detachReplay: (() => void) | null = null;
+
   constructor(
     private bus: EventBus,
     private conversation: ConversationManager,
@@ -59,7 +68,10 @@ export class Orchestrator {
     private permissionManager: PermissionManager,
     private getSystemPrompt: () => string = () => '',
     private hookDispatcher: HookDispatcherLike | null = null,
-  ) {}
+  ) {
+    this.replayQueue = new EventReplayQueue(bus);
+    this.detachReplay = EventReplayQueue.attachTo(bus, this.replayQueue);
+  }
 
   /**
    * Attach an AcpManager and register the 'delegate' tool into the ToolRegistry.
@@ -182,6 +194,16 @@ export class Orchestrator {
     const turnStartTime = Date.now();
     this.bus.emit('turn:start', { prompt: text });
 
+    // Pre-turn plan injection: if an active plan exists, inject its current state into
+    // the conversation so the LLM can refer to it and update item statuses.
+    const preTurnPlan = planManager.getActive();
+    if (preTurnPlan) {
+      const planMd = planManager.toMarkdown(preTurnPlan);
+      this.conversation.addSystemMessage(
+        `## Current Execution Plan\n${planMd}\n\nRefer to this plan. Update item statuses as you complete work.`
+      );
+    }
+
     // Capability check: if model doesn't support multimodal, strip images and warn
     if (content && content.some(p => p.type === 'image')) {
       const model = providerRegistry.getCurrentModel();
@@ -204,6 +226,25 @@ export class Orchestrator {
 
     this.turnStartMessageCount = this.conversation.getMessageCount();
     this.scrollToEnd(this.getViewportHeight());
+
+    // ── Intent classification + plan injection ──────────────────────────────
+    // Run heuristic classifier on the plain-text message. If it looks like a
+    // project-level task (confidence > 0.5), inject a system instruction so
+    // the model knows to create a spec + execution plan first.
+    // Skip classification when an active plan already exists — plan implies project mode.
+    const activePlan = planManager.getActive();
+    if (!activePlan) {
+      const classification = classifyIntent(text);
+      if (classification.intent === 'project' && classification.confidence > 0.5) {
+        this.conversation.addSystemMessage(
+          '[Project mode] This looks like a multi-step project task. ' +
+          'Before executing, write a brief spec (goals, constraints, non-goals) ' +
+          'and an execution plan (phases and tasks). ' +
+          'Use the execution plan format: ## Phase [STATUS] / - [x] Task — STATUS.'
+        );
+      }
+    }
+
     this.startThinking();
 
     try {
@@ -295,8 +336,31 @@ export class Orchestrator {
             tc.name === 'agent' && (tc.arguments as Record<string, unknown>).mode === 'spawn'
           );
           if (spawnedAgents || this.messageQueue.length > 0) {
+            // Continuation nudge: remind the LLM to keep spawning if the plan has pending items.
+            if (spawnedAgents) {
+              const activePlan = planManager.getActive();
+              if (activePlan) {
+                const summary = planManager.getSummary(activePlan);
+                const nextItems = planManager.getNextItems(activePlan);
+                const nextDesc = nextItems.map(i => i.description).join(', ');
+                this.conversation.addSystemMessage(
+                  nextItems.length > 0
+                    ? `Plan progress: ${summary}. Next items ready: ${nextDesc}. Continue spawning agents for remaining work.`
+                    : `Plan progress: ${summary}. All items are accounted for.`
+                );
+              } else {
+                this.conversation.addSystemMessage(
+                  'You spawned an agent for part of the task. If there are remaining tasks, continue spawning agents now.'
+                );
+              }
+            }
             this.bus.emit('turn:complete', { response: response.content });
             continueLoop = false;
+          } else if (planManager.getActive()) {
+            // Non-agent tool calls completed while a plan is active — prompt the LLM to update statuses.
+            this.conversation.addSystemMessage(
+              'Update the execution plan to reflect completed work. Mark items as COMPLETE or IN_PROGRESS with the agent ID.'
+            );
           }
 
           // Loop continues: send results back to LLM
@@ -351,6 +415,18 @@ export class Orchestrator {
       const notifyEnabled = configManager.get('behavior.notifyOnComplete') as boolean | undefined;
       if (notifyEnabled !== false) {
         notifyCompletion('GoodVibes', `Response complete (${Math.round(durationMs / 1000)}s)`, durationMs);
+      }
+
+      // ── Event replay queue ────────────────────────────────────────────────
+      // Signal turn completion; if any tracked events went unacknowledged,
+      // inject them as system messages so the model sees them next turn.
+      const eventsToReplay = this.replayQueue.onTurnComplete();
+      if (eventsToReplay.length > 0) {
+        const messages = this.replayQueue.formatReplays(eventsToReplay);
+        for (const msg of messages) {
+          this.conversation.addSystemMessage(msg);
+        }
+        this.bus.emit('render:request');
       }
     }
   }
