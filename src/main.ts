@@ -1,5 +1,7 @@
 #!/usr/bin/env bun
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
+import { homedir } from 'os';
+import { randomBytes } from 'crypto';
 import { join } from 'path';
 import { Compositor } from './renderer/compositor.ts';
 import { createEmptyLine } from './types/grid.ts';
@@ -45,7 +47,10 @@ import { renderProcessModal } from './renderer/process-modal.ts';
 import { renderAgentDetailModal } from './renderer/agent-detail-modal.ts';
 import { renderLiveTailModal } from './renderer/live-tail-modal.ts';
 import { renderContextInspector } from './renderer/context-inspector.ts';
+import { renderAutocompleteOverlay } from './renderer/autocomplete-overlay.ts';
 import { scan, loadPersistedProviders, persistProviders, removePersistedProviders } from './discovery/index.ts';
+import { getSessionManager } from './sessions/manager.ts';
+import type { SessionMeta } from './sessions/manager.ts';
 import { logger } from './utils/logger.ts';
 
 /**
@@ -87,29 +92,103 @@ const KEYBOARD_EXT_DISABLE = '\x1b[>4;0m' + '\x1b[?1l';
 const PASTE_ENABLE     = '\x1b[?2004h';
 const PASTE_DISABLE    = '\x1b[?2004l';
 
-/** Conversation persistence directory. */
-const CONV_DIR = join(process.cwd(), '.goodvibes', 'conversations');
-const LAST_CONV_FILE = join(CONV_DIR, 'last.json');
+/** User session persistence — .goodvibes/tui/sessions/ */
+const USER_SESSIONS_DIR = join(process.cwd(), '.goodvibes', 'tui', 'sessions');
+const LAST_SESSION_POINTER = join(USER_SESSIONS_DIR, 'last-session.json');
 
-function saveConversation(data: object): void {
-  try {
-    mkdirSync(CONV_DIR, { recursive: true });
-    writeFileSync(LAST_CONV_FILE, JSON.stringify(data, null, 2), 'utf-8');
-  } catch { /* non-fatal */ }
+/** Generate an 8-character lowercase hex ID (matches agent session pattern). */
+function generateUserSessionId(): string {
+  return randomBytes(4).toString('hex');
 }
 
-function loadLastConversation(): { messages: never[] } | null {
+/** Write the last-session pointer so the next startup knows which session to resume. */
+function writeLastSessionPointer(sessionId: string): void {
   try {
-    if (existsSync(LAST_CONV_FILE)) {
-      return JSON.parse(readFileSync(LAST_CONV_FILE, 'utf-8')) as { messages: never[] };
+    mkdirSync(USER_SESSIONS_DIR, { recursive: true });
+    writeFileSync(LAST_SESSION_POINTER, JSON.stringify({ sessionId, timestamp: new Date().toISOString() }) + '\n', 'utf-8');
+  } catch (e) { logger.debug('writeLastSessionPointer failed', { error: String(e) }); }
+}
+
+/** Read the last-session pointer. Returns null if none exists or on error. */
+function readLastSessionPointer(): string | null {
+  try {
+    if (existsSync(LAST_SESSION_POINTER)) {
+      const data = JSON.parse(readFileSync(LAST_SESSION_POINTER, 'utf-8')) as { sessionId?: unknown };
+      if (typeof data.sessionId === 'string' && data.sessionId.trim()) return data.sessionId;
     }
-  } catch { /* non-fatal */ }
+  } catch (e) { logger.debug('readLastSessionPointer failed', { error: String(e) }); }
+  return null;
+}
+
+/**
+ * Save the current conversation as a JSONL session file.
+ * Uses the SessionManager to write meta + messages.
+ */
+function saveConversation(
+  data: { messages: object[]; timestamp?: number },
+  sessionId: string,
+  model: string,
+  provider: string,
+): void {
+  try {
+    const sm = getSessionManager();
+    const meta: SessionMeta = {
+      title: '',
+      model,
+      provider,
+      timestamp: data.timestamp ?? Date.now(),
+    };
+    sm.save(sessionId, data.messages, meta);
+    writeLastSessionPointer(sessionId);
+  } catch (e) { logger.debug('saveConversation failed', { error: String(e) }); }
+}
+
+/**
+ * Load the last user session from the pointer file.
+ * Returns the messages array (compatible with ConversationManager.fromJSON),
+ * or null if no session exists.
+ */
+function loadLastConversation(): { messages: Array<Record<string, unknown>> } | null {
+  try {
+    const lastId = readLastSessionPointer();
+    if (!lastId) {
+      // Migration: check old format
+      const oldPath = join(homedir(), '.goodvibes', 'conversations', 'last.json');
+      if (existsSync(oldPath)) {
+        try {
+          const raw = readFileSync(oldPath, 'utf-8');
+          const data = JSON.parse(raw) as { messages?: unknown };
+          if (data.messages && Array.isArray(data.messages)) {
+            const migrationId = `user-${generateUserSessionId()}`;
+            const sm = getSessionManager();
+            const meta: import('./sessions/manager.ts').SessionMeta = {
+              title: '',
+              model: '',
+              provider: '',
+              timestamp: Date.now(),
+            };
+            sm.save(migrationId, data.messages as Array<Record<string, unknown>>, meta);
+            writeLastSessionPointer(migrationId);
+            logger.debug('Migrated old conversation from conversations/last.json', { newSessionId: migrationId });
+            return { messages: data.messages as Array<Record<string, unknown>> };
+          }
+        } catch (e) { logger.debug('Old session migration failed', { error: String(e) }); }
+      }
+      return null;
+    }
+    const sm = getSessionManager();
+    const { messages } = sm.load(lastId);
+    return { messages: messages as Array<Record<string, unknown>> };
+  } catch (e) { logger.debug('loadLastConversation failed', { error: String(e) }); }
   return null;
 }
 
 async function main() {
   const stdout = process.stdout;
   const stdin = process.stdin;
+
+  // --- User session ID (generated once per startup, permanent) ---
+  const userSessionId = `user-${generateUserSessionId()}`;
 
   // --- Module wiring ---
   const bus = new EventBus();
@@ -194,7 +273,7 @@ async function main() {
   const exitApp = () => {
     unsubs.forEach(fn => fn());
     // Save conversation on exit
-    saveConversation(conversation.toJSON());
+    saveConversation(conversation.toJSON() as { messages: object[]; timestamp?: number }, userSessionId, runtime.model, runtime.provider);
     try { ScheduleManager.getInstance().destroy(); } catch { /* non-fatal */ }
     try { providerRegistry.stopWatching(); } catch { /* non-fatal */ }
     stdin.removeAllListeners('data');
@@ -423,12 +502,9 @@ async function main() {
     toolCount,
   };
 
-  // --- Resume flag ---
-  const shouldResume = process.argv.includes('--resume');
-  if (shouldResume) {
-    const saved = loadLastConversation();
-    if (saved) conversation.fromJSON(saved);
-  }
+  // --- Resume last session on startup ---
+  const saved = loadLastConversation();
+  if (saved) conversation.fromJSON(saved as unknown as Parameters<typeof conversation.fromJSON>[0]);
 
   // --- Render function ---
   const render = () => {
@@ -624,6 +700,17 @@ async function main() {
       viewport.push(...shortcutLines);
     }
 
+    // Autocomplete dropdown: shown when command mode is active and there are matches
+    if (input.commandMode && input.autocomplete?.isActive) {
+      const acLines = renderAutocompleteOverlay(input.autocomplete, width);
+      if (acLines.length > 0) {
+        const acStart = Math.max(0, vHeight - acLines.length);
+        viewport.length = Math.min(viewport.length, acStart);
+        while (viewport.length < acStart) viewport.push(createEmptyLine(width));
+        viewport.push(...acLines);
+      }
+    }
+
     compositor.composite({
       width, height,
       header: headerLines,
@@ -645,6 +732,8 @@ async function main() {
   // --- Streaming speed + tool preview wiring ---
   // Refresh git status after each turn completes or after tool results arrive
   unsubs.push(bus.on('turn:complete', () => {
+    // Auto-save after every LLM turn so kills don't lose the session
+    try { saveConversation(conversation.toJSON() as { messages: object[]; timestamp?: number }, userSessionId, runtime.model, runtime.provider); } catch (e) { logger.debug('auto-save on turn:complete failed', { error: String(e) }); }
     gitStatusProvider.refresh().then((info) => {
       lastGitInfo = info;
       bus.emit('render:request');
