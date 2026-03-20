@@ -45,8 +45,10 @@ export class TreeSitterService {
 
     this.initPromise = (async () => {
       try {
+        // Resolve WASM from the TUI's own node_modules, not the user's project
         const wasmPath = join(
-          process.cwd(),
+          import.meta.dir,
+          '..', '..', '..',
           'node_modules',
           'web-tree-sitter',
           'web-tree-sitter.wasm',
@@ -76,7 +78,8 @@ export class TreeSitterService {
 
     const pkg = getGrammarPackage(langId);
     const wasmFile = getWasmFilename(langId);
-    const wasmPath = join(process.cwd(), 'node_modules', pkg, wasmFile);
+    // Resolve grammar WASM from the TUI's own node_modules
+    const wasmPath = join(import.meta.dir, '..', '..', '..', 'node_modules', pkg, wasmFile);
 
     if (!existsSync(wasmPath)) {
       logger.debug('TreeSitterService: grammar WASM not found', { langId, wasmPath });
