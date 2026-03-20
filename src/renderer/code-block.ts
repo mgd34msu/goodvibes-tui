@@ -2,6 +2,7 @@ import { type Line, type Cell, createStyledCell, createEmptyLine } from '../type
 import { UIFactory } from './ui-factory.ts';
 import { getDisplayWidth } from '../utils/terminal-width.ts';
 import { LAYOUT } from './layout.ts';
+import { syntaxHighlighter, type SyntaxToken as HLToken } from './syntax-highlighter.ts';
 
 // ─── Language Keyword Maps ───────────────────────────────────────────────────
 
@@ -281,8 +282,13 @@ export function renderCodeBlock(codeLines: string[], lang: string, width: number
   const LINE_NUM_FG = '238';
   const effectiveWidth = width - LAYOUT.RIGHT_MARGIN;
 
-  // Tokenizer selection
-  const tokenize = (line: string): SyntaxToken[] => {
+  // Try tree-sitter highlight cache first (populated asynchronously).
+  // Falls back to regex tokenizer when parser not yet ready or language unsupported.
+  const fullCode = codeLines.join('\n');
+  const hlLines = lang ? syntaxHighlighter.highlight(fullCode, lang) : null;
+
+  // Regex tokenizer fallback (used when tree-sitter not ready)
+  const regexTokenize = (line: string): SyntaxToken[] => {
     switch (language) {
       case 'ts': return tokenizeTsJs(line);
       case 'python': return tokenizePython(line);
@@ -309,7 +315,12 @@ export function renderCodeBlock(codeLines: string[], lang: string, width: number
   for (let i = 0; i < codeLines.length; i++) {
     const rawLine = codeLines[i];
     const lineNum = String(i + 1).padStart(lineNumW);
-    const tokens = tokenize(rawLine);
+
+    // Select token source: tree-sitter (accurate) or regex (fallback)
+    const tokens: SyntaxToken[] =
+      hlLines && i < hlLines.length && hlLines[i].length > 0
+        ? (hlLines[i] as HLToken[])
+        : regexTokenize(rawLine);
 
     const line: Cell[] = new Array(width).fill(null).map(() => createStyledCell(' ', { bg: BG }));
     // Clear left margin — no code block bg in margin area
