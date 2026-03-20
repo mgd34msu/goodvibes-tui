@@ -1,3 +1,12 @@
 export type { Panel, PanelCategory, PanelRegistration } from './types.ts';
 export { BasePanel } from './base-panel.ts';
 export { PanelManager, getPanelManager } from './panel-manager.ts';
+export { TokenBudgetPanel } from './token-budget-panel.ts';
+export { CostTrackerPanel } from './cost-tracker-panel.ts';
+export { AgentInspectorPanel } from './agent-inspector-panel.ts';
+export { AgentLogsPanel } from './agent-logs-panel.ts';
+export { WrfcPanel } from './wrfc-panel.ts';
+export { GitPanel } from './git-panel.ts';
+export { SymbolOutlinePanel } from './symbol-outline-panel.ts';
+export type { SymbolEntry, SymbolKind } from './symbol-outline-panel.ts';
+export { ProviderStatsPanel } from './provider-stats-panel.ts';

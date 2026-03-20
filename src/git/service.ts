@@ -108,6 +108,17 @@ export class GitService {
   }
 
   /**
+   * Get the diff for a single file, optionally from the staging area.
+   * Read-only — no hooks emitted.
+   */
+  async diffFile(filePath: string, staged: boolean): Promise<string> {
+    const args = staged
+      ? ['diff', '--cached', '--', filePath]
+      : ['diff', '--', filePath];
+    return this.git.raw(args);
+  }
+
+  /**
    * Get the full diff between two refs, optionally scoped to specific files.
    * Read-only — no hooks emitted.
    */
