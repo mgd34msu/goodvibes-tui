@@ -1307,8 +1307,13 @@ export class InputHandler {
         const pm = getPanelManager();
         if (pm.isVisible() && pm.getAllOpen().length > 0) {
           if (this.panelFocused) {
-            // Already focused on panel — Tab returns to prompt
-            this.panelFocused = false;
+            // Panel focused: toggle pane focus if split, else return to prompt
+            const pmInner = getPanelManager();
+            if (pmInner.isBottomPaneVisible()) {
+              pmInner.togglePaneFocus();
+            } else {
+              this.panelFocused = false;
+            }
           } else {
             // Try path completion first; only focus panel if no completion available
             if (!this.handlePathCompletion()) {
@@ -1325,18 +1330,6 @@ export class InputHandler {
         if (token.type === 'key') {
           if (token.logicalName === 'escape') {
             this.panelFocused = false;
-            this.bus.emit('render:request');
-            continue;
-          }
-
-          // Tab: toggle between top/bottom pane focus, or return to prompt
-          if (token.logicalName === 'tab') {
-            const pm = getPanelManager();
-            if (pm.isBottomPaneVisible()) {
-              pm.togglePaneFocus();
-            } else {
-              this.panelFocused = false;
-            }
             this.bus.emit('render:request');
             continue;
           }
@@ -1360,6 +1353,11 @@ export class InputHandler {
               continue;
             }
           }
+        }
+        // , and . cycle panel tabs when panel is focused
+        if (token.type === 'text' && (token.value === ',' || token.value === '.')) {
+          this.cyclePanelTab(token.value === '.' ? 'next' : 'prev');
+          this.bus.emit('render:request');
         }
         // Consume all tokens (text and unhandled keys) while panel is focused
         continue;
