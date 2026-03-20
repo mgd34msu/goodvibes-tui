@@ -41,6 +41,10 @@ export class Orchestrator {
    * Value is 0 before the first LLM response (context bar shows empty, which is correct).
    */
   public lastInputTokens = 0;
+  /** Approximate input tokens for the current streaming turn (from prior turn's response). */
+  public streamingInputTokens = 0;
+  /** Output tokens received so far in the current streaming turn (one per delta chunk). */
+  public streamingOutputTokens = 0;
   public messageQueue: { text: string; content?: ContentPart[] }[] = [];
 
   private animInterval: ReturnType<typeof setInterval> | null = null;
@@ -180,6 +184,8 @@ export class Orchestrator {
 
   private startThinking(): void {
     this.isThinking = true;
+    this.streamingInputTokens = this.lastInputTokens;
+    this.streamingOutputTokens = 0;
     this.abortController = new AbortController();
     if (this.animInterval) clearInterval(this.animInterval);
     this.animInterval = setInterval(() => {
@@ -194,6 +200,8 @@ export class Orchestrator {
     this.animInterval = null;
     this.abortController = null;
     this.isThinking = false;
+    this.streamingInputTokens = 0;
+    this.streamingOutputTokens = 0;
     this.scrollToEnd(this.getViewportHeight());
     this.bus.emit('render:request');
   }
@@ -271,6 +279,7 @@ export class Orchestrator {
               if (delta.content) {
                 streamAccumulated += delta.content;
                 this.conversation.updateStreamingBlock(streamAccumulated);
+                this.streamingOutputTokens++;
               }
               if (delta.reasoning) {
                 reasoningAccumulated += delta.reasoning;

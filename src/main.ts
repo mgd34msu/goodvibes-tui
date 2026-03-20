@@ -4,7 +4,7 @@ import { homedir } from 'os';
 import { randomBytes } from 'crypto';
 import { join } from 'path';
 import { Compositor } from './renderer/compositor.ts';
-import { createEmptyLine } from './types/grid.ts';
+import { createEmptyLine, type Line } from './types/grid.ts';
 import { UIFactory } from './renderer/ui-factory.ts';
 import { EventBus } from './core/event-bus.ts';
 import { ConversationManager } from './core/conversation.ts';
@@ -199,7 +199,7 @@ async function main() {
   const conversation = new ConversationManager(() => {
     const w = stdout.columns || 80;
     const pm = getPanelManager();
-    if (pm.isVisible() && pm.getOpen().length > 0) {
+    if (pm.isVisible() && pm.getAllOpen().length > 0) {
       return Math.max(1, pm.getLeftWidth(w) - 1);
     }
     return w;
@@ -676,6 +676,8 @@ async function main() {
         orchestrator.thinkingFrame,
         showSpeed ? streamTokenSpeed : undefined,
         showPreview ? partialToolPreview : undefined,
+        orchestrator.streamingInputTokens > 0 ? orchestrator.streamingInputTokens : undefined,
+        orchestrator.streamingOutputTokens > 0 ? orchestrator.streamingOutputTokens : undefined,
       );
       viewport.push(...thinking);
     }
@@ -801,15 +803,60 @@ async function main() {
     // Panel composite data
     let panelData: import('./renderer/compositor.ts').PanelCompositeData | undefined;
     let panelWidth: number | undefined;
-    if (panelManager.isVisible() && panelManager.getOpen().length > 0) {
+    if (panelManager.isVisible() && panelManager.getAllOpen().length > 0) {
       const pWidth = panelManager.getRightWidth(width);
-      const activePanel = panelManager.getActive();
-      const openPanels = panelManager.getOpen();
-      const activeIndex = openPanels.indexOf(activePanel!);
-      if (activePanel && pWidth > 0) {
-        const tabBar = renderPanelTabBar(openPanels, activeIndex >= 0 ? activeIndex : 0, pWidth);
-        const content = activePanel.render(pWidth, vHeight);
-        panelData = { tabBar, content, separator: true };
+      if (pWidth > 0) {
+        const topPane = panelManager.getTopPane();
+        const bottomPane = panelManager.getBottomPane();
+        const focusedPane = panelManager.getFocusedPane();
+        const verticalSplitRatio = panelManager.getVerticalSplitRatio(); // used in panelData below
+
+        // Compute actual pane heights based on whether bottom pane is visible
+        const hasBottom = panelManager.isBottomPaneVisible() && bottomPane.panels.length > 0;
+        let topContent: Line[];
+        let bottomTabBar: Line | undefined;
+        let bottomContent: Line[] | undefined;
+
+        // Top pane
+        const topActivePanel = topPane.panels[topPane.activeIndex] ?? null;
+        const topTabBar = renderPanelTabBar(
+          topPane.panels,
+          topPane.activeIndex,
+          pWidth,
+          focusedPane === 'top',
+        );
+
+        if (hasBottom) {
+          const ratio = panelManager.getVerticalSplitRatio();
+          const contentRows = Math.max(0, vHeight - 3); // 2 tab bars + 1 separator
+          const topH = Math.max(1, Math.floor(contentRows * ratio));
+          const bottomH = Math.max(1, contentRows - topH);
+          topContent = topActivePanel ? topActivePanel.render(pWidth, topH) : [];
+
+          // Bottom pane
+          const bottomActivePanel = bottomPane.panels[bottomPane.activeIndex] ?? null;
+          bottomTabBar = renderPanelTabBar(
+            bottomPane.panels,
+            bottomPane.activeIndex,
+            pWidth,
+            focusedPane === 'bottom',
+          );
+          bottomContent = bottomActivePanel ? bottomActivePanel.render(pWidth, bottomH) : [];
+        } else {
+          const topH = Math.max(0, vHeight - 1); // 1 tab bar
+          topContent = topActivePanel ? topActivePanel.render(pWidth, topH) : [];
+        }
+
+        panelData = {
+          topTabBar,
+          topContent,
+          topFocused: focusedPane === 'top',
+          bottomTabBar,
+          bottomContent,
+          bottomFocused: focusedPane === 'bottom',
+          separator: true,
+          verticalSplitRatio,
+        };
         panelWidth = pWidth;
       }
     }

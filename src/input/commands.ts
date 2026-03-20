@@ -1474,9 +1474,9 @@ export function registerBuiltinCommands(registry: CommandRegistry): void {
   registry.register({
     name: 'panel',
     aliases: ['panels', 'p'],
-    description: 'Open, close, or list panels. Usage: /panel [open <id>|close <id>|list|toggle]',
-    usage: '[open <id>|close <id>|list|toggle]',
-    argsHint: '<open|close|list|toggle> [id]',
+    description: 'Open, close, or list panels. Usage: /panel [open <id>|close <id>|list|toggle|move|focus|split]',
+    usage: '[open <id>|close <id>|list|toggle|move <top|bottom>|focus <top|bottom>|split]',
+    argsHint: '<open|close|list|toggle|move|focus|split> [id]',
     handler(args, ctx) {
       const pm = getPanelManager();
       const sub = args[0]?.toLowerCase() ?? '';
@@ -1489,7 +1489,7 @@ export function registerBuiltinCommands(registry: CommandRegistry): void {
         }
       } else if (sub === 'list') {
         const types = pm.getRegisteredTypes();
-        const open = pm.getOpen().map(p => p.id);
+        const open = pm.getAllOpen().map(p => p.id);
         const lines = ['Registered panels:', ...types.map(t =>
           `  ${open.includes(t.id) ? '\u25cf' : '\u25e6'} ${t.id.padEnd(14)} ${t.icon}  ${t.name.padEnd(12)} [${t.category}] ${t.description}`
         )];
@@ -1515,6 +1515,33 @@ export function registerBuiltinCommands(registry: CommandRegistry): void {
         } catch (e) {
           ctx.print(`Error: ${(e as Error).message}`);
         }
+      } else if (sub === 'move') {
+        const dest = args[1]?.toLowerCase();
+        if (dest !== 'top' && dest !== 'bottom') {
+          ctx.print('Usage: /panel move <top|bottom>');
+          return;
+        }
+        const panelId = args[2];
+        try {
+          pm.moveToPane(dest, panelId);
+          ctx.renderRequest();
+          ctx.print(`Panel moved to ${dest} pane`);
+        } catch (e) {
+          ctx.print(`Error: ${(e as Error).message}`);
+        }
+      } else if (sub === 'focus') {
+        const pane = args[1]?.toLowerCase();
+        if (pane !== 'top' && pane !== 'bottom') {
+          ctx.print('Usage: /panel focus <top|bottom>');
+          return;
+        }
+        pm.focusPane(pane);
+        ctx.renderRequest();
+        ctx.print(`Focused ${pane} pane`);
+      } else if (sub === 'split') {
+        pm.toggleBottomPane();
+        ctx.renderRequest();
+        ctx.print(pm.isBottomPaneVisible() ? 'Bottom pane visible' : 'Bottom pane hidden');
       } else {
         // Treat bare argument as a panel id to open
         const id = args[0]!;
