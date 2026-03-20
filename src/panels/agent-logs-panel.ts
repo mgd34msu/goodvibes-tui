@@ -402,6 +402,7 @@ export class AgentLogsPanel extends BasePanel {
     const type = typeof obj['type'] === 'string' ? obj['type'] : 'unknown';
 
     switch (type) {
+      case 'meta':
       case 'session_start': {
         const agentId = String(obj['agentId'] ?? '');
         const model = String(obj['model'] ?? '');

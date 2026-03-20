@@ -50,7 +50,7 @@ describe('AgentSession', () => {
     });
 
     test('sets sessionFile path with agent prefix', () => {
-      expect(session.sessionFile).toContain(`agent-${agentId}.jsonl`);
+      expect(session.sessionFile).toContain(`${agentId}.jsonl`);
       expect(session.sessionFile).toContain('.goodvibes/tui/sessions');
     });
 
@@ -64,7 +64,7 @@ describe('AgentSession', () => {
       const content = readFileSync(session.sessionFile, 'utf-8').trim();
       const firstLine = content.split('\n')[0];
       const entry = JSON.parse(firstLine);
-      expect(entry.type).toBe('session_start');
+      expect(entry.type).toBe('meta');
       expect(entry.agentId).toBe(agentId);
       expect(entry.model).toBe(model);
       expect(entry.provider).toBe(provider);
@@ -112,7 +112,7 @@ describe('AgentSession', () => {
   describe('kvState namespace', () => {
     test('kvState session ID includes agent prefix', () => {
       const sessionId = session.kvState.getSessionId();
-      expect(sessionId).toBe(`agent-${agentId}`);
+      expect(sessionId).toBe(agentId);
     });
 
     test('two AgentSessions have different kvState instances', () => {
