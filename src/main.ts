@@ -503,12 +503,15 @@ async function main() {
   };
 
   commandContext.openPanelPicker = () => {
-    // Toggle panel visibility or open the panel picker
-    if (panelManager.getOpen().length === 0) {
-      // No panels open yet — open the docs panel by default
-      try { panelManager.open('docs'); } catch { /* non-fatal if not registered */ }
+    if (!panelManager.isVisible()) {
+      // Show panels — open docs if nothing is open yet
+      if (panelManager.getAllOpen().length === 0) {
+        try { panelManager.open('docs'); } catch { /* non-fatal */ }
+      }
+      panelManager.show();
+    } else {
+      panelManager.hide();
     }
-    panelManager.toggle();
     bus.emit('render:request');
   };
 
