@@ -181,7 +181,7 @@ export class ProviderStatsPanel extends BasePanel {
   // Rendering
   // -------------------------------------------------------------------------
 
-  render(width: number, height: number): Line[] {
+  override render(width: number, height: number): Line[] {
     const lines: Line[] = [];
 
     // Title bar

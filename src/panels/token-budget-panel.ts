@@ -159,7 +159,10 @@ export class TokenBudgetPanel extends BasePanel {
   private refresh(): void {
     if (this.orchestrator) {
       const u = this.orchestrator.usage;
-      this.sessionUsage = { input: u.input, output: u.output, cacheRead: u.cacheRead, cacheWrite: u.cacheWrite };
+      this.sessionUsage.input      = u.input      ?? 0;
+      this.sessionUsage.output     = u.output     ?? 0;
+      this.sessionUsage.cacheRead  = u.cacheRead  ?? 0;
+      this.sessionUsage.cacheWrite = u.cacheWrite ?? 0;
       this.lastInputTokens = this.orchestrator.lastInputTokens;
     }
     if (this.getContextWindow) {

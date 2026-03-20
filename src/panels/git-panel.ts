@@ -37,6 +37,13 @@ type ViewItem =
   | { kind: 'diff-line'; text: string; diffType: 'add' | 'remove' | 'meta' | 'neutral' };
 
 // ---------------------------------------------------------------------------
+// Constants
+// ---------------------------------------------------------------------------
+
+/** Minimum number of diff lines kept visible when clamping scroll offset. */
+const MIN_VISIBLE_DIFF_LINES = 5;
+
+// ---------------------------------------------------------------------------
 // Colors
 // ---------------------------------------------------------------------------
 
@@ -269,7 +276,7 @@ export class GitPanel extends BasePanel {
       case 'down':
       case 'j': {
         const diffLen = this.expandedDiff?.length ?? 0;
-        this.scrollOffset = Math.min(this.scrollOffset + 1, Math.max(0, diffLen - 5));
+        this.scrollOffset = Math.min(this.scrollOffset + 1, Math.max(0, diffLen - MIN_VISIBLE_DIFF_LINES));
         this.markDirty();
         return true;
       }
