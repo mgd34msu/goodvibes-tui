@@ -809,8 +809,9 @@ async function main() {
       );
     }
 
-    // Handle removed servers
-    if (removedServers.length > 0) {
+    // Handle removed servers — only reconcile when scan proves network connectivity
+    // (result.servers.length > 0 means at least one server responded, so missing ones are genuinely gone)
+    if (result.servers.length > 0 && removedServers.length > 0) {
       removePersistedProviders(removedServers);
 
       for (const server of removedServers) {
@@ -835,8 +836,8 @@ async function main() {
       }
     }
 
-    // Persist current state: writes found servers (may be empty if all were removed)
-    if (result.servers.length > 0 || removedServers.length > 0) {
+    // Persist found servers (merge with existing — don't overwrite servers not seen this scan)
+    if (result.servers.length > 0) {
       persistProviders(result.servers);
     }
 
