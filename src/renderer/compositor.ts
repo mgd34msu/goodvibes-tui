@@ -1,6 +1,6 @@
 import { TerminalBuffer } from './buffer.ts';
 import { DiffEngine } from './diff.ts';
-import { type Line } from '../types/grid.ts';
+import { type Line, createStyledCell } from '../types/grid.ts';
 import type { SearchManager } from '../input/search.ts';
 
 export interface SelectionInfo {
@@ -15,6 +15,12 @@ export interface SearchInfo {
   viewportStartY: number;
 }
 
+export interface PanelCompositeData {
+  tabBar: Line;     // tab bar at top of panel area
+  content: Line[];  // panel content lines
+  separator: boolean; // whether to draw vertical separator
+}
+
 export interface CompositeRequest {
   width: number;
   height: number;
@@ -23,6 +29,8 @@ export interface CompositeRequest {
   footer: Line[];
   selection?: SelectionInfo;
   search?: SearchInfo;
+  panel?: PanelCompositeData;
+  panelWidth?: number; // width of the right panel area (0 = no panel)
 }
 
 /**
@@ -35,16 +43,25 @@ export class Compositor {
 
   constructor(private stdout: NodeJS.WriteStream) {}
 
+  /** Exposed for unit tests — returns the last composited buffer. */
+  public get lastBufferForTest(): TerminalBuffer | null {
+    return this.lastBuffer;
+  }
+
   public resetDiff(): void {
     this.diffEngine.reset();
     this.lastBuffer = null;
   }
 
   public composite(params: CompositeRequest) {
-    const { width, height, header, viewport, footer, selection, search } = params;
+    const { width, height, header, viewport, footer, selection, search, panel, panelWidth } = params;
     const newBuffer = new TerminalBuffer(width, height);
 
-    // 1. Draw Header (Rows 0-1)
+    const hasPanel = panel !== undefined && panelWidth !== undefined && panelWidth > 0;
+    const leftWidth = hasPanel ? Math.max(1, width - panelWidth - 1) : width;
+    const sepX = hasPanel ? leftWidth : -1;
+
+    // 1. Draw Header (Rows 0-1) — always full width
     header.forEach((line, i) => newBuffer.blitLine(i, line));
 
     // 2. Draw Viewport (Starting at Row 2)
@@ -58,26 +75,58 @@ export class Compositor {
     viewport.forEach((line, i) => {
       const screenY = viewportStartY + i;
       if (screenY >= height) return;
-      newBuffer.blitLine(screenY, line);
 
-      // Apply Selection Highlighting Overlay
+      if (!hasPanel) {
+        // No panel: existing fast path
+        newBuffer.blitLine(screenY, line);
+      } else {
+        // Panel active: write cells individually to support split layout
+        // Left side: viewport cells 0..leftWidth-1
+        for (let x = 0; x < leftWidth; x++) {
+          const cell = line[x];
+          if (cell !== undefined) {
+            newBuffer.setCell(x, screenY, cell);
+          }
+        }
+
+        // viewport row 0 → tabBar, viewport rows 1+ → panel content
+        const p = panel!;
+
+        // Separator column
+        if (p.separator) {
+          newBuffer.setCell(sepX, screenY, createStyledCell('│', { fg: '238' }));
+        }
+        const panelRow = i; // panel area rows match viewport rows 1:1
+        const panelStartX = sepX + 1;
+        const panelLine = panelRow === 0 ? p.tabBar : p.content[panelRow - 1];
+        if (panelLine !== undefined) {
+          for (let x = 0; x < panelWidth; x++) {
+            const cell = panelLine[x];
+            if (cell !== undefined) {
+              newBuffer.setCell(panelStartX + x, screenY, cell);
+            }
+          }
+        }
+      }
+
+      // Apply Selection Highlighting Overlay (left side only)
       // Only highlight rows that actually contain history (past the bottom-anchor offset)
       if (selection && i >= offset) {
         const absoluteRow = selection.scrollTop + (i - offset);
-        for (let x = 0; x < width; x++) {
+        for (let x = 0; x < leftWidth; x++) {
           if (selection.isCellSelected(x, absoluteRow)) {
             newBuffer.setCell(x, screenY, { bg: '4', fg: '0', bold: false, dim: false });
           }
         }
       }
 
-      // Apply Search Match Highlighting Overlay
+      // Apply Search Match Highlighting Overlay (left side only)
       if (search && search.manager.active && search.manager.query.length > 0 && i >= offset) {
         const absoluteRow = search.scrollTop + (i - offset);
         const lineMatches = search.manager.getMatchesOnLine(absoluteRow);
         for (const match of lineMatches) {
           const isCurrent = search.manager.isCurrentMatch(absoluteRow, match.col);
-          for (let x = match.col; x < match.col + match.length && x < width; x++) {
+          for (let x = match.col; x < match.col + match.length && x < leftWidth; x++) {
             if (isCurrent) {
               newBuffer.setCell(x, screenY, { bg: '#ffff00', fg: '#000000', bold: true, dim: false });
             } else {
@@ -88,7 +137,7 @@ export class Compositor {
       }
     });
 
-    // 3. Draw Footer (Pinned to Bottom)
+    // 3. Draw Footer (Pinned to Bottom) — always full width
     const footerStart = height - footer.length;
     footer.forEach((line, i) => {
       const screenY = footerStart + i;
