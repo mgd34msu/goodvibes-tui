@@ -1329,6 +1329,18 @@ export class InputHandler {
             continue;
           }
 
+          // Tab: toggle between top/bottom pane focus, or return to prompt
+          if (token.logicalName === 'tab') {
+            const pm = getPanelManager();
+            if (pm.isBottomPaneVisible()) {
+              pm.togglePaneFocus();
+            } else {
+              this.panelFocused = false;
+            }
+            this.bus.emit('render:request');
+            continue;
+          }
+
           // Ctrl+] / Ctrl+^ still cycle tabs even when panel focused
           if (token.logicalName === '}' && token.ctrl) {
             this.cyclePanelTab('next');
