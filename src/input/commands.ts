@@ -1723,21 +1723,37 @@ export function registerBuiltinCommands(registry: CommandRegistry): void {
       const taskDescription = args.join(' ');
       const classification = classifyIntent(taskDescription);
 
-      // Create a draft plan immediately to track intent
-      const plan = planManager.create(taskDescription, [
-        { phase: 'Specification', description: 'Define spec and requirements' },
-        { phase: 'Planning', description: 'Create execution plan' },
-        { phase: 'Execution', description: 'Execute the plan' },
-      ]);
+      // Create a draft plan with no items — real items come from the model's response.
+      // awaitingPlan=true signals the orchestrator to watch for the model's plan markdown.
+      const plan = planManager.create(taskDescription, []);
+      plan.awaitingPlan = true;
+      planManager.save(plan);
 
       ctx.print(
         `Plan created: "${plan.title}" (${plan.id.slice(0, 8)})\n` +
         `Intent: ${classification.intent} (confidence: ${(classification.confidence * 100).toFixed(0)}%)\n` +
         `Signals: ${classification.signals.join(', ') || 'none'}\n` +
-        `The model will create a spec and execution plan before executing.`
+        `The model will write the execution plan — agents will be spawned automatically.`
       );
 
-      // Inject a system prompt instruction and send the message to the LLM
+      // Inject format instruction as a system message before the model's turn
+      ctx.conversationManager.addSystemMessage(
+        `You are creating an execution plan for the following task: "${taskDescription}"\n\n` +
+        `Output the plan in EXACTLY this markdown format and nothing else:\n\n` +
+        `## Phase 1: [Phase Name] [PENDING]\n` +
+        `- [ ] [Task description] — PENDING\n` +
+        `- [ ] [Task description] — PENDING (depends: [other task description])\n\n` +
+        `## Phase 2: [Phase Name] [PENDING]\n` +
+        `- [ ] [Task description] — PENDING (depends: [Phase 1 task description])\n\n` +
+        `Rules:\n` +
+        `- Each item must be a concrete, independently executable task\n` +
+        `- Use (depends: ...) only where execution order truly matters\n` +
+        `- Items without dependencies in the same phase can run in parallel\n` +
+        `- Keep phases to 2-4 items each, aim for maximum parallelism\n` +
+        `- Output ONLY the plan markdown — the system will parse it and spawn agents automatically`
+      );
+
+      // Send the task as a user message to trigger the model's plan response
       ctx.eventBus.emit('plan:activate', { planId: plan.id, task: taskDescription });
     },
   });

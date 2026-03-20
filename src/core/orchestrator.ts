@@ -393,6 +393,44 @@ export class Orchestrator {
           this.bus.emit('turn:complete', { response: response.content });
           continueLoop = false;
 
+          // Plan parsing: if the active plan has no items yet and the model's response contains
+          // a plan in markdown format, parse it and immediately auto-spawn agents.
+          if (preTurnPlan && preTurnPlan.awaitingPlan === true && response.content.includes('## Phase')) {
+            const parsed = planManager.parseFromMarkdown(response.content);
+            if (parsed.items && parsed.items.length > 0) {
+              planManager.replaceItems(preTurnPlan.id, parsed.items);
+              // Clear the awaitingPlan flag — the plan is now populated
+              const filledPlan = planManager.load(preTurnPlan.id);
+              if (filledPlan) {
+                filledPlan.awaitingPlan = false;
+                planManager.save(filledPlan);
+              }
+              const updatedPlan = planManager.getActive();
+              if (updatedPlan) {
+                const nextItems = planManager.getNextItems(updatedPlan);
+                if (nextItems.length > 0) {
+                  const spawned = this.autoSpawnPendingItems(updatedPlan, nextItems);
+                  if (spawned.length > 0) {
+                    this.conversation.addSystemMessage(
+                      `[Plan] Parsed ${parsed.items.length} item(s) from your plan. Auto-spawned ${spawned.length} agent(s) for items with no blockers: ${spawned.join(', ')}.`
+                    );
+                    this.bus.emit('render:request');
+                  } else {
+                    this.conversation.addSystemMessage(
+                      `[Plan] Parsed ${parsed.items.length} item(s) from your plan. Spawn agents for the items with no blockers to begin execution.`
+                    );
+                  }
+                } else {
+                  this.conversation.addSystemMessage(
+                    `[Plan] Parsed ${parsed.items.length} item(s) from your plan. No items are ready to start — check dependencies.`
+                  );
+                }
+                // Skip the timeout fallback since we already handled spawning
+                return;
+              }
+            }
+          }
+
           // Timeout fallback: if the model ended its turn without spawning agents but there
           // are pending plan items with met dependencies, auto-spawn them after a short delay.
           // This handles weak/free models that stop responding after the first response.

@@ -7,6 +7,7 @@
  */
 
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { logger } from '../utils/logger.ts';
 import { join, dirname } from 'node:path';
 import { randomUUID } from 'node:crypto';
 
@@ -29,6 +30,7 @@ export interface ExecutionPlan {
   status: 'draft' | 'active' | 'complete' | 'failed';
   items: PlanItem[];
   specPath?: string; // path to the spec document
+  awaitingPlan?: boolean; // true when /plan created the shell, waiting for model to fill it
 }
 
 // ---------------------------------------------------------------------------
@@ -65,6 +67,25 @@ function parseItemStatus(checkbox: string, label?: string): PlanItemStatus {
   if (c === '[!]') return 'failed';
   if (c === '[-]') return 'skipped';
   return 'pending';
+}
+
+/**
+ * Find the last occurrence of any dash separator variant in text.
+ * Returns { index, sepLen } or { index: -1, sepLen: 0 } if not found.
+ * Accepts em-dash (—), en-dash (–), or double-hyphen (--).
+ */
+function findLastSeparator(text: string): { index: number; sepLen: number } {
+  const separators = [' \u2014 ', ' \u2013 ', ' -- '];
+  let lastIdx = -1;
+  let lastSepLen = 0;
+  for (const sep of separators) {
+    const idx = text.lastIndexOf(sep);
+    if (idx > lastIdx) {
+      lastIdx = idx;
+      lastSepLen = sep.length;
+    }
+  }
+  return { index: lastIdx, sepLen: lastSepLen };
 }
 
 function phaseStatus(items: PlanItem[]): string {
@@ -292,15 +313,16 @@ export class ExecutionPlanManager {
         if (cbMatch) {
           const [, checkbox, rest] = cbMatch;
 
-          // Split from the RIGHT on ' — ' to separate description from metadata.
-          // This handles em-dashes in descriptions (only the last occurrence splits).
-          const emDashIdx = rest.lastIndexOf(' \u2014 ');
+          // Split from the RIGHT on a dash separator to separate description from metadata.
+          // Accepts em-dash (—), en-dash (–), or double-hyphen (--) for model output variants.
+          // Only the last occurrence splits, so em-dashes in descriptions are preserved.
+          const { index: sepIdx, sepLen } = findLastSeparator(rest);
           let description: string;
           let metaPart: string | undefined;
 
-          if (emDashIdx !== -1) {
-            description = rest.slice(0, emDashIdx).trim();
-            metaPart = rest.slice(emDashIdx + 3).trim(); // 3 = " — ".length
+          if (sepIdx !== -1) {
+            description = rest.slice(0, sepIdx).trim();
+            metaPart = rest.slice(sepIdx + sepLen).trim();
           } else {
             description = rest.trim();
           }
@@ -398,6 +420,57 @@ export class ExecutionPlanManager {
     }
 
     return `${plan.title}: all complete`;
+  }
+
+  /**
+   * Replace all items in a plan with new items.
+   * Used when the model provides a detailed plan in response to /plan.
+   * Dependencies expressed as description strings are resolved to item IDs.
+   */
+  replaceItems(planId: string, items: Omit<PlanItem, 'id' | 'status'>[]): void {
+    const plan = this.load(planId);
+    if (!plan) {
+      logger.debug(`[ExecutionPlanManager] replaceItems: plan not found for id=${planId}`);
+      return;
+    }
+
+    // First pass: create items with UUIDs
+    const newItems: PlanItem[] = items.map((item) => ({
+      ...item,
+      id: randomUUID(),
+      status: 'pending' as PlanItemStatus,
+      dependencies: undefined, // resolve in second pass
+    }));
+
+    // Build description → id map for dependency resolution
+    const descToId = new Map<string, string>();
+    for (let i = 0; i < newItems.length; i++) {
+      descToId.set(items[i].description.toLowerCase().trim(), newItems[i].id);
+    }
+
+    // Second pass: resolve description-based dependencies to IDs
+    for (let i = 0; i < newItems.length; i++) {
+      const rawDeps = items[i].dependencies;
+      if (rawDeps && rawDeps.length > 0) {
+        const resolvedIds = rawDeps
+          .map((dep) => {
+            // Already a UUID? Keep as-is.
+            if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(dep)) {
+              return dep;
+            }
+            // Look up by description (case-insensitive, trimmed)
+            return descToId.get(dep.toLowerCase().trim()) ?? null;
+          })
+          .filter((id): id is string => id !== null);
+        if (resolvedIds.length > 0) {
+          newItems[i].dependencies = resolvedIds;
+        }
+      }
+    }
+
+    plan.items = newItems;
+    plan.updatedAt = new Date().toISOString();
+    this.save(plan);
   }
 
   /** Get next actionable items: dependencies met, status=pending. */
