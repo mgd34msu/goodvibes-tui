@@ -4,6 +4,7 @@
 
 import type { Line } from '../types/grid.ts';
 import { createStyledCell, createEmptyLine } from '../types/grid.ts';
+import { getDisplayWidth } from '../utils/terminal-width.ts';
 import { BasePanel } from './base-panel.ts';
 import type { ToolRegistry } from '../tools/registry.ts';
 import type { ProviderRegistry } from '../providers/registry.ts';
@@ -63,17 +64,25 @@ interface FlatRow {
 
 function renderRow(width: number, row: FlatRow, isCursor: boolean): Line {
   const bg = isCursor ? C.selectedBg : row.bg;
-  const cells: Line = [];
-  cells.push(createStyledCell(isCursor ? '>' : ' ', { fg: C.selected, bg, bold: isCursor }));
-  const text = row.text.slice(0, width - 1);
-  for (const ch of text) {
-    if (cells.length >= width) break;
-    cells.push(createStyledCell(ch, { fg: isCursor ? C.selected : row.fg, bg, bold: row.bold || isCursor }));
+  const line: Line = new Array(width);
+  // Column 0: cursor indicator (always 1 display cell)
+  line[0] = createStyledCell(isCursor ? '>' : ' ', { fg: C.selected, bg, bold: isCursor });
+  let col = 1;
+  for (const ch of row.text) {
+    if (col >= width) break;
+    const cw = getDisplayWidth(ch);
+    if (col + cw > width) break;
+    line[col] = createStyledCell(ch, { fg: isCursor ? C.selected : row.fg, bg, bold: row.bold || isCursor });
+    if (cw === 2 && col + 1 < width) {
+      line[col + 1] = { ...line[col]!, char: '' };
+    }
+    col += cw;
   }
-  while (cells.length < width) {
-    cells.push(createStyledCell(' ', { fg: '', bg }));
+  // Pad remaining columns with spaces
+  while (col < width) {
+    line[col++] = createStyledCell(' ', { fg: '', bg });
   }
-  return cells.slice(0, width);
+  return line;
 }
 
 export class DocsPanel extends BasePanel {
@@ -243,13 +252,21 @@ export class DocsPanel extends BasePanel {
 }
 
 function _renderBg(width: number, text: string, fg: string, bg: string, bold = false): Line {
-  const cells: Line = [];
-  const truncated = text.slice(0, width);
-  for (const ch of truncated) {
-    cells.push(createStyledCell(ch, { fg, bg, bold }));
+  const line: Line = new Array(width);
+  let col = 0;
+  for (const ch of text) {
+    if (col >= width) break;
+    const cw = getDisplayWidth(ch);
+    if (col + cw > width) break;
+    line[col] = createStyledCell(ch, { fg, bg, bold });
+    if (cw === 2 && col + 1 < width) {
+      line[col + 1] = { ...line[col]!, char: '' };
+    }
+    col += cw;
   }
-  while (cells.length < width) {
-    cells.push(createStyledCell(' ', { fg: '', bg }));
+  // Pad remaining columns with spaces
+  while (col < width) {
+    line[col++] = createStyledCell(' ', { fg: '', bg });
   }
-  return cells.slice(0, width);
+  return line;
 }
