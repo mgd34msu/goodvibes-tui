@@ -12,8 +12,8 @@ function makeModal(overrides: Partial<SessionPickerModal> = {}): SessionPickerMo
   const modal = new SessionPickerModal();
   modal.active = true;
   modal.sessions = [
-    { name: 'alpha-session', title: 'Alpha', timestamp: 1700000000000, messageCount: 5, filePath: '/x/alpha.jsonl' },
-    { name: 'beta-session',  title: 'Beta',  timestamp: 1700100000000, messageCount: 12, filePath: '/x/beta.jsonl' },
+    { name: 'alpha-session', title: 'Alpha', model: 'gpt-4', provider: 'openai', timestamp: 1700000000000, messageCount: 5, filePath: '/x/alpha.jsonl' },
+    { name: 'beta-session',  title: 'Beta',  model: 'gpt-4', provider: 'openai', timestamp: 1700100000000, messageCount: 12, filePath: '/x/beta.jsonl' },
   ];
   modal.selectedIndex = 0;
   Object.assign(modal, overrides);

@@ -248,4 +248,177 @@ describe('SessionManager', () => {
       expect((messages[0] as { content: string }).content).toBe('valid');
     });
   });
+
+  // -------------------------------------------------------------------------
+  // getMeta
+  // -------------------------------------------------------------------------
+
+  describe('getMeta', () => {
+    test('returns meta for an existing session', () => {
+      sm.save('meta-only', [], META);
+      const meta = sm.getMeta('meta-only');
+      expect(meta).not.toBeNull();
+      expect(meta!.title).toBe(META.title);
+      expect(meta!.model).toBe(META.model);
+      expect(meta!.provider).toBe(META.provider);
+      expect(meta!.timestamp).toBe(META.timestamp);
+    });
+
+    test('returns null for non-existent session', () => {
+      expect(sm.getMeta('does-not-exist')).toBeNull();
+    });
+
+    test('returns null for empty name', () => {
+      expect(sm.getMeta('')).toBeNull();
+    });
+
+    test('returns null for whitespace-only name', () => {
+      expect(sm.getMeta('   ')).toBeNull();
+    });
+
+    test('does not load all messages, only reads first line', () => {
+      const messages = [
+        { role: 'user', content: 'msg1' },
+        { role: 'assistant', content: 'msg2' },
+      ];
+      sm.save('meta-fast', messages, META);
+      const meta = sm.getMeta('meta-fast');
+      expect(meta).not.toBeNull();
+      expect(meta!.title).toBe(META.title);
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // rename
+  // -------------------------------------------------------------------------
+
+  describe('rename', () => {
+    test('updates the title field in the meta line', () => {
+      sm.save('to-rename', [], META);
+      sm.rename('to-rename', 'New Title');
+      const { meta } = sm.load('to-rename');
+      expect(meta.title).toBe('New Title');
+    });
+
+    test('does not change the filename — only the in-file title', () => {
+      sm.save('rename-file-check', [], META);
+      sm.rename('rename-file-check', 'Updated Title');
+      // Session must still be loadable under the original name
+      const { meta } = sm.load('rename-file-check');
+      expect(meta.title).toBe('Updated Title');
+    });
+
+    test('preserves existing messages after rename', () => {
+      const messages = [{ role: 'user', content: 'keep this' }];
+      sm.save('rename-preserve', messages, META);
+      sm.rename('rename-preserve', 'New Label');
+      const { messages: loaded } = sm.load('rename-preserve');
+      expect(loaded).toHaveLength(1);
+      expect((loaded[0] as { content: string }).content).toBe('keep this');
+    });
+
+    test('throws for non-existent session', () => {
+      expect(() => sm.rename('no-such-session', 'x')).toThrow('Session not found');
+    });
+
+    test('throws for empty name', () => {
+      expect(() => sm.rename('', 'title')).toThrow('Session name cannot be empty');
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // delete
+  // -------------------------------------------------------------------------
+
+  describe('delete', () => {
+    test('removes the session file from disk', () => {
+      sm.save('to-delete', [], META);
+      // Verify it exists before deletion
+      expect(sm.getMeta('to-delete')).not.toBeNull();
+      sm.delete('to-delete');
+      // After deletion, getMeta should return null
+      expect(sm.getMeta('to-delete')).toBeNull();
+    });
+
+    test('session no longer appears in list after deletion', () => {
+      sm.save('del-list-a', [], { ...META, timestamp: 1000 });
+      sm.save('del-list-b', [], { ...META, timestamp: 2000 });
+      sm.delete('del-list-a');
+      const names = sm.list().map(s => s.name);
+      expect(names).not.toContain('del-list-a');
+      expect(names).toContain('del-list-b');
+    });
+
+    test('throws for non-existent session', () => {
+      expect(() => sm.delete('ghost-session')).toThrow('Session not found');
+    });
+
+    test('throws for empty name', () => {
+      expect(() => sm.delete('')).toThrow('Session name cannot be empty');
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // search
+  // -------------------------------------------------------------------------
+
+  describe('search', () => {
+    test('returns empty array for empty query', () => {
+      sm.save('searchable', [{ role: 'user', content: 'hello world' }], META);
+      expect(sm.search('')).toEqual([]);
+    });
+
+    test('returns empty array for whitespace-only query', () => {
+      sm.save('searchable2', [{ role: 'user', content: 'hello world' }], META);
+      expect(sm.search('   ')).toEqual([]);
+    });
+
+    test('finds sessions containing the query string', () => {
+      sm.save('found-session', [{ role: 'user', content: 'unique-keyword-xyz' }], META);
+      sm.save('other-session', [{ role: 'user', content: 'unrelated content' }], META);
+      const results = sm.search('unique-keyword-xyz');
+      expect(results).toHaveLength(1);
+      expect(results[0].session.name).toBe('found-session');
+    });
+
+    test('search is case-insensitive', () => {
+      sm.save('case-search', [{ role: 'user', content: 'Hello World' }], META);
+      const results = sm.search('hello world');
+      expect(results.length).toBeGreaterThan(0);
+      expect(results[0].session.name).toBe('case-search');
+    });
+
+    test('returns match count and snippets', () => {
+      sm.save('snippet-test', [
+        { role: 'user', content: 'find me here and find me again' },
+      ], META);
+      const results = sm.search('find me');
+      expect(results).toHaveLength(1);
+      expect(results[0].matchCount).toBeGreaterThanOrEqual(1);
+      expect(results[0].snippets.length).toBeGreaterThan(0);
+    });
+
+    test('returns empty array when no sessions match', () => {
+      sm.save('no-match', [{ role: 'user', content: 'something unrelated' }], META);
+      expect(sm.search('zzz-no-match-zzz')).toEqual([]);
+    });
+
+    test('sorts by match count descending', () => {
+      sm.save('one-match', [{ role: 'user', content: 'needle here' }], META);
+      sm.save('two-matches', [
+        { role: 'user', content: 'needle here' },
+        { role: 'assistant', content: 'needle again' },
+      ], META);
+      const results = sm.search('needle');
+      expect(results[0].session.name).toBe('two-matches');
+      expect(results[1].session.name).toBe('one-match');
+    });
+
+    test('skips meta line — only searches messages', () => {
+      // Title contains query but no messages do — should not match
+      sm.save('title-only-match', [], { ...META, title: 'contains-the-keyword' });
+      const results = sm.search('contains-the-keyword');
+      expect(results).toHaveLength(0);
+    });
+  });
 });

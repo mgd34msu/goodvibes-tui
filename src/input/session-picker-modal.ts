@@ -5,7 +5,6 @@
  * and handles load/delete actions.
  */
 
-import { unlinkSync } from 'node:fs';
 import { getSessionManager, type SessionInfo } from '../sessions/manager.ts';
 import type { ConversationManager } from '../core/conversation.ts';
 
@@ -83,9 +82,9 @@ export class SessionPickerModal {
     if (!session) return false;
 
     try {
-      unlinkSync(session.filePath);
-      // Reload list
       const manager = getSessionManager();
+      manager.delete(session.name);
+      // Reload list
       this.sessions = manager.list();
       // Adjust selection
       if (this.selectedIndex >= this.sessions.length) {

@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'fs';
+import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync, unlinkSync } from 'fs';
 import { join } from 'path';
 import { logger } from '../utils/logger.ts';
 
@@ -18,6 +18,8 @@ export interface SessionMeta {
 export interface SessionInfo {
   name: string;
   title: string;
+  model: string;
+  provider: string;
   timestamp: number;
   messageCount: number;
   filePath: string;
@@ -185,6 +187,8 @@ export class SessionManager {
       sessions.push({
         name,
         title: meta.title,
+        model: meta.model,
+        provider: meta.provider,
         timestamp: meta.timestamp,
         messageCount,
         filePath,
@@ -194,6 +198,125 @@ export class SessionManager {
     // Sort by most recent first
     sessions.sort((a, b) => b.timestamp - a.timestamp);
     return sessions;
+  }
+
+  /**
+   * Get just the metadata for a session without loading all messages.
+   * Returns null if the session does not exist or meta cannot be parsed.
+   */
+  getMeta(name: string): SessionMeta | null {
+    if (!name || !name.trim()) return null;
+    const filename = this.sanitizeName(name);
+    const filePath = join(this.sessionsDir, `${filename}.jsonl`);
+    if (!existsSync(filePath)) return null;
+    try {
+      const raw = readFileSync(filePath, 'utf-8');
+      const firstLine = raw.split('\n')[0];
+      if (!firstLine?.trim()) return null;
+      const record = JSON.parse(firstLine) as Record<string, unknown>;
+      if (record.type !== 'meta') return null;
+      return {
+        title: String(record.title ?? ''),
+        model: String(record.model ?? ''),
+        provider: String(record.provider ?? ''),
+        timestamp: Number(record.timestamp ?? 0),
+      };
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Rename a session by rewriting its meta line with a new title.
+   * The file is stored under the sanitized name — rename updates the title
+   * field inside the file but does NOT rename the file itself.
+   * Throws if the session does not exist.
+   */
+  rename(name: string, newTitle: string): void {
+    if (!name || !name.trim()) throw new Error('Session name cannot be empty');
+    const filename = this.sanitizeName(name);
+    const filePath = join(this.sessionsDir, `${filename}.jsonl`);
+    if (!existsSync(filePath)) throw new Error(`Session not found: ${name}`);
+
+    const raw = readFileSync(filePath, 'utf-8');
+    const lines = raw.split('\n');
+    if (lines.length === 0) throw new Error('Session file is empty');
+
+    try {
+      const record = JSON.parse(lines[0]) as Record<string, unknown>;
+      record.title = newTitle;
+      lines[0] = JSON.stringify(record);
+      writeFileSync(filePath, lines.join('\n'), 'utf-8');
+    } catch {
+      throw new Error(`Failed to update session title: ${name}`);
+    }
+  }
+
+  /**
+   * Delete a session file.
+   * Throws if the session does not exist.
+   */
+  delete(name: string): void {
+    if (!name || !name.trim()) throw new Error('Session name cannot be empty');
+    const filename = this.sanitizeName(name);
+    const filePath = join(this.sessionsDir, `${filename}.jsonl`);
+    if (!existsSync(filePath)) throw new Error(`Session not found: ${name}`);
+    try {
+      unlinkSync(filePath);
+    } catch (e) {
+      throw new Error(`Failed to delete session: ${(e as Error).message}`);
+    }
+  }
+
+  /**
+   * Search all sessions for messages containing the query string (case-insensitive).
+   * Returns sessions with match count and up to 3 context snippets per session.
+   */
+  search(query: string): Array<{ session: SessionInfo; matchCount: number; snippets: string[] }> {
+    if (!query || !query.trim()) return [];
+    const q = query.toLowerCase();
+    const sessions = this.list();
+    const results: Array<{ session: SessionInfo; matchCount: number; snippets: string[] }> = [];
+
+    for (const session of sessions) {
+      try {
+        const raw = readFileSync(session.filePath, 'utf-8');
+        const lines = raw.split('\n').filter(l => l.trim().length > 0);
+        let matchCount = 0;
+        const snippets: string[] = [];
+
+        for (const line of lines.slice(1)) { // skip meta line
+          try {
+            const record = JSON.parse(line) as Record<string, unknown>;
+            if (record.type !== 'message') continue;
+            const content = String(record.content ?? '');
+            const lower = content.toLowerCase();
+            const idx = lower.indexOf(q);
+            if (idx !== -1) {
+              matchCount++;
+              if (snippets.length < 3) {
+                const start = Math.max(0, idx - 40);
+                const end = Math.min(content.length, idx + q.length + 60);
+                const snippet = (start > 0 ? '...' : '') + content.slice(start, end).replace(/\n/g, ' ') + (end < content.length ? '...' : '');
+                snippets.push(snippet);
+              }
+            }
+          } catch {
+            // skip malformed lines
+          }
+        }
+
+        if (matchCount > 0) {
+          results.push({ session, matchCount, snippets });
+        }
+      } catch {
+        // skip unreadable sessions
+      }
+    }
+
+    // Sort by match count descending
+    results.sort((a, b) => b.matchCount - a.matchCount);
+    return results;
   }
 
   /**
