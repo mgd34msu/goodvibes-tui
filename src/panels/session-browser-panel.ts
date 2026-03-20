@@ -72,21 +72,24 @@ export class SessionBrowserPanel extends BasePanel {
   private scrollOffset = 0;
   private confirm: ConfirmState = null;
   private deleteError = '';
-  private lastLoadTime = 0;
-  private readonly LOAD_INTERVAL_MS = 2000;
+  private loadError = '';
+  private refreshTimer: ReturnType<typeof setInterval> | null = null;
 
   constructor(private bus?: EventBus) {
     super('sessions', 'Sessions', 'H', 'session');
   }
 
   override onActivate(): void {
-    this.needsRender = true;
+    super.onActivate();
     this._load();
+    this.refreshTimer = setInterval(() => { this._load(); }, 5000);
   }
 
   override onDeactivate(): void {
+    if (this.refreshTimer) { clearInterval(this.refreshTimer); this.refreshTimer = null; }
     this.searching = false;
     this.confirm = null;
+    super.onDeactivate();
   }
 
   handleInput(key: string): boolean {
@@ -140,11 +143,6 @@ export class SessionBrowserPanel extends BasePanel {
     const lines: Line[] = [];
     if (height <= 0 || width <= 0) return lines;
 
-    // Maybe refresh stale data
-    if (Date.now() - this.lastLoadTime > this.LOAD_INTERVAL_MS) {
-      this._loadSync();
-    }
-
     // Header
     const count = this.filtered.length;
     const total = this.sessions.length;
@@ -155,12 +153,15 @@ export class SessionBrowserPanel extends BasePanel {
     // Search bar
     const searchLine = this.searching
       ? ` Search: ${this.searchQuery}▊`
+      : this.loadError
+      ? ` Error: ${this.loadError}`
       : this.deleteError
       ? ` Error: ${this.deleteError}`
       : this.searchQuery
       ? ` Filter: ${this.searchQuery}  (/ to edit)`
       : ` / to search  Enter: resume  d: delete  r: refresh`;
-    lines.push(renderText(width, searchLine, this.searching ? C.selected : C.statusFg, C.statusBar));
+    const statusFg = this.loadError || this.deleteError ? C.errorFg : C.statusFg;
+    lines.push(renderText(width, searchLine, this.searching ? C.selected : statusFg, C.statusBar));
     if (height <= 2) return lines.slice(0, height);
 
     // Confirmation overlay
@@ -248,13 +249,13 @@ export class SessionBrowserPanel extends BasePanel {
       const sm = getSessionManager();
       this.sessions = sm.list();
       this._filter();
-      this.lastLoadTime = Date.now();
+      this.loadError = '';
       this.markDirty();
-    } catch (e) { logger.debug('SessionBrowserPanel._load failed', { error: String(e) }); }
-  }
-
-  private _loadSync(): void {
-    this._load();
+    } catch (e) {
+      logger.debug('SessionBrowserPanel._load failed', { error: String(e) });
+      this.loadError = 'Failed to load sessions';
+      this.markDirty();
+    }
   }
 
   private _filter(): void {
@@ -317,7 +318,7 @@ export class SessionBrowserPanel extends BasePanel {
       this._load();
     } catch (e) {
       logger.debug('SessionBrowserPanel._deleteConfirmed failed', { error: String(e) });
-      this.deleteError = 'Delete failed';
+      this.deleteError = `Delete failed: ${name}`;
     }
     this.markDirty();
   }
