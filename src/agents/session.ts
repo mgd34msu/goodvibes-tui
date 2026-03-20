@@ -20,7 +20,7 @@ export class AgentSession {
   /** Isolated conversation history for this agent. */
   readonly conversation: ConversationManager;
 
-  /** KV state namespaced under agent-{agentId}. */
+  /** KV state namespaced under agentId. */
   readonly kvState: KVState;
 
   /** Path to the agent's JSONL message log. */
@@ -33,7 +33,7 @@ export class AgentSession {
     this.conversation = new ConversationManager();
 
     // KV state namespaced to this agent
-    this.kvState = new KVState(`agent-${agentId}`);
+    this.kvState = new KVState(agentId);
 
     // JSONL log path
     this.sessionFile = join(
@@ -41,17 +41,17 @@ export class AgentSession {
       '.goodvibes',
       'tui',
       'sessions',
-      `agent-${agentId}.jsonl`,
+      `${agentId}.jsonl`,
     );
 
     // Write a session-start entry
     this._ensureSessionDir();
     this.appendMessage({
-      type: 'session_start',
+      type: 'meta',
       agentId,
       model,
       provider,
-      timestamp: new Date().toISOString(),
+      timestamp: Date.now(),
     });
 
     logger.debug('AgentSession created', { agentId, model, provider });
