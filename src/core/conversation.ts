@@ -115,16 +115,7 @@ export class ConversationManager {
     const textContent = typeof content === 'string'
       ? content
       : content.filter((p): p is { type: 'text'; text: string } => p.type === 'text').map(p => p.text).join('');
-    if (this.title === '') {
-      // Auto-generate title from first user message (max 50 chars, truncated at word boundary)
-      if (textContent.length <= 50) {
-        this.title = textContent;
-      } else {
-        const truncated = textContent.slice(0, 50);
-        const lastSpace = truncated.lastIndexOf(' ');
-        this.title = lastSpace > 10 ? truncated.slice(0, lastSpace) : truncated;
-      }
-    }
+    // Title is only set explicitly via /session rename — no auto-generation
     this.messages.push({ role: 'user', content });
     // Clear undo stack when new user input is added (can't redo past new input)
     this.undoStack = [];
