@@ -105,20 +105,26 @@ export class Compositor {
       hSepRow = 1 + topPaneHeight; // viewport row index of horizontal separator
     }
 
-    viewport.forEach((line, i) => {
+    // Iterate over ALL viewport rows (not just viewport.length) so separator
+    // and panel content extend to the full viewport height even when
+    // conversation content doesn't fill the screen.
+    for (let i = 0; i < vHeight; i++) {
       const screenY = viewportStartY + i;
-      if (screenY >= height) return;
+      if (screenY >= height) break;
+      const line = viewport[i]; // may be undefined for rows past content
 
       if (!hasPanel) {
         // No panel: existing fast path
-        newBuffer.blitLine(screenY, line);
+        if (line) newBuffer.blitLine(screenY, line);
       } else {
         // Panel active: write cells individually to support split layout
         // Left side: viewport cells 0..leftWidth-1
-        for (let x = 0; x < leftWidth; x++) {
-          const cell = line[x];
-          if (cell !== undefined) {
-            newBuffer.setCell(x, screenY, cell);
+        if (line) {
+          for (let x = 0; x < leftWidth; x++) {
+            const cell = line[x];
+            if (cell !== undefined) {
+              newBuffer.setCell(x, screenY, cell);
+            }
           }
         }
 
@@ -214,7 +220,7 @@ export class Compositor {
           }
         }
       }
-    });
+    }
 
     // 3. Draw Footer (Pinned to Bottom) — always full width
     const footerStart = height - footer.length;
