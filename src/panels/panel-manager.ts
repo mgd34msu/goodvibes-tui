@@ -284,6 +284,14 @@ export class PanelManager {
 
   toggle(): void {
     this._visible = !this._visible;
+    // Auto-open a default panel if toggling visible with nothing open
+    if (this._visible && this.topPane.panels.length === 0 && this.bottomPane.panels.length === 0) {
+      // Try to open the first registered panel type
+      const firstType = this.registry[0];
+      if (firstType) {
+        this.open(firstType.id);
+      }
+    }
   }
 
   show(): void {
