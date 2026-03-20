@@ -273,15 +273,24 @@ describe('Task lifecycle', () => {
     TaskScheduler.resetInstance();
   });
 
-  test('task is rescheduled after execution failure via .finally', async () => {
-    await scheduler.start();
-    const task = scheduler.add({ name: 'fail-task', cron: '* * * * *', prompt: 'test', enabled: true });
-    const before = task.nextRun;
-    // Simulate a failed run: runNow throws because AgentManager.spawn throws
-    // The scheduler itself reschedules via .finally in scheduleNext regardless of error
-    // We verify the task remains scheduled (nextRun is set) after the task would fail
+  test('runNow reschedules task after execution (even on failure)', async () => {
+    const scheduler2 = new TaskScheduler('/tmp/gv-scheduler-test-' + Math.random().toString(36).slice(2) + '.json');
+    scheduler2.start();
+    const task = scheduler2.add({ name: 'resched-test', cron: '* * * * *', prompt: 'test', enabled: true });
+
+    const originalNextRun = task.nextRun;
+    expect(originalNextRun).toBeDefined();
+
+    // Clear nextRun to verify it gets recomputed
+    (task as any).nextRun = undefined;
+
+    // runNow triggers executeTask (fails without AgentManager) but should reschedule
+    await scheduler2.runNow(task.id);
+
+    // nextRun should be recomputed by the reschedule in runNow
     expect(task.nextRun).toBeDefined();
-    expect(task.nextRun).toBeGreaterThanOrEqual(before ?? 0);
-    scheduler.stop();
+    expect(task.nextRun).toBeGreaterThan(Date.now() - 1000);
+
+    scheduler2.stop();
   });
 });
