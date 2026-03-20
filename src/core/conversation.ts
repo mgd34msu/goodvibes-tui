@@ -313,7 +313,8 @@ export class ConversationManager {
    * Falls back to a full rebuild when the terminal width has changed.
    */
   public flushHistory(): void {
-    if (!this.dirty) return;
+    const currentWidth = this.getWidth();
+    if (!this.dirty && currentWidth === this.lastRenderedWidth) return;
     this.rebuildHistory();
   }
 
