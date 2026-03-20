@@ -200,7 +200,7 @@ async function main() {
     const w = stdout.columns || 80;
     const pm = getPanelManager();
     if (pm.isVisible() && pm.getOpen().length > 0) {
-      return pm.getLeftWidth(w);
+      return Math.max(1, pm.getLeftWidth(w) - 1);
     }
     return w;
   });
