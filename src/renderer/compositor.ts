@@ -105,26 +105,20 @@ export class Compositor {
       hSepRow = 1 + topPaneHeight; // viewport row index of horizontal separator
     }
 
-    // Iterate over ALL viewport rows (not just viewport.length) so separator
-    // and panel content extend to the full viewport height even when
-    // conversation content doesn't fill the screen.
-    for (let i = 0; i < vHeight; i++) {
+    viewport.forEach((line, i) => {
       const screenY = viewportStartY + i;
-      if (screenY >= height) break;
-      const line = viewport[i]; // may be undefined for rows past content
+      if (screenY >= height) return;
 
       if (!hasPanel) {
         // No panel: existing fast path
-        if (line) newBuffer.blitLine(screenY, line);
+        newBuffer.blitLine(screenY, line);
       } else {
         // Panel active: write cells individually to support split layout
         // Left side: viewport cells 0..leftWidth-1
-        if (line) {
-          for (let x = 0; x < leftWidth; x++) {
-            const cell = line[x];
-            if (cell !== undefined) {
-              newBuffer.setCell(x, screenY, cell);
-            }
+        for (let x = 0; x < leftWidth; x++) {
+          const cell = line[x];
+          if (cell !== undefined) {
+            newBuffer.setCell(x, screenY, cell);
           }
         }
 
@@ -219,6 +213,16 @@ export class Compositor {
             }
           }
         }
+      }
+    });
+
+    // Draw separator on remaining viewport rows past content (when panel is active)
+    if (hasPanel && panel!.separator) {
+      const sepFg = panel!.topFocused || panel!.bottomFocused ? '244' : '238';
+      for (let i = viewport.length; i < vHeight; i++) {
+        const screenY = viewportStartY + i;
+        if (screenY >= height) break;
+        newBuffer.setCell(sepX, screenY, createStyledCell('\u2502', { fg: sepFg }));
       }
     }
 
