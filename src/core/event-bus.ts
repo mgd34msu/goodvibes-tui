@@ -75,6 +75,9 @@ export interface EventMap {
 
   // Execution plan events
   'plan:activate': { planId: string; task: string };
+
+  // Session resume event
+  'session:resume': { sessionId: string };
 }
 
 type Listener<T> = T extends void ? () => void : (data: T) => void;

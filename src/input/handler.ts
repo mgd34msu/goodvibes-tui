@@ -1391,6 +1391,14 @@ export class InputHandler {
           this.bus.emit('clear:screen');
           continue;
         }
+        // Ctrl+P: toggle panel sidebar
+        if (token.logicalName === 'p' && token.ctrl) {
+          if (this.commandContext?.openPanelPicker) {
+            this.commandContext.openPanelPicker();
+          }
+          this.bus.emit('render:request');
+          continue;
+        }
         // Ctrl+F: toggle search mode
         if (token.logicalName === 'f' && token.ctrl) {
           if (this.searchManager.active) {

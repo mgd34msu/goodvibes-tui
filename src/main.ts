@@ -52,6 +52,9 @@ import { scan, loadPersistedProviders, persistProviders, removePersistedProvider
 import { getSessionManager } from './sessions/manager.ts';
 import type { SessionMeta } from './sessions/manager.ts';
 import { logger } from './utils/logger.ts';
+import { getPanelManager } from './panels/panel-manager.ts';
+import { registerBuiltinPanels } from './panels/builtin-panels.ts';
+import { renderPanelTabBar } from './renderer/panel-tab-bar.ts';
 
 /**
  * Attempt to restore a previously saved model selection after providers are registered.
@@ -371,6 +374,16 @@ async function main() {
   const acpManager = new AcpManager(bus);
   orchestrator.registerDelegateTool(acpManager);
 
+  // --- Panel manager ---
+  const panelManager = getPanelManager();
+  registerBuiltinPanels(panelManager, {
+    bus,
+    getOrchestratorUsage: () => orchestrator.usage as { input: number; output: number; cacheRead: number; cacheWrite: number; model?: string },
+    toolRegistry,
+    providerRegistry,
+    contextWindow: providerRegistry.getCurrentModel().contextWindow,
+  });
+
   // Wire /plan command: when a plan is activated, forward the task to the orchestrator
   // as a user message so the model can create a spec and execution plan.
   unsubs.push(bus.on('plan:activate', ({ task }: { task: string }) => {
@@ -380,6 +393,24 @@ async function main() {
         logger.debug('plan:activate handler failed', { error: String(err) });
       });
     }, 50);
+  }));
+
+  // Session resume from SessionBrowserPanel: load session, update runtime state
+  unsubs.push(bus.on('session:resume', ({ sessionId }: { sessionId: string }) => {
+    try {
+      const sm = getSessionManager();
+      const { messages, meta } = sm.load(sessionId);
+      conversation.fromJSON({ messages: messages as never[] });
+      runtime.sessionId = sessionId;
+      if (meta?.model) runtime.model = meta.model;
+      if (meta?.provider) runtime.provider = meta.provider;
+      writeLastSessionPointer(sessionId);
+      conversation.log(`Resumed session: ${sessionId}`, { fg: '135' });
+    } catch (e) {
+      logger.debug('session:resume handler failed', { error: String(e) });
+      conversation.log('Failed to resume session.', { fg: '#ef4444' });
+    }
+    bus.emit('render:request');
   }));
 
   // --- Command registry ---
@@ -459,6 +490,16 @@ async function main() {
 
   commandContext.openSessionPicker = () => {
     input.sessionPickerModal.open();
+    bus.emit('render:request');
+  };
+
+  commandContext.openPanelPicker = () => {
+    // Toggle panel visibility or open the panel picker
+    if (panelManager.getOpen().length === 0) {
+      // No panels open yet — open the docs panel by default
+      try { panelManager.open('docs'); } catch { /* non-fatal if not registered */ }
+    }
+    panelManager.toggle();
     bus.emit('render:request');
   };
 
@@ -713,6 +754,22 @@ async function main() {
       }
     }
 
+    // Panel composite data
+    let panelData: import('./renderer/compositor.ts').PanelCompositeData | undefined;
+    let panelWidth: number | undefined;
+    if (panelManager.isVisible() && panelManager.getOpen().length > 0) {
+      const pWidth = panelManager.getRightWidth(width);
+      const activePanel = panelManager.getActive();
+      const openPanels = panelManager.getOpen();
+      const activeIndex = openPanels.indexOf(activePanel!);
+      if (activePanel && pWidth > 0) {
+        const tabBar = renderPanelTabBar(openPanels, activeIndex >= 0 ? activeIndex : 0, pWidth);
+        const content = activePanel.render(pWidth, vHeight);
+        panelData = { tabBar, content, separator: true };
+        panelWidth = pWidth;
+      }
+    }
+
     compositor.composite({
       width, height,
       header: headerLines,
@@ -728,6 +785,8 @@ async function main() {
         scrollTop,
         viewportStartY: 2,
       } : undefined,
+      panel: panelData,
+      panelWidth,
     });
   };
 

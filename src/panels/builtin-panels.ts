@@ -5,7 +5,14 @@ import { PlanDashboardPanel } from './plan-dashboard-panel.ts';
 import { CostTrackerPanel } from './cost-tracker-panel.ts';
 import { ProviderStatsPanel } from './provider-stats-panel.ts';
 import { AgentInspectorPanel } from './agent-inspector-panel.ts';
+import { SessionBrowserPanel } from './session-browser-panel.ts';
+import { DocsPanel } from './docs-panel.ts';
+import { ThinkingPanel } from './thinking-panel.ts';
+import { ToolInspectorPanel } from './tool-inspector-panel.ts';
+import { ContextVisualizerPanel } from './context-visualizer-panel.ts';
 import type { EventBus } from '../core/event-bus.ts';
+import type { ToolRegistry } from '../tools/registry.ts';
+import type { ProviderRegistry } from '../providers/registry.ts';
 
 /**
  * Register all built-in panel types with the given PanelManager.
@@ -19,6 +26,12 @@ export interface BuiltinPanelDeps {
   getOrchestratorUsage?: () => { input: number; output: number; cacheRead: number; cacheWrite: number; model?: string };
   /** Optional cost budget alert threshold in USD (0 = disabled). */
   budgetThreshold?: number;
+  /** Tool registry for Docs panel. */
+  toolRegistry?: ToolRegistry;
+  /** Provider registry for Docs panel model list. */
+  providerRegistry?: ProviderRegistry;
+  /** Context window size in tokens (for ContextVisualizerPanel). */
+  contextWindow?: number;
 }
 
 export function registerBuiltinPanels(manager: PanelManager, deps: BuiltinPanelDeps = {}): void {
@@ -80,5 +93,54 @@ export function registerBuiltinPanels(manager: PanelManager, deps: BuiltinPanelD
       description: 'Per-provider performance metrics: latency, error rate, request count, sparkline trends',
       factory: () => new ProviderStatsPanel(bus),
     });
+
+    manager.registerType({
+      id: 'thinking',
+      name: 'Thinking',
+      icon: 'T',
+      category: 'ai',
+      description: 'Stream model reasoning tokens in real-time with collapsible blocks per turn',
+      factory: () => new ThinkingPanel(bus),
+    });
+
+    manager.registerType({
+      id: 'tools',
+      name: 'Tools',
+      icon: 'X',
+      category: 'ai',
+      description: 'Chronological tool call inspector with expandable args/results and filtering',
+      factory: () => new ToolInspectorPanel(bus),
+    });
+
+    manager.registerType({
+      id: 'context',
+      name: 'Context',
+      icon: 'C',
+      category: 'ai',
+      description: 'Context window visualizer: stacked bar showing token usage per section',
+      factory: () => new ContextVisualizerPanel(
+        bus,
+        deps.getOrchestratorUsage,
+        deps.contextWindow,
+      ),
+    });
   }
+
+  manager.registerType({
+    id: 'sessions',
+    name: 'Sessions',
+    icon: 'H',
+    category: 'session',
+    description: 'Browse, search, and resume past conversation sessions',
+    factory: () => new SessionBrowserPanel(deps.bus),
+  });
+
+  manager.registerType({
+    id: 'docs',
+    name: 'Docs',
+    icon: '?',
+    category: 'session',
+    description: 'Tool list, model capabilities, and keyboard shortcut reference',
+    factory: () => new DocsPanel(deps.toolRegistry, deps.providerRegistry),
+  });
 }
