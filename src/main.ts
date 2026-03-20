@@ -554,9 +554,7 @@ async function main() {
     toolCount,
   };
 
-  // --- Resume last session on startup ---
-  const saved = loadLastConversation();
-  if (saved) conversation.fromJSON(saved as unknown as Parameters<typeof conversation.fromJSON>[0]);
+  // Sessions start fresh — use /session resume to load a previous session
 
   // --- Render function ---
   const render = () => {
