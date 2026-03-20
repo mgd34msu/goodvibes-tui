@@ -824,7 +824,7 @@ async function main() {
           topPane.panels,
           topPane.activeIndex,
           pWidth,
-          focusedPane === 'top',
+          input.panelFocused && focusedPane === 'top',
         );
 
         if (hasBottom) {
@@ -840,7 +840,7 @@ async function main() {
             bottomPane.panels,
             bottomPane.activeIndex,
             pWidth,
-            focusedPane === 'bottom',
+            input.panelFocused && focusedPane === 'bottom',
           );
           bottomContent = bottomActivePanel ? bottomActivePanel.render(pWidth, bottomH) : [];
         } else {
@@ -851,10 +851,10 @@ async function main() {
         panelData = {
           topTabBar,
           topContent,
-          topFocused: focusedPane === 'top',
+          topFocused: input.panelFocused && focusedPane === 'top',
           bottomTabBar,
           bottomContent,
-          bottomFocused: focusedPane === 'bottom',
+          bottomFocused: input.panelFocused && focusedPane === 'bottom',
           separator: true,
           verticalSplitRatio,
         };
