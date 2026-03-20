@@ -56,7 +56,7 @@ const LANG_TO_PACKAGE: Record<string, string> = {
 };
 
 // Language IDs where the WASM file name differs from the standard pattern
-// Standard pattern: node_modules/tree-sitter-{lang}/tree-sitter-{lang}.wasm
+// Standard WASM filename: tree-sitter-{lang}.wasm (embedded via embedded-wasm.ts)
 // tsx lives inside tree-sitter-typescript as tree-sitter-tsx.wasm
 const WASM_FILENAME_OVERRIDE: Record<string, string> = {
   tsx: 'tree-sitter-tsx.wasm',

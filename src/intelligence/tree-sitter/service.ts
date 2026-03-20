@@ -1,16 +1,16 @@
 /**
  * TreeSitterService — Grammar loading, parsing, and tree caching.
  *
- * Grammar WASM files are loaded lazily from node_modules at runtime.
+ * Grammar WASM files are embedded in the compiled binary via Bun's
+ * `with { type: 'file' }` import assertion (see embedded-wasm.ts).
  * Missing grammars are handled gracefully (returns null, logs warning).
  * Never throws — callers receive null on failure.
  */
 import { Parser, Language, Query, Tree } from 'web-tree-sitter';
 import type { QueryMatch } from 'web-tree-sitter';
-import { existsSync } from 'fs';
-import { join } from 'path';
 import { logger } from '../../utils/logger.ts';
-import { detectLanguage, getGrammarPackage, getWasmFilename } from './languages.ts';
+import { detectLanguage } from './languages.ts';
+import { TREE_SITTER_WASM, GRAMMAR_WASM } from './embedded-wasm.ts';
 
 const MAX_CACHE_SIZE = 100;
 
@@ -45,16 +45,11 @@ export class TreeSitterService {
 
     this.initPromise = (async () => {
       try {
-        // Resolve WASM from the TUI's own node_modules, not the user's project
-        const wasmPath = join(
-          import.meta.dir,
-          '..', '..', '..',
-          'node_modules',
-          'web-tree-sitter',
-          'web-tree-sitter.wasm',
-        );
+        // TREE_SITTER_WASM is the embedded WASM path from embedded-wasm.ts.
+        // In compiled binaries it resolves to the embedded file; in dev mode
+        // it resolves to the absolute filesystem path. Both work.
         await Parser.init({
-          locateFile: (_path: string) => wasmPath,
+          locateFile: (_path: string) => TREE_SITTER_WASM,
         });
         this.parser = new Parser();
         this.initialized = true;
@@ -76,13 +71,11 @@ export class TreeSitterService {
     const cached = this.languages.get(langId);
     if (cached) return cached;
 
-    const pkg = getGrammarPackage(langId);
-    const wasmFile = getWasmFilename(langId);
-    // Resolve grammar WASM from the TUI's own node_modules
-    const wasmPath = join(import.meta.dir, '..', '..', '..', 'node_modules', pkg, wasmFile);
-
-    if (!existsSync(wasmPath)) {
-      logger.debug('TreeSitterService: grammar WASM not found', { langId, wasmPath });
+    // Look up the embedded WASM path. If not present, the grammar package is
+    // not installed — return null rather than throwing.
+    const wasmPath = GRAMMAR_WASM[langId];
+    if (!wasmPath) {
+      logger.debug('TreeSitterService: grammar WASM not embedded', { langId });
       return null;
     }
 
