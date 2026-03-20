@@ -8,6 +8,9 @@ import { config } from '../config/index.ts';
 import type { EventBus } from '../core/event-bus.ts';
 import { loadCustomProviders, watchCustomProviders } from './custom-loader.ts';
 
+/** Model capability tier — controls system prompt verbosity. */
+export type ModelTier = 'free' | 'standard' | 'premium';
+
 /** Describes a selectable model and its capabilities. */
 export interface ModelDefinition {
   id: string;
@@ -25,6 +28,8 @@ export interface ModelDefinition {
   selectable: boolean;
   /** Available reasoning effort levels for this model (controls UI effort picker). */
   reasoningEffort?: string[];
+  /** Model capability tier — controls system prompt verbosity. */
+  tier?: ModelTier;
 }
 
 const BUILTIN_MODEL_REGISTRY: ModelDefinition[] = [
@@ -38,6 +43,7 @@ const BUILTIN_MODEL_REGISTRY: ModelDefinition[] = [
     contextWindow: 32768,
     selectable: true,
     reasoningEffort: ['instant', 'low', 'medium', 'high'],
+    tier: 'standard',
   },
   {
     id: 'mercury-edit',
@@ -47,6 +53,7 @@ const BUILTIN_MODEL_REGISTRY: ModelDefinition[] = [
     capabilities: { toolCalling: false, codeEditing: true, reasoning: false, multimodal: false },
     contextWindow: 32768,
     selectable: false,
+    tier: 'standard',
   },
 
   // --- OpenAI ---
@@ -58,6 +65,7 @@ const BUILTIN_MODEL_REGISTRY: ModelDefinition[] = [
     capabilities: { toolCalling: true, codeEditing: true, reasoning: true, multimodal: true },
     contextWindow: 128000,
     selectable: true,
+    tier: 'premium',
   },
   {
     id: 'gpt-5.3-chat-latest',
@@ -67,6 +75,7 @@ const BUILTIN_MODEL_REGISTRY: ModelDefinition[] = [
     capabilities: { toolCalling: true, codeEditing: true, reasoning: true, multimodal: true },
     contextWindow: 128000,
     selectable: true,
+    tier: 'premium',
   },
   {
     id: 'gpt-5-mini',
@@ -76,6 +85,7 @@ const BUILTIN_MODEL_REGISTRY: ModelDefinition[] = [
     capabilities: { toolCalling: true, codeEditing: true, reasoning: false, multimodal: true },
     contextWindow: 128000,
     selectable: true,
+    tier: 'standard',
   },
   {
     id: 'gpt-5-nano',
@@ -85,6 +95,7 @@ const BUILTIN_MODEL_REGISTRY: ModelDefinition[] = [
     capabilities: { toolCalling: true, codeEditing: false, reasoning: false, multimodal: false },
     contextWindow: 32768,
     selectable: true,
+    tier: 'standard',
   },
   {
     id: 'gpt-oss-120b',
@@ -94,6 +105,7 @@ const BUILTIN_MODEL_REGISTRY: ModelDefinition[] = [
     capabilities: { toolCalling: true, codeEditing: true, reasoning: false, multimodal: false },
     contextWindow: 128000,
     selectable: true,
+    tier: 'standard',
   },
 
   // --- Gemini ---
@@ -106,6 +118,7 @@ const BUILTIN_MODEL_REGISTRY: ModelDefinition[] = [
     contextWindow: 1000000,
     selectable: true,
     reasoningEffort: ['low', 'medium', 'high'],
+    tier: 'premium',
   },
   {
     id: 'gemini-3-flash',
@@ -115,6 +128,7 @@ const BUILTIN_MODEL_REGISTRY: ModelDefinition[] = [
     capabilities: { toolCalling: true, codeEditing: true, reasoning: false, multimodal: true },
     contextWindow: 1000000,
     selectable: true,
+    tier: 'standard',
   },
   {
     id: 'gemini-3.1-flash-lite-preview',
@@ -124,6 +138,7 @@ const BUILTIN_MODEL_REGISTRY: ModelDefinition[] = [
     capabilities: { toolCalling: true, codeEditing: false, reasoning: false, multimodal: false },
     contextWindow: 128000,
     selectable: true,
+    tier: 'standard',
   },
   {
     id: 'gemini-2.5-pro',
@@ -134,6 +149,7 @@ const BUILTIN_MODEL_REGISTRY: ModelDefinition[] = [
     contextWindow: 1000000,
     selectable: true,
     reasoningEffort: ['low', 'medium', 'high'],
+    tier: 'premium',
   },
 
   // --- OpenRouter (free) ---
@@ -146,6 +162,7 @@ const BUILTIN_MODEL_REGISTRY: ModelDefinition[] = [
     contextWindow: 200000,
     selectable: true,
     reasoningEffort: ['low', 'medium', 'high'],
+    tier: 'free',
   },
   {
     id: 'arcee-ai/trinity-mini:free',
@@ -156,6 +173,7 @@ const BUILTIN_MODEL_REGISTRY: ModelDefinition[] = [
     contextWindow: 131072,
     selectable: true,
     reasoningEffort: ['low', 'medium', 'high'],
+    tier: 'free',
   },
   {
     id: 'minimax/minimax-m2.5:free',
@@ -166,6 +184,7 @@ const BUILTIN_MODEL_REGISTRY: ModelDefinition[] = [
     contextWindow: 196608,
     selectable: true,
     reasoningEffort: ['low', 'medium', 'high'],
+    tier: 'free',
   },
   {
     id: 'nvidia/nemotron-3-super-120b-a12b:free',
@@ -176,6 +195,7 @@ const BUILTIN_MODEL_REGISTRY: ModelDefinition[] = [
     contextWindow: 262144,
     selectable: true,
     reasoningEffort: ['low', 'medium', 'high'],
+    tier: 'free',
   },
   {
     id: 'nvidia/nemotron-3-nano-30b-a3b:free',
@@ -186,6 +206,7 @@ const BUILTIN_MODEL_REGISTRY: ModelDefinition[] = [
     contextWindow: 256000,
     selectable: true,
     reasoningEffort: ['low', 'medium', 'high'],
+    tier: 'free',
   },
   {
     id: 'nvidia/nemotron-nano-12b-v2-vl:free',
@@ -196,6 +217,7 @@ const BUILTIN_MODEL_REGISTRY: ModelDefinition[] = [
     contextWindow: 128000,
     selectable: true,
     reasoningEffort: ['low', 'medium', 'high'],
+    tier: 'free',
   },
   {
     id: 'nvidia/nemotron-nano-9b-v2:free',
@@ -206,6 +228,7 @@ const BUILTIN_MODEL_REGISTRY: ModelDefinition[] = [
     contextWindow: 128000,
     selectable: true,
     reasoningEffort: ['low', 'medium', 'high'],
+    tier: 'free',
   },
   {
     id: 'openai/gpt-oss-120b:free',
@@ -216,6 +239,7 @@ const BUILTIN_MODEL_REGISTRY: ModelDefinition[] = [
     contextWindow: 131072,
     selectable: true,
     reasoningEffort: ['low', 'medium', 'high'],
+    tier: 'free',
   },
   {
     id: 'openai/gpt-oss-20b:free',
@@ -226,6 +250,7 @@ const BUILTIN_MODEL_REGISTRY: ModelDefinition[] = [
     contextWindow: 131072,
     selectable: true,
     reasoningEffort: ['low', 'medium', 'high'],
+    tier: 'free',
   },
   {
     id: 'stepfun/step-3.5-flash:free',
@@ -236,6 +261,7 @@ const BUILTIN_MODEL_REGISTRY: ModelDefinition[] = [
     contextWindow: 256000,
     selectable: true,
     reasoningEffort: ['low', 'medium', 'high'],
+    tier: 'free',
   },
   {
     id: 'z-ai/glm-4.5-air:free',
@@ -246,6 +272,7 @@ const BUILTIN_MODEL_REGISTRY: ModelDefinition[] = [
     contextWindow: 131072,
     selectable: true,
     reasoningEffort: ['low', 'medium', 'high'],
+    tier: 'free',
   },
 
   // --- Anthropic ---
@@ -258,6 +285,7 @@ const BUILTIN_MODEL_REGISTRY: ModelDefinition[] = [
     contextWindow: 1000000,
     selectable: true,
     reasoningEffort: ['low', 'medium', 'high'],
+    tier: 'premium',
   },
   {
     id: 'claude-sonnet-4-6',
@@ -268,6 +296,7 @@ const BUILTIN_MODEL_REGISTRY: ModelDefinition[] = [
     contextWindow: 1000000,
     selectable: true,
     reasoningEffort: ['low', 'medium', 'high'],
+    tier: 'premium',
   },
   {
     id: 'claude-haiku-4-5',
@@ -277,6 +306,7 @@ const BUILTIN_MODEL_REGISTRY: ModelDefinition[] = [
     capabilities: { toolCalling: true, codeEditing: true, reasoning: false, multimodal: true },
     contextWindow: 200000,
     selectable: true,
+    tier: 'standard',
   },
 ];
 
@@ -429,6 +459,7 @@ export class ProviderRegistry {
           ...(reasoningFormat !== 'none' ? { reasoningEffort: ['low', 'medium', 'high'] } : {}),
           contextWindow: 8192,
           selectable: true,
+          tier: 'standard',
         });
       }
     }
@@ -475,6 +506,7 @@ export class ProviderRegistry {
           capabilities: { toolCalling: false, codeEditing: false, reasoning: false, multimodal: false },
           contextWindow: 0, // Unknown until provider discovery completes; 0 = no progress bar
           selectable: true,
+          tier: 'standard' as ModelTier,
         };
       }
       // Builtin model not found — genuinely broken, fall back to first selectable

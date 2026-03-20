@@ -54,6 +54,8 @@ export interface CustomProviderConfig {
       multimodal: boolean;
     };
     reasoningEffort?: string[];
+    /** Model capability tier — controls system prompt verbosity. */
+    tier?: 'free' | 'standard' | 'premium';
   }>;
 }
 
@@ -271,6 +273,7 @@ export async function loadCustomProviders(): Promise<LoadCustomProvidersResult> 
         multimodal: m.capabilities.multimodal,
       },
       ...(m.reasoningEffort ? { reasoningEffort: m.reasoningEffort } : {}),
+      ...(m.tier ? { tier: m.tier } : {}),
     }));
 
     providers.push({ config: cfg, provider });

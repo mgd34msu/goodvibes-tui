@@ -72,6 +72,9 @@ export interface EventMap {
 
   // Help overlay events
   'help:scroll': { delta: number };
+
+  // Execution plan events
+  'plan:activate': { planId: string; task: string };
 }
 
 type Listener<T> = T extends void ? () => void : (data: T) => void;
