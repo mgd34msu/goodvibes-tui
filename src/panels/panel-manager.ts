@@ -236,6 +236,25 @@ export class PanelManager {
       if (this._focusedPane === 'bottom') this._focusedPane = 'top';
     } else {
       this._bottomPaneVisible = true;
+      // If bottom pane is empty, populate it
+      if (this.bottomPane.panels.length === 0) {
+        if (this.topPane.panels.length > 1) {
+          // Move last panel from top to bottom
+          const panel = this.topPane.panels.pop()!;
+          if (this.topPane.activeIndex >= this.topPane.panels.length) {
+            this.topPane.activeIndex = Math.max(0, this.topPane.panels.length - 1);
+          }
+          this.bottomPane.panels.push(panel);
+          this.bottomPane.activeIndex = 0;
+        } else {
+          // Open a default panel in bottom pane
+          const firstType = this.registry[0];
+          if (firstType) {
+            this.open(firstType.id, 'bottom');
+          }
+        }
+      }
+      this._focusedPane = 'bottom';
     }
   }
 

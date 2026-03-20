@@ -1328,15 +1328,14 @@ export class InputHandler {
             this.bus.emit('render:request');
             continue;
           }
+
           // Ctrl+] / Ctrl+^ still cycle tabs even when panel focused
           if (token.logicalName === '}' && token.ctrl) {
-            const pm = getPanelManager();
-            if (pm.isVisible()) { pm.nextPanel(); this.bus.emit('render:request'); }
+            this.cyclePanelTab('next');
             continue;
           }
           if (token.logicalName === '~' && token.ctrl) {
-            const pm = getPanelManager();
-            if (pm.isVisible()) { pm.prevPanel(); this.bus.emit('render:request'); }
+            this.cyclePanelTab('prev');
             continue;
           }
           // Route to active panel's handleInput
@@ -1460,30 +1459,15 @@ export class InputHandler {
           this.bus.emit('render:request');
           continue;
         }
-        // Ctrl+\ (0x1c): toggle panel visibility
-        if (token.logicalName === '|' && token.ctrl) {
-          const pm = getPanelManager();
-          pm.toggle();
-          if (!pm.isVisible()) this.panelFocused = false;
-          this.bus.emit('render:request');
-          continue;
-        }
+
         // Ctrl+] (0x1d): next panel tab
         if (token.logicalName === '}' && token.ctrl) {
-          const pm = getPanelManager();
-          if (pm.isVisible()) {
-            pm.nextPanel();
-            this.bus.emit('render:request');
-          }
+          this.cyclePanelTab('next');
           continue;
         }
         // Ctrl+^ (0x1e): previous panel tab
         if (token.logicalName === '~' && token.ctrl) {
-          const pm = getPanelManager();
-          if (pm.isVisible()) {
-            pm.prevPanel();
-            this.bus.emit('render:request');
-          }
+          this.cyclePanelTab('prev');
           continue;
         }
         // Ctrl+F: toggle search mode
@@ -2210,6 +2194,15 @@ export class InputHandler {
    * Word-wrap a single line to fit within maxW columns.
    * Breaks at spaces; words wider than maxW are force-broken.
    */
+  private cyclePanelTab(direction: 'next' | 'prev'): void {
+    const pm = getPanelManager();
+    if (pm.isVisible()) {
+      if (direction === 'next') pm.nextPanel();
+      else pm.prevPanel();
+      this.bus.emit('render:request');
+    }
+  }
+
   private wordWrapLine(line: string, maxW: number): string[] {
     if (maxW <= 0) return [line];
     if (line.length === 0) return [''];

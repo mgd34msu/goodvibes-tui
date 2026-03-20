@@ -1,6 +1,7 @@
 import { TerminalBuffer } from './buffer.ts';
 import { DiffEngine } from './diff.ts';
 import { type Line, createStyledCell } from '../types/grid.ts';
+import { getDisplayWidth } from '../utils/terminal-width.ts';
 import type { SearchManager } from '../input/search.ts';
 
 export interface SelectionInfo {
@@ -105,6 +106,10 @@ export class Compositor {
       hSepRow = 1 + topPaneHeight; // viewport row index of horizontal separator
     }
 
+    const sepFg = hasPanel && panel!.separator
+      ? (panel!.topFocused || panel!.bottomFocused ? '244' : '238')
+      : '238';
+
     viewport.forEach((line, i) => {
       const screenY = viewportStartY + i;
       if (screenY >= height) return;
@@ -118,6 +123,13 @@ export class Compositor {
         for (let x = 0; x < leftWidth; x++) {
           const cell = line[x];
           if (cell !== undefined) {
+            // If this is a wide char (2-cell) at the last left-side column,
+            // it would bleed into the separator column visually.
+            // Replace with a space to keep the separator aligned.
+            if (x === leftWidth - 1 && cell.char && cell.char.length > 0 && getDisplayWidth(cell.char) > 1) {
+              newBuffer.setCell(x, screenY, { ...cell, char: ' ' });
+              continue;
+            }
             newBuffer.setCell(x, screenY, cell);
           }
         }
@@ -126,7 +138,6 @@ export class Compositor {
 
         // Separator column (vertical bar between left and panel area)
         if (p.separator) {
-          const sepFg = p.topFocused || p.bottomFocused ? '244' : '238';
           newBuffer.setCell(sepX, screenY, createStyledCell('\u2502', { fg: sepFg }));
         }
 
@@ -218,7 +229,6 @@ export class Compositor {
 
     // Draw separator on remaining viewport rows past content (when panel is active)
     if (hasPanel && panel!.separator) {
-      const sepFg = panel!.topFocused || panel!.bottomFocused ? '244' : '238';
       for (let i = viewport.length; i < vHeight; i++) {
         const screenY = viewportStartY + i;
         if (screenY >= height) break;

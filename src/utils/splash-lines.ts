@@ -20,7 +20,7 @@ const SEPARATOR = '━'.repeat(ART_W);
  */
 const TAGLINE = '[ ｇｏｏｄ ｖｉｂｅｓ ・ Ａ Ｉ ・ いい雰囲気 ]';
 
-const VERSION_LINE = `  ✦ v${VERSION}  █  terminal AI assistant  █  自動ｺｰﾄﾞ  ✦`;
+const VERSION_LINE = `　✦　v${VERSION}　█　terminal AI assistant　█　自動ｺｰﾄﾞ 　✦`;
 
 export interface SplashOptions {
   workingDir?: string;
