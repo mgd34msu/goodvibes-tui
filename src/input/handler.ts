@@ -47,6 +47,8 @@ export class InputHandler {
   public commandMode = false;
   /** True when the process indicator bar has keyboard focus. */
   public indicatorFocused = false;
+  /** True when keyboard focus is on the active panel (arrow/enter go to panel, not prompt). */
+  public panelFocused = false;
 
   private tokenizer = new InputTokenizer();
   private pasteRegistry = new Map<string, string>();
@@ -1294,6 +1296,64 @@ export class InputHandler {
         continue;
       }
 
+      // --- Tab: toggle keyboard focus between prompt and active panel ---
+      if (
+        token.type === 'key' &&
+        token.logicalName === 'tab' &&
+        !this.commandMode &&
+        !this.searchManager.active &&
+        !(this.autocomplete?.isActive)
+      ) {
+        const pm = getPanelManager();
+        if (pm.isVisible() && pm.getAllOpen().length > 0) {
+          if (this.panelFocused) {
+            // Already focused on panel — Tab returns to prompt
+            this.panelFocused = false;
+          } else {
+            // Try path completion first; only focus panel if no completion available
+            if (!this.handlePathCompletion()) {
+              this.panelFocused = true;
+            }
+          }
+          this.bus.emit('render:request');
+          continue;
+        }
+      }
+
+      // --- Panel has keyboard focus: route keys to active panel ---
+      if (this.panelFocused) {
+        if (token.type === 'key') {
+          if (token.logicalName === 'escape') {
+            this.panelFocused = false;
+            this.bus.emit('render:request');
+            continue;
+          }
+          // Ctrl+] / Ctrl+^ still cycle tabs even when panel focused
+          if (token.logicalName === '}' && token.ctrl) {
+            const pm = getPanelManager();
+            if (pm.isVisible()) { pm.nextPanel(); this.bus.emit('render:request'); }
+            continue;
+          }
+          if (token.logicalName === '~' && token.ctrl) {
+            const pm = getPanelManager();
+            if (pm.isVisible()) { pm.prevPanel(); this.bus.emit('render:request'); }
+            continue;
+          }
+          // Route to active panel's handleInput
+          const pm = getPanelManager();
+          const activePanel = pm.getActive();
+          if (activePanel?.handleInput) {
+            const consumed = activePanel.handleInput(token.logicalName);
+            if (consumed) {
+              this.bus.emit('render:request');
+              continue;
+            }
+          }
+        }
+        // Consume all tokens (text and unhandled keys) while panel is focused
+        continue;
+      }
+
       // --- Process indicator has focus: intercept keys ---
       if (this.indicatorFocused) {
         if (token.type === 'key') {
@@ -1404,6 +1464,7 @@ export class InputHandler {
         if (token.logicalName === '|' && token.ctrl) {
           const pm = getPanelManager();
           pm.toggle();
+          if (!pm.isVisible()) this.panelFocused = false;
           this.bus.emit('render:request');
           continue;
         }
