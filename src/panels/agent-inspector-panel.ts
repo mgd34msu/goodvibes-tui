@@ -168,6 +168,7 @@ function jsonlToTimeline(rows: JsonlRow[]): TimelineEntry[] {
         break;
       }
 
+      case 'meta':
       case 'session_start': {
         entries.push({
           kind: 'session',
@@ -650,7 +651,7 @@ export class AgentInspectorPanel extends BasePanel {
       const sessionFile = join(
         process.cwd(),
         '.goodvibes', 'tui', 'sessions',
-        `agent-${this.selectedAgentId}.jsonl`,
+        `${this.selectedAgentId}.jsonl`,
       );
       const raw = await readFile(sessionFile, 'utf-8');
       const logLines = raw.trim().split('\n').filter(Boolean);

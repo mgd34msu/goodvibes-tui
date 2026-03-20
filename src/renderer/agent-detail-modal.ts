@@ -65,7 +65,7 @@ export class AgentDetailModal {
   async loadLog(): Promise<void> {
     if (!this.agentId) { this.logEntries = []; this.logTotal = 0; return; }
     try {
-      const sessionFile = join(process.cwd(), '.goodvibes', 'tui', 'sessions', `agent-${this.agentId}.jsonl`);
+      const sessionFile = join(process.cwd(), '.goodvibes', 'tui', 'sessions', `${this.agentId}.jsonl`);
       const logContent = await readFile(sessionFile, 'utf-8');
       const logLines = logContent.trim().split('\n');
       this.logTotal = logLines.length;

@@ -51,6 +51,7 @@ export class AgentSession {
       agentId,
       model,
       provider,
+      title: '',
       timestamp: Date.now(),
     });
 
