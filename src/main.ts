@@ -509,8 +509,12 @@ async function main() {
         try { panelManager.open('docs'); } catch { /* non-fatal */ }
       }
       panelManager.show();
+      conversation.suppressSplash = true;
+      conversation.rebuildHistory();
     } else {
       panelManager.hide();
+      conversation.suppressSplash = false;
+      conversation.rebuildHistory();
     }
     bus.emit('render:request');
   };

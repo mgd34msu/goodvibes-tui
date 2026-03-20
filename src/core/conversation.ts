@@ -290,7 +290,7 @@ export class ConversationManager {
       (m) => m.role !== 'tool' && m.role !== 'system',
     );
 
-    if (displayMessages.length === 0) {
+    if (displayMessages.length === 0 && !this.suppressSplash) {
       this.addSplashScreen(width);
       return;
     }
@@ -595,6 +595,7 @@ export class ConversationManager {
     return before ?? errors[errors.length - 1];
   }
 
+  public suppressSplash: boolean = false;
   public splashOptions: SplashOptions = {};
 
   private addSplashScreen(width: number): void {

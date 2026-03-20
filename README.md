@@ -54,7 +54,7 @@ Language intelligence powered by bundled LSP servers (TypeScript, Python, Bash, 
 - Agent detail modal and background process tracking
 
 ### Automated WRFC Review Chains
-- **Work → Review → Fix → Complete** — every agent spawns an automated quality chain
+- **Work → Review → Fix → Check** — every agent spawns an automated quality chain
 - 10-dimension reviewer with scored rubric (Correctness, Type Safety, Error Handling, Security, Performance, Code Quality, Testing, Documentation, Completeness, Integration)
 - Configurable minimum score threshold (default 9.9/10)
 - Automated fix cycles: fixer agent receives full issue list with point values

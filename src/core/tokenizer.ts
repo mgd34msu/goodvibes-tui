@@ -139,6 +139,7 @@ export class InputTokenizer {
         else if (code === 13) { logicalName = 'enter'; }
         else if (code === 10) { logicalName = 'enter'; isShift = true; }
         else if (code === 127 || code === 8) { logicalName = 'backspace'; }
+        else if (code === 9) { logicalName = 'tab'; }
         else if (code < 32) {
            logicalName = String.fromCharCode(code + 96).toLowerCase(); 
            isCtrl = true;
