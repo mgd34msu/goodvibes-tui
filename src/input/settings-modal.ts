@@ -228,7 +228,7 @@ export class SettingsModal {
         }
       }
     } catch (e) {
-      console.warn('SettingsModal._setValue: config set rejected', { error: String(e) });
+      // Silently ignore — console.warn corrupts TUI display
     }
   }
 }

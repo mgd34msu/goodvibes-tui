@@ -357,8 +357,7 @@ export class ProviderRegistry {
     const apiKey = (name: string): string => {
       const key = config.apiKeys[name] ?? '';
       if (!key) {
-        // Using console here as logger may not be initialized during module-level construction
-        console.warn(`[registry] API key for provider '${name}' is empty — requests will fail.`);
+        // Silently skip — console.warn corrupts TUI display. Missing keys are handled at request time.
       }
       return key;
     };
@@ -564,7 +563,7 @@ export class ProviderRegistry {
       if (isBuiltin) {
         const msg = `[registry] Custom model '${model.id}' from provider '${model.provider}' overrides built-in model.`;
         result.warnings.push(msg);
-        console.warn(msg);
+        // Warning already added to result.warnings — don't console.warn (corrupts TUI)
       }
     }
 
@@ -624,11 +623,11 @@ export class ProviderRegistry {
   initCustomProviders(): void {
     this._readyPromise = this.loadCustomProviders()
       .then((result) => {
-        for (const w of result.warnings) console.warn(w);
+        // Warnings captured in result.warnings — don't console.warn (corrupts TUI)
         this._readyPromise = null;
       })
       .catch((err) => {
-        console.warn('[registry] Failed to load custom providers:', err);
+        // Non-fatal — don't console.warn (corrupts TUI display)
         this._readyPromise = null;
       });
   }
