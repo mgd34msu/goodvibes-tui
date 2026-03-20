@@ -174,6 +174,35 @@ describe('InputTokenizer', () => {
     });
   });
 
+  describe('panel control codes', () => {
+    test('0x1c (Ctrl+\\\\) produces key with logicalName="|" and ctrl=true', () => {
+      const tokens = tokenizer.feed('\x1c');
+      expect(tokens).toHaveLength(1);
+      const t = tokens[0] as Extract<InputToken, { type: 'key' }>;
+      expect(t.type).toBe('key');
+      expect(t.logicalName).toBe('|');
+      expect(t.ctrl).toBe(true);
+    });
+
+    test('0x1d (Ctrl+]) produces key with logicalName="}" and ctrl=true', () => {
+      const tokens = tokenizer.feed('\x1d');
+      expect(tokens).toHaveLength(1);
+      const t = tokens[0] as Extract<InputToken, { type: 'key' }>;
+      expect(t.type).toBe('key');
+      expect(t.logicalName).toBe('}');
+      expect(t.ctrl).toBe(true);
+    });
+
+    test('0x1e (Ctrl+^) produces key with logicalName="~" and ctrl=true', () => {
+      const tokens = tokenizer.feed('\x1e');
+      expect(tokens).toHaveLength(1);
+      const t = tokens[0] as Extract<InputToken, { type: 'key' }>;
+      expect(t.type).toBe('key');
+      expect(t.logicalName).toBe('~');
+      expect(t.ctrl).toBe(true);
+    });
+  });
+
   describe('sequential feed calls', () => {
     test('bare escape emits escape key token', () => {
       const t1 = tokenizer.feed('\x1b');
