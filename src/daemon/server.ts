@@ -169,7 +169,6 @@ export class DaemonServer {
 
     if (pathname === '/status' && method === 'GET') {
       // health check
-      // health check
       return Response.json({ status: 'running', version: VERSION });
     }
     if (pathname === '/config' && method === 'GET') {
@@ -630,6 +629,18 @@ export class DaemonServer {
     const prompt = typeof body.prompt === 'string' ? body.prompt.trim() : undefined;
     if (!cron || !prompt) {
       return Response.json({ error: 'Missing required fields: cron (string), prompt (string)' }, { status: 400 });
+    }
+
+    // Validate prompt length (injection / DoS mitigation)
+    if (prompt.length > 10_000) {
+      return Response.json({ error: 'prompt exceeds maximum length of 10000 characters' }, { status: 400 });
+    }
+
+    // Validate cron expression is parseable before passing to scheduler
+    try {
+      this.scheduler.getNextRun(cron);
+    } catch {
+      return Response.json({ error: 'Invalid cron expression' }, { status: 400 });
     }
 
     const name = typeof body.name === 'string' ? body.name : prompt.slice(0, 40);

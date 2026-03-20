@@ -72,14 +72,55 @@ function parseCronField(token: string, min: number, max: number): CronField {
     return { type: 'any' };
   }
 
-  // Step: */N or N/N (e.g. "*/5", "0/15")
+  // Step: */N or N/N or N-M/N (e.g. "*/5", "0/15", "1-5/2")
   if (token.includes('/')) {
-    const [base, stepRaw] = token.split('/');
+    const slashIdx = token.indexOf('/');
+    const base = token.slice(0, slashIdx);
+    const stepRaw = token.slice(slashIdx + 1);
     const step = parseInt(stepRaw, 10);
     if (isNaN(step) || step < 1) throw new Error(`Invalid cron step: ${token}`);
-    const from = base === '*' ? min : parseInt(base, 10);
+    if (base === '*') {
+      return { type: 'step', step, from: min };
+    }
+    // Base can be a range (N-M) or a plain number
+    if (base.includes('-')) {
+      const [fromRaw, toRaw] = base.split('-');
+      const from = parseInt(fromRaw, 10);
+      const to = parseInt(toRaw, 10);
+      if (isNaN(from) || isNaN(to) || from < min || to > max || from > to) {
+        throw new Error(`Invalid cron range in step: ${token} (allowed ${min}-${max})`);
+      }
+      // Expand range with step
+      const values: number[] = [];
+      for (let v = from; v <= to; v += step) values.push(v);
+      return { type: 'list', values };
+    }
+    const from = parseInt(base, 10);
     if (isNaN(from)) throw new Error(`Invalid cron step base: ${token}`);
     return { type: 'step', step, from };
+  }
+
+  // List: N,M,... (elements may be ranges N-M)
+  if (token.includes(',')) {
+    const values: number[] = [];
+    for (const part of token.split(',')) {
+      if (part.includes('-')) {
+        const [fromRaw, toRaw] = part.split('-');
+        const from = parseInt(fromRaw, 10);
+        const to = parseInt(toRaw, 10);
+        if (isNaN(from) || isNaN(to) || from < min || to > max || from > to) {
+          throw new Error(`Invalid cron range in list: ${part} (allowed ${min}-${max})`);
+        }
+        for (let v = from; v <= to; v++) values.push(v);
+      } else {
+        const v = parseInt(part, 10);
+        if (isNaN(v) || v < min || v > max) {
+          throw new Error(`Invalid cron list value: ${part} (allowed ${min}-${max})`);
+        }
+        values.push(v);
+      }
+    }
+    return { type: 'list', values };
   }
 
   // Range: N-M
@@ -91,15 +132,6 @@ function parseCronField(token: string, min: number, max: number): CronField {
       throw new Error(`Invalid cron range: ${token} (allowed ${min}-${max})`);
     }
     return { type: 'range', from, to };
-  }
-
-  // List: N,M,...
-  if (token.includes(',')) {
-    const values = token.split(',').map((v) => parseInt(v, 10));
-    if (values.some((v) => isNaN(v) || v < min || v > max)) {
-      throw new Error(`Invalid cron list: ${token} (allowed ${min}-${max})`);
-    }
-    return { type: 'list', values };
   }
 
   // Exact value
@@ -123,8 +155,34 @@ function parseCron(expr: string): CronFields {
     hour: parseCronField(parts[1], 0, 23),
     dayOfMonth: parseCronField(parts[2], 1, 31),
     month: parseCronField(parts[3], 1, 12),
-    dayOfWeek: parseCronField(parts[4], 0, 6),
+    dayOfWeek: normalizeDayOfWeek(parseCronField(parts[4], 0, 7)),
   };
+}
+
+/**
+ * Normalize dayOfWeek field: expand all field types to explicit value lists,
+ * then map 7 → 0 (both mean Sunday, POSIX compat).
+ */
+function normalizeDayOfWeek(field: CronField): CronField {
+  if (field.type === 'any') return field;
+
+  // Expand to explicit values list regardless of type
+  const values: number[] = [];
+  if (field.type === 'exact') {
+    values.push(...field.values);
+  } else if (field.type === 'list') {
+    values.push(...field.values);
+  } else if (field.type === 'range') {
+    for (let i = field.from; i <= field.to; i++) values.push(i);
+  } else if (field.type === 'step') {
+    for (let i = field.from ?? 0; i <= 7; i += field.step) values.push(i);
+  }
+
+  // Normalize 7 → 0
+  const normalized = [...new Set(values.map((v) => (v === 7 ? 0 : v)))].sort((a, b) => a - b);
+
+  if (normalized.length === 1) return { type: 'exact', values: normalized };
+  return { type: 'list', values: normalized };
 }
 
 /**
@@ -180,7 +238,19 @@ function computeNextRun(expr: string, from: Date): Date {
       continue;
     }
 
-    if (!fieldMatches(fields.dayOfMonth, dom) || !fieldMatches(fields.dayOfWeek, dow)) {
+    // POSIX cron OR logic: when both dom and dow are non-wildcard, either match suffices.
+    const domIsAny = fields.dayOfMonth.type === 'any';
+    const dowIsAny = fields.dayOfWeek.type === 'any';
+    const domMatch = fieldMatches(fields.dayOfMonth, dom);
+    const dowMatch = fieldMatches(fields.dayOfWeek, dow);
+    const dayMatch = domIsAny && dowIsAny
+      ? true
+      : domIsAny
+        ? dowMatch
+        : dowIsAny
+          ? domMatch
+          : domMatch || dowMatch;
+    if (!dayMatch) {
       // Advance to next day
       cur = new Date(cur.getFullYear(), cur.getMonth(), dom + 1, 0, 0, 0, 0);
       continue;
@@ -228,9 +298,9 @@ export class TaskScheduler {
   }
 
   /** Singleton accessor. */
-  static getInstance(): TaskScheduler {
+  static getInstance(storePath?: string): TaskScheduler {
     if (!TaskScheduler.instance) {
-      TaskScheduler.instance = new TaskScheduler();
+      TaskScheduler.instance = new TaskScheduler(storePath);
     }
     return TaskScheduler.instance;
   }
@@ -290,7 +360,7 @@ export class TaskScheduler {
     };
 
     this.tasks.set(id, task);
-    void this.save();
+    void this.save().catch((err) => logger.debug('TaskScheduler: save failed', { error: String(err) }));
 
     if (task.enabled && this.running) {
       this.scheduleNext(task);
@@ -304,7 +374,7 @@ export class TaskScheduler {
     if (!this.tasks.has(taskId)) return false;
     this.cancelTimer(taskId);
     this.tasks.delete(taskId);
-    void this.save();
+    void this.save().catch((err) => logger.debug('TaskScheduler: save failed', { error: String(err) }));
     return true;
   }
 
@@ -320,7 +390,7 @@ export class TaskScheduler {
     } else {
       this.cancelTimer(taskId);
     }
-    void this.save();
+    void this.save().catch((err) => logger.debug('TaskScheduler: save failed', { error: String(err) }));
     return true;
   }
 
@@ -374,13 +444,13 @@ export class TaskScheduler {
 
     const timer = setTimeout(() => {
       if (!task.enabled) return;
-      this.executeTask(task).catch((err) => {
-        logger.error('TaskScheduler: task execution failed', { taskId: task.id, error: String(err) });
-      });
-      // Schedule the next run
-      if (task.enabled && this.running) {
-        this.scheduleNext(task);
-      }
+      this.executeTask(task)
+        .catch((err) => {
+          logger.error('TaskScheduler: task execution failed', { taskId: task.id, error: String(err) });
+        })
+        .finally(() => {
+          if (task.enabled && this.running) this.scheduleNext(task);
+        });
     }, Math.max(0, delayMs));
 
     this.timers.set(task.id, timer);
@@ -425,7 +495,7 @@ export class TaskScheduler {
         error: errorMsg,
       };
       this.pushHistory(runRecord);
-      void this.save();
+      void this.save().catch((e) => logger.debug('TaskScheduler: save failed', { error: String(e) }));
       throw err;
     }
 
@@ -440,7 +510,7 @@ export class TaskScheduler {
       status: 'running',
     };
     this.pushHistory(runRecord);
-    void this.save();
+    void this.save().catch((err) => logger.debug('TaskScheduler: save failed', { error: String(err) }));
 
     return agentId;
   }
