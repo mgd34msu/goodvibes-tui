@@ -55,13 +55,6 @@ const LANG_TO_PACKAGE: Record<string, string> = {
   markdown: 'tree-sitter-markdown',
 };
 
-// Language IDs where the WASM file name differs from the standard pattern
-// Standard WASM filename: tree-sitter-{lang}.wasm (embedded via embedded-wasm.ts)
-// tsx lives inside tree-sitter-typescript as tree-sitter-tsx.wasm
-const WASM_FILENAME_OVERRIDE: Record<string, string> = {
-  tsx: 'tree-sitter-tsx.wasm',
-};
-
 /**
  * Map a file extension (or full path) to a tree-sitter language ID.
  * Returns null if the language is not supported.
@@ -78,14 +71,6 @@ export function detectLanguage(filePath: string): string | null {
  */
 export function getGrammarPackage(langId: string): string {
   return LANG_TO_PACKAGE[langId] ?? `tree-sitter-${langId}`;
-}
-
-/**
- * Get the expected WASM filename for a language ID.
- * Returns the standard pattern unless overridden.
- */
-export function getWasmFilename(langId: string): string {
-  return WASM_FILENAME_OVERRIDE[langId] ?? `tree-sitter-${langId}.wasm`;
 }
 
 /**
