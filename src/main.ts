@@ -129,11 +129,12 @@ function saveConversation(
   sessionId: string,
   model: string,
   provider: string,
+  title = '',
 ): void {
   try {
     const sm = getSessionManager();
     const meta: SessionMeta = {
-      title: '',
+      title,
       model,
       provider,
       timestamp: data.timestamp ?? Date.now(),
@@ -229,6 +230,7 @@ async function main() {
     debugMode: false,
     systemPrompt: loadSystemPrompt() || config.systemPrompt || '',
     reasoningEffort: configManager.get('provider.reasoningEffort'),
+    sessionId: userSessionId,
   };
 
   /** Content width inside the prompt box (box width minus padding). */
@@ -273,7 +275,7 @@ async function main() {
   const exitApp = () => {
     unsubs.forEach(fn => fn());
     // Save conversation on exit
-    saveConversation(conversation.toJSON() as { messages: object[]; timestamp?: number }, userSessionId, runtime.model, runtime.provider);
+    saveConversation(conversation.toJSON() as { messages: object[]; timestamp?: number }, runtime.sessionId, runtime.model, runtime.provider, conversation.title || '');
     try { ScheduleManager.getInstance().destroy(); } catch { /* non-fatal */ }
     try { providerRegistry.stopWatching(); } catch { /* non-fatal */ }
     stdin.removeAllListeners('data');
@@ -733,7 +735,7 @@ async function main() {
   // Refresh git status after each turn completes or after tool results arrive
   unsubs.push(bus.on('turn:complete', () => {
     // Auto-save after every LLM turn so kills don't lose the session
-    try { saveConversation(conversation.toJSON() as { messages: object[]; timestamp?: number }, userSessionId, runtime.model, runtime.provider); } catch (e) { logger.debug('auto-save on turn:complete failed', { error: String(e) }); }
+    try { saveConversation(conversation.toJSON() as { messages: object[]; timestamp?: number }, runtime.sessionId, runtime.model, runtime.provider, conversation.title || ''); } catch (e) { logger.debug('auto-save on turn:complete failed', { error: String(e) }); }
     gitStatusProvider.refresh().then((info) => {
       lastGitInfo = info;
       bus.emit('render:request');

@@ -23,6 +23,8 @@ export interface CommandContext {
     debugMode: boolean;
     systemPrompt: string;
     reasoningEffort: string;
+    /** Current active session ID (e.g. "user-abc123"). Commands can update this to swap sessions. */
+    sessionId: string;
   };
   /** Request a re-render. */
   renderRequest: () => void;
