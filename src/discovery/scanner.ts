@@ -1,4 +1,4 @@
-import { networkInterfaces } from 'node:os';
+import { networkInterfaces, homedir } from 'node:os';
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { logger } from '../utils/logger.ts';
@@ -29,7 +29,7 @@ export interface ScanResult {
 // Persistence
 // ---------------------------------------------------------------------------
 
-const PERSISTED_PATH = join(process.cwd(), '.goodvibes', 'tui', 'discovered-providers.json');
+const PERSISTED_PATH = join(homedir(), '.goodvibes', 'tui', 'discovered-providers.json');
 
 interface PersistedServer extends DiscoveredServer {
   lastSeen: number; // Unix ms timestamp
@@ -54,13 +54,34 @@ export function loadPersistedProviders(): DiscoveredServer[] {
   }
 }
 
-/** Save discovered providers to disk. Replaces file with current server list. */
+/** Save discovered providers to disk. Merges with existing entries keyed by host:port. */
 export function persistProviders(servers: DiscoveredServer[]): void {
   try {
     const now = Date.now();
-    const persisted: PersistedServer[] = servers.map(s => ({ ...s, lastSeen: now }));
+    // Load existing persisted servers
+    let existing: PersistedServer[] = [];
+    if (existsSync(PERSISTED_PATH)) {
+      try {
+        const raw = readFileSync(PERSISTED_PATH, 'utf-8');
+        const parsed = JSON.parse(raw) as unknown;
+        if (Array.isArray(parsed)) {
+          existing = (parsed as unknown[]).filter(
+            (item): item is PersistedServer =>
+              typeof item === 'object' && item !== null &&
+              typeof (item as Record<string, unknown>).host === 'string' &&
+              typeof (item as Record<string, unknown>).port === 'number' &&
+              Array.isArray((item as Record<string, unknown>).models)
+          );
+        }
+      } catch { existing = []; }
+    }
+    // Merge: update existing entries, add new ones
+    const byKey = new Map(existing.map(s => [`${s.host}:${s.port}`, s]));
+    for (const server of servers) {
+      byKey.set(`${server.host}:${server.port}`, { ...server, lastSeen: now });
+    }
     mkdirSync(dirname(PERSISTED_PATH), { recursive: true });
-    writeFileSync(PERSISTED_PATH, JSON.stringify(persisted, null, 2) + '\n', 'utf-8');
+    writeFileSync(PERSISTED_PATH, JSON.stringify([...byKey.values()], null, 2) + '\n', 'utf-8');
   } catch {
     // Non-fatal — persistence is best-effort
   }

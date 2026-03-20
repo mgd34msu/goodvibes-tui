@@ -1664,7 +1664,7 @@ export function registerBuiltinCommands(registry: CommandRegistry): void {
       }
 
       // Persist discovered servers for next session
-      persistProviders(result.servers);
+      if (result.servers.length > 0) { persistProviders(result.servers); }
 
       ctx.renderRequest();
     },

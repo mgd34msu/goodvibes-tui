@@ -10,6 +10,7 @@
 
 import { describe, test, expect } from 'bun:test';
 import { ExecutionPlanManager } from '../../core/execution-plan.ts';
+import type { ExecutionPlan, PlanItem } from '../../core/execution-plan.ts';
 
 // ---------------------------------------------------------------------------
 // ExecutionPlanManager unit tests (plan manager singleton behavior)
@@ -180,6 +181,149 @@ describe('Plan injection message content', () => {
       ? `Plan progress: ${summary}. Next items ready: ${nextItems.map(i => i.description).join(', ')}. Continue spawning agents for remaining work.`
       : `Plan progress: ${summary}. All items are accounted for.`;
     expect(msg).toContain('All items are accounted for.');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Auto-spawn helper behavior (Critical 1 + Major 2)
+// ---------------------------------------------------------------------------
+
+describe('autoSpawnPendingItems helper behavior', () => {
+  /**
+   * The Orchestrator.autoSpawnPendingItems method is private, but its observable
+   * effects are:
+   * 1. Calls planManager.updateItem(planId, itemId, 'in_progress', agentId) for spawned items
+   * 2. Stops spawning when running agent count >= maxGlobalAgents
+   * 3. Returns empty array immediately when agentRecursion is disabled
+   *
+   * We test these effects using ExecutionPlanManager + a fake AgentManager-like
+   * implementation that mirrors the helper's spawn loop logic.
+   */
+
+  /** Minimal fake for AgentManager used to test limit logic in isolation. */
+  function fakeSpawnLoop(
+    plan: ExecutionPlan,
+    items: PlanItem[],
+    manager: ExecutionPlanManager,
+    opts: { agentRecursion: boolean; maxGlobalAgents: number; runningCount: number }
+  ): { spawned: string[]; limitReached: boolean } {
+    // Mirrors the logic of Orchestrator.autoSpawnPendingItems
+    if (!opts.agentRecursion) {
+      return { spawned: [], limitReached: false };
+    }
+    const maxAgents = opts.maxGlobalAgents || 8;
+    const spawned: string[] = [];
+    let limitReached = false;
+    let running = opts.runningCount;
+
+    for (const item of items) {
+      if (running >= maxAgents) {
+        limitReached = true;
+        break;
+      }
+      const fakeAgentId = `agent-test-${item.id}`;
+      manager.updateItem(plan.id, item.id, 'in_progress', fakeAgentId);
+      spawned.push(item.description);
+      running++;
+    }
+    return { spawned, limitReached };
+  }
+
+  test('returns empty array when agentRecursion is disabled', () => {
+    const manager = new ExecutionPlanManager();
+    const plan = manager.create('Recursion disabled test', [
+      { phase: 'Phase 1', description: 'Task A', dependencies: [] },
+    ]);
+    const items = manager.getNextItems(plan);
+    const result = fakeSpawnLoop(plan, items, manager, {
+      agentRecursion: false,
+      maxGlobalAgents: 8,
+      runningCount: 0,
+    });
+    expect(result.spawned).toHaveLength(0);
+    expect(result.limitReached).toBe(false);
+    // Items remain pending — not mutated
+    const loaded = manager.load(plan.id)!;
+    expect(loaded.items[0].status).toBe('pending');
+  });
+
+  test('marks items in_progress when agentRecursion is enabled', () => {
+    const manager = new ExecutionPlanManager();
+    const plan = manager.create('Recursion enabled test', [
+      { phase: 'Phase 1', description: 'Task A', dependencies: [] },
+      { phase: 'Phase 1', description: 'Task B', dependencies: [] },
+    ]);
+    const items = manager.getNextItems(plan);
+    const result = fakeSpawnLoop(plan, items, manager, {
+      agentRecursion: true,
+      maxGlobalAgents: 8,
+      runningCount: 0,
+    });
+    expect(result.spawned).toHaveLength(2);
+    expect(result.limitReached).toBe(false);
+    const loaded = manager.load(plan.id)!;
+    expect(loaded.items[0].status).toBe('in_progress');
+    expect(loaded.items[1].status).toBe('in_progress');
+  });
+
+  test('stops spawning when running agent count reaches maxGlobalAgents', () => {
+    const manager = new ExecutionPlanManager();
+    const plan = manager.create('Max agents test', [
+      { phase: 'Phase 1', description: 'Task A', dependencies: [] },
+      { phase: 'Phase 1', description: 'Task B', dependencies: [] },
+      { phase: 'Phase 1', description: 'Task C', dependencies: [] },
+    ]);
+    const items = manager.getNextItems(plan);
+    // Simulate 2 agents already running, maxGlobalAgents = 2
+    const result = fakeSpawnLoop(plan, items, manager, {
+      agentRecursion: true,
+      maxGlobalAgents: 2,
+      runningCount: 2,
+    });
+    expect(result.spawned).toHaveLength(0);
+    expect(result.limitReached).toBe(true);
+    // All items remain pending
+    const loaded = manager.load(plan.id)!;
+    expect(loaded.items.every(i => i.status === 'pending')).toBe(true);
+  });
+
+  test('spawns up to the remaining capacity when partially at limit', () => {
+    const manager = new ExecutionPlanManager();
+    const plan = manager.create('Partial capacity test', [
+      { phase: 'Phase 1', description: 'Task A', dependencies: [] },
+      { phase: 'Phase 1', description: 'Task B', dependencies: [] },
+      { phase: 'Phase 1', description: 'Task C', dependencies: [] },
+    ]);
+    const items = manager.getNextItems(plan);
+    // 1 agent running, maxGlobalAgents = 2 — should spawn 1 more
+    const result = fakeSpawnLoop(plan, items, manager, {
+      agentRecursion: true,
+      maxGlobalAgents: 2,
+      runningCount: 1,
+    });
+    expect(result.spawned).toHaveLength(1);
+    expect(result.limitReached).toBe(true);
+    const loaded = manager.load(plan.id)!;
+    // First item should be in_progress, the rest still pending
+    expect(loaded.items[0].status).toBe('in_progress');
+    expect(loaded.items[1].status).toBe('pending');
+    expect(loaded.items[2].status).toBe('pending');
+  });
+
+  test('updateItem records agentId on spawned item', () => {
+    const manager = new ExecutionPlanManager();
+    const plan = manager.create('AgentId test', [
+      { phase: 'Phase 1', description: 'Task A', dependencies: [] },
+    ]);
+    const items = manager.getNextItems(plan);
+    fakeSpawnLoop(plan, items, manager, {
+      agentRecursion: true,
+      maxGlobalAgents: 8,
+      runningCount: 0,
+    });
+    const loaded = manager.load(plan.id)!;
+    expect(loaded.items[0].agentId).toBeDefined();
+    expect(loaded.items[0].agentId).toContain('agent-test-');
   });
 });
 

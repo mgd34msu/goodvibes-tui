@@ -7,15 +7,18 @@ import type { HookEvent, HookResult } from '../hooks/types.ts';
 import { formatProviderError } from '../utils/error-display.ts';
 import { providerRegistry } from '../providers/registry.ts';
 import type { LLMProvider, StreamDelta, ContentPart } from '../providers/interface.ts';
-import { config, configManager } from '../config/index.ts';
+import { config, configManager, DEFAULT_CONFIG } from '../config/index.ts';
 import { notifyCompletion } from '../utils/notify.ts';
 import { logger } from '../utils/logger.ts';
 import type { PermissionManager } from '../permissions/manager.ts';
 import type { AcpManager } from '../acp/manager.ts';
 import type { SubagentTask } from '../acp/protocol.ts';
 import { planManager } from './plan-manager-instance.ts';
+import type { ExecutionPlan, PlanItem } from './execution-plan.ts';
 import { classifyIntent } from './intent-classifier.ts';
 import { EventReplayQueue } from './event-replay.ts';
+import { AgentManager } from '../tools/agent/index.ts';
+import type { AgentInput } from '../tools/agent/schema.ts';
 
 /** Minimal interface for hook dispatch — allows any compatible implementation */
 interface HookDispatcherLike {
@@ -42,6 +45,7 @@ export class Orchestrator {
 
   private animInterval: ReturnType<typeof setInterval> | null = null;
   private abortController: AbortController | null = null;
+  private autoSpawnTimeout: ReturnType<typeof setTimeout> | null = null;
   private acpManager: AcpManager | null = null;
   /** Message count at the start of a turn, used to rollback on cancel. */
   private turnStartMessageCount = 0;
@@ -144,6 +148,10 @@ export class Orchestrator {
   /** Abort the current in-flight LLM request, if any. */
   public abort(): void {
     this.abortController?.abort();
+    if (this.autoSpawnTimeout !== null) {
+      clearTimeout(this.autoSpawnTimeout);
+      this.autoSpawnTimeout = null;
+    }
   }
 
   /**
@@ -336,18 +344,33 @@ export class Orchestrator {
             tc.name === 'agent' && (tc.arguments as Record<string, unknown>).mode === 'spawn'
           );
           if (spawnedAgents || this.messageQueue.length > 0) {
-            // Continuation nudge: remind the LLM to keep spawning if the plan has pending items.
+            // Harness-driven auto-spawn: if the plan has pending items with met dependencies,
+            // spawn agents for them directly — don't wait for the model to do it.
             if (spawnedAgents) {
               const activePlan = planManager.getActive();
               if (activePlan) {
                 const summary = planManager.getSummary(activePlan);
                 const nextItems = planManager.getNextItems(activePlan);
-                const nextDesc = nextItems.map(i => i.description).join(', ');
-                this.conversation.addSystemMessage(
-                  nextItems.length > 0
-                    ? `Plan progress: ${summary}. Next items ready: ${nextDesc}. Continue spawning agents for remaining work.`
-                    : `Plan progress: ${summary}. All items are accounted for.`
-                );
+
+                if (nextItems.length > 0) {
+                  const autoSpawnedDescs = this.autoSpawnPendingItems(activePlan, nextItems);
+
+                  if (autoSpawnedDescs.length > 0) {
+                    this.conversation.addSystemMessage(
+                      `[Plan] Auto-spawned ${autoSpawnedDescs.length} agent(s) for remaining plan items: ${autoSpawnedDescs.join(', ')}. Plan progress: ${summary}.`
+                    );
+                  } else {
+                    // Auto-spawn failed for all items — fall back to nudge so model can try
+                    const nextDesc = nextItems.map(i => i.description).join(', ');
+                    this.conversation.addSystemMessage(
+                      `Plan progress: ${summary}. Next items ready: ${nextDesc}. Continue spawning agents for remaining work.`
+                    );
+                  }
+                } else {
+                  this.conversation.addSystemMessage(
+                    `Plan progress: ${summary}. All items are accounted for.`
+                  );
+                }
               } else {
                 this.conversation.addSystemMessage(
                   'You spawned an agent for part of the task. If there are remaining tasks, continue spawning agents now.'
@@ -369,6 +392,32 @@ export class Orchestrator {
           this.conversation.addAssistantMessage(response.content, { reasoningContent: reasoningForMsg, reasoningSummary: reasoningSummaryForMsg, usage: response.usage });
           this.bus.emit('turn:complete', { response: response.content });
           continueLoop = false;
+
+          // Timeout fallback: if the model ended its turn without spawning agents but there
+          // are pending plan items with met dependencies, auto-spawn them after a short delay.
+          // This handles weak/free models that stop responding after the first response.
+          const pendingPlan = planManager.getActive();
+          if (pendingPlan) {
+            const pendingItems = planManager.getNextItems(pendingPlan);
+            if (pendingItems.length > 0) {
+              this.autoSpawnTimeout = setTimeout(() => {
+                this.autoSpawnTimeout = null;
+                const stillActivePlan = planManager.getActive();
+                if (!stillActivePlan) return;
+                const stillPending = planManager.getNextItems(stillActivePlan);
+                if (stillPending.length === 0) return;
+
+                const spawned = this.autoSpawnPendingItems(stillActivePlan, stillPending);
+
+                if (spawned.length > 0) {
+                  this.conversation.addSystemMessage(
+                    `[Plan] Timeout fallback auto-spawned ${spawned.length} agent(s) for plan items the model did not address: ${spawned.join(', ')}.`
+                  );
+                  this.bus.emit('render:request');
+                }
+              }, 5_000);
+            }
+          }
         }
       }
 
@@ -429,6 +478,61 @@ export class Orchestrator {
         this.bus.emit('render:request');
       }
     }
+  }
+
+  /**
+   * Auto-spawn agents for a list of ready plan items, respecting agentRecursion
+   * and maxGlobalAgents limits. Returns descriptions of successfully spawned items.
+   */
+  private autoSpawnPendingItems(
+    plan: ExecutionPlan,
+    items: PlanItem[],
+  ): string[] {
+    if (!configManager.get('danger.agentRecursion')) {
+      return [];
+    }
+
+    const maxAgents = (configManager.get('danger.maxGlobalAgents') as number) || DEFAULT_CONFIG.danger.maxGlobalAgents;
+    const agentManager = AgentManager.getInstance();
+    const currentModel = providerRegistry.getCurrentModel();
+    const spawned: string[] = [];
+    let running = agentManager
+      .list()
+      .filter(a => a.status === 'running' || a.status === 'pending').length;
+
+    for (const item of items) {
+      if (running >= maxAgents) {
+        this.conversation.addSystemMessage(
+          `[Plan] Agent limit reached (${maxAgents}). Remaining items will be spawned as agents complete.`
+        );
+        break;
+      }
+
+      try {
+        const spawnInput: AgentInput = {
+          mode: 'spawn',
+          task: item.description,
+          template: 'engineer',
+          model: currentModel.id,
+        };
+        const agentRecord = agentManager.spawn(spawnInput);
+        planManager.updateItem(plan.id, item.id, 'in_progress', agentRecord.id);
+        spawned.push(item.description);
+        running++;
+        logger.info('Orchestrator: Auto-spawned agent for plan item', {
+          agentId: agentRecord.id,
+          planItemId: item.id,
+          description: item.description,
+        });
+      } catch (spawnErr) {
+        logger.error('Orchestrator: Failed to auto-spawn agent for plan item', {
+          planItemId: item.id,
+          error: spawnErr instanceof Error ? spawnErr.message : String(spawnErr),
+        });
+      }
+    }
+
+    return spawned;
   }
 
   private async executeToolCalls(calls: ToolCall[]): Promise<ToolResult[]> {
