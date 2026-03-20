@@ -16,6 +16,7 @@ import { SymbolOutlinePanel } from './symbol-outline-panel.ts';
 import { AgentLogsPanel } from './agent-logs-panel.ts';
 import { TokenBudgetPanel } from './token-budget-panel.ts';
 import { WrfcPanel } from './wrfc-panel.ts';
+import { SchedulePanel } from './schedule-panel.ts';
 import type { EventBus } from '../core/event-bus.ts';
 import type { ToolRegistry } from '../tools/registry.ts';
 import type { ProviderRegistry } from '../providers/registry.ts';
@@ -203,6 +204,15 @@ export function registerBuiltinPanels(manager: PanelManager, deps: BuiltinPanelD
       factory: () => new WrfcPanel(bus),
     });
   }
+
+  manager.registerType({
+    id: 'schedule',
+    name: 'Schedule',
+    icon: 'Z',
+    category: 'agent',
+    description: 'Scheduled agent tasks: cron expressions, next run time, enable/disable, run history',
+    factory: () => new SchedulePanel(),
+  });
 
   manager.registerType({
     id: 'tokens',

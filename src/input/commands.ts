@@ -17,6 +17,7 @@ import { scan, persistProviders } from '../discovery/index.ts';
 import { planManager } from '../core/plan-manager-instance.ts';
 import { classifyIntent } from '../core/intent-classifier.ts';
 import { getPanelManager } from '../panels/panel-manager.ts';
+import { TaskScheduler } from '../scheduler/scheduler.ts';
 
 let _serviceRegistry: ServiceRegistry | undefined;
 function getServiceRegistry(): ServiceRegistry {
@@ -2146,6 +2147,164 @@ export function registerBuiltinCommands(registry: CommandRegistry): void {
 
       // Send the task as a user message to trigger the model's plan response
       ctx.eventBus.emit('plan:activate', { planId: plan.id, task: taskDescription });
+    },
+  });
+
+  // ── /schedule ───────────────────────────────────────────
+  registry.register({
+    name: 'schedule',
+    aliases: ['sched'],
+    description: 'Manage scheduled agent tasks (cron-like)',
+    usage: 'add|list|remove|enable|disable|run',
+    argsHint: 'add <cron> <prompt> | list | remove <id> | enable <id> | disable <id> | run <id>',
+    async handler(args, ctx) {
+      const scheduler = TaskScheduler.getInstance();
+      const sub = args[0];
+
+      if (!sub || sub === 'list') {
+        const tasks = scheduler.list();
+        if (tasks.length === 0) {
+          ctx.print('No scheduled tasks.\nUse: /schedule add "*/30 * * * *" "check build status"');
+          return;
+        }
+        const lines = ['Scheduled tasks:', ''];
+        for (const t of tasks) {
+          const status = t.enabled ? '\u25cf enabled ' : '\u25cb disabled';
+          const next = t.nextRun
+            ? `next: ${new Date(t.nextRun).toLocaleString()}`
+            : 'next: unknown';
+          const last = t.lastRun
+            ? `last: ${new Date(t.lastRun).toLocaleString()}`
+            : 'last: never';
+          lines.push(`  ${t.id.slice(0, 12)}  ${status}  runs:${t.runCount}  ${next}  ${last}`);
+          lines.push(`    name: ${t.name || '(unnamed)'}  cron: ${t.cron}`);
+          lines.push(`    prompt: ${t.prompt.slice(0, 60)}${t.prompt.length > 60 ? '…' : ''}`);
+        }
+        ctx.print(lines.join('\n'));
+        return;
+      }
+
+      if (sub === 'add') {
+        // /schedule add "<cron>" "<prompt>" [--name <name>] [--model <model>] [--template <tmpl>]
+        // Args after 'add': first is cron, rest up to -- flags is the prompt.
+        // We support quoted-string parsing via shell-like splitting handled by the caller.
+        // args[1] = cron, args[2..] = prompt words (already split by input handler)
+        const cron = args[1];
+        if (!cron) {
+          ctx.print('Usage: /schedule add "<cron>" "<prompt>" [--name <name>] [--model <model>] [--template <tmpl>]\n' +
+            'Examples:\n' +
+            '  /schedule add "*/30 * * * *" "check build status and report failures"\n' +
+            '  /schedule add "0 9 * * 1-5" "summarize open PRs" --name morning-standup');
+          return;
+        }
+
+        // Parse remaining args: collect prompt words and named flags
+        const remaining = args.slice(2);
+        let name: string | undefined;
+        let model: string | undefined;
+        let template: string | undefined;
+        const promptWords: string[] = [];
+
+        let i = 0;
+        while (i < remaining.length) {
+          const tok = remaining[i];
+          if (tok === '--name' && i + 1 < remaining.length) {
+            name = remaining[++i];
+          } else if (tok === '--model' && i + 1 < remaining.length) {
+            model = remaining[++i];
+          } else if (tok === '--template' && i + 1 < remaining.length) {
+            template = remaining[++i];
+          } else {
+            promptWords.push(tok);
+          }
+          i++;
+        }
+
+        const prompt = promptWords.join(' ');
+        if (!prompt) {
+          ctx.print('Usage: /schedule add "<cron>" "<prompt>"');
+          return;
+        }
+
+        try {
+          const task = scheduler.add({
+            name: name ?? prompt.slice(0, 40),
+            cron,
+            prompt,
+            model,
+            template,
+            enabled: true,
+          });
+          const nextDate = task.nextRun ? new Date(task.nextRun).toLocaleString() : 'unknown';
+          ctx.print(
+            `Scheduled task created: ${task.id}\n` +
+            `  name: ${task.name}\n` +
+            `  cron: ${cron}\n` +
+            `  next run: ${nextDate}`
+          );
+        } catch (e) {
+          ctx.print(`Error: ${(e as Error).message}`);
+        }
+        return;
+      }
+
+      if (sub === 'remove') {
+        const id = args[1];
+        if (!id) { ctx.print('Usage: /schedule remove <id>'); return; }
+        // Support partial ID match
+        const all = scheduler.list();
+        const task = all.find((t) => t.id === id || t.id.startsWith(id));
+        if (!task) { ctx.print(`Task not found: ${id}`); return; }
+        scheduler.remove(task.id);
+        ctx.print(`Removed scheduled task: ${task.id} (${task.name || task.prompt.slice(0, 30)})`);
+        return;
+      }
+
+      if (sub === 'enable') {
+        const id = args[1];
+        if (!id) { ctx.print('Usage: /schedule enable <id>'); return; }
+        const all = scheduler.list();
+        const task = all.find((t) => t.id === id || t.id.startsWith(id));
+        if (!task) { ctx.print(`Task not found: ${id}`); return; }
+        scheduler.setEnabled(task.id, true);
+        const next = task.nextRun ? new Date(task.nextRun).toLocaleString() : 'unknown';
+        ctx.print(`Enabled task: ${task.id} — next run: ${next}`);
+        return;
+      }
+
+      if (sub === 'disable') {
+        const id = args[1];
+        if (!id) { ctx.print('Usage: /schedule disable <id>'); return; }
+        const all = scheduler.list();
+        const task = all.find((t) => t.id === id || t.id.startsWith(id));
+        if (!task) { ctx.print(`Task not found: ${id}`); return; }
+        scheduler.setEnabled(task.id, false);
+        ctx.print(`Disabled task: ${task.id}`);
+        return;
+      }
+
+      if (sub === 'run') {
+        const id = args[1];
+        if (!id) { ctx.print('Usage: /schedule run <id>'); return; }
+        const all = scheduler.list();
+        const task = all.find((t) => t.id === id || t.id.startsWith(id));
+        if (!task) { ctx.print(`Task not found: ${id}`); return; }
+        try {
+          const agentId = await scheduler.runNow(task.id);
+          ctx.print(`Running task ${task.id} immediately — agent: ${agentId}`);
+        } catch (e) {
+          ctx.print(`Error running task: ${(e as Error).message}`);
+        }
+        return;
+      }
+
+      ctx.print('Usage: /schedule add|list|remove|enable|disable|run\n' +
+        '  /schedule add "<cron>" <prompt words...>   Create a new scheduled task\n' +
+        '  /schedule list                             List all scheduled tasks\n' +
+        '  /schedule remove <id>                     Remove a task\n' +
+        '  /schedule enable <id>                     Enable a task\n' +
+        '  /schedule disable <id>                    Disable a task\n' +
+        '  /schedule run <id>                        Run a task immediately');
     },
   });
 }
