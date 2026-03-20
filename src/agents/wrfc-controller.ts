@@ -28,6 +28,74 @@ import { planManager } from '../core/plan-manager-instance.ts';
  */
 
 // ---------------------------------------------------------------------------
+// Score extraction helpers — used when reviewers don't emit structured JSON
+// ---------------------------------------------------------------------------
+
+/**
+ * Extract a numeric score from unstructured reviewer text.
+ * Tries multiple patterns commonly used by LLMs when writing reviews.
+ * Returns null if no score found.
+ */
+export function extractScoreFromText(text: string): number | null {
+  // Pattern 1: "Score: X.X/10" or "Score: X/10" (with optional markdown bold)
+  const scorePattern = /\*{0,2}(?:overall\s+)?score\s*:?\s*\*{0,2}\s*(\d+(?:\.\d+)?)\s*\/\s*10/i;
+  const m1 = text.match(scorePattern);
+  if (m1) {
+    const val = parseFloat(m1[1]);
+    if (val <= 10) return val;
+  }
+
+  // Pattern 2: "X.X/10" or "X/10" standalone (common in review summaries)
+  const slashPattern = /(\d+(?:\.\d+)?)\s*\/\s*10/;
+  const m2 = text.match(slashPattern);
+  if (m2) {
+    const val = parseFloat(m2[1]);
+    if (val <= 10) return val;
+  }
+
+  // Pattern 3: "rated X.X" or "scored X.X" or "rating: X.X"
+  const ratedPattern = /\b(?:rated|scored|rating)\s*:?\s*(\d+(?:\.\d+)?)/i;
+  const m3 = text.match(ratedPattern);
+  if (m3) {
+    const val = parseFloat(m3[1]);
+    if (val <= 10) return val;
+  }
+
+  return null;
+}
+
+/**
+ * Determine if a review passed based on text language and the score vs threshold.
+ * Defaults to score-based check, but explicit "passed"/"approved" language overrides.
+ */
+export function extractPassedFromText(text: string, score: number, threshold: number): boolean {
+  if (score >= threshold) return true;
+  // Check for explicit pass language absent of fail language
+  if (/\bpass(ed|es|ing)?\b/i.test(text) && !/\bfail/i.test(text)) return true;
+  if (/\bapproved?\b/i.test(text)) return true;
+  return false;
+}
+
+/**
+ * Extract a list of issues from unstructured reviewer text.
+ * Matches numbered or bulleted items with severity markers.
+ */
+export function extractIssuesFromText(text: string): ReviewerReport['issues'] {
+  const issues: ReviewerReport['issues'] = [];
+  const issuePattern = /(?:^|\n)\s*(?:\d+\.\s*|-\s*|\*\s*)?(?:\*{1,2})?\[?\(?(critical|major|minor|suggestion)\)?\]?(?:\*{1,2})?[\s:*]*(.+)/gi;
+  let match;
+  while ((match = issuePattern.exec(text)) !== null) {
+    const sev = match[1].toLowerCase() as 'critical' | 'major' | 'minor' | 'suggestion';
+    issues.push({
+      severity: sev,
+      description: match[2].trim(),
+      pointValue: sev === 'critical' ? 3 : sev === 'major' ? 2 : 1,
+    });
+  }
+  return issues;
+}
+
+// ---------------------------------------------------------------------------
 // Transition table
 // ---------------------------------------------------------------------------
 
@@ -307,18 +375,29 @@ export class WrfcController {
       let reviewerReport = parseCompletionReport(rawOutput);
 
       if (!reviewerReport || reviewerReport.archetype !== 'reviewer') {
-        // Construct a minimal passing ReviewerReport if none found
-        logger.warn('WrfcController: no structured ReviewerReport found, constructing minimal', {
+        // Try to extract score from unstructured text before defaulting to 0
+        const extractedScore = extractScoreFromText(rawOutput);
+        const threshold = configManager.get('wrfc.scoreThreshold') as number;
+        const extractedPassed = extractedScore !== null
+          ? extractPassedFromText(rawOutput, extractedScore, threshold)
+          : false;
+        const extractedIssues = extractIssuesFromText(rawOutput);
+
+        logger.warn('WrfcController: no structured ReviewerReport found, extracting from text', {
           chainId: chain.id,
+          extractedScore,
         });
+        if (extractedScore === null) {
+          logger.warn('WrfcController: score extraction returned null, defaulting to 0', { chainId: chain.id });
+        }
         reviewerReport = {
           version: 1,
           archetype: 'reviewer',
           summary: rawOutput.slice(0, 500) || '(no reviewer output)',
-          score: 0,
-          passed: false,
+          score: extractedScore ?? 0,
+          passed: extractedPassed,
           dimensions: [],
-          issues: [],
+          issues: extractedIssues,
         };
       }
 
