@@ -614,6 +614,29 @@ const BUILTIN_MODEL_REGISTRY: ModelDefinition[] = [
     selectable: true,
     tier: 'free',
   },
+
+  // --- Cerebras ---
+  // Free inference on Cerebras wafer-scale hardware. Rate limits apply.
+  {
+    id: 'llama3.1-8b',
+    provider: 'cerebras',
+    displayName: 'Llama 3.1 8B (Cerebras)',
+    description: 'Meta Llama 3.1 8B on Cerebras wafer-scale inference. Ultra-fast.',
+    capabilities: { toolCalling: true, codeEditing: false, reasoning: false, multimodal: false },
+    contextWindow: 131072,
+    selectable: true,
+    tier: 'free',
+  },
+  {
+    id: 'qwen-3-235b-a22b-instruct-2507',
+    provider: 'cerebras',
+    displayName: 'Qwen3 235B A22B (Cerebras)',
+    description: 'Alibaba Qwen3 235B MoE (22B active) on Cerebras wafer-scale inference.',
+    capabilities: { toolCalling: true, codeEditing: true, reasoning: true, multimodal: false },
+    contextWindow: 131072,
+    selectable: true,
+    tier: 'free',
+  },
 ];
 
 /** Mutable array of custom-loaded model definitions. */
@@ -734,6 +757,17 @@ export class ProviderRegistry {
           'meta-llama/llama-4-scout-17b-16e-instruct',
           'groq/compound', 'groq/compound-mini',
         ],
+        reasoningFormat: 'none',
+      }),
+    );
+
+    this.register(
+      new OpenAICompatProvider({
+        name: 'cerebras',
+        baseURL: 'https://api.cerebras.ai/v1',
+        apiKey: apiKey('cerebras'),
+        defaultModel: 'qwen-3-235b-a22b-instruct-2507',
+        models: ['llama3.1-8b', 'qwen-3-235b-a22b-instruct-2507'],
         reasoningFormat: 'none',
       }),
     );
