@@ -284,11 +284,10 @@ function identifyServer(
 
   if (Object.keys(headers).some((k) => k.startsWith('x-vllm'))) return 'vllm';
 
-  if (port === 8080) {
-    const serverHeader = headers['server'] ?? '';
-    if (serverHeader.includes('llama')) return 'llamacpp';
-    if (serverHeader.includes('localai')) return 'localai';
-  }
+  // Check server header on any port (llama.cpp/localai can run on non-standard ports)
+  const serverHeader = headers['server'] ?? '';
+  if (serverHeader.includes('llama')) return 'llamacpp';
+  if (serverHeader.includes('localai')) return 'localai';
 
   if (headerValues.includes('text-generation-inference')) return 'tgi';
 
@@ -437,6 +436,29 @@ export async function fetchModelContextWindows(
           }
         })
       );
+
+      // Fallback: try /props (llama.cpp-style) if no context windows found
+      if (Object.keys(result).length === 0 && models.length > 0) {
+        try {
+          const res = await fetch(`http://${host}:${port}/props`, {
+            signal: AbortSignal.timeout(METADATA_TIMEOUT_MS),
+          });
+          if (res.ok) {
+            const data = await res.json() as Record<string, unknown>;
+            const settings = data.default_generation_settings as Record<string, unknown> | undefined;
+            if (settings && typeof settings.n_ctx === 'number' && settings.n_ctx > 0) {
+              const ctxLen = settings.n_ctx as number;
+              for (const model of models) {
+                result[model] = ctxLen;
+                logger.info(`[Scan] ${model}: context ${ctxLen} tokens (via /props fallback)`);
+              }
+            }
+          }
+        } catch (err) {
+          logger.debug(`[Scan] /props fallback failed for ${host}:${port}: ${err}`);
+        }
+      }
+
       break;
     }
   }

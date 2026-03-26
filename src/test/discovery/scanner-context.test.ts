@@ -258,4 +258,35 @@ describe('fetchModelContextWindows - generic (unknown/lm-studio/etc)', () => {
     const result = await fetchModelContextWindows('127.0.0.1', 1234, 'unknown', []);
     expect(result).toEqual({});
   });
+
+  test('falls back to /props when /v1/models/{id} returns no context info', async () => {
+    globalThis.fetch = (async (url: string) => {
+      if (url.includes('/v1/models/')) {
+        return { ok: true, json: async () => ({ id: 'my-model', object: 'model' }) } as unknown as Response;
+      }
+      if (url.includes('/props')) {
+        return { ok: true, json: async () => ({ default_generation_settings: { n_ctx: 32768 } }) } as unknown as Response;
+      }
+      return { ok: false, json: async () => null } as unknown as Response;
+    }) as typeof globalThis.fetch;
+
+    const result = await fetchModelContextWindows('192.168.0.85', 8001, 'unknown', ['my-model']);
+    expect(result['my-model']).toBe(32768);
+  });
+
+  test('does not try /props fallback when /v1/models/{id} already returned a context window', async () => {
+    let propsCalled = false;
+    globalThis.fetch = (async (url: string) => {
+      if (url.includes('/props')) {
+        propsCalled = true;
+        return { ok: true, json: async () => ({ default_generation_settings: { n_ctx: 99999 } }) } as unknown as Response;
+      }
+      // /v1/models/{id} returns a valid context window
+      return { ok: true, json: async () => ({ id: 'my-model', context_length: 16384 }) } as unknown as Response;
+    }) as typeof globalThis.fetch;
+
+    const result = await fetchModelContextWindows('192.168.0.85', 8001, 'unknown', ['my-model']);
+    expect(result['my-model']).toBe(16384);
+    expect(propsCalled).toBe(false);
+  });
 });
