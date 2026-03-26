@@ -456,7 +456,7 @@ export class ProviderRegistry {
             multimodal: false,
           },
           ...(reasoningFormat !== 'none' ? { reasoningEffort: ['low', 'medium', 'high'] } : {}),
-          contextWindow: 8192,
+          contextWindow: server.modelContextWindows?.[modelId] ?? 8192,
           selectable: true,
           tier: 'standard',
         });

@@ -16,6 +16,7 @@ export interface DiscoveredServer {
   baseURL: string;    // 'http://192.168.1.50:11434/v1'
   models: string[];   // ['llama3:latest', 'codellama:7b']
   serverType: ServerType;
+  modelContextWindows?: Record<string, number>; // modelId -> context window tokens
 }
 
 export interface ScanResult {
@@ -110,6 +111,7 @@ export function removePersistedProviders(toRemove: Array<{ host: string; port: n
 const KNOWN_PORTS = [1234, 1337, 2242, 4891, 5000, 5001, 7860, 8000, 8001, 8080, 11434];
 const PROBE_TIMEOUT_MS = 200;
 const MAX_CONCURRENT_PROBES = 50;
+const METADATA_TIMEOUT_MS = 2000;
 
 // ---------------------------------------------------------------------------
 // Internal Types
@@ -294,6 +296,155 @@ function identifyServer(
 }
 
 // ---------------------------------------------------------------------------
+// Context Window Detection
+// ---------------------------------------------------------------------------
+
+/**
+ * Queries a discovered server for actual context window sizes of its models.
+ * Returns a map of modelId -> contextWindow. Missing entries mean the server
+ * didn't report a context length for that model.
+ */
+export async function fetchModelContextWindows(
+  host: string,
+  port: number,
+  serverType: ServerType,
+  models: string[],
+): Promise<Record<string, number>> {
+  const result: Record<string, number> = {};
+
+  switch (serverType) {
+    case 'ollama': {
+      // Ollama: POST /api/show for each model — parallel to avoid blocking pool slot
+      await Promise.allSettled(
+        models.map(async (model) => {
+          try {
+            const res = await fetch(`http://${host}:${port}/api/show`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ name: model }),
+              signal: AbortSignal.timeout(METADATA_TIMEOUT_MS),
+            });
+            if (!res.ok) return;
+            const data = await res.json() as Record<string, unknown>;
+
+            // Check model_info.context_length (newer Ollama)
+            const modelInfo = data.model_info as Record<string, unknown> | undefined;
+            if (modelInfo) {
+              // Keys vary: could be "<arch>.context_length" or just "context_length"
+              for (const [key, value] of Object.entries(modelInfo)) {
+                if (key.endsWith('context_length') && typeof value === 'number' && value > 0) {
+                  result[model] = value;
+                  logger.info(`[Scan] ${model}: context ${value} tokens`);
+                  break;
+                }
+              }
+            }
+
+            // Fallback: check parameters string for num_ctx
+            if (!result[model] && typeof data.parameters === 'string') {
+              const match = (data.parameters as string).match(/num_ctx\s+(\d+)/);
+              if (match) {
+                const ctxLen = parseInt(match[1], 10);
+                result[model] = ctxLen;
+                logger.info(`[Scan] ${model}: context ${ctxLen} tokens`);
+              }
+            }
+          } catch (err) {
+            logger.debug(`[Scan] Failed to fetch context window for ${model}: ${err}`);
+          }
+        })
+      );
+      break;
+    }
+
+    case 'vllm': {
+      // vLLM: GET /v1/models/{id} returns max_model_len — parallel to avoid blocking pool slot
+      await Promise.allSettled(
+        models.map(async (model) => {
+          try {
+            const res = await fetch(`http://${host}:${port}/v1/models/${encodeURIComponent(model)}`, {
+              signal: AbortSignal.timeout(METADATA_TIMEOUT_MS),
+            });
+            if (!res.ok) return;
+            const data = await res.json() as Record<string, unknown>;
+            if (typeof data.max_model_len === 'number' && data.max_model_len > 0) {
+              result[model] = data.max_model_len;
+              logger.info(`[Scan] ${model}: context ${data.max_model_len} tokens`);
+            }
+          } catch (err) {
+            logger.debug(`[Scan] Failed to fetch context window for ${model}: ${err}`);
+          }
+        })
+      );
+      break;
+    }
+
+    case 'llamacpp': {
+      // llama.cpp: GET /props returns default_generation_settings.n_ctx (server-wide)
+      try {
+        const res = await fetch(`http://${host}:${port}/props`, {
+          signal: AbortSignal.timeout(METADATA_TIMEOUT_MS),
+        });
+        if (res.ok) {
+          const data = await res.json() as Record<string, unknown>;
+          const settings = data.default_generation_settings as Record<string, unknown> | undefined;
+          if (settings && typeof settings.n_ctx === 'number' && settings.n_ctx > 0) {
+            const ctxLen = settings.n_ctx as number;
+            // llama.cpp typically serves one model, apply to all
+            for (const model of models) {
+              result[model] = ctxLen;
+              logger.info(`[Scan] ${model}: context ${ctxLen} tokens`);
+            }
+          }
+        }
+      } catch (err) {
+        logger.debug(`[Scan] Failed to fetch llama.cpp props from ${host}:${port}: ${err}`);
+      }
+      break;
+    }
+
+    case 'lm-studio':
+    case 'localai':
+    case 'jan':
+    case 'gpt4all':
+    case 'koboldcpp':
+    case 'aphrodite':
+    case 'tgi':
+    case 'unknown':
+    default: {
+      // Generic: try /v1/models/{id} for each model, look for common context length fields — parallel
+      await Promise.allSettled(
+        models.map(async (model) => {
+          try {
+            const res = await fetch(`http://${host}:${port}/v1/models/${encodeURIComponent(model)}`, {
+              signal: AbortSignal.timeout(METADATA_TIMEOUT_MS),
+            });
+            if (!res.ok) return;
+            const data = await res.json() as Record<string, unknown>;
+
+            const contextLength =
+              (typeof data.max_model_len === 'number' && data.max_model_len > 0 ? data.max_model_len : null) ??
+              (typeof data.context_length === 'number' && data.context_length > 0 ? data.context_length : null) ??
+              (typeof data.context_window === 'number' && data.context_window > 0 ? data.context_window : null) ??
+              (typeof data.max_context_length === 'number' && data.max_context_length > 0 ? data.max_context_length : null);
+
+            if (contextLength !== null) {
+              result[model] = contextLength;
+              logger.info(`[Scan] ${model}: context ${contextLength} tokens`);
+            }
+          } catch (err) {
+            logger.debug(`[Scan] Failed to fetch context window for ${model}: ${err}`);
+          }
+        })
+      );
+      break;
+    }
+  }
+
+  return result;
+}
+
+// ---------------------------------------------------------------------------
 // Server Name
 // ---------------------------------------------------------------------------
 
@@ -357,8 +508,9 @@ export async function scanHosts(
     const serverType = identifyServer(port, result.headers, result.responseBody);
     const name = buildServerName(serverType, host, port);
     const baseURL = `http://${host}:${port}/v1`;
+    const modelContextWindows = await fetchModelContextWindows(host, port, serverType, result.models);
 
-    servers.push({ name, host, port, baseURL, models: result.models, serverType });
+    servers.push({ name, host, port, baseURL, models: result.models, serverType, modelContextWindows });
     logger.info(`[Scan] Found ${name} at ${host}:${port} (${result.models.length} models)`);
   });
 
