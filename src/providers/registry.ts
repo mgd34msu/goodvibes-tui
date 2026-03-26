@@ -7,6 +7,7 @@ import { GeminiProvider } from './gemini.ts';
 import { config } from '../config/index.ts';
 import type { EventBus } from '../core/event-bus.ts';
 import { loadCustomProviders, watchCustomProviders } from './custom-loader.ts';
+import { SyntheticProvider } from './synthetic.ts';
 
 /** Model capability tier — controls system prompt verbosity. */
 export type ModelTier = 'free' | 'standard' | 'premium';
@@ -33,6 +34,15 @@ export interface ModelDefinition {
 }
 
 const BUILTIN_MODEL_REGISTRY: ModelDefinition[] = [
+  // --- Synthetic (Failover) ---
+  // Auto-failover across multiple free providers. Rate limits trigger automatic rotation.
+  { id: 'gpt-oss-120b', provider: 'synthetic', displayName: 'GPT-OSS 120B (Failover)', description: 'Auto-failover across Groq, HuggingFace, NVIDIA, Ollama Cloud, OpenAI, OpenRouter.', capabilities: { toolCalling: true, codeEditing: true, reasoning: true, multimodal: false }, contextWindow: 131072, selectable: true, tier: 'free' },
+  { id: 'minimax-m2.5', provider: 'synthetic', displayName: 'MiniMax M2.5 (Failover)', description: 'Auto-failover across HuggingFace, NVIDIA, Ollama Cloud, OpenRouter, AIHubMix.', capabilities: { toolCalling: true, codeEditing: true, reasoning: false, multimodal: false }, contextWindow: 204000, selectable: true, tier: 'free' },
+  { id: 'kimi-k2.5', provider: 'synthetic', displayName: 'Kimi K2.5 (Failover)', description: 'Auto-failover across HuggingFace, NVIDIA, Ollama Cloud.', capabilities: { toolCalling: true, codeEditing: true, reasoning: true, multimodal: false }, contextWindow: 131072, selectable: true, tier: 'free' },
+  { id: 'qwen-3.5-397b', provider: 'synthetic', displayName: 'Qwen 3.5 397B (Failover)', description: 'Auto-failover across HuggingFace, NVIDIA, Ollama Cloud.', capabilities: { toolCalling: true, codeEditing: true, reasoning: true, multimodal: false }, contextWindow: 131072, selectable: true, tier: 'free' },
+  { id: 'glm-5', provider: 'synthetic', displayName: 'GLM-5 (Failover)', description: 'Auto-failover across HuggingFace, NVIDIA, Ollama Cloud, AIHubMix.', capabilities: { toolCalling: true, codeEditing: true, reasoning: false, multimodal: false }, contextWindow: 131072, selectable: true, tier: 'free' },
+  { id: 'nemotron-3-super-120b', provider: 'synthetic', displayName: 'Nemotron 3 Super 120B (Failover)', description: 'Auto-failover across NVIDIA, Ollama Cloud, OpenRouter.', capabilities: { toolCalling: true, codeEditing: true, reasoning: true, multimodal: false }, contextWindow: 131072, selectable: true, tier: 'free' },
+
   // --- InceptionLabs ---
   {
     id: 'mercury-2',
@@ -2792,6 +2802,13 @@ export class ProviderRegistry {
           'swiss-ai/Apertus-8B-Instruct-2509',
           'tokyotech-llm/Llama-3.3-Swallow-70B-Instruct-v0.4',
           'utter-project/EuroLLM-22B-Instruct-2512',
+        ],
+        reasoningFormat: 'none',
+      }),
+    );
+
+    this.register(
+      new OpenAICompatProvider({
         name: 'nvidia',
         baseURL: 'https://integrate.api.nvidia.com/v1',
         apiKey: apiKey('nvidia'),
@@ -2933,6 +2950,9 @@ export class ProviderRegistry {
         reasoningFormat: 'none',
       }),
     );
+
+    // Synthetic failover provider — must be after all backends
+    this.register(new SyntheticProvider(() => this));
   }
 
   /** Register a provider. Overwrites any existing entry with the same name. */

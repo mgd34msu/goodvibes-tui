@@ -4,6 +4,48 @@ All notable changes to GoodVibes TUI.
 
 ---
 
+## [0.9.10] — 2026-03-26
+
+### Synthetic Failover Provider
+- **Automatic rate-limit failover** — new `synthetic` provider wraps multiple backends for the same model; when one provider returns a 429 or rate-limit error, the request automatically retries with the next provider in the rotation
+- **6 failover models** — GPT-OSS 120B, MiniMax M2.5, Kimi K2.5, Qwen 3.5 397B, GLM-5, Nemotron 3 Super 120B
+- **Cooldown tracking** — rate-limited backends are skipped for 60 seconds (or the provider's retry-after value); traffic returns to the preferred backend once its cooldown expires
+- **Transparent to users** — failover models appear as a single entry in the model picker; backend rotation is invisible
+
+### New Providers
+- **AIHubMix** — 20 free models including GPT-4.1, GPT-4o, Gemini 2.0/3.0 Flash, GLM coding series, MiniMax coding series, Kimi for Coding, MiMo V2 Flash, Step 3.5 Flash (`AIHUBMIX_API_KEY`)
+- **Groq** — 10 free models on Groq LPU inference: Qwen3 32B, GPT-OSS 120B/20B, Kimi K2/K2.5, Llama 3.3 70B/3.1 8B/4 Scout, Compound/Compound Mini (`GROQ_API_KEY`)
+- **Cerebras** — 2 free models on wafer-scale inference: Llama 3.1 8B, Qwen3 235B A22B (`CEREBRAS_API_KEY`)
+- **Mistral** — 14 models: Large/Medium/Small 4, Codestral, Devstral (3 sizes), Magistral (2 sizes), Ministral (3 sizes), Pixtral Large, Nemo (`MISTRAL_API_KEY`)
+- **Ollama Cloud** — 34 free models including DeepSeek V3.1/V3.2, Cogito 2.1, Qwen3/3.5 series, Kimi K2/K2.5, Mistral Large 3, GLM 4.6-5, MiniMax M2.x, Nemotron 3 (`OLLAMA_CLOUD_API_KEY`)
+- **NVIDIA NIM** — 115 models (1000 free credits): DeepSeek, Nemotron Ultra/Super/Nano, Llama 2-4, Qwen 2.5-3.5, Kimi K2, Mistral, Gemma, Phi 3-4, and more (`NVIDIA_API_KEY`)
+- **HuggingFace** — 124 free models: Qwen 2.5-3.5, DeepSeek V3/R1, GLM 4-5, Llama 3-4, Cohere Command, MiniMax, ERNIE, Cogito, OLMo, MiMo (`HF_API_KEY`)
+- **LLM7** — 5 free models: GLM-4.6V Flash, Codestral, GPT-OSS 20B, Llama 3.1 8B Turbo, Ministral 8B (`LLM7_API_KEY`)
+
+### Provider Management
+- **`/provider add <name> <baseURL> [apiKey]`** — add custom providers from within the TUI; auto-probes server for models, detects context windows, writes provider JSON config
+- **`/provider remove <name>`** — remove custom providers; file watcher auto-deregisters
+- **Path traversal protection** — provider names validated against `[a-zA-Z0-9_-]+` in both add and remove
+- **URL validation** — malformed URLs caught before network probe
+- **HTTPS-aware** — context window detection skipped for HTTPS URLs (only works with HTTP local servers)
+
+### Context Window Detection
+- **Dynamic context windows for discovered LLMs** — scan now queries each server for actual context window sizes instead of hardcoding 8192
+- **Server-type strategies** — Ollama (`/api/show`), vLLM (`/v1/models/{id}`), llama.cpp (`/props`), generic (`/v1/models/{id}` + `/props` fallback)
+- **Parallel metadata fetching** — per-model context queries use `Promise.allSettled` to avoid blocking scan
+- **llama.cpp on non-standard ports** — server header detection no longer limited to port 8080
+- **Context windows persist** — detected values saved in `discovered-providers.json` across sessions
+
+### Bug Fixes
+- Fixed context window percentage not updating for discovered models
+- Fixed llama.cpp server type detection on non-standard ports
+
+### Code Health
+- 24 tests for context window detection covering all 4 server type paths
+- Provider name validation shared via `isValidProviderName()` helper
+
+---
+
 ## [0.9.9] — 2026-03-18
 
 ### Token Counting
