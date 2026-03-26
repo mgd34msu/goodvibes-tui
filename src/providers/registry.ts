@@ -2427,6 +2427,59 @@ const BUILTIN_MODEL_REGISTRY: ModelDefinition[] = [
     tier: 'free',
   },
 
+  // --- LLM7 ---
+  // Free inference via LLM7 API.
+  {
+    id: 'GLM-4.6V-Flash',
+    provider: 'llm7',
+    displayName: 'GLM-4.6V Flash (LLM7)',
+    description: 'ZhipuAI GLM-4.6V Flash multimodal model via LLM7.',
+    capabilities: { toolCalling: true, codeEditing: true, reasoning: false, multimodal: true },
+    contextWindow: 131072,
+    selectable: true,
+    tier: 'free',
+  },
+  {
+    id: 'codestral-latest',
+    provider: 'llm7',
+    displayName: 'Codestral (LLM7)',
+    description: 'Mistral Codestral code model via LLM7.',
+    capabilities: { toolCalling: true, codeEditing: true, reasoning: false, multimodal: false },
+    contextWindow: 32000,
+    selectable: true,
+    tier: 'free',
+  },
+  {
+    id: 'gpt-oss-20b',
+    provider: 'llm7',
+    displayName: 'GPT-OSS 20B (LLM7)',
+    description: 'OpenAI open-source 20B model via LLM7.',
+    capabilities: { toolCalling: true, codeEditing: true, reasoning: false, multimodal: false },
+    contextWindow: 131072,
+    selectable: true,
+    tier: 'free',
+  },
+  {
+    id: 'meta-llama/Meta-Llama-3.1-8B-Instruct-Turbo',
+    provider: 'llm7',
+    displayName: 'Llama 3.1 8B Instruct Turbo (LLM7)',
+    description: 'Meta Llama 3.1 8B Instruct Turbo via LLM7.',
+    capabilities: { toolCalling: true, codeEditing: false, reasoning: false, multimodal: false },
+    contextWindow: 131072,
+    selectable: true,
+    tier: 'free',
+  },
+  {
+    id: 'ministral-8b-2512',
+    provider: 'llm7',
+    displayName: 'Ministral 8B (LLM7)',
+    description: 'Mistral Ministral 8B via LLM7.',
+    capabilities: { toolCalling: true, codeEditing: false, reasoning: false, multimodal: false },
+    contextWindow: 32000,
+    selectable: true,
+    tier: 'free',
+  },
+
 ];
 
 /** Mutable array of custom-loaded model definitions. */
@@ -2859,6 +2912,23 @@ export class ProviderRegistry {
           'writer/palmyra-fin-70b-32k',
           'writer/palmyra-med-70b',
           'writer/palmyra-med-70b-32k',
+        ],
+        reasoningFormat: 'none',
+      }),
+    );
+
+    this.register(
+      new OpenAICompatProvider({
+        name: 'llm7',
+        baseURL: 'https://api.llm7.io/v1',
+        apiKey: apiKey('llm7'),
+        defaultModel: 'codestral-latest',
+        models: [
+          'GLM-4.6V-Flash',
+          'codestral-latest',
+          'gpt-oss-20b',
+          'meta-llama/Meta-Llama-3.1-8B-Instruct-Turbo',
+          'ministral-8b-2512',
         ],
         reasoningFormat: 'none',
       }),
