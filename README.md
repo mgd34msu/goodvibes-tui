@@ -2,7 +2,7 @@
 
 A terminal AI coding agent with automated write-review-fix-check pipelines, multi-provider LLM support, and a vaporwave aesthetic.
 
-Version: **0.9.9**
+Version: **0.9.10**
 
 <!-- screenshot -->
 
@@ -170,12 +170,45 @@ API keys can be set in `.goodvibes/config.json`, via environment variables, or s
     "anthropic": "sk-ant-...",
     "openai": "sk-...",
     "gemini": "AIza...",
-    "inceptionlabs": "il-..."
+    "groq": "gsk_...",
+    "mistral": "..."
   }
 }
 ```
 
-Or set environment variables: `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `GEMINI_API_KEY`, `INCEPTIONLABS_API_KEY`.
+Or set environment variables:
+
+| Provider | Environment Variable | Type |
+|----------|---------------------|------|
+| Anthropic | `ANTHROPIC_API_KEY` | Paid |
+| OpenAI | `OPENAI_API_KEY` | Paid |
+| Google Gemini | `GEMINI_API_KEY` | Paid |
+| InceptionLabs | `INCEPTION_API_KEY` | Paid |
+| Mistral | `MISTRAL_API_KEY` | Paid |
+| OpenRouter | `OPENROUTER_API_KEY` | Free tier available |
+| Groq | `GROQ_API_KEY` | Free (LPU inference) |
+| Cerebras | `CEREBRAS_API_KEY` | Free (wafer-scale inference) |
+| AIHubMix | `AIHUBMIX_API_KEY` | Free tier (rate-limited) |
+| HuggingFace | `HF_API_KEY` | Free tier (rate-limited) |
+| Ollama Cloud | `OLLAMA_CLOUD_API_KEY` | Free |
+| NVIDIA NIM | `NVIDIA_API_KEY` | 1000 free credits |
+| LLM7 | `LLM7_API_KEY` | Free |
+
+### Synthetic Failover Provider
+
+The `synthetic` provider wraps multiple backends for the same model. When one provider hits a rate limit, requests automatically failover to the next. To enable failover, set API keys for multiple free providers:
+
+```sh
+# Recommended minimum for failover
+export GROQ_API_KEY="..."
+export HF_API_KEY="..."
+export NVIDIA_API_KEY="..."
+export OLLAMA_CLOUD_API_KEY="..."
+export OPENROUTER_API_KEY="..."
+export AIHUBMIX_API_KEY="..."
+```
+
+Then select any model from the `synthetic` provider (e.g., `gpt-oss-120b`, `kimi-k2.5`, `qwen-3.5-397b`). Rate limit rotation is automatic and transparent.
 
 ### Run
 
