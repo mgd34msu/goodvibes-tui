@@ -54,16 +54,16 @@ const SYNTHETIC_MODEL_MAP: Record<string, SyntheticBackend[]> = {
 
 // --- Rate Limit Detection ---
 
-function isRateLimitError(err: unknown): boolean {
+function isRateLimitOrQuotaError(err: unknown): boolean {
   if (err instanceof ProviderError) {
-    if (err.statusCode === 429) return true;
+    if (err.statusCode === 429 || err.statusCode === 402) return true;
     const msg = err.message.toLowerCase();
-    return /rate.limit|too many requests|quota exceeded|throttl/.test(msg);
+    return /rate.limit|too many requests|quota exceeded|throttl|depleted|credits/.test(msg);
   }
   // Some providers throw plain errors with rate limit messages
   if (err instanceof Error) {
     const msg = err.message.toLowerCase();
-    return msg.includes('429') || /rate.limit|too many requests|quota exceeded/.test(msg);
+    return msg.includes('429') || msg.includes('402') || /rate.limit|too many requests|quota exceeded|depleted|credits/.test(msg);
   }
   return false;
 }
@@ -147,7 +147,7 @@ export class SyntheticProvider implements LLMProvider {
         logger.info(`[Synthetic] ${syntheticId} served by ${backend.providerName} (${backend.modelId})`);
         return response;
       } catch (err) {
-        if (isRateLimitError(err)) {
+        if (isRateLimitOrQuotaError(err)) {
           // Record cooldown
           const cooldownMs = (err instanceof ProviderError && err.retryAfterMs)
             ? err.retryAfterMs
