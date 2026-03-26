@@ -100,6 +100,8 @@ function loadEnvApiKeys(): Record<string, string> {
     groq: 'GROQ_API_KEY',
     cerebras: 'CEREBRAS_API_KEY',
     mistral: 'MISTRAL_API_KEY',
+    'ollama-cloud': 'OLLAMA_CLOUD_API_KEY',
+    nvidia: 'NVIDIA_API_KEY',
   };
   for (const [prov, envVar] of Object.entries(mapping)) {
     let value = process.env[envVar];
@@ -134,6 +136,8 @@ export async function resolveApiKeys(): Promise<Record<string, string>> {
     { prov: 'groq',          envVars: ['GROQ_API_KEY'] },
     { prov: 'cerebras',      envVars: ['CEREBRAS_API_KEY'] },
     { prov: 'mistral',       envVars: ['MISTRAL_API_KEY'] },
+    { prov: 'ollama-cloud',  envVars: ['OLLAMA_CLOUD_API_KEY'] },
+    { prov: 'nvidia',        envVars: ['NVIDIA_API_KEY'] },
   ];
 
   const result: Record<string, string> = {};
