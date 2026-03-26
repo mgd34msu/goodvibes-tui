@@ -4,7 +4,11 @@ import type { ConfigKey } from '../config/index.ts';
 import { CONFIG_SCHEMA } from '../config/index.ts';
 import { REASONING_BUDGET_MAP } from '../providers/interface.ts';
 import { join } from 'path';
-import { unlinkSync } from 'node:fs';
+import { homedir } from 'node:os';
+import { existsSync, mkdirSync, unlinkSync } from 'node:fs';
+import { writeFile, unlink } from 'node:fs/promises';
+import { fetchModelContextWindows } from '../discovery/scanner.ts';
+import type { CustomProviderConfig } from '../providers/custom-loader.ts';
 import { randomBytes } from 'node:crypto';
 import { getSessionManager } from '../sessions/manager.ts';
 import { TemplateManager, parseTemplateArgs } from '../templates/manager.ts';
@@ -604,10 +608,162 @@ export function registerBuiltinCommands(registry: CommandRegistry): void {
   registry.register({
     name: 'provider',
     aliases: ['p'],
-    description: 'Switch provider',
-    usage: '[provider-name]',
-    argsHint: '[name]',
-    handler(args, ctx) {
+    description: 'Switch provider or manage custom providers (add/remove)',
+    usage: '[add <name> <baseURL> [apiKey] | remove <name> | <provider-name>]',
+    argsHint: '[add|remove|name]',
+    async handler(args, ctx) {
+      const isValidProviderName = (name: string): boolean => /^[a-zA-Z0-9_-]+$/.test(name);
+      // ── /provider add <name> <baseURL> [apiKey] ──────────────
+      if (args[0] === 'add') {
+        const addArgs = args.slice(1);
+        if (addArgs.length < 2) {
+          ctx.print('Usage: /provider add <name> <baseURL> [apiKey]\nExample: /provider add my-server http://192.168.0.85:8001/v1');
+          return;
+        }
+        const [name, baseURL, apiKey] = addArgs;
+
+        if (!isValidProviderName(name)) {
+          ctx.print('Error: Provider name must contain only letters, numbers, hyphens, and underscores.');
+          return;
+        }
+
+        let parsedUrl: URL;
+        try {
+          parsedUrl = new URL(baseURL);
+        } catch {
+          ctx.print(`Error: '${baseURL}' is not a valid URL. Example: http://192.168.0.85:8001/v1`);
+          return;
+        }
+
+        const PROVIDER_PROBE_TIMEOUT_MS = 5000;
+        const providersDir = join(homedir(), '.goodvibes', 'tui', 'providers');
+        const providerFile = join(providersDir, `${name}.json`);
+
+        if (existsSync(providerFile)) {
+          ctx.print(`Error: Provider '${name}' already exists at ${providerFile}\nRemove it first with: /provider remove ${name}`);
+          return;
+        }
+
+        ctx.print(`Probing ${baseURL}/models ...`);
+
+        // Probe the server for models
+        let discoveredModelIds: string[] = [];
+        try {
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), PROVIDER_PROBE_TIMEOUT_MS);
+          const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+          if (apiKey) headers['Authorization'] = `Bearer ${apiKey}`;
+          const res = await fetch(`${baseURL}/models`, { signal: controller.signal, headers });
+          clearTimeout(timeoutId);
+          if (res.ok) {
+            const body = await res.json() as unknown;
+            if (body && typeof body === 'object' && 'data' in body && Array.isArray((body as Record<string, unknown>).data)) {
+              const data = (body as { data: unknown[] }).data;
+              discoveredModelIds = data
+                .filter((m): m is Record<string, unknown> => typeof m === 'object' && m !== null && 'id' in m)
+                .map(m => String(m.id))
+                .filter(Boolean);
+            }
+          }
+        } catch (_err) {
+          ctx.print(`Could not reach ${baseURL}/models — creating provider with placeholder config.`);
+        }
+
+        // Detect context windows
+        let contextWindows: Record<string, number> = {};
+        if (discoveredModelIds.length > 0) {
+          if (parsedUrl.protocol === 'http:') {
+            try {
+              const host = parsedUrl.hostname;
+              const port = parseInt(parsedUrl.port) || 80;
+              contextWindows = await fetchModelContextWindows(host, port, 'unknown', discoveredModelIds);
+            } catch (_err) {
+              // Context window detection failed — use defaults
+            }
+          } else {
+            ctx.print('Note: Context window detection is only supported for http:// URLs. Using defaults.');
+          }
+        }
+
+        const PLACEHOLDER_MODEL = `${name}-model`;
+        let models: CustomProviderConfig['models'];
+
+        if (discoveredModelIds.length === 0) {
+          ctx.print(`Warning: Could not discover models from ${baseURL}/models. Creating provider with a placeholder model entry.\nEdit ${providerFile} to configure models manually.`);
+          models = [{
+            id: PLACEHOLDER_MODEL,
+            displayName: PLACEHOLDER_MODEL,
+            contextWindow: 8192,
+            capabilities: { toolCalling: true, codeEditing: true, reasoning: false, multimodal: false },
+          }];
+        } else {
+          models = discoveredModelIds.map(id => ({
+            id,
+            displayName: id,
+            contextWindow: contextWindows[id] ?? 8192,
+            capabilities: { toolCalling: true, codeEditing: true, reasoning: false, multimodal: false },
+          }));
+        }
+
+        const config: CustomProviderConfig = {
+          name,
+          displayName: name,
+          type: 'openai-compat' as const,
+          baseURL,
+          ...(apiKey ? { apiKey } : {}),
+          models,
+        };
+
+        try {
+          mkdirSync(providersDir, { recursive: true });
+          await writeFile(providerFile, JSON.stringify(config, null, 2), 'utf-8');
+        } catch (e) {
+          ctx.print(`Error writing provider file: ${(e as Error).message}`);
+          return;
+        }
+
+        const ctxWindowSummary = discoveredModelIds.length > 0
+          ? discoveredModelIds.map(id => `  • ${id} (${(contextWindows[id] ?? 8192).toLocaleString()} ctx)`).join('\n')
+          : `  • ${PLACEHOLDER_MODEL} (placeholder)`;
+        if (apiKey) {
+          ctx.print('Tip: For better security, set the key as an env var and use "apiKeyEnv" in the config instead of "apiKey".');
+        }
+        ctx.print(`Provider '${name}' added with ${models.length} model(s):\n${ctxWindowSummary}\nThe file watcher will auto-register it shortly.`);
+        return;
+      }
+
+      // ── /provider remove <name> ───────────────────────────────
+      if (args[0] === 'remove' || args[0] === 'rm') {
+        const removeArgs = args.slice(1);
+        if (removeArgs.length === 0) {
+          ctx.print('Usage: /provider remove <name>');
+          return;
+        }
+        const name = removeArgs[0];
+        if (!isValidProviderName(name)) {
+          ctx.print('Error: Provider name must contain only letters, numbers, hyphens, and underscores.');
+          return;
+        }
+        const providersDir = join(homedir(), '.goodvibes', 'tui', 'providers');
+        const providerFile = join(providersDir, `${name}.json`);
+
+        if (!existsSync(providerFile)) {
+          ctx.print(`Error: No custom provider '${name}' found at ${providerFile}`);
+          return;
+        }
+
+        try {
+          await unlink(providerFile);
+        } catch (e) {
+          ctx.print(`Error removing provider file: ${(e as Error).message}`);
+          return;
+        }
+
+        ctx.print(`Provider '${name}' removed. The file watcher will deregister it shortly.`);
+        return;
+      }
+
+      // ── /provider [name] — switch provider ───────────────────
       if (args.length === 0) {
         // Open the interactive provider picker if available, else fall back to list
         if (ctx.openProviderPicker) {
