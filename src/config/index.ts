@@ -101,6 +101,7 @@ function loadEnvApiKeys(): Record<string, string> {
     cerebras: 'CEREBRAS_API_KEY',
     mistral: 'MISTRAL_API_KEY',
     'ollama-cloud': 'OLLAMA_CLOUD_API_KEY',
+    // Note: also checked as OLLAMA_API_KEY below
     huggingface: 'HF_API_KEY',
     nvidia: 'NVIDIA_API_KEY',
     llm7: 'LLM7_API_KEY',
@@ -111,6 +112,8 @@ function loadEnvApiKeys(): Record<string, string> {
     if (!value && prov === 'gemini') value = process.env['GOOGLE_API_KEY'] ?? process.env['GOOGLE_GEMINI_API_KEY'];
     if (!value && prov === 'openai') value = process.env['OPENAI_KEY'];
     if (!value && prov === 'anthropic') value = process.env['CLAUDE_API_KEY'];
+    if (!value && prov === 'ollama-cloud') value = process.env['OLLAMA_API_KEY'];
+    if (!value && prov === 'huggingface') value = process.env['HUGGINGFACE_API_KEY'] ?? process.env['HF_TOKEN'];
     if (value) keys[prov] = value;
   }
   return keys;
@@ -138,7 +141,7 @@ export async function resolveApiKeys(): Promise<Record<string, string>> {
     { prov: 'groq',          envVars: ['GROQ_API_KEY'] },
     { prov: 'cerebras',      envVars: ['CEREBRAS_API_KEY'] },
     { prov: 'mistral',       envVars: ['MISTRAL_API_KEY'] },
-    { prov: 'ollama-cloud',  envVars: ['OLLAMA_CLOUD_API_KEY'] },
+    { prov: 'ollama-cloud',  envVars: ['OLLAMA_CLOUD_API_KEY', 'OLLAMA_API_KEY'] },
     { prov: 'huggingface',   envVars: ['HF_API_KEY', 'HUGGINGFACE_API_KEY', 'HF_TOKEN'] },
     { prov: 'nvidia',        envVars: ['NVIDIA_API_KEY'] },
     { prov: 'llm7',          envVars: ['LLM7_API_KEY'] },
