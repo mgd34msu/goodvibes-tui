@@ -97,6 +97,7 @@ function loadEnvApiKeys(): Record<string, string> {
     inceptionlabs: 'INCEPTION_API_KEY',
     openrouter: 'OPENROUTER_API_KEY',
     aihubmix: 'AIHUBMIX_API_KEY',
+    groq: 'GROQ_API_KEY',
   };
   for (const [prov, envVar] of Object.entries(mapping)) {
     let value = process.env[envVar];
@@ -128,6 +129,7 @@ export async function resolveApiKeys(): Promise<Record<string, string>> {
     { prov: 'inceptionlabs', envVars: ['INCEPTION_API_KEY'] },
     { prov: 'openrouter',    envVars: ['OPENROUTER_API_KEY'] },
     { prov: 'aihubmix',     envVars: ['AIHUBMIX_API_KEY'] },
+    { prov: 'groq',          envVars: ['GROQ_API_KEY'] },
   ];
 
   const result: Record<string, string> = {};
