@@ -102,6 +102,7 @@ function loadEnvApiKeys(): Record<string, string> {
     mistral: 'MISTRAL_API_KEY',
     'ollama-cloud': 'OLLAMA_CLOUD_API_KEY',
     huggingface: 'HF_API_KEY',
+    nvidia: 'NVIDIA_API_KEY',
   };
   for (const [prov, envVar] of Object.entries(mapping)) {
     let value = process.env[envVar];
@@ -138,6 +139,7 @@ export async function resolveApiKeys(): Promise<Record<string, string>> {
     { prov: 'mistral',       envVars: ['MISTRAL_API_KEY'] },
     { prov: 'ollama-cloud',  envVars: ['OLLAMA_CLOUD_API_KEY'] },
     { prov: 'huggingface',   envVars: ['HF_API_KEY', 'HUGGINGFACE_API_KEY', 'HF_TOKEN'] },
+    { prov: 'nvidia',        envVars: ['NVIDIA_API_KEY'] },
   ];
 
   const result: Record<string, string> = {};
