@@ -8,6 +8,7 @@ export const AGENT_TOOL_SCHEMA: ToolDefinition = {
   name: 'agent',
   description:
     'Manages in-process subagents. Modes: spawn (create a new agent task), ' +
+    'batch-spawn (spawn multiple agents at once from a tasks array), ' +
     'status (check agent progress by ID), cancel (stop a running agent), ' +
     'list (show all agents and their status), ' +
     'templates (list available agent templates with default tool sets), ' +
@@ -17,7 +18,9 @@ export const AGENT_TOOL_SCHEMA: ToolDefinition = {
     'wait (returns current status — non-blocking), ' +
     'message (send a message to an agent), ' +
     'wrfc-chains (list all WRFC chains in current session with status/scores), ' +
-    'wrfc-history (detailed event history for a specific WRFC chain — reviews, scores, issues, gates).' +
+    'wrfc-history (detailed event history for a specific WRFC chain — reviews, scores, issues, gates), ' +
+    'cohort-status (JSON summary of all agents in a named cohort), ' +
+    'cohort-report (markdown table report for all agents in a named cohort).' +
     ' Discovery: use mode=list to see all agents and their status, mode=templates to see available agent templates.',
   parameters: {
     type: 'object',
@@ -25,7 +28,7 @@ export const AGENT_TOOL_SCHEMA: ToolDefinition = {
     properties: {
       mode: {
         type: 'string',
-        enum: ['spawn', 'status', 'cancel', 'list', 'templates', 'get', 'budget', 'plan', 'wait', 'message', 'wrfc-chains', 'wrfc-history'],
+        enum: ['spawn', 'batch-spawn', 'status', 'cancel', 'list', 'templates', 'get', 'budget', 'plan', 'wait', 'message', 'wrfc-chains', 'wrfc-history', 'cohort-status', 'cohort-report'],
         description: 'Operation mode.',
       },
       // mode: spawn
@@ -64,6 +67,29 @@ export const AGENT_TOOL_SCHEMA: ToolDefinition = {
         description: 'If true, skip the WRFC review chain for this agent (mode: spawn). Default: false.',
         default: false,
       },
+      // mode: batch-spawn
+      tasks: {
+        type: 'array',
+        items: {
+          type: 'object',
+          required: ['task'],
+          properties: {
+            task: { type: 'string', description: 'Task description for the agent.' },
+            template: { type: 'string', enum: ['engineer', 'reviewer', 'tester', 'researcher', 'general'], description: 'Agent template.' },
+            model: { type: 'string', description: 'Model override.' },
+            provider: { type: 'string', description: 'Provider override.' },
+            tools: { type: 'array', items: { type: 'string' }, description: 'Tool subset.' },
+            context: { type: 'string', description: 'Additional context.' },
+            dangerously_disable_wrfc: { type: 'boolean', description: 'Skip WRFC review.' },
+          },
+        },
+        description: 'Array of tasks to spawn as agents (mode: batch-spawn). Max 20.',
+      },
+      // mode: spawn, batch-spawn, list, cohort-status, cohort-report
+      cohort: {
+        type: 'string',
+        description: 'Cohort name to group agents together (mode: spawn, batch-spawn). Filter by cohort (mode: list, cohort-status, cohort-report).',
+      },
       // mode: status / cancel / get / budget / plan / wait / message
       agentId: {
         type: 'string',
@@ -90,7 +116,7 @@ export const AGENT_TOOL_SCHEMA: ToolDefinition = {
 
 /** Input shape for the agent tool. */
 export interface AgentInput {
-  mode: 'spawn' | 'status' | 'cancel' | 'list' | 'templates' | 'get' | 'budget' | 'plan' | 'wait' | 'message' | 'wrfc-chains' | 'wrfc-history';
+  mode: 'spawn' | 'batch-spawn' | 'status' | 'cancel' | 'list' | 'templates' | 'get' | 'budget' | 'plan' | 'wait' | 'message' | 'wrfc-chains' | 'wrfc-history' | 'cohort-status' | 'cohort-report';
   // spawn
   task?: string;
   template?: string;
@@ -99,6 +125,18 @@ export interface AgentInput {
   tools?: string[];
   context?: string;
   dangerously_disable_wrfc?: boolean;
+  // cohort grouping
+  cohort?: string;
+  // batch-spawn
+  tasks?: Array<{
+    task: string;
+    template?: string;
+    model?: string;
+    provider?: string;
+    tools?: string[];
+    context?: string;
+    dangerously_disable_wrfc?: boolean;
+  }>;
   // status / cancel / get / budget / plan / wait / message
   agentId?: string;
   // wait

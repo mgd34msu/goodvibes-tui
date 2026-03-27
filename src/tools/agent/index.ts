@@ -57,6 +57,8 @@ export interface AgentRecord {
   wrfcId?: string;
   /** If true, this agent skips the WRFC review chain. */
   dangerously_disable_wrfc?: boolean;
+  /** Cohort name grouping this agent with related agents. */
+  cohort?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -115,6 +117,7 @@ export class AgentManager {
       startedAt: Date.now(),
       toolCallCount: 0,
       dangerously_disable_wrfc: input.dangerously_disable_wrfc,
+      cohort: input.cohort,
     };
 
     this.agents.set(id, record);
@@ -167,6 +170,11 @@ export class AgentManager {
     return Array.from(this.agents.values());
   }
 
+  /** Return all agent records belonging to the given cohort. */
+  listByCohort(cohort: string): AgentRecord[] {
+    return [...this.agents.values()].filter(a => a.cohort === cohort);
+  }
+
   /** Clear all agents — for testing only. */
   clear(): void {
     this.agents.clear();
@@ -194,7 +202,7 @@ export const agentTool: Tool = {
       return { success: false, error: 'Missing required parameter: mode' };
     }
 
-    const validModes = ['spawn', 'status', 'cancel', 'list', 'templates', 'get', 'budget', 'plan', 'wait', 'message', 'wrfc-chains', 'wrfc-history'];
+    const validModes = ['spawn', 'batch-spawn', 'status', 'cancel', 'list', 'templates', 'get', 'budget', 'plan', 'wait', 'message', 'wrfc-chains', 'wrfc-history', 'cohort-status', 'cohort-report'];
     if (!validModes.includes(input.mode)) {
       return { success: false, error: `Invalid mode: '${input.mode}'. Must be one of: ${validModes.join(', ')}` };
     }
@@ -275,7 +283,10 @@ export const agentTool: Tool = {
       }
 
       case 'list': {
-        const records = manager.list();
+        const allRecords = manager.list();
+        const records = input.cohort
+          ? allRecords.filter(r => r.cohort === input.cohort)
+          : allRecords;
         return {
           success: true,
           output: JSON.stringify({
@@ -286,8 +297,10 @@ export const agentTool: Tool = {
               status: r.status,
               startedAt: r.startedAt,
               toolCallCount: r.toolCallCount,
+              cohort: r.cohort,
             })),
             count: records.length,
+            ...(input.cohort ? { cohort: input.cohort } : {}),
           }),
         };
       }
@@ -449,6 +462,87 @@ export const agentTool: Tool = {
             content: input.message,
           }),
         };
+      }
+
+      case 'batch-spawn': {
+        if (!input.tasks || !Array.isArray(input.tasks) || input.tasks.length === 0) {
+          return { success: false, error: 'batch-spawn requires a non-empty tasks array.' };
+        }
+        if (input.tasks.length > 20) {
+          return { success: false, error: 'batch-spawn limited to 20 tasks per batch.' };
+        }
+        const results: Array<{ id: string; task: string; template: string; cohort?: string }> = [];
+        for (const taskDef of input.tasks) {
+          if (!taskDef.task || typeof taskDef.task !== 'string' || taskDef.task.trim() === '') {
+            return { success: false, error: 'Each task in batch-spawn must have a non-empty task string.' };
+          }
+          // Validate template if provided
+          if (taskDef.template && !AGENT_TEMPLATES[taskDef.template]) {
+            const archetypeLoader = ArchetypeLoader.getInstance();
+            const customArchetype = archetypeLoader.loadArchetype(taskDef.template);
+            if (!customArchetype || customArchetype.isCustom === false) {
+              return {
+                success: false,
+                error: `Unknown template: '${taskDef.template}'. Available: ${Object.keys(AGENT_TEMPLATES).join(', ')}`,
+              };
+            }
+          }
+          const spawnInput: AgentInput = {
+            mode: 'spawn',
+            task: taskDef.task,
+            template: taskDef.template ?? input.template ?? 'general',
+            model: taskDef.model ?? input.model,
+            provider: taskDef.provider ?? input.provider,
+            tools: taskDef.tools ?? input.tools,
+            context: taskDef.context ?? input.context,
+            dangerously_disable_wrfc: taskDef.dangerously_disable_wrfc ?? input.dangerously_disable_wrfc,
+            cohort: input.cohort,
+          };
+          const record = manager.spawn(spawnInput);
+          results.push({ id: record.id, task: taskDef.task.slice(0, 80), template: record.template, cohort: record.cohort });
+        }
+        return { success: true, output: JSON.stringify({ agents: results, count: results.length, cohort: input.cohort }) };
+      }
+
+      case 'cohort-status': {
+        if (!input.cohort) {
+          return { success: false, error: 'cohort-status requires a cohort name.' };
+        }
+        const cohortAgents = manager.listByCohort(input.cohort);
+        if (cohortAgents.length === 0) {
+          return { success: true, output: `No agents found in cohort '${input.cohort}'.` };
+        }
+        const summary = cohortAgents.map(a => ({
+          id: a.id,
+          task: a.task?.slice(0, 80),
+          status: a.status,
+          template: a.template,
+          wrfcId: a.wrfcId,
+          toolCallCount: a.toolCallCount,
+        }));
+        return { success: true, output: JSON.stringify({ cohort: input.cohort, count: cohortAgents.length, agents: summary }) };
+      }
+
+      case 'cohort-report': {
+        if (!input.cohort) {
+          return { success: false, error: 'cohort-report requires a cohort name.' };
+        }
+        const reportAgents = manager.listByCohort(input.cohort);
+        if (reportAgents.length === 0) {
+          return { success: true, output: `No agents found in cohort '${input.cohort}'.` };
+        }
+        const lines: string[] = [
+          `## Cohort: ${input.cohort} (${reportAgents.length} agents)`,
+          '',
+          '| Agent | Task | Status | Template | WRFC | Tool Calls |',
+          '|-------|------|--------|----------|------|------------|',
+        ];
+        for (const a of reportAgents) {
+          const taskShort = (a.task ?? '').slice(0, 40).replace(/\|/g, '\\|');
+          const wrfcStatus = a.wrfcId ?? 'n/a';
+          lines.push(`| ${a.id.slice(-8)} | ${taskShort} | ${a.status} | ${a.template ?? 'general'} | ${wrfcStatus} | ${a.toolCallCount ?? 0} |`);
+        }
+        return { success: true, output: lines.join('\n') };
       }
 
       case 'wrfc-chains': {
