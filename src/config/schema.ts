@@ -60,7 +60,7 @@ export interface GoodVibesConfig {
   };
   danger: {
     agentRecursion: boolean;        // default: false — allow agents to spawn subagents
-    maxGlobalAgents: number;        // default: 8 — total agents across all levels
+    maxGlobalAgents: number;        // default: 12 — total agents across all levels
     maxRecursionDepth: number;      // default: 0 — 0=off, 1=one level (max allowed)
     daemon: boolean;                // default: false — enable daemon mode
     httpListener: boolean;          // default: false — enable HTTP webhook listener
@@ -540,7 +540,7 @@ export const CONFIG_SCHEMA: ConfigSetting[] = [
   {
     key: 'danger.maxGlobalAgents',
     type: 'number',
-    default: 8,
+    default: 12,
     description: 'Total concurrent agents allowed across all recursion levels',
     validate: (v) => typeof v === 'number' && v >= 1 && v <= 20,
   },
