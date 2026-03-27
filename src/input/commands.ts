@@ -2463,6 +2463,23 @@ export function registerBuiltinCommands(registry: CommandRegistry): void {
         '  /schedule run <id>                        Run a task immediately');
     },
   });
+
+  // ── /refresh-models ──────────────────────────────────
+  registry.register({
+    name: 'refresh-models',
+    aliases: [],
+    description: 'Refresh model token limits from OpenRouter',
+    async handler(_args, ctx) {
+      ctx.print('Refreshing model limits from OpenRouter...');
+      try {
+        const { refreshModelLimits } = await import('../providers/model-limits.ts');
+        const count = await refreshModelLimits();
+        ctx.print(`Updated limits for ${count} models.`);
+      } catch (e) {
+        ctx.print(`Failed to refresh: ${(e as Error).message}`);
+      }
+    },
+  });
 }
 
 /**

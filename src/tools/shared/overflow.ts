@@ -1,10 +1,11 @@
 import { mkdirSync, writeFileSync, readdirSync, unlinkSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { logger } from '../../utils/logger.ts';
+import { getToolResultMaxChars } from '../../providers/model-limits.ts';
 
 // ─── Constants ─────────────────────────────────────────────────────────────
 
-const DEFAULT_MAX_CHARS = 50_000;
+const DEFAULT_MAX_CHARS = 50_000; // fallback only — runtime uses getToolResultMaxChars()
 const DEFAULT_MAX_AGE_MS = 60 * 60 * 1000; // 1 hour
 const OVERFLOW_DIR = '.goodvibes/.overflow';
 
@@ -81,7 +82,7 @@ export class OverflowHandler {
    *   - Return overflowRef pointing to the file path
    */
   handle(content: string, options?: OverflowOptions): OverflowResult {
-    const maxChars = options?.maxChars ?? DEFAULT_MAX_CHARS;
+    const maxChars = options?.maxChars ?? getToolResultMaxChars();
 
     if (content.length <= maxChars) {
       return { content };

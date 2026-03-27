@@ -5,6 +5,7 @@ import { resolveAndValidatePath } from '../../utils/path-safety.ts';
 import { logger } from '../../utils/logger.ts';
 import { EXEC_TOOL_SCHEMA } from './schema.ts';
 import { overflowHandler } from '../shared/overflow.ts';
+import { getToolResultMaxChars } from '../../providers/model-limits.ts';
 import type {
   ExecInput,
   ExecCommandInput,
@@ -17,7 +18,7 @@ import { ProcessManager } from '../shared/process-manager.ts';
 // ─── Constants ──────────────────────────────────────────────────────────────
 
 const DEFAULT_TIMEOUT_MS = 120_000;
-const OUTPUT_TRUNCATE_LIMIT = 50_000;
+// OUTPUT_TRUNCATE_LIMIT is resolved dynamically via getToolResultMaxChars() at call time
 const PROGRESS_AUTO_THRESHOLD_MS = 30_000;
 const OVERFLOW_DIR = join(process.cwd(), '.goodvibes', '.overflow');
 
@@ -52,7 +53,7 @@ function decodeCmd(cmdInput: ExecCommandInput): string {
 }
 
 function truncate(s: string, label?: string): { text: string; truncated: boolean } {
-  const result = overflowHandler.handle(s, { maxChars: OUTPUT_TRUNCATE_LIMIT, label });
+  const result = overflowHandler.handle(s, { maxChars: getToolResultMaxChars(), label });
   return { text: result.content, truncated: result.overflowRef !== undefined };
 }
 
