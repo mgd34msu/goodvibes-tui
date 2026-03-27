@@ -30,7 +30,7 @@ export async function run(hook: HookDefinition, event: HookEvent): Promise<HookR
   const eventJson = JSON.stringify(event);
 
   try {
-    const proc = Bun.spawn(['sh', '-c', command], {
+    const proc = Bun.spawn(['/bin/sh', '-c', command], {
       stdin: 'pipe',
       stdout: 'pipe',
       stderr: 'pipe',

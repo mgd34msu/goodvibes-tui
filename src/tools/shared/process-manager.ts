@@ -90,7 +90,7 @@ export class ProcessManager {
     ) as Record<string, string>;
     const mergedEnv = { ...cleanEnv, ...env };
 
-    const proc = Bun.spawn(['sh', '-c', cmd], {
+    const proc = Bun.spawn(['/bin/sh', '-c', cmd], {
       cwd,
       env: mergedEnv,
       stdout: 'pipe',

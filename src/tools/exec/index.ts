@@ -214,7 +214,7 @@ async function runCommand(
   }
 
   // ─── Normal execution ───
-  const proc = Bun.spawn(['sh', '-c', cmdStr], {
+  const proc = Bun.spawn(['/bin/sh', '-c', cmdStr], {
     cwd,
     env: mergedEnv,
     stdout: 'pipe',
@@ -334,7 +334,7 @@ async function runCommandWithProgress(
 ): Promise<ExecCommandResult> {
   const progressFile = initProgressFile(cmdStr);
 
-  const proc = Bun.spawn(['sh', '-c', cmdStr], {
+  const proc = Bun.spawn(['/bin/sh', '-c', cmdStr], {
     cwd,
     env: mergedEnv,
     stdout: 'pipe',
@@ -479,7 +479,7 @@ async function runUntil(
   const untilTimeout = until.timeout_ms ?? timeoutMs;
   const killAfter = until.kill_after ?? false;
 
-  const proc = Bun.spawn(['sh', '-c', cmdStr], {
+  const proc = Bun.spawn(['/bin/sh', '-c', cmdStr], {
     cwd,
     env,
     stdout: 'pipe',
