@@ -52,6 +52,7 @@ import { scan, loadPersistedProviders, persistProviders, removePersistedProvider
 import { getSessionManager } from './sessions/manager.ts';
 import type { SessionMeta } from './sessions/manager.ts';
 import { logger } from './utils/logger.ts';
+import { initModelLimits } from './providers/model-limits.ts';
 import { getPanelManager } from './panels/panel-manager.ts';
 import { registerBuiltinPanels } from './panels/builtin-panels.ts';
 import { renderPanelTabBar } from './renderer/panel-tab-bar.ts';
@@ -193,6 +194,9 @@ async function main() {
 
   // --- User session ID (generated once per startup, permanent) ---
   const userSessionId = `user-${generateUserSessionId()}`;
+
+  // --- Initialize model limits cache (sync load + background refresh if stale) ---
+  initModelLimits();
 
   // --- Module wiring ---
   const bus = new EventBus();

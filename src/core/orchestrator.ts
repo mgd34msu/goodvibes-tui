@@ -16,6 +16,7 @@ import type { SubagentTask } from '../acp/protocol.ts';
 import { planManager } from './plan-manager-instance.ts';
 import type { ExecutionPlan, PlanItem } from './execution-plan.ts';
 import { classifyIntent } from './intent-classifier.ts';
+import { getTokenLimitsForModel } from '../providers/model-limits.ts';
 import { EventReplayQueue } from './event-replay.ts';
 import { AgentManager } from '../tools/agent/index.ts';
 import type { AgentInput } from '../tools/agent/schema.ts';
@@ -300,11 +301,13 @@ export class Orchestrator {
           this.bus.emit('turn:stream-start');
         }
 
+        const tokenLimits = getTokenLimitsForModel(model);
         const response = await provider.chat({
           model: model.id,
           messages: this.conversation.getMessagesForLLM(),
           tools: toolDefinitions.length > 0 ? toolDefinitions : undefined,
           systemPrompt: this.getSystemPrompt(),
+          maxTokens: tokenLimits.maxOutputTokens,
           reasoningEffort: (() => {
             const configured = configManager.get('provider.reasoningEffort') as string | undefined;
             if (configured) return configured as 'instant' | 'low' | 'medium' | 'high';

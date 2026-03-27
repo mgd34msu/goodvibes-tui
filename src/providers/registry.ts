@@ -12,6 +12,14 @@ import { SyntheticProvider } from './synthetic.ts';
 /** Model capability tier — controls system prompt verbosity. */
 export type ModelTier = 'free' | 'standard' | 'premium';
 
+/** Per-model token limits for output, tool results, tool calls, and reasoning. */
+export interface TokenLimits {
+  maxOutputTokens?: number;       // max generation tokens sent as max_tokens to API
+  maxToolResultTokens?: number;   // max tokens per tool result before truncation
+  maxToolCalls?: number;          // max parallel tool calls per turn
+  maxReasoningTokens?: number;    // budget for thinking/reasoning
+}
+
 /** Describes a selectable model and its capabilities. */
 export interface ModelDefinition {
   id: string;
@@ -31,6 +39,8 @@ export interface ModelDefinition {
   reasoningEffort?: string[];
   /** Model capability tier — controls system prompt verbosity. */
   tier?: ModelTier;
+  /** Per-model token limits; overrides defaults and OpenRouter data when set. */
+  tokenLimits?: TokenLimits;
 }
 
 const BUILTIN_MODEL_REGISTRY: ModelDefinition[] = [
