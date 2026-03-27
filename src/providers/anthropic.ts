@@ -43,6 +43,23 @@ interface AnthropicSSEEvent {
   usage?: { input_tokens?: number; output_tokens?: number; cache_read_input_tokens?: number; cache_creation_input_tokens?: number };
 }
 
+/** Anthropic model-specific max output token caps. */
+const ANTHROPIC_MAX_OUTPUT: Array<{ match: (m: string) => boolean; cap: number }> = [
+  { match: (m) => m.startsWith('claude-opus-4-6') || m.startsWith('claude-sonnet-4-6'), cap: 128000 },
+  { match: (m) => m.includes('opus-4-5') || m.includes('sonnet-4-5') || m.includes('sonnet-4-0') || m.includes('sonnet-4'), cap: 64000 },
+  { match: (m) => m.includes('opus-4'), cap: 32000 },
+  { match: (m) => m.includes('haiku'), cap: 8192 },
+];
+const ANTHROPIC_DEFAULT_MAX_OUTPUT = 16384;
+
+/** Clamp max_tokens to the model's known limit. */
+function clampMaxTokens(model: string, requested: number): number {
+  for (const { match, cap } of ANTHROPIC_MAX_OUTPUT) {
+    if (match(model)) return Math.min(requested, cap);
+  }
+  return Math.min(requested, ANTHROPIC_DEFAULT_MAX_OUTPUT);
+}
+
 /**
  * AnthropicProvider — calls the Anthropic Messages API directly via fetch.
  * System message is a top-level field (not a message). Tool results are
@@ -69,7 +86,7 @@ export class AnthropicProvider implements LLMProvider {
     return withRetry(async () => {
       const body: Record<string, unknown> = {
         model,
-        max_tokens: maxTokens ?? 8192,
+        max_tokens: clampMaxTokens(model, maxTokens ?? 8192),
         messages: toAnthropicMessages(messages),
         stream: true,
       };
