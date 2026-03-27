@@ -688,7 +688,7 @@ export class WrfcController {
       let output = '';
 
       try {
-        const proc = Bun.spawn(['sh', '-c', gate.command], {
+        const proc = Bun.spawn(['/bin/sh', '-c', gate.command], {
           stdout: 'pipe',
           stderr: 'pipe',
         });
