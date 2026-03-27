@@ -253,7 +253,7 @@ export const DEFAULT_CONFIG: GoodVibesConfig = {
   },
   danger: {
     agentRecursion: false,
-    maxGlobalAgents: 8,
+    maxGlobalAgents: 12,
     maxRecursionDepth: 0,
     daemon: false,
     httpListener: false,
