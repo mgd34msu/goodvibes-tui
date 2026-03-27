@@ -471,8 +471,20 @@ export const agentTool: Tool = {
         if (input.tasks.length > 20) {
           return { success: false, error: 'batch-spawn limited to 20 tasks per batch.' };
         }
+        // Respect maxGlobalAgents limit
+        const { configManager } = await import('../../config/index.ts');
+        const { DEFAULT_CONFIG } = await import('../../config/schema.ts');
+        const maxAgents = (configManager.get('danger.maxGlobalAgents') as number) || DEFAULT_CONFIG.danger.maxGlobalAgents;
+        const currentCount = manager.list().filter(a => a.status === 'pending' || a.status === 'running').length;
+        const available = Math.max(0, maxAgents - currentCount);
+        if (available === 0) {
+          return { success: false, error: `Agent limit reached (${currentCount}/${maxAgents}). No capacity for batch-spawn.` };
+        }
+        const tasksToSpawn = input.tasks.slice(0, available);
+        const skipped = input.tasks.length - tasksToSpawn.length;
+
         const results: Array<{ id: string; task: string; template: string; cohort?: string }> = [];
-        for (const taskDef of input.tasks) {
+        for (const taskDef of tasksToSpawn) {
           if (!taskDef.task || typeof taskDef.task !== 'string' || taskDef.task.trim() === '') {
             return { success: false, error: 'Each task in batch-spawn must have a non-empty task string.' };
           }
@@ -501,7 +513,7 @@ export const agentTool: Tool = {
           const record = manager.spawn(spawnInput);
           results.push({ id: record.id, task: taskDef.task.slice(0, 80), template: record.template, cohort: record.cohort });
         }
-        return { success: true, output: JSON.stringify({ agents: results, count: results.length, cohort: input.cohort }) };
+        return { success: true, output: JSON.stringify({ agents: results, count: results.length, cohort: input.cohort, skipped, maxAgents }) };
       }
 
       case 'cohort-status': {
