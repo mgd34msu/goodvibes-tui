@@ -264,7 +264,7 @@ export class DiffPanel extends BasePanel {
     for (const entry of newEntries) {
       const idx = this.entries.findIndex(e => e.filePath === entry.filePath);
       if (idx >= 0) {
-        this.entries[idx] = entry;
+        this.entries[idx] = { ...entry, semanticSummary: this.entries[idx]!.semanticSummary };
       } else {
         this.entries.push(entry);
       }
