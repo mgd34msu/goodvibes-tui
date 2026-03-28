@@ -30,6 +30,7 @@ import { exportToHTML, exportToJSON, exportToMarkdownExtended, defaultExportPath
 import { getKeybindingsManager } from './keybindings.ts';
 import { pluginManager, type PluginStatus } from '../plugins/manager.ts';
 import { PLUGINS_DIR } from '../plugins/loader.ts';
+import { EFFORT_DESCRIPTIONS } from '../providers/effort-levels.ts';
 
 let _serviceRegistry: ServiceRegistry | undefined;
 function getServiceRegistry(): ServiceRegistry {
@@ -874,10 +875,8 @@ export function registerBuiltinCommands(registry: CommandRegistry): void {
         const current = (ctx.runtime.reasoningEffort || ctx.configManager.get('provider.reasoningEffort') || 'medium') as string;
         if (ctx.openSelection) {
           const descriptions: Record<string, string> = {
-            instant: 'Fastest, minimal reasoning',
-            low: 'Quick with light reasoning',
+            ...EFFORT_DESCRIPTIONS,
             medium: 'Balanced speed and quality (default)',
-            high: 'Thorough, deep reasoning',
           };
           const items: SelectionItem[] = VALID_LEVELS.map(level => ({
             id: level,

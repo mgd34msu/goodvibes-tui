@@ -1,4 +1,5 @@
 import type { ModelDefinition } from '../providers/registry.ts';
+import { EFFORT_DESCRIPTIONS } from '../providers/effort-levels.ts';
 
 export type PickerMode = 'model' | 'provider' | 'effort';
 export type CategoryFilter = 'all' | 'free' | 'premium';
@@ -163,13 +164,7 @@ export class ModelPickerModal {
       return this.providers.map(p => ({ id: p, label: p }));
     }
     // effort mode
-    const descriptions: Record<string, string> = {
-      instant: 'Fastest, minimal reasoning',
-      low: 'Quick with light reasoning',
-      medium: 'Balanced speed and quality',
-      high: 'Thorough, deep reasoning',
-    };
-    return this.effortLevels.map(e => ({ id: e, label: e, detail: descriptions[e] ?? '' }));
+    return this.effortLevels.map(e => ({ id: e, label: e, detail: EFFORT_DESCRIPTIONS[e] ?? '' }));
   }
 
   /** Get count of selectable (non-header) items in current mode. */
