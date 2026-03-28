@@ -1,6 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync, unlinkSync } from 'fs';
 import { join } from 'path';
 import { logger } from '../utils/logger.ts';
+import type { AgentRecord } from '../tools/agent/index.ts';
 
 /**
  * Metadata for a saved session (the first JSONL line).
@@ -45,7 +46,12 @@ export class SessionManager {
    * Overwrites if file already exists.
    * Returns the sanitized filename used (may differ from input name).
    */
-  save(name: string, messages: object[], meta: SessionMeta): { filePath: string; sanitizedName: string } {
+  save(
+    name: string,
+    messages: object[],
+    meta: SessionMeta,
+    agentRecords?: AgentRecord[],
+  ): { filePath: string; sanitizedName: string } {
     if (!name || !name.trim()) throw new Error('Session name cannot be empty');
     mkdirSync(this.sessionsDir, { recursive: true });
     const sanitizedName = this.sanitizeName(name);
@@ -70,6 +76,14 @@ export class SessionManager {
       lines.push(JSON.stringify(record));
     }
 
+    // Agent records: one per line, after messages
+    if (agentRecords && agentRecords.length > 0) {
+      for (const agent of agentRecords) {
+        const record = { ...agent, type: 'agent_record' as const };
+        lines.push(JSON.stringify(record));
+      }
+    }
+
     writeFileSync(filePath, lines.join('\n') + '\n', 'utf-8');
     return { filePath, sanitizedName };
   }
@@ -78,7 +92,7 @@ export class SessionManager {
    * Load a session from JSONL. Returns meta and messages (excluding removed ones).
    * Throws if the file does not exist or cannot be parsed.
    */
-  load(name: string): { meta: SessionMeta; messages: object[] } {
+  load(name: string): { meta: SessionMeta; messages: object[]; agentRecords: AgentRecord[] } {
     if (!name || !name.trim()) throw new Error('Session name cannot be empty');
     const filename = this.sanitizeName(name);
     const filePath = join(this.sessionsDir, `${filename}.jsonl`);
@@ -92,6 +106,7 @@ export class SessionManager {
 
     let meta: SessionMeta = { title: '', model: '', provider: '', timestamp: 0 };
     const messages: object[] = [];
+    const agentRecords: AgentRecord[] = [];
 
     let skipped = 0;
     for (const line of lines) {
@@ -116,11 +131,16 @@ export class SessionManager {
         // Strip the 'type' wrapper before returning raw message
         const { type: _type, ...msgFields } = record;
         messages.push(msgFields);
+      } else if (record.type === 'agent_record') {
+        const { type: _type, ...agentFields } = record;
+        if (typeof agentFields.id === 'string' && typeof agentFields.status === 'string' && typeof agentFields.task === 'string') {
+          agentRecords.push(agentFields as unknown as AgentRecord);
+        }
       }
     }
 
     if (skipped > 0) logger.debug('Skipped malformed lines', { name, skipped });
-    return { meta, messages };
+    return { meta, messages, agentRecords };
   }
 
   /**
