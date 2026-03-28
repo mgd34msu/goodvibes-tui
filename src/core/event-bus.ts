@@ -111,7 +111,13 @@ export class EventBus {
     const handlers = this.listeners.get(event);
     if (!handlers) return;
     for (const handler of handlers) {
-      handler(...(args as unknown[]));
+      try {
+        handler(...(args as unknown[]));
+      } catch (err) {
+        // Isolate listener errors so one failing handler doesn't block others
+        // eslint-disable-next-line no-console
+        console.error('[EventBus] listener error on event', event, err);
+      }
     }
   }
 
