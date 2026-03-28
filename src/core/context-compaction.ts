@@ -179,9 +179,7 @@ function buildSummarizationPrompt(olderMessages: ProviderMessage[]): string {
     let dropIdx = 0;
     for (let i = 0; i < olderMessages.length && running > MAX_PROMPT_OLDER_TOKENS; i++) {
       const msg = olderMessages[i];
-      const msgTokens = typeof msg.content === 'string'
-        ? Math.ceil(msg.content.length / 4)
-        : (msg.content as ContentPart[]).filter(p => p.type === 'text').reduce((s, p) => s + Math.ceil((p as { type: 'text'; text: string }).text.length / 4), 0);
+      const msgTokens = estimateConversationTokens([msg]);
       running -= msgTokens;
       dropIdx = i + 1;
     }

@@ -401,7 +401,7 @@ export class ConversationManager {
             });
           }
 
-          const rendered = showLineNumbers ? tracked : tracked;
+          const rendered = tracked;
           if (showLineNumbers) {
             // Prepend dimmed gutter and shift content right
             const numbered = rendered.map((line, i) => {

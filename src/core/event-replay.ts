@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import type { EventBus } from './event-bus.ts';
+import type { EventBus, EventMap } from './event-bus.ts';
 import { logger } from '../utils/logger.ts';
 
 export interface QueuedEvent {
@@ -230,12 +230,11 @@ export class EventReplayQueue {
     const unsubs: Array<() => void> = [];
 
     for (const eventName of TRACKED_EVENTS) {
-      // Cast needed because EventBus is typed with specific event keys
-      const unsub = (bus as unknown as {
-        on: (event: string, listener: (data: unknown) => void) => () => void;
-      }).on(eventName, (payload: unknown) => {
+      // TRACKED_EVENTS values are a strict subset of EventMap keys; cast is sound.
+      const key = eventName as keyof EventMap;
+      const unsub = bus.on(key, ((payload: unknown) => {
         queue.enqueue(eventName, payload);
-      });
+      }) as Parameters<EventBus['on']>[1]);
       unsubs.push(unsub);
     }
 

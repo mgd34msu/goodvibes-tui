@@ -42,14 +42,19 @@ export function getConfigManager(): ConfigManager {
 export const configManager: ConfigManager = new Proxy({} as ConfigManager, {
   get(_target, prop: string | symbol) {
     const manager = getConfigManager();
+    // Proxy handler requires untyped index access — TypeScript does not allow
+    // bracket-notation on a typed class, so we cast through Record to read any
+    // property by string/symbol at runtime.
     const value = (manager as unknown as Record<string | symbol, unknown>)[prop];
     // Bind methods to the singleton so `this` is correct when called via the proxy.
     if (typeof value === 'function') {
+      // `as Function` is the narrowest safe cast here; we just need .bind().
       return (value as Function).bind(manager);
     }
     return value;
   },
   set(_target, prop: string | symbol, value: unknown) {
+    // Same rationale as the getter: runtime property assignment via bracket notation.
     (getConfigManager() as unknown as Record<string | symbol, unknown>)[prop] = value;
     return true;
   },
