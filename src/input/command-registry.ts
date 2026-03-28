@@ -1,10 +1,12 @@
 import type { EventBus } from '../core/event-bus.ts';
+import type { McpRegistry } from '../mcp/registry.ts';
 import type { ProviderRegistry } from '../providers/registry.ts';
 import type { ConversationManager } from '../core/conversation.ts';
 import type { AppConfig } from '../config/index.ts';
 import type { ConfigManager } from '../config/index.ts';
 import type { ToolRegistry } from '../tools/registry.ts';
 import type { SelectionItem, SelectionResult, SelectionAction } from './selection-modal.ts';
+import type { FileUndoManager } from '../state/file-undo.ts';
 
 /**
  * CommandContext - Passed to every slash command handler so commands can
@@ -59,6 +61,10 @@ export interface CommandContext {
   openProfilePicker?: () => void;
   /** Registry of all available tools. */
   toolRegistry: ToolRegistry;
+  /** MCP server registry — available after startup auto-connect. */
+  mcpRegistry: McpRegistry;
+  /** File-level undo/redo for write and edit tool operations. */
+  fileUndoManager?: FileUndoManager;
   /** Toggle the shortcuts/keyboard overlay. */
   openShortcutsOverlay?: () => void;
   /** Return the current scroll top line of the viewport. */
