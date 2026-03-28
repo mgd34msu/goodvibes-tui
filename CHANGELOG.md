@@ -4,6 +4,78 @@ All notable changes to GoodVibes TUI.
 
 ---
 
+## [0.9.11] — 2026-03-28
+
+### Dynamic Model Catalog
+- Models sourced from models.dev (4,102 models, 105 providers) with 24h TTL cache
+- Benchmark integration from ZeroEval (275 models, 22 scoring dimensions)
+- Auto-provider registration — set an env var, provider auto-configures
+- Catalog-driven SyntheticProvider with tier-isolated failover (free/paid/subscription never cross)
+- "best-free" synthetic model — resolves to highest-benchmarked free model with keys
+- Static BUILTIN_MODEL_REGISTRY removed (~2,500 lines of hardcoded data)
+- Change notifications on catalog refresh (filtered to user's favorites + top benchmarks)
+
+### Enhanced Model Picker
+- Pricing tier filter: Free / Paid / Subscription / All
+- Family grouping: GPT, Claude, Gemini, Llama, Qwen, GLM, MiniMax, DeepSeek, etc.
+- Capability filters: Reasoning, Tool Use, Structured Output, Multimodal, Open Weights
+- Available-only toggle (default on) — only models with configured keys
+- Benchmark sort: SWE-bench, GPQA, composite score
+- Quality tier badges [S/A/B/C] next to model names
+- Pinned/favorite models with star indicator at top
+
+### Favorites & Usage Tracking
+- `/pin` and `/unpin` commands for model favorites
+- Usage history tracking (model, timestamp, count)
+- Favorites persist across sessions
+
+### Context Validation
+- Pre-flight check before provider.chat() — catches context window overflow before provider rejection
+- Auto-compact trigger when context exceeds model limit
+- Clear error with specific token counts and alternative model suggestions
+
+### Cost Tracker Integration
+- Catalog-backed pricing for all models
+- Free models show $0.00 explicitly
+- DEFAULT_PRICING fallback removed
+
+### Roadmap Implementation (all at 10/10)
+- Agent streaming fixes (#1)
+- TS cleanup fixes (#5)
+- CI pipeline hardening (#6)
+- Model picker fixes (#7)
+- Documentation (#20)
+- Test coverage audit (#21)
+- Performance audit plan (#22)
+- Security P0 fixes (#23)
+- Release infrastructure (#24)
+- Plugin/extension system (#25)
+- Keyboard customization (#27)
+- History search fixes (#41)
+- Undo/redo file operations (#42)
+- Context compaction (#43)
+- Graceful degradation fixes (#44)
+- Session export (#46)
+- Semantic diff integration (#49)
+- Dependency ordering (#50)
+
+### Codebase Audit Fixes
+- MCP version hardcode fixed (imports VERSION)
+- Daemon fail-closed auth (was fail-open)
+- All 11 as-any casts eliminated from commands.ts
+- console calls replaced with logger throughout
+- Shallow Object.freeze replaced with structuredClone
+- EventBus error isolation per handler
+- Deep freeze on workflow definitions
+- Shared walkDir utility extracted (DRY)
+- Path validation for TypeScript hooks
+- Context validation with auto-compact
+
+### Documentation
+- Complete docs suite: GETTING-STARTED.md, COMMANDS.md (51 commands), PROVIDERS.md (13 providers), ARCHITECTURE.md, CONFIGURATION.md (42 settings)
+
+---
+
 ## [0.9.10] — 2026-03-26
 
 ### Synthetic Failover Provider
