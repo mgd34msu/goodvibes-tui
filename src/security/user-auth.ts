@@ -18,7 +18,6 @@ interface UserAuthConfig {
 }
 
 const DEFAULT_SESSION_TTL_MS = 3_600_000;
-const DEFAULT_ADMIN_PASSWORD = 'admin';
 
 function toBase64(value: Buffer): string {
   return value.toString('base64');
@@ -28,6 +27,14 @@ function hashPassword(password: string, salt?: Buffer): string {
   const actualSalt = salt ?? randomBytes(16);
   const derived = scryptSync(password, actualSalt, 64);
   return `${toBase64(actualSalt)}:${toBase64(derived)}`;
+}
+
+/**
+ * Generate a cryptographically random one-time password.
+ * Called once on first boot when no users are configured.
+ */
+function generateInitialPassword(): string {
+  return randomBytes(16).toString('hex');
 }
 
 function verifyPassword(password: string, passwordHash: string): boolean {
@@ -48,13 +55,22 @@ export class UserAuthManager {
 
   constructor(config: UserAuthConfig = {}) {
     this.sessionTtlMs = config.sessionTtlMs ?? DEFAULT_SESSION_TTL_MS;
-    const seedUsers = config.users ?? [
-      {
-        username: 'admin',
-        passwordHash: hashPassword(DEFAULT_ADMIN_PASSWORD),
-        roles: ['admin'],
-      },
-    ];
+    const seedUsers = config.users ?? (() => {
+      // No users configured — generate a random one-time admin password.
+      // The password is printed to stderr once so the operator can retrieve it.
+      const initialPassword = generateInitialPassword();
+      process.stderr.write(
+        `[goodvibes] No users configured. Generated initial admin password: ${initialPassword}\n` +
+        `[goodvibes] Change this password immediately via the admin API.\n`,
+      );
+      return [
+        {
+          username: 'admin',
+          passwordHash: hashPassword(initialPassword),
+          roles: ['admin'],
+        },
+      ];
+    })();
 
     for (const user of seedUsers) {
       this.users.set(user.username, user);
