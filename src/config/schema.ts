@@ -31,6 +31,10 @@ export interface PermissionsToolConfig {
   glob?: PermissionAction;        // default: 'allow'
 }
 
+export interface NotificationsConfig {
+  webhookUrls: string[];
+}
+
 export interface GoodVibesConfig {
   display: {
     stream: boolean;            // default: true
@@ -53,6 +57,7 @@ export interface GoodVibesConfig {
     autoCompactThreshold: number; // default: 80
     saveHistory: boolean;       // default: true
     notifyOnComplete: boolean;  // default: true
+    autoSwitchOnProviderFail: boolean; // default: false
   };
   permissions: {
     mode: PermissionMode;       // default: 'prompt'
@@ -80,6 +85,9 @@ export interface GoodVibesConfig {
     // Access via configManager.getCategory('wrfc').gates — not via ConfigKey/ConfigValue.
     gates: Array<{ name: string; command: string; enabled: boolean }>;
   };
+  // NOTE: notifications.webhookUrls is an array and does not fit the scalar-value dot-path config API.
+  // Access via configManager.getCategory('notifications') or mergeCategory('notifications', ...).
+  notifications: NotificationsConfig;
 }
 
 export interface ConfigSetting {
@@ -109,6 +117,7 @@ export type ConfigKey =
   | 'behavior.autoCompactThreshold'
   | 'behavior.saveHistory'
   | 'behavior.notifyOnComplete'
+  | 'behavior.autoSwitchOnProviderFail'
   | 'permissions.mode'
   | 'permissions.tools.read'
   | 'permissions.tools.write'
@@ -163,6 +172,7 @@ export type ConfigValue<K extends ConfigKey> =
   K extends 'behavior.autoCompactThreshold' ? number :
   K extends 'behavior.saveHistory' ? boolean :
   K extends 'behavior.notifyOnComplete' ? boolean :
+  K extends 'behavior.autoSwitchOnProviderFail' ? boolean :
   K extends 'permissions.mode' ? PermissionMode :
   K extends 'permissions.tools.read' ? PermissionAction :
   K extends 'permissions.tools.write' ? PermissionAction :
@@ -222,6 +232,7 @@ export const DEFAULT_CONFIG: GoodVibesConfig = {
     autoCompactThreshold: 80,
     saveHistory: true,
     notifyOnComplete: true,
+    autoSwitchOnProviderFail: false,
   },
   permissions: {
     mode: 'prompt',
@@ -274,6 +285,9 @@ export const DEFAULT_CONFIG: GoodVibesConfig = {
       { name: 'lint', command: 'npx eslint . --max-warnings 0', enabled: true },
       { name: 'build', command: 'npm run build', enabled: false },
     ],
+  },
+  notifications: {
+    webhookUrls: [],
   },
 };
 
@@ -613,5 +627,11 @@ export const CONFIG_SCHEMA: ConfigSetting[] = [
     type: 'boolean',
     default: true,
     description: 'Auto-commit when WRFC chain passes review and quality gates',
+  },
+  {
+    key: 'behavior.autoSwitchOnProviderFail',
+    type: 'boolean',
+    default: false,
+    description: 'Show alternative model suggestion when current provider fails non-transiently',
   },
 ];
