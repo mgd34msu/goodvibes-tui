@@ -3,7 +3,7 @@
 **Project**: goodvibes-tui (Bun-based TypeScript TUI coding agent)  
 **Date**: 2026-03-28  
 **Status**: Planning  
-**Codebase**: ~337 files, ~298 TypeScript, 77 directories
+**Codebase**: ~387 files, ~387 TypeScript, 81 directories
 
 ---
 
@@ -23,7 +23,7 @@ The `main()` function (src/main.ts:245-1329) is a 1,085-line monolith that orche
 | Model limits init | src/providers/model-limits.ts:385-397 | `initModelLimits()` — loads cache, may trigger OpenRouter fetch | High |
 | Scanner (local providers) | src/discovery/scanner.ts:738-778 | `scan()` — network probes to 11 ports across subnets | High |
 | Persisted providers load | src/discovery/scanner.ts:41-57 | `loadPersistedProviders()` — readFileSync | Low |
-| Tool registration | src/tools/index.ts:26-50 | `registerAllTools()` — registers 14 tool modules | Medium |
+| Tool registration | src/tools/index.ts:26-50 | `registerAllTools()` — registers 12 tool modules | Medium |
 | MCP client init | src/mcp/client.ts (369 lines) | Server spawning, capability negotiation | High |
 | MCP registry | src/mcp/registry.ts (171 lines) | Config file reads | Low |
 | Session restore | src/main.ts:164-197 | `loadLastConversation()` — readFileSync + JSON.parse | Medium |
@@ -39,7 +39,7 @@ The `main()` function (src/main.ts:245-1329) is a 1,085-line monolith that orche
 ### Potential Bottlenecks
 
 1. **Scanner network probes**: `scan()` probes 11 known ports across local subnets with 200ms timeout per probe, 50 concurrent max. On networks with multiple interfaces this could take 2-4 seconds.
-2. **Provider registry**: 3,480 lines — largest file in codebase. Construction likely involves significant static data initialization.
+2. **Provider registry**: 3,479 lines — largest file in codebase. Construction likely involves significant static data initialization.
 3. **Model limits fetch**: `fetchOpenRouterModels()` hits `openrouter.ai/api/v1/models` with 15-second timeout. Even with cache, initial fetch blocks.
 4. **MCP server spawning**: Each configured MCP server requires process spawn + stdio handshake.
 5. **Tree-sitter WASM**: Loading WASM modules for 5 language grammars (JS, TS, Python, CSS, JSON) is CPU-intensive.
@@ -83,15 +83,15 @@ console.error(`[startup] ${phaseName}: ${(performance.now() - t0).toFixed(1)}ms`
 
 | File | Sync Call Count | Severity |
 |------|----------------|----------|
-| src/main.ts | 15 | High — startup path |
+| src/main.ts | 18 | High — startup path |
 | src/profiles/manager.ts | 9 | High — called on profile switch |
-| src/discovery/scanner.ts | 13 | Medium — persist/load |
-| src/agents/orchestrator.ts | 13 | High — agent lifecycle |
-| src/agents/wrfc-workmap.ts | 11 | Medium — workmap IO |
-| src/bookmarks/manager.ts | 11 | Medium — bookmark CRUD |
-| src/panels/agent-logs-panel.ts | 7 | Low — panel rendering |
-| src/panels/file-explorer-panel.ts | 6 | Medium — directory listing |
-| src/agents/wrfc-controller.ts | 5 | Medium — WRFC state |
+| src/discovery/scanner.ts | 9 | Medium — persist/load |
+| src/agents/orchestrator.ts | 12 | High — agent lifecycle |
+| src/agents/wrfc-workmap.ts | 7 | Medium — workmap IO |
+| src/bookmarks/manager.ts | 6 | Medium — bookmark CRUD |
+| src/panels/agent-logs-panel.ts | 5 | Low — panel rendering |
+| src/panels/file-explorer-panel.ts | 4 | Medium — directory listing |
+| src/agents/wrfc-controller.ts | 4 | Medium — WRFC state |
 
 ### Potential Bottlenecks
 
@@ -99,7 +99,7 @@ console.error(`[startup] ${phaseName}: ${(performance.now() - t0).toFixed(1)}ms`
 2. **`existsSync` chains**: Multiple sequential existence checks (e.g., checking for config in 5+ locations) add up.
 3. **`writeFileSync` for state persistence**: Session saves, bookmark updates, and workmap writes block the event loop during user interaction.
 4. **`readdirSync` in file explorer panel**: Listing large directories blocks rendering.
-5. **Agent orchestrator sync IO**: 13 sync calls during agent lifecycle management can stall the main loop during multi-agent operations.
+5. **Agent orchestrator sync IO**: 12 sync calls during agent lifecycle management can stall the main loop during multi-agent operations.
 
 ### Measurement Approach
 
@@ -184,12 +184,12 @@ Provider API → chunk parse → event bus → ConversationManager → renderer 
 | Stage | Key Files | Concern |
 |-------|-----------|--------|
 | Provider streaming | src/providers/*.ts | Per-provider SSE/chunk parsing |
-| Synthetic provider | src/providers/synthetic.ts (182 lines) | Failover adds latency |
-| Event dispatch | src/core/event-bus.ts (124 lines) | Synchronous listener invocation |
+| Synthetic provider | src/providers/synthetic.ts (166 lines) | Failover adds latency |
+| Event dispatch | src/core/event-bus.ts (130 lines) | Synchronous listener invocation |
 | Streaming block update | src/core/conversation.ts:239-253 | `updateStreamingBlock()` — re-renders on every chunk |
 | Markdown rendering | src/renderer/markdown.ts:14-154 | `renderMarkdown()` — full re-parse per update |
 | Syntax highlighting | src/renderer/syntax-highlighter.ts:477-491 | `highlight()` — tree-sitter parse per code block |
-| Compositor | src/renderer/compositor.ts (256 lines) | Full frame composition per update |
+| Compositor | src/renderer/compositor.ts (255 lines) | Full frame composition per update |
 | Terminal output | src/main.ts | ANSI escape sequence generation + write |
 
 ### Potential Bottlenecks
@@ -329,7 +329,7 @@ Custom terminal renderer (NOT Ink/React). Direct ANSI escape sequence generation
 
 | Component | File | Lines | Role |
 |-----------|------|-------|------|
-| Compositor | src/renderer/compositor.ts | 256 | Frame composition, dirty tracking |
+| Compositor | src/renderer/compositor.ts | 255 | Frame composition, dirty tracking |
 | Buffer | src/renderer/buffer.ts | 34 | Cell grid (width x height) |
 | Layout | src/renderer/layout.ts | 30 | Panel layout calculation |
 | Markdown | src/renderer/markdown.ts | 665 | Markdown to Cell[] rendering |
@@ -339,7 +339,7 @@ Custom terminal renderer (NOT Ink/React). Direct ANSI escape sequence generation
 | Semantic diff | src/renderer/semantic-diff.ts | ? | Semantic diff with tree-sitter |
 | Tool call | src/renderer/tool-call.ts | ? | Tool call result rendering |
 | Thinking | src/renderer/thinking.ts | ? | Thinking block rendering |
-| 38 renderer files total | src/renderer/*.ts | ~6,750 lines | Various UI components |
+| 38 renderer files total | src/renderer/*.ts | ~6,771 lines | Various UI components |
 
 ### Panels (Hot Render Path)
 
