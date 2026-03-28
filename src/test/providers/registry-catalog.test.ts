@@ -1,27 +1,72 @@
 /**
  * registry-catalog.test.ts
  *
- * Integration tests for Stage 4: catalog-backed model registry.
+ * Integration tests for the catalog-backed model registry.
  * Verifies that getModelRegistry() returns catalog-sourced models,
  * custom providers override catalog entries, discovered servers merge
  * correctly, and the registry handles an empty catalog gracefully.
+ *
+ * Uses _setCatalogForTesting to inject deterministic fixture data —
+ * no network calls are made in tests.
  */
 
-import { describe, it, expect, beforeEach } from 'bun:test';
+import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
 import {
   getModelRegistry,
   _resetProviderRegistryForTesting,
   type ModelDefinition,
 } from '../../providers/registry.ts';
-import { getCatalogModelDefinitions } from '../../providers/model-catalog.ts';
+import {
+  getCatalogModelDefinitions,
+  _setCatalogForTesting,
+  _resetForTest,
+  type CatalogModel,
+  type PricingCatalog,
+} from '../../providers/model-catalog.ts';
+
+// ---------------------------------------------------------------------------
+// Test fixtures — deterministic, no network calls
+// ---------------------------------------------------------------------------
+
+const FIXTURE_MODELS: CatalogModel[] = [
+  // Free tier
+  { id: 'gpt-oss-120b', name: 'GPT OSS 120B', provider: 'OpenAI', pricing: { input: 0, output: 0 }, tier: 'free' },
+
+  // Paid - Anthropic (premium)
+  { id: 'claude-opus-4-6', name: 'Claude Opus 4.6', provider: 'Anthropic', pricing: { input: 15, output: 75 }, tier: 'paid', contextWindow: 200_000 },
+  { id: 'claude-sonnet-4-6', name: 'Claude Sonnet 4.6', provider: 'Anthropic', pricing: { input: 3, output: 15 }, tier: 'paid', contextWindow: 200_000 },
+  { id: 'claude-haiku-4-5', name: 'Claude Haiku 4.5', provider: 'Anthropic', pricing: { input: 0.80, output: 4 }, tier: 'paid', contextWindow: 200_000 },
+
+  // Paid - Google (premium)
+  { id: 'gemini-2.5-pro', name: 'Gemini 2.5 Pro', provider: 'Google', pricing: { input: 1.25, output: 5 }, tier: 'paid', contextWindow: 1_000_000 },
+  { id: 'gemini-3-flash', name: 'Gemini 3 Flash', provider: 'Google', pricing: { input: 0.075, output: 0.30 }, tier: 'paid', contextWindow: 1_000_000 },
+
+  // Paid - OpenAI
+  { id: 'gpt-5.4', name: 'GPT-5.4', provider: 'OpenAI', pricing: { input: 5, output: 15 }, tier: 'paid', contextWindow: 400_000 },
+  { id: 'gpt-5-mini', name: 'GPT-5 Mini', provider: 'OpenAI', pricing: { input: 0.15, output: 0.60 }, tier: 'paid', contextWindow: 128_000 },
+];
+
+const FIXTURE_CATALOG: PricingCatalog = {
+  fetchedAt: Date.now(),
+  models: FIXTURE_MODELS,
+};
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
-/** Reset the module-level state before each test. */
+/** Reset all module-level state before each test. */
 function reset() {
+  _resetForTest();
   _resetProviderRegistryForTesting();
+  // Inject fixture data so tests are deterministic
+  _setCatalogForTesting(FIXTURE_CATALOG);
+}
+
+function resetToEmpty() {
+  _resetForTest();
+  _resetProviderRegistryForTesting();
+  // Leave catalog empty — tests the empty catalog path
 }
 
 // ---------------------------------------------------------------------------
@@ -29,6 +74,9 @@ function reset() {
 // ---------------------------------------------------------------------------
 
 describe('getCatalogModelDefinitions', () => {
+  beforeEach(reset);
+  afterEach(() => { _resetForTest(); _resetProviderRegistryForTesting(); });
+
   it('returns a non-empty array of model definitions', () => {
     const defs = getCatalogModelDefinitions();
     expect(Array.isArray(defs)).toBe(true);
@@ -70,10 +118,9 @@ describe('getCatalogModelDefinitions', () => {
     }
   });
 
-  it('includes known seed models by ID', () => {
+  it('includes known fixture models by ID', () => {
     const defs = getCatalogModelDefinitions();
     const ids = new Set(defs.map((d) => d.id));
-    // Verify several known seed models appear
     expect(ids.has('claude-sonnet-4-6')).toBe(true);
     expect(ids.has('claude-haiku-4-5')).toBe(true);
     expect(ids.has('gemini-2.5-pro')).toBe(true);
@@ -81,7 +128,7 @@ describe('getCatalogModelDefinitions', () => {
 
   it('Google models have multimodal: true', () => {
     const defs = getCatalogModelDefinitions();
-    const googleModels = defs.filter((d) => d.provider === 'google');
+    const googleModels = defs.filter((d) => d.provider === 'Google');
     expect(googleModels.length).toBeGreaterThan(0);
     for (const model of googleModels) {
       expect(model.capabilities.multimodal).toBe(true);
@@ -90,7 +137,7 @@ describe('getCatalogModelDefinitions', () => {
 
   it('Google models have large context windows (>=1M)', () => {
     const defs = getCatalogModelDefinitions();
-    const googleModels = defs.filter((d) => d.provider === 'google');
+    const googleModels = defs.filter((d) => d.provider === 'Google');
     for (const model of googleModels) {
       expect(model.contextWindow).toBeGreaterThanOrEqual(1_000_000);
     }
@@ -98,16 +145,16 @@ describe('getCatalogModelDefinitions', () => {
 
   it('Anthropic models have large context windows (>=200K)', () => {
     const defs = getCatalogModelDefinitions();
-    const anthropicModels = defs.filter((d) => d.provider === 'anthropic');
+    const anthropicModels = defs.filter((d) => d.provider === 'Anthropic');
     expect(anthropicModels.length).toBeGreaterThan(0);
     for (const model of anthropicModels) {
       expect(model.contextWindow).toBeGreaterThanOrEqual(200_000);
     }
   });
 
-  it('free-tier seed models get tier: free', () => {
+  it('free-tier models get tier: free in definitions', () => {
     const defs = getCatalogModelDefinitions();
-    // gpt-oss-120b is in SEED_PRICING_MODELS as tier: free
+    // gpt-oss-120b is injected with tier: free
     const freeModel = defs.find((d) => d.id === 'gpt-oss-120b');
     expect(freeModel).toBeDefined();
     expect(freeModel?.tier).toBe('free');
@@ -135,6 +182,7 @@ describe('getCatalogModelDefinitions', () => {
 
 describe('getModelRegistry — catalog-sourced models', () => {
   beforeEach(reset);
+  afterEach(() => { _resetForTest(); _resetProviderRegistryForTesting(); });
 
   it('returns a non-empty array', () => {
     const models = getModelRegistry();
@@ -198,6 +246,7 @@ describe('getModelRegistry — catalog-sourced models', () => {
 
 describe('getModelRegistry — discovered servers', () => {
   beforeEach(reset);
+  afterEach(() => { _resetForTest(); _resetProviderRegistryForTesting(); });
 
   it('discovered models do not appear before registerDiscoveredProviders is called', () => {
     // After reset, discovered models should be empty
@@ -221,36 +270,33 @@ describe('getModelRegistry — discovered servers', () => {
 // ---------------------------------------------------------------------------
 
 describe('getModelRegistry — empty catalog fallback', () => {
-  beforeEach(reset);
+  beforeEach(resetToEmpty);
+  afterEach(() => { _resetForTest(); _resetProviderRegistryForTesting(); });
 
-  it('registry does not throw when getCatalogModelDefinitions returns data', () => {
-    // This verifies the catalog function is callable and registry handles it
+  it('registry does not throw when catalog is empty', () => {
     expect(() => getModelRegistry()).not.toThrow();
   });
 
-  it('registry returns an array even if catalog returns minimal models', () => {
-    // Basic sanity: registry always returns an array
+  it('registry returns an array even when catalog is empty', () => {
     const result = getModelRegistry();
     expect(Array.isArray(result)).toBe(true);
   });
 
-  it('synthetic models appear in registry from seed catalog', () => {
-    // Synthetic provider models defined in the seed catalog should
-    // appear in the registry even when catalog is seed-only
-    const models = getModelRegistry();
-    const syntheticModels = models.filter((m) => m.provider === 'synthetic');
-    // The seed catalog defines failover models — there should be at least some
-    // Even without catalog-backed auto-detection, manual definitions persist
-    // (synthetic models may or may not appear depending on registry merge logic)
-    expect(Array.isArray(syntheticModels)).toBe(true);
+  it('getCatalogModelDefinitions returns empty array when catalog is empty', () => {
+    const defs = getCatalogModelDefinitions();
+    expect(Array.isArray(defs)).toBe(true);
+    expect(defs.length).toBe(0);
   });
 });
 
 // ---------------------------------------------------------------------------
-// Stage 4 structural verification
+// Structural verification
 // ---------------------------------------------------------------------------
 
-describe('Stage 4 structural verification', () => {
+describe('Structural verification', () => {
+  beforeEach(reset);
+  afterEach(() => { _resetForTest(); _resetProviderRegistryForTesting(); });
+
   it('getCatalogModelDefinitions is the catalog source (not a static array)', () => {
     // Verify the function exists and is callable
     const defs = getCatalogModelDefinitions();

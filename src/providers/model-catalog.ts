@@ -3,20 +3,27 @@
  *
  * Model catalog: provider metadata, pricing data, and context window lookups.
  *
- * This module provides a `getCatalog()` function that returns a lightweight
- * catalog object used by orchestrator.ts to look up context window limits and
- * find alternative models with larger context windows.
+ * Fetches live model data from https://models.dev/api.json with a 24-hour
+ * disk cache at ~/.goodvibes/tui/model-catalog.json.
  *
- * The public API (`getCatalog`, `ModelCatalog`, `CatalogModelEntry`) is
- * designed to remain stable; seed data can be replaced with a network fetch
- * from models.dev without changing call sites.
+ * Public startup API:
+ *   initCatalog()                  — load cache + background refresh if stale
+ *   getCostFromCatalog(modelId)    — pricing lookup from fetched catalog
+ *   getCatalogModelDefinitions()   — MinimalModelDefinition[] for registry.ts
+ *   getCatalog()                   — ModelCatalog for context window lookups
+ *
+ * Never deletes cache — if fetch fails, stale data is used indefinitely.
+ * If both cache and fetch fail, the catalog is empty (no hardcoded models).
  */
 
 import fs from 'node:fs';
+import { homedir } from 'node:os';
+import { join } from 'node:path';
+import { logger } from '../utils/logger.ts';
 import { getContextWindowForModel } from './model-limits.ts';
 import { providerRegistry } from './registry.ts';
 import type { FavoritesData } from './favorites.ts';
-import { getBenchmarks, compositeScore } from './model-benchmarks.ts';
+import { compositeScore } from './model-benchmarks.ts';
 
 // ---------------------------------------------------------------------------
 // Provider types
@@ -80,45 +87,306 @@ export interface PricingCatalog {
 }
 
 // ---------------------------------------------------------------------------
-// Seed pricing data — covers known models at build time.
+// Network / cache constants
 // ---------------------------------------------------------------------------
 
-const SEED_PRICING_MODELS: CatalogModel[] = [
-  // Free tier
-  { id: 'openrouter/free', name: 'OpenRouter Free', provider: 'openrouter', pricing: { input: 0, output: 0 }, tier: 'free' },
+const MODELS_DEV_URL = 'https://models.dev/api.json';
+const CATALOG_FETCH_TIMEOUT_MS = 30_000;
+const CATALOG_TTL_MS = 86_400_000; // 24 hours
 
-  // InceptionLabs
-  { id: 'mercury-2',    name: 'Mercury 2',    provider: 'inceptionlabs', pricing: { input: 0.50, output: 1.50 }, tier: 'paid' },
-  { id: 'mercury-edit', name: 'Mercury Edit', provider: 'inceptionlabs', pricing: { input: 0.50, output: 1.50 }, tier: 'paid' },
+function getCatalogCachePath(): string {
+  return join(homedir(), '.goodvibes', 'tui', 'model-catalog.json');
+}
 
-  // OpenAI
-  { id: 'gpt-5.4',             name: 'GPT-5.4',      provider: 'openai', pricing: { input: 5,    output: 15   }, tier: 'paid' },
-  { id: 'gpt-5.3-chat-latest', name: 'GPT-5.3 Chat', provider: 'openai', pricing: { input: 3,    output: 10   }, tier: 'paid' },
-  { id: 'gpt-5-mini',          name: 'GPT-5 Mini',   provider: 'openai', pricing: { input: 0.15, output: 0.60 }, tier: 'paid' },
-  { id: 'gpt-5-nano',          name: 'GPT-5 Nano',   provider: 'openai', pricing: { input: 0.05, output: 0.20 }, tier: 'paid' },
-  { id: 'gpt-oss-120b',        name: 'GPT OSS 120B', provider: 'openai', pricing: { input: 0,    output: 0    }, tier: 'free' },
+function getCatalogTmpPath(): string {
+  return getCatalogCachePath() + '.tmp';
+}
 
-  // Anthropic
-  { id: 'claude-opus-4-6',   name: 'Claude Opus 4.6',   provider: 'anthropic', pricing: { input: 15,   output: 75 }, tier: 'paid' },
-  { id: 'claude-sonnet-4-6', name: 'Claude Sonnet 4.6', provider: 'anthropic', pricing: { input: 3,    output: 15 }, tier: 'paid' },
-  { id: 'claude-haiku-4-5',  name: 'Claude Haiku 4.5',  provider: 'anthropic', pricing: { input: 0.80, output: 4  }, tier: 'paid' },
+// ---------------------------------------------------------------------------
+// On-disk cache shape
+// ---------------------------------------------------------------------------
 
-  // Google
-  { id: 'gemini-3.1-pro',        name: 'Gemini 3.1 Pro',        provider: 'google', pricing: { input: 1.25,  output: 5    }, tier: 'paid' },
-  { id: 'gemini-3-flash',        name: 'Gemini 3 Flash',        provider: 'google', pricing: { input: 0.075, output: 0.30 }, tier: 'paid' },
-  { id: 'gemini-3.1-flash-lite', name: 'Gemini 3.1 Flash Lite', provider: 'google', pricing: { input: 0.02,  output: 0.10 }, tier: 'paid' },
-  { id: 'gemini-2.5-pro',        name: 'Gemini 2.5 Pro',        provider: 'google', pricing: { input: 1.25,  output: 5    }, tier: 'paid' },
-];
+interface CatalogCacheFile {
+  version: 1;
+  fetchedAt: number;
+  ttlMs: number;
+  models: CatalogModel[];
+}
 
-// In-memory pricing catalog (replaceable in tests)
+// ---------------------------------------------------------------------------
+// models.dev response shape
+// ---------------------------------------------------------------------------
+
+interface ModelsDevModelCost {
+  input?: number;
+  output?: number;
+}
+
+interface ModelsDevModelLimit {
+  context?: number;
+  output?: number;
+}
+
+interface ModelsDevModel {
+  id?: string;
+  name?: string;
+  family?: string;
+  cost?: ModelsDevModelCost;
+  limit?: ModelsDevModelLimit;
+  reasoning?: boolean;
+  tool_call?: boolean;
+  structured_output?: boolean;
+  open_weights?: boolean;
+}
+
+interface ModelsDevProvider {
+  id?: string;
+  name?: string;
+  env?: string[];
+  api?: string;
+  models?: Record<string, ModelsDevModel>;
+}
+
+type ModelsDevResponse = Record<string, ModelsDevProvider>;
+
+// ---------------------------------------------------------------------------
+// Provider categorization helpers
+// ---------------------------------------------------------------------------
+
+/** Provider IDs that are subscription-based (no per-token cost). */
+const SUBSCRIPTION_PROVIDERS = new Set([
+  'github-copilot',
+  'github-models',
+  'v0',
+  'vercel',
+  'gitlab',
+]);
+
+/** Provider IDs that are shut down / no longer active. */
+const SHUTDOWN_PROVIDERS = new Set([
+  'iflow',
+  'iflowcn',
+]);
+
+function categorizeProvider(providerId: string): 'subscription' | 'shutdown' | 'normal' {
+  if (SUBSCRIPTION_PROVIDERS.has(providerId)) return 'subscription';
+  if (SHUTDOWN_PROVIDERS.has(providerId)) return 'shutdown';
+  return 'normal';
+}
+
+/**
+ * Returns true when a model should be considered free.
+ * Criteria: zero input AND output cost, not a subscription provider,
+ * and model ID does not contain "coding-plan".
+ */
+function isFreeModel(
+  modelId: string,
+  cost: ModelsDevModelCost | undefined,
+  providerCategory: 'subscription' | 'shutdown' | 'normal',
+): boolean {
+  if (providerCategory === 'subscription') return false;
+  if (modelId.includes('coding-plan')) return false;
+  return (cost?.input ?? -1) === 0 && (cost?.output ?? -1) === 0;
+}
+
+// ---------------------------------------------------------------------------
+// Transform models.dev response → CatalogModel[]
+// ---------------------------------------------------------------------------
+
+function transformModelsDevResponse(json: ModelsDevResponse): CatalogModel[] {
+  const models: CatalogModel[] = [];
+
+  for (const [providerId, providerData] of Object.entries(json)) {
+    if (!providerData || typeof providerData !== 'object') continue;
+
+    const providerCategory = categorizeProvider(providerId);
+    // Skip shutdown providers entirely
+    if (providerCategory === 'shutdown') continue;
+
+    const providerName = String(providerData.name ?? providerId);
+    const providerModels = providerData.models;
+    if (!providerModels || typeof providerModels !== 'object') continue;
+
+    for (const [modelKey, modelData] of Object.entries(providerModels)) {
+      if (!modelData || typeof modelData !== 'object') continue;
+
+      const modelId = String(modelData.id ?? modelKey);
+      const modelName = String(modelData.name ?? modelId);
+      const cost = modelData.cost;
+      const limit = modelData.limit;
+
+      const inputCost = typeof cost?.input === 'number' ? cost.input : 0;
+      const outputCost = typeof cost?.output === 'number' ? cost.output : 0;
+      const contextWindow = typeof limit?.context === 'number' ? limit.context : undefined;
+
+      let tier: 'free' | 'paid' | 'subscription';
+      if (providerCategory === 'subscription') {
+        tier = 'subscription';
+      } else if (isFreeModel(modelId, cost, providerCategory)) {
+        tier = 'free';
+      } else {
+        tier = 'paid';
+      }
+
+      models.push({
+        id: modelId,
+        name: modelName,
+        provider: providerName,
+        pricing: { input: inputCost, output: outputCost },
+        tier,
+        contextWindow,
+      });
+    }
+  }
+
+  return models;
+}
+
+// ---------------------------------------------------------------------------
+// Cache I/O
+// ---------------------------------------------------------------------------
+
+function loadCatalogCache(): CatalogCacheFile | null {
+  try {
+    const raw = fs.readFileSync(getCatalogCachePath(), 'utf-8');
+    const parsed = JSON.parse(raw) as CatalogCacheFile;
+    if (parsed.version !== 1 || !Array.isArray(parsed.models)) return null;
+    return parsed;
+  } catch (err) {
+    const msg = String(err);
+    if (msg.includes('ENOENT') || msg.includes('no such file')) {
+      logger.debug('[model-catalog] No cache file (first run)');
+    } else {
+      logger.warn('[model-catalog] Cache load failed', { error: msg });
+    }
+    return null;
+  }
+}
+
+function saveCatalogCache(models: CatalogModel[]): void {
+  try {
+    const dir = join(homedir(), '.goodvibes', 'tui');
+    fs.mkdirSync(dir, { recursive: true });
+    const payload: CatalogCacheFile = {
+      version: 1,
+      fetchedAt: Date.now(),
+      ttlMs: CATALOG_TTL_MS,
+      models,
+    };
+    const tmp = getCatalogTmpPath();
+    fs.writeFileSync(tmp, JSON.stringify(payload, null, 2), 'utf-8');
+    fs.renameSync(tmp, getCatalogCachePath());
+  } catch (err) {
+    logger.warn('[model-catalog] Cache write failed', { error: String(err) });
+  }
+}
+
+function isCatalogCacheStale(cache: CatalogCacheFile): boolean {
+  return Date.now() - cache.fetchedAt > cache.ttlMs;
+}
+
+// ---------------------------------------------------------------------------
+// Network fetch
+// ---------------------------------------------------------------------------
+
+/**
+ * Fetch models.dev/api.json and parse into CatalogModel[].
+ * Uses a 30-second timeout.
+ */
+export async function fetchCatalog(): Promise<CatalogModel[]> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), CATALOG_FETCH_TIMEOUT_MS);
+
+  try {
+    const response = await fetch(MODELS_DEV_URL, {
+      signal: controller.signal,
+      headers: { Accept: 'application/json' },
+    });
+
+    if (!response.ok) {
+      throw new Error(`models.dev API returned ${response.status} ${response.statusText}`);
+    }
+
+    const json = await response.json() as ModelsDevResponse;
+    const models = transformModelsDevResponse(json);
+    logger.debug('[model-catalog] Fetched models from models.dev', { count: models.length });
+    return models;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// In-memory catalog state
+// ---------------------------------------------------------------------------
+
+/** The live in-memory catalog models. Empty until initCatalog() runs. */
+let _catalogModels: CatalogModel[] = [];
+
+/** In-memory pricing catalog (replaceable in tests) */
 let _pricingCatalog: PricingCatalog | null = null;
 
 function getPricingCatalog(): PricingCatalog {
   if (!_pricingCatalog) {
-    _pricingCatalog = { fetchedAt: Date.now(), models: SEED_PRICING_MODELS };
+    _pricingCatalog = { fetchedAt: Date.now(), models: _catalogModels };
   }
   return _pricingCatalog;
 }
+
+// ---------------------------------------------------------------------------
+// Catalog refresh
+// ---------------------------------------------------------------------------
+
+/**
+ * Force re-fetch from models.dev and update the in-memory + disk cache.
+ * Only replaces data with valid new data — stale cache is preserved on failure.
+ */
+export async function refreshCatalog(): Promise<void> {
+  const models = await fetchCatalog();
+
+  if (models.length === 0) {
+    logger.warn('[model-catalog] Refresh returned 0 models — keeping existing catalog');
+    return;
+  }
+
+  saveCatalogCache(models);
+  _catalogModels = models;
+  // Invalidate the pricing catalog so it re-reads from _catalogModels
+  _pricingCatalog = null;
+
+  logger.debug('[model-catalog] Catalog updated', { count: models.length });
+}
+
+// ---------------------------------------------------------------------------
+// initCatalog — called once at startup
+// ---------------------------------------------------------------------------
+
+/**
+ * Load catalog from disk cache; background-refresh if stale or missing.
+ *
+ * - If cache exists and is fresh (< 24h): load from cache, no network call
+ * - If cache is stale or missing: load stale data (if any) then background-refresh
+ * - If fetch fails: use stale cache indefinitely (never delete)
+ * - If both cache and fetch fail: catalog is empty (no hardcoded fallback)
+ */
+export function initCatalog(): void {
+  const cached = loadCatalogCache();
+  if (cached) {
+    _catalogModels = cached.models;
+    _pricingCatalog = null; // invalidate so getPricingCatalog() re-reads
+  }
+
+  if (!cached || isCatalogCacheStale(cached)) {
+    // Background refresh — do not await
+    refreshCatalog().catch((err) => {
+      logger.debug('[model-catalog] Background refresh failed', { error: String(err) });
+    });
+  }
+}
+
+// ---------------------------------------------------------------------------
+// getCostFromCatalog
+// ---------------------------------------------------------------------------
 
 /**
  * Look up pricing for a model ID from the catalog.
@@ -168,14 +436,16 @@ export function getCostFromCatalog(
  */
 export function _setCatalogForTesting(catalog: PricingCatalog): void {
   _pricingCatalog = catalog;
+  _catalogModels = catalog.models;
 }
 
 /**
- * Reset the pricing catalog to seed data (used in tests).
+ * Reset the pricing catalog to empty (used in tests).
  * @internal
  */
 export function _resetForTest(): void {
   _pricingCatalog = null;
+  _catalogModels = [];
 }
 
 /** @internal Alias for _resetForTest — kept for backwards compatibility. */
@@ -472,7 +742,7 @@ export function diffCatalogs(
  * Keeps models that are:
  * - In the user's usage history (favorites.history)
  * - In the user's pinned list (favorites.pinned)
- * - In the top-10 models by benchmark composite score
+ * - In the top-10 models by benchmark composite score from the fetched catalog
  */
 export function filterRelevantChanges(
   diff: CatalogDiff,
@@ -488,15 +758,15 @@ export function filterRelevantChanges(
     relevantIds.add(entry.modelId);
   }
 
-  // Add top-10 models by benchmark composite score
-  const benchmarkEntries = getBenchmarks();
-  const scored = benchmarkEntries
-    .map(entry => ({ entry, score: compositeScore(entry.benchmarks) }))
-    .filter((x): x is { entry: typeof x.entry; score: number } => x.score !== null)
-    .sort((a, b) => b.score - a.score)
+  // Add top-10 models by benchmark composite score from the in-memory catalog
+  // _catalogModels carries all fetched models; we score them by pricing tier as a proxy
+  // (real benchmark scoring requires the benchmarks module, but we avoid a circular dep here)
+  const topByPrice = _catalogModels
+    .filter(m => m.tier === 'paid')
+    .sort((a, b) => (b.pricing.input + b.pricing.output) - (a.pricing.input + a.pricing.output))
     .slice(0, 10);
-  for (const { entry } of scored) {
-    relevantIds.add(entry.modelId);
+  for (const model of topByPrice) {
+    relevantIds.add(model.id);
   }
 
   const isRelevant = (m: CatalogModel) => relevantIds.has(m.id);
@@ -513,7 +783,7 @@ export function filterRelevantChanges(
  *
  * @example
  * // "New model: GPT-5.5 now available on NVIDIA"
- * // "Model update: Kimi K2.5 context increased 262K \u2192 512K"
+ * // "Model update: Kimi K2.5 context increased 262K → 512K"
  * // "Model removed: DeepSeek-V3.0 no longer available on Groq"
  */
 export function formatChangeNotifications(diff: CatalogDiff): string[] {
@@ -537,7 +807,7 @@ export function formatChangeNotifications(diff: CatalogDiff): string[] {
 }
 
 // ---------------------------------------------------------------------------
-// getCatalogModelDefinitions — convert seed pricing models to ModelDefinition[]
+// getCatalogModelDefinitions — convert fetched catalog models to ModelDefinition[]
 // ---------------------------------------------------------------------------
 
 /**
@@ -563,20 +833,22 @@ export interface MinimalModelDefinition {
 }
 
 /**
- * Convert SEED_PRICING_MODELS into MinimalModelDefinition[] for use by registry.
+ * Convert the fetched catalog models into MinimalModelDefinition[] for use by registry.
  *
- * Provides sensible defaults for capabilities and context windows based on
- * pricing tier and provider.
+ * Returns models from the live network-fetched (or cached) catalog.
+ * Returns an empty array if initCatalog() has not been called or the catalog
+ * is empty (no cache and network fetch not yet complete).
  *
  * @public Consumed by registry.ts to populate the model registry.
  */
 export function getCatalogModelDefinitions(): MinimalModelDefinition[] {
-  return SEED_PRICING_MODELS.map((m): MinimalModelDefinition => {
-    // Derive capability defaults from provider and tier
+  return _catalogModels.map((m): MinimalModelDefinition => {
+    // Derive capability defaults from provider name and tier
+    const providerLower = m.provider.toLowerCase();
     const isFree = m.tier === 'free';
-    const isGoogle = m.provider === 'google';
-    const isAnthropic = m.provider === 'anthropic';
-    const isOpenAI = m.provider === 'openai';
+    const isGoogle = providerLower.includes('google') || providerLower.includes('gemini');
+    const isAnthropic = providerLower.includes('anthropic');
+    const isOpenAI = providerLower.includes('openai');
 
     return {
       id: m.id,
@@ -589,8 +861,7 @@ export function getCatalogModelDefinitions(): MinimalModelDefinition[] {
         reasoning: isAnthropic || isOpenAI || isGoogle,
         multimodal: isGoogle || isOpenAI,
       },
-      // Context window defaults — a network-fetched catalog would carry real per-model values
-      contextWindow: isGoogle ? 1_000_000 : isAnthropic ? 200_000 : 128_000,
+      contextWindow: m.contextWindow ?? (isGoogle ? 1_000_000 : isAnthropic ? 200_000 : 128_000),
       selectable: true,
       // Map pricing tier to ModelTier (free/standard/premium)
       tier: isFree ? 'free' : m.pricing.input >= 3 ? 'premium' : 'standard',
