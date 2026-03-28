@@ -9,32 +9,19 @@
  * The service handles missing languages gracefully (returns null).
  */
 
-// @ts-ignore — Bun compile-time file embedding
 import treeSitterWasm from 'web-tree-sitter/web-tree-sitter.wasm' with { type: 'file' };
-
-// @ts-ignore
 import typescriptWasm from 'tree-sitter-typescript/tree-sitter-typescript.wasm' with { type: 'file' };
-
-// @ts-ignore
 import tsxWasm from 'tree-sitter-typescript/tree-sitter-tsx.wasm' with { type: 'file' };
-
-// @ts-ignore
 import javascriptWasm from 'tree-sitter-javascript/tree-sitter-javascript.wasm' with { type: 'file' };
-
-// @ts-ignore
 import pythonWasm from 'tree-sitter-python/tree-sitter-python.wasm' with { type: 'file' };
-
-// @ts-ignore
 import jsonWasm from 'tree-sitter-json/tree-sitter-json.wasm' with { type: 'file' };
-
-// @ts-ignore
 import cssWasm from 'tree-sitter-css/tree-sitter-css.wasm' with { type: 'file' };
 
 /**
  * The embedded path for the core web-tree-sitter WASM module.
  * Pass this to `Parser.init({ locateFile: () => TREE_SITTER_WASM })`.
  */
-export const TREE_SITTER_WASM: string = treeSitterWasm as string;
+export const TREE_SITTER_WASM: string = treeSitterWasm;
 
 /**
  * Map of language ID → embedded WASM path.
@@ -42,10 +29,10 @@ export const TREE_SITTER_WASM: string = treeSitterWasm as string;
  * A missing key means the grammar is not available — the service returns null.
  */
 export const GRAMMAR_WASM: Record<string, string> = {
-  typescript: typescriptWasm as string,
-  tsx: tsxWasm as string,
-  javascript: javascriptWasm as string,
-  python: pythonWasm as string,
-  json: jsonWasm as string,
-  css: cssWasm as string,
+  typescript: typescriptWasm,
+  tsx: tsxWasm,
+  javascript: javascriptWasm,
+  python: pythonWasm,
+  json: jsonWasm,
+  css: cssWasm,
 };
