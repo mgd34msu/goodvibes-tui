@@ -1138,9 +1138,11 @@ export class InputHandler {
               this.modelPicker.close();
             }
           } else if (token.logicalName === 'up') {
-            this.modelPicker.moveUp();
+            const maxVis = Math.max(5, this.getViewportHeight() - 7);
+            this.modelPicker.moveUp(maxVis);
           } else if (token.logicalName === 'down') {
-            this.modelPicker.moveDown();
+            const maxVis = Math.max(5, this.getViewportHeight() - 7);
+            this.modelPicker.moveDown(maxVis);
           } else if (token.logicalName === 'tab' && this.modelPicker.mode === 'model') {
             // Tab cycles category filter: all → free → premium → all
             const cycle: import('./model-picker.ts').CategoryFilter[] = ['all', 'free', 'premium'];

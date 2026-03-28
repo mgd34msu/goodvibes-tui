@@ -106,6 +106,8 @@ export class ModelPickerModal {
   public active = false;
   public mode: PickerMode = 'model';
   public selectedIndex = 0;
+  /** Scroll offset for the visible item window (tracks first visible item index). */
+  public scrollOffset = 0;
   public models: ModelDefinition[] = [];
   public providers: string[] = [];
   public effortLevels: string[] = [];
@@ -169,6 +171,7 @@ export class ModelPickerModal {
     const filtered = this.getFilteredModels();
     const idx = filtered.findIndex(m => m.id === currentModelId);
     this.selectedIndex = idx >= 0 ? idx : 0;
+    this.scrollOffset = 0;
   }
 
   /** Open showing providers first — entry point for /provider */
@@ -182,6 +185,7 @@ export class ModelPickerModal {
     this.capabilityFilter = 'none';
     const idx = providers.indexOf(currentProvider);
     this.selectedIndex = idx >= 0 ? idx : 0;
+    this.scrollOffset = 0;
   }
 
   /** Transition to model list filtered by provider (called from provider mode Enter). */
@@ -192,6 +196,7 @@ export class ModelPickerModal {
     this.categoryFilter = 'all';
     this.capabilityFilter = 'none';
     this.selectedIndex = 0;
+    this.scrollOffset = 0;
   }
 
   /** Transition to effort picker after model is chosen. */
@@ -201,6 +206,7 @@ export class ModelPickerModal {
     this.mode = 'effort';
     const idx = this.effortLevels.indexOf(currentEffort);
     this.selectedIndex = idx >= 0 ? idx : 0;
+    this.scrollOffset = 0;
   }
 
   /** Backward-compat alias for openAllModels (used by existing wiring). */
@@ -216,6 +222,7 @@ export class ModelPickerModal {
     this.providers = [];
     this.pendingModel = null;
     this.selectedIndex = 0;
+    this.scrollOffset = 0;
     this.query = '';
     this.categoryFilter = 'all';
     this.capabilityFilter = 'none';
@@ -398,22 +405,31 @@ export class ModelPickerModal {
     return this.effortLevels.length;
   }
 
-  /** Move selection up (wraps, skips headers). */
-  moveUp(): void {
+  /**
+   * Move selection up (stops at 0 — no wrap to avoid going off-screen).
+   * Updates scrollOffset to keep selection visible.
+   */
+  moveUp(maxVisible = 20): void {
     const count = this.getItemCount();
     if (count === 0) return;
-    this.selectedIndex = this.selectedIndex > 0
-      ? this.selectedIndex - 1
-      : count - 1;
+    if (this.selectedIndex > 0) {
+      this.selectedIndex--;
+      this._scrollToSelection(maxVisible);
+    }
+    // At index 0 — stop. Do NOT wrap to count-1 (that puts selection off-screen).
   }
 
-  /** Move selection down (wraps, skips headers). */
-  moveDown(): void {
+  /**
+   * Move selection down (wraps to 0 at bottom).
+   * Updates scrollOffset to keep selection visible.
+   */
+  moveDown(maxVisible = 20): void {
     const count = this.getItemCount();
     if (count === 0) return;
     this.selectedIndex = this.selectedIndex < count - 1
       ? this.selectedIndex + 1
       : 0;
+    this._scrollToSelection(maxVisible);
   }
 
   /** Get the currently highlighted model, or null if not in model mode / empty. */
@@ -430,8 +446,26 @@ export class ModelPickerModal {
     const count = this.getItemCount();
     if (count === 0) {
       this.selectedIndex = 0;
+      this.scrollOffset = 0;
     } else if (this.selectedIndex >= count) {
       this.selectedIndex = count - 1;
+    }
+    // Clamp scrollOffset too
+    const maxOffset = Math.max(0, count - 1);
+    if (this.scrollOffset > maxOffset) this.scrollOffset = maxOffset;
+  }
+
+  /**
+   * Adjust scrollOffset so selectedIndex is within the visible window [scrollOffset, scrollOffset + maxVisible).
+   * Called after every navigation action.
+   */
+  _scrollToSelection(maxVisible: number): void {
+    if (this.selectedIndex < this.scrollOffset) {
+      // Selection moved above viewport — scroll up
+      this.scrollOffset = this.selectedIndex;
+    } else if (this.selectedIndex >= this.scrollOffset + maxVisible) {
+      // Selection moved below viewport — scroll down
+      this.scrollOffset = this.selectedIndex - maxVisible + 1;
     }
   }
 }

@@ -209,10 +209,10 @@ describe('ModelPickerModal', () => {
       expect(picker.selectedIndex).toBe(1);
     });
 
-    test('moveUp wraps from 0 to last', () => {
+    test('moveUp at 0 stops at 0 (no off-screen wrap)', () => {
       picker.selectedIndex = 0;
       picker.moveUp();
-      expect(picker.selectedIndex).toBe(2);
+      expect(picker.selectedIndex).toBe(0);
     });
 
     test('no movement when list is empty', () => {
@@ -223,7 +223,7 @@ describe('ModelPickerModal', () => {
       expect(picker.selectedIndex).toBe(0);
     });
 
-    test('wraps correctly with single item', () => {
+    test('stays at 0 with single item for both moveDown and moveUp', () => {
       picker.models = [FREE_MODEL];
       picker.selectedIndex = 0;
       picker.moveDown();

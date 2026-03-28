@@ -20,12 +20,22 @@ const MODE_TITLES: Record<string, string> = {
 };
 
 /**
+ * Number of fixed chrome lines in the model-picker overlay (title + search + divider + detail×2 + footer).
+ * Used by callers to compute maxVisible item rows.
+ */
+export const MODEL_PICKER_CHROME_LINES = 7;
+
+/**
  * Render the model picker modal as Line[] for overlay in the viewport.
  * Handles model, provider, and effort modes.
+ *
+ * @param maxVisible - Maximum number of item rows to show (controls the scroll window).
+ *   Derived from viewport height minus chrome lines. Defaults to 20.
  */
 export function renderModelPickerOverlay(
   picker: ModelPickerModal,
   width: number,
+  maxVisible = 20,
 ): Line[] {
   const lines: Line[] = [];
   const boxMargin = 4;
@@ -72,7 +82,7 @@ export function renderModelPickerOverlay(
   const emptyRow = pad + '\u2502' + ' '.repeat(boxW - 2) + '\u2502';
 
   if (picker.mode === 'model') {
-    // ── Model list (grouped by provider) ───────────────────────────────────────────
+    // ── Model list (grouped, with scroll window) ────────────────────────────────────
     const filtered = picker.getFilteredModels();
     if (filtered.length === 0) {
       const msg = picker.query.length > 0
@@ -81,11 +91,25 @@ export function renderModelPickerOverlay(
       const noModels = pad + '\u2502 ' + msg.padEnd(contentW) + ' \u2502';
       lines.push(UIFactory.stringToLine(noModels, width, { fg: '244', dim: true }));
     } else {
-      let selIdx = 0; // tracks index into filtered (not grouped) for selectedIndex comparison
-      let lastProvider = '';
+      // Determine the visible slice [scrollOffset, scrollOffset + maxVisible)
+      const scrollOffset = Math.max(0, Math.min(picker.scrollOffset, Math.max(0, filtered.length - maxVisible)));
+      const visibleEnd = Math.min(filtered.length, scrollOffset + maxVisible);
+      const visibleModels = filtered.slice(scrollOffset, visibleEnd);
 
-      for (const model of filtered) {
-        // Provider group header
+      // Scroll indicators
+      if (scrollOffset > 0) {
+        const upHint = pad + '\u2502' + (` \u25b4 ${scrollOffset} more above`).padEnd(boxW - 2) + '\u2502';
+        lines.push(UIFactory.stringToLine(upHint, width, { fg: '240', dim: true }));
+      }
+
+      let lastProvider = '';
+      // Track the absolute index for provider header grouping
+      for (let i = 0; i < visibleModels.length; i++) {
+        const model = visibleModels[i];
+        const absIdx = scrollOffset + i; // index into filtered[] for selectedIndex comparison
+
+        // Provider group header — show when provider changes within the visible window
+        // For the first visible item, always check if header is needed
         if (model.provider !== lastProvider) {
           const headerText = ' \u25e4 ' + model.provider;
           const headerRow = pad + '\u2502' + headerText.padEnd(boxW - 2) + '\u2502';
@@ -93,7 +117,7 @@ export function renderModelPickerOverlay(
           lastProvider = model.provider;
         }
 
-        const isSelected = selIdx === picker.selectedIndex;
+        const isSelected = absIdx === picker.selectedIndex;
         const indicator = isSelected ? '\u25b6 ' : '  ';
 
         // Quality tier badge: [S] / [A] / [B] / [C]
@@ -122,8 +146,12 @@ export function renderModelPickerOverlay(
           bold: isSelected,
           bg: isSelected ? '#1a2a3a' : '',
         }));
+      }
 
-        selIdx++;
+      if (visibleEnd < filtered.length) {
+        const remaining2 = filtered.length - visibleEnd;
+        const downHint = pad + '\u2502' + (` \u25be ${remaining2} more below`).padEnd(boxW - 2) + '\u2502';
+        lines.push(UIFactory.stringToLine(downHint, width, { fg: '240', dim: true }));
       }
     }
 

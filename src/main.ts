@@ -28,7 +28,7 @@ import type { PermissionRequest } from './permissions/prompt.ts';
 import { CommandRegistry } from './input/command-registry.ts';
 import type { CommandContext } from './input/command-registry.ts';
 import { renderFilePickerOverlay } from './renderer/file-picker-overlay.ts';
-import { renderModelPickerOverlay } from './renderer/model-picker-overlay.ts';
+import { renderModelPickerOverlay, MODEL_PICKER_CHROME_LINES } from './renderer/model-picker-overlay.ts';
 import { renderSearchOverlay } from './renderer/search-overlay.ts';
 import { renderHistorySearchOverlay } from './renderer/history-search-overlay.ts';
 import { renderProcessIndicator } from './renderer/process-indicator.ts';
@@ -54,7 +54,7 @@ import { renderAgentDetailModal } from './renderer/agent-detail-modal.ts';
 import { renderLiveTailModal } from './renderer/live-tail-modal.ts';
 import { renderContextInspector } from './renderer/context-inspector.ts';
 import { renderAutocompleteOverlay } from './renderer/autocomplete-overlay.ts';
-import { scan, loadPersistedProviders, persistProviders, removePersistedProviders } from './discovery/index.ts';
+import { scan, loadPersistedProviders, persistProviders, removePersistedProviders, scanMcpServers } from './discovery/index.ts';
 import { getSessionManager } from './sessions/manager.ts';
 import type { SessionMeta } from './sessions/manager.ts';
 import { logger } from './utils/logger.ts';
@@ -546,10 +546,30 @@ async function main() {
   orchestrator.registerDelegateTool(acpManager);
 
   // --- MCP server auto-discovery ---
+  // Step 1: Connect to all servers already declared in config files.
   // Non-blocking: connectAll catches per-server errors internally.
   mcpRegistry.connectAll(config.workingDir ?? process.cwd()).catch((err) => {
     logger.debug('MCP auto-connect failed (non-fatal)', { error: String(err) });
   });
+
+  // Step 2: Scan common locations for undiscovered MCP servers and suggest them.
+  // Runs after a short delay so the initial connection attempt has started.
+  setTimeout(() => {
+    const workDir = config.workingDir ?? process.cwd();
+    const registeredNames = new Set(mcpRegistry.serverNames);
+    scanMcpServers(workDir, registeredNames).then((result) => {
+      if (result.suggestions.length === 0) return;
+      for (const suggestion of result.suggestions) {
+        conversation.addSystemMessage(
+          `[MCP] Discovered server '${suggestion.name}' (${suggestion.command} ${(suggestion.args ?? []).join(' ')}).` +
+          ` Add it to .goodvibes/mcp.json or ~/.config/mcp/mcp.json to enable it.`
+        );
+      }
+      bus.emit('render:request');
+    }).catch((err) => {
+      logger.debug('MCP auto-discovery scan failed (non-fatal)', { error: String(err) });
+    });
+  }, 2000);
 
   // --- Panel manager ---
   const panelManager = getPanelManager();
@@ -885,7 +905,8 @@ async function main() {
     }
 
     if (input.modelPicker.active) {
-      const mpLines = renderModelPickerOverlay(input.modelPicker, width);
+      const mpMaxVisible = Math.max(5, vHeight - MODEL_PICKER_CHROME_LINES);
+      const mpLines = renderModelPickerOverlay(input.modelPicker, width, mpMaxVisible);
       const mpStart = Math.max(0, vHeight - mpLines.length);
       viewport.length = Math.min(viewport.length, mpStart);
       while (viewport.length < mpStart) viewport.push(createEmptyLine(width));
