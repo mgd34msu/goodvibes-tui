@@ -11,30 +11,30 @@
 
 ### What Runs at Startup
 
-The `main()` function (src/main.ts:245-1315) is a 1,070-line monolith that orchestrates all initialization sequentially.
+The `main()` function (src/main.ts:245-1329) is a 1,085-line monolith that orchestrates all initialization sequentially.
 
 | Step | File | Function | Est. Impact |
 |------|------|----------|-------------|
-| Config load | src/config/manager.ts (320 lines) | ConfigManager constructor, readFileSync calls | Medium |
+| Config load | src/config/manager.ts (319 lines) | ConfigManager constructor, readFileSync calls | Medium |
 | API key resolution | src/config/index.ts:132-179 | `resolveApiKeys()` — async, reads env + secrets | Low |
 | Secret store | src/config/secrets.ts | Keychain/file reads | Medium |
 | System prompt load | src/main.ts:86-90 | `loadSystemPrompt()` | Low |
-| Provider registry init | src/providers/registry.ts (3,480 lines) | Provider construction, built-in model defs | High |
+| Provider registry init | src/providers/registry.ts (3,479 lines) | Provider construction, built-in model defs | High |
 | Model limits init | src/providers/model-limits.ts:385-397 | `initModelLimits()` — loads cache, may trigger OpenRouter fetch | High |
 | Scanner (local providers) | src/discovery/scanner.ts:738-778 | `scan()` — network probes to 11 ports across subnets | High |
 | Persisted providers load | src/discovery/scanner.ts:41-57 | `loadPersistedProviders()` — readFileSync | Low |
 | Tool registration | src/tools/index.ts:26-50 | `registerAllTools()` — registers 14 tool modules | Medium |
-| MCP client init | src/mcp/client.ts (370 lines) | Server spawning, capability negotiation | High |
-| MCP registry | src/mcp/registry.ts (172 lines) | Config file reads | Low |
+| MCP client init | src/mcp/client.ts (369 lines) | Server spawning, capability negotiation | High |
+| MCP registry | src/mcp/registry.ts (171 lines) | Config file reads | Low |
 | Session restore | src/main.ts:164-197 | `loadLastConversation()` — readFileSync + JSON.parse | Medium |
 | Recovery file check | src/main.ts:221-243 | `checkRecoveryFile()` — readFileSync | Low |
 | Project index load | src/state/project-index.ts:91-109 | `ProjectIndex.load()` — async file read + tree parse | Medium |
 | File watcher setup | src/state/file-watcher.ts:78-107 | `FileWatcher.start()` — fs.watch on config files | Low |
 | Hook dispatcher init | src/hooks/dispatcher.ts | Hook chain registration | Low |
-| Import graph build | src/intelligence/import-graph.ts:148-196 | `ImportGraph.build()` — walks entire project tree | High |
+| Import graph build | src/intelligence/import-graph.ts:150-199 | `ImportGraph.build()` — walks entire project tree | High |
 | Tree-sitter init | src/intelligence/tree-sitter/service.ts | WASM module loading | High |
 | LSP server spawn | src/intelligence/lsp/service.ts | Binary download check + process spawn | High |
-| Splash screen render | src/core/conversation.ts:616-647 | `addSplashScreen()` | Low |
+| Splash screen render | src/core/conversation.ts:613-644 | `addSplashScreen()` | Low |
 
 ### Potential Bottlenecks
 
@@ -84,7 +84,7 @@ console.error(`[startup] ${phaseName}: ${(performance.now() - t0).toFixed(1)}ms`
 | File | Sync Call Count | Severity |
 |------|----------------|----------|
 | src/main.ts | 15 | High — startup path |
-| src/profiles/manager.ts | 15 | High — called on profile switch |
+| src/profiles/manager.ts | 9 | High — called on profile switch |
 | src/discovery/scanner.ts | 13 | Medium — persist/load |
 | src/agents/orchestrator.ts | 13 | High — agent lifecycle |
 | src/agents/wrfc-workmap.ts | 11 | Medium — workmap IO |
@@ -128,18 +128,18 @@ console.error(`[startup] ${phaseName}: ${(performance.now() - t0).toFixed(1)}ms`
 
 | Structure | Location | Growth Pattern |
 |-----------|----------|----------------|
-| `messages: Message[]` | src/core/conversation.ts:64 | Unbounded — grows with conversation |
+| `messages: Message[]` | src/core/conversation.ts:61 | Unbounded — grows with conversation |
 | `history: InfiniteBuffer` (Line[]) | src/core/history.ts:7 | Unbounded — rendered lines accumulate |
-| `undoStack: Message[][]` | src/core/conversation.ts:83 | O(n) conversation snapshots |
-| `branches: Map<string, Message[]>` | src/core/conversation.ts:85 | Per-branch full message copies |
-| `blockRegistry: BlockMeta[]` | src/core/conversation.ts:77 | One per collapsible block |
-| `collapseState: Map<string, boolean>` | src/core/conversation.ts:75 | One per block |
-| `imports: ImportsMap` | src/intelligence/import-graph.ts:116 | O(files) — up to 5,000 entries |
-| `dependents: DependentsMap` | src/intelligence/import-graph.ts:119 | O(files * avg_imports) |
+| `undoStack: Message[][]` | src/core/conversation.ts:80 | O(n) conversation snapshots |
+| `branches: Map<string, Message[]>` | src/core/conversation.ts:82 | Per-branch full message copies |
+| `blockRegistry: BlockMeta[]` | src/core/conversation.ts:74 | One per collapsible block |
+| `collapseState: Map<string, boolean>` | src/core/conversation.ts:72 | One per block |
+| `imports: ImportsMap` | src/intelligence/import-graph.ts:118 | O(files) — up to 5,000 entries |
+| `dependents: DependentsMap` | src/intelligence/import-graph.ts:121 | O(files * avg_imports) |
 | `files: Map<string, number>` | src/state/project-index.ts:52 | O(project_files) |
 | `cache: Map<string, HighlightedLine[]>` | src/renderer/syntax-highlighter.ts:443 | Capped at 200 entries |
-| `compactionEvents: CompactionEvent[]` | src/core/context-compaction.ts:76 | Unbounded — one per compaction |
-| `errorLineRegistry: number[]` | src/core/conversation.ts:79 | O(errors) |
+| `compactionEvents: CompactionEvent[]` | src/core/context-compaction.ts:81 | Unbounded — one per compaction |
+| `errorLineRegistry: number[]` | src/core/conversation.ts:76 | O(errors) |
 
 ### Potential Bottlenecks
 
@@ -184,9 +184,9 @@ Provider API → chunk parse → event bus → ConversationManager → renderer 
 | Stage | Key Files | Concern |
 |-------|-----------|--------|
 | Provider streaming | src/providers/*.ts | Per-provider SSE/chunk parsing |
-| Synthetic provider | src/providers/synthetic.ts (183 lines) | Failover adds latency |
-| Event dispatch | src/core/event-bus.ts (125 lines) | Synchronous listener invocation |
-| Streaming block update | src/core/conversation.ts:242-256 | `updateStreamingBlock()` — re-renders on every chunk |
+| Synthetic provider | src/providers/synthetic.ts (182 lines) | Failover adds latency |
+| Event dispatch | src/core/event-bus.ts (124 lines) | Synchronous listener invocation |
+| Streaming block update | src/core/conversation.ts:239-253 | `updateStreamingBlock()` — re-renders on every chunk |
 | Markdown rendering | src/renderer/markdown.ts:14-154 | `renderMarkdown()` — full re-parse per update |
 | Syntax highlighting | src/renderer/syntax-highlighter.ts:477-491 | `highlight()` — tree-sitter parse per code block |
 | Compositor | src/renderer/compositor.ts (256 lines) | Full frame composition per update |
@@ -194,7 +194,7 @@ Provider API → chunk parse → event bus → ConversationManager → renderer 
 
 ### Potential Bottlenecks
 
-1. **updateStreamingBlock() per chunk**: Every SSE chunk triggers `updateStreamingBlock()` which calls `rebuildHistory()` (line 282-305), which re-renders ALL messages, not just the streaming one.
+1. **updateStreamingBlock() per chunk**: Every SSE chunk triggers `updateStreamingBlock()` which calls `rebuildHistory()` (line 279-302), which re-renders ALL messages, not just the streaming one.
 2. **Markdown re-parse**: `renderMarkdown()` (140 lines of logic) runs on the full accumulated text every chunk, not incrementally.
 3. **Syntax highlighting during streaming**: If a code block is being streamed, `scheduleParse()` fires tree-sitter for every chunk update.
 4. **Event bus synchronous dispatch**: All listeners run synchronously — a slow listener blocks the next chunk.
@@ -229,23 +229,23 @@ Provider API → chunk parse → event bus → ConversationManager → renderer 
 
 | Tool | File | Lines | Key Operations |
 |------|------|-------|----------------|
-| Read | src/tools/read/index.ts | 856 | File read, token counting, line range extraction |
-| Write | src/tools/write/index.ts | 415 | Atomic write (tmpfile + rename), snapshot capture |
-| Edit | src/tools/edit/index.ts | 1,118 | Find/replace, multi-edit, snapshot before/after |
+| Read | src/tools/read/index.ts | 855 | File read, token counting, line range extraction |
+| Write | src/tools/write/index.ts | 414 | Atomic write (tmpfile + rename), snapshot capture |
+| Edit | src/tools/edit/index.ts | 1,117 | Find/replace, multi-edit, snapshot before/after |
 
 ### Undo/Snapshot System
 
 | Component | File | Lines | Purpose |
 |-----------|------|-------|--------|
-| FileUndo | src/state/file-undo.ts | 156 | Stores file content before each write/edit |
-| PersistentStore | src/state/persistent-store.ts | 49 | Generic JSON file persistence |
-| JsonFileStore | src/state/json-file-store.ts | ~50 | JSON file state storage |
+| FileUndo | src/state/file-undo.ts | 158 | Stores file content before each write/edit |
+| PersistentStore | src/state/persistent-store.ts | 48 | Generic JSON file persistence |
+| JsonFileStore | src/state/json-file-store.ts | 42 | JSON file state storage |
 
 ### Potential Bottlenecks
 
 1. **Snapshot capture on every write/edit**: `file-undo.ts` reads the entire file content before modification to store as undo state. For large files (10,000+ lines), this doubles the IO per operation.
 2. **Atomic writes**: Write tool uses tmpfile + rename pattern. On some filesystems, `rename()` across directories triggers a copy instead of a metadata update.
-3. **Edit tool complexity**: At 1,118 lines, the edit tool does find/replace with diff generation. Multi-edit operations (multiple edits to one file) may re-read the file for each edit.
+3. **Edit tool complexity**: At 1,117 lines, the edit tool does find/replace with diff generation. Multi-edit operations (multiple edits to one file) may re-read the file for each edit.
 4. **Read tool token estimation**: Token counting on large files involves scanning the entire content.
 5. **Synchronous file reads in tools**: Some tool operations may use sync reads for simplicity.
 
@@ -286,7 +286,7 @@ Provider API → chunk parse → event bus → ConversationManager → renderer 
 | Webhook notifications | src/integrations/webhooks.ts | On events | Fire-and-forget |
 | Discord/Slack | src/integrations/discord.ts, slack.ts | On events | Fire-and-forget |
 | GitHub | src/integrations/github.ts | On events | API rate limits |
-| MCP stdio | src/mcp/client.ts (370 lines) | Tool calls | Process IPC overhead |
+| MCP stdio | src/mcp/client.ts (369 lines) | Tool calls | Process IPC overhead |
 | ACP connections | src/acp/connection.ts | Agent protocol | WebSocket/HTTP |
 | Daemon HTTP | src/daemon/server.ts, http-listener.ts | External API | Local only |
 
@@ -330,16 +330,16 @@ Custom terminal renderer (NOT Ink/React). Direct ANSI escape sequence generation
 | Component | File | Lines | Role |
 |-----------|------|-------|------|
 | Compositor | src/renderer/compositor.ts | 256 | Frame composition, dirty tracking |
-| Buffer | src/renderer/buffer.ts | 35 | Cell grid (width x height) |
-| Layout | src/renderer/layout.ts | 31 | Panel layout calculation |
-| Markdown | src/renderer/markdown.ts | 666 | Markdown to Cell[] rendering |
-| Syntax highlighter | src/renderer/syntax-highlighter.ts | 553 | Tree-sitter based highlighting |
+| Buffer | src/renderer/buffer.ts | 34 | Cell grid (width x height) |
+| Layout | src/renderer/layout.ts | 30 | Panel layout calculation |
+| Markdown | src/renderer/markdown.ts | 665 | Markdown to Cell[] rendering |
+| Syntax highlighter | src/renderer/syntax-highlighter.ts | 552 | Tree-sitter based highlighting |
 | Code block | src/renderer/code-block.ts | ? | Code block rendering |
 | Diff view | src/renderer/diff-view.ts, diff.ts | ? | Diff rendering |
 | Semantic diff | src/renderer/semantic-diff.ts | ? | Semantic diff with tree-sitter |
 | Tool call | src/renderer/tool-call.ts | ? | Tool call result rendering |
 | Thinking | src/renderer/thinking.ts | ? | Thinking block rendering |
-| 38 renderer files total | src/renderer/*.ts | ~6,350 lines | Various UI components |
+| 38 renderer files total | src/renderer/*.ts | ~6,750 lines | Various UI components |
 
 ### Panels (Hot Render Path)
 
@@ -396,25 +396,25 @@ Custom terminal renderer (NOT Ink/React). Direct ANSI escape sequence generation
 
 | Component | Location | Purpose |
 |-----------|----------|--------|
-| ImportGraph class | src/intelligence/import-graph.ts:112-260 | Singleton, builds/queries dependency graph |
-| collectSourceFiles | src/intelligence/import-graph.ts:83-106 | Recursive directory walk |
-| extractRelativeSpecifiers | src/intelligence/import-graph.ts:43-52 | Regex-based import extraction |
-| resolveSpecifier | src/intelligence/import-graph.ts:58-77 | Path resolution with extension probing |
-| MAX_FILES | src/intelligence/import-graph.ts:30 | Capped at 5,000 files |
-| SUPPORTED_EXTENSIONS | src/intelligence/import-graph.ts:28 | .ts, .tsx, .js, .jsx, .mjs, .cjs |
-| SKIP_DIRS | src/intelligence/import-graph.ts:29 | .git, node_modules, dist, etc. |
+| ImportGraph class | src/intelligence/import-graph.ts:114-263 | Singleton, builds/queries dependency graph |
+| collectSourceFiles | src/intelligence/import-graph.ts:84-108 | Recursive directory walk |
+| extractRelativeSpecifiers | src/intelligence/import-graph.ts:44-53 | Regex-based import extraction |
+| resolveSpecifier | src/intelligence/import-graph.ts:59-78 | Path resolution with extension probing |
+| MAX_FILES | src/intelligence/import-graph.ts:31 | Capped at 5,000 files |
+| SUPPORTED_EXTENSIONS | src/intelligence/import-graph.ts:29 | .ts, .tsx, .js, .jsx, .mjs, .cjs |
+| SKIP_DIRS | src/intelligence/import-graph.ts:30 | .git, node_modules, dist, etc. |
 
 ### Build Process
 
 1. `collectSourceFiles()`: Recursive `readdir` + `stat` to find all source files (up to 5,000)
 2. For each file: `readFile()` + regex extraction of import/export specifiers
-3. For each relative specifier: `resolveSpecifier()` tries up to 6 extension variants with `existsSync`
+3. For each relative specifier: `resolveSpecifier()` tries up to 11 `existsSync` calls (1 initial path check + 6 extension variants + 4 index variants)
 4. Build two Maps: `imports` (file -> Set<imported_files>) and `dependents` (file -> Set<importing_files>)
 
 ### Potential Bottlenecks
 
 1. **5,000 file reads**: At cap, reads 5,000 files sequentially. Even at 1ms per read, that is 5 seconds.
-2. **Extension probing**: `resolveSpecifier()` tries `.ts`, `.tsx`, `.js`, `.jsx`, `/index.ts`, `/index.tsx` — up to 6 `existsSync` calls per specifier. With 10 imports per file and 5,000 files, that is 300,000 `existsSync` calls.
+2. **Extension probing**: `resolveSpecifier()` tries the exact path (existsSync + statSync), then 6 extension variants (`.ts`, `.tsx`, `.js`, `.jsx`, `.mjs`, `.cjs`), then 4 index variants (`index.ts`, `index.tsx`, `index.js`, `index.jsx`) — up to 11 `existsSync` calls per specifier. With 10 imports per file and 5,000 files, that is ~550,000 `existsSync` calls.
 3. **Regex parsing**: `IMPORT_RE` and `REQUIRE_RE` run on every file's full content. Not expensive individually but multiplied by 5,000.
 4. **No incremental rebuild**: `build()` clears and rebuilds from scratch. Even `markDirty()` triggers full rebuild.
 5. **Singleton with dirty flag**: Any file change marks the entire graph dirty, requiring full rebuild.
