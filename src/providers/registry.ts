@@ -3399,6 +3399,21 @@ export class ProviderRegistry {
 
   private _readyPromise: Promise<void> | null = null;
 
+  /**
+   * Find an alternative model when the current provider fails non-transiently.
+   * Prefers a synthetic failover wrapper; falls back to same-tier model on a different provider.
+   */
+  findAlternativeModel(currentModelId: string): ModelDefinition | null {
+    const current = getModelRegistry().find(m => m.id === currentModelId);
+    if (!current || current.provider === 'synthetic') return null;
+    // Check if synthetic wrapper exists
+    const baseName = current.id.split('/').pop() ?? '';
+    const syntheticMatch = getModelRegistry().find(m => m.provider === 'synthetic' && m.id.includes(baseName));
+    if (syntheticMatch) return syntheticMatch;
+    // Find same-tier model on different provider
+    return getModelRegistry().find(m => m.id !== currentModelId && m.provider !== current.provider && m.tier === current.tier && m.selectable) ?? null;
+  }
+
   /** Kick off async custom provider loading. Called once from singleton factory. */
   initCustomProviders(): void {
     this._readyPromise = this.loadCustomProviders()

@@ -2,7 +2,7 @@ import type { ConversationManager } from './conversation.ts';
 import type { EventBus } from './event-bus.ts';
 import type { ToolRegistry } from '../tools/registry.ts';
 import type { ToolCall, ToolResult } from '../types/tools.ts';
-import { PermissionError, ProviderError, ToolError } from '../types/errors.ts';
+import { PermissionError, ProviderError, ToolError, isNonTransientProviderFailure } from '../types/errors.ts';
 import type { HookEvent, HookResult } from '../hooks/types.ts';
 import { formatProviderError } from '../utils/error-display.ts';
 import { providerRegistry } from '../providers/registry.ts';
@@ -509,6 +509,15 @@ export class Orchestrator {
       const error = err instanceof Error ? err : new Error(String(err));
       const msg = error instanceof ProviderError ? formatProviderError(error) : `Error: ${error.message}`;
       this.conversation.addSystemMessage(msg);
+      // Graceful degradation — suggest alternative when provider fails non-transiently
+      const autoSwitch = configManager.get('behavior.autoSwitchOnProviderFail') as boolean;
+      if (autoSwitch && isNonTransientProviderFailure(err)) {
+        const currentModel = providerRegistry.getCurrentModel();
+        const alt = currentModel ? providerRegistry.findAlternativeModel(currentModel.id) : null;
+        if (alt) {
+          this.conversation.addSystemMessage(`[Provider] ${currentModel?.provider ?? 'Unknown'} failed. Alternative available: ${alt.displayName} (${alt.provider}). Use /model to switch.`);
+        }
+      }
       this.bus.emit('turn:error', { error });
     } finally {
       this.stopThinking();

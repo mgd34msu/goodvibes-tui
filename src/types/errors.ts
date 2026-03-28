@@ -69,3 +69,18 @@ export class RenderError extends AppError {
     super(message, 'RENDER_ERROR', true);
   }
 }
+
+/**
+ * Returns true when the error indicates the provider is non-transient
+ * (auth failures, connection refused, host not found, timeout).
+ * Used to trigger graceful degradation / alternative model suggestions.
+ */
+export function isNonTransientProviderFailure(err: unknown): boolean {
+  if (!(err instanceof Error)) return false;
+  if (err instanceof ProviderError) {
+    const NON_TRANSIENT_CODES = new Set([401, 402, 403, 500, 503]);
+    if (err.statusCode !== undefined && NON_TRANSIENT_CODES.has(err.statusCode)) return true;
+  }
+  const msg = err.message.toLowerCase();
+  return msg.includes('econnrefused') || msg.includes('enotfound') || msg.includes('timeout') || msg.includes('fetch failed');
+}
