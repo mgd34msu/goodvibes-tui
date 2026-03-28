@@ -439,7 +439,7 @@ export class DaemonServer {
       }
 
       // Spawn agent async — respond immediately within Slack's 3-second window
-      let responseUrl = event.responseUrl;
+      let responseUrl: string | undefined = event.responseUrl;
       if (responseUrl && !responseUrl.startsWith('https://hooks.slack.com/')) {
         logger.warn('DaemonServer.handleSlackWebhook: suspicious responseUrl, ignoring');
         responseUrl = undefined;

@@ -378,7 +378,7 @@ describe('EventReplayQueue', () => {
       const detach = EventReplayQueue.attachTo(bus, queue);
       bus.emit('subagent:complete', {
         id: 'agent-123',
-        result: { output: 'done', task: '', agentId: 'agent-123', success: true },
+        result: { id: 'agent-123', output: 'done', success: true, toolCallsMade: 0, duration: 0 },
       });
       expect(queue.getStats().queued).toBe(1);
       detach();
@@ -403,7 +403,7 @@ describe('EventReplayQueue', () => {
       detach();
       bus.emit('subagent:complete', {
         id: 'agent-late',
-        result: { output: 'done', task: '', agentId: 'agent-late', success: true },
+        result: { id: 'agent-late', output: 'done', success: true, toolCallsMade: 0, duration: 0 },
       });
       expect(queue.getStats().queued).toBe(0);
     });
@@ -412,7 +412,7 @@ describe('EventReplayQueue', () => {
       const detach = EventReplayQueue.attachTo(bus, queue);
       bus.emit('subagent:complete', {
         id: 'a1',
-        result: { output: 'done', task: '', agentId: 'a1', success: true },
+        result: { id: 'a1', output: 'done', success: true, toolCallsMade: 0, duration: 0 },
       });
       bus.emit('subagent:error', { id: 'a2', error: new Error('x') });
       bus.emit('wrfc:chain-failed', { chainId: 'w1', reason: 'err' });
