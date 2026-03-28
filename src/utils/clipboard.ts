@@ -105,7 +105,7 @@ export function pasteImageFromClipboard(): { data: string; mediaType: string } |
         }
       }
     } else if (process.platform === 'darwin') {
-      // macOS: pngpaste always outputs PNG regardless of source format
+      // macOS: try pngpaste first (brew install pngpaste), then fall back to osascript
       const pp = Bun.spawnSync(['pngpaste', '-'], {
         stdin: 'ignore',
         stdout: 'pipe',
@@ -116,6 +116,28 @@ export function pasteImageFromClipboard(): { data: string; mediaType: string } |
         const ppBuf = Buffer.from(pp.stdout);
         if (ppBuf.length > MIN_IMAGE_BYTES) {
           return { data: ppBuf.toString('base64'), mediaType: 'image/png' };
+        }
+      }
+      // Fallback: osascript — reads clipboard as PNG hex data
+      // Output format: «data PNGf<hex>» — extract hex after 'PNGf'
+      const osa = Bun.spawnSync(
+        ['osascript', '-e', 'the clipboard as «class PNGf»'],
+        {
+          stdin: 'ignore',
+          stdout: 'pipe',
+          stderr: 'ignore',
+          timeout: 5000,
+        },
+      );
+      if (osa.exitCode === 0 && osa.stdout) {
+        const raw = Buffer.from(osa.stdout).toString('utf8').trim();
+        // raw is like: «data PNGf89504e47...»
+        const match = raw.match(/«data PNGf([0-9a-fA-F]+)»/);
+        if (match) {
+          const osaBuf = Buffer.from(match[1], 'hex');
+          if (osaBuf.length > MIN_IMAGE_BYTES) {
+            return { data: osaBuf.toString('base64'), mediaType: 'image/png' };
+          }
         }
       }
     }

@@ -33,6 +33,7 @@ import { pluginManager, type PluginStatus } from '../plugins/manager.ts';
 import { PLUGINS_DIR } from '../plugins/loader.ts';
 import { EFFORT_DESCRIPTIONS } from '../providers/effort-levels.ts';
 import { pinModel, unpinModel, isModelPinned, getPinned, recordUsage } from '../providers/favorites.ts';
+import { GitService } from '../git/service.ts';
 
 let _serviceRegistry: ServiceRegistry | undefined;
 function getServiceRegistry(): ServiceRegistry {
@@ -3405,6 +3406,93 @@ export function registerBuiltinCommands(registry: CommandRegistry): void {
       }
       await unpinModel(modelId);
       ctx.print(`Unpinned: ${modelId}`);
+    },
+  });
+
+  // ── /git ──────────────────────────────────────────────────────────────────
+  registry.register({
+    name: 'git',
+    aliases: ['g'],
+    description: 'Git repository commands — status, log, diff',
+    usage: '[status|log|diff]',
+    argsHint: '[status|log|diff]',
+    async handler(args, ctx) {
+      const sub = args[0] ?? 'status';
+      let git: GitService;
+      try {
+        git = GitService.getInstance(process.cwd());
+      } catch {
+        ctx.print('Git is not available or this directory is not a git repository.');
+        return;
+      }
+
+      switch (sub) {
+        case 'status': {
+          try {
+            const st = await git.status();
+            const lines: string[] = ['Git status:'];
+            if (st.isClean()) {
+              lines.push('  Working tree clean — nothing to commit.');
+            } else {
+              if (st.staged.length > 0) {
+                lines.push(`  Staged (${st.staged.length}):`);
+                for (const f of st.staged) lines.push(`    + ${f}`);
+              }
+              if (st.modified.length > 0) {
+                lines.push(`  Modified (${st.modified.length}):`);
+                for (const f of st.modified) lines.push(`    ~ ${f}`);
+              }
+              if (st.not_added.length > 0) {
+                lines.push(`  Untracked (${st.not_added.length}):`);
+                for (const f of st.not_added) lines.push(`    ? ${f}`);
+              }
+              if (st.deleted.length > 0) {
+                lines.push(`  Deleted (${st.deleted.length}):`);
+                for (const f of st.deleted) lines.push(`    - ${f}`);
+              }
+            }
+            ctx.print(lines.join('\n'));
+          } catch (e) {
+            ctx.print(`Git status failed: ${(e as Error).message}`);
+          }
+          break;
+        }
+        case 'log': {
+          try {
+            const entries = await git.log(10);
+            const lines: string[] = [`Recent commits (${entries.length}):`];
+            for (const entry of entries) {
+              const date = entry.date.slice(0, 10);
+              const hash = entry.hash.slice(0, 7);
+              lines.push(`  ${hash}  ${date}  ${entry.message}`);
+            }
+            ctx.print(lines.join('\n'));
+          } catch (e) {
+            ctx.print(`Git log failed: ${(e as Error).message}`);
+          }
+          break;
+        }
+        case 'diff': {
+          try {
+            const diffText = await git.diff();
+            if (!diffText.trim()) {
+              ctx.print('No unstaged changes.');
+            } else {
+              // Truncate large diffs to keep TUI output manageable
+              const MAX_DIFF = 4000;
+              const output = diffText.length > MAX_DIFF
+                ? diffText.slice(0, MAX_DIFF) + '\n\n...(diff truncated)'
+                : diffText;
+              ctx.print(output);
+            }
+          } catch (e) {
+            ctx.print(`Git diff failed: ${(e as Error).message}`);
+          }
+          break;
+        }
+        default:
+          ctx.print('Usage: /git [status|log|diff]\n  /git          — working tree status (default)\n  /git status   — working tree status\n  /git log      — recent commits\n  /git diff     — unstaged changes');
+      }
     },
   });
 }

@@ -16,6 +16,39 @@ const STATUS_MESSAGES: Record<number, string> = {
 const MAX_ERROR_LENGTH = 200;
 
 /**
+ * Network error patterns for non-HTTP failures.
+ * Checked against error.code and error.message (case-insensitive).
+ */
+const NETWORK_ERROR_PATTERNS: Array<{ pattern: RegExp; message: (provider?: string) => string }> = [
+  {
+    pattern: /ECONNREFUSED/,
+    message: (provider) => `Cannot connect to ${provider ?? 'provider'}. Is the server running?`,
+  },
+  {
+    pattern: /ETIMEDOUT|ECONNABORTED|timed?[\s_-]?out/i,
+    message: () => 'Connection timed out. Check your network.',
+  },
+  {
+    pattern: /ENOTFOUND/,
+    message: (provider) => `DNS lookup failed for ${provider ?? 'provider'}. Check the URL.`,
+  },
+];
+
+/**
+ * getNetworkErrorMessage - Return a human-readable message for a network-level error,
+ * or undefined if the error does not match any known network pattern.
+ */
+function getNetworkErrorMessage(error: ProviderError, provider?: string): string | undefined {
+  const haystack = `${(error as unknown as { code?: string }).code ?? ''} ${error.message}`;
+  for (const entry of NETWORK_ERROR_PATTERNS) {
+    if (entry.pattern.test(haystack)) {
+      return entry.message(provider);
+    }
+  }
+  return undefined;
+}
+
+/**
  * stripJson - Remove raw JSON objects/arrays from an error message string.
  * Keeps human-readable text while stripping machine noise.
  */
@@ -39,7 +72,7 @@ function truncateMessage(msg: string): string {
  * formatProviderError - Format a ProviderError with structured guidance and retry info.
  * Returns a human-readable string suitable for display in the TUI.
  */
-export function formatProviderError(error: ProviderError): string {
+export function formatProviderError(error: ProviderError, provider?: string): string {
   // Prefer status-code-based message over raw error text
   const statusMessage =
     error.statusCode !== undefined ? STATUS_MESSAGES[error.statusCode] : undefined;
@@ -48,9 +81,15 @@ export function formatProviderError(error: ProviderError): string {
   if (statusMessage) {
     msg = statusMessage;
   } else {
-    // Strip raw JSON and truncate the original message
-    const stripped = stripJson(error.message);
-    msg = truncateMessage(stripped || error.message);
+    // Check for network-level errors before falling back to raw message
+    const networkMessage = getNetworkErrorMessage(error, provider);
+    if (networkMessage) {
+      msg = networkMessage;
+    } else {
+      // Strip raw JSON and truncate the original message
+      const stripped = stripJson(error.message);
+      msg = truncateMessage(stripped || error.message);
+    }
   }
 
   // Append provider guidance (e.g. rate limit or auth hint from ProviderError constructor)
