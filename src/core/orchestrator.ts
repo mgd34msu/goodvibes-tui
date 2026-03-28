@@ -171,7 +171,7 @@ export class Orchestrator {
   public async handleUserInput(text: string, content?: ContentPart[]): Promise<void> {
     if (!text.trim() && !content?.length) return;
 
-    if (this.isThinking) {
+    if (this.isThinking || this.isCompacting) {
       this.messageQueue.push({ text, content });
       this.bus.emit('render:request');
       return;
