@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, renameSync, writeFileSync, copyFileSync, unlinkSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync, copyFileSync, unlinkSync } from 'node:fs';
 import { dirname, extname, join, relative, resolve } from 'node:path';
 import { randomBytes } from 'node:crypto';
 import type { Tool, ToolDefinition } from '../../types/tools.ts';
@@ -6,6 +6,7 @@ import { WRITE_SCHEMA, type WriteInput, type WriteFileInput, type WriteMode } fr
 import { resolveAndValidatePath } from '../../utils/path-safety.ts';
 import { FileStateCache } from '../../state/file-cache.ts';
 import { ProjectIndex } from '../../state/project-index.ts';
+import { FileUndoManager } from '../../state/file-undo.ts';
 import { configManager } from '../../config/index.ts';
 import { autoHealer } from '../shared/auto-heal.ts';
 import { logger } from '../../utils/logger.ts';
@@ -238,6 +239,7 @@ function formatOutput(
 export function createWriteTool(options?: {
   fileCache?: FileStateCache;
   projectIndex?: ProjectIndex;
+  fileUndoManager?: FileUndoManager;
 }): Tool {
   const definition: ToolDefinition = {
     name: 'write',
@@ -270,6 +272,24 @@ export function createWriteTool(options?: {
         if (!fileInput.path || typeof fileInput.path !== 'string') {
           errors.push(`Invalid file entry: missing or invalid 'path' field.`);
           continue;
+        }
+
+        // Capture before-content for undo BEFORE the write happens
+        let beforeContent: string | null = null;
+        if (!dryRun && options?.fileUndoManager && fileInput.path) {
+          let resolvedForUndo: string | undefined;
+          try {
+            resolvedForUndo = resolveAndValidatePath(fileInput.path);
+          } catch {
+            resolvedForUndo = undefined;
+          }
+          if (resolvedForUndo && existsSync(resolvedForUndo)) {
+            try {
+              beforeContent = readFileSync(resolvedForUndo, 'utf-8');
+            } catch {
+              beforeContent = null;
+            }
+          }
         }
 
         const outcome = processSingleWrite(fileInput, projectRoot, dryRun);
@@ -337,6 +357,23 @@ export function createWriteTool(options?: {
               options.projectIndex.upsertFile(outcome.result.resolved_path, tokenEstimate);
             } catch (err) {
               logger.debug('write tool: projectIndex.upsertFile failed (non-fatal)', {
+                path: outcome.result.resolved_path,
+                error: String(err),
+              });
+            }
+          }
+
+          // Snapshot for /undo file support
+          if (options?.fileUndoManager) {
+            try {
+              options.fileUndoManager.snapshot({
+                path: outcome.result.resolved_path,
+                beforeContent,
+                afterContent: content,
+                tool: 'write',
+              });
+            } catch (err) {
+              logger.debug('write tool: fileUndoManager.snapshot failed (non-fatal)', {
                 path: outcome.result.resolved_path,
                 error: String(err),
               });

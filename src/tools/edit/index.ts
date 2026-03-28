@@ -1,13 +1,15 @@
 import { readFileSync, writeFileSync } from 'node:fs';
+import { logger } from '../../utils/logger.ts';
 import { recordChange } from '../../sessions/change-tracker.ts';
-import { extname } from 'node:path';
+import { FileUndoManager } from '../../state/file-undo.ts';
+import { extname, relative } from 'node:path';
 import type { Tool, ToolDefinition } from '../../types/tools.ts';
 import { FileStateCache, unifiedDiff } from '../../state/file-cache.ts';
 import { resolveAndValidatePath } from '../../utils/path-safety.ts';
 import { editSchema } from './schema.ts';
 import { autoHealer } from '../shared/auto-heal.ts';
 import * as astGrep from '@ast-grep/napi';
-import { CodeIntelligence } from '../../intelligence/index.ts';
+import { CodeIntelligence, ImportGraph } from '../../intelligence/index.ts';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -734,6 +736,8 @@ function formatOutput(
 export interface EditToolOptions {
   /** Working directory for validator commands. Defaults to process.cwd(). */
   cwd?: string;
+  /** Optional FileUndoManager for /undo file support. */
+  fileUndoManager?: FileUndoManager;
 }
 
 export function createEditTool(fileCache: FileStateCache, options?: EditToolOptions): Tool {
@@ -947,8 +951,8 @@ export function createEditTool(fileCache: FileStateCache, options?: EditToolOpti
     }
 
     // Write successful edits to disk (unless dry run)
+    const writtenPaths = new Set<string>();
     if (!dryRun) {
-      const writtenPaths = new Set<string>();
 
       for (const r of results) {
         if (!r.success) continue;
@@ -963,6 +967,20 @@ export function createEditTool(fileCache: FileStateCache, options?: EditToolOpti
           writeFileSync(resolvedPath, newContent, 'utf-8');
           fileCache.update(resolvedPath, newContent);
           writtenPaths.add(resolvedPath);
+          // Snapshot for /undo file support
+          if (options?.fileUndoManager) {
+            try {
+              const originalContent = fileContents.get(resolvedPath) ?? null;
+              options.fileUndoManager.snapshot({
+                path: resolvedPath,
+                beforeContent: originalContent,
+                afterContent: newContent,
+                tool: 'edit',
+              });
+            } catch {
+              // Non-fatal
+            }
+          }
           // Track for /diff session change view
           recordChange(resolvedPath);
         } catch (err) {
@@ -979,6 +997,63 @@ export function createEditTool(fileCache: FileStateCache, options?: EditToolOpti
     }
 
     const anySuccess = results.some((r) => r.success);
+
+    // Dependency-aware import graph tracing: after writing files, find affected
+    // dependents and surface broken imports immediately via typecheck.
+    let importGraphWarning: string | undefined;
+    if (!dryRun && anySuccess) {
+      try {
+        const graph = ImportGraph.getInstance();
+        graph.markDirty();
+        await graph.build(cwd);
+
+        // Collect all paths that were written
+        const editedAbsPaths = [...writtenPaths];
+
+        // Find dependents across all edited files (union, deduped)
+        const affectedSet = new Set<string>();
+        for (const edited of editedAbsPaths) {
+          for (const dep of graph.findTransitiveDependents(edited)) {
+            affectedSet.add(dep);
+          }
+        }
+        // Remove files that were just edited (they're already validated)
+        for (const edited of editedAbsPaths) {
+          affectedSet.delete(edited);
+        }
+
+        if (affectedSet.size > 0) {
+          // Run tsc targeting only the affected files to detect broken imports
+          const affectedList = Array.from(affectedSet);
+          const proc = Bun.spawn(
+            ['/bin/sh', '-c', `npx tsc --noEmit ${affectedList.join(' ')}`],
+            { cwd, stdout: 'pipe', stderr: 'pipe' },
+          );
+          const [exitCode, stdoutText, stderrText] = await Promise.all([
+            proc.exited,
+            new Response(proc.stdout).text(),
+            new Response(proc.stderr).text(),
+          ]);
+          if (exitCode !== 0) {
+            const relAffected = affectedList.map((f) => relative(cwd, f));
+            const outputLines = (stderrText + '\n' + stdoutText)
+              .split('\n')
+              .filter((line) => relAffected.some((rel) => line.includes(rel)));
+            if (outputLines.length > 0) {
+              importGraphWarning =
+                `\n⚠ Import graph: ${affectedSet.size} transitive dependent(s) affected by this edit — type errors detected in downstream files:\n` +
+                outputLines.join('\n');
+            } else {
+              importGraphWarning =
+                `\n⚠ Import graph: ${affectedSet.size} transitive dependent(s) affected. tsc reported errors outside the affected set — check unrelated files.`;
+            }
+          }
+          // else: affected dependents type-check clean — no warning needed
+        }
+      } catch (err) {
+        logger.warn('[import-graph] Import graph tracing failed', { error: err instanceof Error ? err.message : String(err) });
+      }
+    }
 
     // Run validate.after (only if edits were actually written to disk)
     if (!dryRun && anySuccess && validateAfter.length > 0) {
@@ -1027,7 +1102,7 @@ export function createEditTool(fileCache: FileStateCache, options?: EditToolOpti
       }
     }
 
-    const output = formatOutput(results, outputFormat, dryRun);
+    const output = formatOutput(results, outputFormat, dryRun) + (importGraphWarning ?? '');
 
     return {
       success: anySuccess,
