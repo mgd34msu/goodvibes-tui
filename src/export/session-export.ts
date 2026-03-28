@@ -1,7 +1,7 @@
 import { join } from 'node:path';
 import { homedir } from 'node:os';
 import type { ContentPart } from '../providers/interface.ts';
-import { exportToMarkdown, type ExportMessage, type ExportMetadata } from './markdown.ts';
+import { exportToMarkdown, extractText, type ExportMessage, type ExportMetadata } from './markdown.ts';
 
 // ── Public Types ─────────────────────────────────────────────────────────────
 
@@ -146,7 +146,9 @@ function redactArgs(args: Record<string, unknown>): Record<string, unknown> {
   for (const [k, v] of Object.entries(args)) {
     if (typeof v === 'string') {
       out[k] = redactSensitiveData(v);
-    } else if (v !== null && typeof v === 'object' && !Array.isArray(v)) {
+    } else if (Array.isArray(v)) {
+      out[k] = v.map(item => typeof item === 'string' ? redactSensitiveData(item) : (item !== null && typeof item === 'object' && !Array.isArray(item)) ? redactArgs(item as Record<string, unknown>) : item);
+    } else if (v !== null && typeof v === 'object') {
       out[k] = redactArgs(v as Record<string, unknown>);
     } else {
       out[k] = v;
@@ -190,6 +192,9 @@ export function exportToMarkdownExtended(
 }
 
 // ── HTML export ───────────────────────────────────────────────────────────────
+
+/** Maximum characters of tool result content to include in the HTML export. */
+const MAX_TOOL_RESULT_LENGTH = 4000;
 
 /**
  * exportToHTML - Generate a self-contained, styled HTML document from a
@@ -361,11 +366,6 @@ ${usageSection}
 </html>`;
 }
 
-// ── Constants ─────────────────────────────────────────────────────────────────
-
-/** Maximum characters of tool result content to include in the HTML export. */
-const MAX_TOOL_RESULT_LENGTH = 4000;
-
 // ── HTML helpers ──────────────────────────────────────────────────────────────
 
 /** Escape characters that are special in HTML. */
@@ -461,14 +461,7 @@ function inlineMarkdown(text: string): string {
     .replace(/`([^`]+)`/g, '<code>$1</code>');
 }
 
-/** Extract plain text from a string or ContentPart array. */
-function extractText(content: string | ContentPart[]): string {
-  if (typeof content === 'string') return content;
-  return (content as ContentPart[])
-    .filter((p): p is { type: 'text'; text: string } => p.type === 'text')
-    .map(p => p.text)
-    .join('');
-}
+
 
 // ── Embedded CSS ──────────────────────────────────────────────────────────────
 
