@@ -580,6 +580,19 @@ async function main() {
   const commandRegistry = new CommandRegistry();
   registerBuiltinCommands(commandRegistry);
 
+  // --- Plugin system ---
+  // Singleton is imported lazily; state is loaded from disk inside init().
+  { const { pluginManager } = await import('./plugins/manager.ts');
+    await pluginManager.init({
+      eventBus: bus,
+      commandRegistry,
+      providerRegistry,
+      toolRegistry,
+      getPluginConfig: (name) => pluginManager.getPluginConfig(name),
+      isEnabled: (name) => pluginManager.isEnabled(name),
+    });
+  }
+
   const commandContext: CommandContext = {
     eventBus: bus,
     providerRegistry,
@@ -760,6 +773,7 @@ async function main() {
           permissions: { tool: '<name> allow|prompt|deny' },
           config: { reset: '<key>' },
           danger: {},
+          plugin: { enable: '<name>', disable: '<name>', reload: '' },
         };
         const subMap = subHints[cmdName];
         if (subMap && afterCmd in subMap) return subMap[afterCmd];
