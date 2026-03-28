@@ -11,6 +11,7 @@
 
 import { CONFIG_SCHEMA, type ConfigSetting, type ConfigKey } from '../config/schema.ts';
 import type { ConfigManager } from '../config/manager.ts';
+import { logger } from '../utils/logger.ts';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -228,7 +229,7 @@ export class SettingsModal {
         }
       }
     } catch (e) {
-      // Silently ignore — console.warn corrupts TUI display
+      logger.error('SettingsModal: failed to set config value', { key, error: String(e) });
     }
   }
 }

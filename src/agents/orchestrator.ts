@@ -54,7 +54,7 @@ const NETWORK_RETRY_DELAYS_MS = [5_000, 10_000, 20_000, 40_000, 60_000];
 const RATE_LIMIT_RETRY_DELAY_MS = 60_000;
 const RATE_LIMIT_MAX_RETRIES = 3;
 
-/** @deprecated Use isRateLimitOrQuotaError from types/errors.ts */
+/** @deprecated This function is superseded by isRateLimitOrQuotaError in types/errors.ts which has broader coverage. Use that instead. */
 
 // ---------------------------------------------------------------------------
 // AgentOrchestrator
@@ -334,7 +334,7 @@ export class AgentOrchestrator {
           // Find worst offender
           let worstCount = 0;
           let worstTool = '';
-          for (const [sig, { count, toolName }] of sigCounts) {
+          for (const [_sig, { count, toolName }] of sigCounts) {
             if (count > worstCount) {
               worstCount = count;
               worstTool = toolName;

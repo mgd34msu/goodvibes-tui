@@ -1,5 +1,6 @@
 import type { ToolDefinition, ToolCall } from '../types/tools.ts';
 import type { ProviderMessage, ContentPart } from './interface.ts';
+import { logger } from '../utils/logger.ts';
 
 // ---------------------------------------------------------------------------
 // OpenAI wire format
@@ -335,8 +336,7 @@ function parseJson(raw: string): Record<string, unknown> {
   try {
     return JSON.parse(raw) as Record<string, unknown>;
   } catch (err) {
-    // Silently return empty — console.warn would corrupt the TUI display.
-    // The caller handles the empty result gracefully.
+    logger.warn('tool-formats: failed to parse JSON tool arguments', { error: String(err) });
     return {};
   }
 }
