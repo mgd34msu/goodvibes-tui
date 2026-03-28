@@ -11,6 +11,7 @@ import {
 import type { GeminiPart } from './tool-formats.ts';
 
 const GEMINI_API_BASE = 'https://generativelanguage.googleapis.com/v1beta';
+const GEMINI_CACHE_TTL_SECONDS = 3600;
 
 interface GeminiCandidate {
   content: { parts: GeminiPart[]; role: string };
@@ -22,6 +23,7 @@ interface GeminiResponseBody {
   usageMetadata?: {
     promptTokenCount?: number;
     candidatesTokenCount?: number;
+    cachedContentTokenCount?: number;
   };
 }
 
@@ -44,8 +46,119 @@ export class GeminiProvider implements LLMProvider {
 
   private apiKey: string;
 
+  /** Active cached content resource name (e.g., "cachedContents/abc123") */
+  private cachedContentName: string | null = null;
+  /** Hash of the content that was cached (systemPrompt + tools + model) */
+  private cachedContentHash: string | null = null;
+  /** When the cache expires (epoch ms) */
+  private cachedContentExpiry: number = 0;
+  /** Hashes known to be below the 32K cache minimum — skip API call */
+  private uncacheableHashes = new Set<string>();
+
   constructor(apiKey: string) {
     this.apiKey = apiKey;
+  }
+
+  private computeCacheHash(
+    systemPrompt: string | undefined,
+    tools: import('./interface.ts').ChatRequest['tools'],
+    model: string,
+  ): string {
+    const raw = (systemPrompt ?? '') + JSON.stringify(tools ?? []) + model;
+    const hasher = new Bun.CryptoHasher('sha256');
+    hasher.update(raw);
+    return hasher.digest('hex');
+  }
+
+  private async ensureCachedContent(
+    systemPrompt: string | undefined,
+    tools: import('./interface.ts').ChatRequest['tools'],
+    model: string,
+  ): Promise<string | null> {
+    // Skip if no system prompt and no tools
+    if (!systemPrompt && (!tools || tools.length === 0)) return null;
+
+    const hash = this.computeCacheHash(systemPrompt, tools, model);
+
+    // Skip if previously determined to be below 32K threshold
+    if (this.uncacheableHashes.has(hash)) return null;
+
+    // Reuse existing cache if hash matches and not expired (with 60s buffer)
+    if (
+      this.cachedContentName &&
+      this.cachedContentHash === hash &&
+      this.cachedContentExpiry > Date.now() + 60_000
+    ) {
+      return this.cachedContentName;
+    }
+
+    // Estimate tokens — skip if below 28K (conservative buffer below 32K minimum)
+    const estimatedChars = (systemPrompt?.length ?? 0) + JSON.stringify(tools ?? []).length;
+    if (estimatedChars / 3 < 28_000) {
+      if (this.uncacheableHashes.size >= 50) this.uncacheableHashes.clear();
+      this.uncacheableHashes.add(hash);
+      logger.debug('[Gemini] Content below 32K cache threshold, skipping cache', {
+        estimatedTokens: Math.round(estimatedChars / 3),
+      });
+      return null;
+    }
+
+    // Delete old cache if hash changed (fire-and-forget)
+    if (this.cachedContentName && this.cachedContentHash !== hash) {
+      const oldName = this.cachedContentName;
+      fetch(`${GEMINI_API_BASE}/${oldName}`, {
+        method: 'DELETE',
+        headers: { 'x-goog-api-key': this.apiKey },
+      }).catch(err => logger.warn('[Gemini] Failed to delete old cache', { error: String(err) }));
+    }
+
+    // Create new cached content
+    try {
+      const cacheBody: Record<string, unknown> = {
+        model: `models/${model}`,
+        ttl: `${GEMINI_CACHE_TTL_SECONDS}s`,
+      };
+
+      if (systemPrompt) {
+        cacheBody['systemInstruction'] = { parts: [{ text: systemPrompt }] };
+      }
+
+      if (tools && tools.length > 0) {
+        cacheBody['tools'] = [{ functionDeclarations: toGeminiFunctionDeclarations(tools) }];
+      }
+
+      const res = await fetch(`${GEMINI_API_BASE}/cachedContents`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-goog-api-key': this.apiKey,
+        },
+        body: JSON.stringify(cacheBody),
+      });
+
+      if (!res.ok) {
+        const text = await res.text().catch(() => '');
+        if (text.includes('too few tokens') || text.includes('minimum')) {
+          if (this.uncacheableHashes.size >= 50) this.uncacheableHashes.clear();
+          this.uncacheableHashes.add(hash);
+          logger.debug('[Gemini] Content below cache minimum', { status: res.status, error: text.slice(0, 200) });
+        } else {
+          logger.debug('[Gemini] Cache creation failed', { status: res.status, error: text.slice(0, 200) });
+        }
+        return null;
+      }
+
+      const data = await res.json() as { name: string; expireTime: string };
+      this.cachedContentName = data.name;
+      this.cachedContentHash = hash;
+      this.cachedContentExpiry = new Date(data.expireTime).getTime();
+
+      logger.info(`[Gemini] Created cache: ${data.name} (expires ${data.expireTime})`);
+      return data.name;
+    } catch (err) {
+      logger.debug('[Gemini] Cache creation error', { error: String(err) });
+      return null;
+    }
   }
 
   async chat(params: ChatRequest): Promise<ChatResponse> {
@@ -74,14 +187,21 @@ export class GeminiProvider implements LLMProvider {
 
       const body: Record<string, unknown> = { contents };
 
-      if (systemInstruction) {
-        body['systemInstruction'] = systemInstruction;
-      }
+      const cachedName = await this.ensureCachedContent(systemPrompt, tools, model);
 
-      if (tools && tools.length > 0) {
-        body['tools'] = [{
-          functionDeclarations: toGeminiFunctionDeclarations(tools),
-        }];
+      if (cachedName) {
+        // Cached content already contains systemInstruction and tools — do NOT resend them
+        body['cachedContent'] = cachedName;
+      } else {
+        if (systemInstruction) {
+          body['systemInstruction'] = systemInstruction;
+        }
+
+        if (tools && tools.length > 0) {
+          body['tools'] = [{
+            functionDeclarations: toGeminiFunctionDeclarations(tools),
+          }];
+        }
       }
 
       if (maxTokens) {
@@ -127,6 +247,7 @@ export class GeminiProvider implements LLMProvider {
       const allParts: GeminiPart[] = [];
       let inputTokens = 0;
       let outputTokens = 0;
+      let cacheReadTokens = 0;
       let lastFinishReason = '';
       let streamedText = '';
 
@@ -185,6 +306,7 @@ export class GeminiProvider implements LLMProvider {
             if (chunk.usageMetadata) {
               inputTokens = chunk.usageMetadata.promptTokenCount ?? inputTokens;
               outputTokens = chunk.usageMetadata.candidatesTokenCount ?? outputTokens;
+              cacheReadTokens = chunk.usageMetadata.cachedContentTokenCount ?? cacheReadTokens;
             }
           }
         }
@@ -210,7 +332,12 @@ export class GeminiProvider implements LLMProvider {
       return {
         content: text,
         toolCalls,
-        usage: { inputTokens, outputTokens },
+        usage: {
+          inputTokens,
+          outputTokens,
+          ...(cacheReadTokens > 0 ? { cacheReadTokens } : {}),
+          // cacheWriteTokens is omitted: Gemini does not charge separately for cache writes
+        },
         stopReason,
       };
     });
