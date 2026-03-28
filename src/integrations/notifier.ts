@@ -101,7 +101,7 @@ export class Notifier {
 
     this.unsubscribers.push(
       bus.on('subagent:complete', (data) => {
-        const result = data.result as Record<string, unknown>;
+        const result = data.result as unknown as Record<string, unknown>;
         void this.notify('subagent:complete', {
           event: 'subagent:complete',
           agentId: data.id,
