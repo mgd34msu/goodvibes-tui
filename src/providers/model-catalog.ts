@@ -539,6 +539,69 @@ export function formatChangeNotifications(diff: CatalogDiff): string[] {
   return notifications;
 }
 
+// ---------------------------------------------------------------------------
+// getCatalogModelDefinitions — convert seed pricing models to ModelDefinition[]
+// ---------------------------------------------------------------------------
+
+/**
+ * A minimal ModelDefinition shape suitable for registry use.
+ * Matches the ModelDefinition interface from registry.ts.
+ * Defined here to avoid a circular import (registry imports model-catalog).
+ */
+export interface MinimalModelDefinition {
+  id: string;
+  provider: string;
+  displayName: string;
+  description: string;
+  capabilities: {
+    toolCalling: boolean;
+    codeEditing: boolean;
+    reasoning: boolean;
+    multimodal: boolean;
+  };
+  contextWindow: number;
+  selectable: boolean;
+  tier: 'free' | 'standard' | 'premium';
+  reasoningEffort?: string[];
+}
+
+/**
+ * Convert SEED_PRICING_MODELS into MinimalModelDefinition[] for use by registry.
+ *
+ * Provides sensible defaults for capabilities and context windows based on
+ * pricing tier and provider. Stage 1 will replace seed data with full
+ * catalog from models.dev including real capabilities and context windows.
+ *
+ * @public Consumed by registry.ts Stage 4 to replace BUILTIN_MODEL_REGISTRY.
+ */
+export function getCatalogModelDefinitions(): MinimalModelDefinition[] {
+  return SEED_PRICING_MODELS.map((m): MinimalModelDefinition => {
+    // Derive capability defaults from provider and tier
+    const isFree = m.tier === 'free';
+    const isGoogle = m.provider === 'google';
+    const isAnthropic = m.provider === 'anthropic';
+    const isOpenAI = m.provider === 'openai';
+
+    return {
+      id: m.id,
+      provider: m.provider,
+      displayName: m.name,
+      description: `${m.name} — sourced from model catalog.`,
+      capabilities: {
+        toolCalling: true,
+        codeEditing: true,
+        reasoning: isAnthropic || isOpenAI || isGoogle,
+        multimodal: isGoogle || isOpenAI,
+      },
+      // Context window defaults — Stage 1 will replace with real values from models.dev
+      contextWindow: isGoogle ? 1_000_000 : isAnthropic ? 200_000 : 128_000,
+      selectable: true,
+      // Map pricing tier to ModelTier (free/standard/premium)
+      tier: isFree ? 'free' : m.pricing.input >= 3 ? 'premium' : 'standard',
+    };
+  });
+}
+
 /**
  * notifyCatalogChanges — Convenience helper called inside refreshCatalog().
  *
