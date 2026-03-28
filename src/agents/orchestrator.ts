@@ -9,7 +9,7 @@ import { ProjectIndex } from '../state/project-index.ts';
 import { AgentSession } from './session.ts';
 import { ArchetypeLoader } from './archetypes.ts';
 import type { AgentRecord } from '../tools/agent/index.ts';
-import type { LLMProvider } from '../providers/interface.ts';
+import type { LLMProvider, StreamDelta } from '../providers/interface.ts';
 import type { EventBus } from '../core/event-bus.ts';
 import { existsSync, readFileSync } from 'node:fs';
 import { ProcessManager } from '../tools/shared/process-manager.ts';
@@ -207,15 +207,38 @@ export class AgentOrchestrator {
         let response: Awaited<ReturnType<typeof provider.chat>>;
         {
           let networkAttempt = 0;
-            let rateLimitAttempt = 0;
+          let rateLimitAttempt = 0;
           // eslint-disable-next-line no-constant-condition
           while (true) {
+            // Reset streaming state for this retry attempt
+            let streamAccumulated = '';
+            record.streamingContent = undefined;
+
+            const onDelta = (delta: StreamDelta) => {
+              if (delta.content) {
+                streamAccumulated += delta.content;
+                record.streamingContent = streamAccumulated;
+                const snippet = streamAccumulated.length > 100
+                  ? '...' + streamAccumulated.slice(-97)
+                  : streamAccumulated;
+                record.progress = snippet.replace(/\n/g, ' ').trim() || 'Streaming...';
+              }
+              if (this.eventBus && delta.content) {
+                this.eventBus.emit('subagent:stream-delta', {
+                  id: record.id,
+                  content: delta.content,
+                  accumulated: streamAccumulated,
+                });
+              }
+            };
+
             try {
               response = await provider.chat({
                 model: modelId,
                 messages: conversation.getMessagesForLLM(),
                 tools: toolDefinitions.length > 0 ? toolDefinitions : undefined,
                 systemPrompt,
+                onDelta,
               });
               break; // success — exit retry loop
             } catch (chatErr) {
@@ -251,6 +274,7 @@ export class AgentOrchestrator {
               }
             }
           }
+          record.streamingContent = undefined;
           record.progress = 'Thinking…';
         }
 

@@ -18,6 +18,8 @@ export interface ProcessEntry {
   status: string;
   /** Elapsed milliseconds since start */
   elapsedMs: number;
+  /** Live streaming snippet for running agents (last ~60 chars of current turn output). */
+  streamSnippet?: string;
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -138,12 +140,18 @@ export class ProcessModal {
     // Agents — only show active (pending/running)
     for (const a of AgentManager.getInstance().list()) {
       if (a.status === 'completed' || a.status === 'failed' || a.status === 'cancelled') continue;
+      let streamSnippet: string | undefined;
+      if (a.streamingContent) {
+        const raw = a.streamingContent.replace(/\n/g, ' ').trim();
+        streamSnippet = raw.length > 60 ? '...' + raw.slice(-57) : raw;
+      }
       result.push({
         id: a.id,
         label: buildAgentLabel(a),
         type: 'agent',
         status: a.status,
         elapsedMs: now - a.startedAt,
+        streamSnippet,
       });
     }
 
@@ -237,7 +245,8 @@ export function renderProcessModal(modal: ProcessModal, width: number): Line[] {
     }[e.status] ?? '\u25cf';
     const typeTag = e.type === 'agent' ? '[agent]' : '[exec]';
     const dur = formatDuration(e.elapsedMs);
-    const suffix = `  ${e.status}  ${dur}`;
+    const statusStr = e.streamSnippet ? `streaming  ${dur}` : `${e.status}  ${dur}`;
+    const suffix = `  ${statusStr}`;
     const maxDescW = maxLabelW - typeTag.length - suffix.length - 4; // icon + spaces
     const desc = e.label.length > maxDescW ? e.label.slice(0, maxDescW - 1) + '\u2026' : e.label;
     const label = `${statusIcon} ${typeTag} ${desc}${suffix}`;

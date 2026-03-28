@@ -53,6 +53,8 @@ export interface AgentRecord {
   error?: string;
   /** Complete final assistant response (no truncation). Set on successful completion; undefined if agent fails or hits max turns. */
   fullOutput?: string;
+  /** Live streaming content for the current turn. Cleared between turns. */
+  streamingContent?: string;
   /** WRFC chain ID linking this agent to its review chain. Undefined if dangerously_disable_wrfc. */
   wrfcId?: string;
   /** If true, this agent skips the WRFC review chain. */
