@@ -181,6 +181,32 @@ export class AgentManager {
   clear(): void {
     this.agents.clear();
   }
+
+  /**
+   * Export all agent records for session persistence.
+   * Running agents are downgraded to 'failed' since they cannot be resumed.
+   */
+  exportState(): AgentRecord[] {
+    return [...this.agents.values()].map(a => {
+      const { streamingContent, fullOutput, ...rest } = a;
+      return {
+        ...rest,
+        status: (a.status === 'running' || a.status === 'pending') ? 'failed' : a.status,
+      };
+    });
+  }
+
+  /**
+   * Import agent records from a saved session.
+   * Only imports completed/failed/cancelled records (not running/pending).
+   */
+  importState(records: AgentRecord[]): void {
+    for (const r of records) {
+      // Skip any record that somehow has an active status (defensive guard)
+      if (r.status === 'running' || r.status === 'pending') continue;
+      this.agents.set(r.id, r);
+    }
+  }
 }
 
 // ---------------------------------------------------------------------------
