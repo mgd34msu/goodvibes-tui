@@ -224,17 +224,11 @@ describe('getComboLabel()', () => {
     expect(km.getComboLabel('search')).toBe('Ctrl+F');
   });
 
-  it('returns "(unbound)" for an action with no combos after clearing', () => {
-    // Force an empty binding by constructing with a config that has an empty array
-    // We can test the fallback via getComboLabel on a manager with no valid override.
-    // Since we cannot inject empty arrays via the public API (validateCombos blocks them),
-    // test the default path: newly constructed manager always has combos.
-    const km = new KeybindingsManager('/nonexistent/path/keybindings.json');
-    // All default actions are bound
-    const all = km.getAll();
-    for (const entry of all) {
-      expect(km.getComboLabel(entry.action as KeyAction)).not.toBe('(unbound)');
-    }
+  it('returns "(unbound)" for an action with no combos', () => {
+    const mgr = new KeybindingsManager('/nonexistent/path/keybindings.json');
+    // Bypass validateCombos by injecting an empty array directly into the bindings map
+    (mgr as any).bindings['copy-selection'] = [];
+    expect(mgr.getComboLabel('copy-selection')).toBe('(unbound)');
   });
 });
 
