@@ -1,7 +1,7 @@
 /**
  * auto-register.ts
  *
- * Stage 2 of the dynamic model catalog plan.
+ * Automatically registers providers when their API keys are detected in the environment.
  *
  * When a user has an API key set in their environment (e.g. GROQ_API_KEY),
  * auto-register that provider using catalog data — zero manual configuration.
@@ -42,9 +42,8 @@ export interface AutoRegisterEntry extends CatalogProvider {
   defaultModel: string;
   /**
    * Model IDs pre-seeded for this provider.
-   * Auto-registered providers start with an empty list — the model registry
-   * is populated by the catalog (Stage 4). These seeds allow the provider
-   * to be usable before Stage 4 lands.
+   * Auto-registered providers start with an empty list; these seeds allow the
+   * provider to be usable immediately without waiting for a catalog fetch.
    */
   seedModels?: string[];
 }
@@ -64,19 +63,6 @@ export interface AutoRegisterEntry extends CatalogProvider {
  * same model. Earlier entries take precedence in the auto-registration log.
  */
 export const AUTO_REGISTER_CATALOG: AutoRegisterEntry[] = [
-  // -------------------------------------------------------------------------
-  // Forward-looking: entries that overlap with BUILTIN_MODEL_REGISTRY
-  //
-  // The five providers below (nvidia, groq, cerebras, mistral, huggingface)
-  // are also present in BUILTIN_MODEL_REGISTRY (src/providers/registry.ts).
-  // They are included here now so that Stage 4 — which removes
-  // BUILTIN_MODEL_REGISTRY and drives all provider registration through this
-  // catalog — requires zero changes to AUTO_REGISTER_CATALOG.
-  //
-  // Until Stage 4 lands, isProviderRegistered() will detect the builtin entry
-  // and skip re-registration, so duplicate registration is not possible.
-  // -------------------------------------------------------------------------
-
   // -------------------------------------------------------------------------
   // Free / no-key-required providers
   // -------------------------------------------------------------------------
