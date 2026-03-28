@@ -34,6 +34,8 @@ interface DiffEntry {
   filePath: string;
   raw: string;        // raw unified diff text
   lines: ParsedLine[];
+  /** One-line semantic summary from computeSemanticDiff, if available. */
+  semanticSummary?: string;
 }
 
 type LineKind = 'addition' | 'deletion' | 'context' | 'hunk' | 'header';
@@ -206,7 +208,7 @@ export class DiffPanel extends BasePanel {
   /** Show a unified diff for a specific file. Adds or replaces the entry. */
   showDiff(filePath: string, diff: string): void {
     const idx = this.entries.findIndex(e => e.filePath === filePath);
-    const entry: DiffEntry = { filePath, raw: diff, lines: parseDiff(diff) };
+    const entry: DiffEntry = { filePath, raw: diff, lines: parseDiff(diff), semanticSummary: this.entries[idx]?.semanticSummary };
     if (idx >= 0) {
       this.entries[idx] = entry;
       // Stay on this file if it was already selected
@@ -270,6 +272,19 @@ export class DiffPanel extends BasePanel {
     this.selectedFile = Math.min(this.selectedFile, Math.max(0, this.entries.length - 1));
     this.scrollOffset = 0;
     this.markDirty();
+  }
+
+  /**
+   * Attach or update the semantic diff summary for a file entry.
+   * No-op if the file isn't currently loaded. Safe to call from an async
+   * callback after the entry has already been replaced.
+   */
+  setSemanticSummary(filePath: string, summary: string): void {
+    const entry = this.entries.find(e => e.filePath === filePath);
+    if (entry) {
+      entry.semanticSummary = summary;
+      this.markDirty();
+    }
   }
 
   /** Clear all diff entries. */
@@ -430,7 +445,8 @@ export class DiffPanel extends BasePanel {
     const scroll = entry
       ? `  L${this.scrollOffset + 1}/${entry.lines.length}  Tab: next file  ↑↓: scroll`
       : '';
-    const text = ` ${fileInfo}${scroll}`;
+    const semantic = entry?.semanticSummary ? `  ◆ ${entry.semanticSummary}` : '';
+    const text = ` ${fileInfo}${scroll}${semantic}`;
     return renderText(width, text, COLOR.tabActive, COLOR.statusBar);
   }
 
