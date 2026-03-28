@@ -227,6 +227,33 @@ export function renderAgentDetailModal(
     }
   }
 
+  // Streaming content — show live output when agent is actively streaming
+  const STREAMING_MAX_CHARS = 500;
+  if (rec.status === 'running' && rec.streamingContent) {
+    const content = rec.streamingContent;
+    const truncated = content.length > STREAMING_MAX_CHARS;
+    const display = truncated ? content.slice(-STREAMING_MAX_CHARS) : content;
+    sections.push({ type: 'separator' });
+    sections.push({
+      type: 'text',
+      content: truncated
+        ? `Streaming (last ${STREAMING_MAX_CHARS} of ${content.length} chars \u2191 scroll for more):`
+        : 'Streaming:',
+      style: { fg: '#00ffcc', dim: true },
+    });
+    // Split into display lines, capped at width for readability
+    const maxLineWidth = Math.max(width - 10, 40);
+    const streamLines = display.split('\n');
+    for (const line of streamLines) {
+      const trimmed = line.length > maxLineWidth ? line.slice(0, maxLineWidth - 1) + '\u2026' : line;
+      sections.push({
+        type: 'text',
+        content: `  ${trimmed}`,
+        style: { fg: '#aaffee' },
+      });
+    }
+  }
+
   return ModalFactory.createModal({
     title: `Agent: ${rec.id.slice(0, AGENT_ID_DISPLAY_LENGTH)}`,
     width: width - 4,

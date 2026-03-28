@@ -4,6 +4,7 @@ import { ToolRegistry } from '../tools/registry.ts';
 import { providerRegistry } from '../providers/registry.ts';
 import { registerAllTools } from '../tools/index.ts';
 import { logger } from '../utils/logger.ts';
+import { isRateLimitOrQuotaError } from '../types/errors.ts';
 import { FileStateCache } from '../state/file-cache.ts';
 import { ProjectIndex } from '../state/project-index.ts';
 import { AgentSession } from './session.ts';
@@ -53,17 +54,7 @@ const NETWORK_RETRY_DELAYS_MS = [5_000, 10_000, 20_000, 40_000, 60_000];
 const RATE_LIMIT_RETRY_DELAY_MS = 60_000;
 const RATE_LIMIT_MAX_RETRIES = 3;
 
-/** Detect rate limit or quota errors that should trigger a delayed retry. */
-function isRateLimitError(err: unknown): boolean {
-  if (!(err instanceof Error)) return false;
-  const msg = err.message.toLowerCase();
-  // Check ProviderError statusCode
-  if ('statusCode' in err) {
-    const code = (err as { statusCode?: number }).statusCode;
-    if (code === 429 || code === 402) return true;
-  }
-  return /rate.limit|too many requests|quota exceeded|throttl|depleted|credits/i.test(msg);
-}
+/** @deprecated Use isRateLimitOrQuotaError from types/errors.ts */
 
 // ---------------------------------------------------------------------------
 // AgentOrchestrator
@@ -224,11 +215,15 @@ export class AgentOrchestrator {
                 record.progress = snippet.replace(/\n/g, ' ').trim() || 'Streaming...';
               }
               if (this.eventBus && delta.content) {
-                this.eventBus.emit('subagent:stream-delta', {
-                  id: record.id,
-                  content: delta.content,
-                  accumulated: streamAccumulated,
-                });
+                try {
+                  this.eventBus.emit('subagent:stream-delta', {
+                    id: record.id,
+                    content: delta.content,
+                    accumulated: streamAccumulated,
+                  });
+                } catch {
+                  // Don't let listener errors kill streaming
+                }
               }
             };
 
@@ -255,7 +250,7 @@ export class AgentOrchestrator {
                 if ((record as { status: string }).status === 'cancelled') {
                   throw new Error('Agent cancelled during network retry');
                 }
-              } else if (isRateLimitError(chatErr) && rateLimitAttempt < RATE_LIMIT_MAX_RETRIES) {
+              } else if (isRateLimitOrQuotaError(chatErr) && rateLimitAttempt < RATE_LIMIT_MAX_RETRIES) {
                 const delaySec = Math.round(RATE_LIMIT_RETRY_DELAY_MS / 1000);
                 logger.warn(
                   `Agent ${record.id}: rate limited on turn ${turn}, retrying in ${delaySec}s (attempt ${rateLimitAttempt + 1}/${RATE_LIMIT_MAX_RETRIES})`,
