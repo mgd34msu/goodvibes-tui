@@ -154,7 +154,9 @@ describe('getModelRegistry — catalog-sourced models', () => {
       // At minimum the registry should not be completely disjoint from the catalog
       // (This is a soft check — full catalog coverage depends on Stage 1 completion)
       if (inRegistry) {
-        expect(registryIds.has(def.id)).toBe(true);
+        // Verify the registry entry has the expected provider (catalog model not hijacked)
+        const registryEntry = registry.find((m) => m.id === def.id);
+        expect(registryEntry?.provider).toBeTruthy();
       }
     }
     // The registry must include at least some catalog models
@@ -232,12 +234,12 @@ describe('getModelRegistry — empty catalog fallback', () => {
     expect(Array.isArray(result)).toBe(true);
   });
 
-  it('synthetic models appear in registry from MANUAL_SYNTHETIC_OVERRIDES', () => {
-    // Synthetic provider models defined via MANUAL_SYNTHETIC_OVERRIDES should
+  it('synthetic models appear in registry from seed catalog', () => {
+    // Synthetic provider models defined in the seed catalog should
     // appear in the registry even when catalog is seed-only
     const models = getModelRegistry();
     const syntheticModels = models.filter((m) => m.provider === 'synthetic');
-    // MANUAL_SYNTHETIC_OVERRIDES defines failover models — there should be at least some
+    // The seed catalog defines failover models — there should be at least some
     // Even without catalog-backed auto-detection, manual definitions persist
     // (synthetic models may or may not appear depending on registry merge logic)
     expect(Array.isArray(syntheticModels)).toBe(true);

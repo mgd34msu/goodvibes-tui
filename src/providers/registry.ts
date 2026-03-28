@@ -8,7 +8,7 @@ import { config } from '../config/index.ts';
 import type { EventBus } from '../core/event-bus.ts';
 import { loadCustomProviders, watchCustomProviders } from './custom-loader.ts';
 import { SyntheticProvider } from './synthetic.ts';
-import type { SyntheticBackend, SyntheticModelMap } from './synthetic.ts';
+
 import { getCatalogModelDefinitions } from './model-catalog.ts';
 
 /** Model capability tier — controls system prompt verbosity. */
@@ -47,220 +47,13 @@ export interface ModelDefinition {
 
 
 /**
- * BUILTIN_MODEL_REGISTRY has been removed as part of Stage 4 of the dynamic
- * model catalog plan. Model definitions now come from getCatalogModelDefinitions()
- * which sources from model-catalog.ts (SEED_PRICING_MODELS).
- *
- * Stage 1 will replace SEED_PRICING_MODELS with a full catalog from models.dev.
- */
-
-/**
  * Returns built-in model definitions sourced from the model catalog.
- * This is the catalog-backed replacement for the removed BUILTIN_MODEL_REGISTRY.
- * Merge order in getModelRegistry(): catalog → custom providers → discovered servers.
+ * Merge order in getModelRegistry(): custom providers → catalog → discovered servers.
  */
 function getCatalogBuiltins(): ModelDefinition[] {
   return getCatalogModelDefinitions() as ModelDefinition[];
 }
 
-
-// --- Synthetic Auto-Generation ---
-
-/**
- * Providers considered candidates for synthetic failover auto-detection.
- * Only models from these providers are included in auto-generated groups.
- */
-const SYNTHETIC_CANDIDATE_PROVIDERS = new Set([
-  'groq', 'huggingface', 'nvidia', 'ollama-cloud', 'openrouter', 'aihubmix', 'llm7',
-]);
-
-/**
- * Normalise a model ID for cross-provider matching.
- * Steps:
- *   1. Strip org prefix (everything up to and including the last "/")
- *   2. Lowercase
- *   3. Replace ":" with "-" (Ollama tag separator → hyphen)
- *   4. Strip ":free" suffix (already removed by step 3, but guard for lowercase)
- *   5. Strip "-free" suffix at end
- *   6. Strip quantisation suffixes (-fp8, -awq, -gptq)
- *   7. Strip date suffixes: -YYYYMMDD or -MMDD (4-8 digit numeric suffixes at end)
- */
-function normaliseSyntheticId(id: string): string {
-  // Strip org prefix (before /)
-  const slashIdx = id.lastIndexOf('/');
-  let s = slashIdx >= 0 ? id.slice(slashIdx + 1) : id;
-  // Lowercase
-  s = s.toLowerCase();
-  // Replace Ollama tag colon with hyphen (e.g. gpt-oss:120b → gpt-oss-120b)
-  s = s.replace(':', '-');
-  // Strip :free (already handled above, guard)
-  s = s.replace(/-free$/, '');
-  // Strip quantisation suffixes
-  s = s.replace(/-(fp8|awq|gptq)$/, '');
-  // Strip date suffixes: -YYYYMMDD, -MMDD, -YYYY (4+ digit numeric trailing segment)
-  s = s.replace(/-\d{4,8}$/, '');
-  return s;
-}
-
-/**
- * Derive a clean synthetic model name from a normalised model ID.
- * This is used as the key in the synthetic model map (the user-facing ID).
- */
-function syntheticNameFromNormalised(normalised: string, originalId: string): string {
-  // Use the original model ID stripped of org prefix, lowercased, colon→hyphen.
-  // This gives a clean canonical name without stripping version/size info.
-  const slashIdx = originalId.lastIndexOf('/');
-  let name = slashIdx >= 0 ? originalId.slice(slashIdx + 1) : originalId;
-  name = name.toLowerCase();
-  name = name.replace(':', '-');
-  name = name.replace(/:free$/, '').replace(/-free$/, '');
-  return name;
-}
-
-/**
- * Scans BUILTIN_MODEL_REGISTRY to find models available on 2+ providers
- * (from SYNTHETIC_CANDIDATE_PROVIDERS) and groups them into synthetic entries.
- * Manual overrides in MANUAL_SYNTHETIC_OVERRIDES take priority.
- *
- * Called once at module load time; result is merged into AUTO_SYNTHETIC_MAP.
- */
-function buildSyntheticModelMap(registry: ModelDefinition[]): SyntheticModelMap {
-  // Group registry entries by normalised ID, tracking provider + original model ID
-  const groups = new Map<string, Array<{ provider: string; modelId: string; normName: string; origName: string }>>();
-
-  for (const model of registry) {
-    // Only consider free provider models that are not already synthetic
-    if (!SYNTHETIC_CANDIDATE_PROVIDERS.has(model.provider)) continue;
-    // Skip models that are provider-specific routers or special models
-    if (model.id === 'openrouter/free') continue;
-
-    const normalised = normaliseSyntheticId(model.id);
-    if (!groups.has(normalised)) groups.set(normalised, []);
-    groups.get(normalised)!.push({
-      provider: model.provider,
-      modelId: model.id,
-      normName: normalised,
-      origName: model.id,
-    });
-  }
-
-  const result: SyntheticModelMap = {};
-
-  for (const [normalised, entries] of groups) {
-    // Need 2+ distinct providers
-    const distinctProviders = new Set(entries.map((e) => e.provider));
-    if (distinctProviders.size < 2) continue;
-
-    // Skip if a manual override already handles this (manual overrides are merged later)
-    // We still generate the auto entry — the merge step gives manual priority.
-
-    // Choose the canonical synthetic name: shortest entry name after normalising
-    // the model IDs (prefer the cleanest/shortest model ID)
-    let canonicalName = normalised;
-    let shortest = Infinity;
-    for (const e of entries) {
-      const nm = syntheticNameFromNormalised(normalised, e.origName);
-      if (nm.length < shortest) {
-        shortest = nm.length;
-        canonicalName = nm;
-      }
-    }
-
-    // Build backends list, deduplicating by (provider, modelId)
-    const seen = new Set<string>();
-    const backends: SyntheticBackend[] = [];
-    for (const e of entries) {
-      const key = `${e.provider}::${e.modelId}`;
-      if (!seen.has(key)) {
-        seen.add(key);
-        backends.push({ providerName: e.provider, modelId: e.modelId });
-      }
-    }
-
-    result[canonicalName] = backends;
-  }
-
-  return result;
-}
-
-/**
- * Generate ModelDefinition entries for auto-detected synthetic models.
- * Merges with manually defined synthetics in BUILTIN_MODEL_REGISTRY;
- * skips entries that already have a manual definition.
- */
-function buildSyntheticModelDefinitions(
-  autoMap: SyntheticModelMap,
-  existingSyntheticIds: Set<string>,
-  registry: ModelDefinition[],
-): ModelDefinition[] {
-  const result: ModelDefinition[] = [];
-
-  for (const [syntheticId, backends] of Object.entries(autoMap)) {
-    // Skip if already manually defined
-    if (existingSyntheticIds.has(syntheticId)) continue;
-
-    // Infer capabilities from the backing models (union of capabilities)
-    const caps = { toolCalling: false, codeEditing: false, reasoning: false, multimodal: false };
-    let maxContext = 0;
-    for (const backend of backends) {
-      const backingModel = registry.find((m) => m.id === backend.modelId && m.provider === backend.providerName);
-      if (backingModel) {
-        if (backingModel.capabilities.toolCalling) caps.toolCalling = true;
-        if (backingModel.capabilities.codeEditing) caps.codeEditing = true;
-        if (backingModel.capabilities.reasoning) caps.reasoning = true;
-        if (backingModel.capabilities.multimodal) caps.multimodal = true;
-        if (backingModel.contextWindow > maxContext) maxContext = backingModel.contextWindow;
-      }
-    }
-
-    const providerNames = [...new Set(backends.map((b) => b.providerName))]
-      .map((p) => p.charAt(0).toUpperCase() + p.slice(1))
-      .join(', ');
-
-    result.push({
-      id: syntheticId,
-      provider: 'synthetic',
-      displayName: `${toDisplayName(syntheticId)} (Failover)`,
-      description: `Auto-failover across ${providerNames}.`,
-      capabilities: caps,
-      contextWindow: maxContext || 131072,
-      selectable: true,
-      tier: 'free',
-    });
-  }
-
-  return result;
-}
-
-/** Convert a model ID like "deepseek-r1-distill-qwen-32b" to "DeepSeek R1 Distill Qwen 32B". */
-function toDisplayName(id: string): string {
-  return id
-    .replace(/[._]/g, '-')
-    .split('-')
-    .map((part) => {
-      // Keep version numbers lowercase except for known acronyms
-      if (/^\d/.test(part)) return part;
-      if (part.length <= 2) return part.toUpperCase();
-      return part.charAt(0).toUpperCase() + part.slice(1);
-    })
-    .join(' ');
-}
-
-// Stage 4: Auto-synthetic map is built from the registered provider models at runtime.
-// Since the catalog (SEED_PRICING_MODELS) doesn't carry per-provider model lists,
-// Stage 3: SyntheticProvider is now catalog-driven and manages its own backend list.
-// for failover definitions. Stage 1 will populate this from the full models.dev catalog.
-const AUTO_SYNTHETIC_MAP: SyntheticModelMap = {};
-
-// Merged map: Stage 3 catalog-driven SyntheticProvider manages its own backend lists.
-// MERGED_SYNTHETIC_MAP is retained for external consumers but is now empty.
-export const MERGED_SYNTHETIC_MAP: SyntheticModelMap = {
-  ...AUTO_SYNTHETIC_MAP,
-};
-
-// No auto-generated synthetic definitions — the catalog-driven SyntheticProvider
-// exposes its own model list from the canonical seed catalog.
-const AUTO_SYNTHETIC_DEFINITIONS: ModelDefinition[] = [];
 
 /** Mutable array of custom-loaded model definitions. */
 let customModels: ModelDefinition[] = [];
@@ -274,44 +67,25 @@ let discoveredModels: ModelDefinition[] = [];
  * Merge order (highest → lowest priority):
  * 1. Custom providers from ~/.goodvibes/tui/providers/
  * 2. Catalog-sourced models (from getCatalogBuiltins() / model-catalog.ts)
- * 3. Auto-generated synthetic failover definitions
- * 4. Discovered local servers (lowest priority)
- *
- * Stage 4 replacement: BUILTIN_MODEL_REGISTRY removed; catalog is now the source.
+ * 3. Discovered local servers (lowest priority)
  */
 export function getModelRegistry(): ModelDefinition[] {
   const catalogModels = getCatalogBuiltins();
 
-  // Catalog models filtered by custom model overrides
+  // Catalog models not overridden by custom providers
   const catalogFiltered = catalogModels.filter(
     (b) => !customModels.some((c) => c.id === b.id),
   );
 
-  // Auto-generated synthetic definitions not overridden by custom or catalog
-  const autoSyntheticFiltered = AUTO_SYNTHETIC_DEFINITIONS.filter(
-    (a) =>
-      !customModels.some((c) => c.id === a.id) &&
-      !catalogModels.some((b) => b.id === a.id),
-  );
-
-  // Discovered server models not already covered by catalog, synthetic, or custom
+  // Discovered server models not already covered by catalog or custom
   const discoveredFiltered = discoveredModels.filter(
     (d) =>
       !catalogModels.some((b) => b.id === d.id) &&
-      !AUTO_SYNTHETIC_DEFINITIONS.some((a) => a.id === d.id) &&
       !customModels.some((c) => c.id === d.id),
   );
 
-  return [...customModels, ...catalogFiltered, ...autoSyntheticFiltered, ...discoveredFiltered];
+  return [...customModels, ...catalogFiltered, ...discoveredFiltered];
 }
-
-/**
- * Backward-compatible export. Prefer getModelRegistry() for live model lists.
- * Returns catalog-sourced models (replaces the removed BUILTIN_MODEL_REGISTRY).
- * Does NOT include custom providers or discovered servers.
- * @deprecated Use getModelRegistry() to include custom providers.
- */
-export const MODEL_REGISTRY: ModelDefinition[] = getCatalogBuiltins();
 
 /**
  * ProviderRegistry — manages LLM provider instances and model selection.
