@@ -1068,13 +1068,23 @@ export class InputHandler {
       if (this.modelPicker.active) {
         if (token.type === 'key') {
           if (token.logicalName === 'escape') {
-            this.modelPicker.close();
+            // Escape clears query first; second Escape closes picker
+            if (this.modelPicker.query.length > 0) {
+              this.modelPicker.clearQuery();
+            } else {
+              this.modelPicker.close();
+            }
+          } else if (token.logicalName === 'backspace') {
+            // Backspace removes last char from query (model mode only)
+            if (this.modelPicker.mode === 'model') {
+              this.modelPicker.deleteChar();
+            }
           } else if (token.logicalName === 'enter') {
             const mode = this.modelPicker.mode;
             const idx = this.modelPicker.selectedIndex;
             if (mode === 'model') {
-              // Model chosen — move to effort picker only if model supports it
-              const selected = this.modelPicker.models[idx];
+              // Model chosen — use filtered list for selection
+              const selected = this.modelPicker.getSelected();
               if (selected) {
                 if (selected.reasoningEffort && selected.reasoningEffort.length > 0) {
                   this.modelPicker.showEffortPicker(selected, this.commandContext?.runtime.reasoningEffort ?? 'medium');
@@ -1108,6 +1118,22 @@ export class InputHandler {
             this.modelPicker.moveDown();
           }
           // All other keys ignored while model picker is active
+        } else if (token.type === 'text' && this.modelPicker.mode === 'model') {
+          // Category filter quick-keys: f=free, p=premium, a=all
+          // Typing chars appends to search query
+          const ch = token.value;
+          if (ch === 'f' && this.modelPicker.query.length === 0) {
+            this.modelPicker.setCategoryFilter('free');
+          } else if (ch === 'p' && this.modelPicker.query.length === 0) {
+            this.modelPicker.setCategoryFilter('premium');
+          } else if (ch === 'a' && this.modelPicker.query.length === 0) {
+            this.modelPicker.setCategoryFilter('all');
+          } else {
+            // Printable character — append to search query
+            if (ch.length === 1 && ch >= ' ') {
+              this.modelPicker.appendChar(ch);
+            }
+          }
         }
         this.bus.emit('render:request');
         continue;
