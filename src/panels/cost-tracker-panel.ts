@@ -7,6 +7,7 @@ import { createStyledCell, createEmptyLine } from '../types/grid.ts';
 import { BasePanel } from './base-panel.ts';
 import type { EventBus } from '../core/event-bus.ts';
 import { getPricingForModel } from '../providers/model-limits.ts';
+import { getCostFromCatalog } from '../providers/model-catalog.ts';
 
 // ---------------------------------------------------------------------------
 // Pricing table  (USD per 1M tokens)
@@ -44,7 +45,14 @@ const MODEL_PRICING: Record<string, ModelPricing> = {
   'gemini-2.5-pro':        { input: 1.25,  output: 5 },
 };
 
-const DEFAULT_PRICING: ModelPricing = { input: 0, output: 0 };
+/**
+ * Look up pricing from the model catalog.
+ * Returns { input: 0, output: 0 } for free models and unknown models.
+ * Unknown models also emit a debug log to stderr.
+ */
+function getCostFromCatalogForPanel(modelId: string): ModelPricing {
+  return getCostFromCatalog(modelId, { debug: true });
+}
 
 function getPricing(modelId: string, provider = ''): ModelPricing {
   // 1. Live OpenRouter pricing (USD per token → convert to per million)
@@ -63,7 +71,8 @@ function getPricing(modelId: string, provider = ''): ModelPricing {
   for (const [key, pricing] of Object.entries(MODEL_PRICING)) {
     if (modelId.startsWith(key) || modelId.includes(key)) return pricing;
   }
-  return DEFAULT_PRICING;
+  // 5. Catalog lookup — covers models added after hardcoded table was written
+  return getCostFromCatalogForPanel(modelId);
 }
 
 function calcCost(inputTokens: number, outputTokens: number, pricing: ModelPricing): number {
