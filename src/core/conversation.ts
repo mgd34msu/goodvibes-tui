@@ -13,6 +13,7 @@ import { logger } from '../utils/logger.ts';
 import { LAYOUT } from '../renderer/layout.ts';
 import type { ProviderRegistry } from '../providers/registry.ts';
 import type { ConfigManager } from '../config/manager.ts';
+import { compactMessages } from './context-compaction.ts';
 
 /** Rough token estimate: 4 chars ≈ 1 token. */
 const estimateTokens = (text: string): number => Math.ceil(text.length / 4);
@@ -701,52 +702,70 @@ export class ConversationManager {
 
   /**
    * compact - Summarize the conversation to free context window.
-   * Sends a summarization prompt to the LLM and replaces message history
-   * with the summary as a single system message.
+   *
+   * Uses context-compaction strategy:
+   *   - Preserves the last N messages verbatim (default: 10)
+   *   - Summarizes all older assistant/user/tool messages into bullet-point form
+   *   - Keeps system messages at the front
+   *
+   * @param registry - Provider registry
+   * @param modelId - Model to use for summarization
+   * @param keepRecentMessages - Number of recent messages to preserve verbatim (default: 10)
+   * @param trigger - 'manual' (from /compact command) or 'auto' (from threshold check)
    */
-  public async compact(registry: ProviderRegistry, modelId: string): Promise<void> {
+  public async compact(
+    registry: ProviderRegistry,
+    modelId: string,
+    keepRecentMessages = 10,
+    trigger: 'auto' | 'manual' = 'manual',
+  ): Promise<void> {
     if (this.messages.length === 0) return;
 
-    const fullText = this.messages
-      .filter(m => m.role !== 'system')
-      .map(m => {
-        const role = m.role === 'tool' ? 'tool-result' : m.role;
-        const contentText = typeof m.content === 'string'
-          ? m.content
-          : (m.content as ContentPart[]).filter((p): p is { type: 'text'; text: string } => p.type === 'text').map(p => p.text).join('');
-        return `[${role}]: ${contentText}`;
-      })
-      .join('\n\n');
-
-    const prompt = [
-      'Please provide a concise summary of the following conversation.',
-      'Include: key topics discussed, decisions made, files modified, and current state.',
-      'Format as bullet points. Be terse.',
-      '',
-      fullText,
-    ].join('\n');
-
     try {
-      const provider = registry.getForModel(modelId);
-      const response = await provider.chat({
-        messages: [{ role: 'user', content: prompt }],
-        model: modelId,
+      const llmMessages = this.getMessagesForLLM();
+      const result = await compactMessages({
+        registry,
+        modelId,
+        messages: llmMessages,
+        keepRecentMessages,
+        trigger,
       });
-      const summary = response.content;
 
-      if (summary) {
-        // Replace all messages with the summary
-        this.messages = [
-          { role: 'system', content: `[Conversation summary]\n${summary}` },
-        ];
-        this.history.clear();
-        this.appendedUpTo = 0;
-        this.lastRenderedWidth = 0;
-        this.dirty = true;
-      }
+      // Rebuild internal messages from the compacted LLM-format messages.
+      // ProviderMessage only has 'user', 'assistant', 'tool' roles (no 'system').
+      // Preserve any original system messages from before compaction, then add compacted messages.
+      const originalSystemMessages = this.messages.filter(m => m.role === 'system');
+      const compactedMessages = result.messages.map(m => {
+        if (m.role === 'user') {
+          return { role: 'user' as const, content: typeof m.content === 'string' ? m.content : (m.content as ContentPart[]) };
+        }
+        if (m.role === 'assistant') {
+          return { role: 'assistant' as const, content: typeof m.content === 'string' ? m.content : String(m.content) };
+        }
+        // tool role
+        const toolMsg = m as { role: 'tool'; callId: string; content: string; name?: string };
+        return { role: 'tool' as const, callId: toolMsg.callId ?? '', content: typeof toolMsg.content === 'string' ? toolMsg.content : String(toolMsg.content) };
+      });
+      this.messages = [...originalSystemMessages, ...compactedMessages];
+
+      this.history.clear();
+      this.appendedUpTo = 0;
+      this.lastRenderedWidth = 0;
+      this.dirty = true;
+
+      const saved = result.tokensBeforeEstimate - result.tokensAfterEstimate;
+      logger.info('Conversation compacted', {
+        trigger,
+        messagesBeforeCompaction: result.event.messagesBeforeCompaction,
+        messagesAfterCompaction: result.event.messagesAfterCompaction,
+        tokensBeforeEstimate: result.tokensBeforeEstimate,
+        tokensAfterEstimate: result.tokensAfterEstimate,
+        tokensSaved: saved,
+      });
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
       logger.error('Compact failed', { error: msg });
+      throw err;
     }
   }
 
