@@ -92,11 +92,21 @@ export class AnthropicProvider implements LLMProvider {
       };
 
       if (systemPrompt) {
-        body['system'] = systemPrompt;
+        // Use cache_control to enable Anthropic prompt caching on the system prompt.
+        // Everything up to the last cache_control breakpoint is cached across requests.
+        body['system'] = [
+          { type: 'text', text: systemPrompt, cache_control: { type: 'ephemeral' } },
+        ];
       }
 
       if (tools && tools.length > 0) {
-        body['tools'] = toAnthropicTools(tools);
+        const anthropicTools = toAnthropicTools(tools);
+        // Mark the last tool with cache_control so the full tool set is cached
+        if (anthropicTools.length > 0) {
+          const lastTool = anthropicTools[anthropicTools.length - 1] as unknown as Record<string, unknown>;
+          lastTool['cache_control'] = { type: 'ephemeral' };
+        }
+        body['tools'] = anthropicTools;
       }
 
       if (reasoningEffort && reasoningEffort !== 'instant') {
