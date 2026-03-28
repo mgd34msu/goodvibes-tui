@@ -2,7 +2,6 @@
 // DiffPanel — unified diff view of agent file changes
 // ---------------------------------------------------------------------------
 
-import { spawnSync } from 'node:child_process';
 import type { Line } from '../types/grid.ts';
 import { createStyledCell, createEmptyLine } from '../types/grid.ts';
 import { BasePanel } from './base-panel.ts';
@@ -223,16 +222,37 @@ export class DiffPanel extends BasePanel {
     this.markDirty();
   }
 
+  /** Load a raw multi-file unified diff string directly. */
+  loadRawDiff(raw: string): void {
+    this.entries = splitIntoDiffEntries(raw);
+    this.selectedFile = 0;
+    this.scrollOffset = 0;
+    this.markDirty();
+  }
+
+  /** Run `git diff` against specific files and populate entries. */
+  async showFileDiffs(files: string[], ref?: string): Promise<void> {
+    const args = ['diff', ...(ref ? [ref] : []), '--', ...files];
+    const proc = Bun.spawn(['/bin/sh', '-c', `git ${args.join(' ')}`], { stdout: 'pipe', cwd: process.cwd() });
+    const raw = await new Response(proc.stdout).text();
+    await proc.exited;
+    this.loadRawDiff(raw);
+  }
+
   /** Run `git diff` and populate all changed files. */
-  async showGitDiff(): Promise<void> {
-    const result = spawnSync('git', ['diff'], { encoding: 'utf8', cwd: process.cwd() });
-    if (result.error || result.status !== 0) {
-      // Show error as a single entry
-      const errorText = result.error?.message ?? result.stderr ?? 'git diff failed';
+  async showGitDiff(ref?: string): Promise<void> {
+    const args = ['diff', ...(ref ? [ref] : [])];
+    const proc = Bun.spawn(['/bin/sh', '-c', `git ${args.join(' ')}`], { stdout: 'pipe', stderr: 'pipe', cwd: process.cwd() });
+    const [raw, errText] = await Promise.all([
+      new Response(proc.stdout).text(),
+      new Response(proc.stderr).text(),
+    ]);
+    const exitCode = await proc.exited;
+    if (exitCode !== 0) {
+      const errorText = errText.trim() || 'git diff failed';
       this.showDiff('(error)', `--- error\n+++ error\n@@ -0,0 +1,1 @@\n+${errorText}`);
       return;
     }
-    const raw = result.stdout ?? '';
     if (!raw.trim()) {
       this.showDiff('(no changes)', '@@ -0,0 +0,0 @@\n No changes in working tree.');
       return;
