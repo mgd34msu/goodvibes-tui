@@ -1,4 +1,5 @@
 import { readFileSync, writeFileSync } from 'node:fs';
+import { recordChange } from '../../sessions/change-tracker.ts';
 import { extname } from 'node:path';
 import type { Tool, ToolDefinition } from '../../types/tools.ts';
 import { FileStateCache, unifiedDiff } from '../../state/file-cache.ts';
@@ -962,6 +963,8 @@ export function createEditTool(fileCache: FileStateCache, options?: EditToolOpti
           writeFileSync(resolvedPath, newContent, 'utf-8');
           fileCache.update(resolvedPath, newContent);
           writtenPaths.add(resolvedPath);
+          // Track for /diff session change view
+          recordChange(resolvedPath);
         } catch (err) {
           const msg = `Write failed for '${resolvedPath}': ${err instanceof Error ? err.message : String(err)}`;
           // Mark all results for this path as failed

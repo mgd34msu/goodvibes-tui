@@ -9,6 +9,7 @@ import { ProjectIndex } from '../../state/project-index.ts';
 import { configManager } from '../../config/index.ts';
 import { autoHealer } from '../shared/auto-heal.ts';
 import { logger } from '../../utils/logger.ts';
+import { recordChange } from '../../sessions/change-tracker.ts';
 
 // ---------------------------------------------------------------------------
 // Result types
@@ -347,6 +348,8 @@ export function createWriteTool(options?: {
             bytes: byteSize,
             mode: outcome.result.mode_applied,
           });
+          // Track for /diff session change view
+          recordChange(outcome.result.resolved_path);
         }
       }
 
