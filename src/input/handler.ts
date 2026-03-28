@@ -713,6 +713,8 @@ export class InputHandler {
     const scrollTop = this.getScrollTop();
     const lineCount = history.getLineCount();
 
+    const kb = getKeybindingsManager();
+
     for (const token of tokens) {
 
       // --- Search mode has focus: two phases ---
@@ -1145,8 +1147,8 @@ export class InputHandler {
             const maxVis = Math.max(5, this.getViewportHeight() - MODEL_PICKER_CHROME_LINES);
             this.modelPicker.moveDown(maxVis);
           } else if (token.logicalName === 'tab' && this.modelPicker.mode === 'model') {
-            // Tab cycles category filter: all → free → premium → all
-            const cycle: import('./model-picker.ts').CategoryFilter[] = ['all', 'free', 'premium'];
+            // Tab cycles category filter: all → free → paid → all
+            const cycle: import('./model-picker.ts').CategoryFilter[] = ['all', 'free', 'paid'];
             const cur = cycle.indexOf(this.modelPicker.categoryFilter);
             this.modelPicker.setCategoryFilter(cycle[(cur + 1) % cycle.length]!);
           }

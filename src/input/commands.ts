@@ -983,7 +983,7 @@ export function registerBuiltinCommands(registry: CommandRegistry): void {
           const exportMsgs = msgs.map(m => ({
             role: String(m.role ?? 'user') as 'user' | 'assistant' | 'system' | 'tool',
             content: Array.isArray(m.content)
-              ? m.content as import('../export/markdown.ts').ContentPart[]
+              ? m.content as import('../providers/interface.ts').ContentPart[]
               : String(m.content ?? ''),
             toolCalls: m.toolCalls as import('../types/tools.ts').ToolCall[] | undefined,
             callId: m.callId as string | undefined,
@@ -3273,7 +3273,7 @@ export function registerBuiltinCommands(registry: CommandRegistry): void {
       } catch (mkdirErr) {
         // Non-fatal: writeFile will surface a clearer error if the directory
         // could not be created. Log for diagnostics.
-        logger.warn(`[share] mkdir failed for ${dirname(outputPath)}:`, mkdirErr);
+        logger.warn(`[share] mkdir failed for ${dirname(outputPath)}:`, mkdirErr instanceof Error ? { message: mkdirErr.message } : undefined);
       }
 
       try {
