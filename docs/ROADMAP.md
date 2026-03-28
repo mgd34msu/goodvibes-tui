@@ -320,27 +320,6 @@ These were not in the original list but emerged from codebase analysis:
 
 ## v1.1.0+ — Additional Enhancements
 
-### 36. Agent memory across sessions
-- **Problem:** Agents start from zero context every time. Past work is lost.
-- **Fix:** Persist a summary of each agent's completed work. New agents receive relevant past summaries as context bootstrap.
-- **Files:** `src/agents/orchestrator.ts`, new `src/agents/memory.ts`
-- **Effort:** L
-- **Depends on:** #19 (session state preservation)
-
-### 37. Agent specialization by model
-- **Problem:** All agents use the same model regardless of task type.
-- **Fix:** Route reviewer tasks to reasoning models (Magistral, QwQ), coding tasks to code models (Codestral, Devstral), research to fast models (Flash, Haiku). Configurable model-per-template mapping.
-- **Files:** `src/agents/orchestrator.ts`, `src/tools/agent/index.ts`, `src/config/schema.ts`
-- **Effort:** M
-- **Depends on:** None
-
-### 38. Agent self-evaluation
-- **Problem:** Agents report completion without verifying their work.
-- **Fix:** Before reporting done, agents self-check: did tests pass? did the build succeed? are there lint errors? Configurable per template.
-- **Files:** `src/agents/orchestrator.ts`
-- **Effort:** M
-- **Depends on:** None
-
 ### 39. Live reload for development
 - **Problem:** TUI must be manually restarted after code changes during development.
 - **Fix:** `bun --watch` integration in dev mode. Auto-restart on source file changes.
@@ -411,21 +390,14 @@ These were not in the original list but emerged from codebase analysis:
 - **Effort:** M
 - **Depends on:** None
 
-### 49. AST-aware editing
-- **Problem:** File edits use string find/replace which can match wrong locations.
-- **Fix:** Edit tool accepts AST node targets (function name, class name, import). Uses tree-sitter to locate the exact node, then replaces its content.
-- **Files:** `src/tools/edit/`, `src/intelligence/tree-sitter/`
-- **Effort:** L
-- **Depends on:** #35 (tree-sitter type safety)
-
-### 50. Semantic diff
+### 49. Semantic diff
 - **Problem:** Diffs show textual changes, not functional changes.
 - **Fix:** After edits, show what changed functionally: new functions added, signatures changed, imports modified. Uses AST comparison.
 - **Files:** new `src/renderer/semantic-diff.ts`, `src/intelligence/tree-sitter/`
 - **Effort:** L
-- **Depends on:** #49 (AST-aware editing)
+- **Depends on:** #35 (tree-sitter type safety)
 
-### 51. Dependency-aware task ordering
+### 50. Dependency-aware task ordering
 - **Problem:** When an agent edits a module, its dependents aren't automatically re-checked.
 - **Fix:** After file edits, trace import graph to find affected files. Queue typecheck/lint on dependents. Surface broken imports immediately.
 - **Files:** `src/intelligence/`, `src/agents/orchestrator.ts`
@@ -440,8 +412,8 @@ These were not in the original list but emerged from codebase analysis:
 |----------|-------|-------|
 | P0 (Ship-blocking) | 1, 5, 6 | Agent streaming, TS cleanup, CI |
 | P1 (Should have for 1.0) | 2, 3, 4, 7, 10, 12, 43 | Version sync, limits, tests, picker, errors, compaction |
-| P2 (Nice for 1.0) | 8, 9, 11, 13, 14, 15, 37, 44 | Synthetic, health, progress, branching, diffs, costs, model routing, failover |
-| P3 (Post-1.0) | 16-31, 36, 38-42, 45-51 | Full feature set, agent intelligence, collaboration, AST |
+| P2 (Nice for 1.0) | 8, 9, 11, 13, 14, 15, 44 | Synthetic, health, progress, branching, diffs, costs, failover |
+| P3 (Post-1.0) | 16-31, 39-42, 45-50 | Full feature set, collaboration, semantic diff |
 | P4 (Ongoing) | 20, 21, 22, 23 | Docs, coverage, perf, security |
 | Done | 29 | Prompt caching (Anthropic, Gemini, OpenAI) |
 
@@ -451,9 +423,9 @@ These were not in the original list but emerged from codebase analysis:
 |------|-------|------------------------|
 | S | 5 | 0.5-1 day |
 | M | 28 | 2-4 days |
-| L | 12 | 5-8 days |
+| L | 8 | 5-8 days |
 | XL | 3 | 10+ days |
 
 **Total estimated effort to 1.0:** ~60-80 dev-days
 **Total estimated effort to 1.1:** ~130-170 dev-days
-**Total items:** 51 (1 done, 50 remaining)
+**Total items:** 47 (1 done, 46 remaining)
