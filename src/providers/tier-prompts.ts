@@ -10,6 +10,22 @@ import type { ModelTier } from './registry.ts';
 export type { ModelTier };
 
 /**
+ * Derive the model tier from a model's context window size.
+ *
+ * - small  (<32K)     → 'free'     (needs most guidance)
+ * - medium (32K–128K) → 'standard' (brief reminders)
+ * - large  (>128K)    → 'premium'  (no extra guidance needed)
+ *
+ * This is used instead of the static ModelDefinition.tier field so that
+ * tier-prompt selection is driven by actual model capabilities.
+ */
+export function getTierForContextWindow(contextWindow: number): ModelTier {
+  if (contextWindow > 128_000) return 'premium';
+  if (contextWindow >= 32_000) return 'standard';
+  return 'free';
+}
+
+/**
  * Returns supplemental system prompt content based on the model's capability
  * tier.  The returned string is appended to the base system prompt before
  * each LLM call.

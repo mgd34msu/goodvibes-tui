@@ -32,7 +32,7 @@ import { getKeybindingsManager } from './keybindings.ts';
 import { pluginManager, type PluginStatus } from '../plugins/manager.ts';
 import { PLUGINS_DIR } from '../plugins/loader.ts';
 import { EFFORT_DESCRIPTIONS } from '../providers/effort-levels.ts';
-import { pinModel, unpinModel, isModelPinned, getPinned } from '../providers/favorites.ts';
+import { pinModel, unpinModel, isModelPinned, getPinned, recordUsage } from '../providers/favorites.ts';
 
 let _serviceRegistry: ServiceRegistry | undefined;
 function getServiceRegistry(): ServiceRegistry {
@@ -93,6 +93,7 @@ export function registerBuiltinCommands(registry: CommandRegistry): void {
           ctx.configManager.set('provider.model', def.id);
           ctx.configManager.set('provider.provider', def.provider);
           ctx.print(`Switched to model: ${def.displayName} (${def.provider})`);
+          void recordUsage(def.id);
           ctx.eventBus.emit('command:model-changed', { provider: def.provider, model: def.id });
         } catch (e) {
           ctx.print(`Error: ${(e as Error).message}`);

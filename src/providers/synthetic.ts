@@ -58,98 +58,43 @@ export interface CanonicalModel {
   backends: SyntheticBackend[];
 }
 
-// --- Seed catalog ---
-// Provides tier-aware, key-aware backend data for catalog-driven failover.
-// Stage 1 network fetch (models.dev) will eventually replace this seed.
+// --- Live catalog ---
+// Populated by the catalog fetch (model-catalog.ts) after a successful network
+// request. Until then the catalog is empty and the synthetic provider returns
+// no models — there is no hardcoded fallback.
 
-const SEED_CANONICAL_MODELS: CanonicalModel[] = [
-  {
-    id: 'gpt-oss-120b',
-    tier: 'free',
-    backends: [
-      { providerName: 'groq',         modelId: 'openai/gpt-oss-120b',      contextWindow: 131072, envVars: ['GROQ_API_KEY'] },
-      { providerName: 'huggingface',  modelId: 'openai/gpt-oss-120b',      contextWindow: 131072, envVars: ['HUGGINGFACE_API_KEY', 'HF_TOKEN'] },
-      { providerName: 'nvidia',       modelId: 'openai/gpt-oss-120b',      contextWindow: 131072, envVars: ['NVIDIA_API_KEY'] },
-      { providerName: 'ollama-cloud', modelId: 'gpt-oss:120b',             contextWindow: 131072, envVars: ['OLLAMA_CLOUD_API_KEY', 'OPENAI_API_KEY'] },
-      { providerName: 'openai',       modelId: 'gpt-oss-120b',             contextWindow: 131072, envVars: ['OPENAI_API_KEY'] },
-      { providerName: 'openrouter',   modelId: 'openai/gpt-oss-120b:free', contextWindow: 131072, envVars: ['OPENROUTER_API_KEY'] },
-    ],
-  },
-  {
-    id: 'minimax-m2.5',
-    tier: 'free',
-    backends: [
-      { providerName: 'huggingface',  modelId: 'MiniMaxAI/MiniMax-M2.5',   contextWindow: 1000000, envVars: ['HUGGINGFACE_API_KEY', 'HF_TOKEN'] },
-      { providerName: 'nvidia',       modelId: 'minimaxai/minimax-m2.5',   contextWindow: 1000000, envVars: ['NVIDIA_API_KEY'] },
-      { providerName: 'ollama-cloud', modelId: 'minimax-m2.5',             contextWindow: 1000000, envVars: ['OLLAMA_CLOUD_API_KEY', 'OPENAI_API_KEY'] },
-      { providerName: 'openrouter',   modelId: 'minimax/minimax-m2.5:free', contextWindow: 1000000, envVars: ['OPENROUTER_API_KEY'] },
-      { providerName: 'aihubmix',     modelId: 'coding-minimax-m2.5-free', contextWindow: 1000000, envVars: ['AIHUBMIX_API_KEY'] },
-      { providerName: 'aihubmix',     modelId: 'minimax-m2.5-free',        contextWindow: 1000000, envVars: ['AIHUBMIX_API_KEY'] },
-    ],
-  },
-  {
-    id: 'kimi-k2.5',
-    tier: 'free',
-    backends: [
-      { providerName: 'huggingface',  modelId: 'moonshotai/Kimi-K2.5', contextWindow: 262144, envVars: ['HUGGINGFACE_API_KEY', 'HF_TOKEN'] },
-      { providerName: 'nvidia',       modelId: 'moonshotai/kimi-k2.5', contextWindow: 262144, envVars: ['NVIDIA_API_KEY'] },
-      { providerName: 'ollama-cloud', modelId: 'kimi-k2.5',            contextWindow: 262144, envVars: ['OLLAMA_CLOUD_API_KEY', 'OPENAI_API_KEY'] },
-    ],
-  },
-  {
-    id: 'qwen-3.5-397b',
-    tier: 'free',
-    backends: [
-      { providerName: 'huggingface',  modelId: 'Qwen/Qwen3.5-397B-A17B',       contextWindow: 131072, envVars: ['HUGGINGFACE_API_KEY', 'HF_TOKEN'] },
-      { providerName: 'nvidia',       modelId: 'qwen/qwen3.5-397b-a17b',       contextWindow: 131072, envVars: ['NVIDIA_API_KEY'] },
-      { providerName: 'ollama-cloud', modelId: 'qwen3.5:397b',                 contextWindow: 131072, envVars: ['OLLAMA_CLOUD_API_KEY', 'OPENAI_API_KEY'] },
-    ],
-  },
-  {
-    id: 'glm-5',
-    tier: 'free',
-    backends: [
-      { providerName: 'huggingface',  modelId: 'zai-org/GLM-5',          contextWindow: 131072, envVars: ['HUGGINGFACE_API_KEY', 'HF_TOKEN'] },
-      { providerName: 'nvidia',       modelId: 'z-ai/glm5',              contextWindow: 131072, envVars: ['NVIDIA_API_KEY'] },
-      { providerName: 'ollama-cloud', modelId: 'glm-5',                  contextWindow: 131072, envVars: ['OLLAMA_CLOUD_API_KEY', 'OPENAI_API_KEY'] },
-      { providerName: 'aihubmix',     modelId: 'coding-glm-5-free',      contextWindow: 131072, envVars: ['AIHUBMIX_API_KEY'] },
-      { providerName: 'aihubmix',     modelId: 'coding-glm-5-turbo-free', contextWindow: 131072, envVars: ['AIHUBMIX_API_KEY'] },
-    ],
-  },
-  {
-    id: 'nemotron-3-super-120b',
-    tier: 'free',
-    backends: [
-      { providerName: 'nvidia',       modelId: 'nvidia/nemotron-3-super-120b-a12b',      contextWindow: 131072, envVars: ['NVIDIA_API_KEY'] },
-      { providerName: 'ollama-cloud', modelId: 'nemotron-3-super',                        contextWindow: 131072, envVars: ['OLLAMA_CLOUD_API_KEY', 'OPENAI_API_KEY'] },
-      { providerName: 'openrouter',   modelId: 'nvidia/nemotron-3-super-120b-a12b:free', contextWindow: 131072, envVars: ['OPENROUTER_API_KEY'] },
-    ],
-  },
-];
+let _canonicalCatalog: CanonicalModel[] | null = null;
 
-// --- Injectable catalog (for tests) ---
-
-let _overrideCatalog: CanonicalModel[] | null = null;
+/**
+ * Inject the canonical model list fetched from the catalog.
+ * Called by the catalog fetch implementation after a successful fetch.
+ */
+export function setSyntheticCanonicalModels(models: CanonicalModel[]): void {
+  _canonicalCatalog = models;
+}
 
 /**
  * Inject a custom catalog for testing.
  * @internal
  */
-export function _setSyntheticCatalogForTest(catalog: CanonicalModel[]): void {
-  _overrideCatalog = catalog;
+export function _setSyntheticCatalogForTest(models: CanonicalModel[]): void {
+  _canonicalCatalog = models;
 }
 
 /**
- * Reset the injected catalog back to seed data.
+ * Reset the injected catalog to empty (no models available).
  * @internal
  */
 export function _resetSyntheticCatalog(): void {
-  _overrideCatalog = null;
+  _canonicalCatalog = null;
 }
 
-/** Returns the active canonical model catalog. */
+/**
+ * Returns the active canonical model catalog.
+ * Returns an empty array if the catalog has not been fetched yet.
+ */
 function getCatalogModels(): CanonicalModel[] {
-  return _overrideCatalog ?? SEED_CANONICAL_MODELS;
+  return _canonicalCatalog ?? [];
 }
 
 // --- Backend selection ---
