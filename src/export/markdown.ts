@@ -204,7 +204,7 @@ export function exportToMarkdown(
 }
 
 /** Extract plain text from a string or ContentPart array. */
-function extractText(content: string | ContentPart[]): string {
+export function extractText(content: string | ContentPart[]): string {
   if (typeof content === 'string') return content;
   return (content as ContentPart[])
     .filter((p): p is { type: 'text'; text: string } => p.type === 'text')
