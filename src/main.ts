@@ -15,6 +15,7 @@ import { config, configManager } from './config/index.ts';
 import { providerRegistry } from './providers/registry.ts';
 import { ToolRegistry } from './tools/registry.ts';
 import { registerAllTools } from './tools/index.ts';
+import { FileUndoManager } from './state/file-undo.ts';
 import { agentOrchestrator } from './agents/orchestrator.ts';
 import { PermissionManager } from './permissions/manager.ts';
 import { AcpManager } from './acp/manager.ts';
@@ -59,6 +60,7 @@ import { getPanelManager } from './panels/panel-manager.ts';
 import { registerBuiltinPanels } from './panels/builtin-panels.ts';
 import { renderPanelTabBar } from './renderer/panel-tab-bar.ts';
 import { mcpRegistry } from './mcp/registry.ts';
+import { getKeybindingsManager } from './input/keybindings.ts';
 
 /**
  * Attempt to restore a previously saved model selection after providers are registered.
@@ -249,6 +251,9 @@ async function main() {
 
   // --- Initialize model limits cache (sync load + background refresh if stale) ---
   initModelLimits();
+
+  // --- Load keybindings from disk (merges user overrides with defaults) ---
+  getKeybindingsManager().loadFromDisk();
 
   // --- Module wiring ---
   const bus = new EventBus();
@@ -591,6 +596,7 @@ async function main() {
     reloadSystemPrompt: loadSystemPrompt,
     toolRegistry,
     mcpRegistry,
+    fileUndoManager: FileUndoManager.getInstance(),
   };
 
   input.setCommandRegistry(commandRegistry, commandContext);
@@ -1091,7 +1097,32 @@ async function main() {
   }));
   unsubs.push(bus.on('input:submit', ({ text, content }) => {
     scrollLocked = true; // Re-lock on any user input
-    orchestrator.handleUserInput(text, content);
+    // Inline model switching: @model:<model-id> anywhere in input
+    // Strips the @model: token and switches the active model before submitting.
+    const AT_MODEL_RE = /@model:([^\s]+)/g;
+    let processedText = text;
+    let atModelMatch: RegExpExecArray | null;
+    while ((atModelMatch = AT_MODEL_RE.exec(text)) !== null) {
+      const modelId = atModelMatch[1];
+      try {
+        providerRegistry.setCurrentModel(modelId);
+        const def = providerRegistry.getCurrentModel();
+        runtime.model = def.id;
+        runtime.provider = def.provider;
+        configManager.set('provider.model', def.id);
+        configManager.set('provider.provider', def.provider);
+        conversation.addSystemMessage(`[Model] Switched to ${def.displayName} (${def.provider}) via @model:`);
+        bus.emit('command:model-changed', { provider: def.provider, model: def.id });
+      } catch {
+        conversation.addSystemMessage(`[Model] Unknown model: ${modelId}`);
+      }
+      processedText = processedText.replace(atModelMatch[0], '').trim();
+    }
+    if (processedText || content) {
+      orchestrator.handleUserInput(processedText, content);
+    } else {
+      bus.emit('render:request');
+    }
   }));
 
   // Cancel generation when requested by input handler

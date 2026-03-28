@@ -29,6 +29,7 @@ import { SettingsModal } from './settings-modal.ts';
 import { SessionPickerModal } from './session-picker-modal.ts';
 import { ProfilePickerModal } from './profile-picker-modal.ts';
 import { getPanelManager } from '../panels/panel-manager.ts';
+import { getKeybindingsManager } from './keybindings.ts';
 
 /**
  * InputHandler - Owns prompt text, paste registry, and keyboard/mouse handling.
@@ -754,7 +755,7 @@ export class InputHandler {
                 matchCount: this.searchManager.matches.length,
                 currentMatch: this.searchManager.currentMatch,
               });
-            } else if (token.logicalName === 'f' && token.ctrl) {
+            } else if (kb.matches('search', token)) {
               this.searchManager.close();
               this.bus.emit('search:end');
             }
@@ -762,7 +763,7 @@ export class InputHandler {
         } else {
           // --- Navigation phase: locked query, navigate matches ---
           if (token.type === 'key') {
-            if (token.logicalName === 'escape' || (token.logicalName === 'f' && token.ctrl)) {
+            if (token.logicalName === 'escape' || kb.matches('search', token)) {
               this.searchManager.close();
               this.bus.emit('search:end');
             } else if (token.logicalName === 'right' || token.logicalName === 'down') {
@@ -1384,12 +1385,12 @@ export class InputHandler {
             continue;
           }
 
-          // Ctrl+] / Ctrl+^ still cycle tabs even when panel focused
-          if (token.logicalName === '}' && token.ctrl) {
+          // Panel tab cycling still works even when panel focused
+          if (getKeybindingsManager().matches('panel-tab-next', token)) {
             this.cyclePanelTab('next');
             continue;
           }
-          if (token.logicalName === '~' && token.ctrl) {
+          if (getKeybindingsManager().matches('panel-tab-prev', token)) {
             this.cyclePanelTab('prev');
             continue;
           }
@@ -1494,11 +1495,12 @@ export class InputHandler {
         continue;
       } else if (token.type === 'key') {
         // --- Global shortcuts (always active) ---
-        if (token.logicalName === 'c' && token.ctrl && token.shift) {
+        const kb = getKeybindingsManager();
+        if (kb.matches('copy-selection', token)) {
           this.handleCopy();
           continue;
         }
-        if (token.logicalName === 'c' && token.ctrl && !token.shift) {
+        if (kb.matches('clear-cancel', token)) {
           this.handleCtrlC();
           continue;
         }
@@ -1507,12 +1509,12 @@ export class InputHandler {
           continue;
         }
         // Ctrl+L: clear screen (full repaint)
-        if (token.logicalName === 'l' && token.ctrl) {
+        if (kb.matches('screen-clear', token)) {
           this.bus.emit('clear:screen');
           continue;
         }
-        // Ctrl+P: toggle panel sidebar
-        if (token.logicalName === 'p' && token.ctrl) {
+        // Toggle panel sidebar
+        if (kb.matches('panel-picker', token)) {
           if (this.commandContext?.openPanelPicker) {
             this.commandContext.openPanelPicker();
           }
@@ -1520,24 +1522,24 @@ export class InputHandler {
           continue;
         }
 
-        // Ctrl+] (0x1d): next panel tab
-        if (token.logicalName === '}' && token.ctrl) {
+        // Next panel tab
+        if (kb.matches('panel-tab-next', token)) {
           this.cyclePanelTab('next');
           continue;
         }
-        // Ctrl+^ (0x1e): previous panel tab
-        if (token.logicalName === '~' && token.ctrl) {
+        // Previous panel tab
+        if (kb.matches('panel-tab-prev', token)) {
           this.cyclePanelTab('prev');
           continue;
         }
-        // Ctrl+R: open reverse-i-search (history search)
-        if (token.logicalName === 'r' && token.ctrl) {
+        // Reverse-i-search (history search)
+        if (kb.matches('history-search', token)) {
           this.historySearch.open(this.prompt);
           this.bus.emit('render:request');
           continue;
         }
-        // Ctrl+F: toggle search mode
-        if (token.logicalName === 'f' && token.ctrl) {
+        // Toggle search mode
+        if (kb.matches('search', token)) {
           if (this.searchManager.active) {
             this.searchManager.close();
             this.bus.emit('search:end');
@@ -1548,23 +1550,23 @@ export class InputHandler {
           this.bus.emit('render:request');
           continue;
         }
-        // Ctrl+Y: copy nearest code/tool block to clipboard
-        if (token.logicalName === 'y' && token.ctrl && !this.commandMode) {
+        // Copy nearest code/tool block to clipboard
+        if (kb.matches('block-copy', token) && !this.commandMode) {
           this.handleBlockCopy();
           continue;
         }
-        // Ctrl+B: bookmark/unbookmark nearest block
-        if (token.logicalName === 'b' && token.ctrl && !this.commandMode) {
+        // Bookmark/unbookmark nearest block
+        if (kb.matches('bookmark', token) && !this.commandMode) {
           this.handleBookmark();
           continue;
         }
-        // Ctrl+S: save nearest block content to file
-        if (token.logicalName === 's' && token.ctrl && !this.commandMode) {
+        // Save nearest block content to file
+        if (kb.matches('block-save', token) && !this.commandMode) {
           this.handleBlockSave();
           continue;
         }
-        // Ctrl+W: delete word backward
-        if (token.logicalName === 'w' && token.ctrl) {
+        // Delete word backward
+        if (kb.matches('delete-word', token)) {
           this.saveUndoState();
           let pos = this.cursorPos;
           // Skip trailing whitespace
@@ -1576,8 +1578,8 @@ export class InputHandler {
           this.ensureInputCursorVisible();
           continue;
         }
-        // Ctrl+A: apply nearest diff block if one is nearby, else move to start of line
-        if (token.logicalName === 'a' && token.ctrl) {
+        // Apply nearest diff block if one is nearby, else move to start of line
+        if (kb.matches('apply-diff-line-start', token)) {
           if (!this.commandMode && this.handleDiffApply()) {
             continue; // Diff found and apply initiated — skip cursor move
           }
@@ -1591,8 +1593,8 @@ export class InputHandler {
           this.ensureInputCursorVisible();
           continue;
         }
-        // Ctrl+E: navigate to next error when prompt is empty; else move to end of line
-        if (token.logicalName === 'e' && token.ctrl) {
+        // Navigate to next error when prompt is empty; else move to end of line
+        if (kb.matches('next-error-line-end', token)) {
           if (this.prompt === '' && !this.commandMode) {
             const cm = this.conversationManager;
             if (cm) {
@@ -1615,15 +1617,15 @@ export class InputHandler {
           this.ensureInputCursorVisible();
           continue;
         }
-        // Ctrl+K: kill to end of line
-        if (token.logicalName === 'k' && token.ctrl) {
+        // Kill to end of line
+        if (kb.matches('kill-line', token)) {
           this.saveUndoState();
           this.prompt = this.prompt.slice(0, this.cursorPos);
           this.ensureInputCursorVisible();
           continue;
         }
-        // Ctrl+U: clear prompt line
-        if (token.logicalName === 'u' && token.ctrl) {
+        // Clear prompt line
+        if (kb.matches('clear-prompt', token)) {
           this.saveUndoState();
           this.prompt = '';
           this.cursorPos = 0;
@@ -1634,18 +1636,18 @@ export class InputHandler {
           }
           continue;
         }
-        // Ctrl+Z: undo last prompt edit
-        if (token.logicalName === 'z' && token.ctrl && !token.shift) {
+        // Undo last prompt edit
+        if (kb.matches('undo', token)) {
           this.handleUndo();
           continue;
         }
-        // Ctrl+Shift+Z: redo
-        if (token.logicalName === 'z' && token.ctrl && token.shift) {
+        // Redo
+        if (kb.matches('redo', token)) {
           this.handleRedo();
           continue;
         }
-        // Ctrl+V: paste (image first, then text)
-        if (token.logicalName === 'v' && token.ctrl) {
+        // Paste (image first, then text)
+        if (kb.matches('paste', token)) {
           this.handlePaste();
           continue;
         }
