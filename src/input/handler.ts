@@ -10,7 +10,7 @@ import { ModelPickerModal } from './model-picker.ts';
 import { SelectionModal } from './selection-modal.ts';
 import type { SelectionResult, SelectionAction } from './selection-modal.ts';
 import { SearchManager } from './search.ts';
-import { InputHistory } from './input-history.ts';
+import { InputHistory, HistorySearch } from './input-history.ts';
 import type { ConversationManager } from '../core/conversation.ts';
 import type { PermissionCategory } from '../permissions/manager.ts';
 import { readFileSync, writeFileSync, existsSync } from 'node:fs';
@@ -76,6 +76,7 @@ export class InputHandler {
   public shortcutsOverlayActive = false;
   public shortcutsScrollOffset = 0;
   private inputHistory: InputHistory | null = null;
+  public historySearch: HistorySearch = new HistorySearch(() => this.inputHistory?.getEntries() ?? []);
   private conversationManager: ConversationManager | null = null;
   private selectionCallback: ((result: SelectionResult | null) => void) | null = null;
   /** Time of last [COPIED] block feedback, for brief display. */
@@ -1064,6 +1065,29 @@ export class InputHandler {
         continue;
       }
 
+      // --- History search mode: intercept all input ---
+      if (this.historySearch.active) {
+        if (token.type === 'text') {
+          this.historySearch.appendChar(token.value);
+        } else if (token.type === 'key') {
+          if (token.logicalName === 'escape') {
+            this.prompt = this.historySearch.cancel();
+            this.cursorPos = this.prompt.length;
+          } else if (token.logicalName === 'return') {
+            this.prompt = this.historySearch.accept();
+            this.cursorPos = this.prompt.length;
+          } else if (token.logicalName === 'backspace') {
+            this.historySearch.deleteChar();
+          } else if (token.ctrl && token.logicalName === 'r') {
+            this.historySearch.stepOlder();
+          } else if (token.ctrl && token.logicalName === 's') {
+            this.historySearch.stepNewer();
+          }
+        }
+        this.bus.emit('render:request');
+        continue;
+      }
+
       // --- Model picker has focus: intercept all input ---
       if (this.modelPicker.active) {
         if (token.type === 'key') {
@@ -1504,6 +1528,12 @@ export class InputHandler {
         // Ctrl+^ (0x1e): previous panel tab
         if (token.logicalName === '~' && token.ctrl) {
           this.cyclePanelTab('prev');
+          continue;
+        }
+        // Ctrl+R: open reverse-i-search (history search)
+        if (token.logicalName === 'r' && token.ctrl) {
+          this.historySearch.open(this.prompt);
+          this.bus.emit('render:request');
           continue;
         }
         // Ctrl+F: toggle search mode

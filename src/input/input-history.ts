@@ -14,6 +14,92 @@ import { logger } from '../utils/logger.ts';
  * Up arrow goes to older entries (position increases).
  * Down arrow goes to newer entries (position decreases), then back to draft.
  */
+export interface HistorySearchMatch {
+  entry: string;
+  matchStart: number;
+  matchLength: number;
+}
+
+export class HistorySearch {
+  active = false;
+  query = '';
+  matches: HistorySearchMatch[] = [];
+  matchIndex = 0;
+  savedDraft = '';
+
+  constructor(private getEntries: () => readonly string[]) {}
+
+  open(draft: string): void {
+    this.active = true;
+    this.savedDraft = draft;
+    this.query = '';
+    this.matches = [];
+    this.matchIndex = 0;
+  }
+
+  search(query: string): void {
+    this.query = query;
+    const q = query.toLowerCase();
+    this.matches = [];
+    if (!q) return;
+    for (const entry of this.getEntries()) {
+      const idx = entry.toLowerCase().indexOf(q);
+      if (idx >= 0) {
+        this.matches.push({ entry, matchStart: idx, matchLength: q.length });
+      }
+    }
+    this.matchIndex = 0;
+  }
+
+  appendChar(ch: string): void {
+    this.search(this.query + ch);
+  }
+
+  deleteChar(): void {
+    if (this.query.length > 0) {
+      this.search(this.query.slice(0, -1));
+    }
+  }
+
+  /** Move to next older match (higher index). */
+  stepOlder(): void {
+    if (this.matches.length > 0 && this.matchIndex < this.matches.length - 1) {
+      this.matchIndex++;
+    }
+  }
+
+  /** Move to next newer match (lower index). */
+  stepNewer(): void {
+    if (this.matchIndex > 0) {
+      this.matchIndex--;
+    }
+  }
+
+  get currentMatch(): HistorySearchMatch | null {
+    return this.matches[this.matchIndex] ?? null;
+  }
+
+  accept(): string {
+    const match = this.currentMatch;
+    this.close();
+    return match?.entry ?? '';
+  }
+
+  cancel(): string {
+    const draft = this.savedDraft;
+    this.close();
+    return draft;
+  }
+
+  private close(): void {
+    this.active = false;
+    this.query = '';
+    this.matches = [];
+    this.matchIndex = 0;
+    this.savedDraft = '';
+  }
+}
+
 export class InputHistory {
   private entries: string[] = [];
   private position = -1;  // -1 = not browsing
@@ -133,6 +219,13 @@ export class InputHistory {
    */
   get isBrowsing(): boolean {
     return this.position !== -1;
+  }
+
+  /**
+   * Return entries as readonly for use by HistorySearch.
+   */
+  getEntries(): readonly string[] {
+    return this.entries;
   }
 
   /**
