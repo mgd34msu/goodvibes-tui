@@ -2,8 +2,9 @@
  * Tests for ModelPickerModal state class.
  */
 import { describe, test, expect, beforeEach } from 'bun:test';
-import { ModelPickerModal } from '../../input/model-picker.ts';
+import { ModelPickerModal, detectFamily, tierToCategoryFilter } from '../../input/model-picker.ts';
 import type { ModelDefinition } from '../../providers/registry.ts';
+import { _setEntriesForTest } from '../../providers/model-benchmarks.ts';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -76,11 +77,12 @@ describe('ModelPickerModal', () => {
       expect(result.every(m => m.tier === 'free')).toBe(true);
     });
 
-    test('filters by premium tier', () => {
-      picker.categoryFilter = 'premium';
+    test('filters by paid tier (premium/standard models)', () => {
+      picker.categoryFilter = 'paid';
       const result = picker.getFilteredModels();
       expect(result).toHaveLength(2);
-      expect(result.every(m => m.tier === 'premium')).toBe(true);
+      // 'premium' and 'standard' tiers both map to 'paid'
+      expect(result.every(m => m.tier === 'premium' || m.tier === 'standard')).toBe(true);
     });
 
     test('filters by query — matches id', () => {
@@ -112,7 +114,7 @@ describe('ModelPickerModal', () => {
     });
 
     test('query + category filter combine', () => {
-      picker.categoryFilter = 'premium';
+      picker.categoryFilter = 'paid';
       picker.query = 'reasoning';
       const result = picker.getFilteredModels();
       expect(result).toHaveLength(1);
@@ -296,7 +298,7 @@ describe('ModelPickerModal', () => {
       picker.categoryFilter = 'free';
       picker.openAllModels(ALL_MODELS, 'free-1');
       expect(picker.query).toBe('');
-      expect(picker.categoryFilter).toBe('all');
+      expect(picker.categoryFilter as string).toBe('all');
     });
 
     test('pre-selects first model when list has one item', () => {
@@ -383,6 +385,274 @@ describe('ModelPickerModal', () => {
       expect(picker.categoryFilter).toBe('free');
       // Only 2 free models, so clamp to max index 1
       expect(picker.selectedIndex).toBeLessThanOrEqual(1);
+    });
+  });
+
+  // ── Stage 5: Pricing tier filter ─────────────────────────────────────────
+
+  describe('pricing tier filter (Stage 5)', () => {
+    const SUB_MODEL = makeModel({ id: 'sub-1', displayName: 'Sub Model', tier: 'standard', provider: 'github' });
+    const EXTENDED_MODELS = [...ALL_MODELS, SUB_MODEL];
+
+    beforeEach(() => {
+      picker.models = EXTENDED_MODELS;
+    });
+
+    test('cycleCategory cycles through all → free → paid → subscription → all', () => {
+      expect(picker.categoryFilter).toBe('all');
+      picker.cycleCategory();
+      expect(picker.categoryFilter).toBe('free');
+      picker.cycleCategory();
+      expect(picker.categoryFilter).toBe('paid');
+      picker.cycleCategory();
+      expect(picker.categoryFilter).toBe('subscription');
+      picker.cycleCategory();
+      expect(picker.categoryFilter).toBe('all');
+    });
+
+    test('paid filter includes standard tier models', () => {
+      picker.categoryFilter = 'paid';
+      // SUB_MODEL has tier 'standard' which maps to 'paid'
+      const result = picker.getFilteredModels();
+      expect(result.some(m => m.id === 'sub-1')).toBe(true);
+      expect(result.some(m => m.id === 'premium-1')).toBe(true);
+    });
+
+    test('free filter excludes paid models', () => {
+      picker.categoryFilter = 'free';
+      const result = picker.getFilteredModels();
+      expect(result.every(m => m.tier === 'free')).toBe(true);
+    });
+  });
+
+  // ── Stage 5: Capability filter ────────────────────────────────────────────
+
+  describe('capability filter (Stage 5)', () => {
+    beforeEach(() => {
+      picker.models = ALL_MODELS;
+    });
+
+    test('reasoning filter returns only reasoning models', () => {
+      picker.setCapabilityFilter('reasoning');
+      const result = picker.getFilteredModels();
+      expect(result).toHaveLength(1);
+      expect(result[0].id).toBe('reasoning-1');
+    });
+
+    test('toolUse filter returns models with toolCalling', () => {
+      picker.setCapabilityFilter('toolUse');
+      const result = picker.getFilteredModels();
+      // All test models have toolCalling: true
+      expect(result).toHaveLength(4);
+    });
+
+    test('multimodal filter returns only multimodal models', () => {
+      picker.setCapabilityFilter('multimodal');
+      const result = picker.getFilteredModels();
+      // No multimodal models in ALL_MODELS
+      expect(result).toHaveLength(0);
+    });
+
+    test('none capability filter returns all', () => {
+      picker.setCapabilityFilter('none');
+      const result = picker.getFilteredModels();
+      expect(result).toHaveLength(4);
+    });
+
+    test('capability filter combines with category filter', () => {
+      picker.categoryFilter = 'paid';
+      picker.setCapabilityFilter('reasoning');
+      const result = picker.getFilteredModels();
+      expect(result).toHaveLength(1);
+      expect(result[0].id).toBe('reasoning-1');
+    });
+  });
+
+  // ── Stage 5: Available-only filter ───────────────────────────────────────
+
+  describe('available-only filter (Stage 5)', () => {
+    beforeEach(() => {
+      picker.models = ALL_MODELS;
+    });
+
+    test('availableOnly defaults to true', () => {
+      expect(picker.availableOnly).toBe(true);
+    });
+
+    test('availableOnly with empty configuredProviders shows all models', () => {
+      picker.configuredProviders = new Set();
+      // Empty set = filter is skipped
+      expect(picker.getFilteredModels()).toHaveLength(4);
+    });
+
+    test('availableOnly with configured providers filters correctly', () => {
+      picker.configuredProviders = new Set(['provA']);
+      const result = picker.getFilteredModels();
+      expect(result.every(m => m.provider === 'provA')).toBe(true);
+    });
+
+    test('toggleAvailableOnly disables the filter', () => {
+      picker.configuredProviders = new Set(['provA']);
+      picker.toggleAvailableOnly();
+      expect(picker.availableOnly).toBe(false);
+      // All models shown when filter is off
+      expect(picker.getFilteredModels()).toHaveLength(4);
+    });
+  });
+
+  // ── Stage 5: Benchmark sort ───────────────────────────────────────────────
+
+  describe('benchmark sort (Stage 5)', () => {
+    beforeEach(() => {
+      picker.models = ALL_MODELS;
+      // Inject benchmark data for sorting tests
+      _setEntriesForTest([
+        { modelId: 'free-1', name: 'free-1', organization: 'test', benchmarks: { swe: 0.8, gpqa: 0.7 } },
+        { modelId: 'premium-1', name: 'premium-1', organization: 'test', benchmarks: { swe: 0.9, gpqa: 0.85 } },
+        { modelId: 'reasoning-1', name: 'reasoning-1', organization: 'test', benchmarks: { swe: 0.95, gpqa: 0.9 } },
+      ]);
+    });
+
+    test('cycleBenchmarkSort cycles none → composite → swe → gpqa → none', () => {
+      expect(picker.benchmarkSort).toBe('none');
+      picker.cycleBenchmarkSort();
+      expect(picker.benchmarkSort).toBe('composite');
+      picker.cycleBenchmarkSort();
+      expect(picker.benchmarkSort).toBe('swe');
+      picker.cycleBenchmarkSort();
+      expect(picker.benchmarkSort).toBe('gpqa');
+      picker.cycleBenchmarkSort();
+      expect(picker.benchmarkSort).toBe('none');
+    });
+
+    test('swe sort orders models by SWE score descending', () => {
+      picker.benchmarkSort = 'swe';
+      const result = picker.getFilteredModels();
+      // reasoning-1 (0.95) > premium-1 (0.9) > free-1 (0.8) > free-2 (no score)
+      expect(result[0].id).toBe('reasoning-1');
+      expect(result[1].id).toBe('premium-1');
+      expect(result[2].id).toBe('free-1');
+      // free-2 has no score, sinks to end
+      expect(result[result.length - 1].id).toBe('free-2');
+    });
+
+    test('gpqa sort orders models by GPQA score descending', () => {
+      picker.benchmarkSort = 'gpqa';
+      const result = picker.getFilteredModels();
+      expect(result[0].id).toBe('reasoning-1'); // gpqa: 0.9
+      expect(result[1].id).toBe('premium-1');   // gpqa: 0.85
+    });
+
+    test('models without benchmark scores sink to end of sort', () => {
+      picker.benchmarkSort = 'composite';
+      const result = picker.getFilteredModels();
+      // free-2 has no benchmark data, must be last
+      expect(result[result.length - 1].id).toBe('free-2');
+    });
+  });
+
+  // ── Stage 5: Family grouping ──────────────────────────────────────────────
+
+  describe('family grouping (Stage 5)', () => {
+    test('detectFamily identifies Claude family', () => {
+      const m = makeModel({ id: 'claude-3-sonnet', displayName: 'Claude 3 Sonnet' });
+      expect(detectFamily(m)).toBe('Claude');
+    });
+
+    test('detectFamily identifies GPT family', () => {
+      const m = makeModel({ id: 'gpt-4o', displayName: 'GPT-4o' });
+      expect(detectFamily(m)).toBe('GPT');
+    });
+
+    test('detectFamily identifies Gemini family', () => {
+      const m = makeModel({ id: 'gemini-2.5-pro', displayName: 'Gemini 2.5 Pro' });
+      expect(detectFamily(m)).toBe('Gemini');
+    });
+
+    test('detectFamily identifies DeepSeek family', () => {
+      const m = makeModel({ id: 'deepseek-v3', displayName: 'DeepSeek V3' });
+      expect(detectFamily(m)).toBe('DeepSeek');
+    });
+
+    test('detectFamily returns Other for unknown model', () => {
+      const m = makeModel({ id: 'some-random-model', displayName: 'Random Model' });
+      expect(detectFamily(m)).toBe('Other');
+    });
+
+    test('family grouping produces correct group headers in getItems()', () => {
+      const claudeM = makeModel({ id: 'claude-opus', displayName: 'Claude Opus', provider: 'anthropic' });
+      const gptM = makeModel({ id: 'gpt-4o', displayName: 'GPT-4o', provider: 'openai' });
+      const deepseekM = makeModel({ id: 'deepseek-v3', displayName: 'DeepSeek V3', provider: 'deepseek' });
+      picker.models = [claudeM, gptM, deepseekM];
+      picker.groupBy = 'family';
+      const items = picker.getItems();
+      const headers = items.filter(i => i.isGroupHeader).map(i => i.label);
+      expect(headers).toContain('Claude');
+      expect(headers).toContain('GPT');
+      expect(headers).toContain('DeepSeek');
+    });
+  });
+
+  // ── Stage 5: Group-by cycling ─────────────────────────────────────────────
+
+  describe('group-by cycling (Stage 5)', () => {
+    test('cycleGroupBy cycles provider → family → pricingTier → qualityTier → provider', () => {
+      expect(picker.groupBy).toBe('provider');
+      picker.cycleGroupBy();
+      expect(picker.groupBy).toBe('family');
+      picker.cycleGroupBy();
+      expect(picker.groupBy).toBe('pricingTier');
+      picker.cycleGroupBy();
+      expect(picker.groupBy).toBe('qualityTier');
+      picker.cycleGroupBy();
+      expect(picker.groupBy).toBe('provider');
+    });
+  });
+
+  // ── Stage 5: tierToCategoryFilter ────────────────────────────────────────
+
+  describe('tierToCategoryFilter (Stage 5)', () => {
+    test('free tier maps to free', () => expect(tierToCategoryFilter('free')).toBe('free'));
+    test('premium tier maps to paid', () => expect(tierToCategoryFilter('premium')).toBe('paid'));
+    test('standard tier maps to paid', () => expect(tierToCategoryFilter('standard')).toBe('paid'));
+    test('subscription tier maps to subscription', () => expect(tierToCategoryFilter('subscription')).toBe('subscription'));
+    test('undefined tier maps to paid', () => expect(tierToCategoryFilter(undefined)).toBe('paid'));
+  });
+
+  // ── Stage 5: Pinned models ────────────────────────────────────────────────
+
+  describe('pinned models (Stage 5)', () => {
+    beforeEach(() => {
+      picker.models = ALL_MODELS;
+    });
+
+    test('pinned models appear before unpinned in getItems()', () => {
+      picker.pinnedIds = new Set(['reasoning-1']);
+      const items = picker.getItems();
+      // First non-header item (after Favorites header) should be reasoning-1
+      const firstHeader = items.find(i => i.isGroupHeader && i.label === 'Favorites');
+      expect(firstHeader).toBeDefined();
+      const firstModelItem = items[items.indexOf(firstHeader!) + 1];
+      expect(firstModelItem?.id).toBe('reasoning-1');
+      expect(firstModelItem?.isPinned).toBe(true);
+    });
+
+    test('Favorites header appears when pinnedIds is non-empty and models match', () => {
+      picker.pinnedIds = new Set(['free-1']);
+      const items = picker.getItems();
+      expect(items.some(i => i.isGroupHeader && i.label === 'Favorites')).toBe(true);
+    });
+
+    test('no Favorites header when pinnedIds is empty', () => {
+      picker.pinnedIds = new Set();
+      const items = picker.getItems();
+      expect(items.some(i => i.isGroupHeader && i.label === 'Favorites')).toBe(false);
+    });
+
+    test('pinned model not in filtered list does not show Favorites header', () => {
+      picker.pinnedIds = new Set(['not-in-list']);
+      const items = picker.getItems();
+      expect(items.some(i => i.isGroupHeader && i.label === 'Favorites')).toBe(false);
     });
   });
 });
