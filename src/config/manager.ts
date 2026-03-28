@@ -164,9 +164,9 @@ export class ConfigManager {
     return structuredClone(this.config[category]);
   }
 
-  /** Return a shallow-frozen reference to the live internal config. For Proxy/internal use only — do NOT mutate. */
+  /** Return a deep-cloned snapshot of the live config. Safe for read-only external consumers. */
   getRaw(): Readonly<GoodVibesConfig> {
-    return Object.freeze(this.config);
+    return structuredClone(this.config) as Readonly<GoodVibesConfig>;
   }
 
   /** Return the full schema. */
@@ -306,6 +306,7 @@ function migrateOldConfig(flat: Record<string, unknown>): Partial<GoodVibesConfi
     // systemPrompt text doesn't map to systemPromptFile cleanly; skip it
   }
   if (Object.keys(providerFields).length > 0) {
+    // providerFields is a partial but guaranteed to satisfy the shape at runtime after migration
     result.provider = providerFields as GoodVibesConfig['provider'];
   }
 

@@ -136,7 +136,7 @@ export class DaemonServer {
       return timingSafeEqual(Buffer.from(bearer), Buffer.from(this.authToken));
     }
 
-    if (!bearer) return true;
+    if (!bearer) return false;
     return this.userAuth.validateSession(bearer) !== null;
   }
 

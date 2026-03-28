@@ -6,6 +6,7 @@
  * getToolSchema() fetches full inputSchema on demand and caches it.
  */
 import { logger } from '../utils/logger.ts';
+import { VERSION } from '../version.ts';
 import type { McpServerConfig } from './config.ts';
 
 export interface McpToolInfo {
@@ -206,7 +207,7 @@ export class McpClient {
       await this._request('initialize', {
         protocolVersion: '2024-11-05',
         capabilities: {},
-        clientInfo: { name: 'goodvibes-tui', version: '0.9.9' },
+        clientInfo: { name: 'goodvibes-tui', version: VERSION },
       });
       this._notify('notifications/initialized', {});
       this.initialized = true;

@@ -31,6 +31,7 @@ import { getKeybindingsManager } from './keybindings.ts';
 import { pluginManager, type PluginStatus } from '../plugins/manager.ts';
 import { PLUGINS_DIR } from '../plugins/loader.ts';
 import { EFFORT_DESCRIPTIONS } from '../providers/effort-levels.ts';
+import { pinModel, unpinModel, isModelPinned, getPinned } from '../providers/favorites.ts';
 
 let _serviceRegistry: ServiceRegistry | undefined;
 function getServiceRegistry(): ServiceRegistry {
@@ -461,13 +462,11 @@ export function registerBuiltinCommands(registry: CommandRegistry): void {
               let newVal: unknown = currentVal;
               if (schema.type === 'boolean') {
                 newVal = !currentVal;
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                cm.set(key, newVal as any);
+                cm.setDynamic(key, newVal);
               } else if (schema.type === 'enum' && schema.enumValues) {
                 const idx = schema.enumValues.indexOf(String(currentVal));
                 newVal = schema.enumValues[(idx + 1) % schema.enumValues.length];
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                cm.set(key, newVal as any);
+                cm.setDynamic(key, newVal);
                 if (key === 'provider.reasoningEffort') ctx.runtime.reasoningEffort = String(newVal);
               }
               // Update the item's detail text so the modal shows the new value
@@ -565,8 +564,7 @@ export function registerBuiltinCommands(registry: CommandRegistry): void {
         }
 
         try {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          cm.set(key, coerced as any);
+          cm.setDynamic(key, coerced);
           ctx.print(`Set ${key} = ${String(coerced)}`);
 
           // Keep runtime in sync for live fields
@@ -1430,8 +1428,7 @@ export function registerBuiltinCommands(registry: CommandRegistry): void {
             if (result.item.id === '__mode__') {
               const currentMode = cm.get('permissions.mode') as string;
               const nextMode = VALID_MODES[(VALID_MODES.indexOf(currentMode as typeof VALID_MODES[number]) + 1) % VALID_MODES.length];
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              cm.set('permissions.mode', nextMode as any);
+              cm.setDynamic('permissions.mode', nextMode);
               result.item.detail = nextMode;
               ctx.renderRequest();
               return; // Stay in modal
@@ -1439,8 +1436,7 @@ export function registerBuiltinCommands(registry: CommandRegistry): void {
               const toolKey = `permissions.tools.${result.item.id}` as Parameters<typeof cm.get>[0];
               const currentAction = cm.get(toolKey) as string;
               const nextAction = VALID_ACTIONS[(VALID_ACTIONS.indexOf(currentAction as typeof VALID_ACTIONS[number]) + 1) % VALID_ACTIONS.length];
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              cm.set(toolKey as Parameters<typeof cm.set>[0], nextAction as any);
+              cm.setDynamic(toolKey, nextAction);
               result.item.detail = nextAction;
               ctx.renderRequest();
               return; // Stay in modal
@@ -1479,8 +1475,7 @@ export function registerBuiltinCommands(registry: CommandRegistry): void {
         }
         try {
           const toolKey = `permissions.tools.${toolName}` as Parameters<typeof cm.set>[0];
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          cm.set(toolKey, action as any);
+          cm.setDynamic(toolKey, action);
           ctx.print(`Permission for ${toolName} set to: ${action}`);
         } catch (e) {
           ctx.print(`Error: ${(e as Error).message}`);
@@ -1494,8 +1489,7 @@ export function registerBuiltinCommands(registry: CommandRegistry): void {
         return;
       }
       try {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        cm.set('permissions.mode', newMode as any);
+        cm.setDynamic('permissions.mode', newMode);
         ctx.print(`Permission mode set to: ${newMode}`);
       } catch (e) {
         ctx.print(`Error: ${(e as Error).message}`);
@@ -1885,7 +1879,7 @@ export function registerBuiltinCommands(registry: CommandRegistry): void {
               let newVal: unknown = currentVal;
               if (schema.type === 'boolean') {
                 newVal = !currentVal;
-                cm.set(key, newVal as any);
+                cm.setDynamic(key, newVal);
               } else if (schema.type === 'number') {
                 // Cycle common values for number settings
                 const fieldName = key.replace('danger.', '');
@@ -1915,7 +1909,7 @@ export function registerBuiltinCommands(registry: CommandRegistry): void {
       if (args.length === 1) {
         // Show single key
         try {
-          const val = ctx.configManager.get(key as any);
+          const val = ctx.configManager.get(key as Parameters<typeof ctx.configManager.get>[0]);
           ctx.print(`${key} = ${String(val)}`);
         } catch (e) {
           ctx.print(`Error: ${(e as Error).message}`);
@@ -1935,7 +1929,7 @@ export function registerBuiltinCommands(registry: CommandRegistry): void {
           } else if (schema.type === 'number') {
             coerced = Number(rawValue);
           }
-          ctx.configManager.set(key as any, coerced as any);
+          ctx.configManager.setDynamic(key as Parameters<typeof ctx.configManager.get>[0], coerced);
           ctx.print(`⚠ Set ${key} = ${String(coerced)}`);
         } catch (e) {
           ctx.print(`Error: ${(e as Error).message}`);
@@ -3360,6 +3354,55 @@ export function registerBuiltinCommands(registry: CommandRegistry): void {
         '  disable <name>    — disable a plugin\n' +
         '  reload            — reload all enabled plugins'
       );
+    },
+  });
+
+  // ── /pin ─────────────────────────────────────────────────────────────────
+  registry.register({
+    name: 'pin',
+    description: 'Pin a model to the favorites list',
+    usage: '<model-id>',
+    argsHint: '<model-id>',
+    async handler(args, ctx) {
+      const modelId = args[0];
+      if (!modelId) {
+        const pinned = await getPinned();
+        if (pinned.length === 0) {
+          ctx.print('No pinned models. Use /pin <model-id> to pin one.');
+        } else {
+          ctx.print('Pinned models:\n' + pinned.map(id => `  ★ ${id}`).join('\n'));
+        }
+        return;
+      }
+      const alreadyPinned = await isModelPinned(modelId);
+      if (alreadyPinned) {
+        ctx.print(`Model already pinned: ${modelId}`);
+        return;
+      }
+      await pinModel(modelId);
+      ctx.print(`Pinned: ${modelId}`);
+    },
+  });
+
+  // ── /unpin ───────────────────────────────────────────────────────────────
+  registry.register({
+    name: 'unpin',
+    description: 'Unpin a model from the favorites list',
+    usage: '<model-id>',
+    argsHint: '<model-id>',
+    async handler(args, ctx) {
+      const modelId = args[0];
+      if (!modelId) {
+        ctx.print('Usage: /unpin <model-id>');
+        return;
+      }
+      const wasPinned = await isModelPinned(modelId);
+      if (!wasPinned) {
+        ctx.print(`Model is not pinned: ${modelId}`);
+        return;
+      }
+      await unpinModel(modelId);
+      ctx.print(`Unpinned: ${modelId}`);
     },
   });
 }
