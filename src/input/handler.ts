@@ -1141,23 +1141,18 @@ export class InputHandler {
             this.modelPicker.moveUp();
           } else if (token.logicalName === 'down') {
             this.modelPicker.moveDown();
+          } else if (token.logicalName === 'tab' && this.modelPicker.mode === 'model') {
+            // Tab cycles category filter: all → free → premium → all
+            const cycle: import('./model-picker.ts').CategoryFilter[] = ['all', 'free', 'premium'];
+            const cur = cycle.indexOf(this.modelPicker.categoryFilter);
+            this.modelPicker.setCategoryFilter(cycle[(cur + 1) % cycle.length]!);
           }
           // All other keys ignored while model picker is active
         } else if (token.type === 'text' && this.modelPicker.mode === 'model') {
-          // Category filter quick-keys: f=free, p=premium, a=all
-          // Typing chars appends to search query
+          // Printable character — append to search query (all chars available)
           const ch = token.value;
-          if (ch === 'f' && this.modelPicker.query.length === 0) {
-            this.modelPicker.setCategoryFilter('free');
-          } else if (ch === 'p' && this.modelPicker.query.length === 0) {
-            this.modelPicker.setCategoryFilter('premium');
-          } else if (ch === 'a' && this.modelPicker.query.length === 0) {
-            this.modelPicker.setCategoryFilter('all');
-          } else {
-            // Printable character — append to search query
-            if (ch.length === 1 && ch >= ' ') {
-              this.modelPicker.appendChar(ch);
-            }
+          if (ch.length === 1 && ch >= ' ') {
+            this.modelPicker.appendChar(ch);
           }
         }
         this.bus.emit('render:request');

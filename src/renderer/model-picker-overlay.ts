@@ -2,6 +2,7 @@ import { type Line } from '../types/grid.ts';
 import { UIFactory } from './ui-factory.ts';
 import { getDisplayWidth } from '../utils/terminal-width.ts';
 import type { ModelPickerModal } from '../input/model-picker.ts';
+import { EFFORT_DESCRIPTIONS } from '../providers/effort-levels.ts';
 
 /** Format a context window number into a short human-readable string. */
 function fmtContext(n: number): string {
@@ -126,7 +127,7 @@ export function renderModelPickerOverlay(
         ('Provider: ' + selected.provider).padEnd(contentW) + ' \u2502';
       lines.push(UIFactory.stringToLine(providerLine, width, { fg: '244' }));
 
-      const caps = selected.capabilities;
+      const caps = selected.capabilities ?? { reasoning: false, multimodal: false, toolCalling: false, codeEditing: false };
       const ctxStr = `Context: ${fmtContext(selected.contextWindow)}`;
       const capParts: string[] = [ctxStr];
       if (caps.reasoning)  capParts.push('Reasoning: \u2713');
@@ -168,17 +169,11 @@ export function renderModelPickerOverlay(
     lines.push(UIFactory.stringToLine(emptyRow, width, { fg: '240' }));
   } else {
     // ── Effort list ────────────────────────────────────────────────────────────────────────
-    const effortDescriptions: Record<string, string> = {
-      instant: 'Fastest, minimal reasoning',
-      low:     'Quick with light reasoning',
-      medium:  'Balanced speed and quality',
-      high:    'Thorough, deep reasoning',
-    };
     for (let i = 0; i < picker.effortLevels.length; i++) {
       const level = picker.effortLevels[i];
       const isSelected = i === picker.selectedIndex;
       const indicator = isSelected ? '\u25b6 ' : '  ';
-      const desc = effortDescriptions[level] ?? '';
+      const desc = EFFORT_DESCRIPTIONS[level] ?? '';
       const labelW = 10;
       const labelStr = level.padEnd(labelW);
       const remaining = contentW - labelW - 4;
@@ -201,8 +196,9 @@ export function renderModelPickerOverlay(
   }
 
   // ── Bottom border with hints ─────────────────────────────────────────────────────────
+  const filterLabel = picker.categoryFilter === 'all' ? 'All' : picker.categoryFilter === 'free' ? 'Free' : 'Premium';
   const hints = picker.mode === 'model'
-    ? ' [\u2191\u2193] Navigate  [Enter] Select  [Esc] Clear/Cancel  [f]ree [p]remium [a]ll '
+    ? ` [\u2191\u2193] Navigate  [Enter] Select  [Esc] Clear/Cancel  [Tab] Filter: ${filterLabel} `
     : ' [\u2191\u2193] Navigate  [Enter] Select  [Esc] Cancel ';
   const bottomLine =
     pad + '\u2514' + hints + '\u2500'.repeat(Math.max(0, boxW - 2 - getDisplayWidth(hints))) + '\u2518';
