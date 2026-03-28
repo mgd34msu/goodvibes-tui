@@ -100,7 +100,7 @@ export class HttpListener {
       return;
     }
     if (this.authToken === null) {
-      logger.error('HttpListener: starting without auth token — all requests accepted');
+      logger.error('HttpListener: starting without auth token — requests require session-based authentication via UserAuth');
     }
     if (this.server !== null) {
       logger.info('HttpListener: already running');
@@ -169,6 +169,8 @@ export class HttpListener {
     }
 
     // Rate limiting (keyed by a synthetic IP-like string from headers)
+    // Note: x-forwarded-for is only trustworthy when running behind a trusted reverse proxy.
+    // If exposed directly to the internet, clients can spoof this header.
     const clientIp = req.headers.get('x-forwarded-for') ?? req.headers.get('x-real-ip') ?? 'unknown';
     if (!this.rateLimiter.check(clientIp)) {
       return Response.json({ error: 'Too many requests' }, { status: 429 });

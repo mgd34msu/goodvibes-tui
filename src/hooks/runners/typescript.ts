@@ -1,3 +1,4 @@
+import { resolve } from 'node:path';
 import type { HookDefinition, HookResult, HookEvent } from '../types.ts';
 import { logger } from '../../utils/logger.ts';
 
@@ -16,13 +17,13 @@ export async function run(hook: HookDefinition, event: HookEvent): Promise<HookR
 
   // Validate path is within the project directory to prevent arbitrary module loading
   const projectRoot = process.cwd();
-  const resolvedPath = new URL(path, import.meta.url).pathname;
-  if (!resolvedPath.startsWith(projectRoot)) {
+  const resolvedPath = resolve(projectRoot, path);
+  if (!resolvedPath.startsWith(projectRoot + '/')) {
     return { ok: false, error: `ts hook path '${path}' is outside the project directory` };
   }
 
   try {
-    const mod = await import(path);
+    const mod = await import(resolvedPath);
     const handler = mod.default as TsHookHandler | undefined;
 
     if (typeof handler !== 'function') {

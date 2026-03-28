@@ -154,6 +154,32 @@ export type ConfigKey =
   | 'wrfc.maxFixAttempts'
   | 'wrfc.autoCommit';
 
+/** Set of all valid config keys for runtime validation. */
+export const CONFIG_KEYS = new Set<string>([
+  'display.stream', 'display.lineNumbers', 'display.collapseThreshold', 'display.theme',
+  'display.showThinking', 'display.showReasoningSummary', 'display.showTokenSpeed',
+  'display.showToolPreview', 'provider.reasoningEffort', 'provider.model',
+  'provider.provider', 'provider.systemPromptFile', 'behavior.autoApprove',
+  'behavior.autoCompactThreshold', 'behavior.saveHistory', 'behavior.notifyOnComplete',
+  'behavior.suggestAlternativeOnProviderFail', 'permissions.mode',
+  'permissions.tools.read', 'permissions.tools.write', 'permissions.tools.edit',
+  'permissions.tools.exec', 'permissions.tools.find', 'permissions.tools.fetch',
+  'permissions.tools.analyze', 'permissions.tools.inspect', 'permissions.tools.agent',
+  'permissions.tools.state', 'permissions.tools.workflow', 'permissions.tools.registry',
+  'permissions.tools.delegate', 'permissions.tools.mcp', 'permissions.tools.file_read',
+  'permissions.tools.file_write', 'permissions.tools.file_edit',
+  'permissions.tools.shell_exec', 'permissions.tools.grep', 'permissions.tools.list_dir',
+  'permissions.tools.glob', 'danger.agentRecursion', 'danger.maxGlobalAgents',
+  'danger.maxRecursionDepth', 'danger.daemon', 'danger.httpListener',
+  'tools.llmProvider', 'tools.llmModel', 'tools.autoHeal', 'tools.defaultTokenBudget',
+  'tools.hooksFile', 'wrfc.scoreThreshold', 'wrfc.maxFixAttempts', 'wrfc.autoCommit',
+] as const satisfies ConfigKey[]);
+
+/** Type guard: returns true if key is a valid ConfigKey. */
+export function isValidConfigKey(key: string): key is ConfigKey {
+  return CONFIG_KEYS.has(key);
+}
+
 /** Maps a ConfigKey to its value type. */
 export type ConfigValue<K extends ConfigKey> =
   K extends 'display.stream' ? boolean :

@@ -4,6 +4,7 @@ import { VERSION } from '../version.ts';
 import { AgentManager } from '../tools/agent/index.ts';
 import { ConfigManager } from '../config/manager.ts';
 import type { ConfigKey } from '../config/schema.ts';
+import { isValidConfigKey } from '../config/schema.ts';
 import type { AgentRecord } from '../tools/agent/index.ts';
 import { UserAuthManager } from '../security/user-auth.ts';
 import { TaskScheduler } from '../scheduler/scheduler.ts';
@@ -90,7 +91,7 @@ export class DaemonServer {
       return;
     }
     if (this.authToken === null) {
-      logger.error('DaemonServer: starting without auth token — all requests accepted');
+      logger.error('DaemonServer: starting without auth token — requests require session-based authentication via UserAuth');
     }
     if (this.server !== null) {
       logger.info('DaemonServer: already running');
@@ -191,6 +192,9 @@ export class DaemonServer {
       const { key, value } = payload;
       if (!key || typeof key !== 'string') {
         return Response.json({ error: 'Missing or invalid key' }, { status: 400 });
+      }
+      if (!isValidConfigKey(key)) {
+        return Response.json({ error: 'Invalid config key' }, { status: 400 });
       }
       try {
         this.configManager.setDynamic(key as ConfigKey, value);

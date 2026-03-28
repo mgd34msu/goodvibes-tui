@@ -1,4 +1,4 @@
-import { createHmac, randomBytes } from 'crypto';
+import { createHmac, randomBytes, timingSafeEqual } from 'crypto';
 import { logger } from '../utils/logger.ts';
 
 // ---------------------------------------------------------------------------
@@ -102,13 +102,10 @@ export class SpawnTokenManager {
 
   private verifySignature(token: SpawnToken): boolean {
     const expected = this.sign(token);
-    // Constant-time comparison to prevent timing attacks
-    if (expected.length !== token.signature.length) return false;
-    let mismatch = 0;
-    for (let i = 0; i < expected.length; i++) {
-      mismatch |= expected.charCodeAt(i) ^ token.signature.charCodeAt(i);
-    }
-    return mismatch === 0;
+    const expectedBuf = Buffer.from(expected);
+    const actualBuf = Buffer.from(token.signature);
+    if (expectedBuf.length !== actualBuf.length) return false;
+    return timingSafeEqual(expectedBuf, actualBuf);
   }
 
   // -------------------------------------------------------------------------
