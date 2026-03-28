@@ -342,7 +342,7 @@ export class Orchestrator {
 
         if (response.toolCalls.length > 0) {
           // Add assistant turn (may include both content and tool calls)
-          this.conversation.addAssistantMessage(response.content, { toolCalls: response.toolCalls, reasoningContent: reasoningForMsg, reasoningSummary: reasoningSummaryForMsg, usage: response.usage });
+          this.conversation.addAssistantMessage(response.content, { toolCalls: response.toolCalls, reasoningContent: reasoningForMsg, reasoningSummary: reasoningSummaryForMsg, usage: response.usage, model: model.displayName, provider: model.provider });
 
           // Execute tools and collect results
           const results = await this.executeToolCalls(response.toolCalls);
@@ -401,7 +401,7 @@ export class Orchestrator {
           // Loop continues: send results back to LLM
         } else {
           // No tool calls — final response
-          this.conversation.addAssistantMessage(response.content, { reasoningContent: reasoningForMsg, reasoningSummary: reasoningSummaryForMsg, usage: response.usage });
+          this.conversation.addAssistantMessage(response.content, { reasoningContent: reasoningForMsg, reasoningSummary: reasoningSummaryForMsg, usage: response.usage, model: model.displayName, provider: model.provider });
           this.bus.emit('turn:complete', { response: response.content });
           continueLoop = false;
 

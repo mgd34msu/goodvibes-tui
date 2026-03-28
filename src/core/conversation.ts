@@ -27,7 +27,7 @@ const estimateTokens = (text: string): number => Math.ceil(text.length / 4);
  */
 export type TokenUsage = { inputTokens: number; outputTokens: number; cacheReadTokens?: number; cacheWriteTokens?: number };
 
-type AssistantMessage = { role: 'assistant'; content: string; toolCalls?: ToolCall[]; reasoningContent?: string; reasoningSummary?: string; usage?: TokenUsage };
+type AssistantMessage = { role: 'assistant'; content: string; toolCalls?: ToolCall[]; reasoningContent?: string; reasoningSummary?: string; usage?: TokenUsage; model?: string; provider?: string };
 
 type Message =
   | { role: 'user'; content: string | ContentPart[]; cancelled?: boolean }
@@ -127,8 +127,8 @@ export class ConversationManager {
   }
 
   /** Add an assistant message, optionally with tool calls (when the LLM invoked tools). */
-  public addAssistantMessage(content: string, opts?: { toolCalls?: ToolCall[]; reasoningContent?: string; reasoningSummary?: string; usage?: TokenUsage }): void {
-    this.messages.push({ role: 'assistant', content, toolCalls: opts?.toolCalls, reasoningContent: opts?.reasoningContent, reasoningSummary: opts?.reasoningSummary, usage: opts?.usage });
+  public addAssistantMessage(content: string, opts?: { toolCalls?: ToolCall[]; reasoningContent?: string; reasoningSummary?: string; usage?: TokenUsage; model?: string; provider?: string }): void {
+    this.messages.push({ role: 'assistant', content, toolCalls: opts?.toolCalls, reasoningContent: opts?.reasoningContent, reasoningSummary: opts?.reasoningSummary, usage: opts?.usage, model: opts?.model, provider: opts?.provider });
     this.markDirty();
   }
 
@@ -363,6 +363,16 @@ export class ConversationManager {
           const summaryLines = renderThinkingBlock(m.reasoningSummary, width);
           this.history.addLines(summaryLines);
           this.history.addLine(createEmptyLine(width));
+        }
+        // Render model label if present (dim, above content)
+        if (m.model) {
+          const labelText = m.provider ? `${m.model} (${m.provider})` : m.model;
+          const labelLine = createEmptyLine(width);
+          const labelStr = ' '.repeat(LAYOUT.LEFT_MARGIN) + labelText;
+          for (let ci = 0; ci < labelStr.length && ci < width; ci++) {
+            labelLine[ci] = { char: labelStr[ci], fg: '238', bg: '', bold: false, dim: true, underline: false, italic: false, strikethrough: false };
+          }
+          this.history.addLine(labelLine);
         }
         // Render assistant content using the markdown renderer
         if (m.content) {
