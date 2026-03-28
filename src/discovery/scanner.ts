@@ -17,6 +17,7 @@ export interface DiscoveredServer {
   models: string[];   // ['llama3:latest', 'codellama:7b']
   serverType: ServerType;
   modelContextWindows?: Record<string, number>; // modelId -> context window tokens
+  modelOutputLimits?: Record<string, number>;   // modelId -> max output tokens
 }
 
 export interface ScanResult {
@@ -467,6 +468,151 @@ export async function fetchModelContextWindows(
 }
 
 // ---------------------------------------------------------------------------
+// Output Token Limit Detection
+// ---------------------------------------------------------------------------
+
+/**
+ * Queries a discovered server for output token limits of its models.
+ * Returns a map of modelId -> maxOutputTokens. Missing entries mean the server
+ * didn't report an output limit for that model.
+ */
+export async function fetchModelOutputLimits(
+  host: string,
+  port: number,
+  serverType: ServerType,
+  models: string[],
+): Promise<Record<string, number>> {
+  const result: Record<string, number> = {};
+
+  switch (serverType) {
+    case 'ollama': {
+      // Ollama: POST /api/show for each model — look for num_predict in model_info or parameters
+      await Promise.allSettled(
+        models.map(async (model) => {
+          try {
+            const res = await fetch(`http://${host}:${port}/api/show`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ name: model }),
+              signal: AbortSignal.timeout(METADATA_TIMEOUT_MS),
+            });
+            if (!res.ok) return;
+            const data = await res.json() as Record<string, unknown>;
+
+            // Check model_info for num_predict (newer Ollama)
+            const modelInfo = data.model_info as Record<string, unknown> | undefined;
+            if (modelInfo) {
+              for (const [key, value] of Object.entries(modelInfo)) {
+                if (key.endsWith('num_predict') && typeof value === 'number' && value > 0) {
+                  result[model] = value;
+                  logger.info(`[Scan] ${model}: output limit ${value} tokens`);
+                  break;
+                }
+              }
+            }
+
+            // Fallback: check parameters string for num_predict
+            if (!result[model] && typeof data.parameters === 'string') {
+              const match = (data.parameters as string).match(/num_predict\s+(\d+)/);
+              if (match) {
+                const limit = parseInt(match[1], 10);
+                result[model] = limit;
+                logger.info(`[Scan] ${model}: output limit ${limit} tokens (from parameters)`);
+              }
+            }
+          } catch (err) {
+            logger.debug(`[Scan] Failed to fetch output limit for ${model}: ${err}`);
+          }
+        })
+      );
+      break;
+    }
+
+    case 'vllm': {
+      // vLLM: GET /v1/models/{id} — look for max_completion_tokens
+      await Promise.allSettled(
+        models.map(async (model) => {
+          try {
+            const res = await fetch(`http://${host}:${port}/v1/models/${encodeURIComponent(model)}`, {
+              signal: AbortSignal.timeout(METADATA_TIMEOUT_MS),
+            });
+            if (!res.ok) return;
+            const data = await res.json() as Record<string, unknown>;
+            if (typeof data.max_completion_tokens === 'number' && data.max_completion_tokens > 0) {
+              result[model] = data.max_completion_tokens;
+              logger.info(`[Scan] ${model}: output limit ${data.max_completion_tokens} tokens`);
+            }
+          } catch (err) {
+            logger.debug(`[Scan] Failed to fetch output limit for ${model}: ${err}`);
+          }
+        })
+      );
+      break;
+    }
+
+    case 'llamacpp': {
+      // llama.cpp: GET /props — look for default_generation_settings.n_predict
+      try {
+        const res = await fetch(`http://${host}:${port}/props`, {
+          signal: AbortSignal.timeout(METADATA_TIMEOUT_MS),
+        });
+        if (res.ok) {
+          const data = await res.json() as Record<string, unknown>;
+          const settings = data.default_generation_settings as Record<string, unknown> | undefined;
+          if (settings && typeof settings.n_predict === 'number' && settings.n_predict > 0) {
+            const limit = settings.n_predict as number;
+            for (const model of models) {
+              result[model] = limit;
+              logger.info(`[Scan] ${model}: output limit ${limit} tokens`);
+            }
+          }
+        }
+      } catch (err) {
+        logger.debug(`[Scan] Failed to fetch llama.cpp output limits from ${host}:${port}: ${err}`);
+      }
+      break;
+    }
+
+    case 'lm-studio':
+    case 'localai':
+    case 'jan':
+    case 'gpt4all':
+    case 'koboldcpp':
+    case 'aphrodite':
+    case 'tgi':
+    case 'unknown':
+    default: {
+      // Generic: try /v1/models/{id} for each model, look for common output limit fields
+      await Promise.allSettled(
+        models.map(async (model) => {
+          try {
+            const res = await fetch(`http://${host}:${port}/v1/models/${encodeURIComponent(model)}`, {
+              signal: AbortSignal.timeout(METADATA_TIMEOUT_MS),
+            });
+            if (!res.ok) return;
+            const data = await res.json() as Record<string, unknown>;
+
+            const outputLimit =
+              (typeof data.max_completion_tokens === 'number' && data.max_completion_tokens > 0 ? data.max_completion_tokens : null) ??
+              (typeof data.max_output_tokens === 'number' && data.max_output_tokens > 0 ? data.max_output_tokens : null);
+
+            if (outputLimit !== null) {
+              result[model] = outputLimit;
+              logger.info(`[Scan] ${model}: output limit ${outputLimit} tokens`);
+            }
+          } catch (err) {
+            logger.debug(`[Scan] Failed to fetch output limit for ${model}: ${err}`);
+          }
+        })
+      );
+      break;
+    }
+  }
+
+  return result;
+}
+
+// ---------------------------------------------------------------------------
 // Server Name
 // ---------------------------------------------------------------------------
 
@@ -531,8 +677,9 @@ export async function scanHosts(
     const name = buildServerName(serverType, host, port);
     const baseURL = `http://${host}:${port}/v1`;
     const modelContextWindows = await fetchModelContextWindows(host, port, serverType, result.models);
+    const modelOutputLimits = await fetchModelOutputLimits(host, port, serverType, result.models);
 
-    servers.push({ name, host, port, baseURL, models: result.models, serverType, modelContextWindows });
+    servers.push({ name, host, port, baseURL, models: result.models, serverType, modelContextWindows, modelOutputLimits });
     logger.info(`[Scan] Found ${name} at ${host}:${port} (${result.models.length} models)`);
   });
 

@@ -3021,6 +3021,9 @@ export class ProviderRegistry {
           },
           ...(reasoningFormat !== 'none' ? { reasoningEffort: ['low', 'medium', 'high'] } : {}),
           contextWindow: server.modelContextWindows?.[modelId] ?? 8192,
+          ...(server.modelOutputLimits?.[modelId] != null
+            ? { tokenLimits: { maxOutputTokens: server.modelOutputLimits[modelId] } }
+            : {}),
           selectable: true,
           tier: 'standard',
         });
