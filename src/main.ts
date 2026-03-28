@@ -13,6 +13,7 @@ import { InputHandler } from './input/handler.ts';
 import { SelectionManager } from './input/selection.ts';
 import { config, configManager } from './config/index.ts';
 import { providerRegistry } from './providers/registry.ts';
+import { autoRegisterProviders } from './providers/auto-register.ts';
 import { ToolRegistry } from './tools/registry.ts';
 import { registerAllTools } from './tools/index.ts';
 import { FileUndoManager } from './state/file-undo.ts';
@@ -1233,6 +1234,9 @@ async function main() {
   recoveryInterval = setInterval(() => {
     writeRecoveryFile(conversation, runtime.sessionId);
   }, 60_000);
+
+  // --- Auto-register providers from env vars (e.g. GROQ_API_KEY → Groq) ---
+  autoRegisterProviders();
 
   // --- Load persisted local LLM providers (instant, before background scan) ---
   const persisted = loadPersistedProviders();
