@@ -86,6 +86,7 @@ async function collectSourceFiles(dir: string, results: string[] = []): Promise<
 
   let entries: Dirent[];
   try {
+    // Bun's readdir with withFileTypes returns Dirent[] at runtime but typings may not reflect this
     entries = await readdir(dir, { withFileTypes: true }) as unknown as Dirent[];
   } catch (err) {
     logger.debug('[import-graph] Skipping unreadable directory', { dir, error: err instanceof Error ? err.message : String(err) });

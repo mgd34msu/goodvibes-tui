@@ -113,6 +113,8 @@ export class ConfigManager {
     if (parts.length === 3) {
       const [section, subsection, field] = parts;
       const sect = this.config[section as keyof GoodVibesConfig] as unknown as Record<string, Record<string, unknown>>;
+      // Intentional: the config schema guarantees all valid keys have values, so this
+      // path only triggers for dynamically constructed invalid keys (e.g., unknown subsections).
       if (!sect?.[subsection]) return undefined as unknown as ConfigValue<K>;
       return sect[subsection][field] as ConfigValue<K>;
     }

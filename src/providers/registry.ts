@@ -630,7 +630,7 @@ export class ProviderRegistry {
           capabilities: { toolCalling: false, codeEditing: false, reasoning: false, multimodal: false },
           contextWindow: 0, // Unknown until provider discovery completes; 0 = no progress bar
           selectable: true,
-          tier: 'standard' as ModelTier,
+          tier: 'standard',
         };
       }
       // Builtin model not found — genuinely broken, fall back to first selectable
