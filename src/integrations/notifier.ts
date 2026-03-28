@@ -101,12 +101,11 @@ export class Notifier {
 
     this.unsubscribers.push(
       bus.on('subagent:complete', (data) => {
-        const result = data.result as unknown as Record<string, unknown>;
         void this.notify('subagent:complete', {
           event: 'subagent:complete',
           agentId: data.id,
-          task: typeof result?.task === 'string' ? result.task : data.id,
-          result: typeof result?.output === 'string' ? result.output : '',
+          task: data.id,
+          result: data.result.output,
         });
       }),
     );

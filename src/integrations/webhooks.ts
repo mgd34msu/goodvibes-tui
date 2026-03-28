@@ -155,9 +155,7 @@ export class WebhookNotifier {
 
     this.unsubscribers.push(
       bus.on('subagent:complete', (data) => {
-        const result = data.result as unknown as Record<string, unknown>;
-        const task = typeof result?.task === 'string' ? result.task : String(data.id ?? '');
-        void this.send(`Agent completed: ${task}`);
+        void this.send(`Agent completed: ${data.id}`);
       }),
     );
 
