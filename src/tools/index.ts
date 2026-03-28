@@ -3,6 +3,7 @@ import { FileStateCache } from '../state/file-cache.ts';
 import { ProjectIndex } from '../state/project-index.ts';
 import { ModeManager } from '../state/mode-manager.ts';
 import { HookDispatcher } from '../hooks/dispatcher.ts';
+import { FileUndoManager } from '../state/file-undo.ts';
 import { ReadTool } from './read/index.ts';
 import { createWriteTool } from './write/index.ts';
 import { createEditTool } from './edit/index.ts';
@@ -28,10 +29,11 @@ export function registerAllTools(
 ): { fileCache: FileStateCache; projectIndex: ProjectIndex } {
   const fileCache = deps?.fileCache ?? new FileStateCache();
   const projectIndex = deps?.projectIndex ?? ProjectIndex.getInstance();
+  const fileUndoManager = FileUndoManager.getInstance();
 
   registry.register(new ReadTool(fileCache, projectIndex));
-  registry.register(createWriteTool({ fileCache, projectIndex }));
-  registry.register(createEditTool(fileCache));
+  registry.register(createWriteTool({ fileCache, projectIndex, fileUndoManager }));
+  registry.register(createEditTool(fileCache, { fileUndoManager }));
   registry.register(findTool);
   registry.register(execTool);
   registry.register(analyzeTool);

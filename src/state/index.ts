@@ -10,3 +10,5 @@ export { FileWatcher } from './file-watcher.ts';
 export { SQLiteStore } from './sqlite-store.ts';
 export { TelemetryDB } from './telemetry.ts';
 export type { ToolCallRecord, TelemetryFilter, TelemetrySummary } from './telemetry.ts';
+export { FileUndoManager } from './file-undo.ts';
+export type { FileOperation } from './file-undo.ts';
