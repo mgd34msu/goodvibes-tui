@@ -56,6 +56,7 @@ import { getSessionManager } from './sessions/manager.ts';
 import type { SessionMeta } from './sessions/manager.ts';
 import { logger } from './utils/logger.ts';
 import { initModelLimits } from './providers/model-limits.ts';
+import { initBenchmarks } from './providers/model-benchmarks.ts';
 import { getPanelManager } from './panels/panel-manager.ts';
 import { registerBuiltinPanels } from './panels/builtin-panels.ts';
 import { renderPanelTabBar } from './renderer/panel-tab-bar.ts';
@@ -251,6 +252,9 @@ async function main() {
 
   // --- Initialize model limits cache (sync load + background refresh if stale) ---
   initModelLimits();
+
+  // --- Initialize benchmark cache (sync load + background refresh if stale) ---
+  initBenchmarks();
 
   // --- Load keybindings from disk (merges user overrides with defaults) ---
   getKeybindingsManager().loadFromDisk();
