@@ -1,8 +1,8 @@
 #!/usr/bin/env bun
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync, unlinkSync, statSync, openSync, readSync, closeSync, renameSync } from 'fs';
 import { homedir } from 'os';
 import { randomBytes } from 'crypto';
-import { join } from 'path';
+import { join, dirname } from 'path';
 import { Compositor } from './renderer/compositor.ts';
 import { createEmptyLine, type Line } from './types/grid.ts';
 import { UIFactory } from './renderer/ui-factory.ts';
@@ -26,12 +26,14 @@ import type { CommandContext } from './input/command-registry.ts';
 import { renderFilePickerOverlay } from './renderer/file-picker-overlay.ts';
 import { renderModelPickerOverlay } from './renderer/model-picker-overlay.ts';
 import { renderSearchOverlay } from './renderer/search-overlay.ts';
+import { renderHistorySearchOverlay } from './renderer/history-search-overlay.ts';
 import { renderProcessIndicator } from './renderer/process-indicator.ts';
 import { AgentManager } from './tools/agent/index.ts';
 import { WrfcController } from './agents/wrfc-controller.ts';
 import { ProcessManager } from './tools/shared/process-manager.ts';
 import { renderSelectionModalOverlay } from './renderer/selection-modal-overlay.ts';
 import { registerBuiltinCommands } from './input/commands.ts';
+import { WebhookNotifier, setWebhookNotifier } from './integrations/webhooks.ts';
 import { ScheduleManager } from './tools/workflow/index.ts';
 import { InputHistory } from './input/input-history.ts';
 import { loadSystemPrompt as _loadSystemPrompt } from './utils/prompt-loader.ts';
@@ -56,6 +58,7 @@ import { initModelLimits } from './providers/model-limits.ts';
 import { getPanelManager } from './panels/panel-manager.ts';
 import { registerBuiltinPanels } from './panels/builtin-panels.ts';
 import { renderPanelTabBar } from './renderer/panel-tab-bar.ts';
+import { mcpRegistry } from './mcp/registry.ts';
 
 /**
  * Attempt to restore a previously saved model selection after providers are registered.
@@ -99,6 +102,9 @@ const PASTE_DISABLE    = '\x1b[?2004l';
 /** User session persistence — .goodvibes/tui/sessions/ */
 const USER_SESSIONS_DIR = join(process.cwd(), '.goodvibes', 'tui', 'sessions');
 const LAST_SESSION_POINTER = join(USER_SESSIONS_DIR, 'last-session.json');
+
+/** Crash recovery file — written periodically and deleted on clean exit. */
+const RECOVERY_FILE = join(homedir(), '.goodvibes', 'tui', 'recovery.jsonl');
 
 /** Generate an 8-character lowercase hex ID (matches agent session pattern). */
 function generateUserSessionId(): string {
@@ -186,6 +192,52 @@ function loadLastConversation(): { messages: Array<Record<string, unknown>> } | 
     return { messages: messages as Array<Record<string, unknown>> };
   } catch (e) { logger.debug('loadLastConversation failed', { error: String(e) }); }
   return null;
+}
+
+function writeRecoveryFile(conversation: ConversationManager, sessionId: string): void {
+  try {
+    const data = conversation.toJSON() as { messages: Array<Record<string, unknown>> };
+    if (!data.messages || data.messages.length === 0) return;
+    const lines: string[] = [];
+    lines.push(JSON.stringify({ type: 'meta', sessionId, title: conversation.title ?? '', timestamp: Date.now() }));
+    for (const msg of data.messages) {
+      lines.push(JSON.stringify({ type: 'message', ...msg }));
+    }
+    const tmpPath = RECOVERY_FILE + '.tmp';
+    mkdirSync(dirname(RECOVERY_FILE), { recursive: true });
+    writeFileSync(tmpPath, lines.join('\n') + '\n', 'utf-8');
+    renameSync(tmpPath, RECOVERY_FILE);
+  } catch (err) {
+    logger.debug('[Recovery] Write failed', { error: String(err) });
+  }
+}
+
+function deleteRecoveryFile(): void {
+  try { unlinkSync(RECOVERY_FILE); } catch { /* missing file is fine */ }
+}
+
+function checkRecoveryFile(): { title: string; timestamp: number; sessionId: string } | null {
+  try {
+    if (!existsSync(RECOVERY_FILE)) return null;
+    // Check if recovery file is newer than last clean exit
+    const recoveryMtime = statSync(RECOVERY_FILE).mtimeMs;
+    const pointerPath = LAST_SESSION_POINTER;
+    if (existsSync(pointerPath)) {
+      const lastCleanMtime = statSync(pointerPath).mtimeMs;
+      if (recoveryMtime <= lastCleanMtime) return null; // clean exit happened after recovery write
+    }
+    // Read only first 4KB for the meta line
+    const fd = openSync(RECOVERY_FILE, 'r');
+    const buf = Buffer.alloc(4096);
+    const bytesRead = readSync(fd, buf, 0, 4096, 0);
+    closeSync(fd);
+    const firstLine = buf.toString('utf-8', 0, bytesRead).split('\n')[0];
+    const meta = JSON.parse(firstLine) as { title?: string; timestamp?: number; sessionId?: string };
+    return { title: meta.title ?? '', timestamp: meta.timestamp ?? 0, sessionId: meta.sessionId ?? '' };
+  } catch (err) {
+    logger.debug('[Recovery] Check failed', { error: String(err) });
+    return null;
+  }
 }
 
 async function main() {
@@ -289,9 +341,17 @@ async function main() {
   // Periodic agent status interval handle — cleared on exit
   let agentStatusInterval: ReturnType<typeof setInterval> | null = null;
 
+  // Crash recovery interval handle — cleared on exit
+  let recoveryInterval: ReturnType<typeof setInterval> | null = null;
+
+  // Recovery flow state
+  let recoveryPending = false;
+
   const exitApp = () => {
     unsubs.forEach(fn => fn());
     if (agentStatusInterval !== null) { clearInterval(agentStatusInterval); agentStatusInterval = null; }
+    if (recoveryInterval !== null) { clearInterval(recoveryInterval); recoveryInterval = null; }
+    deleteRecoveryFile();
     // Save conversation on exit
     saveConversation(conversation.toJSON() as { messages: object[]; timestamp?: number }, runtime.sessionId, runtime.model, runtime.provider, conversation.title || '');
     try { ScheduleManager.getInstance().destroy(); } catch { /* non-fatal */ }
@@ -424,6 +484,14 @@ async function main() {
   // Start watching for custom provider file changes so hot-reload works.
   providerRegistry.startWatching(bus);
 
+  // --- Webhook notifications ---
+  const webhookUrls = (configManager.getCategory('notifications') as { webhookUrls?: string[] }).webhookUrls ?? [];
+  if (webhookUrls.length > 0) {
+    const webhookNotifier = WebhookNotifier.fromConfig(webhookUrls);
+    webhookNotifier.attachToEventBus(bus);
+    setWebhookNotifier(webhookNotifier);
+  }
+
   const permissionManager = new PermissionManager(bus);
 
   const hookDispatcher = new HookDispatcher();
@@ -456,6 +524,12 @@ async function main() {
   const acpManager = new AcpManager(bus);
   orchestrator.registerDelegateTool(acpManager);
 
+  // --- MCP server auto-discovery ---
+  // Non-blocking: connectAll catches per-server errors internally.
+  mcpRegistry.connectAll(config.workingDir ?? process.cwd()).catch((err) => {
+    logger.debug('MCP auto-connect failed (non-fatal)', { error: String(err) });
+  });
+
   // --- Panel manager ---
   const panelManager = getPanelManager();
   registerBuiltinPanels(panelManager, {
@@ -484,7 +558,7 @@ async function main() {
     try {
       const sm = getSessionManager();
       const { messages, meta } = sm.load(sessionId);
-      conversation.fromJSON({ messages: messages as never[] });
+      conversation.fromJSON({ messages: messages as unknown[] });
       runtime.sessionId = sessionId;
       if (meta?.model) runtime.model = meta.model;
       if (meta?.provider) runtime.provider = meta.provider;
@@ -516,6 +590,7 @@ async function main() {
     exit: exitApp,
     reloadSystemPrompt: loadSystemPrompt,
     toolRegistry,
+    mcpRegistry,
   };
 
   input.setCommandRegistry(commandRegistry, commandContext);
@@ -800,6 +875,10 @@ async function main() {
       viewport.push(...renderSearchOverlay(input.searchManager, width));
     }
 
+    if (input.historySearch.active) {
+      viewport.push(...renderHistorySearchOverlay(input.historySearch, width));
+    }
+
 
     if (input.processModal.active) {
       const pmLines = renderProcessModal(input.processModal, width);
@@ -1059,6 +1138,27 @@ async function main() {
       return;
     }
 
+    if (recoveryPending) {
+      recoveryPending = false;
+      const key = data.toString();
+      if (key.toLowerCase() === 'r') {
+        try {
+          const raw = readFileSync(RECOVERY_FILE, 'utf-8');
+          const lines = raw.split('\n').filter(Boolean);
+          const messages = lines.slice(1).map(l => { const { type: _, ...rest } = JSON.parse(l) as { type: string } & Record<string, unknown>; return rest; });
+          conversation.fromJSON({ messages: messages as unknown[] });
+          conversation.addSystemMessage('[Recovery] Session restored.');
+        } catch (err) {
+          conversation.addSystemMessage(`[Recovery] Failed to restore: ${(err as Error).message}`);
+        }
+      } else {
+        conversation.addSystemMessage('[Recovery] Discarded recovery data.');
+      }
+      deleteRecoveryFile();
+      bus.emit('render:request');
+      return;
+    }
+
     input.feed(data);
   });
   process.on('SIGINT', () => input.feed('\x03'));
@@ -1071,6 +1171,19 @@ async function main() {
   // Initial render
   conversation.rebuildHistory();
   render();
+
+  // --- Crash recovery check ---
+  const recoveryInfo = checkRecoveryFile();
+  if (recoveryInfo) {
+    conversation.addSystemMessage(`[Recovery] Found unsaved session from ${new Date(recoveryInfo.timestamp).toLocaleString()}. Title: "${recoveryInfo.title}". Press R to restore, any other key to discard.`);
+    bus.emit('render:request');
+    recoveryPending = true;
+  }
+
+  // --- Auto-save to recovery file every 60s ---
+  recoveryInterval = setInterval(() => {
+    writeRecoveryFile(conversation, runtime.sessionId);
+  }, 60_000);
 
   // --- Load persisted local LLM providers (instant, before background scan) ---
   const persisted = loadPersistedProviders();
