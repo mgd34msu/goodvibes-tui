@@ -31,25 +31,67 @@ export function renderModelPickerOverlay(
   const contentW = boxW - 4; // 2 border chars + 2 padding chars each side
   const pad = ' '.repeat(boxMargin);
 
-  // ── Title bar ──────────────────────────────────────────────────────────────
+  // ── Title bar ───────────────────────────────────────────────────────────────────────
   const titleText = MODE_TITLES[picker.mode] ?? MODE_TITLES.model;
   const titleLine =
     pad + '\u250c' + titleText + '\u2500'.repeat(Math.max(0, boxW - 2 - getDisplayWidth(titleText))) + '\u2510';
   lines.push(UIFactory.stringToLine(titleLine, width, { fg: '#00ffff' }));
 
-  // ── Empty separator ────────────────────────────────────────────────────────
+  // ── Search bar (model mode only) ───────────────────────────────────────────────
+  if (picker.mode === 'model') {
+    // Category filter indicator
+    const filterLabels: Record<string, string> = { all: 'All', free: 'Free', premium: 'Premium' };
+    const filterLabel = filterLabels[picker.categoryFilter] ?? 'All';
+    const filterTag = `[${filterLabel}]`;
+    const searchPrefix = '\u2502 \ud83d\udd0d ';
+    const cursorChar = picker.query.length > 0 ? '' : '\u2592'; // block cursor when empty
+    const queryDisplay = picker.query + cursorChar;
+    const filterTagW = getDisplayWidth(filterTag);
+    // Available space for query: contentW minus prefix-after-border (3 for search icon+space) minus filter tag minus gap
+    const maxQueryW = contentW - 3 - filterTagW - 2;
+    const queryTrunc = getDisplayWidth(queryDisplay) > maxQueryW
+      ? '\u2026' + queryDisplay.slice(-(maxQueryW - 1))
+      : queryDisplay;
+    const spacer = ' '.repeat(Math.max(0, contentW - 3 - getDisplayWidth(queryTrunc) - filterTagW - 1));
+    const searchRowText = pad + searchPrefix + queryTrunc + spacer + filterTag + ' \u2502';
+    lines.push(UIFactory.stringToLine(searchRowText, width, {
+      fg: picker.query.length > 0 ? '#ffffff' : '244',
+    }));
+
+    // Thin divider under search bar
+    const searchDivider = pad + '\u251c' + '\u2500'.repeat(boxW - 2) + '\u2524';
+    lines.push(UIFactory.stringToLine(searchDivider, width, { fg: '238' }));
+  } else {
+    // Empty separator for non-model modes
+    const emptyRow = pad + '\u2502' + ' '.repeat(boxW - 2) + '\u2502';
+    lines.push(UIFactory.stringToLine(emptyRow, width, { fg: '240' }));
+  }
+
   const emptyRow = pad + '\u2502' + ' '.repeat(boxW - 2) + '\u2502';
-  lines.push(UIFactory.stringToLine(emptyRow, width, { fg: '240' }));
 
   if (picker.mode === 'model') {
-    // ── Model list ───────────────────────────────────────────────────────────
-    if (picker.models.length === 0) {
-      const noModels = pad + '\u2502 ' + 'No models available'.padEnd(contentW) + ' \u2502';
+    // ── Model list (grouped by provider) ───────────────────────────────────────────
+    const filtered = picker.getFilteredModels();
+    if (filtered.length === 0) {
+      const msg = picker.query.length > 0
+        ? `No models match "${picker.query.length > 20 ? picker.query.slice(0, 20) + '\u2026' : picker.query}"`
+        : 'No models available';
+      const noModels = pad + '\u2502 ' + msg.padEnd(contentW) + ' \u2502';
       lines.push(UIFactory.stringToLine(noModels, width, { fg: '244', dim: true }));
     } else {
-      for (let i = 0; i < picker.models.length; i++) {
-        const model = picker.models[i];
-        const isSelected = i === picker.selectedIndex;
+      let selIdx = 0; // tracks index into filtered (not grouped) for selectedIndex comparison
+      let lastProvider = '';
+
+      for (const model of filtered) {
+        // Provider group header
+        if (model.provider !== lastProvider) {
+          const headerText = ' \u25e4 ' + model.provider;
+          const headerRow = pad + '\u2502' + headerText.padEnd(boxW - 2) + '\u2502';
+          lines.push(UIFactory.stringToLine(headerRow, width, { fg: '#4488cc', bold: false }));
+          lastProvider = model.provider;
+        }
+
+        const isSelected = selIdx === picker.selectedIndex;
         const indicator = isSelected ? '\u25b6 ' : '  ';
 
         // Left column: model id (max 24 chars), right column: display name (remaining space)
@@ -58,8 +100,6 @@ export function renderModelPickerOverlay(
           ? model.id.slice(0, maxIdLen - 1) + '\u2026'
           : model.id.padEnd(maxIdLen);
         const remaining = contentW - maxIdLen - 4; // 4 = indicator + gap
-        // NOTE: padEnd uses .length (byte width), not display width — CJK chars
-        // may cause slight misalignment. Use ASCII-safe model names where possible.
         const nameStr = model.displayName.length > remaining
           ? model.displayName.slice(0, remaining - 1) + '\u2026'
           : model.displayName.padEnd(remaining);
@@ -70,14 +110,16 @@ export function renderModelPickerOverlay(
           bold: isSelected,
           bg: isSelected ? '#1a2a3a' : '',
         }));
+
+        selIdx++;
       }
     }
 
-    // ── Divider ──────────────────────────────────────────────────────────────
+    // ── Divider ────────────────────────────────────────────────────────────────────
     const divider = pad + '\u251c' + '\u2500'.repeat(boxW - 2) + '\u2524';
     lines.push(UIFactory.stringToLine(divider, width, { fg: '240' }));
 
-    // ── Capability detail for selected model ─────────────────────────────────
+    // ── Capability detail for selected model ────────────────────────────────────────────
     const selected = picker.getSelected();
     if (selected) {
       const providerLine = pad + '\u2502 ' +
@@ -100,7 +142,7 @@ export function renderModelPickerOverlay(
       lines.push(UIFactory.stringToLine(emptyRow, width, { fg: '240' }));
     }
   } else if (picker.mode === 'provider') {
-    // ── Provider list ────────────────────────────────────────────────────────
+    // ── Provider list ───────────────────────────────────────────────────────────────────────
     if (picker.providers.length === 0) {
       const noProviders = pad + '\u2502 ' + 'No providers available'.padEnd(contentW) + ' \u2502';
       lines.push(UIFactory.stringToLine(noProviders, width, { fg: '244', dim: true }));
@@ -118,14 +160,14 @@ export function renderModelPickerOverlay(
       }
     }
 
-    // ── Divider + hint ────────────────────────────────────────────────────────
+    // ── Divider + hint ──────────────────────────────────────────────────────────────────
     const divider = pad + '\u251c' + '\u2500'.repeat(boxW - 2) + '\u2524';
     lines.push(UIFactory.stringToLine(divider, width, { fg: '240' }));
     const hintLine = pad + '\u2502 ' + 'Select a provider to browse its models'.padEnd(contentW) + ' \u2502';
     lines.push(UIFactory.stringToLine(hintLine, width, { fg: '244' }));
     lines.push(UIFactory.stringToLine(emptyRow, width, { fg: '240' }));
   } else {
-    // ── Effort list ──────────────────────────────────────────────────────────
+    // ── Effort list ────────────────────────────────────────────────────────────────────────
     const effortDescriptions: Record<string, string> = {
       instant: 'Fastest, minimal reasoning',
       low:     'Quick with light reasoning',
@@ -149,7 +191,7 @@ export function renderModelPickerOverlay(
       }));
     }
 
-    // ── Divider + model context ────────────────────────────────────────────────
+    // ── Divider + model context ──────────────────────────────────────────────────────
     const divider = pad + '\u251c' + '\u2500'.repeat(boxW - 2) + '\u2524';
     lines.push(UIFactory.stringToLine(divider, width, { fg: '240' }));
     const modelName = picker.pendingModel ? picker.pendingModel.displayName : 'unknown';
@@ -158,8 +200,10 @@ export function renderModelPickerOverlay(
     lines.push(UIFactory.stringToLine(emptyRow, width, { fg: '240' }));
   }
 
-  // ── Bottom border with hints ───────────────────────────────────────────────
-  const hints = ' [\u2191\u2193] Navigate  [Enter] Select  [Esc] Cancel ';
+  // ── Bottom border with hints ─────────────────────────────────────────────────────────
+  const hints = picker.mode === 'model'
+    ? ' [\u2191\u2193] Navigate  [Enter] Select  [Esc] Clear/Cancel  [f]ree [p]remium [a]ll '
+    : ' [\u2191\u2193] Navigate  [Enter] Select  [Esc] Cancel ';
   const bottomLine =
     pad + '\u2514' + hints + '\u2500'.repeat(Math.max(0, boxW - 2 - getDisplayWidth(hints))) + '\u2518';
   lines.push(UIFactory.stringToLine(bottomLine, width, { fg: '240' }));

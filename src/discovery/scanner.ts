@@ -605,6 +605,28 @@ export async function fetchModelOutputLimits(
           }
         })
       );
+
+      // Fallback: try /props (llama.cpp-style) for n_predict if no output limits found
+      if (Object.keys(result).length === 0 && models.length > 0) {
+        try {
+          const res = await fetch(`http://${host}:${port}/props`, {
+            signal: AbortSignal.timeout(METADATA_TIMEOUT_MS),
+          });
+          if (res.ok) {
+            const data = await res.json() as Record<string, unknown>;
+            const settings = data.default_generation_settings as Record<string, unknown> | undefined;
+            if (settings && typeof settings.n_predict === 'number' && settings.n_predict > 0) {
+              const limit = settings.n_predict as number;
+              for (const model of models) {
+                result[model] = limit;
+                logger.info(`[Scan] ${model}: output limit ${limit} tokens (via /props fallback)`);
+              }
+            }
+          }
+        } catch (err) {
+          logger.debug(`[Scan] /props output limit fallback failed for ${host}:${port}: ${err}`);
+        }
+      }
       break;
     }
   }
@@ -676,8 +698,11 @@ export async function scanHosts(
     const serverType = identifyServer(port, result.headers, result.responseBody);
     const name = buildServerName(serverType, host, port);
     const baseURL = `http://${host}:${port}/v1`;
-    const modelContextWindows = await fetchModelContextWindows(host, port, serverType, result.models);
-    const modelOutputLimits = await fetchModelOutputLimits(host, port, serverType, result.models);
+    // Fetch context windows and output limits in parallel (independent queries to the same server)
+    const [modelContextWindows, modelOutputLimits] = await Promise.all([
+      fetchModelContextWindows(host, port, serverType, result.models),
+      fetchModelOutputLimits(host, port, serverType, result.models),
+    ]);
 
     servers.push({ name, host, port, baseURL, models: result.models, serverType, modelContextWindows, modelOutputLimits });
     logger.info(`[Scan] Found ${name} at ${host}:${port} (${result.models.length} models)`);

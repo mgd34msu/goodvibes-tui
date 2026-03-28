@@ -1,12 +1,15 @@
 import type { ModelDefinition } from '../providers/registry.ts';
 
 export type PickerMode = 'model' | 'provider' | 'effort';
+export type CategoryFilter = 'all' | 'free' | 'premium';
 
 /** A generic selectable item for non-model modes. */
 export interface PickerItem {
   id: string;
   label: string;
   detail?: string;
+  /** If true, this item is a provider group header (not selectable). */
+  isGroupHeader?: boolean;
 }
 
 /**
@@ -23,13 +26,22 @@ export class ModelPickerModal {
   /** The model chosen in model-mode, awaiting effort selection. */
   public pendingModel: ModelDefinition | null = null;
 
+  // ── Search / filter ────────────────────────────────────────────────────────
+  /** Current search query string (empty = no filter). */
+  public query = '';
+  /** Active category filter. */
+  public categoryFilter: CategoryFilter = 'all';
+
   /** Open showing all models — entry point for /model */
   openAllModels(models: ModelDefinition[], currentModelId: string): void {
     this.models = models;
     this.mode = 'model';
     this.active = true;
     this.pendingModel = null;
-    const idx = models.findIndex(m => m.id === currentModelId);
+    this.query = '';
+    this.categoryFilter = 'all';
+    const filtered = this.getFilteredModels();
+    const idx = filtered.findIndex(m => m.id === currentModelId);
     this.selectedIndex = idx >= 0 ? idx : 0;
   }
 
@@ -39,6 +51,8 @@ export class ModelPickerModal {
     this.mode = 'provider';
     this.active = true;
     this.pendingModel = null;
+    this.query = '';
+    this.categoryFilter = 'all';
     const idx = providers.indexOf(currentProvider);
     this.selectedIndex = idx >= 0 ? idx : 0;
   }
@@ -47,6 +61,8 @@ export class ModelPickerModal {
   showModelsForProvider(models: ModelDefinition[], _provider: string): void {
     this.models = models;
     this.mode = 'model';
+    this.query = '';
+    this.categoryFilter = 'all';
     this.selectedIndex = 0;
   }
 
@@ -72,12 +88,76 @@ export class ModelPickerModal {
     this.providers = [];
     this.pendingModel = null;
     this.selectedIndex = 0;
+    this.query = '';
+    this.categoryFilter = 'all';
+  }
+
+  // ── Search helpers ─────────────────────────────────────────────────────────
+
+  /** Append a character to the search query and clamp selectedIndex. */
+  appendChar(ch: string): void {
+    this.query += ch;
+    this._clampSelection();
+  }
+
+  /** Delete the last character from the search query and clamp selectedIndex. */
+  deleteChar(): void {
+    if (this.query.length > 0) {
+      this.query = this.query.slice(0, -1);
+      this._clampSelection();
+    }
+  }
+
+  /** Clear the search query and clamp selectedIndex. */
+  clearQuery(): void {
+    this.query = '';
+    this._clampSelection();
+  }
+
+  /** Set category filter and clamp selectedIndex. */
+  setCategoryFilter(filter: CategoryFilter): void {
+    this.categoryFilter = filter;
+    this._clampSelection();
+  }
+
+  /** Return models matching the current query and categoryFilter. */
+  getFilteredModels(): ModelDefinition[] {
+    let result = this.models;
+
+    // Category filter
+    if (this.categoryFilter === 'free') {
+      result = result.filter(m => m.tier === 'free');
+    } else if (this.categoryFilter === 'premium') {
+      result = result.filter(m => m.tier === 'premium');
+    }
+
+    // Query filter — fuzzy: every space-separated word must appear somewhere
+    if (this.query.trim().length > 0) {
+      const words = this.query.toLowerCase().split(/\s+/).filter(Boolean);
+      result = result.filter(m => {
+        const haystack = `${m.id} ${m.displayName} ${m.provider}`.toLowerCase();
+        return words.every(w => haystack.includes(w));
+      });
+    }
+
+    return result;
   }
 
   /** Get the items for the current mode as a unified list. */
   getItems(): PickerItem[] {
     if (this.mode === 'model') {
-      return this.models.map(m => ({ id: m.id, label: m.displayName, detail: m.provider }));
+      const filtered = this.getFilteredModels();
+      // Build grouped list with provider headers
+      const items: PickerItem[] = [];
+      let lastProvider = '';
+      for (const m of filtered) {
+        if (m.provider !== lastProvider) {
+          items.push({ id: `__header__${m.provider}`, label: m.provider, isGroupHeader: true });
+          lastProvider = m.provider;
+        }
+        items.push({ id: m.id, label: m.displayName, detail: m.provider });
+      }
+      return items;
     }
     if (this.mode === 'provider') {
       return this.providers.map(p => ({ id: p, label: p }));
@@ -92,14 +172,14 @@ export class ModelPickerModal {
     return this.effortLevels.map(e => ({ id: e, label: e, detail: descriptions[e] ?? '' }));
   }
 
-  /** Get count of items in current mode. */
+  /** Get count of selectable (non-header) items in current mode. */
   getItemCount(): number {
-    if (this.mode === 'model') return this.models.length;
+    if (this.mode === 'model') return this.getFilteredModels().length;
     if (this.mode === 'provider') return this.providers.length;
     return this.effortLevels.length;
   }
 
-  /** Move selection up (wraps). */
+  /** Move selection up (wraps, skips headers). */
   moveUp(): void {
     const count = this.getItemCount();
     if (count === 0) return;
@@ -108,7 +188,7 @@ export class ModelPickerModal {
       : count - 1;
   }
 
-  /** Move selection down (wraps). */
+  /** Move selection down (wraps, skips headers). */
   moveDown(): void {
     const count = this.getItemCount();
     if (count === 0) return;
@@ -119,7 +199,20 @@ export class ModelPickerModal {
 
   /** Get the currently highlighted model, or null if not in model mode / empty. */
   getSelected(): ModelDefinition | null {
-    if (this.mode !== 'model' || this.models.length === 0) return null;
-    return this.models[this.selectedIndex] ?? null;
+    if (this.mode !== 'model') return null;
+    const filtered = this.getFilteredModels();
+    if (filtered.length === 0) return null;
+    return filtered[this.selectedIndex] ?? null;
+  }
+
+  // ── Private helpers ────────────────────────────────────────────────────────
+
+  private _clampSelection(): void {
+    const count = this.getItemCount();
+    if (count === 0) {
+      this.selectedIndex = 0;
+    } else if (this.selectedIndex >= count) {
+      this.selectedIndex = count - 1;
+    }
   }
 }
