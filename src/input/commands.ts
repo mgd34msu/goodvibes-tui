@@ -722,14 +722,15 @@ export function registerBuiltinCommands(registry: CommandRegistry): void {
           }
         }
 
-        const PLACEHOLDER_MODEL = `${name}-model`;
+        // Default model entry created for custom providers when discovery fails — edit the provider file to configure models manually.
+        const DEFAULT_CUSTOM_MODEL = `${name}-model`;
         let models: CustomProviderConfig['models'];
 
         if (discoveredModelIds.length === 0) {
           ctx.print(`Warning: Could not discover models from ${baseURL}/models. Creating provider with a placeholder model entry.\nEdit ${providerFile} to configure models manually.`);
           models = [{
-            id: PLACEHOLDER_MODEL,
-            displayName: PLACEHOLDER_MODEL,
+            id: DEFAULT_CUSTOM_MODEL,
+            displayName: DEFAULT_CUSTOM_MODEL,
             contextWindow: 8192,
             capabilities: { toolCalling: true, codeEditing: true, reasoning: false, multimodal: false },
           }];
@@ -761,7 +762,7 @@ export function registerBuiltinCommands(registry: CommandRegistry): void {
 
         const ctxWindowSummary = discoveredModelIds.length > 0
           ? discoveredModelIds.map(id => `  • ${id} (${(contextWindows[id] ?? 8192).toLocaleString()} ctx)`).join('\n')
-          : `  • ${PLACEHOLDER_MODEL} (placeholder)`;
+          : `  • ${DEFAULT_CUSTOM_MODEL} (placeholder)`;
         if (apiKey) {
           ctx.print('Tip: For better security, set the key as an env var and use "apiKeyEnv" in the config instead of "apiKey".');
         }

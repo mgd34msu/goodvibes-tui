@@ -10,6 +10,7 @@ export function resolveAndValidatePath(inputPath: string): string {
   const root = resolve(config.workingDir);
   const resolved = resolve(root, inputPath);
   const rel = relative(root, resolved);
+  // NOTE: This check targets Unix paths only. Windows backslash separators are not handled (acceptable for Linux-targeted TUI).
   if (rel.startsWith('..') || rel.includes('/..')) {
     throw new Error(`Path '${inputPath}' is outside the project root`);
   }

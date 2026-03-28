@@ -88,6 +88,9 @@ type Listener<T> = T extends void ? () => void : (data: T) => void;
 /**
  * EventBus - Typed publish/subscribe event bus for TUI module communication.
  */
+/** Maximum listeners per event before a leak warning is emitted. */
+const MAX_LISTENERS = 100;
+
 export class EventBus {
   private listeners = new Map<string, Set<(...args: unknown[]) => void>>();
 
@@ -95,7 +98,11 @@ export class EventBus {
     if (!this.listeners.has(event)) {
       this.listeners.set(event, new Set());
     }
-    this.listeners.get(event)!.add(listener as (...args: unknown[]) => void);
+    const set = this.listeners.get(event)!;
+    set.add(listener as (...args: unknown[]) => void);
+    if (set.size > MAX_LISTENERS) {
+      logger.warn('[EventBus] possible listener leak detected', { event: String(event), count: set.size, max: MAX_LISTENERS });
+    }
     // Return unsubscribe function
     return () => this.off(event, listener);
   }
