@@ -71,14 +71,34 @@ export class RenderError extends AppError {
 }
 
 /**
+ * Returns true when the error indicates a rate limit or quota exhaustion.
+ * Used by SyntheticProvider and AgentOrchestrator to decide whether to
+ * back-off and retry vs. escalate the error.
+ */
+export function isRateLimitOrQuotaError(err: unknown): boolean {
+  if (err instanceof ProviderError) {
+    if (err.statusCode === 429 || err.statusCode === 402) return true;
+    const msg = err.message.toLowerCase();
+    return /rate.limit|too many requests|quota exceeded|throttl|depleted|credits/.test(msg);
+  }
+  if (err instanceof Error) {
+    const msg = err.message.toLowerCase();
+    return msg.includes('429') || msg.includes('402') || /rate.limit|too many requests|quota exceeded|depleted|credits/.test(msg);
+  }
+  return false;
+}
+
+/**
  * Returns true when the error indicates the provider is non-transient
  * (auth failures, connection refused, host not found, timeout).
+ * 500/503 are deliberately excluded — server errors are transient and
+ * eligible for retry. Only permanent auth/billing failures are flagged here.
  * Used to trigger graceful degradation / alternative model suggestions.
  */
 export function isNonTransientProviderFailure(err: unknown): boolean {
   if (!(err instanceof Error)) return false;
   if (err instanceof ProviderError) {
-    const NON_TRANSIENT_CODES = new Set([401, 402, 403, 500, 503]);
+    const NON_TRANSIENT_CODES = new Set([401, 402, 403]);
     if (err.statusCode !== undefined && NON_TRANSIENT_CODES.has(err.statusCode)) return true;
   }
   const msg = err.message.toLowerCase();

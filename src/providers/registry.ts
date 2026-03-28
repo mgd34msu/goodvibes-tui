@@ -3408,7 +3408,7 @@ export class ProviderRegistry {
     if (!current || current.provider === 'synthetic') return null;
     // Check if synthetic wrapper exists
     const baseName = current.id.split('/').pop() ?? '';
-    const syntheticMatch = getModelRegistry().find(m => m.provider === 'synthetic' && m.id.includes(baseName));
+    const syntheticMatch = getModelRegistry().find(m => m.provider === 'synthetic' && (m.id === baseName || m.id.endsWith('/' + baseName)));
     if (syntheticMatch) return syntheticMatch;
     // Find same-tier model on different provider
     return getModelRegistry().find(m => m.id !== currentModelId && m.provider !== current.provider && m.tier === current.tier && m.selectable) ?? null;
