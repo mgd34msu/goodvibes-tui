@@ -5,6 +5,7 @@
   "main": "src/main.ts",
   "scripts": {
     "dev": "bun run src/main.ts",
+    "dev:watch": "bun --watch src/main.ts",
     "prebuild": "bun run scripts/prebuild.ts",
     "build": "bun build src/main.ts --compile --outfile dist/goodvibes",
     "build:linux-x64": "bun build src/main.ts --compile --target=bun-linux-x64 --outfile dist/goodvibes-linux-x64",

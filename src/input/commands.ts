@@ -3,14 +3,16 @@ import type { SelectionItem } from './selection-modal.ts';
 import type { ConfigKey } from '../config/index.ts';
 import { CONFIG_SCHEMA } from '../config/index.ts';
 import { REASONING_BUDGET_MAP } from '../providers/interface.ts';
-import { join } from 'path';
+import type { ContentPart } from '../providers/interface.ts';
+import { join, resolve } from 'path';
 import { homedir } from 'node:os';
-import { existsSync, mkdirSync, unlinkSync } from 'node:fs';
+import { existsSync, mkdirSync, unlinkSync, readFileSync } from 'node:fs';
 import { writeFile, unlink } from 'node:fs/promises';
 import { fetchModelContextWindows } from '../discovery/scanner.ts';
 import type { CustomProviderConfig } from '../providers/custom-loader.ts';
 import { randomBytes } from 'node:crypto';
 import { getSessionManager } from '../sessions/manager.ts';
+import { AgentManager } from '../tools/agent/index.ts';
 import { TemplateManager, parseTemplateArgs } from '../templates/manager.ts';
 import { getBookmarkManager } from '../bookmarks/manager.ts';
 import { getProfileManager } from '../profiles/manager.ts';
@@ -21,7 +23,9 @@ import { scan, persistProviders } from '../discovery/index.ts';
 import { planManager } from '../core/plan-manager-instance.ts';
 import { classifyIntent } from '../core/intent-classifier.ts';
 import { getPanelManager } from '../panels/panel-manager.ts';
+import { resolveAndValidatePath } from '../utils/path-safety.ts';
 import { TaskScheduler } from '../scheduler/scheduler.ts';
+import { exportToMarkdown } from '../export/markdown.ts';
 
 let _serviceRegistry: ServiceRegistry | undefined;
 function getServiceRegistry(): ServiceRegistry {
@@ -165,6 +169,9 @@ export function registerBuiltinCommands(registry: CommandRegistry): void {
           { id: '/undo', label: '/undo', detail: 'Remove last turn', category: 'Conversation' },
           { id: '/redo', label: '/redo', detail: 'Restore undone turn', category: 'Conversation' },
           { id: '/retry', label: '/retry [text]', detail: 'Re-send last message', category: 'Conversation' },
+          { id: '/fork', label: '/fork [name]', detail: 'Snapshot conversation as a named branch', category: 'Conversation' },
+          { id: '/branch', label: '/branch [name]', detail: 'List branches or switch to one', category: 'Conversation' },
+          { id: '/merge', label: '/merge <name>', detail: 'Append messages from a branch', category: 'Conversation' },
           // Templates
           { id: '/template', label: '/template', detail: 'Browse templates', category: 'Templates' },
           { id: '/template save', label: '/template save <name>', detail: 'Save prompt as template', category: 'Templates' },
@@ -901,41 +908,90 @@ export function registerBuiltinCommands(registry: CommandRegistry): void {
   // ── /export ───────────────────────────────────────────
   registry.register({
     name: 'export',
-    aliases: [],
-    description: 'Export conversation as markdown',
-    usage: '[filename.md]',
-    argsHint: '[filename.md]',
+    description: 'Export conversation to a Markdown file',
+    usage: '[format] [path]',
+    argsHint: '[markdown] [path]',
     async handler(args, ctx) {
-      const messages = ctx.conversationManager.toJSON() as ExportableConversation;
-      const lines: string[] = [];
+      // Parse args: /export [format] [path]
+      let format = 'markdown';
+      let outPath: string | undefined;
 
-      for (const msg of messages.messages) {
-        if (msg.role === 'user') {
-          lines.push(`## User\n\n${msg.content}\n`);
-        } else if (msg.role === 'assistant') {
-          lines.push(`## Assistant\n\n${msg.content}\n`);
-          if (msg.toolCalls && msg.toolCalls.length > 0) {
-            for (const tc of msg.toolCalls) {
-              lines.push(`### Tool Call: ${tc.name}\n\n\`\`\`json\n${JSON.stringify(tc.arguments, null, 2)}\n\`\`\`\n`);
-            }
-          }
-        } else if (msg.role === 'tool') {
-          const name = msg.toolName ?? msg.callId ?? 'tool';
-          lines.push(`## Tool: ${name}\n\n\`\`\`\n${msg.content}\n\`\`\`\n`);
-        } else if (msg.role === 'system') {
-          lines.push(`## System\n\n${msg.content}\n`);
+      for (const arg of args) {
+        if (arg === 'markdown' || arg === 'md' || arg === 'text' || arg === 'txt') {
+          format = arg === 'md' ? 'markdown' : arg === 'txt' ? 'text' : arg;
+        } else {
+          outPath = arg;
         }
       }
 
-      const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
-      const filename = args[0] ?? `goodvibes-export-${timestamp}.md`;
-      const filepath = join(process.cwd(), filename);
+      // Default path: ./conversation-{timestamp}.md
+      if (!outPath) {
+        const ts = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+        const ext = format === 'markdown' ? 'md' : 'txt';
+        outPath = `./conversation-${ts}.${ext}`;
+      }
+
+      // Resolve relative paths from cwd
+      const resolvedPath = resolve(
+        outPath.startsWith('~') ? outPath.replace(/^~/, homedir()) : outPath.startsWith('/') ? outPath : join(process.cwd(), outPath)
+      );
+
+      // Path traversal guard — append separator to prevent prefix collisions
+      const cwdPrefix = process.cwd().endsWith('/') ? process.cwd() : process.cwd() + '/';
+      if (!resolvedPath.startsWith(cwdPrefix) && resolvedPath !== process.cwd()) {
+        ctx.print('Error: Export path must be within the current directory.');
+        return;
+      }
+
       try {
-        const { writeFile } = await import('fs/promises');
-        await writeFile(filepath, lines.join('\n'), 'utf-8');
-        ctx.print(`Conversation exported to: ${filepath}`);
-      } catch (e) {
-        ctx.print(`Export failed: ${(e as Error).message}`);
+        // Get raw messages from ConversationManager via toJSON
+        const data = ctx.conversationManager.toJSON() as { messages: Array<Record<string, unknown>> };
+        const msgs = data.messages ?? [];
+
+        let fileContent: string;
+        if (format === 'markdown') {
+          // Map raw messages to ExportMessage shape
+          const exportMsgs = msgs.map(m => ({
+            role: String(m.role ?? 'user') as 'user' | 'assistant' | 'system' | 'tool',
+            content: Array.isArray(m.content)
+              ? m.content as import('../export/markdown.ts').ContentPart[]
+              : String(m.content ?? ''),
+            toolCalls: m.toolCalls as import('../types/tools.ts').ToolCall[] | undefined,
+            callId: m.callId as string | undefined,
+            toolName: m.toolName as string | undefined,
+            reasoningContent: m.reasoningContent as string | undefined,
+            reasoningSummary: m.reasoningSummary as string | undefined,
+            usage: m.usage as { inputTokens: number; outputTokens: number; cacheReadTokens?: number; cacheWriteTokens?: number } | undefined,
+          }));
+          fileContent = exportToMarkdown(exportMsgs, {
+            model: ctx.runtime.model,
+            provider: ctx.runtime.provider,
+            sessionId: ctx.runtime.sessionId,
+            title: ctx.conversationManager.title || undefined,
+          });
+        } else {
+          // Plain text format
+          const lines: string[] = [];
+          for (const m of msgs) {
+            const role = String(m.role ?? 'unknown').toUpperCase();
+            const content = typeof m.content === 'string' ? m.content : '';
+            if (!content.trim()) continue;
+            lines.push(`[${role}]`);
+            lines.push(content);
+            lines.push('');
+          }
+          fileContent = lines.join('\n');
+        }
+
+        // Ensure parent directory exists
+        const { dirname } = await import('node:path');
+        const dir = dirname(resolvedPath);
+        if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
+
+        await writeFile(resolvedPath, fileContent, 'utf-8');
+        ctx.print(`Exported ${msgs.length} messages to: ${resolvedPath}`);
+      } catch (err) {
+        ctx.print(`Export failed: ${(err as Error).message}`);
       }
     },
   });
@@ -978,9 +1034,11 @@ export function registerBuiltinCommands(registry: CommandRegistry): void {
         timestamp: Date.now(),
       };
       try {
-        const { filePath, sanitizedName } = sessionManager.save(rawName, messages, meta);
+        const agentRecords = AgentManager.getInstance().exportState();
+        const { filePath, sanitizedName } = sessionManager.save(rawName, messages, meta, agentRecords);
         const nameNote = sanitizedName !== rawName ? ` (saved as "${sanitizedName}")` : '';
-        ctx.print(`Session saved: ${rawName}${nameNote}\n  → ${filePath}`);
+        const agentNote = agentRecords.length > 0 ? ` [${agentRecords.length} agent records]` : '';
+        ctx.print(`Session saved: ${rawName}${nameNote}${agentNote}\n  → ${filePath}`);
       } catch (e) {
         ctx.print(`Failed to save session: ${(e as Error).message}`);
       }
@@ -1001,13 +1059,18 @@ export function registerBuiltinCommands(registry: CommandRegistry): void {
       }
       const sessionManager = getSessionManager();
       try {
-        const { meta, messages } = sessionManager.load(args[0]);
+        const { meta, messages, agentRecords } = sessionManager.load(args[0]);
         ctx.conversationManager.resetAll();
         ctx.conversationManager.fromJSON({ messages: messages as never[] });
         if (meta.title) ctx.conversationManager.title = meta.title;
         ctx.conversationManager.rebuildHistory();
+        AgentManager.getInstance().clear();
+        if (agentRecords.length > 0) {
+          AgentManager.getInstance().importState(agentRecords);
+        }
         ctx.renderRequest();
-        ctx.print(`Session loaded: ${args[0]} (${messages.length} messages)`);
+        const agentNote = agentRecords.length > 0 ? ` [${agentRecords.length} agent records restored]` : '';
+        ctx.print(`Session loaded: ${args[0]} (${messages.length} messages)${agentNote}`);
       } catch (e) {
         ctx.print(`Failed to load session: ${(e as Error).message}`);
       }
@@ -2464,7 +2527,149 @@ export function registerBuiltinCommands(registry: CommandRegistry): void {
     },
   });
 
+  // ── /fork ────────────────────────────────────────────
+  registry.register({
+    name: 'fork',
+    aliases: ['branch-save'],
+    description: 'Save a named snapshot of the current conversation',
+    usage: '[name]',
+    argsHint: '[name]',
+    handler(args, ctx) {
+      const name = args[0];
+      const branchName = ctx.conversationManager.forkBranch(name);
+      const msgCount = ctx.conversationManager.getMessageCount();
+      ctx.print(`Forked conversation as "${branchName}" (${msgCount} message${msgCount === 1 ? '' : 's'}).`);
+    },
+  });
+
+  // ── /branch ──────────────────────────────────────────
+  registry.register({
+    name: 'branch',
+    aliases: ['br'],
+    description: 'List conversation branches or switch to one',
+    usage: '[name]',
+    argsHint: '[name]',
+    handler(args, ctx) {
+      if (args.length === 0) {
+        const branches = ctx.conversationManager.listBranches();
+        if (branches.length === 0) {
+          ctx.print('No branches. Use /fork [name] to create one.');
+          return;
+        }
+        const current = ctx.conversationManager.getCurrentBranch();
+        const lines = [`Branches (current: ${current}):`];
+        for (const b of branches) {
+          const marker = b.isCurrent ? '▶' : ' ';
+          lines.push(`  ${marker} ${b.name}  (${b.messageCount} message${b.messageCount === 1 ? '' : 's'})`);
+        }
+        ctx.print(lines.join('\n'));
+        return;
+      }
+      const name = args[0];
+      const ok = ctx.conversationManager.switchBranch(name);
+      if (!ok) {
+        ctx.print(`Branch "${name}" not found. Use /fork [name] to create one, or /branch to list.`);
+        return;
+      }
+      ctx.print(`Switched to branch "${name}".`);
+      ctx.renderRequest();
+    },
+  });
+
+  // ── /merge ───────────────────────────────────────────
+  registry.register({
+    name: 'merge',
+    aliases: [],
+    description: 'Append messages from a branch after the fork point',
+    usage: '<name>',
+    argsHint: '<name>',
+    handler(args, ctx) {
+      const name = args[0];
+      if (!name) {
+        ctx.print('Usage: /merge <branch-name>\nSee /branch for available branches.');
+        return;
+      }
+      const ok = ctx.conversationManager.mergeBranch(name);
+      if (!ok) {
+        ctx.print(`Branch "${name}" not found. Use /branch to list available branches.`);
+        return;
+      }
+      ctx.print(`Merged branch "${name}" into current conversation.`);
+      ctx.renderRequest();
+    },
+  });
+
   // ── /refresh-models ──────────────────────────────────
+  // ── /image ─────────────────────────────────────────────
+  registry.register({
+    name: 'image',
+    aliases: ['img'],
+    description: 'Attach an image file to the next message',
+    usage: '<path> [prompt text]',
+    argsHint: '<path> [prompt]',
+    handler(args, ctx) {
+      if (args.length === 0) {
+        ctx.print('Usage: /image <path> [prompt text]\nSupported formats: PNG, JPEG, WebP, GIF');
+        return;
+      }
+
+      const rawPath = args[0];
+      const promptText = args.slice(1).join(' ') || `Attached image: ${rawPath.split('/').pop() ?? rawPath}`;
+
+      // Resolve and validate the path
+      let resolvedPath: string;
+      try {
+        resolvedPath = resolveAndValidatePath(rawPath);
+      } catch (err) {
+        ctx.print(`Error: ${err instanceof Error ? err.message : String(err)}`);
+        return;
+      }
+
+      if (!existsSync(resolvedPath)) {
+        ctx.print(`File not found: ${rawPath}`);
+        return;
+      }
+
+      // Determine mediaType from extension
+      const ext = resolvedPath.slice(resolvedPath.lastIndexOf('.')).toLowerCase();
+      const SUPPORTED_EXTS: Record<string, string> = {
+        '.png': 'image/png',
+        '.jpg': 'image/jpeg',
+        '.jpeg': 'image/jpeg',
+        '.webp': 'image/webp',
+        '.gif': 'image/gif',
+      };
+      const mediaType = SUPPORTED_EXTS[ext];
+      if (!mediaType) {
+        ctx.print(`Unsupported image format: ${ext}\nSupported: ${Object.keys(SUPPORTED_EXTS).join(', ')}`);
+        return;
+      }
+
+      // Read and base64-encode the file
+      let data: string;
+      try {
+        const bytes = readFileSync(resolvedPath);
+        data = bytes.toString('base64');
+      } catch (err) {
+        ctx.print(`Failed to read image: ${err instanceof Error ? err.message : String(err)}`);
+        return;
+      }
+
+      // Warn if current model doesn't support multimodal (orchestrator will strip images)
+      const currentModel = ctx.providerRegistry.getCurrentModel();
+      if (!currentModel.capabilities.multimodal) {
+        ctx.print(`Warning: ${currentModel.displayName} does not support image input. The image will be stripped when sending.`);
+      }
+
+      // Emit as a multimodal message
+      const content: ContentPart[] = [
+        { type: 'text', text: promptText },
+        { type: 'image', data, mediaType },
+      ];
+      ctx.eventBus.emit('input:submit', { text: promptText, content });
+    },
+  });
+
   registry.register({
     name: 'refresh-models',
     aliases: [],
@@ -2478,6 +2683,96 @@ export function registerBuiltinCommands(registry: CommandRegistry): void {
       } catch (e) {
         ctx.print(`Failed to refresh: ${(e as Error).message}`);
       }
+    },
+  });
+
+  // ── /notify ────────────────────────────────────────────
+  registry.register({
+    name: 'notify',
+    aliases: [],
+    description: 'Manage webhook notification URLs (ntfy.sh format)',
+    usage: 'add <url> | remove <url> | list | clear | test',
+    argsHint: 'add|remove|list|clear|test',
+    async handler(args, ctx) {
+      const { WebhookNotifier } = await import('../integrations/webhooks.ts');
+      const cm = ctx.configManager;
+      const notifications = cm.getCategory('notifications');
+      const urls: string[] = Array.isArray(notifications.webhookUrls)
+        ? [...notifications.webhookUrls]
+        : [];
+
+      const sub = args[0];
+
+      if (!sub || sub === 'list') {
+        if (urls.length === 0) {
+          ctx.print('No webhook URLs configured.\nUse: /notify add <url>');
+        } else {
+          ctx.print(`Webhook URLs (${urls.length}):\n${urls.map((u, i) => `  ${i + 1}. ${u}`).join('\n')}`);
+        }
+        return;
+      }
+
+      if (sub === 'add') {
+        const url = args[1];
+        if (!url) {
+          ctx.print('Usage: /notify add <url>\nExample: /notify add https://ntfy.sh/my-topic');
+          return;
+        }
+        try { new URL(url); } catch {
+          ctx.print(`Invalid URL: ${url}`);
+          return;
+        }
+        if (urls.includes(url)) {
+          ctx.print(`Already configured: ${url}`);
+          return;
+        }
+        urls.push(url);
+        (cm.getCategory('notifications') as { webhookUrls: string[] }).webhookUrls = urls;
+        cm.save();
+        ctx.print(`Webhook added: ${url}`);
+        return;
+      }
+
+      if (sub === 'remove') {
+        const url = args[1];
+        if (!url) {
+          ctx.print('Usage: /notify remove <url>');
+          return;
+        }
+        const next = urls.filter((u) => u !== url);
+        if (next.length === urls.length) {
+          ctx.print(`Not found: ${url}`);
+          return;
+        }
+        (cm.getCategory('notifications') as { webhookUrls: string[] }).webhookUrls = next;
+        cm.save();
+        ctx.print(`Webhook removed: ${url}`);
+        return;
+      }
+
+      if (sub === 'clear') {
+        (cm.getCategory('notifications') as { webhookUrls: string[] }).webhookUrls = [];
+        cm.save();
+        ctx.print('All webhook URLs cleared.');
+        return;
+      }
+
+      if (sub === 'test') {
+        if (urls.length === 0) {
+          ctx.print('No webhook URLs configured. Use: /notify add <url>');
+          return;
+        }
+        ctx.print(`Testing ${urls.length} webhook${urls.length !== 1 ? 's' : ''}...`);
+        const notifier = WebhookNotifier.fromConfig(urls);
+        const results = await notifier.test();
+        const lines = results.map((r) =>
+          r.ok ? `  [ok] ${r.url}` : `  [fail] ${r.url} — ${r.error ?? 'unknown error'}`
+        );
+        ctx.print(lines.join('\n'));
+        return;
+      }
+
+      ctx.print('Usage: /notify add <url> | remove <url> | list | clear | test');
     },
   });
 }
