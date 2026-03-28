@@ -1,3 +1,4 @@
+// CLI utility script — not imported by the app. console usage is intentional.
 import { readFileSync } from 'fs';
 import { AgentMessageBus } from '../agents/message-bus.ts';
 

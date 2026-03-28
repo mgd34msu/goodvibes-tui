@@ -18,6 +18,7 @@ import type { EventBus } from '../core/event-bus.ts';
 import type { SubagentInfo, SubagentResult, SubagentTask } from './protocol.ts';
 import type { PermissionCategory } from '../permissions/manager.ts';
 import { logger } from '../utils/logger.ts';
+import { VERSION } from '../version.ts';
 
 /** Shape of an agent_message_chunk session update that carries text content. */
 interface MessageChunkUpdate {
@@ -102,7 +103,7 @@ export class AcpConnection {
       // 5. ACP handshake: initialize (protocolVersion is a number)
       await this.conn.initialize({
         protocolVersion: 1,
-        clientInfo: { name: 'goodvibes-tui', version: '0.1.0' },
+        clientInfo: { name: 'goodvibes-tui', version: VERSION },
         clientCapabilities: {},
       });
 

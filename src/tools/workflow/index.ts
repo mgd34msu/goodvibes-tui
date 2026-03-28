@@ -12,7 +12,7 @@ interface WorkflowDefinition {
   description: string;
 }
 
-export const WORKFLOW_DEFINITIONS: Readonly<Record<string, WorkflowDefinition>> = Object.freeze({
+export const WORKFLOW_DEFINITIONS: Readonly<Record<string, WorkflowDefinition>> = Object.freeze(JSON.parse(JSON.stringify({
   wrfc: {
     name: 'WRFC Loop',
     states: ['gather', 'plan', 'apply', 'review', 'revision', 'complete'],
@@ -43,7 +43,7 @@ export const WORKFLOW_DEFINITIONS: Readonly<Record<string, WorkflowDefinition>> 
     transitions: { review: ['complete'] },
     description: 'Skip to review phase',
   },
-});
+})));
 
 // ---------------------------------------------------------------------------
 // WorkflowManager
