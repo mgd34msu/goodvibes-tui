@@ -6,8 +6,8 @@ import { REASONING_BUDGET_MAP } from '../providers/interface.ts';
 import type { ContentPart } from '../providers/interface.ts';
 import { join, resolve } from 'path';
 import { homedir } from 'node:os';
-import { existsSync, mkdirSync, unlinkSync, readFileSync } from 'node:fs';
-import { writeFile, unlink } from 'node:fs/promises';
+import { existsSync, mkdirSync, unlinkSync, statSync } from 'node:fs';
+import { writeFile, unlink, readFile } from 'node:fs/promises';
 import { fetchModelContextWindows } from '../discovery/scanner.ts';
 import type { CustomProviderConfig } from '../providers/custom-loader.ts';
 import { randomBytes } from 'node:crypto';
@@ -2606,7 +2606,7 @@ export function registerBuiltinCommands(registry: CommandRegistry): void {
     description: 'Attach an image file to the next message',
     usage: '<path> [prompt text]',
     argsHint: '<path> [prompt]',
-    handler(args, ctx) {
+    async handler(args, ctx) {
       if (args.length === 0) {
         ctx.print('Usage: /image <path> [prompt text]\nSupported formats: PNG, JPEG, WebP, GIF');
         return;
@@ -2644,10 +2644,18 @@ export function registerBuiltinCommands(registry: CommandRegistry): void {
         return;
       }
 
+      // Enforce file size limit
+      const stat = statSync(resolvedPath);
+      const MAX_IMAGE_BYTES = 20 * 1024 * 1024;
+      if (stat.size > MAX_IMAGE_BYTES) {
+        ctx.print(`Image too large (${(stat.size / 1024 / 1024).toFixed(1)}MB). Maximum: 20MB`);
+        return;
+      }
+
       // Read and base64-encode the file
       let data: string;
       try {
-        const bytes = readFileSync(resolvedPath);
+        const bytes = await readFile(resolvedPath);
         data = bytes.toString('base64');
       } catch (err) {
         ctx.print(`Failed to read image: ${err instanceof Error ? err.message : String(err)}`);
@@ -2693,7 +2701,7 @@ export function registerBuiltinCommands(registry: CommandRegistry): void {
     usage: 'add <url> | remove <url> | list | clear | test',
     argsHint: 'add|remove|list|clear|test',
     async handler(args, ctx) {
-      const { WebhookNotifier } = await import('../integrations/webhooks.ts');
+      const { WebhookNotifier, getWebhookNotifier } = await import('../integrations/webhooks.ts');
       const cm = ctx.configManager;
       const notifications = cm.getCategory('notifications');
       const urls: string[] = Array.isArray(notifications.webhookUrls)
@@ -2726,8 +2734,10 @@ export function registerBuiltinCommands(registry: CommandRegistry): void {
           return;
         }
         urls.push(url);
-        (cm.getCategory('notifications') as { webhookUrls: string[] }).webhookUrls = urls;
-        cm.save();
+        cm.mergeCategory('notifications', { webhookUrls: urls });
+        // Sync the live notifier if running
+        const liveNotifier = getWebhookNotifier();
+        if (liveNotifier) liveNotifier.setUrls(urls);
         ctx.print(`Webhook added: ${url}`);
         return;
       }
@@ -2743,15 +2753,19 @@ export function registerBuiltinCommands(registry: CommandRegistry): void {
           ctx.print(`Not found: ${url}`);
           return;
         }
-        (cm.getCategory('notifications') as { webhookUrls: string[] }).webhookUrls = next;
-        cm.save();
+        cm.mergeCategory('notifications', { webhookUrls: next });
+        // Sync the live notifier if running
+        const liveNotifier = getWebhookNotifier();
+        if (liveNotifier) liveNotifier.setUrls(next);
         ctx.print(`Webhook removed: ${url}`);
         return;
       }
 
       if (sub === 'clear') {
-        (cm.getCategory('notifications') as { webhookUrls: string[] }).webhookUrls = [];
-        cm.save();
+        cm.mergeCategory('notifications', { webhookUrls: [] });
+        // Sync the live notifier if running
+        const liveNotifier = getWebhookNotifier();
+        if (liveNotifier) liveNotifier.setUrls([]);
         ctx.print('All webhook URLs cleared.');
         return;
       }
@@ -2762,7 +2776,9 @@ export function registerBuiltinCommands(registry: CommandRegistry): void {
           return;
         }
         ctx.print(`Testing ${urls.length} webhook${urls.length !== 1 ? 's' : ''}...`);
-        const notifier = WebhookNotifier.fromConfig(urls);
+        // Use the live notifier if available so the test goes through the wired instance;
+        // fall back to a fresh instance only if startup wiring hasn't completed yet.
+        const notifier = getWebhookNotifier() ?? WebhookNotifier.fromConfig(urls);
         const results = await notifier.test();
         const lines = results.map((r) =>
           r.ok ? `  [ok] ${r.url}` : `  [fail] ${r.url} — ${r.error ?? 'unknown error'}`
@@ -2804,7 +2820,7 @@ export function registerBuiltinCommands(registry: CommandRegistry): void {
         pm.show();
       }
 
-      const diffPanel = panel as DiffPanel;
+      const diffPanel = panel as InstanceType<typeof DiffPanel>;
       const sub = (args[0] ?? 'session').toLowerCase();
 
       switch (sub) {
@@ -2818,13 +2834,16 @@ export function registerBuiltinCommands(registry: CommandRegistry): void {
         case 'staged': {
           // Staged changes: git diff --cached
           ctx.print('Loading staged diff...');
-          const { spawnSync } = await import('node:child_process');
-          const r = spawnSync('git', ['diff', '--cached'], { encoding: 'utf8', cwd: process.cwd() });
-          if (r.error || r.status !== 0) {
-            ctx.print(`git diff --cached failed: ${r.stderr?.trim() ?? r.error?.message ?? 'unknown error'}`);
+          const proc = Bun.spawn(['/bin/sh', '-c', 'git diff --cached'], { stdout: 'pipe', stderr: 'pipe', cwd: process.cwd() });
+          const [raw, errText] = await Promise.all([
+            new Response(proc.stdout).text(),
+            new Response(proc.stderr).text(),
+          ]);
+          const exitCode = await proc.exited;
+          if (exitCode !== 0) {
+            ctx.print(`git diff --cached failed: ${errText.trim() || 'unknown error'}`);
             return;
           }
-          const raw = r.stdout ?? '';
           if (!raw.trim()) {
             ctx.print('No staged changes.');
             diffPanel.showDiff('(no staged changes)', '@@ -0,0 +0,0 @@\n No staged changes.');
