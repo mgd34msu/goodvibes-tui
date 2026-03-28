@@ -6,6 +6,7 @@ import { PermissionError, ProviderError, ToolError, isNonTransientProviderFailur
 import type { HookEvent, HookResult } from '../hooks/types.ts';
 import { formatProviderError } from '../utils/error-display.ts';
 import { providerRegistry } from '../providers/registry.ts';
+import type { ModelDefinition } from '../providers/registry.ts';
 import type { LLMProvider, StreamDelta, ContentPart } from '../providers/interface.ts';
 import { config, configManager, DEFAULT_CONFIG } from '../config/index.ts';
 import { notifyCompletion } from '../utils/notify.ts';
@@ -17,7 +18,8 @@ import { planManager } from './plan-manager-instance.ts';
 import type { ExecutionPlan, PlanItem } from './execution-plan.ts';
 import { classifyIntent } from './intent-classifier.ts';
 import { getTokenLimitsForModel, getContextWindowForModel } from '../providers/model-limits.ts';
-import { shouldAutoCompact } from './context-compaction.ts';
+import { shouldAutoCompact, estimateConversationTokens } from './context-compaction.ts';
+import { getCatalog } from '../providers/model-catalog.ts';
 import { EventReplayQueue } from './event-replay.ts';
 import { AgentManager } from '../tools/agent/index.ts';
 import type { AgentInput } from '../tools/agent/schema.ts';
@@ -304,6 +306,27 @@ export class Orchestrator {
           this.bus.emit('turn:stream-start');
         }
 
+        // ── Context window pre-flight check ─────────────────────────────────
+        // Before calling the provider, verify the request fits within the model's
+        // context window. Auto-compact if enabled and threshold exceeded, otherwise
+        // surface a clear error with token counts and suggest alternatives.
+        // NOTE: Pre-flight compaction (compact-then-retry) and post-turn compaction
+        // (compact after a successful turn, lines ~497+) share the same underlying
+        // conversation.compact() mechanism but serve different triggers.
+        const preflightResult = await this.checkContextWindowPreflight(model);
+        if (preflightResult === 'error') {
+          // Error message already added to conversation; clean up streaming block
+          if (onDelta) {
+            this.isStreaming = false;
+            this.conversation.finalizeStreamingBlock();
+            this.bus.emit('turn:stream-end');
+          }
+          this.bus.emit('turn:complete', { response: '' });
+          continueLoop = false;
+          break;
+        }
+        // preflightResult === 'ok' or 'compacted' — proceed with chat call
+
         const tokenLimits = getTokenLimitsForModel(model);
         const response = await provider.chat({
           model: model.id,
@@ -587,6 +610,129 @@ export class Orchestrator {
         this.bus.emit('render:request');
       }
     }
+  }
+
+  /**
+   * Pre-flight context window check.
+   *
+   * Estimates the token count of the pending request and compares it against
+   * the model's context window from the catalog. If the request exceeds the
+   * context window:
+   *   1. If auto-compact is enabled (threshold configured), compact first.
+   *   2. If still exceeds after compact, emit a clear error message with
+   *      specific token counts and suggest alternatives.
+   *
+   * @returns 'ok' (within context), 'compacted' (compacted and now OK), or
+   *          'error' (still exceeds even after compact, or compact disabled).
+   */
+  private async checkContextWindowPreflight(
+    model: ModelDefinition,
+  ): Promise<'ok' | 'compacted' | 'error'> {
+    const catalog = getCatalog();
+    const catalogModel = catalog.getModel(model.id);
+    const contextWindow = catalogModel?.context ?? getContextWindowForModel(model);
+
+    if (contextWindow <= 0) {
+      // Unknown context window — can't validate, allow through
+      return 'ok';
+    }
+
+    const messages = this.conversation.getMessagesForLLM();
+    const estimatedTokens = estimateConversationTokens(messages);
+
+    if (estimatedTokens <= contextWindow) {
+      return 'ok';
+    }
+
+    // Request exceeds context window — try auto-compact first
+    const threshold = configManager.get('behavior.autoCompactThreshold') as number;
+    // threshold > 0 means auto-compact is active (0 = disabled by convention).
+    // threshold = 100 is valid: compact only when context is completely full.
+    const autoCompactEnabled = threshold > 0;
+
+    if (autoCompactEnabled && !this.isCompacting) {
+      logger.info('Orchestrator: context window pre-flight — auto-compacting before chat call', {
+        modelId: model.id,
+        estimatedTokens,
+        contextWindow,
+      });
+
+      this.isCompacting = true;
+      this.conversation.addSystemMessage(
+        `Context pre-check: request (~${Math.round(estimatedTokens / 1000)}K tokens) exceeds ${model.displayName} context window (${Math.round(contextWindow / 1000)}K). Auto-compacting...`
+      );
+      this.bus.emit('render:request');
+
+      try {
+        await this.conversation.compact(
+          providerRegistry,
+          model.id,
+          10,
+          'auto',
+        );
+        this.conversation.addSystemMessage('Context compacted. Retrying request...');
+      } catch (compactErr) {
+        const msg = compactErr instanceof Error ? compactErr.message : String(compactErr);
+        logger.error('Orchestrator: pre-flight compact failed', { error: msg });
+        this.conversation.addSystemMessage(`Auto-compact failed: ${msg}.`);
+      } finally {
+        this.isCompacting = false;
+      }
+
+      // Re-estimate after compaction
+      const messagesAfter = this.conversation.getMessagesForLLM();
+      const tokensAfter = estimateConversationTokens(messagesAfter);
+
+      if (tokensAfter <= contextWindow) {
+        return 'compacted';
+      }
+
+      // Still exceeds after compaction — fall through to error
+      this.emitContextOverflowError(tokensAfter, contextWindow, model.displayName, catalogModel?.tier);
+      return 'error';
+    }
+
+    // Auto-compact disabled or already compacting — emit error directly
+    this.emitContextOverflowError(estimatedTokens, contextWindow, model.displayName, catalogModel?.tier);
+    return 'error';
+  }
+
+  /**
+   * Emit a user-facing error message when a request exceeds the model's context window,
+   * including specific token counts and suggestions for alternative models.
+   */
+  private emitContextOverflowError(
+    estimatedTokens: number,
+    contextWindow: number,
+    modelDisplayName: string,
+    tier?: 'free' | 'paid' | 'subscription',
+  ): void {
+    const requestK = Math.round(estimatedTokens / 1000);
+    const contextK = Math.round(contextWindow / 1000);
+    const catalog = getCatalog();
+    const alternatives = catalog.findLargerContextModels(contextWindow, tier, 3);
+
+    let msg =
+      `Request (~${requestK}K tokens) exceeds ${modelDisplayName} context window (${contextK}K). ` +
+      `Use /compact to reduce context or switch to a larger model.`;
+
+    if (alternatives.length > 0) {
+      const altNames = alternatives
+        .map(a => `${a.displayName} (${Math.round(a.context / 1000)}K)`)
+        .join(', ');
+      msg += ` Larger-context alternatives: ${altNames}.`;
+    }
+
+    logger.warn('Orchestrator: context window overflow', {
+      estimatedTokens,
+      contextWindow,
+      modelDisplayName,
+      alternatives: alternatives.map(a => a.id),
+    });
+
+    this.conversation.addSystemMessage(msg);
+    this.bus.emit('turn:error', { error: new Error(msg) });
+    this.bus.emit('render:request');
   }
 
   /**
