@@ -6,6 +6,7 @@ import { ModelPickerModal } from '../../input/model-picker.ts';
 import { renderModelPickerOverlay } from '../../renderer/model-picker-overlay.ts';
 import { lineToString, linesToText } from '../setup.ts';
 import type { ModelDefinition } from '../../providers/registry.ts';
+import { _setEntriesForTest } from '../../providers/model-benchmarks.ts';
 
 const W = 120;
 
@@ -81,12 +82,20 @@ describe('renderModelPickerOverlay — model mode', () => {
     expect(footer).toContain('Free');
   });
 
-  test('footer shows Premium when filter is premium', () => {
+  test('footer shows Paid when filter is paid', () => {
     const picker = makePicker();
-    picker.categoryFilter = 'premium';
+    picker.categoryFilter = 'paid';
     const lines = renderModelPickerOverlay(picker, W);
     const footer = lineToString(lines[lines.length - 1]);
-    expect(footer).toContain('Premium');
+    expect(footer).toContain('Paid');
+  });
+
+  test('footer shows Sub when filter is subscription', () => {
+    const picker = makePicker();
+    picker.categoryFilter = 'subscription';
+    const lines = renderModelPickerOverlay(picker, W);
+    const footer = lineToString(lines[lines.length - 1]);
+    expect(footer).toContain('Sub');
   });
 
   test('shows model ids in list', () => {
@@ -299,6 +308,88 @@ describe('renderModelPickerOverlay — effort mode', () => {
     const lines = renderModelPickerOverlay(makeEffortPicker(), narrowW);
     for (const line of lines) {
       expect(line.length).toBe(narrowW);
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Stage 5: Quality tier badge, pin indicator, filters
+// ---------------------------------------------------------------------------
+
+describe('renderModelPickerOverlay — Stage 5 features', () => {
+  test('quality tier badge [S]/[A]/[B]/[C] renders for models with benchmark data', () => {
+    _setEntriesForTest([
+      { modelId: 'model-a', name: 'model-a', organization: 'test', benchmarks: { swe: 0.92, gpqa: 0.88 } },
+    ]);
+    const picker = makePicker({ selectedIndex: 0 });
+    const texts = linesToText(renderModelPickerOverlay(picker, W)).join('\n');
+    // S tier threshold: composite >= 0.80; swe=0.92, gpqa=0.88 → composite ≈ 0.90
+    expect(texts).toMatch(/\[S\]|\[A\]|\[B\]|\[C\]/);
+  });
+
+  test('free indicator ◆ renders for free-tier models', () => {
+    _setEntriesForTest([]);
+    const picker = makePicker({ selectedIndex: 0 });
+    // MODEL_A is tier: free — should show ◆ (\u25c6)
+    const texts = linesToText(renderModelPickerOverlay(picker, W)).join('\n');
+    expect(texts).toContain('\u25c6');
+  });
+
+  test('pin star ★ renders for pinned models', () => {
+    const picker = makePicker();
+    picker.pinnedIds = new Set(['model-a']);
+    const texts = linesToText(renderModelPickerOverlay(picker, W)).join('\n');
+    // Star char ★ (\u2605) should appear in the model row
+    expect(texts).toContain('\u2605');
+  });
+
+  test('no pin star when model is not pinned', () => {
+    const picker = makePicker();
+    picker.pinnedIds = new Set();
+    const texts = linesToText(renderModelPickerOverlay(picker, W)).join('\n');
+    expect(texts).not.toContain('\u2605');
+  });
+
+  test('footer shows Group hint in model mode', () => {
+    const picker = makePicker();
+    const lines = renderModelPickerOverlay(picker, W);
+    const footer = lineToString(lines[lines.length - 1]);
+    expect(footer).toContain('Group');
+  });
+
+  test('footer shows current groupBy mode', () => {
+    const picker = makePicker();
+    picker.groupBy = 'family';
+    const lines = renderModelPickerOverlay(picker, W);
+    const footer = lineToString(lines[lines.length - 1]);
+    expect(footer).toContain('family');
+  });
+
+  test('paid filter label shows Paid in footer', () => {
+    const picker = makePicker();
+    picker.categoryFilter = 'paid';
+    const lines = renderModelPickerOverlay(picker, W);
+    const footer = lineToString(lines[lines.length - 1]);
+    expect(footer).toContain('Paid');
+  });
+
+  test('subscription filter label shows Sub in footer', () => {
+    const picker = makePicker();
+    picker.categoryFilter = 'subscription';
+    const lines = renderModelPickerOverlay(picker, W);
+    const footer = lineToString(lines[lines.length - 1]);
+    expect(footer).toContain('Sub');
+  });
+
+  test('lines maintain correct width when pin/badge columns are added', () => {
+    const picker = makePicker();
+    picker.pinnedIds = new Set(['model-a']);
+    _setEntriesForTest([
+      { modelId: 'model-a', name: 'model-a', organization: 'test', benchmarks: { swe: 0.9 } },
+    ]);
+    const lines = renderModelPickerOverlay(picker, W);
+    for (const line of lines) {
+      expect(line.length).toBe(W);
     }
   });
 });

@@ -3,6 +3,7 @@ import { UIFactory } from './ui-factory.ts';
 import { getDisplayWidth } from '../utils/terminal-width.ts';
 import type { ModelPickerModal } from '../input/model-picker.ts';
 import { EFFORT_DESCRIPTIONS } from '../providers/effort-levels.ts';
+import { getBenchmarks, getQualityTier } from '../providers/model-benchmarks.ts';
 
 /** Format a context window number into a short human-readable string. */
 function fmtContext(n: number): string {
@@ -41,7 +42,7 @@ export function renderModelPickerOverlay(
   // ── Search bar (model mode only) ───────────────────────────────────────────────
   if (picker.mode === 'model') {
     // Category filter indicator
-    const filterLabels: Record<string, string> = { all: 'All', free: 'Free', premium: 'Premium' };
+    const filterLabels: Record<string, string> = { all: 'All', free: 'Free', paid: 'Paid', subscription: 'Sub' };
     const filterLabel = filterLabels[picker.categoryFilter] ?? 'All';
     const filterTag = `[${filterLabel}]`;
     const searchPrefix = '\u2502 \ud83d\udd0d ';
@@ -95,17 +96,27 @@ export function renderModelPickerOverlay(
         const isSelected = selIdx === picker.selectedIndex;
         const indicator = isSelected ? '\u25b6 ' : '  ';
 
-        // Left column: model id (max 24 chars), right column: display name (remaining space)
-        const maxIdLen = 24;
+        // Quality tier badge: [S] / [A] / [B] / [C]
+        const bData = getBenchmarks(model.id) ?? getBenchmarks(model.displayName);
+        const tier = bData ? getQualityTier(bData.benchmarks) : null;
+        const tierBadge = tier ? `[${tier}]` : '   ';
+        // Pin star: ★ if pinned
+        const pinStar = picker.pinnedIds.has(model.id) ? '\u2605 ' : '  ';
+        // Free badge
+        const freeBadge = model.tier === 'free' ? '\u25c6' : ' ';
+
+        // Layout: indicator(2) + pin(2) + id(maxIdLen) + gap(2) + name(remaining) + free(1) + tier(3)
+        const maxIdLen = 20;
+        const badgesW = 3 + 1 + 2; // tierBadge(3) + freeBadge(1) + gap(2)
         const idStr = model.id.length > maxIdLen
           ? model.id.slice(0, maxIdLen - 1) + '\u2026'
           : model.id.padEnd(maxIdLen);
-        const remaining = contentW - maxIdLen - 4; // 4 = indicator + gap
-        const nameStr = model.displayName.length > remaining
-          ? model.displayName.slice(0, remaining - 1) + '\u2026'
-          : model.displayName.padEnd(remaining);
+        const remaining = contentW - maxIdLen - 4 - badgesW - 2; // 4 = indicator+pin, 2 = gap before name
+        const nameStr = model.displayName.length > Math.max(0, remaining)
+          ? model.displayName.slice(0, Math.max(0, remaining) - 1) + '\u2026'
+          : model.displayName.padEnd(Math.max(0, remaining));
 
-        const rowText = pad + '\u2502 ' + indicator + idStr + '  ' + nameStr + ' \u2502';
+        const rowText = pad + '\u2502 ' + indicator + pinStar + idStr + '  ' + nameStr + ' ' + freeBadge + tierBadge + ' \u2502';
         lines.push(UIFactory.stringToLine(rowText, width, {
           fg: isSelected ? '#00ffff' : '252',
           bold: isSelected,
@@ -196,9 +207,11 @@ export function renderModelPickerOverlay(
   }
 
   // ── Bottom border with hints ─────────────────────────────────────────────────────────
-  const filterLabel = picker.categoryFilter === 'all' ? 'All' : picker.categoryFilter === 'free' ? 'Free' : 'Premium';
+  const filterLabelsFooter: Record<string, string> = { all: 'All', free: 'Free', paid: 'Paid', subscription: 'Sub' };
+  const filterLabelFooter = filterLabelsFooter[picker.categoryFilter] ?? 'All';
+  const groupByLabel = picker.groupBy ?? 'provider';
   const hints = picker.mode === 'model'
-    ? ` [\u2191\u2193] Navigate  [Enter] Select  [Esc] Clear/Cancel  [Tab] Filter: ${filterLabel} `
+    ? ` [\u2191\u2193] Navigate  [Enter] Select  [Esc] Clear/Cancel  [Tab] Filter: ${filterLabelFooter}  [G] Group: ${groupByLabel} `
     : ' [\u2191\u2193] Navigate  [Enter] Select  [Esc] Cancel ';
   const bottomLine =
     pad + '\u2514' + hints + '\u2500'.repeat(Math.max(0, boxW - 2 - getDisplayWidth(hints))) + '\u2518';
