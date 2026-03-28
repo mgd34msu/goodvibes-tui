@@ -138,7 +138,7 @@ describe('findAlternativeModel', () => {
     expect(result).toBeNull();
   });
 
-  test('returns null for a model whose provider is synthetic', () => {
+  test('returns null for an unknown non-registry model ID', () => {
     const registry = getProviderRegistry();
     // Stage 3/4: SyntheticProvider manages canonical models like gpt-oss-120b.
     // Stage 4 change: gpt-oss-120b is also in the catalog as provider='openai'.
@@ -149,7 +149,7 @@ describe('findAlternativeModel', () => {
     expect(result).toBeNull();
   });
 
-  test('matches synthetic wrapper by exact base name', () => {
+  test('returns null for a model ID with no registry or synthetic match', () => {
     const registry = getProviderRegistry();
     // groq/gpt-oss-120b should find synthetic gpt-oss-120b (base name exact match)
     // This tests that the boundary-aware matching works for exact baseName
@@ -164,7 +164,7 @@ describe('findAlternativeModel', () => {
     expect(result).toBeNull();
   });
 
-  test('does not falsely match via substring when baseName is a suffix of a longer ID', () => {
+  test('returns null for a namespaced model ID with no registry match', () => {
     const registry = getProviderRegistry();
     // Test that substring matching is NOT used: if model ID is 'foo/bar-extra' and
     // baseName would be 'bar-extra', another model with id 'not-bar-extra' should NOT match.
@@ -176,7 +176,7 @@ describe('findAlternativeModel', () => {
     expect(result).toBeNull();
   });
 
-  test('returns same-tier selectable model from different provider when no synthetic match', () => {
+  test('returns null for a completely unknown model ID', () => {
     const registry = getProviderRegistry();
     // Test the fallback path: when no synthetic wrapper, look for same-tier different provider
     // Using a known non-synthetic model from the builtin list to exercise this path indirectly
