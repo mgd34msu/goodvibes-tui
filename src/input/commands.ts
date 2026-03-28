@@ -2599,7 +2599,6 @@ export function registerBuiltinCommands(registry: CommandRegistry): void {
     },
   });
 
-  // ── /refresh-models ──────────────────────────────────
   // ── /image ─────────────────────────────────────────────
   registry.register({
     name: 'image',
@@ -2773,6 +2772,180 @@ export function registerBuiltinCommands(registry: CommandRegistry): void {
       }
 
       ctx.print('Usage: /notify add <url> | remove <url> | list | clear | test');
+    },
+  });
+
+  // ── /diff ────────────────────────────────────────────
+  registry.register({
+    name: 'diff',
+    aliases: ['d'],
+    description: 'Show unified diff of session file changes. Uses git diff HEAD if in a git repo.',
+    usage: '[session|head|working|staged|<git-ref>]',
+    argsHint: '[session|head|working|staged|<ref>]',
+    async handler(args, ctx) {
+      const { getPanelManager } = await import('../panels/panel-manager.ts');
+      const { DiffPanel } = await import('../panels/diff-panel.ts');
+      const { getChangedFiles } = await import('../sessions/change-tracker.ts');
+
+      const pm = getPanelManager();
+
+      // Ensure the diff panel is open and the panel sidebar is visible
+      let panel = pm.getAllOpen().find(p => p.id === 'diff');
+      if (!panel) {
+        try {
+          panel = pm.open('diff');
+        } catch {
+          ctx.print('Could not open diff panel.');
+          return;
+        }
+      }
+      pm.activateById('diff');
+      if (!pm.isVisible()) {
+        pm.show();
+      }
+
+      const diffPanel = panel as DiffPanel;
+      const sub = (args[0] ?? 'session').toLowerCase();
+
+      switch (sub) {
+        case 'working': {
+          // Unstaged changes only: git diff
+          ctx.print('Loading working-tree diff...');
+          await diffPanel.showGitDiff();
+          ctx.print('Diff panel updated: working tree changes.');
+          break;
+        }
+        case 'staged': {
+          // Staged changes: git diff --cached
+          ctx.print('Loading staged diff...');
+          const { spawnSync } = await import('node:child_process');
+          const r = spawnSync('git', ['diff', '--cached'], { encoding: 'utf8', cwd: process.cwd() });
+          if (r.error || r.status !== 0) {
+            ctx.print(`git diff --cached failed: ${r.stderr?.trim() ?? r.error?.message ?? 'unknown error'}`);
+            return;
+          }
+          const raw = r.stdout ?? '';
+          if (!raw.trim()) {
+            ctx.print('No staged changes.');
+            diffPanel.showDiff('(no staged changes)', '@@ -0,0 +0,0 @@\n No staged changes.');
+          } else {
+            // Feed the full multi-file diff into the panel
+            diffPanel.loadRawDiff(raw);
+            ctx.print('Diff panel updated: staged changes.');
+          }
+          break;
+        }
+        case 'head': {
+          // All changes vs last commit (staged + unstaged): git diff HEAD
+          ctx.print('Loading diff vs HEAD...');
+          await diffPanel.showGitDiff('HEAD');
+          ctx.print('Diff panel updated: all changes vs HEAD.');
+          break;
+        }
+        case 'session':
+        default: {
+          // Session changes: use tracked file list, fall back to git diff HEAD
+          const sessionFiles = getChangedFiles();
+          if (sessionFiles.length > 0) {
+            ctx.print(`Loading session diff (${sessionFiles.length} file${sessionFiles.length === 1 ? '' : 's'} changed this session)...`);
+            await diffPanel.showFileDiffs(sessionFiles, 'HEAD');
+            ctx.print(`Diff panel updated: ${sessionFiles.length} session file${sessionFiles.length === 1 ? '' : 's'}.`);
+          } else {
+            // No tracked changes yet — fall back to git diff HEAD
+            ctx.print('No session changes tracked yet. Showing diff vs HEAD...');
+            await diffPanel.showGitDiff('HEAD');
+            ctx.print('Diff panel updated: all changes vs HEAD.');
+          }
+          break;
+        }
+      }
+
+      ctx.renderRequest();
+    },
+  });
+
+  // ── /mcp ─────────────────────────────────────────────
+  registry.register({
+    name: 'mcp',
+    aliases: [],
+    description: 'List connected MCP servers and their tools',
+    usage: '[tools [<server>]]',
+    argsHint: '[tools [server]]',
+    async handler(args, ctx) {
+      const subcommand = args[0];
+
+      // /mcp tools [server] — list tools from all servers or a specific one
+      if (subcommand === 'tools') {
+        const filterServer = args[1];
+        ctx.print('Fetching MCP tool list...');
+        let allTools;
+        try {
+          allTools = await ctx.mcpRegistry.listAllTools();
+        } catch (e) {
+          ctx.print(`Error listing tools: ${(e as Error).message}`);
+          return;
+        }
+        const tools = filterServer
+          ? allTools.filter(t => t.serverName === filterServer)
+          : allTools;
+
+        if (tools.length === 0) {
+          const msg = filterServer
+            ? `No tools found for server "${filterServer}". Is it connected? Run /mcp to see server status.`
+            : 'No MCP tools available. Configure servers in .goodvibes/mcp.json or ~/.config/mcp/mcp.json.';
+          ctx.print(msg);
+          return;
+        }
+
+        const lines: string[] = [`MCP Tools (${tools.length} total):`];
+        let lastServer = '';
+        for (const tool of tools) {
+          if (tool.serverName !== lastServer) {
+            lines.push(`\n  [${tool.serverName}]`);
+            lastServer = tool.serverName;
+          }
+          const desc = tool.description ? `  — ${tool.description}` : '';
+          lines.push(`    ${tool.toolName}${desc}`);
+        }
+        ctx.print(lines.join('\n'));
+        return;
+      }
+
+      // /mcp (no subcommand) — list servers and their connection status
+      const servers = ctx.mcpRegistry.listServers();
+
+      if (servers.length === 0) {
+        ctx.print(
+          'No MCP servers configured.\n' +
+          'Add servers to one of these locations (scanned in order):\n' +
+          '  ~/.config/mcp/mcp.json               (global XDG)\n' +
+          '  ~/.mcp/mcp.json                      (global dotdir)\n' +
+          '  ~/.config/claude/claude_desktop_config.json  (Claude Desktop)\n' +
+          '  .mcp/mcp.json                        (project-local)\n' +
+          '  .goodvibes/mcp.json                  (goodvibes project)\n' +
+          '\nFormat: { "servers": [{ "name": "my-server", "command": "npx", "args": ["-y", "@modelcontextprotocol/server-filesystem", "/tmp"] }] }'
+        );
+        return;
+      }
+
+      const connected = servers.filter(s => s.connected);
+      const disconnected = servers.filter(s => !s.connected);
+      const lines: string[] = [
+        `MCP Servers (${connected.length}/${servers.length} connected):`,
+      ];
+      for (const s of servers) {
+        const status = s.connected ? '[connected]   ' : '[disconnected]';
+        lines.push(`  ${status}  ${s.name}`);
+      }
+      if (connected.length > 0) {
+        lines.push('');
+        lines.push('Run "/mcp tools" to list all tools, or "/mcp tools <server>" for a specific server.');
+      }
+      if (disconnected.length > 0) {
+        lines.push('');
+        lines.push(`${disconnected.length} server(s) failed to connect. Check server command and args in your config.`);
+      }
+      ctx.print(lines.join('\n'));
     },
   });
 }

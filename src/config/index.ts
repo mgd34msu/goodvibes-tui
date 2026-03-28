@@ -8,7 +8,7 @@
  */
 
 export { ConfigManager } from './manager.ts';
-export type { GoodVibesConfig, ConfigKey, ConfigValue, ConfigSetting, PermissionMode, PermissionAction, PermissionsToolConfig } from './schema.ts';
+export type { GoodVibesConfig, ConfigKey, ConfigValue, ConfigSetting, PermissionMode, PermissionAction, PermissionsToolConfig, NotificationsConfig } from './schema.ts';
 export { DEFAULT_CONFIG, CONFIG_SCHEMA } from './schema.ts';
 export { ConfigError } from '../types/errors.ts';
 

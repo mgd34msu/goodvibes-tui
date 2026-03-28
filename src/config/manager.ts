@@ -229,6 +229,24 @@ export class ConfigManager {
   }
 
   /**
+   * Merge a partial patch into a config category and auto-save.
+   *
+   * This is the correct way to update array or object fields within a category
+   * that cannot be expressed as a scalar dot-path key (e.g. notifications.webhookUrls).
+   * The patch is shallow-merged into the existing category value.
+   */
+  mergeCategory<C extends keyof GoodVibesConfig>(category: C, patch: Partial<GoodVibesConfig[C]>): void {
+    const current = this.config[category] as Record<string, unknown>;
+    const patchObj = patch as Record<string, unknown>;
+    for (const key of Object.keys(patchObj)) {
+      if (patchObj[key] !== undefined) {
+        current[key] = patchObj[key];
+      }
+    }
+    this.save();
+  }
+
+  /**
    * Reset a specific key to its default, or reset all config.
    * Saves to disk after reset.
    */
