@@ -24,13 +24,13 @@ import { recordUsage } from '../providers/favorites.ts';
 import { EventReplayQueue } from './event-replay.ts';
 import { AgentManager } from '../tools/agent/index.ts';
 import type { AgentInput } from '../tools/agent/schema.ts';
+import { THINKING_SPINNER_FRAMES } from '../renderer/progress.ts';
+import { randomUUID } from 'node:crypto';
 
 /** Minimal interface for hook dispatch — allows any compatible implementation */
 interface HookDispatcherLike {
   fire(event: HookEvent): Promise<HookResult>;
 }
-
-const SPINNER_FRAMES = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
 
 /** Delay (ms) before auto-spawning plan items if the model ends its turn without spawning them. */
 const AUTO_SPAWN_FALLBACK_DELAY_MS = 5_000;
@@ -69,7 +69,7 @@ export class Orchestrator {
   private isCompacting = false;
 
   /** Session ID for hook events — unique per Orchestrator instance */
-  private readonly sessionId = crypto.randomUUID();
+  private readonly sessionId = randomUUID();
 
   /** Event replay queue — ensures model acknowledges significant events */
   private readonly replayQueue: EventReplayQueue;
@@ -156,7 +156,7 @@ export class Orchestrator {
   }
 
   public getSpinner(): string {
-    return SPINNER_FRAMES[this.thinkingFrame % SPINNER_FRAMES.length];
+    return THINKING_SPINNER_FRAMES[this.thinkingFrame % THINKING_SPINNER_FRAMES.length];
   }
 
   /** Abort the current in-flight LLM request, if any. */
@@ -530,7 +530,7 @@ export class Orchestrator {
           this.bus.emit('render:request');
 
           // Run compaction without blocking current turn completion
-          this.conversation.compact(
+          void this.conversation.compact(
             providerRegistry,
             currentModel.id,
             10,
