@@ -7,6 +7,8 @@ export { CostTrackerPanel } from './cost-tracker-panel.ts';
 export { AgentInspectorPanel } from './agent-inspector-panel.ts';
 export { AgentLogsPanel } from './agent-logs-panel.ts';
 export { WrfcPanel } from './wrfc-panel.ts';
+export { ProviderHealthPanel, ProviderHealthTracker, providerHealthTracker } from './provider-health-panel.ts';
+export type { ProviderHealth, ProviderStatus } from './provider-health-panel.ts';
 export { GitPanel } from './git-panel.ts';
 export { SymbolOutlinePanel } from './symbol-outline-panel.ts';
 export type { SymbolEntry, SymbolKind } from './symbol-outline-panel.ts';

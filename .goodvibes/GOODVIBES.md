@@ -25,10 +25,11 @@ Fetch: batch urls[]. Use extract (json|markdown|readable|code_blocks) not raw.
 
 ## CRITICAL
 
-  - Don't re-read what you just wrote
-  - Don't read full content when structure suffices
-  - Batch 3+ operations into single calls
-  - Start broad (count_only), narrow only when needed 
-  - User must explicitly request to skip WRFC
-  - Never skip WRFC without user confirmation
+  - NEVER execute tests that output files into project root
+  - ALWAYS run tests in isolated folders that do not clutter the actual project
+  - NEVER re-read what you just wrote
+  - NEVER read full content when structure suffices
+  - ALWAYS Batch sequential same-tool operations into a single call
+  - ALWAYS Start broad (count_only), narrow only when needed 
+  - NEVER skip WRFC without explicit user confirmation
   - ALWAYS work in parallel when implementing a plan of any type

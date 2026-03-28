@@ -128,6 +128,44 @@ describe('ProcessModal state', () => {
     expect(modal.killSelected()).toBe(false);
   });
 
+  test('streamSnippet is populated when agent has streamingContent', () => {
+    const id = seedAgent('Streaming task');
+    const am = AgentManager.getInstance();
+    const rec = (am as any).agents.get(id);
+    rec.streamingContent = 'Processing file analysis results and building summary';
+    const modal = new ProcessModal();
+    modal.refresh();
+    const entry = modal.entries.find((e) => e.id === id);
+    expect(entry).toBeDefined();
+    expect(entry!.streamSnippet).toBeDefined();
+    expect(entry!.streamSnippet).toContain('Processing file analysis results');
+  });
+
+  test('streamSnippet truncates long content with ellipsis prefix', () => {
+    const id = seedAgent('Long streaming task');
+    const am = AgentManager.getInstance();
+    const rec = (am as any).agents.get(id);
+    // 80-char content — exceeds the 60-char threshold in refresh()
+    rec.streamingContent = 'a'.repeat(80);
+    const modal = new ProcessModal();
+    modal.refresh();
+    const entry = modal.entries.find((e) => e.id === id);
+    expect(entry).toBeDefined();
+    expect(entry!.streamSnippet).toBeDefined();
+    expect(entry!.streamSnippet!.startsWith('...')).toBe(true);
+    // Total length: 3 (ellipsis) + 57 (last chars) = 60
+    expect(entry!.streamSnippet!.length).toBe(60);
+  });
+
+  test('streamSnippet is undefined when agent has no streamingContent', () => {
+    const id = seedAgent('Quiet task');
+    const modal = new ProcessModal();
+    modal.refresh();
+    const entry = modal.entries.find((e) => e.id === id);
+    expect(entry).toBeDefined();
+    expect(entry!.streamSnippet).toBeUndefined();
+  });
+
   test('entry label is truncated with ellipsis when longer than 80 chars', () => {
     const longTask = 'a'.repeat(100);
     seedAgent(longTask);

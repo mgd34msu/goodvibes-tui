@@ -30,6 +30,10 @@ interface OpenRouterModelData {
     max_completion_tokens: number | null;
   };
   supported_parameters?: string[];
+  pricing?: {
+    prompt: string;       // USD per token as string, e.g. "0.0000001"
+    completion: string;   // USD per token as string
+  };
 }
 
 interface OpenRouterResponse {
@@ -44,6 +48,7 @@ interface ModelLimitsCache {
     contextLength: number;
     maxOutputTokens: number | null;
     supportedParameters: string[];
+    pricing?: { prompt: number; completion: number }; // USD per token
   }>;
 }
 
@@ -88,7 +93,13 @@ function loadCachedLimits(): ModelLimitsCache | null {
     if (parsed.version !== 1) return null;
     return parsed;
   } catch (err) {
-    logger.debug('[model-limits] Cache load failed', { error: String(err) });
+    // Distinguish missing file (expected) from corrupted cache (worth warning about)
+    const msg = String(err);
+    if (msg.includes('ENOENT') || msg.includes('no such file')) {
+      logger.debug('[model-limits] No cache file found (first run)');
+    } else {
+      logger.warn('[model-limits] Cache load failed (corrupted?)', { error: msg });
+    }
     return null;
   }
 }
@@ -255,6 +266,9 @@ function buildOrMap(cache: ModelLimitsCache): Map<string, OpenRouterModelData> {
       context_length: entry.contextLength,
       top_provider: { max_completion_tokens: entry.maxOutputTokens },
       supported_parameters: entry.supportedParameters,
+      pricing: entry.pricing
+        ? { prompt: String(entry.pricing.prompt), completion: String(entry.pricing.completion) }
+        : undefined,
     });
   }
   return map;
@@ -265,10 +279,46 @@ function buildOrMap(cache: ModelLimitsCache): Map<string, OpenRouterModelData> {
 // ---------------------------------------------------------------------------
 
 /**
+ * Look up pricing for a model from the OpenRouter cache.
+ * Returns USD per token (not per million) for prompt and completion.
+ * Returns null if no pricing data is available.
+ */
+export function getPricingForModel(
+  modelId: string,
+  provider: string,
+): { prompt: number; completion: number } | null {
+  if (!cachedData) return null;
+  const orMap = cachedOrMap ?? buildOrMap(cachedData);
+  const match = findOpenRouterMatch(modelId, provider, orMap);
+  if (!match?.pricing) return null;
+  const prompt = parseFloat(match.pricing.prompt);
+  const completion = parseFloat(match.pricing.completion);
+  if (isNaN(prompt) || isNaN(completion)) return null;
+  return { prompt, completion };
+}
+
+/**
  * Resolve token limits for a model definition using current in-memory cache.
  */
 export function getTokenLimitsForModel(modelDef: ModelDefinition): Required<TokenLimits> {
   return resolveTokenLimits(modelDef);
+}
+
+/**
+ * Resolve the effective context window for a model.
+ * Priority (highest to lowest):
+ *   1. OpenRouter cached context_length (most accurate, updated from API)
+ *   2. modelDef.contextWindow (static registry value, always present)
+ */
+export function getContextWindowForModel(modelDef: ModelDefinition): number {
+  if (cachedData) {
+    const orMap = cachedOrMap ?? buildOrMap(cachedData);
+    const orMatch = findOpenRouterMatch(modelDef.id, modelDef.provider, orMap);
+    if (orMatch?.context_length != null && orMatch.context_length > 0) {
+      return orMatch.context_length;
+    }
+  }
+  return modelDef.contextWindow;
 }
 
 /**
@@ -295,10 +345,19 @@ export async function refreshModelLimits(): Promise<number> {
 
   const models: ModelLimitsCache['models'] = {};
   for (const [id, model] of orModels) {
+    let pricing: { prompt: number; completion: number } | undefined;
+    if (model.pricing?.prompt != null && model.pricing?.completion != null) {
+      const prompt = parseFloat(model.pricing.prompt);
+      const completion = parseFloat(model.pricing.completion);
+      if (!isNaN(prompt) && !isNaN(completion)) {
+        pricing = { prompt, completion };
+      }
+    }
     models[id] = {
       contextLength: model.context_length ?? 0,
       maxOutputTokens: model.top_provider?.max_completion_tokens ?? null,
       supportedParameters: model.supported_parameters ?? [],
+      pricing,
     };
   }
 

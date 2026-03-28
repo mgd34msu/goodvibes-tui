@@ -7,7 +7,8 @@ import { GeminiProvider } from './gemini.ts';
 import { config } from '../config/index.ts';
 import type { EventBus } from '../core/event-bus.ts';
 import { loadCustomProviders, watchCustomProviders } from './custom-loader.ts';
-import { SyntheticProvider } from './synthetic.ts';
+import { SyntheticProvider, MANUAL_SYNTHETIC_OVERRIDES } from './synthetic.ts';
+import type { SyntheticBackend, SyntheticModelMap } from './synthetic.ts';
 
 /** Model capability tier — controls system prompt verbosity. */
 export type ModelTier = 'free' | 'standard' | 'premium';
@@ -2502,6 +2503,209 @@ const BUILTIN_MODEL_REGISTRY: ModelDefinition[] = [
 
 ];
 
+// --- Synthetic Auto-Generation ---
+
+/**
+ * Providers considered candidates for synthetic failover auto-detection.
+ * Only models from these providers are included in auto-generated groups.
+ */
+const SYNTHETIC_CANDIDATE_PROVIDERS = new Set([
+  'groq', 'huggingface', 'nvidia', 'ollama-cloud', 'openrouter', 'aihubmix', 'llm7',
+]);
+
+/**
+ * Normalise a model ID for cross-provider matching.
+ * Steps:
+ *   1. Strip org prefix (everything up to and including the last "/")
+ *   2. Lowercase
+ *   3. Replace ":" with "-" (Ollama tag separator → hyphen)
+ *   4. Strip ":free" suffix (already removed by step 3, but guard for lowercase)
+ *   5. Strip "-free" suffix at end
+ *   6. Strip quantisation suffixes (-fp8, -awq, -gptq)
+ *   7. Strip date suffixes: -YYYYMMDD or -MMDD (4-8 digit numeric suffixes at end)
+ */
+function normaliseSyntheticId(id: string): string {
+  // Strip org prefix (before /)
+  const slashIdx = id.lastIndexOf('/');
+  let s = slashIdx >= 0 ? id.slice(slashIdx + 1) : id;
+  // Lowercase
+  s = s.toLowerCase();
+  // Replace Ollama tag colon with hyphen (e.g. gpt-oss:120b → gpt-oss-120b)
+  s = s.replace(':', '-');
+  // Strip :free (already handled above, guard)
+  s = s.replace(/-free$/, '');
+  // Strip quantisation suffixes
+  s = s.replace(/-(fp8|awq|gptq)$/, '');
+  // Strip date suffixes: -YYYYMMDD, -MMDD, -YYYY (4+ digit numeric trailing segment)
+  s = s.replace(/-\d{4,8}$/, '');
+  return s;
+}
+
+/**
+ * Derive a clean synthetic model name from a normalised model ID.
+ * This is used as the key in the synthetic model map (the user-facing ID).
+ */
+function syntheticNameFromNormalised(normalised: string, originalId: string): string {
+  // Use the original model ID stripped of org prefix, lowercased, colon→hyphen.
+  // This gives a clean canonical name without stripping version/size info.
+  const slashIdx = originalId.lastIndexOf('/');
+  let name = slashIdx >= 0 ? originalId.slice(slashIdx + 1) : originalId;
+  name = name.toLowerCase();
+  name = name.replace(':', '-');
+  name = name.replace(/:free$/, '').replace(/-free$/, '');
+  return name;
+}
+
+/**
+ * Scans BUILTIN_MODEL_REGISTRY to find models available on 2+ providers
+ * (from SYNTHETIC_CANDIDATE_PROVIDERS) and groups them into synthetic entries.
+ * Manual overrides in MANUAL_SYNTHETIC_OVERRIDES take priority.
+ *
+ * Called once at module load time; result is merged into AUTO_SYNTHETIC_MAP.
+ */
+function buildSyntheticModelMap(registry: ModelDefinition[]): SyntheticModelMap {
+  // Group registry entries by normalised ID, tracking provider + original model ID
+  const groups = new Map<string, Array<{ provider: string; modelId: string; normName: string; origName: string }>>();
+
+  for (const model of registry) {
+    // Only consider free provider models that are not already synthetic
+    if (!SYNTHETIC_CANDIDATE_PROVIDERS.has(model.provider)) continue;
+    // Skip models that are provider-specific routers or special models
+    if (model.id === 'openrouter/free') continue;
+
+    const normalised = normaliseSyntheticId(model.id);
+    if (!groups.has(normalised)) groups.set(normalised, []);
+    groups.get(normalised)!.push({
+      provider: model.provider,
+      modelId: model.id,
+      normName: normalised,
+      origName: model.id,
+    });
+  }
+
+  const result: SyntheticModelMap = {};
+
+  for (const [normalised, entries] of groups) {
+    // Need 2+ distinct providers
+    const distinctProviders = new Set(entries.map((e) => e.provider));
+    if (distinctProviders.size < 2) continue;
+
+    // Skip if a manual override already handles this (manual overrides are merged later)
+    // We still generate the auto entry — the merge step gives manual priority.
+
+    // Choose the canonical synthetic name: shortest entry name after normalising
+    // the model IDs (prefer the cleanest/shortest model ID)
+    let canonicalName = normalised;
+    let shortest = Infinity;
+    for (const e of entries) {
+      const nm = syntheticNameFromNormalised(normalised, e.origName);
+      if (nm.length < shortest) {
+        shortest = nm.length;
+        canonicalName = nm;
+      }
+    }
+
+    // Build backends list, deduplicating by (provider, modelId)
+    const seen = new Set<string>();
+    const backends: SyntheticBackend[] = [];
+    for (const e of entries) {
+      const key = `${e.provider}::${e.modelId}`;
+      if (!seen.has(key)) {
+        seen.add(key);
+        backends.push({ providerName: e.provider, modelId: e.modelId });
+      }
+    }
+
+    result[canonicalName] = backends;
+  }
+
+  return result;
+}
+
+/**
+ * Generate ModelDefinition entries for auto-detected synthetic models.
+ * Merges with manually defined synthetics in BUILTIN_MODEL_REGISTRY;
+ * skips entries that already have a manual definition.
+ */
+function buildSyntheticModelDefinitions(
+  autoMap: SyntheticModelMap,
+  existingSyntheticIds: Set<string>,
+  registry: ModelDefinition[],
+): ModelDefinition[] {
+  const result: ModelDefinition[] = [];
+
+  for (const [syntheticId, backends] of Object.entries(autoMap)) {
+    // Skip if already manually defined
+    if (existingSyntheticIds.has(syntheticId)) continue;
+
+    // Infer capabilities from the backing models (union of capabilities)
+    const caps = { toolCalling: false, codeEditing: false, reasoning: false, multimodal: false };
+    let maxContext = 0;
+    for (const backend of backends) {
+      const backingModel = registry.find((m) => m.id === backend.modelId && m.provider === backend.providerName);
+      if (backingModel) {
+        if (backingModel.capabilities.toolCalling) caps.toolCalling = true;
+        if (backingModel.capabilities.codeEditing) caps.codeEditing = true;
+        if (backingModel.capabilities.reasoning) caps.reasoning = true;
+        if (backingModel.capabilities.multimodal) caps.multimodal = true;
+        if (backingModel.contextWindow > maxContext) maxContext = backingModel.contextWindow;
+      }
+    }
+
+    const providerNames = [...new Set(backends.map((b) => b.providerName))]
+      .map((p) => p.charAt(0).toUpperCase() + p.slice(1))
+      .join(', ');
+
+    result.push({
+      id: syntheticId,
+      provider: 'synthetic',
+      displayName: `${toDisplayName(syntheticId)} (Failover)`,
+      description: `Auto-failover across ${providerNames}.`,
+      capabilities: caps,
+      contextWindow: maxContext || 131072,
+      selectable: true,
+      tier: 'free',
+    });
+  }
+
+  return result;
+}
+
+/** Convert a model ID like "deepseek-r1-distill-qwen-32b" to "DeepSeek R1 Distill Qwen 32B". */
+function toDisplayName(id: string): string {
+  return id
+    .replace(/[._]/g, '-')
+    .split('-')
+    .map((part) => {
+      // Keep version numbers lowercase except for known acronyms
+      if (/^\d/.test(part)) return part;
+      if (part.length <= 2) return part.toUpperCase();
+      return part.charAt(0).toUpperCase() + part.slice(1);
+    })
+    .join(' ');
+}
+
+// Build the auto-detected synthetic map from the built-in registry.
+// Manual overrides always take priority: if a manual entry exists, it is used
+// as-is; auto-generated entries fill in the gaps.
+const AUTO_SYNTHETIC_MAP: SyntheticModelMap = buildSyntheticModelMap(BUILTIN_MODEL_REGISTRY);
+
+// Merged map: manual overrides win over auto-generated entries.
+export const MERGED_SYNTHETIC_MAP: SyntheticModelMap = {
+  ...AUTO_SYNTHETIC_MAP,
+  ...MANUAL_SYNTHETIC_OVERRIDES,
+};
+
+// Auto-generated ModelDefinitions for models not already in BUILTIN_MODEL_REGISTRY.
+const existingBuiltinSyntheticIds = new Set(
+  BUILTIN_MODEL_REGISTRY.filter((m) => m.provider === 'synthetic').map((m) => m.id),
+);
+const AUTO_SYNTHETIC_DEFINITIONS: ModelDefinition[] = buildSyntheticModelDefinitions(
+  MERGED_SYNTHETIC_MAP,
+  existingBuiltinSyntheticIds,
+  BUILTIN_MODEL_REGISTRY,
+);
+
 /** Mutable array of custom-loaded model definitions. */
 let customModels: ModelDefinition[] = [];
 
@@ -2516,12 +2720,20 @@ export function getModelRegistry(): ModelDefinition[] {
   const builtinFiltered = BUILTIN_MODEL_REGISTRY.filter(
     (b) => !customModels.some((c) => c.id === b.id),
   );
+  // Auto-generated synthetic definitions are included after built-ins;
+  // skip any that have been overridden by a custom model.
+  const autoSyntheticFiltered = AUTO_SYNTHETIC_DEFINITIONS.filter(
+    (a) =>
+      !customModels.some((c) => c.id === a.id) &&
+      !BUILTIN_MODEL_REGISTRY.some((b) => b.id === a.id),
+  );
   const discoveredFiltered = discoveredModels.filter(
     (d) =>
       !BUILTIN_MODEL_REGISTRY.some((b) => b.id === d.id) &&
+      !AUTO_SYNTHETIC_DEFINITIONS.some((a) => a.id === d.id) &&
       !customModels.some((c) => c.id === d.id),
   );
-  return [...customModels, ...builtinFiltered, ...discoveredFiltered];
+  return [...customModels, ...builtinFiltered, ...autoSyntheticFiltered, ...discoveredFiltered];
 }
 
 /**
@@ -2961,8 +3173,9 @@ export class ProviderRegistry {
       }),
     );
 
-    // Synthetic failover provider — must be after all backends
-    this.register(new SyntheticProvider(() => this));
+    // Synthetic failover provider — must be after all backends.
+    // MERGED_SYNTHETIC_MAP combines auto-detected entries with manual overrides.
+    this.register(new SyntheticProvider(() => this, MERGED_SYNTHETIC_MAP));
   }
 
   /** Register a provider. Overwrites any existing entry with the same name. */
