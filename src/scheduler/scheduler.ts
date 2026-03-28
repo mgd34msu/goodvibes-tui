@@ -11,6 +11,7 @@ export interface ScheduledTask {
   id: string;
   name: string;
   cron: string; // cron expression: "*/30 * * * *" = every 30 min
+  timezone?: string; // IANA timezone, e.g. "America/New_York" (default: local)
   prompt: string; // the prompt to send to the model
   model?: string; // optional model override
   template?: string; // agent template (engineer, reviewer, etc.)
@@ -18,6 +19,7 @@ export interface ScheduledTask {
   lastRun?: number; // timestamp
   nextRun?: number; // computed
   runCount: number;
+  missedRuns: number; // runs missed while the scheduler was stopped
   createdAt: number;
 }
 
@@ -57,6 +59,9 @@ const SCHEDULES_PATH = join(process.cwd(), '.goodvibes', 'tui', 'schedules.json'
 
 /** Max run history records to keep per task. */
 const MAX_HISTORY_PER_TASK = 5;
+
+/** Maximum setTimeout delay — Node.js overflows at ~24.8 days; cap at 24 h. */
+const MAX_TIMEOUT_MS = 24 * 60 * 60 * 1000;
 
 // ---------------------------------------------------------------------------
 // Cron parser
@@ -207,13 +212,67 @@ function fieldMatches(field: CronField, value: number): boolean {
 }
 
 /**
+ * Extract calendar components (minute, hour, dom, month, dow) from a UTC
+ * timestamp as seen in the given IANA timezone.  Falls back to local time
+ * when `timezone` is undefined or the timezone is not recognised.
+ */
+function getCalendarParts(
+  ts: number,
+  timezone?: string,
+): { minute: number; hour: number; dom: number; month: number; dow: number } {
+  if (!timezone) {
+    const d = new Date(ts);
+    return {
+      minute: d.getMinutes(),
+      hour: d.getHours(),
+      dom: d.getDate(),
+      month: d.getMonth() + 1,
+      dow: d.getDay(),
+    };
+  }
+  try {
+    const fmt = new Intl.DateTimeFormat('en-US', {
+      timeZone: timezone,
+      year: 'numeric',
+      month: 'numeric',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: 'numeric',
+      hour12: false,
+      weekday: 'short',
+    });
+    const parts = Object.fromEntries(fmt.formatToParts(new Date(ts)).map((p) => [p.type, p.value]));
+    // 'hour' can be '24' for midnight in some locales
+    const rawHour = parseInt(parts['hour'] ?? '0', 10) % 24;
+    return {
+      minute: parseInt(parts['minute'] ?? '0', 10),
+      hour: rawHour,
+      dom: parseInt(parts['day'] ?? '1', 10),
+      month: parseInt(parts['month'] ?? '1', 10),
+      dow: ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].indexOf(parts['weekday'] ?? 'Sun'),
+    };
+  } catch {
+    // Unknown timezone — fall back to local time
+    const d = new Date(ts);
+    return {
+      minute: d.getMinutes(),
+      hour: d.getHours(),
+      dom: d.getDate(),
+      month: d.getMonth() + 1,
+      dow: d.getDay(),
+    };
+  }
+}
+
+/**
  * Compute the next Date when a cron expression fires after `from`.
  * Returns a Date at most 366 days in the future; throws if none found.
  *
  * Advances minute-by-minute to find the next matching moment.
- * Handles DST gracefully by working in local time arithmetic.
+ * When `timezone` is provided (IANA name), cron fields are evaluated in that
+ * timezone so that e.g. "0 9 * * 1-5" reliably fires at 9 AM New York time.
  */
-function computeNextRun(expr: string, from: Date): Date {
+function computeNextRun(expr: string, from: Date, timezone?: string): Date {
   const fields = parseCron(expr);
 
   // Start from the next minute after `from`
@@ -226,15 +285,13 @@ function computeNextRun(expr: string, from: Date): Date {
   let cur = new Date(base.getTime());
 
   while (cur < limit) {
-    const month = cur.getMonth() + 1; // 1-12
-    const dom = cur.getDate(); // 1-31
-    const dow = cur.getDay(); // 0-6
-    const hour = cur.getHours();
-    const minute = cur.getMinutes();
+    const { month, dom, dow, hour, minute } = getCalendarParts(cur.getTime(), timezone);
 
     if (!fieldMatches(fields.month, month)) {
-      // Advance to next month
-      cur = new Date(cur.getFullYear(), month, 1, 0, 0, 0, 0); // month index = next
+      // Advance to start of next month — always advance by wall-clock ms to
+      // respect DST; add 32 days and floor to day 1 of the resulting month.
+      cur = new Date(cur.getTime() + 32 * 24 * 60 * 60 * 1000);
+      cur = new Date(cur.getFullYear(), cur.getMonth(), 1, 0, 0, 0, 0);
       continue;
     }
 
@@ -252,19 +309,22 @@ function computeNextRun(expr: string, from: Date): Date {
           : domMatch || dowMatch;
     if (!dayMatch) {
       // Advance to next day
-      cur = new Date(cur.getFullYear(), cur.getMonth(), dom + 1, 0, 0, 0, 0);
+      cur = new Date(cur.getTime() + 24 * 60 * 60 * 1000);
+      cur = new Date(cur.getFullYear(), cur.getMonth(), cur.getDate(), 0, 0, 0, 0);
       continue;
     }
 
     if (!fieldMatches(fields.hour, hour)) {
       // Advance to next hour
-      cur = new Date(cur.getFullYear(), cur.getMonth(), dom, hour + 1, 0, 0, 0);
+      cur = new Date(cur.getTime() + 60 * 60 * 1000);
+      cur = new Date(cur.getFullYear(), cur.getMonth(), cur.getDate(), cur.getHours(), 0, 0, 0);
       continue;
     }
 
     if (!fieldMatches(fields.minute, minute)) {
       // Advance to next minute
-      cur = new Date(cur.getFullYear(), cur.getMonth(), dom, hour, minute + 1, 0, 0);
+      cur = new Date(cur.getTime() + 60 * 1000);
+      cur = new Date(cur.getFullYear(), cur.getMonth(), cur.getDate(), cur.getHours(), cur.getMinutes(), 0, 0);
       continue;
     }
 
@@ -272,6 +332,56 @@ function computeNextRun(expr: string, from: Date): Date {
   }
 
   throw new Error(`No matching time found in the next year for cron: ${expr}`);
+}
+
+// ---------------------------------------------------------------------------
+// Timezone helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * Validate an IANA timezone string.  Throws a descriptive error if invalid.
+ * Uses Intl.DateTimeFormat which is available in all modern JS runtimes.
+ */
+function validateTimezone(tz: string): void {
+  try {
+    Intl.DateTimeFormat(undefined, { timeZone: tz });
+  } catch {
+    throw new Error(`Invalid timezone: "${tz}". Use an IANA name like "America/New_York" or "Europe/London".`);
+  }
+}
+
+/**
+ * Count how many times a cron expression would have fired between
+ * `fromMs` (inclusive) and `toMs` (exclusive).  Used on startup to
+ * detect missed runs when the scheduler was down.
+ *
+ * Capped at 1000 iterations to avoid runaway loops for high-frequency crons.
+ */
+function countMissedRuns(
+  expr: string,
+  fromMs: number,
+  toMs: number,
+  timezone?: string,
+): number {
+  const MAX_ITER = 1000;
+  let count = 0;
+  let cur = new Date(fromMs);
+  // The first missed run is AT fromMs (the exact nextRun that was skipped).
+  // We back up one minute so computeNextRun can find it.
+  cur = new Date(cur.getTime() - 60_000);
+
+  for (let i = 0; i < MAX_ITER; i++) {
+    let next: Date;
+    try {
+      next = computeNextRun(expr, cur, timezone);
+    } catch {
+      break;
+    }
+    if (next.getTime() >= toMs) break;
+    count++;
+    cur = next;
+  }
+  return count;
 }
 
 // ---------------------------------------------------------------------------
@@ -343,24 +453,29 @@ export class TaskScheduler {
   // -------------------------------------------------------------------------
 
   /** Add a new scheduled task. Returns the created task with generated ID. */
-  add(input: Omit<ScheduledTask, 'id' | 'runCount' | 'createdAt'>): ScheduledTask {
+  add(input: Omit<ScheduledTask, 'id' | 'runCount' | 'createdAt' | 'missedRuns'>): ScheduledTask {
     // Validate the cron expression eagerly
     parseCron(input.cron);
+    // Validate timezone if provided
+    if (input.timezone) {
+      validateTimezone(input.timezone);
+    }
 
     const id = `sched-${crypto.randomUUID().slice(0, 8)}`;
     const now = Date.now();
-    const nextRun = computeNextRun(input.cron, new Date(now)).getTime();
+    const nextRun = computeNextRun(input.cron, new Date(now), input.timezone).getTime();
 
     const task: ScheduledTask = {
       ...input,
       id,
       runCount: 0,
+      missedRuns: 0,
       createdAt: now,
       nextRun,
     };
 
     this.tasks.set(id, task);
-    void this.save().catch((err) => logger.debug('TaskScheduler: save failed', { error: String(err) }));
+    void this.save().catch((err) => logger.warn('TaskScheduler: save failed', { error: String(err) }));
 
     if (task.enabled && this.running) {
       this.scheduleNext(task);
@@ -374,7 +489,7 @@ export class TaskScheduler {
     if (!this.tasks.has(taskId)) return false;
     this.cancelTimer(taskId);
     this.tasks.delete(taskId);
-    void this.save().catch((err) => logger.debug('TaskScheduler: save failed', { error: String(err) }));
+    void this.save().catch((err) => logger.warn('TaskScheduler: save failed', { error: String(err) }));
     return true;
   }
 
@@ -384,13 +499,13 @@ export class TaskScheduler {
     if (!task) return false;
     task.enabled = enabled;
     if (enabled) {
-      const next = computeNextRun(task.cron, new Date()).getTime();
+      const next = computeNextRun(task.cron, new Date(), task.timezone).getTime();
       task.nextRun = next;
       if (this.running) this.scheduleNext(task);
     } else {
       this.cancelTimer(taskId);
     }
-    void this.save().catch((err) => logger.debug('TaskScheduler: save failed', { error: String(err) }));
+    void this.save().catch((err) => logger.warn('TaskScheduler: save failed', { error: String(err) }));
     return true;
   }
 
@@ -413,8 +528,18 @@ export class TaskScheduler {
    * Compute the next run time for a cron expression, starting from `from`
    * (defaults to now). Throws if the expression is invalid.
    */
-  getNextRun(cron: string, from?: Date): Date {
-    return computeNextRun(cron, from ?? new Date());
+  getNextRun(cron: string, from?: Date, timezone?: string): Date {
+    return computeNextRun(cron, from ?? new Date(), timezone);
+  }
+
+  /** Return the missed-run count for a given task. */
+  getMissedRuns(taskId: string): number {
+    return this.tasks.get(taskId)?.missedRuns ?? 0;
+  }
+
+  /** Validate an IANA timezone string. Throws if invalid. */
+  static validateTimezone(tz: string): void {
+    validateTimezone(tz);
   }
 
   /** Run a task immediately (ignoring its schedule). */
@@ -442,7 +567,7 @@ export class TaskScheduler {
 
     let nextDate: Date;
     try {
-      nextDate = computeNextRun(task.cron, new Date());
+      nextDate = computeNextRun(task.cron, new Date(), task.timezone);
     } catch (err) {
       logger.error('TaskScheduler: invalid cron, disabling task', { taskId: task.id, error: String(err) });
       return;
@@ -450,6 +575,12 @@ export class TaskScheduler {
 
     const delayMs = nextDate.getTime() - Date.now();
     task.nextRun = nextDate.getTime();
+
+    if (delayMs > MAX_TIMEOUT_MS) {
+      const timer = setTimeout(() => this.scheduleNext(task), MAX_TIMEOUT_MS);
+      this.timers.set(task.id, timer);
+      return;
+    }
 
     const timer = setTimeout(() => {
       if (!task.enabled) return;
@@ -504,7 +635,7 @@ export class TaskScheduler {
         error: errorMsg,
       };
       this.pushHistory(runRecord);
-      void this.save().catch((e) => logger.debug('TaskScheduler: save failed', { error: String(e) }));
+      void this.save().catch((e) => logger.warn('TaskScheduler: save failed', { error: String(e) }));
       throw err;
     }
 
@@ -519,7 +650,7 @@ export class TaskScheduler {
       status: 'running',
     };
     this.pushHistory(runRecord);
-    void this.save().catch((err) => logger.debug('TaskScheduler: save failed', { error: String(err) }));
+    void this.save().catch((err) => logger.warn('TaskScheduler: save failed', { error: String(err) }));
 
     return agentId;
   }
@@ -557,13 +688,48 @@ export class TaskScheduler {
     const data = await this.store.load();
     if (!data) return;
 
+    const now = Date.now();
+
     if (Array.isArray(data.tasks)) {
       for (const t of data.tasks) {
+        // Ensure missedRuns exists for tasks persisted before this field was added
+        if (typeof t.missedRuns !== 'number') t.missedRuns = 0;
+
+        // Detect missed runs: if the stored nextRun is in the past and the task
+        // was enabled, the scheduler was down during one or more scheduled times.
+        if (t.enabled && typeof t.nextRun === 'number' && t.nextRun < now) {
+          const missed = countMissedRuns(t.cron, t.nextRun, now, t.timezone);
+          if (missed > 0) {
+            t.missedRuns += missed;
+            logger.warn('TaskScheduler: missed runs detected on startup', {
+              taskId: t.id,
+              taskName: t.name,
+              missed,
+              totalMissed: t.missedRuns,
+            });
+          }
+        }
+
         // Recompute nextRun on load so stale values are replaced
         try {
-          t.nextRun = computeNextRun(t.cron, new Date()).getTime();
+          t.nextRun = computeNextRun(t.cron, new Date(), t.timezone).getTime();
         } catch {
           t.enabled = false; // Disable tasks with invalid cron
+        }
+
+        // Detect if a run was missed during the gap (lastRun → now)
+        if (t.lastRun) {
+          const expectedNext = computeNextRun(t.cron, new Date(t.lastRun), t.timezone);
+          if (expectedNext.getTime() < now) {
+            logger.warn('[Scheduler] Missed run detected', { taskId: t.id, missedAt: expectedNext.toISOString() });
+            this.history.push({
+              taskId: t.id,
+              startedAt: expectedNext.getTime(),
+              agentId: '',
+              status: 'failed',
+              error: 'Missed (scheduler was offline)',
+            });
+          }
         }
         this.tasks.set(t.id, t);
       }
