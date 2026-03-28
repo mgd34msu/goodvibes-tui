@@ -376,12 +376,6 @@ These were not in the original list but emerged from codebase analysis:
 - **Effort:** L
 - **Depends on:** #26 (conversation export)
 
-### 47. Team provider pools
-- **Problem:** No shared API key management across a team.
-- **Fix:** Shared provider config with per-user usage quotas. Central key store with rotation support.
-- **Files:** new `src/config/team.ts`, `src/providers/registry.ts`
-- **Effort:** XL
-- **Depends on:** None
 
 ### 48. Webhook notifications
 - **Problem:** No way to be notified when long-running agent tasks complete.
@@ -428,4 +422,4 @@ These were not in the original list but emerged from codebase analysis:
 
 **Total estimated effort to 1.0:** ~60-80 dev-days
 **Total estimated effort to 1.1:** ~130-170 dev-days
-**Total items:** 47 (1 done, 46 remaining)
+**Total items:** 46 (1 done, 45 remaining)

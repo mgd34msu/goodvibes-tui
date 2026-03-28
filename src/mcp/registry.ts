@@ -121,6 +121,16 @@ export class McpRegistry {
     return Array.from(this.clients.keys());
   }
 
+  /**
+   * listServers — Return status info for all known servers (connected or not).
+   */
+  listServers(): Array<{ name: string; connected: boolean }> {
+    return Array.from(this.clients.entries()).map(([name, client]) => ({
+      name,
+      connected: client.isConnected,
+    }));
+  }
+
   // ---------------------------------------------------------------------------
   // Private helpers
   // ---------------------------------------------------------------------------
@@ -156,3 +166,6 @@ export class McpRegistry {
     return { serverName, toolName };
   }
 }
+
+/** Shared singleton instance — used by main.ts and slash commands. */
+export const mcpRegistry = new McpRegistry();
