@@ -1,4 +1,6 @@
 #!/usr/bin/env bun
+// TODO: main() is ~1240 lines and should be refactored into composable modules
+// (input handling, rendering, session management, agent lifecycle, etc.).
 import { existsSync, mkdirSync, readFileSync, writeFileSync, unlinkSync, statSync, openSync, readSync, closeSync, renameSync } from 'fs';
 import { homedir } from 'os';
 import { randomBytes } from 'crypto';
@@ -655,7 +657,7 @@ async function main() {
     input.helpOverlayActive = !input.helpOverlayActive;
     input.helpScrollOffset = 0;
   };
-  (commandContext as unknown as Record<string, unknown>).openShortcutsOverlay = () => {
+  commandContext.openShortcutsOverlay = () => {
     input.shortcutsOverlayActive = !input.shortcutsOverlayActive;
     input.shortcutsScrollOffset = 0;
     bus.emit('render:request');
@@ -690,11 +692,6 @@ async function main() {
       conversation.suppressSplash = false;
       conversation.rebuildHistory();
     }
-    bus.emit('render:request');
-  };
-
-  commandContext.openProfilePicker = () => {
-    input.profilePickerModal.open();
     bus.emit('render:request');
   };
 
@@ -1336,4 +1333,4 @@ async function main() {
   });
 }
 
-main().catch(console.error);
+main().catch(err => logger.error('Fatal error', { error: err }));
