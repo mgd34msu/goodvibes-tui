@@ -253,17 +253,17 @@ export function createWriteTool(options?: {
   return {
     definition,
     async execute(args: Record<string, unknown>) {
-      const input = args as unknown as WriteInput;
-      const verbosity = input.verbosity ?? 'count_only';
-      const dryRun = input.dry_run ?? false;
-      const projectRoot = resolve(process.cwd());
-
-      if (!input.files || !Array.isArray(input.files) || input.files.length === 0) {
+      // Runtime validation before cast: ensure required fields exist.
+      if (!args['files'] || !Array.isArray(args['files']) || (args['files'] as unknown[]).length === 0) {
         return {
           success: false,
           error: "Invalid input: 'files' must be a non-empty array.",
         };
       }
+      const input = args as unknown as WriteInput;
+      const verbosity = input.verbosity ?? 'count_only';
+      const dryRun = input.dry_run ?? false;
+      const projectRoot = resolve(process.cwd());
 
       const results: FileWriteResult[] = [];
       const errors: string[] = [];

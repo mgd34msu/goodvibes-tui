@@ -1,5 +1,6 @@
 import { join } from 'node:path';
 import { readdir, stat } from 'node:fs/promises';
+import type { Dirent } from 'node:fs';
 
 /**
  * Directories that are always skipped during recursive directory walks.
@@ -28,10 +29,9 @@ export const WALK_MAX_FILE_SIZE = 1024 * 1024; // 1 MB
  * ignored so a single permission error never aborts the whole walk.
  */
 export async function* walkDir(dirPath: string): AsyncGenerator<string> {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let entries: any[];
+  let entries: Dirent[];
   try {
-    entries = await readdir(dirPath, { withFileTypes: true }) as any[];
+    entries = await readdir(dirPath, { withFileTypes: true });
   } catch {
     return;
   }
