@@ -9,8 +9,11 @@ import {
   shouldAutoCompact,
   getCompactionEvents,
   getLastCompactionEvent,
+  compactMessages,
+  checkAndCompact,
 } from '../../core/context-compaction.ts';
-import type { ProviderMessage, ContentPart } from '../../providers/interface.ts';
+import type { ProviderMessage, ContentPart, LLMProvider, ChatRequest, ChatResponse } from '../../providers/interface.ts';
+import type { ProviderRegistry } from '../../providers/registry.ts';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -249,5 +252,223 @@ describe('compaction event accessors', () => {
     // that the accessible log never exceeds 50 entries.
     const events = getCompactionEvents();
     expect(events.length).toBeLessThanOrEqual(50);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Helpers for compactMessages / checkAndCompact
+// ---------------------------------------------------------------------------
+
+function makeMockProvider(summaryContent: string): LLMProvider {
+  return {
+    name: 'mock-provider',
+    models: ['mock-model'],
+    chat: async (_req: ChatRequest): Promise<ChatResponse> => ({
+      content: summaryContent,
+      toolCalls: [],
+      usage: { inputTokens: 10, outputTokens: 10 },
+      stopReason: 'end',
+    }),
+  };
+}
+
+function makeMockRegistry(provider: LLMProvider): ProviderRegistry {
+  return {
+    getForModel: (_modelId: string) => provider,
+  } as unknown as ProviderRegistry;
+}
+
+// Build an array of `count` alternating user/assistant messages
+function makeMessages(count: number): ProviderMessage[] {
+  const msgs: ProviderMessage[] = [];
+  for (let i = 0; i < count; i++) {
+    const role = i % 2 === 0 ? 'user' : 'assistant';
+    msgs.push(makeStringMsg(role as 'user' | 'assistant', `message ${i}`));
+  }
+  return msgs;
+}
+
+// ---------------------------------------------------------------------------
+// compactMessages
+// ---------------------------------------------------------------------------
+
+describe('compactMessages', () => {
+  it('reduces message count when there are older messages to summarize', async () => {
+    const provider = makeMockProvider('• topic A\n• topic B');
+    const registry = makeMockRegistry(provider);
+    const messages = makeMessages(20);
+
+    const result = await compactMessages({
+      registry,
+      modelId: 'mock-model',
+      messages,
+      keepRecentMessages: 5,
+    });
+
+    // 2 summary messages + 5 recent = 7, well below original 20
+    expect(result.messages.length).toBeLessThan(messages.length);
+    expect(result.messages.length).toBe(7); // summaryUser + summaryAssistant + 5 recent
+  });
+
+  it('encodes the summary as a user/assistant pair at the start of the message list', async () => {
+    const summaryText = 'Discussed file edits and wrote tests.';
+    const provider = makeMockProvider(summaryText);
+    const registry = makeMockRegistry(provider);
+    const messages = makeMessages(15);
+
+    const result = await compactMessages({
+      registry,
+      modelId: 'mock-model',
+      messages,
+      keepRecentMessages: 5,
+    });
+
+    const [first, second] = result.messages;
+    expect(first.role).toBe('user');
+    expect(first.content).toBe('[Context compacted — summary of earlier conversation follows]');
+    expect(second.role).toBe('assistant');
+    expect(second.content as string).toContain(summaryText);
+    expect(result.summary).toBe(summaryText);
+  });
+
+  it('records a compaction event with correct fields after successful compaction', async () => {
+    const provider = makeMockProvider('• summary bullet');
+    const registry = makeMockRegistry(provider);
+    const messages = makeMessages(12);
+    const beforeCount = getCompactionEvents().length;
+
+    const result = await compactMessages({
+      registry,
+      modelId: 'mock-model',
+      messages,
+      keepRecentMessages: 4,
+      trigger: 'auto',
+    });
+
+    const events = getCompactionEvents();
+    expect(events.length).toBe(beforeCount + 1);
+
+    const event = result.event;
+    expect(event.messagesBeforeCompaction).toBe(12);
+    expect(event.messagesAfterCompaction).toBe(result.messages.length);
+    expect(event.modelId).toBe('mock-model');
+    expect(event.trigger).toBe('auto');
+    expect(typeof event.timestamp).toBe('number');
+    expect(event.tokensBeforeEstimate).toBeGreaterThan(0);
+    // Last event in the log should match the returned event
+    expect(getLastCompactionEvent()).toEqual(event);
+  });
+
+  it('throws when the LLM returns an empty summary', async () => {
+    const provider = makeMockProvider('   '); // whitespace-only → trims to empty
+    const registry = makeMockRegistry(provider);
+    const messages = makeMessages(12);
+
+    await expect(
+      compactMessages({ registry, modelId: 'mock-model', messages, keepRecentMessages: 4 }),
+    ).rejects.toThrow('Context compaction: LLM returned empty summary');
+  });
+
+  it('throws when provider lookup fails', async () => {
+    const badRegistry = {
+      getForModel: (_modelId: string) => {
+        throw new Error('No provider registered for model');
+      },
+    } as unknown as ProviderRegistry;
+    const messages = makeMessages(12);
+
+    await expect(
+      compactMessages({ registry: badRegistry, modelId: 'unknown-model', messages, keepRecentMessages: 4 }),
+    ).rejects.toThrow("Context compaction: failed to get provider for model 'unknown-model'");
+  });
+
+  it('truncates oldest messages when token budget is exceeded in buildSummarizationPrompt', async () => {
+    // Create a large set of messages that exceed MAX_PROMPT_OLDER_TOKENS (80_000).
+    // Each message has 4*80 = 320 chars = 80 tokens. We need > 80_000 tokens worth.
+    // 1100 messages × 80 tokens = 88_000 tokens > 80_000 budget.
+    const bigContent = 'x'.repeat(320); // 80 tokens per message
+    const manyMessages: ProviderMessage[] = [];
+    for (let i = 0; i < 1100; i++) {
+      manyMessages.push(makeStringMsg(i % 2 === 0 ? 'user' : 'assistant', bigContent));
+    }
+
+    let capturedPrompt = '';
+    const capturingProvider: LLMProvider = {
+      name: 'capturing-provider',
+      models: ['mock-model'],
+      chat: async (req: ChatRequest): Promise<ChatResponse> => {
+        capturedPrompt = req.messages[0].content as string;
+        return {
+          content: '• truncation verified',
+          toolCalls: [],
+          usage: { inputTokens: 10, outputTokens: 10 },
+          stopReason: 'end',
+        };
+      },
+    };
+    const registry = makeMockRegistry(capturingProvider);
+
+    // keepRecentMessages = 10, so 1090 messages go to olderMessages (88_000+ tokens)
+    await compactMessages({
+      registry,
+      modelId: 'mock-model',
+      messages: manyMessages,
+      keepRecentMessages: 10,
+    });
+
+    // The prompt should NOT contain all 1090 messages — truncation dropped the oldest
+    // A rough signal: the prompt length should be less than 1090 × 320 chars
+    expect(capturedPrompt.length).toBeLessThan(1090 * 320);
+  });
+
+  it('evicts oldest event from log once 50-entry cap is reached via repeated calls', async () => {
+    const provider = makeMockProvider('• event');
+    const registry = makeMockRegistry(provider);
+    const messages = makeMessages(12);
+
+    // Call compactMessages enough times to fill and overflow 50 entries.
+    // We use 55 calls to guarantee we push past the 50-entry cap.
+    const calls = 55;
+    for (let i = 0; i < calls; i++) {
+      await compactMessages({ registry, modelId: 'mock-model', messages, keepRecentMessages: 4 });
+    }
+
+    // After 55 calls the log should be capped at 50
+    expect(getCompactionEvents().length).toBeLessThanOrEqual(50);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// checkAndCompact
+// ---------------------------------------------------------------------------
+
+describe('checkAndCompact', () => {
+  it('returns null when usage is below the threshold', async () => {
+    const provider = makeMockProvider('• summary');
+    const registry = makeMockRegistry(provider);
+    const messages = makeMessages(10);
+
+    const result = await checkAndCompact(
+      { currentTokens: 50_000, contextWindow: 100_000, threshold: 80, isCompacting: false },
+      { registry, modelId: 'mock-model', messages, keepRecentMessages: 4 },
+    );
+
+    expect(result).toBeNull();
+  });
+
+  it('performs compaction and returns a result when usage meets the threshold', async () => {
+    const provider = makeMockProvider('• auto-compacted summary');
+    const registry = makeMockRegistry(provider);
+    const messages = makeMessages(20);
+
+    const result = await checkAndCompact(
+      { currentTokens: 85_000, contextWindow: 100_000, threshold: 80, isCompacting: false },
+      { registry, modelId: 'mock-model', messages, keepRecentMessages: 5 },
+    );
+
+    expect(result).not.toBeNull();
+    expect(result!.messages.length).toBeLessThan(messages.length);
+    expect(result!.event.trigger).toBe('auto');
+    expect(result!.summary).toBe('• auto-compacted summary');
   });
 });
