@@ -17,6 +17,7 @@ import { planManager } from './plan-manager-instance.ts';
 import type { ExecutionPlan, PlanItem } from './execution-plan.ts';
 import { classifyIntent } from './intent-classifier.ts';
 import { getTokenLimitsForModel, getContextWindowForModel } from '../providers/model-limits.ts';
+import { shouldAutoCompact } from './context-compaction.ts';
 import { EventReplayQueue } from './event-replay.ts';
 import { AgentManager } from '../tools/agent/index.ts';
 import type { AgentInput } from '../tools/agent/schema.ts';
@@ -58,6 +59,8 @@ export class Orchestrator {
   private isStreaming = false;
   /** Last token warning bracket (multiples of 10%) to avoid repeat warnings at same level. */
   private lastWarningBracket = 0;
+  /** Whether auto-compaction is currently in progress (prevents re-entry). */
+  private isCompacting = false;
 
   /** Session ID for hook events — unique per Orchestrator instance */
   private readonly sessionId = crypto.randomUUID();
@@ -471,8 +474,8 @@ export class Orchestrator {
         }
       }
 
-      // Token budget warning: check context usage after turn completes
-      // Use model-limits data for context window (OpenRouter-sourced when available,
+      // Context usage check: auto-compact when threshold exceeded, otherwise warn.
+      // Uses model-limits data for context window (OpenRouter-sourced when available,
       // falls back to static registry value).
       const totalTokens = this.lastInputTokens;
       const currentModel = providerRegistry.getCurrentModel();
@@ -481,10 +484,55 @@ export class Orchestrator {
         const usagePct = Math.round((totalTokens / maxTokens) * 100);
         const threshold = configManager.get('behavior.autoCompactThreshold') as number;
         const bracket = Math.floor(usagePct / 10) * 10;
-        if (usagePct >= threshold && bracket > this.lastWarningBracket) {
+
+        if (
+          shouldAutoCompact({
+            currentTokens: totalTokens,
+            contextWindow: maxTokens,
+            threshold,
+            isCompacting: this.isCompacting,
+          })
+        ) {
+          // Auto-compact: threshold exceeded, perform compaction in background
+          this.isCompacting = true;
+          this.conversation.addSystemMessage(
+            `Context usage at ${usagePct}% (${totalTokens}/${maxTokens} tokens). Auto-compacting conversation...`
+          );
+          this.bus.emit('context:warning', { usage: usagePct, threshold });
+          this.bus.emit('render:request');
+
+          // Run compaction without blocking current turn completion
+          this.conversation.compact(
+            providerRegistry,
+            currentModel.id,
+            10,
+            'auto',
+          ).then(() => {
+            this.isCompacting = false;
+            this.lastWarningBracket = 0; // Reset so warnings work after compaction
+            this.conversation.addSystemMessage(
+              'Context auto-compacted. Conversation history summarized to free context window.'
+            );
+            this.bus.emit('render:request');
+            logger.info('Orchestrator: auto-compact complete', {
+              modelId: currentModel.id,
+              usagePct,
+              threshold,
+            });
+          }).catch((err: unknown) => {
+            this.isCompacting = false;
+            const msg = err instanceof Error ? err.message : String(err);
+            logger.error('Orchestrator: auto-compact failed', { error: msg });
+            this.conversation.addSystemMessage(
+              `Auto-compact failed: ${msg}. Use /compact to retry manually.`
+            );
+            this.bus.emit('render:request');
+          });
+        } else if (usagePct >= Math.max(threshold - 10, 50) && bracket > this.lastWarningBracket) {
+          // Warning zone: approaching threshold but not yet compacting
           this.lastWarningBracket = bracket;
           this.conversation.addSystemMessage(
-            `Context usage at ${usagePct}% (${totalTokens}/${maxTokens} tokens). Consider running /compact to free space.`
+            `Context usage at ${usagePct}% (${totalTokens}/${maxTokens} tokens). Auto-compact will trigger at ${threshold}%.`
           );
           this.bus.emit('context:warning', { usage: usagePct, threshold });
           this.bus.emit('render:request');
