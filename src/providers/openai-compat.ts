@@ -63,6 +63,7 @@ export class OpenAICompatProvider implements LLMProvider {
       let responseText = '';
       let inputTokens = 0;
       let outputTokens = 0;
+      let cacheReadTokens = 0;
       let stopReason: ChatResponse['stopReason'] = 'end';
       let reasoningSummaryText: string | undefined;
       let rawToolCalls: OpenAIToolCall[] = [];
@@ -145,8 +146,14 @@ export class OpenAICompatProvider implements LLMProvider {
           else if (finishReason === 'length') stopReason = 'max_tokens';
 
           if (raw.usage) {
-            inputTokens = raw.usage.prompt_tokens ?? 0;
-            outputTokens = raw.usage.completion_tokens ?? 0;
+            const rawUsage = raw.usage as {
+              prompt_tokens?: number;
+              completion_tokens?: number;
+              prompt_tokens_details?: { cached_tokens?: number };
+            };
+            inputTokens = rawUsage.prompt_tokens ?? 0;
+            outputTokens = rawUsage.completion_tokens ?? 0;
+            cacheReadTokens = rawUsage.prompt_tokens_details?.cached_tokens ?? cacheReadTokens;
           }
         }
 
@@ -169,7 +176,11 @@ export class OpenAICompatProvider implements LLMProvider {
       const response: ChatResponse = {
         content: responseText,
         toolCalls: rawToolCalls.length > 0 ? fromOpenAIToolCalls(rawToolCalls) : [],
-        usage: { inputTokens, outputTokens },
+        usage: {
+          inputTokens,
+          outputTokens,
+          ...(cacheReadTokens > 0 ? { cacheReadTokens } : {}),
+        },
         stopReason,
       };
 

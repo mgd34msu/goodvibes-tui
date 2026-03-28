@@ -37,6 +37,7 @@ export class OpenAIProvider implements LLMProvider {
       let responseText = '';
       let inputTokens = 0;
       let outputTokens = 0;
+      let cacheReadTokens = 0;
       let stopReason: ChatResponse['stopReason'] = 'end';
       let rawToolCalls: OpenAIToolCall[] = [];
 
@@ -87,10 +88,11 @@ export class OpenAIProvider implements LLMProvider {
           if (finishReason === 'tool_calls') stopReason = 'tool_use';
           else if (finishReason === 'length') stopReason = 'max_tokens';
 
-          const usage = (chunk as { usage?: { prompt_tokens?: number; completion_tokens?: number } }).usage;
+          const usage = (chunk as { usage?: { prompt_tokens?: number; completion_tokens?: number; prompt_tokens_details?: { cached_tokens?: number } } }).usage;
           if (usage) {
             inputTokens = usage.prompt_tokens ?? 0;
             outputTokens = usage.completion_tokens ?? 0;
+            cacheReadTokens = usage.prompt_tokens_details?.cached_tokens ?? cacheReadTokens;
           }
         }
 
@@ -114,7 +116,11 @@ export class OpenAIProvider implements LLMProvider {
       return {
         content: responseText,
         toolCalls: rawToolCalls.length > 0 ? fromOpenAIToolCalls(rawToolCalls) : [],
-        usage: { inputTokens, outputTokens },
+        usage: {
+          inputTokens,
+          outputTokens,
+          ...(cacheReadTokens > 0 ? { cacheReadTokens } : {}),
+        },
         stopReason,
       };
     });
