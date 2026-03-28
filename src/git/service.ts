@@ -200,8 +200,8 @@ export class GitService {
       if (options?.amend) flags.push('--amend');
       if (options?.noVerify) flags.push('--no-verify');
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const result = await (this.git as any).commit(message, undefined, flags);
+      // @ts-expect-error simple-git types do not expose the 3-arg commit signature
+      const result = await this.git.commit(message, undefined, flags);
       const output = { hash: result.commit, summary: JSON.stringify(result.summary) };
       await this.firePost('commit', { message, ...output });
       return output;
