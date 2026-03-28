@@ -1,9 +1,11 @@
-import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
+import { describe, it, expect, beforeEach, afterEach, spyOn } from 'bun:test';
+import fs from 'node:fs';
 import {
   normalizeModelId,
   hasKeyForProvider,
   getCostFromCatalog,
   getCatalog,
+  ensureCacheDir,
   _setCatalogForTesting,
   _resetForTest,
 } from '../../providers/model-catalog.ts';
@@ -138,6 +140,35 @@ describe('getCostFromCatalog', () => {
     expect(getCostFromCatalog('test-model').input).toBe(99);
     _resetForTest();
     expect(getCostFromCatalog('test-model')).toEqual({ input: 0, output: 0 });
+  });
+});
+
+describe('ensureCacheDir', () => {
+  it('creates directory when it does not exist', () => {
+    const spy = spyOn(fs, 'mkdirSync').mockImplementation(() => undefined as never);
+    ensureCacheDir('/tmp/test-cache-dir');
+    expect(spy).toHaveBeenCalledWith('/tmp/test-cache-dir', { recursive: true });
+    spy.mockRestore();
+  });
+
+  it('does not throw when directory already exists (EEXIST)', () => {
+    const eexistError = Object.assign(new Error('EEXIST'), { code: 'EEXIST' });
+    const spy = spyOn(fs, 'mkdirSync').mockImplementation(() => { throw eexistError; });
+    expect(() => ensureCacheDir('/tmp/existing-dir')).not.toThrow();
+    spy.mockRestore();
+  });
+
+  it('logs to stderr on unexpected permission error', () => {
+    const permError = Object.assign(new Error('EACCES: permission denied'), { code: 'EACCES' });
+    const mkdirSpy = spyOn(fs, 'mkdirSync').mockImplementation(() => { throw permError; });
+    const stderrSpy = spyOn(process.stderr, 'write').mockImplementation(() => true);
+    ensureCacheDir('/root/forbidden');
+    expect(stderrSpy).toHaveBeenCalled();
+    const call = stderrSpy.mock.calls[0][0] as string;
+    expect(call).toContain('[model-catalog]');
+    expect(call).toContain('/root/forbidden');
+    mkdirSpy.mockRestore();
+    stderrSpy.mockRestore();
   });
 });
 
