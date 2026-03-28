@@ -104,7 +104,11 @@ if (buildAll) {
   // Default: build native platform binary
   const platform = process.platform;
   const arch = process.arch;
-  const nativeKey = `${platform === 'linux' ? 'linux' : 'darwin'}-${arch === 'arm64' ? 'arm64' : 'x64'}`;
+  if (platform !== 'linux' && platform !== 'darwin') {
+    console.error(`Unsupported platform '${platform}'. Only linux and darwin are supported. Use --target or --all to specify a target explicitly.`);
+    process.exit(1);
+  }
+  const nativeKey = `${platform}-${arch === 'arm64' ? 'arm64' : 'x64'}`;
   if (!TARGETS[nativeKey]) {
     console.error(`No built-in target for ${platform}/${arch}. Use --target or --all.`);
     process.exit(1);

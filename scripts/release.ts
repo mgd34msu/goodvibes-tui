@@ -15,9 +15,10 @@ import { execSync } from 'child_process';
  * What it does:
  *   1. Pre-release validation (typecheck + build)
  *   2. Bump patch version in package.json
- *   3. Update src/version.ts fallback via prebuild script
- *   4. Prepend new section to CHANGELOG.md
- *   5. Stage changes, commit, create annotated git tag
+ *   3. Update package.json on disk
+ *   4. Update src/version.ts fallback via prebuild script
+ *   5. Prepend new section to CHANGELOG.md
+ *   6. Stage changes, commit, create annotated git tag
  */
 
 const args = process.argv.slice(2);
@@ -91,19 +92,19 @@ if (DRY_RUN) console.log('(dry-run mode — no files will be written)\n');
 // --- Pre-release validation ---
 
 if (!SKIP_VALIDATION) {
-  console.log('\n[1/5] Running typecheck...');
+  console.log('\n[1/6] Running typecheck...');
   run('bunx tsc --noEmit');
 
-  console.log('\n[2/5] Running build...');
+  console.log('\n[2/6] Running build...');
   run('bun run build');
 } else {
-  console.log('\n[1/5] Skipping validation (--skip-validation)');
-  console.log('[2/5] Skipping build (--skip-validation)');
+  console.log('\n[1/6] Skipping validation (--skip-validation)');
+  console.log('[2/6] Skipping build (--skip-validation)');
 }
 
 // --- Bump package.json ---
 
-console.log(`\n[3/5] Updating package.json: ${current} → ${next}`);
+console.log(`\n[3/6] Updating package.json: ${current} → ${next}`);
 if (!DRY_RUN) {
   pkg.version = next;
   writeFileSync(pkgPath, JSON.stringify(pkg, null, 2) + '\n');
@@ -111,12 +112,12 @@ if (!DRY_RUN) {
 
 // --- Update src/version.ts via prebuild script ---
 
-console.log('\n[4/5] Syncing src/version.ts via prebuild...');
+console.log('\n[4/6] Syncing src/version.ts via prebuild...');
 run('bun run scripts/prebuild.ts');
 
 // --- Update CHANGELOG.md ---
 
-console.log('\n[4/5] Updating CHANGELOG.md...');
+console.log('\n[5/6] Updating CHANGELOG.md...');
 
 const changelogPath = join(root, 'CHANGELOG.md');
 const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
@@ -125,7 +126,14 @@ const newSection = [
   `## [${next}] — ${today}`,
   '',
   '### Changes',
-  '- See git log for details',
+  ...(() => {
+    try {
+      const log = execSync('git log --oneline $(git describe --tags --abbrev=0 HEAD^)..HEAD 2>/dev/null || git log --oneline -20', { cwd: root, encoding: 'utf8' }).trim();
+      return log ? log.split('\n').map((line: string) => `- ${line}`) : ['- See git log for details'];
+    } catch {
+      return ['- See git log for details'];
+    }
+  })(),
   '',
 ].join('\n');
 
@@ -156,7 +164,7 @@ if (!DRY_RUN) {
 
 // --- Git commit + tag ---
 
-console.log(`\n[5/5] Creating git commit and tag v${next}...`);
+console.log(`\n[6/6] Creating git commit and tag v${next}...`);
 
 const tag = `v${next}`;
 const commitMsg = `chore: release ${tag}`;
