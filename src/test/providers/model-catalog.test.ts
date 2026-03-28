@@ -99,8 +99,17 @@ describe('hasKeyForProvider', () => {
   });
 });
 
+/** Fixture catalog for getCostFromCatalog tests */
+const COST_FIXTURE: PricingCatalog = {
+  fetchedAt: Date.now(),
+  models: [
+    { id: 'claude-sonnet-4-6', name: 'Claude Sonnet 4.6', provider: 'Anthropic', pricing: { input: 3, output: 15 }, tier: 'paid' },
+    { id: 'gpt-oss-120b', name: 'GPT OSS 120B', provider: 'OpenAI', pricing: { input: 0, output: 0 }, tier: 'free' },
+  ],
+};
+
 describe('getCostFromCatalog', () => {
-  beforeEach(() => { _resetForTest(); });
+  beforeEach(() => { _resetForTest(); _setCatalogForTesting(COST_FIXTURE); });
 
   it('returns zero cost for :free suffix models', () => {
     expect(getCostFromCatalog('openai/gpt-4o:free')).toEqual({ input: 0, output: 0 });
