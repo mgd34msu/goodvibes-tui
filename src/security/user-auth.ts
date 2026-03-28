@@ -18,6 +18,7 @@ interface UserAuthConfig {
 }
 
 const DEFAULT_SESSION_TTL_MS = 3_600_000;
+const SCRYPT_KEY_LENGTH = 64;
 
 function toBase64(value: Buffer): string {
   return value.toString('base64');
@@ -25,7 +26,7 @@ function toBase64(value: Buffer): string {
 
 function hashPassword(password: string, salt?: Buffer): string {
   const actualSalt = salt ?? randomBytes(16);
-  const derived = scryptSync(password, actualSalt, 64);
+  const derived = scryptSync(password, actualSalt, SCRYPT_KEY_LENGTH);
   return `${toBase64(actualSalt)}:${toBase64(derived)}`;
 }
 
@@ -43,7 +44,7 @@ function verifyPassword(password: string, passwordHash: string): boolean {
 
   const salt = Buffer.from(saltEncoded, 'base64');
   const expected = Buffer.from(hashEncoded, 'base64');
-  const actual = scryptSync(password, salt, expected.length);
+  const actual = scryptSync(password, salt, SCRYPT_KEY_LENGTH);
   if (actual.length !== expected.length) return false;
   return timingSafeEqual(actual, expected);
 }

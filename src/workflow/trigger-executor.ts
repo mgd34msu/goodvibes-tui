@@ -203,13 +203,23 @@ class ConditionParser {
 
   private parseOr(): ConditionValue {
     let left = this.parseAnd();
-    while (this.peek() === '||') { this.consume(); const right = this.parseAnd(); left = Boolean(left) || Boolean(right); }
+    while (this.peek() === '||') {
+      if (Boolean(left)) break;
+      this.consume();
+      const right = this.parseAnd();
+      left = Boolean(left) || Boolean(right);
+    }
     return left;
   }
 
   private parseAnd(): ConditionValue {
     let left = this.parseUnary();
-    while (this.peek() === '&&') { this.consume(); const right = this.parseUnary(); left = Boolean(left) && Boolean(right); }
+    while (this.peek() === '&&') {
+      if (!Boolean(left)) break;
+      this.consume();
+      const right = this.parseUnary();
+      left = Boolean(left) && Boolean(right);
+    }
     return left;
   }
 
