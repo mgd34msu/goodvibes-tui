@@ -4,14 +4,18 @@ import { logger } from '../utils/logger.ts';
 
 // --- Types ---
 
-interface SyntheticBackend {
+export interface SyntheticBackend {
   providerName: string;
   modelId: string;
 }
 
-// --- Model Map ---
+export type SyntheticModelMap = Record<string, SyntheticBackend[]>;
 
-const SYNTHETIC_MODEL_MAP: Record<string, SyntheticBackend[]> = {
+// --- Manual Overrides ---
+// These take priority over auto-generated entries. Order of backends within
+// each entry controls failover preference.
+
+export const MANUAL_SYNTHETIC_OVERRIDES: SyntheticModelMap = {
   'gpt-oss-120b': [
     { providerName: 'groq', modelId: 'openai/gpt-oss-120b' },
     { providerName: 'huggingface', modelId: 'openai/gpt-oss-120b' },
@@ -82,13 +86,16 @@ export class SyntheticProvider implements LLMProvider {
   // Track active backend: syntheticModelId -> current backend index
   private activeBackend = new Map<string, number>();
 
-  constructor(private registryGetter: () => { get(name: string): LLMProvider }) {
-    this.models = Object.keys(SYNTHETIC_MODEL_MAP);
+  constructor(
+    private registryGetter: () => { get(name: string): LLMProvider },
+    private modelMap: SyntheticModelMap,
+  ) {
+    this.models = Object.keys(modelMap);
   }
 
   async chat(params: ChatRequest): Promise<ChatResponse> {
     const syntheticId = params.model;
-    const backends = SYNTHETIC_MODEL_MAP[syntheticId];
+    const backends = this.modelMap[syntheticId];
     if (!backends || backends.length === 0) {
       throw new ProviderError(`Unknown synthetic model: ${syntheticId}`, 400);
     }

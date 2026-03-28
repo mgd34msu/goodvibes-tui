@@ -16,7 +16,7 @@ import type { SubagentTask } from '../acp/protocol.ts';
 import { planManager } from './plan-manager-instance.ts';
 import type { ExecutionPlan, PlanItem } from './execution-plan.ts';
 import { classifyIntent } from './intent-classifier.ts';
-import { getTokenLimitsForModel } from '../providers/model-limits.ts';
+import { getTokenLimitsForModel, getContextWindowForModel } from '../providers/model-limits.ts';
 import { EventReplayQueue } from './event-replay.ts';
 import { AgentManager } from '../tools/agent/index.ts';
 import type { AgentInput } from '../tools/agent/schema.ts';
@@ -472,9 +472,11 @@ export class Orchestrator {
       }
 
       // Token budget warning: check context usage after turn completes
+      // Use model-limits data for context window (OpenRouter-sourced when available,
+      // falls back to static registry value).
       const totalTokens = this.lastInputTokens;
       const currentModel = providerRegistry.getCurrentModel();
-      const maxTokens = currentModel.contextWindow;
+      const maxTokens = getContextWindowForModel(currentModel);
       if (maxTokens > 0) {
         const usagePct = Math.round((totalTokens / maxTokens) * 100);
         const threshold = configManager.get('behavior.autoCompactThreshold') as number;

@@ -17,6 +17,7 @@ import { AgentLogsPanel } from './agent-logs-panel.ts';
 import { TokenBudgetPanel } from './token-budget-panel.ts';
 import { WrfcPanel } from './wrfc-panel.ts';
 import { SchedulePanel } from './schedule-panel.ts';
+import { ProviderHealthPanel } from './provider-health-panel.ts';
 import type { EventBus } from '../core/event-bus.ts';
 import type { ToolRegistry } from '../tools/registry.ts';
 import type { ProviderRegistry } from '../providers/registry.ts';
@@ -213,6 +214,18 @@ export function registerBuiltinPanels(manager: PanelManager, deps: BuiltinPanelD
     description: 'Scheduled agent tasks: cron expressions, next run time, enable/disable, run history',
     factory: () => new SchedulePanel(),
   });
+
+  if (deps.bus) {
+    const { bus } = deps;
+    manager.registerType({
+      id: 'provider-health',
+      name: 'Health',
+      icon: 'N',
+      category: 'monitoring',
+      description: 'Provider health dashboard: real-time status, latency, errors, and rate-limit cooldowns',
+      factory: () => new ProviderHealthPanel(bus),
+    });
+  }
 
   manager.registerType({
     id: 'tokens',

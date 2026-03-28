@@ -286,8 +286,12 @@ async function main() {
   // Populated after bus.on() calls below — used to clean up listeners on exit
   const unsubs: Array<() => void> = [];
 
+  // Periodic agent status interval handle — cleared on exit
+  let agentStatusInterval: ReturnType<typeof setInterval> | null = null;
+
   const exitApp = () => {
     unsubs.forEach(fn => fn());
+    if (agentStatusInterval !== null) { clearInterval(agentStatusInterval); agentStatusInterval = null; }
     // Save conversation on exit
     saveConversation(conversation.toJSON() as { messages: object[]; timestamp?: number }, runtime.sessionId, runtime.model, runtime.provider, conversation.title || '');
     try { ScheduleManager.getInstance().destroy(); } catch { /* non-fatal */ }
@@ -355,6 +359,67 @@ async function main() {
   unsubs.push(bus.on('subagent:stream-delta', () => {
     bus.emit('render:request');
   }));
+
+  // Helper: generate a cohort summary report string from AgentManager records.
+  const buildCohortReport = (cohort: string): string => {
+    const mgr = AgentManager.getInstance();
+    const agents = mgr.listByCohort(cohort);
+    if (agents.length === 0) return `[Agents] Cohort '${cohort}' complete (no agents found).`;
+    const completed = agents.filter(a => a.status === 'completed').length;
+    const failed = agents.filter(a => a.status === 'failed').length;
+    const cancelled = agents.filter(a => a.status === 'cancelled').length;
+    const lines: string[] = [
+      `[Agents] Cohort '${cohort}' complete: ${completed} completed, ${failed} failed, ${cancelled} cancelled (${agents.length} total)`,
+    ];
+    for (const a of agents) {
+      const dur = a.completedAt !== undefined ? Math.round((a.completedAt - a.startedAt) / 1000) : 0;
+      const icon = a.status === 'completed' ? '\u2713' : a.status === 'failed' ? '\u2717' : '~';
+      const errSuffix = a.error ? ` — ${a.error.slice(0, 60)}` : '';
+      lines.push(`  ${icon} ${a.id.slice(-8)}: ${a.status} in ${dur}s (${a.toolCallCount} tool calls)${errSuffix}`);
+    }
+    return lines.join('\n');
+  };
+
+  // Check if all agents in a cohort are done; if so, show the cohort report.
+  const checkCohortCompletion = (record: { cohort?: string } | null) => {
+    if (!record?.cohort) return;
+    const cohortAgents = AgentManager.getInstance().listByCohort(record.cohort);
+    const allDone = cohortAgents.every(a => a.status !== 'running' && a.status !== 'pending');
+    if (allDone) {
+      conversation.addSystemMessage(buildCohortReport(record.cohort));
+    }
+  };
+
+  // Show a system message when an agent completes and, if its cohort is fully done, show the report.
+  unsubs.push(bus.on('subagent:complete', ({ id }: { id: string }) => {
+    const record = AgentManager.getInstance().getStatus(id);
+    if (record) {
+      const dur = record.completedAt !== undefined ? Math.round((record.completedAt - record.startedAt) / 1000) : 0;
+      conversation.addSystemMessage(`[Agents] \u2713 ${id.slice(-8)} completed in ${dur}s (${record.toolCallCount} tool calls)`);
+    }
+    checkCohortCompletion(record ?? null);
+    bus.emit('render:request');
+  }));
+
+  // Show a system message when an agent errors and check for cohort completion.
+  unsubs.push(bus.on('subagent:error', ({ id, error }: { id: string; error: Error }) => {
+    const record = AgentManager.getInstance().getStatus(id);
+    if (record && record.status !== 'cancelled') {
+      conversation.addSystemMessage(`[Agents] \u2717 ${id.slice(-8)} failed: ${error.message.slice(0, 80)}`);
+    }
+    checkCohortCompletion(record ?? null);
+    bus.emit('render:request');
+  }));
+
+  // Periodic agent status summary — shown every 30s when agents are running.
+  const AGENT_STATUS_INTERVAL_MS = 30_000;
+  agentStatusInterval = setInterval(() => {
+    const running = AgentManager.getInstance().list().filter(a => a.status === 'running');
+    if (running.length === 0) return;
+    const lines = running.map(a => `  ${a.id.slice(-8)}: ${a.progress ?? a.status}`);
+    conversation.addSystemMessage(`[Agents] ${running.length} running:\n${lines.join('\n')}`);
+    bus.emit('render:request');
+  }, AGENT_STATUS_INTERVAL_MS);
 
   // Start watching for custom provider file changes so hot-reload works.
   providerRegistry.startWatching(bus);
