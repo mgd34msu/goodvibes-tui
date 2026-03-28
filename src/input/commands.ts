@@ -28,6 +28,8 @@ import { TaskScheduler } from '../scheduler/scheduler.ts';
 import { exportToMarkdown } from '../export/markdown.ts';
 import { exportToHTML, exportToJSON, exportToMarkdownExtended, defaultExportPath } from '../export/session-export.ts';
 import { getKeybindingsManager } from './keybindings.ts';
+import { pluginManager, type PluginStatus } from '../plugins/manager.ts';
+import { PLUGINS_DIR } from '../plugins/loader.ts';
 
 let _serviceRegistry: ServiceRegistry | undefined;
 function getServiceRegistry(): ServiceRegistry {
@@ -2911,8 +2913,9 @@ export function registerBuiltinCommands(registry: CommandRegistry): void {
         const { computeSemanticDiff, formatSemanticDiffSummary } = await import('../renderer/semantic-diff.ts');
         const { relative: pathRelative } = await import('path');
         // Resolve repo root once for all files — git show requires paths relative to repo root
-        const repoRootProc = Bun.spawnSync(['git', 'rev-parse', '--show-toplevel'], { stdout: 'pipe', cwd: process.cwd() });
-        const repoRoot = new TextDecoder().decode(repoRootProc.stdout).trim() || process.cwd();
+        const repoRootProc = Bun.spawn(['git', 'rev-parse', '--show-toplevel'], { stdout: 'pipe', cwd: process.cwd() });
+        await repoRootProc.exited;
+        const repoRoot = (await new Response(repoRootProc.stdout).text()).trim() || process.cwd();
         await Promise.allSettled(
           files.map(async (filePath) => {
             try {
@@ -2980,6 +2983,15 @@ export function registerBuiltinCommands(registry: CommandRegistry): void {
           ctx.print('Loading working-tree diff...');
           await diffPanel.showGitDiff();
           ctx.print('Diff panel updated: working tree changes.');
+          // Enrich with semantic diff asynchronously (best-effort)
+          const workingChangedFiles = await (async () => {
+            const proc = Bun.spawn(['git', 'diff', '--name-only'], { stdout: 'pipe', cwd: process.cwd() });
+            await proc.exited;
+            return (await new Response(proc.stdout).text()).trim().split('\n').filter(Boolean);
+          })();
+          if (workingChangedFiles.length > 0) {
+            enrichSemanticDiff(diffPanel, workingChangedFiles, 'HEAD', () => ctx.renderRequest()).catch(() => {});
+          }
           break;
         }
         case 'staged': {
@@ -3002,6 +3014,15 @@ export function registerBuiltinCommands(registry: CommandRegistry): void {
             // Feed the full multi-file diff into the panel
             diffPanel.loadRawDiff(raw);
             ctx.print('Diff panel updated: staged changes.');
+            // Enrich with semantic diff asynchronously (best-effort)
+            const stagedChangedFiles = await (async () => {
+              const proc = Bun.spawn(['git', 'diff', '--cached', '--name-only'], { stdout: 'pipe', cwd: process.cwd() });
+              await proc.exited;
+              return (await new Response(proc.stdout).text()).trim().split('\n').filter(Boolean);
+            })();
+            if (stagedChangedFiles.length > 0) {
+              enrichSemanticDiff(diffPanel, stagedChangedFiles, 'HEAD', () => ctx.renderRequest()).catch(() => {});
+            }
           }
           break;
         }
@@ -3011,9 +3032,10 @@ export function registerBuiltinCommands(registry: CommandRegistry): void {
           await diffPanel.showGitDiff('HEAD');
           ctx.print('Diff panel updated: all changes vs HEAD.');
           // Enrich with semantic diff asynchronously (best-effort)
-          const headChangedFiles = (() => {
-            const proc = Bun.spawnSync(['/bin/sh', '-c', 'git diff HEAD --name-only'], { stdout: 'pipe', cwd: process.cwd() });
-            return new TextDecoder().decode(proc.stdout).trim().split('\n').filter(Boolean);
+          const headChangedFiles = await (async () => {
+            const proc = Bun.spawn(['/bin/sh', '-c', 'git diff HEAD --name-only'], { stdout: 'pipe', cwd: process.cwd() });
+            await proc.exited;
+            return (await new Response(proc.stdout).text()).trim().split('\n').filter(Boolean);
           })();
           if (headChangedFiles.length > 0) {
             enrichSemanticDiff(diffPanel, headChangedFiles, 'HEAD', () => ctx.renderRequest()).catch(() => {});
@@ -3036,9 +3058,10 @@ export function registerBuiltinCommands(registry: CommandRegistry): void {
             await diffPanel.showGitDiff('HEAD');
             ctx.print('Diff panel updated: all changes vs HEAD.');
             // Enrich with semantic diff for HEAD-changed files asynchronously
-            const fallbackFiles = (() => {
-              const proc = Bun.spawnSync(['/bin/sh', '-c', 'git diff HEAD --name-only'], { stdout: 'pipe', cwd: process.cwd() });
-              return new TextDecoder().decode(proc.stdout).trim().split('\n').filter(Boolean);
+            const fallbackFiles = await (async () => {
+              const proc = Bun.spawn(['/bin/sh', '-c', 'git diff HEAD --name-only'], { stdout: 'pipe', cwd: process.cwd() });
+              await proc.exited;
+              return (await new Response(proc.stdout).text()).trim().split('\n').filter(Boolean);
             })();
             if (fallbackFiles.length > 0) {
               enrichSemanticDiff(diffPanel, fallbackFiles, 'HEAD', () => ctx.renderRequest()).catch(() => {});
@@ -3176,11 +3199,9 @@ export function registerBuiltinCommands(registry: CommandRegistry): void {
         // the project, we allow it (shares are exported for external use).
         // We still normalise to catch double-dots.
         outputPath = resolve(rawPath);
-        // Reject sneaky traversal attempts using relative paths that escape cwd
-        if (!outputPath.startsWith('/')) {
-          ctx.print(`Invalid path: ${pathArgs[0]}`);
-          return;
-        }
+        // Note: path.resolve() always returns an absolute path on POSIX, so the
+        // startsWith('/') guard was dead code. Exports are intentionally unrestricted
+        // — users may share files to any location on the filesystem.
       } else {
         outputPath = defaultExportPath(format);
       }
@@ -3252,8 +3273,10 @@ export function registerBuiltinCommands(registry: CommandRegistry): void {
       const { dirname } = await import('node:path');
       try {
         _mkdirSync(dirname(outputPath), { recursive: true });
-      } catch {
-        // ignore — writeFile will surface a clearer error if dir creation failed
+      } catch (mkdirErr) {
+        // Non-fatal: writeFile will surface a clearer error if the directory
+        // could not be created. Log for diagnostics.
+        console.warn(`[share] mkdir failed for ${dirname(outputPath)}:`, mkdirErr);
       }
 
       try {
@@ -3265,6 +3288,79 @@ export function registerBuiltinCommands(registry: CommandRegistry): void {
 
       const redactNote = redact ? ' (sensitive data redacted)' : '';
       ctx.print(`Exported ${format.toUpperCase()} session to ${outputPath}${redactNote}`);
+    },
+  });
+
+  // ── /plugin ──────────────────────────────────────────────────────────────
+  registry.register({
+    name: 'plugin',
+    aliases: [],
+    description: 'Manage plugins (list, enable, disable, reload)',
+    usage: 'list | enable <name> | disable <name> | reload',
+    argsHint: 'list | enable | disable | reload',
+    async handler(args, ctx) {
+      const sub = args[0];
+
+      if (!sub || sub === 'list') {
+        const plugins = pluginManager.list() as PluginStatus[];
+        if (plugins.length === 0) {
+          ctx.print(
+            'No plugins installed.\n' +
+            `Plugin directory: ${PLUGINS_DIR}\n` +
+            'Place a plugin folder there with manifest.json and index.ts.'
+          );
+          return;
+        }
+        const lines: string[] = ['Installed plugins:'];
+        for (const p of plugins) {
+          const statusIcon = p.active ? '[active]  ' : p.enabled ? '[loading] ' : '[disabled]';
+          lines.push(`  ${statusIcon}  ${p.name.padEnd(24)} v${p.version}  —  ${p.description}`);
+          if (p.author) lines.push(`            by ${p.author}`);
+        }
+        lines.push('');
+        lines.push('Use /plugin enable <name> or /plugin disable <name> to toggle plugins.');
+        ctx.print(lines.join('\n'));
+        return;
+      }
+
+      if (sub === 'enable') {
+        const name = args[1];
+        if (!name) { ctx.print('Usage: /plugin enable <name>'); return; }
+        const result = await pluginManager.enable(name);
+        if (result.ok) {
+          ctx.print(`Plugin '${name}' enabled and activated.`);
+        } else {
+          ctx.print(`Error: ${result.error}`);
+        }
+        return;
+      }
+
+      if (sub === 'disable') {
+        const name = args[1];
+        if (!name) { ctx.print('Usage: /plugin disable <name>'); return; }
+        const result = await pluginManager.disable(name);
+        if (result.ok) {
+          ctx.print(`Plugin '${name}' disabled.`);
+        } else {
+          ctx.print(`Error: ${result.error}`);
+        }
+        return;
+      }
+
+      if (sub === 'reload') {
+        ctx.print('Reloading plugins...');
+        const { reloaded, failed } = await pluginManager.reload();
+        ctx.print(`Done. ${reloaded} plugin(s) reloaded${failed > 0 ? `, ${failed} failed` : ''}.`);
+        return;
+      }
+
+      ctx.print(
+        'Usage: /plugin <subcommand>\n' +
+        '  list              — show installed plugins and their status\n' +
+        '  enable <name>     — enable a plugin\n' +
+        '  disable <name>    — disable a plugin\n' +
+        '  reload            — reload all enabled plugins'
+      );
     },
   });
 }
