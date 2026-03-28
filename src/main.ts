@@ -41,7 +41,7 @@ import { WebhookNotifier, setWebhookNotifier } from './integrations/webhooks.ts'
 import { ScheduleManager } from './tools/workflow/index.ts';
 import { InputHistory } from './input/input-history.ts';
 import { loadSystemPrompt as _loadSystemPrompt } from './utils/prompt-loader.ts';
-import { getTierPromptSupplement } from './providers/tier-prompts.ts';
+import { getTierPromptSupplement, getTierForContextWindow } from './providers/tier-prompts.ts';
 import { GitStatusProvider } from './renderer/git-status.ts';
 import type { GitHeaderInfo } from './renderer/git-status.ts';
 import { renderHelpOverlay, renderShortcutsOverlay } from './renderer/help-overlay.ts';
@@ -58,8 +58,9 @@ import { scan, loadPersistedProviders, persistProviders, removePersistedProvider
 import { getSessionManager } from './sessions/manager.ts';
 import type { SessionMeta } from './sessions/manager.ts';
 import { logger } from './utils/logger.ts';
-import { initModelLimits } from './providers/model-limits.ts';
+import { initModelLimits, getContextWindowForModel } from './providers/model-limits.ts';
 import { initBenchmarks } from './providers/model-benchmarks.ts';
+import { initCatalog } from './providers/model-catalog.ts';
 import { getPanelManager } from './panels/panel-manager.ts';
 import { registerBuiltinPanels } from './panels/builtin-panels.ts';
 import { renderPanelTabBar } from './renderer/panel-tab-bar.ts';
@@ -255,6 +256,9 @@ async function main() {
 
   // --- Initialize model limits cache (sync load + background refresh if stale) ---
   initModelLimits();
+
+  // --- Initialize model catalog cache (sync load + background refresh if stale) ---
+  initCatalog();
 
   // --- Initialize benchmark cache (sync load + background refresh if stale) ---
   initBenchmarks();
@@ -467,7 +471,8 @@ async function main() {
     const record = AgentManager.getInstance().getStatus(id);
     if (record) {
       const dur = record.completedAt !== undefined ? Math.round((record.completedAt - record.startedAt) / 1000) : 0;
-      conversation.addSystemMessage(`[Agents] \u2713 ${id.slice(-8)} completed in ${dur}s (${record.toolCallCount} tool calls)`);
+      const taskSnippet = record.task.length > 50 ? record.task.slice(0, 50) + '…' : record.task;
+      conversation.addSystemMessage(`[Agents] \u2713 ${record.template} ${id.slice(-8)}: "${taskSnippet}" — completed in ${dur}s (${record.toolCallCount} tool calls)`);
     }
     checkCohortCompletion(record ?? null);
     bus.emit('render:request');
@@ -477,7 +482,9 @@ async function main() {
   unsubs.push(bus.on('subagent:error', ({ id, error }: { id: string; error: Error }) => {
     const record = AgentManager.getInstance().getStatus(id);
     if (record && record.status !== 'cancelled') {
-      conversation.addSystemMessage(`[Agents] \u2717 ${id.slice(-8)} failed: ${error.message.slice(0, 80)}`);
+      const dur = record.completedAt !== undefined ? Math.round((record.completedAt - record.startedAt) / 1000) : 0;
+      const taskSnippet = record.task.length > 50 ? record.task.slice(0, 50) + '…' : record.task;
+      conversation.addSystemMessage(`[Agents] \u2717 ${record.template} ${id.slice(-8)}: "${taskSnippet}" — failed in ${dur}s: ${error.message.slice(0, 80)}`);
     }
     checkCohortCompletion(record ?? null);
     bus.emit('render:request');
@@ -526,7 +533,9 @@ async function main() {
     toolRegistry,
     permissionManager,
     () => {
-      const tier = providerRegistry.getCurrentModel().tier ?? 'standard';
+      const currentModel = providerRegistry.getCurrentModel();
+      const contextWindow = getContextWindowForModel(currentModel);
+      const tier = getTierForContextWindow(contextWindow);
       const supplement = getTierPromptSupplement(tier);
       return supplement ? runtime.systemPrompt + '\n\n' + supplement : runtime.systemPrompt;
     },

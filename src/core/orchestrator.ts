@@ -20,6 +20,7 @@ import { classifyIntent } from './intent-classifier.ts';
 import { getTokenLimitsForModel, getContextWindowForModel } from '../providers/model-limits.ts';
 import { shouldAutoCompact, estimateConversationTokens } from './context-compaction.ts';
 import { getCatalog } from '../providers/model-catalog.ts';
+import { recordUsage } from '../providers/favorites.ts';
 import { EventReplayQueue } from './event-replay.ts';
 import { AgentManager } from '../tools/agent/index.ts';
 import type { AgentInput } from '../tools/agent/schema.ts';
@@ -352,6 +353,7 @@ export class Orchestrator {
           this.bus.emit('turn:stream-end');
         }
 
+        void recordUsage(model.id);
         this.usage.input += response.usage.inputTokens;
         this.usage.output += response.usage.outputTokens;
         this.usage.cacheRead += response.usage.cacheReadTokens ?? 0;
