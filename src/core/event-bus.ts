@@ -1,3 +1,5 @@
+import { logger } from '../utils/logger.ts';
+
 export interface EventMap {
   // Orchestrator lifecycle
   'turn:start': { prompt: string };
@@ -115,8 +117,7 @@ export class EventBus {
         handler(...(args as unknown[]));
       } catch (err) {
         // Isolate listener errors so one failing handler doesn't block others
-        // eslint-disable-next-line no-console
-        console.error('[EventBus] listener error on event', event, err);
+        logger.error('[EventBus] listener error on event', { event: String(event), error: err instanceof Error ? err.message : String(err) });
       }
     }
   }
