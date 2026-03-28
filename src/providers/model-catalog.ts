@@ -1,16 +1,15 @@
 /**
  * model-catalog.ts
  *
- * Minimal catalog interface for Stage 8 context validation.
+ * Model catalog: provider metadata, pricing data, and context window lookups.
  *
  * This module provides a `getCatalog()` function that returns a lightweight
  * catalog object used by orchestrator.ts to look up context window limits and
  * find alternative models with larger context windows.
  *
- * Stage 1 of the dynamic model catalog plan will replace the internals of
- * this module with a full catalog fetched from models.dev. The public API
- * (`getCatalog`, `ModelCatalog`, `CatalogModelEntry`) is designed to remain
- * stable so Stage 8 code does not need to change.
+ * The public API (`getCatalog`, `ModelCatalog`, `CatalogModelEntry`) is
+ * designed to remain stable; seed data can be replaced with a network fetch
+ * from models.dev without changing call sites.
  */
 
 import fs from 'node:fs';
@@ -20,7 +19,7 @@ import type { FavoritesData } from './favorites.ts';
 import { getBenchmarks, compositeScore } from './model-benchmarks.ts';
 
 // ---------------------------------------------------------------------------
-// Provider types (Stage 1: dynamic catalog)
+// Provider types
 // ---------------------------------------------------------------------------
 
 /**
@@ -47,7 +46,7 @@ export interface CatalogProvider {
 }
 
 // ---------------------------------------------------------------------------
-// Pricing types (Stage 7: cost tracker integration)
+// Pricing types
 // ---------------------------------------------------------------------------
 
 /** USD per 1M tokens pricing for a model. */
@@ -58,7 +57,7 @@ export interface CatalogModelPricing {
   output: number;
 }
 
-/** A model entry with full pricing + context data (Stage 7+). */
+/** A model entry with full pricing + context data. */
 export interface CatalogModel {
   /** Canonical model ID (normalized, no provider prefix) */
   id: string;
@@ -82,7 +81,6 @@ export interface PricingCatalog {
 
 // ---------------------------------------------------------------------------
 // Seed pricing data — covers known models at build time.
-// Stage 1 completion will replace this with models.dev network fetch.
 // ---------------------------------------------------------------------------
 
 const SEED_PRICING_MODELS: CatalogModel[] = [
@@ -112,7 +110,7 @@ const SEED_PRICING_MODELS: CatalogModel[] = [
   { id: 'gemini-2.5-pro',        name: 'Gemini 2.5 Pro',        provider: 'google', pricing: { input: 1.25,  output: 5    }, tier: 'paid' },
 ];
 
-// In-memory pricing catalog (replaceable in tests and Stage 1 network fetch)
+// In-memory pricing catalog (replaceable in tests)
 let _pricingCatalog: PricingCatalog | null = null;
 
 function getPricingCatalog(): PricingCatalog {
@@ -165,7 +163,7 @@ export function getCostFromCatalog(
 }
 
 /**
- * Inject a custom pricing catalog (used in tests and Stage 1 network fetch).
+ * Inject a custom pricing catalog (used in tests).
  * @internal
  */
 export function _setCatalogForTesting(catalog: PricingCatalog): void {
@@ -199,7 +197,7 @@ export function _getPricingCatalog(): PricingCatalog {
  * Ensure a cache directory exists, creating it recursively if needed.
  * Replaces the old .gitkeep hack.
  *
- * @public Public API consumed by Stage 2/3 cache management.
+ * @public Public API consumed by cache management.
  */
 export function ensureCacheDir(dir: string): void {
   try {
@@ -225,7 +223,7 @@ export function ensureCacheDir(dir: string): void {
  *
  * The result is a canonical model ID suitable for deduplication and display.
  *
- * @public Exported as public API for Stage 2/3 model deduplication and display.
+ * @public Exported as public API for model deduplication and display.
  *
  * @example
  * normalizeModelId('openai/gpt-5.2')         // → 'gpt-5.2'
@@ -272,7 +270,7 @@ export function normalizeModelId(modelId: string): string {
  * considered always-available (e.g. self-hosted Ollama, subscription plans).
  *
  * @param provider - A CatalogProvider object
- * @public Exported as public API for Stage 2/3 provider availability checks.
+ * @public Exported as public API for provider availability checks.
  */
 export function hasKeyForProvider(provider: CatalogProvider): boolean {
   // No key required — always available
@@ -304,7 +302,7 @@ export interface CatalogModelEntry {
   tier: 'free' | 'paid' | 'subscription';
 }
 
-/** Minimal catalog interface for Stage 8 context validation. */
+/** Catalog interface for context window lookups and model discovery. */
 export interface ModelCatalog {
   /**
    * Look up a model entry by its ID.
@@ -347,7 +345,7 @@ class RegistryBackedCatalog implements ModelCatalog {
       context: getContextWindowForModel(m),
       // Registry does not carry explicit tier info yet — all models default to 'paid'.
       // NOTE: This shim means findLargerContextModels(ctx, 'free') always returns [].
-      // Stage 1 (dynamic catalog from models.dev) will replace this with real tier data.
+      // The registry shim defaults all models to 'paid'; a network-fetched catalog would carry real tier data.
       tier: 'paid' as const,
     }));
     return this._entriesCache;
@@ -380,15 +378,14 @@ const _catalog: ModelCatalog = new RegistryBackedCatalog();
 /**
  * getCatalog -- returns the active model catalog.
  *
- * In Stage 8 this returns a registry-backed shim. After Stage 1, this will
- * return the full dynamic catalog sourced from models.dev.
+ * Returns the active model catalog, currently backed by the provider registry.
  */
 export function getCatalog(): ModelCatalog {
   return _catalog;
 }
 
 // ---------------------------------------------------------------------------
-// Stage 9: Change Notifications
+// Change Notifications
 // ---------------------------------------------------------------------------
 
 /** A model change with a list of human-readable change descriptions. */
@@ -569,10 +566,9 @@ export interface MinimalModelDefinition {
  * Convert SEED_PRICING_MODELS into MinimalModelDefinition[] for use by registry.
  *
  * Provides sensible defaults for capabilities and context windows based on
- * pricing tier and provider. Stage 1 will replace seed data with full
- * catalog from models.dev including real capabilities and context windows.
+ * pricing tier and provider.
  *
- * @public Consumed by registry.ts Stage 4 to replace BUILTIN_MODEL_REGISTRY.
+ * @public Consumed by registry.ts to populate the model registry.
  */
 export function getCatalogModelDefinitions(): MinimalModelDefinition[] {
   return SEED_PRICING_MODELS.map((m): MinimalModelDefinition => {
@@ -593,7 +589,7 @@ export function getCatalogModelDefinitions(): MinimalModelDefinition[] {
         reasoning: isAnthropic || isOpenAI || isGoogle,
         multimodal: isGoogle || isOpenAI,
       },
-      // Context window defaults — Stage 1 will replace with real values from models.dev
+      // Context window defaults — a network-fetched catalog would carry real per-model values
       contextWindow: isGoogle ? 1_000_000 : isAnthropic ? 200_000 : 128_000,
       selectable: true,
       // Map pricing tier to ModelTier (free/standard/premium)
@@ -606,7 +602,7 @@ export function getCatalogModelDefinitions(): MinimalModelDefinition[] {
  * notifyCatalogChanges — Convenience helper called inside refreshCatalog().
  *
  * Diffs old vs new catalog, filters to user-relevant changes, and logs
- * notifications. Stage 1 will call this after a successful network fetch.
+ * notifications. Called after a successful catalog refresh.
  *
  * @internal
  */

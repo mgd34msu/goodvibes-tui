@@ -184,6 +184,51 @@ Additional synthetic models are auto-generated at startup: any model available a
 
 ---
 
+## Dynamic Model Catalog
+
+At startup, goodvibes-tui fetches a live model catalog from [models.dev](https://models.dev) and benchmark data from [ZeroEval](https://zeroeval.com). This replaces the static built-in model list with a continuously updated source.
+
+### Data Sources
+
+| Source | Content | TTL | Endpoint |
+|--------|---------|-----|----------|
+| models.dev | 4,102 models across 105 providers — pricing, context windows, capabilities, env var names, base URLs | 24h | `https://models.dev/api.json` |
+| ZeroEval | Benchmark scores (GPQA, SWE-bench, AIME, etc.) for 275 models | 24h | `https://api.zeroeval.com/leaderboard/models/full?justCanonicals=true` |
+
+### Cache Files
+
+| File | Content |
+|------|---------|
+| `~/.goodvibes/tui/model-catalog.json` | models.dev data + fetch timestamp |
+| `~/.goodvibes/tui/benchmarks.json` | ZeroEval scores + fetch timestamp |
+| `~/.goodvibes/tui/favorites.json` | Pinned models + usage history |
+
+The cache is never deleted on failure — if a network request fails, the last valid cache is used. Run `/refresh-models` to force an immediate re-fetch.
+
+### Pricing Tiers
+
+| Tier | Criteria | Behavior |
+|------|----------|----------|
+| **Free** | `cost.input === 0 && cost.output === 0`, no subscription gate | Free section in model picker |
+| **Paid** | `cost > 0` | Paid section with pricing shown |
+| **Subscription** | GitHub Copilot, GitHub Models, GitLab, v0, Vercel, coding-plan providers | Subscription section with label |
+| **Shutdown** | iFlow, iFlowCN | Excluded entirely |
+
+Tier isolation is enforced in failover: free backends only fail over to free, paid to paid, subscription to subscription. No surprise charges.
+
+### Quality Tiers
+
+Benchmark scores from ZeroEval are mapped to quality tiers displayed in the model picker:
+
+| Tier | Score | Badge |
+|------|-------|-------|
+| S | ≥ 0.80 | S |
+| A | ≥ 0.65 | A |
+| B | ≥ 0.50 | B |
+| C | < 0.50 | C |
+
+---
+
 ## Custom Providers
 
 Add any OpenAI-compatible or Anthropic-compatible endpoint as a custom provider.

@@ -467,13 +467,32 @@ Attach an image file to the next message.
 /image <path-to-image>
 ```
 
+### `/pin`
+
+Pin a model to your favorites. Pinned models appear at the top of the model picker.
+
+```
+/pin <model-id>      # pin a model by ID
+/pin gemini-3-flash  # example
+```
+
+### `/unpin`
+
+Remove a model from your favorites.
+
+```
+/unpin <model-id>
+```
+
 ### `/refresh-models`
 
-Refresh model token limits from OpenRouter.
+Force a re-fetch of the model catalog from models.dev and benchmark data from ZeroEval, bypassing the 24h TTL cache.
 
 ```
 /refresh-models
 ```
+
+Displays a summary of changes: new models added, models removed, and models with changed context windows or pricing.
 
 ### `/notify`
 
