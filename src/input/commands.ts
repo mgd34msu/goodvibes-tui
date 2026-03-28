@@ -26,6 +26,8 @@ import { getPanelManager } from '../panels/panel-manager.ts';
 import { resolveAndValidatePath } from '../utils/path-safety.ts';
 import { TaskScheduler } from '../scheduler/scheduler.ts';
 import { exportToMarkdown } from '../export/markdown.ts';
+import { exportToHTML, exportToJSON, exportToMarkdownExtended, defaultExportPath } from '../export/session-export.ts';
+import { getKeybindingsManager } from './keybindings.ts';
 
 let _serviceRegistry: ServiceRegistry | undefined;
 function getServiceRegistry(): ServiceRegistry {
@@ -119,6 +121,30 @@ export function registerBuiltinCommands(registry: CommandRegistry): void {
         return;
       }
       ctx.print('Use ? key or /help for shortcuts');
+    },
+  });
+
+  // ── /keybindings ─────────────────────────────────────────
+  registry.register({
+    name: 'keybindings',
+    aliases: ['kb'],
+    description: 'List current keyboard bindings and their config file path',
+    handler(_args, ctx) {
+      const km = getKeybindingsManager();
+      const all = km.getAll();
+      const lines: string[] = [
+        `Keybindings config: ${km.getConfigPath()}`,
+        '',
+        `  ${'Action'.padEnd(28)}  ${'Binding'.padEnd(20)}  Description`,
+        `  ${'─'.repeat(28)}  ${'─'.repeat(20)}  ${'─'.repeat(34)}`,
+      ];
+      for (const { action, combos, description } of all) {
+        const label = combos.map(c => km.formatCombo(c)).join(', ');
+        lines.push(`  ${action.padEnd(28)}  ${label.padEnd(20)}  ${description}`);
+      }
+      lines.push('');
+      lines.push('To customize: create the config file with { "action": { "key": "x", "ctrl": true } }');
+      ctx.print(lines.join('\n'));
     },
   });
 
@@ -1081,14 +1107,38 @@ export function registerBuiltinCommands(registry: CommandRegistry): void {
   registry.register({
     name: 'undo',
     aliases: ['u'],
-    description: 'Remove the last user+assistant turn',
-    handler(_args, ctx) {
+    description: 'Undo last action. /undo file — revert last file write/edit. /undo — remove last conversation turn.',
+    usage: '[file]',
+    argsHint: '[file]',
+    handler(args, ctx) {
+      const sub = args[0];
+
+      // /undo file — revert the last write/edit tool operation
+      if (sub === 'file') {
+        if (!ctx.fileUndoManager) {
+          ctx.print('File undo not available.');
+          return;
+        }
+        try {
+          const result = ctx.fileUndoManager.undo();
+          if (result) {
+            ctx.print(`File reverted: ${result.path} (${result.tool} tool). Use /redo file to re-apply.`);
+          } else {
+            ctx.print('Nothing to undo. No file operations recorded.');
+          }
+        } catch (err) {
+          ctx.print(`File undo failed: ${err instanceof Error ? err.message : String(err)}`);
+        }
+        return;
+      }
+
+      // Default: conversation-level undo
       const success = ctx.conversationManager.undo();
       if (success) {
-        ctx.print('Last turn undone. Use /redo to restore.');
+        ctx.print('Last turn undone. Use /redo to restore. Tip: /undo file to revert a file write/edit.');
         ctx.renderRequest();
       } else {
-        ctx.print('Nothing to undo.');
+        ctx.print('Nothing to undo. Tip: use /undo file to revert the last file write/edit.');
       }
     },
   });
@@ -1097,14 +1147,38 @@ export function registerBuiltinCommands(registry: CommandRegistry): void {
   registry.register({
     name: 'redo',
     aliases: [],
-    description: 'Restore the last undone turn',
-    handler(_args, ctx) {
+    description: 'Redo last undone action. /redo file — re-apply last reverted file. /redo — restore conversation turn.',
+    usage: '[file]',
+    argsHint: '[file]',
+    handler(args, ctx) {
+      const sub = args[0];
+
+      // /redo file — re-apply the last reverted file operation
+      if (sub === 'file') {
+        if (!ctx.fileUndoManager) {
+          ctx.print('File redo not available.');
+          return;
+        }
+        try {
+          const result = ctx.fileUndoManager.redo();
+          if (result) {
+            ctx.print(`File re-applied: ${result.path} (${result.tool} tool).`);
+          } else {
+            ctx.print('Nothing to redo.');
+          }
+        } catch (err) {
+          ctx.print(`File redo failed: ${err instanceof Error ? err.message : String(err)}`);
+        }
+        return;
+      }
+
+      // Default: conversation-level redo
       const success = ctx.conversationManager.redo();
       if (success) {
-        ctx.print('Turn restored.');
+        ctx.print('Turn restored. Tip: /redo file to re-apply a reverted file.');
         ctx.renderRequest();
       } else {
-        ctx.print('Nothing to redo.');
+        ctx.print('Nothing to redo. Tip: use /redo file to re-apply the last reverted file.');
       }
     },
   });
@@ -2375,7 +2449,7 @@ export function registerBuiltinCommands(registry: CommandRegistry): void {
     aliases: ['sched'],
     description: 'Manage scheduled agent tasks (cron-like)',
     usage: 'add|list|remove|enable|disable|run',
-    argsHint: 'add <cron> <prompt> | list | remove <id> | enable <id> | disable <id> | run <id>',
+    argsHint: 'add <cron> <prompt> [--name <n>] [--tz <zone>] | list | remove <id> | enable <id> | disable <id> | run <id>',
     async handler(args, ctx) {
       const scheduler = TaskScheduler.getInstance();
       const sub = args[0];
@@ -2389,14 +2463,20 @@ export function registerBuiltinCommands(registry: CommandRegistry): void {
         const lines = ['Scheduled tasks:', ''];
         for (const t of tasks) {
           const status = t.enabled ? '\u25cf enabled ' : '\u25cb disabled';
-          const next = t.nextRun
-            ? `next: ${new Date(t.nextRun).toLocaleString()}`
-            : 'next: unknown';
-          const last = t.lastRun
-            ? `last: ${new Date(t.lastRun).toLocaleString()}`
-            : 'last: never';
-          lines.push(`  ${t.id.slice(0, 12)}  ${status}  runs:${t.runCount}  ${next}  ${last}`);
-          lines.push(`    name: ${t.name || '(unnamed)'}  cron: ${t.cron}`);
+          const tzLabel = t.timezone ? ` [${t.timezone}]` : '';
+          const fmtDate = (ms: number) => {
+            try {
+              const opts: Intl.DateTimeFormatOptions = t.timezone
+                ? { timeZone: t.timezone, dateStyle: 'short', timeStyle: 'short' }
+                : { dateStyle: 'short', timeStyle: 'short' };
+              return new Intl.DateTimeFormat(undefined, opts).format(new Date(ms));
+            } catch { return new Date(ms).toLocaleString(); }
+          };
+          const next = t.nextRun ? `next: ${fmtDate(t.nextRun)}${tzLabel}` : 'next: unknown';
+          const last = t.lastRun ? `last: ${fmtDate(t.lastRun)}` : 'last: never';
+          const missed = t.missedRuns > 0 ? `  missed:${t.missedRuns}` : '';
+          lines.push(`  ${t.id.slice(0, 12)}  ${status}  runs:${t.runCount}${missed}  ${next}  ${last}`);
+          lines.push(`    name: ${t.name || '(unnamed)'}  cron: ${t.cron}${tzLabel}`);
           lines.push(`    prompt: ${t.prompt.slice(0, 60)}${t.prompt.length > 60 ? '…' : ''}`);
         }
         ctx.print(lines.join('\n'));
@@ -2410,10 +2490,10 @@ export function registerBuiltinCommands(registry: CommandRegistry): void {
         // args[1] = cron, args[2..] = prompt words (already split by input handler)
         const cron = args[1];
         if (!cron) {
-          ctx.print('Usage: /schedule add "<cron>" "<prompt>" [--name <name>] [--model <model>] [--template <tmpl>]\n' +
+          ctx.print('Usage: /schedule add "<cron>" "<prompt>" [--name <name>] [--model <model>] [--template <tmpl>] [--tz <timezone>]\n' +
             'Examples:\n' +
             '  /schedule add "*/30 * * * *" "check build status and report failures"\n' +
-            '  /schedule add "0 9 * * 1-5" "summarize open PRs" --name morning-standup');
+            '  /schedule add "0 9 * * 1-5" "summarize open PRs" --name morning-standup --tz America/New_York');
           return;
         }
 
@@ -2422,6 +2502,7 @@ export function registerBuiltinCommands(registry: CommandRegistry): void {
         let name: string | undefined;
         let model: string | undefined;
         let template: string | undefined;
+        let timezone: string | undefined;
         const promptWords: string[] = [];
 
         let i = 0;
@@ -2433,6 +2514,8 @@ export function registerBuiltinCommands(registry: CommandRegistry): void {
             model = remaining[++i];
           } else if (tok === '--template' && i + 1 < remaining.length) {
             template = remaining[++i];
+          } else if ((tok === '--tz' || tok === '--timezone') && i + 1 < remaining.length) {
+            timezone = remaining[++i];
           } else {
             promptWords.push(tok);
           }
@@ -2452,14 +2535,25 @@ export function registerBuiltinCommands(registry: CommandRegistry): void {
             prompt,
             model,
             template,
+            timezone,
             enabled: true,
           });
-          const nextDate = task.nextRun ? new Date(task.nextRun).toLocaleString() : 'unknown';
+          const tzLabel = task.timezone ? ` [${task.timezone}]` : '';
+          const fmtNext = task.nextRun
+            ? (() => {
+                try {
+                  const opts: Intl.DateTimeFormatOptions = task.timezone
+                    ? { timeZone: task.timezone, dateStyle: 'short', timeStyle: 'short' }
+                    : { dateStyle: 'short', timeStyle: 'short' };
+                  return new Intl.DateTimeFormat(undefined, opts).format(new Date(task.nextRun)) + tzLabel;
+                } catch { return new Date(task.nextRun).toLocaleString(); }
+              })()
+            : 'unknown';
           ctx.print(
             `Scheduled task created: ${task.id}\n` +
             `  name: ${task.name}\n` +
-            `  cron: ${cron}\n` +
-            `  next run: ${nextDate}`
+            `  cron: ${cron}${tzLabel}\n` +
+            `  next run: ${fmtNext}`
           );
         } catch (e) {
           ctx.print(`Error: ${(e as Error).message}`);
@@ -2803,6 +2897,63 @@ export function registerBuiltinCommands(registry: CommandRegistry): void {
       const { DiffPanel } = await import('../panels/diff-panel.ts');
       const { getChangedFiles } = await import('../sessions/change-tracker.ts');
 
+      /**
+       * Fire-and-forget: compute semantic diff for each file against a git ref
+       * and attach the summary to the diff panel once complete.
+       * Silently no-ops if tree-sitter is unavailable or content is unreadable.
+       */
+      async function enrichSemanticDiff(
+        panel: InstanceType<typeof DiffPanel>,
+        files: string[],
+        ref: string,
+        renderFn: () => void,
+      ): Promise<void> {
+        const { computeSemanticDiff, formatSemanticDiffSummary } = await import('../renderer/semantic-diff.ts');
+        const { relative: pathRelative } = await import('path');
+        // Resolve repo root once for all files — git show requires paths relative to repo root
+        const repoRootProc = Bun.spawnSync(['git', 'rev-parse', '--show-toplevel'], { stdout: 'pipe', cwd: process.cwd() });
+        const repoRoot = new TextDecoder().decode(repoRootProc.stdout).trim() || process.cwd();
+        await Promise.allSettled(
+          files.map(async (filePath) => {
+            try {
+              // Resolve absolute path for file reads
+              const absPath = filePath.startsWith('/') ? filePath : join(process.cwd(), filePath);
+              // Build repo-root-relative path for git show
+              const repoRelPath = filePath.startsWith('/') ? pathRelative(repoRoot, filePath) : filePath;
+              const [beforeResult, afterResult] = await Promise.allSettled([
+                (async () => {
+                  const proc = Bun.spawn(
+                    ['git', 'show', `${ref}:${repoRelPath}`],
+                    { stdout: 'pipe', stderr: 'pipe', cwd: repoRoot },
+                  );
+                  const [text, exitCode] = await Promise.all([
+                    new Response(proc.stdout).text(),
+                    proc.exited,
+                  ]);
+                  if (exitCode !== 0) throw new Error(`git show failed for ${repoRelPath}`);
+                  return text;
+                })(),
+                Bun.file(absPath).text(),
+              ]);
+              if (beforeResult.status !== 'fulfilled' || afterResult.status !== 'fulfilled') return;
+              const semanticDiff = await computeSemanticDiff(
+                filePath,
+                beforeResult.value,
+                afterResult.value,
+              );
+              if (!semanticDiff) return;
+              const summary = formatSemanticDiffSummary(semanticDiff);
+              if (summary) {
+                panel.setSemanticSummary(filePath, summary);
+                renderFn();
+              }
+            } catch {
+              // Ignore per-file failures — semantic info is best-effort
+            }
+          }),
+        );
+      }
+
       const pm = getPanelManager();
 
       // Ensure the diff panel is open and the panel sidebar is visible
@@ -2859,6 +3010,14 @@ export function registerBuiltinCommands(registry: CommandRegistry): void {
           ctx.print('Loading diff vs HEAD...');
           await diffPanel.showGitDiff('HEAD');
           ctx.print('Diff panel updated: all changes vs HEAD.');
+          // Enrich with semantic diff asynchronously (best-effort)
+          const headChangedFiles = (() => {
+            const proc = Bun.spawnSync(['/bin/sh', '-c', 'git diff HEAD --name-only'], { stdout: 'pipe', cwd: process.cwd() });
+            return new TextDecoder().decode(proc.stdout).trim().split('\n').filter(Boolean);
+          })();
+          if (headChangedFiles.length > 0) {
+            enrichSemanticDiff(diffPanel, headChangedFiles, 'HEAD', () => ctx.renderRequest()).catch(() => {});
+          }
           break;
         }
         case 'session':
@@ -2869,11 +3028,21 @@ export function registerBuiltinCommands(registry: CommandRegistry): void {
             ctx.print(`Loading session diff (${sessionFiles.length} file${sessionFiles.length === 1 ? '' : 's'} changed this session)...`);
             await diffPanel.showFileDiffs(sessionFiles, 'HEAD');
             ctx.print(`Diff panel updated: ${sessionFiles.length} session file${sessionFiles.length === 1 ? '' : 's'}.`);
+            // Enrich with semantic diff asynchronously (best-effort)
+            enrichSemanticDiff(diffPanel, sessionFiles, 'HEAD', () => ctx.renderRequest()).catch(() => {});
           } else {
             // No tracked changes yet — fall back to git diff HEAD
             ctx.print('No session changes tracked yet. Showing diff vs HEAD...');
             await diffPanel.showGitDiff('HEAD');
             ctx.print('Diff panel updated: all changes vs HEAD.');
+            // Enrich with semantic diff for HEAD-changed files asynchronously
+            const fallbackFiles = (() => {
+              const proc = Bun.spawnSync(['/bin/sh', '-c', 'git diff HEAD --name-only'], { stdout: 'pipe', cwd: process.cwd() });
+              return new TextDecoder().decode(proc.stdout).trim().split('\n').filter(Boolean);
+            })();
+            if (fallbackFiles.length > 0) {
+              enrichSemanticDiff(diffPanel, fallbackFiles, 'HEAD', () => ctx.renderRequest()).catch(() => {});
+            }
           }
           break;
         }
@@ -2965,6 +3134,137 @@ export function registerBuiltinCommands(registry: CommandRegistry): void {
         lines.push(`${disconnected.length} server(s) failed to connect. Check server command and args in your config.`);
       }
       ctx.print(lines.join('\n'));
+    },
+  });
+
+  // ── /share ────────────────────────────────────────────────────────────────
+  registry.register({
+    name: 'share',
+    aliases: [],
+    description: 'Export the current session to a shareable format (html, json, md)',
+    usage: '<html|json|md> [path] [--redact]',
+    argsHint: '<html|json|md> [path]',
+    async handler(args, ctx) {
+      const FORMATS = ['html', 'json', 'md'] as const;
+      type Format = typeof FORMATS[number];
+
+      const format = args[0]?.toLowerCase() as Format | undefined;
+      if (!format || !FORMATS.includes(format)) {
+        ctx.print(
+          'Usage: /share <html|json|md> [path] [--redact]\n' +
+          '  html  — self-contained HTML with syntax highlighting\n' +
+          '  json  — structured JSON (machine-readable)\n' +
+          '  md    — Markdown\n' +
+          '\n' +
+          'Options:\n' +
+          '  --redact  Redact API keys and personal paths from output\n' +
+          '\n' +
+          `Default path: ~/goodvibes-exports/session-<timestamp>.<ext>`,
+        );
+        return;
+      }
+
+      const remainingArgs = args.slice(1);
+      const redact = remainingArgs.includes('--redact');
+      const pathArgs = remainingArgs.filter(a => a !== '--redact');
+
+      // Resolve output path
+      let outputPath: string;
+      if (pathArgs.length > 0) {
+        const rawPath = pathArgs[0].replace(/^~/, homedir());
+        // Path-traversal protection: if user supplies an absolute path outside
+        // the project, we allow it (shares are exported for external use).
+        // We still normalise to catch double-dots.
+        outputPath = resolve(rawPath);
+        // Reject sneaky traversal attempts using relative paths that escape cwd
+        if (!outputPath.startsWith('/')) {
+          ctx.print(`Invalid path: ${pathArgs[0]}`);
+          return;
+        }
+      } else {
+        outputPath = defaultExportPath(format);
+      }
+
+      // Gather conversation messages from ConversationManager
+      const convData = ctx.conversationManager.toJSON() as {
+        messages: Array<{
+          role: string;
+          content: unknown;
+          toolCalls?: Array<{ id: string; name: string; arguments: Record<string, unknown> }>;
+          callId?: string;
+          toolName?: string;
+          reasoningContent?: string;
+          reasoningSummary?: string;
+          usage?: {
+            inputTokens: number;
+            outputTokens: number;
+            cacheReadTokens?: number;
+            cacheWriteTokens?: number;
+          };
+          cancelled?: boolean;
+        }>;
+      };
+
+      if (!convData.messages || convData.messages.length === 0) {
+        ctx.print('Nothing to export — conversation is empty.');
+        return;
+      }
+
+      // Map to ExportMessage shape
+      type ExportMsg = import('../export/session-export.ts').ExportMessage;
+      const messages: ExportMsg[] = convData.messages.map(m => ({
+        role: m.role as ExportMsg['role'],
+        content: m.content as string,
+        toolCalls: m.toolCalls,
+        callId: m.callId,
+        toolName: m.toolName,
+        reasoningContent: m.reasoningContent,
+        reasoningSummary: m.reasoningSummary,
+        usage: m.usage,
+        cancelled: m.cancelled,
+      }));
+
+      const metadata = {
+        model: ctx.runtime.model,
+        provider: ctx.runtime.provider,
+        sessionId: ctx.runtime.sessionId,
+        title: ctx.conversationManager.title || undefined,
+      };
+
+      const options = { redact };
+
+      let outputContent: string;
+      try {
+        if (format === 'html') {
+          outputContent = exportToHTML(messages, metadata, options);
+        } else if (format === 'json') {
+          outputContent = exportToJSON(messages, metadata, options);
+        } else {
+          outputContent = exportToMarkdownExtended(messages, metadata, options);
+        }
+      } catch (err) {
+        ctx.print(`Export failed: ${(err as Error).message}`);
+        return;
+      }
+
+      // Ensure output directory exists
+      const { mkdirSync: _mkdirSync } = await import('node:fs');
+      const { dirname } = await import('node:path');
+      try {
+        _mkdirSync(dirname(outputPath), { recursive: true });
+      } catch {
+        // ignore — writeFile will surface a clearer error if dir creation failed
+      }
+
+      try {
+        await writeFile(outputPath, outputContent, 'utf-8');
+      } catch (err) {
+        ctx.print(`Failed to write export: ${(err as Error).message}`);
+        return;
+      }
+
+      const redactNote = redact ? ' (sensitive data redacted)' : '';
+      ctx.print(`Exported ${format.toUpperCase()} session to ${outputPath}${redactNote}`);
     },
   });
 }
