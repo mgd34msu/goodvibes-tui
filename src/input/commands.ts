@@ -1,4 +1,5 @@
 import type { CommandRegistry, CommandContext } from './command-registry.ts';
+import { logger } from '../utils/logger.ts';
 import type { SelectionItem } from './selection-modal.ts';
 import type { ConfigKey } from '../config/index.ts';
 import { CONFIG_SCHEMA } from '../config/index.ts';
@@ -3269,7 +3270,7 @@ export function registerBuiltinCommands(registry: CommandRegistry): void {
       } catch (mkdirErr) {
         // Non-fatal: writeFile will surface a clearer error if the directory
         // could not be created. Log for diagnostics.
-        console.warn(`[share] mkdir failed for ${dirname(outputPath)}:`, mkdirErr);
+        logger.warn(`[share] mkdir failed for ${dirname(outputPath)}:`, mkdirErr);
       }
 
       try {

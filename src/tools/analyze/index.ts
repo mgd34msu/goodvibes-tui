@@ -1,5 +1,6 @@
 import { resolve, relative, join, dirname } from 'node:path';
-import { readdir, stat } from 'node:fs/promises';
+import { stat } from 'node:fs/promises';
+import { walkDir } from '../../utils/walk-dir.ts';
 import { existsSync } from 'node:fs';
 import type { Tool } from '../../types/tools.ts';
 import { analyzeSchema } from './schema.ts';
@@ -44,12 +45,6 @@ export interface AnalyzeInput {
   };
 }
 
-// ---------------------------------------------------------------------------
-// File walking utilities (self-contained, mirrors find tool)
-// ---------------------------------------------------------------------------
-
-const SKIP_DIRS = new Set(['.git', 'node_modules', 'dist', '.next', '.nuxt', '.cache', '__pycache__']);
-const MAX_FILE_SIZE = 1024 * 1024; // 1 MB
 const BINARY_CHECK_BYTES = 8192;
 const MAX_SCAN_FILES = 500;
 const MAX_SCAN_MS = 5000;
@@ -66,31 +61,6 @@ async function isBinary(filePath: string): Promise<boolean> {
     return false;
   } catch {
     return true;
-  }
-}
-
-async function* walkDir(dirPath: string): AsyncGenerator<string> {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let entries: any[];
-  try {
-    entries = await readdir(dirPath, { withFileTypes: true }) as any[];
-  } catch {
-    return;
-  }
-  for (const entry of entries) {
-    if (entry.name.startsWith('.') || SKIP_DIRS.has(entry.name)) continue;
-    const fullPath = join(dirPath, entry.name);
-    if (entry.isDirectory()) {
-      yield* walkDir(fullPath);
-    } else if (entry.isFile()) {
-      try {
-        const info = await stat(fullPath);
-        if (info.size > MAX_FILE_SIZE) continue;
-      } catch {
-        continue;
-      }
-      yield fullPath;
-    }
   }
 }
 

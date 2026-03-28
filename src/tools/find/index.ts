@@ -1,5 +1,6 @@
 import { resolve, relative, join, extname } from 'node:path';
-import { readdir, stat, readFile } from 'node:fs/promises';
+import { readFile } from 'node:fs/promises';
+import { walkDir, WALK_SKIP_DIRS as SKIP_DIRS } from '../../utils/walk-dir.ts';
 import type { Tool } from '../../types/tools.ts';
 import { findSchema } from './schema.ts';
 import { CodeIntelligence, uriToPath } from '../../intelligence/index.ts';
@@ -160,8 +161,6 @@ async function executeReferencesQuery(
 // File walking utilities
 // ---------------------------------------------------------------------------
 
-const SKIP_DIRS = new Set(['.git', 'node_modules', 'dist', '.next', '.nuxt', '.cache', '__pycache__']);
-const MAX_FILE_SIZE = 1024 * 1024; // 1MB
 const VALID_SYMBOL_KINDS = new Set(['function', 'class', 'interface', 'type', 'variable', 'constant', 'enum']);
 const BINARY_CHECK_BYTES = 8192;
 
@@ -179,36 +178,6 @@ async function isBinary(filePath: string): Promise<boolean> {
     return false;
   } catch {
     return true;
-  }
-}
-
-/** Walk a directory tree, yielding all file paths that pass filters. */
-async function* walkDir(dirPath: string): AsyncGenerator<string> {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let entries: any[];
-  try {
-    entries = await readdir(dirPath, { withFileTypes: true }) as any[];
-  } catch {
-    return;
-  }
-
-  for (const entry of entries) {
-    // Skip hidden directories and known heavy directories
-    if (entry.name.startsWith('.') || SKIP_DIRS.has(entry.name)) continue;
-
-    const fullPath = join(dirPath, entry.name);
-
-    if (entry.isDirectory()) {
-      yield* walkDir(fullPath);
-    } else if (entry.isFile()) {
-      try {
-        const info = await stat(fullPath);
-        if (info.size > MAX_FILE_SIZE) continue;
-      } catch {
-        continue;
-      }
-      yield fullPath;
-    }
   }
 }
 

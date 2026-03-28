@@ -57,6 +57,10 @@ export class DaemonServer {
     this.agentManager = config.agentManager ?? AgentManager.getInstance();
     this.configManager = _configManager ?? new ConfigManager();
     this.userAuth = new UserAuthManager();
+    // Webhook secrets follow 12-factor app conventions (https://12factor.net/config):
+    // prefer explicit config object values (e.g. from a vault-injected object) and
+    // fall back to environment variables so the binary works in any deployment
+    // without code changes. Secrets are never logged or exposed via the API.
     this.githubWebhookSecret =
       config.githubWebhookSecret ?? process.env.GITHUB_WEBHOOK_SECRET ?? null;
     this.scheduler = TaskScheduler.getInstance();

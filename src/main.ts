@@ -790,7 +790,7 @@ async function main() {
     const footerContentLines = UIFactory.createFooter(
       width,
       promptInfo.visibleLines.join('\n'),
-      orchestrator.usage as unknown as { up: number; down: number; max?: number },
+      { up: orchestrator.usage.input, down: orchestrator.usage.output },
       input.showExitNotice,
       input.lastCopyTime,
       runtime.model, toolRegistry.list().length,
