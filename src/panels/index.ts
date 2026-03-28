@@ -18,5 +18,7 @@ export { DocsPanel } from './docs-panel.ts';
 export { ThinkingPanel } from './thinking-panel.ts';
 export { ToolInspectorPanel } from './tool-inspector-panel.ts';
 export { ContextVisualizerPanel } from './context-visualizer-panel.ts';
+export { DebugPanel } from './debug-panel.ts';
+export type { ApiCallEntry, ApiCallStatus } from './debug-panel.ts';
 export { registerBuiltinPanels } from './builtin-panels.ts';
 export type { BuiltinPanelDeps } from './builtin-panels.ts';
