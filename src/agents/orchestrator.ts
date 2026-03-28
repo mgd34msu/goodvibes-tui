@@ -49,6 +49,22 @@ function isNetworkError(err: unknown): boolean {
  *  provider-level retries because we are waiting for the network to recover. */
 const NETWORK_RETRY_DELAYS_MS = [5_000, 10_000, 20_000, 40_000, 60_000];
 
+/** Delay between rate-limit retries (ms). Each failed agent waits this long before retrying. */
+const RATE_LIMIT_RETRY_DELAY_MS = 60_000;
+const RATE_LIMIT_MAX_RETRIES = 3;
+
+/** Detect rate limit or quota errors that should trigger a delayed retry. */
+function isRateLimitError(err: unknown): boolean {
+  if (!(err instanceof Error)) return false;
+  const msg = err.message.toLowerCase();
+  // Check ProviderError statusCode
+  if ('statusCode' in err) {
+    const code = (err as { statusCode?: number }).statusCode;
+    if (code === 429 || code === 402) return true;
+  }
+  return /rate.limit|too many requests|quota exceeded|throttl|depleted|credits/i.test(msg);
+}
+
 // ---------------------------------------------------------------------------
 // AgentOrchestrator
 // ---------------------------------------------------------------------------
@@ -191,6 +207,7 @@ export class AgentOrchestrator {
         let response: Awaited<ReturnType<typeof provider.chat>>;
         {
           let networkAttempt = 0;
+            let rateLimitAttempt = 0;
           // eslint-disable-next-line no-constant-condition
           while (true) {
             try {
@@ -215,8 +232,20 @@ export class AgentOrchestrator {
                 if ((record as { status: string }).status === 'cancelled') {
                   throw new Error('Agent cancelled during network retry');
                 }
+              } else if (isRateLimitError(chatErr) && rateLimitAttempt < RATE_LIMIT_MAX_RETRIES) {
+                const delaySec = Math.round(RATE_LIMIT_RETRY_DELAY_MS / 1000);
+                logger.warn(
+                  `Agent ${record.id}: rate limited on turn ${turn}, retrying in ${delaySec}s (attempt ${rateLimitAttempt + 1}/${RATE_LIMIT_MAX_RETRIES})`,
+                  { error: chatErr instanceof Error ? chatErr.message : String(chatErr) },
+                );
+                record.progress = `Rate limited, retrying in ${delaySec}s…`;
+                rateLimitAttempt++;
+                await new Promise<void>((resolve) => setTimeout(resolve, RATE_LIMIT_RETRY_DELAY_MS));
+                if ((record as { status: string }).status === 'cancelled') {
+                  throw new Error('Agent cancelled during rate limit retry');
+                }
               } else {
-                // Not a network error, or all network retries exhausted — re-throw
+                // Not a network/rate-limit error, or all retries exhausted — re-throw
                 // to let the outer catch handle it and fail the agent.
                 throw chatErr;
               }
