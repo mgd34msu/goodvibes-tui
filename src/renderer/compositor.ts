@@ -67,7 +67,7 @@ export class Compositor {
     this.lastBuffer = null;
   }
 
-  public composite(params: CompositeRequest) {
+  public composite(params: CompositeRequest): void {
     const { width, height, header, viewport, footer, selection, search, panel, panelWidth } = params;
     const newBuffer = new TerminalBuffer(width, height);
 

@@ -6,11 +6,11 @@ import { type Line, createEmptyLine } from '../types/grid.ts';
 export class InfiniteBuffer {
   private lines: Line[] = [];
 
-  public addLine(line: Line) {
+  public addLine(line: Line): void {
     this.lines.push(line);
   }
 
-  public addLines(lines: Line[]) {
+  public addLines(lines: Line[]): void {
     this.lines.push(...lines);
   }
 
@@ -40,7 +40,7 @@ export class InfiniteBuffer {
     return slice;
   }
 
-  public clear() {
+  public clear(): void {
     this.lines = [];
   }
 
