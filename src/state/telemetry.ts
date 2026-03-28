@@ -111,6 +111,8 @@ export class TelemetryDB {
       columns.forEach((col, i) => {
         obj[col] = row[i];
       });
+      // Safe cast: the SQL schema defines exactly the columns that
+      // ToolCallRecord expects, so the shape is guaranteed at the DB level.
       return obj as unknown as ToolCallRecord;
     });
   }
