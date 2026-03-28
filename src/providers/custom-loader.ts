@@ -4,6 +4,7 @@ import * as path from 'path';
 import * as os from 'os';
 import type { EventBus } from '../core/event-bus.ts';
 import { OpenAICompatProvider } from './openai-compat.ts';
+import { AnthropicCompatProvider } from './anthropic-compat.ts';
 import type { LLMProvider } from './interface.ts';
 import type { ModelDefinition } from './registry.ts';
 
@@ -25,9 +26,7 @@ export interface CustomProviderConfig {
   /**
    * API compatibility type.
    * - 'openai-compat': provider speaks the OpenAI Chat Completions API
-   * - 'anthropic-compat': provider speaks the Anthropic Messages API
-   *   (TODO: AnthropicCompatProvider not yet implemented — configs of this type
-   *   are skipped with a warning until a dedicated provider class is available)
+   * - 'anthropic-compat': provider speaks the Anthropic Messages API (SSE streaming)
    */
   type: 'openai-compat' | 'anthropic-compat';
   /** Base URL for the API, e.g. 'http://localhost:11434/v1' */
@@ -227,29 +226,31 @@ export async function loadCustomProviders(): Promise<LoadCustomProvidersResult> 
 
     const cfg = parsed as CustomProviderConfig;
 
-    // anthropic-compat is not yet implemented — skip with a warning
-    if (cfg.type === 'anthropic-compat') {
-      warnings.push(
-        `[custom-loader] Skipping '${filename}' — 'anthropic-compat' type is not yet supported. ` +
-          `A dedicated AnthropicCompatProvider is needed for true Anthropic API proxies.`,
-      );
-      continue;
-    }
-
     const apiKey = resolveApiKey(cfg);
     const modelIds = cfg.models.map((m) => m.id);
 
     let provider: LLMProvider;
     try {
-      provider = new OpenAICompatProvider({
-        name: cfg.name,
-        baseURL: cfg.baseURL,
-        apiKey,
-        defaultModel: modelIds[0],
-        models: modelIds,
-        ...(cfg.defaultHeaders ? { defaultHeaders: cfg.defaultHeaders } : {}),
-        reasoningFormat: cfg.reasoningFormat ?? 'none',
-      });
+      if (cfg.type === 'anthropic-compat') {
+        provider = new AnthropicCompatProvider({
+          name: cfg.name,
+          baseURL: cfg.baseURL,
+          apiKey,
+          defaultModel: modelIds[0]!,
+          models: modelIds,
+          ...(cfg.defaultHeaders ? { defaultHeaders: cfg.defaultHeaders } : {}),
+        });
+      } else {
+        provider = new OpenAICompatProvider({
+          name: cfg.name,
+          baseURL: cfg.baseURL,
+          apiKey,
+          defaultModel: modelIds[0]!,
+          models: modelIds,
+          ...(cfg.defaultHeaders ? { defaultHeaders: cfg.defaultHeaders } : {}),
+          reasoningFormat: cfg.reasoningFormat ?? 'none',
+        });
+      }
     } catch (err) {
       warnings.push(
         `[custom-loader] Failed to instantiate provider from '${filename}': ${
