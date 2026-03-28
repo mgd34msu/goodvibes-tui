@@ -1386,11 +1386,12 @@ export class InputHandler {
           }
 
           // Panel tab cycling still works even when panel focused
-          if (getKeybindingsManager().matches('panel-tab-next', token)) {
+          const kb = getKeybindingsManager();
+          if (kb.matches('panel-tab-next', token)) {
             this.cyclePanelTab('next');
             continue;
           }
-          if (getKeybindingsManager().matches('panel-tab-prev', token)) {
+          if (kb.matches('panel-tab-prev', token)) {
             this.cyclePanelTab('prev');
             continue;
           }
