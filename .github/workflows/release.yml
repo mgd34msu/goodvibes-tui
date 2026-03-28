@@ -1,0 +1,126 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build ${{ matrix.target }}
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: linux-x64
+            runner: ubuntu-latest
+            bun_target: bun-linux-x64
+            artifact: goodvibes-linux-x64
+          - target: darwin-x64
+            runner: macos-13
+            bun_target: bun-darwin-x64
+            artifact: goodvibes-macos-x64
+          - target: darwin-arm64
+            runner: macos-latest
+            bun_target: bun-darwin-arm64
+            artifact: goodvibes-macos-arm64
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install
+
+      - name: Typecheck
+        run: bunx tsc --noEmit
+
+      - name: Build binary (${{ matrix.target }})
+        run: |
+          mkdir -p dist
+          bun build src/main.ts \
+            --compile \
+            --target=${{ matrix.bun_target }} \
+            --outfile dist/${{ matrix.artifact }}
+
+      - name: Report binary size
+        run: ls -lh dist/${{ matrix.artifact }}
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: dist/${{ matrix.artifact }}
+          retention-days: 1
+
+  release:
+    name: Create GitHub Release
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist/
+          merge-multiple: true
+
+      - name: Extract version
+        id: version
+        run: echo "version=${GITHUB_REF_NAME}" >> $GITHUB_OUTPUT
+
+      - name: Extract changelog excerpt
+        id: changelog
+        run: |
+          VERSION=${{ steps.version.outputs.version }}
+          # Strip leading 'v' to match CHANGELOG format [0.9.X]
+          VERSION_NUM=${VERSION#v}
+          # Extract the section for this version (between its header and the next)
+          EXCERPT=$(awk "/^## \\[${VERSION_NUM}\\]/,/^## \\[/{if (/^## \\[${VERSION_NUM}\\]/) next; if (/^## \\[/) exit; print}" CHANGELOG.md)
+          # Write to file to preserve newlines
+          echo "$EXCERPT" > /tmp/release_notes.md
+          echo "excerpt_file=/tmp/release_notes.md" >> $GITHUB_OUTPUT
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.version }}
+          name: ${{ steps.version.outputs.version }}
+          body_path: ${{ steps.changelog.outputs.excerpt_file }}
+          draft: false
+          prerelease: false
+          files: |
+            dist/goodvibes-linux-x64
+            dist/goodvibes-macos-x64
+            dist/goodvibes-macos-arm64
+
+  publish-npm:
+    name: Publish to npm
+    needs: release
+    runs-on: ubuntu-latest
+    # Only publish if NPM_TOKEN secret is set
+    if: vars.PUBLISH_NPM == 'true'
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install
+
+      - name: Publish to npm
+        run: npm publish --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

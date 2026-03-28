@@ -13,10 +13,14 @@
     "build:macos-x64": "bun build src/main.ts --compile --target=bun-darwin-x64 --outfile dist/goodvibes-macos-x64",
     "build:macos-arm64": "bun build src/main.ts --compile --target=bun-darwin-arm64 --outfile dist/goodvibes-macos-arm64",
     "build:windows": "bun build src/main.ts --compile --target=bun-windows-x64 --outfile dist/goodvibes-windows.exe",
-    "build:all": "bun run build:linux-x64 && bun run build:linux-arm64 && bun run build:macos-x64 && bun run build:macos-arm64 && bun run build:windows",
+    "build:all-shell": "bun run build:linux-x64 && bun run build:linux-arm64 && bun run build:macos-x64 && bun run build:macos-arm64 && bun run build:windows",
     "test": "bun test",
     "postinstall": "bun run scripts/postinstall.ts",
-    "postbuild": "bun run scripts/postinstall.ts"
+    "postbuild": "bun run scripts/postinstall.ts",
+    "release": "bun run scripts/release.ts",
+    "release:dry": "bun run scripts/release.ts --dry-run",
+    "build:prod": "bun run scripts/build.ts",
+    "build:all": "bun run scripts/build.ts --all"
   },
   "dependencies": {
     "@agentclientprotocol/sdk": "^0.16.1",
