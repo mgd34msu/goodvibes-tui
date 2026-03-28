@@ -100,14 +100,16 @@ function getProgressFilePath(id: string): string {
 function initProgressFile(cmdStr: string): { path: string; append: (line: string) => void } {
   try {
     mkdirSync(OVERFLOW_DIR, { recursive: true });
-  } catch { /* dir may already exist */ }
+  } catch (err) {
+    logger.debug('initProgressFile: mkdirSync failed (dir may already exist)', { error: err instanceof Error ? err.message : String(err) });
+  }
   const id = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
   const filePath = getProgressFilePath(id);
   writeFileSync(filePath, `# Progress: ${cmdStr}\n# Started: ${new Date().toISOString()}\n`);
   return {
     path: filePath,
     append: (chunk: string) => {
-      try { appendFileSync(filePath, chunk); } catch { /* best-effort */ }
+      try { appendFileSync(filePath, chunk); } catch (err) { logger.debug('initProgressFile: appendFileSync failed', { path: filePath, error: err instanceof Error ? err.message : String(err) }); }
     },
   };
 }
@@ -646,11 +648,11 @@ export const execTool: Tool = {
 
   async execute(args: Record<string, unknown>) {
     try {
-      const input = args as unknown as ExecInput;
-
-      if (!Array.isArray(input.commands) || input.commands.length === 0) {
+      // Runtime validation before cast: ensure required fields exist.
+      if (!Array.isArray(args['commands']) || (args['commands'] as unknown[]).length === 0) {
         return { success: false, error: 'commands must be a non-empty array' };
       }
+      const input = args as unknown as ExecInput;
 
       const verbosity: ExecVerbosity = (input.verbosity as ExecVerbosity) ?? 'standard';
       const globalTimeout = input.timeout_ms ?? DEFAULT_TIMEOUT_MS;

@@ -118,6 +118,7 @@ export class ConfigManager {
     }
     const [category, field] = parts;
     const cat = this.config[category as keyof GoodVibesConfig] as Record<string, unknown>;
+    if (cat == null) throw new Error(`Invalid config path: section '${category}' does not exist`);
     return cat[field] as ConfigValue<K>;
   }
 
@@ -135,6 +136,7 @@ export class ConfigManager {
     if (parts.length === 3) {
       const [section, subsection, field] = parts;
       const sect = this.config[section as keyof GoodVibesConfig] as unknown as Record<string, Record<string, unknown>>;
+      if (!sect[subsection]) throw new Error(`Invalid config path: subsection '${section}.${subsection}' does not exist`);
       sect[subsection][field] = value;
       this.save();
       return;
@@ -306,7 +308,7 @@ function migrateOldConfig(flat: Record<string, unknown>): Partial<GoodVibesConfi
     // systemPrompt text doesn't map to systemPromptFile cleanly; skip it
   }
   if (Object.keys(providerFields).length > 0) {
-    // providerFields is a partial but guaranteed to satisfy the shape at runtime after migration
+    // Safe: providerFields satisfies GoodVibesConfig['provider'] shape after migration validation above
     result.provider = providerFields as GoodVibesConfig['provider'];
   }
 
