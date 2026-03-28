@@ -18,6 +18,7 @@ import { TokenBudgetPanel } from './token-budget-panel.ts';
 import { WrfcPanel } from './wrfc-panel.ts';
 import { SchedulePanel } from './schedule-panel.ts';
 import { ProviderHealthPanel } from './provider-health-panel.ts';
+import { DebugPanel } from './debug-panel.ts';
 import type { EventBus } from '../core/event-bus.ts';
 import type { ToolRegistry } from '../tools/registry.ts';
 import type { ProviderRegistry } from '../providers/registry.ts';
@@ -217,6 +218,19 @@ export function registerBuiltinPanels(manager: PanelManager, deps: BuiltinPanelD
 
   if (deps.bus) {
     const { bus } = deps;
+    manager.registerType({
+      id: 'debug',
+      name: 'Debug',
+      icon: 'B',
+      category: 'monitoring',
+      description: 'API debug panel: per-call log with model, provider, tokens, latency, status, and error history',
+      factory: () => {
+        const panel = new DebugPanel(bus);
+        if (deps.orchestrator) panel.wireOrchestrator(deps.orchestrator);
+        return panel;
+      },
+    });
+
     manager.registerType({
       id: 'provider-health',
       name: 'Health',
