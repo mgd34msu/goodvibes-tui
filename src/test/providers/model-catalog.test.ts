@@ -103,8 +103,8 @@ describe('hasKeyForProvider', () => {
 const COST_FIXTURE: PricingCatalog = {
   fetchedAt: Date.now(),
   models: [
-    { id: 'claude-sonnet-4-6', name: 'Claude Sonnet 4.6', provider: 'Anthropic', pricing: { input: 3, output: 15 }, tier: 'paid' },
-    { id: 'gpt-oss-120b', name: 'GPT OSS 120B', provider: 'OpenAI', pricing: { input: 0, output: 0 }, tier: 'free' },
+    { id: 'claude-sonnet-4-6', name: 'Claude Sonnet 4.6', provider: 'Anthropic', providerId: 'anthropic', providerEnvVars: ['ANTHROPIC_API_KEY'], pricing: { input: 3, output: 15 }, tier: 'paid' },
+    { id: 'gpt-oss-120b', name: 'GPT OSS 120B', provider: 'OpenAI', providerId: 'openai', providerEnvVars: ['OPENAI_API_KEY'], pricing: { input: 0, output: 0 }, tier: 'free' },
   ],
 };
 
@@ -133,7 +133,7 @@ describe('getCostFromCatalog', () => {
   it('respects injected catalog via _setCatalogForTesting', () => {
     const customCatalog: PricingCatalog = {
       fetchedAt: Date.now(),
-      models: [{ id: 'test-model', name: 'Test Model', provider: 'test', pricing: { input: 42, output: 84 }, tier: 'paid' }],
+      models: [{ id: 'test-model', name: 'Test Model', provider: 'test', providerId: 'test', providerEnvVars: [], pricing: { input: 42, output: 84 }, tier: 'paid' }],
     };
     _setCatalogForTesting(customCatalog);
     const cost = getCostFromCatalog('test-model');
@@ -143,7 +143,7 @@ describe('getCostFromCatalog', () => {
   it('resets catalog state via _resetForTest', () => {
     const customCatalog: PricingCatalog = {
       fetchedAt: Date.now(),
-      models: [{ id: 'test-model', name: 'Test Model', provider: 'test', pricing: { input: 99, output: 99 }, tier: 'paid' }],
+      models: [{ id: 'test-model', name: 'Test Model', provider: 'test', providerId: 'test', providerEnvVars: [], pricing: { input: 99, output: 99 }, tier: 'paid' }],
     };
     _setCatalogForTesting(customCatalog);
     expect(getCostFromCatalog('test-model').input).toBe(99);

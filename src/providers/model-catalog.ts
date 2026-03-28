@@ -70,14 +70,20 @@ export interface CatalogModel {
   id: string;
   /** Display name */
   name: string;
-  /** Provider name */
+  /** Provider display name */
   provider: string;
+  /** Provider ID as used in the models.dev API (lowercase key, e.g. 'openai') */
+  providerId: string;
+  /** Environment variable names required to use this provider (from models.dev env field) */
+  providerEnvVars: string[];
   /** Pricing in USD per 1M tokens */
   pricing: CatalogModelPricing;
   /** Tier category */
   tier: 'free' | 'paid' | 'subscription';
   /** Maximum context window in tokens */
   contextWindow?: number;
+  /** Maximum output tokens */
+  maxOutputTokens?: number;
 }
 
 /** Internal pricing catalog structure for testing injection. */
@@ -228,13 +234,18 @@ function transformModelsDevResponse(json: ModelsDevResponse): CatalogModel[] {
         tier = 'paid';
       }
 
+      const maxOutputTokens = typeof limit?.output === 'number' ? limit.output : undefined;
+
       models.push({
         id: modelId,
         name: modelName,
         provider: providerName,
+        providerId,
+        providerEnvVars: Array.isArray(providerData.env) ? providerData.env.filter((v: unknown) => typeof v === 'string') as string[] : [],
         pricing: { input: inputCost, output: outputCost },
         tier,
         contextWindow,
+        maxOutputTokens,
       });
     }
   }
@@ -334,6 +345,63 @@ function getPricingCatalog(): PricingCatalog {
 }
 
 // ---------------------------------------------------------------------------
+// buildCanonicalModels — convert CatalogModel[] → CanonicalModel[]
+// ---------------------------------------------------------------------------
+
+/**
+ * Build CanonicalModel[] from the fetched CatalogModel[] for use by SyntheticProvider.
+ *
+ * Groups models by normalized model ID across providers. Each unique normalized ID
+ * becomes one CanonicalModel with one SyntheticBackend per provider offering it.
+ *
+ * Uses a dynamic import to avoid the circular dependency chain:
+ *   model-catalog.ts → synthetic.ts (via setSyntheticCanonicalModels)
+ *   synthetic.ts → registry.ts → model-catalog.ts
+ */
+async function applySyntheticCanonicalModels(models: CatalogModel[]): Promise<void> {
+  try {
+    const syntheticModule = await import('./synthetic.ts');
+    const { setSyntheticCanonicalModels } = syntheticModule;
+
+    // Group models by normalized ID
+    const byNormId = new Map<string, CatalogModel[]>();
+    for (const m of models) {
+      const normId = normalizeModelId(m.id);
+      const bucket = byNormId.get(normId);
+      if (bucket) {
+        bucket.push(m);
+      } else {
+        byNormId.set(normId, [m]);
+      }
+    }
+
+    const canonical: import('./synthetic.ts').CanonicalModel[] = [];
+    for (const [normId, group] of byNormId) {
+      // Determine tier: prefer paid > subscription > free (most capable wins)
+      const tierPriority: Record<string, number> = { paid: 2, subscription: 1, free: 0 };
+      const tier = group.reduce((best, m) => {
+        return (tierPriority[m.tier] ?? 0) > (tierPriority[best] ?? 0) ? m.tier : best;
+      }, group[0].tier) as import('./synthetic.ts').SyntheticTier;
+
+      const backends: import('./synthetic.ts').SyntheticBackend[] = group.map((m) => ({
+        providerName: m.providerId,
+        modelId: m.id,
+        contextWindow: m.contextWindow,
+        maxOutputTokens: m.maxOutputTokens,
+        envVars: m.providerEnvVars.length > 0 ? m.providerEnvVars : undefined,
+      }));
+
+      canonical.push({ id: normId, tier, backends });
+    }
+
+    setSyntheticCanonicalModels(canonical);
+    logger.debug('[model-catalog] Synthetic canonical models updated', { count: canonical.length });
+  } catch (err) {
+    logger.debug('[model-catalog] Failed to apply synthetic canonical models', { error: String(err) });
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Catalog refresh
 // ---------------------------------------------------------------------------
 
@@ -353,6 +421,9 @@ export async function refreshCatalog(): Promise<void> {
   _catalogModels = models;
   // Invalidate the pricing catalog so it re-reads from _catalogModels
   _pricingCatalog = null;
+
+  // Update the SyntheticProvider's canonical model list
+  await applySyntheticCanonicalModels(models);
 
   logger.debug('[model-catalog] Catalog updated', { count: models.length });
 }
@@ -374,6 +445,10 @@ export function initCatalog(): void {
   if (cached) {
     _catalogModels = cached.models;
     _pricingCatalog = null; // invalidate so getPricingCatalog() re-reads
+    // Seed the SyntheticProvider with cached models immediately (no await — fire and forget)
+    applySyntheticCanonicalModels(cached.models).catch((err) => {
+      logger.debug('[model-catalog] Failed to seed synthetic models from cache', { error: String(err) });
+    });
   }
 
   if (!cached || isCatalogCacheStale(cached)) {
