@@ -599,7 +599,7 @@ async function main() {
     try {
       const sm = getSessionManager();
       const { messages, meta } = sm.load(sessionId);
-      conversation.fromJSON({ messages: messages as unknown[] });
+      conversation.fromJSON({ messages: messages as Parameters<typeof conversation.fromJSON>[0]['messages'] });
       runtime.sessionId = sessionId;
       if (meta?.model) runtime.model = meta.model;
       if (meta?.provider) runtime.provider = meta.provider;
@@ -1223,7 +1223,7 @@ async function main() {
           const raw = readFileSync(RECOVERY_FILE, 'utf-8');
           const lines = raw.split('\n').filter(Boolean);
           const messages = lines.slice(1).map(l => { const { type: _, ...rest } = JSON.parse(l) as { type: string } & Record<string, unknown>; return rest; });
-          conversation.fromJSON({ messages: messages as unknown[] });
+          conversation.fromJSON({ messages: messages as Parameters<typeof conversation.fromJSON>[0]['messages'] });
           conversation.addSystemMessage('[Recovery] Session restored.');
         } catch (err) {
           conversation.addSystemMessage(`[Recovery] Failed to restore: ${(err as Error).message}`);
