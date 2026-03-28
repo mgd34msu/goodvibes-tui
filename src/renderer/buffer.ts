@@ -10,7 +10,7 @@ export class TerminalBuffer {
     this.cells = Array.from({ length: height }, () => createEmptyLine(width));
   }
 
-  public setCell(x: number, y: number, cell: Partial<Cell>) {
+  public setCell(x: number, y: number, cell: Partial<Cell>): void {
     if (y >= 0 && y < this.height && x >= 0 && x < this.width) {
       this.cells[y][x] = { ...this.cells[y][x], ...cell };
     }
@@ -20,7 +20,7 @@ export class TerminalBuffer {
     return this.cells[y]?.[x];
   }
 
-  public blitLine(row: number, line: Line) {
+  public blitLine(row: number, line: Line): void {
     if (row >= 0 && row < this.height) {
       this.cells[row] = [...line];
     }
