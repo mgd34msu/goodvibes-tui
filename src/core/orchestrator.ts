@@ -31,6 +31,9 @@ interface HookDispatcherLike {
 
 const SPINNER_FRAMES = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
 
+/** Delay (ms) before auto-spawning plan items if the model ends its turn without spawning them. */
+const AUTO_SPAWN_FALLBACK_DELAY_MS = 5_000;
+
 /**
  * Orchestrator - Manages LLM turn lifecycle with full tool-use loop.
  * Supports multi-turn agent loops: call LLM -> execute tools -> send results -> repeat.
@@ -491,7 +494,7 @@ export class Orchestrator {
                   );
                   this.bus.emit('render:request');
                 }
-              }, 5_000);
+              }, AUTO_SPAWN_FALLBACK_DELAY_MS);
             }
           }
         }

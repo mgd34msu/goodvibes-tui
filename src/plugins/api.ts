@@ -168,8 +168,8 @@ export function createPluginAPI(ctx: PluginAPIContext): PluginAPI {
     },
 
     onEvent(eventName, handler) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const unsub = ctx.eventBus.on(eventName, handler as any);
+      type H = EventMap[typeof eventName] extends void ? () => void : (data: EventMap[typeof eventName]) => void;
+      const unsub = ctx.eventBus.on(eventName, handler as H);
       ctx.cleanup.push(unsub);
       return unsub;
     },

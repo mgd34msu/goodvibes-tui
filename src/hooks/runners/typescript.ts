@@ -14,6 +14,13 @@ export async function run(hook: HookDefinition, event: HookEvent): Promise<HookR
     return { ok: false, error: 'ts hook missing "path" field' };
   }
 
+  // Validate path is within the project directory to prevent arbitrary module loading
+  const projectRoot = process.cwd();
+  const resolvedPath = new URL(path, import.meta.url).pathname;
+  if (!resolvedPath.startsWith(projectRoot)) {
+    return { ok: false, error: `ts hook path '${path}' is outside the project directory` };
+  }
+
   try {
     const mod = await import(path);
     const handler = mod.default as TsHookHandler | undefined;
