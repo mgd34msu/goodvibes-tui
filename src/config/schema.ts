@@ -57,7 +57,7 @@ export interface GoodVibesConfig {
     autoCompactThreshold: number; // default: 80
     saveHistory: boolean;       // default: true
     notifyOnComplete: boolean;  // default: true
-    autoSwitchOnProviderFail: boolean; // default: false
+    suggestAlternativeOnProviderFail: boolean; // default: false
   };
   permissions: {
     mode: PermissionMode;       // default: 'prompt'
@@ -117,7 +117,7 @@ export type ConfigKey =
   | 'behavior.autoCompactThreshold'
   | 'behavior.saveHistory'
   | 'behavior.notifyOnComplete'
-  | 'behavior.autoSwitchOnProviderFail'
+  | 'behavior.suggestAlternativeOnProviderFail'
   | 'permissions.mode'
   | 'permissions.tools.read'
   | 'permissions.tools.write'
@@ -172,7 +172,7 @@ export type ConfigValue<K extends ConfigKey> =
   K extends 'behavior.autoCompactThreshold' ? number :
   K extends 'behavior.saveHistory' ? boolean :
   K extends 'behavior.notifyOnComplete' ? boolean :
-  K extends 'behavior.autoSwitchOnProviderFail' ? boolean :
+  K extends 'behavior.suggestAlternativeOnProviderFail' ? boolean :
   K extends 'permissions.mode' ? PermissionMode :
   K extends 'permissions.tools.read' ? PermissionAction :
   K extends 'permissions.tools.write' ? PermissionAction :
@@ -232,7 +232,7 @@ export const DEFAULT_CONFIG: GoodVibesConfig = {
     autoCompactThreshold: 80,
     saveHistory: true,
     notifyOnComplete: true,
-    autoSwitchOnProviderFail: false,
+    suggestAlternativeOnProviderFail: false,
   },
   permissions: {
     mode: 'prompt',
@@ -629,7 +629,7 @@ export const CONFIG_SCHEMA: ConfigSetting[] = [
     description: 'Auto-commit when WRFC chain passes review and quality gates',
   },
   {
-    key: 'behavior.autoSwitchOnProviderFail',
+    key: 'behavior.suggestAlternativeOnProviderFail',
     type: 'boolean',
     default: false,
     description: 'Show alternative model suggestion when current provider fails non-transiently',

@@ -1,5 +1,5 @@
 import type { LLMProvider, ChatRequest, ChatResponse } from './interface.ts';
-import { ProviderError } from '../types/errors.ts';
+import { ProviderError, isRateLimitOrQuotaError } from '../types/errors.ts';
 import { logger } from '../utils/logger.ts';
 
 // --- Types ---
@@ -55,22 +55,6 @@ export const MANUAL_SYNTHETIC_OVERRIDES: SyntheticModelMap = {
     { providerName: 'openrouter', modelId: 'nvidia/nemotron-3-super-120b-a12b:free' },
   ],
 };
-
-// --- Rate Limit Detection ---
-
-function isRateLimitOrQuotaError(err: unknown): boolean {
-  if (err instanceof ProviderError) {
-    if (err.statusCode === 429 || err.statusCode === 402) return true;
-    const msg = err.message.toLowerCase();
-    return /rate.limit|too many requests|quota exceeded|throttl|depleted|credits/.test(msg);
-  }
-  // Some providers throw plain errors with rate limit messages
-  if (err instanceof Error) {
-    const msg = err.message.toLowerCase();
-    return msg.includes('429') || msg.includes('402') || /rate.limit|too many requests|quota exceeded|depleted|credits/.test(msg);
-  }
-  return false;
-}
 
 // --- Default cooldown ---
 const DEFAULT_COOLDOWN_MS = 60_000;
