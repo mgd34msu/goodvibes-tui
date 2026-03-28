@@ -113,10 +113,6 @@ export class ConversationManager {
   }
 
   public addUserMessage(content: string | ContentPart[]): void {
-    // Extract plain text for title generation and display
-    const textContent = typeof content === 'string'
-      ? content
-      : content.filter((p): p is { type: 'text'; text: string } => p.type === 'text').map(p => p.text).join('');
     // Title is only set explicitly via /session rename — no auto-generation
     this.messages.push({ role: 'user', content });
     // Clear undo stack when new user input is added (can't redo past new input)

@@ -114,6 +114,7 @@ export class SessionManager {
       try {
         record = JSON.parse(line) as Record<string, unknown>;
       } catch {
+        // Non-fatal: malformed JSON line — skip and count it
         skipped++;
         continue;
       }
@@ -153,6 +154,8 @@ export class SessionManager {
     try {
       files = readdirSync(this.sessionsDir).filter(f => f.endsWith('.jsonl'));
     } catch {
+      // Non-fatal: sessions directory unreadable (permissions, doesn't exist yet)
+      logger.debug('SessionManager: could not read sessions directory', { dir: this.sessionsDir });
       return [];
     }
 
@@ -182,7 +185,8 @@ export class SessionManager {
               };
             }
           } catch {
-            // Malformed meta line; continue with defaults
+            // Non-fatal: malformed meta line — session listed with default title/model
+            logger.debug('SessionManager: malformed meta line', { name });
           }
         }
 
@@ -200,7 +204,8 @@ export class SessionManager {
           }
         }
       } catch {
-        // Skip unreadable files
+        // Non-fatal: session file unreadable — skip it from the listing
+        logger.debug('SessionManager: unreadable session file', { name });
         continue;
       }
 
@@ -242,6 +247,8 @@ export class SessionManager {
         timestamp: Number(record.timestamp ?? 0),
       };
     } catch {
+      // Non-fatal: session file unreadable or missing meta — return null to caller
+      logger.debug('SessionManager: could not read session meta', { name: filePath });
       return null;
     }
   }
@@ -322,7 +329,8 @@ export class SessionManager {
               }
             }
           } catch {
-            // skip malformed lines
+            // Non-fatal: malformed line in session during search — skip it
+            logger.debug('SessionManager: malformed line during search', { name });
           }
         }
 
@@ -330,7 +338,8 @@ export class SessionManager {
           results.push({ session, matchCount, snippets });
         }
       } catch {
-        // skip unreadable sessions
+        // Non-fatal: session unreadable during search — skip it
+        logger.debug('SessionManager: unreadable session during search', { name });
       }
     }
 
