@@ -2,7 +2,7 @@
 
 A terminal AI coding agent with automated write-review-fix-check pipelines, multi-provider LLM support, and a vaporwave aesthetic.
 
-Version: **0.9.10**
+Version: **0.9.11**
 
 <!-- screenshot -->
 
@@ -22,12 +22,36 @@ The agent system runs subagents in-process, each with its own conversation histo
 
 ### Multi-Provider LLM Support
 - Built-in: Anthropic, OpenAI, Google Gemini, and InceptionLabs (diffusion LLM)
-- **Custom providers**: add any OpenAI-compatible API (OpenRouter, Ollama, Together, Groq, LM Studio, Fireworks, vLLM) via JSON config in `~/.goodvibes/tui/providers/`
+- **13+ providers** — Groq, Cerebras, Mistral, Ollama Cloud, NVIDIA NIM, HuggingFace, LLM7, OpenRouter, AIHubMix, and more
+- **Dynamic catalog** — 4,102 models from 105 providers sourced from models.dev with 24h TTL cache; set an env var and the provider auto-configures
+- **Custom providers**: add any OpenAI-compatible API via JSON config in `~/.goodvibes/tui/providers/`
 - Hot-reload: provider configs are watched and reloaded automatically on change
 - Hot-swap models mid-conversation with `/model` or the interactive model picker
 - Per-provider reasoning effort control (instant / low / medium / high)
 - Streaming responses with token speed display
 - Interactive `/add-provider` skill for guided setup
+
+### Dynamic Model Catalog
+- Models sourced from models.dev (4,102 models, 105 providers) with 24h TTL cache
+- Benchmark integration from ZeroEval (275 models, 22 scoring dimensions)
+- Auto-provider registration — set an env var, the provider appears automatically
+- Catalog-driven SyntheticProvider with tier-isolated failover (free/paid/subscription tiers never mix)
+- `best-free` synthetic model — always resolves to the highest-benchmarked free model with a configured key
+- Change notifications when catalog refreshes, filtered to your favorites and top-benchmarked models
+
+### Model Picker
+- Pricing tier filter: Free / Paid / Subscription / All
+- Family grouping: GPT, Claude, Gemini, Llama, Qwen, GLM, MiniMax, DeepSeek, and more
+- Capability filters: Reasoning, Tool Use, Structured Output, Multimodal, Open Weights
+- Available-only toggle (default on) — hides models without a configured key
+- Benchmark sort: SWE-bench, GPQA, composite score
+- Quality tier badges [S/A/B/C] displayed next to model names
+- Pinned/favorite models shown at top with star indicator
+
+### Favorites & Usage Tracking
+- `/pin` and `/unpin` to star models as favorites
+- Usage history tracking (model, timestamp, count) persists across sessions
+- Favorites surface at the top of the model picker automatically
 
 ### Cell-Based TUI Renderer
 - Raw ANSI escape sequences — no Ink, no React
