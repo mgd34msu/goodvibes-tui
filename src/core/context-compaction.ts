@@ -166,7 +166,33 @@ function partitionMessages(
 /**
  * Build a summarization prompt from the older messages.
  */
+/** Maximum tokens allowed for the older-messages section of the summarization prompt. */
+const MAX_PROMPT_OLDER_TOKENS = 80_000;
+
 function buildSummarizationPrompt(olderMessages: ProviderMessage[]): string {
+  // Truncate oldest messages if the total token estimate exceeds the budget.
+  let budgetedMessages = olderMessages;
+  const totalTokens = estimateConversationTokens(olderMessages);
+  if (totalTokens > MAX_PROMPT_OLDER_TOKENS) {
+    // Drop from the oldest end until we fit within budget.
+    let running = totalTokens;
+    let dropIdx = 0;
+    for (let i = 0; i < olderMessages.length && running > MAX_PROMPT_OLDER_TOKENS; i++) {
+      const msg = olderMessages[i];
+      const msgTokens = typeof msg.content === 'string'
+        ? Math.ceil(msg.content.length / 4)
+        : (msg.content as ContentPart[]).filter(p => p.type === 'text').reduce((s, p) => s + Math.ceil((p as { type: 'text'; text: string }).text.length / 4), 0);
+      running -= msgTokens;
+      dropIdx = i + 1;
+    }
+    budgetedMessages = olderMessages.slice(dropIdx);
+    logger.info('Context compaction: truncated older messages for prompt budget', {
+      original: olderMessages.length,
+      truncated: budgetedMessages.length,
+      tokensOriginal: totalTokens,
+    });
+  }
+
   const lines: string[] = [
     'You are summarizing a conversation to free context window space.',
     'Provide a concise bullet-point summary of the conversation below.',
@@ -178,7 +204,7 @@ function buildSummarizationPrompt(olderMessages: ProviderMessage[]): string {
     '',
   ];
 
-  for (const msg of olderMessages) {
+  for (const msg of budgetedMessages) {
     const role = msg.role === 'tool' ? 'tool-result' : msg.role;
     const text = extractText(msg.content);
     if (text.trim()) {
@@ -288,6 +314,7 @@ export async function compactMessages(opts: CompactionOptions): Promise<Compacti
   };
 
   compactionEvents.push(event);
+  if (compactionEvents.length > 50) compactionEvents.shift();
 
   logger.info('Context compaction: complete', {
     trigger,

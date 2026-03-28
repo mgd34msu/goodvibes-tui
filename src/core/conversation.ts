@@ -13,10 +13,7 @@ import { logger } from '../utils/logger.ts';
 import { LAYOUT } from '../renderer/layout.ts';
 import type { ProviderRegistry } from '../providers/registry.ts';
 import type { ConfigManager } from '../config/manager.ts';
-import { compactMessages } from './context-compaction.ts';
-
-/** Rough token estimate: 4 chars ≈ 1 token. */
-const estimateTokens = (text: string): number => Math.ceil(text.length / 4);
+import { compactMessages, estimateConversationTokens } from './context-compaction.ts';
 
 /**
  * ConversationManager - Owns conversation messages and the rendered history buffer.
@@ -740,7 +737,12 @@ export class ConversationManager {
           return { role: 'user' as const, content: typeof m.content === 'string' ? m.content : (m.content as ContentPart[]) };
         }
         if (m.role === 'assistant') {
-          return { role: 'assistant' as const, content: typeof m.content === 'string' ? m.content : String(m.content) };
+          const text = typeof m.content === 'string'
+            ? m.content
+            : Array.isArray(m.content)
+              ? (m.content as { type: string; text?: string }[]).filter(p => p.type === 'text').map(p => p.text ?? '').join('')
+              : String(m.content);
+          return { role: 'assistant' as const, content: text };
         }
         // tool role
         const toolMsg = m as { role: 'tool'; callId: string; content: string; name?: string };
