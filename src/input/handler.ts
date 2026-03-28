@@ -1071,7 +1071,7 @@ export class InputHandler {
         if (token.type === 'text') {
           this.historySearch.appendChar(token.value);
         } else if (token.type === 'key') {
-          if (token.logicalName === 'escape') {
+          if (token.logicalName === 'escape' || (token.ctrl && token.logicalName === 'g')) {
             this.prompt = this.historySearch.cancel();
             this.cursorPos = this.prompt.length;
           } else if (token.logicalName === 'return') {
