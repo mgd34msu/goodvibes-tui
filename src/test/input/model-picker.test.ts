@@ -655,4 +655,54 @@ describe('ModelPickerModal', () => {
       expect(items.some(i => i.isGroupHeader && i.label === 'Favorites')).toBe(false);
     });
   });
+
+  // ── scrollOffset behavior ────────────────────────────────────────────────────
+
+  describe('scrollOffset behavior', () => {
+    beforeEach(() => {
+      picker.models = ALL_MODELS; // 4 selectable items
+    });
+
+    test('moveDown past maxVisible increments scrollOffset', () => {
+      // maxVisible = 2, so scrollOffset should advance once selectedIndex > 1
+      const maxVis = 2;
+      picker.selectedIndex = 0;
+      picker.scrollOffset = 0;
+      picker.moveDown(maxVis); // → 1, still in window [0,2)
+      expect(picker.scrollOffset).toBe(0);
+      picker.moveDown(maxVis); // → 2, now >= scrollOffset + maxVis → scroll
+      expect(picker.scrollOffset).toBe(1);
+      picker.moveDown(maxVis); // → 3, now >= 1 + 2 → scroll
+      expect(picker.scrollOffset).toBe(2);
+    });
+
+    test('moveDown wrap-to-0 resets scrollOffset to 0', () => {
+      const maxVis = 2;
+      picker.selectedIndex = 3; // last item
+      picker.scrollOffset = 2;
+      picker.moveDown(maxVis); // wraps to 0 → scrollOffset should be 0
+      expect(picker.selectedIndex).toBe(0);
+      expect(picker.scrollOffset).toBe(0);
+    });
+
+    test('_scrollToSelection keeps selection in visible range when scrolling down', () => {
+      picker.selectedIndex = 3;
+      picker.scrollOffset = 0;
+      picker._scrollToSelection(2); // window [0,2) does not contain 3 → adjust
+      expect(picker.scrollOffset).toBe(2); // 3 - 2 + 1 = 2
+      expect(picker.selectedIndex).toBeGreaterThanOrEqual(picker.scrollOffset);
+      expect(picker.selectedIndex).toBeLessThan(picker.scrollOffset + 2);
+    });
+
+    test('_clampSelection resets scrollOffset when item count shrinks below offset', () => {
+      // Put scrollOffset beyond new list boundary
+      picker.selectedIndex = 3;
+      picker.scrollOffset = 3;
+      // Shrink list to 1 item via filter
+      picker.query = 'Free Model 1';
+      picker['_clampSelection']();
+      expect(picker.scrollOffset).toBe(0);
+      expect(picker.selectedIndex).toBe(0);
+    });
+  });
 });

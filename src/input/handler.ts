@@ -28,6 +28,7 @@ import { BookmarkModal } from './bookmark-modal.ts';
 import { SettingsModal } from './settings-modal.ts';
 import { SessionPickerModal } from './session-picker-modal.ts';
 import { ProfilePickerModal } from './profile-picker-modal.ts';
+import { MODEL_PICKER_CHROME_LINES } from '../renderer/model-picker-overlay.ts';
 import { getPanelManager } from '../panels/panel-manager.ts';
 import { getKeybindingsManager } from './keybindings.ts';
 
@@ -1138,10 +1139,10 @@ export class InputHandler {
               this.modelPicker.close();
             }
           } else if (token.logicalName === 'up') {
-            const maxVis = Math.max(5, this.getViewportHeight() - 7);
+            const maxVis = Math.max(5, this.getViewportHeight() - MODEL_PICKER_CHROME_LINES);
             this.modelPicker.moveUp(maxVis);
           } else if (token.logicalName === 'down') {
-            const maxVis = Math.max(5, this.getViewportHeight() - 7);
+            const maxVis = Math.max(5, this.getViewportHeight() - MODEL_PICKER_CHROME_LINES);
             this.modelPicker.moveDown(maxVis);
           } else if (token.logicalName === 'tab' && this.modelPicker.mode === 'model') {
             // Tab cycles category filter: all → free → premium → all
