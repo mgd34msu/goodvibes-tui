@@ -350,6 +350,12 @@ async function main() {
     bus.emit('render:request');
   }));
 
+  // Trigger re-render on agent stream deltas so the process indicator
+  // and process modal show live streaming progress without waiting for the 1s poll.
+  unsubs.push(bus.on('subagent:stream-delta', () => {
+    bus.emit('render:request');
+  }));
+
   // Start watching for custom provider file changes so hot-reload works.
   providerRegistry.startWatching(bus);
 
