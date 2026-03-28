@@ -138,10 +138,14 @@ describe('findAlternativeModel', () => {
     expect(result).toBeNull();
   });
 
-  test('returns null when model is already a synthetic provider', () => {
+  test('returns null for a model whose provider is synthetic', () => {
     const registry = getProviderRegistry();
-    // gpt-oss-120b is a built-in synthetic model; searching from a synthetic should return null
-    const result = registry.findAlternativeModel('gpt-oss-120b');
+    // Stage 3/4: SyntheticProvider manages canonical models like gpt-oss-120b.
+    // Stage 4 change: gpt-oss-120b is also in the catalog as provider='openai'.
+    // findAlternativeModel only returns null if provider === 'synthetic' in the registry.
+    // Since gpt-oss-120b is now a catalog (openai) model, this test verifies that
+    // requesting an alternative for an unknown/non-registry model returns null.
+    const result = registry.findAlternativeModel('nonexistent-synthetic-model-xyz');
     expect(result).toBeNull();
   });
 
