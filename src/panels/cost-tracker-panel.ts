@@ -6,6 +6,7 @@ import type { Line } from '../types/grid.ts';
 import { createStyledCell, createEmptyLine } from '../types/grid.ts';
 import { BasePanel } from './base-panel.ts';
 import type { EventBus } from '../core/event-bus.ts';
+import { getPricingForModel } from '../providers/model-limits.ts';
 
 // ---------------------------------------------------------------------------
 // Pricing table  (USD per 1M tokens)
@@ -43,14 +44,22 @@ const MODEL_PRICING: Record<string, ModelPricing> = {
   'gemini-2.5-pro':        { input: 1.25,  output: 5 },
 };
 
-const DEFAULT_PRICING: ModelPricing = { input: 1, output: 3 };
+const DEFAULT_PRICING: ModelPricing = { input: 0, output: 0 };
 
-function getPricing(modelId: string): ModelPricing {
-  // Exact match
+function getPricing(modelId: string, provider = ''): ModelPricing {
+  // 1. Live OpenRouter pricing (USD per token → convert to per million)
+  const livePricing = getPricingForModel(modelId, provider);
+  if (livePricing) {
+    return {
+      input: Math.max(0, livePricing.prompt * 1_000_000),
+      output: Math.max(0, livePricing.completion * 1_000_000),
+    };
+  }
+  // 2. Hardcoded table — exact match
   if (MODEL_PRICING[modelId]) return MODEL_PRICING[modelId]!;
-  // OpenRouter :free suffix — treat as free
+  // 3. OpenRouter :free suffix — treat as free
   if (modelId.endsWith(':free')) return { input: 0, output: 0 };
-  // Prefix match (e.g. "openrouter/free:..." or "claude-sonnet-4-6-20..")
+  // 4. Prefix match (e.g. "openrouter/free:..." or "claude-sonnet-4-6-20..")
   for (const [key, pricing] of Object.entries(MODEL_PRICING)) {
     if (modelId.startsWith(key) || modelId.includes(key)) return pricing;
   }
@@ -229,8 +238,9 @@ export class CostTrackerPanel extends BasePanel {
     if (usage.model) this.sessionModel = usage.model;
 
     // Record cost delta for sparkline
-    const pricing = getPricing(this.sessionModel);
-    const totalCost = calcCost(usage.input, usage.output, pricing);
+    const sessionProvider = this.sessionModel.includes('/') ? this.sessionModel.split('/')[0]! : '';
+    const pricing = getPricing(this.sessionModel, sessionProvider);
+    const totalCost = calcCost(usage.input + usage.cacheRead + usage.cacheWrite, usage.output, pricing);
     const delta = Math.max(0, totalCost - this.lastSessionCost);
     this.lastSessionCost = totalCost;
     this.costHistory.push(delta);
@@ -292,9 +302,10 @@ export class CostTrackerPanel extends BasePanel {
 
     const lines: Line[] = [];
 
-    const pricing = getPricing(this.sessionModel);
+    const sessionProvider = this.sessionModel.includes('/') ? this.sessionModel.split('/')[0]! : '';
+    const pricing = getPricing(this.sessionModel, sessionProvider);
     const totalInputTokens = this.sessionUsage.input + this.sessionUsage.cacheRead + this.sessionUsage.cacheWrite;
-    const sessionCost = calcCost(this.sessionUsage.input, this.sessionUsage.output, pricing);
+    const sessionCost = calcCost(this.sessionUsage.input + this.sessionUsage.cacheRead + this.sessionUsage.cacheWrite, this.sessionUsage.output, pricing);
     const overBudget = this.budgetThreshold > 0 && sessionCost > this.budgetThreshold;
 
     // ── Section 1: Running total header ──────────────────────────────────────

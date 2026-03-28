@@ -80,6 +80,10 @@ export class ConversationManager {
   private streamingStartLine = -1;
   /** Undo stack: each entry is a turn (user msg + all subsequent non-user msgs until next user). */
   private undoStack: Message[][] = [];
+  /** Branch storage: named snapshots of messages[]. */
+  private branches: Map<string, Message[]> = new Map();
+  /** Name of the currently active branch. */
+  private currentBranch: string = 'main';
 
   constructor(
     getWidth: () => number = () => process.stdout.columns || 80,
@@ -673,6 +677,8 @@ export class ConversationManager {
     this.messages = [];
     this.title = '';
     this.undoStack = [];
+    this.branches.clear();
+    this.currentBranch = 'main';
     this.history.clear();
     this.appendedUpTo = 0;
     this.lastRenderedWidth = 0;
@@ -735,17 +741,107 @@ export class ConversationManager {
   }
 
   /**
+   * forkBranch - Save a deep-copy of the current messages under a named branch.
+   * If no name is provided a timestamp-based name is used.
+   * Returns the name used.
+   */
+  public forkBranch(name?: string, force = false): string {
+    const branchName = name?.trim() || `branch-${Date.now()}`;
+    if (!force && this.branches.has(branchName)) {
+      logger.warn(`forkBranch: branch '${branchName}' already exists; use force=true to overwrite`);
+    }
+    this.branches.set(branchName, structuredClone(this.messages));
+    return branchName;
+  }
+
+  /**
+   * listBranches - Return the names and message counts of all saved branches.
+   */
+  public listBranches(): Array<{ name: string; messageCount: number; isCurrent: boolean }> {
+    const result: Array<{ name: string; messageCount: number; isCurrent: boolean }> = [];
+    // Always include current branch even if it hasn't been stored in the map yet
+    const currentInMap = this.branches.has(this.currentBranch);
+    if (!currentInMap) {
+      result.push({ name: this.currentBranch, messageCount: this.messages.length, isCurrent: true });
+    }
+    for (const [name, msgs] of this.branches) {
+      result.push({ name, messageCount: msgs.length, isCurrent: name === this.currentBranch });
+    }
+    return result;
+  }
+
+  /**
+   * switchBranch - Replace the active messages with the stored branch snapshot.
+   * Returns true on success, false if the branch does not exist.
+   */
+  public switchBranch(name: string): boolean {
+    const stored = this.branches.get(name);
+    if (!stored) return false;
+    // Save current branch state before switching to prevent data loss
+    this.branches.set(this.currentBranch, structuredClone(this.messages));
+    this.messages = structuredClone(stored);
+    this.currentBranch = name;
+    this.undoStack = [];
+    this.markDirty();
+    return true;
+  }
+
+  /**
+   * mergeBranch - Append all messages from the named branch that come after
+   * the fork point (messages not already present in the current conversation).
+   * Simple strategy: append all branch messages after current messages.
+   * Returns true on success, false if the branch does not exist.
+   */
+  public mergeBranch(name: string): boolean {
+    const stored = this.branches.get(name);
+    if (!stored) return false;
+    // Use length-based fork point detection: the branch was cloned from a known
+    // snapshot so we use the shorter of the two lengths as the common prefix,
+    // then append any messages the branch has beyond that point.
+    const commonLen = Math.min(this.messages.length, stored.length);
+    const toAppend = stored.slice(commonLen);
+    if (toAppend.length === 0) return true;
+    this.messages.push(...structuredClone(toAppend));
+    this.undoStack = [];
+    this.markDirty();
+    return true;
+  }
+
+  /** Returns the name of the currently active branch. */
+  public getCurrentBranch(): string {
+    return this.currentBranch;
+  }
+
+  /**
    * toJSON - Serialize conversation for persistence.
    */
   public toJSON(): object {
-    return { messages: structuredClone(this.messages), timestamp: Date.now() };
+    // Serialize branches map as a plain object for persistence
+    const branchesObj: Record<string, Message[]> = {};
+    for (const [name, msgs] of this.branches) {
+      branchesObj[name] = structuredClone(msgs);
+    }
+    return {
+      messages: structuredClone(this.messages),
+      timestamp: Date.now(),
+      branches: branchesObj,
+      currentBranch: this.currentBranch,
+    };
   }
 
   /**
    * fromJSON - Restore conversation from persisted data.
    */
-  public fromJSON(data: { messages: Message[] }): void {
+  public fromJSON(data: { messages: Message[]; branches?: Record<string, Message[]>; currentBranch?: string }): void {
     this.messages = data.messages ?? [];
+    // Restore branch snapshots if present
+    this.branches.clear();
+    if (data.branches) {
+      for (const [name, msgs] of Object.entries(data.branches)) {
+        this.branches.set(name, msgs);
+      }
+    }
+    this.currentBranch = data.currentBranch ?? 'main';
     this.history.clear();
     this.appendedUpTo = 0;
     this.lastRenderedWidth = 0;

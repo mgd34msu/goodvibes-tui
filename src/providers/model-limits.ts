@@ -226,7 +226,8 @@ function resolveTokenLimits(
 
   // Apply OpenRouter cached data if available
   if (cachedData) {
-    const orMap = cachedOrMap ?? buildOrMap(cachedData);
+    if (!cachedOrMap) cachedOrMap = buildOrMap(cachedData);
+    const orMap = cachedOrMap;
     const orMatch = findOpenRouterMatch(
       modelDef.id,
       modelDef.provider,
@@ -288,7 +289,8 @@ export function getPricingForModel(
   provider: string,
 ): { prompt: number; completion: number } | null {
   if (!cachedData) return null;
-  const orMap = cachedOrMap ?? buildOrMap(cachedData);
+  if (!cachedOrMap) cachedOrMap = buildOrMap(cachedData);
+  const orMap = cachedOrMap;
   const match = findOpenRouterMatch(modelId, provider, orMap);
   if (!match?.pricing) return null;
   const prompt = parseFloat(match.pricing.prompt);
@@ -312,7 +314,8 @@ export function getTokenLimitsForModel(modelDef: ModelDefinition): Required<Toke
  */
 export function getContextWindowForModel(modelDef: ModelDefinition): number {
   if (cachedData) {
-    const orMap = cachedOrMap ?? buildOrMap(cachedData);
+    if (!cachedOrMap) cachedOrMap = buildOrMap(cachedData);
+    const orMap = cachedOrMap;
     const orMatch = findOpenRouterMatch(modelDef.id, modelDef.provider, orMap);
     if (orMatch?.context_length != null && orMatch.context_length > 0) {
       return orMatch.context_length;
