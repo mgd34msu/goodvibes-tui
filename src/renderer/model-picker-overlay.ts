@@ -187,9 +187,21 @@ export function renderModelPickerOverlay(
       const noProviders = pad + '\u2502 ' + 'No providers available'.padEnd(contentW) + ' \u2502';
       lines.push(UIFactory.stringToLine(noProviders, width, { fg: '244', dim: true }));
     } else {
-      for (let i = 0; i < picker.providers.length; i++) {
-        const provider = picker.providers[i];
-        const isSelected = i === picker.selectedIndex;
+      // Determine the visible slice [scrollOffset, scrollOffset + maxVisible)
+      const providerScrollOffset = Math.max(0, Math.min(picker.scrollOffset, Math.max(0, picker.providers.length - maxVisible)));
+      const providerVisibleEnd = Math.min(picker.providers.length, providerScrollOffset + maxVisible);
+      const visibleProviders = picker.providers.slice(providerScrollOffset, providerVisibleEnd);
+
+      // Scroll indicator — items above
+      if (providerScrollOffset > 0) {
+        const upHint = pad + '\u2502' + (` \u25b4 ${providerScrollOffset} more above`).padEnd(boxW - 2) + '\u2502';
+        lines.push(UIFactory.stringToLine(upHint, width, { fg: '240', dim: true }));
+      }
+
+      for (let i = 0; i < visibleProviders.length; i++) {
+        const provider = visibleProviders[i];
+        const absIdx = providerScrollOffset + i;
+        const isSelected = absIdx === picker.selectedIndex;
         const indicator = isSelected ? '\u25b6 ' : '  ';
         const rowText = pad + '\u2502 ' + indicator + provider.padEnd(contentW - 2) + ' \u2502';
         lines.push(UIFactory.stringToLine(rowText, width, {
@@ -197,6 +209,13 @@ export function renderModelPickerOverlay(
           bold: isSelected,
           bg: isSelected ? '#1a2a3a' : '',
         }));
+      }
+
+      // Scroll indicator — items below
+      if (providerVisibleEnd < picker.providers.length) {
+        const remaining2 = picker.providers.length - providerVisibleEnd;
+        const downHint = pad + '\u2502' + (` \u25be ${remaining2} more below`).padEnd(boxW - 2) + '\u2502';
+        lines.push(UIFactory.stringToLine(downHint, width, { fg: '240', dim: true }));
       }
     }
 
