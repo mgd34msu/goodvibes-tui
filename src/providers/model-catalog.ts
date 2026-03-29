@@ -69,8 +69,18 @@ export interface CatalogModelPricing {
 export interface CatalogModel {
   /** Canonical model ID (normalized, no provider prefix) */
   id: string;
-  /** Display name */
+  /**
+   * Display name from models.dev. Varies by provider — do NOT use as a reliable
+   * cross-provider identifier. Within a broad family, slug-normalised names are
+   * used as a best-effort sub-grouping heuristic (see applySyntheticCanonicalModels).
+   */
   name: string;
+  /**
+   * Model family from models.dev (e.g. 'kimi', 'glm-flash', 'deepseek-thinking').
+   * Consistent across providers for the same underlying model family.
+   * Use this field for cross-provider grouping in the synthetic layer.
+   */
+  family?: string;
   /** Provider display name */
   provider: string;
   /** Provider ID as used in the models.dev API (lowercase key, e.g. 'openai') */
@@ -225,6 +235,7 @@ function transformModelsDevResponse(json: ModelsDevResponse): CatalogModel[] {
 
       const modelId = String(modelData.id ?? modelKey);
       const modelName = String(modelData.name ?? modelId);
+      const modelFamily = typeof modelData.family === 'string' ? modelData.family : undefined;
       const cost = modelData.cost;
       const limit = modelData.limit;
       const supportsReasoning = modelData.reasoning === true;
@@ -247,6 +258,7 @@ function transformModelsDevResponse(json: ModelsDevResponse): CatalogModel[] {
       models.push({
         id: modelId,
         name: modelName,
+        ...(modelFamily ? { family: modelFamily } : {}),
         provider: providerName,
         providerId,
         providerEnvVars: Array.isArray(providerData.env) ? providerData.env.filter((v: unknown) => typeof v === 'string') as string[] : [],
@@ -360,9 +372,20 @@ function getPricingCatalog(): PricingCatalog {
 /**
  * Build CanonicalModel[] from the fetched CatalogModel[] for use by SyntheticProvider.
  *
- * Groups models by human-readable `name` field (e.g. "Kimi K2.5") — this field is
- * curated by models.dev and is identical across providers for the same model, unlike
- * the model ID which varies completely (e.g. `nvidia/kimi-k2-5` vs `accounts/fireworks/models/kimi-k2-instruct`).
+ * Grouping strategy (two-level):
+ *
+ * models.dev `family` values span two levels of granularity:
+ *   - Broad families (e.g. 'gpt', 'qwen', 'llama', 'deepseek') lump 100-450 models
+ *     spanning many generations into one bucket — useless for failover grouping.
+ *   - Granular families (e.g. 'claude-sonnet', 'gemini-flash', 'kimi-thinking') are
+ *     already specific enough and work well as grouping keys.
+ *
+ * Detection heuristic: count unique model names within each family across all providers.
+ * Families with more than MAX_FAMILY_UNIQUE_NAMES distinct names are considered broad;
+ * within those we sub-group by slug-normalised name via `nameToSlug()` (name is used as a
+ * heuristic — it tends to be consistent for the same underlying model within models.dev, but
+ * can vary across providers; slug normalisation merges minor punctuation/spacing differences).
+ * Granular families (few unique names) keep the family slug as their canonical ID.
  *
  * Only keeps groups where 2+ distinct providers have configured API keys, since
  * single-provider groups provide no failover value for the synthetic layer.
@@ -371,26 +394,89 @@ function getPricingCatalog(): PricingCatalog {
  *   model-catalog.ts → synthetic.ts (via setSyntheticCanonicalModels)
  *   synthetic.ts → registry.ts → model-catalog.ts
  */
+
+/**
+ * Families with more unique model names than this threshold are considered "broad"
+ * and will be sub-grouped by model name instead of treated as one canonical group.
+ */
+const MAX_FAMILY_UNIQUE_NAMES = 20;
+
+/**
+ * Convert a model name into a slug suitable for use as a canonical model ID.
+ * Lowercases, trims, replaces spaces and non-alphanumeric chars with hyphens,
+ * and collapses/strips leading-trailing hyphens.
+ */
+function nameToSlug(name: string): string {
+  return name
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+}
+
 async function applySyntheticCanonicalModels(models: CatalogModel[]): Promise<void> {
   try {
     const syntheticModule = await import('./synthetic.ts');
     const { setSyntheticCanonicalModels } = syntheticModule;
 
-    // Group models by human-readable name — consistent across providers for the same model
-    const byName = new Map<string, CatalogModel[]>();
+    // Step 1: Group models by family
+    const byFamily = new Map<string, CatalogModel[]>();
     for (const m of models) {
-      if (!m.name) continue;
-      const bucket = byName.get(m.name);
+      if (!m.family) continue;
+      const bucket = byFamily.get(m.family);
       if (bucket) {
         bucket.push(m);
       } else {
-        byName.set(m.name, [m]);
+        byFamily.set(m.family, [m]);
       }
     }
 
+    // Step 2: For each family, determine if it is broad or granular.
+    // Broad families: sub-group by normalised name. Granular: use family as canonical ID.
+    // Collect final groups as Map<canonicalId, CatalogModel[]>.
+    const canonicalGroups = new Map<string, CatalogModel[]>();
+
+    for (const [family, group] of byFamily) {
+      const uniqueNames = new Set(group.map(m => nameToSlug(m.name)));
+      const isBroad = uniqueNames.size > MAX_FAMILY_UNIQUE_NAMES;
+
+      if (isBroad) {
+        // Sub-group by slug-normalised name — each distinct slug becomes its own canonical entry.
+        // E.g. family='gpt', name='GPT-5.2' or 'GPT 5.2' → both slug to 'gpt-5-2'
+        const byName = new Map<string, CatalogModel[]>();
+        for (const m of group) {
+          const key = nameToSlug(m.name);
+          const bucket = byName.get(key);
+          if (bucket) {
+            bucket.push(m);
+          } else {
+            byName.set(key, [m]);
+          }
+        }
+        for (const [slug, nameGroup] of byName) {
+          // If the same slug was already claimed by another family, prefix with family name.
+          const canonicalId = canonicalGroups.has(slug) ? `${family}-${slug}` : slug;
+          const existing = canonicalGroups.get(canonicalId);
+          if (existing) {
+            existing.push(...nameGroup);
+          } else {
+            canonicalGroups.set(canonicalId, nameGroup);
+          }
+        }
+      } else {
+        // Granular family — use family slug directly as canonical ID.
+        const existing = canonicalGroups.get(family);
+        if (existing) {
+          existing.push(...group);
+        } else {
+          canonicalGroups.set(family, group);
+        }
+      }
+    }
+
+    // Step 3: Build CanonicalModel entries, filtering to multi-provider groups.
     const canonical: import('./synthetic.ts').CanonicalModel[] = [];
-    for (const [modelName, group] of byName) {
-      // Build backends first so we can key-filter before deciding to include
+    for (const [canonicalId, group] of canonicalGroups) {
       const allBackends: import('./synthetic.ts').SyntheticBackend[] = group.map((m) => ({
         providerName: m.providerId,
         modelId: m.id,
@@ -417,9 +503,6 @@ async function applySyntheticCanonicalModels(models: CatalogModel[]): Promise<vo
       const tier = group.reduce((best, m) => {
         return (tierPriority[m.tier] ?? 0) > (tierPriority[best] ?? 0) ? m.tier : best;
       }, group[0].tier) as import('./synthetic.ts').SyntheticTier;
-
-      // Use the human-readable name as the canonical ID (slug-friendly)
-      const canonicalId = modelName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
 
       canonical.push({ id: canonicalId, tier, backends: allBackends });
     }
