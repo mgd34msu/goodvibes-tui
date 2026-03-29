@@ -1,6 +1,7 @@
 import type { ModelDefinition } from '../providers/registry.ts';
 import { EFFORT_DESCRIPTIONS } from '../providers/effort-levels.ts';
-import { getBenchmarks, getQualityTier, compositeScore } from '../providers/model-benchmarks.ts';
+import { getBenchmarks, getQualityTier, compositeScore, A_TIER_THRESHOLD } from '../providers/model-benchmarks.ts';
+import { getSyntheticModelInfo } from '../providers/synthetic.ts';
 
 export type PickerMode = 'model' | 'provider' | 'effort';
 
@@ -380,16 +381,54 @@ export class ModelPickerModal {
       });
     }
 
+    // Synthetic sub-grouping: when groupBy is 'provider', order synthetic models so that
+    // "Top Models" (score ≥ 0.65) appear before "All Synthetic", each sub-group internally
+    // sorted: top by composite score desc, all alphabetically by id.
+    if (this.groupBy === 'provider' && this.benchmarkSort === 'none') {
+      const nonSynthetic = result.filter(m => m.provider !== 'synthetic');
+      const synthetic = result.filter(m => m.provider === 'synthetic');
+
+      if (synthetic.length > 0) {
+        const topModels = synthetic.filter(m => this._getSyntheticSubgroup(m) === 'top');
+        const allModels = synthetic.filter(m => this._getSyntheticSubgroup(m) === 'all');
+
+        // Sort top models by composite score descending
+        topModels.sort((a, b) => {
+          const bA = getBenchmarks(a.id) ?? getBenchmarks(a.displayName);
+          const bB = getBenchmarks(b.id) ?? getBenchmarks(b.displayName);
+          const sA = bA ? compositeScore(bA.benchmarks) : null;
+          const sB = bB ? compositeScore(bB.benchmarks) : null;
+          if (sA == null && sB == null) return 0;
+          if (sA == null) return 1;
+          if (sB == null) return -1;
+          return sB - sA;
+        });
+
+        // Sort remaining alphabetically by id
+        allModels.sort((a, b) => a.id.localeCompare(b.id));
+
+        result = [...nonSynthetic, ...topModels, ...allModels];
+      }
+    }
+
     return result;
   }
 
   /**
    * Return the group key for a model under the current groupBy mode.
    * Used for inserting group headers in getItems().
+   *
+   * For synthetic provider models with groupBy 'provider', returns sub-group keys:
+   * - 'Top Models'   — benchmark composite score ≥ 0.65 (A-tier or S-tier)
+   * - 'All Synthetic' — remaining synthetic models
    */
   getModelGroupKey(model: ModelDefinition): string {
     switch (this.groupBy) {
-      case 'provider':    return model.provider;
+      case 'provider':
+        if (model.provider === 'synthetic') {
+          return this._getSyntheticSubgroup(model) === 'top' ? 'Top Models' : 'All Synthetic';
+        }
+        return model.provider;
       case 'family':      return detectFamily(model);
       case 'pricingTier': return tierToCategoryFilter(model.tier);
       case 'qualityTier': {
@@ -397,6 +436,18 @@ export class ModelPickerModal {
         return b ? getQualityTier(b.benchmarks) : 'C';
       }
     }
+  }
+
+  /**
+   * Classify a synthetic model as 'top' or 'all' based on benchmark composite score.
+   * 'top': has benchmark data and score ≥ 0.65 (A-tier or S-tier)
+   * 'all': no benchmark data or score < 0.65
+   */
+  private _getSyntheticSubgroup(model: ModelDefinition): 'top' | 'all' {
+    const b = getBenchmarks(model.id) ?? getBenchmarks(model.displayName);
+    if (!b) return 'all';
+    const score = compositeScore(b.benchmarks);
+    return score !== null && score >= A_TIER_THRESHOLD ? 'top' : 'all';
   }
 
   /** Get the items for the current mode as a unified list. */
@@ -474,10 +525,20 @@ export class ModelPickerModal {
     const b = getBenchmarks(model.id) ?? getBenchmarks(model.displayName);
     const qualityTier = b ? getQualityTier(b.benchmarks) : undefined;
     const isFree = tierToCategoryFilter(model.tier) === 'free';
+
+    // For synthetic models, append provider count info if available
+    let detail = model.provider;
+    if (model.provider === 'synthetic') {
+      const info = getSyntheticModelInfo(model.id);
+      if (info !== null) {
+        detail = `${model.provider} [${info.backendCount} provider${info.backendCount !== 1 ? 's' : ''}]`;
+      }
+    }
+
     return {
       id: model.id,
       label: model.displayName,
-      detail: model.provider,
+      detail,
       qualityTier,
       isPinned,
       isFree,

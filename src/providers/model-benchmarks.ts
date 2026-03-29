@@ -393,6 +393,9 @@ export function compositeScore(b: ModelBenchmarks): number | null {
   return total / weight;
 }
 
+/** Minimum composite score to qualify as A-tier (or higher). Used for 'Top Models' filtering. */
+export const A_TIER_THRESHOLD = 0.65;
+
 /**
  * Determine quality tier based on composite benchmark score.
  * S ≥ 0.80 | A ≥ 0.65 | B ≥ 0.50 | C < 0.50 or no data
@@ -401,7 +404,7 @@ export function getQualityTier(benchmarks: ModelBenchmarks): QualityTier {
   const score = compositeScore(benchmarks);
   if (score == null) return 'C';
   if (score >= 0.80) return 'S';
-  if (score >= 0.65) return 'A';
+  if (score >= A_TIER_THRESHOLD) return 'A';
   if (score >= 0.50) return 'B';
   return 'C';
 }
