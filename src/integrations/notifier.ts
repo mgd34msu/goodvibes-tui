@@ -104,7 +104,7 @@ export class Notifier {
         void this.notify('subagent:complete', {
           event: 'subagent:complete',
           agentId: data.id,
-          task: data.id,
+          task: data.result.output?.slice(0, 100) ?? data.id,
           result: data.result.output,
         });
       }),

@@ -1147,8 +1147,8 @@ export class InputHandler {
             const maxVis = Math.max(5, this.getViewportHeight() - MODEL_PICKER_CHROME_LINES);
             this.modelPicker.moveDown(maxVis);
           } else if (token.logicalName === 'tab' && this.modelPicker.mode === 'model') {
-            // Tab cycles category filter: all → free → paid → all
-            const cycle: import('./model-picker.ts').CategoryFilter[] = ['all', 'free', 'paid'];
+            // Tab cycles category filter: all → free → paid → subscription → all
+            const cycle: import('./model-picker.ts').CategoryFilter[] = ['all', 'free', 'paid', 'subscription'];
             const cur = cycle.indexOf(this.modelPicker.categoryFilter);
             this.modelPicker.setCategoryFilter(cycle[(cur + 1) % cycle.length]!);
           }
