@@ -84,6 +84,8 @@ export interface CatalogModel {
   contextWindow?: number;
   /** Maximum output tokens */
   maxOutputTokens?: number;
+  /** Whether this model supports extended reasoning/thinking. */
+  reasoning?: boolean;
 }
 
 /** Internal pricing catalog structure for testing injection. */
@@ -224,6 +226,7 @@ function transformModelsDevResponse(json: ModelsDevResponse): CatalogModel[] {
       const modelName = String(modelData.name ?? modelId);
       const cost = modelData.cost;
       const limit = modelData.limit;
+      const supportsReasoning = modelData.reasoning === true;
 
       const inputCost = typeof cost?.input === 'number' ? cost.input : 0;
       const outputCost = typeof cost?.output === 'number' ? cost.output : 0;
@@ -250,6 +253,7 @@ function transformModelsDevResponse(json: ModelsDevResponse): CatalogModel[] {
         tier,
         contextWindow,
         maxOutputTokens,
+        ...(supportsReasoning ? { reasoning: true } : {}),
       });
     }
   }
@@ -748,6 +752,46 @@ export function getCatalog(): ModelCatalog {
 }
 
 // ---------------------------------------------------------------------------
+// Configured provider detection
+// ---------------------------------------------------------------------------
+
+/**
+ * getConfiguredProviderIds — returns provider IDs that are "configured".
+ *
+ * A provider is considered configured when:
+ *   - It has no required env vars (e.g. self-hosted Ollama, subscription plans), OR
+ *   - At least one of its required env vars is set to a non-empty value in process.env.
+ *
+ * Uses the live _catalogModels to determine which env vars each provider requires.
+ * Returns an empty array if initCatalog() has not yet populated _catalogModels.
+ *
+ * @public Used by the model picker to populate the configuredProviders filter.
+ */
+export function getConfiguredProviderIds(): string[] {
+  // Build a map: providerId → envVars[]
+  const providerEnvMap = new Map<string, string[]>();
+  for (const m of _catalogModels) {
+    if (!providerEnvMap.has(m.providerId)) {
+      providerEnvMap.set(m.providerId, m.providerEnvVars);
+    }
+  }
+
+  const configured: string[] = [];
+  for (const [providerId, envVars] of providerEnvMap) {
+    if (envVars.length === 0) {
+      // No key required — always available
+      configured.push(providerId);
+    } else if (envVars.some(v => {
+      const val = process.env[v];
+      return typeof val === 'string' && val.length > 0;
+    })) {
+      configured.push(providerId);
+    }
+  }
+  return configured;
+}
+
+// ---------------------------------------------------------------------------
 // Change Notifications
 // ---------------------------------------------------------------------------
 
@@ -943,6 +987,10 @@ export function getCatalogModelDefinitions(): MinimalModelDefinition[] {
     const isAnthropic = providerLower.includes('anthropic');
     const isOpenAI = providerLower.includes('openai');
 
+    // m.reasoning comes from models.dev `reasoning` flag (fresh fetch).
+    // Fall back to provider-based heuristic for cached entries that pre-date
+    // the reasoning field (cache written before this code was added).
+    const hasReasoning = m.reasoning === true || isAnthropic || isOpenAI || isGoogle;
     return {
       id: m.id,
       provider: m.providerId,
@@ -951,13 +999,15 @@ export function getCatalogModelDefinitions(): MinimalModelDefinition[] {
       capabilities: {
         toolCalling: true,
         codeEditing: true,
-        reasoning: isAnthropic || isOpenAI || isGoogle,
+        reasoning: hasReasoning,
         multimodal: isGoogle || isOpenAI,
       },
       contextWindow: m.contextWindow ?? (isGoogle ? 1_000_000 : isAnthropic ? 200_000 : 128_000),
       selectable: true,
       // Map pricing tier to ModelTier (free/standard/premium/subscription)
       tier: m.tier === 'subscription' ? 'subscription' : isFree ? 'free' : m.pricing.input >= 3 ? 'premium' : 'standard',
+      // Populate effort picker levels for reasoning-capable models
+      ...(hasReasoning ? { reasoningEffort: ['instant', 'low', 'medium', 'high'] } : {}),
     };
   });
 }
