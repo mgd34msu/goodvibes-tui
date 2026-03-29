@@ -539,8 +539,9 @@ async function applySyntheticCanonicalModels(models: CatalogModel[]): Promise<vo
       const distinctProviders = new Set(keyedBackends.map(b => b.providerName)).size;
       if (distinctProviders < 2) continue;
 
-      // Determine tier: prefer paid > subscription > free (most capable wins)
-      const tierPriority: Record<string, number> = { paid: 2, subscription: 1, free: 0 };
+      // Determine tier: prefer free > subscription > paid (most accessible wins).
+      // If ANY backend is free, the canonical is free — users get free backends first.
+      const tierPriority: Record<string, number> = { free: 2, subscription: 1, paid: 0 };
       const tier = group.reduce((best, m) => {
         return (tierPriority[m.tier] ?? 0) > (tierPriority[best] ?? 0) ? m.tier : best;
       }, group[0].tier) as import('./synthetic.ts').SyntheticTier;
