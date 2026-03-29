@@ -275,7 +275,9 @@ export class Orchestrator {
 
     try {
       const model = providerRegistry.getCurrentModel();
-      const provider: LLMProvider = providerRegistry.getForModel(model.id, model.provider);
+      const provider: LLMProvider = model.provider
+        ? providerRegistry.get(model.provider)
+        : providerRegistry.getForModel(model.id);
       const toolDefinitions = this.toolRegistry.getToolDefinitions();
       const streamEnabled = configManager.get('display.stream') as boolean;
 
