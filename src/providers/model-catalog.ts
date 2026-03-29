@@ -1104,6 +1104,15 @@ export interface MinimalModelDefinition {
  *
  * @public Consumed by registry.ts to populate synthetic models in the model registry.
  */
+/**
+ * Returns the set of all raw backend model IDs from the synthetic canonical models.
+ * Used by getModelRegistry() to exclude catalog models that are already represented
+ * as synthetic canonical backends, preventing duplicate entries in the picker.
+ */
+export function getSyntheticBackendModelIds(): Set<string> {
+  return new Set(_syntheticCanonicals.flatMap(c => c.backends.map(b => b.modelId)));
+}
+
 export function getSyntheticModelDefinitions(): MinimalModelDefinition[] {
   return _syntheticCanonicals.map((c): MinimalModelDefinition => {
     // Use the backend with the largest context window as representative

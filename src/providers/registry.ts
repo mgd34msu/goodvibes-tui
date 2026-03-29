@@ -9,7 +9,7 @@ import type { EventBus } from '../core/event-bus.ts';
 import { loadCustomProviders, watchCustomProviders } from './custom-loader.ts';
 import { SyntheticProvider } from './synthetic.ts';
 
-import { getCatalogModelDefinitions, getSyntheticModelDefinitions } from './model-catalog.ts';
+import { getCatalogModelDefinitions, getSyntheticModelDefinitions, getSyntheticBackendModelIds } from './model-catalog.ts';
 
 /** Model capability tier — controls system prompt verbosity. */
 export type ModelTier = 'free' | 'standard' | 'premium' | 'subscription';
@@ -84,9 +84,12 @@ export function getModelRegistry(): ModelDefinition[] {
   const catalogModels = getCatalogBuiltins();
   const syntheticModels = getSyntheticBuiltins();
 
-  // Catalog models not overridden by custom providers
+  // Catalog models not overridden by custom providers and not represented as
+  // synthetic canonical backends (prevents hf: and other raw backend IDs from
+  // appearing alongside clean synthetic canonical slugs in the model picker).
+  const syntheticBackendIds = getSyntheticBackendModelIds();
   const catalogFiltered = catalogModels.filter(
-    (b) => !customModels.some((c) => c.id === b.id),
+    (b) => !customModels.some((c) => c.id === b.id) && !syntheticBackendIds.has(b.id),
   );
 
   // Discovered server models not already covered by catalog or custom

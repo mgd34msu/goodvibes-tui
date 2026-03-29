@@ -1141,10 +1141,10 @@ export class InputHandler {
               this.modelPicker.close();
             }
           } else if (token.logicalName === 'up') {
-            const maxVis = Math.max(5, this.getViewportHeight() - MODEL_PICKER_CHROME_LINES);
+            const maxVis = Math.max(5, this.getViewportHeight() - MODEL_PICKER_CHROME_LINES - 4);
             this.modelPicker.moveUp(maxVis);
           } else if (token.logicalName === 'down') {
-            const maxVis = Math.max(5, this.getViewportHeight() - MODEL_PICKER_CHROME_LINES);
+            const maxVis = Math.max(5, this.getViewportHeight() - MODEL_PICKER_CHROME_LINES - 4);
             this.modelPicker.moveDown(maxVis);
           } else if (token.logicalName === 'tab' && this.modelPicker.mode === 'model') {
             // Tab cycles category filter: all → free → paid → subscription → all

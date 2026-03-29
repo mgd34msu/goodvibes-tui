@@ -346,7 +346,33 @@ export function getBenchmarks(modelName: string): BenchmarkEntry | undefined {
       }
     }
   }
-  return bestEntry;
+  if (bestEntry) return bestEntry;
+
+  // 4. Slug-normalized match — strips all non-alphanumeric chars before comparing.
+  //    Allows synthetic canonical slugs (e.g. 'gpt4o') to match benchmark entries
+  //    with dashes/spaces in their names (e.g. 'GPT-4o', 'gpt-4o').
+  const slug = lower.replace(/[^a-z0-9]/g, '');
+  if (slug.length > 0) {
+    let slugBest: BenchmarkEntry | undefined;
+    let slugBestLen = Infinity;
+    for (const e of entries) {
+      const nameSlug = e.name.toLowerCase().replace(/[^a-z0-9]/g, '');
+      const idSlug = e.modelId.toLowerCase().replace(/[^a-z0-9]/g, '');
+      if (nameSlug === slug || idSlug === slug) {
+        const len = Math.min(
+          nameSlug === slug ? e.name.length : Infinity,
+          idSlug === slug ? e.modelId.length : Infinity,
+        );
+        if (len < slugBestLen) {
+          slugBestLen = len;
+          slugBest = e;
+        }
+      }
+    }
+    if (slugBest) return slugBest;
+  }
+
+  return undefined;
 }
 
 /**
