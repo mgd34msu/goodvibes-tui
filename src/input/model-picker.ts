@@ -101,6 +101,7 @@ export const POPULAR_PROVIDERS: ReadonlySet<string> = new Set([
   'ollama',
   'openai',
   'openrouter',
+  'synthetic',
 ]);
 
 /**
@@ -198,8 +199,7 @@ export class ModelPickerModal {
     this.query = '';
     this.categoryFilter = 'all';
     this.capabilityFilter = 'none';
-    const idx = providers.indexOf(currentProvider);
-    this.selectedIndex = idx >= 0 ? idx : 0;
+    this.selectedIndex = 0;
     this.scrollOffset = 0;
   }
 
