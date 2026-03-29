@@ -525,7 +525,7 @@ describe('AcpManager', () => {
       proto.cancel = mock(async function (this: AcpConnection) {
         // Default cancel behaviour
         (this as unknown as Record<string, unknown>).info = {
-          ...(this as unknown as Record<string, unknown>).info,
+          ...(this as unknown as Record<string, unknown>).info as Record<string, unknown>,
           status: 'cancelled',
         };
       });
@@ -617,7 +617,7 @@ describe('AcpManager', () => {
       const originalRun = proto.run;
 
       // Deferred resolvers: keep runs pending until after waitAll() captures the promises
-      const resolvers: Array<(r: SubagentResult) => void> = [];
+      const resolvers: Array<() => void> = [];
       let callCount = 0;
       proto.run = mock(async function (this: AcpConnection) {
         const idx = ++callCount;

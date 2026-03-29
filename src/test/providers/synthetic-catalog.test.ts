@@ -291,7 +291,7 @@ describe('backend sort order (context desc)', () => {
 
     const provider = new SyntheticProvider();
     await provider.chat({ ...DUMMY_REQUEST, model: 'sort-test-model' });
-    expect(firstCalled).toBe('large-ctx');
+    expect(firstCalled as unknown as string).toBe('large-ctx');
   });
 
   it('uses maxOutputTokens as tiebreaker when contextWindow is equal', async () => {
@@ -321,7 +321,7 @@ describe('backend sort order (context desc)', () => {
 
     const provider = new SyntheticProvider();
     await provider.chat({ ...DUMMY_REQUEST, model: 'tie-model' });
-    expect(firstCalled).toBe('high-output');
+    expect(firstCalled as unknown as string).toBe('high-output');
   });
 });
 

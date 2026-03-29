@@ -22,6 +22,8 @@ const TEST_CATALOG: PricingCatalog = {
       id: 'test-paid-model',
       name: 'Test Paid Model',
       provider: 'test-provider',
+      providerId: 'test-provider',
+      providerEnvVars: [],
       pricing: { input: 5.00, output: 15.00 },
       tier: 'paid',
     },
@@ -29,6 +31,8 @@ const TEST_CATALOG: PricingCatalog = {
       id: 'test-free-model',
       name: 'Test Free Model',
       provider: 'test-provider',
+      providerId: 'test-provider',
+      providerEnvVars: [],
       pricing: { input: 0, output: 0 },
       tier: 'free',
     },
@@ -36,6 +40,8 @@ const TEST_CATALOG: PricingCatalog = {
       id: 'test-subscription-model',
       name: 'Test Subscription Model',
       provider: 'test-provider',
+      providerId: 'test-provider',
+      providerEnvVars: [],
       pricing: { input: 10.00, output: 30.00 },
       tier: 'subscription',
     },
@@ -43,6 +49,8 @@ const TEST_CATALOG: PricingCatalog = {
       id: 'claude-sonnet-4-6',
       name: 'Claude Sonnet 4.6',
       provider: 'anthropic',
+      providerId: 'anthropic',
+      providerEnvVars: ['ANTHROPIC_API_KEY'],
       pricing: { input: 3.00, output: 15.00 },
       tier: 'paid',
     },
@@ -198,8 +206,7 @@ describe('_getPricingCatalog', () => {
     expect(catalog.fetchedAt).toBeGreaterThan(0);
   });
 
-  test('seed catalog (after reset) includes known Anthropic models', () => {
-    _resetCatalog();
+  test('test catalog includes known Anthropic models', () => {
     const catalog = _getPricingCatalog();
     const claudeSonnet = catalog.models.find(m => m.id === 'claude-sonnet-4-6');
     expect(claudeSonnet).toBeDefined();
@@ -207,8 +214,7 @@ describe('_getPricingCatalog', () => {
     expect(claudeSonnet!.pricing.output).toBe(15);
   });
 
-  test('seed catalog includes at least one free model', () => {
-    _resetCatalog();
+  test('test catalog includes at least one free model', () => {
     const catalog = _getPricingCatalog();
     const freeModels = catalog.models.filter(m => m.tier === 'free');
     expect(freeModels.length).toBeGreaterThan(0);

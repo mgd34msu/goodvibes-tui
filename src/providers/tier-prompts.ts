@@ -43,6 +43,8 @@ export function getTierPromptSupplement(tier: ModelTier): string {
       return STANDARD_SUPPLEMENT;
     case 'premium':
       return '';
+    case 'subscription':
+      return '';
   }
 }
 
