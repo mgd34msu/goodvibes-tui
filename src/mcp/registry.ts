@@ -12,6 +12,7 @@ import { loadMcpConfig } from './config.ts';
 import { McpClient } from './client.ts';
 import type { McpToolInfo, McpToolSchema } from './client.ts';
 import type { McpServerConfig } from './config.ts';
+import { getHookDispatcher } from '../hooks/index.ts';
 
 export interface RegisteredTool {
   /** Fully-qualified tool name: mcp:<server>:<tool> */
@@ -96,13 +97,55 @@ export class McpRegistry {
     if (!client.isConnected) {
       throw new Error(`McpRegistry: server '${parsed.serverName}' is not connected`);
     }
-    return client.callTool(parsed.toolName, args);
+
+    // Pre:mcp:call hook
+    const dispatcher = getHookDispatcher();
+    const preResult = await dispatcher.fire({
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      path: 'Pre:mcp:call' as any, phase: 'Pre' as any, category: 'mcp' as any, specific: 'call',
+      sessionId: '', timestamp: Date.now(),
+      payload: { tool: qualifiedName, args },
+    }).catch(() => ({ ok: true, decision: undefined as string | undefined }));
+    if (preResult.decision === 'deny') {
+      throw new Error(`MCP call '${qualifiedName}' denied by hook: ${(preResult as { reason?: string }).reason ?? 'no reason'}`);
+    }
+
+    try {
+      const result = await client.callTool(parsed.toolName, args);
+      // Post:mcp:call hook (fire-and-forget)
+      dispatcher.fire({
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        path: 'Post:mcp:call' as any, phase: 'Post' as any, category: 'mcp' as any, specific: 'call',
+        sessionId: '', timestamp: Date.now(),
+        payload: { tool: qualifiedName, args },
+      }).catch((err: unknown) => { logger.debug('Post:mcp:call hook error', { error: String(err) }); });
+      return result;
+    } catch (err) {
+      // Fail:mcp:call hook (fire-and-forget)
+      dispatcher.fire({
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        path: 'Fail:mcp:call' as any, phase: 'Fail' as any, category: 'mcp' as any, specific: 'call',
+        sessionId: '', timestamp: Date.now(),
+        payload: { tool: qualifiedName, args, error: err instanceof Error ? err.message : String(err) },
+      }).catch((hookErr: unknown) => { logger.debug('Fail:mcp:call hook error', { error: String(hookErr) }); });
+      throw err;
+    }
   }
 
   /**
    * disconnectAll — Stop all connected MCP server processes.
    */
   async disconnectAll(): Promise<void> {
+    // Lifecycle:mcp:disconnected hooks (fire-and-forget for each server)
+    const dispatcher = getHookDispatcher();
+    for (const name of this.clients.keys()) {
+      dispatcher.fire({
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        path: 'Lifecycle:mcp:disconnected' as any, phase: 'Lifecycle' as any, category: 'mcp' as any, specific: 'disconnected',
+        sessionId: '', timestamp: Date.now(),
+        payload: { server: name },
+      }).catch((err: unknown) => { logger.debug('Lifecycle:mcp:disconnected hook error', { error: String(err) }); });
+    }
     await Promise.allSettled(
       Array.from(this.clients.values()).map((client) => client.disconnect()),
     );
@@ -146,6 +189,13 @@ export class McpRegistry {
       await client.connect();
       this.clients.set(name, client);
       logger.info('McpRegistry: server connected', { name });
+      // Lifecycle:mcp:connected hook (fire-and-forget)
+      getHookDispatcher().fire({
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        path: 'Lifecycle:mcp:connected' as any, phase: 'Lifecycle' as any, category: 'mcp' as any, specific: 'connected',
+        sessionId: '', timestamp: Date.now(),
+        payload: { server: name },
+      }).catch((err: unknown) => { logger.debug('Lifecycle:mcp:connected hook error', { error: String(err) }); });
     } catch (err) {
       logger.error('McpRegistry: failed to connect server', { name, err: String(err) });
       // Don't register the client — it's not usable

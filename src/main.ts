@@ -22,7 +22,7 @@ import { FileUndoManager } from './state/file-undo.ts';
 import { agentOrchestrator } from './agents/orchestrator.ts';
 import { PermissionManager } from './permissions/manager.ts';
 import { AcpManager } from './acp/manager.ts';
-import { HookDispatcher } from './hooks/dispatcher.ts';
+import { getHookDispatcher } from './hooks/index.ts';
 import { PermissionPromptUI } from './permissions/prompt.ts';
 import type { PermissionRequest } from './permissions/prompt.ts';
 import { CommandRegistry } from './input/command-registry.ts';
@@ -378,8 +378,12 @@ async function main() {
     if (agentStatusInterval !== null) { clearInterval(agentStatusInterval); agentStatusInterval = null; }
     if (recoveryInterval !== null) { clearInterval(recoveryInterval); recoveryInterval = null; }
     deleteRecoveryFile();
+    // Fire session end hook (fire-and-forget, best-effort before process.exit)
+    try { getHookDispatcher().fire({ path: 'Lifecycle:session:end' as any, phase: 'Lifecycle' as any, category: 'session' as any, specific: 'end', sessionId: runtime.sessionId, timestamp: Date.now(), payload: { sessionId: runtime.sessionId } }).catch(() => {}); } catch { /* non-fatal */ }
     // Save conversation on exit
     saveConversation(conversation.toJSON() as { messages: object[]; timestamp?: number }, runtime.sessionId, runtime.model, runtime.provider, conversation.title || '');
+    // Fire session save hook
+    try { getHookDispatcher().fire({ path: 'Lifecycle:session:save' as any, phase: 'Lifecycle' as any, category: 'session' as any, specific: 'save', sessionId: runtime.sessionId, timestamp: Date.now(), payload: { sessionId: runtime.sessionId } }).catch(() => {}); } catch { /* non-fatal */ }
     try { ScheduleManager.getInstance().destroy(); } catch { /* non-fatal */ }
     try { providerRegistry.stopWatching(); } catch { /* non-fatal */ }
     stdin.removeAllListeners('data');
@@ -530,7 +534,7 @@ async function main() {
 
   const permissionManager = new PermissionManager(bus);
 
-  const hookDispatcher = new HookDispatcher();
+  const hookDispatcher = getHookDispatcher();
 
   const input = new InputHandler(
     bus,
@@ -561,6 +565,53 @@ async function main() {
 
   const acpManager = new AcpManager(bus);
   orchestrator.registerDelegateTool(acpManager);
+
+  // ── Hook bridge: EventBus events → HookDispatcher fire() ──────────────────
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const fireHook = (path: string, phase: string, category: string, specific: string, payload: Record<string, unknown>): void => {
+    hookDispatcher.fire({
+      path: path as any,
+      phase: phase as any,
+      category: category as any,
+      specific,
+      sessionId: runtime.sessionId,
+      timestamp: Date.now(),
+      payload,
+    }).catch((err: unknown) => logger.debug('Hook bridge fire error', { path, error: String(err) }));
+  };
+
+  // Lifecycle:agent:*
+  unsubs.push(bus.on('subagent:spawned', ({ id, task }: { id: string; task: string }) => {
+    fireHook('Lifecycle:agent:spawned', 'Lifecycle', 'agent', 'spawned', { agentId: id, task });
+  }));
+  unsubs.push(bus.on('subagent:complete', ({ id, result }: { id: string; result: unknown }) => {
+    fireHook('Lifecycle:agent:completed', 'Lifecycle', 'agent', 'completed', { agentId: id, result: result as Record<string, unknown> });
+  }));
+  unsubs.push(bus.on('subagent:error', ({ id, error }: { id: string; error: Error }) => {
+    const isCancelled = error.message === 'Agent cancelled' || error.message.includes('cancelled');
+    const specific = isCancelled ? 'cancelled' : 'failed';
+    fireHook(`Lifecycle:agent:${specific}`, 'Lifecycle', 'agent', specific, { agentId: id, error: error.message });
+  }));
+
+  // Lifecycle:workflow:*
+  unsubs.push(bus.on('wrfc:chain-created', ({ chainId, task }: { chainId: string; task: string }) => {
+    fireHook('Lifecycle:workflow:started', 'Lifecycle', 'workflow', 'started', { chainId, task });
+  }));
+  unsubs.push(bus.on('wrfc:chain-passed', ({ chainId }: { chainId: string }) => {
+    fireHook('Lifecycle:workflow:completed', 'Lifecycle', 'workflow', 'completed', { chainId });
+  }));
+  unsubs.push(bus.on('wrfc:chain-failed', ({ chainId, reason }: { chainId: string; reason: string }) => {
+    fireHook('Lifecycle:workflow:failed', 'Lifecycle', 'workflow', 'failed', { chainId, reason });
+  }));
+
+  // Change:budget:*
+  unsubs.push(bus.on('context:warning', ({ usage, threshold }: { usage: number; threshold: number }) => {
+    const specific = usage >= threshold ? 'exceeded' : 'warning';
+    fireHook(`Change:budget:${specific}`, 'Change', 'budget', specific, { usage, threshold });
+  }));
+
+  // Lifecycle:session:start (once, at startup)
+  fireHook('Lifecycle:session:start', 'Lifecycle', 'session', 'start', { sessionId: runtime.sessionId });
 
   // --- MCP server auto-discovery ---
   // Step 1: Connect to all servers already declared in config files.
@@ -622,6 +673,7 @@ async function main() {
       if (meta?.provider) runtime.provider = meta.provider;
       writeLastSessionPointer(sessionId);
       conversation.log(`Resumed session: ${sessionId}`, { fg: '135' });
+      fireHook('Lifecycle:session:load', 'Lifecycle', 'session', 'load', { sessionId });
     } catch (e) {
       logger.debug('session:resume handler failed', { error: String(e) });
       conversation.log('Failed to resume session.', { fg: '#ef4444' });
@@ -1119,7 +1171,7 @@ async function main() {
   // Refresh git status after each turn completes or after tool results arrive
   unsubs.push(bus.on('turn:complete', () => {
     // Auto-save after every LLM turn so kills don't lose the session
-    try { saveConversation(conversation.toJSON() as { messages: object[]; timestamp?: number }, runtime.sessionId, runtime.model, runtime.provider, conversation.title || ''); } catch (e) { logger.debug('auto-save on turn:complete failed', { error: String(e) }); }
+    try { saveConversation(conversation.toJSON() as { messages: object[]; timestamp?: number }, runtime.sessionId, runtime.model, runtime.provider, conversation.title || ''); fireHook('Lifecycle:session:save', 'Lifecycle', 'session', 'save', { sessionId: runtime.sessionId }); } catch (e) { logger.debug('auto-save on turn:complete failed', { error: String(e) }); }
     gitStatusProvider.refresh().then((info) => {
       lastGitInfo = info;
       bus.emit('render:request');
