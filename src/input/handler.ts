@@ -1710,8 +1710,9 @@ export class InputHandler {
             continue;
           }
           if (token.logicalName === 'enter') {
-            // Execute the command
-            const raw = this.prompt.trim();
+            // If autocomplete is active and has a selection, execute that command
+            const selectedCmd = this.autocomplete?.isActive ? this.autocomplete.getSelected() : undefined;
+            const raw = selectedCmd ? `/${selectedCmd.name}` : this.prompt.trim();
             this.prompt = '';
             this.cursorPos = 0;
             this.commandMode = false;
