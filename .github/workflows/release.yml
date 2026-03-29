@@ -34,7 +34,7 @@ jobs:
             artifact: goodvibes-macos-arm64
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - uses: oven-sh/setup-bun@v2
         with:
@@ -69,7 +69,7 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           fetch-depth: 0
 
@@ -116,7 +116,7 @@ jobs:
     # Only publish if NPM_TOKEN secret is set
     if: vars.PUBLISH_NPM == 'true'
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - uses: oven-sh/setup-bun@v2
         with:
