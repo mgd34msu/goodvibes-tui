@@ -21,8 +21,8 @@ The agent system runs subagents in-process, each with its own conversation histo
 ## Features
 
 ### Multi-Provider LLM Support
-- Built-in: Anthropic, OpenAI, Google Gemini, and InceptionLabs (diffusion LLM)
-- **13+ providers** — Groq, Cerebras, Mistral, Ollama Cloud, NVIDIA NIM, HuggingFace, LLM7, OpenRouter, AIHubMix, and more
+- Native provider adapters: Anthropic, OpenAI, Google Gemini, and InceptionLabs (diffusion LLM)
+- **15+ auto-registerable providers** — Groq, Cerebras, Mistral, Ollama Cloud, NVIDIA NIM, HuggingFace, LLM7, OpenRouter, AIHubMix, and more
 - **Dynamic catalog** — 4,102 models from 105 providers sourced from models.dev with 24h TTL cache; set an env var and the provider auto-configures
 - **Custom providers**: add any OpenAI-compatible API via JSON config in `~/.goodvibes/tui/providers/`
 - Hot-reload: provider configs are watched and reloaded automatically on change
@@ -47,6 +47,9 @@ The agent system runs subagents in-process, each with its own conversation histo
 - Benchmark sort: SWE-bench, GPQA, composite score
 - Quality tier badges [S/A/B/C] displayed next to model names
 - Pinned/favorite models shown at top with star indicator
+- Synthetic model grouping: "Top Models" (A/S-tier benchmark) and "All Synthetic"
+- Provider count per synthetic model (e.g., "4 providers")
+- Provider search mode with Configured/Popular/All grouping
 
 ### Favorites & Usage Tracking
 - `/pin` and `/unpin` to star models as favorites
@@ -64,6 +67,30 @@ The agent system runs subagents in-process, each with its own conversation histo
 - File picker overlay with fuzzy search and Tab completion
 - Git status in header (branch, dirty indicator, ahead/behind)
 - Background process indicator and live-tail modal
+
+### Sidebar Panels
+- 20+ built-in panels: File Explorer, Git, Diff, Symbol Outline, Agent Inspector, Cost Tracker, Debug, Context Visualizer, WRFC Chain Viewer, Plan Dashboard, Provider Health, Session Browser, and more
+- Split-pane layout with top/bottom panes and resizable divider
+- Panel picker overlay with category grouping and search
+- Toggle with `/panel` or keyboard shortcut
+
+### Session & Profile Management
+- JSONL session files with auto-save on every turn and crash recovery
+- `/save`, `/load`, `/sessions` for named session management
+- Session search across all saved conversations
+- Named config profiles via `/profiles` — save and load display/provider/behavior settings
+- Session browser panel with resume support
+
+### Export
+- Export conversations as Markdown, JSON, or self-contained HTML
+- Sensitive data redaction (API keys, file paths, tokens)
+- Token usage summaries and cost tracking in exports
+
+### Local LLM Auto-Discovery
+- Network scanner probes localhost and local subnets for LLM servers
+- Detects Ollama, LM Studio, vLLM, llama.cpp, LocalAI, TGI, Jan, GPT4All, KoboldCPP, Aphrodite
+- Auto-registers discovered servers with dynamic context window and output limit detection
+- Persists discovered providers across sessions; reconciles on background re-scan
 
 ### 12 Built-In Tools
 Read, write, edit, find, exec, fetch, analyze, inspect, agent, state, workflow, registry.
@@ -117,22 +144,18 @@ Language intelligence powered by bundled LSP servers (TypeScript, Python, Bash, 
 
 ## Supported Providers & Models
 
-| Model | Provider | Context | Tools | Reasoning | Multimodal | Selectable |
-|-------|----------|---------|-------|-----------|------------|------------|
-| Mercury 2 | InceptionLabs | 32k | Yes | Yes | No | Yes |
-| Mercury Edit | InceptionLabs | 32k | No | No | No | No (internal) |
-| GPT-5.4 | OpenAI | 128k | Yes | Yes | Yes | Yes |
-| GPT-5.3 Chat (latest) | OpenAI | 128k | Yes | Yes | Yes | Yes |
-| GPT-5 Mini | OpenAI | 128k | Yes | No | Yes | Yes |
-| GPT-5 Nano | OpenAI | 32k | Yes | No | No | Yes |
-| GPT OSS 120B | OpenAI | 128k | Yes | No | No | Yes |
-| Gemini 3.1 Pro (preview) | Gemini | 1M | Yes | Yes | Yes | Yes |
-| Gemini 3 Flash | Gemini | 1M | Yes | No | Yes | Yes |
-| Gemini 3.1 Flash Lite (preview) | Gemini | 128k | Yes | No | No | Yes |
-| Gemini 2.5 Pro | Gemini | 1M | Yes | Yes | Yes | Yes |
-| Claude Opus 4.6 | Anthropic | 1M | Yes | Yes | Yes | Yes |
-| Claude Sonnet 4.6 | Anthropic | 1M | Yes | Yes | Yes | Yes |
-| Claude Haiku 4.5 | Anthropic | 200k | Yes | No | Yes | Yes |
+Models are sourced dynamically from [models.dev](https://models.dev) — the catalog contains 4,000+ models from 105+ providers. Set an API key and the models appear automatically.
+
+Example models (sourced dynamically from models.dev):
+
+| Model | Provider | Context | Tools | Reasoning | Multimodal |
+|-------|----------|---------|-------|-----------|------------|
+| Mercury 2 | InceptionLabs | 32k | Yes | Yes | No |
+| GPT-5.3 Chat (latest) | OpenAI | 128k | Yes | Yes | Yes |
+| Gemini 3.1 Pro (preview) | Gemini | 1M | Yes | Yes | Yes |
+| Claude Opus 4.6 | Anthropic | 1M | Yes | Yes | Yes |
+| Claude Sonnet 4.6 | Anthropic | 1M | Yes | Yes | Yes |
+| Gemini 2.5 Pro | Gemini | 1M | Yes | Yes | Yes |
 
 Mercury 2 supports configurable reasoning effort levels: `instant`, `low`, `medium`, `high`.
 
@@ -149,9 +172,9 @@ Any OpenAI-compatible API can be added by dropping a JSON file in `~/.goodvibes/
   "apiKeyEnv": "OPENROUTER_API_KEY",
   "models": [
     {
-      "id": "anthropic/claude-3.5-sonnet",
-      "displayName": "Claude 3.5 Sonnet (via OpenRouter)",
-      "description": "Anthropic Claude 3.5 Sonnet via OpenRouter",
+      "id": "anthropic/claude-sonnet-4-6",
+      "displayName": "Claude Sonnet 4.6 (via OpenRouter)",
+      "description": "Anthropic Claude Sonnet 4.6 via OpenRouter",
       "contextWindow": 200000,
       "capabilities": {
         "toolCalling": true,
@@ -310,7 +333,7 @@ Configuration is stored in `.goodvibes/config.json` in the current working direc
 | `display.theme` | `vaporwave` | Color theme |
 | `display.showThinking` | `false` | Show model thinking traces |
 | `display.showTokenSpeed` | `false` | Show tokens/sec in status bar |
-| `provider.model` | `mercury-2` | Active model ID |
+| `provider.model` | `openrouter/free` | Active model ID |
 | `provider.reasoningEffort` | `medium` | Reasoning depth for supported models |
 | `provider.systemPromptFile` | `` | Path to a custom system prompt file |
 | `behavior.autoApprove` | `false` | Auto-approve all tool permission prompts |
@@ -500,6 +523,18 @@ Discover and introspect skills, agents, and tools.
 | `/next-error` | `/ne` | Jump to the next error message in the conversation |
 | `/prev-error` | `/pe` | Jump to the previous error message in the conversation |
 | `/profiles` | `/profile` | Browse and load config profiles |
+| `/pin [id]` | — | Pin a model as favorite |
+| `/unpin [id]` | — | Remove a model from favorites |
+| `/git` | — | Open git panel (initializes repo if needed) |
+| `/scan` | — | Scan for local LLM servers |
+| `/add-provider` | — | Interactive guided provider setup |
+| `/plan [task]` | — | Create an execution plan for a multi-step task |
+| `/panel` | — | Toggle sidebar panel visibility |
+| `/plugin [action]` | — | Manage plugins (enable/disable/reload/list) |
+| `/share [format]` | — | Export conversation (md/json/html) |
+| `/branch [name]` | — | Fork, list, switch, or merge conversation branches |
+| `/agents` | — | List active and completed agents |
+| `/wrfc` | — | Show WRFC chain status |
 | `/help` | `/h`, `/?` | Show available commands and keyboard shortcuts |
 | `/quit` | `/q`, `/:q` | Exit the application |
 
@@ -701,6 +736,31 @@ MCP tool calls respect the `permissions.tools.mcp` setting (default: `prompt`).
 
 ---
 
+## Plugin System
+
+Extend goodvibes-tui with custom plugins. Place plugin folders in `~/.goodvibes/tui/plugins/`:
+
+Each plugin has a `manifest.json` and an entry file (default: `index.ts`):
+
+```json
+{
+  "name": "my-plugin",
+  "version": "1.0.0",
+  "description": "My custom plugin"
+}
+```
+
+Plugins receive a sandboxed API with:
+- `registerCommand()` — add custom slash commands
+- `registerProvider()` — add OpenAI-compatible LLM providers
+- `registerTool()` — add custom tools available to the LLM
+- `onEvent()` — subscribe to EventBus events
+- `getConfig()` — read plugin-specific settings
+
+Manage via `/plugin enable|disable|reload|list`.
+
+---
+
 ## Architecture
 
 ```
@@ -709,11 +769,19 @@ src/
 ├── core/
 │   └── orchestrator.ts  — Main conversation loop, tool dispatch, streaming
 ├── providers/
-│   ├── registry.ts      — MODEL_REGISTRY, ProviderRegistry, custom model merging
-│   ├── custom-loader.ts — Hot-reloadable custom provider loader from ~/.goodvibes/tui/providers/
+│   ├── registry.ts      — ProviderRegistry, model selection, custom model merging
+│   ├── synthetic.ts     — SyntheticProvider: cross-provider failover with tier isolation
+│   ├── model-catalog.ts — Dynamic catalog from models.dev (4000+ models)
+│   ├── model-benchmarks.ts — ZeroEval benchmark integration
+│   ├── auto-register.ts — Env-var-based provider auto-registration
+│   ├── favorites.ts     — Model pinning and usage tracking
+│   ├── model-limits.ts  — OpenRouter-sourced token limits cache
+│   ├── anthropic-compat.ts — Anthropic Messages API adapter (for proxies)
+│   ├── tool-formats.ts  — OpenAI/Anthropic/Gemini wire format converters
+│   ├── custom-loader.ts — Hot-reloadable custom provider loader
 │   ├── anthropic.ts     — Anthropic SDK adapter
 │   ├── openai.ts        — OpenAI SDK adapter
-│   ├── openai-compat.ts — OpenAI-compatible endpoint adapter (InceptionLabs + custom)
+│   ├── openai-compat.ts — OpenAI-compatible endpoint adapter
 │   └── gemini.ts        — Google Gemini adapter
 ├── tools/               — 12 built-in tools (read/write/edit/find/exec/fetch/analyze/inspect/agent/state/workflow/registry)
 ├── agents/
@@ -746,7 +814,20 @@ src/
 ├── permissions/         — Permission manager with per-tool enforcement
 ├── security/            — Spawn tokens (HMAC + TTL)
 ├── daemon/              — HTTP daemon server and webhook listener
-└── git/                 — GitService wrapping simple-git
+├── git/                 — GitService wrapping simple-git
+├── acp/                 — Agent Client Protocol (subagent child processes)
+├── discovery/           — Local LLM scanner + MCP server auto-discovery
+├── panels/              — 20+ sidebar panels (agent inspector, cost tracker, git, etc.)
+├── integrations/        — Discord, Slack, GitHub webhook integrations
+├── export/              — Markdown, JSON, HTML session export with redaction
+├── plugins/             — Plugin system (manifest, loader, sandboxed API)
+├── profiles/            — Named config profile save/load
+├── sessions/            — JSONL session persistence and search
+├── scheduler/           — Cron-based recurring task scheduler
+├── bookmarks/           — Block bookmark manager
+└── intelligence/        — Tree-sitter + LSP language intelligence
+    ├── tree-sitter/     — WASM-based parsing and symbol extraction
+    └── lsp/             — Language server protocol clients
 ```
 
 ### Key Design Decisions
@@ -757,6 +838,9 @@ src/
 - **Tree-sitter for code intelligence** — TypeScript, JavaScript, Python, JSON, and CSS grammars for structural analysis, outline extraction, and AST-level edits
 - **Bundled language servers** — TypeScript, Python, Bash, CSS, HTML, and JSON language servers ship as npm dependencies and work out of the box. Rust (`rust-analyzer`) and Go (`gopls`) are downloaded automatically on first use with SHA256 integrity verification. No manual LSP setup required.
 - **SQL.js for analytics** — WASM SQLite for in-process tool call telemetry without a database server
+- **Agent Client Protocol** — subagents communicate via @agentclientprotocol/sdk over stdio ndJsonStream
+- **Plugin system** — manifest.json + sandboxed API surface with lifecycle hooks (init/activate/deactivate)
+- **Crash recovery** — periodic JSONL snapshots with recovery prompt on next startup
 
 ---
 
