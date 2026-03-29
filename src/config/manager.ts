@@ -5,6 +5,7 @@ import type { GoodVibesConfig, ConfigKey, ConfigValue, ConfigSetting } from './s
 import { DEFAULT_CONFIG, CONFIG_SCHEMA } from './schema.ts';
 import { ConfigError } from '../types/errors.ts';
 import { logger } from '../utils/logger.ts';
+import { getHookDispatcher } from '../hooks/index.ts';
 
 /** Deep immutable type — prevents mutation of nested objects returned from getAll(). */
 type DeepReadonly<T> = {
@@ -141,14 +142,40 @@ export class ConfigManager {
       const [section, subsection, field] = parts;
       const sect = this.config[section as keyof GoodVibesConfig] as unknown as Record<string, Record<string, unknown>>;
       if (!sect[subsection]) throw new Error(`Invalid config path: subsection '${section}.${subsection}' does not exist`);
+      const previousValue = sect[subsection][field];
       sect[subsection][field] = value;
       this.save();
+      this.emitConfigHook(key, previousValue, value);
       return;
     }
     const [category, field] = parts;
     const cat = this.config[category as keyof GoodVibesConfig] as Record<string, unknown>;
+    const previousValue = cat[field];
     cat[field] = value;
     this.save();
+    this.emitConfigHook(key, previousValue, value);
+  }
+
+  /**
+   * Fire the Change:config hook for a config key change.
+   * Best-effort: the hook dispatcher may not be initialised during startup.
+   */
+  private emitConfigHook(key: ConfigKey, previousValue: unknown, newValue: unknown): void {
+    try {
+      getHookDispatcher()
+        .fire({
+          path: `Change:config:${key}` as any,
+          phase: 'Change' as any,
+          category: 'config' as any,
+          specific: key,
+          sessionId: '',
+          timestamp: Date.now(),
+          payload: { key, value: newValue, previousValue },
+        })
+        .catch(() => { /* ignore async errors */ });
+    } catch {
+      // Dispatcher not ready during startup — safe to ignore
+    }
   }
 
   /**

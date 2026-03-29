@@ -334,6 +334,26 @@ export class Orchestrator {
         // preflightResult === 'ok' or 'compacted' — proceed with chat call
 
         const tokenLimits = getTokenLimitsForModel(model);
+
+        // Pre:llm:chat hook
+        if (this.hookDispatcher) {
+          const preEvent: HookEvent = {
+            path: 'Pre:llm:chat',
+            phase: 'Pre',
+            category: 'llm',
+            specific: 'chat',
+            sessionId: this.sessionId,
+            timestamp: Date.now(),
+            payload: { model: model.id, provider: model.provider, messageCount: this.conversation.getMessagesForLLM().length },
+          };
+          const preResult = await this.hookDispatcher.fire(preEvent);
+          if (preResult.decision === 'deny') {
+            this.conversation.addSystemMessage(preResult.reason ?? 'LLM call blocked by hook');
+            continueLoop = false;
+            break;
+          }
+        }
+
         let response: Awaited<ReturnType<typeof provider.chat>>;
         try {
           response = await provider.chat({
@@ -371,6 +391,18 @@ export class Orchestrator {
             continueLoop = false;
             break;
           }
+          // Fail:llm:chat hook (fire-and-forget)
+          if (this.hookDispatcher) {
+            this.hookDispatcher.fire({
+              path: 'Fail:llm:chat',
+              phase: 'Fail',
+              category: 'llm',
+              specific: 'chat',
+              sessionId: this.sessionId,
+              timestamp: Date.now(),
+              payload: { model: model.id, provider: model.provider, error: chatErr instanceof Error ? chatErr.message : String(chatErr) },
+            }).catch((err: unknown) => { logger.debug('Fail:llm:chat hook error', { error: String(err) }); });
+          }
           throw chatErr;
         }
 
@@ -393,6 +425,19 @@ export class Orchestrator {
           content: response.content,
           toolCalls: response.toolCalls,
         });
+
+        // Post:llm:chat hook (fire-and-forget)
+        if (this.hookDispatcher) {
+          this.hookDispatcher.fire({
+            path: 'Post:llm:chat',
+            phase: 'Post',
+            category: 'llm',
+            specific: 'chat',
+            sessionId: this.sessionId,
+            timestamp: Date.now(),
+            payload: { model: model.id, provider: model.provider, inputTokens: response.usage.inputTokens, outputTokens: response.usage.outputTokens, toolCallCount: response.toolCalls.length },
+          }).catch((err: unknown) => { logger.debug('Post:llm:chat hook error', { error: String(err) }); });
+        }
 
         // Gather reasoning/thinking content from stream or response
         const reasoningForMsg = reasoningAccumulated || undefined;
@@ -556,8 +601,27 @@ export class Orchestrator {
           this.bus.emit('context:warning', { usage: usagePct, threshold });
           this.bus.emit('render:request');
 
+          // Pre:compact:auto hook — await to honour deny decisions
+          let skipAutoCompact = false;
+          if (this.hookDispatcher) {
+            const preAutoResult = await this.hookDispatcher.fire({
+              path: 'Pre:compact:auto',
+              phase: 'Pre',
+              category: 'compact',
+              specific: 'auto',
+              sessionId: this.sessionId,
+              timestamp: Date.now(),
+              payload: { trigger: 'auto', usagePct, totalTokens, maxTokens, threshold },
+            }).catch((err: unknown) => { logger.debug('Pre:compact:auto hook error', { error: String(err) }); return { ok: true } as import('../hooks/types.ts').HookResult; });
+            if (preAutoResult.decision === 'deny') {
+              this.isCompacting = false;
+              skipAutoCompact = true;
+              logger.info('Orchestrator: Pre:compact:auto denied by hook — skipping auto-compact', { reason: preAutoResult.reason });
+            }
+          }
+
           // Run compaction without blocking current turn completion
-          void this.conversation.compact(
+          if (!skipAutoCompact) void this.conversation.compact(
             providerRegistry,
             currentModel.id,
             10,
@@ -575,6 +639,18 @@ export class Orchestrator {
               usagePct,
               threshold,
             });
+            // Post:compact:auto hook (fire-and-forget)
+            if (this.hookDispatcher) {
+              this.hookDispatcher.fire({
+                path: 'Post:compact:auto',
+                phase: 'Post',
+                category: 'compact',
+                specific: 'auto',
+                sessionId: this.sessionId,
+                timestamp: Date.now(),
+                payload: { trigger: 'auto', usagePct, totalTokens, maxTokens, threshold },
+              }).catch((err: unknown) => { logger.debug('Post:compact:auto hook error', { error: String(err) }); });
+            }
           }).catch((err: unknown) => {
             this.isCompacting = false;
             const msg = err instanceof Error ? err.message : String(err);
@@ -583,6 +659,18 @@ export class Orchestrator {
               `Auto-compact failed: ${msg}. Use /compact to retry manually.`
             );
             this.bus.emit('render:request');
+            // Fail:compact:auto hook (fire-and-forget)
+            if (this.hookDispatcher) {
+              this.hookDispatcher.fire({
+                path: 'Fail:compact:auto',
+                phase: 'Fail',
+                category: 'compact',
+                specific: 'auto',
+                sessionId: this.sessionId,
+                timestamp: Date.now(),
+                payload: { trigger: 'auto', usagePct, totalTokens, maxTokens, threshold, error: msg },
+              }).catch((err: unknown) => { logger.debug('Fail:compact:auto hook error', { error: String(err) }); });
+            }
           });
         } else if (usagePct >= Math.max(threshold - 10, 50) && bracket > this.lastWarningBracket) {
           // Warning zone: approaching threshold but not yet compacting
@@ -696,6 +784,24 @@ export class Orchestrator {
       );
       this.bus.emit('render:request');
 
+      // Pre:compact:preflight hook — check for deny to skip compaction
+      if (this.hookDispatcher) {
+        const preResult = await this.hookDispatcher.fire({
+          path: 'Pre:compact:preflight',
+          phase: 'Pre',
+          category: 'compact',
+          specific: 'preflight',
+          sessionId: this.sessionId,
+          timestamp: Date.now(),
+          payload: { trigger: 'preflight', estimatedTokens, contextWindow },
+        }).catch((err: unknown) => { logger.debug('Pre:compact:preflight hook error', { error: String(err) }); return { ok: true } as import('../hooks/types.ts').HookResult; });
+        if (preResult.decision === 'deny') {
+          this.isCompacting = false;
+          logger.info('Orchestrator: Pre:compact:preflight denied by hook — skipping preflight compact', { reason: preResult.reason });
+          return 'ok';
+        }
+      }
+
       try {
         await this.conversation.compact(
           providerRegistry,
@@ -705,10 +811,34 @@ export class Orchestrator {
           model.provider,
         );
         this.conversation.addSystemMessage('Context compacted. Retrying request...');
+        // Post:compact:preflight hook (fire-and-forget)
+        if (this.hookDispatcher) {
+          this.hookDispatcher.fire({
+            path: 'Post:compact:preflight',
+            phase: 'Post',
+            category: 'compact',
+            specific: 'preflight',
+            sessionId: this.sessionId,
+            timestamp: Date.now(),
+            payload: { trigger: 'preflight', estimatedTokens, contextWindow },
+          }).catch((err: unknown) => { logger.debug('Post:compact:preflight hook error', { error: String(err) }); });
+        }
       } catch (compactErr) {
         const msg = compactErr instanceof Error ? compactErr.message : String(compactErr);
         logger.error('Orchestrator: pre-flight compact failed', { error: msg });
         this.conversation.addSystemMessage(`Auto-compact failed: ${msg}.`);
+        // Fail:compact:preflight hook (fire-and-forget)
+        if (this.hookDispatcher) {
+          this.hookDispatcher.fire({
+            path: 'Fail:compact:preflight',
+            phase: 'Fail',
+            category: 'compact',
+            specific: 'preflight',
+            sessionId: this.sessionId,
+            timestamp: Date.now(),
+            payload: { trigger: 'preflight', estimatedTokens, contextWindow, error: msg },
+          }).catch((err: unknown) => { logger.debug('Fail:compact:preflight hook error', { error: String(err) }); });
+        }
       } finally {
         this.isCompacting = false;
       }
@@ -938,6 +1068,34 @@ export class Orchestrator {
       }
 
       this.bus.emit('turn:tool-result', { callId: call.id, result });
+
+      // Post/Fail:file:write|edit hooks — fire for write/edit tools regardless of tool hook
+      if (this.hookDispatcher && (call.name === 'write' || call.name === 'edit')) {
+        const filePath = typeof call.arguments['path'] === 'string' ? call.arguments['path'] :
+                         (Array.isArray(call.arguments['files']) ? JSON.stringify(call.arguments['files']) : '');
+        if (result.success) {
+          this.hookDispatcher.fire({
+            path: `Post:file:${call.name}` as import('../hooks/types.ts').HookEventPath,
+            phase: 'Post',
+            category: 'file',
+            specific: call.name,
+            sessionId: this.sessionId,
+            timestamp: Date.now(),
+            payload: { tool: call.name, path: filePath, callId: call.id },
+          }).catch((err: unknown) => { logger.debug(`Post:file:${call.name} hook error`, { error: String(err) }); });
+        } else {
+          this.hookDispatcher.fire({
+            path: `Fail:file:${call.name}` as import('../hooks/types.ts').HookEventPath,
+            phase: 'Fail',
+            category: 'file',
+            specific: call.name,
+            sessionId: this.sessionId,
+            timestamp: Date.now(),
+            payload: { tool: call.name, path: filePath, callId: call.id, error: result.error },
+          }).catch((err: unknown) => { logger.debug(`Fail:file:${call.name} hook error`, { error: String(err) }); });
+        }
+      }
+
       results.push(result);
     }
 
