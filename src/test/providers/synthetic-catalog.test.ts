@@ -61,13 +61,47 @@ function mockRateLimit(name: string): LLMProvider {
   };
 }
 
-/** Create a mock provider that throws a non-rate-limit error. */
-function mockError(name: string, msg = 'fatal error'): LLMProvider {
+/** Create a mock provider that throws a non-rate-limit client error (4xx, not 429). Defaults to 400 Bad Request. */
+function mockClientError(name: string, msg = 'bad request', status = 400): LLMProvider {
   return {
     name,
     models: [],
     chat: async (_req: ChatRequest): Promise<ChatResponse> => {
-      throw new ProviderError(msg, 500);
+      throw new ProviderError(msg, status);
+    },
+  };
+}
+
+/** Create a mock provider that throws a server error (5xx) — should failover. */
+function mockServerError(name: string, msg = 'internal server error', status = 500): LLMProvider {
+  return {
+    name,
+    models: [],
+    chat: async (_req: ChatRequest): Promise<ChatResponse> => {
+      throw new ProviderError(msg, status);
+    },
+  };
+}
+
+/** Create a mock provider that throws a plain network error — should failover. */
+function mockNetworkError(name: string, msg = 'ECONNREFUSED'): LLMProvider {
+  return {
+    name,
+    models: [],
+    chat: async (_req: ChatRequest): Promise<ChatResponse> => {
+      throw new Error(msg);
+    },
+  };
+}
+
+/** Create a mock provider that throws a rate-limit error with a short retry-after for fast tests. */
+function mockRateLimitFast(name: string): LLMProvider {
+  return {
+    name,
+    models: [],
+    chat: async (_req: ChatRequest): Promise<ChatResponse> => {
+      // 'retry-after: 1' is parsed by ProviderError as retryAfterMs = 1000
+      throw new ProviderError('rate limited retry-after: 1', 429);
     },
   };
 }
@@ -461,21 +495,23 @@ describe('failover within tier', () => {
     expect(response.content).toBe('ok-provider/ok');
   });
 
-  it('does NOT fall over for non-rate-limit errors', async () => {
+  it('does NOT fall over for non-rate-limit client errors (4xx)', async () => {
     _setSyntheticCatalogForTest(CATALOG_FAILOVER);
-    registryMap.set('rate-limited-provider', mockError('rate-limited-provider', 'internal server error'));
+    // 400 Bad Request is a client error — should re-throw immediately without failover
+    registryMap.set('rate-limited-provider', mockClientError('rate-limited-provider', 'bad request', 400));
     registryMap.set('ok-provider', mockOk('ok-provider'));
 
     const provider = new SyntheticProvider();
     await expect(
       provider.chat({ ...DUMMY_REQUEST, model: 'failover-model' }),
-    ).rejects.toThrow('internal server error');
+    ).rejects.toThrow('bad request');
   });
 
   it('throws 429 when all backends are rate-limited', async () => {
     _setSyntheticCatalogForTest(CATALOG_FAILOVER);
-    registryMap.set('rate-limited-provider', mockRateLimit('rate-limited-provider'));
-    registryMap.set('ok-provider', mockRateLimit('ok-provider'));
+    // Use fast rate-limit mocks (retry-after: 1s) so auto-wait completes in ~1.1s
+    registryMap.set('rate-limited-provider', mockRateLimitFast('rate-limited-provider'));
+    registryMap.set('ok-provider', mockRateLimitFast('ok-provider'));
 
     const provider = new SyntheticProvider();
     let thrown: ProviderError | null = null;
@@ -488,6 +524,28 @@ describe('failover within tier', () => {
     expect(thrown).not.toBeNull();
     expect(thrown!.statusCode).toBe(429);
     expect(thrown!.message).toContain('failover-model');
+  }, 5000);
+
+  it('fails over on 500 server errors', async () => {
+    _setSyntheticCatalogForTest(CATALOG_FAILOVER);
+    // 500 is a transient server error — should failover to next backend
+    registryMap.set('rate-limited-provider', mockServerError('rate-limited-provider', 'server error', 500));
+    registryMap.set('ok-provider', mockOk('ok-provider'));
+
+    const provider = new SyntheticProvider();
+    const response = await provider.chat({ ...DUMMY_REQUEST, model: 'failover-model' });
+    expect(response.content).toBe('ok-provider/ok');
+  });
+
+  it('fails over on network errors (plain Error, not ProviderError)', async () => {
+    _setSyntheticCatalogForTest(CATALOG_FAILOVER);
+    // Plain Error (e.g. ECONNREFUSED) is a transient error — should failover to next backend
+    registryMap.set('rate-limited-provider', mockNetworkError('rate-limited-provider', 'ECONNREFUSED'));
+    registryMap.set('ok-provider', mockOk('ok-provider'));
+
+    const provider = new SyntheticProvider();
+    const response = await provider.chat({ ...DUMMY_REQUEST, model: 'failover-model' });
+    expect(response.content).toBe('ok-provider/ok');
   });
 
   it('skips unavailable providers (registry miss) and tries next', async () => {
