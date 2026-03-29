@@ -15,6 +15,8 @@ interface HttpListenerConfig {
   hookDispatcher?: HookDispatcher;
   /** Max requests per 60-second window per IP. Default: 60. */
   rateLimit?: number;
+  /** Optional pre-configured UserAuthManager (for testing). */
+  userAuth?: UserAuthManager;
 }
 
 interface HttpDangerConfig {
@@ -72,7 +74,7 @@ export class HttpListener {
     this.host = config.host ?? '127.0.0.1';
     this.allowedOrigins = config.allowedOrigins ?? [];
     this.hookDispatcher = config.hookDispatcher ?? null;
-    this.userAuth = new UserAuthManager();
+    this.userAuth = config.userAuth ?? new UserAuthManager();
     this.rateLimiter = new RateLimiter(config.rateLimit ?? 60);
   }
 

@@ -27,7 +27,7 @@ describe('ConfigManager', () => {
   });
 
   test('loads defaults when no config files exist', () => {
-    const cm = new ConfigManager();
+    const cm = new ConfigManager({ workingDir: tempDir });
     const all = cm.getAll();
     // Compare shallowly – deep equality is fine for our purposes.
     expect(all).toEqual(DEFAULT_CONFIG);

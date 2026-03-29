@@ -359,6 +359,22 @@ export function _setEntriesForTest(entries: BenchmarkEntry[]): void {
 }
 
 /**
+ * Returns the modelIds of the top N entries ranked by composite benchmark score.
+ * Used by filterRelevantChanges in model-catalog.ts.
+ */
+export function getTopBenchmarkModelIds(n: number): string[] {
+  const entries = _cache?.entries;
+  if (!entries || entries.length === 0) return [];
+
+  const scored = entries
+    .map(e => ({ id: e.modelId, score: compositeScore(e.benchmarks) }))
+    .filter((e): e is { id: string; score: number } => e.score !== null)
+    .sort((a, b) => b.score - a.score);
+
+  return scored.slice(0, n).map(e => e.id);
+}
+
+/**
  * Compute weighted composite score.
  * Weights: SWE 0.4, GPQA 0.4, AIME 0.2.
  * Returns null if none of the scored fields are present.

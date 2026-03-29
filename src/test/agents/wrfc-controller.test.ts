@@ -1,4 +1,4 @@
-import { describe, test, expect, mock, spyOn, beforeEach, afterEach } from 'bun:test';
+import { describe, test, expect, mock, spyOn, beforeEach, afterEach, afterAll } from 'bun:test';
 import { EventBus } from '../../core/event-bus.ts';
 import type { AgentRecord } from '../../tools/agent/index.ts';
 
@@ -135,6 +135,15 @@ mock.module('../../agents/message-bus.ts', () => ({
 
 // Now import WrfcController after mocks are registered
 const { WrfcController } = await import('../../agents/wrfc-controller.ts');
+
+// ---------------------------------------------------------------------------
+// Cleanup — restore all module mocks after all tests to prevent leaking into
+// subsequent test files (Bun mock.module() is process-global).
+// ---------------------------------------------------------------------------
+
+afterAll(() => {
+  mock.restore();
+});
 
 // ---------------------------------------------------------------------------
 // Tests

@@ -1,4 +1,4 @@
-import { describe, test, expect, mock, beforeEach, afterEach } from 'bun:test';
+import { describe, test, expect, mock, beforeEach, afterEach, afterAll } from 'bun:test';
 
 // ---------------------------------------------------------------------------
 // Mocks — must be declared/awaited before importing the module under test.
@@ -257,4 +257,8 @@ describe('AutoHealer — HealResult shape', () => {
     const result = await healer.heal('test.ts', VALID_TS, ['error']);
     expect(validMethods).toContain(result.method);
   });
+});
+
+afterAll(() => {
+  mock.restore();
 });

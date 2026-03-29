@@ -113,7 +113,18 @@ export class ConversationManager {
   }
 
   public addUserMessage(content: string | ContentPart[]): void {
-    // Title is only set explicitly via /session rename — no auto-generation
+    // Auto-generate title from first user message if not already set
+    if (this.title === '' && typeof content === 'string' && content.trim().length > 0) {
+      const text = content.trim();
+      if (text.length <= 50) {
+        this.title = text;
+      } else {
+        // Truncate at word boundary
+        let cut = text.lastIndexOf(' ', 50);
+        if (cut <= 0) cut = 50;
+        this.title = text.slice(0, cut);
+      }
+    }
     this.messages.push({ role: 'user', content });
     // Clear undo stack when new user input is added (can't redo past new input)
     this.undoStack = [];

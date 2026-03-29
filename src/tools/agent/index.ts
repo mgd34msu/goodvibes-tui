@@ -259,7 +259,7 @@ export const agentTool: Tool = {
 
         return {
           success: true,
-          output: JSON.stringify({ agentId: record.id, status: 'spawned', template: record.template }),
+          output: JSON.stringify({ agentId: record.id, status: 'spawned', template: record.template, task: record.task, tools: record.tools }),
         };
       }
 
@@ -453,15 +453,34 @@ export const agentTool: Tool = {
           return { success: false, error: `Unknown agent: '${input.agentId}'` };
         }
 
-        // Non-blocking: return current status immediately.
-        // Agents run in background. WRFC review/fix events stream to conversation.
+        // Poll until agent reaches a terminal state or timeout elapses.
+        const timeoutMs = typeof input.timeoutMs === 'number' ? input.timeoutMs : 30000;
+        const terminalStatuses = new Set(['completed', 'failed', 'cancelled']);
+        const start = Date.now();
+        const pollIntervalMs = 50;
+
+        while (!terminalStatuses.has(manager.getStatus(input.agentId)?.status ?? '')) {
+          if (Date.now() - start >= timeoutMs) {
+            const current = manager.getStatus(input.agentId);
+            return {
+              success: true,
+              output: JSON.stringify({
+                agentId: input.agentId,
+                status: current?.status ?? 'unknown',
+                timedOut: true,
+              }),
+            };
+          }
+          await new Promise(resolve => setTimeout(resolve, pollIntervalMs));
+        }
+
+        const finalRecord = manager.getStatus(input.agentId);
         return {
           success: true,
           output: JSON.stringify({
-            agentId: record.id,
-            status: record.status,
-            toolCallCount: record.toolCallCount,
-            progress: record.progress ?? null,
+            agentId: input.agentId,
+            status: finalRecord?.status ?? 'unknown',
+            timedOut: false,
           }),
         };
       }

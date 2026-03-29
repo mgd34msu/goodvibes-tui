@@ -1,6 +1,5 @@
 /**
- * renderHelpOverlay — renders the help command list as Line[].
- * Keyboard shortcuts are in /shortcuts (separate command).
+ * renderHelpOverlay — renders the help overlay with keyboard shortcuts and slash commands.
  *
  * Toggle with `?` key or `/help` command.
  */
@@ -12,7 +11,7 @@ import { getKeybindingsManager } from '../input/keybindings.ts';
 
 /**
  * Render the help overlay as Line[].
- * Shows only slash commands. Keyboard shortcuts are in /shortcuts.
+ * Shows keyboard shortcuts summary and slash commands.
  *
  * @param width      Terminal width.
  * @param commands   List of registered slash commands.
@@ -23,8 +22,33 @@ export function renderHelpOverlay(
   commands?: SlashCommand[],
   scrollOffset = 0,
 ): Line[] {
-  const commandRows: string[] = [];
+  const km = getKeybindingsManager();
+  const kb = (action: Parameters<typeof km.getComboLabel>[0]) => km.getComboLabel(action);
 
+  // Keyboard shortcut sections
+  const shortcutRows: string[] = [
+    '  Navigation',
+    '  ' + '\u2500'.repeat(40),
+    `  ${'\u2191 / \u2193'.padEnd(20)}  Scroll / history recall`,
+    `  ${'PageUp / PageDn'.padEnd(20)}  Scroll by full page`,
+    `  ${kb('search').padEnd(20)}  Search conversation (Ctrl+F)`,
+    '',
+    '  Editing',
+    '  ' + '\u2500'.repeat(40),
+    `  ${'Enter'.padEnd(20)}  Submit message`,
+    `  ${'Shift+Enter'.padEnd(20)}  Insert newline`,
+    `  ${kb('paste').padEnd(20)}  Paste (image priority)`,
+    `  ${(kb('undo') + ' / ' + kb('redo')).padEnd(20)}  Undo / redo`,
+    '',
+    '  Modals',
+    '  ' + '\u2500'.repeat(40),
+    `  ${'?'.padEnd(20)}  Toggle help`,
+    `  ${'/shortcuts'.padEnd(20)}  Full keyboard shortcuts`,
+    '',
+  ];
+
+  // Commands section
+  const commandRows: string[] = ['  Commands', '  ' + '\u2500'.repeat(40)];
   if (commands && commands.length > 0) {
     const sorted = [...commands].sort((a, b) => a.name.localeCompare(b.name));
     for (const cmd of sorted) {
@@ -33,33 +57,37 @@ export function renderHelpOverlay(
       commandRows.push(`  ${nameCol}  ${cmd.description}${aliases}`);
     }
   } else {
-    commandRows.push('  No commands registered');
+    // Fallback: show known built-in commands
+    commandRows.push('  /help             Show this help overlay');
+    commandRows.push('  /shortcuts        Keyboard shortcut reference');
+    commandRows.push('  /model            Select LLM model');
+    commandRows.push('  /clear            Clear conversation');
   }
 
-  // Apply scroll offset — show a window of rows
-  const maxVisible = Math.max(10, Math.floor((process.stdout.rows || 24) - 10));
-  const clampedOffset = Math.max(0, Math.min(scrollOffset, Math.max(0, commandRows.length - maxVisible)));
-  const visibleRows = commandRows.slice(clampedOffset, clampedOffset + maxVisible);
+  const allRows = [...shortcutRows, ...commandRows];
 
-  const scrollInfo = commandRows.length > maxVisible
-    ? `  [${clampedOffset + 1}-${clampedOffset + visibleRows.length} of ${commandRows.length}]`
+  // Apply scroll offset — show a window of rows
+  const maxVisible = Math.max(10, Math.floor((process.stdout.rows || 80) - 10));
+  const clampedOffset = Math.max(0, Math.min(scrollOffset, Math.max(0, allRows.length - maxVisible)));
+  const visibleRows = allRows.slice(clampedOffset, clampedOffset + maxVisible);
+
+  const scrollInfo = allRows.length > maxVisible
+    ? `  [${clampedOffset + 1}-${clampedOffset + visibleRows.length} of ${allRows.length}]`
     : '';
 
   return ModalFactory.createModal(
     {
-      title: 'Help — Slash Commands',
+      title: 'Help',
       width: 80,
       sections: [
-        {
-          type: 'text',
-          content: '  Type /shortcuts for keyboard shortcut reference',
-          style: { fg: '244', dim: true },
-        },
-        { type: 'separator' },
-        ...visibleRows.map((row) => ({ type: 'text' as const, content: row })),
+        ...visibleRows.map((row) => (
+          row.startsWith('  \u2500') ? { type: 'separator' as const }
+          : row === '' ? { type: 'separator' as const }
+          : { type: 'text' as const, content: row }
+        )),
         ...(scrollInfo ? [{ type: 'separator' as const }, { type: 'text' as const, content: scrollInfo, style: { fg: '244', dim: true } }] : []),
       ],
-      hints: ['? or Esc Close', '\u2191\u2193 Scroll', '/shortcuts Keys'],
+      hints: ['? or Esc Close', '\u2191\u2193 Scroll'],
     },
     width,
   );

@@ -76,31 +76,59 @@ describe('resolveToolLLM', () => {
   });
 
   test('falls back to current model when tools.llmProvider is empty', async () => {
-    const { providerRegistry } = await import('../../providers/registry.ts');
+    // getProviderRegistry() returns the underlying instance (bypasses the Proxy),
+    // allowing direct method patching for test isolation.
+    const { getProviderRegistry } = await import('../../providers/registry.ts');
     const { configManager } = await import('../../config/index.ts');
     const { resolveToolLLM } = await import('../../config/tool-llm.ts');
+
+    const instance = getProviderRegistry();
 
     const origProvider = configManager.get('tools.llmProvider');
     const origModel = configManager.get('tools.llmModel');
     configManager.set('tools.llmProvider', '');
     configManager.set('tools.llmModel', '');
 
+    // Stub methods on the real instance so the fallback path works regardless
+    // of what providers are registered in the test environment.
+    const fakeFallbackProvider = makeProvider('test-fallback-current-provider');
+    const fakeFallbackDef = {
+      id: 'test-fallback-model',
+      provider: 'test-fallback-current-provider',
+      registryKey: 'test-fallback-current-provider:test-fallback-model',
+      displayName: 'Test Fallback',
+      description: 'Stub',
+      capabilities: { toolCalling: true, codeEditing: true, reasoning: false, multimodal: false },
+      contextWindow: 4096,
+      selectable: true,
+      tier: 'standard' as const,
+    };
+    const proto = Object.getPrototypeOf(instance);
+    const origGetCurrent = proto.getCurrentModel;
+    const origGetForModel = proto.getForModel;
+    proto.getCurrentModel = () => fakeFallbackDef;
+    proto.getForModel = () => fakeFallbackProvider;
+
     try {
       const resolved = resolveToolLLM();
-      // Should resolve to the currently selected model
-      const currentDef = providerRegistry.getCurrentModel();
       expect(resolved).not.toBeNull();
-      expect(resolved!.modelId).toBe(currentDef.id);
+      expect(resolved!.modelId).toBe('test-fallback-model');
     } finally {
+      proto.getCurrentModel = origGetCurrent;
+      proto.getForModel = origGetForModel;
       configManager.set('tools.llmProvider', origProvider);
       configManager.set('tools.llmModel', origModel);
     }
   });
 
   test('falls back when only one of llmProvider/llmModel is set', async () => {
-    const { providerRegistry } = await import('../../providers/registry.ts');
+    // getProviderRegistry() returns the underlying instance (bypasses the Proxy),
+    // allowing direct method patching for test isolation.
+    const { getProviderRegistry } = await import('../../providers/registry.ts');
     const { configManager } = await import('../../config/index.ts');
     const { resolveToolLLM } = await import('../../config/tool-llm.ts');
+
+    const instance = getProviderRegistry();
 
     const origProvider = configManager.get('tools.llmProvider');
     const origModel = configManager.get('tools.llmModel');
@@ -108,12 +136,33 @@ describe('resolveToolLLM', () => {
     configManager.set('tools.llmProvider', 'anthropic');
     configManager.set('tools.llmModel', '');
 
+    // Stub methods on the real instance so the fallback path works regardless
+    // of what providers are registered in the test environment.
+    const fakeFallbackProvider2 = makeProvider('test-fallback-only-provider');
+    const fakeFallbackDef2 = {
+      id: 'test-fallback-only-model',
+      provider: 'test-fallback-only-provider',
+      registryKey: 'test-fallback-only-provider:test-fallback-only-model',
+      displayName: 'Test Fallback Only',
+      description: 'Stub',
+      capabilities: { toolCalling: true, codeEditing: true, reasoning: false, multimodal: false },
+      contextWindow: 4096,
+      selectable: true,
+      tier: 'standard' as const,
+    };
+    const proto2 = Object.getPrototypeOf(instance);
+    const origGetCurrent2 = proto2.getCurrentModel;
+    const origGetForModel2 = proto2.getForModel;
+    proto2.getCurrentModel = () => fakeFallbackDef2;
+    proto2.getForModel = () => fakeFallbackProvider2;
+
     try {
       const resolved = resolveToolLLM();
-      const currentDef = providerRegistry.getCurrentModel();
       expect(resolved).not.toBeNull();
-      expect(resolved!.modelId).toBe(currentDef.id);
+      expect(resolved!.modelId).toBe('test-fallback-only-model');
     } finally {
+      proto2.getCurrentModel = origGetCurrent2;
+      proto2.getForModel = origGetForModel2;
       configManager.set('tools.llmProvider', origProvider);
       configManager.set('tools.llmModel', origModel);
     }

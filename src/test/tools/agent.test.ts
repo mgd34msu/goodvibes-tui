@@ -143,7 +143,8 @@ describe('status mode', () => {
 
 describe('cancel mode', () => {
   test('cancel marks agent as cancelled', async () => {
-    const spawned = await runAgent({ mode: 'spawn', task: 'Long running task' });
+    // 'Stuck task' prevents the orchestrator from running, keeping the agent in pending state.
+    const spawned = await runAgent({ mode: 'spawn', task: 'Stuck task' });
     const agentId = spawned.agentId as string;
 
     const cancelled = await runAgent({ mode: 'cancel', agentId });
@@ -423,7 +424,8 @@ describe('wait mode', () => {
   });
 
   test('wait returns immediately when agent is cancelled', async () => {
-    const spawned = await runAgent({ mode: 'spawn', task: 'To be cancelled' });
+    // 'Stuck task' prevents the orchestrator from running, keeping the agent in pending state.
+    const spawned = await runAgent({ mode: 'spawn', task: 'Stuck task' });
     const agentId = spawned.agentId as string;
     await runAgent({ mode: 'cancel', agentId });
 

@@ -1,4 +1,4 @@
-import { describe, test, expect, mock, beforeEach } from 'bun:test';
+import { describe, test, expect, mock, beforeEach, afterAll } from 'bun:test';
 import type { HookDefinition, HookEvent } from '../../../hooks/types.ts';
 
 // --------------------------------------------------------------------------
@@ -156,4 +156,8 @@ describe('prompt runner', () => {
       expect(result.error).toContain('timed out');
     }, 5000);
   });
+});
+
+afterAll(() => {
+  mock.restore();
 });
