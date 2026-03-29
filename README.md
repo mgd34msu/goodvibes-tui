@@ -10,7 +10,7 @@ Version: **0.9.11**
 
 ## What is this
 
-goodvibes-tui is a coding agent TUI in the same space as Claude Code, Gemini CLI, and Codex — but you run it locally, configure it however you want, and it operates entirely from your terminal.
+goodvibes-tui is a coding agent TUI in the same space as Claude Code, Gemini CLI, and Codex.
 
 The interface is built around a cell-based renderer that writes directly to the alternate screen buffer using raw ANSI escape sequences — no framework, no virtual DOM. Every message, tool call, diff, and code block is a typed cell that can be collapsed, bookmarked, copied, or applied inline.
 
@@ -112,7 +112,7 @@ Language intelligence powered by bundled LSP servers (TypeScript, Python, Bash, 
 ### Automated WRFC Review Chains
 - **Work → Review → Fix → Check** — every agent spawns an automated quality chain
 - 10-dimension reviewer with scored rubric (Correctness, Type Safety, Error Handling, Security, Performance, Code Quality, Testing, Documentation, Completeness, Integration)
-- Configurable minimum score threshold (default 9.9/10)
+- Configurable minimum score threshold (default 9.9/10; 9.5 will get you working code, 9.9 is a bit cleaner, 10 may take a few unnecessary turns)
 - Automated fix cycles: fixer agent receives full issue list with point values
 - Quality gates after review: typecheck, lint, test, build (configurable)
 - Gate failures spawn new chains automatically
@@ -120,9 +120,11 @@ Language intelligence powered by bundled LSP servers (TypeScript, Python, Bash, 
 - `skipWrfc` flag for utility agents that don't need review
 
 ### Hook System
-- 5 lifecycle phases: Pre, Post, Fail, Change, Lifecycle
 - 5 hook types: command, prompt, agent, http, ts
+- 5 lifecycle phases: Pre, Post, Fail, Change, Lifecycle
 - 11 event categories: tool, file, git, agent, compact, llm, mcp, config, budget, session, workflow
+- Provides a total of over 135 usable hooks that can be called
+- Hook chaining and dynamic workflow hooks provide even more flexibility
 - Multi-event chains with temporal matching, debounce, and conditions
 - Async hooks that run without blocking the main conversation
 
@@ -162,7 +164,7 @@ Example models (sourced dynamically from models.dev):
 | Claude Sonnet 4.6 | Anthropic | 1M | Yes | Yes | Yes |
 | Gemini 2.5 Pro | Gemini | 1M | Yes | Yes | Yes |
 
-Mercury 2 supports configurable reasoning effort levels: `instant`, `low`, `medium`, `high`.
+Many model providers support configurable reasoning effort levels. Selectable options include: `instant`, `low`, `medium`, `high`.
 
 ### Custom Providers
 
@@ -207,7 +209,7 @@ Provider configs are hot-reloaded on file change. Use the `/add-provider` skill 
 ### Install
 
 ```sh
-git clone <repo-url> goodvibes-tui
+git clone https://github.com/mgd34msu/goodvibes-tui.git
 cd goodvibes-tui
 bun install
 ```
@@ -305,6 +307,13 @@ When every provider for a free synthetic model is exhausted and cooldowns are to
 - The user is notified inline (non-blocking) about the model change
 - This cascading continues until a working free model is found
 - Free/paid/subscription tiers never mix — cross-model failover only happens within the free tier
+
+#### **IMPORTANT NOTE**: 
+This system is not perfect, and there are ways it could result in charges accruing. 
+
+This includes but is not limited to when a provider moves a model from free to paid and you have kept the goodvibes-tui session running for longer than 24 hours (and have not run a model refresh manually in that time period). The system will not know that the model is now a paid model. 
+
+Refreshes happen automatically if a new session is started (or session is resumed) after the 24-hour TTL expires for the model list. For long-running sessions, please ensure that the models are refreshed daily.
 
 ### Paid and subscription model exhaustion
 
@@ -919,4 +928,4 @@ bun run build
 
 ## License
 
-TBD
+MIT
