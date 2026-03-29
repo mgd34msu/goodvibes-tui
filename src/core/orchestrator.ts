@@ -275,7 +275,7 @@ export class Orchestrator {
 
     try {
       const model = providerRegistry.getCurrentModel();
-      const provider: LLMProvider = providerRegistry.getForModel(model.id);
+      const provider: LLMProvider = providerRegistry.getForModel(model.id, model.provider);
       const toolDefinitions = this.toolRegistry.getToolDefinitions();
       const streamEnabled = configManager.get('display.stream') as boolean;
 
@@ -535,6 +535,7 @@ export class Orchestrator {
             currentModel.id,
             10,
             'auto',
+            currentModel.provider,
           ).then(() => {
             this.isCompacting = false;
             this.lastWarningBracket = 0; // Reset so warnings work after compaction
@@ -674,6 +675,7 @@ export class Orchestrator {
           model.id,
           10,
           'auto',
+          model.provider,
         );
         this.conversation.addSystemMessage('Context compacted. Retrying request...');
       } catch (compactErr) {

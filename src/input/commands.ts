@@ -272,7 +272,7 @@ export function registerBuiltinCommands(registry: CommandRegistry): void {
     description: 'Summarize conversation to free context window',
     async handler(_args, ctx) {
       ctx.print('Compacting conversation...');
-      await ctx.conversationManager.compact(ctx.providerRegistry, ctx.runtime.model);
+      await ctx.conversationManager.compact(ctx.providerRegistry, ctx.runtime.model, 10, 'manual', ctx.runtime.provider);
       ctx.print('Conversation compacted.');
       ctx.renderRequest();
     },

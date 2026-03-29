@@ -47,7 +47,7 @@ export function resolveToolLLM(): ResolvedToolLLM | null {
 
     // Fallback: use currently selected provider/model
     const currentDef = providerRegistry.getCurrentModel();
-    const provider = providerRegistry.getForModel(currentDef.id);
+    const provider = providerRegistry.getForModel(currentDef.id, currentDef.provider);
     return { provider, modelId: currentDef.id };
   } catch (err) {
     logger.debug('resolveToolLLM: failed to resolve provider/model', { error: String(err) });

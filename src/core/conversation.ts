@@ -711,6 +711,7 @@ export class ConversationManager {
     modelId: string,
     keepRecentMessages = 10,
     trigger: 'auto' | 'manual' = 'manual',
+    provider?: string,
   ): Promise<void> {
     if (this.messages.length === 0) return;
 
@@ -719,6 +720,7 @@ export class ConversationManager {
       const result = await compactMessages({
         registry,
         modelId,
+        provider,
         messages: llmMessages,
         keepRecentMessages,
         trigger,

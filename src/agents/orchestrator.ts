@@ -114,7 +114,7 @@ export class AgentOrchestrator {
       const modelId = record.model ?? providerRegistry.getCurrentModel().id;
       let provider: LLMProvider;
       try {
-        provider = providerRegistry.getForModel(modelId);
+        provider = providerRegistry.getForModel(modelId, record.provider);
       } catch (err) {
         throw new Error(
           `Cannot resolve provider for model '${modelId}': ${
