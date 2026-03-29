@@ -547,7 +547,7 @@ Discover and introspect skills, agents, and tools.
 | `/wrfc` | — | Show WRFC chain status |
 | `/commands` | `/cmds` | Browse all commands in a scrollable list |
 | `/shortcuts` | `/keys`, `/keybinds` | Show keyboard shortcuts reference |
-| `/keybindings` | `/kb` | List current keyboard bindings and config file path |
+| `/keybindings` | `/kb` | List current keyboard bindings and their config file path |
 | `/danger [key] [value]` | — | Danger zone settings (agent recursion, daemon, HTTP listener) |
 | `/schedule [action]` | `/sched` | Manage scheduled agent tasks (cron): add, list, remove, enable, disable, run |
 | `/image <path>` | `/img` | Attach an image file to the next message |
