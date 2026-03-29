@@ -43,6 +43,8 @@ export interface CompactionOptions {
   registry: ProviderRegistry;
   /** Model ID to use for summarization. */
   modelId: string;
+  /** Provider name — used to disambiguate models that exist on multiple providers. */
+  provider?: string;
   /** Current messages (as sent to the LLM — no system messages). */
   messages: ProviderMessage[];
   /** Number of recent messages to keep verbatim (default: 10). */
@@ -233,6 +235,7 @@ export async function compactMessages(opts: CompactionOptions): Promise<Compacti
   const {
     registry,
     modelId,
+    provider: providerName,
     messages,
     keepRecentMessages = 10,
     trigger = 'manual',
@@ -258,7 +261,7 @@ export async function compactMessages(opts: CompactionOptions): Promise<Compacti
 
     let provider: LLMProvider;
     try {
-      provider = registry.getForModel(modelId);
+      provider = registry.getForModel(modelId, providerName);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       throw new Error(`Context compaction: failed to get provider for model '${modelId}': ${msg}`);
