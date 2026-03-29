@@ -108,19 +108,21 @@ export function renderModelPickerOverlay(
         lines.push(UIFactory.stringToLine(upHint, width, { fg: '240', dim: true }));
       }
 
-      let lastProvider = '';
-      // Track the absolute index for provider header grouping
+      let lastGroupKey = '';
+      // Track the absolute index for group header display
+      // Use getModelGroupKey for synthetic sub-group support (Top Models / All Synthetic)
       for (let i = 0; i < visibleModels.length; i++) {
         const model = visibleModels[i];
         const absIdx = scrollOffset + i; // index into filtered[] for selectedIndex comparison
 
-        // Provider group header — show when provider changes within the visible window
+        // Group header — show when group key changes within the visible window
         // For the first visible item, always check if header is needed
-        if (model.provider !== lastProvider) {
-          const headerText = ' \u25e4 ' + model.provider;
+        const groupKey = picker.getModelGroupKey(model);
+        if (groupKey !== lastGroupKey) {
+          const headerText = ' \u25e4 ' + groupKey;
           const headerRow = pad + '\u2502' + headerText.padEnd(boxW - 2) + '\u2502';
           lines.push(UIFactory.stringToLine(headerRow, width, { fg: '#4488cc', bold: false }));
-          lastProvider = model.provider;
+          lastGroupKey = groupKey;
         }
 
         const isSelected = absIdx === picker.selectedIndex;
