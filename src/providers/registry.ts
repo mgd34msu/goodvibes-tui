@@ -9,7 +9,7 @@ import type { EventBus } from '../core/event-bus.ts';
 import { loadCustomProviders, watchCustomProviders } from './custom-loader.ts';
 import { SyntheticProvider } from './synthetic.ts';
 
-import { getCatalogModelDefinitions } from './model-catalog.ts';
+import { getCatalogModelDefinitions, getSyntheticModelDefinitions } from './model-catalog.ts';
 
 /** Model capability tier — controls system prompt verbosity. */
 export type ModelTier = 'free' | 'standard' | 'premium' | 'subscription';
@@ -50,10 +50,18 @@ export interface ModelDefinition {
 
 /**
  * Returns built-in model definitions sourced from the model catalog.
- * Merge order in getModelRegistry(): custom providers → catalog → discovered servers.
+ * Merge order in getModelRegistry(): custom providers → synthetic → catalog → discovered servers.
  */
 function getCatalogBuiltins(): ModelDefinition[] {
   return getCatalogModelDefinitions() as ModelDefinition[];
+}
+
+/**
+ * Returns synthetic failover model definitions.
+ * These have provider='synthetic' and use canonical slug IDs.
+ */
+function getSyntheticBuiltins(): ModelDefinition[] {
+  return getSyntheticModelDefinitions() as ModelDefinition[];
 }
 
 
@@ -68,11 +76,13 @@ let discoveredModels: ModelDefinition[] = [];
  *
  * Merge order (highest → lowest priority):
  * 1. Custom providers from ~/.goodvibes/tui/providers/
- * 2. Catalog-sourced models (from getCatalogBuiltins() / model-catalog.ts)
- * 3. Discovered local servers (lowest priority)
+ * 2. Synthetic failover models (multi-provider canonical models)
+ * 3. Catalog-sourced models (from getCatalogBuiltins() / model-catalog.ts)
+ * 4. Discovered local servers (lowest priority)
  */
 export function getModelRegistry(): ModelDefinition[] {
   const catalogModels = getCatalogBuiltins();
+  const syntheticModels = getSyntheticBuiltins();
 
   // Catalog models not overridden by custom providers
   const catalogFiltered = catalogModels.filter(
@@ -92,6 +102,7 @@ export function getModelRegistry(): ModelDefinition[] {
 
   return [
     ...customModels.map(ensureKey),
+    ...syntheticModels.map(ensureKey),  // synthetic before catalog so they take priority
     ...catalogFiltered.map(ensureKey),
     ...discoveredFiltered.map(ensureKey),
   ];
