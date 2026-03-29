@@ -69,9 +69,14 @@ The agent system runs subagents in-process, each with its own conversation histo
 - Background process indicator and live-tail modal
 
 ### Sidebar Panels
-- 20+ built-in panels: File Explorer, Git, Diff, Symbol Outline, Agent Inspector, Cost Tracker, Debug, Context Visualizer, WRFC Chain Viewer, Plan Dashboard, Provider Health, Session Browser, and more
+- 20 built-in panels across 5 categories: development, agent, monitoring, session, and ai
+- **Development**: File Explorer, File Preview, Git, Diff, Symbol Outline
+- **Agent**: Agent Inspector, Agent Logs, Plan Dashboard, WRFC Chain Viewer, Schedule
+- **Monitoring**: Cost Tracker, Provider Stats, Provider Health, Token Budget, Debug
+- **Session**: Session Browser, Docs
+- **AI**: Thinking, Tool Inspector, Context Visualizer
 - Split-pane layout with top/bottom panes and resizable divider
-- Panel picker overlay with category grouping and search
+- Panel picker overlay (`Ctrl+P`) with category grouping and search
 - Toggle with `/panel` or keyboard shortcut
 
 ### Session & Profile Management
@@ -94,7 +99,7 @@ The agent system runs subagents in-process, each with its own conversation histo
 
 ### 12 Built-In Tools
 Read, write, edit, find, exec, fetch, analyze, inspect, agent, state, workflow, registry.
-Language intelligence powered by bundled LSP servers (TypeScript, Python, Bash, CSS, HTML, JSON) and tree-sitter grammars — no manual setup required. Rust and Go LSP servers auto-download on first use.
+Language intelligence powered by bundled LSP servers (TypeScript, Python, Bash, CSS, HTML, JSON) and tree-sitter grammars for 17 languages — no manual setup required. Rust and Go LSP servers auto-download on first use.
 
 ### Agent System
 - In-process subagents with isolated conversation history
@@ -117,7 +122,7 @@ Language intelligence powered by bundled LSP servers (TypeScript, Python, Bash, 
 ### Hook System
 - 5 lifecycle phases: Pre, Post, Fail, Change, Lifecycle
 - 5 hook types: command, prompt, agent, http, ts
-- 12 event categories: tool, file, git, agent, compact, llm, mcp, config, budget, session, workflow
+- 11 event categories: tool, file, git, agent, compact, llm, mcp, config, budget, session, workflow
 - Multi-event chains with temporal matching, debounce, and conditions
 - Async hooks that run without blocking the main conversation
 
@@ -424,7 +429,7 @@ HTTP client with extraction modes, service registry auth, and batch operations.
 
 ### analyze
 
-14-mode code analysis suite — from impact analysis to upgrade compatibility.
+15-mode code analysis suite — from impact analysis to upgrade compatibility.
 
 - `impact`: trace exported symbols across the project to find what breaks when you change a file
 - `dependencies`: build import graph, detect circular dependencies, list external packages
@@ -448,7 +453,7 @@ HTTP client with extraction modes, service registry auth, and batch operations.
 
 ### agent
 
-In-process subagent system with 10 management modes.
+In-process subagent system with 15 management modes.
 
 - Spawn agents from named archetypes (`engineer`, `reviewer`, `tester`, `researcher`, `general`) or custom archetypes from `.goodvibes/agents/*.md`
 - Full lifecycle management: `spawn`, `status`, `cancel`, `list`, `get` (detailed view with recent messages), `wait` (block until completion with timeout)
@@ -456,6 +461,9 @@ In-process subagent system with 10 management modes.
 - Token budget estimation via `budget` mode
 - Execution plan introspection via `plan` mode
 - Git worktree isolation: each agent can work in its own branch, merged back on completion
+- Batch spawning via `batch-spawn` mode
+- WRFC chain introspection via `wrfc-chains` and `wrfc-history` modes
+- Cohort tracking via `cohort-status` and `cohort-report` modes
 
 ### state
 
@@ -475,7 +483,7 @@ Workflow state machines, automation triggers, and scheduled tasks.
 - Named workflow definitions: `wrfc` (work-review-fix cycle), `fix_loop`, `test_then_fix`, `review_only`
 - State machine with validated transitions — prevents invalid state changes
 - Automation triggers: fire shell commands when specific hook events occur, with optional JS conditions
-- Scheduled tasks: run commands on recurring intervals (`30s`, `5m`, `1h`) with automatic process tracking
+- Cron scheduler: full 5-field cron expressions with IANA timezone support, missed-run detection, per-task run history, and enable/disable control. Persists to `.goodvibes/tui/schedules.json`
 - Full lifecycle: start, transition, cancel, list active instances
 
 ### registry
@@ -494,9 +502,9 @@ Discover and introspect skills, agents, and tools.
 | Command | Aliases | Description |
 |---------|---------|-------------|
 | `/model [id]` | `/m` | Select or display the current LLM model |
-| `/provider [name]` | `/p` | Switch provider |
+| `/provider [name]` | `/p` | Switch provider, or `add <name> <baseURL> [apiKey]` / `remove <name>` |
 | `/effort [level]` | `/e` | Show or set reasoning effort level |
-| `/config [key] [value]` | `/cfg` | Show or set config values |
+| `/config [key] [value]` | `/cfg` | Show, set, or reset config values. Subcommands: `profile`, `diff`, `reset` |
 | `/debug` | — | Toggle debug mode |
 | `/lines` | — | Toggle line numbers on/off |
 | `/expand [type]` | — | Expand blocks by type (all/thinking/tool/code) |
@@ -506,15 +514,17 @@ Discover and introspect skills, agents, and tools.
 | `/clear` | `/cls` | Clear the conversation display (keeps LLM context) |
 | `/reset` | — | Full reset: clear display and conversation context |
 | `/compact` | — | Summarize conversation to free context window |
-| `/export [file]` | — | Export conversation as markdown |
+| `/export [format] [path]` | — | Export conversation (markdown by default) |
+| `/share [format] [path]` | `/shr` | Export session as shareable html, json, or md (supports `--redact`) |
 | `/title [text]` | — | Show or set the conversation title |
 | `/save [name]` | — | Save current session |
 | `/load <name>` | — | Load a saved session |
 | `/sessions` | — | List saved sessions |
-| `/undo` | `/u` | Remove the last user+assistant turn |
-| `/redo` | — | Restore the last undone turn |
+| `/session [action]` | `/sess` | Full session management: list, rename, resume, fork, save, info, export, search, delete |
+| `/undo [file]` | `/u` | Remove last turn, or `/undo file` to revert last file write/edit |
+| `/redo [file]` | — | Restore last undone turn, or `/redo file` to re-apply last reverted file |
 | `/retry [text]` | `/r` | Re-send the last user message |
-| `/template` | `/tmpl` | Manage and use prompt templates |
+| `/template` | `/tmpl` | Manage prompt templates: save, use, list, edit, delete |
 | `/tools` | `/t` | List available tools |
 | `/permissions` | `/perms` | Show or set permission mode and per-tool settings |
 | `/secrets` | — | Manage encrypted API key secrets (set/get/list/delete) |
@@ -525,22 +535,36 @@ Discover and introspect skills, agents, and tools.
 | `/profiles` | `/profile` | Browse and load config profiles |
 | `/pin [id]` | — | Pin a model as favorite |
 | `/unpin [id]` | — | Remove a model from favorites |
-| `/git` | — | Open git panel (initializes repo if needed) |
+| `/git [action]` | `/g` | Git commands: status, log, diff. Opens git panel if no action given |
 | `/scan` | — | Scan for local LLM servers |
-| `/add-provider` | — | Interactive guided provider setup |
-| `/plan [task]` | — | Create an execution plan for a multi-step task |
-| `/panel` | — | Toggle sidebar panel visibility |
+| `/plan [task]` | — | Manage execution plans: create, list, or `show <id>` |
+| `/panel [action]` | `/panels` | Panel management: open, close, list, toggle, move, focus, split |
 | `/plugin [action]` | — | Manage plugins (enable/disable/reload/list) |
-| `/share [format]` | — | Export conversation (md/json/html) |
-| `/branch [name]` | — | Fork, list, switch, or merge conversation branches |
+| `/branch [name]` | `/br` | List conversation branches or switch to one |
+| `/fork [name]` | `/branch-save` | Save a named snapshot of the current conversation |
+| `/merge <name>` | — | Append messages from a branch after the fork point |
 | `/agents` | — | List active and completed agents |
 | `/wrfc` | — | Show WRFC chain status |
-| `/help` | `/h`, `/?` | Show available commands and keyboard shortcuts |
+| `/commands` | `/cmds` | Browse all commands in a scrollable list |
+| `/shortcuts` | `/keys`, `/keybinds` | Show keyboard shortcuts reference |
+| `/keybindings` | `/kb` | List current keyboard bindings and config file path |
+| `/danger [key] [value]` | — | Danger zone settings (agent recursion, daemon, HTTP listener) |
+| `/schedule [action]` | `/sched` | Manage scheduled agent tasks (cron): add, list, remove, enable, disable, run |
+| `/image <path>` | `/img` | Attach an image file to the next message |
+| `/refresh-models` | — | Refresh model catalog, benchmarks, and token limits |
+| `/notify [action]` | `/ntf` | Manage webhook notifications (ntfy.sh): add, remove, list, clear, test |
+| `/diff [target]` | `/d` | Show unified diff: session, head, working, staged, or a git ref |
+| `/mcp [tools]` | — | List connected MCP servers and their tools |
+| `/help [command]` | `/h`, `/?` | Show available commands and keyboard shortcuts |
 | `/quit` | `/q`, `/:q` | Exit the application |
+
+> **Tip:** Use the `/add-provider` skill for interactive guided provider setup with smart defaults for popular providers.
 
 ---
 
 ## Keyboard Shortcuts
+
+All shortcuts are customizable via `~/.goodvibes/tui/keybindings.json`. Use `/keybindings` to view current bindings.
 
 ### Input & Editing
 
@@ -550,9 +574,13 @@ Discover and introspect skills, agents, and tools.
 | `Shift+Enter` | Insert newline |
 | `Tab` | Toggle block collapse / path completion |
 | `Ctrl+U` | Clear the prompt line |
+| `Ctrl+W` | Delete word backward |
+| `Ctrl+K` | Kill to end of line |
 | `Ctrl+Z` | Undo prompt edit |
 | `Ctrl+Shift+Z` | Redo prompt edit |
 | `Ctrl+V` | Paste (image or text) |
+| `@` | Open file picker (insert file path) |
+| `?` | Open help/command picker (empty prompt) |
 
 ### Navigation
 
@@ -560,15 +588,18 @@ Discover and introspect skills, agents, and tools.
 |-----|--------|
 | `Arrow Up / Down` | Scroll conversation / recall input history |
 | `PageUp / PageDown` | Scroll by page |
+| `Ctrl+R` | Reverse input history search |
+| `Ctrl+E` | Move to end of line / next error |
+| `Ctrl+A` | Move to start of line / apply nearest diff |
 | `Mouse wheel` | Scroll |
 | `Click drag` | Select text |
 | `Middle click` | Paste |
+| `Escape` | Exit current mode (search, command, modal) |
 
 ### Blocks & Content
 
 | Key | Action |
 |-----|--------|
-| `Ctrl+A` | Apply nearest diff to disk |
 | `Ctrl+Y` | Copy nearest block to clipboard |
 | `Ctrl+S` | Save nearest block to file |
 | `Ctrl+B` | Bookmark nearest block |
@@ -576,11 +607,20 @@ Discover and introspect skills, agents, and tools.
 | `Ctrl+L` | Clear screen |
 | `Ctrl+Shift+C` | Copy selection |
 
+### Panels
+
+| Key | Action |
+|-----|--------|
+| `Ctrl+P` | Toggle panel sidebar |
+| `Ctrl+}` | Next panel tab |
+| `Ctrl+~` | Previous panel tab |
+| `,` / `.` | Cycle panel tabs (when panel focused) |
+
 ### System
 
 | Key | Action |
 |-----|--------|
-| `Ctrl+C` (twice) | Exit |
+| `Ctrl+C` | Clear input / cancel generation / exit (double-press to quit) |
 
 ---
 
@@ -817,7 +857,7 @@ src/
 ├── git/                 — GitService wrapping simple-git
 ├── acp/                 — Agent Client Protocol (subagent child processes)
 ├── discovery/           — Local LLM scanner + MCP server auto-discovery
-├── panels/              — 20+ sidebar panels (agent inspector, cost tracker, git, etc.)
+├── panels/              — 20 sidebar panels (agent inspector, cost tracker, git, etc.)
 ├── integrations/        — Discord, Slack, GitHub webhook integrations
 ├── export/              — Markdown, JSON, HTML session export with redaction
 ├── plugins/             — Plugin system (manifest, loader, sandboxed API)
@@ -835,7 +875,7 @@ src/
 - **Bun runtime** — native TypeScript execution, fast startup, built-in test runner
 - **Raw ANSI renderer** — no framework dependency in the rendering path, direct control over every byte sent to the terminal
 - **In-process agents** — agents share the same process and memory, avoiding IPC overhead while maintaining isolation through scoped registries and namespaced state
-- **Tree-sitter for code intelligence** — TypeScript, JavaScript, Python, JSON, and CSS grammars for structural analysis, outline extraction, and AST-level edits
+- **Tree-sitter for code intelligence** — 17 language grammars (TypeScript, TSX, JavaScript, Python, Rust, Go, Java, C, C++, Ruby, Bash, JSON, YAML, TOML, CSS, HTML, Markdown) for structural analysis, outline extraction, and AST-level edits — with 6 (TypeScript, TSX, JavaScript, Python, JSON, CSS) embedded as WASM for instant startup
 - **Bundled language servers** — TypeScript, Python, Bash, CSS, HTML, and JSON language servers ship as npm dependencies and work out of the box. Rust (`rust-analyzer`) and Go (`gopls`) are downloaded automatically on first use with SHA256 integrity verification. No manual LSP setup required.
 - **SQL.js for analytics** — WASM SQLite for in-process tool call telemetry without a database server
 - **Agent Client Protocol** — subagents communicate via @agentclientprotocol/sdk over stdio ndJsonStream
