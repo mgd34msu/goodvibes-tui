@@ -166,6 +166,9 @@ const SUBSCRIPTION_PROVIDERS = new Set([
   'v0',
   'vercel',
   'gitlab',
+  'kimi-for-coding',
+  'llama',
+  'lmstudio',
 ]);
 
 /** Provider IDs that are shut down / no longer active. */
@@ -175,6 +178,7 @@ const SHUTDOWN_PROVIDERS = new Set([
 ]);
 
 function categorizeProvider(providerId: string): 'subscription' | 'shutdown' | 'normal' {
+  if (providerId.includes('coding-plan')) return 'subscription';
   if (SUBSCRIPTION_PROVIDERS.has(providerId)) return 'subscription';
   if (SHUTDOWN_PROVIDERS.has(providerId)) return 'shutdown';
   return 'normal';
