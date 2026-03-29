@@ -329,8 +329,12 @@ export class ModelPickerModal {
     }
 
     // Pricing tier / category filter
-    if (this.categoryFilter !== 'all') {
-      result = result.filter(m => tierToCategoryFilter(m.tier) === this.categoryFilter);
+    if (this.categoryFilter === 'free') {
+      result = result.filter(m => m.tier === 'free');
+    } else if (this.categoryFilter === 'paid') {
+      result = result.filter(m => m.tier === 'standard' || m.tier === 'premium' || m.tier == null);
+    } else if (this.categoryFilter === 'subscription') {
+      result = result.filter(m => tierToCategoryFilter(m.tier) === 'subscription');
     }
 
     // Capability filter
