@@ -199,7 +199,10 @@ export class ModelPickerModal {
     this.query = '';
     this.categoryFilter = 'all';
     this.capabilityFilter = 'none';
-    this.selectedIndex = 0;
+    // Start selection at the top of the Popular providers group.
+    // Configured providers come first, so skip past them.
+    const { configured } = this.getGroupedProviders();
+    this.selectedIndex = configured.length;
     this.scrollOffset = 0;
   }
 

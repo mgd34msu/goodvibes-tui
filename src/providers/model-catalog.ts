@@ -355,6 +355,9 @@ export async function fetchCatalog(): Promise<CatalogModel[]> {
 /** The live in-memory catalog models. Empty until initCatalog() runs. */
 let _catalogModels: CatalogModel[] = [];
 
+/** The last-computed synthetic canonical models. Set by applySyntheticCanonicalModels(). */
+let _syntheticCanonicals: import('./synthetic.ts').CanonicalModel[] = [];
+
 /** In-memory pricing catalog (replaceable in tests) */
 let _pricingCatalog: PricingCatalog | null = null;
 
@@ -503,6 +506,7 @@ async function applySyntheticCanonicalModels(models: CatalogModel[]): Promise<vo
       canonical.push({ id: canonicalId, tier, backends: allBackends, backendCount: allBackends.length, keyedBackendCount: distinctProviders });
     }
 
+    _syntheticCanonicals = canonical;
     setSyntheticCanonicalModels(canonical);
     logger.debug('[model-catalog] Synthetic canonical models updated', { count: canonical.length });
   } catch (err) {
@@ -1091,6 +1095,49 @@ export interface MinimalModelDefinition {
  *
  * @public Consumed by registry.ts to populate the model registry.
  */
+/**
+ * Convert the synthetic canonical models into MinimalModelDefinition[] for use by registry.
+ *
+ * Returns models with provider='synthetic' and canonical slug IDs.
+ * Returns an empty array if initCatalog() has not been called or no multi-provider
+ * groups were found.
+ *
+ * @public Consumed by registry.ts to populate synthetic models in the model registry.
+ */
+export function getSyntheticModelDefinitions(): MinimalModelDefinition[] {
+  return _syntheticCanonicals.map((c): MinimalModelDefinition => {
+    // Use the backend with the largest context window as representative
+    const bestBackend = c.backends.reduce((best, b) =>
+      (b.contextWindow ?? 0) > (best.contextWindow ?? 0) ? b : best, c.backends[0]);
+
+    // Find a catalog model whose ID matches one of the backends, to extract display name
+    const catalogMatch = _catalogModels.find(m =>
+      c.backends.some(b => b.modelId === m.id)
+    );
+
+    const displayName = catalogMatch?.name ?? c.id;
+    const hasReasoning = catalogMatch?.reasoning === true;
+
+    return {
+      id: c.id,
+      provider: 'synthetic',
+      registryKey: `synthetic:${c.id}`,
+      displayName,
+      description: `Synthetic failover model — ${c.backendCount} provider${c.backendCount !== 1 ? 's' : ''} available`,
+      capabilities: {
+        toolCalling: true,
+        codeEditing: true,
+        reasoning: hasReasoning,
+        multimodal: false,
+      },
+      contextWindow: bestBackend?.contextWindow ?? 128_000,
+      selectable: true,
+      tier: c.tier === 'free' ? 'free' : c.tier === 'subscription' ? 'subscription' : 'standard',
+      ...(hasReasoning ? { reasoningEffort: ['instant', 'low', 'medium', 'high'] } : {}),
+    };
+  });
+}
+
 export function getCatalogModelDefinitions(): MinimalModelDefinition[] {
   return _catalogModels.map((m): MinimalModelDefinition => {
     // Derive capability defaults from provider name and tier
