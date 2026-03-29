@@ -351,13 +351,18 @@ export function getBenchmarks(modelName: string): BenchmarkEntry | undefined {
   // 4. Slug-normalized match — strips all non-alphanumeric chars before comparing.
   //    Allows synthetic canonical slugs (e.g. 'gpt4o') to match benchmark entries
   //    with dashes/spaces in their names (e.g. 'GPT-4o', 'gpt-4o').
+  //    Tries exact slug match first, then falls back to slug-prefix match to handle
+  //    canonical slugs that are prefixes of benchmark entry slugs (e.g. 'gpt5' matches 'gpt5o').
   const slug = lower.replace(/[^a-z0-9]/g, '');
   if (slug.length > 0) {
     let slugBest: BenchmarkEntry | undefined;
     let slugBestLen = Infinity;
+    let slugPrefixBest: BenchmarkEntry | undefined;
+    let slugPrefixBestLen = Infinity;
     for (const e of entries) {
       const nameSlug = e.name.toLowerCase().replace(/[^a-z0-9]/g, '');
       const idSlug = e.modelId.toLowerCase().replace(/[^a-z0-9]/g, '');
+      // Exact slug match
       if (nameSlug === slug || idSlug === slug) {
         const len = Math.min(
           nameSlug === slug ? e.name.length : Infinity,
@@ -368,8 +373,21 @@ export function getBenchmarks(modelName: string): BenchmarkEntry | undefined {
           slugBest = e;
         }
       }
+      // Prefix slug match — entry slug starts with the query slug (e.g. 'gpt5' in 'gpt5o')
+      // Only use as fallback when no exact match found.
+      else if (nameSlug.startsWith(slug) || idSlug.startsWith(slug)) {
+        const len = Math.min(
+          nameSlug.startsWith(slug) ? e.name.length : Infinity,
+          idSlug.startsWith(slug) ? e.modelId.length : Infinity,
+        );
+        if (len < slugPrefixBestLen) {
+          slugPrefixBestLen = len;
+          slugPrefixBest = e;
+        }
+      }
     }
     if (slugBest) return slugBest;
+    if (slugPrefixBest) return slugPrefixBest;
   }
 
   return undefined;
