@@ -237,6 +237,37 @@ describe('renderModelPickerOverlay — provider mode', () => {
     const footer = lineToString(lines[lines.length - 1]);
     expect(footer).not.toContain('Tab');
   });
+
+  test('search bar is present in provider mode', () => {
+    const texts = linesToText(renderModelPickerOverlay(makeProviderPicker(), W)).join('\n');
+    // Search bar renders a magnifying glass emoji (🔍 = \uD83D\uDD0D)
+    expect(texts).toContain('\uD83D\uDD0D');
+  });
+
+  test('query filters provider list', () => {
+    const picker = makeProviderPicker();
+    picker.query = 'open';
+    const texts = linesToText(renderModelPickerOverlay(picker, W)).join('\n');
+    expect(texts).toContain('openai');
+    expect(texts).not.toContain('anthropic');
+    expect(texts).not.toContain('gemini');
+  });
+
+  test('no-match query shows helpful message', () => {
+    const picker = makeProviderPicker();
+    picker.query = 'zzz-no-match';
+    const texts = linesToText(renderModelPickerOverlay(picker, W)).join('\n');
+    expect(texts).toContain('No providers match');
+  });
+
+  test('each line has correct width in provider mode with query', () => {
+    const picker = makeProviderPicker();
+    picker.query = 'ant';
+    const lines = renderModelPickerOverlay(picker, W);
+    for (const line of lines) {
+      expect(line.length).toBe(W);
+    }
+  });
 });
 
 // ---------------------------------------------------------------------------

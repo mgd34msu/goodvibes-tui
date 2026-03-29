@@ -1103,8 +1103,8 @@ export class InputHandler {
               this.modelPicker.close();
             }
           } else if (token.logicalName === 'backspace') {
-            // Backspace removes last char from query (model mode only)
-            if (this.modelPicker.mode === 'model') {
+            // Backspace removes last char from query (model or provider mode)
+            if (this.modelPicker.mode === 'model' || this.modelPicker.mode === 'provider') {
               this.modelPicker.deleteChar();
             }
           } else if (token.logicalName === 'enter') {
@@ -1124,7 +1124,7 @@ export class InputHandler {
               }
             } else if (mode === 'provider') {
               // Provider chosen — show that provider's models
-              const selectedProvider = this.modelPicker.providers[idx];
+              const selectedProvider = this.modelPicker.getFilteredProviders()[idx];
               if (selectedProvider) {
                 const models = this.commandContext
                   ? this.commandContext.providerRegistry.getSelectableModels().filter(m => m.provider === selectedProvider)
@@ -1153,7 +1153,7 @@ export class InputHandler {
             this.modelPicker.setCategoryFilter(cycle[(cur + 1) % cycle.length]!);
           }
           // All other keys ignored while model picker is active
-        } else if (token.type === 'text' && this.modelPicker.mode === 'model') {
+        } else if (token.type === 'text' && (this.modelPicker.mode === 'model' || this.modelPicker.mode === 'provider')) {
           // Printable character — append to search query (all chars available)
           const ch = token.value;
           if (ch.length === 1 && ch >= ' ') {

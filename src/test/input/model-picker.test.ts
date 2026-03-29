@@ -166,6 +166,24 @@ describe('ModelPickerModal', () => {
       expect(items[0].isGroupHeader).toBeFalsy();
     });
 
+    test('provider mode filters list by query', () => {
+      picker.mode = 'provider';
+      picker.providers = ['anthropic', 'openai', 'gemini'];
+      picker.query = 'open';
+      const items = picker.getItems();
+      expect(items).toHaveLength(1);
+      expect(items[0].id).toBe('openai');
+    });
+
+    test('provider mode filter is case-insensitive', () => {
+      picker.mode = 'provider';
+      picker.providers = ['Anthropic', 'OpenAI', 'Gemini'];
+      picker.query = 'ANTHROPIC';
+      const items = picker.getItems();
+      expect(items).toHaveLength(1);
+      expect(items[0].id).toBe('Anthropic');
+    });
+
     test('effort mode returns effort levels with descriptions', () => {
       picker.mode = 'effort';
       picker.effortLevels = ['low', 'medium', 'high'];
@@ -653,6 +671,62 @@ describe('ModelPickerModal', () => {
       picker.pinnedIds = new Set(['not-in-list']);
       const items = picker.getItems();
       expect(items.some(i => i.isGroupHeader && i.label === 'Favorites')).toBe(false);
+    });
+  });
+
+  // ── getFilteredProviders ──────────────────────────────────────────────────
+
+  describe('getFilteredProviders()', () => {
+    beforeEach(() => {
+      picker.mode = 'provider';
+      picker.providers = ['anthropic', 'openai', 'gemini', 'mistral'];
+    });
+
+    test('returns all providers when query is empty', () => {
+      expect(picker.getFilteredProviders()).toHaveLength(4);
+    });
+
+    test('filters by substring match', () => {
+      picker.query = 'ai';
+      const result = picker.getFilteredProviders();
+      // 'openai' and 'mistral' don't match, but 'openai' contains 'ai'
+      expect(result).toContain('openai');
+      expect(result).not.toContain('anthropic');
+      expect(result).not.toContain('gemini');
+      expect(result).not.toContain('mistral');
+    });
+
+    test('filter is case-insensitive', () => {
+      picker.query = 'GEMINI';
+      expect(picker.getFilteredProviders()).toEqual(['gemini']);
+    });
+
+    test('empty whitespace query returns all', () => {
+      picker.query = '   ';
+      expect(picker.getFilteredProviders()).toHaveLength(4);
+    });
+
+    test('no match returns empty array', () => {
+      picker.query = 'zzz-no-match';
+      expect(picker.getFilteredProviders()).toHaveLength(0);
+    });
+
+    test('getItemCount uses filtered providers in provider mode', () => {
+      picker.query = 'open';
+      expect(picker.getItemCount()).toBe(1);
+    });
+
+    test('appendChar clamps selectedIndex against filtered providers', () => {
+      picker.selectedIndex = 3;
+      picker.appendChar('g');
+      // Only 'gemini' matches — index must be 0
+      expect(picker.selectedIndex).toBe(0);
+    });
+
+    test('clearing query restores full provider list', () => {
+      picker.query = 'open';
+      picker.clearQuery();
+      expect(picker.getFilteredProviders()).toHaveLength(4);
     });
   });
 
