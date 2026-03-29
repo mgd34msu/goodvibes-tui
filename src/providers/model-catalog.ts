@@ -24,7 +24,6 @@ import { getContextWindowForModel, getPricingForModel } from './model-limits.ts'
 import { providerRegistry } from './registry.ts';
 import type { FavoritesData } from './favorites.ts';
 import { loadFavorites } from './favorites.ts';
-import { compositeScore } from './model-benchmarks.ts';
 
 // ---------------------------------------------------------------------------
 // Provider types
@@ -435,10 +434,7 @@ export async function refreshCatalog(): Promise<void> {
 
   // Notify about model changes (new, removed, repriced models)
   const favorites = await loadFavorites();
-  const notifications = notifyCatalogChanges(oldModels, models, favorites);
-  for (const msg of notifications) {
-    logger.info(`[model-catalog] ${msg}`);
-  }
+  notifyCatalogChanges(oldModels, models, favorites);
 }
 
 // ---------------------------------------------------------------------------
