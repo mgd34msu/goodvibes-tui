@@ -598,11 +598,16 @@ export class ProviderRegistry {
   /** Return the provider responsible for a given model ID.
    * When `provider` is supplied, it is used to disambiguate models that exist
    * under multiple providers. Falls back to first-match when provider is unknown.
+   * If the provider-constrained search yields no result (e.g. stale in-memory
+   * data during catalog refresh), falls back to a provider-agnostic search so
+   * the call succeeds rather than throwing with a misleading error.
    */
   getForModel(modelId: string, provider?: string): LLMProvider {
+    const registry = getModelRegistry();
     const def = provider
-      ? getModelRegistry().find((m) => m.id === modelId && m.provider === provider)
-      : getModelRegistry().find((m) => m.id === modelId);
+      ? (registry.find((m) => m.id === modelId && m.provider === provider) ??
+         registry.find((m) => m.id === modelId))
+      : registry.find((m) => m.id === modelId);
     if (!def) throw new Error(`No model '${modelId}' in registry.`);
     return this.get(def.provider);
   }
