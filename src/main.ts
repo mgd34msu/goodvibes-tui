@@ -980,7 +980,9 @@ async function main() {
     }
 
     if (input.modelPicker.active) {
-      const mpMaxVisible = Math.max(5, vHeight - MODEL_PICKER_CHROME_LINES);
+      // Reserve 4 extra lines for scroll indicators (up to 2) and visible group headers (up to 2).
+      // MODEL_PICKER_CHROME_LINES only counts fixed chrome; dynamic rows push total height higher.
+      const mpMaxVisible = Math.max(5, vHeight - MODEL_PICKER_CHROME_LINES - 4);
       const mpLines = renderModelPickerOverlay(input.modelPicker, width, mpMaxVisible);
       const mpStart = Math.max(0, vHeight - mpLines.length);
       viewport.length = Math.min(viewport.length, mpStart);
