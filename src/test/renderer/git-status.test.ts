@@ -1,6 +1,5 @@
-import { describe, test, expect, beforeEach, mock } from 'bun:test';
+import { describe, test, expect } from 'bun:test';
 import { GitStatusProvider } from '../../renderer/git-status.ts';
-import { GitService } from '../../git/service.ts';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -33,18 +32,42 @@ function makeStatus(overrides: Partial<StatusResult> = {}): StatusResult {
   };
 }
 
-function mockGitService(statusResult: StatusResult, branchName: string): void {
-  const fakeService = {
-    status: async () => statusResult,
-    branch: async () => ({ current: branchName, all: [branchName], detached: false }),
-    dispose: () => {},
+/**
+ * Create a GitStatusProvider with a fake fetch function.
+ * This avoids mock.module() which pollutes the global module registry and
+ * breaks other test files (e.g. src/test/git/service.test.ts) that import
+ * the real GitService constructor.
+ */
+function providerWithFakeFetch(
+  statusResult: StatusResult,
+  branchName: string,
+): GitStatusProvider {
+  const provider = new GitStatusProvider();
+  type PrivateProvider = {
+    _fetch: () => Promise<void>;
+    cache: { branch: string; dirty: boolean; ahead: number; behind: number };
+    lastFetch: number;
+    fetching: boolean;
   };
-  // Override getInstance to return our fake
-  mock.module('../../git/service.ts', () => ({
-    GitService: {
-      getInstance: () => fakeService,
-    },
-  }));
+  const p = provider as unknown as PrivateProvider;
+  p._fetch = async () => {
+    const dirty =
+      statusResult.modified.length > 0 ||
+      statusResult.created.length > 0 ||
+      statusResult.deleted.length > 0 ||
+      statusResult.renamed.length > 0 ||
+      statusResult.conflicted.length > 0 ||
+      statusResult.not_added.length > 0;
+    p.cache = {
+      branch: branchName,
+      dirty,
+      ahead: statusResult.ahead ?? 0,
+      behind: statusResult.behind ?? 0,
+    };
+    p.lastFetch = Date.now();
+    p.fetching = false;
+  };
+  return provider;
 }
 
 // ---------------------------------------------------------------------------
@@ -137,29 +160,25 @@ describe('GitStatusProvider', () => {
 
   describe('dirty detection', () => {
     test('dirty is false when all arrays are empty', async () => {
-      mockGitService(makeStatus(), 'main');
-      const provider = new GitStatusProvider();
+      const provider = providerWithFakeFetch(makeStatus(), 'main');
       const info = await provider.getStatus();
       expect(info.dirty).toBe(false);
     });
 
     test('dirty is true when modified files present', async () => {
-      mockGitService(makeStatus({ modified: ['src/foo.ts'] }), 'main');
-      const provider = new GitStatusProvider();
+      const provider = providerWithFakeFetch(makeStatus({ modified: ['src/foo.ts'] }), 'main');
       const info = await provider.getStatus();
       expect(info.dirty).toBe(true);
     });
 
     test('dirty is true when untracked files present', async () => {
-      mockGitService(makeStatus({ not_added: ['new-file.ts'] }), 'feature');
-      const provider = new GitStatusProvider();
+      const provider = providerWithFakeFetch(makeStatus({ not_added: ['new-file.ts'] }), 'feature');
       const info = await provider.getStatus();
       expect(info.dirty).toBe(true);
     });
 
     test('dirty is true when conflicted files present', async () => {
-      mockGitService(makeStatus({ conflicted: ['conflict.ts'] }), 'main');
-      const provider = new GitStatusProvider();
+      const provider = providerWithFakeFetch(makeStatus({ conflicted: ['conflict.ts'] }), 'main');
       const info = await provider.getStatus();
       expect(info.dirty).toBe(true);
     });
