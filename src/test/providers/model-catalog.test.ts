@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach, spyOn } from 'bun:test';
+import { describe, it, expect, beforeEach, afterEach, spyOn, mock, afterAll } from 'bun:test';
 import fs from 'node:fs';
 import {
   normalizeModelId,
@@ -8,10 +8,13 @@ import {
   ensureCacheDir,
   _setCatalogForTesting,
   _resetForTest,
+  _nameToSlugForTest,
+  _applySyntheticCanonicalModelsForTest,
 } from '../../providers/model-catalog.ts';
 import type {
   CatalogProvider,
   PricingCatalog,
+  CatalogModel,
 } from '../../providers/model-catalog.ts';
 
 describe('normalizeModelId', () => {
@@ -207,5 +210,173 @@ describe('getCatalog', () => {
     for (const r of results) {
       expect(r.context).toBeGreaterThan(100_000);
     }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// nameToSlug (slug normalisation)
+// ---------------------------------------------------------------------------
+
+describe('nameToSlug (via _nameToSlugForTest)', () => {
+  it('lowercases a plain name', () => {
+    expect(_nameToSlugForTest('GPT')).toBe('gpt');
+  });
+  it('strips spaces entirely', () => {
+    expect(_nameToSlugForTest('GPT 4o')).toBe('gpt4o');
+  });
+  it('strips dashes entirely', () => {
+    expect(_nameToSlugForTest('GPT-4o')).toBe('gpt4o');
+  });
+  it('strips underscores entirely', () => {
+    expect(_nameToSlugForTest('GPT_4o')).toBe('gpt4o');
+  });
+  it('GPT-4o, GPT 4o, and GPT_4o all produce the same slug', () => {
+    const a = _nameToSlugForTest('GPT-4o');
+    const b = _nameToSlugForTest('GPT 4o');
+    const c = _nameToSlugForTest('GPT_4o');
+    expect(a).toBe(b);
+    expect(b).toBe(c);
+    expect(a).toBe('gpt4o');
+  });
+  it('strips all non-alphanumeric chars including consecutive runs', () => {
+    expect(_nameToSlugForTest('hello  --  world')).toBe('helloworld');
+  });
+  it('strips leading and trailing non-alphanumeric chars', () => {
+    expect(_nameToSlugForTest('-leading')).toBe('leading');
+    expect(_nameToSlugForTest('trailing-')).toBe('trailing');
+  });
+  it('handles names with only non-alphanumeric chars', () => {
+    expect(_nameToSlugForTest('---')).toBe('');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// applySyntheticCanonicalModels — slug-based merging in broad families
+// ---------------------------------------------------------------------------
+
+/**
+ * Helpers to build minimal CatalogModel fixtures.
+ * envVars: [] means no API key required — backends always pass the key filter.
+ */
+function makeCatalogModel(
+  id: string,
+  name: string,
+  family: string,
+  providerId: string,
+): CatalogModel {
+  return {
+    id,
+    name,
+    family,
+    provider: providerId,
+    providerId,
+    providerEnvVars: [],          // no key required — always passes filter
+    pricing: { input: 0, output: 0 },
+    tier: 'free' as const,
+  };
+}
+
+/**
+ * Build the minimum number of models to exceed MAX_FAMILY_UNIQUE_NAMES (20),
+ * triggering broad-family sub-grouping by slug. Returns 21 uniquely-named
+ * filler models plus any extras passed in.
+ *
+ * All models share the same family and alternate between two providers so
+ * every resulting canonical group has 2+ distinct providers.
+ */
+function buildBroadFamily(
+  family: string,
+  extras: CatalogModel[],
+): CatalogModel[] {
+  const providers = ['provider-a', 'provider-b'];
+  // 21 fillers — each gets a unique name so they don't accidentally
+  // collapse with the extras under test.
+  const fillers: CatalogModel[] = Array.from({ length: 21 }, (_, i) => {
+    const pid = providers[i % 2];
+    return makeCatalogModel(`filler-${i}`, `Filler Model ${i}`, family, pid);
+  });
+  return [...fillers, ...extras];
+}
+
+// Capture whatever setSyntheticCanonicalModels receives.
+let capturedCanonical: import('../../providers/synthetic.ts').CanonicalModel[] = [];
+
+mock.module('../../providers/synthetic.ts', () => ({
+  setSyntheticCanonicalModels: (models: import('../../providers/synthetic.ts').CanonicalModel[]) => {
+    capturedCanonical = models;
+  },
+}));
+
+beforeEach(() => {
+  capturedCanonical = [];
+});
+
+afterAll(() => {
+  mock.restore();
+});
+
+describe('applySyntheticCanonicalModels — slug-based merging in broad families', () => {
+  it('merges models whose names differ only in punctuation/spacing into one canonical group', async () => {
+    const family = 'gpt';
+    // These three models have names that normalise to the same slug ('gpt4o'),
+    // but differ in punctuation and spacing. They should end up in ONE canonical group.
+    const hyphen    = makeCatalogModel('gpt-4o-openai',    'GPT-4o', family, 'provider-a');
+    const space     = makeCatalogModel('gpt-4o-azure',     'GPT 4o', family, 'provider-b');
+    const underscore = makeCatalogModel('gpt-4o-microsoft', 'GPT_4o', family, 'provider-c');
+
+    const models = buildBroadFamily(family, [hyphen, space, underscore]);
+    await _applySyntheticCanonicalModelsForTest(models);
+
+    // The three variants should share a single canonical ID ('gpt4o').
+    const gpt4oEntries = capturedCanonical.filter(c => c.id === 'gpt4o');
+    expect(gpt4oEntries).toHaveLength(1);
+
+    // All three backends should be present under that canonical group.
+    const backends = gpt4oEntries[0].backends;
+    const backendModelIds = backends.map(b => b.modelId);
+    expect(backendModelIds).toContain('gpt-4o-openai');
+    expect(backendModelIds).toContain('gpt-4o-azure');
+    expect(backendModelIds).toContain('gpt-4o-microsoft');
+  });
+
+  it('does NOT merge models with genuinely different slugs into the same group', async () => {
+    const family = 'gpt';
+    // 'GPT-4o' → 'gpt4o', 'GPT-5' → 'gpt5': these must stay separate.
+    // Each slug needs 2+ distinct providers to survive the canonical filter.
+    const model4o_a = makeCatalogModel('gpt-4o-a', 'GPT-4o', family, 'provider-a');
+    const model4o_b = makeCatalogModel('gpt-4o-b', 'GPT-4o', family, 'provider-b');
+    const model5_a  = makeCatalogModel('gpt-5-a',  'GPT-5',  family, 'provider-a');
+    const model5_b  = makeCatalogModel('gpt-5-b',  'GPT-5',  family, 'provider-b');
+
+    const models = buildBroadFamily(family, [model4o_a, model4o_b, model5_a, model5_b]);
+    await _applySyntheticCanonicalModelsForTest(models);
+
+    const ids = capturedCanonical.map(c => c.id);
+    expect(ids).toContain('gpt4o');
+    expect(ids).toContain('gpt5');
+    // They must be separate entries — not collapsed into one.
+    expect(ids.filter(id => id === 'gpt4o')).toHaveLength(1);
+    expect(ids.filter(id => id === 'gpt5')).toHaveLength(1);
+    // The 'gpt4o' group must NOT contain the gpt-5 model IDs.
+    const gpt4oBackendIds = capturedCanonical.find(c => c.id === 'gpt4o')!.backends.map(b => b.modelId);
+    expect(gpt4oBackendIds).not.toContain('gpt-5-a');
+    expect(gpt4oBackendIds).not.toContain('gpt-5-b');
+  });
+
+  it('a single-provider group is excluded (requires 2+ distinct providers)', async () => {
+    const family = 'llama';
+    // Three models with same slug, same provider — should be filtered out because
+    // distinctProviders < 2 after the 21 filler models (which use two providers)
+    // are in a different family.
+    const only = [
+      makeCatalogModel('llama-3-a', 'Llama 3',  family, 'provider-solo'),
+      makeCatalogModel('llama-3-b', 'Llama  3', family, 'provider-solo'),
+    ];
+    // Only two models total in the llama family — stays granular (< 21 unique names)
+    // but distinctProviders = 1, so it should NOT appear in canonical output.
+    await _applySyntheticCanonicalModelsForTest(only);
+
+    const llamaEntry = capturedCanonical.find(c => c.id === 'llama');
+    expect(llamaEntry).toBeUndefined();
   });
 });
