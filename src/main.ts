@@ -58,6 +58,7 @@ import { scan, loadPersistedProviders, persistProviders, removePersistedProvider
 import { getSessionManager } from './sessions/manager.ts';
 import type { SessionMeta } from './sessions/manager.ts';
 import { logger } from './utils/logger.ts';
+import { getPinned } from './providers/favorites.ts';
 import { initModelLimits, getContextWindowForModel } from './providers/model-limits.ts';
 import { initBenchmarks } from './providers/model-benchmarks.ts';
 import { initCatalog } from './providers/model-catalog.ts';
@@ -425,7 +426,6 @@ async function main() {
 
   unsubs.push(bus.on('wrfc:gate-result', ({ chainId, gate, passed }: { chainId: string; gate: string; passed: boolean }) => {
     const icon = passed ? '\u2713' : '\u2717';
-    const color = passed ? '#22c55e' : '#ef4444';
     conversation.addSystemMessage(`[WRFC]   ${icon} Gate: ${gate} ${passed ? 'passed' : 'FAILED'}`);
     bus.emit('render:request');
   }));
@@ -658,6 +658,10 @@ async function main() {
   // --- Model picker wiring ---
   commandContext.openModelPicker = () => {
     const models = providerRegistry.getSelectableModels();
+    input.modelPicker.configuredProviders = new Set(providerRegistry.listModels().map(m => m.provider));
+    void getPinned().then((pinned) => {
+      input.modelPicker.pinnedIds = new Set(pinned);
+    });
     input.modelPicker.open(models, runtime.model);
     bus.emit('render:request');
   };
