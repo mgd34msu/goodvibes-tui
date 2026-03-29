@@ -86,7 +86,21 @@ export interface PickerItem {
   isPinned?: boolean;
   /** True when model tier is free. */
   isFree?: boolean;
+  /** True when this provider item has a configured API key. */
+  isConfigured?: boolean;
 }
+
+/** Provider IDs treated as "Popular" in the provider picker. */
+export const POPULAR_PROVIDERS: ReadonlySet<string> = new Set([
+  'anthropic',
+  'google',
+  'groq',
+  'mistral',
+  'nvidia',
+  'ollama',
+  'openai',
+  'openrouter',
+]);
 
 /**
  * ModelPickerModal - Multi-step interactive picker for model, provider, and effort.
@@ -268,11 +282,41 @@ export class ModelPickerModal {
     this._clampSelection();
   }
 
-  /** Return providers matching the current query (case-insensitive substring). */
+  /**
+   * Split providers into three ordered groups: Configured, Popular, All.
+   * Each group is alphabetized. Configured takes priority — Popular and All
+   * exclude providers already in Configured.
+   */
+  getGroupedProviders(): { configured: string[]; popular: string[]; all: string[] } {
+    const configured: string[] = [];
+    const popular: string[] = [];
+    const all: string[] = [];
+
+    for (const p of this.providers) {
+      const pLower = p.toLowerCase();
+      if (this.configuredProviders.has(p)) {
+        configured.push(p);
+      } else if (POPULAR_PROVIDERS.has(pLower)) {
+        popular.push(p);
+      } else {
+        all.push(p);
+      }
+    }
+
+    configured.sort((a, b) => a.localeCompare(b));
+    popular.sort((a, b) => a.localeCompare(b));
+    all.sort((a, b) => a.localeCompare(b));
+
+    return { configured, popular, all };
+  }
+
+  /** Return providers matching the current query (case-insensitive substring), in grouped order. */
   getFilteredProviders(): string[] {
-    if (this.query.trim().length === 0) return this.providers;
+    const { configured, popular, all } = this.getGroupedProviders();
+    const ordered = [...configured, ...popular, ...all];
+    if (this.query.trim().length === 0) return ordered;
     const q = this.query.toLowerCase();
-    return this.providers.filter(p => p.toLowerCase().includes(q));
+    return ordered.filter(p => p.toLowerCase().includes(q));
   }
 
   /** Return models matching all current filters, sorted per benchmarkSort. */
@@ -384,7 +428,38 @@ export class ModelPickerModal {
       return items;
     }
     if (this.mode === 'provider') {
-      return this.getFilteredProviders().map(p => ({ id: p, label: p }));
+      const q = this.query.trim().toLowerCase();
+      const { configured, popular, all } = this.getGroupedProviders();
+
+      const filterGroup = (group: string[]) =>
+        q.length === 0 ? group : group.filter(p => p.toLowerCase().includes(q));
+
+      const filteredConfigured = filterGroup(configured);
+      const filteredPopular = filterGroup(popular);
+      const filteredAll = filterGroup(all);
+
+      const providerItems: PickerItem[] = [];
+
+      if (filteredConfigured.length > 0) {
+        providerItems.push({ id: '__header__configured', label: 'Configured', isGroupHeader: true });
+        for (const p of filteredConfigured) {
+          providerItems.push({ id: p, label: p, isConfigured: true });
+        }
+      }
+      if (filteredPopular.length > 0) {
+        providerItems.push({ id: '__header__popular', label: 'Popular', isGroupHeader: true });
+        for (const p of filteredPopular) {
+          providerItems.push({ id: p, label: p });
+        }
+      }
+      if (filteredAll.length > 0) {
+        providerItems.push({ id: '__header__all', label: 'All', isGroupHeader: true });
+        for (const p of filteredAll) {
+          providerItems.push({ id: p, label: p });
+        }
+      }
+
+      return providerItems;
     }
     // effort mode
     return this.effortLevels.map(e => ({ id: e, label: e, detail: EFFORT_DESCRIPTIONS[e] ?? '' }));

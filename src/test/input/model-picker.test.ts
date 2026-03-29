@@ -2,7 +2,7 @@
  * Tests for ModelPickerModal state class.
  */
 import { describe, test, expect, beforeEach } from 'bun:test';
-import { ModelPickerModal, detectFamily, tierToCategoryFilter } from '../../input/model-picker.ts';
+import { ModelPickerModal, detectFamily, tierToCategoryFilter, POPULAR_PROVIDERS } from '../../input/model-picker.ts';
 import type { ModelDefinition } from '../../providers/registry.ts';
 import { _setEntriesForTest } from '../../providers/model-benchmarks.ts';
 
@@ -158,30 +158,39 @@ describe('ModelPickerModal', () => {
       expect(nonHeaders.length).toBe(4);
     });
 
-    test('provider mode returns flat list', () => {
+    test('provider mode returns grouped list with headers', () => {
       picker.mode = 'provider';
+      // provA and provB are not in POPULAR_PROVIDERS — go to All group
       picker.providers = ['provA', 'provB'];
+      picker.configuredProviders = new Set();
       const items = picker.getItems();
-      expect(items).toHaveLength(2);
-      expect(items[0].isGroupHeader).toBeFalsy();
+      // 1 header (All) + 2 selectable items
+      expect(items).toHaveLength(3);
+      expect(items[0].isGroupHeader).toBe(true);
+      expect(items[0].label).toBe('All');
+      expect(items[1].isGroupHeader).toBeFalsy();
     });
 
-    test('provider mode filters list by query', () => {
+    test('provider mode filters list by query (non-header items)', () => {
       picker.mode = 'provider';
       picker.providers = ['anthropic', 'openai', 'gemini'];
+      picker.configuredProviders = new Set();
       picker.query = 'open';
       const items = picker.getItems();
-      expect(items).toHaveLength(1);
-      expect(items[0].id).toBe('openai');
+      const selectables = items.filter(i => !i.isGroupHeader);
+      expect(selectables).toHaveLength(1);
+      expect(selectables[0].id).toBe('openai');
     });
 
     test('provider mode filter is case-insensitive', () => {
       picker.mode = 'provider';
       picker.providers = ['Anthropic', 'OpenAI', 'Gemini'];
+      picker.configuredProviders = new Set();
       picker.query = 'ANTHROPIC';
       const items = picker.getItems();
-      expect(items).toHaveLength(1);
-      expect(items[0].id).toBe('Anthropic');
+      const selectables = items.filter(i => !i.isGroupHeader);
+      expect(selectables).toHaveLength(1);
+      expect(selectables[0].id).toBe('Anthropic');
     });
 
     test('effort mode returns effort levels with descriptions', () => {
@@ -777,6 +786,167 @@ describe('ModelPickerModal', () => {
       picker['_clampSelection']();
       expect(picker.scrollOffset).toBe(0);
       expect(picker.selectedIndex).toBe(0);
+    });
+  });
+
+  // ── Provider grouping ────────────────────────────────────────────────────────
+
+  describe('provider grouping', () => {
+    beforeEach(() => {
+      picker.mode = 'provider';
+      // Mix of configured, popular, and unknown providers
+      picker.providers = ['anthropic', 'openai', 'groq', 'someCustomProvider', 'anotherUnknown', 'google'];
+      picker.configuredProviders = new Set(['anthropic', 'openai']);
+    });
+
+    test('POPULAR_PROVIDERS contains the 8 expected providers', () => {
+      expect(POPULAR_PROVIDERS.has('anthropic')).toBe(true);
+      expect(POPULAR_PROVIDERS.has('google')).toBe(true);
+      expect(POPULAR_PROVIDERS.has('groq')).toBe(true);
+      expect(POPULAR_PROVIDERS.has('mistral')).toBe(true);
+      expect(POPULAR_PROVIDERS.has('nvidia')).toBe(true);
+      expect(POPULAR_PROVIDERS.has('ollama')).toBe(true);
+      expect(POPULAR_PROVIDERS.has('openai')).toBe(true);
+      expect(POPULAR_PROVIDERS.has('openrouter')).toBe(true);
+      expect(POPULAR_PROVIDERS.size).toBe(8);
+    });
+
+    test('getGroupedProviders splits into configured / popular / all', () => {
+      const { configured, popular, all } = picker.getGroupedProviders();
+      // anthropic and openai are configured
+      expect(configured).toContain('anthropic');
+      expect(configured).toContain('openai');
+      // groq and google are popular but not configured
+      expect(popular).toContain('groq');
+      expect(popular).toContain('google');
+      // custom providers go to all
+      expect(all).toContain('someCustomProvider');
+      expect(all).toContain('anotherUnknown');
+    });
+
+    test('configured providers are excluded from popular group', () => {
+      const { popular } = picker.getGroupedProviders();
+      expect(popular).not.toContain('anthropic');
+      expect(popular).not.toContain('openai');
+    });
+
+    test('configured providers are excluded from all group', () => {
+      const { all } = picker.getGroupedProviders();
+      expect(all).not.toContain('anthropic');
+      expect(all).not.toContain('openai');
+    });
+
+    test('each group is alphabetized', () => {
+      picker.providers = ['openai', 'anthropic', 'groq', 'google', 'zzz', 'aaa'];
+      picker.configuredProviders = new Set(['openai', 'anthropic']);
+      const { configured, popular, all } = picker.getGroupedProviders();
+      expect(configured).toEqual(['anthropic', 'openai']);
+      expect(popular).toEqual(['google', 'groq']);
+      expect(all).toEqual(['aaa', 'zzz']);
+    });
+
+    test('getFilteredProviders returns configured first, then popular, then all', () => {
+      const result = picker.getFilteredProviders();
+      const anthIdx = result.indexOf('anthropic');
+      const openaiIdx = result.indexOf('openai');
+      const groqIdx = result.indexOf('groq');
+      const customIdx = result.indexOf('someCustomProvider');
+      // Configured comes before popular
+      expect(anthIdx).toBeLessThan(groqIdx);
+      expect(openaiIdx).toBeLessThan(groqIdx);
+      // Popular comes before unknown
+      expect(groqIdx).toBeLessThan(customIdx);
+    });
+
+    test('getItems in provider mode inserts group headers', () => {
+      const items = picker.getItems();
+      const headerLabels = items.filter(i => i.isGroupHeader).map(i => i.label);
+      expect(headerLabels).toContain('Configured');
+      expect(headerLabels).toContain('Popular');
+      expect(headerLabels).toContain('All');
+    });
+
+    test('getItems marks configured providers with isConfigured', () => {
+      const items = picker.getItems();
+      const configuredItems = items.filter(i => !i.isGroupHeader && i.isConfigured);
+      const configuredIds = configuredItems.map(i => i.id);
+      expect(configuredIds).toContain('anthropic');
+      expect(configuredIds).toContain('openai');
+    });
+
+    test('non-configured items do not have isConfigured set', () => {
+      const items = picker.getItems();
+      const groqItem = items.find(i => i.id === 'groq');
+      expect(groqItem?.isConfigured).toBeFalsy();
+    });
+
+    test('empty Configured group hides the header', () => {
+      picker.configuredProviders = new Set();
+      const items = picker.getItems();
+      const headerLabels = items.filter(i => i.isGroupHeader).map(i => i.label);
+      expect(headerLabels).not.toContain('Configured');
+    });
+
+    test('empty Popular group hides the header', () => {
+      picker.providers = ['someCustomProvider', 'anotherUnknown'];
+      picker.configuredProviders = new Set();
+      const items = picker.getItems();
+      const headerLabels = items.filter(i => i.isGroupHeader).map(i => i.label);
+      expect(headerLabels).not.toContain('Popular');
+      expect(headerLabels).not.toContain('Configured');
+      expect(headerLabels).toContain('All');
+    });
+
+    test('empty All group hides the header', () => {
+      picker.providers = ['anthropic', 'openai', 'groq'];
+      picker.configuredProviders = new Set(['anthropic', 'openai']);
+      const items = picker.getItems();
+      const headerLabels = items.filter(i => i.isGroupHeader).map(i => i.label);
+      expect(headerLabels).not.toContain('All');
+    });
+
+    test('getItems count (headers + selectables) in provider mode', () => {
+      // 2 configured + 2 popular (groq, google) + 2 all = 6 selectables + 3 headers = 9
+      const items = picker.getItems();
+      const headers = items.filter(i => i.isGroupHeader);
+      const selectables = items.filter(i => !i.isGroupHeader);
+      expect(headers).toHaveLength(3);
+      expect(selectables).toHaveLength(6);
+    });
+
+    test('search filter preserves group structure', () => {
+      picker.query = 'o'; // matches openai, google, someCustomProvider, anotherUnknown
+      const items = picker.getItems();
+      const headers = items.filter(i => i.isGroupHeader).map(i => i.label);
+      // openai is configured, google is popular, custom providers are in all
+      expect(headers).toContain('Configured');
+      expect(headers).toContain('Popular');
+      expect(headers).toContain('All');
+    });
+
+    test('search filter hides empty groups when no matches', () => {
+      picker.query = 'custom'; // only matches someCustomProvider
+      const items = picker.getItems();
+      const headers = items.filter(i => i.isGroupHeader).map(i => i.label);
+      // Only All group has a match
+      expect(headers).not.toContain('Configured');
+      expect(headers).not.toContain('Popular');
+      expect(headers).toContain('All');
+    });
+
+    test('getFilteredProviders count matches getItemCount in provider mode', () => {
+      expect(picker.getItemCount()).toBe(picker.getFilteredProviders().length);
+    });
+
+    test('case-insensitive match for popular providers', () => {
+      // Provider IDs may come in mixed case from registry
+      picker.providers = ['Anthropic', 'OpenAI', 'Groq'];
+      picker.configuredProviders = new Set(['Anthropic']);
+      const { popular } = picker.getGroupedProviders();
+      // 'OpenAI'.toLowerCase() === 'openai' which is in POPULAR_PROVIDERS
+      expect(popular).toContain('OpenAI');
+      // 'Groq'.toLowerCase() === 'groq' which is in POPULAR_PROVIDERS
+      expect(popular).toContain('Groq');
     });
   });
 });
