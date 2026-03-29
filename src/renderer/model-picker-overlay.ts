@@ -49,23 +49,29 @@ export function renderModelPickerOverlay(
     pad + '\u250c' + titleText + '\u2500'.repeat(Math.max(0, boxW - 2 - getDisplayWidth(titleText))) + '\u2510';
   lines.push(UIFactory.stringToLine(titleLine, width, { fg: '#00ffff' }));
 
-  // ── Search bar (model mode only) ───────────────────────────────────────────────
-  if (picker.mode === 'model') {
-    // Category filter indicator
-    const filterLabels: Record<string, string> = { all: 'All', free: 'Free', paid: 'Paid', subscription: 'Sub' };
-    const filterLabel = filterLabels[picker.categoryFilter] ?? 'All';
-    const filterTag = `[${filterLabel}]`;
+  // ── Search bar (model and provider modes) ────────────────────────────────────
+  if (picker.mode === 'model' || picker.mode === 'provider') {
     const searchPrefix = '\u2502 \ud83d\udd0d ';
     const cursorChar = picker.query.length > 0 ? '' : '\u2592'; // block cursor when empty
     const queryDisplay = picker.query + cursorChar;
-    const filterTagW = getDisplayWidth(filterTag);
+    let filterTag = '';
+    let filterTagW = 0;
+    if (picker.mode === 'model') {
+      // Category filter indicator — model mode only
+      const filterLabels: Record<string, string> = { all: 'All', free: 'Free', paid: 'Paid', subscription: 'Sub' };
+      const filterLabel = filterLabels[picker.categoryFilter] ?? 'All';
+      filterTag = `[${filterLabel}]`;
+      filterTagW = getDisplayWidth(filterTag);
+    }
     // Available space for query: contentW minus prefix-after-border (3 for search icon+space) minus filter tag minus gap
-    const maxQueryW = contentW - 3 - filterTagW - 2;
+    const maxQueryW = contentW - 3 - filterTagW - (filterTagW > 0 ? 2 : 1);
     const queryTrunc = getDisplayWidth(queryDisplay) > maxQueryW
       ? '\u2026' + queryDisplay.slice(-(maxQueryW - 1))
       : queryDisplay;
-    const spacer = ' '.repeat(Math.max(0, contentW - 3 - getDisplayWidth(queryTrunc) - filterTagW - 1));
-    const searchRowText = pad + searchPrefix + queryTrunc + spacer + filterTag + ' \u2502';
+    const spacer = ' '.repeat(Math.max(0, contentW - 3 - getDisplayWidth(queryTrunc) - filterTagW - (filterTagW > 0 ? 1 : 0)));
+    const searchRowText = filterTag
+      ? pad + searchPrefix + queryTrunc + spacer + filterTag + ' \u2502'
+      : pad + searchPrefix + queryTrunc + spacer + '\u2502';
     lines.push(UIFactory.stringToLine(searchRowText, width, {
       fg: picker.query.length > 0 ? '#ffffff' : '244',
     }));
@@ -74,7 +80,7 @@ export function renderModelPickerOverlay(
     const searchDivider = pad + '\u251c' + '\u2500'.repeat(boxW - 2) + '\u2524';
     lines.push(UIFactory.stringToLine(searchDivider, width, { fg: '238' }));
   } else {
-    // Empty separator for non-model modes
+    // Empty separator for effort mode
     const emptyRow = pad + '\u2502' + ' '.repeat(boxW - 2) + '\u2502';
     lines.push(UIFactory.stringToLine(emptyRow, width, { fg: '240' }));
   }
@@ -183,14 +189,18 @@ export function renderModelPickerOverlay(
     }
   } else if (picker.mode === 'provider') {
     // ── Provider list ───────────────────────────────────────────────────────────────────────
-    if (picker.providers.length === 0) {
-      const noProviders = pad + '\u2502 ' + 'No providers available'.padEnd(contentW) + ' \u2502';
+    const filteredProviders = picker.getFilteredProviders();
+    if (filteredProviders.length === 0) {
+      const msg = picker.query.length > 0
+        ? `No providers match "${picker.query.length > 20 ? picker.query.slice(0, 20) + '\u2026' : picker.query}"`
+        : 'No providers available';
+      const noProviders = pad + '\u2502 ' + msg.padEnd(contentW) + ' \u2502';
       lines.push(UIFactory.stringToLine(noProviders, width, { fg: '244', dim: true }));
     } else {
       // Determine the visible slice [scrollOffset, scrollOffset + maxVisible)
-      const providerScrollOffset = Math.max(0, Math.min(picker.scrollOffset, Math.max(0, picker.providers.length - maxVisible)));
-      const providerVisibleEnd = Math.min(picker.providers.length, providerScrollOffset + maxVisible);
-      const visibleProviders = picker.providers.slice(providerScrollOffset, providerVisibleEnd);
+      const providerScrollOffset = Math.max(0, Math.min(picker.scrollOffset, Math.max(0, filteredProviders.length - maxVisible)));
+      const providerVisibleEnd = Math.min(filteredProviders.length, providerScrollOffset + maxVisible);
+      const visibleProviders = filteredProviders.slice(providerScrollOffset, providerVisibleEnd);
 
       // Scroll indicator — items above
       if (providerScrollOffset > 0) {
@@ -212,8 +222,8 @@ export function renderModelPickerOverlay(
       }
 
       // Scroll indicator — items below
-      if (providerVisibleEnd < picker.providers.length) {
-        const remaining2 = picker.providers.length - providerVisibleEnd;
+      if (providerVisibleEnd < filteredProviders.length) {
+        const remaining2 = filteredProviders.length - providerVisibleEnd;
         const downHint = pad + '\u2502' + (` \u25be ${remaining2} more below`).padEnd(boxW - 2) + '\u2502';
         lines.push(UIFactory.stringToLine(downHint, width, { fg: '240', dim: true }));
       }

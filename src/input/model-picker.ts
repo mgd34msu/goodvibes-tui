@@ -268,6 +268,13 @@ export class ModelPickerModal {
     this._clampSelection();
   }
 
+  /** Return providers matching the current query (case-insensitive substring). */
+  getFilteredProviders(): string[] {
+    if (this.query.trim().length === 0) return this.providers;
+    const q = this.query.toLowerCase();
+    return this.providers.filter(p => p.toLowerCase().includes(q));
+  }
+
   /** Return models matching all current filters, sorted per benchmarkSort. */
   getFilteredModels(): ModelDefinition[] {
     let result = this.models;
@@ -377,7 +384,7 @@ export class ModelPickerModal {
       return items;
     }
     if (this.mode === 'provider') {
-      return this.providers.map(p => ({ id: p, label: p }));
+      return this.getFilteredProviders().map(p => ({ id: p, label: p }));
     }
     // effort mode
     return this.effortLevels.map(e => ({ id: e, label: e, detail: EFFORT_DESCRIPTIONS[e] ?? '' }));
@@ -401,7 +408,7 @@ export class ModelPickerModal {
   /** Get count of selectable (non-header) items in current mode. */
   getItemCount(): number {
     if (this.mode === 'model') return this.getFilteredModels().length;
-    if (this.mode === 'provider') return this.providers.length;
+    if (this.mode === 'provider') return this.getFilteredProviders().length;
     return this.effortLevels.length;
   }
 
