@@ -191,8 +191,8 @@ export class EventReplayQueue {
     switch (event.eventName) {
       case 'subagent:complete': {
         const id = (payload?.id as string) ?? 'unknown';
-        const task = (payload?.result as Record<string, unknown>)?.task as string | undefined;
-        const taskStr = task ? ` task "${task}"` : '';
+        const output = (payload?.result as Record<string, unknown>)?.output as string | undefined;
+        const taskStr = output ? ` task "${output.slice(0, 60)}"` : '';
         return `Agent ${id} completed${taskStr} (first notified ${turnsAgo} ${turnWord} ago)`;
       }
       case 'subagent:error': {
