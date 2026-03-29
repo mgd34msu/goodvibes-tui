@@ -220,7 +220,7 @@ Or set environment variables:
 
 ### Synthetic Failover Provider
 
-The `synthetic` provider wraps multiple backends for the same model. When one provider hits a rate limit, requests automatically failover to the next. To enable failover, set API keys for multiple free providers:
+The `synthetic` provider groups models available from multiple backends. When one provider hits a rate limit, requests automatically failover to the next — no user intervention needed. To enable failover, set API keys for multiple free providers:
 
 ```sh
 # Recommended minimum for failover
@@ -232,7 +232,7 @@ export OPENROUTER_API_KEY="..."
 export AIHUBMIX_API_KEY="..."
 ```
 
-Then select any model from the `synthetic` provider (e.g., `gpt-oss-120b`, `kimi-k2.5`, `qwen-3.5-397b`). Rate limit rotation is automatic and transparent.
+Then select any model from the `synthetic` provider (e.g., `gpt-oss-120b`, `kimi-k2.5`, `qwen-3.5-397b`). See [Synthetic Provider & Intelligent Failover](#synthetic-provider--intelligent-failover) for full details on failover behavior.
 
 ### Run
 
@@ -246,6 +246,53 @@ bun run dev
 bun run build
 # outputs dist/goodvibes
 ```
+
+---
+
+## Synthetic Provider & Intelligent Failover
+
+### What are synthetic models?
+
+Synthetic models are models available from multiple providers, automatically grouped by the system under a single selectable entry. When you pick a synthetic model, the system routes your request to the best available backend — you never need to think about which provider is serving it.
+
+- Models with different naming across providers (e.g., `GPT-4o` vs `gpt 4o`) are automatically merged into one entry
+- Each synthetic model shows how many providers are available for failover in the model picker
+
+### Transparent failover
+
+Failover happens automatically, with no user action required:
+
+- **Rate limit (429)** — immediately retries the next provider in the pool
+- **Server error (500) or network error** — retries the next provider after a 5-second cooldown
+- **Client error (400 Bad Request)** — does NOT trigger failover; the error indicates a problem with the request itself, not the provider
+- **All providers temporarily exhausted with short cooldowns (≤120s)** — the system automatically waits for the shortest cooldown to expire and retries
+
+Failover is silent by default. The model name in the status bar does not change when switching backends for the same synthetic model.
+
+### Cross-model failover (free models only)
+
+When every provider for a free synthetic model is exhausted and cooldowns are too long to wait:
+
+- The system automatically falls back to the next-best free model, ranked by benchmark score
+- The user is notified inline (non-blocking) about the model change
+- This cascading continues until a working free model is found
+- Free/paid/subscription tiers never mix — cross-model failover only happens within the free tier
+
+### Paid and subscription model exhaustion
+
+Paid and subscription models do **not** auto-failover to a different model. The user made a deliberate, cost-conscious choice.
+
+When a paid or subscription model is exhausted, the system shows a clear message with recovery options:
+
+- Wait for the cooldown to expire and retry
+- Switch to a different model with `/model`
+- Switch to a free synthetic model
+
+### Model picker grouping
+
+- Synthetic models are split into **Top Models** (S-tier or A-tier by benchmark) and **All Synthetic**
+- Each entry shows the number of providers available (e.g., `4 providers`)
+- Quality tier badges [S/A/B/C] are displayed next to model names based on composite benchmark score
 
 ---
 
