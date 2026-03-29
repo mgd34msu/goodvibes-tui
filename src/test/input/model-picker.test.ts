@@ -11,9 +11,10 @@ import { _setEntriesForTest } from '../../providers/model-benchmarks.ts';
 // ---------------------------------------------------------------------------
 
 function makeModel(overrides: Partial<ModelDefinition> = {}): ModelDefinition {
-  return {
+  const base: ModelDefinition = {
     id: 'test-model',
     provider: 'test-provider',
+    registryKey: 'test-provider:test-model',
     displayName: 'Test Model',
     description: '',
     capabilities: { toolCalling: true, codeEditing: true, reasoning: false, multimodal: false },
@@ -22,6 +23,11 @@ function makeModel(overrides: Partial<ModelDefinition> = {}): ModelDefinition {
     tier: 'free',
     ...overrides,
   };
+  // Ensure registryKey reflects provider:id after overrides
+  if (!base.registryKey || base.registryKey === 'test-provider:test-model') {
+    base.registryKey = `${base.provider}:${base.id}`;
+  }
+  return base;
 }
 
 const FREE_MODEL = makeModel({ id: 'free-1', displayName: 'Free Model 1', tier: 'free', provider: 'provA' });

@@ -26,6 +26,8 @@ export interface TokenLimits {
 export interface ModelDefinition {
   id: string;
   provider: string;
+  /** Compound unique key: `${provider}:${id}`. Safe separator since model IDs use `/` not `:`. */
+  registryKey: string;
   displayName: string;
   description: string;
   capabilities: {
@@ -84,7 +86,23 @@ export function getModelRegistry(): ModelDefinition[] {
       !customModels.some((c) => c.id === d.id),
   );
 
-  return [...customModels, ...catalogFiltered, ...discoveredFiltered];
+  // Ensure every model has a registryKey
+  const ensureKey = (m: ModelDefinition): ModelDefinition =>
+    m.registryKey ? m : { ...m, registryKey: `${m.provider}:${m.id}` };
+
+  return [
+    ...customModels.map(ensureKey),
+    ...catalogFiltered.map(ensureKey),
+    ...discoveredFiltered.map(ensureKey),
+  ];
+}
+
+/**
+ * Returns all models with a given base model ID across all providers.
+ * Used by the synthetic provider to discover all backends for a model.
+ */
+export function findModelsByBaseId(modelId: string): ModelDefinition[] {
+  return getModelRegistry().filter((m) => m.id === modelId);
 }
 
 /**
@@ -568,6 +586,7 @@ export class ProviderRegistry {
         discoveredModels.push({
           id: modelId,
           provider: server.name,
+          registryKey: `${server.name}:${modelId}`,
           displayName: modelId,
           description: `Discovered local model on ${server.baseURL}`,
           capabilities: {
@@ -596,18 +615,27 @@ export class ProviderRegistry {
   }
 
   /** Return the provider responsible for a given model ID.
-   * When `provider` is supplied, it is used to disambiguate models that exist
-   * under multiple providers. Falls back to first-match when provider is unknown.
-   * If the provider-constrained search yields no result (e.g. stale in-memory
-   * data during catalog refresh), falls back to a provider-agnostic search so
-   * the call succeeds rather than throwing with a misleading error.
+   * Accepts a registryKey (`provider:modelId`) OR a plain modelId.
+   * - If input contains `:`, treats as registryKey — exact match on `m.registryKey`
+   * - If no `:`, treats as plain modelId — fallback match on `m.id` (backward compat)
+   * When `provider` is supplied alongside a plain modelId, it disambiguates.
+   * Falls back to provider-agnostic search if constrained search yields nothing.
    */
   getForModel(modelId: string, provider?: string): LLMProvider {
     const registry = getModelRegistry();
-    const def = provider
-      ? (registry.find((m) => m.id === modelId && m.provider === provider) ??
-         registry.find((m) => m.id === modelId))
-      : registry.find((m) => m.id === modelId);
+    let def: ModelDefinition | undefined;
+    if (modelId.includes(':')) {
+      // registryKey format — exact match
+      def = registry.find((m) => m.registryKey === modelId);
+      // Fallback: try plain modelId match in case registryKey not yet populated
+      if (!def) def = registry.find((m) => m.id === modelId);
+    } else {
+      // Plain modelId — backward compat
+      def = provider
+        ? (registry.find((m) => m.id === modelId && m.provider === provider) ??
+           registry.find((m) => m.id === modelId))
+        : registry.find((m) => m.id === modelId);
+    }
     if (!def) throw new Error(`No model '${modelId}' in registry.`);
     return this.get(def.provider);
   }
@@ -624,18 +652,30 @@ export class ProviderRegistry {
 
   /** Currently active model definition. */
   getCurrentModel(): ModelDefinition {
-    const def = getModelRegistry().find((m) => m.id === this.currentModelId);
+    // Support registryKey lookup: if currentModelId contains ':', treat as registryKey
+    const registry = getModelRegistry();
+    const def = this.currentModelId.includes(':')
+      ? (registry.find((m) => m.registryKey === this.currentModelId) ??
+         registry.find((m) => m.id === this.currentModelId))
+      : registry.find((m) => m.id === this.currentModelId);
     if (!def) {
       // Check if this is a discovered/custom model that hasn't loaded yet.
       // Don't clobber currentModelId — return a placeholder so the saved ID is preserved
       // until the discovered provider registers later.
-      // Check if this model ID exists in the catalog (not a discovered/custom model)
-      const isInCatalog = getCatalogBuiltins().some((m) => m.id === this.currentModelId);
+      // Extract base model ID from registryKey if needed
+      const baseId = this.currentModelId.includes(':')
+        ? this.currentModelId.split(':').slice(1).join(':')
+        : this.currentModelId;
+      const isInCatalog = getCatalogBuiltins().some((m) => m.id === baseId || m.id === this.currentModelId);
       if (!isInCatalog && this.currentModelId) {
+        const placeholderProvider = this.currentModelId.includes(':')
+          ? this.currentModelId.split(':')[0]
+          : (config.provider ?? 'unknown');
         return {
-          id: this.currentModelId,
-          provider: config.provider ?? 'unknown',
-          displayName: this.currentModelId,
+          id: baseId,
+          provider: placeholderProvider ?? 'unknown',
+          registryKey: this.currentModelId.includes(':') ? this.currentModelId : `${placeholderProvider}:${baseId}`,
+          displayName: baseId,
           description: 'Waiting for provider discovery...',
           capabilities: { toolCalling: false, codeEditing: false, reasoning: false, multimodal: false },
           contextWindow: 0, // Unknown until provider discovery completes; 0 = no progress bar
@@ -654,12 +694,16 @@ export class ProviderRegistry {
     return def;
   }
 
-  /** Switch to a different model. Throws if the model is not selectable. */
+  /** Switch to a different model. Accepts registryKey or plain modelId. Throws if not selectable. */
   setCurrentModel(modelId: string): void {
-    const def = getModelRegistry().find((m) => m.id === modelId);
+    const registry = getModelRegistry();
+    const def = modelId.includes(':')
+      ? (registry.find((m) => m.registryKey === modelId) ?? registry.find((m) => m.id === modelId))
+      : registry.find((m) => m.id === modelId);
     if (!def) throw new Error(`Model '${modelId}' not found.`);
     if (!def.selectable) throw new Error(`Model '${modelId}' is not selectable.`);
-    this.currentModelId = modelId;
+    // Store the registryKey for unambiguous future lookups
+    this.currentModelId = def.registryKey ?? modelId;
   }
 
   /**

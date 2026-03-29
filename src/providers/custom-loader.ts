@@ -263,6 +263,7 @@ export async function loadCustomProviders(): Promise<LoadCustomProvidersResult> 
     const modelDefs: ModelDefinition[] = cfg.models.map((m) => ({
       id: m.id,
       provider: cfg.name,
+      registryKey: `${cfg.name}:${m.id}`,
       displayName: m.displayName,
       description: m.description ?? '',
       contextWindow: m.contextWindow,

@@ -394,6 +394,7 @@ async function applySyntheticCanonicalModels(models: CatalogModel[]): Promise<vo
       const backends: import('./synthetic.ts').SyntheticBackend[] = group.map((m) => ({
         providerName: m.providerId,
         modelId: m.id,
+        registryKey: `${m.providerId}:${m.id}`,
         contextWindow: m.contextWindow,
         maxOutputTokens: m.maxOutputTokens,
         envVars: m.providerEnvVars.length > 0 ? m.providerEnvVars : undefined,
@@ -955,6 +956,8 @@ export function formatChangeNotifications(diff: CatalogDiff): string[] {
 export interface MinimalModelDefinition {
   id: string;
   provider: string;
+  /** Compound unique key: `${provider}:${id}`. */
+  registryKey: string;
   displayName: string;
   description: string;
   capabilities: {
@@ -994,6 +997,7 @@ export function getCatalogModelDefinitions(): MinimalModelDefinition[] {
     return {
       id: m.id,
       provider: m.providerId,
+      registryKey: `${m.providerId}:${m.id}`,
       displayName: m.name,
       description: `${m.name} — sourced from model catalog.`,
       capabilities: {
