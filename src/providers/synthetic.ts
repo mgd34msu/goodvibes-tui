@@ -195,6 +195,19 @@ function resolveBestFree(): string | null {
 // --- Default cooldown ---
 const DEFAULT_COOLDOWN_MS = 60_000;
 
+/** Short cooldown applied to a backend that returns a transient/server error (5xx, network, timeout). */
+const TRANSIENT_COOLDOWN_MS = 5_000;
+
+/**
+ * Maximum duration to transparently wait for a cooling-down backend before
+ * surfacing a 429 error to the caller. Waits of up to 2 minutes are hidden;
+ * longer cooldowns are escalated immediately.
+ */
+const MAX_AUTO_WAIT_MS = 120_000;
+
+/** Buffer added to the computed wait time to absorb clock skew and scheduling jitter. */
+const COOLDOWN_BUFFER_MS = 100;
+
 // --- SyntheticProvider ---
 
 export class SyntheticProvider implements LLMProvider {
@@ -315,21 +328,101 @@ export class SyntheticProvider implements LLMProvider {
             : DEFAULT_COOLDOWN_MS;
           cooldownArr[idx] = now + cooldownMs;
           this.cooldowns.set(syntheticId, cooldownArr);
+          if (cooldownMs < shortestCooldown) shortestCooldown = cooldownMs;
 
           logger.info(`[Synthetic] ${backend.providerName} rate-limited for ${syntheticId}, cooldown ${Math.round(cooldownMs / 1000)}s`);
           errors.push({ backend, error: err as Error });
           continue;
         }
-        // Non-rate-limit error — don't failover, re-throw
-        throw err;
+        // Check if this is a client error (bad request) — re-throw, no failover
+        const isClientError = err instanceof ProviderError
+          && err.statusCode !== undefined
+          && err.statusCode >= 400
+          && err.statusCode < 500;
+
+        if (isClientError) {
+          throw err;
+        }
+
+        // Transient/server error — short cooldown, failover to next backend
+        cooldownArr[idx] = now + TRANSIENT_COOLDOWN_MS;
+        this.cooldowns.set(syntheticId, cooldownArr);
+        if (TRANSIENT_COOLDOWN_MS < shortestCooldown) shortestCooldown = TRANSIENT_COOLDOWN_MS;
+        logger.debug(`[Synthetic] ${backend.providerName} failed for ${syntheticId}: ${(err as Error).message ?? err}, trying next backend`);
+        errors.push({ backend, error: err as Error });
+        continue;
       }
     }
 
-    // All backends exhausted
+    // All backends exhausted — auto-wait if the shortest cooldown is within threshold
+    if (shortestCooldown !== Infinity && shortestCooldown <= MAX_AUTO_WAIT_MS) {
+      // Find the backend index with the shortest remaining cooldown
+      const nowForWait = Date.now();
+      let waitIdx = 0;
+      let minExpiry = Infinity;
+      for (let i = 0; i < cooldownArr.length; i++) {
+        if (cooldownArr[i] > nowForWait && cooldownArr[i] < minExpiry) {
+          minExpiry = cooldownArr[i];
+          waitIdx = i;
+        }
+      }
+      const waitBackend = backends[waitIdx];
+      const waitMs = minExpiry - nowForWait;
+
+      logger.debug(
+        `[Synthetic] All backends cooling down for ${syntheticId}, auto-waiting ${
+          Math.round(waitMs / 1000)
+        }s for ${waitBackend.providerName}…`,
+      );
+
+      // Wait with AbortSignal support
+      await new Promise<void>((resolve, reject) => {
+        const onAbort = () => {
+          clearTimeout(timer);
+          reject(new ProviderError('Request aborted during cooldown wait', 499));
+        };
+        const timer = setTimeout(() => {
+          if (params.signal) params.signal.removeEventListener('abort', onAbort);
+          resolve();
+        }, waitMs + COOLDOWN_BUFFER_MS);
+        if (params.signal) {
+          if (params.signal.aborted) {
+            clearTimeout(timer);
+            reject(new ProviderError('Request aborted during cooldown wait', 499));
+            return;
+          }
+          params.signal.addEventListener('abort', onAbort, { once: true });
+        }
+      });
+
+      // Single retry attempt on the backend that just came off cooldown
+      try {
+        const { providerRegistry } = await import('./registry.ts');
+        const waitProvider = providerRegistry.get(waitBackend.providerName);
+        const response = await waitProvider.chat({
+          ...params,
+          model: waitBackend.modelId,
+        });
+        this.activeBackend.set(syntheticId, waitIdx);
+        logger.info(
+          `[Synthetic] ${syntheticId} served by ${waitBackend.providerName} (${waitBackend.modelId}) after auto-wait`,
+        );
+        return response;
+      } catch (retryErr) {
+        // Retry failed — fall through to throw below
+        logger.debug(
+          `[Synthetic] Auto-wait retry failed for ${syntheticId} via ${
+            waitBackend.providerName
+          }: ${retryErr}`,
+        );
+      }
+    }
+
+    // All backends exhausted (or cooldown exceeded threshold, or retry failed)
     const cooldownSec = shortestCooldown === Infinity ? '?' : Math.round(shortestCooldown / 1000);
     throw new ProviderError(
-      `All backends for ${syntheticId} are rate-limited. Shortest cooldown expires in ${cooldownSec}s. ` +
-      `Tried: ${errors.map(e => e.backend.providerName).join(', ')}`,
+      `All backends for ${syntheticId} exhausted. Shortest cooldown expires in ${cooldownSec}s. ` +
+      `Tried: ${errors.map(e => `${e.backend.providerName} (${e.error.message})`).join(', ')}`,
       429,
     );
   }
