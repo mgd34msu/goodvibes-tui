@@ -15,9 +15,10 @@ const W = 120;
 // ---------------------------------------------------------------------------
 
 function makeModel(overrides: Partial<ModelDefinition> = {}): ModelDefinition {
-  return {
+  const base: ModelDefinition = {
     id: 'test-model',
     provider: 'test-provider',
+    registryKey: 'test-provider:test-model',
     displayName: 'Test Model',
     description: '',
     capabilities: { toolCalling: true, codeEditing: true, reasoning: false, multimodal: false },
@@ -26,6 +27,11 @@ function makeModel(overrides: Partial<ModelDefinition> = {}): ModelDefinition {
     tier: 'free',
     ...overrides,
   };
+  // Ensure registryKey reflects provider:id after overrides
+  if (!base.registryKey || base.registryKey === 'test-provider:test-model') {
+    base.registryKey = `${base.provider}:${base.id}`;
+  }
+  return base;
 }
 
 const MODEL_A = makeModel({ id: 'model-a', displayName: 'Alpha', tier: 'free', provider: 'anthropic', contextWindow: 200_000 });

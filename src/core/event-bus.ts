@@ -60,8 +60,8 @@ export interface EventMap {
   'command:model-changed': { provider: string; model: string };
 
   // Model picker events
-  'model-picker:select': { model: { id: string; provider: string; displayName: string } };
-  'model-picker:complete': { model: { id: string; provider: string; displayName: string }; effort: string };
+  'model-picker:select': { model: { id: string; provider: string; displayName: string; registryKey: string } };
+  'model-picker:complete': { model: { id: string; provider: string; displayName: string; registryKey: string }; effort: string };
 
   // Search events
   'search:start': void;

@@ -10,6 +10,11 @@ export interface SyntheticBackend {
   providerName: string;
   /** Model ID as understood by the provider. */
   modelId: string;
+  /**
+   * Compound registry key for this backend: `${providerName}:${modelId}`.
+   * Used for unambiguous routing and provider lookup.
+   */
+  registryKey?: string;
   /** Context window in tokens (used for backend sort order). */
   contextWindow?: number;
   /** Maximum output tokens (used as tiebreaker in sort order). */

@@ -77,12 +77,18 @@ function restoreSavedModel(
   savedProvider: string,
   runtime: { model: string; provider: string },
 ): void {
-  const modelDef = providerRegistry.listModels().find((m) => m.id === savedModel);
+  // Accept both registryKey (provider:modelId) and plain modelId for backward compat
+  const registry = providerRegistry.listModels();
+  const modelDef = savedModel.includes(':')
+    ? (registry.find((m) => m.registryKey === savedModel) ?? registry.find((m) => m.id === savedModel))
+    : registry.find((m) => m.id === savedModel && (!savedProvider || m.provider === savedProvider))
+      ?? registry.find((m) => m.id === savedModel);
   if (modelDef) {
     try {
-      providerRegistry.setCurrentModel(savedModel);
-      runtime.model = savedModel;
-      runtime.provider = savedProvider;
+      const key = modelDef.registryKey ?? `${modelDef.provider}:${modelDef.id}`;
+      providerRegistry.setCurrentModel(key);
+      runtime.model = key;
+      runtime.provider = modelDef.provider;
     } catch (err) {
       logger.debug('Model restore failed (non-fatal)', { error: String(err) });
     }
@@ -733,12 +739,14 @@ async function main() {
     if (!data?.model) return;
     const def = data.model;
     const effort = data.effort;
+    // Use registryKey as the canonical model identifier for unambiguous routing
+    const key = def.registryKey ?? `${def.provider}:${def.id}`;
     try {
-      providerRegistry.setCurrentModel(def.id);
-      runtime.model = def.id;
+      providerRegistry.setCurrentModel(key);
+      runtime.model = key;
       runtime.provider = def.provider;
       runtime.reasoningEffort = effort as 'instant' | 'low' | 'medium' | 'high';
-      configManager.set('provider.model', def.id);
+      configManager.set('provider.model', key);
       configManager.set('provider.provider', def.provider);
       configManager.set('provider.reasoningEffort', effort as 'instant' | 'low' | 'medium' | 'high');
       conversation.log(`Switched to model: ${def.displayName} (${def.provider}), effort: ${effort}`, { fg: '135' });

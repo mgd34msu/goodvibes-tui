@@ -49,6 +49,7 @@ function makeMockProvider(
 const MOCK_MODEL = {
   id: 'mock-model',
   provider: 'mock',
+  registryKey: 'mock:mock-model',
   displayName: 'Mock',
   description: '',
   capabilities: { toolCalling: true, codeEditing: false, reasoning: false, multimodal: false },
