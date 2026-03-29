@@ -413,6 +413,47 @@ function nameToSlug(name: string): string {
   return name.toLowerCase().replace(/[^a-z0-9]/g, '');
 }
 
+/**
+ * Normalize a model name for broad-family sub-grouping by stripping version numbers,
+ * date stamps, and common variant suffixes that don't distinguish the underlying model.
+ *
+ * Examples:
+ *   "Kimi K2 Instruct" → "kimik2"
+ *   "Kimi K2 0905"     → "kimik2"
+ *   "GPT-5.2"          → "gpt5"
+ *   "GPT-5.4"          → "gpt5"
+ *   "DeepSeek-V3-0324" → "deepseekv3"
+ *
+ * Steps:
+ *   1. Lowercase
+ *   2. Strip common variant suffixes (instruct, chat, latest, preview, free, turbo, fast, base, pt, online)
+ *   3. Strip version-like numeric patterns (v1, v2, 0324, 0905, 2507, etc.)
+ *   4. Strip model size indicators (8b, 70b, 120b, 235b, etc.) that duplicate family info
+ *   5. Apply nameToSlug (strip all non-alphanumeric)
+ */
+function normalizeModelName(name: string): string {
+  let n = name.toLowerCase();
+  // Strip variant suffixes (word-boundary aware).
+  // Suffixes like pro/plus/max are safe to remove here because normalizeModelName() is ONLY
+  // called for broad families (>20 unique normalised names). In those families the top-level
+  // name (e.g. "Gemini", "GPT") is the canonical identity; granular models such as
+  // "Gemini Pro" live in smaller families where this function is never invoked.
+  n = n.replace(/\b(instruct|chat|latest|preview|free|turbo|fast|base|pt|online|thinking|lite|mini|nano|pro|plus|ultra|max|standard|default|code|coder|coding|it|bf16|fp8|fp16|awq|gptq|gguf|bnb|qlora|lora|v1|v2|v3|v4|v5|v6|v7|v8|v9)\b/g, ' ');
+  // Strip decimal minor version suffixes (e.g. GPT-5.1 → GPT-5, GPT-5.2 → GPT-5)
+  // Must run before the size-indicator strip to avoid consuming '5.1b'
+  n = n.replace(/\b([a-z0-9]+)\.([0-9]{1,2})\b/g, '$1');
+  // Strip 4-digit date stamps that look like MMDD or YYMM (e.g. 0324, 0905, 2507, 2512)
+  n = n.replace(/\b(?:(0[1-9]|[12][0-9]|3[01])(0[1-9]|1[0-2])|(0[1-9]|1[0-2])(0[1-9]|[12][0-9]|3[01]))\b/g, ' '); // DDMM or MMDD
+  // YYYYMMDD (20240324), YYYYMM (202403), or YYMM (2403) — year range 2020–2039, valid month only
+  n = n.replace(/\b(?:20[2-3][0-9](?:0[1-9]|1[0-2])(?:0[1-9]|[12][0-9]|3[01])|20[2-3][0-9](?:0[1-9]|1[0-2])|[2-3][0-9](?:0[1-9]|1[0-2]))\b/g, ' ');
+  // Strip model size indicators (e.g. 7b, 8b, 13b, 30b, 32b, 70b, 72b, 120b, 235b, 480b, 671b, 1.5b, 3b)
+  n = n.replace(/\b[0-9]+(?:\.[0-9]+)?[bB]\b/g, ' ');
+  // Strip parameter count patterns like 235B-A22B (MoE notation)
+  n = n.replace(/\b[0-9]+[bB]-[aA][0-9]+[bB]\b/g, ' ');
+  // Apply slug normalisation (strips spaces, dots, dashes, etc.)
+  return nameToSlug(n);
+}
+
 async function applySyntheticCanonicalModels(models: CatalogModel[]): Promise<void> {
   try {
     const syntheticModule = await import('./synthetic.ts');
@@ -436,15 +477,16 @@ async function applySyntheticCanonicalModels(models: CatalogModel[]): Promise<vo
     const canonicalGroups = new Map<string, CatalogModel[]>();
 
     for (const [family, group] of byFamily) {
-      const uniqueNames = new Set(group.map(m => nameToSlug(m.name)));
+      const uniqueNames = new Set(group.map(m => normalizeModelName(m.name)));
       const isBroad = uniqueNames.size > MAX_FAMILY_UNIQUE_NAMES;
 
       if (isBroad) {
-        // Sub-group by slug-normalised name — each distinct slug becomes its own canonical entry.
-        // E.g. family='gpt', name='GPT-5.2' or 'GPT 5.2' or 'GPT5.2' → all slug to 'gpt52'
+        // Sub-group by normalised name — each distinct normalised slug becomes its own canonical entry.
+        // Uses normalizeModelName() which strips version stamps and variant suffixes before slugging,
+        // so "Kimi K2", "Kimi K2 Instruct", "Kimi K2 0905" all collapse to "kimik2".
         const byName = new Map<string, CatalogModel[]>();
         for (const m of group) {
-          const key = nameToSlug(m.name);
+          const key = normalizeModelName(m.name);
           const bucket = byName.get(key);
           if (bucket) {
             bucket.push(m);
@@ -508,7 +550,11 @@ async function applySyntheticCanonicalModels(models: CatalogModel[]): Promise<vo
 
     _syntheticCanonicals = canonical;
     setSyntheticCanonicalModels(canonical);
-    logger.debug('[model-catalog] Synthetic canonical models updated', { count: canonical.length });
+    logger.debug('[model-catalog] Synthetic canonicals built', {
+      count: canonical.length,
+      sampleIds: canonical.slice(0, 20).map(c => c.id),
+      sampleBackendCounts: canonical.slice(0, 20).map(c => c.backends.length),
+    });
   } catch (err) {
     logger.debug('[model-catalog] Failed to apply synthetic canonical models', { error: String(err) });
   }
@@ -662,6 +708,14 @@ export const _resetCatalog = _resetForTest;
  */
 export function _nameToSlugForTest(name: string): string {
   return nameToSlug(name);
+}
+
+/**
+ * Exposed for unit tests — wraps the private normalizeModelName function.
+ * @internal
+ */
+export function _normalizeModelNameForTest(name: string): string {
+  return normalizeModelName(name);
 }
 
 /**
@@ -1114,7 +1168,7 @@ export function getSyntheticBackendModelIds(): Set<string> {
 }
 
 export function getSyntheticModelDefinitions(): MinimalModelDefinition[] {
-  return _syntheticCanonicals.map((c): MinimalModelDefinition => {
+  const defs = _syntheticCanonicals.map((c): MinimalModelDefinition => {
     // Use the backend with the largest context window as representative
     const bestBackend = c.backends.reduce((best, b) =>
       (b.contextWindow ?? 0) > (best.contextWindow ?? 0) ? b : best, c.backends[0]);
@@ -1145,6 +1199,11 @@ export function getSyntheticModelDefinitions(): MinimalModelDefinition[] {
       ...(hasReasoning ? { reasoningEffort: ['instant', 'low', 'medium', 'high'] } : {}),
     };
   });
+  logger.debug('[model-catalog] getSyntheticModelDefinitions', {
+    count: defs.length,
+    sampleIds: defs.slice(0, 20).map(d => d.id),
+  });
+  return defs;
 }
 
 export function getCatalogModelDefinitions(): MinimalModelDefinition[] {
