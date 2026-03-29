@@ -85,6 +85,8 @@ const CATALOG_TIER_ISOLATION: CanonicalModel[] = [
       { providerName: 'huggingface', modelId: 'org/free-model-a', contextWindow: 262144, envVars: ['HF_TOKEN'] },
       { providerName: 'nvidia',      modelId: 'org/free-model-a', contextWindow: 131072, envVars: ['NVIDIA_API_KEY'] },
     ],
+    backendCount: 2,
+    keyedBackendCount: 1,
   },
   {
     id: 'paid-model-a',
@@ -92,6 +94,8 @@ const CATALOG_TIER_ISOLATION: CanonicalModel[] = [
     backends: [
       { providerName: 'openai', modelId: 'paid-model-a', contextWindow: 128000, envVars: ['OPENAI_API_KEY'] },
     ],
+    backendCount: 1,
+    keyedBackendCount: 1,
   },
 ];
 
@@ -103,6 +107,8 @@ const CATALOG_NO_KEYS: CanonicalModel[] = [
     backends: [
       { providerName: 'locked-provider', modelId: 'locked/model', contextWindow: 100000, envVars: ['LOCKED_API_KEY'] },
     ],
+    backendCount: 1,
+    keyedBackendCount: 0,
   },
 ];
 
@@ -117,6 +123,8 @@ const CATALOG_SORT_ORDER: CanonicalModel[] = [
       { providerName: 'large-ctx',   modelId: 'large',  contextWindow: 1000000, maxOutputTokens: 32768, envVars: [] },
       { providerName: 'medium-ctx',  modelId: 'medium', contextWindow: 262144,  maxOutputTokens: 16384, envVars: [] },
     ],
+    backendCount: 3,
+    keyedBackendCount: 3,
   },
 ];
 
@@ -128,6 +136,8 @@ const CATALOG_BEST_FREE: CanonicalModel[] = [
     backends: [
       { providerName: 'provider-a', modelId: 'low-score-model', contextWindow: 128000, envVars: [] },
     ],
+    backendCount: 1,
+    keyedBackendCount: 1,
   },
   {
     id: 'high-score-model',
@@ -135,6 +145,8 @@ const CATALOG_BEST_FREE: CanonicalModel[] = [
     backends: [
       { providerName: 'provider-b', modelId: 'high-score-model', contextWindow: 128000, envVars: [] },
     ],
+    backendCount: 1,
+    keyedBackendCount: 1,
   },
 ];
 
@@ -147,6 +159,8 @@ const CATALOG_FAILOVER: CanonicalModel[] = [
       { providerName: 'rate-limited-provider', modelId: 'failover-model', contextWindow: 100000, envVars: [] },
       { providerName: 'ok-provider',           modelId: 'failover-model', contextWindow: 100000, envVars: [] },
     ],
+    backendCount: 2,
+    keyedBackendCount: 2,
   },
 ];
 
@@ -303,6 +317,8 @@ describe('backend sort order (context desc)', () => {
           { providerName: 'low-output',  modelId: 'tie', contextWindow: 100000, maxOutputTokens: 4096,  envVars: [] },
           { providerName: 'high-output', modelId: 'tie', contextWindow: 100000, maxOutputTokens: 32768, envVars: [] },
         ],
+        backendCount: 2,
+        keyedBackendCount: 2,
       },
     ]);
 
@@ -398,6 +414,8 @@ describe('best-free synthetic model', () => {
         backends: [
           { providerName: 'locked', modelId: 'keyed-free-model', contextWindow: 100000, envVars: ['MISSING_KEY'] },
         ],
+        backendCount: 1,
+        keyedBackendCount: 0,
       },
     ]);
 
@@ -415,6 +433,8 @@ describe('best-free synthetic model', () => {
         backends: [
           { providerName: 'provider-c', modelId: 'no-benchmark-model', contextWindow: 128000, envVars: [] },
         ],
+        backendCount: 1,
+        keyedBackendCount: 1,
       },
     ]);
     _setEntriesForTest([]); // no benchmark data

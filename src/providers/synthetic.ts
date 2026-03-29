@@ -61,6 +61,10 @@ export interface CanonicalModel {
   tier: SyntheticTier;
   /** Ordered list of backends to try within this tier. */
   backends: SyntheticBackend[];
+  /** Total number of provider backends offering this model. */
+  backendCount: number;
+  /** Number of backends for which the user has configured API keys. */
+  keyedBackendCount: number;
 }
 
 // --- Live catalog ---
@@ -100,6 +104,25 @@ export function _resetSyntheticCatalog(): void {
  */
 function getCatalogModels(): CanonicalModel[] {
   return _canonicalCatalog ?? [];
+}
+
+/**
+ * Returns backend count metadata for a synthetic model ID.
+ * Used by the model picker to display provider availability.
+ *
+ * @returns Object with backendCount, keyedBackendCount, and tier, or null if not found.
+ */
+export function getSyntheticModelInfo(
+  modelId: string,
+): { backendCount: number; keyedBackendCount: number; tier: SyntheticTier } | null {
+  const catalog = getCatalogModels();
+  const model = catalog.find(m => m.id === modelId);
+  if (!model) return null;
+  return {
+    backendCount: model.backendCount,
+    keyedBackendCount: model.keyedBackendCount,
+    tier: model.tier,
+  };
 }
 
 // --- Backend selection ---
