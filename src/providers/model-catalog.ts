@@ -403,15 +403,11 @@ const MAX_FAMILY_UNIQUE_NAMES = 20;
 
 /**
  * Convert a model name into a slug suitable for use as a canonical model ID.
- * Lowercases, trims, replaces spaces and non-alphanumeric chars with hyphens,
- * and collapses/strips leading-trailing hyphens.
+ * Lowercases and strips ALL non-alphanumeric characters entirely (not replaced
+ * with hyphens), so "GPT-4o", "GPT 4o", and "GPT4o" all produce "gpt4o".
  */
 function nameToSlug(name: string): string {
-  return name
-    .toLowerCase()
-    .trim()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '');
+  return name.toLowerCase().replace(/[^a-z0-9]/g, '');
 }
 
 async function applySyntheticCanonicalModels(models: CatalogModel[]): Promise<void> {
@@ -442,7 +438,7 @@ async function applySyntheticCanonicalModels(models: CatalogModel[]): Promise<vo
 
       if (isBroad) {
         // Sub-group by slug-normalised name — each distinct slug becomes its own canonical entry.
-        // E.g. family='gpt', name='GPT-5.2' or 'GPT 5.2' → both slug to 'gpt-5-2'
+        // E.g. family='gpt', name='GPT-5.2' or 'GPT 5.2' or 'GPT5.2' → all slug to 'gpt52'
         const byName = new Map<string, CatalogModel[]>();
         for (const m of group) {
           const key = nameToSlug(m.name);
@@ -504,7 +500,7 @@ async function applySyntheticCanonicalModels(models: CatalogModel[]): Promise<vo
         return (tierPriority[m.tier] ?? 0) > (tierPriority[best] ?? 0) ? m.tier : best;
       }, group[0].tier) as import('./synthetic.ts').SyntheticTier;
 
-      canonical.push({ id: canonicalId, tier, backends: allBackends });
+      canonical.push({ id: canonicalId, tier, backends: allBackends, backendCount: allBackends.length, keyedBackendCount: distinctProviders });
     }
 
     setSyntheticCanonicalModels(canonical);
@@ -655,6 +651,22 @@ export function _resetForTest(): void {
 
 /** @internal Alias for _resetForTest — kept for backwards compatibility. */
 export const _resetCatalog = _resetForTest;
+
+/**
+ * Exposed for unit tests — wraps the private nameToSlug function.
+ * @internal
+ */
+export function _nameToSlugForTest(name: string): string {
+  return nameToSlug(name);
+}
+
+/**
+ * Exposed for unit tests — wraps the private applySyntheticCanonicalModels function.
+ * @internal
+ */
+export async function _applySyntheticCanonicalModelsForTest(models: CatalogModel[]): Promise<void> {
+  return applySyntheticCanonicalModels(models);
+}
 
 /**
  * Returns the current pricing catalog (exposed for tests).
