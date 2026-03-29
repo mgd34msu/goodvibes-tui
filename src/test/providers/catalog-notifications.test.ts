@@ -17,6 +17,8 @@ function makeModel(overrides: Partial<CatalogModel> & { id: string; name: string
   return {
     pricing: { input: 1, output: 5 },
     tier: 'paid',
+    providerId: overrides.provider.toLowerCase(),
+    providerEnvVars: [],
     ...overrides,
   };
 }
@@ -34,12 +36,9 @@ function makeBenchmarkEntry(
     name: modelId,
     organization: 'test',
     benchmarks: {
-      swe: scores.swe ?? null,
-      gpqa: scores.gpqa ?? null,
-      aime: scores.aime ?? null,
-      terminal: null,
-      tool: null,
-      mcp: null,
+      swe: scores.swe ?? undefined,
+      gpqa: scores.gpqa ?? undefined,
+      aime: scores.aime ?? undefined,
     },
   };
 }

@@ -259,7 +259,7 @@ export const agentTool: Tool = {
 
         return {
           success: true,
-          output: `Agent ${record.id} spawned (${record.template}). Running in background.`,
+          output: JSON.stringify({ agentId: record.id, status: 'spawned', template: record.template }),
         };
       }
 
