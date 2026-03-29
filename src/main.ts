@@ -61,7 +61,7 @@ import { logger } from './utils/logger.ts';
 import { getPinned } from './providers/favorites.ts';
 import { initModelLimits, getContextWindowForModel } from './providers/model-limits.ts';
 import { initBenchmarks } from './providers/model-benchmarks.ts';
-import { initCatalog } from './providers/model-catalog.ts';
+import { initCatalog, getConfiguredProviderIds } from './providers/model-catalog.ts';
 import { getPanelManager } from './panels/panel-manager.ts';
 import { registerBuiltinPanels } from './panels/builtin-panels.ts';
 import { renderPanelTabBar } from './renderer/panel-tab-bar.ts';
@@ -658,7 +658,7 @@ async function main() {
   // --- Model picker wiring ---
   commandContext.openModelPicker = () => {
     const models = providerRegistry.getSelectableModels();
-    input.modelPicker.configuredProviders = new Set(providerRegistry.listModels().map(m => m.provider));
+    input.modelPicker.configuredProviders = new Set(getConfiguredProviderIds());
     void getPinned().then((pinned) => {
       input.modelPicker.pinnedIds = new Set(pinned);
     });
