@@ -2773,15 +2773,49 @@ export function registerBuiltinCommands(registry: CommandRegistry): void {
   registry.register({
     name: 'refresh-models',
     aliases: [],
-    description: 'Refresh model token limits from OpenRouter',
+    description: 'Refresh model catalog, benchmarks, and token limits',
     async handler(_args, ctx) {
-      ctx.print('Refreshing model limits from OpenRouter...');
+      let catalogOk = false;
+      let benchmarksOk = false;
+      let limitsOk = false;
+
+      // 1. Catalog
+      ctx.print('Refreshing model catalog...');
+      try {
+        const { refreshCatalog, getCatalogModelDefinitions } = await import('../providers/model-catalog.ts');
+        await refreshCatalog();
+        catalogOk = true;
+        const models = getCatalogModelDefinitions();
+        const providerCount = new Set(models.map((m) => m.provider)).size;
+        ctx.print(`Model catalog refreshed: ${models.length} models from ${providerCount} providers`);
+      } catch (e) {
+        ctx.print(`Catalog refresh failed: ${(e as Error).message}`);
+      }
+
+      // 2. Benchmarks
+      ctx.print('Refreshing benchmarks...');
+      try {
+        const { refreshBenchmarks } = await import('../providers/model-benchmarks.ts');
+        await refreshBenchmarks();
+        benchmarksOk = true;
+        ctx.print('Benchmarks refreshed.');
+      } catch (e) {
+        ctx.print(`Benchmarks refresh failed: ${(e as Error).message}`);
+      }
+
+      // 3. Token limits
+      ctx.print('Refreshing token limits...');
       try {
         const { refreshModelLimits } = await import('../providers/model-limits.ts');
         const count = await refreshModelLimits();
-        ctx.print(`Updated limits for ${count} models.`);
+        limitsOk = true;
+        ctx.print(`Token limits refreshed: ${count} models updated.`);
       } catch (e) {
-        ctx.print(`Failed to refresh: ${(e as Error).message}`);
+        ctx.print(`Token limits refresh failed: ${(e as Error).message}`);
+      }
+
+      if (!catalogOk || !benchmarksOk || !limitsOk) {
+        ctx.print('Some refreshes failed — see messages above.');
       }
     },
   });
