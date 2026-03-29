@@ -655,6 +655,53 @@ describe('GitService', () => {
   });
 
   // -------------------------------------------------------------------------
+  // Static utilities (isGitRepo, initRepo, clearInstance)
+  // -------------------------------------------------------------------------
+
+  describe('static utilities', () => {
+    let nonRepoDir: string;
+
+    beforeEach(() => {
+      nonRepoDir = join('/tmp', `non-repo-${process.pid}-${Date.now()}`);
+      mkdirSync(nonRepoDir, { recursive: true });
+    });
+
+    afterEach(() => {
+      rmSync(nonRepoDir, { recursive: true, force: true });
+    });
+
+    test('isGitRepo returns false in a non-repo directory', () => {
+      expect(GitService.isGitRepo(nonRepoDir)).toBe(false);
+    });
+
+    test('isGitRepo returns true after git init', () => {
+      execSync('git init', { cwd: nonRepoDir });
+      expect(GitService.isGitRepo(nonRepoDir)).toBe(true);
+    });
+
+    test('initRepo creates .git directory and returns { success: true }', () => {
+      const result = GitService.initRepo(nonRepoDir);
+      expect(result.success).toBe(true);
+      expect(result.error).toBeUndefined();
+      expect(GitService.isGitRepo(nonRepoDir)).toBe(true);
+    });
+
+    test('initRepo is idempotent on an already-initialized repo', () => {
+      execSync('git init', { cwd: nonRepoDir });
+      const result = GitService.initRepo(nonRepoDir);
+      expect(result.success).toBe(true);
+    });
+
+    test('clearInstance removes the cached singleton so a fresh one is created', () => {
+      const a = GitService.getInstance(tmpDir);
+      GitService.clearInstance(tmpDir);
+      const b = GitService.getInstance(tmpDir);
+      expect(a).not.toBe(b);
+      b.dispose();
+    });
+  });
+
+  // -------------------------------------------------------------------------
   // Singleton
   // -------------------------------------------------------------------------
 

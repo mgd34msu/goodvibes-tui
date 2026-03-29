@@ -390,6 +390,42 @@ export class GitService {
     return instance;
   }
 
+  /**
+   * Remove a cached singleton instance so a fresh one is created on next
+   * getInstance() call. Use after git init to pick up the new repository.
+   */
+  static clearInstance(cwd?: string): void {
+    const key = cwd ?? process.cwd();
+    instances.delete(key);
+  }
+
+  /**
+   * Initialize a new git repository at the given path using Bun.spawnSync.
+   * Returns true on success, false on failure.
+   */
+  static initRepo(cwd?: string): { success: boolean; error?: string } {
+    const dir = cwd ?? process.cwd();
+    const result = Bun.spawnSync(['git', 'init', dir]);
+    if (result.exitCode === 0) {
+      // Bust the singleton cache so the next getInstance() call creates a fresh
+      // GitService bound to the newly-initialised repo.
+      GitService.clearInstance(dir);
+      return { success: true };
+    }
+    const stderr = result.stderr ? new TextDecoder().decode(result.stderr) : 'unknown error';
+    return { success: false, error: stderr.trim() };
+  }
+
+  /**
+   * Return true if the given directory is inside a git repository.
+   * Uses `git rev-parse --git-dir` which exits 0 only inside a repo.
+   */
+  static isGitRepo(cwd?: string): boolean {
+    const dir = cwd ?? process.cwd();
+    const result = Bun.spawnSync(['git', '-C', dir, 'rev-parse', '--git-dir']);
+    return result.exitCode === 0;
+  }
+
   /** Return the working directory this instance is bound to. */
   getCwd(): string {
     return this.cwd;

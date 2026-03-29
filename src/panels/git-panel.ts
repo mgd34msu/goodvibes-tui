@@ -128,7 +128,7 @@ export class GitPanel extends BasePanel {
   // Data fetching
   // ---------------------------------------------------------------------------
 
-  private async refresh(): Promise<void> {
+  private async refresh(isRetry = false): Promise<void> {
     try {
       const git = GitService.getInstance();
       const [statusResult, branchResult, logEntries] = await Promise.all([
@@ -169,7 +169,26 @@ export class GitPanel extends BasePanel {
       // Do not clear expandedDiff during auto-refresh — only clear on explicit user action
       this.markDirty();
     } catch (err) {
-      this.error = String(err);
+      const msg = String(err);
+      // If the failure is because this directory isn't a git repo, auto-initialise
+      // and retry once so the panel becomes functional immediately.
+      if (/not a git\b/i.test(msg)) {
+        const cwd = process.cwd();
+        const initResult = GitService.initRepo(cwd);
+        if (initResult.success) {
+          logger.debug('GitPanel: auto-initialised git repo', { cwd });
+          if (!isRetry) {
+            // Retry refresh now that the repo exists (once only)
+            void this.refresh(true);
+            return;
+          }
+          this.error = 'Not a git repository. Auto-init succeeded but refresh failed.';
+        } else {
+          this.error = `Not a git repository. Auto-init failed: ${initResult.error ?? 'unknown error'}`;
+        }
+      } else {
+        this.error = msg;
+      }
       this.loading = false;
       logger.debug('GitPanel: refresh failed', { error: this.error });
       this.markDirty();

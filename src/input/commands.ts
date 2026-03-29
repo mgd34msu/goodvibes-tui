@@ -3419,13 +3419,19 @@ export function registerBuiltinCommands(registry: CommandRegistry): void {
     argsHint: '[status|log|diff]',
     async handler(args, ctx) {
       const sub = args[0] ?? 'status';
-      let git: GitService;
-      try {
-        git = GitService.getInstance(process.cwd());
-      } catch {
-        ctx.print('Git is not available or this directory is not a git repository.');
-        return;
+      const cwd = process.cwd();
+
+      // Auto-initialise if not already a git repo
+      if (!GitService.isGitRepo(cwd)) {
+        const initResult = GitService.initRepo(cwd);
+        if (!initResult.success) {
+          ctx.print(`Failed to initialise git repository: ${initResult.error ?? 'unknown error'}`);
+          return;
+        }
+        ctx.print(`Initialized git repository in ${cwd}`);
       }
+
+      const git = GitService.getInstance(cwd);
 
       switch (sub) {
         case 'status': {
