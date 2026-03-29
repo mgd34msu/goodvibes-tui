@@ -366,6 +366,7 @@ export class Orchestrator {
               `  • Switch to a different model with /model\n` +
               `  • Switch to a free model via /model and selecting the free tier`
             );
+            this.bus.emit('turn:complete', { response: '' });
             this.bus.emit('render:request');
             continueLoop = false;
             break;
