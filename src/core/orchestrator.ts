@@ -334,20 +334,44 @@ export class Orchestrator {
         // preflightResult === 'ok' or 'compacted' — proceed with chat call
 
         const tokenLimits = getTokenLimitsForModel(model);
-        const response = await provider.chat({
-          model: model.id,
-          messages: this.conversation.getMessagesForLLM(),
-          tools: toolDefinitions.length > 0 ? toolDefinitions : undefined,
-          systemPrompt: this.getSystemPrompt(),
-          maxTokens: tokenLimits.maxOutputTokens,
-          reasoningEffort: (() => {
-            const configured = configManager.get('provider.reasoningEffort') as string | undefined;
-            if (configured) return configured as 'instant' | 'low' | 'medium' | 'high';
-            return model.capabilities.reasoning ? 'medium' : undefined;
-          })(),
-          signal: this.abortController?.signal,
-          onDelta,
-        });
+        let response: Awaited<ReturnType<typeof provider.chat>>;
+        try {
+          response = await provider.chat({
+            model: model.id,
+            messages: this.conversation.getMessagesForLLM(),
+            tools: toolDefinitions.length > 0 ? toolDefinitions : undefined,
+            systemPrompt: this.getSystemPrompt(),
+            maxTokens: tokenLimits.maxOutputTokens,
+            reasoningEffort: (() => {
+              const configured = configManager.get('provider.reasoningEffort') as string | undefined;
+              if (configured) return configured as 'instant' | 'low' | 'medium' | 'high';
+              return model.capabilities.reasoning ? 'medium' : undefined;
+            })(),
+            signal: this.abortController?.signal,
+            onDelta,
+          });
+        } catch (chatErr) {
+          // Clean up streaming block on error
+          if (onDelta) {
+            this.isStreaming = false;
+            this.conversation.finalizeStreamingBlock();
+            this.bus.emit('turn:stream-end');
+          }
+          // Intercept 429 exhaustion for synthetic paid/subscription models and show actionable UX
+          if (chatErr instanceof ProviderError && chatErr.statusCode === 429 && model.provider === 'synthetic' && model.tier !== 'free') {
+            this.conversation.addSystemMessage(
+              `All providers for ${model.displayName} are currently exhausted.\n` +
+              `Options:\n` +
+              `  • Wait a few minutes for the rate limit to reset and retry\n` +
+              `  • Switch to a different model with /model\n` +
+              `  • Switch to a free model via /model and selecting the free tier`
+            );
+            this.bus.emit('render:request');
+            continueLoop = false;
+            break;
+          }
+          throw chatErr;
+        }
 
         if (onDelta) {
           this.isStreaming = false;

@@ -61,6 +61,7 @@ import { logger } from './utils/logger.ts';
 import { getPinned } from './providers/favorites.ts';
 import { initModelLimits, getContextWindowForModel } from './providers/model-limits.ts';
 import { initBenchmarks } from './providers/model-benchmarks.ts';
+import { setSyntheticBus } from './providers/synthetic.ts';
 import { initCatalog, getConfiguredProviderIds } from './providers/model-catalog.ts';
 import { getPanelManager } from './panels/panel-manager.ts';
 import { registerBuiltinPanels } from './panels/builtin-panels.ts';
@@ -275,6 +276,8 @@ async function main() {
 
   // --- Module wiring ---
   const bus = new EventBus();
+  // Inject bus into the synthetic provider for cross-model failover notifications
+  setSyntheticBus(bus);
   const conversation = new ConversationManager(() => {
     const w = stdout.columns || 80;
     const pm = getPanelManager();
@@ -397,6 +400,14 @@ async function main() {
   // Notify the user when a WRFC cascade abort occurs (identical gate failures in consecutive chains)
   unsubs.push(bus.on('wrfc:cascade-abort', ({ chainId, reason }: { chainId: string; reason: string }) => {
     conversation.addSystemMessage(`[WRFC] Cascade abort: ${reason} (chain ${chainId})`);
+    bus.emit('render:request');
+  }));
+
+  // Notify user when a synthetic free-tier model falls back to a different provider
+  unsubs.push(bus.on('model:fallback', ({ from, to, provider: fallbackProvider }: { from: string; to: string; provider: string }) => {
+    conversation.addSystemMessage(
+      `[Model] ${from} exhausted across all providers. Automatically falling back to ${to} via ${fallbackProvider}.`
+    );
     bus.emit('render:request');
   }));
 

@@ -81,6 +81,9 @@ export interface EventMap {
 
   // Session resume event
   'session:resume': { sessionId: string };
+
+  // Model failover events
+  'model:fallback': { from: string; to: string; provider: string };
 }
 
 type Listener<T> = T extends void ? () => void : (data: T) => void;

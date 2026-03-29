@@ -2,6 +2,7 @@ import type { LLMProvider, ChatRequest, ChatResponse } from './interface.ts';
 import { ProviderError, isRateLimitOrQuotaError } from '../types/errors.ts';
 import { logger } from '../utils/logger.ts';
 import { getBenchmarks, compositeScore } from './model-benchmarks.ts';
+import type { EventBus } from '../core/event-bus.ts';
 
 // --- Types ---
 
@@ -73,6 +74,17 @@ export interface CanonicalModel {
 // no models — there is no hardcoded fallback.
 
 let _canonicalCatalog: CanonicalModel[] | null = null;
+
+/** Optional event bus reference, injected after startup to avoid circular deps. */
+let _bus: EventBus | null = null;
+
+/**
+ * Inject the event bus so the synthetic provider can emit non-blocking notifications.
+ * Call this after the bus is created (e.g., in main.ts).
+ */
+export function setSyntheticBus(bus: EventBus): void {
+  _bus = bus;
+}
 
 /**
  * Inject the canonical model list fetched from the catalog.
@@ -181,6 +193,34 @@ function resolveBestFree(): string | null {
     const entry = getBenchmarks(model.id);
     const score = entry ? compositeScore(entry.benchmarks) : null;
     // Models with no benchmark data score lowest but still qualify
+    const effectiveScore = score ?? -1;
+
+    if (effectiveScore > bestScore) {
+      bestScore = effectiveScore;
+      bestId = model.id;
+    }
+  }
+
+  return bestId;
+}
+
+/**
+ * Resolve the next-best free model by benchmark score, excluding models in `excludeIds`.
+ * Returns the canonical model ID or null if no alternatives exist.
+ */
+function resolveNextBestFree(excludeIds: Set<string>): string | null {
+  const catalog = getCatalogModels();
+  const freeModels = catalog.filter(m => m.tier === 'free' && !excludeIds.has(m.id));
+
+  let bestId: string | null = null;
+  let bestScore = -Infinity;
+
+  for (const model of freeModels) {
+    const hasAnyKey = model.backends.some(hasKey);
+    if (!hasAnyKey) continue;
+
+    const entry = getBenchmarks(model.id);
+    const score = entry ? compositeScore(entry.benchmarks) : null;
     const effectiveScore = score ?? -1;
 
     if (effectiveScore > bestScore) {
@@ -420,6 +460,63 @@ export class SyntheticProvider implements LLMProvider {
 
     // All backends exhausted (or cooldown exceeded threshold, or retry failed)
     const cooldownSec = shortestCooldown === Infinity ? '?' : Math.round(shortestCooldown / 1000);
+
+    // Cross-model failover for free tier only
+    if (canonical.tier === 'free') {
+      const tried = new Set<string>([syntheticId]);
+      let fallbackId = resolveNextBestFree(tried);
+
+      while (fallbackId) {
+        tried.add(fallbackId);
+        const fallbackResult = buildBackendList(fallbackId);
+        if (!fallbackResult || fallbackResult.backends.length === 0) {
+          fallbackId = resolveNextBestFree(tried);
+          continue;
+        }
+
+        for (const backend of fallbackResult.backends) {
+          try {
+            const { providerRegistry } = await import('./registry.ts');
+            const provider = providerRegistry.get(backend.providerName);
+            const response = await provider.chat({
+              ...params,
+              model: backend.modelId,
+            });
+
+            this.activeBackend.set(fallbackId, 0);
+            logger.info(`[Synthetic] ${syntheticId} exhausted, fell back to ${fallbackId} via ${backend.providerName}`);
+
+            // Emit non-blocking notification for the user
+            if (_bus) {
+              try {
+                _bus.emit('model:fallback', {
+                  from: syntheticId,
+                  to: fallbackId,
+                  provider: backend.providerName,
+                });
+              } catch (e) {
+                logger.debug('[Synthetic] bus emit failed', { error: String(e) });
+              }
+            }
+
+            return response;
+          } catch (err) {
+            logger.debug(`[Synthetic] Fallback ${fallbackId} via ${backend.providerName} failed: ${(err as Error).message}`);
+            continue;
+          }
+        }
+
+        // All backends for this fallback exhausted, try next model
+        fallbackId = resolveNextBestFree(tried);
+      }
+
+      // All free models exhausted
+      throw new ProviderError(
+        `All free models exhausted. No alternatives available. Last tried: ${[...tried].join(', ')}`,
+        429,
+      );
+    }
+
     throw new ProviderError(
       `All backends for ${syntheticId} exhausted. Shortest cooldown expires in ${cooldownSec}s. ` +
       `Tried: ${errors.map(e => `${e.backend.providerName} (${e.error.message})`).join(', ')}`,
