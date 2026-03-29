@@ -188,19 +188,20 @@ export function renderModelPickerOverlay(
       lines.push(UIFactory.stringToLine(emptyRow, width, { fg: '240' }));
     }
   } else if (picker.mode === 'provider') {
-    // ── Provider list ───────────────────────────────────────────────────────────────────────
-    const filteredProviders = picker.getFilteredProviders();
-    if (filteredProviders.length === 0) {
+    // ── Provider list (grouped: Configured / Popular / All) ─────────────────────────────────
+    const allProviderItems = picker.getItems(); // includes group headers
+    const selectableCount = picker.getFilteredProviders().length;
+    if (selectableCount === 0) {
       const msg = picker.query.length > 0
         ? `No providers match "${picker.query.length > 20 ? picker.query.slice(0, 20) + '\u2026' : picker.query}"`
         : 'No providers available';
       const noProviders = pad + '\u2502 ' + msg.padEnd(contentW) + ' \u2502';
       lines.push(UIFactory.stringToLine(noProviders, width, { fg: '244', dim: true }));
     } else {
-      // Determine the visible slice [scrollOffset, scrollOffset + maxVisible)
-      const providerScrollOffset = Math.max(0, Math.min(picker.scrollOffset, Math.max(0, filteredProviders.length - maxVisible)));
-      const providerVisibleEnd = Math.min(filteredProviders.length, providerScrollOffset + maxVisible);
-      const visibleProviders = filteredProviders.slice(providerScrollOffset, providerVisibleEnd);
+      // Build the flat selectable index → item-list-index mapping for scroll tracking
+      // scrollOffset / selectedIndex track selectable items only
+      const providerScrollOffset = Math.max(0, Math.min(picker.scrollOffset, Math.max(0, selectableCount - maxVisible)));
+      const providerVisibleEnd = Math.min(selectableCount, providerScrollOffset + maxVisible);
 
       // Scroll indicator — items above
       if (providerScrollOffset > 0) {
@@ -208,12 +209,40 @@ export function renderModelPickerOverlay(
         lines.push(UIFactory.stringToLine(upHint, width, { fg: '240', dim: true }));
       }
 
-      for (let i = 0; i < visibleProviders.length; i++) {
-        const provider = visibleProviders[i];
-        const absIdx = providerScrollOffset + i;
-        const isSelected = absIdx === picker.selectedIndex;
+      // Walk all provider items (headers + selectables), rendering only selectables
+      // in [providerScrollOffset, providerVisibleEnd). Headers are shown when the
+      // first selectable item in their group is visible.
+      let selectableIdx = -1;
+      let pendingHeader: string | null = null;
+
+      for (const item of allProviderItems) {
+        if (item.isGroupHeader) {
+          pendingHeader = item.label;
+          continue;
+        }
+        selectableIdx++;
+        if (selectableIdx < providerScrollOffset) {
+          pendingHeader = null; // group header passed, no longer pending
+          continue;
+        }
+        if (selectableIdx >= providerVisibleEnd) break;
+
+        // Emit pending group header before first visible item in the group
+        if (pendingHeader !== null) {
+          const headerText = ' \u25e4 ' + pendingHeader;
+          const headerRow = pad + '\u2502' + headerText.padEnd(boxW - 2) + '\u2502';
+          lines.push(UIFactory.stringToLine(headerRow, width, { fg: '#4488cc' }));
+          pendingHeader = null;
+        }
+
+        const isSelected = selectableIdx === picker.selectedIndex;
         const indicator = isSelected ? '\u25b6 ' : '  ';
-        const rowText = pad + '\u2502 ' + indicator + provider.padEnd(contentW - 2) + ' \u2502';
+        const checkmark = item.isConfigured ? '\u2713 ' : '  ';
+        const labelW = contentW - 2 - 2; // indicator(2) + checkmark(2)
+        const labelStr = item.label.length > labelW
+          ? item.label.slice(0, labelW - 1) + '\u2026'
+          : item.label.padEnd(labelW);
+        const rowText = pad + '\u2502 ' + indicator + checkmark + labelStr + ' \u2502';
         lines.push(UIFactory.stringToLine(rowText, width, {
           fg: isSelected ? '#00ffff' : '252',
           bold: isSelected,
@@ -222,8 +251,8 @@ export function renderModelPickerOverlay(
       }
 
       // Scroll indicator — items below
-      if (providerVisibleEnd < filteredProviders.length) {
-        const remaining2 = filteredProviders.length - providerVisibleEnd;
+      if (providerVisibleEnd < selectableCount) {
+        const remaining2 = selectableCount - providerVisibleEnd;
         const downHint = pad + '\u2502' + (` \u25be ${remaining2} more below`).padEnd(boxW - 2) + '\u2502';
         lines.push(UIFactory.stringToLine(downHint, width, { fg: '240', dim: true }));
       }
