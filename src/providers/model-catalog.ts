@@ -360,8 +360,12 @@ function getPricingCatalog(): PricingCatalog {
 /**
  * Build CanonicalModel[] from the fetched CatalogModel[] for use by SyntheticProvider.
  *
- * Groups models by normalized model ID across providers. Each unique normalized ID
- * becomes one CanonicalModel with one SyntheticBackend per provider offering it.
+ * Groups models by human-readable `name` field (e.g. "Kimi K2.5") — this field is
+ * curated by models.dev and is identical across providers for the same model, unlike
+ * the model ID which varies completely (e.g. `nvidia/kimi-k2-5` vs `accounts/fireworks/models/kimi-k2-instruct`).
+ *
+ * Only keeps groups where 2+ distinct providers have configured API keys, since
+ * single-provider groups provide no failover value for the synthetic layer.
  *
  * Uses a dynamic import to avoid the circular dependency chain:
  *   model-catalog.ts → synthetic.ts (via setSyntheticCanonicalModels)
@@ -372,27 +376,22 @@ async function applySyntheticCanonicalModels(models: CatalogModel[]): Promise<vo
     const syntheticModule = await import('./synthetic.ts');
     const { setSyntheticCanonicalModels } = syntheticModule;
 
-    // Group models by normalized ID
-    const byNormId = new Map<string, CatalogModel[]>();
+    // Group models by human-readable name — consistent across providers for the same model
+    const byName = new Map<string, CatalogModel[]>();
     for (const m of models) {
-      const normId = normalizeModelId(m.id);
-      const bucket = byNormId.get(normId);
+      if (!m.name) continue;
+      const bucket = byName.get(m.name);
       if (bucket) {
         bucket.push(m);
       } else {
-        byNormId.set(normId, [m]);
+        byName.set(m.name, [m]);
       }
     }
 
     const canonical: import('./synthetic.ts').CanonicalModel[] = [];
-    for (const [normId, group] of byNormId) {
-      // Determine tier: prefer paid > subscription > free (most capable wins)
-      const tierPriority: Record<string, number> = { paid: 2, subscription: 1, free: 0 };
-      const tier = group.reduce((best, m) => {
-        return (tierPriority[m.tier] ?? 0) > (tierPriority[best] ?? 0) ? m.tier : best;
-      }, group[0].tier) as import('./synthetic.ts').SyntheticTier;
-
-      const backends: import('./synthetic.ts').SyntheticBackend[] = group.map((m) => ({
+    for (const [modelName, group] of byName) {
+      // Build backends first so we can key-filter before deciding to include
+      const allBackends: import('./synthetic.ts').SyntheticBackend[] = group.map((m) => ({
         providerName: m.providerId,
         modelId: m.id,
         registryKey: `${m.providerId}:${m.id}`,
@@ -401,7 +400,28 @@ async function applySyntheticCanonicalModels(models: CatalogModel[]): Promise<vo
         envVars: m.providerEnvVars.length > 0 ? m.providerEnvVars : undefined,
       }));
 
-      canonical.push({ id: normId, tier, backends });
+      // Only include groups where 2+ distinct providers have configured keys
+      const keyedBackends = allBackends.filter((b) => {
+        const vars = b.envVars;
+        if (!vars || vars.length === 0) return true;
+        return vars.some(v => {
+          const val = process.env[v];
+          return typeof val === 'string' && val.length > 0;
+        });
+      });
+      const distinctProviders = new Set(keyedBackends.map(b => b.providerName)).size;
+      if (distinctProviders < 2) continue;
+
+      // Determine tier: prefer paid > subscription > free (most capable wins)
+      const tierPriority: Record<string, number> = { paid: 2, subscription: 1, free: 0 };
+      const tier = group.reduce((best, m) => {
+        return (tierPriority[m.tier] ?? 0) > (tierPriority[best] ?? 0) ? m.tier : best;
+      }, group[0].tier) as import('./synthetic.ts').SyntheticTier;
+
+      // Use the human-readable name as the canonical ID (slug-friendly)
+      const canonicalId = modelName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+
+      canonical.push({ id: canonicalId, tier, backends: allBackends });
     }
 
     setSyntheticCanonicalModels(canonical);
