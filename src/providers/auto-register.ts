@@ -393,12 +393,12 @@ export function autoRegisterProviders(
       getProviderRegistry().register(provider);
       registered.push(entry.name);
     } catch (err) {
-      logger.warn(`[auto-register] Failed to register ${entry.name}: ${String(err)}`);
+      logger.warn('[auto-register] Failed to register', { name: entry.name, error: String(err) });
     }
   }
 
   if (registered.length > 0) {
-    logger.info(`[auto-register] Auto-registered ${registered.length} provider${registered.length !== 1 ? 's' : ''}: ${registered.join(', ')}`);
+    logger.info('[auto-register] Auto-registered', { count: registered.length, providers: registered.join(', ') });
   }
 
   return registered;

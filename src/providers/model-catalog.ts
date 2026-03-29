@@ -24,6 +24,7 @@ import { getContextWindowForModel, getPricingForModel } from './model-limits.ts'
 import { providerRegistry } from './registry.ts';
 import type { FavoritesData } from './favorites.ts';
 import { loadFavorites } from './favorites.ts';
+import { getTopBenchmarkModelIds } from './model-benchmarks.ts';
 
 // ---------------------------------------------------------------------------
 // Provider types
@@ -576,7 +577,7 @@ export function ensureCacheDir(dir: string): void {
   } catch (err) {
     // EEXIST is harmless; log anything unexpected
     if ((err as NodeJS.ErrnoException).code !== 'EEXIST') {
-      process.stderr.write(`[model-catalog] failed to create cache dir ${dir}: ${String(err)}\n`);
+      logger.warn('[model-catalog] failed to create cache dir', { dir, error: String(err) });
     }
   }
 }
@@ -896,15 +897,9 @@ export function filterRelevantChanges(
     relevantIds.add(entry.modelId);
   }
 
-  // Add top-10 models by benchmark composite score from the in-memory catalog
-  // _catalogModels carries all fetched models; we score them by pricing tier as a proxy
-  // (real benchmark scoring requires the benchmarks module, but we avoid a circular dep here)
-  const topByPrice = _catalogModels
-    .filter(m => m.tier === 'paid')
-    .sort((a, b) => (b.pricing.input + b.pricing.output) - (a.pricing.input + a.pricing.output))
-    .slice(0, 10);
-  for (const model of topByPrice) {
-    relevantIds.add(model.id);
+  // Add top-10 models by benchmark composite score
+  for (const id of getTopBenchmarkModelIds(10)) {
+    relevantIds.add(id);
   }
 
   const isRelevant = (m: CatalogModel) => relevantIds.has(m.id);
