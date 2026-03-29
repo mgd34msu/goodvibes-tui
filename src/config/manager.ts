@@ -79,11 +79,13 @@ export class ConfigManager {
     this.projectConfigPath = join(projectRoot, '.goodvibes', 'tui', 'settings.json');
     this.config = deepMerge(DEFAULT_CONFIG, {}) as GoodVibesConfig;
 
-    // Auto-migrate from old path if needed
-    migrateIfNeeded(
-      join(homedir(), '.config', 'goodvibes', 'config.json'),
-      this.configPath
-    );
+    // Auto-migrate from old path if needed (skip in test mode — test dir is fresh)
+    if (!ConfigManager.testConfigDir) {
+      migrateIfNeeded(
+        join(homedir(), '.config', 'goodvibes', 'config.json'),
+        this.configPath
+      );
+    }
 
     // Ensure shared config exists
     ensureSharedConfig();

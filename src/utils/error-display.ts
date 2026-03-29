@@ -73,23 +73,16 @@ function truncateMessage(msg: string): string {
  * Returns a human-readable string suitable for display in the TUI.
  */
 export function formatProviderError(error: ProviderError, provider?: string): string {
-  // Prefer status-code-based message over raw error text
-  const statusMessage =
-    error.statusCode !== undefined ? STATUS_MESSAGES[error.statusCode] : undefined;
+  // Check for network-level errors before falling back to raw message
+  const networkMessage = getNetworkErrorMessage(error, provider);
 
   let msg: string;
-  if (statusMessage) {
-    msg = statusMessage;
+  if (networkMessage) {
+    msg = networkMessage;
   } else {
-    // Check for network-level errors before falling back to raw message
-    const networkMessage = getNetworkErrorMessage(error, provider);
-    if (networkMessage) {
-      msg = networkMessage;
-    } else {
-      // Strip raw JSON and truncate the original message
-      const stripped = stripJson(error.message);
-      msg = truncateMessage(stripped || error.message);
-    }
+    // Strip raw JSON and truncate the original message
+    const stripped = stripJson(error.message);
+    msg = truncateMessage(stripped || error.message);
   }
 
   // Append provider guidance (e.g. rate limit or auth hint from ProviderError constructor)

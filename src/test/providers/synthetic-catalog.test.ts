@@ -11,7 +11,7 @@
  *   - Failover within tier (rate-limit triggers next backend)
  */
 
-import { describe, it, expect, beforeEach, afterEach, mock } from 'bun:test';
+import { describe, it, expect, beforeEach, afterEach, mock, afterAll } from 'bun:test';
 import {
   SyntheticProvider,
   _setSyntheticCatalogForTest,
@@ -479,4 +479,8 @@ describe('failover within tier', () => {
     const response = await provider.chat({ ...DUMMY_REQUEST, model: 'failover-model' });
     expect(response.content).toBe('ok-provider/ok');
   });
+});
+
+afterAll(() => {
+  mock.restore();
 });

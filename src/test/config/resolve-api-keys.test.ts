@@ -22,12 +22,21 @@ function makeTmpDir(): string {
   return dir;
 }
 
-/** Known provider env var names for cleanup. */
+/** Known provider env var names for cleanup — must match all envVars in resolveApiKeys(). */
 const PROVIDER_ENV_VARS = [
   'OPENAI_API_KEY', 'OPENAI_KEY',
   'ANTHROPIC_API_KEY', 'CLAUDE_API_KEY',
   'GEMINI_API_KEY', 'GOOGLE_API_KEY', 'GOOGLE_GEMINI_API_KEY',
   'INCEPTION_API_KEY',
+  'OPENROUTER_API_KEY',
+  'AIHUBMIX_API_KEY',
+  'GROQ_API_KEY',
+  'CEREBRAS_API_KEY',
+  'MISTRAL_API_KEY',
+  'OLLAMA_CLOUD_API_KEY', 'OLLAMA_API_KEY',
+  'HF_API_KEY', 'HUGGINGFACE_API_KEY', 'HF_TOKEN',
+  'NVIDIA_API_KEY',
+  'LLM7_API_KEY',
 ];
 
 /** Snapshot env vars before each test. */

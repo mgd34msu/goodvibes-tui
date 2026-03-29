@@ -128,7 +128,8 @@ describe('getCatalogModelDefinitions', () => {
 
   it('Google models have multimodal: true', () => {
     const defs = getCatalogModelDefinitions();
-    const googleModels = defs.filter((d) => d.provider === 'Google');
+    // provider field is the providerId (lowercase), e.g. 'google'
+    const googleModels = defs.filter((d) => d.provider === 'google');
     expect(googleModels.length).toBeGreaterThan(0);
     for (const model of googleModels) {
       expect(model.capabilities.multimodal).toBe(true);
@@ -137,7 +138,7 @@ describe('getCatalogModelDefinitions', () => {
 
   it('Google models have large context windows (>=1M)', () => {
     const defs = getCatalogModelDefinitions();
-    const googleModels = defs.filter((d) => d.provider === 'Google');
+    const googleModels = defs.filter((d) => d.provider === 'google');
     for (const model of googleModels) {
       expect(model.contextWindow).toBeGreaterThanOrEqual(1_000_000);
     }
@@ -145,7 +146,7 @@ describe('getCatalogModelDefinitions', () => {
 
   it('Anthropic models have large context windows (>=200K)', () => {
     const defs = getCatalogModelDefinitions();
-    const anthropicModels = defs.filter((d) => d.provider === 'Anthropic');
+    const anthropicModels = defs.filter((d) => d.provider === 'anthropic');
     expect(anthropicModels.length).toBeGreaterThan(0);
     for (const model of anthropicModels) {
       expect(model.contextWindow).toBeGreaterThanOrEqual(200_000);

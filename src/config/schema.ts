@@ -290,7 +290,7 @@ export const DEFAULT_CONFIG: GoodVibesConfig = {
   },
   danger: {
     agentRecursion: false,
-    maxGlobalAgents: 12,
+    maxGlobalAgents: 8,
     maxRecursionDepth: 0,
     daemon: false,
     httpListener: false,
@@ -580,7 +580,7 @@ export const CONFIG_SCHEMA: ConfigSetting[] = [
   {
     key: 'danger.maxGlobalAgents',
     type: 'number',
-    default: 12,
+    default: 8,
     description: 'Total concurrent agents allowed across all recursion levels',
     validate: (v) => typeof v === 'number' && v >= 1 && v <= 20,
   },

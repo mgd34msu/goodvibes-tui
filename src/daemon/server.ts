@@ -21,6 +21,8 @@ interface DaemonConfig {
   agentManager?: AgentManager;
   /** HMAC-SHA256 secret for verifying GitHub webhook signatures. Falls back to GITHUB_WEBHOOK_SECRET env var. */
   githubWebhookSecret?: string;
+  /** Optional pre-configured UserAuthManager (for testing). */
+  userAuth?: UserAuthManager;
 }
 
 interface DaemonDangerConfig {
@@ -57,7 +59,7 @@ export class DaemonServer {
     this.host = config.host ?? '127.0.0.1';
     this.agentManager = config.agentManager ?? AgentManager.getInstance();
     this.configManager = _configManager ?? new ConfigManager();
-    this.userAuth = new UserAuthManager();
+    this.userAuth = config.userAuth ?? new UserAuthManager();
     // Webhook secrets follow 12-factor app conventions (https://12factor.net/config):
     // prefer explicit config object values (e.g. from a vault-injected object) and
     // fall back to environment variables so the binary works in any deployment

@@ -1,6 +1,7 @@
 import { describe, test, expect, beforeEach, afterEach } from 'bun:test';
 import { DaemonServer } from '../../daemon/server.ts';
 import { HttpListener } from '../../daemon/http-listener.ts';
+import { UserAuthManager } from '../../security/user-auth.ts';
 
 const TEST_TOKEN = 'test-secret-token-abc123';
 
@@ -13,7 +14,10 @@ describe('DaemonServer', () => {
 
   beforeEach(() => {
     // Use a high port to avoid conflicts with system services
-    daemon = new DaemonServer({ port: 39421, host: '127.0.0.1' });
+    const userAuth = new UserAuthManager({
+      users: [{ username: 'admin', passwordHash: UserAuthManager.hashPassword('admin'), roles: ['admin'] }],
+    });
+    daemon = new DaemonServer({ port: 39421, host: '127.0.0.1', userAuth });
   });
 
   afterEach(async () => {
@@ -151,7 +155,10 @@ describe('HttpListener', () => {
   let listener: HttpListener;
 
   beforeEach(() => {
-    listener = new HttpListener({ port: 39422, host: '127.0.0.1' });
+    const userAuth = new UserAuthManager({
+      users: [{ username: 'admin', passwordHash: UserAuthManager.hashPassword('admin'), roles: ['admin'] }],
+    });
+    listener = new HttpListener({ port: 39422, host: '127.0.0.1', userAuth });
   });
 
   afterEach(async () => {

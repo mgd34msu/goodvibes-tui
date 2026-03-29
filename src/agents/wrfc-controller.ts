@@ -538,6 +538,16 @@ export class WrfcController {
         }
       }
 
+      // Check if max fix attempts exhausted before starting another fix
+      const maxFixAttempts = configManager.get('wrfc.maxFixAttempts') as number;
+      if (chain.fixAttempts >= maxFixAttempts) {
+        this.failChain(
+          chain,
+          `Score ${review.score}/10 below threshold ${threshold}/10 after ${chain.fixAttempts} fix attempt${chain.fixAttempts !== 1 ? 's' : ''} — below threshold`,
+        );
+        return;
+      }
+
       this.startFix(chain, review);
     }
   }
