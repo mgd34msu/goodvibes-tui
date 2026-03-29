@@ -20,9 +20,10 @@ import fs from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { logger } from '../utils/logger.ts';
-import { getContextWindowForModel } from './model-limits.ts';
+import { getContextWindowForModel, getPricingForModel } from './model-limits.ts';
 import { providerRegistry } from './registry.ts';
 import type { FavoritesData } from './favorites.ts';
+import { loadFavorites } from './favorites.ts';
 import { compositeScore } from './model-benchmarks.ts';
 
 // ---------------------------------------------------------------------------
@@ -414,6 +415,7 @@ async function applySyntheticCanonicalModels(models: CatalogModel[]): Promise<vo
  * Only replaces data with valid new data — stale cache is preserved on failure.
  */
 export async function refreshCatalog(): Promise<void> {
+  const oldModels = [..._catalogModels];
   const models = await fetchCatalog();
 
   if (models.length === 0) {
@@ -430,6 +432,13 @@ export async function refreshCatalog(): Promise<void> {
   await applySyntheticCanonicalModels(models);
 
   logger.debug('[model-catalog] Catalog updated', { count: models.length });
+
+  // Notify about model changes (new, removed, repriced models)
+  const favorites = await loadFavorites();
+  const notifications = notifyCatalogChanges(oldModels, models, favorites);
+  for (const msg of notifications) {
+    logger.info(`[model-catalog] ${msg}`);
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -502,9 +511,21 @@ export function getCostFromCatalog(
     }
   }
 
-  // 4. Not found — fall back to {0,0} with optional debug log
+  // 4. Not found in catalog — try OpenRouter pricing from model-limits as fallback
+  // (covers first-startup with empty catalog and no network)
+  if (catalog.models.length === 0) {
+    // Extract provider from "provider/model-id" format if present
+    const slashIdx = modelId.indexOf('/');
+    const provider = slashIdx !== -1 ? modelId.slice(0, slashIdx) : '';
+    const orPricing = getPricingForModel(modelId, provider);
+    if (orPricing) {
+      // getPricingForModel returns per-token USD; convert to per-million
+      return { input: orPricing.prompt * 1_000_000, output: orPricing.completion * 1_000_000 };
+    }
+  }
+
   if (opts.debug) {
-    process.stderr.write(`[cost-tracker] model not in catalog: ${modelId}\n`);
+    logger.debug(`[cost-tracker] model not in catalog: ${modelId}`);
   }
   return { input: 0, output: 0 };
 }
@@ -692,10 +713,7 @@ class RegistryBackedCatalog implements ModelCatalog {
       displayName: m.displayName,
       provider: m.provider,
       context: getContextWindowForModel(m),
-      // Registry does not carry explicit tier info yet — all models default to 'paid'.
-      // NOTE: This shim means findLargerContextModels(ctx, 'free') always returns [].
-      // The registry shim defaults all models to 'paid'; a network-fetched catalog would carry real tier data.
-      tier: 'paid' as const,
+      tier: (m.tier ?? 'paid') as 'free' | 'paid' | 'subscription',
     }));
     return this._entriesCache;
   }
@@ -907,7 +925,7 @@ export interface MinimalModelDefinition {
   };
   contextWindow: number;
   selectable: boolean;
-  tier: 'free' | 'standard' | 'premium';
+  tier: 'free' | 'standard' | 'premium' | 'subscription';
   reasoningEffort?: string[];
 }
 
@@ -931,7 +949,7 @@ export function getCatalogModelDefinitions(): MinimalModelDefinition[] {
 
     return {
       id: m.id,
-      provider: m.provider,
+      provider: m.providerId,
       displayName: m.name,
       description: `${m.name} — sourced from model catalog.`,
       capabilities: {
@@ -942,8 +960,8 @@ export function getCatalogModelDefinitions(): MinimalModelDefinition[] {
       },
       contextWindow: m.contextWindow ?? (isGoogle ? 1_000_000 : isAnthropic ? 200_000 : 128_000),
       selectable: true,
-      // Map pricing tier to ModelTier (free/standard/premium)
-      tier: isFree ? 'free' : m.pricing.input >= 3 ? 'premium' : 'standard',
+      // Map pricing tier to ModelTier (free/standard/premium/subscription)
+      tier: m.tier === 'subscription' ? 'subscription' : isFree ? 'free' : m.pricing.input >= 3 ? 'premium' : 'standard',
     };
   });
 }
@@ -966,7 +984,7 @@ export function notifyCatalogChanges(
   const notifications = formatChangeNotifications(filtered);
 
   for (const msg of notifications) {
-    process.stderr.write(`[model-catalog] ${msg}\n`);
+    logger.info(`[model-catalog] ${msg}`);
   }
 
   return notifications;

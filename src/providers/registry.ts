@@ -12,7 +12,7 @@ import { SyntheticProvider } from './synthetic.ts';
 import { getCatalogModelDefinitions } from './model-catalog.ts';
 
 /** Model capability tier — controls system prompt verbosity. */
-export type ModelTier = 'free' | 'standard' | 'premium';
+export type ModelTier = 'free' | 'standard' | 'premium' | 'subscription';
 
 /** Per-model token limits for output, tool results, tool calls, and reasoning. */
 export interface TokenLimits {
