@@ -9,6 +9,7 @@ import {
   toGeminiFunctionDeclarations,
   fromGeminiParts,
   toGeminiContents,
+  extractTextToolCalls,
 } from '../../providers/tool-formats.ts';
 import type { ToolDefinition, ToolCall } from '../../types/tools.ts';
 import type { ProviderMessage } from '../../providers/interface.ts';
@@ -232,6 +233,77 @@ describe('fromGeminiParts', () => {
     const { toolCalls } = fromGeminiParts(parts);
     expect(typeof toolCalls[0].id).toBe('string');
     expect(toolCalls[0].id.length).toBeGreaterThan(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// extractTextToolCalls
+// ---------------------------------------------------------------------------
+describe('extractTextToolCalls', () => {
+  const sentinel = '<|toolcallbegin|>';
+  const argBegin = '<|toolcallargumentbegin|>';
+  const end = '<|toolcallend|>';
+
+  function makeCall(name: string, index: number, args: string): string {
+    return `${sentinel}functions.${name}:${index}${argBegin}${args}${end}`;
+  }
+
+  test('fast path: returns empty array and unchanged content when sentinel absent', () => {
+    const content = 'Hello, world!';
+    const { toolCalls, cleanedContent } = extractTextToolCalls(content);
+    expect(toolCalls).toEqual([]);
+    expect(cleanedContent).toBe(content);
+  });
+
+  test('extracts a single tool call with name, parsed args, and generated id', () => {
+    const content = makeCall('file_read', 0, '{"path":"src/main.ts"}');
+    const { toolCalls, cleanedContent } = extractTextToolCalls(content);
+    expect(toolCalls).toHaveLength(1);
+    expect(toolCalls[0].name).toBe('file_read');
+    expect(toolCalls[0].arguments).toEqual({ path: 'src/main.ts' });
+    expect(toolCalls[0].id).toBe('text-call-0');
+    expect(cleanedContent).toBe('');
+  });
+
+  test('extracts multiple tool calls in one response', () => {
+    const content = [
+      makeCall('file_read', 0, '{"path":"a.ts"}'),
+      makeCall('file_write', 1, '{"path":"b.ts","content":"x"}'),
+    ].join(' ');
+    const { toolCalls, cleanedContent } = extractTextToolCalls(content);
+    expect(toolCalls).toHaveLength(2);
+    expect(toolCalls[0].name).toBe('file_read');
+    expect(toolCalls[0].id).toBe('text-call-0');
+    expect(toolCalls[1].name).toBe('file_write');
+    expect(toolCalls[1].id).toBe('text-call-1');
+    expect(cleanedContent).toBe('');
+  });
+
+  test('returns {} arguments for malformed JSON', () => {
+    const content = makeCall('bad_tool', 0, 'not-valid-json');
+    const { toolCalls } = extractTextToolCalls(content);
+    expect(toolCalls).toHaveLength(1);
+    expect(toolCalls[0].arguments).toEqual({});
+  });
+
+  test('removes tool-call tokens and trims surrounding content', () => {
+    const content = `Thinking... ${makeCall('file_read', 0, '{"path":"x"}')} Done.`;
+    const { cleanedContent } = extractTextToolCalls(content);
+    expect(cleanedContent).toBe('Thinking...  Done.');
+  });
+
+  test('handles empty string input', () => {
+    const { toolCalls, cleanedContent } = extractTextToolCalls('');
+    expect(toolCalls).toEqual([]);
+    expect(cleanedContent).toBe('');
+  });
+
+  test('partial delimiter: sentinel present but no full match returns empty array', () => {
+    const content = `${sentinel}functions.incomplete_call`;
+    const { toolCalls, cleanedContent } = extractTextToolCalls(content);
+    expect(toolCalls).toEqual([]);
+    // Content is not cleaned since no full match was found
+    expect(cleanedContent).toBe(content.trim());
   });
 });
 

@@ -2,7 +2,7 @@
 
 A terminal AI coding agent with automated write-review-fix-check pipelines, multi-provider LLM support, and a vaporwave aesthetic.
 
-Version: **0.9.11**
+Version: **0.9.13**
 
 <!-- screenshot -->
 
