@@ -737,6 +737,7 @@ async function main() {
 
   commandContext.openProviderPicker = () => {
     const providers = [...new Set(providerRegistry.listModels().map(m => m.provider))];
+    input.modelPicker.configuredProviders = new Set(getConfiguredProviderIds());
     input.modelPicker.openProviders(providers, runtime.provider);
     bus.emit('render:request');
   };

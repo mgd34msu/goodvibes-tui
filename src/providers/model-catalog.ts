@@ -968,6 +968,16 @@ export function getConfiguredProviderIds(): string[] {
     }
   }
 
+  // Also check the config system's resolved API keys (covers env vars, secrets store,
+  // and provider aliases like gemini → GEMINI_API_KEY → GOOGLE_API_KEY fallback)
+  const configApiKeys = config.apiKeys;
+
+  // Map from config provider names to catalog provider IDs
+  const configToCatalog: Record<string, string> = {
+    gemini: 'google',
+    'google-vertex': 'google-vertex',
+  };
+
   const configured: string[] = [];
   for (const [providerId, envVars] of providerEnvMap) {
     if (envVars.length === 0) {
@@ -980,6 +990,27 @@ export function getConfiguredProviderIds(): string[] {
       configured.push(providerId);
     }
   }
+
+  // Check config-resolved keys for providers whose config name differs from catalog ID
+  for (const [configName, catalogId] of Object.entries(configToCatalog)) {
+    if (configApiKeys[configName] && !configured.includes(catalogId)) {
+      configured.push(catalogId);
+    }
+  }
+
+  // Also mark providers as configured if they match a registered provider with a key
+  // (handles env var aliases like GEMINI_API_KEY for google, CLAUDE_API_KEY for anthropic)
+  for (const [configName, key] of Object.entries(configApiKeys)) {
+    if (key && !configured.includes(configName)) {
+      configured.push(configName);
+    }
+  }
+
+  // Synthetic provider is configured if any synthetic model has keyed backends
+  if (_syntheticCanonicals.length > 0) {
+    configured.push('synthetic');
+  }
+
   return configured;
 }
 
