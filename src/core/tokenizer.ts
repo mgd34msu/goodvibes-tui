@@ -123,6 +123,32 @@ export class InputTokenizer {
           if (charCode === 9) logicalName = 'tab';
           if (charCode === 27) logicalName = 'escape';
           if (charCode === 127) logicalName = 'backspace';
+          // Kitty keyboard protocol functional key codes (Unicode private use area)
+          // These are sent as \x1b[<keycode>;modifier u by Ghostty and other kitty-protocol terminals
+          if (suffix === 'u') {
+            if (charCode === 57350) logicalName = 'left';
+            else if (charCode === 57351) logicalName = 'right';
+            else if (charCode === 57352) logicalName = 'up';
+            else if (charCode === 57353) logicalName = 'down';
+            else if (charCode === 57354) logicalName = 'pageup';
+            else if (charCode === 57355) logicalName = 'pagedown';
+            else if (charCode === 57356) logicalName = 'home';
+            else if (charCode === 57357) logicalName = 'end';
+            else if (charCode === 57348) logicalName = 'insert';
+            else if (charCode === 57349) logicalName = 'delete';
+            else if (charCode === 57364) logicalName = 'f1';
+            else if (charCode === 57365) logicalName = 'f2';
+            else if (charCode === 57366) logicalName = 'f3';
+            else if (charCode === 57367) logicalName = 'f4';
+            else if (charCode === 57368) logicalName = 'f5';
+            else if (charCode === 57369) logicalName = 'f6';
+            else if (charCode === 57370) logicalName = 'f7';
+            else if (charCode === 57371) logicalName = 'f8';
+            else if (charCode === 57372) logicalName = 'f9';
+            else if (charCode === 57373) logicalName = 'f10';
+            else if (charCode === 57374) logicalName = 'f11';
+            else if (charCode === 57375) logicalName = 'f12';
+          }
           // CSI u: map printable ASCII charCodes to their lowercase letter name
           if (logicalName === full && charCode >= 97 && charCode <= 122) logicalName = String.fromCharCode(charCode);
           if (logicalName === full && charCode >= 65 && charCode <= 90) logicalName = String.fromCharCode(charCode + 32);
