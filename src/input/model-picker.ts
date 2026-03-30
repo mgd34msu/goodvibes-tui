@@ -1,6 +1,6 @@
 import type { ModelDefinition } from '../providers/registry.ts';
 import { EFFORT_DESCRIPTIONS } from '../providers/effort-levels.ts';
-import { getBenchmarks, getQualityTier, compositeScore, A_TIER_THRESHOLD, S_TIER_THRESHOLD, B_TIER_THRESHOLD } from '../providers/model-benchmarks.ts';
+import { getBenchmarks, getQualityTier, getQualityTierFromScore, compositeScore, A_TIER_THRESHOLD } from '../providers/model-benchmarks.ts';
 import { getSyntheticModelInfoFromCatalog } from '../providers/model-catalog.ts';
 
 export type PickerMode = 'model' | 'provider' | 'effort';
@@ -411,10 +411,8 @@ export class ModelPickerModal {
 
         // Sort top models by composite score descending
         topModels.sort((a, b) => {
-          const bA = getBenchmarks(a.id) ?? getBenchmarks(a.displayName);
-          const bB = getBenchmarks(b.id) ?? getBenchmarks(b.displayName);
-          const sA = bA ? compositeScore(bA.benchmarks) : null;
-          const sB = bB ? compositeScore(bB.benchmarks) : null;
+          const sA = getSyntheticModelInfoFromCatalog(a.id)?.bestCompositeScore ?? null;
+          const sB = getSyntheticModelInfoFromCatalog(b.id)?.bestCompositeScore ?? null;
           if (sA == null && sB == null) return 0;
           if (sA == null) return 1;
           if (sB == null) return -1;
@@ -449,6 +447,10 @@ export class ModelPickerModal {
       case 'family':      return detectFamily(model);
       case 'pricingTier': return tierToCategoryFilter(model.tier);
       case 'qualityTier': {
+        if (model.provider === 'synthetic') {
+          const info = getSyntheticModelInfoFromCatalog(model.id);
+          return info?.bestCompositeScore != null ? getQualityTierFromScore(info.bestCompositeScore) : 'C';
+        }
         const b = getBenchmarks(model.id) ?? getBenchmarks(model.displayName);
         return b ? getQualityTier(b.benchmarks) : 'C';
       }
@@ -534,26 +536,22 @@ export class ModelPickerModal {
     // For synthetic models, derive quality tier from cached bestCompositeScore
     // (synthetic canonical slugs don't exist in ZeroEval benchmark data)
     let qualityTier: string | undefined;
+    let detail: string;
     if (model.provider === 'synthetic') {
       const synthInfo = getSyntheticModelInfoFromCatalog(model.id);
       if (synthInfo?.bestCompositeScore != null) {
-        const s = synthInfo.bestCompositeScore;
-        qualityTier = s >= S_TIER_THRESHOLD ? 'S' : s >= A_TIER_THRESHOLD ? 'A' : s >= B_TIER_THRESHOLD ? 'B' : 'C';
+        qualityTier = getQualityTierFromScore(synthInfo.bestCompositeScore);
       }
+      // Reuse synthInfo for provider count detail
+      detail = synthInfo !== null
+        ? `${model.provider} [${synthInfo.keyedBackendCount} provider${synthInfo.keyedBackendCount !== 1 ? 's' : ''}]`
+        : model.provider;
     } else {
+      detail = model.provider;
       const b = getBenchmarks(model.id) ?? getBenchmarks(model.displayName);
       qualityTier = b ? getQualityTier(b.benchmarks) : undefined;
     }
     const isFree = tierToCategoryFilter(model.tier) === 'free';
-
-    // For synthetic models, append provider count info if available
-    let detail = model.provider;
-    if (model.provider === 'synthetic') {
-      const info = getSyntheticModelInfoFromCatalog(model.id);
-      if (info !== null) {
-        detail = `${model.provider} [${info.keyedBackendCount} provider${info.keyedBackendCount !== 1 ? 's' : ''}]`;
-      }
-    }
 
     return {
       id: model.id,

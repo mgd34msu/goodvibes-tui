@@ -12,6 +12,7 @@
  *   initBenchmarks()              — load cache + background refresh if stale
  *   getBenchmarks(modelName)      — fuzzy lookup by name
  *   getQualityTier(benchmarks)    — S/A/B/C tier based on composite score
+ *   getQualityTierFromScore(score) — S/A/B/C tier from a raw numeric score
  *   compositeScore(b)             — weighted composite (SWE 0.4, GPQA 0.4, AIME 0.2)
  *   refreshBenchmarks()           — force re-fetch and cache update
  */
@@ -481,6 +482,14 @@ export const B_TIER_THRESHOLD = 0.50;
 export function getQualityTier(benchmarks: ModelBenchmarks): QualityTier {
   const score = compositeScore(benchmarks);
   if (score == null) return 'C';
+  return getQualityTierFromScore(score);
+}
+
+/**
+ * Determine quality tier from a pre-computed composite score.
+ * S ≥ 0.80 | A ≥ 0.65 | B ≥ 0.50 | C < 0.50
+ */
+export function getQualityTierFromScore(score: number): QualityTier {
   if (score >= S_TIER_THRESHOLD) return 'S';
   if (score >= A_TIER_THRESHOLD) return 'A';
   if (score >= B_TIER_THRESHOLD) return 'B';

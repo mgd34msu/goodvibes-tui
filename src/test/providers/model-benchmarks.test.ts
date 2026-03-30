@@ -2,6 +2,7 @@ import { describe, it, expect, afterEach } from 'bun:test';
 import {
   compositeScore,
   getQualityTier,
+  getQualityTierFromScore,
   getBenchmarks,
   _setEntriesForTest,
 } from '../../providers/model-benchmarks.ts';
@@ -156,6 +157,48 @@ describe('getQualityTier', () => {
     for (const input of inputs) {
       expect(validTiers).toContain(getQualityTier(input));
     }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// getQualityTierFromScore
+// ---------------------------------------------------------------------------
+
+describe('getQualityTierFromScore', () => {
+  it('score >= 0.80 returns S', () => {
+    expect(getQualityTierFromScore(0.85)).toBe('S');
+    expect(getQualityTierFromScore(1.0)).toBe('S');
+  });
+
+  it('score >= 0.65 and < 0.80 returns A', () => {
+    expect(getQualityTierFromScore(0.72)).toBe('A');
+    expect(getQualityTierFromScore(0.79)).toBe('A');
+  });
+
+  it('score >= 0.50 and < 0.65 returns B', () => {
+    expect(getQualityTierFromScore(0.55)).toBe('B');
+    expect(getQualityTierFromScore(0.64)).toBe('B');
+  });
+
+  it('score < 0.50 returns C', () => {
+    expect(getQualityTierFromScore(0.3)).toBe('C');
+    expect(getQualityTierFromScore(0.0)).toBe('C');
+  });
+
+  it('boundary: 0.80 exactly returns S', () => {
+    expect(getQualityTierFromScore(0.80)).toBe('S');
+  });
+
+  it('boundary: 0.65 exactly returns A', () => {
+    expect(getQualityTierFromScore(0.65)).toBe('A');
+  });
+
+  it('boundary: 0.50 exactly returns B', () => {
+    expect(getQualityTierFromScore(0.50)).toBe('B');
+  });
+
+  it('boundary: 0.49 returns C', () => {
+    expect(getQualityTierFromScore(0.49)).toBe('C');
   });
 });
 
