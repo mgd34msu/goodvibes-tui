@@ -4,6 +4,36 @@ All notable changes to GoodVibes TUI.
 
 ---
 
+## [0.9.13] — 2026-03-30
+
+### Synthetic Provider & Model Picker
+- Fix ZeroEval benchmark parser: handle raw JSON array response + correct field names (gpqa_score, swe_bench_verified_score, etc.)
+- Benchmark scoring for synthetic models uses real backend model IDs instead of non-existent canonical slugs
+- Fix blank synthetic model list when opening /model then /provider (availableOnly filter)
+- Show provider counts (Np) in model picker for synthetic models
+- Quality tier badges [S]/[A]/[B]/[C] work for synthetic models via getQualityTierFromScore()
+- Benchmark sort (composite/swe/gpqa) works correctly for synthetic models
+- Render lag fix: O(1) Map index for canonical lookups, deduplicated per-frame calls
+- normalizeModelName: preserve version numbers, size indicators, and model tier identifiers
+- Top Models / All Synthetic sub-grouping with benchmark-based ranking
+- Extract getQualityTierFromScore() helper eliminating 3 duplicate threshold sites
+
+### Failover & Error Handling
+- Fix frozen response crash: shallow-copy tool calls before mutation (kimi/ollama-cloud providers)
+- 401/403 errors now failover to next backend instead of crashing the synthetic chain
+- Agent model fallback: gracefully handle non-existent models by falling back to current model
+- Text-based tool call parser: extract tool calls from models that output raw <|toolcallbegin|> tokens
+
+### Provider System
+- Remove hardcoded static model lists from OpenAI, Gemini, Anthropic providers
+- Stop hiding 855 catalog models that are synthetic backends from native provider listings
+- Fix configured provider detection: check config system (secrets + env var aliases), not just process.env
+- Map config 'gemini' to catalog 'google' provider ID
+- Synthetic provider always shows as configured when canonicals exist
+- Set configuredProviders in /provider picker (was only set in /model picker)
+
+---
+
 ## [0.9.11] — 2026-03-28
 
 ### Dynamic Model Catalog

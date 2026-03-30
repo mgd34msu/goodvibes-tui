@@ -6,6 +6,7 @@ import {
   toOpenAITools,
   toOpenAIMessages,
   fromOpenAIToolCalls,
+  extractTextToolCalls,
 } from './tool-formats.ts';
 import type { OpenAIToolCall } from './tool-formats.ts';
 
@@ -173,9 +174,22 @@ export class OpenAICompatProvider implements LLMProvider {
         );
       }
 
+      // Some models (e.g. kimi-k2-thinking via ollama-cloud) emit tool calls as
+      // raw text tokens instead of the OpenAI function-calling wire format.
+      // Fall back to text extraction when no structured tool calls were found.
+      let toolCalls = rawToolCalls.length > 0 ? fromOpenAIToolCalls(rawToolCalls) : [];
+      if (toolCalls.length === 0 && responseText.includes('<|toolcallbegin|>')) {
+        const extracted = extractTextToolCalls(responseText);
+        if (extracted.toolCalls.length > 0) {
+          toolCalls = extracted.toolCalls;
+          responseText = extracted.cleanedContent;
+          stopReason = 'tool_use';
+        }
+      }
+
       const response: ChatResponse = {
         content: responseText,
-        toolCalls: rawToolCalls.length > 0 ? fromOpenAIToolCalls(rawToolCalls) : [],
+        toolCalls,
         usage: {
           inputTokens,
           outputTokens,

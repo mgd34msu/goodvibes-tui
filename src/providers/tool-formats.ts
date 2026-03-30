@@ -329,6 +329,68 @@ export function toGeminiContents(
 }
 
 // ---------------------------------------------------------------------------
+// Text-based tool call extraction (for models that emit tool calls as tokens)
+// ---------------------------------------------------------------------------
+
+/**
+ * Extracts tool calls from raw text content for models (e.g. kimi-k2-thinking
+ * via ollama-cloud) that emit tool calls as text tokens instead of using the
+ * OpenAI function-calling wire format.
+ *
+ * Expected format (one or more per response):
+ *   <|toolcallbegin|>functions.TOOLNAME:INDEX<|toolcallargumentbegin|>JSON_ARGS<|toolcallend|>
+ *
+ * @returns Extracted ToolCall array and the content with all tool-call tokens
+ * removed (trimmed). Returns empty array when no text-based calls are found.
+ */
+export function extractTextToolCalls(content: string): {
+  toolCalls: ToolCall[];
+  cleanedContent: string;
+} {
+  // Fast path: skip regex work when the sentinel is absent
+  if (!content.includes('<|toolcallbegin|>')) {
+    return { toolCalls: [], cleanedContent: content };
+  }
+
+  // The `.*?` lazy match with /s is safe here: backtracking is bounded by
+  // the `<|toolcallend|>` delimiter, which appears within kilobytes of
+  // `<|toolcallargumentbegin|>` — the span of a single tool call's JSON args.
+  // kimi is the known model that emits this delimiter format.
+  const pattern =
+    /<\|toolcallbegin\|>functions\.([^:]+):\d+<\|toolcallargumentbegin\|>(.*?)<\|toolcallend\|>/gs;
+
+  const toolCalls: ToolCall[] = [];
+  // Build cleaned content in a single pass by collecting match spans,
+  // avoiding a second regex execution over the same string.
+  const segments: string[] = [];
+  let lastEnd = 0;
+  let index = 0;
+
+  for (const match of content.matchAll(pattern)) {
+    const matchStart = match.index!;
+    const matchEnd = matchStart + match[0].length;
+    // Collect the text before this match
+    segments.push(content.slice(lastEnd, matchStart));
+    lastEnd = matchEnd;
+
+    const toolName = match[1];
+    const rawArgs = match[2];
+    toolCalls.push({
+      id: `text-call-${index}`,
+      name: toolName,
+      arguments: parseJson(rawArgs),
+    });
+    index++;
+  }
+  // Append any trailing text after the last match
+  segments.push(content.slice(lastEnd));
+
+  const cleanedContent = segments.join('').trim();
+
+  return { toolCalls, cleanedContent };
+}
+
+// ---------------------------------------------------------------------------
 // Shared helper
 // ---------------------------------------------------------------------------
 
