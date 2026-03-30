@@ -15,13 +15,7 @@ import type { OpenAIToolCall } from './tool-formats.ts';
  */
 export class OpenAIProvider implements LLMProvider {
   readonly name = 'openai';
-  readonly models = [
-    'gpt-5.4',
-    'gpt-5.3-chat-latest',
-    'gpt-5-mini',
-    'gpt-5-nano',
-    'gpt-oss-120b',
-  ];
+  readonly models: string[] = [];
 
   private client: OpenAI;
 
