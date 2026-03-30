@@ -379,7 +379,7 @@ export class ModelPickerModal {
             scoreB = bB ? compositeScore(bB.benchmarks) : null;
           }
         } else {
-          // swe/gpqa sort — use getBenchmarks directly (individual scores not cached on synthetic)
+          // swe/gpqa sort — individual benchmark scores not available for synthetic models — only composite is cached
           const bA = a.provider === 'synthetic' ? null : (getBenchmarks(a.id) ?? getBenchmarks(a.displayName));
           const bB = b.provider === 'synthetic' ? null : (getBenchmarks(b.id) ?? getBenchmarks(b.displayName));
           if (this.benchmarkSort === 'swe') {

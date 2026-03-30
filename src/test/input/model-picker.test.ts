@@ -3,6 +3,7 @@
  */
 import { describe, test, expect, beforeEach } from 'bun:test';
 import { ModelPickerModal, detectFamily, tierToCategoryFilter, POPULAR_PROVIDERS } from '../../input/model-picker.ts';
+import type { CategoryFilter, PickerMode } from '../../input/model-picker.ts';
 import type { ModelDefinition } from '../../providers/registry.ts';
 import { _setEntriesForTest } from '../../providers/model-benchmarks.ts';
 
@@ -328,7 +329,7 @@ describe('ModelPickerModal', () => {
 
     test('clears query and filter on open', () => {
       picker.query = 'old';
-      picker.categoryFilter = 'free';
+      picker.categoryFilter = 'free' as CategoryFilter;
       picker.openAllModels(ALL_MODELS, 'free-1');
       expect(picker.query).toBe('');
       expect(picker.categoryFilter).toBe('all');
@@ -350,9 +351,9 @@ describe('ModelPickerModal', () => {
     });
 
     test('sets mode to model and resets query/filters', () => {
-      picker.mode = 'provider';
+      picker.mode = 'provider' as PickerMode;
       picker.query = 'old';
-      picker.categoryFilter = 'free';
+      picker.categoryFilter = 'free' as CategoryFilter;
       picker.showModelsForProvider(ALL_MODELS, 'provA');
       expect(picker.mode).toBe('model');
       expect(picker.query).toBe('');
