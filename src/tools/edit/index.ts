@@ -183,7 +183,7 @@ function findFuzzyLineMatch(
   if (findLines.length === 0 || contentLines.length === 0) return null;
 
   // Skip fuzzy matching for very large files to avoid O(N*M) performance hit
-  if (contentLines.length > 5000) return null;
+  if (contentLines.length > MAX_FUZZY_FILE_LINES) return null;
 
   // Pre-compute cumulative byte offsets for each line in content
   const lineOffsets: number[] = [];
@@ -716,6 +716,7 @@ function computeExactEdit(
 }
 
 const FUZZY_MATCH_THRESHOLD = 0.7;
+const MAX_FUZZY_FILE_LINES = 5000;
 
 function computeSingleEdit(
   fileContent: string,
