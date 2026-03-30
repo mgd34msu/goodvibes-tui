@@ -304,9 +304,12 @@ export const agentTool: Tool = {
         }
 
         const record = manager.getStatus(input.agentId);
+        if (!record) {
+          return { success: true, output: JSON.stringify({ agentId: input.agentId, status: 'deleted', error: 'Agent was removed after cancel' }) };
+        }
         return {
           success: true,
-          output: JSON.stringify({ agentId: input.agentId, status: record?.status ?? 'unknown' }),
+          output: JSON.stringify({ agentId: input.agentId, status: record.status }),
         };
       }
 
@@ -487,7 +490,10 @@ export const agentTool: Tool = {
         }
 
         const finalRecord = manager.getStatus(input.agentId);
-        const finalStatus = finalRecord?.status ?? 'unknown';
+        if (!finalRecord) {
+          return { success: true, output: JSON.stringify({ agentId: input.agentId, status: 'deleted', error: 'Agent was removed during wait' }) };
+        }
+        const finalStatus = finalRecord.status;
         return {
           success: true,
           output: JSON.stringify({
