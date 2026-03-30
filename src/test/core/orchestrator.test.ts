@@ -5,6 +5,9 @@ import { MockLLMProvider } from '../setup.ts';
 import { HookDispatcher } from '../../hooks/dispatcher.ts';
 import type { HookEvent, HookResult } from '../../hooks/types.ts';
 import { config, configManager } from '../../config/index.ts';
+import { getProviderRegistry } from '../../providers/registry.ts';
+import type { ProviderRegistry } from '../../providers/registry.ts';
+import type { LLMProvider, ChatRequest, ChatResponse } from '../../providers/interface.ts';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -380,6 +383,187 @@ describe('Orchestrator', () => {
       // Tool should still execute and succeed despite hook failure
       expect(results[0].success).toBe(true);
       expect(results[0].output).toBe('still works');
+    });
+  });
+
+  describe('turn loop - spawn behavior', () => {
+    /**
+     * Mock model descriptor shared across spawn-behavior tests.
+     * Capabilities.toolCalling must be true so the orchestrator includes tools
+     * in the chat request and processes tool-use responses.
+     */
+    const MOCK_MODEL = {
+      id: 'mock-model',
+      provider: 'mock',
+      registryKey: 'mock:mock-model',
+      displayName: 'Mock',
+      description: '',
+      capabilities: { toolCalling: true, codeEditing: false, reasoning: false, multimodal: false },
+      contextWindow: 8192,
+      selectable: true,
+    };
+
+    /**
+     * Patch the actual ProviderRegistry instance (the Proxy delegates to it)
+     * so getCurrentModel and getForModel return our mocks.  Restores originals
+     * in a finally block.
+     */
+    async function withMockProvider<T>(
+      provider: LLMProvider,
+      fn: () => Promise<T>,
+    ): Promise<T> {
+      const reg: ProviderRegistry = getProviderRegistry();
+      const origGet = reg.get.bind(reg);
+      const origGetForModel = reg.getForModel.bind(reg);
+      const origGetCurrentModel = reg.getCurrentModel.bind(reg);
+      // Patch all three provider-lookup paths used by core/orchestrator.ts
+      reg.get = mock(() => provider);
+      reg.getForModel = mock(() => provider);
+      reg.getCurrentModel = mock(() => MOCK_MODEL);
+      try {
+        return await fn();
+      } finally {
+        reg.get = origGet;
+        reg.getForModel = origGetForModel;
+        reg.getCurrentModel = origGetCurrentModel;
+      }
+    }
+
+    /** autoApprove must be on so permission checks don't block the turn loop. */
+    let savedAutoApprove: boolean;
+
+    beforeEach(() => {
+      savedAutoApprove = config.autoApprove ?? false;
+      configManager.set('behavior.autoApprove', true);
+    });
+
+    afterEach(() => {
+      configManager.set('behavior.autoApprove', savedAutoApprove);
+    });
+
+    test('batch-spawn tool call ends the turn loop (LLM called exactly once)', async () => {
+      let chatCallCount = 0;
+      const provider: LLMProvider = {
+        name: 'mock',
+        models: ['mock-model'],
+        chat: mock(async (_params: ChatRequest): Promise<ChatResponse> => {
+          chatCallCount++;
+          // First (and only expected) call: return a batch-spawn agent tool call
+          return {
+            content: '',
+            toolCalls: [{
+              id: 'call-batch-1',
+              name: 'agent',
+              arguments: {
+                mode: 'batch-spawn',
+                tasks: [
+                  { task: 'Write unit tests' },
+                  { task: 'Write integration tests' },
+                ],
+              },
+            }],
+            usage: { inputTokens: 10, outputTokens: 5 },
+            stopReason: 'tool_use',
+          };
+        }),
+      };
+
+      // Register a no-op agent tool so executeToolCalls doesn't error
+      toolRegistry.register({
+        definition: { name: 'agent', description: 'agent', parameters: { type: 'object', properties: {}, required: ['mode'] } },
+        execute: async () => ({ success: true, output: 'batch spawned' }),
+      });
+
+      const turnCompleteEvents: unknown[] = [];
+      bus.on('turn:complete', (data) => turnCompleteEvents.push(data));
+
+      const { orch } = await buildOrchestrator();
+
+      await withMockProvider(provider, () => orch.handleUserInput('spawn two agents'));
+
+      // The turn loop must stop after the batch-spawn — LLM should only be called once.
+      expect(chatCallCount).toBe(1);
+      // turn:complete must have been emitted
+      expect(turnCompleteEvents.length).toBeGreaterThan(0);
+    });
+
+    test('spawn tool call ends the turn loop (same behavior as batch-spawn)', async () => {
+      let chatCallCount = 0;
+      const provider: LLMProvider = {
+        name: 'mock',
+        models: ['mock-model'],
+        chat: mock(async (_params: ChatRequest): Promise<ChatResponse> => {
+          chatCallCount++;
+          return {
+            content: '',
+            toolCalls: [{
+              id: 'call-spawn-1',
+              name: 'agent',
+              arguments: { mode: 'spawn', task: 'Write tests' },
+            }],
+            usage: { inputTokens: 10, outputTokens: 5 },
+            stopReason: 'tool_use',
+          };
+        }),
+      };
+
+      toolRegistry.register({
+        definition: { name: 'agent', description: 'agent', parameters: { type: 'object', properties: {}, required: ['mode'] } },
+        execute: async () => ({ success: true, output: 'spawned' }),
+      });
+
+      const turnCompleteEvents: unknown[] = [];
+      bus.on('turn:complete', (data) => turnCompleteEvents.push(data));
+
+      const { orch } = await buildOrchestrator();
+
+      await withMockProvider(provider, () => orch.handleUserInput('spawn an agent'));
+
+      expect(chatCallCount).toBe(1);
+      expect(turnCompleteEvents.length).toBeGreaterThan(0);
+    });
+
+    test('non-spawn agent mode (status) does NOT end the turn loop early', async () => {
+      let chatCallCount = 0;
+      const provider: LLMProvider = {
+        name: 'mock',
+        models: ['mock-model'],
+        chat: mock(async (_params: ChatRequest): Promise<ChatResponse> => {
+          chatCallCount++;
+          if (chatCallCount === 1) {
+            // First call: return an agent status tool call (not spawn)
+            return {
+              content: '',
+              toolCalls: [{
+                id: 'call-status-1',
+                name: 'agent',
+                arguments: { mode: 'status', agentId: 'agent-123' },
+              }],
+              usage: { inputTokens: 10, outputTokens: 5 },
+              stopReason: 'tool_use',
+            };
+          }
+          // Second call: finish cleanly
+          return {
+            content: 'Status checked.',
+            toolCalls: [],
+            usage: { inputTokens: 10, outputTokens: 5 },
+            stopReason: 'end',
+          };
+        }),
+      };
+
+      toolRegistry.register({
+        definition: { name: 'agent', description: 'agent', parameters: { type: 'object', properties: {}, required: ['mode'] } },
+        execute: async () => ({ success: true, output: 'status: running' }),
+      });
+
+      const { orch } = await buildOrchestrator();
+
+      await withMockProvider(provider, () => orch.handleUserInput('check agent status'));
+
+      // Status mode should NOT end the loop — LLM is called twice (tool result sent back)
+      expect(chatCallCount).toBe(2);
     });
   });
 });
