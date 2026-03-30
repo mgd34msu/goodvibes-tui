@@ -1431,6 +1431,10 @@ export class InputHandler {
             // Ctrl-combos should work globally; unfocus and fall through
             this.indicatorFocused = false;
             // Don't continue -- let the key reach global shortcuts below
+          } else if (token.logicalName === 'left' || token.logicalName === 'right') {
+            // Left/right arrows clear indicator focus and fall through to cursor movement
+            this.indicatorFocused = false;
+            // Don't continue -- let the key reach cursor movement logic below
           } else {
             this.bus.emit('render:request');
             continue;
