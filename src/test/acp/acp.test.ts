@@ -317,14 +317,13 @@ describe('AcpConnection', () => {
 
     /** Build a minimal fake child process compatible with what AcpConnection uses. */
     function makeFakeChild() {
-      // WritableStream stub
+      // FileSink stub — matches Bun's actual childProcess.stdin type (FileSink,
+      // not WritableStream). AcpConnection wraps this in a WritableStream adapter
+      // internally, so the mock must exercise the .write() / .end() surface.
       const stdinStub = {
-        getWriter: () => ({
-          write: mock(async () => {}),
-          close: mock(async () => {}),
-          releaseLock: mock(() => {}),
-        }),
-        locked: false,
+        write: mock((_chunk: Uint8Array | string) => {}),
+        end: mock(() => {}),
+        flush: mock(async () => {}),
       };
       // ReadableStream stub that immediately closes
       const stdoutStub = {
