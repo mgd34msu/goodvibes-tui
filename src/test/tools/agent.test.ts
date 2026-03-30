@@ -1,4 +1,4 @@
-import { describe, test, expect, beforeEach } from 'bun:test';
+import { describe, test, expect, beforeEach, spyOn } from 'bun:test';
 import { agentTool } from '../../tools/agent/index.ts';
 import { AgentManager } from '../../tools/agent/index.ts';
 import { AgentMessageBus } from '../../agents/message-bus.ts';
@@ -455,6 +455,30 @@ describe('wait mode', () => {
     const result = await runAgentMayFail({ mode: 'wait' });
     expect(result.success).toBe(false);
     expect(result.error).toContain('agentId');
+  });
+
+  test('wait returns deleted status when agent is removed during poll', async () => {
+    const spawned = await runAgent({ mode: 'spawn', task: 'Stuck task' });
+    const agentId = spawned.agentId as string;
+
+    const manager = AgentManager.getInstance();
+    const originalRecord = manager.getStatus(agentId);
+
+    // On first call return the record (initial existence check passes),
+    // then return null for all subsequent calls (agent removed during poll).
+    let callCount = 0;
+    const spy = spyOn(manager, 'getStatus').mockImplementation((_id: string) => {
+      callCount++;
+      if (callCount === 1) return originalRecord;
+      return null;
+    });
+
+    const result = await runAgent({ mode: 'wait', agentId, timeoutMs: 200 });
+
+    spy.mockRestore();
+
+    expect(result.agentId).toBe(agentId);
+    expect(result.status).toBe('deleted');
   });
 });
 
