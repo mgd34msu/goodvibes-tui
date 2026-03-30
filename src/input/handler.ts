@@ -390,6 +390,9 @@ export class InputHandler {
     while ((m = markerRegex.exec(this.prompt)) !== null) {
       const start = m.index;
       const end = m.index + m[0].length;
+      // Uses pos > start (not >=) intentionally: callers that pass cursorPos directly
+      // (e.g. left-arrow) rely on pos===start NOT matching so the cursor can move left
+      // past the marker start. The backspace handler has its own workaround for this edge case.
       if (pos > start && pos <= end) {
         return { start, end };
       }
@@ -1749,7 +1752,11 @@ export class InputHandler {
             }
             continue;
           }
-          continue; // in command mode: let text tokens handle character typing
+          // Left/right arrows: allow cursor movement within the command text
+          if (token.logicalName !== 'left' && token.logicalName !== 'right') {
+            continue; // in command mode: consume all other unhandled key tokens
+          }
+          // left/right fall through to cursor movement below
         }
 
         // --- Normal mode ---

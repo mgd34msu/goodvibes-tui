@@ -277,6 +277,35 @@ describe('handlePathCompletion', () => {
   });
 });
 
+// ── command-mode arrow key navigation ─────────────────────────────────────────
+
+describe('command-mode arrow key navigation', () => {
+  test('left/right arrow keys move the cursor while in command mode', () => {
+    const ih = makeInput();
+    ih.commandMode = true;
+    ih.prompt = '/plan';
+    ih.cursorPos = 5;
+
+    ih.feed('\x1b[D'); // left arrow
+    expect(ih.cursorPos).toBe(4);
+
+    ih.feed('\x1b[C'); // right arrow
+    expect(ih.cursorPos).toBe(5);
+  });
+
+  test('up/down arrow keys are consumed in command mode (cursor unchanged)', () => {
+    const ih = makeInput();
+    ih.commandMode = true;
+    ih.prompt = '/plan';
+    ih.cursorPos = 5;
+
+    const before = ih.cursorPos;
+    ih.feed('\x1b[A'); // up arrow
+    ih.feed('\x1b[B'); // down arrow
+    expect(ih.cursorPos).toBe(before);
+  });
+});
+
 // ── autocomplete reset on space ─────────────────────────────────────────────
 
 describe('autocomplete reset on space in command mode', () => {
