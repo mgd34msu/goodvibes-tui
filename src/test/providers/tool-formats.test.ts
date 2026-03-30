@@ -240,12 +240,23 @@ describe('fromGeminiParts', () => {
 // extractTextToolCalls
 // ---------------------------------------------------------------------------
 describe('extractTextToolCalls', () => {
+  // Without-underscore format (original)
   const sentinel = '<|toolcallbegin|>';
   const argBegin = '<|toolcallargumentbegin|>';
   const end = '<|toolcallend|>';
 
+  // With-underscore format (actual kimi output)
+  const sentinelU = '<|tool_call_begin|>';
+  const argBeginU = '<|tool_call_argument_begin|>';
+  const endU = '<|tool_call_end|>';
+  const sectionEndU = '<|tool_calls_section_end|>';
+
   function makeCall(name: string, index: number, args: string): string {
     return `${sentinel}functions.${name}:${index}${argBegin}${args}${end}`;
+  }
+
+  function makeCallU(name: string, index: number, args: string): string {
+    return `${sentinelU}functions.${name}:${index}${argBeginU}${args}${endU}`;
   }
 
   test('fast path: returns empty array and unchanged content when sentinel absent', () => {
@@ -304,6 +315,52 @@ describe('extractTextToolCalls', () => {
     expect(toolCalls).toEqual([]);
     // Content is not cleaned since no full match was found
     expect(cleanedContent).toBe(content.trim());
+  });
+
+  // ---------------------------------------------------------------------------
+  // Underscore-format variants (actual kimi output)
+  // ---------------------------------------------------------------------------
+
+  test('underscore format: extracts a single tool call', () => {
+    const content = makeCallU('delegate', 0, '{"task":"do something"}');
+    const { toolCalls, cleanedContent } = extractTextToolCalls(content);
+    expect(toolCalls).toHaveLength(1);
+    expect(toolCalls[0].name).toBe('delegate');
+    expect(toolCalls[0].arguments).toEqual({ task: 'do something' });
+    expect(toolCalls[0].id).toBe('text-call-0');
+    expect(cleanedContent).toBe('');
+  });
+
+  test('underscore format: strips trailing <|tool_calls_section_end|>', () => {
+    const content = `${makeCallU('file_read', 0, '{"path":"x"}')}${sectionEndU}`;
+    const { toolCalls, cleanedContent } = extractTextToolCalls(content);
+    expect(toolCalls).toHaveLength(1);
+    expect(cleanedContent).toBe('');
+  });
+
+  test('underscore format: strips section-end and surrounding text', () => {
+    const content = `Thinking... ${makeCallU('file_read', 0, '{"path":"y"}')}${sectionEndU} Done.`;
+    const { toolCalls, cleanedContent } = extractTextToolCalls(content);
+    expect(toolCalls).toHaveLength(1);
+    expect(cleanedContent).toBe('Thinking...  Done.');
+  });
+
+  test('underscore format: extracts multiple tool calls', () => {
+    const content = [
+      makeCallU('file_read', 0, '{"path":"a.ts"}'),
+      makeCallU('file_write', 1, '{"path":"b.ts","content":"x"}'),
+    ].join(' ') + sectionEndU;
+    const { toolCalls, cleanedContent } = extractTextToolCalls(content);
+    expect(toolCalls).toHaveLength(2);
+    expect(toolCalls[0].name).toBe('file_read');
+    expect(toolCalls[1].name).toBe('file_write');
+    expect(cleanedContent).toBe('');
+  });
+
+  test('underscore format: fast path returns empty when neither sentinel present', () => {
+    const { toolCalls, cleanedContent } = extractTextToolCalls('no delimiters here');
+    expect(toolCalls).toEqual([]);
+    expect(cleanedContent).toBe('no delimiters here');
   });
 });
 

@@ -337,8 +337,12 @@ export function toGeminiContents(
  * via ollama-cloud) that emit tool calls as text tokens instead of using the
  * OpenAI function-calling wire format.
  *
- * Expected format (one or more per response):
- *   <|toolcallbegin|>functions.TOOLNAME:INDEX<|toolcallargumentbegin|>JSON_ARGS<|toolcallend|>
+ * Supports two delimiter formats (both emitted by kimi variants):
+ *   Without underscores: <|toolcallbegin|>functions.TOOLNAME:INDEX<|toolcallargumentbegin|>JSON_ARGS<|toolcallend|>
+ *   With underscores:    <|tool_call_begin|>functions.TOOLNAME:INDEX<|tool_call_argument_begin|>JSON_ARGS<|tool_call_end|>
+ *
+ * A trailing <|tool_calls_section_end|> or <|toolcallssectionend|> is also
+ * stripped from the cleaned content.
  *
  * @returns Extracted ToolCall array and the content with all tool-call tokens
  * removed (trimmed). Returns empty array when no text-based calls are found.
@@ -347,17 +351,18 @@ export function extractTextToolCalls(content: string): {
   toolCalls: ToolCall[];
   cleanedContent: string;
 } {
-  // Fast path: skip regex work when the sentinel is absent
-  if (!content.includes('<|toolcallbegin|>')) {
+  // Fast path: skip regex work when neither sentinel variant is present
+  if (!content.includes('<|toolcallbegin|>') && !content.includes('<|tool_call_begin|>')) {
     return { toolCalls: [], cleanedContent: content };
   }
 
+  // Match both delimiter variants using optional underscores.
   // The `.*?` lazy match with /s is safe here: backtracking is bounded by
-  // the `<|toolcallend|>` delimiter, which appears within kilobytes of
-  // `<|toolcallargumentbegin|>` — the span of a single tool call's JSON args.
-  // kimi is the known model that emits this delimiter format.
+  // the end delimiter, which appears within kilobytes of the argument-begin
+  // delimiter — the span of a single tool call's JSON args.
+  // kimi is the known model that emits these delimiter formats.
   const pattern =
-    /<\|toolcallbegin\|>functions\.([^:]+):\d+<\|toolcallargumentbegin\|>(.*?)<\|toolcallend\|>/gs;
+    /<\|tool_?call_?begin\|>functions\.([^:]+):\d+<\|tool_?call_?argument_?begin\|>(.*?)<\|tool_?call_?end\|>/gs;
 
   const toolCalls: ToolCall[] = [];
   // Build cleaned content in a single pass by collecting match spans,
@@ -385,7 +390,11 @@ export function extractTextToolCalls(content: string): {
   // Append any trailing text after the last match
   segments.push(content.slice(lastEnd));
 
-  const cleanedContent = segments.join('').trim();
+  // Strip section-end sentinels (both variants) and trim
+  const cleanedContent = segments
+    .join('')
+    .replace(/<\|tool_?calls_?section_?end\|>/g, '')
+    .trim();
 
   return { toolCalls, cleanedContent };
 }

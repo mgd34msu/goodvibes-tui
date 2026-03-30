@@ -178,7 +178,7 @@ export class OpenAICompatProvider implements LLMProvider {
       // raw text tokens instead of the OpenAI function-calling wire format.
       // Fall back to text extraction when no structured tool calls were found.
       let toolCalls = rawToolCalls.length > 0 ? fromOpenAIToolCalls(rawToolCalls) : [];
-      if (toolCalls.length === 0 && responseText.includes('<|toolcallbegin|>')) {
+      if (toolCalls.length === 0 && (responseText.includes('<|toolcallbegin|>') || responseText.includes('<|tool_call_begin|>'))) {
         const extracted = extractTextToolCalls(responseText);
         if (extracted.toolCalls.length > 0) {
           toolCalls = extracted.toolCalls;
