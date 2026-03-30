@@ -374,14 +374,28 @@ export class SyntheticProvider implements LLMProvider {
           errors.push({ backend, error: err as Error });
           continue;
         }
-        // Check if this is a client error (bad request) — re-throw, no failover
-        const isClientError = err instanceof ProviderError
+        // 400 Bad Request — the request itself is malformed, no point trying other backends
+        const isBadRequest = err instanceof ProviderError
+          && err.statusCode === 400;
+
+        if (isBadRequest) {
+          throw err;
+        }
+
+        // Other client errors (401 auth, 403 billing/forbidden, 404 model not found, etc.)
+        // are provider-specific — failover to next backend with long cooldown
+        const isProviderClientError = err instanceof ProviderError
           && err.statusCode !== undefined
-          && err.statusCode >= 400
+          && err.statusCode > 400
           && err.statusCode < 500;
 
-        if (isClientError) {
-          throw err;
+        if (isProviderClientError) {
+          cooldownArr[idx] = now + DEFAULT_COOLDOWN_MS;
+          this.cooldowns.set(syntheticId, cooldownArr);
+          if (DEFAULT_COOLDOWN_MS < shortestCooldown) shortestCooldown = DEFAULT_COOLDOWN_MS;
+          logger.info(`[Synthetic] ${backend.providerName} returned ${(err as ProviderError).statusCode} for ${syntheticId}, trying next backend`);
+          errors.push({ backend, error: err as Error });
+          continue;
         }
 
         // Transient/server error — short cooldown, failover to next backend

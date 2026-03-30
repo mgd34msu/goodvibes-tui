@@ -495,9 +495,9 @@ describe('failover within tier', () => {
     expect(response.content).toBe('ok-provider/ok');
   });
 
-  it('does NOT fall over for non-rate-limit client errors (4xx)', async () => {
+  it('does NOT fall over for 400 Bad Request (malformed request)', async () => {
     _setSyntheticCatalogForTest(CATALOG_FAILOVER);
-    // 400 Bad Request is a client error — should re-throw immediately without failover
+    // 400 Bad Request means the request itself is malformed — re-throw immediately, no failover
     registryMap.set('rate-limited-provider', mockClientError('rate-limited-provider', 'bad request', 400));
     registryMap.set('ok-provider', mockOk('ok-provider'));
 
@@ -505,6 +505,28 @@ describe('failover within tier', () => {
     await expect(
       provider.chat({ ...DUMMY_REQUEST, model: 'failover-model' }),
     ).rejects.toThrow('bad request');
+  });
+
+  it('fails over on 401 auth errors (provider-specific, not malformed request)', async () => {
+    _setSyntheticCatalogForTest(CATALOG_FAILOVER);
+    // 401 Unauthorized is provider-specific — invalid key for this backend, try next
+    registryMap.set('rate-limited-provider', mockClientError('rate-limited-provider', 'unauthorized', 401));
+    registryMap.set('ok-provider', mockOk('ok-provider'));
+
+    const provider = new SyntheticProvider();
+    const response = await provider.chat({ ...DUMMY_REQUEST, model: 'failover-model' });
+    expect(response.content).toBe('ok-provider/ok');
+  });
+
+  it('fails over on 403 billing/forbidden errors (provider-specific)', async () => {
+    _setSyntheticCatalogForTest(CATALOG_FAILOVER);
+    // 403 Forbidden (e.g. insufficient balance) is provider-specific — failover to next backend
+    registryMap.set('rate-limited-provider', mockClientError('rate-limited-provider', 'insufficient balance', 403));
+    registryMap.set('ok-provider', mockOk('ok-provider'));
+
+    const provider = new SyntheticProvider();
+    const response = await provider.chat({ ...DUMMY_REQUEST, model: 'failover-model' });
+    expect(response.content).toBe('ok-provider/ok');
   });
 
   it('throws 429 when all backends are rate-limited', async () => {
