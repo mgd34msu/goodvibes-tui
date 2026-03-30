@@ -68,11 +68,7 @@ function clampMaxTokens(model: string, requested: number): number {
  */
 export class AnthropicProvider implements LLMProvider {
   readonly name = 'anthropic';
-  readonly models = [
-    'claude-opus-4-6',
-    'claude-sonnet-4-6',
-    'claude-haiku-4-5',
-  ];
+  readonly models: string[] = [];
 
   private apiKey: string;
 

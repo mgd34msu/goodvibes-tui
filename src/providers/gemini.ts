@@ -37,12 +37,7 @@ export class GeminiProvider implements LLMProvider {
   readonly name = 'gemini';
   /** Maps function call name → thoughtSignature for the current turn. */
   private thoughtSignatures = new Map<string, string>();
-  readonly models = [
-    'gemini-3.1-pro-preview',
-    'gemini-3-flash',
-    'gemini-3.1-flash-lite-preview',
-    'gemini-2.5-pro',
-  ];
+  readonly models: string[] = [];
 
   private apiKey: string;
 
