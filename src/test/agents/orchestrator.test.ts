@@ -167,6 +167,30 @@ describe('AgentOrchestrator', () => {
       }
     });
 
+    test('falls back to current model when requested model is not found', async () => {
+      const provider = makeMockProvider([{ content: 'Task done via fallback.' }]);
+      const reg = getActualRegistry();
+      const origGetForModel = reg.getForModel.bind(reg);
+      const origGetCurrentModel = reg.getCurrentModel.bind(reg);
+      let callCount = 0;
+      reg.getForModel = mock((..._args: Parameters<typeof origGetForModel>) => {
+        callCount++;
+        if (callCount === 1) throw new Error('model not found');
+        return provider;
+      });
+      reg.getCurrentModel = mock(() => MOCK_MODEL);
+      try {
+        const record = makeRecord({ model: 'some-other-model' });
+        await orchestrator.runAgent(record);
+        expect(record.status).toBe('completed');
+        // getForModel called twice: once for requested model (throws), once for fallback
+        expect(callCount).toBe(2);
+      } finally {
+        reg.getForModel = origGetForModel;
+        reg.getCurrentModel = origGetCurrentModel;
+      }
+    });
+
     test('never throws — all errors captured in record.error', async () => {
       const origWarn = console.warn;
       console.warn = () => {};

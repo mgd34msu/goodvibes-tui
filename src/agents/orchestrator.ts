@@ -111,19 +111,38 @@ export class AgentOrchestrator {
 
     try {
       // --- Resolve model and provider ---
-      const modelId = record.model ?? providerRegistry.getCurrentModel().id;
+      const requestedModelId = record.model;
+      const currentModel = providerRegistry.getCurrentModel();
+      let modelId = requestedModelId ?? currentModel.id;
       let provider: LLMProvider;
       try {
         provider = providerRegistry.getForModel(modelId, record.provider);
       } catch (err) {
-        throw new Error(
-          `Cannot resolve provider for model '${modelId}': ${
-            err instanceof Error ? err.message : String(err)
-          }`,
-        );
+        // If the LLM requested a specific model that doesn't exist, fall back to current model
+        if (requestedModelId && requestedModelId !== currentModel.id) {
+          logger.debug(`[AgentOrchestrator] Requested model '${requestedModelId}' not found, falling back to '${currentModel.id}'`);
+          try {
+            provider = providerRegistry.getForModel(currentModel.id);
+            modelId = currentModel.id;
+          } catch (fallbackErr) {
+            throw new Error(
+              `Cannot resolve provider for model '${requestedModelId}' (${
+                err instanceof Error ? err.message : String(err)
+              }) or fallback '${currentModel.id}' (${
+                fallbackErr instanceof Error ? fallbackErr.message : String(fallbackErr)
+              })`,
+            );
+          }
+        } else {
+          throw new Error(
+            `Cannot resolve provider for model '${modelId}': ${
+              err instanceof Error ? err.message : String(err)
+            }`,
+          );
+        }
       }
 
-      session = new AgentSession(record.id, modelId, record.provider ?? providerRegistry.getCurrentModel().provider ?? 'unknown');
+      session = new AgentSession(record.id, modelId, record.provider ?? currentModel.provider ?? 'unknown');
       session.appendMessage({ type: 'session_config', template: record.template, task: record.task, tools: record.tools, model: modelId, provider: record.provider ?? 'unknown', timestamp: new Date().toISOString() });
 
       // --- Build scoped tool registry ---
