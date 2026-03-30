@@ -454,103 +454,114 @@ function normalizeModelName(name: string): string {
   return nameToSlug(n);
 }
 
+/**
+ * Pure synchronous computation: build CanonicalModel[] from CatalogModel[].
+ * Contains all grouping logic. Does NOT import synthetic.ts — no async, no side effects.
+ */
+function buildSyntheticCanonicals(
+  models: CatalogModel[],
+): { id: string; tier: string; backends: import('./synthetic.ts').SyntheticBackend[]; backendCount: number; keyedBackendCount: number }[] {
+  // Step 1: Group models by family
+  const byFamily = new Map<string, CatalogModel[]>();
+  for (const m of models) {
+    if (!m.family) continue;
+    const bucket = byFamily.get(m.family);
+    if (bucket) {
+      bucket.push(m);
+    } else {
+      byFamily.set(m.family, [m]);
+    }
+  }
+
+  // Step 2: For each family, determine if it is broad or granular.
+  // Broad families: sub-group by normalised name. Granular: use family as canonical ID.
+  // Collect final groups as Map<canonicalId, CatalogModel[]>.
+  const canonicalGroups = new Map<string, CatalogModel[]>();
+
+  for (const [family, group] of byFamily) {
+    const uniqueNames = new Set(group.map(m => normalizeModelName(m.name)));
+    const isBroad = uniqueNames.size > MAX_FAMILY_UNIQUE_NAMES;
+
+    if (isBroad) {
+      // Sub-group by normalised name — each distinct normalised slug becomes its own canonical entry.
+      // Uses normalizeModelName() which strips version stamps and variant suffixes before slugging,
+      // so "Kimi K2", "Kimi K2 Instruct", "Kimi K2 0905" all collapse to "kimik2".
+      const byName = new Map<string, CatalogModel[]>();
+      for (const m of group) {
+        const key = normalizeModelName(m.name);
+        const bucket = byName.get(key);
+        if (bucket) {
+          bucket.push(m);
+        } else {
+          byName.set(key, [m]);
+        }
+      }
+      for (const [slug, nameGroup] of byName) {
+        // If the same slug was already claimed by another family, prefix with family name.
+        const canonicalId = canonicalGroups.has(slug) ? `${family}-${slug}` : slug;
+        const existing = canonicalGroups.get(canonicalId);
+        if (existing) {
+          existing.push(...nameGroup);
+        } else {
+          canonicalGroups.set(canonicalId, nameGroup);
+        }
+      }
+    } else {
+      // Granular family — use family slug directly as canonical ID.
+      const existing = canonicalGroups.get(family);
+      if (existing) {
+        existing.push(...group);
+      } else {
+        canonicalGroups.set(family, group);
+      }
+    }
+  }
+
+  // Step 3: Build canonical entries, filtering to multi-provider groups.
+  const canonical: { id: string; tier: string; backends: import('./synthetic.ts').SyntheticBackend[]; backendCount: number; keyedBackendCount: number }[] = [];
+  for (const [canonicalId, group] of canonicalGroups) {
+    const allBackends: import('./synthetic.ts').SyntheticBackend[] = group.map((m) => ({
+      providerName: m.providerId,
+      modelId: m.id,
+      registryKey: `${m.providerId}:${m.id}`,
+      contextWindow: m.contextWindow,
+      maxOutputTokens: m.maxOutputTokens,
+      envVars: m.providerEnvVars.length > 0 ? m.providerEnvVars : undefined,
+    }));
+
+    // Only include groups where 2+ distinct providers have configured keys
+    const keyedBackends = allBackends.filter((b) => {
+      const vars = b.envVars;
+      if (!vars || vars.length === 0) return true;
+      return vars.some(v => {
+        const val = process.env[v];
+        return typeof val === 'string' && val.length > 0;
+      });
+    });
+    const distinctProviders = new Set(keyedBackends.map(b => b.providerName)).size;
+    if (distinctProviders < 2) continue;
+
+    // Determine tier: prefer free > subscription > paid (most accessible wins).
+    // If ANY backend is free, the canonical is free — users get free backends first.
+    const tierPriority: Record<string, number> = { free: 2, subscription: 1, paid: 0 };
+    const tier = group.reduce((best, m) => {
+      return (tierPriority[m.tier] ?? 0) > (tierPriority[best] ?? 0) ? m.tier : best;
+    }, group[0].tier);
+
+    canonical.push({ id: canonicalId, tier, backends: allBackends, backendCount: allBackends.length, keyedBackendCount: distinctProviders });
+  }
+
+  return canonical;
+}
+
 async function applySyntheticCanonicalModels(models: CatalogModel[]): Promise<void> {
   try {
     const syntheticModule = await import('./synthetic.ts');
     const { setSyntheticCanonicalModels } = syntheticModule;
 
-    // Step 1: Group models by family
-    const byFamily = new Map<string, CatalogModel[]>();
-    for (const m of models) {
-      if (!m.family) continue;
-      const bucket = byFamily.get(m.family);
-      if (bucket) {
-        bucket.push(m);
-      } else {
-        byFamily.set(m.family, [m]);
-      }
-    }
-
-    // Step 2: For each family, determine if it is broad or granular.
-    // Broad families: sub-group by normalised name. Granular: use family as canonical ID.
-    // Collect final groups as Map<canonicalId, CatalogModel[]>.
-    const canonicalGroups = new Map<string, CatalogModel[]>();
-
-    for (const [family, group] of byFamily) {
-      const uniqueNames = new Set(group.map(m => normalizeModelName(m.name)));
-      const isBroad = uniqueNames.size > MAX_FAMILY_UNIQUE_NAMES;
-
-      if (isBroad) {
-        // Sub-group by normalised name — each distinct normalised slug becomes its own canonical entry.
-        // Uses normalizeModelName() which strips version stamps and variant suffixes before slugging,
-        // so "Kimi K2", "Kimi K2 Instruct", "Kimi K2 0905" all collapse to "kimik2".
-        const byName = new Map<string, CatalogModel[]>();
-        for (const m of group) {
-          const key = normalizeModelName(m.name);
-          const bucket = byName.get(key);
-          if (bucket) {
-            bucket.push(m);
-          } else {
-            byName.set(key, [m]);
-          }
-        }
-        for (const [slug, nameGroup] of byName) {
-          // If the same slug was already claimed by another family, prefix with family name.
-          const canonicalId = canonicalGroups.has(slug) ? `${family}-${slug}` : slug;
-          const existing = canonicalGroups.get(canonicalId);
-          if (existing) {
-            existing.push(...nameGroup);
-          } else {
-            canonicalGroups.set(canonicalId, nameGroup);
-          }
-        }
-      } else {
-        // Granular family — use family slug directly as canonical ID.
-        const existing = canonicalGroups.get(family);
-        if (existing) {
-          existing.push(...group);
-        } else {
-          canonicalGroups.set(family, group);
-        }
-      }
-    }
-
-    // Step 3: Build CanonicalModel entries, filtering to multi-provider groups.
-    const canonical: import('./synthetic.ts').CanonicalModel[] = [];
-    for (const [canonicalId, group] of canonicalGroups) {
-      const allBackends: import('./synthetic.ts').SyntheticBackend[] = group.map((m) => ({
-        providerName: m.providerId,
-        modelId: m.id,
-        registryKey: `${m.providerId}:${m.id}`,
-        contextWindow: m.contextWindow,
-        maxOutputTokens: m.maxOutputTokens,
-        envVars: m.providerEnvVars.length > 0 ? m.providerEnvVars : undefined,
-      }));
-
-      // Only include groups where 2+ distinct providers have configured keys
-      const keyedBackends = allBackends.filter((b) => {
-        const vars = b.envVars;
-        if (!vars || vars.length === 0) return true;
-        return vars.some(v => {
-          const val = process.env[v];
-          return typeof val === 'string' && val.length > 0;
-        });
-      });
-      const distinctProviders = new Set(keyedBackends.map(b => b.providerName)).size;
-      if (distinctProviders < 2) continue;
-
-      // Determine tier: prefer free > subscription > paid (most accessible wins).
-      // If ANY backend is free, the canonical is free — users get free backends first.
-      const tierPriority: Record<string, number> = { free: 2, subscription: 1, paid: 0 };
-      const tier = group.reduce((best, m) => {
-        return (tierPriority[m.tier] ?? 0) > (tierPriority[best] ?? 0) ? m.tier : best;
-      }, group[0].tier) as import('./synthetic.ts').SyntheticTier;
-
-      canonical.push({ id: canonicalId, tier, backends: allBackends, backendCount: allBackends.length, keyedBackendCount: distinctProviders });
-    }
-
-    _syntheticCanonicals = canonical;
-    setSyntheticCanonicalModels(canonical);
+    const canonical = buildSyntheticCanonicals(models);
+    _syntheticCanonicals = canonical as import('./synthetic.ts').CanonicalModel[];
+    setSyntheticCanonicalModels(canonical as import('./synthetic.ts').CanonicalModel[]);
     logger.debug('[model-catalog] Synthetic canonicals built', {
       count: canonical.length,
       sampleIds: canonical.slice(0, 20).map(c => c.id),
@@ -610,7 +621,10 @@ export function initCatalog(): void {
   if (cached) {
     _catalogModels = cached.models;
     _pricingCatalog = null; // invalidate so getPricingCatalog() re-reads
-    // Seed the SyntheticProvider with cached models immediately (no await — fire and forget)
+    // Synchronously build synthetic canonicals so getSyntheticModelInfoFromCatalog() is
+    // available immediately (no async, no dynamic import needed at this point).
+    _syntheticCanonicals = buildSyntheticCanonicals(cached.models) as import('./synthetic.ts').CanonicalModel[];
+    // Also inject into SyntheticProvider runtime (async — fire and forget)
     applySyntheticCanonicalModels(cached.models).catch((err) => {
       logger.debug('[model-catalog] Failed to seed synthetic models from cache', { error: String(err) });
     });
@@ -1164,6 +1178,21 @@ export interface MinimalModelDefinition {
  * Used by getModelRegistry() to exclude catalog models that are already represented
  * as synthetic canonical backends, preventing duplicate entries in the picker.
  */
+/**
+ * Synchronous lookup for synthetic canonical model info from the catalog.
+ * Available immediately after initCatalog() (no async required).
+ *
+ * @returns backendCount, keyedBackendCount, and tier for the given modelId,
+ *          or null if the model is not a known synthetic canonical.
+ */
+export function getSyntheticModelInfoFromCatalog(
+  modelId: string,
+): { backendCount: number; keyedBackendCount: number; tier: string } | null {
+  const c = _syntheticCanonicals.find(m => m.id === modelId);
+  if (!c) return null;
+  return { backendCount: c.backendCount, keyedBackendCount: c.keyedBackendCount, tier: c.tier };
+}
+
 export function getSyntheticBackendModelIds(): Set<string> {
   return new Set(_syntheticCanonicals.flatMap(c => c.backends.map(b => b.modelId)));
 }

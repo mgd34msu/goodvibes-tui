@@ -190,7 +190,7 @@ export function renderModelPickerOverlay(
       lines.push(UIFactory.stringToLine(emptyRow, width, { fg: '240' }));
     }
   } else if (picker.mode === 'provider') {
-    // ── Provider list (grouped: Configured / Popular / All) ─────────────────────────────────
+    // ── Provider list (grouped: Popular / All Providers) ───────────────────────────────────
     const allProviderItems = picker.getItems(); // includes group headers
     const selectableCount = picker.getFilteredProviders().length;
     if (selectableCount === 0) {

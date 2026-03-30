@@ -1,7 +1,7 @@
 import type { ModelDefinition } from '../providers/registry.ts';
 import { EFFORT_DESCRIPTIONS } from '../providers/effort-levels.ts';
 import { getBenchmarks, getQualityTier, compositeScore, A_TIER_THRESHOLD } from '../providers/model-benchmarks.ts';
-import { getSyntheticModelInfo } from '../providers/synthetic.ts';
+import { getSyntheticModelInfoFromCatalog } from '../providers/model-catalog.ts';
 
 export type PickerMode = 'model' | 'provider' | 'effort';
 
@@ -200,9 +200,7 @@ export class ModelPickerModal {
     this.categoryFilter = 'all';
     this.capabilityFilter = 'none';
     // Start selection at the top of the Popular providers group.
-    // Configured providers come first, so skip past them.
-    const { configured } = this.getGroupedProviders();
-    this.selectedIndex = configured.length;
+    this.selectedIndex = 0;
     this.scrollOffset = 0;
   }
 
@@ -287,37 +285,34 @@ export class ModelPickerModal {
   }
 
   /**
-   * Split providers into three ordered groups: Configured, Popular, All.
-   * Each group is alphabetized. Configured takes priority — Popular and All
-   * exclude providers already in Configured.
+   * Split providers into two ordered groups: Popular, All.
+   * Each group is alphabetized. Popular contains providers in POPULAR_PROVIDERS;
+   * All contains the rest. Configuration status is shown via checkmarks in the
+   * renderer and does not affect grouping.
    */
-  getGroupedProviders(): { configured: string[]; popular: string[]; all: string[] } {
-    const configured: string[] = [];
+  getGroupedProviders(): { popular: string[]; all: string[] } {
     const popular: string[] = [];
     const all: string[] = [];
 
     for (const p of this.providers) {
       const pLower = p.toLowerCase();
-      if (this.configuredProviders.has(p)) {
-        configured.push(p);
-      } else if (POPULAR_PROVIDERS.has(pLower)) {
+      if (POPULAR_PROVIDERS.has(pLower)) {
         popular.push(p);
       } else {
         all.push(p);
       }
     }
 
-    configured.sort((a, b) => a.localeCompare(b));
     popular.sort((a, b) => a.localeCompare(b));
     all.sort((a, b) => a.localeCompare(b));
 
-    return { configured, popular, all };
+    return { popular, all };
   }
 
   /** Return providers matching the current query (case-insensitive substring), in grouped order. */
   getFilteredProviders(): string[] {
-    const { configured, popular, all } = this.getGroupedProviders();
-    const ordered = [...configured, ...popular, ...all];
+    const { popular, all } = this.getGroupedProviders();
+    const ordered = [...popular, ...all];
     if (this.query.trim().length === 0) return ordered;
     const q = this.query.toLowerCase();
     return ordered.filter(p => p.toLowerCase().includes(q));
@@ -487,33 +482,26 @@ export class ModelPickerModal {
     }
     if (this.mode === 'provider') {
       const q = this.query.trim().toLowerCase();
-      const { configured, popular, all } = this.getGroupedProviders();
+      const { popular, all } = this.getGroupedProviders();
 
       const filterGroup = (group: string[]) =>
         q.length === 0 ? group : group.filter(p => p.toLowerCase().includes(q));
 
-      const filteredConfigured = filterGroup(configured);
       const filteredPopular = filterGroup(popular);
       const filteredAll = filterGroup(all);
 
       const providerItems: PickerItem[] = [];
 
-      if (filteredConfigured.length > 0) {
-        providerItems.push({ id: '__header__configured', label: 'Configured', isGroupHeader: true });
-        for (const p of filteredConfigured) {
-          providerItems.push({ id: p, label: p, isConfigured: true });
-        }
-      }
       if (filteredPopular.length > 0) {
         providerItems.push({ id: '__header__popular', label: 'Popular', isGroupHeader: true });
         for (const p of filteredPopular) {
-          providerItems.push({ id: p, label: p });
+          providerItems.push({ id: p, label: p, isConfigured: this.configuredProviders.has(p) });
         }
       }
       if (filteredAll.length > 0) {
-        providerItems.push({ id: '__header__all', label: 'All', isGroupHeader: true });
+        providerItems.push({ id: '__header__all', label: 'All Providers', isGroupHeader: true });
         for (const p of filteredAll) {
-          providerItems.push({ id: p, label: p });
+          providerItems.push({ id: p, label: p, isConfigured: this.configuredProviders.has(p) });
         }
       }
 
@@ -532,7 +520,7 @@ export class ModelPickerModal {
     // For synthetic models, append provider count info if available
     let detail = model.provider;
     if (model.provider === 'synthetic') {
-      const info = getSyntheticModelInfo(model.id);
+      const info = getSyntheticModelInfoFromCatalog(model.id);
       if (info !== null) {
         detail = `${model.provider} [${info.backendCount} provider${info.backendCount !== 1 ? 's' : ''}]`;
       }
