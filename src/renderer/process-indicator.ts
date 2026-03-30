@@ -28,6 +28,7 @@ export function renderProcessIndicator(
   agentCount: number,
   toolCount: number,
   focused: boolean = false,
+  agentProgress?: string,
 ): Line[] {
   const total = agentCount + toolCount;
 
@@ -54,7 +55,7 @@ export function renderProcessIndicator(
     return [UIFactory.stringToLine(padded, width, { fg: '238', dim: true })];
   }
 
-  // Build the label: "⚡ 2 agents · 1 tool running"
+  // Build the label: "⚡ 2 agents · Turn 3 · write — src/foo.ts"
   const parts: string[] = [];
   if (agentCount > 0) {
     parts.push(`${agentCount} agent${agentCount !== 1 ? 's' : ''}`);
@@ -62,7 +63,18 @@ export function renderProcessIndicator(
   if (toolCount > 0) {
     parts.push(`${toolCount} tool${toolCount !== 1 ? 's' : ''} running`);
   }
-  const label = `  ⚡ ${parts.join(' · ')}`;
+  // Append the first running agent's progress (truncated to fit)
+  /**
+   * Number of columns reserved for the agent count label and hint text.
+   * Breakdown: "⚡ N agents" prefix (~15 chars) + " · " separator (~3)
+   * + "  ↓ Enter to view  " hint (~19) + padding (~8) ≈ 45 chars.
+   */
+  const PROGRESS_RESERVED_CHARS = 45;
+  const progressMaxLen = Math.max(0, width - PROGRESS_RESERVED_CHARS); // reserve space for count + hint
+  const progressSuffix = agentProgress && progressMaxLen > 10
+    ? ` · ${agentProgress.length > progressMaxLen ? agentProgress.slice(0, progressMaxLen - 1) + '\u2026' : agentProgress}`
+    : '';
+  const label = `  \u26a1 ${parts.join(' \u00b7 ')}${progressSuffix}`;
 
   // Right-aligned hint
   const hint = '  ↓ Enter to view  ';

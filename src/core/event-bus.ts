@@ -20,6 +20,7 @@ export interface EventMap {
   'subagent:complete': { id: string; result: import('../acp/protocol.ts').SubagentResult };
   'subagent:error': { id: string; error: Error };
   'subagent:stream-delta': { id: string; content: string; accumulated: string };
+  'subagent:progress': { id: string; progress: string };
 
   // WRFC chain events
   'wrfc:chain-created': { chainId: string; task: string };

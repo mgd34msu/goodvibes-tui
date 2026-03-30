@@ -453,34 +453,48 @@ export const agentTool: Tool = {
           return { success: false, error: `Unknown agent: '${input.agentId}'` };
         }
 
-        // Poll until agent reaches a terminal state or timeout elapses.
-        const timeoutMs = typeof input.timeoutMs === 'number' ? input.timeoutMs : 30000;
+        // Non-blocking: return current status immediately if already in a terminal state.
+        // For short polls (timeoutMs > 0), wait at most that duration — capped at 5000ms
+        // to prevent blocking the main conversation loop.
         const terminalStatuses = new Set(['completed', 'failed', 'cancelled']);
-        const start = Date.now();
-        const pollIntervalMs = 50;
 
-        while (!terminalStatuses.has(manager.getStatus(input.agentId)?.status ?? '')) {
-          if (Date.now() - start >= timeoutMs) {
+        if (terminalStatuses.has(record.status)) {
+          return {
+            success: true,
+            output: JSON.stringify({
+              agentId: input.agentId,
+              status: record.status,
+              timedOut: false,
+            }),
+          };
+        }
+
+        // If a timeoutMs is requested, poll briefly — capped at 5000ms to avoid
+        // blocking the main turn loop (sub-agents use small timeouts anyway).
+        const requestedTimeout = typeof input.timeoutMs === 'number' ? input.timeoutMs : 0;
+        const MAX_BLOCKING_MS = 5_000;
+        const timeoutMs = Math.min(requestedTimeout, MAX_BLOCKING_MS);
+
+        if (timeoutMs > 0) {
+          const start = Date.now();
+          const pollIntervalMs = 50;
+          while (true) {
             const current = manager.getStatus(input.agentId);
-            return {
-              success: true,
-              output: JSON.stringify({
-                agentId: input.agentId,
-                status: current?.status ?? 'unknown',
-                timedOut: true,
-              }),
-            };
+            if (!current || terminalStatuses.has(current.status)) break;
+            if (Date.now() - start >= timeoutMs) break;
+            await new Promise<void>(resolve => setTimeout(resolve, pollIntervalMs));
           }
-          await new Promise(resolve => setTimeout(resolve, pollIntervalMs));
         }
 
         const finalRecord = manager.getStatus(input.agentId);
+        const finalStatus = finalRecord?.status ?? 'unknown';
         return {
           success: true,
           output: JSON.stringify({
             agentId: input.agentId,
-            status: finalRecord?.status ?? 'unknown',
-            timedOut: false,
+            status: finalStatus,
+            timedOut: !terminalStatuses.has(finalStatus),
+            hint: terminalStatuses.has(finalStatus) ? undefined : 'Agent still running. Use mode=status to poll again.',
           }),
         };
       }

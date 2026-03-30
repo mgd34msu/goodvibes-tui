@@ -15,7 +15,7 @@ export const AGENT_TOOL_SCHEMA: ToolDefinition = {
     'get (detailed agent info including messages), ' +
     'budget (token usage for an agent), ' +
     'plan (execution plan: task + template + tools), ' +
-    'wait (returns current status — non-blocking), ' +
+    'wait (returns current status immediately if terminal, or polls up to timeoutMs capped at 5000ms; always non-blocking for the main conversation), ' +
     'message (send a message to an agent), ' +
     'wrfc-chains (list all WRFC chains in current session with status/scores), ' +
     'wrfc-history (detailed event history for a specific WRFC chain — reviews, scores, issues, gates), ' +
@@ -98,7 +98,7 @@ export const AGENT_TOOL_SCHEMA: ToolDefinition = {
       // mode: wait
       timeoutMs: {
         type: 'number',
-        description: 'Timeout in milliseconds for the wait action (mode: wait). Default: 30000.',
+        description: 'Timeout in milliseconds for the wait action (mode: wait). Default: 0 (non-blocking, returns immediately). Max: 5000ms. If agent is still running, returns current status with a hint to poll again via mode=status.',
       },
       // mode: message
       message: {

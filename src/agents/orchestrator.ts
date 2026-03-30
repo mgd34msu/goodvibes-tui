@@ -54,7 +54,33 @@ const NETWORK_RETRY_DELAYS_MS = [5_000, 10_000, 20_000, 40_000, 60_000];
 const RATE_LIMIT_RETRY_DELAY_MS = 60_000;
 const RATE_LIMIT_MAX_RETRIES = 3;
 
-/** @deprecated This function is superseded by isRateLimitOrQuotaError in types/errors.ts which has broader coverage. Use that instead. */
+// ---------------------------------------------------------------------------
+// Tool args summarizer
+// ---------------------------------------------------------------------------
+
+/**
+ * Summarize tool call arguments into a brief display string for progress labels.
+ * Extracts the most informative single string arg (path, cmd, etc.) and
+ * truncates to 30 characters.
+ */
+export function summarizeToolArgs(args: Record<string, unknown>): string {
+  // Extract the most informative single arg
+  for (const key of ['path', 'file', 'cmd', 'pattern', 'url', 'query']) {
+    const val = args[key];
+    if (typeof val === 'string' && val.length > 0) {
+      const trimmed = val.length > 30 ? val.slice(0, 27) + '\u2026' : val;
+      return ` \u2014 ${trimmed}`;
+    }
+  }
+  // Fallback: first string value found
+  for (const val of Object.values(args)) {
+    if (typeof val === 'string' && val.length > 0) {
+      const trimmed = val.length > 30 ? val.slice(0, 27) + '\u2026' : val;
+      return ` \u2014 ${trimmed}`;
+    }
+  }
+  return '';
+}
 
 // ---------------------------------------------------------------------------
 // AgentOrchestrator
@@ -159,7 +185,7 @@ export class AgentOrchestrator {
       // --- Turn loop ---
       let continueLoop = true;
       let turn = 0;
-      record.progress = 'Thinking…';
+      record.progress = 'Turn 1 · Thinking…';
 
       // --- Loop detection ---
       const callHistory: string[] = [];
@@ -289,7 +315,7 @@ export class AgentOrchestrator {
             }
           }
           record.streamingContent = undefined;
-          record.progress = 'Thinking…';
+          record.progress = `Turn ${turn} · Thinking…`;
         }
 
         session.appendMessage({ type: 'llm_response', turn, contentLength: response.content.length, toolCallCount: response.toolCalls.length, usage: response.usage, timestamp: new Date().toISOString() });
@@ -302,8 +328,15 @@ export class AgentOrchestrator {
           for (const originalCall of response.toolCalls) {
             // Create mutable copy — some providers (e.g. ollama-cloud/kimi) freeze response objects
             const call = { ...originalCall, arguments: { ...originalCall.arguments } };
-            record.progress = `Executing tool: ${call.name}`;
+            // Build a brief args summary for the progress label
+            const argsSummary = summarizeToolArgs(call.arguments as Record<string, unknown>);
+            record.progress = `Turn ${turn} · ${call.name}${argsSummary}`;
             record.toolCallCount++;
+            if (this.eventBus) {
+              try {
+                this.eventBus.emit('subagent:progress', { id: record.id, progress: record.progress });
+              } catch (e) { logger.debug('subagent:progress emit failed', { error: String(e) }); }
+            }
 
             // Sanitize exec args for agent context: force inline execution, 10-min TTL
             if (call.name === 'exec' || call.name === 'precision_exec') {
@@ -372,7 +405,7 @@ export class AgentOrchestrator {
               `You have already executed this exact call (${worstTool}) ${worstCount} times with identical arguments. The results from your previous calls are already in your conversation history. Review them and proceed to the next step.`,
             );
           }
-          record.progress = 'Thinking…';
+          record.progress = `Turn ${turn} · Thinking…`;
         } else {
           // Final response — no more tool calls
           conversation.addAssistantMessage(response.content, { usage: response.usage });
