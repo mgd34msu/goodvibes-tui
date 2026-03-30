@@ -3,7 +3,7 @@ import { UIFactory } from './ui-factory.ts';
 import { getDisplayWidth } from '../utils/terminal-width.ts';
 import type { ModelPickerModal } from '../input/model-picker.ts';
 import { EFFORT_DESCRIPTIONS } from '../providers/effort-levels.ts';
-import { getBenchmarks, getQualityTier, S_TIER_THRESHOLD, A_TIER_THRESHOLD, B_TIER_THRESHOLD } from '../providers/model-benchmarks.ts';
+import { getBenchmarks, getQualityTier, getQualityTierFromScore } from '../providers/model-benchmarks.ts';
 import { getSyntheticModelInfoFromCatalog } from '../providers/model-catalog.ts';
 
 /** Format a context window number into a short human-readable string. */
@@ -136,8 +136,7 @@ export function renderModelPickerOverlay(
         let tier: string | null = null;
         if (model.provider === 'synthetic') {
           if (synthInfo?.bestCompositeScore != null) {
-            const s = synthInfo.bestCompositeScore;
-            tier = s >= S_TIER_THRESHOLD ? 'S' : s >= A_TIER_THRESHOLD ? 'A' : s >= B_TIER_THRESHOLD ? 'B' : 'C';
+            tier = getQualityTierFromScore(synthInfo.bestCompositeScore);
           }
         } else {
           const bData = getBenchmarks(model.id) ?? getBenchmarks(model.displayName);
