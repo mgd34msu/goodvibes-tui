@@ -1,6 +1,6 @@
 import type { ModelDefinition } from '../providers/registry.ts';
 import { EFFORT_DESCRIPTIONS } from '../providers/effort-levels.ts';
-import { getBenchmarks, getQualityTier, compositeScore, A_TIER_THRESHOLD } from '../providers/model-benchmarks.ts';
+import { getBenchmarks, getQualityTier, compositeScore, A_TIER_THRESHOLD, S_TIER_THRESHOLD, B_TIER_THRESHOLD } from '../providers/model-benchmarks.ts';
 import { getSyntheticModelInfoFromCatalog } from '../providers/model-catalog.ts';
 
 export type PickerMode = 'model' | 'provider' | 'effort';
@@ -360,19 +360,35 @@ export class ModelPickerModal {
     // Benchmark sort
     if (this.benchmarkSort !== 'none') {
       result = [...result].sort((a, b) => {
-        const bA = getBenchmarks(a.id) ?? getBenchmarks(a.displayName);
-        const bB = getBenchmarks(b.id) ?? getBenchmarks(b.displayName);
         let scoreA: number | null = null;
         let scoreB: number | null = null;
+
+        // For synthetic models, use pre-computed bestCompositeScore from backend lookup
+        // (synthetic canonical slugs don't exist in ZeroEval benchmark data)
         if (this.benchmarkSort === 'composite') {
-          scoreA = bA ? compositeScore(bA.benchmarks) : null;
-          scoreB = bB ? compositeScore(bB.benchmarks) : null;
-        } else if (this.benchmarkSort === 'swe') {
-          scoreA = bA?.benchmarks.swe ?? null;
-          scoreB = bB?.benchmarks.swe ?? null;
-        } else if (this.benchmarkSort === 'gpqa') {
-          scoreA = bA?.benchmarks.gpqa ?? null;
-          scoreB = bB?.benchmarks.gpqa ?? null;
+          if (a.provider === 'synthetic') {
+            scoreA = getSyntheticModelInfoFromCatalog(a.id)?.bestCompositeScore ?? null;
+          } else {
+            const bA = getBenchmarks(a.id) ?? getBenchmarks(a.displayName);
+            scoreA = bA ? compositeScore(bA.benchmarks) : null;
+          }
+          if (b.provider === 'synthetic') {
+            scoreB = getSyntheticModelInfoFromCatalog(b.id)?.bestCompositeScore ?? null;
+          } else {
+            const bB = getBenchmarks(b.id) ?? getBenchmarks(b.displayName);
+            scoreB = bB ? compositeScore(bB.benchmarks) : null;
+          }
+        } else {
+          // swe/gpqa sort — use getBenchmarks directly (individual scores not cached on synthetic)
+          const bA = a.provider === 'synthetic' ? null : (getBenchmarks(a.id) ?? getBenchmarks(a.displayName));
+          const bB = b.provider === 'synthetic' ? null : (getBenchmarks(b.id) ?? getBenchmarks(b.displayName));
+          if (this.benchmarkSort === 'swe') {
+            scoreA = bA?.benchmarks.swe ?? null;
+            scoreB = bB?.benchmarks.swe ?? null;
+          } else if (this.benchmarkSort === 'gpqa') {
+            scoreA = bA?.benchmarks.gpqa ?? null;
+            scoreB = bB?.benchmarks.gpqa ?? null;
+          }
         }
         // Models with no score sink to the end
         if (scoreA == null && scoreB == null) return 0;
@@ -515,8 +531,19 @@ export class ModelPickerModal {
 
   /** Build a PickerItem for a model, including quality tier and pin status. */
   private _modelToItem(model: ModelDefinition, isPinned: boolean): PickerItem {
-    const b = getBenchmarks(model.id) ?? getBenchmarks(model.displayName);
-    const qualityTier = b ? getQualityTier(b.benchmarks) : undefined;
+    // For synthetic models, derive quality tier from cached bestCompositeScore
+    // (synthetic canonical slugs don't exist in ZeroEval benchmark data)
+    let qualityTier: string | undefined;
+    if (model.provider === 'synthetic') {
+      const synthInfo = getSyntheticModelInfoFromCatalog(model.id);
+      if (synthInfo?.bestCompositeScore != null) {
+        const s = synthInfo.bestCompositeScore;
+        qualityTier = s >= S_TIER_THRESHOLD ? 'S' : s >= A_TIER_THRESHOLD ? 'A' : s >= B_TIER_THRESHOLD ? 'B' : 'C';
+      }
+    } else {
+      const b = getBenchmarks(model.id) ?? getBenchmarks(model.displayName);
+      qualityTier = b ? getQualityTier(b.benchmarks) : undefined;
+    }
     const isFree = tierToCategoryFilter(model.tier) === 'free';
 
     // For synthetic models, append provider count info if available
