@@ -4,6 +4,7 @@ import { ToolRegistry } from '../tools/registry.ts';
 import { providerRegistry } from '../providers/registry.ts';
 import { registerAllTools } from '../tools/index.ts';
 import { logger } from '../utils/logger.ts';
+import { ConsecutiveErrorBreaker } from '../core/circuit-breaker.ts';
 import { isRateLimitOrQuotaError } from '../types/errors.ts';
 import { FileStateCache } from '../state/file-cache.ts';
 import { ProjectIndex } from '../state/project-index.ts';
@@ -193,6 +194,9 @@ export class AgentOrchestrator {
       const LOOP_USER_THRESHOLD = 5;
       const CALL_HISTORY_WINDOW = 20;
 
+      // --- Consecutive error circuit breaker ---
+      const circuitBreaker = new ConsecutiveErrorBreaker();
+
       while (continueLoop) {
         if ((record as { status: string }).status === 'cancelled') {
           record.completedAt = Date.now();
@@ -374,6 +378,35 @@ export class AgentOrchestrator {
 
           conversation.addToolResults(results);
 
+          // --- Consecutive error circuit breaker ---
+          const allFailed = results.length > 0 && results.every(r => r.success === false);
+          if (allFailed) {
+            const cbResult = circuitBreaker.recordAllFailed();
+            logger.warn(`Agent ${record.id}: consecutive all-error turn ${circuitBreaker.consecutiveErrors}`);
+            if (cbResult === 'break') {
+              // Use addSystemMessage for consistency with core orchestrator
+              // (system messages are preferable to user messages for internal control signals)
+              conversation.addSystemMessage(
+                `CIRCUIT BREAKER: You have made ${circuitBreaker.consecutiveErrors} consecutive turns where ALL tool calls failed. ` +
+                `The agent loop is stopping to prevent an infinite failure cycle. ` +
+                `Report what you were trying to do and what errors you encountered.`
+              );
+              record.status = 'failed';
+              record.error = `Circuit breaker tripped after ${circuitBreaker.consecutiveErrors} consecutive all-error turns`;
+              record.completedAt = Date.now();
+              continueLoop = false;
+            } else if (cbResult === 'warn') {
+              conversation.addSystemMessage(
+                `You have made ${circuitBreaker.consecutiveErrors} consecutive tool calls that ALL failed. ` +
+                `Stop attempting the same approach. Describe what you're trying to do and what's going wrong, ` +
+                `then try a completely different strategy.`
+              );
+            }
+          } else if (results.length > 0) {
+            // At least one success — reset the counter
+            circuitBreaker.recordSuccess();
+          }
+
           // --- Loop detection: nudge if any signature repeats ---
           const sigCounts = new Map<string, { count: number; toolName: string }>();
           for (const sig of callHistory) {
@@ -415,7 +448,10 @@ export class AgentOrchestrator {
         }
       }
 
-      record.status = 'completed';
+      // Don't overwrite 'failed' status set by circuit breaker or other in-loop failures
+      if (record.status !== 'failed') {
+        record.status = 'completed';
+      }
       record.completedAt = Date.now();
       // Kill any background processes leaked by this agent
       const pm = ProcessManager.getInstance();
@@ -424,8 +460,8 @@ export class AgentOrchestrator {
           pm.stop(p.id);
         }
       }
-      // Emit completion event for WrfcController
-      if (this.eventBus) {
+      // Emit completion event for WrfcController (only if truly completed, not circuit-broken)
+      if (this.eventBus && record.status !== 'failed') {
         this.eventBus.emit('subagent:complete', {
           id: record.id,
           result: {
@@ -437,8 +473,20 @@ export class AgentOrchestrator {
           },
         });
       }
-      logger.info(`Agent ${record.id} completed`, { toolCallCount: record.toolCallCount });
-      session.appendMessage({ type: 'session_end', status: 'completed', toolCallCount: record.toolCallCount, durationMs: Date.now() - record.startedAt, timestamp: new Date().toISOString() });
+      if (record.status === 'failed') {
+        // Circuit breaker tripped — emit error event and log
+        if (this.eventBus) {
+          this.eventBus.emit('subagent:error', {
+            id: record.id,
+            error: new Error(record.error ?? 'Circuit breaker tripped'),
+          });
+        }
+        logger.error(`Agent ${record.id} circuit-breaker terminated`, { error: record.error, toolCallCount: record.toolCallCount });
+        session.appendMessage({ type: 'session_end', status: 'failed', error: record.error, toolCallCount: record.toolCallCount, durationMs: Date.now() - record.startedAt, timestamp: new Date().toISOString() });
+      } else {
+        logger.info(`Agent ${record.id} completed`, { toolCallCount: record.toolCallCount });
+        session.appendMessage({ type: 'session_end', status: 'completed', toolCallCount: record.toolCallCount, durationMs: Date.now() - record.startedAt, timestamp: new Date().toISOString() });
+      }
       try { await session.dispose(); } catch { /* non-fatal */ }
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
