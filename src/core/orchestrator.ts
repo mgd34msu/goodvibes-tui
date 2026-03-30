@@ -486,9 +486,10 @@ export class Orchestrator {
 
           // If agents were spawned, end the turn — agents run in background, WRFC handles quality.
           // Also end if user typed something during tool execution.
-          const spawnedAgents = response.toolCalls.some((tc: ToolCall) =>
-            tc.name === 'agent' && (tc.arguments as Record<string, unknown>).mode === 'spawn'
-          );
+          const spawnedAgents = response.toolCalls.some((tc: ToolCall) => {
+            const mode = (tc.arguments as Record<string, unknown>).mode;
+            return tc.name === 'agent' && (mode === 'spawn' || mode === 'batch-spawn');
+          });
           if (spawnedAgents || this.messageQueue.length > 0) {
             // Harness-driven auto-spawn: if the plan has pending items with met dependencies,
             // spawn agents for them directly — don't wait for the model to do it.
