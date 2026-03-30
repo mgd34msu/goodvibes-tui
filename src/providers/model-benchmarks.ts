@@ -55,16 +55,22 @@ interface ZeroEvalModel {
   organization?: string;
   org?: string;
   // Benchmark score fields — ZeroEval may use various key names
+  gpqa_score?: number | null;
   gpqa?: number | null;
   gpqa_diamond?: number | null;
+  swe_bench_verified_score?: number | null;
   swe_bench?: number | null;
   swe?: number | null;
+  aime_2025_score?: number | null;
   aime?: number | null;
   aime_2024?: number | null;
+  terminal_bench_score?: number | null;
   terminal_bench?: number | null;
   terminal?: number | null;
+  toolathlon_score?: number | null;
   tool_use?: number | null;
   tool?: number | null;
+  mcp_atlas_score?: number | null;
   mcp_bench?: number | null;
   mcp?: number | null;
   // Scores may also be nested
@@ -73,6 +79,9 @@ interface ZeroEvalModel {
   average?: number | null;
 }
 
+// Defensive fallback for potential API wrapper formats — the actual ZeroEval API returns a raw
+// array, but this interface handles any envelope shapes that might appear in future API versions
+// or staging environments.
 interface ZeroEvalResponse {
   models?: ZeroEvalModel[];
   data?: ZeroEvalModel[];
@@ -138,12 +147,12 @@ function extractBenchmarks(model: ZeroEvalModel): ModelBenchmarks {
   const s = model.scores ?? {};
 
   const raw = {
-    gpqa: pickFirst(model.gpqa_diamond, model.gpqa, s['gpqa_diamond'], s['gpqa']),
-    swe: pickFirst(model.swe_bench, model.swe, s['swe_bench'], s['swe']),
-    aime: pickFirst(model.aime_2024, model.aime, s['aime_2024'], s['aime']),
-    terminal: pickFirst(model.terminal_bench, model.terminal, s['terminal_bench'], s['terminal']),
-    tool: pickFirst(model.tool_use, model.tool, s['tool_use'], s['tool']),
-    mcp: pickFirst(model.mcp_bench, model.mcp, s['mcp_bench'], s['mcp']),
+    gpqa: pickFirst(model.gpqa_score, model.gpqa_diamond, model.gpqa, s['gpqa_score'], s['gpqa_diamond'], s['gpqa']),
+    swe: pickFirst(model.swe_bench_verified_score, model.swe_bench, model.swe, s['swe_bench_verified_score'], s['swe_bench'], s['swe']),
+    aime: pickFirst(model.aime_2025_score, model.aime_2024, model.aime, s['aime_2025_score'], s['aime_2024'], s['aime']),
+    terminal: pickFirst(model.terminal_bench_score, model.terminal_bench, model.terminal, s['terminal_bench_score'], s['terminal_bench'], s['terminal']),
+    tool: pickFirst(model.toolathlon_score, model.tool_use, model.tool, s['toolathlon_score'], s['tool_use'], s['tool']),
+    mcp: pickFirst(model.mcp_atlas_score, model.mcp_bench, model.mcp, s['mcp_atlas_score'], s['mcp_bench'], s['mcp']),
   };
 
   const benchmarks: ModelBenchmarks = {};
@@ -158,11 +167,16 @@ function extractBenchmarks(model: ZeroEvalModel): ModelBenchmarks {
 }
 
 function parseEntries(json: unknown): BenchmarkEntry[] {
-  const resp = json as ZeroEvalResponse;
-  const raw: ZeroEvalModel[] = resp.models ?? resp.data ?? resp.leaderboard ?? [];
+  let raw: ZeroEvalModel[];
+  if (Array.isArray(json)) {
+    raw = json as ZeroEvalModel[];
+  } else {
+    const resp = json as ZeroEvalResponse;
+    raw = resp.models ?? resp.data ?? resp.leaderboard ?? [];
+  }
 
   if (!Array.isArray(raw)) {
-    logger.warn('[model-benchmarks] Unexpected ZeroEval response shape', { keys: Object.keys(resp) });
+    logger.warn('[model-benchmarks] Unexpected ZeroEval response shape', { keys: Object.keys(json as object) });
     return [];
   }
 
@@ -329,28 +343,11 @@ export function getBenchmarks(modelName: string): BenchmarkEntry | undefined {
   const lowerEntry = idx.get(lower);
   if (lowerEntry) return lowerEntry;
 
-  // 3. Substring match — prefer shortest name/modelId to avoid 'gpt-4' matching 'gpt-4o'
-  let bestEntry: BenchmarkEntry | undefined;
-  let bestLen = Infinity;
-  for (const e of entries) {
-    const nameLow = e.name.toLowerCase();
-    const idLow = e.modelId.toLowerCase();
-    if (nameLow.includes(lower) || idLow.includes(lower)) {
-      const len = Math.min(
-        nameLow.includes(lower) ? e.name.length : Infinity,
-        idLow.includes(lower) ? e.modelId.length : Infinity,
-      );
-      if (len < bestLen) {
-        bestLen = len;
-        bestEntry = e;
-      }
-    }
-  }
-  if (bestEntry) return bestEntry;
-
-  // 4. Slug-normalized match — strips all non-alphanumeric chars before comparing.
+  // 3. Slug-normalized match — strips all non-alphanumeric chars before comparing.
   //    Allows synthetic canonical slugs (e.g. 'gpt4o') to match benchmark entries
   //    with dashes/spaces in their names (e.g. 'GPT-4o', 'gpt-4o').
+  //    Placed before substring match because slug matching is more precise and avoids
+  //    ambiguous substring hits (e.g. 'gpt5' substring-matching a wrong entry).
   //    Tries exact slug match first, then falls back to slug-prefix match to handle
   //    canonical slugs that are prefixes of benchmark entry slugs (e.g. 'gpt5' matches 'gpt5o').
   const slug = lower.replace(/[^a-z0-9]/g, '');
@@ -389,6 +386,25 @@ export function getBenchmarks(modelName: string): BenchmarkEntry | undefined {
     if (slugBest) return slugBest;
     if (slugPrefixBest) return slugPrefixBest;
   }
+
+  // 4. Substring match — prefer shortest name/modelId to avoid 'gpt-4' matching 'gpt-4o'
+  let bestEntry: BenchmarkEntry | undefined;
+  let bestLen = Infinity;
+  for (const e of entries) {
+    const nameLow = e.name.toLowerCase();
+    const idLow = e.modelId.toLowerCase();
+    if (nameLow.includes(lower) || idLow.includes(lower)) {
+      const len = Math.min(
+        nameLow.includes(lower) ? e.name.length : Infinity,
+        idLow.includes(lower) ? e.modelId.length : Infinity,
+      );
+      if (len < bestLen) {
+        bestLen = len;
+        bestEntry = e;
+      }
+    }
+  }
+  if (bestEntry) return bestEntry;
 
   return undefined;
 }

@@ -24,7 +24,7 @@ import { getContextWindowForModel, getPricingForModel } from './model-limits.ts'
 import { providerRegistry } from './registry.ts';
 import type { FavoritesData } from './favorites.ts';
 import { loadFavorites } from './favorites.ts';
-import { getTopBenchmarkModelIds } from './model-benchmarks.ts';
+import { getTopBenchmarkModelIds, getBenchmarks, compositeScore } from './model-benchmarks.ts';
 
 // ---------------------------------------------------------------------------
 // Provider types
@@ -1185,12 +1185,32 @@ export interface MinimalModelDefinition {
  * @returns backendCount, keyedBackendCount, and tier for the given modelId,
  *          or null if the model is not a known synthetic canonical.
  */
+export interface SyntheticModelInfo {
+  backendCount: number;
+  keyedBackendCount: number;
+  tier: string;
+  bestCompositeScore: number | null;
+}
+
 export function getSyntheticModelInfoFromCatalog(
   modelId: string,
-): { backendCount: number; keyedBackendCount: number; tier: string } | null {
+): SyntheticModelInfo | null {
   const c = _syntheticCanonicals.find(m => m.id === modelId);
   if (!c) return null;
-  return { backendCount: c.backendCount, keyedBackendCount: c.keyedBackendCount, tier: c.tier };
+
+  // Compute best composite score across all backend model IDs (the real IDs that exist in ZeroEval)
+  let bestCompositeScore: number | null = null;
+  for (const b of c.backends) {
+    const bench = getBenchmarks(b.modelId);
+    if (bench) {
+      const score = compositeScore(bench.benchmarks);
+      if (score !== null && (bestCompositeScore === null || score > bestCompositeScore)) {
+        bestCompositeScore = score;
+      }
+    }
+  }
+
+  return { backendCount: c.backendCount, keyedBackendCount: c.keyedBackendCount, tier: c.tier, bestCompositeScore };
 }
 
 export function getSyntheticBackendModelIds(): Set<string> {

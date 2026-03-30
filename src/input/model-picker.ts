@@ -442,9 +442,8 @@ export class ModelPickerModal {
    * 'all': no benchmark data or score < 0.65
    */
   private _getSyntheticSubgroup(model: ModelDefinition): 'top' | 'all' {
-    const b = getBenchmarks(model.id) ?? getBenchmarks(model.displayName);
-    if (!b) return 'all';
-    const score = compositeScore(b.benchmarks);
+    const info = getSyntheticModelInfoFromCatalog(model.id);
+    const score = info?.bestCompositeScore ?? null;
     return score !== null && score >= A_TIER_THRESHOLD ? 'top' : 'all';
   }
 
