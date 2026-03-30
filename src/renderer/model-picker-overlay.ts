@@ -129,10 +129,12 @@ export function renderModelPickerOverlay(
         const isSelected = absIdx === picker.selectedIndex;
         const indicator = isSelected ? '\u25b6 ' : '  ';
 
+        // Pre-compute synthetic info once per model (avoid 3 separate lookups per frame)
+        const synthInfo = model.provider === 'synthetic' ? getSyntheticModelInfoFromCatalog(model.id) : null;
+
         // Quality tier badge: [S] / [A] / [B] / [C]
         let tier: string | null = null;
         if (model.provider === 'synthetic') {
-          const synthInfo = getSyntheticModelInfoFromCatalog(model.id);
           if (synthInfo?.bestCompositeScore != null) {
             const s = synthInfo.bestCompositeScore;
             tier = s >= S_TIER_THRESHOLD ? 'S' : s >= A_TIER_THRESHOLD ? 'A' : s >= B_TIER_THRESHOLD ? 'B' : 'C';
@@ -148,12 +150,9 @@ export function renderModelPickerOverlay(
         const freeBadge = model.tier === 'free' ? '\u25c6' : ' ';
         // Provider count for synthetic models
         let providerCountStr = '     '; // 5 chars wide (fixed)
-        if (model.provider === 'synthetic') {
-          const synthInfo = getSyntheticModelInfoFromCatalog(model.id);
-          if (synthInfo) {
-            const countLabel = `(${synthInfo.keyedBackendCount}p)`;
-            providerCountStr = countLabel.padEnd(5);
-          }
+        if (synthInfo) {
+          const countLabel = `(${synthInfo.keyedBackendCount}p)`;
+          providerCountStr = countLabel.padEnd(5);
         }
 
         // Layout: indicator(2) + pin(2) + id(maxIdLen) + gap(2) + name(remaining) + provCount(5) + free(1) + tier(3)
