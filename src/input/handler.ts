@@ -1494,6 +1494,10 @@ export class InputHandler {
           // Only autocomplete while still typing the command name (no space yet)
           if (spaceIdx === -1) {
             this.autocomplete?.update(query);
+          } else {
+            // Space typed after command name — close the autocomplete modal.
+            // The command name is complete; space acts as delimiter.
+            this.autocomplete?.reset();
           }
           this.bus.emit('command:autocomplete', { query });
         }
@@ -1806,7 +1810,17 @@ export class InputHandler {
         if (token.logicalName === 'backspace') {
           if (this.cursorPos > 0) {
             this.saveUndoState();
-            const marker = this.findMarkerAtPos(this.cursorPos);
+            // Check for marker at cursor (cursor inside/after marker)
+            let marker = this.findMarkerAtPos(this.cursorPos);
+            // Also handle cursor positioned exactly at marker start (e.g., after left-arrow jump):
+            // findMarkerAtPos uses pos > start, so it misses pos === start.
+            // Check forward to catch that case.
+            if (!marker) {
+              const ahead = this.findMarkerAtPos(this.cursorPos + 1);
+              if (ahead && ahead.start === this.cursorPos) {
+                marker = ahead;
+              }
+            }
             if (marker) {
               // Delete entire atomic marker and clean up registry
               const markerText = this.prompt.slice(marker.start, marker.end);
@@ -1833,6 +1847,8 @@ export class InputHandler {
             }
             this.ensureInputCursorVisible(this.contentWidth);
           }
+          this.bus.emit('render:request');
+          continue;
         } else if (token.logicalName === 'left') {
           if (this.cursorPos > 0) {
             const marker = this.findMarkerAtPos(this.cursorPos);

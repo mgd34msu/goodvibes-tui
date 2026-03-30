@@ -188,6 +188,37 @@ describe('Paste + Navigate + Delete/Backspace', () => {
     expect(ih.cursorPos).toBe(8);
   });
 
+  test('backspace at marker start removes entire marker', () => {
+    const ih = makeInput(CW);
+    // Type some text before the marker
+    insertText(ih, 'before ');
+    // Register a multi-line paste with >8 lines (creates a TEXT marker)
+    const marker = ih.registerPaste('line 1\nline 2\nline 3\nline 4\nline 5\nline 6\nline 7\nline 8\nline 9');
+    // Insert the marker text into the prompt at cursor
+    ih.prompt = ih.prompt.slice(0, ih.cursorPos) + marker + ih.prompt.slice(ih.cursorPos);
+    ih.cursorPos += marker.length;
+    insertText(ih, ' after');
+
+    const promptWithMarker = ih.prompt;
+    const markerStart = promptWithMarker.indexOf('[TEXT:');
+    expect(markerStart).toBeGreaterThanOrEqual(0);
+
+    // Position cursor exactly at the START of the marker (simulates left-arrow jump)
+    ih.cursorPos = markerStart;
+
+    // Feed backspace — handler should detect marker.start === cursorPos and delete entire marker
+    ih.feed('\x7f');
+
+    // The entire marker should be gone, not just one character
+    expect(ih.prompt).not.toContain('[TEXT:');
+    // The surrounding text should remain intact
+    expect(ih.prompt).toContain('before');
+    expect(ih.prompt).toContain('after');
+    // Prompt should be shorter by the full marker length, not just 1 char
+    const markerLen = marker.length;
+    expect(ih.prompt.length).toBe(promptWithMarker.length - markerLen);
+  });
+
   test('cursor position survives full edit cycle', () => {
     const ih = makeInput(35);
 

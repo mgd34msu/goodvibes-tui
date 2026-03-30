@@ -2,6 +2,8 @@ import { describe, test, expect, beforeEach } from 'bun:test';
 import { InputHandler } from '../../input/handler.ts';
 import { EventBus } from '../../core/event-bus.ts';
 import { SelectionManager } from '../../input/selection.ts';
+import { CommandRegistry } from '../../input/command-registry.ts';
+import { AutocompleteEngine } from '../../input/autocomplete.ts';
 
 function makeInput(): InputHandler {
   const bus = new EventBus();
@@ -272,5 +274,57 @@ describe('handlePathCompletion', () => {
     const stack = getUndoStack(ih);
     expect(stack.length).toBeGreaterThanOrEqual(1);
     expect(stack[stack.length - 1].prompt).toBe(beforePrompt);
+  });
+});
+
+// ── autocomplete reset on space ─────────────────────────────────────────────
+
+describe('autocomplete reset on space in command mode', () => {
+  test('typing space after /plan hides autocomplete', () => {
+    const ih = makeInput();
+    // Wire up a minimal CommandRegistry + AutocompleteEngine
+    const registry = new CommandRegistry();
+    registry.register({ name: 'plan', description: 'Run plan', handler: () => {} });
+    (ih as any).commandRegistry = registry;
+    (ih as any).autocomplete = new AutocompleteEngine(registry);
+
+    // Simulate having typed '/plan' — autocomplete is active
+    ih.commandMode = true;
+    ih.prompt = '/plan';
+    ih.cursorPos = 5;
+    // Manually update autocomplete so it has results
+    (ih as any).autocomplete.update('plan');
+    expect((ih as any).autocomplete.isActive).toBe(true);
+
+    // Feed a space character — should reset autocomplete
+    ih.feed(' ');
+
+    // Autocomplete should no longer be active after space
+    expect((ih as any).autocomplete.isActive).toBe(false);
+    // commandMode stays true (space doesn't exit command mode)
+    expect(ih.commandMode).toBe(true);
+    // Prompt should contain the space
+    expect(ih.prompt).toBe('/plan ');
+  });
+
+  test('autocomplete stays active while typing command name without space', () => {
+    const ih = makeInput();
+    const registry = new CommandRegistry();
+    registry.register({ name: 'plan', description: 'Run plan', handler: () => {} });
+    (ih as any).commandRegistry = registry;
+    (ih as any).autocomplete = new AutocompleteEngine(registry);
+
+    // Simulate typing '/pla' — autocomplete should update but stay active
+    ih.commandMode = true;
+    ih.prompt = '/pla';
+    ih.cursorPos = 4;
+    (ih as any).autocomplete.update('pla');
+    expect((ih as any).autocomplete.isActive).toBe(true);
+
+    // Feed 'n' — no space, autocomplete should remain active
+    ih.feed('n');
+
+    // Autocomplete should still be active (no space typed)
+    expect((ih as any).autocomplete.isActive).toBe(true);
   });
 });
