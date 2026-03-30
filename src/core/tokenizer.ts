@@ -59,6 +59,15 @@ export class InputTokenizer {
         if (this.buffer.startsWith('\x1bOQ')) { tokens.push({ type: 'key', name: '\x1bOQ', logicalName: 'f2', ctrl: false, shift: false, meta: false }); this.buffer = this.buffer.slice(3); continue; }
         if (this.buffer.startsWith('\x1bOR')) { tokens.push({ type: 'key', name: '\x1bOR', logicalName: 'f3', ctrl: false, shift: false, meta: false }); this.buffer = this.buffer.slice(3); continue; }
         if (this.buffer.startsWith('\x1bOS')) { tokens.push({ type: 'key', name: '\x1bOS', logicalName: 'f4', ctrl: false, shift: false, meta: false }); this.buffer = this.buffer.slice(3); continue; }
+        // SS3 cursor keys: \x1bOA (up), \x1bOB (down), \x1bOC (right), \x1bOD (left)
+        // Sent by terminals in application cursor mode (e.g. tmux, some VTE terminals)
+        if (this.buffer.startsWith('\x1bOA')) { tokens.push({ type: 'key', name: '\x1bOA', logicalName: 'up',    ctrl: false, shift: false, meta: false }); this.buffer = this.buffer.slice(3); continue; }
+        if (this.buffer.startsWith('\x1bOB')) { tokens.push({ type: 'key', name: '\x1bOB', logicalName: 'down',  ctrl: false, shift: false, meta: false }); this.buffer = this.buffer.slice(3); continue; }
+        if (this.buffer.startsWith('\x1bOC')) { tokens.push({ type: 'key', name: '\x1bOC', logicalName: 'right', ctrl: false, shift: false, meta: false }); this.buffer = this.buffer.slice(3); continue; }
+        if (this.buffer.startsWith('\x1bOD')) { tokens.push({ type: 'key', name: '\x1bOD', logicalName: 'left',  ctrl: false, shift: false, meta: false }); this.buffer = this.buffer.slice(3); continue; }
+        // SS3 home/end: \x1bOH (home), \x1bOF (end)
+        if (this.buffer.startsWith('\x1bOH')) { tokens.push({ type: 'key', name: '\x1bOH', logicalName: 'home', ctrl: false, shift: false, meta: false }); this.buffer = this.buffer.slice(3); continue; }
+        if (this.buffer.startsWith('\x1bOF')) { tokens.push({ type: 'key', name: '\x1bOF', logicalName: 'end',  ctrl: false, shift: false, meta: false }); this.buffer = this.buffer.slice(3); continue; }
 
         const mouseMatch = /^\x1b\[<(\d+);(\d+);(\d+)([Mm])/.exec(this.buffer);
         if (mouseMatch) {
