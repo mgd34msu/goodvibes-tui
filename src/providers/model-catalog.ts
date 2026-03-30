@@ -24,7 +24,7 @@ import { getContextWindowForModel, getPricingForModel } from './model-limits.ts'
 import { providerRegistry } from './registry.ts';
 import type { FavoritesData } from './favorites.ts';
 import { loadFavorites } from './favorites.ts';
-import { getTopBenchmarkModelIds, getBenchmarks, compositeScore } from './model-benchmarks.ts';
+import { getTopBenchmarkModelIds, getBenchmarks, compositeScore, onBenchmarksRefreshed } from './model-benchmarks.ts';
 
 // ---------------------------------------------------------------------------
 // Provider types
@@ -1192,22 +1192,43 @@ export interface SyntheticModelInfo {
   bestCompositeScore: number | null;
 }
 
+// Module-level cache for bestCompositeScore per synthetic canonical model ID.
+// Computed lazily on first access, cleared when benchmarks are refreshed.
+let _benchmarkScoreCache = new Map<string, number | null>();
+
+/** Clear the synthetic benchmark score cache. Called automatically after benchmarks are refreshed. */
+export function clearSyntheticBenchmarkCache(): void {
+  _benchmarkScoreCache = new Map();
+}
+
+// Register the cache-clearing callback with model-benchmarks (avoids circular import).
+onBenchmarksRefreshed(clearSyntheticBenchmarkCache);
+
 export function getSyntheticModelInfoFromCatalog(
   modelId: string,
 ): SyntheticModelInfo | null {
   const c = _syntheticCanonicals.find(m => m.id === modelId);
   if (!c) return null;
 
-  // Compute best composite score across all backend model IDs (the real IDs that exist in ZeroEval)
-  let bestCompositeScore: number | null = null;
-  for (const b of c.backends) {
-    const bench = getBenchmarks(b.modelId);
-    if (bench) {
-      const score = compositeScore(bench.benchmarks);
-      if (score !== null && (bestCompositeScore === null || score > bestCompositeScore)) {
-        bestCompositeScore = score;
+  // Compute best composite score across all backend model IDs (the real IDs that exist in ZeroEval).
+  // Cache the result to avoid re-iterating 95+ backends on every render frame.
+  let bestCompositeScore: number | null;
+  if (_benchmarkScoreCache.has(modelId)) {
+    // Map.get() returns T | undefined; the has() check above guarantees the key exists,
+    // so `undefined` cannot occur here — cast to the actual stored type.
+    bestCompositeScore = _benchmarkScoreCache.get(modelId) as number | null;
+  } else {
+    bestCompositeScore = null;
+    for (const b of c.backends) {
+      const bench = getBenchmarks(b.modelId);
+      if (bench) {
+        const score = compositeScore(bench.benchmarks);
+        if (score !== null && (bestCompositeScore === null || score > bestCompositeScore)) {
+          bestCompositeScore = score;
+        }
       }
     }
+    _benchmarkScoreCache.set(modelId, bestCompositeScore);
   }
 
   return { backendCount: c.backendCount, keyedBackendCount: c.keyedBackendCount, tier: c.tier, bestCompositeScore };

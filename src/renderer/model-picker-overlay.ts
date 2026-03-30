@@ -3,7 +3,8 @@ import { UIFactory } from './ui-factory.ts';
 import { getDisplayWidth } from '../utils/terminal-width.ts';
 import type { ModelPickerModal } from '../input/model-picker.ts';
 import { EFFORT_DESCRIPTIONS } from '../providers/effort-levels.ts';
-import { getBenchmarks, getQualityTier } from '../providers/model-benchmarks.ts';
+import { getBenchmarks, getQualityTier, S_TIER_THRESHOLD, A_TIER_THRESHOLD, B_TIER_THRESHOLD } from '../providers/model-benchmarks.ts';
+import { getSyntheticModelInfoFromCatalog } from '../providers/model-catalog.ts';
 
 /** Format a context window number into a short human-readable string. */
 function fmtContext(n: number): string {
@@ -129,26 +130,45 @@ export function renderModelPickerOverlay(
         const indicator = isSelected ? '\u25b6 ' : '  ';
 
         // Quality tier badge: [S] / [A] / [B] / [C]
-        const bData = getBenchmarks(model.id) ?? getBenchmarks(model.displayName);
-        const tier = bData ? getQualityTier(bData.benchmarks) : null;
+        let tier: string | null = null;
+        if (model.provider === 'synthetic') {
+          const synthInfo = getSyntheticModelInfoFromCatalog(model.id);
+          if (synthInfo?.bestCompositeScore != null) {
+            const s = synthInfo.bestCompositeScore;
+            tier = s >= S_TIER_THRESHOLD ? 'S' : s >= A_TIER_THRESHOLD ? 'A' : s >= B_TIER_THRESHOLD ? 'B' : 'C';
+          }
+        } else {
+          const bData = getBenchmarks(model.id) ?? getBenchmarks(model.displayName);
+          tier = bData ? getQualityTier(bData.benchmarks) : null;
+        }
         const tierBadge = tier ? `[${tier}]` : '   ';
         // Pin star: ★ if pinned
         const pinStar = picker.pinnedIds.has(model.id) ? '\u2605 ' : '  ';
         // Free badge
         const freeBadge = model.tier === 'free' ? '\u25c6' : ' ';
+        // Provider count for synthetic models
+        let providerCountStr = '     '; // 5 chars wide (fixed)
+        if (model.provider === 'synthetic') {
+          const synthInfo = getSyntheticModelInfoFromCatalog(model.id);
+          if (synthInfo) {
+            const countLabel = `(${synthInfo.keyedBackendCount}p)`;
+            providerCountStr = countLabel.padEnd(5);
+          }
+        }
 
-        // Layout: indicator(2) + pin(2) + id(maxIdLen) + gap(2) + name(remaining) + free(1) + tier(3)
+        // Layout: indicator(2) + pin(2) + id(maxIdLen) + gap(2) + name(remaining) + provCount(5) + free(1) + tier(3)
         const maxIdLen = 20;
+        const provCountW = 5;
         const badgesW = 3 + 1 + 2; // tierBadge(3) + freeBadge(1) + gap(2)
         const idStr = model.id.length > maxIdLen
           ? model.id.slice(0, maxIdLen - 1) + '\u2026'
           : model.id.padEnd(maxIdLen);
-        const remaining = contentW - maxIdLen - 4 - badgesW - 2; // 4 = indicator+pin, 2 = gap before name
+        const remaining = contentW - maxIdLen - 4 - badgesW - 2 - provCountW; // 4 = indicator+pin, 2 = gap before name
         const nameStr = model.displayName.length > Math.max(0, remaining)
           ? model.displayName.slice(0, Math.max(0, remaining) - 1) + '\u2026'
           : model.displayName.padEnd(Math.max(0, remaining));
 
-        const rowText = pad + '\u2502 ' + indicator + pinStar + idStr + '  ' + nameStr + ' ' + freeBadge + tierBadge + ' \u2502';
+        const rowText = pad + '\u2502 ' + indicator + pinStar + idStr + '  ' + nameStr + providerCountStr + ' ' + freeBadge + tierBadge + ' \u2502';
         lines.push(UIFactory.stringToLine(rowText, width, {
           fg: isSelected ? '#00ffff' : '252',
           bold: isSelected,

@@ -124,6 +124,18 @@ let _cache: BenchmarksCache | null = null;
 // Index for fast lookup: lowercase name → entry
 let _nameIndex: Map<string, BenchmarkEntry> | null = null;
 
+// Callbacks invoked after a successful benchmark refresh (e.g. to clear derived caches).
+const _onRefreshCallbacks: Array<() => void> = [];
+
+/**
+ * Register a callback to be called after benchmarks are successfully refreshed.
+ * Used by model-catalog.ts to clear its synthetic benchmark score cache without
+ * creating a circular import.
+ */
+export function onBenchmarksRefreshed(cb: () => void): void {
+  _onRefreshCallbacks.push(cb);
+}
+
 // ---------------------------------------------------------------------------
 // Parse helpers
 // ---------------------------------------------------------------------------
@@ -319,6 +331,8 @@ export async function refreshBenchmarks(): Promise<void> {
   saveCache(newCache);
   _cache = newCache;
   _nameIndex = buildNameIndex(entries);
+  // Notify registered callbacks (e.g. model-catalog clears its synthetic score cache).
+  for (const cb of _onRefreshCallbacks) cb();
 
   logger.debug('[model-benchmarks] Cache updated', { count: entries.length });
 }
@@ -453,8 +467,12 @@ export function compositeScore(b: ModelBenchmarks): number | null {
   return total / weight;
 }
 
-/** Minimum composite score to qualify as A-tier (or higher). Used for 'Top Models' filtering. */
+/** Minimum composite score to qualify as S-tier. */
+export const S_TIER_THRESHOLD = 0.80;
+/** Minimum composite score to qualify as A-tier. Used for 'Top Models' filtering. */
 export const A_TIER_THRESHOLD = 0.65;
+/** Minimum composite score to qualify as B-tier. */
+export const B_TIER_THRESHOLD = 0.50;
 
 /**
  * Determine quality tier based on composite benchmark score.
@@ -463,8 +481,8 @@ export const A_TIER_THRESHOLD = 0.65;
 export function getQualityTier(benchmarks: ModelBenchmarks): QualityTier {
   const score = compositeScore(benchmarks);
   if (score == null) return 'C';
-  if (score >= 0.80) return 'S';
+  if (score >= S_TIER_THRESHOLD) return 'S';
   if (score >= A_TIER_THRESHOLD) return 'A';
-  if (score >= 0.50) return 'B';
+  if (score >= B_TIER_THRESHOLD) return 'B';
   return 'C';
 }
