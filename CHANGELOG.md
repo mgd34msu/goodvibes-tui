@@ -4,6 +4,35 @@ All notable changes to GoodVibes TUI.
 
 ---
 
+## [0.9.14] — 2026-03-30
+
+### Input & Navigation
+- Fix left/right arrow keys: add kitty keyboard protocol support (Ghostty/kitty terminals)
+- Fix left/right arrow keys disabled after slash command use
+- Fix slug erase: backspace at marker start removes entire paste slug
+- Space after slash command closes autocomplete modal
+
+### Agent System
+- Fix batch-spawn not breaking turn loop (caused infinite wait polling)
+- Non-blocking agent wait mode: 0ms default, 5s cap
+- Agent progress indicator: shows "Turn N · tool — args" instead of permanent "Thinking..."
+- Consecutive error circuit breaker: warns at 5, stops at 10 all-fail turns
+- Agent model fallback: gracefully handle non-existent models
+
+### Edit Tool
+- Fuzzy matching fallback for less capable models (whitespace-normalized → line-based at 70% threshold)
+- Better error messages with closest match preview and similarity percentage
+- Warning propagation through all output formats
+
+### Provider & UI
+- Fix ACP stdin crash: WritableStream adapter for Bun FileSink
+- Fix text tool call parser: handle underscore delimiter format (kimi models)
+- Fix system message colors: only errors are red, status messages are cyan
+- Fix spinner color fading after ~67 min (JS negative modulo on frame counter)
+- Spinner message rotation slowed from ~3s to ~30s
+
+---
+
 ## [0.9.13] — 2026-03-30
 
 ### Synthetic Provider & Model Picker

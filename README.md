@@ -2,7 +2,7 @@
 
 A terminal AI coding agent with automated write-review-fix-check pipelines, multi-provider LLM support, and a vaporwave aesthetic.
 
-Version: **0.9.13**
+Version: **0.9.14**
 
 <!-- screenshot -->
 
@@ -59,6 +59,7 @@ The agent system runs subagents in-process, each with its own conversation histo
 ### Cell-Based TUI Renderer
 - Raw ANSI escape sequences — no Ink, no React
 - Alternate screen buffer, mouse support, bracketed paste
+- Kitty keyboard protocol support for accurate key events in Ghostty and kitty terminals
 - Markdown rendering with syntax highlighting
 - Inline diff viewer with one-keystroke apply (`Ctrl+A`)
 - Collapsible blocks — tool calls, thinking traces, code blocks
@@ -103,6 +104,9 @@ Language intelligence powered by bundled LSP servers (TypeScript, Python, Bash, 
 
 ### Agent System
 - In-process subagents with isolated conversation history
+- Non-blocking agent wait mode with 0ms default and 5s cap
+- Agent progress indicator: shows current turn and active tool instead of a static spinner
+- Consecutive error circuit breaker: warns at 5 consecutive all-fail turns, stops at 10
 - Named archetypes (engineer, reviewer, tester, researcher, general)
 - Custom archetypes via `.goodvibes/agents/*.md` with YAML frontmatter
 - Git worktree isolation per agent
