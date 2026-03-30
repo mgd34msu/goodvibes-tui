@@ -129,6 +129,123 @@ describe('InputTokenizer', () => {
     });
   });
 
+  describe('kitty keyboard protocol', () => {
+    test('CSI u insert (57348) produces key with logicalName=insert', () => {
+      const tokens = tokenizer.feed('\x1b[57348;1u');
+      expect(tokens).toHaveLength(1);
+      const t = tokens[0] as Extract<InputToken, { type: 'key' }>;
+      expect(t.type).toBe('key');
+      expect(t.logicalName).toBe('insert');
+    });
+
+    test('CSI u delete (57349) produces key with logicalName=delete', () => {
+      const tokens = tokenizer.feed('\x1b[57349;1u');
+      expect(tokens).toHaveLength(1);
+      const t = tokens[0] as Extract<InputToken, { type: 'key' }>;
+      expect(t.type).toBe('key');
+      expect(t.logicalName).toBe('delete');
+    });
+
+    test('CSI u left (57350) produces key with logicalName=left', () => {
+      const tokens = tokenizer.feed('\x1b[57350;1u');
+      expect(tokens).toHaveLength(1);
+      const t = tokens[0] as Extract<InputToken, { type: 'key' }>;
+      expect(t.type).toBe('key');
+      expect(t.logicalName).toBe('left');
+    });
+
+    test('CSI u right (57351) produces key with logicalName=right', () => {
+      const tokens = tokenizer.feed('\x1b[57351;1u');
+      expect(tokens).toHaveLength(1);
+      const t = tokens[0] as Extract<InputToken, { type: 'key' }>;
+      expect(t.type).toBe('key');
+      expect(t.logicalName).toBe('right');
+    });
+
+    test('CSI u up (57352) produces key with logicalName=up', () => {
+      const tokens = tokenizer.feed('\x1b[57352;1u');
+      expect(tokens).toHaveLength(1);
+      const t = tokens[0] as Extract<InputToken, { type: 'key' }>;
+      expect(t.type).toBe('key');
+      expect(t.logicalName).toBe('up');
+    });
+
+    test('CSI u down (57353) produces key with logicalName=down', () => {
+      const tokens = tokenizer.feed('\x1b[57353;1u');
+      expect(tokens).toHaveLength(1);
+      const t = tokens[0] as Extract<InputToken, { type: 'key' }>;
+      expect(t.type).toBe('key');
+      expect(t.logicalName).toBe('down');
+    });
+
+    test('CSI u home (57356) produces key with logicalName=home', () => {
+      const tokens = tokenizer.feed('\x1b[57356;1u');
+      expect(tokens).toHaveLength(1);
+      const t = tokens[0] as Extract<InputToken, { type: 'key' }>;
+      expect(t.type).toBe('key');
+      expect(t.logicalName).toBe('home');
+    });
+
+    test('CSI u end (57357) produces key with logicalName=end', () => {
+      const tokens = tokenizer.feed('\x1b[57357;1u');
+      expect(tokens).toHaveLength(1);
+      const t = tokens[0] as Extract<InputToken, { type: 'key' }>;
+      expect(t.type).toBe('key');
+      expect(t.logicalName).toBe('end');
+    });
+
+    test('CSI u f1 (57364) produces key with logicalName=f1', () => {
+      const tokens = tokenizer.feed('\x1b[57364;1u');
+      expect(tokens).toHaveLength(1);
+      const t = tokens[0] as Extract<InputToken, { type: 'key' }>;
+      expect(t.type).toBe('key');
+      expect(t.logicalName).toBe('f1');
+    });
+
+    test('CSI u f12 (57375) produces key with logicalName=f12', () => {
+      const tokens = tokenizer.feed('\x1b[57375;1u');
+      expect(tokens).toHaveLength(1);
+      const t = tokens[0] as Extract<InputToken, { type: 'key' }>;
+      expect(t.type).toBe('key');
+      expect(t.logicalName).toBe('f12');
+    });
+
+    test('CSI u left (57350) bare form without modifier suffix', () => {
+      const tokens = tokenizer.feed('\x1b[57350u');
+      expect(tokens).toHaveLength(1);
+      const t = tokens[0] as Extract<InputToken, { type: 'key' }>;
+      expect(t.type).toBe('key');
+      expect(t.logicalName).toBe('left');
+    });
+
+    test('CSI u pageup (57354) produces key with logicalName=pageup', () => {
+      const tokens = tokenizer.feed('\x1b[57354;1u');
+      expect(tokens).toHaveLength(1);
+      const t = tokens[0] as Extract<InputToken, { type: 'key' }>;
+      expect(t.type).toBe('key');
+      expect(t.logicalName).toBe('pageup');
+    });
+
+    test('CSI u pagedown (57355) produces key with logicalName=pagedown', () => {
+      const tokens = tokenizer.feed('\x1b[57355;1u');
+      expect(tokens).toHaveLength(1);
+      const t = tokens[0] as Extract<InputToken, { type: 'key' }>;
+      expect(t.type).toBe('key');
+      expect(t.logicalName).toBe('pagedown');
+    });
+
+    test('CSI u left (57350) with modifier 6 (shift+ctrl) produces key with ctrl=true, shift=true, meta=false', () => {
+      const tokens = tokenizer.feed('\x1b[57350;6u');
+      expect(tokens).toHaveLength(1);
+      const t = tokens[0] as Extract<InputToken, { type: 'key' }>;
+      expect(t.type).toBe('key');
+      expect(t.logicalName).toBe('left');
+      expect(t.ctrl).toBe(true);
+      expect(t.shift).toBe(true);
+      expect(t.meta).toBe(false);
+    });
+  });
+
   describe('bracketed paste', () => {
     test('bracketed paste produces a single text token with full content', () => {
       const tokens = tokenizer.feed('\x1b[200~hello world\x1b[201~');

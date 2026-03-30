@@ -1844,6 +1844,8 @@ export class InputHandler {
             }
             this.ensureInputCursorVisible(this.contentWidth);
           }
+          this.bus.emit('render:request');
+          continue;
         } else if (token.logicalName === 'right') {
           if (this.cursorPos < this.prompt.length) {
             const marker = this.findMarkerAtPos(this.cursorPos + 1);
@@ -1855,6 +1857,8 @@ export class InputHandler {
             }
             this.ensureInputCursorVisible(this.contentWidth);
           }
+          this.bus.emit('render:request');
+          continue;
         } else if (token.logicalName === 'home') {
           this.cursorPos = 0;
         } else if (token.logicalName === 'end') {
