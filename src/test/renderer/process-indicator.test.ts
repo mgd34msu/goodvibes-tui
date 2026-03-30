@@ -139,4 +139,30 @@ describe('renderProcessIndicator', () => {
     const explicitText = explicitLines[0].map(c => c.char).join('');
     expect(defaultText).toBe(explicitText);
   });
+
+  test('agentProgress appears in rendered output when passed', () => {
+    const progress = 'Turn 3 · precision_write';
+    const lines = renderProcessIndicator(W, 1, 0, false, progress);
+    const text = lineToString(lines[0]);
+    expect(text).toContain(progress);
+  });
+
+  test('agentProgress is truncated when it exceeds available width', () => {
+    // With a narrow terminal, progress is either truncated or omitted entirely
+    const progress = 'A'.repeat(100);
+    const lines = renderProcessIndicator(60, 1, 0, false, progress);
+    const text = lineToString(lines[0]);
+    // Should not overflow the line width
+    expect(lines[0].length).toBe(60);
+    // The full 100-char string must not appear verbatim
+    expect(text).not.toContain('A'.repeat(100));
+  });
+
+  test('no agentProgress shows no progress suffix', () => {
+    const lines = renderProcessIndicator(W, 1, 0, false, undefined);
+    const text = lineToString(lines[0]);
+    // Should contain agent count but no ' · Turn' style suffix beyond it
+    expect(text).toContain('1 agent');
+    expect(text).not.toContain(' · Turn');
+  });
 });

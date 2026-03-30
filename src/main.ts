@@ -457,6 +457,12 @@ async function main() {
     bus.emit('render:request');
   }));
 
+  // Trigger re-render on agent progress updates (tool execution phase)
+  // so the process indicator reflects what the agent is actually doing.
+  unsubs.push(bus.on('subagent:progress', () => {
+    bus.emit('render:request');
+  }));
+
   // Helper: generate a cohort summary report string from AgentManager records.
   const buildCohortReport = (cohort: string): string => {
     const mgr = AgentManager.getInstance();
@@ -852,9 +858,12 @@ async function main() {
 
     // Build header and footer FIRST so we know the exact viewport height
     const headerLines = UIFactory.createHeader(width, currentModel.id, currentModel.provider, conversation.title || undefined, lastGitInfo);
-    const runningAgentCount = AgentManager.getInstance().list().filter((a) => a.status === 'running' || a.status === 'pending').length;
+    const runningAgents = AgentManager.getInstance().list().filter((a) => a.status === 'running' || a.status === 'pending');
+    const runningAgentCount = runningAgents.length;
+    // Show first running agent's progress (detail modal shows all)
+    const runningAgentProgress = runningAgents[0]?.progress;
     const runningProcessCount = ProcessManager.getInstance().list().filter((p) => !p.status.startsWith('done')).length;
-    const processIndicatorLines = renderProcessIndicator(width, runningAgentCount, runningProcessCount, input.indicatorFocused);
+    const processIndicatorLines = renderProcessIndicator(width, runningAgentCount, runningProcessCount, input.indicatorFocused, runningAgentProgress);
     const cw = getPromptContentWidth();
     const promptInfo = input.getWrappedPromptInfo(cw);
     // Compute args hint for slash commands — shown in dim grey after cursor

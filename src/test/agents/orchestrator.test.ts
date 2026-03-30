@@ -1,5 +1,5 @@
 import { describe, test, expect, beforeEach, mock } from 'bun:test';
-import { AgentOrchestrator } from '../../agents/orchestrator.ts';
+import { AgentOrchestrator, summarizeToolArgs } from '../../agents/orchestrator.ts';
 import type { AgentRecord } from '../../tools/agent/index.ts';
 import type { LLMProvider, ChatRequest, ChatResponse } from '../../providers/interface.ts';
 import { getProviderRegistry, _resetProviderRegistryForTesting } from '../../providers/registry.ts';
@@ -457,6 +457,44 @@ describe('AgentOrchestrator', () => {
   // -------------------------------------------------------------------------
   // Singleton
   // -------------------------------------------------------------------------
+
+  describe('summarizeToolArgs', () => {
+    test('returns empty string for empty args', () => {
+      expect(summarizeToolArgs({})).toBe('');
+    });
+
+    test('extracts path arg with em-dash prefix', () => {
+      const result = summarizeToolArgs({ path: 'src/foo.ts' });
+      expect(result).toBe(' — src/foo.ts');
+    });
+
+    test('extracts cmd arg', () => {
+      const result = summarizeToolArgs({ cmd: 'npm run build' });
+      expect(result).toBe(' — npm run build');
+    });
+
+    test('truncates values longer than 30 chars', () => {
+      const longPath = 'src/' + 'a'.repeat(40) + '.ts';
+      const result = summarizeToolArgs({ path: longPath });
+      expect(result.length).toBeLessThanOrEqual(32); // ' — ' (3) + 27 + '…' (1)
+      expect(result).toContain('\u2026');
+    });
+
+    test('falls back to first string value when no priority key matches', () => {
+      const result = summarizeToolArgs({ unknownKey: 'some-value' });
+      expect(result).toBe(' — some-value');
+    });
+
+    test('ignores non-string values', () => {
+      const result = summarizeToolArgs({ count: 5, flag: true, name: 'ok' });
+      expect(result).toBe(' — ok');
+    });
+
+    test('skips empty string values', () => {
+      const result = summarizeToolArgs({ path: '', cmd: 'echo hi' });
+      expect(result).toBe(' — echo hi');
+    });
+  });
 
   describe('singleton', () => {
     test('getInstance returns the same instance each time', () => {

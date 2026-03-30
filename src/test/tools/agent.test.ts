@@ -423,6 +423,17 @@ describe('wait mode', () => {
     expect(result.timedOut).toBe(true);
   });
 
+  test('wait returns immediately with hint when timeoutMs is 0 (default)', async () => {
+    const spawned = await runAgent({ mode: 'spawn', task: 'Stuck task' });
+    const agentId = spawned.agentId as string;
+
+    // timeoutMs: 0 means no polling — should return immediately
+    const result = await runAgent({ mode: 'wait', agentId, timeoutMs: 0 });
+    expect(result.agentId).toBe(agentId);
+    expect(result.timedOut).toBe(true);
+    expect(result.hint).toContain('poll again');
+  });
+
   test('wait returns immediately when agent is cancelled', async () => {
     // 'Stuck task' prevents the orchestrator from running, keeping the agent in pending state.
     const spawned = await runAgent({ mode: 'spawn', task: 'Stuck task' });
