@@ -25,6 +25,7 @@ import { providerRegistry } from './registry.ts';
 import type { FavoritesData } from './favorites.ts';
 import { loadFavorites } from './favorites.ts';
 import { getTopBenchmarkModelIds, getBenchmarks, compositeScore, onBenchmarksRefreshed } from './model-benchmarks.ts';
+import { config } from '../config/index.ts';
 
 // ---------------------------------------------------------------------------
 // Provider types
@@ -960,58 +961,50 @@ export function getCatalog(): ModelCatalog {
  * @public Used by the model picker to populate the configuredProviders filter.
  */
 export function getConfiguredProviderIds(): string[] {
-  // Build a map: providerId → envVars[]
+  // Build a set of configured provider IDs using three sources:
+  // 1. Catalog env vars (process.env check)
+  // 2. Config system resolved keys (env vars + secrets store + aliases)
+  // 3. Synthetic provider (always configured when canonicals exist)
+  const configured = new Set<string>();
+
+  // Source 1: Check catalog env vars directly
   const providerEnvMap = new Map<string, string[]>();
   for (const m of _catalogModels) {
     if (!providerEnvMap.has(m.providerId)) {
       providerEnvMap.set(m.providerId, m.providerEnvVars);
     }
   }
-
-  // Also check the config system's resolved API keys (covers env vars, secrets store,
-  // and provider aliases like gemini → GEMINI_API_KEY → GOOGLE_API_KEY fallback)
-  const configApiKeys = config.apiKeys;
-
-  // Map from config provider names to catalog provider IDs
-  const configToCatalog: Record<string, string> = {
-    gemini: 'google',
-    'google-vertex': 'google-vertex',
-  };
-
-  const configured: string[] = [];
   for (const [providerId, envVars] of providerEnvMap) {
     if (envVars.length === 0) {
-      // No key required — always available
-      configured.push(providerId);
+      configured.add(providerId);
     } else if (envVars.some(v => {
       const val = process.env[v];
       return typeof val === 'string' && val.length > 0;
     })) {
-      configured.push(providerId);
+      configured.add(providerId);
     }
   }
 
-  // Check config-resolved keys for providers whose config name differs from catalog ID
-  for (const [configName, catalogId] of Object.entries(configToCatalog)) {
-    if (configApiKeys[configName] && !configured.includes(catalogId)) {
-      configured.push(catalogId);
+  // Source 2: Config system resolved keys (covers secrets store + env var aliases).
+  // Config provider names may differ from catalog IDs (e.g., config 'gemini' = catalog 'google').
+  const CONFIG_TO_CATALOG: Record<string, string> = { gemini: 'google' };
+  try {
+    const configApiKeys = config.apiKeys;
+    for (const [configName, key] of Object.entries(configApiKeys)) {
+      if (key) {
+        configured.add(CONFIG_TO_CATALOG[configName] ?? configName);
+      }
     }
+  } catch {
+    // Config not available yet — non-fatal
   }
 
-  // Also mark providers as configured if they match a registered provider with a key
-  // (handles env var aliases like GEMINI_API_KEY for google, CLAUDE_API_KEY for anthropic)
-  for (const [configName, key] of Object.entries(configApiKeys)) {
-    if (key && !configured.includes(configName)) {
-      configured.push(configName);
-    }
-  }
-
-  // Synthetic provider is configured if any synthetic model has keyed backends
+  // Source 3: Synthetic provider is always configured when canonicals exist
   if (_syntheticCanonicals.length > 0) {
-    configured.push('synthetic');
+    configured.add('synthetic');
   }
 
-  return configured;
+  return [...configured];
 }
 
 // ---------------------------------------------------------------------------
