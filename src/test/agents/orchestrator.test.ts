@@ -382,6 +382,55 @@ describe('AgentOrchestrator', () => {
   });
 
   // -------------------------------------------------------------------------
+  // Frozen response objects (regression)
+  // -------------------------------------------------------------------------
+
+  describe('frozen response objects', () => {
+    test('handles deeply frozen exec tool call without throwing readonly property error', async () => {
+      // Regression: some providers (e.g. ollama-cloud/kimi) return frozen response objects.
+      // The orchestrator must shallow-copy tool calls before mutating them.
+      const frozenArgs = Object.freeze({ commands: Object.freeze([Object.freeze({ cmd: 'echo hello' })]) });
+      const frozenToolCall = Object.freeze({ id: 'call-frozen', name: 'exec', arguments: frozenArgs });
+      const frozenToolCalls = Object.freeze([frozenToolCall]);
+
+      const provider: LLMProvider = {
+        name: 'mock',
+        models: ['mock-model'],
+        chat: mock(async (_params: ChatRequest): Promise<ChatResponse> => {
+          // Alternate: first call returns frozen tool call, second call ends cleanly
+          if ((_params.messages ?? []).some((m) => m.role === 'tool')) {
+            return {
+              content: 'Done.',
+              toolCalls: [],
+              usage: { inputTokens: 10, outputTokens: 5 },
+              stopReason: 'end',
+            };
+          }
+          return {
+            content: '',
+            // Cast needed: frozen array is readonly but interface expects mutable
+            // Object.freeze() returns Readonly<T>, which is incompatible with the mutable Array<T> expected by ChatResponse.toolCalls.
+            // The double cast bypasses TypeScript here to simulate the runtime scenario where frozen arrays reach this code path.
+            toolCalls: frozenToolCalls as unknown as Array<{ id: string; name: string; arguments: Record<string, unknown> }>,
+            usage: { inputTokens: 10, outputTokens: 5 },
+            stopReason: 'tool_use',
+          };
+        }),
+      };
+
+      const record = makeRecord({ tools: ['exec'] });
+
+      // Must not throw "Attempted to assign to readonly property"
+      await expect(
+        withMockProvider(provider, () => orchestrator.runAgent(record))
+      ).resolves.toBeUndefined();
+
+      expect(record.status).toBe('completed');
+      expect(record.toolCallCount).toBe(1);
+    });
+  });
+
+  // -------------------------------------------------------------------------
   // Singleton
   // -------------------------------------------------------------------------
 

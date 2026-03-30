@@ -280,13 +280,15 @@ export class AgentOrchestrator {
 
           // Execute tools sequentially
           const results = [];
-          for (const call of response.toolCalls) {
+          for (const originalCall of response.toolCalls) {
+            // Create mutable copy — some providers (e.g. ollama-cloud/kimi) freeze response objects
+            const call = { ...originalCall, arguments: { ...originalCall.arguments } };
             record.progress = `Executing tool: ${call.name}`;
             record.toolCallCount++;
 
             // Sanitize exec args for agent context: force inline execution, 10-min TTL
             if (call.name === 'exec' || call.name === 'precision_exec') {
-              // Clone arguments — LLM response objects may be frozen
+              // Deep clone for nested mutation safety
               call.arguments = structuredClone(call.arguments);
               const execArgs = call.arguments as Record<string, unknown>;
               // Force all commands to run inline (no background leaks)
