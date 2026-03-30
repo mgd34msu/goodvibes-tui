@@ -87,14 +87,11 @@ export function getModelRegistry(): ModelDefinition[] {
   // Catalog models not overridden by custom providers and not represented as
   // synthetic canonical backends (prevents hf: and other raw backend IDs from
   // appearing alongside clean synthetic canonical slugs in the model picker).
-  const syntheticBackendIds = getSyntheticBackendModelIds();
   const catalogFiltered = catalogModels.filter(
     (b) =>
       !customModels.some((c) => c.id === b.id) &&
-      !syntheticBackendIds.has(b.id) &&
       // Filter out raw hf: prefixed IDs — these are HuggingFace catalog entries that
-      // appear as backends inside synthetic canonical groups. They should not be
-      // listed separately alongside the canonical synthetic slug in the model picker.
+      // should not appear in the model picker.
       !b.id.startsWith('hf:'),
   );
 
