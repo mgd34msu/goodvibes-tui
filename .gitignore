@@ -20,3 +20,4 @@ dist/
 
 # Artifacts
 scripts/reset-suite.sh
+.test-tmp/
