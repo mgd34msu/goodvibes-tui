@@ -4,6 +4,11 @@ import { VERSION } from '../version.ts';
 import { getDisplayWidth, wrapText, interpolateColor } from '../utils/terminal-width.ts';
 import type { GitHeaderInfo } from './git-status.ts';
 
+/** Number of frames before the animated gradient completes one full cycle. */
+const GRADIENT_CYCLE_FRAMES = 50;
+/** Number of frames before rotating to the next thinking phrase (~30 seconds at 80ms/frame). */
+const PHRASE_ROTATION_FRAMES = 375;
+
 /** Build the git segment string and its display width. Single source of truth for header layout. */
 function buildGitSegment(gitInfo: GitHeaderInfo): { text: string; width: number } {
   const branch = ` ⎇ ${gitInfo.branch}`;
@@ -367,8 +372,8 @@ export class UIFactory {
   private static readonly THINK_GRADIENT_END = '#d000ff';
 
   public static createThinkingFragment(width: number, spinner: string, frame: number = 0, tokenSpeed?: number, toolPreview?: string, inputTokens?: number, outputTokens?: number): Line[] {
-    // Rotate phrase every ~3 seconds (frame ticks at 80ms, so ~37 frames)
-    const phraseIndex = Math.floor(frame / 37) % this.THINKING_PHRASES.length;
+    // Rotate phrase every ~30 seconds (frame ticks at 80ms, so ~375 frames)
+    const phraseIndex = Math.floor(frame / PHRASE_ROTATION_FRAMES) % this.THINKING_PHRASES.length;
     const phrase = this.THINKING_PHRASES[phraseIndex];
     const speedSuffix = (tokenSpeed !== undefined && tokenSpeed > 0) ? ` (${Math.round(tokenSpeed)} tok/s)` : '';
     const text = `  ${spinner} ${phrase}${speedSuffix} `;
@@ -381,7 +386,9 @@ export class UIFactory {
       const code = char.codePointAt(0) ?? 0;
       if (code < 32 || code === 127) continue;
       // Animated gradient: ping-pong (triangle wave) for smooth cyan↔purple sweep
-      const raw = (col / Math.max(1, getDisplayWidth(text) - 1) - frame * 0.02 + 100) % 1.0;
+      // Use positive-safe modulo: JS % can return negative for large frame values
+      const rawUnwrapped = (col / Math.max(1, getDisplayWidth(text) - 1)) - (frame % GRADIENT_CYCLE_FRAMES) * 0.02;
+      const raw = ((rawUnwrapped % 1.0) + 1.0) % 1.0;
       const gradientPos = raw <= 0.5 ? raw * 2 : (1 - raw) * 2; // triangle wave: 0→1→0
       const fg = interpolateColor(this.THINK_GRADIENT_START, this.THINK_GRADIENT_END, gradientPos);
       line[col] = { char, fg, bg: '', bold: true, dim: false, underline: false, italic: false, strikethrough: false };

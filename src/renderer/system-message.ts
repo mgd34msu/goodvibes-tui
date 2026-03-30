@@ -6,7 +6,10 @@ import { type Line, createStyledCell, createEmptyLine } from '../types/grid.ts';
 import { LAYOUT, BORDERS, COLORS } from './layout.ts';
 import { wrapText } from '../utils/terminal-width.ts';
 
-type SystemMessageType = 'error' | 'warning' | 'info';
+/** Exported for use by typeOverride callers and tests. */
+export type SystemMessageType = 'error' | 'warning' | 'info';
+
+const BALLOT_X = '\u2717';
 
 export function classifySystemMessage(content: string): SystemMessageType {
   // Bracket-prefixed messages: classify by prefix first to prevent task
@@ -28,7 +31,7 @@ export function classifySystemMessage(content: string): SystemMessageType {
   // [Agents] messages
   if (/^\[Agents\]/.test(content)) {
     // ✗ individual agent failure → error (red)
-    if (/^\[Agents\] \u2717/.test(content)) return 'error';
+    if (content.startsWith(`[Agents] ${BALLOT_X}`)) return 'error';
     // Cohort summary: warn only if ≥1 agent failed, otherwise info
     if (/^\[Agents\] Cohort/.test(content)) {
       return /\b[1-9]\d* failed\b/.test(content) ? 'warning' : 'info';
@@ -55,8 +58,10 @@ export function classifySystemMessage(content: string): SystemMessageType {
 
   // Generic messages: strip quoted substrings before keyword scan to avoid
   // false positives from task descriptions like "Fix the error in auth.ts".
-  const stripped = content.replace(/"[^"]*"/g, '"…"');
-  if (/\b(error|failed|denied|crash|exception)\b/i.test(stripped)) return 'error';
+  const stripped = content.replace(/"[^"]*"|'[^']*'|`[^`]*`/g, '"…"');
+  // error: catches runtime failures, permission denials, crash and variants (crashed, crashing, etc.), unhandled exceptions
+  if (/\b(error|failed|denied|crash\w*|exception)\b/i.test(stripped)) return 'error';
+  // warning: catches advisory notices, high-usage alerts, deprecation notices
   if (/\b(warning|context usage|caution|deprecated)\b/i.test(stripped)) return 'warning';
   return 'info';
 }
@@ -67,7 +72,7 @@ export function classifySystemMessage(content: string): SystemMessageType {
 export function renderSystemMessage(
   content: string,
   width: number,
-  typeOverride?: 'error' | 'warning' | 'info',
+  typeOverride?: SystemMessageType,
 ): Line[] {
   const lines: Line[] = [];
   const msgType = typeOverride ?? classifySystemMessage(content);

@@ -194,6 +194,7 @@ export class Orchestrator {
 
   private startThinking(): void {
     this.isThinking = true;
+    this.thinkingFrame = 0; // Reset each turn so gradient starts clean and frame never grows unbounded
     this.streamingInputTokens = this.lastInputTokens;
     this.streamingOutputTokens = 0;
     this.abortController = new AbortController();
