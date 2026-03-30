@@ -170,10 +170,10 @@ describe('ModelPickerModal', () => {
       picker.providers = ['provA', 'provB'];
       picker.configuredProviders = new Set();
       const items = picker.getItems();
-      // 1 header (All) + 2 selectable items
+      // 1 header (All Providers) + 2 selectable items
       expect(items).toHaveLength(3);
       expect(items[0].isGroupHeader).toBe(true);
-      expect(items[0].label).toBe('All');
+      expect(items[0].label).toBe('All Providers');
       expect(items[1].isGroupHeader).toBeFalsy();
     });
 
@@ -331,12 +331,32 @@ describe('ModelPickerModal', () => {
       picker.categoryFilter = 'free';
       picker.openAllModels(ALL_MODELS, 'free-1');
       expect(picker.query).toBe('');
-      expect(picker.categoryFilter as string).toBe('all');
+      expect(picker.categoryFilter).toBe('all');
     });
 
     test('pre-selects first model when list has one item', () => {
       picker.openAllModels([FREE_MODEL], 'free-1');
       expect(picker.selectedIndex).toBe(0);
+    });
+  });
+
+  // ── showModelsForProvider ───────────────────────────────────────────────────
+
+  describe('showModelsForProvider()', () => {
+    test('sets availableOnly to false so synthetic models are not filtered', () => {
+      picker.availableOnly = true;
+      picker.showModelsForProvider(ALL_MODELS, 'provA');
+      expect(picker.availableOnly).toBe(false);
+    });
+
+    test('sets mode to model and resets query/filters', () => {
+      picker.mode = 'provider';
+      picker.query = 'old';
+      picker.categoryFilter = 'free';
+      picker.showModelsForProvider(ALL_MODELS, 'provA');
+      expect(picker.mode).toBe('model');
+      expect(picker.query).toBe('');
+      expect(picker.categoryFilter).toBe('all');
     });
   });
 

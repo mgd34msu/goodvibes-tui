@@ -211,6 +211,9 @@ export class ModelPickerModal {
     this.query = '';
     this.categoryFilter = 'all';
     this.capabilityFilter = 'none';
+    // User explicitly chose this provider — disable availability filter so synthetic
+    // models (which have no real API key) are not filtered out.
+    this.availableOnly = false;
     this.selectedIndex = 0;
     this.scrollOffset = 0;
   }
@@ -521,7 +524,7 @@ export class ModelPickerModal {
     if (model.provider === 'synthetic') {
       const info = getSyntheticModelInfoFromCatalog(model.id);
       if (info !== null) {
-        detail = `${model.provider} [${info.backendCount} provider${info.backendCount !== 1 ? 's' : ''}]`;
+        detail = `${model.provider} [${info.keyedBackendCount} provider${info.keyedBackendCount !== 1 ? 's' : ''}]`;
       }
     }
 
