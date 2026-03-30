@@ -61,6 +61,7 @@ interface EditResult {
   occurrencesReplaced?: number;
   diff?: string;
   error?: string;
+  warning?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -161,6 +162,77 @@ function formatValidatorFailure(result: ValidatorResult): string {
  */
 function normalizeWhitespace(s: string): string {
   return s.replace(/\s+/g, ' ').trim();
+}
+
+/**
+ * Line-based fuzzy match: slide a window of the same line count as `findStr`
+ * through `content`, comparing lines with whitespace normalization.
+ * Returns the best match position and similarity (0–1), or null if findStr has
+ * no lines.
+ *
+ * Similarity = (number of lines that match after normalization) / totalFindLines.
+ */
+function findFuzzyLineMatch(
+  content: string,
+  findStr: string,
+): { start: number; end: number; similarity: number; candidateLines: string[] } | null {
+  const findLines = findStr.split('\n');
+  // content.split('\n') handles CRLF — \r stays at line end but is normalized away by normalizeWhitespace
+  const contentLines = content.split('\n');
+
+  if (findLines.length === 0 || contentLines.length === 0) return null;
+
+  // Skip fuzzy matching for very large files to avoid O(N*M) performance hit
+  if (contentLines.length > 5000) return null;
+
+  // Pre-compute cumulative byte offsets for each line in content
+  const lineOffsets: number[] = [];
+  let offset = 0;
+  for (const line of contentLines) {
+    lineOffsets.push(offset);
+    offset += line.length + 1; // +1 for '\n'
+  }
+
+  const normalizedFind = findLines.map(normalizeWhitespace);
+  const normalizedContent = contentLines.map(normalizeWhitespace);
+  const windowSize = findLines.length;
+
+  let bestSimilarity = -1;
+  let bestStart = 0;
+  let bestEnd = 0;
+  let bestCandidateLines: string[] = [];
+
+  const limit = contentLines.length - windowSize + 1;
+  for (let i = 0; i < limit; i++) {
+    let matchingLines = 0;
+    for (let j = 0; j < windowSize; j++) {
+      if (normalizedContent[i + j] === normalizedFind[j]) {
+        matchingLines++;
+      }
+    }
+    const similarity = matchingLines / windowSize;
+    if (similarity > bestSimilarity) {
+      bestSimilarity = similarity;
+      bestStart = lineOffsets[i];
+      // End offset: start of line after the window, including the trailing newline
+      const lastLineIdx = i + windowSize - 1;
+      bestEnd =
+        lastLineIdx + 1 < contentLines.length
+          ? lineOffsets[lastLineIdx + 1] // includes the '\n' at end of last window line
+          : content.length; // last line in file has no trailing newline
+      bestCandidateLines = contentLines.slice(i, i + windowSize);
+      if (similarity === 1.0) break; // perfect match — no need to check remaining windows
+    }
+  }
+
+  if (bestSimilarity < 0) return null;
+
+  return {
+    start: bestStart,
+    end: bestEnd,
+    similarity: bestSimilarity,
+    candidateLines: bestCandidateLines,
+  };
 }
 
 /**
@@ -470,7 +542,8 @@ function computeAstPatternEdit(
   let root: ReturnType<AstGrepParser['parse']>;
   try {
     root = parser.parse(fileContent);
-  } catch {
+  } catch (e) {
+    logger.debug('AST pattern parse failed', { error: String(e) });
     return computeExactEdit(fileContent, item);
   }
 
@@ -555,7 +628,8 @@ async function computeAstEdit(
   let intel: CodeIntelligence;
   try {
     intel = CodeIntelligence.getInstance();
-  } catch {
+  } catch (e) {
+    logger.debug('CodeIntelligence instance not available', { error: String(e) });
     return computeExactEdit(fileContent, item);
   }
 
@@ -641,13 +715,15 @@ function computeExactEdit(
   return { newContent, occurrencesReplaced: selResult.selected.length };
 }
 
+const FUZZY_MATCH_THRESHOLD = 0.7;
+
 function computeSingleEdit(
   fileContent: string,
   item: EditItem,
   mode: 'exact' | 'fuzzy' | 'regex',
   caseSensitive: boolean,
   whitespaceSensitive: boolean = true,
-): { newContent: string; occurrencesReplaced: number } | { error: string } {
+): { newContent: string; occurrencesReplaced: number; warning?: string } | { error: string } {
   const findStr = item.find_base64 ? decodeBase64(item.find_base64) : item.find;
   const replaceStr = item.replace_base64 ? decodeBase64(item.replace_base64) : item.replace;
 
@@ -664,6 +740,41 @@ function computeSingleEdit(
     positions = applyHints(fileContent, positions, item.hints, item.hints.near_line);
   }
 
+  // When exact match produces no positions, try progressive fallbacks
+  let usedFallback: 'whitespace' | 'fuzzy-lines' | null = null;
+  if (positions.length === 0 && mode === 'exact') {
+    // Fallback 1: whitespace-normalized match
+    const wsPositions = findAllPositions(fileContent, findStr, 'fuzzy', caseSensitive, true);
+    if (wsPositions.length > 0) {
+      positions = wsPositions;
+      usedFallback = 'whitespace';
+    } else {
+      // Fallback 2: line-based fuzzy match
+      const fuzzyMatch = findFuzzyLineMatch(fileContent, findStr);
+      if (fuzzyMatch !== null && fuzzyMatch.similarity >= FUZZY_MATCH_THRESHOLD) {
+        positions = [{ start: fuzzyMatch.start, end: fuzzyMatch.end }];
+        usedFallback = 'fuzzy-lines';
+        logger.warn('[edit] Fuzzy line match used', {
+          similarity: fuzzyMatch.similarity,
+          file: item.path,
+          findPreview: findStr.split('\n').slice(0, 2).join('\n'),
+        });
+      } else if (fuzzyMatch !== null) {
+        // Below threshold — return a helpful error showing the closest candidate
+        const candidatePreview = fuzzyMatch.candidateLines.slice(0, 3).join('\n');
+        const pct = Math.round(fuzzyMatch.similarity * 100);
+        return {
+          error:
+            `Find string not found in file (best match was ${pct}% similar, below the ${Math.round(FUZZY_MATCH_THRESHOLD * 100)}% threshold).\n` +
+            `Closest candidate (first 3 lines):\n${candidatePreview}\n` +
+            `Tip: correct the find string to match the file content exactly.`,
+        };
+      } else {
+        return { error: 'Find string not found in file' };
+      }
+    }
+  }
+
   // Select occurrences
   const selResult = selectOccurrences(positions, item.occurrence);
   if ('error' in selResult) return selResult;
@@ -677,7 +788,14 @@ function computeSingleEdit(
     caseSensitive,
   );
 
-  return { newContent, occurrencesReplaced: selResult.selected.length };
+  let warning: string | undefined;
+  if (usedFallback === 'whitespace') {
+    warning = 'Exact match failed; used whitespace-normalized match instead.';
+  } else if (usedFallback === 'fuzzy-lines') {
+    warning = 'Exact match failed; used fuzzy line match (content may differ slightly — verify the edit).';
+  }
+
+  return { newContent, occurrencesReplaced: selResult.selected.length, warning };
 }
 
 // ---------------------------------------------------------------------------
@@ -705,6 +823,9 @@ function formatOutput(
       if (r.success) {
         const id = r.id ? ` [${r.id}]` : '';
         lines.push(`  OK${id}: ${r.path} (${r.occurrencesReplaced} replacement(s))`);
+        if (r.warning) {
+          lines.push(`    WARN: ${r.warning}`);
+        }
       } else {
         const id = r.id ? ` [${r.id}]` : '';
         lines.push(`  FAIL${id}: ${r.path} — ${r.error}`);
@@ -720,6 +841,9 @@ function formatOutput(
       lines.push(`\n--- ${r.path}${id} (${r.occurrencesReplaced} replacement(s))${dryTag} ---`);
       if (r.diff) {
         lines.push(r.diff);
+      }
+      if (r.warning) {
+        lines.push(`  WARN: ${r.warning}`);
       }
     } else {
       lines.push(`\n--- ${r.path}${id} FAILED ---`);
@@ -888,7 +1012,7 @@ export function createEditTool(fileCache: FileStateCache, options?: EditToolOpti
         continue;
       }
 
-      let editResult: { newContent: string; occurrencesReplaced: number } | { error: string };
+      let editResult: { newContent: string; occurrencesReplaced: number; warning?: string } | { error: string };
       if (matchMode === 'ast_pattern') {
         editResult = computeAstPatternEdit(currentContent, item, resolvedPath);
       } else if (matchMode === 'ast') {
@@ -920,13 +1044,13 @@ export function createEditTool(fileCache: FileStateCache, options?: EditToolOpti
       if (outputFormat === 'with_diff' || outputFormat === 'verbose' || dryRun) {
         diff = unifiedDiff(oldContent, editResult.newContent, resolvedPath);
       }
-
       results.push({
         id: item.id,
         path: item.path,
         success: true,
         occurrencesReplaced: editResult.occurrencesReplaced,
         diff,
+        warning: editResult.warning,
       });
     }
 

@@ -271,6 +271,64 @@ describe('edit tool', () => {
   });
 
   // -------------------------------------------------------------------------
+  // Automatic fuzzy fallback (no explicit mode: 'fuzzy')
+  // -------------------------------------------------------------------------
+
+  describe('automatic fuzzy fallback', () => {
+    test('whitespace-normalized fallback: exact fails, whitespace-normalized match succeeds', async () => {
+      // File has normal spacing; find string has extra internal spaces
+      const file = writeFile(tmpDir, 'fuzz_ws.ts', 'function hello(x: number) {\n  return x + 1;\n}\n');
+      const result = await tool.execute({
+        edits: [{ path: relPath(file), find: 'function  hello(x:  number) {', replace: 'function hello(x: number, y: number) {' }],
+        // No mode specified — default exact falls back automatically
+      });
+      expect(result.success).toBe(true);
+      expect(readFileSync(file, 'utf-8')).toContain('y: number');
+      // Warning should be present in the output
+      const output = JSON.stringify(result);
+      expect(output).toMatch(/whitespace-normalized/);
+    });
+
+    test('fuzzy-line fallback: exact fails, fuzzy line match above 70% succeeds (1 of 4 lines has a typo)', async () => {
+      // 4 lines, 1 has a real typo → similarity = 3/4 = 75% ≥ 70% threshold
+      const content = 'line one\nline two\nline three\nline four\n';
+      const file = writeFile(tmpDir, 'fuzz_line.ts', content);
+      const result = await tool.execute({
+        edits: [{ path: relPath(file), find: 'line one\nline two\nline TYPO\nline four', replace: 'line one\nline two\nreplaced line\nline four' }],
+      });
+      expect(result.success).toBe(true);
+      expect(readFileSync(file, 'utf-8')).toContain('replaced line');
+      const output = JSON.stringify(result);
+      expect(output).toMatch(/fuzzy line match/);
+    });
+
+    test('fuzzy-line match below 70%: completely wrong find string returns error with candidate preview', async () => {
+      const content = 'alpha beta\ngamma delta\nepsilon zeta\n';
+      const file = writeFile(tmpDir, 'fuzz_low.ts', content);
+      const result = await tool.execute({
+        edits: [{ path: relPath(file), find: 'XXXX YYYY\nZZZZ WWWW\nAAAA BBBB', replace: 'replaced' }],
+      });
+      expect(result.success).toBe(false);
+      const errStr = JSON.stringify(result);
+      // Should contain threshold info and candidate preview
+      expect(errStr).toMatch(/threshold|similarity|candidate/);
+    });
+
+    test('fuzzy-line match below threshold returns error with candidate info', async () => {
+      const content = 'const x = 1;\nconst y = 2;\nconst z = 3;\n';
+      const file = writeFile(tmpDir, 'fuzz_warn.ts', content);
+      // 2 exact lines + 1 typo = 2/3 similarity ≈ 67% — below threshold
+      // Use 3 lines where 2 match and 1 has a minor diff that still passes after normalization
+      const result = await tool.execute({
+        edits: [{ path: relPath(file), find: 'const x = 1;\nconst y = 2;\nconst z = TYPO;', replace: 'const x = 1;\nconst y = 2;\nconst z = 99;' }],
+      });
+      // 2/3 lines match = 67% — just below 70% threshold, should fail
+      expect(result.success).toBe(false);
+      expect(JSON.stringify(result)).toMatch(/threshold|similarity/i);
+    });
+  });
+
+  // -------------------------------------------------------------------------
   // Regex matching
   // -------------------------------------------------------------------------
 
