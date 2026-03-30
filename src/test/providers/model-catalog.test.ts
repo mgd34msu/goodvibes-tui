@@ -9,6 +9,7 @@ import {
   _setCatalogForTesting,
   _resetForTest,
   _nameToSlugForTest,
+  _normalizeModelNameForTest,
   _applySyntheticCanonicalModelsForTest,
 } from '../../providers/model-catalog.ts';
 import type {
@@ -247,6 +248,95 @@ describe('nameToSlug (via _nameToSlugForTest)', () => {
   });
   it('handles names with only non-alphanumeric chars', () => {
     expect(_nameToSlugForTest('---')).toBe('');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// normalizeModelName — preserved vs stripped identifiers
+// ---------------------------------------------------------------------------
+
+describe('normalizeModelName (via _normalizeModelNameForTest)', () => {
+  // --- Preserved identifiers: these MUST produce different slugs ---
+
+  it('mini vs pro: GPT-5.4 Mini and GPT-5.4 Pro yield different slugs', () => {
+    const mini = _normalizeModelNameForTest('GPT-5.4 Mini');
+    const pro  = _normalizeModelNameForTest('GPT-5.4 Pro');
+    expect(mini).not.toBe(pro);
+    expect(mini).toBe('gpt54mini');
+    expect(pro).toBe('gpt54pro');
+  });
+
+  it('version numbers: DeepSeek V3 and DeepSeek V3.1 yield different slugs', () => {
+    const v3   = _normalizeModelNameForTest('DeepSeek V3');
+    const v31  = _normalizeModelNameForTest('DeepSeek V3.1');
+    expect(v3).not.toBe(v31);
+    expect(v3).toBe('deepseekv3');
+    expect(v31).toBe('deepseekv31');
+  });
+
+  it('size indicators: Llama 3.2 1B and Llama 3.2 70B yield different slugs', () => {
+    const b1  = _normalizeModelNameForTest('Llama 3.2 1B');
+    const b70 = _normalizeModelNameForTest('Llama 3.2 70B');
+    expect(b1).not.toBe(b70);
+    expect(b1).toBe('llama321b');
+    expect(b70).toBe('llama3270b');
+  });
+
+  it('thinking vs base: Kimi K2 Thinking and Kimi K2 yield different slugs', () => {
+    const thinking = _normalizeModelNameForTest('Kimi K2 Thinking');
+    const base     = _normalizeModelNameForTest('Kimi K2');
+    expect(thinking).not.toBe(base);
+    expect(thinking).toBe('kimik2thinking');
+    expect(base).toBe('kimik2');
+  });
+
+  it('size indicators resembling dates are preserved: Model 1024B', () => {
+    const slug = _normalizeModelNameForTest('Model 1024B');
+    expect(slug).toBe('model1024b');
+    // 1024 looks like MMDD (Oct 24) but the B suffix makes it a size indicator
+    // The \b word boundary in the date regex should prevent matching inside 1024B
+  });
+
+  // --- Stripped identifiers: these MUST produce the same slug ---
+
+  it('instruct variant: Kimi K2 Instruct collapses to same slug as Kimi K2', () => {
+    const base     = _normalizeModelNameForTest('Kimi K2');
+    const instruct = _normalizeModelNameForTest('Kimi K2 Instruct');
+    expect(instruct).toBe(base);
+    expect(instruct).toBe('kimik2');
+  });
+
+  it('chat variant: Model X Chat collapses to same slug as Model X', () => {
+    const base = _normalizeModelNameForTest('Model X');
+    const chat = _normalizeModelNameForTest('Model X Chat');
+    expect(chat).toBe(base);
+    expect(chat).toBe('modelx');
+  });
+
+  it('quantization: Llama 3.2 70B FP16 and Llama 3.2 70B GPTQ collapse to the same slug', () => {
+    const fp16 = _normalizeModelNameForTest('Llama 3.2 70B FP16');
+    const gptq = _normalizeModelNameForTest('Llama 3.2 70B GPTQ');
+    expect(fp16).toBe(gptq);
+    expect(fp16).toBe('llama3270b');
+  });
+
+  it('date stamps: Model X 0324 collapses to same slug as Model X', () => {
+    const base = _normalizeModelNameForTest('Model X');
+    const dated = _normalizeModelNameForTest('Model X 0324');
+    expect(dated).toBe(base);
+    expect(dated).toBe('modelx');
+  });
+
+  it('combined suffixes: Llama 3.2 70B Instruct FP16 0324 strips instruct, fp16, and datestamp', () => {
+    const result = _normalizeModelNameForTest('Llama 3.2 70B Instruct FP16 0324');
+    expect(result).toBe('llama3270b');
+  });
+
+  it('date stamps: DeepSeek-V3-0324 collapses to same slug as DeepSeek-V3', () => {
+    const base  = _normalizeModelNameForTest('DeepSeek-V3');
+    const dated = _normalizeModelNameForTest('DeepSeek-V3-0324');
+    expect(dated).toBe(base);
+    expect(dated).toBe('deepseekv3');
   });
 });
 

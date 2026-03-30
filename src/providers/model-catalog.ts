@@ -414,42 +414,39 @@ function nameToSlug(name: string): string {
 }
 
 /**
- * Normalize a model name for broad-family sub-grouping by stripping version numbers,
- * date stamps, and common variant suffixes that don't distinguish the underlying model.
+ * Normalize a model name for broad-family sub-grouping by stripping only truly
+ * redundant deployment suffixes and date stamps. Version numbers, size indicators,
+ * decimal sub-versions, and tier/capability identifiers are intentionally preserved
+ * because they distinguish different models.
  *
  * Examples:
- *   "Kimi K2 Instruct" → "kimik2"
- *   "Kimi K2 0905"     → "kimik2"
- *   "GPT-5.2"          → "gpt5"
- *   "GPT-5.4"          → "gpt5"
- *   "DeepSeek-V3-0324" → "deepseekv3"
+ *   "Kimi K2 Instruct" → "kimik2"        (instruct is redundant)
+ *   "Kimi K2 0905"     → "kimik2"        (date stamp stripped)
+ *   "Kimi K2.5"        → "kimik25"       (decimal preserved — different model)
+ *   "GPT-5.2"          → "gpt52"         (preserved — different from GPT-5.4)
+ *   "GPT-5.4 Mini"     → "gpt54mini"     (mini preserved — different tier)
+ *   "Llama 3.2 1B"     → "llama3210b"    (1B preserved — different size than 70B)
+ *   "DeepSeek-V3-0324" → "deepseekv3"    (date stripped, v3 preserved)
  *
  * Steps:
  *   1. Lowercase
- *   2. Strip common variant suffixes (instruct, chat, latest, preview, free, turbo, fast, base, pt, online)
- *   3. Strip version-like numeric patterns (v1, v2, 0324, 0905, 2507, etc.)
- *   4. Strip model size indicators (8b, 70b, 120b, 235b, etc.) that duplicate family info
- *   5. Apply nameToSlug (strip all non-alphanumeric)
+ *   2. Strip redundant deployment suffixes (instruct, chat, latest, preview, free, turbo,
+ *      fast, base, pt, online, standard, default, it) and quantization formats
+ *      (bf16, fp8, fp16, awq, gptq, gguf, bnb, qlora, lora)
+ *   3. Strip date stamps (0324, 0905, 2507, 20240324, etc.)
+ *   4. Apply nameToSlug (strip all non-alphanumeric)
  */
 function normalizeModelName(name: string): string {
   let n = name.toLowerCase();
-  // Strip variant suffixes (word-boundary aware).
-  // Suffixes like pro/plus/max are safe to remove here because normalizeModelName() is ONLY
-  // called for broad families (>20 unique normalised names). In those families the top-level
-  // name (e.g. "Gemini", "GPT") is the canonical identity; granular models such as
-  // "Gemini Pro" live in smaller families where this function is never invoked.
-  n = n.replace(/\b(instruct|chat|latest|preview|free|turbo|fast|base|pt|online|thinking|lite|mini|nano|pro|plus|ultra|max|standard|default|code|coder|coding|it|bf16|fp8|fp16|awq|gptq|gguf|bnb|qlora|lora|v1|v2|v3|v4|v5|v6|v7|v8|v9)\b/g, ' ');
-  // Strip decimal minor version suffixes (e.g. GPT-5.1 → GPT-5, GPT-5.2 → GPT-5)
-  // Must run before the size-indicator strip to avoid consuming '5.1b'
-  n = n.replace(/\b([a-z0-9]+)\.([0-9]{1,2})\b/g, '$1');
+  // Strip only truly redundant deployment/quantization suffixes.
+  // Version identifiers (v1-v9), size indicators (mini, nano, lite), tier markers
+  // (pro, plus, ultra, max), and capability variants (thinking, code, coder, coding)
+  // are intentionally NOT stripped — they distinguish different models.
+  n = n.replace(/\b(instruct|chat|latest|preview|free|turbo|fast|base|pt|online|standard|default|it|bf16|fp8|fp16|awq|gptq|gguf|bnb|qlora|lora)\b/g, ' ');
   // Strip 4-digit date stamps that look like MMDD or YYMM (e.g. 0324, 0905, 2507, 2512)
   n = n.replace(/\b(?:(0[1-9]|[12][0-9]|3[01])(0[1-9]|1[0-2])|(0[1-9]|1[0-2])(0[1-9]|[12][0-9]|3[01]))\b/g, ' '); // DDMM or MMDD
   // YYYYMMDD (20240324), YYYYMM (202403), or YYMM (2403) — year range 2020–2039, valid month only
   n = n.replace(/\b(?:20[2-3][0-9](?:0[1-9]|1[0-2])(?:0[1-9]|[12][0-9]|3[01])|20[2-3][0-9](?:0[1-9]|1[0-2])|[2-3][0-9](?:0[1-9]|1[0-2]))\b/g, ' ');
-  // Strip model size indicators (e.g. 7b, 8b, 13b, 30b, 32b, 70b, 72b, 120b, 235b, 480b, 671b, 1.5b, 3b)
-  n = n.replace(/\b[0-9]+(?:\.[0-9]+)?[bB]\b/g, ' ');
-  // Strip parameter count patterns like 235B-A22B (MoE notation)
-  n = n.replace(/\b[0-9]+[bB]-[aA][0-9]+[bB]\b/g, ' ');
   // Apply slug normalisation (strips spaces, dots, dashes, etc.)
   return nameToSlug(n);
 }
