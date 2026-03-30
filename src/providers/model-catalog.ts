@@ -358,6 +358,9 @@ let _catalogModels: CatalogModel[] = [];
 /** The last-computed synthetic canonical models. Set by applySyntheticCanonicalModels(). */
 let _syntheticCanonicals: import('./synthetic.ts').CanonicalModel[] = [];
 
+/** O(1) index for getSyntheticModelInfoFromCatalog lookups. Rebuilt whenever _syntheticCanonicals is set. */
+let _syntheticCanonicalIndex = new Map<string, import('./synthetic.ts').CanonicalModel>();
+
 /** In-memory pricing catalog (replaceable in tests) */
 let _pricingCatalog: PricingCatalog | null = null;
 
@@ -558,6 +561,7 @@ async function applySyntheticCanonicalModels(models: CatalogModel[]): Promise<vo
 
     const canonical = buildSyntheticCanonicals(models);
     _syntheticCanonicals = canonical as import('./synthetic.ts').CanonicalModel[];
+    _syntheticCanonicalIndex = new Map(_syntheticCanonicals.map(c => [c.id, c]));
     setSyntheticCanonicalModels(canonical as import('./synthetic.ts').CanonicalModel[]);
     logger.debug('[model-catalog] Synthetic canonicals built', {
       count: canonical.length,
@@ -621,6 +625,7 @@ export function initCatalog(): void {
     // Synchronously build synthetic canonicals so getSyntheticModelInfoFromCatalog() is
     // available immediately (no async, no dynamic import needed at this point).
     _syntheticCanonicals = buildSyntheticCanonicals(cached.models) as import('./synthetic.ts').CanonicalModel[];
+    _syntheticCanonicalIndex = new Map(_syntheticCanonicals.map(c => [c.id, c]));
     // Also inject into SyntheticProvider runtime (async — fire and forget)
     applySyntheticCanonicalModels(cached.models).catch((err) => {
       logger.debug('[model-catalog] Failed to seed synthetic models from cache', { error: String(err) });
@@ -1204,7 +1209,7 @@ onBenchmarksRefreshed(clearSyntheticBenchmarkCache);
 export function getSyntheticModelInfoFromCatalog(
   modelId: string,
 ): SyntheticModelInfo | null {
-  const c = _syntheticCanonicals.find(m => m.id === modelId);
+  const c = _syntheticCanonicalIndex.get(modelId);
   if (!c) return null;
 
   // Compute best composite score across all backend model IDs (the real IDs that exist in ZeroEval).
