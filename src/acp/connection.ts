@@ -88,9 +88,32 @@ export class AcpConnection {
         stderr: 'pipe',
       });
 
-      // 2. Build ndJsonStream from child stdio
+      // 2. Build ndJsonStream from child stdio.
+      //
+      // In Bun, childProcess.stdin is a FileSink (not a Web WritableStream).
+      // ndJsonStream requires a Web WritableStream<Uint8Array> so it can call
+      // .getWriter() internally.  Wrap the FileSink in a WritableStream adapter.
+      if (!this.childProcess.stdin) {
+        throw new Error('ACP subprocess stdin not available — was it spawned with stdin: "pipe"?');
+      }
+      const bunStdin = this.childProcess.stdin as import('bun').FileSink;
+      const stdinStream = new WritableStream<Uint8Array>({
+        write(chunk) {
+          bunStdin.write(chunk);
+        },
+        close() {
+          bunStdin.end();
+        },
+        abort() {
+          bunStdin.end();
+        },
+      });
+
       const stream = ndJsonStream(
-        this.childProcess.stdin as unknown as WritableStream<Uint8Array>,
+        stdinStream,
+        // Bun's piped stdout is ReadableStream-compatible at runtime — getReader() works
+        // correctly. The double-cast is safe here because Bun's ReadStream implements the
+        // same interface, unlike stdin (FileSink) which lacks getWriter().
         this.childProcess.stdout as unknown as ReadableStream<Uint8Array>,
       );
 
