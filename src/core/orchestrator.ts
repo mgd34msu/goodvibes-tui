@@ -15,6 +15,7 @@ import type { PermissionManager } from '../permissions/manager.ts';
 import type { AcpManager } from '../acp/manager.ts';
 import type { SubagentTask } from '../acp/protocol.ts';
 import { planManager } from './plan-manager-instance.ts';
+import { ConsecutiveErrorBreaker } from './circuit-breaker.ts';
 import type { ExecutionPlan, PlanItem } from './execution-plan.ts';
 import { classifyIntent } from './intent-classifier.ts';
 import { getTokenLimitsForModel, getContextWindowForModel } from '../providers/model-limits.ts';
@@ -283,6 +284,7 @@ export class Orchestrator {
       const streamEnabled = configManager.get('display.stream') as boolean;
 
       let continueLoop = true;
+      const circuitBreaker = new ConsecutiveErrorBreaker();
       while (continueLoop) {
         // Wire up streaming delta handler when streaming is enabled
         let streamAccumulated = '';
@@ -453,6 +455,34 @@ export class Orchestrator {
 
           // Add tool results — LLM sees them on next iteration
           this.conversation.addToolResults(results);
+
+          // --- Consecutive error circuit breaker ---
+          // Count failures in this batch of tool results
+          const allFailed = results.length > 0 && results.every(r => r.success === false);
+          if (allFailed) {
+            const cbResult = circuitBreaker.recordAllFailed();
+            logger.warn(`Orchestrator: consecutive all-error turn ${circuitBreaker.consecutiveErrors}`);
+            if (cbResult === 'break') {
+              // Log when circuit breaker trips so it's visible in logs
+              logger.warn(`Orchestrator: circuit breaker tripped at ${circuitBreaker.consecutiveErrors} consecutive all-error turns`);
+              this.conversation.addSystemMessage(
+                `CIRCUIT BREAKER: You have made ${circuitBreaker.consecutiveErrors} consecutive turns where ALL tool calls failed. ` +
+                `The loop is stopping to prevent an infinite failure cycle. ` +
+                `Please reassess your approach and try a completely different strategy.`
+              );
+              this.bus.emit('turn:complete', { response: '' });
+              continueLoop = false;
+            } else if (cbResult === 'warn') {
+              this.conversation.addSystemMessage(
+                `WARNING: You have made ${circuitBreaker.consecutiveErrors} consecutive tool calls that ALL failed. ` +
+                `Stop attempting the same approach. Describe what you're trying to do and what's going wrong, ` +
+                `then try a completely different strategy.`
+              );
+            }
+          } else if (results.length > 0) {
+            // At least one success — reset the counter
+            circuitBreaker.recordSuccess();
+          }
 
           // If agents were spawned, end the turn — agents run in background, WRFC handles quality.
           // Also end if user typed something during tool execution.
