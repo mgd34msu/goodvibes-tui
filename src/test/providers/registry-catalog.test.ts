@@ -333,3 +333,31 @@ describe('Structural verification', () => {
     }
   });
 });
+
+// ---------------------------------------------------------------------------
+// ProviderRegistry.get() — alias resolution
+// ---------------------------------------------------------------------------
+
+describe('ProviderRegistry.get() — alias resolution', () => {
+  beforeEach(reset);
+  afterEach(() => { _resetForTest(); _resetProviderRegistryForTesting(); });
+
+  it('registry.get("inception") resolves via alias to the inceptionlabs provider', () => {
+    const registry = getProviderRegistry();
+    const provider = registry.get('inception');
+    expect(provider).toBeDefined();
+    expect(provider.name).toBe('inceptionlabs');
+  });
+
+  it('registry.get("inceptionlabs") returns the inceptionlabs provider directly', () => {
+    const registry = getProviderRegistry();
+    const provider = registry.get('inceptionlabs');
+    expect(provider).toBeDefined();
+    expect(provider.name).toBe('inceptionlabs');
+  });
+
+  it('registry.get("nonexistent") throws', () => {
+    const registry = getProviderRegistry();
+    expect(() => registry.get('nonexistent')).toThrow();
+  });
+});
