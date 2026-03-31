@@ -21,3 +21,5 @@ dist/
 # Artifacts
 scripts/reset-suite.sh
 .test-tmp/
+test-tmp-hooks/
+tmp/
