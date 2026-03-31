@@ -988,7 +988,7 @@ export function getConfiguredProviderIds(): string[] {
   // Source 2: Config system resolved keys (covers secrets store + env var aliases).
   // Config provider names may differ from catalog IDs (e.g., config 'gemini' = catalog 'google').
   // Add new entries here when a config provider name diverges from its catalog ID.
-  const CONFIG_TO_CATALOG: Record<string, string> = { gemini: 'google' };
+  const CONFIG_TO_CATALOG: Record<string, string> = { gemini: 'google', inceptionlabs: 'inception' };
   try {
     const configApiKeys = config.apiKeys;
     for (const [configName, key] of Object.entries(configApiKeys)) {

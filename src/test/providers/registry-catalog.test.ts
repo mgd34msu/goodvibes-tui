@@ -13,6 +13,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
 import {
   getModelRegistry,
+  getProviderRegistry,
   _resetProviderRegistryForTesting,
   type ModelDefinition,
 } from '../../providers/registry.ts';
