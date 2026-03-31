@@ -738,6 +738,7 @@ async function main() {
     void getPinned().then((pinned) => {
       input.modelPicker.pinnedIds = new Set(pinned);
     });
+    void input.modelPicker.loadRecentModels().catch(() => {}); // non-blocking, fire-and-forget
     input.modelPicker.open(models, runtime.model);
     bus.emit('render:request');
   };

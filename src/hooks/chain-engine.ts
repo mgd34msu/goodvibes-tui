@@ -105,6 +105,7 @@ function tokenize(input: string): Token[] {
  * Any expression that references identifiers not in the context, or
  * uses unsupported constructs, evaluates to false.
  */
+/** @internal — used directly by safe-evaluate.test.ts; not part of public API. */
 export function safeEvaluate(condition: string, context: Record<string, unknown>): boolean {
   const tokens = tokenize(condition);
   let pos = 0;

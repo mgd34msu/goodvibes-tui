@@ -74,7 +74,7 @@ export function getBinaryPath(name: string): string {
 /**
  * Check if a binary is already downloaded and cached.
  */
-export function isBinaryCached(name: string): boolean {
+function isBinaryCached(name: string): boolean {
   return existsSync(getBinaryPath(name));
 }
 
@@ -82,7 +82,7 @@ export function isBinaryCached(name: string): boolean {
  * Download a binary from GitHub releases (latest).
  * Returns the path to the downloaded binary, or null on failure.
  */
-export async function downloadBinary(name: string): Promise<string | null> {
+async function downloadBinary(name: string): Promise<string | null> {
   const spec = BINARY_SPECS.find(s => s.name === name);
   if (!spec) {
     logger.debug(`BinaryDownloader: unknown binary '${name}'`);
@@ -221,7 +221,7 @@ export async function downloadBinary(name: string): Promise<string | null> {
  * Installs to .goodvibes/bin/ by setting GOBIN.
  * Returns the path to gopls, or null if go is not installed or install fails.
  */
-export async function ensureGopls(): Promise<string | null> {
+async function ensureGopls(): Promise<string | null> {
   const destPath = getBinaryPath('gopls');
 
   // Already cached

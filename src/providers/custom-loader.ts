@@ -82,7 +82,7 @@ function resolveApiKey(config: CustomProviderConfig): string {
  * Validate a single parsed JSON object against the CustomProviderConfig schema.
  * Returns { valid, errors } — errors is empty when valid.
  */
-export function validateCustomProvider(data: unknown): { valid: boolean; errors: string[] } {
+function validateCustomProvider(data: unknown): { valid: boolean; errors: string[] } {
   const errors: string[] = [];
 
   if (typeof data !== 'object' || data === null || Array.isArray(data)) {

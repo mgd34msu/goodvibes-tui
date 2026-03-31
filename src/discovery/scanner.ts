@@ -476,7 +476,7 @@ export async function fetchModelContextWindows(
  * Returns a map of modelId -> maxOutputTokens. Missing entries mean the server
  * didn't report an output limit for that model.
  */
-export async function fetchModelOutputLimits(
+async function fetchModelOutputLimits(
   host: string,
   port: number,
   serverType: ServerType,

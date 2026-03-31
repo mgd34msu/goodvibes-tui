@@ -18,6 +18,7 @@ import type { EventBus } from '../core/event-bus.ts';
 import type { SubagentInfo, SubagentResult, SubagentTask } from './protocol.ts';
 import type { PermissionCategory } from '../permissions/manager.ts';
 import { logger } from '../utils/logger.ts';
+import { AcpError } from '../types/errors.ts';
 import { VERSION } from '../version.ts';
 
 /** Shape of an agent_message_chunk session update that carries text content. */
@@ -94,7 +95,7 @@ export class AcpConnection {
       // ndJsonStream requires a Web WritableStream<Uint8Array> so it can call
       // .getWriter() internally.  Wrap the FileSink in a WritableStream adapter.
       if (!this.childProcess.stdin) {
-        throw new Error('ACP subprocess stdin not available — was it spawned with stdin: "pipe"?');
+        throw new AcpError('ACP subprocess stdin not available — was it spawned with stdin: "pipe"?');
       }
       const bunStdin = this.childProcess.stdin as import('bun').FileSink;
       const stdinStream = new WritableStream<Uint8Array>({
