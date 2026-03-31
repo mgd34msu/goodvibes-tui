@@ -348,8 +348,9 @@ describe('AgentOrchestrator', () => {
   // -------------------------------------------------------------------------
 
   describe('max turn limit', () => {
-    test('fails with error message after exceeding MAX_TURNS', async () => {
-      // Provider that always returns a tool call — would loop forever without the limit
+    test('circuit breaker trips on consecutive all-error turns before MAX_TURNS', async () => {
+      // Provider that always returns an unknown tool call — every turn all tools fail,
+      // triggering the circuit breaker (CONSECUTIVE_ERROR_BREAK = 10) before MAX_TURNS (50)
       const provider = makeMockProvider([
         { content: '', toolCalls: [{ id: 'call-inf', name: 'noop', arguments: {} }] },
       ]);
@@ -358,8 +359,8 @@ describe('AgentOrchestrator', () => {
       await withMockProvider(provider, () => orchestrator.runAgent(record));
 
       expect(record.status).toBe('failed');
-      expect(record.error).toContain('Exceeded maximum turn limit');
-      expect(record.error).toContain('50');
+      expect(record.error).toContain('Circuit breaker tripped');
+      expect(record.error).toContain('10');
     });
   });
 

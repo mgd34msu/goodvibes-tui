@@ -16,7 +16,6 @@ import type { LLMProvider } from './interface.ts';
 import { getProviderRegistry } from './registry.ts';
 import { hasKeyForProvider } from './model-catalog.ts';
 import type { CatalogProvider } from './model-catalog.ts';
-import { logger } from '../utils/logger.ts';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -393,12 +392,14 @@ export function autoRegisterProviders(
       getProviderRegistry().register(provider);
       registered.push(entry.name);
     } catch (err) {
-      logger.warn('[auto-register] Failed to register', { name: entry.name, error: String(err) });
+      const errMsg = err instanceof Error ? err.message : String(err);
+      process.stderr.write(`[auto-register] Failed to register ${entry.name}: ${errMsg}\n`);
     }
   }
 
   if (registered.length > 0) {
-    logger.info('[auto-register] Auto-registered', { count: registered.length, providers: registered.join(', ') });
+    const noun = registered.length === 1 ? 'provider' : 'providers';
+    process.stderr.write(`[auto-register] Auto-registered ${registered.length} ${noun}: ${registered.join(', ')}\n`);
   }
 
   return registered;
