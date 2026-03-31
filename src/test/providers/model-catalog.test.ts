@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, spyOn, mock, afterAll } from 'bun:test';
 import fs from 'node:fs';
+import { logger } from '../../utils/logger.ts';
 import {
   normalizeModelId,
   hasKeyForProvider,
@@ -174,14 +175,14 @@ describe('ensureCacheDir', () => {
   it('logs to stderr on unexpected permission error', () => {
     const permError = Object.assign(new Error('EACCES: permission denied'), { code: 'EACCES' });
     const mkdirSpy = spyOn(fs, 'mkdirSync').mockImplementation(() => { throw permError; });
-    const stderrSpy = spyOn(process.stderr, 'write').mockImplementation(() => true);
+    const warnSpy = spyOn(logger, 'warn').mockImplementation(() => {});
     ensureCacheDir('/root/forbidden');
-    expect(stderrSpy).toHaveBeenCalled();
-    const call = stderrSpy.mock.calls[0][0] as string;
-    expect(call).toContain('[model-catalog]');
-    expect(call).toContain('/root/forbidden');
+    expect(warnSpy).toHaveBeenCalled();
+    const [message, data] = warnSpy.mock.calls[0] as [string, Record<string, unknown>];
+    expect(message).toContain('[model-catalog]');
+    expect((data as Record<string, unknown>).dir).toBe('/root/forbidden');
     mkdirSpy.mockRestore();
-    stderrSpy.mockRestore();
+    warnSpy.mockRestore();
   });
 });
 
