@@ -15,8 +15,8 @@
  * Public API (stable — backward compatible with v1):
  *   estimateConversationTokens(messages)   — rough token count for a message array
  *   estimateTokens(text)                   — rough token count for a string
- *   shouldAutoCompact(opts)                — check if threshold is exceeded
- *   getCompactionThreshold(contextWindow)  — context-window-aware threshold
+ *   shouldAutoCompact(opts)                — check if 15k token buffer threshold is exceeded
+ *   compactSmallWindow(messages, keepRecent) — simplified compaction for small context windows
  *   compactMessages(ctx)                   — v2 hybrid compaction entry point
  *   checkAndCompact(autoOpts, ctx)         — check and compact if threshold exceeded
  *   getCompactionEvents()                  — return compaction event log
@@ -82,11 +82,26 @@ export interface AutoCompactOptions {
   currentTokens: number;
   /** Maximum context window for the current model. */
   contextWindow: number;
-  /** Threshold percentage (0-100) at which to trigger compaction (default: 80). */
-  threshold: number;
   /** Whether auto-compact is already in progress (prevent re-entry). */
   isCompacting: boolean;
 }
+
+// ---------------------------------------------------------------------------
+// Compaction trigger constants
+// ---------------------------------------------------------------------------
+
+/**
+ * Tokens remaining in the context window at which auto-compaction triggers.
+ * Compact when contextWindow - currentTokens <= COMPACTION_BUFFER_TOKENS.
+ * 15k gives room for the ~6.5k compaction output + LLM extraction calls.
+ */
+export const COMPACTION_BUFFER_TOKENS = 15_000;
+
+/**
+ * Context windows smaller than this use simplified compaction (summarize last N messages)
+ * instead of the full structured v2 output, since there isn't enough room for extraction calls.
+ */
+export const SMALL_WINDOW_THRESHOLD = 12_000;
 
 // ---------------------------------------------------------------------------
 // Compaction event log (in-memory, session-scoped)
@@ -132,38 +147,52 @@ export function estimateConversationTokens(messages: ProviderMessage[]): number 
 }
 
 // ---------------------------------------------------------------------------
-// Context-window-aware threshold
-// ---------------------------------------------------------------------------
-
-/**
- * Returns the compaction threshold percentage based on the model's context window.
- *
- * Larger context windows can wait longer; smaller windows must compact earlier
- * to leave room for LLM extraction calls.
- *
- *   >= 500k tokens : compact at 80%
- *   128k–500k     : compact at 75%
- *   < 128k         : compact at 65%
- */
-export function getCompactionThreshold(contextWindow: number): number {
-  if (contextWindow >= 500_000) return 80;
-  if (contextWindow >= 128_000) return 75;
-  return 65;
-}
-
-// ---------------------------------------------------------------------------
 // Should compact?
 // ---------------------------------------------------------------------------
 
 /**
- * Returns true if the context usage exceeds the threshold and compaction
- * has not already been triggered.
+ * Returns true if the remaining context window is within COMPACTION_BUFFER_TOKENS
+ * and compaction has not already been triggered.
+ *
+ * Triggers when: contextWindow - currentTokens <= 15000
+ * The 15k buffer gives room for the ~6.5k compaction output + LLM extraction calls
+ * + post-compaction work before the window is exhausted.
  */
 export function shouldAutoCompact(opts: AutoCompactOptions): boolean {
-  const { currentTokens, contextWindow, threshold, isCompacting } = opts;
+  const { currentTokens, contextWindow, isCompacting } = opts;
   if (isCompacting || contextWindow <= 0) return false;
-  const usagePct = (currentTokens / contextWindow) * 100;
-  return usagePct >= threshold;
+  return (contextWindow - currentTokens) <= COMPACTION_BUFFER_TOKENS;
+}
+
+// ---------------------------------------------------------------------------
+// Small-window simplified compaction
+// ---------------------------------------------------------------------------
+
+/**
+ * Simplified compaction for context windows smaller than SMALL_WINDOW_THRESHOLD (12k).
+ * There isn't enough room for LLM extraction calls, so we just keep the last
+ * `keepRecent` messages and add a brief summary note.
+ *
+ * @param messages - Full conversation message array
+ * @param keepRecent - Number of recent messages to keep verbatim (default: 10)
+ * @returns Truncated message array with a summary placeholder prepended
+ */
+export function compactSmallWindow(
+  messages: ProviderMessage[],
+  keepRecent = 10,
+): ProviderMessage[] {
+  if (messages.length <= keepRecent) return messages;
+  const recentMessages = messages.slice(-keepRecent);
+  const omittedCount = messages.length - keepRecent;
+  const summaryMsg: ProviderMessage = {
+    role: 'user' as const,
+    content: `[Context compacted — small window mode, ${omittedCount} messages summarized]`,
+  };
+  const summaryReply: ProviderMessage = {
+    role: 'assistant' as const,
+    content: `[${omittedCount} earlier messages omitted to fit context window. Continuing from recent conversation.]`,
+  };
+  return [summaryMsg, summaryReply, ...recentMessages];
 }
 
 // ---------------------------------------------------------------------------

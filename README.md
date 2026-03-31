@@ -155,7 +155,7 @@ Language intelligence powered by bundled LSP servers (TypeScript, Python, Bash, 
 - **Hybrid structured compaction** — deterministic framework with targeted LLM extraction for specific tasks
 - **10 discrete sections** with per-section token budgets (current task, running agents, recent conversation, tool results, agent activity table, resolved problems, plan progress, session lineage, and more)
 - **Intentionally small output** — less compaction = more post-compaction working space; unused budget stays unused
-- **Context-window-aware thresholds** — 80% for >=500k windows, 75% for 128k–500k, 65% for <128k
+- **Auto-compacts when within 15k tokens of context limit** (configurable) — small windows (<12k) use simplified compaction
 - Empty sections are omitted entirely — no placeholder headers, no wasted tokens
 - Multi-turn coherence: user-assistant pairs are always kept together during message filtering
 - Post-compaction validation: checks that critical sections (handoff header, current task, running agents, session memories) are present

@@ -11,7 +11,9 @@ import {
   getLastCompactionEvent,
   compactMessages,
   checkAndCompact,
-  getCompactionThreshold,
+  COMPACTION_BUFFER_TOKENS,
+  SMALL_WINDOW_THRESHOLD,
+  compactSmallWindow,
 } from '../../core/context-compaction.ts';
 import type { ProviderMessage, ContentPart, LLMProvider, ChatRequest, ChatResponse } from '../../providers/interface.ts';
 import type { ProviderRegistry } from '../../providers/registry.ts';
@@ -104,7 +106,6 @@ describe('shouldAutoCompact', () => {
     expect(shouldAutoCompact({
       currentTokens: 90_000,
       contextWindow: 100_000,
-      threshold: 80,
       isCompacting: true,
     })).toBe(false);
   });
@@ -113,52 +114,48 @@ describe('shouldAutoCompact', () => {
     expect(shouldAutoCompact({
       currentTokens: 1000,
       contextWindow: 0,
-      threshold: 80,
       isCompacting: false,
     })).toBe(false);
   });
 
-  it('returns false when usage is below threshold', () => {
-    expect(shouldAutoCompact({
-      currentTokens: 70_000,
-      contextWindow: 100_000,
-      threshold: 80,
-      isCompacting: false,
-    })).toBe(false);
-  });
-
-  it('returns true when usage equals threshold exactly', () => {
+  it('returns false when remaining tokens > 15k buffer', () => {
     expect(shouldAutoCompact({
       currentTokens: 80_000,
       contextWindow: 100_000,
-      threshold: 80,
       isCompacting: false,
-    })).toBe(true);
+    })).toBe(false); // 20k remaining > 15k
   });
 
-  it('returns true when usage exceeds threshold', () => {
+  it('returns true when remaining tokens equal 15k buffer exactly', () => {
+    expect(shouldAutoCompact({
+      currentTokens: 100_000 - COMPACTION_BUFFER_TOKENS,
+      contextWindow: 100_000,
+      isCompacting: false,
+    })).toBe(true); // exactly 15k remaining
+  });
+
+  it('returns true when remaining tokens are below 15k buffer', () => {
     expect(shouldAutoCompact({
       currentTokens: 95_000,
       contextWindow: 100_000,
-      threshold: 80,
       isCompacting: false,
-    })).toBe(true);
+    })).toBe(true); // 5k remaining < 15k
   });
 
-  it('respects custom threshold values', () => {
-    const base = { contextWindow: 100_000, isCompacting: false };
-    expect(shouldAutoCompact({ ...base, currentTokens: 60_000, threshold: 60 })).toBe(true);
-    expect(shouldAutoCompact({ ...base, currentTokens: 59_000, threshold: 60 })).toBe(false);
-    expect(shouldAutoCompact({ ...base, currentTokens: 99_000, threshold: 99 })).toBe(true);
-  });
-
-  it('handles 100% usage with 100 threshold', () => {
+  it('returns true when context is nearly exhausted', () => {
     expect(shouldAutoCompact({
-      currentTokens: 100_000,
+      currentTokens: 99_000,
       contextWindow: 100_000,
-      threshold: 100,
       isCompacting: false,
-    })).toBe(true);
+    })).toBe(true); // 1k remaining << 15k
+  });
+
+  it('COMPACTION_BUFFER_TOKENS constant is 15000', () => {
+    expect(COMPACTION_BUFFER_TOKENS).toBe(15_000);
+  });
+
+  it('SMALL_WINDOW_THRESHOLD constant is 12000', () => {
+    expect(SMALL_WINDOW_THRESHOLD).toBe(12_000);
   });
 });
 
@@ -444,26 +441,26 @@ describe('compactMessages', () => {
 // ---------------------------------------------------------------------------
 
 describe('checkAndCompact', () => {
-  it('returns null when usage is below the threshold', async () => {
+  it('returns null when remaining tokens > 15k buffer', async () => {
     const provider = makeMockProvider('• summary');
     const registry = makeMockRegistry(provider);
     const messages = makeMessages(10);
 
     const result = await checkAndCompact(
-      { currentTokens: 50_000, contextWindow: 100_000, threshold: 80, isCompacting: false },
+      { currentTokens: 50_000, contextWindow: 100_000, isCompacting: false },
       { registry, modelId: 'mock-model', messages, keepRecentMessages: 4 },
     );
 
     expect(result).toBeNull();
   });
 
-  it('performs compaction and returns a result when usage meets the threshold', async () => {
+  it('performs compaction and returns a result when remaining tokens <= 15k buffer', async () => {
     const provider = makeMockProvider('• auto-compacted summary');
     const registry = makeMockRegistry(provider);
     const messages = makeMessages(20);
 
     const result = await checkAndCompact(
-      { currentTokens: 85_000, contextWindow: 100_000, threshold: 80, isCompacting: false },
+      { currentTokens: 90_000, contextWindow: 100_000, isCompacting: false },
       { registry, modelId: 'mock-model', messages, keepRecentMessages: 5 },
     );
 
@@ -475,24 +472,43 @@ describe('checkAndCompact', () => {
 });
 
 // ---------------------------------------------------------------------------
-// getCompactionThreshold
+// compactSmallWindow
 // ---------------------------------------------------------------------------
 
-describe('getCompactionThreshold', () => {
-  it('returns 80 for context windows >= 500k', () => {
-    expect(getCompactionThreshold(500_000)).toBe(80);
-    expect(getCompactionThreshold(1_000_000)).toBe(80);
+describe('compactSmallWindow', () => {
+  it('returns all messages unchanged when count <= keepRecent', () => {
+    const messages = makeMessages(5);
+    const result = compactSmallWindow(messages, 10);
+    expect(result).toEqual(messages);
   });
 
-  it('returns 75 for context windows 128k-499k', () => {
-    expect(getCompactionThreshold(128_000)).toBe(75);
-    expect(getCompactionThreshold(200_000)).toBe(75);
-    expect(getCompactionThreshold(499_999)).toBe(75);
+  it('truncates to keepRecent messages plus summary pair when over limit', () => {
+    const messages = makeMessages(20);
+    const result = compactSmallWindow(messages, 10);
+    // 2 summary messages + 10 recent = 12
+    expect(result.length).toBe(12);
   });
 
-  it('returns 65 for context windows < 128k', () => {
-    expect(getCompactionThreshold(127_999)).toBe(65);
-    expect(getCompactionThreshold(32_000)).toBe(65);
-    expect(getCompactionThreshold(0)).toBe(65);
+  it('prepends a user/assistant summary pair at the start', () => {
+    const messages = makeMessages(15);
+    const result = compactSmallWindow(messages, 5);
+    expect(result[0].role).toBe('user');
+    expect(result[0].content).toContain('compacted');
+    expect(result[1].role).toBe('assistant');
+    expect(result[1].content as string).toContain('omitted');
+  });
+
+  it('preserves the most recent N messages verbatim', () => {
+    const messages = makeMessages(10);
+    const keepRecent = 4;
+    const result = compactSmallWindow(messages, keepRecent);
+    const keptMessages = result.slice(2); // skip summary pair
+    expect(keptMessages).toEqual(messages.slice(-keepRecent));
+  });
+
+  it('defaults to keepRecent=10', () => {
+    const messages = makeMessages(20);
+    const result = compactSmallWindow(messages);
+    expect(result.length).toBe(12); // 2 summary + 10 recent
   });
 });

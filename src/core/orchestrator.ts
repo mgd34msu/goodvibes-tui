@@ -19,7 +19,7 @@ import { ConsecutiveErrorBreaker } from './circuit-breaker.ts';
 import type { ExecutionPlan, PlanItem } from './execution-plan.ts';
 import { classifyIntent } from './intent-classifier.ts';
 import { getTokenLimitsForModel, getContextWindowForModel } from '../providers/model-limits.ts';
-import { shouldAutoCompact, estimateConversationTokens, getCompactionThreshold } from './context-compaction.ts';
+import { shouldAutoCompact, estimateConversationTokens, COMPACTION_BUFFER_TOKENS, SMALL_WINDOW_THRESHOLD, compactSmallWindow } from './context-compaction.ts';
 import type { CompactionContext } from './context-compaction.ts';
 import { sessionMemoryStore } from './session-memory.ts';
 import { sessionLineageTracker } from './session-lineage.ts';
@@ -610,7 +610,7 @@ export class Orchestrator {
         }
       }
 
-      // Context usage check: auto-compact when threshold exceeded, otherwise warn.
+      // Context usage check: auto-compact when within 15k tokens of context limit.
       // Uses model-limits data for context window (OpenRouter-sourced when available,
       // falls back to static registry value).
       const totalTokens = this.lastInputTokens;
@@ -618,23 +618,16 @@ export class Orchestrator {
       const maxTokens = getContextWindowForModel(currentModel);
       if (maxTokens > 0) {
         const usagePct = Math.round((totalTokens / maxTokens) * 100);
-        // Context-window-aware threshold: larger windows have more headroom, so trigger
-        // compaction earlier as a percentage; smaller windows need earlier intervention
-        // to leave room for the LLM-assisted extraction calls during compaction.
-        // Threshold 0 = disabled (existing convention).
+        // Disable check: autoCompactThreshold <= 0 means disabled (existing convention).
         const configuredThreshold = configManager.get('behavior.autoCompactThreshold') as number;
-        // Scale threshold down for smaller context windows using getCompactionThreshold.
-        // Threshold 0 = disabled (existing convention).
-        const effectiveThreshold = configuredThreshold <= 0
-          ? configuredThreshold // disabled — preserve 0
-          : Math.min(configuredThreshold, getCompactionThreshold(maxTokens));
+        const autoCompactEnabled = configuredThreshold > 0;
         const bracket = Math.floor(usagePct / 10) * 10;
 
         if (
+          autoCompactEnabled &&
           shouldAutoCompact({
             currentTokens: totalTokens,
             contextWindow: maxTokens,
-            threshold: effectiveThreshold,
             isCompacting: this.isCompacting,
           })
         ) {
@@ -643,7 +636,7 @@ export class Orchestrator {
           this.conversation.addSystemMessage(
             `Context usage at ${usagePct}% (${totalTokens}/${maxTokens} tokens). Auto-compacting conversation...`
           );
-          this.bus.emit('context:warning', { usage: usagePct, threshold: effectiveThreshold });
+          this.bus.emit('context:warning', { usage: usagePct, threshold: COMPACTION_BUFFER_TOKENS });
           this.bus.emit('render:request');
 
           // Pre:compact:auto hook — await to honour deny decisions
@@ -656,7 +649,7 @@ export class Orchestrator {
               specific: 'auto',
               sessionId: this.sessionId,
               timestamp: Date.now(),
-              payload: { trigger: 'auto', usagePct, totalTokens, maxTokens, threshold: effectiveThreshold },
+              payload: { trigger: 'auto', usagePct, totalTokens, maxTokens },
             }).catch((err: unknown) => { logger.debug('Pre:compact:auto hook error', { error: String(err) }); return { ok: true } as import('../hooks/types.ts').HookResult; });
             if (preAutoResult.decision === 'deny') {
               this.isCompacting = false;
@@ -665,83 +658,115 @@ export class Orchestrator {
             }
           }
 
-          // Build v2 compaction context from live data sources
-          const agentManager = AgentManager.getInstance();
-          const wrfcController = WrfcController.getInstance();
-          const compactionCtx: CompactionContext = {
-            messages: this.conversation.getMessagesForLLM(),
-            sessionMemories: sessionMemoryStore.list(),
-            lineageEntries: sessionLineageTracker.getEntries(),
-            agents: agentManager.list().filter(a => a.status === 'running' || a.status === 'pending'),
-            wrfcChains: wrfcController.listChains(),
-            activePlan: planManager.getActive(),
-            compactionCount: sessionLineageTracker.getCompactionCount(),
-            contextWindow: maxTokens,
-            trigger: 'auto',
-            extractionModelId: currentModel.id,
-            extractionProvider: currentModel.provider,
-          };
+          // For small context windows, use simplified compaction instead of full v2
+          // Outer try/catch ensures isCompacting is always reset on any synchronous error
+          try {
+            const currentMsgs = this.conversation.getMessagesForLLM();
+            const useSmallWindow = maxTokens < SMALL_WINDOW_THRESHOLD;
 
-          // Run compaction without blocking current turn completion
-          if (!skipAutoCompact) void this.conversation.compact(
-            providerRegistry,
-            currentModel.id,
-            10,
-            'auto',
-            currentModel.provider,
-            compactionCtx,
-          ).then(() => {
-            this.isCompacting = false;
-            this.lastWarningBracket = 0; // Reset so warnings work after compaction
-            this.conversation.addSystemMessage(
-              'Context auto-compacted. Conversation history summarized to free context window.'
-            );
-            this.bus.emit('render:request');
-            logger.info('Orchestrator: auto-compact complete', {
-              modelId: currentModel.id,
-              usagePct,
-              threshold: effectiveThreshold,
-            });
-            // Post:compact:auto hook (fire-and-forget)
-            if (this.hookDispatcher) {
-              this.hookDispatcher.fire({
-                path: 'Post:compact:auto',
-                phase: 'Post',
-                category: 'compact',
-                specific: 'auto',
-                sessionId: this.sessionId,
-                timestamp: Date.now(),
-                payload: { trigger: 'auto', usagePct, totalTokens, maxTokens, threshold: effectiveThreshold },
-              }).catch((err: unknown) => { logger.debug('Post:compact:auto hook error', { error: String(err) }); });
+            // Run compaction without blocking current turn completion
+            // Small windows (<12k) use simplified compaction; larger use full v2
+            if (!skipAutoCompact && useSmallWindow) {
+              try {
+                const compactedMsgs = compactSmallWindow(currentMsgs, 10);
+                this.conversation.replaceMessagesForLLM(compactedMsgs);
+                this.isCompacting = false;
+                this.lastWarningBracket = 0;
+                this.conversation.addSystemMessage(
+                  'Context auto-compacted (small window mode). Kept last 10 messages.'
+                );
+                this.bus.emit('render:request');
+              } catch (err: unknown) {
+                this.isCompacting = false;
+                const msg = err instanceof Error ? err.message : String(err);
+                logger.error('Orchestrator: small-window auto-compact failed', { error: msg });
+                this.conversation.addSystemMessage(
+                  `Auto-compact failed: ${msg}. Use /compact to retry manually.`
+                );
+                this.bus.emit('render:request');
+              }
+            } else if (!skipAutoCompact) {
+              // Build v2 compaction context from live data sources
+              const agentManager = AgentManager.getInstance();
+              const wrfcController = WrfcController.getInstance();
+              const compactionCtx: CompactionContext = {
+                messages: currentMsgs,
+                sessionMemories: sessionMemoryStore.list(),
+                lineageEntries: sessionLineageTracker.getEntries(),
+                agents: agentManager.list().filter(a => a.status === 'running' || a.status === 'pending'),
+                wrfcChains: wrfcController.listChains(),
+                activePlan: planManager.getActive(),
+                compactionCount: sessionLineageTracker.getCompactionCount(),
+                contextWindow: maxTokens,
+                trigger: 'auto',
+                extractionModelId: currentModel.id,
+                extractionProvider: currentModel.provider,
+              };
+              void this.conversation.compact(
+                providerRegistry,
+                currentModel.id,
+                10,
+                'auto',
+                currentModel.provider,
+                compactionCtx,
+              ).then(() => {
+                this.isCompacting = false;
+                this.lastWarningBracket = 0; // Reset so warnings work after compaction
+                this.conversation.addSystemMessage(
+                  'Context auto-compacted. Conversation history summarized to free context window.'
+                );
+                this.bus.emit('render:request');
+                logger.info('Orchestrator: auto-compact complete', {
+                  modelId: currentModel.id,
+                  usagePct,
+                });
+                // Post:compact:auto hook (fire-and-forget)
+                if (this.hookDispatcher) {
+                  this.hookDispatcher.fire({
+                    path: 'Post:compact:auto',
+                    phase: 'Post',
+                    category: 'compact',
+                    specific: 'auto',
+                    sessionId: this.sessionId,
+                    timestamp: Date.now(),
+                    payload: { trigger: 'auto', usagePct, totalTokens, maxTokens },
+                  }).catch((err: unknown) => { logger.debug('Post:compact:auto hook error', { error: String(err) }); });
+                }
+              }).catch((err: unknown) => {
+                this.isCompacting = false;
+                const msg = err instanceof Error ? err.message : String(err);
+                logger.error('Orchestrator: auto-compact failed', { error: msg });
+                this.conversation.addSystemMessage(
+                  `Auto-compact failed: ${msg}. Use /compact to retry manually.`
+                );
+                this.bus.emit('render:request');
+                // Fail:compact:auto hook (fire-and-forget)
+                if (this.hookDispatcher) {
+                  this.hookDispatcher.fire({
+                    path: 'Fail:compact:auto',
+                    phase: 'Fail',
+                    category: 'compact',
+                    specific: 'auto',
+                    sessionId: this.sessionId,
+                    timestamp: Date.now(),
+                    payload: { trigger: 'auto', usagePct, totalTokens, maxTokens, error: msg },
+                  }).catch((err: unknown) => { logger.debug('Fail:compact:auto hook error', { error: String(err) }); });
+                }
+              });
             }
-          }).catch((err: unknown) => {
+          } catch (compactErr: unknown) {
             this.isCompacting = false;
-            const msg = err instanceof Error ? err.message : String(err);
-            logger.error('Orchestrator: auto-compact failed', { error: msg });
-            this.conversation.addSystemMessage(
-              `Auto-compact failed: ${msg}. Use /compact to retry manually.`
-            );
+            logger.error('Auto-compact failed', { error: String(compactErr) });
+            this.conversation.addSystemMessage(`[Compact] Auto-compaction failed: ${String(compactErr)}`);
             this.bus.emit('render:request');
-            // Fail:compact:auto hook (fire-and-forget)
-            if (this.hookDispatcher) {
-              this.hookDispatcher.fire({
-                path: 'Fail:compact:auto',
-                phase: 'Fail',
-                category: 'compact',
-                specific: 'auto',
-                sessionId: this.sessionId,
-                timestamp: Date.now(),
-                payload: { trigger: 'auto', usagePct, totalTokens, maxTokens, threshold: effectiveThreshold, error: msg },
-              }).catch((err: unknown) => { logger.debug('Fail:compact:auto hook error', { error: String(err) }); });
-            }
-          });
-        } else if (usagePct >= Math.max(effectiveThreshold - 10, 50) && bracket > this.lastWarningBracket) {
-          // Warning zone: approaching threshold but not yet compacting
+          }
+        } else if (autoCompactEnabled && (maxTokens - totalTokens) <= COMPACTION_BUFFER_TOKENS * 2 && bracket > this.lastWarningBracket) {
+          // Warning zone: approaching 15k buffer but not yet at trigger point
           this.lastWarningBracket = bracket;
           this.conversation.addSystemMessage(
-            `Context usage at ${usagePct}% (${totalTokens}/${maxTokens} tokens). Auto-compact will trigger at ${effectiveThreshold}%.`
+            `Context usage at ${usagePct}% (${totalTokens}/${maxTokens} tokens). Auto-compact will trigger within ${COMPACTION_BUFFER_TOKENS.toLocaleString()} remaining tokens.`
           );
-          this.bus.emit('context:warning', { usage: usagePct, threshold: effectiveThreshold });
+          this.bus.emit('context:warning', { usage: usagePct, threshold: COMPACTION_BUFFER_TOKENS });
           this.bus.emit('render:request');
         }
       }
