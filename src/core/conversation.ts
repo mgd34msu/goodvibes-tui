@@ -708,6 +708,37 @@ export class ConversationManager {
 
 
   /**
+   * replaceMessagesForLLM - Replace the conversation's LLM-visible messages with a new set.
+   * Used by small-window compaction to swap in truncated messages without an LLM call.
+   * System messages are always preserved at the front.
+   *
+   * @param newMessages - Replacement ProviderMessage array (user/assistant/tool roles only)
+   */
+  public replaceMessagesForLLM(newMessages: ProviderMessage[]): void {
+    const originalSystemMessages = this.messages.filter(m => m.role === 'system');
+    const convertedMessages = newMessages.map(m => {
+      if (m.role === 'user') {
+        return { role: 'user' as const, content: typeof m.content === 'string' ? m.content : (m.content as ContentPart[]) };
+      }
+      if (m.role === 'assistant') {
+        const text = typeof m.content === 'string'
+          ? m.content
+          : Array.isArray(m.content)
+            ? (m.content as { type: string; text?: string }[]).filter(p => p.type === 'text').map(p => p.text ?? '').join('')
+            : String(m.content);
+        return { role: 'assistant' as const, content: text };
+      }
+      const toolMsg = m as { role: 'tool'; callId: string; content: string; name?: string };
+      return { role: 'tool' as const, callId: toolMsg.callId ?? '', content: typeof toolMsg.content === 'string' ? toolMsg.content : String(toolMsg.content) };
+    });
+    this.messages = [...originalSystemMessages, ...convertedMessages];
+    this.history.clear();
+    this.appendedUpTo = 0;
+    this.lastRenderedWidth = 0;
+    this.dirty = true;
+  }
+
+  /**
    * compact - Summarize the conversation to free context window.
    *
    * Uses context-compaction strategy:
