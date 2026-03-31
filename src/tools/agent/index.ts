@@ -14,23 +14,23 @@ import { logger } from '../../utils/logger.ts';
 const AGENT_TEMPLATES: Record<string, { description: string; defaultTools: string[] }> = {
   engineer: {
     description: 'Full-stack implementation agent',
-    defaultTools: ['read', 'write', 'edit', 'find', 'exec', 'analyze'],
+    defaultTools: ['read', 'write', 'edit', 'find', 'exec', 'analyze', 'inspect', 'fetch', 'registry'],
   },
   reviewer: {
     description: 'Code review and quality assessment',
-    defaultTools: ['read', 'find', 'analyze'],
+    defaultTools: ['read', 'find', 'analyze', 'inspect', 'fetch', 'registry'],
   },
   tester: {
     description: 'Test writing and execution',
-    defaultTools: ['read', 'write', 'find', 'exec'],
+    defaultTools: ['read', 'write', 'find', 'exec', 'analyze', 'inspect'],
   },
   researcher: {
     description: 'Codebase exploration and analysis',
-    defaultTools: ['read', 'find', 'analyze', 'inspect'],
+    defaultTools: ['read', 'find', 'analyze', 'inspect', 'fetch', 'registry'],
   },
   general: {
     description: 'General purpose agent',
-    defaultTools: ['read', 'write', 'edit', 'find', 'exec'],
+    defaultTools: ['read', 'write', 'edit', 'find', 'exec', 'analyze', 'inspect', 'fetch', 'registry'],
   },
 };
 
@@ -97,7 +97,14 @@ export class AgentManager {
     const archetype = archetypeLoader.loadArchetype(template);
     const templateDef = AGENT_TEMPLATES[template] ?? AGENT_TEMPLATES.general;
     const defaultTools = archetype ? archetype.tools : templateDef.defaultTools;
-    const tools = input.tools ?? [...defaultTools];
+    if (input.restrictTools && (!input.tools || input.tools.length === 0)) {
+      logger.warn('spawn: restrictTools=true has no effect without a tools array — falling back to template defaults', { template });
+    }
+    const tools = input.tools
+      ? (input.restrictTools
+          ? [...input.tools]  // explicit override: use ONLY these tools
+          : [...new Set([...defaultTools, ...input.tools])])  // additive: defaults + extras
+      : [...defaultTools];
 
     // Archetype may supply model/provider defaults
     if (!input.model && archetype?.model) {
@@ -573,6 +580,7 @@ export const agentTool: Tool = {
             model: taskDef.model ?? input.model,
             provider: taskDef.provider ?? input.provider,
             tools: taskDef.tools ?? input.tools,
+            restrictTools: taskDef.restrictTools ?? input.restrictTools,
             context: taskDef.context ?? input.context,
             dangerously_disable_wrfc: taskDef.dangerously_disable_wrfc ?? input.dangerously_disable_wrfc,
             cohort: input.cohort,
