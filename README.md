@@ -151,6 +151,26 @@ Language intelligence powered by bundled LSP servers (TypeScript, Python, Bash, 
 - Prompt templates system with save, browse, and execute
 - Session persistence with save/load/list
 
+### Context Compaction
+- **Hybrid structured compaction** — deterministic framework with targeted LLM extraction for specific tasks
+- **10 discrete sections** with per-section token budgets (current task, running agents, recent conversation, tool results, agent activity table, resolved problems, plan progress, session lineage, and more)
+- **Intentionally small output** — less compaction = more post-compaction working space; unused budget stays unused
+- **Context-window-aware thresholds** — 80% for >=500k windows, 75% for 128k–500k, 65% for <128k
+- Empty sections are omitted entirely — no placeholder headers, no wasted tokens
+- Multi-turn coherence: user-assistant pairs are always kept together during message filtering
+- Post-compaction validation: checks that critical sections (handoff header, current task, running agents, session memories) are present
+- **Session lineage** — append-only micro-log that survives every compaction without degradation; each entry is one line, new lines are added per compaction, old lines never change
+- **Handoff header** — first line of every compacted context tells the LLM the session is not new and prompts it to read the handoff for proper resumption
+- Trigger manually with `/compact` or automatically when context usage crosses the threshold
+
+### Session Memory
+- **`!#` prefix** — pin any message as session memory: the message is sent normally (prefix stripped) and stored for the session
+- Session memories survive all compactions unconditionally, always at the top of the compacted context
+- **`/memory list`** — view all pinned memories with their IDs
+- **`/memory add <text>`** — add a memory without sending a message
+- **`/memory remove <id>`** — remove a specific memory by ID
+- No token cap — users control how much of their context memories occupy
+
 ---
 
 ## Supported Providers & Models
@@ -526,7 +546,7 @@ Discover and introspect skills, agents, and tools.
 | `/settings` | `/cfg-ui` | Open the config/settings browser modal |
 | `/clear` | `/cls` | Clear the conversation display (keeps LLM context) |
 | `/reset` | — | Full reset: clear display and conversation context |
-| `/compact` | — | Summarize conversation to free context window |
+| `/compact` | — | Compact conversation context using hybrid structured compaction (v2) |
 | `/export [format] [path]` | — | Export conversation (markdown by default) |
 | `/share [format] [path]` | `/shr` | Export session as shareable html, json, or md (supports `--redact`) |
 | `/title [text]` | — | Show or set the conversation title |
@@ -542,6 +562,7 @@ Discover and introspect skills, agents, and tools.
 | `/permissions` | `/perms` | Show or set permission mode and per-tool settings |
 | `/secrets` | — | Manage encrypted API key secrets (set/get/list/delete) |
 | `/services` | `/svc` | Manage API service configurations |
+| `/memory [action]` | — | Session memory management: `list`, `add <text>`, `remove <id>` |
 | `/context` | `/ctx` | Inspect context window usage (token breakdown per message) |
 | `/next-error` | `/ne` | Jump to the next error message in the conversation |
 | `/prev-error` | `/pe` | Jump to the previous error message in the conversation |
