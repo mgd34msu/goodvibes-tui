@@ -177,16 +177,45 @@ Language intelligence powered by bundled LSP servers (TypeScript, Python, Bash, 
 
 Models are sourced dynamically from [models.dev](https://models.dev) — the catalog contains 4,000+ models from 105+ providers. Set an API key and the models appear automatically.
 
-Example models (sourced dynamically from models.dev):
+### Registered Providers
 
-| Model | Provider | Context | Tools | Reasoning | Multimodal |
-|-------|----------|---------|-------|-----------|------------|
-| Mercury 2 | InceptionLabs | 32k | Yes | Yes | No |
-| GPT-5.3 Chat (latest) | OpenAI | 128k | Yes | Yes | Yes |
-| Gemini 3.1 Pro (preview) | Gemini | 1M | Yes | Yes | Yes |
-| Claude Opus 4.6 | Anthropic | 1M | Yes | Yes | Yes |
-| Claude Sonnet 4.6 | Anthropic | 1M | Yes | Yes | Yes |
-| Gemini 2.5 Pro | Gemini | 1M | Yes | Yes | Yes |
+The following providers are built in. Native providers (OpenAI, Anthropic, Gemini) use dedicated API implementations; all others use the OpenAI-compatible API.
+
+| Provider | Type | Base URL | Notes |
+|----------|------|----------|-------|
+| `openai` | Native | `api.openai.com/v1` | GPT-4/GPT-5 family |
+| `anthropic` | Native | `api.anthropic.com` | Claude family |
+| `gemini` | Native | `generativelanguage.googleapis.com` | Gemini family |
+| `inceptionlabs` | OpenAI-compat | `api.inceptionlabs.ai/v1` | Mercury diffusion models |
+| `openrouter` | OpenAI-compat | `openrouter.ai/api/v1` | 100+ models, free tier |
+| `aihubmix` | OpenAI-compat | `aihubmix.com/v1` | Multi-provider hub, free tier |
+| `groq` | OpenAI-compat | `api.groq.com/openai/v1` | LPU inference, free tier |
+| `cerebras` | OpenAI-compat | `api.cerebras.ai/v1` | Wafer-scale inference, free |
+| `mistral` | OpenAI-compat | `api.mistral.ai/v1` | Mistral/Codestral/Devstral family |
+| `ollama-cloud` | OpenAI-compat | `ollama.com/v1` | Cloud-hosted Ollama models |
+| `huggingface` | OpenAI-compat | `router.huggingface.co/v1` | HF Inference Router, free tier |
+| `nvidia` | OpenAI-compat | `integrate.api.nvidia.com/v1` | NVIDIA NIM, 1000 free credits |
+| `llm7` | OpenAI-compat | `api.llm7.io/v1` | Free, no API key required |
+| `synthetic` | Failover | — | Virtual provider; routes to best available backend |
+
+**Provider aliases**: The catalog ID `inception` is resolved to `inceptionlabs` automatically.
+
+### Local Server Discovery
+
+goodvibes-tui auto-discovers local inference servers on startup. Supported server types:
+
+- **Ollama** (port 11434)
+- **LM Studio** (port 1234)
+- **vLLM** (detected via `x-vllm-*` response headers)
+- **llama.cpp** / **LocalAI** (detected via server header)
+- **Text Generation Inference (TGI)**
+- **Jan**, **GPT4All**, **KoboldCpp**, **Aphrodite**
+
+Discovered servers are registered automatically as OpenAI-compatible providers with no configuration required.
+
+### Synthetic Failover Provider
+
+The `synthetic` provider groups the same model across multiple backends under a single selectable entry. When one backend hits a rate limit or error, requests automatically failover to the next — no user action needed. Models are cataloged from models.dev (4,000+ models, 100+ providers) with a 24-hour TTL cache.
 
 Many model providers support configurable reasoning effort levels. Selectable options include: `instant`, `low`, `medium`, `high`.
 
@@ -256,21 +285,23 @@ API keys can be set in `.goodvibes/config.json`, via environment variables, or s
 
 Or set environment variables:
 
-| Provider | Environment Variable | Type |
-|----------|---------------------|------|
-| Anthropic | `ANTHROPIC_API_KEY` | Paid |
-| OpenAI | `OPENAI_API_KEY` | Paid |
-| Google Gemini | `GEMINI_API_KEY` | Paid |
-| InceptionLabs | `INCEPTION_API_KEY` | Paid |
-| Mistral | `MISTRAL_API_KEY` | Paid |
-| OpenRouter | `OPENROUTER_API_KEY` | Free tier available |
-| Groq | `GROQ_API_KEY` | Free (LPU inference) |
-| Cerebras | `CEREBRAS_API_KEY` | Free (wafer-scale inference) |
-| AIHubMix | `AIHUBMIX_API_KEY` | Free tier (rate-limited) |
-| HuggingFace | `HF_API_KEY` | Free tier (rate-limited) |
-| Ollama Cloud | `OLLAMA_CLOUD_API_KEY` | Free |
-| NVIDIA NIM | `NVIDIA_API_KEY` | 1000 free credits |
-| LLM7 | `LLM7_API_KEY` | Free |
+| Provider | Primary Env Var | Accepted Aliases | Type |
+|----------|----------------|-----------------|------|
+| Anthropic | `ANTHROPIC_API_KEY` | `CLAUDE_API_KEY` | Paid |
+| OpenAI | `OPENAI_API_KEY` | `OPENAI_KEY` | Paid |
+| Google Gemini | `GEMINI_API_KEY` | `GOOGLE_API_KEY`, `GOOGLE_GEMINI_API_KEY` | Paid |
+| InceptionLabs | `INCEPTION_API_KEY` | — | Paid |
+| Mistral | `MISTRAL_API_KEY` | — | Paid |
+| OpenRouter | `OPENROUTER_API_KEY` | — | Free tier available |
+| Groq | `GROQ_API_KEY` | — | Free (LPU inference) |
+| Cerebras | `CEREBRAS_API_KEY` | — | Free (wafer-scale inference) |
+| AIHubMix | `AIHUBMIX_API_KEY` | — | Free tier (rate-limited) |
+| HuggingFace | `HF_API_KEY` | `HUGGINGFACE_API_KEY`, `HF_TOKEN` | Free tier (rate-limited) |
+| Ollama Cloud | `OLLAMA_CLOUD_API_KEY` | `OLLAMA_API_KEY` | Free |
+| NVIDIA NIM | `NVIDIA_API_KEY` | — | 1000 free credits |
+| LLM7 | `LLM7_API_KEY` | — | Free |
+
+Alternatively, store keys encrypted using the `/secrets` command — the secrets store takes precedence over env vars when both are set.
 
 ### Synthetic Failover Provider
 
