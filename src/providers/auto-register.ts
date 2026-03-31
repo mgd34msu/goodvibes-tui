@@ -393,6 +393,10 @@ export function autoRegisterProviders(
       registered.push(entry.name);
     } catch (err) {
       const errMsg = err instanceof Error ? err.message : String(err);
+      // Use process.stderr.write (not logger) for startup diagnostics:
+      // 1. Logger may not be fully initialized when auto-registration runs at startup
+      // 2. stderr is the correct stream for diagnostic output (doesn't corrupt TUI)
+      // 3. Synchronous write is guaranteed available at any lifecycle phase
       process.stderr.write(`[auto-register] Failed to register ${entry.name}: ${errMsg}\n`);
     }
   }
