@@ -123,6 +123,14 @@ export function findModelsByBaseId(modelId: string): ModelDefinition[] {
 }
 
 /**
+ * Maps catalog provider IDs to registered provider names when they differ.
+ * Add an entry when a catalog's provider ID does not match the register() name.
+ */
+const PROVIDER_ALIASES: Record<string, string> = {
+  'inception': 'inceptionlabs',
+};
+
+/**
  * ProviderRegistry — manages LLM provider instances and model selection.
  * Lazily instantiates providers on first use.
  */
@@ -627,8 +635,14 @@ export class ProviderRegistry {
   /** Retrieve a provider by name. Throws if not found. */
   get(name: string): LLMProvider {
     const p = this.providers.get(name);
-    if (!p) throw new Error(`Provider '${name}' is not registered.`);
-    return p;
+    if (p) return p;
+    // Check alias map — catalog may use a different name than the registered provider
+    const aliased = PROVIDER_ALIASES[name];
+    if (aliased) {
+      const pa = this.providers.get(aliased);
+      if (pa) return pa;
+    }
+    throw new Error(`Provider '${name}' is not registered.`);
   }
 
   /** Return the provider responsible for a given model ID.

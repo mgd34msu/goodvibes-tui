@@ -115,7 +115,7 @@ describe('resolveApiKeys', () => {
       expect(keys['gemini']).toBe('env-google-gemini-key');
     });
 
-    test('resolves inceptionlabs from INCEPTION_API_KEY env var', async () => {
+    test('resolves inception from INCEPTION_API_KEY env var', async () => {
       process.env['INCEPTION_API_KEY'] = 'env-inception-key';
       const keys = await resolveApiKeys();
       expect(keys['inceptionlabs']).toBe('env-inception-key');

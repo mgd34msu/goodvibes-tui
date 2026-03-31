@@ -50,6 +50,11 @@ export class SessionLineageTracker {
     return this.entries.length;
   }
 
+  /** Get a copy of the lineage entries (read-only snapshot). */
+  getEntries(): string[] {
+    return [...this.entries];
+  }
+
   /**
    * Format the lineage for compaction output.
    * Returns null if originalTask was never set (section is omitted).

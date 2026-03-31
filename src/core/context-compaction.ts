@@ -514,7 +514,7 @@ async function compactMessagesV2(
   if (currentTaskSection) sections.push(currentTaskSection);
 
   // Section 1: Session memories
-  const memoriesSection = buildSessionMemories(ctx.sessionMemories);
+  const memoriesSection = buildSessionMemories([...ctx.sessionMemories]);
   if (memoriesSection) sections.push(memoriesSection);
 
   // Section 3: Running agents

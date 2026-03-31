@@ -669,11 +669,17 @@ export class Orchestrator {
           const agentManager = AgentManager.getInstance();
           const wrfcController = WrfcController.getInstance();
           const compactionCtx: CompactionContext = {
+            messages: this.conversation.getMessagesForLLM(),
             sessionMemories: sessionMemoryStore.list(),
-            lineage: sessionLineageTracker,
-            runningAgents: agentManager.list().filter(a => a.status === 'running' || a.status === 'pending'),
+            lineageEntries: sessionLineageTracker.getEntries(),
+            agents: agentManager.list().filter(a => a.status === 'running' || a.status === 'pending'),
             wrfcChains: wrfcController.listChains(),
-            plan: planManager.getActive(),
+            activePlan: planManager.getActive(),
+            compactionCount: sessionLineageTracker.getCompactionCount(),
+            contextWindow: maxTokens,
+            trigger: 'auto',
+            extractionModelId: currentModel.id,
+            extractionProvider: currentModel.provider,
           };
 
           // Run compaction without blocking current turn completion
@@ -861,11 +867,17 @@ export class Orchestrator {
 
       try {
         const preflightCtx: CompactionContext = {
+          messages,
           sessionMemories: sessionMemoryStore.list(),
-          lineage: sessionLineageTracker,
-          runningAgents: AgentManager.getInstance().list().filter(a => a.status === 'running' || a.status === 'pending'),
+          lineageEntries: sessionLineageTracker.getEntries(),
+          agents: AgentManager.getInstance().list().filter(a => a.status === 'running' || a.status === 'pending'),
           wrfcChains: WrfcController.getInstance().listChains(),
-          plan: planManager.getActive(),
+          activePlan: planManager.getActive(),
+          compactionCount: sessionLineageTracker.getCompactionCount(),
+          contextWindow,
+          trigger: 'auto',
+          extractionModelId: model.id,
+          extractionProvider: model.provider,
         };
         await this.conversation.compact(
           providerRegistry,
