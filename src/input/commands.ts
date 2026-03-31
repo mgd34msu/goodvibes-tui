@@ -34,6 +34,7 @@ import { PLUGINS_DIR } from '../plugins/loader.ts';
 import { EFFORT_DESCRIPTIONS } from '../providers/effort-levels.ts';
 import { pinModel, unpinModel, isModelPinned, getPinned, recordUsage } from '../providers/favorites.ts';
 import { GitService } from '../git/service.ts';
+import { sessionMemoryStore } from '../core/session-memory.ts';
 
 let _serviceRegistry: ServiceRegistry | undefined;
 function getServiceRegistry(): ServiceRegistry {
@@ -3533,6 +3534,61 @@ export function registerBuiltinCommands(registry: CommandRegistry): void {
         }
         default:
           ctx.print('Usage: /git [status|log|diff]\n  /git          — working tree status (default)\n  /git status   — working tree status\n  /git log      — recent commits\n  /git diff     — unstaged changes');
+      }
+    },
+  });
+
+  // ── /memory ──────────────────────────────────────────────
+  registry.register({
+    name: 'memory',
+    description: 'Manage session memories (pinned across context compaction)',
+    usage: '[list|add <text>|remove <id>]',
+    argsHint: '[list|add|remove]',
+    handler(args, ctx) {
+      const sub = args[0] ?? 'list';
+
+      if (sub === 'list' || args.length === 0) {
+        const memories = sessionMemoryStore.list();
+        if (memories.length === 0) {
+          ctx.print('No session memories. Use !# prefix or /memory add <text> to create one.');
+        } else {
+          const lines = [
+            `Session Memories (${memories.length}):`,
+            ...memories.map(m => `  [${m.id}] ${m.text}`),
+          ];
+          ctx.print(lines.join('\n'));
+        }
+
+      } else if (sub === 'add') {
+        const text = args.slice(1).join(' ').trim();
+        if (!text) {
+          ctx.print('Usage: /memory add <text>');
+          return;
+        }
+        const id = sessionMemoryStore.add(text);
+        ctx.print(`Memory added: [${id}] ${text}`);
+
+      } else if (sub === 'remove') {
+        const id = args[1];
+        if (!id) {
+          ctx.print('Usage: /memory remove <id>');
+          return;
+        }
+        const removed = sessionMemoryStore.remove(id);
+        if (removed) {
+          ctx.print(`Memory removed: [${id}]`);
+        } else {
+          ctx.print(`Memory not found: ${id}`);
+        }
+
+      } else {
+        ctx.print(
+          `Usage: /memory [list|add <text>|remove <id>]
+  /memory              — list all session memories
+  /memory list         — list all session memories
+  /memory add <text>   — add a memory without sending a message
+  /memory remove <id>  — remove a specific memory`
+        );
       }
     },
   });
