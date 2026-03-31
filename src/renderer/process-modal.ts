@@ -134,11 +134,13 @@ export class ProcessModal {
 
   /** Rebuild entries from live singletons. */
   refresh(): void {
+    const manager = AgentManager.getInstance();
+    if (typeof manager?.list !== 'function') return; // Guard against test mock pollution
     const now = Date.now();
     const result: ProcessEntry[] = [];
 
     // Agents — only show active (pending/running)
-    for (const a of AgentManager.getInstance().list()) {
+    for (const a of manager.list()) {
       if (a.status === 'completed' || a.status === 'failed' || a.status === 'cancelled') continue;
       let streamSnippet: string | undefined;
       if (a.streamingContent) {

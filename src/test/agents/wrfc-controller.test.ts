@@ -57,6 +57,10 @@ mock.module('../../tools/agent/index.ts', () => ({
     getInstance: () => ({
       spawn: mockSpawn,
       getStatus: mockGetStatus,
+      list: () => [],
+      cancel: () => false,
+      listByCohort: () => [],
+      clear: () => {},
     }),
     resetInstance: () => {},
   },
@@ -130,6 +134,7 @@ mock.module('../../agents/orchestrator.ts', () => ({
 mock.module('../../agents/message-bus.ts', () => ({
   AgentMessageBus: {
     getInstance: () => ({ getMessages: () => [], send: () => {} }),
+    resetInstance: () => {},
   },
 }));
 
