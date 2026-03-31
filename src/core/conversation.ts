@@ -14,6 +14,9 @@ import { LAYOUT } from '../renderer/layout.ts';
 import type { ProviderRegistry } from '../providers/registry.ts';
 import type { ConfigManager } from '../config/manager.ts';
 import { compactMessages, estimateConversationTokens } from './context-compaction.ts';
+import type { CompactionContext } from './context-compaction.ts';
+import { sessionMemoryStore } from './session-memory.ts';
+import { sessionLineageTracker } from './session-lineage.ts';
 
 /**
  * ConversationManager - Owns conversation messages and the rendered history buffer.
@@ -716,6 +719,8 @@ export class ConversationManager {
    * @param modelId - Model to use for summarization
    * @param keepRecentMessages - Number of recent messages to preserve verbatim (default: 10)
    * @param trigger - 'manual' (from /compact command) or 'auto' (from threshold check)
+   * @param provider - Provider name for model disambiguation
+   * @param context - Optional v2 context data (agents, plan, lineage, memories)
    */
   public async compact(
     registry: ProviderRegistry,
@@ -723,6 +728,7 @@ export class ConversationManager {
     keepRecentMessages = 10,
     trigger: 'auto' | 'manual' = 'manual',
     provider?: string,
+    context?: CompactionContext,
   ): Promise<void> {
     if (this.messages.length === 0) return;
 
@@ -735,6 +741,7 @@ export class ConversationManager {
         messages: llmMessages,
         keepRecentMessages,
         trigger,
+        context,
       });
 
       // Rebuild internal messages from the compacted LLM-format messages.
@@ -765,6 +772,15 @@ export class ConversationManager {
       this.dirty = true;
 
       const saved = result.tokensBeforeEstimate - result.tokensAfterEstimate;
+
+      // Record this compaction in the session lineage for v2 handoff context.
+      const memoriesCount = sessionMemoryStore.list().length;
+      const memoriesPart = memoriesCount > 0 ? `, ${memoriesCount} pinned memories` : '';
+      const savedKTokens = Math.round(saved / 1000);
+      sessionLineageTracker.addCompactionEntry(
+        `${trigger} compact, saved ~${savedKTokens}K tokens${memoriesPart}.`
+      );
+
       logger.info('Conversation compacted', {
         trigger,
         messagesBeforeCompaction: result.event.messagesBeforeCompaction,

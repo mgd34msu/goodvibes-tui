@@ -68,6 +68,7 @@ import { registerBuiltinPanels } from './panels/builtin-panels.ts';
 import { renderPanelTabBar } from './renderer/panel-tab-bar.ts';
 import { mcpRegistry } from './mcp/registry.ts';
 import { getKeybindingsManager } from './input/keybindings.ts';
+import { sessionMemoryStore } from './core/session-memory.ts';
 
 /**
  * Attempt to restore a previously saved model selection after providers are registered.
@@ -1250,6 +1251,19 @@ async function main() {
         conversation.addSystemMessage(`[Model] Unknown model: ${modelId}`);
       }
       processedText = processedText.replace(atModelMatch[0], '').trim();
+    }
+    // !# prefix: pin text as a session memory, then send stripped text to orchestrator
+    if (processedText.startsWith('!#')) {
+      const memoryText = processedText.slice(2).trim();
+      if (!memoryText) {
+        conversation.addSystemMessage('[Memory] Usage: !# <text to pin as session memory>');
+        bus.emit('render:request');
+        processedText = '';
+      } else {
+        const memId = sessionMemoryStore.add(memoryText);
+        conversation.addSystemMessage(`[Memory] Pinned: "${memoryText}" (${memId})`);
+        processedText = memoryText;
+      }
     }
     if (processedText || content) {
       orchestrator.handleUserInput(processedText, content);
