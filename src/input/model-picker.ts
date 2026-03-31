@@ -1,4 +1,5 @@
 import type { ModelDefinition } from '../providers/registry.ts';
+import { getRecentModels } from '../providers/favorites.ts';
 import { EFFORT_DESCRIPTIONS } from '../providers/effort-levels.ts';
 import { getBenchmarks, getQualityTier, getQualityTierFromScore, compositeScore, A_TIER_THRESHOLD } from '../providers/model-benchmarks.ts';
 import { getSyntheticModelInfoFromCatalog } from '../providers/model-catalog.ts';
@@ -143,6 +144,8 @@ export class ModelPickerModal {
   public configuredProviders: Set<string> = new Set();
   /** IDs of pinned/favorite models — shown at top of list. */
   public pinnedIds: Set<string> = new Set();
+  /** IDs of recently used models — shown after pinned, before the rest. */
+  public recentIds: string[] = [];
   /** Benchmark score sort order. */
   public benchmarkSort: BenchmarkSort = 'none';
   /** Current group-by mode. */
@@ -426,7 +429,27 @@ export class ModelPickerModal {
       }
     }
 
+    // Boost recent (non-pinned) models to the front of the list,
+    // preserving relative order within the recent group and within the rest.
+    if (this.recentIds.length > 0) {
+      const recentSet = new Set(this.recentIds);
+      const recent = this.recentIds
+        .filter(id => result.some(m => m.id === id && !this.pinnedIds.has(id)))
+        .map(id => result.find(m => m.id === id)!)
+        .filter(Boolean);
+      const rest = result.filter(m => !recentSet.has(m.id) || this.pinnedIds.has(m.id));
+      result = [...recent, ...rest];
+    }
+
     return result;
+  }
+
+  /**
+   * Load recently used model IDs from favorites and cache them in recentIds.
+   * Call this when opening the picker to ensure recent models appear near the top.
+   */
+  async loadRecentModels(n = 10): Promise<void> {
+    this.recentIds = await getRecentModels(n);
   }
 
   /**

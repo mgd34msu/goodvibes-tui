@@ -118,7 +118,7 @@ export function getModelRegistry(): ModelDefinition[] {
  * Returns all models with a given base model ID across all providers.
  * Used by the synthetic provider to discover all backends for a model.
  */
-export function findModelsByBaseId(modelId: string): ModelDefinition[] {
+function findModelsByBaseId(modelId: string): ModelDefinition[] {
   return getModelRegistry().filter((m) => m.id === modelId);
 }
 

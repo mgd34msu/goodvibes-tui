@@ -73,7 +73,7 @@ export async function loadFavorites(): Promise<FavoritesData> {
  * saveFavorites — Atomically write favorites data to disk.
  * Uses a temp file + rename for crash safety.
  */
-export async function saveFavorites(data: FavoritesData): Promise<void> {
+async function saveFavorites(data: FavoritesData): Promise<void> {
   const path = getFavoritesPath();
   mkdirSync(_favoritesDir, { recursive: true });
   const tmp = `${path}.tmp.${Date.now()}`;
