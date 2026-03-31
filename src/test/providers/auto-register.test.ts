@@ -16,6 +16,7 @@ import type { AutoRegisterEntry } from '../../providers/auto-register.ts';
 import { _resetProviderRegistryForTesting, getProviderRegistry } from '../../providers/registry.ts';
 import { OpenAICompatProvider } from '../../providers/openai-compat.ts';
 import { AnthropicCompatProvider } from '../../providers/anthropic-compat.ts';
+import { logger } from '../../utils/logger.ts';
 
 // ---------------------------------------------------------------------------
 // Test helpers
@@ -349,13 +350,11 @@ describe('autoRegisterProviders', () => {
   });
 
   // Log format test
-  it('writes correct log format to stderr when providers are registered', () => {
+  it('writes correct log format to logger when providers are registered', () => {
     process.env.TEST_PROVIDER_API_KEY = 'sk-test';
-    const stderrMessages: string[] = [];
-    const original = process.stderr.write.bind(process.stderr);
-    const spy = spyOn(process.stderr, 'write').mockImplementation((msg: unknown) => {
-      if (typeof msg === 'string') stderrMessages.push(msg);
-      return true;
+    const logMessages: string[] = [];
+    const spy = spyOn(logger, 'info').mockImplementation((msg: string) => {
+      logMessages.push(msg);
     });
 
     try {
@@ -364,7 +363,7 @@ describe('autoRegisterProviders', () => {
       spy.mockRestore();
     }
 
-    const logLine = stderrMessages.find(m => m.includes('[auto-register]'));
+    const logLine = logMessages.find(m => m.includes('[auto-register]'));
     expect(logLine).toBeDefined();
     expect(logLine).toContain('Auto-registered 1 provider');
     expect(logLine).toContain('Test Provider');
@@ -372,10 +371,9 @@ describe('autoRegisterProviders', () => {
 
   it('uses singular "provider" when only one is registered', () => {
     process.env.TEST_PROVIDER_API_KEY = 'sk-test';
-    const stderrMessages: string[] = [];
-    const spy = spyOn(process.stderr, 'write').mockImplementation((msg: unknown) => {
-      if (typeof msg === 'string') stderrMessages.push(msg);
-      return true;
+    const logMessages: string[] = [];
+    const spy = spyOn(logger, 'info').mockImplementation((msg: string) => {
+      logMessages.push(msg);
     });
 
     try {
@@ -384,7 +382,7 @@ describe('autoRegisterProviders', () => {
       spy.mockRestore();
     }
 
-    const logLine = stderrMessages.find(m => m.includes('[auto-register]'));
+    const logLine = logMessages.find(m => m.includes('[auto-register]'));
     expect(logLine).toContain('1 provider:');
     expect(logLine).not.toContain('1 providers:');
   });
@@ -396,10 +394,9 @@ describe('autoRegisterProviders', () => {
       makeEntry({ id: 'p1', name: 'P One', envVars: ['P1_KEY'] }),
       makeEntry({ id: 'p2', name: 'P Two', envVars: ['P2_KEY'] }),
     ];
-    const stderrMessages: string[] = [];
-    const spy = spyOn(process.stderr, 'write').mockImplementation((msg: unknown) => {
-      if (typeof msg === 'string') stderrMessages.push(msg);
-      return true;
+    const logMessages: string[] = [];
+    const spy = spyOn(logger, 'info').mockImplementation((msg: string) => {
+      logMessages.push(msg);
     });
 
     try {
@@ -408,16 +405,15 @@ describe('autoRegisterProviders', () => {
       spy.mockRestore();
     }
 
-    const logLine = stderrMessages.find(m => m.includes('[auto-register]'));
+    const logLine = logMessages.find(m => m.includes('[auto-register]'));
     expect(logLine).toContain('2 providers:');
     expect(logLine).toContain('P One, P Two');
   });
 
   it('writes no log when nothing is registered', () => {
-    const stderrMessages: string[] = [];
-    const spy = spyOn(process.stderr, 'write').mockImplementation((msg: unknown) => {
-      if (typeof msg === 'string') stderrMessages.push(msg);
-      return true;
+    const logMessages: string[] = [];
+    const spy = spyOn(logger, 'info').mockImplementation((msg: string) => {
+      logMessages.push(msg);
     });
 
     try {
@@ -426,7 +422,7 @@ describe('autoRegisterProviders', () => {
       spy.mockRestore();
     }
 
-    const autoRegisterLogs = stderrMessages.filter(m => m.includes('[auto-register]'));
+    const autoRegisterLogs = logMessages.filter(m => m.includes('[auto-register]'));
     expect(autoRegisterLogs).toHaveLength(0);
   });
 
@@ -437,7 +433,7 @@ describe('autoRegisterProviders', () => {
     expect(Array.isArray(result)).toBe(true);
   });
 
-  it('logs to stderr and excludes failing provider when register() throws', () => {
+  it('logs to logger and excludes failing provider when register() throws', () => {
     process.env.P1_KEY = 'k1';
     process.env.P2_KEY = 'k2';
     const catalog = [
@@ -445,10 +441,9 @@ describe('autoRegisterProviders', () => {
       makeEntry({ id: 'p-ok', name: 'P OK', envVars: ['P2_KEY'] }),
     ];
 
-    const stderrMessages: string[] = [];
-    const stderrSpy = spyOn(process.stderr, 'write').mockImplementation((msg: unknown) => {
-      if (typeof msg === 'string') stderrMessages.push(msg);
-      return true;
+    const warnMessages: string[] = [];
+    const warnSpy = spyOn(logger, 'warn').mockImplementation((msg: string) => {
+      warnMessages.push(msg);
     });
 
     const registry = getProviderRegistry();
@@ -467,7 +462,7 @@ describe('autoRegisterProviders', () => {
     try {
       result = autoRegisterProviders(catalog);
     } finally {
-      stderrSpy.mockRestore();
+      warnSpy.mockRestore();
       registerSpy.mockRestore();
     }
 
@@ -478,8 +473,8 @@ describe('autoRegisterProviders', () => {
     expect(result!).toContain('P OK');
     expect(isProviderRegistered('p-ok')).toBe(true);
 
-    // Error logged to stderr
-    const errorLine = stderrMessages.find(m => m.includes('[auto-register] Failed to register P Fail'));
+    // Error logged via logger.warn
+    const errorLine = warnMessages.find(m => m.includes('[auto-register] Failed to register P Fail'));
     expect(errorLine).toBeDefined();
     expect(errorLine).toContain('simulated registration failure');
   });
