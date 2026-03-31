@@ -35,6 +35,7 @@ import { EFFORT_DESCRIPTIONS } from '../providers/effort-levels.ts';
 import { pinModel, unpinModel, isModelPinned, getPinned, recordUsage } from '../providers/favorites.ts';
 import { GitService } from '../git/service.ts';
 import { sessionMemoryStore } from '../core/session-memory.ts';
+import { sessionLineageTracker } from '../core/session-lineage.ts';
 
 let _serviceRegistry: ServiceRegistry | undefined;
 function getServiceRegistry(): ServiceRegistry {
@@ -2413,6 +2414,9 @@ export function registerBuiltinCommands(registry: CommandRegistry): void {
       const plan = planManager.create(taskDescription, []);
       plan.awaitingPlan = true;
       planManager.save(plan);
+
+      // Wire session lineage: the plan title is the original task for this session.
+      sessionLineageTracker.setOriginalTask(taskDescription.slice(0, 200));
 
       ctx.print(
         `Plan created: "${plan.title}" (${plan.id.slice(0, 8)})\n` +

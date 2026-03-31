@@ -188,6 +188,9 @@ export class Orchestrator {
       return;
     }
 
+    // Set the original task on the first user message (idempotent — subsequent calls are no-ops)
+    sessionLineageTracker.setOriginalTask(text.slice(0, 200));
+
     await this.runTurn(text, content);
 
     // Process any messages queued while the LLM was thinking (iterative, not recursive)
