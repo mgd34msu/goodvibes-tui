@@ -792,6 +792,7 @@ export class Orchestrator {
       const error = err instanceof Error ? err : new Error(String(err));
       const msg = error instanceof ProviderError ? formatProviderError(error) : `Error: ${error.message}`;
       this.conversation.addSystemMessage(msg);
+      this.bus.emit('render:request');
       // Graceful degradation — suggest alternative when provider fails non-transiently
       const autoSwitch = configManager.get('behavior.suggestAlternativeOnProviderFail') as boolean;
       if (autoSwitch && isNonTransientProviderFailure(err)) {

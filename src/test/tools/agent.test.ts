@@ -77,14 +77,59 @@ describe('spawn mode', () => {
     expect(result.template).toBe('general');
   });
 
-  test('spawn with explicit tools overrides template defaults', async () => {
+  test('spawn with explicit tools merges with template defaults (additive)', async () => {
     const result = await runAgent({
       mode: 'spawn',
       task: 'Custom task',
       template: 'engineer',
       tools: ['read', 'find'],
     });
+    // Additive merge: defaults + input tools, deduplicated.
+    // ArchetypeLoader built-in for 'engineer': ['read', 'write', 'edit', 'find', 'exec', 'analyze', 'inspect', 'fetch', 'registry']
+    // input.tools ['read', 'find'] are already in defaults, so merged = defaults unchanged.
+    const engineerDefaults = ['read', 'write', 'edit', 'find', 'exec', 'analyze', 'inspect', 'fetch', 'registry'];
+    const expected = [...new Set([...engineerDefaults, 'read', 'find'])];
+    expect(result.tools).toEqual(expected);
+  });
+
+  test('spawn with restrictTools=true uses only specified tools', async () => {
+    const result = await runAgent({
+      mode: 'spawn',
+      task: 'Custom task',
+      template: 'engineer',
+      tools: ['read', 'find'],
+      restrictTools: true,
+    });
+    // restrictTools bypasses additive merge — only the specified tools are used
     expect(result.tools).toEqual(['read', 'find']);
+    // Template defaults must NOT be present
+    const tools = result.tools as string[];
+    expect(tools).not.toContain('write');
+    expect(tools).not.toContain('exec');
+    expect(tools).not.toContain('edit');
+    expect(tools).not.toContain('analyze');
+  });
+
+  test('batch-spawn with restrictTools propagates to each agent', async () => {
+    const result = await runAgent({
+      mode: 'batch-spawn',
+      tasks: [
+        { task: 'Batch task A', template: 'engineer', tools: ['read', 'find'], restrictTools: true },
+        { task: 'Batch task B', template: 'engineer', tools: ['read'], restrictTools: true },
+      ],
+    });
+    const agents = result.agents as Array<{ id: string; task: string }>;
+    expect(agents.length).toBe(2);
+
+    // Verify each spawned agent has only the restricted tools
+    const statusA = await runAgent({ mode: 'get', agentId: agents[0].id });
+    const statusB = await runAgent({ mode: 'get', agentId: agents[1].id });
+
+    expect(statusA.tools).toEqual(['read', 'find']);
+    expect((statusA.tools as string[])).not.toContain('write');
+
+    expect(statusB.tools).toEqual(['read']);
+    expect((statusB.tools as string[])).not.toContain('write');
   });
 
   test('spawn without task returns error', async () => {

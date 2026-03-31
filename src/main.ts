@@ -1267,7 +1267,11 @@ async function main() {
       }
     }
     if (processedText || content) {
-      orchestrator.handleUserInput(processedText, content);
+      orchestrator.handleUserInput(processedText, content).catch((err: unknown) => {
+        // Safety net only — runTurn's catch already handles display.
+        // Only log at debug level to avoid double error display.
+        logger.debug('handleUserInput safety catch (already handled by runTurn)', { error: String(err) });
+      });
     } else {
       bus.emit('render:request');
     }
@@ -1341,6 +1345,32 @@ async function main() {
     input.feed(data);
   });
   process.on('SIGINT', () => input.feed('\x03'));
+  // Track unhandled rejections to detect cascading failures
+  let _unhandledRejectionCount = 0;
+  let _unhandledRejectionWindowStart = Date.now();
+  process.on('unhandledRejection', (reason: unknown) => {
+    const now = Date.now();
+    if (now - _unhandledRejectionWindowStart > 10000) {
+      _unhandledRejectionCount = 0;
+      _unhandledRejectionWindowStart = now;
+    }
+    _unhandledRejectionCount++;
+    const msg = reason instanceof Error ? reason.message : String(reason);
+    if (_unhandledRejectionCount > 3) {
+      logger.error('CRITICAL: cascading unhandled rejections — consider restarting', {
+        count: _unhandledRejectionCount,
+        windowMs: now - _unhandledRejectionWindowStart,
+        error: String(reason),
+      });
+      conversation.addSystemMessage(
+        `[Critical] Multiple errors detected (${_unhandledRejectionCount} in 10s). If the issue persists, please restart. Latest: ${msg}`
+      );
+    } else {
+      conversation.addSystemMessage(`[Error] ${msg}`);
+      logger.error('unhandledRejection', { error: String(reason) });
+    }
+    bus.emit('render:request');
+  });
   stdout.on('resize', () => {
     input.setContentWidth(getPromptContentWidth());
     compositor.resetDiff();

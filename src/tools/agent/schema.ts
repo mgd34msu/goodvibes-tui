@@ -62,6 +62,14 @@ export const AGENT_TOOL_SCHEMA: ToolDefinition = {
         type: 'string',
         description: 'Additional context to provide to the spawned agent (mode: spawn).',
       },
+      restrictTools: {
+        type: 'boolean',
+        description:
+          'If true, use ONLY the specified tools (override mode). ' +
+          'If false or omitted, specified tools are merged with template defaults (additive mode). ' +
+          'Only applies when tools is also provided (mode: spawn).',
+        default: false,
+      },
       dangerously_disable_wrfc: {
         type: 'boolean',
         description: 'If true, skip the WRFC review chain for this agent (mode: spawn). Default: false.',
@@ -79,6 +87,7 @@ export const AGENT_TOOL_SCHEMA: ToolDefinition = {
             model: { type: 'string', description: 'Model override.' },
             provider: { type: 'string', description: 'Provider override.' },
             tools: { type: 'array', items: { type: 'string' }, description: 'Tool subset.' },
+            restrictTools: { type: 'boolean', description: 'If true, use ONLY the specified tools (override mode). Default: false.' },
             context: { type: 'string', description: 'Additional context.' },
             dangerously_disable_wrfc: { type: 'boolean', description: 'Skip WRFC review.' },
           },
@@ -123,6 +132,7 @@ export interface AgentInput {
   model?: string;
   provider?: string;
   tools?: string[];
+  restrictTools?: boolean;
   context?: string;
   dangerously_disable_wrfc?: boolean;
   // cohort grouping
@@ -134,6 +144,7 @@ export interface AgentInput {
     model?: string;
     provider?: string;
     tools?: string[];
+    restrictTools?: boolean;
     context?: string;
     dangerously_disable_wrfc?: boolean;
   }>;

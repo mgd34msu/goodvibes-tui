@@ -35,31 +35,31 @@ const BUILT_IN_ARCHETYPES: AgentArchetype[] = [
   {
     name: 'engineer',
     description: 'Full-stack implementation agent',
-    tools: ['read', 'write', 'edit', 'find', 'exec', 'analyze'],
+    tools: ['read', 'write', 'edit', 'find', 'exec', 'analyze', 'inspect', 'fetch', 'registry'],
     isCustom: false,
   },
   {
     name: 'reviewer',
     description: 'Code review and quality assessment',
-    tools: ['read', 'find', 'analyze'],
+    tools: ['read', 'find', 'analyze', 'inspect', 'fetch', 'registry'],
     isCustom: false,
   },
   {
     name: 'tester',
     description: 'Test writing and execution',
-    tools: ['read', 'write', 'find', 'exec'],
+    tools: ['read', 'write', 'find', 'exec', 'analyze', 'inspect'],
     isCustom: false,
   },
   {
     name: 'researcher',
     description: 'Codebase exploration and analysis',
-    tools: ['read', 'find', 'analyze', 'inspect'],
+    tools: ['read', 'find', 'analyze', 'inspect', 'fetch', 'registry'],
     isCustom: false,
   },
   {
     name: 'general',
     description: 'General purpose agent',
-    tools: ['read', 'write', 'edit', 'find', 'exec'],
+    tools: ['read', 'write', 'edit', 'find', 'exec', 'analyze', 'inspect', 'fetch', 'registry'],
     isCustom: false,
   },
 ];
