@@ -172,6 +172,23 @@ function buildBackendList(
 }
 
 /**
+ * Best composite benchmark score across a canonical model's backends.
+ * Uses backend model IDs (not canonical slug) because ZeroEval indexes by real model ID.
+ * Returns -1 if no benchmarks found.
+ */
+function bestCompositeScoreForModel(model: CanonicalModel): number {
+  let best = -1;
+  for (const b of model.backends) {
+    const entry = getBenchmarks(b.modelId);
+    if (entry) {
+      const score = compositeScore(entry.benchmarks);
+      if (score !== null && score > best) best = score;
+    }
+  }
+  return best;
+}
+
+/**
  * Resolve 'best-free' to the canonical ID of the highest composite-scored
  * free model for which the user has at least one backend key configured.
  *
@@ -189,11 +206,7 @@ function resolveBestFree(): string | null {
     const hasAnyKey = model.backends.some(hasKey);
     if (!hasAnyKey) continue;
 
-    // Look up benchmark score for this model
-    const entry = getBenchmarks(model.id);
-    const score = entry ? compositeScore(entry.benchmarks) : null;
-    // Models with no benchmark data score lowest but still qualify
-    const effectiveScore = score ?? -1;
+    const effectiveScore = bestCompositeScoreForModel(model);
 
     if (effectiveScore > bestScore) {
       bestScore = effectiveScore;
@@ -219,9 +232,7 @@ function resolveNextBestFree(excludeIds: Set<string>): string | null {
     const hasAnyKey = model.backends.some(hasKey);
     if (!hasAnyKey) continue;
 
-    const entry = getBenchmarks(model.id);
-    const score = entry ? compositeScore(entry.benchmarks) : null;
-    const effectiveScore = score ?? -1;
+    const effectiveScore = bestCompositeScoreForModel(model);
 
     if (effectiveScore > bestScore) {
       bestScore = effectiveScore;

@@ -6,6 +6,7 @@ import {
   toOpenAITools,
   toOpenAIMessages,
   fromOpenAIToolCalls,
+  extractTextToolCalls,
 } from './tool-formats.ts';
 import type { OpenAIToolCall } from './tool-formats.ts';
 
@@ -107,9 +108,21 @@ export class OpenAIProvider implements LLMProvider {
         );
       }
 
+      // Some models may emit tool calls as raw text tokens instead of the
+      // OpenAI function-calling wire format. Fall back to text extraction.
+      let toolCalls = rawToolCalls.length > 0 ? fromOpenAIToolCalls(rawToolCalls) : [];
+      if (toolCalls.length === 0 && (responseText.includes('<|toolcallbegin|>') || responseText.includes('<|tool_call_begin|>'))) {
+        const extracted = extractTextToolCalls(responseText);
+        if (extracted.toolCalls.length > 0) {
+          toolCalls = extracted.toolCalls;
+          responseText = extracted.cleanedContent;
+          stopReason = 'tool_use';
+        }
+      }
+
       return {
         content: responseText,
-        toolCalls: rawToolCalls.length > 0 ? fromOpenAIToolCalls(rawToolCalls) : [],
+        toolCalls,
         usage: {
           inputTokens,
           outputTokens,
