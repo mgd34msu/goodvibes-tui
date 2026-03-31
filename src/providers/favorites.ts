@@ -174,3 +174,6 @@ export async function getRecentModels(n: number): Promise<string[]> {
     .slice(0, n)
     .map(e => e.modelId);
 }
+
+// ── Test-only exports ─────────────────────────────────────────────────────────
+export { saveFavorites as _saveFavoritesForTest };

@@ -3,7 +3,7 @@ import { join } from 'path';
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import {
   loadFavorites,
-  saveFavorites,
+  _saveFavoritesForTest as saveFavorites,
   pinModel,
   unpinModel,
   getPinned,
