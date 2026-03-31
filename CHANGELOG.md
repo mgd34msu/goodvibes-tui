@@ -4,6 +4,27 @@ All notable changes to GoodVibes TUI.
 
 ---
 
+## [0.9.15] — 2026-03-30
+
+### Context Compaction v2
+- Hybrid structured compaction: deterministic framework + targeted LLM extraction calls
+- 10 discrete sections with per-section token budgets (handoff header, session memories, current task, running agents, recent conversation, tool results, agent activity table, older agent summary, resolved problems, plan progress, session lineage)
+- Session memory system: `!#` prefix pins messages for the session, `/memory` command to list/add/remove
+- Session lineage: append-only micro-log that survives compaction without degradation
+- Context-window-aware thresholds: >=500k at 80%, 128k-500k at 75%, <128k at 65%
+- LLM extraction calls parallelized with Promise.all
+- Post-compaction validation checks critical sections
+- Multi-turn coherence: user-assistant pairs kept together during filtering
+- Empty sections omitted to save tokens
+- Backward-compatible v1 legacy path preserved
+
+### Provider System
+- Provider alias mapping: catalog IDs that differ from registered names resolved via PROVIDER_ALIASES
+- InceptionLabs/Mercury: 'inception' catalog ID maps to 'inceptionlabs' provider
+- Alias fallback in registry.get() with 3 tests
+
+---
+
 ## [0.9.14] — 2026-03-30
 
 ### Input & Navigation
