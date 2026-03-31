@@ -115,14 +115,6 @@ export function getModelRegistry(): ModelDefinition[] {
 }
 
 /**
- * Returns all models with a given base model ID across all providers.
- * Used by the synthetic provider to discover all backends for a model.
- */
-function findModelsByBaseId(modelId: string): ModelDefinition[] {
-  return getModelRegistry().filter((m) => m.id === modelId);
-}
-
-/**
  * Maps catalog provider IDs to registered provider names when they differ.
  * Add an entry when a catalog's provider ID does not match the register() name.
  */
