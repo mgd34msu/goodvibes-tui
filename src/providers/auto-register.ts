@@ -394,6 +394,11 @@ export function autoRegisterProviders(
       registered.push(entry.name);
     } catch (err) {
       const errMsg = err instanceof Error ? err.message : String(err);
+      // IMPORTANT: Use logger (NOT process.stderr.write) for all output here.
+      // process.stderr.write bypasses the TUI renderer and writes directly to the
+      // terminal, corrupting the cell-based display. All diagnostic output in a TUI
+      // app must go through the logger, which writes to the log file without
+      // disrupting the screen.
       logger.warn(`[auto-register] Failed to register ${entry.name}: ${errMsg}`);
     }
   }
