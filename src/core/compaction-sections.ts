@@ -15,7 +15,7 @@ import type { AgentRecord } from '../tools/agent/index.ts';
 import type { WrfcChain } from '../agents/wrfc-types.ts';
 import type { ExecutionPlan, PlanItem } from './execution-plan.ts';
 import type { CompactionSection, CompactionConfig, SessionMemory } from './compaction-types.ts';
-import { estimateTokens } from './context-compaction.ts';
+import { estimateTokens } from './compaction-types.ts';
 
 // ---------------------------------------------------------------------------
 // Internal helpers
