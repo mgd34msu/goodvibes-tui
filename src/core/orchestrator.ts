@@ -19,7 +19,7 @@ import { ConsecutiveErrorBreaker } from './circuit-breaker.ts';
 import type { ExecutionPlan, PlanItem } from './execution-plan.ts';
 import { classifyIntent } from './intent-classifier.ts';
 import { getTokenLimitsForModel, getContextWindowForModel } from '../providers/model-limits.ts';
-import { shouldAutoCompact, estimateConversationTokens } from './context-compaction.ts';
+import { shouldAutoCompact, estimateConversationTokens, getCompactionThreshold } from './context-compaction.ts';
 import type { CompactionContext } from './context-compaction.ts';
 import { sessionMemoryStore } from './session-memory.ts';
 import { sessionLineageTracker } from './session-lineage.ts';
@@ -623,13 +623,11 @@ export class Orchestrator {
         // to leave room for the LLM-assisted extraction calls during compaction.
         // Threshold 0 = disabled (existing convention).
         const configuredThreshold = configManager.get('behavior.autoCompactThreshold') as number;
-        // Scale threshold down for smaller context windows so the LLM-assisted extraction
-        // calls have enough room to run. Only applies when auto-compact is enabled (> 0).
+        // Scale threshold down for smaller context windows using getCompactionThreshold.
+        // Threshold 0 = disabled (existing convention).
         const effectiveThreshold = configuredThreshold <= 0
           ? configuredThreshold // disabled — preserve 0
-          : maxTokens >= 500_000 ? configuredThreshold
-          : maxTokens >= 128_000 ? Math.min(configuredThreshold, 75)
-          : Math.min(configuredThreshold, 65);
+          : Math.min(configuredThreshold, getCompactionThreshold(maxTokens));
         const bracket = Math.floor(usagePct / 10) * 10;
 
         if (

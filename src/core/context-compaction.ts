@@ -33,7 +33,7 @@ import type {
   CompactionEvent,
   CompactionConfig,
 } from './compaction-types.ts';
-import { DEFAULT_COMPACTION_CONFIG } from './compaction-types.ts';
+import { DEFAULT_COMPACTION_CONFIG, estimateTokens } from './compaction-types.ts';
 import {
   buildHandoffHeader,
   buildSessionMemories,
@@ -50,10 +50,10 @@ import {
 } from './compaction-sections.ts';
 
 // ---------------------------------------------------------------------------
-// Re-export CompactionEvent and CompactionResult for backward compatibility
+// Re-export CompactionEvent, CompactionResult, and CompactionContext for backward compatibility
 // ---------------------------------------------------------------------------
 
-export type { CompactionEvent, CompactionResult } from './compaction-types.ts';
+export type { CompactionEvent, CompactionResult, CompactionContext } from './compaction-types.ts';
 
 // ---------------------------------------------------------------------------
 // V1 compatibility types (for callers that still use the old API shape)
@@ -73,6 +73,8 @@ export interface CompactionOptions {
   keepRecentMessages?: number;
   /** Whether this was triggered automatically or manually (default: 'manual'). */
   trigger?: 'auto' | 'manual';
+  /** Optional v2 context data (agents, plan, lineage, memories). When provided, v2 path is used. */
+  context?: CompactionContext;
 }
 
 export interface AutoCompactOptions {
@@ -106,10 +108,11 @@ export function getLastCompactionEvent(): CompactionEvent | null {
 // Token estimation
 // ---------------------------------------------------------------------------
 
-/** Rough token estimate for a string: 4 chars ≈ 1 token, with 10% safety margin. */
-export function estimateTokens(text: string): number {
-  return Math.ceil((text.length / 4) * 1.1);
-}
+/** Rough token estimate: 4 chars ≈ 1 token. Used for threshold checks.
+ * @deprecated Import estimateTokens from compaction-types.ts instead.
+ * Re-exported here for backward compatibility.
+ */
+export { estimateTokens } from './compaction-types.ts';
 
 /** Rough token estimate: 4 chars ≈ 1 token. Used for threshold checks. */
 export function estimateConversationTokens(messages: ProviderMessage[]): number {
@@ -267,50 +270,208 @@ function assembleSections(sections: CompactionSection[]): string {
 }
 
 // ---------------------------------------------------------------------------
+// Legacy v1 compaction (used when CompactionOptions.context is absent)
+// ---------------------------------------------------------------------------
+
+/**
+ * MAX_PROMPT_OLDER_TOKENS — budget for the summarization prompt sent to the LLM
+ * in the v1 legacy path. This is NOT related to the user's context window; it
+ * caps the amount of older message text included in the extraction request.
+ * Should be well below the extraction model's own context window.
+ */
+const MAX_PROMPT_OLDER_TOKENS = 80_000;
+
+/**
+ * compactMessagesLegacy — v1 backward-compatible compaction.
+ *
+ * Keeps the most recent `keepRecentMessages` messages verbatim, summarizes older
+ * messages via a single LLM call, and returns a CompactionResult that places the
+ * summary as a user/assistant pair followed by the recent messages.
+ *
+ * Throws if the LLM returns empty content or provider lookup fails.
+ */
+async function compactMessagesLegacy(
+  opts: CompactionOptions,
+): Promise<CompactionResult> {
+  const {
+    registry,
+    modelId,
+    provider: providerName,
+    messages,
+    keepRecentMessages = 10,
+    trigger = 'manual',
+  } = opts;
+
+  const tokensBeforeEstimate = estimateConversationTokens(messages);
+
+  logger.info('Context compaction v1 (legacy): starting', {
+    trigger,
+    messageCount: messages.length,
+    tokensBeforeEstimate,
+    keepRecentMessages,
+  });
+
+  // Partition: older messages to summarize, recent to keep verbatim
+  const recentMessages = messages.slice(-keepRecentMessages);
+  const olderMessages = messages.slice(0, Math.max(0, messages.length - keepRecentMessages));
+
+  // Build summarization prompt, truncating oldest if over token budget
+  const promptParts: string[] = [
+    'Summarize the following conversation history into concise bullet points. Focus on key decisions, facts, and outcomes. Be brief.',
+    '',
+    '--- CONVERSATION HISTORY ---',
+    '',
+  ];
+
+  let olderTokens = 0;
+  const includedOlderMessages: ProviderMessage[] = [];
+  for (const msg of olderMessages) {
+    const text = typeof msg.content === 'string'
+      ? msg.content
+      : (msg.content as ContentPart[]).filter((p): p is { type: 'text'; text: string } => p.type === 'text').map((p) => p.text).join('');
+    const msgTokens = estimateTokens(text);
+    if (olderTokens + msgTokens > MAX_PROMPT_OLDER_TOKENS) break;
+    olderTokens += msgTokens;
+    includedOlderMessages.push(msg);
+  }
+
+  for (const msg of includedOlderMessages) {
+    const text = typeof msg.content === 'string'
+      ? msg.content
+      : (msg.content as ContentPart[]).filter((p): p is { type: 'text'; text: string } => p.type === 'text').map((p) => p.text).join('');
+    promptParts.push(`[${msg.role}]: ${text.trim()}`);
+    promptParts.push('');
+  }
+
+  promptParts.push('--- END CONVERSATION HISTORY ---');
+  promptParts.push('');
+  promptParts.push('Provide a concise bullet-point summary:');
+
+  const summarizationPrompt = promptParts.join('\n');
+
+  // Get provider — throw (don't degrade gracefully) for v1 compat
+  let llmProvider: LLMProvider;
+  try {
+    llmProvider = registry.getForModel(modelId, providerName);
+  } catch (err) {
+    throw new Error(
+      `Context compaction: failed to get provider for model '${modelId}': ${
+        err instanceof Error ? err.message : String(err)
+      }`,
+    );
+  }
+
+  // Call LLM — throw on empty (v1 behavior)
+  const response = await llmProvider.chat({
+    messages: [{ role: 'user', content: summarizationPrompt }],
+    model: modelId,
+  });
+  const summaryText = response.content?.trim() ?? '';
+  if (!summaryText) {
+    throw new Error('Context compaction: LLM returned empty summary');
+  }
+
+  // Build v1 output: [summaryUser, summaryAssistant, ...recentMessages]
+  const summaryUserMsg: ProviderMessage = {
+    role: 'user',
+    content: '[Context compacted — summary of earlier conversation follows]',
+  };
+  const summaryAssistantMsg: ProviderMessage = {
+    role: 'assistant',
+    content: summaryText,
+  };
+  const newMessages: ProviderMessage[] = [summaryUserMsg, summaryAssistantMsg, ...recentMessages];
+
+  const tokensAfterEstimate = estimateConversationTokens(newMessages);
+
+  const event: CompactionEvent = {
+    timestamp: Date.now(),
+    messagesBeforeCompaction: messages.length,
+    messagesAfterCompaction: newMessages.length,
+    tokensBeforeEstimate,
+    tokensAfterEstimate,
+    modelId,
+    trigger,
+    sectionsIncluded: ['legacy-summary'],
+    validationPassed: true,
+  };
+
+  compactionEvents.push(event);
+  if (compactionEvents.length > 50) compactionEvents.shift();
+
+  logger.info('Context compaction v1 (legacy): complete', {
+    trigger,
+    modelId,
+    messagesBeforeCompaction: event.messagesBeforeCompaction,
+    messagesAfterCompaction: event.messagesAfterCompaction,
+    tokensBeforeEstimate: event.tokensBeforeEstimate,
+    tokensAfterEstimate: event.tokensAfterEstimate,
+    tokensSaved: event.tokensBeforeEstimate - event.tokensAfterEstimate,
+  });
+
+  return {
+    messages: newMessages,
+    summary: summaryText,
+    tokensBeforeEstimate,
+    tokensAfterEstimate,
+    event,
+    sections: [],
+    validationWarnings: [],
+  };
+}
+
+// ---------------------------------------------------------------------------
 // Core compaction logic: v2 hybrid
 // ---------------------------------------------------------------------------
 
 /**
- * compactMessages — v2 hybrid compaction.
+ * compactMessages — hybrid compaction entry point.
  *
- * Accepts a CompactionContext containing all data sources. Makes targeted LLM
- * calls for substance filtering and extraction, assembles a structured handoff
- * context, validates it, and returns a CompactionResult.
+ * When called with CompactionOptions (legacy v1 shape without a `context` field),
+ * runs the v1 compatible summarize-and-keep path for backward compatibility.
  *
- * Also accepts the legacy CompactionOptions shape for backward compatibility;
- * callers should migrate to CompactionContext.
+ * When called with CompactionOptions that includes a `context` field, or with a
+ * CompactionContext directly, runs the v2 hybrid path with section assembly,
+ * targeted LLM extraction, and post-compaction validation.
  */
 export async function compactMessages(
   ctxOrOpts: CompactionContext | CompactionOptions,
   registryOverride?: ProviderRegistry,
 ): Promise<CompactionResult> {
-  // ---------------------------------------------------------------------------
-  // Normalize input: support both new CompactionContext and legacy CompactionOptions
-  // ---------------------------------------------------------------------------
-  let ctx: CompactionContext;
-
+  // Legacy path: CompactionOptions without a context field
   if ('registry' in ctxOrOpts) {
-    // Legacy CompactionOptions — build a minimal CompactionContext
     const opts = ctxOrOpts as CompactionOptions;
-    ctx = {
+    if (!opts.context) {
+      // Pure v1 legacy: use keepRecentMessages-based summarization
+      return compactMessagesLegacy(opts);
+    }
+    // Opts has a context field: promote to v2 path
+    const ctx: CompactionContext = {
+      ...opts.context,
       messages: opts.messages,
-      sessionMemories: [],
-      agents: [],
-      wrfcChains: [],
-      activePlan: null,
-      lineageEntries: [],
-      originalTask: undefined,
-      compactionCount: 1,
-      contextWindow: 128_000,
       trigger: opts.trigger ?? 'manual',
       extractionModelId: opts.modelId,
       extractionProvider: opts.provider,
     };
     registryOverride = opts.registry;
-  } else {
-    ctx = ctxOrOpts as CompactionContext;
+    return compactMessagesV2(ctx, registryOverride);
   }
 
+  // V2 path
+  return compactMessagesV2(ctxOrOpts as CompactionContext, registryOverride);
+}
+
+/**
+ * compactMessagesV2 — v2 hybrid compaction (internal implementation).
+ *
+ * Accepts a CompactionContext containing all data sources. Makes targeted LLM
+ * calls for substance filtering and extraction (parallelized), assembles a
+ * structured handoff context, validates it, and returns a CompactionResult.
+ */
+async function compactMessagesV2(
+  ctx: CompactionContext,
+  registryOverride?: ProviderRegistry,
+): Promise<CompactionResult> {
   if (!registryOverride) {
     throw new Error('compactMessages: provider registry is required');
   }
@@ -327,14 +488,14 @@ export async function compactMessages(
   });
 
   // ---------------------------------------------------------------------------
-  // Build sections
+  // Build rule-based sections (no LLM needed)
   // ---------------------------------------------------------------------------
   const sections: CompactionSection[] = [];
 
   // Section 0: Handoff header (always present)
   sections.push(buildHandoffHeader());
 
-  // Section 2: Current task (before memories in display, but build from plan/messages)
+  // Section 2: Current task
   const planTitle = ctx.activePlan?.title ?? null;
   const lastUserMsg = (() => {
     for (let i = ctx.messages.length - 1; i >= 0; i--) {
@@ -360,28 +521,62 @@ export async function compactMessages(
   const runningSection = buildRunningAgents(ctx.agents, ctx.wrfcChains);
   if (runningSection) sections.push(runningSection);
 
-  // Section 4: Recent conversation (gather + LLM substance filter)
+  // Section 6: Agent activity table (rule-based, needed before LLM calls to determine remaining)
+  const { section: activitySection, remainingChains } = buildAgentActivityTable(
+    ctx.wrfcChains,
+    config.agentActivityBudget,
+  );
+  if (activitySection) sections.push(activitySection);
+
+  // ---------------------------------------------------------------------------
+  // Prepare all LLM-assisted prompts
+  // ---------------------------------------------------------------------------
   const gatheredMessages = gatherRecentConversation(
     ctx.messages,
     config.recentConversationBudget,
   );
+  const filterPrompt = gatheredMessages.length > 0
+    ? buildConversationFilterPrompt(gatheredMessages)
+    : '';
 
+  const toolMessages = ctx.messages.filter((m) => m.role === 'tool');
+  const toolPrompt = toolMessages.length > 0
+    ? buildToolResultsPrompt(toolMessages)
+    : '';
+
+  const olderPrompt = remainingChains.length > 0
+    ? buildOlderAgentSummaryPrompt(remainingChains)
+    : '';
+
+  const allUserAssistant = ctx.messages.filter(
+    (m) => m.role === 'user' || m.role === 'assistant',
+  );
+  const problemsPrompt = allUserAssistant.length > 0
+    ? buildResolvedProblemsPrompt(allUserAssistant)
+    : '';
+
+  // ---------------------------------------------------------------------------
+  // Parallelize all 4 independent LLM extraction calls
+  // ---------------------------------------------------------------------------
+  const [filteredText, toolSummary, olderSummary, problemsText] = await Promise.all([
+    llmExtract(registryOverride, ctx.extractionModelId, ctx.extractionProvider, filterPrompt, 'conversation-filter'),
+    llmExtract(registryOverride, ctx.extractionModelId, ctx.extractionProvider, toolPrompt, 'tool-results'),
+    llmExtract(registryOverride, ctx.extractionModelId, ctx.extractionProvider, olderPrompt, 'older-agent-summary'),
+    llmExtract(registryOverride, ctx.extractionModelId, ctx.extractionProvider, problemsPrompt, 'resolved-problems'),
+  ]);
+
+  // ---------------------------------------------------------------------------
+  // Assemble LLM-assisted sections
+  // ---------------------------------------------------------------------------
+
+  // Section 4: Recent conversation
   if (gatheredMessages.length > 0) {
-    const filterPrompt = buildConversationFilterPrompt(gatheredMessages);
-    const filteredText = await llmExtract(
-      registryOverride,
-      ctx.extractionModelId,
-      ctx.extractionProvider,
-      filterPrompt,
-      'conversation-filter',
-    );
     if (filteredText) {
-      const tokens = estimateTokens(filteredText);
       sections.push({
         id: 'recent-conversation',
         header: '## Recent Conversation',
         content: filteredText,
-        tokens,
+        tokens: estimateTokens(filteredText),
       });
     } else {
       // Fallback: include raw gathered messages if LLM filter fails
@@ -404,76 +599,35 @@ export async function compactMessages(
     }
   }
 
-  // Section 5: Tool results (LLM-assisted relevance filter)
-  const toolMessages = ctx.messages.filter((m) => m.role === 'tool');
-  if (toolMessages.length > 0) {
-    const toolPrompt = buildToolResultsPrompt(toolMessages);
-    const toolSummary = await llmExtract(
-      registryOverride,
-      ctx.extractionModelId,
-      ctx.extractionProvider,
-      toolPrompt,
-      'tool-results',
-    );
-    if (toolSummary) {
-      sections.push({
-        id: 'tool-results',
-        header: '## Tool Results & Files Modified',
-        content: toolSummary,
-        tokens: estimateTokens(toolSummary),
-      });
-    }
+  // Section 5: Tool results
+  if (toolSummary) {
+    sections.push({
+      id: 'tool-results',
+      header: '## Tool Results & Files Modified',
+      content: toolSummary,
+      tokens: estimateTokens(toolSummary),
+    });
   }
 
-  // Section 6: Agent activity table (rule-based)
-  const { section: activitySection, remainingChains } = buildAgentActivityTable(
-    ctx.wrfcChains,
-    config.agentActivityBudget,
-  );
-  if (activitySection) sections.push(activitySection);
-
-  // Section 7: Older agent summary (LLM-assisted, only if agents beyond table)
-  if (remainingChains.length > 0) {
-    const olderPrompt = buildOlderAgentSummaryPrompt(remainingChains);
-    const olderSummary = await llmExtract(
-      registryOverride,
-      ctx.extractionModelId,
-      ctx.extractionProvider,
-      olderPrompt,
-      'older-agent-summary',
-    );
-    if (olderSummary) {
-      sections.push({
-        id: 'older-agent-summary',
-        header: '## Older Work Summary',
-        content: olderSummary,
-        tokens: estimateTokens(olderSummary),
-      });
-    }
+  // Section 7: Older agent summary
+  if (olderSummary) {
+    sections.push({
+      id: 'older-agent-summary',
+      header: '## Older Work Summary',
+      content: olderSummary,
+      tokens: estimateTokens(olderSummary),
+    });
   }
 
-  // Section 8: Resolved problems (LLM-assisted)
-  const allUserAssistant = ctx.messages.filter(
-    (m) => m.role === 'user' || m.role === 'assistant',
-  );
-  if (allUserAssistant.length > 0) {
-    const problemsPrompt = buildResolvedProblemsPrompt(allUserAssistant);
-    const problemsText = await llmExtract(
-      registryOverride,
-      ctx.extractionModelId,
-      ctx.extractionProvider,
-      problemsPrompt,
-      'resolved-problems',
-    );
-    if (problemsText && problemsText.toLowerCase().trim() !== 'empty'
-        && !problemsText.toLowerCase().includes('no resolved problems')) {
-      sections.push({
-        id: 'resolved-problems',
-        header: '## Resolved Problems',
-        content: problemsText,
-        tokens: estimateTokens(problemsText),
-      });
-    }
+  // Section 8: Resolved problems
+  if (problemsText && problemsText.toLowerCase().trim() !== 'empty'
+      && !problemsText.toLowerCase().includes('no resolved problems')) {
+    sections.push({
+      id: 'resolved-problems',
+      header: '## Resolved Problems',
+      content: problemsText,
+      tokens: estimateTokens(problemsText),
+    });
   }
 
   // Section 9: Plan progress (rule-based)

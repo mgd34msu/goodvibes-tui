@@ -59,6 +59,15 @@ export const DEFAULT_COMPACTION_CONFIG: CompactionConfig = {
 export type { SessionMemory };
 
 // ---------------------------------------------------------------------------
+// Token estimation utility (here to avoid circular imports)
+// ---------------------------------------------------------------------------
+
+/** Rough token estimate for a string: 4 chars ≈ 1 token. */
+export function estimateTokens(text: string): number {
+  return Math.ceil(text.length / 4);
+}
+
+// ---------------------------------------------------------------------------
 // Context data sources (read-only, passed in as plain data — no singletons)
 // ---------------------------------------------------------------------------
 
@@ -68,7 +77,7 @@ export interface CompactionContext {
   messages: ProviderMessage[];
 
   /** Pinned session memories (survive all compactions). */
-  sessionMemories: SessionMemory[];
+  sessionMemories: readonly SessionMemory[];
 
   /** All agent records from AgentManager.list(). */
   agents: AgentRecord[];

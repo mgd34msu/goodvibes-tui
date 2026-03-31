@@ -11,6 +11,7 @@ import {
   getLastCompactionEvent,
   compactMessages,
   checkAndCompact,
+  getCompactionThreshold,
 } from '../../core/context-compaction.ts';
 import type { ProviderMessage, ContentPart, LLMProvider, ChatRequest, ChatResponse } from '../../providers/interface.ts';
 import type { ProviderRegistry } from '../../providers/registry.ts';
@@ -470,5 +471,28 @@ describe('checkAndCompact', () => {
     expect(result!.messages.length).toBeLessThan(messages.length);
     expect(result!.event.trigger).toBe('auto');
     expect(result!.summary).toBe('• auto-compacted summary');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// getCompactionThreshold
+// ---------------------------------------------------------------------------
+
+describe('getCompactionThreshold', () => {
+  it('returns 80 for context windows >= 500k', () => {
+    expect(getCompactionThreshold(500_000)).toBe(80);
+    expect(getCompactionThreshold(1_000_000)).toBe(80);
+  });
+
+  it('returns 75 for context windows 128k-499k', () => {
+    expect(getCompactionThreshold(128_000)).toBe(75);
+    expect(getCompactionThreshold(200_000)).toBe(75);
+    expect(getCompactionThreshold(499_999)).toBe(75);
+  });
+
+  it('returns 65 for context windows < 128k', () => {
+    expect(getCompactionThreshold(127_999)).toBe(65);
+    expect(getCompactionThreshold(32_000)).toBe(65);
+    expect(getCompactionThreshold(0)).toBe(65);
   });
 });
