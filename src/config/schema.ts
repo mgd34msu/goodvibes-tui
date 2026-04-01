@@ -65,7 +65,7 @@ export interface GoodVibesConfig {
   };
   danger: {
     agentRecursion: boolean;        // default: false — allow agents to spawn subagents
-    maxGlobalAgents: number;        // default: 12 — total agents across all levels
+    maxGlobalAgents: number;        // default: 8 — total agents across all levels
     maxRecursionDepth: number;      // default: 0 — 0=off, 1=one level (max allowed)
     daemon: boolean;                // default: false — enable daemon mode
     httpListener: boolean;          // default: false — enable HTTP webhook listener
@@ -84,6 +84,18 @@ export interface GoodVibesConfig {
     // NOTE: gates is an array of objects and does not fit the scalar-value dot-path config API.
     // Access via configManager.getCategory('wrfc').gates — not via ConfigKey/ConfigValue.
     gates: Array<{ name: string; command: string; enabled: boolean }>;
+  };
+  cache: {
+    enabled: boolean;                    // default: true
+    anthropicTtl: '5m' | '1h';          // default: '1h' (for stable content like system+tools)
+    monitorHitRate: boolean;             // default: true
+    hitRateWarningThreshold: number;     // default: 0.3
+  };
+  helper: {
+    enabled: boolean;                    // default: false
+    globalProvider: string;              // default: ''
+    globalModel: string;                 // default: ''
+    // Per-provider overrides accessed via configManager.getCategory('helper').providers
   };
   // NOTE: notifications.webhookUrls is an array and does not fit the scalar-value dot-path config API.
   // Access via configManager.getCategory('notifications') or mergeCategory('notifications', ...).
@@ -152,7 +164,14 @@ export type ConfigKey =
   | 'tools.hooksFile'
   | 'wrfc.scoreThreshold'
   | 'wrfc.maxFixAttempts'
-  | 'wrfc.autoCommit';
+  | 'wrfc.autoCommit'
+  | 'cache.enabled'
+  | 'cache.anthropicTtl'
+  | 'cache.monitorHitRate'
+  | 'cache.hitRateWarningThreshold'
+  | 'helper.enabled'
+  | 'helper.globalProvider'
+  | 'helper.globalModel';
 
 /** Set of all valid config keys for runtime validation. */
 export const CONFIG_KEYS = new Set<string>([
@@ -173,6 +192,8 @@ export const CONFIG_KEYS = new Set<string>([
   'danger.maxRecursionDepth', 'danger.daemon', 'danger.httpListener',
   'tools.llmProvider', 'tools.llmModel', 'tools.autoHeal', 'tools.defaultTokenBudget',
   'tools.hooksFile', 'wrfc.scoreThreshold', 'wrfc.maxFixAttempts', 'wrfc.autoCommit',
+  'cache.enabled', 'cache.anthropicTtl', 'cache.monitorHitRate', 'cache.hitRateWarningThreshold',
+  'helper.enabled', 'helper.globalProvider', 'helper.globalModel',
 ] as const satisfies ConfigKey[]);
 
 /** Type guard: returns true if key is a valid ConfigKey. */
@@ -234,6 +255,13 @@ export type ConfigValue<K extends ConfigKey> =
   K extends 'wrfc.scoreThreshold' ? number :
   K extends 'wrfc.maxFixAttempts' ? number :
   K extends 'wrfc.autoCommit' ? boolean :
+  K extends 'cache.enabled' ? boolean :
+  K extends 'cache.anthropicTtl' ? '5m' | '1h' :
+  K extends 'cache.monitorHitRate' ? boolean :
+  K extends 'cache.hitRateWarningThreshold' ? number :
+  K extends 'helper.enabled' ? boolean :
+  K extends 'helper.globalProvider' ? string :
+  K extends 'helper.globalModel' ? string :
   never;
 
 export const DEFAULT_CONFIG: GoodVibesConfig = {
@@ -311,6 +339,17 @@ export const DEFAULT_CONFIG: GoodVibesConfig = {
       { name: 'lint', command: 'npx eslint . --max-warnings 0', enabled: true },
       { name: 'build', command: 'npm run build', enabled: false },
     ],
+  },
+  cache: {
+    enabled: true,
+    anthropicTtl: '1h',
+    monitorHitRate: true,
+    hitRateWarningThreshold: 0.3,
+  },
+  helper: {
+    enabled: false,
+    globalProvider: '',
+    globalModel: '',
   },
   notifications: {
     webhookUrls: [],
@@ -653,6 +692,50 @@ export const CONFIG_SCHEMA: ConfigSetting[] = [
     type: 'boolean',
     default: true,
     description: 'Auto-commit when WRFC chain passes review and quality gates',
+  },
+  {
+    key: 'cache.enabled',
+    type: 'boolean',
+    default: true,
+    description: 'Enable prompt caching for eligible providers (Anthropic)',
+  },
+  {
+    key: 'cache.anthropicTtl',
+    type: 'enum',
+    default: '1h',
+    description: 'Cache TTL for Anthropic prompt caching: 5m (ephemeral) or 1h (persistent)',
+    enumValues: ['5m', '1h'],
+  },
+  {
+    key: 'cache.monitorHitRate',
+    type: 'boolean',
+    default: true,
+    description: 'Monitor cache hit rate and warn when below threshold',
+  },
+  {
+    key: 'cache.hitRateWarningThreshold',
+    type: 'number',
+    default: 0.3,
+    description: 'Warn when cache hit rate falls below this fraction (0.0–1.0)',
+    validate: (v) => typeof v === 'number' && v >= 0 && v <= 1,
+  },
+  {
+    key: 'helper.enabled',
+    type: 'boolean',
+    default: false,
+    description: 'Enable helper model routing for grunt-work tasks',
+  },
+  {
+    key: 'helper.globalProvider',
+    type: 'string',
+    default: '',
+    description: 'Provider for the global helper model (empty = disabled)',
+  },
+  {
+    key: 'helper.globalModel',
+    type: 'string',
+    default: '',
+    description: 'Model ID for the global helper model (empty = disabled)',
   },
   {
     key: 'behavior.suggestAlternativeOnProviderFail',

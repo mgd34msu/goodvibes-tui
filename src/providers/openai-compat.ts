@@ -9,6 +9,9 @@ import {
   extractTextToolCalls,
 } from './tool-formats.ts';
 import type { OpenAIToolCall } from './tool-formats.ts';
+import { getCacheCapability } from './cache-capability.ts';
+import type { ProviderCacheCapability } from './cache-capability.ts';
+import { cacheHitTracker } from './cache-strategy.ts';
 
 export interface OpenAICompatOptions {
   name: string;
@@ -34,12 +37,14 @@ export class OpenAICompatProvider implements LLMProvider {
   private client: OpenAI;
   private defaultModel: string;
   private reasoningFormat: 'mercury' | 'openrouter' | 'llamacpp' | 'none';
+  private cacheCapability: ProviderCacheCapability;
 
   constructor(opts: OpenAICompatOptions) {
     this.name = opts.name;
     this.models = opts.models;
     this.defaultModel = opts.defaultModel;
     this.reasoningFormat = opts.reasoningFormat ?? 'none';
+    this.cacheCapability = getCacheCapability(opts.name);
     this.client = new OpenAI({
       apiKey: opts.apiKey,
       baseURL: opts.baseURL,
@@ -90,6 +95,12 @@ export class OpenAICompatProvider implements LLMProvider {
         extraBody['reasoning_summary_wait'] = true;
       }
 
+      // Build per-request headers for cache optimization
+      const requestHeaders: Record<string, string> = {};
+      if (this.cacheCapability.type === 'automatic' && this.cacheCapability.sessionAffinityHeader) {
+        requestHeaders[this.cacheCapability.sessionAffinityHeader] = 'true';
+      }
+
       try {
         const stream = await this.client.chat.completions.create(
           {
@@ -101,7 +112,10 @@ export class OpenAICompatProvider implements LLMProvider {
             stream_options: { include_usage: true },
             ...extraBody,
           },
-          { signal },
+          {
+            signal,
+            ...(Object.keys(requestHeaders).length > 0 ? { headers: requestHeaders } : {}),
+          },
         );
 
         const accToolCalls: Map<number, { id: string; name: string; args: string }> = new Map();
@@ -201,6 +215,11 @@ export class OpenAICompatProvider implements LLMProvider {
       if (reasoningSummaryText) {
         response.reasoningSummary = reasoningSummaryText;
       }
+
+      cacheHitTracker.recordTurn({
+        inputTokens,
+        cacheReadTokens,
+      });
 
       return response;
     });

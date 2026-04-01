@@ -62,6 +62,15 @@ export interface ChatResponse {
   stopReason: 'end' | 'tool_use' | 'max_tokens' | 'error';
   /** Mercury-2 specific: condensed chain-of-thought, if requested. */
   reasoningSummary?: string;
+  /**
+   * Cache metrics for this response.
+   * @remarks Currently only populated by the Anthropic provider. Other providers return `undefined`.
+   */
+  cacheMetrics?: {
+    strategy: string;           // e.g. 'explicit-4bp', 'automatic', 'implicit', 'none'
+    breakpointsPlaced: number;
+    hitRate?: number;           // Computed from this response's usage
+  };
 }
 
 export type ProviderMessage =

@@ -9,6 +9,7 @@ import {
   extractTextToolCalls,
 } from './tool-formats.ts';
 import type { OpenAIToolCall } from './tool-formats.ts';
+import { cacheHitTracker } from './cache-strategy.ts';
 
 /**
  * OpenAIProvider — wraps the official `openai` npm package.
@@ -119,6 +120,11 @@ export class OpenAIProvider implements LLMProvider {
           stopReason = 'tool_use';
         }
       }
+
+      cacheHitTracker.recordTurn({
+        inputTokens,
+        cacheReadTokens,
+      });
 
       return {
         content: responseText,

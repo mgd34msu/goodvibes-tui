@@ -49,6 +49,10 @@ export interface EventMap {
   // Context warnings
   'context:warning': { usage: number; threshold: number };
 
+  // Cache and helper metrics
+  'cache:metrics': { hitRate: number; cacheReadTokens: number; cacheWriteTokens: number; totalInputTokens: number; turns: number };
+  'helper:usage': { inputTokens: number; outputTokens: number; calls: number };
+
   // Custom provider events
   'providers:changed': { added: string[]; removed: string[]; updated: string[] };
   'providers:warning': { message: string };

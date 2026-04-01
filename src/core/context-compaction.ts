@@ -48,6 +48,8 @@ import {
   buildPlanProgress,
   buildSessionLineage,
 } from './compaction-sections.ts';
+import { cacheHitTracker } from '../providers/cache-strategy.ts';
+import { cachePlanner } from '../providers/cache-planner.ts';
 
 // ---------------------------------------------------------------------------
 // Re-export CompactionEvent, CompactionResult, and CompactionContext for backward compatibility
@@ -102,6 +104,9 @@ export const COMPACTION_BUFFER_TOKENS = 15_000;
  * instead of the full structured v2 output, since there isn't enough room for extraction calls.
  */
 export const SMALL_WINDOW_THRESHOLD = 12_000;
+
+/** Hit rate threshold for logging cache impact during compaction. */
+const CACHE_HIT_RATE_LOG_THRESHOLD = 0.5;
 
 // ---------------------------------------------------------------------------
 // Compaction event log (in-memory, session-scoped)
@@ -467,27 +472,43 @@ export async function compactMessages(
   ctxOrOpts: CompactionContext | CompactionOptions,
   registryOverride?: ProviderRegistry,
 ): Promise<CompactionResult> {
+  let result: CompactionResult;
+
   // Legacy path: CompactionOptions without a context field
   if ('registry' in ctxOrOpts) {
     const opts = ctxOrOpts as CompactionOptions;
     if (!opts.context) {
       // Pure v1 legacy: use keepRecentMessages-based summarization
-      return compactMessagesLegacy(opts);
+      result = await compactMessagesLegacy(opts);
+    } else {
+      // Opts has a context field: promote to v2 path
+      const ctx: CompactionContext = {
+        ...opts.context,
+        messages: opts.messages,
+        trigger: opts.trigger ?? 'manual',
+        extractionModelId: opts.modelId,
+        extractionProvider: opts.provider,
+      };
+      registryOverride = opts.registry;
+      result = await compactMessagesV2(ctx, registryOverride);
     }
-    // Opts has a context field: promote to v2 path
-    const ctx: CompactionContext = {
-      ...opts.context,
-      messages: opts.messages,
-      trigger: opts.trigger ?? 'manual',
-      extractionModelId: opts.modelId,
-      extractionProvider: opts.provider,
-    };
-    registryOverride = opts.registry;
-    return compactMessagesV2(ctx, registryOverride);
+  } else {
+    // V2 path
+    result = await compactMessagesV2(ctxOrOpts as CompactionContext, registryOverride);
   }
 
-  // V2 path
-  return compactMessagesV2(ctxOrOpts as CompactionContext, registryOverride);
+  // Invalidate cache strategy after compaction — cached message indices are no longer valid
+  cachePlanner.invalidate();
+
+  // Log compaction's impact on cache
+  const recentHitRate = cacheHitTracker.getHitRate();
+  if (recentHitRate > CACHE_HIT_RATE_LOG_THRESHOLD) {
+    logger.info('[Compaction] High cache hit rate before compaction — cache will need rebuild', {
+      hitRate: (recentHitRate * 100).toFixed(0) + '%',
+    });
+  }
+
+  return result;
 }
 
 /**

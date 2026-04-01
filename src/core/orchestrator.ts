@@ -31,6 +31,8 @@ import type { AgentInput } from '../tools/agent/schema.ts';
 import { WrfcController } from '../agents/wrfc-controller.ts';
 import { THINKING_SPINNER_FRAMES } from '../renderer/progress.ts';
 import { randomUUID } from 'node:crypto';
+import { cacheHitTracker } from '../providers/cache-strategy.ts';
+import { helperModel } from '../config/helper-model.ts';
 
 /** Minimal interface for hook dispatch — allows any compatible implementation */
 interface HookDispatcherLike {
@@ -427,6 +429,42 @@ export class Orchestrator {
         this.usage.output += response.usage.outputTokens;
         this.usage.cacheRead += response.usage.cacheReadTokens ?? 0;
         this.usage.cacheWrite += response.usage.cacheWriteTokens ?? 0;
+
+        // Emit cache metrics event
+        const cacheMetrics = cacheHitTracker.getMetrics();
+        if (cacheMetrics.turns > 0) {
+          this.bus.emit('cache:metrics', {
+            hitRate: cacheMetrics.hitRate,
+            cacheReadTokens: cacheMetrics.cacheReadTokens,
+            cacheWriteTokens: cacheMetrics.cacheWriteTokens,
+            totalInputTokens: cacheMetrics.totalInputTokens,
+            turns: cacheMetrics.turns,
+          });
+        }
+
+        // Track helper model usage
+        // Cumulative lifetime totals (not per-turn deltas) — consumers can diff successive events
+        const helperUsage = helperModel.getUsage();
+        if (helperUsage.calls > 0) {
+          this.bus.emit('helper:usage', {
+            inputTokens: helperUsage.inputTokens,
+            outputTokens: helperUsage.outputTokens,
+            calls: helperUsage.calls,
+          });
+        }
+
+        // Warn on low cache hit rate (after enough data)
+        // configManager.get() is generic (get<K>(key: K): ConfigValue<K>), so no cast needed
+        const hitRateThreshold = configManager.get('cache.hitRateWarningThreshold');
+        if (
+          cacheMetrics.turns >= 5 &&
+          cacheMetrics.hitRate < hitRateThreshold &&
+          configManager.get('cache.monitorHitRate')
+        ) {
+          const pct = (cacheMetrics.hitRate * 100).toFixed(0);
+          logger.info(`[Cache] Low hit rate: ${pct}% over ${cacheMetrics.turns} turns`); // TODO: Consider emitting cache:warning event for UI consumers
+        }
+
         this.lastInputTokens = response.usage.inputTokens
           + (response.usage.cacheReadTokens ?? 0)
           + (response.usage.cacheWriteTokens ?? 0);
