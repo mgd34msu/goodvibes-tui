@@ -5,6 +5,41 @@ import type { FetchInput, FetchUrlInput, FetchAuthInput, FetchExtractMode, Fetch
 import { resolveServiceAuth } from '../../config/service-registry.ts';
 
 // ---------------------------------------------------------------------------
+// Module-level response cache (feature: cache_ttl_seconds)
+// ---------------------------------------------------------------------------
+
+interface CacheEntry {
+  data: FetchUrlResult;
+  timestamp: number;
+  /** TTL in seconds for this entry (used during expiry purge). */
+  ttl: number;
+}
+
+const responseCache = new Map<string, CacheEntry>();
+const MAX_CACHE_SIZE = 500;
+let cacheWriteCount = 0;
+
+/**
+ * Write a cache entry with LRU eviction and periodic expiry purge.
+ */
+function cacheSet(key: string, entry: CacheEntry): void {
+  cacheWriteCount++;
+  // Periodically purge expired entries (every 50 writes)
+  if (cacheWriteCount % 50 === 0) {
+    const now = Date.now();
+    for (const [k, v] of responseCache) {
+      if (now - v.timestamp > v.ttl * 1000) responseCache.delete(k);
+    }
+  }
+  // LRU eviction: delete oldest entry when at capacity
+  if (responseCache.size >= MAX_CACHE_SIZE) {
+    const oldest = responseCache.keys().next().value;
+    if (oldest !== undefined) responseCache.delete(oldest);
+  }
+  responseCache.set(key, entry);
+}
+
+// ---------------------------------------------------------------------------
 // Output types
 // ---------------------------------------------------------------------------
 
@@ -16,6 +51,19 @@ export interface FetchUrlResult {
   byteSize?: number;
   content?: string;
   error?: string;
+  /** True when the response body was truncated to max_content_length. */
+  truncated?: boolean;
+  /** True when the result was served from the response cache. */
+  from_cache?: boolean;
+  /** Whether the request was redirected. */
+  redirected?: boolean;
+  /** Final URL after any redirects. */
+  final_url?: string;
+  // redirect_chain reserved for future manual redirect following
+  /** Time taken to complete the request in milliseconds. */
+  duration_ms?: number;
+  /** Estimated token count for the content (Math.ceil(content.length / 4)). */
+  tokens_used?: number;
   /** Additional metadata included in verbose format. */
   metadata?: {
     headers: Record<string, string>;
@@ -32,6 +80,8 @@ export interface FetchOutput {
     total: number;
     succeeded: number;
     failed: number;
+    /** Total wall-clock time for all requests in milliseconds. */
+    total_ms?: number;
   };
 }
 
@@ -313,6 +363,78 @@ function extractMetadata(html: string): string {
   return JSON.stringify(result, null, 2);
 }
 
+/**
+ * Extractive summary: return the first heading + first paragraph of text content.
+ * Works on HTML (extracts headings and first <p>) or plain text (first two lines).
+ */
+function extractSummary(body: string, contentType: string): string {
+  const isHtml = /text\/html/i.test(contentType);
+  if (!isHtml) {
+    // For plain text: return the first non-empty paragraph (double newline separated)
+    const paragraphs = body.split(/\n{2,}/).map((p) => p.trim()).filter(Boolean);
+    return paragraphs.slice(0, 2).join('\n\n');
+  }
+
+  const parts: string[] = [];
+
+  // First heading (h1..h3)
+  const headingM = body.match(/<h[1-3][^>]*>([\s\S]*?)<\/h[1-3]>/i);
+  if (headingM) {
+    parts.push(stripHtml(headingM[1]).trim());
+  }
+
+  // First paragraph
+  const paraM = body.match(/<p[^>]*>([\s\S]*?)<\/p>/i);
+  if (paraM) {
+    const text = stripHtml(paraM[1]).trim();
+    if (text) parts.push(text);
+  }
+
+  // Collect remaining headings for outline
+  const headingRe = /<h([1-6])[^>]*>([\s\S]*?)<\/h[1-6]>/gi;
+  let hm: RegExpExecArray | null;
+  const headings: string[] = [];
+  while ((hm = headingRe.exec(body)) !== null) {
+    const level = parseInt(hm[1], 10);
+    const text = stripHtml(hm[2]).trim();
+    if (text && !parts.includes(text)) {
+      headings.push(`${'#'.repeat(level)} ${text}`);
+    }
+  }
+
+  if (headings.length > 0) {
+    parts.push('\nHeadings:\n' + headings.join('\n'));
+  }
+
+  return parts.join('\n\n') || extractReadable(body).slice(0, 500);
+}
+
+// ---------------------------------------------------------------------------
+// Content type sniffing (feature: content type sniffing)
+// ---------------------------------------------------------------------------
+
+/**
+ * Sniff content type from first 512 bytes when Content-Type is missing or
+ * is 'application/octet-stream'. Returns the detected MIME type or the
+ * original contentType if nothing is detected.
+ */
+function sniffContentType(contentType: string, body: string): string {
+  const isMissing = !contentType || /application\/octet-stream/i.test(contentType);
+  if (!isMissing) return contentType;
+
+  const sample = body.slice(0, 512).trimStart();
+  if (/^<!DOCTYPE\s+html/i.test(sample) || /^<html/i.test(sample)) {
+    return 'text/html';
+  }
+  if (/^<\?xml/i.test(sample)) {
+    return 'application/xml';
+  }
+  if (/^[{[]/.test(sample)) {
+    return 'application/json';
+  }
+  return contentType;
+}
+
 // ---------------------------------------------------------------------------
 // Apply extract mode to raw response text
 // ---------------------------------------------------------------------------
@@ -323,7 +445,8 @@ function applyExtract(
   mode: FetchExtractMode,
   opts?: { selectors?: string[] },
 ): string {
-  const isHtml = /text\/html/i.test(contentType);
+  const effectiveContentType = sniffContentType(contentType, body);
+  const isHtml = /text\/html/i.test(effectiveContentType);
 
   switch (mode) {
     case 'raw':
@@ -335,7 +458,7 @@ function applyExtract(
     case 'json': {
       try {
         return JSON.stringify(JSON.parse(body), null, 2);
-      } catch {
+      } catch { /* JSON parse fallback — non-JSON content returns as-is */
         return body;
       }
     }
@@ -365,11 +488,14 @@ function applyExtract(
       return isHtml ? extractTables(body) : JSON.stringify([]);
 
     case 'pdf': {
-      const isPdf = /application\/pdf/i.test(contentType);
+      const isPdf = /application\/pdf/i.test(effectiveContentType);
       return isPdf ? extractPdf(body) : JSON.stringify({
         note: 'PDF extraction only applies to application/pdf responses.',
       });
     }
+
+    case 'summary':
+      return extractSummary(body, effectiveContentType);
 
     default:
       return body;
@@ -416,34 +542,144 @@ function applyAuthHeaders(headers: Record<string, string>, auth: FetchAuthInput)
 
 const DEFAULT_TIMEOUT_MS = 30_000;
 
+/**
+ * Build the effective URL with query params appended.
+ */
+function buildUrl(base: string, params?: Record<string, string>): string {
+  if (!params || Object.keys(params).length === 0) return base;
+  let u: URL;
+  try {
+    u = new URL(base);
+  } catch {
+    throw new Error(`Invalid URL: ${base}`);
+  }
+  for (const [k, v] of Object.entries(params)) {
+    u.searchParams.set(k, v);
+  }
+  return u.toString();
+}
+
+/**
+ * Return a cache key string for a URL + params + extract mode + verbosity.
+ * Including extract and verbosity prevents poisoning across different output formats.
+ */
+function cacheKey(
+  url: string,
+  params: Record<string, string> | undefined,
+  extract: FetchExtractMode,
+  verbosity: FetchVerbosity,
+): string {
+  const base = params && Object.keys(params).length > 0
+    ? `${url}?${new URLSearchParams(params).toString()}`
+    : url;
+  return `${base}|${extract}|${verbosity}`;
+}
+
+/**
+ * Delay execution for the given number of milliseconds.
+ */
+function delay(ms: number): Promise<void> {
+  return new Promise((r) => setTimeout(r, ms));
+}
+
+interface FetchOneOptions {
+  globalExtract: FetchExtractMode;
+  verbosity: FetchVerbosity;
+  cacheTtlSeconds: number;
+  maxContentLength?: number;
+}
+
+async function fetchOneRaw(
+  urlInput: FetchUrlInput,
+  headers: Record<string, string>,
+  method: string,
+  body: string | FormData | undefined,
+  effectiveUrl: string,
+): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), urlInput.timeout_ms ?? DEFAULT_TIMEOUT_MS);
+  try {
+    const response = await fetch(effectiveUrl, {
+      method,
+      headers: Object.keys(headers).length > 0 ? (headers as HeadersInit) : undefined,
+      body,
+      signal: controller.signal,
+    });
+    clearTimeout(timer);
+    return response;
+  } catch (err) {
+    clearTimeout(timer);
+    throw err;
+  }
+}
+
 async function fetchOne(
   urlInput: FetchUrlInput,
-  globalExtract: FetchExtractMode,
-  verbosity: FetchVerbosity,
+  opts: FetchOneOptions,
 ): Promise<FetchUrlResult> {
+  const { globalExtract, verbosity, cacheTtlSeconds, maxContentLength } = opts;
   const extractMode: FetchExtractMode = urlInput.extract ?? globalExtract;
-  const timeoutMs = urlInput.timeout_ms ?? DEFAULT_TIMEOUT_MS;
   const method = urlInput.method ?? 'GET';
+  const effectiveMaxContent = urlInput.max_content_length ?? maxContentLength;
+
+  // Build URL with query params
+  const effectiveUrl = buildUrl(urlInput.url, urlInput.params);
+
+  // --- Cache check (GET only) ---
+  if (cacheTtlSeconds > 0 && method === 'GET') {
+    const key = cacheKey(urlInput.url, urlInput.params, extractMode, verbosity);
+    const entry = responseCache.get(key);
+    if (entry && (Date.now() - entry.timestamp) / 1000 < cacheTtlSeconds) {
+      return { ...entry.data, from_cache: true };
+    }
+  }
 
   // Build headers
-  const headers: Record<string, string> = { ...urlInput.headers };
+  const headers: Record<string, string> = { ...(urlInput.headers ?? {}) };
 
   // Apply inline auth
   if (urlInput.auth) {
     applyAuthHeaders(headers, urlInput.auth);
   } else if (urlInput.service) {
-    // Service registry auth — looked up from secrets
     const serviceHeaders = await resolveServiceAuth(urlInput.service);
     if (serviceHeaders) {
       Object.assign(headers, serviceHeaders);
     }
   }
 
+  // JSON auto-negotiation: add Accept: application/json for API-like URLs
+  try {
+    if (/\/api\/|\/v\d+\/|\/graphql/i.test(effectiveUrl)) {
+      if (!Object.keys(headers).some((h) => h.toLowerCase() === 'accept')) {
+        headers['Accept'] = 'application/json';
+      }
+    }
+  } catch { /* malformed URL, skip auto-negotiation */ }
+
   // Build body
-  let body: string | undefined;
-  if (urlInput.body !== undefined) {
-    body = urlInput.body;
-    const hasContentType = Object.keys(headers).some((k) => k.toLowerCase() === 'content-type');
+  let requestBody: string | FormData | undefined;
+  const hasContentType = Object.keys(headers).some((k) => k.toLowerCase() === 'content-type');
+
+  if (urlInput.body_type === 'multipart' && urlInput.body_data) {
+    // Multipart: use FormData
+    const form = new FormData();
+    for (const [k, v] of Object.entries(urlInput.body_data)) {
+      form.append(k, v);
+    }
+    requestBody = form;
+    // Do NOT set Content-Type — fetch sets it automatically with the boundary
+  } else if (urlInput.body_base64 !== undefined) {
+    // body_base64 takes precedence over body
+    requestBody = Buffer.from(urlInput.body_base64, 'base64').toString();
+    if (!hasContentType) {
+      if (urlInput.body_type === 'json') {
+        headers['Content-Type'] = 'application/json';
+      } else if (urlInput.body_type === 'form') {
+        headers['Content-Type'] = 'application/x-www-form-urlencoded';
+      }
+    }
+  } else if (urlInput.body !== undefined) {
+    requestBody = urlInput.body;
     if (!hasContentType) {
       if (urlInput.body_type === 'json') {
         headers['Content-Type'] = 'application/json';
@@ -453,38 +689,72 @@ async function fetchOne(
     }
   }
 
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  const startTime = performance.now();
 
   try {
-    const response = await fetch(urlInput.url, {
-      method,
-      headers: Object.keys(headers).length > 0 ? headers : undefined,
-      body,
-      signal: controller.signal,
-    });
+    let response = await fetchOneRaw(urlInput, headers, method, requestBody, effectiveUrl);
 
-    clearTimeout(timer);
+    // --- Auth refresh on 401 (feature 3) ---
+    // Skip retry for FormData bodies — they cannot be replayed after consumption.
+    const retryOnAuth = urlInput.retry_on_auth ?? (urlInput.service !== undefined);
+    if (response.status === 401 && retryOnAuth && urlInput.service && !(requestBody instanceof FormData)) {
+      // Re-resolve service auth (registry may refresh)
+      const refreshedHeaders = await resolveServiceAuth(urlInput.service);
+      if (refreshedHeaders) {
+        const retryHeaders = { ...headers };
+        Object.assign(retryHeaders, refreshedHeaders);
+        response = await fetchOneRaw(urlInput, retryHeaders, method, requestBody, effectiveUrl);
+      }
+    }
 
-    const contentType = response.headers.get('content-type') ?? '';
-    const rawBody = await response.text();
+    const durationMs = Math.round(performance.now() - startTime);
+
+    let contentType = response.headers.get('content-type') ?? '';
+    let rawBody = await response.text();
+
+    // Sniff content type if missing/octet-stream
+    contentType = sniffContentType(contentType, rawBody);
+
+    // --- Max content length truncation (feature 6) ---
+    let truncated = false;
+    if (effectiveMaxContent !== undefined) {
+      const buf = Buffer.from(rawBody, 'utf-8');
+      if (buf.length > effectiveMaxContent) {
+        rawBody = buf.subarray(0, effectiveMaxContent).toString('utf-8');
+        truncated = true;
+      }
+    }
+
     const byteSize = Buffer.byteLength(rawBody, 'utf-8');
 
     const result: FetchUrlResult = {
       url: urlInput.url,
       status: response.status,
       statusText: response.statusText,
+      duration_ms: durationMs,
     };
 
     if (verbosity === 'count_only') {
+      // Cache result for GET requests
+      if (cacheTtlSeconds > 0 && method === 'GET') {
+        cacheSet(cacheKey(urlInput.url, urlInput.params, extractMode, verbosity), { data: result, timestamp: Date.now(), ttl: cacheTtlSeconds });
+      }
       return result;
     }
 
     result.contentType = contentType;
     result.byteSize = byteSize;
+    if (truncated) result.truncated = true;
+
+    // Redirect tracking (feature 7)
+    result.redirected = response.redirected;
+    result.final_url = response.url !== effectiveUrl ? response.url : undefined;
 
     if (verbosity !== 'minimal') {
-      result.content = applyExtract(rawBody, contentType, extractMode, { selectors: urlInput.selectors });
+      const content = applyExtract(rawBody, contentType, extractMode, { selectors: urlInput.selectors });
+      result.content = content;
+      // Token estimation (feature 10)
+      result.tokens_used = Math.ceil(content.length / 4);
     }
 
     if (verbosity === 'verbose') {
@@ -499,17 +769,22 @@ async function fetchOne(
       };
     }
 
+    // Cache result for GET requests
+    if (cacheTtlSeconds > 0 && method === 'GET') {
+      cacheSet(cacheKey(urlInput.url, urlInput.params, extractMode, verbosity), { data: result, timestamp: Date.now(), ttl: cacheTtlSeconds });
+    }
+
     return result;
   } catch (err) {
-    clearTimeout(timer);
+    const durationMs = Math.round(performance.now() - startTime);
     const isTimeout = err instanceof Error && err.name === 'AbortError';
     const message = isTimeout
-      ? `Timeout after ${timeoutMs}ms`
+      ? `Timeout after ${urlInput.timeout_ms ?? DEFAULT_TIMEOUT_MS}ms`
       : err instanceof Error
         ? err.message
         : String(err);
     logger.debug('fetch tool: request failed', { url: urlInput.url, error: message });
-    return { url: urlInput.url, error: message };
+    return { url: urlInput.url, error: message, duration_ms: durationMs };
   }
 }
 
@@ -529,9 +804,10 @@ export const fetchTool: Tool = {
     name: 'fetch',
     description:
       'Fetch one or more URLs via HTTP. Supports batch parallel/sequential requests,'
-      + ' per-URL method/headers/body, extraction modes (raw, text, json, markdown,'
-      + ' readable, code_blocks, links, metadata, structured, tables, pdf),'
-      + ' per-URL timeouts, and verbosity control.',
+      + ' per-URL method/headers/body/params, extraction modes (raw, text, json, markdown,'
+      + ' readable, code_blocks, links, metadata, structured, tables, pdf, summary),'
+      + ' per-URL timeouts, caching, rate limiting, auth refresh, content-length limits,'
+      + ' redirect tracking, timing metrics, token estimation, and verbosity control.',
     parameters: FETCH_TOOL_SCHEMA as unknown as Record<string, unknown>,
   },
 
@@ -547,20 +823,38 @@ export const fetchTool: Tool = {
       const globalExtract: FetchExtractMode = input.extract ?? 'raw';
       const parallel: boolean = input.parallel !== false; // default true
       const verbosity: FetchVerbosity = input.verbosity ?? 'standard';
+      const cacheTtlSeconds = input.cache_ttl_seconds ?? 0;
+      const rateLimitMs = input.rate_limit_ms ?? 0;
+      const maxContentLength = input.max_content_length;
 
+      const fetchOpts: FetchOneOptions = {
+        globalExtract,
+        verbosity,
+        cacheTtlSeconds,
+        maxContentLength,
+      };
+
+      const wallStart = performance.now();
       let results: FetchUrlResult[];
 
       if (parallel) {
+        if (rateLimitMs > 0) {
+          logger.debug('fetch tool: rate_limit_ms is ignored in parallel mode; set parallel: false to enforce rate limiting');
+        }
         results = await Promise.all(
-          input.urls.map((u) => fetchOne(u, globalExtract, verbosity)),
+          input.urls.map((u) => fetchOne(u, fetchOpts)),
         );
       } else {
         results = [];
-        for (const u of input.urls) {
-          results.push(await fetchOne(u, globalExtract, verbosity));
+        for (let i = 0; i < input.urls.length; i++) {
+          if (i > 0 && rateLimitMs > 0) {
+            await delay(rateLimitMs);
+          }
+          results.push(await fetchOne(input.urls[i], fetchOpts));
         }
       }
 
+      const totalMs = Math.round(performance.now() - wallStart);
       const succeeded = results.filter((r) => r.error === undefined).length;
       const failed = results.filter((r) => r.error !== undefined).length;
 
@@ -570,6 +864,7 @@ export const fetchTool: Tool = {
           total: results.length,
           succeeded,
           failed,
+          total_ms: totalMs,
         },
       };
 

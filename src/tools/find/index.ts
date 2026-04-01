@@ -1,5 +1,6 @@
 import { resolve, relative, join, extname } from 'node:path';
-import { readFile } from 'node:fs/promises';
+import { stat as statAsync } from 'node:fs/promises';
+import { statSync, lstatSync, existsSync, readFileSync, realpathSync } from 'node:fs';
 import { walkDir, WALK_SKIP_DIRS as SKIP_DIRS } from '../../utils/walk-dir.ts';
 import type { Tool } from '../../types/tools.ts';
 import { findSchema } from './schema.ts';
@@ -7,10 +8,32 @@ import { CodeIntelligence, uriToPath } from '../../intelligence/index.ts';
 import * as astGrep from '@ast-grep/napi';
 
 // ---------------------------------------------------------------------------
+// Import graph module-level cache (avoids rebuilding on every relationships query)
+// ---------------------------------------------------------------------------
+
+let _importGraphBuiltAt = 0;
+const IMPORT_GRAPH_TTL = 30_000; // 30 seconds
+
+async function getImportGraph(projectRoot: string) {
+  const { ImportGraph } = await import('../../intelligence/import-graph.ts');
+  const now = Date.now();
+  const graph = ImportGraph.getInstance();
+  if (now - _importGraphBuiltAt > IMPORT_GRAPH_TTL) {
+    try {
+      await graph.build(projectRoot);
+    } catch {
+      // Import graph build failure is non-fatal
+    }
+    _importGraphBuiltAt = now;
+  }
+  return graph;
+}
+
+// ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
 
-export type OutputFormat = 'count_only' | 'files_only' | 'locations' | 'matches' | 'context';
+export type OutputFormat = 'count_only' | 'files_only' | 'locations' | 'matches' | 'context' | 'with_stats' | 'with_preview' | 'signatures' | 'full';
 export type SymbolKind = 'function' | 'class' | 'interface' | 'type' | 'variable' | 'constant' | 'enum';
 
 export interface QueryBase {
@@ -23,6 +46,17 @@ export interface FilesQuery extends QueryBase {
   mode: 'files';
   patterns?: string[];
   exclude?: string[];
+  min_size?: number;
+  max_size?: number;
+  modified_after?: string;
+  modified_before?: string;
+  respect_gitignore?: boolean;
+  sort_by?: 'name' | 'size' | 'modified';
+  sort_order?: 'asc' | 'desc';
+  has_content?: string;
+  is_empty?: boolean;
+  follow_symlinks?: boolean;
+  include_hidden?: boolean;
 }
 
 export interface ContentQuery extends QueryBase {
@@ -34,6 +68,9 @@ export interface ContentQuery extends QueryBase {
   whole_word?: boolean;
   multiline?: boolean;
   negate?: boolean;
+  ranked?: boolean;
+  preview_replace?: string;
+  relationships?: boolean;
 }
 
 export interface SymbolsQuery extends QueryBase {
@@ -41,6 +78,8 @@ export interface SymbolsQuery extends QueryBase {
   query?: string;
   kinds?: SymbolKind[];
   exported_only?: boolean;
+  include_private?: boolean;
+  group_by?: 'file' | 'kind' | 'none';
 }
 
 export interface ReferencesQuery extends QueryBase {
@@ -69,6 +108,8 @@ export interface OutputOptions {
   max_per_item?: number;
   max_total_matches?: number;
   max_tokens?: number;
+  preview_lines?: number;
+  max_line_length?: number;
 }
 
 export interface FindInput {
@@ -222,6 +263,68 @@ function validateSearchPath(
 }
 
 // ---------------------------------------------------------------------------
+// Gitignore support
+// ---------------------------------------------------------------------------
+
+/**
+ * Parse a .gitignore file and return a predicate that returns true when a
+ * relative path should be ignored. Supports:
+ *   - blank lines and # comments are skipped
+ *   - leading ! negates the pattern (un-ignore)
+ *   - trailing / restricts to directories (treated as prefix match)
+ *   - ** glob wildcard
+ *   - standard * and ? single-segment wildcards
+ */
+function buildGitignoreMatcher(gitignorePath: string): ((rel: string) => boolean) | null {
+  if (!existsSync(gitignorePath)) return null;
+  let raw: string;
+  try {
+    raw = readFileSync(gitignorePath, 'utf8');
+  } catch {
+    return null;
+  }
+
+  interface GitignoreRule { negate: boolean; glob: InstanceType<typeof Bun.Glob> }
+  const rules: GitignoreRule[] = [];
+
+  for (const rawLine of raw.split('\n')) {
+    const line = rawLine.trim();
+    if (!line || line.startsWith('#')) continue;
+
+    let negate = false;
+    let pat = line;
+    if (pat.startsWith('!')) {
+      negate = true;
+      pat = pat.slice(1);
+    }
+    // Strip trailing slash (we match both files and dirs)
+    if (pat.endsWith('/')) pat = pat.slice(0, -1);
+    // If no slash in pattern, make it match anywhere in tree
+    if (!pat.includes('/')) pat = `**/${pat}`;
+    // If starts with /, strip the slash (root-anchored)
+    else if (pat.startsWith('/')) pat = pat.slice(1);
+
+    try {
+      rules.push({ negate, glob: new Bun.Glob(pat) });
+    } catch {
+      // Skip malformed patterns
+    }
+  }
+
+  if (rules.length === 0) return null;
+
+  return (rel: string): boolean => {
+    let ignored = false;
+    for (const rule of rules) {
+      if (rule.glob.match(rel)) {
+        ignored = !rule.negate;
+      }
+    }
+    return ignored;
+  };
+}
+
+// ---------------------------------------------------------------------------
 // Mode: files
 // ---------------------------------------------------------------------------
 
@@ -237,43 +340,253 @@ async function executeFilesQuery(
   const excludePatterns = query.exclude ?? [];
   const compiledExcludes = excludePatterns.map((p) => new Bun.Glob(p));
   const maxResults = output.max_results ?? 100;
+  const includeHidden = query.include_hidden ?? false;
+  const followSymlinks = query.follow_symlinks ?? false;
+  const respectGitignore = query.respect_gitignore !== false; // default true
+
+  // Parse date filters once
+  const modifiedAfterMs = query.modified_after ? new Date(query.modified_after).getTime() : undefined;
+  if (modifiedAfterMs !== undefined && Number.isNaN(modifiedAfterMs)) {
+    return { error: `Invalid modified_after date: ${query.modified_after}` };
+  }
+  const modifiedBeforeMs = query.modified_before ? new Date(query.modified_before).getTime() : undefined;
+  if (modifiedBeforeMs !== undefined && Number.isNaN(modifiedBeforeMs)) {
+    return { error: `Invalid modified_before date: ${query.modified_before}` };
+  }
+
+  // Build gitignore matcher
+  const gitignoreMatcher = respectGitignore
+    ? buildGitignoreMatcher(join(projectRoot, '.gitignore'))
+    : null;
+
+  // Validate has_content regex early
+  let hasContentRegex: RegExp | undefined;
+  if (query.has_content) {
+    try {
+      hasContentRegex = new RegExp(query.has_content);
+    } catch (e) {
+      return { error: `Invalid has_content regex: ${e instanceof Error ? e.message : String(e)}` };
+    }
+  }
 
   const matchedFiles = new Set<string>();
+  const SCAN_CEILING = 50_000;
+  const visitedRealPaths = new Set<string>();
 
   for (const pattern of patterns) {
     const glob = new Bun.Glob(pattern);
     try {
-      for await (const file of glob.scan({ cwd: basePath, onlyFiles: true, absolute: true })) {
-        if (matchedFiles.size >= maxResults) break;
+      for await (const file of glob.scan({ cwd: basePath, onlyFiles: true, absolute: true, followSymlinks })) {
+        if (matchedFiles.size >= SCAN_CEILING) break;
+
+        // Symlink cycle detection
+        if (followSymlinks) {
+          try {
+            const real = realpathSync(file);
+            if (visitedRealPaths.has(real)) continue;
+            visitedRealPaths.add(real);
+          } catch {
+            // realpathSync failure — skip file
+            continue;
+          }
+        }
 
         // Skip system/hidden directories (same rules as walkDir)
         const rel = relative(basePath, file);
         const segments = rel.split('/');
         const inSkippedDir = segments.some(
-          (seg) => SKIP_DIRS.has(seg) || (seg.startsWith('.') && seg !== '.'),
+          (seg) =>
+            SKIP_DIRS.has(seg) ||
+            (!includeHidden && seg.startsWith('.') && seg !== '.'),
         );
         if (inSkippedDir) continue;
 
+        // Gitignore check
+        if (gitignoreMatcher && gitignoreMatcher(rel)) continue;
+
         // Check exclusions
         const excluded = compiledExcludes.some((excl) => matchesGlob(excl, file, basePath));
-        if (!excluded) {
-          matchedFiles.add(file);
-        }
+        if (excluded) continue;
+
+        matchedFiles.add(file);
       }
     } catch {
       // Pattern scan failure — skip
     }
   }
 
-  const sorted = Array.from(matchedFiles).sort();
+  // Collect stats and apply stat-based filters.
+  // We stat all candidates in one pass; the result is cached for sorting/output.
+  const needStats =
+    query.min_size !== undefined ||
+    query.max_size !== undefined ||
+    query.is_empty !== undefined ||
+    modifiedAfterMs !== undefined ||
+    modifiedBeforeMs !== undefined ||
+    query.sort_by === 'size' ||
+    query.sort_by === 'modified' ||
+    output.format === 'with_stats' ||
+    output.format === 'with_preview';
+
+  interface FileEntry {
+    path: string;
+    size?: number;
+    mtimeMs?: number;
+  }
+
+  let entries: FileEntry[] = Array.from(matchedFiles).map((p) => ({ path: p }));
+
+  if (needStats) {
+    const withStats: FileEntry[] = [];
+    for (const entry of entries) {
+      try {
+        const s = followSymlinks ? statSync(entry.path) : lstatSync(entry.path);
+        entry.size = s.size;
+        entry.mtimeMs = s.mtimeMs;
+      } catch {
+        // If stat fails, keep with no stats — filters requiring stats will drop it
+      }
+
+      // Size filters
+      if (query.min_size !== undefined && (entry.size ?? 0) < query.min_size) continue;
+      if (query.max_size !== undefined && (entry.size ?? 0) > query.max_size) continue;
+
+      // is_empty filter
+      if (query.is_empty === true && (entry.size ?? 0) !== 0) continue;
+      if (query.is_empty === false && (entry.size ?? 0) === 0) continue;
+
+      // Date filters
+      if (modifiedAfterMs !== undefined && (entry.mtimeMs ?? 0) < modifiedAfterMs) continue;
+      if (modifiedBeforeMs !== undefined && (entry.mtimeMs ?? 0) >= modifiedBeforeMs) continue;
+
+      withStats.push(entry);
+    }
+    entries = withStats;
+  }
+
+  // Apply maxResults cap after all filters
+  entries = entries.slice(0, maxResults);
+
+  // has_content filter — read file and test regex
+  if (hasContentRegex) {
+    const filtered: FileEntry[] = [];
+    for (const entry of entries) {
+      try {
+        const text = await Bun.file(entry.path).text();
+        if (hasContentRegex.test(text)) filtered.push(entry);
+      } catch {
+        // Unreadable file — skip
+      }
+    }
+    entries = filtered;
+  }
+
+  // Sorting
+  const sortBy = query.sort_by ?? 'name';
+  const sortOrder = query.sort_order ?? 'asc';
+  const dir = sortOrder === 'desc' ? -1 : 1;
+
+  entries.sort((a, b) => {
+    if (sortBy === 'size') return ((a.size ?? 0) - (b.size ?? 0)) * dir;
+    if (sortBy === 'modified') return ((a.mtimeMs ?? 0) - (b.mtimeMs ?? 0)) * dir;
+    // name
+    return a.path.localeCompare(b.path) * dir;
+  });
 
   const format = output.format ?? 'files_only';
 
   if (format === 'count_only') {
-    return { count: sorted.length };
+    return { count: entries.length };
   }
 
-  return { files: sorted, count: sorted.length };
+  if (format === 'with_stats') {
+    // Ensure we have stats even when not needed for filters/sorting
+    const result = entries.map((e) => ({
+      file: e.path,
+      size: e.size,
+      modified: e.mtimeMs !== undefined ? new Date(e.mtimeMs).toISOString() : undefined,
+    }));
+    return { files: result, count: result.length };
+  }
+
+  if (format === 'with_preview') {
+    const previewLines = output.preview_lines ?? 3;
+    const result: Array<{ file: string; preview: string[] }> = [];
+    for (const entry of entries) {
+      let preview: string[] = [];
+      try {
+        const text = await Bun.file(entry.path).text();
+        preview = text.split('\n').slice(0, previewLines);
+      } catch {
+        // Unreadable — empty preview
+      }
+      result.push({ file: entry.path, preview });
+    }
+    return { files: result, count: result.length };
+  }
+
+  return { files: entries.map((e) => e.path), count: entries.length };
+}
+
+// ---------------------------------------------------------------------------
+// Search cache (feature: cache)
+// ---------------------------------------------------------------------------
+
+interface CacheKey {
+  pattern: string;
+  glob: string;
+  path: string;
+  flags: string;
+}
+
+interface CacheValue {
+  files: string[];
+  matchedFiles: Map<string, { content: string; matches: ContentMatch[] }>;
+  totalMatches: number;
+  fileMtimes: Map<string, number>;
+}
+
+const SEARCH_CACHE_MAX = 50;
+const searchCache = new Map<string, { value: CacheValue; accessedAt: number }>();
+
+function makeSearchCacheKey(key: CacheKey): string {
+  return JSON.stringify([key.pattern, key.glob, key.path, key.flags]);
+}
+
+function searchCacheGet(key: CacheKey): CacheValue | null {
+  const k = makeSearchCacheKey(key);
+  const entry = searchCache.get(k);
+  if (!entry) return null;
+  entry.accessedAt = Date.now();
+  return entry.value;
+}
+
+function searchCacheSet(key: CacheKey, value: CacheValue): void {
+  const k = makeSearchCacheKey(key);
+  // LRU eviction: drop oldest entry when at capacity
+  if (searchCache.size >= SEARCH_CACHE_MAX && !searchCache.has(k)) {
+    let oldestKey = '';
+    let oldestTime = Infinity;
+    for (const [ck, cv] of searchCache) {
+      if (cv.accessedAt < oldestTime) {
+        oldestTime = cv.accessedAt;
+        oldestKey = ck;
+      }
+    }
+    if (oldestKey) searchCache.delete(oldestKey);
+  }
+  searchCache.set(k, { value, accessedAt: Date.now() });
+}
+
+async function searchCacheIsValid(cached: CacheValue): Promise<boolean> {
+  // Validate by checking that none of the searched files have changed mtime
+  const entries = Array.from(cached.fileMtimes.entries());
+  const stats = await Promise.all(entries.map(([f]) => statAsync(f).catch(() => null)));
+  for (let i = 0; i < entries.length; i++) {
+    const s = stats[i];
+    if (!s || s.mtimeMs !== entries[i][1]) return false;
+  }
+  return true;
 }
 
 // ---------------------------------------------------------------------------
@@ -303,6 +616,11 @@ async function executeContentQuery(
   const maxTotal = output.max_total_matches ?? output.max_results ?? 100;
   const ctxBefore = output.context_before ?? 0;
   const ctxAfter = output.context_after ?? 0;
+
+  // signatures/full output format is only valid for symbols mode
+  if (format === 'signatures' || format === 'full') {
+    return { error: `Output format '${format}' is only valid for symbols mode` };
+  }
 
   // Resolve pattern
   let rawPattern: string;
@@ -372,9 +690,23 @@ async function executeContentQuery(
     return { files: nonMatchingFiles, count: nonMatchingFiles.length };
   }
 
+  // Search cache: skip expensive scan if same query repeated and files unchanged
+  const cacheKey: CacheKey = { pattern: rawPattern, glob: query.glob ?? '', path: basePath, flags };
+  const cachedEntry = searchCacheGet(cacheKey);
+  const cacheValid = cachedEntry ? await searchCacheIsValid(cachedEntry) : false;
+
+  // matchedFiles and totalMatches are populated either from cache or from normal matching below
+  let matchedFiles: Map<string, { content: string; matches: ContentMatch[] }>;
+  let totalMatches: number;
+
+  if (cacheValid && cachedEntry) {
+    // Use cached results for ALL output formats — skip expensive file scan
+    matchedFiles = cachedEntry.matchedFiles;
+    totalMatches = cachedEntry.totalMatches;
+  } else {
   // Normal matching
-  const matchedFiles = new Map<string, { content: string; matches: ContentMatch[] }>();
-  let totalMatches = 0;
+  matchedFiles = new Map<string, { content: string; matches: ContentMatch[] }>();
+  totalMatches = 0;
 
   outer: for (const file of files) {
     if (totalMatches >= maxTotal) break;
@@ -398,6 +730,7 @@ async function executeContentQuery(
 
       regex.lastIndex = 0;
       if (regex.test(lines[i])) {
+        // Store full text here; max_line_length truncation happens at output time (after preview_replace)
         const match: ContentMatch = { file, line: i + 1, text: lines[i] };
 
         if (format === 'context') {
@@ -413,6 +746,70 @@ async function executeContentQuery(
     if (fileMatches.length > 0) {
       matchedFiles.set(file, { content, matches: fileMatches });
     }
+  }
+
+  } // end: normal matching (else branch of cache valid check)
+
+  // Store results in cache (only when not using ranked/preview_replace/relationships to keep cache simple)
+  if (!query.ranked && !query.preview_replace && !query.relationships) {
+    // Build mtime map for cache validity checking
+    const fileMtimesForCache = new Map<string, number>();
+    await Promise.all(
+      Array.from(matchedFiles.keys()).map(async (f) => {
+        try {
+          const s = await statAsync(f);
+          fileMtimesForCache.set(f, s.mtimeMs);
+        } catch {
+          fileMtimesForCache.set(f, 0);
+        }
+      }),
+    );
+    searchCacheSet(cacheKey, {
+      files,
+      matchedFiles: new Map(matchedFiles),
+      totalMatches,
+      fileMtimes: fileMtimesForCache,
+    });
+  }
+
+  // ranked: score and sort matches by relevance
+  if (query.ranked) {
+    // Collect file mtimes for recency scoring
+    const fileMtimes = new Map<string, number>();
+    await Promise.all(
+      Array.from(matchedFiles.keys()).map(async (f) => {
+        try {
+          const s = await statAsync(f);
+          fileMtimes.set(f, s.mtimeMs);
+        } catch {
+          fileMtimes.set(f, 0);
+        }
+      }),
+    );
+    const mostRecentMtime = Math.max(...Array.from(fileMtimes.values()), 0);
+    const exactPattern = query.pattern_base64
+      ? Buffer.from(query.pattern_base64, 'base64').toString('utf8')
+      : (query.pattern ?? '');
+
+    // Score each match
+    const scoredEntries: Array<{ file: string; matches: ContentMatch[]; score: number }> = [];
+    for (const [file, { matches }] of matchedFiles) {
+      let fileScore = 0;
+      const mtime = fileMtimes.get(file) ?? 0;
+      if (mostRecentMtime > 0 && mtime >= mostRecentMtime * 0.95) fileScore += 3;
+      for (const m of matches) {
+        if (m.text.includes(exactPattern)) fileScore += 10;
+        if (/^export\s/.test(m.text.trimStart())) fileScore += 5;
+      }
+      scoredEntries.push({ file, matches, score: fileScore });
+    }
+    scoredEntries.sort((a, b) => b.score - a.score);
+    // Rebuild matchedFiles in sorted order, preserving original content for expand_to
+    const sortedEntries = scoredEntries.map(({ file, matches }) => {
+      const original = matchedFiles.get(file);
+      return [file, { content: original?.content ?? '', matches }] as const;
+    });
+    matchedFiles = new Map(sortedEntries);
   }
 
   // expand_to: use CodeIntelligence.getEnclosingScope() to expand matches to
@@ -460,6 +857,7 @@ async function executeContentQuery(
       file: string;
       line: number;
       text: string;
+      replaced?: string;
       startLine?: number;
       endLine?: number;
       context_before?: string[];
@@ -467,7 +865,27 @@ async function executeContentQuery(
     }> = [];
     for (const [, { matches }] of matchedFiles) {
       for (const m of matches) {
-        const entry: (typeof results)[number] = { file: m.file, line: m.line, text: m.text };
+        // preview_replace: show what the line would look like after replacement (no write)
+        // Run replacement on full text before truncation so the pattern can match the whole line
+        let displayText = m.text;
+        let replacedText: string | undefined;
+        if (query.preview_replace !== undefined) {
+          try {
+            const replaceRegex = new RegExp(rawPattern, flags);
+            replacedText = m.text.replace(replaceRegex, query.preview_replace);
+          } catch {
+            // Ignore replacement errors
+          }
+        }
+        // Apply max_line_length truncation after replacement
+        if (output.max_line_length && displayText.length > output.max_line_length) {
+          displayText = displayText.slice(0, output.max_line_length) + '...';
+        }
+        if (replacedText !== undefined && output.max_line_length && replacedText.length > output.max_line_length) {
+          replacedText = replacedText.slice(0, output.max_line_length) + '...';
+        }
+        const entry: (typeof results)[number] = { file: m.file, line: m.line, text: displayText };
+        if (replacedText !== undefined) entry.replaced = replacedText;
         if (m.startLine !== undefined) entry.startLine = m.startLine;
         if (m.endLine !== undefined) entry.endLine = m.endLine;
         if (format === 'context') {
@@ -477,6 +895,20 @@ async function executeContentQuery(
         results.push(entry);
       }
     }
+
+    // relationships: for each matched file, include import/export relationships
+    if (query.relationships) {
+      const importGraph = await getImportGraph(process.cwd());
+      const relMap: Record<string, { imports: string[]; importedBy: string[] }> = {};
+      for (const file of matchedFiles.keys()) {
+        relMap[file] = {
+          imports: importGraph.findImports(file),
+          importedBy: importGraph.findDependents(file),
+        };
+      }
+      return { matches: results, count: totalMatches, relationships: relMap };
+    }
+
     return { matches: results, count: totalMatches };
   }
 
@@ -571,7 +1003,8 @@ async function executeSymbolsQuery(
           const kind: SymbolKind = VALID_SYMBOL_KINDS.has(mappedKind) ? (mappedKind as SymbolKind) : 'variable';
 
           if (kindFilter && !kindFilter.has(kind)) continue;
-          if (query.exported_only && !sym.exported) continue;
+          // include_private overrides exported_only — when true, all symbols are included
+          if (query.exported_only && !query.include_private && !sym.exported) continue;
           if (queryRegex && !queryRegex.test(sym.name)) continue;
 
           symbols.push({ name: sym.name, kind, file, line: sym.line, exported: sym.exported });
@@ -592,7 +1025,8 @@ async function executeSymbolsQuery(
       const line = lines[i].trimStart();
 
       for (const { kind, regex, exported } of activePatterns) {
-        if (query.exported_only && !exported) continue;
+        // include_private overrides exported_only — when true, all symbols are included
+        if (query.exported_only && !query.include_private && !exported) continue;
 
         const match = line.match(regex);
         if (match) {
@@ -617,6 +1051,109 @@ async function executeSymbolsQuery(
   if (output.format === 'files_only') {
     const uniqueFiles = [...new Set(symbols.map((s) => s.file))];
     return { files: uniqueFiles, count: symbols.length };
+  }
+
+  // signatures/full: enrich results with signature lines from file content
+  if (output.format === 'signatures' || output.format === 'full') {
+    const fileContents = new Map<string, string[]>();
+    const enriched: Array<Record<string, unknown>> = [];
+    for (const sym of symbols) {
+      let fileLines = fileContents.get(sym.file);
+      if (!fileLines) {
+        try {
+          const raw = await Bun.file(sym.file).text();
+          fileLines = raw.split('\n');
+        } catch {
+          fileLines = [];
+        }
+        fileContents.set(sym.file, fileLines);
+      }
+      const entry: Record<string, unknown> = {
+        name: sym.name,
+        kind: sym.kind,
+        file: sym.file,
+        line: sym.line,
+        exported: sym.exported,
+      };
+      // Build signature: collect lines from sym.line until we hit '{', ';', or empty for type-only
+      const sigLines: string[] = [];
+      for (let i = sym.line - 1; i < Math.min(sym.line + 10, fileLines.length); i++) {
+        const l = fileLines[i];
+        sigLines.push(l.trimEnd());
+        if (/[{;]/.test(l)) break;
+      }
+      entry.signature = sigLines.join('\n');
+      if (output.format === 'full') {
+        // JSDoc: look backwards from sym.line for /** ... */ block
+        let jsdoc = '';
+        let j = sym.line - 2;
+        if (j >= 0 && fileLines[j]?.trimStart().startsWith('*/')) {
+          const docLines: string[] = [];
+          while (j >= 0 && !fileLines[j].trimStart().startsWith('/**')) {
+            docLines.unshift(fileLines[j]);
+            j--;
+          }
+          if (j >= 0) docLines.unshift(fileLines[j]);
+          jsdoc = docLines.join('\n');
+        }
+        if (jsdoc) entry.jsdoc = jsdoc;
+        // Container: scan backwards for class/namespace declaration
+        let container = '';
+        for (let k = sym.line - 2; k >= Math.max(0, sym.line - 50); k--) {
+          const cl = fileLines[k]?.trimStart() ?? '';
+          if (/^(?:export\s+)?(?:abstract\s+)?class\s+(\w+)/.test(cl)) {
+            const m = cl.match(/class\s+(\w+)/);
+            if (m) { container = m[1]; break; }
+          }
+          if (/^(?:export\s+)?(?:namespace|module)\s+(\w+)/.test(cl)) {
+            const m = cl.match(/(?:namespace|module)\s+(\w+)/);
+            if (m) { container = m[1]; break; }
+          }
+        }
+        if (container) entry.container = container;
+      }
+      enriched.push(entry);
+    }
+    // Apply group_by if requested
+    const groupBy = query.group_by ?? 'none';
+    if (groupBy === 'file') {
+      const grouped: Record<string, unknown[]> = {};
+      for (const s of enriched) {
+        const key = s.file as string;
+        if (!grouped[key]) grouped[key] = [];
+        grouped[key].push(s);
+      }
+      return { symbols: grouped, count: symbols.length };
+    }
+    if (groupBy === 'kind') {
+      const grouped: Record<string, unknown[]> = {};
+      for (const s of enriched) {
+        const key = s.kind as string;
+        if (!grouped[key]) grouped[key] = [];
+        grouped[key].push(s);
+      }
+      return { symbols: grouped, count: symbols.length };
+    }
+    return { symbols: enriched, count: symbols.length };
+  }
+
+  // group_by post-processing for standard formats
+  const groupBy = query.group_by ?? 'none';
+  if (groupBy === 'file') {
+    const grouped: Record<string, SymbolResult[]> = {};
+    for (const s of symbols) {
+      if (!grouped[s.file]) grouped[s.file] = [];
+      grouped[s.file].push(s);
+    }
+    return { symbols: grouped, count: symbols.length };
+  }
+  if (groupBy === 'kind') {
+    const grouped: Record<string, SymbolResult[]> = {};
+    for (const s of symbols) {
+      if (!grouped[s.kind]) grouped[s.kind] = [];
+      grouped[s.kind].push(s);
+    }
+    return { symbols: grouped, count: symbols.length };
   }
 
   return { symbols, count: symbols.length };

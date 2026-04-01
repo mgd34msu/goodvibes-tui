@@ -3,6 +3,7 @@ import { dirname, extname, join, relative, resolve } from 'node:path';
 import { randomBytes } from 'node:crypto';
 import type { Tool, ToolDefinition } from '../../types/tools.ts';
 import { WRITE_SCHEMA, type WriteInput, type WriteFileInput, type WriteMode } from './schema.ts';
+import { runValidators, formatValidatorFailure, type ValidatorName } from '../shared/validators.ts';
 import { resolveAndValidatePath } from '../../utils/path-safety.ts';
 import { FileStateCache } from '../../state/file-cache.ts';
 import { ProjectIndex } from '../../state/project-index.ts';
@@ -343,6 +344,9 @@ export function createWriteTool(options?: {
 
       const results: FileWriteResult[] = [];
       const errors: string[] = [];
+      const transactionMode = input.transaction?.mode ?? 'none';
+      // Snapshots for atomic rollback: map from resolvedPath -> original content (null = new file)
+      const snapshots = new Map<string, string | null>();
 
       for (const fileInput of input.files) {
         if (!fileInput.path || typeof fileInput.path !== 'string') {
@@ -350,9 +354,9 @@ export function createWriteTool(options?: {
           continue;
         }
 
-        // Capture before-content for undo BEFORE the write happens
+        // Capture before-content for undo and atomic transaction snapshots BEFORE the write happens
         let beforeContent: string | null = null;
-        if (!dryRun && options?.fileUndoManager && fileInput.path) {
+        if (!dryRun && fileInput.path) {
           let resolvedForUndo: string | undefined;
           try {
             resolvedForUndo = resolveAndValidatePath(fileInput.path);
@@ -366,6 +370,10 @@ export function createWriteTool(options?: {
               beforeContent = null;
             }
           }
+          // Store snapshot for atomic transaction rollback
+          if (transactionMode === 'atomic' && resolvedForUndo && !snapshots.has(resolvedForUndo)) {
+            snapshots.set(resolvedForUndo, beforeContent);
+          }
         }
 
         const outcome = processSingleWrite(fileInput, projectRoot, dryRun);
@@ -373,6 +381,35 @@ export function createWriteTool(options?: {
         if (!outcome.ok) {
           errors.push(outcome.error);
           logger.debug('write tool: file write failed', { path: fileInput.path, error: outcome.error });
+
+          // Atomic transaction: rollback all successfully written files
+          if (transactionMode === 'atomic' && results.length > 0) {
+            const rolledBack: string[] = [];
+            for (const written of results) {
+              try {
+                const snapshot = snapshots.get(written.resolved_path);
+                if (snapshot === null || snapshot === undefined) {
+                  // File was new - delete it
+                  unlinkSync(written.resolved_path);
+                } else {
+                  // File existed before - restore original
+                  atomicWrite(written.resolved_path, snapshot);
+                }
+                rolledBack.push(written.path);
+              } catch (rollbackErr) {
+                logger.debug('write tool: atomic rollback failed (non-fatal)', {
+                  path: written.resolved_path,
+                  error: String(rollbackErr),
+                });
+              }
+            }
+            const failMsg = `Atomic transaction failed on '${fileInput.path}': ${outcome.error}. Rolled back ${rolledBack.length} file(s): ${rolledBack.join(', ')}`;
+            return {
+              success: false,
+              error: failMsg,
+            };
+          }
+
           continue;
         }
 
@@ -479,6 +516,34 @@ export function createWriteTool(options?: {
       const finalOutput: Record<string, unknown> = { ...output };
       if (errors.length > 0) {
         finalOutput.errors = errors;
+      }
+
+      // Post-write validation — run after all files are written, even if partial errors occurred
+      if (!dryRun && results.length > 0 && input.validate?.after && input.validate.after.length > 0) {
+        const validatorNames = input.validate.after as ValidatorName[];
+        logger.debug('write tool: running post-write validators', { validators: validatorNames });
+        try {
+          const failures = await runValidators(validatorNames, projectRoot);
+          if (failures.length > 0) {
+            finalOutput.validation_failures = failures.map((f) => ({
+              validator: f.validator,
+              passed: false,
+              exit_code: f.exitCode,
+              stdout: f.stdout.trim(),
+              stderr: f.stderr.trim(),
+              message: formatValidatorFailure(f),
+            }));
+            logger.debug('write tool: post-write validators failed', {
+              count: failures.length,
+              validators: failures.map((f) => f.validator),
+            });
+          } else {
+            finalOutput.validation_passed = true;
+          }
+        } catch (validationErr) {
+          logger.debug('write tool: validator execution error (non-fatal)', { error: String(validationErr) });
+          finalOutput.validation_error = String(validationErr);
+        }
       }
 
       return {

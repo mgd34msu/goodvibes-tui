@@ -66,6 +66,14 @@ export const editSchema = {
                 type: 'string',
                 description: 'Only match within a class with this name',
               },
+              after: {
+                type: 'string',
+                description: 'Only match occurrences that appear after this text anchor in the file',
+              },
+              before: {
+                type: 'string',
+                description: 'Only match occurrences that appear before this text anchor in the file',
+              },
             },
             additionalProperties: false,
           },
@@ -95,6 +103,14 @@ export const editSchema = {
           description: 'Whether whitespace differences matter. When false in exact mode, delegates to fuzzy matching algorithm. Default: true.',
           default: true,
         },
+        multiline: {
+          type: 'boolean',
+          description:
+            'When true and mode is regex, adds the s (dotAll) and m (multiline) flags. ' +
+            's flag: . matches newlines, enabling patterns that span multiple lines. ' +
+            'm flag: ^ and $ match at line boundaries. Default: false.',
+          default: false,
+        },
       },
       additionalProperties: false,
     },
@@ -123,8 +139,18 @@ export const editSchema = {
             'count_only: only total edits applied. ' +
             'minimal: per-edit success/failure summary (default). ' +
             'with_diff: include unified diff per edit. ' +
-            'verbose: full detail including pre/post content.',
+            'verbose: full detail including pre/post content. ' +
+            'Results include status field: applied | not_found | ambiguous | conflict | failed. ' +
+            'Failed results include hint field with actionable suggestions.',
           default: 'minimal',
+        },
+        diff_context: {
+          type: 'integer',
+          minimum: 0,
+          description:
+            'Number of context lines to include around each change in unified diffs. Default: 3. ' +
+            'Reduce to 0 for minimal diffs, increase for more context.',
+          default: 3,
         },
       },
       additionalProperties: false,
