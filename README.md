@@ -2,7 +2,7 @@
 
 A terminal AI coding agent with automated write-review-fix-check pipelines, multi-provider LLM support, and a vaporwave aesthetic.
 
-Version: **0.9.15**
+Version: **0.9.16**
 
 <!-- screenshot -->
 
@@ -28,6 +28,8 @@ The agent system runs subagents in-process, each with its own conversation histo
 - Hot-reload: provider configs are watched and reloaded automatically on change
 - Hot-swap models mid-conversation with `/model` or the interactive model picker
 - Per-provider reasoning effort control (instant / low / medium / high)
+- **Prompt caching strategy layer** — multi-breakpoint placement for Anthropic (1h/5m TTL), session affinity for Fireworks, cache hit tracking across all providers
+- **Helper model routing** — offload grunt work (cache planning, compaction, commit messages) to cheaper/free models with 4-step resolution chain
 - Streaming responses with token speed display
 - Interactive `/add-provider` skill for guided setup
 
@@ -415,6 +417,12 @@ Configuration is stored in `.goodvibes/config.json` in the current working direc
 | `danger.httpListener` | `false` | Enable HTTP webhook listener |
 | `tools.autoHeal` | `false` | Auto-fix syntax errors on write/edit |
 | `tools.hooksFile` | `hooks.json` | Hook configuration file name |
+| `cache.enabled` | `true` | Enable provider-aware prompt caching |
+| `cache.stableTtl` | `1h` | TTL for stable content (system prompt + tools) |
+| `cache.monitorHitRate` | `true` | Track and warn on low cache hit rates |
+| `helper.enabled` | `false` | Route grunt work to a cheaper helper model |
+| `helper.globalProvider` | `` | Helper model provider (e.g., `ollama`) |
+| `helper.globalModel` | `` | Helper model ID (e.g., `llama3.2:3b`) |
 
 ### Permission Modes
 
@@ -884,9 +892,12 @@ src/
 │   ├── anthropic-compat.ts — Anthropic Messages API adapter (for proxies)
 │   ├── tool-formats.ts  — OpenAI/Anthropic/Gemini wire format converters
 │   ├── custom-loader.ts — Hot-reloadable custom provider loader
-│   ├── anthropic.ts     — Anthropic SDK adapter
+│   ├── cache-capability.ts — Provider cache capability registry (13+ providers)
+│   ├── cache-strategy.ts — Cache strategy generation + hit rate tracker
+│   ├── cache-planner.ts — LLM-assisted cache breakpoint planning
+│   ├── anthropic.ts     — Anthropic SDK adapter (multi-breakpoint caching)
 │   ├── openai.ts        — OpenAI SDK adapter
-│   ├── openai-compat.ts — OpenAI-compatible endpoint adapter
+│   ├── openai-compat.ts — OpenAI-compatible endpoint adapter (session affinity)
 │   └── gemini.ts        — Google Gemini adapter
 ├── tools/               — 12 built-in tools (read/write/edit/find/exec/fetch/analyze/inspect/agent/state/workflow/registry)
 ├── agents/
@@ -913,6 +924,7 @@ src/
 │   └── handler.ts       — Raw stdin input processing
 ├── config/
 │   ├── schema.ts        — GoodVibesConfig type, ConfigKey, defaults
+│   ├── helper-model.ts  — Helper model router + singleton (HelperModel, HelperRouter)
 │   ├── index.ts         — Config loader and live-edit manager
 │   └── secrets.ts       — AES-256-GCM encrypted secret storage
 ├── state/               — KV store, project index, file cache, mode manager, telemetry

@@ -87,7 +87,7 @@ export interface GoodVibesConfig {
   };
   cache: {
     enabled: boolean;                    // default: true
-    anthropicTtl: '5m' | '1h';          // default: '1h' (for stable content like system+tools)
+    stableTtl: '5m' | '1h';          // default: '1h' (for stable content like system+tools)
     monitorHitRate: boolean;             // default: true
     hitRateWarningThreshold: number;     // default: 0.3
   };
@@ -166,7 +166,7 @@ export type ConfigKey =
   | 'wrfc.maxFixAttempts'
   | 'wrfc.autoCommit'
   | 'cache.enabled'
-  | 'cache.anthropicTtl'
+  | 'cache.stableTtl'
   | 'cache.monitorHitRate'
   | 'cache.hitRateWarningThreshold'
   | 'helper.enabled'
@@ -192,7 +192,7 @@ export const CONFIG_KEYS = new Set<string>([
   'danger.maxRecursionDepth', 'danger.daemon', 'danger.httpListener',
   'tools.llmProvider', 'tools.llmModel', 'tools.autoHeal', 'tools.defaultTokenBudget',
   'tools.hooksFile', 'wrfc.scoreThreshold', 'wrfc.maxFixAttempts', 'wrfc.autoCommit',
-  'cache.enabled', 'cache.anthropicTtl', 'cache.monitorHitRate', 'cache.hitRateWarningThreshold',
+  'cache.enabled', 'cache.stableTtl', 'cache.monitorHitRate', 'cache.hitRateWarningThreshold',
   'helper.enabled', 'helper.globalProvider', 'helper.globalModel',
 ] as const satisfies ConfigKey[]);
 
@@ -256,7 +256,7 @@ export type ConfigValue<K extends ConfigKey> =
   K extends 'wrfc.maxFixAttempts' ? number :
   K extends 'wrfc.autoCommit' ? boolean :
   K extends 'cache.enabled' ? boolean :
-  K extends 'cache.anthropicTtl' ? '5m' | '1h' :
+  K extends 'cache.stableTtl' ? '5m' | '1h' :
   K extends 'cache.monitorHitRate' ? boolean :
   K extends 'cache.hitRateWarningThreshold' ? number :
   K extends 'helper.enabled' ? boolean :
@@ -342,7 +342,7 @@ export const DEFAULT_CONFIG: GoodVibesConfig = {
   },
   cache: {
     enabled: true,
-    anthropicTtl: '1h',
+    stableTtl: '1h',
     monitorHitRate: true,
     hitRateWarningThreshold: 0.3,
   },
@@ -700,10 +700,10 @@ export const CONFIG_SCHEMA: ConfigSetting[] = [
     description: 'Enable prompt caching for eligible providers (Anthropic)',
   },
   {
-    key: 'cache.anthropicTtl',
+    key: 'cache.stableTtl',
     type: 'enum',
     default: '1h',
-    description: 'Cache TTL for Anthropic prompt caching: 5m (ephemeral) or 1h (persistent)',
+    description: 'Cache TTL for stable content (system prompt + tools): 5m (ephemeral) or 1h (persistent)',
     enumValues: ['5m', '1h'],
   },
   {
