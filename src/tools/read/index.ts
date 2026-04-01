@@ -1,4 +1,4 @@
-import { openSync, readSync, closeSync, readFileSync, statSync } from 'node:fs';
+import { readFileSync, statSync } from 'node:fs';
 import { extname } from 'node:path';
 import { resolveAndValidatePath } from '../../utils/path-safety.ts';
 import { logger } from '../../utils/logger.ts';
@@ -8,6 +8,14 @@ import { ProjectIndex } from '../../state/project-index.ts';
 import type { Tool, ToolDefinition } from '../../types/tools.ts';
 import { READ_TOOL_SCHEMA } from './schema.ts';
 import type { ReadInput, ReadFileInput, ExtractMode, OutputFormat } from './schema.ts';
+import {
+  type ImageMode, type ImageMetadata,
+  IMAGE_SIZE_LIMIT,
+  RESIZE_TARGETS,
+  isImageFile as isImageFileByExt, isArchiveFile, getImageMediaType,
+  validateMagicBytes, getImageMetadata, isBinaryByContent, humanSize,
+  tryLoadSharp, resizeImage, convertToPortableFormat, listArchiveContents,
+} from './media.ts';
 import { CodeIntelligence } from '../../intelligence/facade.ts';
 import type { SymbolInfo } from '../../intelligence/tree-sitter/queries.ts';
 
@@ -39,12 +47,34 @@ export interface FileReadResult {
     sizeBytes: number;
     cacheStatus: string;
   };
+  /** Structured image data for multimodal LLM messages. */
+  imageData?: { base64: string; mediaType: string };
+  /** Image-specific metadata. */
+  imageMetadata?: {
+    width?: number;
+    height?: number;
+    format: string;
+    fileSize: number;
+    resized?: boolean;
+    converted?: boolean;
+    originalFormat?: string;
+    mode?: ImageMode;
+  };
+  /** True when the file is an archive with listed contents. */
+  archive?: boolean;
 }
 
 export interface ReadOutput {
   success: boolean;
   error?: string;
   files?: FileReadResult[];
+  /** Image data for multimodal message construction. Present when images were read. */
+  images?: Array<{
+    path: string;
+    base64: string;
+    mediaType: string;
+    description: string;
+  }>;
   summary: {
     files_read: number;
     files_binary: number;
@@ -259,20 +289,6 @@ async function extractAst(
 // Image / PDF / Notebook helpers
 // ---------------------------------------------------------------------------
 
-const IMAGE_EXTENSIONS = new Set(['.png', '.jpg', '.jpeg', '.gif', '.webp', '.svg']);
-const IMAGE_MEDIA_TYPES: Record<string, string> = {
-  '.png': 'image/png',
-  '.jpg': 'image/jpeg',
-  '.jpeg': 'image/jpeg',
-  '.gif': 'image/gif',
-  '.webp': 'image/webp',
-  '.svg': 'image/svg+xml',
-};
-
-function isImageFile(ext: string): boolean {
-  return IMAGE_EXTENSIONS.has(ext.toLowerCase());
-}
-
 function isPdfFile(ext: string): boolean {
   return ext.toLowerCase() === '.pdf';
 }
@@ -376,22 +392,6 @@ function formatNotebook(raw: string): string {
   return parts.join('\n');
 }
 
-/**
- * Check for binary content by probing the first 8KB of a file for null bytes.
- * Reads directly via a file descriptor to avoid a full UTF-8 decode on large files.
- */
-function isBinaryFile(resolvedPath: string): boolean {
-  try {
-    const fd = openSync(resolvedPath, 'r');
-    const probe = Buffer.alloc(8192);
-    const bytesRead = readSync(fd, probe, 0, 8192, 0);
-    closeSync(fd);
-    return probe.slice(0, bytesRead).includes(0);
-  } catch {
-    return false;
-  }
-}
-
 // ---------------------------------------------------------------------------
 // Content formatting
 // ---------------------------------------------------------------------------
@@ -437,6 +437,8 @@ async function readOneFile(
   maxPerItem: number | undefined,
   fileCache: FileStateCache,
   projectIndex: ProjectIndex,
+  globalImageMode?: ImageMode,
+  globalMaxImageSize?: number,
 ): Promise<FileReadResult> {
   const extract: ExtractMode = fileInput.extract ?? globalExtract;
 
@@ -461,13 +463,15 @@ async function readOneFile(
   // Determine file extension for special type handling
   const ext = extname(resolvedPath);
 
-  // Image files: return base64-encoded content with mediaType
-  if (isImageFile(ext)) {
+  // Determine image mode: per-file > global > default
+  const imageMode: ImageMode = fileInput.image_mode ?? globalImageMode ?? 'default';
+  const maxImageSize = globalMaxImageSize ?? IMAGE_SIZE_LIMIT;
+
+  // --- IMAGE FILES ---
+  if (isImageFileByExt(ext)) {
     let imgBuffer: Buffer;
-    let imgByteSize = 0;
     try {
       imgBuffer = readFileSync(resolvedPath);
-      imgByteSize = imgBuffer.length;
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       return {
@@ -480,21 +484,153 @@ async function readOneFile(
         error: `Cannot read image: ${message}`,
       };
     }
-    const mediaType = IMAGE_MEDIA_TYPES[ext.toLowerCase()] ?? 'application/octet-stream';
-    const b64 = imgBuffer.toString('base64');
-    const tokenEst = Math.ceil(imgByteSize / 4);
+
+    const byteSize = imgBuffer.length;
+
+    // Size limit check
+    if (byteSize > maxImageSize) {
+      const meta = getImageMetadata(imgBuffer, ext);
+      return {
+        path: fileInput.path,
+        resolvedPath,
+        lineCount: 0,
+        byteSize,
+        tokenEstimate: 0,
+        extract,
+        image: true,
+        mediaType: getImageMediaType(ext) ?? 'application/octet-stream',
+        content: `Image exceeds size limit (${byteSize} bytes > ${maxImageSize} bytes). Use max_image_size to increase.`,
+        imageMetadata: { ...meta, mode: imageMode },
+      };
+    }
+
+    // Magic byte validation: capture result and warn on mismatch
+    const magicResult = validateMagicBytes(imgBuffer, ext);
+    if (!magicResult.valid) {
+      logger.debug('[read] image magic bytes mismatch', {
+        path: resolvedPath,
+        expected: ext,
+        detected: magicResult.detectedType ?? 'unknown',
+      });
+    }
+
+    // Get metadata (always, for all modes)
+    const rawMeta = getImageMetadata(imgBuffer, ext);
+
+    // MODE-AWARE SUPPRESSION
+    // count_only and minimal: no image data
+    if (format === 'count_only' || format === 'minimal') {
+      projectIndex.upsertFile(resolvedPath, Math.ceil(byteSize / 4));
+      return {
+        path: fileInput.path,
+        resolvedPath,
+        lineCount: 0,
+        byteSize,
+        tokenEstimate: Math.ceil(byteSize / 4),
+        extract,
+        image: true,
+        mediaType: getImageMediaType(ext) ?? 'application/octet-stream',
+        imageMetadata: { ...rawMeta, mode: imageMode },
+      };
+    }
+
+    // metadata-only mode: return metadata, no image data
+    if (imageMode === 'metadata-only') {
+      projectIndex.upsertFile(resolvedPath, Math.ceil(byteSize / 4));
+      return {
+        path: fileInput.path,
+        resolvedPath,
+        lineCount: 0,
+        byteSize,
+        tokenEstimate: 0,
+        extract,
+        image: true,
+        mediaType: getImageMediaType(ext) ?? 'application/octet-stream',
+        content: `Image: ${rawMeta.width ?? '?'}x${rawMeta.height ?? '?'} ${rawMeta.format}, ${humanSize(byteSize)}`,
+        imageMetadata: { ...rawMeta, mode: imageMode },
+      };
+    }
+
+    // For default/unoptimized/thumbnail-only: process the image
+    let processedBuffer = imgBuffer;
+    let mediaType = getImageMediaType(ext) ?? 'application/octet-stream';
+    let resized = false;
+    let converted = false;
+    let originalFormat: string | undefined;
+
+    // Convert non-portable formats (bmp, tiff, avif) to PNG
+    const convertResult = await convertToPortableFormat(imgBuffer, ext);
+    if (convertResult.converted) {
+      processedBuffer = convertResult.buffer;
+      mediaType = convertResult.mediaType;
+      converted = true;
+      originalFormat = convertResult.originalFormat;
+    }
+
+    // Resize based on mode
+    const resizeTarget = RESIZE_TARGETS[imageMode];
+    if (resizeTarget !== null) {
+      const resizeResult = await resizeImage(processedBuffer, mediaType, resizeTarget);
+      if (resizeResult.resized) {
+        processedBuffer = resizeResult.buffer;
+        resized = true;
+        if (resizeResult.width) rawMeta.width = resizeResult.width;
+        if (resizeResult.height) rawMeta.height = resizeResult.height;
+      }
+    }
+
+    // Encode to base64
+    const b64 = processedBuffer.toString('base64');
+    const tokenEst = Math.ceil(processedBuffer.length / 4);
+    projectIndex.upsertFile(resolvedPath, tokenEst);
+
+    // Build text description for content field
+    const desc = `Image: ${rawMeta.width ?? '?'}x${rawMeta.height ?? '?'} ${rawMeta.format}, ${humanSize(byteSize)}${resized ? ' (resized)' : ''}${converted ? ` (converted from ${originalFormat})` : ''}`;
+
+    return {
+      path: fileInput.path,
+      resolvedPath,
+      content: desc,
+      lineCount: 0,
+      byteSize,
+      tokenEstimate: tokenEst,
+      extract,
+      image: true,
+      mediaType,
+      imageData: { base64: b64, mediaType },
+      imageMetadata: { ...rawMeta, resized, converted, originalFormat, mode: imageMode },
+    };
+  }
+
+  // --- ARCHIVE FILES ---
+  if (isArchiveFile(ext)) {
+    let archiveBuffer: Buffer;
+    try {
+      archiveBuffer = readFileSync(resolvedPath);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      return {
+        path: fileInput.path,
+        resolvedPath,
+        lineCount: 0,
+        byteSize: 0,
+        tokenEstimate: 0,
+        extract,
+        error: `Cannot read archive: ${message}`,
+      };
+    }
+    const listing = listArchiveContents(resolvedPath, archiveBuffer, ext);
+    const tokenEst = Math.ceil(listing.length / 4);
     projectIndex.upsertFile(resolvedPath, tokenEst);
     return {
       path: fileInput.path,
       resolvedPath,
-      content: b64,
-      lineCount: 0,
-      byteSize: imgByteSize,
+      content: listing,
+      lineCount: listing.split('\n').length,
+      byteSize: archiveBuffer.length,
       tokenEstimate: tokenEst,
       extract,
-      binary: false,
-      image: true,
-      mediaType,
+      archive: true,
     };
   }
 
@@ -567,28 +703,10 @@ async function readOneFile(
     };
   }
 
-  // Binary pre-check: probe first 8KB before full UTF-8 read
-  if (isBinaryFile(resolvedPath)) {
-    logger.debug('read tool: binary file skipped', { path: resolvedPath });
-    let binaryByteSize = 0;
-    try {
-      binaryByteSize = statSync(resolvedPath).size;
-    } catch { /* ignore */ }
-    return {
-      path: fileInput.path,
-      resolvedPath,
-      lineCount: 0,
-      byteSize: binaryByteSize,
-      tokenEstimate: 0,
-      extract,
-      binary: true,
-    };
-  }
-
-  // Read file content once
-  let rawContent: string;
+  // Text file path: read file as Buffer once; check binary, then convert to string
+  let fullBuf: Buffer;
   try {
-    rawContent = readFileSync(resolvedPath, 'utf-8');
+    fullBuf = readFileSync(resolvedPath);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     logger.debug('read tool: file read failed', { path: resolvedPath, error: message });
@@ -600,6 +718,37 @@ async function readOneFile(
       tokenEstimate: 0,
       extract,
       error: `Cannot read file: ${message}`,
+    };
+  }
+
+  if (isBinaryByContent(fullBuf)) {
+    logger.debug('read tool: binary file skipped', { path: resolvedPath });
+    return {
+      path: fileInput.path,
+      resolvedPath,
+      lineCount: 0,
+      byteSize: fullBuf.length,
+      tokenEstimate: 0,
+      extract,
+      binary: true,
+    };
+  }
+
+  // Convert the already-loaded buffer to string (no second disk read)
+  let rawContent: string;
+  try {
+    rawContent = fullBuf.toString('utf-8');
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    logger.debug('read tool: utf-8 decode failed', { path: resolvedPath, error: message });
+    return {
+      path: fileInput.path,
+      resolvedPath,
+      lineCount: 0,
+      byteSize: fullBuf.length,
+      tokenEstimate: 0,
+      extract,
+      error: `Cannot decode file as UTF-8: ${message}`,
     };
   }
 
@@ -760,6 +909,8 @@ export class ReadTool implements Tool {
     const maxTokens: number | undefined = input.output?.max_tokens;
     const tokenBudget: number | undefined = input.token_budget;
     const page: number = Math.max(1, input.page ?? 1);
+    const globalImageMode: ImageMode | undefined = input.image_mode;
+    const globalMaxImageSize: number | undefined = input.max_image_size;
 
     const allFiles = input.files;
 
@@ -788,7 +939,7 @@ export class ReadTool implements Tool {
     // Read all files for the current page
     const results: FileReadResult[] = await Promise.all(
       filesToProcess.map((f) =>
-        readOneFile(f, globalExtract, format, includeLineNumbers, maxPerItem, this.fileCache, this.projectIndex),
+        readOneFile(f, globalExtract, format, includeLineNumbers, maxPerItem, this.fileCache, this.projectIndex, globalImageMode, globalMaxImageSize),
       ),
     );
 
@@ -806,12 +957,28 @@ export class ReadTool implements Tool {
       }
     }
 
+    // Collect images for multimodal output using destructuring to avoid mutation
+    const images: NonNullable<ReadOutput['images']> = [];
+    const fileResults: FileReadResult[] = results.map((r) => {
+      if (r.imageData) {
+        images.push({
+          path: r.path,
+          base64: r.imageData.base64,
+          mediaType: r.imageData.mediaType,
+          description: r.content ?? `Image: ${r.path}`,
+        });
+        const { imageData: _imageData, ...rest } = r;
+        return rest;
+      }
+      return r;
+    });
+
     // Compute summary
-    const filesBinary = results.filter((r) => r.binary === true).length;
-    const filesErrored = results.filter((r) => r.error !== undefined && !r.binary).length;
-    const filesRead = results.length - filesBinary - filesErrored;
-    const totalLines = results.reduce((s, r) => s + r.lineCount, 0);
-    const totalTokens = results.reduce((s, r) => s + r.tokenEstimate, 0);
+    const filesBinary = fileResults.filter((r) => r.binary === true).length;
+    const filesErrored = fileResults.filter((r) => r.error !== undefined && !r.binary).length;
+    const filesRead = fileResults.length - filesBinary - filesErrored;
+    const totalLines = fileResults.reduce((s, r) => s + r.lineCount, 0);
+    const totalTokens = fileResults.reduce((s, r) => s + r.tokenEstimate, 0);
 
     const output: ReadOutput = {
       success: true,
@@ -822,12 +989,13 @@ export class ReadTool implements Tool {
         total_lines: totalLines,
         total_tokens: totalTokens,
       },
+      ...(images.length > 0 ? { images } : {}),
     };
 
     if (format === 'count_only') {
       // Summary only — no file data
     } else if (format === 'minimal') {
-      output.files = results.map((r) => ({
+      output.files = fileResults.map((r) => ({
         path: r.path,
         resolvedPath: r.resolvedPath,
         lineCount: r.lineCount,
@@ -840,7 +1008,7 @@ export class ReadTool implements Tool {
       }));
     } else {
       // standard / verbose: include content and all fields
-      output.files = results;
+      output.files = fileResults;
     }
 
     if (paginationInfo) {

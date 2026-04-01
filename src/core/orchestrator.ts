@@ -463,6 +463,23 @@ export class Orchestrator {
           // Add tool results — LLM sees them on next iteration
           this.conversation.addToolResults(results);
 
+          // Inject multimodal user message for any images extracted from read tool results.
+          // Only inject when the current model supports multimodal input.
+          const allImages = (results as Array<ToolResult & { _images?: Array<{ path: string; base64: string; mediaType: string; description: string }> }>)
+            .filter(r => Array.isArray(r._images) && r._images.length > 0)
+            .flatMap(r => r._images!);
+          if (allImages.length > 0 && providerRegistry.getCurrentModel().capabilities.multimodal) {
+            const imageParts: ContentPart[] = [
+              { type: 'text', text: '[Images from read tool results]' },
+              ...allImages.map(img => ({
+                type: 'image' as const,
+                data: img.base64,
+                mediaType: img.mediaType,
+              })),
+            ];
+            this.conversation.addUserMessage(imageParts);
+          }
+
           // --- Consecutive error circuit breaker ---
           // Count failures in this batch of tool results
           const allFailed = results.length > 0 && results.every(r => r.success === false);
@@ -1199,6 +1216,30 @@ export class Orchestrator {
             timestamp: Date.now(),
             payload: { tool: call.name, path: filePath, callId: call.id, error: result.error },
           }).catch((err: unknown) => { logger.debug(`Fail:file:${call.name} hook error`, { error: String(err) }); });
+        }
+      }
+
+      // Extract images from read tool results for multimodal injection.
+      // Strip base64 from text output to avoid double-sending, store on result.
+      if (result.success && result.output && call.name === 'read') {
+        try {
+          const parsed = JSON.parse(result.output) as Record<string, unknown>;
+          if (Array.isArray(parsed['images']) && (parsed['images'] as unknown[]).length > 0) {
+            const images = parsed['images'] as Array<{ path: string; base64: string; mediaType: string; description: string }>;
+            delete parsed['images'];
+            if (parsed['files'] && typeof parsed['files'] === 'object') {
+              for (const key of Object.keys(parsed['files'] as Record<string, unknown>)) {
+                const f = (parsed['files'] as Record<string, unknown>)[key];
+                if (f && typeof f === 'object') {
+                  delete (f as Record<string, unknown>)['imageData'];
+                }
+              }
+            }
+            result.output = JSON.stringify(parsed);
+            (result as ToolResult & { _images?: typeof images })._images = images;
+          }
+        } catch {
+          // Not JSON or parse error — leave result as-is
         }
       }
 
