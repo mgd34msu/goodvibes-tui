@@ -56,6 +56,37 @@ export const WRITE_SCHEMA = {
       description: 'If true, validate and plan writes but do not write any files.',
       default: false,
     },
+    validate: {
+      type: 'object',
+      description: 'Run validators after all files have been written.',
+      properties: {
+        after: {
+          type: 'array',
+          items: {
+            type: 'string',
+            enum: ['typecheck', 'lint', 'test', 'build'],
+          },
+          description: 'Validators to run after writing. Failures are reported but do NOT undo writes.',
+        },
+      },
+      additionalProperties: false,
+    },
+    transaction: {
+      type: 'object',
+      description: 'Batch transaction behaviour when one or more file writes fail.',
+      properties: {
+        mode: {
+          type: 'string',
+          enum: ['atomic', 'partial', 'none'],
+          description:
+            'atomic: if any write fails, undo all previously written files (restores originals). '
+            + 'partial: skip failed writes but continue. '
+            + 'none (default): same as partial — no rollback.',
+          default: 'none',
+        },
+      },
+      additionalProperties: false,
+    },
   },
   required: ['files'],
   additionalProperties: false,
@@ -63,6 +94,8 @@ export const WRITE_SCHEMA = {
 
 export type WriteMode = 'fail_if_exists' | 'overwrite' | 'backup';
 export type WriteVerbosity = 'count_only' | 'minimal' | 'standard' | 'verbose';
+export type WriteValidatorName = 'typecheck' | 'lint' | 'test' | 'build';
+export type WriteTransactionMode = 'atomic' | 'partial' | 'none';
 
 export interface WriteFileInput {
   path: string;
@@ -76,4 +109,10 @@ export interface WriteInput {
   files: WriteFileInput[];
   verbosity?: WriteVerbosity;
   dry_run?: boolean;
+  validate?: {
+    after?: WriteValidatorName[];
+  };
+  transaction?: {
+    mode?: WriteTransactionMode;
+  };
 }

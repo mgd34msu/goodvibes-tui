@@ -171,6 +171,27 @@ export const EXEC_TOOL_SCHEMA = {
             type: 'boolean',
             description: 'Copy/delete directories recursively.',
           },
+          overwrite: {
+            type: 'boolean',
+            description:
+              'Overwrite destination if it already exists (copy/move only). Default: false. '
+              + 'When false and destination exists, the operation returns an error.',
+            default: false,
+          },
+          dry_run: {
+            type: 'boolean',
+            description:
+              'Preview what would be deleted without deleting (delete only). Default: false. '
+              + 'Returns a list of files that would be deleted.',
+            default: false,
+          },
+          update_imports: {
+            type: 'boolean',
+            description:
+              'After a move, find all TypeScript/JavaScript files that import from the old path '
+              + 'and rewrite their import statements to use the new path (move only). Default: false.',
+            default: false,
+          },
         },
         required: ['op', 'source'],
       },
@@ -206,6 +227,12 @@ export interface ExecFileOp {
   source: string;
   destination?: string;
   recursive?: boolean;
+  /** Overwrite destination if it exists (copy/move only). Default: false. */
+  overwrite?: boolean;
+  /** Preview what would be deleted without deleting (delete only). Default: false. */
+  dry_run?: boolean;
+  /** Rewrite TS/JS import paths after move (move only). Default: false. */
+  update_imports?: boolean;
 }
 
 export interface ExecCommandInput {

@@ -1,5 +1,5 @@
-import { resolve, isAbsolute, join } from 'node:path';
-import { copyFileSync, renameSync, unlinkSync, rmSync, cpSync, writeFileSync, mkdirSync, appendFileSync } from 'node:fs';
+import { resolve, isAbsolute, join, relative, dirname } from 'node:path';
+import { copyFileSync, renameSync, unlinkSync, rmSync, cpSync, writeFileSync, mkdirSync, appendFileSync, existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import type { Tool } from '../../types/tools.ts';
 import { resolveAndValidatePath } from '../../utils/path-safety.ts';
 import { logger } from '../../utils/logger.ts';
@@ -129,22 +129,156 @@ function resolveFileOpPath(p: string, op: 'copy' | 'move' | 'delete'): string {
   return resolve(p);
 }
 
-function executeFileOp(op: ExecFileOp): void {
+interface FileOpResult {
+  op: string;
+  source: string;
+  destination?: string;
+  dry_run?: boolean;
+  would_delete?: string[];
+  updated_imports?: string[];
+}
+
+/**
+ * Collect all files under a directory (recursively) or return [path] for a single file.
+ * Used for dry_run delete reporting.
+ */
+function collectPaths(p: string, acc: string[] = []): string[] {
+  try {
+    const st = statSync(p);
+    if (st.isDirectory()) {
+      for (const entry of readdirSync(p)) {
+        collectPaths(join(p, entry), acc);
+      }
+    } else {
+      acc.push(p);
+    }
+  } catch {
+    acc.push(p);
+  }
+  return acc;
+}
+
+/**
+ * Compute the relative import specifier from one TS/JS file to another.
+ * Both paths must be absolute. Returns a string like './foo' or '../bar/baz'.
+ */
+function computeRelativeImportPath(fromFile: string, toFile: string): string {
+  const TS_EXTS = new Set(['.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs']);
+  const toDir = dirname(toFile);
+  let rel = relative(dirname(fromFile), toDir);
+  // relative() returns '' when both files are in the same directory; ensure it always starts with '.'
+  if (rel === '' || !rel.startsWith('.')) rel = './' + (rel || '');
+  // Append filename without extension if target has a TS/JS extension, else as-is
+  const ext = toFile.slice(toFile.lastIndexOf('.'));
+  const base = toFile.slice(toDir.length + 1, TS_EXTS.has(ext) ? toFile.lastIndexOf('.') : undefined);
+  // rel is './' for same-dir; use endsWith('/') to determine join style
+  return rel.endsWith('/') ? rel + base : rel + '/' + base;
+}
+
+/**
+ * After a move, scan TS/JS files that import from the old path and rewrite them.
+ * Returns list of files that were updated.
+ */
+async function updateImportsAfterMove(
+  oldSrc: string,
+  newDst: string,
+  projectRoot: string,
+): Promise<string[]> {
+  const TS_EXTS = new Set(['.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs']);
+  const SKIP_DIRS = new Set(['.git', 'node_modules', 'dist', '.next', '.nuxt', '.cache', '__pycache__']);
+
+  // Collect all TS/JS files in project
+  const allFiles: string[] = [];
+  function walkDir(dir: string): void {
+    let entries: string[];
+    try { entries = readdirSync(dir); } catch { return; }
+    for (const entry of entries) {
+      if (SKIP_DIRS.has(entry)) continue;
+      const full = join(dir, entry);
+      try {
+        const st = statSync(full);
+        if (st.isDirectory()) { walkDir(full); continue; }
+        const ext = full.slice(full.lastIndexOf('.'));
+        if (TS_EXTS.has(ext)) allFiles.push(full);
+      } catch { /* skip */ }
+    }
+  }
+  walkDir(projectRoot);
+
+  // Determine the old specifier stem (without extension) - we match relative imports
+  // that resolve to the old source file path. We build regex patterns for:
+  //   from '..old_relative..'
+  //   require('..old_relative..')
+  const updated: string[] = [];
+
+  for (const file of allFiles) {
+    if (file === newDst) continue; // skip the moved file itself
+    let content: string;
+    try { content = readFileSync(file, 'utf-8'); } catch { continue; }
+
+    // Compute what the old specifier would look like from this file's perspective
+    const oldSpecifier = computeRelativeImportPath(file, oldSrc);
+    const newSpecifier = computeRelativeImportPath(file, newDst);
+
+    // Skip if specifier wouldn't change
+    if (oldSpecifier === newSpecifier) continue;
+
+    const escaped = oldSpecifier.replace(/[.*+~?^${}()|[\\]\\/g, '\\$&');
+    const importRe = new RegExp(`(from\\s+['"])${escaped}(['"])`, 'g');
+    const requireRe = new RegExp(`(require\\(['"])${escaped}(['"]\\))`, 'g');
+
+    const newContent = content
+      .replace(importRe, `$1${newSpecifier}$2`)
+      .replace(requireRe, `$1${newSpecifier}$2`);
+
+    if (newContent !== content) {
+      try {
+        writeFileSync(file, newContent, 'utf-8');
+        updated.push(file);
+      } catch (err) {
+        logger.debug('exec file_ops update_imports: write failed (non-fatal)', {
+          file,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
+    }
+  }
+
+  return updated;
+}
+
+function executeFileOp(op: ExecFileOp, projectRoot: string): FileOpResult {
   const src = resolveFileOpPath(op.source, op.op);
+  const result: FileOpResult = { op: op.op, source: src };
 
   if (op.op === 'delete') {
+    if (op.dry_run) {
+      // Collect what would be deleted without actually deleting
+      const wouldDelete = collectPaths(src);
+      result.dry_run = true;
+      result.would_delete = wouldDelete;
+      return result;
+    }
     if (op.recursive) {
       rmSync(src, { recursive: true, force: true });
     } else {
       unlinkSync(src);
     }
-    return;
+    return result;
   }
 
   if (!op.destination) {
     throw new Error(`file_ops ${op.op} requires destination`);
   }
   const dst = resolveFileOpPath(op.destination, op.op);
+  result.destination = dst;
+
+  // Overwrite check for copy/move
+  if (!op.overwrite && existsSync(dst)) {
+    throw new Error(
+      `file_ops ${op.op}: destination already exists: '${op.destination}'. Set overwrite: true to replace it.`,
+    );
+  }
 
   if (op.op === 'copy') {
     if (op.recursive) {
@@ -152,7 +286,7 @@ function executeFileOp(op: ExecFileOp): void {
     } else {
       copyFileSync(src, dst);
     }
-    return;
+    return result;
   }
 
   if (op.op === 'move') {
@@ -168,7 +302,10 @@ function executeFileOp(op: ExecFileOp): void {
         unlinkSync(src);
       }
     }
+    // update_imports is handled asynchronously after the sync op returns
   }
+
+  return result;
 }
 
 // ─── Background command management ──────────────────────────────────────────
@@ -659,14 +796,37 @@ export const execTool: Tool = {
       const globalCwd = input.working_dir;
       const failFast = input.fail_fast === true || input.stop_on_error === true;
 
+      const projectRoot = resolve(process.cwd());
+
       // ── File ops first ──
+      const fileOpResults: FileOpResult[] = [];
+      const pendingImportUpdates: Array<{ src: string; dst: string }> = [];
       if (input.file_ops && input.file_ops.length > 0) {
         for (const op of input.file_ops) {
           try {
-            executeFileOp(op);
+            const opResult = executeFileOp(op, projectRoot);
+            fileOpResults.push(opResult);
+            // Queue async import update after move completes
+            if (op.op === 'move' && op.update_imports && opResult.destination) {
+              pendingImportUpdates.push({ src: opResult.source, dst: opResult.destination });
+            }
           } catch (err) {
             const msg = err instanceof Error ? err.message : String(err);
             return { success: false, error: `file_ops failed: ${msg}` };
+          }
+        }
+        // Run import updates after all file ops complete (async)
+        for (const { src, dst } of pendingImportUpdates) {
+          try {
+            const updated = await updateImportsAfterMove(src, dst, projectRoot);
+            const matchingResult = fileOpResults.find((r) => r.source === src && r.destination === dst);
+            if (matchingResult) matchingResult.updated_imports = updated;
+          } catch (err) {
+            logger.debug('exec file_ops: update_imports failed (non-fatal)', {
+              src,
+              dst,
+              error: err instanceof Error ? err.message : String(err),
+            });
           }
         }
       }
@@ -742,11 +902,13 @@ export const execTool: Tool = {
       const formatted = results.map((r) => formatResult(r, verbosity));
       const allSuccess = results.every((r) => r.success);
 
+      const responseData: Record<string, unknown> =
+        formatted.length === 1 ? { ...formatted[0] } : { commands: formatted, total: formatted.length };
+      if (fileOpResults.length > 0) responseData.file_ops = fileOpResults;
+
       return {
         success: allSuccess,
-        output: JSON.stringify(
-          formatted.length === 1 ? formatted[0] : { commands: formatted, total: formatted.length },
-        ),
+        output: JSON.stringify(responseData),
       };
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);

@@ -275,10 +275,10 @@ function estimateMemBytes(filePath: string, content: string): number {
  * Generate a simple unified diff between two strings.
  * Uses line-by-line LCS diff, not the Myers algorithm.
  */
-export function unifiedDiff(oldContent: string, newContent: string, label: string): string {
+export function unifiedDiff(oldContent: string, newContent: string, label: string, contextLines = 3): string {
   const oldLines = oldContent.split('\n');
   const newLines = newContent.split('\n');
-  const hunks = computeHunks(oldLines, newLines);
+  const hunks = computeHunks(oldLines, newLines, contextLines);
   if (hunks.length === 0) return '';
 
   const header = `--- ${label}\n+++ ${label}\n`;
@@ -290,9 +290,8 @@ interface HunkLine {
   text: string;
 }
 
-function computeHunks(oldLines: string[], newLines: string[]): string[] {
+function computeHunks(oldLines: string[], newLines: string[], CONTEXT = 3): string[] {
   // Simple O(n*m) LCS-based diff — practical for reasonable file sizes
-  const CONTEXT = 3;
   const edits = computeEdits(oldLines, newLines);
   if (edits.length === 0) return [];
 

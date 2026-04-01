@@ -30,6 +30,8 @@ interface EditItem {
     near_line?: number;
     in_function?: string;
     in_class?: string;
+    after?: string;
+    before?: string;
   };
 }
 
@@ -42,12 +44,14 @@ interface EditInput {
     mode?: 'exact' | 'fuzzy' | 'regex' | 'ast' | 'ast_pattern';
     case_sensitive?: boolean;
     whitespace_sensitive?: boolean;
+    multiline?: boolean;
   };
   transaction?: {
     mode?: 'atomic' | 'partial' | 'none';
   };
   output?: {
     format?: 'count_only' | 'minimal' | 'with_diff' | 'verbose';
+    diff_context?: number;
   };
   dry_run?: boolean;
   validate?: {
@@ -56,13 +60,22 @@ interface EditInput {
   };
 }
 
+type EditResultStatus = 'applied' | 'not_found' | 'ambiguous' | 'conflict' | 'failed';
+
+const DIFF_TRUNCATE_THRESHOLD = 5000;
+const DIFF_PREVIEW_LENGTH = 500;
+
 interface EditResult {
   id?: string;
   path: string;
   success: boolean;
+  status?: EditResultStatus;
   occurrencesReplaced?: number;
   diff?: string;
+  diff_truncated?: boolean;
+  diff_preview?: string;
   error?: string;
+  hint?: string;
   warning?: string;
 }
 
@@ -289,11 +302,16 @@ function findAllPositions(
   mode: 'exact' | 'fuzzy' | 'regex',
   caseSensitive: boolean,
   whitespaceSensitive: boolean = true,
+  multiline: boolean = false,
 ): { start: number; end: number }[] {
   const positions: { start: number; end: number }[] = [];
 
   if (mode === 'regex') {
-    const flags = caseSensitive ? 'g' : 'gi';
+    let flags = caseSensitive ? 'g' : 'gi';
+    if (multiline) {
+      if (!flags.includes('s')) flags += 's'; // dotAll: . matches newlines
+      if (!flags.includes('m')) flags += 'm'; // multiline: ^/$ per line
+    }
     const re = new RegExp(find, flags);
     let m: RegExpExecArray | null;
     while ((m = re.exec(content)) !== null) {
@@ -375,10 +393,30 @@ function applyHints(
   positions: { start: number; end: number }[],
   hints: EditItem['hints'],
   nearLine?: number,
-): { start: number; end: number }[] {
-  if (!hints) return positions;
+): { positions: { start: number; end: number }[]; warning?: string } {
+  if (!hints) return { positions };
 
   let filtered = positions;
+  let warning: string | undefined;
+
+  // after: only keep positions that appear after this anchor text in the file
+  if (hints.after) {
+    const anchorIdx = content.indexOf(hints.after);
+    if (anchorIdx === -1) {
+      return { positions: [], warning: `after anchor "${hints.after}" not found in file` };
+    }
+    const afterOffset = anchorIdx + hints.after.length;
+    filtered = filtered.filter((pos) => pos.start >= afterOffset);
+  }
+
+  // before: only keep positions that appear before this anchor text in the file
+  if (hints.before) {
+    const anchorIdx = content.indexOf(hints.before);
+    if (anchorIdx === -1) {
+      return { positions: [], warning: `before anchor "${hints.before}" not found in file` };
+    }
+    filtered = filtered.filter((pos) => pos.end <= anchorIdx);
+  }
 
   if (hints.in_function) {
     const name = hints.in_function;
@@ -410,7 +448,7 @@ function applyHints(
     filtered = [best];
   }
 
-  return filtered;
+  return { positions: filtered, warning };
 }
 
 function escapeRegex(s: string): string {
@@ -460,9 +498,9 @@ function filterByScope(
 function selectOccurrences(
   positions: { start: number; end: number }[],
   occurrence: OccurrenceSpec | undefined,
-): { selected: { start: number; end: number }[] } | { error: string } {
+): { selected: { start: number; end: number }[] } | { error: string; hint?: string } {
   if (positions.length === 0) {
-    return { error: 'Find string not found in file' };
+    return { error: 'Find string not found in file', hint: 'Check that the find string matches the file content exactly, including whitespace and line endings.' };
   }
 
   if (occurrence === undefined) {
@@ -470,6 +508,7 @@ function selectOccurrences(
     if (positions.length > 1) {
       return {
         error: `Ambiguous match: find string appears ${positions.length} times. Specify occurrence: 'first', 'last', 'all', or a number.`,
+        hint: `Pattern matched ${positions.length} times — use occurrence: 'first', 'last', 'all', or a number (1-${positions.length}) to disambiguate.`,
       };
     }
     return { selected: positions };
@@ -513,13 +552,17 @@ function applyReplacements(
     let replacement = replace;
     if (mode === 'regex') {
       // Re-run the regex on just this match to get capture groups
-      const flags = caseSensitive ? '' : 'i';
-      const re = new RegExp(find, flags);
-      const m = re.exec(content.slice(start, end));
-      if (m) {
-        replacement = replace.replace(/\$(\d+)/g, (_full, digit) => {
-          return m[parseInt(digit)] ?? '';
-        });
+      try {
+        const flags = caseSensitive ? '' : 'i';
+        const re = new RegExp(find, flags);
+        const m = re.exec(content.slice(start, end));
+        if (m) {
+          replacement = replace.replace(/\$(\d+)/g, (_full, digit) => {
+            return m[parseInt(digit)] ?? '';
+          });
+        }
+      } catch {
+        // Invalid regex for capture group substitution — use literal replacement
       }
     }
     result = result.slice(0, start) + replacement + result.slice(end);
@@ -761,21 +804,25 @@ function computeSingleEdit(
   mode: 'exact' | 'fuzzy' | 'regex',
   caseSensitive: boolean,
   whitespaceSensitive: boolean = true,
-): { newContent: string; occurrencesReplaced: number; warning?: string } | { error: string } {
+  multiline: boolean = false,
+): { newContent: string; occurrencesReplaced: number; warning?: string } | { error: string; hint?: string } {
   const findStr = item.find_base64 ? decodeBase64(item.find_base64) : item.find;
   const replaceStr = item.replace_base64 ? decodeBase64(item.replace_base64) : item.replace;
 
   // Find all positions (regex mode may throw on invalid patterns)
   let positions: { start: number; end: number }[];
   try {
-    positions = findAllPositions(fileContent, findStr, mode, caseSensitive, whitespaceSensitive);
+    positions = findAllPositions(fileContent, findStr, mode, caseSensitive, whitespaceSensitive, multiline);
   } catch (err) {
     return { error: `Invalid find pattern: ${err instanceof Error ? err.message : String(err)}` };
   }
 
   // Apply hints
+  let hintsWarning: string | undefined;
   if (item.hints) {
-    positions = applyHints(fileContent, positions, item.hints, item.hints.near_line);
+    const hintsResult = applyHints(fileContent, positions, item.hints, item.hints.near_line);
+    positions = hintsResult.positions;
+    hintsWarning = hintsResult.warning;
   }
 
   // When exact match produces no positions, try progressive fallbacks
@@ -806,9 +853,10 @@ function computeSingleEdit(
             `Find string not found in file (best match was ${pct}% similar, below the ${Math.round(FUZZY_MATCH_THRESHOLD * 100)}% threshold).\n` +
             `Closest candidate (first 3 lines):\n${candidatePreview}\n` +
             `Tip: correct the find string to match the file content exactly.`,
+          hint: `Did you mean this? (${pct}% match):\n${candidatePreview}`,
         };
       } else {
-        return { error: 'Find string not found in file' };
+        return { error: 'Find string not found in file', hint: 'The find string was not found. Check spelling, whitespace, and that the file has been read recently.' };
       }
     }
   }
@@ -826,7 +874,7 @@ function computeSingleEdit(
     caseSensitive,
   );
 
-  let warning: string | undefined;
+  let warning: string | undefined = hintsWarning;
   if (usedFallback === 'whitespace') {
     warning = 'Exact match failed; used whitespace-normalized match instead.';
   } else if (usedFallback === 'fuzzy-lines') {
@@ -1041,13 +1089,18 @@ function formatOutput(
     for (const r of results) {
       if (r.success) {
         const id = r.id ? ` [${r.id}]` : '';
-        lines.push(`  OK${id}: ${r.path} (${r.occurrencesReplaced} replacement(s))`);
+        const statusTag = r.status ? ` [${r.status}]` : '';
+        lines.push(`  OK${statusTag}${id}: ${r.path} (${r.occurrencesReplaced} replacement(s))`);
         if (r.warning) {
           lines.push(`    WARN: ${r.warning}`);
         }
       } else {
         const id = r.id ? ` [${r.id}]` : '';
-        lines.push(`  FAIL${id}: ${r.path} — ${r.error}`);
+        const statusTag = r.status ? ` [${r.status}]` : '';
+        lines.push(`  FAIL${statusTag}${id}: ${r.path} — ${r.error}`);
+        if (r.hint) {
+          lines.push(`    HINT: ${r.hint}`);
+        }
       }
     }
     return lines.join('\n');
@@ -1057,16 +1110,26 @@ function formatOutput(
   for (const r of results) {
     const id = r.id ? ` [${r.id}]` : '';
     if (r.success) {
-      lines.push(`\n--- ${r.path}${id} (${r.occurrencesReplaced} replacement(s))${dryTag} ---`);
+      const statusTag = r.status ? ` [${r.status}]` : '';
+      lines.push(`\n--- ${r.path}${id}${statusTag} (${r.occurrencesReplaced} replacement(s))${dryTag} ---`);
       if (r.diff) {
-        lines.push(r.diff);
+        if (r.diff_truncated) {
+          lines.push(`[diff truncated — showing first ${DIFF_PREVIEW_LENGTH} chars]`);
+          lines.push(r.diff_preview ?? r.diff.slice(0, DIFF_PREVIEW_LENGTH));
+        } else {
+          lines.push(r.diff);
+        }
       }
       if (r.warning) {
         lines.push(`  WARN: ${r.warning}`);
       }
     } else {
-      lines.push(`\n--- ${r.path}${id} FAILED ---`);
+      const statusTag = r.status ? ` [${r.status}]` : '';
+      lines.push(`\n--- ${r.path}${id}${statusTag} FAILED ---`);
       lines.push(`  Error: ${r.error}`);
+      if (r.hint) {
+        lines.push(`  Hint: ${r.hint}`);
+      }
     }
   }
   return lines.join('\n');
@@ -1116,6 +1179,7 @@ export function createEditTool(fileCache: FileStateCache, options?: EditToolOpti
     if (input.notebook_operations) {
       const nbOps = input.notebook_operations;
       const outputFormat = input.output?.format ?? 'minimal';
+      const diffContext = input.output?.diff_context ?? 3;
       const dryRun = input.dry_run ?? false;
       const cwd = options?.cwd ?? process.cwd();
 
@@ -1191,7 +1255,7 @@ export function createEditTool(fileCache: FileStateCache, options?: EditToolOpti
         } else if (outputFormat === 'minimal') {
           output = `Notebook operations applied: ${opsResult.applied}, failed: 0 (dry run)\n${opsResult.summary}`;
         } else {
-          const diff = unifiedDiff(rawContent, newContent, resolvedPath);
+          const diff = unifiedDiff(rawContent, newContent, resolvedPath, diffContext);
           output = `Notebook operations applied: ${opsResult.applied}, failed: 0 (dry run)\n${opsResult.summary}\n${diff}`;
         }
         return { success: true, output };
@@ -1252,7 +1316,7 @@ export function createEditTool(fileCache: FileStateCache, options?: EditToolOpti
         output = `Notebook operations applied: ${opsResult.applied}, failed: 0\n${opsResult.summary}`;
       } else {
         // with_diff / verbose: include a diff
-        const diff = unifiedDiff(rawContent, newContent, resolvedPath);
+        const diff = unifiedDiff(rawContent, newContent, resolvedPath, diffContext);
         output = `Notebook operations applied: ${opsResult.applied}, failed: 0\n${opsResult.summary}\n${diff}`;
       }
 
@@ -1267,8 +1331,10 @@ export function createEditTool(fileCache: FileStateCache, options?: EditToolOpti
     const matchMode = input.match?.mode ?? 'exact';
     const caseSensitive = input.match?.case_sensitive ?? true;
     const whitespaceSensitive = input.match?.whitespace_sensitive ?? true;
+    const multiline = input.match?.multiline ?? false;
     const transactionMode = input.transaction?.mode ?? 'atomic';
     const outputFormat = input.output?.format ?? 'minimal';
+    const diffContext = input.output?.diff_context ?? 3;
     const dryRun = input.dry_run ?? false;
     const validateBefore = input.validate?.before ?? [];
     const validateAfter = input.validate?.after ?? [];
@@ -1346,6 +1412,7 @@ export function createEditTool(fileCache: FileStateCache, options?: EditToolOpti
           id: item.id,
           path: item.path,
           success: false,
+          status: 'failed',
           error: `Path resolution failed for '${item.path}'`,
         });
         if (transactionMode === 'atomic') {
@@ -1357,15 +1424,18 @@ export function createEditTool(fileCache: FileStateCache, options?: EditToolOpti
       }
 
       if (fileReadErrors.has(resolvedPath)) {
+        const readErrMsg = fileReadErrors.get(resolvedPath)!;
+        const readErrStatus: EditResultStatus = readErrMsg.includes('OCC conflict') || readErrMsg.includes('modified externally') ? 'conflict' : 'failed';
         results.push({
           id: item.id,
           path: item.path,
           success: false,
-          error: fileReadErrors.get(resolvedPath)!,
+          status: readErrStatus,
+          error: readErrMsg,
         });
         if (transactionMode === 'atomic') {
           atomicFailed = true;
-          atomicFailError = fileReadErrors.get(resolvedPath)!;
+          atomicFailError = readErrMsg;
           break;
         }
         continue;
@@ -1377,6 +1447,7 @@ export function createEditTool(fileCache: FileStateCache, options?: EditToolOpti
           id: item.id,
           path: item.path,
           success: false,
+          status: 'failed',
           error: `No content available for '${resolvedPath}'`,
         });
         if (transactionMode === 'atomic') {
@@ -1387,25 +1458,33 @@ export function createEditTool(fileCache: FileStateCache, options?: EditToolOpti
         continue;
       }
 
-      let editResult: { newContent: string; occurrencesReplaced: number; warning?: string } | { error: string };
+      let editResult: { newContent: string; occurrencesReplaced: number; warning?: string } | { error: string; hint?: string };
       if (matchMode === 'ast_pattern') {
         editResult = computeAstPatternEdit(currentContent, item, resolvedPath);
       } else if (matchMode === 'ast') {
         editResult = await computeAstEdit(currentContent, item, resolvedPath);
       } else {
-        editResult = computeSingleEdit(currentContent, item, matchMode, caseSensitive, whitespaceSensitive);
+        editResult = computeSingleEdit(currentContent, item, matchMode, caseSensitive, whitespaceSensitive, multiline);
       }
 
       if ('error' in editResult) {
+        // Determine structured status for the error
+        const errMsg = editResult.error;
+        let errorStatus: EditResultStatus = 'failed';
+        if (errMsg.includes('not found') || errMsg.includes('No match')) errorStatus = 'not_found';
+        else if (errMsg.includes('Ambiguous') || errMsg.includes('ambiguous')) errorStatus = 'ambiguous';
+        else if (errMsg.includes('OCC conflict') || errMsg.includes('modified externally')) errorStatus = 'conflict';
         results.push({
           id: item.id,
           path: item.path,
           success: false,
-          error: editResult.error,
+          status: errorStatus,
+          error: errMsg,
+          hint: 'hint' in editResult ? editResult.hint : undefined,
         });
         if (transactionMode === 'atomic') {
           atomicFailed = true;
-          atomicFailError = editResult.error;
+          atomicFailError = errMsg;
           break;
         }
         continue;
@@ -1416,15 +1495,27 @@ export function createEditTool(fileCache: FileStateCache, options?: EditToolOpti
       workingContents.set(resolvedPath, editResult.newContent);
 
       let diff: string | undefined;
+      let diffTruncated: boolean | undefined;
+      let diffPreview: string | undefined;
       if (outputFormat === 'with_diff' || outputFormat === 'verbose' || dryRun) {
-        diff = unifiedDiff(oldContent, editResult.newContent, resolvedPath);
+        const rawDiff = unifiedDiff(oldContent, editResult.newContent, resolvedPath, diffContext);
+        if (rawDiff.length > DIFF_TRUNCATE_THRESHOLD) {
+          diffTruncated = true;
+          diffPreview = rawDiff.slice(0, DIFF_PREVIEW_LENGTH);
+          diff = diffPreview; // store truncated version; full diff available in verbose format only
+        } else {
+          diff = rawDiff;
+        }
       }
       results.push({
         id: item.id,
         path: item.path,
         success: true,
+        status: 'applied',
         occurrencesReplaced: editResult.occurrencesReplaced,
         diff,
+        diff_truncated: diffTruncated,
+        diff_preview: diffPreview,
         warning: editResult.warning,
       });
     }
@@ -1439,6 +1530,7 @@ export function createEditTool(fileCache: FileStateCache, options?: EditToolOpti
           id: item.id,
           path: item.path,
           success: false,
+          status: 'failed',
           error: r?.success ? 'Rolled back due to atomic transaction failure' : (r?.error ?? atomicFailError),
         };
       });

@@ -22,6 +22,11 @@ export const FETCH_TOOL_SCHEMA = {
             enum: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'HEAD', 'OPTIONS'],
             description: 'HTTP method. Defaults to GET.',
           },
+          params: {
+            type: 'object',
+            description: 'Query parameters to append to the URL as a query string.',
+            additionalProperties: { type: 'string' },
+          },
           headers: {
             type: 'object',
             description: 'HTTP headers to include in the request.',
@@ -31,17 +36,27 @@ export const FETCH_TOOL_SCHEMA = {
             type: 'string',
             description: 'Request body string.',
           },
+          body_base64: {
+            type: 'string',
+            description: 'Base64-encoded request body. Decoded before sending. Takes precedence over body.',
+          },
           body_type: {
             type: 'string',
-            enum: ['json', 'form', 'raw'],
+            enum: ['json', 'form', 'raw', 'multipart'],
             description:
               'How to encode the body. json: sets Content-Type application/json;'
               + ' form: sets Content-Type application/x-www-form-urlencoded;'
+              + ' multipart: builds a FormData body from body_data (object of key-value pairs);'
               + ' raw: sends as-is.',
+          },
+          body_data: {
+            type: 'object',
+            description: 'Key-value pairs for multipart body_type. Each entry becomes a FormData field.',
+            additionalProperties: { type: 'string' },
           },
           extract: {
             type: 'string',
-            enum: ['raw', 'text', 'json', 'markdown', 'readable', 'code_blocks', 'links', 'metadata', 'structured', 'tables', 'pdf'],
+            enum: ['raw', 'text', 'json', 'markdown', 'readable', 'code_blocks', 'links', 'metadata', 'structured', 'tables', 'pdf', 'summary'],
             description:
               'Extraction mode for this URL. Overrides the global extract.'
               + ' raw: raw response body; text: plain text, strips HTML tags;'
@@ -51,7 +66,8 @@ export const FETCH_TOOL_SCHEMA = {
               + ' links: extract all URLs; metadata: extract title/og-tags;'
               + ' structured: extract text of elements matching CSS selectors (requires selectors field);'
               + ' tables: parse <table> elements into JSON arrays;'
-              + ' pdf: extract text from PDF responses.',
+              + ' pdf: extract text from PDF responses;'
+              + ' summary: extractive summary (first paragraph + headings).',
           },
           selectors: {
             type: 'array',
@@ -62,6 +78,15 @@ export const FETCH_TOOL_SCHEMA = {
             type: 'integer',
             minimum: 1,
             description: 'Per-URL timeout in milliseconds. Default 30000.',
+          },
+          max_content_length: {
+            type: 'integer',
+            minimum: 1,
+            description: 'Maximum response body size in bytes. Responses exceeding this are truncated. Overrides global max_content_length.',
+          },
+          retry_on_auth: {
+            type: 'boolean',
+            description: 'When a service is specified and a 401 is returned, attempt to refresh auth and retry once. Defaults to true when service is specified.',
           },
           service: {
             type: 'string',
@@ -91,7 +116,7 @@ export const FETCH_TOOL_SCHEMA = {
     },
     extract: {
       type: 'string',
-      enum: ['raw', 'text', 'json', 'markdown', 'readable', 'code_blocks', 'links', 'metadata', 'structured', 'tables', 'pdf'],
+      enum: ['raw', 'text', 'json', 'markdown', 'readable', 'code_blocks', 'links', 'metadata', 'structured', 'tables', 'pdf', 'summary'],
       description: 'Global extraction mode applied to all URLs unless overridden per-URL. Defaults to raw.',
     },
     parallel: {
@@ -104,6 +129,21 @@ export const FETCH_TOOL_SCHEMA = {
       description:
         'count_only: totals only; minimal: URL + status + byte size;'
         + ' standard: URL + status + content (default); verbose: all metadata.',
+    },
+    cache_ttl_seconds: {
+      type: 'integer',
+      minimum: 0,
+      description: 'Cache GET responses by URL+params for this many seconds. 0 disables caching (default).',
+    },
+    rate_limit_ms: {
+      type: 'integer',
+      minimum: 0,
+      description: 'Minimum delay in milliseconds between sequential requests. 0 disables rate limiting (default). Has no effect in parallel mode.',
+    },
+    max_content_length: {
+      type: 'integer',
+      minimum: 1,
+      description: 'Global maximum response body size in bytes. Responses exceeding this are truncated. Can be overridden per-URL.',
     },
   },
   required: ['urls'],
@@ -121,7 +161,8 @@ export type FetchExtractMode =
   | 'metadata'
   | 'structured'
   | 'tables'
-  | 'pdf';
+  | 'pdf'
+  | 'summary';
 
 /** Output verbosity format. */
 export type FetchVerbosity = 'count_only' | 'minimal' | 'standard' | 'verbose';
@@ -145,13 +186,23 @@ export interface FetchAuthInput {
 export interface FetchUrlInput {
   url: string;
   method?: 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH' | 'HEAD' | 'OPTIONS';
+  /** Query parameters appended as a query string to the URL. */
+  params?: Record<string, string>;
   headers?: Record<string, string>;
   body?: string;
-  body_type?: 'json' | 'form' | 'raw';
+  /** Base64-encoded request body. Decoded before sending. Takes precedence over body. */
+  body_base64?: string;
+  body_type?: 'json' | 'form' | 'raw' | 'multipart';
+  /** Key-value pairs used when body_type is 'multipart'. */
+  body_data?: Record<string, string>;
   extract?: FetchExtractMode;
   /** CSS selectors for structured extraction mode. */
   selectors?: string[];
   timeout_ms?: number;
+  /** Maximum response body size in bytes. Overrides global max_content_length. */
+  max_content_length?: number;
+  /** When a service is specified and a 401 is returned, refresh auth and retry once. */
+  retry_on_auth?: boolean;
   /** Named service for automatic credential lookup from the service registry. */
   service?: string;
   /** Inline auth configuration. Applied directly without registry lookup. */
@@ -164,4 +215,10 @@ export interface FetchInput {
   extract?: FetchExtractMode;
   parallel?: boolean;
   verbosity?: FetchVerbosity;
+  /** Cache GET responses by URL+params for this many seconds. 0 = disabled (default). */
+  cache_ttl_seconds?: number;
+  /** Minimum delay in ms between sequential requests. 0 = disabled (default). */
+  rate_limit_ms?: number;
+  /** Global maximum response body size in bytes. */
+  max_content_length?: number;
 }
