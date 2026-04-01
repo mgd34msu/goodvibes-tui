@@ -8,6 +8,7 @@ import { FileStateCache, unifiedDiff } from '../../state/file-cache.ts';
 import { resolveAndValidatePath } from '../../utils/path-safety.ts';
 import { editSchema } from './schema.ts';
 import { autoHealer } from '../shared/auto-heal.ts';
+import { isNotebookFile } from '../../utils/notebook.ts';
 import * as astGrep from '@ast-grep/napi';
 import { CodeIntelligence, ImportGraph } from '../../intelligence/index.ts';
 
@@ -35,7 +36,8 @@ interface EditItem {
 type ValidatorName = 'typecheck' | 'lint' | 'test' | 'build';
 
 interface EditInput {
-  edits: EditItem[];
+  edits?: EditItem[];
+  notebook_operations?: NotebookOperationsInput;
   match?: {
     mode?: 'exact' | 'fuzzy' | 'regex' | 'ast' | 'ast_pattern';
     case_sensitive?: boolean;
@@ -62,6 +64,41 @@ interface EditResult {
   diff?: string;
   error?: string;
   warning?: string;
+}
+
+// ---------------------------------------------------------------------------
+// Notebook types
+// ---------------------------------------------------------------------------
+
+interface NotebookCell {
+  cell_type: 'code' | 'markdown' | 'raw';
+  source: string | string[];
+  metadata?: Record<string, unknown>;
+  execution_count?: number | null;
+  outputs?: unknown[];
+  id?: string;
+}
+
+interface JupyterNotebook {
+  nbformat: number;
+  nbformat_minor: number;
+  cells: NotebookCell[];
+  metadata?: Record<string, unknown>;
+}
+
+interface NotebookOperation {
+  op: 'replace' | 'insert' | 'delete';
+  cell?: number;
+  cell_id?: string;
+  after?: number;
+  source?: string;
+  cell_type?: 'code' | 'markdown' | 'raw';
+  clear_outputs?: boolean;
+}
+
+interface NotebookOperationsInput {
+  path: string;
+  operations: NotebookOperation[];
 }
 
 // ---------------------------------------------------------------------------
@@ -800,6 +837,187 @@ function computeSingleEdit(
 }
 
 // ---------------------------------------------------------------------------
+// Notebook helpers
+// ---------------------------------------------------------------------------
+
+/** Split a source string into a notebook source array (line array with preserved newlines). */
+function normalizeSource(source: string | string[]): string[] {
+  if (Array.isArray(source)) return source;
+  const lines = source.split('\n');
+  return lines.map((line, i) => (i < lines.length - 1 ? line + '\n' : line));
+}
+
+/** Validate that a parsed value is a JupyterNotebook. */
+function validateNotebook(parsed: unknown): parsed is JupyterNotebook {
+  if (typeof parsed !== 'object' || parsed === null) return false;
+  const nb = parsed as Record<string, unknown>;
+  if (typeof nb['nbformat'] !== 'number') return false;
+  if (!Array.isArray(nb['cells'])) return false;
+  // Validate cell structure
+  for (const cell of nb['cells'] as unknown[]) {
+    if (!cell || typeof cell !== 'object') return false;
+    const c = cell as Record<string, unknown>;
+    if (!c['cell_type'] || typeof c['cell_type'] !== 'string') return false;
+    if (c['source'] === undefined) return false;
+  }
+  return true;
+}
+
+/** Find a cell by id field or metadata.id. Returns -1 if not found. */
+function resolveCellId(cells: NotebookCell[], cellId: string): number {
+  for (let i = 0; i < cells.length; i++) {
+    const cell = cells[i];
+    if (cell.id === cellId) return i;
+    if (cell.metadata && (cell.metadata as Record<string, unknown>)['id'] === cellId) return i;
+  }
+  return -1;
+}
+
+/** Generate a random 8-character alphanumeric cell ID, collision-safe. */
+function generateCellId(existingCells?: NotebookCell[]): string {
+  const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
+  const existingIds = new Set(existingCells?.map((c) => c.id).filter(Boolean) ?? []);
+  let id: string;
+  do {
+    id = Array.from({ length: 8 }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
+  } while (existingIds.has(id));
+  return id;
+}
+
+/** Apply notebook operations to a JupyterNotebook. Returns summary info. */
+function applyNotebookOperations(
+  notebook: JupyterNotebook,
+  operations: NotebookOperation[],
+): { success: boolean; applied: number; summary: string; error?: string } {
+  const needsCellIds = notebook.nbformat > 4 ||
+    (notebook.nbformat === 4 && (notebook.nbformat_minor ?? 0) >= 5);
+
+  let indexOffset = 0;
+  let applied = 0;
+  const summaryLines: string[] = [];
+
+  for (const op of operations) {
+    if (op.op === 'replace') {
+      // Resolve target cell
+      let idx: number;
+      if (op.cell_id !== undefined) {
+        idx = resolveCellId(notebook.cells, op.cell_id);
+        if (idx === -1) {
+          return { success: false, applied, summary: summaryLines.join('\n'), error: `replace: cell_id '${op.cell_id}' not found` };
+        }
+      } else if (op.cell !== undefined) {
+        idx = op.cell + indexOffset;
+        if (idx < 0 || idx >= notebook.cells.length) {
+          return { success: false, applied, summary: summaryLines.join('\n'), error: `replace: cell index ${op.cell} out of range (notebook has ${notebook.cells.length} cells)` };
+        }
+      } else {
+        return { success: false, applied, summary: summaryLines.join('\n'), error: 'replace: requires cell or cell_id' };
+      }
+
+      if (op.source === undefined) {
+        return { success: false, applied, summary: summaryLines.join('\n'), error: 'replace: source is required' };
+      }
+
+      const cell = notebook.cells[idx];
+      cell.source = normalizeSource(op.source);
+
+      // Optionally change cell_type
+      if (op.cell_type !== undefined && op.cell_type !== cell.cell_type) {
+        cell.cell_type = op.cell_type;
+        if (op.cell_type === 'code') {
+          if (cell.execution_count === undefined) cell.execution_count = null;
+          if (cell.outputs === undefined) cell.outputs = [];
+        } else {
+          delete cell.execution_count;
+          delete cell.outputs;
+        }
+      }
+
+      if (op.clear_outputs && cell.cell_type === 'code') {
+        cell.outputs = [];
+        cell.execution_count = null;
+      }
+
+      summaryLines.push(`  OK: replace cell[${idx}]`);
+      applied++;
+
+    } else if (op.op === 'insert') {
+      if (op.source === undefined) {
+        return { success: false, applied, summary: summaryLines.join('\n'), error: 'insert: source is required' };
+      }
+      if (op.cell_type === undefined) {
+        return { success: false, applied, summary: summaryLines.join('\n'), error: 'insert: cell_type is required' };
+      }
+
+      const newCell: NotebookCell = {
+        cell_type: op.cell_type,
+        source: normalizeSource(op.source),
+        metadata: {},
+      };
+      if (op.cell_type === 'code') {
+        newCell.execution_count = null;
+        newCell.outputs = [];
+      }
+      if (needsCellIds) {
+        newCell.id = generateCellId(notebook.cells);
+      }
+
+      // Determine insert position
+      let insertAt: number;
+      if (op.cell_id !== undefined) {
+        // Insert after the cell with this ID
+        const refIdx = resolveCellId(notebook.cells, op.cell_id);
+        if (refIdx === -1) {
+          return { success: false, applied, summary: summaryLines.join('\n'), error: `insert: cell_id '${op.cell_id}' not found` };
+        }
+        insertAt = refIdx + 1;
+      } else if (op.after !== undefined) {
+        if (op.after === -1) {
+          insertAt = 0;
+        } else {
+          const adjustedAfter = op.after + indexOffset;
+          if (adjustedAfter < -1 || adjustedAfter >= notebook.cells.length) {
+            return { success: false, applied, summary: summaryLines.join('\n'), error: `insert: after index ${op.after} out of bounds (-1 to ${notebook.cells.length - 1})` };
+          }
+          insertAt = adjustedAfter + 1;
+        }
+      } else {
+        // Append at end
+        insertAt = notebook.cells.length;
+      }
+
+      notebook.cells.splice(insertAt, 0, newCell);
+      indexOffset++;
+      summaryLines.push(`  OK: insert cell at[${insertAt}]`);
+      applied++;
+
+    } else if (op.op === 'delete') {
+      let idx: number;
+      if (op.cell_id !== undefined) {
+        idx = resolveCellId(notebook.cells, op.cell_id);
+        if (idx === -1) {
+          return { success: false, applied, summary: summaryLines.join('\n'), error: `delete: cell_id '${op.cell_id}' not found` };
+        }
+      } else if (op.cell !== undefined) {
+        idx = op.cell + indexOffset;
+        if (idx < 0 || idx >= notebook.cells.length) {
+          return { success: false, applied, summary: summaryLines.join('\n'), error: `delete: cell index ${op.cell} out of range (notebook has ${notebook.cells.length} cells)` };
+        }
+      } else {
+        return { success: false, applied, summary: summaryLines.join('\n'), error: 'delete: requires cell or cell_id' };
+      }
+
+      notebook.cells.splice(idx, 1);
+      indexOffset--;
+      summaryLines.push(`  OK: delete cell[${idx}]`);
+      applied++;
+    }
+  }
+
+  return { success: true, applied, summary: summaryLines.join('\n') };
+}
+
+// ---------------------------------------------------------------------------
 // Output formatting
 // ---------------------------------------------------------------------------
 
@@ -871,7 +1089,8 @@ export function createEditTool(fileCache: FileStateCache, options?: EditToolOpti
     description:
       'Edit files by finding and replacing text. Supports exact, fuzzy, and regex matching. ' +
       'Handles multiple edits in one call with atomic or partial transaction semantics. ' +
-      'Detects OCC conflicts when files have been modified externally.',
+      'Detects OCC conflicts when files have been modified externally. ' +
+      'Also supports Jupyter notebook (.ipynb) cell operations via notebook_operations field.',
     parameters: editSchema as unknown as Record<string, unknown>,
   };
 
@@ -883,11 +1102,166 @@ export function createEditTool(fileCache: FileStateCache, options?: EditToolOpti
     let input: EditInput;
     try {
       input = args as unknown as EditInput;
-      if (!Array.isArray(input.edits) || input.edits.length === 0) {
-        return { success: false, error: 'edits must be a non-empty array' };
+      if (!input.edits && !input.notebook_operations) {
+        return { success: false, error: 'Either edits or notebook_operations must be provided' };
+      }
+      if (input.edits && input.notebook_operations) {
+        return { success: false, error: 'Provide either edits or notebook_operations, not both' };
       }
     } catch (err) {
       return { success: false, error: `Invalid input: ${err instanceof Error ? err.message : String(err)}` };
+    }
+
+    // --- Notebook operations branch ---
+    if (input.notebook_operations) {
+      const nbOps = input.notebook_operations;
+      const outputFormat = input.output?.format ?? 'minimal';
+      const dryRun = input.dry_run ?? false;
+      const cwd = options?.cwd ?? process.cwd();
+
+      // Runtime input validation
+      if (!nbOps.path || typeof nbOps.path !== 'string') {
+        return { success: false, error: 'notebook_operations.path is required and must be a string' };
+      }
+      if (!Array.isArray(nbOps.operations)) {
+        return { success: false, error: 'notebook_operations.operations must be an array' };
+      }
+
+      let resolvedPath: string;
+      try {
+        resolvedPath = resolveAndValidatePath(nbOps.path);
+      } catch (err) {
+        return { success: false, error: `Path error: ${err instanceof Error ? err.message : String(err)}` };
+      }
+
+      if (!isNotebookFile(resolvedPath)) {
+        return { success: false, error: `notebook_operations requires a .ipynb file, got: ${nbOps.path}` };
+      }
+
+      // Check OCC conflict
+      const cacheResult = fileCache.lookup(resolvedPath);
+      if (cacheResult.status === 'modified') {
+        return { success: false, error: `OCC conflict: '${resolvedPath}' was modified externally since last read` };
+      }
+
+      // Read and parse notebook
+      let rawContent: string;
+      try {
+        rawContent = readFileSync(resolvedPath, 'utf-8');
+      } catch {
+        return { success: false, error: `File not found or unreadable: '${resolvedPath}'` };
+      }
+
+      let notebook: JupyterNotebook;
+      try {
+        const parsed: unknown = JSON.parse(rawContent);
+        if (!validateNotebook(parsed)) {
+          return { success: false, error: `Not a valid Jupyter notebook: missing nbformat or cells array` };
+        }
+        notebook = parsed;
+      } catch (err) {
+        return { success: false, error: `Failed to parse notebook JSON: ${err instanceof Error ? err.message : String(err)}` };
+      }
+
+      // Run validate.before
+      if (!dryRun && (input.validate?.before ?? []).length > 0) {
+        const failure = await runValidators(input.validate!.before!, cwd);
+        if (failure) {
+          return {
+            success: false,
+            error: `Pre-edit validation failed. ${formatValidatorFailure(failure)}`,
+          };
+        }
+      }
+
+      // Apply notebook operations
+      const opsResult = applyNotebookOperations(notebook, nbOps.operations);
+      if (!opsResult.success) {
+        return { success: false, error: opsResult.error };
+      }
+
+      // Serialize notebook
+      const newContent = JSON.stringify(notebook, null, 1) + '\n';
+
+      if (dryRun) {
+        // Dry run: return summary of what would have been applied without writing
+        let output: string;
+        if (outputFormat === 'count_only') {
+          output = JSON.stringify({ applied: opsResult.applied, failed: 0, dry_run: true });
+        } else if (outputFormat === 'minimal') {
+          output = `Notebook operations applied: ${opsResult.applied}, failed: 0 (dry run)\n${opsResult.summary}`;
+        } else {
+          const diff = unifiedDiff(rawContent, newContent, resolvedPath);
+          output = `Notebook operations applied: ${opsResult.applied}, failed: 0 (dry run)\n${opsResult.summary}\n${diff}`;
+        }
+        return { success: true, output };
+      }
+
+      // Write to disk
+      try {
+        writeFileSync(resolvedPath, newContent, 'utf-8');
+      } catch (err) {
+        return { success: false, error: `Write failed for '${resolvedPath}': ${err instanceof Error ? err.message : String(err)}` };
+      }
+
+      // Run validate.after
+      if ((input.validate?.after ?? []).length > 0) {
+        const failure = await runValidators(input.validate!.after!, cwd);
+        if (failure) {
+          // Restore original content
+          try {
+            writeFileSync(resolvedPath, rawContent, 'utf-8');
+            fileCache.update(resolvedPath, rawContent);
+          } catch {
+            // Best-effort rollback
+          }
+          return {
+            success: false,
+            error: `Post-edit validation failed (notebook restored). ${formatValidatorFailure(failure)}`,
+          };
+        }
+      }
+
+      // Update cache
+      fileCache.update(resolvedPath, newContent);
+
+      // Snapshot for /undo support
+      if (options?.fileUndoManager) {
+        try {
+          options.fileUndoManager.snapshot({
+            path: resolvedPath,
+            beforeContent: rawContent,
+            afterContent: newContent,
+            tool: 'edit',
+          });
+        } catch {
+          // Non-fatal
+        }
+      }
+
+      // Track for /diff session change view
+      recordChange(resolvedPath);
+
+      logger.debug('[edit] notebook operations applied', { path: resolvedPath, applied: opsResult.applied });
+
+      // Format output
+      let output: string;
+      if (outputFormat === 'count_only') {
+        output = JSON.stringify({ applied: opsResult.applied, failed: 0, dry_run: false });
+      } else if (outputFormat === 'minimal') {
+        output = `Notebook operations applied: ${opsResult.applied}, failed: 0\n${opsResult.summary}`;
+      } else {
+        // with_diff / verbose: include a diff
+        const diff = unifiedDiff(rawContent, newContent, resolvedPath);
+        output = `Notebook operations applied: ${opsResult.applied}, failed: 0\n${opsResult.summary}\n${diff}`;
+      }
+
+      return { success: true, output };
+    }
+
+    // --- Text edits branch ---
+    if (!Array.isArray(input.edits) || input.edits.length === 0) {
+      return { success: false, error: 'edits must be a non-empty array' };
     }
 
     const matchMode = input.match?.mode ?? 'exact';
@@ -913,7 +1287,7 @@ export function createEditTool(fileCache: FileStateCache, options?: EditToolOpti
 
     // Resolve all paths upfront
     const resolvedPaths: Map<string, string> = new Map();
-    for (const item of input.edits) {
+    for (const item of input.edits!) {
       if (resolvedPaths.has(item.path)) continue;
       try {
         resolvedPaths.set(item.path, resolveAndValidatePath(item.path));
@@ -927,7 +1301,7 @@ export function createEditTool(fileCache: FileStateCache, options?: EditToolOpti
     }
 
     // Gather unique file paths and read content
-    const uniquePaths = new Set(input.edits.map((e) => resolvedPaths.get(e.path) ?? e.path));
+    const uniquePaths = new Set(input.edits!.map((e) => resolvedPaths.get(e.path) ?? e.path));
     const fileContents: Map<string, string> = new Map();
     const fileReadErrors: Map<string, string> = new Map();
 
@@ -963,7 +1337,7 @@ export function createEditTool(fileCache: FileStateCache, options?: EditToolOpti
     let atomicFailed = false;
     let atomicFailError = '';
 
-    for (const item of input.edits) {
+    for (const item of input.edits!) {
       const resolvedPath = resolvedPaths.get(item.path);
 
       if (!resolvedPath) {
@@ -1058,7 +1432,7 @@ export function createEditTool(fileCache: FileStateCache, options?: EditToolOpti
     // Atomic rollback: if any edit failed, report all as failed
     if (transactionMode === 'atomic' && atomicFailed) {
       // Replace all pending success results with rollback notices
-      const atomicResults: EditResult[] = input.edits.map((item, idx) => {
+      const atomicResults: EditResult[] = input.edits!.map((item, idx) => {
         const r = results[idx];
         if (r && !r.success) return r;
         return {

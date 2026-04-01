@@ -1,7 +1,6 @@
 /** JSON Schema definition for the edit tool input. */
 export const editSchema = {
   type: 'object',
-  required: ['edits'],
   properties: {
     edits: {
       type: 'array',
@@ -156,6 +155,60 @@ export const editSchema = {
           },
         },
       },
+      additionalProperties: false,
+    },
+    notebook_operations: {
+      type: 'object',
+      description:
+        'Jupyter notebook (.ipynb) cell operations. Alternative to edits — provide either edits or notebook_operations, not both.',
+      properties: {
+        path: { type: 'string', description: 'Path to .ipynb notebook file' },
+        operations: {
+          type: 'array',
+          minItems: 1,
+          items: {
+            type: 'object',
+            required: ['op'],
+            properties: {
+              op: {
+                type: 'string',
+                enum: ['replace', 'insert', 'delete'],
+                description: 'Cell operation: replace existing cell content, insert a new cell, or delete a cell',
+              },
+              cell: {
+                type: 'integer',
+                minimum: 0,
+                description: '0-based cell index (used by replace/delete when cell_id is not provided)',
+              },
+              cell_id: {
+                type: 'string',
+                description: 'Cell ID targeting — takes precedence over cell index for all operations',
+              },
+              after: {
+                type: 'integer',
+                minimum: -1,
+                description: 'For insert: insert after this 0-based index (-1 = insert at beginning). Omit to append at end.',
+              },
+              source: {
+                type: 'string',
+                description: 'Cell source content (required for replace and insert operations)',
+              },
+              cell_type: {
+                type: 'string',
+                enum: ['code', 'markdown', 'raw'],
+                description:
+                  'Cell type (required for insert; optional for replace — if provided, changes the cell type)',
+              },
+              clear_outputs: {
+                type: 'boolean',
+                description: 'Clear cell outputs on replace (default: false)',
+              },
+            },
+            additionalProperties: false,
+          },
+        },
+      },
+      required: ['path', 'operations'],
       additionalProperties: false,
     },
   },
