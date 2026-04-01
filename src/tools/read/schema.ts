@@ -1,3 +1,5 @@
+import type { ImageMode } from './media.ts';
+
 /**
  * JSON Schema definition for the `read` tool.
  *
@@ -42,6 +44,14 @@ export const READ_TOOL_SCHEMA = {
           pages: {
             type: 'string',
             description: 'Page range for PDF files (e.g. \'1-5\', \'3\', \'10-20\'). Max 20 pages per request.',
+          },
+          image_mode: {
+            type: 'string',
+            enum: ['default', 'unoptimized', 'metadata-only', 'thumbnail-only'],
+            description:
+              'Image handling mode. default: resize to 1568px max edge (token-efficient).'
+              + ' unoptimized: full resolution. metadata-only: dimensions/format/size only, no image data.'
+              + ' thumbnail-only: aggressive 256px resize for previews.',
           },
         },
         required: ['path'],
@@ -95,6 +105,19 @@ export const READ_TOOL_SCHEMA = {
       minimum: 1,
       description: 'Page number to return when using token_budget pagination. Default 1.',
     },
+    image_mode: {
+      type: 'string',
+      enum: ['default', 'unoptimized', 'metadata-only', 'thumbnail-only'],
+      description:
+        'Global image handling mode. Per-file image_mode overrides this. Default: default.',
+    },
+    max_image_size: {
+      type: 'integer',
+      minimum: 1,
+      description:
+        'Maximum image file size in bytes. Images exceeding this return metadata only.'
+        + ' Default: 5242880 (5MB).',
+    },
   },
   required: ['files'],
 } as const;
@@ -113,6 +136,7 @@ export interface ReadFileInput {
   force?: boolean;
   /** Page range for PDF files (e.g. '1-5', '3', '10-20'). Max 20 pages. */
   pages?: string;
+  image_mode?: ImageMode;
 }
 
 /** Full input shape for the read tool. */
@@ -127,4 +151,6 @@ export interface ReadInput {
   };
   token_budget?: number;
   page?: number;
+  image_mode?: ImageMode;
+  max_image_size?: number;
 }
