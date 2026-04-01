@@ -4,6 +4,28 @@ All notable changes to GoodVibes TUI.
 
 ---
 
+## [0.9.16] — 2026-04-01
+
+### Provider Caching Strategy Layer
+- Multi-breakpoint prompt caching for Anthropic: BP1 system+tools (1h TTL), BP2 conversation prefix (5m), BP3 largest tool result (5m), BP4 dynamic
+- Prompt-caching beta header (`prompt-caching-2025-04-14`) auto-added when extended TTL breakpoints are placed
+- Provider cache capability registry covering 13+ providers: explicit (Anthropic, Gemini), automatic (OpenAI, DeepSeek, Groq, Fireworks, Together), implicit (Ollama, LM Studio, vLLM, llama.cpp, SGLang), none (Mistral)
+- Session affinity header injection for Fireworks (`x-session-affinity`) and compatible providers
+- Shared CacheHitTracker across all providers with consistent hit rate formula
+- CachePlanner with LLM-assisted strategy optimization via helper model
+- Cache-aware context compaction: invalidates strategy on message restructuring
+- Cache hit rate monitoring with configurable warning threshold
+- `cache:metrics` and `helper:usage` events on the event bus
+
+### Helper Model Foundation
+- HelperRouter with 4-step resolution: per-provider helper → global helper → tool LLM → main model fallback
+- HelperModel singleton with never-throw contract and separate usage tracking
+- `helper.enabled` config properly gates helper routing (disabled = main model only)
+- First use case: LLM-assisted cache breakpoint planning for explicit-caching providers
+- Config: `cache.*` (enabled, stableTtl, monitorHitRate, hitRateWarningThreshold) and `helper.*` (enabled, globalProvider, globalModel)
+
+---
+
 ## [0.9.15] — 2026-03-30
 
 ### Context Compaction v2
