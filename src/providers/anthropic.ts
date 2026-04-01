@@ -1,5 +1,8 @@
 import type { LLMProvider, ChatRequest, ChatResponse } from './interface.ts';
 import { REASONING_BUDGET_MAP } from './interface.ts';
+import { getCacheCapability } from './cache-capability.ts';
+import { getDefaultStrategy, cacheHitTracker } from './cache-strategy.ts';
+import type { CacheContext } from './cache-strategy.ts';
 import { ProviderError } from '../types/errors.ts';
 import { withRetry } from '../utils/retry.ts';
 import { logger } from '../utils/logger.ts';
@@ -80,35 +83,128 @@ export class AnthropicProvider implements LLMProvider {
     const { messages, tools, model, maxTokens, signal, systemPrompt, onDelta, reasoningEffort } = params;
 
     return withRetry(async () => {
+      // Build Anthropic-formatted messages and tools early so we can inject cache_control.
+      const anthropicMessages = toAnthropicMessages(messages);
+      const anthropicTools = (tools && tools.length > 0) ? toAnthropicTools(tools) : null;
+
       const body: Record<string, unknown> = {
         model,
         max_tokens: clampMaxTokens(model, maxTokens ?? 8192),
-        messages: toAnthropicMessages(messages),
         stream: true,
       };
 
       if (systemPrompt) {
-        // System prompt — cache_control is only added here when there are no tools.
-        // When tools are present, the single cache breakpoint goes on the last tool instead,
-        // so system + tools are counted together toward the 1024-token minimum.
         body['system'] = [
           { type: 'text', text: systemPrompt },
         ];
       }
 
-      if (tools && tools.length > 0) {
-        const anthropicTools = toAnthropicTools(tools);
-        // Single cache breakpoint on the last tool — covers system + tools together toward
-        // the 1024-token minimum, so short system prompts still benefit from caching.
-        if (anthropicTools.length > 0) {
-          const lastTool = anthropicTools[anthropicTools.length - 1] as unknown as Record<string, unknown>;
-          lastTool['cache_control'] = { type: 'ephemeral' };
-        }
+      if (anthropicTools && anthropicTools.length > 0) {
         body['tools'] = anthropicTools;
-      } else if (systemPrompt) {
-        // No tools: put the single cache breakpoint on the system prompt instead.
-        (body['system'] as Array<Record<string, unknown>>)[0]['cache_control'] = { type: 'ephemeral' };
       }
+
+      // Multi-breakpoint prompt caching (up to 4 breakpoints).
+      const cacheContext: CacheContext = {
+        providerName: 'anthropic',
+        systemPromptTokens: Math.ceil((systemPrompt?.length ?? 0) / 4),
+        toolCount: tools?.length ?? 0,
+        toolTokens: Math.ceil(JSON.stringify(tools ?? []).length / 4),
+        conversationTurns: Math.floor(messages.length / 2),
+        // Token estimates use length/4 as an approximation (actual tokenization varies by content).
+        conversationTokens: Math.ceil(
+          messages.reduce((sum, m) =>
+            sum + (typeof m.content === 'string' ? m.content.length : JSON.stringify(m.content).length), 0) / 4,
+        ),
+        recentCacheHitRate: cacheHitTracker.getHitRate() || undefined,
+      };
+
+      const strategy = getDefaultStrategy(cacheContext);
+      let breakpointsPlaced = 0;
+
+      if (strategy.breakpoints.length > 0) {
+        // BP1: System prompt + tools (1h TTL for stable content).
+        const bp1 = strategy.breakpoints.find(b => b.position === 'system_and_tools');
+        if (bp1) {
+          if (anthropicTools && anthropicTools.length > 0) {
+            const lastTool = anthropicTools[anthropicTools.length - 1] as unknown as Record<string, unknown>;
+            lastTool['cache_control'] = bp1.ttl !== '5m'
+              ? { type: 'ephemeral', ttl: bp1.ttl }
+              : { type: 'ephemeral' };
+            breakpointsPlaced++;
+          } else if (systemPrompt) {
+            const sysBlocks = body['system'] as Array<Record<string, unknown>>;
+            if (sysBlocks?.length) {
+              sysBlocks[sysBlocks.length - 1]['cache_control'] = bp1.ttl !== '5m'
+                ? { type: 'ephemeral', ttl: bp1.ttl }
+                : { type: 'ephemeral' };
+              breakpointsPlaced++;
+            }
+          }
+        }
+
+        // BP2: Conversation history prefix — last assistant message before the final user message.
+        const bp2 = strategy.breakpoints.find(b => b.position === 'conversation_prefix');
+        let bp2MessageIdx = -1;
+        if (bp2 && anthropicMessages.length >= 3) {
+          for (let i = anthropicMessages.length - 2; i >= 0; i--) {
+            const msg = anthropicMessages[i] as unknown as Record<string, unknown>;
+            if (msg.role === 'assistant') {
+              const content = msg.content as Array<Record<string, unknown>>;
+              if (content?.length) {
+                content[content.length - 1]['cache_control'] = { type: 'ephemeral' };
+                bp2MessageIdx = i;
+                breakpointsPlaced++;
+              }
+              break;
+            }
+          }
+        }
+
+        // BP3: Largest tool result in conversation history.
+        // Skip messages within 2 indices of BP2 to avoid wasting breakpoints on overlapping prefix regions.
+        const bp3 = strategy.breakpoints.find(b => b.position === 'last_tool_result');
+        if (bp3) {
+          let largestIdx = -1;
+          let largestBlockIdx = -1;
+          let largestSize = 0;
+          for (let i = 0; i < anthropicMessages.length - 1; i++) {
+            // Skip messages too close to BP2 to avoid proximity waste.
+            if (bp2MessageIdx >= 0 && Math.abs(i - bp2MessageIdx) <= 2) continue;
+            const msg = anthropicMessages[i] as unknown as Record<string, unknown>;
+            if (msg.role === 'user') {
+              const content = msg.content as Array<Record<string, unknown>>;
+              if (content) {
+                // Skip messages that already have cache_control on any content block.
+                const alreadyCached = content.some(b => b['cache_control'] != null);
+                if (alreadyCached) continue;
+                for (let j = 0; j < content.length; j++) {
+                  const block = content[j];
+                  if (block['type'] === 'tool_result') {
+                    const size = typeof block['content'] === 'string'
+                      ? block['content'].length
+                      : JSON.stringify(block['content']).length;
+                    if (size > largestSize) {
+                      largestSize = size;
+                      largestIdx = i;
+                      largestBlockIdx = j;
+                    }
+                  }
+                }
+              }
+            }
+          }
+          // Only place BP3 if the tool result is substantial (>500 chars ~ 125 tokens).
+          if (largestIdx >= 0 && largestBlockIdx >= 0 && largestSize > 500) {
+            const msg = anthropicMessages[largestIdx] as unknown as Record<string, unknown>;
+            const content = msg.content as Array<Record<string, unknown>>;
+            // Target the specific tool_result block, not the last block in the message.
+            content[largestBlockIdx]['cache_control'] = { type: 'ephemeral' };
+            breakpointsPlaced++;
+          }
+        }
+      }
+
+      body['messages'] = anthropicMessages;
 
       if (reasoningEffort && reasoningEffort !== 'instant') {
         const budget = REASONING_BUDGET_MAP[reasoningEffort];
@@ -127,8 +223,18 @@ export class AnthropicProvider implements LLMProvider {
         'x-api-key': this.apiKey,
         'anthropic-version': ANTHROPIC_API_VERSION,
       };
+      // Build beta headers: thinking and/or extended TTL prompt caching.
+      const betaFeatures: string[] = [];
       if (body['thinking']) {
-        headers['anthropic-beta'] = 'interleaved-thinking-2025-05-14';
+        betaFeatures.push('interleaved-thinking-2025-05-14');
+      }
+      // Extended TTL (e.g. '1h') requires the prompt-caching beta header.
+      const hasExtendedTtl = strategy.breakpoints.some(bp => bp.ttl !== '5m');
+      if (hasExtendedTtl) {
+        betaFeatures.push('prompt-caching-2025-04-14');
+      }
+      if (betaFeatures.length > 0) {
+        headers['anthropic-beta'] = betaFeatures.join(',');
       }
 
       let res: Response;
@@ -257,11 +363,25 @@ export class AnthropicProvider implements LLMProvider {
 
       const { text, toolCalls } = fromAnthropicContent(contentBlocks);
 
+      // Record cache metrics for strategy adaptation.
+      cacheHitTracker.recordTurn({ inputTokens, cacheReadTokens, cacheWriteTokens });
+
+      const cap = getCacheCapability('anthropic');
+      // Exclude write tokens from the denominator: writes are a one-time cost and inflate the
+      // apparent miss rate on the first request. Read rate = reads / (billed input + reads).
+      const hitRateDenom = inputTokens + cacheReadTokens;
+      const hitRate = hitRateDenom > 0 ? cacheReadTokens / hitRateDenom : undefined;
+
       return {
         content: text,
         toolCalls,
         usage: { inputTokens, outputTokens, cacheReadTokens, cacheWriteTokens },
         stopReason,
+        cacheMetrics: {
+          strategy: cap.type === 'explicit' ? `explicit-${cap.maxBreakpoints}bp` : cap.type,
+          breakpointsPlaced,
+          hitRate,
+        },
       };
     });
   }

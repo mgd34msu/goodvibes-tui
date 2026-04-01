@@ -9,6 +9,7 @@ import {
   fromGeminiParts,
 } from './tool-formats.ts';
 import type { GeminiPart } from './tool-formats.ts';
+import { cacheHitTracker } from './cache-strategy.ts';
 
 const GEMINI_API_BASE = 'https://generativelanguage.googleapis.com/v1beta';
 const GEMINI_CACHE_TTL_SECONDS = 3600;
@@ -323,6 +324,11 @@ export class GeminiProvider implements LLMProvider {
       if (toolCalls.length === 0) {
         this.thoughtSignatures.clear();
       }
+
+      cacheHitTracker.recordTurn({
+        inputTokens,
+        cacheReadTokens,
+      });
 
       return {
         content: text,
