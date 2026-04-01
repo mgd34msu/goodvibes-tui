@@ -461,6 +461,172 @@ describe('write tool', () => {
   });
 
   // -------------------------------------------------------------------------
+  // Notebook validation
+  // -------------------------------------------------------------------------
+
+  describe('notebook validation', () => {
+    const validNotebook = JSON.stringify({
+      nbformat: 4,
+      nbformat_minor: 5,
+      metadata: { kernelspec: { display_name: 'Python 3', language: 'python', name: 'python3' } },
+      cells: [
+        { cell_type: 'code', source: 'print("hello")', metadata: {}, execution_count: null, outputs: [] },
+        { cell_type: 'markdown', source: '# Title', metadata: {} },
+        { cell_type: 'raw', source: ['line1\n', 'line2'], metadata: {} },
+      ],
+    });
+
+    test('valid notebook passes validation and gets written', async () => {
+      const result = await runWrite(tmpDir, {
+        files: [{ path: 'test.ipynb', content: validNotebook, mode: 'overwrite' }],
+      });
+      expect(result.success).toBe(true);
+      expect(existsSync(join(tmpDir, 'test.ipynb'))).toBe(true);
+    });
+
+    test('invalid JSON is rejected', async () => {
+      const result = await runWrite(tmpDir, {
+        files: [{ path: 'bad.ipynb', content: '{ not json }' }],
+      });
+      expect(result.success).toBe(false);
+      expect(result.error as string).toContain('Invalid JSON');
+    });
+
+    test('missing nbformat is rejected', async () => {
+      const nb = JSON.stringify({ cells: [] });
+      const result = await runWrite(tmpDir, {
+        files: [{ path: 'no-nbformat.ipynb', content: nb }],
+      });
+      expect(result.success).toBe(false);
+      expect(result.error as string).toContain('nbformat');
+    });
+
+    test('missing cells array is rejected', async () => {
+      const nb = JSON.stringify({ nbformat: 4 });
+      const result = await runWrite(tmpDir, {
+        files: [{ path: 'no-cells.ipynb', content: nb }],
+      });
+      expect(result.success).toBe(false);
+      expect(result.error as string).toContain('cells');
+    });
+
+    test('invalid cell_type is rejected', async () => {
+      const nb = JSON.stringify({
+        nbformat: 4,
+        cells: [{ cell_type: 'invalid', source: '' }],
+      });
+      const result = await runWrite(tmpDir, {
+        files: [{ path: 'bad-celltype.ipynb', content: nb }],
+      });
+      expect(result.success).toBe(false);
+      expect(result.error as string).toContain('cell_type');
+    });
+
+    test('missing source on a cell is rejected', async () => {
+      const nb = JSON.stringify({
+        nbformat: 4,
+        cells: [{ cell_type: 'code' }],
+      });
+      const result = await runWrite(tmpDir, {
+        files: [{ path: 'no-source.ipynb', content: nb }],
+      });
+      expect(result.success).toBe(false);
+      expect(result.error as string).toContain('source');
+    });
+
+    test('code cell with outputs as non-array is rejected', async () => {
+      const nb = JSON.stringify({
+        nbformat: 4,
+        cells: [{ cell_type: 'code', source: '', outputs: 'not-an-array' }],
+      });
+      const result = await runWrite(tmpDir, {
+        files: [{ path: 'bad-outputs.ipynb', content: nb }],
+      });
+      expect(result.success).toBe(false);
+      expect(result.error as string).toContain('outputs');
+    });
+
+    test('empty cells array is valid', async () => {
+      const nb = JSON.stringify({ nbformat: 4, cells: [] });
+      const result = await runWrite(tmpDir, {
+        files: [{ path: 'empty-cells.ipynb', content: nb }],
+      });
+      expect(result.success).toBe(true);
+      expect(existsSync(join(tmpDir, 'empty-cells.ipynb'))).toBe(true);
+    });
+
+    test('cell source as string is valid', async () => {
+      const nb = JSON.stringify({
+        nbformat: 4,
+        cells: [{ cell_type: 'code', source: 'x = 1', outputs: [], execution_count: null }],
+      });
+      const result = await runWrite(tmpDir, {
+        files: [{ path: 'src-string.ipynb', content: nb }],
+      });
+      expect(result.success).toBe(true);
+    });
+
+    test('cell source as string[] is valid', async () => {
+      const nb = JSON.stringify({
+        nbformat: 4,
+        cells: [{ cell_type: 'markdown', source: ['# Hello\n', 'world'] }],
+      });
+      const result = await runWrite(tmpDir, {
+        files: [{ path: 'src-array.ipynb', content: nb }],
+      });
+      expect(result.success).toBe(true);
+    });
+
+    test('non-.ipynb files bypass notebook validation entirely', async () => {
+      // Invalid JSON that would fail notebook validation — should succeed for .ts
+      const result = await runWrite(tmpDir, {
+        files: [{ path: 'not-a-notebook.ts', content: '{ not json }' }],
+      });
+      expect(result.success).toBe(true);
+      expect(readFileSync(join(tmpDir, 'not-a-notebook.ts'), 'utf-8')).toBe('{ not json }');
+    });
+
+    test('re-serialization preserves metadata and kernelspec', async () => {
+      const result = await runWrite(tmpDir, {
+        files: [{ path: 'meta.ipynb', content: validNotebook, mode: 'overwrite' }],
+        verbosity: 'minimal',
+      });
+      expect(result.success).toBe(true);
+      const written = readFileSync(join(tmpDir, 'meta.ipynb'), 'utf-8');
+      const parsed = JSON.parse(written) as Record<string, unknown>;
+      const meta = parsed['metadata'] as Record<string, unknown>;
+      expect(meta).toBeDefined();
+      const kernelspec = meta['kernelspec'] as Record<string, unknown>;
+      expect(kernelspec['name']).toBe('python3');
+      expect(parsed['nbformat']).toBe(4);
+    });
+
+    test('case-insensitive extension check (.IPYNB works)', async () => {
+      const result = await runWrite(tmpDir, {
+        files: [{ path: 'UPPER.IPYNB', content: validNotebook }],
+      });
+      expect(result.success).toBe(true);
+      expect(existsSync(join(tmpDir, 'UPPER.IPYNB'))).toBe(true);
+    });
+
+    test('case-insensitive extension check (.Ipynb works)', async () => {
+      const result = await runWrite(tmpDir, {
+        files: [{ path: 'Mixed.Ipynb', content: validNotebook }],
+      });
+      expect(result.success).toBe(true);
+      expect(existsSync(join(tmpDir, 'Mixed.Ipynb'))).toBe(true);
+    });
+
+    test('case-insensitive extension: uppercase invalid JSON is rejected', async () => {
+      const result = await runWrite(tmpDir, {
+        files: [{ path: 'bad.IPYNB', content: '{ broken' }],
+      });
+      expect(result.success).toBe(false);
+      expect(result.error as string).toContain('Invalid JSON');
+    });
+  });
+
+  // -------------------------------------------------------------------------
   // State integration
   // -------------------------------------------------------------------------
 

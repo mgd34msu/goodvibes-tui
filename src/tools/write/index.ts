@@ -9,6 +9,7 @@ import { ProjectIndex } from '../../state/project-index.ts';
 import { FileUndoManager } from '../../state/file-undo.ts';
 import { configManager } from '../../config/index.ts';
 import { autoHealer } from '../shared/auto-heal.ts';
+import { isNotebookFile } from '../../utils/notebook.ts';
 import { logger } from '../../utils/logger.ts';
 import { recordChange } from '../../sessions/change-tracker.ts';
 
@@ -57,6 +58,66 @@ function resolveContent(fileInput: WriteFileInput): string {
 function buildBackupPath(resolvedPath: string, projectRoot: string): string {
   const rel = relative(projectRoot, resolvedPath);
   return join(projectRoot, '.goodvibes', '.backups', `${rel}.${Date.now()}`);
+}
+
+/** Module-level constant — avoids re-allocating the Set on every validation call. */
+const VALID_CELL_TYPES = new Set(['code', 'markdown', 'raw']);
+
+/**
+ * Validate that a string contains well-formed Jupyter notebook JSON.
+ * Checks required top-level fields and per-cell structure.
+ * On success, returns the parsed notebook object to avoid a redundant JSON.parse at the call site.
+ */
+function validateNotebookContent(
+  content: string,
+): { valid: true; notebook: Record<string, unknown> } | { valid: false; error: string } {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(content);
+  } catch (err) {
+    return { valid: false, error: `Invalid JSON: ${err instanceof Error ? err.message : String(err)}` };
+  }
+
+  if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+    return { valid: false, error: 'Notebook must be a JSON object' };
+  }
+
+  const nb = parsed as Record<string, unknown>;
+
+  if (!('nbformat' in nb) || typeof nb['nbformat'] !== 'number') {
+    return { valid: false, error: "Notebook must have a numeric 'nbformat' field" };
+  }
+
+  if (!('cells' in nb) || !Array.isArray(nb['cells'])) {
+    return { valid: false, error: "Notebook must have a 'cells' array" };
+  }
+
+  for (let i = 0; i < (nb['cells'] as unknown[]).length; i++) {
+    const cell = (nb['cells'] as unknown[])[i];
+    if (typeof cell !== 'object' || cell === null || Array.isArray(cell)) {
+      return { valid: false, error: `Cell ${i} must be an object` };
+    }
+    const c = cell as Record<string, unknown>;
+
+    if (!('cell_type' in c) || !VALID_CELL_TYPES.has(c['cell_type'] as string)) {
+      return { valid: false, error: `Cell ${i} has missing or invalid 'cell_type' (must be 'code', 'markdown', or 'raw')` };
+    }
+
+    if (!('source' in c) || (typeof c['source'] !== 'string' && !Array.isArray(c['source']))) {
+      return { valid: false, error: `Cell ${i} must have a 'source' field (string or array)` };
+    }
+
+    if (c['cell_type'] === 'code') {
+      if ('outputs' in c && !Array.isArray(c['outputs'])) {
+        return { valid: false, error: `Cell ${i} 'outputs' must be an array` };
+      }
+      if ('execution_count' in c && c['execution_count'] !== null && typeof c['execution_count'] !== 'number') {
+        return { valid: false, error: `Cell ${i} 'execution_count' must be a number or null` };
+      }
+    }
+  }
+
+  return { valid: true, notebook: nb };
 }
 
 /**
@@ -124,7 +185,22 @@ function processSingleWrite(
     }
   }
 
-  const content = resolveContent(fileInput);
+  let content = resolveContent(fileInput);
+
+  // Notebook validation and normalization
+  if (isNotebookFile(resolvedPath)) {
+    const validation = validateNotebookContent(content);
+    if (!validation.valid) {
+      return {
+        ok: false,
+        error: `Invalid notebook content for '${fileInput.path}': ${validation.error}`,
+      };
+    }
+    // Re-serialize with consistent formatting (1-space indent, trailing newline).
+    // Use the already-parsed notebook from the validator to avoid a redundant JSON.parse.
+    content = JSON.stringify(validation.notebook, null, 1) + '\n';
+  }
+
   const byteSize = Buffer.byteLength(content, encoding);
 
   // Check existence

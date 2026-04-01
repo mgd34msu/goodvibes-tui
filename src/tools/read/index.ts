@@ -2,6 +2,7 @@ import { openSync, readSync, closeSync, readFileSync, statSync } from 'node:fs';
 import { extname } from 'node:path';
 import { resolveAndValidatePath } from '../../utils/path-safety.ts';
 import { logger } from '../../utils/logger.ts';
+import { isNotebookFile } from '../../utils/notebook.ts';
 import { FileStateCache } from '../../state/file-cache.ts';
 import { ProjectIndex } from '../../state/project-index.ts';
 import type { Tool, ToolDefinition } from '../../types/tools.ts';
@@ -276,10 +277,6 @@ function isPdfFile(ext: string): boolean {
   return ext.toLowerCase() === '.pdf';
 }
 
-function isNotebookFile(ext: string): boolean {
-  return ext.toLowerCase() === '.ipynb';
-}
-
 /**
  * Extract text from PDF binary content by scanning stream sections.
  * Mirrors the approach used in the fetch tool.
@@ -537,7 +534,7 @@ async function readOneFile(
   }
 
   // Jupyter notebook files: parse and format as structured text
-  if (isNotebookFile(ext)) {
+  if (isNotebookFile(resolvedPath)) {
     let nbRaw: string;
     let nbByteSize = 0;
     try {
