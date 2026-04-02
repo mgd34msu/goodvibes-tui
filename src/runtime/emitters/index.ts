@@ -39,3 +39,4 @@ export * from './permissions.ts';
 export * from './plugins.ts';
 export * from './mcp.ts';
 export * from './transport.ts';
+export * from './compaction.ts';

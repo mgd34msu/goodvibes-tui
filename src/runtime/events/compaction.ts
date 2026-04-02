@@ -12,7 +12,7 @@ export type CompactionEvent =
   /** Collapse: full context collapsed into a single summary message. */
   | { type: 'COMPACTION_COLLAPSE'; sessionId: string; messageCount: number; tokensBefore: number; tokensAfter: number }
   /** Auto-compaction: automatic compaction triggered by threshold breach. */
-  | { type: 'COMPACTION_AUTOCOMPACT'; sessionId: string; strategy: string; tokensBefore: number }
+  | { type: 'COMPACTION_AUTOCOMPACT'; sessionId: string; strategy: string; tokensBefore: number; tokensAfter: number }
   /** Reactive compaction: triggered by an imminent context overflow. */
   | { type: 'COMPACTION_REACTIVE'; sessionId: string; tokenCount: number; limit: number }
   /** Compaction boundary commit: the compacted state has been persisted. */
@@ -20,7 +20,9 @@ export type CompactionEvent =
   /** Compaction completed successfully. */
   | { type: 'COMPACTION_DONE'; sessionId: string; strategy: string; tokensBefore: number; tokensAfter: number; durationMs: number }
   /** Compaction failed. */
-  | { type: 'COMPACTION_FAILED'; sessionId: string; strategy: string; error: string };
+  | { type: 'COMPACTION_FAILED'; sessionId: string; strategy: string; error: string }
+  /** Session resume repair pipeline completed. */
+  | { type: 'COMPACTION_RESUME_REPAIR'; sessionId: string; repaired: boolean; actionsCount: number; safeToResume: boolean };
 
 /** All compaction event type literals as a union. */
 export type CompactionEventType = CompactionEvent['type'];
