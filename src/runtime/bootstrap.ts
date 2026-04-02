@@ -314,11 +314,23 @@ export async function bootstrapRuntime(
 
   bootstrapUnsubs.push(bus.on('wrfc:chain-passed', ({ chainId }: { chainId: string }) => {
     conversation.addSystemMessage(`[WRFC] \u2713 Chain ${chainId.slice(0, 12)} PASSED \u2014 all gates clear`);
+    // Re-check cohort completion now that a WRFC chain finished
+    const chain = WrfcController.getInstance(bus).getChain(chainId);
+    if (chain?.engineerAgentId) {
+      const record = AgentManager.getInstance().getStatus(chain.engineerAgentId);
+      checkCohortCompletion(record ?? null);
+    }
     bus.emit('render:request');
   }));
 
   bootstrapUnsubs.push(bus.on('wrfc:chain-failed', ({ chainId, reason }: { chainId: string; reason: string }) => {
     conversation.addSystemMessage(`[WRFC] \u2717 Chain ${chainId.slice(0, 12)} FAILED: ${reason.slice(0, 80)}`);
+    // Re-check cohort completion now that a WRFC chain finished
+    const chain = WrfcController.getInstance(bus).getChain(chainId);
+    if (chain?.engineerAgentId) {
+      const record = AgentManager.getInstance().getStatus(chain.engineerAgentId);
+      checkCohortCompletion(record ?? null);
+    }
     bus.emit('render:request');
   }));
 
@@ -366,10 +378,23 @@ export async function bootstrapRuntime(
   const checkCohortCompletion = (record: { cohort?: string } | null): void => {
     if (!record?.cohort) return;
     const cohortAgents = AgentManager.getInstance().listByCohort(record.cohort);
-    const allDone = cohortAgents.every(a => a.status !== 'running' && a.status !== 'pending');
-    if (allDone) {
-      conversation.addSystemMessage(buildCohortReport(record.cohort));
-    }
+    const allAgentsDone = cohortAgents.every(a => a.status !== 'running' && a.status !== 'pending');
+    if (!allAgentsDone) return;
+
+    // Also check that all WRFC chains for this cohort's agents are in terminal states
+    const wrfc = WrfcController.getInstance(bus);
+    const allChains = wrfc.listChains();
+    const cohortAgentIds = new Set(cohortAgents.map(a => a.id));
+    const cohortChains = allChains.filter(c =>
+      (c.engineerAgentId && cohortAgentIds.has(c.engineerAgentId)) ||
+      (c.reviewerAgentId && cohortAgentIds.has(c.reviewerAgentId)) ||
+      (c.fixerAgentId && cohortAgentIds.has(c.fixerAgentId))
+    );
+    const terminalStates = new Set(['passed', 'failed']);
+    const allChainsDone = cohortChains.every(c => terminalStates.has(c.state));
+    if (!allChainsDone) return;
+
+    conversation.addSystemMessage(buildCohortReport(record.cohort));
   };
 
   bootstrapUnsubs.push(bus.on('subagent:complete', ({ id }: { id: string }) => {
