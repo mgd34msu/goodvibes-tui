@@ -2,7 +2,7 @@
 
 A terminal AI coding agent with automated write-review-fix-check pipelines, multi-provider LLM support, and a vaporwave aesthetic.
 
-Version: **0.9.16**
+Version: **0.12.2**
 
 <!-- screenshot -->
 
@@ -146,6 +146,23 @@ Language intelligence powered by bundled LSP servers (TypeScript, Python, Bash, 
 - Encrypted secret storage (AES-256-GCM) via `/secrets`
 - Spawn tokens with HMAC + 1-hour TTL
 - HTTP listener with bearer auth, rate limiting, and localhost enforcement
+
+### Runtime Architecture
+- **Zustand vanilla store** — 19 domain slices (session, model, conversation, overlays, panels, permissions, tasks, agents, providerHealth, mcp, plugins, daemon, acp, integrations, telemetry, git, discovery, intelligence, uiPerf) as the single source of truth for all runtime state
+- **Runtime event system** — 12 domain event modules with discriminated unions, domain-scoped subscriptions, and immutable event envelopes with correlation IDs
+- **RuntimeHealthAggregator** — derives composite health from all domain slices; CascadeEngine applies 8 declarative cascade rules so degradation in one domain automatically affects dependent domains
+- **Phased tool executor** — 6-phase pipeline (validate → prehook → permission → execute → map → posthook) with AbortController cancellation and per-phase timeouts
+- **LayeredPolicyEvaluator** — 5-layer permission stack (safety → mode → session → policy → default) with 19 decision reason codes; safety layer is bypass-immune
+- **UnifiedTaskManager** — single lifecycle state machine for process, agent, ACP, and scheduled tasks with retry and parent/child tracking
+- **10 state machines** across plugin lifecycle (8-state), MCP lifecycle (7-state), task types, and WRFC chains
+- **OTel-compatible telemetry** — lightweight tracer/meter with no OTel SDK dependency, ExportQueue with bounded ring buffer, and OtlpExporter for batch export
+- **Bootstrap composition root** — initialization extracted from `main.ts` with explicit dependency ordering
+
+### Feature Flags
+- 8 runtime feature flags: `phasedTools`, `layeredPermissions`, `unifiedTasks`, `notificationRouter`, `pluginLifecycle`, `mcpLifecycle`, `remoteSubstrate`, `otelExport`
+- Enable/disable/kill lifecycle — kill permanently disables a flag for the session
+- Toggleable at runtime via the `/settings` modal Feature Flags tab; changes persist to `.goodvibes/config.json`
+- Subscriber pattern for reactive flag-change propagation with full audit log
 
 ### Configuration
 - Live config editing via `/config` or `/settings` modal
@@ -934,6 +951,20 @@ src/
 ├── git/                 — GitService wrapping simple-git
 ├── acp/                 — Agent Client Protocol (subagent child processes)
 ├── discovery/           — Local LLM scanner + MCP server auto-discovery
+├── runtime/
+│   ├── store/           — Zustand vanilla store with 19 domain slices and typed selectors
+│   ├── events/          — 12 domain event modules, RuntimeEventBus, typed emission wrappers
+│   ├── health/          — RuntimeHealthAggregator, CascadeEngine, partial degradation model
+│   ├── flags/           — 8 feature flags with enable/disable/kill lifecycle and audit log
+│   ├── executor/        — 6-phase phased tool executor with AbortController and per-phase timeouts
+│   ├── permissions/     — LayeredPolicyEvaluator, 5-layer stack, 19 decision reason codes
+│   ├── tasks/           — UnifiedTaskManager, 4 task adapters, retry with exponential backoff
+│   ├── notifications/   — NotificationRouter, 3-layer policy stack, batch collapsing
+│   ├── contracts/       — Schema versioning, MigrationRegistry, event validators (16)
+│   ├── otel/            — Lightweight tracer/meter, DomainBridge, ExportQueue, OtlpExporter
+│   ├── remote/          — ReconnectEngine, DurableIdentityManager, RemoteStateSyncer
+│   ├── compaction/      — 5 compaction strategies, resume repair pipeline
+│   └── bootstrap.ts     — Composition root: typed initialization with dependency ordering
 ├── panels/              — 20 sidebar panels (agent inspector, cost tracker, git, etc.)
 ├── integrations/        — Discord, Slack, GitHub webhook integrations
 ├── export/              — Markdown, JSON, HTML session export with redaction
@@ -955,6 +986,7 @@ src/
 - **Tree-sitter for code intelligence** — 17 language grammars (TypeScript, TSX, JavaScript, Python, Rust, Go, Java, C, C++, Ruby, Bash, JSON, YAML, TOML, CSS, HTML, Markdown) for structural analysis, outline extraction, and AST-level edits — with 6 (TypeScript, TSX, JavaScript, Python, JSON, CSS) embedded as WASM for instant startup
 - **Bundled language servers** — TypeScript, Python, Bash, CSS, HTML, and JSON language servers ship as npm dependencies and work out of the box. Rust (`rust-analyzer`) and Go (`gopls`) are downloaded automatically on first use with SHA256 integrity verification. No manual LSP setup required.
 - **SQL.js for analytics** — WASM SQLite for in-process tool call telemetry without a database server
+- **Zustand vanilla store** — no React dependency; the runtime store is a plain Zustand store with 19 domain slices and typed selectors, usable from any context (agents, tools, renderer, hooks)
 - **Agent Client Protocol** — subagents communicate via @agentclientprotocol/sdk over stdio ndJsonStream
 - **Plugin system** — manifest.json + sandboxed API surface with lifecycle hooks (init/activate/deactivate)
 - **Crash recovery** — periodic JSONL snapshots with recovery prompt on next startup
@@ -974,6 +1006,8 @@ bun run dev
 ```sh
 bun test
 ```
+
+565+ tests across contract, security, chaos, and UX anti-regression suites. Performance budget gate runs as part of CI — the build fails if any of the 5 perf budgets (store update latency, event dispatch latency, tool execution overhead, compaction duration, startup time) are exceeded.
 
 ### Build standalone binary
 

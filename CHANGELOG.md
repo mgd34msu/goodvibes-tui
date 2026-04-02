@@ -4,6 +4,174 @@ All notable changes to GoodVibes TUI.
 
 ---
 
+## [0.12.2] — 2026-04-02
+
+### Cohort Completion Fix
+- Cohort completion now waits for full WRFC chains to finish (review + fix cycles), not just the engineer agent
+- Previously, cohort-complete fired as soon as the engineer agent finished, before the reviewer/fixer had run
+
+### Test Fixes
+- Fixed settings modal and input handler test suite failures introduced by modal navigation stack
+- Fixed renderer/settings-modal test assertions after viewport overlay changes
+
+---
+
+## [0.12.1] — 2026-04-02
+
+### Feature Flag Settings Modal
+- `/settings` modal now includes a Feature Flags tab for all 8 runtime feature flags
+- Toggle flags on/off at runtime; changes persist to `.goodvibes/config.json`
+- Modal navigation stack: Escape now navigates back through modal history instead of immediately closing
+- Settings modal viewport overlay fix: modal correctly fills viewport without layout bleed
+- Modal-factory list item border fix: border rendering corrected for list items in all modals
+
+---
+
+## [0.12.0] — 2026-04-02
+
+### Session Compaction v2 (Tier 6)
+- 5 compaction strategies: microcompact, collapse, autocompact, reactive, and boundary commit with lineage
+- Boundary commit strategy persists compaction lineage across sessions for traceable context history
+- Resume repair pipeline: detects and repairs broken session state on resume
+
+### OTel Export Reliability (Tier 6)
+- ExportQueue with bounded ring buffer — telemetry spans are never lost under export backpressure
+- OtlpExporter with batch export: spans are batched and exported on flush or queue threshold
+- Combined with the lightweight tracer/meter from Tier 4: full OTel-compatible pipeline with no SDK dependency
+
+### Ops Playbooks (Tier 6)
+- 5 machine-readable runbooks covering provider outage, memory pressure, plugin crash, MCP disconnect, and compaction failure
+
+### Model Picker Data Surface (Tier 7)
+- Enriched model picker entries with live health status, latency percentile stats, and fallback chain visualization
+- Health status sourced from RuntimeHealthAggregator; entries marked degraded or unavailable in real time
+
+### State Inspector (Tier 7)
+- New diagnostics panel: domain-filtered Zustand store snapshots
+- Bounded transition log (last 200 entries) with timestamp, domain, and change summary
+- Subscription tracking: shows which UI components are subscribed to each domain slice
+
+### Event Contracts (Tier 7)
+- 16 runtime event validators covering all domain event modules
+- Validators enforce discriminated union invariants at the EventBus dispatch boundary
+
+### UX Anti-Regression Tests (Tier 7)
+- 55 tests across 5 suites covering modal navigation, settings persistence, model picker enrichment, state inspector rendering, and event contract validation
+
+---
+
+## [0.11.0] — 2026-04-02
+
+### Plugin Lifecycle (Tier 4)
+- 8-state plugin lifecycle machine: unloaded → loading → loaded → activating → active → deactivating → inactive → error
+- Deny-by-default capability manifests: plugins declare required capabilities at load time; missing capabilities block activation
+- Safe hot reload protocol: deactivate → unload → reload → activate with rollback on failure
+
+### MCP Lifecycle (Tier 4)
+- 7-state MCP server lifecycle machine: disconnected → connecting → connected → ready → degraded → reconnecting → failed
+- Per-server permissions: MCP servers declare tool capability requirements in `mcp.json`
+- Schema freshness tracking: detects and re-fetches stale tool schemas without full reconnect
+
+### OTel Foundation (Tier 4)
+- Lightweight tracer and meter implementing OTel-compatible interfaces — no OTel SDK dependency
+- Turn spans, tool spans, and LLM request spans with structured attributes
+- Local JSON lines ledger exporter for offline telemetry review
+
+### Diagnostics (Tier 4)
+- Data providers for 6 panel types: health, provider stats, plugin state, MCP state, task queue, and telemetry
+
+### Remote Substrate (Tier 5)
+- Transport contracts for remote agent connections with pluggable backend
+- ReconnectEngine with exponential backoff and message replay on reconnect
+- DurableIdentityManager: stable agent identity across disconnects
+- RemoteStateSyncer: reconciles local Zustand store with remote state on reconnect
+
+### OTel Lifecycle Instrumentation (Tier 5)
+- 9 span creators covering session, tool, agent, MCP, plugin, compaction, LLM, permission, and task domains
+- DomainBridge: automatically creates and closes spans from domain event emissions — no manual span management required
+
+### Security Tests (Tier 5)
+- 4 suites: permission bypass attempts, command injection vectors, plugin capability escalation, path traversal
+- All 4 suites at 100% pass rate against the Tier 2 permission and Tier 4 plugin systems
+
+### Chaos Tests (Tier 5)
+- 5 suites: provider failures under load, hook execution failures, MCP reconnect under message loss, plugin crash and recovery, health cascade propagation
+- Validates the CascadeEngine, ReconnectEngine, and plugin lifecycle machine under adversarial conditions
+
+### Performance Budgets (Tier 5)
+- 5 perf budgets: store update latency, event dispatch latency, tool execution overhead, compaction duration, and startup time
+- PerfMonitor samples against budgets at runtime; CI gate script fails the build if any budget is exceeded
+
+---
+
+## [0.10.0] — 2026-04-02
+
+### Zustand Runtime Store (Tier 0)
+- Zustand vanilla store (no React dependency) as the single source of truth for all runtime state
+- 19 domain slices: session, model, conversation, overlays, panels, permissions, tasks, agents, providerHealth, mcp, plugins, daemon, acp, integrations, telemetry, git, discovery, intelligence, uiPerf
+- Typed selectors for all 19 domains with memoization
+
+### Runtime Event System (Tier 0)
+- 12 domain event modules with discriminated unions (no stringly-typed events)
+- RuntimeEventBus with domain-scoped subscriptions and typed emission wrappers
+- Immutable event envelope factory with correlation IDs for cross-domain tracing
+
+### Runtime Health (Tier 0)
+- RuntimeHealthAggregator: derives composite health from all domain slices
+- CascadeEngine with 8 declarative cascade rules: health degradation in one domain can suppress or alter behavior in dependent domains
+- Partial degradation model: the system continues operating in a reduced state rather than failing completely
+
+### Bootstrap Composition Root (Tier 0)
+- Extracted initialization logic from `main.ts` into a typed bootstrap composition root
+- Initialization order is explicit and dependency-checked at startup
+
+### Feature Flags (Tier 1)
+- 8 feature flags: `phasedTools`, `layeredPermissions`, `unifiedTasks`, `notificationRouter`, `pluginLifecycle`, `mcpLifecycle`, `remoteSubstrate`, `otelExport`
+- Each flag supports enable/disable/kill lifecycle — kill permanently disables a flag for the session
+- `runtimeToggleable` enforcement: flags that cannot be toggled after initialization are locked on first use
+- Subscriber pattern for reactive flag-change propagation
+- Audit log: all flag changes recorded with timestamp and caller context
+
+### Phased Tool Executor (Tier 1)
+- 6-phase execution pipeline: validate → prehook → permission → execute → map → posthook
+- AbortController-based cancellation at every phase boundary
+- Per-phase timeouts with configurable defaults
+- Execution records: every tool invocation produces a structured record with phase timings
+- All 6 core tools wrapped with PhasedTool metadata; ToolRegistryBridge enables gradual rollout alongside existing tools
+
+### Permissions v2 (Tier 2)
+- LayeredPolicyEvaluator with 5-layer priority stack: safety → mode → session → policy → default
+- 19 decision reason codes for auditability
+- Safety layer is bypass-immune: deny decisions from the safety layer cannot be overridden by higher layers
+
+### Command Normalization (Tier 2)
+- Shell command tokenizer, segmenter, canonicalizer, and classifier
+- Normalizes shell syntax variations before permission evaluation
+
+### Compatibility Contracts (Tier 2)
+- Schema versioning for 5 domains: config, session, agent, plugin, mcp
+- MigrationRegistry with pathfinding: finds the shortest migration path between any two schema versions
+
+### Error Propagation (Tier 2)
+- HealthStoreWiring connects the RuntimeHealthAggregator to the CascadeEngine, effect handlers, and EventBus
+- Health degradation automatically triggers cascade rules and emits typed health events
+
+### Task Unification (Tier 3)
+- UnifiedTaskManager: single lifecycle state machine for all task types (process, agent, ACP, scheduled)
+- Retry with exponential backoff and configurable max attempts
+- Parent/child task tracking for WRFC chain visibility
+- 4 task adapters: ProcessTaskAdapter, AgentTaskAdapter, AcpTaskAdapter, SchedulerTaskAdapter
+
+### Notification Router (Tier 3)
+- NotificationRouter with 3-layer policy stack: global → domain → per-notification
+- Per-domain verbosity configuration
+- Batch collapsing: repeated notifications of the same type are collapsed into a single summary
+
+### Contract Tests (Tier 3)
+- 128 tests across 6 suites covering event contracts, permission contracts, task lifecycle contracts, tool phase contracts, notification routing contracts, and health cascade contracts
+
+---
+
 ## [0.9.16] — 2026-04-01
 
 ### Provider Caching Strategy Layer
