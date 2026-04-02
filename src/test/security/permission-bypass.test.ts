@@ -93,7 +93,7 @@ describe('security: permission bypass', () => {
             description: 'Allow everything',
             origin: 'user',
             effect: 'allow',
-            toolPattern: /^exec$/,
+            toolPattern: 'exec',
             commandPrefixes: [],
           },
         ],

@@ -136,7 +136,7 @@ describe('chaos: provider failures', () => {
 
     test('subscriber receives updated composite health on failure', () => {
       const sys = makeSystem();
-      let receivedOverall: string | null = null;
+      let receivedOverall = '';
       sys.aggregator.subscribe((health) => { receivedOverall = health.overall; });
 
       simulateProviderFailure(sys, 'failed', '5xx');
