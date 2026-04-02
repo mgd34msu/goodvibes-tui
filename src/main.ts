@@ -382,6 +382,7 @@ async function main() {
       input.modelPicker.pinnedIds = new Set(pinned);
     });
     void input.modelPicker.loadRecentModels().catch(() => {}); // non-blocking, fire-and-forget
+    input.modalOpened('modelPicker');
     input.modelPicker.open(models, runtime.model);
     bus.emit('render:request');
   };
@@ -389,6 +390,7 @@ async function main() {
   commandContext.openProviderPicker = () => {
     const providers = [...new Set(providerRegistry.listModels().map(m => m.provider))];
     input.modelPicker.configuredProviders = new Set(getConfiguredProviderIds());
+    input.modalOpened('modelPicker');
     input.modelPicker.openProviders(providers, runtime.provider);
     bus.emit('render:request');
   };
@@ -398,36 +400,43 @@ async function main() {
   };
 
   commandContext.openContextInspector = () => {
+    input.modalOpened('contextInspector');
     input.contextInspectorModal.open();
     bus.emit('render:request');
   };
 
   commandContext.openBookmarkModal = () => {
+    input.modalOpened('bookmark');
     input.bookmarkModal.open();
     bus.emit('render:request');
   };
 
   commandContext.openHelpOverlay = () => {
+    if (!input.helpOverlayActive) input.modalOpened('help');
     input.helpOverlayActive = !input.helpOverlayActive;
     input.helpScrollOffset = 0;
   };
   commandContext.openShortcutsOverlay = () => {
+    if (!input.shortcutsOverlayActive) input.modalOpened('shortcuts');
     input.shortcutsOverlayActive = !input.shortcutsOverlayActive;
     input.shortcutsScrollOffset = 0;
     bus.emit('render:request');
   };
 
   commandContext.openProfilePicker = () => {
+    input.modalOpened('profilePicker');
     input.profilePickerModal.open();
     bus.emit('render:request');
   };
 
   commandContext.openSettingsModal = () => {
+    input.modalOpened('settings');
     input.settingsModal.open(configManager, ctx.featureFlags);
     bus.emit('render:request');
   };
 
   commandContext.openSessionPicker = () => {
+    input.modalOpened('sessionPicker');
     input.sessionPickerModal.open();
     bus.emit('render:request');
   };
@@ -694,7 +703,11 @@ async function main() {
       viewport.push(...ciLines);
     }
     if (input.settingsModal.active) {
-      viewport.push(...renderSettingsModal(input.settingsModal, width));
+      const smLines = renderSettingsModal(input.settingsModal, width);
+      const smStart = Math.max(0, vHeight - smLines.length);
+      viewport.length = Math.min(viewport.length, smStart);
+      while (viewport.length < smStart) viewport.push(createEmptyLine(width));
+      viewport.push(...smLines);
     }
 
     if (input.sessionPickerModal.active) {
@@ -872,6 +885,7 @@ async function main() {
     render();
   }));
   unsubs.push(bus.on('input:submit', ({ text, content }) => {
+    input.clearModalStack();
     scrollLocked = true; // Re-lock on any user input
     // Inline model switching: @model:<model-id> anywhere in input
     // Strips the @model: token and switches the active model before submitting.

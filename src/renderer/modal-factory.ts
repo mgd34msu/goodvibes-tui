@@ -215,7 +215,7 @@ export class ModalFactory {
       ? truncateToWidth(text, contentW - 3) + '\u2026'
       : text;
     const padded = displayText + ' '.repeat(Math.max(0, contentW - 2 - getDisplayWidth(displayText)));
-    const row = pad + '\u2502 ' + indicator + padded + '\u2502';
+    const row = pad + '\u2502 ' + indicator + padded + ' \u2502';
     const cellStyle: Partial<Cell> = selected
       ? { fg: s.selectedFg, bg: s.selectedBg, bold: true }
       : { fg: s.textFg };

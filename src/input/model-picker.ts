@@ -122,6 +122,8 @@ export const POPULAR_PROVIDERS: ReadonlySet<string> = new Set([
 export class ModelPickerModal {
   public active = false;
   public mode: PickerMode = 'model';
+  /** Tracks the mode we came from, for back-navigation. */
+  public previousMode: PickerMode | null = null;
   public selectedIndex = 0;
   /** Scroll offset for the visible item window (tracks first visible item index). */
   public scrollOffset = 0;
@@ -195,6 +197,7 @@ export class ModelPickerModal {
 
   /** Open showing providers first — entry point for /provider */
   openProviders(providers: string[], currentProvider: string): void {
+    this.previousMode = null;
     this.providers = providers;
     this.mode = 'provider';
     this.active = true;
@@ -209,6 +212,7 @@ export class ModelPickerModal {
 
   /** Transition to model list filtered by provider (called from provider mode Enter). */
   showModelsForProvider(models: ModelDefinition[], _provider: string): void {
+    this.previousMode = 'provider';
     this.models = models;
     this.mode = 'model';
     this.query = '';
@@ -223,6 +227,7 @@ export class ModelPickerModal {
 
   /** Transition to effort picker after model is chosen. */
   showEffortPicker(model: ModelDefinition, currentEffort: string): void {
+    this.previousMode = 'model';
     this.pendingModel = model;
     this.effortLevels = model.reasoningEffort ?? [];
     this.mode = 'effort';
