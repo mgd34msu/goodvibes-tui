@@ -78,7 +78,7 @@ export interface RuntimeContext {
    * Gates all new subsystems introduced in Tier 1 and beyond.
    * Optional until all consumers have been migrated.
    */
-  featureFlags?: FeatureFlagManager;
+  featureFlags: FeatureFlagManager;
 
   // ── Managers ────────────────────────────────────────────────────────
 

@@ -7,6 +7,7 @@ import { join } from 'path';
 import { tmpdir } from 'os';
 import { SettingsModal, SETTINGS_CATEGORIES } from '../../input/settings-modal.ts';
 import { ConfigManager } from '../../config/manager.ts';
+import { FeatureFlagManager } from '../../runtime/feature-flags/manager.ts';
 import { renderSettingsModal } from '../../renderer/settings-modal.ts';
 import { lineToString, linesToText } from '../setup.ts';
 
@@ -21,13 +22,15 @@ function makeTmpDir(): string {
 describe('renderSettingsModal', () => {
   let tmpDir: string;
   let cm: ConfigManager;
+  let ffm: FeatureFlagManager;
   let modal: SettingsModal;
 
   beforeEach(() => {
     tmpDir = makeTmpDir();
     cm = new ConfigManager({ workingDir: tmpDir });
+    ffm = new FeatureFlagManager();
     modal = new SettingsModal();
-    modal.open(cm);
+    modal.open(cm, ffm);
   });
 
   afterEach(() => {

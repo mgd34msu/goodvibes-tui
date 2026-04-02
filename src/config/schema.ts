@@ -2,6 +2,9 @@
  * Config schema definitions and metadata for goodvibes-tui.
  */
 
+/** Persisted state for a single feature flag in the config file. */
+export type PersistedFlagState = 'enabled' | 'disabled';
+
 export type PermissionMode = 'prompt' | 'allow-all' | 'custom';
 export type PermissionAction = 'allow' | 'prompt' | 'deny';
 
@@ -100,6 +103,10 @@ export interface GoodVibesConfig {
   // NOTE: notifications.webhookUrls is an array and does not fit the scalar-value dot-path config API.
   // Access via configManager.getCategory('notifications') or mergeCategory('notifications', ...).
   notifications: NotificationsConfig;
+
+  // NOTE: featureFlags does not use the scalar dot-path config API.
+  // Access via configManager.getCategory('featureFlags') or mergeCategory('featureFlags', ...).
+  featureFlags: Record<string, PersistedFlagState>;
 }
 
 export interface ConfigSetting {
@@ -354,6 +361,7 @@ export const DEFAULT_CONFIG: GoodVibesConfig = {
   notifications: {
     webhookUrls: [],
   },
+  featureFlags: {},
 };
 
 export const CONFIG_SCHEMA: ConfigSetting[] = [
