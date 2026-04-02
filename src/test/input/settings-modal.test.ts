@@ -7,6 +7,7 @@ import { join } from 'path';
 import { tmpdir } from 'os';
 import { SettingsModal, SETTINGS_CATEGORIES } from '../../input/settings-modal.ts';
 import { ConfigManager } from '../../config/manager.ts';
+import { FeatureFlagManager } from '../../runtime/feature-flags/manager.ts';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -25,11 +26,13 @@ function makeTmpDir(): string {
 describe('SettingsModal', () => {
   let tmpDir: string;
   let cm: ConfigManager;
+  let ffm: FeatureFlagManager;
   let modal: SettingsModal;
 
   beforeEach(() => {
     tmpDir = makeTmpDir();
     cm = new ConfigManager({ workingDir: tmpDir });
+    ffm = new FeatureFlagManager();
     modal = new SettingsModal();
   });
 
@@ -42,7 +45,7 @@ describe('SettingsModal', () => {
   });
 
   test('open() activates modal and loads config groups', () => {
-    modal.open(cm);
+    modal.open(cm, ffm);
     expect(modal.active).toBe(true);
     expect(modal.categoryIndex).toBe(0);
     expect(modal.selectedIndex).toBe(0);
@@ -50,7 +53,7 @@ describe('SettingsModal', () => {
   });
 
   test('open() populates all categories', () => {
-    modal.open(cm);
+    modal.open(cm, ffm);
     for (const cat of SETTINGS_CATEGORIES) {
       const items = modal.groups.get(cat);
       expect(items).toBeDefined();
@@ -59,25 +62,25 @@ describe('SettingsModal', () => {
   });
 
   test('currentCategory returns correct category', () => {
-    modal.open(cm);
+    modal.open(cm, ffm);
     expect(modal.currentCategory).toBe(SETTINGS_CATEGORIES[0]);
   });
 
   test('nextCategory cycles through categories', () => {
-    modal.open(cm);
+    modal.open(cm, ffm);
     const initial = modal.categoryIndex;
     modal.nextCategory();
     expect(modal.categoryIndex).toBe((initial + 1) % SETTINGS_CATEGORIES.length);
   });
 
   test('prevCategory cycles backwards', () => {
-    modal.open(cm);
+    modal.open(cm, ffm);
     modal.prevCategory();
     expect(modal.categoryIndex).toBe(SETTINGS_CATEGORIES.length - 1);
   });
 
   test('nextCategory resets selectedIndex to 0', () => {
-    modal.open(cm);
+    modal.open(cm, ffm);
     modal.moveDown();
     modal.moveDown();
     modal.nextCategory();
@@ -85,21 +88,21 @@ describe('SettingsModal', () => {
   });
 
   test('moveDown increments selectedIndex', () => {
-    modal.open(cm);
+    modal.open(cm, ffm);
     const before = modal.selectedIndex;
     modal.moveDown();
     expect(modal.selectedIndex).toBe(before + 1);
   });
 
   test('moveUp wraps around to last item', () => {
-    modal.open(cm);
+    modal.open(cm, ffm);
     modal.moveUp();
     const len = modal.currentItems.length;
     expect(modal.selectedIndex).toBe(len - 1);
   });
 
   test('getSelected returns the selected SettingEntry', () => {
-    modal.open(cm);
+    modal.open(cm, ffm);
     const entry = modal.getSelected();
     expect(entry).not.toBeNull();
     expect(entry!.setting).toBeDefined();
@@ -107,7 +110,7 @@ describe('SettingsModal', () => {
   });
 
   test('activateSelected toggles boolean setting', () => {
-    modal.open(cm);
+    modal.open(cm, ffm);
     // Navigate to a boolean setting (display.stream is first in display)
     const items = modal.currentItems;
     const boolIdx = items.findIndex(e => e.setting.type === 'boolean');
@@ -123,7 +126,7 @@ describe('SettingsModal', () => {
   });
 
   test('activateSelected enters editingMode for string setting', () => {
-    modal.open(cm);
+    modal.open(cm, ffm);
     // Navigate to a string setting (display.theme)
     const items = modal.currentItems;
     const strIdx = items.findIndex(e => e.setting.type === 'string');
@@ -136,7 +139,7 @@ describe('SettingsModal', () => {
   });
 
   test('editChar appends to editBuffer', () => {
-    modal.open(cm);
+    modal.open(cm, ffm);
     const items = modal.currentItems;
     const strIdx = items.findIndex(e => e.setting.type === 'string');
     for (let i = 0; i < strIdx; i++) modal.moveDown();
@@ -147,7 +150,7 @@ describe('SettingsModal', () => {
   });
 
   test('editBackspace removes last char', () => {
-    modal.open(cm);
+    modal.open(cm, ffm);
     const items = modal.currentItems;
     const strIdx = items.findIndex(e => e.setting.type === 'string');
     for (let i = 0; i < strIdx; i++) modal.moveDown();
@@ -158,7 +161,7 @@ describe('SettingsModal', () => {
   });
 
   test('cancelEdit exits editingMode without saving', () => {
-    modal.open(cm);
+    modal.open(cm, ffm);
     const items = modal.currentItems;
     const strIdx = items.findIndex(e => e.setting.type === 'string');
     for (let i = 0; i < strIdx; i++) modal.moveDown();
@@ -173,7 +176,7 @@ describe('SettingsModal', () => {
   });
 
   test('commitEdit saves string value', () => {
-    modal.open(cm);
+    modal.open(cm, ffm);
     // Go to provider category which has model (string)
     while (modal.currentCategory !== 'provider') modal.nextCategory();
     const items = modal.currentItems;
@@ -187,7 +190,7 @@ describe('SettingsModal', () => {
   });
 
   test('close() deactivates modal and clears editing state', () => {
-    modal.open(cm);
+    modal.open(cm, ffm);
     modal.editingMode = true;
     modal.editBuffer = 'partial';
     modal.close();
@@ -197,7 +200,7 @@ describe('SettingsModal', () => {
   });
 
   test('navigating categories does not change settings in other categories', () => {
-    modal.open(cm);
+    modal.open(cm, ffm);
     modal.nextCategory();
     const items = modal.currentItems;
     expect(items.length).toBeGreaterThan(0);
@@ -207,7 +210,7 @@ describe('SettingsModal', () => {
   });
 
   test('editingMode blocks category and direction navigation', () => {
-    modal.open(cm);
+    modal.open(cm, ffm);
     modal.editingMode = true;
     const catBefore = modal.categoryIndex;
     const idxBefore = modal.selectedIndex;

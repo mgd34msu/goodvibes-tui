@@ -423,7 +423,7 @@ async function main() {
   };
 
   commandContext.openSettingsModal = () => {
-    input.settingsModal.open(configManager);
+    input.settingsModal.open(configManager, ctx.featureFlags);
     bus.emit('render:request');
   };
 
