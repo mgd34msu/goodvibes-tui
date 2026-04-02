@@ -627,6 +627,10 @@ export class InputHandler {
    * @param name - The modal identifier (e.g. 'settings', 'help', 'process').
    */
   public modalOpened(name: string): void {
+    // If no modal is currently active, this is a fresh open — clear any stale stack
+    if (this.activeModalName() === null && this.modalStack.length > 0) {
+      this.modalStack.length = 0;
+    }
     this.modalStack.push(name);
   }
 
