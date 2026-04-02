@@ -38,6 +38,10 @@ export type {
   CascadeAppliedEvent,
 } from './health/types.ts';
 
+// Notifications
+export { NotificationRouter, createNotificationRouter } from './notifications/index.ts';
+export type { Notification, NotificationLevel, NotificationTarget, DomainVerbosity, RoutingDecision } from './notifications/types.ts';
+
 // Bootstrap
 export { bootstrapRuntime } from './bootstrap.ts';
 export type { RuntimeContext, BootstrapOptions } from './context.ts';

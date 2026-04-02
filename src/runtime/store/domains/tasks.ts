@@ -42,7 +42,7 @@ export interface TaskRetryPolicy {
  * in the system has one of these in the tasks map.
  */
 export interface RuntimeTask {
-  /** Unique task ID (ulid). */
+  /** Unique task ID (uuid). */
   id: string;
   /** Task kind from the v3 taxonomy. */
   kind: TaskKind;
@@ -76,6 +76,18 @@ export interface RuntimeTask {
   // ── Retry ────────────────────────────────────────────────────────────────
   /** Retry policy (undefined = no retries). */
   retryPolicy?: TaskRetryPolicy;
+  /**
+   * Computed delay in ms before the next retry attempt.
+   * Set by TaskManager.failTask() when re-queuing. The task runner is
+   * responsible for not starting the task until `retryAt` has elapsed.
+   */
+  retryDelayMs?: number;
+  /**
+   * Epoch ms at which the task is eligible to run again after a retry re-queue.
+   * Computed as `Date.now() + retryDelayMs` by TaskManager.failTask().
+   * The task runner must not dequeue this task before this timestamp.
+   */
+  retryAt?: number;
 
   // ── Result ───────────────────────────────────────────────────────────────
   /** Exit code for exec tasks. */
