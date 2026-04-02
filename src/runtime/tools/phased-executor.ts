@@ -1,0 +1,310 @@
+import type { Tool, ToolCall, ToolResult } from '../../types/tools.ts';
+import type { ToolRuntimeContext } from './context.ts';
+import type { ExecutorConfig, PhaseResult, ToolExecutionPhase, ToolExecutionRecord } from './types.ts';
+import {
+  emitToolCancelled,
+  emitToolExecuting,
+  emitToolFailed,
+  emitToolMapped,
+  emitToolPermissioned,
+  emitToolPosthooked,
+  emitToolPrehooked,
+  emitToolSucceeded,
+  emitToolValidated,
+} from '../emitters/tools.ts';
+import {
+  executePhase,
+  mapOutputPhase,
+  permissionPhase,
+  posthookPhase,
+  prehookPhase,
+  validatePhase,
+} from './phases/index.ts';
+
+/**
+ * PhasedToolExecutor — runs a ToolCall through the multi-phase execution pipeline.
+ *
+ * Pipeline (in order):
+ *   validate → prehook → permission → execute → mapOutput → posthook → succeeded
+ *
+ * Any phase that sets `abort: true` on its PhaseResult will halt the pipeline
+ * and transition to the `failed` or `cancelled` terminal state.
+ *
+ * Cancellation is cooperative: the executor checks `context.cancellation.signal`
+ * at each phase boundary and immediately transitions to `cancelled` when aborted.
+ *
+ * @example
+ * ```ts
+ * const executor = createPhasedExecutor({ enableHooks: true, enablePermissions: true, enableEvents: true });
+ * const result = await executor.execute(call, tool, context);
+ * ```
+ */
+/** Maximum number of completed records retained in memory before eviction. */
+const MAX_RECORDS = 1000;
+
+export class PhasedToolExecutor {
+  private readonly config: ExecutorConfig;
+  private readonly records = new Map<string, ToolExecutionRecord>();
+  private readonly controllers = new Map<string, AbortController>();
+
+  constructor(config: ExecutorConfig) {
+    this.config = config;
+  }
+
+  /**
+   * Execute a tool call through all pipeline phases.
+   * Returns a ToolResult regardless of outcome — callers never need to catch.
+   */
+  async execute(
+    call: ToolCall,
+    tool: Tool,
+    context: ToolRuntimeContext,
+  ): Promise<ToolResult> {
+    const record: ToolExecutionRecord = {
+      callId: call.id,
+      toolName: call.name,
+      phases: [],
+      currentPhase: 'received',
+      startedAt: Date.now(),
+      cancelled: false,
+    };
+    this.records.set(call.id, record);
+    this._evictOldestCompleted();
+
+    // Create a per-execution AbortController. cancel() aborts this controller;
+    // the pipeline loop checks controller.signal.aborted at every boundary.
+    // The outer context.cancellation.signal is also respected via a forwarding listener.
+    const controller = new AbortController();
+    this.controllers.set(call.id, controller);
+    const cancelSignal = controller.signal;
+    // Forward outer cancellation into our local controller
+    const forwardAbort = () => controller.abort(context.cancellation.reason);
+    if (context.cancellation.signal.aborted) {
+      controller.abort(context.cancellation.reason);
+    } else {
+      context.cancellation.signal.addEventListener('abort', forwardAbort, { once: true });
+    }
+
+    // --- Phase pipeline ---
+    // Each entry: [phase name used for cancellation check, phase function, config guard]
+    type PipelineEntry = [
+      phase: ToolExecutionPhase,
+      fn: (call: ToolCall, tool: Tool, context: ToolRuntimeContext, record: ToolExecutionRecord) => Promise<PhaseResult & { toolResult?: ToolResult }>,
+      enabled: boolean,
+    ];
+
+    const pipeline: PipelineEntry[] = [
+      ['validated',    validatePhase,    true],
+      ['prehooked',    prehookPhase,     this.config.enableHooks],
+      ['permissioned', permissionPhase,  this.config.enablePermissions],
+      ['executing',    (c, t, ctx, r) => executePhase(c, t, ctx, r, this.config), true],
+      ['mapped',       mapOutputPhase,   true],
+      ['posthooked',   posthookPhase,    this.config.enableHooks],
+    ];
+
+    const emitterCtx = {
+      sessionId: context.ids.sessionId,
+      traceId:   context.ids.traceId,
+      source:    'phased-executor' as const,
+    };
+
+    for (const [phaseName, phaseFn, enabled] of pipeline) {
+      // --- Cancellation check at every boundary ---
+      if (cancelSignal.aborted) {
+        context.cancellation.signal.removeEventListener('abort', forwardAbort);
+        this.controllers.delete(call.id);
+        return this._cancel(record, call, context, emitterCtx, cancelSignal.reason as string | undefined);
+      }
+
+      if (!enabled) {
+        continue;
+      }
+
+      record.currentPhase = phaseName;
+      const phaseResult = await phaseFn(call, tool, context, record);
+      record.phases.push(phaseResult);
+
+      // --- Emit per-phase event ---
+      if (this.config.enableEvents && context.runtimeBus) {
+        this._emitPhaseEvent(phaseName, phaseResult, call, context, emitterCtx);
+      }
+
+      // --- Capture execute result ---
+      if (phaseName === 'executing' && phaseResult.toolResult) {
+        record.result = phaseResult.toolResult;
+      }
+
+      // --- Handle phase failure/abort ---
+      if (!phaseResult.success || phaseResult.abort) {
+        context.cancellation.signal.removeEventListener('abort', forwardAbort);
+        this.controllers.delete(call.id);
+        return this._fail(record, call, context, emitterCtx, phaseResult.error ?? 'Phase failed');
+      }
+    }
+
+    // --- Final cancellation check before transitioning to succeeded ---
+    context.cancellation.signal.removeEventListener('abort', forwardAbort);
+    if (cancelSignal.aborted) {
+      this.controllers.delete(call.id);
+      return this._cancel(record, call, context, emitterCtx, cancelSignal.reason as string | undefined);
+    }
+
+    // --- Succeeded ---
+    this.controllers.delete(call.id);
+    record.currentPhase = 'succeeded';
+    record.completedAt = Date.now();
+
+    const durationMs = record.completedAt - record.startedAt;
+    if (this.config.enableEvents && context.runtimeBus) {
+      emitToolSucceeded(context.runtimeBus, emitterCtx, {
+        callId: call.id,
+        turnId: context.ids.turnId,
+        tool: call.name,
+        durationMs,
+      });
+    }
+
+    context.tasks.onComplete?.(call.id, durationMs);
+
+    return record.result ?? {
+      callId: call.id,
+      success: true,
+    };
+  }
+
+  /**
+   * Cancel an in-flight tool execution.
+   * Sets a cancelled flag on the record; the next phase boundary will pick it up.
+   */
+  cancel(callId: string, reason?: string): void {
+    const record = this.records.get(callId);
+    if (record && !record.completedAt) {
+      record.cancelled = true;
+      record.cancelledReason = reason;
+      this.controllers.get(callId)?.abort(reason);
+    }
+  }
+
+  /** Returns the full execution record for a given call id, if any. */
+  getRecord(callId: string): ToolExecutionRecord | undefined {
+    return this.records.get(callId);
+  }
+
+  /** Returns all execution records for in-flight calls. */
+  getActiveRecords(): ToolExecutionRecord[] {
+    return Array.from(this.records.values()).filter((r) => !r.completedAt);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Private helpers
+  // ---------------------------------------------------------------------------
+
+  private _fail(
+    record: ToolExecutionRecord,
+    call: ToolCall,
+    context: ToolRuntimeContext,
+    emitterCtx: { sessionId: string; traceId: string; source: string },
+    error: string,
+  ): ToolResult {
+    record.currentPhase = 'failed';
+    record.completedAt = Date.now();
+    const durationMs = record.completedAt - record.startedAt;
+
+    if (this.config.enableEvents && context.runtimeBus) {
+      emitToolFailed(context.runtimeBus, emitterCtx as Parameters<typeof emitToolFailed>[1], {
+        callId: call.id,
+        turnId: context.ids.turnId,
+        tool: call.name,
+        error,
+        durationMs,
+      });
+    }
+
+    context.tasks.onError?.(call.id, error);
+
+    return {
+      callId: call.id,
+      success: false,
+      error,
+    };
+  }
+
+  private _cancel(
+    record: ToolExecutionRecord,
+    call: ToolCall,
+    context: ToolRuntimeContext,
+    emitterCtx: { sessionId: string; traceId: string; source: string },
+    reason?: string,
+  ): ToolResult {
+    record.currentPhase = 'cancelled';
+    record.cancelled = true;
+    record.cancelledReason = reason;
+    record.completedAt = Date.now();
+
+    if (this.config.enableEvents && context.runtimeBus) {
+      emitToolCancelled(
+        context.runtimeBus,
+        emitterCtx as Parameters<typeof emitToolCancelled>[1],
+        {
+          callId: call.id,
+          turnId: context.ids.turnId,
+          tool: call.name,
+          reason,
+        },
+      );
+    }
+
+    return {
+      callId: call.id,
+      success: false,
+      error: reason ? `Cancelled: ${reason}` : 'Tool call cancelled',
+    };
+  }
+
+  /**
+   * Evicts the oldest completed records when the map exceeds MAX_RECORDS.
+   * Only completed records are eligible for eviction.
+   */
+  private _evictOldestCompleted(): void {
+    if (this.records.size <= MAX_RECORDS) return;
+    for (const [id, record] of this.records) {
+      if (record.completedAt) {
+        this.records.delete(id);
+        if (this.records.size <= MAX_RECORDS) break;
+      }
+    }
+  }
+
+  private _emitPhaseEvent(
+    phase: ToolExecutionPhase,
+    _result: PhaseResult,
+    call: ToolCall,
+    context: ToolRuntimeContext,
+    emitterCtx: Parameters<typeof emitToolValidated>[1],
+  ): void {
+    if (!context.runtimeBus) return;
+    const base = { callId: call.id, turnId: context.ids.turnId, tool: call.name };
+    switch (phase) {
+      case 'validated':
+        emitToolValidated(context.runtimeBus, emitterCtx, base);
+        break;
+      case 'prehooked':
+        emitToolPrehooked(context.runtimeBus, emitterCtx, base);
+        break;
+      case 'permissioned':
+        emitToolPermissioned(context.runtimeBus, emitterCtx, { ...base, approved: _result.success });
+        break;
+      case 'executing':
+        emitToolExecuting(context.runtimeBus, emitterCtx, { ...base, startedAt: Date.now() });
+        break;
+      case 'mapped':
+        emitToolMapped(context.runtimeBus, emitterCtx, base);
+        break;
+      case 'posthooked':
+        emitToolPosthooked(context.runtimeBus, emitterCtx, base);
+        break;
+      default:
+        break;
+    }
+  }
+}

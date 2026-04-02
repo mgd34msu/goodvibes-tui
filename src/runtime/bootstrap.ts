@@ -58,6 +58,7 @@ import type { SessionMeta } from '../sessions/manager.ts';
 import type { HookPhase, HookCategory, HookEventPath } from '../hooks/types.ts';
 import type { RuntimeContext, BootstrapOptions, MutableRuntimeState } from './context.ts';
 import { shutdownRuntime, fireSessionStart, saveSession } from './lifecycle.ts';
+import { createFeatureFlagManager } from './feature-flags/index.ts';
 
 // ── Session file paths ─────────────────────────────────────────────────────
 
@@ -235,6 +236,10 @@ export async function bootstrapRuntime(
   stdout: NodeJS.WriteStream,
   options?: BootstrapOptions,
 ): Promise<BootstrapContext> {
+
+  // ── Phase 0: Feature flags ──────────────────────────────────────────────
+
+  const featureFlags = createFeatureFlagManager();
 
   // ── Phase 1: Config, caches, keybindings ────────────────────────────────
 
@@ -744,6 +749,7 @@ export async function bootstrapRuntime(
 
   const ctx: BootstrapContext = {
     bus,
+    featureFlags,
     conversation,
     permissions: permissionManager,
     toolRegistry,

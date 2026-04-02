@@ -16,6 +16,7 @@ import type { ProjectIndex } from '../state/project-index.ts';
 import type { ProviderRegistry } from '../providers/registry.ts';
 import type { RuntimeStore } from './store/index.ts';
 import type { RuntimeEventBus } from './events/index.ts';
+import type { FeatureFlagManager } from './feature-flags/index.ts';
 
 /**
  * Mutable runtime state that may be changed by slash commands or model-picker events.
@@ -71,6 +72,13 @@ export interface RuntimeContext {
    * Optional until all consumers have been migrated.
    */
   store?: RuntimeStore;
+
+  /**
+   * Feature flag and kill-switch manager.
+   * Gates all new subsystems introduced in Tier 1 and beyond.
+   * Optional until all consumers have been migrated.
+   */
+  featureFlags?: FeatureFlagManager;
 
   // ── Managers ────────────────────────────────────────────────────────
 
