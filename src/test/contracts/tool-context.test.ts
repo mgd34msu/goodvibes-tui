@@ -150,7 +150,7 @@ describe('ToolRuntimeContext contract', () => {
   describe('PhaseResult contract', () => {
     test('PhaseResult has required phase, success, and durationMs fields', () => {
       const phases: ToolExecutionPhase[] = [
-        'validate', 'prehook', 'permission', 'execute', 'mapOutput', 'posthook',
+        'validated', 'prehooked', 'permissioned', 'executing', 'mapped', 'posthooked',
       ];
 
       for (const phase of phases) {
@@ -169,7 +169,7 @@ describe('ToolRuntimeContext contract', () => {
 
     test('PhaseResult abort field signals pipeline halt', () => {
       const result: PhaseResult = {
-        phase: 'permission',
+        phase: 'permissioned',
         success: false,
         durationMs: 1,
         abort: true,
