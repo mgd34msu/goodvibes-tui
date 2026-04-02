@@ -60,6 +60,31 @@ export type {
   LlmSpanContext,
   LlmSpanEndContext,
   LlmTokenUsage,
+  PluginSpanContext,
+  PluginSpanEndContext,
+  PluginPhase,
+  McpSpanContext,
+  McpSpanEndContext,
+  McpPhase,
+  TransportSpanContext,
+  TransportSpanEndContext,
+  TransportPhase,
+  TaskSpanContext,
+  TaskSpanEndContext,
+  TaskPhase,
+  AgentSpanContext,
+  AgentSpanEndContext,
+  AgentPhase,
+  PermissionSpanContext,
+  PermissionSpanEndContext,
+  PermissionPhase,
+  SessionSpanContext,
+  SessionSpanEndContext,
+  SessionPhase,
+  CompactionSpanContext,
+  CompactionSpanEndContext,
+  CompactionPhase,
+  HealthCascadeSpanContext,
 } from './spans/index.ts';
 export {
   startTurnSpan,
@@ -70,11 +95,40 @@ export {
   startLlmSpan,
   recordLlmStreamStart,
   endLlmSpan,
+  startPluginSpan,
+  recordPluginPhase,
+  endPluginSpan,
+  startMcpSpan,
+  recordMcpPhase,
+  endMcpSpan,
+  startTransportSpan,
+  recordTransportPhase,
+  endTransportSpan,
+  startTaskSpan,
+  recordTaskPhase,
+  endTaskSpan,
+  startAgentSpan,
+  recordAgentPhase,
+  endAgentSpan,
+  startPermissionSpan,
+  recordPermissionPhase,
+  endPermissionSpan,
+  startSessionSpan,
+  recordSessionPhase,
+  endSessionSpan,
+  startCompactionSpan,
+  recordCompactionPhase,
+  endCompactionSpan,
+  recordHealthCascadeSpan,
 } from './spans/index.ts';
 
 // Re-export exporters
 export type { LocalLedgerConfig, ConsoleVerbosity, ConsoleExporterConfig } from './exporters/index.ts';
 export { LocalLedgerExporter, ConsoleExporter } from './exporters/index.ts';
+
+// Re-export instrumentation
+export type { InstrumentationHandle } from './instrumentation/index.ts';
+export { DomainBridge, createInstrumentation } from './instrumentation/index.ts';
 
 /** Alias for TelemetryProviderConfig to match the factory parameter name. */
 export type TelemetryConfig = TelemetryProviderConfig;
