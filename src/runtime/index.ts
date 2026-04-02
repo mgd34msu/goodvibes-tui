@@ -42,6 +42,11 @@ export type {
 export { NotificationRouter, createNotificationRouter } from './notifications/index.ts';
 export type { Notification, NotificationLevel, NotificationTarget, DomainVerbosity, RoutingDecision } from './notifications/types.ts';
 
+// UI surfaces
+export { createModelPickerData, ModelPickerDataProvider } from './ui/model-picker/index.ts';
+export type { ModelPickerDataProviderOptions } from './ui/model-picker/index.ts';
+export { createProviderHealthData, ProviderHealthDataProvider } from './ui/provider-health/index.ts';
+
 // Bootstrap
 export { bootstrapRuntime } from './bootstrap.ts';
 export type { RuntimeContext, BootstrapOptions } from './context.ts';
