@@ -3,7 +3,7 @@
  * using ModalFactory.
  *
  * Layout:
- *   - Title bar: ┌─ Settings ─────────────────────────────────────┐
+ *   - Title bar: ┌─ Settings ───────────────────────────────────────┐
  *   - Category tabs row
  *   - Separator
  *   - Settings list (current category)
@@ -32,50 +32,10 @@ function valueColor(entry: SettingEntry): string {
   return '244';                            // dim = default
 }
 
-/**
- * Build the flags category label for a single flag entry.
- *
- * Columns: Name | Tier | State | Toggleable hint
- */
-function flagEntryLabel(
-  entry: FlagEntry,
-  nameW: number,
-  contentW: number,
-): string {
-  const { flag, state } = entry;
-
-  const name = flag.name.length > nameW
-    ? flag.name.slice(0, nameW - 1) + '\u2026'
-    : flag.name.padEnd(nameW);
-
-  const tierStr = `T${flag.tier}`.padEnd(3);
-
-  let stateStr: string;
-  if (state === 'enabled') stateStr = 'enabled ';
-  else if (state === 'killed') stateStr = 'KILLED  ';
-  else stateStr = 'disabled';
-
-  const available = contentW - nameW - 3 - 8 - 4; // nameW + tier + state + spaces
-  let hint: string;
-  if (state === 'killed') {
-    hint = '(read-only)';
-  } else if (!flag.runtimeToggleable) {
-    hint = '(restart required)';
-  } else {
-    hint = '';
-  }
-  const hintStr = hint.length > available ? hint.slice(0, available) : hint;
-
-  return `${name}  ${tierStr}  ${stateStr}  ${hintStr}`;
-}
-
-/**
- * Color for a flag entry row (non-selected).
- */
-function flagStateColor(entry: FlagEntry): string {
-  if (entry.state === 'killed') return '#ef4444';     // red = killed
-  if (entry.state === 'enabled') return '#00ffcc';    // cyan-green = enabled
-  return '244';                                        // dim = disabled (default)
+function flagStateColor(state: string, killed: boolean): string {
+  if (killed) return '#ef4444'; // red
+  if (state === 'enabled') return '#00ffcc'; // cyan-green
+  return '244'; // dim
 }
 
 // ---------------------------------------------------------------------------
@@ -99,62 +59,86 @@ export function renderSettingsModal(
 
   const sections: import('./modal-factory.ts').ModalSection[] = [];
 
-  // ── Category tabs ────────────────────────────────────────────────────────
+  // ── Category tabs ────────────────────────────────────────────
   const tabParts = SETTINGS_CATEGORIES.map((cat, i) => {
     const isActive = i === modal.categoryIndex;
     return isActive ? `[${cat.toUpperCase()}]` : ` ${cat} `;
   });
-  const tabLine = tabParts.join('  ');
+  const tabLine = tabParts.join(' ');
   const isDangerTab = SETTINGS_CATEGORIES[modal.categoryIndex] === 'danger';
+  const isFlagsTab = SETTINGS_CATEGORIES[modal.categoryIndex] === 'flags';
   sections.push({
     type: 'text',
     content: tabLine,
-    style: { fg: isDangerTab ? '#ef4444' : '#00ffff', bold: true },
+    style: { fg: isDangerTab ? '#ef4444' : isFlagsTab ? '#a78bfa' : '#00ffff', bold: true },
   });
 
   sections.push({ type: 'separator' });
 
-  // ── Settings list ────────────────────────────────────────────────────────
+  // ── Flags tab ──────────────────────────────────────────────────
+  if (isFlagsTab) {
+    const flagEntries: FlagEntry[] = modal.flagEntries;
 
-  if (modal.currentCategory === 'flags') {
-    // ── Feature flags category ─────────────────────────────────────────────
-    const flags = modal.flagEntries;
-
-    if (flags.length === 0) {
+    if (flagEntries.length === 0) {
       sections.push({
         type: 'text',
         content: '(no feature flags registered)',
         style: { fg: '240', dim: true },
       });
     } else {
-      const nameW = Math.floor(contentW * 0.45);
+      // Column widths for flags table
+      const nameW = Math.floor(contentW * 0.30);
+      const tierW = 5;
+      const stateW = 10;
+      const notesW = Math.max(0, contentW - nameW - tierW - stateW - 6);
 
       // Column header
-      const nameHdr = 'Flag'.padEnd(nameW);
+      const nameHdr = 'Name'.padEnd(nameW);
+      const tierHdr = 'Tier'.padEnd(tierW);
+      const stateHdr = 'State'.padEnd(stateW);
+      const notesHdr = 'Notes';
       sections.push({
         type: 'text',
-        content: `${nameHdr}  Tier  State     Notes`,
+        content: `${nameHdr}  ${tierHdr}  ${stateHdr}  ${notesHdr}`,
         style: { fg: '240', dim: true },
       });
       sections.push({ type: 'separator' });
 
-      const flagListItems: import('./modal-factory.ts').ModalListItem[] = flags.map((entry, idx) => {
+      const listItems: import('./modal-factory.ts').ModalListItem[] = flagEntries.map((entry, idx) => {
         const isSelected = idx === modal.selectedIndex;
-        const label = flagEntryLabel(entry, nameW, contentW);
+        const isKilled = entry.state === 'killed';
+
+        const nameStr = entry.flag.name.length > nameW
+          ? entry.flag.name.slice(0, nameW - 1) + '\u2026'
+          : entry.flag.name.padEnd(nameW);
+        const tierStr = String(entry.flag.tier).padEnd(tierW);
+
+        let stateStr: string;
+        if (isKilled) {
+          stateStr = 'KILLED'.padEnd(stateW);
+        } else {
+          stateStr = entry.state.padEnd(stateW);
+        }
+
+        const notes = !entry.flag.runtimeToggleable && !isKilled ? '(restart required)' : '';
+        const notesStr = notes.length > notesW ? notes.slice(0, notesW - 1) + '\u2026' : notes;
+
+        const label = `${nameStr}  ${tierStr}  ${stateStr}  ${notesStr}`;
+
         return {
           label,
           selected: isSelected,
-          style: isSelected ? undefined : { fg: flagStateColor(entry) },
+          style: isSelected ? undefined : { fg: flagStateColor(entry.state, isKilled) },
         };
       });
 
-      sections.push({ type: 'list', items: flagListItems });
+      sections.push({ type: 'list', items: listItems });
 
       // Description of selected flag
-      const selectedFlag = modal.getSelectedFlag();
-      if (selectedFlag) {
+      const selected = modal.getSelectedFlag();
+      if (selected) {
         sections.push({ type: 'separator' });
-        const desc = selectedFlag.flag.description;
+        const desc = selected.flag.description;
         const truncated = desc.length > contentW
           ? desc.slice(0, contentW - 1) + '\u2026'
           : desc;
@@ -163,106 +147,115 @@ export function renderSettingsModal(
           content: truncated,
           style: { fg: '246', dim: true },
         });
-        if (selectedFlag.state === 'killed') {
+        if (selected.state === 'killed' && selected.flag.killReason) {
+          const killStr = `Kill reason: ${selected.flag.killReason}`;
+          const killTrunc = killStr.length > contentW ? killStr.slice(0, contentW - 1) + '\u2026' : killStr;
           sections.push({
             type: 'text',
-            content: 'This flag has been emergency-killed and cannot be toggled.',
+            content: killTrunc,
             style: { fg: '#ef4444', dim: true },
-          });
-        } else if (!selectedFlag.flag.runtimeToggleable) {
-          sections.push({
-            type: 'text',
-            content: 'Restart required — this flag is not runtime-toggleable.',
-            style: { fg: '242', dim: true },
           });
         }
       }
     }
-  } else {
-    const items = modal.currentItems;
 
-    if (items.length === 0) {
-      sections.push({
-        type: 'text',
-        content: '(no settings in this category)',
-        style: { fg: '240', dim: true },
-      });
-    } else {
-      const keyW = Math.floor(contentW * 0.45);
-      const valW = Math.floor(contentW * 0.22);
-  
-      // Column header
-      const keyHdr = 'Setting'.padEnd(keyW);
-      const valHdr = 'Value'.padEnd(valW);
-      const defHdr = 'Default';
-      sections.push({
-        type: 'text',
-        content: `${keyHdr}  ${valHdr}  ${defHdr}`,
-        style: { fg: '240', dim: true },
-      });
+    const hints = ['[Tab] Category', '[\u2191\u2193] Navigate', '[Enter] Toggle', '[Esc] Close'];
+    return ModalFactory.createModal(
+      {
+        title: 'Settings',
+        width: boxW,
+        margin: boxMargin,
+        sections,
+        hints,
+      },
+      width,
+    );
+  }
+
+  // ── Settings list ────────────────────────────────────────────
+  const items = modal.currentItems;
+
+  if (items.length === 0) {
+    sections.push({
+      type: 'text',
+      content: '(no settings in this category)',
+      style: { fg: '240', dim: true },
+    });
+  } else {
+    const keyW = Math.floor(contentW * 0.45);
+    const valW = Math.floor(contentW * 0.22);
+
+    // Column header
+    const keyHdr = 'Setting'.padEnd(keyW);
+    const valHdr = 'Value'.padEnd(valW);
+    const defHdr = 'Default';
+    sections.push({
+      type: 'text',
+      content: `${keyHdr}  ${valHdr}  ${defHdr}`,
+      style: { fg: '240', dim: true },
+    });
+    sections.push({ type: 'separator' });
+
+    const isDangerCategory = modal.currentCategory === 'danger';
+    const listItems: import('./modal-factory.ts').ModalListItem[] = items.map((entry, idx) => {
+      const isSelected = idx === modal.selectedIndex;
+
+      // If this is selected and editing, show edit buffer
+      const isEditing = isSelected && modal.editingMode;
+      const valueStr = isEditing
+        ? modal.editBuffer + '\u2588'
+        : formatValue(entry);
+
+      const shortKey = entry.setting.key.replace(/^[^.]+\./, ''); // strip category prefix
+      const keyStr = shortKey.length > keyW
+        ? shortKey.slice(0, keyW - 1) + '\u2026'
+        : shortKey.padEnd(keyW);
+
+      const valStr = valueStr.length > valW
+        ? valueStr.slice(0, valW - 1) + '\u2026'
+        : valueStr.padEnd(valW);
+
+      const defStr = String(entry.setting.default);
+
+      const label = `${keyStr}  ${valStr}  ${defStr}`;
+
+      return {
+        label,
+        selected: isSelected,
+        style: isSelected ? undefined : { fg: isDangerCategory ? '#ef4444' : valueColor(entry) },
+      };
+    });
+
+    sections.push({ type: 'list', items: listItems });
+
+    // Description of selected item
+    const selected = modal.getSelected();
+    if (selected) {
       sections.push({ type: 'separator' });
-  
-      const isDangerCategory = modal.currentCategory === 'danger';
-      const listItems: import('./modal-factory.ts').ModalListItem[] = items.map((entry, idx) => {
-        const isSelected = idx === modal.selectedIndex;
-  
-        // If this is selected and editing, show edit buffer
-        const isEditing = isSelected && modal.editingMode;
-        const valueStr = isEditing
-          ? modal.editBuffer + '█'
-          : formatValue(entry);
-  
-        const shortKey = entry.setting.key.replace(/^[^.]+\./, ''); // strip category prefix
-        const keyStr = shortKey.length > keyW
-          ? shortKey.slice(0, keyW - 1) + '…'
-          : shortKey.padEnd(keyW);
-  
-        const valStr = valueStr.length > valW
-          ? valueStr.slice(0, valW - 1) + '…'
-          : valueStr.padEnd(valW);
-  
-        const defStr = String(entry.setting.default);
-  
-        const label = `${keyStr}  ${valStr}  ${defStr}`;
-  
-        return {
-          label,
-          selected: isSelected,
-          style: isSelected ? undefined : { fg: isDangerCategory ? '#ef4444' : valueColor(entry) },
-        };
+      const desc = selected.setting.description;
+      const truncated = desc.length > contentW
+        ? desc.slice(0, contentW - 1) + '\u2026'
+        : desc;
+      sections.push({
+        type: 'text',
+        content: truncated,
+        style: { fg: '246', dim: true },
       });
-  
-      sections.push({ type: 'list', items: listItems });
-  
-      // Description of selected item
-      const selected = modal.getSelected();
-      if (selected) {
-        sections.push({ type: 'separator' });
-        const desc = selected.setting.description;
-        const truncated = desc.length > contentW
-          ? desc.slice(0, contentW - 1) + '…'
-          : desc;
+      // Show enum options if applicable
+      if (selected.setting.type === 'enum' && selected.setting.enumValues) {
+        const opts = selected.setting.enumValues.join(' | ');
+        const optStr = `Options: ${opts}`;
+        const optTrunc = optStr.length > contentW
+          ? optStr.slice(0, contentW - 1) + '\u2026'
+          : optStr;
         sections.push({
           type: 'text',
-          content: truncated,
-          style: { fg: '246', dim: true },
+          content: optTrunc,
+          style: { fg: '240', dim: true },
         });
-        // Show enum options if applicable
-        if (selected.setting.type === 'enum' && selected.setting.enumValues) {
-          const opts = selected.setting.enumValues.join(' | ');
-          const optStr = `Options: ${opts}`;
-          const optTrunc = optStr.length > contentW
-            ? optStr.slice(0, contentW - 1) + '…'
-            : optStr;
-          sections.push({
-            type: 'text',
-            content: optTrunc,
-            style: { fg: '240', dim: true },
-          });
-        }
       }
-    } // end inner items if/else
-  } // end else (non-flags categories)
+    }
+  }
 
   const hints = modal.editingMode
     ? ['[Enter] Confirm', '[Esc] Cancel']

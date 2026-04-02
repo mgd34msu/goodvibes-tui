@@ -240,13 +240,9 @@ export async function bootstrapRuntime(
   // ── Phase 0: Feature flags ──────────────────────────────────────────────
 
   const featureFlags = createFeatureFlagManager();
+  featureFlags.loadFromConfig({ flags: (configManager.getCategory('featureFlags') as Record<string, import('./feature-flags/types.ts').FlagState>) ?? {} });
 
   // ── Phase 1: Config, caches, keybindings ────────────────────────────────
-
-  // Apply any flag overrides persisted from the UI (must run after configManager
-  // has loaded from disk, which happens in its constructor).
-  const persistedFlags = configManager.getCategory('featureFlags');
-  featureFlags.loadFromConfig({ flags: persistedFlags ?? {} });
 
   const userSessionId = `user-${generateUserSessionId()}`;
 

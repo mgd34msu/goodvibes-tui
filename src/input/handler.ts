@@ -70,6 +70,12 @@ export class InputHandler {
   public bookmarkModal = new BookmarkModal();
   public blockActionsMenu = new BlockActionsMenu();
   public settingsModal = new SettingsModal();
+
+  /**
+   * Modal navigation stack. Each element is the name of an open modal.
+   * Used to support back-navigation via Escape.
+   */
+  public modalStack: string[] = [];
   public sessionPickerModal = new SessionPickerModal();
   public profilePickerModal = new ProfilePickerModal();
   /** True when the help overlay is visible. */
@@ -180,6 +186,7 @@ export class InputHandler {
     } | undefined,
     callback: (result: SelectionResult | null) => void,
   ): void {
+    this.modalOpened('selection');
     this.selectionModal.open(title, items, opts);
     this.selectionCallback = callback;
     this.bus.emit('render:request');
@@ -613,89 +620,171 @@ export class InputHandler {
    * - If prompt has text: clear it
    * - If prompt is empty: cancel generation (double-tap not needed)
    */
-  private handleEscape(): void {
-    // If help overlay is open, close it
-    if (this.helpOverlayActive) {
-      this.helpOverlayActive = false;
-      this.helpScrollOffset = 0;
-      this.bus.emit('render:request');
-      return;
-    }
-    // If shortcuts overlay is open, close it
-    if (this.shortcutsOverlayActive) {
-      this.shortcutsOverlayActive = false;
-      this.shortcutsScrollOffset = 0;
-      this.bus.emit('render:request');
-      return;
-    }
-    // If bookmark modal is open, close it
-    if (this.bookmarkModal.active) {
-      this.bookmarkModal.close();
-      this.bus.emit('render:request');
-      return;
-    }
-    // If agent detail modal is open, go back to process list
-    if (this.agentDetailModal.active) {
-      this.agentDetailModal.close();
-      this.processModal.open();
-      return;
-    }
-    // If live-tail peek is open, go back to process list
-    if (this.liveTailModal.active) {
-      this.liveTailModal.close();
-      this.processModal.open();
-      return;
-    }
-    // If settings modal is open, handle Esc — cancel edit if editing, else close
-    if (this.settingsModal.active) {
-      if (this.settingsModal.editingMode) {
-        this.settingsModal.cancelEdit();
-      } else {
+  /**
+   * Record that a modal has been opened and push it onto the navigation stack.
+   * Call this EVERY time a modal opens (except inside openModal()).
+   *
+   * @param name - The modal identifier (e.g. 'settings', 'help', 'process').
+   */
+  public modalOpened(name: string): void {
+    this.modalStack.push(name);
+  }
+
+  /**
+   * Clear the modal navigation stack on non-modal user input (e.g. submit).
+   */
+  public clearModalStack(): void {
+    this.modalStack.length = 0;
+  }
+
+  /**
+   * Return the name of whatever modal is currently showing, or null.
+   * Used as a defensive fallback when the stack is empty.
+   */
+  private activeModalName(): string | null {
+    if (this.helpOverlayActive) return 'help';
+    if (this.shortcutsOverlayActive) return 'shortcuts';
+    if (this.bookmarkModal.active) return 'bookmark';
+    if (this.agentDetailModal.active) return 'agentDetail';
+    if (this.liveTailModal.active) return 'liveTail';
+    if (this.settingsModal.active) return 'settings';
+    if (this.sessionPickerModal.active) return 'sessionPicker';
+    if (this.profilePickerModal.active) return 'profilePicker';
+    if (this.contextInspectorModal.active) return 'contextInspector';
+    if (this.processModal.active) return 'process';
+    if (this.modelPicker.active) return 'modelPicker';
+    if (this.filePicker.active) return 'filePicker';
+    if (this.blockActionsMenu.active) return 'blockActions';
+    if (this.selectionModal.active) return 'selection';
+    if (this.commandMode) return 'command';
+    return null;
+  }
+
+  /**
+   * Close a modal by name. Used by handleEscape for stack navigation.
+   */
+  private closeModal(name: string): void {
+    switch (name) {
+      case 'help':
+        this.helpOverlayActive = false;
+        this.helpScrollOffset = 0;
+        break;
+      case 'shortcuts':
+        this.shortcutsOverlayActive = false;
+        this.shortcutsScrollOffset = 0;
+        break;
+      case 'bookmark':
+        this.bookmarkModal.close();
+        break;
+      case 'agentDetail':
+        this.agentDetailModal.close();
+        break;
+      case 'liveTail':
+        this.liveTailModal.close();
+        break;
+      case 'settings':
         this.settingsModal.close();
+        break;
+      case 'sessionPicker':
+        this.sessionPickerModal.close();
+        break;
+      case 'profilePicker':
+        this.profilePickerModal.close();
+        break;
+      case 'contextInspector':
+        this.contextInspectorModal.close();
+        break;
+      case 'process':
+        this.processModal.close();
+        break;
+      case 'modelPicker':
+        this.modelPicker.close();
+        break;
+      case 'filePicker':
+        this.filePicker.close();
+        break;
+      case 'blockActions':
+        this.blockActionsMenu.close();
+        break;
+      case 'selection': {
+        const cb = this.selectionCallback;
+        this.selectionCallback = null;
+        this.selectionModal.close();
+        cb?.(null);
+        break;
+      }
+      case 'command': {
+        this.commandMode = false;
+        this.autocomplete?.reset();
+        this.prompt = '';
+        this.cursorPos = 0;
+        this.bus.emit('command:mode-exit');
+        break;
+      }
+    }
+  }
+
+  /**
+   * Restore a modal by name (for back-navigation via Escape).
+   * Does NOT call modalOpened() — that would double-push onto the stack.
+   */
+  private openModal(name: string): void {
+    switch (name) {
+      case 'help':
+        this.helpOverlayActive = true;
+        break;
+      case 'shortcuts':
+        this.shortcutsOverlayActive = true;
+        break;
+      case 'bookmark':
+        this.bookmarkModal.open();
+        break;
+      case 'process':
+        this.processModal.open();
+        break;
+      case 'contextInspector':
+        this.contextInspectorModal.open();
+        break;
+      case 'command': {
+        this.commandMode = true;
+        this.prompt = '/';
+        this.cursorPos = 1;
+        this.autocomplete?.update('');
+        this.bus.emit('command:mode-enter');
+        break;
+      }
+    }
+  }
+
+  private handleEscape(): void {
+    // Settings edit mode: cancel edit first
+    if (this.settingsModal.active && this.settingsModal.editingMode) {
+      this.settingsModal.cancelEdit();
+      this.bus.emit('render:request');
+      return;
+    }
+
+    // Modal stack navigation
+    if (this.modalStack.length > 0) {
+      const current = this.modalStack.pop()!;
+      const previous = this.modalStack[this.modalStack.length - 1];
+      this.closeModal(current);
+      if (previous) {
+        this.openModal(previous);
       }
       this.bus.emit('render:request');
       return;
     }
-    // If session picker is open, close it
-    if (this.sessionPickerModal.active) {
-      this.sessionPickerModal.close();
+
+    // Fallback: close any active modal not in stack
+    // (defensive — shouldn't happen if all open sites call modalOpened)
+    const active = this.activeModalName();
+    if (active) {
+      this.closeModal(active);
       this.bus.emit('render:request');
       return;
     }
-    // If profile picker is open, close it
-    if (this.profilePickerModal.active) {
-      this.profilePickerModal.close();
-      this.bus.emit('render:request');
-      return;
-    }
-    // If context inspector is open, close it
-    if (this.contextInspectorModal.active) {
-      this.contextInspectorModal.close();
-      return;
-    }
-    // If process modal is open, close it
-    if (this.processModal.active) {
-      this.processModal.close();
-      return;
-    }
-    // If model picker is active, close it
-    if (this.modelPicker.active) {
-      this.modelPicker.close();
-      return;
-    }
-    // If file picker is active, close it (don't clear input)
-    if (this.filePicker.active) {
-      this.filePicker.close();
-      return;
-    }
-    // If selection modal is active, close it
-    if (this.selectionModal.active) {
-      const cb = this.selectionCallback;
-      this.selectionCallback = null;
-      this.selectionModal.close();
-      cb?.(null);
-      return;
-    }
+
     if (this.prompt.length > 0) {
       this.saveUndoState();
       this.prompt = '';
@@ -845,10 +934,8 @@ export class InputHandler {
           }
         } else if (token.type === 'key') {
           if (token.logicalName === 'escape') {
-            const cb = this.selectionCallback;
-            this.selectionCallback = null;
-            this.selectionModal.close();
-            cb?.(null);
+            this.handleEscape();
+            continue;
           } else if (token.logicalName === 'enter') {
             const customAction = this.selectionModal.customActions.get('enter');
             const selected = this.selectionModal.getSelected();
@@ -856,6 +943,10 @@ export class InputHandler {
               const cb = this.selectionCallback;
               this.selectionCallback = null;
               this.selectionModal.close();
+              // Pop 'selection' from stack — the callback may open a new modal
+              if (this.modalStack.length > 0 && this.modalStack[this.modalStack.length - 1] === 'selection') {
+                this.modalStack.pop();
+              }
               cb?.({ item: selected, action: customAction ?? 'select' });
             }
           } else if (token.logicalName === 'up') {
@@ -891,7 +982,8 @@ export class InputHandler {
       if (this.bookmarkModal.active) {
         if (token.type === 'key') {
           if (token.logicalName === 'escape') {
-            this.bookmarkModal.close();
+            this.handleEscape();
+            continue;
           } else if (token.logicalName === 'up') {
             this.bookmarkModal.moveUp();
           } else if (token.logicalName === 'down') {
@@ -945,14 +1037,13 @@ export class InputHandler {
       if (this.settingsModal.active) {
         if (token.type === 'key') {
           if (token.logicalName === 'escape') {
-            if (this.settingsModal.editingMode) {
-              this.settingsModal.cancelEdit();
-            } else {
-              this.settingsModal.close();
-            }
+            this.handleEscape();
+            continue;
           } else if (token.logicalName === 'enter') {
             if (this.settingsModal.editingMode) {
               this.settingsModal.commitEdit();
+            } else if (this.settingsModal.currentCategory === 'flags') {
+              this.settingsModal.toggleSelectedFlag();
             } else {
               this.settingsModal.activateSelected();
             }
@@ -980,7 +1071,8 @@ export class InputHandler {
       if (this.sessionPickerModal.active) {
         if (token.type === 'key') {
           if (token.logicalName === 'escape') {
-            this.sessionPickerModal.close();
+            this.handleEscape();
+            continue;
           } else if (token.logicalName === 'enter') {
             if (this.commandContext?.conversationManager) {
               this.sessionPickerModal.loadSelected(this.commandContext.conversationManager);
@@ -1005,7 +1097,8 @@ export class InputHandler {
       if (this.profilePickerModal.active) {
         if (token.type === 'key') {
           if (token.logicalName === 'escape') {
-            this.profilePickerModal.close();
+            this.handleEscape();
+            continue;
           } else if (token.logicalName === 'enter') {
             if (this.commandContext?.configManager) {
               this.profilePickerModal.loadSelected(this.commandContext.configManager);
@@ -1041,8 +1134,8 @@ export class InputHandler {
       if (this.helpOverlayActive) {
         if (token.type === 'key') {
           if (token.logicalName === 'escape') {
-            this.helpOverlayActive = false;
-            this.helpScrollOffset = 0;
+            this.handleEscape();
+            continue;
           } else if (token.logicalName === 'up') {
             this.helpScrollOffset = Math.max(0, this.helpScrollOffset - 1);
           } else if (token.logicalName === 'down') {
@@ -1060,8 +1153,8 @@ export class InputHandler {
       if (this.shortcutsOverlayActive) {
         if (token.type === 'key') {
           if (token.logicalName === 'escape') {
-            this.shortcutsOverlayActive = false;
-            this.shortcutsScrollOffset = 0;
+            this.handleEscape();
+            continue;
           } else if (token.logicalName === 'up') {
             this.shortcutsScrollOffset = Math.max(0, this.shortcutsScrollOffset - 1);
           } else if (token.logicalName === 'down') {
@@ -1099,11 +1192,19 @@ export class InputHandler {
       if (this.modelPicker.active) {
         if (token.type === 'key') {
           if (token.logicalName === 'escape') {
-            // Escape clears query first; second Escape closes picker
+            // Escape: clear query first, then navigate back through modes, then close
             if (this.modelPicker.query.length > 0) {
               this.modelPicker.clearQuery();
+            } else if (this.modelPicker.mode === 'effort') {
+              // Back to model list
+              this.modelPicker.mode = 'model' as any;
+              this.modelPicker.selectedIndex = 0;
+            } else if (this.modelPicker.mode === 'model' && this.modelPicker.previousMode === 'provider') {
+              // Back to provider list
+              this.modelPicker.mode = 'provider' as any;
+              this.modelPicker.selectedIndex = 0;
             } else {
-              this.modelPicker.close();
+              this.handleEscape();
             }
           } else if (token.logicalName === 'backspace') {
             // Backspace removes last char from query (model or provider mode)
@@ -1123,6 +1224,7 @@ export class InputHandler {
                   // No reasoning support — complete immediately with current effort
                   this.bus.emit('model-picker:complete', { model: selected, effort: this.commandContext?.runtime.reasoningEffort ?? 'medium' });
                   this.modelPicker.close();
+                  if (this.modalStack.length > 0 && this.modalStack[this.modalStack.length - 1] === 'modelPicker') this.modalStack.pop();
                 }
               }
             } else if (mode === 'provider') {
@@ -1142,6 +1244,7 @@ export class InputHandler {
                 this.bus.emit('model-picker:complete', { model, effort });
               }
               this.modelPicker.close();
+              if (this.modalStack.length > 0 && this.modalStack[this.modalStack.length - 1] === 'modelPicker') this.modalStack.pop();
             }
           } else if (token.logicalName === 'up') {
             const maxVis = Math.max(5, this.getViewportHeight() - MODEL_PICKER_CHROME_LINES - 4);
@@ -1171,8 +1274,8 @@ export class InputHandler {
       if (this.liveTailModal.active) {
         if (token.type === 'key') {
           if (token.logicalName === 'escape') {
-            this.liveTailModal.close();
-            this.processModal.open();
+            this.handleEscape();
+            continue;
           } else if (token.logicalName === 'up') {
             this.liveTailModal.scrollUp();
           } else if (token.logicalName === 'down') {
@@ -1196,8 +1299,8 @@ export class InputHandler {
       // --- Agent detail modal has focus: intercept all input ---
       if (this.agentDetailModal.active) {
         if (token.type === 'key' && token.logicalName === 'escape') {
-          this.agentDetailModal.close();
-          this.processModal.open();
+          this.handleEscape();
+          continue;
         }
         this.bus.emit('render:request');
         continue;
@@ -1206,7 +1309,8 @@ export class InputHandler {
       // --- Context inspector modal has focus: intercept all input ---
       if (this.contextInspectorModal.active) {
         if (token.type === 'key' && token.logicalName === 'escape') {
-          this.contextInspectorModal.close();
+          this.handleEscape();
+          continue;
         }
         this.bus.emit('render:request');
         continue;
@@ -1216,8 +1320,8 @@ export class InputHandler {
       if (this.processModal.active) {
         if (token.type === 'key') {
           if (token.logicalName === 'escape') {
-            this.processModal.close();
-            this.indicatorFocused = false;
+            this.handleEscape();
+            continue;
           } else if (token.logicalName === 'up') {
             this.processModal.moveUp();
           } else if (token.logicalName === 'down') {
@@ -1227,8 +1331,10 @@ export class InputHandler {
             if (entry) {
               this.processModal.close();
               if (entry.type === 'agent') {
+                this.modalOpened('agentDetail');
                 this.agentDetailModal.open(entry.id);
               } else {
+                this.modalOpened('liveTail');
                 this.liveTailModal.open(entry);
               }
             }
@@ -1256,7 +1362,8 @@ export class InputHandler {
         } else if (token.type === 'key') {
           if (token.logicalName === 'escape') {
             // Close picker, keep @ in prompt (user can delete it manually)
-            this.filePicker.close();
+            this.handleEscape();
+            continue;
           } else if (token.logicalName === 'enter') {
             const selected = this.filePicker.getSelected();
             if (selected) {
@@ -1327,7 +1434,8 @@ export class InputHandler {
       if (this.blockActionsMenu.active) {
         if (token.type === 'key') {
           if (token.logicalName === 'escape') {
-            this.blockActionsMenu.close();
+            this.handleEscape();
+            continue;
           } else if (token.logicalName === 'up') {
             this.blockActionsMenu.moveUp();
           } else if (token.logicalName === 'down') {
@@ -1427,6 +1535,7 @@ export class InputHandler {
             continue;
           } else if (token.logicalName === 'enter') {
             this.indicatorFocused = false;
+            this.modalOpened('process');
             this.processModal.open();
             this.bus.emit('render:request');
             continue;
@@ -1478,9 +1587,11 @@ export class InputHandler {
           if (charBefore === '!') {
             // !@ sequence — open file picker in inject mode
             // insertPos points to the '!' character
+            this.modalOpened('filePicker');
             this.filePicker.open(this.cursorPos - 2, true);
           } else if (charBefore === undefined || charBefore === ' ' || charBefore === '\n') {
             // @ is at word start — open file picker
+            this.modalOpened('filePicker');
             this.filePicker.open(this.cursorPos - 1);
           }
         }
@@ -1488,6 +1599,7 @@ export class InputHandler {
         // Detect slash-command mode: '/' typed into empty prompt
         if (this.prompt === '/' && this.commandRegistry) {
           this.commandMode = true;
+          this.modalOpened('command');
           this.autocomplete?.update('');
           this.bus.emit('command:mode-enter');
         } else if (this.commandMode && this.commandRegistry) {
@@ -1677,12 +1789,7 @@ export class InputHandler {
         // --- Command mode routing ---
         if (this.commandMode) {
           if (token.logicalName === 'escape') {
-            // Exit command mode without executing
-            this.prompt = '';
-            this.cursorPos = 0;
-            this.commandMode = false;
-            this.autocomplete?.reset();
-            this.bus.emit('command:mode-exit');
+            this.handleEscape();
             continue;
           }
           if (token.logicalName === 'up') {
@@ -1712,6 +1819,9 @@ export class InputHandler {
               // Erased the '/' — exit command mode
               this.commandMode = false;
               this.autocomplete?.reset();
+              if (this.modalStack.length > 0 && this.modalStack[this.modalStack.length - 1] === 'command') {
+                this.modalStack.pop();
+              }
               this.bus.emit('command:mode-exit');
             } else {
               const query = this.prompt.startsWith('/') ? this.prompt.slice(1) : '';
@@ -1728,6 +1838,9 @@ export class InputHandler {
             this.cursorPos = 0;
             this.commandMode = false;
             this.autocomplete?.reset();
+            // 'command' stays on the stack — if the command opens a modal,
+            // it pushes on top. Escape from that modal returns to command mode.
+            // If the command doesn't open a modal, clearModalStack on input:submit clears it.
             this.bus.emit('command:mode-exit');
 
             if (raw.startsWith('/') && this.commandRegistry && this.commandContext) {
@@ -1784,6 +1897,7 @@ export class InputHandler {
                 const lineIndex = this.getScrollTop();
                 const nearest = cm.findNearestBlock(lineIndex);
                 if (nearest) {
+                  this.modalOpened('blockActions');
                   this.blockActionsMenu.open(nearest);
                   this.bus.emit('render:request');
                   continue;
@@ -1933,6 +2047,7 @@ export class InputHandler {
         } else if (token.logicalName === 'f2') {
           // F2: open the background process monitor
           this.indicatorFocused = false;  // clear focus if it was set
+          this.modalOpened('process');
           this.processModal.open();
         }
       } else if (token.type === 'mouse') {
