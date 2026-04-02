@@ -1,0 +1,69 @@
+/**
+ * Default performance budget definitions for goodvibes-tui.
+ *
+ * Based on v3 Section 21.4 — measurable budgets for frame latency,
+ * event throughput, tool executor overhead, memory growth, and
+ * compaction latency.
+ */
+
+import type { PerfBudget } from './types.ts';
+
+/**
+ * The default set of performance budgets applied in CI.
+ *
+ * These represent acceptable operational thresholds. Any metric that
+ * consistently exceeds its budget beyond the tolerance window will
+ * cause CI to fail.
+ */
+export const DEFAULT_BUDGETS: PerfBudget[] = [
+  {
+    name: 'Frame Render Latency (p95)',
+    metric: 'frame.render.p95',
+    threshold: 16,
+    unit: 'ms',
+    tolerance: 3,
+    description:
+      'p95 frame render duration must stay under 16ms to maintain 60fps. ' +
+      'Sustained violations indicate rendering bottlenecks under operational load.',
+  },
+  {
+    name: 'Event Queue Depth',
+    metric: 'event.queue.depth',
+    threshold: 1000,
+    unit: 'count',
+    tolerance: 5,
+    description:
+      'Event queue must not accumulate more than 1000 pending events. ' +
+      'Deep queues indicate the event loop cannot drain fast enough.',
+  },
+  {
+    name: 'Tool Executor Overhead (p95)',
+    metric: 'tool.executor.overhead.p95',
+    threshold: 5,
+    unit: 'ms',
+    tolerance: 3,
+    description:
+      'p95 overhead per tool executor phase (scheduling, dispatch, teardown) ' +
+      'must be under 5ms. Sustained violations indicate executor inefficiency.',
+  },
+  {
+    name: 'Memory Growth Rate',
+    metric: 'memory.growth.bytes_per_hour',
+    threshold: 52_428_800, // 50 MiB in bytes
+    unit: 'bytes',
+    tolerance: 2,
+    description:
+      'Sustained heap growth must remain below 50 MiB/hour. ' +
+      'Faster growth indicates a memory leak in long-running sessions.',
+  },
+  {
+    name: 'Compaction Latency (p95)',
+    metric: 'compaction.latency.p95',
+    threshold: 500,
+    unit: 'ms',
+    tolerance: 3,
+    description:
+      'p95 compaction duration must be under 500ms. ' +
+      'Slower compaction blocks the conversation loop and degrades UX.',
+  },
+];

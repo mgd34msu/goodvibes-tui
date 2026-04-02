@@ -21,7 +21,8 @@
     "release": "bun run scripts/release.ts",
     "release:dry": "bun run scripts/release.ts --dry-run",
     "build:prod": "bun run scripts/build.ts",
-    "build:all": "bun run scripts/build.ts --all"
+    "build:all": "bun run scripts/build.ts --all",
+    "perf:check": "bun run scripts/perf-check.ts"
   },
   "dependencies": {
     "@agentclientprotocol/sdk": "^0.16.1",
