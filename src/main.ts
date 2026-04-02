@@ -15,7 +15,6 @@ import { InputHandler } from './input/handler.ts';
 import { SelectionManager } from './input/selection.ts';
 import { config, configManager } from './config/index.ts';
 import { providerRegistry } from './providers/registry.ts';
-import { autoRegisterProviders } from './providers/auto-register.ts';
 import { ToolRegistry } from './tools/registry.ts';
 import { registerAllTools } from './tools/index.ts';
 import { FileUndoManager } from './state/file-undo.ts';
@@ -40,7 +39,6 @@ import { registerBuiltinCommands } from './input/commands.ts';
 import { WebhookNotifier, setWebhookNotifier } from './integrations/webhooks.ts';
 import { ScheduleManager } from './tools/workflow/index.ts';
 import { InputHistory } from './input/input-history.ts';
-import { loadSystemPrompt as _loadSystemPrompt } from './utils/prompt-loader.ts';
 import { getTierPromptSupplement, getTierForContextWindow } from './providers/tier-prompts.ts';
 import { GitStatusProvider } from './renderer/git-status.ts';
 import type { GitHeaderInfo } from './renderer/git-status.ts';
@@ -54,7 +52,6 @@ import { renderAgentDetailModal } from './renderer/agent-detail-modal.ts';
 import { renderLiveTailModal } from './renderer/live-tail-modal.ts';
 import { renderContextInspector } from './renderer/context-inspector.ts';
 import { renderAutocompleteOverlay } from './renderer/autocomplete-overlay.ts';
-import { scan, loadPersistedProviders, persistProviders, removePersistedProviders, scanMcpServers } from './discovery/index.ts';
 import { getSessionManager } from './sessions/manager.ts';
 import type { SessionMeta } from './sessions/manager.ts';
 import { logger } from './utils/logger.ts';
@@ -69,39 +66,10 @@ import { renderPanelTabBar } from './renderer/panel-tab-bar.ts';
 import { mcpRegistry } from './mcp/registry.ts';
 import { getKeybindingsManager } from './input/keybindings.ts';
 import { sessionMemoryStore } from './core/session-memory.ts';
+import { bootstrapRuntime } from './runtime/bootstrap.ts';
+import type { BootstrapContext } from './runtime/bootstrap.ts';
+import type { HookPhase, HookCategory, HookEventPath } from './hooks/types.ts';
 
-/**
- * Attempt to restore a previously saved model selection after providers are registered.
- * Non-fatal: logs on failure but does not throw.
- */
-function restoreSavedModel(
-  savedModel: string,
-  savedProvider: string,
-  runtime: { model: string; provider: string },
-): void {
-  // Accept both registryKey (provider:modelId) and plain modelId for backward compat
-  const registry = providerRegistry.listModels();
-  const modelDef = savedModel.includes(':')
-    ? (registry.find((m) => m.registryKey === savedModel) ?? registry.find((m) => m.id === savedModel))
-    : registry.find((m) => m.id === savedModel && (!savedProvider || m.provider === savedProvider))
-      ?? registry.find((m) => m.id === savedModel);
-  if (modelDef) {
-    try {
-      const key = modelDef.registryKey ?? `${modelDef.provider}:${modelDef.id}`;
-      providerRegistry.setCurrentModel(key);
-      runtime.model = key;
-      runtime.provider = modelDef.provider;
-    } catch (err) {
-      logger.debug('Model restore failed (non-fatal)', { error: String(err) });
-    }
-  }
-}
-
-function loadSystemPrompt(): string {
-  return _loadSystemPrompt(
-    () => configManager.get('provider.systemPromptFile') as string | undefined,
-  );
-}
 
 const ALT_SCREEN_ENTER = '\x1b[?1049h';
 const ALT_SCREEN_EXIT  = '\x1b[?1049l';
@@ -260,36 +228,35 @@ async function main() {
   const stdout = process.stdout;
   const stdin = process.stdin;
 
-  // --- User session ID (generated once per startup, permanent) ---
-  const userSessionId = `user-${generateUserSessionId()}`;
-
-  // --- Initialize model limits cache (sync load + background refresh if stale) ---
-  initModelLimits();
-
-  // --- Initialize model catalog cache (sync load + background refresh if stale) ---
-  initCatalog();
-
-  // --- Initialize benchmark cache (sync load + background refresh if stale) ---
-  initBenchmarks();
-
-  // --- Load keybindings from disk (merges user overrides with defaults) ---
-  getKeybindingsManager().loadFromDisk();
-
-  // --- Module wiring ---
-  const bus = new EventBus();
-  // Inject bus into the synthetic provider for cross-model failover notifications
-  setSyntheticBus(bus);
-  const conversation = new ConversationManager(() => {
-    const w = stdout.columns || 80;
-    const pm = getPanelManager();
-    if (pm.isVisible() && pm.getAllOpen().length > 0) {
-      return Math.max(1, pm.getLeftWidth(w) - 1);
-    }
-    return w;
-  });
-  conversation.setConfigManager(configManager);
-  const compositor = new Compositor(stdout);
-  const selection = new SelectionManager();
+  // ── Bootstrap all runtime subsystems ─────────────────────────────────────
+  // bootstrapRuntime initializes all subsystems in dependency order and returns
+  // a fully-wired BootstrapContext. main.ts owns terminal setup, the render loop,
+  // stdin input, and signal handlers — everything else is in bootstrap.
+  const ctx: BootstrapContext = await bootstrapRuntime(stdout);
+  const {
+    bus,
+    conversation,
+    orchestrator,
+    runtime,
+    toolRegistry,
+    compositor,
+    selection,
+    commandContext,
+    commandRegistry,
+    inputHistory,
+    hookDispatcher,
+    gitStatusProvider,
+    lastGitInfoRef,
+    bootstrapUnsubs,
+    agentStatusIntervalRef,
+    orchestratorRefs,
+    loadLastConversation,
+    _writeLastSessionPointer: writeLastSessionPointer,
+    _getPinned: getPinned,
+    _getConfiguredProviderIds: getConfiguredProviderIds,
+  } = ctx;
+  // Use the singleton panel manager (already initialized in bootstrap)
+  const panelManager = getPanelManager();
 
   // Permission state — set while a permission prompt is blocking the orchestrator
   let pendingPermission: PermissionRequest | null = null;
@@ -307,24 +274,8 @@ async function main() {
    *  False when user manually scrolls up. Reset on user input. */
   let scrollLocked = true;
 
-  // --- Git status provider ---
-  const gitStatusProvider = new GitStatusProvider();
-  let lastGitInfo: GitHeaderInfo | undefined = undefined;
-  // Prime the cache on startup (non-blocking)
-  gitStatusProvider.getStatus().then((info) => {
-    lastGitInfo = info;
-    bus.emit('render:request');
-  }).catch(() => { /* non-fatal */ });
-
-  // --- Runtime state (mutable, can be changed by slash commands) ---
-  const runtime = {
-    model: configManager.get('provider.model'),
-    provider: configManager.get('provider.provider'),
-    debugMode: false,
-    systemPrompt: loadSystemPrompt() || config.systemPrompt || '',
-    reasoningEffort: configManager.get('provider.reasoningEffort'),
-    sessionId: userSessionId,
-  };
+  // lastGitInfo is a mutable ref provided by bootstrap (updated asynchronously)
+  // Use lastGitInfoRef.value inside render to get the current value.
 
   /** Content width inside the prompt box (box width minus padding). */
   const getPromptContentWidth = () => {
@@ -362,11 +313,9 @@ async function main() {
     scrollTop = Math.max(0, conversation.history.getLineCount() - vHeight);
   };
 
-  // Populated after bus.on() calls below — used to clean up listeners on exit
+  // main.ts-owned unsub functions (render:request, input:submit, cancel:generation, etc.)
+  // Bootstrap-owned unsubs are in ctx.bootstrapUnsubs and cleared by ctx.shutdown().
   const unsubs: Array<() => void> = [];
-
-  // Periodic agent status interval handle — cleared on exit
-  let agentStatusInterval: ReturnType<typeof setInterval> | null = null;
 
   // Crash recovery interval handle — cleared on exit
   let recoveryInterval: ReturnType<typeof setInterval> | null = null;
@@ -374,19 +323,22 @@ async function main() {
   // Recovery flow state
   let recoveryPending = false;
 
-  const exitApp = () => {
+  /**
+   * Full application teardown.
+   * Clears main.ts-owned listeners, calls ctx.shutdown() for logical teardown,
+   * then tears down the terminal and exits the process.
+   */
+  const exitApp = (): void => {
+    // Clear main.ts-owned event subscriptions
     unsubs.forEach(fn => fn());
-    if (agentStatusInterval !== null) { clearInterval(agentStatusInterval); agentStatusInterval = null; }
+    // Clear bootstrap-owned unsubs + interval via ctx.shutdown()
+    ctx.shutdown(conversation.toJSON() as { messages: object[]; timestamp?: number }).catch((err) => {
+      logger.debug('ctx.shutdown error during exitApp (non-fatal)', { error: String(err) });
+    });
+    // Clear recovery interval
     if (recoveryInterval !== null) { clearInterval(recoveryInterval); recoveryInterval = null; }
     deleteRecoveryFile();
-    // Fire session end hook (fire-and-forget, best-effort before process.exit)
-    try { getHookDispatcher().fire({ path: 'Lifecycle:session:end' as any, phase: 'Lifecycle' as any, category: 'session' as any, specific: 'end', sessionId: runtime.sessionId, timestamp: Date.now(), payload: { sessionId: runtime.sessionId } }).catch(() => {}); } catch { /* non-fatal */ }
-    // Save conversation on exit
-    saveConversation(conversation.toJSON() as { messages: object[]; timestamp?: number }, runtime.sessionId, runtime.model, runtime.provider, conversation.title || '');
-    // Fire session save hook
-    try { getHookDispatcher().fire({ path: 'Lifecycle:session:save' as any, phase: 'Lifecycle' as any, category: 'session' as any, specific: 'save', sessionId: runtime.sessionId, timestamp: Date.now(), payload: { sessionId: runtime.sessionId } }).catch(() => {}); } catch { /* non-fatal */ }
-    try { ScheduleManager.getInstance().destroy(); } catch { /* non-fatal */ }
-    try { providerRegistry.stopWatching(); } catch { /* non-fatal */ }
+    // Terminal teardown — main.ts exclusively owns these
     stdin.removeAllListeners('data');
     stdout.removeAllListeners('resize');
     stdout.write(PASTE_DISABLE + KEYBOARD_EXT_DISABLE + MOUSE_DISABLE + CURSOR_SHOW + ALT_SCREEN_EXIT);
@@ -394,155 +346,13 @@ async function main() {
     process.exit(0);
   };
 
-  // --- Tool registry ---
-  const toolRegistry = new ToolRegistry();
-  const { fileCache, projectIndex } = registerAllTools(toolRegistry);
-  agentOrchestrator.setDependencies(fileCache, projectIndex);
-  // Initialize WrfcController with EventBus and wire to AgentOrchestrator
-  agentOrchestrator.setEventBus(bus);
-  WrfcController.getInstance(bus);
+  // Patch the placeholder exit in commandContext with the real exitApp
+  commandContext.exit = exitApp;
 
-  // Notify the user when a WRFC cascade abort occurs (identical gate failures in consecutive chains)
-  unsubs.push(bus.on('wrfc:cascade-abort', ({ chainId, reason }: { chainId: string; reason: string }) => {
-    conversation.addSystemMessage(`[WRFC] Cascade abort: ${reason} (chain ${chainId})`);
-    bus.emit('render:request');
-  }));
+  // ── InputHandler — created here so getViewportHeight can reference it ──────
+  // orchestratorRefs.getViewportHeight and .scrollToEnd are patched immediately after.
 
-  // Notify user when a synthetic free-tier model falls back to a different provider
-  unsubs.push(bus.on('model:fallback', ({ from, to, provider: fallbackProvider }: { from: string; to: string; provider: string }) => {
-    conversation.addSystemMessage(
-      `[Model] ${from} exhausted across all providers. Automatically falling back to ${to} via ${fallbackProvider}.`
-    );
-    bus.emit('render:request');
-  }));
-
-  // WRFC chain lifecycle — bubble events to conversation
-  unsubs.push(bus.on('wrfc:chain-created', ({ chainId, task }: { chainId: string; task: string }) => {
-    conversation.addSystemMessage(`[WRFC] Chain ${chainId} started: ${task}`);
-    bus.emit('render:request');
-  }));
-
-  unsubs.push(bus.on('wrfc:review-complete', ({ chainId, score, passed }: { chainId: string; score: number; passed: boolean }) => {
-    const icon = passed ? '\u2713' : '\u2717';
-    const threshold = configManager.get('wrfc.scoreThreshold') as number;
-    const suffix = passed ? '' : ` - Minimum score is ${threshold}/10, spawning a fix agent ...`;
-    conversation.addSystemMessage(`[WRFC] ${icon} Review ${chainId.slice(0, 12)}: ${score}/10${suffix}`);
-    bus.emit('render:request');
-  }));
-
-  unsubs.push(bus.on('wrfc:chain-passed', ({ chainId }: { chainId: string }) => {
-    conversation.addSystemMessage(`[WRFC] \u2713 Chain ${chainId.slice(0, 12)} PASSED — all gates clear`);
-    bus.emit('render:request');
-  }));
-
-  unsubs.push(bus.on('wrfc:chain-failed', ({ chainId, reason }: { chainId: string; reason: string }) => {
-    conversation.addSystemMessage(`[WRFC] \u2717 Chain ${chainId.slice(0, 12)} FAILED: ${reason.slice(0, 80)}`);
-    bus.emit('render:request');
-  }));
-
-  unsubs.push(bus.on('wrfc:auto-commit', ({ chainId, commitHash }: { chainId: string; commitHash?: string }) => {
-    const suffix = commitHash ? ` (${commitHash.slice(0, 7)})` : '';
-    conversation.addSystemMessage(`[WRFC] Auto-committed chain ${chainId.slice(0, 12)}${suffix}`);
-    bus.emit('render:request');
-  }));
-
-  unsubs.push(bus.on('wrfc:gate-result', ({ chainId, gate, passed }: { chainId: string; gate: string; passed: boolean }) => {
-    const icon = passed ? '\u2713' : '\u2717';
-    conversation.addSystemMessage(`[WRFC]   ${icon} Gate: ${gate} ${passed ? 'passed' : 'FAILED'}`);
-    bus.emit('render:request');
-  }));
-
-  // Trigger re-render on agent stream deltas so the process indicator
-  // and process modal show live streaming progress without waiting for the 1s poll.
-  unsubs.push(bus.on('subagent:stream-delta', () => {
-    bus.emit('render:request');
-  }));
-
-  // Trigger re-render on agent progress updates (tool execution phase)
-  // so the process indicator reflects what the agent is actually doing.
-  unsubs.push(bus.on('subagent:progress', () => {
-    bus.emit('render:request');
-  }));
-
-  // Helper: generate a cohort summary report string from AgentManager records.
-  const buildCohortReport = (cohort: string): string => {
-    const mgr = AgentManager.getInstance();
-    const agents = mgr.listByCohort(cohort);
-    if (agents.length === 0) return `[Agents] Cohort '${cohort}' complete (no agents found).`;
-    const completed = agents.filter(a => a.status === 'completed').length;
-    const failed = agents.filter(a => a.status === 'failed').length;
-    const cancelled = agents.filter(a => a.status === 'cancelled').length;
-    const lines: string[] = [
-      `[Agents] Cohort '${cohort}' complete: ${completed} completed, ${failed} failed, ${cancelled} cancelled (${agents.length} total)`,
-    ];
-    for (const a of agents) {
-      const dur = a.completedAt !== undefined ? Math.round((a.completedAt - a.startedAt) / 1000) : 0;
-      const icon = a.status === 'completed' ? '\u2713' : a.status === 'failed' ? '\u2717' : '~';
-      const errSuffix = a.error ? ` — ${a.error.slice(0, 60)}` : '';
-      lines.push(`  ${icon} ${a.id.slice(-8)}: ${a.status} in ${dur}s (${a.toolCallCount} tool calls)${errSuffix}`);
-    }
-    return lines.join('\n');
-  };
-
-  // Check if all agents in a cohort are done; if so, show the cohort report.
-  const checkCohortCompletion = (record: { cohort?: string } | null) => {
-    if (!record?.cohort) return;
-    const cohortAgents = AgentManager.getInstance().listByCohort(record.cohort);
-    const allDone = cohortAgents.every(a => a.status !== 'running' && a.status !== 'pending');
-    if (allDone) {
-      conversation.addSystemMessage(buildCohortReport(record.cohort));
-    }
-  };
-
-  // Show a system message when an agent completes and, if its cohort is fully done, show the report.
-  unsubs.push(bus.on('subagent:complete', ({ id }: { id: string }) => {
-    const record = AgentManager.getInstance().getStatus(id);
-    if (record) {
-      const dur = record.completedAt !== undefined ? Math.round((record.completedAt - record.startedAt) / 1000) : 0;
-      const taskSnippet = record.task.length > 50 ? record.task.slice(0, 50) + '…' : record.task;
-      conversation.addSystemMessage(`[Agents] \u2713 ${record.template} ${id.slice(-8)}: "${taskSnippet}" — completed in ${dur}s (${record.toolCallCount} tool calls)`);
-    }
-    checkCohortCompletion(record ?? null);
-    bus.emit('render:request');
-  }));
-
-  // Show a system message when an agent errors and check for cohort completion.
-  unsubs.push(bus.on('subagent:error', ({ id, error }: { id: string; error: Error }) => {
-    const record = AgentManager.getInstance().getStatus(id);
-    if (record && record.status !== 'cancelled') {
-      const dur = record.completedAt !== undefined ? Math.round((record.completedAt - record.startedAt) / 1000) : 0;
-      const taskSnippet = record.task.length > 50 ? record.task.slice(0, 50) + '…' : record.task;
-      conversation.addSystemMessage(`[Agents] \u2717 ${record.template} ${id.slice(-8)}: "${taskSnippet}" — failed in ${dur}s: ${error.message.slice(0, 80)}`);
-    }
-    checkCohortCompletion(record ?? null);
-    bus.emit('render:request');
-  }));
-
-  // Periodic agent status summary — shown every 30s when agents are running.
-  const AGENT_STATUS_INTERVAL_MS = 30_000;
-  agentStatusInterval = setInterval(() => {
-    const running = AgentManager.getInstance().list().filter(a => a.status === 'running');
-    if (running.length === 0) return;
-    const lines = running.map(a => `  ${a.id.slice(-8)}: ${a.progress ?? a.status}`);
-    conversation.addSystemMessage(`[Agents] ${running.length} running:\n${lines.join('\n')}`);
-    bus.emit('render:request');
-  }, AGENT_STATUS_INTERVAL_MS);
-
-  // Start watching for custom provider file changes so hot-reload works.
-  providerRegistry.startWatching(bus);
-
-  // --- Webhook notifications ---
-  const webhookUrls = (configManager.getCategory('notifications') as { webhookUrls?: string[] }).webhookUrls ?? [];
-  if (webhookUrls.length > 0) {
-    const webhookNotifier = WebhookNotifier.fromConfig(webhookUrls);
-    webhookNotifier.attachToEventBus(bus);
-    setWebhookNotifier(webhookNotifier);
-  }
-
-  const permissionManager = new PermissionManager(bus);
-
-  const hookDispatcher = getHookDispatcher();
-
+  // ── InputHandler ────────────────────────────────────────────────────────
   const input = new InputHandler(
     bus,
     selection,
@@ -553,176 +363,9 @@ async function main() {
     exitApp,
   );
 
-  const orchestrator = new Orchestrator(
-    bus,
-    conversation,
-    getViewportHeight,
-    scrollToEnd,
-    toolRegistry,
-    permissionManager,
-    () => {
-      const currentModel = providerRegistry.getCurrentModel();
-      const contextWindow = getContextWindowForModel(currentModel);
-      const tier = getTierForContextWindow(contextWindow);
-      const supplement = getTierPromptSupplement(tier);
-      return supplement ? runtime.systemPrompt + '\n\n' + supplement : runtime.systemPrompt;
-    },
-    hookDispatcher,
-  );
-
-  const acpManager = new AcpManager(bus);
-  orchestrator.registerDelegateTool(acpManager);
-
-  // ── Hook bridge: EventBus events → HookDispatcher fire() ──────────────────
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const fireHook = (path: string, phase: string, category: string, specific: string, payload: Record<string, unknown>): void => {
-    hookDispatcher.fire({
-      path: path as any,
-      phase: phase as any,
-      category: category as any,
-      specific,
-      sessionId: runtime.sessionId,
-      timestamp: Date.now(),
-      payload,
-    }).catch((err: unknown) => logger.debug('Hook bridge fire error', { path, error: String(err) }));
-  };
-
-  // Lifecycle:agent:*
-  unsubs.push(bus.on('subagent:spawned', ({ id, task }: { id: string; task: string }) => {
-    fireHook('Lifecycle:agent:spawned', 'Lifecycle', 'agent', 'spawned', { agentId: id, task });
-  }));
-  unsubs.push(bus.on('subagent:complete', ({ id, result }: { id: string; result: unknown }) => {
-    fireHook('Lifecycle:agent:completed', 'Lifecycle', 'agent', 'completed', { agentId: id, result: result as Record<string, unknown> });
-  }));
-  unsubs.push(bus.on('subagent:error', ({ id, error }: { id: string; error: Error }) => {
-    const isCancelled = error.message === 'Agent cancelled' || error.message.includes('cancelled');
-    const specific = isCancelled ? 'cancelled' : 'failed';
-    fireHook(`Lifecycle:agent:${specific}`, 'Lifecycle', 'agent', specific, { agentId: id, error: error.message });
-  }));
-
-  // Lifecycle:workflow:*
-  unsubs.push(bus.on('wrfc:chain-created', ({ chainId, task }: { chainId: string; task: string }) => {
-    fireHook('Lifecycle:workflow:started', 'Lifecycle', 'workflow', 'started', { chainId, task });
-  }));
-  unsubs.push(bus.on('wrfc:chain-passed', ({ chainId }: { chainId: string }) => {
-    fireHook('Lifecycle:workflow:completed', 'Lifecycle', 'workflow', 'completed', { chainId });
-  }));
-  unsubs.push(bus.on('wrfc:chain-failed', ({ chainId, reason }: { chainId: string; reason: string }) => {
-    fireHook('Lifecycle:workflow:failed', 'Lifecycle', 'workflow', 'failed', { chainId, reason });
-  }));
-
-  // Change:budget:*
-  unsubs.push(bus.on('context:warning', ({ usage, threshold }: { usage: number; threshold: number }) => {
-    const specific = usage >= threshold ? 'exceeded' : 'warning';
-    fireHook(`Change:budget:${specific}`, 'Change', 'budget', specific, { usage, threshold });
-  }));
-
-  // Lifecycle:session:start (once, at startup)
-  fireHook('Lifecycle:session:start', 'Lifecycle', 'session', 'start', { sessionId: runtime.sessionId });
-
-  // --- MCP server auto-discovery ---
-  // Step 1: Connect to all servers already declared in config files.
-  // Non-blocking: connectAll catches per-server errors internally.
-  mcpRegistry.connectAll(config.workingDir ?? process.cwd()).catch((err) => {
-    logger.debug('MCP auto-connect failed (non-fatal)', { error: String(err) });
-  });
-
-  // Step 2: Scan common locations for undiscovered MCP servers and suggest them.
-  // Runs after a short delay so the initial connection attempt has started.
-  setTimeout(() => {
-    const workDir = config.workingDir ?? process.cwd();
-    const registeredNames = new Set(mcpRegistry.serverNames);
-    scanMcpServers(workDir, registeredNames).then((result) => {
-      if (result.suggestions.length === 0) return;
-      for (const suggestion of result.suggestions) {
-        conversation.addSystemMessage(
-          `[MCP] Discovered server '${suggestion.name}' (${suggestion.command} ${(suggestion.args ?? []).join(' ')}).` +
-          ` Add it to .goodvibes/mcp.json or ~/.config/mcp/mcp.json to enable it.`
-        );
-      }
-      bus.emit('render:request');
-    }).catch((err) => {
-      logger.debug('MCP auto-discovery scan failed (non-fatal)', { error: String(err) });
-    });
-  }, 2000);
-
-  // --- Panel manager ---
-  const panelManager = getPanelManager();
-  registerBuiltinPanels(panelManager, {
-    bus,
-    getOrchestratorUsage: () => orchestrator.usage as { input: number; output: number; cacheRead: number; cacheWrite: number; model?: string },
-    toolRegistry,
-    providerRegistry,
-    contextWindow: providerRegistry.getCurrentModel().contextWindow,
-    orchestrator,
-    getCtxWindow: () => providerRegistry.getCurrentModel().contextWindow,
-  });
-
-  // Wire /plan command: when a plan is activated, forward the task to the orchestrator
-  // as a user message so the model can create a spec and execution plan.
-  unsubs.push(bus.on('plan:activate', ({ task }: { task: string }) => {
-    // Use a short delay so the /plan command output renders before the LLM turn starts
-    setTimeout(() => {
-      orchestrator.handleUserInput(task).catch((err) => {
-        logger.debug('plan:activate handler failed', { error: String(err) });
-      });
-    }, 50);
-  }));
-
-  // Session resume from SessionBrowserPanel: load session, update runtime state
-  unsubs.push(bus.on('session:resume', ({ sessionId }: { sessionId: string }) => {
-    try {
-      const sm = getSessionManager();
-      const { messages, meta } = sm.load(sessionId);
-      conversation.fromJSON({ messages: messages as Parameters<typeof conversation.fromJSON>[0]['messages'] });
-      runtime.sessionId = sessionId;
-      if (meta?.model) runtime.model = meta.model;
-      if (meta?.provider) runtime.provider = meta.provider;
-      writeLastSessionPointer(sessionId);
-      conversation.log(`Resumed session: ${sessionId}`, { fg: '135' });
-      fireHook('Lifecycle:session:load', 'Lifecycle', 'session', 'load', { sessionId });
-    } catch (e) {
-      logger.debug('session:resume handler failed', { error: String(e) });
-      conversation.log('Failed to resume session.', { fg: '#ef4444' });
-    }
-    bus.emit('render:request');
-  }));
-
-  // --- Command registry ---
-  const commandRegistry = new CommandRegistry();
-  registerBuiltinCommands(commandRegistry);
-
-  // --- Plugin system ---
-  // Singleton is imported lazily; state is loaded from disk inside init().
-  { const { pluginManager } = await import('./plugins/manager.ts');
-    await pluginManager.init({
-      eventBus: bus,
-      commandRegistry,
-      providerRegistry,
-      toolRegistry,
-      getPluginConfig: (name) => pluginManager.getPluginConfig(name),
-      isEnabled: (name) => pluginManager.isEnabled(name),
-    });
-  }
-
-  const commandContext: CommandContext = {
-    eventBus: bus,
-    providerRegistry,
-    conversationManager: conversation,
-    config,
-    configManager,
-    runtime,
-    renderRequest: () => bus.emit('render:request'),
-    print: (text: string) => {
-      conversation.log(text, { fg: '252' });
-      bus.emit('render:request');
-    },
-    exit: exitApp,
-    reloadSystemPrompt: loadSystemPrompt,
-    toolRegistry,
-    mcpRegistry,
-    fileUndoManager: FileUndoManager.getInstance(),
-  };
+  // Wire orchestratorRefs now that InputHandler is created
+  orchestratorRefs.getViewportHeight = getViewportHeight;
+  orchestratorRefs.scrollToEnd = scrollToEnd;
 
   input.setCommandRegistry(commandRegistry, commandContext);
   input.setConversationManager(conversation);
@@ -831,9 +474,7 @@ async function main() {
     bus.emit('render:request');
   }));
 
-  // --- Input history ---
-  const saveHistory = configManager.get('behavior.saveHistory');
-  const inputHistory = new InputHistory(undefined, saveHistory);
+  // inputHistory comes from bootstrap, already set up — wire it to the input handler
   input.setHistory(inputHistory);
 
   // --- Splash options ---
@@ -859,7 +500,7 @@ async function main() {
 
 
     // Build header and footer FIRST so we know the exact viewport height
-    const headerLines = UIFactory.createHeader(width, currentModel.id, currentModel.provider, conversation.title || undefined, lastGitInfo);
+    const headerLines = UIFactory.createHeader(width, currentModel.id, currentModel.provider, conversation.title || undefined, lastGitInfoRef.value);
     const runningAgents = AgentManager.getInstance().list().filter((a) => a.status === 'running' || a.status === 'pending');
     const runningAgentCount = runningAgents.length;
     // Show first running agent's progress (detail modal shows all)
@@ -1185,15 +826,15 @@ async function main() {
   // Refresh git status after each turn completes or after tool results arrive
   unsubs.push(bus.on('turn:complete', () => {
     // Auto-save after every LLM turn so kills don't lose the session
-    try { saveConversation(conversation.toJSON() as { messages: object[]; timestamp?: number }, runtime.sessionId, runtime.model, runtime.provider, conversation.title || ''); fireHook('Lifecycle:session:save', 'Lifecycle', 'session', 'save', { sessionId: runtime.sessionId }); } catch (e) { logger.debug('auto-save on turn:complete failed', { error: String(e) }); }
+    try { saveConversation(conversation.toJSON() as { messages: object[]; timestamp?: number }, runtime.sessionId, runtime.model, runtime.provider, conversation.title || ''); hookDispatcher.fire({ path: 'Lifecycle:session:save' as HookEventPath, phase: 'Lifecycle' as HookPhase, category: 'session' as HookCategory, specific: 'save', sessionId: runtime.sessionId, timestamp: Date.now(), payload: { sessionId: runtime.sessionId } }).catch((err: unknown) => logger.debug('hook fire error', { error: String(err) })); } catch (e) { logger.debug('auto-save on turn:complete failed', { error: String(e) }); }
     gitStatusProvider.refresh().then((info) => {
-      lastGitInfo = info;
+      lastGitInfoRef.value = info;
       bus.emit('render:request');
     }).catch(() => { /* non-fatal */ });
   }));
   unsubs.push(bus.on('turn:tool-result', () => {
     gitStatusProvider.refresh().then((info) => {
-      lastGitInfo = info;
+      lastGitInfoRef.value = info;
       bus.emit('render:request');
     }).catch(() => { /* non-fatal */ });
   }));
@@ -1394,105 +1035,6 @@ async function main() {
     writeRecoveryFile(conversation, runtime.sessionId);
   }, 60_000);
 
-  // --- Auto-register providers from env vars (e.g. GROQ_API_KEY → Groq) ---
-  autoRegisterProviders();
-
-  // --- Load persisted local LLM providers (instant, before background scan) ---
-  const persisted = loadPersistedProviders();
-  if (persisted.length > 0) {
-    try {
-      providerRegistry.registerDiscoveredProviders(persisted);
-      // Restore saved model now that persisted providers are registered
-      restoreSavedModel(
-        configManager.get('provider.model') as string,
-        configManager.get('provider.provider') as string,
-        runtime,
-      );
-      for (const server of persisted) {
-        conversation.addSystemMessage(
-          `[Local] ${server.name} at ${server.host}:${server.port} (${server.models.length} model${server.models.length !== 1 ? 's' : ''}) — from last session`
-        );
-      }
-      bus.emit('render:request');
-    } catch {
-      // Non-fatal
-    }
-  }
-
-  // --- Background scan to verify persisted + discover new ---
-  scan().then((result) => {
-    const currentModel = configManager.get('provider.model') as string;
-
-    // Build sets for reconciliation
-    const foundKeys = new Set(result.servers.map(s => `${s.host}:${s.port}`));
-    const persistedKeys = new Set(persisted.map(s => `${s.host}:${s.port}`));
-
-    // Newly discovered servers (not previously persisted)
-    const newServers = result.servers.filter(s => !persistedKeys.has(`${s.host}:${s.port}`));
-
-    // Previously persisted but now unreachable
-    const removedServers = persisted.filter(s => !foundKeys.has(`${s.host}:${s.port}`));
-
-    // Register all found servers (re-registers persisted ones with fresh model lists)
-    if (result.servers.length > 0) {
-      try {
-        providerRegistry.registerDiscoveredProviders(result.servers);
-        // Restore saved model now that scan providers are registered
-        restoreSavedModel(
-          configManager.get('provider.model') as string,
-          configManager.get('provider.provider') as string,
-          runtime,
-        );
-      } catch {
-        // Non-fatal
-      }
-    }
-
-    // Log newly discovered servers
-    for (const server of newServers) {
-      conversation.addSystemMessage(
-        `[Scan] Found ${server.name} at ${server.host}:${server.port} (${server.models.length} model${server.models.length !== 1 ? 's' : ''})`
-      );
-    }
-
-    // Handle removed servers — only reconcile when scan proves network connectivity
-    // (result.servers.length > 0 means at least one server responded, so missing ones are genuinely gone)
-    if (result.servers.length > 0 && removedServers.length > 0) {
-      removePersistedProviders(removedServers);
-
-      for (const server of removedServers) {
-        conversation.addSystemMessage(
-          `[Scan] ${server.name} at ${server.host}:${server.port} is no longer reachable — removed`
-        );
-
-        // Check if the active model was on this removed server
-        const wasActive = server.models.includes(currentModel);
-        if (wasActive) {
-          configManager.set('provider.model', 'openrouter/free');
-          configManager.set('provider.provider', 'openrouter');
-          try {
-            providerRegistry.setCurrentModel('openrouter/free');
-            runtime.model = 'openrouter/free';
-            runtime.provider = 'openrouter';
-          } catch { /* non-fatal */ }
-          conversation.addSystemMessage(
-            `[Scan] Active model was on ${server.name} — switched to openrouter/free`
-          );
-        }
-      }
-    }
-
-    // Persist found servers (merge with existing — don't overwrite servers not seen this scan)
-    if (result.servers.length > 0) {
-      persistProviders(result.servers);
-    }
-
-    if (newServers.length > 0 || removedServers.length > 0) {
-      bus.emit('render:request');
-    }
-  }).catch(() => {
-    // Non-fatal: scan failure is expected when no local LLMs are running
-  });
 }
 
 main().catch(err => logger.error('Fatal error', { error: err }));
