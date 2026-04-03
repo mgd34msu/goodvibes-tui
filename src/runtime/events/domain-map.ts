@@ -15,6 +15,7 @@ import type { McpEvent } from './mcp.ts';
 import type { TransportEvent } from './transport.ts';
 import type { CompactionEvent } from './compaction.ts';
 import type { UIEvent } from './ui.ts';
+import type { OpsEvent } from './ops.ts';
 
 /** Union of all runtime domain events. */
 export type AnyRuntimeEvent =
@@ -28,7 +29,8 @@ export type AnyRuntimeEvent =
   | McpEvent
   | TransportEvent
   | CompactionEvent
-  | UIEvent;
+  | UIEvent
+  | OpsEvent;
 
 /**
  * Utility type that maps an event type discriminant to its full event shape.
@@ -58,7 +60,8 @@ export type RuntimeEventDomain =
   | 'mcp'
   | 'transport'
   | 'compaction'
-  | 'ui';
+  | 'ui'
+  | 'ops';
 
 /** Map from domain label to its event union type. */
 export type DomainEventMap = {
@@ -73,4 +76,5 @@ export type DomainEventMap = {
   transport: TransportEvent;
   compaction: CompactionEvent;
   ui: UIEvent;
+  ops: OpsEvent;
 };

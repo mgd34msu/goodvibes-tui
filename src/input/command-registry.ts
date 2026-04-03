@@ -71,6 +71,10 @@ export interface CommandContext {
   getScrollTop?: () => number;
   /** Toggle the panel sidebar (open/close). */
   openPanelPicker?: () => void;
+  /** Toggle the Operator Control Plane (Ops) panel. */
+  openOpsPanel?: () => void;
+  /** OpsControlPlane instance for operator intervention commands. */
+  opsControlPlane?: import('../runtime/ops/control-plane.ts').OpsControlPlane;
 }
 
 /**

@@ -3733,7 +3733,7 @@ export function registerBuiltinCommands(registry: CommandRegistry): void {
           }
           ctx.print(`[Ops] Task ${taskId}: ${action} dispatched.`);
         } catch (e) {
-          ctx.print(`[Ops] Error: ${(e as Error).message}`);
+          ctx.print(`[Ops] Error: ${e instanceof Error ? e.message : String(e)}`);
         }
         return;
       }

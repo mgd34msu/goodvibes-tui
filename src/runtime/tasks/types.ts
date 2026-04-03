@@ -211,4 +211,17 @@ export interface TaskManager {
    * @returns The current status, or `undefined` if the task does not exist.
    */
   getTaskStatus(taskId: string): TaskLifecycleState | undefined;
+
+  /**
+   * Re-queues a failed or cancelled task for execution.
+   *
+   * Transitions the task back to 'queued', clearing terminal-state fields
+   * (error, exitCode, endedAt, startedAt). Only valid from 'failed' or
+   * 'cancelled' states.
+   *
+   * @param taskId - The task to retry.
+   * @returns The updated RuntimeTask in 'queued' state.
+   * @throws If the task does not exist or is not in a retryable state.
+   */
+  retryTask(taskId: string): RuntimeTask;
 }

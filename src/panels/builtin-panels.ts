@@ -49,7 +49,7 @@ export interface BuiltinPanelDeps {
   orchestrator?: Orchestrator;
   /** Callback returning the current model context window size (for TokenBudgetPanel). */
   getCtxWindow?: () => number;
-  /** RuntimeEventBus for the Operator Control Plane panel (ops-control). */
+  /** RuntimeEventBus for panels requiring typed domain events (e.g. ops-control). */
   runtimeBus?: RuntimeEventBus;
 }
 

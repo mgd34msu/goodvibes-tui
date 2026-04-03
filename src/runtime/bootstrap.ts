@@ -59,6 +59,10 @@ import type { HookPhase, HookCategory, HookEventPath } from '../hooks/types.ts';
 import type { RuntimeContext, BootstrapOptions, MutableRuntimeState } from './context.ts';
 import { shutdownRuntime, fireSessionStart, saveSession } from './lifecycle.ts';
 import { createFeatureFlagManager } from './feature-flags/index.ts';
+import { RuntimeEventBus } from './events/index.ts';
+import { createRuntimeStore } from './store/index.ts';
+import { createTaskManager } from './tasks/index.ts';
+import { OpsControlPlane } from './ops/control-plane.ts';
 
 // ── Session file paths ─────────────────────────────────────────────────────
 
@@ -257,6 +261,8 @@ export async function bootstrapRuntime(
   // ── Phase 2: Core subsystems ─────────────────────────────────────────
 
   const bus = new EventBus();
+  // RuntimeEventBus for typed domain events (tasks, agents, ops, etc.)
+  const runtimeBus = new RuntimeEventBus();
 
   // Inject bus into the synthetic provider for cross-model failover notifications
   setSyntheticBus(bus);
@@ -562,6 +568,7 @@ export async function bootstrapRuntime(
     contextWindow: providerRegistry.getCurrentModel().contextWindow,
     orchestrator,
     getCtxWindow: () => providerRegistry.getCurrentModel().contextWindow,
+    runtimeBus,
   });
 
   bootstrapUnsubs.push(bus.on('plan:activate', ({ task }: { task: string }) => {
@@ -820,6 +827,22 @@ export async function bootstrapRuntime(
       );
     },
   };
+
+  // ── Phase 12b: Operator Control Plane wiring (feature-gated) ──────────────
+  // Wire the OpsControlPlane into CommandContext when the feature flag is enabled.
+  // The store and task manager are created unconditionally so they reflect the
+  // real runtime state (tasks registered before the flag check are visible).
+  const opsStore = createRuntimeStore();
+  const opsTaskManager = createTaskManager(opsStore, runtimeBus, userSessionId);
+  if (featureFlags.isEnabled('operator-control-plane')) {
+    const opsControlPlane = new OpsControlPlane(opsTaskManager, runtimeBus, opsStore, userSessionId);
+    ctx.commandContext.opsControlPlane = opsControlPlane;
+    ctx.commandContext.openOpsPanel = () => {
+      const pm = getPanelManager();
+      pm.open('ops-control');
+      bus.emit('render:request');
+    };
+  }
 
   // Wire exit from options if provided, otherwise leave placeholder for main.ts to patch
   if (options?.exit) {
