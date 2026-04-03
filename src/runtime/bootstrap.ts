@@ -63,6 +63,7 @@ import { RuntimeEventBus } from './events/index.ts';
 import { createRuntimeStore } from './store/index.ts';
 import { createTaskManager } from './tasks/index.ts';
 import { OpsControlPlane } from './ops/control-plane.ts';
+import { createSystemMessageRouter, SystemMessageRouter } from '../core/system-message-router.ts';
 
 // ── Session file paths ─────────────────────────────────────────────────────
 
@@ -211,6 +212,15 @@ export type BootstrapContext = RuntimeContext & {
   _getConfiguredProviderIds: typeof getConfiguredProviderIds;
   /** Command registry used by InputHandler. main.ts needs this to wire input. */
   commandRegistry: import('../input/command-registry.ts').CommandRegistry;
+  /**
+   * System message router instantiated at startup, wired to conversation and panel manager.
+   *
+   * @remarks
+   * Route operational messages through this rather than calling
+   * conversation.addSystemMessage() directly so that low-priority messages
+   * stay out of the main conversation and go to the SystemMessagesPanel instead.
+   */
+  systemMessageRouter: SystemMessageRouter;
 };
 
 // ── Bootstrap function ────────────────────────────────────────────────────
@@ -299,7 +309,7 @@ export async function bootstrapRuntime(
   }));
 
   bootstrapUnsubs.push(bus.on('model:fallback', ({ from, to, provider: fallbackProvider }: { from: string; to: string; provider: string }) => {
-    conversation.addSystemMessage(
+    systemMessageRouter.high(
       `[Model] ${from} exhausted across all providers. Automatically falling back to ${to} via ${fallbackProvider}.`
     );
     bus.emit('render:request');
@@ -436,7 +446,7 @@ export async function bootstrapRuntime(
     const running = AgentManager.getInstance().list().filter(a => a.status === 'running');
     if (running.length === 0) return;
     const lines = running.map(a => `  ${a.id.slice(-8)}: ${a.progress ?? a.status}`);
-    conversation.addSystemMessage(`[Agents] ${running.length} running:\n${lines.join('\n')}`);
+    systemMessageRouter.low(`[Agents] ${running.length} running:\n${lines.join('\n')}`);
     bus.emit('render:request');
   }, AGENT_STATUS_INTERVAL_MS);
 
@@ -548,7 +558,7 @@ export async function bootstrapRuntime(
     scanMcpServers(workDir, registeredNames).then((result) => {
       if (result.suggestions.length === 0) return;
       for (const suggestion of result.suggestions) {
-        conversation.addSystemMessage(
+        systemMessageRouter.low(
           `[MCP] Discovered server '${suggestion.name}' (${suggestion.command} ${(suggestion.args ?? []).join(' ')}).` +
           ` Add it to .goodvibes/mcp.json or ~/.config/mcp/mcp.json to enable it.`
         );
@@ -570,6 +580,13 @@ export async function bootstrapRuntime(
     getCtxWindow: () => providerRegistry.getCurrentModel().contextWindow,
     runtimeBus,
   });
+
+  // ── System message router ────────────────────────────────────────────────
+  // Instantiated here so bootstrap event handlers can route through it.
+  // The panel reference is null at startup (SystemMessagesPanel is created lazily
+  // when the user opens it). Messages to the panel are silently dropped until
+  // a panel instance is available.
+  const systemMessageRouter = createSystemMessageRouter(conversation, null);
 
   bootstrapUnsubs.push(bus.on('plan:activate', ({ task }: { task: string }) => {
     setTimeout(() => {
@@ -658,6 +675,10 @@ export async function bootstrapRuntime(
     const effort = data.effort;
     const key = def.registryKey ?? `${def.provider}:${def.id}`;
     try {
+      // Apply context cap override before switching model (so getCurrentModel sees updated contextWindow)
+      if (data.contextCap != null && data.contextCap > 0) {
+        providerRegistry.setModelContextCap(key, data.contextCap);
+      }
       providerRegistry.setCurrentModel(key);
       runtime.model = key;
       runtime.provider = def.provider;
@@ -665,7 +686,10 @@ export async function bootstrapRuntime(
       configManager.set('provider.model', key);
       configManager.set('provider.provider', def.provider);
       configManager.set('provider.reasoningEffort', effort as 'instant' | 'low' | 'medium' | 'high');
-      conversation.log(`Switched to model: ${def.displayName} (${def.provider}), effort: ${effort}`, { fg: '135' });
+      const ctxNote = data.contextCap != null && data.contextCap > 0
+        ? `, context cap: ${data.contextCap.toLocaleString()}`
+        : '';
+      conversation.log(`Switched to model: ${def.displayName} (${def.provider}), effort: ${effort}${ctxNote}`, { fg: '135' });
       bus.emit('command:model-changed', { provider: def.provider, model: def.id });
     } catch (e) {
       conversation.log(`Error switching model: ${(e as Error).message}`, { fg: '#ef4444' });
@@ -702,7 +726,7 @@ export async function bootstrapRuntime(
         runtime,
       );
       for (const server of persisted) {
-        conversation.addSystemMessage(
+        systemMessageRouter.low(
           `[Local] ${server.name} at ${server.host}:${server.port} (${server.models.length} model${server.models.length !== 1 ? 's' : ''}) \u2014 from last session`
         );
       }
@@ -734,7 +758,7 @@ export async function bootstrapRuntime(
     }
 
     for (const server of newServers) {
-      conversation.addSystemMessage(
+      systemMessageRouter.low(
         `[Scan] Found ${server.name} at ${server.host}:${server.port} (${server.models.length} model${server.models.length !== 1 ? 's' : ''})`
       );
     }
@@ -742,7 +766,7 @@ export async function bootstrapRuntime(
     if (result.servers.length > 0 && removedServers.length > 0) {
       removePersistedProviders(removedServers);
       for (const server of removedServers) {
-        conversation.addSystemMessage(
+        systemMessageRouter.low(
           `[Scan] ${server.name} at ${server.host}:${server.port} is no longer reachable \u2014 removed`
         );
         const wasActive = server.models.includes(currentModel);
@@ -756,7 +780,7 @@ export async function bootstrapRuntime(
           } catch (err) {
             logger.debug('[bootstrap] Non-fatal error switching model after server removal', { error: err instanceof Error ? err.message : String(err) });
           }
-          conversation.addSystemMessage(
+          systemMessageRouter.high(
             `[Scan] Active model was on ${server.name} \u2014 switched to openrouter/free`
           );
         }
@@ -809,6 +833,7 @@ export async function bootstrapRuntime(
     _getPinned: getPinned,
     _getConfiguredProviderIds: getConfiguredProviderIds,
     commandRegistry,
+    systemMessageRouter,
     shutdown: async (sessionData) => {
       // Clear bootstrap-owned subscriptions
       bootstrapUnsubs.forEach(fn => fn());

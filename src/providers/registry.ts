@@ -1,4 +1,5 @@
 import type { LLMProvider } from './interface.ts';
+import { logger } from '../utils/logger.ts';
 import { getCapabilityRegistry, type ProviderCapability, type RequestProfile, type RouteExplanation } from './capabilities.ts';
 import type { DiscoveredServer } from '../discovery/scanner.ts';
 import { OpenAIProvider } from './openai.ts';
@@ -751,6 +752,38 @@ export class ProviderRegistry {
       throw new Error(`Current model '${this.currentModelId}' not in registry.`);
     }
     return def;
+  }
+
+  /**
+   * Override the context window cap for a custom or discovered (local) model.
+   * Mutates the live model entry in customModels or discoveredModels so the change
+   * is reflected immediately without requiring a full provider reload.
+   *
+   * @param registryKey - The model's registryKey (`provider:id`).
+   * @param cap         - New context window value in tokens.
+   * @remarks Context cap is session-only. Not persisted to config — lost on restart.
+   */
+  setModelContextCap(registryKey: string, cap: number): void {
+    // Try customModels first, then discoveredModels
+    const customIdx = customModels.findIndex((m) => m.registryKey === registryKey || m.id === registryKey);
+    if (customIdx >= 0) {
+      customModels[customIdx] = {
+        ...customModels[customIdx]!,
+        contextWindow: cap,
+        contextWindowProvenance: 'configured_cap',
+      };
+      return;
+    }
+    const discoveredIdx = discoveredModels.findIndex((m) => m.registryKey === registryKey || m.id === registryKey);
+    if (discoveredIdx >= 0) {
+      discoveredModels[discoveredIdx] = {
+        ...discoveredModels[discoveredIdx]!,
+        contextWindow: cap,
+        contextWindowProvenance: 'configured_cap',
+      };
+      return;
+    }
+    logger.warn('[registry] setModelContextCap: model not found', { registryKey });
   }
 
   /** Switch to a different model. Accepts registryKey or plain modelId. Throws if not selectable. */

@@ -66,7 +66,7 @@ export interface EventMap {
 
   // Model picker events
   'model-picker:select': { model: { id: string; provider: string; displayName: string; registryKey: string } };
-  'model-picker:complete': { model: { id: string; provider: string; displayName: string; registryKey: string }; effort: string };
+  'model-picker:complete': { model: { id: string; provider: string; displayName: string; registryKey: string }; effort: string; contextCap?: number | null };
 
   // Search events
   'search:start': void;

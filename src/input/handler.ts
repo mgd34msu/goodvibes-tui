@@ -1262,7 +1262,7 @@ export class InputHandler {
               if (capModel) {
                 const rawInput = this.modelPicker.contextCapQuery.trim();
                 const parsedCap = rawInput.length > 0 ? parseInt(rawInput, 10) : null;
-                const validCap = parsedCap !== null && parsedCap > 0 ? parsedCap : null;
+                const validCap = parsedCap !== null && parsedCap > 0 && parsedCap <= 10_000_000 ? parsedCap : null;
                 const effort = this.commandContext?.runtime.reasoningEffort ?? 'medium';
                 this.bus.emit('model-picker:complete', { model: capModel, effort, contextCap: validCap });
               }

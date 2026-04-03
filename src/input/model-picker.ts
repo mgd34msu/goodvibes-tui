@@ -4,7 +4,7 @@ import { EFFORT_DESCRIPTIONS } from '../providers/effort-levels.ts';
 import { getBenchmarks, getQualityTier, getQualityTierFromScore, compositeScore, A_TIER_THRESHOLD } from '../providers/model-benchmarks.ts';
 import { getSyntheticModelInfoFromCatalog } from '../providers/model-catalog.ts';
 
-export type PickerMode = 'model' | 'provider' | 'effort';
+export type PickerMode = 'model' | 'provider' | 'effort' | 'contextCap';
 
 /**
  * Pricing tier filter.
@@ -132,6 +132,10 @@ export class ModelPickerModal {
   public effortLevels: string[] = [];
   /** The model chosen in model-mode, awaiting effort selection. */
   public pendingModel: ModelDefinition | null = null;
+  /** The model awaiting context cap input (contextCap mode). */
+  public contextCapPendingModel: ModelDefinition | null = null;
+  /** Current input string in contextCap mode. */
+  public contextCapQuery = '';
 
   // ── Search / filter ──────────────────────────────────────────────────────────
   /** Current search query string (empty = no filter). */
@@ -178,6 +182,38 @@ export class ModelPickerModal {
     const idx = ModelPickerModal.BENCHMARK_SORT_CYCLE.indexOf(this.benchmarkSort);
     this.benchmarkSort = ModelPickerModal.BENCHMARK_SORT_CYCLE[(idx + 1) % ModelPickerModal.BENCHMARK_SORT_CYCLE.length];
     this._clampSelection();
+  }
+
+  /**
+   * Return true when a model is from a custom or discovered (local) provider.
+   * Local models have `contextWindowProvenance` set; catalog cloud models do not.
+   */
+  isLocalModel(model: ModelDefinition): boolean {
+    return model.contextWindowProvenance !== undefined;
+  }
+
+  /** Enter context window cap input mode for a local model. */
+  enterContextCapMode(model: ModelDefinition): void {
+    this.previousMode = 'model';
+    this.contextCapPendingModel = model;
+    this.contextCapQuery = '';
+    this.mode = 'contextCap';
+  }
+
+  /** Append a character to the context cap query. */
+  appendContextCapChar(ch: string): void {
+    // Only allow digits; limit to 9 characters (max representable: 999_999_999)
+    if (this.contextCapQuery.length >= 9) return;
+    if (/^[0-9]$/.test(ch)) {
+      this.contextCapQuery += ch;
+    }
+  }
+
+  /** Delete the last character from the context cap query. */
+  deleteContextCapChar(): void {
+    if (this.contextCapQuery.length > 0) {
+      this.contextCapQuery = this.contextCapQuery.slice(0, -1);
+    }
   }
 
   /** Open showing all models — entry point for /model */
@@ -248,6 +284,8 @@ export class ModelPickerModal {
     this.models = [];
     this.providers = [];
     this.pendingModel = null;
+    this.contextCapPendingModel = null;
+    this.contextCapQuery = '';
     this.selectedIndex = 0;
     this.scrollOffset = 0;
     this.query = '';
