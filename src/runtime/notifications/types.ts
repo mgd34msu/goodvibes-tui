@@ -24,6 +24,40 @@ export type NotificationTarget = 'conversation' | 'status_bar' | 'panel_only';
  */
 export type DomainVerbosity = 'minimal' | 'normal' | 'verbose';
 
+/**
+ * Typed reason codes for routing decisions.
+ *
+ * These codes appear in RoutingDecision.reasonCode and provide a machine-
+ * readable explanation of why a notification was suppressed or redirected.
+ *
+ * - `allowed`                — notification was not suppressed (delivered normally)
+ * - `quiet_while_typing`     — suppressed because the user is actively typing
+ * - `mode_context_minimal`   — suppressed by the mode-context policy (quiet/minimal mode)
+ * - `mode_context_normal`    — suppressed by the mode-context policy (normal mode, operational info)
+ * - `burst_collapsed`        — collapsed into an existing burst batch group
+ * - `batch_window_collapsed` — collapsed by the rolling batch-window policy
+ * - `domain_verbosity_low`   — domain verbosity set below the notification level
+ */
+export type RoutingReasonCode =
+  | 'allowed'
+  | 'quiet_while_typing'
+  | 'mode_context_minimal'
+  | 'mode_context_normal'
+  | 'burst_collapsed'
+  | 'batch_window_collapsed'
+  | 'domain_verbosity_low';
+
+/**
+ * Semantic tag classifying a notification's operational role.
+ *
+ * Used by the burst and mode-context policies to distinguish high-signal
+ * events from operational churn:
+ * - `operational` — routine progress / heartbeat events (most suppressible)
+ * - `milestone`   — meaningful completion or state-change events
+ * - `alert`       — user-attention-required events (least suppressible)
+ */
+export type NotificationTag = 'operational' | 'milestone' | 'alert';
+
 /** An action that can be triggered when the user interacts with a notification. */
 export interface NotificationAction {
   /** Human-readable label (e.g. "Jump to panel"). */
@@ -57,6 +91,11 @@ export interface Notification {
   panelId?: string;
   /** Optional action (e.g. jump to panel) presented alongside the notification. */
   action?: NotificationAction;
+  /**
+   * Optional semantic tag classifying the notification's operational role.
+   * When absent, the notification is treated as `operational` by default.
+   */
+  tag?: NotificationTag;
 }
 
 /**
@@ -74,8 +113,15 @@ export interface RoutingDecision {
   /**
    * When set, this notification was suppressed and should not be displayed.
    * The string value describes the suppression reason (e.g. 'quiet_while_typing').
+   *
+   * @deprecated Use `reasonCode` for structured decision processing.
    */
   suppressed?: string;
+  /**
+   * Structured reason code for this routing decision.
+   * Always present; reflects the final policy that determined the outcome.
+   */
+  reasonCode: RoutingReasonCode;
 }
 
 /** A notification paired with its routing decision. */

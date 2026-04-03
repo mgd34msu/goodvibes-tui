@@ -242,6 +242,116 @@ export interface RemoteSession {
   readonly lastAckedOffset: number;
 }
 
+// ── Protocol Version Compatibility (Section 10.5) ────────────────────────────
+
+/**
+ * A semantic protocol version for the transport wire protocol.
+ *
+ * Versions are compared numerically: major.minor.patch.
+ * A peer with a different major version is always incompatible.
+ * A peer with a lower minor version may require graceful downgrade.
+ */
+export interface ProtocolVersion {
+  /** Major version — breaking changes; different majors cannot interoperate. */
+  readonly major: number;
+  /** Minor version — additive features; lower minor = possible downgrade. */
+  readonly minor: number;
+  /** Patch version — bug fixes only; no capability differences. */
+  readonly patch: number;
+  /** Human-readable version string (e.g. "2.1.0"). */
+  readonly label: string;
+}
+
+/**
+ * Reason codes for a protocol downgrade.
+ *
+ * When a peer's version is lower than the local version, the negotiation
+ * can proceed at the peer's level. The reason code records why the downgrade
+ * occurred for diagnostics and operator visibility.
+ */
+export type DowngradeReason =
+  /** Peer advertised a lower minor version; downgrading feature set. */
+  | 'peer_minor_older'
+  /** Local policy forces downgrade for compatibility with legacy peers. */
+  | 'policy_forced'
+  /** Peer explicitly requested an older protocol level. */
+  | 'peer_requested';
+
+/**
+ * Negotiated protocol contract agreed upon during handshake.
+ *
+ * Both sides commit to this version for the session lifetime.
+ * Any capability absent at the negotiated version must not be used.
+ */
+export interface NegotiatedProtocol {
+  /** The agreed-upon version both peers will use. */
+  readonly version: ProtocolVersion;
+  /** Whether a downgrade from the local maximum occurred. */
+  readonly downgraded: boolean;
+  /** Reason for the downgrade (undefined when no downgrade). */
+  readonly downgradeReason?: DowngradeReason;
+  /** Version the local side offered (before negotiation). */
+  readonly offeredVersion: ProtocolVersion;
+  /** Version the remote peer advertised. */
+  readonly peerVersion: ProtocolVersion;
+  /** Epoch ms when negotiation completed. */
+  readonly negotiatedAt: number;
+}
+
+/**
+ * Result of a version compatibility check between local and peer versions.
+ *
+ * The `proceed` flag is the gate: if false, the handshake must be rejected
+ * and `incompatibilityReason` explains why to the operator.
+ */
+export type VersionNegotiationResult =
+  | {
+      readonly proceed: true;
+      readonly protocol: NegotiatedProtocol;
+    }
+  | {
+      readonly proceed: false;
+      /** Structured reason code for programmatic handling. */
+      readonly incompatibilityCode:
+        | 'major_version_mismatch'
+        | 'peer_version_too_old'
+        | 'peer_version_unsupported';
+      /** Human-readable explanation for operator diagnostics. */
+      readonly incompatibilityReason: string;
+      /** The local version that was offered. */
+      readonly offeredVersion: ProtocolVersion;
+      /** The peer version that was received. */
+      readonly peerVersion: ProtocolVersion;
+    };
+
+/**
+ * Compatibility matrix entry defining the min/max peer versions that can
+ * interoperate with a given local version.
+ *
+ * "Supported range" is inclusive. Peers outside this range cannot proceed.
+ * Peers below `minSupported` receive an incompatibility rejection.
+ * Peers above `maxSupported` are treated as downgrade targets (peer is newer).
+ */
+export interface CompatibilityEntry {
+  /** The local version this entry describes. */
+  readonly localVersion: ProtocolVersion;
+  /** Minimum peer minor version accepted (same major required). */
+  readonly minSupportedMinor: number;
+  /** Maximum peer minor version accepted (same major required). */
+  readonly maxSupportedMinor: number;
+  /** Human-readable notes on what changed at each boundary. */
+  readonly notes?: string;
+}
+
+/**
+ * The full compatibility matrix: an ordered list of compatibility entries,
+ * one per supported local version.
+ *
+ * During handshake, the entry matching the current local version is looked up
+ * and the peer version is validated against its min/max range.
+ */
+export type CompatibilityMatrix = readonly CompatibilityEntry[];
+
 // ── Substrate Config ─────────────────────────────────────────────────────────
 
 /**

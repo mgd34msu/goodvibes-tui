@@ -30,6 +30,7 @@ import type {
   McpTrustLevel,
   McpPermission,
   SchemaFreshness,
+  QuarantineReason,
 } from './types.ts';
 import { DEFAULT_RECONNECT_CONFIG } from './types.ts';
 
@@ -135,10 +136,22 @@ export class McpLifecycleManager {
   /**
    * Check whether a tool call is permitted for the given server.
    *
+   * Quarantined schemas unconditionally block execution — the freshness check
+   * runs before the permission check so a quarantined schema cannot be bypassed
+   * by a permissive trust level.
+   *
    * @param serverName - Server identifier
    * @param toolName   - Tool name on the server (not qualified)
    */
   isToolAllowed(serverName: string, toolName: string): McpPermission {
+    if (this.freshness.isQuarantined(serverName)) {
+      const record = this.freshness.getRecord(serverName);
+      const detail = record?.quarantine?.detail ?? 'schema is quarantined';
+      return {
+        allowed: false,
+        reason: `Schema quarantined (${record?.quarantine?.reason ?? 'unknown'}): ${detail}. Refresh schema or request operator approval to proceed.`,
+      };
+    }
     return this.permissions.isToolAllowed(serverName, toolName);
   }
 
@@ -183,6 +196,68 @@ export class McpLifecycleManager {
    */
   getSchemaFreshness(serverName: string): SchemaFreshness {
     return this.freshness.getFreshness(serverName);
+  }
+
+  /**
+   * Returns `true` if the server's schema is quarantined.
+   *
+   * When quarantined, `isToolAllowed` will block all tool execution until the
+   * schema is refreshed (`markFresh` via a successful schema fetch) or an
+   * operator approves a temporary override via `approveSchemaQuarantine`.
+   *
+   * @param serverName - Server identifier
+   */
+  isSchemaQuarantined(serverName: string): boolean {
+    return this.freshness.isQuarantined(serverName);
+  }
+
+  /**
+   * Manually quarantine a server's schema.
+   *
+   * Intended for operator-initiated quarantine (e.g. after detecting schema
+   * incompatibility). Emits `MCP_SCHEMA_QUARANTINED`.
+   *
+   * @param serverName - Server identifier
+   * @param reason     - Why quarantine is being applied
+   * @param detail     - Optional detail for the MCP panel display
+   */
+  quarantineSchema(
+    serverName: string,
+    reason: QuarantineReason,
+    detail?: string,
+  ): void {
+    this.freshness.markQuarantined(serverName, reason, detail);
+    this._emit({
+      type: 'MCP_SCHEMA_QUARANTINED',
+      serverId: serverName,
+      reason,
+      detail,
+    });
+    logger.warn('McpLifecycleManager: schema quarantined', { server: serverName, reason, detail });
+  }
+
+  /**
+   * Operator override: approve a quarantined schema so tool execution can
+   * proceed temporarily without a full schema refresh.
+   *
+   * The quarantine record is preserved for audit purposes. Freshness transitions
+   * to `stale`. Emits `MCP_SCHEMA_QUARANTINE_APPROVED`.
+   *
+   * @param serverName - Server identifier
+   * @param operatorId - Identifier of the approving operator
+   */
+  approveSchemaQuarantine(serverName: string, operatorId: string): void {
+    if (!this.freshness.isQuarantined(serverName)) {
+      logger.debug('McpLifecycleManager: approveSchemaQuarantine called but not quarantined', { server: serverName });
+      return;
+    }
+    this.freshness.approveQuarantine(serverName, operatorId);
+    this._emit({
+      type: 'MCP_SCHEMA_QUARANTINE_APPROVED',
+      serverId: serverName,
+      operatorId,
+    });
+    logger.warn('McpLifecycleManager: quarantine override approved', { server: serverName, operatorId });
   }
 
   // ── Inspection ────────────────────────────────────────────────────────────

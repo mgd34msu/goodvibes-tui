@@ -468,30 +468,7 @@ async function main() {
     bus.emit('render:request');
   };
 
-  // When model+effort selection is complete via the picker, apply both
-  unsubs.push(bus.on('model-picker:complete', (data) => {
-    if (!data?.model) return;
-    const def = data.model;
-    const effort = data.effort;
-    // Use registryKey as the canonical model identifier for unambiguous routing
-    const key = def.registryKey ?? `${def.provider}:${def.id}`;
-    try {
-      providerRegistry.setCurrentModel(key);
-      runtime.model = key;
-      runtime.provider = def.provider;
-      runtime.reasoningEffort = effort as 'instant' | 'low' | 'medium' | 'high';
-      configManager.set('provider.model', key);
-      configManager.set('provider.provider', def.provider);
-      configManager.set('provider.reasoningEffort', effort as 'instant' | 'low' | 'medium' | 'high');
-      conversation.log(`Switched to model: ${def.displayName} (${def.provider}), effort: ${effort}`, { fg: '135' });
-      bus.emit('command:model-changed', { provider: def.provider, model: def.id });
-    } catch (e) {
-      conversation.log(`Error switching model: ${(e as Error).message}`, { fg: '#ef4444' });
-    }
-    // Full screen redraw to ensure all UI elements (including context bar) reflect the new model
-    compositor.resetDiff();
-    bus.emit('render:request');
-  }));
+  // Model picker callback is handled in bootstrap.ts — do not duplicate here
 
   // inputHistory comes from bootstrap, already set up — wire it to the input handler
   input.setHistory(inputHistory);

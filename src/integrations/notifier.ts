@@ -2,6 +2,9 @@ import { logger } from '../utils/logger.ts';
 import type { EventBus } from '../core/event-bus.ts';
 import { SlackIntegration } from './slack.ts';
 import { DiscordIntegration } from './discord.ts';
+import { DeliveryQueue } from './delivery.ts';
+import type { DeliveryQueueConfig, IntegrationQueueStatus } from './delivery.ts';
+import { snapshotQueueStatus } from './delivery.ts';
 
 // ---------------------------------------------------------------------------
 // Notifier
@@ -20,10 +23,16 @@ export class Notifier {
   private slack?: SlackIntegration;
   private discord?: DiscordIntegration;
   private unsubscribers: Array<() => void> = [];
+  private readonly _queue: DeliveryQueue;
 
-  constructor(options?: { slack?: SlackIntegration; discord?: DiscordIntegration }) {
+  constructor(options?: {
+    slack?: SlackIntegration;
+    discord?: DiscordIntegration;
+    delivery?: Partial<DeliveryQueueConfig>;
+  }) {
     this.slack = options?.slack;
     this.discord = options?.discord;
+    this._queue = new DeliveryQueue(options?.delivery ?? {});
   }
 
   /**
@@ -60,31 +69,54 @@ export class Notifier {
    */
   async notify(event: string, data: Record<string, unknown>): Promise<void> {
     const text = this.formatText(event, data);
-    const errors: string[] = [];
 
     if (this.slack) {
-      try {
-        await this.slack.postWebhook(text);
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
-        errors.push(`Slack: ${msg}`);
-        logger.warn('Notifier: Slack notification failed', { error: msg });
-      }
+      const slack = this.slack;
+      await this._queue.enqueue('slack', event, text, () => slack.postWebhook(text));
     }
 
     if (this.discord) {
-      try {
-        await this.discord.postWebhook(text);
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
-        errors.push(`Discord: ${msg}`);
-        logger.warn('Notifier: Discord notification failed', { error: msg });
-      }
+      const discord = this.discord;
+      await this._queue.enqueue('discord', event, text, () => discord.postWebhook(text));
     }
+  }
 
-    if (errors.length > 0) {
-      logger.warn('Notifier.notify: some channels failed', { errors });
+  /**
+   * Get delivery queue status snapshots for all active channels.
+   * Used by integration diagnostics to surface queue and DLQ state.
+   */
+  getQueueStatus(): IntegrationQueueStatus[] {
+    const sloEnforced = this._queue.sloEnforced;
+    const statuses: IntegrationQueueStatus[] = [];
+    if (this.slack) {
+      statuses.push(snapshotQueueStatus('slack', this._queue, sloEnforced));
     }
+    if (this.discord) {
+      statuses.push(snapshotQueueStatus('discord', this._queue, sloEnforced));
+    }
+    return statuses;
+  }
+
+  /**
+   * Replay all dead-letter entries to their respective channels.
+   * Re-attempts delivery for each DLQ entry; results are returned per-entry.
+   */
+  async replayDeadLetters(): Promise<Array<{ id: string; outcome: import('./delivery.ts').DeliveryOutcome }>> {
+    return this._queue.replay(async (dlqEntry) => {
+      const text = dlqEntry.payload;
+      if (dlqEntry.channel === 'slack' && this.slack) {
+        await this.slack.postWebhook(text);
+      } else if (dlqEntry.channel === 'discord' && this.discord) {
+        await this.discord.postWebhook(text);
+      } else {
+        throw new Error(`No active integration for channel: ${dlqEntry.channel}`);
+      }
+    });
+  }
+
+  /** Dispose the delivery queue (cancel pending timers). Call on shutdown. */
+  dispose(): void {
+    this._queue.dispose();
   }
 
   /**

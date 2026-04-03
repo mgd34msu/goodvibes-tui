@@ -6,3 +6,12 @@ export { DiscordInteractionType, DiscordInteractionResponseType } from './discor
 export { Notifier } from './notifier.ts';
 export { GitHubIntegration } from './github.ts';
 export type { GitHubWebhookEvent } from './github.ts';
+export { DeliveryQueue, DeliveryError, classifyDeliveryError, snapshotQueueStatus } from './delivery.ts';
+export type {
+  DeliveryOutcome,
+  DeliveryFailureClass,
+  DeadLetterEntry,
+  DeliveryMetrics,
+  DeliveryQueueConfig,
+  IntegrationQueueStatus,
+} from './delivery.ts';

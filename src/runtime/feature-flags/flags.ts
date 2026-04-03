@@ -318,6 +318,37 @@ export const FEATURE_FLAGS: FeatureFlag[] = [
     runtimeToggleable: true,
   },
 
+  // ── Integration Delivery SLO ────────────────────────────────────────────
+  {
+    id: 'integration-delivery-slo',
+    name: 'Integration Delivery SLO',
+    description:
+      'Enables SLO enforcement for integration delivery (Slack, Discord, webhooks). '
+      + 'When enabled, dead-letter events are logged at error level and surfaced in '
+      + 'integration diagnostics. Failures are classified as retryable or terminal '
+      + 'and retried with exponential backoff. Dead-letter entries are exposed via '
+      + '/notify dlq and replayable via /notify replay. '
+      + 'Disable to revert to legacy warn-only logging with no DLQ tracking.',
+    defaultState: 'disabled',
+    tier: 6,
+    runtimeToggleable: true,
+  },
+
+  // ── Adaptive Notification Suppression ──────────────────────────────────────
+  {
+    id: 'adaptive-notification-suppression',
+    name: 'Adaptive Notification Suppression',
+    description:
+      'Enables mode-context and burst-detection policies in the NotificationRouter. '
+      + 'In quiet/minimal mode, operational churn is suppressed before reaching the '
+      + 'conversation or status bar. Burst detection collapses rapid domain:level '
+      + 'floods into panel_only with a burst_collapsed reason code. '
+      + 'Disable to revert to base default + quiet-typing + batch-window policies only.',
+    defaultState: 'disabled',
+    tier: 3,
+    runtimeToggleable: true,
+  },
+
   // ── Section 5.7: Tool Contract Verification ──────────────────────────────
   {
     id: 'tool-contract-verification',

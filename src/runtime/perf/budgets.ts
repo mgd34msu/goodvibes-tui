@@ -107,4 +107,25 @@ export const DEFAULT_BUDGETS: PerfBudget[] = [
       'p95 duration from PERMISSION_REQUESTED to DECISION_EMITTED must be under 100ms. ' +
       'Sustained violations indicate permission pipeline overhead regression.',
   },
+  // ── Integration Delivery SLO ─────────────────────────────────────────────
+  {
+    name: 'SLO: Integration Delivery Success Rate',
+    metric: 'slo.integration.delivery_success_rate',
+    threshold: 95,
+    unit: 'percent',
+    tolerance: 3,
+    description:
+      'Integration delivery success rate must remain above 95% over any 100-delivery window. '
+      + 'Sustained violations indicate systemic integration delivery failures requiring investigation.',
+  },
+  {
+    name: 'SLO: Integration DLQ Depth',
+    metric: 'slo.integration.dlq_depth',
+    threshold: 10,
+    unit: 'count',
+    tolerance: 3,
+    description:
+      'Integration dead-letter queue depth must remain below 10 entries. '
+      + 'A deeper queue indicates persistent delivery failures that require manual replay or investigation.',
+  },
 ];
