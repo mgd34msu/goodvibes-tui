@@ -30,9 +30,10 @@ import { AgentManager } from '../tools/agent/index.ts';
 import type { AgentInput } from '../tools/agent/schema.ts';
 import { WrfcController } from '../agents/wrfc-controller.ts';
 import { THINKING_SPINNER_FRAMES } from '../renderer/progress.ts';
-import { randomUUID } from 'node:crypto';
+import { randomUUID, createHash } from 'node:crypto';
 import { cacheHitTracker } from '../providers/cache-strategy.ts';
 import { helperModel } from '../config/helper-model.ts';
+import { idempotencyStore } from '../runtime/idempotency/index.ts';
 
 /** Minimal interface for hook dispatch — allows any compatible implementation */
 interface HookDispatcherLike {
@@ -77,6 +78,24 @@ export class Orchestrator {
 
   /** Session ID for hook events — unique per Orchestrator instance */
   private readonly sessionId = randomUUID();
+
+  /**
+   * Submission key for the currently active turn.
+   *
+   * Generated at the start of each `runTurn` call and used as the idempotency
+   * key for the turn-level deduplication fence. A duplicate `runTurn` call with
+   * the same text that arrives while a turn is still in-flight will be detected
+   * via the shared `idempotencyStore` and rejected before re-executing.
+   *
+   * The key is reset to `null` when the turn completes.
+   */
+  public currentSubmissionKey: string | null = null;
+
+  /**
+   * Tracks whether the current turn ended in failure.
+   * Set to `true` in the catch block; read in `finally` to decide markComplete vs markFailed.
+   */
+  private _turnFailed = false;
 
   /** Event replay queue — ensures model acknowledges significant events */
   private readonly replayQueue: EventReplayQueue;
@@ -229,6 +248,41 @@ export class Orchestrator {
 
   private async runTurn(text: string, content?: ContentPart[]): Promise<void> {
     const turnStartTime = Date.now();
+
+    // --- Submission key — per-turn idempotency fence ---
+    // Generates a stable, deterministic key for this turn using a SHA-256 hash
+    // of the message content (first 512 chars) + conversation length as context.
+    // If the same physical turn is replayed (reconnect/restart) before the
+    // prior execution completes, the second attempt hits 'in-flight' and is
+    // silently dropped. After completion the key expires via TTL.
+    // Note: turnId is deliberately pre-hashed here (SHA-256, sliced to 16 chars) so
+    // that long message text does not bloat the intermediate string passed to
+    // generateKey — which applies its own SHA-256 internally. The double-hash is
+    // intentional and harmless: the outer hash provides key isolation and the
+    // inner hash ensures the final store key is a uniform 64-char hex digest.
+    const turnId = createHash('sha256')
+      .update(`${this.sessionId}:${this.conversation.getMessageCount()}:${text.slice(0, 512)}`)
+      .digest('hex')
+      .slice(0, 16); // 16-char prefix is sufficient for in-process dedup
+    const submissionKey = idempotencyStore.generateKey({
+      sessionId: this.sessionId,
+      turnId,
+      callId:    text.slice(0, 64), // use prompt prefix for human-readable correlation
+    });
+    const submissionCheck = idempotencyStore.checkAndRecord(submissionKey);
+    this.currentSubmissionKey = submissionKey;
+
+    if (submissionCheck.status === 'in-flight') {
+      logger.warn('Orchestrator: duplicate turn submission detected (in-flight) — dropping', {
+        sessionId: this.sessionId,
+        submissionKey,
+      });
+      this.currentSubmissionKey = null;
+      return;
+    }
+    // 'duplicate' (completed/failed) — allow re-run (user sent same text intentionally).
+    // We just let it proceed; the prior record will be overwritten.
+
     this.bus.emit('turn:start', { prompt: text });
 
     // Pre-turn plan injection: if an active plan exists, inject its current state into
@@ -857,8 +911,21 @@ export class Orchestrator {
           this.conversation.addSystemMessage(`[Provider] ${currentModel?.provider ?? 'Unknown'} failed. Alternative available: ${alt.displayName} (${alt.provider}). Use /model to switch.`);
         }
       }
+      this._turnFailed = true;
       this.bus.emit('turn:error', { error });
     } finally {
+      // --- Submission key: mark turn complete or failed ---
+      // Success: markComplete caches the result for duplicate callers.
+      // Failure: markFailed allows retry on the next submission.
+      if (this.currentSubmissionKey) {
+        if (this._turnFailed) {
+          idempotencyStore.markFailed(this.currentSubmissionKey);
+        } else {
+          idempotencyStore.markComplete(this.currentSubmissionKey);
+        }
+        this.currentSubmissionKey = null;
+        this._turnFailed = false;
+      }
       this.stopThinking();
       const durationMs = Date.now() - turnStartTime;
       const notifyEnabled = configManager.get('behavior.notifyOnComplete') as boolean | undefined;

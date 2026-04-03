@@ -150,6 +150,138 @@ export interface PermissionDecision {
   evaluationTrace: EvaluationStep[];
 }
 
+// ── Simulation Types ──────────────────────────────────────────────────────────
+
+/**
+ * Controls how the permission simulator behaves during evaluation.
+ *
+ * - `simulation-only`     — Both evaluators run; only the actual decision is
+ *                           enforced. Divergence is logged silently.
+ * - `warn-on-divergence`  — Both evaluators run; actual enforced. Divergence
+ *                           emits a warning to the decision log.
+ * - `enforce`             — The simulated evaluator becomes the authoritative
+ *                           evaluator. Blocked if the divergence gate fails.
+ */
+export type SimulationMode =
+  | 'simulation-only'
+  | 'warn-on-divergence'
+  | 'enforce';
+
+/**
+ * Categorises how two decisions diverged from one another.
+ *
+ * - `allow-vs-deny`  — Actual allowed; simulated denied.
+ * - `deny-vs-allow`  — Actual denied; simulated allowed.
+ * - `reason-mismatch`— Both produced the same allow/deny but with different
+ *                      reason codes or source layers.
+ */
+export type DivergenceType =
+  | 'allow-vs-deny'
+  | 'deny-vs-allow'
+  | 'reason-mismatch';
+
+/**
+ * The result of a single simulation evaluation — pairing the actual decision
+ * with the simulated decision and describing any observed divergence.
+ */
+export interface SimulationResult {
+  /** Decision produced by the actual (authoritative) evaluator. */
+  actualDecision: PermissionDecision;
+  /** Decision produced by the simulated (candidate) evaluator. */
+  simulatedDecision: PermissionDecision;
+  /**
+   * The decision that should be enforced by the caller.
+   *
+   * - `simulation-only` and `warn-on-divergence` — equals `actualDecision`.
+   * - `enforce` — equals `simulatedDecision` (simulated becomes authoritative).
+   */
+  authoritativeDecision: PermissionDecision;
+  /** Whether the two decisions diverged in any way. */
+  diverged: boolean;
+  /** How the decisions diverged; only set when `diverged` is `true`. */
+  divergenceType?: DivergenceType;
+}
+
+/**
+ * A single divergence observation recorded for aggregation.
+ *
+ * Stored by `PermissionSimulator` and surfaced via `getDivergenceReport()`.
+ */
+export interface DivergenceRecord {
+  /** Unix epoch milliseconds when the divergence was recorded. */
+  timestamp: number;
+  /** Tool name at the time of divergence. */
+  toolName: string;
+  /** Semantic classification of the tool call. */
+  toolClass: CommandClassification;
+  /** First token of the command/path/url argument, if present. */
+  commandPrefix: string | undefined;
+  /** Active simulation mode at the time of divergence. */
+  mode: SimulationMode;
+  /** How the two decisions diverged. */
+  divergenceType: DivergenceType;
+  /** Reason from the actual decision. */
+  actualReason: DecisionReason;
+  /** Reason from the simulated decision. */
+  simulatedReason: DecisionReason;
+}
+
+/**
+ * Aggregated statistics for a group of divergence records.
+ */
+export interface DivergenceStats {
+  /** Total number of divergences observed. */
+  total: number;
+  /** Breakdown by divergence type. */
+  byType: Record<DivergenceType, number>;
+  /** Rate: divergences / total evaluations (0–1). */
+  divergenceRate: number;
+  /** Total evaluations against which this rate is computed. */
+  totalEvaluations: number;
+}
+
+/**
+ * Full report returned by `PermissionSimulator.getDivergenceReport()`.
+ *
+ * Aggregated statistics broken down by tool class and command prefix.
+ */
+export interface DivergenceReport {
+  /** Aggregate statistics across all evaluations. */
+  overall: DivergenceStats;
+  /** Per-tool-class breakdown (keyed by CommandClassification). */
+  byToolClass: Partial<Record<CommandClassification, DivergenceStats>>;
+  /** Per-command-prefix breakdown (keyed by prefix string). */
+  byCommandPrefix: Record<string, DivergenceStats>;
+  /** Per-mode breakdown (keyed by SimulationMode). */
+  byMode: Partial<Record<SimulationMode, DivergenceStats>>;
+  /** Raw divergence records (capped at internal limit). */
+  records: DivergenceRecord[];
+}
+
+/**
+ * Configuration for `PermissionSimulator`.
+ */
+export interface PermissionSimulatorConfig {
+  /**
+   * Maximum number of divergence records to retain in memory.
+   * Oldest records are evicted when the limit is reached. Defaults to 500.
+   */
+  maxDivergenceRecords?: number;
+  /**
+   * Maximum divergence rate (0–1) allowed before enforcement mode is blocked.
+   * Only relevant when `mode` is `'enforce'`.
+   * Defaults to 0.05 (5%).
+   */
+  divergenceThreshold?: number;
+  /**
+   * Optional callback invoked when a divergence is detected in `warn-on-divergence` mode.
+   *
+   * Receives the full `DivergenceRecord` for the diverging evaluation.
+   * If omitted, warnings are written to `process.stderr` as a fallback.
+   */
+  onWarning?: (record: DivergenceRecord) => void;
+}
+
 // ── Policy Rules ───────────────────────────────────────────────────────────────
 
 /**

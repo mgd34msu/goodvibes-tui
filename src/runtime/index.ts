@@ -47,6 +47,24 @@ export { createModelPickerData, ModelPickerDataProvider } from './ui/model-picke
 export type { ModelPickerDataProviderOptions } from './ui/model-picker/index.ts';
 export { createProviderHealthData, ProviderHealthDataProvider } from './ui/provider-health/index.ts';
 
+// Retention
+export {
+  RetentionPolicy,
+  SnapshotPruner,
+  DEFAULT_RETENTION_CONFIG,
+} from './retention/index.ts';
+export type {
+  RetentionClass,
+  RetentionClassConfig,
+  RetentionConfig,
+  CheckpointRecord,
+  PruneOptions,
+  PruneResult,
+  PerClassPruneResult,
+  Pruner,
+  RetentionStats,
+} from './retention/index.ts';
+
 // Bootstrap
 export { bootstrapRuntime } from './bootstrap.ts';
 export type { RuntimeContext, BootstrapOptions } from './context.ts';
