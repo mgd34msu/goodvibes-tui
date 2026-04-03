@@ -1203,6 +1203,11 @@ export class InputHandler {
               // Back to model list
               this.modelPicker.mode = 'model' as any;
               this.modelPicker.selectedIndex = 0;
+            } else if (this.modelPicker.mode === 'contextCap') {
+              // Escape from contextCap — return to model list without applying cap
+              this.modelPicker.contextCapQuery = '';
+              this.modelPicker.contextCapPendingModel = null;
+              this.modelPicker.mode = 'model' as any;
             } else if (this.modelPicker.mode === 'model' && this.modelPicker.previousMode === 'provider') {
               // Back to provider list
               this.modelPicker.mode = 'provider' as any;
@@ -1211,8 +1216,10 @@ export class InputHandler {
               this.handleEscape();
             }
           } else if (token.logicalName === 'backspace') {
-            // Backspace removes last char from query (model or provider mode)
-            if (this.modelPicker.mode === 'model' || this.modelPicker.mode === 'provider') {
+            if (this.modelPicker.mode === 'contextCap') {
+              this.modelPicker.deleteContextCapChar();
+            } else if (this.modelPicker.mode === 'model' || this.modelPicker.mode === 'provider') {
+              // Backspace removes last char from query (model or provider mode)
               this.modelPicker.deleteChar();
             }
           } else if (token.logicalName === 'enter') {
@@ -1249,6 +1256,18 @@ export class InputHandler {
               }
               this.modelPicker.close();
               if (this.modalStack.length > 0 && this.modalStack[this.modalStack.length - 1] === 'modelPicker') this.modalStack.pop();
+            } else if (mode === 'contextCap') {
+              // Confirm context cap — emit complete with optional cap, then close
+              const capModel = this.modelPicker.contextCapPendingModel;
+              if (capModel) {
+                const rawInput = this.modelPicker.contextCapQuery.trim();
+                const parsedCap = rawInput.length > 0 ? parseInt(rawInput, 10) : null;
+                const validCap = parsedCap !== null && parsedCap > 0 ? parsedCap : null;
+                const effort = this.commandContext?.runtime.reasoningEffort ?? 'medium';
+                this.bus.emit('model-picker:complete', { model: capModel, effort, contextCap: validCap });
+              }
+              this.modelPicker.close();
+              if (this.modalStack.length > 0 && this.modalStack[this.modalStack.length - 1] === 'modelPicker') this.modalStack.pop();
             }
           } else if (token.logicalName === 'up') {
             const maxVis = Math.max(5, this.getViewportHeight() - MODEL_PICKER_CHROME_LINES - 4);
@@ -1263,11 +1282,27 @@ export class InputHandler {
             this.modelPicker.setCategoryFilter(cycle[(cur + 1) % cycle.length]!);
           }
           // All other keys ignored while model picker is active
-        } else if (token.type === 'text' && (this.modelPicker.mode === 'model' || this.modelPicker.mode === 'provider')) {
-          // Printable character — append to search query (all chars available)
-          const ch = token.value;
-          if (ch.length === 1 && ch >= ' ') {
-            this.modelPicker.appendChar(ch);
+        } else if (token.type === 'text') {
+          if (this.modelPicker.mode === 'contextCap') {
+            // In contextCap mode: only digits are accepted
+            const ch = token.value;
+            if (ch.length === 1) {
+              this.modelPicker.appendContextCapChar(ch);
+            }
+          } else if (this.modelPicker.mode === 'model' || this.modelPicker.mode === 'provider') {
+            // Printable character — append to search query
+            // Space in model mode on a local model enters context cap mode
+            const ch = token.value;
+            if (ch === ' ' && this.modelPicker.mode === 'model') {
+              const selected = this.modelPicker.getSelected();
+              if (selected && this.modelPicker.isLocalModel(selected)) {
+                this.modelPicker.enterContextCapMode(selected);
+              } else if (ch.length === 1 && ch >= ' ') {
+                this.modelPicker.appendChar(ch);
+              }
+            } else if (ch.length === 1 && ch >= ' ') {
+              this.modelPicker.appendChar(ch);
+            }
           }
         }
         this.bus.emit('render:request');
@@ -2005,12 +2040,12 @@ export class InputHandler {
         } else if (token.logicalName === 'end') {
           this.cursorPos = this.prompt.length;
         } else if (token.logicalName === 'up') {
-          // In multiline input: move cursor up. At boundary: no-op.
-          // Only scroll viewport if input is single-line.
+          // In multiline input: move cursor up. At boundary: navigate history.
+          // Only scroll viewport if already at top of history.
           if (!this.moveCursorVertical(-1)) {
             const info = this.getWrappedPromptInfo(this.contentWidth);
-            if (info.wrappedLines.length <= 1) {
-              // Single-line: try history recall first
+            if (info.cursorWrappedLine === 0) {
+              // Cursor is on the first line (single or multiline): try history recall
               if (this.inputHistory) {
                 const recalled = this.inputHistory.up(this.prompt);
                 if (recalled !== null) {
