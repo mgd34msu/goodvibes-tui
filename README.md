@@ -2,7 +2,7 @@
 
 A terminal AI coding agent with automated write-review-fix-check pipelines, multi-provider LLM support, and a vaporwave aesthetic.
 
-Version: **0.12.2**
+Version: **0.12.3**
 
 <!-- screenshot -->
 
@@ -72,12 +72,12 @@ The agent system runs subagents in-process, each with its own conversation histo
 - Background process indicator and live-tail modal
 
 ### Sidebar Panels
-- 20 built-in panels across 5 categories: development, agent, monitoring, session, and ai
+- 30+ built-in panels across 5 categories: development, agent, monitoring, session, and ai
 - **Development**: File Explorer, File Preview, Git, Diff, Symbol Outline
-- **Agent**: Agent Inspector, Agent Logs, Plan Dashboard, WRFC Chain Viewer, Schedule
-- **Monitoring**: Cost Tracker, Provider Stats, Provider Health, Token Budget, Debug
+- **Agent**: Agent Inspector, Agent Logs, Plan Dashboard, WRFC Chain Viewer, Schedule, Ops Control, Ops Strategy, Forensics, Memory, Eval
+- **Monitoring**: Cost Tracker, Provider Stats, Provider Health, Token Budget, Debug, Transport, Security, Panel Resources, System Messages
 - **Session**: Session Browser, Docs
-- **AI**: Thinking, Tool Inspector, Context Visualizer
+- **AI**: Thinking, Tool Inspector, Context Visualizer, Replay, State Inspector
 - Split-pane layout with top/bottom panes and resizable divider
 - Panel picker overlay (`Ctrl+P`) with category grouping and search
 - Toggle with `/panel` or keyboard shortcut
@@ -98,6 +98,8 @@ The agent system runs subagents in-process, each with its own conversation histo
 - Network scanner probes localhost and local subnets for LLM servers
 - Detects Ollama, LM Studio, vLLM, llama.cpp, LocalAI, TGI, Jan, GPT4All, KoboldCPP, Aphrodite
 - Auto-registers discovered servers with dynamic context window and output limit detection
+- **Verbose-first context discovery**: probes LM Studio `/api/v1/models`, Ollama `/api/show`, vLLM, llama.cpp `/props`, TGI `/info` for accurate context windows
+- **Context cap UI**: press Space in the model picker to set a custom context window for local models
 - Persists discovered providers across sessions; reconciles on background re-scan
 
 ### 12 Built-In Tools
@@ -1007,7 +1009,7 @@ bun run dev
 bun test
 ```
 
-565+ tests across contract, security, chaos, and UX anti-regression suites. Performance budget gate runs as part of CI — the build fails if any of the 5 perf budgets (store update latency, event dispatch latency, tool execution overhead, compaction duration, startup time) are exceeded.
+1,200+ tests across contract, security, release gate, chaos, and UX anti-regression suites. Performance budget gate runs as part of CI — the build fails if any of the 5 perf budgets (store update latency, event dispatch latency, tool execution overhead, compaction duration, startup time) are exceeded.
 
 ### Build standalone binary
 
