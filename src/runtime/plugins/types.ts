@@ -43,6 +43,16 @@ export const ALL_CAPABILITIES: ReadonlyArray<PluginCapability> = [
 ] as const;
 
 /**
+ * High-risk capabilities that require the `trusted` tier to be granted.
+ * These capabilities can have significant side-effects outside the process.
+ */
+export const HIGH_RISK_CAPABILITIES: ReadonlyArray<PluginCapability> = [
+  'filesystem.write',
+  'network.outbound',
+  'shell.exec',
+] as const;
+
+/**
  * Capability manifest embedded in (or derived from) a plugin's manifest.json.
  *
  * `requested` lists every capability the plugin declares it needs.
@@ -53,9 +63,9 @@ export interface PluginCapabilityManifest {
   /** Capabilities declared by the plugin author. */
   readonly requested: ReadonlyArray<PluginCapability>;
   /** Capabilities actually granted by the runtime. Populated after resolution. */
-  granted: ReadonlyArray<PluginCapability>;
+  granted: PluginCapability[];
   /** Capabilities that were requested but explicitly denied by runtime policy. */
-  denied: ReadonlyArray<PluginCapability>;
+  denied: PluginCapability[];
   /** Human-readable denial reasons keyed by capability. */
   denialReasons: Partial<Record<PluginCapability, string>>;
 }
@@ -64,8 +74,9 @@ export interface PluginCapabilityManifest {
 
 /**
  * PluginManifestV2 extends the loader's PluginManifest with capability
- * declarations (§9.1). Stored inside manifest.json under the `capabilities`
- * key. Omitting the key is equivalent to requesting no capabilities.
+ * declarations (§9.1) and trust framework fields (§5.9).
+ * Stored inside manifest.json under the `capabilities` key.
+ * Omitting the key is equivalent to requesting no capabilities.
  */
 export interface PluginManifestV2 extends PluginManifest {
   /** Optional capability list declared by the plugin. */
@@ -75,6 +86,17 @@ export interface PluginManifestV2 extends PluginManifest {
    * Semver string (e.g. "0.9.0"). Unset = no constraint.
    */
   minRuntimeVersion?: string;
+  /**
+   * Base64-encoded HMAC-SHA256 signature of the canonical manifest payload.
+   * Required for plugins that want to operate at the `trusted` tier (§5.9).
+   */
+  signature?: string;
+  /**
+   * Declared trust tier hint from the plugin author.
+   * The runtime validates this against the actual trust record; it does not
+   * grant trust by itself.
+   */
+  trustTier?: import('./trust.ts').PluginTrustTier;
 }
 
 // ── State machine ─────────────────────────────────────────────────────────────
@@ -142,6 +164,10 @@ export interface PluginLifecycleRecord {
   lastError?: string;
   /** Whether a hot-reload is currently in progress for this plugin. */
   reloading: boolean;
+  /** Trust tier assigned to this plugin (§5.9). Defaults to 'untrusted'. */
+  trustTier: import('./trust.ts').PluginTrustTier;
+  /** Whether this plugin is currently quarantined (§5.9). */
+  quarantined: boolean;
 }
 
 /** Maximum transition history entries kept per plugin. */
@@ -164,4 +190,11 @@ export interface PluginLifecycleManagerOptions {
    * Defaults to a permissive policy that grants all valid capabilities.
    */
   capabilityPolicy?: (pluginName: string, capability: PluginCapability) => boolean;
+  /**
+   * Optional trust tier resolver. Called during capability resolution to
+   * determine the effective trust tier for capability filtering (§5.9).
+   * Return the tier for the given plugin name.
+   * Defaults to 'untrusted' for all plugins when not provided.
+   */
+  trustTierResolver?: (pluginName: string) => import('./trust.ts').PluginTrustTier;
 }

@@ -8,7 +8,10 @@
  * - validateManifestV2 rejects malformed manifests
  *
  * Note: The default policy is permissive (grants all valid capabilities).
- * Enforce deny-by-default by supplying a restrictive capabilityPolicy to the manager.
+ * However, the default trust tier is 'untrusted', which blocks high-risk
+ * capabilities (filesystem.write, network.outbound, shell.exec) regardless of
+ * the policy callback. Pass trustTier='trusted' to enable full capability grants.
+ * See also: src/test/security/plugin-trust.test.ts for trust tier coverage.
  */
 
 import { describe, test, expect } from 'bun:test';
@@ -55,11 +58,21 @@ function allowOnlyPolicy(allowed: PluginCapability) {
 
 describe('security: plugin capabilities', () => {
   describe('resolveCapabilityManifest — default policy (permissive)', () => {
-    test('default policy grants all valid requested capabilities', () => {
+    test('default policy grants all valid requested capabilities when trust is trusted', () => {
+      // The default trust tier is 'untrusted', which blocks high-risk capabilities.
+      // Pass 'trusted' explicitly to verify the permissive policy path.
       const manifest = makeManifest([...ALL_CAPABILITIES]);
-      const resolved = resolveCapabilityManifest('test-plugin', manifest);
+      const resolved = resolveCapabilityManifest('test-plugin', manifest, undefined, 'trusted');
       expect(resolved.granted.length).toBe(ALL_CAPABILITIES.length);
       expect(resolved.denied.length).toBe(0);
+    });
+
+    test('default trust tier (untrusted) blocks high-risk capabilities even with permissive policy', () => {
+      const manifest = makeManifest([...ALL_CAPABILITIES]);
+      const resolved = resolveCapabilityManifest('test-plugin', manifest);
+      // 3 high-risk capabilities blocked: filesystem.write, network.outbound, shell.exec
+      expect(resolved.denied.length).toBe(3);
+      expect(resolved.granted.length).toBe(ALL_CAPABILITIES.length - 3);
     });
 
     test('only requested capabilities appear in granted list', () => {
