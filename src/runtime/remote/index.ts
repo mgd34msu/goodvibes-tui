@@ -99,6 +99,22 @@ export type {
   DataPayloads,
 } from './transport-contract.ts';
 
+export {
+  CURRENT_PROTOCOL_VERSION,
+  TRANSPORT_COMPATIBILITY_MATRIX,
+  VersionMismatchError,
+  negotiateProtocolVersion,
+} from './transport-contract.ts';
+
+export type {
+  ProtocolVersion,
+  CompatibilityMatrix,
+  CompatibilityEntry,
+  VersionNegotiationResult,
+  NegotiatedProtocol,
+  DowngradeReason,
+} from './types.ts';
+
 export { DurableIdentityManager } from './identity.ts';
 export { ReconnectEngine, generateIdempotencyKey } from './reconnect.ts';
 export { RemoteStateSyncer, createNoOpSyncCallbacks, buildAcpConnectionEntry, countActiveRemoteConnections, extractRemoteTaskIds } from './sync.ts';

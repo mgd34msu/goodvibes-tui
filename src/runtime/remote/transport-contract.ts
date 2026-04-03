@@ -7,6 +7,7 @@
  * This module defines the full structural contract for all messages that cross
  * the remote transport boundary. No raw strings — all messages are typed.
  */
+import { logger } from '../../utils/logger.ts';
 
 import { randomUUID } from 'node:crypto';
 import type {
@@ -17,6 +18,12 @@ import type {
   TransportMessageBase,
   RetryPolicy,
   TransportErrorCategory,
+  ProtocolVersion,
+  CompatibilityMatrix,
+  CompatibilityEntry,
+  VersionNegotiationResult,
+  NegotiatedProtocol,
+  DowngradeReason,
 } from './types.ts';
 
 // ── Default retry policies per message class ──────────────────────────────────
@@ -75,6 +82,188 @@ export const FAILURE_RETRY_POLICY: Readonly<RetryPolicy> = Object.freeze({
   retryOn: ['network'] as const,
 }) satisfies RetryPolicy;
 
+// ── Protocol Version Constants ───────────────────────────────────────────────
+
+/**
+ * The current protocol version implemented by this build.
+ *
+ * Increment major on breaking wire changes, minor on additive features,
+ * patch on bug fixes that do not affect the wire contract.
+ */
+export const CURRENT_PROTOCOL_VERSION: Readonly<ProtocolVersion> = Object.freeze({
+  major: 1,
+  minor: 2,
+  patch: 0,
+  label: '1.2.0',
+});
+
+/**
+ * Compatibility matrix for v1.x of the transport protocol.
+ *
+ * Each entry records the minor-version range the local build can interoperate
+ * with for a given local version. Major version must always match exactly.
+ *
+ * Policy:
+ * - Peers advertising minor < minSupportedMinor are rejected (too old).
+ * - Peers advertising minor > maxSupportedMinor are accepted; we downgrade to
+ *   the peer's level (peer is newer — they offer a superset of our features).
+ * - Peers advertising the same minor connect at full capability.
+ */
+export const TRANSPORT_COMPATIBILITY_MATRIX: CompatibilityMatrix = Object.freeze([
+  Object.freeze<CompatibilityEntry>({
+    localVersion: CURRENT_PROTOCOL_VERSION,
+    minSupportedMinor: 0,
+    maxSupportedMinor: 2,
+    notes: 'v1.2: version negotiation; supports peers v1.0–v1.2',
+  }),
+  Object.freeze<CompatibilityEntry>({
+    localVersion: Object.freeze<ProtocolVersion>({ major: 1, minor: 1, patch: 0, label: '1.1.0' }),
+    minSupportedMinor: 0,
+    maxSupportedMinor: 2,
+    notes: 'v1.1: replay protocol; accepts peers v1.0–v1.2 (v1.2 peer downgraded to 1.1)',
+  }),
+  Object.freeze<CompatibilityEntry>({
+    localVersion: Object.freeze<ProtocolVersion>({ major: 1, minor: 0, patch: 0, label: '1.0.0' }),
+    minSupportedMinor: 0,
+    maxSupportedMinor: 2,
+    notes: 'v1.0: initial typed messages; accepts peers v1.0–v1.2 (newer peers downgraded to 1.0)',
+  }),
+]);
+
+/**
+ * VersionMismatchError — thrown (or returned as failure) when a peer presents
+ * an incompatible protocol version and the handshake must be rejected.
+ *
+ * Carries the structured incompatibility details so callers can log,
+ * surface diagnostics, and produce a typed HANDSHAKE_REJECT payload.
+ */
+export class VersionMismatchError extends Error {
+  public readonly code:
+    | 'major_version_mismatch'
+    | 'peer_version_too_old'
+    | 'peer_version_unsupported';
+  public readonly offeredVersion: Readonly<ProtocolVersion>;
+  public readonly peerVersion: Readonly<ProtocolVersion>;
+
+  constructor(
+    code: 'major_version_mismatch' | 'peer_version_too_old' | 'peer_version_unsupported',
+    offeredVersion: Readonly<ProtocolVersion>,
+    peerVersion: Readonly<ProtocolVersion>,
+    message: string,
+  ) {
+    super(message);
+    this.name = 'VersionMismatchError';
+    this.code = code;
+    this.offeredVersion = offeredVersion;
+    this.peerVersion = peerVersion;
+  }
+}
+
+/**
+ * Negotiate a protocol version between this peer and a remote peer.
+ *
+ * Rules:
+ * 1. Major versions must match exactly — a mismatch is always incompatible.
+ * 2. Find the compatibility entry for the local version in the matrix.
+ * 3. Peer minor below `minSupportedMinor` → incompatible (peer too old).
+ * 4. Peer minor equal to local minor → full capability, no downgrade.
+ * 5. Peer minor above local minor → downgrade to local (we are the older peer).
+ * 6. Peer minor in (local, maxSupportedMinor] → downgrade to peer (peer is newer).
+ *
+ * Incompatible peers CANNOT proceed — callers must reject the handshake.
+ *
+ * @param localVersion - The version this side is running.
+ * @param peerVersion - The version the remote peer advertised.
+ * @param matrix - The compatibility matrix to look up against.
+ * @returns A VersionNegotiationResult — check `proceed` before allowing the session.
+ */
+export function negotiateProtocolVersion(
+  localVersion: Readonly<ProtocolVersion>,
+  peerVersion: Readonly<ProtocolVersion>,
+  matrix: CompatibilityMatrix = TRANSPORT_COMPATIBILITY_MATRIX,
+): VersionNegotiationResult {
+  // Rule 1: Major mismatch → always incompatible
+  if (localVersion.major !== peerVersion.major) {
+    return {
+      proceed: false,
+      incompatibilityCode: 'major_version_mismatch',
+      incompatibilityReason:
+        `Major version mismatch: local=${localVersion.label} peer=${peerVersion.label}. ` +
+        `Peers on different major versions cannot interoperate.`,
+      offeredVersion: localVersion,
+      peerVersion,
+    };
+  }
+
+  // Find the compatibility entry for the local version
+  const entry = matrix.find(
+    (e) =>
+      e.localVersion.major === localVersion.major &&
+      e.localVersion.minor === localVersion.minor,
+  );
+
+  // If no entry, treat all same-major peers as compatible (conservative default)
+  if (!entry) {
+    logger.warn('CompatibilityMatrix: no entry found for local version — falling back to conservative defaults', {
+      localVersion: localVersion.label,
+    });
+  }
+  const minMinor = entry?.minSupportedMinor ?? 0;
+  const maxMinor = entry?.maxSupportedMinor ?? localVersion.minor;
+
+  // Rule 3: Peer minor too old → reject
+  if (peerVersion.minor < minMinor) {
+    return {
+      proceed: false,
+      incompatibilityCode: 'peer_version_too_old',
+      incompatibilityReason:
+        `Peer version ${peerVersion.label} is below the minimum supported minor ` +
+        `version ${localVersion.major}.${minMinor}.x for local ${localVersion.label}. ` +
+        `Upgrade the peer to proceed.`,
+      offeredVersion: localVersion,
+      peerVersion,
+    };
+  }
+
+  // Rule 6: Peer minor exceeds our matrix max → unsupported future version
+  if (peerVersion.minor > maxMinor) {
+    return {
+      proceed: false,
+      incompatibilityCode: 'peer_version_unsupported',
+      incompatibilityReason:
+        `Peer version ${peerVersion.label} exceeds the maximum supported minor ` +
+        `version ${localVersion.major}.${maxMinor}.x for local ${localVersion.label}. ` +
+        `Upgrade the local build to connect to this peer.`,
+      offeredVersion: localVersion,
+      peerVersion,
+    };
+  }
+
+  // Rules 4 & 5: Negotiate to the lower of the two minor versions
+  const agreedMinor = Math.min(localVersion.minor, peerVersion.minor);
+  const agreedPatch = agreedMinor === localVersion.minor ? localVersion.patch : 0;
+  const downgraded = agreedMinor < localVersion.minor;
+  const downgradeReason: DowngradeReason | undefined = downgraded ? 'peer_minor_older' : undefined;
+
+  const agreedVersion: ProtocolVersion = Object.freeze({
+    major: localVersion.major,
+    minor: agreedMinor,
+    patch: agreedPatch,
+    label: `${localVersion.major}.${agreedMinor}.${agreedPatch}`,
+  });
+
+  const protocol: NegotiatedProtocol = Object.freeze({
+    version: agreedVersion,
+    downgraded,
+    downgradeReason,
+    offeredVersion: localVersion,
+    peerVersion,
+    negotiatedAt: Date.now(),
+  });
+
+  return { proceed: true, protocol };
+}
+
 // ── Control message subtypes ──────────────────────────────────────────────────
 
 /** Control message type literals. */
@@ -96,7 +285,10 @@ export interface ControlPayloads {
     readonly epoch: number;
     readonly lastAckedOffset: number;
     readonly authToken: string;
+    /** Semver label of the protocol version the client offers (e.g. "1.2.0"). */
     readonly clientVersion: string;
+    /** Structured version object for server-side compatibility matrix lookup. */
+    readonly protocolVersion: ProtocolVersion;
   };
   HANDSHAKE_ACCEPT: {
     readonly sessionId: string;
@@ -105,10 +297,24 @@ export interface ControlPayloads {
     readonly handshakeToken: string;
     readonly expiresAt: number;
     readonly replayFromOffset: number;
+    /** The negotiated protocol version both peers will use for this session. */
+    readonly negotiatedProtocol: NegotiatedProtocol;
   };
   HANDSHAKE_REJECT: {
     readonly reason: string;
     readonly retryable: boolean;
+    /**
+     * Structured incompatibility code when the reject is due to version mismatch.
+     * Absent for auth/quota/other rejections.
+     */
+    readonly incompatibilityCode?:
+      | 'major_version_mismatch'
+      | 'peer_version_too_old'
+      | 'peer_version_unsupported';
+    /** The peer's offered version, echoed back for diagnostics. */
+    readonly peerVersion?: ProtocolVersion;
+    /** The server's offered version, for operator diagnostics. */
+    readonly serverVersion?: ProtocolVersion;
   };
   PING: Record<string, never>;
   PONG: { readonly serverTimeMs: number };
@@ -317,10 +523,14 @@ export function createFailureMessage(
  * @param attempt - Current attempt number (1-indexed).
  * @returns Delay in ms, capped at policy.maxDelayMs.
  */
-export function computeRetryDelay(policy: RetryPolicy, attempt: number): number {
+export function computeRetryDelay(
+  policy: RetryPolicy,
+  attempt: number,
+  rng: () => number = Math.random,
+): number {
   const base = policy.initialDelayMs * Math.pow(policy.backoffMultiplier, attempt - 1);
   const capped = Math.min(base, policy.maxDelayMs);
-  const jitterMs = capped * policy.jitter * (Math.random() * 2 - 1);
+  const jitterMs = capped * policy.jitter * (rng() * 2 - 1);
   return Math.max(0, Math.round(capped + jitterMs));
 }
 

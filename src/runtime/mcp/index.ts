@@ -27,6 +27,8 @@ export type {
   McpServerState,
   SchemaFreshness,
   McpSchemaRecord,
+  QuarantineReason,
+  QuarantineRecord,
   McpTrustLevel,
   McpPermission,
   McpToolPermission,

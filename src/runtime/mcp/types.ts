@@ -40,8 +40,33 @@ export type McpServerState =
  * - `stale`        — fetched but TTL has elapsed; re-fetch recommended
  * - `unknown`      — never fetched or record cleared
  * - `fetch_failed` — last fetch attempt returned an error
+ * - `quarantined`  — schema is incompatible or stale past threshold; execution
+ *                    blocked until operator refreshes or explicitly acknowledges
  */
-export type SchemaFreshness = 'fresh' | 'stale' | 'unknown' | 'fetch_failed';
+export type SchemaFreshness = 'fresh' | 'stale' | 'unknown' | 'fetch_failed' | 'quarantined';
+
+/**
+ * Reason a schema was placed into quarantine.
+ *
+ * - `stale_threshold`   — TTL expired and refresh failed repeatedly
+ * - `incompatible`      — schema version is incompatible with the runtime
+ * - `operator_flagged`  — manually flagged by an operator for review
+ */
+export type QuarantineReason = 'stale_threshold' | 'incompatible' | 'operator_flagged';
+
+/** Quarantine record attached to a schema when it enters the quarantined state. */
+export interface QuarantineRecord {
+  /** Why the schema was quarantined. */
+  reason: QuarantineReason;
+  /** Epoch ms when quarantine was applied. */
+  quarantinedAt: number;
+  /** Human-readable detail for display in the MCP panel. */
+  detail?: string;
+  /** Operator identifier who acknowledged and approved override, if any. */
+  overrideAcknowledgedBy?: string;
+  /** Epoch ms when the operator acknowledged the quarantine override. */
+  overrideAcknowledgedAt?: number;
+}
 
 /** Per-server schema record tracking freshness metadata. */
 export interface McpSchemaRecord {
@@ -57,6 +82,8 @@ export interface McpSchemaRecord {
   lastFetchError?: string;
   /** Number of consecutive failed fetch attempts. */
   consecutiveFailures: number;
+  /** Quarantine metadata, present only when freshness is 'quarantined'. */
+  quarantine?: QuarantineRecord;
 }
 
 // ── Permissions ───────────────────────────────────────────────────────────────

@@ -1792,12 +1792,14 @@ export function registerBuiltinCommands(registry: CommandRegistry): void {
           ctx.renderRequest();
         }
       } else if (sub === 'list') {
-        const types = pm.getRegisteredTypes();
-        const open = pm.getAllOpen().map(p => p.id);
-        const lines = ['Registered panels:', ...types.map(t =>
-          `  ${open.includes(t.id) ? '\u25cf' : '\u25e6'} ${t.id.padEnd(14)} ${t.icon}  ${t.name.padEnd(12)} [${t.category}] ${t.description}`
-        )];
-        ctx.print(lines.join('\n'));
+        // Open the panel picker instead of printing to conversation
+        if (ctx.openPanelPicker) {
+          ctx.openPanelPicker();
+        } else {
+          // Fallback: show panel sidebar if no picker available
+          pm.show();
+          ctx.renderRequest();
+        }
       } else if (sub === 'open') {
         const id = args[1];
         if (!id) { ctx.print('Usage: /panel open <panel-id>'); return; }

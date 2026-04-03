@@ -381,6 +381,112 @@ export interface ToolContractEntry {
   readonly isPhasedTool: boolean;
 }
 
+// ── Transport negotiation entries ─────────────────────────────────────────────
+
+/**
+ * Diagnostic entry capturing a protocol version negotiation event.
+ *
+ * Produced each time a handshake completes (success or failure) so the
+ * transport panel can show the negotiated version, downgrade reason, and
+ * any incompatibility codes.
+ */
+export interface TransportNegotiationEntry {
+  /** Unique connection ID (local tracking ID). */
+  readonly connectionId: string;
+  /** Remote endpoint URL or address. */
+  readonly endpoint: string;
+  /** Whether the negotiation resulted in a usable session. */
+  readonly success: boolean;
+  /**
+   * Negotiated protocol version label (e.g. "1.2.0").
+   * Populated on success; undefined on failure.
+   */
+  readonly negotiatedVersion?: string;
+  /** Whether the local side downgraded to match the peer. */
+  readonly downgraded: boolean;
+  /** Reason for downgrade (undefined when no downgrade). */
+  readonly downgradeReason?: string;
+  /** The version label this side offered. */
+  readonly offeredVersion: string;
+  /** The version label the remote peer advertised. */
+  readonly peerVersion: string;
+  /**
+   * Structured incompatibility code when success=false due to version mismatch.
+   * Absent for auth/network failures.
+   */
+  readonly incompatibilityCode?:
+    | 'major_version_mismatch'
+    | 'peer_version_too_old'
+    | 'peer_version_unsupported';
+  /** Human-readable incompatibility explanation. */
+  readonly incompatibilityReason?: string;
+  /** Epoch ms when the negotiation completed. */
+  readonly negotiatedAt: number;
+}
+
+// ── Integration delivery diagnostics ────────────────────────────────────────
+
+/**
+ * Delivery outcome taxonomy for integration channel diagnostics.
+ * Mirrors DeliveryOutcome from src/integrations/delivery.ts.
+ */
+export type DeliveryOutcomeDiag = 'delivered' | 'retrying' | 'dead_letter';
+
+/**
+ * A single dead-letter entry in the integration diagnostics panel.
+ * Snapshot-safe; no live references.
+ */
+export interface DeadLetterDiagEntry {
+  /** Unique entry identifier. */
+  readonly id: string;
+  /** Integration channel (e.g. "slack", "discord", "webhook"). */
+  readonly channel: string;
+  /** Event name that triggered the delivery. */
+  readonly event: string;
+  /** Message payload (truncated to 200 chars for display). */
+  readonly payloadPreview: string;
+  /** Epoch ms when the entry moved to the DLQ. */
+  readonly deadAt: number;
+  /** Number of delivery attempts made. */
+  readonly attempts: number;
+  /** Final error message. */
+  readonly finalError: string;
+  /** Whether this was a terminal failure (vs exhausted retries). */
+  readonly terminal: boolean;
+}
+
+/**
+ * Per-channel delivery metrics for the diagnostics panel.
+ */
+export interface DeliveryChannelMetrics {
+  /** Integration channel identifier. */
+  readonly channel: string;
+  /** Total delivery attempts. */
+  readonly totalAttempts: number;
+  /** Successfully delivered messages. */
+  readonly delivered: number;
+  /** Messages currently queued for retry. */
+  readonly retrying: number;
+  /** Messages moved to the dead-letter queue. */
+  readonly deadLettered: number;
+  /** Current DLQ size. */
+  readonly dlqSize: number;
+  /** Whether SLO enforcement is active. */
+  readonly sloEnforced: boolean;
+}
+
+/**
+ * Integration delivery diagnostics snapshot for the diagnostics panel.
+ */
+export interface IntegrationDeliveryDiagnostics {
+  /** Per-channel metrics. */
+  readonly channels: readonly DeliveryChannelMetrics[];
+  /** Dead-letter entries across all channels (most recent first, capped at 100). */
+  readonly dlqEntries: readonly DeadLetterDiagEntry[];
+  /** Epoch ms of this snapshot. */
+  readonly capturedAt: number;
+}
+
 // ── Utility ───────────────────────────────────────────────────────────────────
 
 /**

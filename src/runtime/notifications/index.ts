@@ -26,6 +26,8 @@ export type {
   RoutingDecision,
   RoutedNotification,
   DomainConfig,
+  RoutingReasonCode,
+  NotificationTag,
 } from './types.ts';
 
 export { NotificationRouter } from './router.ts';
@@ -34,6 +36,8 @@ export {
   applyDefaultPolicy,
   applyQuietTypingPolicy,
   BatchPolicy,
+  applyModeContextPolicy,
+  BurstPolicy,
 } from './policies/index.ts';
 
 export {
@@ -53,7 +57,8 @@ import { NotificationRouter } from './router.ts';
  * @returns A configured NotificationRouter instance ready for use.
  */
 export function createNotificationRouter(
-  batchWindowMs?: number
+  batchWindowMs?: number,
+  adaptiveSuppression?: boolean,
 ): NotificationRouter {
-  return new NotificationRouter(batchWindowMs);
+  return new NotificationRouter(batchWindowMs, adaptiveSuppression);
 }

@@ -15,3 +15,5 @@ export { ReplayPanel } from './replay.ts';
 export { PolicyPanel } from './policy.ts';
 export type { PolicyPanelSnapshot } from './policy.ts';
 export { ToolContractsPanel } from './tool-contracts.ts';
+export { TransportPanel } from './transport.ts';
+export type { TransportPanelSnapshot } from './transport.ts';

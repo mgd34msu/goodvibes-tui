@@ -17,6 +17,7 @@ import type {
   DurableIdentity,
   RetryPolicy,
   TransportErrorCategory,
+  NegotiatedProtocol,
 } from './types.ts';
 import {
   CONTROL_RETRY_POLICY,
@@ -44,8 +45,28 @@ const DEFAULT_REPLAY_CONFIG: Readonly<ReplayConfig> = Object.freeze({
 
 /** Outcome of a connect/reconnect attempt. */
 export type ConnectOutcome =
-  | { readonly success: true; readonly token: HandshakeToken; readonly epoch: number; readonly replayFromOffset: number }
-  | { readonly success: false; readonly category: TransportErrorCategory; readonly error: string; readonly retryable: boolean };
+  | {
+      readonly success: true;
+      readonly token: HandshakeToken;
+      readonly epoch: number;
+      readonly replayFromOffset: number;
+      /** Negotiated protocol agreed during handshake. */
+      readonly negotiatedProtocol: NegotiatedProtocol;
+    }
+  | {
+      readonly success: false;
+      readonly category: TransportErrorCategory;
+      readonly error: string;
+      readonly retryable: boolean;
+      /**
+       * Incompatibility code when the failure is due to version mismatch.
+       * Absent for auth/network failures.
+       */
+      readonly incompatibilityCode?:
+        | 'major_version_mismatch'
+        | 'peer_version_too_old'
+        | 'peer_version_unsupported';
+    };
 
 /**
  * Adapter interface — callers implement the actual transport operations.
@@ -57,15 +78,19 @@ export interface TransportAdapter {
   /**
    * Attempt to establish a connection and perform the handshake.
    *
-   * Implementations should:
+   * Implementations must:
    * 1. Open the transport channel
-   * 2. Send HANDSHAKE_INIT with identity, epoch, lastAckedOffset, authToken
+   * 2. Send HANDSHAKE_INIT with identity, epoch, lastAckedOffset, authToken,
+   *    and the local `protocolVersion` from CURRENT_PROTOCOL_VERSION
    * 3. Wait for HANDSHAKE_ACCEPT or HANDSHAKE_REJECT
+   * 4. On HANDSHAKE_ACCEPT, extract `negotiatedProtocol` and return it in the outcome
+   * 5. On HANDSHAKE_REJECT with an `incompatibilityCode`, return success=false with
+   *    that code — the engine will treat it as a terminal (non-retryable) failure
    *
    * @param identity - Stable durable identity to present.
    * @param lastAckedOffset - Offset to replay from.
    * @param authToken - Bearer token from the AuthProvider.
-   * @returns ConnectOutcome — success with token or failure with category.
+   * @returns ConnectOutcome — success with token+negotiatedProtocol or failure with category.
    */
   connect(
     identity: DurableIdentity,
@@ -85,6 +110,8 @@ export interface TransportAdapter {
 
 /** Lifecycle event callbacks fired by the reconnect engine. */
 export interface ReconnectEngineCallbacks {
+  /** Called when version negotiation produces a downgrade. Incompatible = terminal failure. */
+  onVersionNegotiated?(protocol: NegotiatedProtocol): void;
   /** Called when the transport enters 'initializing'. */
   onInitializing?(attempt: number): void;
   /** Called when authentication is in progress. */
@@ -122,6 +149,8 @@ export class ReconnectEngine {
   private _attempts = 0;
   private _disposed = false;
   private _pendingTimer: ReturnType<typeof setTimeout> | null = null;
+  /** Negotiated protocol from the last successful handshake. */
+  private _negotiatedProtocol: NegotiatedProtocol | undefined;
 
   constructor(
     private readonly adapter: TransportAdapter,
@@ -157,6 +186,14 @@ export class ReconnectEngine {
   /** Number of reconnect attempts since last successful connect. */
   get attempts(): number {
     return this._attempts;
+  }
+
+  /**
+   * The negotiated protocol from the last successful handshake.
+   * Undefined until the first successful connect.
+   */
+  get negotiatedProtocol(): NegotiatedProtocol | undefined {
+    return this._negotiatedProtocol;
   }
 
   /**
@@ -255,6 +292,17 @@ export class ReconnectEngine {
     );
 
     if (!outcome.success) {
+      // Version incompatibility is always terminal — never retry
+      if (outcome.incompatibilityCode) {
+        logger.error('ReconnectEngine: incompatible peer version — terminal failure', {
+          error: outcome.error,
+          incompatibilityCode: outcome.incompatibilityCode,
+        });
+        if (this._disposed) return false;
+        this.callbacks?.onTerminalFailure(outcome.error);
+        return false;
+      }
+
       const retryable = outcome.retryable && shouldRetry(this._policy, outcome.category);
       logger.warn('ReconnectEngine: connect attempt failed', {
         error: outcome.error,
@@ -273,9 +321,14 @@ export class ReconnectEngine {
     }
 
     // Success path
-    const { token, epoch, replayFromOffset } = outcome;
+    const { token, epoch, replayFromOffset, negotiatedProtocol } = outcome;
     this._epoch = epoch;
     this._handshakeToken = token;
+    this._negotiatedProtocol = negotiatedProtocol;
+
+    if (this.callbacks?.onVersionNegotiated) {
+      this.callbacks.onVersionNegotiated(negotiatedProtocol);
+    }
 
     this.callbacks?.onConnected(token, epoch);
 
