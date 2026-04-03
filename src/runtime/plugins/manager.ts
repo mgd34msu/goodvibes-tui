@@ -27,6 +27,8 @@ import {
 } from './types.ts';
 import { applyTransition, isOperational } from './lifecycle.ts';
 import { resolveCapabilityManifest } from './manifest.ts';
+import { PluginTrustStore, type PluginTrustTier } from './trust.ts';
+import { PluginQuarantineEngine } from './quarantine.ts';
 
 /** Source label for emitted events. */
 const EVENT_SOURCE = 'plugin-lifecycle-manager';
@@ -39,11 +41,18 @@ export class PluginLifecycleManager {
   private readonly records = new Map<string, PluginLifecycleRecord>();
   private readonly sessionId: string;
   private readonly capabilityPolicy: (name: string, cap: PluginCapability) => boolean;
+  private readonly trustTierResolver: (pluginName: string) => PluginTrustTier;
   private eventBus: EventBus | undefined;
+
+  /** Trust store — manages tier records for all plugins. */
+  readonly trustStore: PluginTrustStore = new PluginTrustStore();
+  /** Quarantine engine — tracks and applies quarantine constraints. */
+  readonly quarantine: PluginQuarantineEngine = new PluginQuarantineEngine();
 
   constructor(options: PluginLifecycleManagerOptions = {}) {
     this.sessionId = options.sessionId ?? '';
     this.capabilityPolicy = options.capabilityPolicy ?? (() => true);
+    this.trustTierResolver = options.trustTierResolver ?? ((name) => this.trustStore.getTier(name));
   }
 
   /**
@@ -97,7 +106,8 @@ export class PluginLifecycleManager {
       return;
     }
 
-    const capabilities = resolveCapabilityManifest(name, manifest, this.capabilityPolicy);
+    const tier = this.trustTierResolver(name);
+    const capabilities = resolveCapabilityManifest(name, manifest, this.capabilityPolicy, tier);
 
     const record: PluginLifecycleRecord = {
       name,
@@ -106,6 +116,8 @@ export class PluginLifecycleManager {
       capabilities,
       transitions: [],
       reloading: false,
+      trustTier: tier,
+      quarantined: this.quarantine.isQuarantined(name),
     };
 
     this.records.set(name, record);
@@ -239,6 +251,74 @@ export class PluginLifecycleManager {
     logger.info(`[plugin-lifecycle] ${name}: disabled${reason ? ` (${reason})` : ''}`);
   }
 
+  // ── Trust & Quarantine operations ────────────────────────────────────────
+
+  /**
+   * setTrustTier — Assign a trust tier to a plugin and re-sync the record.
+   *
+   * If the plugin has an active lifecycle record, the trust tier in the record
+   * is updated immediately. Capability re-resolution requires a reload.
+   */
+  setTrustTier(name: string, tier: PluginTrustTier, note?: string): void {
+    this.trustStore.setTier(name, tier, { note });
+    const record = this.records.get(name);
+    if (record) {
+      record.trustTier = tier;
+    }
+    logger.info(`[plugin-lifecycle] ${name}: trust tier set to '${tier}'${note ? ` — ${note}` : ''}`);
+  }
+
+  /**
+   * quarantinePlugin — Apply quarantine to a named plugin.
+   *
+   * Revokes high-risk capabilities from the live manifest and marks the record
+   * as quarantined. Emits PLUGIN_DEGRADED to signal partial functionality.
+   *
+   * @returns true if quarantine was applied; false if not tracked or already quarantined.
+   */
+  quarantinePlugin(name: string, reason: string): boolean {
+    const record = this.records.get(name);
+    if (!record) {
+      logger.warn(`[plugin-lifecycle] ${name}: quarantine requested but plugin not tracked`);
+      return false;
+    }
+
+    const qRecord = this.quarantine.quarantine(name, record.capabilities, reason);
+    if (!qRecord) return false;
+
+    record.quarantined = true;
+
+    this.emit({
+      type: 'PLUGIN_DEGRADED',
+      pluginId: name,
+      reason: `quarantined: ${reason}`,
+      affectedCapabilities: qRecord.revokedCapabilities as string[],
+    });
+
+    return true;
+  }
+
+  /**
+   * liftQuarantine — Remove quarantine from a plugin.
+   *
+   * Capabilities are NOT restored here; the operator should reload the plugin
+   * after lifting so that trust-aware re-resolution can grant capabilities
+   * appropriate for the updated tier.
+   *
+   * @returns true if quarantine was lifted; false if no active quarantine.
+   */
+  liftQuarantine(name: string): boolean {
+    const lifted = this.quarantine.lift(name);
+    const record = this.records.get(name);
+    if (record) {
+      record.quarantined = false;
+    }
+    if (lifted) {
+      logger.info(`[plugin-lifecycle] ${name}: quarantine lifted — reload to restore capabilities`);
+    }
+    return lifted;
+  }
+
   /**
    * Mark a plugin as degraded (partial functionality). Only valid from active.
    */
@@ -338,7 +418,7 @@ export class PluginLifecycleManager {
    */
   private updateRecord(
     name: string,
-    patch: Partial<Pick<PluginLifecycleRecord, 'lastError' | 'errorAt' | 'activatedAt' | 'reloading'>>,
+    patch: Partial<Pick<PluginLifecycleRecord, 'lastError' | 'errorAt' | 'activatedAt' | 'reloading' | 'trustTier' | 'quarantined'>>,
   ): void {
     const record = this.records.get(name);
     if (!record) return;

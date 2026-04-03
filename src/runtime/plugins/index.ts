@@ -47,6 +47,24 @@ export {
 export { PluginLifecycleManager } from './manager.ts';
 import { PluginLifecycleManager } from './manager.ts';
 
+// ── Trust Framework (§5.9) ────────────────────────────────────────────────────
+export type {
+  PluginTrustTier,
+  PluginTrustRecord,
+  SignatureValidationResult,
+} from './trust.ts';
+export {
+  PluginTrustStore,
+  validatePluginSignature,
+  filterCapabilitiesByTrust,
+  SAFE_CAPABILITIES,
+} from './trust.ts';
+
+export type { QuarantineRecord } from './quarantine.ts';
+export { PluginQuarantineEngine } from './quarantine.ts';
+
+export { isHighRiskCapability } from './manifest.ts';
+
 export type { HotReloadOptions, HotReloadResult } from './hot-reload.ts';
 export { runHotReload } from './hot-reload.ts';
 

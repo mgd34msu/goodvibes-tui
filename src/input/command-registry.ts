@@ -93,6 +93,16 @@ export interface CommandContext {
   providerOptimizer?: import('../providers/optimizer.ts').ProviderOptimizer;
   /** EvalRegistry for /eval command subcommands. */
   evalRegistry?: import('../panels/eval-panel.ts').EvalRegistry;
+  /** MemoryRegistry for /memory command subcommands and the Memory panel. */
+  memoryRegistry?: import('../state/memory-store.ts').MemoryRegistry;
+  /**
+   * CrossSessionTaskRegistry for /session orchestration subcommands.
+   *
+   * When provided (injected at the app level), the /session command handlers
+   * use this instance. Falls back to the lazy module-level singleton via
+   * `getSessionOrchestration()` when undefined.
+   */
+  sessionOrchestration?: import('../sessions/orchestration/index.ts').CrossSessionTaskRegistry;
 }
 
 /**

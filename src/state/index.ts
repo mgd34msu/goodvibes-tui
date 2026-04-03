@@ -14,3 +14,13 @@ export { TelemetryDB } from './telemetry.ts';
 export type { ToolCallRecord, TelemetryFilter, TelemetrySummary } from './telemetry.ts';
 export { FileUndoManager } from './file-undo.ts';
 export type { FileOperation } from './file-undo.ts';
+export { MemoryStore, MemoryRegistry, getMemoryStore, getMemoryRegistry } from './memory-store.ts';
+export type {
+  MemoryClass,
+  MemoryRecord,
+  MemoryLink,
+  MemoryAddOptions,
+  MemorySearchFilter,
+  ProvenanceLink,
+  ProvenanceLinkKind,
+} from './memory-store.ts';

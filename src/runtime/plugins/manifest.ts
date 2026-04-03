@@ -11,10 +11,12 @@
 import { logger } from '../../utils/logger.ts';
 import {
   ALL_CAPABILITIES,
+  HIGH_RISK_CAPABILITIES,
   type PluginCapability,
   type PluginCapabilityManifest,
   type PluginManifestV2,
 } from './types.ts';
+import { type PluginTrustTier, filterCapabilitiesByTrust } from './trust.ts';
 
 /**
  * Default capability policy: grant all valid capabilities.
@@ -34,17 +36,25 @@ function isKnownCapability(value: string): value is PluginCapability {
 
 /**
  * resolveCapabilityManifest — Parse and resolve the capability manifest for a
- * plugin, applying the runtime's capability policy.
+ * plugin, applying the runtime's capability policy and trust-tier constraints.
+ *
+ * Evaluation order:
+ *   1. Unknown capability strings are filtered out (warn + ignore).
+ *   2. Trust-tier constraints are applied — high-risk capabilities blocked
+ *      unless the plugin has the `trusted` tier (§5.9).
+ *   3. The runtime capability policy callback is applied to the remaining set.
  *
  * @param pluginName - Plugin name (for logging).
  * @param manifest   - The raw plugin manifest (may have `capabilities` array).
  * @param policy     - Capability grant/deny callback. Defaults to permissive.
+ * @param trustTier  - Effective trust tier for this plugin. Defaults to 'untrusted'.
  * @returns A fully-resolved PluginCapabilityManifest.
  */
 export function resolveCapabilityManifest(
   pluginName: string,
   manifest: PluginManifestV2,
   policy: (name: string, cap: PluginCapability) => boolean = defaultPolicy,
+  trustTier: PluginTrustTier = 'untrusted',
 ): PluginCapabilityManifest {
   const rawRequested = manifest.capabilities ?? [];
 
@@ -60,11 +70,24 @@ export function resolveCapabilityManifest(
     }
   }
 
-  const granted: PluginCapability[] = [];
-  const denied: PluginCapability[] = [];
-  const denialReasons: Partial<Record<PluginCapability, string>> = {};
+  // Apply trust-tier constraints before the policy callback.
+  const trustResult = filterCapabilitiesByTrust(requested, trustTier);
+  if (trustResult.blocked.length > 0) {
+    logger.warn(
+      `[plugin-lifecycle:${pluginName}] Trust tier '${trustTier}' blocks` +
+      ` high-risk capabilities: [${trustResult.blocked.join(', ')}]` +
+      ' — trust escalation required',
+    );
+  }
 
-  for (const cap of requested) {
+  // Only the trust-permitted capabilities proceed to policy evaluation.
+  const afterTrust = trustResult.permitted;
+
+  const granted: PluginCapability[] = [];
+  const denied: PluginCapability[] = [...trustResult.blocked];
+  const denialReasons: Partial<Record<PluginCapability, string>> = { ...trustResult.reasons };
+
+  for (const cap of afterTrust) {
     if (policy(pluginName, cap)) {
       granted.push(cap);
     } else {
@@ -77,7 +100,8 @@ export function resolveCapabilityManifest(
   }
 
   logger.debug(
-    `[plugin-lifecycle:${pluginName}] Capabilities resolved — granted: [${granted.join(', ')}]` +
+    `[plugin-lifecycle:${pluginName}] Capabilities resolved (trust=${trustTier})` +
+    ` — granted: [${granted.join(', ')}]` +
     (denied.length > 0 ? `, denied: [${denied.join(', ')}]` : ''),
   );
 
@@ -87,6 +111,14 @@ export function resolveCapabilityManifest(
     denied,
     denialReasons,
   };
+}
+
+/**
+ * isHighRiskCapability — Returns whether a capability is classified as high-risk.
+ * High-risk capabilities require the `trusted` tier to be granted.
+ */
+export function isHighRiskCapability(capability: PluginCapability): boolean {
+  return (HIGH_RISK_CAPABILITIES as ReadonlyArray<string>).includes(capability);
 }
 
 /**

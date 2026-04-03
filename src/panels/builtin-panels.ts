@@ -28,6 +28,8 @@ import type { ToolRegistry } from '../tools/registry.ts';
 import type { ProviderRegistry } from '../providers/registry.ts';
 import type { Orchestrator } from '../core/orchestrator.ts';
 import { EvalPanel, EvalRegistry } from './eval-panel.ts';
+import { MemoryPanel } from './memory-panel.ts';
+import type { MemoryRegistry } from '../state/memory-store.ts';
 
 /**
  * Register all built-in panel types with the given PanelManager.
@@ -57,6 +59,8 @@ export interface BuiltinPanelDeps {
   forensicsRegistry?: import('../runtime/forensics/registry.ts').ForensicsRegistry;
   /** EvalRegistry for the Eval panel. */
   evalRegistry?: EvalRegistry;
+  /** MemoryRegistry for the Memory panel. */
+  memoryRegistry?: MemoryRegistry;
 }
 
 export function registerBuiltinPanels(manager: PanelManager, deps: BuiltinPanelDeps = {}): void {
@@ -297,6 +301,18 @@ export function registerBuiltinPanels(manager: PanelManager, deps: BuiltinPanelD
       category: 'monitoring',
       description: 'Evaluation harness: benchmark suite results, scorecards, and regression gates',
       factory: () => new EvalPanel(evalRegistry),
+    });
+  }
+
+  if (deps.memoryRegistry) {
+    const { memoryRegistry } = deps;
+    manager.registerType({
+      id: 'memory',
+      name: 'Memory',
+      icon: 'M',
+      category: 'agent',
+      description: 'Project memory: decisions, constraints, incidents, and patterns with provenance links',
+      factory: () => new MemoryPanel(memoryRegistry),
     });
   }
 

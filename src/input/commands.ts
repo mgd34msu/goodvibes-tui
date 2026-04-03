@@ -41,6 +41,8 @@ import { handleReplayCommand } from '../core/replay-command-handler.ts';
 import { policyCommand } from './commands/policy.ts';
 import { providerCommand } from './commands/provider.ts';
 import { evalCommand } from './commands/eval.ts';
+import { sessionCommand } from './commands/session.ts';
+import { recallCommand } from './commands/memory.ts';
 import { ModeManager } from '../state/mode-manager.ts';
 import { ToolContractVerifier } from '../runtime/tools/contract-verifier.ts';
 
@@ -3406,12 +3408,145 @@ export function registerBuiltinCommands(registry: CommandRegistry): void {
         return;
       }
 
+      if (sub === 'trust') {
+        const name = args[1];
+        const rawTier = args[2];
+        if (!name || !rawTier) {
+          ctx.print('Usage: /plugin trust <name> <untrusted|limited|trusted> [note]');
+          return;
+        }
+        if (rawTier !== 'untrusted' && rawTier !== 'limited' && rawTier !== 'trusted') {
+          ctx.print(`Error: Invalid trust tier '${rawTier}'. Must be: untrusted, limited, or trusted.`);
+          return;
+        }
+        const tier = rawTier as 'untrusted' | 'limited' | 'trusted';
+        const note = args.slice(3).join(' ') || undefined;
+        if (tier === 'trusted') {
+          // For 'trusted' tier, attempt signature-based validation first.
+          const sigResult = pluginManager.trustSigned(name);
+          if (sigResult.ok) {
+            ctx.print(
+              `Plugin '${name}' elevated to 'trusted' via signed manifest` +
+              (sigResult.fingerprint ? ` (fingerprint: ${sigResult.fingerprint})` : '') +
+              '.\nReload the plugin to apply updated capability grants.',
+            );
+            return;
+          }
+          // Fall through to operator-forced trust with a warning.
+          ctx.print(
+            `Warning: Signature validation failed (${sigResult.error}).\n` +
+            `Granting 'trusted' tier by operator override. High-risk capabilities will be available on next reload.`,
+          );
+        }
+        const result = pluginManager.trust(name, tier, note);
+        if (result.ok) {
+          ctx.print(
+            `Plugin '${name}' trust tier set to '${tier}'.` +
+            (tier === 'trusted'
+              ? '\nReload the plugin to apply high-risk capability grants.'
+              : ''),
+          );
+        } else {
+          ctx.print(`Error: ${result.error}`);
+        }
+        return;
+      }
+
+      if (sub === 'verify') {
+        const name = args[1];
+        if (!name) { ctx.print('Usage: /plugin verify <name>'); return; }
+        const result = pluginManager.verify(name);
+        if (!result.ok && result.reason?.includes('not found')) {
+          ctx.print(`Error: ${result.reason}`);
+          return;
+        }
+        if (result.valid) {
+          ctx.print(
+            `Plugin '${name}' manifest signature is VALID.` +
+            (result.fingerprint ? `\nFingerprint: ${result.fingerprint}` : ''),
+          );
+        } else {
+          ctx.print(
+            `Plugin '${name}' manifest signature is INVALID.\nReason: ${result.reason ?? 'Unknown'}`,
+          );
+        }
+        return;
+      }
+
+      if (sub === 'capabilities') {
+        const name = args[1];
+        if (!name) { ctx.print('Usage: /plugin capabilities <name>'); return; }
+        const info = pluginManager.capabilities(name);
+        if (!info) {
+          ctx.print(`Error: Plugin '${name}' not found.`);
+          return;
+        }
+        const lines: string[] = [
+          `Plugin: ${name}`,
+          `Trust tier: ${info.tier}`,
+          '',
+          `Requested capabilities (${info.requested.length}):`,
+        ];
+        if (info.requested.length === 0) {
+          lines.push('  (none)');
+        } else {
+          for (const cap of info.requested) {
+            const isHighRisk = info.highRisk.includes(cap);
+            const isBlocked = info.blocked.includes(cap);
+            const tag = isBlocked ? '[BLOCKED - requires trusted tier]' : isHighRisk ? '[high-risk, granted]' : '[safe]';
+            lines.push(`  ${cap.padEnd(32)} ${tag}`);
+          }
+        }
+        if (info.blocked.length > 0) {
+          lines.push('');
+          lines.push(`${info.blocked.length} high-risk capability/capabilities blocked by trust tier '${info.tier}'.`);
+          lines.push(`Use /plugin trust ${name} trusted to escalate.`);
+        }
+        ctx.print(lines.join('\n'));
+        return;
+      }
+
+      if (sub === 'quarantine') {
+        const name = args[1];
+        const action = args[2] ?? 'add';
+        if (!name) {
+          ctx.print('Usage: /plugin quarantine <name> [add|lift] [reason]');
+          return;
+        }
+        if (action === 'lift') {
+          const result = pluginManager.liftQuarantine(name);
+          if (result.ok) {
+            ctx.print(`Plugin '${name}' quarantine lifted. Reload to restore safe capabilities.`);
+          } else {
+            ctx.print(`Error: ${result.error}`);
+          }
+          return;
+        }
+        const reason = args.slice(2).join(' ') || 'quarantined by operator';
+        const result = pluginManager.quarantine(name, reason);
+        if (result.ok) {
+          ctx.print(
+            `Plugin '${name}' quarantined.\n` +
+            `Reason: ${reason}\n` +
+            'High-risk capabilities revoked. Reload to fully apply. Use /plugin quarantine <name> lift to restore.',
+          );
+        } else {
+          ctx.print(`Error: ${result.error}`);
+        }
+        return;
+      }
+
       ctx.print(
         'Usage: /plugin <subcommand>\n' +
-        '  list              — show installed plugins and their status\n' +
-        '  enable <name>     — enable a plugin\n' +
-        '  disable <name>    — disable a plugin\n' +
-        '  reload            — reload all enabled plugins'
+        '  list                       — show installed plugins and their status\n' +
+        '  enable <name>              — enable a plugin\n' +
+        '  disable <name>             — disable a plugin\n' +
+        '  reload                     — reload all enabled plugins\n' +
+        '  trust <name> <tier> [note] — set trust tier (untrusted|limited|trusted)\n' +
+        '  verify <name>              — inspect a plugin manifest signature\n' +
+        '  capabilities <name>        — show capability grants and blocks\n' +
+        '  quarantine <name> [reason] — quarantine a plugin (revoke high-risk caps)\n' +
+        '  quarantine <name> lift     — lift quarantine from a plugin'
       );
     },
   });
@@ -3953,6 +4088,12 @@ export function registerBuiltinCommands(registry: CommandRegistry): void {
 
   // ── /eval ─────────────────────────────────────────────────────────────────
   registry.register(evalCommand);
+
+  // ── /session ─────────────────────────────────────────────────────────────
+  registry.register(sessionCommand);
+
+  // ── /recall ──────────────────────────────────────────────────────────────
+  registry.register(recallCommand);
 
   // ── /replay ───────────────────────────────────────────────────────────────
   registry.register({
