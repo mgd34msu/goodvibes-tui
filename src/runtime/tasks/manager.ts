@@ -313,6 +313,24 @@ export class UnifiedTaskManager implements TaskManager {
     return this._registry.get(taskId)?.status;
   }
 
+  public retryTask(taskId: string): RuntimeTask {
+    const task = this._requireTask(taskId);
+
+    if (task.status !== 'failed' && task.status !== 'cancelled') {
+      throw new TaskTransitionError(task.id, task.status, 'queued');
+    }
+
+    return this._applyTransition(task, 'queued', {
+      startedAt: undefined,
+      endedAt: undefined,
+      error: undefined,
+      exitCode: undefined,
+      retryAt: undefined,
+      retryDelayMs: undefined,
+      queuedAt: Date.now(),
+    });
+  }
+
   // ── Private helpers ─────────────────────────────────────────────────────
 
   /**
