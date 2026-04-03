@@ -1,4 +1,5 @@
 import type { Tool, ToolCall, ToolResult } from '../../types/tools.ts';
+import { logger } from '../../utils/logger.ts';
 import type { ToolRuntimeContext } from './context.ts';
 import type { ExecutorConfig, PhaseResult, ToolExecutionPhase, ToolExecutionRecord } from './types.ts';
 import {
@@ -46,6 +47,8 @@ export class PhasedToolExecutor {
   private readonly config: ExecutorConfig;
   private readonly records = new Map<string, ToolExecutionRecord>();
   private readonly controllers = new Map<string, AbortController>();
+  /** Maps ToolCall instances to their idempotency key without mutating the input. */
+  private readonly _idKeyMap = new WeakMap<ToolCall, string>();
 
   constructor(config: ExecutorConfig) {
     this.config = config;
@@ -60,6 +63,55 @@ export class PhasedToolExecutor {
     tool: Tool,
     context: ToolRuntimeContext,
   ): Promise<ToolResult> {
+    // --- Idempotency check ---
+    // Must run before creating a record to avoid registering calls that will be
+    // short-circuited as duplicates or rejected as in-flight.
+    if (this.config.idempotencyStore) {
+      const idKey = this.config.idempotencyStore.generateKey({
+        sessionId: context.ids.sessionId,
+        turnId: context.ids.turnId,
+        callId: call.id,
+      });
+      const check = this.config.idempotencyStore.checkAndRecord(idKey);
+
+      if (check.status === 'duplicate') {
+        logger.debug('PhasedToolExecutor: duplicate tool call — returning cached result', {
+          callId: call.id,
+          tool: call.name,
+          idKey,
+          priorStatus: check.record.status,
+        });
+        // Return the cached result from the prior completed execution.
+        // If the prior run failed (status === 'failed'), the cached result will
+        // be undefined and we return a generic error to the LLM.
+        if (check.record.result !== undefined) {
+          return check.record.result as ToolResult;
+        }
+        return {
+          callId: call.id,
+          success: false,
+          error: 'Duplicate tool call: prior execution failed; retry is not permitted.',
+        };
+      }
+
+      if (check.status === 'in-flight') {
+        logger.warn('PhasedToolExecutor: in-flight duplicate detected — rejecting', {
+          callId: call.id,
+          tool: call.name,
+          idKey,
+          inFlightSince: check.record.createdAt,
+        });
+        return {
+          callId: call.id,
+          success: false,
+          error: 'Duplicate tool call: an identical submission is already in-flight.',
+        };
+      }
+
+      // 'new' — proceed; store the key so _fail/_cancel can markFailed.
+      this._idKeyMap.set(call, idKey);
+    }
+
     const record: ToolExecutionRecord = {
       callId: call.id,
       toolName: call.name,
@@ -166,10 +218,18 @@ export class PhasedToolExecutor {
 
     context.tasks.onComplete?.(call.id, durationMs);
 
-    return record.result ?? {
+    const finalResult: ToolResult = record.result ?? {
       callId: call.id,
       success: true,
     };
+
+    // --- Idempotency: cache the successful result ---
+    const idKey = this._getIdKey(call);
+    if (idKey && this.config.idempotencyStore) {
+      this.config.idempotencyStore.markComplete(idKey, finalResult);
+    }
+
+    return finalResult;
   }
 
   /**
@@ -199,6 +259,14 @@ export class PhasedToolExecutor {
   // Private helpers
   // ---------------------------------------------------------------------------
 
+  /**
+   * Extract the idempotency key previously attached to a call during `execute`.
+   * Returns `undefined` if no idempotency store is configured.
+   */
+  private _getIdKey(call: ToolCall): string | undefined {
+    return this._idKeyMap.get(call);
+  }
+
   private _fail(
     record: ToolExecutionRecord,
     call: ToolCall,
@@ -221,6 +289,12 @@ export class PhasedToolExecutor {
     }
 
     context.tasks.onError?.(call.id, error);
+
+    // --- Idempotency: mark failed to allow retry ---
+    const idKey = this._getIdKey(call);
+    if (idKey && this.config.idempotencyStore) {
+      this.config.idempotencyStore.markFailed(idKey);
+    }
 
     return {
       callId: call.id,
@@ -252,6 +326,12 @@ export class PhasedToolExecutor {
           reason,
         },
       );
+    }
+
+    // --- Idempotency: mark failed so the cancelled call can be retried ---
+    const idKey = this._getIdKey(call);
+    if (idKey && this.config.idempotencyStore) {
+      this.config.idempotencyStore.markFailed(idKey);
     }
 
     return {

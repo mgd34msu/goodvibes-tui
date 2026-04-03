@@ -1,7 +1,10 @@
-import type { Tool, ToolCall, ToolResult } from '../../../types/tools.ts';
+import type { Tool, ToolCall } from '../../../types/tools.ts';
 import { repairToolCall } from '../../../tools/auto-repair.ts';
 import type { ToolRuntimeContext } from '../context.ts';
 import type { PhaseResult, ToolExecutionRecord } from '../types.ts';
+import type { PhasedTool } from '../adapter.ts';
+import type { ToolClass } from '../output-policy.ts';
+import { applyOutputPolicy, getPolicy } from '../output-policy.ts';
 
 /**
  * mapOutput — Phase 5 of the tool execution pipeline.
@@ -11,11 +14,31 @@ import type { PhaseResult, ToolExecutionRecord } from '../types.ts';
  * 1. Applies auto-repair annotation: if args were repaired during
  *    execution, prepends a `[Auto-repaired: ...]` note to the output
  *    so the LLM knows what was corrected.
- * 2. No-ops cleanly when there is no result to map (defensive guard).
- *
- * Future extensions (output truncation, content policy filtering, etc.)
- * should be added here.
+ * 2. Applies output policy enforcement: byte limits, truncation, and spill
+ *    handling are applied per tool class via `applyOutputPolicy`.
+ * 3. No-ops cleanly when there is no result to map (defensive guard).
  */
+/** Type guard — true when `tool` carries phased execution metadata. */
+function isPhasedTool(tool: Tool): tool is PhasedTool {
+  return 'category' in tool && typeof (tool as PhasedTool).category === 'string';
+}
+
+/**
+ * Maps a PhasedTool category to the ToolClass used by output-policy.
+ * `delegate` has no direct output-policy class; treat as `analyze`.
+ */
+function resolveToolClass(tool: Tool): ToolClass {
+  if (!isPhasedTool(tool)) return 'read';
+  switch (tool.category) {
+    case 'read':     return 'read';
+    case 'write':    return 'write';
+    case 'execute':  return 'execute';
+    case 'network':  return 'network';
+    case 'delegate': return 'analyze';
+    default:         return 'read';
+  }
+}
+
 export async function mapOutputPhase(
   call: ToolCall,
   tool: Tool,
@@ -46,6 +69,12 @@ export async function mapOutputPhase(
         record.result.output = repairNote;
       }
     }
+
+    // Apply output policy enforcement after auto-repair annotation
+    const toolClass = resolveToolClass(tool);
+    const policy = getPolicy(toolClass);
+    const auditedResult = applyOutputPolicy(record.result, policy);
+    record.result = auditedResult.result;
 
     return {
       phase: 'mapped',

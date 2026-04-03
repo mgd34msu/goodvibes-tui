@@ -10,6 +10,7 @@
 export { LayeredPolicyEvaluator } from './evaluator.ts';
 export { DecisionLog } from './decision-log.ts';
 export { runSafetyChecks } from './safety-checks.ts';
+export { PermissionSimulator, SimulationEnforcementError } from './simulation.ts';
 
 export type {
   PermissionMode,
@@ -26,6 +27,13 @@ export type {
   ModeConstraintRule,
   RuleOrigin,
   PermissionsV2Config,
+  SimulationMode,
+  SimulationResult,
+  DivergenceType,
+  DivergenceRecord,
+  DivergenceStats,
+  DivergenceReport,
+  PermissionSimulatorConfig,
 } from './types.ts';
 
 export type { DecisionLogEntry, DecisionLogQuery } from './decision-log.ts';
@@ -42,7 +50,9 @@ export {
 // ── Factory ──────────────────────────────────────────────────────────────────────
 
 import { LayeredPolicyEvaluator } from './evaluator.ts';
-import type { PermissionsV2Config } from './types.ts';
+import { PermissionSimulator } from './simulation.ts';
+import type { PermissionsV2Config, SimulationMode, PermissionSimulatorConfig } from './types.ts';
+import type { FeatureFlagManager } from '../feature-flags/manager.ts';
 
 /**
  * createPermissionsV2 — Factory function for the v2 permission evaluator.
@@ -71,4 +81,46 @@ export function createPermissionsV2(
   config: PermissionsV2Config = {},
 ): LayeredPolicyEvaluator {
   return new LayeredPolicyEvaluator(config);
+}
+
+/**
+ * createPermissionSimulator — Factory for `PermissionSimulator`.
+ *
+ * Creates a dual-evaluator simulation pipeline for Permissions v2 that runs
+ * both the actual and simulated evaluators in parallel, tracking divergence.
+ *
+ * Requires the `permissions-simulation` feature flag to be enabled.
+ *
+ * @param actualConfig    — Config for the authoritative evaluator.
+ * @param simulatedConfig — Config for the candidate evaluator.
+ * @param simulationMode  — Controls enforcement and warning behaviour.
+ * @param config          — Optional tuning: record limit, divergence threshold.
+ *
+ * @example
+ * ```ts
+ * const simulator = createPermissionSimulator(
+ *   { mode: 'default', rules: currentRules },
+ *   { mode: 'default', rules: candidateRules },
+ *   'warn-on-divergence',
+ * );
+ * const result = simulator.evaluate('write', { path: '/tmp/out.txt' });
+ * const report = simulator.getDivergenceReport();
+ * ```
+ */
+export function createPermissionSimulator(
+  actualConfig: PermissionsV2Config,
+  simulatedConfig: PermissionsV2Config,
+  simulationMode: SimulationMode,
+  config: PermissionSimulatorConfig = {},
+  flagManager?: FeatureFlagManager,
+): PermissionSimulator {
+  if (flagManager && !flagManager.isEnabled('permissions-simulation')) {
+    throw new Error('Feature flag "permissions-simulation" is not enabled');
+  }
+  return new PermissionSimulator(
+    actualConfig,
+    simulatedConfig,
+    simulationMode,
+    config,
+  );
 }

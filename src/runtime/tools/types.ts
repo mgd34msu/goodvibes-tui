@@ -85,4 +85,16 @@ export interface ExecutorConfig {
   enablePermissions: boolean;
   /** Whether to emit RuntimeEventBus events at each phase transition. */
   enableEvents: boolean;
+  /**
+   * Optional idempotency store.
+   *
+   * When provided, the executor checks each tool call against the store before
+   * entering the pipeline phase:
+   * - `'new'`        → proceed normally.
+   * - `'in-flight'`  → reject immediately with an error result.
+   * - `'duplicate'`  → return the cached result without re-executing.
+   *
+   * Omit to disable idempotency checking (default behaviour).
+   */
+  idempotencyStore?: import('../idempotency/index.ts').IdempotencyStore;
 }

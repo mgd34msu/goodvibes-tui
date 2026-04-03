@@ -66,4 +66,45 @@ export const DEFAULT_BUDGETS: PerfBudget[] = [
       'p95 compaction duration must be under 500ms. ' +
       'Slower compaction blocks the conversation loop and degrades UX.',
   },
+  // ── SLO Gates ──────────────────────────────────────────────────────────────
+  {
+    name: 'SLO: Turn Start Latency (p95)',
+    metric: 'slo.turn_start.p95',
+    threshold: 2000,
+    unit: 'ms',
+    tolerance: 3,
+    description:
+      'p95 duration from TURN_SUBMITTED to first STREAM_DELTA must be under 2000ms. ' +
+      'Sustained violations indicate provider latency or pipeline overhead regression.',
+  },
+  {
+    name: 'SLO: Cancel Latency (p95)',
+    metric: 'slo.cancel.p95',
+    threshold: 500,
+    unit: 'ms',
+    tolerance: 3,
+    description:
+      'p95 duration from TURN_CANCEL to confirmed turn stop must be under 500ms. ' +
+      'Sustained violations indicate the cancellation path is blocked or too slow.',
+  },
+  {
+    name: 'SLO: Reconnect Recovery (p95)',
+    metric: 'slo.reconnect_recovery.p95',
+    threshold: 10000,
+    unit: 'ms',
+    tolerance: 3,
+    description:
+      'p95 duration from TRANSPORT_RECONNECTING to TRANSPORT_CONNECTED must be under 10000ms. ' +
+      'Sustained violations indicate degraded transport reliability.',
+  },
+  {
+    name: 'SLO: Permission Decision (p95)',
+    metric: 'slo.permission_decision.p95',
+    threshold: 100,
+    unit: 'ms',
+    tolerance: 3,
+    description:
+      'p95 duration from PERMISSION_REQUESTED to DECISION_EMITTED must be under 100ms. ' +
+      'Sustained violations indicate permission pipeline overhead regression.',
+  },
 ];

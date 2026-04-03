@@ -36,6 +36,18 @@ export const FEATURE_FLAGS: FeatureFlag[] = [
     runtimeToggleable: false,
   },
 
+  {
+    id: 'permissions-simulation',
+    name: 'Permissions Simulation Mode',
+    description:
+      'Enables the dual-evaluator simulation pipeline for Permissions v2. '
+      + 'Tracks divergence between actual and candidate evaluators without '
+      + 'changing enforcement behaviour until switched to enforce mode.',
+    defaultState: 'disabled',
+    tier: 2,
+    runtimeToggleable: false,
+  },
+
   // ── Tier 3 ───────────────────────────────────────────────────────────────
   {
     id: 'unified-runtime-task',

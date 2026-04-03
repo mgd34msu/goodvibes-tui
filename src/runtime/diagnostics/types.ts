@@ -232,6 +232,35 @@ export interface RuntimeStateSnapshot {
   readonly domains: readonly DomainStateEntry[];
 }
 
+// ── SLO status ───────────────────────────────────────────────────────────────
+
+/**
+ * Gate status for a single SLO metric.
+ * - `ok`: current p95 is within the target threshold.
+ * - `warn`: current p95 is within 20% above threshold (approaching violation).
+ * - `violated`: current p95 exceeds the threshold.
+ * - `no_data`: no samples have been collected yet.
+ */
+export type SloGateStatus = 'ok' | 'warn' | 'violated' | 'no_data';
+
+/**
+ * A single SLO metric row for display in the health dashboard.
+ */
+export interface SloRow {
+  /** Metric key (e.g. 'slo.turn_start.p95'). */
+  readonly metric: string;
+  /** Human-readable name for the metric. */
+  readonly name: string;
+  /** Current p95 value in milliseconds. */
+  readonly p95Ms: number;
+  /** SLO target threshold in milliseconds. */
+  readonly targetMs: number;
+  /** Number of samples in the rolling window. */
+  readonly sampleCount: number;
+  /** Gate status derived from p95 vs target. */
+  readonly status: SloGateStatus;
+}
+
 // ── Health dashboard ─────────────────────────────────────────────────────────
 
 /**
@@ -266,6 +295,8 @@ export interface HealthDashboardData {
   readonly failedDomains: readonly HealthDomain[];
   /** Epoch ms of the last health update. */
   readonly lastUpdatedAt: number;
+  /** SLO metric status rows. Empty when no SloCollector is attached. */
+  readonly sloRows: readonly SloRow[];
 }
 
 // ── Panel config ─────────────────────────────────────────────────────────────

@@ -1,4 +1,5 @@
 import type { ToolDefinition, ToolCall } from '../types/tools.ts';
+import type { ProviderCapability } from './capabilities.ts';
 
 /** Shared budget token map for reasoning effort levels. */
 export const REASONING_BUDGET_MAP: Record<string, number> = {
@@ -12,6 +13,15 @@ export const REASONING_BUDGET_MAP: Record<string, number> = {
 export interface LLMProvider {
   readonly name: string;
   readonly models: string[];
+  /**
+   * Optional self-declared capability overrides for this provider instance.
+   * When present, these take precedence over the built-in `PROVIDER_DEFAULTS`
+   * table in `capabilities.ts` but are overridden by per-model `MODEL_OVERRIDES`.
+   *
+   * @remarks Useful for custom / dynamically-discovered providers that know
+   * their own capabilities and want to participate in explainable routing.
+   */
+  readonly capabilities?: Partial<ProviderCapability>;
   chat(params: ChatRequest): Promise<ChatResponse>;
 }
 

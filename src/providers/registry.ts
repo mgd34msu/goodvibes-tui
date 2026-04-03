@@ -1,4 +1,5 @@
 import type { LLMProvider } from './interface.ts';
+import { getCapabilityRegistry, type ProviderCapability, type RequestProfile, type RouteExplanation } from './capabilities.ts';
 import type { DiscoveredServer } from '../discovery/scanner.ts';
 import { OpenAIProvider } from './openai.ts';
 import { OpenAICompatProvider } from './openai-compat.ts';
@@ -836,11 +837,65 @@ export class ProviderRegistry {
     return getModelRegistry().find(m => m.id !== currentModelId && m.provider !== current.provider && m.tier === current.tier && m.selectable) ?? null;
   }
 
+  /**
+   * Resolve the full capability record for a model.
+   * Accepts a plain model ID or a `provider:modelId` registryKey.
+   *
+   * @param modelId - Plain model ID or registryKey (`provider:modelId`).
+   * @returns A fully-resolved, immutable `ProviderCapability`.
+   */
+  getCapabilityForModel(modelId: string): ProviderCapability {
+    const { providerId, resolvedModelId, provider } = this._resolveModelContext(modelId);
+    return getCapabilityRegistry().getCapability(providerId, resolvedModelId, provider);
+  }
+
+  /**
+   * Check whether a model can handle a request described by `profile`.
+   * Fails early with a typed explanation when unsupported — avoids mid-stream errors.
+   *
+   * @param modelId - Plain model ID or registryKey.
+   * @param profile - The capability requirements for this request.
+   * @returns A `RouteExplanation` with `accepted` flag, rejections, and capability.
+   */
+  explainRoute(modelId: string, profile: RequestProfile): RouteExplanation {
+    const { providerId, resolvedModelId, provider } = this._resolveModelContext(modelId);
+    return getCapabilityRegistry().getRouteExplanation(providerId, resolvedModelId, profile, provider);
+  }
+
+  /**
+   * Resolve the provider identity and instance for a plain model ID or registryKey.
+   * Shared by `getCapabilityForModel` and `explainRoute` to avoid duplication.
+   *
+   * @param modelId - Plain model ID or registryKey (`provider:modelId`).
+   */
+  private _resolveModelContext(modelId: string): {
+    providerId: string;
+    resolvedModelId: string;
+    provider: LLMProvider | undefined;
+  } {
+    const registry = getModelRegistry();
+    const def = modelId.includes(':')
+      ? (registry.find((m) => m.registryKey === modelId) ?? registry.find((m) => m.id === modelId))
+      : registry.find((m) => m.id === modelId);
+    const providerId = def?.provider ?? modelId.split(':')[0] ?? 'unknown';
+    const resolvedModelId = def?.id ?? (modelId.includes(':') ? modelId.split(':').slice(1).join(':') : modelId);
+    let provider: LLMProvider | undefined;
+    try {
+      provider = this.get(providerId);
+    } catch {
+      // Provider not registered yet — proceed without self-declared capabilities
+    }
+    return { providerId, resolvedModelId, provider };
+  }
+
   /** Kick off async custom provider loading. Called once from singleton factory. */
   initCustomProviders(): void {
     this._readyPromise = this.loadCustomProviders()
       .then((result) => {
         // Warnings captured in result.warnings — don't console.warn (corrupts TUI)
+        // Invalidate the capability cache so custom providers' self-declared
+        // capabilities are reflected in subsequent getCapabilityForModel calls.
+        getCapabilityRegistry().invalidate();
         this._readyPromise = null;
       })
       .catch((err) => {

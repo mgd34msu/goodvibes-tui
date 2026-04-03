@@ -25,6 +25,7 @@ export { DEFAULT_BUDGETS } from './budgets.ts';
 export { PerfMonitor } from './monitor.ts';
 export type { PerfSnapshot } from './monitor.ts';
 export { formatReport, exitCode } from './reporter.ts';
+export { SloCollector, SLO_METRICS } from './slo-collector.ts';
 
 import { PerfMonitor } from './monitor.ts';
 import type { PerfBudget } from './types.ts';
