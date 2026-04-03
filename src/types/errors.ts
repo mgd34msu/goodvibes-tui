@@ -89,6 +89,27 @@ export function isRateLimitOrQuotaError(err: unknown): boolean {
 }
 
 /**
+ * Returns true when the error indicates the model's context window was exceeded.
+ * Covers OpenAI, Anthropic, and generic provider error messages.
+ */
+export function isContextSizeExceededError(err: unknown): boolean {
+  if (!(err instanceof Error)) return false;
+  const msg = err.message.toLowerCase();
+  return (
+    msg.includes('context_length_exceeded') ||
+    msg.includes('context length exceeded') ||
+    msg.includes('context size exceeded') ||
+    msg.includes('context window exceeded') ||
+    msg.includes('maximum context length') ||
+    msg.includes('prompt is too long') ||
+    msg.includes('input too long') ||
+    msg.includes('tokens exceed') ||
+    msg.includes('exceeds the model') ||
+    (msg.includes('context') && msg.includes('exceed'))
+  );
+}
+
+/**
  * Returns true when the error indicates the provider is non-transient
  * (auth failures, connection refused, host not found, timeout).
  * 500/503 are deliberately excluded — server errors are transient and
