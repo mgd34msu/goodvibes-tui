@@ -309,10 +309,18 @@ export function getTokenLimitsForModel(modelDef: ModelDefinition): Required<Toke
 /**
  * Resolve the effective context window for a model.
  * Priority (highest to lowest):
- *   1. OpenRouter cached context_length (most accurate, updated from API)
- *   2. modelDef.contextWindow (static registry value, always present)
+ *   1. provider_api provenance — local/custom provider reported value via /v1/models
+ *      (only for models with contextWindowProvenance === 'provider_api')
+ *   2. OpenRouter cached context_length (most accurate for cloud models, updated from API)
+ *   3. modelDef.contextWindow (static registry value, always present)
  */
 export function getContextWindowForModel(modelDef: ModelDefinition): number {
+  // Highest priority: provider_api provenance means the local provider reported this
+  // value directly from its /v1/models endpoint — always use it for local providers.
+  if (modelDef.contextWindowProvenance === 'provider_api' && modelDef.contextWindow > 0) {
+    return modelDef.contextWindow;
+  }
+
   if (cachedData) {
     if (!cachedOrMap) cachedOrMap = buildOrMap(cachedData);
     const orMap = cachedOrMap;
