@@ -27,6 +27,7 @@ import type { RuntimeEventBus } from '../runtime/events/index.ts';
 import type { ToolRegistry } from '../tools/registry.ts';
 import type { ProviderRegistry } from '../providers/registry.ts';
 import type { Orchestrator } from '../core/orchestrator.ts';
+import { EvalPanel, EvalRegistry } from './eval-panel.ts';
 
 /**
  * Register all built-in panel types with the given PanelManager.
@@ -54,6 +55,8 @@ export interface BuiltinPanelDeps {
   runtimeBus?: RuntimeEventBus;
   /** ForensicsRegistry for the Forensics panel. */
   forensicsRegistry?: import('../runtime/forensics/registry.ts').ForensicsRegistry;
+  /** EvalRegistry for the Eval panel. */
+  evalRegistry?: EvalRegistry;
 }
 
 export function registerBuiltinPanels(manager: PanelManager, deps: BuiltinPanelDeps = {}): void {
@@ -282,6 +285,18 @@ export function registerBuiltinPanels(manager: PanelManager, deps: BuiltinPanelD
       category: 'monitoring',
       description: 'Failure Forensics: auto-classified failure reports with causal chains, phase timings, and jump links',
       factory: () => new ForensicsPanel(forensicsRegistry),
+    });
+  }
+
+  if (deps.evalRegistry) {
+    const { evalRegistry } = deps;
+    manager.registerType({
+      id: 'eval',
+      name: 'Eval',
+      icon: 'Y',
+      category: 'monitoring',
+      description: 'Evaluation harness: benchmark suite results, scorecards, and regression gates',
+      factory: () => new EvalPanel(evalRegistry),
     });
   }
 

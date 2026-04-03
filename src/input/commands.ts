@@ -39,6 +39,8 @@ import { sessionLineageTracker } from '../core/session-lineage.ts';
 import { handlePlanCommand } from '../core/plan-command-handler.ts';
 import { handleReplayCommand } from '../core/replay-command-handler.ts';
 import { policyCommand } from './commands/policy.ts';
+import { providerCommand } from './commands/provider.ts';
+import { evalCommand } from './commands/eval.ts';
 import { ModeManager } from '../state/mode-manager.ts';
 import { ToolContractVerifier } from '../runtime/tools/contract-verifier.ts';
 
@@ -3945,6 +3947,12 @@ export function registerBuiltinCommands(registry: CommandRegistry): void {
 
   // ── /policy ───────────────────────────────────────────────────────────────
   registry.register(policyCommand);
+
+  // ── /provider ─────────────────────────────────────────────────────────────
+  registry.register(providerCommand);
+
+  // ── /eval ─────────────────────────────────────────────────────────────────
+  registry.register(evalCommand);
 
   // ── /replay ───────────────────────────────────────────────────────────────
   registry.register({
