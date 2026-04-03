@@ -36,6 +36,8 @@ import { pinModel, unpinModel, isModelPinned, getPinned, recordUsage } from '../
 import { GitService } from '../git/service.ts';
 import { sessionMemoryStore } from '../core/session-memory.ts';
 import { sessionLineageTracker } from '../core/session-lineage.ts';
+import { handlePlanCommand } from '../core/plan-command-handler.ts';
+import { ModeManager } from '../state/mode-manager.ts';
 
 let _serviceRegistry: ServiceRegistry | undefined;
 function getServiceRegistry(): ServiceRegistry {
@@ -2358,10 +2360,19 @@ export function registerBuiltinCommands(registry: CommandRegistry): void {
   // ── /plan ─────────────────────────────────────────────────
   registry.register({
     name: 'plan',
-    description: 'Manage execution plans for multi-step tasks',
-    usage: '[list | show <id> | <task description>]',
-    argsHint: '[list|show <id>|<task description>]',
+    description: 'Manage execution plans and adaptive execution strategy',
+    usage: '[list | show <id> | mode | explain | override <strategy> | status | clear | <task description>]',
+    argsHint: '[list|show|mode|explain|override|status|clear|<task>]',
     handler(args, ctx) {
+      // ── Adaptive planner subcommands (Section 5.5) ─────────────────────
+      const PLANNER_SUBS = ['mode', 'explain', 'override', 'status', 'clear'];
+      if (args.length > 0 && PLANNER_SUBS.includes(args[0].toLowerCase())) {
+        const result = handlePlanCommand(args[0], args.slice(1));
+        ctx.print(result.output);
+        return;
+      }
+      // ───────────────────────────────────────────────────────────────────
+
       if (args.length === 0) {
         // Show active plan status
         const active = planManager.getActive();
@@ -3594,6 +3605,169 @@ export function registerBuiltinCommands(registry: CommandRegistry): void {
   /memory remove <id>  — remove a specific memory`
         );
       }
+    },
+  });
+
+  // ── /mode ────────────────────────────────────────────────────────────────────
+  registry.register({
+    name: 'mode',
+    aliases: ['hitl'],
+    description: 'Manage HITL UX notification mode (quiet/balanced/operator)',
+    usage: '[quiet|balanced|operator|show|set-domain <domain> <verbosity>]',
+    argsHint: '[preset|show|set-domain]',
+    handler(args, ctx) {
+      const mgr = ModeManager.getInstance();
+      const sub = args[0] ?? 'show';
+
+      if (sub === 'quiet' || sub === 'balanced' || sub === 'operator') {
+        const newMode = sub as 'quiet' | 'balanced' | 'operator';
+        mgr.setHITLMode(newMode);
+        try {
+          ctx.configManager.setDynamic('behavior.hitlMode' as import('../config/schema.ts').ConfigKey, newMode);
+        } catch (e) {
+          logger.warn('[/mode] Failed to persist mode:', e);
+        }
+        const preset = mgr.getHITLPreset();
+        ctx.print(`HITL mode set to: ${preset.name}\n${preset.description}`);
+        ctx.renderRequest();
+        return;
+      }
+
+      if (sub === 'show') {
+        const current = mgr.getHITLMode();
+        const preset = mgr.getHITLPreset();
+        const overrides = mgr.getDomainOverrides();
+        const lines: string[] = [
+          `HITL mode: ${current}`,
+          `  ${preset.description}`,
+          `  Default domain verbosity: ${preset.defaultDomainVerbosity}`,
+          `  Quiet-while-typing: ${preset.quietWhileTyping}`,
+          `  Batch window: ${preset.batchWindowMs}ms`,
+        ];
+        const overrideEntries = Object.entries(overrides);
+        if (overrideEntries.length > 0) {
+          lines.push('  Per-domain overrides:');
+          for (const [domain, verbosity] of overrideEntries) {
+            lines.push(`    ${domain}: ${verbosity}`);
+          }
+        } else {
+          lines.push('  No per-domain overrides.');
+        }
+        lines.push('');
+        lines.push('Available presets:');
+        for (const p of mgr.listHITLPresets()) {
+          const marker = p.name === current ? '\u25b6' : ' ';
+          lines.push(`  ${marker} ${p.name.padEnd(10)} ${p.description}`);
+        }
+        ctx.print(lines.join('\n'));
+        return;
+      }
+
+      if (sub === 'set-domain') {
+        const domain = args[1];
+        const verbosity = args[2];
+        if (!domain || !verbosity) {
+          ctx.print('Usage: /mode set-domain <domain> <minimal|normal|verbose>');
+          return;
+        }
+        if (verbosity !== 'minimal' && verbosity !== 'normal' && verbosity !== 'verbose') {
+          ctx.print(`Invalid verbosity "${verbosity}". Valid values: minimal, normal, verbose`);
+          return;
+        }
+        mgr.setDomainVerbosity(domain, verbosity as 'minimal' | 'normal' | 'verbose');
+        ctx.print(`Domain "${domain}" verbosity set to: ${verbosity}`);
+        return;
+      }
+
+      ctx.print(
+        'Usage: /mode [quiet|balanced|operator|show|set-domain <domain> <verbosity>]\n'
+        + '  /mode                          — show current mode and settings\n'
+        + '  /mode show                     — show current mode and settings\n'
+        + '  /mode quiet                    — suppress all non-critical notifications\n'
+        + '  /mode balanced                 — surface warnings, batch info noise (default)\n'
+        + '  /mode operator                 — full verbosity, no suppression\n'
+        + '  /mode set-domain <d> <v>       — per-domain verbosity override (minimal|normal|verbose)'
+      );
+    },
+  });
+
+  // ── /ops ──────────────────────────────────────────────
+  registry.register({
+    name: 'ops',
+    description: 'Operator Control Plane: view audit log, cancel/pause/resume/retry tasks and agents',
+    usage: 'view | task <cancel|pause|resume|retry> <id> [note] | agent cancel <id> [note]',
+    argsHint: '[view|task|agent]',
+    handler(args, ctx) {
+      const sub = args[0];
+
+      if (sub === 'view' || sub === undefined) {
+        if (ctx.openOpsPanel) {
+          ctx.openOpsPanel();
+        } else {
+          ctx.print('Operator Control Plane panel is not available. Enable the operator-control-plane feature flag.');
+        }
+        return;
+      }
+
+      if (sub === 'task') {
+        const action = args[1];
+        const taskId = args[2];
+        const note   = args.slice(3).join(' ') || undefined;
+        if (!action || !taskId) {
+          ctx.print('Usage: /ops task <cancel|pause|resume|retry> <task-id> [note]');
+          return;
+        }
+        if (!ctx.opsControlPlane) {
+          ctx.print('Operator Control Plane not active. Enable the operator-control-plane feature flag.');
+          return;
+        }
+        try {
+          switch (action) {
+            case 'cancel': ctx.opsControlPlane.cancelTask(taskId, note); break;
+            case 'pause':  ctx.opsControlPlane.pauseTask(taskId, note);  break;
+            case 'resume': ctx.opsControlPlane.resumeTask(taskId, note); break;
+            case 'retry':  ctx.opsControlPlane.retryTask(taskId, note);  break;
+            default:
+              ctx.print(`Unknown task action "${action}". Use: cancel, pause, resume, retry`);
+              return;
+          }
+          ctx.print(`[Ops] Task ${taskId}: ${action} dispatched.`);
+        } catch (e) {
+          ctx.print(`[Ops] Error: ${(e as Error).message}`);
+        }
+        return;
+      }
+
+      if (sub === 'agent') {
+        const action = args[1];
+        const agentId = args[2];
+        const note    = args.slice(3).join(' ') || undefined;
+        if (action !== 'cancel' || !agentId) {
+          ctx.print('Usage: /ops agent cancel <agent-id> [note]');
+          return;
+        }
+        if (!ctx.opsControlPlane) {
+          ctx.print('Operator Control Plane not active. Enable the operator-control-plane feature flag.');
+          return;
+        }
+        try {
+          ctx.opsControlPlane.cancelAgent(agentId, note);
+          ctx.print(`[Ops] Agent ${agentId}: cancel dispatched.`);
+        } catch (e) {
+          ctx.print(`[Ops] Error: ${(e as Error).message}`);
+        }
+        return;
+      }
+
+      ctx.print(
+        'Usage: /ops <subcommand>\n'
+        + '  /ops view                              — open the Ops Control panel (Ctrl+O)\n'
+        + '  /ops task cancel <id> [note]           — cancel a task\n'
+        + '  /ops task pause  <id> [note]           — pause a task\n'
+        + '  /ops task resume <id> [note]           — resume a blocked task\n'
+        + '  /ops task retry  <id> [note]           — retry a failed task\n'
+        + '  /ops agent cancel <id> [note]          — cancel a running agent'
+      );
     },
   });
 }

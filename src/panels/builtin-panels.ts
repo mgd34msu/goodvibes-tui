@@ -19,7 +19,10 @@ import { WrfcPanel } from './wrfc-panel.ts';
 import { SchedulePanel } from './schedule-panel.ts';
 import { ProviderHealthPanel } from './provider-health-panel.ts';
 import { DebugPanel } from './debug-panel.ts';
+import { OpsStrategyPanel } from './ops-strategy-panel.ts';
+import { OpsControlPanel } from './ops-control-panel.ts';
 import type { EventBus } from '../core/event-bus.ts';
+import type { RuntimeEventBus } from '../runtime/events/index.ts';
 import type { ToolRegistry } from '../tools/registry.ts';
 import type { ProviderRegistry } from '../providers/registry.ts';
 import type { Orchestrator } from '../core/orchestrator.ts';
@@ -46,6 +49,8 @@ export interface BuiltinPanelDeps {
   orchestrator?: Orchestrator;
   /** Callback returning the current model context window size (for TokenBudgetPanel). */
   getCtxWindow?: () => number;
+  /** RuntimeEventBus for the Operator Control Plane panel (ops-control). */
+  runtimeBus?: RuntimeEventBus;
 }
 
 export function registerBuiltinPanels(manager: PanelManager, deps: BuiltinPanelDeps = {}): void {
@@ -238,6 +243,30 @@ export function registerBuiltinPanels(manager: PanelManager, deps: BuiltinPanelD
       category: 'monitoring',
       description: 'Provider health dashboard: real-time status, latency, errors, and rate-limit cooldowns',
       factory: () => new ProviderHealthPanel(bus),
+    });
+  }
+
+  if (deps.bus) {
+    const { bus } = deps;
+    manager.registerType({
+      id: 'ops',
+      name: 'Ops',
+      icon: 'O',
+      category: 'agent',
+      description: 'Adaptive Execution Planner: strategy timeline, reason codes, mode and override controls',
+      factory: () => new OpsStrategyPanel(bus),
+    });
+  }
+
+  if (deps.runtimeBus) {
+    const { runtimeBus } = deps;
+    manager.registerType({
+      id: 'ops-control',
+      name: 'Ops Control',
+      icon: 'Q',
+      category: 'agent',
+      description: 'Operator Control Plane: audit log of operator interventions (task/agent cancel, pause, resume, retry)',
+      factory: () => new OpsControlPanel(runtimeBus),
     });
   }
 
