@@ -256,6 +256,7 @@ async function main() {
     _writeLastSessionPointer: writeLastSessionPointer,
     _getPinned: getPinned,
     _getConfiguredProviderIds: getConfiguredProviderIds,
+    systemMessageRouter,
   } = ctx;
   // ── HITL UX mode — read from config and apply at startup ─────────────────
   {
@@ -889,10 +890,10 @@ async function main() {
         runtime.provider = def.provider;
         configManager.set('provider.model', def.id);
         configManager.set('provider.provider', def.provider);
-        conversation.addSystemMessage(`[Model] Switched to ${def.displayName} (${def.provider}) via @model:`);
+        systemMessageRouter.high(`[Model] Switched to ${def.displayName} (${def.provider}) via @model:`);
         bus.emit('command:model-changed', { provider: def.provider, model: def.id });
       } catch {
-        conversation.addSystemMessage(`[Model] Unknown model: ${modelId}`);
+        systemMessageRouter.high(`[Model] Unknown model: ${modelId}`);
       }
       processedText = processedText.replace(atModelMatch[0], '').trim();
     }
@@ -900,12 +901,12 @@ async function main() {
     if (processedText.startsWith('!#')) {
       const memoryText = processedText.slice(2).trim();
       if (!memoryText) {
-        conversation.addSystemMessage('[Memory] Usage: !# <text to pin as session memory>');
+        systemMessageRouter.high('[Memory] Usage: !# <text to pin as session memory>');
         bus.emit('render:request');
         processedText = '';
       } else {
         const memId = sessionMemoryStore.add(memoryText);
-        conversation.addSystemMessage(`[Memory] Pinned: "${memoryText}" (${memId})`);
+        systemMessageRouter.high(`[Memory] Pinned: "${memoryText}" (${memId})`);
         processedText = memoryText;
       }
     }
@@ -973,12 +974,12 @@ async function main() {
           const lines = raw.split('\n').filter(Boolean);
           const messages = lines.slice(1).map(l => { const { type: _, ...rest } = JSON.parse(l) as { type: string } & Record<string, unknown>; return rest; });
           conversation.fromJSON({ messages: messages as Parameters<typeof conversation.fromJSON>[0]['messages'] });
-          conversation.addSystemMessage('[Recovery] Session restored.');
+          systemMessageRouter.high('[Recovery] Session restored.');
         } catch (err) {
-          conversation.addSystemMessage(`[Recovery] Failed to restore: ${(err as Error).message}`);
+          systemMessageRouter.high(`[Recovery] Failed to restore: ${(err as Error).message}`);
         }
       } else {
-        conversation.addSystemMessage('[Recovery] Discarded recovery data.');
+        systemMessageRouter.high('[Recovery] Discarded recovery data.');
       }
       deleteRecoveryFile();
       bus.emit('render:request');
@@ -1005,11 +1006,11 @@ async function main() {
         windowMs: now - _unhandledRejectionWindowStart,
         error: String(reason),
       });
-      conversation.addSystemMessage(
+      systemMessageRouter.high(
         `[Critical] Multiple errors detected (${_unhandledRejectionCount} in 10s). If the issue persists, please restart. Latest: ${msg}`
       );
     } else {
-      conversation.addSystemMessage(`[Error] ${msg}`);
+      systemMessageRouter.high(`[Error] ${msg}`);
       logger.error('unhandledRejection', { error: String(reason) });
     }
     bus.emit('render:request');
@@ -1027,7 +1028,7 @@ async function main() {
   // --- Crash recovery check ---
   const recoveryInfo = checkRecoveryFile();
   if (recoveryInfo) {
-    conversation.addSystemMessage(`[Recovery] Found unsaved session from ${new Date(recoveryInfo.timestamp).toLocaleString()}. Title: "${recoveryInfo.title}". Press R to restore, any other key to discard.`);
+    systemMessageRouter.high(`[Recovery] Found unsaved session from ${new Date(recoveryInfo.timestamp).toLocaleString()}. Title: "${recoveryInfo.title}". Press R to restore, any other key to discard.`);
     bus.emit('render:request');
     recoveryPending = true;
   }

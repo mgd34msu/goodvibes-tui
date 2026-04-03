@@ -83,9 +83,12 @@ Full implementation of the post-v3 runtime blueprint across 9 phases, ~52,000 li
 - Fixed /panel list to open picker instead of printing to conversation
 
 ### System Message Routing
-- SystemMessageRouter with high/low priority classification
-- SystemMessagesPanel for operational messages with scroll support
+- SystemMessageRouter with high/low priority classification and auto-classification by content pattern
+- SystemMessagesPanel with word-wrap, color-coded priority, keyboard scroll, 500-message cap
+- All `addSystemMessage` calls in bootstrap.ts and main.ts routed through the router (WRFC→high, agent lifecycle→low, memory→high, model switches→high, errors→high, scan/discovery→low)
+- `setPanel()` for late binding; `@internal classifyPriority` for testability
 - High-value messages appear in both conversation and panel; low-value messages panel-only
+- 32 tests covering classification, routing, auto-classify, panel push, null-panel edge cases
 
 ---
 

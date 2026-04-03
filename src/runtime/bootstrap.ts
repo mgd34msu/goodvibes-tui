@@ -304,7 +304,7 @@ export async function bootstrapRuntime(
   const bootstrapUnsubs: Array<() => void> = [];
 
   bootstrapUnsubs.push(bus.on('wrfc:cascade-abort', ({ chainId, reason }: { chainId: string; reason: string }) => {
-    conversation.addSystemMessage(`[WRFC] Cascade abort: ${reason} (chain ${chainId})`);
+    systemMessageRouter.high(`[WRFC] Cascade abort: ${reason} (chain ${chainId})`);
     bus.emit('render:request');
   }));
 
@@ -316,7 +316,7 @@ export async function bootstrapRuntime(
   }));
 
   bootstrapUnsubs.push(bus.on('wrfc:chain-created', ({ chainId, task }: { chainId: string; task: string }) => {
-    conversation.addSystemMessage(`[WRFC] Chain ${chainId} started: ${task}`);
+    systemMessageRouter.high(`[WRFC] Chain ${chainId} started: ${task}`);
     bus.emit('render:request');
   }));
 
@@ -324,12 +324,12 @@ export async function bootstrapRuntime(
     const icon = passed ? '\u2713' : '\u2717';
     const threshold = configManager.get('wrfc.scoreThreshold') as number;
     const suffix = passed ? '' : ` - Minimum score is ${threshold}/10, spawning a fix agent ...`;
-    conversation.addSystemMessage(`[WRFC] ${icon} Review ${chainId.slice(0, 12)}: ${score}/10${suffix}`);
+    systemMessageRouter.high(`[WRFC] ${icon} Review ${chainId.slice(0, 12)}: ${score}/10${suffix}`);
     bus.emit('render:request');
   }));
 
   bootstrapUnsubs.push(bus.on('wrfc:chain-passed', ({ chainId }: { chainId: string }) => {
-    conversation.addSystemMessage(`[WRFC] \u2713 Chain ${chainId.slice(0, 12)} PASSED \u2014 all gates clear`);
+    systemMessageRouter.high(`[WRFC] \u2713 Chain ${chainId.slice(0, 12)} PASSED \u2014 all gates clear`);
     // Re-check cohort completion now that a WRFC chain finished
     const chain = WrfcController.getInstance(bus).getChain(chainId);
     if (chain?.engineerAgentId) {
@@ -340,7 +340,7 @@ export async function bootstrapRuntime(
   }));
 
   bootstrapUnsubs.push(bus.on('wrfc:chain-failed', ({ chainId, reason }: { chainId: string; reason: string }) => {
-    conversation.addSystemMessage(`[WRFC] \u2717 Chain ${chainId.slice(0, 12)} FAILED: ${reason.slice(0, 80)}`);
+    systemMessageRouter.high(`[WRFC] \u2717 Chain ${chainId.slice(0, 12)} FAILED: ${reason.slice(0, 80)}`);
     // Re-check cohort completion now that a WRFC chain finished
     const chain = WrfcController.getInstance(bus).getChain(chainId);
     if (chain?.engineerAgentId) {
@@ -352,13 +352,13 @@ export async function bootstrapRuntime(
 
   bootstrapUnsubs.push(bus.on('wrfc:auto-commit', ({ chainId, commitHash }: { chainId: string; commitHash?: string }) => {
     const suffix = commitHash ? ` (${commitHash.slice(0, 7)})` : '';
-    conversation.addSystemMessage(`[WRFC] Auto-committed chain ${chainId.slice(0, 12)}${suffix}`);
+    systemMessageRouter.high(`[WRFC] Auto-committed chain ${chainId.slice(0, 12)}${suffix}`);
     bus.emit('render:request');
   }));
 
   bootstrapUnsubs.push(bus.on('wrfc:gate-result', ({ chainId, gate, passed }: { chainId: string; gate: string; passed: boolean }) => {
     const icon = passed ? '\u2713' : '\u2717';
-    conversation.addSystemMessage(`[WRFC]   ${icon} Gate: ${gate} ${passed ? 'passed' : 'FAILED'}`);
+    systemMessageRouter.high(`[WRFC]   ${icon} Gate: ${gate} ${passed ? 'passed' : 'FAILED'}`);
     bus.emit('render:request');
   }));
 
@@ -410,7 +410,7 @@ export async function bootstrapRuntime(
     const allChainsDone = cohortChains.every(c => terminalStates.has(c.state));
     if (!allChainsDone) return;
 
-    conversation.addSystemMessage(buildCohortReport(record.cohort));
+    systemMessageRouter.low(buildCohortReport(record.cohort));
   };
 
   bootstrapUnsubs.push(bus.on('subagent:complete', ({ id }: { id: string }) => {
@@ -418,7 +418,7 @@ export async function bootstrapRuntime(
     if (record) {
       const dur = record.completedAt !== undefined ? Math.round((record.completedAt - record.startedAt) / 1000) : 0;
       const taskSnippet = record.task.length > 50 ? record.task.slice(0, 50) + '\u2026' : record.task;
-      conversation.addSystemMessage(
+      systemMessageRouter.low(
         `[Agents] \u2713 ${record.template} ${id.slice(-8)}: "${taskSnippet}" \u2014 completed in ${dur}s (${record.toolCallCount} tool calls)`
       );
     }
@@ -431,7 +431,7 @@ export async function bootstrapRuntime(
     if (record && record.status !== 'cancelled') {
       const dur = record.completedAt !== undefined ? Math.round((record.completedAt - record.startedAt) / 1000) : 0;
       const taskSnippet = record.task.length > 50 ? record.task.slice(0, 50) + '\u2026' : record.task;
-      conversation.addSystemMessage(
+      systemMessageRouter.low(
         `[Agents] \u2717 ${record.template} ${id.slice(-8)}: "${taskSnippet}" \u2014 failed in ${dur}s: ${error.message.slice(0, 80)}`
       );
     }
