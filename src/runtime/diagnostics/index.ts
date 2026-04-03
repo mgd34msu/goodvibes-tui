@@ -35,6 +35,42 @@ export type {
 } from './types.ts';
 export { DEFAULT_BUFFER_LIMIT, DEFAULT_PANEL_CONFIG, applyFilter, appendBounded } from './types.ts';
 
+// ── Action system ────────────────────────────────────────────────────────────
+export type {
+  DiagnosticActionType,
+  DiagnosticActionPermission,
+  DiagnosticActionPayload,
+  DiagnosticAction,
+  HighSeverityDiagnostic,
+  ActionResult,
+  NavigateToEntryCallback,
+  PermissionChecker,
+  DiagnosticActionDispatcherConfig,
+  LoadReplayPayload,
+  RunPolicySimulationPayload,
+  JumpToTaskPayload,
+  JumpToAgentPayload,
+  JumpToToolCallPayload,
+  RetryTaskPayload,
+  CancelTaskPayload,
+  CancelAgentPayload,
+} from './actions.ts';
+export {
+  DiagnosticActionDispatcher,
+  buildLoadReplayAction,
+  buildRunPolicySimulationAction,
+  buildJumpToTaskAction,
+  buildJumpToAgentAction,
+  buildJumpToToolCallAction,
+  buildRetryTaskAction,
+  buildCancelTaskAction,
+  buildCancelAgentAction,
+  diagnosticFromTaskFailure,
+  diagnosticFromAgentFailure,
+  diagnosticFromToolContractViolation,
+  diagnosticFromForensicsRun,
+} from './actions.ts';
+
 // ── Panel data providers ─────────────────────────────────────────────────────
 export { ToolCallsPanel } from './panels/tool-calls.ts';
 export { AgentsPanel } from './panels/agents.ts';

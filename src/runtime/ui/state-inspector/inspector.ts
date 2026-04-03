@@ -15,44 +15,14 @@ import type {
   TransitionEntry,
   SubscriptionInfo,
   StateInspectorConfig,
+  TimelineEvent,
+  TimeTravelCursor,
 } from './types.ts';
-import { DEFAULT_MAX_TRANSITIONS } from './types.ts';
+import { DEFAULT_MAX_TRANSITIONS, DEFAULT_TIMELINE_BUFFER_SIZE } from './types.ts';
 import { BoundedTransitionLog } from './transition-log.ts';
+import { TimelineBuffer } from './timeline.ts';
 import type { InspectableDomain } from '../../diagnostics/panels/state-inspector.ts';
-
-// ── Serialize helper ──────────────────────────────────────────────────────────
-
-/**
- * Serialize a value to a JSON-safe representation.
- * Maps → plain objects, Sets → arrays, circular refs → '[Circular]'.
- */
-function serializeSafe(value: unknown, seen = new WeakSet()): unknown {
-  if (value === null || typeof value !== 'object') return value;
-  if (seen.has(value as object)) return '[Circular]';
-  seen.add(value as object);
-
-  if (value instanceof Map) {
-    const result: Record<string, unknown> = {};
-    for (const [k, v] of value.entries()) {
-      result[String(k)] = serializeSafe(v, seen);
-    }
-    return result;
-  }
-
-  if (value instanceof Set) {
-    return [...value].map((v) => serializeSafe(v, seen));
-  }
-
-  if (Array.isArray(value)) {
-    return value.map((v) => serializeSafe(v, seen));
-  }
-
-  const result: Record<string, unknown> = {};
-  for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
-    result[k] = serializeSafe(v, seen);
-  }
-  return result;
-}
+import { serializeSafe } from './serialize.ts';
 
 // ── Domain state cache ────────────────────────────────────────────────────────
 
@@ -61,6 +31,21 @@ interface DomainCache {
   revision: number;
   lastUpdatedAt: number;
   source: string;
+}
+
+// ── Internal mutable subscription type ───────────────────────────────────────
+
+/** Internal mutable version of SubscriptionInfo, also carries the callback. */
+interface MutableSubscriptionInfo {
+  id: string;
+  label: string;
+  registeredAt: number;
+  domainFilter: readonly string[] | undefined;
+  notificationCount: number;
+  lastNotifiedAt: number | undefined;
+  callback: () => void;
+  errorCount: number;
+  lastError: string | undefined;
 }
 
 // ── StateInspectorProvider ────────────────────────────────────────────────────
@@ -83,8 +68,9 @@ interface DomainCache {
 export class StateInspectorProvider {
   private readonly _domains: InspectableDomain[];
   private readonly _transitionLog: BoundedTransitionLog;
+  private readonly _timeline: TimelineBuffer;
   private readonly _observedDomains: ReadonlySet<string> | undefined;
-  private readonly _subscriptions = new Map<string, SubscriptionInfo & { callback: () => void }>();
+  private readonly _subscriptions = new Map<string, MutableSubscriptionInfo>();
   private readonly _domainCache = new Map<string, DomainCache>();
   private _subIdCounter = 0;
 
@@ -99,6 +85,9 @@ export class StateInspectorProvider {
     this._domains = [...domains];
     this._transitionLog = new BoundedTransitionLog(
       config.maxTransitions ?? DEFAULT_MAX_TRANSITIONS,
+    );
+    this._timeline = new TimelineBuffer(
+      config.timelineBufferSize ?? DEFAULT_TIMELINE_BUFFER_SIZE,
     );
     this._observedDomains = config.observedDomains
       ? new Set(config.observedDomains)
@@ -179,13 +168,23 @@ export class StateInspectorProvider {
             ? (rawState as Record<string, unknown>)['source'] as string
             : 'unknown';
 
-        this._transitionLog.append({
+        const serializedState = serializeSafe(rawState) as Record<string, unknown>;
+        const entry = this._transitionLog.append({
           domain: domain.name,
           fromRevision,
           toRevision: currentRevision,
           recordedAt: now,
           source,
-          state: serializeSafe(rawState) as Record<string, unknown>,
+          state: serializedState,
+        });
+
+        // Record timeline event for time-travel replay
+        this._timeline.append({
+          capturedAt: now,
+          domain: domain.name,
+          transitionId: entry.id,
+          snapshot: serializedState,
+          label: source !== 'unknown' ? source : undefined,
         });
 
         this._domainCache.set(domain.name, {
@@ -244,11 +243,101 @@ export class StateInspectorProvider {
   }
 
   /**
-   * Clear all stored transitions.
+   * Clear all stored transitions and timeline events.
    * Does not reset subscription registry or domain cache.
    */
   public clearTransitionHistory(): void {
     this._transitionLog.clear();
+    this._timeline.clear();
+  }
+
+  // ── Time-travel API ──────────────────────────────────────────────────────────
+
+  /**
+   * Return all retained timeline events in chronological order.
+   *
+   * @returns Ordered array of TimelineEvent.
+   */
+  public getTimeline(): TimelineEvent[] {
+    return this._timeline.getAll();
+  }
+
+  /**
+   * Return the event at the current time-travel cursor position.
+   * Returns undefined when the cursor is at the live position.
+   *
+   * @returns TimelineEvent or undefined when live.
+   */
+  public getCurrentTimelineEvent(): TimelineEvent | undefined {
+    return this._timeline.getCurrentEvent();
+  }
+
+  /**
+   * Current time-travel cursor state.
+   */
+  get timeTravelCursor(): TimeTravelCursor {
+    return this._timeline.cursorState;
+  }
+
+  /**
+   * Whether the inspector is currently in time-travel mode (cursor pinned).
+   */
+  get isTimeTravel(): boolean {
+    return !this._timeline.isLive;
+  }
+
+  /**
+   * Step the cursor one event backward (toward oldest).
+   *
+   * @returns true if the cursor moved.
+   */
+  public stepBack(): boolean {
+    return this._timeline.stepBack();
+  }
+
+  /**
+   * Step the cursor one event forward (toward live).
+   *
+   * @returns true if the cursor moved.
+   */
+  public stepForward(): boolean {
+    return this._timeline.stepForward();
+  }
+
+  /**
+   * Seek the cursor to an absolute logical index.
+   * Pass `timeline.size` to return to live.
+   *
+   * @param index — Target index (size = live).
+   */
+  public seekTo(index: number): void {
+    this._timeline.seekTo(index);
+  }
+
+  /**
+   * Seek to the nearest event at or before a given epoch ms timestamp.
+   *
+   * @param epochMs — Target timestamp.
+   */
+  public seekToTime(epochMs: number): void {
+    this._timeline.seekToTime(epochMs);
+  }
+
+  /**
+   * Exit time-travel mode, returning the cursor to the live tail.
+   */
+  public exitTimeTravel(): void {
+    this._timeline.exitTimeTravel();
+  }
+
+  /**
+   * Get the snapshot at the current cursor position for display.
+   * Returns undefined when live (callers should use getSnapshot() instead).
+   *
+   * @returns The pinned snapshot state or undefined when live.
+   */
+  public getTimeTravelSnapshot(): TimelineEvent | undefined {
+    return this._timeline.getCurrentEvent();
   }
 
   // ── Subscription API ─────────────────────────────────────────────────────────
@@ -267,7 +356,7 @@ export class StateInspectorProvider {
     domainFilter?: readonly string[],
   ): { id: string; unsubscribe: () => void } {
     const id = `sub-${++this._subIdCounter}`;
-    const info: SubscriptionInfo & { callback: () => void } = {
+    const info: MutableSubscriptionInfo = {
       id,
       label,
       registeredAt: Date.now(),
@@ -326,14 +415,12 @@ export class StateInspectorProvider {
     for (const sub of this._subscriptions.values()) {
       try {
         sub.callback();
-        (sub as { notificationCount: number; lastNotifiedAt?: number }).notificationCount++;
-        (sub as { notificationCount: number; lastNotifiedAt?: number }).lastNotifiedAt = now;
+        sub.notificationCount++;
+        sub.lastNotifiedAt = now;
       } catch (err) {
         // Non-fatal: subscriber errors must not crash the provider
-        (sub as { errorCount: number; lastError?: string }).errorCount =
-          (sub.errorCount ?? 0) + 1;
-        (sub as { errorCount: number; lastError?: string }).lastError =
-          err instanceof Error ? err.message : String(err);
+        sub.errorCount = (sub.errorCount ?? 0) + 1;
+        sub.lastError = err instanceof Error ? err.message : String(err);
       }
     }
   }

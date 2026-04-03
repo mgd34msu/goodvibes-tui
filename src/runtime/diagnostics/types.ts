@@ -487,6 +487,119 @@ export interface IntegrationDeliveryDiagnostics {
   readonly capturedAt: number;
 }
 
+// ── Panel resource diagnostics ───────────────────────────────────────────────
+
+import type { PanelThrottleStatus, PanelHealthStatus } from '../perf/panel-contracts.ts';
+
+/**
+ * Diagnostic snapshot for a single panel's resource usage and health.
+ */
+export interface PanelResourceEntry {
+  /** Panel id. */
+  readonly panelId: string;
+  /** Current throttle status. */
+  readonly throttleStatus: PanelThrottleStatus;
+  /** Current health status. */
+  readonly healthStatus: PanelHealthStatus;
+  /** p95 render duration in ms over the last measurement window. */
+  readonly renderP95Ms: number;
+  /** Maximum contract render budget in ms. */
+  readonly maxRenderMs: number;
+  /** Renders observed in the current measurement window. */
+  readonly rendersInWindow: number;
+  /** Contracted max updates per second. */
+  readonly maxUpdatesPerSecond: number;
+  /** Number of consecutive budget violations. */
+  readonly consecutiveViolations: number;
+  /** Total renders suppressed since monitor start. */
+  readonly totalSuppressed: number;
+  /** Total renders permitted since monitor start. */
+  readonly totalPermitted: number;
+  /** Epoch ms of the last permitted render. */
+  readonly lastRenderAt: number;
+  /** Epoch ms when next render is permitted (0 = unrestricted). */
+  readonly nextAllowedAt: number;
+}
+
+/**
+ * Full snapshot of panel resource health for the diagnostics panel.
+ */
+export interface PanelResourceSnapshot {
+  /** All tracked panel entries, sorted: overloaded > warning > healthy. */
+  readonly panels: readonly PanelResourceEntry[];
+  /** Count of panels currently in 'overloaded' health status. */
+  readonly overloadedCount: number;
+  /** Count of panels currently in 'warning' health status. */
+  readonly warningCount: number;
+  /** Count of panels currently in 'healthy' health status. */
+  readonly healthyCount: number;
+  /** Total renders suppressed across all panels since monitor start. */
+  readonly totalSuppressed: number;
+  /** Epoch ms when this snapshot was captured. */
+  readonly capturedAt: number;
+}
+
+// ── Token audit diagnostics ──────────────────────────────────────────────────
+
+/**
+ * Outcome of a token scope audit check.
+ * Mirrors TokenScopeAuditResult from src/security/token-audit.ts.
+ */
+export type TokenScopeAuditOutcome = 'ok' | 'violation';
+
+/**
+ * Outcome of a token rotation audit check.
+ * Mirrors TokenRotationAuditResult from src/security/token-audit.ts.
+ */
+export type TokenRotationAuditOutcome = 'ok' | 'warning' | 'overdue';
+
+/**
+ * Diagnostics entry for a single audited API token.
+ * Snapshot-safe; contains no secret values.
+ */
+export interface TokenAuditDiagEntry {
+  /** Stable token identifier (not the secret value). */
+  readonly tokenId: string;
+  /** Human-readable label (e.g. 'OPENAI_API_KEY'). */
+  readonly label: string;
+  /** Scope audit outcome. */
+  readonly scopeOutcome: TokenScopeAuditOutcome;
+  /** Scopes present on the token beyond the policy's allowedScopes. */
+  readonly excessScopes: readonly string[];
+  /** Policy ID this token was evaluated against. */
+  readonly policyId: string;
+  /** Rotation audit outcome. */
+  readonly rotationOutcome: TokenRotationAuditOutcome;
+  /** How old the token is in ms. */
+  readonly ageMs: number;
+  /** Configured rotation cadence in ms. */
+  readonly cadenceMs: number;
+  /** Ms remaining until rotation is due (negative = overdue). */
+  readonly msUntilDue: number;
+  /** Whether this token is blocked in managed mode. */
+  readonly blocked: boolean;
+}
+
+/**
+ * Full token audit diagnostics snapshot for the security panel.
+ */
+export interface TokenAuditDiagnostics {
+  /** Whether the auditor is operating in managed mode. */
+  readonly managed: boolean;
+  /** All audited token entries. */
+  readonly entries: readonly TokenAuditDiagEntry[];
+  /** IDs of tokens blocked in managed mode. */
+  readonly blocked: readonly string[];
+  /** IDs of tokens with scope violations. */
+  readonly scopeViolations: readonly string[];
+  /** IDs of tokens with rotation warnings. */
+  readonly rotationWarnings: readonly string[];
+  /** IDs of tokens with overdue rotation. */
+  readonly rotationOverdue: readonly string[];
+  /** Epoch ms when this audit was captured. */
+  readonly capturedAt: number;
+}
+
 // ── Utility ───────────────────────────────────────────────────────────────────
 
 /**
