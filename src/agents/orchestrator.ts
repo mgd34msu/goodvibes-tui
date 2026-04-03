@@ -1,11 +1,11 @@
 import { ConversationManager } from '../core/conversation.ts';
 import { AgentMessageBus } from './message-bus.ts';
 import { ToolRegistry } from '../tools/registry.ts';
-import { providerRegistry } from '../providers/registry.ts';
+import { providerRegistry, getModelRegistry } from '../providers/registry.ts';
 import { registerAllTools } from '../tools/index.ts';
 import { logger } from '../utils/logger.ts';
 import { ConsecutiveErrorBreaker } from '../core/circuit-breaker.ts';
-import { isRateLimitOrQuotaError } from '../types/errors.ts';
+import { isRateLimitOrQuotaError, isContextSizeExceededError } from '../types/errors.ts';
 import { FileStateCache } from '../state/file-cache.ts';
 import { ProjectIndex } from '../state/project-index.ts';
 import { AgentSession } from './session.ts';
@@ -16,6 +16,13 @@ import type { EventBus } from '../core/event-bus.ts';
 import { existsSync, readFileSync } from 'node:fs';
 import { ProcessManager } from '../tools/shared/process-manager.ts';
 import { join } from 'node:path';
+import { getContextWindowForModel } from '../providers/model-limits.ts';
+import {
+  estimateTokens,
+  estimateConversationTokens,
+  compactSmallWindow,
+} from '../core/context-compaction.ts';
+import type { FeatureFlagManager } from '../runtime/feature-flags/manager.ts';
 
 // ---------------------------------------------------------------------------
 // Network error detection
@@ -54,6 +61,25 @@ const NETWORK_RETRY_DELAYS_MS = [5_000, 10_000, 20_000, 40_000, 60_000];
 /** Delay between rate-limit retries (ms). Each failed agent waits this long before retrying. */
 const RATE_LIMIT_RETRY_DELAY_MS = 60_000;
 const RATE_LIMIT_MAX_RETRIES = 3;
+
+// ---------------------------------------------------------------------------
+// Context window awareness constants
+// ---------------------------------------------------------------------------
+
+/**
+ * Fraction of context window at which pre-call compaction is triggered.
+ * 0.85 = compact when estimated usage exceeds 85% of available window.
+ */
+const CONTEXT_COMPACT_THRESHOLD = 0.85;
+
+/**
+ * Minimum context window size (tokens) below which we skip LLM-based
+ * compaction and only do rule-based truncation.
+ * Matches SMALL_WINDOW_THRESHOLD from context-compaction.ts (12_000).
+ */
+const MIN_WINDOW_FOR_LLM_COMPACT = 12_000;
+
+
 
 // ---------------------------------------------------------------------------
 // Tool args summarizer
@@ -104,6 +130,7 @@ export class AgentOrchestrator {
   private projectIndex: ProjectIndex | null = null;
   private projectContextCache: string | null | undefined = undefined; // undefined = not cached, null = no context
   private eventBus: EventBus | null = null;
+  private featureFlagManager: FeatureFlagManager | null = null;
 
   /** Singleton accessor. */
   static getInstance(): AgentOrchestrator {
@@ -121,6 +148,11 @@ export class AgentOrchestrator {
   /** Set the EventBus for emitting agent lifecycle events (WRFC integration). */
   setEventBus(eventBus: EventBus): void {
     this.eventBus = eventBus;
+  }
+
+  /** Set the FeatureFlagManager for G01 context-window awareness gating. */
+  setFeatureFlagManager(manager: FeatureFlagManager): void {
+    this.featureFlagManager = manager;
   }
 
   /**
@@ -176,12 +208,23 @@ export class AgentOrchestrator {
       const toolRegistry = this.buildScopedRegistry(record.tools, this.getFullRegistry());
       const toolDefinitions = toolRegistry.getToolDefinitions();
 
+      // --- Tool token cost (computed once, used per-turn in G01 context check) ---
+      const toolTokens = toolDefinitions.length > 0
+        ? estimateTokens(JSON.stringify(toolDefinitions))
+        : 0;
+
       // --- Conversation ---
       conversation = new ConversationManager(() => 80); // default terminal width for agent conversation
       conversation.addUserMessage(record.task);
 
       // --- System prompt ---
-      const systemPrompt = this.buildSystemPrompt(record);
+      // Declared as `let` so context-window awareness (G01) can rebuild with fewer layers.
+      let systemPrompt = this.buildSystemPrompt(record);
+
+      // --- Resolve model definition for context-window lookups (G01) ---
+      const modelDef = getModelRegistry().find(
+        (m) => m.id === modelId || m.registryKey === modelId,
+      ) ?? providerRegistry.getCurrentModel();
 
       // --- Turn loop ---
       let continueLoop = true;
@@ -240,6 +283,56 @@ export class AgentOrchestrator {
           // Inject as user message so LLM responds to inter-agent communication
           conversation.addUserMessage(`[Message from agent ${msg.from}]: ${msg.content}`);
         }
+        // --- G01: Context-window pre-check ---
+        // Before calling provider.chat(), estimate total token usage and compact
+        // messages or trim the system prompt when approaching the context limit.
+        if (this.featureFlagManager?.isEnabled('g01-agent-context-window-awareness') ?? true) {
+          const contextWindow = getContextWindowForModel(modelDef);
+          if (contextWindow === 0) {
+            logger.debug(`[G01] Context window is 0/unknown for model ${modelId}, skipping context validation`);
+          } else {
+            const messages = conversation.getMessagesForLLM();
+            const msgTokens = estimateConversationTokens(messages);
+            const sysTokens = estimateTokens(systemPrompt);
+            const totalEstimate = msgTokens + sysTokens + toolTokens;
+            const threshold = Math.floor(contextWindow * CONTEXT_COMPACT_THRESHOLD);
+
+            if (totalEstimate > threshold) {
+              logger.warn(
+                `[AgentOrchestrator] G01: estimated ${totalEstimate} tokens exceeds ${threshold} (${Math.round(CONTEXT_COMPACT_THRESHOLD * 100)}% of ${contextWindow}) — compacting`,
+                { agentId: record.id, turn, msgTokens, sysTokens, toolTokens, contextWindow },
+              );
+              record.progress = `Turn ${turn} · Compacting context…`;
+
+              if (contextWindow <= MIN_WINDOW_FOR_LLM_COMPACT) {
+                // Small window: rule-based truncation only
+                const compacted = compactSmallWindow(messages);
+                conversation.replaceMessagesForLLM(compacted);
+              } else {
+                // Standard window: rule-based message compaction (keep recent 50%).
+                // Full LLM-based summarisation would produce higher-quality compaction
+                // but requires an async provider call with full context — that's a
+                // follow-up improvement. For now, simple truncation keeps the tail of
+                // the conversation where the most relevant work lives.
+                const compacted = compactSmallWindow(messages, Math.max(10, Math.floor(messages.length / 2)));
+                conversation.replaceMessagesForLLM(compacted);
+              }
+
+              // After message compaction, check if system prompt still fits.
+              // Apply layered trimming: drop conventions first, then project context.
+              const remainingAfterMsgs = contextWindow - estimateConversationTokens(conversation.getMessagesForLLM()) - toolTokens;
+              const currentSysTokens = estimateTokens(systemPrompt);
+              if (currentSysTokens > remainingAfterMsgs * CONTEXT_COMPACT_THRESHOLD) {
+                logger.warn(
+                  `[AgentOrchestrator] G01: system prompt (${currentSysTokens} tokens) too large for remaining window (${remainingAfterMsgs}) — applying layered trim`,
+                  { agentId: record.id },
+                );
+                systemPrompt = this.buildLayeredSystemPrompt(record, remainingAfterMsgs);
+              }
+            }
+          }
+        }
+
         // --- Network-aware retry around the LLM call ---
         // provider.chat() already has short provider-level retries (~30s total).
         // This outer loop waits for the network to come back (up to ~2.5 min
@@ -248,6 +341,7 @@ export class AgentOrchestrator {
         {
           let networkAttempt = 0;
           let rateLimitAttempt = 0;
+          let contextRetried = false;
           // eslint-disable-next-line no-constant-condition
           while (true) {
             // Reset streaming state for this retry attempt
@@ -311,8 +405,28 @@ export class AgentOrchestrator {
                 if ((record as { status: string }).status === 'cancelled') {
                   throw new Error('Agent cancelled during rate limit retry');
                 }
+              } else if (
+                isContextSizeExceededError(chatErr) &&
+                !contextRetried &&
+                (this.featureFlagManager?.isEnabled('g01-agent-context-window-awareness') ?? true)
+              ) {
+                // G01: context size exceeded — compact messages and retry once
+                contextRetried = true;
+                logger.warn(
+                  `[AgentOrchestrator] G01: context size exceeded on turn ${turn} — emergency compaction and retry`,
+                  { agentId: record.id, error: chatErr instanceof Error ? chatErr.message : String(chatErr) },
+                );
+                record.progress = `Turn ${turn} · Context exceeded, compacting…`;
+                const currentMessages = conversation.getMessagesForLLM();
+                const compacted = compactSmallWindow(
+                  currentMessages,
+                  Math.max(5, Math.floor(currentMessages.length / 3)),
+                );
+                conversation.replaceMessagesForLLM(compacted);
+                // Also strip system prompt to bare minimum
+                systemPrompt = this.buildLayeredSystemPrompt(record, 0);
               } else {
-                // Not a network/rate-limit error, or all retries exhausted — re-throw
+                // Not a network/rate-limit/context error, or all retries exhausted — re-throw
                 // to let the outer catch handle it and fail the agent.
                 throw chatErr;
               }
@@ -571,8 +685,10 @@ export class AgentOrchestrator {
     return scopedRegistry;
   }
 
-  /** Build a layered system prompt: base + archetype + project context + conventions. */
-  private buildSystemPrompt(record: AgentRecord): string {
+  /** Build a layered system prompt: base + archetype + project context + conventions.
+   * Layers 3 (project context) and 4 (conventions) are omitted when their key appears in skipLayers.
+   */
+  private buildSystemPrompt(record: AgentRecord, skipLayers?: Set<string>): string {
     const parts: string[] = [];
 
     // --- Layer 1: Base instructions ---
@@ -709,15 +825,19 @@ The report format depends on your role:
     }
 
     // --- Layer 3: Project context ---
-    const projectContext = this.buildProjectContext();
-    if (projectContext) {
-      parts.push(projectContext);
+    if (!skipLayers?.has('project')) {
+      const projectContext = this.buildProjectContext();
+      if (projectContext) {
+        parts.push(projectContext);
+      }
     }
 
     // --- Layer 4: Conventions ---
-    const conventions = this.loadConventions();
-    if (conventions) {
-      parts.push(conventions);
+    if (!skipLayers?.has('conventions')) {
+      const conventions = this.loadConventions();
+      if (conventions) {
+        parts.push(conventions);
+      }
     }
 
     // --- Layer 5: Task ---
@@ -725,6 +845,60 @@ The report format depends on your role:
 
     return parts.join('\n\n');
   }
+
+  /**
+   * Build a system prompt with progressively fewer layers based on token budget.
+   * Layer order (dropped last to first when space is tight):
+   *   Layer 5: Task (always included)
+   *   Layer 1: Base instructions (always included)
+   *   Layer 2: Archetype overlay (always included)
+   *   Layer 3: Project context (dropped first when tight)
+   *   Layer 4: Conventions (dropped first when tightest)
+   *
+   * When remainingTokens is 0, returns the minimal prompt (layers 1+2+5 only).
+   */
+  private buildLayeredSystemPrompt(record: AgentRecord, remainingTokens: number): string {
+    // Always include base instructions + archetype + task
+    const base = this.buildSystemPrompt(record);
+    if (remainingTokens === 0) {
+      // Emergency: strip to task-only minimal prompt
+      logger.warn('[AgentOrchestrator] G01: emergency system prompt — base layers only', { agentId: record.id });
+      const parts: string[] = [];
+      const toolNames = record.tools.filter(t => t !== 'agent').join(', ');
+      parts.push(`You are an autonomous agent. Complete your task. Tools: ${toolNames}.`);
+      parts.push(`## Task\n${record.task}`);
+      return parts.join('\n\n');
+    }
+    const baseTokens = estimateTokens(base);
+    if (baseTokens <= remainingTokens) {
+      return base; // Full prompt fits — return as-is
+    }
+
+    // Try without conventions
+    const noConventions = this.buildSystemPrompt(record, new Set(['conventions']));
+    const noConvTokens = estimateTokens(noConventions);
+    if (noConvTokens <= remainingTokens) {
+      logger.info('[AgentOrchestrator] G01: system prompt trimmed — dropped conventions layer', { agentId: record.id });
+      return noConventions;
+    }
+
+    // Try without conventions AND project context
+    const noContext = this.buildSystemPrompt(record, new Set(['conventions', 'project']));
+    const noContextTokens = estimateTokens(noContext);
+    if (noContextTokens <= remainingTokens) {
+      logger.info('[AgentOrchestrator] G01: system prompt trimmed — dropped conventions + project context', { agentId: record.id });
+      return noContext;
+    }
+
+    // Final fallback: truncate the reduced prompt to fit
+    const targetChars = remainingTokens * 4; // rough chars from tokens
+    const truncated = noContext.length > targetChars
+      ? noContext.slice(0, targetChars) + '\n[...system prompt truncated to fit context window]'
+      : noContext;
+    logger.warn('[AgentOrchestrator] G01: system prompt hard-truncated to fit context window', { agentId: record.id, chars: truncated.length });
+    return truncated;
+  }
+
 
   /** Build project context from package.json and filesystem markers. */
   private buildProjectContext(): string | null {
