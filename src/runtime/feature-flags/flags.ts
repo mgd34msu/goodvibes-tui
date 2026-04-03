@@ -99,7 +99,37 @@ export const FEATURE_FLAGS: FeatureFlag[] = [
     runtimeToggleable: true,
   },
 
-  // ── Tier 6 ───────────────────────────────────────────────────────────────
+  // ── Tier 7 ───────────────────────────────────────────────────────────────
+  {
+    id: 'gc-orch-015-tool-result-reconciliation',
+    name: 'GC-ORCH-015: Tool Result Reconciliation',
+    description:
+      'Detects and reconciles unresolved tool calls at turn end. '
+      + 'When enabled, dangling tool-call state causes synthetic error results '
+      + 'to be injected and a reconciliation event to be emitted, preventing '
+      + 'silent conversation corruption. Disable to fall back to legacy '
+      + '(silent-drop) behaviour with a warning log.',
+    defaultState: 'enabled',
+    tier: 7,
+    runtimeToggleable: true,
+  },
+
+  // ── Tier 7 (continued) ──────────────────────────────────────────────────
+  // @remarks policy-signing: this flag is informational for UI/ops status display only —
+  // it is NOT a runtime gate. Signing always runs when a signing key is provided via
+  // `signingKey` in `PolicyLoaderOptions`; the flag does not suppress or bypass that
+  // behaviour. Use this flag to surface signing status in dashboards or operational tooling.
+  {
+    id: 'policy-signing',
+    name: 'Policy Signing (GC-PERM-011)',
+    description:
+      'Enables HMAC-SHA256 signature validation on policy bundle load. '
+      + 'When enabled, managed mode rejects bundles with invalid or missing signatures. '
+      + 'In non-managed mode, unsigned bundles are permitted with a warning status.',
+    defaultState: 'disabled',
+    tier: 7,
+    runtimeToggleable: false,
+  },
   {
     id: 'session-compaction-v2',
     name: 'Session Compaction v2',
@@ -107,6 +137,34 @@ export const FEATURE_FLAGS: FeatureFlag[] = [
       'Activates the v2 compaction algorithm with semantic chunking and relevance scoring.',
     defaultState: 'disabled',
     tier: 6,
+    runtimeToggleable: true,
+  },
+
+  // ── GC-FETCH-006 ─────────────────────────────────────────────────────────
+  {
+    id: 'fetch-sanitization',
+    name: 'Fetch Response Sanitization',
+    description:
+      'Enables GC-FETCH-006 fetch response sanitization and host trust tier classification.'
+      + ' Sanitizes HTTP response content (none/safe-text/strict modes) and blocks requests'
+      + ' to SSRF-risk hosts (private IPs, metadata endpoints, localhost variants).'
+      + ' Defaults to safe-text sanitization mode when enabled.'
+      + ' Set sanitize_mode: none in fetch config to override for explicitly trusted hosts.',
+    defaultState: 'disabled',
+    tier: 8,
+    runtimeToggleable: true,
+  },
+
+  // ── GC-EXEC-005 ────────────────────────────────────────────────────────────
+  {
+    id: 'shell-ast-normalization',
+    name: 'Shell AST Normalization (GC-EXEC-005)',
+    description:
+      'Enables the Shell AST parser for compound command verdict evaluation. '
+      + 'Produces per-segment verdicts (safe/unsafe) with user-facing denial '
+      + 'explanations. When disabled, falls back to legacy flat segmentation mode.',
+    defaultState: 'disabled',
+    tier: 8,
     runtimeToggleable: true,
   },
 ];

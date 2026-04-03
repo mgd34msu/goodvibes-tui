@@ -89,6 +89,9 @@ export interface EventMap {
 
   // Model failover events
   'model:fallback': { from: string; to: string; provider: string };
+
+  // Tool result reconciliation (GC-ORCH-015)
+  'turn:tool-reconciliation': import('./tool-reconciliation.ts').ReconciliationEvent;
 }
 
 type Listener<T> = T extends void ? () => void : (data: T) => void;

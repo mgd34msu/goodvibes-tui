@@ -145,6 +145,25 @@ export const FETCH_TOOL_SCHEMA = {
       minimum: 1,
       description: 'Global maximum response body size in bytes. Responses exceeding this are truncated. Can be overridden per-URL.',
     },
+    sanitize_mode: {
+      type: 'string',
+      enum: ['none', 'safe-text', 'strict'],
+      description:
+        'Response sanitization mode applied to all URL responses.'
+        + ' none: content returned verbatim (trusted hosts only);'
+        + ' safe-text: strips script/style blocks and control characters (default);'
+        + ' strict: strips all HTML and non-printable characters (untrusted hosts).',
+    },
+    trusted_hosts: {
+      type: 'array',
+      items: { type: 'string' },
+      description: 'Hostnames or glob patterns explicitly trusted. Trusted hosts may use sanitize_mode: none.',
+    },
+    blocked_hosts: {
+      type: 'array',
+      items: { type: 'string' },
+      description: 'Hostnames or glob patterns explicitly blocked. Denied pre-request regardless of other config.',
+    },
   },
   required: ['urls'],
 } as const;
@@ -209,6 +228,16 @@ export interface FetchUrlInput {
   auth?: FetchAuthInput;
 }
 
+/**
+ * Sanitization mode for response content.
+ *
+ * Re-exported from sanitizer.ts to avoid duplication. `FetchSanitizeMode`
+ * is an alias for `SanitizeMode`.
+ */
+import type { SanitizeMode } from './sanitizer.ts';
+/** Sanitization mode alias — re-exported from sanitizer.ts to avoid duplication. */
+export type FetchSanitizeMode = SanitizeMode;
+
 /** Full input shape for the fetch tool. */
 export interface FetchInput {
   urls: FetchUrlInput[];
@@ -221,4 +250,13 @@ export interface FetchInput {
   rate_limit_ms?: number;
   /** Global maximum response body size in bytes. */
   max_content_length?: number;
+  /**
+   * Response sanitization mode applied to all URL responses.
+   * Defaults to `'safe-text'` when omitted (rollback-safe default per GC-FETCH-006).
+   */
+  sanitize_mode?: FetchSanitizeMode;
+  /** Hostnames or glob patterns explicitly trusted. Trusted hosts may use sanitize_mode: none. */
+  trusted_hosts?: string[];
+  /** Hostnames or glob patterns explicitly blocked. Denied pre-request regardless of other config. */
+  blocked_hosts?: string[];
 }

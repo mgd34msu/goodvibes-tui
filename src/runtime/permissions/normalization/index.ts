@@ -12,33 +12,55 @@ export type {
   NormalizedCommand,
 } from './types.ts';
 
+export type {
+  ShellNode,
+  CommandNode,
+  PipeNode,
+  SequenceNode,
+  SubshellNode,
+} from './ast.ts';
+
+export type {
+  SegmentVerdict,
+  CompoundVerdict,
+} from './verdict.ts';
+
 export { tokenize } from './tokenizer.ts';
 export { segment } from './segmenter.ts';
 export { canonicalize } from './canonicalizer.ts';
 export { classifySegment, classifyCommand, higherPriority } from './classifier.ts';
+export { collectCommandNodes, describeNode } from './ast.ts';
+export { parseAST, parseCommandAST } from './parser.ts';
+export { evaluateSegmentNode, evaluateCommandAST, buildDenialExplanation, DEFAULT_ALLOWED_CLASSES } from './verdict.ts';
 
 import { tokenize } from './tokenizer.ts';
 import { segment } from './segmenter.ts';
 import { classifyCommand } from './classifier.ts';
-import type { NormalizedCommand } from './types.ts';
+import type { NormalizedCommand, CommandClassification } from './types.ts';
+import { parseCommandAST } from './parser.ts';
+import { evaluateCommandAST, DEFAULT_ALLOWED_CLASSES } from './verdict.ts';
+import type { CompoundVerdict } from './verdict.ts';
 
 /**
- * Normalizes a raw shell command string into a fully analyzed NormalizedCommand.
+ * Normalizes a raw shell command string and evaluates per-segment verdicts.
  *
- * Pipeline:
- *  1. Tokenize: split the string into lexical tokens.
- *  2. Segment: split compound commands (&&, ||, ;, |) into segments.
- *  3. Classify: assign risk classifications and detect dangerous patterns.
+ * Uses the Shell AST parser (GC-EXEC-005) to produce a CompoundVerdict with
+ * per-segment classification and denial reasons. Requires the
+ * `shell-ast-normalization` feature flag to be enabled; falls back to
+ * `normalizeCommand` when the flag is disabled.
  *
- * @param command - The raw shell command string to normalize.
- * @returns A NormalizedCommand with segments, classifications, and pattern analysis.
- *
- * @example
- * const result = normalizeCommand('rm -rf /tmp && git push --force');
- * result.highestClassification; // 'destructive'
- * result.hasDangerousPatterns; // true
- * result.dangerousPatterns; // ['rm -rf: recursive forced deletion', ...]
+ * @param command        - The raw shell command string to evaluate.
+ * @param allowedClasses - Classification tiers to allow (default: read+write+network).
+ * @returns A CompoundVerdict with per-segment breakdown.
  */
+export function normalizeCommandWithVerdicts(
+  command: string,
+  allowedClasses: ReadonlySet<CommandClassification> = DEFAULT_ALLOWED_CLASSES,
+): CompoundVerdict {
+  const ast = parseCommandAST(command);
+  return evaluateCommandAST(command, ast, allowedClasses);
+}
+
 export function normalizeCommand(command: string): NormalizedCommand {
   const trimmed = command.trim();
   const tokens = tokenize(trimmed);

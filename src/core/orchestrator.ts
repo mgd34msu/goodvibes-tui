@@ -34,6 +34,12 @@ import { randomUUID, createHash } from 'node:crypto';
 import { cacheHitTracker } from '../providers/cache-strategy.ts';
 import { helperModel } from '../config/helper-model.ts';
 import { idempotencyStore } from '../runtime/idempotency/index.ts';
+import {
+  buildSyntheticResult,
+  detectUnresolvedToolCalls,
+  type ReconciliationReason,
+} from './tool-reconciliation.ts';
+import type { FeatureFlagManager } from '../runtime/feature-flags/manager.ts';
 
 /** Minimal interface for hook dispatch — allows any compatible implementation */
 interface HookDispatcherLike {
@@ -103,6 +109,24 @@ export class Orchestrator {
   /** Cleanup function returned by EventReplayQueue.attachTo() */
   private detachReplay: (() => void) | null = null;
 
+  /**
+   * Optional feature flag manager.
+   *
+   * When provided, the `gc-orch-015-tool-result-reconciliation` flag is
+   * consulted at each turn end to decide whether to use full reconciliation
+   * (default, `enabled`) or legacy silent-drop behaviour (`disabled`).
+   * When `null`, reconciliation defaults to enabled (matching the flag's
+   * declared `defaultState`).
+   */
+  private flagManager: FeatureFlagManager | null = null;
+
+  /**
+   * Tracks the last provider response's tool calls within the current turn
+   * iteration so the reconciliation pass can detect unresolved calls when
+   * the loop exits early.
+   */
+  private _pendingToolCalls: ToolCall[] = [];
+
   constructor(
     private bus: EventBus,
     private conversation: ConversationManager,
@@ -112,9 +136,11 @@ export class Orchestrator {
     private permissionManager: PermissionManager,
     private getSystemPrompt: () => string = () => '',
     private hookDispatcher: HookDispatcherLike | null = null,
+    flagManager: FeatureFlagManager | null = null,
   ) {
     this.replayQueue = new EventReplayQueue(bus);
     this.detachReplay = EventReplayQueue.attachTo(bus, this.replayQueue);
+    this.flagManager = flagManager;
   }
 
   /**
@@ -545,7 +571,36 @@ export class Orchestrator {
         const reasoningForMsg = reasoningAccumulated || undefined;
         const reasoningSummaryForMsg = response.reasoningSummary || undefined;
 
+        // ── Stop-reason completeness check ─────────────────────────────────────
+        // Detect malformed provider responses: stopReason claims 'tool_use' but
+        // no tool calls were returned. Reconcile immediately so the LLM receives
+        // a synthetic error result on the next turn instead of an orphaned
+        // tool_use block.
+        if (response.stopReason === 'tool_use' && response.toolCalls.length === 0) {
+          logger.warn('Orchestrator: provider reported stopReason=tool_use but returned no tool calls (malformed response)', {
+            model: model.id,
+            stopReason: response.stopReason,
+          });
+          if (this.isReconciliationEnabled()) {
+            this.conversation.addSystemMessage(
+              '[Tool Reconciliation] Provider returned stop_reason=tool_use but no tool calls were included in the response. ' +
+              'This is a malformed provider response. If this repeats, try switching models.',
+            );
+            this.bus.emit('turn:tool-reconciliation', {
+              count: 0,
+              callIds: [],
+              toolNames: [],
+              reason: 'malformed-stop-reason',
+              isMalformed: true,
+              timestamp: Date.now(),
+            });
+          }
+        }
+
         if (response.toolCalls.length > 0) {
+          // Track pending tool calls for reconciliation at turn end
+          this._pendingToolCalls = response.toolCalls;
+
           // Add assistant turn (may include both content and tool calls)
           this.conversation.addAssistantMessage(response.content, { toolCalls: response.toolCalls, reasoningContent: reasoningForMsg, reasoningSummary: reasoningSummaryForMsg, usage: response.usage, model: model.displayName, provider: model.provider });
 
@@ -554,6 +609,9 @@ export class Orchestrator {
 
           // Add tool results — LLM sees them on next iteration
           this.conversation.addToolResults(results);
+
+          // Clear pending state: all tool calls have been resolved
+          this._pendingToolCalls = [];
 
           // Inject multimodal user message for any images extracted from read tool results.
           // Only inject when the current model supports multimodal input.
@@ -914,6 +972,15 @@ export class Orchestrator {
       this._turnFailed = true;
       this.bus.emit('turn:error', { error });
     } finally {
+      // ── GC-ORCH-015: Terminal-state tool-call reconciliation ───────────────────
+      // If the turn threw an exception between addAssistantMessage (which sets
+      // _pendingToolCalls) and addToolResults (which clears it), there are
+      // unresolved tool-call blocks in the conversation. Reconcile them now
+      // so the conversation is always in a valid state on turn exit.
+      if (this._pendingToolCalls.length > 0) {
+        this.reconcileUnresolvedToolCalls([], 'exception-before-results');
+      }
+
       // --- Submission key: mark turn complete or failed ---
       // Success: markComplete caches the result for duplicate callers.
       // Failure: markFailed allows retry on the next submission.
@@ -1180,6 +1247,91 @@ export class Orchestrator {
     }
 
     return spawned;
+  }
+
+  /**
+   * Returns `true` when the GC-ORCH-015 reconciliation feature is active.
+   *
+   * Defaults to `true` (flag `defaultState: 'enabled'`) when no flag manager
+   * has been wired in — safe for tests that omit the optional constructor arg.
+   */
+  private isReconciliationEnabled(): boolean {
+    if (this.flagManager === null) return true;
+    return this.flagManager.isEnabled('gc-orch-015-tool-result-reconciliation');
+  }
+
+  /**
+   * Reconcile unresolved tool calls at turn end.
+   *
+   * Called when the turn loop exits while `_pendingToolCalls` is non-empty,
+   * or when a malformed provider response is detected. Injects synthetic error
+   * results for every unresolved call, adds a system message, and emits a
+   * `turn:tool-reconciliation` event.
+   *
+   * When the feature flag is disabled (legacy/compatibility mode) this method
+   * logs a warning and returns without taking action.
+   *
+   * @param resolvedResults - Tool results already collected this iteration.
+   * @param reason          - Why reconciliation was triggered.
+   */
+  private reconcileUnresolvedToolCalls(
+    resolvedResults: ToolResult[],
+    reason: ReconciliationReason,
+  ): void {
+    const pending = this._pendingToolCalls;
+    if (pending.length === 0) return;
+
+    const unresolved = detectUnresolvedToolCalls(pending, resolvedResults);
+    if (unresolved.length === 0) {
+      // All calls were resolved — clear pending state
+      this._pendingToolCalls = [];
+      return;
+    }
+
+    if (!this.isReconciliationEnabled()) {
+      // Compatibility mode: legacy silent-drop with warning
+      logger.warn(
+        'Orchestrator: unresolved tool calls detected but reconciliation is disabled (legacy mode). ' +
+        'Enable gc-orch-015-tool-result-reconciliation flag to suppress this.',
+        { count: unresolved.length, callIds: unresolved.map((c) => c.id), reason },
+      );
+      this._pendingToolCalls = [];
+      return;
+    }
+
+    // Build and add synthetic results to the conversation
+    const syntheticResults = unresolved.map((call) => buildSyntheticResult(call, reason));
+    this.conversation.addToolResults(syntheticResults);
+
+    // Emit synthetic result events for each reconciled call
+    for (const sr of syntheticResults) {
+      this.bus.emit('turn:tool-result', { callId: sr.callId, result: sr });
+    }
+
+    // Add a conversation-visible system message so the model understands what happened
+    const names = unresolved.map((c) => `'${c.name}'`).join(', ');
+    this.conversation.addSystemMessage(
+      `[Tool Reconciliation] ${unresolved.length} tool call(s) (${names}) were not executed before ` +
+      `the turn ended. Synthetic error results have been injected. ` +
+      `Review the situation and avoid repeating the same tool calls if the root cause has not changed.`,
+    );
+
+    // Emit the reconciliation event for telemetry / test assertions
+    this.bus.emit('turn:tool-reconciliation', {
+      count: unresolved.length,
+      callIds: unresolved.map((c) => c.id),
+      toolNames: unresolved.map((c) => c.name),
+      reason,
+      timestamp: Date.now(),
+    });
+
+    logger.warn('Orchestrator: reconciled unresolved tool calls', {
+      count: unresolved.length,
+      callIds: unresolved.map((c) => c.id),
+      reason,
+    });
+
+    this._pendingToolCalls = [];
   }
 
   private async executeToolCalls(calls: ToolCall[]): Promise<ToolResult[]> {
