@@ -7,6 +7,7 @@
 import type { Playbook, DiagnosticCheckResult } from '../types.ts';
 import { safeCheck } from '../safe-check.ts';
 
+// TODO(GC-HEALTH-003): Wire live runtime context for diagnostic checks
 /** Stuck turn / task resolution playbook. */
 export const stuckTurnPlaybook: Playbook = {
   id: 'stuck-turn',

@@ -31,6 +31,7 @@ export interface EmitterContext extends EnvelopeContext {
   readonly traceId: string;
 }
 
+export * from './session.ts';
 export * from './turn.ts';
 export * from './tools.ts';
 export * from './tasks.ts';

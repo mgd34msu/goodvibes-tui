@@ -6,13 +6,29 @@
  *
  * Implements the health visualization layer from v3 Section 18.3.
  * SLO status rows are included when an SloCollector is attached.
+ * Remediation actions are included when a CascadeTimer is attached.
  */
 import type { RuntimeHealthAggregator } from '../../health/aggregator.ts';
-import type { CompositeHealth } from '../../health/types.ts';
-import type { HealthDashboardData, DomainHealthSummary, SloRow, SloGateStatus } from '../types.ts';
+import type { CompositeHealth, HealthDomain, HealthStatus } from '../../health/types.ts';
+import type { HealthDashboardData, DomainHealthSummary, SloRow, SloGateStatus, RemediationAction } from '../types.ts';
 import type { SloCollector } from '../../perf/slo-collector.ts';
+import type { CascadeTimer } from '../../health/cascade-timing.ts';
 import { SLO_METRICS } from '../../perf/slo-collector.ts';
 import { DEFAULT_BUDGETS } from '../../perf/budgets.ts';
+
+/**
+ * Human-readable names for playbooks, keyed by playbook ID.
+ * Used to populate RemediationAction.playbookName in the health dashboard.
+ */
+const PLAYBOOK_NAMES: ReadonlyMap<string, string> = new Map([
+  ['stuck-turn', 'Stuck Turn / Task'],
+  ['reconnect-failure', 'Reconnect Failure'],
+  ['permission-deadlock', 'Permission Deadlock'],
+  ['plugin-degradation', 'Plugin Degradation'],
+  ['export-recovery', 'Export Recovery'],
+  ['session-unrecoverable', 'Session Unrecoverable'],
+  ['compaction-failure', 'Compaction Failure'],
+]);
 
 /**
  * HealthPanel — diagnostic data provider for runtime health telemetry.
@@ -33,6 +49,7 @@ const SLO_BUDGET_META = new Map(
 export class HealthPanel {
   private readonly _aggregator: RuntimeHealthAggregator;
   private readonly _sloCollector: SloCollector | null;
+  private readonly _cascadeTimer: CascadeTimer | null;
   private _current: HealthDashboardData;
   /** Registered change notification callbacks. */
   private readonly _subscribers = new Set<() => void>();
@@ -43,10 +60,18 @@ export class HealthPanel {
    * @param aggregator - The runtime health aggregator to subscribe to.
    * @param sloCollector - Optional SLO collector for SLO status rows.
    *   When provided, SLO rows are included in every dashboard snapshot.
+   * @param cascadeTimer - Optional CascadeTimer for remediation action rows.
+   *   When provided, active failed domains are evaluated and remediation
+   *   playbook IDs are surfaced in every dashboard snapshot.
    */
-  constructor(aggregator: RuntimeHealthAggregator, sloCollector: SloCollector | null = null) {
+  constructor(
+    aggregator: RuntimeHealthAggregator,
+    sloCollector: SloCollector | null = null,
+    cascadeTimer: CascadeTimer | null = null,
+  ) {
     this._aggregator = aggregator;
     this._sloCollector = sloCollector;
+    this._cascadeTimer = cascadeTimer;
     // Capture the initial snapshot before subscribing
     this._current = this._buildDashboard(aggregator.getCompositeHealth());
     this._unsub = aggregator.subscribe((health) => {
@@ -83,7 +108,52 @@ export class HealthPanel {
       failedDomains: composite.failedDomains,
       lastUpdatedAt: composite.lastUpdatedAt,
       sloRows: this._buildSloRows(),
+      remediationActions: this._buildRemediationActions(composite),
     };
+  }
+
+  /**
+   * Build remediation action rows by evaluating cascade rules for all
+   * currently-failed domains using the CascadeTimer.
+   *
+   * Returns an empty array when no CascadeTimer is attached or when
+   * no domains are in the failed state.
+   */
+  private _buildRemediationActions(composite: CompositeHealth): readonly RemediationAction[] {
+    if (this._cascadeTimer === null || composite.failedDomains.length === 0) {
+      return [];
+    }
+
+    const actions: RemediationAction[] = [];
+    const seen = new Set<string>(); // deduplicate by playbookId+ruleId
+
+    for (const domain of composite.failedDomains) {
+      const { cascades } = this._cascadeTimer.evaluate(
+        domain,
+        'failed',
+      );
+
+      for (const cascade of cascades) {
+        for (const playbookId of cascade.remediationPlaybookIds) {
+          const key = `${playbookId}:${cascade.ruleId}`;
+          if (seen.has(key)) continue;
+          seen.add(key);
+          actions.push({
+            playbookId,
+            playbookName: PLAYBOOK_NAMES.get(playbookId) ?? playbookId,
+            ruleId: cascade.ruleId,
+            sourceDomain: cascade.source,
+            severity: cascade.severity ?? 'low',
+          });
+        }
+      }
+    }
+
+    // Sort by severity: critical first, then high, medium, low
+    const severityOrder: Record<string, number> = { critical: 0, high: 1, medium: 2, low: 3 };
+    actions.sort((a, b) => (severityOrder[a.severity] ?? 3) - (severityOrder[b.severity] ?? 3));
+
+    return actions;
   }
 
   /**

@@ -1,6 +1,17 @@
 import type { ToolResult } from '../../types/tools.ts';
 
 /**
+ * BudgetExceedReason — typed discriminant for budget breach events.
+ *
+ * Emitted as part of PhaseResult.budgetExceedReason when a budget phase
+ * terminates the pipeline due to a hard budget violation.
+ */
+export type BudgetExceedReason =
+  | 'BUDGET_EXCEEDED_MS'
+  | 'BUDGET_EXCEEDED_TOKENS'
+  | 'BUDGET_EXCEEDED_COST';
+
+/**
  * ToolExecutionPhase — all states in the tool execution machine (v3 Section 4.2).
  *
  * Transitions:
@@ -18,7 +29,9 @@ export type ToolExecutionPhase =
   | 'posthooked'
   | 'succeeded'
   | 'failed'
-  | 'cancelled';
+  | 'cancelled'
+  | 'budget-entry'
+  | 'budget-exit';
 
 /**
  * PhaseResult — outcome of a single pipeline phase.
@@ -37,6 +50,16 @@ export interface PhaseResult {
    * the current result immediately (e.g. permission denied).
    */
   abort?: boolean;
+  /**
+   * When a budget phase aborts the pipeline, this carries the typed reason
+   * so the executor can emit a diagnostic event with the correct discriminant.
+   */
+  budgetExceedReason?: BudgetExceedReason;
+  /**
+   * Additional numeric metadata about the budget breach (e.g. limit and actual values).
+   * Surfaced in the BUDGET_EXCEEDED_* event payload for diagnostics.
+   */
+  budgetMeta?: Record<string, number>;
 }
 
 /**
@@ -52,8 +75,10 @@ export interface ToolExecutionRecord {
   phases: PhaseResult[];
   /** The phase currently being executed (or terminal phase on completion). */
   currentPhase: ToolExecutionPhase;
-  /** Unix timestamp (ms) when execution began. */
+  /** Monotonic timestamp (ms) from performance.now() when execution began. Used for elapsed-time budget checks. */
   startedAt: number;
+  /** Wall-clock timestamp (ms) from Date.now() when execution began. Used for display/logging. */
+  wallStartedAt?: number;
   /** Unix timestamp (ms) when execution completed (success, failure, or cancel). */
   completedAt?: number;
   /** Final tool result (set on success). */
@@ -85,6 +110,12 @@ export interface ExecutorConfig {
   enablePermissions: boolean;
   /** Whether to emit RuntimeEventBus events at each phase transition. */
   enableEvents: boolean;
+  /**
+   * Whether to enforce runtime budget limits (time, tokens, cost) at phase
+   * entry and exit. When disabled, budget fields on ToolRuntimeContext are
+   * ignored. Controlled by the `runtime-tools-budget-enforcement` feature flag.
+   */
+  enableBudgetEnforcement?: boolean;
   /**
    * Optional idempotency store.
    *
