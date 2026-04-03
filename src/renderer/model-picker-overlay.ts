@@ -18,6 +18,7 @@ const MODE_TITLES: Record<string, string> = {
   model: '\u2500 Select Model ',
   provider: '\u2500 Select Provider ',
   effort: '\u2500 Select Effort Level ',
+  contextCap: '\u2500 Set Context Window ',
 };
 
 /**
@@ -284,6 +285,35 @@ export function renderModelPickerOverlay(
     const hintLine = pad + '\u2502 ' + 'Select a provider to browse its models'.padEnd(contentW) + ' \u2502';
     lines.push(UIFactory.stringToLine(hintLine, width, { fg: '244' }));
     lines.push(UIFactory.stringToLine(emptyRow, width, { fg: '240' }));
+  } else if (picker.mode === 'contextCap') {
+    // ── Context cap input ──────────────────────────────────────────────────────────────
+    const capModel = picker.contextCapPendingModel;
+    const modelName = capModel ? capModel.displayName : 'unknown';
+    const currentCtx = capModel ? fmtContext(capModel.contextWindow) : '?';
+    const provenance = capModel?.contextWindowProvenance ?? 'configured_cap';
+
+    const promptLabel = 'Context window (tokens):';
+    const cursorChar = '\u2592'; // block cursor
+    const inputDisplay = picker.contextCapQuery + cursorChar;
+    const promptRow = pad + '\u2502 ' + promptLabel + ' ' + inputDisplay.padEnd(Math.max(0, contentW - promptLabel.length - 2)) + ' \u2502';
+    lines.push(UIFactory.stringToLine(promptRow, width, { fg: '#ffffff' }));
+
+    const blankRow = pad + '\u2502' + ' '.repeat(boxW - 2) + '\u2502';
+    lines.push(UIFactory.stringToLine(blankRow, width, { fg: '240' }));
+
+    const hintText = `Leave blank to use default (current: ${currentCtx}, source: ${provenance})`;
+    const hintTrunc = getDisplayWidth(hintText) > contentW
+      ? hintText.slice(0, contentW - 1) + '\u2026'
+      : hintText;
+    const hintRow = pad + '\u2502 ' + hintTrunc.padEnd(contentW) + ' \u2502';
+    lines.push(UIFactory.stringToLine(hintRow, width, { fg: '244', dim: true }));
+
+    // Divider + model info
+    const divider2 = pad + '\u251c' + '\u2500'.repeat(boxW - 2) + '\u2524';
+    lines.push(UIFactory.stringToLine(divider2, width, { fg: '240' }));
+    const modelInfoLine = pad + '\u2502 ' + `Model: ${modelName}`.padEnd(contentW) + ' \u2502';
+    lines.push(UIFactory.stringToLine(modelInfoLine, width, { fg: '244' }));
+    lines.push(UIFactory.stringToLine(emptyRow, width, { fg: '240' }));
   } else {
     // ── Effort list ────────────────────────────────────────────────────────────────────────
     for (let i = 0; i < picker.effortLevels.length; i++) {
@@ -316,8 +346,14 @@ export function renderModelPickerOverlay(
   const filterLabelsFooter: Record<string, string> = { all: 'All', free: 'Free', paid: 'Paid', subscription: 'Sub' };
   const filterLabelFooter = filterLabelsFooter[picker.categoryFilter] ?? 'All';
   const groupByLabel = picker.groupBy ?? 'provider';
+  const selectedModel = picker.mode === 'model' ? picker.getSelected() : null;
+  const showContextCapHint = selectedModel != null && selectedModel.contextWindowProvenance !== undefined;
   const hints = picker.mode === 'model'
-    ? ` [\u2191\u2193] Navigate  [Enter] Select  [Esc] Clear/Cancel  [Tab] Filter: ${filterLabelFooter}  [G] Group: ${groupByLabel} `
+    ? showContextCapHint
+      ? ` [\u2191\u2193] Navigate  [Enter] Select  [Space] Context Cap  [Esc] Clear/Cancel  [Tab] Filter: ${filterLabelFooter}  [G] Group: ${groupByLabel} `
+      : ` [\u2191\u2193] Navigate  [Enter] Select  [Esc] Clear/Cancel  [Tab] Filter: ${filterLabelFooter}  [G] Group: ${groupByLabel} `
+    : picker.mode === 'contextCap'
+    ? ' [Enter] Confirm  [Esc] Cancel '
     : ' [\u2191\u2193] Navigate  [Enter] Select  [Esc] Cancel ';
   const bottomLine =
     pad + '\u2514' + hints + '\u2500'.repeat(Math.max(0, boxW - 2 - getDisplayWidth(hints))) + '\u2518';
