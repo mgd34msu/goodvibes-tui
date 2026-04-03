@@ -11,6 +11,9 @@ export { LayeredPolicyEvaluator } from './evaluator.ts';
 export { DecisionLog } from './decision-log.ts';
 export { runSafetyChecks } from './safety-checks.ts';
 export { PermissionSimulator, SimulationEnforcementError } from './simulation.ts';
+// GC-PERM-011
+export { signBundle, verifyBundle, canonicalise } from './policy-signer.ts';
+export { loadPolicyBundle, createUnsignedBundle, PolicySignatureError } from './policy-loader.ts';
 
 export type {
   PermissionMode,
@@ -38,6 +41,20 @@ export type {
 
 export type { DecisionLogEntry, DecisionLogQuery } from './decision-log.ts';
 export type { SafetyCheckResult } from './safety-checks.ts';
+// GC-PERM-011
+export type {
+  PolicyBundleId,
+  SignatureStatus,
+  ProvenanceSource,
+  SignedPolicyBundle,
+  VerifyResult,
+} from './policy-signer.ts';
+export type {
+  PolicyBundlePayload,
+  BundleProvenance,
+  PolicyLoadResult,
+  PolicyLoaderOptions,
+} from './policy-loader.ts';
 
 export {
   evaluatePrefixRule,
@@ -53,6 +70,7 @@ import { LayeredPolicyEvaluator } from './evaluator.ts';
 import { PermissionSimulator } from './simulation.ts';
 import type { PermissionsV2Config, SimulationMode, PermissionSimulatorConfig } from './types.ts';
 import type { FeatureFlagManager } from '../feature-flags/manager.ts';
+import type { BundleProvenance } from './policy-loader.ts';
 
 /**
  * createPermissionsV2 — Factory function for the v2 permission evaluator.
@@ -75,12 +93,14 @@ import type { FeatureFlagManager } from '../feature-flags/manager.ts';
  * }
  * ```
  *
- * @param config — Optional configuration; all fields have safe defaults.
+ * @param config     — Optional configuration; all fields have safe defaults.
+ * @param provenance — Optional bundle provenance (GC-PERM-011).
  */
 export function createPermissionsV2(
   config: PermissionsV2Config = {},
+  provenance?: BundleProvenance,
 ): LayeredPolicyEvaluator {
-  return new LayeredPolicyEvaluator(config);
+  return new LayeredPolicyEvaluator(config, provenance);
 }
 
 /**

@@ -130,6 +130,11 @@ export interface EvaluationStep {
  * Contains the final allow/deny outcome, the reason code, the source layer,
  * the semantic classification of the tool call, and a full evaluation trace
  * for audit logging and debugging.
+ *
+ * When the evaluator was configured from a signed policy bundle, the
+ * provenance fields `policyBundleId`, `signatureStatus`, and
+ * `provenanceSource` are populated from `BundleProvenance` for audit
+ * trail and UI display (GC-PERM-011).
  */
 export interface PermissionDecision {
   /** Whether the tool call is permitted. */
@@ -148,6 +153,22 @@ export interface PermissionDecision {
   timestamp: number;
   /** Full ordered trace of evaluation steps that led to this decision. */
   evaluationTrace: EvaluationStep[];
+  // ── GC-PERM-011: Policy provenance ──────────────────────────────────────
+  /**
+   * Opaque identifier of the policy bundle that provided the rules used
+   * for this evaluation. Undefined when no bundle was loaded.
+   */
+  policyBundleId?: string;
+  /**
+   * Signature validation status of the bundle at load time.
+   * Undefined when no bundle was loaded or when the feature flag is disabled.
+   */
+  signatureStatus?: import('./policy-signer.ts').SignatureStatus;
+  /**
+   * Where the policy bundle originated from.
+   * Undefined when no bundle was loaded.
+   */
+  provenanceSource?: import('./policy-signer.ts').ProvenanceSource;
 }
 
 // ── Simulation Types ──────────────────────────────────────────────────────────

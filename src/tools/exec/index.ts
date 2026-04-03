@@ -14,6 +14,7 @@ import type {
   ExecVerbosity,
 } from './schema.ts';
 import { ProcessManager } from '../shared/process-manager.ts';
+import { guardExecCommand, formatDenialResponse } from './ast-guard.ts';
 
 // ─── Constants ──────────────────────────────────────────────────────────────
 
@@ -330,6 +331,21 @@ async function runCommand(
   globalCwd: string | undefined,
   globalTimeout: number,
 ): Promise<ExecCommandResult> {
+  // ─── AST guard: evaluate command before execution ───
+  const guardResult = await guardExecCommand(cmdStr);
+  if (!guardResult.allowed) {
+    const denial = formatDenialResponse(guardResult, cmdStr);
+    return {
+      cmd: cmdStr,
+      exit_code: null,
+      stdout: '',
+      stderr: denial.denial_reason as string ?? 'Command denied by policy',
+      success: false,
+      denied: true,
+      denial_detail: denial,
+    } as ExecCommandResult;
+  }
+
   checkDangerous(cmdStr);
 
   const cwd = resolveCwd(cmdInput.cwd, globalCwd);

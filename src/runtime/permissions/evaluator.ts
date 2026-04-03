@@ -23,6 +23,7 @@ import type {
   SourceLayer,
   PermissionsV2Config,
 } from './types.ts';
+import type { BundleProvenance } from './policy-loader.ts';
 
 import { runSafetyChecks } from './safety-checks.ts';
 import { DecisionLog } from './decision-log.ts';
@@ -255,14 +256,17 @@ export class LayeredPolicyEvaluator {
   private readonly sessionCache: Map<string, boolean> = new Map();
   private sessionCacheInsertOrder: string[] = [];
   readonly log: DecisionLog;
+  /** GC-PERM-011: Provenance from the loaded policy bundle, if any. */
+  private readonly provenance?: BundleProvenance;
 
   private static readonly MAX_SESSION_CACHE_SIZE = 500;
 
-  constructor(config: PermissionsV2Config) {
+  constructor(config: PermissionsV2Config, provenance?: BundleProvenance) {
     this.mode = config.mode ?? 'default';
     this.rules = config.rules ?? [];
     this.defaultEffect = config.defaultEffect ?? 'deny';
     this.log = new DecisionLog();
+    this.provenance = provenance;
   }
 
   /**
@@ -452,6 +456,12 @@ export class LayeredPolicyEvaluator {
       classification: params.classification,
       timestamp: Date.now(),
       evaluationTrace: params.trace,
+      // GC-PERM-011: Attach provenance from the loaded policy bundle
+      ...(this.provenance !== undefined && {
+        policyBundleId: this.provenance.policyBundleId,
+        signatureStatus: this.provenance.signatureStatus,
+        provenanceSource: this.provenance.provenanceSource,
+      }),
     };
     this.log.append(decision);
     return decision;

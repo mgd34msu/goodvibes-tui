@@ -1,8 +1,37 @@
 import { logger } from '../../utils/logger.ts';
 import type { Tool, ToolDefinition } from '../../types/tools.ts';
 import { FETCH_TOOL_SCHEMA } from './schema.ts';
-import type { FetchInput, FetchUrlInput, FetchAuthInput, FetchExtractMode, FetchVerbosity } from './schema.ts';
+import type { FetchInput, FetchUrlInput, FetchAuthInput, FetchExtractMode, FetchVerbosity, FetchSanitizeMode } from './schema.ts';
 import { resolveServiceAuth } from '../../config/service-registry.ts';
+import { applySanitizer, resolveSanitizeMode } from './sanitizer.ts';
+import {
+  classifyHostTrustTier,
+  emitSsrfDeny,
+  emitHostTrustTier,
+  extractHostname,
+  type TrustTierConfig,
+} from './trust-tiers.ts';
+
+// ── Feature flag integration ──────────────────────────────────────────────────
+
+/**
+ * Thin adapter: checks the runtime feature flag manager if available.
+ * Falls back to `false` (disabled) when the manager is not initialised.
+ *
+ * We import lazily to avoid circular dependency between tools and runtime.
+ */
+function isFetchSanitizationEnabled(): boolean {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { FeatureFlagManager } = require('../../runtime/feature-flags/manager.ts') as {
+      FeatureFlagManager: { getInstance?: () => { isEnabled(id: string): boolean } };
+    };
+    const manager = FeatureFlagManager.getInstance?.();
+    return manager?.isEnabled('fetch-sanitization') ?? false;
+  } catch {
+    return false;
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Module-level response cache (feature: cache_ttl_seconds)
@@ -64,6 +93,16 @@ export interface FetchUrlResult {
   duration_ms?: number;
   /** Estimated token count for the content (Math.ceil(content.length / 4)). */
   tokens_used?: number;
+  /**
+   * Sanitization mode applied to this response (GC-FETCH-006).
+   * Always present unless the request was blocked pre-flight.
+   */
+  sanitization_tier?: FetchSanitizeMode | 'skipped';
+  /**
+   * Host trust tier classification for this response (GC-FETCH-006).
+   * `trusted` | `unknown` | `blocked`.
+   */
+  host_trust_tier?: string;
   /** Additional metadata included in verbose format. */
   metadata?: {
     headers: Record<string, string>;
@@ -587,6 +626,10 @@ interface FetchOneOptions {
   verbosity: FetchVerbosity;
   cacheTtlSeconds: number;
   maxContentLength?: number;
+  /** Sanitization mode to apply to response content (GC-FETCH-006). */
+  sanitizeMode: FetchSanitizeMode;
+  /** Trust tier configuration (GC-FETCH-006). */
+  trustTierConfig: TrustTierConfig;
 }
 
 async function fetchOneRaw(
@@ -617,13 +660,39 @@ async function fetchOne(
   urlInput: FetchUrlInput,
   opts: FetchOneOptions,
 ): Promise<FetchUrlResult> {
-  const { globalExtract, verbosity, cacheTtlSeconds, maxContentLength } = opts;
+  const { globalExtract, verbosity, cacheTtlSeconds, maxContentLength, sanitizeMode, trustTierConfig } = opts;
   const extractMode: FetchExtractMode = urlInput.extract ?? globalExtract;
   const method = urlInput.method ?? 'GET';
   const effectiveMaxContent = urlInput.max_content_length ?? maxContentLength;
 
   // Build URL with query params
   const effectiveUrl = buildUrl(urlInput.url, urlInput.params);
+
+  // --- Trust tier classification (GC-FETCH-006) ---
+  // When the feature flag is disabled, skip SSRF blocking and sanitization.
+  const sanitizationEnabled = isFetchSanitizationEnabled();
+  const effectiveSanitizeModeForBlocked = sanitizationEnabled ? sanitizeMode : 'none';
+
+  // Block requests to internal/metadata/SSRF-vector hosts pre-request.
+  const hostname = extractHostname(urlInput.url);
+  // Store result to avoid a second classifyHostTrustTier call below.
+  let initialTrustResult: ReturnType<typeof classifyHostTrustTier> | null = null;
+  if (hostname !== null) {
+    initialTrustResult = classifyHostTrustTier(hostname, trustTierConfig);
+    emitHostTrustTier(hostname, urlInput.url, initialTrustResult);
+
+    if (sanitizationEnabled && initialTrustResult.tier === 'blocked') {
+      if (initialTrustResult.isSsrf) {
+        emitSsrfDeny(hostname, urlInput.url, initialTrustResult.reason);
+      }
+      return {
+        url: urlInput.url,
+        error: `Request blocked: ${initialTrustResult.reason}`,
+        host_trust_tier: 'blocked',
+        sanitization_tier: effectiveSanitizeModeForBlocked,
+      };
+    }
+  }
 
   // --- Cache check (GET only) ---
   if (cacheTtlSeconds > 0 && method === 'GET') {
@@ -750,11 +819,43 @@ async function fetchOne(
     result.redirected = response.redirected;
     result.final_url = response.url !== effectiveUrl ? response.url : undefined;
 
+    // Determine effective sanitize mode for this URL
+    // Trusted hosts keep the caller-specified mode; unknown hosts are forced to at least safe-text
+    // When sanitization is disabled via feature flag, bypass entirely.
+    let effectiveSanitizeMode = sanitizationEnabled ? sanitizeMode : 'none' as const;
+    if (sanitizationEnabled && hostname !== null) {
+      // Reuse the trust result stored from the pre-request classification above.
+      // Defensive fallback — initialTrustResult is always set when hostname is non-null
+      const hostTrustResult = initialTrustResult ?? classifyHostTrustTier(hostname, trustTierConfig);
+      result.host_trust_tier = hostTrustResult.tier;
+      if (hostTrustResult.tier === 'unknown' && effectiveSanitizeMode === 'none') {
+        // Upgrade unknown hosts from none to safe-text for safety
+        effectiveSanitizeMode = 'safe-text';
+      }
+    } else if (hostname !== null && initialTrustResult !== null) {
+      result.host_trust_tier = initialTrustResult.tier;
+    }
+
+    if (verbosity === 'minimal') {
+      // Content is not included in minimal output — sanitization was not applied.
+      result.sanitization_tier = 'skipped';
+    } else {
+      result.sanitization_tier = effectiveSanitizeMode;
+    }
+
     if (verbosity !== 'minimal') {
-      const content = applyExtract(rawBody, contentType, extractMode, { selectors: urlInput.selectors });
-      result.content = content;
+      const extracted = applyExtract(rawBody, contentType, extractMode, { selectors: urlInput.selectors });
+      // Apply sanitization to extracted content
+      const sanitized = applySanitizer(extracted, effectiveSanitizeMode);
+      logger.debug('SANITIZE_MODE_APPLIED', {
+        event: 'SANITIZE_MODE_APPLIED',
+        url: urlInput.url,
+        mode: effectiveSanitizeMode,
+        modified: sanitized.modified,
+      });
+      result.content = sanitized.content;
       // Token estimation (feature 10)
-      result.tokens_used = Math.ceil(content.length / 4);
+      result.tokens_used = Math.ceil(sanitized.content.length / 4);
     }
 
     if (verbosity === 'verbose') {
@@ -827,11 +928,19 @@ export const fetchTool: Tool = {
       const rateLimitMs = input.rate_limit_ms ?? 0;
       const maxContentLength = input.max_content_length;
 
+      const sanitizeMode = resolveSanitizeMode(input.sanitize_mode);
+      const trustTierConfig: TrustTierConfig = {
+        trustedHosts: input.trusted_hosts,
+        blockedHosts: input.blocked_hosts,
+      };
+
       const fetchOpts: FetchOneOptions = {
         globalExtract,
         verbosity,
         cacheTtlSeconds,
         maxContentLength,
+        sanitizeMode,
+        trustTierConfig,
       };
 
       const wallStart = performance.now();
