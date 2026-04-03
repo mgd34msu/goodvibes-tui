@@ -301,6 +301,23 @@ export const FEATURE_FLAGS: FeatureFlag[] = [
     tier: 5,
     runtimeToggleable: true,
   },
+  // ── Section 5.6: Provider Optimizer ────────────────────────────────────────
+  {
+    id: 'provider-optimizer',
+    name: 'Provider Optimizer (Section 5.6)',
+    description:
+      'Enables the capability-contract-driven provider routing optimizer. '
+      + 'In auto mode, selects the best capable provider for each request profile '
+      + 'using ProviderCapabilityRegistry contracts. Supports manual, auto, and pinned '
+      + 'routing modes with deterministic, fully-explainable route decisions. '
+      + 'Exposes /provider route, /provider explain-route, /provider pin, and '
+      + '/provider fallback test commands. '
+      + 'Disable to revert to implicit provider selection with zero behavior change.',
+    defaultState: 'disabled',
+    tier: 5,
+    runtimeToggleable: true,
+  },
+
   // ── Section 5.7: Tool Contract Verification ──────────────────────────────
   {
     id: 'tool-contract-verification',

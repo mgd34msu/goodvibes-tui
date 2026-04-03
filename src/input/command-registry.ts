@@ -81,6 +81,18 @@ export interface CommandContext {
   forensicsRegistry?: import('../runtime/forensics/registry.ts').ForensicsRegistry;
   /** PolicyRegistry for /policy command subcommands. */
   policyRegistry?: import('../runtime/permissions/policy-registry.ts').PolicyRegistry;
+  /**
+   * ProviderOptimizer for /provider command subcommands.
+   *
+   * @remarks
+   * Follows the same deferred-wiring pattern as `policyRegistry` — populated
+   * by the orchestrator when the `provider-optimizer` feature flag is enabled.
+   * Until then it remains `undefined` and command handlers read the optimizer
+   * singleton directly via `getProviderOptimizer()`.
+   */
+  providerOptimizer?: import('../providers/optimizer.ts').ProviderOptimizer;
+  /** EvalRegistry for /eval command subcommands. */
+  evalRegistry?: import('../panels/eval-panel.ts').EvalRegistry;
 }
 
 /**
