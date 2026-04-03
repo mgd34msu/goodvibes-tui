@@ -12,6 +12,27 @@ import { SyntheticProvider } from './synthetic.ts';
 
 import { getCatalogModelDefinitions, getSyntheticModelDefinitions, getSyntheticBackendModelIds } from './model-catalog.ts';
 
+// ── Feature flag integration ──────────────────────────────────────────────────
+
+/**
+ * Thin adapter: checks the runtime feature flag manager if available.
+ * Falls back to `false` (disabled) when the manager is not initialised.
+ *
+ * We import lazily to avoid circular dependency between providers and runtime.
+ */
+function isContextIngestionEnabled(): boolean {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { FeatureFlagManager } = require('../runtime/feature-flags/manager.ts') as {
+      FeatureFlagManager: { getInstance?: () => { isEnabled(id: string): boolean } };
+    };
+    const manager = FeatureFlagManager.getInstance?.();
+    return manager?.isEnabled('local-provider-context-ingestion') ?? false;
+  } catch {
+    return false;
+  }
+}
+
 /** Model capability tier — controls system prompt verbosity. */
 export type ModelTier = 'free' | 'standard' | 'premium' | 'subscription';
 
@@ -22,6 +43,9 @@ export interface TokenLimits {
   maxToolCalls?: number;          // max parallel tool calls per turn
   maxReasoningTokens?: number;    // budget for thinking/reasoning
 }
+
+/** Provenance of a resolved context window value. */
+export type ContextWindowProvenance = 'provider_api' | 'configured_cap' | 'fallback';
 
 /** Describes a selectable model and its capabilities. */
 export interface ModelDefinition {
@@ -38,6 +62,14 @@ export interface ModelDefinition {
     multimodal: boolean;
   };
   contextWindow: number;
+  /**
+   * How `contextWindow` was resolved. Present on custom/local provider models.
+   * - `provider_api`   — sourced from provider's /v1/models endpoint at runtime
+   * - `configured_cap` — explicit value from provider config file
+   * - `fallback`       — default constant (8192) applied when no other source available
+   * Absent for built-in catalog models (they use OpenRouter data via model-limits).
+   */
+  contextWindowProvenance?: ContextWindowProvenance;
   /** Whether the user can select this model in the model picker. */
   selectable: boolean;
   /** Available reasoning effort levels for this model (controls UI effort picker). */
@@ -736,7 +768,9 @@ export class ProviderRegistry {
    * Call this after construction to populate custom providers.
    */
   async loadCustomProviders(): Promise<{ warnings: string[]; added: string[]; removed: string[]; updated: string[] }> {
-    const result = await loadCustomProviders();
+    const result = await loadCustomProviders({
+      ingestContextWindows: isContextIngestionEnabled(),
+    });
     const previousIds = new Set(customModels.map((m) => m.id));
     const newIds = new Set(result.models.map((m) => m.id));
 

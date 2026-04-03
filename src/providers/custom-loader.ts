@@ -7,6 +7,13 @@ import { OpenAICompatProvider } from './openai-compat.ts';
 import { AnthropicCompatProvider } from './anthropic-compat.ts';
 import type { LLMProvider } from './interface.ts';
 import type { ModelDefinition } from './registry.ts';
+import {
+  ingestLocalProviderContextWindows,
+  resolveContextWindow,
+} from './local-context-ingestion.ts';
+
+// Re-export for callers that want to clear ingestion cache on provider reload.
+export { clearProviderContextCache } from './local-context-ingestion.ts';
 
 /** Directory where custom provider JSON files are stored. */
 const PROVIDERS_DIR = path.join(os.homedir(), '.goodvibes', 'tui', 'providers');
@@ -63,6 +70,17 @@ export interface LoadCustomProvidersResult {
   providers: Array<{ config: CustomProviderConfig; provider: LLMProvider }>;
   models: ModelDefinition[];
   warnings: string[];
+}
+
+/** Options for loadCustomProviders. */
+export interface LoadCustomProvidersOptions {
+  /**
+   * When true, attempts to fetch max_context_length from each provider's
+   * /v1/models endpoint and uses the reported value with 'provider_api'
+   * provenance. Falls back to the configured contextWindow or DEFAULT_CONTEXT_WINDOW.
+   * Defaults to false.
+   */
+  ingestContextWindows?: boolean;
 }
 
 /**
@@ -167,8 +185,14 @@ async function ensureProvidersDir(): Promise<void> {
  * Load all custom providers from ~/.goodvibes/tui/providers/*.json.
  * Auto-creates the directory if it does not exist.
  * Invalid files are skipped with a warning rather than failing the whole load.
+ *
+ * When `options.ingestContextWindows` is true, each provider's /v1/models
+ * endpoint is queried concurrently (via Promise.allSettled) to resolve
+ * `max_context_length` with `provider_api` provenance.
  */
-export async function loadCustomProviders(): Promise<LoadCustomProvidersResult> {
+export async function loadCustomProviders(
+  options: LoadCustomProvidersOptions = {},
+): Promise<LoadCustomProvidersResult> {
   const warnings: string[] = [];
   const providers: Array<{ config: CustomProviderConfig; provider: LLMProvider }> = [];
   const models: ModelDefinition[] = [];
@@ -189,6 +213,10 @@ export async function loadCustomProviders(): Promise<LoadCustomProvidersResult> 
     );
     return { providers, models, warnings };
   }
+
+  // Phase 1: Parse and validate all provider files, instantiate provider objects.
+  // Collect valid entries; skip invalid ones with warnings.
+  const validConfigs: Array<{ cfg: CustomProviderConfig; provider: LLMProvider; apiKey: string }> = [];
 
   for (const filename of entries) {
     const filepath = path.join(PROVIDERS_DIR, filename);
@@ -260,23 +288,56 @@ export async function loadCustomProviders(): Promise<LoadCustomProvidersResult> 
       continue;
     }
 
-    const modelDefs: ModelDefinition[] = cfg.models.map((m) => ({
-      id: m.id,
-      provider: cfg.name,
-      registryKey: `${cfg.name}:${m.id}`,
-      displayName: m.displayName,
-      description: m.description ?? '',
-      contextWindow: m.contextWindow,
-      selectable: m.selectable ?? true,
-      capabilities: {
-        toolCalling: m.capabilities.toolCalling,
-        codeEditing: m.capabilities.codeEditing,
-        reasoning: m.capabilities.reasoning,
-        multimodal: m.capabilities.multimodal,
-      },
-      ...(m.reasoningEffort ? { reasoningEffort: m.reasoningEffort } : {}),
-      ...(m.tier ? { tier: m.tier } : {}),
-    }));
+    validConfigs.push({ cfg, provider, apiKey });
+  }
+
+  // Phase 2: Ingest context windows concurrently for all valid providers.
+  // Runs only when options.ingestContextWindows is true.
+  const ingestionResults: Array<Map<string, number> | null> = validConfigs.map(() => null);
+  if (options.ingestContextWindows && validConfigs.length > 0) {
+    const ingestionPromises = validConfigs.map(({ cfg, apiKey }) =>
+      ingestLocalProviderContextWindows(
+        cfg.name,
+        cfg.baseURL,
+        apiKey || undefined,
+      ),
+    );
+    const settled = await Promise.allSettled(ingestionPromises);
+    for (let i = 0; i < settled.length; i++) {
+      const result = settled[i];
+      if (result) {
+        ingestionResults[i] = result.status === 'fulfilled' ? result.value : null;
+      }
+    }
+  }
+
+  // Phase 3: Build model definitions and populate output arrays.
+  for (let i = 0; i < validConfigs.length; i++) {
+    const { cfg, provider } = validConfigs[i]!;
+    const apiContextMap = ingestionResults[i] ?? null;
+
+    const modelDefs: ModelDefinition[] = cfg.models.map((m) => {
+      const apiContextLength = apiContextMap?.get(m.id) ?? null;
+      const resolved = resolveContextWindow(m.id, apiContextLength, m.contextWindow);
+      return {
+        id: m.id,
+        provider: cfg.name,
+        registryKey: `${cfg.name}:${m.id}`,
+        displayName: m.displayName,
+        description: m.description ?? '',
+        contextWindow: resolved.tokens,
+        contextWindowProvenance: resolved.provenance,
+        selectable: m.selectable ?? true,
+        capabilities: {
+          toolCalling: m.capabilities.toolCalling,
+          codeEditing: m.capabilities.codeEditing,
+          reasoning: m.capabilities.reasoning,
+          multimodal: m.capabilities.multimodal,
+        },
+        ...(m.reasoningEffort ? { reasoningEffort: m.reasoningEffort } : {}),
+        ...(m.tier ? { tier: m.tier } : {}),
+      };
+    });
 
     providers.push({ config: cfg, provider });
     models.push(...modelDefs);

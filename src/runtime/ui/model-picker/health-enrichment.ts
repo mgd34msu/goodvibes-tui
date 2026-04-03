@@ -11,6 +11,7 @@ import type { ModelDomainState } from '../../store/domains/model.ts';
 import { detectFamily, tierToCategoryFilter } from '../../../input/model-picker.ts';
 import { getBenchmarks, getQualityTier, getQualityTierFromScore, compositeScore } from '../../../providers/model-benchmarks.ts';
 import { getSyntheticModelInfoFromCatalog } from '../../../providers/model-catalog.ts';
+import { getContextWindowForModel } from '../../../providers/model-limits.ts';
 import type {
   ModelPickerEntry,
   ModelPickerGroup,
@@ -142,6 +143,20 @@ export function enrichModelEntries(
 
     const fallbackPosition = fallbackPositions.get(model.id);
 
+    // Resolve effective context window and determine display source label.
+    const effectiveContextWindow = getContextWindowForModel(model);
+    // Determine source: custom/local providers carry provenance on ModelDefinition;
+    // for catalog models, if getContextWindowForModel returned more than the
+    // static contextWindow it came from OpenRouter, else it's the registry value.
+    let contextWindowSource: ModelPickerEntry['contextWindowSource'];
+    if (model.contextWindowProvenance) {
+      contextWindowSource = model.contextWindowProvenance;
+    } else if (effectiveContextWindow !== model.contextWindow) {
+      contextWindowSource = 'openrouter';
+    } else {
+      contextWindowSource = 'registry';
+    }
+
     return {
       modelId: model.id,
       providerId: model.provider,
@@ -152,6 +167,8 @@ export function enrichModelEntries(
       benchmarkScore,
       capabilities: buildCapabilityFlags(model),
       health,
+      contextWindow: effectiveContextWindow,
+      contextWindowSource,
       isPinned: pinnedIds.has(model.id),
       isActive: model.id === modelState.activeModelId,
       isProviderDegraded,
