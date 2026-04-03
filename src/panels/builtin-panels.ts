@@ -21,6 +21,7 @@ import { ProviderHealthPanel } from './provider-health-panel.ts';
 import { DebugPanel } from './debug-panel.ts';
 import { OpsStrategyPanel } from './ops-strategy-panel.ts';
 import { OpsControlPanel } from './ops-control-panel.ts';
+import { ForensicsPanel } from './forensics-panel.ts';
 import type { EventBus } from '../core/event-bus.ts';
 import type { RuntimeEventBus } from '../runtime/events/index.ts';
 import type { ToolRegistry } from '../tools/registry.ts';
@@ -51,6 +52,8 @@ export interface BuiltinPanelDeps {
   getCtxWindow?: () => number;
   /** RuntimeEventBus for panels requiring typed domain events (e.g. ops-control). */
   runtimeBus?: RuntimeEventBus;
+  /** ForensicsRegistry for the Forensics panel. */
+  forensicsRegistry?: import('../runtime/forensics/registry.ts').ForensicsRegistry;
 }
 
 export function registerBuiltinPanels(manager: PanelManager, deps: BuiltinPanelDeps = {}): void {
@@ -267,6 +270,18 @@ export function registerBuiltinPanels(manager: PanelManager, deps: BuiltinPanelD
       category: 'agent',
       description: 'Operator Control Plane: audit log of operator interventions (task/agent cancel, pause, resume, retry)',
       factory: () => new OpsControlPanel(runtimeBus),
+    });
+  }
+
+  if (deps.forensicsRegistry) {
+    const { forensicsRegistry } = deps;
+    manager.registerType({
+      id: 'forensics',
+      name: 'Forensics',
+      icon: 'F',
+      category: 'monitoring',
+      description: 'Failure Forensics: auto-classified failure reports with causal chains, phase timings, and jump links',
+      factory: () => new ForensicsPanel(forensicsRegistry),
     });
   }
 

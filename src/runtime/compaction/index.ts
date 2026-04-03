@@ -57,6 +57,16 @@ export {
   runReactive,
   createBoundaryCommit,
   validateBoundaryCommit,
+  computeQualityScore,
+  describeScore,
+  escalateStrategy,
+  LOW_QUALITY_THRESHOLD,
+} from './strategies/index.ts';
+
+export type {
+  CompactionQualityScore,
+  CompactionQualityGrade,
+  SemanticRetentionSignals,
 } from './strategies/index.ts';
 
 /**

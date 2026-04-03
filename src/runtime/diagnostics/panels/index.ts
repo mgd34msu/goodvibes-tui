@@ -11,3 +11,7 @@ export { StateInspectorPanel } from './state-inspector.ts';
 export type { InspectableDomain } from './state-inspector.ts';
 export { HealthPanel } from './health.ts';
 export { DivergencePanel } from './divergence.ts';
+export { ReplayPanel } from './replay.ts';
+export { PolicyPanel } from './policy.ts';
+export type { PolicyPanelSnapshot } from './policy.ts';
+export { ToolContractsPanel } from './tool-contracts.ts';

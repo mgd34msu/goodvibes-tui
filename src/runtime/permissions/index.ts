@@ -77,6 +77,17 @@ export type {
   DivergenceDashboardConfig,
 } from './divergence-dashboard.ts';
 
+// Section 5.3 — Policy-as-Code
+export { PolicyRegistry } from './policy-registry.ts';
+export type {
+  BundleLifecycleState,
+  PolicyBundleVersion,
+  PolicyDiffResult,
+  PromoteResult,
+  RollbackResult,
+  PolicyRegistryConfig,
+} from './policy-registry.ts';
+
 // ── Factory ──────────────────────────────────────────────────────────────────────
 
 import { LayeredPolicyEvaluator } from './evaluator.ts';

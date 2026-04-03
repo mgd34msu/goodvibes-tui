@@ -3,10 +3,14 @@
 import type { ToolResult } from '../../types/tools.ts';
 import type { ToolRuntimeContext } from './context.ts';
 import { ToolRegistry } from '../../tools/registry.ts';
+import type { ContractVerificationResult, ContractVerifierOptions } from './contract-verifier.ts';
+import { ToolContractVerifier } from './contract-verifier.ts';
 
 /**
  * Placeholder type for the phased executor.
  * Replace this import with the real type once phased-executor.ts is ready.
+ *
+ * Migration stubs — to be replaced when phased executor types are unified.
  *
  * @internal
  */
@@ -23,6 +27,8 @@ interface PhasedToolExecutor {
  * Placeholder type for the feature flag manager.
  * Replace this import with the real type once feature-flags/ is ready.
  *
+ * Migration stubs — to be replaced when phased executor types are unified.
+ *
  * @internal
  */
 interface FeatureFlagManager {
@@ -35,6 +41,11 @@ const PHASED_EXECUTOR_FLAG = 'phased-tool-executor';
 /**
  * ToolRegistryBridge routes tool execution through either the legacy ToolRegistry
  * or the new PhasedToolExecutor, selected at call-time via a feature flag.
+ *
+ * @remarks
+ * This class is scaffolding for the phased executor migration. It will be wired
+ * into the executor pipeline in Phase 8, at which point real imports replace
+ * the stub interfaces above and this bridge becomes the active dispatch layer.
  *
  * This allows incremental migration: flip the flag on to route through the phased
  * executor; flip it off to fall back to the proven legacy path. Both paths remain
@@ -93,5 +104,40 @@ export class ToolRegistryBridge {
    */
   isPhasedEnabled(): boolean {
     return this.flags.isEnabled(PHASED_EXECUTOR_FLAG);
+  }
+
+  /**
+   * Run contract verification on all tools in the legacy registry.
+   *
+   * Delegates to `ToolRegistry.verifyAllContracts`. The result map can be
+   * loaded into a `ToolContractsPanel` for diagnostics display.
+   *
+   * @param opts - Optional verifier options.
+   * @returns Map of tool name → ContractVerificationResult.
+   */
+  verifyAll(opts?: ContractVerifierOptions): Map<string, ContractVerificationResult> {
+    return this.legacy.verifyAllContracts(opts);
+  }
+
+  /**
+   * Run contract verification on a single tool in the legacy registry.
+   *
+   * @param name - Tool name to verify.
+   * @param opts - Optional verifier options.
+   * @returns The verification result, or undefined if not registered.
+   */
+  verifyTool(name: string, opts?: ContractVerifierOptions): ContractVerificationResult | undefined {
+    return this.legacy.verifyContract(name, opts);
+  }
+
+  /**
+   * Format the result of a verifyAll run as a human-readable diagnostic string.
+   * Suitable for rendering in the diagnostics panel or printing to the terminal.
+   *
+   * @param results - Map from verifyAll().
+   * @returns Multi-line formatted string.
+   */
+  static formatVerifyAllReport(results: Map<string, ContractVerificationResult>): string {
+    return ToolContractVerifier.formatAllResults(results);
   }
 }

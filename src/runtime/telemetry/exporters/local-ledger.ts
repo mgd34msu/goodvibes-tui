@@ -4,8 +4,11 @@
  * Writes completed spans to a rotating JSON Lines (.jsonl) file.
  * Writes are fire-and-forget (non-blocking). Export failures are
  * logged but never thrown — they must not block the runtime.
+ *
+ * Also provides typed event ledger recording for deterministic replay.
+ * Call `recordEvent()` to append a `LedgerEntry` to the ledger file.
  */
-import { appendFileSync, statSync, renameSync, writeFileSync } from 'fs';
+import { appendFileSync, statSync, renameSync, writeFileSync, readFileSync, existsSync } from 'fs';
 import { logger } from '../../../utils/logger.ts';
 import type { ReadableSpan, SpanExporter } from '../types.ts';
 
@@ -21,6 +24,33 @@ export interface LocalLedgerConfig {
    * fresh file is started. Defaults to 10 MB.
    */
   readonly maxFileSizeBytes?: number;
+  /**
+   * Optional path for the typed event ledger file.
+   * When provided, `recordEvent()` appends `LedgerEntry` lines here.
+   * Defaults to `<filePath>.ledger.jsonl`.
+   */
+  readonly ledgerFilePath?: string;
+}
+
+/**
+ * A single typed event entry in the replay ledger.
+ *
+ * Each entry captures the run identifier, a monotonically increasing
+ * revision counter, the event name, payload, and wall-clock timestamp.
+ * The revision counter is used by the deterministic replay engine for
+ * seek and stepwise playback.
+ */
+export interface LedgerEntry {
+  /** Run identifier — groups entries belonging to the same recorded run. */
+  readonly runId: string;
+  /** Monotonically increasing revision counter within the run (starts at 1). */
+  readonly rev: number;
+  /** Event name (matches keys in EventBus EventMap). */
+  readonly eventName: string;
+  /** Full event payload, JSON-serialisable. */
+  readonly payload: unknown;
+  /** Wall-clock timestamp (epoch ms) when the event was recorded. */
+  readonly ts: number;
 }
 
 const DEFAULT_MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
@@ -40,10 +70,12 @@ export class LocalLedgerExporter implements SpanExporter {
   readonly name = 'local-ledger';
   private readonly filePath: string;
   private readonly maxFileSizeBytes: number;
+  private readonly ledgerFilePath: string;
 
   constructor(config: LocalLedgerConfig) {
     this.filePath = config.filePath;
     this.maxFileSizeBytes = config.maxFileSizeBytes ?? DEFAULT_MAX_FILE_SIZE;
+    this.ledgerFilePath = config.ledgerFilePath ?? `${config.filePath}.ledger.jsonl`;
   }
 
   /**
@@ -76,6 +108,97 @@ export class LocalLedgerExporter implements SpanExporter {
         logger.debug(`[local-ledger] export failed: ${String(err)}`);
       }
     });
+  }
+
+  /**
+   * Record a typed event entry to the ledger file (fire-and-forget).
+   *
+   * Used by the deterministic replay engine to build a per-run event log.
+   * Failures are logged but never thrown.
+   *
+   * @param entry - The ledger entry to append.
+   *
+   * @remarks
+   * This method is pre-positioned for the event recording integration that
+   * wires EventBus events to the ledger. The integration subscribes to the
+   * bus at session start and calls `recordEvent()` for each event that should
+   * be included in the replay ledger. See `DeterministicReplayEngine.load()`
+   * for the consumer side of this pipeline.
+   */
+  recordEvent(entry: LedgerEntry): void {
+    try {
+      const line = JSON.stringify(entry) + '\n';
+      appendFileSync(this.ledgerFilePath, line, 'utf8');
+    } catch (err) {
+      // Non-fatal — ledger recording must not block the runtime.
+      logger.debug(`[local-ledger] ledger write failed: ${String(err)}`);
+    }
+  }
+
+  /**
+   * Read all ledger entries for a given run.
+   *
+   * Parses the ledger file line-by-line. Malformed lines are skipped.
+   * Returns entries sorted by revision (ascending).
+   *
+   * @param runId - The run to retrieve entries for.
+   * @returns Ordered ledger entries for the run.
+   */
+  readRunEntries(runId: string): LedgerEntry[] {
+    if (!existsSync(this.ledgerFilePath)) return [];
+
+    const entries: LedgerEntry[] = [];
+    let raw: string;
+    try {
+      raw = readFileSync(this.ledgerFilePath, 'utf8');
+    } catch (err) {
+      logger.debug(`[local-ledger] ledger read failed: ${String(err)}`);
+      return [];
+    }
+
+    for (const line of raw.split('\n')) {
+      if (!line.trim()) continue;
+      try {
+        const entry = JSON.parse(line) as LedgerEntry;
+        if (entry.runId === runId) {
+          entries.push(entry);
+        }
+      } catch {
+        // Skip malformed lines — ledger may have partial writes.
+      }
+    }
+
+    entries.sort((a, b) => a.rev - b.rev);
+    return entries;
+  }
+
+  /**
+   * List all run IDs recorded in the ledger.
+   */
+  listRunIds(): string[] {
+    if (!existsSync(this.ledgerFilePath)) return [];
+
+    let raw: string;
+    try {
+      raw = readFileSync(this.ledgerFilePath, 'utf8');
+    } catch (err) {
+      logger.debug(`[local-ledger] ledger read failed: ${String(err)}`);
+      return [];
+    }
+
+    const seen = new Set<string>();
+    for (const line of raw.split('\n')) {
+      if (!line.trim()) continue;
+      try {
+        const entry = JSON.parse(line) as LedgerEntry;
+        if (typeof entry.runId === 'string') {
+          seen.add(entry.runId);
+        }
+      } catch {
+        // Skip malformed lines.
+      }
+    }
+    return [...seen];
   }
 
   /** Flush is a no-op for synchronous append-only writes. */

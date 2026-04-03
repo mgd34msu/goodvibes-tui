@@ -272,6 +272,21 @@ export const FEATURE_FLAGS: FeatureFlag[] = [
     tier: 8,
     runtimeToggleable: true,
   },
+  // ── Section 5.3: Policy-as-Code ─────────────────────────────────────────────
+  {
+    id: 'policy-as-code',
+    name: 'Policy-as-Code (Section 5.3)',
+    description:
+      'Enables the versioned policy bundle registry with promote/rollback semantics. '
+      + 'Requires simulation evidence (divergence gate passing) before enforcement. '
+      + 'Exposes /policy load, /policy simulate, /policy diff, /policy promote, '
+      + 'and /policy rollback commands. Divergence trends visible by command class/prefix '
+      + 'via the diagnostics panel.',
+    defaultState: 'disabled',
+    tier: 5,
+    runtimeToggleable: true,
+  },
+
   // ── Section 5.5: Adaptive Execution Planner ──────────────────────────────
   {
     id: 'adaptive-execution-planner',
@@ -284,6 +299,20 @@ export const FEATURE_FLAGS: FeatureFlag[] = [
       + 'Disable to revert to implicit single-call execution.',
     defaultState: 'disabled',
     tier: 5,
+    runtimeToggleable: true,
+  },
+  // ── Section 5.7: Tool Contract Verification ──────────────────────────────
+  {
+    id: 'tool-contract-verification',
+    name: 'Tool Contract Verification (Section 5.7)',
+    description:
+      'Enables registration-time contract checks for all registered tools. '
+      + 'Validates schema validity, timeout/cancellation semantics, permission class '
+      + 'mapping, output policy compatibility, and idempotency declarations. '
+      + 'Invalid tools fail closed with actionable diagnostics. '
+      + 'Exposes /tool verify <name>, /tool verify-all, and /tool contract show <name> commands.',
+    defaultState: 'enabled',
+    tier: 8,
     runtimeToggleable: true,
   },
 ];

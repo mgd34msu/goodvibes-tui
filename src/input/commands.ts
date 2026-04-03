@@ -37,7 +37,10 @@ import { GitService } from '../git/service.ts';
 import { sessionMemoryStore } from '../core/session-memory.ts';
 import { sessionLineageTracker } from '../core/session-lineage.ts';
 import { handlePlanCommand } from '../core/plan-command-handler.ts';
+import { handleReplayCommand } from '../core/replay-command-handler.ts';
+import { policyCommand } from './commands/policy.ts';
 import { ModeManager } from '../state/mode-manager.ts';
+import { ToolContractVerifier } from '../runtime/tools/contract-verifier.ts';
 
 let _serviceRegistry: ServiceRegistry | undefined;
 function getServiceRegistry(): ServiceRegistry {
@@ -3768,6 +3771,192 @@ export function registerBuiltinCommands(registry: CommandRegistry): void {
         + '  /ops task retry  <id> [note]           — retry a failed task\n'
         + '  /ops agent cancel <id> [note]          — cancel a running agent'
       );
+    },
+  });
+
+  // ── /tool ──────────────────────────────────────────────
+  registry.register({
+    name: 'tool',
+    description: 'Tool contract verification — verify registered tool contracts',
+    usage: 'verify <name> | verify-all | contract show <name>',
+    argsHint: 'verify <name> | verify-all | contract show <name>',
+    handler(args, ctx) {
+      const sub = args[0];
+
+      // /tool verify <name>
+      if (sub === 'verify' && args[1]) {
+        const toolName = args[1];
+        const result = ctx.toolRegistry.verifyContract(toolName);
+        if (!result) {
+          ctx.print(`[tool verify] Tool '${toolName}' is not registered.`);
+          return;
+        }
+        ctx.print(ToolContractVerifier.formatResult(result));
+        return;
+      }
+
+      // /tool verify-all
+      if (sub === 'verify-all') {
+        const results = ctx.toolRegistry.verifyAllContracts();
+        ctx.print(ToolContractVerifier.formatAllResults(results));
+        return;
+      }
+
+      // /tool contract show <name>
+      if (sub === 'contract' && args[1] === 'show' && args[2]) {
+        const toolName = args[2];
+        const result = ctx.toolRegistry.verifyContract(toolName);
+        if (!result) {
+          ctx.print(`[tool contract show] Tool '${toolName}' is not registered.`);
+          return;
+        }
+        const lines: string[] = [
+          ToolContractVerifier.formatResult(result),
+        ];
+        // Show tool definition details
+        // Linear scan — ToolRegistry does not expose a direct get(name) method.
+        // When that API is added, replace with: ctx.toolRegistry.get?.(toolName)
+        const tool = ctx.toolRegistry.list().find((t) => t.definition.name === toolName);
+        if (tool) {
+          lines.push('');
+          lines.push('Tool Definition:');
+          lines.push(`  Name:        ${tool.definition.name}`);
+          lines.push(`  Description: ${tool.definition.description}`);
+          lines.push(`  Parameters:  ${JSON.stringify(tool.definition.parameters, null, 2).replace(/\n/g, '\n               ')}`);
+        }
+        ctx.print(lines.join('\n'));
+        return;
+      }
+
+      ctx.print(
+        'Usage: /tool <subcommand>\n'
+        + '  /tool verify <name>             — verify contract for a specific registered tool\n'
+        + '  /tool verify-all                — verify contracts for all registered tools\n'
+        + '  /tool contract show <name>      — show full contract details for a tool'
+      );
+    },
+  });
+
+  // ── /forensics ────────────────────────────────────────────────────────────
+  registry.register({
+    name: 'forensics',
+    aliases: ['foren'],
+    description: 'Failure Forensics: view, inspect, and export auto-classified failure reports',
+    usage: '[latest | show <id> | export <id>]',
+    argsHint: '[latest|show|export]',
+    handler(args, ctx) {
+      const sub = args[0];
+
+      // No subcommand — open the panel
+      if (sub === undefined || sub === 'view') {
+        if (ctx.openForensicsPanel) {
+          ctx.openForensicsPanel();
+        } else {
+          ctx.print('Forensics panel is not available.');
+        }
+        return;
+      }
+
+      if (sub === 'latest') {
+        if (!ctx.forensicsRegistry) {
+          ctx.print('[Forensics] Registry not active.');
+          return;
+        }
+        const report = ctx.forensicsRegistry.latest();
+        if (!report) {
+          ctx.print('[Forensics] No failure reports recorded this session.');
+          return;
+        }
+        const lines: string[] = [
+          `[Forensics] Latest failure report (id: ${report.id})`,
+          `  Time:           ${new Date(report.generatedAt).toISOString()}`,
+          `  Classification: ${report.classification}`,
+          `  Summary:        ${report.summary}`,
+        ];
+        if (report.errorMessage) lines.push(`  Error:          ${report.errorMessage}`);
+        if (report.stopReason)   lines.push(`  Stop reason:    ${report.stopReason}`);
+        if (report.taskId)       lines.push(`  Task ID:        ${report.taskId}`);
+        if (report.turnId)       lines.push(`  Turn ID:        ${report.turnId}`);
+        if (report.causalChain.length > 0) {
+          lines.push('  Causal chain:');
+          for (const entry of report.causalChain) {
+            const marker = entry.isRootCause ? '  ● ' : '  · ';
+            lines.push(`  ${marker}${entry.description}`);
+          }
+        }
+        if (report.jumpLinks.length > 0) {
+          lines.push('  Jump links:');
+          for (const link of report.jumpLinks) {
+            lines.push(`    [${link.kind}] ${link.label} \u2192 ${link.target}${link.args ? ` (${link.args})` : ''}`);
+          }
+        }
+        lines.push(`  Use "/forensics show ${report.id}" for full JSON.`);
+        ctx.print(lines.join('\n'));
+        return;
+      }
+
+      if (sub === 'show') {
+        const id = args[1];
+        if (!id) {
+          ctx.print('Usage: /forensics show <id>');
+          return;
+        }
+        if (!ctx.forensicsRegistry) {
+          ctx.print('[Forensics] Registry not active.');
+          return;
+        }
+        const json = ctx.forensicsRegistry.exportAsJson(id);
+        if (!json) {
+          ctx.print(`[Forensics] No report found with id "${id}". Use /forensics latest to see the most recent.`);
+          return;
+        }
+        ctx.print(json);
+        return;
+      }
+
+      if (sub === 'export') {
+        const id = args[1];
+        if (!id) {
+          ctx.print('Usage: /forensics export <id>');
+          return;
+        }
+        if (!ctx.forensicsRegistry) {
+          ctx.print('[Forensics] Registry not active.');
+          return;
+        }
+        const json = ctx.forensicsRegistry.exportAsJson(id);
+        if (!json) {
+          ctx.print(`[Forensics] No report found with id "${id}".`);
+          return;
+        }
+        ctx.print(`[Forensics] Report ${id}:\n${json}`);
+        return;
+      }
+
+      ctx.print(
+        'Usage: /forensics <subcommand>\n'
+        + '  /forensics             — open the Forensics panel\n'
+        + '  /forensics latest      — print the most recent failure report summary\n'
+        + '  /forensics show <id>   — show full JSON for a specific report\n'
+        + '  /forensics export <id> — export full JSON to the conversation'
+      );
+    },
+  });
+
+  // ── /policy ───────────────────────────────────────────────────────────────
+  registry.register(policyCommand);
+
+  // ── /replay ───────────────────────────────────────────────────────────────
+  registry.register({
+    name: 'replay',
+    aliases: ['rep'],
+    description: 'Deterministic replay: load, step, seek, diff, and export recorded runs',
+    usage: '[load [runId] | step [n] | seek <rev> | diff | export <path>]',
+    argsHint: '[load|step|seek|diff|export]',
+    handler(args, _ctx) {
+      const subcommand = args[0] ?? 'help';
+      const result = handleReplayCommand(subcommand, args.slice(1));
+      _ctx.print(result.output);
     },
   });
 }
