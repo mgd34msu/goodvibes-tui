@@ -1792,11 +1792,28 @@ export function registerBuiltinCommands(registry: CommandRegistry): void {
           ctx.renderRequest();
         }
       } else if (sub === 'list') {
-        // Open the panel picker instead of printing to conversation
-        if (ctx.openPanelPicker) {
-          ctx.openPanelPicker();
+        // Open a navigable selection modal listing all panels
+        if (ctx.openSelection) {
+          const types = pm.getRegisteredTypes();
+          const open = new Set(pm.getAllOpen().map(p => p.id));
+          const items: SelectionItem[] = types.map(t => ({
+            id: t.id,
+            label: `${open.has(t.id) ? '\u25cf' : '\u25e6'} ${t.id}`,
+            detail: `${t.icon}  ${t.name} [${t.category}]`,
+            category: t.category,
+          }));
+          ctx.openSelection('Panels  —  Select to open', items, { allowSearch: true }, (result) => {
+            if (!result) return;
+            try {
+              pm.open(result.item.id);
+              pm.show();
+              ctx.renderRequest();
+            } catch (e) {
+              ctx.print(`Error: ${e instanceof Error ? e.message : String(e)}`);
+            }
+          });
         } else {
-          // Fallback: show panel sidebar if no picker available
+          // Fallback: show panel sidebar if no selection modal available
           pm.show();
           ctx.renderRequest();
         }
