@@ -349,6 +349,22 @@ export const FEATURE_FLAGS: FeatureFlag[] = [
     runtimeToggleable: true,
   },
 
+  // ── Token Scope and Rotation Audit ────────────────────────────────────────
+  {
+    id: 'token-scope-rotation-audit',
+    name: 'Token Scope and Rotation Audit',
+    description:
+      'Enables minimum scope principle checks and rotation cadence audits for API tokens. '
+      + 'In managed mode, tokens with excess scopes or overdue rotation are blocked from use. '
+      + 'Diagnostics panel surfaces token age, scope violations, and rotation warnings. '
+      + 'Emits TOKEN_SCOPE_VIOLATION, TOKEN_ROTATION_WARNING, TOKEN_ROTATION_EXPIRED, '
+      + 'and TOKEN_BLOCKED events via the security event domain. '
+      + 'Disable to revert to unenforced advisory reporting only.',
+    defaultState: 'disabled',
+    tier: 7,
+    runtimeToggleable: true,
+  },
+
   // ── Section 5.7: Tool Contract Verification ──────────────────────────────
   {
     id: 'tool-contract-verification',

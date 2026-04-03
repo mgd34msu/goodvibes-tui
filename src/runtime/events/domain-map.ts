@@ -17,6 +17,7 @@ import type { CompactionEvent } from './compaction.ts';
 import type { UIEvent } from './ui.ts';
 import type { OpsEvent } from './ops.ts';
 import type { ForensicsEvent } from './forensics.ts';
+import type { SecurityEvent } from './security.ts';
 
 /** Union of all runtime domain events. */
 export type AnyRuntimeEvent =
@@ -32,7 +33,8 @@ export type AnyRuntimeEvent =
   | CompactionEvent
   | UIEvent
   | OpsEvent
-  | ForensicsEvent;
+  | ForensicsEvent
+  | SecurityEvent;
 
 /**
  * Utility type that maps an event type discriminant to its full event shape.
@@ -64,7 +66,8 @@ export type RuntimeEventDomain =
   | 'compaction'
   | 'ui'
   | 'ops'
-  | 'forensics';
+  | 'forensics'
+  | 'security';
 
 /** Map from domain label to its event union type. */
 export type DomainEventMap = {
@@ -81,4 +84,5 @@ export type DomainEventMap = {
   ui: UIEvent;
   ops: OpsEvent;
   forensics: ForensicsEvent;
+  security: SecurityEvent;
 };

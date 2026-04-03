@@ -1,4 +1,5 @@
 import type { Line } from '../types/grid.ts';
+import type { PanelResourceContract, PanelHealthState } from '../runtime/perf/panel-contracts.ts';
 
 export type PanelCategory = 'development' | 'agent' | 'monitoring' | 'session' | 'ai';
 
@@ -20,6 +21,12 @@ export interface Panel {
   isTransient: boolean;
   isPinned: boolean;
   needsRender: boolean;
+
+  // Resource contract (optional — panels may declare resource requirements)
+  resourceContract?: Readonly<PanelResourceContract>;
+
+  // Health state (optional — set by PanelHealthMonitor when panel is registered)
+  healthState?: Readonly<PanelHealthState>;
 
   // Input (optional)
   handleInput?(key: string): boolean;

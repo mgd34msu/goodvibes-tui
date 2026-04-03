@@ -17,3 +17,8 @@ export type { PolicyPanelSnapshot } from './policy.ts';
 export { ToolContractsPanel } from './tool-contracts.ts';
 export { TransportPanel } from './transport.ts';
 export type { TransportPanelSnapshot } from './transport.ts';
+export { OpsPanel } from './ops.ts';
+export type { OpsAuditEntry } from './ops.ts';
+export { PanelResourcesPanel } from './panel-resources.ts';
+export { SecurityPanel } from './security.ts';
+export type { SecurityPanelSnapshot } from './security.ts';

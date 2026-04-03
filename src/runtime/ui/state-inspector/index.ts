@@ -23,11 +23,27 @@ export type {
   TransitionEntry,
   SubscriptionInfo,
   StateInspectorConfig,
+  TimelineEvent,
+  TimeTravelCursor,
+  SelectorHotspot,
+  HotspotReport,
+  HotspotSamplerConfig,
 } from './types.ts';
-export { DEFAULT_MAX_TRANSITIONS } from './types.ts';
+export {
+  DEFAULT_MAX_TRANSITIONS,
+  DEFAULT_TIMELINE_BUFFER_SIZE,
+  DEFAULT_HOTSPOT_WINDOW_MS,
+  DEFAULT_HOTSPOT_MAX_SAMPLES_PER_KEY,
+} from './types.ts';
 
 // ── Transition log ────────────────────────────────────────────────────────────
 export { BoundedTransitionLog } from './transition-log.ts';
+
+// ── Timeline buffer ───────────────────────────────────────────────────────────
+export { TimelineBuffer } from './timeline.ts';
+
+// ── Hotspot sampler ───────────────────────────────────────────────────────────
+export { SelectorHotspotSampler } from './hotspot-sampler.ts';
 
 // ── Provider ─────────────────────────────────────────────────────────────────
 export { StateInspectorProvider } from './inspector.ts';

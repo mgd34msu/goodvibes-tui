@@ -26,6 +26,22 @@ export { PerfMonitor } from './monitor.ts';
 export type { PerfSnapshot } from './monitor.ts';
 export { formatReport, exitCode } from './reporter.ts';
 export { SloCollector, SLO_METRICS } from './slo-collector.ts';
+export type {
+  PanelResourceContract,
+  PanelHealthState,
+  PanelThrottleStatus,
+  PanelHealthStatus,
+} from './panel-contracts.ts';
+export {
+  CATEGORY_CONTRACTS,
+  buildContract,
+  createInitialPanelHealthState,
+} from './panel-contracts.ts';
+export {
+  PanelHealthMonitor,
+  getSharedPanelHealthMonitor,
+  resetSharedPanelHealthMonitor,
+} from './panel-health-monitor.ts';
 
 import { PerfMonitor } from './monitor.ts';
 import type { PerfBudget } from './types.ts';
