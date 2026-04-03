@@ -18,6 +18,7 @@
  */
 
 import { logger } from '../utils/logger.ts';
+import { discoverContextWindows } from './context-discovery.ts';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -52,26 +53,6 @@ export interface ResolvedContextWindow {
   safeCap?: number;
 }
 
-/**
- * Shape of a single model entry in an OpenAI-compatible /v1/models response.
- */
-interface OpenAICompatModelEntry {
-  id: string;
-  /** Context window in tokens — present in Ollama, llama.cpp, LM Studio etc. */
-  max_context_length?: number;
-  /** Alternate field name used by some implementations. */
-  context_length?: number;
-  /** Some providers nest limits inside an object. */
-  limits?: {
-    max_context_length?: number;
-    context_length?: number;
-  };
-}
-
-interface OpenAICompatModelsResponse {
-  data: OpenAICompatModelEntry[];
-}
-
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
@@ -81,9 +62,6 @@ interface OpenAICompatModelsResponse {
  * provides a value.
  */
 export const DEFAULT_CONTEXT_WINDOW = 8_192;
-
-/** How long to wait for a /v1/models response before giving up. */
-const FETCH_TIMEOUT_MS = 5_000;
 
 /**
  * Grace period between ingestion attempts for the same provider.
@@ -105,100 +83,6 @@ interface CacheEntry {
 }
 
 const providerCache = new Map<string, CacheEntry>();
-
-// ---------------------------------------------------------------------------
-// Fetch helpers
-// ---------------------------------------------------------------------------
-
-/**
- * Parse a single model entry and extract its context window value.
- * Tries multiple field names for broad compatibility.
- */
-function extractContextLength(entry: OpenAICompatModelEntry): number | null {
-  // Direct fields (most common)
-  if (typeof entry.max_context_length === 'number' && entry.max_context_length > 0) {
-    return entry.max_context_length;
-  }
-  if (typeof entry.context_length === 'number' && entry.context_length > 0) {
-    return entry.context_length;
-  }
-  // Nested limits object
-  if (entry.limits) {
-    if (typeof entry.limits.max_context_length === 'number' && entry.limits.max_context_length > 0) {
-      return entry.limits.max_context_length;
-    }
-    if (typeof entry.limits.context_length === 'number' && entry.limits.context_length > 0) {
-      return entry.limits.context_length;
-    }
-  }
-  return null;
-}
-
-/**
- * Fetch /v1/models from the given base URL and return a map of
- * model ID → context_length. Returns null on fetch error or invalid response.
- *
- * @param baseURL - Provider base URL. **Must include the `/v1` path component**
- *   (e.g. `http://localhost:11434/v1`). The function appends `/models` to this
- *   value, so omitting `/v1` will produce an incorrect endpoint URL such as
- *   `http://localhost:11434/models` instead of `http://localhost:11434/v1/models`.
- * @param apiKey - Optional API key sent as a Bearer token in the Authorization header.
- */
-async function fetchProviderModels(
-  baseURL: string,
-  apiKey?: string,
-): Promise<Map<string, number> | null> {
-  const url = baseURL.replace(/\/$/, '') + '/models';
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
-
-  try {
-    const headers: Record<string, string> = { 'Accept': 'application/json' };
-    if (apiKey) headers['Authorization'] = `Bearer ${apiKey}`;
-
-    const response = await fetch(url, { signal: controller.signal, headers });
-    if (!response.ok) {
-      logger.debug('[local-context-ingestion] Non-OK response from provider', {
-        url,
-        status: response.status,
-      });
-      return null;
-    }
-
-    const json = await response.json() as OpenAICompatModelsResponse;
-    if (!Array.isArray(json?.data)) {
-      logger.debug('[local-context-ingestion] Unexpected response shape', { url });
-      return null;
-    }
-
-    const result = new Map<string, number>();
-    for (const entry of json.data) {
-      if (typeof entry.id !== 'string') continue;
-      const ctxLen = extractContextLength(entry);
-      if (ctxLen !== null) {
-        result.set(entry.id, ctxLen);
-      }
-    }
-
-    logger.debug('[local-context-ingestion] Fetched model context windows', {
-      url,
-      count: result.size,
-    });
-    return result;
-  } catch (err) {
-    if ((err as Error)?.name === 'AbortError') {
-      logger.debug('[local-context-ingestion] Fetch timed out', { url });
-    } else {
-      logger.debug('[local-context-ingestion] Fetch failed', {
-        url,
-        error: String(err),
-      });
-    }
-    return null;
-  } finally {
-    clearTimeout(timer);
-  }
-}
 
 // ---------------------------------------------------------------------------
 // Public API
@@ -227,14 +111,17 @@ export async function ingestLocalProviderContextWindows(
     return cached.failed ? null : cached.models;
   }
 
-  const models = await fetchProviderModels(baseURL, apiKey);
+  // Use multi-endpoint discovery (probes LM Studio, Ollama, OpenAI-compat, llama.cpp, TGI)
+  // Returns an empty Map when all probes fail — treat that as a fetch failure.
+  const discovered = await discoverContextWindows(baseURL, apiKey);
+  const failed = discovered.size === 0;
   providerCache.set(providerName, {
     fetchedAt: now,
-    models: models ?? new Map(),
-    failed: models === null,
+    models: discovered,
+    failed,
   });
 
-  return models;
+  return failed ? null : discovered;
 }
 
 /**
