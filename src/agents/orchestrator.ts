@@ -273,6 +273,13 @@ export class AgentOrchestrator {
             session.appendMessage({ type: 'session_end', status: 'max_turns_exceeded', turn, timestamp: new Date().toISOString() });
             try { await session.dispose(); } catch { /* non-fatal */ }
           }
+          // Notify WRFC so the chain is not orphaned in 'engineering' state
+          if (this.eventBus) {
+            this.eventBus.emit('subagent:error', {
+              id: record.id,
+              error: new Error(record.error),
+            });
+          }
           return;
         }
         session.appendMessage({ type: 'llm_request', turn, messageCount: conversation.getMessagesForLLM().length, timestamp: new Date().toISOString() });
@@ -562,8 +569,9 @@ export class AgentOrchestrator {
         }
       }
 
-      // Don't overwrite 'failed' status set by circuit breaker or other in-loop failures
-      if (record.status !== 'failed') {
+      // Don't overwrite 'failed' or 'cancelled' status set by circuit breaker, cancellation, or other in-loop failures
+      const statusAfterLoop = (record as { status: string }).status;
+      if (statusAfterLoop !== 'failed' && statusAfterLoop !== 'cancelled') {
         record.status = 'completed';
       }
       record.completedAt = Date.now();
@@ -574,8 +582,8 @@ export class AgentOrchestrator {
           pm.stop(p.id);
         }
       }
-      // Emit completion event for WrfcController (only if truly completed, not circuit-broken)
-      if (this.eventBus && record.status !== 'failed') {
+      // Emit completion event for WrfcController (only if truly completed, not circuit-broken or cancelled)
+      if (this.eventBus && record.status !== 'failed' && statusAfterLoop !== 'cancelled') {
         this.eventBus.emit('subagent:complete', {
           id: record.id,
           result: {
@@ -597,6 +605,17 @@ export class AgentOrchestrator {
         }
         logger.error(`Agent ${record.id} circuit-breaker terminated`, { error: record.error, toolCallCount: record.toolCallCount });
         session.appendMessage({ type: 'session_end', status: 'failed', error: record.error, toolCallCount: record.toolCallCount, durationMs: Date.now() - record.startedAt, timestamp: new Date().toISOString() });
+      } else if (statusAfterLoop === 'cancelled') {
+        // Agent was cancelled while the LLM response was in flight — the in-loop cancellation
+        // check did not fire in time. Emit subagent:error so WRFC terminates the chain cleanly.
+        if (this.eventBus) {
+          this.eventBus.emit('subagent:error', {
+            id: record.id,
+            error: new Error('Agent cancelled'),
+          });
+        }
+        logger.info(`Agent ${record.id} cancelled (detected post-loop)`, { toolCallCount: record.toolCallCount });
+        session.appendMessage({ type: 'session_end', status: 'cancelled', toolCallCount: record.toolCallCount, durationMs: Date.now() - record.startedAt, timestamp: new Date().toISOString() });
       } else {
         logger.info(`Agent ${record.id} completed`, { toolCallCount: record.toolCallCount });
         session.appendMessage({ type: 'session_end', status: 'completed', toolCallCount: record.toolCallCount, durationMs: Date.now() - record.startedAt, timestamp: new Date().toISOString() });
