@@ -92,6 +92,12 @@ export interface EventMap {
 
   // Tool result reconciliation (GC-ORCH-015)
   'turn:tool-reconciliation': import('./tool-reconciliation.ts').ReconciliationEvent;
+
+  // Adaptive Execution Planner (Section 5.5)
+  /** Emitted each time the planner selects an execution strategy. */
+  'plan:strategy-selected': import('./adaptive-planner.ts').PlannerDecision;
+  /** Emitted when a user override is applied or cleared. */
+  'plan:strategy-override': { strategy: import('./adaptive-planner.ts').ExecutionStrategy | null; clearedBy?: string };
 }
 
 type Listener<T> = T extends void ? () => void : (data: T) => void;
@@ -103,7 +109,22 @@ type Listener<T> = T extends void ? () => void : (data: T) => void;
 const MAX_LISTENERS = 100;
 
 export class EventBus {
+  /** Process-level singleton, set on first construction. */
+  private static _instance: EventBus | null = null;
+
+  /** Return the process-level EventBus singleton, or null if not yet constructed. */
+  static getInstance(): EventBus | null {
+    return EventBus._instance;
+  }
+
   private listeners = new Map<string, Set<(...args: unknown[]) => void>>();
+
+  constructor() {
+    // Register this instance as the process-level singleton on first construction.
+    if (!EventBus._instance) {
+      EventBus._instance = this;
+    }
+  }
 
   public on<K extends keyof EventMap>(event: K, listener: Listener<EventMap[K]>): () => void {
     if (!this.listeners.has(event)) {

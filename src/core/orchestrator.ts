@@ -40,6 +40,7 @@ import {
   type ReconciliationReason,
 } from './tool-reconciliation.ts';
 import type { FeatureFlagManager } from '../runtime/feature-flags/manager.ts';
+import { adaptivePlanner } from './adaptive-planner-instance.ts';
 
 /** Minimal interface for hook dispatch — allows any compatible implementation */
 interface HookDispatcherLike {
@@ -310,6 +311,41 @@ export class Orchestrator {
     // We just let it proceed; the prior record will be overwritten.
 
     this.bus.emit('turn:start', { prompt: text });
+
+    // ── Adaptive Execution Planner (Section 5.5) ────────────────────────────
+    // If the feature flag is enabled, score and select the execution strategy
+    // before the turn proceeds. The selected strategy and reason code are
+    // emitted for the Ops panel and logged for observability.
+    if (this.flagManager?.isEnabled('adaptive-execution-planner') ?? false) {
+      const classification = classifyIntent(text);
+      /**
+       * TODO(Phase 3): Wire real signals from:
+       * - riskScore: task intent classifier confidence (currently hardcoded 0.3).
+       *   Replace with a trained risk scorer that reads task type, destructive-op
+       *   indicators, and file-scope breadth from `classification`.
+       * - remoteAvailable: provider registry remote capability check (currently false).
+       *   Replace with a live query to the provider registry, e.g.
+       *   `providerRegistry.hasRemoteCapability()`.
+       * - backgroundEligible: scheduler eligibility check (currently false).
+       *   Replace with a scheduler readiness check, e.g.
+       *   `scheduler.canDefer(classification.intent)`.
+       */
+      const plannerInputs = {
+        riskScore: 0.3,               // default; extended by task-type scoring
+        latencyBudgetMs: Infinity,
+        isMultiStep: classification.intent === 'project' && classification.confidence > 0.5,
+        remoteAvailable: false,       // extended by remote-agent integration
+        backgroundEligible: false,    // extended by scheduler integration
+        taskDescription: text.slice(0, 120),
+      };
+      const decision = adaptivePlanner.select(plannerInputs);
+      this.bus.emit('plan:strategy-selected', decision);
+      logger.debug('[Orchestrator] adaptive-planner decision', {
+        strategy: decision.selected,
+        reasonCode: decision.reasonCode,
+      });
+    }
+    // ────────────────────────────────────────────────────────────────────────
 
     // Pre-turn plan injection: if an active plan exists, inject its current state into
     // the conversation so the LLM can refer to it and update item statuses.
