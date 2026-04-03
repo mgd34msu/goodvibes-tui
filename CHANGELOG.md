@@ -4,6 +4,91 @@ All notable changes to GoodVibes TUI.
 
 ---
 
+## [0.12.3] — 2026-04-03
+
+### State Machine Runtime v3 — Complete Implementation
+
+Full implementation of the post-v3 runtime blueprint across 9 phases, ~52,000 lines.
+
+#### Phase 0: v3.1 Completion
+- SLO gates with p95 metric collection and budget tracking
+- Tool output policy with size limits and truncation
+- Permissions simulation dry-run mode
+- Idempotency store with SHA-256 keys, TTL eviction, deterministic turn/tool dedup
+- Snapshot retention with 3-class pruning, injectable clock/pruner, path traversal protection
+- Provider capability registry with routing decisions
+
+#### Phase 1: P0 Hardening
+- Shell AST normalization with recursive-descent parser, per-segment verdicts, 8 obfuscation detectors
+- Fetch sanitization with host trust tiers, SSRF detection, response sanitizer modes
+- Policy signing with HMAC-SHA256 composite signatures, provenance on every PermissionDecision
+- Unresolved tool result reconciliation with synthetic error results and stop-reason enforcement
+
+#### Phase 2: Architecture Hardening
+- Domain import boundary enforcement with read matrix and bidirectional drift detection
+- Typed emission enforcement blocking raw bus.emit() outside approved wrappers
+- Cascade SLO with timing instrumentation, severity derivation, playbook-to-cascade mapping
+- Runtime budget enforcement with monotonic timing, time/token/cost limits
+- Output schema fingerprints with SHA-256/FNV-1a hashing, canonical shape IDs
+- Overflow backend retention with pluggable spill backends, path traversal guards
+- Divergence dashboard with enforce gate threshold and trend history
+- Tokenizer fuzz guards with MAX_INPUT_LENGTH (64K) and MAX_TOKEN_COUNT (1024)
+
+#### Phase 3: Operator Control + HITL
+- Operator Control Plane with task cancel/pause/resume/retry, agent cancel, typed audit events
+- Adaptive Execution Planner with strategy scoring, /plan commands, OpsStrategy panel
+- HITL UX Modes with quiet/balanced/operator presets, per-domain verbosity, status bar badge
+
+#### Phase 4+5: Replay, Forensics, Policy, Tool Contracts
+- Deterministic Replay engine with load/step/seek/diff/export, path traversal guard
+- Failure Forensics with auto-classification, causal chain builder, bounded tracker maps
+- Compaction Quality Scoring with weighted composite, auto-strategy escalation
+- Policy-as-Code with versioned bundle registry, simulation-gated promotion pipeline
+- Tool Contract Verification with 5-dimension checker, fail-closed registration
+
+#### Phase 6: Eval + Provider
+- Evaluation Harness with 5-dimension scorecard, deterministic benchmarks, CI gate
+- Provider Optimizer with capability-contract-driven routing, auto/manual/pinned modes
+
+#### Phase 7: Memory, Sessions, Trust
+- Project Memory Substrate with SQLite store, 4 durable classes, provenance links, /recall commands
+- Multi-session Orchestration with cross-session task graph, BFS cycle detection, scoped cancellation
+- Extension Trust Framework with trust tiers, HMAC-SHA256 timing-safe signatures, quarantine
+
+#### Phase 8: P1 Hardening
+- Transport compatibility matrix with version negotiation and downgrade reason codes
+- MCP schema drift quarantine blocking tool execution on stale schemas
+- Adaptive notification suppression with mode-context and burst policies
+- Integration delivery SLO with retry/backoff, dead-letter queue
+- Token scope and rotation audits with managed-mode blocking
+- Panel resource contracts with two-tier throttle/degrade escalation
+- Actionable diagnostics controls with permission-gated dispatch
+- State inspector time-travel with circular timeline buffer and hotspot sampler
+
+#### Phase 9: Release Gates
+- 5 release gate suites (Safety, Determinism, Performance, Operability, Product Quality) with 130+ integration tests
+- Runner script for CI gate enforcement
+
+### Context Window Discovery
+- Multi-provider context window discovery with verbose-first endpoint probing
+- LM Studio, Ollama, vLLM, llama.cpp, TGI support
+- Agent orchestrator context window awareness with proactive compaction at 85% threshold
+- Model picker context cap UI: press Space on local models to set custom context window
+
+### Bug Fixes
+- Fixed cancelled agent respawn race condition (cancelled agents no longer re-trigger WRFC chains)
+- Fixed multi-line input history navigation (up-arrow on line 0 now navigates to previous entry)
+- Fixed duplicate model switch confirmation message
+- Fixed /provider command collision (optimizer renamed to /provider-opt)
+- Fixed /panel list to open picker instead of printing to conversation
+
+### System Message Routing
+- SystemMessageRouter with high/low priority classification
+- SystemMessagesPanel for operational messages with scroll support
+- High-value messages appear in both conversation and panel; low-value messages panel-only
+
+---
+
 ## [0.12.2] — 2026-04-02
 
 ### Cohort Completion Fix
