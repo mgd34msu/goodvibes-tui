@@ -30,6 +30,7 @@ import type { Orchestrator } from '../core/orchestrator.ts';
 import { EvalPanel, EvalRegistry } from './eval-panel.ts';
 import { MemoryPanel } from './memory-panel.ts';
 import type { MemoryRegistry } from '../state/memory-store.ts';
+import { SystemMessagesPanel } from './system-messages-panel.ts';
 
 /**
  * Register all built-in panel types with the given PanelManager.
@@ -315,6 +316,15 @@ export function registerBuiltinPanels(manager: PanelManager, deps: BuiltinPanelD
       factory: () => new MemoryPanel(memoryRegistry),
     });
   }
+
+  manager.registerType({
+    id: 'system-messages',
+    name: 'System Messages',
+    icon: 'J',
+    category: 'monitoring',
+    description: 'Operational system messages routed away from the main conversation (scans, discovery, plugin events, tool status)',
+    factory: () => new SystemMessagesPanel(),
+  });
 
   manager.registerType({
     id: 'tokens',
