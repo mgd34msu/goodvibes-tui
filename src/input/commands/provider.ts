@@ -294,8 +294,8 @@ function handleFallbackTest(
  * Routes to subcommand handlers based on args[0].
  */
 export const providerCommand: SlashCommand = {
-  name: 'provider',
-  aliases: ['prov'],
+  name: 'provider-opt',
+  aliases: ['prov-opt'],
   description: 'Manage provider routing optimizer (route, pin, explain, fallback).',
   usage: '<subcommand> [args]',
   argsHint: 'route|explain-route|pin|fallback',
