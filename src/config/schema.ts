@@ -61,6 +61,7 @@ export interface GoodVibesConfig {
     saveHistory: boolean;       // default: true
     notifyOnComplete: boolean;  // default: true
     suggestAlternativeOnProviderFail: boolean; // default: false
+    hitlMode: 'quiet' | 'balanced' | 'operator'; // default: 'balanced'
   };
   permissions: {
     mode: PermissionMode;       // default: 'prompt'
@@ -135,6 +136,7 @@ export type ConfigKey =
   | 'behavior.saveHistory'
   | 'behavior.notifyOnComplete'
   | 'behavior.suggestAlternativeOnProviderFail'
+  | 'behavior.hitlMode'
   | 'permissions.mode'
   | 'permissions.tools.read'
   | 'permissions.tools.write'
@@ -185,7 +187,7 @@ export const CONFIG_KEYS = new Set<string>([
   'display.showToolPreview', 'provider.reasoningEffort', 'provider.model',
   'provider.provider', 'provider.systemPromptFile', 'behavior.autoApprove',
   'behavior.autoCompactThreshold', 'behavior.saveHistory', 'behavior.notifyOnComplete',
-  'behavior.suggestAlternativeOnProviderFail', 'permissions.mode',
+  'behavior.suggestAlternativeOnProviderFail', 'behavior.hitlMode', 'permissions.mode',
   'permissions.tools.read', 'permissions.tools.write', 'permissions.tools.edit',
   'permissions.tools.exec', 'permissions.tools.find', 'permissions.tools.fetch',
   'permissions.tools.analyze', 'permissions.tools.inspect', 'permissions.tools.agent',
@@ -225,6 +227,7 @@ export type ConfigValue<K extends ConfigKey> =
   K extends 'behavior.saveHistory' ? boolean :
   K extends 'behavior.notifyOnComplete' ? boolean :
   K extends 'behavior.suggestAlternativeOnProviderFail' ? boolean :
+  K extends 'behavior.hitlMode' ? 'quiet' | 'balanced' | 'operator' :
   K extends 'permissions.mode' ? PermissionMode :
   K extends 'permissions.tools.read' ? PermissionAction :
   K extends 'permissions.tools.write' ? PermissionAction :
@@ -292,6 +295,7 @@ export const DEFAULT_CONFIG: GoodVibesConfig = {
     saveHistory: true,
     notifyOnComplete: true,
     suggestAlternativeOnProviderFail: false,
+    hitlMode: 'balanced',
   },
   permissions: {
     mode: 'prompt',
@@ -748,5 +752,12 @@ export const CONFIG_SCHEMA: ConfigSetting[] = [
     type: 'boolean',
     default: false,
     description: 'Show alternative model suggestion when current provider fails non-transiently',
+  },
+  {
+    key: 'behavior.hitlMode',
+    type: 'enum',
+    default: 'balanced',
+    description: 'HITL UX mode: controls notification verbosity and burst batching (quiet/balanced/operator)',
+    enumValues: ['quiet', 'balanced', 'operator'],
   },
 ];

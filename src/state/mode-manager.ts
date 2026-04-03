@@ -1,138 +1,228 @@
+import type { DomainVerbosity } from '../runtime/notifications/types.ts';
+
 // ---------------------------------------------------------------------------
-// ModeManager — output mode management
-// Session-scoped: no config persistence, pure state holder.
+// Precision tool verbosity modes (original API, preserved)
 // ---------------------------------------------------------------------------
 
+export type ModePreset = 'default' | 'vibecoding' | 'justvibes' | (string & Record<never, never>);
+
+export interface VerbosityDefaults {
+  write: string;
+  edit: string;
+  read: string;
+  grep: string;
+  glob: string;
+  exec: string;
+}
+
 export interface ModeDefinition {
-  name: string;
+  name: ModePreset;
   description: string;
-  verbosityDefaults: Record<string, string>;
+  verbosityDefaults: Partial<VerbosityDefaults>;
   enforcement: 'strict' | 'advisory';
 }
 
-// ---------------------------------------------------------------------------
-// Built-in modes
-// ---------------------------------------------------------------------------
-
-const DEFAULT_MODE: ModeDefinition = {
-  name: 'default',
-  description: 'Standard output verbosity with diffs and full match context.',
-  verbosityDefaults: {
-    write: 'standard',
-    edit: 'with_diff',
-    read: 'standard',
-    grep: 'matches',
-    glob: 'paths_only',
-    exec: 'standard',
-  },
-  enforcement: 'advisory',
+const DEFAULT_VERBOSITY: VerbosityDefaults = {
+  write: 'standard',
+  edit: 'with_diff',
+  read: 'standard',
+  grep: 'matches',
+  glob: 'paths_only',
+  exec: 'standard',
 };
 
-const VIBECODING_MODE: ModeDefinition = {
-  name: 'vibecoding',
-  description: 'Minimal output verbosity optimised for fast, token-efficient iteration.',
-  verbosityDefaults: {
-    write: 'count_only',
-    edit: 'minimal',
-    read: 'standard',
-    grep: 'files_only',
-    glob: 'paths_only',
-    exec: 'minimal',
-  },
-  enforcement: 'advisory',
+const VIBECODING_VERBOSITY: VerbosityDefaults = {
+  write: 'count_only',
+  edit: 'minimal',
+  read: 'standard',
+  grep: 'files_only',
+  glob: 'paths_only',
+  exec: 'minimal',
 };
 
-const JUSTVIBES_MODE: ModeDefinition = {
-  name: 'justvibes',
-  description: 'Ultra-quiet mode: suppress all non-essential output.',
-  verbosityDefaults: {
-    write: 'count_only',
-    edit: 'minimal',
-    read: 'standard',
-    grep: 'files_only',
-    glob: 'paths_only',
-    exec: 'minimal',
+const BUILT_IN_MODES: ModeDefinition[] = [
+  {
+    name: 'default',
+    description: 'Standard precision tool verbosity with confirmation prompts.',
+    verbosityDefaults: DEFAULT_VERBOSITY,
+    enforcement: 'advisory',
   },
-  enforcement: 'advisory',
+  {
+    name: 'vibecoding',
+    description: 'Reduced verbosity for rapid iteration; still confirms destructive operations.',
+    verbosityDefaults: VIBECODING_VERBOSITY,
+    enforcement: 'advisory',
+  },
+  {
+    name: 'justvibes',
+    description: 'Minimal output, no confirmation prompts. Fast and autonomous.',
+    verbosityDefaults: VIBECODING_VERBOSITY,
+    enforcement: 'advisory',
+  },
+];
+
+// ---------------------------------------------------------------------------
+// HITL UX modes (Section 5.11)
+// ---------------------------------------------------------------------------
+
+export type HITLMode = 'quiet' | 'balanced' | 'operator';
+
+export interface HITLModeDefinition {
+  name: HITLMode;
+  description: string;
+  defaultDomainVerbosity: DomainVerbosity;
+  quietWhileTyping: boolean;
+  batchWindowMs: number;
+}
+
+export const HITL_QUIET: HITLModeDefinition = {
+  name: 'quiet',
+  description: 'Minimal verbosity. Suppresses most notifications. Batches updates in 5s windows.',
+  defaultDomainVerbosity: 'minimal',
+  quietWhileTyping: true,
+  batchWindowMs: 5_000,
 };
 
-// ---------------------------------------------------------------------------
-// ModeManager
-// ---------------------------------------------------------------------------
+export const HITL_BALANCED: HITLModeDefinition = {
+  name: 'balanced',
+  description: 'Normal verbosity. Standard notification flow. Batches updates in 2s windows.',
+  defaultDomainVerbosity: 'normal',
+  quietWhileTyping: true,
+  batchWindowMs: 2_000,
+};
 
-let _instance: ModeManager | null = null;
+export const HITL_OPERATOR: HITLModeDefinition = {
+  name: 'operator',
+  description: 'Verbose. All notifications shown immediately. No quiet-while-typing suppression.',
+  defaultDomainVerbosity: 'verbose',
+  quietWhileTyping: false,
+  batchWindowMs: 500,
+};
+
+const HITL_PRESETS: HITLModeDefinition[] = [HITL_QUIET, HITL_BALANCED, HITL_OPERATOR];
+
+// ---------------------------------------------------------------------------
+// ModeManager singleton
+// ---------------------------------------------------------------------------
 
 export class ModeManager {
-  private modes: Map<string, ModeDefinition>;
-  private current: string;
+  private static instance: ModeManager | undefined;
 
-  private constructor() {
-    this.modes = new Map();
-    this.modes.set('default', DEFAULT_MODE);
-    this.modes.set('vibecoding', VIBECODING_MODE);
-    this.modes.set('justvibes', JUSTVIBES_MODE);
-    this.current = 'default';
-  }
+  private currentMode: ModePreset = 'default';
+  private modes: ModeDefinition[] = [...BUILT_IN_MODES];
 
-  // -------------------------------------------------------------------------
-  // Singleton
-  // -------------------------------------------------------------------------
+  private hitlMode: HITLMode = 'balanced';
+  private domainOverrides: Map<string, DomainVerbosity> = new Map();
+
+  private constructor() {}
 
   static getInstance(): ModeManager {
-    if (!_instance) {
-      _instance = new ModeManager();
+    if (!ModeManager.instance) {
+      ModeManager.instance = new ModeManager();
     }
-    return _instance;
+    return ModeManager.instance;
   }
 
-  /**
-   * Reset the singleton — intended for testing only.
-   */
   static resetInstance(): void {
-    _instance = null;
+    ModeManager.instance = undefined;
   }
 
   // -------------------------------------------------------------------------
-  // Public API
+  // Precision tool verbosity mode API
   // -------------------------------------------------------------------------
 
-  /**
-   * Returns the name of the currently active mode.
-   */
-  getMode(): string {
-    return this.current;
+  getMode(): ModePreset {
+    return this.currentMode;
   }
 
-  /**
-   * Switch to the named mode. Throws if the mode is not registered.
-   */
-  setMode(name: string): void {
-    if (!this.modes.has(name)) {
-      throw new Error(`Unknown mode: "${name}". Available modes: ${[...this.modes.keys()].join(', ')}`);
+  getModeDefinition(): ModeDefinition {
+    return this.modes.find((m) => m.name === this.currentMode) ?? this.modes[0]!;
+  }
+
+  setMode(mode: ModePreset): void {
+    const found = this.modes.find((m) => m.name === mode);
+    if (!found) {
+      const available = this.modes.map((m) => `"${m.name}"`).join(', ');
+      throw new Error(`Unknown mode: "${mode}". Available modes: ${available}`);
     }
-    this.current = name;
+    this.currentMode = mode;
   }
 
-  /**
-   * Returns a copy of all registered mode definitions.
-   */
   listModes(): ModeDefinition[] {
-    return [...this.modes.values()];
+    return [...this.modes];
+  }
+
+  registerMode(def: ModeDefinition): void {
+    const idx = this.modes.findIndex((m) => m.name === def.name);
+    if (idx >= 0) {
+      this.modes[idx] = def;
+    } else {
+      this.modes.push(def);
+    }
+  }
+
+  getVerbosityDefaults(): Partial<VerbosityDefaults> {
+    return { ...this.getModeDefinition().verbosityDefaults };
+  }
+
+  // -------------------------------------------------------------------------
+  // HITL UX mode API (Section 5.11)
+  // -------------------------------------------------------------------------
+
+  getHITLMode(): HITLMode {
+    return this.hitlMode;
+  }
+
+  getHITLPreset(): HITLModeDefinition {
+    return HITL_PRESETS.find((p) => p.name === this.hitlMode) ?? HITL_BALANCED;
   }
 
   /**
-   * Returns the verbosity defaults for the current mode.
+   * Switch the active HITL mode.
+   *
+   * Switching modes clears all per-domain verbosity overrides that may have
+   * been set via {@link setDomainVerbosity}. This ensures the new mode's
+   * `defaultDomainVerbosity` applies uniformly until the caller re-establishes
+   * any domain-specific overrides.
    */
-  getVerbosityDefaults(): Record<string, string> {
-    const mode = this.modes.get(this.current);
-    // current is always a valid key — safe assertion
-    return { ...(mode as ModeDefinition).verbosityDefaults };
+  setHITLMode(mode: HITLMode): void {
+    const found = HITL_PRESETS.find((p) => p.name === mode);
+    if (!found) {
+      const available = HITL_PRESETS.map((p) => `"${p.name}"`).join(', ');
+      throw new Error(`Unknown HITL mode: "${mode}". Available: ${available}`);
+    }
+    this.hitlMode = mode;
+    this.domainOverrides.clear();
   }
 
-  /**
-   * Register a custom mode at runtime. Overwriting a built-in mode is allowed.
-   */
-  registerMode(mode: ModeDefinition): void {
-    this.modes.set(mode.name, mode);
+  listHITLPresets(): HITLModeDefinition[] {
+    return [...HITL_PRESETS];
+  }
+
+  setDomainVerbosity(domain: string, verbosity: DomainVerbosity): void {
+    this.domainOverrides.set(domain, verbosity);
+  }
+
+  getDomainVerbosity(domain: string): DomainVerbosity {
+    return this.domainOverrides.get(domain) ?? this.getHITLPreset().defaultDomainVerbosity;
+  }
+
+  getDomainOverrides(): Record<string, DomainVerbosity> {
+    return Object.fromEntries(this.domainOverrides);
+  }
+
+  applyToRouter(router: {
+    setQuietWhileTyping(enabled: boolean): void;
+    setBatchWindowMs?(ms: number): void;
+    setDefaultDomainVerbosity?(verbosity: DomainVerbosity): void;
+    setDomainVerbosity(domain: string, verbosity: DomainVerbosity): void;
+  }): void {
+    const preset = this.getHITLPreset();
+    router.setQuietWhileTyping(preset.quietWhileTyping);
+    router.setBatchWindowMs?.(preset.batchWindowMs);
+    router.setDefaultDomainVerbosity?.(preset.defaultDomainVerbosity);
+    for (const [domain, verbosity] of this.domainOverrides) {
+      router.setDomainVerbosity(domain, verbosity);
+    }
   }
 }

@@ -68,6 +68,8 @@ import { getKeybindingsManager } from './input/keybindings.ts';
 import { sessionMemoryStore } from './core/session-memory.ts';
 import { bootstrapRuntime } from './runtime/bootstrap.ts';
 import type { BootstrapContext } from './runtime/bootstrap.ts';
+import { ModeManager } from './state/mode-manager.ts';
+import type { HITLMode } from './state/mode-manager.ts';
 import type { HookPhase, HookCategory, HookEventPath } from './hooks/types.ts';
 
 
@@ -255,6 +257,14 @@ async function main() {
     _getPinned: getPinned,
     _getConfiguredProviderIds: getConfiguredProviderIds,
   } = ctx;
+  // ── HITL UX mode — read from config and apply at startup ─────────────────
+  {
+    const hitlMode = configManager.get('behavior.hitlMode') as HITLMode | undefined;
+    if (hitlMode && (hitlMode === 'quiet' || hitlMode === 'balanced' || hitlMode === 'operator')) {
+      ModeManager.getInstance().setHITLMode(hitlMode);
+    }
+  }
+
   // Use the singleton panel manager (already initialized in bootstrap)
   const panelManager = getPanelManager();
 
@@ -579,6 +589,7 @@ async function main() {
       })(),
       orchestrator.lastInputTokens,
       commandArgsHint,
+      ModeManager.getInstance().getHITLMode(),
     );
     // Insert process indicator directly after the input box (top border + content rows + bottom border)
     const inputBoxRows = promptInfo.visibleLines.length + 2;

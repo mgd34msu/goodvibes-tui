@@ -192,6 +192,7 @@ export class UIFactory {
     dangerMode?: boolean,
     lastInputTokens?: number,
     commandArgsHint?: string,
+    hitlMode?: string,
   ): Line[] {
     const lines: Line[] = [];
     const promptLines = prompt.split('\n');
@@ -310,6 +311,7 @@ export class UIFactory {
         ctxParts.push(model + (provider ? ` (${provider})` : ''));
       }
       if (toolCount) ctxParts.push(`${toolCount} tools`);
+      if (hitlMode) ctxParts.push(`hitl:${hitlMode}`);
       const ctxLine = '   ' + ctxParts.join('  \u00B7  ');
       lines.push(createBaseLine());
       lines.push(this.stringToLine(ctxLine.slice(0, width), width, { fg: '240', dim: true }));

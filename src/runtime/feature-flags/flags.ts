@@ -50,6 +50,22 @@ export const FEATURE_FLAGS: FeatureFlag[] = [
 
   // ── Tier 3 ───────────────────────────────────────────────────────────────
   {
+    id: 'hitl-ux-modes',
+    name: 'HITL UX Modes (Section 5.11)',
+    description:
+      'Enables the HITL UX mode system (quiet/balanced/operator) for notification verbosity '
+      + 'control. When enabled, ModeManager applies the configured HITL preset to the '
+      + 'notification router at startup and on mode change. '
+      + 'Disable to revert to legacy unmediated notification delivery. '
+      + '@remarks This flag is informational for dashboard display only. '
+      + 'HITL modes are always applied from config at startup regardless of this flag — '
+      + 'it does not gate the runtime behaviour of ModeManager.',
+    defaultState: 'disabled',
+    tier: 3,
+    runtimeToggleable: true,
+  },
+
+  {
     id: 'unified-runtime-task',
     name: 'Unified RuntimeTask',
     description:
@@ -254,6 +270,20 @@ export const FEATURE_FLAGS: FeatureFlag[] = [
       + 'backward compatibility with consumers that do not tolerate extra fields.',
     defaultState: 'disabled',
     tier: 8,
+    runtimeToggleable: true,
+  },
+  // ── Section 5.5: Adaptive Execution Planner ──────────────────────────────
+  {
+    id: 'adaptive-execution-planner',
+    name: 'Adaptive Execution Planner (Section 5.5)',
+    description:
+      'Enables the Adaptive Execution Planner, which scores strategy candidates '
+      + '(single/cohort/background/remote) using risk, latency, and capability '
+      + 'inputs and selects the best execution strategy each turn. '
+      + 'Exposes /plan mode, /plan explain, and /plan override commands. '
+      + 'Disable to revert to implicit single-call execution.',
+    defaultState: 'disabled',
+    tier: 5,
     runtimeToggleable: true,
   },
 ];

@@ -6,6 +6,8 @@ export { ProjectIndex } from './project-index.ts';
 export type { FileEntry } from './project-index.ts';
 export { ModeManager } from './mode-manager.ts';
 export type { ModeDefinition } from './mode-manager.ts';
+export type { HITLMode, HITLModeDefinition } from './mode-manager.ts';
+export { HITL_QUIET, HITL_BALANCED, HITL_OPERATOR } from './mode-manager.ts';
 export { FileWatcher } from './file-watcher.ts';
 export { SQLiteStore } from './sqlite-store.ts';
 export { TelemetryDB } from './telemetry.ts';
