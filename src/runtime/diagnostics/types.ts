@@ -282,6 +282,23 @@ export interface DomainHealthSummary {
 }
 
 /**
+ * A single remediation action surface in the health dashboard.
+ * Maps to a playbook that provides resolution steps for a cascade failure.
+ */
+export interface RemediationAction {
+  /** Playbook ID (matches Playbook.id). */
+  readonly playbookId: string;
+  /** Human-readable name of the playbook. */
+  readonly playbookName: string;
+  /** The cascade rule ID that triggered the need for this remediation. */
+  readonly ruleId: string;
+  /** Source domain that triggered the cascade. */
+  readonly sourceDomain: HealthDomain;
+  /** Severity tier of the triggering cascade. */
+  readonly severity: string;
+}
+
+/**
  * Aggregated health dashboard data for rendering.
  */
 export interface HealthDashboardData {
@@ -297,6 +314,11 @@ export interface HealthDashboardData {
   readonly lastUpdatedAt: number;
   /** SLO metric status rows. Empty when no SloCollector is attached. */
   readonly sloRows: readonly SloRow[];
+  /**
+   * Actionable remediation steps derived from active cascade results.
+   * Empty when no cascades are pending or no playbook mappings exist.
+   */
+  readonly remediationActions: readonly RemediationAction[];
 }
 
 // ── Panel config ─────────────────────────────────────────────────────────────

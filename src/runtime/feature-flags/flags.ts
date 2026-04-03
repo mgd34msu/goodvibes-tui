@@ -155,6 +155,21 @@ export const FEATURE_FLAGS: FeatureFlag[] = [
     runtimeToggleable: true,
   },
 
+  // ── GC-TOOL-004 ────────────────────────────────────────────────────────────
+  {
+    id: 'runtime-tools-budget-enforcement',
+    name: 'Runtime Budget Enforcement (GC-TOOL-004)',
+    description:
+      'Enables per-phase runtime budget enforcement for tool execution pipelines. '
+      + 'Checks wall-clock time (BUDGET_EXCEEDED_MS), token consumption '
+      + '(BUDGET_EXCEEDED_TOKENS), and cost (BUDGET_EXCEEDED_COST) limits at phase '
+      + 'entry and exit. Terminates the pipeline immediately on hard budget breach '
+      + 'and emits a typed diagnostic event. Disable to revert to unlimited execution.',
+    defaultState: 'disabled',
+    tier: 8,
+    runtimeToggleable: true,
+  },
+
   // ── GC-EXEC-005 ────────────────────────────────────────────────────────────
   {
     id: 'shell-ast-normalization',

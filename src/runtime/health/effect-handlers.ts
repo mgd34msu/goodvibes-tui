@@ -26,6 +26,16 @@ import type { AnyRuntimeEvent } from '../events/index.ts';
  * cross-domain cast in a single, documented location rather than duplicating it
  * at each call site.
  */
+/**
+ * GC-ARCH-002 allowlist: This file is explicitly permitted to call
+ * RuntimeEventBus.emit() directly because it emits synthetic health events
+ * (CASCADE_APPLIED, EMIT_EVENT effects) that are intentionally outside the
+ * AnyRuntimeEvent typed union. The necessary cast is isolated here to avoid
+ * duplicating it at every effect-handler call site.
+ *
+ * Do NOT copy this pattern elsewhere — use typed emitters from
+ * src/runtime/emitters/ for all standard domain events.
+ */
 function emitHealthEvent(
   bus: RuntimeEventBus,
   envelope: RuntimeEventEnvelope<string, unknown>,

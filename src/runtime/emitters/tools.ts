@@ -94,3 +94,30 @@ export function emitToolCancelled(
 ): void {
   bus.emit('tools', createEventEnvelope('TOOL_CANCELLED', { type: 'TOOL_CANCELLED', ...data }, ctx));
 }
+
+/** Emit BUDGET_EXCEEDED_MS when wall-clock time limit is breached. */
+export function emitBudgetExceededMs(
+  bus: RuntimeEventBus,
+  ctx: EmitterContext,
+  data: { callId: string; turnId: string; tool: string; phase: string; limitMs: number; elapsedMs: number }
+): void {
+  bus.emit('tools', createEventEnvelope('BUDGET_EXCEEDED_MS', { type: 'BUDGET_EXCEEDED_MS', ...data }, ctx));
+}
+
+/** Emit BUDGET_EXCEEDED_TOKENS when token consumption limit is breached. */
+export function emitBudgetExceededTokens(
+  bus: RuntimeEventBus,
+  ctx: EmitterContext,
+  data: { callId: string; turnId: string; tool: string; phase: string; limitTokens: number; usedTokens: number }
+): void {
+  bus.emit('tools', createEventEnvelope('BUDGET_EXCEEDED_TOKENS', { type: 'BUDGET_EXCEEDED_TOKENS', ...data }, ctx));
+}
+
+/** Emit BUDGET_EXCEEDED_COST when cost-in-USD limit is breached. */
+export function emitBudgetExceededCost(
+  bus: RuntimeEventBus,
+  ctx: EmitterContext,
+  data: { callId: string; turnId: string; tool: string; phase: string; limitCostUsd: number; usedCostUsd: number }
+): void {
+  bus.emit('tools', createEventEnvelope('BUDGET_EXCEEDED_COST', { type: 'BUDGET_EXCEEDED_COST', ...data }, ctx));
+}

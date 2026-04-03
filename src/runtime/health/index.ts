@@ -27,6 +27,9 @@ export { CASCADE_RULES } from './cascade-rules.ts';
 export { HealthStoreWiring } from './wiring.ts';
 export { handleCascadeEffect } from './effect-handlers.ts';
 export type { EffectHandlerContext } from './effect-handlers.ts';
+export { CascadeTimer, deriveCascadeSeverity } from './cascade-timing.ts';
+export type { CascadeSeverity, TimedCascadeResult, TimedEvaluateResult } from './cascade-timing.ts';
+export { CASCADE_PLAYBOOK_MAP, ALL_CASCADE_RULE_IDS } from './cascade-playbook-map.ts';
 
 import { RuntimeHealthAggregator } from './aggregator.ts';
 import { CascadeEngine } from './cascade-engine.ts';

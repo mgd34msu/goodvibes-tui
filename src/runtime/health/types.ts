@@ -122,6 +122,21 @@ export interface CascadeResult {
   recoveryExhausted: boolean;
   /** Optional context about the entity that triggered the cascade (e.g. { pluginId: 'foo' }) */
   sourceContext?: Record<string, string>;
+  /**
+   * Wall-clock latency (ms) of the cascade rule evaluation that produced this result.
+   * Populated by CascadeTimer; undefined when evaluated directly via CascadeEngine.
+   */
+  latencyMs?: number;
+  /**
+   * Severity tier derived from the cascade effect type and recovery state.
+   * Populated by CascadeTimer; undefined when evaluated directly via CascadeEngine.
+   */
+  severity?: string;
+  /**
+   * Playbook IDs providing remediation actions for this cascade type.
+   * Populated by CascadeTimer; empty when evaluated directly via CascadeEngine.
+   */
+  remediationPlaybookIds?: readonly string[];
 }
 
 /**
@@ -155,6 +170,21 @@ export interface CascadeAppliedEvent {
   recoveryExhausted: boolean;
   /** Optional context about the entity that triggered the cascade */
   sourceContext?: Record<string, string>;
+  /**
+   * Wall-clock latency (ms) of the cascade evaluation that produced this event.
+   * Populated when the event is created from a TimedCascadeResult.
+   */
+  latencyMs?: number;
+  /**
+   * Severity tier of this cascade event.
+   * Populated when the event is created from a TimedCascadeResult.
+   */
+  severity?: string;
+  /**
+   * Playbook IDs that provide remediation actions for this cascade type.
+   * Populated when the event is created from a TimedCascadeResult.
+   */
+  remediationPlaybookIds?: readonly string[];
 }
 
 /**
@@ -171,5 +201,8 @@ export function createCascadeAppliedEvent(result: CascadeResult): CascadeApplied
     timestamp: result.timestamp,
     recoveryExhausted: result.recoveryExhausted,
     sourceContext: result.sourceContext,
+    latencyMs: result.latencyMs,
+    severity: result.severity,
+    remediationPlaybookIds: result.remediationPlaybookIds,
   };
 }

@@ -3,6 +3,9 @@ import { logger } from '../../utils/logger.ts';
 import type { ToolRuntimeContext } from './context.ts';
 import type { ExecutorConfig, PhaseResult, ToolExecutionPhase, ToolExecutionRecord } from './types.ts';
 import {
+  emitBudgetExceededCost,
+  emitBudgetExceededMs,
+  emitBudgetExceededTokens,
   emitToolCancelled,
   emitToolExecuting,
   emitToolFailed,
@@ -14,6 +17,7 @@ import {
   emitToolValidated,
 } from '../emitters/tools.ts';
 import {
+  budgetPhase,
   executePhase,
   mapOutputPhase,
   permissionPhase,
@@ -117,7 +121,8 @@ export class PhasedToolExecutor {
       toolName: call.name,
       phases: [],
       currentPhase: 'received',
-      startedAt: Date.now(),
+      startedAt: performance.now(),
+      wallStartedAt: Date.now(),
       cancelled: false,
     };
     this.records.set(call.id, record);
@@ -145,13 +150,17 @@ export class PhasedToolExecutor {
       enabled: boolean,
     ];
 
+    const budgetEnabled = this.config.enableBudgetEnforcement === true;
+
     const pipeline: PipelineEntry[] = [
-      ['validated',    validatePhase,    true],
-      ['prehooked',    prehookPhase,     this.config.enableHooks],
-      ['permissioned', permissionPhase,  this.config.enablePermissions],
-      ['executing',    (c, t, ctx, r) => executePhase(c, t, ctx, r, this.config), true],
-      ['mapped',       mapOutputPhase,   true],
-      ['posthooked',   posthookPhase,    this.config.enableHooks],
+      ['validated',     validatePhase,                                              true],
+      ['prehooked',     prehookPhase,                                               this.config.enableHooks],
+      ['permissioned',  permissionPhase,                                            this.config.enablePermissions],
+      ['budget-entry',  (c, t, ctx, r) => budgetPhase(c, t, ctx, r, 'entry'),      budgetEnabled],
+      ['executing',     (c, t, ctx, r) => executePhase(c, t, ctx, r, this.config), true],
+      ['mapped',        mapOutputPhase,                                             true],
+      ['budget-exit',   (c, t, ctx, r) => budgetPhase(c, t, ctx, r, 'exit'),       budgetEnabled],
+      ['posthooked',    posthookPhase,                                              this.config.enableHooks],
     ];
 
     const emitterCtx = {
@@ -190,6 +199,19 @@ export class PhasedToolExecutor {
       if (!phaseResult.success || phaseResult.abort) {
         context.cancellation.signal.removeEventListener('abort', forwardAbort);
         this.controllers.delete(call.id);
+
+        // Emit typed budget breach event before failing
+        if (phaseResult.budgetExceedReason && this.config.enableEvents && context.runtimeBus) {
+          this._emitBudgetEvent(
+            phaseResult.budgetExceedReason,
+            phaseResult.budgetMeta ?? {},
+            phaseName,
+            call,
+            context,
+            emitterCtx,
+          );
+        }
+
         return this._fail(record, call, context, emitterCtx, phaseResult.error ?? 'Phase failed');
       }
     }
@@ -204,9 +226,8 @@ export class PhasedToolExecutor {
     // --- Succeeded ---
     this.controllers.delete(call.id);
     record.currentPhase = 'succeeded';
+    const durationMs = performance.now() - record.startedAt;
     record.completedAt = Date.now();
-
-    const durationMs = record.completedAt - record.startedAt;
     if (this.config.enableEvents && context.runtimeBus) {
       emitToolSucceeded(context.runtimeBus, emitterCtx, {
         callId: call.id,
@@ -275,8 +296,8 @@ export class PhasedToolExecutor {
     error: string,
   ): ToolResult {
     record.currentPhase = 'failed';
+    const durationMs = performance.now() - record.startedAt;
     record.completedAt = Date.now();
-    const durationMs = record.completedAt - record.startedAt;
 
     if (this.config.enableEvents && context.runtimeBus) {
       emitToolFailed(context.runtimeBus, emitterCtx as Parameters<typeof emitToolFailed>[1], {
@@ -352,6 +373,43 @@ export class PhasedToolExecutor {
         this.records.delete(id);
         if (this.records.size <= MAX_RECORDS) break;
       }
+    }
+  }
+
+  private _emitBudgetEvent(
+    reason: import('./types.ts').BudgetExceedReason,
+    meta: Record<string, number>,
+    phase: ToolExecutionPhase,
+    call: ToolCall,
+    context: ToolRuntimeContext,
+    emitterCtx: Parameters<typeof emitToolValidated>[1],
+  ): void {
+    if (!context.runtimeBus) return;
+    const base = { callId: call.id, turnId: context.ids.turnId, tool: call.name, phase: String(phase) };
+    switch (reason) {
+      case 'BUDGET_EXCEEDED_MS':
+        emitBudgetExceededMs(context.runtimeBus, emitterCtx, {
+          ...base,
+          limitMs: meta['limitMs'] ?? 0,
+          elapsedMs: meta['elapsedMs'] ?? 0,
+        });
+        break;
+      case 'BUDGET_EXCEEDED_TOKENS':
+        emitBudgetExceededTokens(context.runtimeBus, emitterCtx, {
+          ...base,
+          limitTokens: meta['limitTokens'] ?? 0,
+          usedTokens: meta['usedTokens'] ?? 0,
+        });
+        break;
+      case 'BUDGET_EXCEEDED_COST':
+        emitBudgetExceededCost(context.runtimeBus, emitterCtx, {
+          ...base,
+          limitCostUsd: meta['limitCostUsd'] ?? 0,
+          usedCostUsd: meta['usedCostUsd'] ?? 0,
+        });
+        break;
+      default:
+        break;
     }
   }
 

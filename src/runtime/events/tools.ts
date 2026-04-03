@@ -24,7 +24,41 @@ export type ToolEvent =
   /** Tool call failed with an error. */
   | { type: 'TOOL_FAILED'; callId: string; turnId: string; tool: string; error: string; durationMs: number }
   /** Tool call was cancelled before completion. */
-  | { type: 'TOOL_CANCELLED'; callId: string; turnId: string; tool: string; reason?: string };
+  | { type: 'TOOL_CANCELLED'; callId: string; turnId: string; tool: string; reason?: string }
+  /**
+   * A runtime budget was exceeded and the phase pipeline was terminated.
+   * The `reason` discriminant distinguishes the type of budget breached:
+   *  - BUDGET_EXCEEDED_MS    — wall-clock execution time limit
+   *  - BUDGET_EXCEEDED_TOKENS — token consumption limit
+   *  - BUDGET_EXCEEDED_COST  — cost limit in USD
+   */
+  | {
+      type: 'BUDGET_EXCEEDED_MS';
+      callId: string;
+      turnId: string;
+      tool: string;
+      phase: string;
+      limitMs: number;
+      elapsedMs: number;
+    }
+  | {
+      type: 'BUDGET_EXCEEDED_TOKENS';
+      callId: string;
+      turnId: string;
+      tool: string;
+      phase: string;
+      limitTokens: number;
+      usedTokens: number;
+    }
+  | {
+      type: 'BUDGET_EXCEEDED_COST';
+      callId: string;
+      turnId: string;
+      tool: string;
+      phase: string;
+      limitCostUsd: number;
+      usedCostUsd: number;
+    };
 
 /** All tool event type literals as a union. */
 export type ToolEventType = ToolEvent['type'];
