@@ -7,6 +7,7 @@ import { analyzeSchema } from './schema.ts';
 import { CodeIntelligence } from '../../intelligence/facade.ts';
 import { GitService } from '../../git/service.ts';
 import { toolLLM } from '../../config/tool-llm.ts';
+import { appendSchemaFingerprint } from '../shared/schema-fingerprint.ts';
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
@@ -1566,7 +1567,7 @@ export const analyzeTool: Tool = {
         }
       }
 
-      return { success: true, output: JSON.stringify(result) };
+      return { success: true, output: JSON.stringify(appendSchemaFingerprint(result, 'analyze', input.mode)) };
     } catch (err) {
       return {
         success: false,

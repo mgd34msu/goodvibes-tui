@@ -76,10 +76,13 @@ export async function mapOutputPhase(
     const auditedResult = applyOutputPolicy(record.result, policy);
     record.result = auditedResult.result;
 
+    // Surface spill backend in phase metadata when overflow occurred
+    const spillBackend = auditedResult.audit.spillBackend;
     return {
       phase: 'mapped',
       success: true,
       durationMs: performance.now() - start,
+      ...(spillBackend ? { spillBackend } : {}),
     };
   } catch (err) {
     // Mapping failure is non-fatal — pass through unmapped result

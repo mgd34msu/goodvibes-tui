@@ -1,5 +1,6 @@
 import type { ToolResult } from '../../types/tools.ts';
 import { overflowHandler } from '../../tools/shared/overflow.ts';
+import type { SpillBackendType } from '../../tools/shared/overflow.ts';
 
 // ─── Tool Class ─────────────────────────────────────────────────────────────
 
@@ -82,6 +83,11 @@ export interface OutputPolicyResult {
   originalSize: number;
   /** Output byte length after policy enforcement. */
   resultSize: number;
+  /**
+   * Backend type used when `actionTaken === 'spilled'`.
+   * Undefined for other action types.
+   */
+  spillBackend?: SpillBackendType;
 }
 
 /**
@@ -273,6 +279,9 @@ export function applyOutputPolicy(
         : 'truncated';
       audit.actionTaken = actionTaken;
       audit.resultSize = encoder.encode(overflowResult.content).length;
+      if (overflowResult.spillBackend) {
+        audit.spillBackend = overflowResult.spillBackend;
+      }
       break;
     }
 
