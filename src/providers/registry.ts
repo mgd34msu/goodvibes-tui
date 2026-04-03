@@ -647,6 +647,9 @@ export class ProviderRegistry {
           },
           ...(reasoningFormat !== 'none' ? { reasoningEffort: ['low', 'medium', 'high'] } : {}),
           contextWindow: server.modelContextWindows?.[modelId] ?? 8192,
+          ...(server.modelContextWindows?.[modelId] != null
+            ? { contextWindowProvenance: 'provider_api' as const }
+            : {}),
           ...(server.modelOutputLimits?.[modelId] != null
             ? { tokenLimits: { maxOutputTokens: server.modelOutputLimits[modelId] } }
             : {}),

@@ -242,14 +242,71 @@ describe('fetchModelContextWindows - generic (unknown/lm-studio/etc)', () => {
     expect(result).toEqual({});
   });
 
-  test('lm-studio type uses same generic path', async () => {
-    globalThis.fetch = makeFetch(() => ({
-      ok: true,
-      body: { context_length: 32768 },
-    })) as typeof globalThis.fetch;
+  test('lm-studio: returns correct context windows from /api/v1/models rich endpoint', async () => {
+    // LM Studio exposes /api/v1/models with max_context_length per model.
+    // fetchModelContextWindows should delegate to discoverContextWindows which
+    // probes that endpoint first (verbose-first), returning accurate values.
+    globalThis.fetch = (async (url: string) => {
+      if (url.includes('/api/v1/models')) {
+        return {
+          ok: true,
+          json: async () => ({
+            models: [
+              { key: 'meta-llama-3.1-8b-instruct', max_context_length: 131072 },
+              { key: 'qwen2.5-coder-7b-instruct', max_context_length: 32768 },
+            ],
+          }),
+        } as unknown as Response;
+      }
+      // No other endpoints needed — the rich probe succeeds
+      return { ok: false, json: async () => null } as unknown as Response;
+    }) as typeof globalThis.fetch;
 
-    const result = await fetchModelContextWindows('127.0.0.1', 1234, 'lm-studio', ['lmstudio-model']);
-    expect(result['lmstudio-model']).toBe(32768);
+    const models = ['meta-llama-3.1-8b-instruct', 'qwen2.5-coder-7b-instruct'];
+    const result = await fetchModelContextWindows('127.0.0.1', 1234, 'lm-studio', models);
+    expect(result['meta-llama-3.1-8b-instruct']).toBe(131072);
+    expect(result['qwen2.5-coder-7b-instruct']).toBe(32768);
+  });
+
+  test('lm-studio: does NOT default to 8192 when rich endpoint succeeds', async () => {
+    globalThis.fetch = (async (url: string) => {
+      if (url.includes('/api/v1/models')) {
+        return {
+          ok: true,
+          json: async () => ({
+            models: [{ key: 'my-model', max_context_length: 131072 }],
+          }),
+        } as unknown as Response;
+      }
+      return { ok: false, json: async () => null } as unknown as Response;
+    }) as typeof globalThis.fetch;
+
+    const result = await fetchModelContextWindows('127.0.0.1', 1234, 'lm-studio', ['my-model']);
+    expect(result['my-model']).toBe(131072);
+    expect(result['my-model']).not.toBe(8192);
+  });
+
+  test('lm-studio: falls back to generic /v1/models/{id} probe when /api/v1/models returns empty', async () => {
+    // If LM Studio rich endpoint returns no models (or 404), fall through to generic probe
+    globalThis.fetch = (async (url: string) => {
+      if (url.includes('/api/v1/models')) {
+        // Responds but with empty models list
+        return { ok: true, json: async () => ({ models: [] }) } as unknown as Response;
+      }
+      if (url.includes('/api/tags')) {
+        return { ok: false, json: async () => null } as unknown as Response;
+      }
+      if (url.includes('/v1/models/')) {
+        return {
+          ok: true,
+          json: async () => ({ id: 'fallback-model', context_length: 16384 }),
+        } as unknown as Response;
+      }
+      return { ok: false, json: async () => null } as unknown as Response;
+    }) as typeof globalThis.fetch;
+
+    const result = await fetchModelContextWindows('127.0.0.1', 1234, 'lm-studio', ['fallback-model']);
+    expect(result['fallback-model']).toBe(16384);
   });
 
   test('returns empty record when empty models array is passed', async () => {

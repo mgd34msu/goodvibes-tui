@@ -2,6 +2,7 @@ import { networkInterfaces, homedir } from 'node:os';
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { logger } from '../utils/logger.ts';
+import { discoverContextWindows } from '../providers/context-discovery.ts';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -403,7 +404,21 @@ export async function fetchModelContextWindows(
       break;
     }
 
-    case 'lm-studio':
+    case 'lm-studio': {
+      // LM Studio: use discoverContextWindows which probes /api/v1/models first (rich endpoint
+      // with max_context_length per model), falling back through the verbose-first probe chain.
+      const baseURL = `http://${host}:${port}/v1`;
+      const discovered = await discoverContextWindows(baseURL);
+      for (const [modelId, ctx] of discovered) {
+        if (models.includes(modelId) || models.length === 0) {
+          result[modelId] = ctx;
+          logger.info(`[Scan] ${modelId}: context ${ctx} tokens (via discoverContextWindows)`);
+        }
+      }
+      // If no results from rich endpoint, fall through to generic probe
+      if (Object.keys(result).length > 0) break;
+    }
+    // falls through to generic probe when LM Studio rich endpoint yields nothing
     case 'localai':
     case 'jan':
     case 'gpt4all':
