@@ -3,6 +3,7 @@ import { join, resolve, relative } from 'node:path';
 import { readdir } from 'node:fs/promises';
 import type { Tool } from '../../types/tools.ts';
 import { INSPECT_TOOL_SCHEMA } from './schema.ts';
+import { appendSchemaFingerprint } from '../shared/schema-fingerprint.ts';
 import type {
   InspectInput,
   InspectMode,
@@ -1178,6 +1179,26 @@ export class InspectTool implements Tool {
     parameters: INSPECT_TOOL_SCHEMA,
   };
 
+  /**
+   * Inject `_meta.outputSchemaFingerprint` into a serialized JSON output string.
+   * Parses the JSON, calls appendSchemaFingerprint, and re-serializes.
+   * If the output is not parseable as an object (non-fatal), returns as-is.
+   */
+  private _withFingerprint(output: string, mode: string, indent: number): string {
+    try {
+      // Double parse/stringify is a design consequence of inspect's stringified return pattern:
+      // inspect modes return JSON strings, so we parse to augment then re-stringify.
+      const parsed = JSON.parse(output) as unknown;
+      if (parsed !== null && typeof parsed === 'object' && !Array.isArray(parsed)) {
+        const fingerprinted = appendSchemaFingerprint(parsed as Record<string, unknown>, 'inspect', mode);
+        return JSON.stringify(fingerprinted, null, indent || 0);
+      }
+    } catch {
+      // logger.debug would be appropriate here but we avoid adding a logger dep
+    }
+    return output;
+  }
+
   async execute(args: Record<string, unknown>): Promise<{ success: boolean; output?: string; error?: string }> {
     if (!args.mode || typeof args.mode !== 'string') {
       return { success: false, error: 'mode is required' };
@@ -1192,7 +1213,23 @@ export class InspectTool implements Tool {
 
     const projectRoot = resolve(input.projectRoot ?? process.cwd());
     const format = input.output?.format ?? 'detailed';
+    const jsonIndent = format === 'json' ? 2 : 0;
+    const mode = input.mode;
 
+    // Inner execute returns the raw result; fingerprint is applied after.
+    const rawResult = await this._executeInner(args, input, projectRoot, format, jsonIndent);
+    return this._fingerprintResult(rawResult, mode, jsonIndent);
+  }
+
+  /** @internal Main dispatch — extracted so execute() can post-process the result. */
+  private async _executeInner(
+    _args: Record<string, unknown>,
+    input: InspectInput,
+    projectRoot: string,
+    format: string,
+    jsonIndent: number,
+  ): Promise<{ success: boolean; output?: string; error?: string }> {
+    void jsonIndent; // available for future callers; current sites use format directly
     try {
       switch (input.mode as InspectMode) {
         case 'project': {
@@ -1406,5 +1443,20 @@ export class InspectTool implements Tool {
       const message = err instanceof Error ? err.message : String(err);
       return { success: false, error: `inspect (${input.mode}): ${message}` };
     }
+  }
+
+  /**
+   * Post-process a successful result to inject schema fingerprint metadata.
+   * Called from `execute` before returning to the caller.
+   */
+  private _fingerprintResult(
+    result: { success: boolean; output?: string; error?: string },
+    mode: string,
+    jsonIndent: number,
+  ): { success: boolean; output?: string; error?: string } {
+    if (result.success && result.output !== undefined) {
+      return { ...result, output: this._withFingerprint(result.output, mode, jsonIndent) };
+    }
+    return result;
   }
 }

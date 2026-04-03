@@ -60,6 +60,12 @@ export interface PhaseResult {
    * Surfaced in the BUDGET_EXCEEDED_* event payload for diagnostics.
    */
   budgetMeta?: Record<string, number>;
+  /**
+   * When the map-output phase spilled overflow content, this carries the
+   * backend type used (`file`, `ledger`, or `diagnostics`).
+   * Surfaced in phase metadata for operator diagnostics.
+   */
+  spillBackend?: import('../../tools/shared/overflow.ts').SpillBackendType;
 }
 
 /**

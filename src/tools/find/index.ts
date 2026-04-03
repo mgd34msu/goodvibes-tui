@@ -6,6 +6,7 @@ import type { Tool } from '../../types/tools.ts';
 import { findSchema } from './schema.ts';
 import { CodeIntelligence, uriToPath } from '../../intelligence/index.ts';
 import * as astGrep from '@ast-grep/napi';
+import { appendSchemaFingerprint } from '../shared/schema-fingerprint.ts';
 
 // ---------------------------------------------------------------------------
 // Import graph module-level cache (avoids rebuilding on every relationships query)
@@ -1325,7 +1326,8 @@ export const findTool: Tool = {
           }
         }
 
-        return [query.id, result];
+        // Append schema fingerprint to each individual query result
+        return [query.id, appendSchemaFingerprint(result, 'find', query.mode)];
       };
 
       let pairs: Array<[string, Record<string, unknown>]>;
@@ -1344,7 +1346,12 @@ export const findTool: Tool = {
         results[id] = result;
       }
 
-      return { success: true, output: JSON.stringify(results) };
+      // For multi-query results, also fingerprint the envelope using the 'multi' mode
+      const finalResults = input.queries.length > 1
+        ? appendSchemaFingerprint(results, 'find', 'multi')
+        : results;
+
+      return { success: true, output: JSON.stringify(finalResults) };
     } catch (err) {
       return {
         success: false,

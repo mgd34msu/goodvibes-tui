@@ -170,6 +170,33 @@ export const FEATURE_FLAGS: FeatureFlag[] = [
     runtimeToggleable: true,
   },
 
+  // ── GC-TOOL-008 ────────────────────────────────────────────────────────────
+  {
+    id: 'overflow-spill-backends',
+    name: 'Overflow Spill Backends (GC-TOOL-008)',
+    description:
+      'Enables the pluggable spill backend system for overflow content. '
+      + 'When enabled, spillBackend can be set to file|ledger|diagnostics via config. '
+      + 'When disabled, falls back to pin: file backend (legacy behavior).',
+    defaultState: 'disabled',
+    tier: 8,
+    runtimeToggleable: true,
+  },
+
+  // ── GC-PERM-009 ────────────────────────────────────────────────────────────
+  {
+    id: 'gc-perm-009-divergence-dashboard',
+    name: 'Divergence Dashboard and Enforce Gate (GC-PERM-009)',
+    description:
+      'Enables the divergence dashboard and enforcement gate for Permissions v2 simulation. '
+      + 'Aggregates divergence by tool/prefix/mode, exposes trend history in diagnostics, '
+      + 'and blocks enforce mode transitions when the divergence rate exceeds the configured '
+      + 'threshold. Disable to fall back to warn mode (no gate enforcement).',
+    defaultState: 'disabled',
+    tier: 8,
+    runtimeToggleable: true,
+  },
+
   // ── GC-EXEC-005 ────────────────────────────────────────────────────────────
   {
     id: 'shell-ast-normalization',
@@ -178,6 +205,53 @@ export const FEATURE_FLAGS: FeatureFlag[] = [
       'Enables the Shell AST parser for compound command verdict evaluation. '
       + 'Produces per-segment verdicts (safe/unsafe) with user-facing denial '
       + 'explanations. When disabled, falls back to legacy flat segmentation mode.',
+    defaultState: 'disabled',
+    tier: 8,
+    runtimeToggleable: true,
+  },
+
+  // ── G00 ───────────────────────────────────────────────────────────────────
+  {
+    id: 'local-provider-context-ingestion',
+    name: 'Local Provider Context Window Ingestion (G00)',
+    description:
+      'Enables dynamic ingestion of max_context_length from local/custom provider '
+      + '/v1/models endpoints. When enabled, local models use the provider-reported '
+      + 'context window (provenance: provider_api) for token budgeting and compaction '
+      + 'thresholds instead of the statically-configured contextWindow value. '
+      + 'Disable to revert to explicit configured or static limits (configured_cap / fallback).',
+    defaultState: 'enabled',
+    tier: 9,
+    runtimeToggleable: true,
+  },
+
+  // ── G01 ───────────────────────────────────────────────────────────────────
+  {
+    id: 'g01-agent-context-window-awareness',
+    name: 'Agent Context Window Awareness (G01)',
+    description:
+      'Enables context window validation and compaction in the AgentOrchestrator. '
+      + 'Before each provider.chat() call, estimates total token count (system prompt + '
+      + 'messages + tool definitions) and compacts the conversation when usage exceeds '
+      + '85% of the model context window. Also applies layered system prompt assembly '
+      + '(drops conventions then project context for small windows) and catches '
+      + '"context size exceeded" errors from the provider with a single compaction retry. '
+      + 'Disable to revert to unchecked provider.chat() calls (pre-G01 behavior).',
+    defaultState: 'enabled',
+    tier: 9,
+    runtimeToggleable: true,
+  },
+
+  // ── GC-TOOL-007 ────────────────────────────────────────────────────────────
+  {
+    id: 'gc-tool-007-output-schema-fingerprint',
+    name: 'Output Schema Fingerprints (GC-TOOL-007)',
+    description:
+      'Appends `_meta.outputSchemaFingerprint` (SHA-256 of sorted result key names) '
+      + 'and `_meta.schemaShapeId` (canonical mode identifier) to tool results from '
+      + 'the find, analyze, and inspect tools. Enables schema drift detection and '
+      + 'diagnostic fingerprint surfaces. Disable to omit fingerprint metadata for '
+      + 'backward compatibility with consumers that do not tolerate extra fields.',
     defaultState: 'disabled',
     tier: 8,
     runtimeToggleable: true,

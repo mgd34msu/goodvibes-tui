@@ -64,6 +64,19 @@ export {
   evaluateModeConstraintRule,
 } from './rules/index.ts';
 
+// GC-PERM-009
+export {
+  DivergenceDashboard,
+  DivergenceGateError,
+} from './divergence-dashboard.ts';
+export type {
+  DivergenceTrendEntry,
+  EnforceGateStatus,
+  EnforceGateResult,
+  DivergenceDashboardSnapshot,
+  DivergenceDashboardConfig,
+} from './divergence-dashboard.ts';
+
 // ── Factory ──────────────────────────────────────────────────────────────────────
 
 import { LayeredPolicyEvaluator } from './evaluator.ts';
