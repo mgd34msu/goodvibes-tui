@@ -47,7 +47,8 @@ export type KeyAction =
   | 'clear-prompt'
   | 'undo'
   | 'redo'
-  | 'paste';
+  | 'paste'
+  | 'replay-panel';
 
 /** Human-readable description for each action (used in /keybindings display). */
 export const ACTION_DESCRIPTIONS: Record<KeyAction, string> = {
@@ -70,6 +71,7 @@ export const ACTION_DESCRIPTIONS: Record<KeyAction, string> = {
   'undo':                  'Undo last prompt edit',
   'redo':                  'Redo last undone edit',
   'paste':                 'Paste from clipboard (image priority)',
+  'replay-panel':          'Open / close the Replay panel (Section 5.2)',
 };
 
 /** Default key bindings for all actions. */
@@ -80,6 +82,9 @@ export const DEFAULT_KEYBINDINGS: Record<KeyAction, KeyCombo[]> = {
   'panel-picker':          [{ key: 'p', ctrl: true }],
   'panel-tab-next':        [{ key: '}', ctrl: true }],
   'panel-tab-prev':        [{ key: '~', ctrl: true }],
+  // NOTE: 'history-search' and 'replay-panel' share Ctrl+R by default.
+  // The input handler dispatches 'replay-panel' when in command mode and
+  // 'history-search' otherwise. Users may rebind either in keybindings.json.
   'history-search':        [{ key: 'r', ctrl: true }],
   'search':                [{ key: 'f', ctrl: true }],
   'block-copy':            [{ key: 'y', ctrl: true }],
@@ -93,6 +98,7 @@ export const DEFAULT_KEYBINDINGS: Record<KeyAction, KeyCombo[]> = {
   'undo':                  [{ key: 'z', ctrl: true }],
   'redo':                  [{ key: 'z', ctrl: true, shift: true }],
   'paste':                 [{ key: 'v', ctrl: true }],
+  'replay-panel':          [{ key: 'r', ctrl: true }],
 };
 
 /** Resolved overrides type: each key can be a single combo or array. */

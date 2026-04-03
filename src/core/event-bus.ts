@@ -98,6 +98,16 @@ export interface EventMap {
   'plan:strategy-selected': import('./adaptive-planner.ts').PlannerDecision;
   /** Emitted when a user override is applied or cleared. */
   'plan:strategy-override': { strategy: import('./adaptive-planner.ts').ExecutionStrategy | null; clearedBy?: string };
+
+  // Deterministic Replay (Section 5.2)
+  /** Emitted when a run is loaded into the replay engine. */
+  'replay:loaded': { runId: string; totalRevisions: number };
+  /** Emitted after each step or seek operation. */
+  'replay:position-changed': { runId: string; currentRev: number; totalRevisions: number; status: string };
+  /** Emitted when diff mode completes. */
+  'replay:diff-complete': { runId: string; mismatchCount: number };
+  /** Emitted when the replay panel is toggled via keybind. */
+  'replay:panel-toggle': void;
 }
 
 type Listener<T> = T extends void ? () => void : (data: T) => void;

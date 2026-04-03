@@ -338,6 +338,49 @@ export const DEFAULT_PANEL_CONFIG: PanelConfig = {
   bufferLimit: DEFAULT_BUFFER_LIMIT,
 };
 
+// ── Tool Contract entries ────────────────────────────────────────────────────
+
+/**
+ * Severity of a single tool contract violation.
+ * Mirrors ContractViolationSeverity from the contract-verifier module.
+ */
+export type ContractViolationSeverity = 'error' | 'warn';
+
+/**
+ * A single contract check failure or warning for a registered tool.
+ */
+export interface ToolContractViolation {
+  /** Which of the 5 contract dimensions this violation belongs to. */
+  readonly dimension:
+    | 'schema'
+    | 'timeout-cancellation'
+    | 'permission-class'
+    | 'output-policy'
+    | 'idempotency';
+  /** Severity of the violation. */
+  readonly severity: ContractViolationSeverity;
+  /** Human-readable explanation of what is wrong. */
+  readonly message: string;
+  /** Optional hint for how to fix the violation. */
+  readonly hint?: string;
+}
+
+/**
+ * Immutable diagnostic entry for a single tool's contract verification result.
+ */
+export interface ToolContractEntry {
+  /** Tool name. */
+  readonly toolName: string;
+  /** Whether the tool passed all required (error-level) checks. */
+  readonly passed: boolean;
+  /** All violations found. May include warnings even when passed. */
+  readonly violations: readonly ToolContractViolation[];
+  /** Unix timestamp (ms) when this result was produced. */
+  readonly verifiedAt: number;
+  /** Whether this tool implements the PhasedTool interface. */
+  readonly isPhasedTool: boolean;
+}
+
 // ── Utility ───────────────────────────────────────────────────────────────────
 
 /**

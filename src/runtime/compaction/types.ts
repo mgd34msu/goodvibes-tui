@@ -9,6 +9,9 @@
  */
 
 import type { ProviderMessage } from '../../providers/interface.ts';
+import type { CompactionQualityScore } from './quality-score.ts';
+
+export type { CompactionQualityScore };
 
 // ---------------------------------------------------------------------------
 // Compaction lifecycle states
@@ -161,6 +164,10 @@ export interface CompactionLifecycleResult {
   messages: ProviderMessage[];
   /** Strategy output warnings. */
   warnings: string[];
+  /** Quality score for the strategy run (null when scoring was skipped). */
+  qualityScore: CompactionQualityScore | null;
+  /** Strategy switch reason if auto-escalation occurred (null otherwise). */
+  strategySwitchReason: string | null;
 }
 
 // ---------------------------------------------------------------------------

@@ -31,6 +31,7 @@ import type {
   HealthDashboardData,
   DiagnosticFilter,
   PanelConfig,
+  ToolContractEntry,
 } from './types.ts';
 import { ToolCallsPanel } from './panels/tool-calls.ts';
 import { AgentsPanel } from './panels/agents.ts';
@@ -38,6 +39,8 @@ import { TasksPanel } from './panels/tasks.ts';
 import { EventsPanel } from './panels/events.ts';
 import { StateInspectorPanel, type InspectableDomain } from './panels/state-inspector.ts';
 import { HealthPanel } from './panels/health.ts';
+import { ToolContractsPanel } from './panels/tool-contracts.ts';
+import type { ContractVerificationResult } from '../tools/contract-verifier.ts';
 
 /** Configuration for creating a DiagnosticsProvider. */
 export interface DiagnosticsProviderConfig {
@@ -61,7 +64,8 @@ export type DiagnosticPanelName =
   | 'tasks'
   | 'events'
   | 'state-inspector'
-  | 'health';
+  | 'health'
+  | 'tool-contracts';
 
 /**
  * DiagnosticsProvider — unified data access layer for all diagnostic panels.
@@ -77,6 +81,7 @@ export class DiagnosticsProvider {
   private readonly _events: EventsPanel;
   private readonly _stateInspector: StateInspectorPanel;
   private readonly _health: HealthPanel;
+  private readonly _toolContracts: ToolContractsPanel;
 
   constructor(config: DiagnosticsProviderConfig) {
     const pc = config.panelConfig;
@@ -88,6 +93,7 @@ export class DiagnosticsProvider {
       config.domains ? [...config.domains] : []
     );
     this._health = new HealthPanel(config.healthAggregator);
+    this._toolContracts = new ToolContractsPanel(pc);
   }
 
   // ── Data access ──────────────────────────────────────────────────────────────
@@ -159,6 +165,59 @@ export class DiagnosticsProvider {
     this._stateInspector.registerDomain(domain);
   }
 
+  // ── Tool contracts ────────────────────────────────────────────────────────────
+
+  /**
+   * Load (or reload) all tool contract verification results.
+   * Replaces any previously loaded results.
+   *
+   * @param results - Map of tool name → ContractVerificationResult from ToolContractVerifier.
+   */
+  public loadToolContracts(results: Map<string, ContractVerificationResult>): void {
+    this._toolContracts.load(results);
+  }
+
+  /**
+   * Upsert a single tool contract verification result.
+   * Use this for live updates when a single tool is re-verified.
+   *
+   * @param result - The ContractVerificationResult to upsert.
+   */
+  public upsertToolContract(result: ContractVerificationResult): void {
+    this._toolContracts.upsert(result);
+  }
+
+  /**
+   * Get the contract entry for a specific tool by name.
+   *
+   * @param toolName - Tool name to look up.
+   * @returns The entry or undefined if not verified.
+   */
+  public getToolContract(toolName: string): ToolContractEntry | undefined {
+    return this._toolContracts.get(toolName);
+  }
+
+  /**
+   * Get all tool contract entries, sorted by tool name.
+   */
+  public getToolContracts(): ToolContractEntry[] {
+    return this._toolContracts.getAll();
+  }
+
+  /**
+   * Get only tools that failed their contract checks.
+   */
+  public getToolContractFailures(): ToolContractEntry[] {
+    return this._toolContracts.getFailures();
+  }
+
+  /**
+   * Get summary counts across all tool contract results.
+   */
+  public getToolContractSummary(): ReturnType<ToolContractsPanel['getSummary']> {
+    return this._toolContracts.getSummary();
+  }
+
   // ── Change subscriptions ──────────────────────────────────────────────────────
 
   /**
@@ -179,6 +238,7 @@ export class DiagnosticsProvider {
       case 'events': return this._events.subscribe(callback);
       case 'state-inspector': return this._stateInspector.subscribe(callback);
       case 'health': return this._health.subscribe(callback);
+      case 'tool-contracts': return this._toolContracts.subscribe(callback);
     }
   }
 
@@ -196,6 +256,7 @@ export class DiagnosticsProvider {
     this._tasks.dispose();
     this._events.dispose();
     this._health.dispose();
+    this._toolContracts.dispose();
     // StateInspectorPanel has no disposable resources (no event bus subscriptions)
   }
 }

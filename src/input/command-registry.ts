@@ -75,6 +75,12 @@ export interface CommandContext {
   openOpsPanel?: () => void;
   /** OpsControlPlane instance for operator intervention commands. */
   opsControlPlane?: import('../runtime/ops/control-plane.ts').OpsControlPlane;
+  /** Open the Failure Forensics panel. */
+  openForensicsPanel?: () => void;
+  /** ForensicsRegistry for /forensics command subcommands. */
+  forensicsRegistry?: import('../runtime/forensics/registry.ts').ForensicsRegistry;
+  /** PolicyRegistry for /policy command subcommands. */
+  policyRegistry?: import('../runtime/permissions/policy-registry.ts').PolicyRegistry;
 }
 
 /**

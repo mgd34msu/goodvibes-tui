@@ -49,7 +49,11 @@ import {
   emitCompactionCollapse,
   emitCompactionAutocompact,
   emitCompactionReactive,
+  emitCompactionQualityScore,
+  emitCompactionStrategySwitch,
 } from '../emitters/compaction.ts';
+import { computeQualityScore, escalateStrategy, LOW_QUALITY_THRESHOLD } from './quality-score.ts';
+import type { CompactionQualityScore } from './quality-score.ts';
 import type { ProviderMessage } from '../../providers/interface.ts';
 
 // ---------------------------------------------------------------------------
@@ -182,7 +186,7 @@ export class CompactionManager {
     }
 
     // ── Select strategy ──────────────────────────────────────────────────────
-    const strategy = selectStrategy({
+    let strategy = selectStrategy({
       trigger,
       currentTokens: tokenCount,
       contextWindow: this._contextWindow,
@@ -195,15 +199,20 @@ export class CompactionManager {
 
     // ── Execute strategy ─────────────────────────────────────────────────────
     let strategyOutput: StrategyOutput;
+    let qualityScore: CompactionQualityScore | null = null;
+    let strategySwitchReason: string | null = null;
+
+    const strategyInput: StrategyInput = {
+      sessionId: this._sessionId,
+      messages,
+      tokensBefore: tokenCount,
+      contextWindow: this._contextWindow,
+      strategy,
+      meta: isPromptTooLong !== undefined ? { isPromptTooLong } : undefined,
+    };
+
     try {
-      strategyOutput = await this._runStrategy(strategy, {
-        sessionId: this._sessionId,
-        messages,
-        tokensBefore: tokenCount,
-        contextWindow: this._contextWindow,
-        strategy,
-        meta: isPromptTooLong !== undefined ? { isPromptTooLong } : undefined,
-      });
+      strategyOutput = await this._runStrategy(strategy, strategyInput);
     } catch (err) {
       const error = err instanceof Error ? err.message : String(err);
       this._transition('failed');
@@ -219,6 +228,75 @@ export class CompactionManager {
         error,
       });
       return null;
+    }
+
+    // ── Score quality and auto-switch if low ─────────────────────────────────
+    qualityScore = computeQualityScore(strategyInput, strategyOutput);
+
+    emitCompactionQualityScore(this._bus, this._ctx, {
+      sessionId: this._sessionId,
+      strategy,
+      score: qualityScore.score,
+      grade: qualityScore.grade,
+      compressionRatio: qualityScore.compressionRatio,
+      retentionScore: qualityScore.retentionScore,
+      isLowQuality: qualityScore.isLowQuality,
+      description: qualityScore.description,
+    });
+
+    if (qualityScore.isLowQuality) {
+      const escalated = escalateStrategy(strategy);
+      if (escalated !== strategy) {
+        const reason = `Quality score ${qualityScore.score.toFixed(2)} below threshold ${LOW_QUALITY_THRESHOLD}; escalating from ${strategy} to ${escalated}`;
+        strategySwitchReason = reason;
+
+        logger.warn('[CompactionManager] low quality score — switching strategy', {
+          sessionId: this._sessionId,
+          fromStrategy: strategy,
+          toStrategy: escalated,
+          score: qualityScore.score,
+          grade: qualityScore.grade,
+        });
+
+        emitCompactionStrategySwitch(this._bus, this._ctx, {
+          sessionId: this._sessionId,
+          fromStrategy: strategy,
+          toStrategy: escalated,
+          reason,
+          score: qualityScore.score,
+        });
+
+        // Force state to the escalated strategy state, bypassing normal transition
+        // validation. This is intentional: quality-correction reruns are not modelled
+        // in the standard state machine, and forcing the state allows _runStrategy to
+        // emit the correct strategy event while keeping lifecycle state consistent.
+        this._state = strategyToState(escalated);
+
+        const escalatedInput: StrategyInput = { ...strategyInput, strategy: escalated };
+        try {
+          const escalatedOutput = await this._runStrategy(escalated, escalatedInput);
+          // Re-score the escalated result
+          qualityScore = computeQualityScore(escalatedInput, escalatedOutput);
+          strategyOutput = escalatedOutput;
+          strategy = escalated;
+        } catch (err) {
+          const error = err instanceof Error ? err.message : String(err);
+          logger.warn('[CompactionManager] escalated strategy also failed; using original output', {
+            sessionId: this._sessionId,
+            strategy: escalated,
+            error,
+          });
+          // Fall back to the original output — restore to the original strategy state
+          this._state = strategyToState(strategy);
+        }
+      } else {
+        // Already at ceiling strategy (collapse or reactive) — log but continue
+        logger.debug('[CompactionManager] low quality at ceiling strategy; no escalation possible', {
+          sessionId: this._sessionId,
+          strategy,
+          score: qualityScore.score,
+        });
+      }
     }
 
     // ── Transition: <strategy> → boundary_commit ─────────────────────────────
@@ -280,6 +358,8 @@ export class CompactionManager {
       commit,
       messages: strategyOutput.messages,
       warnings: strategyOutput.warnings,
+      qualityScore,
+      strategySwitchReason,
     };
   }
 
