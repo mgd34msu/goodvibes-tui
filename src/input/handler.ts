@@ -1676,6 +1676,16 @@ export class InputHandler {
           this.bus.emit('clear:screen');
           continue;
         }
+        // Close active panel
+        if (kb.matches('panel-close', token)) {
+          const pm = getPanelManager();
+          const active = pm.getActivePanel();
+          if (active) {
+            pm.close(active.id);
+            this.bus.emit('render:request');
+          }
+          continue;
+        }
         // Toggle panel sidebar
         if (kb.matches('panel-picker', token)) {
           if (this.commandContext?.openPanelPicker) {

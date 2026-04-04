@@ -33,6 +33,7 @@ export type KeyAction =
   | 'clear-cancel'
   | 'screen-clear'
   | 'panel-picker'
+  | 'panel-close'
   | 'panel-tab-next'
   | 'panel-tab-prev'
   | 'history-search'
@@ -56,6 +57,7 @@ export const ACTION_DESCRIPTIONS: Record<KeyAction, string> = {
   'clear-cancel':          'Clear input / cancel generation / exit (double)',
   'screen-clear':          'Repaint the screen',
   'panel-picker':          'Toggle panel sidebar',
+  'panel-close':            'Close the currently active panel',
   'panel-tab-next':        'Next panel tab',
   'panel-tab-prev':        'Previous panel tab',
   'history-search':        'Reverse input history search',
@@ -80,6 +82,7 @@ export const DEFAULT_KEYBINDINGS: Record<KeyAction, KeyCombo[]> = {
   'clear-cancel':          [{ key: 'c', ctrl: true }],
   'screen-clear':          [{ key: 'l', ctrl: true }],
   'panel-picker':          [{ key: 'p', ctrl: true }],
+  'panel-close':            [{ key: 'x', ctrl: true }],
   'panel-tab-next':        [{ key: '}', ctrl: true }],
   'panel-tab-prev':        [{ key: '~', ctrl: true }],
   // NOTE: 'history-search' and 'replay-panel' share Ctrl+R by default.

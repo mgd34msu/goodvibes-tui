@@ -221,6 +221,12 @@ export class PanelManager {
     return this._focusedPane;
   }
 
+  /** Get the currently active (focused) panel, or null if none. */
+  getActivePanel(): Panel | null {
+    const p = this._getFocusedPane();
+    return p.panels[p.activeIndex] ?? null;
+  }
+
   togglePaneFocus(): void {
     if (!this._bottomPaneVisible || this.bottomPane.panels.length === 0) return;
     this._focusedPane = this._focusedPane === 'top' ? 'bottom' : 'top';
