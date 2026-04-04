@@ -50,6 +50,25 @@ const PREFIX_WIDTH = 4; // arrow + dot + space + space
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
+/** Word-wrap text to lines of maxWidth, breaking at spaces. No leading spaces on any line. */
+function wordWrap(text: string, maxWidth: number): string[] {
+  const words = text.split(' ');
+  const result: string[] = [];
+  let line = '';
+  for (const word of words) {
+    if (line.length === 0) {
+      line = word;
+    } else if (line.length + 1 + word.length <= maxWidth) {
+      line += ' ' + word;
+    } else {
+      result.push(line);
+      line = word;
+    }
+  }
+  if (line.length > 0) result.push(line);
+  return result.length > 0 ? result : [''];
+}
+
 /** Build a Line from [text, fg, bg?] segments, one Cell per character, padded to width. */
 function buildLine(width: number, segments: Array<[string, string, string?]>): Line {
   const cells: Cell[] = [];
@@ -216,28 +235,26 @@ export class PanelListPanel extends BasePanel {
         const nameColor = isSelected ? C.selected : C.name;
         const nameStr = entry.reg.name.padEnd(NAME_COL_WIDTH, ' ').slice(0, NAME_COL_WIDTH);
         const descStartCol = PREFIX_WIDTH + NAME_COL_WIDTH + 1;
-        const descWidth = Math.max(0, width - descStartCol);
+        const descWidth = Math.max(1, width - descStartCol);
         const fullDesc = entry.reg.description;
-        const descLine1 = fullDesc.slice(0, descWidth);
+        const descLines = wordWrap(fullDesc, descWidth);
 
+        // Line 1: prefix + name + first chunk of description
         lines.push(buildLine(width, [
           [arrow,            C.selIcon, bg],
           [dot,              dotColor,  bg],
           [' ',              '',        bg],
           [nameStr + ' ',    nameColor, bg],
-          [descLine1,        C.desc,    bg],
+          [descLines[0] ?? '', C.desc,  bg],
         ]));
 
-        // Wrap remainder to line 2+, justified to description start column
-        const remainder = fullDesc.slice(descWidth);
-        if (remainder.length > 0) {
-          const indent = ' '.repeat(descStartCol);
-          for (let i = 0; i < remainder.length; i += descWidth) {
-            lines.push(buildLine(width, [
-              [indent,         '',        bg],
-              [remainder.slice(i, i + descWidth), C.desc, bg],
-            ]));
-          }
+        // Line 2+: wrapped remainder, justified to description start column
+        const indent = ' '.repeat(descStartCol);
+        for (let i = 1; i < descLines.length; i++) {
+          lines.push(buildLine(width, [
+            [indent,           '',        bg],
+            [descLines[i]!,    C.desc,    bg],
+          ]));
         }
       }
     }
