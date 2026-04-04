@@ -215,16 +215,30 @@ export class PanelListPanel extends BasePanel {
         const arrow = isSelected ? '▶' : ' ';
         const nameColor = isSelected ? C.selected : C.name;
         const nameStr = entry.reg.name.padEnd(NAME_COL_WIDTH, ' ').slice(0, NAME_COL_WIDTH);
-        const descMax = Math.max(0, width - PREFIX_WIDTH - NAME_COL_WIDTH - 1);
-        const desc = entry.reg.description.slice(0, descMax);
+        const descStartCol = PREFIX_WIDTH + NAME_COL_WIDTH + 1;
+        const descWidth = Math.max(0, width - descStartCol);
+        const fullDesc = entry.reg.description;
+        const descLine1 = fullDesc.slice(0, descWidth);
 
         lines.push(buildLine(width, [
           [arrow,            C.selIcon, bg],
           [dot,              dotColor,  bg],
           [' ',              '',        bg],
           [nameStr + ' ',    nameColor, bg],
-          [desc,             C.desc,    bg],
+          [descLine1,        C.desc,    bg],
         ]));
+
+        // Wrap remainder to line 2+, justified to description start column
+        const remainder = fullDesc.slice(descWidth);
+        if (remainder.length > 0) {
+          const indent = ' '.repeat(descStartCol);
+          for (let i = 0; i < remainder.length; i += descWidth) {
+            lines.push(buildLine(width, [
+              [indent,         '',        bg],
+              [remainder.slice(i, i + descWidth), C.desc, bg],
+            ]));
+          }
+        }
       }
     }
 
