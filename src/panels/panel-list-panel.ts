@@ -45,8 +45,8 @@ const CATEGORY_LABELS: Record<PanelCategory, string> = {
 };
 
 // ── Layout constants ──────────────────────────────────────────────────────────
-const NAME_COL_WIDTH = 14;
-const ICON_COL_WIDTH = 2;
+const NAME_COL_WIDTH = 22;
+const PREFIX_WIDTH = 4; // arrow + dot + space + space
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -212,16 +212,16 @@ export class PanelListPanel extends BasePanel {
         const dotColor = isOpen ? C.openDot : C.closedDot;
         const arrow = isSelected ? '▶' : ' ';
         const nameColor = isSelected ? C.selected : C.name;
-        const descMax = Math.max(0, width - 2 - 1 - 1 - ICON_COL_WIDTH - NAME_COL_WIDTH - 3);
+        const nameStr = entry.reg.name.padEnd(NAME_COL_WIDTH, ' ').slice(0, NAME_COL_WIDTH);
+        const descMax = Math.max(0, width - PREFIX_WIDTH - NAME_COL_WIDTH - 1);
         const desc = entry.reg.description.slice(0, descMax);
-        const iconStr = entry.reg.icon.padEnd(ICON_COL_WIDTH - 1, ' ');
 
         lines.push(buildLine(width, [
-          [arrow,              C.selIcon, bg],
-          [dot + ' ',         dotColor,  bg],
-          [iconStr + ' ',     C.icon,    bg],
-          [entry.reg.name.padEnd(NAME_COL_WIDTH, ' ').slice(0, NAME_COL_WIDTH) + ' ', nameColor, bg],
-          [desc,              C.desc,    bg],
+          [arrow,            C.selIcon, bg],
+          [dot,              dotColor,  bg],
+          [' ',              '',        bg],
+          [nameStr + ' ',    nameColor, bg],
+          [desc,             C.desc,    bg],
         ]));
       }
     }
