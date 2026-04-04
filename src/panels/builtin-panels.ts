@@ -31,6 +31,7 @@ import { EvalPanel, EvalRegistry } from './eval-panel.ts';
 import { MemoryPanel } from './memory-panel.ts';
 import type { MemoryRegistry } from '../state/memory-store.ts';
 import { SystemMessagesPanel } from './system-messages-panel.ts';
+import { PanelListPanel } from './panel-list-panel.ts';
 
 /**
  * Register all built-in panel types with the given PanelManager.
@@ -316,6 +317,15 @@ export function registerBuiltinPanels(manager: PanelManager, deps: BuiltinPanelD
       factory: () => new MemoryPanel(memoryRegistry),
     });
   }
+
+  manager.registerType({
+    id: 'panel-list',
+    name: 'Panel List',
+    icon: 'L',
+    category: 'session',
+    description: 'Browse all registered panels grouped by category, with open/closed status and Enter-to-open',
+    factory: () => new PanelListPanel(),
+  });
 
   manager.registerType({
     id: 'system-messages',
