@@ -50,16 +50,18 @@ const PREFIX_WIDTH = 4; // arrow + dot + space + space
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-/** Build a Line from [text, fg, bg?] segments, padding to width. */
+/** Build a Line from [text, fg, bg?] segments, one Cell per character, padded to width. */
 function buildLine(width: number, segments: Array<[string, string, string?]>): Line {
   const cells: Cell[] = [];
-  let used = 0;
   for (const [text, fg, bg] of segments) {
-    cells.push(createStyledCell(text, { fg, bg: bg ?? '' }));
-    used += text.length;
+    const style = { fg, bg: bg ?? '' };
+    for (const ch of text) {
+      if (cells.length >= width) break;
+      cells.push(createStyledCell(ch, style));
+    }
   }
-  if (used < width) {
-    cells.push(createStyledCell(' '.repeat(width - used), { fg: '' }));
+  while (cells.length < width) {
+    cells.push(createStyledCell(' ', { fg: '' }));
   }
   return cells;
 }
