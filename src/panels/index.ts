@@ -24,4 +24,5 @@ export { registerBuiltinPanels } from './builtin-panels.ts';
 export type { BuiltinPanelDeps } from './builtin-panels.ts';
 export { ForensicsPanel } from './forensics-panel.ts';
 export { SystemMessagesPanel } from './system-messages-panel.ts';
+export { PanelListPanel } from './panel-list-panel.ts';
 export type { SystemMessageEntry, SystemMessagePriority } from './system-messages-panel.ts';
