@@ -1545,6 +1545,20 @@ export class InputHandler {
             this.cyclePanelTab('prev');
             continue;
           }
+          // Close active panel
+          if (kb.matches('panel-close', token)) {
+            const pm = getPanelManager();
+            const active = pm.getActivePanel();
+            if (active) {
+              pm.close(active.id);
+              // If no panels left, return focus to conversation
+              if (pm.getAllOpen().length === 0) {
+                this.panelFocused = false;
+              }
+            }
+            this.bus.emit('render:request');
+            continue;
+          }
           // Route to active panel's handleInput
           const pm = getPanelManager();
           const activePanel = pm.getActive();
