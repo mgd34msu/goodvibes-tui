@@ -1545,13 +1545,20 @@ export class InputHandler {
             this.cyclePanelTab('prev');
             continue;
           }
+          // Close all panels
+          if (kb.matches('panel-close-all', token)) {
+            const pm = getPanelManager();
+            for (const p of pm.getAllOpen()) { pm.close(p.id); }
+            this.panelFocused = false;
+            this.bus.emit('render:request');
+            continue;
+          }
           // Close active panel
           if (kb.matches('panel-close', token)) {
             const pm = getPanelManager();
             const active = pm.getActivePanel();
             if (active) {
               pm.close(active.id);
-              // If no panels left, return focus to conversation
               if (pm.getAllOpen().length === 0) {
                 this.panelFocused = false;
               }
@@ -1700,6 +1707,14 @@ export class InputHandler {
         // Ctrl+L: clear screen (full repaint)
         if (kb.matches('screen-clear', token)) {
           this.bus.emit('clear:screen');
+          continue;
+        }
+        // Close all panels
+        if (kb.matches('panel-close-all', token)) {
+          const pm = getPanelManager();
+          for (const p of pm.getAllOpen()) { pm.close(p.id); }
+          pm.hide();
+          this.bus.emit('render:request');
           continue;
         }
         // Close active panel
