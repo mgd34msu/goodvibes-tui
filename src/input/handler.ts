@@ -1570,12 +1570,24 @@ export class InputHandler {
             }
           }
         }
-        // , and . cycle panel tabs when panel is focused
-        if (token.type === 'text' && (token.value === ',' || token.value === '.')) {
-          this.cyclePanelTab(token.value === '.' ? 'next' : 'prev');
-          this.bus.emit('render:request');
+        // Route text input to active panel (for search/filter)
+        if (token.type === 'text' && token.value) {
+          // , and . cycle panel tabs
+          if (token.value === ',' || token.value === '.') {
+            this.cyclePanelTab(token.value === '.' ? 'next' : 'prev');
+            this.bus.emit('render:request');
+            continue;
+          }
+          // Send each character to the panel's handleInput
+          const pm = getPanelManager();
+          const activePanel = pm.getActive();
+          if (activePanel?.handleInput) {
+            for (const ch of token.value) {
+              activePanel.handleInput(ch);
+            }
+            this.bus.emit('render:request');
+          }
         }
-        // Consume all tokens (text and unhandled keys) while panel is focused
         continue;
       }
 
