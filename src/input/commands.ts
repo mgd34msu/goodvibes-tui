@@ -1785,9 +1785,12 @@ export function registerBuiltinCommands(registry: CommandRegistry): void {
       const pm = getPanelManager();
       const sub = args[0]?.toLowerCase() ?? '';
       if (!sub || sub === 'toggle') {
-        if (ctx.openPanelPicker) {
-          ctx.openPanelPicker();
-        } else {
+        // Default: open the panel list
+        try {
+          pm.open('panel-list');
+          pm.show();
+          ctx.renderRequest();
+        } catch {
           pm.toggle();
           ctx.renderRequest();
         }
