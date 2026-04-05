@@ -21,11 +21,11 @@ import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { logger } from '../utils/logger.ts';
 import { getContextWindowForModel, getPricingForModel } from './model-limits.ts';
-import { providerRegistry } from './registry.ts';
+import { getProviderRegistry } from './registry.ts';
 import type { FavoritesData } from './favorites.ts';
 import { loadFavorites } from './favorites.ts';
 import { getTopBenchmarkModelIds, getBenchmarks, compositeScore, onBenchmarksRefreshed } from './model-benchmarks.ts';
-import { config } from '../config/index.ts';
+import { getConfiguredApiKeys } from '../config/index.ts';
 
 // ---------------------------------------------------------------------------
 // Provider types
@@ -168,6 +168,8 @@ interface ModelsDevProvider {
 }
 
 type ModelsDevResponse = Record<string, ModelsDevProvider>;
+type SyntheticCanonicalModel = import('./synthetic.ts').CanonicalModel;
+type SyntheticBackend = import('./synthetic.ts').SyntheticBackend;
 
 // ---------------------------------------------------------------------------
 // Provider categorization helpers
@@ -262,7 +264,7 @@ function transformModelsDevResponse(json: ModelsDevResponse): CatalogModel[] {
         ...(modelFamily ? { family: modelFamily } : {}),
         provider: providerName,
         providerId,
-        providerEnvVars: Array.isArray(providerData.env) ? providerData.env.filter((v: unknown) => typeof v === 'string') as string[] : [],
+        providerEnvVars: getStringArray(providerData.env),
         pricing: { input: inputCost, output: outputCost },
         tier,
         contextWindow,
@@ -357,23 +359,38 @@ export async function fetchCatalog(): Promise<CatalogModel[]> {
 let _catalogModels: CatalogModel[] = [];
 
 /** The last-computed synthetic canonical models. Set by applySyntheticCanonicalModels(). */
-let _syntheticCanonicals: import('./synthetic.ts').CanonicalModel[] = [];
+let _syntheticCanonicals: SyntheticCanonicalModel[] = [];
 
 /** O(1) index for getSyntheticModelInfoFromCatalog lookups. Rebuilt whenever _syntheticCanonicals is set. */
-let _syntheticCanonicalIndex = new Map<string, import('./synthetic.ts').CanonicalModel>();
+let _syntheticCanonicalIndex = new Map<string, SyntheticCanonicalModel>();
+
+/** Optional test seam for capturing synthetic canonical-model updates without module mocking. */
+let _applySyntheticCanonicalSink:
+  | ((models: SyntheticCanonicalModel[]) => void | Promise<void>)
+  | null = null;
 
 /** In-memory pricing catalog (replaceable in tests) */
 let _pricingCatalog: PricingCatalog | null = null;
 
-function getPricingCatalog(): PricingCatalog {
+function getOrCreatePricingCatalog(): PricingCatalog {
   if (!_pricingCatalog) {
     _pricingCatalog = { fetchedAt: Date.now(), models: _catalogModels };
   }
   return _pricingCatalog;
 }
 
+/**
+ * Override the synthetic canonical sink for tests.
+ * @internal
+ */
+export function _setSyntheticCanonicalSinkForTest(
+  sink: ((models: SyntheticCanonicalModel[]) => void | Promise<void>) | null,
+): void {
+  _applySyntheticCanonicalSink = sink;
+}
+
 // ---------------------------------------------------------------------------
-// buildCanonicalModels — convert CatalogModel[] → CanonicalModel[]
+// buildSyntheticCanonicalModels — convert CatalogModel[] → CanonicalModel[]
 // ---------------------------------------------------------------------------
 
 /**
@@ -417,6 +434,18 @@ function nameToSlug(name: string): string {
   return name.toLowerCase().replace(/[^a-z0-9]/g, '');
 }
 
+function getStringArray(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value.filter((entry): entry is string => typeof entry === 'string');
+}
+
+function hasConfiguredEnvVar(envVars: readonly string[]): boolean {
+  return envVars.some((envVar) => {
+    const value = process.env[envVar];
+    return typeof value === 'string' && value.length > 0;
+  });
+}
+
 /**
  * Normalize a model name for broad-family sub-grouping by stripping only truly
  * redundant deployment suffixes and date stamps. Version numbers, size indicators,
@@ -430,7 +459,7 @@ function nameToSlug(name: string): string {
  *   "GPT-5.2"          → "gpt52"         (preserved — different from GPT-5.4)
  *   "GPT-5.4 Mini"     → "gpt54mini"     (mini preserved — different tier)
  *   "Llama 3.2 1B"     → "llama3210b"    (1B preserved — different size than 70B)
- *   "DeepSeek-V3-0324" → "deepseekv3"    (date stripped, v3 preserved)
+ *   "DeepSeek-V3-0324" → "deepseekv3"    (date stripped, version preserved)
  *
  * Steps:
  *   1. Lowercase
@@ -459,9 +488,9 @@ function normalizeModelName(name: string): string {
  * Pure synchronous computation: build CanonicalModel[] from CatalogModel[].
  * Contains all grouping logic. Does NOT import synthetic.ts — no async, no side effects.
  */
-function buildSyntheticCanonicals(
+function buildSyntheticCanonicalModels(
   models: CatalogModel[],
-): { id: string; tier: string; backends: import('./synthetic.ts').SyntheticBackend[]; backendCount: number; keyedBackendCount: number }[] {
+): { id: string; tier: string; backends: SyntheticBackend[]; backendCount: number; keyedBackendCount: number }[] {
   // Step 1: Group models by family
   const byFamily = new Map<string, CatalogModel[]>();
   for (const m of models) {
@@ -519,9 +548,9 @@ function buildSyntheticCanonicals(
   }
 
   // Step 3: Build canonical entries, filtering to multi-provider groups.
-  const canonical: { id: string; tier: string; backends: import('./synthetic.ts').SyntheticBackend[]; backendCount: number; keyedBackendCount: number }[] = [];
+  const canonical: { id: string; tier: string; backends: SyntheticBackend[]; backendCount: number; keyedBackendCount: number }[] = [];
   for (const [canonicalId, group] of canonicalGroups) {
-    const allBackends: import('./synthetic.ts').SyntheticBackend[] = group.map((m) => ({
+    const allBackends: SyntheticBackend[] = group.map((m) => ({
       providerName: m.providerId,
       modelId: m.id,
       registryKey: `${m.providerId}:${m.id}`,
@@ -534,10 +563,7 @@ function buildSyntheticCanonicals(
     const keyedBackends = allBackends.filter((b) => {
       const vars = b.envVars;
       if (!vars || vars.length === 0) return true;
-      return vars.some(v => {
-        const val = process.env[v];
-        return typeof val === 'string' && val.length > 0;
-      });
+      return hasConfiguredEnvVar(vars);
     });
     const distinctProviders = new Set(keyedBackends.map(b => b.providerName)).size;
     if (distinctProviders < 2) continue;
@@ -557,13 +583,15 @@ function buildSyntheticCanonicals(
 
 async function applySyntheticCanonicalModels(models: CatalogModel[]): Promise<void> {
   try {
-    const syntheticModule = await import('./synthetic.ts');
-    const { setSyntheticCanonicalModels } = syntheticModule;
-
-    const canonical = buildSyntheticCanonicals(models);
-    _syntheticCanonicals = canonical as import('./synthetic.ts').CanonicalModel[];
+    const canonical = buildSyntheticCanonicalModels(models);
+    _syntheticCanonicals = canonical as SyntheticCanonicalModel[];
     _syntheticCanonicalIndex = new Map(_syntheticCanonicals.map(c => [c.id, c]));
-    setSyntheticCanonicalModels(canonical as import('./synthetic.ts').CanonicalModel[]);
+    if (_applySyntheticCanonicalSink) {
+      await _applySyntheticCanonicalSink(canonical as SyntheticCanonicalModel[]);
+    } else {
+      const syntheticModule = await import('./synthetic.ts');
+      syntheticModule.setSyntheticCanonicalModels(canonical as SyntheticCanonicalModel[]);
+    }
     logger.debug('[model-catalog] Synthetic canonicals built', {
       count: canonical.length,
       sampleIds: canonical.slice(0, 20).map(c => c.id),
@@ -622,10 +650,10 @@ export function initCatalog(): void {
   const cached = loadCatalogCache();
   if (cached) {
     _catalogModels = cached.models;
-    _pricingCatalog = null; // invalidate so getPricingCatalog() re-reads
+    _pricingCatalog = null; // invalidate so getOrCreatePricingCatalog() re-reads
     // Synchronously build synthetic canonicals so getSyntheticModelInfoFromCatalog() is
     // available immediately (no async, no dynamic import needed at this point).
-    _syntheticCanonicals = buildSyntheticCanonicals(cached.models) as import('./synthetic.ts').CanonicalModel[];
+    _syntheticCanonicals = buildSyntheticCanonicalModels(cached.models) as SyntheticCanonicalModel[];
     _syntheticCanonicalIndex = new Map(_syntheticCanonicals.map(c => [c.id, c]));
     // Also inject into SyntheticProvider runtime (async — fire and forget)
     applySyntheticCanonicalModels(cached.models).catch((err) => {
@@ -663,7 +691,7 @@ export function getCostFromCatalog(
     return { input: 0, output: 0 };
   }
 
-  const catalog = getPricingCatalog();
+  const catalog = getOrCreatePricingCatalog();
 
   // 2. Exact match
   const exact = catalog.models.find(m => m.id === modelId);
@@ -717,9 +745,6 @@ export function _resetForTest(): void {
   _catalogModels = [];
 }
 
-/** @internal Alias for _resetForTest — kept for backwards compatibility. */
-export const _resetCatalog = _resetForTest;
-
 /**
  * Exposed for unit tests — wraps the private nameToSlug function.
  * @internal
@@ -749,7 +774,7 @@ export async function _applySyntheticCanonicalModelsForTest(models: CatalogModel
  * @internal
  */
 export function _getPricingCatalog(): PricingCatalog {
-  return getPricingCatalog();
+  return getOrCreatePricingCatalog();
 }
 
 // ---------------------------------------------------------------------------
@@ -841,10 +866,7 @@ export function hasKeyForProvider(provider: CatalogProvider): boolean {
     return true;
   }
   // Any non-empty env var satisfies the requirement
-  return provider.envVars.some(v => {
-    const val = process.env[v];
-    return typeof val === 'string' && val.length > 0;
-  });
+  return hasConfiguredEnvVar(provider.envVars);
 }
 
 // ---------------------------------------------------------------------------
@@ -896,7 +918,7 @@ class RegistryBackedCatalog implements ModelCatalog {
   private _entriesCacheVersion = -1;
 
   private getEntries(): CatalogModelEntry[] {
-    const models = providerRegistry.listModels();
+    const models = getProviderRegistry().listModels();
     if (this._entriesCache !== null && models.length === this._entriesCacheVersion) {
       return this._entriesCache;
     }
@@ -990,7 +1012,7 @@ export function getConfiguredProviderIds(): string[] {
   // Add new entries here when a config provider name diverges from its catalog ID.
   const CONFIG_TO_CATALOG: Record<string, string> = { gemini: 'google', inceptionlabs: 'inception' };
   try {
-    const configApiKeys = config.apiKeys;
+    const configApiKeys = getConfiguredApiKeys();
     for (const [configName, key] of Object.entries(configApiKeys)) {
       if (key) {
         configured.add(CONFIG_TO_CATALOG[configName] ?? configName);
@@ -1182,36 +1204,7 @@ export interface MinimalModelDefinition {
   reasoningEffort?: string[];
 }
 
-/**
- * Convert the fetched catalog models into MinimalModelDefinition[] for use by registry.
- *
- * Returns models from the live network-fetched (or cached) catalog.
- * Returns an empty array if initCatalog() has not been called or the catalog
- * is empty (no cache and network fetch not yet complete).
- *
- * @public Consumed by registry.ts to populate the model registry.
- */
-/**
- * Convert the synthetic canonical models into MinimalModelDefinition[] for use by registry.
- *
- * Returns models with provider='synthetic' and canonical slug IDs.
- * Returns an empty array if initCatalog() has not been called or no multi-provider
- * groups were found.
- *
- * @public Consumed by registry.ts to populate synthetic models in the model registry.
- */
-/**
- * Returns the set of all raw backend model IDs from the synthetic canonical models.
- * Used by getModelRegistry() to exclude catalog models that are already represented
- * as synthetic canonical backends, preventing duplicate entries in the picker.
- */
-/**
- * Synchronous lookup for synthetic canonical model info from the catalog.
- * Available immediately after initCatalog() (no async required).
- *
- * @returns backendCount, keyedBackendCount, and tier for the given modelId,
- *          or null if the model is not a known synthetic canonical.
- */
+/** A synthetic canonical model summary used for runtime lookups. */
 export interface SyntheticModelInfo {
   backendCount: number;
   keyedBackendCount: number;
@@ -1265,6 +1258,15 @@ export function getSyntheticBackendModelIds(): Set<string> {
   return new Set(_syntheticCanonicals.flatMap(c => c.backends.map(b => b.modelId)));
 }
 
+/**
+ * Convert the synthetic canonical models into MinimalModelDefinition[] for use by registry.
+ *
+ * Returns models with provider='synthetic' and canonical slug IDs.
+ * Returns an empty array if initCatalog() has not been called or no multi-provider
+ * groups were found.
+ *
+ * @public Consumed by registry.ts to populate synthetic models in the model registry.
+ */
 export function getSyntheticModelDefinitions(): MinimalModelDefinition[] {
   const defs = _syntheticCanonicals.map((c): MinimalModelDefinition => {
     // Use the backend with the largest context window as representative
@@ -1304,6 +1306,15 @@ export function getSyntheticModelDefinitions(): MinimalModelDefinition[] {
   return defs;
 }
 
+/**
+ * Convert the fetched catalog models into MinimalModelDefinition[] for use by registry.
+ *
+ * Returns models from the live network-fetched (or cached) catalog.
+ * Returns an empty array if initCatalog() has not been called or the catalog
+ * is empty (no cache and network fetch not yet complete).
+ *
+ * @public Consumed by registry.ts to populate the model registry.
+ */
 export function getCatalogModelDefinitions(): MinimalModelDefinition[] {
   return _catalogModels.map((m): MinimalModelDefinition => {
     // Derive capability defaults from provider name and tier

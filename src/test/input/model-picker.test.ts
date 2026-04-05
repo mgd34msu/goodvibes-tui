@@ -392,8 +392,8 @@ describe('ModelPickerModal', () => {
       expect(picker.categoryFilter).toBe('all');
     });
 
-    test('open() is an alias for openAllModels', () => {
-      picker.open(ALL_MODELS, 'free-2');
+    test('openAllModels() activates the picker and selects the current model', () => {
+      picker.openAllModels(ALL_MODELS, 'free-2');
       expect(picker.active).toBe(true);
       expect(picker.selectedIndex).toBe(1);
     });

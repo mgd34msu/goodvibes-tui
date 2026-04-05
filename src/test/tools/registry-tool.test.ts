@@ -34,14 +34,38 @@ function makeTool(name: string, description = `Mock tool: ${name}`): Tool {
   };
 }
 
-async function run(
+type RegistryToolParsedResult = Omit<Awaited<ReturnType<ReturnType<typeof createRegistryTool>['execute']>>, 'callId'> & {
+  parsed?: unknown;
+};
+
+async function run<TParsed>(
   tool: ReturnType<typeof createRegistryTool>,
   args: Record<string, unknown>,
-): Promise<Omit<Awaited<ReturnType<typeof tool.execute>>, 'callId'> & { parsed?: any }> {
+): Promise<Omit<RegistryToolParsedResult, 'parsed'> & { parsed: TParsed }> {
   const result = await tool.execute(args);
-  if (!result.success) return result;
-  return { ...result, parsed: JSON.parse(result.output!) };
+  if (!result.success) {
+    throw new Error(result.error ?? 'registry tool execution failed');
+  }
+  return { ...result, parsed: JSON.parse(result.output!) as TParsed };
 }
+
+type RegistryEntry = {
+  name: string;
+  type: string;
+  description: string;
+  path: string;
+};
+
+type SearchModeOutput = { count: number; results: RegistryEntry[] };
+type RecommendModeOutput = { scope: string; results: RegistryEntry[] };
+type DependencyModeOutput = { depends_on: string[]; includes: string[] };
+type ContentModeOutput = {
+  content: string;
+  metadata: {
+    name: string;
+    description?: string;
+  };
+};
 
 // ---------------------------------------------------------------------------
 // Fixture setup
@@ -97,49 +121,49 @@ afterEach(() => {
 
 describe('search mode', () => {
   test('finds skill by name', async () => {
-    const res = await run(tool, { mode: 'search', query: 'code-review', type: 'skills' });
+    const res = await run<SearchModeOutput>(tool, { mode: 'search', query: 'code-review', type: 'skills' });
     expect(res.parsed.results).toHaveLength(1);
-    expect(res.parsed.results[0].name).toBe('code-review');
-    expect(res.parsed.results[0].type).toBe('skill');
+    expect(res.parsed.results[0]?.name).toBe('code-review');
+    expect(res.parsed.results[0]?.type).toBe('skill');
   });
 
   test('finds agent by name', async () => {
-    const res = await run(tool, { mode: 'search', query: 'researcher', type: 'agents' });
+    const res = await run<SearchModeOutput>(tool, { mode: 'search', query: 'researcher', type: 'agents' });
     expect(res.parsed.results).toHaveLength(1);
-    expect(res.parsed.results[0].name).toBe('researcher');
-    expect(res.parsed.results[0].type).toBe('agent');
+    expect(res.parsed.results[0]?.name).toBe('researcher');
+    expect(res.parsed.results[0]?.type).toBe('agent');
   });
 
   test('finds tool by name from ToolRegistry', async () => {
-    const res = await run(tool, { mode: 'search', query: 'shell-exec', type: 'tools' });
+    const res = await run<SearchModeOutput>(tool, { mode: 'search', query: 'shell-exec', type: 'tools' });
     expect(res.parsed.results).toHaveLength(1);
-    expect(res.parsed.results[0].name).toBe('shell-exec');
-    expect(res.parsed.results[0].type).toBe('tool');
+    expect(res.parsed.results[0]?.name).toBe('shell-exec');
+    expect(res.parsed.results[0]?.type).toBe('tool');
   });
 
   test('type filter "skills" excludes agents and tools', async () => {
-    const res = await run(tool, { mode: 'search', type: 'skills' });
+    const res = await run<SearchModeOutput>(tool, { mode: 'search', type: 'skills' });
     for (const item of res.parsed.results) {
       expect(item.type).toBe('skill');
     }
   });
 
   test('type filter "agents" excludes skills and tools', async () => {
-    const res = await run(tool, { mode: 'search', type: 'agents' });
+    const res = await run<SearchModeOutput>(tool, { mode: 'search', type: 'agents' });
     for (const item of res.parsed.results) {
       expect(item.type).toBe('agent');
     }
   });
 
   test('type filter "tools" excludes skills and agents', async () => {
-    const res = await run(tool, { mode: 'search', type: 'tools' });
+    const res = await run<SearchModeOutput>(tool, { mode: 'search', type: 'tools' });
     for (const item of res.parsed.results) {
       expect(item.type).toBe('tool');
     }
   });
 
   test('type "all" (default) returns skills, agents, and tools', async () => {
-    const res = await run(tool, { mode: 'search' });
+    const res = await run<SearchModeOutput>(tool, { mode: 'search' });
     const types = new Set(res.parsed.results.map((r: { type: string }) => r.type));
     expect(types.has('skill')).toBe(true);
     expect(types.has('agent')).toBe(true);
@@ -147,15 +171,15 @@ describe('search mode', () => {
   });
 
   test('returns empty results for no-match query', async () => {
-    const res = await run(tool, { mode: 'search', query: 'zzz-no-match-xyz' });
+    const res = await run<SearchModeOutput>(tool, { mode: 'search', query: 'zzz-no-match-xyz' });
     expect(res.parsed.count).toBe(0);
     expect(res.parsed.results).toHaveLength(0);
   });
 
   test('search includes description in match target', async () => {
-    const res = await run(tool, { mode: 'search', query: 'gathers information', type: 'agents' });
+    const res = await run<SearchModeOutput>(tool, { mode: 'search', query: 'gathers information', type: 'agents' });
     expect(res.parsed.results.length).toBeGreaterThan(0);
-    expect(res.parsed.results[0].name).toBe('researcher');
+    expect(res.parsed.results[0]?.name).toBe('researcher');
   });
 });
 
@@ -165,20 +189,20 @@ describe('search mode', () => {
 
 describe('recommend mode', () => {
   test('returns all skills when no task given', async () => {
-    const res = await run(tool, { mode: 'recommend' });
+    const res = await run<RecommendModeOutput>(tool, { mode: 'recommend' });
     expect(res.parsed.scope).toBe('skills');
     expect(res.parsed.results.length).toBeGreaterThanOrEqual(2);
   });
 
   test('returns tools when scope=tools', async () => {
-    const res = await run(tool, { mode: 'recommend', scope: 'tools' });
+    const res = await run<RecommendModeOutput>(tool, { mode: 'recommend', scope: 'tools' });
     for (const item of res.parsed.results) {
       expect(item.type).toBe('tool');
     }
   });
 
   test('sorts results by keyword relevance to task', async () => {
-    const res = await run(tool, { mode: 'recommend', task: 'review code quality', scope: 'skills' });
+    const res = await run<RecommendModeOutput>(tool, { mode: 'recommend', task: 'review code quality', scope: 'skills' });
     // code-review has "review" and "code" in name+description so should rank before test-driven
     // Note: global ~/.goodvibes/tui/skills may also appear; we verify relative ordering of fixtures
     const names = res.parsed.results.map((r: { name: string }) => r.name);
@@ -192,7 +216,7 @@ describe('recommend mode', () => {
   });
 
   test('result items have name, type, description, path fields', async () => {
-    const res = await run(tool, { mode: 'recommend' });
+    const res = await run<RecommendModeOutput>(tool, { mode: 'recommend' });
     for (const item of res.parsed.results) {
       expect(typeof item.name).toBe('string');
       expect(typeof item.type).toBe('string');
@@ -208,18 +232,18 @@ describe('recommend mode', () => {
 
 describe('dependencies mode', () => {
   test('reads depends_on from frontmatter', async () => {
-    const res = await run(tool, { mode: 'dependencies', skillName: 'test-driven' });
+    const res = await run<DependencyModeOutput>(tool, { mode: 'dependencies', skillName: 'test-driven' });
     expect(res.parsed.depends_on).toContain('code-review');
     expect(res.parsed.depends_on).toContain('some-other-skill');
   });
 
   test('returns empty depends_on for skill with no dependencies', async () => {
-    const res = await run(tool, { mode: 'dependencies', skillName: 'code-review' });
+    const res = await run<DependencyModeOutput>(tool, { mode: 'dependencies', skillName: 'code-review' });
     expect(res.parsed.depends_on).toEqual([]);
   });
 
   test('detects @ include directives in body', async () => {
-    const res = await run(tool, { mode: 'dependencies', skillName: 'test-driven' });
+    const res = await run<DependencyModeOutput>(tool, { mode: 'dependencies', skillName: 'test-driven' });
     expect(res.parsed.includes).toContain('some-include');
   });
 
@@ -243,7 +267,7 @@ describe('dependencies mode', () => {
 describe('content mode', () => {
   test('returns full content and metadata for skill file', async () => {
     const filePath = join(tmpDir, '.goodvibes', 'skills', 'code-review.md');
-    const res = await run(tool, { mode: 'content', path: filePath });
+    const res = await run<ContentModeOutput>(tool, { mode: 'content', path: filePath });
     expect(res.parsed.content).toContain('Body content here');
     expect(res.parsed.metadata.name).toBe('code-review');
     expect(res.parsed.metadata.description).toBe('Automated code review workflow');
@@ -251,7 +275,7 @@ describe('content mode', () => {
 
   test('returns full content and metadata for agent file', async () => {
     const filePath = join(tmpDir, '.goodvibes', 'agents', 'researcher.md');
-    const res = await run(tool, { mode: 'content', path: filePath });
+    const res = await run<ContentModeOutput>(tool, { mode: 'content', path: filePath });
     expect(res.parsed.content).toContain('Agent body');
     expect(res.parsed.metadata.name).toBe('researcher');
   });

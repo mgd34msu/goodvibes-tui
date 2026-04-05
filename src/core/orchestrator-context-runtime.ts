@@ -1,0 +1,358 @@
+import type { ConversationManager } from './conversation.ts';
+import type { ModelDefinition } from '../providers/registry.ts';
+import { providerRegistry } from '../providers/registry.ts';
+import { configManager } from '../config/index.ts';
+import { logger } from '../utils/logger.ts';
+import { getCatalog } from '../providers/model-catalog.ts';
+import { estimateConversationTokens, COMPACTION_BUFFER_TOKENS, SMALL_WINDOW_THRESHOLD, compactSmallWindow, shouldAutoCompact } from './context-compaction.ts';
+import type { CompactionContext } from './context-compaction.ts';
+import { sessionMemoryStore } from './session-memory.ts';
+import { sessionLineageTracker } from './session-lineage.ts';
+import { AgentManager } from '../tools/agent/index.ts';
+import { WrfcController } from '../agents/wrfc-controller.ts';
+import { planManager } from './plan-manager-instance.ts';
+import type { RuntimeEventBus } from '../runtime/events/index.ts';
+import { emitOpsContextWarning } from '../runtime/emitters/index.ts';
+import { getContextWindowForModel } from '../providers/model-limits.ts';
+import type { HookEvent, HookResult } from '../hooks/types.ts';
+
+type HookDispatcherLike = {
+  fire(event: HookEvent): Promise<HookResult>;
+};
+
+type EmitterContextFactory = (turnId: string) => import('../runtime/emitters/index.ts').EmitterContext;
+
+export type PreflightDeps = {
+  conversation: ConversationManager;
+  requestRender: () => void;
+  hookDispatcher: HookDispatcherLike | null;
+  sessionId: string;
+  runtimeBus: RuntimeEventBus | null;
+  emitterContext: EmitterContextFactory;
+  isCompacting: boolean;
+  setIsCompacting: (value: boolean) => void;
+};
+
+export async function checkContextWindowPreflight(
+  deps: PreflightDeps,
+  turnId: string,
+  model: ModelDefinition,
+): Promise<'ok' | 'compacted' | 'error'> {
+  const catalog = getCatalog();
+  const catalogModel = catalog.getModel(model.id);
+  const contextWindow = catalogModel?.context ?? getContextWindowForModel(model);
+
+  if (contextWindow <= 0) return 'ok';
+
+  const messages = deps.conversation.getMessagesForLLM();
+  const estimatedTokens = estimateConversationTokens(messages);
+  if (estimatedTokens <= contextWindow) return 'ok';
+
+  const threshold = configManager.get('behavior.autoCompactThreshold') as number;
+  const autoCompactEnabled = threshold > 0;
+
+  if (autoCompactEnabled && !deps.isCompacting) {
+    logger.info('Orchestrator: context window pre-flight - auto-compacting before chat call', {
+      modelId: model.id,
+      estimatedTokens,
+      contextWindow,
+    });
+
+    deps.setIsCompacting(true);
+    deps.conversation.addSystemMessage(
+      `Context pre-check: request (~${Math.round(estimatedTokens / 1000)}K tokens) exceeds ${model.displayName} context window (${Math.round(contextWindow / 1000)}K). Auto-compacting...`
+    );
+    deps.requestRender();
+
+    if (deps.hookDispatcher) {
+      const preResult = await deps.hookDispatcher.fire({
+        path: 'Pre:compact:preflight',
+        phase: 'Pre',
+        category: 'compact',
+        specific: 'preflight',
+        sessionId: deps.sessionId,
+        timestamp: Date.now(),
+        payload: { trigger: 'preflight', estimatedTokens, contextWindow },
+      }).catch((err: unknown): HookResult => {
+        logger.debug('Pre:compact:preflight hook error', { error: String(err) });
+        return { ok: true };
+      });
+      if (preResult.decision === 'deny') {
+        deps.setIsCompacting(false);
+        logger.info('Orchestrator: Pre:compact:preflight denied by hook - skipping preflight compact', { reason: preResult.reason });
+        return 'ok';
+      }
+    }
+
+    try {
+      const preflightCtx: CompactionContext = {
+        messages,
+        sessionMemories: sessionMemoryStore.list(),
+        lineageEntries: sessionLineageTracker.getEntries(),
+        agents: AgentManager.getInstance().list().filter(a => a.status === 'running' || a.status === 'pending'),
+        wrfcChains: WrfcController.getInstance().listChains(),
+        activePlan: planManager.getActive(),
+        compactionCount: sessionLineageTracker.getCompactionCount(),
+        contextWindow,
+        trigger: 'auto',
+        extractionModelId: model.id,
+        extractionProvider: model.provider,
+      };
+      await deps.conversation.compact(providerRegistry, model.id, 'auto', model.provider, preflightCtx);
+      deps.conversation.addSystemMessage('Context compacted. Retrying request...');
+      if (deps.hookDispatcher) {
+        deps.hookDispatcher.fire({
+          path: 'Post:compact:preflight',
+          phase: 'Post',
+          category: 'compact',
+          specific: 'preflight',
+          sessionId: deps.sessionId,
+          timestamp: Date.now(),
+          payload: { trigger: 'preflight', estimatedTokens, contextWindow },
+        }).catch((err: unknown) => { logger.debug('Post:compact:preflight hook error', { error: String(err) }); });
+      }
+    } catch (compactErr) {
+      const msg = compactErr instanceof Error ? compactErr.message : String(compactErr);
+      logger.error('Orchestrator: pre-flight compact failed', { error: msg });
+      deps.conversation.addSystemMessage(`Auto-compact failed: ${msg}.`);
+      if (deps.hookDispatcher) {
+        deps.hookDispatcher.fire({
+          path: 'Fail:compact:preflight',
+          phase: 'Fail',
+          category: 'compact',
+          specific: 'preflight',
+          sessionId: deps.sessionId,
+          timestamp: Date.now(),
+          payload: { trigger: 'preflight', estimatedTokens, contextWindow, error: msg },
+        }).catch((err: unknown) => { logger.debug('Fail:compact:preflight hook error', { error: String(err) }); });
+      }
+    } finally {
+      deps.setIsCompacting(false);
+    }
+
+    const tokensAfter = estimateConversationTokens(deps.conversation.getMessagesForLLM());
+    if (tokensAfter <= contextWindow) {
+      return 'compacted';
+    }
+
+    emitContextOverflowError(
+      deps.conversation,
+      deps.requestRender,
+      turnId,
+      estimatedTokens,
+      contextWindow,
+      model.displayName,
+      catalogModel?.tier,
+    );
+    return 'error';
+  }
+
+  emitContextOverflowError(
+    deps.conversation,
+    deps.requestRender,
+    turnId,
+    estimatedTokens,
+    contextWindow,
+    model.displayName,
+    catalogModel?.tier,
+  );
+  return 'error';
+}
+
+export function emitContextOverflowError(
+  conversation: { addSystemMessage: (message: string) => void },
+  requestRender: () => void,
+  _turnId: string,
+  estimatedTokens: number,
+  contextWindow: number,
+  modelDisplayName: string,
+  tier?: 'free' | 'paid' | 'subscription',
+): void {
+  const requestK = Math.round(estimatedTokens / 1000);
+  const contextK = Math.round(contextWindow / 1000);
+  const catalog = getCatalog();
+  const alternatives = catalog.findLargerContextModels(contextWindow, tier, 3);
+
+  let msg =
+    `Request (~${requestK}K tokens) exceeds ${modelDisplayName} context window (${contextK}K). ` +
+    `Use /compact to reduce context or switch to a larger model.`;
+
+  if (alternatives.length > 0) {
+    const altNames = alternatives.map(a => `${a.displayName} (${Math.round(a.context / 1000)}K)`).join(', ');
+    msg += ` Larger-context alternatives: ${altNames}.`;
+  }
+
+  logger.warn('Orchestrator: context window overflow', {
+    estimatedTokens,
+    contextWindow,
+    modelDisplayName,
+    alternatives: alternatives.map(a => a.id),
+  });
+
+  conversation.addSystemMessage(msg);
+  requestRender();
+}
+
+export type PostTurnContextDeps = {
+  conversation: ConversationManager;
+  runtimeBus: RuntimeEventBus | null;
+  emitterContext: EmitterContextFactory;
+  hookDispatcher: HookDispatcherLike | null;
+  sessionId: string;
+  requestRender: () => void;
+  isCompacting: boolean;
+  setIsCompacting: (value: boolean) => void;
+  lastWarningBracket: number;
+  setLastWarningBracket: (value: number) => void;
+};
+
+export async function handlePostTurnContextMaintenance(
+  deps: PostTurnContextDeps,
+  turnId: string,
+  totalTokens: number,
+): Promise<void> {
+  const currentModel = providerRegistry.getCurrentModel();
+  const maxTokens = getContextWindowForModel(currentModel);
+  if (maxTokens <= 0) return;
+
+  const usagePct = Math.round((totalTokens / maxTokens) * 100);
+  const configuredThreshold = configManager.get('behavior.autoCompactThreshold') as number;
+  const autoCompactEnabled = configuredThreshold > 0;
+  const bracket = Math.floor(usagePct / 10) * 10;
+
+  if (
+    autoCompactEnabled &&
+    shouldAutoCompact({
+      currentTokens: totalTokens,
+      contextWindow: maxTokens,
+      isCompacting: deps.isCompacting,
+    })
+  ) {
+    deps.setIsCompacting(true);
+    deps.conversation.addSystemMessage(
+      `Context usage at ${usagePct}% (${totalTokens}/${maxTokens} tokens). Auto-compacting conversation...`
+    );
+    if (deps.runtimeBus) {
+      emitOpsContextWarning(deps.runtimeBus, deps.emitterContext(turnId), {
+        usage: usagePct,
+        threshold: COMPACTION_BUFFER_TOKENS,
+      });
+    }
+    deps.requestRender();
+
+    let skipAutoCompact = false;
+    if (deps.hookDispatcher) {
+      const preAutoResult = await deps.hookDispatcher.fire({
+        path: 'Pre:compact:auto',
+        phase: 'Pre',
+        category: 'compact',
+        specific: 'auto',
+        sessionId: deps.sessionId,
+        timestamp: Date.now(),
+        payload: { trigger: 'auto', usagePct, totalTokens, maxTokens },
+      }).catch((err: unknown): HookResult => {
+        logger.debug('Pre:compact:auto hook error', { error: String(err) });
+        return { ok: true };
+      });
+      if (preAutoResult.decision === 'deny') {
+        deps.setIsCompacting(false);
+        skipAutoCompact = true;
+        logger.info('Orchestrator: Pre:compact:auto denied by hook - skipping auto-compact', { reason: preAutoResult.reason });
+      }
+    }
+
+    try {
+      const currentMsgs = deps.conversation.getMessagesForLLM();
+      const useSmallWindow = maxTokens < SMALL_WINDOW_THRESHOLD;
+
+      if (!skipAutoCompact && useSmallWindow) {
+        try {
+          const compactedMsgs = compactSmallWindow(currentMsgs, 10);
+          deps.conversation.replaceMessagesForLLM(compactedMsgs);
+          deps.setIsCompacting(false);
+          deps.setLastWarningBracket(0);
+          deps.conversation.addSystemMessage('Context auto-compacted (small window mode). Kept last 10 messages.');
+          deps.requestRender();
+        } catch (err: unknown) {
+          deps.setIsCompacting(false);
+          const msg = err instanceof Error ? err.message : String(err);
+          logger.error('Orchestrator: small-window auto-compact failed', { error: msg });
+          deps.conversation.addSystemMessage(`Auto-compact failed: ${msg}. Use /compact to retry manually.`);
+          deps.requestRender();
+        }
+      } else if (!skipAutoCompact) {
+        const compactionCtx: CompactionContext = {
+          messages: currentMsgs,
+          sessionMemories: sessionMemoryStore.list(),
+          lineageEntries: sessionLineageTracker.getEntries(),
+          agents: AgentManager.getInstance().list().filter(a => a.status === 'running' || a.status === 'pending'),
+          wrfcChains: WrfcController.getInstance().listChains(),
+          activePlan: planManager.getActive(),
+          compactionCount: sessionLineageTracker.getCompactionCount(),
+          contextWindow: maxTokens,
+          trigger: 'auto',
+          extractionModelId: currentModel.id,
+          extractionProvider: currentModel.provider,
+        };
+        void deps.conversation.compact(
+          providerRegistry,
+          currentModel.id,
+          'auto',
+          currentModel.provider,
+          compactionCtx,
+        ).then(() => {
+          deps.setIsCompacting(false);
+          deps.setLastWarningBracket(0);
+          deps.conversation.addSystemMessage('Context auto-compacted. Conversation history summarized to free context window.');
+          deps.requestRender();
+          logger.info('Orchestrator: auto-compact complete', { modelId: currentModel.id, usagePct });
+          if (deps.hookDispatcher) {
+            deps.hookDispatcher.fire({
+              path: 'Post:compact:auto',
+              phase: 'Post',
+              category: 'compact',
+              specific: 'auto',
+              sessionId: deps.sessionId,
+              timestamp: Date.now(),
+              payload: { trigger: 'auto', usagePct, totalTokens, maxTokens },
+            }).catch((err: unknown) => { logger.debug('Post:compact:auto hook error', { error: String(err) }); });
+          }
+        }).catch((err: unknown) => {
+          deps.setIsCompacting(false);
+          const msg = err instanceof Error ? err.message : String(err);
+          logger.error('Orchestrator: auto-compact failed', { error: msg });
+          deps.conversation.addSystemMessage(`Auto-compact failed: ${msg}. Use /compact to retry manually.`);
+          deps.requestRender();
+          if (deps.hookDispatcher) {
+            deps.hookDispatcher.fire({
+              path: 'Fail:compact:auto',
+              phase: 'Fail',
+              category: 'compact',
+              specific: 'auto',
+              sessionId: deps.sessionId,
+              timestamp: Date.now(),
+              payload: { trigger: 'auto', usagePct, totalTokens, maxTokens, error: msg },
+            }).catch((err: unknown) => { logger.debug('Fail:compact:auto hook error', { error: String(err) }); });
+          }
+        });
+      }
+    } catch (compactErr: unknown) {
+      deps.setIsCompacting(false);
+      logger.error('Auto-compact failed', { error: String(compactErr) });
+      deps.conversation.addSystemMessage(`[Compact] Auto-compaction failed: ${String(compactErr)}`);
+      deps.requestRender();
+    }
+  } else if (autoCompactEnabled && (maxTokens - totalTokens) <= COMPACTION_BUFFER_TOKENS * 2 && bracket > deps.lastWarningBracket) {
+    deps.setLastWarningBracket(bracket);
+    deps.conversation.addSystemMessage(
+      `Context usage at ${usagePct}% (${totalTokens}/${maxTokens} tokens). Auto-compact will trigger within ${COMPACTION_BUFFER_TOKENS.toLocaleString()} remaining tokens.`
+    );
+    if (deps.runtimeBus) {
+      emitOpsContextWarning(deps.runtimeBus, deps.emitterContext(turnId), {
+        usage: usagePct,
+        threshold: COMPACTION_BUFFER_TOKENS,
+      });
+    }
+    deps.requestRender();
+  }
+}

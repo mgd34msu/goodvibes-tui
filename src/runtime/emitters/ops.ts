@@ -9,6 +9,49 @@ import type { RuntimeEventBus } from '../events/index.ts';
 import type { EmitterContext } from './index.ts';
 import type { OpsInterventionReason } from '../events/ops.ts';
 
+/** Emit OPS_CONTEXT_WARNING when context usage crosses a warning threshold. */
+export function emitOpsContextWarning(
+  bus: RuntimeEventBus,
+  ctx: EmitterContext,
+  data: { usage: number; threshold: number }
+): void {
+  bus.emit('ops', createEventEnvelope('OPS_CONTEXT_WARNING', {
+    type: 'OPS_CONTEXT_WARNING',
+    usage: data.usage,
+    threshold: data.threshold,
+  }, ctx));
+}
+
+/** Emit OPS_CACHE_METRICS for cache hit-rate and token accounting snapshots. */
+export function emitOpsCacheMetrics(
+  bus: RuntimeEventBus,
+  ctx: EmitterContext,
+  data: {
+    hitRate: number;
+    cacheReadTokens: number;
+    cacheWriteTokens: number;
+    totalInputTokens: number;
+    turns: number;
+  }
+): void {
+  bus.emit('ops', createEventEnvelope('OPS_CACHE_METRICS', {
+    type: 'OPS_CACHE_METRICS',
+    ...data,
+  }, ctx));
+}
+
+/** Emit OPS_HELPER_USAGE for cumulative helper-model token/call snapshots. */
+export function emitOpsHelperUsage(
+  bus: RuntimeEventBus,
+  ctx: EmitterContext,
+  data: { inputTokens: number; outputTokens: number; calls: number }
+): void {
+  bus.emit('ops', createEventEnvelope('OPS_HELPER_USAGE', {
+    type: 'OPS_HELPER_USAGE',
+    ...data,
+  }, ctx));
+}
+
 // ── Generic helper ───────────────────────────────────────────────────────────
 
 type OpsAuditData = {

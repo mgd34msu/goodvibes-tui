@@ -1,5 +1,5 @@
 /**
- * Section 5.6 — /provider command handler.
+ * /provider command handler.
  *
  * Implements the Provider Optimizer panel commands:
  *

@@ -1,7 +1,7 @@
 /**
  * context-compaction.ts
  *
- * Context Compaction v2 — Hybrid compaction engine for goodvibes-tui.
+ * Context compaction engine for goodvibes-tui.
  *
  * Architecture:
  *   - Deterministic structure: fixed sections assembled in order
@@ -12,12 +12,12 @@
  *   - Post-compaction validation: sanity-checks required sections
  *   - Context-window-aware thresholds
  *
- * Public API (stable — backward compatible with v1):
+ * Public API:
  *   estimateConversationTokens(messages)   — rough token count for a message array
  *   estimateTokens(text)                   — rough token count for a string
  *   shouldAutoCompact(opts)                — check if 15k token buffer threshold is exceeded
  *   compactSmallWindow(messages, keepRecent) — simplified compaction for small context windows
- *   compactMessages(ctx)                   — v2 hybrid compaction entry point
+ *   compactMessages(ctx, registry)         — structured compaction entry point
  *   checkAndCompact(autoOpts, ctx)         — check and compact if threshold exceeded
  *   getCompactionEvents()                  — return compaction event log
  *   getLastCompactionEvent()               — return most recent compaction event
@@ -51,33 +51,7 @@ import {
 import { cacheHitTracker } from '../providers/cache-strategy.ts';
 import { cachePlanner } from '../providers/cache-planner.ts';
 
-// ---------------------------------------------------------------------------
-// Re-export CompactionEvent, CompactionResult, and CompactionContext for backward compatibility
-// ---------------------------------------------------------------------------
-
 export type { CompactionEvent, CompactionResult, CompactionContext } from './compaction-types.ts';
-
-// ---------------------------------------------------------------------------
-// V1 compatibility types (for callers that still use the old API shape)
-// ---------------------------------------------------------------------------
-
-/** @deprecated Use CompactionContext instead. Kept for backward compatibility. */
-export interface CompactionOptions {
-  /** Provider registry to get the LLM provider from. */
-  registry: ProviderRegistry;
-  /** Model ID to use for summarization. */
-  modelId: string;
-  /** Provider name — used to disambiguate models that exist on multiple providers. */
-  provider?: string;
-  /** Current messages (as sent to the LLM — no system messages). */
-  messages: ProviderMessage[];
-  /** Number of recent messages to keep verbatim (default: 10). */
-  keepRecentMessages?: number;
-  /** Whether this was triggered automatically or manually (default: 'manual'). */
-  trigger?: 'auto' | 'manual';
-  /** Optional v2 context data (agents, plan, lineage, memories). When provided, v2 path is used. */
-  context?: CompactionContext;
-}
 
 export interface AutoCompactOptions {
   /** Current input token count from last LLM response. */
@@ -101,7 +75,7 @@ export const COMPACTION_BUFFER_TOKENS = 15_000;
 
 /**
  * Context windows smaller than this use simplified compaction (summarize last N messages)
- * instead of the full structured v2 output, since there isn't enough room for extraction calls.
+ * instead of the full structured output, since there isn't enough room for extraction calls.
  */
 export const SMALL_WINDOW_THRESHOLD = 12_000;
 
@@ -128,12 +102,6 @@ export function getLastCompactionEvent(): CompactionEvent | null {
 // Token estimation
 // ---------------------------------------------------------------------------
 
-/** Rough token estimate: 4 chars ≈ 1 token. Used for threshold checks.
- * @deprecated Import estimateTokens from compaction-types.ts instead.
- * Re-exported here for backward compatibility.
- */
-export { estimateTokens } from './compaction-types.ts';
-
 /** Rough token estimate: 4 chars ≈ 1 token. Used for threshold checks. */
 export function estimateConversationTokens(messages: ProviderMessage[]): number {
   let total = 0;
@@ -150,6 +118,8 @@ export function estimateConversationTokens(messages: ProviderMessage[]): number 
   }
   return total;
 }
+
+export { estimateTokens } from './compaction-types.ts';
 
 // ---------------------------------------------------------------------------
 // Should compact?
@@ -180,7 +150,7 @@ export function shouldAutoCompact(opts: AutoCompactOptions): boolean {
  *
  * @param messages - Full conversation message array
  * @param keepRecent - Number of recent messages to keep verbatim (default: 10)
- * @returns Truncated message array with a summary placeholder prepended
+ * @returns Truncated message array with a summary pair prepended
  */
 export function compactSmallWindow(
   messages: ProviderMessage[],
@@ -304,198 +274,17 @@ function assembleSections(sections: CompactionSection[]): string {
 }
 
 // ---------------------------------------------------------------------------
-// Legacy v1 compaction (used when CompactionOptions.context is absent)
+// Core compaction logic
 // ---------------------------------------------------------------------------
 
 /**
- * MAX_PROMPT_OLDER_TOKENS — budget for the summarization prompt sent to the LLM
- * in the v1 legacy path. This is NOT related to the user's context window; it
- * caps the amount of older message text included in the extraction request.
- * Should be well below the extraction model's own context window.
- */
-const MAX_PROMPT_OLDER_TOKENS = 80_000;
-
-/**
- * compactMessagesLegacy — v1 backward-compatible compaction.
- *
- * Keeps the most recent `keepRecentMessages` messages verbatim, summarizes older
- * messages via a single LLM call, and returns a CompactionResult that places the
- * summary as a user/assistant pair followed by the recent messages.
- *
- * Throws if the LLM returns empty content or provider lookup fails.
- */
-async function compactMessagesLegacy(
-  opts: CompactionOptions,
-): Promise<CompactionResult> {
-  const {
-    registry,
-    modelId,
-    provider: providerName,
-    messages,
-    keepRecentMessages = 10,
-    trigger = 'manual',
-  } = opts;
-
-  const tokensBeforeEstimate = estimateConversationTokens(messages);
-
-  logger.info('Context compaction v1 (legacy): starting', {
-    trigger,
-    messageCount: messages.length,
-    tokensBeforeEstimate,
-    keepRecentMessages,
-  });
-
-  // Partition: older messages to summarize, recent to keep verbatim
-  const recentMessages = messages.slice(-keepRecentMessages);
-  const olderMessages = messages.slice(0, Math.max(0, messages.length - keepRecentMessages));
-
-  // Build summarization prompt, truncating oldest if over token budget
-  const promptParts: string[] = [
-    'Summarize the following conversation history into concise bullet points. Focus on key decisions, facts, and outcomes. Be brief.',
-    '',
-    '--- CONVERSATION HISTORY ---',
-    '',
-  ];
-
-  let olderTokens = 0;
-  const includedOlderMessages: ProviderMessage[] = [];
-  for (const msg of olderMessages) {
-    const text = typeof msg.content === 'string'
-      ? msg.content
-      : (msg.content as ContentPart[]).filter((p): p is { type: 'text'; text: string } => p.type === 'text').map((p) => p.text).join('');
-    const msgTokens = estimateTokens(text);
-    if (olderTokens + msgTokens > MAX_PROMPT_OLDER_TOKENS) break;
-    olderTokens += msgTokens;
-    includedOlderMessages.push(msg);
-  }
-
-  for (const msg of includedOlderMessages) {
-    const text = typeof msg.content === 'string'
-      ? msg.content
-      : (msg.content as ContentPart[]).filter((p): p is { type: 'text'; text: string } => p.type === 'text').map((p) => p.text).join('');
-    promptParts.push(`[${msg.role}]: ${text.trim()}`);
-    promptParts.push('');
-  }
-
-  promptParts.push('--- END CONVERSATION HISTORY ---');
-  promptParts.push('');
-  promptParts.push('Provide a concise bullet-point summary:');
-
-  const summarizationPrompt = promptParts.join('\n');
-
-  // Get provider — throw (don't degrade gracefully) for v1 compat
-  let llmProvider: LLMProvider;
-  try {
-    llmProvider = registry.getForModel(modelId, providerName);
-  } catch (err) {
-    throw new Error(
-      `Context compaction: failed to get provider for model '${modelId}': ${
-        err instanceof Error ? err.message : String(err)
-      }`,
-    );
-  }
-
-  // Call LLM — throw on empty (v1 behavior)
-  const response = await llmProvider.chat({
-    messages: [{ role: 'user', content: summarizationPrompt }],
-    model: modelId,
-  });
-  const summaryText = response.content?.trim() ?? '';
-  if (!summaryText) {
-    throw new Error('Context compaction: LLM returned empty summary');
-  }
-
-  // Build v1 output: [summaryUser, summaryAssistant, ...recentMessages]
-  const summaryUserMsg: ProviderMessage = {
-    role: 'user',
-    content: '[Context compacted — summary of earlier conversation follows]',
-  };
-  const summaryAssistantMsg: ProviderMessage = {
-    role: 'assistant',
-    content: summaryText,
-  };
-  const newMessages: ProviderMessage[] = [summaryUserMsg, summaryAssistantMsg, ...recentMessages];
-
-  const tokensAfterEstimate = estimateConversationTokens(newMessages);
-
-  const event: CompactionEvent = {
-    timestamp: Date.now(),
-    messagesBeforeCompaction: messages.length,
-    messagesAfterCompaction: newMessages.length,
-    tokensBeforeEstimate,
-    tokensAfterEstimate,
-    modelId,
-    trigger,
-    sectionsIncluded: ['legacy-summary'],
-    validationPassed: true,
-  };
-
-  compactionEvents.push(event);
-  if (compactionEvents.length > 50) compactionEvents.shift();
-
-  logger.info('Context compaction v1 (legacy): complete', {
-    trigger,
-    modelId,
-    messagesBeforeCompaction: event.messagesBeforeCompaction,
-    messagesAfterCompaction: event.messagesAfterCompaction,
-    tokensBeforeEstimate: event.tokensBeforeEstimate,
-    tokensAfterEstimate: event.tokensAfterEstimate,
-    tokensSaved: event.tokensBeforeEstimate - event.tokensAfterEstimate,
-  });
-
-  return {
-    messages: newMessages,
-    summary: summaryText,
-    tokensBeforeEstimate,
-    tokensAfterEstimate,
-    event,
-    sections: [],
-    validationWarnings: [],
-  };
-}
-
-// ---------------------------------------------------------------------------
-// Core compaction logic: v2 hybrid
-// ---------------------------------------------------------------------------
-
-/**
- * compactMessages — hybrid compaction entry point.
- *
- * When called with CompactionOptions (legacy v1 shape without a `context` field),
- * runs the v1 compatible summarize-and-keep path for backward compatibility.
- *
- * When called with CompactionOptions that includes a `context` field, or with a
- * CompactionContext directly, runs the v2 hybrid path with section assembly,
- * targeted LLM extraction, and post-compaction validation.
+ * compactMessages — structured compaction entry point.
  */
 export async function compactMessages(
-  ctxOrOpts: CompactionContext | CompactionOptions,
-  registryOverride?: ProviderRegistry,
+  ctx: CompactionContext,
+  registry: ProviderRegistry,
 ): Promise<CompactionResult> {
-  let result: CompactionResult;
-
-  // Legacy path: CompactionOptions without a context field
-  if ('registry' in ctxOrOpts) {
-    const opts = ctxOrOpts as CompactionOptions;
-    if (!opts.context) {
-      // Pure v1 legacy: use keepRecentMessages-based summarization
-      result = await compactMessagesLegacy(opts);
-    } else {
-      // Opts has a context field: promote to v2 path
-      const ctx: CompactionContext = {
-        ...opts.context,
-        messages: opts.messages,
-        trigger: opts.trigger ?? 'manual',
-        extractionModelId: opts.modelId,
-        extractionProvider: opts.provider,
-      };
-      registryOverride = opts.registry;
-      result = await compactMessagesV2(ctx, registryOverride);
-    }
-  } else {
-    // V2 path
-    result = await compactMessagesV2(ctxOrOpts as CompactionContext, registryOverride);
-  }
+  const result = await runCompaction(ctx, registry);
 
   // Invalidate cache strategy after compaction — cached message indices are no longer valid
   cachePlanner.invalidate();
@@ -512,24 +301,20 @@ export async function compactMessages(
 }
 
 /**
- * compactMessagesV2 — v2 hybrid compaction (internal implementation).
+ * runCompaction — internal implementation for structured compaction.
  *
  * Accepts a CompactionContext containing all data sources. Makes targeted LLM
  * calls for substance filtering and extraction (parallelized), assembles a
  * structured handoff context, validates it, and returns a CompactionResult.
  */
-async function compactMessagesV2(
+async function runCompaction(
   ctx: CompactionContext,
-  registryOverride?: ProviderRegistry,
+  registry: ProviderRegistry,
 ): Promise<CompactionResult> {
-  if (!registryOverride) {
-    throw new Error('compactMessages: provider registry is required');
-  }
-
   const config = DEFAULT_COMPACTION_CONFIG;
   const tokensBeforeEstimate = estimateConversationTokens(ctx.messages);
 
-  logger.info('Context compaction v2: starting', {
+  logger.info('Context compaction: starting', {
     trigger: ctx.trigger,
     messageCount: ctx.messages.length,
     tokensBeforeEstimate,
@@ -542,10 +327,10 @@ async function compactMessagesV2(
   // ---------------------------------------------------------------------------
   const sections: CompactionSection[] = [];
 
-  // Section 0: Handoff header (always present)
+  // Handoff header (always present)
   sections.push(buildHandoffHeader());
 
-  // Section 2: Current task
+  // Current task
   const planTitle = ctx.activePlan?.title ?? null;
   const lastUserMsg = (() => {
     for (let i = ctx.messages.length - 1; i >= 0; i--) {
@@ -563,15 +348,15 @@ async function compactMessagesV2(
   const currentTaskSection = buildCurrentTask(planTitle, lastUserMsg);
   if (currentTaskSection) sections.push(currentTaskSection);
 
-  // Section 1: Session memories
+  // Session memories
   const memoriesSection = buildSessionMemories([...ctx.sessionMemories]);
   if (memoriesSection) sections.push(memoriesSection);
 
-  // Section 3: Running agents
+  // Running agents
   const runningSection = buildRunningAgents(ctx.agents, ctx.wrfcChains);
   if (runningSection) sections.push(runningSection);
 
-  // Section 6: Agent activity table (rule-based, needed before LLM calls to determine remaining)
+  // Agent activity table (rule-based, needed before LLM calls to determine remaining)
   const { section: activitySection, remainingChains } = buildAgentActivityTable(
     ctx.wrfcChains,
     config.agentActivityBudget,
@@ -609,17 +394,17 @@ async function compactMessagesV2(
   // Parallelize all 4 independent LLM extraction calls
   // ---------------------------------------------------------------------------
   const [filteredText, toolSummary, olderSummary, problemsText] = await Promise.all([
-    llmExtract(registryOverride, ctx.extractionModelId, ctx.extractionProvider, filterPrompt, 'conversation-filter'),
-    llmExtract(registryOverride, ctx.extractionModelId, ctx.extractionProvider, toolPrompt, 'tool-results'),
-    llmExtract(registryOverride, ctx.extractionModelId, ctx.extractionProvider, olderPrompt, 'older-agent-summary'),
-    llmExtract(registryOverride, ctx.extractionModelId, ctx.extractionProvider, problemsPrompt, 'resolved-problems'),
+    llmExtract(registry, ctx.extractionModelId, ctx.extractionProvider, filterPrompt, 'conversation-filter'),
+    llmExtract(registry, ctx.extractionModelId, ctx.extractionProvider, toolPrompt, 'tool-results'),
+    llmExtract(registry, ctx.extractionModelId, ctx.extractionProvider, olderPrompt, 'older-agent-summary'),
+    llmExtract(registry, ctx.extractionModelId, ctx.extractionProvider, problemsPrompt, 'resolved-problems'),
   ]);
 
   // ---------------------------------------------------------------------------
   // Assemble LLM-assisted sections
   // ---------------------------------------------------------------------------
 
-  // Section 4: Recent conversation
+  // Recent conversation
   if (gatheredMessages.length > 0) {
     if (filteredText) {
       sections.push({
@@ -649,7 +434,7 @@ async function compactMessagesV2(
     }
   }
 
-  // Section 5: Tool results
+  // Tool results
   if (toolSummary) {
     sections.push({
       id: 'tool-results',
@@ -659,7 +444,7 @@ async function compactMessagesV2(
     });
   }
 
-  // Section 7: Older agent summary
+  // Older agent summary
   if (olderSummary) {
     sections.push({
       id: 'older-agent-summary',
@@ -669,7 +454,7 @@ async function compactMessagesV2(
     });
   }
 
-  // Section 8: Resolved problems
+  // Resolved problems
   if (problemsText && problemsText.toLowerCase().trim() !== 'empty'
       && !problemsText.toLowerCase().includes('no resolved problems')) {
     sections.push({
@@ -680,11 +465,11 @@ async function compactMessagesV2(
     });
   }
 
-  // Section 9: Plan progress (rule-based)
+  // Plan progress (rule-based)
   const planSection = buildPlanProgress(ctx.activePlan);
   if (planSection) sections.push(planSection);
 
-  // Section 10: Session lineage (rule-based, append-only)
+  // Session lineage (rule-based, append-only)
   const lineageSection = buildSessionLineage(
     ctx.originalTask ?? lastUserMsg ?? undefined,
     ctx.lineageEntries,
@@ -700,7 +485,7 @@ async function compactMessagesV2(
   const validationWarnings = validateCompaction(sections, ctx, totalTokens, config);
 
   if (validationWarnings.length > 0) {
-    logger.warn('Context compaction v2: validation warnings', { warnings: validationWarnings });
+    logger.warn('Context compaction: validation warnings', { warnings: validationWarnings });
   }
 
   // Build the new message list: a single user message containing the compacted context
@@ -728,7 +513,7 @@ async function compactMessagesV2(
   compactionEvents.push(event);
   if (compactionEvents.length > 50) compactionEvents.shift();
 
-  logger.info('Context compaction v2: complete', {
+  logger.info('Context compaction: complete', {
     trigger: ctx.trigger,
     modelId: ctx.extractionModelId,
     messagesBeforeCompaction: event.messagesBeforeCompaction,
@@ -759,25 +544,16 @@ async function compactMessagesV2(
  * checkAndCompact — Check if context usage exceeds threshold and compact if so.
  * Returns the compaction result if compaction was performed, null otherwise.
  *
- * Supports both v2 CompactionContext and legacy CompactionOptions.
  */
 export async function checkAndCompact(
   autoOpts: AutoCompactOptions,
-  ctxOrOpts: CompactionContext | Omit<CompactionOptions, 'trigger'>,
-  registryOverride?: ProviderRegistry,
+  ctx: CompactionContext,
+  registry: ProviderRegistry,
 ): Promise<CompactionResult | null> {
   if (!shouldAutoCompact(autoOpts)) return null;
 
-  if ('registry' in ctxOrOpts) {
-    // Legacy path
-    return compactMessages(
-      { ...ctxOrOpts, trigger: 'auto' } as CompactionOptions,
-      registryOverride,
-    );
-  }
-
   return compactMessages(
-    { ...ctxOrOpts, trigger: 'auto' } as CompactionContext,
-    registryOverride,
+    { ...ctx, trigger: 'auto' } as CompactionContext,
+    registry,
   );
 }

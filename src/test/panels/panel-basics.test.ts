@@ -10,6 +10,7 @@
 
 import { describe, test, expect, beforeEach } from 'bun:test';
 import type { Line } from '../../types/grid.ts';
+import type { Orchestrator } from '../../core/orchestrator.ts';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -40,6 +41,10 @@ function countLinesContaining(lines: Line[], needle: string): number {
 /** Get the text of a specific rendered row. */
 function rowText(lines: Line[], rowIndex: number): string {
   return (lines[rowIndex] ?? []).map(c => c.char ?? ' ').join('');
+}
+
+function asOrchestratorMock(mock: TokenBudgetPanelOrchestratorMock): Orchestrator {
+  return mock as unknown as Orchestrator;
 }
 
 // ---------------------------------------------------------------------------
@@ -245,7 +250,7 @@ describe('TokenBudgetPanel', () => {
     cacheRead?: number;
     cacheWrite?: number;
     lastInputTokens?: number;
-  } = {}) {
+  } = {}): TokenBudgetPanelOrchestratorMock {
     return {
       usage: {
         input:      overrides.input      ?? 0,
@@ -254,7 +259,7 @@ describe('TokenBudgetPanel', () => {
         cacheWrite: overrides.cacheWrite ?? 0,
       },
       lastInputTokens: overrides.lastInputTokens ?? 0,
-    } as any;
+    };
   }
 
   beforeEach(() => {
@@ -293,7 +298,7 @@ describe('TokenBudgetPanel', () => {
   describe('render() — wired with usage data', () => {
     test('shows input/output data when wired', () => {
       const orch = makeOrchMock({ input: 1000, output: 500 });
-      panel.wire(orch, () => 0);
+      panel.wire(asOrchestratorMock(orch), () => 0);
       panel.onActivate();
       const lines = panel.render(80, 25);
       const text = linesText(lines);
@@ -304,7 +309,7 @@ describe('TokenBudgetPanel', () => {
 
     test('shows "Session Totals" section', () => {
       const orch = makeOrchMock({ input: 2000, output: 800 });
-      panel.wire(orch, () => 0);
+      panel.wire(asOrchestratorMock(orch), () => 0);
       panel.onActivate();
       const lines = panel.render(80, 25);
       const text = linesText(lines);
@@ -314,7 +319,7 @@ describe('TokenBudgetPanel', () => {
     test('fmtTok: values < 10000 shown as raw integer', () => {
       // Wire panel with 9999 input tokens
       const orch = makeOrchMock({ input: 9999, output: 0, cacheRead: 0, cacheWrite: 0 });
-      panel.wire(orch, () => 0);
+      panel.wire(asOrchestratorMock(orch), () => 0);
       panel.onActivate();
       const lines = panel.render(80, 25);
       const text = linesText(lines);
@@ -323,7 +328,7 @@ describe('TokenBudgetPanel', () => {
 
     test('fmtTok: values >= 10000 shown with k suffix', () => {
       const orch = makeOrchMock({ input: 15000, output: 0, cacheRead: 0, cacheWrite: 0 });
-      panel.wire(orch, () => 0);
+      panel.wire(asOrchestratorMock(orch), () => 0);
       panel.onActivate();
       const lines = panel.render(80, 25);
       const text = linesText(lines);
@@ -332,7 +337,7 @@ describe('TokenBudgetPanel', () => {
 
     test('fmtTok: values >= 1M shown with M suffix', () => {
       const orch = makeOrchMock({ input: 1_200_000, output: 0, cacheRead: 0, cacheWrite: 0 });
-      panel.wire(orch, () => 0);
+      panel.wire(asOrchestratorMock(orch), () => 0);
       panel.onActivate();
       const lines = panel.render(80, 25);
       const text = linesText(lines);
@@ -341,7 +346,7 @@ describe('TokenBudgetPanel', () => {
 
     test('renders context bar when contextWindow > 0', () => {
       const orch = makeOrchMock({ lastInputTokens: 50000 });
-      panel.wire(orch, () => 200000);
+      panel.wire(asOrchestratorMock(orch), () => 200000);
       panel.onActivate();
       const lines = panel.render(80, 30);
       const text = linesText(lines);
@@ -350,7 +355,7 @@ describe('TokenBudgetPanel', () => {
 
     test('context bar shows WARNING at >= 70% fill', () => {
       const orch = makeOrchMock({ lastInputTokens: 75000 });
-      panel.wire(orch, () => 100000); // 75% fill
+      panel.wire(asOrchestratorMock(orch), () => 100000); // 75% fill
       panel.onActivate();
       const lines = panel.render(80, 30);
       const text = linesText(lines);
@@ -359,7 +364,7 @@ describe('TokenBudgetPanel', () => {
 
     test('context bar shows CRITICAL at >= 90% fill', () => {
       const orch = makeOrchMock({ lastInputTokens: 92000 });
-      panel.wire(orch, () => 100000); // 92% fill
+      panel.wire(asOrchestratorMock(orch), () => 100000); // 92% fill
       panel.onActivate();
       const lines = panel.render(80, 30);
       const text = linesText(lines);
@@ -368,7 +373,7 @@ describe('TokenBudgetPanel', () => {
 
     test('context bar not shown when contextWindow is 0', () => {
       const orch = makeOrchMock({ lastInputTokens: 50000 });
-      panel.wire(orch, () => 0); // unknown window size
+      panel.wire(asOrchestratorMock(orch), () => 0); // unknown window size
       panel.onActivate();
       const lines = panel.render(80, 25);
       const text = linesText(lines);
@@ -379,7 +384,7 @@ describe('TokenBudgetPanel', () => {
   describe('render geometry', () => {
     test('returns exactly height lines', () => {
       const orch = makeOrchMock({ input: 500, output: 200 });
-      panel.wire(orch, () => 1000);
+      panel.wire(asOrchestratorMock(orch), () => 1000);
       panel.onActivate();
       const lines = panel.render(80, 30);
       expect(lines).toHaveLength(30);
@@ -505,3 +510,12 @@ describe('GitPanel', () => {
     });
   });
 });
+type TokenBudgetPanelOrchestratorMock = {
+  usage: {
+    input: number;
+    output: number;
+    cacheRead: number;
+    cacheWrite: number;
+  };
+  lastInputTokens: number;
+};

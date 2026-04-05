@@ -18,7 +18,7 @@ import {
   PolicySignatureError,
 } from '../../../runtime/permissions/policy-loader.ts';
 import { signBundle } from '../../../runtime/permissions/policy-signer.ts';
-import { createPermissionsV2 } from '../../../runtime/permissions/index.ts';
+import { createPermissionEvaluator } from '../../../runtime/permissions/index.ts';
 import type { PolicyBundlePayload, BundleProvenance } from '../../../runtime/permissions/policy-loader.ts';
 import type { SignedPolicyBundle } from '../../../runtime/permissions/policy-signer.ts';
 
@@ -223,7 +223,7 @@ describe('provenance in PermissionDecision (integration)', () => {
     expect(result.ok).toBe(true);
 
     const provenance = result.provenance as BundleProvenance;
-    const evaluator = createPermissionsV2(
+    const evaluator = createPermissionEvaluator(
       { mode: 'default', rules: result.rules },
       provenance,
     );
@@ -235,7 +235,7 @@ describe('provenance in PermissionDecision (integration)', () => {
   });
 
   it('leaves provenance fields undefined when no bundle is loaded', () => {
-    const evaluator = createPermissionsV2({ mode: 'default' });
+    const evaluator = createPermissionEvaluator({ mode: 'default' });
     const decision = evaluator.evaluate('read', { path: '/tmp/foo.txt' });
     expect(decision.policyBundleId).toBeUndefined();
     expect(decision.signatureStatus).toBeUndefined();
@@ -251,7 +251,7 @@ describe('provenance in PermissionDecision (integration)', () => {
     expect(result.ok).toBe(true);
     expect(result.provenance.signatureStatus).toBe('invalid');
 
-    const evaluator = createPermissionsV2(
+    const evaluator = createPermissionEvaluator(
       { mode: 'default' },
       result.provenance,
     );

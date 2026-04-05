@@ -1,15 +1,22 @@
 import { describe, test, expect, beforeEach } from 'bun:test';
 import { InputHandler } from '../../input/handler.ts';
-import { EventBus } from '../../core/event-bus.ts';
 import { SelectionManager } from '../../input/selection.ts';
+import { InfiniteBuffer } from '../../core/history.ts';
+import type { ContentPart } from '../../providers/interface.ts';
+
+type InputHandlerImageTestAccess = {
+  pasteRegistry: Map<string, string>;
+  expandPrompt(text: string): string | ContentPart[];
+};
+
+function asImageTestAccess(input: InputHandler): InputHandlerImageTestAccess {
+  return input as unknown as InputHandlerImageTestAccess;
+}
 
 function makeInput(): InputHandler {
-  const bus = new EventBus();
   const sel = new SelectionManager();
-  return new InputHandler(bus, sel, () => 0, () => 20, () => ({
-    getLineCount: () => 0, getAllLines: () => [], getSnapshot: () => [],
-    addLine: () => {}, addLines: () => {}, clear: () => {},
-  }) as any, () => {}, () => {});
+  const history = new InfiniteBuffer();
+  return new InputHandler(() => {}, sel, () => 0, () => 20, () => history, () => {}, () => {});
 }
 
 // ---------------------------------------------------------------------------
@@ -93,7 +100,7 @@ describe('registerPaste base64 image detection', () => {
 describe('expandPrompt', () => {
   test('with no images returns plain string', () => {
     const ih = makeInput();
-    const result = (ih as any).expandPrompt('hello world') as string;
+    const result = asImageTestAccess(ih).expandPrompt('hello world');
     expect(typeof result).toBe('string');
     expect(result).toBe('hello world');
   });
@@ -101,8 +108,8 @@ describe('expandPrompt', () => {
   test('with TEXT marker expands to content string', () => {
     const ih = makeInput();
     // Manually inject into pasteRegistry
-    (ih as any).pasteRegistry.set('p1', 'line1\nline2\nline3\nline4\nline5\nline6\nline7\nline8\nline9');
-    const result = (ih as any).expandPrompt('before [TEXT: p1, 9 lines] after') as string;
+    asImageTestAccess(ih).pasteRegistry.set('p1', 'line1\nline2\nline3\nline4\nline5\nline6\nline7\nline8\nline9');
+    const result = asImageTestAccess(ih).expandPrompt('before [TEXT: p1, 9 lines] after');
     expect(typeof result).toBe('string');
     expect(result).toContain('line1');
     expect(result).toContain('line9');
@@ -113,10 +120,11 @@ describe('expandPrompt', () => {
     const pngData = 'iVBORw0KGgo' + 'A'.repeat(200);
     const marker = ih.registerPaste(pngData);
     // marker = "[IMAGE: img1, clipboard, NKB]"
-    const result = (ih as any).expandPrompt(`describe this ${marker}`) as any[];
+    const result = asImageTestAccess(ih).expandPrompt(`describe this ${marker}`);
     expect(Array.isArray(result)).toBe(true);
-    const textParts = result.filter((p: any) => p.type === 'text');
-    const imageParts = result.filter((p: any) => p.type === 'image');
+    const content = result as ContentPart[];
+    const textParts = content.filter((p): p is Extract<ContentPart, { type: 'text' }> => p.type === 'text');
+    const imageParts = content.filter((p): p is Extract<ContentPart, { type: 'image' }> => p.type === 'image');
     expect(textParts.length).toBeGreaterThanOrEqual(1);
     expect(imageParts.length).toBe(1);
     expect(imageParts[0].mediaType).toBe('image/png');
@@ -130,9 +138,9 @@ describe('expandPrompt', () => {
     const m1 = ih.registerPaste(pngData);
     const m2 = ih.registerPaste(gifData);
     // Use m2 first, then m1 — reverse of insertion order
-    const result = (ih as any).expandPrompt(`${m2} text ${m1}`) as any[];
+    const result = asImageTestAccess(ih).expandPrompt(`${m2} text ${m1}`);
     expect(Array.isArray(result)).toBe(true);
-    const imageParts = result.filter((p: any) => p.type === 'image');
+    const imageParts = (result as ContentPart[]).filter((p): p is Extract<ContentPart, { type: 'image' }> => p.type === 'image');
     expect(imageParts.length).toBe(2);
     // First image in text is m2 (GIF), second is m1 (PNG)
     expect(imageParts[0].mediaType).toBe('image/gif');
@@ -173,8 +181,10 @@ describe('addUserMessage with ContentPart[]', () => {
     const msgs = cm.getMessagesForLLM();
     const content = msgs[0].content as typeof parts;
     expect(content).toHaveLength(2);
-    expect((content[1] as any).data).toBe('base64data');
-    expect((content[1] as any).mediaType).toBe('image/webp');
+    expect(content[1].type).toBe('image');
+    if (content[1].type !== 'image') throw new Error('expected image content part');
+    expect(content[1].data).toBe('base64data');
+    expect(content[1].mediaType).toBe('image/webp');
   });
 });
 
@@ -184,22 +194,25 @@ describe('addUserMessage with ContentPart[]', () => {
 
 describe('Orchestrator capability check for non-multimodal models', () => {
   test('strips images and adds warning when model lacks multimodal capability', async () => {
-    const { EventBus } = await import('../../core/event-bus.ts');
     const { ToolRegistry } = await import('../../tools/registry.ts');
     const { Orchestrator } = await import('../../core/orchestrator.ts');
     const { ConversationManager } = await import('../../core/conversation.ts');
     const { PermissionManager } = await import('../../permissions/manager.ts');
-    const { providerRegistry } = await import('../../providers/registry.ts');
+    const { getProviderRegistry } = await import('../../providers/registry.ts');
+    const { RuntimeEventBus } = await import('../../runtime/events/index.ts');
 
-    const bus = new EventBus();
+    const runtimeBus = new RuntimeEventBus();
     const toolRegistry = new ToolRegistry();
     const cm = new ConversationManager(() => 80);
-    const pm = new PermissionManager(bus);
-    const orch = new Orchestrator(bus, cm, () => 24, () => {}, toolRegistry, pm);
+    const pm = new PermissionManager();
+    const orch = new Orchestrator(cm, () => 24, () => {}, toolRegistry, pm, () => '', null, null, null, runtimeBus);
 
-    // Inject a non-multimodal model into providerRegistry for this test
+    const providerRegistry = getProviderRegistry();
+
+    // Inject a non-multimodal model into provider registry for this test
     const originalGetCurrentModel = providerRegistry.getCurrentModel.bind(providerRegistry);
-    const originalGetForModel = providerRegistry.getForModel.bind(providerRegistry);
+    const mockBackingProvider = providerRegistry.get('openrouter');
+    const originalChat = mockBackingProvider.chat.bind(mockBackingProvider);
     let systemMessages: string[] = [];
     const origAddSystem = cm.addSystemMessage.bind(cm);
     cm.addSystemMessage = (msg: string) => {
@@ -210,21 +223,21 @@ describe('Orchestrator capability check for non-multimodal models', () => {
     // Patch getCurrentModel to return a non-multimodal model
     providerRegistry.getCurrentModel = () => ({
       id: 'test-model',
+      registryKey: 'openrouter:test-model',
       displayName: 'Test Model',
-      provider: 'test',
-      capabilities: { multimodal: false, tools: true, streaming: false, contextWindow: 8192, reasoning: false },
-    } as any);
+      description: '',
+      provider: 'openrouter',
+      contextWindow: 8192,
+      selectable: true,
+      capabilities: { multimodal: false, toolCalling: true, codeEditing: false, reasoning: false },
+    });
 
-    // Patch getForModel to return a mock provider that returns a valid response
-    providerRegistry.getForModel = () => ({
-      name: 'mock',
-      models: ['test-model'],
-      chat: async () => ({
-        content: 'ok',
-        toolCalls: [],
-        usage: { inputTokens: 1, outputTokens: 1 },
-        stopReason: 'end' as const,
-      }),
+    // Patch the resolved provider instance to return a fast canned response.
+    mockBackingProvider.chat = async () => ({
+      content: 'ok',
+      toolCalls: [],
+      usage: { inputTokens: 1, outputTokens: 1 },
+      stopReason: 'end' as const,
     });
 
     const content = [
@@ -236,7 +249,7 @@ describe('Orchestrator capability check for non-multimodal models', () => {
 
     // Restore
     providerRegistry.getCurrentModel = originalGetCurrentModel;
-    providerRegistry.getForModel = originalGetForModel;
+    mockBackingProvider.chat = originalChat;
 
     expect(systemMessages.some(m => m.includes('does not support image input'))).toBe(true);
   });

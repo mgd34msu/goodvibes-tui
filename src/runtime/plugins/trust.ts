@@ -1,5 +1,5 @@
 /**
- * Plugin Extension Trust Framework — §5.9.
+ * Plugin extension trust framework.
  *
  * Defines trust tiers (untrusted, limited, trusted), signed manifest
  * validation for the trusted tier, and the PluginTrustStore that manages

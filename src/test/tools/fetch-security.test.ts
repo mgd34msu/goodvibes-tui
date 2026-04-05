@@ -1,5 +1,5 @@
 /**
- * GC-FETCH-006 — Fetch sanitization and host trust tier tests.
+ * Fetch sanitization and host trust tier tests.
  *
  * Tests:
  *   - SSRF vector detection (internal IPs, localhost, metadata endpoints,
@@ -11,6 +11,7 @@
  */
 
 import { describe, it, expect, mock, beforeEach, afterEach } from 'bun:test';
+import { createFeatureFlagManager, FeatureFlagManager } from '../../runtime/feature-flags/manager.ts';
 import {
   applySanitizer,
   resolveSanitizeMode,
@@ -23,6 +24,11 @@ import {
   type TrustTierConfig,
 } from '../../tools/fetch/trust-tiers.ts';
 import { fetchTool } from '../../tools/fetch/index.ts';
+
+afterEach(() => {
+  FeatureFlagManager.resetInstance();
+  mock.restore();
+});
 
 // ---------------------------------------------------------------------------
 // Sanitizer conformance tests
@@ -460,12 +466,9 @@ describe('extractHostname', () => {
 
 describe('fetchOne pipeline — SSRF blocked pre-request (integration)', () => {
   it('blocks internal IP (10.0.0.1) before any HTTP request is made', async () => {
-    // Mock FeatureFlagManager so isFetchSanitizationEnabled() returns true
-    mock.module('../../runtime/feature-flags/manager.ts', () => ({
-      FeatureFlagManager: {
-        getInstance: () => ({ isEnabled: (_id: string) => true }),
-      },
-    }));
+    const manager = createFeatureFlagManager();
+    manager.enable('fetch-sanitization');
+    FeatureFlagManager.setInstance(manager);
 
     // Patch global fetch to ensure it is never called for a blocked host
     const originalFetch = globalThis.fetch;

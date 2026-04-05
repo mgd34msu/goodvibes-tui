@@ -1,4 +1,6 @@
 import { resolve } from 'node:path';
+import { pathToFileURL } from 'node:url';
+import { statSync } from 'node:fs';
 import type { HookDefinition, HookResult, HookEvent } from '../types.ts';
 import { logger } from '../../utils/logger.ts';
 
@@ -23,7 +25,15 @@ export async function run(hook: HookDefinition, event: HookEvent): Promise<HookR
   }
 
   try {
-    const mod = await import(resolvedPath);
+    let moduleUrl = pathToFileURL(resolvedPath).href;
+    try {
+      const { mtimeMs } = statSync(resolvedPath);
+      moduleUrl += `?mtime=${mtimeMs}`;
+    } catch {
+      // Ignore stat failures and fall back to the bare file URL so import can surface the real error.
+    }
+
+    const mod = await import(moduleUrl);
     const handler = mod.default as TsHookHandler | undefined;
 
     if (typeof handler !== 'function') {

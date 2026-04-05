@@ -1,5 +1,5 @@
 /**
- * Permissions v2 — Structured audit log for permission decisions.
+ * Structured audit log for permission decisions.
  *
  * DecisionLog provides an in-memory circular buffer of PermissionDecision
  * records with structured output suitable for debugging and compliance auditing.

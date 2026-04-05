@@ -40,7 +40,6 @@ function emitHealthEvent(
   bus: RuntimeEventBus,
   envelope: RuntimeEventEnvelope<string, unknown>,
 ): void {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   bus.emit('session', envelope as unknown as RuntimeEventEnvelope<AnyRuntimeEvent['type'], AnyRuntimeEvent>);
 }
 

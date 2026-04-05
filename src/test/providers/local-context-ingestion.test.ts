@@ -1,5 +1,5 @@
 /**
- * G00: Local provider context window ingestion tests.
+ * Local provider context window ingestion tests.
  *
  * Tests for:
  * - Parsing max_context_length from /v1/models responses

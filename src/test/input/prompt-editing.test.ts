@@ -1,39 +1,53 @@
 import { describe, test, expect, beforeEach } from 'bun:test';
 import { InputHandler } from '../../input/handler.ts';
-import { EventBus } from '../../core/event-bus.ts';
 import { SelectionManager } from '../../input/selection.ts';
 import { CommandRegistry } from '../../input/command-registry.ts';
 import { AutocompleteEngine } from '../../input/autocomplete.ts';
+import { InfiniteBuffer } from '../../core/history.ts';
+import type { UndoState } from '../../input/handler-prompt-buffer.ts';
+
+type InputHandlerTestAccess = {
+  undoStack: UndoState[];
+  redoStack: UndoState[];
+  saveUndoState(): void;
+  handleUndo(): void;
+  handleRedo(): void;
+  findPathToken(): { start: number; prefix: string } | null;
+  handlePathCompletion(): boolean;
+  commandRegistry: CommandRegistry | null;
+  autocomplete: AutocompleteEngine | null;
+};
+
+function asTestAccess(input: InputHandler): InputHandlerTestAccess {
+  return input as unknown as InputHandlerTestAccess;
+}
 
 function makeInput(): InputHandler {
-  const bus = new EventBus();
   const sel = new SelectionManager();
-  const ih = new InputHandler(bus, sel, () => 0, () => 20, () => ({
-    getLineCount: () => 0, getAllLines: () => [], getSnapshot: () => [],
-    addLine: () => {}, addLines: () => {}, clear: () => {},
-  }) as any, () => {}, () => {});
+  const history = new InfiniteBuffer();
+  const ih = new InputHandler(() => {}, sel, () => 0, () => 20, () => history, () => {}, () => {});
   ih.setContentWidth(80);
   return ih;
 }
 
 // Access private members for unit testing
-function getUndoStack(ih: InputHandler): Array<{ prompt: string; cursorPos: number }> {
-  return (ih as any).undoStack;
+function getUndoStack(ih: InputHandler): UndoState[] {
+  return asTestAccess(ih).undoStack;
 }
-function getRedoStack(ih: InputHandler): Array<{ prompt: string; cursorPos: number }> {
-  return (ih as any).redoStack;
+function getRedoStack(ih: InputHandler): UndoState[] {
+  return asTestAccess(ih).redoStack;
 }
 function saveUndo(ih: InputHandler): void {
-  (ih as any).saveUndoState();
+  asTestAccess(ih).saveUndoState();
 }
 function doUndo(ih: InputHandler): void {
-  (ih as any).handleUndo();
+  asTestAccess(ih).handleUndo();
 }
 function doRedo(ih: InputHandler): void {
-  (ih as any).handleRedo();
+  asTestAccess(ih).handleRedo();
 }
 function findPathToken(ih: InputHandler): { start: number; prefix: string } | null {
-  return (ih as any).findPathToken();
+  return asTestAccess(ih).findPathToken();
 }
 
 // ── saveUndoState ──────────────────────────────────────────────────────────
@@ -56,7 +70,7 @@ describe('saveUndoState', () => {
     ih.cursorPos = 5;
     saveUndo(ih);
     // Manually put something in redo to simulate prior undo
-    (ih as any).redoStack.push({ prompt: 'old', cursorPos: 3 });
+    asTestAccess(ih).redoStack.push({ prompt: 'old', cursorPos: 3 });
     ih.prompt = 'step2';
     ih.cursorPos = 5;
     saveUndo(ih);
@@ -65,7 +79,7 @@ describe('saveUndoState', () => {
 
   test('undo stack bounded at MAX_UNDO (50)', () => {
     const ih = makeInput();
-    const MAX = (InputHandler as any).MAX_UNDO as number;
+    const MAX = 50;
     for (let i = 0; i <= MAX; i++) {
       ih.prompt = `state${i}`;
       ih.cursorPos = i;
@@ -114,7 +128,7 @@ describe('handleUndo', () => {
 
   test('redo stack bounded at MAX_UNDO after many undos', () => {
     const ih = makeInput();
-    const MAX = (InputHandler as any).MAX_UNDO as number;
+    const MAX = 50;
     // Build a large undo stack
     for (let i = 0; i <= MAX + 5; i++) {
       ih.prompt = `s${i}`;
@@ -227,7 +241,7 @@ describe('handlePathCompletion', () => {
     ih.prompt = '@src/in';
     ih.cursorPos = 7;
     // filePicker.allFiles is [] by default
-    const result = (ih as any).handlePathCompletion() as boolean;
+    const result = asTestAccess(ih).handlePathCompletion();
     expect(result).toBe(false);
   });
 
@@ -236,8 +250,8 @@ describe('handlePathCompletion', () => {
     ih.prompt = '@src/in';
     ih.cursorPos = 7;
     // Inject test files directly
-    ih.filePicker.allFiles = ['src/input/handler.ts', 'src/input/file-picker.ts', 'src/core/event-bus.ts'];
-    const result = (ih as any).handlePathCompletion() as boolean;
+    ih.filePicker.allFiles = ['src/input/handler.ts', 'src/input/file-picker.ts', 'src/runtime/events/index.ts'];
+    const result = asTestAccess(ih).handlePathCompletion();
     expect(result).toBe(true);
     // Prompt should now contain @src/input/... 
     expect(ih.prompt.startsWith('@src/input/')).toBe(true);
@@ -250,11 +264,11 @@ describe('handlePathCompletion', () => {
     ih.filePicker.allFiles = ['src/input/handler.ts', 'src/input/file-picker.ts'];
 
     // First Tab
-    (ih as any).handlePathCompletion();
+    asTestAccess(ih).handlePathCompletion();
     const first = ih.prompt;
 
     // Second Tab: cursor is now after completed path, start should still be 0
-    (ih as any).handlePathCompletion();
+    asTestAccess(ih).handlePathCompletion();
     const second = ih.prompt;
 
     // Both should be valid completions but different from each other
@@ -269,7 +283,7 @@ describe('handlePathCompletion', () => {
     ih.cursorPos = 7;
     ih.filePicker.allFiles = ['src/input/handler.ts'];
     const beforePrompt = ih.prompt;
-    (ih as any).handlePathCompletion();
+    asTestAccess(ih).handlePathCompletion();
     // Undo stack should contain the state before completion
     const stack = getUndoStack(ih);
     expect(stack.length).toBeGreaterThanOrEqual(1);
@@ -314,22 +328,22 @@ describe('autocomplete reset on space in command mode', () => {
     // Wire up a minimal CommandRegistry + AutocompleteEngine
     const registry = new CommandRegistry();
     registry.register({ name: 'plan', description: 'Run plan', handler: () => {} });
-    (ih as any).commandRegistry = registry;
-    (ih as any).autocomplete = new AutocompleteEngine(registry);
+    asTestAccess(ih).commandRegistry = registry;
+    asTestAccess(ih).autocomplete = new AutocompleteEngine(registry);
 
     // Simulate having typed '/plan' — autocomplete is active
     ih.commandMode = true;
     ih.prompt = '/plan';
     ih.cursorPos = 5;
     // Manually update autocomplete so it has results
-    (ih as any).autocomplete.update('plan');
-    expect((ih as any).autocomplete.isActive).toBe(true);
+    asTestAccess(ih).autocomplete?.update('plan');
+    expect(asTestAccess(ih).autocomplete?.isActive).toBe(true);
 
     // Feed a space character — should reset autocomplete
     ih.feed(' ');
 
     // Autocomplete should no longer be active after space
-    expect((ih as any).autocomplete.isActive).toBe(false);
+    expect(asTestAccess(ih).autocomplete?.isActive).toBe(false);
     // commandMode stays true (space doesn't exit command mode)
     expect(ih.commandMode).toBe(true);
     // Prompt should contain the space
@@ -340,20 +354,20 @@ describe('autocomplete reset on space in command mode', () => {
     const ih = makeInput();
     const registry = new CommandRegistry();
     registry.register({ name: 'plan', description: 'Run plan', handler: () => {} });
-    (ih as any).commandRegistry = registry;
-    (ih as any).autocomplete = new AutocompleteEngine(registry);
+    asTestAccess(ih).commandRegistry = registry;
+    asTestAccess(ih).autocomplete = new AutocompleteEngine(registry);
 
     // Simulate typing '/pla' — autocomplete should update but stay active
     ih.commandMode = true;
     ih.prompt = '/pla';
     ih.cursorPos = 4;
-    (ih as any).autocomplete.update('pla');
-    expect((ih as any).autocomplete.isActive).toBe(true);
+    asTestAccess(ih).autocomplete?.update('pla');
+    expect(asTestAccess(ih).autocomplete?.isActive).toBe(true);
 
     // Feed 'n' — no space, autocomplete should remain active
     ih.feed('n');
 
     // Autocomplete should still be active (no space typed)
-    expect((ih as any).autocomplete.isActive).toBe(true);
+    expect(asTestAccess(ih).autocomplete?.isActive).toBe(true);
   });
 });

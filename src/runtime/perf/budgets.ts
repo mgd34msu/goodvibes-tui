@@ -1,7 +1,7 @@
 /**
  * Default performance budget definitions for goodvibes-tui.
  *
- * Based on v3 Section 21.4 — measurable budgets for frame latency,
+ * Measurable budgets for frame latency,
  * event throughput, tool executor overhead, memory growth, and
  * compaction latency.
  */

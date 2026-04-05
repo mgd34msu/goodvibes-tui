@@ -1,6 +1,6 @@
 import { describe, test, expect, beforeEach } from 'bun:test';
 import { ConversationManager } from '../../core/conversation.ts';
-import { EventBus } from '../../core/event-bus.ts';
+import { RuntimeEventBus, createEventEnvelope } from '../../runtime/events/index.ts';
 
 // ---------------------------------------------------------------------------
 // F3: Auto-generated conversation title
@@ -69,46 +69,79 @@ describe('ConversationManager - title', () => {
 
 // ---------------------------------------------------------------------------
 // F1: Token budget warnings
-// NOTE: These tests verify EventBus event shape only — they do not test the
+// NOTE: These tests verify runtime event envelope shape only — they do not test the
 // actual Orchestrator.runTurn() path, which requires a mock provider and full
 // initialization. The cooldown bracket logic (lastWarningBracket) cannot be
 // unit-tested here without substantially refactoring Orchestrator dependencies.
 // ---------------------------------------------------------------------------
 describe('Token budget warning', () => {
-  test('context:warning event has correct shape', () => {
-    const bus = new EventBus();
+  test('OPS_CONTEXT_WARNING event has correct shape', () => {
+    const bus = new RuntimeEventBus();
     const events: Array<{ usage: number; threshold: number }> = [];
-    bus.on('context:warning', (data) => events.push(data));
+    bus.on<Extract<import('../../runtime/events/index.ts').OpsEvent, { type: 'OPS_CONTEXT_WARNING' }>>(
+      'OPS_CONTEXT_WARNING',
+      ({ payload }) => events.push(payload),
+    );
 
-    bus.emit('context:warning', { usage: 85, threshold: 80 });
+    bus.emit('ops', createEventEnvelope('OPS_CONTEXT_WARNING', {
+      type: 'OPS_CONTEXT_WARNING',
+      usage: 85,
+      threshold: 80,
+    }, {
+      sessionId: 'test-session',
+      traceId: 'test-trace',
+      source: 'qol-features.test',
+    }));
     expect(events).toHaveLength(1);
     expect(events[0].usage).toBe(85);
     expect(events[0].threshold).toBe(80);
   });
 
-  test('context:warning is not emitted below threshold', () => {
+  test('OPS_CONTEXT_WARNING is not emitted below threshold', () => {
     // Simulate the logic: warning fires only when usagePct >= threshold
-    const bus = new EventBus();
+    const bus = new RuntimeEventBus();
     const events: Array<{ usage: number; threshold: number }> = [];
-    bus.on('context:warning', (data) => events.push(data));
+    bus.on<Extract<import('../../runtime/events/index.ts').OpsEvent, { type: 'OPS_CONTEXT_WARNING' }>>(
+      'OPS_CONTEXT_WARNING',
+      ({ payload }) => events.push(payload),
+    );
 
     const threshold = 80;
     const usagePct = 70; // below threshold
     if (usagePct >= threshold) {
-      bus.emit('context:warning', { usage: usagePct, threshold });
+      bus.emit('ops', createEventEnvelope('OPS_CONTEXT_WARNING', {
+        type: 'OPS_CONTEXT_WARNING',
+        usage: usagePct,
+        threshold,
+      }, {
+        sessionId: 'test-session',
+        traceId: 'test-trace',
+        source: 'qol-features.test',
+      }));
     }
     expect(events).toHaveLength(0);
   });
 
-  test('context:warning fires at threshold exactly', () => {
-    const bus = new EventBus();
+  test('OPS_CONTEXT_WARNING fires at threshold exactly', () => {
+    const bus = new RuntimeEventBus();
     const events: Array<{ usage: number; threshold: number }> = [];
-    bus.on('context:warning', (data) => events.push(data));
+    bus.on<Extract<import('../../runtime/events/index.ts').OpsEvent, { type: 'OPS_CONTEXT_WARNING' }>>(
+      'OPS_CONTEXT_WARNING',
+      ({ payload }) => events.push(payload),
+    );
 
     const threshold = 80;
     const usagePct = 80; // exactly at threshold
     if (usagePct >= threshold) {
-      bus.emit('context:warning', { usage: usagePct, threshold });
+      bus.emit('ops', createEventEnvelope('OPS_CONTEXT_WARNING', {
+        type: 'OPS_CONTEXT_WARNING',
+        usage: usagePct,
+        threshold,
+      }, {
+        sessionId: 'test-session',
+        traceId: 'test-trace',
+        source: 'qol-features.test',
+      }));
     }
     expect(events).toHaveLength(1);
     expect(events[0].usage).toBe(80);

@@ -29,6 +29,9 @@ interface DaemonDangerConfig {
   daemon: boolean;
 }
 
+type JsonBody = Record<string, unknown>;
+type ScheduleRecord = ReturnType<TaskScheduler['list']>[number];
+
 // ---------------------------------------------------------------------------
 // DaemonServer
 // ---------------------------------------------------------------------------
@@ -238,12 +241,8 @@ export class DaemonServer {
   }
 
   private async handleLogin(req: Request): Promise<Response> {
-    let body: Record<string, unknown>;
-    try {
-      body = await req.json() as Record<string, unknown>;
-    } catch {
-      return Response.json({ error: 'Invalid JSON body' }, { status: 400 });
-    }
+    const body = await this.parseJsonBody(req);
+    if (body instanceof Response) return body;
 
     const username = typeof body.username === 'string' ? body.username : '';
     const password = typeof body.password === 'string' ? body.password : '';
@@ -263,15 +262,10 @@ export class DaemonServer {
   }
 
   private async handlePostTask(req: Request): Promise<Response> {
-    let body: Record<string, unknown>;
-    try {
-      body = await req.json() as Record<string, unknown>;
-    } catch {
-      return Response.json({ error: 'Invalid JSON body' }, { status: 400 });
-    }
+    const body = await this.parseJsonBody(req);
+    if (body instanceof Response) return body;
 
-    // Accept both 'task' and 'prompt' field names for compatibility
-    const task = body.task ?? body.prompt;
+    const task = body.task;
     if (!task || typeof task !== 'string' || task.trim() === '') {
       return Response.json({ error: 'Missing required field: task (non-empty string)' }, { status: 400 });
     }
@@ -281,19 +275,14 @@ export class DaemonServer {
       ? (body.tools as unknown[]).filter((t): t is string => typeof t === 'string')
       : undefined;
 
-    let record: AgentRecord;
-    try {
-      record = this.agentManager.spawn({
-        mode: 'spawn',
-        task,
-        ...(model !== undefined && { model }),
-        ...(tools !== undefined && { tools }),
-      });
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      logger.error('DaemonServer: agent spawn failed', { error: message });
-      return Response.json({ error: `Failed to spawn agent: ${message}` }, { status: 500 });
-    }
+    const spawnResult = this.trySpawnAgent({
+      mode: 'spawn',
+      task,
+      ...(model !== undefined && { model }),
+      ...(tools !== undefined && { tools }),
+    });
+    if (spawnResult instanceof Response) return spawnResult;
+    const record = spawnResult;
 
     return Response.json(
       {
@@ -343,12 +332,8 @@ export class DaemonServer {
     }
 
     // Parse JSON body
-    let body: Record<string, unknown>;
-    try {
-      body = JSON.parse(rawBody) as Record<string, unknown>;
-    } catch {
-      return Response.json({ error: 'Invalid JSON body' }, { status: 400 });
-    }
+    const body = this.parseJsonText(rawBody);
+    if (body instanceof Response) return body;
 
     // Parse the GitHub event
     const event = GitHubIntegration.parseEvent(req.headers, body);
@@ -365,19 +350,16 @@ export class DaemonServer {
 
     // Spawn agent asynchronously — return 200 immediately
     let agentId: string | null = null;
+    const spawnResult = this.trySpawnAgent({ mode: 'spawn', task: prompt });
+    if (spawnResult instanceof Response) return spawnResult;
     try {
-      const record = this.agentManager.spawn({ mode: 'spawn', task: prompt });
-      agentId = record.id;
+      agentId = spawnResult.id;
       logger.info('DaemonServer: GitHub webhook spawned agent', {
         type: event.type,
         action: event.action,
         agentId,
       });
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      logger.error('DaemonServer: failed to spawn agent for GitHub webhook', { error: message });
-      return Response.json({ error: `Failed to spawn agent: ${message}` }, { status: 500 });
-    }
+    } catch {}
 
     return Response.json({
       acknowledged: true,
@@ -455,11 +437,10 @@ export class DaemonServer {
         responseUrl = undefined;
       }
       setImmediate(async () => {
-        let record: AgentRecord | undefined;
-        try {
-          record = this.agentManager.spawn({ mode: 'spawn', task });
-        } catch (err) {
-          const msg = err instanceof Error ? err.message : String(err);
+        const spawnResult = this.trySpawnAgent({ mode: 'spawn', task }, 'DaemonServer.handleSlackWebhook');
+        if (spawnResult instanceof Response) {
+          const payload = await spawnResult.json() as { error?: string };
+          const msg = payload.error ?? 'Agent spawn failed';
           logger.error('DaemonServer.handleSlackWebhook: spawn failed', { error: msg });
           if (responseUrl) {
             await fetch(responseUrl, {
@@ -473,6 +454,7 @@ export class DaemonServer {
           }
           return;
         }
+        const record = spawnResult;
         if (responseUrl && record) {
           await fetch(responseUrl, {
             method: 'POST',
@@ -560,17 +542,17 @@ export class DaemonServer {
       const token = interaction.token;
 
       setImmediate(async () => {
-        let record: AgentRecord | undefined;
-        try {
-          record = this.agentManager.spawn({ mode: 'spawn', task });
-        } catch (err) {
-          const msg = err instanceof Error ? err.message : String(err);
+        const spawnResult = this.trySpawnAgent({ mode: 'spawn', task }, 'DaemonServer.handleDiscordWebhook');
+        if (spawnResult instanceof Response) {
+          const payload = await spawnResult.json() as { error?: string };
+          const msg = payload.error ?? 'Agent spawn failed';
           logger.error('DaemonServer.handleDiscordWebhook: spawn failed', { error: msg });
           await discord
             .editOriginalResponse(appId, token, `Agent spawn failed: ${msg}`)
             .catch(() => {});
           return;
         }
+        const record = spawnResult;
         if (record) {
           const embed = discord.formatAgentResult(
             record.id,
@@ -628,12 +610,8 @@ export class DaemonServer {
   }
 
   private async handlePostSchedule(req: Request): Promise<Response> {
-    let body: Record<string, unknown>;
-    try {
-      body = await req.json() as Record<string, unknown>;
-    } catch {
-      return Response.json({ error: 'Invalid JSON body' }, { status: 400 });
-    }
+    const body = await this.parseJsonBody(req);
+    if (body instanceof Response) return body;
 
     const cron = typeof body.cron === 'string' ? body.cron : undefined;
     const prompt = typeof body.prompt === 'string' ? body.prompt.trim() : undefined;
@@ -667,17 +645,14 @@ export class DaemonServer {
   }
 
   private handleDeleteSchedule(id: string): Response {
-    // Support partial ID prefix matching
-    const tasks = this.scheduler.list();
-    const task = tasks.find((t) => t.id === id || t.id.startsWith(id));
+    const task = this.findSchedule(id);
     if (!task) return Response.json({ error: `Schedule not found: ${id}` }, { status: 404 });
     this.scheduler.remove(task.id);
     return Response.json({ removed: true, id: task.id });
   }
 
   private handleSetScheduleEnabled(id: string, enabled: boolean): Response {
-    const tasks = this.scheduler.list();
-    const task = tasks.find((t) => t.id === id || t.id.startsWith(id));
+    const task = this.findSchedule(id);
     if (!task) return Response.json({ error: `Schedule not found: ${id}` }, { status: 404 });
     this.scheduler.setEnabled(task.id, enabled);
     const updated = this.scheduler.list().find((t) => t.id === task.id);
@@ -685,8 +660,7 @@ export class DaemonServer {
   }
 
   private async handleRunScheduleNow(id: string): Promise<Response> {
-    const tasks = this.scheduler.list();
-    const task = tasks.find((t) => t.id === id || t.id.startsWith(id));
+    const task = this.findSchedule(id);
     if (!task) return Response.json({ error: `Schedule not found: ${id}` }, { status: 404 });
     try {
       const agentId = await this.scheduler.runNow(task.id);
@@ -694,5 +668,38 @@ export class DaemonServer {
     } catch (e: unknown) {
       return Response.json({ error: e instanceof Error ? e.message : 'Failed to run schedule' }, { status: 500 });
     }
+  }
+
+  private async parseJsonBody(req: Request): Promise<JsonBody | Response> {
+    try {
+      return await req.json() as JsonBody;
+    } catch {
+      return Response.json({ error: 'Invalid JSON body' }, { status: 400 });
+    }
+  }
+
+  private parseJsonText(rawBody: string): JsonBody | Response {
+    try {
+      return JSON.parse(rawBody) as JsonBody;
+    } catch {
+      return Response.json({ error: 'Invalid JSON body' }, { status: 400 });
+    }
+  }
+
+  private trySpawnAgent(
+    input: Parameters<AgentManager['spawn']>[0],
+    logLabel = 'DaemonServer',
+  ): AgentRecord | Response {
+    try {
+      return this.agentManager.spawn(input);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      logger.error(`${logLabel}: agent spawn failed`, { error: message });
+      return Response.json({ error: `Failed to spawn agent: ${message}` }, { status: 500 });
+    }
+  }
+
+  private findSchedule(id: string): ScheduleRecord | undefined {
+    return this.scheduler.list().find((task) => task.id === id || task.id.startsWith(id));
   }
 }

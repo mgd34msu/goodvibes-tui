@@ -1,7 +1,7 @@
 /**
  * PermissionEvent — discriminated union covering all permission evaluation events.
  *
- * Maps to state machine events from v3 Section 4 (Permissions domain).
+ * Covers permission evaluation events for the runtime event bus.
  */
 
 export type PermissionEvent =

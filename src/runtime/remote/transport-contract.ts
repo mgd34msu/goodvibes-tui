@@ -1,7 +1,7 @@
 /**
  * Remote Substrate — Transport Contract
  *
- * Implements v3 Section 10.3: typed message definitions for control/data/ack/failure
+ * Defines typed message definitions for control/data/ack/failure
  * message classes with retry/backoff policies per class.
  *
  * This module defines the full structural contract for all messages that cross

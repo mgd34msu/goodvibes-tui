@@ -28,6 +28,7 @@ import type {
   FailureClass,
   FailureReport,
   CausalChainEntry,
+  ForensicsBundle,
 } from '../../runtime/forensics/types.ts';
 
 // ---------------------------------------------------------------------------
@@ -47,6 +48,10 @@ describe('operability gate: forensics classifier coverage', () => {
     expect(classifyFailure({ stopReason: 'length' })).toBe('max_tokens');
   });
 
+  test('context_overflow stop reason → classified as max_tokens', () => {
+    expect(classifyFailure({ stopReason: 'context_overflow' })).toBe('max_tokens');
+  });
+
   test('compaction error → classified as compaction_error', () => {
     expect(classifyFailure({ hasCompactionError: true })).toBe('compaction_error');
   });
@@ -55,8 +60,16 @@ describe('operability gate: forensics classifier coverage', () => {
     expect(classifyFailure({ hasPermissionDenial: true })).toBe('permission_denied');
   });
 
+  test('hook_denied stop reason → classified as permission_denied', () => {
+    expect(classifyFailure({ stopReason: 'hook_denied' })).toBe('permission_denied');
+  });
+
   test('tool failure → classified as tool_failure', () => {
     expect(classifyFailure({ hasToolFailure: true })).toBe('tool_failure');
+  });
+
+  test('tool_loop_circuit_breaker stop reason → classified as tool_failure', () => {
+    expect(classifyFailure({ stopReason: 'tool_loop_circuit_breaker' })).toBe('tool_failure');
   });
 
   test('cascade events → classified as cascade_failure', () => {
@@ -77,6 +90,14 @@ describe('operability gate: forensics classifier coverage', () => {
 
   test('error stop reason → classified as llm_error', () => {
     expect(classifyFailure({ stopReason: 'error' })).toBe('llm_error');
+  });
+
+  test('provider_exhausted stop reason → classified as llm_error', () => {
+    expect(classifyFailure({ stopReason: 'provider_exhausted' })).toBe('llm_error');
+  });
+
+  test('provider_error stop reason → classified as llm_error', () => {
+    expect(classifyFailure({ stopReason: 'provider_error' })).toBe('llm_error');
   });
 
   test('no signals → classified as unknown', () => {
@@ -113,15 +134,15 @@ describe('operability gate: forensics classifier coverage', () => {
       'unknown',
     ];
     // Verify the classifier can produce each value
-    expect(classifyFailure({ wasCancelled: true })).toBe(allClasses.find(c => c === 'cancelled'));
-    expect(classifyFailure({ stopReason: 'max_tokens' })).toBe(allClasses.find(c => c === 'max_tokens'));
-    expect(classifyFailure({ hasCompactionError: true })).toBe(allClasses.find(c => c === 'compaction_error'));
-    expect(classifyFailure({ hasPermissionDenial: true })).toBe(allClasses.find(c => c === 'permission_denied'));
-    expect(classifyFailure({ hasToolFailure: true })).toBe(allClasses.find(c => c === 'tool_failure'));
-    expect(classifyFailure({ hasCascadeEvents: true })).toBe(allClasses.find(c => c === 'cascade_failure'));
-    expect(classifyFailure({ errorMessage: 'timed out' })).toBe(allClasses.find(c => c === 'turn_timeout'));
-    expect(classifyFailure({ errorMessage: 'API error 500' })).toBe(allClasses.find(c => c === 'llm_error'));
-    expect(classifyFailure({})).toBe(allClasses.find(c => c === 'unknown'));
+    expect(classifyFailure({ wasCancelled: true })).toBe('cancelled');
+    expect(classifyFailure({ stopReason: 'max_tokens' })).toBe('max_tokens');
+    expect(classifyFailure({ hasCompactionError: true })).toBe('compaction_error');
+    expect(classifyFailure({ hasPermissionDenial: true })).toBe('permission_denied');
+    expect(classifyFailure({ hasToolFailure: true })).toBe('tool_failure');
+    expect(classifyFailure({ hasCascadeEvents: true })).toBe('cascade_failure');
+    expect(classifyFailure({ errorMessage: 'timed out' })).toBe('turn_timeout');
+    expect(classifyFailure({ errorMessage: 'API error 500' })).toBe('llm_error');
+    expect(classifyFailure({})).toBe('unknown');
     // Confirm total count matches the type union
     expect(allClasses.length).toBe(9);
   });
@@ -171,6 +192,7 @@ describe('operability gate: action factory helpers produce valid actions', () =>
   test('buildLoadReplayAction produces a load-replay action', () => {
     const action = buildLoadReplayAction('run-001');
     expect(action.type).toBe('load-replay');
+    if (action.type !== 'load-replay') throw new Error('unexpected action type');
     expect(action.payload.runId).toBe('run-001');
     expect(typeof action.label).toBe('string');
     expect(action.label.length).toBeGreaterThan(0);
@@ -180,6 +202,7 @@ describe('operability gate: action factory helpers produce valid actions', () =>
   test('buildRunPolicySimulationAction produces a run-policy-simulation action', () => {
     const action = buildRunPolicySimulationAction('exec', { command: 'ls' });
     expect(action.type).toBe('run-policy-simulation');
+    if (action.type !== 'run-policy-simulation') throw new Error('unexpected action type');
     expect(action.payload.toolName).toBe('exec');
     expect(action.payload.args).toEqual({ command: 'ls' });
   });
@@ -187,36 +210,42 @@ describe('operability gate: action factory helpers produce valid actions', () =>
   test('buildJumpToTaskAction produces a jump-to-task action', () => {
     const action = buildJumpToTaskAction('task-123');
     expect(action.type).toBe('jump-to-task');
+    if (action.type !== 'jump-to-task') throw new Error('unexpected action type');
     expect(action.payload.taskId).toBe('task-123');
   });
 
   test('buildJumpToAgentAction produces a jump-to-agent action', () => {
     const action = buildJumpToAgentAction('agent-456');
     expect(action.type).toBe('jump-to-agent');
+    if (action.type !== 'jump-to-agent') throw new Error('unexpected action type');
     expect(action.payload.agentId).toBe('agent-456');
   });
 
   test('buildJumpToToolCallAction produces a jump-to-tool-call action', () => {
     const action = buildJumpToToolCallAction('call-789');
     expect(action.type).toBe('jump-to-tool-call');
+    if (action.type !== 'jump-to-tool-call') throw new Error('unexpected action type');
     expect(action.payload.callId).toBe('call-789');
   });
 
   test('buildRetryTaskAction produces a retry-task action', () => {
     const action = buildRetryTaskAction('task-retry');
     expect(action.type).toBe('retry-task');
+    if (action.type !== 'retry-task') throw new Error('unexpected action type');
     expect(action.payload.taskId).toBe('task-retry');
   });
 
   test('buildCancelTaskAction produces a cancel-task action', () => {
     const action = buildCancelTaskAction('task-cancel');
     expect(action.type).toBe('cancel-task');
+    if (action.type !== 'cancel-task') throw new Error('unexpected action type');
     expect(action.payload.taskId).toBe('task-cancel');
   });
 
   test('buildCancelAgentAction produces a cancel-agent action', () => {
     const action = buildCancelAgentAction('agent-cancel');
     expect(action.type).toBe('cancel-agent');
+    if (action.type !== 'cancel-agent') throw new Error('unexpected action type');
     expect(action.payload.agentId).toBe('agent-cancel');
   });
 });
@@ -276,14 +305,18 @@ describe('operability gate: FailureReport type contract', () => {
       classification: 'tool_failure',
       summary: 'Tool execution failed: permission denied',
       phaseTimings: [],
+      phaseLedger: [],
       causalChain: [],
       cascadeEvents: [],
+      permissionEvidence: [],
+      budgetBreaches: [],
       jumpLinks: [],
     };
 
     expect(report.id).toBeDefined();
     expect(report.classification).toBe('tool_failure');
     expect(Array.isArray(report.phaseTimings)).toBe(true);
+    expect(Array.isArray(report.phaseLedger)).toBe(true);
     expect(Array.isArray(report.causalChain)).toBe(true);
     expect(Array.isArray(report.jumpLinks)).toBe(true);
   });
@@ -298,5 +331,89 @@ describe('operability gate: FailureReport type contract', () => {
     };
     expect(entry.isRootCause).toBe(true);
     expect(entry.seq).toBe(0);
+  });
+
+  test('ForensicsBundle shape satisfies expected contract', () => {
+    const bundle: ForensicsBundle = {
+      schemaVersion: 'v1',
+      exportedAt: Date.now(),
+      report: {
+        id: 'abc123',
+        traceId: 'trace-full-123',
+        sessionId: 'sess-1',
+        generatedAt: Date.now(),
+        classification: 'tool_failure',
+        summary: 'Tool execution failed: permission denied',
+        phaseTimings: [],
+        phaseLedger: [],
+        causalChain: [],
+        cascadeEvents: [],
+        permissionEvidence: [],
+        budgetBreaches: [],
+        jumpLinks: [],
+      },
+      evidence: {
+        rootCause: 'Tool execution failed',
+        terminalPhase: 'TOOL_BATCH',
+        terminalOutcome: 'failed',
+        phaseCount: 1,
+        causalCount: 1,
+        cascadeCount: 0,
+        permissionDecisionCount: 1,
+        deniedPermissionCount: 1,
+        budgetBreachCount: 0,
+        slowPhases: [],
+        jumpLinkCount: 0,
+        relatedIds: {
+          turnId: 'turn-1',
+        },
+      },
+      replay: {
+        status: 'available',
+        runId: 'run-1',
+        currentRev: 4,
+        totalRevisions: 4,
+        mismatchCount: 1,
+        mismatches: [{
+          rev: 4,
+          kind: 'state_divergence',
+          description: 'turn stop reason diverged',
+          ownerDomain: 'turn',
+          failureMode: 'stop_reason_diverged',
+          relatedTurnId: 'turn-1',
+        }],
+        relatedMismatches: [{
+          rev: 4,
+          kind: 'state_divergence',
+          description: 'turn stop reason diverged',
+          ownerDomain: 'turn',
+          failureMode: 'stop_reason_diverged',
+          relatedTurnId: 'turn-1',
+        }],
+        mismatchBreakdown: {
+          byKind: { state_divergence: 1 },
+          byFailureMode: { stop_reason_diverged: 1 },
+          byOwnerDomain: { turn: 1 },
+        },
+        turnSummaries: [{
+          turnId: 'turn-1',
+          outcome: 'failed',
+          terminalEvent: 'TURN_ERROR',
+          terminalRev: 4,
+        }],
+        matchingTurnSummary: {
+          turnId: 'turn-1',
+          outcome: 'failed',
+          terminalEvent: 'TURN_ERROR',
+          terminalRev: 4,
+        },
+      },
+    };
+
+    expect(bundle.schemaVersion).toBe('v1');
+    expect(bundle.report.id).toBe('abc123');
+    expect(bundle.evidence.phaseCount).toBe(1);
+    expect(bundle.replay.mismatchCount).toBe(1);
+    expect(bundle.replay.matchingTurnSummary?.turnId).toBe('turn-1');
   });
 });

@@ -3,7 +3,9 @@
  * message buffer, streaming deltas, and tool dispatch state.
  */
 
-/** States from the turn lifecycle state machine (v3 §4.1). */
+import type { TurnStopReason } from '../../events/turn.ts';
+
+/** States for the turn lifecycle machine. */
 export type TurnState =
   | 'idle'
   | 'preflight'
@@ -14,7 +16,7 @@ export type TurnState =
   | 'failed'
   | 'cancelled';
 
-/** States from the tool execution state machine (v3 §4.2). */
+/** States for the tool execution machine. */
 export type ToolExecutionState =
   | 'received'
   | 'validated'
@@ -60,12 +62,23 @@ export interface StreamProgress {
   accumulated: string;
   /** Latest reasoning delta (if any). */
   reasoningAccumulated: string;
+  /** Compact preview of the most recent partial tool call streamed so far. */
+  partialToolPreview?: string;
   /** Number of delta events received. */
   deltaCount: number;
   /** Epoch ms of the first delta. */
   firstDeltaAt?: number;
   /** Epoch ms of the most recent delta. */
   lastDeltaAt?: number;
+}
+
+export interface TurnReconciliationRecord {
+  count: number;
+  callIds: string[];
+  toolNames: string[];
+  reason: string;
+  timestamp: number;
+  isMalformed: boolean;
 }
 
 /**
@@ -91,6 +104,12 @@ export interface ConversationDomainState {
   turnEndedAt?: number;
   /** Error from the most recent failed turn. */
   lastTurnError?: string;
+  /** Explicit terminal reason for the most recently finished turn. */
+  lastTurnStopReason?: TurnStopReason;
+  /** Final assistant response for the most recently completed turn. */
+  lastTurnResponse?: string;
+  /** Most recent preflight failure message, if any. */
+  lastPreflightFailure?: string;
   /** Total number of turns completed in this session. */
   totalTurns: number;
 
@@ -103,6 +122,8 @@ export interface ConversationDomainState {
   activeToolCalls: Map<string, ActiveToolCall>;
   /** Count of tool calls dispatched in the current turn. */
   toolCallsThisTurn: number;
+  /** Most recent reconciliation record for unresolved or malformed tool calls. */
+  lastToolReconciliation?: TurnReconciliationRecord;
 
   // ── Token accounting ───────────────────────────────────────────────────────
   /** Usage for the current or most recent turn. */
@@ -136,16 +157,21 @@ export function createInitialConversationState(): ConversationDomainState {
     turnStartedAt: undefined,
     turnEndedAt: undefined,
     lastTurnError: undefined,
+    lastTurnStopReason: undefined,
+    lastTurnResponse: undefined,
+    lastPreflightFailure: undefined,
     totalTurns: 0,
     stream: {
       accumulated: '',
       reasoningAccumulated: '',
+      partialToolPreview: undefined,
       deltaCount: 0,
       firstDeltaAt: undefined,
       lastDeltaAt: undefined,
     },
     activeToolCalls: new Map(),
     toolCallsThisTurn: 0,
+    lastToolReconciliation: undefined,
     currentTurnUsage: makeEmptyUsage(),
     sessionUsage: makeEmptyUsage(),
     estimatedContextTokens: 0,

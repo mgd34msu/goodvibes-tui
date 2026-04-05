@@ -62,7 +62,7 @@ const BUILT_IN_MODES: ModeDefinition[] = [
 ];
 
 // ---------------------------------------------------------------------------
-// HITL UX modes (Section 5.11)
+// HITL UX modes.
 // ---------------------------------------------------------------------------
 
 export type HITLMode = 'quiet' | 'balanced' | 'operator';
@@ -166,7 +166,7 @@ export class ModeManager {
   }
 
   // -------------------------------------------------------------------------
-  // HITL UX mode API (Section 5.11)
+  // HITL UX mode API.
   // -------------------------------------------------------------------------
 
   getHITLMode(): HITLMode {

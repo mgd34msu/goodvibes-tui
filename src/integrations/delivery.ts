@@ -153,7 +153,7 @@ export interface DeliveryQueueConfig {
   /**
    * When true, SLO enforcement is active: dead-letter events are logged at
    * error level and metrics are updated. When false, failures are logged at
-   * warn level only (legacy behaviour).
+   * warn level only.
    *
    * Controlled by the `integration-delivery-slo` feature flag.
    */
@@ -438,7 +438,14 @@ export class DeliveryQueue {
     }
 
     for (const listener of this._listeners) {
-      try { listener(dlqEntry); } catch (err) { logger.debug('[delivery] listener error:', err); }
+      try {
+        listener(dlqEntry);
+      } catch (err) {
+        logger.debug('[delivery] listener error:', {
+          error: err instanceof Error ? err.message : String(err),
+          entryId: dlqEntry.id,
+        });
+      }
     }
 
     return 'dead_letter';

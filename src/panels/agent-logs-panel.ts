@@ -4,7 +4,7 @@ import { createEmptyLine, createStyledCell } from '../types/grid.ts';
 import { BasePanel } from './base-panel.ts';
 import { AgentManager } from '../tools/agent/index.ts';
 import type { AgentRecord } from '../tools/agent/index.ts';
-import type { EventBus } from '../core/event-bus.ts';
+import type { RuntimeEventBus, AgentEvent } from '../runtime/events/index.ts';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -82,11 +82,11 @@ export class AgentLogsPanel extends BasePanel {
   private pollTimer: ReturnType<typeof setInterval> | null = null;
   private fsWatcher: FSWatcher | null = null;
   private unsubs: Array<() => void> = [];
-  private eventBus: EventBus;
+  private runtimeBus: RuntimeEventBus;
 
-  constructor(eventBus: EventBus) {
+  constructor(runtimeBus: RuntimeEventBus) {
     super('agent-logs', 'Agent Logs', 'A', 'agent');
-    this.eventBus = eventBus;
+    this.runtimeBus = runtimeBus;
   }
 
   // ── Lifecycle ─────────────────────────────────────────────────────────────
@@ -296,9 +296,9 @@ export class AgentLogsPanel extends BasePanel {
     };
 
     this.unsubs.push(
-      this.eventBus.on('subagent:spawned', onSpawned),
-      this.eventBus.on('subagent:complete', onComplete),
-      this.eventBus.on('subagent:error', onError),
+      this.runtimeBus.on<Extract<AgentEvent, { type: 'AGENT_SPAWNING' }>>('AGENT_SPAWNING', ({ payload }) => onSpawned({ id: payload.agentId, task: payload.task })),
+      this.runtimeBus.on<Extract<AgentEvent, { type: 'AGENT_COMPLETED' }>>('AGENT_COMPLETED', ({ payload }) => onComplete({ id: payload.agentId })),
+      this.runtimeBus.on<Extract<AgentEvent, { type: 'AGENT_FAILED' }>>('AGENT_FAILED', ({ payload }) => onError({ id: payload.agentId, error: new Error(payload.error) })),
     );
   }
 

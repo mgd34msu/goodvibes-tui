@@ -1,5 +1,5 @@
 /**
- * /plan command handler — Section 5.5
+ * /plan command handler.
  *
  * Handles the subcommands of the /plan slash command:
  *   /plan mode auto|single|cohort|background|remote
@@ -13,8 +13,25 @@
 import { adaptivePlanner } from './adaptive-planner-instance.ts';
 import { AdaptivePlanner, VALID_STRATEGIES } from './adaptive-planner.ts';
 import type { ExecutionStrategy } from './adaptive-planner.ts';
-import { EventBus } from './event-bus.ts';
 import { logger } from '../utils/logger.ts';
+import type { RuntimeEventBus } from '../runtime/events/index.ts';
+import { emitPlanStrategyOverridden } from '../runtime/emitters/index.ts';
+
+let runtimeBus: RuntimeEventBus | null = null;
+
+export function setPlanRuntimeBus(bus: RuntimeEventBus | null): void {
+  runtimeBus = bus;
+}
+
+function emitStrategyOverride(data: { strategy: ExecutionStrategy | null; clearedBy?: string }): void {
+  if (runtimeBus) {
+    emitPlanStrategyOverridden(runtimeBus, {
+      sessionId: 'system',
+      traceId: `planner:override:${data.strategy ?? 'none'}`,
+      source: 'plan-command-handler',
+    }, data);
+  }
+}
 
 export interface PlanCommandResult {
   /** Human-readable output to show the user. */
@@ -84,14 +101,14 @@ export function handlePlanCommand(
       if (result.strategy === 'auto') {
         // override('auto') already cleared the override internally
         logger.info('[PlanCommandHandler] override cleared via auto');
-        EventBus.getInstance()?.emit('plan:strategy-override', { strategy: 'auto', clearedBy: 'override(auto)' });
+        emitStrategyOverride({ strategy: 'auto', clearedBy: 'override(auto)' });
         return {
           ok: true,
           output: 'Execution strategy override cleared. Planner will run in auto mode.',
         };
       }
       logger.info('[PlanCommandHandler] override applied', { strategy: result.strategy });
-      EventBus.getInstance()?.emit('plan:strategy-override', { strategy: result.strategy });
+      emitStrategyOverride({ strategy: result.strategy });
       return {
         ok: true,
         output: `Execution strategy overridden to **${result.strategy.toUpperCase()}**.\n`
@@ -103,7 +120,7 @@ export function handlePlanCommand(
       adaptivePlanner.clearOverride();
       adaptivePlanner.setMode('auto');
       logger.info('[PlanCommandHandler] mode and override reset to auto');
-      EventBus.getInstance()?.emit('plan:strategy-override', { strategy: 'auto', clearedBy: 'clear' });
+      emitStrategyOverride({ strategy: 'auto', clearedBy: 'clear' });
       return {
         ok: true,
         output: 'Planner mode and override reset to **auto**.',

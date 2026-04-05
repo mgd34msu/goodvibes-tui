@@ -2,7 +2,7 @@
  * DiagnosticsProvider — aggregates all diagnostic panel data providers
  * into a single unified interface.
  *
- * Implements the provider contract from v3 Section 18.3 and Section 26.
+ * Implements the provider contract for diagnostics and the state inspector.
  * Wire this up once during runtime initialization and pass it to all
  * panels that need diagnostic data.
  *

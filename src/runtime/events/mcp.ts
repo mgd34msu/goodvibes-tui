@@ -1,7 +1,7 @@
 /**
  * McpEvent — discriminated union covering all MCP (Model Context Protocol) server events.
  *
- * Maps to state machine events from v3 Section 4 (MCP domain).
+ * Covers MCP server lifecycle events for the runtime event bus.
  */
 
 export type McpEvent =

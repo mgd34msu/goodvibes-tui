@@ -1,7 +1,7 @@
 /**
  * lifecycle.ts
  *
- * Compaction lifecycle state machine for the v2 compaction engine (v3 §4.10).
+ * Compaction lifecycle state machine for the compaction engine.
  *
  * Provides:
  * - Valid transition map for the 9-state machine

@@ -1,16 +1,7 @@
 /**
- * Permissions v2 — LayeredPolicyEvaluator.
+ * Runtime permissions evaluator.
  *
  * Evaluates tool calls through a layered priority stack. First match wins.
- *
- * Layer order (highest to lowest priority):
- *   1. Safety checks (bypass-immune, always run)
- *   2. Mode constraints (active-mode-specific restrictions)
- *   3. Session overrides (cached per-session allow/deny)
- *   4. Policy rules (user rules first, then managed rules)
- *   5. Default policy (fallback)
- *
- * Returns a PermissionDecision with a full evaluation trace.
  */
 
 import type {
@@ -21,7 +12,7 @@ import type {
   EvaluationStep,
   PolicyRule,
   SourceLayer,
-  PermissionsV2Config,
+  PermissionsConfig,
 } from './types.ts';
 import type { BundleProvenance } from './policy-loader.ts';
 
@@ -37,11 +28,10 @@ import { evaluateModeConstraintRule } from './rules/mode-constraint.ts';
 
 const READ_TOOLS: ReadonlySet<string> = new Set([
   'read', 'find', 'fetch', 'analyze', 'inspect', 'state', 'registry',
-  'file_read', 'grep', 'list_dir', 'glob',
 ]);
 
 const WRITE_TOOLS: ReadonlySet<string> = new Set([
-  'write', 'edit', 'file_write', 'file_edit',
+  'write', 'edit',
 ]);
 
 const NETWORK_TOOLS: ReadonlySet<string> = new Set([
@@ -238,7 +228,7 @@ function dispatchPolicyRule(
 // ── LayeredPolicyEvaluator ───────────────────────────────────────────────────────
 
 /**
- * LayeredPolicyEvaluator — Core evaluator for Permissions v2.
+ * LayeredPolicyEvaluator — Core runtime permissions evaluator.
  *
  * Evaluates tool calls through five layers in priority order.
  * Maintains a session approval cache and a structured audit log.
@@ -261,7 +251,7 @@ export class LayeredPolicyEvaluator {
 
   private static readonly MAX_SESSION_CACHE_SIZE = 500;
 
-  constructor(config: PermissionsV2Config, provenance?: BundleProvenance) {
+  constructor(config: PermissionsConfig, provenance?: BundleProvenance) {
     this.mode = config.mode ?? 'default';
     this.rules = config.rules ?? [];
     this.defaultEffect = config.defaultEffect ?? 'deny';

@@ -47,15 +47,14 @@ function makeCloudModel(overrides: Partial<ModelDefinition> = {}): ModelDefiniti
     capabilities: { toolCalling: true, codeEditing: true, reasoning: false, multimodal: false },
     contextWindow: 128000,
     selectable: true,
-    tier: 'paid',
+    tier: 'standard',
     ...overrides,
   };
 }
 
 const MINIMAL_CATALOG: PricingCatalog = {
+  fetchedAt: Date.now(),
   models: [],
-  version: 1,
-  updated: '2026-01-01',
 };
 
 // ---------------------------------------------------------------------------
@@ -346,7 +345,7 @@ describe('ModelPickerModal — Escape from contextCap resets state', () => {
     // Simulate handler escape logic
     picker.contextCapQuery = '';
     picker.contextCapPendingModel = null;
-    picker.mode = 'model' as any;
+    picker.mode = 'model';
 
     expect(picker.mode).toBe('model');
     expect(picker.contextCapQuery).toBe('');
@@ -364,7 +363,7 @@ describe('ModelPickerModal — Escape from contextCap resets state', () => {
     // Simulate escape — cancel without applying
     picker.contextCapQuery = '';
     picker.contextCapPendingModel = null;
-    picker.mode = 'model' as any;
+    picker.mode = 'model';
 
     // The original model object's contextWindow is untouched
     expect(local.contextWindow).toBe(4096);

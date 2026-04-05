@@ -1,5 +1,5 @@
 /**
- * Permissions v2 — Argument shape/content policy rule evaluator.
+ * Argument shape/content policy rule evaluator.
  *
  * ArgShapeRule matches tool calls by testing that all specified key/value pairs
  * are present in the tool's arguments. Values may be literal matches or regex

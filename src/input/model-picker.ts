@@ -272,11 +272,6 @@ export class ModelPickerModal {
     this.scrollOffset = 0;
   }
 
-  /** Backward-compat alias for openAllModels (used by existing wiring). */
-  open(models: ModelDefinition[], currentModelId: string): void {
-    this.openAllModels(models, currentModelId);
-  }
-
   /** Close the picker entirely. */
   close(): void {
     this.active = false;

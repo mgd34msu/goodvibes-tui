@@ -1,5 +1,5 @@
 /**
- * GC-TOOL-007: Output schema fingerprint utility.
+ * Output schema fingerprint utility.
  *
  * Provides stable SHA-256 fingerprints derived from the sorted key set of a
  * tool result object. The same output mode / input class always produces the
@@ -9,8 +9,7 @@
  * Integration pattern:
  *   1. After a mode-specific result is produced, call `appendSchemaFingerprint`.
  *   2. The `_meta.outputSchemaFingerprint` field is appended to the result object.
- *   3. When the feature flag is disabled the result object is returned unchanged
- *      (rollback / compatibility mode).
+ *   3. When the feature flag is disabled the result object is returned unchanged.
  */
 
 // ── Feature flag integration ──────────────────────────────────────────────────
@@ -29,7 +28,7 @@ export function isSchemaFingerprintEnabled(): boolean {
       FeatureFlagManager: { getInstance?: () => { isEnabled(id: string): boolean } };
     };
     const manager = FeatureFlagManager.getInstance?.();
-    return manager?.isEnabled('gc-tool-007-output-schema-fingerprint') ?? false;
+    return manager?.isEnabled('output-schema-fingerprint') ?? false;
   } catch {
     // Non-fatal — diagnostics must never block tool execution
     return false;
@@ -98,8 +97,7 @@ export const SCHEMA_SHAPE_IDS: Record<string, string> = {
 
 /**
  * Returns the canonical shape ID for a given tool and mode combination.
- * Falls back to `<tool>.<mode>.v1` for unknown combinations to remain
- * forward-compatible with new modes added without updating this registry.
+ * Falls back to `<tool>.<mode>.v1` for unknown combinations.
  */
 export function getSchemaShapeId(tool: string, mode: string): string {
   const key = `${tool}:${mode}`;
@@ -184,7 +182,7 @@ export interface SchemaFingerprintMeta {
 /**
  * Append `_meta.outputSchemaFingerprint` to a result object when the feature
  * flag is enabled. Returns the original object unchanged when the flag is
- * disabled (rollback / compatibility mode).
+ * disabled.
  *
  * @param result   The mode result object (plain, not yet JSON-stringified).
  * @param tool     Tool name: `'find'`, `'analyze'`, or `'inspect'`.
@@ -203,10 +201,15 @@ export function appendSchemaFingerprint(
   const shapeId = getSchemaShapeId(tool, mode);
   const fingerprint = computeSchemaFingerprintSync(result);
 
+  const existingMeta =
+    typeof result._meta === 'object' && result._meta !== null
+      ? (result._meta as Record<string, unknown>)
+      : undefined;
+
   return {
     ...result,
     _meta: {
-      ...((result as any)._meta ?? {}),
+      ...(existingMeta ?? {}),
       schemaShapeId: shapeId,
       outputSchemaFingerprint: fingerprint,
     } satisfies SchemaFingerprintMeta,

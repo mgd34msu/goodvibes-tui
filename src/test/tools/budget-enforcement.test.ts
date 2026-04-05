@@ -10,6 +10,7 @@
  */
 import { describe, test, expect, mock } from 'bun:test';
 import { budgetPhase } from '../../runtime/tools/phases/budget.ts';
+import { RuntimeEventBus } from '../../runtime/events/index.ts';
 import type { ToolCall, ToolResult } from '../../types/tools.ts';
 import type { ToolRuntimeContext } from '../../runtime/tools/context.ts';
 import type { ToolExecutionRecord } from '../../runtime/tools/types.ts';
@@ -48,6 +49,7 @@ function makeContext(
       signal: new AbortController().signal,
     },
     executionMode: 'interactive',
+    runtimeBus: new RuntimeEventBus(),
     permissionManager: { check: async () => true } as never,
     hookDispatcher: { fire: async () => ({ decision: 'allow' }) } as never,
     budget,

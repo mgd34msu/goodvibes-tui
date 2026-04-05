@@ -1,5 +1,5 @@
 /**
- * Permissions v2 — Prefix matching policy rule evaluator.
+ * Prefix matching policy rule evaluator.
  *
  * PrefixRule matches tool calls by tool name and optionally the command prefix
  * of the first string argument. Independently testable — no external dependencies.

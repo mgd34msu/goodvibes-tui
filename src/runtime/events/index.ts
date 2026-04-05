@@ -14,15 +14,19 @@ export type { RuntimeEventEnvelope, EnvelopeContext } from './envelope.ts';
 export { createEventEnvelope } from './envelope.ts';
 export type { SessionEvent, SessionEventType } from './session.ts';
 export type { TurnEvent, TurnEventType } from './turn.ts';
+export type { ProviderEvent, ProviderEventType } from './providers.ts';
 export type { ToolEvent, ToolEventType } from './tools.ts';
 export type { TaskEvent, TaskEventType } from './tasks.ts';
 export type { AgentEvent, AgentEventType } from './agents.ts';
+export type { WorkflowEvent, WorkflowEventType } from './workflows.ts';
+export type { PlannerEvent, PlannerEventType } from './planner.ts';
 export type { PermissionEvent, PermissionEventType } from './permissions.ts';
 export type { PluginEvent, PluginEventType } from './plugins.ts';
 export type { McpEvent, McpEventType } from './mcp.ts';
 export type { TransportEvent, TransportEventType } from './transport.ts';
 export type { CompactionEvent, CompactionEventType } from './compaction.ts';
 export type { UIEvent, UIEventType } from './ui.ts';
+export type { OpsEvent, OpsEventType } from './ops.ts';
 export type { AnyRuntimeEvent, RuntimeEventPayload, RuntimeEventDomain, DomainEventMap } from './domain-map.ts';
 
 /** Listener callback receiving a fully-formed envelope. */
@@ -49,7 +53,7 @@ const MAX_LISTENERS = 100;
  * All events are wrapped in a RuntimeEventEnvelope providing traceId,
  * sessionId, timestamps, and source context.
  *
- * Designed to coexist with the legacy EventBus during gradual migration.
+ * This is the authoritative event transport for runtime domain signaling.
  */
 export class RuntimeEventBus {
   /** Per-event-type listener sets. Keyed by the exact event type string. */

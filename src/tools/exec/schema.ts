@@ -295,5 +295,5 @@ export interface ExecCommandResult {
   progress_file?: string;
 }
 
-// BackgroundProcess is defined in shared/process-manager and re-exported here for backward compat.
+// BackgroundProcess is defined in shared/process-manager and re-exported here for consumers of this schema module.
 export type { BackgroundProcess } from '../shared/process-manager.ts';

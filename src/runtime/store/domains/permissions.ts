@@ -13,7 +13,7 @@ export type PermissionMode =
   | 'custom'
   | 'background-restricted';
 
-/** States from the permission decision state machine (v3 §4.3). */
+/** States for the permission decision machine. */
 export type PermissionDecisionMachineState =
   | 'collect_rules'
   | 'normalize_input'

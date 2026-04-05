@@ -15,14 +15,14 @@ import type { ToolDefinition, ToolCall } from '../../types/tools.ts';
 import type { ProviderMessage } from '../../providers/interface.ts';
 
 const sampleTool: ToolDefinition = {
-  name: 'file_read',
+  name: 'read',
   description: 'Read a file',
   parameters: { type: 'object', properties: { path: { type: 'string' } }, required: ['path'] },
 };
 
 const sampleToolCall: ToolCall = {
   id: 'call-1',
-  name: 'file_read',
+  name: 'read',
   arguments: { path: 'src/main.ts' },
 };
 
@@ -33,7 +33,7 @@ describe('toOpenAITools', () => {
   test('converts tool definition to OpenAI tool format', () => {
     const [result] = toOpenAITools([sampleTool]);
     expect(result.type).toBe('function');
-    expect(result.function.name).toBe('file_read');
+    expect(result.function.name).toBe('read');
     expect(result.function.description).toBe('Read a file');
     expect(result.function.parameters).toBe(sampleTool.parameters);
   });
@@ -45,22 +45,22 @@ describe('toOpenAITools', () => {
   test('converts multiple tools', () => {
     const tools = [
       sampleTool,
-      { name: 'file_write', description: 'Write a file', parameters: {} },
+      { name: 'write', description: 'Write a file', parameters: {} },
     ];
     const result = toOpenAITools(tools);
     expect(result).toHaveLength(2);
-    expect(result[1].function.name).toBe('file_write');
+    expect(result[1].function.name).toBe('write');
   });
 });
 
 describe('fromOpenAIToolCalls', () => {
   test('parses OpenAI tool calls into internal ToolCall format', () => {
     const openAICalls = [
-      { id: 'c1', type: 'function' as const, function: { name: 'file_read', arguments: '{"path":"foo.ts"}' } },
+      { id: 'c1', type: 'function' as const, function: { name: 'read', arguments: '{"path":"foo.ts"}' } },
     ];
     const [result] = fromOpenAIToolCalls(openAICalls);
     expect(result.id).toBe('c1');
-    expect(result.name).toBe('file_read');
+    expect(result.name).toBe('read');
     expect(result.arguments).toEqual({ path: 'foo.ts' });
   });
 
@@ -98,7 +98,7 @@ describe('toOpenAIMessages', () => {
     const [result] = toOpenAIMessages(msgs);
     expect(result.role).toBe('assistant');
     expect(result.tool_calls).toHaveLength(1);
-    expect(result.tool_calls![0].function.name).toBe('file_read');
+    expect(result.tool_calls![0].function.name).toBe('read');
   });
 
   test('converts tool result messages', () => {
@@ -124,7 +124,7 @@ describe('toOpenAIMessages', () => {
 describe('toAnthropicTools', () => {
   test('converts tool to Anthropic format with input_schema', () => {
     const [result] = toAnthropicTools([sampleTool]);
-    expect(result.name).toBe('file_read');
+    expect(result.name).toBe('read');
     expect(result.description).toBe('Read a file');
     expect(result.input_schema).toBe(sampleTool.parameters);
   });
@@ -142,19 +142,19 @@ describe('fromAnthropicContent', () => {
     const content = [{
       type: 'tool_use' as const,
       id: 'tu-1',
-      name: 'file_read',
+      name: 'read',
       input: { path: 'src/main.ts' },
     }];
     const { text, toolCalls } = fromAnthropicContent(content);
     expect(text).toBe('');
     expect(toolCalls).toHaveLength(1);
-    expect(toolCalls[0]).toEqual({ id: 'tu-1', name: 'file_read', arguments: { path: 'src/main.ts' } });
+    expect(toolCalls[0]).toEqual({ id: 'tu-1', name: 'read', arguments: { path: 'src/main.ts' } });
   });
 
   test('handles mixed text and tool_use blocks', () => {
     const content = [
       { type: 'text' as const, text: 'I will read the file.' },
-      { type: 'tool_use' as const, id: 'tu-2', name: 'file_read', input: {} },
+      { type: 'tool_use' as const, id: 'tu-2', name: 'read', input: {} },
     ];
     const { text, toolCalls } = fromAnthropicContent(content);
     expect(text).toBe('I will read the file.');
@@ -205,7 +205,7 @@ describe('toAnthropicMessages', () => {
 describe('toGeminiFunctionDeclarations', () => {
   test('converts tool to Gemini function declaration', () => {
     const [result] = toGeminiFunctionDeclarations([sampleTool]);
-    expect(result.name).toBe('file_read');
+    expect(result.name).toBe('read');
     expect(result.description).toBe('Read a file');
     expect(result.parameters).toEqual(sampleTool.parameters);
   });
@@ -220,11 +220,11 @@ describe('fromGeminiParts', () => {
   });
 
   test('extracts functionCall parts as ToolCalls', () => {
-    const parts = [{ functionCall: { name: 'file_read', args: { path: 'main.ts' } } }];
+    const parts = [{ functionCall: { name: 'read', args: { path: 'main.ts' } } }];
     const { text, toolCalls } = fromGeminiParts(parts);
     expect(text).toBe('');
     expect(toolCalls).toHaveLength(1);
-    expect(toolCalls[0].name).toBe('file_read');
+    expect(toolCalls[0].name).toBe('read');
     expect(toolCalls[0].arguments).toEqual({ path: 'main.ts' });
   });
 
@@ -267,10 +267,10 @@ describe('extractTextToolCalls', () => {
   });
 
   test('extracts a single tool call with name, parsed args, and generated id', () => {
-    const content = makeCall('file_read', 0, '{"path":"src/main.ts"}');
+    const content = makeCall('read', 0, '{"path":"src/main.ts"}');
     const { toolCalls, cleanedContent } = extractTextToolCalls(content);
     expect(toolCalls).toHaveLength(1);
-    expect(toolCalls[0].name).toBe('file_read');
+    expect(toolCalls[0].name).toBe('read');
     expect(toolCalls[0].arguments).toEqual({ path: 'src/main.ts' });
     expect(toolCalls[0].id).toBe('text-call-0');
     expect(cleanedContent).toBe('');
@@ -278,14 +278,14 @@ describe('extractTextToolCalls', () => {
 
   test('extracts multiple tool calls in one response', () => {
     const content = [
-      makeCall('file_read', 0, '{"path":"a.ts"}'),
-      makeCall('file_write', 1, '{"path":"b.ts","content":"x"}'),
+      makeCall('read', 0, '{"path":"a.ts"}'),
+      makeCall('write', 1, '{"path":"b.ts","content":"x"}'),
     ].join(' ');
     const { toolCalls, cleanedContent } = extractTextToolCalls(content);
     expect(toolCalls).toHaveLength(2);
-    expect(toolCalls[0].name).toBe('file_read');
+    expect(toolCalls[0].name).toBe('read');
     expect(toolCalls[0].id).toBe('text-call-0');
-    expect(toolCalls[1].name).toBe('file_write');
+    expect(toolCalls[1].name).toBe('write');
     expect(toolCalls[1].id).toBe('text-call-1');
     expect(cleanedContent).toBe('');
   });
@@ -298,7 +298,7 @@ describe('extractTextToolCalls', () => {
   });
 
   test('removes tool-call tokens and trims surrounding content', () => {
-    const content = `Thinking... ${makeCall('file_read', 0, '{"path":"x"}')} Done.`;
+    const content = `Thinking... ${makeCall('read', 0, '{"path":"x"}')} Done.`;
     const { cleanedContent } = extractTextToolCalls(content);
     expect(cleanedContent).toBe('Thinking...  Done.');
   });
@@ -332,14 +332,14 @@ describe('extractTextToolCalls', () => {
   });
 
   test('underscore format: strips trailing <|tool_calls_section_end|>', () => {
-    const content = `${makeCallU('file_read', 0, '{"path":"x"}')}${sectionEndU}`;
+    const content = `${makeCallU('read', 0, '{"path":"x"}')}${sectionEndU}`;
     const { toolCalls, cleanedContent } = extractTextToolCalls(content);
     expect(toolCalls).toHaveLength(1);
     expect(cleanedContent).toBe('');
   });
 
   test('underscore format: strips section-end and surrounding text', () => {
-    const content = `Thinking... ${makeCallU('file_read', 0, '{"path":"y"}')}${sectionEndU} Done.`;
+    const content = `Thinking... ${makeCallU('read', 0, '{"path":"y"}')}${sectionEndU} Done.`;
     const { toolCalls, cleanedContent } = extractTextToolCalls(content);
     expect(toolCalls).toHaveLength(1);
     expect(cleanedContent).toBe('Thinking...  Done.');
@@ -347,13 +347,13 @@ describe('extractTextToolCalls', () => {
 
   test('underscore format: extracts multiple tool calls', () => {
     const content = [
-      makeCallU('file_read', 0, '{"path":"a.ts"}'),
-      makeCallU('file_write', 1, '{"path":"b.ts","content":"x"}'),
+      makeCallU('read', 0, '{"path":"a.ts"}'),
+      makeCallU('write', 1, '{"path":"b.ts","content":"x"}'),
     ].join(' ') + sectionEndU;
     const { toolCalls, cleanedContent } = extractTextToolCalls(content);
     expect(toolCalls).toHaveLength(2);
-    expect(toolCalls[0].name).toBe('file_read');
-    expect(toolCalls[1].name).toBe('file_write');
+    expect(toolCalls[0].name).toBe('read');
+    expect(toolCalls[1].name).toBe('write');
     expect(cleanedContent).toBe('');
   });
 
@@ -387,7 +387,7 @@ describe('toGeminiContents', () => {
   test('merges tool results into user functionResponse parts', () => {
     const msgs: ProviderMessage[] = [
       { role: 'assistant', content: '', toolCalls: [sampleToolCall] },
-      { role: 'tool', callId: 'call-1', content: 'result', name: 'file_read' },
+      { role: 'tool', callId: 'call-1', content: 'result', name: 'read' },
     ];
     const { contents } = toGeminiContents(msgs);
     const last = contents[contents.length - 1];

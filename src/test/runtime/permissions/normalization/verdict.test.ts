@@ -1,5 +1,5 @@
 /**
- * Verdict evaluation tests for Shell AST normalization (GC-EXEC-005).
+ * Verdict evaluation tests for Shell AST normalization.
  *
  * Tests cover:
  *  - Per-segment verdict evaluation (allow/deny)

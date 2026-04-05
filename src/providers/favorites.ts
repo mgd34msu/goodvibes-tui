@@ -1,6 +1,7 @@
 import { join } from 'path';
 import { homedir } from 'node:os';
 import { mkdirSync } from 'node:fs';
+import { randomUUID } from 'node:crypto';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -76,7 +77,7 @@ export async function loadFavorites(): Promise<FavoritesData> {
 async function saveFavorites(data: FavoritesData): Promise<void> {
   const path = getFavoritesPath();
   mkdirSync(_favoritesDir, { recursive: true });
-  const tmp = `${path}.tmp.${Date.now()}`;
+  const tmp = `${path}.tmp.${randomUUID()}`;
   await Bun.write(tmp, JSON.stringify(data, null, 2));
   const { rename } = await import('node:fs/promises');
   await rename(tmp, path);

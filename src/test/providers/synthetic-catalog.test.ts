@@ -11,11 +11,12 @@
  *   - Failover within tier (rate-limit triggers next backend)
  */
 
-import { describe, it, expect, beforeEach, afterEach, mock, afterAll } from 'bun:test';
+import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
 import {
   SyntheticProvider,
   _setSyntheticCatalogForTest,
   _resetSyntheticCatalog,
+  _setSyntheticProviderLookupForTest,
 } from '../../providers/synthetic.ts';
 import type { CanonicalModel } from '../../providers/synthetic.ts';
 import { _setEntriesForTest } from '../../providers/model-benchmarks.ts';
@@ -202,20 +203,7 @@ const CATALOG_FAILOVER: CanonicalModel[] = [
 // Registry mock: dynamic map from providerName -> LLMProvider
 // ---------------------------------------------------------------------------
 
-// We intercept the dynamic import of registry.ts inside SyntheticProvider.chat()
-// by mocking the module. Bun supports mock.module for this purpose.
-
 const registryMap = new Map<string, LLMProvider>();
-
-mock.module('../../providers/registry.ts', () => ({
-  providerRegistry: {
-    get: (name: string): LLMProvider => {
-      const p = registryMap.get(name);
-      if (!p) throw new Error(`Provider not found: ${name}`);
-      return p;
-    },
-  },
-}));
 
 // ---------------------------------------------------------------------------
 // Test lifecycle
@@ -227,6 +215,11 @@ beforeEach(() => {
   process.env = { ...originalEnv };
   registryMap.clear();
   _setEntriesForTest([]);
+  _setSyntheticProviderLookupForTest((name: string): LLMProvider => {
+    const provider = registryMap.get(name);
+    if (!provider) throw new Error(`Provider not found: ${name}`);
+    return provider;
+  });
 });
 
 afterEach(() => {
@@ -234,6 +227,7 @@ afterEach(() => {
   registryMap.clear();
   _resetSyntheticCatalog();
   _setEntriesForTest([]);
+  _setSyntheticProviderLookupForTest(null);
 });
 
 // ---------------------------------------------------------------------------
@@ -579,8 +573,4 @@ describe('failover within tier', () => {
     const response = await provider.chat({ ...DUMMY_REQUEST, model: 'failover-model' });
     expect(response.content).toBe('ok-provider/ok');
   });
-});
-
-afterAll(() => {
-  mock.restore();
 });

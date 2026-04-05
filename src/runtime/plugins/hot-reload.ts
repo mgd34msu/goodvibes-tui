@@ -1,5 +1,5 @@
 /**
- * Safe hot-reload protocol for plugins — v3 §9.2.
+ * Safe hot-reload protocol for plugins.
  *
  * Implements the 6-phase hot-reload sequence:
  *   1. Quiesce   — stop accepting new work from the plugin
@@ -84,7 +84,7 @@ async function defaultHealthCheck(name: string): Promise<PluginHealthCheckResult
  * @param name      - Plugin name.
  * @param manifest  - Current manifest for the plugin.
  * @param pluginDir - Absolute path to the plugin directory.
- * @param deps      - Loader dependencies (EventBus, registries, etc.).
+ * @param deps      - Loader dependencies (runtime bus, registries, etc.).
  * @param lcm       - PluginLifecycleManager to track state transitions.
  * @param options   - Host-side callbacks and configuration.
  * @returns HotReloadResult describing the outcome.
@@ -127,12 +127,10 @@ export async function runHotReload(
     return failure('quiesce', String(err), startTs);
   }
 
-  // ── Phase 2: Unregister ─────────────────────────────────────────────────
-  // The existing plugin's cleanup callbacks handle un-registration. We rely
-  // on the unload phase (which calls entry.deactivate() + cleanup[]) to
-  // remove registrations. This phase is a no-op placeholder for future
-  // explicit unregistration hooks.
-  logger.debug(`[plugin-hot-reload] ${name}: phase 2/6 unregister (deferred to unload)`);
+  // ── Phase 2: Prepare unregister ──────────────────────────────────────────
+  // The existing plugin's cleanup callbacks handle un-registration during
+  // unload, so there is no separate hook dispatch here.
+  logger.debug(`[plugin-hot-reload] ${name}: phase 2/6 unregister scheduled with unload cleanup`);
 
   // ── Phase 3: Unload ─────────────────────────────────────────────────────
   try {

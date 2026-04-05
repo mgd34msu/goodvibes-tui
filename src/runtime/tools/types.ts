@@ -12,7 +12,7 @@ export type BudgetExceedReason =
   | 'BUDGET_EXCEEDED_COST';
 
 /**
- * ToolExecutionPhase — all states in the tool execution machine (v3 Section 4.2).
+ * ToolExecutionPhase — all states in the tool execution machine.
  *
  * Transitions:
  *   received → validated → prehooked → permissioned → executing → mapped → posthooked

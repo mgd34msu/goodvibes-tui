@@ -1,7 +1,7 @@
 /**
  * compaction-sections.ts
  *
- * Section builder functions for Context Compaction v2.
+ * Section builder functions for prompt compaction.
  *
  * Rule-based builders return CompactionSection | null directly.
  * LLM-assisted builders return a string prompt to be sent to the LLM by the
@@ -47,7 +47,7 @@ function makeSection(
 }
 
 // ---------------------------------------------------------------------------
-// Section 0: Handoff header
+// Handoff header
 // ---------------------------------------------------------------------------
 
 /**
@@ -66,7 +66,7 @@ export function buildHandoffHeader(): CompactionSection {
 }
 
 // ---------------------------------------------------------------------------
-// Section 1: Session memories
+// Session memories
 // ---------------------------------------------------------------------------
 
 /**
@@ -86,7 +86,7 @@ export function buildSessionMemories(
 }
 
 // ---------------------------------------------------------------------------
-// Section 2: Current task
+// Current task
 // ---------------------------------------------------------------------------
 
 /**
@@ -105,7 +105,7 @@ export function buildCurrentTask(
 }
 
 // ---------------------------------------------------------------------------
-// Section 3: Running agents
+// Running agents
 // ---------------------------------------------------------------------------
 
 /**
@@ -140,7 +140,7 @@ export function buildRunningAgents(
 }
 
 // ---------------------------------------------------------------------------
-// Section 4a: Recent conversation gather
+// Recent conversation gather
 // ---------------------------------------------------------------------------
 
 /**
@@ -175,7 +175,7 @@ export function gatherRecentConversation(
 }
 
 // ---------------------------------------------------------------------------
-// Section 4b: LLM substance filter prompt
+// LLM substance filter prompt
 // ---------------------------------------------------------------------------
 
 /**
@@ -212,7 +212,7 @@ export function buildToolResultsPrompt(toolMessages: ProviderMessage[]): string 
 }
 
 // ---------------------------------------------------------------------------
-// Section 5: Recent conversation substance filter prompt
+// Recent conversation substance filter prompt
 // ---------------------------------------------------------------------------
 
 /**
@@ -255,7 +255,7 @@ export function buildConversationFilterPrompt(
 }
 
 // ---------------------------------------------------------------------------
-// Section 6: Agent activity table
+// Agent activity table
 // ---------------------------------------------------------------------------
 
 /**
@@ -335,7 +335,7 @@ function terminalResult(state: WrfcChain['state']): string {
 }
 
 // ---------------------------------------------------------------------------
-// Section 7: Older agent summary prompt (LLM-assisted)
+// Older agent summary prompt (LLM-assisted)
 // ---------------------------------------------------------------------------
 
 /**
@@ -374,7 +374,7 @@ export function buildOlderAgentSummaryPrompt(olderChains: WrfcChain[]): string {
 }
 
 // ---------------------------------------------------------------------------
-// Section 8: Resolved problems prompt (LLM-assisted)
+// Resolved problems prompt (LLM-assisted)
 // ---------------------------------------------------------------------------
 
 /**
@@ -414,7 +414,7 @@ export function buildResolvedProblemsPrompt(
 }
 
 // ---------------------------------------------------------------------------
-// Section 9: Plan progress
+// Plan progress
 // ---------------------------------------------------------------------------
 
 /**
@@ -465,7 +465,7 @@ export function buildPlanProgress(
 }
 
 // ---------------------------------------------------------------------------
-// Section 10: Session lineage
+// Session lineage
 // ---------------------------------------------------------------------------
 
 /**

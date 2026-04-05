@@ -1,5 +1,5 @@
 /**
- * GC-PERM-009 — Tests for DivergenceDashboard enforce gate and trend history.
+ * Tests for DivergenceDashboard enforce gate and trend history.
  *
  * Covers:
  *   - checkEnforceGate(): no_data, allowed, blocked states
@@ -23,11 +23,42 @@ import {
 
 /** Creates a simulator preconfigured in warn-on-divergence mode. */
 function makeSimulator() {
-  // actual: allow-all; simulated: plan (blocks write/network)
-  // This guarantees divergence on write tool calls.
+  // Keep reads aligned and selectively diverge writes under /tmp/.
+  // That makes the gate math stable under the stricter reason/source mismatch
+  // semantics introduced in the current simulator.
   return new PermissionSimulator(
-    { mode: 'allow-all' },
-    { mode: 'plan' },
+    {
+      mode: 'default',
+      rules: [
+        {
+          id: 'allow-reads',
+          type: 'prefix',
+          origin: 'managed',
+          effect: 'allow',
+          toolPattern: 'read',
+        },
+        {
+          id: 'allow-tmp-writes',
+          type: 'prefix',
+          origin: 'user',
+          effect: 'allow',
+          toolPattern: 'write',
+          commandPrefixes: ['/tmp/'],
+        },
+      ],
+    },
+    {
+      mode: 'default',
+      rules: [
+        {
+          id: 'allow-reads',
+          type: 'prefix',
+          origin: 'managed',
+          effect: 'allow',
+          toolPattern: 'read',
+        },
+      ],
+    },
     'warn-on-divergence',
   );
 }
@@ -38,11 +69,11 @@ function drive(
   { total, diverging }: { total: number; diverging: number },
 ) {
   for (let i = 0; i < diverging; i++) {
-    // write tool — allow-all allows, plan blocks → divergence
+    // write tool — actual allows /tmp/ writes, simulated denies them
     sim.evaluate('write', { path: `/tmp/file-${i}.txt` });
   }
   for (let i = diverging; i < total; i++) {
-    // read tool — both evaluators allow it
+    // read tool — both evaluators allow it with the same managed rule
     sim.evaluate('read', { path: `/tmp/file-${i}.txt` });
   }
 }
@@ -319,4 +350,3 @@ describe('DivergenceDashboard.isGatePassing()', () => {
     expect(dash.isGatePassing()).toBe(false);
   });
 });
-

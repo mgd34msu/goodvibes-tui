@@ -1,5 +1,5 @@
 /**
- * Ops Strategy Timeline Panel — Section 5.5
+ * Ops Strategy Timeline Panel.
  *
  * Renders the Adaptive Execution Planner state: current strategy, reason
  * code, mode, override status, and a scrollable history of past decisions.
@@ -10,7 +10,7 @@
 import { BasePanel } from './base-panel.ts';
 import type { Line } from '../types/grid.ts';
 import { createStyledCell } from '../types/grid.ts';
-import type { EventBus } from '../core/event-bus.ts';
+import type { RuntimeEventBus, PlannerEvent } from '../runtime/events/index.ts';
 import { adaptivePlanner } from '../core/adaptive-planner-instance.ts';
 import type { PlannerDecision, ExecutionStrategy } from '../core/adaptive-planner.ts';
 
@@ -90,21 +90,19 @@ export class OpsStrategyPanel extends BasePanel {
   private scrollOffset = 0;
   private history: PlannerDecision[] = [];
 
-  constructor(private readonly eventBus?: EventBus) {
+  constructor(private readonly runtimeBus: RuntimeEventBus) {
     super('ops', 'Ops', 'O', 'agent');
   }
 
   override onActivate(): void {
     super.onActivate();
     this._syncHistory();
-    if (!this.eventBus) return;
-
     this.unsubscribers.push(
-      this.eventBus.on('plan:strategy-selected', () => {
+      this.runtimeBus.on<Extract<PlannerEvent, { type: 'PLAN_STRATEGY_SELECTED' }>>('PLAN_STRATEGY_SELECTED', () => {
         this._syncHistory();
         this.markDirty();
       }),
-      this.eventBus.on('plan:strategy-override', () => {
+      this.runtimeBus.on<Extract<PlannerEvent, { type: 'PLAN_STRATEGY_OVERRIDDEN' }>>('PLAN_STRATEGY_OVERRIDDEN', () => {
         this._syncHistory();
         this.markDirty();
       }),

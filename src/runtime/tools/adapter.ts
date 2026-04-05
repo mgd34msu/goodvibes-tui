@@ -10,11 +10,11 @@ export type ToolExecutionPhase =
   | 'posthook';  // Post-execution hooks (audit trail, side effects)
 
 /**
- * A PhasedTool wraps a legacy Tool with metadata the phased executor uses
+ * A PhasedTool wraps a base Tool with metadata the phased executor uses
  * to configure routing, phase skipping, timeouts, and cancellation.
  *
  * All existing Tool implementations remain valid; PhasedTool is purely additive.
- * The `execute` contract is unchanged — callers that use the legacy ToolRegistry
+ * The `execute` contract is unchanged — callers that use the base ToolRegistry
  * path continue working without modification.
  */
 export interface PhasedTool extends Tool {
@@ -52,7 +52,7 @@ export interface PhasedTool extends Tool {
 }
 
 /**
- * Wraps a legacy Tool in a PhasedTool by merging the phased metadata.
+ * Wraps a base Tool in a PhasedTool by merging the phased metadata.
  * Use this in `createPhasedExecTool` / `createPhasedReadTool` factories
  * to avoid duplicating the underlying tool's `definition` and `execute`.
  *

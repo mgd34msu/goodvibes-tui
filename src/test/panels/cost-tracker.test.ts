@@ -7,7 +7,7 @@ import {
   getCostFromCatalog,
   _getPricingCatalog,
   _setCatalogForTesting,
-  _resetCatalog,
+  _resetForTest,
 } from '../../providers/model-catalog.ts';
 import type { PricingCatalog } from '../../providers/model-catalog.ts';
 
@@ -62,7 +62,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-  _resetCatalog();
+  _resetForTest();
 });
 
 // ---------------------------------------------------------------------------

@@ -8,7 +8,9 @@
 import { randomUUID } from 'node:crypto';
 import { AcpConnection } from './connection.ts';
 import type { SubagentInfo, SubagentResult, SubagentTask } from './protocol.ts';
-import type { EventBus } from '../core/event-bus.ts';
+import type { PermissionRequestHandler } from '../permissions/prompt.ts';
+import type { RuntimeEventBus } from '../runtime/events/index.ts';
+import { emitAgentSpawning } from '../runtime/emitters/index.ts';
 
 /**
  * Command used to spawn subagent processes.
@@ -28,7 +30,7 @@ function resolveAgentCommand(): string[] {
  * @example
  * ```ts
  * const mgr = new AcpManager(bus);
- * const id = await mgr.spawn({ description: 'Fix the bug', context: '...', tools: ['file_read'] });
+ * const id = await mgr.spawn({ description: 'Fix the bug', context: '...', tools: ['read'] });
  * const results = await mgr.waitAll();
  * ```
  */
@@ -36,9 +38,16 @@ export class AcpManager {
   private connections = new Map<string, AcpConnection>();
   private pending = new Map<string, Promise<SubagentResult>>();
   private agentCmd: string[];
+  private readonly requestPermission?: PermissionRequestHandler;
+  private readonly runtimeBus: RuntimeEventBus | null;
 
-  constructor(private bus: EventBus) {
+  constructor(
+    permissionOrLegacyBus?: PermissionRequestHandler | { emit?: unknown },
+    runtimeBus: RuntimeEventBus | null = null,
+  ) {
     this.agentCmd = resolveAgentCommand();
+    this.requestPermission = typeof permissionOrLegacyBus === 'function' ? permissionOrLegacyBus : undefined;
+    this.runtimeBus = runtimeBus;
   }
 
   /**
@@ -47,10 +56,19 @@ export class AcpManager {
    */
   async spawn(task: SubagentTask): Promise<string> {
     const id = randomUUID();
-    const conn = new AcpConnection(id, task, this.bus, this.agentCmd);
+    const conn = new AcpConnection(id, task, this.agentCmd, this.requestPermission, this.runtimeBus);
     this.connections.set(id, conn);
 
-    this.bus.emit('subagent:spawned', { id, task: task.description });
+    if (this.runtimeBus) {
+      emitAgentSpawning(this.runtimeBus, {
+        sessionId: 'acp-manager',
+        traceId: `acp-manager:${id}`,
+        source: 'acp-manager',
+      }, {
+        agentId: id,
+        task: task.description,
+      });
+    }
 
     // Start running — store the promise so waitAll() can await it
     const promise = conn.run().finally(() => {

@@ -2,15 +2,6 @@ import { describe, test, expect, beforeEach } from 'bun:test';
 import { TaskScheduler } from '../../scheduler/scheduler.ts';
 
 // ---------------------------------------------------------------------------
-// Helpers — access private internals via cast
-// ---------------------------------------------------------------------------
-
-type AnyScheduler = {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  [key: string]: any;
-};
-
-// ---------------------------------------------------------------------------
 // Cron parser — tested indirectly via getNextRun
 // ---------------------------------------------------------------------------
 
@@ -282,7 +273,7 @@ describe('Task lifecycle', () => {
     expect(originalNextRun).toBeDefined();
 
     // Clear nextRun to verify it gets recomputed
-    (task as any).nextRun = undefined;
+    task.nextRun = undefined;
 
     // runNow triggers executeTask (fails without AgentManager) but should reschedule
     await scheduler2.runNow(task.id);

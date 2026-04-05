@@ -16,7 +16,9 @@ beforeEach(() => {
 function seedAgent(task = 'Do something', status: 'running' | 'pending' = 'running'): string {
   const am = AgentManager.getInstance();
   const rec = am.spawn({ mode: 'spawn', task, template: 'general', tools: [] });
-  (am as any).agents.get(rec.id).status = status;
+  const seeded = am.getStatus(rec.id);
+  if (!seeded) throw new Error('expected agent record');
+  seeded.status = status;
   return rec.id;
 }
 
@@ -122,7 +124,9 @@ describe('renderAgentDetailModal', () => {
   test('renders tool call count', () => {
     const id = seedAgent('Tool task');
     const am = AgentManager.getInstance();
-    (am as any).agents.get(id).toolCallCount = 5;
+    const rec = am.getStatus(id);
+    if (!rec) throw new Error('expected agent record');
+    rec.toolCallCount = 5;
     const modal = new AgentDetailModal();
     modal.open(id);
     const lines = renderAgentDetailModal(modal, W);
@@ -134,7 +138,9 @@ describe('renderAgentDetailModal', () => {
   test('renders estimated token usage', () => {
     const id = seedAgent('Token task');
     const am = AgentManager.getInstance();
-    (am as any).agents.get(id).toolCallCount = 3;
+    const rec = am.getStatus(id);
+    if (!rec) throw new Error('expected agent record');
+    rec.toolCallCount = 3;
     const modal = new AgentDetailModal();
     modal.open(id);
     const lines = renderAgentDetailModal(modal, W);
@@ -146,7 +152,9 @@ describe('renderAgentDetailModal', () => {
   test('renders progress text when present', () => {
     const id = seedAgent('Progress task');
     const am = AgentManager.getInstance();
-    (am as any).agents.get(id).progress = 'Step 2 of 5';
+    const rec = am.getStatus(id);
+    if (!rec) throw new Error('expected agent record');
+    rec.progress = 'Step 2 of 5';
     const modal = new AgentDetailModal();
     modal.open(id);
     const lines = renderAgentDetailModal(modal, W);
@@ -158,7 +166,9 @@ describe('renderAgentDetailModal', () => {
   test('renders error when present', () => {
     const id = seedAgent('Error task');
     const am = AgentManager.getInstance();
-    (am as any).agents.get(id).error = 'Something went wrong';
+    const rec = am.getStatus(id);
+    if (!rec) throw new Error('expected agent record');
+    rec.error = 'Something went wrong';
     const modal = new AgentDetailModal();
     modal.open(id);
     const lines = renderAgentDetailModal(modal, W);

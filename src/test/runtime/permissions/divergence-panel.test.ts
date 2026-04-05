@@ -1,5 +1,5 @@
 /**
- * GC-PERM-009 — Tests for DivergencePanel diagnostics data provider.
+ * Tests for DivergencePanel diagnostics data provider.
  *
  * Covers:
  *   - subscribe/notify lifecycle (subscriber called on recordTrendEntry)

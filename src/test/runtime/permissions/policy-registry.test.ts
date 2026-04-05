@@ -1,5 +1,5 @@
 /**
- * Tests for PolicyRegistry — Section 5.3.
+ * Tests for PolicyRegistry.
  *
  * Verifies the versioned bundle lifecycle:
  *   load → simulate → attach report → promote (gate check) → rollback

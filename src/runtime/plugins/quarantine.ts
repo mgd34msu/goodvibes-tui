@@ -1,5 +1,5 @@
 /**
- * Plugin Quarantine Engine — §5.9.
+ * Plugin quarantine engine.
  *
  * Quarantine removes a plugin's unsafe contribution effects without fully
  * unloading it. This allows the operator to isolate a suspicious plugin,

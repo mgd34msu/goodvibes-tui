@@ -2,7 +2,9 @@ import type { LLMProvider, ChatRequest, ChatResponse } from './interface.ts';
 import { ProviderError, isRateLimitOrQuotaError } from '../types/errors.ts';
 import { logger } from '../utils/logger.ts';
 import { getBenchmarks, compositeScore } from './model-benchmarks.ts';
-import type { EventBus } from '../core/event-bus.ts';
+import type { RuntimeEventBus } from '../runtime/events/index.ts';
+import { emitModelFallback } from '../runtime/emitters/index.ts';
+import { getProviderRegistry } from './registry.ts';
 
 // --- Types ---
 
@@ -75,15 +77,11 @@ export interface CanonicalModel {
 
 let _canonicalCatalog: CanonicalModel[] | null = null;
 
-/** Optional event bus reference, injected after startup to avoid circular deps. */
-let _bus: EventBus | null = null;
+let _runtimeBus: RuntimeEventBus | null = null;
+let _providerLookup: ((providerName: string) => LLMProvider) | null = null;
 
-/**
- * Inject the event bus so the synthetic provider can emit non-blocking notifications.
- * Call this after the bus is created (e.g., in main.ts).
- */
-export function setSyntheticBus(bus: EventBus): void {
-  _bus = bus;
+export function setSyntheticRuntimeBus(bus: RuntimeEventBus | null): void {
+  _runtimeBus = bus;
 }
 
 /**
@@ -108,6 +106,23 @@ export function _setSyntheticCatalogForTest(models: CanonicalModel[]): void {
  */
 export function _resetSyntheticCatalog(): void {
   _canonicalCatalog = null;
+}
+
+/**
+ * Override provider lookup for tests without process-global module mocking.
+ * @internal
+ */
+export function _setSyntheticProviderLookupForTest(
+  lookup: ((providerName: string) => LLMProvider) | null,
+): void {
+  _providerLookup = lookup;
+}
+
+function resolveProvider(providerName: string): LLMProvider {
+  if (_providerLookup) {
+    return _providerLookup(providerName);
+  }
+  return getProviderRegistry().get(providerName);
 }
 
 /**
@@ -346,10 +361,7 @@ export class SyntheticProvider implements LLMProvider {
       // Resolve provider
       let provider: LLMProvider;
       try {
-        // registryGetter is no longer stored on the class; we resolve lazily via
-        // the module-level registry to avoid circular imports at construction time.
-        const { providerRegistry } = await import('./registry.ts');
-        provider = providerRegistry.get(backend.providerName);
+        provider = resolveProvider(backend.providerName);
       } catch (err) {
         logger.debug(`[Synthetic] Backend ${backend.providerName} not available: ${err}`);
         continue;
@@ -462,8 +474,7 @@ export class SyntheticProvider implements LLMProvider {
 
       // Single retry attempt on the backend that just came off cooldown
       try {
-        const { providerRegistry } = await import('./registry.ts');
-        const waitProvider = providerRegistry.get(waitBackend.providerName);
+        const waitProvider = resolveProvider(waitBackend.providerName);
         const response = await waitProvider.chat({
           ...params,
           model: waitBackend.modelId,
@@ -501,8 +512,7 @@ export class SyntheticProvider implements LLMProvider {
 
         for (const backend of fallbackResult.backends) {
           try {
-            const { providerRegistry } = await import('./registry.ts');
-            const provider = providerRegistry.get(backend.providerName);
+            const provider = resolveProvider(backend.providerName);
             const response = await provider.chat({
               ...params,
               model: backend.modelId,
@@ -511,16 +521,19 @@ export class SyntheticProvider implements LLMProvider {
             this.activeBackend.set(fallbackId, 0);
             logger.info(`[Synthetic] ${syntheticId} exhausted, fell back to ${fallbackId} via ${backend.providerName}`);
 
-            // Emit non-blocking notification for the user
-            if (_bus) {
+            if (_runtimeBus) {
               try {
-                _bus.emit('model:fallback', {
+                emitModelFallback(_runtimeBus, {
+                  sessionId: 'system',
+                  traceId: `synthetic:fallback:${syntheticId}:${fallbackId}`,
+                  source: 'synthetic-provider',
+                }, {
                   from: syntheticId,
                   to: fallbackId,
                   provider: backend.providerName,
                 });
               } catch (e) {
-                logger.debug('[Synthetic] bus emit failed', { error: String(e) });
+                logger.debug('[Synthetic] runtime bus emit failed', { error: String(e) });
               }
             }
 

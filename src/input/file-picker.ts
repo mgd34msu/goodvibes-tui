@@ -1,6 +1,6 @@
 import { readdir, stat } from 'node:fs/promises';
 import { join, relative } from 'node:path';
-import { config } from '../config/index.ts';
+import { getWorkingDirectory } from '../config/index.ts';
 
 /**
  * FilePickerModal - Fuzzy file finder triggered by @ in the input area.
@@ -132,7 +132,7 @@ export class FilePickerModal {
   }
 
   private async loadFiles(): Promise<void> {
-    const root = config.workingDir;
+    const root = getWorkingDirectory();
     const files: string[] = [];
     await this.walkDir(root, files, 0);
     this.allFiles = files.sort();
@@ -156,7 +156,7 @@ export class FilePickerModal {
       if (entry.name === 'node_modules' || entry.name === 'dist') continue;
 
       const fullPath = join(dir, entry.name);
-      const relPath = relative(config.workingDir, fullPath);
+      const relPath = relative(getWorkingDirectory(), fullPath);
 
       if (entry.isDirectory()) {
         files.push(relPath + '/');

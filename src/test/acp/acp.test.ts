@@ -14,9 +14,9 @@
  */
 
 import { describe, test, expect, beforeEach, afterEach, mock, spyOn } from 'bun:test';
-import { EventBus } from '../../core/event-bus.ts';
 import { AcpConnection } from '../../acp/connection.ts';
 import { AcpManager } from '../../acp/manager.ts';
+import { RuntimeEventBus } from '../../runtime/events/index.ts';
 import type {
   SubagentInfo,
   SubagentResult,
@@ -167,30 +167,30 @@ describe('Protocol types', () => {
 // ---------------------------------------------------------------------------
 
 describe('AcpConnection', () => {
-  let bus: EventBus;
+  let runtimeBus: RuntimeEventBus;
 
   beforeEach(() => {
-    bus = new EventBus();
+    runtimeBus = new RuntimeEventBus();
   });
 
   describe('constructor / getInfo', () => {
     test('getInfo returns correct id', () => {
-      const conn = new AcpConnection('conn-1', makeTask(), bus, ['bun', 'run', 'agent.ts']);
+      const conn = new AcpConnection('conn-1', makeTask(), ['bun', 'run', 'agent.ts'], undefined, runtimeBus);
       expect(conn.getInfo().id).toBe('conn-1');
     });
 
     test('getInfo returns task description', () => {
-      const conn = new AcpConnection('conn-1', makeTask({ description: 'My task' }), bus, ['bun']);
+      const conn = new AcpConnection('conn-1', makeTask({ description: 'My task' }), ['bun'], undefined, runtimeBus);
       expect(conn.getInfo().task).toBe('My task');
     });
 
     test('getInfo initial status is running', () => {
-      const conn = new AcpConnection('conn-1', makeTask(), bus, ['bun']);
+      const conn = new AcpConnection('conn-1', makeTask(), ['bun'], undefined, runtimeBus);
       expect(conn.getInfo().status).toBe('running');
     });
 
     test('getInfo returns a snapshot (not the internal reference)', () => {
-      const conn = new AcpConnection('conn-1', makeTask(), bus, ['bun']);
+      const conn = new AcpConnection('conn-1', makeTask(), ['bun'], undefined, runtimeBus);
       const info1 = conn.getInfo();
       const info2 = conn.getInfo();
       expect(info1).not.toBe(info2);
@@ -199,7 +199,7 @@ describe('AcpConnection', () => {
 
     test('getInfo startedAt is a recent timestamp', () => {
       const before = Date.now();
-      const conn = new AcpConnection('conn-1', makeTask(), bus, ['bun']);
+      const conn = new AcpConnection('conn-1', makeTask(), ['bun'], undefined, runtimeBus);
       const after = Date.now();
       const { startedAt } = conn.getInfo();
       expect(startedAt).toBeGreaterThanOrEqual(before);
@@ -207,20 +207,20 @@ describe('AcpConnection', () => {
     });
 
     test('id is exposed as public readonly', () => {
-      const conn = new AcpConnection('my-id', makeTask(), bus, ['bun']);
+      const conn = new AcpConnection('my-id', makeTask(), ['bun'], undefined, runtimeBus);
       expect(conn.id).toBe('my-id');
     });
   });
 
   describe('cancel — no active session', () => {
     test('cancel when not yet running sets status to cancelled', async () => {
-      const conn = new AcpConnection('conn-cancel', makeTask(), bus, ['bun']);
+      const conn = new AcpConnection('conn-cancel', makeTask(), ['bun'], undefined, runtimeBus);
       await conn.cancel();
       expect(conn.getInfo().status).toBe('cancelled');
     });
 
     test('cancel is idempotent (calling twice does not throw)', async () => {
-      const conn = new AcpConnection('conn-cancel2', makeTask(), bus, ['bun']);
+      const conn = new AcpConnection('conn-cancel2', makeTask(), ['bun'], undefined, runtimeBus);
       await conn.cancel();
       await expect(conn.cancel()).resolves.toBeUndefined();
     });
@@ -242,7 +242,7 @@ describe('AcpConnection', () => {
       (Bun as unknown as Record<string, unknown>).spawn = () => {
         throw new Error('spawn failed');
       };
-      const conn = new AcpConnection('conn-err', makeTask(), bus, ['bun']);
+      const conn = new AcpConnection('conn-err', makeTask(), ['bun'], undefined, runtimeBus);
       const result = await conn.run();
       expect(result.success).toBe(false);
       expect(result.id).toBe('conn-err');
@@ -253,31 +253,34 @@ describe('AcpConnection', () => {
       (Bun as unknown as Record<string, unknown>).spawn = () => {
         throw new Error('process error');
       };
-      const conn = new AcpConnection('specific-id', makeTask(), bus, ['bun']);
+      const conn = new AcpConnection('specific-id', makeTask(), ['bun'], undefined, runtimeBus);
       const result = await conn.run();
       expect(result.id).toBe('specific-id');
     });
 
-    test('run emits subagent:error when spawn throws', async () => {
+    test('run emits AGENT_FAILED when spawn throws', async () => {
       (Bun as unknown as Record<string, unknown>).spawn = () => {
         throw new Error('spawn failure');
       };
-      const errors: Array<{ id: string; error: Error }> = [];
-      bus.on('subagent:error', (data) => errors.push(data));
+      const errors: Array<{ agentId: string; error: string }> = [];
+      runtimeBus.on<Extract<import('../../runtime/events/agents.ts').AgentEvent, { type: 'AGENT_FAILED' }>>(
+        'AGENT_FAILED',
+        ({ payload }) => errors.push(payload),
+      );
 
-      const conn = new AcpConnection('err-emit', makeTask(), bus, ['bun']);
+      const conn = new AcpConnection('err-emit', makeTask(), ['bun'], undefined, runtimeBus);
       await conn.run();
 
       expect(errors).toHaveLength(1);
-      expect(errors[0].id).toBe('err-emit');
-      expect(errors[0].error).toBeInstanceOf(Error);
+      expect(errors[0].agentId).toBe('err-emit');
+      expect(errors[0].error).toContain('spawn failure');
     });
 
     test('run sets status to error when spawn throws', async () => {
       (Bun as unknown as Record<string, unknown>).spawn = () => {
         throw new Error('spawn crash');
       };
-      const conn = new AcpConnection('status-err', makeTask(), bus, ['bun']);
+      const conn = new AcpConnection('status-err', makeTask(), ['bun'], undefined, runtimeBus);
       await conn.run();
       expect(conn.getInfo().status).toBe('error');
     });
@@ -286,7 +289,7 @@ describe('AcpConnection', () => {
       (Bun as unknown as Record<string, unknown>).spawn = () => {
         throw new Error('instant fail');
       };
-      const conn = new AcpConnection('zero-calls', makeTask(), bus, ['bun']);
+      const conn = new AcpConnection('zero-calls', makeTask(), ['bun'], undefined, runtimeBus);
       const result = await conn.run();
       expect(result.toolCallsMade).toBe(0);
     });
@@ -295,7 +298,7 @@ describe('AcpConnection', () => {
       (Bun as unknown as Record<string, unknown>).spawn = () => {
         throw new Error('fail');
       };
-      const conn = new AcpConnection('duration-test', makeTask(), bus, ['bun']);
+      const conn = new AcpConnection('duration-test', makeTask(), ['bun'], undefined, runtimeBus);
       const result = await conn.run();
       expect(result.duration).toBeGreaterThanOrEqual(0);
     });
@@ -305,7 +308,7 @@ describe('AcpConnection', () => {
         // eslint-disable-next-line @typescript-eslint/only-throw-error
         throw 'string error';
       };
-      const conn = new AcpConnection('str-err', makeTask(), bus, ['bun']);
+      const conn = new AcpConnection('str-err', makeTask(), ['bun'], undefined, runtimeBus);
       const result = await conn.run();
       expect(result.success).toBe(false);
       expect(typeof result.output).toBe('string');
@@ -363,7 +366,7 @@ describe('AcpConnection', () => {
       };
 
       const cmd = ['custom-cmd', '--flag', 'value'];
-      const conn = new AcpConnection('spawn-args-test', makeTask(), bus, cmd);
+      const conn = new AcpConnection('spawn-args-test', makeTask(), cmd, undefined, runtimeBus);
       await conn.run(); // will fail but that's fine
 
       expect(spawnArgs[0]).toEqual(cmd);
@@ -376,7 +379,7 @@ describe('AcpConnection', () => {
         throw new Error('abort');
       };
 
-      const conn = new AcpConnection('piped-test', makeTask(), bus, ['bun']);
+      const conn = new AcpConnection('piped-test', makeTask(), ['bun'], undefined, runtimeBus);
       await conn.run();
 
       expect((capturedOpts as Record<string, unknown>).stdin).toBe('pipe');
@@ -391,10 +394,10 @@ describe('AcpConnection', () => {
 // ---------------------------------------------------------------------------
 
 describe('AcpManager', () => {
-  let bus: EventBus;
+  let runtimeBus: RuntimeEventBus;
 
   beforeEach(() => {
-    bus = new EventBus();
+    runtimeBus = new RuntimeEventBus();
   });
 
   describe('spawn', () => {
@@ -406,7 +409,7 @@ describe('AcpManager', () => {
         return makeResult({ id: this.id });
       });
 
-      const mgr = new AcpManager(bus);
+      const mgr = new AcpManager(undefined, runtimeBus);
       const id = await mgr.spawn(makeTask());
 
       proto.run = originalRun;
@@ -414,17 +417,20 @@ describe('AcpManager', () => {
       expect(id.length).toBeGreaterThan(0);
     });
 
-    test('spawn emits subagent:spawned with the task description', async () => {
+    test('spawn emits AGENT_SPAWNING with the task description', async () => {
       const proto = AcpConnection.prototype;
       const originalRun = proto.run;
       proto.run = mock(async function (this: AcpConnection) {
         return makeResult({ id: this.id });
       });
 
-      const spawned: Array<{ id: string; task: string }> = [];
-      bus.on('subagent:spawned', (data) => spawned.push(data));
+      const spawned: Array<{ agentId: string; task: string }> = [];
+      runtimeBus.on<Extract<import('../../runtime/events/agents.ts').AgentEvent, { type: 'AGENT_SPAWNING' }>>(
+        'AGENT_SPAWNING',
+        ({ payload }) => spawned.push(payload),
+      );
 
-      const mgr = new AcpManager(bus);
+      const mgr = new AcpManager(undefined, runtimeBus);
       await mgr.spawn(makeTask({ description: 'Fix the bug' }));
 
       proto.run = originalRun;
@@ -443,7 +449,7 @@ describe('AcpManager', () => {
         });
       });
 
-      const mgr = new AcpManager(bus);
+      const mgr = new AcpManager(undefined, runtimeBus);
       const id1 = await mgr.spawn(makeTask());
       const id2 = await mgr.spawn(makeTask());
       const id3 = await mgr.spawn(makeTask());
@@ -460,7 +466,7 @@ describe('AcpManager', () => {
 
   describe('getActive', () => {
     test('getActive returns empty array initially', () => {
-      const mgr = new AcpManager(bus);
+      const mgr = new AcpManager(undefined, runtimeBus);
       expect(mgr.getActive()).toEqual([]);
     });
 
@@ -474,7 +480,7 @@ describe('AcpManager', () => {
         });
       });
 
-      const mgr = new AcpManager(bus);
+      const mgr = new AcpManager(undefined, runtimeBus);
       await mgr.spawn(makeTask({ description: 'Long running task' }));
 
       const active = mgr.getActive();
@@ -493,7 +499,7 @@ describe('AcpManager', () => {
         return makeResult({ id: this.id });
       });
 
-      const mgr = new AcpManager(bus);
+      const mgr = new AcpManager(undefined, runtimeBus);
       const id = await mgr.spawn(makeTask());
       // Wait for run to settle
       await mgr.waitAll();
@@ -506,7 +512,7 @@ describe('AcpManager', () => {
 
   describe('cancel', () => {
     test('cancel no-ops for unknown ID', async () => {
-      const mgr = new AcpManager(bus);
+      const mgr = new AcpManager(undefined, runtimeBus);
       await expect(mgr.cancel('nonexistent-id')).resolves.toBeUndefined();
     });
 
@@ -529,7 +535,7 @@ describe('AcpManager', () => {
         };
       });
 
-      const mgr = new AcpManager(bus);
+      const mgr = new AcpManager(undefined, runtimeBus);
       const id = await mgr.spawn(makeTask());
       await mgr.cancel(id);
 
@@ -543,7 +549,7 @@ describe('AcpManager', () => {
 
   describe('cancelAll', () => {
     test('cancelAll resolves immediately when no active connections', async () => {
-      const mgr = new AcpManager(bus);
+      const mgr = new AcpManager(undefined, runtimeBus);
       await expect(mgr.cancelAll()).resolves.toBeUndefined();
     });
 
@@ -563,7 +569,7 @@ describe('AcpManager', () => {
         cancelledIds.push(this.id);
       });
 
-      const mgr = new AcpManager(bus);
+      const mgr = new AcpManager(undefined, runtimeBus);
       await mgr.spawn(makeTask());
       await mgr.spawn(makeTask());
 
@@ -591,7 +597,7 @@ describe('AcpManager', () => {
         // no-op stub
       });
 
-      const mgr = new AcpManager(bus);
+      const mgr = new AcpManager(undefined, runtimeBus);
       await mgr.spawn(makeTask());
       await mgr.spawn(makeTask());
       await mgr.cancelAll();
@@ -606,7 +612,7 @@ describe('AcpManager', () => {
 
   describe('waitAll', () => {
     test('waitAll returns empty array when no pending tasks', async () => {
-      const mgr = new AcpManager(bus);
+      const mgr = new AcpManager(undefined, runtimeBus);
       const results = await mgr.waitAll();
       expect(results).toEqual([]);
     });
@@ -626,7 +632,7 @@ describe('AcpManager', () => {
         });
       });
 
-      const mgr = new AcpManager(bus);
+      const mgr = new AcpManager(undefined, runtimeBus);
       // spawn() fires run() without awaiting it; pending map still holds the promises
       const id1 = await mgr.spawn(makeTask());
       const id2 = await mgr.spawn(makeTask());
@@ -667,7 +673,7 @@ describe('AcpManager', () => {
         });
       });
 
-      const mgr = new AcpManager(bus);
+      const mgr = new AcpManager(undefined, runtimeBus);
       await mgr.spawn(makeTask());
       await mgr.spawn(makeTask());
 
@@ -683,7 +689,7 @@ describe('AcpManager', () => {
     });
 
     test('waitAll can be called multiple times safely', async () => {
-      const mgr = new AcpManager(bus);
+      const mgr = new AcpManager(undefined, runtimeBus);
       const first = await mgr.waitAll();
       const second = await mgr.waitAll();
       expect(first).toEqual([]);
@@ -711,7 +717,7 @@ describe('AcpManager', () => {
 
       const savedEnv = process.env.ACP_AGENT_CMD;
       process.env.ACP_AGENT_CMD = 'my-agent --headless';
-      const mgr = new AcpManager(bus);
+      const mgr = new AcpManager(undefined, runtimeBus);
       await mgr.spawn(makeTask());
       await mgr.waitAll();
       process.env.ACP_AGENT_CMD = savedEnv;
@@ -726,14 +732,14 @@ describe('AcpManager', () => {
       // constructs without error when ACP_AGENT_CMD is set
       const savedEnv = process.env.ACP_AGENT_CMD;
       process.env.ACP_AGENT_CMD = 'bun run --smol src/main.ts';
-      expect(() => new AcpManager(bus)).not.toThrow();
+      expect(() => new AcpManager(undefined, runtimeBus)).not.toThrow();
       process.env.ACP_AGENT_CMD = savedEnv;
     });
 
     test('manager constructs without ACP_AGENT_CMD set', () => {
       const savedEnv = process.env.ACP_AGENT_CMD;
       delete process.env.ACP_AGENT_CMD;
-      expect(() => new AcpManager(bus)).not.toThrow();
+      expect(() => new AcpManager(undefined, runtimeBus)).not.toThrow();
       process.env.ACP_AGENT_CMD = savedEnv;
     });
   });
@@ -744,11 +750,11 @@ describe('AcpManager', () => {
 // ---------------------------------------------------------------------------
 
 describe('Error handling', () => {
-  let bus: EventBus;
+  let runtimeBus: RuntimeEventBus;
   let originalSpawn: typeof Bun.spawn;
 
   beforeEach(() => {
-    bus = new EventBus();
+    runtimeBus = new RuntimeEventBus();
     originalSpawn = Bun.spawn;
   });
 
@@ -760,7 +766,7 @@ describe('Error handling', () => {
     (Bun as unknown as Record<string, unknown>).spawn = () => {
       throw new Error('ENOENT: command not found');
     };
-    const conn = new AcpConnection('fail-1', makeTask(), bus, ['nonexistent']);
+    const conn = new AcpConnection('fail-1', makeTask(), ['nonexistent'], undefined, runtimeBus);
     const result = await conn.run();
     expect(result.success).toBe(false);
   });
@@ -769,34 +775,40 @@ describe('Error handling', () => {
     (Bun as unknown as Record<string, unknown>).spawn = () => {
       throw new Error('connection refused');
     };
-    const conn = new AcpConnection('fail-2', makeTask(), bus, ['nonexistent']);
+    const conn = new AcpConnection('fail-2', makeTask(), ['nonexistent'], undefined, runtimeBus);
     const result = await conn.run();
     expect(result.output).toContain('connection refused');
   });
 
-  test('connection failure emits subagent:error on bus', async () => {
+  test('connection failure emits AGENT_FAILED on runtime bus', async () => {
     (Bun as unknown as Record<string, unknown>).spawn = () => {
       throw new Error('timeout');
     };
-    const errors: Array<{ id: string; error: Error }> = [];
-    bus.on('subagent:error', (data) => errors.push(data));
+    const errors: Array<{ agentId: string; error: string }> = [];
+    runtimeBus.on<Extract<import('../../runtime/events/agents.ts').AgentEvent, { type: 'AGENT_FAILED' }>>(
+      'AGENT_FAILED',
+      ({ payload }) => errors.push(payload),
+    );
 
-    const conn = new AcpConnection('fail-3', makeTask(), bus, ['nonexistent']);
+    const conn = new AcpConnection('fail-3', makeTask(), ['nonexistent'], undefined, runtimeBus);
     await conn.run();
 
     expect(errors).toHaveLength(1);
-    expect(errors[0].error.message).toContain('timeout');
+    expect(errors[0].error).toContain('timeout');
   });
 
-  test('multiple failed connections each emit separate subagent:error events', async () => {
+  test('multiple failed connections each emit separate AGENT_FAILED events', async () => {
     (Bun as unknown as Record<string, unknown>).spawn = () => {
       throw new Error('fail');
     };
     const errors: string[] = [];
-    bus.on('subagent:error', (data) => errors.push(data.id));
+    runtimeBus.on<Extract<import('../../runtime/events/agents.ts').AgentEvent, { type: 'AGENT_FAILED' }>>(
+      'AGENT_FAILED',
+      ({ payload }) => errors.push(payload.agentId),
+    );
 
-    const conn1 = new AcpConnection('multi-fail-1', makeTask(), bus, ['x']);
-    const conn2 = new AcpConnection('multi-fail-2', makeTask(), bus, ['x']);
+    const conn1 = new AcpConnection('multi-fail-1', makeTask(), ['x'], undefined, runtimeBus);
+    const conn2 = new AcpConnection('multi-fail-2', makeTask(), ['x'], undefined, runtimeBus);
     await Promise.all([conn1.run(), conn2.run()]);
 
     expect(errors).toHaveLength(2);
@@ -808,7 +820,7 @@ describe('Error handling', () => {
     (Bun as unknown as Record<string, unknown>).spawn = () => {
       throw new Error('catastrophic failure');
     };
-    const conn = new AcpConnection('no-throw', makeTask(), bus, ['x']);
+    const conn = new AcpConnection('no-throw', makeTask(), ['x'], undefined, runtimeBus);
     const result = await expect(conn.run()).resolves;
     expect(result).toBeDefined();
   });
@@ -817,7 +829,7 @@ describe('Error handling', () => {
     (Bun as unknown as Record<string, unknown>).spawn = () => {
       throw new Error('fail');
     };
-    const conn = new AcpConnection('cancel-after-fail', makeTask(), bus, ['x']);
+    const conn = new AcpConnection('cancel-after-fail', makeTask(), ['x'], undefined, runtimeBus);
     await conn.run();
     await expect(conn.cancel()).resolves.toBeUndefined();
   });
@@ -827,14 +839,14 @@ describe('Error handling', () => {
       // Simulate a hanging connection by making spawn throw after a delay
       // (real timeout testing requires actual process control; we test the
       // cancel() API is available and functional)
-      const conn = new AcpConnection('timeout-sim', makeTask(), bus, ['bun']);
+      const conn = new AcpConnection('timeout-sim', makeTask(), ['bun'], undefined, runtimeBus);
       // Cancel before run() — ensures cancel is safe to call at any time
       await conn.cancel();
       expect(conn.getInfo().status).toBe('cancelled');
     });
 
     test('cancelled connection info status is cancelled', async () => {
-      const conn = new AcpConnection('cancel-status', makeTask(), bus, ['bun']);
+      const conn = new AcpConnection('cancel-status', makeTask(), ['bun'], undefined, runtimeBus);
       await conn.cancel();
       expect(conn.getInfo().status).toBe('cancelled');
     });

@@ -6,10 +6,14 @@
  */
 import type { Playbook, DiagnosticCheckResult } from '../types.ts';
 import { safeCheck } from '../safe-check.ts';
+import { existsSync } from 'fs';
+import { getOpsRuntimeContext, readRecoveryFileMetadata } from '../runtime-context.ts';
+import type { OpsRuntimeContextState } from '../runtime-context.ts';
 
-// TODO(GC-HEALTH-003): Wire live runtime context for diagnostic checks
-/** Session unrecoverable resolution playbook. */
-export const sessionUnrecoverablePlaybook: Playbook = {
+export function createSessionUnrecoverablePlaybook(
+  getRuntimeContext: () => OpsRuntimeContextState | null = getOpsRuntimeContext,
+): Playbook {
+  return {
   id: 'session-unrecoverable',
   name: 'Session Unrecoverable',
   description:
@@ -28,36 +32,100 @@ export const sessionUnrecoverablePlaybook: Playbook = {
       label: 'Session recovery attempts exhausted',
       description: 'Confirms that all configured recovery attempts have been made before the cascade.',
       run: async (): Promise<DiagnosticCheckResult> =>
-        safeCheck(async () => ({
-          passed: false,
-          summary: 'Session recovery state requires live SessionStateMachine context.',
-          severity: 'critical',
-          context: { hint: 'Inspect SessionStateMachine.recoveryAttempts vs maxRecoveryAttempts' },
-        })),
+        safeCheck(async () => {
+          const runtime = getRuntimeContext();
+          if (!runtime) {
+            return {
+              passed: false,
+              summary: 'Ops runtime context is not configured.',
+              severity: 'warning',
+            };
+          }
+          const { session } = runtime.store.getState();
+          const exhausted = session.recoveryState === 'failed';
+          return {
+            passed: !exhausted,
+            summary: exhausted
+              ? `Session recovery is in a failed state${session.recoveryError ? `: ${session.recoveryError}` : '.'}`
+              : `Session recovery state is ${session.recoveryState}.`,
+            severity: exhausted ? 'critical' : 'info',
+            context: {
+              recoveryState: session.recoveryState,
+              recoveryError: session.recoveryError ?? '',
+            },
+          };
+        }),
     },
     {
       id: 'session.state-file',
       label: 'Session state file integrity',
       description: 'Checks whether the session state file exists and is parseable.',
       run: async (): Promise<DiagnosticCheckResult> =>
-        safeCheck(async () => ({
-          passed: false,
-          summary: 'Session file path requires live session config context.',
-          severity: 'error',
-          context: { hint: 'Locate session state file via config.sessionDir and verify JSON integrity' },
-        })),
+        safeCheck(async () => {
+          const runtime = getRuntimeContext();
+          if (!runtime) {
+            return {
+              passed: false,
+              summary: 'Ops runtime context is not configured.',
+              severity: 'warning',
+            };
+          }
+          const recoveryMeta = readRecoveryFileMetadata(runtime.recoveryFilePath);
+          const pointerExists = existsSync(runtime.lastSessionPointerPath);
+          const passed = recoveryMeta.ok && pointerExists;
+          return {
+            passed,
+            summary: passed
+              ? 'Recovery artifact and last-session pointer are both present and readable.'
+              : `${recoveryMeta.summary}${pointerExists ? '' : ' Last-session pointer file is missing.'}`,
+            severity: passed ? 'info' : 'error',
+            context: {
+              recoveryFilePresent: existsSync(runtime.recoveryFilePath),
+              lastSessionPointerPresent: pointerExists,
+            },
+          };
+        }),
     },
     {
       id: 'session.event-bus-silent',
       label: 'Event bus silent after cascade',
       description: 'Verifies that no further domain events are being processed after SESSION_UNRECOVERABLE.',
       run: async (): Promise<DiagnosticCheckResult> =>
-        safeCheck(async () => ({
-          passed: false,
-          summary: 'Event bus state requires live RuntimeEventBus context.',
-          severity: 'warning',
-          context: { hint: 'Subscribe to eventBus and confirm no events within 5 s' },
-        })),
+        safeCheck(async () => {
+          const runtime = getRuntimeContext();
+          if (!runtime) {
+            return {
+              passed: false,
+              summary: 'Ops runtime context is not configured.',
+              severity: 'warning',
+            };
+          }
+          if (!runtime.sessionRecoveryFailedAt) {
+            return {
+              passed: true,
+              summary: 'No SESSION_RECOVERY_FAILED event has been observed in this runtime context.',
+              severity: 'info',
+              context: {
+                sessionRecoveryFailedCount: runtime.sessionRecoveryFailedCount,
+                sessionRecoveryFailedAt: 0,
+                lastEventAt: runtime.lastEventAt,
+              },
+            };
+          }
+          const postCascadeActivity = runtime.lastEventAt > runtime.sessionRecoveryFailedAt;
+          return {
+            passed: !postCascadeActivity,
+            summary: postCascadeActivity
+              ? 'Runtime events are still being processed after SESSION_UNRECOVERABLE.'
+              : 'No runtime events have been observed after SESSION_UNRECOVERABLE.',
+            severity: postCascadeActivity ? 'warning' : 'info',
+            context: {
+              sessionRecoveryFailedAt: runtime.sessionRecoveryFailedAt,
+              lastEventAt: runtime.lastEventAt,
+              sessionRecoveryFailedCount: runtime.sessionRecoveryFailedCount,
+            },
+          };
+        }),
     },
   ],
   steps: [
@@ -121,4 +189,8 @@ export const sessionUnrecoverablePlaybook: Playbook = {
     'Runtime process exits immediately after restart attempt',
   ],
   tags: ['session', 'unrecoverable', 'cascade', 'critical'],
-};
+  };
+}
+
+/** Session unrecoverable resolution playbook. */
+export const sessionUnrecoverablePlaybook: Playbook = createSessionUnrecoverablePlaybook();

@@ -35,7 +35,7 @@ describe('JsonFileStore', () => {
   it('load returns null for invalid JSON file', async () => {
     const filePath = `${tempDir}/invalid.json`;
     await writeTempFile(tempDir, 'invalid.json', '{ not: valid json }');
-    const store = new JsonFileStore<any>(filePath);
+    const store = new JsonFileStore<unknown>(filePath);
     const data = await store.load();
     expect(data).toBeNull();
   });

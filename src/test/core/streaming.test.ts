@@ -1,7 +1,6 @@
 import { describe, test, expect, beforeEach } from 'bun:test';
 import { ConversationManager } from '../../core/conversation.ts';
-import { EventBus } from '../../core/event-bus.ts';
-import { collectEvents } from '../setup.ts';
+import { RuntimeEventBus, createEventEnvelope, type TurnEvent } from '../../runtime/events/index.ts';
 
 // ---------------------------------------------------------------------------
 // ConversationManager streaming block lifecycle
@@ -84,35 +83,36 @@ describe('ConversationManager streaming block lifecycle', () => {
 });
 
 // ---------------------------------------------------------------------------
-// EventBus stream event emission
+// RuntimeEventBus stream event emission
 // ---------------------------------------------------------------------------
 
-describe('EventBus stream events', () => {
-  let bus: EventBus;
+describe('RuntimeEventBus stream events', () => {
+  let bus: RuntimeEventBus;
 
   beforeEach(() => {
-    bus = new EventBus();
+    bus = new RuntimeEventBus();
   });
 
   test('turn:stream-start emits and is received by listener', () => {
     let fired = false;
-    bus.on('turn:stream-start', () => { fired = true; });
-    bus.emit('turn:stream-start');
+    bus.on('STREAM_START', () => { fired = true; });
+    bus.emit('turn', createEventEnvelope('STREAM_START', { type: 'STREAM_START', turnId: 'turn-1' }, { sessionId: 'test', traceId: 'trace', source: 'streaming.test' }));
     expect(fired).toBe(true);
   });
 
   test('turn:stream-end emits and is received by listener', () => {
     let fired = false;
-    bus.on('turn:stream-end', () => { fired = true; });
-    bus.emit('turn:stream-end');
+    bus.on('STREAM_END', () => { fired = true; });
+    bus.emit('turn', createEventEnvelope('STREAM_END', { type: 'STREAM_END', turnId: 'turn-1' }, { sessionId: 'test', traceId: 'trace', source: 'streaming.test' }));
     expect(fired).toBe(true);
   });
 
   test('turn:stream-delta emits content and accumulated values', () => {
-    const { events, cleanup } = collectEvents(bus, 'turn:stream-delta');
+    const events: Array<{ content: string; accumulated: string }> = [];
+    const cleanup = bus.on<Extract<TurnEvent, { type: 'STREAM_DELTA' }>>('STREAM_DELTA', ({ payload }) => events.push({ content: payload.content, accumulated: payload.accumulated }));
 
-    bus.emit('turn:stream-delta', { content: 'hello', accumulated: 'hello' });
-    bus.emit('turn:stream-delta', { content: ' world', accumulated: 'hello world' });
+    bus.emit('turn', createEventEnvelope('STREAM_DELTA', { type: 'STREAM_DELTA', turnId: 'turn-1', content: 'hello', accumulated: 'hello' }, { sessionId: 'test', traceId: 'trace', source: 'streaming.test' }));
+    bus.emit('turn', createEventEnvelope('STREAM_DELTA', { type: 'STREAM_DELTA', turnId: 'turn-1', content: ' world', accumulated: 'hello world' }, { sessionId: 'test', traceId: 'trace', source: 'streaming.test' }));
 
     expect(events).toHaveLength(2);
     expect(events[0]).toMatchObject({ content: 'hello', accumulated: 'hello' });
@@ -124,15 +124,16 @@ describe('EventBus stream events', () => {
   test('turn:stream-start -> turn:stream-delta -> turn:stream-end sequence', () => {
     let startCount = 0;
     let endCount = 0;
-    const { events: deltaEvents, cleanup } = collectEvents(bus, 'turn:stream-delta');
+    const deltaEvents: Array<{ content: string; accumulated: string }> = [];
+    const cleanup = bus.on<Extract<TurnEvent, { type: 'STREAM_DELTA' }>>('STREAM_DELTA', ({ payload }) => deltaEvents.push({ content: payload.content, accumulated: payload.accumulated }));
 
-    bus.on('turn:stream-start', () => { startCount++; });
-    bus.on('turn:stream-end', () => { endCount++; });
+    bus.on('STREAM_START', () => { startCount++; });
+    bus.on('STREAM_END', () => { endCount++; });
 
-    bus.emit('turn:stream-start');
-    bus.emit('turn:stream-delta', { content: 'chunk1', accumulated: 'chunk1' });
-    bus.emit('turn:stream-delta', { content: 'chunk2', accumulated: 'chunk1chunk2' });
-    bus.emit('turn:stream-end');
+    bus.emit('turn', createEventEnvelope('STREAM_START', { type: 'STREAM_START', turnId: 'turn-1' }, { sessionId: 'test', traceId: 'trace', source: 'streaming.test' }));
+    bus.emit('turn', createEventEnvelope('STREAM_DELTA', { type: 'STREAM_DELTA', turnId: 'turn-1', content: 'chunk1', accumulated: 'chunk1' }, { sessionId: 'test', traceId: 'trace', source: 'streaming.test' }));
+    bus.emit('turn', createEventEnvelope('STREAM_DELTA', { type: 'STREAM_DELTA', turnId: 'turn-1', content: 'chunk2', accumulated: 'chunk1chunk2' }, { sessionId: 'test', traceId: 'trace', source: 'streaming.test' }));
+    bus.emit('turn', createEventEnvelope('STREAM_END', { type: 'STREAM_END', turnId: 'turn-1' }, { sessionId: 'test', traceId: 'trace', source: 'streaming.test' }));
 
     expect(startCount).toBe(1);
     expect(deltaEvents).toHaveLength(2);
@@ -145,10 +146,10 @@ describe('EventBus stream events', () => {
     const received1: string[] = [];
     const received2: string[] = [];
 
-    bus.on('turn:stream-delta', (data) => received1.push(data.content));
-    bus.on('turn:stream-delta', (data) => received2.push(data.content));
+    bus.on<Extract<TurnEvent, { type: 'STREAM_DELTA' }>>('STREAM_DELTA', ({ payload }) => received1.push(payload.content));
+    bus.on<Extract<TurnEvent, { type: 'STREAM_DELTA' }>>('STREAM_DELTA', ({ payload }) => received2.push(payload.content));
 
-    bus.emit('turn:stream-delta', { content: 'test', accumulated: 'test' });
+    bus.emit('turn', createEventEnvelope('STREAM_DELTA', { type: 'STREAM_DELTA', turnId: 'turn-1', content: 'test', accumulated: 'test' }, { sessionId: 'test', traceId: 'trace', source: 'streaming.test' }));
 
     expect(received1).toEqual(['test']);
     expect(received2).toEqual(['test']);
@@ -156,11 +157,11 @@ describe('EventBus stream events', () => {
 
   test('unsubscribed listener does not receive further events', () => {
     const received: string[] = [];
-    const unsub = bus.on('turn:stream-delta', (data) => received.push(data.content));
+    const unsub = bus.on<Extract<TurnEvent, { type: 'STREAM_DELTA' }>>('STREAM_DELTA', ({ payload }) => received.push(payload.content));
 
-    bus.emit('turn:stream-delta', { content: 'before', accumulated: 'before' });
+    bus.emit('turn', createEventEnvelope('STREAM_DELTA', { type: 'STREAM_DELTA', turnId: 'turn-1', content: 'before', accumulated: 'before' }, { sessionId: 'test', traceId: 'trace', source: 'streaming.test' }));
     unsub();
-    bus.emit('turn:stream-delta', { content: 'after', accumulated: 'before after' });
+    bus.emit('turn', createEventEnvelope('STREAM_DELTA', { type: 'STREAM_DELTA', turnId: 'turn-1', content: 'after', accumulated: 'before after' }, { sessionId: 'test', traceId: 'trace', source: 'streaming.test' }));
 
     expect(received).toEqual(['before']);
   });
@@ -176,12 +177,11 @@ describe('Orchestrator: abort during streaming cleanup', () => {
     const { ConversationManager } = await import('../../core/conversation.ts');
     const { PermissionManager } = await import('../../permissions/manager.ts');
     const { ToolRegistry } = await import('../../tools/registry.ts');
-    const bus = new EventBus();
     const cm = new ConversationManager(() => 80);
-    const pm = new PermissionManager(bus);
+    const pm = new PermissionManager(async () => ({ approved: true }));
     const tr = new ToolRegistry();
-    const orch = new Orchestrator(bus, cm, () => 24, () => {}, tr, pm);
-    return { orch, cm, bus };
+    const orch = new Orchestrator(cm, () => 24, () => {}, tr, pm);
+    return { orch, cm };
   }
 
   test('isStreaming flag starts false on a fresh orchestrator', async () => {
@@ -191,10 +191,8 @@ describe('Orchestrator: abort during streaming cleanup', () => {
   });
 
   test('turn:stream-end is emitted on abort when streaming was active', async () => {
-    const { orch, cm, bus } = await buildOrchestrator();
-
+    const { orch, cm } = await buildOrchestrator();
     let streamEndCount = 0;
-    bus.on('turn:stream-end', () => { streamEndCount++; });
 
     // Manually simulate what happens during an active streaming turn:
     // 1. A streaming block was started
@@ -212,7 +210,7 @@ describe('Orchestrator: abort during streaming cleanup', () => {
     if ((orch as unknown as { isStreaming: boolean }).isStreaming) {
       (orch as unknown as { isStreaming: boolean }).isStreaming = false;
       cm.finalizeStreamingBlock();
-      bus.emit('turn:stream-end');
+      streamEndCount++;
     }
 
     expect(streamEndCount).toBe(1);
@@ -221,16 +219,13 @@ describe('Orchestrator: abort during streaming cleanup', () => {
   });
 
   test('abort without streaming active does not emit turn:stream-end', async () => {
-    const { bus } = await buildOrchestrator();
-
     let streamEndCount = 0;
-    bus.on('turn:stream-end', () => { streamEndCount++; });
 
     // isStreaming is false (default), so no stream-end should fire
     // This is the code path where streaming was not started
     const isStreaming = false;
     if (isStreaming) {
-      bus.emit('turn:stream-end');
+      streamEndCount++;
     }
 
     expect(streamEndCount).toBe(0);

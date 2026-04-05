@@ -72,7 +72,7 @@ export function emitToolPosthooked(
 export function emitToolSucceeded(
   bus: RuntimeEventBus,
   ctx: EmitterContext,
-  data: { callId: string; turnId: string; tool: string; durationMs: number }
+  data: { callId: string; turnId: string; tool: string; durationMs: number; result?: unknown }
 ): void {
   bus.emit('tools', createEventEnvelope('TOOL_SUCCEEDED', { type: 'TOOL_SUCCEEDED', ...data }, ctx));
 }
@@ -81,9 +81,26 @@ export function emitToolSucceeded(
 export function emitToolFailed(
   bus: RuntimeEventBus,
   ctx: EmitterContext,
-  data: { callId: string; turnId: string; tool: string; error: string; durationMs: number }
+  data: { callId: string; turnId: string; tool: string; error: string; durationMs: number; result?: unknown }
 ): void {
   bus.emit('tools', createEventEnvelope('TOOL_FAILED', { type: 'TOOL_FAILED', ...data }, ctx));
+}
+
+/** Emit TOOL_RECONCILED when unresolved tool calls are synthesized. */
+export function emitToolReconciled(
+  bus: RuntimeEventBus,
+  ctx: EmitterContext,
+  data: {
+    turnId: string;
+    count: number;
+    callIds: string[];
+    toolNames: string[];
+    reason: string;
+    timestamp: number;
+    isMalformed?: boolean;
+  }
+): void {
+  bus.emit('tools', createEventEnvelope('TOOL_RECONCILED', { type: 'TOOL_RECONCILED', ...data }, ctx));
 }
 
 /** Emit TOOL_CANCELLED when a tool call is cancelled. */

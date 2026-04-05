@@ -1,5 +1,5 @@
 /**
- * Replay panel data provider — Section 5.2
+ * Replay panel data provider.
  *
  * Wraps a `DeterministicReplayEngine` and exposes its state for the
  * diagnostics view as a snapshot-based panel. Subscribers are notified

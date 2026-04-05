@@ -4,7 +4,7 @@
  * These are purely data-oriented. No UI rendering logic lives here.
  * All values are JSON-safe unless explicitly noted.
  *
- * v3 Section 26 (Devtools / State Inspector).
+ * Types used by the state inspector subsystem.
  */
 
 // ── Domain snapshot ───────────────────────────────────────────────────────────

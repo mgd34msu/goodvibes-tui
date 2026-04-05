@@ -1,7 +1,7 @@
 /**
  * Notification routing module — barrel export and factory.
  *
- * Implements v3 Section 18.2: conversation noise routing.
+ * Implements conversation noise routing.
  * Operational noise is routed to dedicated panels while the main
  * conversation receives only high-signal items.
  *

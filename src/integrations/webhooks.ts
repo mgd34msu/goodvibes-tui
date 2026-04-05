@@ -1,5 +1,5 @@
 import { logger } from '../utils/logger.ts';
-import type { EventBus } from '../core/event-bus.ts';
+import type { RuntimeEventBus, AgentEvent, WorkflowEvent } from '../runtime/events/index.ts';
 
 // ---------------------------------------------------------------------------
 // WebhookNotifier
@@ -14,7 +14,7 @@ import type { EventBus } from '../core/event-bus.ts';
  *
  * Usage:
  *   const notifier = new WebhookNotifier(['https://ntfy.sh/my-topic']);
- *   notifier.attachToEventBus(bus);
+ *   notifier.attachToRuntimeBus(runtimeBus);
  */
 // ---------------------------------------------------------------------------
 // Module-level singleton — wired at startup, accessible to command handlers
@@ -23,7 +23,7 @@ import type { EventBus } from '../core/event-bus.ts';
 let _liveNotifier: WebhookNotifier | null = null;
 
 /**
- * Set the live WebhookNotifier instance (called from main.ts after wiring to EventBus).
+ * Set the live WebhookNotifier instance after runtime wiring.
  * The /notify test command uses this to send test pings through the active instance.
  */
 export function setWebhookNotifier(notifier: WebhookNotifier): void {
@@ -138,55 +138,41 @@ export class WebhookNotifier {
   }
 
   // -------------------------------------------------------------------------
-  // EventBus integration
+  // Runtime event integration
   // -------------------------------------------------------------------------
 
-  /**
-   * Subscribe to relevant EventBus events and dispatch webhook notifications.
-   *
-   * Events handled:
-   *   subagent:complete  → "Agent completed: {task}"
-   *   subagent:error     → "Agent failed: {id} — {error}"
-   *   wrfc:chain-passed  → "WRFC passed: chain {chainId}"
-   *   wrfc:chain-failed  → "WRFC failed: {reason}"
-   */
-  attachToEventBus(bus: EventBus): void {
-    this.detachFromEventBus();
+  attachToRuntimeBus(bus: RuntimeEventBus): void {
+    this.detach();
 
     this.unsubscribers.push(
-      bus.on('subagent:complete', (data) => {
-        void this.send(`Agent completed: ${data.id}`);
+      bus.on<Extract<AgentEvent, { type: 'AGENT_COMPLETED' }>>('AGENT_COMPLETED', ({ payload }) => {
+        void this.send(`Agent completed: ${payload.agentId}`);
       }),
     );
 
     this.unsubscribers.push(
-      bus.on('subagent:error', (data) => {
-        const errorMsg = data.error instanceof Error ? data.error.message : String(data.error ?? 'unknown error');
-        void this.send(`Agent failed: ${data.id} — ${errorMsg}`);
+      bus.on<Extract<AgentEvent, { type: 'AGENT_FAILED' }>>('AGENT_FAILED', ({ payload }) => {
+        void this.send(`Agent failed: ${payload.agentId} — ${payload.error}`);
       }),
     );
 
     this.unsubscribers.push(
-      bus.on('wrfc:chain-passed', (data) => {
-        const chainId = String(data.chainId ?? '');
-        void this.send(`WRFC passed: chain ${chainId}`);
+      bus.on<Extract<WorkflowEvent, { type: 'WORKFLOW_CHAIN_PASSED' }>>('WORKFLOW_CHAIN_PASSED', ({ payload }) => {
+        void this.send(`WRFC passed: chain ${payload.chainId}`);
       }),
     );
 
     this.unsubscribers.push(
-      bus.on('wrfc:chain-failed', (data) => {
-        const reason = typeof data.reason === 'string' ? data.reason : 'unknown reason';
-        void this.send(`WRFC failed: ${reason}`);
+      bus.on<Extract<WorkflowEvent, { type: 'WORKFLOW_CHAIN_FAILED' }>>('WORKFLOW_CHAIN_FAILED', ({ payload }) => {
+        void this.send(`WRFC failed: ${payload.reason}`);
       }),
     );
 
-    logger.info('WebhookNotifier: attached to EventBus', { urlCount: this.urls.length });
+    logger.info('WebhookNotifier: attached to RuntimeEventBus', { urlCount: this.urls.length });
   }
 
-  /**
-   * Remove all EventBus subscriptions.
-   */
-  detachFromEventBus(): void {
+  /** Remove all webhook subscriptions. */
+  detach(): void {
     for (const unsub of this.unsubscribers) {
       unsub();
     }

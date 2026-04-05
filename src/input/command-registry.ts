@@ -1,10 +1,10 @@
-import type { EventBus } from '../core/event-bus.ts';
 import type { McpRegistry } from '../mcp/registry.ts';
 import type { ProviderRegistry } from '../providers/registry.ts';
 import type { ConversationManager } from '../core/conversation.ts';
-import type { AppConfig } from '../config/index.ts';
 import type { ConfigManager } from '../config/index.ts';
+import type { GoodVibesConfig } from '../config/index.ts';
 import type { ToolRegistry } from '../tools/registry.ts';
+import type { PermissionRequestHandler } from '../permissions/prompt.ts';
 import type { SelectionItem, SelectionResult, SelectionAction } from './selection-modal.ts';
 import type { FileUndoManager } from '../state/file-undo.ts';
 
@@ -13,10 +13,9 @@ import type { FileUndoManager } from '../state/file-undo.ts';
  * interact with the full application without circular-import issues.
  */
 export interface CommandContext {
-  eventBus: EventBus;
   providerRegistry: ProviderRegistry;
   conversationManager: ConversationManager;
-  config: AppConfig;
+  config: Readonly<GoodVibesConfig>;
   configManager: ConfigManager;
   /** Mutable runtime state — commands can mutate these in-place. */
   runtime: {
@@ -30,6 +29,24 @@ export interface CommandContext {
   };
   /** Request a re-render. */
   renderRequest: () => void;
+  /** Submit user input directly to the shell/orchestrator path. */
+  submitInput?: (text: string, content?: import('../providers/interface.ts').ContentPart[]) => void;
+  /** Execute a slash command directly through the shell command path. */
+  executeCommand?: (name: string, args: string[]) => Promise<boolean>;
+  /** Cancel the active generation directly through the turn controller path. */
+  cancelGeneration?: () => void;
+  /** Complete model selection directly through the shell bridge. */
+  completeModelSelection?: (selection: {
+    model: { id: string; provider: string; displayName: string; registryKey: string };
+    effort: string;
+    contextCap?: number | null;
+  }) => void;
+  /** Clear the terminal screen directly through the shell control path. */
+  clearScreen?: () => void;
+  /** Activate a plan directly through the shell bridge. */
+  activatePlan?: (planId: string, task: string) => void;
+  /** Request tool permission directly through the shell-owned permission prompt. */
+  requestPermission?: PermissionRequestHandler;
   /** Print a message to the conversation as a system note. */
   print: (text: string) => void;
   /** Exit the application cleanly. */
@@ -44,6 +61,10 @@ export interface CommandContext {
   openContextInspector?: () => void;
   /** Open the bookmark browser modal. */
   openBookmarkModal?: () => void;
+  /** Jump the viewport to a bookmarked conversation block. */
+  jumpToBookmark?: (key: string) => void;
+  /** Jump the viewport to a specific absolute line. */
+  scrollToLine?: (line: number) => void;
   /** Toggle the help/shortcuts overlay. */
   openHelpOverlay?: () => void;
   /** Open the generic selection modal and call back with the result. */
@@ -77,6 +98,8 @@ export interface CommandContext {
   opsControlPlane?: import('../runtime/ops/control-plane.ts').OpsControlPlane;
   /** Open the Failure Forensics panel. */
   openForensicsPanel?: () => void;
+  /** Open the policy/governance panel. */
+  openPolicyPanel?: () => void;
   /** ForensicsRegistry for /forensics command subcommands. */
   forensicsRegistry?: import('../runtime/forensics/registry.ts').ForensicsRegistry;
   /** PolicyRegistry for /policy command subcommands. */

@@ -11,7 +11,8 @@
 import { randomUUID } from 'node:crypto';
 import type { TaskManager } from '../tasks/types.ts';
 import type { RuntimeEventBus } from '../events/index.ts';
-import type { RuntimeStore } from '../store/index.ts';
+import { createDomainDispatch } from '../store/index.ts';
+import type { RuntimeStore, DomainDispatch } from '../store/index.ts';
 import type { TaskLifecycleState } from '../store/domains/tasks.ts';
 import type { AgentLifecycleState } from '../store/domains/agents.ts';
 import { canTransition } from '../tasks/lifecycle.ts';
@@ -91,6 +92,7 @@ export class OpsControlPlane {
   private readonly _taskManager: TaskManager;
   private readonly _bus: RuntimeEventBus;
   private readonly _store: RuntimeStore;
+  private readonly _dispatch: DomainDispatch;
   private readonly _sessionId: string;
 
   public constructor(
@@ -102,6 +104,7 @@ export class OpsControlPlane {
     this._taskManager = taskManager;
     this._bus = bus;
     this._store = store;
+    this._dispatch = createDomainDispatch(store);
     this._sessionId = sessionId;
   }
 
@@ -298,31 +301,12 @@ export class OpsControlPlane {
       throw err;
     }
 
-    // Update agent state in store
-    this._store.setState((s) => {
-      const agents = new Map(s.agents.agents);
-      const a = agents.get(agentId);
-      if (!a) return s;
-
-      agents.set(agentId, {
-        ...a,
-        status: 'cancelled',
-        endedAt: Date.now(),
-      });
-
-      const activeAgentIds = s.agents.activeAgentIds.filter((id) => id !== agentId);
-
-      return {
-        agents: {
-          ...s.agents,
-          agents,
-          activeAgentIds,
-          revision: s.agents.revision + 1,
-          lastUpdatedAt: Date.now(),
-          source: 'ops-control-plane',
-        },
-      };
-    });
+    this._dispatch.transitionRuntimeAgent(
+      agentId,
+      'cancelled',
+      { endedAt: Date.now() },
+      'ops-control-plane',
+    );
 
     emitOpsAgentCancelled(this._bus, this._makeCtx(undefined, agentId), {
       agentId,

@@ -1,7 +1,7 @@
 /**
  * Remote Substrate — Durable Identity Manager
  *
- * Implements v3 Section 10.1: globally unique, stable identifiers for
+ * Implements globally unique, stable identifiers for
  * sessionId, taskId, and agentId that survive transport changes and reconnects.
  *
  * The identity manager maintains the canonical set of IDs for a remote

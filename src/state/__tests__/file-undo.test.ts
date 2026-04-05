@@ -1,20 +1,16 @@
-import { describe, it, expect, beforeEach, afterEach, mock } from 'bun:test';
+import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
+import { randomUUID } from 'crypto';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { tmpdir } from 'node:os';
 import { FileUndoManager } from '../file-undo.ts';
-
-// ---------------------------------------------------------------------------
-// Mock node:fs
-// ---------------------------------------------------------------------------
-
-const mockWriteFileSync = mock(() => {});
-
-mock.module('node:fs', () => ({
-  readFileSync: mock(() => ''),
-  writeFileSync: mockWriteFileSync,
-}));
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
+
+let tempDir = '';
+let testFilePath = '';
 
 function makeOp(overrides?: {
   path?: string;
@@ -23,7 +19,7 @@ function makeOp(overrides?: {
   tool?: 'write' | 'edit';
 }) {
   return {
-    path: '/tmp/test-file.ts',
+    path: testFilePath,
     beforeContent: 'before content',
     afterContent: 'after content',
     tool: 'write' as const,
@@ -41,11 +37,16 @@ describe('FileUndoManager', () => {
   beforeEach(() => {
     FileUndoManager._resetForTest();
     manager = FileUndoManager.getInstance();
-    mockWriteFileSync.mockClear();
+    tempDir = mkdtempSync(join(tmpdir(), `gv-file-undo-${randomUUID()}-`));
+    testFilePath = join(tempDir, 'test-file.ts');
+    mkdirSync(tempDir, { recursive: true });
   });
 
   afterEach(() => {
     FileUndoManager._resetForTest();
+    rmSync(tempDir, { recursive: true, force: true });
+    tempDir = '';
+    testFilePath = '';
   });
 
   // ── snapshot ──────────────────────────────────────────────
@@ -58,7 +59,7 @@ describe('FileUndoManager', () => {
     expect(entry).toBeDefined();
     expect(entry!.beforeContent).toBe('old content');
     expect(entry!.afterContent).toBe('new content');
-    expect(entry!.path).toBe('/tmp/test-file.ts');
+    expect(entry!.path).toBe(testFilePath);
     expect(entry!.tool).toBe('write');
     expect(entry!.timestamp).toBeTruthy();
   });
@@ -79,11 +80,12 @@ describe('FileUndoManager', () => {
   it('undo restores beforeContent and pushes op to redo stack', () => {
     const op = makeOp({ beforeContent: 'before', afterContent: 'after' });
     manager.snapshot(op);
+    writeFileSync(testFilePath, 'after', 'utf-8');
 
     const result = manager.undo();
 
-    expect(result).toEqual({ path: '/tmp/test-file.ts', tool: 'write' });
-    expect(mockWriteFileSync).toHaveBeenCalledWith('/tmp/test-file.ts', 'before', 'utf-8');
+    expect(result).toEqual({ path: testFilePath, tool: 'write' });
+    expect(readFileSync(testFilePath, 'utf-8')).toBe('before');
     expect(manager.undoDepth()).toBe(0);
     expect(manager.redoDepth()).toBe(1);
   });
@@ -91,11 +93,12 @@ describe('FileUndoManager', () => {
   it('undo with null beforeContent writes empty string', () => {
     const op = makeOp({ beforeContent: null, afterContent: 'new file content' });
     manager.snapshot(op);
+    writeFileSync(testFilePath, 'new file content', 'utf-8');
 
     const result = manager.undo();
 
     expect(result).toBeDefined();
-    expect(mockWriteFileSync).toHaveBeenCalledWith('/tmp/test-file.ts', '', 'utf-8');
+    expect(readFileSync(testFilePath, 'utf-8')).toBe('');
   });
 
   it('undo returns null when nothing to undo', () => {
@@ -107,13 +110,13 @@ describe('FileUndoManager', () => {
   it('redo re-applies afterContent and pushes op back to undo stack', () => {
     const op = makeOp({ beforeContent: 'before', afterContent: 'after' });
     manager.snapshot(op);
+    writeFileSync(testFilePath, 'after', 'utf-8');
     manager.undo();
-    mockWriteFileSync.mockClear();
 
     const result = manager.redo();
 
-    expect(result).toEqual({ path: '/tmp/test-file.ts', tool: 'write' });
-    expect(mockWriteFileSync).toHaveBeenCalledWith('/tmp/test-file.ts', 'after', 'utf-8');
+    expect(result).toEqual({ path: testFilePath, tool: 'write' });
+    expect(readFileSync(testFilePath, 'utf-8')).toBe('after');
     expect(manager.redoDepth()).toBe(0);
     expect(manager.undoDepth()).toBe(1);
   });

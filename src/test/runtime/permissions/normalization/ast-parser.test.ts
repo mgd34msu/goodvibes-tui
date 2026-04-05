@@ -1,5 +1,5 @@
 /**
- * Corpus tests for the Shell AST parser (GC-EXEC-005).
+ * Corpus tests for the Shell AST parser.
  *
  * Tests cover:
  *  - Simple commands

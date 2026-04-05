@@ -1,5 +1,5 @@
 /**
- * Shell AST guard for the exec tool (GC-EXEC-005).
+ * Shell AST guard for the exec tool.
  *
  * Integrates the Shell AST normalization pipeline with the exec tool to
  * provide per-segment verdict evaluation and user-facing denial explanations.
@@ -8,8 +8,8 @@
  * command is parsed into an AST, evaluated segment-by-segment, and denied
  * with a structured explanation if any segment fails policy.
  *
- * When the flag is disabled, this module falls back to the legacy segmentation
- * mode (flat token-based normalization).
+ * When the flag is disabled, this module falls back to the baseline
+ * flat-token segmentation path.
  *
  * @module tools/exec/ast-guard
  */
@@ -80,22 +80,22 @@ export interface ASTGuardResult {
    * Only set when AST normalization is active.
    */
   verdict?: CompoundVerdict;
-  /** Whether AST normalization was active (vs. legacy mode). */
+  /** Whether AST normalization was active. */
   astModeActive: boolean;
 }
 
-// ── Legacy mode guard ──────────────────────────────────────────────────────────
+// ── Baseline guard ─────────────────────────────────────────────────────────────
 
 /**
- * Evaluates a command using the legacy flat segmentation pipeline.
+ * Evaluates a command using the baseline flat segmentation pipeline.
  *
  * Returns `allowed: true` for non-destructive, non-escalation commands.
- * This mirrors the pre-GC-EXEC-005 behaviour of the exec tool.
+ * This mirrors the baseline exec safety path used when AST normalization is off.
  *
  * @param command - The raw shell command string.
- * @returns ASTGuardResult with legacy mode flag set.
+ * @returns ASTGuardResult with AST mode disabled.
  */
-function legacyGuard(command: string): ASTGuardResult {
+function baselineGuard(command: string): ASTGuardResult {
   const normalized = normalizeCommand(command);
   const cls = normalized.highestClassification;
 
@@ -103,7 +103,7 @@ function legacyGuard(command: string): ASTGuardResult {
     return {
       allowed: false,
       denialMessage:
-        `Command denied (legacy mode): "${command}"\n` +
+        `Command denied (baseline mode): "${command}"\n` +
         `Classification: ${cls}\n` +
         `Highest-risk operation in compound command is classified as ${cls}.`,
       astModeActive: false,
@@ -116,7 +116,7 @@ function legacyGuard(command: string): ASTGuardResult {
 // ── AST mode guard ─────────────────────────────────────────────────────────────
 
 /**
- * Evaluates a command using the Shell AST pipeline (GC-EXEC-005).
+ * Evaluates a command using the Shell AST pipeline.
  *
  * Parses the command into a ShellNode AST, evaluates each segment
  * independently, and returns a CompoundVerdict.
@@ -154,7 +154,7 @@ function astGuard(
  * Evaluates a shell command string through the AST guard.
  *
  * Routes to the AST pipeline when the `shell-ast-normalization` feature flag
- * is enabled, otherwise falls back to the legacy segmentation mode.
+ * is enabled, otherwise falls back to the baseline segmentation path.
  *
  * @param command        - The raw shell command string to evaluate.
  * @param allowedClasses - Override for the default allowed classification set.
@@ -174,7 +174,7 @@ export async function guardExecCommand(
   if (await isASTNormalizationEnabled()) {
     return astGuard(command, allowedClasses);
   }
-  return legacyGuard(command);
+  return baselineGuard(command);
 }
 
 /**

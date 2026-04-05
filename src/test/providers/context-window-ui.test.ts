@@ -1,5 +1,5 @@
 /**
- * G00: Context window UI and diagnostics tests.
+ * Context window UI and diagnostics tests.
  *
  * Proves that ModelPickerEntry includes contextWindow and contextWindowSource,
  * and that getContextIngestionDiagnostics surfaces cache state.

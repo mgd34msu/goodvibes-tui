@@ -1,7 +1,7 @@
 /**
  * TransportEvent — discriminated union covering ACP/daemon transport lifecycle events.
  *
- * Maps to state machine events from v3 Section 4 (Transport domain).
+ * Covers transport lifecycle events for the runtime event bus.
  */
 
 export type TransportEvent =

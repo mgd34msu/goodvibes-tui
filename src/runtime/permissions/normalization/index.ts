@@ -44,7 +44,7 @@ import type { CompoundVerdict } from './verdict.ts';
 /**
  * Normalizes a raw shell command string and evaluates per-segment verdicts.
  *
- * Uses the Shell AST parser (GC-EXEC-005) to produce a CompoundVerdict with
+ * Uses the Shell AST parser to produce a CompoundVerdict with
  * per-segment classification and denial reasons. Requires the
  * `shell-ast-normalization` feature flag to be enabled; falls back to
  * `normalizeCommand` when the flag is disabled.

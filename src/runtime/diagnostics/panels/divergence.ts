@@ -1,5 +1,5 @@
 /**
- * GC-PERM-009 — Divergence diagnostics panel data provider.
+ * Divergence diagnostics panel data provider.
  *
  * Wraps a `DivergenceDashboard` and exposes its state for the diagnostics
  * view as a snapshot-based panel. Subscribers are notified whenever a new

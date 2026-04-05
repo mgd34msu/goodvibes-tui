@@ -5,7 +5,7 @@
 import type { Line } from '../types/grid.ts';
 import { createStyledCell, createEmptyLine } from '../types/grid.ts';
 import { BasePanel } from './base-panel.ts';
-import type { EventBus } from '../core/event-bus.ts';
+import type { RuntimeEventBus, AgentEvent, TurnEvent } from '../runtime/events/index.ts';
 import { getPricingForModel } from '../providers/model-limits.ts';
 import { getCostFromCatalog } from '../providers/model-catalog.ts';
 
@@ -177,32 +177,32 @@ export class CostTrackerPanel extends BasePanel {
   private readonly getOrchestratorUsage: () => UsageSnapshot & { model?: string };
 
   constructor(
-    bus: EventBus,
+    runtimeBus: RuntimeEventBus,
     getOrchestratorUsage: () => UsageSnapshot & { model?: string },
     opts: { budgetThreshold?: number } = {},
   ) {
     super('cost', 'Cost', '$', 'monitoring');
     this.getOrchestratorUsage = getOrchestratorUsage;
     this.budgetThreshold = opts.budgetThreshold ?? 0;
-    this.attachBus(bus);
+    this.attachBus(runtimeBus);
   }
 
   // -------------------------------------------------------------------------
   // Bus wiring
   // -------------------------------------------------------------------------
 
-  private attachBus(bus: EventBus): void {
+  private attachBus(runtimeBus: RuntimeEventBus): void {
     // Refresh after every completed turn
     this.unsubs.push(
-      bus.on('turn:complete', () => this.onTurnComplete()),
+      runtimeBus.on<Extract<TurnEvent, { type: 'TURN_COMPLETED' }>>('TURN_COMPLETED', () => this.onTurnComplete()),
     );
 
     // Track agent spawns
     this.unsubs.push(
-      bus.on('subagent:spawned', ({ id, task }) => {
-        this.agents.set(id, {
-          id: id.slice(0, 8),
-          task: task.length > 40 ? task.slice(0, 37) + '…' : task,
+      runtimeBus.on<Extract<AgentEvent, { type: 'AGENT_SPAWNING' }>>('AGENT_SPAWNING', ({ payload }) => {
+        this.agents.set(payload.agentId, {
+          id: payload.agentId.slice(0, 8),
+          task: payload.task.length > 40 ? payload.task.slice(0, 37) + '…' : payload.task,
           model: 'unknown',
           inputTokens: 0,
           outputTokens: 0,
@@ -215,10 +215,10 @@ export class CostTrackerPanel extends BasePanel {
 
     // Agent completed — capture token data from result if available
     this.unsubs.push(
-      bus.on('subagent:complete', ({ id, result }) => {
-        const entry = this.agents.get(id);
+      runtimeBus.on<Extract<AgentEvent, { type: 'AGENT_COMPLETED' }>>('AGENT_COMPLETED', ({ payload }) => {
+        const entry = this.agents.get(payload.agentId);
         if (entry) {
-          entry.status = result.success ? 'done' : 'failed';
+          entry.status = 'done';
           this.markDirty();
         }
       }),
@@ -226,8 +226,8 @@ export class CostTrackerPanel extends BasePanel {
 
     // Agent error
     this.unsubs.push(
-      bus.on('subagent:error', ({ id }) => {
-        const entry = this.agents.get(id);
+      runtimeBus.on<Extract<AgentEvent, { type: 'AGENT_FAILED' }>>('AGENT_FAILED', ({ payload }) => {
+        const entry = this.agents.get(payload.agentId);
         if (entry) {
           entry.status = 'failed';
           this.markDirty();
@@ -317,7 +317,7 @@ export class CostTrackerPanel extends BasePanel {
     const sessionCost = calcCost(this.sessionUsage.input + this.sessionUsage.cacheRead + this.sessionUsage.cacheWrite, this.sessionUsage.output, pricing);
     const overBudget = this.budgetThreshold > 0 && sessionCost > this.budgetThreshold;
 
-    // ── Section 1: Running total header ──────────────────────────────────────
+    // ── Running total header ─────────────────────────────────────────────────
     lines.push(this.renderSectionHeader(width, ' SESSION COST'));
     if (lines.length >= height) return lines.slice(0, height);
 
@@ -361,7 +361,7 @@ export class CostTrackerPanel extends BasePanel {
     lines.push(this.renderKeyValue(width, ' Model', this.sessionModel, C.model));
     if (lines.length >= height) return lines.slice(0, height);
 
-    // ── Section 2: Per-plan cost (sum across all agents) ─────────────────────
+    // ── Per-plan cost (sum across all agents) ────────────────────────────────
     const agentList = Array.from(this.agents.values());
     if (agentList.length > 0) {
       lines.push(this.renderEmpty(width));

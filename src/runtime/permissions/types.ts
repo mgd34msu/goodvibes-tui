@@ -1,5 +1,5 @@
 /**
- * Permissions v2 — Core types for the layered policy evaluator.
+ * Core types for the layered permission evaluator.
  *
  * These types represent the full evaluation model: modes, decisions, reason
  * codes, classification, policy rules, and per-step evaluation trace.
@@ -418,8 +418,8 @@ export type PolicyRule =
 
 // ── Evaluator Configuration ────────────────────────────────────────────────────
 
-/** Configuration object passed to `createPermissionsV2()`. */
-export interface PermissionsV2Config {
+/** Configuration object passed to `createPermissionEvaluator()`. */
+export interface PermissionsConfig {
   /** Active permission mode. Defaults to `'default'`. */
   mode?: PermissionMode;
   /**

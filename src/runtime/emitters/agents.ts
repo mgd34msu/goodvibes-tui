@@ -23,6 +23,24 @@ export function emitAgentRunning(
   bus.emit('agents', createEventEnvelope('AGENT_RUNNING', { type: 'AGENT_RUNNING', ...data }, ctx));
 }
 
+/** Emit AGENT_PROGRESS when an agent reports a progress string. */
+export function emitAgentProgress(
+  bus: RuntimeEventBus,
+  ctx: EmitterContext,
+  data: { agentId: string; taskId?: string; progress: string }
+): void {
+  bus.emit('agents', createEventEnvelope('AGENT_PROGRESS', { type: 'AGENT_PROGRESS', ...data }, ctx));
+}
+
+/** Emit AGENT_STREAM_DELTA when an agent streams output text. */
+export function emitAgentStreamDelta(
+  bus: RuntimeEventBus,
+  ctx: EmitterContext,
+  data: { agentId: string; taskId?: string; content: string; accumulated: string }
+): void {
+  bus.emit('agents', createEventEnvelope('AGENT_STREAM_DELTA', { type: 'AGENT_STREAM_DELTA', ...data }, ctx));
+}
+
 /** Emit AGENT_AWAITING_MESSAGE when an agent is waiting to send to LLM. */
 export function emitAgentAwaitingMessage(
   bus: RuntimeEventBus,
@@ -54,7 +72,7 @@ export function emitAgentFinalizing(
 export function emitAgentCompleted(
   bus: RuntimeEventBus,
   ctx: EmitterContext,
-  data: { agentId: string; taskId?: string; durationMs: number }
+  data: { agentId: string; taskId?: string; durationMs: number; output?: string; toolCallsMade?: number }
 ): void {
   bus.emit('agents', createEventEnvelope('AGENT_COMPLETED', { type: 'AGENT_COMPLETED', ...data }, ctx));
 }

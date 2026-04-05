@@ -1,5 +1,5 @@
 /**
- * Permissions v2 — Policy rules barrel export.
+ * Runtime permissions policy rules barrel export.
  *
  * Re-exports all rule evaluator functions and result types.
  */

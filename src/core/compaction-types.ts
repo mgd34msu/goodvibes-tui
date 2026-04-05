@@ -1,7 +1,7 @@
 /**
  * compaction-types.ts
  *
- * Shared types for the Context Compaction v2 engine.
+ * Shared types for the prompt compaction engine.
  */
 
 import type { ProviderMessage } from '../providers/interface.ts';

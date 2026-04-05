@@ -1,7 +1,7 @@
 /**
- * src/runtime/mcp — MCP Lifecycle v2 barrel.
+ * src/runtime/mcp — MCP lifecycle barrel.
  *
- * Gated by the `mcp-lifecycle-v2` feature flag.
+ * Gated by the `mcp-lifecycle` feature flag.
  *
  * Public API:
  *   - `createMcpLifecycleManager()` — factory function
@@ -44,8 +44,8 @@ import type { McpLifecycleManagerOptions } from './manager.ts';
 /**
  * Factory function for creating a `McpLifecycleManager`.
  *
- * Check the `mcp-lifecycle-v2` feature flag before calling this — when the
- * flag is disabled, the caller should fall through to the legacy `McpRegistry`.
+ * Check the `mcp-lifecycle` feature flag before calling this — when the
+ * flag is disabled, the caller should use the standard MCP registry path.
  *
  * @param options - Optional configuration overrides
  */

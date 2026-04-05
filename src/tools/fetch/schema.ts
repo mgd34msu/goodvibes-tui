@@ -252,7 +252,7 @@ export interface FetchInput {
   max_content_length?: number;
   /**
    * Response sanitization mode applied to all URL responses.
-   * Defaults to `'safe-text'` when omitted (rollback-safe default per GC-FETCH-006).
+   * Defaults to `'safe-text'` when omitted (rollback-safe default for fetch sanitization).
    */
   sanitize_mode?: FetchSanitizeMode;
   /** Hostnames or glob patterns explicitly trusted. Trusted hosts may use sanitize_mode: none. */

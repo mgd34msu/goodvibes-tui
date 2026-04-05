@@ -1,5 +1,5 @@
 /**
- * MCP per-server permission and trust-level management (v3 §11.3).
+ * MCP per-server permission and trust-level management.
  *
  * McpPermissionManager tracks trust levels and per-tool allow/deny overrides
  * for every registered MCP server.

@@ -16,6 +16,28 @@ export type OpsInterventionReason =
   | 'ops_agent_cancel';     // /ops agent cancel
 
 export type OpsEvent =
+  /** Context usage crossed a warning threshold. */
+  | {
+      type: 'OPS_CONTEXT_WARNING';
+      usage: number;
+      threshold: number;
+    }
+  /** Cache hit-rate and token metrics snapshot. */
+  | {
+      type: 'OPS_CACHE_METRICS';
+      hitRate: number;
+      cacheReadTokens: number;
+      cacheWriteTokens: number;
+      totalInputTokens: number;
+      turns: number;
+    }
+  /** Helper-model cumulative usage snapshot. */
+  | {
+      type: 'OPS_HELPER_USAGE';
+      inputTokens: number;
+      outputTokens: number;
+      calls: number;
+    }
   /** Operator cancelled a running or queued task. */
   | {
       type: 'OPS_TASK_CANCELLED';

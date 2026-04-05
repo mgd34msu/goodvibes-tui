@@ -1,5 +1,5 @@
 /**
- * State inspector barrel — public API for the state inspector subsystem.
+ * State inspector subsystem exports.
  *
  * Import from here to access types, the provider class, and the factory.
  *
@@ -13,7 +13,7 @@
  * });
  * ```
  *
- * v3 Section 26 (Devtools / State Inspector).
+ * Devtools / State Inspector.
  */
 
 // ── Types ─────────────────────────────────────────────────────────────────────

@@ -1,10 +1,10 @@
 /**
  * types.ts
  *
- * Core types for the Session Compaction v2 lifecycle engine (v3 §4.10).
+ * Core types for the session compaction lifecycle engine.
  *
- * These are distinct from `src/core/compaction-types.ts` (the legacy single-pass
- * compaction types). This module defines the *lifecycle* layer: state machine
+ * These are distinct from `src/core/compaction-types.ts` (the prompt compaction
+ * section types). This module defines the *lifecycle* layer: state machine
  * states, strategies, boundary commits, and repair records.
  */
 
@@ -18,7 +18,7 @@ export type { CompactionQualityScore };
 // ---------------------------------------------------------------------------
 
 /**
- * All states of the compaction lifecycle state machine (v3 §4.10).
+ * All states of the compaction lifecycle state machine.
  *
  * Transition map:
  *   idle → checking_threshold
@@ -51,7 +51,7 @@ export type CompactionLifecycleState =
  *
  * - `microcompact`  — lightweight summary of recent turns; lowest latency
  * - `collapse`      — full context collapse into a single summary message
- * - `autocompact`   — threshold-based automatic compaction using v2 algorithm
+ * - `autocompact`   — threshold-based automatic compaction
  * - `reactive`      — emergency compaction triggered by prompt-too-long errors
  */
 export type CompactionStrategy =

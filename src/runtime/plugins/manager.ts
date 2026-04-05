@@ -1,15 +1,16 @@
 /**
- * PluginLifecycleManager — v3 §4.6 + §9.
+ * PluginLifecycleManager — plugin lifecycle and capability enforcement.
  *
  * Tracks all plugins through the 8-state lifecycle machine, resolves capability
  * manifests on load, and emits PluginEvents at every state transition.
  *
- * Gated by the `plugin-lifecycle-v2` feature flag.
+ * Gated by the `plugin-lifecycle` feature flag.
  */
 
 import { logger } from '../../utils/logger.ts';
-import type { EventBus } from '../../core/event-bus.ts';
 import type { PluginEvent } from '../events/plugins.ts';
+import { RuntimeEventBus } from '../events/index.ts';
+import type { RuntimeEventBus as RuntimeEventBusContract } from '../events/index.ts';
 import type { PluginLoaderDeps, LoadedPlugin } from '../../plugins/loader.ts';
 import {
   discoverPlugins,
@@ -29,6 +30,16 @@ import { applyTransition, isOperational } from './lifecycle.ts';
 import { resolveCapabilityManifest } from './manifest.ts';
 import { PluginTrustStore, type PluginTrustTier } from './trust.ts';
 import { PluginQuarantineEngine } from './quarantine.ts';
+import {
+  emitPluginActive,
+  emitPluginDegraded,
+  emitPluginDisabled,
+  emitPluginDiscovered,
+  emitPluginError,
+  emitPluginLoaded,
+  emitPluginLoading,
+  emitPluginUnloading,
+} from '../emitters/plugins.ts';
 
 /** Source label for emitted events. */
 const EVENT_SOURCE = 'plugin-lifecycle-manager';
@@ -42,7 +53,7 @@ export class PluginLifecycleManager {
   private readonly sessionId: string;
   private readonly capabilityPolicy: (name: string, cap: PluginCapability) => boolean;
   private readonly trustTierResolver: (pluginName: string) => PluginTrustTier;
-  private eventBus: EventBus | undefined;
+  private readonly runtimeBus: RuntimeEventBusContract;
 
   /** Trust store — manages tier records for all plugins. */
   readonly trustStore: PluginTrustStore = new PluginTrustStore();
@@ -53,14 +64,7 @@ export class PluginLifecycleManager {
     this.sessionId = options.sessionId ?? '';
     this.capabilityPolicy = options.capabilityPolicy ?? (() => true);
     this.trustTierResolver = options.trustTierResolver ?? ((name) => this.trustStore.getTier(name));
-  }
-
-  /**
-   * Attach an EventBus to receive PluginEvents on state transitions.
-   * Optional — manager works without an event bus (no events emitted).
-   */
-  attachEventBus(bus: EventBus): void {
-    this.eventBus = bus;
+    this.runtimeBus = options.runtimeBus ?? new RuntimeEventBus();
   }
 
   // ── Plugin record accessors ────────────────────────────────────────────────
@@ -428,18 +432,41 @@ export class PluginLifecycleManager {
     if (patch.reloading !== undefined) record.reloading = patch.reloading;
   }
 
-  /**
-   * Emit a PluginEvent via the attached EventBus (if any).
-   * The EventBus.emit signature accepts a string event name and payload.
-   */
   private emit(event: PluginEvent): void {
-    if (!this.eventBus) return;
+    const ctx = {
+      sessionId: this.sessionId,
+      traceId: `plugin-lifecycle:${event.pluginId}`,
+      source: EVENT_SOURCE,
+    } as const;
     try {
-      // EventBus.emit(eventName, payload) — cast as unknown to avoid EventMap constraint.
-      (this.eventBus as { emit(name: string, data: unknown): void }).emit(event.type, event);
+      switch (event.type) {
+        case 'PLUGIN_DISCOVERED':
+          emitPluginDiscovered(this.runtimeBus, ctx, event);
+          break;
+        case 'PLUGIN_LOADING':
+          emitPluginLoading(this.runtimeBus, ctx, event);
+          break;
+        case 'PLUGIN_LOADED':
+          emitPluginLoaded(this.runtimeBus, ctx, event);
+          break;
+        case 'PLUGIN_ACTIVE':
+          emitPluginActive(this.runtimeBus, ctx, event);
+          break;
+        case 'PLUGIN_DEGRADED':
+          emitPluginDegraded(this.runtimeBus, ctx, event);
+          break;
+        case 'PLUGIN_ERROR':
+          emitPluginError(this.runtimeBus, ctx, event);
+          break;
+        case 'PLUGIN_UNLOADING':
+          emitPluginUnloading(this.runtimeBus, ctx, event);
+          break;
+        case 'PLUGIN_DISABLED':
+          emitPluginDisabled(this.runtimeBus, ctx, event);
+          break;
+      }
     } catch (err) {
-      // Non-fatal — event emission failures must not break plugin management.
-      logger.debug(`[plugin-lifecycle] EventBus emit failed: ${String(err)}`);
+      logger.debug(`[plugin-lifecycle] runtime emit failed: ${String(err)}`);
     }
   }
 }

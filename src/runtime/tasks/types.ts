@@ -15,7 +15,7 @@ import type { TaskKind, TaskLifecycleState, TaskRetryPolicy, RuntimeTask } from 
  * All other fields are optional and have sensible defaults.
  */
 export interface TaskCreateParams {
-  /** Task kind from the v3 taxonomy. */
+  /** Task kind from the runtime task taxonomy. */
   kind: TaskKind;
   /** Human-readable title for display in the task monitor. */
   title: string;

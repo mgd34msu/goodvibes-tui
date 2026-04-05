@@ -7,7 +7,8 @@ import { join } from 'path';
 import { tmpdir } from 'os';
 import { SettingsModal, SETTINGS_CATEGORIES } from '../../input/settings-modal.ts';
 import { ConfigManager } from '../../config/manager.ts';
-import { FeatureFlagManager } from '../../runtime/feature-flags/manager.ts';
+import { createFeatureFlagManager } from '../../runtime/feature-flags/manager.ts';
+import type { FeatureFlagManager } from '../../runtime/feature-flags/manager.ts';
 import { renderSettingsModal } from '../../renderer/settings-modal.ts';
 import { lineToString, linesToText } from '../setup.ts';
 
@@ -28,7 +29,7 @@ describe('renderSettingsModal', () => {
   beforeEach(() => {
     tmpDir = makeTmpDir();
     cm = new ConfigManager({ workingDir: tmpDir });
-    ffm = new FeatureFlagManager();
+    ffm = createFeatureFlagManager();
     modal = new SettingsModal();
     modal.open(cm, ffm);
   });

@@ -9,7 +9,6 @@ export type PermissionAction = 'allow' | 'prompt' | 'deny';
 export type PersistedFlagState = 'enabled' | 'disabled';
 
 export interface PermissionsToolConfig {
-  // New tool names
   read?: PermissionAction;        // default: 'allow'
   write?: PermissionAction;       // default: 'prompt'
   edit?: PermissionAction;        // default: 'prompt'
@@ -24,14 +23,6 @@ export interface PermissionsToolConfig {
   registry?: PermissionAction;    // default: 'allow'
   delegate?: PermissionAction;    // default: 'prompt'
   mcp?: PermissionAction;         // default: 'prompt'
-  // Legacy tool names (backward compat)
-  file_read?: PermissionAction;   // default: 'allow'
-  file_write?: PermissionAction;  // default: 'prompt'
-  file_edit?: PermissionAction;   // default: 'prompt'
-  shell_exec?: PermissionAction;  // default: 'prompt'
-  grep?: PermissionAction;        // default: 'allow'
-  list_dir?: PermissionAction;    // default: 'allow'
-  glob?: PermissionAction;        // default: 'allow'
 }
 
 export interface NotificationsConfig {
@@ -152,13 +143,6 @@ export type ConfigKey =
   | 'permissions.tools.registry'
   | 'permissions.tools.delegate'
   | 'permissions.tools.mcp'
-  | 'permissions.tools.file_read'
-  | 'permissions.tools.file_write'
-  | 'permissions.tools.file_edit'
-  | 'permissions.tools.shell_exec'
-  | 'permissions.tools.grep'
-  | 'permissions.tools.list_dir'
-  | 'permissions.tools.glob'
   | 'danger.agentRecursion'
   | 'danger.maxGlobalAgents'
   | 'danger.maxRecursionDepth'
@@ -192,10 +176,7 @@ export const CONFIG_KEYS = new Set<string>([
   'permissions.tools.exec', 'permissions.tools.find', 'permissions.tools.fetch',
   'permissions.tools.analyze', 'permissions.tools.inspect', 'permissions.tools.agent',
   'permissions.tools.state', 'permissions.tools.workflow', 'permissions.tools.registry',
-  'permissions.tools.delegate', 'permissions.tools.mcp', 'permissions.tools.file_read',
-  'permissions.tools.file_write', 'permissions.tools.file_edit',
-  'permissions.tools.shell_exec', 'permissions.tools.grep', 'permissions.tools.list_dir',
-  'permissions.tools.glob', 'danger.agentRecursion', 'danger.maxGlobalAgents',
+  'permissions.tools.delegate', 'permissions.tools.mcp', 'danger.agentRecursion', 'danger.maxGlobalAgents',
   'danger.maxRecursionDepth', 'danger.daemon', 'danger.httpListener',
   'tools.llmProvider', 'tools.llmModel', 'tools.autoHeal', 'tools.defaultTokenBudget',
   'tools.hooksFile', 'wrfc.scoreThreshold', 'wrfc.maxFixAttempts', 'wrfc.autoCommit',
@@ -243,13 +224,6 @@ export type ConfigValue<K extends ConfigKey> =
   K extends 'permissions.tools.registry' ? PermissionAction :
   K extends 'permissions.tools.delegate' ? PermissionAction :
   K extends 'permissions.tools.mcp' ? PermissionAction :
-  K extends 'permissions.tools.file_read' ? PermissionAction :
-  K extends 'permissions.tools.file_write' ? PermissionAction :
-  K extends 'permissions.tools.file_edit' ? PermissionAction :
-  K extends 'permissions.tools.shell_exec' ? PermissionAction :
-  K extends 'permissions.tools.grep' ? PermissionAction :
-  K extends 'permissions.tools.list_dir' ? PermissionAction :
-  K extends 'permissions.tools.glob' ? PermissionAction :
   K extends 'danger.agentRecursion' ? boolean :
   K extends 'danger.maxGlobalAgents' ? number :
   K extends 'danger.maxRecursionDepth' ? number :
@@ -300,7 +274,6 @@ export const DEFAULT_CONFIG: GoodVibesConfig = {
   permissions: {
     mode: 'prompt',
     tools: {
-      // New tool names
       read: 'allow',
       write: 'prompt',
       edit: 'prompt',
@@ -315,14 +288,6 @@ export const DEFAULT_CONFIG: GoodVibesConfig = {
       registry: 'allow',
       delegate: 'prompt',
       mcp: 'prompt',
-      // Legacy tool names (backward compat)
-      file_read: 'allow',
-      file_write: 'prompt',
-      file_edit: 'prompt',
-      shell_exec: 'prompt',
-      grep: 'allow',
-      list_dir: 'allow',
-      glob: 'allow',
     },
   },
   danger: {
@@ -562,55 +527,6 @@ export const CONFIG_SCHEMA: ConfigSetting[] = [
     type: 'enum',
     default: 'prompt',
     description: 'Permission for MCP tool calls (external server tools)',
-    enumValues: ['allow', 'prompt', 'deny'],
-  },
-  {
-    key: 'permissions.tools.file_read',
-    type: 'enum',
-    default: 'allow',
-    description: 'Permission for legacy file read operations (backward compat)',
-    enumValues: ['allow', 'prompt', 'deny'],
-  },
-  {
-    key: 'permissions.tools.file_write',
-    type: 'enum',
-    default: 'prompt',
-    description: 'Permission for legacy file write operations (backward compat)',
-    enumValues: ['allow', 'prompt', 'deny'],
-  },
-  {
-    key: 'permissions.tools.file_edit',
-    type: 'enum',
-    default: 'prompt',
-    description: 'Permission for legacy file edit operations (backward compat)',
-    enumValues: ['allow', 'prompt', 'deny'],
-  },
-  {
-    key: 'permissions.tools.shell_exec',
-    type: 'enum',
-    default: 'prompt',
-    description: 'Permission for legacy shell execution (backward compat)',
-    enumValues: ['allow', 'prompt', 'deny'],
-  },
-  {
-    key: 'permissions.tools.grep',
-    type: 'enum',
-    default: 'allow',
-    description: 'Permission for legacy grep/search operations (backward compat)',
-    enumValues: ['allow', 'prompt', 'deny'],
-  },
-  {
-    key: 'permissions.tools.list_dir',
-    type: 'enum',
-    default: 'allow',
-    description: 'Permission for legacy directory listing (backward compat)',
-    enumValues: ['allow', 'prompt', 'deny'],
-  },
-  {
-    key: 'permissions.tools.glob',
-    type: 'enum',
-    default: 'allow',
-    description: 'Permission for legacy glob pattern matching (backward compat)',
     enumValues: ['allow', 'prompt', 'deny'],
   },
   {

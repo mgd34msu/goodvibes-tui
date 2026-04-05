@@ -4,6 +4,7 @@ import type {
   TaskHooks,
   RuntimeStoreAccess,
 } from '../../runtime/tools/context.ts';
+import { RuntimeEventBus } from '../../runtime/events/index.ts';
 import type { PhaseResult, ToolExecutionPhase } from '../../runtime/tools/types.ts';
 
 // ---------------------------------------------------------------------------
@@ -42,6 +43,7 @@ function makeContext(overrides: Partial<ToolRuntimeContext> = {}): ToolRuntimeCo
       signal: abort.signal,
     },
     executionMode: 'interactive',
+    runtimeBus: new RuntimeEventBus(),
     permissionManager: {} as never,
     hookDispatcher: {} as never,
     ...overrides,
@@ -112,9 +114,9 @@ describe('ToolRuntimeContext contract', () => {
       expect(ctx.budget).toBeUndefined();
     });
 
-    test('runtimeBus is absent by default', () => {
+    test('runtimeBus is present by default', () => {
       const ctx = makeContext();
-      expect(ctx.runtimeBus).toBeUndefined();
+      expect(ctx.runtimeBus).toBeInstanceOf(RuntimeEventBus);
     });
 
     test('cancellation.reason is absent by default', () => {

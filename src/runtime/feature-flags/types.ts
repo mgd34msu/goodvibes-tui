@@ -22,7 +22,7 @@ export type FlagState = 'enabled' | 'disabled' | 'killed';
  * separately by `FeatureFlagManager`.
  */
 export interface FeatureFlag {
-  /** Unique kebab-case identifier used as the lookup key (e.g. `phased-tool-executor`) */
+  /** Unique kebab-case identifier used as the lookup key (e.g. `fetch-sanitization`) */
   id: string;
 
   /** Human-readable display name */

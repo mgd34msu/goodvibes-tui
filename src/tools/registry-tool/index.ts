@@ -280,7 +280,7 @@ function runRecommend(
       .sort((a, b) => a.name.localeCompare(b.name));
     sorted = [...sorted, ...unmatched];
   } else {
-    // No task — fall back to word overlap scoring for backwards compat
+    // No task — fall back to simple word-overlap scoring.
     const lowerTask2 = lowerTask; // already empty string
     const taskWords = lowerTask2.split(/\s+/).filter(Boolean);
     const scored = candidates.map((item) => {

@@ -1,5 +1,5 @@
 /**
- * G00: Context window routing tests.
+ * Context window routing tests.
  *
  * Proves that getContextWindowForModel uses the resolved context window
  * with correct priority: provider_api > OpenRouter cache > static registry.

@@ -5,8 +5,6 @@
  * per compaction. Entries are never modified or removed. The section is
  * omitted entirely from compacted output when no task has been set.
  *
- * Design: context-compaction-v2.md § 10
- *
  * Lifecycle:
  *   - Singleton: use the exported `sessionLineageTracker` instance.
  *   - Session-scoped: call `reset()` when starting a new session.

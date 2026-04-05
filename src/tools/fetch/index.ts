@@ -94,12 +94,12 @@ export interface FetchUrlResult {
   /** Estimated token count for the content (Math.ceil(content.length / 4)). */
   tokens_used?: number;
   /**
-   * Sanitization mode applied to this response (GC-FETCH-006).
+   * Sanitization mode applied to this response.
    * Always present unless the request was blocked pre-flight.
    */
   sanitization_tier?: FetchSanitizeMode | 'skipped';
   /**
-   * Host trust tier classification for this response (GC-FETCH-006).
+   * Host trust tier classification for this response.
    * `trusted` | `unknown` | `blocked`.
    */
   host_trust_tier?: string;
@@ -626,10 +626,15 @@ interface FetchOneOptions {
   verbosity: FetchVerbosity;
   cacheTtlSeconds: number;
   maxContentLength?: number;
-  /** Sanitization mode to apply to response content (GC-FETCH-006). */
+  /** Sanitization mode to apply to response content. */
   sanitizeMode: FetchSanitizeMode;
-  /** Trust tier configuration (GC-FETCH-006). */
+  /** Trust tier configuration. */
   trustTierConfig: TrustTierConfig;
+}
+
+interface PreparedFetchRequest {
+  headers: Record<string, string>;
+  body?: string | FormData;
 }
 
 async function fetchOneRaw(
@@ -656,6 +661,88 @@ async function fetchOneRaw(
   }
 }
 
+function prepareFetchHeaders(urlInput: FetchUrlInput): Record<string, string> {
+  const headers: Record<string, string> = { ...(urlInput.headers ?? {}) };
+  if (urlInput.auth) {
+    applyAuthHeaders(headers, urlInput.auth);
+  }
+  return headers;
+}
+
+async function prepareFetchRequest(urlInput: FetchUrlInput): Promise<PreparedFetchRequest> {
+  const headers = prepareFetchHeaders(urlInput);
+
+  if (!urlInput.auth && urlInput.service) {
+    const serviceHeaders = await resolveServiceAuth(urlInput.service);
+    if (serviceHeaders) {
+      Object.assign(headers, serviceHeaders);
+    }
+  }
+
+  // JSON auto-negotiation: add Accept: application/json for API-like URLs
+  try {
+    const effectiveUrl = buildUrl(urlInput.url, urlInput.params);
+    if (/\/api\/|\/v\d+\/|\/graphql/i.test(effectiveUrl)) {
+      if (!Object.keys(headers).some((h) => h.toLowerCase() === 'accept')) {
+        headers['Accept'] = 'application/json';
+      }
+    }
+  } catch {
+    // malformed URL, skip auto-negotiation
+  }
+
+  const hasContentType = Object.keys(headers).some((k) => k.toLowerCase() === 'content-type');
+  let body: string | FormData | undefined;
+
+  if (urlInput.body_type === 'multipart' && urlInput.body_data) {
+    const form = new FormData();
+    for (const [k, v] of Object.entries(urlInput.body_data)) {
+      form.append(k, v);
+    }
+    body = form;
+  } else if (urlInput.body_base64 !== undefined) {
+    body = Buffer.from(urlInput.body_base64, 'base64').toString();
+    if (!hasContentType) {
+      headers['Content-Type'] = urlInput.body_type === 'form'
+        ? 'application/x-www-form-urlencoded'
+        : 'application/json';
+    }
+  } else if (urlInput.body !== undefined) {
+    body = urlInput.body;
+    if (!hasContentType) {
+      headers['Content-Type'] = urlInput.body_type === 'form'
+        ? 'application/x-www-form-urlencoded'
+        : 'application/json';
+    }
+  }
+
+  return { headers, body };
+}
+
+function buildFetchResultBase(
+  urlInput: FetchUrlInput,
+  response: Response,
+  durationMs: number,
+): FetchUrlResult {
+  return {
+    url: urlInput.url,
+    status: response.status,
+    statusText: response.statusText,
+    duration_ms: durationMs,
+  };
+}
+
+function cacheSuccessfulGet(
+  cacheTtlSeconds: number,
+  method: string,
+  key: string,
+  result: FetchUrlResult,
+): void {
+  if (cacheTtlSeconds > 0 && method === 'GET') {
+    cacheSet(key, { data: result, timestamp: Date.now(), ttl: cacheTtlSeconds });
+  }
+}
+
 async function fetchOne(
   urlInput: FetchUrlInput,
   opts: FetchOneOptions,
@@ -668,7 +755,7 @@ async function fetchOne(
   // Build URL with query params
   const effectiveUrl = buildUrl(urlInput.url, urlInput.params);
 
-  // --- Trust tier classification (GC-FETCH-006) ---
+  // --- Trust tier classification ---
   // When the feature flag is disabled, skip SSRF blocking and sanitization.
   const sanitizationEnabled = isFetchSanitizationEnabled();
   const effectiveSanitizeModeForBlocked = sanitizationEnabled ? sanitizeMode : 'none';
@@ -703,60 +790,7 @@ async function fetchOne(
     }
   }
 
-  // Build headers
-  const headers: Record<string, string> = { ...(urlInput.headers ?? {}) };
-
-  // Apply inline auth
-  if (urlInput.auth) {
-    applyAuthHeaders(headers, urlInput.auth);
-  } else if (urlInput.service) {
-    const serviceHeaders = await resolveServiceAuth(urlInput.service);
-    if (serviceHeaders) {
-      Object.assign(headers, serviceHeaders);
-    }
-  }
-
-  // JSON auto-negotiation: add Accept: application/json for API-like URLs
-  try {
-    if (/\/api\/|\/v\d+\/|\/graphql/i.test(effectiveUrl)) {
-      if (!Object.keys(headers).some((h) => h.toLowerCase() === 'accept')) {
-        headers['Accept'] = 'application/json';
-      }
-    }
-  } catch { /* malformed URL, skip auto-negotiation */ }
-
-  // Build body
-  let requestBody: string | FormData | undefined;
-  const hasContentType = Object.keys(headers).some((k) => k.toLowerCase() === 'content-type');
-
-  if (urlInput.body_type === 'multipart' && urlInput.body_data) {
-    // Multipart: use FormData
-    const form = new FormData();
-    for (const [k, v] of Object.entries(urlInput.body_data)) {
-      form.append(k, v);
-    }
-    requestBody = form;
-    // Do NOT set Content-Type — fetch sets it automatically with the boundary
-  } else if (urlInput.body_base64 !== undefined) {
-    // body_base64 takes precedence over body
-    requestBody = Buffer.from(urlInput.body_base64, 'base64').toString();
-    if (!hasContentType) {
-      if (urlInput.body_type === 'json') {
-        headers['Content-Type'] = 'application/json';
-      } else if (urlInput.body_type === 'form') {
-        headers['Content-Type'] = 'application/x-www-form-urlencoded';
-      }
-    }
-  } else if (urlInput.body !== undefined) {
-    requestBody = urlInput.body;
-    if (!hasContentType) {
-      if (urlInput.body_type === 'json') {
-        headers['Content-Type'] = 'application/json';
-      } else if (urlInput.body_type === 'form') {
-        headers['Content-Type'] = 'application/x-www-form-urlencoded';
-      }
-    }
-  }
+  const { headers, body: requestBody } = await prepareFetchRequest(urlInput);
 
   const startTime = performance.now();
 
@@ -796,18 +830,10 @@ async function fetchOne(
 
     const byteSize = Buffer.byteLength(rawBody, 'utf-8');
 
-    const result: FetchUrlResult = {
-      url: urlInput.url,
-      status: response.status,
-      statusText: response.statusText,
-      duration_ms: durationMs,
-    };
+    const result: FetchUrlResult = buildFetchResultBase(urlInput, response, durationMs);
 
     if (verbosity === 'count_only') {
-      // Cache result for GET requests
-      if (cacheTtlSeconds > 0 && method === 'GET') {
-        cacheSet(cacheKey(urlInput.url, urlInput.params, extractMode, verbosity), { data: result, timestamp: Date.now(), ttl: cacheTtlSeconds });
-      }
+      cacheSuccessfulGet(cacheTtlSeconds, method, cacheKey(urlInput.url, urlInput.params, extractMode, verbosity), result);
       return result;
     }
 
@@ -871,9 +897,7 @@ async function fetchOne(
     }
 
     // Cache result for GET requests
-    if (cacheTtlSeconds > 0 && method === 'GET') {
-      cacheSet(cacheKey(urlInput.url, urlInput.params, extractMode, verbosity), { data: result, timestamp: Date.now(), ttl: cacheTtlSeconds });
-    }
+    cacheSuccessfulGet(cacheTtlSeconds, method, cacheKey(urlInput.url, urlInput.params, extractMode, verbosity), result);
 
     return result;
   } catch (err) {

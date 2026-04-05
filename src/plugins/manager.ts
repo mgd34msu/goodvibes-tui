@@ -17,8 +17,8 @@ import {
   type SignatureValidationResult,
 } from '../runtime/plugins/trust.ts';
 import { PluginQuarantineEngine, type QuarantineRecord } from '../runtime/plugins/quarantine.ts';
-import { isHighRiskCapability } from '../runtime/plugins/manifest.ts';
-import type { PluginCapability } from '../runtime/plugins/types.ts';
+import { isHighRiskCapability, resolveCapabilityManifest } from '../runtime/plugins/manifest.ts';
+import type { PluginCapability, PluginManifestV2 } from '../runtime/plugins/types.ts';
 
 /** Path to the plugin state persistence file. */
 const PLUGINS_STATE_FILE = join(homedir(), '.goodvibes', 'tui', 'plugins.json');
@@ -31,9 +31,9 @@ interface PluginState {
   enabled: Record<string, boolean>;
   /** Map of plugin name → plugin-specific config. */
   config: Record<string, Record<string, unknown>>;
-  /** Map of plugin name → trust record (§5.9). */
+  /** Map of plugin name → trust record. */
   trust: Record<string, PluginTrustRecord>;
-  /** Map of plugin name → quarantine record (§5.9). */
+  /** Map of plugin name → quarantine record. */
   quarantine: Record<string, QuarantineRecord>;
 }
 
@@ -47,9 +47,9 @@ export interface PluginStatus {
   author?: string;
   enabled: boolean;
   active: boolean;
-  /** Trust tier for this plugin (§5.9). */
+  /** Trust tier for this plugin. */
   trustTier: PluginTrustTier;
-  /** Whether this plugin is currently quarantined (§5.9). */
+  /** Whether this plugin is currently quarantined. */
   quarantined: boolean;
 }
 
@@ -224,13 +224,9 @@ export class PluginManager {
   /**
    * quarantine — Apply quarantine to a plugin.
    *
-   * This is the high-level operator path. It uses a stub capability manifest
-   * since the PluginManager doesn't track live manifests — the actual
-   * capability revocation takes effect when the plugin is next reloaded via
-   * the PluginLifecycleManager.
-   *
-   * For runtime quarantine with live manifest revocation, use
-   * PluginLifecycleManager.quarantinePlugin() instead.
+   * This is the high-level operator path. It resolves the plugin's declared
+   * capability manifest using the current trust tier, then applies quarantine
+   * immediately to the resolved capability set.
    */
   quarantine(
     name: string,
@@ -245,20 +241,15 @@ export class PluginManager {
       return { ok: false, error: `Plugin '${name}' is already quarantined` };
     }
 
-    // Create a minimal stub manifest for the quarantine engine.
-    // The stub is intentionally permissive (all declared capabilities initially
-    // granted) because PluginManager does not track live resolved manifests.
-    // Actual capability revocation takes effect on next plugin load/reload via
-    // PluginLifecycleManager, which applies quarantine constraints at that point.
-    const manifest = discovered.manifest as { capabilities?: string[] };
-    const stubManifest = {
-      requested: (manifest.capabilities ?? []) as PluginCapability[],
-      granted: (manifest.capabilities ?? []) as PluginCapability[],
-      denied: [] as PluginCapability[],
-      denialReasons: {} as Partial<Record<PluginCapability, string>>,
-    };
+    const trustTier = this.trustStore.getTier(name);
+    const capabilityManifest = resolveCapabilityManifest(
+      name,
+      discovered.manifest as PluginManifestV2,
+      undefined,
+      trustTier,
+    );
 
-    const record = this.quarantineEngine.quarantine(name, stubManifest, reason);
+    const record = this.quarantineEngine.quarantine(name, capabilityManifest, reason);
     if (!record) {
       return { ok: false, error: `Failed to quarantine '${name}'` };
     }

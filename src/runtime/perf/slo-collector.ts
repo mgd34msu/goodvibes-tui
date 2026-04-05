@@ -162,6 +162,18 @@ export class SloCollector {
 
     // Clean up stale pending turn starts when a turn ends without streaming
     this._unsubs.push(
+      bus.on('PREFLIGHT_FAIL', (env) => {
+        const e = toRaw(env);
+        const turnId = getField<string>(e, 'turnId');
+        if (turnId !== undefined) {
+          this._pendingTurnStart.delete(turnId);
+          this._seenFirstDelta.delete(turnId);
+          this._pendingCancel.delete(turnId);
+        }
+      })
+    );
+
+    this._unsubs.push(
       bus.on('TURN_ERROR', (env) => {
         const e = toRaw(env);
         const turnId = getField<string>(e, 'turnId');

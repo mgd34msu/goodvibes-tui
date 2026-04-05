@@ -12,8 +12,8 @@
  */
 
 import { randomUUID } from 'node:crypto';
-import type { StoreApi } from 'zustand';
-import type { RuntimeState } from '../../store/state.ts';
+import { createDomainDispatch } from '../../store/index.ts';
+import type { RuntimeStore, DomainDispatch } from '../../store/index.ts';
 import type { RuntimeTask } from '../../store/domains/tasks.ts';
 import type { TaskScheduler, ScheduledTask, TaskRunRecord } from '../../../scheduler/scheduler.ts';
 
@@ -39,7 +39,11 @@ export class SchedulerTaskAdapter {
   /** Maps task ID → run agentId. */
   private readonly _taskToRun = new Map<string, string>();
 
-  constructor(private readonly _store: StoreApi<RuntimeState>) {}
+  private readonly _dispatch: DomainDispatch;
+
+  constructor(private readonly _store: RuntimeStore) {
+    this._dispatch = createDomainDispatch(_store);
+  }
 
   // ── Core API ────────────────────────────────────────────────────────────────
 
@@ -168,34 +172,7 @@ export class SchedulerTaskAdapter {
   // ── Private helpers ─────────────────────────────────────────────────────────
 
   private _upsertTask(task: RuntimeTask): void {
-    this._store.setState((state) => {
-      const tasks = new Map(state.tasks.tasks);
-      tasks.set(task.id, task);
-
-      const isRunning = task.status === 'running';
-
-      return {
-        tasks: {
-          ...state.tasks,
-          tasks,
-          runningIds: isRunning
-            ? [...state.tasks.runningIds, task.id]
-            : state.tasks.runningIds,
-          totalCreated: state.tasks.totalCreated + 1,
-          totalCompleted:
-            !isRunning && task.status === 'completed'
-              ? state.tasks.totalCompleted + 1
-              : state.tasks.totalCompleted,
-          totalFailed:
-            !isRunning && task.status === 'failed'
-              ? state.tasks.totalFailed + 1
-              : state.tasks.totalFailed,
-          revision: state.tasks.revision + 1,
-          lastUpdatedAt: Date.now(),
-          source: 'scheduler-adapter',
-        },
-      };
-    });
+    this._dispatch.syncRuntimeTask(task, 'scheduler-adapter');
   }
 
   private _transitionTask(
@@ -203,46 +180,14 @@ export class SchedulerTaskAdapter {
     status: 'completed' | 'failed' | 'cancelled',
     opts: { error?: string },
   ): void {
-    this._store.setState((state) => {
-      const existing = state.tasks.tasks.get(taskId);
-      if (!existing) return {};
-
-      if (existing.status === status) return {};
-
-      const now = Date.now();
-      const updated: RuntimeTask = {
-        ...existing,
-        status,
-        endedAt: now,
+    this._dispatch.transitionRuntimeTask(
+      taskId,
+      status,
+      {
+        endedAt: Date.now(),
         error: opts.error,
-      };
-
-      const tasks = new Map(state.tasks.tasks);
-      tasks.set(taskId, updated);
-
-      return {
-        tasks: {
-          ...state.tasks,
-          tasks,
-          runningIds: state.tasks.runningIds.filter((id) => id !== taskId),
-          queuedIds: state.tasks.queuedIds.filter((id) => id !== taskId),
-          totalCompleted:
-            status === 'completed'
-              ? state.tasks.totalCompleted + 1
-              : state.tasks.totalCompleted,
-          totalFailed:
-            status === 'failed'
-              ? state.tasks.totalFailed + 1
-              : state.tasks.totalFailed,
-          totalCancelled:
-            status === 'cancelled'
-              ? state.tasks.totalCancelled + 1
-              : state.tasks.totalCancelled,
-          revision: state.tasks.revision + 1,
-          lastUpdatedAt: now,
-          source: 'scheduler-adapter',
-        },
-      };
-    });
+      },
+      'scheduler-adapter',
+    );
   }
 }

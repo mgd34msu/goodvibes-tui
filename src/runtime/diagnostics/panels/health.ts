@@ -4,7 +4,7 @@
  * Subscribes to the RuntimeHealthAggregator and produces HealthDashboardData
  * snapshots for the health dashboard diagnostics panel.
  *
- * Implements the health visualization layer from v3 Section 18.3.
+ * Implements the health visualization layer for diagnostics.
  * SLO status rows are included when an SloCollector is attached.
  * Remediation actions are included when a CascadeTimer is attached.
  */

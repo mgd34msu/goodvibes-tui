@@ -2,23 +2,40 @@
  * Hotspot sampler tests — accuracy of sliding-window frequency tracking
  * and latency percentile computation.
  */
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, test, expect, beforeEach, afterEach } from 'bun:test';
 import { SelectorHotspotSampler } from '../../../runtime/ui/state-inspector/hotspot-sampler.ts';
+
+let originalDateNow: typeof Date.now;
+let mockedNow = 0;
+
+function useFakeNow(start = 0): void {
+  mockedNow = start;
+  originalDateNow = Date.now;
+  Date.now = () => mockedNow;
+}
+
+function advanceFakeNow(ms: number): void {
+  mockedNow += ms;
+}
+
+function useRealNow(): void {
+  Date.now = originalDateNow;
+}
 
 // ── Construction ──────────────────────────────────────────────────────────────
 
 describe('SelectorHotspotSampler — construction', () => {
-  it('initialises with no tracked keys', () => {
+  test('initialises with no tracked keys', () => {
     const s = new SelectorHotspotSampler();
     expect(s.trackedKeyCount).toBe(0);
   });
 
-  it('exposes configured windowMs', () => {
+  test('exposes configured windowMs', () => {
     const s = new SelectorHotspotSampler({ windowMs: 5_000 });
     expect(s.windowMs).toBe(5_000);
   });
 
-  it('defaults windowMs to 10_000', () => {
+  test('defaults windowMs to 10_000', () => {
     const s = new SelectorHotspotSampler();
     expect(s.windowMs).toBe(10_000);
   });
@@ -27,20 +44,20 @@ describe('SelectorHotspotSampler — construction', () => {
 // ── record() ─────────────────────────────────────────────────────────────────
 
 describe('SelectorHotspotSampler — record', () => {
-  it('creates a new key on first record', () => {
+  test('creates a new key on first record', () => {
     const s = new SelectorHotspotSampler();
     s.record('selectSession', 0.5);
     expect(s.trackedKeyCount).toBe(1);
   });
 
-  it('accumulates totalCalls across multiple records', () => {
+  test('accumulates totalCalls across multiple records', () => {
     const s = new SelectorHotspotSampler();
     for (let i = 0; i < 10; i++) s.record('selectSession', 1);
     const hs = s.getHotspot('selectSession')!;
     expect(hs.totalCalls).toBe(10);
   });
 
-  it('tracks separate keys independently', () => {
+  test('tracks separate keys independently', () => {
     const s = new SelectorHotspotSampler();
     s.record('selectA', 1);
     s.record('selectB', 2);
@@ -54,7 +71,7 @@ describe('SelectorHotspotSampler — record', () => {
 // ── Latency percentiles ───────────────────────────────────────────────────────
 
 describe('SelectorHotspotSampler — latency percentiles', () => {
-  it('computes p50, p95, p99, avg, max correctly for a known distribution', () => {
+  test('computes p50, p95, p99, avg, max correctly for a known distribution', () => {
     const s = new SelectorHotspotSampler({ windowMs: 60_000 });
     // Record 100 samples: 1ms through 100ms
     for (let i = 1; i <= 100; i++) s.record('sel', i);
@@ -75,7 +92,7 @@ describe('SelectorHotspotSampler — latency percentiles', () => {
     expect(hs.maxMs).toBe(100);
   });
 
-  it('returns zeroes for a key with no samples in window', () => {
+  test('returns zeroes for a key with no samples in window', () => {
     const s = new SelectorHotspotSampler();
     s.record('sel', 5);
     // Manually evict by mocking time would require fake timers;
@@ -85,7 +102,7 @@ describe('SelectorHotspotSampler — latency percentiles', () => {
     expect(hs).toBeUndefined();
   });
 
-  it('single sample: all percentiles equal the sample value', () => {
+  test('single sample: all percentiles equal the sample value', () => {
     const s = new SelectorHotspotSampler({ windowMs: 60_000 });
     s.record('sel', 7.5);
     const hs = s.getHotspot('sel')!;
@@ -99,17 +116,17 @@ describe('SelectorHotspotSampler — latency percentiles', () => {
 // ── Sliding-window eviction ───────────────────────────────────────────────────
 
 describe('SelectorHotspotSampler — sliding window', () => {
-  beforeEach(() => { vi.useFakeTimers(); });
-  afterEach(() => { vi.useRealTimers(); });
+  beforeEach(() => { useFakeNow(0); });
+  afterEach(() => { useRealNow(); });
 
-  it('evicts samples older than windowMs from callsInWindow', () => {
+  test('evicts samples older than windowMs from callsInWindow', () => {
     const s = new SelectorHotspotSampler({ windowMs: 5_000 });
 
     // Record 5 samples at t=0
     for (let i = 0; i < 5; i++) s.record('sel', 1);
 
     // Advance 6 seconds — these samples are now outside the window
-    vi.advanceTimersByTime(6_000);
+    advanceFakeNow(6_000);
 
     // Record 2 new samples at t=6s
     s.record('sel', 1);
@@ -122,10 +139,10 @@ describe('SelectorHotspotSampler — sliding window', () => {
     expect(hs.totalCalls).toBe(7);
   });
 
-  it('callsInWindow is 0 when all samples expired', () => {
+  test('callsInWindow is 0 when all samples expired', () => {
     const s = new SelectorHotspotSampler({ windowMs: 1_000 });
     s.record('sel', 1);
-    vi.advanceTimersByTime(2_000);
+    advanceFakeNow(2_000);
     // Trigger eviction via record of a new key
     s.record('sel', 0); // this will trigger eviction
     const hs = s.getHotspot('sel')!;
@@ -136,10 +153,10 @@ describe('SelectorHotspotSampler — sliding window', () => {
 // ── Hotspot classification ────────────────────────────────────────────────────
 
 describe('SelectorHotspotSampler — hotspot flags', () => {
-  beforeEach(() => { vi.useFakeTimers(); });
-  afterEach(() => { vi.useRealTimers(); });
+  beforeEach(() => { useFakeNow(0); });
+  afterEach(() => { useRealNow(); });
 
-  it('isChurnHotspot is true when callsPerSecond > 10', () => {
+  test('isChurnHotspot is true when callsPerSecond > 10', () => {
     // windowMs=1000ms, so 11 calls = 11/sec
     const s = new SelectorHotspotSampler({ windowMs: 1_000 });
     for (let i = 0; i < 11; i++) s.record('sel', 0);
@@ -147,14 +164,14 @@ describe('SelectorHotspotSampler — hotspot flags', () => {
     expect(hs.isChurnHotspot).toBe(true);
   });
 
-  it('isChurnHotspot is false when callsPerSecond <= 10', () => {
+  test('isChurnHotspot is false when callsPerSecond <= 10', () => {
     const s = new SelectorHotspotSampler({ windowMs: 1_000 });
     for (let i = 0; i < 5; i++) s.record('sel', 0);
     const hs = s.getHotspot('sel')!;
     expect(hs.isChurnHotspot).toBe(false);
   });
 
-  it('isLatencyHotspot is true when p95 > 5ms', () => {
+  test('isLatencyHotspot is true when p95 > 5ms', () => {
     const s = new SelectorHotspotSampler({ windowMs: 60_000 });
     // 100 samples, values 1..100 — p95 will be ~95ms
     for (let i = 1; i <= 100; i++) s.record('sel', i);
@@ -162,7 +179,7 @@ describe('SelectorHotspotSampler — hotspot flags', () => {
     expect(hs.isLatencyHotspot).toBe(true);
   });
 
-  it('isLatencyHotspot is false when p95 <= 5ms', () => {
+  test('isLatencyHotspot is false when p95 <= 5ms', () => {
     const s = new SelectorHotspotSampler({ windowMs: 60_000 });
     // All samples below 5ms
     for (let i = 0; i < 50; i++) s.record('sel', 1);
@@ -174,7 +191,7 @@ describe('SelectorHotspotSampler — hotspot flags', () => {
 // ── getReport ─────────────────────────────────────────────────────────────────
 
 describe('SelectorHotspotSampler — getReport', () => {
-  it('returns hotspots sorted by callsInWindow descending', () => {
+  test('returns hotspots sorted by callsInWindow descending', () => {
     const s = new SelectorHotspotSampler({ windowMs: 60_000 });
     for (let i = 0; i < 3; i++) s.record('selA', 1); // 3 calls
     for (let i = 0; i < 7; i++) s.record('selB', 1); // 7 calls
@@ -186,20 +203,20 @@ describe('SelectorHotspotSampler — getReport', () => {
     expect(report.hotspots[2].key).toBe('selC');
   });
 
-  it('report includes windowMs', () => {
+  test('report includes windowMs', () => {
     const s = new SelectorHotspotSampler({ windowMs: 7_500 });
     const report = s.getReport();
     expect(report.windowMs).toBe(7_500);
   });
 
-  it('report generatedAt is recent', () => {
+  test('report generatedAt is recent', () => {
     const before = Date.now();
     const s = new SelectorHotspotSampler();
     const report = s.getReport();
     expect(report.generatedAt).toBeGreaterThanOrEqual(before);
   });
 
-  it('report has empty hotspots when nothing recorded', () => {
+  test('report has empty hotspots when nothing recorded', () => {
     const s = new SelectorHotspotSampler();
     expect(s.getReport().hotspots).toEqual([]);
   });
@@ -208,14 +225,14 @@ describe('SelectorHotspotSampler — getReport', () => {
 // ── getTopHotspots ────────────────────────────────────────────────────────────
 
 describe('SelectorHotspotSampler — getTopHotspots', () => {
-  it('returns at most N hotspots', () => {
+  test('returns at most N hotspots', () => {
     const s = new SelectorHotspotSampler({ windowMs: 60_000 });
     for (let k = 0; k < 10; k++) s.record(`sel${k}`, 1);
     const top3 = s.getTopHotspots(3);
     expect(top3.length).toBe(3);
   });
 
-  it('returns all when N > tracked keys', () => {
+  test('returns all when N > tracked keys', () => {
     const s = new SelectorHotspotSampler({ windowMs: 60_000 });
     s.record('a', 1);
     s.record('b', 1);
@@ -226,7 +243,7 @@ describe('SelectorHotspotSampler — getTopHotspots', () => {
 // ── per-key sample cap ────────────────────────────────────────────────────────
 
 describe('SelectorHotspotSampler — per-key sample cap', () => {
-  it('does not retain more than maxSamplesPerKey samples', () => {
+  test('does not retain more than maxSamplesPerKey samples', () => {
     const s = new SelectorHotspotSampler({ windowMs: 600_000, maxSamplesPerKey: 10 });
     for (let i = 0; i < 50; i++) s.record('sel', 1);
     // Cannot directly access internal samples; verify via totalCalls vs callsInWindow
@@ -239,7 +256,7 @@ describe('SelectorHotspotSampler — per-key sample cap', () => {
 // ── reset ─────────────────────────────────────────────────────────────────────
 
 describe('SelectorHotspotSampler — reset', () => {
-  it('clears all tracked keys', () => {
+  test('clears all tracked keys', () => {
     const s = new SelectorHotspotSampler();
     s.record('sel', 1);
     s.reset();
@@ -247,7 +264,7 @@ describe('SelectorHotspotSampler — reset', () => {
     expect(s.getHotspot('sel')).toBeUndefined();
   });
 
-  it('report after reset returns empty hotspots', () => {
+  test('report after reset returns empty hotspots', () => {
     const s = new SelectorHotspotSampler();
     s.record('sel', 1);
     s.reset();

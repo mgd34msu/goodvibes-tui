@@ -4,7 +4,7 @@
  * CompactionManager — orchestrates the full compaction lifecycle state machine.
  *
  * Responsibilities:
- * - Gate all compaction behind the `session-compaction-v2` feature flag
+ * - Gate all compaction behind the `session-compaction` feature flag
  * - Drive state transitions (idle → checking_threshold → strategy → boundary_commit → done/failed)
  * - Select and execute the appropriate compaction strategy
  * - Create boundary commits with lineage tracking
@@ -66,7 +66,7 @@ export interface CompactionManagerOptions {
   sessionId: string;
   /** Runtime event bus for emitting CompactionEvents. */
   bus: RuntimeEventBus;
-  /** Feature flag manager — used to gate on `session-compaction-v2`. */
+  /** Feature flag manager — used to gate on `session-compaction`. */
   flags: FeatureFlagManager;
   /** Model context window size (tokens). */
   contextWindow: number;
@@ -81,7 +81,7 @@ export interface CompactionManagerOptions {
 /**
  * CompactionManager — manages the full lifecycle of session context compaction.
  *
- * All compaction is gated behind the `session-compaction-v2` feature flag.
+ * All compaction is gated behind the `session-compaction` feature flag.
  * When the flag is disabled, `compact()` is a no-op and returns the original
  * messages unchanged.
  *
@@ -139,7 +139,7 @@ export class CompactionManager {
   /**
    * Runs the compaction lifecycle for the given messages and trigger.
    *
-   * If the `session-compaction-v2` feature flag is disabled, returns the
+   * If the `session-compaction` feature flag is disabled, returns the
    * original messages unchanged with no events emitted.
    *
    * @param opts - Run options.
@@ -152,8 +152,8 @@ export class CompactionManager {
     isPromptTooLong?: boolean;
   }): Promise<CompactionLifecycleResult | null> {
     // ── Feature flag gate ────────────────────────────────────────────────────
-    if (!this._flags.isEnabled('session-compaction-v2')) {
-      logger.debug('[CompactionManager] session-compaction-v2 flag disabled; skipping', {
+    if (!this._flags.isEnabled('session-compaction')) {
+      logger.debug('[CompactionManager] session-compaction flag disabled; skipping', {
         sessionId: this._sessionId,
       });
       return null;

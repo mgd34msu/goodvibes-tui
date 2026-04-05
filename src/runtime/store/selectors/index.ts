@@ -4,7 +4,7 @@
  * Each domain has a primary selector plus derived selectors for
  * common access patterns. All selectors are pure functions of RuntimeState.
  *
- * Per v3 Section 19.2: no ad hoc direct `set` from arbitrary modules.
+ * No ad hoc direct `set` from arbitrary modules.
  * Selectors are the read path; mutations go through DomainDispatch.
  */
 
@@ -310,6 +310,13 @@ export function selectTurnState(
   state: RuntimeState,
 ): TurnState {
   return state.conversation.turnState;
+}
+
+/**
+ * Returns the current store-owned partial tool preview for the active stream.
+ */
+export function selectStreamToolPreview(state: RuntimeState): string | undefined {
+  return state.conversation.stream.partialToolPreview;
 }
 
 /**

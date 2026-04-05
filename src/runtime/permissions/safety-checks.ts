@@ -1,11 +1,8 @@
 /**
- * Permissions v2 — Bypass-immune safety checks (Layer 1).
+ * Runtime permissions safety checks.
  *
- * These checks run FIRST and ALWAYS, regardless of mode, session overrides,
- * or any policy rule. They cannot be disabled or bypassed by configuration.
- *
- * Matched patterns produce a SAFETY_* reason code and immediately short-circuit
- * the evaluation pipeline.
+ * These checks run first and always, regardless of mode, session overrides,
+ * or policy rules. They cannot be disabled by configuration.
  */
 
 import type {
@@ -105,7 +102,6 @@ export interface SafetyCheckResult {
 /** Tool names that accept shell commands as their primary argument. */
 const EXEC_CLASS_TOOLS: ReadonlySet<string> = new Set([
   'exec',
-  'shell_exec',
   'bash',
   'sh',
   'run',
@@ -117,11 +113,6 @@ const PATH_CLASS_TOOLS: ReadonlySet<string> = new Set([
   'write',
   'edit',
   'find',
-  'file_read',
-  'file_write',
-  'file_edit',
-  'glob',
-  'list_dir',
 ]);
 
 /** Tool names that accept SQL as their primary argument. */

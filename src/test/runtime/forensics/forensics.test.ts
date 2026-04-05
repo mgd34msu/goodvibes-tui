@@ -34,8 +34,11 @@ function makeReport(id: string, overrides: Partial<FailureReport> = {}): Failure
     classification: 'unknown',
     summary: 'test',
     phaseTimings: [],
+    phaseLedger: [],
     causalChain: [],
     cascadeEvents: [],
+    permissionEvidence: [],
+    budgetBreaches: [],
     jumpLinks: [],
     ...overrides,
   };
@@ -87,6 +90,10 @@ describe('classifyFailure — all 9 categories', () => {
     expect(classifyFailure({ stopReason: 'length' })).toBe('max_tokens');
   });
 
+  test('stopReason context_overflow → max_tokens', () => {
+    expect(classifyFailure({ stopReason: 'context_overflow' })).toBe('max_tokens');
+  });
+
   test('hasCompactionError → compaction_error (outranks permission/tool)', () => {
     expect(classifyFailure({
       hasCompactionError: true,
@@ -102,8 +109,16 @@ describe('classifyFailure — all 9 categories', () => {
     })).toBe('permission_denied');
   });
 
+  test('stopReason hook_denied → permission_denied', () => {
+    expect(classifyFailure({ stopReason: 'hook_denied' })).toBe('permission_denied');
+  });
+
   test('hasToolFailure → tool_failure', () => {
     expect(classifyFailure({ hasToolFailure: true })).toBe('tool_failure');
+  });
+
+  test('stopReason tool_loop_circuit_breaker → tool_failure', () => {
+    expect(classifyFailure({ stopReason: 'tool_loop_circuit_breaker' })).toBe('tool_failure');
   });
 
   test('hasCascadeEvents → cascade_failure', () => {
@@ -128,6 +143,14 @@ describe('classifyFailure — all 9 categories', () => {
 
   test('stopReason error → llm_error', () => {
     expect(classifyFailure({ stopReason: 'error' })).toBe('llm_error');
+  });
+
+  test('stopReason provider_exhausted → llm_error', () => {
+    expect(classifyFailure({ stopReason: 'provider_exhausted' })).toBe('llm_error');
+  });
+
+  test('stopReason provider_error → llm_error', () => {
+    expect(classifyFailure({ stopReason: 'provider_error' })).toBe('llm_error');
   });
 
   test('stopReason content_filter → llm_error', () => {
@@ -304,6 +327,111 @@ describe('ForensicsRegistry — subscribe', () => {
   test('exportAsJson returns undefined for unknown ID', () => {
     expect(makeRegistry().exportAsJson('nope')).toBeUndefined();
   });
+
+  test('buildBundle derives incident evidence summary from the report', () => {
+    const reg = makeRegistry();
+    reg.push(makeReport('r-bundle', {
+      turnId: 'turn-123',
+      phaseLedger: [
+        {
+          seq: 1,
+          domain: 'turn',
+          phase: 'STREAM',
+          enterEventType: 'STREAM_START',
+          enteredAt: 10,
+          exitEventType: 'TURN_ERROR',
+          exitedAt: 25,
+          durationMs: 15,
+          outcome: 'failed',
+          error: 'socket reset',
+        },
+      ],
+      causalChain: [
+        {
+          seq: 1,
+          ts: 25,
+          description: 'Turn error: socket reset',
+          sourceEventType: 'TURN_ERROR',
+          isRootCause: true,
+        },
+      ],
+      jumpLinks: [{ label: 'Replay turn', kind: 'command', target: 'replay load', args: 'turn-123' }],
+    }));
+
+    const bundle = reg.buildBundle('r-bundle');
+    expect(bundle).toBeDefined();
+    expect(bundle!.schemaVersion).toBe('v1');
+    expect(bundle!.evidence.rootCause).toBe('Turn error: socket reset');
+    expect(bundle!.evidence.terminalPhase).toBe('STREAM');
+    expect(bundle!.evidence.terminalOutcome).toBe('failed');
+    expect(bundle!.evidence.relatedIds.turnId).toBe('turn-123');
+    expect(bundle!.replay.status).toBe('unavailable');
+    expect(bundle!.replay.relatedMismatches).toEqual([]);
+    expect(bundle!.replay.mismatchBreakdown.byKind).toEqual({});
+  });
+
+  test('buildBundle attaches replay evidence and matching turn summary when available', () => {
+    const reg = makeRegistry();
+    reg.push(makeReport('r-replay', { turnId: 'turn-1' }));
+
+    const bundle = reg.buildBundle('r-replay', {
+      replaySnapshot: {
+        status: 'exhausted',
+        runId: 'run-42',
+        currentRev: 4,
+        totalRevisions: 4,
+        mismatches: [
+          {
+            rev: 4,
+            kind: 'state_divergence',
+            description: 'turn stop reason diverged',
+            eventName: 'TURN_COMPLETED',
+            ownerDomain: 'turn',
+            failureMode: 'stop_reason_diverged',
+            relatedTurnId: 'turn-1',
+          },
+        ],
+        turnSummaries: [
+          {
+            turnId: 'turn-1',
+            outcome: 'failed',
+            terminalEvent: 'TURN_ERROR',
+            startedRev: 1,
+            terminalRev: 4,
+            stopReason: 'provider_error',
+            message: 'provider failed',
+          },
+        ],
+      },
+    });
+
+    expect(bundle).toBeDefined();
+    expect(bundle!.replay.status).toBe('available');
+    expect(bundle!.replay.runId).toBe('run-42');
+    expect(bundle!.replay.mismatchCount).toBe(1);
+    expect(bundle!.replay.matchingTurnSummary?.turnId).toBe('turn-1');
+    expect(bundle!.replay.matchingTurnSummary?.terminalEvent).toBe('TURN_ERROR');
+    expect(bundle!.replay.relatedMismatches).toHaveLength(1);
+    expect(bundle!.replay.relatedMismatches[0]?.failureMode).toBe('stop_reason_diverged');
+    expect(bundle!.replay.mismatchBreakdown.byFailureMode.stop_reason_diverged).toBe(1);
+    expect(bundle!.replay.mismatchBreakdown.byOwnerDomain.turn).toBe(1);
+  });
+
+  test('exportBundleAsJson returns bundle JSON for known ID', () => {
+    const reg = makeRegistry();
+    reg.push(makeReport('r-bundle-json', { turnId: 'turn-7' }));
+    const json = reg.exportBundleAsJson('r-bundle-json');
+    expect(json).toBeDefined();
+    const parsed = JSON.parse(json!);
+    expect(parsed.schemaVersion).toBe('v1');
+    expect(parsed.report.id).toBe('r-bundle-json');
+    expect(parsed.replay.status).toBe('unavailable');
+    expect(parsed.replay.relatedMismatches).toEqual([]);
+  });
+
+  test('exportBundleAsJson returns undefined for unknown ID', () => {
+    expect(makeRegistry().exportBundleAsJson('nope')).toBeUndefined();
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -333,6 +461,18 @@ describe('ForensicsCollector — turn lifecycle', () => {
     expect(report.classification).toBe('turn_timeout');
     expect(report.errorMessage).toBe('Request timed out');
     expect(report.turnId).toBe('t1');
+  });
+
+  test('TURN_ERROR report includes ordered phase ledger entries', () => {
+    const { bus, registry } = makeCollector();
+    emitTurn(bus, { type: 'TURN_SUBMITTED', turnId: 'ledger-turn', prompt: 'hello' });
+    emitTurn(bus, { type: 'PREFLIGHT_OK', turnId: 'ledger-turn' });
+    emitTurn(bus, { type: 'STREAM_START', turnId: 'ledger-turn' });
+    emitTurn(bus, { type: 'TURN_ERROR', turnId: 'ledger-turn', error: 'network reset' });
+    const report = registry.latest()!;
+    expect(report.phaseLedger.map((entry) => entry.phase)).toEqual(['SUBMITTED', 'PREFLIGHT', 'STREAM']);
+    expect(report.phaseLedger.at(-1)?.outcome).toBe('failed');
+    expect(report.phaseLedger.at(-1)?.exitEventType).toBe('TURN_ERROR');
   });
 
   test('TURN_CANCEL produces a report classified as cancelled', () => {
@@ -425,6 +565,17 @@ describe('ForensicsCollector — task lifecycle', () => {
     const report = registry.latest()!;
     expect(report.taskId).toBe('task-2');
     expect(report.errorMessage).toBe('agent crashed');
+  });
+
+  test('TASK_FAILED report includes ordered phase ledger entries', () => {
+    const { bus, registry } = makeCollector();
+    emitTask(bus, { type: 'TASK_CREATED', taskId: 'task-ledger' });
+    emitTask(bus, { type: 'TASK_STARTED', taskId: 'task-ledger' });
+    emitTask(bus, { type: 'TASK_FAILED', taskId: 'task-ledger', error: 'agent crashed' });
+    const report = registry.latest()!;
+    expect(report.phaseLedger.map((entry) => entry.phase)).toEqual(['CREATED', 'RUNNING']);
+    expect(report.phaseLedger.at(-1)?.outcome).toBe('failed');
+    expect(report.phaseLedger.at(-1)?.domain).toBe('task');
   });
 
   test('TASK_CANCELLED produces a report classified as cancelled', () => {

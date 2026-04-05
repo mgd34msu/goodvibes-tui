@@ -1,7 +1,7 @@
 /**
  * TaskEvent — discriminated union covering all task lifecycle events.
  *
- * Maps to state machine events from v3 Section 4 (Tasks domain).
+ * Maps to the typed runtime event contract for the  domain.
  */
 
 export type TaskEvent =

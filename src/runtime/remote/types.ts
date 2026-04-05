@@ -1,7 +1,7 @@
 /**
  * Remote Substrate — Core Types
  *
- * Implements v3 Sections 10.1–10.4: durable identity, handshake tokens,
+ * Implements durable identity, handshake tokens,
  * typed transport messages, and replay configuration.
  */
 
@@ -12,7 +12,7 @@ import type { DaemonTransportState } from '../store/domains/daemon.ts';
 /** Re-export the shared transport lifecycle state. */
 export type { DaemonTransportState as RemoteTransportState };
 
-// ── Durable Identity (Section 10.1) ──────────────────────────────────────────
+// Durable identity.
 
 /**
  * Globally unique, stable identity for a remote substrate session.
@@ -33,7 +33,7 @@ export interface DurableIdentity {
   readonly generation: number;
 }
 
-// ── Handshake Token (Section 10.2) ───────────────────────────────────────────
+// Handshake token.
 
 /**
  * Handshake token exchanged during reconnect negotiations.
@@ -54,7 +54,7 @@ export interface HandshakeToken {
   readonly expiresAt: number;
 }
 
-// ── Replay Configuration (Section 10.2) ──────────────────────────────────────
+// Replay configuration.
 
 /**
  * Configuration for replaying missed messages after a reconnect.
@@ -71,7 +71,7 @@ export interface ReplayConfig {
   readonly enabled: boolean;
 }
 
-// ── Transport Messages (Section 10.3) ─────────────────────────────────────────
+// Transport messages.
 
 /** Message class discriminant. */
 export type TransportMessageClass = 'control' | 'data' | 'ack' | 'failure';
@@ -167,7 +167,7 @@ export interface FailureMessage extends TransportMessageBase {
   readonly context?: Record<string, unknown>;
 }
 
-// ── Remote Session (Section 10.4) ─────────────────────────────────────────────
+// Remote session.
 
 /** Health status of a remote connection. */
 export type RemoteConnectionHealth = 'healthy' | 'degraded' | 'unreachable';
@@ -242,7 +242,7 @@ export interface RemoteSession {
   readonly lastAckedOffset: number;
 }
 
-// ── Protocol Version Compatibility (Section 10.5) ────────────────────────────
+// Protocol version compatibility.
 
 /**
  * A semantic protocol version for the transport wire protocol.
@@ -272,7 +272,7 @@ export interface ProtocolVersion {
 export type DowngradeReason =
   /** Peer advertised a lower minor version; downgrading feature set. */
   | 'peer_minor_older'
-  /** Local policy forces downgrade for compatibility with legacy peers. */
+  /** Local policy forces downgrade for compatibility with older peers. */
   | 'policy_forced'
   /** Peer explicitly requested an older protocol level. */
   | 'peer_requested';

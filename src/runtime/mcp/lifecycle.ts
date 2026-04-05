@@ -1,5 +1,5 @@
 /**
- * MCP server lifecycle state machine (v3 §4.7).
+ * MCP server lifecycle state machine.
  *
  * Pure transition logic — no side effects, no I/O.
  * All state changes flow through `applyTransition()`.

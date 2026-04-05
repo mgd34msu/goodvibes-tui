@@ -1,5 +1,5 @@
 /**
- * Policy-as-Code Registry — Section 5.3.
+ * Policy-as-Code registry.
  *
  * Manages versioned policy bundles with promote/rollback semantics.
  * Enforces the rule that no bundle may move to enforcement without

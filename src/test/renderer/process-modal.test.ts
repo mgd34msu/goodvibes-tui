@@ -17,7 +17,9 @@ function seedAgent(task: string, status: 'running' | 'pending' = 'running'): str
   const am = AgentManager.getInstance();
   const rec = am.spawn({ mode: 'spawn', task, template: 'default', tools: [] });
   // Force status (spawn sets it to pending, then running — we update directly)
-  (am as any).agents.get(rec.id).status = status;
+  const seeded = am.getStatus(rec.id);
+  if (!seeded) throw new Error('expected agent record');
+  seeded.status = status;
   return rec.id;
 }
 
@@ -56,7 +58,9 @@ describe('ProcessModal state', () => {
   test('refresh() skips completed agents', () => {
     const am = AgentManager.getInstance();
     const rec = am.spawn({ mode: 'spawn', task: 'Done task', template: 'default', tools: [] });
-    (am as any).agents.get(rec.id).status = 'completed';
+    const seeded = am.getStatus(rec.id);
+    if (!seeded) throw new Error('expected agent record');
+    seeded.status = 'completed';
     const modal = new ProcessModal();
     modal.refresh();
     expect(modal.entries.length).toBe(0);
@@ -131,7 +135,8 @@ describe('ProcessModal state', () => {
   test('streamSnippet is populated when agent has streamingContent', () => {
     const id = seedAgent('Streaming task');
     const am = AgentManager.getInstance();
-    const rec = (am as any).agents.get(id);
+    const rec = am.getStatus(id);
+    if (!rec) throw new Error('expected agent record');
     rec.streamingContent = 'Processing file analysis results and building summary';
     const modal = new ProcessModal();
     modal.refresh();
@@ -144,7 +149,8 @@ describe('ProcessModal state', () => {
   test('streamSnippet truncates long content with ellipsis prefix', () => {
     const id = seedAgent('Long streaming task');
     const am = AgentManager.getInstance();
-    const rec = (am as any).agents.get(id);
+    const rec = am.getStatus(id);
+    if (!rec) throw new Error('expected agent record');
     // 80-char content — exceeds the 60-char threshold in refresh()
     rec.streamingContent = 'a'.repeat(80);
     const modal = new ProcessModal();

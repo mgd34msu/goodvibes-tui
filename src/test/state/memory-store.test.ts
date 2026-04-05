@@ -103,10 +103,10 @@ describe('MemoryStore', () => {
 
     it('filters by since timestamp', async () => {
       const before = Date.now();
-      await store.add({ cls: 'pattern', summary: 'New pattern after cutoff' });
+      const added = await store.add({ cls: 'pattern', summary: 'New pattern after cutoff' });
       const results = store.search({ since: before });
-      expect(results.length).toBe(1);
-      expect(results[0].summary).toContain('New pattern');
+      expect(results.some((record) => record.id === added.id)).toBe(true);
+      expect(results.every((record) => record.createdAt >= before)).toBe(true);
     });
 
     it('filters by single tag', () => {

@@ -5,7 +5,7 @@
 
 import type { DaemonTransportState } from './daemon.ts';
 
-/** ACP transport state reuses the daemon transport lifecycle (v3 §4.8). */
+/** ACP transport state reuses the daemon transport lifecycle. */
 export type AcpTransportState = DaemonTransportState;
 
 /** An active ACP subagent connection. */

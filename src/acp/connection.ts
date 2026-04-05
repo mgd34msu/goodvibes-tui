@@ -14,12 +14,14 @@ import type {
   RequestPermissionRequest,
   RequestPermissionResponse,
 } from './protocol.ts';
-import type { EventBus } from '../core/event-bus.ts';
 import type { SubagentInfo, SubagentResult, SubagentTask } from './protocol.ts';
 import type { PermissionCategory } from '../permissions/manager.ts';
+import type { PermissionRequestHandler } from '../permissions/prompt.ts';
 import { logger } from '../utils/logger.ts';
 import { AcpError } from '../types/errors.ts';
 import { VERSION } from '../version.ts';
+import type { RuntimeEventBus } from '../runtime/events/index.ts';
+import { emitAgentCancelled, emitAgentCompleted, emitAgentFailed, emitAgentStreamDelta } from '../runtime/emitters/index.ts';
 
 /** Shape of an agent_message_chunk session update that carries text content. */
 interface MessageChunkUpdate {
@@ -47,6 +49,9 @@ function isMessageChunk(update: { sessionUpdate?: unknown }): update is MessageC
 export class AcpConnection {
   public readonly id: string;
   private info: SubagentInfo;
+  private spawnCmd: string[];
+  private requestPermission: PermissionRequestHandler;
+  private runtimeBus: RuntimeEventBus | null;
   private conn: ClientSideConnection | null = null;
   private sessionId: string | null = null;
   private childProcess: ReturnType<typeof Bun.spawn> | null = null;
@@ -56,11 +61,14 @@ export class AcpConnection {
   constructor(
     id: string,
     private task: SubagentTask,
-    private bus: EventBus,
-    /** Command + args to spawn the agent process. */
-    private spawnCmd: string[],
+    spawnCmd: string[],
+    requestPermission: PermissionRequestHandler = async () => ({ approved: false, remember: false }),
+    runtimeBus: RuntimeEventBus | null = null,
   ) {
     this.id = id;
+    this.spawnCmd = spawnCmd;
+    this.requestPermission = requestPermission;
+    this.runtimeBus = runtimeBus;
     this.info = {
       id,
       task: task.description,
@@ -159,12 +167,25 @@ export class AcpConnection {
       };
 
       this.info.status = result.success ? 'complete' : 'error';
-      this.bus.emit('subagent:complete', { id: this.id, result });
+      if (this.runtimeBus) {
+        emitAgentCompleted(this.runtimeBus, this.emitterContext(), {
+          agentId: this.id,
+          durationMs: result.duration,
+          output: result.output,
+          toolCallsMade: result.toolCallsMade,
+        });
+      }
       return result;
     } catch (err) {
       const error = err instanceof Error ? err : new Error(String(err));
       this.info.status = 'error';
-      this.bus.emit('subagent:error', { id: this.id, error });
+      if (this.runtimeBus) {
+        emitAgentFailed(this.runtimeBus, this.emitterContext(), {
+          agentId: this.id,
+          error: error.message,
+          durationMs: Date.now() - startedAt,
+        });
+      }
       return {
         id: this.id,
         success: false,
@@ -188,7 +209,21 @@ export class AcpConnection {
       }
     }
     this.info.status = 'cancelled';
+    if (this.runtimeBus) {
+      emitAgentCancelled(this.runtimeBus, this.emitterContext(), {
+        agentId: this.id,
+        reason: 'ACP session cancelled',
+      });
+    }
     this.cleanup();
+  }
+
+  private emitterContext(): import('../runtime/emitters/index.ts').EmitterContext {
+    return {
+      sessionId: 'acp-connection',
+      traceId: `acp-connection:${this.id}`,
+      source: 'acp-connection',
+    };
   }
 
   private cleanup(): void {
@@ -204,41 +239,30 @@ export class AcpConnection {
 
   private buildClientImpl(): Client {
     return {
-      /**
-       * Forward permission requests to the TUI's EventBus.
-       * The permission manager resolves the promise via the 'permission:request' event.
-       */
+      /** Forward permission requests through the shell-owned permission controller. */
       requestPermission: (params: RequestPermissionRequest): Promise<RequestPermissionResponse> => {
-        return new Promise((resolve) => {
-          const category: PermissionCategory = 'delegate';
-          const callId = `acp-${this.id}-${Date.now()}`;
+        const category: PermissionCategory = 'delegate';
+        const callId = `acp-${this.id}-${Date.now()}`;
+        const toolTitle = params.toolCall?.title ?? 'unknown';
+        const approveOptionId = params.options[0]?.optionId ?? 'allow';
 
-          // Extract a human-readable tool name from the tool call
-          const toolTitle = params.toolCall?.title ?? 'unknown';
-
-          // Pick the first available option ID to use when approved
-          const approveOptionId = params.options[0]?.optionId ?? 'allow';
-
-          this.bus.emit('permission:request', {
-            callId,
-            tool: toolTitle,
-            args: (params.toolCall?.rawInput as Record<string, unknown>) ?? {},
-            category,
-            resolve: (approved: boolean) => {
-              if (approved) {
-                resolve({
-                  outcome: {
-                    outcome: 'selected',
-                    optionId: approveOptionId,
-                  },
-                } as RequestPermissionResponse);
-              } else {
-                resolve({
-                  outcome: { outcome: 'cancelled' },
-                } as RequestPermissionResponse);
-              }
-            },
-          });
+        return this.requestPermission({
+          callId,
+          tool: toolTitle,
+          args: (params.toolCall?.rawInput as Record<string, unknown>) ?? {},
+          category,
+        }).then(({ approved }) => {
+          if (approved) {
+            return {
+              outcome: {
+                outcome: 'selected',
+                optionId: approveOptionId,
+              },
+            } as RequestPermissionResponse;
+          }
+          return {
+            outcome: { outcome: 'cancelled' },
+          } as RequestPermissionResponse;
         });
       },
 
@@ -260,10 +284,15 @@ export class AcpConnection {
           if (text) {
             this.lastProgressText = (this.lastProgressText + text).slice(-1000);
             this.info.progress = this.lastProgressText.slice(-200);
+            if (this.runtimeBus) {
+              emitAgentStreamDelta(this.runtimeBus, this.emitterContext(), {
+                agentId: this.id,
+                content: text,
+                accumulated: this.lastProgressText,
+              });
+            }
           }
         }
-
-        this.bus.emit('subagent:update', { id: this.id, update: params });
       },
     };
   }

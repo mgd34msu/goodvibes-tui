@@ -1,10 +1,17 @@
 import { randomUUID } from 'node:crypto';
-import type { EventBus, EventMap } from './event-bus.ts';
+import type { RuntimeEventBus, AgentEvent, WorkflowEvent } from '../runtime/events/index.ts';
 import { logger } from '../utils/logger.ts';
+
+export type ReplayTrackedEventName =
+  | 'AGENT_COMPLETED'
+  | 'AGENT_FAILED'
+  | 'WORKFLOW_STATE_CHANGED'
+  | 'WORKFLOW_CHAIN_PASSED'
+  | 'WORKFLOW_CHAIN_FAILED';
 
 export interface QueuedEvent {
   id: string;
-  eventName: string;
+  eventName: ReplayTrackedEventName;
   payload: unknown;
   timestamp: number;
   acknowledged: boolean;
@@ -14,11 +21,11 @@ export interface QueuedEvent {
 
 /** Events that are significant enough to track for replay. */
 export const TRACKED_EVENTS = [
-  'subagent:complete',
-  'subagent:error',
-  'wrfc:state-changed',
-  'wrfc:chain-passed',
-  'wrfc:chain-failed',
+  'AGENT_COMPLETED',
+  'AGENT_FAILED',
+  'WORKFLOW_STATE_CHANGED',
+  'WORKFLOW_CHAIN_PASSED',
+  'WORKFLOW_CHAIN_FAILED',
 ] as const;
 
 function generateId(): string {
@@ -42,19 +49,23 @@ export class EventReplayQueue {
   private queue: QueuedEvent[] = [];
   private currentTurn = 0;
   private droppedCount = 0;
+  private readonly maxReplays: number;
+  private readonly graceTurns: number;
 
   constructor(
-    private bus: EventBus,
-    private maxReplays: number = 3,
-    private graceTurns: number = 1,
-  ) {}
+    maxReplays: number = 3,
+    graceTurns: number = 1,
+  ) {
+    this.maxReplays = maxReplays;
+    this.graceTurns = graceTurns;
+  }
 
   /**
    * Enqueue an event for tracking.
    * Called when significant events fire (agent complete, WRFC state change, etc.)
    * Returns the assigned event ID.
    */
-  enqueue(eventName: string, payload: unknown): string {
+  enqueue(eventName: ReplayTrackedEventName, payload: unknown): string {
     const id = generateId();
     this.queue.push({
       id,
@@ -189,29 +200,29 @@ export class EventReplayQueue {
     const payload = event.payload as Record<string, unknown>;
 
     switch (event.eventName) {
-      case 'subagent:complete': {
+      case 'AGENT_COMPLETED': {
         const id = (payload?.id as string) ?? 'unknown';
         const output = (payload?.result as Record<string, unknown>)?.output as string | undefined;
         const taskStr = output ? ` task "${output.slice(0, 60)}"` : '';
         return `Agent ${id} completed${taskStr} (first notified ${turnsAgo} ${turnWord} ago)`;
       }
-      case 'subagent:error': {
+      case 'AGENT_FAILED': {
         const id = (payload?.id as string) ?? 'unknown';
         const err = payload?.error as Error | undefined;
         const errStr = err?.message ? `: ${err.message}` : '';
         return `Agent ${id} failed${errStr} (first notified ${turnsAgo} ${turnWord} ago)`;
       }
-      case 'wrfc:state-changed': {
+      case 'WORKFLOW_STATE_CHANGED': {
         const chainId = (payload?.chainId as string) ?? 'unknown';
         const from = (payload?.from as string) ?? '?';
         const to = (payload?.to as string) ?? '?';
         return `WRFC chain ${chainId} transitioned ${from} \u2192 ${to} — waiting for action (first notified ${turnsAgo} ${turnWord} ago)`;
       }
-      case 'wrfc:chain-passed': {
+      case 'WORKFLOW_CHAIN_PASSED': {
         const chainId = (payload?.chainId as string) ?? 'unknown';
         return `WRFC chain ${chainId} passed — waiting for action (first notified ${turnsAgo} ${turnWord} ago)`;
       }
-      case 'wrfc:chain-failed': {
+      case 'WORKFLOW_CHAIN_FAILED': {
         const chainId = (payload?.chainId as string) ?? 'unknown';
         const reason = (payload?.reason as string) ?? 'unknown reason';
         return `WRFC chain ${chainId} failed: ${reason} — waiting for action (first notified ${turnsAgo} ${turnWord} ago)`;
@@ -223,20 +234,53 @@ export class EventReplayQueue {
   }
 
   /**
-   * Wire up listeners for all tracked events on the provided bus.
+   * Wire up listeners for replay-significant events on the typed runtime bus.
    * Returns an unsubscribe function that removes all listeners.
    */
-  static attachTo(bus: EventBus, queue: EventReplayQueue): () => void {
+  static attachToRuntimeBus(bus: RuntimeEventBus, queue: EventReplayQueue): () => void {
     const unsubs: Array<() => void> = [];
 
-    for (const eventName of TRACKED_EVENTS) {
-      // TRACKED_EVENTS values are a strict subset of EventMap keys; cast is sound.
-      const key = eventName as keyof EventMap;
-      const unsub = bus.on(key, ((payload: unknown) => {
-        queue.enqueue(eventName, payload);
-      }) as Parameters<EventBus['on']>[1]);
-      unsubs.push(unsub);
-    }
+    unsubs.push(
+      bus.on<Extract<AgentEvent, { type: 'AGENT_COMPLETED' }>>('AGENT_COMPLETED', ({ payload }) => {
+        queue.enqueue('AGENT_COMPLETED', {
+          id: payload.agentId,
+          result: {
+            id: payload.agentId,
+            success: true,
+            output: payload.output ?? '',
+            toolCallsMade: payload.toolCallsMade ?? 0,
+            duration: payload.durationMs,
+          },
+        });
+      }),
+    );
+
+    unsubs.push(
+      bus.on<Extract<AgentEvent, { type: 'AGENT_FAILED' }>>('AGENT_FAILED', ({ payload }) => {
+        queue.enqueue('AGENT_FAILED', {
+          id: payload.agentId,
+          error: new Error(payload.error),
+        });
+      }),
+    );
+
+    unsubs.push(
+      bus.on<Extract<WorkflowEvent, { type: 'WORKFLOW_STATE_CHANGED' }>>('WORKFLOW_STATE_CHANGED', ({ payload }) => {
+        queue.enqueue('WORKFLOW_STATE_CHANGED', payload);
+      }),
+    );
+
+    unsubs.push(
+      bus.on<Extract<WorkflowEvent, { type: 'WORKFLOW_CHAIN_PASSED' }>>('WORKFLOW_CHAIN_PASSED', ({ payload }) => {
+        queue.enqueue('WORKFLOW_CHAIN_PASSED', payload);
+      }),
+    );
+
+    unsubs.push(
+      bus.on<Extract<WorkflowEvent, { type: 'WORKFLOW_CHAIN_FAILED' }>>('WORKFLOW_CHAIN_FAILED', ({ payload }) => {
+        queue.enqueue('WORKFLOW_CHAIN_FAILED', payload);
+      }),
+    );
 
     return () => unsubs.forEach((u) => u());
   }

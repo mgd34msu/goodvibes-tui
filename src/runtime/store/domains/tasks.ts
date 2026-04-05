@@ -3,7 +3,7 @@
  * subsystem kinds: exec, agent, acp, scheduler, daemon, mcp, plugin, integration.
  */
 
-/** States from the task lifecycle state machine (v3 §4.4). */
+/** States for the task lifecycle machine. */
 export type TaskLifecycleState =
   | 'queued'
   | 'running'
@@ -12,7 +12,7 @@ export type TaskLifecycleState =
   | 'failed'
   | 'cancelled';
 
-/** Task kind — maps to v3 §4.4 task kinds. */
+/** Task kind used by the runtime task domain. */
 export type TaskKind =
   | 'exec'
   | 'agent'
@@ -44,7 +44,7 @@ export interface TaskRetryPolicy {
 export interface RuntimeTask {
   /** Unique task ID (uuid). */
   id: string;
-  /** Task kind from the v3 taxonomy. */
+  /** Task kind stored on a runtime task record. */
   kind: TaskKind;
   /** Human-readable title for display in task monitor. */
   title: string;

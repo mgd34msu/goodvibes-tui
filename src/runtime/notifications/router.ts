@@ -47,7 +47,7 @@ const DEFAULT_VERBOSITY: DomainVerbosity = 'normal';
  * router.setQuietWhileTyping(true);
  *
  * const decision = router.route(notification);
- * if (!decision.suppressed) {
+ * if (decision.reasonCode === 'allowed') {
  *   deliver(notification, decision.target);
  * }
  * ```
@@ -96,7 +96,7 @@ export class NotificationRouter {
    *
    * @param notification - The notification to route.
    * @returns A RoutingDecision with target, reasonCode, optional batchKey,
-   *          and optional suppressed reason.
+   *          and optional suppression reason text.
    */
   route(notification: Notification): RoutingDecision {
     const verbosity = this.getDomainVerbosity(notification.domain);

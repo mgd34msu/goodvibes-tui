@@ -5,7 +5,6 @@
  * and terminal lifecycle. The bootstrap owns initialization; main.ts owns
  * the runtime loop.
  */
-import type { EventBus } from '../core/event-bus.ts';
 import type { ConversationManager } from '../core/conversation.ts';
 import type { Orchestrator } from '../core/orchestrator.ts';
 import type { ToolRegistry } from '../tools/registry.ts';
@@ -43,8 +42,8 @@ export interface BootstrapOptions {
   workingDir?: string;
   /**
    * Callback invoked when the app should exit.
-   * If provided, commandContext.exit will be wired to this immediately.
-   * If omitted, callers must patch commandContext.exit after bootstrap returns.
+   * If provided, commandContext.exit is wired during bootstrap.
+   * Otherwise main.ts binds the shell-owned exit bridge immediately after bootstrap returns.
    */
   exit?: () => void;
 }
@@ -58,25 +57,19 @@ export interface BootstrapOptions {
 export interface RuntimeContext {
   // ── Core subsystems ─────────────────────────────────────────────────
 
-  /** Legacy EventBus used for all current event wiring. */
-  bus: EventBus;
-
   /**
    * Typed domain event bus for new runtime subsystems.
-   * Optional until all consumers have been migrated.
    */
-  runtimeBus?: RuntimeEventBus;
+  runtimeBus: RuntimeEventBus;
 
   /**
    * Zustand vanilla store for domain state slices.
-   * Optional until all consumers have been migrated.
    */
-  store?: RuntimeStore;
+  store: RuntimeStore;
 
   /**
    * Feature flag and kill-switch manager.
-   * Gates all new subsystems introduced in Tier 1 and beyond.
-   * Optional until all consumers have been migrated.
+   * Gates runtime subsystems and release controls.
    */
   featureFlags: FeatureFlagManager;
 

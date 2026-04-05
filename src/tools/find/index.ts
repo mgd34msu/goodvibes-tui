@@ -119,6 +119,24 @@ export interface FindInput {
   parallel?: boolean;
 }
 
+type CountResult = { count: number; file_count?: number; source?: string };
+type FilesResult = { files: string[]; count: number; source?: string };
+type LocationsResult<TLocation> = { locations: TLocation[]; count: number; source?: string };
+
+function makeCountResult(count: number, source?: string, fileCount?: number): CountResult {
+  return fileCount !== undefined
+    ? { count, file_count: fileCount, ...(source ? { source } : {}) }
+    : { count, ...(source ? { source } : {}) };
+}
+
+function makeFilesResult(files: string[], count: number, source?: string): FilesResult {
+  return { files, count, ...(source ? { source } : {}) };
+}
+
+function makeLocationsResult<TLocation>(locations: TLocation[], count: number, source?: string): LocationsResult<TLocation> {
+  return { locations, count, ...(source ? { source } : {}) };
+}
+
 // ---------------------------------------------------------------------------
 // Mode: references
 // ---------------------------------------------------------------------------
@@ -149,12 +167,12 @@ async function executeReferencesQuery(
         }
       }
 
-      if (output.format === 'count_only') return { count: locations.length };
+      if (output.format === 'count_only') return makeCountResult(locations.length);
       if (output.format === 'files_only') {
         const uniqueFiles = [...new Set(locations.map((l) => l.file))];
-        return { files: uniqueFiles, count: locations.length };
+        return makeFilesResult(uniqueFiles, locations.length);
       }
-      return { locations, count: locations.length };
+      return makeLocationsResult(locations, locations.length);
     }
   } catch {
     // LSP unavailable — fall through to grep fallback
@@ -162,7 +180,7 @@ async function executeReferencesQuery(
 
   // Grep fallback: search for symbol name across all project text files
   if (!query.symbol) {
-    return { locations: [], count: 0, source: 'fallback' };
+    return makeLocationsResult([], 0, 'fallback');
   }
 
   let regex: RegExp;
@@ -175,10 +193,8 @@ async function executeReferencesQuery(
   const files = await collectTextFiles(projectRoot);
   for (const file of files) {
     if (locations.length >= maxResults) break;
-    let content: string;
-    try {
-      content = await Bun.file(file).text();
-    } catch {
+    const content = await readTextFile(file);
+    if (content === null) {
       continue;
     }
     const lines = content.split('\n');
@@ -191,12 +207,12 @@ async function executeReferencesQuery(
     }
   }
 
-  if (output.format === 'count_only') return { count: locations.length, source: 'fallback' };
+  if (output.format === 'count_only') return makeCountResult(locations.length, 'fallback');
   if (output.format === 'files_only') {
     const uniqueFiles = [...new Set(locations.map((l) => l.file))];
-    return { files: uniqueFiles, count: locations.length, source: 'fallback' };
+    return makeFilesResult(uniqueFiles, locations.length, 'fallback');
   }
-  return { locations, count: locations.length, source: 'fallback' };
+  return makeLocationsResult(locations, locations.length, 'fallback');
 }
 
 // ---------------------------------------------------------------------------
@@ -205,6 +221,14 @@ async function executeReferencesQuery(
 
 const VALID_SYMBOL_KINDS = new Set(['function', 'class', 'interface', 'type', 'variable', 'constant', 'enum']);
 const BINARY_CHECK_BYTES = 8192;
+
+function isHiddenOrSkippedSegment(segment: string, includeHidden: boolean): boolean {
+  return SKIP_DIRS.has(segment) || (!includeHidden && segment.startsWith('.') && segment !== '.');
+}
+
+function shouldSkipRelativePath(relativePath: string, includeHidden: boolean): boolean {
+  return relativePath.split('/').some((segment) => isHiddenOrSkippedSegment(segment, includeHidden));
+}
 
 /** Detect binary files by checking for null bytes in the first 8KB. */
 async function isBinary(filePath: string): Promise<boolean> {
@@ -234,6 +258,50 @@ async function collectTextFiles(dirPath: string): Promise<string[]> {
   return files;
 }
 
+async function readTextFile(filePath: string): Promise<string | null> {
+  try {
+    return await Bun.file(filePath).text();
+  } catch {
+    return null;
+  }
+}
+
+async function collectGlobFiles(
+  basePath: string,
+  patterns: string[],
+  includeHidden: boolean,
+  followSymlinks: boolean,
+): Promise<Set<string>> {
+  const matchedFiles = new Set<string>();
+  const visitedRealPaths = new Set<string>();
+
+  for (const pattern of patterns) {
+    const glob = new Bun.Glob(pattern);
+    try {
+      for await (const file of glob.scan({ cwd: basePath, onlyFiles: true, absolute: true, followSymlinks })) {
+        if (followSymlinks) {
+          try {
+            const real = realpathSync(file);
+            if (visitedRealPaths.has(real)) continue;
+            visitedRealPaths.add(real);
+          } catch {
+            continue;
+          }
+        }
+
+        const rel = relative(basePath, file);
+        if (shouldSkipRelativePath(rel, includeHidden)) continue;
+
+        matchedFiles.add(file);
+      }
+    } catch {
+      // Pattern scan failure — skip
+    }
+  }
+
+  return matchedFiles;
+}
+
 // ---------------------------------------------------------------------------
 // Glob file matching (matches a single glob against a file path)
 // ---------------------------------------------------------------------------
@@ -242,6 +310,49 @@ async function collectTextFiles(dirPath: string): Promise<string[]> {
 function matchesGlob(glob: InstanceType<typeof Bun.Glob>, filePath: string, basePath: string): boolean {
   const rel = relative(basePath, filePath);
   return glob.match(rel) || glob.match(filePath);
+}
+
+async function collectFilesForSearch(
+  basePath: string,
+  queryGlob: string | undefined,
+): Promise<string[]> {
+  if (!queryGlob) {
+    return collectTextFiles(basePath);
+  }
+  return Array.from(await collectGlobFiles(basePath, [queryGlob], false, false));
+}
+
+function toSymbolKind(kind: string | undefined): SymbolKind {
+  const kindMap: Record<string, SymbolKind> = {
+    method: 'function',
+    property: 'variable',
+    namespace: 'variable',
+  };
+  const mappedKind = kindMap[kind ?? ''] ?? (kind ?? 'variable');
+  return VALID_SYMBOL_KINDS.has(mappedKind) ? mappedKind : 'variable';
+}
+
+function matchesSymbolQuery(name: string, queryRegex: RegExp | null): boolean {
+  return queryRegex ? queryRegex.test(name) : true;
+}
+
+async function loadFileLines(filePath: string): Promise<string[]> {
+  const raw = await readTextFile(filePath);
+  return raw === null ? [] : raw.split('\n');
+}
+
+function groupByKey<T extends { file: string; kind: string }>(
+  items: T[],
+  groupBy: 'file' | 'kind' | 'none',
+): Record<string, T[]> | null {
+  if (groupBy === 'none') return null;
+  const grouped: Record<string, T[]> = {};
+  for (const item of items) {
+    const key = groupBy === 'file' ? item.file : item.kind;
+    if (!grouped[key]) grouped[key] = [];
+    grouped[key].push(item);
+  }
+  return grouped;
 }
 
 // ---------------------------------------------------------------------------
@@ -370,50 +481,20 @@ async function executeFilesQuery(
     }
   }
 
-  const matchedFiles = new Set<string>();
   const SCAN_CEILING = 50_000;
-  const visitedRealPaths = new Set<string>();
+  const scannedFiles = await collectGlobFiles(basePath, patterns, includeHidden, followSymlinks);
+  const matchedFiles = new Set<string>();
+  for (const file of scannedFiles) {
+    if (matchedFiles.size >= SCAN_CEILING) break;
 
-  for (const pattern of patterns) {
-    const glob = new Bun.Glob(pattern);
-    try {
-      for await (const file of glob.scan({ cwd: basePath, onlyFiles: true, absolute: true, followSymlinks })) {
-        if (matchedFiles.size >= SCAN_CEILING) break;
+    const rel = relative(basePath, file);
 
-        // Symlink cycle detection
-        if (followSymlinks) {
-          try {
-            const real = realpathSync(file);
-            if (visitedRealPaths.has(real)) continue;
-            visitedRealPaths.add(real);
-          } catch {
-            // realpathSync failure — skip file
-            continue;
-          }
-        }
+    if (gitignoreMatcher && gitignoreMatcher(rel)) continue;
 
-        // Skip system/hidden directories (same rules as walkDir)
-        const rel = relative(basePath, file);
-        const segments = rel.split('/');
-        const inSkippedDir = segments.some(
-          (seg) =>
-            SKIP_DIRS.has(seg) ||
-            (!includeHidden && seg.startsWith('.') && seg !== '.'),
-        );
-        if (inSkippedDir) continue;
+    const excluded = compiledExcludes.some((excl) => matchesGlob(excl, file, basePath));
+    if (excluded) continue;
 
-        // Gitignore check
-        if (gitignoreMatcher && gitignoreMatcher(rel)) continue;
-
-        // Check exclusions
-        const excluded = compiledExcludes.some((excl) => matchesGlob(excl, file, basePath));
-        if (excluded) continue;
-
-        matchedFiles.add(file);
-      }
-    } catch {
-      // Pattern scan failure — skip
-    }
+    matchedFiles.add(file);
   }
 
   // Collect stats and apply stat-based filters.
@@ -497,7 +578,7 @@ async function executeFilesQuery(
   const format = output.format ?? 'files_only';
 
   if (format === 'count_only') {
-    return { count: entries.length };
+    return makeCountResult(entries.length);
   }
 
   if (format === 'with_stats') {
@@ -526,7 +607,7 @@ async function executeFilesQuery(
     return { files: result, count: result.length };
   }
 
-  return { files: entries.map((e) => e.path), count: entries.length };
+  return makeFilesResult(entries.map((e) => e.path), entries.length);
 }
 
 // ---------------------------------------------------------------------------
@@ -651,34 +732,14 @@ async function executeContentQuery(
   }
 
   // Collect files to search
-  let files: string[];
-  if (query.glob) {
-    const glob = new Bun.Glob(query.glob);
-    files = [];
-    try {
-      for await (const file of glob.scan({ cwd: basePath, onlyFiles: true, absolute: true })) {
-        const rel = relative(basePath, file);
-        const segments = rel.split('/');
-        const inSkippedDir = segments.some(
-          (seg) => SKIP_DIRS.has(seg) || (seg.startsWith('.') && seg !== '.'),
-        );
-        if (!inSkippedDir) files.push(file);
-      }
-    } catch {
-      files = [];
-    }
-  } else {
-    files = await collectTextFiles(basePath);
-  }
+  const files = await collectFilesForSearch(basePath, query.glob);
 
   if (query.negate) {
     // Return files that do NOT contain the pattern
     const nonMatchingFiles: string[] = [];
     for (const file of files) {
-      let content: string;
-      try {
-        content = await Bun.file(file).text();
-      } catch {
+      const content = await readTextFile(file);
+      if (content === null) {
         continue;
       }
       regex.lastIndex = 0;
@@ -687,8 +748,8 @@ async function executeContentQuery(
         if (nonMatchingFiles.length >= maxTotal) break;
       }
     }
-    if (format === 'count_only') return { count: nonMatchingFiles.length };
-    return { files: nonMatchingFiles, count: nonMatchingFiles.length };
+    if (format === 'count_only') return makeCountResult(nonMatchingFiles.length);
+    return makeFilesResult(nonMatchingFiles, nonMatchingFiles.length);
   }
 
   // Search cache: skip expensive scan if same query repeated and files unchanged
@@ -712,10 +773,8 @@ async function executeContentQuery(
   outer: for (const file of files) {
     if (totalMatches >= maxTotal) break;
 
-    let content: string;
-    try {
-      content = await Bun.file(file).text();
-    } catch {
+    const content = await readTextFile(file);
+    if (content === null) {
       continue;
     }
 
@@ -835,11 +894,11 @@ async function executeContentQuery(
   }
 
   if (format === 'count_only') {
-    return { count: totalMatches, file_count: matchedFiles.size };
+    return makeCountResult(totalMatches, undefined, matchedFiles.size);
   }
 
   if (format === 'files_only') {
-    return { files: Array.from(matchedFiles.keys()), count: matchedFiles.size };
+    return makeFilesResult(Array.from(matchedFiles.keys()), matchedFiles.size);
   }
 
 
@@ -850,7 +909,7 @@ async function executeContentQuery(
         locations.push({ file, line: m.line });
       }
     }
-    return { locations, count: totalMatches };
+    return makeLocationsResult(locations, totalMatches);
   }
 
   if (format === 'matches' || format === 'context') {
@@ -913,7 +972,7 @@ async function executeContentQuery(
     return { matches: results, count: totalMatches };
   }
 
-  return { count: totalMatches };
+  return makeCountResult(totalMatches);
 }
 
 // ---------------------------------------------------------------------------
@@ -981,10 +1040,8 @@ async function executeSymbolsQuery(
   for (const file of files) {
     if (symbols.length >= maxResults) break;
 
-    let content: string;
-    try {
-      content = await Bun.file(file).text();
-    } catch {
+    const content = await readTextFile(file);
+    if (content === null) {
       continue;
     }
 
@@ -998,15 +1055,12 @@ async function executeSymbolsQuery(
         usedTreeSitter = true;
         for (const sym of tsSymbols) {
           if (symbols.length >= maxResults) break;
-          // Map tree-sitter SymbolInfo kinds to our SymbolKind (filter unknowns)
-          const kindMap: Record<string, string> = { method: 'function', property: 'variable', namespace: 'variable' };
-          const mappedKind = kindMap[sym.kind ?? ''] ?? (sym.kind ?? 'variable');
-          const kind: SymbolKind = VALID_SYMBOL_KINDS.has(mappedKind) ? (mappedKind as SymbolKind) : 'variable';
+          const kind = toSymbolKind(sym.kind);
 
           if (kindFilter && !kindFilter.has(kind)) continue;
           // include_private overrides exported_only — when true, all symbols are included
           if (query.exported_only && !query.include_private && !sym.exported) continue;
-          if (queryRegex && !queryRegex.test(sym.name)) continue;
+          if (!matchesSymbolQuery(sym.name, queryRegex)) continue;
 
           symbols.push({ name: sym.name, kind, file, line: sym.line, exported: sym.exported });
         }
@@ -1035,7 +1089,7 @@ async function executeSymbolsQuery(
           if (!name) continue;
 
           // Apply query filter
-          if (queryRegex && !queryRegex.test(name)) continue;
+          if (!matchesSymbolQuery(name, queryRegex)) continue;
 
           symbols.push({ name, kind, file, line: i + 1, exported });
           // Only match the first matching pattern per line to avoid duplicates
@@ -1046,12 +1100,12 @@ async function executeSymbolsQuery(
   }
 
   if (output.format === 'count_only') {
-    return { count: symbols.length };
+    return makeCountResult(symbols.length);
   }
 
   if (output.format === 'files_only') {
     const uniqueFiles = [...new Set(symbols.map((s) => s.file))];
-    return { files: uniqueFiles, count: symbols.length };
+    return makeFilesResult(uniqueFiles, symbols.length);
   }
 
   // signatures/full: enrich results with signature lines from file content
@@ -1061,12 +1115,7 @@ async function executeSymbolsQuery(
     for (const sym of symbols) {
       let fileLines = fileContents.get(sym.file);
       if (!fileLines) {
-        try {
-          const raw = await Bun.file(sym.file).text();
-          fileLines = raw.split('\n');
-        } catch {
-          fileLines = [];
-        }
+        fileLines = await loadFileLines(sym.file);
         fileContents.set(sym.file, fileLines);
       }
       const entry: Record<string, unknown> = {
@@ -1117,22 +1166,8 @@ async function executeSymbolsQuery(
     }
     // Apply group_by if requested
     const groupBy = query.group_by ?? 'none';
-    if (groupBy === 'file') {
-      const grouped: Record<string, unknown[]> = {};
-      for (const s of enriched) {
-        const key = s.file as string;
-        if (!grouped[key]) grouped[key] = [];
-        grouped[key].push(s);
-      }
-      return { symbols: grouped, count: symbols.length };
-    }
-    if (groupBy === 'kind') {
-      const grouped: Record<string, unknown[]> = {};
-      for (const s of enriched) {
-        const key = s.kind as string;
-        if (!grouped[key]) grouped[key] = [];
-        grouped[key].push(s);
-      }
+    const grouped = groupByKey(enriched as Array<{ file: string; kind: string }>, groupBy);
+    if (grouped) {
       return { symbols: grouped, count: symbols.length };
     }
     return { symbols: enriched, count: symbols.length };
@@ -1140,20 +1175,8 @@ async function executeSymbolsQuery(
 
   // group_by post-processing for standard formats
   const groupBy = query.group_by ?? 'none';
-  if (groupBy === 'file') {
-    const grouped: Record<string, SymbolResult[]> = {};
-    for (const s of symbols) {
-      if (!grouped[s.file]) grouped[s.file] = [];
-      grouped[s.file].push(s);
-    }
-    return { symbols: grouped, count: symbols.length };
-  }
-  if (groupBy === 'kind') {
-    const grouped: Record<string, SymbolResult[]> = {};
-    for (const s of symbols) {
-      if (!grouped[s.kind]) grouped[s.kind] = [];
-      grouped[s.kind].push(s);
-    }
+  const grouped = groupByKey(symbols, groupBy);
+  if (grouped) {
     return { symbols: grouped, count: symbols.length };
   }
 
@@ -1200,24 +1223,7 @@ async function executeStructuralQuery(
 
   // Collect files to search
   let files: string[];
-  if (query.glob) {
-    const glob = new Bun.Glob(query.glob);
-    files = [];
-    try {
-      for await (const file of glob.scan({ cwd: basePath, onlyFiles: true, absolute: true })) {
-        const rel = relative(basePath, file);
-        const segments = rel.split('/');
-        const inSkippedDir = segments.some(
-          (seg) => SKIP_DIRS.has(seg) || (seg.startsWith('.') && seg !== '.'),
-        );
-        if (!inSkippedDir) files.push(file);
-      }
-    } catch {
-      files = [];
-    }
-  } else {
-    files = await collectTextFiles(basePath);
-  }
+  files = await collectFilesForSearch(basePath, query.glob);
 
   interface StructuralMatch { file: string; line: number; text: string }
   const allMatches: StructuralMatch[] = [];
@@ -1230,10 +1236,8 @@ async function executeStructuralQuery(
     const parser = getAstGrepLang(file, query.lang);
     if (!parser) continue; // unsupported extension
 
-    let content: string;
-    try {
-      content = await Bun.file(file).text();
-    } catch {
+    const content = await readTextFile(file);
+    if (content === null) {
       continue;
     }
 
@@ -1267,16 +1271,16 @@ async function executeStructuralQuery(
   }
 
   if (format === 'count_only') {
-    return { count: totalMatches, file_count: matchedFiles.size };
+    return makeCountResult(totalMatches, undefined, matchedFiles.size);
   }
 
   if (format === 'files_only') {
-    return { files: Array.from(matchedFiles), count: matchedFiles.size };
+    return makeFilesResult(Array.from(matchedFiles), matchedFiles.size);
   }
 
   if (format === 'locations') {
     const locations = allMatches.map((m) => ({ file: m.file, line: m.line }));
-    return { locations, count: totalMatches };
+    return makeLocationsResult(locations, totalMatches);
   }
 
   // matches / context (context is same as matches for structural — no line-level context available)

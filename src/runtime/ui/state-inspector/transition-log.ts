@@ -5,7 +5,7 @@
  * When the buffer is full, oldest entries are evicted (FIFO).
  * All operations are O(1) amortised.
  *
- * v3 Section 26 (Devtools / State Inspector).
+ * State inspector transition log.
  */
 import type { TransitionEntry } from './types.ts';
 import { DEFAULT_MAX_TRANSITIONS } from './types.ts';

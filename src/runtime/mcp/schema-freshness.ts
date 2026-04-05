@@ -1,5 +1,5 @@
 /**
- * MCP schema freshness tracking (v3 §11.2).
+ * MCP schema freshness tracking.
  *
  * Tracks per-server schema cache freshness with TTL-based staleness detection.
  * Used by McpLifecycleManager to decide when to trigger background re-fetches.
