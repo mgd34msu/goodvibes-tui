@@ -452,7 +452,7 @@ describe('security: PluginManager layer — trust/quarantine integration', () =>
   });
 
   test('quarantine revokes capabilities from manifest built by PluginManager stub pattern', () => {
-    // Simulates the stub manifest PluginManager.quarantine() builds from
+    // Simulates the resolved capability manifest PluginManager.quarantine() uses
     // discovered.manifest.capabilities before passing to the quarantine engine.
     const pluginName = 'dangerous-plugin';
     const rawCaps = ['shell.exec', 'network.outbound', 'register.tool'] as PluginCapability[];

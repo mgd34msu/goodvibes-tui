@@ -12,8 +12,8 @@
  */
 
 import { randomUUID } from 'node:crypto';
-import type { StoreApi } from 'zustand';
-import type { RuntimeState } from '../../store/state.ts';
+import { createDomainDispatch } from '../../store/index.ts';
+import type { RuntimeStore, DomainDispatch } from '../../store/index.ts';
 import type { RuntimeTask } from '../../store/domains/tasks.ts';
 import { ProcessManager } from '../../../tools/shared/process-manager.ts';
 
@@ -45,12 +45,14 @@ export class ProcessTaskAdapter {
   private readonly _pidToId = new Map<number, string>();
 
   private readonly _manager: ProcessManager;
+  private readonly _dispatch: DomainDispatch;
 
   constructor(
-    private readonly _store: StoreApi<RuntimeState>,
+    private readonly _store: RuntimeStore,
     manager?: ProcessManager,
   ) {
     this._manager = manager ?? ProcessManager.getInstance();
+    this._dispatch = createDomainDispatch(_store);
   }
 
   // ── Core API ────────────────────────────────────────────────────────────────
@@ -190,30 +192,7 @@ export class ProcessTaskAdapter {
   // ── Private helpers ─────────────────────────────────────────────────────────
 
   private _upsertTask(task: RuntimeTask): void {
-    this._store.setState((state) => {
-      const tasks = new Map(state.tasks.tasks);
-      tasks.set(task.id, task);
-
-      const isRunning = task.status === 'running';
-      const isQueued = task.status === 'queued';
-
-      return {
-        tasks: {
-          ...state.tasks,
-          tasks,
-          runningIds: isRunning
-            ? [...state.tasks.runningIds, task.id]
-            : state.tasks.runningIds,
-          queuedIds: isQueued
-            ? [...state.tasks.queuedIds, task.id]
-            : state.tasks.queuedIds,
-          totalCreated: state.tasks.totalCreated + 1,
-          revision: state.tasks.revision + 1,
-          lastUpdatedAt: Date.now(),
-          source: 'process-adapter',
-        },
-      };
-    });
+    this._dispatch.syncRuntimeTask(task, 'process-adapter');
   }
 
   private _transitionTask(
@@ -221,50 +200,15 @@ export class ProcessTaskAdapter {
     status: 'completed' | 'failed' | 'cancelled',
     extras: { exitCode?: number; error?: string },
   ): void {
-    this._store.setState((state) => {
-      const existing = state.tasks.tasks.get(taskId);
-      if (!existing) return {};
-
-      if (existing.status === status) return {};
-
-      const now = Date.now();
-      const updated: RuntimeTask = {
-        ...existing,
-        status,
-        endedAt: now,
+    this._dispatch.transitionRuntimeTask(
+      taskId,
+      status,
+      {
+        endedAt: Date.now(),
         exitCode: extras.exitCode,
         error: extras.error,
-      };
-
-      const tasks = new Map(state.tasks.tasks);
-      tasks.set(taskId, updated);
-
-      const runningIds = state.tasks.runningIds.filter((id) => id !== taskId);
-      const queuedIds = state.tasks.queuedIds.filter((id) => id !== taskId);
-
-      return {
-        tasks: {
-          ...state.tasks,
-          tasks,
-          runningIds,
-          queuedIds,
-          totalCompleted:
-            status === 'completed'
-              ? state.tasks.totalCompleted + 1
-              : state.tasks.totalCompleted,
-          totalFailed:
-            status === 'failed'
-              ? state.tasks.totalFailed + 1
-              : state.tasks.totalFailed,
-          totalCancelled:
-            status === 'cancelled'
-              ? state.tasks.totalCancelled + 1
-              : state.tasks.totalCancelled,
-          revision: state.tasks.revision + 1,
-          lastUpdatedAt: now,
-          source: 'process-adapter',
-        },
-      };
-    });
+      },
+      'process-adapter',
+    );
   }
 }

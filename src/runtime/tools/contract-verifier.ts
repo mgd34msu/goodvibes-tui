@@ -85,12 +85,12 @@ export interface ContractVerifierOptions {
    * Whether to treat missing idempotency declarations on side-effecting tools
    * as errors (true, default) or warnings (false).
    *
-   * Set to false during migration when tools are being incrementally annotated.
+   * Set to false while tightening tool metadata requirements incrementally.
    */
   strictIdempotency?: boolean;
   /**
    * Whether to treat missing permission class metadata as errors (true) or
-   * warnings (false, default for backward compatibility with plain Tools).
+   * warnings (false, default for tool definitions that omit that metadata).
    */
   strictPermissionClass?: boolean;
 }

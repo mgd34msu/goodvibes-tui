@@ -1,28 +1,33 @@
 import { describe, test, expect, beforeEach, afterEach } from 'bun:test';
 import { PermissionManager } from '../../permissions/manager.ts';
-import { EventBus } from '../../core/event-bus.ts';
-import { config, configManager } from '../../config/index.ts';
+import { configManager, getConfigSnapshot } from '../../config/index.ts';
+import type { PermissionPromptRequest, PermissionPromptDecision } from '../../permissions/prompt.ts';
 
-// config.autoApprove reflects the --no-worries-just-vibes flag.
+// behavior.autoApprove reflects the --no-worries-just-vibes flag.
 // In the test environment (no CLI flag), it is false.
 // Tests are written for the autoApprove=false path.
 // If the flag is somehow set, the suite notes it so the reader understands.
 
 describe('PermissionManager', () => {
-  let bus: EventBus;
   let manager: PermissionManager;
   let savedMode: string;
   let savedAutoApprove: boolean;
+  let requests: PermissionPromptRequest[];
+  let decisions: PermissionPromptDecision[];
 
   beforeEach(() => {
     // Snapshot current config state
-    savedMode = config.permissions?.mode ?? 'prompt';
-    savedAutoApprove = config.autoApprove ?? false;
+    savedMode = getConfigSnapshot().permissions.mode ?? 'prompt';
+    savedAutoApprove = getConfigSnapshot().behavior.autoApprove ?? false;
     // Isolate: reset to default permission state so tests are deterministic
     configManager.set('permissions.mode', 'prompt');
     configManager.set('behavior.autoApprove', false);
-    bus = new EventBus();
-    manager = new PermissionManager(bus);
+    requests = [];
+    decisions = [];
+    manager = new PermissionManager(async (request) => {
+      requests.push(request);
+      return decisions.shift() ?? { approved: true };
+    });
   });
 
   afterEach(() => {
@@ -85,35 +90,6 @@ describe('PermissionManager', () => {
       expect(manager.getCategory('workflow')).toBe('delegate');
     });
 
-    // Legacy tool names (backward compat)
-    test('file_read is read category', () => {
-      expect(manager.getCategory('file_read')).toBe('read');
-    });
-
-    test('grep is read category', () => {
-      expect(manager.getCategory('grep')).toBe('read');
-    });
-
-    test('list_dir is read category', () => {
-      expect(manager.getCategory('list_dir')).toBe('read');
-    });
-
-    test('glob (glob tool) is read category', () => {
-      expect(manager.getCategory('glob')).toBe('read');
-    });
-
-    test('file_write is write category', () => {
-      expect(manager.getCategory('file_write')).toBe('write');
-    });
-
-    test('file_edit is write category', () => {
-      expect(manager.getCategory('file_edit')).toBe('write');
-    });
-
-    test('shell_exec is execute category', () => {
-      expect(manager.getCategory('shell_exec')).toBe('execute');
-    });
-
     test('unknown tool defaults to delegate category', () => {
       expect(manager.getCategory('unknown_tool')).toBe('delegate');
     });
@@ -160,211 +136,146 @@ describe('PermissionManager', () => {
       expect(result).toBe(true);
     });
 
-    // Legacy tool names (backward compat)
     test('auto-approves read category tools regardless of autoApprove flag', async () => {
-      // Read operations are always auto-approved before the autoApprove check.
-      const result = await manager.check('file_read', { path: 'README.md' });
-      expect(result).toBe(true);
-    });
-
-    test('auto-approves grep without prompting', async () => {
-      const result = await manager.check('grep', { pattern: 'foo' });
-      expect(result).toBe(true);
-    });
-
-    test('auto-approves list_dir', async () => {
-      const result = await manager.check('list_dir', { path: '.' });
-      expect(result).toBe(true);
-    });
-
-    test('auto-approves glob tool', async () => {
-      const result = await manager.check('glob', { patterns: ['**/*.ts'] });
+      const result = await manager.check('read', { path: 'README.md' });
       expect(result).toBe(true);
     });
   });
 
   describe('check - permission prompt for non-read tools (autoApprove=false)', () => {
     test('emits permission:request event for write category when autoApprove=false', async () => {
-      if (config.autoApprove) {
+      if (getConfigSnapshot().behavior.autoApprove) {
         // Skip assertion path — flag is set, no event fires
-        const result = await manager.check('file_write', { path: 'file.txt' });
+        const result = await manager.check('write', { path: 'file.txt' });
         expect(result).toBe(true);
         return;
       }
 
       expect.assertions(2);
-      let eventFired = false;
+      decisions.push({ approved: true });
 
-      bus.once('permission:request', ({ resolve }) => {
-        eventFired = true;
-        resolve(true);
-      });
-
-      const result = await manager.check('file_write', { path: 'file.txt' });
-      expect(eventFired).toBe(true);
+      const result = await manager.check('write', { path: 'file.txt' });
+      expect(requests).toHaveLength(1);
       expect(result).toBe(true);
     });
 
     test('resolving with false denies the operation', async () => {
-      if (config.autoApprove) {
-        const result = await manager.check('shell_exec', { command: 'echo hi' });
+      if (getConfigSnapshot().behavior.autoApprove) {
+        const result = await manager.check('exec', { command: 'echo hi' });
         expect(result).toBe(true);
         return;
       }
 
       expect.assertions(1);
 
-      bus.once('permission:request', ({ resolve }) => {
-        resolve(false);
-      });
+      decisions.push({ approved: false });
 
-      const result = await manager.check('shell_exec', { command: 'echo hi' });
+      const result = await manager.check('exec', { command: 'echo hi' });
       expect(result).toBe(false);
     });
 
     test('permission:request event includes tool name and category', async () => {
-      if (config.autoApprove) {
-        await manager.check('file_write', { path: 'test.ts' });
+      if (getConfigSnapshot().behavior.autoApprove) {
+        await manager.check('write', { path: 'test.ts' });
         return;
       }
 
       expect.assertions(2);
-      let capturedEvent: { tool: string; category: string; resolve: (v: boolean) => void } | null = null;
+      decisions.push({ approved: true });
 
-      bus.once('permission:request', (evt) => {
-        capturedEvent = evt as typeof capturedEvent;
-        evt.resolve(true);
-      });
-
-      await manager.check('file_write', { path: 'test.ts' });
-      expect(capturedEvent!.tool).toBe('file_write');
-      expect(capturedEvent!.category).toBe('write');
+      await manager.check('write', { path: 'test.ts' });
+      expect(requests[0]!.tool).toBe('write');
+      expect(requests[0]!.category).toBe('write');
     });
   });
 
   describe('check - prompt-flow for non-read tools in default prompt mode', () => {
     test('write tool triggers permission prompt', async () => {
       expect.assertions(2);
-      let eventFired = false;
-
-      bus.once('permission:request', ({ resolve }) => {
-        eventFired = true;
-        resolve(true);
-      });
+      decisions.push({ approved: true });
 
       const result = await manager.check('write', { path: 'output.ts' });
-      expect(eventFired).toBe(true);
+      expect(requests).toHaveLength(1);
       expect(result).toBe(true);
     });
 
     test('exec tool triggers permission prompt', async () => {
       expect.assertions(2);
-      let eventFired = false;
-
-      bus.once('permission:request', ({ resolve }) => {
-        eventFired = true;
-        resolve(true);
-      });
+      decisions.push({ approved: true });
 
       const result = await manager.check('exec', { command: 'npm run build' });
-      expect(eventFired).toBe(true);
+      expect(requests).toHaveLength(1);
       expect(result).toBe(true);
     });
 
     test('agent tool triggers permission prompt', async () => {
       expect.assertions(2);
-      let eventFired = false;
-
-      bus.once('permission:request', ({ resolve }) => {
-        eventFired = true;
-        resolve(true);
-      });
+      decisions.push({ approved: true });
 
       const result = await manager.check('agent', { task: 'do something' });
-      expect(eventFired).toBe(true);
+      expect(requests).toHaveLength(1);
       expect(result).toBe(true);
     });
 
     test('workflow tool triggers permission prompt', async () => {
       expect.assertions(2);
-      let eventFired = false;
-
-      bus.once('permission:request', ({ resolve }) => {
-        eventFired = true;
-        resolve(true);
-      });
+      decisions.push({ approved: true });
 
       const result = await manager.check('workflow', { name: 'deploy' });
-      expect(eventFired).toBe(true);
+      expect(requests).toHaveLength(1);
       expect(result).toBe(true);
     });
   });
 
   describe('session approval cache', () => {
     test('caches approval when remember=true — only 1 prompt for 2 identical calls', async () => {
-      if (config.autoApprove) {
+      if (getConfigSnapshot().behavior.autoApprove) {
         // autoApprove skips prompts; cache logic isn't exercised
-        await manager.check('file_write', { path: 'cached.ts' });
-        await manager.check('file_write', { path: 'cached.ts' });
+        await manager.check('write', { path: 'cached.ts' });
+        await manager.check('write', { path: 'cached.ts' });
         return;
       }
 
       expect.assertions(1);
-      let promptCount = 0;
+      decisions.push({ approved: true, remember: true });
 
-      bus.on('permission:request', ({ resolve }) => {
-        promptCount++;
-        resolve(true, true); // approve and remember
-      });
+      await manager.check('write', { path: 'cached.ts' });
+      await manager.check('write', { path: 'cached.ts' });
 
-      await manager.check('file_write', { path: 'cached.ts' });
-      await manager.check('file_write', { path: 'cached.ts' });
-
-      // Second call should hit the cache, not fire a new event
-      expect(promptCount).toBe(1);
+      expect(requests).toHaveLength(1);
     });
 
     test('different paths get separate cache entries — up to 2 prompts', async () => {
-      if (config.autoApprove) {
-        await manager.check('file_write', { path: 'file-a.ts' });
-        await manager.check('file_write', { path: 'file-b.ts' });
+      if (getConfigSnapshot().behavior.autoApprove) {
+        await manager.check('write', { path: 'file-a.ts' });
+        await manager.check('write', { path: 'file-b.ts' });
         return;
       }
 
       expect.assertions(1);
-      let promptCount = 0;
+      decisions.push({ approved: true, remember: true }, { approved: true, remember: true });
 
-      bus.on('permission:request', ({ resolve }) => {
-        promptCount++;
-        resolve(true, true);
-      });
+      await manager.check('write', { path: 'file-a.ts' });
+      await manager.check('write', { path: 'file-b.ts' });
 
-      await manager.check('file_write', { path: 'file-a.ts' });
-      await manager.check('file_write', { path: 'file-b.ts' });
-
-      expect(promptCount).toBe(2);
+      expect(requests).toHaveLength(2);
     });
 
     test('cached denial is returned without prompting again', async () => {
-      if (config.autoApprove) {
+      if (getConfigSnapshot().behavior.autoApprove) {
         // autoApprove=true means the denial path can't be reached
         return;
       }
 
       expect.assertions(3);
-      let promptCount = 0;
+      decisions.push({ approved: false, remember: true });
 
-      bus.on('permission:request', ({ resolve }) => {
-        promptCount++;
-        resolve(false, true); // deny and remember
-      });
-
-      const first = await manager.check('file_edit', { path: 'denied.ts' });
-      const second = await manager.check('file_edit', { path: 'denied.ts' });
+      const first = await manager.check('edit', { path: 'denied.ts' });
+      const second = await manager.check('edit', { path: 'denied.ts' });
 
       expect(first).toBe(false);
       expect(second).toBe(false);
-      expect(promptCount).toBe(1);
+      expect(requests).toHaveLength(1);
     });
   });
 });

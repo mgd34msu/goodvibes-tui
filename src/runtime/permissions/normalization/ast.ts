@@ -1,5 +1,5 @@
 /**
- * Shell AST types for compound command parsing (GC-EXEC-005).
+ * Shell AST types for compound command parsing.
  *
  * Represents the structural tree of a compound shell command after parsing.
  * The tree preserves operator relationships between segments so that per-segment

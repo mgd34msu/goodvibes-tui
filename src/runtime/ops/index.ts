@@ -39,6 +39,8 @@ export {
   permissionDeadlockPlaybook,
   pluginDegradationPlaybook,
   exportRecoveryPlaybook,
+  sessionUnrecoverablePlaybook,
+  compactionFailurePlaybook,
 } from './playbooks/index.ts';
 
 import type { Playbook, PlaybookRegistry, PlaybookRegistryEntry } from './types.ts';
@@ -48,6 +50,8 @@ import {
   permissionDeadlockPlaybook,
   pluginDegradationPlaybook,
   exportRecoveryPlaybook,
+  sessionUnrecoverablePlaybook,
+  compactionFailurePlaybook,
 } from './playbooks/index.ts';
 
 /** All registered playbooks in definition order. */
@@ -57,6 +61,8 @@ const ALL_PLAYBOOKS: readonly Playbook[] = [
   permissionDeadlockPlaybook,
   pluginDegradationPlaybook,
   exportRecoveryPlaybook,
+  sessionUnrecoverablePlaybook,
+  compactionFailurePlaybook,
 ] as const;
 
 /** Registry version — bump when playbooks are added or updated. */

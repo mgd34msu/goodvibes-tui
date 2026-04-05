@@ -152,7 +152,7 @@ export interface EvaluateResult {
 
 /**
  * Event emitted when a cascade effect is applied.
- * Defined in v3 spec Section 23.2.
+ * Health diagnostics types for the runtime.
  */
 export interface CascadeAppliedEvent {
   type: 'CASCADE_APPLIED';

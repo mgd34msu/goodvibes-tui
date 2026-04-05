@@ -45,6 +45,21 @@ export interface PhaseTimingEntry {
   readonly error?: string;
 }
 
+export type PhaseLedgerOutcome = 'in_progress' | 'succeeded' | 'failed' | 'cancelled';
+
+export interface PhaseLedgerEntry {
+  readonly seq: number;
+  readonly domain: 'turn' | 'task';
+  readonly phase: string;
+  readonly enterEventType: string;
+  readonly enteredAt: number;
+  readonly exitEventType?: string;
+  readonly exitedAt?: number;
+  readonly durationMs?: number;
+  readonly outcome: PhaseLedgerOutcome;
+  readonly error?: string;
+}
+
 // ── Causal chain ─────────────────────────────────────────────────────────────
 
 /**
@@ -121,10 +136,101 @@ export interface FailureReport {
   readonly agentId?: string;
   /** Ordered phase timings from the originating turn or task execution. */
   readonly phaseTimings: readonly PhaseTimingEntry[];
+  /** Ordered phase transition ledger for explicit runtime reconstruction. */
+  readonly phaseLedger: readonly PhaseLedgerEntry[];
   /** Causal chain from root cause to terminal state (root cause first). */
   readonly causalChain: readonly CausalChainEntry[];
   /** Cascade events that contributed to or were triggered by this failure. */
   readonly cascadeEvents: readonly CausalChainEntry[];
+  /** Permission request and decision evidence correlated to this failure. */
+  readonly permissionEvidence: readonly PermissionEvidenceEntry[];
+  /** Tool budget and timeout breaches correlated to this failure. */
+  readonly budgetBreaches: readonly BudgetBreachEvidence[];
   /** Jump links to replay and related diagnostics. */
   readonly jumpLinks: readonly ForensicsJumpLink[];
+}
+
+// ── Export bundle ───────────────────────────────────────────────────────────
+
+export interface PermissionEvidenceEntry {
+  readonly callId: string;
+  readonly tool: string;
+  readonly requestedAt?: number;
+  readonly decidedAt?: number;
+  readonly durationMs?: number;
+  readonly approved?: boolean;
+  readonly source?: string;
+}
+
+export interface BudgetBreachEvidence {
+  readonly callId: string;
+  readonly tool: string;
+  readonly eventType: 'BUDGET_EXCEEDED_MS' | 'BUDGET_EXCEEDED_TOKENS' | 'BUDGET_EXCEEDED_COST';
+  readonly phase: string;
+  readonly ts: number;
+  readonly meta: Readonly<Record<string, number>>;
+}
+
+export interface ForensicsReplayMismatchEvidence {
+  readonly rev: number;
+  readonly kind: string;
+  readonly description: string;
+  readonly eventName?: string;
+  readonly ownerDomain?: string;
+  readonly failureMode?: string;
+  readonly relatedTurnId?: string;
+}
+
+export interface ForensicsReplayTurnEvidence {
+  readonly turnId: string;
+  readonly outcome: 'completed' | 'failed' | 'cancelled';
+  readonly terminalEvent: 'PREFLIGHT_FAIL' | 'TURN_COMPLETED' | 'TURN_ERROR' | 'TURN_CANCEL';
+  readonly startedRev?: number;
+  readonly terminalRev: number;
+  readonly stopReason?: string;
+  readonly message?: string;
+}
+
+export interface ForensicsReplayEvidence {
+  readonly status: 'unavailable' | 'not_loaded' | 'available';
+  readonly runId?: string;
+  readonly currentRev?: number;
+  readonly totalRevisions?: number;
+  readonly mismatchCount: number;
+  readonly mismatches: readonly ForensicsReplayMismatchEvidence[];
+  readonly relatedMismatches: readonly ForensicsReplayMismatchEvidence[];
+  readonly mismatchBreakdown: {
+    readonly byKind: Readonly<Record<string, number>>;
+    readonly byFailureMode: Readonly<Record<string, number>>;
+    readonly byOwnerDomain: Readonly<Record<string, number>>;
+  };
+  readonly turnSummaries: readonly ForensicsReplayTurnEvidence[];
+  readonly matchingTurnSummary?: ForensicsReplayTurnEvidence;
+}
+
+export interface ForensicsEvidenceSummary {
+  readonly rootCause?: string;
+  readonly terminalPhase?: string;
+  readonly terminalOutcome?: PhaseLedgerOutcome;
+  readonly phaseCount: number;
+  readonly causalCount: number;
+  readonly cascadeCount: number;
+  readonly permissionDecisionCount: number;
+  readonly deniedPermissionCount: number;
+  readonly budgetBreachCount: number;
+  readonly slowPhases: readonly string[];
+  readonly jumpLinkCount: number;
+  readonly relatedIds: {
+    readonly turnId?: string;
+    readonly taskId?: string;
+    readonly agentId?: string;
+  };
+}
+
+export interface ForensicsBundle {
+  readonly schemaVersion: 'v1';
+  readonly exportedAt: number;
+  readonly report: FailureReport;
+  readonly evidence: ForensicsEvidenceSummary;
+  readonly replay: ForensicsReplayEvidence;
 }

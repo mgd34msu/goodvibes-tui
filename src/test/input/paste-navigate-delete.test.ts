@@ -1,15 +1,12 @@
 import { describe, test, expect, beforeEach } from 'bun:test';
 import { InputHandler } from '../../input/handler.ts';
-import { EventBus } from '../../core/event-bus.ts';
 import { SelectionManager } from '../../input/selection.ts';
+import { InfiniteBuffer } from '../../core/history.ts';
 
 function makeInput(contentWidth = 40): InputHandler {
-  const bus = new EventBus();
   const sel = new SelectionManager();
-  const ih = new InputHandler(bus, sel, () => 0, () => 20, () => ({
-    getLineCount: () => 0, getAllLines: () => [], getSnapshot: () => [],
-    addLine: () => {}, addLines: () => {}, clear: () => {},
-  }) as any, () => {}, () => {});
+  const history = new InfiniteBuffer();
+  const ih = new InputHandler(() => {}, sel, () => 0, () => 20, () => history, () => {}, () => {});
   ih.setContentWidth(contentWidth);
   return ih;
 }

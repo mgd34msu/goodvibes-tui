@@ -1,5 +1,5 @@
 /**
- * Plugin capability manifest validation and resolution — v3 §9.1.
+ * Plugin capability manifest validation and resolution.
  *
  * Implements deny-by-default capability enforcement:
  * 1. Parse raw manifest capabilities (unknown → typed)
@@ -41,7 +41,7 @@ function isKnownCapability(value: string): value is PluginCapability {
  * Evaluation order:
  *   1. Unknown capability strings are filtered out (warn + ignore).
  *   2. Trust-tier constraints are applied — high-risk capabilities blocked
- *      unless the plugin has the `trusted` tier (§5.9).
+ *      unless the plugin has the `trusted` tier.
  *   3. The runtime capability policy callback is applied to the remaining set.
  *
  * @param pluginName - Plugin name (for logging).

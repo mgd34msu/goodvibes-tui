@@ -1,5 +1,5 @@
 /**
- * /replay command handler — Section 5.2
+ * /replay command handler.
  *
  * Handles the subcommands of the /replay slash command:
  *   /replay load <runId>     — load a recorded run by ID
@@ -205,7 +205,8 @@ export function handleReplayCommand(
         '',
       ];
       for (const m of mismatches) {
-        const tag = `[${m.kind}]`.padEnd(20);
+        const tagParts = [m.kind, m.failureMode, m.ownerDomain].filter(Boolean);
+        const tag = `[${tagParts.join('/')}]`.padEnd(40);
         lines.push(`  ${tag} ${m.description}`);
       }
       lines.push('');

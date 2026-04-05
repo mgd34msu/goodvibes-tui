@@ -1,10 +1,9 @@
 /**
- * Test infrastructure: mock providers, event bus helpers, and filesystem utilities.
+ * Test infrastructure: mock providers and filesystem utilities.
  */
 import { mkdtemp, rm, mkdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { LLMProvider, ChatRequest, ChatResponse } from '../providers/interface.ts';
-import type { EventBus, EventMap } from '../core/event-bus.ts';
 import type { ToolCall } from '../types/tools.ts';
 import { ConfigManager } from '../config/manager.ts';
 
@@ -50,25 +49,6 @@ export class MockLLMProvider implements LLMProvider {
     this.callIndex = 0;
     this.callLog = [];
   }
-}
-
-// ---------------------------------------------------------------------------
-// Event Bus spy helpers
-// ---------------------------------------------------------------------------
-
-/**
- * Collect all events emitted on a bus for a given key during a test.
- * Returns a cleanup function.
- */
-export function collectEvents<K extends keyof EventMap>(
-  bus: EventBus,
-  event: K,
-): { events: EventMap[K][]; cleanup: () => void } {
-  const events: EventMap[K][] = [];
-  const unsub = bus.on(event, ((data: EventMap[K]) => {
-    events.push(data);
-  }) as Parameters<typeof bus.on<K>>[1]);
-  return { events, cleanup: unsub };
 }
 
 // ---------------------------------------------------------------------------

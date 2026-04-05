@@ -32,7 +32,7 @@ describe('ConversationManager', () => {
     });
 
     test('addAssistantMessage with tool calls includes them', () => {
-      const toolCalls = [{ id: 'c1', name: 'file_read', arguments: { path: 'foo.ts' } }];
+      const toolCalls = [{ id: 'c1', name: 'read', arguments: { path: 'foo.ts' } }];
       cm.addAssistantMessage('calling tool', { toolCalls });
       const msgs = cm.getMessagesForLLM();
       expect(msgs[0]).toMatchObject({ role: 'assistant', toolCalls });

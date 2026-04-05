@@ -59,7 +59,7 @@ describe('renderHelpOverlay', () => {
   });
 
   test('contains Commands section', () => {
-    const lines = renderHelpOverlay(W);
+    const lines = renderHelpOverlay(W, undefined, 14);
     const texts = linesToText(lines).join('\n');
     expect(texts).toContain('Commands');
   });
@@ -83,7 +83,7 @@ describe('renderHelpOverlay', () => {
   });
 
   test('renders command list when commands provided', () => {
-    const lines = renderHelpOverlay(W, SAMPLE_COMMANDS);
+    const lines = renderHelpOverlay(W, SAMPLE_COMMANDS, 14);
     const texts = linesToText(lines).join('\n');
     expect(texts).toContain('/model');
     expect(texts).toContain('/help');
@@ -91,14 +91,14 @@ describe('renderHelpOverlay', () => {
   });
 
   test('shows command aliases when provided', () => {
-    const lines = renderHelpOverlay(W, SAMPLE_COMMANDS);
+    const lines = renderHelpOverlay(W, SAMPLE_COMMANDS, 14);
     const texts = linesToText(lines).join('\n');
     // /model has alias /m
     expect(texts).toContain('/m');
   });
 
   test('shows fallback command list when no commands provided', () => {
-    const lines = renderHelpOverlay(W);
+    const lines = renderHelpOverlay(W, undefined, 14);
     const texts = linesToText(lines).join('\n');
     // The fallback string includes known command names
     expect(texts).toContain('/help');

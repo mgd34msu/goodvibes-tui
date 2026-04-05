@@ -12,7 +12,8 @@
  * - Support retry policies
  */
 
-import type { RuntimeStore } from '../store/index.ts';
+import { createDomainDispatch } from '../store/index.ts';
+import type { RuntimeStore, DomainDispatch } from '../store/index.ts';
 import type { RuntimeEventBus } from '../events/index.ts';
 import type { RuntimeTask, TaskKind, TaskLifecycleState } from '../store/domains/tasks.ts';
 import type { EmitterContext } from '../emitters/index.ts';
@@ -93,6 +94,7 @@ export class TaskNotCancellableError extends Error {
 export class UnifiedTaskManager implements TaskManager {
   private readonly _registry = new TaskRegistry();
   private readonly _store: RuntimeStore;
+  private readonly _dispatch: DomainDispatch;
   private readonly _bus: RuntimeEventBus;
   /** Session ID for emitter context. */
   private readonly _sessionId: string;
@@ -108,6 +110,7 @@ export class UnifiedTaskManager implements TaskManager {
     sessionId: string
   ) {
     this._store = store;
+    this._dispatch = createDomainDispatch(store);
     this._bus = bus;
     this._sessionId = sessionId;
   }
@@ -400,69 +403,13 @@ export class UnifiedTaskManager implements TaskManager {
    * Dispatches TASK_CREATED state update to the Zustand store.
    */
   private _dispatchCreated(task: RuntimeTask): void {
-    this._store.setState((state) => {
-      const tasks = new Map(state.tasks.tasks);
-      tasks.set(task.id, task);
-      return {
-        tasks: {
-          ...state.tasks,
-          tasks,
-          queuedIds: [...state.tasks.queuedIds, task.id],
-          totalCreated: state.tasks.totalCreated + 1,
-          revision: state.tasks.revision + 1,
-          lastUpdatedAt: Date.now(),
-          source: 'task-manager',
-        },
-      };
-    });
+    this._dispatch.syncRuntimeTask(task, 'task-manager');
   }
 
   /**
    * Syncs an updated task to the Zustand store, adjusting status index arrays.
    */
   private _syncTaskToStore(task: RuntimeTask): void {
-    this._store.setState((state) => {
-      const tasks = new Map(state.tasks.tasks);
-      const prev = tasks.get(task.id);
-      tasks.set(task.id, task);
-
-      // Rebuild status index arrays from scratch to stay consistent
-      const queuedIds: string[] = [];
-      const runningIds: string[] = [];
-      const blockedIds: string[] = [];
-
-      for (const t of tasks.values()) {
-        if (t.status === 'queued') queuedIds.push(t.id);
-        else if (t.status === 'running') runningIds.push(t.id);
-        else if (t.status === 'blocked') blockedIds.push(t.id);
-      }
-
-      // Update statistics counters based on terminal transitions
-      const prevStatus = prev?.status;
-      const nextStatus = task.status;
-      let { totalCompleted, totalFailed, totalCancelled } = state.tasks;
-
-      if (prevStatus !== nextStatus) {
-        if (nextStatus === 'completed') totalCompleted += 1;
-        else if (nextStatus === 'failed') totalFailed += 1;
-        else if (nextStatus === 'cancelled') totalCancelled += 1;
-      }
-
-      return {
-        tasks: {
-          ...state.tasks,
-          tasks,
-          queuedIds,
-          runningIds,
-          blockedIds,
-          totalCompleted,
-          totalFailed,
-          totalCancelled,
-          revision: state.tasks.revision + 1,
-          lastUpdatedAt: Date.now(),
-          source: 'task-manager',
-        },
-      };
-    });
+    this._dispatch.syncRuntimeTask(task, 'task-manager');
   }
 }

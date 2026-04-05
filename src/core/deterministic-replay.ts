@@ -1,12 +1,12 @@
 /**
- * DeterministicReplayEngine — Section 5.2
+ * DeterministicReplayEngine.
  *
  * Consumes a recorded snapshot + typed event ledger to replay a run
  * deterministically. Supports stepwise transitions, seekable revision
  * positioning, and diff mode that reports expected-vs-replayed mismatches
  * with classifiers.
  *
- * The engine does not re-emit live events on the EventBus — it maintains
+ * The engine does not re-emit live runtime events through a separate bus — it maintains
  * its own replay-local state tree built by folding ledger entries over the
  * initial snapshot. This isolation ensures replay never affects live state.
  */
@@ -15,7 +15,6 @@ import { resolve, normalize } from 'node:path';
 import { logger } from '../utils/logger.ts';
 import type { LedgerEntry } from '../runtime/telemetry/exporters/local-ledger.ts';
 import type { RuntimeStateSnapshot } from '../runtime/diagnostics/types.ts';
-import { EventBus } from './event-bus.ts';
 
 // ── Mismatch classifier ────────────────────────────────────────────────────
 
@@ -35,6 +34,30 @@ export type MismatchClass =
   | 'ordering'
   | 'state_divergence';
 
+export type ReplayMismatchOwnerDomain =
+  | 'turn'
+  | 'tasks'
+  | 'tools'
+  | 'providers'
+  | 'session'
+  | 'conversation'
+  | 'agents'
+  | 'workflows'
+  | 'permissions'
+  | 'transport'
+  | 'unknown';
+
+export type ReplayMismatchFailureMode =
+  | 'missing_event'
+  | 'extra_event'
+  | 'ordering_violation'
+  | 'payload_schema_mismatch'
+  | 'payload_type_mismatch'
+  | 'payload_value_mismatch'
+  | 'missing_terminal_summary'
+  | 'terminal_outcome_diverged'
+  | 'stop_reason_diverged';
+
 /**
  * A single actionable mismatch entry produced by diff mode.
  */
@@ -51,6 +74,24 @@ export interface ReplayMismatch {
   readonly recordedSummary?: string;
   /** Key fields from the replayed payload, if applicable. */
   readonly replayedSummary?: string;
+  /** Likely owning runtime domain for the divergence. */
+  readonly ownerDomain?: ReplayMismatchOwnerDomain;
+  /** Narrower replay failure mode for operator triage. */
+  readonly failureMode?: ReplayMismatchFailureMode;
+  /** Related turn ID when the divergence can be tied to a single turn. */
+  readonly relatedTurnId?: string;
+}
+
+export type ReplayTurnOutcome = 'completed' | 'failed' | 'cancelled';
+
+export interface ReplayTurnSummary {
+  readonly turnId: string;
+  readonly outcome: ReplayTurnOutcome;
+  readonly terminalEvent: 'PREFLIGHT_FAIL' | 'TURN_COMPLETED' | 'TURN_ERROR' | 'TURN_CANCEL';
+  readonly startedRev?: number;
+  readonly terminalRev: number;
+  readonly stopReason?: string;
+  readonly message?: string;
 }
 
 // ── Replay state ───────────────────────────────────────────────────────────
@@ -88,12 +129,13 @@ export interface ReplayEngineSnapshot {
   readonly totalRevisions: number;
   readonly currentFrame: ReplayFrame | null;
   readonly mismatches: readonly ReplayMismatch[];
+  readonly turnSummaries: readonly ReplayTurnSummary[];
 }
 
 // ── DeterministicReplayEngine ──────────────────────────────────────────────
 
 /**
- * DeterministicReplayEngine — Section 5.2
+ * DeterministicReplayEngine.
  *
  * Usage:
  * ```ts
@@ -121,6 +163,7 @@ export class DeterministicReplayEngine {
   private _frames: ReplayFrame[] = [];
   private _currentFrameIndex = 0;
   private _mismatches: ReplayMismatch[] = [];
+  private _turnSummaries: ReplayTurnSummary[] = [];
   private readonly _subscribers = new Set<() => void>();
 
   // ── Public API ─────────────────────────────────────────────────────────
@@ -143,6 +186,7 @@ export class DeterministicReplayEngine {
     // Sort by revision ascending; validate rev sequence.
     const sorted = [...entries].sort((a, b) => a.rev - b.rev);
     this._entries = sorted;
+    this._turnSummaries = this._deriveTurnSummaries(sorted);
 
     // Build the initial frame from the snapshot.
     const initialDomains = this._snapshotToDomains(snapshot);
@@ -166,11 +210,6 @@ export class DeterministicReplayEngine {
       runId,
       revisions: sorted.length,
       domains: Object.keys(initialDomains).length,
-    });
-
-    EventBus.getInstance()?.emit('replay:loaded', {
-      runId,
-      totalRevisions: sorted.length,
     });
 
     this._notify();
@@ -208,14 +247,6 @@ export class DeterministicReplayEngine {
 
     if (stepped.length > 0) {
       const afterSnap = this.getSnapshot();
-      if (this._runId) {
-        EventBus.getInstance()?.emit('replay:position-changed', {
-          runId: this._runId,
-          currentRev: afterSnap.currentRev,
-          totalRevisions: afterSnap.totalRevisions,
-          status: this._status,
-        });
-      }
       this._notify();
     }
 
@@ -247,15 +278,6 @@ export class DeterministicReplayEngine {
     }
 
     logger.debug('[DeterministicReplayEngine] seeked', { targetRev, clamped });
-
-    if (this._runId) {
-      EventBus.getInstance()?.emit('replay:position-changed', {
-        runId: this._runId,
-        currentRev: clamped,
-        totalRevisions: this._frames.length - 1,
-        status: this._status,
-      });
-    }
 
     this._notify();
   }
@@ -291,6 +313,9 @@ export class DeterministicReplayEngine {
         mismatches.push({
           rev: frame.rev,
           kind: 'extra_event',
+          ownerDomain: this._inferOwnerDomain(frame.entry?.eventName),
+          failureMode: 'extra_event',
+          relatedTurnId: this._extractTurnId(frame.entry?.payload),
           description: `Rev ${frame.rev}: event "${frame.entry?.eventName ?? 'unknown'}" was replayed but does not exist in the recording.`,
           eventName: frame.entry?.eventName,
         });
@@ -302,6 +327,9 @@ export class DeterministicReplayEngine {
         mismatches.push({
           rev: recorded.rev,
           kind: 'missing_event',
+          ownerDomain: this._inferOwnerDomain(recorded.eventName),
+          failureMode: 'missing_event',
+          relatedTurnId: this._extractTurnId(recorded.payload),
           description: `Rev ${recorded.rev}: recorded event "${recorded.eventName}" was not replayed.`,
           eventName: recorded.eventName,
         });
@@ -318,6 +346,9 @@ export class DeterministicReplayEngine {
         mismatches.push({
           rev: recorded.rev,
           kind: 'ordering',
+          ownerDomain: this._inferOwnerDomain(recorded.eventName),
+          failureMode: 'ordering_violation',
+          relatedTurnId: this._extractTurnId(recorded.payload, frameEntry.payload),
           description: `Rev ${recorded.rev}: expected event "${recorded.eventName}" but replayed "${frameEntry.eventName}". Possible ordering violation.`,
           eventName: recorded.eventName,
           recordedSummary: recorded.eventName,
@@ -338,6 +369,8 @@ export class DeterministicReplayEngine {
       }
     }
 
+    mismatches.push(...this._diffTurnSummaries());
+
     this._mismatches = mismatches;
     this._notify();
 
@@ -345,13 +378,6 @@ export class DeterministicReplayEngine {
       runId: this._runId,
       mismatchCount: mismatches.length,
     });
-
-    if (this._runId) {
-      EventBus.getInstance()?.emit('replay:diff-complete', {
-        runId: this._runId,
-        mismatchCount: mismatches.length,
-      });
-    }
 
     return mismatches;
   }
@@ -389,6 +415,7 @@ export class DeterministicReplayEngine {
       totalRevisions: this._frames.length - 1,
       currentRev: this._currentFrameIndex,
       mismatches: this._mismatches,
+      turnSummaries: this._turnSummaries,
       frames: this._frames.map((f) => ({
         rev: f.rev,
         eventName: f.entry?.eventName ?? null,
@@ -416,6 +443,7 @@ export class DeterministicReplayEngine {
       totalRevisions: this._frames.length - 1,
       currentFrame: this._frames[this._currentFrameIndex] ?? null,
       mismatches: this._mismatches,
+      turnSummaries: this._turnSummaries,
     };
   }
 
@@ -437,6 +465,7 @@ export class DeterministicReplayEngine {
     this._frames = [];
     this._currentFrameIndex = 0;
     this._mismatches = [];
+    this._turnSummaries = [];
     this._notify();
   }
 
@@ -519,6 +548,9 @@ export class DeterministicReplayEngine {
         rev,
         kind: 'payload_mismatch',
         eventName,
+        ownerDomain: this._inferOwnerDomain(eventName),
+        failureMode: 'payload_schema_mismatch',
+        relatedTurnId: this._extractTurnId(recorded, replayed),
         description:
           `Rev ${rev} "${eventName}": payload schema mismatch.`
           + (missingInReplay.length ? ` Missing keys in replay: [${missingInReplay.join(', ')}].` : '')
@@ -539,6 +571,9 @@ export class DeterministicReplayEngine {
           rev,
           kind: 'payload_mismatch',
           eventName,
+          ownerDomain: this._inferOwnerDomain(eventName),
+          failureMode: 'payload_type_mismatch',
+          relatedTurnId: this._extractTurnId(recorded, replayed),
           description: `Rev ${rev} "${eventName}": field "${key}" type mismatch (recorded: ${typeof rv}, replayed: ${typeof pv}).`,
           recordedSummary: `${key}: ${typeof rv}`,
           replayedSummary: `${key}: ${typeof pv}`,
@@ -553,6 +588,9 @@ export class DeterministicReplayEngine {
           rev,
           kind: 'payload_mismatch',
           eventName,
+          ownerDomain: this._inferOwnerDomain(eventName),
+          failureMode: 'payload_value_mismatch',
+          relatedTurnId: this._extractTurnId(recorded, replayed),
           description: `Rev ${rev} "${eventName}": field "${key}" value differs. Recorded: ${String(rv).slice(0, 80)}. Replayed: ${String(pv).slice(0, 80)}.`,
           recordedSummary: `${key}=${String(rv).slice(0, 40)}`,
           replayedSummary: `${key}=${String(pv).slice(0, 40)}`,
@@ -563,13 +601,155 @@ export class DeterministicReplayEngine {
     return null;
   }
 
+  private _deriveTurnSummaries(
+    entries: Array<Pick<LedgerEntry, 'rev' | 'eventName' | 'payload'>>
+  ): ReplayTurnSummary[] {
+    const starts = new Map<string, number>();
+    const summaries: ReplayTurnSummary[] = [];
+
+    for (const entry of entries) {
+      const payload =
+        entry.payload && typeof entry.payload === 'object' && !Array.isArray(entry.payload)
+          ? entry.payload as Record<string, unknown>
+          : null;
+      const turnId = typeof payload?.turnId === 'string' ? payload.turnId : undefined;
+      if (!turnId) continue;
+
+      if (entry.eventName === 'TURN_SUBMITTED') {
+        starts.set(turnId, entry.rev);
+        continue;
+      }
+
+      if (
+        entry.eventName !== 'PREFLIGHT_FAIL'
+        && entry.eventName !== 'TURN_COMPLETED'
+        && entry.eventName !== 'TURN_ERROR'
+        && entry.eventName !== 'TURN_CANCEL'
+      ) {
+        continue;
+      }
+
+      const outcome: ReplayTurnOutcome =
+        entry.eventName === 'TURN_COMPLETED'
+          ? 'completed'
+          : entry.eventName === 'TURN_CANCEL'
+            ? 'cancelled'
+            : 'failed';
+
+      const message =
+        typeof payload?.reason === 'string'
+          ? payload.reason
+          : typeof payload?.error === 'string'
+            ? payload.error
+            : typeof payload?.response === 'string'
+              ? payload.response.slice(0, 160)
+              : undefined;
+
+      summaries.push({
+        turnId,
+        outcome,
+        terminalEvent: entry.eventName,
+        startedRev: starts.get(turnId),
+        terminalRev: entry.rev,
+        stopReason: typeof payload?.stopReason === 'string' ? payload.stopReason : undefined,
+        message,
+      });
+    }
+
+    return summaries;
+  }
+
+  private _diffTurnSummaries(): ReplayMismatch[] {
+    const recorded = this._deriveTurnSummaries(this._entries);
+    const replayed = this._deriveTurnSummaries(
+      this._frames
+        .map((frame) => frame.entry)
+        .filter((entry): entry is LedgerEntry => entry !== undefined),
+    );
+
+    const mismatches: ReplayMismatch[] = [];
+    const replayedByTurnId = new Map(replayed.map((summary) => [summary.turnId, summary] as const));
+
+    for (const recordedSummary of recorded) {
+      const replayedSummary = replayedByTurnId.get(recordedSummary.turnId);
+      if (!replayedSummary) {
+        mismatches.push({
+          rev: recordedSummary.terminalRev,
+          kind: 'missing_event',
+          eventName: recordedSummary.terminalEvent,
+          ownerDomain: 'turn',
+          failureMode: 'missing_terminal_summary',
+          relatedTurnId: recordedSummary.turnId,
+          description: `Rev ${recordedSummary.terminalRev}: missing terminal replay summary for turn "${recordedSummary.turnId}".`,
+          recordedSummary: `${recordedSummary.outcome}/${recordedSummary.stopReason ?? 'none'}`,
+        });
+        continue;
+      }
+
+      if (recordedSummary.outcome !== replayedSummary.outcome) {
+        mismatches.push({
+          rev: recordedSummary.terminalRev,
+          kind: 'state_divergence',
+          eventName: recordedSummary.terminalEvent,
+          ownerDomain: 'turn',
+          failureMode: 'terminal_outcome_diverged',
+          relatedTurnId: recordedSummary.turnId,
+          description: `Rev ${recordedSummary.terminalRev}: turn "${recordedSummary.turnId}" terminal outcome diverged (recorded ${recordedSummary.outcome}, replayed ${replayedSummary.outcome}).`,
+          recordedSummary: `${recordedSummary.outcome}/${recordedSummary.stopReason ?? 'none'}`,
+          replayedSummary: `${replayedSummary.outcome}/${replayedSummary.stopReason ?? 'none'}`,
+        });
+        continue;
+      }
+
+      if (recordedSummary.stopReason !== replayedSummary.stopReason) {
+        mismatches.push({
+          rev: recordedSummary.terminalRev,
+          kind: 'state_divergence',
+          eventName: recordedSummary.terminalEvent,
+          ownerDomain: 'turn',
+          failureMode: 'stop_reason_diverged',
+          relatedTurnId: recordedSummary.turnId,
+          description: `Rev ${recordedSummary.terminalRev}: turn "${recordedSummary.turnId}" stop reason diverged (recorded ${recordedSummary.stopReason ?? 'none'}, replayed ${replayedSummary.stopReason ?? 'none'}).`,
+          recordedSummary: `${recordedSummary.outcome}/${recordedSummary.stopReason ?? 'none'}`,
+          replayedSummary: `${replayedSummary.outcome}/${replayedSummary.stopReason ?? 'none'}`,
+        });
+      }
+    }
+
+    return mismatches;
+  }
+
+  private _extractTurnId(...payloads: unknown[]): string | undefined {
+    for (const payload of payloads) {
+      if (!payload || typeof payload !== 'object' || Array.isArray(payload)) continue;
+      const maybeTurnId = (payload as Record<string, unknown>).turnId;
+      if (typeof maybeTurnId === 'string' && maybeTurnId.length > 0) return maybeTurnId;
+    }
+    return undefined;
+  }
+
+  private _inferOwnerDomain(eventName: string | undefined): ReplayMismatchOwnerDomain {
+    if (!eventName) return 'unknown';
+    if (eventName.startsWith('TURN_') || eventName.startsWith('PREFLIGHT_') || eventName.startsWith('STREAM_')) return 'turn';
+    if (eventName.startsWith('TASK_')) return 'tasks';
+    if (eventName.startsWith('TOOL_')) return 'tools';
+    if (eventName.startsWith('WORKFLOW_')) return 'workflows';
+    if (eventName.startsWith('AGENT_')) return 'agents';
+    if (eventName.startsWith('PERMISSION_')) return 'permissions';
+    if (eventName.startsWith('PROVIDER_') || eventName.startsWith('MODEL_')) return 'providers';
+    if (eventName.startsWith('SESSION_')) return 'session';
+    if (eventName.startsWith('CONVERSATION_')) return 'conversation';
+    if (eventName.startsWith('TRANSPORT_') || eventName.startsWith('ACP_') || eventName.startsWith('DAEMON_')) return 'transport';
+    return 'unknown';
+  }
+
   private _notify(): void {
     for (const cb of this._subscribers) {
       try {
         cb();
       } catch (err) {
         // Non-fatal: subscriber errors must not crash the engine.
-        logger.debug('[DeterministicReplayEngine] subscriber error:', err);
+        logger.debug('[DeterministicReplayEngine] subscriber error', { error: String(err) });
       }
     }
   }

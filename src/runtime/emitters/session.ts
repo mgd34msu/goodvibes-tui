@@ -2,22 +2,6 @@
  * Session emitters — typed emission wrappers for SessionEvent domain.
  *
  * Import and call these instead of emitting raw strings.
- *
- * @remarks
- * **Pre-positioned for RuntimeEventBus migration.**
- *
- * The goodvibes-tui bootstrap layer currently uses the legacy `EventBus`
- * (src/core/event-bus.ts) for session lifecycle orchestration. The
- * `RuntimeEventBus` (src/runtime/events/index.ts) is a separate typed bus
- * introduced in v3 for structured event envelopes. These wrappers are
- * intentionally written against `RuntimeEventBus` so that callsites can be
- * migrated incrementally as the runtime bus is adopted at the bootstrap layer.
- *
- * Until that migration occurs, these functions have no callers in the
- * production codebase. They are tested via the emit-enforcement test suite
- * (src/test/runtime/emit-enforcement.test.ts) which validates their
- * structural conformance. See also: src/runtime/events/session.ts for the
- * SessionEvent discriminated union.
  */
 import { createEventEnvelope } from '../events/envelope.ts';
 import type { RuntimeEventEnvelope } from '../events/envelope.ts';

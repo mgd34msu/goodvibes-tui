@@ -1,6 +1,5 @@
 /**
- * Permissions v2 — Network scope (host/URL) policy rule evaluator with
- * host trust tier classification (GC-FETCH-006).
+ * Network scope (host/URL) policy rule evaluator with host trust tier classification.
  *
  * NetworkScopeRule matches tool calls that make network requests, restricting
  * or allowing access based on whether the target hostname matches any of the
@@ -23,7 +22,7 @@ import {
  * consumers that access trust classification via the permissions layer.
  *
  * The policy panel uses these exports to show host trust classification
- * alongside permission decisions (GC-FETCH-006 requirement).
+ * alongside permission decisions.
  */
 export type { HostTrustTier, TrustTierConfig };
 export { classifyHostTrustTier, extractHostname };

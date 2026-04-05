@@ -1,7 +1,7 @@
 /**
  * local-context-ingestion.ts
  *
- * G00: Local provider `max_context_length` ingestion.
+ * Local provider `max_context_length` ingestion.
  *
  * Fetches the /v1/models endpoint for local/custom providers and extracts
  * per-model `max_context_length` values. Results are keyed by model ID and

@@ -2,7 +2,7 @@
 
 A terminal AI coding agent with automated write-review-fix-check pipelines, multi-provider LLM support, and a vaporwave aesthetic.
 
-Version: **0.12.3**
+Version: **0.14.1**
 
 <!-- screenshot -->
 
@@ -14,7 +14,7 @@ goodvibes-tui is a coding agent TUI in the same space as Claude Code, Gemini CLI
 
 The interface is built around a cell-based renderer that writes directly to the alternate screen buffer using raw ANSI escape sequences — no framework, no virtual DOM. Every message, tool call, diff, and code block is a typed cell that can be collapsed, bookmarked, copied, or applied inline.
 
-The agent system runs subagents in-process, each with its own conversation history, scoped tool registry, and optional git worktree. An inter-agent message bus allows agents to communicate. The hook system fires lifecycle events on every tool call, git operation, LLM exchange, and more — and routes them to shell commands, HTTP endpoints, prompt-based handlers, or TypeScript modules.
+The agent system runs subagents in-process, each with its own conversation history, scoped tool registry, and optional git worktree. Agents can communicate through a dedicated inter-agent message bus, while the main runtime itself is coordinated through the runtime store, typed `RuntimeEventBus` domains, and direct controller calls. The hook system fires lifecycle events on every tool call, git operation, LLM exchange, and more — and routes them to shell commands, HTTP endpoints, prompt-based handlers, or TypeScript modules.
 
 ---
 
@@ -72,15 +72,15 @@ The agent system runs subagents in-process, each with its own conversation histo
 - Background process indicator and live-tail modal
 
 ### Sidebar Panels
-- 30+ built-in panels across 5 categories: development, agent, monitoring, session, and ai
-- **Development**: File Explorer, File Preview, Git, Diff, Symbol Outline
-- **Agent**: Agent Inspector, Agent Logs, Plan Dashboard, WRFC Chain Viewer, Schedule, Ops Control, Ops Strategy, Forensics, Memory, Eval
-- **Monitoring**: Cost Tracker, Provider Stats, Provider Health, Token Budget, Debug, Transport, Security, Panel Resources, System Messages
-- **Session**: Session Browser, Docs
-- **AI**: Thinking, Tool Inspector, Context Visualizer, Replay, State Inspector
+- 28 built-in panel types across 5 categories: development, agent, monitoring, session, and ai
+- **Development**: Git, Diff, File Explorer, File Preview, Symbol Outline
+- **Agent**: Plan Dashboard, Agent Inspector, Agent Logs, WRFC Chain Viewer, Schedule, Ops Strategy, Ops Control, Memory
+- **Monitoring**: Cost Tracker, Provider Stats, Provider Health, Debug, Forensics, Policy, Eval, System Messages, Token Budget
+- **Session**: Session Browser, Docs, Panel List
+- **AI**: Thinking, Tool Inspector, Context Visualizer
 - Split-pane layout with top/bottom panes and resizable divider
 - Panel picker overlay (`Ctrl+P`) with category grouping and search
-- Toggle with `/panel` or keyboard shortcut
+- Layout control with `/panel open|move|focus|split|width|height` or the panel picker
 
 ### Session & Profile Management
 - JSONL session files with auto-save on every turn and crash recovery
@@ -150,8 +150,9 @@ Language intelligence powered by bundled LSP servers (TypeScript, Python, Bash, 
 - HTTP listener with bearer auth, rate limiting, and localhost enforcement
 
 ### Runtime Architecture
-- **Zustand vanilla store** — 19 domain slices (session, model, conversation, overlays, panels, permissions, tasks, agents, providerHealth, mcp, plugins, daemon, acp, integrations, telemetry, git, discovery, intelligence, uiPerf) as the single source of truth for all runtime state
-- **Runtime event system** — 12 domain event modules with discriminated unions, domain-scoped subscriptions, and immutable event envelopes with correlation IDs
+- **Zustand vanilla store** — 19 domain slices (session, model, conversation, overlays, panels, permissions, tasks, agents, providerHealth, mcp, plugins, daemon, acp, integrations, telemetry, git, discovery, intelligence, uiPerf) as the single source of truth for shared runtime state
+- **Typed runtime event system** — 17 domain event modules with discriminated unions, domain-scoped subscriptions, typed emitter wrappers, and immutable event envelopes with correlation IDs
+- **No legacy runtime bus** — the old `EventBus` runtime path has been removed; shell control flow now uses direct controller calls, typed runtime events, and store-driven rendering
 - **RuntimeHealthAggregator** — derives composite health from all domain slices; CascadeEngine applies 8 declarative cascade rules so degradation in one domain automatically affects dependent domains
 - **Phased tool executor** — 6-phase pipeline (validate → prehook → permission → execute → map → posthook) with AbortController cancellation and per-phase timeouts
 - **LayeredPolicyEvaluator** — 5-layer permission stack (safety → mode → session → policy → default) with 19 decision reason codes; safety layer is bypass-immune
@@ -630,7 +631,7 @@ Discover and introspect skills, agents, and tools.
 | `/git [action]` | `/g` | Git commands: status, log, diff. Opens git panel if no action given |
 | `/scan` | — | Scan for local LLM servers |
 | `/plan [task]` | — | Manage execution plans: create, list, or `show <id>` |
-| `/panel [action]` | `/panels` | Panel management: open, close, list, toggle, move, focus, split |
+| `/panel [action]` | `/panels` | Panel management: open, close, list, toggle, move, focus, split, width, height |
 | `/plugin [action]` | — | Manage plugins (enable/disable/reload/list) |
 | `/branch [name]` | `/br` | List conversation branches or switch to one |
 | `/fork [name]` | `/branch-save` | Save a named snapshot of the current conversation |
@@ -886,7 +887,7 @@ Plugins receive a sandboxed API with:
 - `registerCommand()` — add custom slash commands
 - `registerProvider()` — add OpenAI-compatible LLM providers
 - `registerTool()` — add custom tools available to the LLM
-- `onEvent()` — subscribe to EventBus events
+- `onEvent()` — subscribe to typed runtime events
 - `getConfig()` — read plugin-specific settings
 
 Manage via `/plugin enable|disable|reload|list`.
@@ -954,20 +955,24 @@ src/
 ├── acp/                 — Agent Client Protocol (subagent child processes)
 ├── discovery/           — Local LLM scanner + MCP server auto-discovery
 ├── runtime/
-│   ├── store/           — Zustand vanilla store with 19 domain slices and typed selectors
-│   ├── events/          — 12 domain event modules, RuntimeEventBus, typed emission wrappers
+│   ├── store/           — Zustand vanilla store with 19 domain slices, selectors, and dispatch paths
+│   ├── events/          — 17 typed event domains and RuntimeEventBus
+│   ├── emitters/        — Typed event emission wrappers
 │   ├── health/          — RuntimeHealthAggregator, CascadeEngine, partial degradation model
-│   ├── flags/           — 8 feature flags with enable/disable/kill lifecycle and audit log
-│   ├── executor/        — 6-phase phased tool executor with AbortController and per-phase timeouts
-│   ├── permissions/     — LayeredPolicyEvaluator, 5-layer stack, 19 decision reason codes
-│   ├── tasks/           — UnifiedTaskManager, 4 task adapters, retry with exponential backoff
-│   ├── notifications/   — NotificationRouter, 3-layer policy stack, batch collapsing
-│   ├── contracts/       — Schema versioning, MigrationRegistry, event validators (16)
-│   ├── otel/            — Lightweight tracer/meter, DomainBridge, ExportQueue, OtlpExporter
+│   ├── feature-flags/   — 8 feature flags with enable/disable/kill lifecycle and audit log
+│   ├── tools/           — 6-phase phased tool executor with AbortController and per-phase timeouts
+│   ├── permissions/     — LayeredPolicyEvaluator, normalization, rules, and decision reasons
+│   ├── tasks/           — Unified task management, adapters, retry, and lifecycle state
+│   ├── notifications/   — NotificationRouter, policy stack, formatters, and batching
+│   ├── contracts/       — Schema versioning, MigrationRegistry, and validators
+│   ├── telemetry/       — Lightweight tracing, exporters, and instrumentation
+│   ├── diagnostics/     — Diagnostics providers and inspector panels
+│   ├── forensics/       — Failure classification and forensic bundles
+│   ├── eval/            — Evaluation harness and scorecard logic
 │   ├── remote/          — ReconnectEngine, DurableIdentityManager, RemoteStateSyncer
-│   ├── compaction/      — 5 compaction strategies, resume repair pipeline
+│   ├── compaction/      — 5 compaction strategies and resume repair pipeline
 │   └── bootstrap.ts     — Composition root: typed initialization with dependency ordering
-├── panels/              — 20 sidebar panels (agent inspector, cost tracker, git, etc.)
+├── panels/              — 28 built-in sidebar panel types and panel-management UI
 ├── integrations/        — Discord, Slack, GitHub webhook integrations
 ├── export/              — Markdown, JSON, HTML session export with redaction
 ├── plugins/             — Plugin system (manifest, loader, sandboxed API)

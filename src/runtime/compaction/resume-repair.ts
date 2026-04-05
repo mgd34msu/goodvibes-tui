@@ -1,7 +1,7 @@
 /**
  * resume-repair.ts
  *
- * Session resume repair pipeline for the v2 compaction engine (v3 §4.10).
+ * Session resume repair pipeline for the compaction engine.
  *
  * When a session is resumed from a saved boundary commit, this pipeline
  * validates and repairs the compacted message list before it is handed

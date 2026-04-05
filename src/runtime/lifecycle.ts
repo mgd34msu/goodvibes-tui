@@ -4,40 +4,13 @@
  * Handles ordered teardown: persist session, fire lifecycle hooks,
  * stop background managers. Terminal teardown remains in main.ts.
  */
-import { getSessionManager } from '../sessions/manager.ts';
-import type { SessionMeta } from '../sessions/manager.ts';
 import { getHookDispatcher } from '../hooks/index.ts';
 import type { HookPhase, HookCategory, HookEventPath } from '../hooks/types.ts';
 import { ScheduleManager } from '../tools/workflow/index.ts';
 import { providerRegistry } from '../providers/registry.ts';
 import { logger } from '../utils/logger.ts';
-
-// ── Session persistence helpers ──────────────────────────────────────────────
-
-/**
- * Persist conversation messages to the user sessions store.
- * Non-fatal: logs on failure but does not throw.
- */
-export function saveSession(
-  sessionId: string,
-  data: { messages: object[]; timestamp?: number },
-  model: string,
-  provider: string,
-  title = '',
-): void {
-  try {
-    const sm = getSessionManager();
-    const meta: SessionMeta = {
-      title,
-      model,
-      provider,
-      timestamp: data.timestamp ?? Date.now(),
-    };
-    sm.save(sessionId, data.messages as Array<Record<string, unknown>>, meta);
-  } catch (e) {
-    logger.debug('saveSession failed', { error: String(e) });
-  }
-}
+export { saveSession } from './session-persistence.ts';
+import { saveSession } from './session-persistence.ts';
 
 // ── Startup lifecycle ────────────────────────────────────────────────────────
 

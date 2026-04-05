@@ -5,7 +5,7 @@
 import type { Line } from '../types/grid.ts';
 import { createStyledCell, createEmptyLine } from '../types/grid.ts';
 import { BasePanel } from './base-panel.ts';
-import type { EventBus } from '../core/event-bus.ts';
+import type { RuntimeEventBus } from '../runtime/events/index.ts';
 
 const C = {
   headerBg:     '#1a1a2e',
@@ -41,7 +41,7 @@ export class ContextVisualizerPanel extends BasePanel {
   private unsubs: Array<() => void> = [];
 
   constructor(
-    private bus: EventBus,
+    private runtimeBus: RuntimeEventBus,
     private getUsage?: () => { input: number; output: number; cacheRead: number; cacheWrite: number; model?: string },
     private contextLimit?: number,
   ) {
@@ -164,10 +164,10 @@ export class ContextVisualizerPanel extends BasePanel {
 
   private _attachBus(): void {
     if (this.unsubs.length > 0) return;
-    this.unsubs.push(this.bus.on('turn:complete', () => {
+    this.unsubs.push(this.runtimeBus.on('TURN_COMPLETED', () => {
       this._refresh();
     }));
-    this.unsubs.push(this.bus.on('turn:start', () => {
+    this.unsubs.push(this.runtimeBus.on('TURN_SUBMITTED', () => {
       this._refresh();
     }));
   }

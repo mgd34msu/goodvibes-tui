@@ -13,7 +13,7 @@ import { LayeredPolicyEvaluator } from '../../runtime/permissions/evaluator.ts';
 // Helpers
 // ---------------------------------------------------------------------------
 
-const PATH_TOOLS = ['read', 'write', 'edit', 'file_read', 'file_write', 'file_edit', 'find', 'glob', 'list_dir'] as const;
+const PATH_TOOLS = ['read', 'write', 'edit', 'find'] as const;
 
 function checkPath(toolName: string, path: string) {
   return runSafetyChecks(toolName, { path });

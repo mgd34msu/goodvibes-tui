@@ -1,7 +1,7 @@
 /**
  * SessionEvent — discriminated union covering all session lifecycle events.
  *
- * Maps to state machine events from v3 Section 4 (Session domain).
+ * Covers session lifecycle events for the runtime event bus.
  */
 
 export type SessionEvent =

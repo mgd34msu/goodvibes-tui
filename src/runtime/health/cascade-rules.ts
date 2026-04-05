@@ -1,6 +1,6 @@
 /**
  * Declarative cascade rules table for the goodvibes-tui runtime.
- * Based on v3 blueprint Section 23.1: Cross-Machine Error Propagation Model.
+ * Cross-machine error propagation rules.
  *
  * Each entry is pure data — adding a new cascade rule means adding a new object to this array.
  * The CascadeEngine consumes this table; no logic lives here.

@@ -6,6 +6,9 @@
  * - Open/closed indicator (● open, ○ closed)
  * - Search/filter by typing
  * - Grouped by category
+ * - `T` / `B` to place a panel in the top/bottom pane
+ * - `M` to move an open panel to the other pane
+ * - `S` to toggle the split and Tab to switch pane focus
  *
  * Open via /panel list.
  */
@@ -33,6 +36,8 @@ const C = {
   search:      '#f97316',
   searchBg:    '#1e293b',
   dim:         '#334155',
+  paneTop:     '#38bdf8',
+  paneBottom:  '#a78bfa',
 } as const;
 
 const CATEGORY_ORDER: PanelCategory[] = ['development', 'agent', 'monitoring', 'session', 'ai'];
@@ -145,6 +150,47 @@ export class PanelListPanel extends BasePanel {
       return true;
     }
 
+    if (key === 'T' || key === 'B') {
+      const selectedPanel = this._getSelectedPanelEntry(entries);
+      if (selectedPanel) {
+        const pane = key === 'T' ? 'top' : 'bottom';
+        try {
+          const pm = getPanelManager();
+          pm.open(selectedPanel.reg.id, pane);
+          pm.show();
+        } catch (err) {
+          console.debug('[panel-list] failed to place panel:', err);
+        }
+        this.markDirty();
+      }
+      return true;
+    }
+
+    if (key === 'M') {
+      const selectedPanel = this._getSelectedPanelEntry(entries);
+      if (selectedPanel) {
+        try {
+          getPanelManager().moveToOtherPane(selectedPanel.reg.id);
+        } catch (err) {
+          console.debug('[panel-list] failed to move panel:', err);
+        }
+        this.markDirty();
+      }
+      return true;
+    }
+
+    if (key === 'S') {
+      getPanelManager().toggleBottomPane();
+      this.markDirty();
+      return true;
+    }
+
+    if (key === 'tab') {
+      getPanelManager().togglePaneFocus();
+      this.markDirty();
+      return true;
+    }
+
     // Search: backspace
     if (key === 'backspace' || key === 'delete') {
       if (this._query.length > 0) {
@@ -210,6 +256,7 @@ export class PanelListPanel extends BasePanel {
     if (entries.length === 0) {
       lines.push(buildLine(width, [[' No panels match filter.', C.hint]]));
       while (lines.length < height) lines.push(createEmptyLine(width));
+      if (lines.length > height) lines.length = height;
       this.reportRenderDuration(Date.now() - start);
       return lines;
     }
@@ -218,7 +265,10 @@ export class PanelListPanel extends BasePanel {
     this._clampScroll(entries, bodyHeight);
 
     const visible = entries.slice(this._scrollOffset, this._scrollOffset + bodyHeight);
-    const openIds = new Set(getPanelManager().getAllOpen().map(p => p.id));
+    const pm = getPanelManager();
+    const topIds = new Set(pm.getTopPane().panels.map(p => p.id));
+    const bottomIds = new Set(pm.getBottomPane().panels.map(p => p.id));
+    const focusedPane = pm.getFocusedPane();
 
     for (const entry of visible) {
       if (entry.kind === 'header') {
@@ -227,10 +277,11 @@ export class PanelListPanel extends BasePanel {
       } else {
         const flatIdx = this._flatPanelIndex(entries, entry.reg.id);
         const isSelected = flatIdx === this._selectedIndex;
-        const isOpen = openIds.has(entry.reg.id);
         const bg = isSelected ? C.selectedBg : '';
-        const dot = isOpen ? '●' : '○';
-        const dotColor = isOpen ? C.openDot : C.closedDot;
+        const isTopOpen = topIds.has(entry.reg.id);
+        const isBottomOpen = bottomIds.has(entry.reg.id);
+        const dot = isTopOpen || isBottomOpen ? '●' : '○';
+        const dotColor = isTopOpen || isBottomOpen ? C.openDot : C.closedDot;
         const arrow = isSelected ? '▶' : ' ';
         const nameColor = isSelected ? C.selected : C.name;
         const nameStr = entry.reg.name.padEnd(NAME_COL_WIDTH, ' ').slice(0, NAME_COL_WIDTH);
@@ -238,12 +289,27 @@ export class PanelListPanel extends BasePanel {
         const descWidth = Math.max(1, width - descStartCol);
         const fullDesc = entry.reg.description;
         const descLines = wordWrap(fullDesc, descWidth);
+        const paneBadge =
+          isTopOpen && isBottomOpen ? '2' :
+          isTopOpen ? 'T' :
+          isBottomOpen ? 'B' :
+          ' ';
+        const paneBadgeColor =
+          isTopOpen && isBottomOpen ? C.selected :
+          isTopOpen ? C.paneTop :
+          isBottomOpen ? C.paneBottom :
+          C.dim;
+        const focusBadge =
+          (isTopOpen && focusedPane === 'top') || (isBottomOpen && focusedPane === 'bottom')
+            ? '*'
+            : ' ';
 
         // Line 1: prefix + name + first chunk of description
         lines.push(buildLine(width, [
           [arrow,            C.selIcon, bg],
           [dot,              dotColor,  bg],
-          [' ',              '',        bg],
+          [paneBadge,        paneBadgeColor, bg],
+          [focusBadge,       C.selected, bg],
           [nameStr + ' ',    nameColor, bg],
           [descLines[0] ?? '', C.desc,  bg],
         ]));
@@ -261,11 +327,12 @@ export class PanelListPanel extends BasePanel {
 
     // Hint line
     const panelEntries = entries.filter(e => e.kind === 'panel');
-    const hintText = ` [${this._selectedIndex + 1}/${panelEntries.length}] ↑/↓ nav  Enter open  type to filter`;
+    const hintText = ` [${this._selectedIndex + 1}/${panelEntries.length}] ↑/↓ nav  Enter open  T/B place  M move  S split  Tab focus`;
     while (lines.length < height - 1) lines.push(createEmptyLine(width));
     lines.push(buildLine(width, [[hintText.slice(0, width), C.hint]]));
 
     while (lines.length < height) lines.push(createEmptyLine(width));
+    if (lines.length > height) lines.length = height;
     this.reportRenderDuration(Date.now() - start);
     return lines;
   }

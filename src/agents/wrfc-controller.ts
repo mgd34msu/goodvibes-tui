@@ -1,7 +1,6 @@
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { WrfcWorkmap } from './wrfc-workmap.ts';
-import { EventBus } from '../core/event-bus.ts';
 import { AgentManager, type AgentRecord } from '../tools/agent/index.ts';
 import { type CompletionReport, type ReviewerReport, parseCompletionReport } from './completion-report.ts';
 import type { WrfcChain, WrfcState, QualityGateResult, QueuedChain } from './wrfc-types.ts';
@@ -9,6 +8,28 @@ import { AgentWorktree } from './worktree.ts';
 import { configManager } from '../config/index.ts';
 import { logger } from '../utils/logger.ts';
 import { planManager } from '../core/plan-manager-instance.ts';
+import type { AgentEvent, RuntimeEventBus } from '../runtime/events/index.ts';
+import {
+  emitWorkflowAutoCommitted,
+  emitWorkflowCascadeAborted,
+  emitWorkflowChainCreated,
+  emitWorkflowChainFailed,
+  emitWorkflowChainPassed,
+  emitWorkflowFixAttempted,
+  emitWorkflowGateResult,
+  emitWorkflowReviewCompleted,
+  emitWorkflowStateChanged,
+} from '../runtime/emitters/index.ts';
+
+type AgentManagerLike = Pick<AgentManager, 'spawn' | 'getStatus' | 'list' | 'cancel' | 'listByCohort' | 'clear'>;
+
+let agentManagerResolver: () => AgentManagerLike = () => AgentManager.getInstance();
+
+export function _setWrfcAgentManagerResolverForTest(
+  resolver: (() => AgentManagerLike) | null,
+): void {
+  agentManagerResolver = resolver ?? (() => AgentManager.getInstance());
+}
 
 /**
  * WrfcController — Event-driven state machine for automated WRFC chains.
@@ -115,6 +136,11 @@ const VALID_TRANSITIONS: Partial<Record<WrfcState, WrfcState[]>> = {
 
 /** Maximum number of concurrently active (non-terminal) WRFC chains. */
 const MAX_ACTIVE_CHAINS = 6;
+const CHAIN_CLEANUP_DELAY_MS = 60_000;
+const GATE_TIMEOUT_MS = 120_000;
+
+type WorkflowContext = { sessionId: string; traceId: string; source: string };
+type RuntimeEventSource = Extract<AgentEvent['type'], 'AGENT_COMPLETED' | 'AGENT_FAILED'>;
 
 // ---------------------------------------------------------------------------
 // WrfcController
@@ -124,7 +150,6 @@ export class WrfcController {
   private static instance: WrfcController | null = null;
   private chains = new Map<string, WrfcChain>();
   private chainQueue: QueuedChain[] = [];
-  private eventBus: EventBus;
   private unsubscribers: Array<() => void> = [];
   /** Counter of currently active (non-terminal) chains — avoids linear scan on every spawn. */
   private activeChainCount = 0;
@@ -132,9 +157,10 @@ export class WrfcController {
   private pendingParentChainIds = new Map<string, string>();
   private sessionId: string;
   private workmap: WrfcWorkmap;
+  private runtimeBus: RuntimeEventBus;
 
-  private constructor(eventBus: EventBus) {
-    this.eventBus = eventBus;
+  private constructor(runtimeBus: RuntimeEventBus) {
+    this.runtimeBus = runtimeBus;
     this.sessionId = crypto.randomUUID().slice(0, 8);
     this.workmap = new WrfcWorkmap(this.sessionId);
     this.setupListeners();
@@ -144,10 +170,18 @@ export class WrfcController {
   // Singleton
   // ---------------------------------------------------------------------------
 
-  static getInstance(eventBus?: EventBus): WrfcController {
+  static initialize(runtimeBus: RuntimeEventBus): WrfcController {
     if (!WrfcController.instance) {
-      if (!eventBus) throw new Error('WrfcController requires EventBus on first initialization');
-      WrfcController.instance = new WrfcController(eventBus);
+      WrfcController.instance = new WrfcController(runtimeBus);
+    } else {
+      WrfcController.instance.setRuntimeBus(runtimeBus);
+    }
+    return WrfcController.instance;
+  }
+
+  static getInstance(): WrfcController {
+    if (!WrfcController.instance) {
+      throw new Error('WrfcController must be initialized before use');
     }
     return WrfcController.instance;
   }
@@ -177,87 +211,37 @@ export class WrfcController {
     const activeCount = this.activeChainCount;
 
     if (activeCount >= MAX_ACTIVE_CHAINS) {
-      // Enqueue and return a placeholder pending chain
-      const id = this.generateWrfcId();
-      const chain: WrfcChain = {
-        id,
-        state: 'pending',
-        task: engineerRecord.task,
-        engineerAgentId: engineerRecord.id,
-        allAgentIds: [engineerRecord.id],
-        fixAttempts: 0,
-        reviewCycles: 0,
-        gateRetryDepth: 0,
-        reviewScores: [],
-        createdAt: Date.now(),
-      };
-      this.chains.set(id, chain);
-      engineerRecord.wrfcId = id;
-
-      // Check if a parent chain was pre-registered for this agent
-      const pendingParentId = this.pendingParentChainIds.get(engineerRecord.id);
-      if (pendingParentId) {
-        chain.parentChainId = pendingParentId;
-        const parent = this.chains.get(pendingParentId);
-        if (parent) chain.gateRetryDepth = parent.gateRetryDepth + (parent.gateFailureFingerprint ? 1 : 0);
-        this.pendingParentChainIds.delete(engineerRecord.id);
-      }
-
+      const chain = this.createBaseChain(engineerRecord);
       this.chainQueue.push({ record: engineerRecord, queuedAt: Date.now() });
 
       logger.debug('WrfcController.createChain: at cap, queued', {
-        chainId: id,
+        chainId: chain.id,
         agentId: engineerRecord.id,
         activeCount,
         queueLength: this.chainQueue.length,
       });
 
-      this.eventBus.emit('wrfc:chain-created', { chainId: id, task: chain.task });
+      this.emitChainCreated(chain.id, chain.task);
       return chain;
     }
 
-    const id = this.generateWrfcId();
+    const chain = this.createBaseChain(engineerRecord);
+    this.startEngineeringChain(chain, true);
 
-    const chain: WrfcChain = {
-      id,
-      state: 'pending',
-      task: engineerRecord.task,
-      engineerAgentId: engineerRecord.id,
-      allAgentIds: [engineerRecord.id],
-      fixAttempts: 0,
-      reviewCycles: 0,
-      gateRetryDepth: 0,
-      reviewScores: [],
-      createdAt: Date.now(),
-    };
-
-    this.chains.set(id, chain);
-
-    // Link the agent record to this chain
-    engineerRecord.wrfcId = id;
-
-    // Check if a parent chain was pre-registered for this agent
-    const pendingParentId = this.pendingParentChainIds.get(engineerRecord.id);
-    if (pendingParentId) {
-      chain.parentChainId = pendingParentId;
-      const parent = this.chains.get(pendingParentId);
-      if (parent) chain.gateRetryDepth = parent.gateRetryDepth + (parent.gateFailureFingerprint ? 1 : 0);
-      this.pendingParentChainIds.delete(engineerRecord.id);
-    }
-
-    // Transition immediately to 'engineering'
-    this.activeChainCount++;
-    this.transition(chain, 'engineering');
-
-    this.eventBus.emit('wrfc:chain-created', { chainId: id, task: chain.task });
-
-    logger.debug('WrfcController.createChain', { chainId: id, agentId: engineerRecord.id });
+    logger.debug('WrfcController.createChain', { chainId: chain.id, agentId: engineerRecord.id });
     return chain;
   }
 
   getSessionId(): string { return this.sessionId; }
 
   getWorkmap(): WrfcWorkmap { return this.workmap; }
+
+  setRuntimeBus(runtimeBus: RuntimeEventBus): void {
+    for (const unsub of this.unsubscribers) unsub();
+    this.unsubscribers = [];
+    this.runtimeBus = runtimeBus;
+    this.setupListeners();
+  }
 
   getChain(chainId: string): WrfcChain | null {
     return this.chains.get(chainId) ?? null;
@@ -294,7 +278,7 @@ export class WrfcController {
     const from = chain.state;
     chain.state = to;
 
-    this.eventBus.emit('wrfc:state-changed', { chainId: chain.id, from, to });
+    emitWorkflowStateChanged(this.runtimeBus, this.workflowContext(chain.id), { chainId: chain.id, from, to });
     logger.debug('WrfcController.transition', { chainId: chain.id, from, to });
   }
 
@@ -303,21 +287,25 @@ export class WrfcController {
   // ---------------------------------------------------------------------------
 
   private setupListeners(): void {
-    const onComplete = ({ id }: { id: string; result: unknown }) => {
-      this.onAgentComplete(id).catch((err) => {
+    const onComplete = (agentId: string) => {
+      this.onAgentComplete(agentId).catch((err) => {
         logger.error('WrfcController.onAgentComplete unhandled error', {
-          agentId: id,
+          agentId,
           error: String(err),
         });
       });
     };
 
-    const onError = ({ id, error }: { id: string; error: Error }) => {
-      this.onAgentFailed(id, error.message);
+    const onError = (agentId: string, errorMessage: string) => {
+      this.onAgentFailed(agentId, errorMessage);
     };
 
-    const unsubComplete = this.eventBus.on('subagent:complete', onComplete);
-    const unsubError = this.eventBus.on('subagent:error', onError);
+    const unsubComplete = this.runtimeBus.on<Extract<AgentEvent, { type: 'AGENT_COMPLETED' }>>('AGENT_COMPLETED', ({ payload }) => {
+      onComplete(payload.agentId);
+    });
+    const unsubError = this.runtimeBus.on<Extract<AgentEvent, { type: 'AGENT_FAILED' }>>('AGENT_FAILED', ({ payload }) => {
+      onError(payload.agentId, payload.error);
+    });
 
     this.unsubscribers.push(unsubComplete, unsubError);
   }
@@ -330,7 +318,7 @@ export class WrfcController {
     }
 
     // Get the full output from AgentManager
-    const record = AgentManager.getInstance().getStatus(agentId);
+    const record = agentManagerResolver().getStatus(agentId);
     const rawOutput = record?.fullOutput ?? '';
 
     logger.debug('WrfcController.onAgentComplete', {
@@ -351,57 +339,10 @@ export class WrfcController {
     }
 
     if (chain.state === 'engineering' || chain.state === 'fixing') {
-      // Engineer or fixer completed — parse report and start review
-      let report = parseCompletionReport(rawOutput);
-
-      if (!report) {
-        // Construct a minimal GenericReport from raw output
-        report = {
-          version: 1,
-          archetype: record?.template ?? 'engineer',
-          summary: rawOutput.slice(0, 500) || '(no output)',
-          result: rawOutput,
-        } as CompletionReport;
-      }
-
-      if (chain.state === 'engineering') {
-        chain.engineerReport = report;
-        this.workmap.append({ ts: new Date().toISOString(), wrfcId: chain.id, event: 'engineer_complete', agentId, task: chain.task });
-      }
-
-      this.startReview(chain, report);
+      const report = this.parseEngineerCompletionReport(rawOutput, record?.template);
+      this.handleEngineerCompletion(chain, agentId, report);
     } else if (chain.state === 'reviewing') {
-      // Reviewer completed — parse review report and process
-      let reviewerReport = parseCompletionReport(rawOutput);
-
-      if (!reviewerReport || reviewerReport.archetype !== 'reviewer') {
-        // Try to extract score from unstructured text before defaulting to 0
-        const extractedScore = extractScoreFromText(rawOutput);
-        const threshold = configManager.get('wrfc.scoreThreshold') as number;
-        const extractedPassed = extractedScore !== null
-          ? extractPassedFromText(rawOutput, extractedScore, threshold)
-          : false;
-        const extractedIssues = extractIssuesFromText(rawOutput);
-
-        logger.warn('WrfcController: no structured ReviewerReport found, extracting from text', {
-          chainId: chain.id,
-          extractedScore,
-        });
-        if (extractedScore === null) {
-          logger.warn('WrfcController: score extraction returned null, defaulting to 0', { chainId: chain.id });
-        }
-        reviewerReport = {
-          version: 1,
-          archetype: 'reviewer',
-          summary: rawOutput.slice(0, 500) || '(no reviewer output)',
-          score: extractedScore ?? 0,
-          passed: extractedPassed,
-          dimensions: [],
-          issues: extractedIssues,
-        };
-      }
-
-      const narrowedReport = reviewerReport as ReviewerReport;
+      const narrowedReport = this.parseReviewerCompletionReport(chain, rawOutput);
       chain.reviewerReport = narrowedReport;
       chain.reviewCycles += 1;
 
@@ -450,41 +391,7 @@ export class WrfcController {
 
   private startReview(chain: WrfcChain, report: CompletionReport): void {
     this.transition(chain, 'reviewing');
-
-    const threshold = configManager.get('wrfc.scoreThreshold') as number;
-
-    const reviewTask = [
-      `WRFC Review Request`,
-      `Chain ID: ${chain.id}`,
-      ``,
-      `Engineer completion report:`,
-      `\`\`\`json`,
-      JSON.stringify(report, null, 2),
-      `\`\`\``,
-      ``,
-      `Instructions:`,
-      `1. Read all files listed in the engineer report (filesCreated, filesModified).`,
-      `2. Verify the implementation meets all stated requirements.`,
-      `3. Score the implementation using the 10-dimension review rubric.`,
-      `4. The passing score threshold is ${threshold}/10.`,
-      `5. Return a structured ReviewerReport JSON block in your final response.`,
-      ``,
-      `The ReviewerReport must include:`,
-      `- version: 1`,
-      `- archetype: "reviewer"`,
-      `- score: <number 0-10>`,
-      `- passed: <boolean>`,
-      `- dimensions: array of { name, score, maxScore, issues[] }`,
-      `- issues: array of { severity, description, file?, line?, pointValue }`,
-    ].join('\n');
-
-    const manager = AgentManager.getInstance();
-    const reviewerRecord = manager.spawn({
-      mode: 'spawn',
-      task: reviewTask,
-      template: 'reviewer',
-      dangerously_disable_wrfc: true,
-    });
+    const reviewerRecord = this.spawnWrfcAgent('reviewer', this.buildReviewTask(chain, report), true);
 
     chain.reviewerAgentId = reviewerRecord.id;
     chain.allAgentIds.push(reviewerRecord.id);
@@ -499,7 +406,7 @@ export class WrfcController {
   private async processReview(chain: WrfcChain, review: ReviewerReport): Promise<void> {
     const threshold = configManager.get('wrfc.scoreThreshold') as number;
 
-    this.eventBus.emit('wrfc:review-complete', {
+    emitWorkflowReviewCompleted(this.runtimeBus, this.workflowContext(chain.id), {
       chainId: chain.id,
       score: review.score,
       passed: review.passed,
@@ -531,10 +438,10 @@ export class WrfcController {
         const initial = scores[0];
         const last2 = scores.slice(-2);
         if (last2[0] < initial && last2[1] < initial) {
-          this.eventBus.emit('wrfc:cascade-abort', {
-            chainId: chain.id,
-            reason: `Score regression warning: initial ${initial}/10, last two ${last2[0]}/10, ${last2[1]}/10 — both below initial. Fix quality may be degrading.`,
-          });
+          this.emitCascadeAbort(
+            chain.id,
+            `Score regression warning: initial ${initial}/10, last two ${last2[0]}/10, ${last2[1]}/10 — both below initial. Fix quality may be degrading.`,
+          );
         }
       }
 
@@ -560,46 +467,14 @@ export class WrfcController {
     chain.fixAttempts += 1;
     this.transition(chain, 'fixing');
 
-    const threshold = configManager.get('wrfc.scoreThreshold') as number;
-
-    this.eventBus.emit('wrfc:fix-attempt', {
+    const maxAttempts = configManager.get('wrfc.maxFixAttempts') as number;
+    emitWorkflowFixAttempted(this.runtimeBus, this.workflowContext(chain.id), {
       chainId: chain.id,
       attempt: chain.fixAttempts,
-      maxAttempts: configManager.get('wrfc.maxFixAttempts') as number,
+      maxAttempts,
     });
 
-    const issueList = review.issues
-      .map((issue) => {
-        const location = issue.file ? ` (${issue.file}${issue.line ? `:${issue.line}` : ''})` : '';
-        return `- [${issue.severity.toUpperCase()}] ${issue.description}${location} (-${issue.pointValue} pts)`;
-      })
-      .join('\n');
-
-    const fixTask = [
-      `WRFC Fix Request`,
-      `Chain ID: ${chain.id}`,
-      ``,
-      `Review score: ${review.score}/10 (threshold: ${threshold}/10)`,
-      `Fix attempt: ${chain.fixAttempts}`,
-      ``,
-      `Issues to address:`,
-      issueList || '(no structured issues — see review summary)',
-      ``,
-      `Review summary: ${review.summary}`,
-      ``,
-      `Instructions:`,
-      `1. Address ALL issues listed above, prioritizing critical and major items.`,
-      `2. Fix each issue completely — partial fixes will reduce your score.`,
-      `3. Return a structured EngineerReport JSON block in your final response.`,
-    ].join('\n');
-
-    const manager = AgentManager.getInstance();
-    const fixerRecord = manager.spawn({
-      mode: 'spawn',
-      task: fixTask,
-      template: 'engineer',
-      dangerously_disable_wrfc: true,
-    });
+    const fixerRecord = this.spawnWrfcAgent('engineer', this.buildFixTask(chain, review), true);
 
     chain.fixerAgentId = fixerRecord.id;
     chain.allAgentIds.push(fixerRecord.id);
@@ -621,8 +496,7 @@ export class WrfcController {
   private async runGates(chain: WrfcChain): Promise<QualityGateResult[]> {
     this.transition(chain, 'gating');
 
-    const wrfcConfig = configManager.getCategory('wrfc');
-    const gates = (wrfcConfig.gates ?? []).filter((g) => g.enabled);
+    const gates = this.getEnabledGates();
 
     logger.debug('WrfcController.runGates', {
       chainId: chain.id,
@@ -631,45 +505,12 @@ export class WrfcController {
 
     // Read package.json once for script-based gate checks
     const cwd = process.cwd();
-    let pkgScripts: Record<string, string> = {};
-    const pkgPath = join(cwd, 'package.json');
-    if (existsSync(pkgPath)) {
-      try {
-        const pkgJson = JSON.parse(await Bun.file(pkgPath).text()) as { scripts?: Record<string, string> };
-        pkgScripts = pkgJson.scripts ?? {};
-      } catch {
-        // Malformed package.json — treat as no scripts
-      }
-    }
+    const pkgScripts = await this.loadPackageScripts(cwd);
 
     const results: QualityGateResult[] = [];
-    const GATE_TIMEOUT_MS = 120_000;
 
     for (const gate of gates) {
-      // Gate auto-detection: skip gates whose required config files are absent
-      let skipReason: string | null = null;
-
-      if (gate.name === 'typecheck') {
-        if (!existsSync(join(cwd, 'tsconfig.json'))) {
-          skipReason = 'Skipped: no tsconfig.json found';
-        }
-      } else if (gate.name === 'lint') {
-        const lintConfigs = [
-          'eslint.config.js', 'eslint.config.mjs', 'eslint.config.cjs', 'eslint.config.ts',
-          '.eslintrc.json', '.eslintrc.js', '.eslintrc.yml', '.eslintrc.yaml', '.eslintrc',
-        ];
-        if (!lintConfigs.some((f) => existsSync(join(cwd, f)))) {
-          skipReason = 'Skipped: no ESLint config found';
-        }
-      } else if (gate.name === 'test') {
-        if (!pkgScripts['test']) {
-          skipReason = 'Skipped: no test script in package.json';
-        }
-      } else if (gate.name === 'build') {
-        if (!pkgScripts['build']) {
-          skipReason = 'Skipped: no build script in package.json';
-        }
-      }
+      const skipReason = this.getSkippedGateReason(gate.name, cwd, pkgScripts);
 
       if (skipReason !== null) {
         const result: QualityGateResult = {
@@ -680,11 +521,7 @@ export class WrfcController {
         };
         results.push(result);
         chain.gateResults = results.slice();
-        this.eventBus.emit('wrfc:gate-result', {
-          chainId: chain.id,
-          gate: gate.name,
-          passed: true,
-        });
+        this.emitGateResult(chain.id, gate.name, true);
         logger.debug('WrfcController.gate-skipped', {
           chainId: chain.id,
           gate: gate.name,
@@ -697,36 +534,7 @@ export class WrfcController {
       let passed = false;
       let output = '';
 
-      try {
-        const proc = Bun.spawn(['/bin/sh', '-c', gate.command], {
-          stdout: 'pipe',
-          stderr: 'pipe',
-        });
-
-        // Timeout: kill process after 120s
-        const timer = setTimeout(() => {
-          try { proc.kill(); } catch { /* already exited */ }
-        }, GATE_TIMEOUT_MS);
-
-        let exitCode: number;
-        try {
-          exitCode = await proc.exited;
-          clearTimeout(timer);
-        } catch (err) {
-          clearTimeout(timer);
-          try { proc.kill(); } catch { /* already dead */ }
-          throw err;
-        }
-
-        const stdout = await new Response(proc.stdout).text();
-        const stderr = await new Response(proc.stderr).text();
-        output = [stdout, stderr].filter(Boolean).join('\n').trim();
-
-        passed = exitCode === 0;
-      } catch (err) {
-        output = err instanceof Error ? err.message : String(err);
-        passed = false;
-      }
+      ({ passed, output } = await this.executeGateCommand(gate.command));
 
       const durationMs = Date.now() - startedAt;
       const result: QualityGateResult = {
@@ -739,11 +547,7 @@ export class WrfcController {
       results.push(result);
       chain.gateResults = results.slice();
 
-      this.eventBus.emit('wrfc:gate-result', {
-        chainId: chain.id,
-        gate: gate.name,
-        passed,
-      });
+      this.emitGateResult(chain.id, gate.name, passed);
 
       logger.debug('WrfcController.gate-result', {
         chainId: chain.id,
@@ -767,21 +571,14 @@ export class WrfcController {
       this.workmap.append({ ts: new Date().toISOString(), wrfcId: chain.id, event: 'gate_result', gate: r.gate, passed: r.passed, gateOutput: r.output.slice(0, 200) });
     }
 
-    if (allPassed) {
-      this.workmap.append({ ts: new Date().toISOString(), wrfcId: chain.id, event: 'chain_passed' });
-      chain.gatesPassed = true;
-      if (autoCommit) {
-        await this.autoCommit(chain);
-      } else {
-        this.activeChainCount = Math.max(0, this.activeChainCount - 1);
-        this.transition(chain, 'passed');
-        this.eventBus.emit('wrfc:chain-passed', { chainId: chain.id });
-        chain.completedAt = Date.now();
-        this.scheduleChainCleanup(chain);
-        this.dequeueNext().catch((err) => {
-          logger.error('WrfcController.dequeueNext unhandled error', { error: String(err) });
-        });
-      }
+      if (allPassed) {
+        this.workmap.append({ ts: new Date().toISOString(), wrfcId: chain.id, event: 'chain_passed' });
+        chain.gatesPassed = true;
+        if (autoCommit) {
+          await this.autoCommit(chain);
+        } else {
+        this.completeChainAsPassed(chain);
+        }
     } else {
       // Gate(s) failed — this chain's review passed, but we spawn a new engineer
       // chain (without dangerously_disable_wrfc) to address the gate failures.
@@ -799,14 +596,7 @@ export class WrfcController {
       // Store fingerprint on current chain before transitioning
       chain.gateFailureFingerprint = fingerprint;
 
-      this.activeChainCount = Math.max(0, this.activeChainCount - 1);
-      this.transition(chain, 'passed');
-      this.eventBus.emit('wrfc:chain-passed', { chainId: chain.id });
-      chain.completedAt = Date.now();
-      this.scheduleChainCleanup(chain);
-      this.dequeueNext().catch((err) => {
-        logger.error('WrfcController.dequeueNext unhandled error', { error: String(err) });
-      });
+      this.completeChainAsPassed(chain);
 
       if (chain.gateRetryDepth >= maxGateRetries) {
         // Hard cap on gate retries reached — fail, don't spawn more agents
@@ -814,10 +604,10 @@ export class WrfcController {
           'WrfcController.processGateResults: gate retry limit reached, manual intervention required',
           { chainId: chain.id, gateRetryDepth: chain.gateRetryDepth, maxGateRetries }
         );
-        this.eventBus.emit('wrfc:cascade-abort', {
-          chainId: chain.id,
-          reason: `Gate failures exceeded max retries (${chain.gateRetryDepth}/${maxGateRetries}). Manual intervention required.`,
-        });
+        this.emitCascadeAbort(
+          chain.id,
+          `Gate failures exceeded max retries (${chain.gateRetryDepth}/${maxGateRetries}). Manual intervention required.`,
+        );
         return;
       }
 
@@ -840,17 +630,8 @@ export class WrfcController {
         `3. Return a structured EngineerReport in your final response.`,
       ].join('\n');
 
-      const manager = AgentManager.getInstance();
-      // Register parent chain ID — handles both sync createChain (during spawn) and async createChain (after spawn)
       const parentChainIdForFollowUp = chain.id;
-
-      // We don't know the follow-up record's ID yet — register after spawn
-      const followUpRecord = manager.spawn({
-        mode: 'spawn',
-        task: followUpTask,
-        template: 'engineer',
-        // No dangerously_disable_wrfc — gets its own full WRFC chain
-      });
+      const followUpRecord = this.spawnWrfcAgent('engineer', followUpTask, false);
 
       // If createChain was called synchronously during spawn, the chain already exists.
       // Otherwise, pre-register so createChain will pick up the parent when called.
@@ -877,7 +658,7 @@ export class WrfcController {
       if (chain.state === 'passed' || chain.state === 'failed') {
         this.chains.delete(chain.id);
       }
-    }, 60_000);
+    }, CHAIN_CLEANUP_DELAY_MS);
   }
 
   private async checkAndRunGatesForAll(): Promise<void> {
@@ -942,15 +723,8 @@ export class WrfcController {
     // Check if project is a git repo before attempting worktree operations
     if (!existsSync(join(process.cwd(), '.git'))) {
       logger.debug('WrfcController.autoCommit: not a git repo, skipping commit', { chainId: chain.id });
-      this.activeChainCount = Math.max(0, this.activeChainCount - 1);
       // No actual commit — intentionally skip wrfc:auto-commit event (commit didn't happen)
-      this.transition(chain, 'passed');
-      chain.completedAt = Date.now();
-      this.eventBus.emit('wrfc:chain-passed', { chainId: chain.id });
-      this.scheduleChainCleanup(chain);
-      this.dequeueNext().catch((err) => {
-        logger.error('WrfcController.dequeueNext unhandled error', { error: String(err) });
-      });
+      this.completeChainAsPassed(chain);
       return;
     }
 
@@ -959,16 +733,8 @@ export class WrfcController {
     try {
       const merged = await worktree.merge(agentId);
 
-      this.activeChainCount = Math.max(0, this.activeChainCount - 1);
-      this.transition(chain, 'passed');
-      chain.completedAt = Date.now();
-      this.scheduleChainCleanup(chain);
-
-      this.eventBus.emit('wrfc:auto-commit', { chainId: chain.id });
-      this.eventBus.emit('wrfc:chain-passed', { chainId: chain.id });
-      this.dequeueNext().catch((err) => {
-        logger.error('WrfcController.dequeueNext unhandled error', { error: String(err) });
-      });
+      this.emitAutoCommitted(chain.id);
+      this.completeChainAsPassed(chain);
 
       logger.debug('WrfcController.autoCommit: success', {
         chainId: chain.id,
@@ -1019,15 +785,12 @@ export class WrfcController {
 
     this.workmap.append({ ts: new Date().toISOString(), wrfcId: chain.id, event: 'chain_failed', reason });
 
-    this.eventBus.emit('wrfc:chain-failed', { chainId: chain.id, reason });
+    emitWorkflowChainFailed(this.runtimeBus, this.workflowContext(chain.id), { chainId: chain.id, reason });
 
     logger.error('WrfcController.failChain', { chainId: chain.id, reason });
 
     this.scheduleChainCleanup(chain);
-
-    this.dequeueNext().catch((err) => {
-      logger.error('WrfcController.dequeueNext unhandled error', { error: String(err) });
-    });
+    this.safeDequeueNext();
   }
 
   // ---------------------------------------------------------------------------
@@ -1059,8 +822,7 @@ export class WrfcController {
       waitedMs: Date.now() - queued.queuedAt,
     });
 
-    this.activeChainCount++;
-    this.transition(chain, 'engineering');
+    this.startEngineeringChain(chain, false);
 
     // Process any buffered completion from while the chain was queued
     if (chain.bufferedCompletion) {
@@ -1085,5 +847,273 @@ export class WrfcController {
 
   private generateWrfcId(): string {
     return `wrfc-${crypto.randomUUID().slice(0, 8)}`;
+  }
+
+  private workflowContext(chainId: string): WorkflowContext {
+    return {
+      sessionId: this.sessionId,
+      traceId: `${this.sessionId}:workflow:${chainId}`,
+      source: 'wrfc-controller',
+    };
+  }
+
+  private createBaseChain(engineerRecord: AgentRecord): WrfcChain {
+    const chain: WrfcChain = {
+      id: this.generateWrfcId(),
+      state: 'pending',
+      task: engineerRecord.task,
+      engineerAgentId: engineerRecord.id,
+      allAgentIds: [engineerRecord.id],
+      fixAttempts: 0,
+      reviewCycles: 0,
+      gateRetryDepth: 0,
+      reviewScores: [],
+      createdAt: Date.now(),
+    };
+    this.chains.set(chain.id, chain);
+    engineerRecord.wrfcId = chain.id;
+    this.attachPendingParentChain(chain, engineerRecord.id);
+    return chain;
+  }
+
+  private attachPendingParentChain(chain: WrfcChain, agentId: string): void {
+    const pendingParentId = this.pendingParentChainIds.get(agentId);
+    if (!pendingParentId) return;
+    chain.parentChainId = pendingParentId;
+    const parent = this.chains.get(pendingParentId);
+    if (parent) {
+      chain.gateRetryDepth = parent.gateRetryDepth + (parent.gateFailureFingerprint ? 1 : 0);
+    }
+    this.pendingParentChainIds.delete(agentId);
+  }
+
+  private startEngineeringChain(chain: WrfcChain, emitCreated: boolean): void {
+    this.activeChainCount++;
+    this.transition(chain, 'engineering');
+    if (emitCreated) {
+      this.emitChainCreated(chain.id, chain.task);
+    }
+  }
+
+  private parseEngineerCompletionReport(rawOutput: string, template?: string): CompletionReport {
+    const report = parseCompletionReport(rawOutput);
+    if (report) return report;
+    return {
+      version: 1,
+      archetype: template ?? 'engineer',
+      summary: rawOutput.slice(0, 500) || '(no output)',
+      result: rawOutput,
+    } as CompletionReport;
+  }
+
+  private parseReviewerCompletionReport(chain: WrfcChain, rawOutput: string): ReviewerReport {
+    const reviewerReport = parseCompletionReport(rawOutput);
+    if (reviewerReport && reviewerReport.archetype === 'reviewer') {
+      return reviewerReport as ReviewerReport;
+    }
+    const extractedScore = extractScoreFromText(rawOutput);
+    const threshold = configManager.get('wrfc.scoreThreshold') as number;
+    const extractedPassed = extractedScore !== null
+      ? extractPassedFromText(rawOutput, extractedScore, threshold)
+      : false;
+    const extractedIssues = extractIssuesFromText(rawOutput);
+
+    logger.warn('WrfcController: no structured ReviewerReport found, extracting from text', {
+      chainId: chain.id,
+      extractedScore,
+    });
+    if (extractedScore === null) {
+      logger.warn('WrfcController: score extraction returned null, defaulting to 0', { chainId: chain.id });
+    }
+    return {
+      version: 1,
+      archetype: 'reviewer',
+      summary: rawOutput.slice(0, 500) || '(no reviewer output)',
+      score: extractedScore ?? 0,
+      passed: extractedPassed,
+      dimensions: [],
+      issues: extractedIssues,
+    };
+  }
+
+  private handleEngineerCompletion(chain: WrfcChain, agentId: string, report: CompletionReport): void {
+    if (chain.state === 'engineering') {
+      chain.engineerReport = report;
+      this.workmap.append({ ts: new Date().toISOString(), wrfcId: chain.id, event: 'engineer_complete', agentId, task: chain.task });
+    }
+    this.startReview(chain, report);
+  }
+
+  private buildReviewTask(chain: WrfcChain, report: CompletionReport): string {
+    const threshold = configManager.get('wrfc.scoreThreshold') as number;
+    return [
+      `WRFC Review Request`,
+      `Chain ID: ${chain.id}`,
+      ``,
+      `Engineer completion report:`,
+      `\`\`\`json`,
+      JSON.stringify(report, null, 2),
+      `\`\`\``,
+      ``,
+      `Instructions:`,
+      `1. Read all files listed in the engineer report (filesCreated, filesModified).`,
+      `2. Verify the implementation meets all stated requirements.`,
+      `3. Score the implementation using the 10-dimension review rubric.`,
+      `4. The passing score threshold is ${threshold}/10.`,
+      `5. Return a structured ReviewerReport JSON block in your final response.`,
+      ``,
+      `The ReviewerReport must include:`,
+      `- version: 1`,
+      `- archetype: "reviewer"`,
+      `- score: <number 0-10>`,
+      `- passed: <boolean>`,
+      `- dimensions: array of { name, score, maxScore, issues[] }`,
+      `- issues: array of { severity, description, file?, line?, pointValue }`,
+    ].join('\n');
+  }
+
+  private buildFixTask(chain: WrfcChain, review: ReviewerReport): string {
+    const threshold = configManager.get('wrfc.scoreThreshold') as number;
+    const issueList = review.issues
+      .map((issue) => {
+        const location = issue.file ? ` (${issue.file}${issue.line ? `:${issue.line}` : ''})` : '';
+        return `- [${issue.severity.toUpperCase()}] ${issue.description}${location} (-${issue.pointValue} pts)`;
+      })
+      .join('\n');
+    return [
+      `WRFC Fix Request`,
+      `Chain ID: ${chain.id}`,
+      ``,
+      `Review score: ${review.score}/10 (threshold: ${threshold}/10)`,
+      `Fix attempt: ${chain.fixAttempts}`,
+      ``,
+      `Issues to address:`,
+      issueList || '(no structured issues — see review summary)',
+      ``,
+      `Review summary: ${review.summary}`,
+      ``,
+      `Instructions:`,
+      `1. Address ALL issues listed above, prioritizing critical and major items.`,
+      `2. Fix each issue completely — partial fixes will reduce your score.`,
+      `3. Return a structured EngineerReport JSON block in your final response.`,
+    ].join('\n');
+  }
+
+  private spawnWrfcAgent(
+    template: 'engineer' | 'reviewer',
+    task: string,
+    dangerouslyDisableWrfc: boolean,
+  ): AgentRecord {
+    return agentManagerResolver().spawn({
+      mode: 'spawn',
+      task,
+      template,
+      ...(dangerouslyDisableWrfc ? { dangerously_disable_wrfc: true } : {}),
+    });
+  }
+
+  private getEnabledGates() {
+    const wrfcConfig = configManager.getCategory('wrfc');
+    return (wrfcConfig.gates ?? []).filter((gate) => gate.enabled);
+  }
+
+  private async loadPackageScripts(cwd: string): Promise<Record<string, string>> {
+    const pkgPath = join(cwd, 'package.json');
+    if (!existsSync(pkgPath)) return {};
+    try {
+      const pkgJson = JSON.parse(await Bun.file(pkgPath).text()) as { scripts?: Record<string, string> };
+      return pkgJson.scripts ?? {};
+    } catch {
+      return {};
+    }
+  }
+
+  private getSkippedGateReason(
+    gateName: string,
+    cwd: string,
+    pkgScripts: Record<string, string>,
+  ): string | null {
+    if (gateName === 'typecheck' && !existsSync(join(cwd, 'tsconfig.json'))) {
+      return 'Skipped: no tsconfig.json found';
+    }
+    if (gateName === 'lint') {
+      const lintConfigs = [
+        'eslint.config.js', 'eslint.config.mjs', 'eslint.config.cjs', 'eslint.config.ts',
+        '.eslintrc.json', '.eslintrc.js', '.eslintrc.yml', '.eslintrc.yaml', '.eslintrc',
+      ];
+      if (!lintConfigs.some((file) => existsSync(join(cwd, file)))) {
+        return 'Skipped: no ESLint config found';
+      }
+    }
+    if (gateName === 'test' && !pkgScripts['test']) return 'Skipped: no test script in package.json';
+    if (gateName === 'build' && !pkgScripts['build']) return 'Skipped: no build script in package.json';
+    return null;
+  }
+
+  private async executeGateCommand(command: string): Promise<{ passed: boolean; output: string }> {
+    try {
+      const proc = Bun.spawn(['/bin/sh', '-c', command], {
+        stdout: 'pipe',
+        stderr: 'pipe',
+      });
+      const timer = setTimeout(() => {
+        try { proc.kill(); } catch {}
+      }, GATE_TIMEOUT_MS);
+      let exitCode: number;
+      try {
+        exitCode = await proc.exited;
+        clearTimeout(timer);
+      } catch (err) {
+        clearTimeout(timer);
+        try { proc.kill(); } catch {}
+        throw err;
+      }
+      const stdout = await new Response(proc.stdout).text();
+      const stderr = await new Response(proc.stderr).text();
+      return {
+        passed: exitCode === 0,
+        output: [stdout, stderr].filter(Boolean).join('\n').trim(),
+      };
+    } catch (err) {
+      return {
+        passed: false,
+        output: err instanceof Error ? err.message : String(err),
+      };
+    }
+  }
+
+  private completeChainAsPassed(chain: WrfcChain): void {
+    this.activeChainCount = Math.max(0, this.activeChainCount - 1);
+    this.transition(chain, 'passed');
+    chain.completedAt = Date.now();
+    this.emitChainPassed(chain.id);
+    this.scheduleChainCleanup(chain);
+    this.safeDequeueNext();
+  }
+
+  private safeDequeueNext(): void {
+    this.dequeueNext().catch((err) => {
+      logger.error('WrfcController.dequeueNext unhandled error', { error: String(err) });
+    });
+  }
+
+  private emitChainCreated(chainId: string, task: string): void {
+    emitWorkflowChainCreated(this.runtimeBus, this.workflowContext(chainId), { chainId, task });
+  }
+
+  private emitGateResult(chainId: string, gate: string, passed: boolean): void {
+    emitWorkflowGateResult(this.runtimeBus, this.workflowContext(chainId), { chainId, gate, passed });
+  }
+
+  private emitChainPassed(chainId: string): void {
+    emitWorkflowChainPassed(this.runtimeBus, this.workflowContext(chainId), { chainId });
+  }
+
+  private emitAutoCommitted(chainId: string, commitHash?: string): void {
+    emitWorkflowAutoCommitted(this.runtimeBus, this.workflowContext(chainId), { chainId, commitHash });
+  }
+
+  private emitCascadeAbort(chainId: string, reason: string): void {
+    emitWorkflowCascadeAborted(this.runtimeBus, this.workflowContext(chainId), { chainId, reason });
   }
 }

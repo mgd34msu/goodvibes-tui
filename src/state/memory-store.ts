@@ -1,5 +1,5 @@
 /**
- * MemoryStore — Project Memory Substrate (Section 5.8).
+ * MemoryStore — project memory substrate.
  *
  * Durable, provenance-rich memory for decisions, constraints, incidents, and
  * patterns. Backed by SQLite via SQLiteStore. Survives process restarts and is

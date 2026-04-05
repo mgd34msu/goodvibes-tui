@@ -51,7 +51,8 @@ describe('resolveToolLLM', () => {
   });
 
   test('uses explicit tools.llmProvider + tools.llmModel when both set', async () => {
-    const { providerRegistry } = await import('../../providers/registry.ts');
+    const { getProviderRegistry } = await import('../../providers/registry.ts');
+    const providerRegistry = getProviderRegistry();
     const { configManager } = await import('../../config/index.ts');
     const { resolveToolLLM } = await import('../../config/tool-llm.ts');
 
@@ -103,19 +104,18 @@ describe('resolveToolLLM', () => {
       selectable: true,
       tier: 'standard' as const,
     };
-    const proto = Object.getPrototypeOf(instance);
-    const origGetCurrent = proto.getCurrentModel;
-    const origGetForModel = proto.getForModel;
-    proto.getCurrentModel = () => fakeFallbackDef;
-    proto.getForModel = () => fakeFallbackProvider;
+    const origGetCurrent = instance.getCurrentModel.bind(instance);
+    const origGetForModel = instance.getForModel.bind(instance);
+    instance.getCurrentModel = () => fakeFallbackDef;
+    instance.getForModel = () => fakeFallbackProvider;
 
     try {
       const resolved = resolveToolLLM();
       expect(resolved).not.toBeNull();
       expect(resolved!.modelId).toBe('test-fallback-model');
     } finally {
-      proto.getCurrentModel = origGetCurrent;
-      proto.getForModel = origGetForModel;
+      instance.getCurrentModel = origGetCurrent;
+      instance.getForModel = origGetForModel;
       configManager.set('tools.llmProvider', origProvider);
       configManager.set('tools.llmModel', origModel);
     }
@@ -150,19 +150,18 @@ describe('resolveToolLLM', () => {
       selectable: true,
       tier: 'standard' as const,
     };
-    const proto2 = Object.getPrototypeOf(instance);
-    const origGetCurrent2 = proto2.getCurrentModel;
-    const origGetForModel2 = proto2.getForModel;
-    proto2.getCurrentModel = () => fakeFallbackDef2;
-    proto2.getForModel = () => fakeFallbackProvider2;
+    const origGetCurrent2 = instance.getCurrentModel.bind(instance);
+    const origGetForModel2 = instance.getForModel.bind(instance);
+    instance.getCurrentModel = () => fakeFallbackDef2;
+    instance.getForModel = () => fakeFallbackProvider2;
 
     try {
       const resolved = resolveToolLLM();
       expect(resolved).not.toBeNull();
       expect(resolved!.modelId).toBe('test-fallback-only-model');
     } finally {
-      proto2.getCurrentModel = origGetCurrent2;
-      proto2.getForModel = origGetForModel2;
+      instance.getCurrentModel = origGetCurrent2;
+      instance.getForModel = origGetForModel2;
       configManager.set('tools.llmProvider', origProvider);
       configManager.set('tools.llmModel', origModel);
     }
@@ -194,7 +193,8 @@ describe('ToolLLM.chat', () => {
   });
 
   test('returns response text on success', async () => {
-    const { providerRegistry } = await import('../../providers/registry.ts');
+    const { getProviderRegistry } = await import('../../providers/registry.ts');
+    const providerRegistry = getProviderRegistry();
     const { configManager } = await import('../../config/index.ts');
     const { ToolLLM } = await import('../../config/tool-llm.ts');
 
@@ -220,7 +220,8 @@ describe('ToolLLM.chat', () => {
   });
 
   test('passes maxTokens and systemPrompt to provider', async () => {
-    const { providerRegistry } = await import('../../providers/registry.ts');
+    const { getProviderRegistry } = await import('../../providers/registry.ts');
+    const providerRegistry = getProviderRegistry();
     const { configManager } = await import('../../config/index.ts');
     const { ToolLLM } = await import('../../config/tool-llm.ts');
 
@@ -244,7 +245,8 @@ describe('ToolLLM.chat', () => {
   });
 
   test('returns empty string when provider throws (no API key)', async () => {
-    const { providerRegistry } = await import('../../providers/registry.ts');
+    const { getProviderRegistry } = await import('../../providers/registry.ts');
+    const providerRegistry = getProviderRegistry();
     const { configManager } = await import('../../config/index.ts');
     const { ToolLLM } = await import('../../config/tool-llm.ts');
 

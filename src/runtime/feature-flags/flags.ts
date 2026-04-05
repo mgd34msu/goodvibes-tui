@@ -14,21 +14,10 @@ import type { FeatureFlag } from './types.ts';
  * Add new flags here; the manager initialises from this array at startup.
  */
 export const FEATURE_FLAGS: FeatureFlag[] = [
-  // ── Tier 1 ───────────────────────────────────────────────────────────────
-  {
-    id: 'phased-tool-executor',
-    name: 'Phased Tool Executor',
-    description:
-      'Routes tool calls through the phased execution pipeline instead of the legacy direct-call path.',
-    defaultState: 'disabled',
-    tier: 1,
-    runtimeToggleable: true,
-  },
-
   // ── Tier 2 ───────────────────────────────────────────────────────────────
   {
-    id: 'permissions-v2',
-    name: 'Permissions v2',
+    id: 'permissions-policy-engine',
+    name: 'Permissions Policy Engine',
     description:
       'Activates the redesigned permission model with granular tool-level and path-level rules.',
     defaultState: 'disabled',
@@ -40,7 +29,7 @@ export const FEATURE_FLAGS: FeatureFlag[] = [
     id: 'permissions-simulation',
     name: 'Permissions Simulation Mode',
     description:
-      'Enables the dual-evaluator simulation pipeline for Permissions v2. '
+      'Enables the dual-evaluator simulation pipeline for the permissions policy engine. '
       + 'Tracks divergence between actual and candidate evaluators without '
       + 'changing enforcement behaviour until switched to enforce mode.',
     defaultState: 'disabled',
@@ -51,12 +40,12 @@ export const FEATURE_FLAGS: FeatureFlag[] = [
   // ── Tier 3 ───────────────────────────────────────────────────────────────
   {
     id: 'hitl-ux-modes',
-    name: 'HITL UX Modes (Section 5.11)',
+    name: 'HITL UX Modes',
     description:
       'Enables the HITL UX mode system (quiet/balanced/operator) for notification verbosity '
       + 'control. When enabled, ModeManager applies the configured HITL preset to the '
       + 'notification router at startup and on mode change. '
-      + 'Disable to revert to legacy unmediated notification delivery. '
+      + 'Disable to keep the router on its baseline delivery policy. '
       + '@remarks This flag is informational for dashboard display only. '
       + 'HITL modes are always applied from config at startup regardless of this flag — '
       + 'it does not gate the runtime behaviour of ModeManager.',
@@ -77,19 +66,19 @@ export const FEATURE_FLAGS: FeatureFlag[] = [
 
   // ── Tier 4 ───────────────────────────────────────────────────────────────
   {
-    id: 'plugin-lifecycle-v2',
-    name: 'Plugin Lifecycle v2',
+    id: 'plugin-lifecycle',
+    name: 'Plugin Lifecycle',
     description:
-      'Enables the v2 plugin lifecycle with structured init/teardown phases and health integration.',
+      'Enables the plugin lifecycle with structured init/teardown phases and health integration.',
     defaultState: 'disabled',
     tier: 4,
     runtimeToggleable: false,
   },
   {
-    id: 'mcp-lifecycle-v2',
-    name: 'MCP Lifecycle v2',
+    id: 'mcp-lifecycle',
+    name: 'MCP Lifecycle',
     description:
-      'Enables the v2 MCP server lifecycle with structured connect/disconnect phases and health integration.',
+      'Enables the MCP server lifecycle with structured connect/disconnect phases and health integration.',
     defaultState: 'disabled',
     tier: 4,
     runtimeToggleable: false,
@@ -117,14 +106,14 @@ export const FEATURE_FLAGS: FeatureFlag[] = [
 
   // ── Tier 7 ───────────────────────────────────────────────────────────────
   {
-    id: 'gc-orch-015-tool-result-reconciliation',
-    name: 'GC-ORCH-015: Tool Result Reconciliation',
+    id: 'tool-result-reconciliation',
+    name: 'Tool Result Reconciliation',
     description:
       'Detects and reconciles unresolved tool calls at turn end. '
       + 'When enabled, dangling tool-call state causes synthetic error results '
       + 'to be injected and a reconciliation event to be emitted, preventing '
-      + 'silent conversation corruption. Disable to fall back to legacy '
-      + '(silent-drop) behaviour with a warning log.',
+      + 'silent conversation corruption. Disable to keep warning-only logging '
+      + 'without synthetic result injection.',
     defaultState: 'enabled',
     tier: 7,
     runtimeToggleable: true,
@@ -137,7 +126,7 @@ export const FEATURE_FLAGS: FeatureFlag[] = [
   // behaviour. Use this flag to surface signing status in dashboards or operational tooling.
   {
     id: 'policy-signing',
-    name: 'Policy Signing (GC-PERM-011)',
+    name: 'Policy Signing',
     description:
       'Enables HMAC-SHA256 signature validation on policy bundle load. '
       + 'When enabled, managed mode rejects bundles with invalid or missing signatures. '
@@ -147,21 +136,20 @@ export const FEATURE_FLAGS: FeatureFlag[] = [
     runtimeToggleable: false,
   },
   {
-    id: 'session-compaction-v2',
-    name: 'Session Compaction v2',
+    id: 'session-compaction',
+    name: 'Session Compaction',
     description:
-      'Activates the v2 compaction algorithm with semantic chunking and relevance scoring.',
+      'Activates structured session compaction with semantic chunking and relevance scoring.',
     defaultState: 'disabled',
     tier: 6,
     runtimeToggleable: true,
   },
 
-  // ── GC-FETCH-006 ─────────────────────────────────────────────────────────
   {
     id: 'fetch-sanitization',
     name: 'Fetch Response Sanitization',
     description:
-      'Enables GC-FETCH-006 fetch response sanitization and host trust tier classification.'
+      'Enables fetch response sanitization and host trust tier classification.'
       + ' Sanitizes HTTP response content (none/safe-text/strict modes) and blocks requests'
       + ' to SSRF-risk hosts (private IPs, metadata endpoints, localhost variants).'
       + ' Defaults to safe-text sanitization mode when enabled.'
@@ -171,10 +159,9 @@ export const FEATURE_FLAGS: FeatureFlag[] = [
     runtimeToggleable: true,
   },
 
-  // ── GC-TOOL-004 ────────────────────────────────────────────────────────────
   {
     id: 'runtime-tools-budget-enforcement',
-    name: 'Runtime Budget Enforcement (GC-TOOL-004)',
+    name: 'Runtime Budget Enforcement',
     description:
       'Enables per-phase runtime budget enforcement for tool execution pipelines. '
       + 'Checks wall-clock time (BUDGET_EXCEEDED_MS), token consumption '
@@ -186,25 +173,23 @@ export const FEATURE_FLAGS: FeatureFlag[] = [
     runtimeToggleable: true,
   },
 
-  // ── GC-TOOL-008 ────────────────────────────────────────────────────────────
   {
     id: 'overflow-spill-backends',
-    name: 'Overflow Spill Backends (GC-TOOL-008)',
+    name: 'Overflow Spill Backends',
     description:
       'Enables the pluggable spill backend system for overflow content. '
       + 'When enabled, spillBackend can be set to file|ledger|diagnostics via config. '
-      + 'When disabled, falls back to pin: file backend (legacy behavior).',
+      + 'When disabled, overflow content uses the file spill backend.',
     defaultState: 'disabled',
     tier: 8,
     runtimeToggleable: true,
   },
 
-  // ── GC-PERM-009 ────────────────────────────────────────────────────────────
   {
-    id: 'gc-perm-009-divergence-dashboard',
-    name: 'Divergence Dashboard and Enforce Gate (GC-PERM-009)',
+    id: 'permission-divergence-dashboard',
+    name: 'Divergence Dashboard and Enforce Gate',
     description:
-      'Enables the divergence dashboard and enforcement gate for Permissions v2 simulation. '
+      'Enables the divergence dashboard and enforcement gate for permissions simulation. '
       + 'Aggregates divergence by tool/prefix/mode, exposes trend history in diagnostics, '
       + 'and blocks enforce mode transitions when the divergence rate exceeds the configured '
       + 'threshold. Disable to fall back to warn mode (no gate enforcement).',
@@ -213,23 +198,21 @@ export const FEATURE_FLAGS: FeatureFlag[] = [
     runtimeToggleable: true,
   },
 
-  // ── GC-EXEC-005 ────────────────────────────────────────────────────────────
   {
     id: 'shell-ast-normalization',
-    name: 'Shell AST Normalization (GC-EXEC-005)',
+    name: 'Shell AST Normalization',
     description:
       'Enables the Shell AST parser for compound command verdict evaluation. '
       + 'Produces per-segment verdicts (safe/unsafe) with user-facing denial '
-      + 'explanations. When disabled, falls back to legacy flat segmentation mode.',
+      + 'explanations. When disabled, uses the baseline flat segmentation mode.',
     defaultState: 'disabled',
     tier: 8,
     runtimeToggleable: true,
   },
 
-  // ── G00 ───────────────────────────────────────────────────────────────────
   {
     id: 'local-provider-context-ingestion',
-    name: 'Local Provider Context Window Ingestion (G00)',
+    name: 'Local Provider Context Window Ingestion',
     description:
       'Enables dynamic ingestion of max_context_length from local/custom provider '
       + '/v1/models endpoints. When enabled, local models use the provider-reported '
@@ -241,10 +224,9 @@ export const FEATURE_FLAGS: FeatureFlag[] = [
     runtimeToggleable: true,
   },
 
-  // ── G01 ───────────────────────────────────────────────────────────────────
   {
-    id: 'g01-agent-context-window-awareness',
-    name: 'Agent Context Window Awareness (G01)',
+    id: 'agent-context-window-awareness',
+    name: 'Agent Context Window Awareness',
     description:
       'Enables context window validation and compaction in the AgentOrchestrator. '
       + 'Before each provider.chat() call, estimates total token count (system prompt + '
@@ -252,30 +234,28 @@ export const FEATURE_FLAGS: FeatureFlag[] = [
       + '85% of the model context window. Also applies layered system prompt assembly '
       + '(drops conventions then project context for small windows) and catches '
       + '"context size exceeded" errors from the provider with a single compaction retry. '
-      + 'Disable to revert to unchecked provider.chat() calls (pre-G01 behavior).',
+      + 'Disable to revert to unchecked provider.chat() calls.',
     defaultState: 'enabled',
     tier: 9,
     runtimeToggleable: true,
   },
 
-  // ── GC-TOOL-007 ────────────────────────────────────────────────────────────
   {
-    id: 'gc-tool-007-output-schema-fingerprint',
-    name: 'Output Schema Fingerprints (GC-TOOL-007)',
+    id: 'output-schema-fingerprint',
+    name: 'Output Schema Fingerprints',
     description:
       'Appends `_meta.outputSchemaFingerprint` (SHA-256 of sorted result key names) '
       + 'and `_meta.schemaShapeId` (canonical mode identifier) to tool results from '
       + 'the find, analyze, and inspect tools. Enables schema drift detection and '
-      + 'diagnostic fingerprint surfaces. Disable to omit fingerprint metadata for '
-      + 'backward compatibility with consumers that do not tolerate extra fields.',
+      + 'diagnostic fingerprint surfaces. Disable to omit fingerprint metadata.',
     defaultState: 'disabled',
     tier: 8,
     runtimeToggleable: true,
   },
-  // ── Section 5.3: Policy-as-Code ─────────────────────────────────────────────
+  // ── Policy-as-Code ───────────────────────────────────────────────────────────
   {
     id: 'policy-as-code',
-    name: 'Policy-as-Code (Section 5.3)',
+    name: 'Policy-as-Code',
     description:
       'Enables the versioned policy bundle registry with promote/rollback semantics. '
       + 'Requires simulation evidence (divergence gate passing) before enforcement. '
@@ -287,10 +267,10 @@ export const FEATURE_FLAGS: FeatureFlag[] = [
     runtimeToggleable: true,
   },
 
-  // ── Section 5.5: Adaptive Execution Planner ──────────────────────────────
+  // Adaptive Execution Planner.
   {
     id: 'adaptive-execution-planner',
-    name: 'Adaptive Execution Planner (Section 5.5)',
+    name: 'Adaptive Execution Planner',
     description:
       'Enables the Adaptive Execution Planner, which scores strategy candidates '
       + '(single/cohort/background/remote) using risk, latency, and capability '
@@ -301,10 +281,10 @@ export const FEATURE_FLAGS: FeatureFlag[] = [
     tier: 5,
     runtimeToggleable: true,
   },
-  // ── Section 5.6: Provider Optimizer ────────────────────────────────────────
+  // Provider Optimizer.
   {
     id: 'provider-optimizer',
-    name: 'Provider Optimizer (Section 5.6)',
+    name: 'Provider Optimizer',
     description:
       'Enables the capability-contract-driven provider routing optimizer. '
       + 'In auto mode, selects the best capable provider for each request profile '
@@ -328,7 +308,7 @@ export const FEATURE_FLAGS: FeatureFlag[] = [
       + 'integration diagnostics. Failures are classified as retryable or terminal '
       + 'and retried with exponential backoff. Dead-letter entries are exposed via '
       + '/notify dlq and replayable via /notify replay. '
-      + 'Disable to revert to legacy warn-only logging with no DLQ tracking.',
+      + 'Disable to keep warn-level logging without DLQ tracking.',
     defaultState: 'disabled',
     tier: 6,
     runtimeToggleable: true,
@@ -365,10 +345,10 @@ export const FEATURE_FLAGS: FeatureFlag[] = [
     runtimeToggleable: true,
   },
 
-  // ── Section 5.7: Tool Contract Verification ──────────────────────────────
+  // Tool Contract Verification.
   {
     id: 'tool-contract-verification',
-    name: 'Tool Contract Verification (Section 5.7)',
+    name: 'Tool Contract Verification',
     description:
       'Enables registration-time contract checks for all registered tools. '
       + 'Validates schema validity, timeout/cancellation semantics, permission class '

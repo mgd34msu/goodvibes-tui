@@ -3,7 +3,7 @@
  *
  * Barrel export and `createRemoteSubstrate()` factory.
  *
- * The remote substrate layer implements v3 Sections 4.8, 10.1–10.4:
+ * The remote substrate layer covers identity, handshake, sync, and transport:
  * - Durable identity stable across reconnects
  * - Handshake tokens with epoch tracking
  * - Typed transport messages (control / data / ack / failure)

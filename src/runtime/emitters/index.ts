@@ -33,11 +33,16 @@ export interface EmitterContext extends EnvelopeContext {
 
 export * from './session.ts';
 export * from './turn.ts';
+export * from './providers.ts';
 export * from './tools.ts';
 export * from './tasks.ts';
 export * from './agents.ts';
+export * from './workflows.ts';
+export * from './planner.ts';
 export * from './permissions.ts';
 export * from './plugins.ts';
 export * from './mcp.ts';
 export * from './transport.ts';
 export * from './compaction.ts';
+export * from './ops.ts';
+export * from './forensics.ts';

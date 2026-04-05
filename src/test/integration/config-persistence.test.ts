@@ -4,63 +4,63 @@
  * Tests the ConfigManager's read/write lifecycle using the typed ConfigKey API.
  * Config keys follow the format 'section.field' or 'section.subsection.field'.
  */
-import { describe, test, expect, beforeEach, afterEach } from 'bun:test';
-import { configManager, config } from '../../config/index.ts';
+import { describe, test, expect, beforeEach } from 'bun:test';
+import { mkdtempSync } from 'fs';
+import { join } from 'path';
+import { tmpdir } from 'os';
+import { ConfigManager } from '../../config/index.ts';
 
 // ---------------------------------------------------------------------------
 // ConfigManager set/get roundtrip
 // ---------------------------------------------------------------------------
 
 describe('Config persistence — set/get roundtrip', () => {
-  let savedAutoApprove: boolean;
-  let savedPermissionsMode: string;
+  let configManager: ConfigManager;
 
   beforeEach(() => {
-    savedAutoApprove = config.autoApprove ?? false;
-    savedPermissionsMode = config.permissions?.mode ?? 'prompt';
-  });
-
-  afterEach(() => {
-    configManager.set('behavior.autoApprove', savedAutoApprove);
-    configManager.set('permissions.mode', savedPermissionsMode as 'prompt' | 'allow-all' | 'custom');
+    const tempRoot = mkdtempSync(join(tmpdir(), 'goodvibes-config-persistence-'));
+    configManager = new ConfigManager({
+      workingDir: tempRoot,
+      configDir: join(tempRoot, '.config-override'),
+    });
   });
 
   test('set + get roundtrip for boolean values', () => {
     configManager.set('behavior.autoApprove', true);
-    expect(config.autoApprove).toBe(true);
+    expect(configManager.get('behavior.autoApprove')).toBe(true);
     configManager.set('behavior.autoApprove', false);
-    expect(config.autoApprove).toBe(false);
+    expect(configManager.get('behavior.autoApprove')).toBe(false);
   });
 
   test('set + get roundtrip for permissions.mode', () => {
     configManager.set('permissions.mode', 'allow-all');
-    expect(config.permissions?.mode).toBe('allow-all');
+    expect(configManager.get('permissions.mode')).toBe('allow-all');
     configManager.set('permissions.mode', 'prompt');
-    expect(config.permissions?.mode).toBe('prompt');
+    expect(configManager.get('permissions.mode')).toBe('prompt');
   });
 
   test('set + get roundtrip for custom permissions.mode', () => {
     configManager.set('permissions.mode', 'custom');
-    expect(config.permissions?.mode).toBe('custom');
+    expect(configManager.get('permissions.mode')).toBe('custom');
   });
 
   test('config.autoApprove reflects set() immediately', () => {
     configManager.set('behavior.autoApprove', true);
-    const snapshot = config.autoApprove;
+    const snapshot = configManager.get('behavior.autoApprove');
     expect(snapshot).toBe(true);
   });
 
   test('multiple set() calls accumulate correctly', () => {
     configManager.set('behavior.autoApprove', false);
     configManager.set('permissions.mode', 'allow-all');
-    expect(config.autoApprove).toBe(false);
-    expect(config.permissions?.mode).toBe('allow-all');
+    expect(configManager.get('behavior.autoApprove')).toBe(false);
+    expect(configManager.get('permissions.mode')).toBe('allow-all');
   });
 
   test('set() is idempotent when called with same value', () => {
     configManager.set('permissions.mode', 'prompt');
     configManager.set('permissions.mode', 'prompt');
-    expect(config.permissions?.mode).toBe('prompt');
+    expect(configManager.get('permissions.mode')).toBe('prompt');
   });
 });
 
@@ -69,14 +69,14 @@ describe('Config persistence — set/get roundtrip', () => {
 // ---------------------------------------------------------------------------
 
 describe('Config persistence — typed path access', () => {
-  let savedAutoApprove: boolean;
+  let configManager: ConfigManager;
 
   beforeEach(() => {
-    savedAutoApprove = config.autoApprove ?? false;
-  });
-
-  afterEach(() => {
-    configManager.set('behavior.autoApprove', savedAutoApprove);
+    const tempRoot = mkdtempSync(join(tmpdir(), 'goodvibes-config-persistence-'));
+    configManager = new ConfigManager({
+      workingDir: tempRoot,
+      configDir: join(tempRoot, '.config-override'),
+    });
   });
 
   test('get() returns value at behavior.autoApprove path', () => {
@@ -113,21 +113,14 @@ describe('Config persistence — typed path access', () => {
 // ---------------------------------------------------------------------------
 
 describe('Config persistence — provider fields', () => {
-  let savedProvider: unknown;
-  let savedModel: unknown;
+  let configManager: ConfigManager;
 
   beforeEach(() => {
-    savedProvider = configManager.get('provider.provider');
-    savedModel = configManager.get('provider.model');
-  });
-
-  afterEach(() => {
-    if (savedProvider !== undefined) {
-      configManager.set('provider.provider', savedProvider as string);
-    }
-    if (savedModel !== undefined) {
-      configManager.set('provider.model', savedModel as string);
-    }
+    const tempRoot = mkdtempSync(join(tmpdir(), 'goodvibes-config-persistence-'));
+    configManager = new ConfigManager({
+      workingDir: tempRoot,
+      configDir: join(tempRoot, '.config-override'),
+    });
   });
 
   test('provider.provider can be set and retrieved', () => {
@@ -153,17 +146,14 @@ describe('Config persistence — provider fields', () => {
 // ---------------------------------------------------------------------------
 
 describe('Config persistence — display fields', () => {
-  let savedStream: unknown;
-  let savedLineNumbers: unknown;
+  let configManager: ConfigManager;
 
   beforeEach(() => {
-    savedStream = configManager.get('display.stream');
-    savedLineNumbers = configManager.get('display.lineNumbers');
-  });
-
-  afterEach(() => {
-    if (savedStream !== undefined) configManager.set('display.stream', savedStream as boolean);
-    if (savedLineNumbers !== undefined) configManager.set('display.lineNumbers', savedLineNumbers as boolean);
+    const tempRoot = mkdtempSync(join(tmpdir(), 'goodvibes-config-persistence-'));
+    configManager = new ConfigManager({
+      workingDir: tempRoot,
+      configDir: join(tempRoot, '.config-override'),
+    });
   });
 
   test('display.stream can be set and retrieved', () => {
@@ -186,33 +176,37 @@ describe('Config persistence — display fields', () => {
 // ---------------------------------------------------------------------------
 
 describe('Config persistence — isolation between tests', () => {
-  const ORIGINAL_MODE = 'prompt';
+  let configManager: ConfigManager;
+
+  beforeEach(() => {
+    const tempRoot = mkdtempSync(join(tmpdir(), 'goodvibes-config-persistence-'));
+    configManager = new ConfigManager({
+      workingDir: tempRoot,
+      configDir: join(tempRoot, '.config-override'),
+    });
+  });
 
   test('changes in one test do not bleed into the next', () => {
     configManager.set('permissions.mode', 'allow-all');
-    expect(config.permissions?.mode).toBe('allow-all');
-    // Reset
-    configManager.set('permissions.mode', ORIGINAL_MODE);
+    expect(configManager.get('permissions.mode')).toBe('allow-all');
   });
 
   test('value is back to default after previous test reset', () => {
-    expect(config.permissions?.mode).toBe('prompt');
+    expect(configManager.get('permissions.mode')).toBe('prompt');
   });
 
   test('sequential modifications to the same key work correctly', () => {
     const values = ['prompt', 'allow-all', 'custom', 'prompt'] as const;
     for (const v of values) {
       configManager.set('permissions.mode', v);
-      expect(config.permissions?.mode).toBe(v);
+      expect(configManager.get('permissions.mode')).toBe(v);
     }
   });
 
   test('behavior.saveHistory can be toggled', () => {
-    const saved = configManager.get('behavior.saveHistory');
     configManager.set('behavior.saveHistory', true);
     expect(configManager.get('behavior.saveHistory')).toBe(true);
     configManager.set('behavior.saveHistory', false);
     expect(configManager.get('behavior.saveHistory')).toBe(false);
-    if (saved !== undefined) configManager.set('behavior.saveHistory', saved as boolean);
   });
 });

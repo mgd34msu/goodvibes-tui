@@ -1,7 +1,7 @@
 import { ConversationManager } from '../core/conversation.ts';
 import { AgentMessageBus } from './message-bus.ts';
 import { ToolRegistry } from '../tools/registry.ts';
-import { providerRegistry, getModelRegistry } from '../providers/registry.ts';
+import { getProviderRegistry, getModelRegistry } from '../providers/registry.ts';
 import { registerAllTools } from '../tools/index.ts';
 import { logger } from '../utils/logger.ts';
 import { ConsecutiveErrorBreaker } from '../core/circuit-breaker.ts';
@@ -12,7 +12,7 @@ import { AgentSession } from './session.ts';
 import { ArchetypeLoader } from './archetypes.ts';
 import type { AgentRecord } from '../tools/agent/index.ts';
 import type { LLMProvider, StreamDelta } from '../providers/interface.ts';
-import type { EventBus } from '../core/event-bus.ts';
+import type { ToolResult } from '../types/tools.ts';
 import { existsSync, readFileSync } from 'node:fs';
 import { ProcessManager } from '../tools/shared/process-manager.ts';
 import { join } from 'node:path';
@@ -23,6 +23,15 @@ import {
   compactSmallWindow,
 } from '../core/context-compaction.ts';
 import type { FeatureFlagManager } from '../runtime/feature-flags/manager.ts';
+import type { RuntimeEventBus } from '../runtime/events/index.ts';
+import {
+  emitAgentCancelled,
+  emitAgentCompleted,
+  emitAgentFailed,
+  emitAgentProgress,
+  emitAgentRunning,
+  emitAgentStreamDelta,
+} from '../runtime/emitters/index.ts';
 
 // ---------------------------------------------------------------------------
 // Network error detection
@@ -129,8 +138,8 @@ export class AgentOrchestrator {
   private fileCache: FileStateCache | null = null;
   private projectIndex: ProjectIndex | null = null;
   private projectContextCache: string | null | undefined = undefined; // undefined = not cached, null = no context
-  private eventBus: EventBus | null = null;
   private featureFlagManager: FeatureFlagManager | null = null;
+  private runtimeBus: RuntimeEventBus | null = null;
 
   /** Singleton accessor. */
   static getInstance(): AgentOrchestrator {
@@ -145,14 +154,168 @@ export class AgentOrchestrator {
     AgentOrchestrator.instance = null;
   }
 
-  /** Set the EventBus for emitting agent lifecycle events (WRFC integration). */
-  setEventBus(eventBus: EventBus): void {
-    this.eventBus = eventBus;
+  setRuntimeBus(runtimeBus: RuntimeEventBus | null): void {
+    this.runtimeBus = runtimeBus;
   }
 
-  /** Set the FeatureFlagManager for G01 context-window awareness gating. */
+  /** Set the FeatureFlagManager for context-window awareness gating. */
   setFeatureFlagManager(manager: FeatureFlagManager): void {
     this.featureFlagManager = manager;
+  }
+
+  private emitterContext(agentId: string): import('../runtime/emitters/index.ts').EmitterContext {
+    return {
+      sessionId: 'agent-orchestrator',
+      traceId: `agent-orchestrator:${agentId}`,
+      source: 'agent-orchestrator',
+    };
+  }
+
+  private emitAgentProgress(recordId: string, progress: string): void {
+    if (!this.runtimeBus) return;
+    emitAgentProgress(this.runtimeBus, this.emitterContext(recordId), {
+      agentId: recordId,
+      progress,
+    });
+  }
+
+  private emitAgentStarted(recordId: string): void {
+    if (!this.runtimeBus) return;
+    emitAgentRunning(this.runtimeBus, this.emitterContext(recordId), { agentId: recordId });
+  }
+
+  private emitAgentCancelledEvent(recordId: string, reason: string): void {
+    if (!this.runtimeBus) return;
+    emitAgentCancelled(this.runtimeBus, this.emitterContext(recordId), {
+      agentId: recordId,
+      reason,
+    });
+  }
+
+  private emitAgentFailedEvent(recordId: string, error: string, durationMs: number): void {
+    if (!this.runtimeBus) return;
+    emitAgentFailed(this.runtimeBus, this.emitterContext(recordId), {
+      agentId: recordId,
+      error,
+      durationMs,
+    });
+  }
+
+  private emitAgentCompletedEvent(
+    recordId: string,
+    durationMs: number,
+    output: string,
+    toolCallsMade: number,
+  ): void {
+    if (!this.runtimeBus) return;
+    emitAgentCompleted(this.runtimeBus, this.emitterContext(recordId), {
+      agentId: recordId,
+      durationMs,
+      output,
+      toolCallsMade,
+    });
+  }
+
+  private emitStreamDelta(recordId: string, content: string, accumulated: string): void {
+    if (!this.runtimeBus || !content) return;
+    emitAgentStreamDelta(this.runtimeBus, this.emitterContext(recordId), {
+      agentId: recordId,
+      content,
+      accumulated,
+    });
+  }
+
+  private resolveProviderForRecord(
+    providerRegistry: ReturnType<typeof getProviderRegistry>,
+    record: AgentRecord,
+    currentModel: { id: string; provider: string },
+  ): { provider: LLMProvider; modelId: string } {
+    const requestedModelId = record.model;
+    let modelId = requestedModelId ?? currentModel.id;
+
+    try {
+      return {
+        provider: providerRegistry.getForModel(modelId, record.provider),
+        modelId,
+      };
+    } catch (err) {
+      if (requestedModelId && requestedModelId !== currentModel.id) {
+        logger.debug(`[AgentOrchestrator] Requested model '${requestedModelId}' not found, falling back to '${currentModel.id}'`);
+        try {
+          return {
+            provider: providerRegistry.getForModel(currentModel.id),
+            modelId: currentModel.id,
+          };
+        } catch (fallbackErr) {
+          throw new Error(
+            `Cannot resolve provider for model '${requestedModelId}' (${
+              err instanceof Error ? err.message : String(err)
+            }) or fallback '${currentModel.id}' (${
+              fallbackErr instanceof Error ? fallbackErr.message : String(fallbackErr)
+            })`,
+          );
+        }
+      }
+
+      throw new Error(
+        `Cannot resolve provider for model '${modelId}': ${
+          err instanceof Error ? err.message : String(err)
+        }`,
+      );
+    }
+  }
+
+  private applyContextWindowAwareness(
+    record: AgentRecord,
+    modelId: string,
+    modelWindow: number,
+    conversation: ConversationManager,
+    systemPrompt: string,
+    toolTokens: number,
+    turn: number,
+  ): string {
+    if (!(this.featureFlagManager?.isEnabled('agent-context-window-awareness') ?? true)) {
+      return systemPrompt;
+    }
+
+    if (modelWindow === 0) {
+      logger.debug(`[agent-context-window-awareness] Context window is 0/unknown for model ${modelId}, skipping context validation`);
+      return systemPrompt;
+    }
+
+    const messages = conversation.getMessagesForLLM();
+    const msgTokens = estimateConversationTokens(messages);
+    const sysTokens = estimateTokens(systemPrompt);
+    const totalEstimate = msgTokens + sysTokens + toolTokens;
+    const threshold = Math.floor(modelWindow * CONTEXT_COMPACT_THRESHOLD);
+
+    if (totalEstimate <= threshold) {
+      return systemPrompt;
+    }
+
+    logger.warn(
+      `[AgentOrchestrator] context-window awareness: estimated ${totalEstimate} tokens exceeds ${threshold} (${Math.round(CONTEXT_COMPACT_THRESHOLD * 100)}% of ${modelWindow}) - compacting`,
+      { agentId: record.id, turn, msgTokens, sysTokens, toolTokens, contextWindow: modelWindow },
+    );
+    record.progress = `Turn ${turn} · Compacting context…`;
+
+    if (modelWindow <= MIN_WINDOW_FOR_LLM_COMPACT) {
+      conversation.replaceMessagesForLLM(compactSmallWindow(messages));
+    } else {
+      conversation.replaceMessagesForLLM(compactSmallWindow(messages, Math.max(10, Math.floor(messages.length / 2))));
+    }
+
+    const remainingAfterMsgs = modelWindow - estimateConversationTokens(conversation.getMessagesForLLM()) - toolTokens;
+    const currentSysTokens = estimateTokens(systemPrompt);
+    if (currentSysTokens > remainingAfterMsgs * CONTEXT_COMPACT_THRESHOLD) {
+      logger.warn(
+        `[AgentOrchestrator] context-window awareness: system prompt (${currentSysTokens} tokens) too large for remaining window (${remainingAfterMsgs}) - applying layered trim`,
+        { agentId: record.id },
+      );
+      return this.buildLayeredSystemPrompt(record, remainingAfterMsgs);
+    }
+
+    return systemPrompt;
   }
 
   /**
@@ -163,43 +326,18 @@ export class AgentOrchestrator {
   async runAgent(record: AgentRecord): Promise<void> {
     record.status = 'running';
     record.progress = 'Initialising…';
+    this.emitAgentStarted(record.id);
+    this.emitAgentProgress(record.id, record.progress);
 
     let session: AgentSession | null = null;
     let conversation: ConversationManager | null = null;
     const preAgentProcessIds = new Set(ProcessManager.getInstance().list().map(p => p.id));
 
     try {
+      const providerRegistry = getProviderRegistry();
       // --- Resolve model and provider ---
-      const requestedModelId = record.model;
       const currentModel = providerRegistry.getCurrentModel();
-      let modelId = requestedModelId ?? currentModel.id;
-      let provider: LLMProvider;
-      try {
-        provider = providerRegistry.getForModel(modelId, record.provider);
-      } catch (err) {
-        // If the LLM requested a specific model that doesn't exist, fall back to current model
-        if (requestedModelId && requestedModelId !== currentModel.id) {
-          logger.debug(`[AgentOrchestrator] Requested model '${requestedModelId}' not found, falling back to '${currentModel.id}'`);
-          try {
-            provider = providerRegistry.getForModel(currentModel.id);
-            modelId = currentModel.id;
-          } catch (fallbackErr) {
-            throw new Error(
-              `Cannot resolve provider for model '${requestedModelId}' (${
-                err instanceof Error ? err.message : String(err)
-              }) or fallback '${currentModel.id}' (${
-                fallbackErr instanceof Error ? fallbackErr.message : String(fallbackErr)
-              })`,
-            );
-          }
-        } else {
-          throw new Error(
-            `Cannot resolve provider for model '${modelId}': ${
-              err instanceof Error ? err.message : String(err)
-            }`,
-          );
-        }
-      }
+      const { provider, modelId } = this.resolveProviderForRecord(providerRegistry, record, currentModel);
 
       session = new AgentSession(record.id, modelId, record.provider ?? currentModel.provider ?? 'unknown');
       session.appendMessage({ type: 'session_config', template: record.template, task: record.task, tools: record.tools, model: modelId, provider: record.provider ?? 'unknown', timestamp: new Date().toISOString() });
@@ -208,7 +346,7 @@ export class AgentOrchestrator {
       const toolRegistry = this.buildScopedRegistry(record.tools, this.getFullRegistry());
       const toolDefinitions = toolRegistry.getToolDefinitions();
 
-      // --- Tool token cost (computed once, used per-turn in G01 context check) ---
+      // --- Tool token cost (computed once, used per turn in the context check) ---
       const toolTokens = toolDefinitions.length > 0
         ? estimateTokens(JSON.stringify(toolDefinitions))
         : 0;
@@ -218,10 +356,10 @@ export class AgentOrchestrator {
       conversation.addUserMessage(record.task);
 
       // --- System prompt ---
-      // Declared as `let` so context-window awareness (G01) can rebuild with fewer layers.
+      // Declared as `let` so context-window awareness can rebuild with fewer layers.
       let systemPrompt = this.buildSystemPrompt(record);
 
-      // --- Resolve model definition for context-window lookups (G01) ---
+      // --- Resolve model definition for context-window lookups ---
       const modelDef = getModelRegistry().find(
         (m) => m.id === modelId || m.registryKey === modelId,
       ) ?? providerRegistry.getCurrentModel();
@@ -230,6 +368,7 @@ export class AgentOrchestrator {
       let continueLoop = true;
       let turn = 0;
       record.progress = 'Turn 1 · Thinking…';
+      this.emitAgentProgress(record.id, record.progress);
 
       // --- Loop detection ---
       const callHistory: string[] = [];
@@ -243,20 +382,11 @@ export class AgentOrchestrator {
       while (continueLoop) {
         if ((record as { status: string }).status === 'cancelled') {
           record.completedAt = Date.now();
-          if (this.eventBus) {
-            this.eventBus.emit('subagent:error', {
-              id: record.id,
-              error: new Error('Agent cancelled'),
-            });
-          }
-          // Kill any background processes leaked by this agent
-          const pm = ProcessManager.getInstance();
-          for (const p of pm.list()) {
-            if (!preAgentProcessIds.has(p.id)) pm.stop(p.id);
-          }
+          this.emitAgentCancelledEvent(record.id, 'Agent cancelled');
+          this.cleanupLeakedProcesses(preAgentProcessIds);
           if (session) {
             session.appendMessage({ type: 'session_end', status: 'cancelled', turn, timestamp: new Date().toISOString() });
-            try { await session.dispose(); } catch { /* non-fatal */ }
+            await this.disposeSession(session);
           }
           return;
         }
@@ -271,15 +401,10 @@ export class AgentOrchestrator {
           record.error = `Exceeded maximum turn limit (${MAX_TURNS})`;
           if (session) {
             session.appendMessage({ type: 'session_end', status: 'max_turns_exceeded', turn, timestamp: new Date().toISOString() });
-            try { await session.dispose(); } catch { /* non-fatal */ }
+            await this.disposeSession(session);
           }
           // Notify WRFC so the chain is not orphaned in 'engineering' state
-          if (this.eventBus) {
-            this.eventBus.emit('subagent:error', {
-              id: record.id,
-              error: new Error(record.error),
-            });
-          }
+          this.emitAgentFailedEvent(record.id, record.error, Date.now() - record.startedAt);
           return;
         }
         session.appendMessage({ type: 'llm_request', turn, messageCount: conversation.getMessagesForLLM().length, timestamp: new Date().toISOString() });
@@ -290,54 +415,20 @@ export class AgentOrchestrator {
           // Inject as user message so LLM responds to inter-agent communication
           conversation.addUserMessage(`[Message from agent ${msg.from}]: ${msg.content}`);
         }
-        // --- G01: Context-window pre-check ---
+        // --- Context-window pre-check ---
         // Before calling provider.chat(), estimate total token usage and compact
         // messages or trim the system prompt when approaching the context limit.
-        if (this.featureFlagManager?.isEnabled('g01-agent-context-window-awareness') ?? true) {
+        if (this.featureFlagManager?.isEnabled('agent-context-window-awareness') ?? true) {
           const contextWindow = getContextWindowForModel(modelDef);
-          if (contextWindow === 0) {
-            logger.debug(`[G01] Context window is 0/unknown for model ${modelId}, skipping context validation`);
-          } else {
-            const messages = conversation.getMessagesForLLM();
-            const msgTokens = estimateConversationTokens(messages);
-            const sysTokens = estimateTokens(systemPrompt);
-            const totalEstimate = msgTokens + sysTokens + toolTokens;
-            const threshold = Math.floor(contextWindow * CONTEXT_COMPACT_THRESHOLD);
-
-            if (totalEstimate > threshold) {
-              logger.warn(
-                `[AgentOrchestrator] G01: estimated ${totalEstimate} tokens exceeds ${threshold} (${Math.round(CONTEXT_COMPACT_THRESHOLD * 100)}% of ${contextWindow}) — compacting`,
-                { agentId: record.id, turn, msgTokens, sysTokens, toolTokens, contextWindow },
-              );
-              record.progress = `Turn ${turn} · Compacting context…`;
-
-              if (contextWindow <= MIN_WINDOW_FOR_LLM_COMPACT) {
-                // Small window: rule-based truncation only
-                const compacted = compactSmallWindow(messages);
-                conversation.replaceMessagesForLLM(compacted);
-              } else {
-                // Standard window: rule-based message compaction (keep recent 50%).
-                // Full LLM-based summarisation would produce higher-quality compaction
-                // but requires an async provider call with full context — that's a
-                // follow-up improvement. For now, simple truncation keeps the tail of
-                // the conversation where the most relevant work lives.
-                const compacted = compactSmallWindow(messages, Math.max(10, Math.floor(messages.length / 2)));
-                conversation.replaceMessagesForLLM(compacted);
-              }
-
-              // After message compaction, check if system prompt still fits.
-              // Apply layered trimming: drop conventions first, then project context.
-              const remainingAfterMsgs = contextWindow - estimateConversationTokens(conversation.getMessagesForLLM()) - toolTokens;
-              const currentSysTokens = estimateTokens(systemPrompt);
-              if (currentSysTokens > remainingAfterMsgs * CONTEXT_COMPACT_THRESHOLD) {
-                logger.warn(
-                  `[AgentOrchestrator] G01: system prompt (${currentSysTokens} tokens) too large for remaining window (${remainingAfterMsgs}) — applying layered trim`,
-                  { agentId: record.id },
-                );
-                systemPrompt = this.buildLayeredSystemPrompt(record, remainingAfterMsgs);
-              }
-            }
-          }
+          systemPrompt = this.applyContextWindowAwareness(
+            record,
+            modelId,
+            contextWindow,
+            conversation,
+            systemPrompt,
+            toolTokens,
+            turn,
+          );
         }
 
         // --- Network-aware retry around the LLM call ---
@@ -364,17 +455,7 @@ export class AgentOrchestrator {
                   : streamAccumulated;
                 record.progress = snippet.replace(/\n/g, ' ').trim() || 'Streaming...';
               }
-              if (this.eventBus && delta.content) {
-                try {
-                  this.eventBus.emit('subagent:stream-delta', {
-                    id: record.id,
-                    content: delta.content,
-                    accumulated: streamAccumulated,
-                  });
-                } catch {
-                  // Don't let listener errors kill streaming
-                }
-              }
+              this.emitStreamDelta(record.id, delta.content ?? '', streamAccumulated);
             };
 
             try {
@@ -395,6 +476,7 @@ export class AgentOrchestrator {
                   { error: chatErr instanceof Error ? chatErr.message : String(chatErr) },
                 );
                 record.progress = `Network error, retrying in ${delaySec}s…`;
+                this.emitAgentProgress(record.id, record.progress);
                 networkAttempt++;
                 await new Promise<void>((resolve) => setTimeout(resolve, delayMs));
                 if ((record as { status: string }).status === 'cancelled') {
@@ -407,6 +489,7 @@ export class AgentOrchestrator {
                   { error: chatErr instanceof Error ? chatErr.message : String(chatErr) },
                 );
                 record.progress = `Rate limited, retrying in ${delaySec}s…`;
+                this.emitAgentProgress(record.id, record.progress);
                 rateLimitAttempt++;
                 await new Promise<void>((resolve) => setTimeout(resolve, RATE_LIMIT_RETRY_DELAY_MS));
                 if ((record as { status: string }).status === 'cancelled') {
@@ -415,15 +498,16 @@ export class AgentOrchestrator {
               } else if (
                 isContextSizeExceededError(chatErr) &&
                 !contextRetried &&
-                (this.featureFlagManager?.isEnabled('g01-agent-context-window-awareness') ?? true)
+                (this.featureFlagManager?.isEnabled('agent-context-window-awareness') ?? true)
               ) {
-                // G01: context size exceeded — compact messages and retry once
+                // Context size exceeded; compact messages and retry once.
                 contextRetried = true;
                 logger.warn(
-                  `[AgentOrchestrator] G01: context size exceeded on turn ${turn} — emergency compaction and retry`,
+                  `[AgentOrchestrator] context-window awareness: context size exceeded on turn ${turn} - emergency compaction and retry`,
                   { agentId: record.id, error: chatErr instanceof Error ? chatErr.message : String(chatErr) },
                 );
                 record.progress = `Turn ${turn} · Context exceeded, compacting…`;
+                this.emitAgentProgress(record.id, record.progress);
                 const currentMessages = conversation.getMessagesForLLM();
                 const compacted = compactSmallWindow(
                   currentMessages,
@@ -447,56 +531,15 @@ export class AgentOrchestrator {
 
         if (response.toolCalls.length > 0) {
           conversation.addAssistantMessage(response.content, { toolCalls: response.toolCalls, usage: response.usage });
-
-          // Execute tools sequentially
-          const results = [];
-          for (const originalCall of response.toolCalls) {
-            // Create mutable copy — some providers (e.g. ollama-cloud/kimi) freeze response objects
-            const call = { ...originalCall, arguments: { ...originalCall.arguments } };
-            // Build a brief args summary for the progress label
-            const argsSummary = summarizeToolArgs(call.arguments as Record<string, unknown>);
-            record.progress = `Turn ${turn} · ${call.name}${argsSummary}`;
-            record.toolCallCount++;
-            if (this.eventBus) {
-              try {
-                this.eventBus.emit('subagent:progress', { id: record.id, progress: record.progress });
-              } catch (e) { logger.debug('subagent:progress emit failed', { error: String(e) }); }
-            }
-
-            // Sanitize exec args for agent context: force inline execution, 10-min TTL
-            if (call.name === 'exec' || call.name === 'precision_exec') {
-              // Deep clone for nested mutation safety
-              call.arguments = structuredClone(call.arguments);
-              const execArgs = call.arguments as Record<string, unknown>;
-              // Force all commands to run inline (no background leaks)
-              if (Array.isArray(execArgs.commands)) {
-                for (const cmd of execArgs.commands as Record<string, unknown>[]) {
-                  cmd.background = false;
-                  if (!cmd.timeout_ms) cmd.timeout_ms = 600_000; // 10 min default
-                }
-              }
-              // Set global timeout default
-              if (!execArgs.timeout_ms) execArgs.timeout_ms = 600_000;
-            }
-
-            const callSig = `${call.name}::${JSON.stringify(call.arguments)}`;
-            try {
-              const result = await toolRegistry.execute(call.id, call.name, call.arguments);
-              results.push(result);
-              session.appendMessage({ type: 'tool_execution', turn, toolName: call.name, toolCallId: call.id, success: result.success !== false, args: JSON.stringify(call.arguments).slice(0, 500), resultPreview: (result.output ?? result.error ?? '').slice(0, 500), timestamp: new Date().toISOString() });
-            } catch (err) {
-              const toolErr = err instanceof Error ? err.message : String(err);
-              results.push({
-                callId: call.id,
-                success: false,
-                error: toolErr,
-              });
-              session.appendMessage({ type: 'tool_execution', turn, toolName: call.name, toolCallId: call.id, success: false, args: JSON.stringify(call.arguments).slice(0, 500), resultPreview: toolErr.slice(0, 500), timestamp: new Date().toISOString() });
-            }
-            callHistory.push(callSig);
-            if (callHistory.length > CALL_HISTORY_WINDOW) callHistory.shift();
-          }
-
+          const results = await this.executeToolCalls(
+            response.toolCalls,
+            toolRegistry,
+            session,
+            turn,
+            record,
+            callHistory,
+            CALL_HISTORY_WINDOW,
+          );
           conversation.addToolResults(results);
 
           // --- Consecutive error circuit breaker ---
@@ -569,90 +612,9 @@ export class AgentOrchestrator {
         }
       }
 
-      // Don't overwrite 'failed' or 'cancelled' status set by circuit breaker, cancellation, or other in-loop failures
-      const statusAfterLoop = (record as { status: string }).status;
-      if (statusAfterLoop !== 'failed' && statusAfterLoop !== 'cancelled') {
-        record.status = 'completed';
-      }
-      record.completedAt = Date.now();
-      // Kill any background processes leaked by this agent
-      const pm = ProcessManager.getInstance();
-      for (const p of pm.list()) {
-        if (!preAgentProcessIds.has(p.id)) {
-          pm.stop(p.id);
-        }
-      }
-      // Emit completion event for WrfcController (only if truly completed, not circuit-broken or cancelled)
-      if (this.eventBus && record.status !== 'failed' && statusAfterLoop !== 'cancelled') {
-        this.eventBus.emit('subagent:complete', {
-          id: record.id,
-          result: {
-            id: record.id,
-            success: true,
-            output: record.fullOutput ?? '',
-            toolCallsMade: record.toolCallCount,
-            duration: (record.completedAt ?? Date.now()) - record.startedAt,
-          },
-        });
-      }
-      if (record.status === 'failed') {
-        // Circuit breaker tripped — emit error event and log
-        if (this.eventBus) {
-          this.eventBus.emit('subagent:error', {
-            id: record.id,
-            error: new Error(record.error ?? 'Circuit breaker tripped'),
-          });
-        }
-        logger.error(`Agent ${record.id} circuit-breaker terminated`, { error: record.error, toolCallCount: record.toolCallCount });
-        session.appendMessage({ type: 'session_end', status: 'failed', error: record.error, toolCallCount: record.toolCallCount, durationMs: Date.now() - record.startedAt, timestamp: new Date().toISOString() });
-      } else if (statusAfterLoop === 'cancelled') {
-        // Agent was cancelled while the LLM response was in flight — the in-loop cancellation
-        // check did not fire in time. Emit subagent:error so WRFC terminates the chain cleanly.
-        if (this.eventBus) {
-          this.eventBus.emit('subagent:error', {
-            id: record.id,
-            error: new Error('Agent cancelled'),
-          });
-        }
-        logger.info(`Agent ${record.id} cancelled (detected post-loop)`, { toolCallCount: record.toolCallCount });
-        session.appendMessage({ type: 'session_end', status: 'cancelled', toolCallCount: record.toolCallCount, durationMs: Date.now() - record.startedAt, timestamp: new Date().toISOString() });
-      } else {
-        logger.info(`Agent ${record.id} completed`, { toolCallCount: record.toolCallCount });
-        session.appendMessage({ type: 'session_end', status: 'completed', toolCallCount: record.toolCallCount, durationMs: Date.now() - record.startedAt, timestamp: new Date().toISOString() });
-      }
-      try { await session.dispose(); } catch { /* non-fatal */ }
+      await this.finalizeAgentRun(record, session, preAgentProcessIds);
     } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      // Capture last assistant response before failing
-      if (conversation) {
-        const lastMessages = conversation.getMessagesForLLM();
-        const lastAssistant = [...lastMessages].reverse().find(m => m.role === 'assistant');
-        if (lastAssistant) {
-          record.fullOutput = typeof lastAssistant.content === 'string' ? lastAssistant.content : '';
-        }
-      }
-      record.status = 'failed';
-      record.error = message;
-      record.completedAt = Date.now();
-      // Kill any background processes leaked by this agent
-      const pm = ProcessManager.getInstance();
-      for (const p of pm.list()) {
-        if (!preAgentProcessIds.has(p.id)) {
-          pm.stop(p.id);
-        }
-      }
-      // Emit error event for WrfcController
-      if (this.eventBus) {
-        this.eventBus.emit('subagent:error', {
-          id: record.id,
-          error: err instanceof Error ? err : new Error(String(err)),
-        });
-      }
-      logger.error(`Agent ${record.id} failed`, { error: message });
-      if (session) {
-        session.appendMessage({ type: 'session_end', status: 'failed', error: message, toolCallCount: record.toolCallCount, durationMs: Date.now() - record.startedAt, timestamp: new Date().toISOString() });
-        try { await session.dispose(); } catch { /* non-fatal */ }
-      }
+      await this.handleAgentRunFailure(record, conversation, session, preAgentProcessIds, err);
     }
   }
 
@@ -881,7 +843,7 @@ The report format depends on your role:
     const base = this.buildSystemPrompt(record);
     if (remainingTokens === 0) {
       // Emergency: strip to task-only minimal prompt
-      logger.warn('[AgentOrchestrator] G01: emergency system prompt — base layers only', { agentId: record.id });
+      logger.warn('[AgentOrchestrator] context-window awareness: emergency system prompt - base layers only', { agentId: record.id });
       const parts: string[] = [];
       const toolNames = record.tools.filter(t => t !== 'agent').join(', ');
       parts.push(`You are an autonomous agent. Complete your task. Tools: ${toolNames}.`);
@@ -897,7 +859,7 @@ The report format depends on your role:
     const noConventions = this.buildSystemPrompt(record, new Set(['conventions']));
     const noConvTokens = estimateTokens(noConventions);
     if (noConvTokens <= remainingTokens) {
-      logger.info('[AgentOrchestrator] G01: system prompt trimmed — dropped conventions layer', { agentId: record.id });
+      logger.info('[AgentOrchestrator] context-window awareness: system prompt trimmed - dropped conventions layer', { agentId: record.id });
       return noConventions;
     }
 
@@ -905,7 +867,7 @@ The report format depends on your role:
     const noContext = this.buildSystemPrompt(record, new Set(['conventions', 'project']));
     const noContextTokens = estimateTokens(noContext);
     if (noContextTokens <= remainingTokens) {
-      logger.info('[AgentOrchestrator] G01: system prompt trimmed — dropped conventions + project context', { agentId: record.id });
+      logger.info('[AgentOrchestrator] context-window awareness: system prompt trimmed - dropped conventions + project context', { agentId: record.id });
       return noContext;
     }
 
@@ -914,7 +876,7 @@ The report format depends on your role:
     const truncated = noContext.length > targetChars
       ? noContext.slice(0, targetChars) + '\n[...system prompt truncated to fit context window]'
       : noContext;
-    logger.warn('[AgentOrchestrator] G01: system prompt hard-truncated to fit context window', { agentId: record.id, chars: truncated.length });
+    logger.warn('[AgentOrchestrator] context-window awareness: system prompt hard-truncated to fit context window', { agentId: record.id, chars: truncated.length });
     return truncated;
   }
 
@@ -1001,6 +963,189 @@ The report format depends on your role:
       return null;
     } catch {
       return null;
+    }
+  }
+
+  private cleanupLeakedProcesses(preAgentProcessIds: Set<string>): void {
+    const pm = ProcessManager.getInstance();
+    for (const p of pm.list()) {
+      if (!preAgentProcessIds.has(p.id)) {
+        pm.stop(p.id);
+      }
+    }
+  }
+
+  private async disposeSession(session: AgentSession): Promise<void> {
+    try {
+      await session.dispose();
+    } catch {
+      // non-fatal
+    }
+  }
+
+  private async executeToolCalls(
+    toolCalls: Awaited<ReturnType<LLMProvider['chat']>>['toolCalls'],
+    toolRegistry: ToolRegistry,
+    session: AgentSession,
+    turn: number,
+    record: AgentRecord,
+    callHistory: string[],
+    callHistoryWindow: number,
+  ): Promise<ToolResult[]> {
+    const results: ToolResult[] = [];
+
+    for (const originalCall of toolCalls) {
+      const call = { ...originalCall, arguments: { ...originalCall.arguments } };
+      const argsSummary = summarizeToolArgs(call.arguments as Record<string, unknown>);
+      record.progress = `Turn ${turn} · ${call.name}${argsSummary}`;
+      record.toolCallCount++;
+      this.emitAgentProgress(record.id, record.progress);
+
+      if (call.name === 'exec' || call.name === 'precision_exec') {
+        call.arguments = structuredClone(call.arguments);
+        const execArgs = call.arguments as Record<string, unknown>;
+        if (Array.isArray(execArgs.commands)) {
+          for (const cmd of execArgs.commands as Record<string, unknown>[]) {
+            cmd.background = false;
+            if (!cmd.timeout_ms) cmd.timeout_ms = 600_000;
+          }
+        }
+        if (!execArgs.timeout_ms) execArgs.timeout_ms = 600_000;
+      }
+
+      const callSig = `${call.name}::${JSON.stringify(call.arguments)}`;
+      try {
+        const result = await toolRegistry.execute(call.id, call.name, call.arguments);
+        results.push({ ...result, callId: call.id });
+        session.appendMessage({
+          type: 'tool_execution',
+          turn,
+          toolName: call.name,
+          toolCallId: call.id,
+          success: result.success !== false,
+          args: JSON.stringify(call.arguments).slice(0, 500),
+          resultPreview: (result.output ?? result.error ?? '').slice(0, 500),
+          timestamp: new Date().toISOString(),
+        });
+      } catch (err) {
+        const toolErr = err instanceof Error ? err.message : String(err);
+        results.push({
+          callId: call.id,
+          success: false,
+          error: toolErr,
+        });
+        session.appendMessage({
+          type: 'tool_execution',
+          turn,
+          toolName: call.name,
+          toolCallId: call.id,
+          success: false,
+          args: JSON.stringify(call.arguments).slice(0, 500),
+          resultPreview: toolErr.slice(0, 500),
+          timestamp: new Date().toISOString(),
+        });
+      }
+
+      callHistory.push(callSig);
+      if (callHistory.length > callHistoryWindow) callHistory.shift();
+    }
+
+    return results;
+  }
+
+  private async finalizeAgentRun(
+    record: AgentRecord,
+    session: AgentSession | null,
+    preAgentProcessIds: Set<string>,
+  ): Promise<void> {
+    const statusAfterLoop = (record as { status: string }).status;
+    if (statusAfterLoop !== 'failed' && statusAfterLoop !== 'cancelled') {
+      record.status = 'completed';
+    }
+    record.completedAt = Date.now();
+    this.cleanupLeakedProcesses(preAgentProcessIds);
+
+    if (this.runtimeBus && record.status !== 'failed' && statusAfterLoop !== 'cancelled') {
+      this.emitAgentCompletedEvent(
+        record.id,
+        (record.completedAt ?? Date.now()) - record.startedAt,
+        record.fullOutput ?? '',
+        record.toolCallCount,
+      );
+    }
+
+    if (record.status === 'failed') {
+      this.emitAgentFailedEvent(
+        record.id,
+        record.error ?? 'Circuit breaker tripped',
+        Date.now() - record.startedAt,
+      );
+      logger.error(`Agent ${record.id} circuit-breaker terminated`, { error: record.error, toolCallCount: record.toolCallCount });
+      session?.appendMessage({
+        type: 'session_end',
+        status: 'failed',
+        error: record.error,
+        toolCallCount: record.toolCallCount,
+        durationMs: Date.now() - record.startedAt,
+        timestamp: new Date().toISOString(),
+      });
+    } else if (statusAfterLoop === 'cancelled') {
+      this.emitAgentCancelledEvent(record.id, 'Agent cancelled');
+      logger.info(`Agent ${record.id} cancelled (detected post-loop)`, { toolCallCount: record.toolCallCount });
+      session?.appendMessage({
+        type: 'session_end',
+        status: 'cancelled',
+        toolCallCount: record.toolCallCount,
+        durationMs: Date.now() - record.startedAt,
+        timestamp: new Date().toISOString(),
+      });
+    } else {
+      logger.info(`Agent ${record.id} completed`, { toolCallCount: record.toolCallCount });
+      session?.appendMessage({
+        type: 'session_end',
+        status: 'completed',
+        toolCallCount: record.toolCallCount,
+        durationMs: Date.now() - record.startedAt,
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    if (session) {
+      await this.disposeSession(session);
+    }
+  }
+
+  private async handleAgentRunFailure(
+    record: AgentRecord,
+    conversation: ConversationManager | null,
+    session: AgentSession | null,
+    preAgentProcessIds: Set<string>,
+    err: unknown,
+  ): Promise<void> {
+    const message = err instanceof Error ? err.message : String(err);
+    if (conversation) {
+      const lastMessages = conversation.getMessagesForLLM();
+      const lastAssistant = [...lastMessages].reverse().find((m) => m.role === 'assistant');
+      if (lastAssistant) {
+        record.fullOutput = typeof lastAssistant.content === 'string' ? lastAssistant.content : '';
+      }
+    }
+    record.status = 'failed';
+    record.error = message;
+    record.completedAt = Date.now();
+    this.cleanupLeakedProcesses(preAgentProcessIds);
+    this.emitAgentFailedEvent(record.id, message, Date.now() - record.startedAt);
+    logger.error(`Agent ${record.id} failed`, { error: message });
+    if (session) {
+      session.appendMessage({
+        type: 'session_end',
+        status: 'failed',
+        error: message,
+        toolCallCount: record.toolCallCount,
+        durationMs: Date.now() - record.startedAt,
+        timestamp: new Date().toISOString(),
+      });
+      await this.disposeSession(session);
     }
   }
 }

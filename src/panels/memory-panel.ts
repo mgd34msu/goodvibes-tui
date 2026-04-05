@@ -1,5 +1,5 @@
 /**
- * MemoryPanel — Project Memory Substrate TUI panel (Section 5.8).
+ * MemoryPanel — project memory substrate TUI panel.
  *
  * Displays durable memory records (decisions, constraints, incidents, patterns)
  * with full provenance and cross-record links. Supports keyboard navigation

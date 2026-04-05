@@ -1,5 +1,5 @@
 /**
- * ForensicsPanel — Failure Forensics TUI panel (Section 5.10).
+ * ForensicsPanel — failure forensics TUI panel.
  *
  * Displays the most recent failure reports with auto-classified causes,
  * causal chains, phase timings, and jump links to related panels.

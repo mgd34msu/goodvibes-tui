@@ -1,15 +1,15 @@
 /**
- * MCP Lifecycle v2 — core type definitions.
+ * MCP lifecycle core type definitions.
  *
  * Referenced by: lifecycle.ts, permissions.ts, schema-freshness.ts, manager.ts
- * Spec: v3 §4.7 (server state machine) and §11 (MCP evolution).
+ * Spec: server state machine and MCP evolution.
  */
 import type { McpServerConfig } from '../../mcp/config.ts';
 
 // ── State machine ─────────────────────────────────────────────────────────────
 
 /**
- * All legal states in the MCP server lifecycle state machine (v3 §4.7).
+ * All legal states in the MCP server lifecycle state machine.
  *
  * Transition diagram:
  *   configured → connecting → connected → degraded
@@ -34,7 +34,7 @@ export type McpServerState =
 // ── Schema freshness ──────────────────────────────────────────────────────────
 
 /**
- * Freshness status of a server's tool/resource schema cache (v3 §11.2).
+ * Freshness status of a server's tool/resource schema cache.
  *
  * - `fresh`        — fetched recently, within the TTL window
  * - `stale`        — fetched but TTL has elapsed; re-fetch recommended
@@ -89,7 +89,7 @@ export interface McpSchemaRecord {
 // ── Permissions ───────────────────────────────────────────────────────────────
 
 /**
- * Trust level assigned to an MCP server (v3 §11.3).
+ * Trust level assigned to an MCP server.
  *
  * - `trusted`    — all tools allowed; schema auto-refreshed
  * - `standard`   — all tools allowed; subject to per-tool overrides
@@ -156,7 +156,7 @@ export interface McpServerEntry {
   authType?: string;
   /** Tools available from this server (populated on connect). */
   availableTools: string[];
-  /** Resources available from this server (populated on connect, §11.1). */
+  /** Resources available from this server (populated on connect). */
   availableResources: string[];
   /** Number of tool calls made to this server this session. */
   callCount: number;

@@ -6,7 +6,7 @@
  * returns results.
  */
 import { describe, test, expect, beforeEach, afterEach } from 'bun:test';
-import { EventBus } from '../../core/event-bus.ts';
+import { RuntimeEventBus, createEventEnvelope } from '../../runtime/events/index.ts';
 import { ToolRegistry } from '../../tools/registry.ts';
 import { PermissionManager } from '../../permissions/manager.ts';
 import { configManager } from '../../config/index.ts';
@@ -16,9 +16,9 @@ import { configManager } from '../../config/index.ts';
 // ---------------------------------------------------------------------------
 
 function buildStack() {
-  const bus = new EventBus();
+  const bus = new RuntimeEventBus();
   const registry = new ToolRegistry();
-  const pm = new PermissionManager(bus);
+  const pm = new PermissionManager(async () => ({ approved: true }));
   return { bus, registry, pm };
 }
 
@@ -186,11 +186,22 @@ describe('Tool execution pipeline — permission + registry', () => {
     });
 
     const events: unknown[] = [];
-    bus.on('turn:tool-result', (data) => events.push(data));
+    bus.on('TOOL_SUCCEEDED', (data) => events.push(data.payload));
 
     // Simulate what executeToolCalls does: execute + emit
     const result = await registry.execute('ping-1', 'ping', {});
-    bus.emit('turn:tool-result', { callId: 'ping-1', result });
+    bus.emit('tools', createEventEnvelope('TOOL_SUCCEEDED', {
+      type: 'TOOL_SUCCEEDED',
+      callId: 'ping-1',
+      turnId: 'turn-1',
+      tool: 'ping',
+      result,
+      durationMs: 0,
+    }, {
+      sessionId: 'test-session',
+      traceId: 'test-trace',
+      source: 'tool-execution.test',
+    }));
 
     expect(events).toHaveLength(1);
     const ev = events[0] as { callId: string; result: { success: boolean; output: string } };

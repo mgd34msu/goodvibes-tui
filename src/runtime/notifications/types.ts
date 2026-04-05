@@ -1,6 +1,6 @@
 /**
  * Notification system types — core interfaces for the conversation noise
- * routing model (v3 Section 18.2). Operational noise is routed to dedicated
+ * routing model. Operational noise is routed to dedicated
  * panels; the main conversation receives only critical failures, milestones,
  * and condensed summaries.
  */
@@ -113,8 +113,6 @@ export interface RoutingDecision {
   /**
    * When set, this notification was suppressed and should not be displayed.
    * The string value describes the suppression reason (e.g. 'quiet_while_typing').
-   *
-   * @deprecated Use `reasonCode` for structured decision processing.
    */
   suppressed?: string;
   /**

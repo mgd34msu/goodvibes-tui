@@ -50,6 +50,32 @@ import type {
 // Helpers
 // ---------------------------------------------------------------------------
 
+const VALID_MODES: InspectMode[] = [
+  'project',
+  'api',
+  'api_spec',
+  'api_validate',
+  'api_sync',
+  'database',
+  'components',
+  'layout',
+  'accessibility',
+  'scaffold',
+  'component_state',
+  'render_triggers',
+  'hooks',
+  'overflow',
+  'sizing',
+  'stacking',
+  'responsive',
+  'events',
+  'tailwind',
+  'client_boundary',
+  'error_boundary',
+];
+
+const JSON_OUTPUT_INDENT = 2;
+
 /**
  * Resolve a path relative to projectRoot, enforcing that the result stays
  * within the project root to prevent path traversal attacks.
@@ -61,6 +87,18 @@ function resolvePath(projectRoot: string, inputPath: string): string {
     throw new Error(`Path '${inputPath}' resolves outside the project root`);
   }
   return resolved;
+}
+
+function requireExistingFilePath(projectRoot: string, inputPath: string, notFoundPrefix: string): string {
+  const filePath = resolvePath(projectRoot, inputPath);
+  if (!existsSync(filePath)) {
+    throw new Error(`${notFoundPrefix}: ${filePath}`);
+  }
+  return filePath;
+}
+
+function serializeInspectOutput(value: unknown, format: string): string {
+  return JSON.stringify(value, null, format === 'json' ? JSON_OUTPUT_INDENT : 0);
 }
 
 /**
@@ -97,6 +135,42 @@ function safeRead(filePath: string): string {
   } catch {
     return '';
   }
+}
+
+type InspectToolResult = { success: boolean; output?: string; error?: string };
+
+function createInspectFailure(error: string): InspectToolResult {
+  return { success: false, error };
+}
+
+function createInspectSuccess(output: unknown, format: string): InspectToolResult {
+  return { success: true, output: serializeInspectOutput(output, format) };
+}
+
+function readRequiredFile(
+  projectRoot: string,
+  inputFile: string | undefined,
+  mode: string,
+  errorMessage: string,
+): { filePath: string; content: string } | InspectToolResult {
+  if (!inputFile) {
+    return createInspectFailure(`file is required for ${mode} mode`);
+  }
+  const filePath = requireExistingFilePath(projectRoot, inputFile, errorMessage);
+  return { filePath, content: safeRead(filePath) };
+}
+
+function runFileInspection<T>(
+  projectRoot: string,
+  inputFile: string | undefined,
+  mode: string,
+  errorMessage: string,
+  format: string,
+  inspect: (content: string, file: string) => T,
+): InspectToolResult {
+  const file = readRequiredFile(projectRoot, inputFile, mode, errorMessage);
+  if ('success' in file) return file;
+  return createInspectSuccess(inspect(file.content, inputFile!), format);
 }
 
 // ---------------------------------------------------------------------------
@@ -1206,19 +1280,17 @@ export class InspectTool implements Tool {
 
     const input = args as unknown as InspectInput;
 
-    const VALID_MODES = ['project', 'api', 'api_spec', 'api_validate', 'api_sync', 'database', 'components', 'layout', 'accessibility', 'scaffold', 'component_state', 'render_triggers', 'hooks', 'overflow', 'sizing', 'stacking', 'responsive', 'events', 'tailwind', 'client_boundary', 'error_boundary'];
     if (!VALID_MODES.includes(input.mode)) {
       return { success: false, error: `Invalid mode: ${input.mode}. Valid modes: ${VALID_MODES.join(', ')}` };
     }
 
     const projectRoot = resolve(input.projectRoot ?? process.cwd());
     const format = input.output?.format ?? 'detailed';
-    const jsonIndent = format === 'json' ? 2 : 0;
     const mode = input.mode;
 
     // Inner execute returns the raw result; fingerprint is applied after.
-    const rawResult = await this._executeInner(args, input, projectRoot, format, jsonIndent);
-    return this._fingerprintResult(rawResult, mode, jsonIndent);
+    const rawResult = await this._executeInner(args, input, projectRoot, format);
+    return this._fingerprintResult(rawResult, mode, format);
   }
 
   /** @internal Main dispatch — extracted so execute() can post-process the result. */
@@ -1227,212 +1299,160 @@ export class InspectTool implements Tool {
     input: InspectInput,
     projectRoot: string,
     format: string,
-    jsonIndent: number,
   ): Promise<{ success: boolean; output?: string; error?: string }> {
-    void jsonIndent; // available for future callers; current sites use format directly
     try {
       switch (input.mode as InspectMode) {
         case 'project': {
           const info = detectProject(projectRoot);
-          return { success: true, output: JSON.stringify(info, null, format === 'json' ? 2 : 0) };
+          return createInspectSuccess(info, format);
         }
 
         case 'api': {
           const framework: ApiFramework = (input.framework ?? 'auto') as ApiFramework;
           const routes = await inspectApi(projectRoot, framework);
-          return { success: true, output: JSON.stringify({ routes, count: routes.length }, null, format === 'json' ? 2 : 0) };
+          return createInspectSuccess({ routes, count: routes.length }, format);
         }
 
         case 'database': {
           const schemaPath = input.schemaPath
-            ? resolvePath(projectRoot, input.schemaPath)
-            : join(projectRoot, 'prisma', 'schema.prisma');
-
-          if (!existsSync(schemaPath)) {
-            return { success: false, error: `Database schema not found at: ${schemaPath}` };
-          }
+            ? requireExistingFilePath(projectRoot, input.schemaPath, 'Database schema not found at')
+            : requireExistingFilePath(projectRoot, join('prisma', 'schema.prisma'), 'Database schema not found at');
 
           const content = safeRead(schemaPath);
           const dbInfo = parsePrismaSchema(content);
-          return { success: true, output: JSON.stringify(dbInfo, null, format === 'json' ? 2 : 0) };
+          return createInspectSuccess(dbInfo, format);
         }
 
         case 'components': {
-          if (!input.file) {
-            return { success: false, error: 'file is required for components mode' };
-          }
-          const filePath = resolvePath(projectRoot, input.file);
-          if (!existsSync(filePath)) {
-            return { success: false, error: `File not found: ${filePath}` };
-          }
-          const content = safeRead(filePath);
-          const comps = inspectComponents(content);
-          return { success: true, output: JSON.stringify({ components: comps, count: comps.length }, null, format === 'json' ? 2 : 0) };
+          const file = readRequiredFile(projectRoot, input.file, 'components', 'File not found');
+          if ('success' in file) return file;
+          const comps = inspectComponents(file.content);
+          return createInspectSuccess({ components: comps, count: comps.length }, format);
         }
 
         case 'layout': {
-          if (!input.file) {
-            return { success: false, error: 'file is required for layout mode' };
-          }
-          const filePath = resolvePath(projectRoot, input.file);
-          if (!existsSync(filePath)) {
-            return { success: false, error: `File not found: ${filePath}` };
-          }
-          const content = safeRead(filePath);
-          const layoutInfo = inspectLayout(content, input.file);
-          return { success: true, output: JSON.stringify(layoutInfo, null, format === 'json' ? 2 : 0) };
+          const file = readRequiredFile(projectRoot, input.file, 'layout', 'File not found');
+          if ('success' in file) return file;
+          const layoutInfo = inspectLayout(file.content, input.file!);
+          return createInspectSuccess(layoutInfo, format);
         }
 
         case 'accessibility': {
-          if (!input.file) {
-            return { success: false, error: 'file is required for accessibility mode' };
-          }
-          const filePath = resolvePath(projectRoot, input.file);
-          if (!existsSync(filePath)) {
-            return { success: false, error: `File not found: ${filePath}` };
-          }
-          const content = safeRead(filePath);
-          const a11yIssues = inspectAccessibility(content);
-          return {
-            success: true,
-            output: JSON.stringify({ issues: a11yIssues, count: a11yIssues.length }, null, format === 'json' ? 2 : 0),
-          };
+          const file = readRequiredFile(projectRoot, input.file, 'accessibility', 'File not found');
+          if ('success' in file) return file;
+          const a11yIssues = inspectAccessibility(file.content);
+          return createInspectSuccess({ issues: a11yIssues, count: a11yIssues.length }, format);
         }
 
         case 'api_spec': {
           const framework: ApiFramework = (input.framework ?? 'auto') as ApiFramework;
           const routes = await inspectApi(projectRoot, framework);
           const spec = generateApiSpec(routes);
-          return { success: true, output: JSON.stringify(spec, null, format === 'json' ? 2 : 0) };
+          return createInspectSuccess(spec, format);
         }
 
         case 'api_validate': {
           if (!input.specPath) {
-            return { success: false, error: 'specPath is required for api_validate mode' };
+            return createInspectFailure('specPath is required for api_validate mode');
           }
-          const resolvedSpec = resolvePath(projectRoot, input.specPath);
-          if (!existsSync(resolvedSpec)) {
-            return { success: false, error: `Spec file not found at: ${resolvedSpec}` };
-          }
+          const resolvedSpec = requireExistingFilePath(projectRoot, input.specPath, 'Spec file not found at');
           const specContent = safeRead(resolvedSpec);
           const framework: ApiFramework = (input.framework ?? 'auto') as ApiFramework;
           const routes = await inspectApi(projectRoot, framework);
           const validationResult = validateApiSpec(specContent, routes);
-          return { success: true, output: JSON.stringify(validationResult, null, format === 'json' ? 2 : 0) };
+          return createInspectSuccess(validationResult, format);
         }
 
         case 'api_sync': {
           const framework: ApiFramework = (input.framework ?? 'auto') as ApiFramework;
           const syncResult = await inspectApiSync(projectRoot, framework);
-          return { success: true, output: JSON.stringify(syncResult, null, format === 'json' ? 2 : 0) };
+          return createInspectSuccess(syncResult, format);
         }
 
         case 'scaffold': {
           if (!input.moduleName) {
-            return { success: false, error: 'moduleName is required for scaffold mode' };
+            return createInspectFailure('moduleName is required for scaffold mode');
           }
           const dryRun = input.dryRun !== false; // default true
           const plan = buildScaffold(input.moduleName, projectRoot, dryRun);
-          return { success: true, output: JSON.stringify(plan, null, format === 'json' ? 2 : 0) };
+          return createInspectSuccess(plan, format);
         }
 
         case 'component_state': {
-          if (!input.file) return { success: false, error: 'file is required for component_state mode' };
-          const filePath = resolvePath(projectRoot, input.file);
-          if (!existsSync(filePath)) return { success: false, error: `File not found: ${filePath}` };
-          const content = safeRead(filePath);
-          const result = inspectComponentState(content, input.file);
-          return { success: true, output: JSON.stringify(result, null, format === 'json' ? 2 : 0) };
+          const file = readRequiredFile(projectRoot, input.file, 'component_state', 'File not found');
+          if ('success' in file) return file;
+          const result = inspectComponentState(file.content, input.file!);
+          return createInspectSuccess(result, format);
         }
 
         case 'render_triggers': {
-          if (!input.file) return { success: false, error: 'file is required for render_triggers mode' };
-          const filePath = resolvePath(projectRoot, input.file);
-          if (!existsSync(filePath)) return { success: false, error: `File not found: ${filePath}` };
-          const content = safeRead(filePath);
-          const result = inspectRenderTriggers(content, input.file);
-          return { success: true, output: JSON.stringify(result, null, format === 'json' ? 2 : 0) };
+          const file = readRequiredFile(projectRoot, input.file, 'render_triggers', 'File not found');
+          if ('success' in file) return file;
+          const result = inspectRenderTriggers(file.content, input.file!);
+          return createInspectSuccess(result, format);
         }
 
         case 'hooks': {
-          if (!input.file) return { success: false, error: 'file is required for hooks mode' };
-          const filePath = resolvePath(projectRoot, input.file);
-          if (!existsSync(filePath)) return { success: false, error: `File not found: ${filePath}` };
-          const content = safeRead(filePath);
-          const result = inspectHooks(content, input.file);
-          return { success: true, output: JSON.stringify(result, null, format === 'json' ? 2 : 0) };
+          const file = readRequiredFile(projectRoot, input.file, 'hooks', 'File not found');
+          if ('success' in file) return file;
+          const result = inspectHooks(file.content, input.file!);
+          return createInspectSuccess(result, format);
         }
 
         case 'overflow': {
-          if (!input.file) return { success: false, error: 'file is required for overflow mode' };
-          const filePath = resolvePath(projectRoot, input.file);
-          if (!existsSync(filePath)) return { success: false, error: `File not found: ${filePath}` };
-          const content = safeRead(filePath);
-          const result = inspectOverflow(content, input.file);
-          return { success: true, output: JSON.stringify(result, null, format === 'json' ? 2 : 0) };
+          const file = readRequiredFile(projectRoot, input.file, 'overflow', 'File not found');
+          if ('success' in file) return file;
+          const result = inspectOverflow(file.content, input.file!);
+          return createInspectSuccess(result, format);
         }
 
         case 'sizing': {
-          if (!input.file) return { success: false, error: 'file is required for sizing mode' };
-          const filePath = resolvePath(projectRoot, input.file);
-          if (!existsSync(filePath)) return { success: false, error: `File not found: ${filePath}` };
-          const content = safeRead(filePath);
-          const result = inspectSizing(content, input.file);
-          return { success: true, output: JSON.stringify(result, null, format === 'json' ? 2 : 0) };
+          const file = readRequiredFile(projectRoot, input.file, 'sizing', 'File not found');
+          if ('success' in file) return file;
+          const result = inspectSizing(file.content, input.file!);
+          return createInspectSuccess(result, format);
         }
 
         case 'stacking': {
-          if (!input.file) return { success: false, error: 'file is required for stacking mode' };
-          const filePath = resolvePath(projectRoot, input.file);
-          if (!existsSync(filePath)) return { success: false, error: `File not found: ${filePath}` };
-          const content = safeRead(filePath);
-          const result = inspectStacking(content, input.file);
-          return { success: true, output: JSON.stringify(result, null, format === 'json' ? 2 : 0) };
+          const file = readRequiredFile(projectRoot, input.file, 'stacking', 'File not found');
+          if ('success' in file) return file;
+          const result = inspectStacking(file.content, input.file!);
+          return createInspectSuccess(result, format);
         }
 
         case 'responsive': {
-          if (!input.file) return { success: false, error: 'file is required for responsive mode' };
-          const filePath = resolvePath(projectRoot, input.file);
-          if (!existsSync(filePath)) return { success: false, error: `File not found: ${filePath}` };
-          const content = safeRead(filePath);
-          const result = inspectResponsive(content, input.file);
-          return { success: true, output: JSON.stringify(result, null, format === 'json' ? 2 : 0) };
+          const file = readRequiredFile(projectRoot, input.file, 'responsive', 'File not found');
+          if ('success' in file) return file;
+          const result = inspectResponsive(file.content, input.file!);
+          return createInspectSuccess(result, format);
         }
 
         case 'events': {
-          if (!input.file) return { success: false, error: 'file is required for events mode' };
-          const filePath = resolvePath(projectRoot, input.file);
-          if (!existsSync(filePath)) return { success: false, error: `File not found: ${filePath}` };
-          const content = safeRead(filePath);
-          const result = inspectEvents(content, input.file);
-          return { success: true, output: JSON.stringify(result, null, format === 'json' ? 2 : 0) };
+          const file = readRequiredFile(projectRoot, input.file, 'events', 'File not found');
+          if ('success' in file) return file;
+          const result = inspectEvents(file.content, input.file!);
+          return createInspectSuccess(result, format);
         }
 
         case 'tailwind': {
-          if (!input.file) return { success: false, error: 'file is required for tailwind mode' };
-          const filePath = resolvePath(projectRoot, input.file);
-          if (!existsSync(filePath)) return { success: false, error: `File not found: ${filePath}` };
-          const content = safeRead(filePath);
-          const result = inspectTailwind(content, input.file);
-          return { success: true, output: JSON.stringify(result, null, format === 'json' ? 2 : 0) };
+          const file = readRequiredFile(projectRoot, input.file, 'tailwind', 'File not found');
+          if ('success' in file) return file;
+          const result = inspectTailwind(file.content, input.file!);
+          return createInspectSuccess(result, format);
         }
 
         case 'client_boundary': {
-          if (!input.file) return { success: false, error: 'file is required for client_boundary mode' };
-          const filePath = resolvePath(projectRoot, input.file);
-          if (!existsSync(filePath)) return { success: false, error: `File not found: ${filePath}` };
-          const content = safeRead(filePath);
-          const result = inspectClientBoundary(content, input.file);
-          return { success: true, output: JSON.stringify(result, null, format === 'json' ? 2 : 0) };
+          const file = readRequiredFile(projectRoot, input.file, 'client_boundary', 'File not found');
+          if ('success' in file) return file;
+          const result = inspectClientBoundary(file.content, input.file!);
+          return createInspectSuccess(result, format);
         }
 
         case 'error_boundary': {
-          if (!input.file) return { success: false, error: 'file is required for error_boundary mode' };
-          const filePath = resolvePath(projectRoot, input.file);
-          if (!existsSync(filePath)) return { success: false, error: `File not found: ${filePath}` };
-          const content = safeRead(filePath);
-          const result = inspectErrorBoundary(content, input.file);
-          return { success: true, output: JSON.stringify(result, null, format === 'json' ? 2 : 0) };
+          const file = readRequiredFile(projectRoot, input.file, 'error_boundary', 'File not found');
+          if ('success' in file) return file;
+          const result = inspectErrorBoundary(file.content, input.file!);
+          return createInspectSuccess(result, format);
         }
 
         default: {
@@ -1452,10 +1472,10 @@ export class InspectTool implements Tool {
   private _fingerprintResult(
     result: { success: boolean; output?: string; error?: string },
     mode: string,
-    jsonIndent: number,
+    format: string,
   ): { success: boolean; output?: string; error?: string } {
     if (result.success && result.output !== undefined) {
-      return { ...result, output: this._withFingerprint(result.output, mode, jsonIndent) };
+      return { ...result, output: this._withFingerprint(result.output, mode, format === 'json' ? JSON_OUTPUT_INDENT : 0) };
     }
     return result;
   }

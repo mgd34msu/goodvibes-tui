@@ -1,7 +1,7 @@
 /**
  * Remote Substrate — Reconnect Engine
  *
- * Implements v3 Section 10.2: reconnect with handshake tokens, epoch tracking,
+ * Implements reconnect with handshake tokens, epoch tracking,
  * replay from last acknowledged offset, and idempotent command submission.
  *
  * The reconnect engine drives the transport state machine:

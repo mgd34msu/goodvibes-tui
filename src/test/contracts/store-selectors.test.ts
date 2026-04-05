@@ -32,6 +32,7 @@ import {
   selectFocusedPanel,
   selectAnyOverlayVisible,
   selectTurnState,
+  selectStreamToolPreview,
   selectIsTurnActive,
   selectIsSessionReady,
   selectRunningTaskCountByKind,
@@ -187,6 +188,11 @@ describe('store-selectors contract', () => {
     test('selectTurnState returns a string', () => {
       const turnState = selectTurnState(state);
       expect(typeof turnState).toBe('string');
+    });
+
+    test('selectStreamToolPreview returns undefined from initial state', () => {
+      const preview = selectStreamToolPreview(state);
+      expect(preview).toBeUndefined();
     });
 
     test('selectIsTurnActive returns false from initial state (turn is idle)', () => {

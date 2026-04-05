@@ -1,7 +1,7 @@
 /**
  * CompactionEvent — discriminated union covering all context compaction events.
  *
- * Maps to state machine events from v3 Section 4 (Compaction domain).
+ * Covers compaction lifecycle events for the runtime event bus.
  */
 
 export type CompactionEvent =

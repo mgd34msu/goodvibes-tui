@@ -34,25 +34,25 @@ describe('ToolRegistry', () => {
 
   describe('register', () => {
     test('registers a tool successfully', () => {
-      const tool = makeTool('file_read');
+      const tool = makeTool('read');
       registry.register(tool);
-      expect(registry.has('file_read')).toBe(true);
+      expect(registry.has('read')).toBe(true);
     });
 
     test('throws when registering duplicate tool name', () => {
-      registry.register(makeTool('file_read'));
-      expect(() => registry.register(makeTool('file_read'))).toThrow(
-        "Tool 'file_read' is already registered"
+      registry.register(makeTool('read'));
+      expect(() => registry.register(makeTool('read'))).toThrow(
+        "Tool 'read' is already registered"
       );
     });
 
     test('allows registering multiple distinct tools', () => {
-      registry.register(makeTool('file_read'));
-      registry.register(makeTool('file_write'));
-      registry.register(makeTool('shell_exec'));
-      expect(registry.has('file_read')).toBe(true);
-      expect(registry.has('file_write')).toBe(true);
-      expect(registry.has('shell_exec')).toBe(true);
+      registry.register(makeTool('read'));
+      registry.register(makeTool('write'));
+      registry.register(makeTool('exec'));
+      expect(registry.has('read')).toBe(true);
+      expect(registry.has('write')).toBe(true);
+      expect(registry.has('exec')).toBe(true);
     });
   });
 
@@ -81,8 +81,8 @@ describe('ToolRegistry', () => {
 
   describe('execute', () => {
     test('executes a registered tool and returns result with callId', async () => {
-      registry.register(makeTool('file_read', 'file contents'));
-      const result = await registry.execute('call-1', 'file_read', {});
+      registry.register(makeTool('read', 'file contents'));
+      const result = await registry.execute('call-1', 'read', {});
       expect(result.callId).toBe('call-1');
       expect(result.success).toBe(true);
       expect(result.output).toBe('file contents');

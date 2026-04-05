@@ -5,7 +5,7 @@
  * a bounded buffer of EventEntry records. Provides the typed event timeline
  * with full trace/session/turn/task/agent correlation context.
  *
- * This panel powers the "Events/Diagnostics" view from v3 Section 18.3.
+ * This panel powers the "Events/Diagnostics" view.
  */
 import type { RuntimeEventBus, EnvelopeListener } from '../../events/index.ts';
 import type { AnyRuntimeEvent, RuntimeEventDomain } from '../../events/domain-map.ts';

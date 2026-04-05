@@ -28,7 +28,9 @@ function makeEntry(overrides: Partial<ProcessEntry> = {}): ProcessEntry {
 function seedAgent(task: string): string {
   const am = AgentManager.getInstance();
   const rec = am.spawn({ mode: 'spawn', task, template: 'default', tools: [] });
-  (am as any).agents.get(rec.id).status = 'running';
+  const seeded = am.getStatus(rec.id);
+  if (!seeded) throw new Error('expected agent record');
+  seeded.status = 'running';
   return rec.id;
 }
 
@@ -206,7 +208,7 @@ describe('renderLiveTailModal', () => {
     const am = AgentManager.getInstance();
     // Add progress to generate multi-line output
     const rec = am.getStatus(id)!;
-    (rec as any).progress = Array.from({ length: 20 }, (_, i) => `Line ${i}`).join('\n');
+    rec.progress = Array.from({ length: 20 }, (_, i) => `Line ${i}`).join('\n');
     const modal = new LiveTailModal();
     modal.open(makeEntry({ id, type: 'agent', label: 'Scrollable task' }));
     // Force enough output lines by setting a small maxOutputLines

@@ -109,11 +109,29 @@ export class DomainBridge {
    * @param traceId - Trace ID to use for correlation.
    */
   public recordCascade(event: CascadeAppliedEvent, traceId: string): void {
-    try {
+    this._safe(() => {
       recordHealthCascadeSpan(this._tracer, event, { traceId });
+    });
+  }
+
+  private _safe(action: () => void): void {
+    try {
+      action();
     } catch {
       // Bridge failure must not propagate — non-fatal, swallowed intentionally
     }
+  }
+
+  private _withSpan(map: SpanMap, key: string, action: (span: Span) => void): void {
+    const span = map.get(key);
+    if (span) action(span);
+  }
+
+  private _closeSpan(map: SpanMap, key: string, action: (span: Span) => void): void {
+    const span = map.get(key);
+    if (!span) return;
+    action(span);
+    map.delete(key);
   }
 
   // ── Plugin domain ─────────────────────────────────────────────────────────
@@ -123,7 +141,7 @@ export class DomainBridge {
 
     unsubs.push(
       bus.on('PLUGIN_DISCOVERED', (env: Env<Extract<PluginEvent, { type: 'PLUGIN_DISCOVERED' }>>) => {
-        try {
+        this._safe(() => {
           const span = startPluginSpan(this._tracer, {
             pluginId: env.payload.pluginId,
             path: env.payload.path,
@@ -131,91 +149,82 @@ export class DomainBridge {
             traceId: env.traceId,
           });
           this._pluginSpans.set(env.payload.pluginId, span);
-        } catch { /* non-fatal */ }
+        });
       })
     );
 
     unsubs.push(
       bus.on('PLUGIN_LOADING', (env: Env<Extract<PluginEvent, { type: 'PLUGIN_LOADING' }>>) => {
-        try {
-          const span = this._pluginSpans.get(env.payload.pluginId);
-          if (span) recordPluginPhase(span, 'loading');
-        } catch { /* non-fatal */ }
+        this._safe(() => {
+          this._withSpan(this._pluginSpans, env.payload.pluginId, (span) => recordPluginPhase(span, 'loading'));
+        });
       })
     );
 
     unsubs.push(
       bus.on('PLUGIN_LOADED', (env: Env<Extract<PluginEvent, { type: 'PLUGIN_LOADED' }>>) => {
-        try {
-          const span = this._pluginSpans.get(env.payload.pluginId);
-          if (span) {
+        this._safe(() => {
+          this._withSpan(this._pluginSpans, env.payload.pluginId, (span) => {
             recordPluginPhase(span, 'loaded', {
               'plugin.capability_count': env.payload.capabilities.length,
             });
-          }
-        } catch { /* non-fatal */ }
+          });
+        });
       })
     );
 
     unsubs.push(
       bus.on('PLUGIN_ACTIVE', (env: Env<Extract<PluginEvent, { type: 'PLUGIN_ACTIVE' }>>) => {
-        try {
-          const span = this._pluginSpans.get(env.payload.pluginId);
-          if (span) recordPluginPhase(span, 'active');
-        } catch { /* non-fatal */ }
+        this._safe(() => {
+          this._withSpan(this._pluginSpans, env.payload.pluginId, (span) => recordPluginPhase(span, 'active'));
+        });
       })
     );
 
     unsubs.push(
       bus.on('PLUGIN_DEGRADED', (env: Env<Extract<PluginEvent, { type: 'PLUGIN_DEGRADED' }>>) => {
-        try {
-          const span = this._pluginSpans.get(env.payload.pluginId);
-          if (span) {
+        this._safe(() => {
+          this._withSpan(this._pluginSpans, env.payload.pluginId, (span) => {
             recordPluginPhase(span, 'degraded', {
               'plugin.degraded_reason': env.payload.reason,
               'plugin.affected_capability_count': env.payload.affectedCapabilities.length,
             });
-          }
-        } catch { /* non-fatal */ }
+          });
+        });
       })
     );
 
     unsubs.push(
       bus.on('PLUGIN_ERROR', (env: Env<Extract<PluginEvent, { type: 'PLUGIN_ERROR' }>>) => {
-        try {
-          const span = this._pluginSpans.get(env.payload.pluginId);
-          if (span) {
+        this._safe(() => {
+          this._closeSpan(this._pluginSpans, env.payload.pluginId, (span) => {
             endPluginSpan(span, {
               outcome: 'error',
               error: env.payload.error,
             });
-            this._pluginSpans.delete(env.payload.pluginId);
-          }
-        } catch { /* non-fatal */ }
+          });
+        });
       })
     );
 
     unsubs.push(
       bus.on('PLUGIN_UNLOADING', (env: Env<Extract<PluginEvent, { type: 'PLUGIN_UNLOADING' }>>) => {
-        try {
-          const span = this._pluginSpans.get(env.payload.pluginId);
-          if (span) recordPluginPhase(span, 'unloading');
-        } catch { /* non-fatal */ }
+        this._safe(() => {
+          this._withSpan(this._pluginSpans, env.payload.pluginId, (span) => recordPluginPhase(span, 'unloading'));
+        });
       })
     );
 
     unsubs.push(
       bus.on('PLUGIN_DISABLED', (env: Env<Extract<PluginEvent, { type: 'PLUGIN_DISABLED' }>>) => {
-        try {
-          const span = this._pluginSpans.get(env.payload.pluginId);
-          if (span) {
+        this._safe(() => {
+          this._closeSpan(this._pluginSpans, env.payload.pluginId, (span) => {
             endPluginSpan(span, {
               outcome: 'disabled',
               reason: env.payload.reason,
             });
-            this._pluginSpans.delete(env.payload.pluginId);
-          }
-        } catch { /* non-fatal */ }
+          });
+        });
       })
     );
 
@@ -229,7 +238,7 @@ export class DomainBridge {
 
     unsubs.push(
       bus.on('MCP_CONFIGURED', (env: Env<Extract<McpEvent, { type: 'MCP_CONFIGURED' }>>) => {
-        try {
+        this._safe(() => {
           const span = startMcpSpan(this._tracer, {
             serverId: env.payload.serverId,
             transport: env.payload.transport,
@@ -237,91 +246,83 @@ export class DomainBridge {
             traceId: env.traceId,
           });
           this._mcpSpans.set(env.payload.serverId, span);
-        } catch { /* non-fatal */ }
+        });
       })
     );
 
     unsubs.push(
       bus.on('MCP_CONNECTING', (env: Env<Extract<McpEvent, { type: 'MCP_CONNECTING' }>>) => {
-        try {
-          const span = this._mcpSpans.get(env.payload.serverId);
-          if (span) recordMcpPhase(span, 'connecting');
-        } catch { /* non-fatal */ }
+        this._safe(() => {
+          this._withSpan(this._mcpSpans, env.payload.serverId, (span) => recordMcpPhase(span, 'connecting'));
+        });
       })
     );
 
     unsubs.push(
       bus.on('MCP_CONNECTED', (env: Env<Extract<McpEvent, { type: 'MCP_CONNECTED' }>>) => {
-        try {
-          const span = this._mcpSpans.get(env.payload.serverId);
-          if (span) {
+        this._safe(() => {
+          this._withSpan(this._mcpSpans, env.payload.serverId, (span) => {
             recordMcpPhase(span, 'connected', {
               'mcp.tool_count': env.payload.toolCount,
               'mcp.resource_count': env.payload.resourceCount,
             });
             // MCP_CONNECTED is an intermediate state — span stays open
             // for subsequent DEGRADED/DISCONNECTED/AUTH_REQUIRED events
-          }
-        } catch { /* non-fatal */ }
+          });
+        });
       })
     );
 
     unsubs.push(
       bus.on('MCP_DEGRADED', (env: Env<Extract<McpEvent, { type: 'MCP_DEGRADED' }>>) => {
-        try {
-          const span = this._mcpSpans.get(env.payload.serverId);
-          if (span) {
+        this._safe(() => {
+          this._withSpan(this._mcpSpans, env.payload.serverId, (span) => {
             recordMcpPhase(span, 'degraded', {
               'mcp.degraded_reason': env.payload.reason,
               'mcp.available_tool_count': env.payload.availableTools.length,
             });
-          }
-        } catch { /* non-fatal */ }
+          });
+        });
       })
     );
 
     unsubs.push(
       bus.on('MCP_AUTH_REQUIRED', (env: Env<Extract<McpEvent, { type: 'MCP_AUTH_REQUIRED' }>>) => {
-        try {
-          const span = this._mcpSpans.get(env.payload.serverId);
-          if (span) {
+        this._safe(() => {
+          this._closeSpan(this._mcpSpans, env.payload.serverId, (span) => {
             recordMcpPhase(span, 'auth_required', {
               'mcp.auth_type': env.payload.authType,
             });
             endMcpSpan(span, { outcome: 'auth_failed' });
-            this._mcpSpans.delete(env.payload.serverId);
-          }
-        } catch { /* non-fatal */ }
+          });
+        });
       })
     );
 
     unsubs.push(
       bus.on('MCP_RECONNECTING', (env: Env<Extract<McpEvent, { type: 'MCP_RECONNECTING' }>>) => {
-        try {
-          const span = this._mcpSpans.get(env.payload.serverId);
-          if (span) {
+        this._safe(() => {
+          this._withSpan(this._mcpSpans, env.payload.serverId, (span) => {
             recordMcpPhase(span, 'reconnecting', {
               'mcp.reconnect_attempt': env.payload.attempt,
               'mcp.reconnect_max_attempts': env.payload.maxAttempts,
             });
-          }
-        } catch { /* non-fatal */ }
+          });
+        });
       })
     );
 
     unsubs.push(
       bus.on('MCP_DISCONNECTED', (env: Env<Extract<McpEvent, { type: 'MCP_DISCONNECTED' }>>) => {
-        try {
-          const span = this._mcpSpans.get(env.payload.serverId);
-          if (span) {
+        this._safe(() => {
+          this._closeSpan(this._mcpSpans, env.payload.serverId, (span) => {
             endMcpSpan(span, {
               outcome: 'disconnected',
               reason: env.payload.reason,
               willRetry: env.payload.willRetry,
             });
-            this._mcpSpans.delete(env.payload.serverId);
-          }
-        } catch { /* non-fatal */ }
+          });
+        });
       })
     );
 
@@ -335,103 +336,94 @@ export class DomainBridge {
 
     unsubs.push(
       bus.on('TRANSPORT_INITIALIZING', (env: Env<Extract<TransportEvent, { type: 'TRANSPORT_INITIALIZING' }>>) => {
-        try {
+        this._safe(() => {
           const span = startTransportSpan(this._tracer, {
             transportId: env.payload.transportId,
             protocol: env.payload.protocol,
             traceId: env.traceId,
           });
           this._transportSpans.set(env.payload.transportId, span);
-        } catch { /* non-fatal */ }
+        });
       })
     );
 
     unsubs.push(
       bus.on('TRANSPORT_AUTHENTICATING', (env: Env<Extract<TransportEvent, { type: 'TRANSPORT_AUTHENTICATING' }>>) => {
-        try {
-          const span = this._transportSpans.get(env.payload.transportId);
-          if (span) recordTransportPhase(span, 'authenticating');
-        } catch { /* non-fatal */ }
+        this._safe(() => {
+          this._withSpan(this._transportSpans, env.payload.transportId, (span) => recordTransportPhase(span, 'authenticating'));
+        });
       })
     );
 
     unsubs.push(
       bus.on('TRANSPORT_CONNECTED', (env: Env<Extract<TransportEvent, { type: 'TRANSPORT_CONNECTED' }>>) => {
-        try {
-          const span = this._transportSpans.get(env.payload.transportId);
-          if (span) {
+        this._safe(() => {
+          this._withSpan(this._transportSpans, env.payload.transportId, (span) => {
             recordTransportPhase(span, 'connected', {
               'transport.endpoint': env.payload.endpoint,
             });
-          }
-        } catch { /* non-fatal */ }
+          });
+        });
       })
     );
 
     unsubs.push(
       bus.on('TRANSPORT_SYNCING', (env: Env<Extract<TransportEvent, { type: 'TRANSPORT_SYNCING' }>>) => {
-        try {
-          const span = this._transportSpans.get(env.payload.transportId);
-          if (span) recordTransportPhase(span, 'syncing');
-        } catch { /* non-fatal */ }
+        this._safe(() => {
+          this._withSpan(this._transportSpans, env.payload.transportId, (span) => recordTransportPhase(span, 'syncing'));
+        });
       })
     );
 
     unsubs.push(
       bus.on('TRANSPORT_DEGRADED', (env: Env<Extract<TransportEvent, { type: 'TRANSPORT_DEGRADED' }>>) => {
-        try {
-          const span = this._transportSpans.get(env.payload.transportId);
-          if (span) {
+        this._safe(() => {
+          this._withSpan(this._transportSpans, env.payload.transportId, (span) => {
             recordTransportPhase(span, 'degraded', {
               'transport.degraded_reason': env.payload.reason,
             });
-          }
-        } catch { /* non-fatal */ }
+          });
+        });
       })
     );
 
     unsubs.push(
       bus.on('TRANSPORT_RECONNECTING', (env: Env<Extract<TransportEvent, { type: 'TRANSPORT_RECONNECTING' }>>) => {
-        try {
-          const span = this._transportSpans.get(env.payload.transportId);
-          if (span) {
+        this._safe(() => {
+          this._withSpan(this._transportSpans, env.payload.transportId, (span) => {
             recordTransportPhase(span, 'reconnecting', {
               'transport.reconnect_attempt': env.payload.attempt,
               'transport.reconnect_max_attempts': env.payload.maxAttempts,
             });
-          }
-        } catch { /* non-fatal */ }
+          });
+        });
       })
     );
 
     unsubs.push(
       bus.on('TRANSPORT_DISCONNECTED', (env: Env<Extract<TransportEvent, { type: 'TRANSPORT_DISCONNECTED' }>>) => {
-        try {
-          const span = this._transportSpans.get(env.payload.transportId);
-          if (span) {
+        this._safe(() => {
+          this._closeSpan(this._transportSpans, env.payload.transportId, (span) => {
             endTransportSpan(span, {
               outcome: 'disconnected',
               reason: env.payload.reason,
               willRetry: env.payload.willRetry,
             });
-            this._transportSpans.delete(env.payload.transportId);
-          }
-        } catch { /* non-fatal */ }
+          });
+        });
       })
     );
 
     unsubs.push(
       bus.on('TRANSPORT_TERMINAL_FAILURE', (env: Env<Extract<TransportEvent, { type: 'TRANSPORT_TERMINAL_FAILURE' }>>) => {
-        try {
-          const span = this._transportSpans.get(env.payload.transportId);
-          if (span) {
+        this._safe(() => {
+          this._closeSpan(this._transportSpans, env.payload.transportId, (span) => {
             endTransportSpan(span, {
               outcome: 'terminal_failure',
               reason: env.payload.error,
             });
-            this._transportSpans.delete(env.payload.transportId);
-          }
-        } catch { /* non-fatal */ }
+          });
+        });
       })
     );
 
@@ -445,7 +437,7 @@ export class DomainBridge {
 
     unsubs.push(
       bus.on('TASK_CREATED', (env: Env<Extract<TaskEvent, { type: 'TASK_CREATED' }>>) => {
-        try {
+        this._safe(() => {
           const span = startTaskSpan(this._tracer, {
             taskId: env.payload.taskId,
             agentId: env.payload.agentId,
@@ -454,89 +446,80 @@ export class DomainBridge {
             traceId: env.traceId,
           });
           this._taskSpans.set(env.payload.taskId, span);
-        } catch { /* non-fatal */ }
+        });
       })
     );
 
     unsubs.push(
       bus.on('TASK_STARTED', (env: Env<Extract<TaskEvent, { type: 'TASK_STARTED' }>>) => {
-        try {
-          const span = this._taskSpans.get(env.payload.taskId);
-          if (span) recordTaskPhase(span, 'started');
-        } catch { /* non-fatal */ }
+        this._safe(() => {
+          this._withSpan(this._taskSpans, env.payload.taskId, (span) => recordTaskPhase(span, 'started'));
+        });
       })
     );
 
     unsubs.push(
       bus.on('TASK_BLOCKED', (env: Env<Extract<TaskEvent, { type: 'TASK_BLOCKED' }>>) => {
-        try {
-          const span = this._taskSpans.get(env.payload.taskId);
-          if (span) {
+        this._safe(() => {
+          this._withSpan(this._taskSpans, env.payload.taskId, (span) => {
             recordTaskPhase(span, 'blocked', {
               'task.blocked_reason': env.payload.reason,
             });
-          }
-        } catch { /* non-fatal */ }
+          });
+        });
       })
     );
 
     unsubs.push(
       bus.on('TASK_PROGRESS', (env: Env<Extract<TaskEvent, { type: 'TASK_PROGRESS' }>>) => {
-        try {
-          const span = this._taskSpans.get(env.payload.taskId);
-          if (span) {
+        this._safe(() => {
+          this._withSpan(this._taskSpans, env.payload.taskId, (span) => {
             recordTaskPhase(span, 'progress', {
               'task.progress': env.payload.progress,
             });
-          }
-        } catch { /* non-fatal */ }
+          });
+        });
       })
     );
 
     unsubs.push(
       bus.on('TASK_COMPLETED', (env: Env<Extract<TaskEvent, { type: 'TASK_COMPLETED' }>>) => {
-        try {
-          const span = this._taskSpans.get(env.payload.taskId);
-          if (span) {
+        this._safe(() => {
+          this._closeSpan(this._taskSpans, env.payload.taskId, (span) => {
             endTaskSpan(span, {
               outcome: 'completed',
               durationMs: env.payload.durationMs,
             });
-            this._taskSpans.delete(env.payload.taskId);
-          }
-        } catch { /* non-fatal */ }
+          });
+        });
       })
     );
 
     unsubs.push(
       bus.on('TASK_FAILED', (env: Env<Extract<TaskEvent, { type: 'TASK_FAILED' }>>) => {
-        try {
-          const span = this._taskSpans.get(env.payload.taskId);
-          if (span) {
+        this._safe(() => {
+          this._closeSpan(this._taskSpans, env.payload.taskId, (span) => {
             endTaskSpan(span, {
               outcome: 'failed',
               durationMs: env.payload.durationMs,
               error: env.payload.error,
             });
-            this._taskSpans.delete(env.payload.taskId);
-          }
-        } catch { /* non-fatal */ }
+          });
+        });
       })
     );
 
     unsubs.push(
       bus.on('TASK_CANCELLED', (env: Env<Extract<TaskEvent, { type: 'TASK_CANCELLED' }>>) => {
-        try {
-          const span = this._taskSpans.get(env.payload.taskId);
-          if (span) {
+        this._safe(() => {
+          this._closeSpan(this._taskSpans, env.payload.taskId, (span) => {
             endTaskSpan(span, {
               outcome: 'cancelled',
               durationMs: 0,
               reason: env.payload.reason,
             });
-            this._taskSpans.delete(env.payload.taskId);
-          }
-        } catch { /* non-fatal */ }
+          });
+        });
       })
     );
 
@@ -550,7 +533,7 @@ export class DomainBridge {
 
     unsubs.push(
       bus.on('AGENT_SPAWNING', (env: Env<Extract<AgentEvent, { type: 'AGENT_SPAWNING' }>>) => {
-        try {
+        this._safe(() => {
           const span = startAgentSpan(this._tracer, {
             agentId: env.payload.agentId,
             taskId: env.payload.taskId,
@@ -558,95 +541,85 @@ export class DomainBridge {
             traceId: env.traceId,
           });
           this._agentSpans.set(env.payload.agentId, span);
-        } catch { /* non-fatal */ }
+        });
       })
     );
 
     unsubs.push(
       bus.on('AGENT_RUNNING', (env: Env<Extract<AgentEvent, { type: 'AGENT_RUNNING' }>>) => {
-        try {
-          const span = this._agentSpans.get(env.payload.agentId);
-          if (span) recordAgentPhase(span, 'running');
-        } catch { /* non-fatal */ }
+        this._safe(() => {
+          this._withSpan(this._agentSpans, env.payload.agentId, (span) => recordAgentPhase(span, 'running'));
+        });
       })
     );
 
     unsubs.push(
       bus.on('AGENT_AWAITING_MESSAGE', (env: Env<Extract<AgentEvent, { type: 'AGENT_AWAITING_MESSAGE' }>>) => {
-        try {
-          const span = this._agentSpans.get(env.payload.agentId);
-          if (span) recordAgentPhase(span, 'awaiting_message');
-        } catch { /* non-fatal */ }
+        this._safe(() => {
+          this._withSpan(this._agentSpans, env.payload.agentId, (span) => recordAgentPhase(span, 'awaiting_message'));
+        });
       })
     );
 
     unsubs.push(
       bus.on('AGENT_AWAITING_TOOL', (env: Env<Extract<AgentEvent, { type: 'AGENT_AWAITING_TOOL' }>>) => {
-        try {
-          const span = this._agentSpans.get(env.payload.agentId);
-          if (span) {
+        this._safe(() => {
+          this._withSpan(this._agentSpans, env.payload.agentId, (span) => {
             recordAgentPhase(span, 'awaiting_tool', {
               'agent.tool': env.payload.tool,
               'agent.call_id': env.payload.callId,
             });
-          }
-        } catch { /* non-fatal */ }
+          });
+        });
       })
     );
 
     unsubs.push(
       bus.on('AGENT_FINALIZING', (env: Env<Extract<AgentEvent, { type: 'AGENT_FINALIZING' }>>) => {
-        try {
-          const span = this._agentSpans.get(env.payload.agentId);
-          if (span) recordAgentPhase(span, 'finalizing');
-        } catch { /* non-fatal */ }
+        this._safe(() => {
+          this._withSpan(this._agentSpans, env.payload.agentId, (span) => recordAgentPhase(span, 'finalizing'));
+        });
       })
     );
 
     unsubs.push(
       bus.on('AGENT_COMPLETED', (env: Env<Extract<AgentEvent, { type: 'AGENT_COMPLETED' }>>) => {
-        try {
-          const span = this._agentSpans.get(env.payload.agentId);
-          if (span) {
+        this._safe(() => {
+          this._closeSpan(this._agentSpans, env.payload.agentId, (span) => {
             endAgentSpan(span, {
               outcome: 'completed',
               durationMs: env.payload.durationMs,
             });
-            this._agentSpans.delete(env.payload.agentId);
-          }
-        } catch { /* non-fatal */ }
+          });
+        });
       })
     );
 
     unsubs.push(
       bus.on('AGENT_FAILED', (env: Env<Extract<AgentEvent, { type: 'AGENT_FAILED' }>>) => {
-        try {
-          const span = this._agentSpans.get(env.payload.agentId);
-          if (span) {
+        this._safe(() => {
+          this._closeSpan(this._agentSpans, env.payload.agentId, (span) => {
             endAgentSpan(span, {
               outcome: 'failed',
               durationMs: env.payload.durationMs,
               error: env.payload.error,
             });
-            this._agentSpans.delete(env.payload.agentId);
-          }
-        } catch { /* non-fatal */ }
+          });
+        });
       })
     );
 
     unsubs.push(
       bus.on('AGENT_CANCELLED', (env: Env<Extract<AgentEvent, { type: 'AGENT_CANCELLED' }>>) => {
-        try {
-          const span = this._agentSpans.get(env.payload.agentId);
-          if (span) {
+        this._safe(() => {
+          this._closeSpan(this._agentSpans, env.payload.agentId, (span) => {
             endAgentSpan(span, {
               outcome: 'cancelled',
               durationMs: 0,
               reason: env.payload.reason,
             });
-            this._agentSpans.delete(env.payload.agentId);
-          }
-        } catch { /* non-fatal */ }
+          });
+        });
       })
     );
 
@@ -660,7 +633,7 @@ export class DomainBridge {
 
     unsubs.push(
       bus.on('PERMISSION_REQUESTED', (env: Env<Extract<PermissionEvent, { type: 'PERMISSION_REQUESTED' }>>) => {
-        try {
+        this._safe(() => {
           const span = startPermissionSpan(this._tracer, {
             callId: env.payload.callId,
             tool: env.payload.tool,
@@ -668,98 +641,90 @@ export class DomainBridge {
             traceId: env.traceId,
           });
           this._permissionSpans.set(env.payload.callId, span);
-        } catch { /* non-fatal */ }
+        });
       })
     );
 
     unsubs.push(
       bus.on('RULES_COLLECTED', (env: Env<Extract<PermissionEvent, { type: 'RULES_COLLECTED' }>>) => {
-        try {
-          const span = this._permissionSpans.get(env.payload.callId);
-          if (span) {
+        this._safe(() => {
+          this._withSpan(this._permissionSpans, env.payload.callId, (span) => {
             recordPermissionPhase(span, 'rules_collected', {
               'permission.rule_count': env.payload.ruleCount,
             });
-          }
-        } catch { /* non-fatal */ }
+          });
+        });
       })
     );
 
     unsubs.push(
       bus.on('INPUT_NORMALIZED', (env: Env<Extract<PermissionEvent, { type: 'INPUT_NORMALIZED' }>>) => {
-        try {
-          const span = this._permissionSpans.get(env.payload.callId);
-          if (span) recordPermissionPhase(span, 'input_normalized');
-        } catch { /* non-fatal */ }
+        this._safe(() => {
+          this._withSpan(this._permissionSpans, env.payload.callId, (span) => recordPermissionPhase(span, 'input_normalized'));
+        });
       })
     );
 
     unsubs.push(
       bus.on('POLICY_EVALUATED', (env: Env<Extract<PermissionEvent, { type: 'POLICY_EVALUATED' }>>) => {
-        try {
-          const span = this._permissionSpans.get(env.payload.callId);
-          if (span) {
+        this._safe(() => {
+          this._withSpan(this._permissionSpans, env.payload.callId, (span) => {
             recordPermissionPhase(span, 'policy_evaluated', {
               'permission.policy_result': env.payload.result,
             });
-          }
-        } catch { /* non-fatal */ }
+          });
+        });
       })
     );
 
     unsubs.push(
       bus.on('MODE_EVALUATED', (env: Env<Extract<PermissionEvent, { type: 'MODE_EVALUATED' }>>) => {
-        try {
-          const span = this._permissionSpans.get(env.payload.callId);
-          if (span) {
+        this._safe(() => {
+          this._withSpan(this._permissionSpans, env.payload.callId, (span) => {
             recordPermissionPhase(span, 'mode_evaluated', {
               'permission.mode': env.payload.mode,
               'permission.mode_result': env.payload.result,
             });
-          }
-        } catch { /* non-fatal */ }
+          });
+        });
       })
     );
 
     unsubs.push(
       bus.on('SESSION_OVERRIDE_EVALUATED', (env: Env<Extract<PermissionEvent, { type: 'SESSION_OVERRIDE_EVALUATED' }>>) => {
-        try {
-          const span = this._permissionSpans.get(env.payload.callId);
-          if (span) {
+        this._safe(() => {
+          this._withSpan(this._permissionSpans, env.payload.callId, (span) => {
             recordPermissionPhase(span, 'session_override_evaluated', {
               'permission.override_applied': env.payload.overrideApplied,
             });
-          }
-        } catch { /* non-fatal */ }
+          });
+        });
       })
     );
 
     unsubs.push(
       bus.on('SAFETY_CHECKED', (env: Env<Extract<PermissionEvent, { type: 'SAFETY_CHECKED' }>>) => {
-        try {
-          const span = this._permissionSpans.get(env.payload.callId);
-          if (span) {
+        this._safe(() => {
+          this._withSpan(this._permissionSpans, env.payload.callId, (span) => {
             recordPermissionPhase(span, 'safety_checked', {
               'permission.safe': env.payload.safe,
               'permission.warning_count': env.payload.warnings.length,
             });
-          }
-        } catch { /* non-fatal */ }
+          });
+        });
       })
     );
 
     unsubs.push(
       bus.on('DECISION_EMITTED', (env: Env<Extract<PermissionEvent, { type: 'DECISION_EMITTED' }>>) => {
-        try {
-          const span = this._permissionSpans.get(env.payload.callId);
-          if (span) {
+        this._safe(() => {
+          this._closeSpan(this._permissionSpans, env.payload.callId, (span) => {
             endPermissionSpan(span, {
               approved: env.payload.approved,
               source: env.payload.source,
             });
-            this._permissionSpans.delete(env.payload.callId);
-          }
-        } catch { /* non-fatal */ }
+          });
+        });
       })
     );
 
@@ -773,7 +738,7 @@ export class DomainBridge {
 
     unsubs.push(
       bus.on('SESSION_STARTED', (env: Env<Extract<SessionEvent, { type: 'SESSION_STARTED' }>>) => {
-        try {
+        this._safe(() => {
           const span = startSessionSpan(this._tracer, {
             sessionId: env.payload.sessionId,
             traceId: env.traceId,
@@ -781,13 +746,13 @@ export class DomainBridge {
             workingDir: env.payload.workingDir,
           });
           this._sessionSpans.set(env.payload.sessionId, span);
-        } catch { /* non-fatal */ }
+        });
       })
     );
 
     unsubs.push(
       bus.on('SESSION_LOADING', (env: Env<Extract<SessionEvent, { type: 'SESSION_LOADING' }>>) => {
-        try {
+        this._safe(() => {
           // SESSION_LOADING fires when resuming — open a span if not already open
           if (!this._sessionSpans.has(env.payload.sessionId)) {
             const span = startSessionSpan(this._tracer, {
@@ -797,76 +762,68 @@ export class DomainBridge {
             });
             this._sessionSpans.set(env.payload.sessionId, span);
           } else {
-            const span = this._sessionSpans.get(env.payload.sessionId);
-            if (span) recordSessionPhase(span, 'loading');
+            this._withSpan(this._sessionSpans, env.payload.sessionId, (span) => recordSessionPhase(span, 'loading'));
           }
-        } catch { /* non-fatal */ }
+        });
       })
     );
 
     unsubs.push(
       bus.on('SESSION_RESUMED', (env: Env<Extract<SessionEvent, { type: 'SESSION_RESUMED' }>>) => {
-        try {
-          const span = this._sessionSpans.get(env.payload.sessionId);
-          if (span) {
+        this._safe(() => {
+          this._withSpan(this._sessionSpans, env.payload.sessionId, (span) => {
             recordSessionPhase(span, 'resumed', {
               'session.turn_count': env.payload.turnCount,
             });
-          }
-        } catch { /* non-fatal */ }
+          });
+        });
       })
     );
 
     unsubs.push(
       bus.on('SESSION_REPAIRING', (env: Env<Extract<SessionEvent, { type: 'SESSION_REPAIRING' }>>) => {
-        try {
-          const span = this._sessionSpans.get(env.payload.sessionId);
-          if (span) {
+        this._safe(() => {
+          this._withSpan(this._sessionSpans, env.payload.sessionId, (span) => {
             recordSessionPhase(span, 'repairing', {
               'session.repair_reason': env.payload.reason,
             });
-          }
-        } catch { /* non-fatal */ }
+          });
+        });
       })
     );
 
     unsubs.push(
       bus.on('SESSION_RECONCILING', (env: Env<Extract<SessionEvent, { type: 'SESSION_RECONCILING' }>>) => {
-        try {
-          const span = this._sessionSpans.get(env.payload.sessionId);
-          if (span) {
+        this._safe(() => {
+          this._withSpan(this._sessionSpans, env.payload.sessionId, (span) => {
             recordSessionPhase(span, 'reconciling', {
               'session.message_count': env.payload.messageCount,
             });
-          }
-        } catch { /* non-fatal */ }
+          });
+        });
       })
     );
 
     unsubs.push(
       bus.on('SESSION_READY', (env: Env<Extract<SessionEvent, { type: 'SESSION_READY' }>>) => {
-        try {
-          const span = this._sessionSpans.get(env.payload.sessionId);
-          if (span) {
+        this._safe(() => {
+          this._closeSpan(this._sessionSpans, env.payload.sessionId, (span) => {
             endSessionSpan(span, { outcome: 'ready' });
-            this._sessionSpans.delete(env.payload.sessionId);
-          }
-        } catch { /* non-fatal */ }
+          });
+        });
       })
     );
 
     unsubs.push(
       bus.on('SESSION_RECOVERY_FAILED', (env: Env<Extract<SessionEvent, { type: 'SESSION_RECOVERY_FAILED' }>>) => {
-        try {
-          const span = this._sessionSpans.get(env.payload.sessionId);
-          if (span) {
+        this._safe(() => {
+          this._closeSpan(this._sessionSpans, env.payload.sessionId, (span) => {
             endSessionSpan(span, {
               outcome: 'recovery_failed',
               error: env.payload.error,
             });
-            this._sessionSpans.delete(env.payload.sessionId);
-          }
-        } catch { /* non-fatal */ }
+          });
+        });
       })
     );
 
@@ -881,7 +838,7 @@ export class DomainBridge {
     // COMPACTION_CHECK is a poll event — open a span keyed by sessionId
     unsubs.push(
       bus.on('COMPACTION_CHECK', (env: Env<Extract<CompactionEvent, { type: 'COMPACTION_CHECK' }>>) => {
-        try {
+        this._safe(() => {
           // Only open a new span if there's not already a compaction running for this session
           if (!this._compactionSpans.has(env.payload.sessionId)) {
             const span = startCompactionSpan(this._tracer, {
@@ -893,13 +850,13 @@ export class DomainBridge {
             });
             this._compactionSpans.set(env.payload.sessionId, span);
           }
-        } catch { /* non-fatal */ }
+        });
       })
     );
 
     unsubs.push(
       bus.on('COMPACTION_AUTOCOMPACT', (env: Env<Extract<CompactionEvent, { type: 'COMPACTION_AUTOCOMPACT' }>>) => {
-        try {
+        this._safe(() => {
           // Upgrade or open a new span with the resolved strategy
           const existing = this._compactionSpans.get(env.payload.sessionId);
           if (!existing) {
@@ -911,13 +868,13 @@ export class DomainBridge {
             });
             this._compactionSpans.set(env.payload.sessionId, span);
           }
-        } catch { /* non-fatal */ }
+        });
       })
     );
 
     unsubs.push(
       bus.on('COMPACTION_REACTIVE', (env: Env<Extract<CompactionEvent, { type: 'COMPACTION_REACTIVE' }>>) => {
-        try {
+        this._safe(() => {
           if (!this._compactionSpans.has(env.payload.sessionId)) {
             const span = startCompactionSpan(this._tracer, {
               sessionId: env.payload.sessionId,
@@ -928,75 +885,69 @@ export class DomainBridge {
             });
             this._compactionSpans.set(env.payload.sessionId, span);
           }
-        } catch { /* non-fatal */ }
+        });
       })
     );
 
     unsubs.push(
       bus.on('COMPACTION_MICROCOMPACT', (env: Env<Extract<CompactionEvent, { type: 'COMPACTION_MICROCOMPACT' }>>) => {
-        try {
-          const span = this._compactionSpans.get(env.payload.sessionId);
-          if (span) {
+        this._safe(() => {
+          this._withSpan(this._compactionSpans, env.payload.sessionId, (span) => {
             recordCompactionPhase(span, 'microcompact', {
               'compaction.turn_count': env.payload.turnCount,
               'compaction.tokens_before': env.payload.tokensBefore,
               'compaction.tokens_after': env.payload.tokensAfter,
             });
-          }
-        } catch { /* non-fatal */ }
+          });
+        });
       })
     );
 
     unsubs.push(
       bus.on('COMPACTION_COLLAPSE', (env: Env<Extract<CompactionEvent, { type: 'COMPACTION_COLLAPSE' }>>) => {
-        try {
-          const span = this._compactionSpans.get(env.payload.sessionId);
-          if (span) {
+        this._safe(() => {
+          this._withSpan(this._compactionSpans, env.payload.sessionId, (span) => {
             recordCompactionPhase(span, 'collapse', {
               'compaction.message_count': env.payload.messageCount,
               'compaction.tokens_before': env.payload.tokensBefore,
               'compaction.tokens_after': env.payload.tokensAfter,
             });
-          }
-        } catch { /* non-fatal */ }
+          });
+        });
       })
     );
 
     unsubs.push(
       bus.on('COMPACTION_BOUNDARY_COMMIT', (env: Env<Extract<CompactionEvent, { type: 'COMPACTION_BOUNDARY_COMMIT' }>>) => {
-        try {
-          const span = this._compactionSpans.get(env.payload.sessionId);
-          if (span) {
+        this._safe(() => {
+          this._withSpan(this._compactionSpans, env.payload.sessionId, (span) => {
             recordCompactionPhase(span, 'boundary_commit', {
               'compaction.checkpoint_id': env.payload.checkpointId,
             });
-          }
-        } catch { /* non-fatal */ }
+          });
+        });
       })
     );
 
     unsubs.push(
       bus.on('COMPACTION_DONE', (env: Env<Extract<CompactionEvent, { type: 'COMPACTION_DONE' }>>) => {
-        try {
-          const span = this._compactionSpans.get(env.payload.sessionId);
-          if (span) {
+        this._safe(() => {
+          this._closeSpan(this._compactionSpans, env.payload.sessionId, (span) => {
             endCompactionSpan(span, {
               outcome: 'done',
               tokensBefore: env.payload.tokensBefore,
               tokensAfter: env.payload.tokensAfter,
               durationMs: env.payload.durationMs,
             });
-            this._compactionSpans.delete(env.payload.sessionId);
-          }
-        } catch { /* non-fatal */ }
+          });
+        });
       })
     );
 
     unsubs.push(
       bus.on('COMPACTION_FAILED', (env: Env<Extract<CompactionEvent, { type: 'COMPACTION_FAILED' }>>) => {
-        try {
-          const span = this._compactionSpans.get(env.payload.sessionId);
-          if (span) {
+        this._safe(() => {
+          this._closeSpan(this._compactionSpans, env.payload.sessionId, (span) => {
             endCompactionSpan(span, {
               outcome: 'failed',
               // COMPACTION_FAILED does not carry tokensBefore in its event payload;
@@ -1004,9 +955,8 @@ export class DomainBridge {
               tokensBefore: 0,
               error: env.payload.error,
             });
-            this._compactionSpans.delete(env.payload.sessionId);
-          }
-        } catch { /* non-fatal */ }
+          });
+        });
       })
     );
 

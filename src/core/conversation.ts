@@ -36,6 +36,73 @@ type Message =
   | { role: 'system'; content: string }
   | { role: 'tool'; callId: string; content: string; toolName?: string };
 
+function cloneMessages(messages: Message[]): Message[] {
+  return structuredClone(messages);
+}
+
+function extractAssistantText(content: ProviderMessage['content']): string {
+  if (typeof content === 'string') return content;
+  if (!Array.isArray(content)) return String(content);
+  return content
+    .filter((part): part is { type: 'text'; text: string } => part.type === 'text')
+    .map((part) => part.text)
+    .join('');
+}
+
+function toInternalMessage(message: ProviderMessage): Message {
+  if (message.role === 'user') {
+    return {
+      role: 'user',
+      content: typeof message.content === 'string' ? message.content : (message.content as ContentPart[]),
+    };
+  }
+  if (message.role === 'assistant') {
+    return { role: 'assistant', content: extractAssistantText(message.content) };
+  }
+  const toolMsg = message as { role: 'tool'; callId: string; content: string | unknown };
+  return {
+    role: 'tool',
+    callId: toolMsg.callId ?? '',
+    content: typeof toolMsg.content === 'string' ? toolMsg.content : String(toolMsg.content),
+  };
+}
+
+function messagesToInternal(messages: ProviderMessage[]): Message[] {
+  return messages.map(toInternalMessage);
+}
+
+function cloneBranchMap(branches: Map<string, Message[]>): Record<string, Message[]> {
+  const result: Record<string, Message[]> = {};
+  for (const [name, msgs] of branches) {
+    result[name] = cloneMessages(msgs);
+  }
+  return result;
+}
+
+function restoreBranchMap(branches?: Record<string, Message[]>): Map<string, Message[]> {
+  const restored = new Map<string, Message[]>();
+  if (!branches) return restored;
+  for (const [name, msgs] of Object.entries(branches)) {
+    restored.set(name, msgs);
+  }
+  return restored;
+}
+
+function deriveConversationTitle(content: string): string {
+  const text = content.trim();
+  if (text.length <= 50) return text;
+  let cut = text.lastIndexOf(' ', 50);
+  if (cut <= 0) cut = 50;
+  return text.slice(0, cut);
+}
+
+function extractUserDisplayText(content: string | ContentPart[]): string {
+  if (typeof content === 'string') return content;
+  const textParts = content.filter((part): part is { type: 'text'; text: string } => part.type === 'text');
+  const imageCount = content.filter((part) => part.type === 'image').length;
+  return textParts.map((part) => part.text).join('') + (imageCount > 0 ? ` [+${imageCount} image(s)]` : '');
+}
+
 /** Metadata for a rendered block (code, tool, or diff). */
 export interface BlockMeta {
   /** Index of this block (increments per renderable block). */
@@ -118,15 +185,7 @@ export class ConversationManager {
   public addUserMessage(content: string | ContentPart[]): void {
     // Auto-generate title from first user message if not already set
     if (this.title === '' && typeof content === 'string' && content.trim().length > 0) {
-      const text = content.trim();
-      if (text.length <= 50) {
-        this.title = text;
-      } else {
-        // Truncate at word boundary
-        let cut = text.lastIndexOf(' ', 50);
-        if (cut <= 0) cut = 50;
-        this.title = text.slice(0, cut);
-      }
+      this.title = deriveConversationTitle(content);
     }
     this.messages.push({ role: 'user', content });
     // Clear undo stack when new user input is added (can't redo past new input)
@@ -325,6 +384,191 @@ export class ConversationManager {
     this.dirty = true;
   }
 
+  private renderUserMessage(message: Extract<Message, { role: 'user' }>, width: number): void {
+    const displayText = extractUserDisplayText(message.content);
+    if (message.cancelled) {
+      this.history.addLines(UIFactory.createMessageBar(width, displayText, '#3a1a1a', '196', ' × ', true));
+      return;
+    }
+    this.history.addLines(UIFactory.createMessageBar(width, displayText));
+  }
+
+  private renderAssistantMessage(message: Extract<Message, { role: 'assistant' }>, width: number, showLineNumbers: boolean, collapseThreshold: number, msgIdx: number): void {
+    // Render reasoning/thinking block if enabled and present
+    const showThinking = this.configManager?.get('display.showThinking') ?? false;
+    const showReasoningSummary = this.configManager?.get('display.showReasoningSummary') ?? false;
+    if (showThinking && message.reasoningContent) {
+      const thinkingStartLine = this.history.getLineCount();
+      const thinkingBlockIdx = this.blockRegistry.length;
+      const thinkingCollapseKey = `msg_${msgIdx}_thinking`;
+      const thinkingLines = renderThinkingBlock(message.reasoningContent, width);
+      this.history.addLines(thinkingLines);
+      this.history.addLine(createEmptyLine(width));
+      const thinkingRenderedLines = this.history.getLineCount() - thinkingStartLine;
+      this.blockRegistry.push({
+        blockIndex: thinkingBlockIdx,
+        collapseKey: thinkingCollapseKey,
+        type: 'thinking',
+        startLine: thinkingStartLine,
+        lineCount: thinkingRenderedLines,
+        rawContent: message.reasoningContent,
+      });
+    }
+    if (showReasoningSummary && message.reasoningSummary) {
+      const summaryLines = renderThinkingBlock(message.reasoningSummary, width);
+      this.history.addLines(summaryLines);
+      this.history.addLine(createEmptyLine(width));
+    }
+    // Render model label if present (dim, above content)
+    if (message.model) {
+      const labelText = message.provider ? `${message.model} (${message.provider})` : message.model;
+      const labelLine = createEmptyLine(width);
+      const labelStr = ' '.repeat(LAYOUT.LEFT_MARGIN) + labelText;
+      for (let ci = 0; ci < labelStr.length && ci < width; ci++) {
+        labelLine[ci] = { char: labelStr[ci], fg: '238', bg: '', bold: false, dim: true, underline: false, italic: false, strikethrough: false };
+      }
+      this.history.addLine(labelLine);
+    }
+    // Render assistant content using the markdown renderer
+    if (message.content) {
+      // Calculate gutter width dynamically based on total line count
+      const preRendered = showLineNumbers ? renderMarkdown(message.content, width) : null;
+      const totalLines = preRendered?.length ?? 0;
+      const numWidth = Math.max(3, String(totalLines).length); // minimum 3 digits wide
+      const gutterW = numWidth + 3; // digits + ' │ '
+      const contentWidth = showLineNumbers ? width - gutterW : width;
+      const renderWidth = showLineNumbers ? contentWidth : width;
+
+      // Use tracked render to register code blocks in blockRegistry
+      const { lines: tracked, codeBlocks } = renderMarkdownTracked(message.content, renderWidth);
+
+      // Register each code block found in this message
+      const msgBaseLineOffset = this.history.getLineCount();
+      for (const cb of codeBlocks) {
+        const blockStartLine = msgBaseLineOffset + cb.startOffset;
+        const blockIdx = this.blockRegistry.length;
+        const collapseKey = `code_${msgIdx}_${blockIdx}`;
+        const isAutoCollapsed = cb.rawContent.split('\n').length > collapseThreshold;
+        if (isAutoCollapsed && !this.collapseState.has(collapseKey)) {
+          this.collapseState.set(collapseKey, true);
+        }
+        this.blockRegistry.push({
+          blockIndex: blockIdx,
+          collapseKey,
+          type: 'code',
+          startLine: blockStartLine,
+          lineCount: cb.lineCount,
+          rawContent: cb.rawContent,
+        });
+      }
+
+      const rendered = tracked;
+      if (showLineNumbers) {
+        // Prepend dimmed gutter and shift content right
+        const numbered = rendered.map((line, i) => {
+          const label = String(i + 1).padStart(numWidth) + ' \u2502 ';
+          const gutterCells = UIFactory.stringToLine(label, gutterW, { fg: '238', dim: true });
+          // Build full-width line: gutter + content
+          const fullLine = createEmptyLine(width);
+          for (let ci = 0; ci < gutterW && ci < gutterCells.length; ci++) {
+            fullLine[ci] = gutterCells[ci];
+          }
+          for (let ci = 0; ci < line.length && gutterW + ci < width; ci++) {
+            fullLine[gutterW + ci] = line[ci];
+          }
+          return fullLine;
+        });
+        this.history.addLines(numbered);
+      } else {
+        this.history.addLines(rendered);
+      }
+    }
+    // Render tool calls using the tool-call block renderer
+    if (message.toolCalls && message.toolCalls.length > 0) {
+      for (const tc of message.toolCalls) {
+        const status = 'done'; // Historical messages are always complete
+        this.history.addLines(renderToolCallBlock(tc, status, undefined, width));
+      }
+    }
+  }
+
+  private renderSystemMessage(message: Extract<Message, { role: 'system' }>, width: number): void {
+    const sysStartLine = this.history.getLineCount();
+    const sysLines = renderSystemMessage(message.content, width);
+    this.history.addLines(sysLines);
+    if (/error/i.test(message.content)) {
+      this.errorLineRegistry.push(sysStartLine);
+    }
+  }
+
+  private renderToolMessage(message: Extract<Message, { role: 'tool' }>, width: number, msgIdx: number): void {
+    const collapseKey = `msg_${msgIdx}`;
+    const blockIdx = this.blockRegistry.length;
+    const startLine = this.history.getLineCount();
+    const contentLines = message.content.split('\n');
+    const lineCount = contentLines.length;
+    const hasDiffHeader = contentLines.some(l => l.startsWith('--- ')) && contentLines.some(l => l.startsWith('+++ '));
+    const hasHunk = contentLines.some(l => l.startsWith('@@ '));
+    const isDiff = hasDiffHeader && hasHunk;
+    const blockType: 'diff' | 'tool' = isDiff ? 'diff' : 'tool';
+
+    // Short messages (≤200 chars) are never collapsible
+    const isShort = message.content.length <= 200;
+    const isCollapsed = isShort ? false
+      : this.collapseState.has(collapseKey)
+        ? this.collapseState.get(collapseKey)!
+        : true;  // Collapsed by default
+
+    if (!this.collapseState.has(collapseKey)) {
+      this.collapseState.set(collapseKey, isShort ? false : true);
+    }
+
+    if (isCollapsed) {
+      // Collapsed: single dim line with preview
+      const COLLAPSE_SUFFIX_RESERVE = 30; // space for '… [+N lines]' suffix
+      const preview = contentLines[0].slice(0, width - LAYOUT.LEFT_MARGIN - LAYOUT.RIGHT_MARGIN - COLLAPSE_SUFFIX_RESERVE);
+      const hiddenCount = lineCount - 1;
+      const collapsedText = hiddenCount > 0
+        ? `${preview}…  [+${hiddenCount} lines]`
+        : preview;
+      const rendered = renderSystemMessage(collapsedText, width, 'info');
+      this.history.addLines(rendered);
+    } else {
+      // Expanded: render through markdown pipeline
+      let contentToRender = message.content;
+
+      // If the content is valid JSON, wrap in a json code fence for syntax highlighting
+      const trimmed = contentToRender.trimStart();
+      if ((trimmed.startsWith('{') || trimmed.startsWith('[')) && contentToRender.length < 100_000) {
+        try {
+          const parsed = JSON.parse(contentToRender);
+          contentToRender = '```json\n' + JSON.stringify(parsed, null, 2) + '\n```';
+        } catch {
+          // Not valid JSON — render as-is through markdown
+        }
+      }
+
+      const rendered = renderMarkdown(contentToRender, width);
+      this.history.addLines(rendered);
+    }
+
+    const renderedLineCount = this.history.getLineCount() - startLine;
+    let meta: BlockMeta = {
+      blockIndex: blockIdx,
+      collapseKey,
+      type: blockType,
+      startLine,
+      lineCount: renderedLineCount,
+      rawContent: message.content,
+    };
+
+    if (isDiff) {
+      meta = { ...meta, ...parseDiffForApply(message.content) };
+    }
+
+    this.blockRegistry.push(meta);
+  }
+
   /** Render a slice of messages into the history buffer. */
   private appendMessages(messages: Message[], width: number): void {
     const showLineNumbers = this.configManager?.get('display.lineNumbers') ?? false;
@@ -333,189 +577,13 @@ export class ConversationManager {
     for (let msgIdx = 0; msgIdx < messages.length; msgIdx++) {
       const m = messages[msgIdx];
       if (m.role === 'user') {
-        // Flatten ContentPart[] to display text for user messages
-        const parts = Array.isArray(m.content) ? m.content as ContentPart[] : [];
-        const displayText = typeof m.content === 'string'
-          ? m.content
-          : parts.filter((p): p is { type: 'text'; text: string } => p.type === 'text').map(p => p.text).join('')
-            + (parts.filter(p => p.type === 'image').length > 0
-              ? ` [+${parts.filter(p => p.type === 'image').length} image(s)]`
-              : '');
-        if (m.cancelled) {
-          this.history.addLines(UIFactory.createMessageBar(width, displayText, '#3a1a1a', '196', ' × ', true));
-        } else {
-          this.history.addLines(UIFactory.createMessageBar(width, displayText));
-        }
+        this.renderUserMessage(m, width);
       } else if (m.role === 'assistant') {
-        // Render reasoning/thinking block if enabled and present
-        const showThinking = this.configManager?.get('display.showThinking') ?? false;
-        const showReasoningSummary = this.configManager?.get('display.showReasoningSummary') ?? false;
-        if (showThinking && m.reasoningContent) {
-          const thinkingStartLine = this.history.getLineCount();
-          const thinkingBlockIdx = this.blockRegistry.length;
-          const thinkingCollapseKey = `msg_${msgIdx}_thinking`;
-          const thinkingLines = renderThinkingBlock(m.reasoningContent, width);
-          this.history.addLines(thinkingLines);
-          this.history.addLine(createEmptyLine(width));
-          const thinkingRenderedLines = this.history.getLineCount() - thinkingStartLine;
-          this.blockRegistry.push({
-            blockIndex: thinkingBlockIdx,
-            collapseKey: thinkingCollapseKey,
-            type: 'thinking',
-            startLine: thinkingStartLine,
-            lineCount: thinkingRenderedLines,
-            rawContent: m.reasoningContent,
-          });
-        }
-        if (showReasoningSummary && m.reasoningSummary) {
-          const summaryLines = renderThinkingBlock(m.reasoningSummary, width);
-          this.history.addLines(summaryLines);
-          this.history.addLine(createEmptyLine(width));
-        }
-        // Render model label if present (dim, above content)
-        if (m.model) {
-          const labelText = m.provider ? `${m.model} (${m.provider})` : m.model;
-          const labelLine = createEmptyLine(width);
-          const labelStr = ' '.repeat(LAYOUT.LEFT_MARGIN) + labelText;
-          for (let ci = 0; ci < labelStr.length && ci < width; ci++) {
-            labelLine[ci] = { char: labelStr[ci], fg: '238', bg: '', bold: false, dim: true, underline: false, italic: false, strikethrough: false };
-          }
-          this.history.addLine(labelLine);
-        }
-        // Render assistant content using the markdown renderer
-        if (m.content) {
-          // Calculate gutter width dynamically based on total line count
-          const preRendered = showLineNumbers ? renderMarkdown(m.content, width) : null;
-          const totalLines = preRendered?.length ?? 0;
-          const numWidth = Math.max(3, String(totalLines).length); // minimum 3 digits wide
-          const gutterW = numWidth + 3; // digits + ' │ '
-          const contentWidth = showLineNumbers ? width - gutterW : width;
-          const renderWidth = showLineNumbers ? contentWidth : width;
-
-          // Use tracked render to register code blocks in blockRegistry
-          const { lines: tracked, codeBlocks } = renderMarkdownTracked(m.content, renderWidth);
-
-          // Register each code block found in this message
-          const msgBaseLineOffset = this.history.getLineCount();
-          for (const cb of codeBlocks) {
-            const blockStartLine = msgBaseLineOffset + cb.startOffset;
-            const blockIdx = this.blockRegistry.length;
-            const collapseKey = `code_${msgIdx}_${blockIdx}`;
-            const isAutoCollapsed = cb.rawContent.split('\n').length > collapseThreshold;
-            if (isAutoCollapsed && !this.collapseState.has(collapseKey)) {
-              this.collapseState.set(collapseKey, true);
-            }
-            this.blockRegistry.push({
-              blockIndex: blockIdx,
-              collapseKey,
-              type: 'code',
-              startLine: blockStartLine,
-              lineCount: cb.lineCount,
-              rawContent: cb.rawContent,
-            });
-          }
-
-          const rendered = tracked;
-          if (showLineNumbers) {
-            // Prepend dimmed gutter and shift content right
-            const numbered = rendered.map((line, i) => {
-              const label = String(i + 1).padStart(numWidth) + ' \u2502 ';
-              const gutterCells = UIFactory.stringToLine(label, gutterW, { fg: '238', dim: true });
-              // Build full-width line: gutter + content
-              const fullLine = createEmptyLine(width);
-              for (let ci = 0; ci < gutterW && ci < gutterCells.length; ci++) {
-                fullLine[ci] = gutterCells[ci];
-              }
-              for (let ci = 0; ci < line.length && gutterW + ci < width; ci++) {
-                fullLine[gutterW + ci] = line[ci];
-              }
-              return fullLine;
-            });
-            this.history.addLines(numbered);
-          } else {
-            this.history.addLines(rendered);
-          }
-        }
-        // Render tool calls using the tool-call block renderer
-        if (m.toolCalls && m.toolCalls.length > 0) {
-          for (const tc of m.toolCalls) {
-            const status = 'done'; // Historical messages are always complete
-            this.history.addLines(renderToolCallBlock(tc, status, undefined, width));
-          }
-        }
+        this.renderAssistantMessage(m, width, showLineNumbers, collapseThreshold, msgIdx);
       } else if (m.role === 'system') {
-        const sysStartLine = this.history.getLineCount();
-        const sysLines = renderSystemMessage(m.content, width);
-        this.history.addLines(sysLines);
-        if (/error/i.test(m.content)) {
-          this.errorLineRegistry.push(sysStartLine);
-        }
+        this.renderSystemMessage(m, width);
       } else if (m.role === 'tool') {
-        const collapseKey = `msg_${msgIdx}`;
-        const blockIdx = this.blockRegistry.length;
-        const startLine = this.history.getLineCount();
-        const contentLines = m.content.split('\n');
-        const lineCount = contentLines.length;
-        const hasDiffHeader = contentLines.some(l => l.startsWith('--- ')) && contentLines.some(l => l.startsWith('+++ '));
-        const hasHunk = contentLines.some(l => l.startsWith('@@ '));
-        const isDiff = hasDiffHeader && hasHunk;
-        const blockType: 'diff' | 'tool' = isDiff ? 'diff' : 'tool';
-
-        // Short messages (≤200 chars) are never collapsible
-        const isShort = m.content.length <= 200;
-        const isCollapsed = isShort ? false
-          : this.collapseState.has(collapseKey)
-            ? this.collapseState.get(collapseKey)!
-            : true;  // Collapsed by default
-
-        if (!this.collapseState.has(collapseKey)) {
-          this.collapseState.set(collapseKey, isShort ? false : true);
-        }
-
-        if (isCollapsed) {
-          // Collapsed: single dim line with preview
-          const COLLAPSE_SUFFIX_RESERVE = 30; // space for '… [+N lines]' suffix
-          const preview = contentLines[0].slice(0, width - LAYOUT.LEFT_MARGIN - LAYOUT.RIGHT_MARGIN - COLLAPSE_SUFFIX_RESERVE);
-          const hiddenCount = lineCount - 1;
-          const collapsedText = hiddenCount > 0
-            ? `${preview}…  [+${hiddenCount} lines]`
-            : preview;
-          const rendered = renderSystemMessage(collapsedText, width, 'info');
-          this.history.addLines(rendered);
-        } else {
-          // Expanded: render through markdown pipeline
-          let contentToRender = m.content;
-
-          // If the content is valid JSON, wrap in a json code fence for syntax highlighting
-          const trimmed = contentToRender.trimStart();
-          if ((trimmed.startsWith('{') || trimmed.startsWith('[')) && contentToRender.length < 100_000) {
-            try {
-              const parsed = JSON.parse(contentToRender);
-              contentToRender = '```json\n' + JSON.stringify(parsed, null, 2) + '\n```';
-            } catch {
-              // Not valid JSON — render as-is through markdown
-            }
-          }
-
-          const rendered = renderMarkdown(contentToRender, width);
-          this.history.addLines(rendered);
-        }
-
-        const renderedLineCount = this.history.getLineCount() - startLine;
-        let meta: BlockMeta = {
-          blockIndex: blockIdx,
-          collapseKey,
-          type: blockType,
-          startLine,
-          lineCount: renderedLineCount,
-          rawContent: m.content,
-        };
-
-        if (isDiff) {
-          meta = { ...meta, ...parseDiffForApply(m.content) };
-        }
-
-        this.blockRegistry.push(meta);
+        this.renderToolMessage(m, width, msgIdx);
       }
       this.history.addLine(createEmptyLine(width));
     }
@@ -716,21 +784,7 @@ export class ConversationManager {
    */
   public replaceMessagesForLLM(newMessages: ProviderMessage[]): void {
     const originalSystemMessages = this.messages.filter(m => m.role === 'system');
-    const convertedMessages = newMessages.map(m => {
-      if (m.role === 'user') {
-        return { role: 'user' as const, content: typeof m.content === 'string' ? m.content : (m.content as ContentPart[]) };
-      }
-      if (m.role === 'assistant') {
-        const text = typeof m.content === 'string'
-          ? m.content
-          : Array.isArray(m.content)
-            ? (m.content as { type: string; text?: string }[]).filter(p => p.type === 'text').map(p => p.text ?? '').join('')
-            : String(m.content);
-        return { role: 'assistant' as const, content: text };
-      }
-      const toolMsg = m as { role: 'tool'; callId: string; content: string; name?: string };
-      return { role: 'tool' as const, callId: toolMsg.callId ?? '', content: typeof toolMsg.content === 'string' ? toolMsg.content : String(toolMsg.content) };
-    });
+    const convertedMessages = messagesToInternal(newMessages);
     this.messages = [...originalSystemMessages, ...convertedMessages];
     this.history.clear();
     this.appendedUpTo = 0;
@@ -739,24 +793,17 @@ export class ConversationManager {
   }
 
   /**
-   * compact - Summarize the conversation to free context window.
-   *
-   * Uses context-compaction strategy:
-   *   - Preserves the last N messages verbatim (default: 10)
-   *   - Summarizes all older assistant/user/tool messages into bullet-point form
-   *   - Keeps system messages at the front
+   * compact - Reduce conversation state to a structured handoff payload.
    *
    * @param registry - Provider registry
    * @param modelId - Model to use for summarization
-   * @param keepRecentMessages - Number of recent messages to preserve verbatim (default: 10)
    * @param trigger - 'manual' (from /compact command) or 'auto' (from threshold check)
    * @param provider - Provider name for model disambiguation
-   * @param context - Optional v2 context data (agents, plan, lineage, memories)
-   */
+   * @param context - Structured compaction context
+  */
   public async compact(
     registry: ProviderRegistry,
     modelId: string,
-    keepRecentMessages = 10,
     trigger: 'auto' | 'manual' = 'manual',
     provider?: string,
     context?: CompactionContext,
@@ -765,36 +812,26 @@ export class ConversationManager {
 
     try {
       const llmMessages = this.getMessagesForLLM();
-      const result = await compactMessages({
-        registry,
-        modelId,
-        provider,
+      const compactionContext: CompactionContext = context ?? {
         messages: llmMessages,
-        keepRecentMessages,
         trigger,
-        context,
-      });
+        extractionModelId: modelId,
+        extractionProvider: provider,
+        sessionMemories: [],
+        agents: [],
+        wrfcChains: [],
+        activePlan: null,
+        lineageEntries: [],
+        compactionCount: 0,
+        contextWindow: 0,
+      };
+      const result = await compactMessages(compactionContext, registry);
 
       // Rebuild internal messages from the compacted LLM-format messages.
       // ProviderMessage only has 'user', 'assistant', 'tool' roles (no 'system').
       // Preserve any original system messages from before compaction, then add compacted messages.
       const originalSystemMessages = this.messages.filter(m => m.role === 'system');
-      const compactedMessages = result.messages.map(m => {
-        if (m.role === 'user') {
-          return { role: 'user' as const, content: typeof m.content === 'string' ? m.content : (m.content as ContentPart[]) };
-        }
-        if (m.role === 'assistant') {
-          const text = typeof m.content === 'string'
-            ? m.content
-            : Array.isArray(m.content)
-              ? (m.content as { type: string; text?: string }[]).filter(p => p.type === 'text').map(p => p.text ?? '').join('')
-              : String(m.content);
-          return { role: 'assistant' as const, content: text };
-        }
-        // tool role
-        const toolMsg = m as { role: 'tool'; callId: string; content: string; name?: string };
-        return { role: 'tool' as const, callId: toolMsg.callId ?? '', content: typeof toolMsg.content === 'string' ? toolMsg.content : String(toolMsg.content) };
-      });
+      const compactedMessages = messagesToInternal(result.messages);
       this.messages = [...originalSystemMessages, ...compactedMessages];
 
       this.history.clear();
@@ -804,7 +841,7 @@ export class ConversationManager {
 
       const saved = result.tokensBeforeEstimate - result.tokensAfterEstimate;
 
-      // Record this compaction in the session lineage for v2 handoff context.
+      // Record this compaction in the session lineage for future handoff context.
       const memoriesCount = sessionMemoryStore.list().length;
       const memoriesPart = memoriesCount > 0 ? `, ${memoriesCount} pinned memories` : '';
       const savedKTokens = Math.round(saved / 1000);
@@ -837,7 +874,7 @@ export class ConversationManager {
     if (!force && this.branches.has(branchName)) {
       logger.warn(`forkBranch: branch '${branchName}' already exists; use force=true to overwrite`);
     }
-    this.branches.set(branchName, structuredClone(this.messages));
+    this.branches.set(branchName, cloneMessages(this.messages));
     return branchName;
   }
 
@@ -865,8 +902,8 @@ export class ConversationManager {
     const stored = this.branches.get(name);
     if (!stored) return false;
     // Save current branch state before switching to prevent data loss
-    this.branches.set(this.currentBranch, structuredClone(this.messages));
-    this.messages = structuredClone(stored);
+    this.branches.set(this.currentBranch, cloneMessages(this.messages));
+    this.messages = cloneMessages(stored);
     this.currentBranch = name;
     this.undoStack = [];
     this.markDirty();
@@ -888,7 +925,7 @@ export class ConversationManager {
     const commonLen = Math.min(this.messages.length, stored.length);
     const toAppend = stored.slice(commonLen);
     if (toAppend.length === 0) return true;
-    this.messages.push(...structuredClone(toAppend));
+    this.messages.push(...cloneMessages(toAppend));
     this.undoStack = [];
     this.markDirty();
     return true;
@@ -904,12 +941,9 @@ export class ConversationManager {
    */
   public toJSON(): object {
     // Serialize branches map as a plain object for persistence
-    const branchesObj: Record<string, Message[]> = {};
-    for (const [name, msgs] of this.branches) {
-      branchesObj[name] = structuredClone(msgs);
-    }
+    const branchesObj = cloneBranchMap(this.branches);
     return {
-      messages: structuredClone(this.messages),
+      messages: cloneMessages(this.messages),
       timestamp: Date.now(),
       branches: branchesObj,
       currentBranch: this.currentBranch,
@@ -921,13 +955,7 @@ export class ConversationManager {
    */
   public fromJSON(data: { messages: Message[]; branches?: Record<string, Message[]>; currentBranch?: string }): void {
     this.messages = data.messages ?? [];
-    // Restore branch snapshots if present
-    this.branches.clear();
-    if (data.branches) {
-      for (const [name, msgs] of Object.entries(data.branches)) {
-        this.branches.set(name, msgs);
-      }
-    }
+    this.branches = restoreBranchMap(data.branches);
     this.currentBranch = data.currentBranch ?? 'main';
     this.history.clear();
     this.appendedUpTo = 0;

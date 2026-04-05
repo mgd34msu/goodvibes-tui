@@ -7,7 +7,8 @@ import { join } from 'path';
 import { tmpdir } from 'os';
 import { SettingsModal, SETTINGS_CATEGORIES } from '../../input/settings-modal.ts';
 import { ConfigManager } from '../../config/manager.ts';
-import { FeatureFlagManager } from '../../runtime/feature-flags/manager.ts';
+import { createFeatureFlagManager } from '../../runtime/feature-flags/manager.ts';
+import type { FeatureFlagManager } from '../../runtime/feature-flags/manager.ts';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -32,7 +33,7 @@ describe('SettingsModal', () => {
   beforeEach(() => {
     tmpDir = makeTmpDir();
     cm = new ConfigManager({ workingDir: tmpDir });
-    ffm = new FeatureFlagManager();
+    ffm = createFeatureFlagManager();
     modal = new SettingsModal();
   });
 
@@ -55,6 +56,10 @@ describe('SettingsModal', () => {
   test('open() populates all categories', () => {
     modal.open(cm, ffm);
     for (const cat of SETTINGS_CATEGORIES) {
+      if (cat === 'flags') {
+        expect(Array.isArray(modal.flagEntries)).toBe(true);
+        continue;
+      }
       const items = modal.groups.get(cat);
       expect(items).toBeDefined();
       expect(Array.isArray(items)).toBe(true);

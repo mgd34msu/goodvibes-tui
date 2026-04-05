@@ -1,7 +1,7 @@
 import { BasePanel } from './base-panel.ts';
 import type { Line } from '../types/grid.ts';
 import { createStyledCell, createEmptyLine } from '../types/grid.ts';
-import type { EventBus } from '../core/event-bus.ts';
+import type { RuntimeEventBus, ProviderEvent, TurnEvent } from '../runtime/events/index.ts';
 import { providerRegistry } from '../providers/registry.ts';
 
 // ---------------------------------------------------------------------------
@@ -51,7 +51,10 @@ export class ProviderStatsPanel extends BasePanel {
   /** Unsubscribe functions for event listeners. */
   private _unsubs: Array<() => void> = [];
 
-  constructor(private readonly bus: EventBus) {
+  constructor(
+    private readonly runtimeBus: RuntimeEventBus,
+    private readonly requestRender: () => void = () => {},
+  ) {
     super('providers', 'Providers', 'R', 'monitoring');
     this._subscribe();
   }
@@ -63,24 +66,22 @@ export class ProviderStatsPanel extends BasePanel {
   private _subscribe(): void {
     // Record when a turn starts so we can compute latency later
     this._unsubs.push(
-      this.bus.on('turn:start', () => {
+      this.runtimeBus.on('TURN_SUBMITTED', () => {
         this._turnStartMs = Date.now();
       }),
     );
 
     // Per-streaming-call timing (each iteration of the agentic loop)
     this._unsubs.push(
-      this.bus.on('turn:stream-start', () => {
+      this.runtimeBus.on('STREAM_START', () => {
         this._streamStartMs = Date.now();
       }),
     );
 
-    // After each LLM response (streamed or not), record metrics.
-    // Note: turn:llm-response carries no usage data, so tokens remain 0
-    // until a richer event is available. Latency is computed from
-    // stream-start (streaming) or turn-start (non-streaming).
+    // After each LLM response (streamed or not), record metrics for the
+    // current provider call inside the turn loop.
     this._unsubs.push(
-      this.bus.on('turn:llm-response', () => {
+      this.runtimeBus.on<Extract<TurnEvent, { type: 'LLM_RESPONSE_RECEIVED' }>>('LLM_RESPONSE_RECEIVED', (env) => {
         const now = Date.now();
         const latencyMs = this._streamStartMs !== null
           ? now - this._streamStartMs
@@ -89,43 +90,39 @@ export class ProviderStatsPanel extends BasePanel {
             : 0;
         // Reset stream start — ready for next iteration in the agentic loop
         this._streamStartMs = null;
-
-        try {
-          const model = providerRegistry.getCurrentModel();
-          this._recordRequest(model.provider, model.id, latencyMs, false, 0);
-        } catch {
-          // Non-fatal: model may not be set yet (race at startup)
-          this._recordRequest('unknown', 'unknown', latencyMs, false, 0);
-        }
+        this._recordRequest(
+          env.payload.provider,
+          env.payload.model,
+          latencyMs,
+          false,
+          env.payload.inputTokens
+            + env.payload.outputTokens
+            + (env.payload.cacheReadTokens ?? 0)
+            + (env.payload.cacheWriteTokens ?? 0),
+        );
 
         this.markDirty();
-        this.bus.emit('render:request');
+        this.requestRender();
       }),
     );
 
     // On error, record a failed request
     this._unsubs.push(
-      this.bus.on('turn:error', () => {
+      this.runtimeBus.on('TURN_ERROR', () => {
         this._turnStartMs = null;
         this._streamStartMs = null;
-
-        try {
-          const model = providerRegistry.getCurrentModel();
-          this._recordRequest(model.provider, model.id, 0, true, 0);
-        } catch {
-          this._recordRequest('unknown', 'unknown', 0, true, 0);
-        }
+        this._recordRequest('unknown', 'unknown', 0, true, 0);
 
         this.markDirty();
-        this.bus.emit('render:request');
+        this.requestRender();
       }),
     );
 
     // Re-render when providers change (new custom providers loaded)
     this._unsubs.push(
-      this.bus.on('providers:changed', () => {
+      this.runtimeBus.on<Extract<ProviderEvent, { type: 'PROVIDERS_CHANGED' }>>('PROVIDERS_CHANGED', () => {
         this.markDirty();
-        this.bus.emit('render:request');
+        this.requestRender();
       }),
     );
   }

@@ -111,11 +111,11 @@ describe('ChainEngine', () => {
       await engine.evaluate(makeEvent({
         path: 'Pre:tool:read',
         phase: 'Pre',
-        payload: { tool: 'file_read', path: '/tmp/x' },
+        payload: { tool: 'read', path: '/tmp/x' },
       }));
 
       const state = engine.getStates().get('capture-chain')!;
-      expect(state.captures.toolName).toBe('file_read');
+      expect(state.captures.toolName).toBe('read');
     });
 
     test('capture does not fail when payload key missing', async () => {

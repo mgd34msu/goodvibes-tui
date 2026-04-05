@@ -1,15 +1,15 @@
 import { describe, test, expect, beforeEach } from 'bun:test';
 import { InputHandler } from '../../input/handler.ts';
-import { EventBus } from '../../core/event-bus.ts';
 import { SelectionManager } from '../../input/selection.ts';
+import { InfiniteBuffer } from '../../core/history.ts';
 
 describe('Cursor mapping through word-wrap', () => {
   let input: InputHandler;
 
   beforeEach(() => {
-    const bus = new EventBus();
     const sel = new SelectionManager();
-    input = new InputHandler(bus, sel, () => 0, () => 20, () => ({ getLineCount: () => 0, getAllLines: () => [], getSnapshot: () => [], addLine: () => {}, addLines: () => {}, clear: () => {} }) as any, () => {}, () => {});
+    const history = new InfiniteBuffer();
+    input = new InputHandler(() => {}, sel, () => 0, () => 20, () => history, () => {}, () => {});
     input.setContentWidth(20);
   });
 

@@ -1,7 +1,7 @@
 /**
  * Plugin lifecycle system — barrel export and factory.
  *
- * Gated by the `plugin-lifecycle-v2` feature flag. Import and call
+ * Gated by the `plugin-lifecycle` feature flag. Import and call
  * `createPluginLifecycleManager()` at startup after the feature flag
  * manager has been initialised.
  *
@@ -9,8 +9,7 @@
  * ```ts
  * import { createPluginLifecycleManager } from './src/runtime/plugins/index.ts';
  *
- * const lcm = createPluginLifecycleManager({ sessionId: session.id });
- * lcm.attachEventBus(eventBus);
+ * const lcm = createPluginLifecycleManager({ sessionId: session.id, runtimeBus });
  * lcm.scanAndRegister();
  * ```
  */
@@ -47,7 +46,7 @@ export {
 export { PluginLifecycleManager } from './manager.ts';
 import { PluginLifecycleManager } from './manager.ts';
 
-// ── Trust Framework (§5.9) ────────────────────────────────────────────────────
+// Trust framework.
 export type {
   PluginTrustTier,
   PluginTrustRecord,
@@ -72,7 +71,7 @@ export { runHotReload } from './hot-reload.ts';
  * createPluginLifecycleManager — Factory function for the PluginLifecycleManager.
  *
  * Intended as the primary entry point for consumers. Respects the
- * `plugin-lifecycle-v2` feature flag — callers should check the flag before
+ * `plugin-lifecycle` feature flag — callers should check the flag before
  * invoking if they want to gate the entire system.
  *
  * @param options - Optional manager configuration.

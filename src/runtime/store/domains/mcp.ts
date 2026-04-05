@@ -3,7 +3,7 @@
  * state, and available tools per server.
  */
 
-/** States from the MCP server lifecycle machine (v3 §4.7). */
+/** States for the MCP server lifecycle machine. */
 export type McpServerLifecycleState =
   | 'configured'
   | 'connecting'

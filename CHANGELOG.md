@@ -4,6 +4,79 @@ All notable changes to GoodVibes TUI.
 
 ---
 
+## [0.14.1] — 2026-04-05
+
+### Runtime Hardening And Evidence Model
+
+- Completed the `v6` runtime hardening program on top of the post-migration runtime substrate
+- Added explicit terminal stop reasons, stricter turn lifecycle handling, guarded runtime transitions, and stronger replay confidence
+- Added phase-ledger evidence, richer forensic bundles, replay mismatch triage metadata, and release-gate coverage for substrate, policy/budget, certification, and operator surfaces
+
+### Operator Surfaces And Policy Tooling
+
+- Added the shared runtime policy surface and operator-facing policy panel
+- Expanded panel layout controls for placement, split visibility, focused pane switching, and pane resizing
+- Strengthened runtime evidence and operator-facing controls without reintroducing compatibility layers or legacy runtime choreography
+
+### Refactors And Cleanup
+
+- Refactored the largest shell and runtime files into clearer modules:
+  - extracted shared session persistence and crash-recovery helpers
+  - decomposed bootstrap composition and background setup
+  - reduced `commands.ts` to a thin registrar backed by focused command modules
+  - split `handler.ts` into modal, routing, prompt-buffer, and shortcut helpers
+  - split orchestrator responsibilities into cleaner turn, tool, and context helper layers
+- Followed up with targeted cleanup in provider/model and tool modules, reducing duplication and tightening ownership boundaries
+- Removed remaining internal compatibility debt that only preserved old shapes, stale migrations, and rollout-era wording
+
+### Quality And Verification
+
+- Eliminated remaining production `any` usage and restored a fully clean `tsc --noEmit` surface
+- Fixed real issues uncovered by full-suite execution, including config reset contamination and several stale or flaky post-migration tests
+- Finished the release in a state where the full suite and full typecheck both pass cleanly
+
+---
+
+## [0.13.1] — 2026-04-04
+
+### Runtime Bus Migration Completed
+
+The legacy runtime `EventBus` migration is now fully complete.
+
+- Removed the legacy runtime bus from active production flow
+- Deleted `src/core/event-bus.ts` and the legacy bus test surface
+- Cut shell control flow over to store-backed state, typed runtime events, and direct controller callbacks
+- Cut orchestrator turn, streaming, tool, agent, WRFC, provider, planner, permission, replay, plugin, notifier, and webhook flows over to `RuntimeEventBus`
+- Removed compatibility relays for legacy runtime event families including submit, cancel, permission, session resume, plan activation, WRFC, and subagent lifecycle
+- Reworked replay and notification plumbing to use typed runtime event names and typed runtime subscriptions only
+- Completed runtime context cleanup so production composition is `RuntimeEventBus` + store based
+
+### Store And Runtime Substrate Hardening
+
+- Made `DomainDispatch` concrete and store-owned instead of placeholder-only
+- Wired real typed runtime domains into dispatch and reducer paths
+- Removed ad hoc runtime `store.setState()` mutation patterns from migrated runtime consumers
+- Added enforcement coverage for typed emission rules, shell-control cutover, and store-write discipline
+
+### Panels, Providers, And Workflow Wiring
+
+- Migrated turn-observing panels to typed turn/tool/provider/planner/workflow subscriptions
+- Moved WRFC, provider fallback, provider discovery, planner override, and monitoring panels onto typed runtime contracts
+- Removed legacy render-loop invalidation from migrated panels in favor of shell-owned render callbacks and state-driven updates
+
+### Docs Updated To Final State
+
+- Updated the `docs/big-update` migration package to reflect the completed end state
+- Marked older EventBus migration inventories as historical references
+- Updated architecture and README documentation to describe the current runtime model accurately
+
+### Verification
+
+- Focused migration and regression suites passed during the cutover
+- Documentation now matches the production runtime architecture
+
+---
+
 ## [0.12.3] — 2026-04-03
 
 ### State Machine Runtime v3 — Complete Implementation

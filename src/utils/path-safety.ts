@@ -1,5 +1,5 @@
 import { resolve, relative } from 'node:path';
-import { config } from '../config/index.ts';
+import { getWorkingDirectory } from '../config/index.ts';
 
 /**
  * Resolves an input path against the working directory and validates it is
@@ -7,7 +7,7 @@ import { config } from '../config/index.ts';
  * root (path traversal attempt).
  */
 export function resolveAndValidatePath(inputPath: string): string {
-  const root = resolve(config.workingDir);
+  const root = resolve(getWorkingDirectory());
   const resolved = resolve(root, inputPath);
   const rel = relative(root, resolved);
   // NOTE: This check targets Unix paths only. Windows backslash separators are not handled (acceptable for Linux-targeted TUI).

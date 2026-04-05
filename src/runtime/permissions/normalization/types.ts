@@ -1,5 +1,5 @@
 /**
- * Command normalization types for Permissions v2 (v3 Section 7.1).
+ * Command normalization types for the runtime permissions pipeline.
  *
  * Defines the token, segment, classification, and normalized command
  * types used throughout the command normalization pipeline.

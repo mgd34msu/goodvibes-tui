@@ -1,5 +1,5 @@
 /**
- * G01: Agent context window awareness tests.
+ * Agent context window awareness tests.
  *
  * Tests:
  *  1. estimateTokenCount utility (chars/4 approximation)
@@ -229,7 +229,7 @@ describe('compactSmallWindow', () => {
 // Integration: agent runs normally without compaction needed
 // ---------------------------------------------------------------------------
 
-describe('AgentOrchestrator — G01 context-window awareness', () => {
+describe('AgentOrchestrator context-window awareness', () => {
   test('completes successfully when context is within limits', async () => {
     const provider = makeMockProvider([{ content: 'done' }]);
     const record = makeRecord({ id: 'g01-normal-01' });
@@ -313,7 +313,7 @@ describe('AgentOrchestrator — G01 context-window awareness', () => {
     // 990 / 4096 ≈ 24% — not enough alone. We need many messages.
     // Simulate prior turns: make the first response emit a tool call so the orchestrator
     // adds a tool-result message and loops, building up message history quickly.
-    // After enough turns, G01 compaction triggers. Then reply 'done'.
+    // After enough turns, compaction triggers. Then reply 'done'.
     //
     // Simpler approach that definitely works: create a task and use a model where
     // the total (system + 1 msg) already exceeds 85% of a tiny context.
@@ -359,7 +359,7 @@ describe('AgentOrchestrator — G01 context-window awareness', () => {
     expect(record.status).toBe('completed');
     expect(capturedMessageCounts.length).toBeGreaterThanOrEqual(1);
     // When compaction fires, replaceMessagesForLLM reduces the conversation.
-    // With a tiny window (1000 tokens) and a large task, the G01 block fires.
+    // With a tiny window (1000 tokens) and a large task, the context guard fires.
     // The compacted message count should be ≤ the original message count (1 task msg).
     // Since we only have 1 turn, capturedMessageCounts[0] should be 1 (the task message).
     // The key assertion: provider.chat was called (compaction didn't break execution).
@@ -377,7 +377,7 @@ describe('AgentOrchestrator — G01 context-window awareness', () => {
     // Create a mock FeatureFlagManager that reports the flag as disabled
     const mockFlagManager = {
       isEnabled: mock((flagId: string) => {
-        if (flagId === 'g01-agent-context-window-awareness') return false;
+        if (flagId === 'agent-context-window-awareness') return false;
         return true;
       }),
     };

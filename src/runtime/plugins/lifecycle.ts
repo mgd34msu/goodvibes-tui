@@ -1,5 +1,5 @@
 /**
- * Plugin lifecycle state machine — v3 §4.6.
+ * Plugin lifecycle state machine.
  *
  * Defines the valid state transitions for the 8-state plugin lifecycle
  * and provides pure guard/transition functions with no side effects.

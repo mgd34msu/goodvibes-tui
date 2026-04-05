@@ -25,7 +25,9 @@ export type FlagSubscriber = (
  *
  * Create via `createFeatureFlagManager()` rather than constructing directly.
  */
-export class FeatureFlagManager {
+class FeatureFlagManagerImpl {
+  private static _instance: FeatureFlagManagerImpl | undefined;
+
   /** Current state for each registered flag */
   private readonly _states: Map<string, FlagState> = new Map();
 
@@ -43,6 +45,34 @@ export class FeatureFlagManager {
     for (const [id, flag] of FEATURE_FLAG_MAP) {
       this._states.set(id, flag.defaultState);
     }
+  }
+
+  /**
+   * Return the process-global feature-flag manager singleton.
+   *
+   * This exists for subsystems that lazily consult flag state outside bootstrap
+   * composition. Bootstrap should install its constructed manager via
+   * `setInstance()` so runtime consumers see the configured state.
+   */
+  static getInstance(): FeatureFlagManagerImpl {
+    if (!FeatureFlagManagerImpl._instance) {
+      FeatureFlagManagerImpl._instance = new FeatureFlagManagerImpl();
+    }
+    return FeatureFlagManagerImpl._instance;
+  }
+
+  /**
+   * Install or clear the process-global feature-flag manager singleton.
+   */
+  static setInstance(instance: FeatureFlagManagerImpl | null): void {
+    FeatureFlagManagerImpl._instance = instance ?? undefined;
+  }
+
+  /**
+   * Clear the process-global singleton. Intended for tests.
+   */
+  static resetInstance(): void {
+    FeatureFlagManagerImpl._instance = undefined;
   }
 
   // ── Read API ────────────────────────────────────────────────────────────
@@ -297,4 +327,17 @@ export class FeatureFlagManager {
       }
     }
   }
+}
+
+/**
+ * Construct a fresh feature-flag manager.
+ *
+ * Keeping this factory in the same module as the class avoids test-runner
+ * namespace quirks around cross-module construction while preserving the same
+ * runtime behavior.
+ */
+export { FeatureFlagManagerImpl as FeatureFlagManager };
+
+export function createFeatureFlagManager(): FeatureFlagManagerImpl {
+  return new FeatureFlagManagerImpl();
 }

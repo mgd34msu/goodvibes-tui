@@ -1,7 +1,7 @@
 /**
  * /session command handler — Multi-session Orchestration.
  *
- * Implements Section 5.12 commands:
+ * Implements session and workflow commands:
  *
  *   /session link-task <taskId> [--session <sessionId>] [--depends-on <ref>] [--label <label>]
  *     — Register a task as a global cross-session ref, optionally linking it to a

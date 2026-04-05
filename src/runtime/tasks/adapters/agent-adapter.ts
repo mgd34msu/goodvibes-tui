@@ -7,8 +7,8 @@
  */
 
 import { randomUUID } from 'node:crypto';
-import type { StoreApi } from 'zustand';
-import type { RuntimeState } from '../../store/state.ts';
+import { createDomainDispatch } from '../../store/index.ts';
+import type { RuntimeStore, DomainDispatch } from '../../store/index.ts';
 import type { RuntimeTask } from '../../store/domains/tasks.ts';
 import type { AgentLifecycleState } from '../../store/domains/agents.ts';
 
@@ -67,7 +67,11 @@ export class AgentTaskAdapter {
   /** Maps task ID → agent ID. */
   private readonly _taskToAgent = new Map<string, string>();
 
-  constructor(private readonly _store: StoreApi<RuntimeState>) {}
+  private readonly _dispatch: DomainDispatch;
+
+  constructor(private readonly _store: RuntimeStore) {
+    this._dispatch = createDomainDispatch(_store);
+  }
 
   // ── Core API ────────────────────────────────────────────────────────────────
 
@@ -180,30 +184,7 @@ export class AgentTaskAdapter {
   // ── Private helpers ─────────────────────────────────────────────────────────
 
   private _upsertTask(task: RuntimeTask): void {
-    this._store.setState((state) => {
-      const tasks = new Map(state.tasks.tasks);
-      tasks.set(task.id, task);
-
-      const isQueued = task.status === 'queued';
-      const isRunning = task.status === 'running';
-
-      return {
-        tasks: {
-          ...state.tasks,
-          tasks,
-          queuedIds: isQueued
-            ? [...state.tasks.queuedIds, task.id]
-            : state.tasks.queuedIds,
-          runningIds: isRunning
-            ? [...state.tasks.runningIds, task.id]
-            : state.tasks.runningIds,
-          totalCreated: state.tasks.totalCreated + 1,
-          revision: state.tasks.revision + 1,
-          lastUpdatedAt: Date.now(),
-          source: 'agent-adapter',
-        },
-      };
-    });
+    this._dispatch.syncRuntimeTask(task, 'agent-adapter');
   }
 
   private _transitionTask(
@@ -211,61 +192,17 @@ export class AgentTaskAdapter {
     status: 'queued' | 'running' | 'completed' | 'failed' | 'cancelled',
     opts: { isTerminal?: boolean; error?: string },
   ): void {
-    this._store.setState((state) => {
-      const existing = state.tasks.tasks.get(taskId);
-      if (!existing) return {};
-
-      // No-op if already in the same status
-      if (existing.status === status) return {};
-
-      const now = Date.now();
-      const isFirstStart = status === 'running' && existing.startedAt === undefined;
-
-      const updated: RuntimeTask = {
-        ...existing,
-        status,
-        startedAt: isFirstStart ? now : existing.startedAt,
-        endedAt: opts.isTerminal ? now : existing.endedAt,
+    const current = this._store.getState().tasks.tasks.get(taskId);
+    const timestamp = Date.now();
+    this._dispatch.transitionRuntimeTask(
+      taskId,
+      status,
+      {
+        startedAt: status === 'running' && current?.startedAt === undefined ? timestamp : current?.startedAt,
+        endedAt: opts.isTerminal ? timestamp : current?.endedAt,
         error: opts.error,
-      };
-
-      const tasks = new Map(state.tasks.tasks);
-      tasks.set(taskId, updated);
-
-      // Rebuild index lists
-      const runningIds =
-        status === 'running'
-          ? [...state.tasks.runningIds.filter((id) => id !== taskId), taskId]
-          : state.tasks.runningIds.filter((id) => id !== taskId);
-
-      const queuedIds =
-        status === 'queued'
-          ? [...state.tasks.queuedIds.filter((id) => id !== taskId), taskId]
-          : state.tasks.queuedIds.filter((id) => id !== taskId);
-
-      return {
-        tasks: {
-          ...state.tasks,
-          tasks,
-          runningIds,
-          queuedIds,
-          totalCompleted:
-            status === 'completed'
-              ? state.tasks.totalCompleted + 1
-              : state.tasks.totalCompleted,
-          totalFailed:
-            status === 'failed'
-              ? state.tasks.totalFailed + 1
-              : state.tasks.totalFailed,
-          totalCancelled:
-            status === 'cancelled'
-              ? state.tasks.totalCancelled + 1
-              : state.tasks.totalCancelled,
-          revision: state.tasks.revision + 1,
-          lastUpdatedAt: now,
-          source: 'agent-adapter',
-        },
-      };
-    });
+      },
+      'agent-adapter',
+    );
   }
 }

@@ -22,7 +22,7 @@ import { DebugPanel } from './debug-panel.ts';
 import { OpsStrategyPanel } from './ops-strategy-panel.ts';
 import { OpsControlPanel } from './ops-control-panel.ts';
 import { ForensicsPanel } from './forensics-panel.ts';
-import type { EventBus } from '../core/event-bus.ts';
+import { PolicyPanel } from './policy-panel.ts';
 import type { RuntimeEventBus } from '../runtime/events/index.ts';
 import type { ToolRegistry } from '../tools/registry.ts';
 import type { ProviderRegistry } from '../providers/registry.ts';
@@ -39,8 +39,6 @@ import { PanelListPanel } from './panel-list-panel.ts';
  * Call this once during application startup, before opening any panels.
  */
 export interface BuiltinPanelDeps {
-  /** EventBus for panels that subscribe to application events. */
-  bus?: EventBus;
   /** Getter returning the main orchestrator's cumulative token usage. */
   getOrchestratorUsage?: () => { input: number; output: number; cacheRead: number; cacheWrite: number; model?: string };
   /** Optional cost budget alert threshold in USD (0 = disabled). */
@@ -55,17 +53,23 @@ export interface BuiltinPanelDeps {
   orchestrator?: Orchestrator;
   /** Callback returning the current model context window size (for TokenBudgetPanel). */
   getCtxWindow?: () => number;
-  /** RuntimeEventBus for panels requiring typed domain events (e.g. ops-control). */
-  runtimeBus?: RuntimeEventBus;
+  /** Resume a saved session directly through the session controller path. */
+  resumeSession?: (sessionId: string) => void;
+  /** Request a shell repaint directly rather than routing through a retired event path. */
+  requestRender?: () => void;
+  /** RuntimeEventBus for typed panel subscriptions and operator surfaces. */
+  runtimeBus: RuntimeEventBus;
   /** ForensicsRegistry for the Forensics panel. */
   forensicsRegistry?: import('../runtime/forensics/registry.ts').ForensicsRegistry;
   /** EvalRegistry for the Eval panel. */
   evalRegistry?: EvalRegistry;
   /** MemoryRegistry for the Memory panel. */
   memoryRegistry?: MemoryRegistry;
+  /** Shared policy runtime state for governance/policy diagnostics. */
+  policyRuntimeState?: import('../runtime/permissions/policy-runtime.ts').PolicyRuntimeState;
 }
 
-export function registerBuiltinPanels(manager: PanelManager, deps: BuiltinPanelDeps = {}): void {
+export function registerBuiltinPanels(manager: PanelManager, deps: BuiltinPanelDeps): void {
   manager.registerType({
     id: 'git',
     name: 'Git',
@@ -102,60 +106,58 @@ export function registerBuiltinPanels(manager: PanelManager, deps: BuiltinPanelD
     factory: () => new AgentInspectorPanel(),
   });
 
-  if (deps.bus && deps.getOrchestratorUsage) {
-    const { bus, getOrchestratorUsage, budgetThreshold } = deps;
+  if (deps.getOrchestratorUsage) {
+    const { getOrchestratorUsage, budgetThreshold, runtimeBus } = deps;
     manager.registerType({
       id: 'cost',
       name: 'Cost',
       icon: '$',
       category: 'monitoring',
       description: 'Estimated costs per session, agent, and plan with budget alerts',
-      factory: () => new CostTrackerPanel(bus, getOrchestratorUsage, { budgetThreshold }),
+      factory: () => new CostTrackerPanel(runtimeBus, getOrchestratorUsage, { budgetThreshold }),
     });
   }
 
-  if (deps.bus) {
-    const { bus } = deps;
-    manager.registerType({
-      id: 'providers',
-      name: 'Providers',
-      icon: 'R',
-      category: 'monitoring',
-      description: 'Per-provider performance metrics: latency, error rate, request count, sparkline trends',
-      factory: () => new ProviderStatsPanel(bus),
-    });
+  const { runtimeBus } = deps;
+  manager.registerType({
+    id: 'providers',
+    name: 'Providers',
+    icon: 'R',
+    category: 'monitoring',
+    description: 'Per-provider performance metrics: latency, error rate, request count, sparkline trends',
+    factory: () => new ProviderStatsPanel(runtimeBus, deps.requestRender),
+  });
 
-    manager.registerType({
-      id: 'thinking',
-      name: 'Thinking',
-      icon: 'T',
-      category: 'ai',
-      description: 'Stream model reasoning tokens in real-time with collapsible blocks per turn',
-      factory: () => new ThinkingPanel(bus),
-    });
+  manager.registerType({
+    id: 'thinking',
+    name: 'Thinking',
+    icon: 'T',
+    category: 'ai',
+    description: 'Stream model reasoning tokens in real-time with collapsible blocks per turn',
+    factory: () => new ThinkingPanel(runtimeBus),
+  });
 
-    manager.registerType({
-      id: 'tools',
-      name: 'Tools',
-      icon: 'X',
-      category: 'ai',
-      description: 'Chronological tool call inspector with expandable args/results and filtering',
-      factory: () => new ToolInspectorPanel(bus),
-    });
+  manager.registerType({
+    id: 'tools',
+    name: 'Tools',
+    icon: 'X',
+    category: 'ai',
+    description: 'Chronological tool call inspector with expandable args/results and filtering',
+    factory: () => new ToolInspectorPanel(runtimeBus),
+  });
 
-    manager.registerType({
-      id: 'context',
-      name: 'Context',
-      icon: 'C',
-      category: 'ai',
-      description: 'Context window visualizer: stacked bar showing token usage per section',
-      factory: () => new ContextVisualizerPanel(
-        bus,
-        deps.getOrchestratorUsage,
-        deps.contextWindow,
-      ),
-    });
-  }
+  manager.registerType({
+    id: 'context',
+    name: 'Context',
+    icon: 'C',
+    category: 'ai',
+    description: 'Context window visualizer: stacked bar showing token usage per section',
+    factory: () => new ContextVisualizerPanel(
+      runtimeBus,
+      deps.getOrchestratorUsage,
+      deps.contextWindow,
+    ),
+  });
 
   manager.registerType({
     id: 'sessions',
@@ -163,7 +165,7 @@ export function registerBuiltinPanels(manager: PanelManager, deps: BuiltinPanelD
     icon: 'H',
     category: 'session',
     description: 'Browse, search, and resume past conversation sessions',
-    factory: () => new SessionBrowserPanel(deps.bus),
+    factory: () => new SessionBrowserPanel(deps.resumeSession),
   });
 
   manager.registerType({
@@ -202,27 +204,23 @@ export function registerBuiltinPanels(manager: PanelManager, deps: BuiltinPanelD
     factory: () => new SymbolOutlinePanel(),
   });
 
-  if (deps.bus) {
-    const { bus } = deps;
+  manager.registerType({
+    id: 'agent-logs',
+    name: 'Agent Logs',
+    icon: 'A',
+    category: 'agent',
+    description: 'Live log stream from all running agents',
+    factory: () => new AgentLogsPanel(runtimeBus),
+  });
 
-    manager.registerType({
-      id: 'agent-logs',
-      name: 'Agent Logs',
-      icon: 'A',
-      category: 'agent',
-      description: 'Live log stream from all running agents',
-      factory: () => new AgentLogsPanel(bus),
-    });
-
-    manager.registerType({
-      id: 'wrfc',
-      name: 'WRFC',
-      icon: 'W',
-      category: 'agent',
-      description: 'WRFC chain view: write, review, fix, and confirm cycle status',
-      factory: () => new WrfcPanel(bus),
-    });
-  }
+  manager.registerType({
+    id: 'wrfc',
+    name: 'WRFC',
+    icon: 'W',
+    category: 'agent',
+    description: 'WRFC chain view: write, review, fix, and confirm cycle status',
+    factory: () => new WrfcPanel(runtimeBus),
+  });
 
   manager.registerType({
     id: 'schedule',
@@ -233,54 +231,45 @@ export function registerBuiltinPanels(manager: PanelManager, deps: BuiltinPanelD
     factory: () => new SchedulePanel(),
   });
 
-  if (deps.bus) {
-    const { bus } = deps;
-    manager.registerType({
-      id: 'debug',
-      name: 'Debug',
-      icon: 'B',
-      category: 'monitoring',
-      description: 'API debug panel: per-call log with model, provider, tokens, latency, status, and error history',
-      factory: () => {
-        const panel = new DebugPanel(bus);
-        if (deps.orchestrator) panel.wireOrchestrator(deps.orchestrator);
-        return panel;
-      },
-    });
+  manager.registerType({
+    id: 'debug',
+    name: 'Debug',
+    icon: 'B',
+    category: 'monitoring',
+    description: 'API debug panel: per-call log with model, provider, tokens, latency, status, and error history',
+    factory: () => {
+      const panel = new DebugPanel(runtimeBus, deps.requestRender);
+      if (deps.orchestrator) panel.wireOrchestrator(deps.orchestrator);
+      return panel;
+    },
+  });
 
-    manager.registerType({
-      id: 'provider-health',
-      name: 'Health',
-      icon: 'N',
-      category: 'monitoring',
-      description: 'Provider health dashboard: real-time status, latency, errors, and rate-limit cooldowns',
-      factory: () => new ProviderHealthPanel(bus),
-    });
-  }
+  manager.registerType({
+    id: 'provider-health',
+    name: 'Health',
+    icon: 'N',
+    category: 'monitoring',
+    description: 'Provider health dashboard: real-time status, latency, errors, and rate-limit cooldowns',
+    factory: () => new ProviderHealthPanel(runtimeBus, deps.requestRender),
+  });
 
-  if (deps.bus) {
-    const { bus } = deps;
-    manager.registerType({
-      id: 'ops',
-      name: 'Ops',
-      icon: 'O',
-      category: 'agent',
-      description: 'Adaptive Execution Planner: strategy timeline, reason codes, mode and override controls',
-      factory: () => new OpsStrategyPanel(bus),
-    });
-  }
+  manager.registerType({
+    id: 'ops',
+    name: 'Ops',
+    icon: 'O',
+    category: 'agent',
+    description: 'Adaptive Execution Planner: strategy timeline, reason codes, mode and override controls',
+    factory: () => new OpsStrategyPanel(runtimeBus),
+  });
 
-  if (deps.runtimeBus) {
-    const { runtimeBus } = deps;
-    manager.registerType({
-      id: 'ops-control',
-      name: 'Ops Control',
-      icon: 'Q',
-      category: 'agent',
-      description: 'Operator Control Plane: audit log of operator interventions (task/agent cancel, pause, resume, retry)',
-      factory: () => new OpsControlPanel(runtimeBus),
-    });
-  }
+  manager.registerType({
+    id: 'ops-control',
+    name: 'Ops Control',
+    icon: 'Q',
+    category: 'agent',
+    description: 'Operator Control Plane: audit log of operator interventions (task/agent cancel, pause, resume, retry)',
+    factory: () => new OpsControlPanel(runtimeBus),
+  });
 
   if (deps.forensicsRegistry) {
     const { forensicsRegistry } = deps;
@@ -291,6 +280,18 @@ export function registerBuiltinPanels(manager: PanelManager, deps: BuiltinPanelD
       category: 'monitoring',
       description: 'Failure Forensics: auto-classified failure reports with causal chains, phase timings, and jump links',
       factory: () => new ForensicsPanel(forensicsRegistry),
+    });
+  }
+
+  if (deps.policyRuntimeState) {
+    const { policyRuntimeState } = deps;
+    manager.registerType({
+      id: 'policy',
+      name: 'Policy',
+      icon: 'U',
+      category: 'monitoring',
+      description: 'Policy governance: active/candidate bundles, divergence gate, rollout history, and simulation evidence',
+      factory: () => new PolicyPanel(policyRuntimeState),
     });
   }
 

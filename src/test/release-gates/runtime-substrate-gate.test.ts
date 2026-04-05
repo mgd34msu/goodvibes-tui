@@ -1,0 +1,223 @@
+import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test';
+import { mkdirSync } from 'node:fs';
+import { homedir } from 'node:os';
+import { join } from 'node:path';
+import { ConversationManager } from '../../core/conversation.ts';
+import { Orchestrator } from '../../core/orchestrator.ts';
+import { configManager } from '../../config/index.ts';
+import { PermissionManager } from '../../permissions/manager.ts';
+import { getProviderRegistry } from '../../providers/registry.ts';
+import type { ProviderRegistry } from '../../providers/registry.ts';
+import type { ChatRequest, ChatResponse, LLMProvider } from '../../providers/interface.ts';
+import { RuntimeEventBus } from '../../runtime/events/index.ts';
+import { createDomainDispatch, createRuntimeStore } from '../../runtime/store/index.ts';
+import { ToolRegistry } from '../../tools/registry.ts';
+import { ForensicsCollector } from '../../runtime/forensics/collector.ts';
+import { ForensicsRegistry } from '../../runtime/forensics/registry.ts';
+import { ProviderError } from '../../types/errors.ts';
+import type { HookResult } from '../../hooks/types.ts';
+
+const DEFAULT_MODEL = {
+  id: 'mock-model',
+  provider: 'mock',
+  registryKey: 'mock:mock-model',
+  displayName: 'Mock',
+  description: '',
+  capabilities: { toolCalling: true, codeEditing: false, reasoning: false, multimodal: false },
+  contextWindow: 8192,
+  selectable: true,
+};
+
+const SYNTHETIC_MODEL = {
+  ...DEFAULT_MODEL,
+  provider: 'synthetic',
+  registryKey: 'synthetic:mock-model',
+  tier: 'paid',
+};
+
+async function withMockProvider<T>(
+  provider: LLMProvider,
+  fn: () => Promise<T>,
+  model = DEFAULT_MODEL,
+): Promise<T> {
+  const reg: ProviderRegistry = getProviderRegistry();
+  const origGet = reg.get.bind(reg);
+  const origGetForModel = reg.getForModel.bind(reg);
+  const origGetCurrentModel = reg.getCurrentModel.bind(reg);
+  reg.get = mock(() => provider);
+  reg.getForModel = mock(() => provider);
+  reg.getCurrentModel = mock(() => model);
+  try {
+    return await fn();
+  } finally {
+    reg.get = origGet;
+    reg.getForModel = origGetForModel;
+    reg.getCurrentModel = origGetCurrentModel;
+  }
+}
+
+function buildHarness(options: { hookResult?: HookResult } = {}) {
+  mkdirSync(join(homedir(), '.goodvibes', 'tui'), { recursive: true });
+  const runtimeBus = new RuntimeEventBus();
+  const store = createRuntimeStore();
+  const dispatch = createDomainDispatch(store);
+  const registry = new ForensicsRegistry();
+  const collector = new ForensicsCollector(runtimeBus, registry);
+  const toolRegistry = new ToolRegistry();
+  const conversation = new ConversationManager(() => 80);
+  const permissions = new PermissionManager(async () => ({ approved: true }));
+  const hookDispatcher = options.hookResult
+    ? { fire: mock(async () => options.hookResult!) }
+    : null;
+
+  runtimeBus.onDomain('turn', (env) => dispatch.dispatchTurnEvent(env.payload));
+  runtimeBus.onDomain('tools', (env) => dispatch.dispatchToolEvent(env.payload));
+
+  const orchestrator = new Orchestrator(
+    conversation,
+    () => 24,
+    () => {},
+    toolRegistry,
+    permissions,
+    () => '',
+    hookDispatcher,
+    null,
+    () => {},
+    runtimeBus,
+  );
+
+  return { runtimeBus, store, registry, collector, orchestrator };
+}
+
+describe('runtime substrate gate', () => {
+  const savedStream = configManager.get('display.stream') as boolean;
+  const realDateNow = Date.now;
+  let fakeNow = 1_800_000_000_000;
+
+  beforeEach(() => {
+    Date.now = () => ++fakeNow;
+  });
+
+  afterEach(() => {
+    configManager.set('display.stream', savedStream);
+    Date.now = realDateNow;
+  });
+
+  test('preflight overflow fails with explicit terminal stop reason and forensic evidence', async () => {
+    configManager.set('display.stream', false);
+    const { orchestrator, store, registry, collector } = buildHarness();
+    const provider: LLMProvider = {
+      name: 'mock',
+      models: ['mock-model'],
+      chat: mock(async (): Promise<ChatResponse> => ({
+        content: 'should not run',
+        toolCalls: [],
+        usage: { inputTokens: 1, outputTokens: 1 },
+        stopReason: 'end',
+      })),
+    };
+
+    (orchestrator as unknown as { checkContextWindowPreflight: () => Promise<'error'> }).checkContextWindowPreflight =
+      (async () => 'error');
+
+    await withMockProvider(provider, () => orchestrator.handleUserInput('overflow me'));
+
+    expect(store.getState().conversation.turnState).toBe('failed');
+    expect(store.getState().conversation.lastTurnStopReason).toBe('context_overflow');
+    expect(registry.latest()?.classification).toBe('max_tokens');
+    collector.dispose();
+  });
+
+  test('hook denial fails with permission-style classification', async () => {
+    configManager.set('display.stream', false);
+    const { orchestrator, store, registry, collector } = buildHarness({
+      hookResult: { ok: true, decision: 'deny', reason: 'policy blocked' },
+    });
+    const provider: LLMProvider = {
+      name: 'mock',
+      models: ['mock-model'],
+      chat: mock(async (): Promise<ChatResponse> => ({
+        content: 'should not run',
+        toolCalls: [],
+        usage: { inputTokens: 1, outputTokens: 1 },
+        stopReason: 'end',
+      })),
+    };
+
+    await withMockProvider(provider, () => orchestrator.handleUserInput('blocked by hook'));
+
+    expect(store.getState().conversation.turnState).toBe('failed');
+    expect(store.getState().conversation.lastTurnStopReason).toBe('hook_denied');
+    expect(registry.latest()?.classification).toBe('permission_denied');
+    collector.dispose();
+  });
+
+  test('synthetic provider exhaustion classifies as llm_error with explicit stop reason', async () => {
+    configManager.set('display.stream', false);
+    const { orchestrator, store, registry, collector } = buildHarness();
+    const provider: LLMProvider = {
+      name: 'synthetic',
+      models: ['mock-model'],
+      chat: mock(async (): Promise<ChatResponse> => {
+        throw new ProviderError('rate limited', 429);
+      }),
+    };
+
+    await withMockProvider(provider, () => orchestrator.handleUserInput('exhausted'), SYNTHETIC_MODEL);
+
+    expect(store.getState().conversation.turnState).toBe('failed');
+    expect(store.getState().conversation.lastTurnStopReason).toBe('provider_exhausted');
+    expect(registry.latest()?.classification).toBe('llm_error');
+    collector.dispose();
+  });
+
+  test('abort during provider wait yields cancelled terminal state and forensics', async () => {
+    configManager.set('display.stream', false);
+    const { orchestrator, store, registry, collector } = buildHarness();
+    const provider: LLMProvider = {
+      name: 'mock',
+      models: ['mock-model'],
+      chat: mock(async (params: ChatRequest): Promise<ChatResponse> => {
+        await new Promise((_, reject) => {
+          if (params.signal?.aborted) {
+            reject(new Error('aborted'));
+            return;
+          }
+          params.signal?.addEventListener('abort', () => reject(new Error('aborted')));
+        });
+        throw new Error('unreachable');
+      }),
+    };
+
+    const run = withMockProvider(provider, () => orchestrator.handleUserInput('cancel me'));
+    setTimeout(() => orchestrator.abort(), 0);
+    await run;
+
+    expect(store.getState().conversation.turnState).toBe('cancelled');
+    expect(store.getState().conversation.lastTurnStopReason).toBe('cancelled');
+    expect(registry.latest()?.classification).toBe('cancelled');
+    collector.dispose();
+  });
+
+  test('repeated all-failed tool turns trip the circuit breaker with typed terminal evidence', async () => {
+    configManager.set('display.stream', false);
+    const { orchestrator, store, registry, collector } = buildHarness();
+    const provider: LLMProvider = {
+      name: 'mock',
+      models: ['mock-model'],
+      chat: mock(async (): Promise<ChatResponse> => ({
+        content: '',
+        toolCalls: [{ id: `call-${Date.now()}-${Math.random()}`, name: 'missing_tool', arguments: {} }],
+        usage: { inputTokens: 5, outputTokens: 1 },
+        stopReason: 'tool_use',
+      })),
+    };
+
+    await withMockProvider(provider, () => orchestrator.handleUserInput('loop forever'));
+
+    expect(store.getState().conversation.turnState).toBe('failed');
+    expect(store.getState().conversation.lastTurnStopReason).toBe('tool_loop_circuit_breaker');
+    expect(registry.latest()?.classification).toBe('tool_failure');
+    collector.dispose();
+  });
+});

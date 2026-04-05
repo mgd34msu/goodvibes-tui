@@ -1,8 +1,7 @@
 /**
  * strategies/autocompact.ts
  *
- * Auto-compaction strategy — delegates to the v2 compaction algorithm from
- * `src/core/context-compaction.ts` (compactMessages / compactMessagesV2).
+ * Auto-compaction strategy for the session compaction pipeline.
  *
  * This strategy is used when token pressure is in the 50–85% range. It runs
  * the full semantic compaction pipeline including section-based extraction,
@@ -16,9 +15,9 @@ import type { StrategyInput, StrategyOutput } from '../types.ts';
 /**
  * Applies automatic threshold-based compaction.
  *
- * When the full v2 pipeline is available via a registry reference in `meta`,
- * it delegates to `compactMessages`. Otherwise it falls back to a structural
- * compaction (similar to microcompact but with a wider drop window).
+ * This uses the standard compaction pipeline. If a registry-backed context
+ * summary is unavailable, it falls back to a structural compaction that keeps
+ * a wider recent-message window than microcompact.
  *
  * @param input - Strategy input.
  * @returns Strategy output.
@@ -64,4 +63,3 @@ export function runAutocompact(input: StrategyInput): StrategyOutput {
     warnings,
   };
 }
-

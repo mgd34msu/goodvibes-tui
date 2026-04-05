@@ -45,7 +45,7 @@ export interface LedgerEntry {
   readonly runId: string;
   /** Monotonically increasing revision counter within the run (starts at 1). */
   readonly rev: number;
-  /** Event name (matches keys in EventBus EventMap). */
+  /** Event name recorded in the typed runtime ledger. */
   readonly eventName: string;
   /** Full event payload, JSON-serialisable. */
   readonly payload: unknown;
@@ -119,9 +119,9 @@ export class LocalLedgerExporter implements SpanExporter {
    * @param entry - The ledger entry to append.
    *
    * @remarks
-   * This method is pre-positioned for the event recording integration that
-   * wires EventBus events to the ledger. The integration subscribes to the
-   * bus at session start and calls `recordEvent()` for each event that should
+   * This method is used by the event recording integration that
+   * wires typed runtime events to the ledger. The integration subscribes to the
+   * runtime bus at session start and calls `recordEvent()` for each event that should
    * be included in the replay ledger. See `DeterministicReplayEngine.load()`
    * for the consumer side of this pipeline.
    */

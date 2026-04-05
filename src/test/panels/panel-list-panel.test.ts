@@ -40,7 +40,19 @@ function makeReg(overrides: Partial<PanelRegistration> & { id: string }): PanelR
     icon: overrides.icon ?? 'X',
     category: overrides.category ?? 'session',
     description: overrides.description ?? `Desc for ${overrides.id}`,
-    factory: overrides.factory ?? (() => { throw new Error('not implemented'); }),
+    factory: overrides.factory ?? (() => ({
+      id: overrides.id,
+      name: overrides.name ?? `Panel ${overrides.id}`,
+      icon: overrides.icon ?? 'X',
+      category: overrides.category ?? 'session',
+      isTransient: false,
+      isPinned: false,
+      needsRender: true,
+      onActivate() {},
+      onDeactivate() {},
+      onDestroy() {},
+      render: () => [],
+    })),
   };
 }
 
@@ -54,6 +66,7 @@ describe('PanelListPanel', () => {
 
   // Register a small set of panels before each test so _buildEntries has data.
   beforeEach(() => {
+    mgr.destroyAll();
     // Register panels in two categories so we can test filtering and navigation.
     mgr.registerType(makeReg({ id: 'alpha', name: 'Alpha Panel', category: 'development', description: 'The alpha panel' }));
     mgr.registerType(makeReg({ id: 'beta',  name: 'Beta Panel',  category: 'development', description: 'The beta panel' }));
@@ -61,6 +74,10 @@ describe('PanelListPanel', () => {
     mgr.registerType(makeReg({ id: 'delta', name: 'Delta Panel', category: 'session',     description: 'A unique tag: xyz' }));
     panel = new PanelListPanel();
     panel.onActivate();
+  });
+
+  afterEach(() => {
+    mgr.destroyAll();
   });
 
   // ── metadata ─────────────────────────────────────────────────────────────
@@ -107,6 +124,7 @@ describe('PanelListPanel', () => {
     test('shows hint line with nav shortcuts', () => {
       const text = linesText(panel.render(80, 20));
       expect(text).toContain('Enter');
+      expect(text).toContain('T/B');
     });
   });
 
@@ -214,7 +232,7 @@ describe('PanelListPanel', () => {
   describe('search input', () => {
     test('printable characters append to query and appear in filter bar', () => {
       panel.handleInput('a');
-      panel.handleInput('b');
+      panel.handleInput('B');
       const text = linesText(panel.render(80, 20));
       expect(text).toContain('ab');
     });
@@ -274,6 +292,40 @@ describe('PanelListPanel', () => {
     });
   });
 
+  // ── pane controls ────────────────────────────────────────────────────────
+
+  describe('pane controls', () => {
+    test('b opens the selected panel in the bottom pane', () => {
+      panel.handleInput('B');
+      expect(mgr.isBottomPaneVisible()).toBe(true);
+      expect(mgr.getBottomPane().panels.map(p => p.id)).toContain('alpha');
+    });
+
+    test('t opens the selected panel in the top pane', () => {
+      panel.handleInput('T');
+      expect(mgr.getTopPane().panels.map(p => p.id)).toContain('alpha');
+    });
+
+    test('m moves an open selected panel to the other pane', () => {
+      panel.handleInput('T');
+      panel.handleInput('M');
+      expect(mgr.getBottomPane().panels.map(p => p.id)).toContain('alpha');
+    });
+
+    test('s toggles bottom-pane visibility', () => {
+      expect(mgr.isBottomPaneVisible()).toBe(false);
+      panel.handleInput('S');
+      expect(mgr.isBottomPaneVisible()).toBe(true);
+    });
+
+    test('tab toggles focused pane when bottom pane is visible', () => {
+      panel.handleInput('B');
+      expect(mgr.getFocusedPane()).toBe('bottom');
+      panel.handleInput('tab');
+      expect(mgr.getFocusedPane()).toBe('top');
+    });
+  });
+
   // ── scroll clamping ───────────────────────────────────────────────────────
 
   describe('scroll clamping', () => {
@@ -315,7 +367,6 @@ describe('PanelListPanel', () => {
         name: 'Openable Panel',
         category: 'session',
         description: 'A panel that can be opened',
-        factory: () => new PanelListPanel(),
       }));
     });
 

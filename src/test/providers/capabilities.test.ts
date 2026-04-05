@@ -4,9 +4,11 @@ import {
   getCapabilityRegistry,
   _resetCapabilityRegistryForTesting,
   RouteRejectionCode,
+  type RouteRejectionDetail,
   type ProviderCapability,
   type RequestProfile,
 } from '../../providers/capabilities.ts';
+import type { LLMProvider } from '../../providers/interface.ts';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -27,6 +29,11 @@ function makeCapability(overrides: Partial<ProviderCapability> = {}): ProviderCa
     ...overrides,
   };
 }
+
+type ProviderWithCapabilities = Pick<LLMProvider, 'capabilities'>;
+type ProviderCapabilityRegistryTestAccess = {
+  _collectRejections(capability: ProviderCapability, profile: RequestProfile): RouteRejectionDetail[];
+};
 
 // ---------------------------------------------------------------------------
 // ProviderCapabilityRegistry — merge order
@@ -60,11 +67,11 @@ describe('ProviderCapabilityRegistry.getCapability — merge order', () => {
   });
 
   test('self-declared provider capability overrides PROVIDER_DEFAULTS', () => {
-    const selfDeclared: Pick<import('../../providers/interface.ts').LLMProvider, 'capabilities'> = {
+    const selfDeclared: ProviderWithCapabilities = {
       capabilities: { toolCalling: false } as Partial<ProviderCapability>,
     };
     // anthropic has toolCalling: true — self-declared false should win
-    const cap = registry.getCapability('anthropic', 'claude-3-haiku-20240307', selfDeclared as any);
+    const cap = registry.getCapability('anthropic', 'claude-3-haiku-20240307', selfDeclared);
     expect(cap.toolCalling).toBe(false);
   });
 
@@ -74,7 +81,7 @@ describe('ProviderCapabilityRegistry.getCapability — merge order', () => {
     const selfDeclared = {
       capabilities: { reasoningControls: false } as Partial<ProviderCapability>,
     };
-    const cap = registry.getCapability('anthropic', 'claude-opus-4-5', selfDeclared as any);
+    const cap = registry.getCapability('anthropic', 'claude-opus-4-5', selfDeclared);
     expect(cap.reasoningControls).toBe(true);
     expect(cap.maxOutputTokens).toBe(32_000);
   });
@@ -229,7 +236,7 @@ describe('ProviderCapabilityRegistry.getRouteExplanation', () => {
     // We test via canHandle rejection collection indirectly: any provider whose
     // resolved capability has streaming=false will produce this code
     const cap = makeCapability({ streaming: false });
-    const rejections = (reg as any)._collectRejections(cap, { requiresStreaming: true });
+    const rejections = (reg as unknown as ProviderCapabilityRegistryTestAccess)._collectRejections(cap, { requiresStreaming: true });
     expect(rejections).toHaveLength(1);
     expect(rejections[0].code).toBe(RouteRejectionCode.NO_STREAMING);
     expect(rejections[0].actual).toBe(false);
@@ -239,7 +246,7 @@ describe('ProviderCapabilityRegistry.getRouteExplanation', () => {
   test('NO_TOOL_CALLING rejection code produced correctly', () => {
     const reg = new ProviderCapabilityRegistry();
     const cap = makeCapability({ toolCalling: false });
-    const rejections = (reg as any)._collectRejections(cap, { requiresToolCalling: true });
+    const rejections = (reg as unknown as ProviderCapabilityRegistryTestAccess)._collectRejections(cap, { requiresToolCalling: true });
     expect(rejections).toHaveLength(1);
     expect(rejections[0].code).toBe(RouteRejectionCode.NO_TOOL_CALLING);
   });
@@ -247,7 +254,7 @@ describe('ProviderCapabilityRegistry.getRouteExplanation', () => {
   test('NO_PARALLEL_TOOLS rejection code produced correctly', () => {
     const reg = new ProviderCapabilityRegistry();
     const cap = makeCapability({ parallelTools: false });
-    const rejections = (reg as any)._collectRejections(cap, { requiresParallelTools: true });
+    const rejections = (reg as unknown as ProviderCapabilityRegistryTestAccess)._collectRejections(cap, { requiresParallelTools: true });
     expect(rejections).toHaveLength(1);
     expect(rejections[0].code).toBe(RouteRejectionCode.NO_PARALLEL_TOOLS);
   });
@@ -255,7 +262,7 @@ describe('ProviderCapabilityRegistry.getRouteExplanation', () => {
   test('NO_JSON_MODE rejection code produced correctly', () => {
     const reg = new ProviderCapabilityRegistry();
     const cap = makeCapability({ jsonMode: false });
-    const rejections = (reg as any)._collectRejections(cap, { requiresJsonMode: true });
+    const rejections = (reg as unknown as ProviderCapabilityRegistryTestAccess)._collectRejections(cap, { requiresJsonMode: true });
     expect(rejections).toHaveLength(1);
     expect(rejections[0].code).toBe(RouteRejectionCode.NO_JSON_MODE);
   });
@@ -263,7 +270,7 @@ describe('ProviderCapabilityRegistry.getRouteExplanation', () => {
   test('NO_REASONING_CONTROLS rejection code produced correctly', () => {
     const reg = new ProviderCapabilityRegistry();
     const cap = makeCapability({ reasoningControls: false });
-    const rejections = (reg as any)._collectRejections(cap, { requiresReasoningControls: true });
+    const rejections = (reg as unknown as ProviderCapabilityRegistryTestAccess)._collectRejections(cap, { requiresReasoningControls: true });
     expect(rejections).toHaveLength(1);
     expect(rejections[0].code).toBe(RouteRejectionCode.NO_REASONING_CONTROLS);
   });
@@ -271,7 +278,7 @@ describe('ProviderCapabilityRegistry.getRouteExplanation', () => {
   test('CONTEXT_TOO_SMALL rejection code produced correctly', () => {
     const reg = new ProviderCapabilityRegistry();
     const cap = makeCapability({ maxContextTokens: 32_768 });
-    const rejections = (reg as any)._collectRejections(cap, { minContextTokens: 100_000 });
+    const rejections = (reg as unknown as ProviderCapabilityRegistryTestAccess)._collectRejections(cap, { minContextTokens: 100_000 });
     expect(rejections).toHaveLength(1);
     expect(rejections[0].code).toBe(RouteRejectionCode.CONTEXT_TOO_SMALL);
     expect(rejections[0].actual).toBe(32_768);
@@ -281,7 +288,7 @@ describe('ProviderCapabilityRegistry.getRouteExplanation', () => {
   test('OUTPUT_TOO_SMALL rejection code produced correctly', () => {
     const reg = new ProviderCapabilityRegistry();
     const cap = makeCapability({ maxOutputTokens: 4_096 });
-    const rejections = (reg as any)._collectRejections(cap, { minOutputTokens: 8_000 });
+    const rejections = (reg as unknown as ProviderCapabilityRegistryTestAccess)._collectRejections(cap, { minOutputTokens: 8_000 });
     expect(rejections).toHaveLength(1);
     expect(rejections[0].code).toBe(RouteRejectionCode.OUTPUT_TOO_SMALL);
     expect(rejections[0].actual).toBe(4_096);
@@ -295,7 +302,7 @@ describe('ProviderCapabilityRegistry.getRouteExplanation', () => {
       jsonMode: false,
       maxOutputTokens: 1_000,
     });
-    const rejections = (reg as any)._collectRejections(cap, {
+    const rejections = (reg as unknown as ProviderCapabilityRegistryTestAccess)._collectRejections(cap, {
       requiresParallelTools: true,
       requiresJsonMode: true,
       minOutputTokens: 8_000,

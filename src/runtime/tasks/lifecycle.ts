@@ -1,7 +1,7 @@
 /**
  * Task lifecycle state machine — pure transition logic with no side effects.
  *
- * Implements the state machine from v3 §4.4:
+ * Implements the task lifecycle state machine:
  *
  * ```
  * queued → running

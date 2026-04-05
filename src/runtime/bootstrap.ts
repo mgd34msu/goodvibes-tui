@@ -9,18 +9,11 @@
  *   - main.ts: terminal setup, render loop, stdin/stdout handlers
  *   - lifecycle.ts: save/shutdown helpers
  */
-import { randomBytes } from 'crypto';
-import { existsSync, readFileSync, mkdirSync, writeFileSync } from 'fs';
-import { homedir } from 'os';
-import { join } from 'path';
-
-import { EventBus } from '../core/event-bus.ts';
 import { ConversationManager } from '../core/conversation.ts';
 import { Orchestrator } from '../core/orchestrator.ts';
 import { SelectionManager } from '../input/selection.ts';
-import { config, configManager } from '../config/index.ts';
+import { configManager, getConfiguredSystemPrompt, getWorkingDirectory } from '../config/index.ts';
 import { providerRegistry } from '../providers/registry.ts';
-import { autoRegisterProviders } from '../providers/auto-register.ts';
 import { ToolRegistry } from '../tools/registry.ts';
 import { registerAllTools } from '../tools/index.ts';
 import { agentOrchestrator } from '../agents/orchestrator.ts';
@@ -38,44 +31,47 @@ import { loadSystemPrompt as _loadSystemPrompt } from '../utils/prompt-loader.ts
 import { getTierPromptSupplement, getTierForContextWindow } from '../providers/tier-prompts.ts';
 import { GitStatusProvider } from '../renderer/git-status.ts';
 import type { GitHeaderInfo } from '../renderer/git-status.ts';
-import { scan, loadPersistedProviders, persistProviders, removePersistedProviders, scanMcpServers } from '../discovery/index.ts';
 import { getSessionManager } from '../sessions/manager.ts';
 import { logger } from '../utils/logger.ts';
 import { getPinned } from '../providers/favorites.ts';
 import { initModelLimits, getContextWindowForModel } from '../providers/model-limits.ts';
 import { initBenchmarks } from '../providers/model-benchmarks.ts';
-import { setSyntheticBus } from '../providers/synthetic.ts';
+import { setSyntheticRuntimeBus } from '../providers/synthetic.ts';
 import { initCatalog, getConfiguredProviderIds } from '../providers/model-catalog.ts';
 import { getPanelManager } from '../panels/panel-manager.ts';
 import { registerBuiltinPanels } from '../panels/builtin-panels.ts';
 import { mcpRegistry } from '../mcp/registry.ts';
 import { getKeybindingsManager } from '../input/keybindings.ts';
 import { sessionMemoryStore } from '../core/session-memory.ts';
-import { FileUndoManager } from '../state/file-undo.ts';
 import { Compositor } from '../renderer/compositor.ts';
-import type { SessionMeta } from '../sessions/manager.ts';
+import type { PermissionRequestHandler } from '../permissions/prompt.ts';
 
 import type { HookPhase, HookCategory, HookEventPath } from '../hooks/types.ts';
 import type { RuntimeContext, BootstrapOptions, MutableRuntimeState } from './context.ts';
 import { shutdownRuntime, fireSessionStart, saveSession } from './lifecycle.ts';
-import { createFeatureFlagManager } from './feature-flags/index.ts';
+import { createFeatureFlagManager, FeatureFlagManager } from './feature-flags/index.ts';
+import type { AgentEvent, OpsEvent, ProviderEvent, WorkflowEvent } from './events/index.ts';
 import { RuntimeEventBus } from './events/index.ts';
-import { createRuntimeStore } from './store/index.ts';
+import { createRuntimeStore, createDomainDispatch } from './store/index.ts';
 import { createTaskManager } from './tasks/index.ts';
 import { OpsControlPlane } from './ops/control-plane.ts';
+import { ForensicsCollector, ForensicsRegistry } from './forensics/index.ts';
+import { setOpsRuntimeContext } from './ops/runtime-context.ts';
+import { getPolicyRuntimeState } from './permissions/policy-runtime.ts';
 import { createSystemMessageRouter, SystemMessageRouter } from '../core/system-message-router.ts';
-
-// ── Session file paths ─────────────────────────────────────────────────────
-
-const USER_SESSIONS_DIR = join(process.cwd(), '.goodvibes', 'tui', 'sessions');
-const LAST_SESSION_POINTER = join(USER_SESSIONS_DIR, 'last-session.json');
+import { emitSessionReady, emitSessionResumed, emitSessionStarted } from './emitters/index.ts';
+import { setPlanRuntimeBus } from '../core/plan-command-handler.ts';
+import {
+  generateUserSessionId,
+  getLastSessionPointerPath,
+  getRecoveryFilePath,
+  loadLastConversation,
+  writeLastSessionPointer,
+} from './session-persistence.ts';
+import { createBootstrapCommandContext } from './bootstrap-command-context.ts';
+import { scheduleMcpAutodiscovery, startBackgroundProviderRegistration } from './bootstrap-background.ts';
 
 // ── Internal helpers ──────────────────────────────────────────────────────
-
-/** Generate an 8-character lowercase hex session ID. */
-function generateUserSessionId(): string {
-  return randomBytes(4).toString('hex');
-}
 
 /** Load and resolve the current system prompt. */
 function loadSystemPrompt(): string {
@@ -110,68 +106,6 @@ function restoreSavedModel(
   }
 }
 
-/** Write the last-session pointer (imported in main.ts for use after session resume). */
-export function writeLastSessionPointer(sessionId: string): void {
-  try {
-    mkdirSync(USER_SESSIONS_DIR, { recursive: true });
-    writeFileSync(
-      LAST_SESSION_POINTER,
-      JSON.stringify({ sessionId, timestamp: new Date().toISOString() }) + '\n',
-      'utf-8',
-    );
-  } catch (e) { logger.debug('writeLastSessionPointer failed', { error: String(e) }); }
-}
-
-/** Read the last-session pointer. Returns null if none exists or on error. */
-function readLastSessionPointer(): string | null {
-  try {
-    if (existsSync(LAST_SESSION_POINTER)) {
-      const data = JSON.parse(readFileSync(LAST_SESSION_POINTER, 'utf-8')) as { sessionId?: unknown };
-      if (typeof data.sessionId === 'string' && data.sessionId.trim()) return data.sessionId;
-    }
-  } catch (e) { logger.debug('readLastSessionPointer failed', { error: String(e) }); }
-  return null;
-}
-
-/**
- * Load the last user session from the pointer file.
- * Returns the messages array or null if no session exists.
- */
-function loadLastConversation(): { messages: Array<Record<string, unknown>> } | null {
-  try {
-    const lastId = readLastSessionPointer();
-    if (!lastId) {
-      // Migration: check old format
-      const oldPath = join(homedir(), '.goodvibes', 'conversations', 'last.json');
-      if (existsSync(oldPath)) {
-        try {
-          const raw = readFileSync(oldPath, 'utf-8');
-          const data = JSON.parse(raw) as { messages?: unknown };
-          if (data.messages && Array.isArray(data.messages)) {
-            const migrationId = `user-${generateUserSessionId()}`;
-            const sm = getSessionManager();
-            const meta: SessionMeta = {
-              title: '',
-              model: '',
-              provider: '',
-              timestamp: Date.now(),
-            };
-            sm.save(migrationId, data.messages as Array<Record<string, unknown>>, meta);
-            writeLastSessionPointer(migrationId);
-            logger.debug('Migrated old conversation from conversations/last.json', { newSessionId: migrationId });
-            return { messages: data.messages as Array<Record<string, unknown>> };
-          }
-        } catch (e) { logger.debug('Old session migration failed', { error: String(e) }); }
-      }
-      return null;
-    }
-    const sm = getSessionManager();
-    const { messages } = sm.load(lastId);
-    return { messages: messages as Array<Record<string, unknown>> };
-  } catch (e) { logger.debug('loadLastConversation failed', { error: String(e) }); }
-  return null;
-}
-
 // ── Bootstrap context type ──────────────────────────────────────────────────
 
 /**
@@ -198,8 +132,10 @@ export type BootstrapContext = RuntimeContext & {
   bootstrapUnsubs: Array<() => void>;
   /** Ref holding the periodic agent-status interval (use ref — not local var — to keep shutdown in sync). */
   agentStatusIntervalRef: { value: ReturnType<typeof setInterval> | null };
-  /** Mutable refs for viewport/scroll functions; main.ts patches these after constructing UI state. */
-  orchestratorRefs: { getViewportHeight: () => number; scrollToEnd: (vHeight: number) => void };
+  /** Mutable refs for viewport/scroll/render functions; main.ts patches these after constructing UI state. */
+  orchestratorRefs: { getViewportHeight: () => number; scrollToEnd: (vHeight: number) => void; requestRender: () => void };
+  /** Shell-owned permission prompt bridge that main.ts patches after UI setup. */
+  permissionPromptRef: { requestPermission: PermissionRequestHandler };
   /** Load the most recently saved conversation from disk. */
   loadLastConversation: () => { messages: Array<Record<string, unknown>> } | null;
   /** Write the last-session pointer file (used after session resume). */
@@ -235,9 +171,9 @@ export type BootstrapContext = RuntimeContext & {
  *
  * Phase summary:
  *   1. Config, caches, keybindings
- *   2. EventBus, ConversationManager, Compositor, SelectionManager
+ *   2. Runtime event bus, conversation, compositor, selection
  *   3. Tool registry + agent wiring
- *   4. Event bus subscriptions (WRFC, subagent, hook bridge)
+ *   4. Runtime bus subscriptions (WRFC, subagent, hook bridge)
  *   5. Providers, webhooks, PermissionManager, HookDispatcher
  *   6. Orchestrator + AcpManager
  *   7. MCP auto-connect + panel manager
@@ -255,6 +191,7 @@ export async function bootstrapRuntime(
 
   const featureFlags = createFeatureFlagManager();
   featureFlags.loadFromConfig({ flags: (configManager.getCategory('featureFlags') as Record<string, import('./feature-flags/types.ts').FlagState>) ?? {} });
+  FeatureFlagManager.setInstance(featureFlags);
 
   // ── Phase 1: Config, caches, keybindings ────────────────────────────────
 
@@ -270,12 +207,21 @@ export async function bootstrapRuntime(
 
   // ── Phase 2: Core subsystems ─────────────────────────────────────────
 
-  const bus = new EventBus();
-  // RuntimeEventBus for typed domain events (tasks, agents, ops, etc.)
   const runtimeBus = new RuntimeEventBus();
+  const store = createRuntimeStore();
+  const domainDispatch = createDomainDispatch(store);
+  const forensicsRegistry = new ForensicsRegistry();
+  const forensicsCollector = new ForensicsCollector(runtimeBus, forensicsRegistry);
+  const policyRuntimeState = getPolicyRuntimeState();
+  setOpsRuntimeContext({
+    runtimeBus,
+    store,
+    recoveryFilePath: getRecoveryFilePath(),
+    lastSessionPointerPath: getLastSessionPointerPath(options?.workingDir),
+  });
 
-  // Inject bus into the synthetic provider for cross-model failover notifications
-  setSyntheticBus(bus);
+  setSyntheticRuntimeBus(runtimeBus);
+  setPlanRuntimeBus(runtimeBus);
 
   const conversation = new ConversationManager(() => {
     const w = stdout.columns || 80;
@@ -295,79 +241,104 @@ export async function bootstrapRuntime(
   const toolRegistry = new ToolRegistry();
   const { fileCache, projectIndex } = registerAllTools(toolRegistry);
   agentOrchestrator.setDependencies(fileCache, projectIndex);
-  agentOrchestrator.setEventBus(bus);
-  WrfcController.getInstance(bus);
+  agentOrchestrator.setRuntimeBus(runtimeBus);
+  AgentManager.getInstance().setRuntimeBus(runtimeBus);
+  WrfcController.initialize(runtimeBus);
 
   // ── Phase 4: Event bus subscriptions ──────────────────────────────────
 
   // These unsubs are owned by bootstrap; cleared via shutdown()
   const bootstrapUnsubs: Array<() => void> = [];
-
-  bootstrapUnsubs.push(bus.on('wrfc:cascade-abort', ({ chainId, reason }: { chainId: string; reason: string }) => {
-    systemMessageRouter.high(`[WRFC] Cascade abort: ${reason} (chain ${chainId})`);
-    bus.emit('render:request');
+  const renderRequestRef = {
+    value: (): void => {},
+  };
+  const requestRender = (): void => {
+    renderRequestRef.value();
+  };
+  const permissionPromptRef = {
+    requestPermission: (async () => ({ approved: false, remember: false })) as PermissionRequestHandler,
+  };
+  const runtimeUnsubs: Array<() => void> = [];
+  runtimeUnsubs.push(runtimeBus.onDomain('turn', (env) => {
+    domainDispatch.dispatchTurnEvent(env.payload);
+  }));
+  runtimeUnsubs.push(runtimeBus.onDomain('agents', (env) => {
+    domainDispatch.dispatchAgentEvent(env.payload);
   }));
 
-  bootstrapUnsubs.push(bus.on('model:fallback', ({ from, to, provider: fallbackProvider }: { from: string; to: string; provider: string }) => {
+  runtimeUnsubs.push(runtimeBus.on<Extract<WorkflowEvent, { type: 'WORKFLOW_CASCADE_ABORTED' }>>('WORKFLOW_CASCADE_ABORTED', ({ payload }) => {
+    const { chainId, reason } = payload;
+    systemMessageRouter.high(`[WRFC] Cascade abort: ${reason} (chain ${chainId})`);
+    requestRender();
+  }));
+
+  runtimeUnsubs.push(runtimeBus.on<Extract<ProviderEvent, { type: 'MODEL_FALLBACK' }>>('MODEL_FALLBACK', ({ payload }) => {
+    const { from, to, provider: fallbackProvider } = payload;
     systemMessageRouter.high(
       `[Model] ${from} exhausted across all providers. Automatically falling back to ${to} via ${fallbackProvider}.`
     );
-    bus.emit('render:request');
+    requestRender();
   }));
 
-  bootstrapUnsubs.push(bus.on('wrfc:chain-created', ({ chainId, task }: { chainId: string; task: string }) => {
+  runtimeUnsubs.push(runtimeBus.on<Extract<WorkflowEvent, { type: 'WORKFLOW_CHAIN_CREATED' }>>('WORKFLOW_CHAIN_CREATED', ({ payload }) => {
+    const { chainId, task } = payload;
     systemMessageRouter.high(`[WRFC] Chain ${chainId} started: ${task}`);
-    bus.emit('render:request');
+    requestRender();
   }));
 
-  bootstrapUnsubs.push(bus.on('wrfc:review-complete', ({ chainId, score, passed }: { chainId: string; score: number; passed: boolean }) => {
+  runtimeUnsubs.push(runtimeBus.on<Extract<WorkflowEvent, { type: 'WORKFLOW_REVIEW_COMPLETED' }>>('WORKFLOW_REVIEW_COMPLETED', ({ payload }) => {
+    const { chainId, score, passed } = payload;
     const icon = passed ? '\u2713' : '\u2717';
     const threshold = configManager.get('wrfc.scoreThreshold') as number;
     const suffix = passed ? '' : ` - Minimum score is ${threshold}/10, spawning a fix agent ...`;
     systemMessageRouter.high(`[WRFC] ${icon} Review ${chainId.slice(0, 12)}: ${score}/10${suffix}`);
-    bus.emit('render:request');
+    requestRender();
   }));
 
-  bootstrapUnsubs.push(bus.on('wrfc:chain-passed', ({ chainId }: { chainId: string }) => {
+  runtimeUnsubs.push(runtimeBus.on<Extract<WorkflowEvent, { type: 'WORKFLOW_CHAIN_PASSED' }>>('WORKFLOW_CHAIN_PASSED', ({ payload }) => {
+    const { chainId } = payload;
     systemMessageRouter.high(`[WRFC] \u2713 Chain ${chainId.slice(0, 12)} PASSED \u2014 all gates clear`);
     // Re-check cohort completion now that a WRFC chain finished
-    const chain = WrfcController.getInstance(bus).getChain(chainId);
+    const chain = WrfcController.getInstance().getChain(chainId);
     if (chain?.engineerAgentId) {
       const record = AgentManager.getInstance().getStatus(chain.engineerAgentId);
       checkCohortCompletion(record ?? null);
     }
-    bus.emit('render:request');
+    requestRender();
   }));
 
-  bootstrapUnsubs.push(bus.on('wrfc:chain-failed', ({ chainId, reason }: { chainId: string; reason: string }) => {
+  runtimeUnsubs.push(runtimeBus.on<Extract<WorkflowEvent, { type: 'WORKFLOW_CHAIN_FAILED' }>>('WORKFLOW_CHAIN_FAILED', ({ payload }) => {
+    const { chainId, reason } = payload;
     systemMessageRouter.high(`[WRFC] \u2717 Chain ${chainId.slice(0, 12)} FAILED: ${reason.slice(0, 80)}`);
     // Re-check cohort completion now that a WRFC chain finished
-    const chain = WrfcController.getInstance(bus).getChain(chainId);
+    const chain = WrfcController.getInstance().getChain(chainId);
     if (chain?.engineerAgentId) {
       const record = AgentManager.getInstance().getStatus(chain.engineerAgentId);
       checkCohortCompletion(record ?? null);
     }
-    bus.emit('render:request');
+    requestRender();
   }));
 
-  bootstrapUnsubs.push(bus.on('wrfc:auto-commit', ({ chainId, commitHash }: { chainId: string; commitHash?: string }) => {
+  runtimeUnsubs.push(runtimeBus.on<Extract<WorkflowEvent, { type: 'WORKFLOW_AUTO_COMMITTED' }>>('WORKFLOW_AUTO_COMMITTED', ({ payload }) => {
+    const { chainId, commitHash } = payload;
     const suffix = commitHash ? ` (${commitHash.slice(0, 7)})` : '';
     systemMessageRouter.high(`[WRFC] Auto-committed chain ${chainId.slice(0, 12)}${suffix}`);
-    bus.emit('render:request');
+    requestRender();
   }));
 
-  bootstrapUnsubs.push(bus.on('wrfc:gate-result', ({ chainId, gate, passed }: { chainId: string; gate: string; passed: boolean }) => {
+  runtimeUnsubs.push(runtimeBus.on<Extract<WorkflowEvent, { type: 'WORKFLOW_GATE_RESULT' }>>('WORKFLOW_GATE_RESULT', ({ payload }) => {
+    const { gate, passed } = payload;
     const icon = passed ? '\u2713' : '\u2717';
     systemMessageRouter.high(`[WRFC]   ${icon} Gate: ${gate} ${passed ? 'passed' : 'FAILED'}`);
-    bus.emit('render:request');
+    requestRender();
   }));
 
-  bootstrapUnsubs.push(bus.on('subagent:stream-delta', () => {
-    bus.emit('render:request');
+  runtimeUnsubs.push(runtimeBus.on<Extract<AgentEvent, { type: 'AGENT_STREAM_DELTA' }>>('AGENT_STREAM_DELTA', () => {
+    requestRender();
   }));
 
-  bootstrapUnsubs.push(bus.on('subagent:progress', () => {
-    bus.emit('render:request');
+  runtimeUnsubs.push(runtimeBus.on<Extract<AgentEvent, { type: 'AGENT_PROGRESS' }>>('AGENT_PROGRESS', () => {
+    requestRender();
   }));
 
   // ── Agent cohort helpers ──────────────────────────────────────────────────
@@ -398,7 +369,7 @@ export async function bootstrapRuntime(
     if (!allAgentsDone) return;
 
     // Also check that all WRFC chains for this cohort's agents are in terminal states
-    const wrfc = WrfcController.getInstance(bus);
+    const wrfc = WrfcController.getInstance();
     const allChains = wrfc.listChains();
     const cohortAgentIds = new Set(cohortAgents.map(a => a.id));
     const cohortChains = allChains.filter(c =>
@@ -413,30 +384,30 @@ export async function bootstrapRuntime(
     systemMessageRouter.low(buildCohortReport(record.cohort));
   };
 
-  bootstrapUnsubs.push(bus.on('subagent:complete', ({ id }: { id: string }) => {
-    const record = AgentManager.getInstance().getStatus(id);
+  runtimeUnsubs.push(runtimeBus.on<Extract<AgentEvent, { type: 'AGENT_COMPLETED' }>>('AGENT_COMPLETED', ({ payload }) => {
+    const record = AgentManager.getInstance().getStatus(payload.agentId);
     if (record) {
       const dur = record.completedAt !== undefined ? Math.round((record.completedAt - record.startedAt) / 1000) : 0;
       const taskSnippet = record.task.length > 50 ? record.task.slice(0, 50) + '\u2026' : record.task;
       systemMessageRouter.low(
-        `[Agents] \u2713 ${record.template} ${id.slice(-8)}: "${taskSnippet}" \u2014 completed in ${dur}s (${record.toolCallCount} tool calls)`
+        `[Agents] \u2713 ${record.template} ${payload.agentId.slice(-8)}: "${taskSnippet}" \u2014 completed in ${dur}s (${record.toolCallCount} tool calls)`
       );
     }
     checkCohortCompletion(record ?? null);
-    bus.emit('render:request');
+    requestRender();
   }));
 
-  bootstrapUnsubs.push(bus.on('subagent:error', ({ id, error }: { id: string; error: Error }) => {
-    const record = AgentManager.getInstance().getStatus(id);
+  runtimeUnsubs.push(runtimeBus.on<Extract<AgentEvent, { type: 'AGENT_FAILED' }>>('AGENT_FAILED', ({ payload }) => {
+    const record = AgentManager.getInstance().getStatus(payload.agentId);
     if (record && record.status !== 'cancelled') {
       const dur = record.completedAt !== undefined ? Math.round((record.completedAt - record.startedAt) / 1000) : 0;
       const taskSnippet = record.task.length > 50 ? record.task.slice(0, 50) + '\u2026' : record.task;
       systemMessageRouter.low(
-        `[Agents] \u2717 ${record.template} ${id.slice(-8)}: "${taskSnippet}" \u2014 failed in ${dur}s: ${error.message.slice(0, 80)}`
+        `[Agents] \u2717 ${record.template} ${payload.agentId.slice(-8)}: "${taskSnippet}" \u2014 failed in ${dur}s: ${payload.error.slice(0, 80)}`
       );
     }
     checkCohortCompletion(record ?? null);
-    bus.emit('render:request');
+    requestRender();
   }));
 
   // Periodic agent status summary — stored only in the ref so shutdown() always sees the current value.
@@ -447,22 +418,22 @@ export async function bootstrapRuntime(
     if (running.length === 0) return;
     const lines = running.map(a => `  ${a.id.slice(-8)}: ${a.progress ?? a.status}`);
     systemMessageRouter.low(`[Agents] ${running.length} running:\n${lines.join('\n')}`);
-    bus.emit('render:request');
+    requestRender();
   }, AGENT_STATUS_INTERVAL_MS);
 
   // ── Phase 5: Providers, webhooks, PermissionManager, HookDispatcher ─────────
 
   // Start watching for custom provider file changes (hot-reload)
-  providerRegistry.startWatching(bus);
+  providerRegistry.startWatching(runtimeBus);
 
   const webhookUrls = (configManager.getCategory('notifications') as { webhookUrls?: string[] }).webhookUrls ?? [];
   if (webhookUrls.length > 0) {
     const webhookNotifier = WebhookNotifier.fromConfig(webhookUrls);
-    webhookNotifier.attachToEventBus(bus);
+    webhookNotifier.attachToRuntimeBus(runtimeBus);
     setWebhookNotifier(webhookNotifier);
   }
 
-  const permissionManager = new PermissionManager(bus);
+  const permissionManager = new PermissionManager((request) => permissionPromptRef.requestPermission(request));
   const hookDispatcher = getHookDispatcher();
 
   // ── Phase 5b: Runtime state object ───────────────────────────────────────
@@ -471,7 +442,7 @@ export async function bootstrapRuntime(
     model: configManager.get('provider.model') as string,
     provider: configManager.get('provider.provider') as string,
     debugMode: false,
-    systemPrompt: loadSystemPrompt() || config.systemPrompt || '',
+    systemPrompt: loadSystemPrompt() || getConfiguredSystemPrompt() || '',
     reasoningEffort: (configManager.get('provider.reasoningEffort') as string | undefined) ?? '',
     sessionId: userSessionId,
   };
@@ -490,29 +461,62 @@ export async function bootstrapRuntime(
     }).catch((err: unknown) => logger.debug('Hook bridge fire error', { path, error: String(err) }));
   };
 
-  bootstrapUnsubs.push(bus.on('subagent:spawned', ({ id, task }: { id: string; task: string }) => {
-    fireHook('Lifecycle:agent:spawned', 'Lifecycle', 'agent', 'spawned', { agentId: id, task });
+  const resumeSession = (sessionId: string): void => {
+    try {
+      const sm = getSessionManager();
+      const { messages, meta } = sm.load(sessionId);
+      emitSessionResumed(runtimeBus, {
+        sessionId: runtime.sessionId,
+        traceId: `${runtime.sessionId}:session-resume:${sessionId}`,
+        source: 'bootstrap',
+      }, {
+        sessionId,
+        turnCount: messages.length,
+      });
+      conversation.fromJSON({ messages: messages as Parameters<typeof conversation.fromJSON>[0]['messages'] });
+      runtime.sessionId = sessionId;
+      if (meta?.model) runtime.model = meta.model;
+      if (meta?.provider) runtime.provider = meta.provider;
+      writeLastSessionPointer(sessionId);
+      conversation.log(`Resumed session: ${sessionId}`, { fg: '135' });
+      fireHook('Lifecycle:session:load', 'Lifecycle', 'session', 'load', { sessionId });
+    } catch (e) {
+      logger.debug('resumeSession failed', { error: String(e) });
+      conversation.log('Failed to resume session.', { fg: '#ef4444' });
+    }
+    requestRender();
+  };
+
+  runtimeUnsubs.push(runtimeBus.on<Extract<AgentEvent, { type: 'AGENT_SPAWNING' }>>('AGENT_SPAWNING', ({ payload }) => {
+    fireHook('Lifecycle:agent:spawned', 'Lifecycle', 'agent', 'spawned', { agentId: payload.agentId, task: payload.task });
   }));
-  bootstrapUnsubs.push(bus.on('subagent:complete', ({ id, result }: { id: string; result: unknown }) => {
-    fireHook('Lifecycle:agent:completed', 'Lifecycle', 'agent', 'completed', { agentId: id, result: result as Record<string, unknown> });
+  runtimeUnsubs.push(runtimeBus.on<Extract<AgentEvent, { type: 'AGENT_COMPLETED' }>>('AGENT_COMPLETED', ({ payload }) => {
+    fireHook('Lifecycle:agent:completed', 'Lifecycle', 'agent', 'completed', {
+      agentId: payload.agentId,
+      result: {
+        durationMs: payload.durationMs,
+        ...(payload.output !== undefined ? { output: payload.output } : {}),
+        ...(payload.toolCallsMade !== undefined ? { toolCallsMade: payload.toolCallsMade } : {}),
+      },
+    });
   }));
-  bootstrapUnsubs.push(bus.on('subagent:error', ({ id, error }: { id: string; error: Error }) => {
-    const isCancelled = error.message === 'Agent cancelled' || error.message.includes('cancelled');
+  runtimeUnsubs.push(runtimeBus.on<Extract<AgentEvent, { type: 'AGENT_FAILED' }>>('AGENT_FAILED', ({ payload }) => {
+    const isCancelled = payload.error === 'Agent cancelled' || payload.error.includes('cancelled');
     const specific = isCancelled ? 'cancelled' : 'failed';
-    fireHook(`Lifecycle:agent:${specific}` as HookEventPath, 'Lifecycle', 'agent', specific, { agentId: id, error: error.message });
+    fireHook(`Lifecycle:agent:${specific}` as HookEventPath, 'Lifecycle', 'agent', specific, { agentId: payload.agentId, error: payload.error });
   }));
 
-  bootstrapUnsubs.push(bus.on('wrfc:chain-created', ({ chainId, task }: { chainId: string; task: string }) => {
-    fireHook('Lifecycle:workflow:started', 'Lifecycle', 'workflow', 'started', { chainId, task });
+  runtimeUnsubs.push(runtimeBus.on<Extract<WorkflowEvent, { type: 'WORKFLOW_CHAIN_CREATED' }>>('WORKFLOW_CHAIN_CREATED', ({ payload }) => {
+    fireHook('Lifecycle:workflow:started', 'Lifecycle', 'workflow', 'started', { chainId: payload.chainId, task: payload.task });
   }));
-  bootstrapUnsubs.push(bus.on('wrfc:chain-passed', ({ chainId }: { chainId: string }) => {
-    fireHook('Lifecycle:workflow:completed', 'Lifecycle', 'workflow', 'completed', { chainId });
+  runtimeUnsubs.push(runtimeBus.on<Extract<WorkflowEvent, { type: 'WORKFLOW_CHAIN_PASSED' }>>('WORKFLOW_CHAIN_PASSED', ({ payload }) => {
+    fireHook('Lifecycle:workflow:completed', 'Lifecycle', 'workflow', 'completed', { chainId: payload.chainId });
   }));
-  bootstrapUnsubs.push(bus.on('wrfc:chain-failed', ({ chainId, reason }: { chainId: string; reason: string }) => {
-    fireHook('Lifecycle:workflow:failed', 'Lifecycle', 'workflow', 'failed', { chainId, reason });
+  runtimeUnsubs.push(runtimeBus.on<Extract<WorkflowEvent, { type: 'WORKFLOW_CHAIN_FAILED' }>>('WORKFLOW_CHAIN_FAILED', ({ payload }) => {
+    fireHook('Lifecycle:workflow:failed', 'Lifecycle', 'workflow', 'failed', { chainId: payload.chainId, reason: payload.reason });
   }));
 
-  bootstrapUnsubs.push(bus.on('context:warning', ({ usage, threshold }: { usage: number; threshold: number }) => {
+  runtimeUnsubs.push(runtimeBus.on<Extract<OpsEvent, { type: 'OPS_CONTEXT_WARNING' }>>('OPS_CONTEXT_WARNING', ({ payload: { usage, threshold } }) => {
     const specific = usage >= threshold ? 'exceeded' : 'warning';
     fireHook(`Change:budget:${specific}` as HookEventPath, 'Change', 'budget', specific, { usage, threshold });
   }));
@@ -524,10 +528,10 @@ export async function bootstrapRuntime(
   const orchestratorRefs = {
     getViewportHeight: (): number => 20,
     scrollToEnd: (_vHeight: number): void => { /* patched by main.ts */ },
+    requestRender: (): void => { requestRender(); },
   };
 
   const orchestrator = new Orchestrator(
-    bus,
     conversation,
     () => orchestratorRefs.getViewportHeight(),
     (vHeight: number) => orchestratorRefs.scrollToEnd(vHeight),
@@ -541,44 +545,29 @@ export async function bootstrapRuntime(
       return supplement ? runtime.systemPrompt + '\n\n' + supplement : runtime.systemPrompt;
     },
     hookDispatcher,
+    null,
+    () => orchestratorRefs.requestRender(),
+    runtimeBus,
   );
 
-  const acpManager = new AcpManager(bus);
+  const acpManager = new AcpManager((request) => permissionPromptRef.requestPermission(request), runtimeBus);
   orchestrator.registerDelegateTool(acpManager);
 
   // ── Phase 7: MCP auto-connect + panel manager ─────────────────────────
 
-  mcpRegistry.connectAll(config.workingDir ?? process.cwd()).catch((err) => {
-    logger.debug('MCP auto-connect failed (non-fatal)', { error: String(err) });
-  });
-
-  setTimeout(() => {
-    const workDir = config.workingDir ?? process.cwd();
-    const registeredNames = new Set(mcpRegistry.serverNames);
-    scanMcpServers(workDir, registeredNames).then((result) => {
-      if (result.suggestions.length === 0) return;
-      for (const suggestion of result.suggestions) {
-        systemMessageRouter.low(
-          `[MCP] Discovered server '${suggestion.name}' (${suggestion.command} ${(suggestion.args ?? []).join(' ')}).` +
-          ` Add it to .goodvibes/mcp.json or ~/.config/mcp/mcp.json to enable it.`
-        );
-      }
-      bus.emit('render:request');
-    }).catch((err) => {
-      logger.debug('MCP auto-discovery scan failed (non-fatal)', { error: String(err) });
-    });
-  }, 2000);
-
   const panelManager = getPanelManager();
   registerBuiltinPanels(panelManager, {
-    bus,
     getOrchestratorUsage: () => orchestrator.usage as { input: number; output: number; cacheRead: number; cacheWrite: number; model?: string },
     toolRegistry,
     providerRegistry,
     contextWindow: providerRegistry.getCurrentModel().contextWindow,
     orchestrator,
     getCtxWindow: () => providerRegistry.getCurrentModel().contextWindow,
+    resumeSession,
+    requestRender,
     runtimeBus,
+    forensicsRegistry,
+    policyRuntimeState,
   });
 
   // ── System message router ────────────────────────────────────────────────
@@ -587,32 +576,11 @@ export async function bootstrapRuntime(
   // when the user opens it). Messages to the panel are silently dropped until
   // a panel instance is available.
   const systemMessageRouter = createSystemMessageRouter(conversation, null);
-
-  bootstrapUnsubs.push(bus.on('plan:activate', ({ task }: { task: string }) => {
-    setTimeout(() => {
-      orchestrator.handleUserInput(task).catch((err) => {
-        logger.debug('plan:activate handler failed', { error: String(err) });
-      });
-    }, 50);
-  }));
-
-  bootstrapUnsubs.push(bus.on('session:resume', ({ sessionId }: { sessionId: string }) => {
-    try {
-      const sm = getSessionManager();
-      const { messages, meta } = sm.load(sessionId);
-      conversation.fromJSON({ messages: messages as Parameters<typeof conversation.fromJSON>[0]['messages'] });
-      runtime.sessionId = sessionId;
-      if (meta?.model) runtime.model = meta.model;
-      if (meta?.provider) runtime.provider = meta.provider;
-      writeLastSessionPointer(sessionId);
-      conversation.log(`Resumed session: ${sessionId}`, { fg: '135' });
-      fireHook('Lifecycle:session:load', 'Lifecycle', 'session', 'load', { sessionId });
-    } catch (e) {
-      logger.debug('session:resume handler failed', { error: String(e) });
-      conversation.log('Failed to resume session.', { fg: '#ef4444' });
-    }
-    bus.emit('render:request');
-  }));
+  scheduleMcpAutodiscovery({
+    mcpRegistry,
+    systemMessageRouter,
+    requestRender,
+  });
 
   // ── Phase 8: Command registry + plugin init + CommandContext ───────────────
 
@@ -622,7 +590,7 @@ export async function bootstrapRuntime(
   // Plugin system (singleton, lazy import)
   { const { pluginManager } = await import('../plugins/manager.ts');
     await pluginManager.init({
-      eventBus: bus,
+      runtimeBus,
       commandRegistry,
       providerRegistry,
       toolRegistry,
@@ -631,73 +599,41 @@ export async function bootstrapRuntime(
     });
   }
 
-  const commandContext: CommandContext = {
-    eventBus: bus,
+  const commandContext: CommandContext = createBootstrapCommandContext({
     providerRegistry,
-    conversationManager: conversation,
-    config,
-    configManager,
+    conversation,
     runtime,
-    renderRequest: () => bus.emit('render:request'),
-    print: (text: string) => {
-      conversation.log(text, { fg: '252' });
-      bus.emit('render:request');
-    },
-    exit: () => {
-      // Placeholder: main.ts overwrites this with exitApp after constructing it
-      // This should never be called before main.ts has wired exitApp
-      logger.debug('commandContext.exit called before exitApp was wired — no-op placeholder');
-    },
-    reloadSystemPrompt: loadSystemPrompt,
+    requestRender,
+    requestPermission: (request) => permissionPromptRef.requestPermission(request),
     toolRegistry,
     mcpRegistry,
-    fileUndoManager: FileUndoManager.getInstance(),
-  };
+    forensicsRegistry,
+    policyRuntimeState,
+    loadSystemPrompt,
+    activatePlan: (_planId, task) => {
+      setTimeout(() => {
+        orchestrator.handleUserInput(task).catch((err) => {
+          logger.debug('activatePlan handler failed', { error: String(err) });
+        });
+      }, 50);
+    },
+    completeModelSelectionSideEffect: () => {
+      compositor.resetDiff();
+    },
+  });
 
   // ── Phase 9: Input handler ──────────────────────────────────────────────
   // Note: getViewportHeight and scroll are UI concerns; main.ts constructs these
   // after receiving the context, then calls input.setContentWidth etc.
-  // We use placeholder closures here and main.ts patches commandContext.exit and
-  // any other deferred wiring.
+  // Shell-owned actions are bound in main.ts after terminal ownership is established.
 
   // Git status provider (initialized in bootstrap, used in main.ts render)
   const gitStatusProvider = new GitStatusProvider();
   let lastGitInfo: GitHeaderInfo | undefined = undefined;
   gitStatusProvider.getStatus().then((info) => {
     lastGitInfo = info;
-    bus.emit('render:request');
+    requestRender();
   }).catch(() => { /* non-fatal */ });
-
-  // model-picker:complete wiring (needs compositor)
-  bootstrapUnsubs.push(bus.on('model-picker:complete', (data) => {
-    if (!data?.model) return;
-    const def = data.model;
-    const effort = data.effort;
-    const key = def.registryKey ?? `${def.provider}:${def.id}`;
-    try {
-      // Apply context cap override before switching model (so getCurrentModel sees updated contextWindow)
-      if (data.contextCap != null && data.contextCap > 0) {
-        providerRegistry.setModelContextCap(key, data.contextCap);
-      }
-      providerRegistry.setCurrentModel(key);
-      runtime.model = key;
-      runtime.provider = def.provider;
-      runtime.reasoningEffort = effort as 'instant' | 'low' | 'medium' | 'high';
-      configManager.set('provider.model', key);
-      configManager.set('provider.provider', def.provider);
-      configManager.set('provider.reasoningEffort', effort as 'instant' | 'low' | 'medium' | 'high');
-      const ctxNote = data.contextCap != null && data.contextCap > 0
-        ? `, context cap: ${data.contextCap.toLocaleString()}`
-        : '';
-      conversation.log(`Switched to model: ${def.displayName} (${def.provider}), effort: ${effort}${ctxNote}`, { fg: '135' });
-      bus.emit('command:model-changed', { provider: def.provider, model: def.id });
-    } catch (e) {
-      conversation.log(`Error switching model: ${(e as Error).message}`, { fg: '#ef4444' });
-    }
-    compositor.resetDiff();
-    bus.emit('render:request');
-  }));
-
   // ── Phase 10: Input history + splash options ───────────────────────────
 
   const saveHistory = configManager.get('behavior.saveHistory') as boolean;
@@ -705,7 +641,7 @@ export async function bootstrapRuntime(
 
   const toolCount = toolRegistry.list().length;
   conversation.splashOptions = {
-    workingDir: config.workingDir,
+    workingDir: getWorkingDirectory(),
     model: runtime.model,
     provider: runtime.provider,
     toolCount,
@@ -714,98 +650,38 @@ export async function bootstrapRuntime(
   // ── Phase 11: Background provider registration (non-blocking) ────────────
   // These run after the initial render so they don't delay startup.
 
-  autoRegisterProviders();
-
-  const persisted = loadPersistedProviders();
-  if (persisted.length > 0) {
-    try {
-      providerRegistry.registerDiscoveredProviders(persisted);
-      restoreSavedModel(
-        configManager.get('provider.model') as string,
-        configManager.get('provider.provider') as string,
-        runtime,
-      );
-      for (const server of persisted) {
-        systemMessageRouter.low(
-          `[Local] ${server.name} at ${server.host}:${server.port} (${server.models.length} model${server.models.length !== 1 ? 's' : ''}) \u2014 from last session`
-        );
-      }
-      bus.emit('render:request');
-    } catch (err) {
-      logger.debug('[bootstrap] Non-fatal error during persisted provider registration', { error: err instanceof Error ? err.message : String(err) });
-    }
-  }
-
-  // Background scan to verify persisted + discover new local LLMs
-  scan().then((result) => {
-    const currentModel = configManager.get('provider.model') as string;
-    const foundKeys = new Set(result.servers.map(s => `${s.host}:${s.port}`));
-    const persistedKeys = new Set(persisted.map(s => `${s.host}:${s.port}`));
-    const newServers = result.servers.filter(s => !persistedKeys.has(`${s.host}:${s.port}`));
-    const removedServers = persisted.filter(s => !foundKeys.has(`${s.host}:${s.port}`));
-
-    if (result.servers.length > 0) {
-      try {
-        providerRegistry.registerDiscoveredProviders(result.servers);
-        restoreSavedModel(
-          configManager.get('provider.model') as string,
-          configManager.get('provider.provider') as string,
-          runtime,
-        );
-      } catch (err) {
-        logger.debug('[bootstrap] Non-fatal error during scan provider registration', { error: err instanceof Error ? err.message : String(err) });
-      }
-    }
-
-    for (const server of newServers) {
-      systemMessageRouter.low(
-        `[Scan] Found ${server.name} at ${server.host}:${server.port} (${server.models.length} model${server.models.length !== 1 ? 's' : ''})`
-      );
-    }
-
-    if (result.servers.length > 0 && removedServers.length > 0) {
-      removePersistedProviders(removedServers);
-      for (const server of removedServers) {
-        systemMessageRouter.low(
-          `[Scan] ${server.name} at ${server.host}:${server.port} is no longer reachable \u2014 removed`
-        );
-        const wasActive = server.models.includes(currentModel);
-        if (wasActive) {
-          configManager.set('provider.model', 'openrouter/free');
-          configManager.set('provider.provider', 'openrouter');
-          try {
-            providerRegistry.setCurrentModel('openrouter/free');
-            runtime.model = 'openrouter/free';
-            runtime.provider = 'openrouter';
-          } catch (err) {
-            logger.debug('[bootstrap] Non-fatal error switching model after server removal', { error: err instanceof Error ? err.message : String(err) });
-          }
-          systemMessageRouter.high(
-            `[Scan] Active model was on ${server.name} \u2014 switched to openrouter/free`
-          );
-        }
-      }
-    }
-
-    if (result.servers.length > 0) {
-      persistProviders(result.servers);
-    }
-
-    if (newServers.length > 0 || removedServers.length > 0) {
-      bus.emit('render:request');
-    }
-  }).catch(() => {
-    // Non-fatal: scan failure expected when no local LLMs are running
+  startBackgroundProviderRegistration({
+    runtime,
+    requestRender,
+    restoreSavedModel,
+    systemMessageRouter,
   });
 
   // ── Phase 12: Session:start lifecycle hook ─────────────────────────────
 
   fireSessionStart(runtime.sessionId);
+  emitSessionStarted(runtimeBus, {
+    sessionId: runtime.sessionId,
+    traceId: `${runtime.sessionId}:session-start`,
+    source: 'bootstrap',
+  }, {
+    sessionId: runtime.sessionId,
+    profileId: 'default',
+    workingDir: getWorkingDirectory(),
+  });
+  emitSessionReady(runtimeBus, {
+    sessionId: runtime.sessionId,
+    traceId: `${runtime.sessionId}:session-ready`,
+    source: 'bootstrap',
+  }, {
+    sessionId: runtime.sessionId,
+  });
 
   // ── Compose RuntimeContext ────────────────────────────────────────────────
 
   const ctx: BootstrapContext = {
-    bus,
+    runtimeBus,
+    store,
     featureFlags,
     conversation,
     permissions: permissionManager,
@@ -827,6 +703,7 @@ export async function bootstrapRuntime(
     bootstrapUnsubs,
     agentStatusIntervalRef,
     orchestratorRefs,
+    permissionPromptRef,
     loadLastConversation: loadLastConversation,
     _writeLastSessionPointer: writeLastSessionPointer,
     _saveSession: saveSession,
@@ -838,6 +715,9 @@ export async function bootstrapRuntime(
       // Clear bootstrap-owned subscriptions
       bootstrapUnsubs.forEach(fn => fn());
       bootstrapUnsubs.length = 0;
+      runtimeUnsubs.forEach((fn) => fn());
+      runtimeUnsubs.length = 0;
+      forensicsCollector.dispose();
       // Clear agent status interval via ref (consistent with agentStatusIntervalRef usage)
       if (agentStatusIntervalRef.value !== null) {
         clearInterval(agentStatusIntervalRef.value);
@@ -857,19 +737,18 @@ export async function bootstrapRuntime(
   // Wire the OpsControlPlane into CommandContext when the feature flag is enabled.
   // The store and task manager are created unconditionally so they reflect the
   // real runtime state (tasks registered before the flag check are visible).
-  const opsStore = createRuntimeStore();
-  const opsTaskManager = createTaskManager(opsStore, runtimeBus, userSessionId);
+  const opsTaskManager = createTaskManager(store, runtimeBus, userSessionId);
   if (featureFlags.isEnabled('operator-control-plane')) {
-    const opsControlPlane = new OpsControlPlane(opsTaskManager, runtimeBus, opsStore, userSessionId);
+    const opsControlPlane = new OpsControlPlane(opsTaskManager, runtimeBus, store, userSessionId);
     ctx.commandContext.opsControlPlane = opsControlPlane;
     ctx.commandContext.openOpsPanel = () => {
       const pm = getPanelManager();
       pm.open('ops-control');
-      bus.emit('render:request');
+      requestRender();
     };
   }
 
-  // Wire exit from options if provided, otherwise leave placeholder for main.ts to patch
+  // Wire exit from options if provided; otherwise main.ts binds the shell bridge.
   if (options?.exit) {
     ctx.commandContext.exit = options.exit;
   }

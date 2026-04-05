@@ -6,9 +6,12 @@
  */
 import type { SessionEvent } from './session.ts';
 import type { TurnEvent } from './turn.ts';
+import type { ProviderEvent } from './providers.ts';
 import type { ToolEvent } from './tools.ts';
 import type { TaskEvent } from './tasks.ts';
 import type { AgentEvent } from './agents.ts';
+import type { WorkflowEvent } from './workflows.ts';
+import type { PlannerEvent } from './planner.ts';
 import type { PermissionEvent } from './permissions.ts';
 import type { PluginEvent } from './plugins.ts';
 import type { McpEvent } from './mcp.ts';
@@ -23,9 +26,12 @@ import type { SecurityEvent } from './security.ts';
 export type AnyRuntimeEvent =
   | SessionEvent
   | TurnEvent
+  | ProviderEvent
   | ToolEvent
   | TaskEvent
   | AgentEvent
+  | WorkflowEvent
+  | PlannerEvent
   | PermissionEvent
   | PluginEvent
   | McpEvent
@@ -56,9 +62,12 @@ export type RuntimeEventPayload<T extends AnyRuntimeEvent['type']> = Extract<
 export type RuntimeEventDomain =
   | 'session'
   | 'turn'
+  | 'providers'
   | 'tools'
   | 'tasks'
   | 'agents'
+  | 'workflows'
+  | 'planner'
   | 'permissions'
   | 'plugins'
   | 'mcp'
@@ -73,9 +82,12 @@ export type RuntimeEventDomain =
 export type DomainEventMap = {
   session: SessionEvent;
   turn: TurnEvent;
+  providers: ProviderEvent;
   tools: ToolEvent;
   tasks: TaskEvent;
   agents: AgentEvent;
+  workflows: WorkflowEvent;
+  planner: PlannerEvent;
   permissions: PermissionEvent;
   plugins: PluginEvent;
   mcp: McpEvent;

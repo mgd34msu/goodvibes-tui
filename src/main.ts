@@ -1,20 +1,15 @@
 #!/usr/bin/env bun
-// TODO: main() is ~1240 lines and should be refactored into composable modules
-// (input handling, rendering, session management, agent lifecycle, etc.).
-import { existsSync, mkdirSync, readFileSync, writeFileSync, unlinkSync, statSync, openSync, readSync, closeSync, renameSync } from 'fs';
-import { homedir } from 'os';
-import { randomBytes } from 'crypto';
-import { join, dirname } from 'path';
+// Main shell entrypoint. Composition-heavy startup remains here, with
+// lower-level session/bootstrap/input helpers extracted into focused modules.
 import { Compositor } from './renderer/compositor.ts';
 import { createEmptyLine, type Line } from './types/grid.ts';
 import { UIFactory } from './renderer/ui-factory.ts';
-import { EventBus } from './core/event-bus.ts';
-import { ConversationManager } from './core/conversation.ts';
 import { Orchestrator } from './core/orchestrator.ts';
 import { InputHandler } from './input/handler.ts';
 import { SelectionManager } from './input/selection.ts';
-import { config, configManager } from './config/index.ts';
+import { configManager, getWorkingDirectory } from './config/index.ts';
 import { providerRegistry } from './providers/registry.ts';
+import type { ContentPart } from './providers/interface.ts';
 import { ToolRegistry } from './tools/registry.ts';
 import { registerAllTools } from './tools/index.ts';
 import { FileUndoManager } from './state/file-undo.ts';
@@ -23,7 +18,6 @@ import { PermissionManager } from './permissions/manager.ts';
 import { AcpManager } from './acp/manager.ts';
 import { getHookDispatcher } from './hooks/index.ts';
 import { PermissionPromptUI } from './permissions/prompt.ts';
-import type { PermissionRequest } from './permissions/prompt.ts';
 import { CommandRegistry } from './input/command-registry.ts';
 import type { CommandContext } from './input/command-registry.ts';
 import { renderFilePickerOverlay } from './renderer/file-picker-overlay.ts';
@@ -36,7 +30,6 @@ import { WrfcController } from './agents/wrfc-controller.ts';
 import { ProcessManager } from './tools/shared/process-manager.ts';
 import { renderSelectionModalOverlay } from './renderer/selection-modal-overlay.ts';
 import { registerBuiltinCommands } from './input/commands.ts';
-import { WebhookNotifier, setWebhookNotifier } from './integrations/webhooks.ts';
 import { ScheduleManager } from './tools/workflow/index.ts';
 import { InputHistory } from './input/input-history.ts';
 import { getTierPromptSupplement, getTierForContextWindow } from './providers/tier-prompts.ts';
@@ -52,13 +45,10 @@ import { renderAgentDetailModal } from './renderer/agent-detail-modal.ts';
 import { renderLiveTailModal } from './renderer/live-tail-modal.ts';
 import { renderContextInspector } from './renderer/context-inspector.ts';
 import { renderAutocompleteOverlay } from './renderer/autocomplete-overlay.ts';
-import { getSessionManager } from './sessions/manager.ts';
-import type { SessionMeta } from './sessions/manager.ts';
 import { logger } from './utils/logger.ts';
 import { getPinned } from './providers/favorites.ts';
 import { initModelLimits, getContextWindowForModel } from './providers/model-limits.ts';
 import { initBenchmarks } from './providers/model-benchmarks.ts';
-import { setSyntheticBus } from './providers/synthetic.ts';
 import { initCatalog, getConfiguredProviderIds } from './providers/model-catalog.ts';
 import { getPanelManager } from './panels/panel-manager.ts';
 import { registerBuiltinPanels } from './panels/builtin-panels.ts';
@@ -68,9 +58,20 @@ import { getKeybindingsManager } from './input/keybindings.ts';
 import { sessionMemoryStore } from './core/session-memory.ts';
 import { bootstrapRuntime } from './runtime/bootstrap.ts';
 import type { BootstrapContext } from './runtime/bootstrap.ts';
+import type { ToolEvent, TurnEvent } from './runtime/events/index.ts';
+import { selectStreamToolPreview } from './runtime/store/selectors/index.ts';
 import { ModeManager } from './state/mode-manager.ts';
 import type { HITLMode } from './state/mode-manager.ts';
 import type { HookPhase, HookCategory, HookEventPath } from './hooks/types.ts';
+import {
+  checkRecoveryFile,
+  deleteRecoveryFile,
+  loadRecoveryConversation,
+  persistConversation,
+  writeRecoveryFile,
+} from './runtime/session-persistence.ts';
+import { handleBlockingShellInput, type PendingPermissionState } from './shell/blocking-input.ts';
+import { wireShellUiOpeners } from './shell/ui-openers.ts';
 
 
 const ALT_SCREEN_ENTER = '\x1b[?1049h';
@@ -84,148 +85,6 @@ const KEYBOARD_EXT_ENABLE  = '\x1b[>4;2m' + '\x1b[?1u';
 const KEYBOARD_EXT_DISABLE = '\x1b[>4;0m' + '\x1b[?1l';
 const PASTE_ENABLE     = '\x1b[?2004h';
 const PASTE_DISABLE    = '\x1b[?2004l';
-
-/** User session persistence — .goodvibes/tui/sessions/ */
-const USER_SESSIONS_DIR = join(process.cwd(), '.goodvibes', 'tui', 'sessions');
-const LAST_SESSION_POINTER = join(USER_SESSIONS_DIR, 'last-session.json');
-
-/** Crash recovery file — written periodically and deleted on clean exit. */
-const RECOVERY_FILE = join(homedir(), '.goodvibes', 'tui', 'recovery.jsonl');
-
-/** Generate an 8-character lowercase hex ID (matches agent session pattern). */
-function generateUserSessionId(): string {
-  return randomBytes(4).toString('hex');
-}
-
-/** Write the last-session pointer so the next startup knows which session to resume. */
-function writeLastSessionPointer(sessionId: string): void {
-  try {
-    mkdirSync(USER_SESSIONS_DIR, { recursive: true });
-    writeFileSync(LAST_SESSION_POINTER, JSON.stringify({ sessionId, timestamp: new Date().toISOString() }) + '\n', 'utf-8');
-  } catch (e) { logger.debug('writeLastSessionPointer failed', { error: String(e) }); }
-}
-
-/** Read the last-session pointer. Returns null if none exists or on error. */
-function readLastSessionPointer(): string | null {
-  try {
-    if (existsSync(LAST_SESSION_POINTER)) {
-      const data = JSON.parse(readFileSync(LAST_SESSION_POINTER, 'utf-8')) as { sessionId?: unknown };
-      if (typeof data.sessionId === 'string' && data.sessionId.trim()) return data.sessionId;
-    }
-  } catch (e) { logger.debug('readLastSessionPointer failed', { error: String(e) }); }
-  return null;
-}
-
-/**
- * Save the current conversation as a JSONL session file.
- * Uses the SessionManager to write meta + messages.
- */
-function saveConversation(
-  data: { messages: object[]; timestamp?: number },
-  sessionId: string,
-  model: string,
-  provider: string,
-  title = '',
-): void {
-  try {
-    const sm = getSessionManager();
-    const meta: SessionMeta = {
-      title,
-      model,
-      provider,
-      timestamp: data.timestamp ?? Date.now(),
-    };
-    sm.save(sessionId, data.messages, meta);
-    writeLastSessionPointer(sessionId);
-  } catch (e) { logger.debug('saveConversation failed', { error: String(e) }); }
-}
-
-/**
- * Load the last user session from the pointer file.
- * Returns the messages array (compatible with ConversationManager.fromJSON),
- * or null if no session exists.
- */
-function loadLastConversation(): { messages: Array<Record<string, unknown>> } | null {
-  try {
-    const lastId = readLastSessionPointer();
-    if (!lastId) {
-      // Migration: check old format
-      const oldPath = join(homedir(), '.goodvibes', 'conversations', 'last.json');
-      if (existsSync(oldPath)) {
-        try {
-          const raw = readFileSync(oldPath, 'utf-8');
-          const data = JSON.parse(raw) as { messages?: unknown };
-          if (data.messages && Array.isArray(data.messages)) {
-            const migrationId = `user-${generateUserSessionId()}`;
-            const sm = getSessionManager();
-            const meta: import('./sessions/manager.ts').SessionMeta = {
-              title: '',
-              model: '',
-              provider: '',
-              timestamp: Date.now(),
-            };
-            sm.save(migrationId, data.messages as Array<Record<string, unknown>>, meta);
-            writeLastSessionPointer(migrationId);
-            logger.debug('Migrated old conversation from conversations/last.json', { newSessionId: migrationId });
-            return { messages: data.messages as Array<Record<string, unknown>> };
-          }
-        } catch (e) { logger.debug('Old session migration failed', { error: String(e) }); }
-      }
-      return null;
-    }
-    const sm = getSessionManager();
-    const { messages } = sm.load(lastId);
-    return { messages: messages as Array<Record<string, unknown>> };
-  } catch (e) { logger.debug('loadLastConversation failed', { error: String(e) }); }
-  return null;
-}
-
-function writeRecoveryFile(conversation: ConversationManager, sessionId: string): void {
-  try {
-    const data = conversation.toJSON() as { messages: Array<Record<string, unknown>> };
-    if (!data.messages || data.messages.length === 0) return;
-    const lines: string[] = [];
-    lines.push(JSON.stringify({ type: 'meta', sessionId, title: conversation.title ?? '', timestamp: Date.now() }));
-    for (const msg of data.messages) {
-      lines.push(JSON.stringify({ type: 'message', ...msg }));
-    }
-    const tmpPath = RECOVERY_FILE + '.tmp';
-    mkdirSync(dirname(RECOVERY_FILE), { recursive: true });
-    writeFileSync(tmpPath, lines.join('\n') + '\n', 'utf-8');
-    renameSync(tmpPath, RECOVERY_FILE);
-  } catch (err) {
-    logger.debug('[Recovery] Write failed', { error: String(err) });
-  }
-}
-
-function deleteRecoveryFile(): void {
-  try { unlinkSync(RECOVERY_FILE); } catch { /* missing file is fine */ }
-}
-
-function checkRecoveryFile(): { title: string; timestamp: number; sessionId: string } | null {
-  try {
-    if (!existsSync(RECOVERY_FILE)) return null;
-    // Check if recovery file is newer than last clean exit
-    const recoveryMtime = statSync(RECOVERY_FILE).mtimeMs;
-    const pointerPath = LAST_SESSION_POINTER;
-    if (existsSync(pointerPath)) {
-      const lastCleanMtime = statSync(pointerPath).mtimeMs;
-      if (recoveryMtime <= lastCleanMtime) return null; // clean exit happened after recovery write
-    }
-    // Read only first 4KB for the meta line
-    const fd = openSync(RECOVERY_FILE, 'r');
-    const buf = Buffer.alloc(4096);
-    const bytesRead = readSync(fd, buf, 0, 4096, 0);
-    closeSync(fd);
-    const firstLine = buf.toString('utf-8', 0, bytesRead).split('\n')[0];
-    const meta = JSON.parse(firstLine) as { title?: string; timestamp?: number; sessionId?: string };
-    return { title: meta.title ?? '', timestamp: meta.timestamp ?? 0, sessionId: meta.sessionId ?? '' };
-  } catch (err) {
-    logger.debug('[Recovery] Check failed', { error: String(err) });
-    return null;
-  }
-}
-
 async function main() {
   const stdout = process.stdout;
   const stdin = process.stdin;
@@ -236,7 +95,8 @@ async function main() {
   // stdin input, and signal handlers — everything else is in bootstrap.
   const ctx: BootstrapContext = await bootstrapRuntime(stdout);
   const {
-    bus,
+    runtimeBus,
+    store,
     conversation,
     orchestrator,
     runtime,
@@ -252,12 +112,16 @@ async function main() {
     bootstrapUnsubs,
     agentStatusIntervalRef,
     orchestratorRefs,
+    permissionPromptRef,
     loadLastConversation,
     _writeLastSessionPointer: writeLastSessionPointer,
     _getPinned: getPinned,
     _getConfiguredProviderIds: getConfiguredProviderIds,
     systemMessageRouter,
   } = ctx;
+  if (!runtimeBus) {
+    throw new Error('bootstrapRuntime must provide RuntimeEventBus');
+  }
   // ── HITL UX mode — read from config and apply at startup ─────────────────
   {
     const hitlMode = configManager.get('behavior.hitlMode') as HITLMode | undefined;
@@ -270,15 +134,12 @@ async function main() {
   const panelManager = getPanelManager();
 
   // Permission state — set while a permission prompt is blocking the orchestrator
-  let pendingPermission: PermissionRequest | null = null;
+  let pendingPermission: PendingPermissionState | null = null;
 
   // --- Streaming speed tracking (B2) ---
   let streamStartTime = 0;
   let streamDeltaCount = 0;
   let streamTokenSpeed = 0;
-
-  // --- Partial tool call preview tracking (B3) ---
-  let partialToolPreview: string | undefined = undefined;
 
   let scrollTop = 0;
   /** When true, view auto-scrolls to bottom on every render.
@@ -324,7 +185,7 @@ async function main() {
     scrollTop = Math.max(0, conversation.history.getLineCount() - vHeight);
   };
 
-  // main.ts-owned unsub functions (render:request, input:submit, cancel:generation, etc.)
+  // main.ts-owned unsub functions for shell-owned typed runtime subscriptions
   // Bootstrap-owned unsubs are in ctx.bootstrapUnsubs and cleared by ctx.shutdown().
   const unsubs: Array<() => void> = [];
 
@@ -357,15 +218,103 @@ async function main() {
     process.exit(0);
   };
 
-  // Patch the placeholder exit in commandContext with the real exitApp
+  // main.ts owns terminal teardown, so it binds the shell exit bridge here.
   commandContext.exit = exitApp;
+
+  const submitInput = (text: string, content?: ContentPart[]) => {
+    input.clearModalStack();
+    scrollLocked = true; // Re-lock on any user input
+    const AT_MODEL_RE = /@model:([^\s]+)/g;
+    let processedText = text;
+    let atModelMatch: RegExpExecArray | null;
+    while ((atModelMatch = AT_MODEL_RE.exec(text)) !== null) {
+      const modelId = atModelMatch[1];
+      try {
+        providerRegistry.setCurrentModel(modelId);
+        const def = providerRegistry.getCurrentModel();
+        runtime.model = def.id;
+        runtime.provider = def.provider;
+        configManager.set('provider.model', def.id);
+        configManager.set('provider.provider', def.provider);
+        systemMessageRouter.high(`[Model] Switched to ${def.displayName} (${def.provider}) via @model:`);
+      } catch {
+        systemMessageRouter.high(`[Model] Unknown model: ${modelId}`);
+      }
+      processedText = processedText.replace(atModelMatch[0], '').trim();
+    }
+    if (processedText.startsWith('!#')) {
+      const memoryText = processedText.slice(2).trim();
+      if (!memoryText) {
+        systemMessageRouter.high('[Memory] Usage: !# <text to pin as session memory>');
+        render();
+        processedText = '';
+      } else {
+        const memId = sessionMemoryStore.add(memoryText);
+        systemMessageRouter.high(`[Memory] Pinned: "${memoryText}" (${memId})`);
+        processedText = memoryText;
+      }
+    }
+    if (processedText || content) {
+      orchestrator.handleUserInput(processedText, content).catch((err: unknown) => {
+        logger.debug('handleUserInput safety catch (already handled by runTurn)', { error: String(err) });
+      });
+    } else {
+      render();
+    }
+  };
+
+  const cancelGeneration = () => {
+    if (orchestrator.isThinking) {
+      orchestrator.abort();
+    }
+  };
+
+  const jumpToBookmark = (key: string) => {
+    conversation.getDisplayBlocks();
+    const block = conversation.getBlockRegistry().find((entry) => entry.collapseKey === key);
+    if (!block) {
+      systemMessageRouter.high(`[Bookmark] Not found: ${key}`);
+      render();
+      return;
+    }
+    scrollLocked = false;
+    scrollTop = Math.max(0, block.startLine);
+    render();
+  };
+
+  const scrollToLine = (line: number) => {
+    conversation.getDisplayBlocks();
+    const maxScroll = Math.max(0, conversation.history.getLineCount() - getViewportHeight());
+    scrollLocked = false;
+    scrollTop = Math.max(0, Math.min(line, maxScroll));
+    render();
+  };
+
+  commandContext.submitInput = submitInput;
+  commandContext.executeCommand = (name, args) => commandRegistry.execute(name, args, commandContext);
+  commandContext.cancelGeneration = cancelGeneration;
+  commandContext.jumpToBookmark = jumpToBookmark;
+  commandContext.scrollToLine = scrollToLine;
+  commandContext.clearScreen = () => {
+    compositor.resetDiff();
+    stdout.write(CLEAR_SCREEN);
+    render();
+  };
+  permissionPromptRef.requestPermission = (request) =>
+    new Promise((resolve) => {
+      pendingPermission = {
+        ...request,
+        resolve: (approved: boolean, remember = false) => resolve({ approved, remember }),
+      };
+      render();
+    });
 
   // ── InputHandler — created here so getViewportHeight can reference it ──────
   // orchestratorRefs.getViewportHeight and .scrollToEnd are patched immediately after.
 
   // ── InputHandler ────────────────────────────────────────────────────────
   const input = new InputHandler(
-    bus,
+    () => render(),
     selection,
     () => scrollTop,
     getViewportHeight,
@@ -381,94 +330,11 @@ async function main() {
   input.setCommandRegistry(commandRegistry, commandContext);
   input.setConversationManager(conversation);
   input.setContentWidth(getPromptContentWidth());
-  input.filePicker.setOnUpdate(() => bus.emit('render:request'));
-  input.agentDetailModal.setOnRefresh(() => bus.emit('render:request'));
-  input.processModal.setOnRefresh(() => bus.emit('render:request'));
+  input.filePicker.setOnUpdate(() => render());
+  input.agentDetailModal.setOnRefresh(() => render());
+  input.processModal.setOnRefresh(() => render());
 
   // --- Model picker wiring ---
-  commandContext.openModelPicker = () => {
-    const models = providerRegistry.getSelectableModels();
-    input.modelPicker.configuredProviders = new Set(getConfiguredProviderIds());
-    void getPinned().then((pinned) => {
-      input.modelPicker.pinnedIds = new Set(pinned);
-    });
-    void input.modelPicker.loadRecentModels().catch(() => {}); // non-blocking, fire-and-forget
-    input.modalOpened('modelPicker');
-    input.modelPicker.open(models, runtime.model);
-    bus.emit('render:request');
-  };
-
-  commandContext.openProviderPicker = () => {
-    const providers = [...new Set(providerRegistry.listModels().map(m => m.provider))];
-    input.modelPicker.configuredProviders = new Set(getConfiguredProviderIds());
-    input.modalOpened('modelPicker');
-    input.modelPicker.openProviders(providers, runtime.provider);
-    bus.emit('render:request');
-  };
-
-  commandContext.openSelection = (title, items, opts, callback) => {
-    input.openSelection(title, items, opts, callback);
-  };
-
-  commandContext.openContextInspector = () => {
-    input.modalOpened('contextInspector');
-    input.contextInspectorModal.open();
-    bus.emit('render:request');
-  };
-
-  commandContext.openBookmarkModal = () => {
-    input.modalOpened('bookmark');
-    input.bookmarkModal.open();
-    bus.emit('render:request');
-  };
-
-  commandContext.openHelpOverlay = () => {
-    if (!input.helpOverlayActive) input.modalOpened('help');
-    input.helpOverlayActive = !input.helpOverlayActive;
-    input.helpScrollOffset = 0;
-  };
-  commandContext.openShortcutsOverlay = () => {
-    if (!input.shortcutsOverlayActive) input.modalOpened('shortcuts');
-    input.shortcutsOverlayActive = !input.shortcutsOverlayActive;
-    input.shortcutsScrollOffset = 0;
-    bus.emit('render:request');
-  };
-
-  commandContext.openProfilePicker = () => {
-    input.modalOpened('profilePicker');
-    input.profilePickerModal.open();
-    bus.emit('render:request');
-  };
-
-  commandContext.openSettingsModal = () => {
-    input.modalOpened('settings');
-    input.settingsModal.open(configManager, ctx.featureFlags);
-    bus.emit('render:request');
-  };
-
-  commandContext.openSessionPicker = () => {
-    input.modalOpened('sessionPicker');
-    input.sessionPickerModal.open();
-    bus.emit('render:request');
-  };
-
-  commandContext.openPanelPicker = () => {
-    if (!panelManager.isVisible()) {
-      // Show panels — open docs if nothing is open yet
-      if (panelManager.getAllOpen().length === 0) {
-        try { panelManager.open('docs'); } catch { /* non-fatal */ }
-      }
-      panelManager.show();
-      conversation.suppressSplash = true;
-      conversation.rebuildHistory();
-    } else {
-      panelManager.hide();
-      conversation.suppressSplash = false;
-      conversation.rebuildHistory();
-    }
-    bus.emit('render:request');
-  };
-
   // Model picker callback is handled in bootstrap.ts — do not duplicate here
 
   // inputHistory comes from bootstrap, already set up — wire it to the input handler
@@ -477,7 +343,7 @@ async function main() {
   // --- Splash options ---
   const toolCount = toolRegistry.list().length;
   conversation.splashOptions = {
-    workingDir: config.workingDir,
+    workingDir: getWorkingDirectory(),
     model: runtime.model,
     provider: runtime.provider,
     toolCount,
@@ -551,7 +417,7 @@ async function main() {
       promptInfo.visibleCursorLine >= 0
         ? promptInfo.visibleLines.slice(0, promptInfo.visibleCursorLine).reduce((s, l) => s + l.length + 1, 0) + promptInfo.visibleCursorCol
         : undefined,
-      config.workingDir,
+      getWorkingDirectory(),
       runtime.provider,
       currentModel.contextWindow,
       configManager.get('behavior.autoCompactThreshold') as number,
@@ -602,6 +468,7 @@ async function main() {
     if (orchestrator.isThinking) {
       const showSpeed = configManager.get('display.showTokenSpeed') as boolean;
       const showPreview = configManager.get('display.showToolPreview') as boolean;
+      const partialToolPreview = showPreview ? selectStreamToolPreview(store.getState()) : undefined;
       const thinking = UIFactory.createThinkingFragment(
         width,
         orchestrator.getSpinner(),
@@ -824,115 +691,54 @@ async function main() {
     });
   };
 
+  orchestratorRefs.requestRender = render;
+  commandContext.renderRequest = render;
+  wireShellUiOpeners({
+    commandContext,
+    input,
+    panelManager,
+    conversation,
+    providerRegistry,
+    runtime,
+    featureFlags: ctx.featureFlags,
+    getConfiguredProviderIds,
+    getPinned,
+    render,
+  });
+
   // --- Streaming speed + tool preview wiring ---
   // Refresh git status after each turn completes or after tool results arrive
-  unsubs.push(bus.on('turn:complete', () => {
+  unsubs.push(runtimeBus.on<Extract<TurnEvent, { type: 'TURN_COMPLETED' }>>('TURN_COMPLETED', () => {
     // Auto-save after every LLM turn so kills don't lose the session
-    try { saveConversation(conversation.toJSON() as { messages: object[]; timestamp?: number }, runtime.sessionId, runtime.model, runtime.provider, conversation.title || ''); hookDispatcher.fire({ path: 'Lifecycle:session:save' as HookEventPath, phase: 'Lifecycle' as HookPhase, category: 'session' as HookCategory, specific: 'save', sessionId: runtime.sessionId, timestamp: Date.now(), payload: { sessionId: runtime.sessionId } }).catch((err: unknown) => logger.debug('hook fire error', { error: String(err) })); } catch (e) { logger.debug('auto-save on turn:complete failed', { error: String(e) }); }
+    try { persistConversation(runtime.sessionId, conversation.toJSON() as { messages: object[]; timestamp?: number }, runtime.model, runtime.provider, conversation.title || ''); hookDispatcher.fire({ path: 'Lifecycle:session:save' as HookEventPath, phase: 'Lifecycle' as HookPhase, category: 'session' as HookCategory, specific: 'save', sessionId: runtime.sessionId, timestamp: Date.now(), payload: { sessionId: runtime.sessionId } }).catch((err: unknown) => logger.debug('hook fire error', { error: String(err) })); } catch (e) { logger.debug('auto-save on turn:complete failed', { error: String(e) }); }
     gitStatusProvider.refresh().then((info) => {
       lastGitInfoRef.value = info;
-      bus.emit('render:request');
+      render();
     }).catch(() => { /* non-fatal */ });
   }));
-  unsubs.push(bus.on('turn:tool-result', () => {
+  unsubs.push(runtimeBus.on<Extract<ToolEvent, { type: 'TOOL_SUCCEEDED' }>>('TOOL_SUCCEEDED', () => {
     gitStatusProvider.refresh().then((info) => {
       lastGitInfoRef.value = info;
-      bus.emit('render:request');
+      render();
+    }).catch(() => { /* non-fatal */ });
+  }));
+  unsubs.push(runtimeBus.on<Extract<ToolEvent, { type: 'TOOL_FAILED' }>>('TOOL_FAILED', () => {
+    gitStatusProvider.refresh().then((info) => {
+      lastGitInfoRef.value = info;
+      render();
     }).catch(() => { /* non-fatal */ });
   }));
 
-  unsubs.push(bus.on('turn:stream-start', () => {
+  unsubs.push(runtimeBus.on<Extract<TurnEvent, { type: 'STREAM_START' }>>('STREAM_START', () => {
     streamStartTime = Date.now();
     streamDeltaCount = 0;
     streamTokenSpeed = 0;
-    partialToolPreview = undefined;
   }));
-  unsubs.push(bus.on('turn:stream-delta', (data) => {
+  unsubs.push(runtimeBus.on<Extract<TurnEvent, { type: 'STREAM_DELTA' }>>('STREAM_DELTA', ({ payload: data }) => {
     streamDeltaCount++;
     const elapsed = (Date.now() - streamStartTime) / 1000;
     // Note: counts stream deltas, not actual tokens. ~1 delta per token for most providers.
     streamTokenSpeed = elapsed > 0 ? streamDeltaCount / elapsed : 0;
-    // Extract most recent partial tool call for preview
-    if (data.toolCalls && data.toolCalls.length > 0) {
-      const last = data.toolCalls[data.toolCalls.length - 1];
-      const name = last.name ?? '';
-      const args = last.arguments ?? '';
-      // Show first 60 chars of args to keep preview compact
-      const preview = args.length > 60 ? args.slice(0, 57) + '...' : args;
-      partialToolPreview = name ? `${name}(${preview})` : undefined;
-    }
-  }));
-  unsubs.push(bus.on('turn:stream-end', () => {
-    partialToolPreview = undefined;
-  }));
-
-  // --- Event wiring ---
-  unsubs.push(bus.on('render:request', render));
-  unsubs.push(bus.on('clear:screen', () => {
-    compositor.resetDiff();
-    stdout.write(CLEAR_SCREEN);
-    render();
-  }));
-  unsubs.push(bus.on('input:submit', ({ text, content }) => {
-    input.clearModalStack();
-    scrollLocked = true; // Re-lock on any user input
-    // Inline model switching: @model:<model-id> anywhere in input
-    // Strips the @model: token and switches the active model before submitting.
-    const AT_MODEL_RE = /@model:([^\s]+)/g;
-    let processedText = text;
-    let atModelMatch: RegExpExecArray | null;
-    while ((atModelMatch = AT_MODEL_RE.exec(text)) !== null) {
-      const modelId = atModelMatch[1];
-      try {
-        providerRegistry.setCurrentModel(modelId);
-        const def = providerRegistry.getCurrentModel();
-        runtime.model = def.id;
-        runtime.provider = def.provider;
-        configManager.set('provider.model', def.id);
-        configManager.set('provider.provider', def.provider);
-        systemMessageRouter.high(`[Model] Switched to ${def.displayName} (${def.provider}) via @model:`);
-        bus.emit('command:model-changed', { provider: def.provider, model: def.id });
-      } catch {
-        systemMessageRouter.high(`[Model] Unknown model: ${modelId}`);
-      }
-      processedText = processedText.replace(atModelMatch[0], '').trim();
-    }
-    // !# prefix: pin text as a session memory, then send stripped text to orchestrator
-    if (processedText.startsWith('!#')) {
-      const memoryText = processedText.slice(2).trim();
-      if (!memoryText) {
-        systemMessageRouter.high('[Memory] Usage: !# <text to pin as session memory>');
-        bus.emit('render:request');
-        processedText = '';
-      } else {
-        const memId = sessionMemoryStore.add(memoryText);
-        systemMessageRouter.high(`[Memory] Pinned: "${memoryText}" (${memId})`);
-        processedText = memoryText;
-      }
-    }
-    if (processedText || content) {
-      orchestrator.handleUserInput(processedText, content).catch((err: unknown) => {
-        // Safety net only — runTurn's catch already handles display.
-        // Only log at debug level to avoid double error display.
-        logger.debug('handleUserInput safety catch (already handled by runTurn)', { error: String(err) });
-      });
-    } else {
-      bus.emit('render:request');
-    }
-  }));
-
-  // Cancel generation when requested by input handler
-  unsubs.push(bus.on('cancel:generation', () => {
-    if (orchestrator.isThinking) {
-      orchestrator.abort();
-    }
-  }));
-
-  // Permission prompt wiring — store the pending request and trigger a render.
-  // The orchestrator's Promise is blocked until resolve() is called.
-  unsubs.push(bus.on('permission:request', (req) => {
-    pendingPermission = req;
-    bus.emit('render:request');
   }));
 
   // --- Terminal setup ---
@@ -942,47 +748,20 @@ async function main() {
   stdout.write(ALT_SCREEN_ENTER + CLEAR_SCREEN + CURSOR_HIDE + MOUSE_ENABLE + KEYBOARD_EXT_ENABLE + PASTE_ENABLE);
 
   stdin.on('data', (data: string) => {
-    // When a permission prompt is active, intercept all input and handle Y/A/N/Escape.
-    // Normal input handling is fully paused during this state.
-    if (pendingPermission) {
-      const req = pendingPermission;
-      const key = data.toLowerCase().trim();
-
-      if (key === 'y') {
-        pendingPermission = null;
-        req.resolve(true, false);
-      } else if (key === 'a') {
-        pendingPermission = null;
-        req.resolve(true, true);
-      } else if (key === 'n' || data === '\x1b' || data === '\x03') {
-        // n, Escape, or Ctrl+C all deny and abort the current turn
-        pendingPermission = null;
-        req.resolve(false, false);
-        orchestrator.abort();
-      }
-      // Any other key: ignore, keep showing the prompt
-      bus.emit('render:request');
-      return;
-    }
-
-    if (recoveryPending) {
-      recoveryPending = false;
-      const key = data.toString();
-      if (key.toLowerCase() === 'r') {
-        try {
-          const raw = readFileSync(RECOVERY_FILE, 'utf-8');
-          const lines = raw.split('\n').filter(Boolean);
-          const messages = lines.slice(1).map(l => { const { type: _, ...rest } = JSON.parse(l) as { type: string } & Record<string, unknown>; return rest; });
-          conversation.fromJSON({ messages: messages as Parameters<typeof conversation.fromJSON>[0]['messages'] });
-          systemMessageRouter.high('[Recovery] Session restored.');
-        } catch (err) {
-          systemMessageRouter.high(`[Recovery] Failed to restore: ${(err as Error).message}`);
-        }
-      } else {
-        systemMessageRouter.high('[Recovery] Discarded recovery data.');
-      }
-      deleteRecoveryFile();
-      bus.emit('render:request');
+    const blocking = handleBlockingShellInput({
+      data,
+      pendingPermission,
+      recoveryPending,
+      abortTurn: () => orchestrator.abort(),
+      conversation,
+      systemMessageRouter,
+      render,
+      loadRecoveryConversation,
+      deleteRecoveryFile,
+    });
+    pendingPermission = blocking.pendingPermission;
+    recoveryPending = blocking.recoveryPending;
+    if (blocking.handled) {
       return;
     }
 
@@ -1013,7 +792,7 @@ async function main() {
       systemMessageRouter.high(`[Error] ${msg}`);
       logger.error('unhandledRejection', { error: String(reason) });
     }
-    bus.emit('render:request');
+    render();
   });
   stdout.on('resize', () => {
     input.setContentWidth(getPromptContentWidth());
@@ -1029,13 +808,17 @@ async function main() {
   const recoveryInfo = checkRecoveryFile();
   if (recoveryInfo) {
     systemMessageRouter.high(`[Recovery] Found unsaved session from ${new Date(recoveryInfo.timestamp).toLocaleString()}. Title: "${recoveryInfo.title}". Press R to restore, any other key to discard.`);
-    bus.emit('render:request');
+    render();
     recoveryPending = true;
   }
 
   // --- Auto-save to recovery file every 60s ---
   recoveryInterval = setInterval(() => {
-    writeRecoveryFile(conversation, runtime.sessionId);
+    writeRecoveryFile(
+      conversation.toJSON() as { messages: Array<Record<string, unknown>> },
+      runtime.sessionId,
+      conversation.title ?? '',
+    );
   }, 60_000);
 
 }

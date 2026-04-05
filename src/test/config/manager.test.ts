@@ -1,5 +1,5 @@
 import { describe, test, expect, beforeEach, afterEach } from 'bun:test';
-import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'fs';
+import { mkdirSync, rmSync } from 'fs';
 import { join } from 'path';
 import { ConfigManager } from '../../config/manager.ts';
 import { DEFAULT_CONFIG } from '../../config/schema.ts';
@@ -59,24 +59,12 @@ describe('ConfigManager', () => {
     expect(all).toEqual(DEFAULT_CONFIG);
   });
 
-  test('migrates old flat config format', () => {
-    // Write an old‑style config file directly.
-    const oldConfig = {
-      model: 'gpt-3.5-turbo',
-      provider: 'openai',
-      autoApprove: true,
-    };
-    const configPath = join(tempDir, 'settings.json');
-    writeFileSync(configPath, JSON.stringify(oldConfig, null, 2));
-    // Instantiate – it should migrate and save the new format.
+  test('set does not mutate DEFAULT_CONFIG nested objects', () => {
     const cm = new ConfigManager();
-    expect(cm.get('provider.model')).toBe('gpt-3.5-turbo');
-    expect(cm.get('provider.provider')).toBe('openai');
-    expect(cm.get('behavior.autoApprove')).toBe(true);
-    // Verify the migrated file now contains nested structure.
-    const migrated = JSON.parse(readFileSync(configPath, 'utf-8')) as any;
-    expect(migrated.provider?.model).toBe('gpt-3.5-turbo');
-    expect(migrated.provider?.provider).toBe('openai');
-    expect(migrated.behavior?.autoApprove).toBe(true);
+    const before = structuredClone(DEFAULT_CONFIG);
+    cm.set('provider.provider', 'anthropic');
+    cm.set('behavior.autoApprove', true);
+    cm.set('display.lineNumbers', true);
+    expect(DEFAULT_CONFIG).toEqual(before);
   });
 });

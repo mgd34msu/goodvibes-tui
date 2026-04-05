@@ -1,8 +1,8 @@
 /**
  * McpLifecycleManager — drives the MCP server state machine.
  *
- * Gated by the `mcp-lifecycle-v2` feature flag. When the flag is disabled
- * the manager is a no-op and callers should fall through to the legacy McpRegistry.
+ * Gated by the `mcp-lifecycle` feature flag. When the flag is disabled
+ * callers should use the standard MCP registry path instead.
  *
  * Responsibilities:
  *   - Track per-server McpServerEntry state
@@ -96,7 +96,7 @@ export class McpLifecycleManager {
    * Register and start all provided server configs.
    *
    * Connection errors on individual servers are logged but do not abort the
-   * overall startup (mirrors legacy McpRegistry behaviour).
+   * overall startup.
    *
    * @param configs - Array of server configurations to start
    */

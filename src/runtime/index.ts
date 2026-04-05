@@ -7,7 +7,7 @@
  */
 
 // Store
-export { createRuntimeStore } from './store/index.ts';
+export { createRuntimeStore, createDomainDispatch } from './store/index.ts';
 export type { RuntimeStore, DomainDispatch } from './store/index.ts';
 export type { RuntimeState } from './store/state.ts';
 export * from './store/selectors/index.ts';

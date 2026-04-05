@@ -1,5 +1,5 @@
 /**
- * Shell AST parser (GC-EXEC-005).
+ * Shell AST parser.
  *
  * Converts a flat CommandToken list into a ShellNode AST, preserving
  * operator relationships between segments (&&, ||, ;, |, subshells).

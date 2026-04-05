@@ -30,7 +30,11 @@ export function emitPreflightOk(
 export function emitPreflightFail(
   bus: RuntimeEventBus,
   ctx: EmitterContext,
-  data: { turnId: string; reason: string }
+  data: {
+    turnId: string;
+    reason: string;
+    stopReason: 'preflight_failed' | 'context_overflow';
+  }
 ): void {
   bus.emit('turn', createEventEnvelope('PREFLIGHT_FAIL', { type: 'PREFLIGHT_FAIL', ...data }, ctx));
 }
@@ -60,6 +64,25 @@ export function emitStreamEnd(
   data: { turnId: string }
 ): void {
   bus.emit('turn', createEventEnvelope('STREAM_END', { type: 'STREAM_END', ...data }, ctx));
+}
+
+/** Emit LLM_RESPONSE_RECEIVED when a provider chat call completes within a turn iteration. */
+export function emitLlmResponseReceived(
+  bus: RuntimeEventBus,
+  ctx: EmitterContext,
+  data: {
+    turnId: string;
+    provider: string;
+    model: string;
+    content: string;
+    toolCallCount: number;
+    inputTokens: number;
+    outputTokens: number;
+    cacheReadTokens?: number;
+    cacheWriteTokens?: number;
+  }
+): void {
+  bus.emit('turn', createEventEnvelope('LLM_RESPONSE_RECEIVED', { type: 'LLM_RESPONSE_RECEIVED', ...data }, ctx));
 }
 
 /** Emit TOOL_BATCH_READY when a set of tool calls is ready for execution. */
@@ -93,7 +116,11 @@ export function emitPostHooksDone(
 export function emitTurnCompleted(
   bus: RuntimeEventBus,
   ctx: EmitterContext,
-  data: { turnId: string; response: string }
+  data: {
+    turnId: string;
+    response: string;
+    stopReason: 'completed' | 'empty_response';
+  }
 ): void {
   bus.emit('turn', createEventEnvelope('TURN_COMPLETED', { type: 'TURN_COMPLETED', ...data }, ctx));
 }
@@ -102,7 +129,18 @@ export function emitTurnCompleted(
 export function emitTurnError(
   bus: RuntimeEventBus,
   ctx: EmitterContext,
-  data: { turnId: string; error: string }
+  data: {
+    turnId: string;
+    error: string;
+    stopReason:
+      | 'preflight_failed'
+      | 'context_overflow'
+      | 'provider_exhausted'
+      | 'provider_error'
+      | 'hook_denied'
+      | 'tool_loop_circuit_breaker'
+      | 'unexpected_error';
+  }
 ): void {
   bus.emit('turn', createEventEnvelope('TURN_ERROR', { type: 'TURN_ERROR', ...data }, ctx));
 }
@@ -111,7 +149,7 @@ export function emitTurnError(
 export function emitTurnCancel(
   bus: RuntimeEventBus,
   ctx: EmitterContext,
-  data: { turnId: string; reason?: string }
+  data: { turnId: string; reason?: string; stopReason: 'cancelled' }
 ): void {
   bus.emit('turn', createEventEnvelope('TURN_CANCEL', { type: 'TURN_CANCEL', ...data }, ctx));
 }

@@ -1,5 +1,5 @@
 /**
- * Section 5.3 — /policy command handler.
+ * /policy command handler.
  *
  * Implements the Policy-as-Code panel commands:
  *
@@ -14,30 +14,21 @@
  */
 
 import type { SlashCommand, CommandContext } from '../command-registry.ts';
-import { PolicyRegistry } from '../../runtime/permissions/policy-registry.ts';
 import {
   createPermissionSimulator,
 } from '../../runtime/permissions/index.ts';
 import { DivergenceDashboard } from '../../runtime/permissions/divergence-dashboard.ts';
+import { getPolicyRuntimeState } from '../../runtime/permissions/policy-runtime.ts';
 import { createUnsignedBundle } from '../../runtime/permissions/policy-loader.ts';
 import type { PolicyBundlePayload } from '../../runtime/permissions/policy-loader.ts';
-import type { PolicyRule, PermissionsV2Config, DivergenceStats } from '../../runtime/permissions/types.ts';
+import type { PolicyRule, PermissionsConfig, DivergenceStats } from '../../runtime/permissions/types.ts';
 
-// ── Module-level registry singleton ────────────────────────────────────────────
-//
-// The registry is intentionally module-scoped so that all /policy subcommands
-// operate on the same instance across invocations within a session.
-// When ctx.policyRegistry is provided (injected via CommandContext), it takes
-// precedence so the runtime can own the lifecycle; the module-level fallback
-// exists for standalone use (e.g. ops consoles without a full app context).
+function getPolicyState() {
+  return getPolicyRuntimeState();
+}
 
-let _registry: PolicyRegistry | null = null;
-let _dashboard: DivergenceDashboard | null = null;
-
-function getRegistry(ctx?: CommandContext): PolicyRegistry {
-  if (ctx?.policyRegistry) return ctx.policyRegistry;
-  if (!_registry) _registry = new PolicyRegistry();
-  return _registry;
+function getRegistry(ctx?: CommandContext) {
+  return ctx?.policyRegistry ?? getPolicyState().getRegistry();
 }
 
 // ── Subcommand helpers ─────────────────────────────────────────────────────────
@@ -68,6 +59,7 @@ async function handleLoad(
   context: CommandContext,
 ): Promise<void> {
   const registry = getRegistry(context);
+  const policyState = getPolicyState();
 
   // In a production integration, args[0] would be a path or bundle ID to load.
   // Here we demonstrate the loading path with an inline bundle constructed from
@@ -111,6 +103,7 @@ async function handleLoad(
 
   const candidate = registry.getCandidate();
   if (candidate) {
+    policyState.notify();
     context.print(bundleSummary('[policy] Candidate loaded', candidate));
     context.print(
       '[policy] Next: run `/policy simulate` to collect divergence evidence before promoting.',
@@ -125,6 +118,7 @@ async function handleSimulate(
   context: CommandContext,
 ): Promise<void> {
   const registry = getRegistry(context);
+  const policyState = getPolicyState();
   const candidate = registry.getCandidate();
   const current = registry.getCurrent();
 
@@ -142,7 +136,7 @@ async function handleSimulate(
   }
 
   // Build evaluator configs from bundle rules
-  const currentConfig: PermissionsV2Config = {
+  const currentConfig: PermissionsConfig = {
     mode: 'default',
     rules: current?.rules ?? [],
     defaultEffect: 'allow',
@@ -151,7 +145,7 @@ async function handleSimulate(
   if (!candidateForSim) {
     throw new Error('Invariant: candidate disappeared after markSimulating()');
   }
-  const candidateConfig: PermissionsV2Config = {
+  const candidateConfig: PermissionsConfig = {
     mode: 'default',
     rules: candidateForSim.rules,
     defaultEffect: 'allow',
@@ -174,7 +168,8 @@ async function handleSimulate(
   );
 
   // Build or reset the divergence dashboard
-  _dashboard = new DivergenceDashboard(simulator, simulationMode, { threshold: 0.05 });
+  const dashboard = new DivergenceDashboard(simulator, simulationMode, { threshold: 0.05 });
+  policyState.setDashboard(dashboard);
 
   context.print(
     `[policy] Simulation started in "${simulationMode}" mode. ` +
@@ -187,12 +182,13 @@ async function handleSimulate(
 
   // Immediately take a baseline divergence snapshot
   const report = simulator.getDivergenceReport();
-  const gateResult = _dashboard.checkEnforceGate();
+  const gateResult = dashboard.checkEnforceGate();
 
   // Attach the simulation report (transitions candidate to 'promoting' state)
   registry.attachSimulationReport(report, gateResult);
 
   const candidate2 = registry.getCandidate();
+  policyState.notify();
   context.print(
     `[policy] Baseline divergence: ${fmtRate(report.overall.divergenceRate)} ` +
     `(${report.overall.total} divergences / ${report.overall.totalEvaluations} evaluations). ` +
@@ -255,8 +251,9 @@ async function handleDiff(
   }
 
   // Show divergence by prefix/class if dashboard is available
-  if (_dashboard) {
-    const snap = _dashboard.getSnapshot();
+  const dashboard = getPolicyState().getDashboard();
+  if (dashboard) {
+    const snap = dashboard.getSnapshot();
     const report = snap.report;
     const byPrefix = report.byCommandPrefix;
     const prefixEntries = Object.entries(byPrefix);
@@ -291,6 +288,7 @@ async function handlePromote(
   context: CommandContext,
 ): Promise<void> {
   const registry = getRegistry(context);
+  const policyState = getPolicyState();
 
   // --force bypasses gate check (not for production use)
   const force = args.includes('--force');
@@ -331,6 +329,7 @@ async function handlePromote(
   if (current) {
     context.print(bundleSummary('[policy] Active bundle', current));
   }
+  policyState.notify();
 }
 
 // ── /policy rollback ───────────────────────────────────────────────────────────
@@ -340,6 +339,7 @@ async function handleRollback(
   context: CommandContext,
 ): Promise<void> {
   const registry = getRegistry(context);
+  const policyState = getPolicyState();
   const result = registry.rollback();
 
   if (!result.ok) {
@@ -356,7 +356,8 @@ async function handleRollback(
   }
 
   // Clear any active dashboard after rollback
-  _dashboard = null;
+  policyState.setDashboard(null);
+  policyState.notify();
   context.print('[policy] Simulation dashboard cleared. Run `/policy simulate` for the restored bundle.');
 }
 
@@ -367,6 +368,7 @@ async function handleStatus(
   context: CommandContext,
 ): Promise<void> {
   const registry = getRegistry(context);
+  const policyState = getPolicyState();
   const current = registry.getCurrent();
   const candidate = registry.getCandidate();
   const history = registry.getHistory();
@@ -380,8 +382,9 @@ async function handleStatus(
   if (candidate) context.print(bundleSummary('[policy] Candidate', candidate));
   context.print(`[policy] History: ${history.length} previous bundle(s).`);
 
-  if (_dashboard) {
-    const snap = _dashboard.getSnapshot();
+  const dashboard = policyState.getDashboard();
+  if (dashboard) {
+    const snap = dashboard.getSnapshot();
     context.print(
       `[policy] Divergence gate: ${snap.gate.status} — ` +
       `${snap.gate.divergenceRate !== undefined ? fmtRate(snap.gate.divergenceRate) : fmtRate(snap.report.overall.divergenceRate)} ` +
@@ -402,11 +405,18 @@ async function handleStatus(
 export const policyCommand: SlashCommand = {
   name: 'policy',
   aliases: ['pol'],
-  description: 'Manage versioned policy bundles (load, simulate, diff, promote, rollback).',
+  description: 'Open the policy panel or manage versioned policy bundles (load, simulate, diff, promote, rollback).',
   usage: '<subcommand> [args]',
   argsHint: 'load|simulate|diff|promote|rollback|status',
   handler: async (args: string[], context: CommandContext): Promise<void> => {
     const [sub, ...rest] = args;
+
+    if (!sub) {
+      if (context.openPolicyPanel) {
+        context.openPolicyPanel();
+        return;
+      }
+    }
 
     switch (sub) {
       case 'load':
@@ -439,6 +449,7 @@ export const policyCommand: SlashCommand = {
       default: {
         const usage = [
           'Usage: /policy <subcommand>',
+          '  /policy                        — open the policy/governance panel',
           '  load <bundle-id> [rule-count]  — Load a candidate bundle',
           '  simulate [mode]               — Run simulation (silent|warn|enforce)',
           '  diff                          — Show rule diff (current vs candidate)',

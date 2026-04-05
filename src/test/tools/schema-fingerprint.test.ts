@@ -1,5 +1,5 @@
 /**
- * GC-TOOL-007 — Output schema fingerprint stability tests.
+ * Output schema fingerprint stability tests.
  *
  * Tests:
  *   - Same mode/input class produces stable (deterministic) fingerprint
@@ -10,7 +10,8 @@
  *   - appendSchemaFingerprint injects _meta when flag is enabled
  */
 
-import { describe, it, expect, mock, beforeEach, afterEach } from 'bun:test';
+import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
+import { createFeatureFlagManager, FeatureFlagManager } from '../../runtime/feature-flags/manager.ts';
 import {
   computeSchemaFingerprintSync,
   computeSchemaFingerprint,
@@ -19,6 +20,14 @@ import {
   SCHEMA_SHAPE_IDS,
   type SchemaFingerprintMeta,
 } from '../../tools/shared/schema-fingerprint.ts';
+
+function installFlagState(enabled: boolean): void {
+  const manager = createFeatureFlagManager();
+  if (enabled) {
+    manager.enable('output-schema-fingerprint');
+  }
+  FeatureFlagManager.setInstance(manager);
+}
 
 // ---------------------------------------------------------------------------
 // computeSchemaFingerprintSync — stability
@@ -144,8 +153,15 @@ describe('getSchemaShapeId — canonical shape IDs', () => {
 // ---------------------------------------------------------------------------
 
 describe('appendSchemaFingerprint — flag disabled (default)', () => {
+  beforeEach(() => {
+    installFlagState(false);
+  });
+
+  afterEach(() => {
+    FeatureFlagManager.resetInstance();
+  });
+
   it('returns the original object unchanged when flag is disabled', () => {
-    // By default, no FeatureFlagManager is wired in tests → flag is disabled
     const original = { files: ['a.ts'], count: 1 };
     const result = appendSchemaFingerprint(original, 'find', 'files');
 
@@ -167,16 +183,11 @@ describe('appendSchemaFingerprint — flag disabled (default)', () => {
 
 describe('appendSchemaFingerprint — flag enabled (mocked)', () => {
   beforeEach(() => {
-    // Mock FeatureFlagManager so isSchemaFingerprintEnabled() returns true
-    mock.module('../../runtime/feature-flags/manager.ts', () => ({
-      FeatureFlagManager: {
-        getInstance: () => ({ isEnabled: (_id: string) => true }),
-      },
-    }));
+    installFlagState(true);
   });
 
   afterEach(() => {
-    mock.restore();
+    FeatureFlagManager.resetInstance();
   });
 
   it('appendSchemaFingerprint injects _meta with correct fields when flag is enabled', () => {

@@ -7,8 +7,8 @@
  */
 
 import { randomUUID } from 'node:crypto';
-import type { StoreApi } from 'zustand';
-import type { RuntimeState } from '../../store/state.ts';
+import { createDomainDispatch } from '../../store/index.ts';
+import type { RuntimeStore, DomainDispatch } from '../../store/index.ts';
 import type { RuntimeTask } from '../../store/domains/tasks.ts';
 import type { SubagentStatus } from '../../../acp/protocol.ts';
 import type { AcpManager } from '../../../acp/manager.ts';
@@ -61,7 +61,11 @@ export class AcpTaskAdapter {
   /** Maps task ID → ACP remote ID. */
   private readonly _taskToRemote = new Map<string, string>();
 
-  constructor(private readonly _store: StoreApi<RuntimeState>) {}
+  private readonly _dispatch: DomainDispatch;
+
+  constructor(private readonly _store: RuntimeStore) {
+    this._dispatch = createDomainDispatch(_store);
+  }
 
   // ── Core API ────────────────────────────────────────────────────────────────
 
@@ -186,24 +190,7 @@ export class AcpTaskAdapter {
   // ── Private helpers ─────────────────────────────────────────────────────────
 
   private _upsertTask(task: RuntimeTask): void {
-    this._store.setState((state) => {
-      const tasks = new Map(state.tasks.tasks);
-      tasks.set(task.id, task);
-
-      return {
-        tasks: {
-          ...state.tasks,
-          tasks,
-          runningIds: task.status === 'running'
-            ? [...state.tasks.runningIds, task.id]
-            : state.tasks.runningIds,
-          totalCreated: state.tasks.totalCreated + 1,
-          revision: state.tasks.revision + 1,
-          lastUpdatedAt: Date.now(),
-          source: 'acp-adapter',
-        },
-      };
-    });
+    this._dispatch.syncRuntimeTask(task, 'acp-adapter');
   }
 
   private _transitionTask(
@@ -211,50 +198,14 @@ export class AcpTaskAdapter {
     status: 'running' | 'completed' | 'failed' | 'cancelled',
     opts: { isTerminal?: boolean; error?: string },
   ): void {
-    this._store.setState((state) => {
-      const existing = state.tasks.tasks.get(taskId);
-      if (!existing) return {};
-
-      // No-op if already in the same terminal status
-      if (existing.status === status) return {};
-
-      const now = Date.now();
-      const updated: RuntimeTask = {
-        ...existing,
-        status,
-        endedAt: opts.isTerminal ? now : existing.endedAt,
+    this._dispatch.transitionRuntimeTask(
+      taskId,
+      status,
+      {
+        endedAt: opts.isTerminal ? Date.now() : undefined,
         error: opts.error,
-      };
-
-      const tasks = new Map(state.tasks.tasks);
-      tasks.set(taskId, updated);
-
-      const runningIds = status === 'running'
-        ? [...state.tasks.runningIds.filter((id) => id !== taskId), taskId]
-        : state.tasks.runningIds.filter((id) => id !== taskId);
-
-      return {
-        tasks: {
-          ...state.tasks,
-          tasks,
-          runningIds,
-          totalCompleted:
-            status === 'completed'
-              ? state.tasks.totalCompleted + 1
-              : state.tasks.totalCompleted,
-          totalFailed:
-            status === 'failed'
-              ? state.tasks.totalFailed + 1
-              : state.tasks.totalFailed,
-          totalCancelled:
-            status === 'cancelled'
-              ? state.tasks.totalCancelled + 1
-              : state.tasks.totalCancelled,
-          revision: state.tasks.revision + 1,
-          lastUpdatedAt: now,
-          source: 'acp-adapter',
-        },
-      };
-    });
+      },
+      'acp-adapter',
+    );
   }
 }

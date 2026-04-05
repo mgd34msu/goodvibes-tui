@@ -5,7 +5,7 @@
 import type { Line } from '../types/grid.ts';
 import { createStyledCell, createEmptyLine } from '../types/grid.ts';
 import { BasePanel } from './base-panel.ts';
-import type { EventBus } from '../core/event-bus.ts';
+import type { RuntimeEventBus, ToolEvent, TurnEvent } from '../runtime/events/index.ts';
 
 const C = {
   headerBg:    '#1a1a2e',
@@ -68,7 +68,7 @@ export class ToolInspectorPanel extends BasePanel {
   private autoScroll = true;
   private _flatCache: FlatRow[] | null = null;
 
-  constructor(private bus: EventBus) {
+  constructor(private runtimeBus: RuntimeEventBus) {
     super('tools', 'Tools', 'X', 'ai');
   }
 
@@ -261,7 +261,7 @@ export class ToolInspectorPanel extends BasePanel {
   private _attachBus(): void {
     if (this.unsubs.length > 0) return;
 
-    this.unsubs.push(this.bus.on('turn:tool-executing', (data) => {
+    this.unsubs.push(this.runtimeBus.on<Extract<ToolEvent, { type: 'TOOL_RECEIVED' }>>('TOOL_RECEIVED', ({ payload: data }) => {
       if (this.records.length >= MAX_ENTRIES) {
         this.records.shift();
       }
@@ -276,7 +276,7 @@ export class ToolInspectorPanel extends BasePanel {
       this.markDirty();
     }));
 
-    this.unsubs.push(this.bus.on('turn:tool-result', (data) => {
+    this.unsubs.push(this.runtimeBus.on<Extract<ToolEvent, { type: 'TOOL_SUCCEEDED' }>>('TOOL_SUCCEEDED', ({ payload: data }) => {
       const rec = this.records.findLast(r => r.callId === data.callId);
       if (rec) {
         rec.endMs = Date.now();
@@ -285,12 +285,22 @@ export class ToolInspectorPanel extends BasePanel {
       this.markDirty();
     }));
 
-    this.unsubs.push(this.bus.on('turn:error', (data) => {
+    this.unsubs.push(this.runtimeBus.on<Extract<ToolEvent, { type: 'TOOL_FAILED' }>>('TOOL_FAILED', ({ payload: data }) => {
+      const rec = this.records.findLast(r => r.callId === data.callId);
+      if (rec) {
+        rec.endMs = Date.now();
+        rec.result = data.result;
+        rec.error = data.error;
+      }
+      this.markDirty();
+    }));
+
+    this.unsubs.push(this.runtimeBus.on<Extract<TurnEvent, { type: 'TURN_ERROR' }>>('TURN_ERROR', ({ payload: data }) => {
       // Mark any running calls as errored
       for (const rec of this.records) {
         if (rec.endMs === undefined) {
           rec.endMs = Date.now();
-          rec.error = data.error?.message ?? 'unknown error';
+          rec.error = data.error ?? 'unknown error';
         }
       }
       this.markDirty();

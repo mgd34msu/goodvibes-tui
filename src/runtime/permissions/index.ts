@@ -1,17 +1,17 @@
 /**
- * Permissions v2 — Public API barrel.
+ * Runtime permissions public API barrel.
  *
  * Exports the LayeredPolicyEvaluator, all types, rule evaluators, safety checks,
- * and the createPermissionsV2() factory function.
+ * and the createPermissionEvaluator() factory function.
  *
- * Feature flag: `permissions-v2` must be enabled to use this module in production.
+ * Feature flag: `permissions-policy-engine` must be enabled to use this module in production.
  */
 
 export { LayeredPolicyEvaluator } from './evaluator.ts';
 export { DecisionLog } from './decision-log.ts';
 export { runSafetyChecks } from './safety-checks.ts';
 export { PermissionSimulator, SimulationEnforcementError } from './simulation.ts';
-// GC-PERM-011
+// Policy signing
 export { signBundle, verifyBundle, canonicalise } from './policy-signer.ts';
 export { loadPolicyBundle, createUnsignedBundle, PolicySignatureError } from './policy-loader.ts';
 
@@ -29,7 +29,7 @@ export type {
   NetworkScopeRule,
   ModeConstraintRule,
   RuleOrigin,
-  PermissionsV2Config,
+  PermissionsConfig,
   SimulationMode,
   SimulationResult,
   DivergenceType,
@@ -41,7 +41,7 @@ export type {
 
 export type { DecisionLogEntry, DecisionLogQuery } from './decision-log.ts';
 export type { SafetyCheckResult } from './safety-checks.ts';
-// GC-PERM-011
+// Policy signing
 export type {
   PolicyBundleId,
   SignatureStatus,
@@ -64,7 +64,7 @@ export {
   evaluateModeConstraintRule,
 } from './rules/index.ts';
 
-// GC-PERM-009
+// Divergence dashboard
 export {
   DivergenceDashboard,
   DivergenceGateError,
@@ -77,8 +77,13 @@ export type {
   DivergenceDashboardConfig,
 } from './divergence-dashboard.ts';
 
-// Section 5.3 — Policy-as-Code
+// Policy-as-Code
 export { PolicyRegistry } from './policy-registry.ts';
+export {
+  PolicyRuntimeState,
+  getPolicyRuntimeState,
+  resetPolicyRuntimeStateForTests,
+} from './policy-runtime.ts';
 export type {
   BundleLifecycleState,
   PolicyBundleVersion,
@@ -92,15 +97,15 @@ export type {
 
 import { LayeredPolicyEvaluator } from './evaluator.ts';
 import { PermissionSimulator } from './simulation.ts';
-import type { PermissionsV2Config, SimulationMode, PermissionSimulatorConfig } from './types.ts';
+import type { PermissionsConfig, SimulationMode, PermissionSimulatorConfig } from './types.ts';
 import type { FeatureFlagManager } from '../feature-flags/manager.ts';
 import type { BundleProvenance } from './policy-loader.ts';
 
 /**
- * createPermissionsV2 — Factory function for the v2 permission evaluator.
+ * createPermissionEvaluator — Factory function for the runtime permission evaluator.
  *
  * Returns a LayeredPolicyEvaluator configured with the given options.
- * Designed as the primary entry point for integrating Permissions v2.
+ * Designed as the primary entry point for integrating the runtime permissions system.
  *
  * The returned evaluator exposes:
  *   - `evaluate(toolName, args)` — perform a full layered evaluation
@@ -110,7 +115,7 @@ import type { BundleProvenance } from './policy-loader.ts';
  *
  * @example
  * ```ts
- * const perms = createPermissionsV2({ mode: 'default', rules: [] });
+ * const perms = createPermissionEvaluator({ mode: 'default', rules: [] });
  * const decision = perms.evaluate('write', { path: '/tmp/out.txt' });
  * if (!decision.allowed) {
  *   console.error('denied:', decision.reason);
@@ -120,8 +125,8 @@ import type { BundleProvenance } from './policy-loader.ts';
  * @param config     — Optional configuration; all fields have safe defaults.
  * @param provenance — Optional bundle provenance (GC-PERM-011).
  */
-export function createPermissionsV2(
-  config: PermissionsV2Config = {},
+export function createPermissionEvaluator(
+  config: PermissionsConfig = {},
   provenance?: BundleProvenance,
 ): LayeredPolicyEvaluator {
   return new LayeredPolicyEvaluator(config, provenance);
@@ -130,7 +135,7 @@ export function createPermissionsV2(
 /**
  * createPermissionSimulator — Factory for `PermissionSimulator`.
  *
- * Creates a dual-evaluator simulation pipeline for Permissions v2 that runs
+ * Creates a dual-evaluator simulation pipeline for the runtime permissions system that runs
  * both the actual and simulated evaluators in parallel, tracking divergence.
  *
  * Requires the `permissions-simulation` feature flag to be enabled.
@@ -152,8 +157,8 @@ export function createPermissionsV2(
  * ```
  */
 export function createPermissionSimulator(
-  actualConfig: PermissionsV2Config,
-  simulatedConfig: PermissionsV2Config,
+  actualConfig: PermissionsConfig,
+  simulatedConfig: PermissionsConfig,
   simulationMode: SimulationMode,
   config: PermissionSimulatorConfig = {},
   flagManager?: FeatureFlagManager,

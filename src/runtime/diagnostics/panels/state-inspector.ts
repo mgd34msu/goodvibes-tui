@@ -3,7 +3,7 @@
  *
  * Produces on-demand snapshots of the runtime store's domain states.
  * Implements the "Live domain state viewer" and "Raw state mode" from
- * v3 Section 26 (Devtools / State Inspector).
+ * Devtools / State Inspector.
  *
  * All domains are serialized to JSON-safe plain objects at snapshot time.
  * Maps and Sets are converted to arrays; circular references are replaced

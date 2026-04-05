@@ -1,7 +1,7 @@
 /**
  * overflow-backends.test.ts
  *
- * GC-TOOL-008: Overflow backend switching and retention pruning tests.
+ * Overflow backend switching and retention pruning tests.
  *
  * Test strategy:
  *  - Backend switching: verify each backend (file, ledger, diagnostics) writes,
@@ -403,7 +403,7 @@ describe('OverflowHandler — retention policy', () => {
     expect(calls.length).toBe(1);
   });
 
-  it('cleanup() accepts legacy numeric maxAge argument', () => {
+  it('cleanup() accepts a retention policy object', () => {
     const calls: Array<RetentionPolicyConfig | undefined> = [];
     const trackingBackend: SpillBackend = {
       type: 'ledger',
@@ -413,7 +413,7 @@ describe('OverflowHandler — retention policy', () => {
       list: () => [],
     };
     const handler = new OverflowHandler({ backend: trackingBackend });
-    handler.cleanup(3600 * 1000);
+    handler.cleanup({ maxAgeMs: 3600 * 1000 });
     expect(calls.length).toBe(1);
     expect((calls[0] as RetentionPolicyConfig).maxAgeMs).toBe(3600 * 1000);
   });

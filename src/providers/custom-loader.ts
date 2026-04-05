@@ -2,7 +2,8 @@ import * as fs from 'fs';
 import * as fsPromises from 'fs/promises';
 import * as path from 'path';
 import * as os from 'os';
-import type { EventBus } from '../core/event-bus.ts';
+import type { RuntimeEventBus } from '../runtime/events/index.ts';
+import { emitProviderWarning } from '../runtime/emitters/index.ts';
 import { OpenAICompatProvider } from './openai-compat.ts';
 import { AnthropicCompatProvider } from './anthropic-compat.ts';
 import type { LLMProvider } from './interface.ts';
@@ -349,15 +350,25 @@ export async function loadCustomProviders(
 /**
  * Start watching ~/.goodvibes/tui/providers/ for file changes.
  * Debounces rapid events by 300ms before invoking the onChange callback.
- * Emits 'providers:warning' on the bus if the watcher cannot be started.
+ * Emits typed provider warnings if the watcher cannot be started.
  * Returns a handle with a `close()` method to stop watching.
  */
 export function watchCustomProviders(
-  bus: EventBus,
+  runtimeBus: RuntimeEventBus | null,
   onChange: () => void,
 ): { close: () => void } {
   let debounceTimer: ReturnType<typeof setTimeout> | null = null;
   let watcher: fs.FSWatcher | null = null;
+
+  const emitWarning = (message: string): void => {
+    if (runtimeBus) {
+      emitProviderWarning(runtimeBus, {
+        sessionId: 'system',
+        traceId: `providers:warning:${Date.now()}`,
+        source: 'custom-provider-loader',
+      }, { message });
+    }
+  };
 
   const startWatch = () => {
     try {
@@ -376,16 +387,10 @@ export function watchCustomProviders(
       });
 
       watcher.on('error', (err) => {
-        bus.emit('providers:warning', {
-          message: `[custom-loader] Watcher error: ${err.message}`,
-        });
+        emitWarning(`[custom-loader] Watcher error: ${err.message}`);
       });
     } catch (err) {
-      bus.emit('providers:warning', {
-        message: `[custom-loader] Could not watch providers directory: ${
-          err instanceof Error ? err.message : String(err)
-        }`,
-      });
+      emitWarning(`[custom-loader] Could not watch providers directory: ${err instanceof Error ? err.message : String(err)}`);
     }
   };
 
@@ -394,11 +399,7 @@ export function watchCustomProviders(
     .mkdir(PROVIDERS_DIR, { recursive: true })
     .then(() => startWatch())
     .catch((err) => {
-      bus.emit('providers:warning', {
-        message: `[custom-loader] Could not create/watch providers directory: ${
-          err instanceof Error ? err.message : String(err)
-        }`,
-      });
+      emitWarning(`[custom-loader] Could not create/watch providers directory: ${err instanceof Error ? err.message : String(err)}`);
     });
 
   return {

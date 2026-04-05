@@ -11,6 +11,10 @@ import {
   type KeyCombo,
 } from '../../input/keybindings.ts';
 
+type KeybindingsManagerTestAccess = {
+  bindings: Record<string, KeyCombo[]>;
+};
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -47,10 +51,10 @@ beforeEach(() => {
 // ---------------------------------------------------------------------------
 
 describe('default bindings', () => {
-  it('loads all 19 actions with at least one combo each', () => {
+  it('loads all default actions with at least one combo each', () => {
     const km = new KeybindingsManager('/nonexistent/path/keybindings.json');
     const all = km.getAll();
-    expect(all.length).toBe(19);
+    expect(all.length).toBe(Object.keys(DEFAULT_KEYBINDINGS).length);
     for (const entry of all) {
       expect(entry.combos.length).toBeGreaterThanOrEqual(1);
     }
@@ -227,7 +231,7 @@ describe('getComboLabel()', () => {
   it('returns "(unbound)" for an action with no combos', () => {
     const mgr = new KeybindingsManager('/nonexistent/path/keybindings.json');
     // Bypass validateCombos by injecting an empty array directly into the bindings map
-    (mgr as any).bindings['copy-selection'] = [];
+    (mgr as unknown as KeybindingsManagerTestAccess).bindings['copy-selection'] = [];
     expect(mgr.getComboLabel('copy-selection')).toBe('(unbound)');
   });
 });

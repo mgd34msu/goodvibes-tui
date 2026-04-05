@@ -11,13 +11,13 @@
 import { describe, test, expect } from 'bun:test';
 import { runSafetyChecks } from '../../runtime/permissions/safety-checks.ts';
 import { LayeredPolicyEvaluator } from '../../runtime/permissions/evaluator.ts';
-import type { PermissionsV2Config } from '../../runtime/permissions/types.ts';
+import type { PermissionsConfig } from '../../runtime/permissions/types.ts';
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
-function makeEvaluator(config: Partial<PermissionsV2Config> = {}): LayeredPolicyEvaluator {
+function makeEvaluator(config: Partial<PermissionsConfig> = {}): LayeredPolicyEvaluator {
   return new LayeredPolicyEvaluator({ mode: 'default', rules: [], ...config });
 }
 

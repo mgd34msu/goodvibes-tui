@@ -1,7 +1,7 @@
 /**
  * ToolEvent — discriminated union covering all tool execution lifecycle events.
  *
- * Maps to state machine events from v3 Section 4 (Tools domain).
+ * Covers tool execution lifecycle events for the runtime event bus.
  */
 
 export type ToolEvent =
@@ -20,9 +20,20 @@ export type ToolEvent =
   /** Post-execution hooks have run for this tool call. */
   | { type: 'TOOL_POSTHOOKED'; callId: string; turnId: string; tool: string }
   /** Tool call completed successfully. */
-  | { type: 'TOOL_SUCCEEDED'; callId: string; turnId: string; tool: string; durationMs: number }
+  | { type: 'TOOL_SUCCEEDED'; callId: string; turnId: string; tool: string; durationMs: number; result?: unknown }
   /** Tool call failed with an error. */
-  | { type: 'TOOL_FAILED'; callId: string; turnId: string; tool: string; error: string; durationMs: number }
+  | { type: 'TOOL_FAILED'; callId: string; turnId: string; tool: string; error: string; durationMs: number; result?: unknown }
+  /** Tool results were synthesized to reconcile unresolved calls. */
+  | {
+      type: 'TOOL_RECONCILED';
+      turnId: string;
+      count: number;
+      callIds: string[];
+      toolNames: string[];
+      reason: string;
+      timestamp: number;
+      isMalformed?: boolean;
+    }
   /** Tool call was cancelled before completion. */
   | { type: 'TOOL_CANCELLED'; callId: string; turnId: string; tool: string; reason?: string }
   /**

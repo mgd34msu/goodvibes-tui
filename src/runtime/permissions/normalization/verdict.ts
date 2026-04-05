@@ -1,5 +1,5 @@
 /**
- * Per-segment verdict evaluation for Shell AST normalization (GC-EXEC-005).
+ * Per-segment verdict evaluation for Shell AST normalization.
  *
  * Evaluates policy per AST segment, aggregates a final compound verdict,
  * and produces structured denial output with per-segment reasons.

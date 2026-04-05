@@ -1,21 +1,18 @@
 import { describe, test, expect, beforeEach, afterAll } from 'bun:test';
 import { run } from '../../../hooks/runners/agent.ts';
 import { AgentManager } from '../../../tools/agent/index.ts';
-import { AgentOrchestrator } from '../../../agents/orchestrator.ts';
+import { _resetAgentExecutorForTest, _setAgentExecutorForTest } from '../../../tools/agent/manager.ts';
 import type { HookDefinition, HookEvent } from '../../../hooks/types.ts';
 
-// ---------------------------------------------------------------------------
-// Stub AgentOrchestrator.prototype.runAgent so agents stay 'pending' during
-// tests. This keeps the hook runner's poll loop behaviorally predictable
-// without using process-global mock.module() which pollutes parallel workers.
-// ---------------------------------------------------------------------------
-const _origRunAgent = AgentOrchestrator.prototype.runAgent;
-AgentOrchestrator.prototype.runAgent = async function() {
-  // Never resolves — agent stays pending until test advances status or cancels.
-  return new Promise<void>(() => {});
-};
+_setAgentExecutorForTest({
+  async runAgent() {
+    // Never resolves — agent stays pending until test advances status or cancels.
+    return new Promise<void>(() => {});
+  },
+});
+
 afterAll(() => {
-  AgentOrchestrator.prototype.runAgent = _origRunAgent;
+  _resetAgentExecutorForTest();
 });
 
 // ---------------------------------------------------------------------------

@@ -1,7 +1,7 @@
 /**
  * src/runtime/compaction/index.ts
  *
- * Barrel re-export for the Session Compaction v2 lifecycle engine.
+ * Barrel re-export for the session compaction lifecycle engine.
  *
  * Main entry point: `createCompactionManager()`
  *

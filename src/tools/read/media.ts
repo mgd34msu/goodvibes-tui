@@ -310,7 +310,6 @@ interface SharpInstance {
 
 type SharpFactory = (input: Buffer) => SharpInstance;
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 let _sharp: SharpFactory | null | undefined = undefined;
 
 /**
@@ -320,9 +319,15 @@ let _sharp: SharpFactory | null | undefined = undefined;
 export async function tryLoadSharp(): Promise<SharpFactory | null> {
   if (_sharp !== undefined) return _sharp;
   try {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const mod = await import('sharp' as any) as any;
-    _sharp = (mod.default ?? mod) as SharpFactory;
+    const dynamicImport = new Function('specifier', 'return import(specifier)') as (specifier: string) => Promise<unknown>;
+    const mod = await dynamicImport('sharp');
+    if (typeof mod === 'function') {
+      _sharp = mod as SharpFactory;
+    } else if (typeof mod === 'object' && mod !== null && 'default' in mod && typeof mod.default === 'function') {
+      _sharp = mod.default as SharpFactory;
+    } else {
+      throw new Error('sharp module did not expose a callable factory');
+    }
   } catch (err) {
     logger.debug('[media] sharp not available — image resizing/conversion disabled', { error: (err as Error).message });
     _sharp = null;

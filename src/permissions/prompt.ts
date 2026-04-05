@@ -2,11 +2,23 @@ import { type Line } from '../types/grid.ts';
 import { UIFactory } from '../renderer/ui-factory.ts';
 import type { PermissionCategory } from './manager.ts';
 
-export interface PermissionRequest {
+export interface PermissionPromptRequest {
   callId: string;
   tool: string;
   args: Record<string, unknown>;
   category: PermissionCategory;
+}
+
+export interface PermissionPromptDecision {
+  approved: boolean;
+  remember?: boolean;
+}
+
+export type PermissionRequestHandler = (
+  request: PermissionPromptRequest,
+) => Promise<PermissionPromptDecision>;
+
+export interface PermissionRequest extends PermissionPromptRequest {
   resolve: (approved: boolean, remember?: boolean) => void;
 }
 

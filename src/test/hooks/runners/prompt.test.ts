@@ -30,7 +30,7 @@ function makeEvent(overrides: Partial<HookEvent> = {}): HookEvent {
     specific: 'read',
     sessionId: 'test',
     timestamp: Date.now(),
-    payload: { tool: 'file_read' },
+    payload: { tool: 'read' },
     ...overrides,
   };
 }

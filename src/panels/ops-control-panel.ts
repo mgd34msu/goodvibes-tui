@@ -1,5 +1,5 @@
 /**
- * OpsControlPanel — Operator Control Plane UI panel (Section 5.1).
+ * OpsControlPanel — operator control plane UI panel.
  *
  * Renders the ops audit log sourced from the OpsPanel diagnostics subscriber.
  * Each entry shows: seq, timestamp, action, target, outcome, and optional note.

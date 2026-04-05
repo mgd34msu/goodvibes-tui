@@ -1,5 +1,5 @@
 /**
- * G02: Multi-provider context window discovery tests.
+ * Multi-provider context window discovery tests.
  *
  * Tests each probe path individually and the fallback chain behaviour.
  * All tests use globalThis.fetch mocking — no real network calls.

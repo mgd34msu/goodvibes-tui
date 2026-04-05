@@ -25,8 +25,8 @@ const EMPTY_SNAPSHOT: RuntimeStateSnapshot = {
 const SNAPSHOT_WITH_DOMAINS: RuntimeStateSnapshot = {
   capturedAt: 1_700_000_000_000,
   domains: [
-    { domain: 'turn', state: { count: 0 } },
-    { domain: 'session', state: { id: 'sess-1' } },
+    { domain: 'turn', revision: 1, lastUpdatedAt: 1_700_000_000_000, state: { count: 0 } },
+    { domain: 'session', revision: 1, lastUpdatedAt: 1_700_000_000_000, state: { id: 'sess-1' } },
   ],
 };
 
@@ -231,12 +231,89 @@ describe('DeterministicReplayEngine', () => {
       const mismatches = engine.diff();
       expect(mismatches.length).toBeGreaterThan(0);
       expect(mismatches[0].kind).toBe('payload_mismatch');
+      expect(mismatches[0].failureMode).toBe('payload_schema_mismatch');
+      expect(mismatches[0].ownerDomain).toBe('unknown');
     });
 
     test('stores mismatches on snapshot after diff', () => {
       loadEngine(engine, [makeEntry(1, 'turn:start')]);
       engine.diff();
       expect(Array.isArray(engine.getSnapshot().mismatches)).toBe(true);
+    });
+
+    test('classifies turn stop-reason divergence as state_divergence', () => {
+      loadEngine(engine, [
+        makeEntry(1, 'TURN_SUBMITTED', { turnId: 'turn-1', prompt: 'hello' }),
+        makeEntry(2, 'TURN_COMPLETED', { turnId: 'turn-1', response: 'done', stopReason: 'completed' }),
+      ]);
+      (engine as unknown as { _entries: LedgerEntry[] })._entries = [
+        makeEntry(1, 'TURN_SUBMITTED', { turnId: 'turn-1', prompt: 'hello' }),
+        makeEntry(2, 'TURN_COMPLETED', { turnId: 'turn-1', response: 'done', stopReason: 'empty_response' }),
+      ];
+      const mismatches = engine.diff();
+      expect(mismatches.some((m) => m.kind === 'state_divergence' && m.description.includes('stop reason diverged'))).toBe(true);
+      const stopReasonMismatch = mismatches.find((m) => m.failureMode === 'stop_reason_diverged');
+      expect(stopReasonMismatch?.ownerDomain).toBe('turn');
+      expect(stopReasonMismatch?.relatedTurnId).toBe('turn-1');
+    });
+
+    test('classifies ordering mismatches with owner domain and related turn id', () => {
+      loadEngine(engine, [
+        makeEntry(1, 'TURN_SUBMITTED', { turnId: 'turn-2', prompt: 'hello' }),
+        makeEntry(2, 'STREAM_START', { turnId: 'turn-2' }),
+      ]);
+      (engine as unknown as { _entries: LedgerEntry[] })._entries = [
+        makeEntry(1, 'TURN_SUBMITTED', { turnId: 'turn-2', prompt: 'hello' }),
+        makeEntry(2, 'TURN_COMPLETED', { turnId: 'turn-2', response: 'done', stopReason: 'completed' }),
+      ];
+      const mismatches = engine.diff();
+      const orderingMismatch = mismatches.find((m) => m.failureMode === 'ordering_violation');
+      expect(orderingMismatch).toBeDefined();
+      expect(orderingMismatch?.ownerDomain).toBe('turn');
+      expect(orderingMismatch?.relatedTurnId).toBe('turn-2');
+    });
+  });
+
+  describe('turn summaries', () => {
+    test('summarizes completed, failed, and cancelled turns from typed ledger events', () => {
+      loadEngine(engine, [
+        makeEntry(1, 'TURN_SUBMITTED', { turnId: 'turn-ok', prompt: 'one' }),
+        makeEntry(2, 'TURN_COMPLETED', { turnId: 'turn-ok', response: 'done', stopReason: 'completed' }),
+        makeEntry(3, 'TURN_SUBMITTED', { turnId: 'turn-fail', prompt: 'two' }),
+        makeEntry(4, 'TURN_ERROR', { turnId: 'turn-fail', error: 'provider blew up', stopReason: 'provider_error' }),
+        makeEntry(5, 'TURN_SUBMITTED', { turnId: 'turn-cancel', prompt: 'three' }),
+        makeEntry(6, 'TURN_CANCEL', { turnId: 'turn-cancel', reason: 'user aborted', stopReason: 'cancelled' }),
+      ]);
+
+      expect(engine.getSnapshot().turnSummaries).toEqual([
+        {
+          turnId: 'turn-ok',
+          outcome: 'completed',
+          terminalEvent: 'TURN_COMPLETED',
+          startedRev: 1,
+          terminalRev: 2,
+          stopReason: 'completed',
+          message: 'done',
+        },
+        {
+          turnId: 'turn-fail',
+          outcome: 'failed',
+          terminalEvent: 'TURN_ERROR',
+          startedRev: 3,
+          terminalRev: 4,
+          stopReason: 'provider_error',
+          message: 'provider blew up',
+        },
+        {
+          turnId: 'turn-cancel',
+          outcome: 'cancelled',
+          terminalEvent: 'TURN_CANCEL',
+          startedRev: 5,
+          terminalRev: 6,
+          stopReason: 'cancelled',
+          message: 'user aborted',
+        },
+      ]);
     });
   });
 

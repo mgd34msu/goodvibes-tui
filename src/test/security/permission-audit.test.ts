@@ -8,29 +8,27 @@
 
 import { describe, test, expect, beforeEach, afterEach } from 'bun:test';
 import { PermissionManager } from '../../permissions/manager.ts';
-import { PermissionPromptUI } from '../../permissions/prompt.ts';
-import { EventBus } from '../../core/event-bus.ts';
+import { PermissionPromptUI, type PermissionPromptRequest } from '../../permissions/prompt.ts';
 import { configManager } from '../../config/index.ts';
 import { DaemonServer } from '../../daemon/server.ts';
 import { HttpListener } from '../../daemon/http-listener.ts';
 import { SpawnTokenManager } from '../../security/spawn-tokens.ts';
 import { resolveAndValidatePath } from '../../utils/path-safety.ts';
+import type { PermissionMode } from '../../config/schema.ts';
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
-function makeManager(): { bus: EventBus; mgr: PermissionManager } {
-  const bus = new EventBus();
-  const mgr = new PermissionManager(bus);
-  return { bus, mgr };
-}
-
-/** Auto-resolve all permission:request events with the given answer. */
-function autoResolve(bus: EventBus, answer: boolean): void {
-  bus.on('permission:request', ({ resolve }: { resolve: (v: boolean) => void }) => {
-    resolve(answer);
+function makeManager(
+  handler: (request: PermissionPromptRequest) => Promise<{ approved: boolean; remember?: boolean }> = async () => ({ approved: true }),
+): { requests: PermissionPromptRequest[]; mgr: PermissionManager } {
+  const requests: PermissionPromptRequest[] = [];
+  const mgr = new PermissionManager(async (request) => {
+    requests.push(request);
+    return handler(request);
   });
+  return { requests, mgr };
 }
 
 // ---------------------------------------------------------------------------
@@ -38,22 +36,18 @@ function autoResolve(bus: EventBus, answer: boolean): void {
 // ---------------------------------------------------------------------------
 
 let savedAutoApprove: boolean;
-let savedMode: string;
+let savedMode: PermissionMode;
 
 beforeEach(() => {
   savedAutoApprove = configManager.get('behavior.autoApprove') as boolean ?? false;
-  savedMode = configManager.get('permissions.mode') as string ?? 'prompt';
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  configManager.set('behavior.autoApprove', false as any);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  configManager.set('permissions.mode', 'prompt' as any);
+  savedMode = configManager.get('permissions.mode') ?? 'prompt';
+  configManager.set('behavior.autoApprove', false);
+  configManager.set('permissions.mode', 'prompt');
 });
 
 afterEach(() => {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  configManager.set('behavior.autoApprove', savedAutoApprove as any);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  configManager.set('permissions.mode', savedMode as any);
+  configManager.set('behavior.autoApprove', savedAutoApprove);
+  configManager.set('permissions.mode', savedMode);
 });
 
 // ---------------------------------------------------------------------------
@@ -74,15 +68,10 @@ describe('Tool permission gate — all 12 tools + delegate', () => {
 
   for (const [tool, args] of READ_TOOLS) {
     test(`${tool}: auto-approved (read category, no prompt event)`, async () => {
-      const { bus, mgr } = makeManager();
-      let eventFired = false;
-      bus.on('permission:request', ({ resolve }: { resolve: (v: boolean) => void }) => {
-        eventFired = true;
-        resolve(true);
-      });
+      const { requests, mgr } = makeManager();
       const result = await mgr.check(tool, args);
       expect(result).toBe(true);
-      expect(eventFired).toBe(false);
+      expect(requests).toHaveLength(0);
     });
   }
 
@@ -98,22 +87,14 @@ describe('Tool permission gate — all 12 tools + delegate', () => {
 
   for (const [tool, args] of PROMPT_TOOLS) {
     test(`${tool}: permission:request event fires before approval`, async () => {
-      const { bus, mgr } = makeManager();
-      let eventFired = false;
-      bus.once('permission:request', ({ resolve }: { resolve: (v: boolean) => void }) => {
-        eventFired = true;
-        resolve(true);
-      });
+      const { requests, mgr } = makeManager(async () => ({ approved: true }));
       const result = await mgr.check(tool, args);
-      expect(eventFired).toBe(true);
+      expect(requests).toHaveLength(1);
       expect(result).toBe(true);
     });
 
     test(`${tool}: denied when user resolves false`, async () => {
-      const { bus, mgr } = makeManager();
-      bus.once('permission:request', ({ resolve }: { resolve: (v: boolean) => void }) => {
-        resolve(false);
-      });
+      const { mgr } = makeManager(async () => ({ approved: false }));
       const result = await mgr.check(tool, args);
       expect(result).toBe(false);
     });
@@ -136,22 +117,16 @@ describe('Unknown tools default to delegate category', () => {
   });
 
   test('unknown tool triggers permission:request event (not auto-approved)', async () => {
-    const { bus, mgr } = makeManager();
-    let eventFired = false;
-    bus.once('permission:request', ({ resolve }: { resolve: (v: boolean) => void }) => {
-      eventFired = true;
-      resolve(true);
-    });
+    const { requests, mgr } = makeManager(async () => ({ approved: true }));
     await mgr.check('unknown_tool_xyz', { something: 'value' });
-    expect(eventFired).toBe(true);
+    expect(requests).toHaveLength(1);
   });
 
   test('unknown tool permission:request carries category=delegate', async () => {
-    const { bus, mgr } = makeManager();
     let capturedCategory: string | null = null;
-    bus.once('permission:request', (evt: { category: string; resolve: (v: boolean) => void }) => {
-      capturedCategory = evt.category;
-      evt.resolve(true);
+    const { mgr } = makeManager(async (request) => {
+      capturedCategory = String(request.category);
+      return { approved: true };
     });
     await mgr.check('mystery_tool', {});
     expect(capturedCategory as string | null).toBe('delegate');

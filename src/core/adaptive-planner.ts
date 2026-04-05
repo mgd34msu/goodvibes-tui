@@ -1,5 +1,5 @@
 /**
- * Adaptive Execution Planner — Section 5.5
+ * Adaptive Execution Planner.
  *
  * Scores and selects execution strategies based on risk, latency, and
  * capability inputs. Emits typed reason codes for every decision and

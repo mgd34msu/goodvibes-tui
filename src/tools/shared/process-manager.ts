@@ -37,8 +37,7 @@ export class ProcessManager {
 
   private _counter = 0;
   private _processes = new Map<string, BackgroundProcess>();
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  private _procs = new Map<string, any>();
+  private _procs = new Map<string, ReturnType<typeof Bun.spawn>>();
 
   private constructor() {}
 

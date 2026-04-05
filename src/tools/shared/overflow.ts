@@ -84,19 +84,10 @@ export interface OverflowOptions {
   label?: string;
 }
 
-/** @deprecated Use SpillEntry instead. Retained for backward compatibility. */
-export interface OverflowFileInfo {
-  filename: string;
-  path: string;
-  sizeBytes: number;
-  createdAt: number;
-}
-
 // ─── File Backend ────────────────────────────────────────────────────────────
 
 /**
  * FileBackend — spills overflow content to `.goodvibes/.overflow/` on disk.
- * This is the default backend and matches the legacy OverflowHandler behavior.
  */
 export class FileBackend implements SpillBackend {
   readonly type: SpillBackendType = 'file';
@@ -288,7 +279,7 @@ export class DiagnosticsBackend implements SpillBackend {
 // ─── Backend Factory ─────────────────────────────────────────────────────────
 
 /**
- * Create a spill backend by type. Defaults to `'file'` (rollback pin).
+ * Create a spill backend by type. Defaults to `'file'`.
  */
 export function createSpillBackend(type: SpillBackendType = 'file', baseDir?: string): SpillBackend {
   switch (type) {
@@ -307,7 +298,6 @@ export function createSpillBackend(type: SpillBackendType = 'file', baseDir?: st
 export interface OverflowHandlerConfig {
   /**
    * Which backend to use. Defaults to `'file'`.
-   * Rollback pin: set to `'file'` to restore v1 behavior.
    */
   spillBackend?: SpillBackendType;
   /** Base directory for FileBackend. */
@@ -335,18 +325,9 @@ export class OverflowHandler {
   private readonly backend: SpillBackend;
   private readonly retention: RetentionPolicyConfig;
 
-  /**
-   * Accepts either a legacy `baseDir` string (backward compat) or a full config.
-   */
-  constructor(baseDirOrConfig?: string | OverflowHandlerConfig) {
-    if (typeof baseDirOrConfig === 'string' || baseDirOrConfig === undefined) {
-      this.backend = new FileBackend(baseDirOrConfig);
-      this.retention = { ...DEFAULT_RETENTION };
-    } else {
-      const cfg = baseDirOrConfig;
-      this.backend = cfg.backend ?? createSpillBackend(cfg.spillBackend ?? 'file', cfg.baseDir);
-      this.retention = { ...DEFAULT_RETENTION, ...cfg.retention };
-    }
+  constructor(config: OverflowHandlerConfig = {}) {
+    this.backend = config.backend ?? createSpillBackend(config.spillBackend ?? 'file', config.baseDir);
+    this.retention = { ...DEFAULT_RETENTION, ...config.retention };
   }
 
   private sanitizeLabel(label: string): string {
@@ -410,14 +391,9 @@ export class OverflowHandler {
 
   /**
    * Prune entries that violate the retention policy.
-   * Accepts a maxAge number (legacy) or a full RetentionPolicyConfig.
    */
-  cleanup(maxAgeOrPolicy?: number | RetentionPolicyConfig): void {
-    if (typeof maxAgeOrPolicy === 'number') {
-      this.backend.cleanup({ ...this.retention, maxAgeMs: maxAgeOrPolicy });
-    } else {
-      this.backend.cleanup({ ...this.retention, ...maxAgeOrPolicy });
-    }
+  cleanup(policy?: RetentionPolicyConfig): void {
+    this.backend.cleanup({ ...this.retention, ...policy });
   }
 
   /** List current overflow entries from the active backend. */
@@ -447,5 +423,5 @@ export function overflowCleanup(policy?: RetentionPolicyConfig): { beforeCount: 
 
 // ─── Singleton ───────────────────────────────────────────────────────────────
 
-/** Module-level singleton. Defaults to file backend at process.cwd(). */
+/** Module-level singleton. Defaults to the file backend at process.cwd(). */
 export const overflowHandler = new OverflowHandler();

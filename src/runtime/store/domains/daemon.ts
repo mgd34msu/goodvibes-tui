@@ -7,7 +7,7 @@
  */
 
 /**
- * States from the ACP/daemon transport lifecycle machine (v3 §4.8).
+ * States from the ACP/daemon transport lifecycle machine.
  * Shared with acp.ts since the daemon uses the same transport lifecycle.
  */
 export type DaemonTransportState =

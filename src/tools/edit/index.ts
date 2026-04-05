@@ -884,6 +884,286 @@ function computeSingleEdit(
   return { newContent, occurrencesReplaced: selResult.selected.length, warning };
 }
 
+function classifyEditFailure(message: string): EditResultStatus {
+  if (message.includes('not found') || message.includes('No match')) return 'not_found';
+  if (message.includes('Ambiguous') || message.includes('ambiguous')) return 'ambiguous';
+  if (message.includes('OCC conflict') || message.includes('modified externally')) return 'conflict';
+  return 'failed';
+}
+
+function buildFailedEditResult(
+  item: EditItem,
+  error: string,
+  status: EditResultStatus,
+): EditResult {
+  return {
+    id: item.id,
+    path: item.path,
+    success: false,
+    status,
+    error,
+  };
+}
+
+function prepareTextEditInput(
+  input: EditInput,
+  env: EditExecutionContext,
+  transactionMode: 'atomic' | 'partial' | 'none',
+): ResolvedTextEditInput | { error: string } {
+  const resolvedPaths: Map<string, string> = new Map();
+  for (const item of input.edits!) {
+    if (resolvedPaths.has(item.path)) continue;
+    try {
+      resolvedPaths.set(item.path, resolveAndValidatePath(item.path));
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (transactionMode === 'atomic') {
+        return { error: `Path error for '${item.path}': ${msg}` };
+      }
+    }
+  }
+
+  const uniquePaths = new Set(input.edits!.map((e) => resolvedPaths.get(e.path) ?? e.path));
+  const fileContents: Map<string, string> = new Map();
+  const fileReadErrors: Map<string, string> = new Map();
+
+  for (const resolvedPath of uniquePaths) {
+    const cacheResult = env.fileCache.lookup(resolvedPath);
+    if (cacheResult.status === 'modified') {
+      const msg = `OCC conflict: '${resolvedPath}' was modified externally since last read`;
+      if (transactionMode === 'atomic') {
+        return { error: msg };
+      }
+      fileReadErrors.set(resolvedPath, msg);
+      continue;
+    }
+
+    try {
+      const content = readFileSync(resolvedPath, 'utf-8');
+      fileContents.set(resolvedPath, content);
+    } catch {
+      const msg = `File not found or unreadable: '${resolvedPath}'`;
+      if (transactionMode === 'atomic') {
+        return { error: msg };
+      }
+      fileReadErrors.set(resolvedPath, msg);
+    }
+  }
+
+  return {
+    resolvedPaths,
+    fileContents,
+    fileReadErrors,
+    workingContents: new Map(fileContents),
+  };
+}
+
+function writeSuccessfulTextEdits(
+  results: EditResult[],
+  resolvedPaths: Map<string, string>,
+  workingContents: Map<string, string>,
+  fileContents: Map<string, string>,
+  env: EditExecutionContext,
+  writtenPaths: Set<string>,
+): void {
+  for (const r of results) {
+    if (!r.success) continue;
+    const resolvedPath = resolvedPaths.get(r.path);
+    if (!resolvedPath || writtenPaths.has(resolvedPath)) continue;
+
+    const newContent = workingContents.get(resolvedPath);
+    if (newContent === undefined) continue;
+
+    try {
+      writeFileSync(resolvedPath, newContent, 'utf-8');
+      env.fileCache.update(resolvedPath, newContent);
+      writtenPaths.add(resolvedPath);
+      if (env.fileUndoManager) {
+        try {
+          const originalContent = fileContents.get(resolvedPath) ?? null;
+          env.fileUndoManager.snapshot({
+            path: resolvedPath,
+            beforeContent: originalContent,
+            afterContent: newContent,
+            tool: 'edit',
+          });
+        } catch {
+          // Non-fatal
+        }
+      }
+      recordChange(resolvedPath);
+    } catch (err) {
+      const msg = `Write failed for '${resolvedPath}': ${err instanceof Error ? err.message : String(err)}`;
+      for (const res of results) {
+        if (res.path === r.path) {
+          res.success = false;
+          res.error = msg;
+        }
+      }
+    }
+  }
+}
+
+async function buildImportGraphWarning(
+  cwd: string,
+  writtenPaths: Set<string>,
+): Promise<string | undefined> {
+  try {
+    const graph = ImportGraph.getInstance();
+    graph.markDirty();
+    await graph.build(cwd);
+
+    const editedAbsPaths = [...writtenPaths];
+    const affectedSet = new Set<string>();
+    for (const edited of editedAbsPaths) {
+      for (const dep of graph.findTransitiveDependents(edited)) {
+        affectedSet.add(dep);
+      }
+    }
+    for (const edited of editedAbsPaths) {
+      affectedSet.delete(edited);
+    }
+
+    if (affectedSet.size === 0) return undefined;
+
+    const affectedList = Array.from(affectedSet);
+    const proc = Bun.spawn(
+      ['/bin/sh', '-c', `npx tsc --noEmit ${affectedList.join(' ')}`],
+      { cwd, stdout: 'pipe', stderr: 'pipe' },
+    );
+    const [exitCode, stdoutText, stderrText] = await Promise.all([
+      proc.exited,
+      new Response(proc.stdout).text(),
+      new Response(proc.stderr).text(),
+    ]);
+    if (exitCode === 0) return undefined;
+
+    const relAffected = affectedList.map((f) => relative(cwd, f));
+    const outputLines = (stderrText + '\n' + stdoutText)
+      .split('\n')
+      .filter((line) => relAffected.some((rel) => line.includes(rel)));
+    if (outputLines.length > 0) {
+      return `\n⚠ Import graph: ${affectedSet.size} transitive dependent(s) affected by this edit — type errors detected in downstream files:\n${outputLines.join('\n')}`;
+    }
+    return `\n⚠ Import graph: ${affectedSet.size} transitive dependent(s) affected. tsc reported errors outside the affected set — check unrelated files.`;
+  } catch (err) {
+    logger.warn('[import-graph] Import graph tracing failed', { error: err instanceof Error ? err.message : String(err) });
+    return undefined;
+  }
+}
+
+function restoreOriginalContents(
+  fileContents: Map<string, string>,
+  env: EditExecutionContext,
+): void {
+  for (const [resolvedPath, originalContent] of fileContents) {
+    try {
+      writeFileSync(resolvedPath, originalContent, 'utf-8');
+      env.fileCache.update(resolvedPath, originalContent);
+    } catch {
+      // Best-effort rollback
+    }
+  }
+}
+
+async function validateAfterTextEdits(
+  validators: ValidatorName[],
+  cwd: string,
+  transactionMode: 'atomic' | 'partial' | 'none',
+  fileContents: Map<string, string>,
+  workingContents: Map<string, string>,
+  env: EditExecutionContext,
+): Promise<{ error?: string }> {
+  const failure = await runValidators(validators, cwd);
+  if (!failure) return {};
+
+  const failureMessages = [formatValidatorFailure(failure)];
+  const repair = await repairAfterValidationFailure(fileContents, workingContents, failureMessages, env);
+  if (repair.healed) {
+    const healFailure = await runValidators(validators, cwd);
+    if (!healFailure) {
+      return {};
+    }
+  }
+
+  if (transactionMode === 'atomic') {
+    restoreOriginalContents(fileContents, env);
+  }
+  return {
+    error: `Post-edit validation failed${transactionMode === 'atomic' ? ' — edits rolled back' : ''}. ${formatValidatorFailure(failure)}`,
+  };
+}
+
+async function repairAfterValidationFailure(
+  fileContents: Map<string, string>,
+  workingContents: Map<string, string>,
+  failureMessages: string[],
+  env: EditExecutionContext,
+): Promise<PostValidationRepairResult> {
+  let healed = false;
+  for (const [resolvedPath, originalContent] of fileContents) {
+    const newContent = workingContents.get(resolvedPath);
+    if (newContent === undefined || newContent === originalContent) continue;
+    const healResult = await autoHealer.heal(resolvedPath, newContent, failureMessages);
+    if (healResult.healed) {
+      try {
+        writeFileSync(resolvedPath, healResult.content, 'utf-8');
+        env.fileCache.update(resolvedPath, healResult.content);
+        healed = true;
+      } catch {
+        // Best-effort heal write
+      }
+    }
+  }
+  return { healed };
+}
+
+function readNotebookFile(
+  resolvedPath: string,
+  fileCache: FileStateCache,
+): { notebook: JupyterNotebook; rawContent: string } | { error: string } {
+  const cacheResult = fileCache.lookup(resolvedPath);
+  if (cacheResult.status === 'modified') {
+    return { error: `OCC conflict: '${resolvedPath}' was modified externally since last read` };
+  }
+
+  let rawContent: string;
+  try {
+    rawContent = readFileSync(resolvedPath, 'utf-8');
+  } catch {
+    return { error: `File not found or unreadable: '${resolvedPath}'` };
+  }
+
+  try {
+    const parsed: unknown = JSON.parse(rawContent);
+    if (!validateNotebook(parsed)) {
+      return { error: 'Not a valid Jupyter notebook: missing nbformat or cells array' };
+    }
+    return { notebook: parsed, rawContent };
+  } catch (err) {
+    return { error: `Failed to parse notebook JSON: ${err instanceof Error ? err.message : String(err)}` };
+  }
+}
+
+function formatNotebookOutput(
+  opsResult: { applied: number; summary: string },
+  outputFormat: 'count_only' | 'minimal' | 'with_diff' | 'verbose',
+  dryRun: boolean,
+  rawContent: string,
+  newContent: string,
+  resolvedPath: string,
+  diffContext: number,
+): string {
+  if (outputFormat === 'count_only') {
+    return JSON.stringify({ applied: opsResult.applied, failed: 0, dry_run: dryRun });
+  }
+  if (outputFormat === 'minimal') {
+    return `Notebook operations applied: ${opsResult.applied}, failed: 0${dryRun ? ' (dry run)' : ''}\n${opsResult.summary}`;
+  }
+  const diff = unifiedDiff(rawContent, newContent, resolvedPath, diffContext);
+  return `Notebook operations applied: ${opsResult.applied}, failed: 0${dryRun ? ' (dry run)' : ''}\n${opsResult.summary}\n${diff}`;
+}
+
 // ---------------------------------------------------------------------------
 // Notebook helpers
 // ---------------------------------------------------------------------------
@@ -1136,6 +1416,302 @@ function formatOutput(
 }
 
 // ---------------------------------------------------------------------------
+// Branch execution
+// ---------------------------------------------------------------------------
+
+interface EditExecutionContext {
+  fileCache: FileStateCache;
+  cwd: string;
+  fileUndoManager?: FileUndoManager;
+}
+
+interface ResolvedTextEditInput {
+  resolvedPaths: Map<string, string>;
+  fileContents: Map<string, string>;
+  fileReadErrors: Map<string, string>;
+  workingContents: Map<string, string>;
+}
+
+interface PostValidationRepairResult {
+  healed: boolean;
+}
+
+async function executeNotebookEdit(
+  input: EditInput,
+  env: EditExecutionContext,
+): Promise<{ success: boolean; output?: string; error?: string }> {
+  const nbOps = input.notebook_operations!;
+  const outputFormat = input.output?.format ?? 'minimal';
+  const diffContext = input.output?.diff_context ?? 3;
+  const dryRun = input.dry_run ?? false;
+
+  if (!nbOps.path || typeof nbOps.path !== 'string') {
+    return { success: false, error: 'notebook_operations.path is required and must be a string' };
+  }
+  if (!Array.isArray(nbOps.operations)) {
+    return { success: false, error: 'notebook_operations.operations must be an array' };
+  }
+
+  let resolvedPath: string;
+  try {
+    resolvedPath = resolveAndValidatePath(nbOps.path);
+  } catch (err) {
+    return { success: false, error: `Path error: ${err instanceof Error ? err.message : String(err)}` };
+  }
+
+  if (!isNotebookFile(resolvedPath)) {
+    return { success: false, error: `notebook_operations requires a .ipynb file, got: ${nbOps.path}` };
+  }
+
+  const notebookRead = readNotebookFile(resolvedPath, env.fileCache);
+  if ('error' in notebookRead) {
+    return { success: false, error: notebookRead.error };
+  }
+
+  if (!dryRun && (input.validate?.before ?? []).length > 0) {
+    const failure = await runValidators(input.validate!.before!, env.cwd);
+    if (failure) {
+      return {
+        success: false,
+        error: `Pre-edit validation failed. ${formatValidatorFailure(failure)}`,
+      };
+    }
+  }
+
+  const notebook = notebookRead.notebook;
+  const rawContent = notebookRead.rawContent;
+  const opsResult = applyNotebookOperations(notebook, nbOps.operations);
+  if (!opsResult.success) {
+    return { success: false, error: opsResult.error };
+  }
+
+  const newContent = JSON.stringify(notebook, null, 1) + '\n';
+
+  if (dryRun) {
+    return { success: true, output: formatNotebookOutput(opsResult, outputFormat, true, rawContent, newContent, resolvedPath, diffContext) };
+  }
+
+  try {
+    writeFileSync(resolvedPath, newContent, 'utf-8');
+  } catch (err) {
+    return { success: false, error: `Write failed for '${resolvedPath}': ${err instanceof Error ? err.message : String(err)}` };
+  }
+
+  if ((input.validate?.after ?? []).length > 0) {
+    const failure = await runValidators(input.validate!.after!, env.cwd);
+    if (failure) {
+      try {
+        writeFileSync(resolvedPath, rawContent, 'utf-8');
+        env.fileCache.update(resolvedPath, rawContent);
+      } catch {
+        // Best-effort rollback
+      }
+      return {
+        success: false,
+        error: `Post-edit validation failed (notebook restored). ${formatValidatorFailure(failure)}`,
+      };
+    }
+  }
+
+  env.fileCache.update(resolvedPath, newContent);
+
+  if (env.fileUndoManager) {
+    try {
+      env.fileUndoManager.snapshot({
+        path: resolvedPath,
+        beforeContent: rawContent,
+        afterContent: newContent,
+        tool: 'edit',
+      });
+    } catch {
+      // Non-fatal
+    }
+  }
+
+  recordChange(resolvedPath);
+  logger.debug('[edit] notebook operations applied', { path: resolvedPath, applied: opsResult.applied });
+
+  return {
+    success: true,
+    output: formatNotebookOutput(opsResult, outputFormat, false, rawContent, newContent, resolvedPath, diffContext),
+  };
+}
+
+async function executeTextEdits(
+  input: EditInput,
+  env: EditExecutionContext,
+): Promise<{ success: boolean; output?: string; error?: string }> {
+  const matchMode = input.match?.mode ?? 'exact';
+  const caseSensitive = input.match?.case_sensitive ?? true;
+  const whitespaceSensitive = input.match?.whitespace_sensitive ?? true;
+  const multiline = input.match?.multiline ?? false;
+  const transactionMode = input.transaction?.mode ?? 'atomic';
+  const outputFormat = input.output?.format ?? 'minimal';
+  const diffContext = input.output?.diff_context ?? 3;
+  const dryRun = input.dry_run ?? false;
+  const validateBefore = input.validate?.before ?? [];
+  const validateAfter = input.validate?.after ?? [];
+  const cwd = env.cwd;
+
+  if (!dryRun && validateBefore.length > 0) {
+    const failure = await runValidators(validateBefore, cwd);
+    if (failure) {
+      return {
+        success: false,
+        error: `Pre-edit validation failed. ${formatValidatorFailure(failure)}`,
+      };
+    }
+  }
+
+  const prepResult = prepareTextEditInput(input, env, transactionMode);
+  if ('error' in prepResult) {
+    return { success: false, error: prepResult.error };
+  }
+
+  const { resolvedPaths, fileContents, fileReadErrors, workingContents } = prepResult;
+  const results: EditResult[] = [];
+  let atomicFailed = false;
+  let atomicFailError = '';
+
+  for (const item of input.edits!) {
+    const resolvedPath = resolvedPaths.get(item.path);
+
+    if (!resolvedPath) {
+      results.push(buildFailedEditResult(item, `Path resolution failed for '${item.path}'`, 'failed'));
+      if (transactionMode === 'atomic') {
+        atomicFailed = true;
+        atomicFailError = `Path resolution failed for '${item.path}'`;
+        break;
+      }
+      continue;
+    }
+
+    if (fileReadErrors.has(resolvedPath)) {
+      const readErrMsg = fileReadErrors.get(resolvedPath)!;
+      results.push(buildFailedEditResult(item, readErrMsg, classifyEditFailure(readErrMsg)));
+      if (transactionMode === 'atomic') {
+        atomicFailed = true;
+        atomicFailError = readErrMsg;
+        break;
+      }
+      continue;
+    }
+
+    const currentContent = workingContents.get(resolvedPath);
+    if (currentContent === undefined) {
+      results.push(buildFailedEditResult(item, `No content available for '${resolvedPath}'`, 'failed'));
+      if (transactionMode === 'atomic') {
+        atomicFailed = true;
+        atomicFailError = `No content available for '${resolvedPath}'`;
+        break;
+      }
+      continue;
+    }
+
+    let editResult: { newContent: string; occurrencesReplaced: number; warning?: string } | { error: string; hint?: string };
+    if (matchMode === 'ast_pattern') {
+      editResult = computeAstPatternEdit(currentContent, item, resolvedPath);
+    } else if (matchMode === 'ast') {
+      editResult = await computeAstEdit(currentContent, item, resolvedPath);
+    } else {
+      editResult = computeSingleEdit(currentContent, item, matchMode, caseSensitive, whitespaceSensitive, multiline);
+    }
+
+    if ('error' in editResult) {
+      const errMsg = editResult.error;
+      results.push({
+        ...buildFailedEditResult(item, errMsg, classifyEditFailure(errMsg)),
+        hint: 'hint' in editResult ? editResult.hint : undefined,
+      });
+      if (transactionMode === 'atomic') {
+        atomicFailed = true;
+        atomicFailError = errMsg;
+        break;
+      }
+      continue;
+    }
+
+    const oldContent = currentContent;
+    workingContents.set(resolvedPath, editResult.newContent);
+
+    let diff: string | undefined;
+    let diffTruncated: boolean | undefined;
+    let diffPreview: string | undefined;
+    if (outputFormat === 'with_diff' || outputFormat === 'verbose' || dryRun) {
+      const rawDiff = unifiedDiff(oldContent, editResult.newContent, resolvedPath, diffContext);
+      if (rawDiff.length > DIFF_TRUNCATE_THRESHOLD) {
+        diffTruncated = true;
+        diffPreview = rawDiff.slice(0, DIFF_PREVIEW_LENGTH);
+        diff = diffPreview;
+      } else {
+        diff = rawDiff;
+      }
+    }
+    results.push({
+      id: item.id,
+      path: item.path,
+      success: true,
+      status: 'applied',
+      occurrencesReplaced: editResult.occurrencesReplaced,
+      diff,
+      diff_truncated: diffTruncated,
+      diff_preview: diffPreview,
+      warning: editResult.warning,
+    });
+  }
+
+  if (transactionMode === 'atomic' && atomicFailed) {
+    const atomicResults: EditResult[] = input.edits!.map((item, idx) => {
+      const r = results[idx];
+      if (r && !r.success) return r;
+      return {
+        id: item.id,
+        path: item.path,
+        success: false,
+        status: 'failed',
+        error: r?.success ? 'Rolled back due to atomic transaction failure' : (r?.error ?? atomicFailError),
+      };
+    });
+    return {
+      success: false,
+      error: `Atomic transaction failed: ${atomicFailError}`,
+      output: formatOutput(atomicResults, outputFormat, dryRun),
+    };
+  }
+
+  const writtenPaths = new Set<string>();
+  if (!dryRun) {
+    writeSuccessfulTextEdits(results, resolvedPaths, workingContents, fileContents, env, writtenPaths);
+  }
+
+  const anySuccess = results.some((r) => r.success);
+
+  let importGraphWarning: string | undefined;
+  if (!dryRun && anySuccess) {
+    importGraphWarning = await buildImportGraphWarning(cwd, writtenPaths);
+  }
+
+  if (!dryRun && anySuccess && validateAfter.length > 0) {
+    const validationResult = await validateAfterTextEdits(
+      validateAfter,
+      cwd,
+      transactionMode,
+      fileContents,
+      workingContents,
+      env,
+    );
+    if (validationResult.error) {
+      return { success: false, error: validationResult.error };
+    }
+  }
+
+  return {
+    success: anySuccess,
+    output: formatOutput(results, outputFormat, dryRun) + (importGraphWarning ?? ''),
+  };
+}
+
+// ---------------------------------------------------------------------------
 // Tool implementation
 // ---------------------------------------------------------------------------
 
@@ -1161,544 +1737,24 @@ export function createEditTool(fileCache: FileStateCache, options?: EditToolOpti
     args: Record<string, unknown>,
   ): Promise<{ success: boolean; output?: string; error?: string }> {
     try {
-    // Parse and validate input
-    let input: EditInput;
-    try {
-      input = args as unknown as EditInput;
+      const input = args as EditInput;
       if (!input.edits && !input.notebook_operations) {
         return { success: false, error: 'Either edits or notebook_operations must be provided' };
       }
       if (input.edits && input.notebook_operations) {
         return { success: false, error: 'Provide either edits or notebook_operations, not both' };
       }
-    } catch (err) {
-      return { success: false, error: `Invalid input: ${err instanceof Error ? err.message : String(err)}` };
-    }
 
-    // --- Notebook operations branch ---
-    if (input.notebook_operations) {
-      const nbOps = input.notebook_operations;
-      const outputFormat = input.output?.format ?? 'minimal';
-      const diffContext = input.output?.diff_context ?? 3;
-      const dryRun = input.dry_run ?? false;
-      const cwd = options?.cwd ?? process.cwd();
-
-      // Runtime input validation
-      if (!nbOps.path || typeof nbOps.path !== 'string') {
-        return { success: false, error: 'notebook_operations.path is required and must be a string' };
-      }
-      if (!Array.isArray(nbOps.operations)) {
-        return { success: false, error: 'notebook_operations.operations must be an array' };
-      }
-
-      let resolvedPath: string;
-      try {
-        resolvedPath = resolveAndValidatePath(nbOps.path);
-      } catch (err) {
-        return { success: false, error: `Path error: ${err instanceof Error ? err.message : String(err)}` };
-      }
-
-      if (!isNotebookFile(resolvedPath)) {
-        return { success: false, error: `notebook_operations requires a .ipynb file, got: ${nbOps.path}` };
-      }
-
-      // Check OCC conflict
-      const cacheResult = fileCache.lookup(resolvedPath);
-      if (cacheResult.status === 'modified') {
-        return { success: false, error: `OCC conflict: '${resolvedPath}' was modified externally since last read` };
-      }
-
-      // Read and parse notebook
-      let rawContent: string;
-      try {
-        rawContent = readFileSync(resolvedPath, 'utf-8');
-      } catch {
-        return { success: false, error: `File not found or unreadable: '${resolvedPath}'` };
-      }
-
-      let notebook: JupyterNotebook;
-      try {
-        const parsed: unknown = JSON.parse(rawContent);
-        if (!validateNotebook(parsed)) {
-          return { success: false, error: `Not a valid Jupyter notebook: missing nbformat or cells array` };
-        }
-        notebook = parsed;
-      } catch (err) {
-        return { success: false, error: `Failed to parse notebook JSON: ${err instanceof Error ? err.message : String(err)}` };
-      }
-
-      // Run validate.before
-      if (!dryRun && (input.validate?.before ?? []).length > 0) {
-        const failure = await runValidators(input.validate!.before!, cwd);
-        if (failure) {
-          return {
-            success: false,
-            error: `Pre-edit validation failed. ${formatValidatorFailure(failure)}`,
-          };
-        }
-      }
-
-      // Apply notebook operations
-      const opsResult = applyNotebookOperations(notebook, nbOps.operations);
-      if (!opsResult.success) {
-        return { success: false, error: opsResult.error };
-      }
-
-      // Serialize notebook
-      const newContent = JSON.stringify(notebook, null, 1) + '\n';
-
-      if (dryRun) {
-        // Dry run: return summary of what would have been applied without writing
-        let output: string;
-        if (outputFormat === 'count_only') {
-          output = JSON.stringify({ applied: opsResult.applied, failed: 0, dry_run: true });
-        } else if (outputFormat === 'minimal') {
-          output = `Notebook operations applied: ${opsResult.applied}, failed: 0 (dry run)\n${opsResult.summary}`;
-        } else {
-          const diff = unifiedDiff(rawContent, newContent, resolvedPath, diffContext);
-          output = `Notebook operations applied: ${opsResult.applied}, failed: 0 (dry run)\n${opsResult.summary}\n${diff}`;
-        }
-        return { success: true, output };
-      }
-
-      // Write to disk
-      try {
-        writeFileSync(resolvedPath, newContent, 'utf-8');
-      } catch (err) {
-        return { success: false, error: `Write failed for '${resolvedPath}': ${err instanceof Error ? err.message : String(err)}` };
-      }
-
-      // Run validate.after
-      if ((input.validate?.after ?? []).length > 0) {
-        const failure = await runValidators(input.validate!.after!, cwd);
-        if (failure) {
-          // Restore original content
-          try {
-            writeFileSync(resolvedPath, rawContent, 'utf-8');
-            fileCache.update(resolvedPath, rawContent);
-          } catch {
-            // Best-effort rollback
-          }
-          return {
-            success: false,
-            error: `Post-edit validation failed (notebook restored). ${formatValidatorFailure(failure)}`,
-          };
-        }
-      }
-
-      // Update cache
-      fileCache.update(resolvedPath, newContent);
-
-      // Snapshot for /undo support
-      if (options?.fileUndoManager) {
-        try {
-          options.fileUndoManager.snapshot({
-            path: resolvedPath,
-            beforeContent: rawContent,
-            afterContent: newContent,
-            tool: 'edit',
-          });
-        } catch {
-          // Non-fatal
-        }
-      }
-
-      // Track for /diff session change view
-      recordChange(resolvedPath);
-
-      logger.debug('[edit] notebook operations applied', { path: resolvedPath, applied: opsResult.applied });
-
-      // Format output
-      let output: string;
-      if (outputFormat === 'count_only') {
-        output = JSON.stringify({ applied: opsResult.applied, failed: 0, dry_run: false });
-      } else if (outputFormat === 'minimal') {
-        output = `Notebook operations applied: ${opsResult.applied}, failed: 0\n${opsResult.summary}`;
-      } else {
-        // with_diff / verbose: include a diff
-        const diff = unifiedDiff(rawContent, newContent, resolvedPath, diffContext);
-        output = `Notebook operations applied: ${opsResult.applied}, failed: 0\n${opsResult.summary}\n${diff}`;
-      }
-
-      return { success: true, output };
-    }
-
-    // --- Text edits branch ---
-    if (!Array.isArray(input.edits) || input.edits.length === 0) {
-      return { success: false, error: 'edits must be a non-empty array' };
-    }
-
-    const matchMode = input.match?.mode ?? 'exact';
-    const caseSensitive = input.match?.case_sensitive ?? true;
-    const whitespaceSensitive = input.match?.whitespace_sensitive ?? true;
-    const multiline = input.match?.multiline ?? false;
-    const transactionMode = input.transaction?.mode ?? 'atomic';
-    const outputFormat = input.output?.format ?? 'minimal';
-    const diffContext = input.output?.diff_context ?? 3;
-    const dryRun = input.dry_run ?? false;
-    const validateBefore = input.validate?.before ?? [];
-    const validateAfter = input.validate?.after ?? [];
-    const cwd = options?.cwd ?? process.cwd();
-
-    // Run validate.before
-    if (!dryRun && validateBefore.length > 0) {
-      const failure = await runValidators(validateBefore, cwd);
-      if (failure) {
-        return {
-          success: false,
-          error: `Pre-edit validation failed. ${formatValidatorFailure(failure)}`,
-        };
-      }
-    }
-
-    // Resolve all paths upfront
-    const resolvedPaths: Map<string, string> = new Map();
-    for (const item of input.edits!) {
-      if (resolvedPaths.has(item.path)) continue;
-      try {
-        resolvedPaths.set(item.path, resolveAndValidatePath(item.path));
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
-        // In atomic mode, a single path error fails the whole batch
-        if (transactionMode === 'atomic') {
-          return { success: false, error: `Path error for '${item.path}': ${msg}` };
-        }
-      }
-    }
-
-    // Gather unique file paths and read content
-    const uniquePaths = new Set(input.edits!.map((e) => resolvedPaths.get(e.path) ?? e.path));
-    const fileContents: Map<string, string> = new Map();
-    const fileReadErrors: Map<string, string> = new Map();
-
-    for (const resolvedPath of uniquePaths) {
-      // Check OCC conflict first
-      const cacheResult = fileCache.lookup(resolvedPath);
-      if (cacheResult.status === 'modified') {
-        const msg = `OCC conflict: '${resolvedPath}' was modified externally since last read`;
-        if (transactionMode === 'atomic') {
-          return { success: false, error: msg };
-        }
-        fileReadErrors.set(resolvedPath, msg);
-        continue;
-      }
-
-      try {
-        const content = readFileSync(resolvedPath, 'utf-8');
-        fileContents.set(resolvedPath, content);
-      } catch (err) {
-        const msg = `File not found or unreadable: '${resolvedPath}'`;
-        if (transactionMode === 'atomic') {
-          return { success: false, error: msg };
-        }
-        fileReadErrors.set(resolvedPath, msg);
-      }
-    }
-
-    // Compute all edits
-    // For atomic: track working copies per file; rollback all on any failure
-    // For partial/none: apply edits that succeed, skip failures
-    const workingContents: Map<string, string> = new Map(fileContents);
-    const results: EditResult[] = [];
-    let atomicFailed = false;
-    let atomicFailError = '';
-
-    for (const item of input.edits!) {
-      const resolvedPath = resolvedPaths.get(item.path);
-
-      if (!resolvedPath) {
-        // Path resolution failed
-        results.push({
-          id: item.id,
-          path: item.path,
-          success: false,
-          status: 'failed',
-          error: `Path resolution failed for '${item.path}'`,
-        });
-        if (transactionMode === 'atomic') {
-          atomicFailed = true;
-          atomicFailError = `Path resolution failed for '${item.path}'`;
-          break;
-        }
-        continue;
-      }
-
-      if (fileReadErrors.has(resolvedPath)) {
-        const readErrMsg = fileReadErrors.get(resolvedPath)!;
-        const readErrStatus: EditResultStatus = readErrMsg.includes('OCC conflict') || readErrMsg.includes('modified externally') ? 'conflict' : 'failed';
-        results.push({
-          id: item.id,
-          path: item.path,
-          success: false,
-          status: readErrStatus,
-          error: readErrMsg,
-        });
-        if (transactionMode === 'atomic') {
-          atomicFailed = true;
-          atomicFailError = readErrMsg;
-          break;
-        }
-        continue;
-      }
-
-      const currentContent = workingContents.get(resolvedPath);
-      if (currentContent === undefined) {
-        results.push({
-          id: item.id,
-          path: item.path,
-          success: false,
-          status: 'failed',
-          error: `No content available for '${resolvedPath}'`,
-        });
-        if (transactionMode === 'atomic') {
-          atomicFailed = true;
-          atomicFailError = `No content available for '${resolvedPath}'`;
-          break;
-        }
-        continue;
-      }
-
-      let editResult: { newContent: string; occurrencesReplaced: number; warning?: string } | { error: string; hint?: string };
-      if (matchMode === 'ast_pattern') {
-        editResult = computeAstPatternEdit(currentContent, item, resolvedPath);
-      } else if (matchMode === 'ast') {
-        editResult = await computeAstEdit(currentContent, item, resolvedPath);
-      } else {
-        editResult = computeSingleEdit(currentContent, item, matchMode, caseSensitive, whitespaceSensitive, multiline);
-      }
-
-      if ('error' in editResult) {
-        // Determine structured status for the error
-        const errMsg = editResult.error;
-        let errorStatus: EditResultStatus = 'failed';
-        if (errMsg.includes('not found') || errMsg.includes('No match')) errorStatus = 'not_found';
-        else if (errMsg.includes('Ambiguous') || errMsg.includes('ambiguous')) errorStatus = 'ambiguous';
-        else if (errMsg.includes('OCC conflict') || errMsg.includes('modified externally')) errorStatus = 'conflict';
-        results.push({
-          id: item.id,
-          path: item.path,
-          success: false,
-          status: errorStatus,
-          error: errMsg,
-          hint: 'hint' in editResult ? editResult.hint : undefined,
-        });
-        if (transactionMode === 'atomic') {
-          atomicFailed = true;
-          atomicFailError = errMsg;
-          break;
-        }
-        continue;
-      }
-
-      // Success — update working copy
-      const oldContent = currentContent;
-      workingContents.set(resolvedPath, editResult.newContent);
-
-      let diff: string | undefined;
-      let diffTruncated: boolean | undefined;
-      let diffPreview: string | undefined;
-      if (outputFormat === 'with_diff' || outputFormat === 'verbose' || dryRun) {
-        const rawDiff = unifiedDiff(oldContent, editResult.newContent, resolvedPath, diffContext);
-        if (rawDiff.length > DIFF_TRUNCATE_THRESHOLD) {
-          diffTruncated = true;
-          diffPreview = rawDiff.slice(0, DIFF_PREVIEW_LENGTH);
-          diff = diffPreview; // store truncated version; full diff available in verbose format only
-        } else {
-          diff = rawDiff;
-        }
-      }
-      results.push({
-        id: item.id,
-        path: item.path,
-        success: true,
-        status: 'applied',
-        occurrencesReplaced: editResult.occurrencesReplaced,
-        diff,
-        diff_truncated: diffTruncated,
-        diff_preview: diffPreview,
-        warning: editResult.warning,
-      });
-    }
-
-    // Atomic rollback: if any edit failed, report all as failed
-    if (transactionMode === 'atomic' && atomicFailed) {
-      // Replace all pending success results with rollback notices
-      const atomicResults: EditResult[] = input.edits!.map((item, idx) => {
-        const r = results[idx];
-        if (r && !r.success) return r;
-        return {
-          id: item.id,
-          path: item.path,
-          success: false,
-          status: 'failed',
-          error: r?.success ? 'Rolled back due to atomic transaction failure' : (r?.error ?? atomicFailError),
-        };
-      });
-      return {
-        success: false,
-        error: `Atomic transaction failed: ${atomicFailError}`,
-        output: formatOutput(atomicResults, outputFormat, dryRun),
+      const env: EditExecutionContext = {
+        fileCache,
+        cwd: options?.cwd ?? process.cwd(),
+        fileUndoManager: options?.fileUndoManager,
       };
-    }
 
-    // Write successful edits to disk (unless dry run)
-    const writtenPaths = new Set<string>();
-    if (!dryRun) {
-
-      for (const r of results) {
-        if (!r.success) continue;
-        const resolvedPath = resolvedPaths.get(r.path);
-        if (!resolvedPath || writtenPaths.has(resolvedPath)) continue;
-
-        // Check if the working content differs from original (may be multiple edits on same file)
-        const newContent = workingContents.get(resolvedPath);
-        if (newContent === undefined) continue;
-
-        try {
-          writeFileSync(resolvedPath, newContent, 'utf-8');
-          fileCache.update(resolvedPath, newContent);
-          writtenPaths.add(resolvedPath);
-          // Snapshot for /undo file support
-          if (options?.fileUndoManager) {
-            try {
-              const originalContent = fileContents.get(resolvedPath) ?? null;
-              options.fileUndoManager.snapshot({
-                path: resolvedPath,
-                beforeContent: originalContent,
-                afterContent: newContent,
-                tool: 'edit',
-              });
-            } catch {
-              // Non-fatal
-            }
-          }
-          // Track for /diff session change view
-          recordChange(resolvedPath);
-        } catch (err) {
-          const msg = `Write failed for '${resolvedPath}': ${err instanceof Error ? err.message : String(err)}`;
-          // Mark all results for this path as failed
-          for (const res of results) {
-            if (res.path === r.path) {
-              res.success = false;
-              res.error = msg;
-            }
-          }
-        }
+      if (input.notebook_operations) {
+        return await executeNotebookEdit(input, env);
       }
-    }
-
-    const anySuccess = results.some((r) => r.success);
-
-    // Dependency-aware import graph tracing: after writing files, find affected
-    // dependents and surface broken imports immediately via typecheck.
-    let importGraphWarning: string | undefined;
-    if (!dryRun && anySuccess) {
-      try {
-        const graph = ImportGraph.getInstance();
-        graph.markDirty();
-        await graph.build(cwd);
-
-        // Collect all paths that were written
-        const editedAbsPaths = [...writtenPaths];
-
-        // Find dependents across all edited files (union, deduped)
-        const affectedSet = new Set<string>();
-        for (const edited of editedAbsPaths) {
-          for (const dep of graph.findTransitiveDependents(edited)) {
-            affectedSet.add(dep);
-          }
-        }
-        // Remove files that were just edited (they're already validated)
-        for (const edited of editedAbsPaths) {
-          affectedSet.delete(edited);
-        }
-
-        if (affectedSet.size > 0) {
-          // Run tsc targeting only the affected files to detect broken imports
-          const affectedList = Array.from(affectedSet);
-          const proc = Bun.spawn(
-            ['/bin/sh', '-c', `npx tsc --noEmit ${affectedList.join(' ')}`],
-            { cwd, stdout: 'pipe', stderr: 'pipe' },
-          );
-          const [exitCode, stdoutText, stderrText] = await Promise.all([
-            proc.exited,
-            new Response(proc.stdout).text(),
-            new Response(proc.stderr).text(),
-          ]);
-          if (exitCode !== 0) {
-            const relAffected = affectedList.map((f) => relative(cwd, f));
-            const outputLines = (stderrText + '\n' + stdoutText)
-              .split('\n')
-              .filter((line) => relAffected.some((rel) => line.includes(rel)));
-            if (outputLines.length > 0) {
-              importGraphWarning =
-                `\n⚠ Import graph: ${affectedSet.size} transitive dependent(s) affected by this edit — type errors detected in downstream files:\n` +
-                outputLines.join('\n');
-            } else {
-              importGraphWarning =
-                `\n⚠ Import graph: ${affectedSet.size} transitive dependent(s) affected. tsc reported errors outside the affected set — check unrelated files.`;
-            }
-          }
-          // else: affected dependents type-check clean — no warning needed
-        }
-      } catch (err) {
-        logger.warn('[import-graph] Import graph tracing failed', { error: err instanceof Error ? err.message : String(err) });
-      }
-    }
-
-    // Run validate.after (only if edits were actually written to disk)
-    if (!dryRun && anySuccess && validateAfter.length > 0) {
-      const failure = await runValidators(validateAfter, cwd);
-      if (failure) {
-        // Try auto-heal on each written file before reporting failure
-        let healed = false;
-        const failureMessages = [formatValidatorFailure(failure)];
-        for (const [resolvedPath, originalContent] of fileContents) {
-          const newContent = workingContents.get(resolvedPath);
-          if (newContent === undefined || newContent === originalContent) continue;
-          const healResult = await autoHealer.heal(resolvedPath, newContent, failureMessages);
-          if (healResult.healed) {
-            try {
-              writeFileSync(resolvedPath, healResult.content, 'utf-8');
-              fileCache.update(resolvedPath, healResult.content);
-              healed = true;
-            } catch {
-              // Best-effort heal write
-            }
-          }
-        }
-        if (healed) {
-          // Re-run validators after heal
-          const healFailure = await runValidators(validateAfter, cwd);
-          if (!healFailure) {
-            // Healed successfully — report as success
-            return { success: true, output: formatOutput(results, outputFormat, dryRun) };
-          }
-        }
-        // Rollback in atomic mode: restore original file contents
-        if (transactionMode === 'atomic') {
-          for (const [resolvedPath, originalContent] of fileContents) {
-            try {
-              writeFileSync(resolvedPath, originalContent, 'utf-8');
-              fileCache.update(resolvedPath, originalContent);
-            } catch {
-              // Best-effort rollback
-            }
-          }
-        }
-        return {
-          success: false,
-          error: `Post-edit validation failed${transactionMode === 'atomic' ? ' — edits rolled back' : ''}. ${formatValidatorFailure(failure)}`,
-        };
-      }
-    }
-
-    const output = formatOutput(results, outputFormat, dryRun) + (importGraphWarning ?? '');
-
-    return {
-      success: anySuccess,
-      output,
-    };
+      return await executeTextEdits(input, env);
     } catch (err) {
       return { success: false, error: `Unexpected error: ${err instanceof Error ? err.message : String(err)}` };
     }

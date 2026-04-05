@@ -3,7 +3,7 @@
  * subagents, WRFC chain agents, and orchestrator agents.
  */
 
-/** States from the agent lifecycle state machine (v3 §4.5). */
+/** States for the agent lifecycle machine. */
 export type AgentLifecycleState =
   | 'spawning'
   | 'running'

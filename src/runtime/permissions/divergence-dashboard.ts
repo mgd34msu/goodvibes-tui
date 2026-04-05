@@ -1,5 +1,5 @@
 /**
- * GC-PERM-009 — Divergence Dashboard and Enforcement Gate.
+ * Divergence dashboard and enforcement gate.
  *
  * Wraps a `PermissionSimulator` to provide:
  *   - Trend history: periodic snapshots of divergence rates bucketed by time.
@@ -275,7 +275,7 @@ export class DivergenceDashboard {
    * transitions externally.
    *
    * Throws if an attempt is made to set `enforce` mode while the gate is
-   * `blocked`. This is the primary enforcement mechanism for GC-PERM-009.
+   * `blocked`. This is the primary enforcement mechanism for the divergence gate.
    *
    * @throws {DivergenceGateError} when attempting to enable enforce mode
    *   while divergence exceeds the configured threshold.

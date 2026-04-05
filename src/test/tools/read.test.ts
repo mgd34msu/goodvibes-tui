@@ -666,14 +666,21 @@ describe('ReadTool', () => {
       const rel = absPath.slice(PROJECT_ROOT.length + 1);
       const r = await exec(tool, { files: [{ path: rel }] });
       expect(r.success).toBe(true);
-      const parsed = (r as { parsed: { files: Array<Record<string, unknown>> } }).parsed;
+      const parsed = (r as {
+        parsed: {
+          files: Array<Record<string, unknown>>;
+          images: Array<{ path: string; base64: string; mediaType: string }>;
+        };
+      }).parsed;
       const f = parsed.files[0];
       expect(f.image).toBe(true);
-      expect(f.binary).toBe(false);
+      expect(f.binary).toBeUndefined();
       expect(f.mediaType).toBe('image/png');
       expect(typeof f.content).toBe('string');
-      // content should be valid base64
-      expect(() => Buffer.from(f.content as string, 'base64')).not.toThrow();
+      expect(parsed.images).toHaveLength(1);
+      expect(parsed.images[0].path).toBe(rel);
+      expect(parsed.images[0].mediaType).toBe('image/png');
+      expect(() => Buffer.from(parsed.images[0].base64, 'base64')).not.toThrow();
     });
 
     test('reads a JPEG file and sets mediaType=image/jpeg', async () => {
@@ -706,12 +713,20 @@ describe('ReadTool', () => {
       const svgContent = '<svg xmlns="http://www.w3.org/2000/svg"><circle r="5"/></svg>';
       const rel = writeRelative(tmpDir, 'test.svg', svgContent);
       const r = await exec(tool, { files: [{ path: rel }] });
-      const parsed = (r as { parsed: { files: Array<Record<string, unknown>> } }).parsed;
+      const parsed = (r as {
+        parsed: {
+          files: Array<Record<string, unknown>>;
+          images: Array<{ path: string; base64: string; mediaType: string }>;
+        };
+      }).parsed;
       const f = parsed.files[0];
       expect(f.image).toBe(true);
       expect(f.mediaType).toBe('image/svg+xml');
+      expect(parsed.images).toHaveLength(1);
+      expect(parsed.images[0].path).toBe(rel);
+      expect(parsed.images[0].mediaType).toBe('image/svg+xml');
       // Decoded base64 should equal the original SVG content
-      expect(Buffer.from(f.content as string, 'base64').toString('utf-8')).toBe(svgContent);
+      expect(Buffer.from(parsed.images[0].base64, 'base64').toString('utf-8')).toBe(svgContent);
     });
 
     test('image files are counted as files_read (not binary) in summary', async () => {

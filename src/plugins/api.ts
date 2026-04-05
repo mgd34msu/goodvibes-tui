@@ -1,8 +1,8 @@
-import type { EventBus, EventMap } from '../core/event-bus.ts';
 import type { CommandRegistry, SlashCommand } from '../input/command-registry.ts';
 import type { ProviderRegistry } from '../providers/registry.ts';
 import type { ToolRegistry } from '../tools/registry.ts';
 import type { ToolDefinition } from '../types/tools.ts';
+import type { RuntimeEventBus, AnyRuntimeEvent, RuntimeEventPayload } from '../runtime/events/index.ts';
 import { logger } from '../utils/logger.ts';
 
 /**
@@ -60,10 +60,10 @@ export interface PluginAPI {
     handler: PluginToolHandler,
   ): void;
 
-  /** Subscribe to an EventBus event. Returns an unsubscribe function. */
-  onEvent<K extends keyof EventMap>(
+  /** Subscribe to a typed runtime event. Returns an unsubscribe function. */
+  onEvent<K extends AnyRuntimeEvent['type']>(
     eventName: K,
-    handler: EventMap[K] extends void ? () => void : (data: EventMap[K]) => void,
+    handler: (payload: RuntimeEventPayload<K>) => void,
   ): () => void;
 
   /** Read a plugin-specific config value from the plugin's stored settings. */
@@ -79,7 +79,7 @@ export interface PluginAPI {
  */
 export interface PluginAPIContext {
   pluginName: string;
-  eventBus: EventBus;
+  runtimeBus: RuntimeEventBus;
   commandRegistry: CommandRegistry;
   providerRegistry: ProviderRegistry;
   toolRegistry: ToolRegistry;
@@ -168,8 +168,10 @@ export function createPluginAPI(ctx: PluginAPIContext): PluginAPI {
     },
 
     onEvent(eventName, handler) {
-      type H = EventMap[typeof eventName] extends void ? () => void : (data: EventMap[typeof eventName]) => void;
-      const unsub = ctx.eventBus.on(eventName, handler as H);
+      const unsub = ctx.runtimeBus.on(
+        eventName,
+        (envelope) => handler(envelope.payload as RuntimeEventPayload<typeof eventName>),
+      );
       ctx.cleanup.push(unsub);
       return unsub;
     },

@@ -7,8 +7,15 @@
  * pointing at fixture files written to /tmp.
  */
 import { describe, test, expect, beforeEach, afterEach, mock } from 'bun:test';
-import { mkdirSync, rmSync, writeFileSync } from 'fs';
+import { existsSync, mkdirSync, rmSync, writeFileSync } from 'fs';
 import { join } from 'path';
+import { RuntimeEventBus, createEventEnvelope } from '../../runtime/events/index.ts';
+import type { SessionEvent } from '../../runtime/events/index.ts';
+import type { CommandRegistry, SlashCommand } from '../../input/command-registry.ts';
+import type { ProviderRegistry } from '../../providers/registry.ts';
+import type { ToolRegistry } from '../../tools/registry.ts';
+import type { LoadedPlugin, PluginLoaderDeps } from '../../plugins/loader.ts';
+import type { PluginAPIContext } from '../../plugins/api.ts';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -35,10 +42,36 @@ function makeEntry(pluginDir: string, code: string, filename = 'index.ts') {
 
 // ─── Minimal fake registries ──────────────────────────────────────────────────
 
-function makeFakeCommandRegistry() {
+type FakeCommandRegistry = Pick<CommandRegistry, 'register' | 'unregister'> & {
+  _commands: string[];
+};
+
+type FakeToolRegistry = Pick<ToolRegistry, 'has' | 'register'> & {
+  _tools: Map<string, unknown>;
+};
+
+type FakeProviderRegistry = Pick<ProviderRegistry, 'register'> & {
+  _providers: unknown[];
+};
+
+type PluginManagerTestAccess = {
+  state: {
+    enabled: Record<string, boolean>;
+    config: Record<string, Record<string, unknown>>;
+    trust: Record<string, unknown>;
+    quarantine: Record<string, unknown>;
+  };
+  enable(name: string): Promise<{ ok: boolean; error?: string }>;
+  disable(name: string): Promise<{ ok: boolean; error?: string }>;
+  reload(): Promise<{ reloaded: number; failed: number }>;
+  isEnabled(name: string): boolean;
+  getPluginConfig(name: string): Record<string, unknown>;
+};
+
+function makeFakeCommandRegistry(): FakeCommandRegistry {
   const commands: string[] = [];
   return {
-    register: (cmd: { name: string }) => { commands.push(cmd.name); },
+    register: (cmd: SlashCommand) => { commands.push(cmd.name); },
     unregister: (name: string) => {
       const i = commands.indexOf(name);
       if (i >= 0) commands.splice(i, 1);
@@ -47,7 +80,7 @@ function makeFakeCommandRegistry() {
   };
 }
 
-function makeFakeToolRegistry() {
+function makeFakeToolRegistry(): FakeToolRegistry {
   const tools = new Map<string, unknown>();
   return {
     has: (name: string) => tools.has(name),
@@ -58,7 +91,7 @@ function makeFakeToolRegistry() {
   };
 }
 
-function makeFakeProviderRegistry() {
+function makeFakeProviderRegistry(): FakeProviderRegistry {
   const providers: unknown[] = [];
   return {
     register: (p: unknown) => { providers.push(p); },
@@ -66,34 +99,35 @@ function makeFakeProviderRegistry() {
   };
 }
 
-function makeFakeEventBus() {
-  const subs = new Map<string, Array<(...args: unknown[]) => void>>();
-  return {
-    on: (event: string, handler: (...args: unknown[]) => void) => {
-      if (!subs.has(event)) subs.set(event, []);
-      subs.get(event)!.push(handler);
-      return () => {
-        const list = subs.get(event) ?? [];
-        const i = list.indexOf(handler);
-        if (i >= 0) list.splice(i, 1);
-      };
-    },
-    emit: (event: string, ...args: unknown[]) => {
-      for (const handler of subs.get(event) ?? []) handler(...args);
-    },
-    _subs: subs,
-  };
+function makeFakeRuntimeBus() {
+  return new RuntimeEventBus();
 }
 
-function makeFakeDeps() {
+function makeFakeDeps(): PluginLoaderDeps {
   return {
-    eventBus: makeFakeEventBus() as any,
-    commandRegistry: makeFakeCommandRegistry() as any,
-    providerRegistry: makeFakeProviderRegistry() as any,
-    toolRegistry: makeFakeToolRegistry() as any,
+    runtimeBus: makeFakeRuntimeBus(),
+    commandRegistry: makeFakeCommandRegistry() as unknown as CommandRegistry,
+    providerRegistry: makeFakeProviderRegistry() as unknown as ProviderRegistry,
+    toolRegistry: makeFakeToolRegistry() as unknown as ToolRegistry,
     getPluginConfig: (_name: string) => ({}),
     isEnabled: (_name: string) => true,
   };
+}
+
+function createLoadedPlugin(overrides: Partial<LoadedPlugin> = {}): LoadedPlugin {
+  return {
+    manifest: { name: 'test', version: '1.0.0', description: 'test' },
+    pluginDir: '/tmp/test',
+    active: true,
+    cleanup: [],
+    ...overrides,
+  };
+}
+
+function getPluginManagerTestAccess(
+  managerCtor: typeof import('../../plugins/manager.ts').PluginManager,
+): PluginManagerTestAccess {
+  return managerCtor.getInstance() as unknown as PluginManagerTestAccess;
 }
 
 // ─── discoverPlugins ──────────────────────────────────────────────────────────
@@ -115,10 +149,20 @@ describe('discoverPlugins', () => {
   });
 
   test('skips directories without manifest.json', async () => {
-    // We create a temp plugin dir structure manually and test discoverPlugins
-    // by verifying its manifest validation logic — tested via loadPlugin below.
-    // This is an integration concern covered in the loadPlugin tests.
-    expect(true).toBe(true); // placeholder — see loadPlugin tests
+    const { discoverPlugins, PLUGINS_DIR } = await import('../../plugins/loader.ts');
+    const pluginDir = join(PLUGINS_DIR, `missing-manifest-${process.pid}-${Date.now()}`);
+    const hadPluginsDir = existsSync(PLUGINS_DIR);
+    mkdirSync(pluginDir, { recursive: true });
+
+    try {
+      const result = discoverPlugins();
+      expect(result.some((plugin) => plugin.pluginDir === pluginDir)).toBe(false);
+    } finally {
+      rmSync(pluginDir, { recursive: true, force: true });
+      if (!hadPluginsDir) {
+        rmSync(PLUGINS_DIR, { recursive: true, force: true });
+      }
+    }
   });
 });
 
@@ -258,10 +302,7 @@ describe('unloadPlugin', () => {
     let cleanup1Called = false;
     let cleanup2Called = false;
 
-    const plugin = {
-      manifest: { name: 'test', version: '1.0.0', description: 'test' },
-      pluginDir: '/tmp/test',
-      active: true,
+    const plugin = createLoadedPlugin({
       cleanup: [
         () => { cleanup1Called = true; },
         () => { cleanup2Called = true; },
@@ -270,9 +311,9 @@ describe('unloadPlugin', () => {
         init: async () => {},
         deactivate: async () => { deactivateCalled = true; },
       },
-    };
+    });
 
-    await unloadPlugin(plugin as any);
+    await unloadPlugin(plugin);
 
     expect(deactivateCalled).toBe(true);
     expect(cleanup1Called).toBe(true);
@@ -285,18 +326,16 @@ describe('unloadPlugin', () => {
     const { unloadPlugin } = await import('../../plugins/loader.ts');
 
     let deactivateCalled = false;
-    const plugin = {
-      manifest: { name: 'test', version: '1.0.0', description: 'test' },
-      pluginDir: '/tmp/test',
+    const plugin = createLoadedPlugin({
       active: false,
       cleanup: [],
       entry: {
         init: async () => {},
         deactivate: async () => { deactivateCalled = true; },
       },
-    };
+    });
 
-    await unloadPlugin(plugin as any);
+    await unloadPlugin(plugin);
     expect(deactivateCalled).toBe(false);
   });
 
@@ -304,18 +343,15 @@ describe('unloadPlugin', () => {
     const { unloadPlugin } = await import('../../plugins/loader.ts');
 
     let cleanupCalled = false;
-    const plugin = {
-      manifest: { name: 'test', version: '1.0.0', description: 'test' },
-      pluginDir: '/tmp/test',
-      active: true,
+    const plugin = createLoadedPlugin({
       cleanup: [() => { cleanupCalled = true; }],
       entry: {
         init: async () => {},
         deactivate: async () => { throw new Error('deactivate failed'); },
       },
-    };
+    });
 
-    await unloadPlugin(plugin as any);
+    await unloadPlugin(plugin);
     expect(cleanupCalled).toBe(true);
     expect(plugin.active).toBe(false);
   });
@@ -324,15 +360,12 @@ describe('unloadPlugin', () => {
     const { unloadPlugin } = await import('../../plugins/loader.ts');
 
     let unsubCalled = false;
-    const plugin = {
-      manifest: { name: 'test', version: '1.0.0', description: 'test' },
-      pluginDir: '/tmp/test',
-      active: true,
+    const plugin = createLoadedPlugin({
       cleanup: [() => { unsubCalled = true; }],
       entry: { init: async () => {} },
-    };
+    });
 
-    await unloadPlugin(plugin as any);
+    await unloadPlugin(plugin);
     expect(unsubCalled).toBe(true);
   });
 
@@ -340,18 +373,15 @@ describe('unloadPlugin', () => {
     const { unloadPlugin } = await import('../../plugins/loader.ts');
     const cmdReg = makeFakeCommandRegistry();
     // Simulate a registered command
-    cmdReg.register({ name: 'plugin-test-cmd' });
+    cmdReg.register({ name: 'plugin-test-cmd', description: 'test', handler: async () => {} });
     expect(cmdReg._commands).toContain('plugin-test-cmd');
 
-    const plugin = {
-      manifest: { name: 'test', version: '1.0.0', description: 'test' },
-      pluginDir: '/tmp/test',
-      active: true,
+    const plugin = createLoadedPlugin({
       cleanup: [() => cmdReg.unregister('plugin-test-cmd')],
       entry: { init: async () => {} },
-    };
+    });
 
-    await unloadPlugin(plugin as any);
+    await unloadPlugin(plugin);
     expect(cmdReg._commands).not.toContain('plugin-test-cmd');
   });
 });
@@ -363,12 +393,12 @@ describe('createPluginAPI', () => {
     const { createPluginAPI } = await import('../../plugins/api.ts');
     const cmdReg = makeFakeCommandRegistry();
     const cleanup: Array<() => void> = [];
-    const ctx = {
+    const ctx: PluginAPIContext = {
       pluginName: 'my-plugin',
-      eventBus: makeFakeEventBus() as any,
-      commandRegistry: cmdReg as any,
-      providerRegistry: makeFakeProviderRegistry() as any,
-      toolRegistry: makeFakeToolRegistry() as any,
+      runtimeBus: makeFakeRuntimeBus(),
+      commandRegistry: cmdReg as unknown as CommandRegistry,
+      providerRegistry: makeFakeProviderRegistry() as unknown as ProviderRegistry,
+      toolRegistry: makeFakeToolRegistry() as unknown as ToolRegistry,
       pluginConfig: {},
       cleanup,
     };
@@ -387,12 +417,12 @@ describe('createPluginAPI', () => {
     const { createPluginAPI } = await import('../../plugins/api.ts');
     const toolReg = makeFakeToolRegistry();
     const cleanup: Array<() => void> = [];
-    const ctx = {
+    const ctx: PluginAPIContext = {
       pluginName: 'my-plugin',
-      eventBus: makeFakeEventBus() as any,
-      commandRegistry: makeFakeCommandRegistry() as any,
-      providerRegistry: makeFakeProviderRegistry() as any,
-      toolRegistry: toolReg as any,
+      runtimeBus: makeFakeRuntimeBus(),
+      commandRegistry: makeFakeCommandRegistry() as unknown as CommandRegistry,
+      providerRegistry: makeFakeProviderRegistry() as unknown as ProviderRegistry,
+      toolRegistry: toolReg as unknown as ToolRegistry,
       pluginConfig: {},
       cleanup,
     };
@@ -407,12 +437,12 @@ describe('createPluginAPI', () => {
   test('registerTool skips duplicate registrations', async () => {
     const { createPluginAPI } = await import('../../plugins/api.ts');
     const toolReg = makeFakeToolRegistry();
-    const ctx = {
+    const ctx: PluginAPIContext = {
       pluginName: 'my-plugin',
-      eventBus: makeFakeEventBus() as any,
-      commandRegistry: makeFakeCommandRegistry() as any,
-      providerRegistry: makeFakeProviderRegistry() as any,
-      toolRegistry: toolReg as any,
+      runtimeBus: makeFakeRuntimeBus(),
+      commandRegistry: makeFakeCommandRegistry() as unknown as CommandRegistry,
+      providerRegistry: makeFakeProviderRegistry() as unknown as ProviderRegistry,
+      toolRegistry: toolReg as unknown as ToolRegistry,
       pluginConfig: {},
       cleanup: [],
     };
@@ -424,28 +454,42 @@ describe('createPluginAPI', () => {
 
   test('onEvent subscribes and returns unsubscribe, cleanup tracks it', async () => {
     const { createPluginAPI } = await import('../../plugins/api.ts');
-    const bus = makeFakeEventBus();
+    const bus = makeFakeRuntimeBus();
     const cleanup: Array<() => void> = [];
-    const ctx = {
+    const ctx: PluginAPIContext = {
       pluginName: 'my-plugin',
-      eventBus: bus as any,
-      commandRegistry: makeFakeCommandRegistry() as any,
-      providerRegistry: makeFakeProviderRegistry() as any,
-      toolRegistry: makeFakeToolRegistry() as any,
+      runtimeBus: bus,
+      commandRegistry: makeFakeCommandRegistry() as unknown as CommandRegistry,
+      providerRegistry: makeFakeProviderRegistry() as unknown as ProviderRegistry,
+      toolRegistry: makeFakeToolRegistry() as unknown as ToolRegistry,
       pluginConfig: {},
       cleanup,
     };
     const api = createPluginAPI(ctx);
     let received = false;
-    const unsub = api.onEvent('session:started' as any, () => { received = true; });
+    const unsub = api.onEvent('SESSION_STARTED', () => { received = true; });
 
-    bus.emit('session:started');
+    const sessionStartedEnvelope = createEventEnvelope<'SESSION_STARTED', SessionEvent>(
+      'SESSION_STARTED',
+      {
+      type: 'SESSION_STARTED',
+      sessionId: 'session-1',
+      profileId: 'default',
+      workingDir: process.cwd(),
+    },
+      {
+      sessionId: 'session-1',
+      traceId: 'plugin-test',
+      source: 'plugin-system.test',
+      },
+    );
+    bus.emit('session', sessionStartedEnvelope);
     expect(received).toBe(true);
 
     // Unsubscribe via returned function
     unsub();
     received = false;
-    bus.emit('session:started');
+    bus.emit('session', sessionStartedEnvelope);
     expect(received).toBe(false);
 
     // cleanup also tracks the unsub
@@ -454,12 +498,12 @@ describe('createPluginAPI', () => {
 
   test('getConfig reads from pluginConfig', async () => {
     const { createPluginAPI } = await import('../../plugins/api.ts');
-    const ctx = {
+    const ctx: PluginAPIContext = {
       pluginName: 'my-plugin',
-      eventBus: makeFakeEventBus() as any,
-      commandRegistry: makeFakeCommandRegistry() as any,
-      providerRegistry: makeFakeProviderRegistry() as any,
-      toolRegistry: makeFakeToolRegistry() as any,
+      runtimeBus: makeFakeRuntimeBus(),
+      commandRegistry: makeFakeCommandRegistry() as unknown as CommandRegistry,
+      providerRegistry: makeFakeProviderRegistry() as unknown as ProviderRegistry,
+      toolRegistry: makeFakeToolRegistry() as unknown as ToolRegistry,
       pluginConfig: { apiKey: 'abc123', timeout: 30 },
       cleanup: [],
     };
@@ -471,12 +515,12 @@ describe('createPluginAPI', () => {
 
   test('registerProvider returns Promise', async () => {
     const { createPluginAPI } = await import('../../plugins/api.ts');
-    const ctx = {
+    const ctx: PluginAPIContext = {
       pluginName: 'my-plugin',
-      eventBus: makeFakeEventBus() as any,
-      commandRegistry: makeFakeCommandRegistry() as any,
-      providerRegistry: makeFakeProviderRegistry() as any,
-      toolRegistry: makeFakeToolRegistry() as any,
+      runtimeBus: makeFakeRuntimeBus(),
+      commandRegistry: makeFakeCommandRegistry() as unknown as CommandRegistry,
+      providerRegistry: makeFakeProviderRegistry() as unknown as ProviderRegistry,
+      toolRegistry: makeFakeToolRegistry() as unknown as ToolRegistry,
       pluginConfig: {},
       cleanup: [],
     };
@@ -499,7 +543,7 @@ describe('PluginManager', () => {
     const { PluginManager } = await import('../../plugins/manager.ts');
     // Use a fresh instance by bypassing singleton for testability
     // The singleton approach means we test the singleton directly.
-    const manager = (PluginManager as any).getInstance() as any;
+    const manager = getPluginManagerTestAccess(PluginManager);
     const result = await manager.enable('nonexistent-plugin-xyz');
     expect(result.ok).toBe(false);
     expect(result.error).toContain('not found');
@@ -507,7 +551,7 @@ describe('PluginManager', () => {
 
   test('disable returns error for not-enabled plugin', async () => {
     const { PluginManager } = await import('../../plugins/manager.ts');
-    const manager = (PluginManager as any).getInstance() as any;
+    const manager = getPluginManagerTestAccess(PluginManager);
     const result = await manager.disable('nonexistent-plugin-xyz');
     expect(result.ok).toBe(false);
     expect(result.error).toContain('not enabled');
@@ -515,9 +559,9 @@ describe('PluginManager', () => {
 
   test('enable returns error when already enabled', async () => {
     const { PluginManager } = await import('../../plugins/manager.ts');
-    const manager = (PluginManager as any).getInstance() as any;
+    const manager = getPluginManagerTestAccess(PluginManager);
     // Manually set state to simulate an enabled plugin
-    manager.state = manager.state ?? { enabled: {}, config: {} };
+    manager.state = manager.state ?? { enabled: {}, config: {}, trust: {}, quarantine: {} };
     manager.state.enabled['already-on'] = true;
     const result = await manager.enable('already-on');
     expect(result.ok).toBe(false);
@@ -528,22 +572,22 @@ describe('PluginManager', () => {
 
   test('isEnabled returns false for unknown plugin', async () => {
     const { PluginManager } = await import('../../plugins/manager.ts');
-    const manager = (PluginManager as any).getInstance() as any;
+    const manager = getPluginManagerTestAccess(PluginManager);
     expect(manager.isEnabled('totally-unknown-xyz')).toBe(false);
   });
 
   test('getPluginConfig returns empty object for unknown plugin', async () => {
     const { PluginManager } = await import('../../plugins/manager.ts');
-    const manager = (PluginManager as any).getInstance() as any;
+    const manager = getPluginManagerTestAccess(PluginManager);
     expect(manager.getPluginConfig('unknown')).toEqual({});
   });
 
   test('reload returns reloaded/failed counts', async () => {
     const { PluginManager } = await import('../../plugins/manager.ts');
-    const manager = (PluginManager as any).getInstance() as any;
+    const manager = getPluginManagerTestAccess(PluginManager);
     // With no enabled plugins and no deps, reload should succeed vacuously
     const prevEnabled = manager.state?.enabled ?? {};
-    manager.state = { enabled: {}, config: {} };
+    manager.state = { enabled: {}, config: {}, trust: {}, quarantine: {} };
     const result = await manager.reload();
     expect(typeof result.reloaded).toBe('number');
     expect(typeof result.failed).toBe('number');

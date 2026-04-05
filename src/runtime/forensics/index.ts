@@ -8,7 +8,16 @@
  * 4. Pass the registry to ForensicsPanel (diagnostic provider) and the
  *    /forensics command handler via CommandContext.forensicsRegistry.
  */
-export type { FailureReport, FailureClass, PhaseTimingEntry, CausalChainEntry, ForensicsJumpLink } from './types.ts';
+export type {
+  FailureReport,
+  FailureClass,
+  PhaseTimingEntry,
+  CausalChainEntry,
+  ForensicsJumpLink,
+  ForensicsBundle,
+  ForensicsReplayEvidence,
+  ForensicsEvidenceSummary,
+} from './types.ts';
 export { classifyFailure, summariseFailure } from './classifier.ts';
 export { ForensicsRegistry, DEFAULT_REGISTRY_LIMIT } from './registry.ts';
 export { ForensicsCollector } from './collector.ts';

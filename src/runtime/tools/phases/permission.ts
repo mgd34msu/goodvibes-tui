@@ -1,6 +1,10 @@
 import type { Tool, ToolCall } from '../../../types/tools.ts';
 import type { ToolRuntimeContext } from '../context.ts';
 import type { PhaseResult, ToolExecutionRecord } from '../types.ts';
+import {
+  emitPermissionDecision,
+  emitPermissionRequested,
+} from '../../emitters/permissions.ts';
 
 /**
  * permission — Phase 3 of the tool execution pipeline.
@@ -23,7 +27,33 @@ export async function permissionPhase(
   const effectiveArgs = record._updatedArgs ?? call.arguments;
 
   try {
+    if (context.runtimeBus) {
+      emitPermissionRequested(context.runtimeBus, {
+        sessionId: context.ids.sessionId,
+        traceId: context.ids.traceId,
+        source: 'permission-phase',
+      }, {
+        callId: call.id,
+        tool: call.name,
+        args: effectiveArgs,
+        category: context.permissionManager.getCategory(call.name),
+      });
+    }
+
     const approved = await context.permissionManager.check(call.name, effectiveArgs);
+
+    if (context.runtimeBus) {
+      emitPermissionDecision(context.runtimeBus, {
+        sessionId: context.ids.sessionId,
+        traceId: context.ids.traceId,
+        source: 'permission-phase',
+      }, {
+        callId: call.id,
+        tool: call.name,
+        approved,
+        source: 'permission-manager',
+      });
+    }
 
     if (!approved) {
       return {

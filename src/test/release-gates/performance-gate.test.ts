@@ -19,6 +19,7 @@ import {
 import { SloCollector } from '../../runtime/perf/slo-collector.ts';
 import { RuntimeEventBus } from '../../runtime/events/index.ts';
 import { FEATURE_FLAGS } from '../../runtime/feature-flags/flags.ts';
+import type { ProviderMessage } from '../../providers/interface.ts';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -29,25 +30,50 @@ function findBudget(metric: string) {
 }
 
 function makeCompactionInput(messageCount: number, tokenCount: number) {
-  const messages = Array.from({ length: messageCount }, (_, i) => ({
-    role: i % 2 === 0 ? 'user' : 'assistant' as const,
-    content: [{ type: 'text' as const, text: `Message ${i}: Some meaningful content about the task being performed.` }],
-  }));
+  const messages: ProviderMessage[] = [];
+  for (let i = 0; i < messageCount; i++) {
+    if (i % 2 === 0) {
+      messages.push({
+        role: 'user',
+        content: [{ type: 'text', text: `Message ${i}: Some meaningful content about the task being performed.` }],
+      });
+    } else {
+      messages.push({
+        role: 'assistant',
+        content: `Message ${i}: Some meaningful content about the task being performed.`,
+      });
+    }
+  }
   return {
+    sessionId: 'test-session',
     messages,
-    tokenCount,
+    tokensBefore: tokenCount,
+    contextWindow: 128_000,
     strategy: 'collapse' as const,
   };
 }
 
 function makeCompactionOutput(messageCount: number, tokenCount: number, includeHandoff = true) {
-  const messages = Array.from({ length: messageCount }, (_, i) => ({
-    role: i % 2 === 0 ? 'user' : 'assistant' as const,
-    content: [{ type: 'text' as const, text: includeHandoff && i === 0 ? '[Session compaction] Summary of prior work.' : `Msg ${i}` }],
-  }));
+  const messages: ProviderMessage[] = [];
+  for (let i = 0; i < messageCount; i++) {
+    if (i % 2 === 0) {
+      messages.push({
+        role: 'user',
+        content: [{ type: 'text', text: includeHandoff && i === 0 ? '[Session compaction] Summary of prior work.' : `Msg ${i}` }],
+      });
+    } else {
+      messages.push({
+        role: 'assistant',
+        content: includeHandoff && i === 0 ? '[Session compaction] Summary of prior work.' : `Msg ${i}`,
+      });
+    }
+  }
   return {
     messages,
-    tokenCount,
+    tokensAfter: tokenCount,
+    summary: includeHandoff ? 'Compacted with handoff summary.' : 'Compacted.',
+    durationMs: 12,
+    warnings: [],
     strategy: 'collapse' as const,
   };
 }
@@ -241,7 +267,7 @@ describe('performance gate: budget enforcement flag', () => {
   });
 
   test('compaction feature flags are declared', () => {
-    const compactionFlag = FEATURE_FLAGS.find(f => f.id === 'session-compaction-v2');
+    const compactionFlag = FEATURE_FLAGS.find(f => f.id === 'session-compaction');
     expect(compactionFlag).toBeDefined();
   });
 });

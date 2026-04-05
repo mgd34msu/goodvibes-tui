@@ -1,4 +1,4 @@
-import { readFileSync, writeFileSync, existsSync, mkdirSync, copyFileSync } from 'fs';
+import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'fs';
 import { join, dirname } from 'path';
 import { homedir } from 'os';
 import type { GoodVibesConfig, ConfigKey, ConfigValue, ConfigSetting } from './schema.ts';
@@ -6,6 +6,7 @@ import { DEFAULT_CONFIG, CONFIG_SCHEMA } from './schema.ts';
 import { ConfigError } from '../types/errors.ts';
 import { logger } from '../utils/logger.ts';
 import { getHookDispatcher } from '../hooks/index.ts';
+import type { HookEvent } from '../hooks/types.ts';
 
 /** Deep immutable type — prevents mutation of nested objects returned from getAll(). */
 type DeepReadonly<T> = {
@@ -19,20 +20,24 @@ export interface ConfigOverrides {
   autoApprove?: boolean;
   systemPromptFile?: string;
   workingDir?: string;
+  configDir?: string;
 }
 
-/** Auto-migrate: copy old path to new path if old exists and new doesn't. */
-function migrateIfNeeded(oldPath: string, newPath: string): void {
-  if (existsSync(oldPath) && !existsSync(newPath)) {
-    mkdirSync(dirname(newPath), { recursive: true });
-    try {
-      copyFileSync(oldPath, newPath);
-      logger.debug('Migrated config', { from: oldPath, to: newPath });
-    } catch (err: unknown) {
-      // Silently ignore EEXIST — newPath was created between check and copy
-      if ((err as NodeJS.ErrnoException).code !== 'EEXIST') throw err;
+const DEFAULT_CONFIG_SNAPSHOT = structuredClone(DEFAULT_CONFIG) as GoodVibesConfig;
+const PERMISSION_TOOL_KEYS = new Set(Object.keys(DEFAULT_CONFIG.permissions.tools));
+
+function cloneDefaultConfig(): GoodVibesConfig {
+  return structuredClone(DEFAULT_CONFIG_SNAPSHOT) as GoodVibesConfig;
+}
+
+function sanitizeConfigShape(config: GoodVibesConfig): GoodVibesConfig {
+  const sanitized = structuredClone(config) as GoodVibesConfig;
+  for (const key of Object.keys(sanitized.permissions.tools)) {
+    if (!PERMISSION_TOOL_KEYS.has(key)) {
+      delete (sanitized.permissions.tools as Record<string, unknown>)[key];
     }
   }
+  return sanitized;
 }
 
 /**
@@ -74,22 +79,17 @@ export class ConfigManager {
   }
 
   constructor(overrides?: ConfigOverrides) {
-    const base = ConfigManager.testConfigDir ?? join(homedir(), '.goodvibes', 'tui');
+    const configDirOverride = overrides?.configDir;
+    const base = configDirOverride ?? ConfigManager.testConfigDir ?? join(homedir(), '.goodvibes', 'tui');
     this.configPath = join(base, 'settings.json');
     const projectRoot = overrides?.workingDir ?? process.cwd();
     this.projectConfigPath = join(projectRoot, '.goodvibes', 'tui', 'settings.json');
-    this.config = deepMerge(DEFAULT_CONFIG, {}) as GoodVibesConfig;
-
-    // Auto-migrate from old path if needed (skip in test mode — test dir is fresh)
-    if (!ConfigManager.testConfigDir) {
-      migrateIfNeeded(
-        join(homedir(), '.config', 'goodvibes', 'config.json'),
-        this.configPath
-      );
-    }
+    this.config = cloneDefaultConfig();
 
     // Ensure shared config exists
-    ensureSharedConfig();
+    if (!configDirOverride) {
+      ensureSharedConfig();
+    }
 
     this.load();
 
@@ -110,21 +110,34 @@ export class ConfigManager {
     }
   }
 
+  private resolvePath(
+    key: ConfigKey,
+  ): { parent: Record<string, unknown>; field: string } {
+    const parts = key.split('.');
+    let cursor: unknown = this.config;
+
+    for (let i = 0; i < parts.length - 1; i++) {
+      const part = parts[i]!;
+      if (cursor == null || typeof cursor !== 'object' || !(part in (cursor as Record<string, unknown>))) {
+        throw new Error(`Invalid config path: section '${parts.slice(0, i + 1).join('.')}' does not exist`);
+      }
+      cursor = (cursor as Record<string, unknown>)[part];
+    }
+
+    if (cursor == null || typeof cursor !== 'object') {
+      throw new Error(`Invalid config path: section '${parts.slice(0, -1).join('.')}' does not exist`);
+    }
+
+    return {
+      parent: cursor as Record<string, unknown>,
+      field: parts[parts.length - 1]!,
+    };
+  }
+
   /** Get a config value by dot-path key. Supports 2-level (a.b) and 3-level (a.b.c) keys. */
   get<K extends ConfigKey>(key: K): ConfigValue<K> {
-    const parts = key.split('.');
-    if (parts.length === 3) {
-      const [section, subsection, field] = parts;
-      const sect = this.config[section as keyof GoodVibesConfig] as unknown as Record<string, Record<string, unknown>>;
-      // Intentional: the config schema guarantees all valid keys have values, so this
-      // path only triggers for dynamically constructed invalid keys (e.g., unknown subsections).
-      if (!sect?.[subsection]) return undefined as unknown as ConfigValue<K>;
-      return sect[subsection][field] as ConfigValue<K>;
-    }
-    const [category, field] = parts;
-    const cat = this.config[category as keyof GoodVibesConfig] as Record<string, unknown>;
-    if (cat == null) throw new Error(`Invalid config path: section '${category}' does not exist`);
-    return cat[field] as ConfigValue<K>;
+    const { parent, field } = this.resolvePath(key);
+    return parent[field] as ConfigValue<K>;
   }
 
   /** Set a config value by dot-path key and auto-save to disk. Supports 2-level and 3-level keys. */
@@ -137,21 +150,9 @@ export class ConfigManager {
       throw new ConfigError(`Invalid value for ${key}: "${String(value)}". Allowed: ${schema.enumValues.join(', ')}`);
     }
 
-    const parts = key.split('.');
-    if (parts.length === 3) {
-      const [section, subsection, field] = parts;
-      const sect = this.config[section as keyof GoodVibesConfig] as unknown as Record<string, Record<string, unknown>>;
-      if (!sect[subsection]) throw new Error(`Invalid config path: subsection '${section}.${subsection}' does not exist`);
-      const previousValue = sect[subsection][field];
-      sect[subsection][field] = value;
-      this.save();
-      this.emitConfigHook(key, previousValue, value);
-      return;
-    }
-    const [category, field] = parts;
-    const cat = this.config[category as keyof GoodVibesConfig] as Record<string, unknown>;
-    const previousValue = cat[field];
-    cat[field] = value;
+    const { parent, field } = this.resolvePath(key);
+    const previousValue = parent[field];
+    parent[field] = value;
     this.save();
     this.emitConfigHook(key, previousValue, value);
   }
@@ -162,16 +163,17 @@ export class ConfigManager {
    */
   private emitConfigHook(key: ConfigKey, previousValue: unknown, newValue: unknown): void {
     try {
+      const event: HookEvent = {
+        path: `Change:config:${key}`,
+        phase: 'Change',
+        category: 'config',
+        specific: key,
+        sessionId: '',
+        timestamp: Date.now(),
+        payload: { key, value: newValue, previousValue },
+      };
       getHookDispatcher()
-        .fire({
-          path: `Change:config:${key}` as any,
-          phase: 'Change' as any,
-          category: 'config' as any,
-          specific: key,
-          sessionId: '',
-          timestamp: Date.now(),
-          payload: { key, value: newValue, previousValue },
-        })
+        .fire(event)
         .catch(() => { /* ignore async errors */ });
     } catch {
       // Dispatcher not ready during startup — safe to ignore
@@ -235,15 +237,7 @@ export class ConfigManager {
         const raw = readFileSync(this.configPath, 'utf-8');
         const parsed = JSON.parse(raw) as Record<string, unknown>;
 
-        // Auto-migrate: detect old flat format (has top-level 'model' or 'provider' string keys)
-        if (typeof parsed.model === 'string' || typeof parsed.provider === 'string') {
-          const migrated = migrateOldConfig(parsed);
-          this.config = deepMerge(DEFAULT_CONFIG, migrated) as GoodVibesConfig;
-          // Save the migrated format
-          this.save();
-        } else {
-          this.config = deepMerge(DEFAULT_CONFIG, parsed) as GoodVibesConfig;
-        }
+        this.config = sanitizeConfigShape(deepMerge(cloneDefaultConfig(), parsed) as GoodVibesConfig);
       } catch (err) {
         logger.debug('Global config load failed (non-fatal, using defaults)', { error: String(err) });
       }
@@ -254,7 +248,7 @@ export class ConfigManager {
       try {
         const raw = readFileSync(this.projectConfigPath, 'utf-8');
         const parsed = JSON.parse(raw) as Record<string, unknown>;
-        this.config = deepMerge(this.config, parsed) as GoodVibesConfig;
+        this.config = sanitizeConfigShape(deepMerge(this.config, parsed) as GoodVibesConfig);
       } catch (err) {
         logger.debug('Project config load failed (non-fatal)', { error: String(err) });
       }
@@ -285,7 +279,7 @@ export class ConfigManager {
    */
   reset(key?: ConfigKey): void {
     if (key === undefined) {
-      this.config = deepMerge(DEFAULT_CONFIG, {}) as GoodVibesConfig;
+      this.config = cloneDefaultConfig();
     } else {
       const schema = CONFIG_SCHEMA.find(s => s.key === key);
       if (!schema) throw new ConfigError(`Unknown config key: ${key}`);
@@ -293,12 +287,12 @@ export class ConfigManager {
       if (parts.length === 3) {
         const [section, subsection, field] = parts;
         const sect = this.config[section as keyof GoodVibesConfig] as unknown as Record<string, Record<string, unknown>>;
-        const defaultSect = DEFAULT_CONFIG[section as keyof GoodVibesConfig] as unknown as Record<string, Record<string, unknown>>;
+        const defaultSect = DEFAULT_CONFIG_SNAPSHOT[section as keyof GoodVibesConfig] as unknown as Record<string, Record<string, unknown>>;
         sect[subsection][field] = defaultSect[subsection][field];
       } else {
         const [category, field] = parts;
         const cat = this.config[category as keyof GoodVibesConfig] as Record<string, unknown>;
-        const defaultCat = DEFAULT_CONFIG[category as keyof GoodVibesConfig] as Record<string, unknown>;
+        const defaultCat = DEFAULT_CONFIG_SNAPSHOT[category as keyof GoodVibesConfig] as Record<string, unknown>;
         cat[field] = defaultCat[field];
       }
     }
@@ -309,7 +303,9 @@ export class ConfigManager {
 /** Deep-merge source into target. Returns a new object. Source non-objects are ignored — target clone is returned.
  * Non-object source values will not overwrite object target values (type-safe merge). */
 function deepMerge(target: unknown, source: unknown): unknown {
-  const result: Record<string, unknown> = isObject(target) ? { ...target } : {};
+  const result: Record<string, unknown> = isObject(target)
+    ? structuredClone(target) as Record<string, unknown>
+    : {};
   if (!isObject(source)) return result;
   for (const key of Object.keys(source)) {
     const sv = source[key];
@@ -317,8 +313,9 @@ function deepMerge(target: unknown, source: unknown): unknown {
     if (isObject(sv) && isObject(tv)) {
       result[key] = deepMerge(tv, sv);
     } else if (sv !== undefined && !isObject(tv)) {
-      // Only overwrite non-object target values — never replace an object with a scalar
-      result[key] = sv;
+      // Only overwrite non-object target values — never replace an object with a scalar.
+      // Clone assigned values so config instances never share mutable references.
+      result[key] = structuredClone(sv);
     }
   }
   return result;
@@ -326,28 +323,4 @@ function deepMerge(target: unknown, source: unknown): unknown {
 
 function isObject(val: unknown): val is Record<string, unknown> {
   return val !== null && typeof val === 'object' && !Array.isArray(val);
-}
-
-/** Migrate old flat config format to nested GoodVibesConfig format. */
-function migrateOldConfig(flat: Record<string, unknown>): Partial<GoodVibesConfig> {
-  const result: Partial<GoodVibesConfig> = {};
-
-  const providerFields: Partial<GoodVibesConfig['provider']> = {};
-  if (typeof flat.model === 'string') providerFields.model = flat.model;
-  if (typeof flat.provider === 'string') providerFields.provider = flat.provider;
-  if (typeof flat.systemPrompt === 'string') {
-    // systemPrompt text doesn't map to systemPromptFile cleanly; skip it
-  }
-  if (Object.keys(providerFields).length > 0) {
-    // Safe: providerFields satisfies GoodVibesConfig['provider'] shape after migration validation above
-    result.provider = providerFields as GoodVibesConfig['provider'];
-  }
-
-  const behaviorFields: Partial<GoodVibesConfig['behavior']> = {};
-  if (typeof flat.autoApprove === 'boolean') behaviorFields.autoApprove = flat.autoApprove;
-  if (Object.keys(behaviorFields).length > 0) {
-    result.behavior = behaviorFields as GoodVibesConfig['behavior'];
-  }
-
-  return result;
 }

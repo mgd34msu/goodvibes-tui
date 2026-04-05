@@ -7,7 +7,7 @@
  * - Subscription registry showing active consumers with notification metadata
  *
  * This is a DATA PROVIDER — no UI rendering logic.
- * v3 Section 26 (Devtools / State Inspector).
+ * State inspector provider implementation.
  */
 import type {
   StateSnapshot,

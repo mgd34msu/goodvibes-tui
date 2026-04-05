@@ -1,13 +1,19 @@
-import type { EventBus } from '../core/event-bus.ts';
-import { config } from '../config/index.ts';
+import { getConfigSnapshot, isAutoApproveEnabled } from '../config/index.ts';
 import type { PermissionAction, PermissionsToolConfig } from '../config/schema.ts';
+import type { PermissionRequestHandler } from './prompt.ts';
 export type { PermissionMode } from '../config/schema.ts';
 
 export type PermissionCategory = 'read' | 'write' | 'execute' | 'delegate';
 
+type PermissionConfigSnapshot = ReturnType<typeof getConfigSnapshot>;
+
+export interface PermissionConfigReader {
+  isAutoApproveEnabled(): boolean;
+  getSnapshot(): PermissionConfigSnapshot;
+}
+
 /** Maps tool names to permission categories and config tool keys. */
 const TOOL_CATEGORIES: Record<string, PermissionCategory> = {
-  // read — new tool names
   read: 'read',
   find: 'read',
   fetch: 'read',
@@ -24,23 +30,11 @@ const TOOL_CATEGORIES: Record<string, PermissionCategory> = {
   agent: 'delegate',
   delegate: 'delegate',
   workflow: 'delegate',
-  // mcp — external server tools, treated as delegate category
   mcp: 'delegate',
-  // read — legacy tool names (backward compat)
-  file_read: 'read',
-  grep: 'read',
-  list_dir: 'read',
-  glob: 'read',
-  // write — legacy tool names (backward compat)
-  file_write: 'write',
-  file_edit: 'write',
-  // execute — legacy tool name (backward compat)
-  shell_exec: 'execute',
 };
 
 /** Maps tool names to their key in PermissionsToolConfig. */
 const TOOL_CONFIG_KEYS: Record<string, keyof PermissionsToolConfig> = {
-  // New tool names
   read: 'read',
   write: 'write',
   edit: 'edit',
@@ -55,14 +49,6 @@ const TOOL_CONFIG_KEYS: Record<string, keyof PermissionsToolConfig> = {
   registry: 'registry',
   delegate: 'delegate',
   mcp: 'mcp',
-  // Legacy tool names (backward compat)
-  file_read: 'file_read',
-  file_write: 'file_write',
-  file_edit: 'file_edit',
-  shell_exec: 'shell_exec',
-  grep: 'grep',
-  list_dir: 'list_dir',
-  glob: 'glob',
 };
 
 /**
@@ -73,12 +59,23 @@ const TOOL_CONFIG_KEYS: Record<string, keyof PermissionsToolConfig> = {
  *   2. mode='custom' -> check per-tool config action ('allow'/'prompt'/'deny')
  *   3. mode='prompt' (default) -> auto-approve reads, prompt for writes/execute/delegate
  *   4. Session approval cache hit -> use cached decision
- *   5. Emit 'permission:request' event and block until user responds
+ *   5. Ask the shell-owned permission controller and block until user responds
  */
 export class PermissionManager {
   private sessionApprovals = new Map<string, boolean>();
+  private readonly requestPermission: PermissionRequestHandler;
+  private readonly configReader: PermissionConfigReader;
 
-  constructor(private eventBus: EventBus) {}
+  constructor(
+    requestPermission: PermissionRequestHandler = async () => ({ approved: false, remember: false }),
+    configReader: PermissionConfigReader = {
+      isAutoApproveEnabled,
+      getSnapshot: getConfigSnapshot,
+    },
+  ) {
+    this.requestPermission = requestPermission;
+    this.configReader = configReader;
+  }
 
   /**
    * check - Returns a Promise that resolves to true (approved) or false (denied).
@@ -86,9 +83,9 @@ export class PermissionManager {
    */
   async check(toolName: string, args: Record<string, unknown>): Promise<boolean> {
     // 1. Auto-approve when --no-worries-just-vibes is active
-    if (config.autoApprove) return true;
+    if (this.configReader.isAutoApproveEnabled()) return true;
 
-    const permsConfig = config.permissions;
+    const permsConfig = this.configReader.getSnapshot().permissions;
     const mode = permsConfig?.mode ?? 'prompt';
 
     // 2. allow-all mode: auto-approve everything
@@ -119,21 +116,17 @@ export class PermissionManager {
       return this.sessionApprovals.get(key)!;
     }
 
-    // 6. Prompt user via event bus - blocks until resolve() is called
-    return new Promise<boolean>((resolve) => {
-      this.eventBus.emit('permission:request', {
-        callId: crypto.randomUUID(),
-        tool: toolName,
-        args,
-        category,
-        resolve: (approved: boolean, remember = false) => {
-          if (remember) {
-            this.sessionApprovals.set(key, approved);
-          }
-          resolve(approved);
-        },
-      });
+    // 6. Prompt user via the shell-owned permission controller
+    const decision = await this.requestPermission({
+      callId: crypto.randomUUID(),
+      tool: toolName,
+      args,
+      category,
     });
+    if (decision.remember) {
+      this.sessionApprovals.set(key, decision.approved);
+    }
+    return decision.approved;
   }
 
   /** Returns the permission category for a tool name. Unknown tools default to 'delegate'. */

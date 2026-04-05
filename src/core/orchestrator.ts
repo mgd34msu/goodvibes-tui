@@ -1,5 +1,4 @@
 import type { ConversationManager } from './conversation.ts';
-import type { EventBus } from './event-bus.ts';
 import type { ToolRegistry } from '../tools/registry.ts';
 import type { ToolCall, ToolResult } from '../types/tools.ts';
 import { PermissionError, ProviderError, ToolError, isNonTransientProviderFailure } from '../types/errors.ts';
@@ -8,7 +7,7 @@ import { formatProviderError } from '../utils/error-display.ts';
 import { providerRegistry } from '../providers/registry.ts';
 import type { ModelDefinition } from '../providers/registry.ts';
 import type { LLMProvider, StreamDelta, ContentPart } from '../providers/interface.ts';
-import { config, configManager, DEFAULT_CONFIG } from '../config/index.ts';
+import { configManager, DEFAULT_CONFIG } from '../config/index.ts';
 import { notifyCompletion } from '../utils/notify.ts';
 import { logger } from '../utils/logger.ts';
 import type { PermissionManager } from '../permissions/manager.ts';
@@ -19,28 +18,62 @@ import { ConsecutiveErrorBreaker } from './circuit-breaker.ts';
 import type { ExecutionPlan, PlanItem } from './execution-plan.ts';
 import { classifyIntent } from './intent-classifier.ts';
 import { getTokenLimitsForModel, getContextWindowForModel } from '../providers/model-limits.ts';
-import { shouldAutoCompact, estimateConversationTokens, COMPACTION_BUFFER_TOKENS, SMALL_WINDOW_THRESHOLD, compactSmallWindow } from './context-compaction.ts';
-import type { CompactionContext } from './context-compaction.ts';
+import { estimateConversationTokens } from './context-compaction.ts';
 import { sessionMemoryStore } from './session-memory.ts';
 import { sessionLineageTracker } from './session-lineage.ts';
 import { getCatalog } from '../providers/model-catalog.ts';
 import { recordUsage } from '../providers/favorites.ts';
 import { EventReplayQueue } from './event-replay.ts';
 import { AgentManager } from '../tools/agent/index.ts';
-import type { AgentInput } from '../tools/agent/schema.ts';
 import { WrfcController } from '../agents/wrfc-controller.ts';
 import { THINKING_SPINNER_FRAMES } from '../renderer/progress.ts';
 import { randomUUID, createHash } from 'node:crypto';
 import { cacheHitTracker } from '../providers/cache-strategy.ts';
 import { helperModel } from '../config/helper-model.ts';
 import { idempotencyStore } from '../runtime/idempotency/index.ts';
-import {
-  buildSyntheticResult,
-  detectUnresolvedToolCalls,
-  type ReconciliationReason,
-} from './tool-reconciliation.ts';
+import { type ReconciliationReason } from './tool-reconciliation.ts';
 import type { FeatureFlagManager } from '../runtime/feature-flags/manager.ts';
 import { adaptivePlanner } from './adaptive-planner-instance.ts';
+import type { RuntimeEventBus } from '../runtime/events/index.ts';
+import {
+  emitOpsCacheMetrics,
+  emitOpsHelperUsage,
+  emitToolExecuting,
+  emitToolFailed,
+  emitToolPermissioned,
+  emitToolReconciled,
+  emitToolReceived,
+  emitToolSucceeded,
+  emitLlmResponseReceived,
+  emitPlanStrategySelected,
+  emitPreflightFail,
+  emitPreflightOk,
+  emitStreamDelta,
+  emitStreamEnd,
+  emitStreamStart,
+  emitTurnCancel,
+  emitTurnCompleted,
+  emitTurnError,
+  emitTurnSubmitted,
+} from '../runtime/emitters/index.ts';
+import {
+  autoSpawnPendingItems,
+  executeToolCalls,
+  reconcileUnresolvedToolCalls,
+} from './orchestrator-tool-runtime.ts';
+import {
+  checkContextWindowPreflight,
+  emitContextOverflowError,
+  handlePostTurnContextMaintenance,
+} from './orchestrator-context-runtime.ts';
+import {
+  emitMalformedToolUseWarning,
+  handleFinalResponseOutcome,
+  handleToolResponseOutcome,
+  type ChatResponseWithReasoning,
+  maybeEmitAdaptivePlannerDecision,
+  prepareConversationForTurn,
+} from './orchestrator-turn-helpers.ts';
 
 /** Minimal interface for hook dispatch — allows any compatible implementation */
 interface HookDispatcherLike {
@@ -107,15 +140,16 @@ export class Orchestrator {
   /** Event replay queue — ensures model acknowledges significant events */
   private readonly replayQueue: EventReplayQueue;
 
-  /** Cleanup function returned by EventReplayQueue.attachTo() */
+  /** Cleanup function returned by the active replay queue attachment. */
   private detachReplay: (() => void) | null = null;
+  private readonly runtimeBus: RuntimeEventBus | null;
 
   /**
    * Optional feature flag manager.
    *
-   * When provided, the `gc-orch-015-tool-result-reconciliation` flag is
+   * When provided, the `tool-result-reconciliation` flag is
    * consulted at each turn end to decide whether to use full reconciliation
-   * (default, `enabled`) or legacy silent-drop behaviour (`disabled`).
+   * (`enabled`) or skip reconciliation (`disabled`).
    * When `null`, reconciliation defaults to enabled (matching the flag's
    * declared `defaultState`).
    */
@@ -127,9 +161,9 @@ export class Orchestrator {
    * the loop exits early.
    */
   private _pendingToolCalls: ToolCall[] = [];
+  private readonly requestRender: () => void;
 
   constructor(
-    private bus: EventBus,
     private conversation: ConversationManager,
     private getViewportHeight: () => number,
     private scrollToEnd: (vHeight: number) => void,
@@ -138,10 +172,24 @@ export class Orchestrator {
     private getSystemPrompt: () => string = () => '',
     private hookDispatcher: HookDispatcherLike | null = null,
     flagManager: FeatureFlagManager | null = null,
+    requestRender: (() => void) | null = null,
+    runtimeBus: RuntimeEventBus | null = null,
   ) {
-    this.replayQueue = new EventReplayQueue(bus);
-    this.detachReplay = EventReplayQueue.attachTo(bus, this.replayQueue);
+    this.replayQueue = new EventReplayQueue();
+    this.detachReplay = runtimeBus
+      ? EventReplayQueue.attachToRuntimeBus(runtimeBus, this.replayQueue)
+      : null;
     this.flagManager = flagManager;
+    this.requestRender = requestRender ?? (() => {});
+    this.runtimeBus = runtimeBus;
+  }
+
+  private emitterContext(turnId: string): import('../runtime/emitters/index.ts').EmitterContext {
+    return {
+      sessionId: this.sessionId,
+      traceId: `${this.sessionId}:${turnId}`,
+      source: 'orchestrator',
+    };
   }
 
   /**
@@ -232,7 +280,7 @@ export class Orchestrator {
 
     if (this.isThinking || this.isCompacting) {
       this.messageQueue.push({ text, content });
-      this.bus.emit('render:request');
+      this.requestRender();
       return;
     }
 
@@ -257,9 +305,9 @@ export class Orchestrator {
     if (this.animInterval) clearInterval(this.animInterval);
     this.animInterval = setInterval(() => {
       this.thinkingFrame++;
-      this.bus.emit('render:request');
+      this.requestRender();
     }, 80);
-    this.bus.emit('render:request');
+    this.requestRender();
   }
 
   private stopThinking(): void {
@@ -270,7 +318,7 @@ export class Orchestrator {
     this.streamingInputTokens = 0;
     this.streamingOutputTokens = 0;
     this.scrollToEnd(this.getViewportHeight());
-    this.bus.emit('render:request');
+    this.requestRender();
   }
 
   private async runTurn(text: string, content?: ContentPart[]): Promise<void> {
@@ -310,93 +358,29 @@ export class Orchestrator {
     // 'duplicate' (completed/failed) — allow re-run (user sent same text intentionally).
     // We just let it proceed; the prior record will be overwritten.
 
-    this.bus.emit('turn:start', { prompt: text });
+    if (this.runtimeBus) {
+      emitTurnSubmitted(this.runtimeBus, this.emitterContext(turnId), { turnId, prompt: text });
+    }
 
-    // ── Adaptive Execution Planner (Section 5.5) ────────────────────────────
+    // Adaptive Execution Planner.
     // If the feature flag is enabled, score and select the execution strategy
     // before the turn proceeds. The selected strategy and reason code are
     // emitted for the Ops panel and logged for observability.
-    if (this.flagManager?.isEnabled('adaptive-execution-planner') ?? false) {
-      const classification = classifyIntent(text);
-      /**
-       * TODO(Phase 3): Wire real signals from:
-       * - riskScore: task intent classifier confidence (currently hardcoded 0.3).
-       *   Replace with a trained risk scorer that reads task type, destructive-op
-       *   indicators, and file-scope breadth from `classification`.
-       * - remoteAvailable: provider registry remote capability check (currently false).
-       *   Replace with a live query to the provider registry, e.g.
-       *   `providerRegistry.hasRemoteCapability()`.
-       * - backgroundEligible: scheduler eligibility check (currently false).
-       *   Replace with a scheduler readiness check, e.g.
-       *   `scheduler.canDefer(classification.intent)`.
-       */
-      const plannerInputs = {
-        riskScore: 0.3,               // default; extended by task-type scoring
-        latencyBudgetMs: Infinity,
-        isMultiStep: classification.intent === 'project' && classification.confidence > 0.5,
-        remoteAvailable: false,       // extended by remote-agent integration
-        backgroundEligible: false,    // extended by scheduler integration
-        taskDescription: text.slice(0, 120),
-      };
-      const decision = adaptivePlanner.select(plannerInputs);
-      this.bus.emit('plan:strategy-selected', decision);
-      logger.debug('[Orchestrator] adaptive-planner decision', {
-        strategy: decision.selected,
-        reasonCode: decision.reasonCode,
-      });
-    }
+    maybeEmitAdaptivePlannerDecision(
+      text,
+      this.flagManager?.isEnabled('adaptive-execution-planner') ?? false,
+      this.runtimeBus,
+      (id) => this.emitterContext(id),
+      turnId,
+    );
     // ────────────────────────────────────────────────────────────────────────
 
     // Pre-turn plan injection: if an active plan exists, inject its current state into
     // the conversation so the LLM can refer to it and update item statuses.
-    const preTurnPlan = planManager.getActive();
-    if (preTurnPlan) {
-      const planMd = planManager.toMarkdown(preTurnPlan);
-      this.conversation.addSystemMessage(
-        `## Current Execution Plan\n${planMd}\n\nRefer to this plan. Update item statuses as you complete work.`
-      );
-    }
-
-    // Capability check: if model doesn't support multimodal, strip images and warn
-    if (content && content.some(p => p.type === 'image')) {
-      const model = providerRegistry.getCurrentModel();
-      if (!model.capabilities.multimodal) {
-        this.conversation.addSystemMessage(
-          `Warning: ${model.displayName} does not support image input. Images have been removed from this message.`
-        );
-        // Keep only text parts
-        const textOnly = content
-          .filter((p): p is { type: 'text'; text: string } => p.type === 'text')
-          .map(p => p.text)
-          .join('');
-        this.conversation.addUserMessage(textOnly || text);
-      } else {
-        this.conversation.addUserMessage(content);
-      }
-    } else {
-      this.conversation.addUserMessage(content ?? text);
-    }
+    const preTurnPlan = prepareConversationForTurn(this.conversation, text, content);
 
     this.turnStartMessageCount = this.conversation.getMessageCount();
     this.scrollToEnd(this.getViewportHeight());
-
-    // ── Intent classification + plan injection ──────────────────────────────
-    // Run heuristic classifier on the plain-text message. If it looks like a
-    // project-level task (confidence > 0.5), inject a system instruction so
-    // the model knows to create a spec + execution plan first.
-    // Skip classification when an active plan already exists — plan implies project mode.
-    const activePlan = planManager.getActive();
-    if (!activePlan) {
-      const classification = classifyIntent(text);
-      if (classification.intent === 'project' && classification.confidence > 0.5) {
-        this.conversation.addSystemMessage(
-          '[Project mode] This looks like a multi-step project task. ' +
-          'Before executing, write a brief spec (goals, constraints, non-goals) ' +
-          'and an execution plan (phases and tasks). ' +
-          'Use the execution plan format: ## Phase [STATUS] / - [x] Task — STATUS.'
-        );
-      }
-    }
 
     this.startThinking();
 
@@ -424,20 +408,25 @@ export class Orchestrator {
               if (delta.reasoning) {
                 reasoningAccumulated += delta.reasoning;
               }
-              this.bus.emit('turn:stream-delta', {
-                content: delta.content ?? '',
-                accumulated: streamAccumulated,
-                ...(delta.reasoning !== undefined ? { reasoning: delta.reasoning } : {}),
-                ...(delta.toolCalls !== undefined ? { toolCalls: delta.toolCalls } : {}),
-              });
-              this.bus.emit('render:request');
+              if (this.runtimeBus) {
+                emitStreamDelta(this.runtimeBus, this.emitterContext(turnId), {
+                  turnId,
+                  content: delta.content ?? '',
+                  accumulated: streamAccumulated,
+                  ...(delta.reasoning !== undefined ? { reasoning: delta.reasoning } : {}),
+                  ...(delta.toolCalls !== undefined ? { toolCalls: delta.toolCalls } : {}),
+                });
+              }
+              this.requestRender();
             }
           : undefined;
 
         if (onDelta) {
           this.isStreaming = true;
           this.conversation.startStreamingBlock();
-          this.bus.emit('turn:stream-start');
+          if (this.runtimeBus) {
+            emitStreamStart(this.runtimeBus, this.emitterContext(turnId), { turnId });
+          }
         }
 
         // ── Context window pre-flight check ─────────────────────────────────
@@ -447,19 +436,31 @@ export class Orchestrator {
         // NOTE: Pre-flight compaction (compact-then-retry) and post-turn compaction
         // (compact after a successful turn, lines ~497+) share the same underlying
         // conversation.compact() mechanism but serve different triggers.
-        const preflightResult = await this.checkContextWindowPreflight(model);
+        const preflightResult = await this.checkContextWindowPreflight(turnId, model);
         if (preflightResult === 'error') {
           // Error message already added to conversation; clean up streaming block
           if (onDelta) {
             this.isStreaming = false;
             this.conversation.finalizeStreamingBlock();
-            this.bus.emit('turn:stream-end');
+            if (this.runtimeBus) {
+              emitStreamEnd(this.runtimeBus, this.emitterContext(turnId), { turnId });
+            }
           }
-          this.bus.emit('turn:complete', { response: '' });
+          if (this.runtimeBus) {
+            emitPreflightFail(this.runtimeBus, this.emitterContext(turnId), {
+              turnId,
+              reason: 'context window preflight failed',
+              stopReason: 'context_overflow',
+            });
+          }
+          this._turnFailed = true;
           continueLoop = false;
           break;
         }
         // preflightResult === 'ok' or 'compacted' — proceed with chat call
+        if (this.runtimeBus) {
+          emitPreflightOk(this.runtimeBus, this.emitterContext(turnId), { turnId });
+        }
 
         const tokenLimits = getTokenLimitsForModel(model);
 
@@ -477,6 +478,14 @@ export class Orchestrator {
           const preResult = await this.hookDispatcher.fire(preEvent);
           if (preResult.decision === 'deny') {
             this.conversation.addSystemMessage(preResult.reason ?? 'LLM call blocked by hook');
+            if (this.runtimeBus) {
+              emitTurnError(this.runtimeBus, this.emitterContext(turnId), {
+                turnId,
+                error: preResult.reason ?? 'LLM call blocked by hook',
+                stopReason: 'hook_denied',
+              });
+            }
+            this._turnFailed = true;
             continueLoop = false;
             break;
           }
@@ -503,7 +512,9 @@ export class Orchestrator {
           if (onDelta) {
             this.isStreaming = false;
             this.conversation.finalizeStreamingBlock();
-            this.bus.emit('turn:stream-end');
+            if (this.runtimeBus) {
+              emitStreamEnd(this.runtimeBus, this.emitterContext(turnId), { turnId });
+            }
           }
           // Intercept 429 exhaustion for synthetic paid/subscription models and show actionable UX
           if (chatErr instanceof ProviderError && chatErr.statusCode === 429 && model.provider === 'synthetic' && model.tier !== 'free') {
@@ -514,8 +525,15 @@ export class Orchestrator {
               `  • Switch to a different model with /model\n` +
               `  • Switch to a free model via /model and selecting the free tier`
             );
-            this.bus.emit('turn:complete', { response: '' });
-            this.bus.emit('render:request');
+            if (this.runtimeBus) {
+              emitTurnError(this.runtimeBus, this.emitterContext(turnId), {
+                turnId,
+                error: 'All providers for the selected synthetic model are exhausted',
+                stopReason: 'provider_exhausted',
+              });
+            }
+            this._turnFailed = true;
+            this.requestRender();
             continueLoop = false;
             break;
           }
@@ -537,7 +555,9 @@ export class Orchestrator {
         if (onDelta) {
           this.isStreaming = false;
           this.conversation.finalizeStreamingBlock();
-          this.bus.emit('turn:stream-end');
+          if (this.runtimeBus) {
+            emitStreamEnd(this.runtimeBus, this.emitterContext(turnId), { turnId });
+          }
         }
 
         void recordUsage(model.id);
@@ -549,24 +569,28 @@ export class Orchestrator {
         // Emit cache metrics event
         const cacheMetrics = cacheHitTracker.getMetrics();
         if (cacheMetrics.turns > 0) {
-          this.bus.emit('cache:metrics', {
-            hitRate: cacheMetrics.hitRate,
-            cacheReadTokens: cacheMetrics.cacheReadTokens,
-            cacheWriteTokens: cacheMetrics.cacheWriteTokens,
-            totalInputTokens: cacheMetrics.totalInputTokens,
-            turns: cacheMetrics.turns,
-          });
+          if (this.runtimeBus) {
+            emitOpsCacheMetrics(this.runtimeBus, this.emitterContext(turnId), {
+              hitRate: cacheMetrics.hitRate,
+              cacheReadTokens: cacheMetrics.cacheReadTokens,
+              cacheWriteTokens: cacheMetrics.cacheWriteTokens,
+              totalInputTokens: cacheMetrics.totalInputTokens,
+              turns: cacheMetrics.turns,
+            });
+          }
         }
 
         // Track helper model usage
         // Cumulative lifetime totals (not per-turn deltas) — consumers can diff successive events
         const helperUsage = helperModel.getUsage();
         if (helperUsage.calls > 0) {
-          this.bus.emit('helper:usage', {
-            inputTokens: helperUsage.inputTokens,
-            outputTokens: helperUsage.outputTokens,
-            calls: helperUsage.calls,
-          });
+          if (this.runtimeBus) {
+            emitOpsHelperUsage(this.runtimeBus, this.emitterContext(turnId), {
+              inputTokens: helperUsage.inputTokens,
+              outputTokens: helperUsage.outputTokens,
+              calls: helperUsage.calls,
+            });
+          }
         }
 
         // Warn on low cache hit rate (after enough data)
@@ -578,17 +602,26 @@ export class Orchestrator {
           configManager.get('cache.monitorHitRate')
         ) {
           const pct = (cacheMetrics.hitRate * 100).toFixed(0);
-          logger.info(`[Cache] Low hit rate: ${pct}% over ${cacheMetrics.turns} turns`); // TODO: Consider emitting cache:warning event for UI consumers
+          logger.info(`[Cache] Low hit rate: ${pct}% over ${cacheMetrics.turns} turns`);
         }
 
         this.lastInputTokens = response.usage.inputTokens
           + (response.usage.cacheReadTokens ?? 0)
           + (response.usage.cacheWriteTokens ?? 0);
 
-        this.bus.emit('turn:llm-response', {
-          content: response.content,
-          toolCalls: response.toolCalls,
-        });
+        if (this.runtimeBus) {
+          emitLlmResponseReceived(this.runtimeBus, this.emitterContext(turnId), {
+            turnId,
+            provider: model.provider,
+            model: model.id,
+            content: response.content,
+            toolCallCount: response.toolCalls.length,
+            inputTokens: response.usage.inputTokens,
+            outputTokens: response.usage.outputTokens,
+            cacheReadTokens: response.usage.cacheReadTokens,
+            cacheWriteTokens: response.usage.cacheWriteTokens,
+          });
+        }
 
         // Post:llm:chat hook (fire-and-forget)
         if (this.hookDispatcher) {
@@ -613,62 +646,36 @@ export class Orchestrator {
         // a synthetic error result on the next turn instead of an orphaned
         // tool_use block.
         if (response.stopReason === 'tool_use' && response.toolCalls.length === 0) {
-          logger.warn('Orchestrator: provider reported stopReason=tool_use but returned no tool calls (malformed response)', {
-            model: model.id,
-            stopReason: response.stopReason,
+          emitMalformedToolUseWarning({
+            conversation: this.conversation,
+            runtimeBus: this.runtimeBus,
+            emitterContext: (id) => this.emitterContext(id),
+            turnId,
+            isReconciliationEnabled: this.isReconciliationEnabled(),
           });
-          if (this.isReconciliationEnabled()) {
-            this.conversation.addSystemMessage(
-              '[Tool Reconciliation] Provider returned stop_reason=tool_use but no tool calls were included in the response. ' +
-              'This is a malformed provider response. If this repeats, try switching models.',
-            );
-            this.bus.emit('turn:tool-reconciliation', {
-              count: 0,
-              callIds: [],
-              toolNames: [],
-              reason: 'malformed-stop-reason',
-              isMalformed: true,
-              timestamp: Date.now(),
-            });
-          }
         }
 
         if (response.toolCalls.length > 0) {
-          // Track pending tool calls for reconciliation at turn end
-          this._pendingToolCalls = response.toolCalls;
-
-          // Add assistant turn (may include both content and tool calls)
-          this.conversation.addAssistantMessage(response.content, { toolCalls: response.toolCalls, reasoningContent: reasoningForMsg, reasoningSummary: reasoningSummaryForMsg, usage: response.usage, model: model.displayName, provider: model.provider });
-
-          // Execute tools and collect results
-          const results = await this.executeToolCalls(response.toolCalls);
-
-          // Add tool results — LLM sees them on next iteration
-          this.conversation.addToolResults(results);
-
-          // Clear pending state: all tool calls have been resolved
-          this._pendingToolCalls = [];
-
-          // Inject multimodal user message for any images extracted from read tool results.
-          // Only inject when the current model supports multimodal input.
-          const allImages = (results as Array<ToolResult & { _images?: Array<{ path: string; base64: string; mediaType: string; description: string }> }>)
-            .filter(r => Array.isArray(r._images) && r._images.length > 0)
-            .flatMap(r => r._images!);
-          if (allImages.length > 0 && providerRegistry.getCurrentModel().capabilities.multimodal) {
-            const imageParts: ContentPart[] = [
-              { type: 'text', text: '[Images from read tool results]' },
-              ...allImages.map(img => ({
-                type: 'image' as const,
-                data: img.base64,
-                mediaType: img.mediaType,
-              })),
-            ];
-            this.conversation.addUserMessage(imageParts);
-          }
+          const enrichedResponse: ChatResponseWithReasoning = {
+            ...response,
+            reasoning: reasoningForMsg,
+            reasoningSummary: reasoningSummaryForMsg,
+          };
+          const results = await handleToolResponseOutcome({
+            conversation: this.conversation,
+            runtimeBus: this.runtimeBus,
+            emitterContext: (id) => this.emitterContext(id),
+            turnId,
+            response: enrichedResponse,
+            executeToolCalls: (id, calls) => this.executeToolCalls(id, calls),
+            setPendingToolCalls: (calls) => { this._pendingToolCalls = calls; },
+            messageQueueLength: this.messageQueue.length,
+            requestRender: this.requestRender,
+          });
 
           // --- Consecutive error circuit breaker ---
           // Count failures in this batch of tool results
-          const allFailed = results.length > 0 && results.every(r => r.success === false);
+          const allFailed = results.results.length > 0 && results.results.every(r => r.success === false);
           if (allFailed) {
             const cbResult = circuitBreaker.recordAllFailed();
             logger.warn(`Orchestrator: consecutive all-error turn ${circuitBreaker.consecutiveErrors}`);
@@ -680,7 +687,14 @@ export class Orchestrator {
                 `The loop is stopping to prevent an infinite failure cycle. ` +
                 `Please reassess your approach and try a completely different strategy.`
               );
-              this.bus.emit('turn:complete', { response: '' });
+              if (this.runtimeBus) {
+                emitTurnError(this.runtimeBus, this.emitterContext(turnId), {
+                  turnId,
+                  error: 'Consecutive all-failed tool turns tripped the circuit breaker',
+                  stopReason: 'tool_loop_circuit_breaker',
+                });
+              }
+              this._turnFailed = true;
               continueLoop = false;
             } else if (cbResult === 'warn') {
               this.conversation.addSystemMessage(
@@ -689,313 +703,71 @@ export class Orchestrator {
                 `then try a completely different strategy.`
               );
             }
-          } else if (results.length > 0) {
+          } else if (results.results.length > 0) {
             // At least one success — reset the counter
             circuitBreaker.recordSuccess();
           }
-
-          // If agents were spawned, end the turn — agents run in background, WRFC handles quality.
-          // Also end if user typed something during tool execution.
-          const spawnedAgents = response.toolCalls.some((tc: ToolCall) => {
-            const mode = (tc.arguments as Record<string, unknown>).mode;
-            return tc.name === 'agent' && (mode === 'spawn' || mode === 'batch-spawn');
-          });
-          if (spawnedAgents || this.messageQueue.length > 0) {
-            // Harness-driven auto-spawn: if the plan has pending items with met dependencies,
-            // spawn agents for them directly — don't wait for the model to do it.
-            if (spawnedAgents) {
-              const activePlan = planManager.getActive();
-              if (activePlan) {
-                const summary = planManager.getSummary(activePlan);
-                const nextItems = planManager.getNextItems(activePlan);
-
-                if (nextItems.length > 0) {
-                  const autoSpawnedDescs = this.autoSpawnPendingItems(activePlan, nextItems);
-
-                  if (autoSpawnedDescs.length > 0) {
-                    this.conversation.addSystemMessage(
-                      `[Plan] Auto-spawned ${autoSpawnedDescs.length} agent(s) for remaining plan items: ${autoSpawnedDescs.join(', ')}. Plan progress: ${summary}.`
-                    );
-                  } else {
-                    // Auto-spawn failed for all items — fall back to nudge so model can try
-                    const nextDesc = nextItems.map(i => i.description).join(', ');
-                    this.conversation.addSystemMessage(
-                      `Plan progress: ${summary}. Next items ready: ${nextDesc}. Continue spawning agents for remaining work.`
-                    );
-                  }
-                } else {
-                  this.conversation.addSystemMessage(
-                    `Plan progress: ${summary}. All items are accounted for.`
-                  );
-                }
-              } else {
-                this.conversation.addSystemMessage(
-                  'You spawned an agent for part of the task. If there are remaining tasks, continue spawning agents now.'
-                );
-              }
-            }
-            this.bus.emit('turn:complete', { response: response.content });
-            continueLoop = false;
-          } else if (planManager.getActive()) {
-            // Non-agent tool calls completed while a plan is active — prompt the LLM to update statuses.
-            this.conversation.addSystemMessage(
-              'Update the execution plan to reflect completed work. Mark items as COMPLETE or IN_PROGRESS with the agent ID.'
-            );
-          }
-
-          // Loop continues: send results back to LLM
+          continueLoop = results.continueLoop;
         } else {
-          // No tool calls — final response
-          this.conversation.addAssistantMessage(response.content, { reasoningContent: reasoningForMsg, reasoningSummary: reasoningSummaryForMsg, usage: response.usage, model: model.displayName, provider: model.provider });
-          this.bus.emit('turn:complete', { response: response.content });
-          continueLoop = false;
-
-          // Plan parsing: if the active plan has no items yet and the model's response contains
-          // a plan in markdown format, parse it and immediately auto-spawn agents.
-          if (preTurnPlan && preTurnPlan.awaitingPlan === true && response.content.includes('## Phase')) {
-            const parsed = planManager.parseFromMarkdown(response.content);
-            if (parsed.items && parsed.items.length > 0) {
-              planManager.replaceItems(preTurnPlan.id, parsed.items);
-              // Clear the awaitingPlan flag — the plan is now populated
-              const filledPlan = planManager.load(preTurnPlan.id);
-              if (filledPlan) {
-                filledPlan.awaitingPlan = false;
-                planManager.save(filledPlan);
-              }
-              const updatedPlan = planManager.getActive();
-              if (updatedPlan) {
-                const nextItems = planManager.getNextItems(updatedPlan);
-                if (nextItems.length > 0) {
-                  const spawned = this.autoSpawnPendingItems(updatedPlan, nextItems);
-                  if (spawned.length > 0) {
-                    this.conversation.addSystemMessage(
-                      `[Plan] Parsed ${parsed.items.length} item(s) from your plan. Auto-spawned ${spawned.length} agent(s) for items with no blockers: ${spawned.join(', ')}.`
-                    );
-                    this.bus.emit('render:request');
-                  } else {
-                    this.conversation.addSystemMessage(
-                      `[Plan] Parsed ${parsed.items.length} item(s) from your plan. Spawn agents for the items with no blockers to begin execution.`
-                    );
-                  }
-                } else {
-                  this.conversation.addSystemMessage(
-                    `[Plan] Parsed ${parsed.items.length} item(s) from your plan. No items are ready to start — check dependencies.`
-                  );
-                }
-                // Skip the timeout fallback since we already handled spawning
-                return;
-              }
-            }
-          }
-
-          // Timeout fallback: if the model ended its turn without spawning agents but there
-          // are pending plan items with met dependencies, auto-spawn them after a short delay.
-          // This handles weak/free models that stop responding after the first response.
-          const pendingPlan = planManager.getActive();
-          if (pendingPlan) {
-            const pendingItems = planManager.getNextItems(pendingPlan);
-            if (pendingItems.length > 0) {
-              this.autoSpawnTimeout = setTimeout(() => {
-                this.autoSpawnTimeout = null;
-                const stillActivePlan = planManager.getActive();
-                if (!stillActivePlan) return;
-                const stillPending = planManager.getNextItems(stillActivePlan);
-                if (stillPending.length === 0) return;
-
-                const spawned = this.autoSpawnPendingItems(stillActivePlan, stillPending);
-
-                if (spawned.length > 0) {
-                  this.conversation.addSystemMessage(
-                    `[Plan] Timeout fallback auto-spawned ${spawned.length} agent(s) for plan items the model did not address: ${spawned.join(', ')}.`
-                  );
-                  this.bus.emit('render:request');
-                }
-              }, AUTO_SPAWN_FALLBACK_DELAY_MS);
-            }
-          }
+          const enrichedResponse: ChatResponseWithReasoning = {
+            ...response,
+            reasoning: reasoningForMsg,
+            reasoningSummary: reasoningSummaryForMsg,
+          };
+          continueLoop = handleFinalResponseOutcome({
+            conversation: this.conversation,
+            runtimeBus: this.runtimeBus,
+            emitterContext: (id) => this.emitterContext(id),
+            turnId,
+            response: enrichedResponse,
+            preTurnPlan,
+            requestRender: this.requestRender,
+            setAutoSpawnTimeout: (timeout) => { this.autoSpawnTimeout = timeout; },
+            autoSpawnTimeoutMs: AUTO_SPAWN_FALLBACK_DELAY_MS,
+          });
         }
       }
 
-      // Context usage check: auto-compact when within 15k tokens of context limit.
-      // Uses model-limits data for context window (OpenRouter-sourced when available,
-      // falls back to static registry value).
-      const totalTokens = this.lastInputTokens;
-      const currentModel = providerRegistry.getCurrentModel();
-      const maxTokens = getContextWindowForModel(currentModel);
-      if (maxTokens > 0) {
-        const usagePct = Math.round((totalTokens / maxTokens) * 100);
-        // Disable check: autoCompactThreshold <= 0 means disabled (existing convention).
-        const configuredThreshold = configManager.get('behavior.autoCompactThreshold') as number;
-        const autoCompactEnabled = configuredThreshold > 0;
-        const bracket = Math.floor(usagePct / 10) * 10;
-
-        if (
-          autoCompactEnabled &&
-          shouldAutoCompact({
-            currentTokens: totalTokens,
-            contextWindow: maxTokens,
-            isCompacting: this.isCompacting,
-          })
-        ) {
-          // Auto-compact: threshold exceeded, perform compaction in background
-          this.isCompacting = true;
-          this.conversation.addSystemMessage(
-            `Context usage at ${usagePct}% (${totalTokens}/${maxTokens} tokens). Auto-compacting conversation...`
-          );
-          this.bus.emit('context:warning', { usage: usagePct, threshold: COMPACTION_BUFFER_TOKENS });
-          this.bus.emit('render:request');
-
-          // Pre:compact:auto hook — await to honour deny decisions
-          let skipAutoCompact = false;
-          if (this.hookDispatcher) {
-            const preAutoResult = await this.hookDispatcher.fire({
-              path: 'Pre:compact:auto',
-              phase: 'Pre',
-              category: 'compact',
-              specific: 'auto',
-              sessionId: this.sessionId,
-              timestamp: Date.now(),
-              payload: { trigger: 'auto', usagePct, totalTokens, maxTokens },
-            }).catch((err: unknown) => { logger.debug('Pre:compact:auto hook error', { error: String(err) }); return { ok: true } as import('../hooks/types.ts').HookResult; });
-            if (preAutoResult.decision === 'deny') {
-              this.isCompacting = false;
-              skipAutoCompact = true;
-              logger.info('Orchestrator: Pre:compact:auto denied by hook — skipping auto-compact', { reason: preAutoResult.reason });
-            }
-          }
-
-          // For small context windows, use simplified compaction instead of full v2
-          // Outer try/catch ensures isCompacting is always reset on any synchronous error
-          try {
-            const currentMsgs = this.conversation.getMessagesForLLM();
-            const useSmallWindow = maxTokens < SMALL_WINDOW_THRESHOLD;
-
-            // Run compaction without blocking current turn completion
-            // Small windows (<12k) use simplified compaction; larger use full v2
-            if (!skipAutoCompact && useSmallWindow) {
-              try {
-                const compactedMsgs = compactSmallWindow(currentMsgs, 10);
-                this.conversation.replaceMessagesForLLM(compactedMsgs);
-                this.isCompacting = false;
-                this.lastWarningBracket = 0;
-                this.conversation.addSystemMessage(
-                  'Context auto-compacted (small window mode). Kept last 10 messages.'
-                );
-                this.bus.emit('render:request');
-              } catch (err: unknown) {
-                this.isCompacting = false;
-                const msg = err instanceof Error ? err.message : String(err);
-                logger.error('Orchestrator: small-window auto-compact failed', { error: msg });
-                this.conversation.addSystemMessage(
-                  `Auto-compact failed: ${msg}. Use /compact to retry manually.`
-                );
-                this.bus.emit('render:request');
-              }
-            } else if (!skipAutoCompact) {
-              // Build v2 compaction context from live data sources
-              const agentManager = AgentManager.getInstance();
-              const wrfcController = WrfcController.getInstance();
-              const compactionCtx: CompactionContext = {
-                messages: currentMsgs,
-                sessionMemories: sessionMemoryStore.list(),
-                lineageEntries: sessionLineageTracker.getEntries(),
-                agents: agentManager.list().filter(a => a.status === 'running' || a.status === 'pending'),
-                wrfcChains: wrfcController.listChains(),
-                activePlan: planManager.getActive(),
-                compactionCount: sessionLineageTracker.getCompactionCount(),
-                contextWindow: maxTokens,
-                trigger: 'auto',
-                extractionModelId: currentModel.id,
-                extractionProvider: currentModel.provider,
-              };
-              void this.conversation.compact(
-                providerRegistry,
-                currentModel.id,
-                10,
-                'auto',
-                currentModel.provider,
-                compactionCtx,
-              ).then(() => {
-                this.isCompacting = false;
-                this.lastWarningBracket = 0; // Reset so warnings work after compaction
-                this.conversation.addSystemMessage(
-                  'Context auto-compacted. Conversation history summarized to free context window.'
-                );
-                this.bus.emit('render:request');
-                logger.info('Orchestrator: auto-compact complete', {
-                  modelId: currentModel.id,
-                  usagePct,
-                });
-                // Post:compact:auto hook (fire-and-forget)
-                if (this.hookDispatcher) {
-                  this.hookDispatcher.fire({
-                    path: 'Post:compact:auto',
-                    phase: 'Post',
-                    category: 'compact',
-                    specific: 'auto',
-                    sessionId: this.sessionId,
-                    timestamp: Date.now(),
-                    payload: { trigger: 'auto', usagePct, totalTokens, maxTokens },
-                  }).catch((err: unknown) => { logger.debug('Post:compact:auto hook error', { error: String(err) }); });
-                }
-              }).catch((err: unknown) => {
-                this.isCompacting = false;
-                const msg = err instanceof Error ? err.message : String(err);
-                logger.error('Orchestrator: auto-compact failed', { error: msg });
-                this.conversation.addSystemMessage(
-                  `Auto-compact failed: ${msg}. Use /compact to retry manually.`
-                );
-                this.bus.emit('render:request');
-                // Fail:compact:auto hook (fire-and-forget)
-                if (this.hookDispatcher) {
-                  this.hookDispatcher.fire({
-                    path: 'Fail:compact:auto',
-                    phase: 'Fail',
-                    category: 'compact',
-                    specific: 'auto',
-                    sessionId: this.sessionId,
-                    timestamp: Date.now(),
-                    payload: { trigger: 'auto', usagePct, totalTokens, maxTokens, error: msg },
-                  }).catch((err: unknown) => { logger.debug('Fail:compact:auto hook error', { error: String(err) }); });
-                }
-              });
-            }
-          } catch (compactErr: unknown) {
-            this.isCompacting = false;
-            logger.error('Auto-compact failed', { error: String(compactErr) });
-            this.conversation.addSystemMessage(`[Compact] Auto-compaction failed: ${String(compactErr)}`);
-            this.bus.emit('render:request');
-          }
-        } else if (autoCompactEnabled && (maxTokens - totalTokens) <= COMPACTION_BUFFER_TOKENS * 2 && bracket > this.lastWarningBracket) {
-          // Warning zone: approaching 15k buffer but not yet at trigger point
-          this.lastWarningBracket = bracket;
-          this.conversation.addSystemMessage(
-            `Context usage at ${usagePct}% (${totalTokens}/${maxTokens} tokens). Auto-compact will trigger within ${COMPACTION_BUFFER_TOKENS.toLocaleString()} remaining tokens.`
-          );
-          this.bus.emit('context:warning', { usage: usagePct, threshold: COMPACTION_BUFFER_TOKENS });
-          this.bus.emit('render:request');
-        }
-      }
+      await handlePostTurnContextMaintenance({
+        conversation: this.conversation,
+        runtimeBus: this.runtimeBus,
+        emitterContext: (id) => this.emitterContext(id),
+        hookDispatcher: this.hookDispatcher,
+        sessionId: this.sessionId,
+        requestRender: this.requestRender,
+        isCompacting: this.isCompacting,
+        setIsCompacting: (value) => { this.isCompacting = value; },
+        lastWarningBracket: this.lastWarningBracket,
+        setLastWarningBracket: (value) => { this.lastWarningBracket = value; },
+      }, turnId, this.lastInputTokens);
     } catch (err: unknown) {
       if (this.abortController?.signal.aborted) {
         // Clean up streaming block if one was active when aborted
         if (this.isStreaming) {
           this.isStreaming = false;
           this.conversation.finalizeStreamingBlock();
-          this.bus.emit('turn:stream-end');
+          if (this.runtimeBus) {
+            emitStreamEnd(this.runtimeBus, this.emitterContext(turnId), { turnId });
+          }
         }
         // Remove any partial LLM response, keep user message but mark it cancelled
         this.conversation.removeMessagesAfter(this.turnStartMessageCount);
         this.conversation.markLastUserMessageCancelled();
         this.conversation.addSystemMessage('[Response cancelled]');
-        this.bus.emit('turn:error', { error: new Error('Cancelled') });
+        if (this.runtimeBus) {
+          emitTurnCancel(this.runtimeBus, this.emitterContext(turnId), {
+            turnId,
+            reason: 'cancelled',
+            stopReason: 'cancelled',
+          });
+        }
         return;
       }
 
       const error = err instanceof Error ? err : new Error(String(err));
       const msg = error instanceof ProviderError ? formatProviderError(error) : `Error: ${error.message}`;
       this.conversation.addSystemMessage(msg);
-      this.bus.emit('render:request');
+      this.requestRender();
       // Graceful degradation — suggest alternative when provider fails non-transiently
       const autoSwitch = configManager.get('behavior.suggestAlternativeOnProviderFail') as boolean;
       if (autoSwitch && isNonTransientProviderFailure(err)) {
@@ -1006,7 +778,13 @@ export class Orchestrator {
         }
       }
       this._turnFailed = true;
-      this.bus.emit('turn:error', { error });
+      if (this.runtimeBus) {
+        emitTurnError(this.runtimeBus, this.emitterContext(turnId), {
+          turnId,
+          error: error.message,
+          stopReason: err instanceof ProviderError ? 'provider_error' : 'unexpected_error',
+        });
+      }
     } finally {
       // ── GC-ORCH-015: Terminal-state tool-call reconciliation ───────────────────
       // If the turn threw an exception between addAssistantMessage (which sets
@@ -1045,7 +823,7 @@ export class Orchestrator {
         for (const msg of messages) {
           this.conversation.addSystemMessage(msg);
         }
-        this.bus.emit('render:request');
+        this.requestRender();
       }
     }
   }
@@ -1064,132 +842,19 @@ export class Orchestrator {
    *          'error' (still exceeds even after compact, or compact disabled).
    */
   private async checkContextWindowPreflight(
+    turnId: string,
     model: ModelDefinition,
   ): Promise<'ok' | 'compacted' | 'error'> {
-    const catalog = getCatalog();
-    const catalogModel = catalog.getModel(model.id);
-    const contextWindow = catalogModel?.context ?? getContextWindowForModel(model);
-
-    if (contextWindow <= 0) {
-      // Unknown context window — can't validate, allow through
-      return 'ok';
-    }
-
-    const messages = this.conversation.getMessagesForLLM();
-    const estimatedTokens = estimateConversationTokens(messages);
-
-    if (estimatedTokens <= contextWindow) {
-      return 'ok';
-    }
-
-    // Request exceeds context window — try auto-compact first
-    const threshold = configManager.get('behavior.autoCompactThreshold') as number;
-    // threshold > 0 means auto-compact is active (0 = disabled by convention).
-    // threshold = 100 is valid: compact only when context is completely full.
-    const autoCompactEnabled = threshold > 0;
-
-    if (autoCompactEnabled && !this.isCompacting) {
-      logger.info('Orchestrator: context window pre-flight — auto-compacting before chat call', {
-        modelId: model.id,
-        estimatedTokens,
-        contextWindow,
-      });
-
-      this.isCompacting = true;
-      this.conversation.addSystemMessage(
-        `Context pre-check: request (~${Math.round(estimatedTokens / 1000)}K tokens) exceeds ${model.displayName} context window (${Math.round(contextWindow / 1000)}K). Auto-compacting...`
-      );
-      this.bus.emit('render:request');
-
-      // Pre:compact:preflight hook — check for deny to skip compaction
-      if (this.hookDispatcher) {
-        const preResult = await this.hookDispatcher.fire({
-          path: 'Pre:compact:preflight',
-          phase: 'Pre',
-          category: 'compact',
-          specific: 'preflight',
-          sessionId: this.sessionId,
-          timestamp: Date.now(),
-          payload: { trigger: 'preflight', estimatedTokens, contextWindow },
-        }).catch((err: unknown) => { logger.debug('Pre:compact:preflight hook error', { error: String(err) }); return { ok: true } as import('../hooks/types.ts').HookResult; });
-        if (preResult.decision === 'deny') {
-          this.isCompacting = false;
-          logger.info('Orchestrator: Pre:compact:preflight denied by hook — skipping preflight compact', { reason: preResult.reason });
-          return 'ok';
-        }
-      }
-
-      try {
-        const preflightCtx: CompactionContext = {
-          messages,
-          sessionMemories: sessionMemoryStore.list(),
-          lineageEntries: sessionLineageTracker.getEntries(),
-          agents: AgentManager.getInstance().list().filter(a => a.status === 'running' || a.status === 'pending'),
-          wrfcChains: WrfcController.getInstance().listChains(),
-          activePlan: planManager.getActive(),
-          compactionCount: sessionLineageTracker.getCompactionCount(),
-          contextWindow,
-          trigger: 'auto',
-          extractionModelId: model.id,
-          extractionProvider: model.provider,
-        };
-        await this.conversation.compact(
-          providerRegistry,
-          model.id,
-          10,
-          'auto',
-          model.provider,
-          preflightCtx,
-        );
-        this.conversation.addSystemMessage('Context compacted. Retrying request...');
-        // Post:compact:preflight hook (fire-and-forget)
-        if (this.hookDispatcher) {
-          this.hookDispatcher.fire({
-            path: 'Post:compact:preflight',
-            phase: 'Post',
-            category: 'compact',
-            specific: 'preflight',
-            sessionId: this.sessionId,
-            timestamp: Date.now(),
-            payload: { trigger: 'preflight', estimatedTokens, contextWindow },
-          }).catch((err: unknown) => { logger.debug('Post:compact:preflight hook error', { error: String(err) }); });
-        }
-      } catch (compactErr) {
-        const msg = compactErr instanceof Error ? compactErr.message : String(compactErr);
-        logger.error('Orchestrator: pre-flight compact failed', { error: msg });
-        this.conversation.addSystemMessage(`Auto-compact failed: ${msg}.`);
-        // Fail:compact:preflight hook (fire-and-forget)
-        if (this.hookDispatcher) {
-          this.hookDispatcher.fire({
-            path: 'Fail:compact:preflight',
-            phase: 'Fail',
-            category: 'compact',
-            specific: 'preflight',
-            sessionId: this.sessionId,
-            timestamp: Date.now(),
-            payload: { trigger: 'preflight', estimatedTokens, contextWindow, error: msg },
-          }).catch((err: unknown) => { logger.debug('Fail:compact:preflight hook error', { error: String(err) }); });
-        }
-      } finally {
-        this.isCompacting = false;
-      }
-
-      // Re-estimate after compaction
-      const messagesAfter = this.conversation.getMessagesForLLM();
-      const tokensAfter = estimateConversationTokens(messagesAfter);
-
-      if (tokensAfter <= contextWindow) {
-        return 'compacted';
-      }
-
-      // Still exceeds after compaction — fall through to error
-      this.emitContextOverflowError(tokensAfter, contextWindow, model.displayName, catalogModel?.tier);
-      return 'error';
-    }
-
-    // Auto-compact disabled or already compacting — emit error directly
-    this.emitContextOverflowError(estimatedTokens, contextWindow, model.displayName, catalogModel?.tier);
-    return 'error';
+    return checkContextWindowPreflight({
+      conversation: this.conversation,
+      requestRender: this.requestRender,
+      hookDispatcher: this.hookDispatcher,
+      sessionId: this.sessionId,
+      runtimeBus: this.runtimeBus,
+      emitterContext: (id) => this.emitterContext(id),
+      isCompacting: this.isCompacting,
+      setIsCompacting: (value) => { this.isCompacting = value; },
+    }, turnId, model);
   }
 
   /**
@@ -1197,37 +862,13 @@ export class Orchestrator {
    * including specific token counts and suggestions for alternative models.
    */
   private emitContextOverflowError(
+    turnId: string,
     estimatedTokens: number,
     contextWindow: number,
     modelDisplayName: string,
     tier?: 'free' | 'paid' | 'subscription',
   ): void {
-    const requestK = Math.round(estimatedTokens / 1000);
-    const contextK = Math.round(contextWindow / 1000);
-    const catalog = getCatalog();
-    const alternatives = catalog.findLargerContextModels(contextWindow, tier, 3);
-
-    let msg =
-      `Request (~${requestK}K tokens) exceeds ${modelDisplayName} context window (${contextK}K). ` +
-      `Use /compact to reduce context or switch to a larger model.`;
-
-    if (alternatives.length > 0) {
-      const altNames = alternatives
-        .map(a => `${a.displayName} (${Math.round(a.context / 1000)}K)`)
-        .join(', ');
-      msg += ` Larger-context alternatives: ${altNames}.`;
-    }
-
-    logger.warn('Orchestrator: context window overflow', {
-      estimatedTokens,
-      contextWindow,
-      modelDisplayName,
-      alternatives: alternatives.map(a => a.id),
-    });
-
-    this.conversation.addSystemMessage(msg);
-    this.bus.emit('turn:error', { error: new Error(msg) });
-    this.bus.emit('render:request');
+    emitContextOverflowError(this.conversation, this.requestRender, turnId, estimatedTokens, contextWindow, modelDisplayName, tier);
   }
 
   /**
@@ -1238,51 +879,7 @@ export class Orchestrator {
     plan: ExecutionPlan,
     items: PlanItem[],
   ): string[] {
-    if (!configManager.get('danger.agentRecursion')) {
-      return [];
-    }
-
-    const maxAgents = (configManager.get('danger.maxGlobalAgents') as number) || DEFAULT_CONFIG.danger.maxGlobalAgents;
-    const agentManager = AgentManager.getInstance();
-    const currentModel = providerRegistry.getCurrentModel();
-    const spawned: string[] = [];
-    let running = agentManager
-      .list()
-      .filter(a => a.status === 'running' || a.status === 'pending').length;
-
-    for (const item of items) {
-      if (running >= maxAgents) {
-        this.conversation.addSystemMessage(
-          `[Plan] Agent limit reached (${maxAgents}). Remaining items will be spawned as agents complete.`
-        );
-        break;
-      }
-
-      try {
-        const spawnInput: AgentInput = {
-          mode: 'spawn',
-          task: item.description,
-          template: 'engineer',
-          model: currentModel.id,
-        };
-        const agentRecord = agentManager.spawn(spawnInput);
-        planManager.updateItem(plan.id, item.id, 'in_progress', agentRecord.id);
-        spawned.push(item.description);
-        running++;
-        logger.info('Orchestrator: Auto-spawned agent for plan item', {
-          agentId: agentRecord.id,
-          planItemId: item.id,
-          description: item.description,
-        });
-      } catch (spawnErr) {
-        logger.error('Orchestrator: Failed to auto-spawn agent for plan item', {
-          planItemId: item.id,
-          error: spawnErr instanceof Error ? spawnErr.message : String(spawnErr),
-        });
-      }
-    }
-
-    return spawned;
+    return autoSpawnPendingItems(this.conversation, plan, items);
   }
 
   /**
@@ -1293,7 +890,7 @@ export class Orchestrator {
    */
   private isReconciliationEnabled(): boolean {
     if (this.flagManager === null) return true;
-    return this.flagManager.isEnabled('gc-orch-015-tool-result-reconciliation');
+    return this.flagManager.isEnabled('tool-result-reconciliation');
   }
 
   /**
@@ -1302,10 +899,10 @@ export class Orchestrator {
    * Called when the turn loop exits while `_pendingToolCalls` is non-empty,
    * or when a malformed provider response is detected. Injects synthetic error
    * results for every unresolved call, adds a system message, and emits a
-   * `turn:tool-reconciliation` event.
+   * typed `TOOL_RECONCILED` runtime event.
    *
-   * When the feature flag is disabled (legacy/compatibility mode) this method
-   * logs a warning and returns without taking action.
+   * When the feature flag is disabled this method logs a warning and returns
+   * without taking action.
    *
    * @param resolvedResults - Tool results already collected this iteration.
    * @param reason          - Why reconciliation was triggered.
@@ -1314,231 +911,25 @@ export class Orchestrator {
     resolvedResults: ToolResult[],
     reason: ReconciliationReason,
   ): void {
-    const pending = this._pendingToolCalls;
-    if (pending.length === 0) return;
-
-    const unresolved = detectUnresolvedToolCalls(pending, resolvedResults);
-    if (unresolved.length === 0) {
-      // All calls were resolved — clear pending state
-      this._pendingToolCalls = [];
-      return;
-    }
-
-    if (!this.isReconciliationEnabled()) {
-      // Compatibility mode: legacy silent-drop with warning
-      logger.warn(
-        'Orchestrator: unresolved tool calls detected but reconciliation is disabled (legacy mode). ' +
-        'Enable gc-orch-015-tool-result-reconciliation flag to suppress this.',
-        { count: unresolved.length, callIds: unresolved.map((c) => c.id), reason },
-      );
-      this._pendingToolCalls = [];
-      return;
-    }
-
-    // Build and add synthetic results to the conversation
-    const syntheticResults = unresolved.map((call) => buildSyntheticResult(call, reason));
-    this.conversation.addToolResults(syntheticResults);
-
-    // Emit synthetic result events for each reconciled call
-    for (const sr of syntheticResults) {
-      this.bus.emit('turn:tool-result', { callId: sr.callId, result: sr });
-    }
-
-    // Add a conversation-visible system message so the model understands what happened
-    const names = unresolved.map((c) => `'${c.name}'`).join(', ');
-    this.conversation.addSystemMessage(
-      `[Tool Reconciliation] ${unresolved.length} tool call(s) (${names}) were not executed before ` +
-      `the turn ended. Synthetic error results have been injected. ` +
-      `Review the situation and avoid repeating the same tool calls if the root cause has not changed.`,
-    );
-
-    // Emit the reconciliation event for telemetry / test assertions
-    this.bus.emit('turn:tool-reconciliation', {
-      count: unresolved.length,
-      callIds: unresolved.map((c) => c.id),
-      toolNames: unresolved.map((c) => c.name),
-      reason,
-      timestamp: Date.now(),
-    });
-
-    logger.warn('Orchestrator: reconciled unresolved tool calls', {
-      count: unresolved.length,
-      callIds: unresolved.map((c) => c.id),
-      reason,
-    });
-
-    this._pendingToolCalls = [];
+    reconcileUnresolvedToolCalls({
+      conversation: this.conversation,
+      runtimeBus: this.runtimeBus,
+      emitterContext: (id) => this.emitterContext(id),
+      isReconciliationEnabled: () => this.isReconciliationEnabled(),
+      currentSubmissionKey: this.currentSubmissionKey,
+      pendingToolCalls: this._pendingToolCalls,
+      setPendingToolCalls: (calls) => { this._pendingToolCalls = calls; },
+    }, resolvedResults, reason);
   }
 
-  private async executeToolCalls(calls: ToolCall[]): Promise<ToolResult[]> {
-    const results: ToolResult[] = [];
-
-    for (const call of calls) {
-      // Check permission before announcing or executing the tool
-      const approved = await this.permissionManager.check(call.name, call.arguments);
-      if (!approved) {
-        const err = new PermissionError(`Permission denied for tool '${call.name}'`);
-        results.push({
-          callId: call.id,
-          success: false,
-          error: err.message,
-        });
-        this.bus.emit('turn:tool-result', { callId: call.id, result: { callId: call.id, success: false, error: err.message } });
-        continue;
-      }
-
-      this.bus.emit('turn:tool-executing', {
-        callId: call.id,
-        tool: call.name,
-        args: call.arguments,
-      });
-
-      // --- Pre hook ---
-      if (this.hookDispatcher) {
-        try {
-          const preEvent: HookEvent = {
-            path: `Pre:tool:${call.name}`,
-            phase: 'Pre',
-            category: 'tool',
-            specific: call.name,
-            sessionId: this.sessionId,
-            timestamp: Date.now(),
-            payload: { callId: call.id, tool: call.name, args: call.arguments },
-          };
-          const preResult = await this.hookDispatcher.fire(preEvent);
-          if (preResult.decision === 'deny') {
-            const deniedResult: ToolResult = {
-              callId: call.id,
-              success: false,
-              error: preResult.reason ?? `Tool '${call.name}' denied by hook`,
-            };
-            this.bus.emit('turn:tool-result', { callId: call.id, result: deniedResult });
-            results.push(deniedResult);
-            continue;
-          }
-        } catch (hookErr) {
-          logger.error('Orchestrator: Pre hook error', {
-            tool: call.name,
-            error: hookErr instanceof Error ? hookErr.message : String(hookErr),
-          });
-        }
-      }
-
-      let result: ToolResult;
-      try {
-        result = await this.toolRegistry.execute(call.id, call.name, call.arguments);
-      } catch (err) {
-        const message =
-          err instanceof ToolError
-            ? err.message
-            : err instanceof Error
-              ? err.message
-              : String(err);
-        result = {
-          callId: call.id,
-          success: false,
-          error: message,
-        };
-
-        // --- Fail hook ---
-        if (this.hookDispatcher) {
-          try {
-            const failEvent: HookEvent = {
-              path: `Fail:tool:${call.name}`,
-              phase: 'Fail',
-              category: 'tool',
-              specific: call.name,
-              sessionId: this.sessionId,
-              timestamp: Date.now(),
-              payload: { callId: call.id, tool: call.name, error: message },
-            };
-            await this.hookDispatcher.fire(failEvent);
-          } catch (hookErr) {
-            logger.error('Orchestrator: Fail hook error', {
-              tool: call.name,
-              error: hookErr instanceof Error ? hookErr.message : String(hookErr),
-            });
-          }
-        }
-      }
-
-      // --- Post hook (only on success) ---
-      if (this.hookDispatcher && result.success === true) {
-        try {
-          const postEvent: HookEvent = {
-            path: `Post:tool:${call.name}`,
-            phase: 'Post',
-            category: 'tool',
-            specific: call.name,
-            sessionId: this.sessionId,
-            timestamp: Date.now(),
-            payload: { callId: call.id, tool: call.name, result },
-          };
-          await this.hookDispatcher.fire(postEvent);
-        } catch (hookErr) {
-          logger.error('Orchestrator: Post hook error', {
-            tool: call.name,
-            error: hookErr instanceof Error ? hookErr.message : String(hookErr),
-          });
-        }
-      }
-
-      this.bus.emit('turn:tool-result', { callId: call.id, result });
-
-      // Post/Fail:file:write|edit hooks — fire for write/edit tools regardless of tool hook
-      if (this.hookDispatcher && (call.name === 'write' || call.name === 'edit')) {
-        const filePath = typeof call.arguments['path'] === 'string' ? call.arguments['path'] :
-                         (Array.isArray(call.arguments['files']) ? JSON.stringify(call.arguments['files']) : '');
-        if (result.success) {
-          this.hookDispatcher.fire({
-            path: `Post:file:${call.name}` as import('../hooks/types.ts').HookEventPath,
-            phase: 'Post',
-            category: 'file',
-            specific: call.name,
-            sessionId: this.sessionId,
-            timestamp: Date.now(),
-            payload: { tool: call.name, path: filePath, callId: call.id },
-          }).catch((err: unknown) => { logger.debug(`Post:file:${call.name} hook error`, { error: String(err) }); });
-        } else {
-          this.hookDispatcher.fire({
-            path: `Fail:file:${call.name}` as import('../hooks/types.ts').HookEventPath,
-            phase: 'Fail',
-            category: 'file',
-            specific: call.name,
-            sessionId: this.sessionId,
-            timestamp: Date.now(),
-            payload: { tool: call.name, path: filePath, callId: call.id, error: result.error },
-          }).catch((err: unknown) => { logger.debug(`Fail:file:${call.name} hook error`, { error: String(err) }); });
-        }
-      }
-
-      // Extract images from read tool results for multimodal injection.
-      // Strip base64 from text output to avoid double-sending, store on result.
-      if (result.success && result.output && call.name === 'read') {
-        try {
-          const parsed = JSON.parse(result.output) as Record<string, unknown>;
-          if (Array.isArray(parsed['images']) && (parsed['images'] as unknown[]).length > 0) {
-            const images = parsed['images'] as Array<{ path: string; base64: string; mediaType: string; description: string }>;
-            delete parsed['images'];
-            if (parsed['files'] && typeof parsed['files'] === 'object') {
-              for (const key of Object.keys(parsed['files'] as Record<string, unknown>)) {
-                const f = (parsed['files'] as Record<string, unknown>)[key];
-                if (f && typeof f === 'object') {
-                  delete (f as Record<string, unknown>)['imageData'];
-                }
-              }
-            }
-            result.output = JSON.stringify(parsed);
-            (result as ToolResult & { _images?: typeof images })._images = images;
-          }
-        } catch {
-          // Not JSON or parse error — leave result as-is
-        }
-      }
-
-      results.push(result);
-    }
-
-    return results;
+  private async executeToolCalls(turnId: string, calls: ToolCall[]): Promise<ToolResult[]> {
+    return executeToolCalls({
+      toolRegistry: this.toolRegistry,
+      permissionManager: this.permissionManager,
+      hookDispatcher: this.hookDispatcher,
+      runtimeBus: this.runtimeBus,
+      sessionId: this.sessionId,
+      emitterContext: (id) => this.emitterContext(id),
+    }, turnId, calls);
   }
 }

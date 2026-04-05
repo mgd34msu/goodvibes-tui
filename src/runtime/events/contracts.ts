@@ -1,5 +1,5 @@
 /**
- * Event schema contracts — v3 Section 21.6.
+ * Event schema contracts for runtime event validation.
  *
  * Provides runtime shape validators for every RuntimeEvent variant.
  * Each validator is a pure predicate that checks required fields and

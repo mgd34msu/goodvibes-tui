@@ -1,5 +1,5 @@
 /**
- * Plugin lifecycle system types — v3 §4.6 and §9.
+ * Plugin lifecycle system types.
  *
  * Types here extend the store domain types with the richer capability
  * manifest and transition models used by the PluginLifecycleManager.
@@ -14,7 +14,7 @@ export type { PluginLifecycleState } from '../store/domains/plugins.ts';
 // ── Capability manifest ───────────────────────────────────────────────────────
 
 /**
- * The set of capabilities a plugin can declare in its manifest (§9.1).
+ * The set of capabilities a plugin can declare in its manifest.
  *
  * All capabilities are **deny-by-default**: a plugin must explicitly request
  * each capability and the runtime must grant it before the capability is
@@ -74,7 +74,7 @@ export interface PluginCapabilityManifest {
 
 /**
  * PluginManifestV2 extends the loader's PluginManifest with capability
- * declarations (§9.1) and trust framework fields (§5.9).
+ * declarations and trust framework fields.
  * Stored inside manifest.json under the `capabilities` key.
  * Omitting the key is equivalent to requesting no capabilities.
  */
@@ -88,7 +88,7 @@ export interface PluginManifestV2 extends PluginManifest {
   minRuntimeVersion?: string;
   /**
    * Base64-encoded HMAC-SHA256 signature of the canonical manifest payload.
-   * Required for plugins that want to operate at the `trusted` tier (§5.9).
+   * Required for plugins that want to operate at the `trusted` tier.
    */
   signature?: string;
   /**
@@ -127,7 +127,7 @@ export type TransitionResult =
 // ── Health check ─────────────────────────────────────────────────────────────
 
 /**
- * Result of a plugin health check (used during hot-reload, §9.2).
+ * Result of a plugin health check (used during hot-reload).
  */
 export interface PluginHealthCheckResult {
   /** Whether the plugin is considered healthy after the check. */
@@ -164,9 +164,9 @@ export interface PluginLifecycleRecord {
   lastError?: string;
   /** Whether a hot-reload is currently in progress for this plugin. */
   reloading: boolean;
-  /** Trust tier assigned to this plugin (§5.9). Defaults to 'untrusted'. */
+  /** Trust tier assigned to this plugin. Defaults to 'untrusted'. */
   trustTier: import('./trust.ts').PluginTrustTier;
-  /** Whether this plugin is currently quarantined (§5.9). */
+  /** Whether this plugin is currently quarantined. */
   quarantined: boolean;
 }
 
@@ -192,9 +192,14 @@ export interface PluginLifecycleManagerOptions {
   capabilityPolicy?: (pluginName: string, capability: PluginCapability) => boolean;
   /**
    * Optional trust tier resolver. Called during capability resolution to
-   * determine the effective trust tier for capability filtering (§5.9).
+   * determine the effective trust tier for capability filtering.
    * Return the tier for the given plugin name.
    * Defaults to 'untrusted' for all plugins when not provided.
    */
   trustTierResolver?: (pluginName: string) => import('./trust.ts').PluginTrustTier;
+  /**
+   * Runtime event bus used for lifecycle emission.
+   * When omitted, the manager creates an isolated in-memory bus.
+   */
+  runtimeBus?: import('../events/index.ts').RuntimeEventBus;
 }

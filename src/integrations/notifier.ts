@@ -1,5 +1,5 @@
 import { logger } from '../utils/logger.ts';
-import type { EventBus } from '../core/event-bus.ts';
+import type { RuntimeEventBus, AgentEvent, WorkflowEvent } from '../runtime/events/index.ts';
 import { SlackIntegration } from './slack.ts';
 import { DiscordIntegration } from './discord.ts';
 import { DeliveryQueue } from './delivery.ts';
@@ -17,7 +17,7 @@ import { snapshotQueueStatus } from './delivery.ts';
  *   SLACK_WEBHOOK_URL, SLACK_BOT_TOKEN
  *   DISCORD_WEBHOOK_URL, DISCORD_BOT_TOKEN
  *
- * Attach to an EventBus to automatically post notifications for key events.
+ * Attach to the RuntimeEventBus to automatically post notifications for key events.
  */
 export class Notifier {
   private slack?: SlackIntegration;
@@ -119,65 +119,44 @@ export class Notifier {
     this._queue.dispose();
   }
 
-  /**
-   * Subscribe to relevant EventBus events and automatically dispatch notifications.
-   *
-   * Events handled:
-   *   subagent:complete  → "Agent completed: {task}"
-   *   wrfc:chain-passed  → "Review passed: {score}/10"
-   *   wrfc:chain-failed  → "Review chain failed: {reason}"
-   *   plan:activate      → "Plan activated: {task}"
-   */
-  attachToEventBus(bus: EventBus): void {
-    this.detachFromEventBus();
+  attachToRuntimeBus(bus: RuntimeEventBus): void {
+    this.detach();
 
     this.unsubscribers.push(
-      bus.on('subagent:complete', (data) => {
-        void this.notify('subagent:complete', {
-          event: 'subagent:complete',
-          agentId: data.id,
-          task: data.result.output?.slice(0, 100) ?? data.id,
-          result: data.result.output,
+      bus.on<Extract<AgentEvent, { type: 'AGENT_COMPLETED' }>>('AGENT_COMPLETED', ({ payload }) => {
+        void this.notify('AGENT_COMPLETED', {
+          event: 'AGENT_COMPLETED',
+          agentId: payload.agentId,
+          task: payload.output?.slice(0, 100) ?? payload.agentId,
+          result: payload.output,
         });
       }),
     );
 
     this.unsubscribers.push(
-      bus.on('wrfc:chain-passed', (data) => {
-        void this.notify('wrfc:chain-passed', {
-          event: 'wrfc:chain-passed',
-          chainId: data.chainId,
+      bus.on<Extract<WorkflowEvent, { type: 'WORKFLOW_CHAIN_PASSED' }>>('WORKFLOW_CHAIN_PASSED', ({ payload }) => {
+        void this.notify('WORKFLOW_CHAIN_PASSED', {
+          event: 'WORKFLOW_CHAIN_PASSED',
+          chainId: payload.chainId,
         });
       }),
     );
 
     this.unsubscribers.push(
-      bus.on('wrfc:chain-failed', (data) => {
-        void this.notify('wrfc:chain-failed', {
-          event: 'wrfc:chain-failed',
-          chainId: data.chainId,
-          reason: data.reason,
+      bus.on<Extract<WorkflowEvent, { type: 'WORKFLOW_CHAIN_FAILED' }>>('WORKFLOW_CHAIN_FAILED', ({ payload }) => {
+        void this.notify('WORKFLOW_CHAIN_FAILED', {
+          event: 'WORKFLOW_CHAIN_FAILED',
+          chainId: payload.chainId,
+          reason: payload.reason,
         });
       }),
     );
 
-    this.unsubscribers.push(
-      bus.on('plan:activate', (data) => {
-        void this.notify('plan:activate', {
-          event: 'plan:activate',
-          planId: data.planId,
-          task: data.task,
-        });
-      }),
-    );
-
-    logger.info('Notifier: attached to EventBus');
+    logger.info('Notifier: attached to RuntimeEventBus');
   }
 
-  /**
-   * Remove all EventBus subscriptions.
-   */
-  detachFromEventBus(): void {
+  /** Remove all notification subscriptions. */
+  detach(): void {
     for (const unsub of this.unsubscribers) {
       unsub();
     }
@@ -190,21 +169,17 @@ export class Notifier {
 
   private formatText(event: string, data: Record<string, unknown>): string {
     switch (event) {
-      case 'subagent:complete': {
+      case 'AGENT_COMPLETED': {
         const task = typeof data.task === 'string' ? data.task : String(data.agentId ?? '');
         return `Agent completed: ${task}`;
       }
-      case 'wrfc:chain-passed': {
+      case 'WORKFLOW_CHAIN_PASSED': {
         const score = typeof data.score === 'number' ? `${data.score}/10` : 'passed';
         return `Review passed: ${score}`;
       }
-      case 'wrfc:chain-failed': {
+      case 'WORKFLOW_CHAIN_FAILED': {
         const reason = typeof data.reason === 'string' ? data.reason : 'unknown reason';
         return `Review chain failed: ${reason}`;
-      }
-      case 'plan:activate': {
-        const task = typeof data.task === 'string' ? data.task : String(data.planId ?? '');
-        return `Plan activated: ${task}`;
       }
       default: {
         const extras = Object.entries(data)

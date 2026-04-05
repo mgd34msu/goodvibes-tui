@@ -32,8 +32,8 @@ export interface TaskHooks {
 /**
  * ToolRuntimeContext — full context passed to each phase and to the tool itself.
  *
- * Based on v3 Section 6. Fields required for Tier 1 are non-optional;
- * fields wired in later tiers are optional until those tiers land.
+ * The typed runtime substrate is mandatory for tool execution; phase handlers
+ * should not need defensive guards around store or runtime-bus availability.
  */
 export interface ToolRuntimeContext {
   /** Read/subscribe access to the Zustand runtime store. */
@@ -95,11 +95,12 @@ export interface ToolRuntimeContext {
   executionMode: 'interactive' | 'background' | 'remote';
 
   /**
-   * Optional runtime event bus.
-   * Present when enableEvents is true in ExecutorConfig.
-   * Optional during migration — consumers must guard before emitting.
+   * Runtime event bus for structured phase and audit emission.
+   *
+   * ExecutorConfig still decides whether individual phase events are emitted,
+   * but the bus itself is a required runtime dependency.
    */
-  runtimeBus?: RuntimeEventBus;
+  runtimeBus: RuntimeEventBus;
 
   /** Full PermissionManager instance (used by permission phase). */
   permissionManager: PermissionManager;

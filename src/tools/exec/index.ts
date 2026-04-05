@@ -84,6 +84,57 @@ function computeRetryDelay(attempt: number, delayMs: number, backoff: 'fixed' | 
   return delayMs * Math.pow(2, attempt);
 }
 
+function buildCleanEnv(): Record<string, string> {
+  return Object.fromEntries(
+    Object.entries(process.env).filter(([, v]) => v !== undefined),
+  ) as Record<string, string>;
+}
+
+function applyExpectations(
+  result: ExecCommandResult,
+  expect: ExecCommandInput['expect'] | undefined,
+  exitCode: number | null,
+): ExecCommandResult {
+  if (!expect) return result;
+
+  const failures: string[] = [];
+  const { exit_code: expCode, stdout_contains, stderr_contains } = expect;
+
+  if (expCode !== undefined && exitCode !== expCode) {
+    failures.push(`exit_code: expected ${expCode}, got ${exitCode}`);
+  }
+  if (stdout_contains !== undefined && !result.stdout.includes(stdout_contains)) {
+    failures.push(`stdout_contains: '${stdout_contains}' not found`);
+  }
+  if (stderr_contains !== undefined && !result.stderr.includes(stderr_contains)) {
+    failures.push(`stderr_contains: '${stderr_contains}' not found`);
+  }
+
+  if (failures.length > 0) {
+    return {
+      ...result,
+      success: false,
+      expectation_error: failures.join('; '),
+    };
+  }
+
+  return result;
+}
+
+function buildTimedOutResult(cmdStr: string, cwd: string | undefined, durationMs: number, progressFile?: string): ExecCommandResult {
+  return {
+    cmd: cmdStr,
+    exit_code: null,
+    stdout: '',
+    stderr: '',
+    success: false,
+    timed_out: true,
+    duration_ms: durationMs,
+    cwd,
+    ...(progressFile ? { progress_file: progressFile } : {}),
+  };
+}
+
 // ─── Progress file helpers ────────────────────────────────────────────────────
 
 /**
@@ -248,7 +299,7 @@ async function updateImportsAfterMove(
   return updated;
 }
 
-function executeFileOp(op: ExecFileOp, projectRoot: string): FileOpResult {
+function executeFileOp(op: ExecFileOp): FileOpResult {
   const src = resolveFileOpPath(op.source, op.op);
   const result: FileOpResult = { op: op.op, source: src };
 
@@ -350,10 +401,7 @@ async function runCommand(
 
   const cwd = resolveCwd(cmdInput.cwd, globalCwd);
   const timeoutMs = cmdInput.timeout_ms ?? globalTimeout;
-  const cleanEnv = Object.fromEntries(
-    Object.entries(process.env).filter(([, v]) => v !== undefined),
-  ) as Record<string, string>;
-  const mergedEnv = { ...cleanEnv, ...cmdInput.env };
+  const mergedEnv = { ...buildCleanEnv(), ...cmdInput.env };
   const startTime = Date.now();
 
   // ─── Until pattern mode ───
@@ -416,16 +464,7 @@ async function runCommand(
     if (timedOut) {
       // Wait for process to fully exit (already killed)
       try { await procPromise; } catch { /* ignore */ }
-      return {
-        cmd: cmdStr,
-        exit_code: null,
-        stdout: '',
-        stderr: '',
-        success: false,
-        timed_out: true,
-        duration_ms: Date.now() - startTime,
-        cwd,
-      };
+      return buildTimedOutResult(cmdStr, cwd, Date.now() - startTime);
     }
 
     const [stdoutRaw, stderrRaw, exitCode] = procResult!;
@@ -447,28 +486,7 @@ async function runCommand(
       ...(stderrResult.truncated && { stderr_truncated: true }),
     };
 
-    // Check expectations
-    if (cmdInput.expect) {
-      const { exit_code: expCode, stdout_contains, stderr_contains } = cmdInput.expect;
-      const failures: string[] = [];
-
-      if (expCode !== undefined && exitCode !== expCode) {
-        failures.push(`exit_code: expected ${expCode}, got ${exitCode}`);
-      }
-      if (stdout_contains !== undefined && !(result.stdout.includes(stdout_contains))) {
-        failures.push(`stdout_contains: '${stdout_contains}' not found`);
-      }
-      if (stderr_contains !== undefined && !(result.stderr.includes(stderr_contains))) {
-        failures.push(`stderr_contains: '${stderr_contains}' not found`);
-      }
-
-      if (failures.length > 0) {
-        result.success = false;
-        result.expectation_error = failures.join('; ');
-      }
-    }
-
-    return result;
+    return applyExpectations(result, cmdInput.expect, exitCode);
   } catch (err) {
     clearTimeout(killTimer);
     throw err;
@@ -562,15 +580,9 @@ async function runCommandWithProgress(
   if (timedOut) {
     try { await ioPromise; } catch { /* ignore */ }
     return {
-      cmd: cmdStr,
-      exit_code: null,
+      ...buildTimedOutResult(cmdStr, cwd, Date.now() - startTime, progressFile.path),
       stdout: stdoutBuf,
       stderr: stderrBuf,
-      success: false,
-      timed_out: true,
-      duration_ms: Date.now() - startTime,
-      cwd,
-      progress_file: progressFile.path,
     };
   }
 
@@ -596,29 +608,7 @@ async function runCommandWithProgress(
     ...(stdoutResult.truncated && { stdout_truncated: true }),
     ...(stderrResult.truncated && { stderr_truncated: true }),
   };
-
-  // Check expectations
-  if (cmdInput.expect) {
-    const { exit_code: expCode, stdout_contains, stderr_contains } = cmdInput.expect;
-    const failures: string[] = [];
-
-    if (expCode !== undefined && actualExitCode !== expCode) {
-      failures.push(`exit_code: expected ${expCode}, got ${actualExitCode}`);
-    }
-    if (stdout_contains !== undefined && !result.stdout.includes(stdout_contains)) {
-      failures.push(`stdout_contains: '${stdout_contains}' not found`);
-    }
-    if (stderr_contains !== undefined && !result.stderr.includes(stderr_contains)) {
-      failures.push(`stderr_contains: '${stderr_contains}' not found`);
-    }
-
-    if (failures.length > 0) {
-      result.success = false;
-      result.expectation_error = failures.join('; ');
-    }
-  }
-
-  return result;
+  return applyExpectations(result, cmdInput.expect, actualExitCode);
 }
 
 async function runUntil(
@@ -738,6 +728,60 @@ async function runWithRetry(
   return { ...lastResult!, retries: maxRetries };
 }
 
+async function executeResolvedCommand(
+  cmdStr: string,
+  cmdInput: ExecCommandInput,
+  globalCwd: string | undefined,
+  globalTimeout: number,
+): Promise<ExecCommandResult> {
+  const bgSpecial = handleBgSpecialCommand(cmdStr);
+  if (bgSpecial) return bgSpecial;
+
+  if (cmdInput.background) {
+    return spawnBackground(cmdStr, resolveCwd(cmdInput.cwd, globalCwd), cmdInput.env);
+  }
+  return runWithRetry(cmdStr, cmdInput, globalCwd, globalTimeout);
+}
+
+async function executeResolvedCommands(
+  resolvedCmds: Array<{ cmdStr: string; cmdInput: ExecCommandInput }>,
+  parallel: boolean,
+  globalCwd: string | undefined,
+  globalTimeout: number,
+  failFast: boolean,
+): Promise<ExecCommandResult[]> {
+  if (parallel) {
+    return Promise.all(
+      resolvedCmds.map(({ cmdStr, cmdInput }) => executeResolvedCommand(cmdStr, cmdInput, globalCwd, globalTimeout)),
+    );
+  }
+
+  const results: ExecCommandResult[] = [];
+  let stopped = false;
+  for (const { cmdStr, cmdInput } of resolvedCmds) {
+    if (stopped) {
+      results.push({
+        cmd: cmdStr,
+        exit_code: null,
+        stdout: '',
+        stderr: '',
+        success: false,
+        skipped: true,
+      });
+      continue;
+    }
+
+    const result = await executeResolvedCommand(cmdStr, cmdInput, globalCwd, globalTimeout);
+    results.push(result);
+
+    if (failFast && !result.success) {
+      stopped = true;
+    }
+  }
+
+  return results;
+}
+
 // ─── Output formatting ───────────────────────────────────────────────────────
 
 function formatResult(result: ExecCommandResult, verbosity: ExecVerbosity): Record<string, unknown> {
@@ -815,37 +859,8 @@ export const execTool: Tool = {
       const projectRoot = resolve(process.cwd());
 
       // ── File ops first ──
-      const fileOpResults: FileOpResult[] = [];
-      const pendingImportUpdates: Array<{ src: string; dst: string }> = [];
-      if (input.file_ops && input.file_ops.length > 0) {
-        for (const op of input.file_ops) {
-          try {
-            const opResult = executeFileOp(op, projectRoot);
-            fileOpResults.push(opResult);
-            // Queue async import update after move completes
-            if (op.op === 'move' && op.update_imports && opResult.destination) {
-              pendingImportUpdates.push({ src: opResult.source, dst: opResult.destination });
-            }
-          } catch (err) {
-            const msg = err instanceof Error ? err.message : String(err);
-            return { success: false, error: `file_ops failed: ${msg}` };
-          }
-        }
-        // Run import updates after all file ops complete (async)
-        for (const { src, dst } of pendingImportUpdates) {
-          try {
-            const updated = await updateImportsAfterMove(src, dst, projectRoot);
-            const matchingResult = fileOpResults.find((r) => r.source === src && r.destination === dst);
-            if (matchingResult) matchingResult.updated_imports = updated;
-          } catch (err) {
-            logger.debug('exec file_ops: update_imports failed (non-fatal)', {
-              src,
-              dst,
-              error: err instanceof Error ? err.message : String(err),
-            });
-          }
-        }
-      }
+      const { fileOpResults, fileOpError } = await executeFileOperations(input.file_ops, projectRoot);
+      if (fileOpError) return { success: false, error: fileOpError };
 
       // ── Resolve commands ──
       const resolvedCmds: Array<{ cmdStr: string; cmdInput: ExecCommandInput }> = [];
@@ -861,58 +876,7 @@ export const execTool: Tool = {
       }
 
       // ── Execute ──
-      let results: ExecCommandResult[];
-
-      if (input.parallel) {
-        results = await Promise.all(
-          resolvedCmds.map(({ cmdStr, cmdInput }) => {
-            // Background commands in parallel mode
-            if (cmdInput.background) {
-              const bgSpecial = handleBgSpecialCommand(cmdStr);
-              if (bgSpecial) return Promise.resolve(bgSpecial);
-              return Promise.resolve(spawnBackground(cmdStr, resolveCwd(cmdInput.cwd, globalCwd), cmdInput.env));
-            }
-            return runWithRetry(cmdStr, cmdInput, globalCwd, globalTimeout);
-          }),
-        );
-      } else {
-        results = [];
-        let stopped = false;
-        for (const { cmdStr, cmdInput } of resolvedCmds) {
-          // If fail_fast already triggered, append skipped entries
-          if (stopped) {
-            results.push({
-              cmd: cmdStr,
-              exit_code: null,
-              stdout: '',
-              stderr: '',
-              success: false,
-              skipped: true,
-            });
-            continue;
-          }
-
-          // Handle bg special commands
-          const bgSpecial = handleBgSpecialCommand(cmdStr);
-          if (bgSpecial) {
-            results.push(bgSpecial);
-            continue;
-          }
-
-          if (cmdInput.background) {
-            results.push(spawnBackground(cmdStr, resolveCwd(cmdInput.cwd, globalCwd), cmdInput.env));
-            continue;
-          }
-
-          const result = await runWithRetry(cmdStr, cmdInput, globalCwd, globalTimeout);
-          results.push(result);
-
-          // Check fail_fast after each sequential command
-          if (failFast && !result.success) {
-            stopped = true;
-          }
-        }
-      }
+      const results = await executeResolvedCommands(resolvedCmds, input.parallel === true, globalCwd, globalTimeout, failFast);
 
       // ── Format output ──
       const formatted = results.map((r) => formatResult(r, verbosity));
@@ -932,3 +896,44 @@ export const execTool: Tool = {
     }
   },
 };
+
+async function executeFileOperations(
+  fileOps: ExecInput['file_ops'],
+  projectRoot: string,
+): Promise<{ fileOpResults: FileOpResult[]; fileOpError?: string }> {
+  const fileOpResults: FileOpResult[] = [];
+  const pendingImportUpdates: Array<{ src: string; dst: string }> = [];
+
+  if (!fileOps || fileOps.length === 0) {
+    return { fileOpResults };
+  }
+
+  for (const op of fileOps) {
+    try {
+      const opResult = executeFileOp(op);
+      fileOpResults.push(opResult);
+      if (op.op === 'move' && op.update_imports && opResult.destination) {
+        pendingImportUpdates.push({ src: opResult.source, dst: opResult.destination });
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      return { fileOpResults, fileOpError: `file_ops failed: ${msg}` };
+    }
+  }
+
+  for (const { src, dst } of pendingImportUpdates) {
+    try {
+      const updated = await updateImportsAfterMove(src, dst, projectRoot);
+      const matchingResult = fileOpResults.find((r) => r.source === src && r.destination === dst);
+      if (matchingResult) matchingResult.updated_imports = updated;
+    } catch (err) {
+      logger.debug('exec file_ops: update_imports failed (non-fatal)', {
+        src,
+        dst,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+
+  return { fileOpResults };
+}

@@ -1,7 +1,7 @@
 /**
  * Multi-session Orchestration — Core Types
  *
- * Implements Section 5.12: global task references across sessions,
+ * Global task references across sessions,
  * status/dependency propagation, and scoped cancellation semantics.
  */
 

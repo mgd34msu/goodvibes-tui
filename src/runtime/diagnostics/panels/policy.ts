@@ -1,5 +1,5 @@
 /**
- * Section 5.3 — Policy diagnostics panel data provider.
+ * Policy diagnostics panel data provider.
  *
  * Wraps a `PolicyRegistry` and optionally a `DivergencePanel` to expose
  * combined policy state (current bundle, candidate, simulation status,

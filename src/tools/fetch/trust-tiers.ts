@@ -1,5 +1,5 @@
 /**
- * Host trust tier classification — GC-FETCH-006.
+ * Host trust tier classification.
  *
  * Classifies outbound HTTP request targets into one of three tiers before
  * the request is sent. Blocked hosts are denied pre-request with an
@@ -199,7 +199,7 @@ function isLocalhostAlias(host: string): boolean {
 
 /**
  * Telemetry event names emitted by the trust tier classifier.
- * These are the canonical runtime contract strings for GC-FETCH-006.
+ * These are the canonical runtime contract strings for host trust classification.
  */
 export const TRUST_TIER_EVENTS = {
   /** Emitted when a host trust tier has been classified (all tiers). */
@@ -310,7 +310,7 @@ export function classifyHostTrustTier(
  *
  * Emits a log entry with event name `SSRF_DENY` that can be consumed by
  * the telemetry pipeline. This fulfils the runtime contract for the
- * `SSRF_DENY` telemetry event in GC-FETCH-006.
+ * `SSRF_DENY` telemetry event in fetch sanitization.
  *
  * @param host     - The host that was denied.
  * @param url      - The full URL that was attempted.
@@ -331,7 +331,7 @@ export function emitSsrfDeny(host: string, url: string, reason: string): void {
  *
  * Emits a log entry with event name `HOST_TRUST_TIER` that can be consumed
  * by the telemetry pipeline. This fulfils the runtime contract for the
- * `HOST_TRUST_TIER` telemetry event in GC-FETCH-006.
+ * `HOST_TRUST_TIER` telemetry event in fetch sanitization.
  *
  * @param host   - The classified host.
  * @param url    - The full URL being fetched.

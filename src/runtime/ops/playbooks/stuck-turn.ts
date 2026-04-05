@@ -6,10 +6,13 @@
  */
 import type { Playbook, DiagnosticCheckResult } from '../types.ts';
 import { safeCheck } from '../safe-check.ts';
+import { getOpsRuntimeContext } from '../runtime-context.ts';
+import type { OpsRuntimeContextState } from '../runtime-context.ts';
 
-// TODO(GC-HEALTH-003): Wire live runtime context for diagnostic checks
-/** Stuck turn / task resolution playbook. */
-export const stuckTurnPlaybook: Playbook = {
+export function createStuckTurnPlaybook(
+  getRuntimeContext: () => OpsRuntimeContextState | null = getOpsRuntimeContext,
+): Playbook {
+  return {
   id: 'stuck-turn',
   name: 'Stuck Turn / Task',
   description:
@@ -28,39 +31,102 @@ export const stuckTurnPlaybook: Playbook = {
       label: 'Turn timeout elapsed',
       description: 'Checks whether the active turn has exceeded its configured timeout.',
       run: async (): Promise<DiagnosticCheckResult> =>
-        safeCheck(async () => ({
-          passed: false,
-          summary:
-            'Cannot determine elapsed time without a live runtime context — attach the RuntimeTracer to inspect active spans.',
-          severity: 'warning',
-          context: { hint: 'Run runtime.tracer.getActiveSpans() if available' },
-        })),
+        safeCheck(async () => {
+          const runtime = getRuntimeContext();
+          if (!runtime) {
+            return {
+              passed: false,
+              summary: 'Ops runtime context is not configured.',
+              severity: 'warning',
+            };
+          }
+          const { conversation } = runtime.store.getState();
+          if (!conversation.currentTurnId || !conversation.turnStartedAt || conversation.turnState === 'idle') {
+            return {
+              passed: true,
+              summary: 'No active turn is currently in flight.',
+              severity: 'info',
+            };
+          }
+          const elapsedMs = runtime.now() - conversation.turnStartedAt;
+          const thresholdMs = 30_000;
+          const exceeded = elapsedMs > thresholdMs;
+          return {
+            passed: !exceeded,
+            summary: exceeded
+              ? `Active turn ${conversation.currentTurnId} has exceeded ${thresholdMs}ms (${elapsedMs}ms elapsed).`
+              : `Active turn ${conversation.currentTurnId} is still within the ${thresholdMs}ms threshold.`,
+            severity: exceeded ? 'error' : 'info',
+            context: {
+              turnId: conversation.currentTurnId,
+              turnState: conversation.turnState,
+              elapsedMs,
+              thresholdMs,
+            },
+          };
+        }),
     },
     {
       id: 'turn.event-bus-silent',
       label: 'Event bus silent',
       description: 'Checks whether the RuntimeEventBus has emitted any events recently.',
       run: async (): Promise<DiagnosticCheckResult> =>
-        safeCheck(async () => ({
-          passed: false,
-          summary:
-            'No live bus reference available in static context. ' +
-            'Inject the event bus to enable real-time silence detection.',
-          severity: 'warning',
-          context: { hint: 'Subscribe to eventBus and compare lastEventAt with Date.now()' },
-        })),
+        safeCheck(async () => {
+          const runtime = getRuntimeContext();
+          if (!runtime) {
+            return {
+              passed: false,
+              summary: 'Ops runtime context is not configured.',
+              severity: 'warning',
+            };
+          }
+          const silenceMs = runtime.now() - runtime.lastEventAt;
+          const thresholdMs = 30_000;
+          const silent = silenceMs > thresholdMs;
+          return {
+            passed: !silent,
+            summary: silent
+              ? `No runtime events have been observed for ${silenceMs}ms.`
+              : `Runtime event flow is active (${silenceMs}ms since the last event).`,
+            severity: silent ? 'warning' : 'info',
+            context: {
+              silenceMs,
+              thresholdMs,
+              lastEventAt: runtime.lastEventAt,
+            },
+          };
+        }),
     },
     {
       id: 'turn.pending-tool-calls',
       label: 'Pending tool calls',
       description: 'Checks for tool calls that have been dispatched but not yet resolved.',
       run: async (): Promise<DiagnosticCheckResult> =>
-        safeCheck(async () => ({
-          passed: false,
-          summary: 'Cannot query tool executor state in static context.',
-          severity: 'warning',
-          context: { hint: 'Inspect PhasedToolExecutor.pendingCount() if available' },
-        })),
+        safeCheck(async () => {
+          const runtime = getRuntimeContext();
+          if (!runtime) {
+            return {
+              passed: false,
+              summary: 'Ops runtime context is not configured.',
+              severity: 'warning',
+            };
+          }
+          const { conversation, permissions } = runtime.store.getState();
+          const pendingToolCalls = conversation.activeToolCalls.size;
+          const awaitingDecision = permissions.awaitingDecision;
+          const blocked = pendingToolCalls > 0 || awaitingDecision;
+          return {
+            passed: !blocked,
+            summary: blocked
+              ? `Detected ${pendingToolCalls} active tool call(s)${awaitingDecision ? ' with a permission decision still pending' : ''}.`
+              : 'No active tool calls or pending permission decisions detected.',
+            severity: blocked ? 'warning' : 'info',
+            context: {
+              pendingToolCalls,
+              awaitingDecision,
+            },
+          };
+        }),
     },
   ],
   steps: [
@@ -125,4 +191,8 @@ export const stuckTurnPlaybook: Playbook = {
     'Core health check reports CRITICAL for > 5 minutes',
   ],
   tags: ['turn', 'task', 'timeout', 'deadlock', 'llm'],
-};
+  };
+}
+
+/** Stuck turn / task resolution playbook. */
+export const stuckTurnPlaybook: Playbook = createStuckTurnPlaybook();

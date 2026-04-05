@@ -67,12 +67,9 @@ export class HelperRouter {
   /**
    * Resolve the best helper for the given task.
    *
-   * NOTE: `task` is accepted for forward-compatibility — per-task routing may be
-   * added in a future iteration — but is currently unused in resolution logic.
-   *
    * Returns null only if no provider can be resolved at all.
    */
-  resolve(task: HelperTask): ResolvedHelper | null {
+  resolve(_task: HelperTask): ResolvedHelper | null {
     try {
       // 1. Check per-provider helper
       const currentModel = providerRegistry.getCurrentModel();
@@ -124,7 +121,7 @@ export class HelperRouter {
       const mainProvider = providerRegistry.getForModel(currentModel.id, currentModel.provider);
       return { provider: mainProvider, modelId: currentModel.id, isHelper: false };
     } catch (err) {
-      logger.debug('HelperRouter.resolve: failed', { task, error: String(err) });
+      logger.debug('HelperRouter.resolve: failed', { task: _task, error: String(err) });
       return null;
     }
   }

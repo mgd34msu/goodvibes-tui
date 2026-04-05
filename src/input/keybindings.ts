@@ -75,7 +75,7 @@ export const ACTION_DESCRIPTIONS: Record<KeyAction, string> = {
   'undo':                  'Undo last prompt edit',
   'redo':                  'Redo last undone edit',
   'paste':                 'Paste from clipboard (image priority)',
-  'replay-panel':          'Open / close the Replay panel (Section 5.2)',
+  'replay-panel':          'Open / close the Replay panel',
 };
 
 /** Default key bindings for all actions. */

@@ -1,5 +1,5 @@
 /**
- * Permissions v2 — Simulation Pipeline.
+ * Runtime permissions simulation pipeline.
  *
  * `PermissionSimulator` wraps two `LayeredPolicyEvaluator` instances —
  * the *actual* (authoritative) evaluator and a *simulated* (candidate)
@@ -27,7 +27,7 @@ import type {
   DivergenceType,
   PermissionDecision,
   PermissionSimulatorConfig,
-  PermissionsV2Config,
+  PermissionsConfig,
   SimulationMode,
   SimulationResult,
 } from './types.ts';
@@ -93,7 +93,7 @@ function accumulateStats(
 // ── PermissionSimulator ────────────────────────────────────────────────────────
 
 /**
- * PermissionSimulator — Dual-evaluator simulation pipeline for Permissions v2.
+ * PermissionSimulator — Dual-evaluator simulation pipeline for runtime permissions.
  *
  * Runs two `LayeredPolicyEvaluator` instances (actual + simulated) in parallel
  * and tracks divergence between their decisions.
@@ -138,8 +138,8 @@ export class PermissionSimulator {
   private static readonly DEFAULT_THRESHOLD = 0.05;
 
   constructor(
-    actualConfig: PermissionsV2Config,
-    simulatedConfig: PermissionsV2Config,
+    actualConfig: PermissionsConfig,
+    simulatedConfig: PermissionsConfig,
     simulationMode: SimulationMode,
     config: PermissionSimulatorConfig = {},
   ) {

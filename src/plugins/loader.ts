@@ -3,10 +3,10 @@ import { join, resolve, isAbsolute } from 'path';
 import { homedir } from 'os';
 import { logger } from '../utils/logger.ts';
 import { createPluginAPI, type PluginAPIContext } from './api.ts';
-import type { EventBus } from '../core/event-bus.ts';
 import type { CommandRegistry } from '../input/command-registry.ts';
 import type { ProviderRegistry } from '../providers/registry.ts';
 import type { ToolRegistry } from '../tools/registry.ts';
+import type { RuntimeEventBus } from '../runtime/events/index.ts';
 
 /** Directory where users place plugin folders. */
 export const PLUGINS_DIR = join(homedir(), '.goodvibes', 'tui', 'plugins');
@@ -22,7 +22,7 @@ export interface PluginManifest {
   author?: string;
   /** Entry point relative to plugin directory. Defaults to "index.ts". */
   main?: string;
-  /** Optional list of EventBus event names the plugin subscribes to. */
+  /** Optional list of runtime event names the plugin subscribes to. */
   hooks?: string[];
 }
 
@@ -122,7 +122,7 @@ export function discoverPlugins(): DiscoveredPlugin[] {
  * PluginLoaderDeps — External dependencies injected into the loader.
  */
 export interface PluginLoaderDeps {
-  eventBus: EventBus;
+  runtimeBus: RuntimeEventBus;
   commandRegistry: CommandRegistry;
   providerRegistry: ProviderRegistry;
   toolRegistry: ToolRegistry;
@@ -201,7 +201,7 @@ export async function loadPlugin(
 
     const ctx: PluginAPIContext = {
       pluginName: manifest.name,
-      eventBus: deps.eventBus,
+      runtimeBus: deps.runtimeBus,
       commandRegistry: deps.commandRegistry,
       providerRegistry: deps.providerRegistry,
       toolRegistry: deps.toolRegistry,

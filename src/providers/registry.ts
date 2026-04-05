@@ -6,8 +6,9 @@ import { OpenAIProvider } from './openai.ts';
 import { OpenAICompatProvider } from './openai-compat.ts';
 import { AnthropicProvider } from './anthropic.ts';
 import { GeminiProvider } from './gemini.ts';
-import { config } from '../config/index.ts';
-import type { EventBus } from '../core/event-bus.ts';
+import { getConfiguredApiKeys, getConfiguredModelId, getConfiguredProviderId } from '../config/index.ts';
+import type { RuntimeEventBus } from '../runtime/events/index.ts';
+import { emitProvidersChanged, emitProviderWarning } from '../runtime/emitters/index.ts';
 import { loadCustomProviders, watchCustomProviders } from './custom-loader.ts';
 import { SyntheticProvider } from './synthetic.ts';
 
@@ -82,18 +83,32 @@ export interface ModelDefinition {
 }
 
 
-/**
- * Returns built-in model definitions sourced from the model catalog.
- * Merge order in getModelRegistry(): custom providers → synthetic → catalog → discovered servers.
- */
+function withRegistryKey(model: ModelDefinition): ModelDefinition {
+  return model.registryKey ? model : { ...model, registryKey: `${model.provider}:${model.id}` };
+}
+
+function splitModelRegistryKey(modelId: string): { providerId: string; resolvedModelId: string } {
+  if (!modelId.includes(':')) {
+    return { providerId: modelId, resolvedModelId: modelId };
+  }
+
+  return {
+    providerId: modelId.split(':')[0] ?? 'unknown',
+    resolvedModelId: modelId.split(':').slice(1).join(':'),
+  };
+}
+
+function findModelDefinition(modelId: string, registry: ModelDefinition[] = getModelRegistry()): ModelDefinition | undefined {
+  if (modelId.includes(':')) {
+    return registry.find((model) => model.registryKey === modelId) ?? registry.find((model) => model.id === modelId);
+  }
+  return registry.find((model) => model.id === modelId);
+}
+
 function getCatalogBuiltins(): ModelDefinition[] {
   return getCatalogModelDefinitions() as ModelDefinition[];
 }
 
-/**
- * Returns synthetic failover model definitions.
- * These have provider='synthetic' and use canonical slug IDs.
- */
 function getSyntheticBuiltins(): ModelDefinition[] {
   return getSyntheticModelDefinitions() as ModelDefinition[];
 }
@@ -136,15 +151,11 @@ export function getModelRegistry(): ModelDefinition[] {
       !customModels.some((c) => c.id === d.id),
   );
 
-  // Ensure every model has a registryKey
-  const ensureKey = (m: ModelDefinition): ModelDefinition =>
-    m.registryKey ? m : { ...m, registryKey: `${m.provider}:${m.id}` };
-
   return [
-    ...customModels.map(ensureKey),
-    ...syntheticModels.map(ensureKey),  // synthetic before catalog so they take priority
-    ...catalogFiltered.map(ensureKey),
-    ...discoveredFiltered.map(ensureKey),
+    ...customModels.map(withRegistryKey),
+    ...syntheticModels.map(withRegistryKey), // synthetic before catalog so they take priority
+    ...catalogFiltered.map(withRegistryKey),
+    ...discoveredFiltered.map(withRegistryKey),
   ];
 }
 
@@ -152,7 +163,7 @@ export function getModelRegistry(): ModelDefinition[] {
  * Maps catalog provider IDs to registered provider names when they differ.
  * Add an entry when a catalog's provider ID does not match the register() name.
  */
-const PROVIDER_ALIASES: Record<string, string> = {
+const CATALOG_PROVIDER_NAME_ALIASES: Record<string, string> = {
   'inception': 'inceptionlabs',
 };
 
@@ -166,17 +177,14 @@ export class ProviderRegistry {
   private discoveredProviderNames: Set<string> = new Set();
 
   constructor() {
-    this.currentModelId = config.model ?? 'openrouter/free';
+    this.currentModelId = getConfiguredModelId() || 'openrouter/free';
     this.registerBuiltins();
   }
 
   private registerBuiltins(): void {
     const apiKey = (name: string): string => {
-      const key = config.apiKeys[name] ?? '';
-      if (!key) {
-        // Silently skip — console.warn corrupts TUI display. Missing keys are handled at request time.
-      }
-      return key;
+      // Missing keys are handled at request time; avoid noisy logs during startup.
+      return getConfiguredApiKeys()[name] ?? '';
     };
 
     this.register(
@@ -615,11 +623,7 @@ export class ProviderRegistry {
       // Skip servers with no models — defaultModel would be undefined
       if (server.models.length === 0) continue;
 
-      // Map serverType to reasoningFormat so discovered providers send correct params
-      const reasoningFormat = 
-        server.serverType === 'llamacpp' ? 'llamacpp' as const :
-        server.serverType === 'ollama' ? 'llamacpp' as const : // Ollama uses same enable_thinking param
-        'none' as const;
+      const reasoningFormat = getDiscoveredReasoningFormat(server.serverType);
 
       const provider = new OpenAICompatProvider({
         name: server.name,
@@ -666,7 +670,7 @@ export class ProviderRegistry {
     const p = this.providers.get(name);
     if (p) return p;
     // Check alias map — catalog may use a different name than the registered provider
-    const aliased = PROVIDER_ALIASES[name];
+    const aliased = CATALOG_PROVIDER_NAME_ALIASES[name];
     if (aliased) {
       const pa = this.providers.get(aliased);
       if (pa) return pa;
@@ -677,25 +681,20 @@ export class ProviderRegistry {
   /** Return the provider responsible for a given model ID.
    * Accepts a registryKey (`provider:modelId`) OR a plain modelId.
    * - If input contains `:`, treats as registryKey — exact match on `m.registryKey`
-   * - If no `:`, treats as plain modelId — fallback match on `m.id` (backward compat)
+   * - If no `:`, treats as plain modelId — exact match on `m.id`
    * When `provider` is supplied alongside a plain modelId, it disambiguates.
    * Falls back to provider-agnostic search if constrained search yields nothing.
    */
   getForModel(modelId: string, provider?: string): LLMProvider {
     const registry = getModelRegistry();
-    let def: ModelDefinition | undefined;
-    if (modelId.includes(':')) {
-      // registryKey format — exact match
-      def = registry.find((m) => m.registryKey === modelId);
-      // Fallback: try plain modelId match in case registryKey not yet populated
-      if (!def) def = registry.find((m) => m.id === modelId);
-    } else {
-      // Plain modelId — backward compat
-      def = provider
-        ? (registry.find((m) => m.id === modelId && m.provider === provider) ??
-           registry.find((m) => m.id === modelId))
-        : registry.find((m) => m.id === modelId);
-    }
+    const def = provider
+      ? (modelId.includes(':')
+        ? findModelDefinition(modelId, registry)
+          ?? registry.find((model) => model.id === modelId && model.provider === provider)
+          ?? registry.find((model) => model.id === modelId)
+        : registry.find((model) => model.id === modelId && model.provider === provider)
+          ?? registry.find((model) => model.id === modelId))
+      : findModelDefinition(modelId, registry);
     if (!def) throw new Error(`No model '${modelId}' in registry.`);
     return this.get(def.provider);
   }
@@ -712,25 +711,15 @@ export class ProviderRegistry {
 
   /** Currently active model definition. */
   getCurrentModel(): ModelDefinition {
-    // Support registryKey lookup: if currentModelId contains ':', treat as registryKey
     const registry = getModelRegistry();
-    const def = this.currentModelId.includes(':')
-      ? (registry.find((m) => m.registryKey === this.currentModelId) ??
-         registry.find((m) => m.id === this.currentModelId))
-      : registry.find((m) => m.id === this.currentModelId);
+    const def = findModelDefinition(this.currentModelId, registry);
     if (!def) {
-      // Check if this is a discovered/custom model that hasn't loaded yet.
-      // Don't clobber currentModelId — return a placeholder so the saved ID is preserved
-      // until the discovered provider registers later.
-      // Extract base model ID from registryKey if needed
-      const baseId = this.currentModelId.includes(':')
-        ? this.currentModelId.split(':').slice(1).join(':')
-        : this.currentModelId;
+      const baseId = getBaseModelId(this.currentModelId);
       const isInCatalog = getCatalogBuiltins().some((m) => m.id === baseId || m.id === this.currentModelId);
       if (!isInCatalog && this.currentModelId) {
         const placeholderProvider = this.currentModelId.includes(':')
           ? this.currentModelId.split(':')[0]
-          : (config.provider ?? 'unknown');
+          : (getConfiguredProviderId() || 'unknown');
         return {
           id: baseId,
           provider: placeholderProvider ?? 'unknown',
@@ -788,10 +777,7 @@ export class ProviderRegistry {
 
   /** Switch to a different model. Accepts registryKey or plain modelId. Throws if not selectable. */
   setCurrentModel(modelId: string): void {
-    const registry = getModelRegistry();
-    const def = modelId.includes(':')
-      ? (registry.find((m) => m.registryKey === modelId) ?? registry.find((m) => m.id === modelId))
-      : registry.find((m) => m.id === modelId);
+    const def = findModelDefinition(modelId);
     if (!def) throw new Error(`Model '${modelId}' not found.`);
     if (!def.selectable) throw new Error(`Model '${modelId}' is not selectable.`);
     // Store the registryKey for unambiguous future lookups
@@ -853,21 +839,33 @@ export class ProviderRegistry {
 
   /**
    * Start watching ~/.goodvibes/tui/providers/ for file changes.
-   * On change, reloads custom providers and emits 'providers:changed' on the bus.
+   * On change, reloads custom providers and emits typed provider runtime events.
    * Safe to call multiple times — stops the previous watcher first.
    */
-  startWatching(bus: EventBus): void {
+  startWatching(runtimeBus: RuntimeEventBus | null = null): void {
     this.stopWatching();
-    this._watcher = watchCustomProviders(bus, async () => {
+    this._watcher = watchCustomProviders(runtimeBus, async () => {
       const result = await this.loadCustomProviders();
       for (const msg of result.warnings) {
-        bus.emit('providers:warning', { message: msg });
+        if (runtimeBus) {
+          emitProviderWarning(runtimeBus, {
+            sessionId: 'system',
+            traceId: `providers:warning:${Date.now()}`,
+            source: 'provider-registry',
+          }, { message: msg });
+        }
       }
-      bus.emit('providers:changed', {
-        added: result.added,
-        removed: result.removed,
-        updated: result.updated,
-      });
+      if (runtimeBus) {
+        emitProvidersChanged(runtimeBus, {
+          sessionId: 'system',
+          traceId: `providers:changed:${Date.now()}`,
+          source: 'provider-registry',
+        }, {
+          added: result.added,
+          removed: result.removed,
+          updated: result.updated,
+        });
+      }
     });
   }
 
@@ -897,14 +895,14 @@ export class ProviderRegistry {
    * Prefers a synthetic failover wrapper; falls back to same-tier model on a different provider.
    */
   findAlternativeModel(currentModelId: string): ModelDefinition | null {
-    const current = getModelRegistry().find(m => m.id === currentModelId);
+    const current = findModelDefinition(currentModelId);
     if (!current || current.provider === 'synthetic') return null;
     // Check if synthetic wrapper exists
     const baseName = current.id.split('/').pop() ?? '';
-    const syntheticMatch = getModelRegistry().find(m => m.provider === 'synthetic' && (m.id === baseName || m.id.endsWith('/' + baseName)));
+    const syntheticMatch = getModelRegistry().find((model) => model.provider === 'synthetic' && (model.id === baseName || model.id.endsWith('/' + baseName)));
     if (syntheticMatch) return syntheticMatch;
     // Find same-tier model on different provider
-    return getModelRegistry().find(m => m.id !== currentModelId && m.provider !== current.provider && m.tier === current.tier && m.selectable) ?? null;
+    return getModelRegistry().find((model) => model.id !== currentModelId && model.provider !== current.provider && model.tier === current.tier && model.selectable) ?? null;
   }
 
   /**
@@ -944,11 +942,10 @@ export class ProviderRegistry {
     provider: LLMProvider | undefined;
   } {
     const registry = getModelRegistry();
-    const def = modelId.includes(':')
-      ? (registry.find((m) => m.registryKey === modelId) ?? registry.find((m) => m.id === modelId))
-      : registry.find((m) => m.id === modelId);
-    const providerId = def?.provider ?? modelId.split(':')[0] ?? 'unknown';
-    const resolvedModelId = def?.id ?? (modelId.includes(':') ? modelId.split(':').slice(1).join(':') : modelId);
+    const def = findModelDefinition(modelId, registry);
+    const { providerId: fallbackProviderId, resolvedModelId: fallbackModelId } = splitModelRegistryKey(modelId);
+    const providerId = def?.provider ?? fallbackProviderId;
+    const resolvedModelId = def?.id ?? fallbackModelId;
     let provider: LLMProvider | undefined;
     try {
       provider = this.get(providerId);
@@ -973,6 +970,20 @@ export class ProviderRegistry {
         this._readyPromise = null;
       });
   }
+}
+
+function getDiscoveredReasoningFormat(serverType: DiscoveredServer['serverType']): 'llamacpp' | 'none' {
+  switch (serverType) {
+    case 'llamacpp':
+    case 'ollama':
+      return 'llamacpp';
+    default:
+      return 'none';
+  }
+}
+
+function getBaseModelId(modelId: string): string {
+  return modelId.includes(':') ? modelId.split(':').slice(1).join(':') : modelId;
 }
 
 /**

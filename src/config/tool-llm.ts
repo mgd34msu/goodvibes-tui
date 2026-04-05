@@ -15,7 +15,7 @@
  */
 
 import type { LLMProvider } from '../providers/interface.ts';
-import { providerRegistry } from '../providers/registry.ts';
+import { getProviderRegistry } from '../providers/registry.ts';
 import { configManager } from './index.ts';
 import { logger } from '../utils/logger.ts';
 
@@ -36,6 +36,7 @@ export interface ResolvedToolLLM {
  */
 export function resolveToolLLM(): ResolvedToolLLM | null {
   try {
+    const providerRegistry = getProviderRegistry();
     const cfgProvider = configManager.get('tools.llmProvider');
     const cfgModel = configManager.get('tools.llmModel');
 

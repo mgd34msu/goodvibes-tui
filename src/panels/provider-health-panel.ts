@@ -1,6 +1,6 @@
 import { BasePanel } from './base-panel.ts';
 import { createEmptyLine, createStyledCell, type Line } from '../types/grid.ts';
-import type { EventBus } from '../core/event-bus.ts';
+import type { RuntimeEventBus, ProviderEvent, TurnEvent } from '../runtime/events/index.ts';
 import { providerRegistry } from '../providers/registry.ts';
 
 // ---------------------------------------------------------------------------
@@ -25,7 +25,7 @@ export interface ProviderHealth {
 // ---------------------------------------------------------------------------
 
 /**
- * Singleton health tracker updated via EventBus events.
+ * Singleton health tracker updated via typed turn runtime events.
  * Panels read from this; external code can also observe it.
  */
 export class ProviderHealthTracker {
@@ -50,7 +50,7 @@ export class ProviderHealthTracker {
     this._streamStartMs = Date.now();
   }
 
-  onLlmResponse(): void {
+  onLlmResponse(providerName: string): void {
     const now = Date.now(); // single timestamp for consistency within this method
     const latencyMs =
       this._streamStartMs !== null
@@ -60,28 +60,13 @@ export class ProviderHealthTracker {
           : undefined;
     this._streamStartMs = null;
 
-    let providerName = 'unknown';
-    try {
-      providerName = providerRegistry.getCurrentModel().provider;
-    } catch {
-      // model not set yet at startup
-    }
-
     this._recordSuccess(providerName, latencyMs);
   }
 
-  onTurnError(error: Error): void {
+  onTurnError(error: string, providerName = 'unknown'): void {
     this._streamStartMs = null;
     this._turnStartMs = null;
-
-    let providerName = 'unknown';
-    try {
-      providerName = providerRegistry.getCurrentModel().provider;
-    } catch {
-      // ignore
-    }
-
-    const msg = error?.message ?? String(error);
+    const msg = error;
     const isRateLimit = this._isRateLimitMessage(msg);
 
     this._recordError(providerName, msg, isRateLimit);
@@ -253,7 +238,10 @@ export class ProviderHealthPanel extends BasePanel {
   private _unsubs: Array<() => void> = [];
   private _refreshTimer: ReturnType<typeof setInterval> | null = null;
 
-  constructor(private readonly bus: EventBus) {
+  constructor(
+    private readonly runtimeBus: RuntimeEventBus,
+    private readonly requestRender: () => void = () => {},
+  ) {
     super('provider-health', 'Health', 'N', 'monitoring');
     this._subscribe();
   }
@@ -264,38 +252,38 @@ export class ProviderHealthPanel extends BasePanel {
 
   private _subscribe(): void {
     this._unsubs.push(
-      this.bus.on('turn:start', () => {
+      this.runtimeBus.on('TURN_SUBMITTED', () => {
         providerHealthTracker.onTurnStart();
       }),
     );
 
     this._unsubs.push(
-      this.bus.on('turn:stream-start', () => {
+      this.runtimeBus.on('STREAM_START', () => {
         providerHealthTracker.onStreamStart();
       }),
     );
 
     this._unsubs.push(
-      this.bus.on('turn:llm-response', () => {
-        providerHealthTracker.onLlmResponse();
+      this.runtimeBus.on<Extract<TurnEvent, { type: 'LLM_RESPONSE_RECEIVED' }>>('LLM_RESPONSE_RECEIVED', (env) => {
+        providerHealthTracker.onLlmResponse(env.payload.provider);
         this.markDirty();
-        this.bus.emit('render:request');
+        this.requestRender();
       }),
     );
 
     this._unsubs.push(
-      this.bus.on('turn:error', ({ error }) => {
-        providerHealthTracker.onTurnError(error);
+      this.runtimeBus.on<Extract<TurnEvent, { type: 'TURN_ERROR' }>>('TURN_ERROR', (env) => {
+        providerHealthTracker.onTurnError(env.payload.error);
         this.markDirty();
-        this.bus.emit('render:request');
+        this.requestRender();
       }),
     );
 
     this._unsubs.push(
-      this.bus.on('providers:changed', () => {
+      this.runtimeBus.on<Extract<ProviderEvent, { type: 'PROVIDERS_CHANGED' }>>('PROVIDERS_CHANGED', () => {
         providerHealthTracker.onProvidersChanged();
         this.markDirty();
-        this.bus.emit('render:request');
+        this.requestRender();
       }),
     );
   }
@@ -311,7 +299,7 @@ export class ProviderHealthPanel extends BasePanel {
     if (this._refreshTimer !== null) clearInterval(this._refreshTimer);
     this._refreshTimer = setInterval(() => {
       this.markDirty();
-      this.bus.emit('render:request');
+      this.requestRender();
     }, 1_000);
   }
 

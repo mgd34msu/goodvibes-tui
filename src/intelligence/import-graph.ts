@@ -11,8 +11,7 @@
  *   const affected = graph.findDependents('/abs/path/to/file.ts');
  */
 
-import { existsSync, statSync, type Dirent } from 'node:fs';
-import { readdir, readFile } from 'node:fs/promises';
+import { existsSync, readdirSync, readFileSync, statSync, type Dirent } from 'node:fs';
 import { dirname, extname, join, relative, resolve } from 'node:path';
 import { logger } from '../utils/logger.ts';
 
@@ -52,42 +51,64 @@ function extractRelativeSpecifiers(content: string): string[] {
   return specs;
 }
 
+export const extractRelativeSpecifiersForTest = extractRelativeSpecifiers;
+
 /**
  * Resolve a relative specifier from a source file to an absolute path.
  * Tries common extensions/index files if an exact match doesn't exist.
  */
-function resolveSpecifier(fromFile: string, spec: string): string | null {
+function resolveSpecifierFromKnownFiles(
+  fromFile: string,
+  spec: string,
+  fileExists: (candidate: string) => boolean,
+): string | null {
   const base = resolve(dirname(fromFile), spec);
 
   // Already an exact file?
-  if (existsSync(base) && statSync(base).isFile()) return base;
+  if (fileExists(base)) return base;
 
   // Try extensions
   for (const ext of ['.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs']) {
     const candidate = base + ext;
-    if (existsSync(candidate)) return candidate;
+    if (fileExists(candidate)) return candidate;
   }
 
   // Try index files
   for (const index of ['index.ts', 'index.tsx', 'index.js', 'index.jsx']) {
     const candidate = join(base, index);
-    if (existsSync(candidate)) return candidate;
+    if (fileExists(candidate)) return candidate;
   }
 
   return null;
+}
+
+function resolveSpecifier(fromFile: string, spec: string): string | null {
+  return resolveSpecifierFromKnownFiles(
+    fromFile,
+    spec,
+    (candidate) => existsSync(candidate) && statSync(candidate).isFile(),
+  );
+}
+
+export function resolveSpecifierForTest(
+  fromFile: string,
+  spec: string,
+  knownFiles: Iterable<string>,
+): string | null {
+  const fileSet = knownFiles instanceof Set ? knownFiles : new Set(knownFiles);
+  return resolveSpecifierFromKnownFiles(fromFile, spec, (candidate) => fileSet.has(candidate));
 }
 
 // ---------------------------------------------------------------------------
 // File collection
 // ---------------------------------------------------------------------------
 
-async function collectSourceFiles(dir: string, results: string[] = []): Promise<string[]> {
+function collectSourceFiles(dir: string, results: string[] = []): string[] {
   if (results.length >= MAX_FILES) return results;
 
   let entries: Dirent[];
   try {
-    // Bun's readdir with withFileTypes returns Dirent[] at runtime but typings may not reflect this
-    entries = await readdir(dir, { withFileTypes: true }) as unknown as Dirent[];
+    entries = readdirSync(dir, { withFileTypes: true }) as unknown as Dirent[];
   } catch (err) {
     logger.debug('[import-graph] Skipping unreadable directory', { dir, error: err instanceof Error ? err.message : String(err) });
     return results;
@@ -99,7 +120,7 @@ async function collectSourceFiles(dir: string, results: string[] = []): Promise<
 
     const full = join(dir, entry.name);
     if (entry.isDirectory()) {
-      await collectSourceFiles(full, results);
+      collectSourceFiles(full, results);
     } else if (entry.isFile() && SUPPORTED_EXTENSIONS.has(extname(entry.name))) {
       results.push(full);
     }
@@ -127,7 +148,7 @@ export class ImportGraph {
   /** Whether graph is stale and needs a rebuild */
   private dirty = true;
 
-  private constructor() {}
+  constructor() {}
 
   static getInstance(): ImportGraph {
     if (!ImportGraph._instance) {
@@ -151,7 +172,7 @@ export class ImportGraph {
   async build(projectRoot: string): Promise<void> {
     if (!this.dirty && this.scannedRoot === projectRoot) return;
 
-    const files = await collectSourceFiles(projectRoot);
+    const files = collectSourceFiles(projectRoot);
     const imports: ImportsMap = new Map();
     const dependents: DependentsMap = new Map();
 
@@ -164,7 +185,7 @@ export class ImportGraph {
     for (const filePath of files) {
       let content: string;
       try {
-        content = await readFile(filePath, 'utf-8');
+        content = readFileSync(filePath, 'utf-8');
       } catch (err) {
         logger.debug('[import-graph] Skipping unreadable file', { file: filePath, error: err instanceof Error ? err.message : String(err) });
         continue;
@@ -196,6 +217,38 @@ export class ImportGraph {
     this.imports = imports;
     this.dependents = dependents;
     this.scannedRoot = projectRoot;
+    this.dirty = false;
+  }
+
+  /**
+   * Build the graph from an in-memory file map for deterministic tests.
+   * Keys must be absolute file paths.
+   * @internal
+   */
+  buildFromFilesForTest(files: Record<string, string>): void {
+    const knownFiles = new Set(Object.keys(files));
+    const imports: ImportsMap = new Map();
+    const dependents: DependentsMap = new Map();
+
+    for (const filePath of knownFiles) {
+      imports.set(filePath, new Set());
+      dependents.set(filePath, new Set());
+    }
+
+    for (const [filePath, content] of Object.entries(files)) {
+      const specs = extractRelativeSpecifiers(content);
+      for (const spec of specs) {
+        const resolved = resolveSpecifierFromKnownFiles(filePath, spec, (candidate) => knownFiles.has(candidate));
+        if (!resolved) continue;
+
+        imports.get(filePath)!.add(resolved);
+        dependents.get(resolved)!.add(filePath);
+      }
+    }
+
+    this.imports = imports;
+    this.dependents = dependents;
+    this.scannedRoot = null;
     this.dirty = false;
   }
 

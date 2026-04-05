@@ -83,7 +83,7 @@ describe('FilePickerModal — inject mode', () => {
     const picker = new FilePickerModal();
     // Mutate then re-open
     picker.open(0);
-    (picker as any).selectedIndex = 5;
+    picker.selectedIndex = 5;
     picker.open(0, true);
     expect(picker.selectedIndex).toBe(0);
   });

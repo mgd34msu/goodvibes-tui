@@ -1,13 +1,13 @@
 import { describe, test, expect, beforeEach, afterEach, mock } from 'bun:test';
-import { EventBus } from '../../core/event-bus.ts';
 import { ToolRegistry } from '../../tools/registry.ts';
 import { MockLLMProvider } from '../setup.ts';
 import { HookDispatcher } from '../../hooks/dispatcher.ts';
 import type { HookEvent, HookResult } from '../../hooks/types.ts';
-import { config, configManager } from '../../config/index.ts';
+import { configManager, getConfigSnapshot } from '../../config/index.ts';
 import { getProviderRegistry } from '../../providers/registry.ts';
 import type { ProviderRegistry } from '../../providers/registry.ts';
 import type { LLMProvider, ChatRequest, ChatResponse } from '../../providers/interface.ts';
+import { RuntimeEventBus } from '../../runtime/events/index.ts';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -40,22 +40,33 @@ function _makeMockProvider(responses: MockChatResponse[]) {
 // ---------------------------------------------------------------------------
 
 describe('Orchestrator', () => {
-  let bus: EventBus;
+  let runtimeBus: RuntimeEventBus;
   let toolRegistry: ToolRegistry;
+  let testExecutionLock: Promise<void> = Promise.resolve();
+  let releaseTestExecutionLock: (() => void) | null = null;
 
-  beforeEach(() => {
-    bus = new EventBus();
+  beforeEach(async () => {
+    await testExecutionLock;
+    testExecutionLock = new Promise<void>((resolve) => {
+      releaseTestExecutionLock = resolve;
+    });
+    runtimeBus = new RuntimeEventBus();
     toolRegistry = new ToolRegistry();
   });
 
-  async function buildOrchestrator() {
+  afterEach(() => {
+    releaseTestExecutionLock?.();
+    releaseTestExecutionLock = null;
+  });
+
+  async function buildOrchestrator(renderRequest: (() => void) | null = null) {
     const { Orchestrator } = await import('../../core/orchestrator.ts');
     const { ConversationManager } = await import('../../core/conversation.ts');
     const { PermissionManager } = await import('../../permissions/manager.ts');
     const cm = new ConversationManager(() => 80);
-    const pm = new PermissionManager(bus);
-    // hookDispatcher is the optional 8th param; omitting it tests backward compat
-    const orch = new Orchestrator(bus, cm, () => 24, () => {}, toolRegistry, pm);
+    const pm = new PermissionManager();
+    // hookDispatcher is the optional 8th param; omitting it exercises the default constructor path
+    const orch = new Orchestrator(cm, () => 24, () => {}, toolRegistry, pm, () => '', null, null, renderRequest, runtimeBus);
     return { orch, cm, pm };
   }
 
@@ -64,8 +75,8 @@ describe('Orchestrator', () => {
     const { ConversationManager } = await import('../../core/conversation.ts');
     const { PermissionManager } = await import('../../permissions/manager.ts');
     const cm = new ConversationManager(() => 80);
-    const pm = new PermissionManager(bus);
-    const orch = new Orchestrator(bus, cm, () => 24, () => {}, toolRegistry, pm, () => '', hookDispatcher);
+    const pm = new PermissionManager();
+    const orch = new Orchestrator(cm, () => 24, () => {}, toolRegistry, pm, () => '', hookDispatcher, null, null, runtimeBus);
     return { orch, cm, pm };
   }
 
@@ -128,13 +139,11 @@ describe('Orchestrator', () => {
 
   describe('handleUserInput - queue behavior', () => {
     test('queues input when already thinking and emits render:request', async () => {
-      const { orch } = await buildOrchestrator();
+      let renderCount = 0;
+      const { orch } = await buildOrchestrator(() => { renderCount++; });
 
       // Manually set thinking state to simulate in-flight request
       (orch as unknown as { isThinking: boolean }).isThinking = true;
-
-      let renderCount = 0;
-      bus.on('render:request', () => renderCount++);
 
       // This should queue, not call LLM (which would fail without a valid provider)
       orch.handleUserInput('queued message');
@@ -205,7 +214,7 @@ describe('Orchestrator', () => {
       const result = await toolRegistry.execute('call-x', 'delegate', {
         description: 'Run tests',
         context: 'Run all unit tests',
-        tools: ['file_read'],
+        tools: ['read'],
       });
 
       expect(result.success).toBe(true);
@@ -242,7 +251,7 @@ describe('Orchestrator', () => {
     let savedAutoApprove: boolean;
 
     beforeEach(() => {
-      savedAutoApprove = config.autoApprove ?? false;
+      savedAutoApprove = getConfigSnapshot().behavior.autoApprove ?? false;
       configManager.set('behavior.autoApprove', true);
     });
 
@@ -252,7 +261,10 @@ describe('Orchestrator', () => {
 
     /** Directly call the private executeToolCalls method via type cast */
     type OrchestratorInternal = {
-      executeToolCalls: (calls: Array<{ id: string; name: string; arguments: Record<string, unknown> }>) => Promise<Array<{ callId: string; success: boolean; output?: string; error?: string }>>;
+      executeToolCalls: (
+        turnId: string,
+        calls: Array<{ id: string; name: string; arguments: Record<string, unknown> }>,
+      ) => Promise<Array<{ callId: string; success: boolean; output?: string; error?: string }>>;
     };
 
     test('Pre hook fires before tool execution with correct event shape', async () => {
@@ -275,7 +287,7 @@ describe('Orchestrator', () => {
       registerSuccessTool('mytool');
       const { orch } = await buildOrchestratorWithHooks(dispatcher);
       const internal = orch as unknown as OrchestratorInternal;
-      await internal.executeToolCalls([{ id: 'c1', name: 'mytool', arguments: {} }]);
+      await internal.executeToolCalls('turn-1', [{ id: 'c1', name: 'mytool', arguments: {} }]);
 
       const preEvent = firedEvents.find(e => e.phase === 'Pre');
       expect(preEvent).toBeDefined();
@@ -298,7 +310,7 @@ describe('Orchestrator', () => {
       registerSuccessTool('goodtool', 'done');
       const { orch } = await buildOrchestratorWithHooks(dispatcher);
       const internal = orch as unknown as OrchestratorInternal;
-      const results = await internal.executeToolCalls([{ id: 'c2', name: 'goodtool', arguments: {} }]);
+      const results = await internal.executeToolCalls('turn-2', [{ id: 'c2', name: 'goodtool', arguments: {} }]);
 
       expect(results[0].success).toBe(true);
       const postEvent = firedEvents.find(e => e.phase === 'Post');
@@ -318,7 +330,7 @@ describe('Orchestrator', () => {
       registerThrowingTool('badtool', 'something went wrong');
       const { orch } = await buildOrchestratorWithHooks(dispatcher);
       const internal = orch as unknown as OrchestratorInternal;
-      const results = await internal.executeToolCalls([{ id: 'c3', name: 'badtool', arguments: {} }]);
+      const results = await internal.executeToolCalls('turn-3', [{ id: 'c3', name: 'badtool', arguments: {} }]);
 
       expect(results[0].success).toBe(false);
       expect(results[0].error).toContain('something went wrong');
@@ -351,7 +363,7 @@ describe('Orchestrator', () => {
 
       const { orch } = await buildOrchestratorWithHooks(dispatcher);
       const internal = orch as unknown as OrchestratorInternal;
-      const results = await internal.executeToolCalls([{ id: 'c4', name: 'restricted', arguments: {} }]);
+      const results = await internal.executeToolCalls('turn-4', [{ id: 'c4', name: 'restricted', arguments: {} }]);
 
       expect(results[0].success).toBe(false);
       expect(results[0].error).toContain('blocked by policy');
@@ -363,7 +375,7 @@ describe('Orchestrator', () => {
       registerSuccessTool('plaintool', 'plain result');
       const { orch } = await buildOrchestrator();
       const internal = orch as unknown as OrchestratorInternal;
-      const results = await internal.executeToolCalls([{ id: 'c5', name: 'plaintool', arguments: {} }]);
+      const results = await internal.executeToolCalls('turn-5', [{ id: 'c5', name: 'plaintool', arguments: {} }]);
 
       expect(results[0].success).toBe(true);
       expect(results[0].output).toBe('plain result');
@@ -378,7 +390,7 @@ describe('Orchestrator', () => {
       registerSuccessTool('robusttool', 'still works');
       const { orch } = await buildOrchestratorWithHooks(dispatcher);
       const internal = orch as unknown as OrchestratorInternal;
-      const results = await internal.executeToolCalls([{ id: 'c6', name: 'robusttool', arguments: {} }]);
+      const results = await internal.executeToolCalls('turn-6', [{ id: 'c6', name: 'robusttool', arguments: {} }]);
 
       // Tool should still execute and succeed despite hook failure
       expect(results[0].success).toBe(true);
@@ -387,6 +399,8 @@ describe('Orchestrator', () => {
   });
 
   describe('turn loop - spawn behavior', () => {
+    let providerPatchLock: Promise<void> = Promise.resolve();
+
     /**
      * Mock model descriptor shared across spawn-behavior tests.
      * Capabilities.toolCalling must be true so the orchestrator includes tools
@@ -412,6 +426,13 @@ describe('Orchestrator', () => {
       provider: LLMProvider,
       fn: () => Promise<T>,
     ): Promise<T> {
+      const waitForTurn = providerPatchLock;
+      let releaseLock!: () => void;
+      providerPatchLock = new Promise<void>((resolve) => {
+        releaseLock = resolve;
+      });
+
+      await waitForTurn;
       const reg: ProviderRegistry = getProviderRegistry();
       const origGet = reg.get.bind(reg);
       const origGetForModel = reg.getForModel.bind(reg);
@@ -426,6 +447,7 @@ describe('Orchestrator', () => {
         reg.get = origGet;
         reg.getForModel = origGetForModel;
         reg.getCurrentModel = origGetCurrentModel;
+        releaseLock();
       }
     }
 
@@ -433,7 +455,7 @@ describe('Orchestrator', () => {
     let savedAutoApprove: boolean;
 
     beforeEach(() => {
-      savedAutoApprove = config.autoApprove ?? false;
+      savedAutoApprove = getConfigSnapshot().behavior.autoApprove ?? false;
       configManager.set('behavior.autoApprove', true);
     });
 
@@ -442,12 +464,10 @@ describe('Orchestrator', () => {
     });
 
     test('batch-spawn tool call ends the turn loop (LLM called exactly once)', async () => {
-      let chatCallCount = 0;
       const provider: LLMProvider = {
         name: 'mock',
         models: ['mock-model'],
         chat: mock(async (_params: ChatRequest): Promise<ChatResponse> => {
-          chatCallCount++;
           // First (and only expected) call: return a batch-spawn agent tool call
           return {
             content: '',
@@ -475,25 +495,31 @@ describe('Orchestrator', () => {
       });
 
       const turnCompleteEvents: unknown[] = [];
-      bus.on('turn:complete', (data) => turnCompleteEvents.push(data));
+      runtimeBus.on('TURN_COMPLETED', (data) => turnCompleteEvents.push(data));
 
-      const { orch } = await buildOrchestrator();
+      const { orch, cm } = await buildOrchestrator();
 
       await withMockProvider(provider, () => orch.handleUserInput('spawn two agents'));
 
-      // The turn loop must stop after the batch-spawn — LLM should only be called once.
-      expect(chatCallCount).toBe(1);
-      // turn:complete must have been emitted
+      const messages = (
+        cm as unknown as {
+          messages: Array<{ role: string; callId?: string; content: unknown }>;
+        }
+      ).messages;
+      const assistantMessages = messages.filter((message) => message.role === 'assistant');
+      const toolMessages = messages.filter((message) => message.role === 'tool');
+      expect(assistantMessages).toHaveLength(1);
+      expect(toolMessages).toHaveLength(1);
+      expect(toolMessages[0]?.callId).toBe('call-batch-1');
+      expect(toolMessages[0]?.content).toBe('batch spawned');
       expect(turnCompleteEvents.length).toBeGreaterThan(0);
     });
 
     test('spawn tool call ends the turn loop (same behavior as batch-spawn)', async () => {
-      let chatCallCount = 0;
       const provider: LLMProvider = {
         name: 'mock',
         models: ['mock-model'],
         chat: mock(async (_params: ChatRequest): Promise<ChatResponse> => {
-          chatCallCount++;
           return {
             content: '',
             toolCalls: [{
@@ -513,13 +539,23 @@ describe('Orchestrator', () => {
       });
 
       const turnCompleteEvents: unknown[] = [];
-      bus.on('turn:complete', (data) => turnCompleteEvents.push(data));
+      runtimeBus.on('TURN_COMPLETED', (data) => turnCompleteEvents.push(data));
 
-      const { orch } = await buildOrchestrator();
+      const { orch, cm } = await buildOrchestrator();
 
       await withMockProvider(provider, () => orch.handleUserInput('spawn an agent'));
 
-      expect(chatCallCount).toBe(1);
+      const messages = (
+        cm as unknown as {
+          messages: Array<{ role: string; callId?: string; content: unknown }>;
+        }
+      ).messages;
+      const assistantMessages = messages.filter((message) => message.role === 'assistant');
+      const toolMessages = messages.filter((message) => message.role === 'tool');
+      expect(assistantMessages).toHaveLength(1);
+      expect(toolMessages).toHaveLength(1);
+      expect(toolMessages[0]?.callId).toBe('call-spawn-1');
+      expect(toolMessages[0]?.content).toBe('spawned');
       expect(turnCompleteEvents.length).toBeGreaterThan(0);
     });
 

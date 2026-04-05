@@ -2,8 +2,8 @@
  * RuntimeState — the canonical top-level state shape for the goodvibes-tui
  * runtime store. All 19 domain slices are defined here.
  *
- * Per v3 blueprint Section 3: each domain includes revision, lastUpdatedAt,
- * and source metadata fields. These are defined per-domain in the domain files.
+ * Each domain includes revision, lastUpdatedAt, and source metadata fields.
+ * These are defined per-domain in the domain files.
  */
 
 import type { SessionDomainState } from './domains/session.ts';
@@ -49,8 +49,8 @@ import { createInitialUiPerfState } from './domains/ui-perf.ts';
 /**
  * RuntimeState — the complete state shape managed by the runtime store.
  *
- * Per v3 Section 3: 19 domain slices, each with revision/lastUpdatedAt/source
- * metadata. All mutations must go through typed domain dispatch APIs.
+ * 19 domain slices, each with revision/lastUpdatedAt/source metadata.
+ * All mutations must go through typed domain dispatch APIs.
  */
 export interface RuntimeState {
   session: SessionDomainState;

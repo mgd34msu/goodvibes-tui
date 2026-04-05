@@ -38,7 +38,11 @@ export function classifyFailure(input: ClassifierInput): FailureClass {
   }
 
   // LLM stop reason: max_tokens
-  if (input.stopReason === 'max_tokens' || input.stopReason === 'length') {
+  if (
+    input.stopReason === 'max_tokens'
+    || input.stopReason === 'length'
+    || input.stopReason === 'context_overflow'
+  ) {
     return 'max_tokens';
   }
 
@@ -48,12 +52,12 @@ export function classifyFailure(input: ClassifierInput): FailureClass {
   }
 
   // Permission denial
-  if (input.hasPermissionDenial) {
+  if (input.hasPermissionDenial || input.stopReason === 'hook_denied') {
     return 'permission_denied';
   }
 
   // Tool failure
-  if (input.hasToolFailure) {
+  if (input.hasToolFailure || input.stopReason === 'tool_loop_circuit_breaker') {
     return 'tool_failure';
   }
 
@@ -85,6 +89,8 @@ export function classifyFailure(input: ClassifierInput): FailureClass {
 
   // LLM stop reason hinting at an error
   if (
+    input.stopReason === 'provider_exhausted' ||
+    input.stopReason === 'provider_error' ||
     input.stopReason === 'error' ||
     input.stopReason === 'stop_sequence' ||
     input.stopReason === 'content_filter'

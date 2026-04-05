@@ -7,7 +7,6 @@ import { createStyledCell, createEmptyLine } from '../types/grid.ts';
 import { BasePanel } from './base-panel.ts';
 import { getSessionManager } from '../sessions/manager.ts';
 import type { SessionInfo } from '../sessions/manager.ts';
-import type { EventBus } from '../core/event-bus.ts';
 import { logger } from '../utils/logger.ts';
 
 const C = {
@@ -75,7 +74,7 @@ export class SessionBrowserPanel extends BasePanel {
   private loadError = '';
   private refreshTimer: ReturnType<typeof setInterval> | null = null;
 
-  constructor(private bus?: EventBus) {
+  constructor(private resumeSession?: (sessionId: string) => void) {
     super('sessions', 'Sessions', 'H', 'session');
   }
 
@@ -295,9 +294,7 @@ export class SessionBrowserPanel extends BasePanel {
   private _resume(): void {
     const sess = this.filtered[this.cursorIndex];
     if (!sess) return;
-    if (this.bus) {
-      this.bus.emit('session:resume', { sessionId: sess.name });
-    }
+    this.resumeSession?.(sess.name);
   }
 
   private _promptDelete(): void {

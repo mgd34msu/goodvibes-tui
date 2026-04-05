@@ -1,5 +1,5 @@
 import { describe, test, expect, mock, spyOn, beforeEach, afterEach, afterAll } from 'bun:test';
-import { EventBus } from '../../core/event-bus.ts';
+import { RuntimeEventBus, createEventEnvelope } from '../../runtime/events/index.ts';
 import type { AgentRecord } from '../../tools/agent/index.ts';
 
 // ---------------------------------------------------------------------------
@@ -44,27 +44,40 @@ function makeReviewerOutput(score: number, passed: boolean): string {
   });
 }
 
+function makeEnvelopeContext(agentId?: string): { sessionId: string; traceId: string; source: string; agentId?: string } {
+  return {
+    sessionId: 'test-session',
+    traceId: `test-trace:${agentId ?? 'root'}`,
+    source: 'wrfc-controller-test',
+    agentId,
+  };
+}
+
+function emitAgentCompleted(runtimeBus: RuntimeEventBus, agentId: string): void {
+  runtimeBus.emit('agents', createEventEnvelope('AGENT_COMPLETED', {
+    type: 'AGENT_COMPLETED',
+    agentId,
+    durationMs: 0,
+    output: '',
+    toolCallsMade: 0,
+  }, makeEnvelopeContext(agentId)));
+}
+
+function emitAgentFailed(runtimeBus: RuntimeEventBus, agentId: string, error: string): void {
+  runtimeBus.emit('agents', createEventEnvelope('AGENT_FAILED', {
+    type: 'AGENT_FAILED',
+    agentId,
+    error,
+    durationMs: 0,
+  }, makeEnvelopeContext(agentId)));
+}
+
 // ---------------------------------------------------------------------------
 // Module mocks — set up before importing WrfcController
 // ---------------------------------------------------------------------------
 
-// Mock AgentManager
 const mockSpawn = mock((_input: unknown): AgentRecord => makeRecord({ id: 'mock-spawned-agent' }));
 const mockGetStatus = mock((_id: string): AgentRecord | null => null);
-
-mock.module('../../tools/agent/index.ts', () => ({
-  AgentManager: {
-    getInstance: () => ({
-      spawn: mockSpawn,
-      getStatus: mockGetStatus,
-      list: () => [],
-      cancel: () => false,
-      listByCohort: () => [],
-      clear: () => {},
-    }),
-    resetInstance: () => {},
-  },
-}));
 
 // Mock configManager — uses a mutable config state so tests can override values directly
 const mockConfigState: Record<string, unknown> = {
@@ -81,11 +94,40 @@ const mockConfigGetCategoryState = {
   autoCommit: false,
 };
 const mockConfigGetCategory = mock((_category: string) => ({ ...mockConfigGetCategoryState }));
+const mockConfig = {
+  autoApprove: false,
+  apiKeys: {} as Record<string, string>,
+  display: { stream: false },
+  permissions: {
+    mode: 'prompt',
+    tools: {} as Record<string, unknown>,
+  },
+};
+const mockConfigSet = mock((key: string, value: unknown) => {
+  if (key === 'behavior.autoApprove') {
+    mockConfig.autoApprove = Boolean(value);
+    return;
+  }
+  if (key === 'display.stream') {
+    mockConfig.display.stream = Boolean(value);
+    return;
+  }
+  if (key === 'permissions.mode') {
+    mockConfig.permissions.mode = String(value);
+    return;
+  }
+  if (key.startsWith('permissions.tools.')) {
+    mockConfig.permissions.tools[key.slice('permissions.tools.'.length)] = value;
+  }
+});
 
 mock.module('../../config/index.ts', () => ({
+  config: mockConfig,
+  DEFAULT_CONFIG: mockConfig,
   configManager: {
     get: mockConfigGet,
     getCategory: mockConfigGetCategory,
+    set: mockConfigSet,
   },
 }));
 
@@ -139,7 +181,7 @@ mock.module('../../agents/message-bus.ts', () => ({
 }));
 
 // Now import WrfcController after mocks are registered
-const { WrfcController } = await import('../../agents/wrfc-controller.ts');
+const { WrfcController, _setWrfcAgentManagerResolverForTest } = await import('../../agents/wrfc-controller.ts');
 
 // ---------------------------------------------------------------------------
 // Cleanup — restore all module mocks after all tests to prevent leaking into
@@ -147,6 +189,7 @@ const { WrfcController } = await import('../../agents/wrfc-controller.ts');
 // ---------------------------------------------------------------------------
 
 afterAll(() => {
+  _setWrfcAgentManagerResolverForTest(null);
   mock.restore();
 });
 
@@ -155,11 +198,27 @@ afterAll(() => {
 // ---------------------------------------------------------------------------
 
 describe('WrfcController', () => {
-  let eventBus: EventBus;
+  let runtimeBus: RuntimeEventBus;
   let emitSpy: ReturnType<typeof spyOn>;
+  const workflowCalls = (type: string) => emitSpy.mock.calls.filter(
+    (args: unknown[]) =>
+      args[0] === 'workflows' &&
+      typeof args[1] === 'object' &&
+      args[1] !== null &&
+      'type' in (args[1] as object) &&
+      (args[1] as { type: string }).type === type,
+  );
 
   beforeEach(() => {
     WrfcController.resetInstance();
+    _setWrfcAgentManagerResolverForTest(() => ({
+      spawn: mockSpawn,
+      getStatus: mockGetStatus,
+      list: () => [],
+      cancel: () => false,
+      listByCohort: () => [],
+      clear: () => {},
+    }));
     mockSpawn.mockClear();
     mockGetStatus.mockClear();
     mockConfigGet.mockClear();
@@ -176,11 +235,12 @@ describe('WrfcController', () => {
     mockConfigGetCategoryState.maxFixAttempts = 3;
     mockConfigGetCategoryState.autoCommit = false;
 
-    eventBus = new EventBus();
-    emitSpy = spyOn(eventBus, 'emit');
+    runtimeBus = new RuntimeEventBus();
+    emitSpy = spyOn(runtimeBus, 'emit');
   });
 
   afterEach(() => {
+    _setWrfcAgentManagerResolverForTest(null);
     WrfcController.resetInstance();
   });
 
@@ -190,7 +250,7 @@ describe('WrfcController', () => {
 
   describe('chain lifecycle', () => {
     test('createChain() generates valid wrfc-{uuid8} ID format', () => {
-      const controller = WrfcController.getInstance(eventBus);
+      const controller = WrfcController.initialize(runtimeBus);
       const record = makeRecord();
       const chain = controller.createChain(record);
 
@@ -198,7 +258,7 @@ describe('WrfcController', () => {
     });
 
     test('createChain() links engineer record to chain via wrfcId', () => {
-      const controller = WrfcController.getInstance(eventBus);
+      const controller = WrfcController.initialize(runtimeBus);
       const record = makeRecord();
       const chain = controller.createChain(record);
 
@@ -206,27 +266,25 @@ describe('WrfcController', () => {
     });
 
     test('createChain() transitions from pending to engineering', () => {
-      const controller = WrfcController.getInstance(eventBus);
+      const controller = WrfcController.initialize(runtimeBus);
       const record = makeRecord();
       const chain = controller.createChain(record);
 
       expect(chain.state).toBe('engineering');
     });
 
-    test('createChain() emits wrfc:chain-created event', () => {
-      const controller = WrfcController.getInstance(eventBus);
+    test('createChain() emits WORKFLOW_CHAIN_CREATED event', () => {
+      const controller = WrfcController.initialize(runtimeBus);
       const record = makeRecord();
       const chain = controller.createChain(record);
 
-      const chainCreatedCalls = emitSpy.mock.calls.filter(
-        (args: unknown[]) => args[0] === 'wrfc:chain-created'
-      );
+      const chainCreatedCalls = workflowCalls('WORKFLOW_CHAIN_CREATED');
       expect(chainCreatedCalls.length).toBe(1);
-      expect(chainCreatedCalls[0][1]).toMatchObject({ chainId: chain.id, task: record.task });
+      expect((chainCreatedCalls[0][1] as { payload: object }).payload).toMatchObject({ chainId: chain.id, task: record.task });
     });
 
     test('createChain() initializes allAgentIds with engineer ID', () => {
-      const controller = WrfcController.getInstance(eventBus);
+      const controller = WrfcController.initialize(runtimeBus);
       const record = makeRecord();
       const chain = controller.createChain(record);
 
@@ -235,7 +293,7 @@ describe('WrfcController', () => {
     });
 
     test('getChain() returns chain by ID', () => {
-      const controller = WrfcController.getInstance(eventBus);
+      const controller = WrfcController.initialize(runtimeBus);
       const record = makeRecord();
       const chain = controller.createChain(record);
 
@@ -244,13 +302,13 @@ describe('WrfcController', () => {
     });
 
     test('getChain() returns null for unknown ID', () => {
-      const controller = WrfcController.getInstance(eventBus);
+      const controller = WrfcController.initialize(runtimeBus);
       const result = controller.getChain('wrfc-nonexistent');
       expect(result).toBeNull();
     });
 
     test('listChains() returns all chains', () => {
-      const controller = WrfcController.getInstance(eventBus);
+      const controller = WrfcController.initialize(runtimeBus);
       const r1 = makeRecord();
       const r2 = makeRecord({ id: 'agent-other001' });
 
@@ -270,31 +328,29 @@ describe('WrfcController', () => {
 
   describe('state transitions', () => {
     test('valid transition pending → engineering succeeds', () => {
-      const controller = WrfcController.getInstance(eventBus);
+      const controller = WrfcController.initialize(runtimeBus);
       const record = makeRecord();
       const chain = controller.createChain(record);
       // createChain already does pending → engineering
       expect(chain.state).toBe('engineering');
     });
 
-    test('every transition emits wrfc:state-changed', () => {
-      const controller = WrfcController.getInstance(eventBus);
+    test('every transition emits WORKFLOW_STATE_CHANGED', () => {
+      const controller = WrfcController.initialize(runtimeBus);
       const record = makeRecord();
       controller.createChain(record);
 
       // The pending → engineering transition should have emitted state-changed
-      const stateChangedCalls = emitSpy.mock.calls.filter(
-        (args: unknown[]) => args[0] === 'wrfc:state-changed'
-      );
+      const stateChangedCalls = workflowCalls('WORKFLOW_STATE_CHANGED');
       expect(stateChangedCalls.length).toBeGreaterThanOrEqual(1);
 
-      const firstChange = stateChangedCalls[0][1] as { from: string; to: string };
+      const firstChange = (stateChangedCalls[0][1] as { payload: { from: string; to: string } }).payload;
       expect(firstChange.from).toBe('pending');
       expect(firstChange.to).toBe('engineering');
     });
 
     test('invalid transition throws error', async () => {
-      const controller = WrfcController.getInstance(eventBus);
+      const controller = WrfcController.initialize(runtimeBus);
       const record = makeRecord();
       const chain = controller.createChain(record);
       // Chain is now in 'engineering' state
@@ -304,7 +360,7 @@ describe('WrfcController', () => {
 
       // Trigger agent complete with no output to force a fail path via event
       // The onAgentFailed path transitions engineering → failed (valid)
-      eventBus.emit('subagent:error', { id: record.id, error: new Error('test error') });
+      emitAgentFailed(runtimeBus, record.id, 'test error');
       expect(chain.state).toBe('failed');
 
       // Now chain is in 'failed'. 'failed' has no valid outgoing transitions.
@@ -312,22 +368,22 @@ describe('WrfcController', () => {
       // But failChain catches the invalid transition internally.
       // We can't directly test that the error throws without accessing private methods.
       // Instead verify the chain remains in failed state (double-fail is handled gracefully).
-      eventBus.emit('subagent:error', { id: record.id, error: new Error('second error') });
+      emitAgentFailed(runtimeBus, record.id, 'second error');
       expect(chain.state).toBe('failed');
     });
 
     test('failChain handles double-fail gracefully (does not throw)', () => {
-      const controller = WrfcController.getInstance(eventBus);
+      const controller = WrfcController.initialize(runtimeBus);
       const record = makeRecord();
       const chain = controller.createChain(record);
 
       // First fail
-      eventBus.emit('subagent:error', { id: record.id, error: new Error('first fail') });
+      emitAgentFailed(runtimeBus, record.id, 'first fail');
       expect(chain.state).toBe('failed');
 
       // Second fail on same chain — should not throw
       expect(() => {
-        eventBus.emit('subagent:error', { id: record.id, error: new Error('second fail') });
+        emitAgentFailed(runtimeBus, record.id, 'second fail');
       }).not.toThrow();
       expect(chain.state).toBe('failed');
     });
@@ -339,7 +395,7 @@ describe('WrfcController', () => {
 
   describe('review cycle', () => {
     test('engineer completion spawns reviewer agent', async () => {
-      const controller = WrfcController.getInstance(eventBus);
+      const controller = WrfcController.initialize(runtimeBus);
       const engineerRecord = makeRecord();
       controller.createChain(engineerRecord);
 
@@ -350,7 +406,7 @@ describe('WrfcController', () => {
       });
 
       // Emit subagent:complete for the engineer
-      eventBus.emit('subagent:complete', { id: engineerRecord.id, result: { id: 'mock-agent', success: true, output: '', toolCallsMade: 0, duration: 0 } });
+      emitAgentCompleted(runtimeBus, engineerRecord.id);
 
       // Allow async handler to complete
       await new Promise((r) => setTimeout(r, 10));
@@ -361,7 +417,7 @@ describe('WrfcController', () => {
     });
 
     test('reviewer gets engineer report as task input', async () => {
-      const controller = WrfcController.getInstance(eventBus);
+      const controller = WrfcController.initialize(runtimeBus);
       const engineerRecord = makeRecord();
       controller.createChain(engineerRecord);
 
@@ -370,7 +426,7 @@ describe('WrfcController', () => {
         return null;
       });
 
-      eventBus.emit('subagent:complete', { id: engineerRecord.id, result: { id: 'mock-agent', success: true, output: '', toolCallsMade: 0, duration: 0 } });
+      emitAgentCompleted(runtimeBus, engineerRecord.id);
       await new Promise((r) => setTimeout(r, 10));
 
       const spawnInput = mockSpawn.mock.calls[0][0] as { task: string };
@@ -379,7 +435,7 @@ describe('WrfcController', () => {
     });
 
     test('reviewer record has dangerously_disable_wrfc=true and same wrfcId', async () => {
-      const controller = WrfcController.getInstance(eventBus);
+      const controller = WrfcController.initialize(runtimeBus);
       const engineerRecord = makeRecord();
       const chain = controller.createChain(engineerRecord);
 
@@ -390,7 +446,7 @@ describe('WrfcController', () => {
         return null;
       });
 
-      eventBus.emit('subagent:complete', { id: engineerRecord.id, result: { id: 'mock-agent', success: true, output: '', toolCallsMade: 0, duration: 0 } });
+      emitAgentCompleted(runtimeBus, engineerRecord.id);
       await new Promise((r) => setTimeout(r, 10));
 
       const spawnInput = mockSpawn.mock.calls[0][0] as { dangerously_disable_wrfc: boolean };
@@ -399,7 +455,7 @@ describe('WrfcController', () => {
     });
 
     test('review score >= threshold transitions chain to gating', async () => {
-      const controller = WrfcController.getInstance(eventBus);
+      const controller = WrfcController.initialize(runtimeBus);
       const engineerRecord = makeRecord();
       const chain = controller.createChain(engineerRecord);
 
@@ -422,11 +478,11 @@ describe('WrfcController', () => {
       });
 
       // Engineer completes → spawns reviewer
-      eventBus.emit('subagent:complete', { id: engineerRecord.id, result: { id: 'mock-agent', success: true, output: '', toolCallsMade: 0, duration: 0 } });
+      emitAgentCompleted(runtimeBus, engineerRecord.id);
       await new Promise((r) => setTimeout(r, 10));
 
       // Reviewer completes with passing score
-      eventBus.emit('subagent:complete', { id: reviewerRecord.id, result: { id: 'mock-agent', success: true, output: '', toolCallsMade: 0, duration: 0 } });
+      emitAgentCompleted(runtimeBus, reviewerRecord.id);
       await new Promise((r) => setTimeout(r, 10));
 
       // Score >= threshold → runGates → transition to gating (then passed if no gates)
@@ -435,7 +491,7 @@ describe('WrfcController', () => {
     });
 
     test('review score < threshold transitions chain to fixing', async () => {
-      const controller = WrfcController.getInstance(eventBus);
+      const controller = WrfcController.initialize(runtimeBus);
       const engineerRecord = makeRecord();
       const chain = controller.createChain(engineerRecord);
 
@@ -453,11 +509,11 @@ describe('WrfcController', () => {
       });
 
       // Engineer completes → spawns reviewer
-      eventBus.emit('subagent:complete', { id: engineerRecord.id, result: { id: 'mock-agent', success: true, output: '', toolCallsMade: 0, duration: 0 } });
+      emitAgentCompleted(runtimeBus, engineerRecord.id);
       await new Promise((r) => setTimeout(r, 10));
 
       // Reviewer completes with failing score
-      eventBus.emit('subagent:complete', { id: reviewerRecord.id, result: { id: 'mock-agent', success: true, output: '', toolCallsMade: 0, duration: 0 } });
+      emitAgentCompleted(runtimeBus, reviewerRecord.id);
       await new Promise((r) => setTimeout(r, 10));
 
       expect(chain.state).toBe('fixing');
@@ -470,7 +526,7 @@ describe('WrfcController', () => {
 
   describe('fix cycle', () => {
     test('fixer gets full issue list with point values in task', async () => {
-      const controller = WrfcController.getInstance(eventBus);
+      const controller = WrfcController.initialize(runtimeBus);
       const engineerRecord = makeRecord();
       controller.createChain(engineerRecord);
 
@@ -495,13 +551,13 @@ describe('WrfcController', () => {
       });
 
       // Engineer completes
-      eventBus.emit('subagent:complete', { id: engineerRecord.id, result: { id: 'mock-agent', success: true, output: '', toolCallsMade: 0, duration: 0 } });
+      emitAgentCompleted(runtimeBus, engineerRecord.id);
       await new Promise((r) => setTimeout(r, 10));
 
       // Reviewer (first spawned) completes with failing score
       const firstSpawned = spawnedRecords[0];
       firstSpawned.fullOutput = reviewerRecord.fullOutput;
-      eventBus.emit('subagent:complete', { id: firstSpawned.id, result: { id: 'mock-agent', success: true, output: '', toolCallsMade: 0, duration: 0 } });
+      emitAgentCompleted(runtimeBus, firstSpawned.id);
       await new Promise((r) => setTimeout(r, 10));
 
       // Second spawn should be the fixer
@@ -513,7 +569,7 @@ describe('WrfcController', () => {
     });
 
     test('fixer record has dangerously_disable_wrfc=true and same wrfcId', async () => {
-      const controller = WrfcController.getInstance(eventBus);
+      const controller = WrfcController.initialize(runtimeBus);
       const engineerRecord = makeRecord();
       const chain = controller.createChain(engineerRecord);
 
@@ -538,12 +594,12 @@ describe('WrfcController', () => {
         return spawnedRecords.find((r) => r.id === id) ?? null;
       });
 
-      eventBus.emit('subagent:complete', { id: engineerRecord.id, result: { id: 'mock-agent', success: true, output: '', toolCallsMade: 0, duration: 0 } });
+      emitAgentCompleted(runtimeBus, engineerRecord.id);
       await new Promise((r) => setTimeout(r, 10));
 
       const firstSpawned = spawnedRecords[0];
       firstSpawned.fullOutput = reviewerRecord.fullOutput;
-      eventBus.emit('subagent:complete', { id: firstSpawned.id, result: { id: 'mock-agent', success: true, output: '', toolCallsMade: 0, duration: 0 } });
+      emitAgentCompleted(runtimeBus, firstSpawned.id);
       await new Promise((r) => setTimeout(r, 10));
 
       // Second spawn is the fixer
@@ -555,7 +611,7 @@ describe('WrfcController', () => {
     });
 
     test('fixAttempts increments on each fix', async () => {
-      const controller = WrfcController.getInstance(eventBus);
+      const controller = WrfcController.initialize(runtimeBus);
       const engineerRecord = makeRecord();
       const chain = controller.createChain(engineerRecord);
 
@@ -574,20 +630,20 @@ describe('WrfcController', () => {
       });
 
       // Engineer completes → spawns reviewer (index 0)
-      eventBus.emit('subagent:complete', { id: engineerRecord.id, result: { id: 'mock-agent', success: true, output: '', toolCallsMade: 0, duration: 0 } });
+      emitAgentCompleted(runtimeBus, engineerRecord.id);
       await new Promise((r) => setTimeout(r, 10));
 
       expect(chain.fixAttempts).toBe(0);
 
       // Reviewer 0 completes with failing score → fixAttempts becomes 1, spawns fixer (index 1)
-      eventBus.emit('subagent:complete', { id: spawnedRecords[0].id, result: { id: 'mock-agent', success: true, output: '', toolCallsMade: 0, duration: 0 } });
+      emitAgentCompleted(runtimeBus, spawnedRecords[0].id);
       await new Promise((r) => setTimeout(r, 10));
 
       expect(chain.fixAttempts).toBe(1);
     });
 
     test('fix completion spawns reviewer again', async () => {
-      const controller = WrfcController.getInstance(eventBus);
+      const controller = WrfcController.initialize(runtimeBus);
       const engineerRecord = makeRecord();
       controller.createChain(engineerRecord);
 
@@ -612,15 +668,15 @@ describe('WrfcController', () => {
       });
 
       // Engineer → reviewer spawned (index 0, template=reviewer)
-      eventBus.emit('subagent:complete', { id: engineerRecord.id, result: { id: 'mock-agent', success: true, output: '', toolCallsMade: 0, duration: 0 } });
+      emitAgentCompleted(runtimeBus, engineerRecord.id);
       await new Promise((r) => setTimeout(r, 10));
 
       // Reviewer fails → fixer spawned (index 1, template=engineer)
-      eventBus.emit('subagent:complete', { id: spawnedRecords[0].id, result: { id: 'mock-agent', success: true, output: '', toolCallsMade: 0, duration: 0 } });
+      emitAgentCompleted(runtimeBus, spawnedRecords[0].id);
       await new Promise((r) => setTimeout(r, 10));
 
       // Fixer completes → another reviewer spawned (index 2, template=reviewer)
-      eventBus.emit('subagent:complete', { id: spawnedRecords[1].id, result: { id: 'mock-agent', success: true, output: '', toolCallsMade: 0, duration: 0 } });
+      emitAgentCompleted(runtimeBus, spawnedRecords[1].id);
       await new Promise((r) => setTimeout(r, 10));
 
       // Third spawn should be reviewer again
@@ -633,7 +689,7 @@ describe('WrfcController', () => {
       // Override maxFixAttempts to 1 for this test
       mockConfigState['wrfc.maxFixAttempts'] = 1;
 
-      const controller = WrfcController.getInstance(eventBus);
+      const controller = WrfcController.initialize(runtimeBus);
       const engineerRecord = makeRecord();
       const chain = controller.createChain(engineerRecord);
 
@@ -655,19 +711,19 @@ describe('WrfcController', () => {
       });
 
       // Engineer → reviewer (index 0)
-      eventBus.emit('subagent:complete', { id: engineerRecord.id, result: { id: 'mock-agent', success: true, output: '', toolCallsMade: 0, duration: 0 } });
+      emitAgentCompleted(runtimeBus, engineerRecord.id);
       await new Promise((r) => setTimeout(r, 10));
 
       // Reviewer fails → fixer (index 1), fixAttempts=1
-      eventBus.emit('subagent:complete', { id: spawnedRecords[0].id, result: { id: 'mock-agent', success: true, output: '', toolCallsMade: 0, duration: 0 } });
+      emitAgentCompleted(runtimeBus, spawnedRecords[0].id);
       await new Promise((r) => setTimeout(r, 10));
 
       // Fixer completes → reviewer (index 2)
-      eventBus.emit('subagent:complete', { id: spawnedRecords[1].id, result: { id: 'mock-agent', success: true, output: '', toolCallsMade: 0, duration: 0 } });
+      emitAgentCompleted(runtimeBus, spawnedRecords[1].id);
       await new Promise((r) => setTimeout(r, 10));
 
       // Second reviewer fails → fixAttempts=1 >= maxFixAttempts=1 → chain fails
-      eventBus.emit('subagent:complete', { id: spawnedRecords[2].id, result: { id: 'mock-agent', success: true, output: '', toolCallsMade: 0, duration: 0 } });
+      emitAgentCompleted(runtimeBus, spawnedRecords[2].id);
       await new Promise((r) => setTimeout(r, 10));
 
       expect(chain.state).toBe('failed');
@@ -675,8 +731,8 @@ describe('WrfcController', () => {
       expect(chain.reviewCycles).toBe(2);
     });
 
-    test('wrfc:fix-attempt event emitted on each fix', async () => {
-      const controller = WrfcController.getInstance(eventBus);
+    test('WORKFLOW_FIX_ATTEMPTED event emitted on each fix', async () => {
+      const controller = WrfcController.initialize(runtimeBus);
       const engineerRecord = makeRecord();
       controller.createChain(engineerRecord);
 
@@ -695,18 +751,16 @@ describe('WrfcController', () => {
       });
 
       // Engineer completes
-      eventBus.emit('subagent:complete', { id: engineerRecord.id, result: { id: 'mock-agent', success: true, output: '', toolCallsMade: 0, duration: 0 } });
+      emitAgentCompleted(runtimeBus, engineerRecord.id);
       await new Promise((r) => setTimeout(r, 10));
 
       // Reviewer fails → fix attempt 1
-      eventBus.emit('subagent:complete', { id: spawnedRecords[0].id, result: { id: 'mock-agent', success: true, output: '', toolCallsMade: 0, duration: 0 } });
+      emitAgentCompleted(runtimeBus, spawnedRecords[0].id);
       await new Promise((r) => setTimeout(r, 10));
 
-      const fixAttemptCalls = emitSpy.mock.calls.filter(
-        (args: unknown[]) => args[0] === 'wrfc:fix-attempt'
-      );
+      const fixAttemptCalls = workflowCalls('WORKFLOW_FIX_ATTEMPTED');
       expect(fixAttemptCalls.length).toBe(1);
-      expect(fixAttemptCalls[0][1]).toMatchObject({ attempt: 1 });
+      expect((fixAttemptCalls[0][1] as { payload: object }).payload).toMatchObject({ attempt: 1 });
     });
   });
 
@@ -719,7 +773,7 @@ describe('WrfcController', () => {
       // Configure a passing gate
       mockConfigGetCategoryState.gates = [{ name: 'typecheck', command: 'exit 0', enabled: true }];
 
-      const controller = WrfcController.getInstance(eventBus);
+      const controller = WrfcController.initialize(runtimeBus);
       const engineerRecord = makeRecord();
       const chain = controller.createChain(engineerRecord);
 
@@ -736,10 +790,10 @@ describe('WrfcController', () => {
         return null;
       });
 
-      eventBus.emit('subagent:complete', { id: engineerRecord.id, result: { id: 'mock-agent', success: true, output: '', toolCallsMade: 0, duration: 0 } });
+      emitAgentCompleted(runtimeBus, engineerRecord.id);
       await new Promise((r) => setTimeout(r, 10));
 
-      eventBus.emit('subagent:complete', { id: reviewerRecord.id, result: { id: 'mock-agent', success: true, output: '', toolCallsMade: 0, duration: 0 } });
+      emitAgentCompleted(runtimeBus, reviewerRecord.id);
       // Allow extra time for gate execution
       await new Promise((r) => setTimeout(r, 200));
 
@@ -748,7 +802,7 @@ describe('WrfcController', () => {
 
     test('no gates configured → chain transitions to passed directly', async () => {
       // Default mock: gates = []
-      const controller = WrfcController.getInstance(eventBus);
+      const controller = WrfcController.initialize(runtimeBus);
       const engineerRecord = makeRecord();
       const chain = controller.createChain(engineerRecord);
 
@@ -765,17 +819,17 @@ describe('WrfcController', () => {
         return null;
       });
 
-      eventBus.emit('subagent:complete', { id: engineerRecord.id, result: { id: 'mock-agent', success: true, output: '', toolCallsMade: 0, duration: 0 } });
+      emitAgentCompleted(runtimeBus, engineerRecord.id);
       await new Promise((r) => setTimeout(r, 10));
 
-      eventBus.emit('subagent:complete', { id: reviewerRecord.id, result: { id: 'mock-agent', success: true, output: '', toolCallsMade: 0, duration: 0 } });
+      emitAgentCompleted(runtimeBus, reviewerRecord.id);
       await new Promise((r) => setTimeout(r, 50));
 
       expect(chain.state).toBe('passed');
     });
 
     test('gatesPassed set to true when all gates pass', async () => {
-      const controller = WrfcController.getInstance(eventBus);
+      const controller = WrfcController.initialize(runtimeBus);
       const engineerRecord = makeRecord();
       const chain = controller.createChain(engineerRecord);
 
@@ -792,22 +846,22 @@ describe('WrfcController', () => {
         return null;
       });
 
-      eventBus.emit('subagent:complete', { id: engineerRecord.id, result: { id: 'mock-agent', success: true, output: '', toolCallsMade: 0, duration: 0 } });
+      emitAgentCompleted(runtimeBus, engineerRecord.id);
       await new Promise((r) => setTimeout(r, 10));
 
-      eventBus.emit('subagent:complete', { id: reviewerRecord.id, result: { id: 'mock-agent', success: true, output: '', toolCallsMade: 0, duration: 0 } });
+      emitAgentCompleted(runtimeBus, reviewerRecord.id);
       await new Promise((r) => setTimeout(r, 50));
 
       expect(chain.gatesPassed).toBe(true);
     });
 
-    test('wrfc:gate-result emitted per gate', async () => {
+    test('WORKFLOW_GATE_RESULT emitted per gate', async () => {
       mockConfigGetCategoryState.gates = [
         { name: 'typecheck', command: 'exit 0', enabled: true },
         { name: 'lint', command: 'exit 0', enabled: true },
       ];
 
-      const controller = WrfcController.getInstance(eventBus);
+      const controller = WrfcController.initialize(runtimeBus);
       const engineerRecord = makeRecord();
       controller.createChain(engineerRecord);
 
@@ -824,22 +878,20 @@ describe('WrfcController', () => {
         return null;
       });
 
-      eventBus.emit('subagent:complete', { id: engineerRecord.id, result: { id: 'mock-agent', success: true, output: '', toolCallsMade: 0, duration: 0 } });
+      emitAgentCompleted(runtimeBus, engineerRecord.id);
       await new Promise((r) => setTimeout(r, 10));
 
-      eventBus.emit('subagent:complete', { id: reviewerRecord.id, result: { id: 'mock-agent', success: true, output: '', toolCallsMade: 0, duration: 0 } });
+      emitAgentCompleted(runtimeBus, reviewerRecord.id);
       await new Promise((r) => setTimeout(r, 500));
 
-      const gateResultCalls = emitSpy.mock.calls.filter(
-        (args: unknown[]) => args[0] === 'wrfc:gate-result'
-      );
+      const gateResultCalls = workflowCalls('WORKFLOW_GATE_RESULT');
       expect(gateResultCalls.length).toBe(2);
     });
 
     test('gate failure → new chain spawned (without dangerously_disable_wrfc)', async () => {
       mockConfigGetCategoryState.gates = [{ name: 'typecheck', command: 'exit 1', enabled: true }];
 
-      const controller = WrfcController.getInstance(eventBus);
+      const controller = WrfcController.initialize(runtimeBus);
       const engineerRecord = makeRecord();
       const chain = controller.createChain(engineerRecord);
 
@@ -860,10 +912,10 @@ describe('WrfcController', () => {
         return null;
       });
 
-      eventBus.emit('subagent:complete', { id: engineerRecord.id, result: { id: 'mock-agent', success: true, output: '', toolCallsMade: 0, duration: 0 } });
+      emitAgentCompleted(runtimeBus, engineerRecord.id);
       await new Promise((r) => setTimeout(r, 10));
 
-      eventBus.emit('subagent:complete', { id: reviewerRecord.id, result: { id: 'mock-agent', success: true, output: '', toolCallsMade: 0, duration: 0 } });
+      emitAgentCompleted(runtimeBus, reviewerRecord.id);
       await new Promise((r) => setTimeout(r, 500));
 
       // Current chain should transition to passed (gate failure means CURRENT chain passed review)
@@ -890,7 +942,7 @@ describe('WrfcController', () => {
 
     test('auto-commit on gate pass: transitions through committing to passed', async () => {
       enableAutoCommit();
-      const controller = WrfcController.getInstance(eventBus);
+      const controller = WrfcController.initialize(runtimeBus);
       const engineerRecord = makeRecord();
       const chain = controller.createChain(engineerRecord);
 
@@ -906,18 +958,18 @@ describe('WrfcController', () => {
         return null;
       });
 
-      eventBus.emit('subagent:complete', { id: engineerRecord.id, result: { id: 'mock-agent', success: true, output: '', toolCallsMade: 0, duration: 0 } });
+      emitAgentCompleted(runtimeBus, engineerRecord.id);
       await new Promise((r) => setTimeout(r, 10));
-      eventBus.emit('subagent:complete', { id: reviewerRecord.id, result: { id: 'mock-agent', success: true, output: '', toolCallsMade: 0, duration: 0 } });
+      emitAgentCompleted(runtimeBus, reviewerRecord.id);
       await new Promise((r) => setTimeout(r, 100));
 
       expect(chain.state).toBe('passed');
       expect(mockMerge).toHaveBeenCalledTimes(1);
     });
 
-    test('auto-commit on gate pass: emits wrfc:auto-commit event', async () => {
+    test('auto-commit on gate pass: emits WORKFLOW_AUTO_COMMITTED event', async () => {
       enableAutoCommit();
-      const controller = WrfcController.getInstance(eventBus);
+      const controller = WrfcController.initialize(runtimeBus);
       const engineerRecord = makeRecord();
       controller.createChain(engineerRecord);
 
@@ -933,20 +985,18 @@ describe('WrfcController', () => {
         return null;
       });
 
-      eventBus.emit('subagent:complete', { id: engineerRecord.id, result: { id: 'mock-agent', success: true, output: '', toolCallsMade: 0, duration: 0 } });
+      emitAgentCompleted(runtimeBus, engineerRecord.id);
       await new Promise((r) => setTimeout(r, 10));
-      eventBus.emit('subagent:complete', { id: reviewerRecord.id, result: { id: 'mock-agent', success: true, output: '', toolCallsMade: 0, duration: 0 } });
+      emitAgentCompleted(runtimeBus, reviewerRecord.id);
       await new Promise((r) => setTimeout(r, 100));
 
-      const autoCommitCalls = emitSpy.mock.calls.filter(
-        (args: unknown[]) => args[0] === 'wrfc:auto-commit'
-      );
+      const autoCommitCalls = workflowCalls('WORKFLOW_AUTO_COMMITTED');
       expect(autoCommitCalls.length).toBe(1);
     });
 
     test('auto-commit on gate pass: calls mockMerge with last agent ID', async () => {
       enableAutoCommit();
-      const controller = WrfcController.getInstance(eventBus);
+      const controller = WrfcController.initialize(runtimeBus);
       const engineerRecord = makeRecord();
       const chain = controller.createChain(engineerRecord);
 
@@ -962,9 +1012,9 @@ describe('WrfcController', () => {
         return null;
       });
 
-      eventBus.emit('subagent:complete', { id: engineerRecord.id, result: { id: 'mock-agent', success: true, output: '', toolCallsMade: 0, duration: 0 } });
+      emitAgentCompleted(runtimeBus, engineerRecord.id);
       await new Promise((r) => setTimeout(r, 10));
-      eventBus.emit('subagent:complete', { id: reviewerRecord.id, result: { id: 'mock-agent', success: true, output: '', toolCallsMade: 0, duration: 0 } });
+      emitAgentCompleted(runtimeBus, reviewerRecord.id);
       await new Promise((r) => setTimeout(r, 100));
 
       // The last agent ID in allAgentIds is the reviewer (last pushed)
@@ -975,7 +1025,7 @@ describe('WrfcController', () => {
 
     test('auto-commit on gate pass: calls mockCleanup for all agents in chain', async () => {
       enableAutoCommit();
-      const controller = WrfcController.getInstance(eventBus);
+      const controller = WrfcController.initialize(runtimeBus);
       const engineerRecord = makeRecord();
       const chain = controller.createChain(engineerRecord);
 
@@ -991,9 +1041,9 @@ describe('WrfcController', () => {
         return null;
       });
 
-      eventBus.emit('subagent:complete', { id: engineerRecord.id, result: { id: 'mock-agent', success: true, output: '', toolCallsMade: 0, duration: 0 } });
+      emitAgentCompleted(runtimeBus, engineerRecord.id);
       await new Promise((r) => setTimeout(r, 10));
-      eventBus.emit('subagent:complete', { id: reviewerRecord.id, result: { id: 'mock-agent', success: true, output: '', toolCallsMade: 0, duration: 0 } });
+      emitAgentCompleted(runtimeBus, reviewerRecord.id);
       await new Promise((r) => setTimeout(r, 100));
 
       // Wait for async cleanup to settle
@@ -1010,7 +1060,7 @@ describe('WrfcController', () => {
       mockMerge.mockImplementation(async (_id: string) => {
         throw new Error('merge conflict');
       });
-      const controller = WrfcController.getInstance(eventBus);
+      const controller = WrfcController.initialize(runtimeBus);
       const engineerRecord = makeRecord();
       const chain = controller.createChain(engineerRecord);
 
@@ -1026,9 +1076,9 @@ describe('WrfcController', () => {
         return null;
       });
 
-      eventBus.emit('subagent:complete', { id: engineerRecord.id, result: { id: 'mock-agent', success: true, output: '', toolCallsMade: 0, duration: 0 } });
+      emitAgentCompleted(runtimeBus, engineerRecord.id);
       await new Promise((r) => setTimeout(r, 10));
-      eventBus.emit('subagent:complete', { id: reviewerRecord.id, result: { id: 'mock-agent', success: true, output: '', toolCallsMade: 0, duration: 0 } });
+      emitAgentCompleted(runtimeBus, reviewerRecord.id);
       await new Promise((r) => setTimeout(r, 100));
 
       expect(chain.state).toBe('failed');
@@ -1038,7 +1088,7 @@ describe('WrfcController', () => {
     test('auto-commit with fixer as last agent: mockMerge called with fixer ID', async () => {
       enableAutoCommit();
 
-      const controller = WrfcController.getInstance(eventBus);
+      const controller = WrfcController.initialize(runtimeBus);
       const engineerRecord = makeRecord();
       const chain = controller.createChain(engineerRecord);
 
@@ -1069,19 +1119,19 @@ describe('WrfcController', () => {
       });
 
       // Engineer completes → reviewer0 spawned
-      eventBus.emit('subagent:complete', { id: engineerRecord.id, result: { id: 'mock-agent', success: true, output: '', toolCallsMade: 0, duration: 0 } });
+      emitAgentCompleted(runtimeBus, engineerRecord.id);
       await new Promise((r) => setTimeout(r, 10));
 
       // reviewer0 completes (failing) → fixer spawned (index 1)
-      eventBus.emit('subagent:complete', { id: spawnedRecords[0].id, result: { id: 'mock-agent', success: true, output: '', toolCallsMade: 0, duration: 0 } });
+      emitAgentCompleted(runtimeBus, spawnedRecords[0].id);
       await new Promise((r) => setTimeout(r, 10));
 
       // fixer completes → reviewer2 spawned (index 2)
-      eventBus.emit('subagent:complete', { id: spawnedRecords[1].id, result: { id: 'mock-agent', success: true, output: '', toolCallsMade: 0, duration: 0 } });
+      emitAgentCompleted(runtimeBus, spawnedRecords[1].id);
       await new Promise((r) => setTimeout(r, 10));
 
       // reviewer2 completes (passing) → autoCommit
-      eventBus.emit('subagent:complete', { id: spawnedRecords[2].id, result: { id: 'mock-agent', success: true, output: '', toolCallsMade: 0, duration: 0 } });
+      emitAgentCompleted(runtimeBus, spawnedRecords[2].id);
       await new Promise((r) => setTimeout(r, 100));
 
       // Last agent in allAgentIds is reviewer2 (index 2)
@@ -1097,7 +1147,7 @@ describe('WrfcController', () => {
 
   describe('error handling', () => {
     test('chain fails when agent has no fullOutput (null output)', async () => {
-      const controller = WrfcController.getInstance(eventBus);
+      const controller = WrfcController.initialize(runtimeBus);
       const engineerRecord = makeRecord({ fullOutput: undefined });
       const chain = controller.createChain(engineerRecord);
 
@@ -1111,7 +1161,7 @@ describe('WrfcController', () => {
       const reviewerRecord = makeRecord({ id: 'agent-reviewer-noout', template: 'reviewer' });
       mockSpawn.mockImplementation((_input: unknown) => reviewerRecord);
 
-      eventBus.emit('subagent:complete', { id: engineerRecord.id, result: { id: 'mock-agent', success: true, output: '', toolCallsMade: 0, duration: 0 } });
+      emitAgentCompleted(runtimeBus, engineerRecord.id);
       await new Promise((r) => setTimeout(r, 10));
 
       // Chain moved to reviewing (fallback minimal report was created)
@@ -1119,48 +1169,46 @@ describe('WrfcController', () => {
     });
 
     test('chain fails when engineer agent fails (subagent:error)', () => {
-      const controller = WrfcController.getInstance(eventBus);
+      const controller = WrfcController.initialize(runtimeBus);
       const engineerRecord = makeRecord();
       const chain = controller.createChain(engineerRecord);
 
-      eventBus.emit('subagent:error', { id: engineerRecord.id, error: new Error('LLM call failed') });
+      emitAgentFailed(runtimeBus, engineerRecord.id, 'LLM call failed');
 
       expect(chain.state).toBe('failed');
       expect(chain.error).toContain('LLM call failed');
       expect(chain.completedAt).toBeDefined();
     });
 
-    test('chain emits wrfc:chain-failed on failure', () => {
-      const controller = WrfcController.getInstance(eventBus);
+    test('chain emits WORKFLOW_CHAIN_FAILED on failure', () => {
+      const controller = WrfcController.initialize(runtimeBus);
       const engineerRecord = makeRecord();
       const chain = controller.createChain(engineerRecord);
 
-      eventBus.emit('subagent:error', { id: engineerRecord.id, error: new Error('API timeout') });
+      emitAgentFailed(runtimeBus, engineerRecord.id, 'API timeout');
 
-      const failedCalls = emitSpy.mock.calls.filter(
-        (args: unknown[]) => args[0] === 'wrfc:chain-failed'
-      );
+      const failedCalls = workflowCalls('WORKFLOW_CHAIN_FAILED');
       expect(failedCalls.length).toBe(1);
-      expect(failedCalls[0][1]).toMatchObject({ chainId: chain.id });
+      expect((failedCalls[0][1] as { payload: object }).payload).toMatchObject({ chainId: chain.id });
     });
 
     test('subagent:error for unknown agent ID is ignored', () => {
-      const controller = WrfcController.getInstance(eventBus);
+      const controller = WrfcController.initialize(runtimeBus);
 
       // No chain exists for this agent
       expect(() => {
-        eventBus.emit('subagent:error', { id: 'agent-unknown-xyz', error: new Error('fail') });
+        emitAgentFailed(runtimeBus, 'agent-unknown-xyz', 'fail');
       }).not.toThrow();
     });
 
     test('subagent:complete for unknown agent ID is ignored', async () => {
-      const controller = WrfcController.getInstance(eventBus);
+      const controller = WrfcController.initialize(runtimeBus);
 
       // No chain exists for this agent
       await expect(
         new Promise<void>((resolve, reject) => {
           try {
-            eventBus.emit('subagent:complete', { id: 'agent-unknown-xyz', result: { id: 'mock-agent', success: true, output: '', toolCallsMade: 0, duration: 0 } });
+            emitAgentCompleted(runtimeBus, 'agent-unknown-xyz');
             setTimeout(resolve, 20);
           } catch (err) {
             reject(err);
@@ -1176,25 +1224,25 @@ describe('WrfcController', () => {
 
   describe('singleton', () => {
     test('getInstance returns same instance', () => {
-      const a = WrfcController.getInstance(eventBus);
+      const a = WrfcController.initialize(runtimeBus);
       const b = WrfcController.getInstance();
       expect(a).toBe(b);
     });
 
-    test('getInstance without eventBus on first init throws', () => {
+    test('getInstance without runtimeBus on first init throws', () => {
       // Already reset in beforeEach
-      expect(() => WrfcController.getInstance()).toThrow('WrfcController requires EventBus');
+      expect(() => WrfcController.getInstance()).toThrow('WrfcController must be initialized before use');
     });
 
     test('resetInstance clears singleton', () => {
-      const a = WrfcController.getInstance(eventBus);
+      const a = WrfcController.initialize(runtimeBus);
       WrfcController.resetInstance();
-      const b = WrfcController.getInstance(new EventBus());
+      const b = WrfcController.initialize(new RuntimeEventBus());
       expect(a).not.toBe(b);
     });
 
     test('dispose stops event listener processing', async () => {
-      const controller = WrfcController.getInstance(eventBus);
+      const controller = WrfcController.initialize(runtimeBus);
       const record = makeRecord();
       controller.createChain(record);
       const chain = controller.getChain(record.wrfcId!);
@@ -1203,7 +1251,7 @@ describe('WrfcController', () => {
       controller.dispose();
 
       // Emit completion event after dispose — should be ignored (no transition)
-      eventBus.emit('subagent:complete', { id: record.id, result: { id: 'mock-agent', success: true, output: '', toolCallsMade: 0, duration: 0 } });
+      emitAgentCompleted(runtimeBus, record.id);
       await new Promise((r) => setTimeout(r, 20));
 
       // Chain should still be in 'engineering' — event was not processed

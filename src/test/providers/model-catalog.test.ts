@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach, spyOn, mock, afterAll } from 'bun:test';
+import { describe, it, expect, beforeEach, afterEach, spyOn } from 'bun:test';
 import fs from 'node:fs';
 import { logger } from '../../utils/logger.ts';
 import {
@@ -12,6 +12,7 @@ import {
   _nameToSlugForTest,
   _normalizeModelNameForTest,
   _applySyntheticCanonicalModelsForTest,
+  _setSyntheticCanonicalSinkForTest,
 } from '../../providers/model-catalog.ts';
 import type {
   CatalogProvider,
@@ -392,18 +393,15 @@ function buildBroadFamily(
 // Capture whatever setSyntheticCanonicalModels receives.
 let capturedCanonical: import('../../providers/synthetic.ts').CanonicalModel[] = [];
 
-mock.module('../../providers/synthetic.ts', () => ({
-  setSyntheticCanonicalModels: (models: import('../../providers/synthetic.ts').CanonicalModel[]) => {
-    capturedCanonical = models;
-  },
-}));
-
 beforeEach(() => {
   capturedCanonical = [];
+  _setSyntheticCanonicalSinkForTest((models) => {
+    capturedCanonical = models;
+  });
 });
 
-afterAll(() => {
-  mock.restore();
+afterEach(() => {
+  _setSyntheticCanonicalSinkForTest(null);
 });
 
 describe('applySyntheticCanonicalModels — slug-based merging in broad families', () => {

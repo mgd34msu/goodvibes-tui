@@ -115,11 +115,11 @@ describe('matchesMatcher', () => {
   });
 
   test('exact matcher matches exact value', () => {
-    expect(matchesMatcher('file_read', 'file_read')).toBe(true);
+    expect(matchesMatcher('read', 'read')).toBe(true);
   });
 
   test('exact matcher does not match different value', () => {
-    expect(matchesMatcher('file_read', 'file_write')).toBe(false);
+    expect(matchesMatcher('read', 'write')).toBe(false);
   });
 
   test('empty string matcher matches empty string', () => {

@@ -1,7 +1,6 @@
 import { BasePanel } from './base-panel.ts';
 import { createEmptyLine, createStyledCell, type Line } from '../types/grid.ts';
-import type { EventBus } from '../core/event-bus.ts';
-import { providerRegistry } from '../providers/registry.ts';
+import type { RuntimeEventBus, TurnEvent } from '../runtime/events/index.ts';
 import type { Orchestrator } from '../core/orchestrator.ts';
 
 // ---------------------------------------------------------------------------
@@ -109,7 +108,7 @@ function statusCodeFromError(msg: string): number {
  * Shows per-call log (model, provider, input/output tokens, latency, status code),
  * running session call total, and error history.
  *
- * Subscribes to: turn:start, turn:stream-start, turn:llm-response, turn:error.
+ * Subscribes to typed turn runtime events.
  */
 export class DebugPanel extends BasePanel {
   private _unsubs: Array<() => void> = [];
@@ -129,7 +128,10 @@ export class DebugPanel extends BasePanel {
   private _totalCalls = 0;
   private _totalErrors = 0;
 
-  constructor(private readonly bus: EventBus) {
+  constructor(
+    private readonly runtimeBus: RuntimeEventBus,
+    private readonly requestRender: () => void = () => {},
+  ) {
     super('debug', 'Debug', 'B', 'monitoring');
     this._subscribe();
   }
@@ -152,20 +154,20 @@ export class DebugPanel extends BasePanel {
 
   private _subscribe(): void {
     this._unsubs.push(
-      this.bus.on('turn:start', () => {
+      this.runtimeBus.on('TURN_SUBMITTED', () => {
         this._turnStartMs  = Date.now();
         this._streamStartMs = null;
       }),
     );
 
     this._unsubs.push(
-      this.bus.on('turn:stream-start', () => {
+      this.runtimeBus.on('STREAM_START', () => {
         this._streamStartMs = Date.now();
       }),
     );
 
     this._unsubs.push(
-      this.bus.on('turn:llm-response', () => {
+      this.runtimeBus.on<Extract<TurnEvent, { type: 'LLM_RESPONSE_RECEIVED' }>>('LLM_RESPONSE_RECEIVED', (env) => {
         const now = Date.now();
         const latencyMs =
           this._streamStartMs !== null
@@ -175,17 +177,9 @@ export class DebugPanel extends BasePanel {
               : 0;
         this._streamStartMs = null;
 
-        let provider = 'unknown';
-        let model    = 'unknown';
-        try {
-          const m = providerRegistry.getCurrentModel();
-          provider = m.provider;
-          model    = m.id;
-        } catch { /* startup race */ }
-
         // Compute per-call token delta if orchestrator is wired
-        let inputTokens  = 0;
-        let outputTokens = 0;
+        let inputTokens  = env.payload.inputTokens + (env.payload.cacheReadTokens ?? 0) + (env.payload.cacheWriteTokens ?? 0);
+        let outputTokens = env.payload.outputTokens;
         if (this._orchestrator) {
           const cu = this._orchestrator.usage;
           inputTokens  = Math.max(0, cu.input  - this._prevInput);
@@ -196,8 +190,8 @@ export class DebugPanel extends BasePanel {
 
         const entry: ApiCallEntry = {
           ts: now,
-          provider,
-          model,
+          provider: env.payload.provider,
+          model: env.payload.model,
           inputTokens,
           outputTokens,
           latencyMs,
@@ -206,30 +200,22 @@ export class DebugPanel extends BasePanel {
         };
         this._pushCall(entry);
         this.markDirty();
-        this.bus.emit('render:request');
+        this.requestRender();
       }),
     );
 
     this._unsubs.push(
-      this.bus.on('turn:error', ({ error }) => {
+      this.runtimeBus.on<Extract<TurnEvent, { type: 'TURN_ERROR' }>>('TURN_ERROR', (env) => {
         this._streamStartMs = null;
         this._turnStartMs   = null;
 
-        let provider = 'unknown';
-        let model    = 'unknown';
-        try {
-          const m = providerRegistry.getCurrentModel();
-          provider = m.provider;
-          model    = m.id;
-        } catch { /* startup race */ }
-
-        const msg  = error?.message ?? String(error);
+        const msg  = env.payload.error;
         const code = statusCodeFromError(msg);
 
         const entry: ApiCallEntry = {
           ts: Date.now(),
-          provider,
-          model,
+          provider: 'unknown',
+          model: 'unknown',
           inputTokens:  0,
           outputTokens: 0,
           latencyMs:    0,
@@ -240,7 +226,7 @@ export class DebugPanel extends BasePanel {
         this._pushCall(entry);
         this._pushError(entry);
         this.markDirty();
-        this.bus.emit('render:request');
+        this.requestRender();
       }),
     );
   }

@@ -1,5 +1,5 @@
 /**
- * Fetch response sanitizer — GC-FETCH-006.
+ * Fetch response sanitizer.
  *
  * Implements three sanitization modes applied to HTTP response content before
  * it is returned to the caller. The mode is deterministic and auditable:
@@ -150,7 +150,7 @@ export function applySanitizer(content: string, mode: SanitizeMode): SanitizeRes
  * Resolve the effective sanitize mode, applying the rollback default.
  *
  * When no explicit mode is requested, defaults to `'safe-text'` — the
- * rollback-safe default per GC-FETCH-006 spec.
+ * rollback-safe default for fetch sanitization.
  *
  * @param requested - Caller-supplied mode (may be undefined).
  * @returns         Effective `SanitizeMode` to apply.

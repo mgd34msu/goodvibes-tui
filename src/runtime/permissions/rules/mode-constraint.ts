@@ -1,5 +1,5 @@
 /**
- * Permissions v2 — Mode-based constraint policy rule evaluator.
+ * Mode-based constraint policy rule evaluator.
  *
  * ModeConstraintRule activates only when a specific PermissionMode is active.
  * Primarily used by the mode evaluation layer (Layer 2) to enforce mode-level

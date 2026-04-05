@@ -104,6 +104,206 @@ function validatePath(inputPath: string, root: string): string | { error: string
   }
 }
 
+async function readTextFile(filePath: string): Promise<string | null> {
+  try {
+    return await Bun.file(filePath).text();
+  } catch {
+    return null;
+  }
+}
+
+async function collectInputFiles(
+  inputFiles: string[] | undefined,
+  projectRoot: string,
+  options: {
+    expandDirectories?: boolean;
+    limit?: number;
+    deadline?: number;
+  } = {},
+): Promise<string[]> {
+  const expandDirectories = options.expandDirectories ?? false;
+  const limit = options.limit ?? MAX_SCAN_FILES;
+  const deadline = options.deadline;
+
+  if (!inputFiles || inputFiles.length === 0) {
+    return collectTextFiles(projectRoot, limit, deadline);
+  }
+
+  const files: string[] = [];
+  for (const inputFile of inputFiles) {
+    if (files.length >= limit) break;
+    if (deadline && Date.now() > deadline) break;
+
+    const resolved = resolve(projectRoot, inputFile);
+    try {
+      const info = await stat(resolved);
+      if (info.isDirectory()) {
+        if (expandDirectories) {
+          const remaining = limit - files.length;
+          const collected = await collectTextFiles(resolved, remaining, deadline);
+          files.push(...collected);
+        }
+        continue;
+      }
+      files.push(resolved);
+    } catch {
+      // Skip missing or unreadable paths.
+    }
+  }
+
+  return files;
+}
+
+type ExportedSymbol = { name: string; file: string; line: number; kind?: string };
+type JsonObject = Record<string, unknown>;
+type DiffStatFile = { file: string; insertions: number; deletions: number };
+type SemanticDiffSummary = {
+  summary: string;
+  impact: string[];
+  risk: 'low' | 'medium' | 'high';
+};
+
+function extractExportedSymbols(content: string): Array<{ name: string; kind: string; line: number }> {
+  const symbols: Array<{ name: string; kind: string; line: number }> = [];
+  const lines = content.split('\n');
+  const patterns: Array<{ kind: string; regex: RegExp }> = [
+    { kind: 'function', regex: /^export\s+(?:async\s+)?function\s+(\w+)/ },
+    { kind: 'class', regex: /^export\s+(?:abstract\s+)?class\s+(\w+)/ },
+    { kind: 'interface', regex: /^export\s+interface\s+(\w+)/ },
+    { kind: 'type', regex: /^export\s+type\s+(\w+)/ },
+    { kind: 'enum', regex: /^export\s+enum\s+(\w+)/ },
+    { kind: 'const', regex: /^export\s+const\s+(\w+)/ },
+    { kind: 'variable', regex: /^export\s+(?:let|var)\s+(\w+)/ },
+  ];
+
+  for (let i = 0; i < lines.length; i++) {
+    const trimmed = lines[i].trimStart();
+    for (const { kind, regex } of patterns) {
+      const m = trimmed.match(regex);
+      if (m?.[1]) {
+        symbols.push({ name: m[1], kind, line: i + 1 });
+        break;
+      }
+    }
+  }
+
+  return symbols;
+}
+
+async function collectExportedSymbols(
+  files: string[],
+  intelligence: CodeIntelligence,
+): Promise<ExportedSymbol[]> {
+  const exported: ExportedSymbol[] = [];
+
+  for (const file of files) {
+    const content = await readTextFile(file);
+    if (content === null) continue;
+
+    const symbols = await intelligence.getSymbols(file, content);
+    if (symbols.length > 0) {
+      for (const sym of symbols) {
+        if (sym.exported) {
+          exported.push({ name: sym.name, file, line: sym.line ?? 0, kind: sym.kind ?? 'unknown' });
+        }
+      }
+      continue;
+    }
+
+    for (const sym of extractExportedSymbols(content)) {
+      exported.push({ ...sym, file });
+    }
+  }
+
+  return exported;
+}
+
+async function readJsonFile<T extends JsonObject = JsonObject>(filePath: string): Promise<T | null> {
+  try {
+    return (await Bun.file(filePath).json()) as T;
+  } catch {
+    return null;
+  }
+}
+
+function resolveScanRoot(input: AnalyzeInput, projectRoot: string): string {
+  return input.files && input.files.length > 0 ? resolve(projectRoot, input.files[0]) : projectRoot;
+}
+
+function collectExistingPaths(projectRoot: string, names: string[]): string[] {
+  const found: string[] = [];
+  for (const name of names) {
+    const candidate = join(projectRoot, name);
+    if (existsSync(candidate)) {
+      found.push(name);
+    }
+  }
+  return found;
+}
+
+function loadDependencyVersions(pkgJson: JsonObject): Record<string, string> {
+  return {
+    ...((pkgJson.dependencies as Record<string, string>) ?? {}),
+    ...((pkgJson.devDependencies as Record<string, string>) ?? {}),
+  };
+}
+
+function parseDiffStats(statOutput: string): DiffStatFile[] {
+  const files: DiffStatFile[] = [];
+  for (const line of statOutput.trim().split('\n')) {
+    const m = line.match(/^\s*(.+?)\s+\|\s+(\d+)\s+([+\-]+)?/);
+    if (!m) continue;
+    const plusMinus = m[3] ?? '';
+    files.push({
+      file: m[1].trim(),
+      insertions: (plusMinus.match(/\+/g) ?? []).length,
+      deletions: (plusMinus.match(/-/g) ?? []).length,
+    });
+  }
+  return files;
+}
+
+function parseSemanticDiffResponse(
+  llmResponse: string | null,
+  changedFiles: string[],
+): SemanticDiffSummary {
+  let summary = 'LLM unavailable — diff available in raw_diff field.';
+  let impact: string[] = changedFiles.map((f) => `Changed file: ${f}`);
+  let risk: 'low' | 'medium' | 'high' = 'medium';
+
+  if (llmResponse) {
+    try {
+      const cleaned = llmResponse.replace(/^```(?:json)?\s*/m, '').replace(/\s*```$/m, '').trim();
+      const parsed = JSON.parse(cleaned) as {
+        summary?: string;
+        impact?: unknown[];
+        risk?: string;
+      };
+      if (typeof parsed.summary === 'string') summary = parsed.summary;
+      if (Array.isArray(parsed.impact)) {
+        impact = parsed.impact.map((i) => String(i));
+      }
+      if (parsed.risk === 'low' || parsed.risk === 'medium' || parsed.risk === 'high') {
+        risk = parsed.risk;
+      }
+    } catch {
+      summary = llmResponse.slice(0, 500);
+    }
+  }
+
+  return { summary, impact, risk };
+}
+
+function findEntryPoint(targetDir: string, candidates: string[]): string | null {
+  for (const name of candidates) {
+    const candidate = join(targetDir, name);
+    if (existsSync(candidate)) {
+      return candidate;
+    }
+  }
+  return null;
+}
+
 // ---------------------------------------------------------------------------
 // Mode: impact
 // ---------------------------------------------------------------------------
@@ -119,41 +319,12 @@ async function runImpact(
 
   const deadline = Date.now() + MAX_SCAN_MS;
   const intelligence = CodeIntelligence.getInstance();
-
-  // Collect export names from target files
-  const exportedNames: Array<{ name: string; file: string; line: number }> = [];
-
-  for (const rawFile of targetFiles) {
-    const resolved = validatePath(rawFile, projectRoot);
-    if (typeof resolved === 'object') continue;
-
-    let content: string;
-    try {
-      content = await Bun.file(resolved).text();
-    } catch {
-      continue;
-    }
-
-    // Try CodeIntelligence first
-    const symbols = await intelligence.getSymbols(resolved, content);
-    if (symbols.length > 0) {
-      for (const sym of symbols) {
-        if (sym.exported) {
-          exportedNames.push({ name: sym.name, file: resolved, line: sym.line ?? 0 });
-        }
-      }
-    } else {
-      // Fallback: regex export scan
-      const lines = content.split('\n');
-      const exportRegex = /^export\s+(?:(?:async\s+)?function|class|const|let|var|type|interface|enum)\s+(\w+)/;
-      for (let i = 0; i < lines.length; i++) {
-        const m = lines[i].trimStart().match(exportRegex);
-        if (m?.[1]) {
-          exportedNames.push({ name: m[1], file: resolved, line: i + 1 });
-        }
-      }
-    }
-  }
+  const exportedNames = await collectExportedSymbols(
+    targetFiles
+      .map((rawFile) => validatePath(rawFile, projectRoot))
+      .filter((resolved): resolved is string => typeof resolved === 'string'),
+    intelligence,
+  );
 
   if (exportedNames.length === 0) {
     return { affected_files: [], exported_names: [], message: 'No exported symbols found in target files' };
@@ -161,7 +332,7 @@ async function runImpact(
 
   // Search for references across the project
   const allProjectFiles = await collectTextFiles(projectRoot, MAX_SCAN_FILES, deadline);
-  const targetSet = new Set(targetFiles.map((f) => resolve(projectRoot, f)));
+  const targetSet = new Set(exportedNames.map((e) => e.file));
 
   const affected = new Map<string, Array<{ name: string; line: number }>>(); // file -> hits
 
@@ -169,12 +340,8 @@ async function runImpact(
     if (targetSet.has(file)) continue; // skip self
     if (Date.now() > deadline) break;
 
-    let content: string;
-    try {
-      content = await Bun.file(file).text();
-    } catch {
-      continue;
-    }
+    const content = await readTextFile(file);
+    if (content === null) continue;
 
     const lines = content.split('\n');
     for (const exported of exportedNames) {
@@ -216,10 +383,8 @@ async function buildDepGraph(
 ): Promise<DepGraph> {
   const graph: DepGraph = {};
   for (const file of files) {
-    let content: string;
-    try {
-      content = await Bun.file(file).text();
-    } catch {
+    const content = await readTextFile(file);
+    if (content === null) {
       graph[file] = [];
       continue;
     }
@@ -309,27 +474,7 @@ async function runDependencies(
   projectRoot: string,
 ): Promise<Record<string, unknown>> {
   const submode = input.submode ?? 'analyze';
-
-  let targetFiles: string[];
-  if (input.files && input.files.length > 0) {
-    targetFiles = [];
-    for (const f of input.files) {
-      const resolved = resolve(projectRoot, f);
-      try {
-        const info = await stat(resolved);
-        if (info.isDirectory()) {
-          const sub = await collectTextFiles(resolved);
-          targetFiles.push(...sub);
-        } else {
-          targetFiles.push(resolved);
-        }
-      } catch {
-        // Skip missing
-      }
-    }
-  } else {
-    targetFiles = await collectTextFiles(projectRoot);
-  }
+  const targetFiles = await collectInputFiles(input.files, projectRoot, { expandDirectories: true });
 
   const graph = await buildDepGraph(targetFiles, projectRoot);
 
@@ -384,47 +529,14 @@ async function runDeadCode(
   const allFiles = await collectTextFiles(scanRoot, MAX_SCAN_FILES, deadline);
 
   // Phase 1: collect all exported symbols
-  const exports: Array<{ name: string; file: string; line: number }> = [];
-
-  for (const file of allFiles) {
-    if (Date.now() > deadline) break;
-
-    let content: string;
-    try {
-      content = await Bun.file(file).text();
-    } catch {
-      continue;
-    }
-
-    const symbols = await intelligence.getSymbols(file, content);
-    if (symbols.length > 0) {
-      for (const sym of symbols) {
-        if (sym.exported) {
-          exports.push({ name: sym.name, file, line: sym.line ?? 0 });
-        }
-      }
-    } else {
-      // Fallback: regex
-      const lines = content.split('\n');
-      const exportRegex = /^export\s+(?:(?:async\s+)?function|class|const|let|var|type|interface|enum)\s+(\w+)/;
-      for (let i = 0; i < lines.length; i++) {
-        const m = lines[i].trimStart().match(exportRegex);
-        if (m?.[1]) {
-          exports.push({ name: m[1], file, line: i + 1 });
-        }
-      }
-    }
-  }
+  const exports = await collectExportedSymbols(allFiles, intelligence);
 
   // Phase 2: cache file contents, then find which exports have no references outside their own file
   const fileContentCache = new Map<string, string>();
   for (const file of allFiles) {
     if (Date.now() > deadline) break;
-    try {
-      fileContentCache.set(file, await Bun.file(file).text());
-    } catch {
-      // Skip unreadable files
-    }
+    const content = await readTextFile(file);
+    if (content !== null) fileContentCache.set(file, content);
   }
 
   const dead: Array<{ name: string; file: string; line: number }> = [];
@@ -477,22 +589,15 @@ async function runSecurity(
   const scope = input.securityScope ?? 'all';
   const results: Record<string, unknown> = {};
 
-  const scanRoot =
-    input.files && input.files.length > 0
-      ? resolve(projectRoot, input.files[0])
-      : projectRoot;
+  const scanRoot = resolveScanRoot(input, projectRoot);
 
   if (scope === 'secrets' || scope === 'all') {
     const findings: Array<{ file: string; line: number; pattern: string; match: string }> = [];
     const files = await collectTextFiles(scanRoot);
 
     for (const file of files) {
-      let content: string;
-      try {
-        content = await Bun.file(file).text();
-      } catch {
-        continue;
-      }
+      const content = await readTextFile(file);
+      if (content === null) continue;
 
       const lines = content.split('\n');
       for (let i = 0; i < lines.length; i++) {
@@ -515,12 +620,9 @@ async function runSecurity(
 
   if (scope === 'env' || scope === 'all') {
     // Audit .env files
-    const envFiles: string[] = [];
-    for (const name of ['.env', '.env.local', '.env.development', '.env.production']) {
-      const p = join(projectRoot, name);
-      if (existsSync(p)) envFiles.push(name);
-    }
-    results.env = { files_found: envFiles };
+    results.env = {
+      files_found: collectExistingPaths(projectRoot, ['.env', '.env.local', '.env.development', '.env.production']),
+    };
   }
 
   if (scope === 'permissions' || scope === 'all') {
@@ -555,20 +657,18 @@ async function runCoverage(
   // Try coverage/coverage-summary.json first (Istanbul/NYC/c8)
   const summaryPath = join(projectRoot, 'coverage', 'coverage-summary.json');
   if (existsSync(summaryPath)) {
-    try {
-      const raw = await Bun.file(summaryPath).json();
-      const total = raw?.total;
-      if (total) {
-        return {
-          source: 'coverage-summary.json',
-          lines: total.lines,
-          statements: total.statements,
-          branches: total.branches,
-          functions: total.functions,
-        };
-      }
-    } catch (err) {
-      // Fall through
+    const raw = await readJsonFile(summaryPath);
+    const total = raw?.total as
+      | { lines?: unknown; statements?: unknown; branches?: unknown; functions?: unknown }
+      | undefined;
+    if (total) {
+      return {
+        source: 'coverage-summary.json',
+        lines: total.lines,
+        statements: total.statements,
+        branches: total.branches,
+        functions: total.functions,
+      };
     }
   }
 
@@ -624,11 +724,9 @@ async function runBundle(
 
   for (const path of candidates) {
     if (!existsSync(path)) continue;
-    try {
-      const raw = await Bun.file(path).json();
+    const raw = await readJsonFile(path);
+    if (raw !== null) {
       return { source: relative(projectRoot, path), data: raw };
-    } catch {
-      continue;
     }
   }
 
@@ -655,14 +753,8 @@ async function runSurface(
       try {
         const info = await stat(resolved);
         if (info.isDirectory()) {
-          // Find index files in directory
-          for (const name of ['index.ts', 'index.tsx', 'index.js', 'mod.ts']) {
-            const idx = join(resolved, name);
-            if (existsSync(idx)) {
-              targetFiles.push(idx);
-              break;
-            }
-          }
+          const idx = findEntryPoint(resolved, ['index.ts', 'index.tsx', 'index.js', 'mod.ts']);
+          if (idx) targetFiles.push(idx);
         } else {
           targetFiles.push(resolved);
         }
@@ -671,14 +763,8 @@ async function runSurface(
       }
     }
   } else {
-    // Default: look for index.ts/index.js at project root
-    for (const name of ['index.ts', 'index.tsx', 'index.js', 'src/index.ts', 'src/index.js']) {
-      const p = join(projectRoot, name);
-      if (existsSync(p)) {
-        targetFiles.push(p);
-        break;
-      }
-    }
+    const rootEntry = findEntryPoint(projectRoot, ['index.ts', 'index.tsx', 'index.js', 'src/index.ts', 'src/index.js']);
+    if (rootEntry) targetFiles.push(rootEntry);
   }
 
   if (targetFiles.length === 0) {
@@ -691,49 +777,11 @@ async function runSurface(
   }> = [];
 
   for (const file of targetFiles) {
-    let content: string;
-    try {
-      content = await Bun.file(file).text();
-    } catch {
-      continue;
-    }
-
-    const fileExports: Array<{ name: string; kind: string; line: number }> = [];
-
-    const symbols = await intelligence.getSymbols(file, content);
-    if (symbols.length > 0) {
-      for (const sym of symbols) {
-        if (sym.exported) {
-          fileExports.push({ name: sym.name, kind: sym.kind ?? 'unknown', line: sym.line ?? 0 });
-        }
-      }
-    } else {
-      // Fallback: regex export scan
-      const lines = content.split('\n');
-      const patterns: Array<{ kind: string; regex: RegExp }> = [
-        { kind: 'function', regex: /^export\s+(?:async\s+)?function\s+(\w+)/ },
-        { kind: 'class', regex: /^export\s+(?:abstract\s+)?class\s+(\w+)/ },
-        { kind: 'interface', regex: /^export\s+interface\s+(\w+)/ },
-        { kind: 'type', regex: /^export\s+type\s+(\w+)/ },
-        { kind: 'enum', regex: /^export\s+enum\s+(\w+)/ },
-        { kind: 'const', regex: /^export\s+const\s+(\w+)/ },
-        { kind: 'variable', regex: /^export\s+(?:let|var)\s+(\w+)/ },
-      ];
-      for (let i = 0; i < lines.length; i++) {
-        const trimmed = lines[i].trimStart();
-        for (const { kind, regex } of patterns) {
-          const m = trimmed.match(regex);
-          if (m?.[1]) {
-            fileExports.push({ name: m[1], kind, line: i + 1 });
-            break;
-          }
-        }
-      }
-    }
+    const fileExports = await collectExportedSymbols([file], intelligence);
 
     surface.push({
       file: relative(projectRoot, file),
-      exports: fileExports,
+      exports: fileExports.map(({ name, kind, line }) => ({ name, kind: kind ?? 'unknown', line })),
     });
   }
 
@@ -1089,11 +1137,7 @@ async function runSemanticDiff(
   }
 
   // Parse changed files for impact analysis
-  const changedFiles: string[] = [];
-  for (const line of statOutput.trim().split('\n')) {
-    const m = line.match(/^\s*(.+?)\s+\|/);
-    if (m) changedFiles.push(m[1].trim());
-  }
+  const changedFiles = parseDiffStats(statOutput).map((file) => file.file);
 
   // Build LLM prompt with diff context
   const truncatedDiff = truncateDiffAtBoundary(fullDiff, 6000);
@@ -1110,32 +1154,7 @@ ${truncatedDiff}`;
 
   const llmResponse = await toolLLM.chat(prompt, { maxTokens: 512 });
 
-  // Parse LLM JSON response, with fallback for unparseable responses
-  let summary = 'LLM unavailable — diff available in raw_diff field.';
-  let impact: string[] = changedFiles.map((f) => `Changed file: ${f}`);
-  let risk: 'low' | 'medium' | 'high' = 'medium';
-
-  if (llmResponse) {
-    try {
-      // Strip markdown code fences if present
-      const cleaned = llmResponse.replace(/^```(?:json)?\s*/m, '').replace(/\s*```$/m, '').trim();
-      const parsed = JSON.parse(cleaned) as {
-        summary?: string;
-        impact?: unknown[];
-        risk?: string;
-      };
-      if (typeof parsed.summary === 'string') summary = parsed.summary;
-      if (Array.isArray(parsed.impact)) {
-        impact = parsed.impact.map((i) => String(i));
-      }
-      if (parsed.risk === 'low' || parsed.risk === 'medium' || parsed.risk === 'high') {
-        risk = parsed.risk;
-      }
-    } catch {
-      // LLM returned non-JSON prose — use raw as summary
-      summary = llmResponse.slice(0, 500);
-    }
-  }
+  const { summary, impact, risk } = parseSemanticDiffResponse(llmResponse, changedFiles);
 
   return {
     before,
@@ -1186,16 +1205,11 @@ async function runUpgrade(
     if (!existsSync(pkgPath)) {
       return { error: 'No package.json found and no packages specified', projectRoot };
     }
-    let pkgJson: Record<string, unknown>;
-    try {
-      pkgJson = await Bun.file(pkgPath).json();
-    } catch {
+    const pkgJson = await readJsonFile(pkgPath);
+    if (pkgJson === null) {
       return { error: 'Failed to parse package.json' };
     }
-    const deps = {
-      ...((pkgJson.dependencies as Record<string, string>) ?? {}),
-      ...((pkgJson.devDependencies as Record<string, string>) ?? {}),
-    };
+    const deps = loadDependencyVersions(pkgJson);
     packageNames = Object.keys(deps);
     if (packageNames.length === 0) {
       return { packages: [], total: 0, outdated: 0, breaking: 0 };
@@ -1207,11 +1221,11 @@ async function runUpgrade(
   const pkgPath = join(projectRoot, 'package.json');
   if (existsSync(pkgPath)) {
     try {
-      const pkgJson = await Bun.file(pkgPath).json() as Record<string, unknown>;
-      const allDeps = {
-        ...((pkgJson.dependencies as Record<string, string>) ?? {}),
-        ...((pkgJson.devDependencies as Record<string, string>) ?? {}),
-      };
+      const pkgJson = await readJsonFile(pkgPath);
+      if (pkgJson === null) {
+        throw new Error('Failed to parse package.json');
+      }
+      const allDeps = loadDependencyVersions(pkgJson);
       for (const [name, ver] of Object.entries(allDeps)) {
         currentVersions[name] = ver;
       }
@@ -1282,10 +1296,7 @@ async function runPermissions(
   input: AnalyzeInput,
   projectRoot: string,
 ): Promise<Record<string, unknown>> {
-  const scanRoot =
-    input.files && input.files.length > 0
-      ? resolve(projectRoot, input.files[0])
-      : projectRoot;
+  const scanRoot = resolveScanRoot(input, projectRoot);
 
   const deadline = Date.now() + MAX_SCAN_MS;
   const files = await collectTextFiles(scanRoot, MAX_SCAN_FILES, deadline);

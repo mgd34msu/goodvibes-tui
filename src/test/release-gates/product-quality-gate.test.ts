@@ -11,7 +11,7 @@
 
 import { describe, test, expect } from 'bun:test';
 import { FEATURE_FLAGS } from '../../runtime/feature-flags/flags.ts';
-import { FeatureFlagManager } from '../../runtime/feature-flags/manager.ts';
+import { createFeatureFlagManager } from '../../runtime/feature-flags/manager.ts';
 import { NotificationRouter } from '../../runtime/notifications/router.ts';
 
 // ---------------------------------------------------------------------------
@@ -67,14 +67,9 @@ describe('product quality gate: feature flag declarations', () => {
     }
   });
 
-  // Core phased executor capability
-  test('phased-tool-executor flag is declared', () => {
-    expect(findFlag('phased-tool-executor')).toBeDefined();
-  });
-
   // Permissions
-  test('permissions-v2 flag is declared', () => {
-    expect(findFlag('permissions-v2')).toBeDefined();
+  test('permissions-policy-engine flag is declared', () => {
+    expect(findFlag('permissions-policy-engine')).toBeDefined();
   });
 
   test('permissions-simulation flag is declared', () => {
@@ -87,14 +82,14 @@ describe('product quality gate: feature flag declarations', () => {
   });
 
   // Session compaction v2
-  test('session-compaction-v2 flag is declared', () => {
-    expect(findFlag('session-compaction-v2')).toBeDefined();
-    expect(findFlag('session-compaction-v2')!.runtimeToggleable).toBe(true);
+  test('session-compaction flag is declared', () => {
+    expect(findFlag('session-compaction')).toBeDefined();
+    expect(findFlag('session-compaction')!.runtimeToggleable).toBe(true);
   });
 
   // Tool result reconciliation
-  test('gc-orch-015-tool-result-reconciliation flag is declared', () => {
-    expect(findFlag('gc-orch-015-tool-result-reconciliation')).toBeDefined();
+  test('tool-result-reconciliation flag is declared', () => {
+    expect(findFlag('tool-result-reconciliation')).toBeDefined();
   });
 
   // Fetch sanitization
@@ -120,7 +115,7 @@ describe('product quality gate: feature flag declarations', () => {
 
 describe('product quality gate: feature flag manager lifecycle', () => {
   function makeManager() {
-    return new FeatureFlagManager();
+    return createFeatureFlagManager();
   }
 
   test('manager initialises all known flags', () => {
@@ -131,28 +126,27 @@ describe('product quality gate: feature flag manager lifecycle', () => {
 
   test('disabled flag reports isEnabled=false initially', () => {
     const manager = makeManager();
-    // phased-tool-executor defaults to disabled
-    expect(manager.isEnabled('phased-tool-executor')).toBe(false);
+    expect(manager.isEnabled('fetch-sanitization')).toBe(false);
   });
 
   test('enable → isEnabled returns true', () => {
     const manager = makeManager();
-    manager.enable('phased-tool-executor');
-    expect(manager.isEnabled('phased-tool-executor')).toBe(true);
+    manager.enable('fetch-sanitization');
+    expect(manager.isEnabled('fetch-sanitization')).toBe(true);
   });
 
   test('disable → isEnabled returns false', () => {
     const manager = makeManager();
-    manager.enable('phased-tool-executor');
-    manager.disable('phased-tool-executor');
-    expect(manager.isEnabled('phased-tool-executor')).toBe(false);
+    manager.enable('fetch-sanitization');
+    manager.disable('fetch-sanitization');
+    expect(manager.isEnabled('fetch-sanitization')).toBe(false);
   });
 
   test('kill → isKilled returns true and flag cannot be re-enabled', () => {
     const manager = makeManager();
-    manager.kill('phased-tool-executor', 'emergency disable');
-    expect(manager.isKilled('phased-tool-executor')).toBe(true);
-    expect(() => manager.enable('phased-tool-executor')).toThrow();
+    manager.kill('fetch-sanitization', 'emergency disable');
+    expect(manager.isKilled('fetch-sanitization')).toBe(true);
+    expect(() => manager.enable('fetch-sanitization')).toThrow();
   });
 
   test('getAll returns map of all registered flags with their states', () => {
@@ -171,8 +165,8 @@ describe('product quality gate: feature flag manager lifecycle', () => {
 
   test('getTransitions records enable/disable history', () => {
     const manager = makeManager();
-    manager.enable('phased-tool-executor');
-    manager.disable('phased-tool-executor');
+    manager.enable('fetch-sanitization');
+    manager.disable('fetch-sanitization');
     expect(manager.getTransitions().length).toBe(2);
   });
 
@@ -182,8 +176,8 @@ describe('product quality gate: feature flag manager lifecycle', () => {
     const unsub = manager.subscribe((id, state) => {
       events.push(`${id}:${state}`);
     });
-    manager.enable('phased-tool-executor');
-    expect(events).toContain('phased-tool-executor:enabled');
+    manager.enable('fetch-sanitization');
+    expect(events).toContain('fetch-sanitization:enabled');
     unsub();
   });
 });

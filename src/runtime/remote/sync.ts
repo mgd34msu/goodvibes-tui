@@ -1,7 +1,7 @@
 /**
  * Remote Substrate — State Sync
  *
- * Implements v3 Section 10.4: mirrors remote task and health state into
+ * Mirrors remote task and health state into
  * local runtime store domains (AcpDomainState, TaskDomainState).
  *
  * The sync layer is a one-way bridge: remote data flows into local store

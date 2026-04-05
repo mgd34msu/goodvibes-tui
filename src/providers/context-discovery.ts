@@ -1,7 +1,7 @@
 /**
  * context-discovery.ts
  *
- * G02: Multi-provider context window discovery with verbose-first endpoint probing.
+ * Multi-provider context window discovery with verbose-first endpoint probing.
  *
  * Implements a provider-agnostic discovery chain that probes endpoints from
  * most-informative (verbose) to least-informative, returning the richest
@@ -14,7 +14,7 @@
  *   4. /props          — llama.cpp server-level n_ctx (single context all models)
  *   5. /info           — TGI format (max_input_tokens / max_total_tokens)
  *
- * Feature flag: `local-provider-context-ingestion` (inherited from G00)
+ * Feature flag: `local-provider-context-ingestion`
  */
 
 import { logger } from '../utils/logger.ts';

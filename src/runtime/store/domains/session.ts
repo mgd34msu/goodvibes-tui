@@ -3,7 +3,7 @@
  * recovery machine state, lineage, and identity metadata.
  */
 
-/** States from the session recovery state machine (v3 §4.9). */
+/** States for the session recovery machine. */
 export type SessionRecoveryState =
   | 'loading'
   | 'repairing'

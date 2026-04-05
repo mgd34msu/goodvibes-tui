@@ -26,12 +26,49 @@ function makeTmpDir(): string {
   return mkdtempSync(join(base, 'state-'));
 }
 
+type StateToolParsedResult = Omit<Awaited<ReturnType<ReturnType<typeof createStateTool>['execute']>>, 'callId'> & {
+  parsed?: unknown;
+};
+
 /** Execute the tool and parse JSON output. */
-async function run(tool: ReturnType<typeof createStateTool>, args: Record<string, unknown>): Promise<Omit<Awaited<ReturnType<typeof tool.execute>>, 'callId'> & { parsed?: any }> {
+async function run<TParsed>(tool: ReturnType<typeof createStateTool>, args: Record<string, unknown>): Promise<Omit<StateToolParsedResult, 'parsed'> & { parsed: TParsed }> {
   const result = await tool.execute(args);
-  if (!result.success) return result;
-  return { ...result, parsed: JSON.parse(result.output!) };
+  if (!result.success) {
+    throw new Error(result.error ?? 'state tool execution failed');
+  }
+  return { ...result, parsed: JSON.parse(result.output!) as TParsed };
 }
+
+type StateGetOutput = { values: Record<string, unknown> };
+type StateListOutput = { entries: Record<string, unknown>; count: number };
+type StateBudgetOutput = {
+  mode: string;
+  session_id: string;
+  project_index: { file_count: number; total_tokens: number };
+  session_metrics: unknown;
+};
+type StateContextOutput = {
+  mode: string;
+  session_id: string;
+  project_index: { file_count: number; total_tokens: number };
+};
+type StateMemoryListOutput = { action: string; keys: string[] };
+type StateMemoryGetOutput = { key: string; value: unknown };
+type StateTelemetryOutput = { mode: string; session_duration_ms: number; tool_calls: number; errors: number };
+type StateHooksListOutput = {
+  mode: string;
+  action: string;
+  count: number;
+  hooks: Array<{ name: string; type: string; enabled: boolean }>;
+};
+type StateHooksToggleOutput = { enabled: boolean };
+type StateHooksAddRemoveOutput = { action: string; name: string };
+type StateModeGetOutput = { mode: string; action: string; name: string; verbosityDefaults: Record<string, string> };
+type StateModeListOutput = {
+  action: string;
+  count: number;
+  modes: Array<{ name: string; verbosityDefaults: Record<string, string> }>;
+};
 
 // ---------------------------------------------------------------------------
 // Suite setup
@@ -63,24 +100,24 @@ describe('StateTool', () => {
 
   test('set and get round-trip — string value', async () => {
     await tool.execute({ mode: 'set', values: { myKey: 'hello' } });
-    const res = await run(tool, { mode: 'get', keys: ['myKey'] });
+    const res = await run<StateGetOutput>(tool, { mode: 'get', keys: ['myKey'] });
     expect(res.parsed.values.myKey).toBe('hello');
   });
 
   test('set and get round-trip — numeric value', async () => {
     await tool.execute({ mode: 'set', values: { count: 42 } });
-    const res = await run(tool, { mode: 'get', keys: ['count'] });
+    const res = await run<StateGetOutput>(tool, { mode: 'get', keys: ['count'] });
     expect(res.parsed.values.count).toBe(42);
   });
 
   test('get missing key returns empty values map', async () => {
-    const res = await run(tool, { mode: 'get', keys: ['nonexistent'] });
+    const res = await run<StateGetOutput>(tool, { mode: 'get', keys: ['nonexistent'] });
     expect(res.parsed.values).toEqual({});
   });
 
   test('get returns only requested keys', async () => {
     await tool.execute({ mode: 'set', values: { a: 1, b: 2, c: 3 } });
-    const res = await run(tool, { mode: 'get', keys: ['a', 'c'] });
+    const res = await run<StateGetOutput>(tool, { mode: 'get', keys: ['a', 'c'] });
     expect(res.parsed.values).toEqual({ a: 1, c: 3 });
     expect(res.parsed.values.b).toBeUndefined();
   });
@@ -102,7 +139,7 @@ describe('StateTool', () => {
 
   test('list returns all entries when no prefix', async () => {
     await tool.execute({ mode: 'set', values: { x: 1, y: 2 } });
-    const res = await run(tool, { mode: 'list' });
+    const res = await run<StateListOutput>(tool, { mode: 'list' });
     expect(res.parsed.entries.x).toBe(1);
     expect(res.parsed.entries.y).toBe(2);
     expect(res.parsed.count).toBeGreaterThanOrEqual(2);
@@ -110,7 +147,7 @@ describe('StateTool', () => {
 
   test('list filters by prefix', async () => {
     await tool.execute({ mode: 'set', values: { 'ns:a': 1, 'ns:b': 2, 'other': 3 } });
-    const res = await run(tool, { mode: 'list', prefix: 'ns:' });
+    const res = await run<StateListOutput>(tool, { mode: 'list', prefix: 'ns:' });
     expect(res.parsed.entries['ns:a']).toBe(1);
     expect(res.parsed.entries['ns:b']).toBe(2);
     expect(res.parsed.entries.other).toBeUndefined();
@@ -119,7 +156,7 @@ describe('StateTool', () => {
 
   test('list with prefix that matches nothing returns empty', async () => {
     await tool.execute({ mode: 'set', values: { foo: 1 } });
-    const res = await run(tool, { mode: 'list', prefix: 'zzz:' });
+    const res = await run<StateListOutput>(tool, { mode: 'list', prefix: 'zzz:' });
     expect(res.parsed.count).toBe(0);
     expect(res.parsed.entries).toEqual({});
   });
@@ -131,7 +168,7 @@ describe('StateTool', () => {
   test('clear removes specified keys', async () => {
     await tool.execute({ mode: 'set', values: { k1: 'v1', k2: 'v2' } });
     await tool.execute({ mode: 'clear', clearKeys: ['k1'] });
-    const res = await run(tool, { mode: 'get', keys: ['k1', 'k2'] });
+    const res = await run<StateGetOutput>(tool, { mode: 'get', keys: ['k1', 'k2'] });
     expect(res.parsed.values.k1).toBeUndefined();
     expect(res.parsed.values.k2).toBe('v2');
   });
@@ -157,7 +194,7 @@ describe('StateTool', () => {
     const res = await tool.execute({ mode: 'set', values: { id: 'hack', myData: 'ok' } });
     expect(res.success).toBe(true);
     // "id" should NOT have been overwritten
-    const getRes = await run(tool, { mode: 'get', keys: ['id', 'myData'] });
+    const getRes = await run<StateGetOutput>(tool, { mode: 'get', keys: ['id', 'myData'] });
     // id was reserved so get might return the session id or nothing — but myData must be set
     expect(getRes.parsed.values.myData).toBe('ok');
   });
@@ -165,7 +202,7 @@ describe('StateTool', () => {
   test('set silently ignores reserved key "started_at"', async () => {
     const res = await tool.execute({ mode: 'set', values: { started_at: '1970', safe: true } });
     expect(res.success).toBe(true);
-    const getRes = await run(tool, { mode: 'get', keys: ['safe'] });
+    const getRes = await run<StateGetOutput>(tool, { mode: 'get', keys: ['safe'] });
     expect(getRes.parsed.values.safe).toBe(true);
   });
 
@@ -180,20 +217,20 @@ describe('StateTool', () => {
   // -------------------------------------------------------------------------
 
   test('budget returns structured info with session_id', async () => {
-    const res = await run(tool, { mode: 'budget' });
+    const res = await run<StateBudgetOutput>(tool, { mode: 'budget' });
     expect(res.parsed.mode).toBe('budget');
     expect(typeof res.parsed.session_id).toBe('string');
     expect(res.parsed.session_id.length).toBeGreaterThan(0);
   });
 
   test('budget includes project_index with file_count and total_tokens', async () => {
-    const res = await run(tool, { mode: 'budget' });
+    const res = await run<StateBudgetOutput>(tool, { mode: 'budget' });
     expect(typeof res.parsed.project_index.file_count).toBe('number');
     expect(typeof res.parsed.project_index.total_tokens).toBe('number');
   });
 
   test('budget includes session_metrics object', async () => {
-    const res = await run(tool, { mode: 'budget' });
+    const res = await run<StateBudgetOutput>(tool, { mode: 'budget' });
     expect(typeof res.parsed.session_metrics).toBe('object');
   });
 
@@ -202,7 +239,7 @@ describe('StateTool', () => {
   // -------------------------------------------------------------------------
 
   test('context returns session_id and project_index', async () => {
-    const res = await run(tool, { mode: 'context' });
+    const res = await run<StateContextOutput>(tool, { mode: 'context' });
     expect(res.parsed.mode).toBe('context');
     expect(typeof res.parsed.session_id).toBe('string');
     expect(typeof res.parsed.project_index.file_count).toBe('number');
@@ -234,7 +271,7 @@ describe('StateTool', () => {
     test('memory list returns empty when no files', async () => {
       // Remove the memory dir we just created to simulate empty state
       rmSync(join(tmpDir, '.goodvibes', 'memory'), { recursive: true, force: true });
-      const res = await run(tool, { mode: 'memory', memoryAction: 'list' });
+      const res = await run<StateMemoryListOutput>(tool, { mode: 'memory', memoryAction: 'list' });
       expect(res.parsed.action).toBe('list');
       expect(res.parsed.keys).toEqual([]);
     });
@@ -246,7 +283,7 @@ describe('StateTool', () => {
         memoryKey: 'testEntry',
         memoryValue: '{"hello":"world"}',
       });
-      const res = await run(tool, { mode: 'memory', memoryAction: 'list' });
+      const res = await run<StateMemoryListOutput>(tool, { mode: 'memory', memoryAction: 'list' });
       expect(res.parsed.keys).toContain('testEntry');
     });
 
@@ -257,7 +294,7 @@ describe('StateTool', () => {
         memoryKey: 'myData',
         memoryValue: '{"x":42}',
       });
-      const res = await run(tool, {
+      const res = await run<StateMemoryGetOutput>(tool, {
         mode: 'memory',
         memoryAction: 'get',
         memoryKey: 'myData',
@@ -267,7 +304,7 @@ describe('StateTool', () => {
     });
 
     test('memory get returns null value for missing key', async () => {
-      const res = await run(tool, {
+      const res = await run<StateMemoryGetOutput>(tool, {
         mode: 'memory',
         memoryAction: 'get',
         memoryKey: 'missing',
@@ -305,7 +342,7 @@ describe('StateTool', () => {
     });
 
     test('memory list defaults when no memoryAction provided', async () => {
-      const res = await run(tool, { mode: 'memory' });
+      const res = await run<StateMemoryListOutput>(tool, { mode: 'memory' });
       expect(res.parsed.action).toBe('list');
     });
 
@@ -358,7 +395,7 @@ describe('StateTool', () => {
   test('telemetry returns summary with duration and tool_calls', async () => {
     // Call something first so tool_calls > 0
     await tool.execute({ mode: 'list' });
-    const res = await run(tool, { mode: 'telemetry' });
+    const res = await run<StateTelemetryOutput>(tool, { mode: 'telemetry' });
     expect(res.parsed.mode).toBe('telemetry');
     expect(typeof res.parsed.session_duration_ms).toBe('number');
     expect(res.parsed.session_duration_ms).toBeGreaterThanOrEqual(0);
@@ -390,7 +427,7 @@ describe('StateTool', () => {
     });
 
     test('hooks list returns empty when no hooks registered', async () => {
-      const res = await run(hookTool, { mode: 'hooks', hookAction: 'list' });
+      const res = await run<StateHooksListOutput>(hookTool, { mode: 'hooks', hookAction: 'list' });
       expect(res.parsed.mode).toBe('hooks');
       expect(res.parsed.action).toBe('list');
       expect(res.parsed.count).toBe(0);
@@ -398,13 +435,13 @@ describe('StateTool', () => {
     });
 
     test('hooks list defaults when no hookAction provided', async () => {
-      const res = await run(hookTool, { mode: 'hooks' });
+      const res = await run<StateHooksListOutput>(hookTool, { mode: 'hooks' });
       expect(res.parsed.action).toBe('list');
     });
 
     test('hooks list shows registered hooks', async () => {
       dispatcher.register('Pre:tool:*', { name: 'myHook', type: 'command', match: 'Pre:tool:*', command: 'echo hi' });
-      const res = await run(hookTool, { mode: 'hooks', hookAction: 'list' });
+      const res = await run<StateHooksListOutput>(hookTool, { mode: 'hooks', hookAction: 'list' });
       expect(res.parsed.count).toBe(1);
       expect(res.parsed.hooks[0].name).toBe('myHook');
       expect(res.parsed.hooks[0].type).toBe('command');
@@ -413,16 +450,16 @@ describe('StateTool', () => {
 
     test('hooks enable sets hook enabled to true', async () => {
       dispatcher.register('Pre:tool:*', { name: 'toggleHook', type: 'command', match: 'Pre:tool:*', command: 'echo hi', enabled: false });
-      const res = await run(hookTool, { mode: 'hooks', hookAction: 'enable', hookName: 'toggleHook' });
+      const res = await run<StateHooksToggleOutput>(hookTool, { mode: 'hooks', hookAction: 'enable', hookName: 'toggleHook' });
       expect(res.parsed.enabled).toBe(true);
       // Verify via list
-      const list = await run(hookTool, { mode: 'hooks', hookAction: 'list' });
+      const list = await run<StateHooksListOutput>(hookTool, { mode: 'hooks', hookAction: 'list' });
       expect(list.parsed.hooks[0].enabled).toBe(true);
     });
 
     test('hooks disable sets hook enabled to false', async () => {
       dispatcher.register('Pre:tool:*', { name: 'disableMe', type: 'command', match: 'Pre:tool:*', command: 'echo hi' });
-      const res = await run(hookTool, { mode: 'hooks', hookAction: 'disable', hookName: 'disableMe' });
+      const res = await run<StateHooksToggleOutput>(hookTool, { mode: 'hooks', hookAction: 'disable', hookName: 'disableMe' });
       expect(res.parsed.enabled).toBe(false);
     });
 
@@ -445,7 +482,7 @@ describe('StateTool', () => {
     });
 
     test('hooks add registers a new hook', async () => {
-      const res = await run(hookTool, {
+      const res = await run<StateHooksAddRemoveOutput>(hookTool, {
         mode: 'hooks',
         hookAction: 'add',
         hookDefinition: {
@@ -459,7 +496,7 @@ describe('StateTool', () => {
       expect(res.parsed.action).toBe('add');
       expect(res.parsed.name).toBe('addedHook');
       // Verify it appears in list
-      const list = await run(hookTool, { mode: 'hooks', hookAction: 'list' });
+      const list = await run<StateHooksListOutput>(hookTool, { mode: 'hooks', hookAction: 'list' });
       expect(list.parsed.count).toBe(1);
       expect(list.parsed.hooks[0].name).toBe('addedHook');
     });
@@ -492,11 +529,11 @@ describe('StateTool', () => {
 
     test('hooks remove deletes a named hook', async () => {
       dispatcher.register('Pre:tool:*', { name: 'removeMe', type: 'command', match: 'Pre:tool:*', command: 'echo' });
-      const res = await run(hookTool, { mode: 'hooks', hookAction: 'remove', hookName: 'removeMe' });
+      const res = await run<StateHooksAddRemoveOutput>(hookTool, { mode: 'hooks', hookAction: 'remove', hookName: 'removeMe' });
       expect(res.parsed.action).toBe('remove');
       expect(res.parsed.name).toBe('removeMe');
       // Verify removed
-      const list = await run(hookTool, { mode: 'hooks', hookAction: 'list' });
+      const list = await run<StateHooksListOutput>(hookTool, { mode: 'hooks', hookAction: 'list' });
       expect(list.parsed.count).toBe(0);
     });
 
@@ -539,7 +576,7 @@ describe('StateTool', () => {
     });
 
     test('mode get returns current mode name and verbosityDefaults', async () => {
-      const res = await run(modeTool, { mode: 'mode', modeAction: 'get' });
+      const res = await run<StateModeGetOutput>(modeTool, { mode: 'mode', modeAction: 'get' });
       expect(res.parsed.mode).toBe('mode');
       expect(res.parsed.action).toBe('get');
       expect(res.parsed.name).toBe('default');
@@ -547,13 +584,13 @@ describe('StateTool', () => {
     });
 
     test('mode get defaults when no modeAction provided', async () => {
-      const res = await run(modeTool, { mode: 'mode' });
+      const res = await run<StateModeGetOutput>(modeTool, { mode: 'mode' });
       expect(res.parsed.action).toBe('get');
       expect(res.parsed.name).toBe('default');
     });
 
     test('mode list returns all available modes', async () => {
-      const res = await run(modeTool, { mode: 'mode', modeAction: 'list' });
+      const res = await run<StateModeListOutput>(modeTool, { mode: 'mode', modeAction: 'list' });
       expect(res.parsed.action).toBe('list');
       expect(res.parsed.count).toBeGreaterThanOrEqual(3);
       const names = res.parsed.modes.map((m: { name: string }) => m.name);
@@ -563,20 +600,24 @@ describe('StateTool', () => {
     });
 
     test('mode list includes verbosityDefaults per mode', async () => {
-      const res = await run(modeTool, { mode: 'mode', modeAction: 'list' });
+      const res = await run<StateModeListOutput>(modeTool, { mode: 'mode', modeAction: 'list' });
       const def = res.parsed.modes.find((m: { name: string }) => m.name === 'default');
+      expect(def).toBeDefined();
+      if (!def) {
+        throw new Error('default mode missing from mode list');
+      }
       expect(typeof def.verbosityDefaults).toBe('object');
       expect(typeof def.verbosityDefaults.write).toBe('string');
     });
 
     test('mode set switches to vibecoding', async () => {
       await modeTool.execute({ mode: 'mode', modeAction: 'set', modeName: 'vibecoding' });
-      const res = await run(modeTool, { mode: 'mode', modeAction: 'get' });
+      const res = await run<StateModeGetOutput>(modeTool, { mode: 'mode', modeAction: 'get' });
       expect(res.parsed.name).toBe('vibecoding');
     });
 
     test('mode set returns new verbosityDefaults', async () => {
-      const res = await run(modeTool, { mode: 'mode', modeAction: 'set', modeName: 'vibecoding' });
+      const res = await run<StateModeGetOutput>(modeTool, { mode: 'mode', modeAction: 'set', modeName: 'vibecoding' });
       expect(res.parsed.name).toBe('vibecoding');
       expect(res.parsed.verbosityDefaults.write).toBe('count_only');
     });
@@ -598,7 +639,7 @@ describe('StateTool', () => {
       const singleton = ModeManager.getInstance();
       singleton.setMode('justvibes');
       const noMgrTool = createStateTool(kvState, projectIndex);
-      const res = await run(noMgrTool, { mode: 'mode', modeAction: 'get' });
+      const res = await run<StateModeGetOutput>(noMgrTool, { mode: 'mode', modeAction: 'get' });
       expect(res.parsed.name).toBe('justvibes');
       ModeManager.resetInstance();
     });

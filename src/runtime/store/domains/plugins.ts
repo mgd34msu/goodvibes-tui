@@ -3,7 +3,7 @@
  * configuration, and health status.
  */
 
-/** States from the plugin lifecycle machine (v3 §4.6). */
+/** States for the plugin lifecycle machine. */
 export type PluginLifecycleState =
   | 'discovered'
   | 'loading'

@@ -2,8 +2,7 @@
  * Telemetry domain state — tracks runtime observability data including
  * correlation IDs, session metrics, and structured event counts.
  *
- * Note: Full OTel integration is planned for Tier 4-6. Correlation IDs
- * are tracked from day one per the v3 blueprint (Section 20).
+ * Correlation IDs and structured event counts are tracked from day one.
  */
 
 /** A single structured telemetry event record (lightweight). */

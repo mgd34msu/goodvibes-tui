@@ -72,7 +72,7 @@ describe('GC-ARCH-001 domain import boundary contract', () => {
 
     // Every file in directory should be in DOMAINS
     for (const file of domainFiles) {
-      expect(DOMAINS).toContain(file);
+      expect((DOMAINS as readonly string[])).toContain(file);
     }
     // Every entry in DOMAINS should have a file
     for (const domain of DOMAINS) {

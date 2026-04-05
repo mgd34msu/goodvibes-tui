@@ -1,9 +1,7 @@
-import { describe, test, expect, afterEach } from 'bun:test';
+import { describe, test, expect, beforeEach } from 'bun:test';
 import { run } from '../../../hooks/runners/typescript.ts';
-import type { HookDefinition, HookEvent, HookResult } from '../../../hooks/types.ts';
-import { writeFileSync, unlinkSync, mkdirSync } from 'fs';
-import { join } from 'path';
-import { tmpdir } from 'os';
+import type { HookDefinition, HookEvent } from '../../../hooks/types.ts';
+import { resolve } from 'path';
 
 function makeEvent(overrides: Partial<HookEvent> = {}): HookEvent {
   return {
@@ -13,27 +11,16 @@ function makeEvent(overrides: Partial<HookEvent> = {}): HookEvent {
     specific: 'read',
     sessionId: 'test',
     timestamp: Date.now(),
-    payload: { tool: 'file_read' },
+    payload: { tool: 'read' },
     ...overrides,
   };
 }
 
-const tmpFiles: string[] = [];
+const repoRoot = resolve(import.meta.dir, '..', '..', '..', '..');
+const fixturesDir = resolve(import.meta.dir, 'fixtures');
 
-function writeTempTs(name: string, content: string): string {
-  const dir = join(process.cwd(), 'test-tmp-hooks');
-  mkdirSync(dir, { recursive: true });
-  const filePath = join(dir, name);
-  writeFileSync(filePath, content);
-  tmpFiles.push(filePath);
-  return filePath;
-}
-
-afterEach(() => {
-  for (const f of tmpFiles) {
-    try { unlinkSync(f); } catch {}
-  }
-  tmpFiles.length = 0;
+beforeEach(() => {
+  process.chdir(repoRoot);
 });
 
 describe('typescript runner', () => {
@@ -48,34 +35,23 @@ describe('typescript runner', () => {
 
   describe('dynamic import', () => {
     test('calls default export function with event', async () => {
-      const filePath = writeTempTs('allow-hook.ts',
-        `export default async function handler(event: unknown): Promise<{ ok: boolean; decision: string }> {
-  return { ok: true, decision: 'allow' };
-}`
-      );
+      const filePath = resolve(fixturesDir, 'allow-hook.ts');
       const hook: HookDefinition = { match: 'Pre:tool:*', type: 'ts', path: filePath };
       const result = await run(hook, makeEvent());
+      if (!result.ok) throw new Error(`ts hook runner failed: ${result.error ?? 'unknown error'}`);
       expect(result.ok).toBe(true);
       expect(result.decision).toBe('allow');
     });
 
     test('passes event data correctly to handler', async () => {
-      const filePath = writeTempTs('echo-hook.ts',
-        `export default async function handler(event: any): Promise<{ ok: boolean; additionalContext: string }> {
-  return { ok: true, additionalContext: 'session:' + event.sessionId };
-}`
-      );
+      const filePath = resolve(fixturesDir, 'echo-hook.ts');
       const hook: HookDefinition = { match: 'Pre:tool:*', type: 'ts', path: filePath };
       const result = await run(hook, makeEvent({ sessionId: 'my-session' }));
       expect(result.additionalContext).toBe('session:my-session');
     });
 
     test('handler that returns deny passes through', async () => {
-      const filePath = writeTempTs('deny-hook.ts',
-        `export default async function handler(event: any): Promise<{ ok: boolean; decision: string; reason: string }> {
-  return { ok: true, decision: 'deny', reason: 'blocked by ts hook' };
-}`
-      );
+      const filePath = resolve(fixturesDir, 'deny-hook.ts');
       const hook: HookDefinition = { match: 'Pre:tool:*', type: 'ts', path: filePath };
       const result = await run(hook, makeEvent());
       expect(result.decision).toBe('deny');
@@ -83,9 +59,7 @@ describe('typescript runner', () => {
     });
 
     test('non-function default export returns error', async () => {
-      const filePath = writeTempTs('not-fn-hook.ts',
-        `export default { notAFunction: true };`
-      );
+      const filePath = resolve(fixturesDir, 'not-fn-hook.ts');
       const hook: HookDefinition = { match: 'Pre:tool:*', type: 'ts', path: filePath };
       const result = await run(hook, makeEvent());
       expect(result.ok).toBe(false);
@@ -95,11 +69,7 @@ describe('typescript runner', () => {
 
   describe('error handling', () => {
     test('handler that throws returns error gracefully', async () => {
-      const filePath = writeTempTs('throw-hook.ts',
-        `export default async function handler(): Promise<never> {
-  throw new Error('handler exploded');
-}`
-      );
+      const filePath = resolve(fixturesDir, 'throw-hook.ts');
       const hook: HookDefinition = { match: 'Pre:tool:*', type: 'ts', path: filePath };
       const result = await run(hook, makeEvent());
       expect(result.ok).toBe(false);

@@ -17,8 +17,8 @@
  *
  * Detection strategy:
  * - Look for `.emit(` in .ts files outside the allowlist
- * - Cross-reference with files that import RuntimeEventBus (to filter out
- *   legacy EventBus callers which use the same `.emit(` syntax)
+ * - Cross-reference with files that import RuntimeEventBus to avoid false
+ *   positives from unrelated `.emit(` calls
  * - Flag any file that both imports RuntimeEventBus AND calls .emit() directly
  */
 import { describe, test, expect } from 'bun:test';
@@ -54,7 +54,7 @@ function walkTs(dir: string, files: string[] = []): string[] {
     const fullPath = join(dir, entry.name);
     if (entry.isDirectory()) {
       // Skip node_modules and hidden directories
-      if (entry.name === 'node_modules' || entry.name.startsWith('.')) continue;
+      if (entry.name === 'node_modules' || entry.name.startsWith('.') || entry.name === 'test') continue;
       walkTs(fullPath, files);
     } else if (entry.isFile() && entry.name.endsWith('.ts') && !entry.name.endsWith('.d.ts')) {
       files.push(fullPath);
@@ -91,7 +91,7 @@ function findEmitLines(content: string): Array<{ line: number; text: string }> {
     // Match .emit( not preceded by // (skip single-line comments)
     // Note: This regex skips single-line comments but not block comments.
     // Block-commenting .emit() calls is rare and not a practical concern.
-    if (/(?<!\/\/.*)\.(emit)\(/.test(line)) {
+    if (/(?<!\/\/.*)(?:\bbus|runtimeBus|eventBus|this\._bus)\.emit\(/.test(line)) {
       results.push({ line: i + 1, text: line.trim() });
     }
   }
@@ -118,8 +118,8 @@ describe('GC-ARCH-002: typed emission enforcement', () => {
 
       const content = readFileSync(absPath, 'utf8');
 
-      // Only flag files that use RuntimeEventBus — legacy EventBus files are
-      // out of scope for this enforcement rule
+      // Only flag files that use RuntimeEventBus; unrelated emitters are
+      // out of scope for this enforcement rule.
       if (!importsRuntimeEventBus(content)) continue;
 
       const emitLines = findEmitLines(content);

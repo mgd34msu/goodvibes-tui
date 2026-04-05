@@ -64,7 +64,7 @@ function adaptiveRouter(batchWindowMs?: number): NotificationRouter {
   return new NotificationRouter(batchWindowMs, true);
 }
 
-/** Create a router with adaptive suppression DISABLED (legacy behaviour). */
+/** Create a router with adaptive suppression disabled. */
 function legacyRouter(batchWindowMs?: number): NotificationRouter {
   return new NotificationRouter(batchWindowMs, false);
 }
