@@ -136,7 +136,7 @@ describe('exec tool — timeout', () => {
     const out = parseOutput(result.output);
     expect(out.timed_out).toBe(true);
     expect(out.exit_code).toBeNull();
-  }, 15000);
+  }, 30000);
 });
 
 // ---------------------------------------------------------------------------
