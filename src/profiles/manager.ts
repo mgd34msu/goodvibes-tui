@@ -32,6 +32,7 @@ export interface ProfileInfo {
  */
 export class ProfileManager {
   private profilesDir: string;
+  private lastTimestamp = 0;
 
   constructor(baseDir?: string) {
     this.profilesDir = baseDir ?? join(homedir(), '.goodvibes', 'tui', 'profiles');
@@ -48,7 +49,7 @@ export class ProfileManager {
     const filePath = join(this.profilesDir, `${sanitizedName}.json`);
     const record = {
       name: sanitizedName,
-      timestamp: Date.now(),
+      timestamp: this.nextTimestamp(),
       display: data.display ?? {},
       provider: data.provider ?? {},
       behavior: data.behavior ?? {},
@@ -110,8 +111,17 @@ export class ProfileManager {
       }
       profiles.push({ name, timestamp, filePath });
     }
-    profiles.sort((a, b) => b.timestamp - a.timestamp);
+    profiles.sort((a, b) => {
+      if (b.timestamp !== a.timestamp) return b.timestamp - a.timestamp;
+      return b.name.localeCompare(a.name);
+    });
     return profiles;
+  }
+
+  private nextTimestamp(): number {
+    const now = Date.now();
+    this.lastTimestamp = now > this.lastTimestamp ? now : this.lastTimestamp + 1;
+    return this.lastTimestamp;
   }
 
   /**

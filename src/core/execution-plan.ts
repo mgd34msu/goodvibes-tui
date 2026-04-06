@@ -103,6 +103,7 @@ function phaseStatus(items: PlanItem[]): string {
 export class ExecutionPlanManager {
   private readonly plansDir: string;
   private readonly activeFile: string;
+  private lastCreatedAtMs = 0;
 
   constructor(baseDir?: string) {
     const root = baseDir ?? join(process.cwd(), '.goodvibes', 'plans');
@@ -164,7 +165,7 @@ export class ExecutionPlanManager {
 
   /** Create a new plan and set it as active. */
   create(title: string, items: Omit<PlanItem, 'id' | 'status'>[]): ExecutionPlan {
-    const now = new Date().toISOString();
+    const now = this.nextCreatedAt();
     const plan: ExecutionPlan = {
       id: randomUUID(),
       title,
@@ -220,7 +221,17 @@ export class ExecutionPlanManager {
       const plan = this.load(id);
       if (plan) plans.push(plan);
     }
-    return plans.sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+    return plans.sort((a, b) => {
+      const byCreatedAt = a.createdAt.localeCompare(b.createdAt);
+      if (byCreatedAt !== 0) return byCreatedAt;
+      return a.id.localeCompare(b.id);
+    });
+  }
+
+  private nextCreatedAt(): string {
+    const now = Date.now();
+    this.lastCreatedAtMs = now > this.lastCreatedAtMs ? now : this.lastCreatedAtMs + 1;
+    return new Date(this.lastCreatedAtMs).toISOString();
   }
 
   // --------------------------------------------------------------------------
