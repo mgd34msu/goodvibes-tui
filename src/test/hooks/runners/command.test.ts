@@ -109,14 +109,14 @@ describe('command runner', () => {
       const hook: HookDefinition = {
         match: 'Pre:tool:*',
         type: 'command',
-        command: 'sleep 10',
+        command: 'exec sleep 10',
         timeout: 1,  // 1 second
       };
       const result = await run(hook, makeEvent());
       expect(result.ok).toBe(false);
       // Process is killed on timeout — exits with non-zero signal code (e.g. 143)
       expect(result.error).toBeTruthy();
-    }, 15000);
+    }, 10000);
   });
 
   describe('error handling', () => {

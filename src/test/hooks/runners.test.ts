@@ -22,7 +22,7 @@ describe('command runner', () => {
     const hook: HookDefinition = {
       match: '*:*:*',
       type: 'command',
-      command: 'sleep 60',
+      command: 'exec sleep 60',
       timeout: 1, // 1 second timeout
     };
     const start = Date.now();
@@ -36,7 +36,7 @@ describe('command runner', () => {
     // Bun resolves exited with signal kill — either ok:false or the proc exited non-zero
     // Either way the result should reflect failure or the process was cleaned up
     expect(result).toBeDefined();
-  }, 15000);
+  }, 10000);
 
   test('returns ok:false when command is missing', async () => {
     const hook: HookDefinition = { match: '*:*:*', type: 'command' };
