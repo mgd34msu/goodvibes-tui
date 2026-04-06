@@ -40,6 +40,12 @@ function buildCiSnapshot(): PerfSnapshot {
     'event.queue.depth': 0,
     'tool.executor.overhead.p95': 0,
     'compaction.latency.p95': 0,
+    'slo.turn_start.p95': 0,
+    'slo.cancel.p95': 0,
+    'slo.reconnect_recovery.p95': 0,
+    'slo.permission_decision.p95': 0,
+    'slo.integration.delivery_success_rate': 1,
+    'slo.integration.dlq_depth': 0,
   };
 
   return { uiPerf, extraMetrics };
