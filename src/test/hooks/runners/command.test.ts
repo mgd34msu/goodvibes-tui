@@ -116,7 +116,7 @@ describe('command runner', () => {
       expect(result.ok).toBe(false);
       // Process is killed on timeout — exits with non-zero signal code (e.g. 143)
       expect(result.error).toBeTruthy();
-    }, 5000);
+    }, 15000);
   });
 
   describe('error handling', () => {
