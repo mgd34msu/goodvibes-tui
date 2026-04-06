@@ -2,7 +2,7 @@
 
 A terminal AI coding agent with automated write-review-fix-check pipelines, multi-provider LLM support, and a vaporwave aesthetic.
 
-Version: **0.14.1**
+Version: **0.14.2**
 
 <!-- screenshot -->
 
@@ -81,6 +81,7 @@ The agent system runs subagents in-process, each with its own conversation histo
 - Split-pane layout with top/bottom panes and resizable divider
 - Panel picker overlay (`Ctrl+P`) with category grouping and search
 - Layout control with `/panel open|move|focus|split|width|height` or the panel picker
+- Unified operator cockpit plus dedicated security, incident review, knowledge, communication, hooks, remote, MCP, orchestration, plugins, services, and tasks control rooms
 
 ### Session & Profile Management
 - JSONL session files with auto-save on every turn and crash recovery
@@ -114,8 +115,9 @@ Language intelligence powered by bundled LSP servers (TypeScript, Python, Bash, 
 - Named archetypes (engineer, reviewer, tester, researcher, general)
 - Custom archetypes via `.goodvibes/agents/*.md` with YAML frontmatter
 - Git worktree isolation per agent
-- Inter-agent message bus with TTL auto-cleanup
+- Structured inter-agent communication lanes with policy-aware routing and operator-visible history
 - Agent detail modal and background process tracking
+- Bounded recursive orchestration with graph/state visibility, subtree cancellation, and remote runner contracts
 
 ### Automated WRFC Review Chains
 - **Work → Review → Fix → Check** — every agent spawns an automated quality chain
@@ -126,6 +128,7 @@ Language intelligence powered by bundled LSP servers (TypeScript, Python, Bash, 
 - Gate failures spawn new chains automatically
 - Auto-commit on chain completion via git worktree merge
 - `skipWrfc` flag for utility agents that don't need review
+- Engineer completion reports now carry explicit Gather / Plan / Apply evidence for tighter review and replay
 
 ### Hook System
 - 5 hook types: command, prompt, agent, http, ts
@@ -135,12 +138,14 @@ Language intelligence powered by bundled LSP servers (TypeScript, Python, Bash, 
 - Hook chaining and dynamic workflow hooks provide even more flexibility
 - Multi-event chains with temporal matching, debounce, and conditions
 - Async hooks that run without blocking the main conversation
+- Managed hook workflow authoring with scaffold, chain, simulate, reload, export, and recent activity inspection
 
 ### MCP Integration
 - Connect to any MCP server via `.goodvibes/mcp.json`
 - JSON-RPC 2.0 over stdio, auto-restart on crash
 - Progressive schema loading — names at startup, full schemas on first use
 - Tools appear in the main tool registry as `mcp:<server>:<tool>`
+- Per-server trust profiles, coherence review, quarantine, explicit settings-gated `allow-all`, and attack-path analysis
 
 ### Permissions & Security
 - Three modes: `prompt`, `allow-all`, `custom`
@@ -148,6 +153,12 @@ Language intelligence powered by bundled LSP servers (TypeScript, Python, Bash, 
 - Encrypted secret storage (AES-256-GCM) via `/secrets`
 - Spawn tokens with HMAC + 1-hour TTL
 - HTTP listener with bearer auth, rate limiting, and localhost enforcement
+- Policy lint, simulation, and preflight review with operator-facing security workspace and audit visibility
+
+### Knowledge, Remote, And Product Operations
+- Durable typed knowledge store with session/project/team scopes, review queue, contradiction handling, bundle export/import, and explainable task-time knowledge injection
+- Self-hosted remote runner registry with runner pools, scoped remote dispatch, portable replay/review artifacts, rerun-local flows, and remote control surfaces
+- Product breadth commands for setup review/transfer, services auth review, curated plugin and skill catalog publish/install/update flows, and runtime task CRUD/control
 
 ### Runtime Architecture
 - **Zustand vanilla store** — 19 domain slices (session, model, conversation, overlays, panels, permissions, tasks, agents, providerHealth, mcp, plugins, daemon, acp, integrations, telemetry, git, discovery, intelligence, uiPerf) as the single source of truth for shared runtime state

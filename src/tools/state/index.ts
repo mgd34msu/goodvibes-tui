@@ -69,6 +69,8 @@ export function createStateTool(
       + ' mode=mode modeAction=get to see the current output mode.'
       + ' Also: mode=memory memoryAction=list to list persistent memory keys, mode=analytics analyticsAction=summary for session metrics.',
     parameters: STATE_TOOL_SCHEMA as unknown as Record<string, unknown>,
+    sideEffects: ['state'],
+    concurrency: 'serial',
   };
 
   async function execute(

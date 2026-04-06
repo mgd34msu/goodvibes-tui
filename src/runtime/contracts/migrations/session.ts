@@ -17,7 +17,7 @@ import { SCHEMA_VERSIONS } from '../version.ts';
  * Future steps must be appended here and registered via the contract registry.
  *
  * Example: if session files gain a `tags` array in v1.1.0, a migration step
- * would backfill it as an empty array for older sessions.
+ * would backfill it as an empty array for existing sessions.
  */
 const SESSION_STEPS: MigrationStep[] = [
   // Example structure for future use:

@@ -845,6 +845,9 @@ export class ReadTool implements Tool {
       'Read one or more files from disk. Supports extract modes (content, outline, symbols, lines, ast)'
       + ' for token-efficient reading, per-file caching, pagination via token_budget, and batch processing.',
     parameters: READ_TOOL_SCHEMA as unknown as Record<string, unknown>,
+    sideEffects: ['read_fs'],
+    concurrency: 'parallel',
+    supportsProgress: true,
   };
 
   private readonly fileCache: FileStateCache;

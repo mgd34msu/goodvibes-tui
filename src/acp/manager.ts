@@ -24,6 +24,10 @@ function resolveAgentCommand(): string[] {
   return [process.execPath, 'run', process.argv[1] ?? 'src/main.ts', '--acp'];
 }
 
+export function getDefaultAcpAgentCommand(): string[] {
+  return [...resolveAgentCommand()];
+}
+
 /**
  * AcpManager — Manages multiple concurrent subagent connections.
  *

@@ -3,13 +3,14 @@
  */
 import { createEventEnvelope } from '../events/envelope.ts';
 import type { RuntimeEventBus } from '../events/index.ts';
+import type { McpServerRole, McpTrustMode, QuarantineReason } from '../mcp/types.ts';
 import type { EmitterContext } from './index.ts';
 
 /** Emit MCP_CONFIGURED when an MCP server config is parsed. */
 export function emitMcpConfigured(
   bus: RuntimeEventBus,
   ctx: EmitterContext,
-  data: { serverId: string; transport: string; url?: string }
+  data: { serverId: string; transport: string; url?: string; role?: McpServerRole; trustMode?: McpTrustMode; allowedPaths?: string[]; allowedHosts?: string[] }
 ): void {
   bus.emit('mcp', createEventEnvelope('MCP_CONFIGURED', { type: 'MCP_CONFIGURED', ...data }, ctx));
 }
@@ -66,4 +67,29 @@ export function emitMcpDisconnected(
   data: { serverId: string; reason?: string; willRetry: boolean }
 ): void {
   bus.emit('mcp', createEventEnvelope('MCP_DISCONNECTED', { type: 'MCP_DISCONNECTED', ...data }, ctx));
+}
+
+/** Emit MCP_POLICY_UPDATED when server trust posture changes. */
+export function emitMcpPolicyUpdated(
+  bus: RuntimeEventBus,
+  ctx: EmitterContext,
+  data: { serverId: string; role: McpServerRole; trustMode: McpTrustMode; allowedPaths: string[]; allowedHosts: string[] }
+): void {
+  bus.emit('mcp', createEventEnvelope('MCP_POLICY_UPDATED', { type: 'MCP_POLICY_UPDATED', ...data }, ctx));
+}
+
+export function emitMcpSchemaQuarantined(
+  bus: RuntimeEventBus,
+  ctx: EmitterContext,
+  data: { serverId: string; reason: QuarantineReason; detail?: string }
+): void {
+  bus.emit('mcp', createEventEnvelope('MCP_SCHEMA_QUARANTINED', { type: 'MCP_SCHEMA_QUARANTINED', ...data }, ctx));
+}
+
+export function emitMcpSchemaQuarantineApproved(
+  bus: RuntimeEventBus,
+  ctx: EmitterContext,
+  data: { serverId: string; operatorId: string }
+): void {
+  bus.emit('mcp', createEventEnvelope('MCP_SCHEMA_QUARANTINE_APPROVED', { type: 'MCP_SCHEMA_QUARANTINE_APPROVED', ...data }, ctx));
 }

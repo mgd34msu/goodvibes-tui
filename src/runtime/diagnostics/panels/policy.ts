@@ -15,6 +15,10 @@ import type { DivergenceDashboardSnapshot } from '../../permissions/divergence-d
 import type { DivergencePanel } from './divergence.ts';
 import type { PanelConfig } from '../types.ts';
 import { DEFAULT_PANEL_CONFIG } from '../types.ts';
+import type { PermissionAuditEntry } from '../../permissions/policy-runtime.ts';
+import type { PolicyLintFinding } from '../../permissions/lint.ts';
+import type { PolicySimulationSummary } from '../../permissions/simulation-scenarios.ts';
+import type { PolicyPreflightReview } from '../../permissions/preflight.ts';
 
 /**
  * A point-in-time snapshot of policy state for diagnostics rendering.
@@ -30,6 +34,14 @@ export interface PolicyPanelSnapshot {
   diff: PolicyDiffResult | null;
   /** Divergence dashboard snapshot, or null if no panel attached. */
   divergence: DivergenceDashboardSnapshot | null;
+  /** Recent permission requests and decisions for operator audit review. */
+  recentPermissionAudit: readonly PermissionAuditEntry[];
+  /** Policy lint findings for current and candidate bundles. */
+  lintFindings: readonly PolicyLintFinding[];
+  /** Concrete scenario results from the most recent policy simulation run. */
+  lastSimulationSummary: PolicySimulationSummary | null;
+  /** Most recent proactive policy preflight review. */
+  lastPreflightReview: PolicyPreflightReview | null;
   /** ISO 8601 timestamp of when this snapshot was captured. */
   capturedAt: string;
 }
@@ -58,15 +70,27 @@ export class PolicyPanel {
   private readonly _registry: PolicyRegistry;
   private readonly _divergencePanel: DivergencePanel | null;
   private readonly _config: PanelConfig;
+  private readonly _recentPermissionAudit: readonly PermissionAuditEntry[];
+  private readonly _lintFindings: readonly PolicyLintFinding[];
+  private readonly _lastSimulationSummary: PolicySimulationSummary | null;
+  private readonly _lastPreflightReview: PolicyPreflightReview | null;
   private readonly _subscribers = new Set<() => void>();
 
   constructor(
     registry: PolicyRegistry,
     divergencePanel: DivergencePanel | null = null,
+    recentPermissionAudit: readonly PermissionAuditEntry[] = [],
+    lintFindings: readonly PolicyLintFinding[] = [],
+    lastSimulationSummary: PolicySimulationSummary | null = null,
+    lastPreflightReview: PolicyPreflightReview | null = null,
     config: PanelConfig = DEFAULT_PANEL_CONFIG,
   ) {
     this._registry = registry;
     this._divergencePanel = divergencePanel;
+    this._recentPermissionAudit = recentPermissionAudit;
+    this._lintFindings = lintFindings;
+    this._lastSimulationSummary = lastSimulationSummary;
+    this._lastPreflightReview = lastPreflightReview;
     this._config = config;
   }
 
@@ -116,6 +140,10 @@ export class PolicyPanel {
       history,
       diff,
       divergence,
+      recentPermissionAudit: this._recentPermissionAudit.slice(0, this._config.bufferLimit),
+      lintFindings: this._lintFindings.slice(0, this._config.bufferLimit),
+      lastSimulationSummary: this._lastSimulationSummary,
+      lastPreflightReview: this._lastPreflightReview,
       capturedAt: new Date().toISOString(),
     };
   }

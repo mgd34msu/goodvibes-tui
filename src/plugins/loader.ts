@@ -12,6 +12,18 @@ import type { RuntimeEventBus } from '../runtime/events/index.ts';
 export const PLUGINS_DIR = join(homedir(), '.goodvibes', 'tui', 'plugins');
 
 /**
+ * Plugin search directories in precedence order.
+ * Project-local plugins override global plugins with the same manifest name.
+ */
+export function getPluginDirectories(cwd: string = process.cwd()): string[] {
+  return [
+    join(cwd, '.goodvibes', 'plugins'),
+    join(cwd, '.goodvibes', 'tui', 'plugins'),
+    PLUGINS_DIR,
+  ];
+}
+
+/**
  * PluginManifest — The structure of a plugin's manifest.json.
  */
 export interface PluginManifest {
@@ -65,20 +77,19 @@ export interface DiscoveredPlugin {
  * discoverPlugins — Scan PLUGINS_DIR for valid plugin folders.
  * Each subdirectory with a readable manifest.json is a candidate.
  */
-export function discoverPlugins(): DiscoveredPlugin[] {
-  if (!existsSync(PLUGINS_DIR)) return [];
-
+function scanPluginDirectory(rootDir: string): DiscoveredPlugin[] {
+  if (!existsSync(rootDir)) return [];
   const results: DiscoveredPlugin[] = [];
   let entries: string[];
   try {
-    entries = readdirSync(PLUGINS_DIR);
+    entries = readdirSync(rootDir);
   } catch (err) {
-    logger.warn(`[plugins] Could not read plugins directory: ${String(err)}`);
+    logger.warn(`[plugins] Could not read plugins directory '${rootDir}': ${String(err)}`);
     return [];
   }
 
   for (const entry of entries) {
-    const pluginDir = join(PLUGINS_DIR, entry);
+    const pluginDir = join(rootDir, entry);
     try {
       if (!statSync(pluginDir).isDirectory()) continue;
 
@@ -116,6 +127,18 @@ export function discoverPlugins(): DiscoveredPlugin[] {
   }
 
   return results;
+}
+
+export function discoverPlugins(cwd: string = process.cwd()): DiscoveredPlugin[] {
+  const discovered = new Map<string, DiscoveredPlugin>();
+  for (const dir of getPluginDirectories(cwd)) {
+    for (const plugin of scanPluginDirectory(dir)) {
+      if (!discovered.has(plugin.manifest.name)) {
+        discovered.set(plugin.manifest.name, plugin);
+      }
+    }
+  }
+  return [...discovered.values()];
 }
 
 /**

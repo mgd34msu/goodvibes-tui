@@ -12,7 +12,7 @@
 
 import type { Line } from '../types/grid.ts';
 import { ModalFactory } from './modal-factory.ts';
-import type { SettingsModal, SettingEntry, FlagEntry } from '../input/settings-modal.ts';
+import type { SettingsModal, SettingEntry, FlagEntry, McpEntry } from '../input/settings-modal.ts';
 import { SETTINGS_CATEGORIES } from '../input/settings-modal.ts';
 
 // ---------------------------------------------------------------------------
@@ -36,6 +36,21 @@ function flagStateColor(state: string, killed: boolean): string {
   if (killed) return '#ef4444'; // red
   if (state === 'enabled') return '#00ffcc'; // cyan-green
   return '244'; // dim
+}
+
+function mcpTrustColor(mode: McpEntry['trustMode']): string {
+  switch (mode) {
+    case 'allow-all':
+      return '#ef4444';
+    case 'ask-on-risk':
+      return '#eab308';
+    case 'constrained':
+      return '#00ffcc';
+    case 'blocked':
+      return '244';
+    default:
+      return '244';
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -66,11 +81,12 @@ export function renderSettingsModal(
   });
   const tabLine = tabParts.join(' ');
   const isDangerTab = SETTINGS_CATEGORIES[modal.categoryIndex] === 'danger';
+  const isMcpTab = SETTINGS_CATEGORIES[modal.categoryIndex] === 'mcp';
   const isFlagsTab = SETTINGS_CATEGORIES[modal.categoryIndex] === 'flags';
   sections.push({
     type: 'text',
     content: tabLine,
-    style: { fg: isDangerTab ? '#ef4444' : isFlagsTab ? '#a78bfa' : '#00ffff', bold: true },
+    style: { fg: isDangerTab ? '#ef4444' : isFlagsTab ? '#a78bfa' : isMcpTab ? '#38bdf8' : '#00ffff', bold: true },
   });
 
   sections.push({ type: 'separator' });
@@ -160,6 +176,92 @@ export function renderSettingsModal(
     }
 
     const hints = ['[Tab] Category', '[\u2191\u2193] Navigate', '[Enter] Toggle', '[Esc] Close'];
+    return ModalFactory.createModal(
+      {
+        title: 'Settings',
+        width: boxW,
+        margin: boxMargin,
+        sections,
+        hints,
+      },
+      width,
+    );
+  }
+
+  if (isMcpTab) {
+    const mcpEntries = modal.mcpEntries;
+
+    if (mcpEntries.length === 0) {
+      sections.push({
+        type: 'text',
+        content: '(no MCP servers registered)',
+        style: { fg: '240', dim: true },
+      });
+    } else {
+      const nameW = Math.floor(contentW * 0.28);
+      const roleW = 12;
+      const trustW = 13;
+      const scopeW = Math.max(0, contentW - nameW - roleW - trustW - 6);
+
+      sections.push({
+        type: 'text',
+        content: `${'Server'.padEnd(nameW)}  ${'Role'.padEnd(roleW)}  ${'Trust'.padEnd(trustW)}  Scope`,
+        style: { fg: '240', dim: true },
+      });
+      sections.push({ type: 'separator' });
+
+      const listItems: import('./modal-factory.ts').ModalListItem[] = mcpEntries.map((entry, idx) => {
+        const isSelected = idx === modal.selectedIndex;
+        const isEditing = isSelected && modal.editingMode;
+        const trustValue = isEditing ? `${modal.editBuffer}\u2588` : entry.trustMode;
+        const scopeValue = entry.allowedPaths.length > 0
+          ? `paths:${entry.allowedPaths.length}`
+          : entry.allowedHosts.length > 0
+            ? `hosts:${entry.allowedHosts.length}`
+            : 'unbounded';
+        const label = `${entry.name.padEnd(nameW).slice(0, nameW)}  ${entry.role.padEnd(roleW).slice(0, roleW)}  ${trustValue.padEnd(trustW).slice(0, trustW)}  ${scopeValue.slice(0, scopeW)}`;
+        return {
+          label,
+          selected: isSelected,
+          style: isSelected ? undefined : { fg: mcpTrustColor(entry.trustMode) },
+        };
+      });
+
+      sections.push({ type: 'list', items: listItems });
+
+      const selected = modal.getSelectedMcp();
+      if (selected) {
+        sections.push({ type: 'separator' });
+        sections.push({
+          type: 'text',
+          content: `Trust ${selected.trustMode} for ${selected.name} (${selected.connected ? 'connected' : 'disconnected'}, role ${selected.role}).`,
+          style: { fg: '246', dim: true },
+        });
+        const scope = selected.allowedPaths.length > 0
+          ? `Path scope: ${selected.allowedPaths.join(', ')}`
+          : selected.allowedHosts.length > 0
+            ? `Host scope: ${selected.allowedHosts.join(', ')}`
+            : 'No explicit path or host scope is configured.';
+        sections.push({
+          type: 'text',
+          content: scope.length > contentW ? `${scope.slice(0, contentW - 1)}…` : scope,
+          style: { fg: '240', dim: true },
+        });
+        const guidance = modal.mcpAllowAllConfirmationTarget
+          ? `Type ALLOW ALL ${modal.mcpAllowAllConfirmationTarget} to confirm unrestricted trust for this server.`
+          : 'Press Enter to edit trust mode. Type constrained, ask-on-risk, allow-all, or blocked, then press Enter.';
+        sections.push({
+          type: 'text',
+          content: guidance.length > contentW ? `${guidance.slice(0, contentW - 1)}…` : guidance,
+          style: { fg: modal.mcpAllowAllConfirmationTarget ? '#ef4444' : '#38bdf8', dim: true },
+        });
+      }
+    }
+
+    const hints = modal.editingMode
+      ? ['[Enter] Confirm', '[Esc] Cancel']
+      : ['[Tab] Category', '[↑↓] Navigate', '[Enter] Edit Trust', '[Esc] Close'];
+
     return ModalFactory.createModal(
       {
         title: 'Settings',

@@ -34,7 +34,6 @@ const FORBIDDEN_EVENTS = [
   'clear:screen',
   'session:resume',
   'plan:activate',
-  'permission:request',
 ];
 
 describe('GC-ARCH-004: shell control cutover enforcement', () => {

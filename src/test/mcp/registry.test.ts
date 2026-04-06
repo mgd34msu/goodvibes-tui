@@ -102,6 +102,7 @@ describe('McpRegistry — with stub server', () => {
     registry = new McpRegistry();
     await registry.connectServer(stubServerConfig('alpha'));
     expect(registry.serverNames).toContain('alpha');
+    expect(registry.listServerSecurity()[0]?.trustMode).toBe('ask-on-risk');
   });
 
   test('getClient() returns the McpClient after connecting', async () => {
@@ -147,6 +148,27 @@ describe('McpRegistry — with stub server', () => {
     await registry.connectServer(stubServerConfig('call-srv'));
     const result = await registry.callTool('mcp:call-srv:greet', { name: 'Alice' });
     expect(result).toBeDefined();
+  });
+
+  test('callTool() denies when server trust mode is blocked', async () => {
+    registry = new McpRegistry();
+    await registry.connectServer(stubServerConfig('blocked-srv'));
+    registry.setServerTrustMode('blocked-srv', 'blocked');
+    await expect(registry.callTool('mcp:blocked-srv:greet', {})).rejects.toThrow('denied');
+  });
+
+  test('quarantineSchema() blocks calls until an operator approves an override', async () => {
+    registry = new McpRegistry();
+    await registry.connectServer(stubServerConfig('quarantine-srv'));
+    registry.quarantineSchema('quarantine-srv', 'operator_flagged', 'unexpected deploy surface');
+    expect(registry.listServerSecurity()[0]?.schemaFreshness).toBe('quarantined');
+    await expect(registry.callTool('mcp:quarantine-srv:greet', {})).rejects.toThrow('schema quarantined');
+
+    registry.approveSchemaQuarantine('quarantine-srv', 'alice');
+    const security = registry.listServerSecurity()[0];
+    expect(security?.schemaFreshness).toBe('stale');
+    expect(security?.quarantineApprovedBy).toBe('alice');
+    await expect(registry.callTool('mcp:quarantine-srv:greet', {})).resolves.toBeDefined();
   });
 
   test('connectServer() is idempotent (skips duplicate name)', async () => {

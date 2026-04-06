@@ -117,10 +117,13 @@ export class PolicyPanel extends BasePanel {
     const current = snapshot.current;
     const candidate = snapshot.candidate;
     const divergence = snapshot.divergence;
+    const permissionAudit = snapshot.recentPermissionAudit;
+    const lintFindings = snapshot.lintFindings;
+    const simulationSummary = snapshot.lastSimulationSummary;
+    const preflightReview = snapshot.lastPreflightReview;
 
     if (!current && !candidate) {
       lines.push(buildLine(width, [[' No policy bundles loaded. Use /policy load to begin.', C.empty]]));
-      return lines;
     }
 
     lines.push(buildLine(width, [[' Current', C.label]]));
@@ -207,6 +210,101 @@ export class PolicyPanel extends BasePanel {
           [version.state, C.dim],
           ['  ', C.label],
           [fmtTime(version.activatedAt ?? version.loadedAt), C.dim],
+        ]));
+      }
+    }
+
+    lines.push(buildLine(width, [[' Permission Audit', C.label]]));
+    if (permissionAudit.length === 0) {
+      lines.push(buildLine(width, [['  No permission activity recorded yet.', C.empty]]));
+    } else {
+      for (const entry of permissionAudit.slice(0, 5)) {
+        const outcome = entry.approved === undefined ? 'pending' : entry.approved ? 'approved' : 'denied';
+        const outcomeColor = entry.approved === undefined ? C.warn : entry.approved ? C.ok : C.error;
+        lines.push(buildLine(width, [
+          ['  ', C.label],
+          [entry.tool, C.value],
+          ['  ', C.label],
+          [entry.riskLevel.toUpperCase(), outcomeColor],
+          ['  ', C.label],
+          [outcome, outcomeColor],
+        ]));
+        lines.push(buildLine(width, [
+          ['    ', C.label],
+          [entry.summary.slice(0, Math.max(0, width - 6)), C.dim],
+        ]));
+      }
+    }
+
+    lines.push(buildLine(width, [[' Policy Lint', C.label]]));
+    if (lintFindings.length === 0) {
+      lines.push(buildLine(width, [['  No lint findings for the current policy state.', C.ok]]));
+    } else {
+      for (const finding of lintFindings.slice(0, 5)) {
+        const color = finding.severity === 'error' ? C.error : finding.severity === 'warn' ? C.warn : C.info;
+        lines.push(buildLine(width, [
+          ['  ', C.label],
+          [finding.severity.toUpperCase(), color],
+          ['  ', C.label],
+          [finding.message.slice(0, Math.max(0, width - 14)), color],
+        ]));
+      }
+    }
+
+    lines.push(buildLine(width, [[' Preflight Review', C.label]]));
+    if (!preflightReview) {
+      lines.push(buildLine(width, [['  No proactive preflight review recorded yet.', C.empty]]));
+    } else {
+      const statusColor =
+        preflightReview.status === 'pass'
+          ? C.ok
+          : preflightReview.status === 'warn'
+            ? C.warn
+            : C.error;
+      lines.push(buildLine(width, [
+        ['  Status: ', C.label],
+        [preflightReview.status.toUpperCase(), statusColor],
+        ['  Issues: ', C.label],
+        [String(preflightReview.issueCount), C.value],
+        ['  Generated: ', C.label],
+        [fmtTime(preflightReview.generatedAt), C.dim],
+      ]));
+      lines.push(buildLine(width, [
+        ['  ', C.label],
+        [preflightReview.summary.slice(0, Math.max(0, width - 2)), C.dim],
+      ]));
+      for (const issue of preflightReview.issues.slice(0, 4)) {
+        const issueColor = issue.severity === 'error' ? C.error : issue.severity === 'warn' ? C.warn : C.info;
+        lines.push(buildLine(width, [
+          ['  ', C.label],
+          [issue.severity.toUpperCase(), issueColor],
+          ['  ', C.label],
+          [issue.message.slice(0, Math.max(0, width - 14)), issueColor],
+        ]));
+      }
+    }
+
+    lines.push(buildLine(width, [[' Simulation Samples', C.label]]));
+    if (!simulationSummary) {
+      lines.push(buildLine(width, [['  No concrete simulation samples recorded yet.', C.empty]]));
+    } else {
+      lines.push(buildLine(width, [
+        ['  Mode: ', C.label],
+        [simulationSummary.mode, C.info],
+        ['  Diverged: ', C.label],
+        [`${simulationSummary.divergentScenarios}/${simulationSummary.totalScenarios}`, simulationSummary.divergentScenarios > 0 ? C.warn : C.ok],
+        ['  Allowed(actual/sim): ', C.label],
+        [`${simulationSummary.allowedByActual}/${simulationSummary.allowedBySimulated}`, C.value],
+      ]));
+      for (const result of simulationSummary.results.slice(0, 4)) {
+        const color = result.diverged ? C.warn : (result.authoritativeDecision.allowed ? C.ok : C.error);
+        lines.push(buildLine(width, [
+          ['  ', C.label],
+          [result.scenario.label.slice(0, Math.max(0, width - 40)), C.value],
+          ['  ', C.label],
+          [(result.authoritativeDecision.allowed ? 'allow' : 'deny').toUpperCase(), color],
+          ['  ', C.label],
+          [result.diverged ? (result.divergenceType ?? 'diverged') : 'aligned', color],
         ]));
       }
     }

@@ -22,6 +22,7 @@ import {
   estimateConversationTokens,
   compactSmallWindow,
 } from '../core/context-compaction.ts';
+import { buildKnowledgeInjectionPrompt, selectKnowledgeForTask } from '../state/index.ts';
 import type { FeatureFlagManager } from '../runtime/feature-flags/manager.ts';
 import type { RuntimeEventBus } from '../runtime/events/index.ts';
 import {
@@ -31,6 +32,10 @@ import {
   emitAgentProgress,
   emitAgentRunning,
   emitAgentStreamDelta,
+  emitOrchestrationNodeCancelled,
+  emitOrchestrationNodeCompleted,
+  emitOrchestrationNodeFailed,
+  emitOrchestrationNodeProgress,
 } from '../runtime/emitters/index.ts';
 
 // ---------------------------------------------------------------------------
@@ -179,6 +184,15 @@ export class AgentOrchestrator {
     });
   }
 
+  private emitOrchestrationProgress(record: AgentRecord, progress: string): void {
+    if (!this.runtimeBus || !record.orchestrationGraphId || !record.orchestrationNodeId) return;
+    emitOrchestrationNodeProgress(this.runtimeBus, this.emitterContext(record.id), {
+      graphId: record.orchestrationGraphId,
+      nodeId: record.orchestrationNodeId,
+      message: progress,
+    });
+  }
+
   private emitAgentStarted(recordId: string): void {
     if (!this.runtimeBus) return;
     emitAgentRunning(this.runtimeBus, this.emitterContext(recordId), { agentId: recordId });
@@ -192,12 +206,30 @@ export class AgentOrchestrator {
     });
   }
 
+  private emitOrchestrationCancelled(record: AgentRecord, reason: string): void {
+    if (!this.runtimeBus || !record.orchestrationGraphId || !record.orchestrationNodeId) return;
+    emitOrchestrationNodeCancelled(this.runtimeBus, this.emitterContext(record.id), {
+      graphId: record.orchestrationGraphId,
+      nodeId: record.orchestrationNodeId,
+      reason,
+    });
+  }
+
   private emitAgentFailedEvent(recordId: string, error: string, durationMs: number): void {
     if (!this.runtimeBus) return;
     emitAgentFailed(this.runtimeBus, this.emitterContext(recordId), {
       agentId: recordId,
       error,
       durationMs,
+    });
+  }
+
+  private emitOrchestrationFailed(record: AgentRecord, error: string): void {
+    if (!this.runtimeBus || !record.orchestrationGraphId || !record.orchestrationNodeId) return;
+    emitOrchestrationNodeFailed(this.runtimeBus, this.emitterContext(record.id), {
+      graphId: record.orchestrationGraphId,
+      nodeId: record.orchestrationNodeId,
+      error,
     });
   }
 
@@ -213,6 +245,15 @@ export class AgentOrchestrator {
       durationMs,
       output,
       toolCallsMade,
+    });
+  }
+
+  private emitOrchestrationCompleted(record: AgentRecord, output: string): void {
+    if (!this.runtimeBus || !record.orchestrationGraphId || !record.orchestrationNodeId) return;
+    emitOrchestrationNodeCompleted(this.runtimeBus, this.emitterContext(record.id), {
+      graphId: record.orchestrationGraphId,
+      nodeId: record.orchestrationNodeId,
+      summary: output.length > 120 ? `${output.slice(0, 117)}...` : output,
     });
   }
 
@@ -328,6 +369,7 @@ export class AgentOrchestrator {
     record.progress = 'Initialising…';
     this.emitAgentStarted(record.id);
     this.emitAgentProgress(record.id, record.progress);
+    this.emitOrchestrationProgress(record, record.progress);
 
     let session: AgentSession | null = null;
     let conversation: ConversationManager | null = null;
@@ -369,6 +411,7 @@ export class AgentOrchestrator {
       let turn = 0;
       record.progress = 'Turn 1 · Thinking…';
       this.emitAgentProgress(record.id, record.progress);
+      this.emitOrchestrationProgress(record, record.progress);
 
       // --- Loop detection ---
       const callHistory: string[] = [];
@@ -413,7 +456,8 @@ export class AgentOrchestrator {
         const pending = bus.getMessages(record.id);
         for (const msg of pending) {
           // Inject as user message so LLM responds to inter-agent communication
-          conversation.addUserMessage(`[Message from agent ${msg.from}]: ${msg.content}`);
+          const kindLabel = msg.kind[0]!.toUpperCase() + msg.kind.slice(1);
+          conversation.addUserMessage(`[${kindLabel} from ${msg.from}]: ${msg.content}`);
         }
         // --- Context-window pre-check ---
         // Before calling provider.chat(), estimate total token usage and compact
@@ -477,6 +521,7 @@ export class AgentOrchestrator {
                 );
                 record.progress = `Network error, retrying in ${delaySec}s…`;
                 this.emitAgentProgress(record.id, record.progress);
+                this.emitOrchestrationProgress(record, record.progress);
                 networkAttempt++;
                 await new Promise<void>((resolve) => setTimeout(resolve, delayMs));
                 if ((record as { status: string }).status === 'cancelled') {
@@ -490,6 +535,7 @@ export class AgentOrchestrator {
                 );
                 record.progress = `Rate limited, retrying in ${delaySec}s…`;
                 this.emitAgentProgress(record.id, record.progress);
+                this.emitOrchestrationProgress(record, record.progress);
                 rateLimitAttempt++;
                 await new Promise<void>((resolve) => setTimeout(resolve, RATE_LIMIT_RETRY_DELAY_MS));
                 if ((record as { status: string }).status === 'cancelled') {
@@ -508,6 +554,7 @@ export class AgentOrchestrator {
                 );
                 record.progress = `Turn ${turn} · Context exceeded, compacting…`;
                 this.emitAgentProgress(record.id, record.progress);
+                this.emitOrchestrationProgress(record, record.progress);
                 const currentMessages = conversation.getMessagesForLLM();
                 const compacted = compactSmallWindow(
                   currentMessages,
@@ -669,7 +716,7 @@ export class AgentOrchestrator {
   /** Build a layered system prompt: base + archetype + project context + conventions.
    * Layers 3 (project context) and 4 (conventions) are omitted when their key appears in skipLayers.
    */
-  private buildSystemPrompt(record: AgentRecord, skipLayers?: Set<string>): string {
+  buildSystemPrompt(record: AgentRecord, skipLayers?: Set<string>): string {
     const parts: string[] = [];
 
     // --- Layer 1: Base instructions ---
@@ -739,6 +786,9 @@ The report format depends on your role:
   "archetype": "engineer",
   "wrfcId": "<wrfc-id from context, or null>",
   "summary": "1-2 sentence summary",
+  "gatheredContext": ["critical file, symbol, or constraint learned before editing"],
+  "plannedActions": ["specific edit or write planned before execution"],
+  "appliedChanges": ["concrete change that was actually implemented"],
   "filesCreated": ["path/to/new/file.ts"],
   "filesModified": ["path/to/changed/file.ts"],
   "filesDeleted": [],
@@ -795,7 +845,7 @@ The report format depends on your role:
     } else {
       // Fallback: minimal role description from built-in templates
       const roleDescriptions: Record<string, string> = {
-        engineer: '## Role: Engineer\nFull-stack implementation agent. Build production-ready features with error handling, type safety, input validation, and security. Follow existing project patterns.\n\nYour final message MUST include a structured EngineerReport JSON block (see Structured Output section).\n\nWill NOT do: architecture planning, code review, test writing, deployment.',
+        engineer: '## Role: Engineer\nFull-stack implementation agent. Build production-ready features with error handling, type safety, input validation, and security. Follow existing project patterns.\n\nEngineer execution protocol:\n1. Gather: read the necessary files, symbols, and constraints before editing.\n2. Plan: decide the exact writes and tool actions before making changes.\n3. Apply: perform the smallest correct set of edits and validations.\n\nYour final message MUST include a structured EngineerReport JSON block with gatheredContext, plannedActions, and appliedChanges (see Structured Output section).\n\nWill NOT do: architecture planning, code review, test writing, deployment.',
         reviewer: '## Role: Reviewer\nCode review and quality assessment agent. Evaluate code for correctness, security, performance, and adherence to project conventions. Produce structured pass/fail assessments with specific issues.\n\nYour final message MUST include a structured ReviewerReport JSON block (see Structured Output section).\n\nWill NOT do: implementation, deployment, testing.',
         tester: '## Role: Tester\nTest writing and execution agent. Write comprehensive tests, run test suites, and report coverage. Ensure edge cases are covered.\n\nYour final message MUST include a structured TesterReport JSON block (see Structured Output section).\n\nWill NOT do: implementation, architecture, deployment.',
         researcher: '## Role: Researcher\nCodebase exploration and analysis agent. Investigate code structure, trace data flows, find patterns, and report findings. Answer questions about how the code works.\n\nWill NOT do: implementation, testing, deployment.',
@@ -819,6 +869,16 @@ The report format depends on your role:
       if (conventions) {
         parts.push(conventions);
       }
+    }
+
+    const knowledgeInjections =
+      record.knowledgeInjections && record.knowledgeInjections.length > 0
+        ? record.knowledgeInjections
+        : selectKnowledgeForTask(record.task, record.writeScope ?? []);
+    record.knowledgeInjections = knowledgeInjections;
+    const knowledgePrompt = buildKnowledgeInjectionPrompt(knowledgeInjections);
+    if (knowledgePrompt) {
+      parts.push(knowledgePrompt);
     }
 
     // --- Layer 5: Task ---
@@ -1000,6 +1060,7 @@ The report format depends on your role:
       record.progress = `Turn ${turn} · ${call.name}${argsSummary}`;
       record.toolCallCount++;
       this.emitAgentProgress(record.id, record.progress);
+      this.emitOrchestrationProgress(record, record.progress);
 
       if (call.name === 'exec' || call.name === 'precision_exec') {
         call.arguments = structuredClone(call.arguments);
@@ -1072,6 +1133,7 @@ The report format depends on your role:
         record.fullOutput ?? '',
         record.toolCallCount,
       );
+      this.emitOrchestrationCompleted(record, record.fullOutput ?? '');
     }
 
     if (record.status === 'failed') {
@@ -1080,6 +1142,7 @@ The report format depends on your role:
         record.error ?? 'Circuit breaker tripped',
         Date.now() - record.startedAt,
       );
+      this.emitOrchestrationFailed(record, record.error ?? 'Circuit breaker tripped');
       logger.error(`Agent ${record.id} circuit-breaker terminated`, { error: record.error, toolCallCount: record.toolCallCount });
       session?.appendMessage({
         type: 'session_end',
@@ -1091,6 +1154,7 @@ The report format depends on your role:
       });
     } else if (statusAfterLoop === 'cancelled') {
       this.emitAgentCancelledEvent(record.id, 'Agent cancelled');
+      this.emitOrchestrationCancelled(record, 'Agent cancelled');
       logger.info(`Agent ${record.id} cancelled (detected post-loop)`, { toolCallCount: record.toolCallCount });
       session?.appendMessage({
         type: 'session_end',
@@ -1135,6 +1199,7 @@ The report format depends on your role:
     record.completedAt = Date.now();
     this.cleanupLeakedProcesses(preAgentProcessIds);
     this.emitAgentFailedEvent(record.id, message, Date.now() - record.startedAt);
+    this.emitOrchestrationFailed(record, message);
     logger.error(`Agent ${record.id} failed`, { error: message });
     if (session) {
       session.appendMessage({

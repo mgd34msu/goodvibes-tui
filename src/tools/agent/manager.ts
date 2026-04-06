@@ -1,8 +1,18 @@
 import { ArchetypeLoader } from '../../agents/archetypes.ts';
-import { agentOrchestrator } from '../../agents/orchestrator.ts';
+import { AgentOrchestrator } from '../../agents/orchestrator.ts';
+import { AgentMessageBus } from '../../agents/message-bus.ts';
 import { WrfcController } from '../../agents/wrfc-controller.ts';
 import type { RuntimeEventBus } from '../../runtime/events/index.ts';
-import { emitAgentSpawning } from '../../runtime/emitters/index.ts';
+import {
+  emitAgentSpawning,
+  emitOrchestrationGraphCreated,
+  emitOrchestrationNodeAdded,
+  emitOrchestrationNodeCancelled,
+  emitOrchestrationRecursionGuardTriggered,
+  emitOrchestrationNodeStarted,
+} from '../../runtime/emitters/index.ts';
+import type { OrchestrationTaskContract } from '../../runtime/events/index.ts';
+import { evaluateOrchestrationSpawn } from '../../runtime/orchestration/spawn-policy.ts';
 import { logger } from '../../utils/logger.ts';
 import type { AgentInput } from './schema.ts';
 
@@ -10,14 +20,20 @@ type AgentExecutor = {
   runAgent(record: AgentRecord): Promise<void>;
 };
 
-let agentExecutor: AgentExecutor = agentOrchestrator;
+const defaultAgentExecutor: AgentExecutor = {
+  runAgent(record: AgentRecord): Promise<void> {
+    return AgentOrchestrator.getInstance().runAgent(record);
+  },
+};
+
+let agentExecutor: AgentExecutor = defaultAgentExecutor;
 
 export function _setAgentExecutorForTest(executor: AgentExecutor): void {
   agentExecutor = executor;
 }
 
 export function _resetAgentExecutorForTest(): void {
-  agentExecutor = agentOrchestrator;
+  agentExecutor = defaultAgentExecutor;
 }
 
 export const AGENT_TEMPLATES: Record<string, { description: string; defaultTools: string[] }> = {
@@ -61,12 +77,33 @@ export interface AgentRecord {
   wrfcId?: string;
   dangerously_disable_wrfc?: boolean;
   cohort?: string;
+  orchestrationGraphId?: string;
+  orchestrationNodeId?: string;
+  orchestrationDepth: number;
+  parentAgentId?: string;
+  parentNodeId?: string;
+  capabilityCeilingTools?: string[];
+  successCriteria?: string[];
+  requiredEvidence?: string[];
+  writeScope?: string[];
+  executionProtocol: 'direct' | 'gather-plan-apply';
+  reviewMode: 'none' | 'wrfc';
+  communicationLane: 'parent-only' | 'parent-and-children' | 'cohort' | 'direct';
+  knowledgeInjections?: Array<{
+    id: string;
+    cls: string;
+    summary: string;
+    reason: string;
+    confidence: number;
+    reviewState: 'fresh' | 'reviewed' | 'stale' | 'contradicted';
+  }>;
 }
 
 export class AgentManager {
   private static instance: AgentManager | null = null;
   private agents = new Map<string, AgentRecord>();
   private runtimeBus: RuntimeEventBus | null = null;
+  private orchestrationGraphs = new Set<string>();
 
   static getInstance(): AgentManager {
     if (!AgentManager.instance) {
@@ -83,6 +120,38 @@ export class AgentManager {
     this.runtimeBus = runtimeBus;
   }
 
+  private deriveEffectiveTools(
+    input: AgentInput,
+    defaultTools: string[],
+  ): {
+    tools: string[];
+    capabilityCeilingTools?: string[];
+  } {
+    const requestedTools = input.tools
+      ? (input.restrictTools ? [...input.tools] : [...new Set([...defaultTools, ...input.tools])])
+      : [...defaultTools];
+
+    if (!input.parentAgentId) {
+      return { tools: requestedTools };
+    }
+
+    const parentRecord = this.agents.get(input.parentAgentId);
+    if (!parentRecord) {
+      throw new Error(`Unknown parent agent: '${input.parentAgentId}'`);
+    }
+
+    const parentCeiling = parentRecord.capabilityCeilingTools ?? parentRecord.tools;
+    const tools = requestedTools.filter((tool) => parentCeiling.includes(tool));
+    if (tools.length === 0) {
+      throw new Error(`Spawned child agent would exceed parent capability ceiling from '${input.parentAgentId}'`);
+    }
+
+    return {
+      tools,
+      capabilityCeilingTools: [...parentCeiling],
+    };
+  }
+
   spawn(input: AgentInput): AgentRecord {
     const task = input.task;
     if (!task || typeof task !== 'string' || task.trim() === '') {
@@ -97,9 +166,8 @@ export class AgentManager {
     if (input.restrictTools && (!input.tools || input.tools.length === 0)) {
       logger.warn('spawn: restrictTools=true has no effect without a tools array — falling back to template defaults', { template });
     }
-    const tools = input.tools
-      ? (input.restrictTools ? [...input.tools] : [...new Set([...defaultTools, ...input.tools])])
-      : [...defaultTools];
+    const toolResolution = this.deriveEffectiveTools(input, defaultTools);
+    const tools = toolResolution.tools;
 
     if (!input.model && archetype?.model) {
       input = { ...input, model: archetype.model };
@@ -107,6 +175,40 @@ export class AgentManager {
     if (!input.provider && archetype?.provider) {
       input = { ...input, provider: archetype.provider };
     }
+
+    const parentRecord = input.parentAgentId ? this.agents.get(input.parentAgentId) : undefined;
+    if (input.parentAgentId && !parentRecord) {
+      throw new Error(`Unknown parent agent: '${input.parentAgentId}'`);
+    }
+    const orchestrationDepth = parentRecord ? parentRecord.orchestrationDepth + 1 : 0;
+    const activeAgents = this.list().filter((agent) => agent.status === 'pending' || agent.status === 'running').length;
+    const spawnDecision = evaluateOrchestrationSpawn({
+      mode: input.parentAgentId ? 'recursive-child' : 'manual-batch',
+      activeAgents,
+      requestedDepth: orchestrationDepth,
+    });
+    if (!spawnDecision.allowed) {
+      if (this.runtimeBus && (input.orchestrationGraphId ?? parentRecord?.orchestrationGraphId)) {
+        emitOrchestrationRecursionGuardTriggered(this.runtimeBus, {
+          sessionId: 'agent-manager',
+          traceId: `agent-manager:recursion-guard:${input.parentAgentId ?? 'root'}`,
+          source: 'agent-manager',
+          ...(input.parentAgentId ? { agentId: input.parentAgentId } : {}),
+        }, {
+          graphId: input.orchestrationGraphId ?? parentRecord?.orchestrationGraphId ?? 'orchestration',
+          ...(input.parentNodeId ?? parentRecord?.orchestrationNodeId ? { nodeId: input.parentNodeId ?? parentRecord?.orchestrationNodeId } : {}),
+          depth: orchestrationDepth,
+          activeAgents,
+          reason: spawnDecision.reason ?? 'spawn policy rejected the child worker',
+        });
+      }
+      throw new Error(spawnDecision.reason ?? 'Spawn policy rejected the child worker');
+    }
+
+    const executionProtocol = input.executionProtocol ?? 'gather-plan-apply';
+    const reviewMode = input.reviewMode ?? (input.dangerously_disable_wrfc ? 'none' : 'wrfc');
+    const communicationLane = input.communicationLane
+      ?? (input.parentAgentId ? 'parent-only' : input.cohort ? 'cohort' : 'direct');
 
     const id = `agent-${crypto.randomUUID().slice(0, 8)}`;
     const record: AgentRecord = {
@@ -116,14 +218,34 @@ export class AgentManager {
       model: input.model,
       provider: input.provider,
       tools,
+      orchestrationDepth,
+      executionProtocol,
+      reviewMode,
+      communicationLane,
       status: 'pending',
       startedAt: Date.now(),
       toolCallCount: 0,
       dangerously_disable_wrfc: input.dangerously_disable_wrfc,
       cohort: input.cohort,
+      ...(input.orchestrationGraphId ?? input.cohort ? {
+        orchestrationGraphId: input.orchestrationGraphId ?? parentRecord?.orchestrationGraphId ?? `cohort:${input.cohort}`,
+        orchestrationNodeId: input.orchestrationNodeId ?? id,
+      } : {}),
+      ...(input.parentAgentId ? { parentAgentId: input.parentAgentId } : {}),
+      ...(input.parentNodeId ? { parentNodeId: input.parentNodeId } : {}),
+      ...(toolResolution.capabilityCeilingTools ? { capabilityCeilingTools: toolResolution.capabilityCeilingTools } : {}),
+      ...(input.successCriteria ? { successCriteria: [...input.successCriteria] } : {}),
+      ...(input.requiredEvidence ? { requiredEvidence: [...input.requiredEvidence] } : {}),
+      ...(input.writeScope ? { writeScope: [...input.writeScope] } : {}),
     };
 
     this.agents.set(id, record);
+    AgentMessageBus.getInstance().registerAgent({
+      agentId: id,
+      template,
+      parentAgentId: input.parentAgentId,
+      cohort: input.cohort,
+    });
     if (this.runtimeBus) {
       emitAgentSpawning(this.runtimeBus, {
         sessionId: 'agent-manager',
@@ -133,6 +255,61 @@ export class AgentManager {
         agentId: id,
         task,
       });
+      const contract: OrchestrationTaskContract = {
+        allowedTools: [...record.tools],
+        capabilityCeiling: [...(record.capabilityCeilingTools ?? record.tools)],
+        ...(record.successCriteria ? { successCriteria: [...record.successCriteria] } : {}),
+        ...(record.requiredEvidence ? { requiredEvidence: [...record.requiredEvidence] } : {}),
+        ...(record.writeScope ? { writeScope: [...record.writeScope] } : {}),
+        executionProtocol: record.executionProtocol,
+        reviewMode: record.reviewMode,
+        inheritsParentConstraints: Boolean(record.parentAgentId),
+        communicationLane: record.communicationLane,
+      };
+      if (record.orchestrationGraphId && record.orchestrationNodeId) {
+        if (!this.orchestrationGraphs.has(record.orchestrationGraphId)) {
+          this.orchestrationGraphs.add(record.orchestrationGraphId);
+          emitOrchestrationGraphCreated(this.runtimeBus, {
+            sessionId: 'agent-manager',
+            traceId: `agent-manager:${record.orchestrationGraphId}`,
+            source: 'agent-manager',
+          }, {
+            graphId: record.orchestrationGraphId,
+            title: `Cohort ${record.cohort}`,
+            mode: 'parallel-workers',
+          });
+        }
+        emitOrchestrationNodeAdded(this.runtimeBus, {
+          sessionId: 'agent-manager',
+          traceId: `agent-manager:${record.orchestrationNodeId}`,
+          source: 'agent-manager',
+          agentId: id,
+        }, {
+          graphId: record.orchestrationGraphId,
+          nodeId: record.orchestrationNodeId,
+          title: task,
+          role: template === 'reviewer'
+            ? 'reviewer'
+            : template === 'researcher'
+              ? 'researcher'
+              : template === 'engineer'
+                ? 'engineer'
+                : 'integrator',
+          ...(record.parentNodeId !== undefined ? { parentNodeId: record.parentNodeId } : {}),
+          agentId: id,
+          contract,
+        });
+        emitOrchestrationNodeStarted(this.runtimeBus, {
+          sessionId: 'agent-manager',
+          traceId: `agent-manager:${record.orchestrationNodeId}:start`,
+          source: 'agent-manager',
+          agentId: id,
+        }, {
+          graphId: record.orchestrationGraphId,
+          nodeId: record.orchestrationNodeId,
+          agentId: id,
+        });
+      }
     }
     if (record.task === 'Stuck task') {
       return record;
@@ -166,9 +343,51 @@ export class AgentManager {
     if (record.status === 'pending' || record.status === 'running') {
       record.status = 'cancelled';
       record.completedAt = Date.now();
+      if (this.runtimeBus && record.orchestrationGraphId && record.orchestrationNodeId) {
+        emitOrchestrationNodeCancelled(this.runtimeBus, {
+          sessionId: 'agent-manager',
+          traceId: `agent-manager:${record.id}:cancel`,
+          source: 'agent-manager',
+          agentId: record.id,
+        }, {
+          graphId: record.orchestrationGraphId,
+          nodeId: record.orchestrationNodeId,
+          reason: 'operator cancellation',
+        });
+      }
     }
     this.agents.set(id, record);
     return true;
+  }
+
+  listByGraph(graphId: string): AgentRecord[] {
+    return this.list().filter((agent) => agent.orchestrationGraphId === graphId);
+  }
+
+  cancelSubtree(rootAgentId: string): string[] {
+    const cancelled: string[] = [];
+    const queue = [rootAgentId];
+    const seen = new Set<string>();
+    while (queue.length > 0) {
+      const currentId = queue.shift()!;
+      if (seen.has(currentId)) continue;
+      seen.add(currentId);
+      const record = this.agents.get(currentId);
+      if (!record) continue;
+      if (this.cancel(currentId)) cancelled.push(currentId);
+      for (const child of this.agents.values()) {
+        if (child.parentAgentId === currentId) queue.push(child.id);
+      }
+    }
+    return cancelled;
+  }
+
+  cancelGraph(graphId: string): string[] {
+    const cancelled: string[] = [];
+    for (const agent of this.listByGraph(graphId)) {
+      if (this.cancel(agent.id)) cancelled.push(agent.id);
+    }
+    return cancelled;
   }
 
   list(): AgentRecord[] {
@@ -181,6 +400,8 @@ export class AgentManager {
 
   clear(): void {
     this.agents.clear();
+    this.orchestrationGraphs.clear();
+    AgentMessageBus.resetInstance();
   }
 
   exportState(): AgentRecord[] {

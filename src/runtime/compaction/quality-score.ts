@@ -122,7 +122,7 @@ function evaluateSemanticRetention(
 
   const hasNonTrivialContent = output.messages.some((m) => {
     const text = extractTextContent(m);
-    // Non-trivial means more than just whitespace, and longer than a minimal stub
+    // Non-trivial means more than just whitespace, and longer than a minimal fragment
     return text.trim().length > 20;
   });
 

@@ -9,6 +9,7 @@ import { SettingsModal, SETTINGS_CATEGORIES } from '../../input/settings-modal.t
 import { ConfigManager } from '../../config/manager.ts';
 import { createFeatureFlagManager } from '../../runtime/feature-flags/manager.ts';
 import type { FeatureFlagManager } from '../../runtime/feature-flags/manager.ts';
+import type { McpRegistry } from '../../mcp/registry.ts';
 import { renderSettingsModal } from '../../renderer/settings-modal.ts';
 import { lineToString, linesToText } from '../setup.ts';
 
@@ -25,13 +26,28 @@ describe('renderSettingsModal', () => {
   let cm: ConfigManager;
   let ffm: FeatureFlagManager;
   let modal: SettingsModal;
+  let mcpRegistry: McpRegistry;
 
   beforeEach(() => {
     tmpDir = makeTmpDir();
     cm = new ConfigManager({ workingDir: tmpDir });
     ffm = createFeatureFlagManager();
     modal = new SettingsModal();
-    modal.open(cm, ffm);
+    mcpRegistry = {
+      listServerSecurity: () => [
+        {
+          name: 'docs-server',
+          connected: true,
+          role: 'docs',
+          trustMode: 'ask-on-risk',
+          allowedPaths: ['/workspace/docs'],
+          allowedHosts: [],
+          schemaFreshness: 'fresh',
+        },
+      ],
+      setServerTrustMode: () => {},
+    } as unknown as McpRegistry;
+    modal.open(cm, ffm, mcpRegistry);
   });
 
   afterEach(() => {
@@ -114,6 +130,24 @@ describe('renderSettingsModal', () => {
     const texts = linesToText(lines).join('\n');
     const activeCat = SETTINGS_CATEGORIES[1].toUpperCase();
     expect(texts).toContain(`[${activeCat}]`);
+  });
+
+  test('mcp category renders server trust editing surface', () => {
+    while (modal.currentCategory !== 'mcp') modal.nextCategory();
+    const lines = renderSettingsModal(modal, W);
+    const texts = linesToText(lines).join('\n');
+    expect(texts).toContain('[MCP]');
+    expect(texts).toContain('docs-server');
+    expect(texts).toContain('ask-on-risk');
+  });
+
+  test('mcp category renders explicit allow-all confirmation guidance', () => {
+    while (modal.currentCategory !== 'mcp') modal.nextCategory();
+    modal.editingMode = true;
+    modal.mcpAllowAllConfirmationTarget = 'docs-server';
+    const lines = renderSettingsModal(modal, W);
+    const texts = linesToText(lines).join('\n');
+    expect(texts).toContain('ALLOW ALL docs-server');
   });
 
   test('works with narrow terminal width', () => {

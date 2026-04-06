@@ -15,6 +15,14 @@ export interface McpServerConfig {
   args?: string[];
   /** Optional environment variables to merge with process.env */
   env?: Record<string, string>;
+  /** Optional role used by runtime coherence checks. */
+  role?: 'general' | 'docs' | 'filesystem' | 'git' | 'database' | 'browser' | 'automation' | 'ops' | 'remote';
+  /** Optional initial trust mode for the runtime MCP trust layer. */
+  trustMode?: 'constrained' | 'ask-on-risk' | 'allow-all' | 'blocked';
+  /** Optional allowed path prefixes for filesystem-oriented tools. */
+  allowedPaths?: string[];
+  /** Optional allowed network hostnames for network-oriented tools. */
+  allowedHosts?: string[];
 }
 
 export interface McpConfig {
@@ -60,6 +68,10 @@ export function loadMcpConfig(baseDir?: string): McpConfig {
                 env: typeof s.env === 'object' && s.env ? Object.fromEntries(
                   Object.entries(s.env as Record<string, unknown>).filter(([, v]) => typeof v === 'string')
                 ) as Record<string, string> : undefined,
+                role: typeof s.role === 'string' ? s.role as McpServerConfig['role'] : undefined,
+                trustMode: typeof s.trustMode === 'string' ? s.trustMode as McpServerConfig['trustMode'] : undefined,
+                allowedPaths: Array.isArray(s.allowedPaths) ? s.allowedPaths.filter((v: unknown) => typeof v === 'string') : undefined,
+                allowedHosts: Array.isArray(s.allowedHosts) ? s.allowedHosts.filter((v: unknown) => typeof v === 'string') : undefined,
               });
             }
           }
@@ -97,6 +109,10 @@ function isMcpConfig(v: unknown): v is McpConfig {
       if (!srv['args'].every((a: unknown) => typeof a === 'string')) return false;
     }
     if (srv['env'] !== undefined && (typeof srv['env'] !== 'object' || srv['env'] === null)) return false;
+    if (srv['role'] !== undefined && typeof srv['role'] !== 'string') return false;
+    if (srv['trustMode'] !== undefined && typeof srv['trustMode'] !== 'string') return false;
+    if (srv['allowedPaths'] !== undefined && (!Array.isArray(srv['allowedPaths']) || !srv['allowedPaths'].every((a: unknown) => typeof a === 'string'))) return false;
+    if (srv['allowedHosts'] !== undefined && (!Array.isArray(srv['allowedHosts']) || !srv['allowedHosts'].every((a: unknown) => typeof a === 'string'))) return false;
   }
   return true;
 }

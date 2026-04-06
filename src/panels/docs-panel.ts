@@ -210,6 +210,22 @@ export class DocsPanel extends BasePanel {
           if (tool.definition.description) {
             rows.push({ kind: 'detail', text: `    ${tool.definition.description}`, fg: C.descFg, bg: '' });
           }
+          const metadata: string[] = [];
+          if (tool.definition.sideEffects && tool.definition.sideEffects.length > 0) {
+            metadata.push(`effects: ${tool.definition.sideEffects.join(', ')}`);
+          }
+          if (tool.definition.concurrency) {
+            metadata.push(`concurrency: ${tool.definition.concurrency}`);
+          }
+          if (tool.definition.supportsProgress) {
+            metadata.push('progress');
+          }
+          if (tool.definition.supportsStreamingOutput) {
+            metadata.push('streaming');
+          }
+          if (metadata.length > 0) {
+            rows.push({ kind: 'detail', text: `    ${metadata.join('  •  ')}`, fg: C.dimFg, bg: '' });
+          }
         }
       }
     } else if (this.section === 'models') {

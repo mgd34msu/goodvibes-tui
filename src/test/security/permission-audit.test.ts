@@ -9,6 +9,7 @@
 import { describe, test, expect, beforeEach, afterEach } from 'bun:test';
 import { PermissionManager } from '../../permissions/manager.ts';
 import { PermissionPromptUI, type PermissionPromptRequest } from '../../permissions/prompt.ts';
+import { analyzePermissionRequest } from '../../permissions/analysis.ts';
 import { configManager } from '../../config/index.ts';
 import { DaemonServer } from '../../daemon/server.ts';
 import { HttpListener } from '../../daemon/http-listener.ts';
@@ -134,7 +135,7 @@ describe('Unknown tools default to delegate category', () => {
 });
 
 // ---------------------------------------------------------------------------
-// 3. Danger-gated features: daemon, httpListener, agentRecursion
+// 3. Protected execution surfaces: daemon, httpListener, bounded recursive orchestration
 // ---------------------------------------------------------------------------
 
 describe('Danger-gated features check config before enabling', () => {
@@ -186,55 +187,55 @@ describe('Danger-gated features check config before enabling', () => {
     });
   });
 
-  describe('agentRecursion — SpawnTokenManager.canSpawn', () => {
+  describe('recursive orchestration policy — SpawnTokenManager.canSpawn', () => {
     beforeEach(() => SpawnTokenManager.resetInstance());
     afterEach(() => SpawnTokenManager.resetInstance());
 
-    test('canSpawn returns allowed=false when agentRecursion=false', () => {
+    test('canSpawn returns allowed=false when recursionEnabled=false', () => {
       const stm = new SpawnTokenManager('test-session');
       const token = stm.createOrchestratorToken();
       const result = stm.canSpawn(token, {
-        agentRecursion: false,
-        maxRecursionDepth: 1,
-        maxGlobalAgents: 8,
+        recursionEnabled: false,
+        maxDepth: 1,
+        maxActiveAgents: 8,
       }, 0);
       expect(result.allowed).toBe(false);
-      expect(result.reason).toContain('agentRecursion');
+      expect(result.reason).toContain('recursive orchestration');
     });
 
-    test('canSpawn returns allowed=true when agentRecursion=true and within limits', () => {
+    test('canSpawn returns allowed=true when recursionEnabled=true and within limits', () => {
       const stm = new SpawnTokenManager('test-session');
       const token = stm.createOrchestratorToken();
       const result = stm.canSpawn(token, {
-        agentRecursion: true,
-        maxRecursionDepth: 1,
-        maxGlobalAgents: 8,
+        recursionEnabled: true,
+        maxDepth: 1,
+        maxActiveAgents: 8,
       }, 0);
       expect(result.allowed).toBe(true);
     });
 
-    test('canSpawn blocks when maxGlobalAgents exceeded', () => {
+    test('canSpawn blocks when maxActiveAgents exceeded', () => {
       const stm = new SpawnTokenManager('test-session');
       const token = stm.createOrchestratorToken();
       const result = stm.canSpawn(token, {
-        agentRecursion: true,
-        maxRecursionDepth: 1,
-        maxGlobalAgents: 2,
+        recursionEnabled: true,
+        maxDepth: 1,
+        maxActiveAgents: 2,
       }, 2); // already at limit
       expect(result.allowed).toBe(false);
-      expect(result.reason).toContain('maxGlobalAgents');
+      expect(result.reason).toContain('maxActiveAgents');
     });
 
-    test('canSpawn blocks when depth exceeds maxRecursionDepth', () => {
+    test('canSpawn blocks when depth exceeds maxDepth', () => {
       const stm = new SpawnTokenManager('test-session');
       const orchestratorToken = stm.createOrchestratorToken();
       const agentToken = stm.generateAgentToken(orchestratorToken, 'agent-1');
       expect(agentToken).not.toBeNull();
-      // Agent token has depth=1; maxRecursionDepth=0 means even depth=1 is blocked
+      // Agent token has depth=1; maxDepth=0 means even depth=1 is blocked
       const result = stm.canSpawn(agentToken!, {
-        agentRecursion: true,
-        maxRecursionDepth: 0,
-        maxGlobalAgents: 8,
+        recursionEnabled: true,
+        maxDepth: 0,
+        maxActiveAgents: 8,
       }, 0);
       expect(result.allowed).toBe(false);
       expect(result.reason).toContain('depth');
@@ -332,6 +333,7 @@ describe('PermissionPromptUI — renders correctly per category', () => {
       tool: 'write',
       args: { path: 'src/output.ts' },
       category: 'write' as const,
+      analysis: analyzePermissionRequest('write', { path: 'src/output.ts' }, 'write'),
       resolve: (_approved: boolean) => {},
     };
     const lines = PermissionPromptUI.createPromptLines(WIDTH, request);
@@ -344,6 +346,7 @@ describe('PermissionPromptUI — renders correctly per category', () => {
       tool: 'exec',
       args: { command: 'npm run build' },
       category: 'execute' as const,
+      analysis: analyzePermissionRequest('exec', { command: 'npm run build' }, 'execute'),
       resolve: (_approved: boolean) => {},
     };
     const lines = PermissionPromptUI.createPromptLines(WIDTH, request);
@@ -360,6 +363,7 @@ describe('PermissionPromptUI — renders correctly per category', () => {
       tool: 'agent',
       args: { task: 'do something' },
       category: 'delegate' as const,
+      analysis: analyzePermissionRequest('agent', { task: 'do something' }, 'delegate'),
       resolve: (_approved: boolean) => {},
     };
     const lines = PermissionPromptUI.createPromptLines(WIDTH, request);
@@ -376,6 +380,7 @@ describe('PermissionPromptUI — renders correctly per category', () => {
       tool: toolName,
       args: { path: 'out.ts' },
       category: 'write' as const,
+      analysis: analyzePermissionRequest(toolName, { path: 'out.ts' }, 'write'),
       resolve: (_approved: boolean) => {},
     };
     const lines = PermissionPromptUI.createPromptLines(WIDTH, request);
@@ -391,6 +396,7 @@ describe('PermissionPromptUI — renders correctly per category', () => {
       tool: 'exec',
       args: { command: 'ls' },
       category: 'execute' as const,
+      analysis: analyzePermissionRequest('exec', { command: 'ls' }, 'execute'),
       resolve: (_approved: boolean) => {},
     };
     const lines = PermissionPromptUI.createPromptLines(WIDTH, request);
@@ -398,6 +404,84 @@ describe('PermissionPromptUI — renders correctly per category', () => {
       line.map((c) => c.char).join('').includes('[Y]')
     );
     expect(hasChoices).toBe(true);
+  });
+
+  test('createPromptLines specializes execute prompts for shell execution', () => {
+    const request = {
+      callId: 'test-call-6',
+      tool: 'exec',
+      args: { command: 'ls' },
+      category: 'execute' as const,
+      analysis: analyzePermissionRequest('exec', { command: 'ls' }, 'execute'),
+      resolve: (_approved: boolean) => {},
+    };
+    const text = PermissionPromptUI.createPromptLines(WIDTH, request)
+      .map((line) => line.map((c) => c.char).join(''))
+      .join('\n');
+    expect(text).toContain('Shell Execution Approval');
+    expect(text).toContain('Command');
+    expect(text).toContain('Decision  : shell-execution');
+    expect(text).toContain('Checklist : Confirm shell side effects');
+  });
+
+  test('createPromptLines specializes network prompts and includes host context', () => {
+    const request = {
+      callId: 'test-call-7',
+      tool: 'fetch',
+      args: { url: 'https://example.com/docs' },
+      category: 'execute' as const,
+      analysis: {
+        classification: 'network',
+        riskLevel: 'medium' as const,
+        summary: 'Outbound network request',
+        reasons: ['Review external host access before approval.'],
+        target: 'https://example.com/docs',
+        targetKind: 'url' as const,
+        host: 'example.com',
+      },
+      resolve: (_approved: boolean) => {},
+    };
+    const text = PermissionPromptUI.createPromptLines(WIDTH, request)
+      .map((line) => line.map((c) => c.char).join(''))
+      .join('\n');
+    expect(text).toContain('Network Access Approval');
+    expect(text).toContain('Host');
+    expect(text).toContain('example.com');
+    expect(text).toContain('Decision  : external-access');
+  });
+
+  test('createPromptLines specializes write prompts for file mutation review', () => {
+    const request = {
+      callId: 'test-call-8',
+      tool: 'write',
+      args: { path: '.env.production' },
+      category: 'write' as const,
+      analysis: analyzePermissionRequest('write', { path: '.env.production' }, 'write'),
+      resolve: (_approved: boolean) => {},
+    };
+    const text = PermissionPromptUI.createPromptLines(WIDTH, request)
+      .map((line) => line.map((c) => c.char).join(''))
+      .join('\n');
+    expect(text).toContain('File Mutation Approval');
+    expect(text).toContain('Decision  : file-mutation');
+    expect(text).toContain('Checklist : Confirm target path');
+  });
+
+  test('createPromptLines specializes delegation prompts for fan-out review', () => {
+    const request = {
+      callId: 'test-call-9',
+      tool: 'agent',
+      args: { task: 'delegate release verification' },
+      category: 'delegate' as const,
+      analysis: analyzePermissionRequest('agent', { task: 'delegate release verification' }, 'delegate'),
+      resolve: (_approved: boolean) => {},
+    };
+    const text = PermissionPromptUI.createPromptLines(WIDTH, request)
+      .map((line) => line.map((c) => c.char).join(''))
+      .join('\n');
+    expect(text).toContain('Agent Delegation Approval');
+    expect(text).toContain('Decision  : delegation');
+    expect(text).toContain('Checklist : Confirm delegated scope');
   });
 
   test('getDisplayArg returns path when args has path', () => {

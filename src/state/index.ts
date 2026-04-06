@@ -15,6 +15,7 @@ export type { ToolCallRecord, TelemetryFilter, TelemetrySummary } from './teleme
 export { FileUndoManager } from './file-undo.ts';
 export type { FileOperation } from './file-undo.ts';
 export { MemoryStore, MemoryRegistry, getMemoryStore, getMemoryRegistry } from './memory-store.ts';
+export { _resetMemoryRegistryForTesting } from './memory-store.ts';
 export type {
   MemoryClass,
   MemoryRecord,
@@ -24,3 +25,5 @@ export type {
   ProvenanceLink,
   ProvenanceLinkKind,
 } from './memory-store.ts';
+export type { KnowledgeInjection } from './knowledge-injection.ts';
+export { selectKnowledgeForTask, buildKnowledgeInjectionPrompt, _setKnowledgeRegistryForTesting } from './knowledge-injection.ts';

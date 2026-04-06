@@ -5,6 +5,10 @@ import type { ToolRegistry } from '../tools/registry.ts';
 import type { PermissionManager } from '../permissions/manager.ts';
 import type { RuntimeEventBus } from '../runtime/events/index.ts';
 import {
+  emitOrchestrationGraphCreated,
+  emitOrchestrationNodeAdded,
+  emitOrchestrationNodeStarted,
+  emitOrchestrationRecursionGuardTriggered,
   emitToolExecuting,
   emitToolFailed,
   emitToolPermissioned,
@@ -20,6 +24,7 @@ import type { AgentInput } from '../tools/agent/schema.ts';
 import type { ExecutionPlan, PlanItem } from './execution-plan.ts';
 import { planManager } from './plan-manager-instance.ts';
 import { providerRegistry } from '../providers/registry.ts';
+import { evaluateOrchestrationSpawn } from '../runtime/orchestration/spawn-policy.ts';
 
 type HookDispatcherLike = {
   fire(event: HookEvent): Promise<HookResult>;
@@ -346,21 +351,77 @@ export function autoSpawnPendingItems(
   conversation: { addSystemMessage: (message: string) => void },
   plan: ExecutionPlan,
   items: PlanItem[],
+  runtimeBus: RuntimeEventBus | null = null,
+  emitterContext: import('../runtime/emitters/index.ts').EmitterContext | null = null,
 ): string[] {
-  if (!configManager.get('danger.agentRecursion')) {
+  const agentManager = AgentManager.getInstance();
+  const currentModel = providerRegistry.getCurrentModel();
+  const graphId = `plan:${plan.id}`;
+  const ctx = runtimeBus && emitterContext
+    ? {
+        ...emitterContext,
+        traceId: `${emitterContext.traceId}:${graphId}`,
+      }
+    : null;
+
+  if (runtimeBus && ctx) {
+    emitOrchestrationGraphCreated(runtimeBus, ctx, {
+      graphId,
+      title: plan.title,
+      mode: 'graph-execute',
+    });
+  }
+
+  let running = agentManager.list().filter(a => a.status === 'running' || a.status === 'pending').length;
+  const spawnDecision = evaluateOrchestrationSpawn({
+    mode: 'plan-auto',
+    activeAgents: running,
+    requestedDepth: 1,
+  });
+
+  if (!spawnDecision.allowed) {
+    if (runtimeBus && ctx) {
+      emitOrchestrationRecursionGuardTriggered(runtimeBus, ctx, {
+        graphId,
+        depth: 1,
+        activeAgents: running,
+        reason: spawnDecision.reason ?? 'plan auto-spawn is currently blocked',
+      });
+    }
     return [];
   }
 
-  const maxAgents = (configManager.get('danger.maxGlobalAgents') as number) || DEFAULT_CONFIG.danger.maxGlobalAgents;
-  const agentManager = AgentManager.getInstance();
-  const currentModel = providerRegistry.getCurrentModel();
   const spawned: string[] = [];
-  let running = agentManager.list().filter(a => a.status === 'running' || a.status === 'pending').length;
 
   for (const item of items) {
-    if (running >= maxAgents) {
+    if (runtimeBus && ctx) {
+      emitOrchestrationNodeAdded(runtimeBus, ctx, {
+        graphId,
+        nodeId: item.id,
+        title: item.description,
+        role: 'engineer',
+        dependsOn: item.dependencies ?? [],
+        taskId: item.id,
+      });
+    }
+
+    const decision = evaluateOrchestrationSpawn({
+      mode: 'plan-auto',
+      activeAgents: running,
+      requestedDepth: 1,
+    });
+    if (!decision.allowed) {
+      if (runtimeBus && ctx) {
+        emitOrchestrationRecursionGuardTriggered(runtimeBus, ctx, {
+          graphId,
+          nodeId: item.id,
+          depth: 1,
+          activeAgents: running,
+          reason: decision.reason ?? 'plan auto-spawn is currently blocked',
+        });
+      }
       conversation.addSystemMessage(
-        `[Plan] Agent limit reached (${maxAgents}). Remaining items will be spawned as agents complete.`
+        `[Plan] ${decision.reason ?? `Agent limit reached (${running}/${decision.maxAgents}). Remaining items will be spawned as agents complete.`}`
       );
       break;
     }
@@ -373,6 +434,14 @@ export function autoSpawnPendingItems(
         model: currentModel.id,
       };
       const agentRecord = agentManager.spawn(spawnInput);
+      if (runtimeBus && ctx) {
+        emitOrchestrationNodeStarted(runtimeBus, ctx, {
+          graphId,
+          nodeId: item.id,
+          taskId: item.id,
+          agentId: agentRecord.id,
+        });
+      }
       planManager.updateItem(plan.id, item.id, 'in_progress', agentRecord.id);
       spawned.push(item.description);
       running++;

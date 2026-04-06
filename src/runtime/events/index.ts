@@ -19,6 +19,8 @@ export type { ToolEvent, ToolEventType } from './tools.ts';
 export type { TaskEvent, TaskEventType } from './tasks.ts';
 export type { AgentEvent, AgentEventType } from './agents.ts';
 export type { WorkflowEvent, WorkflowEventType } from './workflows.ts';
+export type { OrchestrationEvent, OrchestrationEventType, OrchestrationTaskContract } from './orchestration.ts';
+export type { CommunicationEvent, CommunicationEventType, CommunicationKind, CommunicationScope } from './communication.ts';
 export type { PlannerEvent, PlannerEventType } from './planner.ts';
 export type { PermissionEvent, PermissionEventType } from './permissions.ts';
 export type { PluginEvent, PluginEventType } from './plugins.ts';

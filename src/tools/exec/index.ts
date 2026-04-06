@@ -841,6 +841,10 @@ export const execTool: Tool = {
       'Execute shell commands. Supports batch, parallel, background, retry, timeout,'
       + ' expectation-checking, until-pattern, and pre-command file operations.',
     parameters: EXEC_TOOL_SCHEMA,
+    sideEffects: ['exec', 'read_fs', 'write_fs'],
+    concurrency: 'serial',
+    supportsProgress: true,
+    supportsStreamingOutput: true,
   },
 
   async execute(args: Record<string, unknown>) {

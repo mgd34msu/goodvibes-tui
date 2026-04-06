@@ -6,6 +6,7 @@ import type { PanelManager } from '../panels/panel-manager.ts';
 import type { ProviderRegistry } from '../providers/registry.ts';
 import type { MutableRuntimeState } from '../runtime/context.ts';
 import type { FeatureFlagManager } from '../runtime/feature-flags/index.ts';
+import type { McpRegistry } from '../mcp/registry.ts';
 
 type WireShellUiOpenersOptions = {
   commandContext: CommandContext;
@@ -15,6 +16,7 @@ type WireShellUiOpenersOptions = {
   providerRegistry: ProviderRegistry;
   runtime: MutableRuntimeState;
   featureFlags: FeatureFlagManager;
+  mcpRegistry: McpRegistry;
   getConfiguredProviderIds: () => string[];
   getPinned: () => Promise<string[]>;
   render: () => void;
@@ -29,6 +31,7 @@ export function wireShellUiOpeners(options: WireShellUiOpenersOptions): void {
     providerRegistry,
     runtime,
     featureFlags,
+    mcpRegistry,
     getConfiguredProviderIds,
     getPinned,
     render,
@@ -91,7 +94,7 @@ export function wireShellUiOpeners(options: WireShellUiOpenersOptions): void {
 
   commandContext.openSettingsModal = () => {
     input.modalOpened('settings');
-    input.settingsModal.open(configManager, featureFlags);
+    input.settingsModal.open(configManager, featureFlags, mcpRegistry);
     render();
   };
 

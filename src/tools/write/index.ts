@@ -325,6 +325,9 @@ export function createWriteTool(options?: {
       'and three overwrite modes: fail_if_exists (default), overwrite, backup. ' +
       'Use content_base64 for content containing special characters.',
     parameters: WRITE_SCHEMA as Record<string, unknown>,
+    sideEffects: ['write_fs'],
+    concurrency: 'serial',
+    supportsProgress: true,
   };
 
   return {

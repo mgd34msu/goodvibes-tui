@@ -2,6 +2,8 @@ import { describe, test, expect, beforeEach, afterEach } from 'bun:test';
 import { DaemonServer } from '../../daemon/server.ts';
 import { HttpListener } from '../../daemon/http-listener.ts';
 import { UserAuthManager } from '../../security/user-auth.ts';
+import { RuntimeEventBus } from '../../runtime/events/index.ts';
+import type { TransportEvent } from '../../runtime/events/transport.ts';
 
 const TEST_TOKEN = 'test-secret-token-abc123';
 
@@ -47,6 +49,38 @@ describe('DaemonServer', () => {
     daemon.enable({ daemon: true }, TEST_TOKEN);
     await daemon.start();
     expect(daemon.isRunning).toBe(true);
+  });
+
+  test('emits transport lifecycle when starting and stopping', async () => {
+    const runtimeBus = new RuntimeEventBus();
+    const transportEvents: TransportEvent[] = [];
+    runtimeBus.onDomain('transport', ({ payload }) => transportEvents.push(payload));
+    daemon = new DaemonServer({ port: 39421, host: '127.0.0.1', userAuth: new UserAuthManager({
+      users: [{ username: 'admin', passwordHash: UserAuthManager.hashPassword('admin'), roles: ['admin'] }],
+    }), runtimeBus });
+
+    daemon.enable({ daemon: true }, TEST_TOKEN);
+    await daemon.start();
+    await daemon.stop();
+
+    expect(transportEvents).toEqual([
+      {
+        type: 'TRANSPORT_INITIALIZING',
+        transportId: 'daemon:http:127.0.0.1:39421',
+        protocol: 'http-daemon',
+      },
+      {
+        type: 'TRANSPORT_CONNECTED',
+        transportId: 'daemon:http:127.0.0.1:39421',
+        endpoint: 'http://127.0.0.1:39421',
+      },
+      {
+        type: 'TRANSPORT_DISCONNECTED',
+        transportId: 'daemon:http:127.0.0.1:39421',
+        reason: 'Daemon server stopped',
+        willRetry: false,
+      },
+    ]);
   });
 
   test('start is idempotent — does not throw when called twice', async () => {

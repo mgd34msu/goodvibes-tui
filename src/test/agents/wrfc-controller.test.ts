@@ -1,4 +1,5 @@
 import { describe, test, expect, mock, spyOn, beforeEach, afterEach, afterAll } from 'bun:test';
+import { join } from 'node:path';
 import { RuntimeEventBus, createEventEnvelope } from '../../runtime/events/index.ts';
 import type { AgentRecord } from '../../tools/agent/index.ts';
 
@@ -14,11 +15,18 @@ function makeRecord(overrides?: Partial<AgentRecord>): AgentRecord {
     tools: ['read', 'write'],
     status: 'completed',
     startedAt: Date.now(),
+    orchestrationDepth: 0,
     toolCallCount: 5,
+    executionProtocol: 'gather-plan-apply',
+    reviewMode: 'wrfc',
+    communicationLane: 'direct',
     fullOutput: JSON.stringify({
       version: 1,
       archetype: 'engineer',
       summary: 'test summary',
+      gatheredContext: ['src/test.ts'],
+      plannedActions: ['update src/test.ts'],
+      appliedChanges: ['implemented src/test.ts'],
       filesCreated: [],
       filesModified: ['src/test.ts'],
       filesDeleted: [],
@@ -173,9 +181,10 @@ mock.module('../../agents/orchestrator.ts', () => ({
 }));
 
 // Mock message bus
+const mockRegisterAgent = mock((_identity: unknown) => {});
 mock.module('../../agents/message-bus.ts', () => ({
   AgentMessageBus: {
-    getInstance: () => ({ getMessages: () => [], send: () => {} }),
+    getInstance: () => ({ getMessages: () => [], send: () => {}, registerAgent: mockRegisterAgent }),
     resetInstance: () => {},
   },
 }));
@@ -200,6 +209,8 @@ afterAll(() => {
 describe('WrfcController', () => {
   let runtimeBus: RuntimeEventBus;
   let emitSpy: ReturnType<typeof spyOn>;
+  const repoRoot = join(import.meta.dir, '..', '..', '..');
+  const originalCwd = process.cwd();
   const workflowCalls = (type: string) => emitSpy.mock.calls.filter(
     (args: unknown[]) =>
       args[0] === 'workflows' &&
@@ -208,8 +219,17 @@ describe('WrfcController', () => {
       'type' in (args[1] as object) &&
       (args[1] as { type: string }).type === type,
   );
+  const orchestrationCalls = (type: string) => emitSpy.mock.calls.filter(
+    (args: unknown[]) =>
+      args[0] === 'orchestration' &&
+      typeof args[1] === 'object' &&
+      args[1] !== null &&
+      'type' in (args[1] as object) &&
+      (args[1] as { type: string }).type === type,
+  );
 
   beforeEach(() => {
+    process.chdir(repoRoot);
     WrfcController.resetInstance();
     _setWrfcAgentManagerResolverForTest(() => ({
       spawn: mockSpawn,
@@ -225,6 +245,7 @@ describe('WrfcController', () => {
     mockConfigGetCategory.mockClear();
     mockMerge.mockClear();
     mockCleanup.mockClear();
+    mockRegisterAgent.mockClear();
 
     // Reset mutable config state to defaults
     mockConfigState['wrfc.scoreThreshold'] = 9.9;
@@ -240,6 +261,7 @@ describe('WrfcController', () => {
   });
 
   afterEach(() => {
+    process.chdir(originalCwd);
     _setWrfcAgentManagerResolverForTest(null);
     WrfcController.resetInstance();
   });
@@ -281,6 +303,28 @@ describe('WrfcController', () => {
       const chainCreatedCalls = workflowCalls('WORKFLOW_CHAIN_CREATED');
       expect(chainCreatedCalls.length).toBe(1);
       expect((chainCreatedCalls[0][1] as { payload: object }).payload).toMatchObject({ chainId: chain.id, task: record.task });
+    });
+
+    test('createChain() emits orchestration graph and engineer node events', () => {
+      const controller = WrfcController.initialize(runtimeBus);
+      const record = makeRecord();
+      const chain = controller.createChain(record);
+
+      const graphCreatedCalls = orchestrationCalls('ORCHESTRATION_GRAPH_CREATED');
+      const nodeAddedCalls = orchestrationCalls('ORCHESTRATION_NODE_ADDED');
+      const nodeStartedCalls = orchestrationCalls('ORCHESTRATION_NODE_STARTED');
+
+      expect(graphCreatedCalls.length).toBe(1);
+      expect((graphCreatedCalls[0][1] as { payload: object }).payload).toMatchObject({
+        graphId: `wrfc:${chain.id}`,
+        mode: 'review-loop',
+      });
+      expect(nodeAddedCalls.length).toBeGreaterThanOrEqual(1);
+      expect((nodeAddedCalls[0][1] as { payload: object }).payload).toMatchObject({
+        graphId: `wrfc:${chain.id}`,
+        role: 'engineer',
+      });
+      expect(nodeStartedCalls.length).toBeGreaterThanOrEqual(1);
     });
 
     test('createChain() initializes allAgentIds with engineer ID', () => {
@@ -432,6 +476,9 @@ describe('WrfcController', () => {
       const spawnInput = mockSpawn.mock.calls[0][0] as { task: string };
       expect(spawnInput.task).toContain('WRFC Review Request');
       expect(spawnInput.task).toContain('Engineer completion report');
+      expect(spawnInput.task).toContain('gatheredContext');
+      expect(spawnInput.task).toContain('plannedActions');
+      expect(spawnInput.task).toContain('appliedChanges');
     });
 
     test('reviewer record has dangerously_disable_wrfc=true and same wrfcId', async () => {

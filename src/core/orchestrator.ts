@@ -872,14 +872,14 @@ export class Orchestrator {
   }
 
   /**
-   * Auto-spawn agents for a list of ready plan items, respecting agentRecursion
-   * and maxGlobalAgents limits. Returns descriptions of successfully spawned items.
+   * Auto-spawn agents for a list of ready plan items under bounded orchestration policy.
    */
   private autoSpawnPendingItems(
+    turnId: string,
     plan: ExecutionPlan,
     items: PlanItem[],
   ): string[] {
-    return autoSpawnPendingItems(this.conversation, plan, items);
+    return autoSpawnPendingItems(this.conversation, plan, items, this.runtimeBus, this.emitterContext(turnId));
   }
 
   /**

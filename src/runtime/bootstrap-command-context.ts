@@ -11,6 +11,7 @@ import type { PolicyRuntimeState } from './permissions/policy-runtime.ts';
 import { FileUndoManager } from '../state/file-undo.ts';
 import { logger } from '../utils/logger.ts';
 import type { McpRegistry } from '../mcp/registry.ts';
+import type { RuntimeStore } from '../runtime/store/index.ts';
 
 export type CreateBootstrapCommandContextOptions = {
   providerRegistry: ProviderRegistry;
@@ -22,6 +23,7 @@ export type CreateBootstrapCommandContextOptions = {
   mcpRegistry: McpRegistry;
   forensicsRegistry: ForensicsRegistry;
   policyRuntimeState: PolicyRuntimeState;
+  runtimeStore: RuntimeStore;
   loadSystemPrompt: () => string;
   activatePlan: (planId: string, task: string) => void;
   completeModelSelectionSideEffect?: () => void;
@@ -46,6 +48,7 @@ export function createBootstrapCommandContext(
     mcpRegistry,
     forensicsRegistry,
     policyRuntimeState,
+    runtimeStore,
     loadSystemPrompt,
     activatePlan,
     completeModelSelectionSideEffect,
@@ -121,10 +124,56 @@ export function createBootstrapCommandContext(
       pm.open('forensics');
       requestRender();
     },
+    openIncidentPanel: () => {
+      const pm = getPanelManager();
+      pm.open('incident');
+      requestRender();
+    },
     openPolicyPanel: () => {
       const pm = getPanelManager();
       pm.open('policy');
       requestRender();
     },
+    openHooksPanel: () => {
+      const pm = getPanelManager();
+      pm.open('hooks');
+      requestRender();
+    },
+    openCommunicationPanel: () => {
+      const pm = getPanelManager();
+      pm.open('communication');
+      requestRender();
+    },
+    openOrchestrationPanel: () => {
+      const pm = getPanelManager();
+      pm.open('orchestration');
+      requestRender();
+    },
+    openCockpitPanel: () => {
+      const pm = getPanelManager();
+      pm.open('cockpit');
+      requestRender();
+    },
+    openMcpPanel: () => {
+      const pm = getPanelManager();
+      pm.open('mcp');
+      requestRender();
+    },
+    openSecurityPanel: () => {
+      const pm = getPanelManager();
+      pm.open('security');
+      requestRender();
+    },
+    openKnowledgePanel: () => {
+      const pm = getPanelManager();
+      pm.open('knowledge');
+      requestRender();
+    },
+    openRemotePanel: () => {
+      const pm = getPanelManager();
+      pm.open('remote');
+      requestRender();
+    },
+    runtimeStore,
   };
 }

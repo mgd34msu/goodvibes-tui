@@ -18,10 +18,24 @@ import type { SubagentInfo, SubagentResult, SubagentTask } from './protocol.ts';
 import type { PermissionCategory } from '../permissions/manager.ts';
 import type { PermissionRequestHandler } from '../permissions/prompt.ts';
 import { logger } from '../utils/logger.ts';
+import { analyzePermissionRequest } from '../permissions/analysis.ts';
 import { AcpError } from '../types/errors.ts';
 import { VERSION } from '../version.ts';
 import type { RuntimeEventBus } from '../runtime/events/index.ts';
-import { emitAgentCancelled, emitAgentCompleted, emitAgentFailed, emitAgentStreamDelta } from '../runtime/emitters/index.ts';
+import {
+  emitAgentCancelled,
+  emitAgentCompleted,
+  emitAgentFailed,
+  emitAgentStreamDelta,
+  emitTransportAuthenticating,
+  emitTransportConnected,
+  emitTransportDisconnected,
+  emitTransportInitializing,
+  emitTransportSyncing,
+  emitTransportTerminalFailure,
+} from '../runtime/emitters/index.ts';
+import { getHookDispatcher } from '../hooks/index.ts';
+import type { HookCategory, HookEventPath, HookPhase } from '../hooks/types.ts';
 
 /** Shape of an agent_message_chunk session update that carries text content. */
 interface MessageChunkUpdate {
@@ -57,6 +71,7 @@ export class AcpConnection {
   private childProcess: ReturnType<typeof Bun.spawn> | null = null;
   private toolCallsMade = 0;
   private lastProgressText = '';
+  private transportClosed = false;
 
   constructor(
     id: string,
@@ -90,6 +105,9 @@ export class AcpConnection {
     const startedAt = this.info.startedAt;
 
     try {
+      this.transportClosed = false;
+      this.emitTransportInitializing();
+
       // 1. Spawn child process with piped stdio
       this.childProcess = Bun.spawn(this.spawnCmd, {
         stdin: 'pipe',
@@ -133,6 +151,7 @@ export class AcpConnection {
       this.conn = new ClientSideConnection((_agent: Agent) => clientImpl, stream);
 
       // 5. ACP handshake: initialize (protocolVersion is a number)
+      this.emitTransportAuthenticating();
       await this.conn.initialize({
         protocolVersion: 1,
         clientInfo: { name: 'goodvibes-tui', version: VERSION },
@@ -145,6 +164,8 @@ export class AcpConnection {
         mcpServers: [],
       });
       this.sessionId = sessionResp.sessionId;
+      this.emitTransportConnected();
+      this.emitTransportSyncing();
 
       // 7. Send the prompt (uses 'prompt' field with ContentBlock array)
       const promptResp = await this.conn.prompt({
@@ -175,6 +196,7 @@ export class AcpConnection {
           toolCallsMade: result.toolCallsMade,
         });
       }
+      this.emitTransportDisconnected('ACP session completed', false);
       return result;
     } catch (err) {
       const error = err instanceof Error ? err : new Error(String(err));
@@ -186,6 +208,7 @@ export class AcpConnection {
           durationMs: Date.now() - startedAt,
         });
       }
+      this.emitTransportTerminalFailure(error.message);
       return {
         id: this.id,
         success: false,
@@ -215,6 +238,7 @@ export class AcpConnection {
         reason: 'ACP session cancelled',
       });
     }
+    this.emitTransportDisconnected('ACP session cancelled', false);
     this.cleanup();
   }
 
@@ -224,6 +248,102 @@ export class AcpConnection {
       traceId: `acp-connection:${this.id}`,
       source: 'acp-connection',
     };
+  }
+
+  private transportId(): string {
+    return `acp:${this.id}`;
+  }
+
+  private transportEndpoint(): string {
+    return `stdio://subagent/${this.id}`;
+  }
+
+  private emitTransportInitializing(): void {
+    if (!this.runtimeBus) return;
+    emitTransportInitializing(this.runtimeBus, this.emitterContext(), {
+      transportId: this.transportId(),
+      protocol: 'acp-stdio',
+    });
+    void this.fireTransportHook('initializing', {
+      transportId: this.transportId(),
+      protocol: 'acp-stdio',
+    });
+  }
+
+  private emitTransportAuthenticating(): void {
+    if (!this.runtimeBus) return;
+    emitTransportAuthenticating(this.runtimeBus, this.emitterContext(), {
+      transportId: this.transportId(),
+    });
+    void this.fireTransportHook('authenticating', {
+      transportId: this.transportId(),
+    });
+  }
+
+  private emitTransportConnected(): void {
+    if (!this.runtimeBus) return;
+    emitTransportConnected(this.runtimeBus, this.emitterContext(), {
+      transportId: this.transportId(),
+      endpoint: this.transportEndpoint(),
+    });
+    void this.fireTransportHook('connected', {
+      transportId: this.transportId(),
+      endpoint: this.transportEndpoint(),
+    });
+  }
+
+  private emitTransportSyncing(): void {
+    if (!this.runtimeBus) return;
+    emitTransportSyncing(this.runtimeBus, this.emitterContext(), {
+      transportId: this.transportId(),
+    });
+    void this.fireTransportHook('syncing', {
+      transportId: this.transportId(),
+    });
+  }
+
+  private emitTransportDisconnected(reason: string, willRetry: boolean): void {
+    if (!this.runtimeBus || this.transportClosed) return;
+    this.transportClosed = true;
+    emitTransportDisconnected(this.runtimeBus, this.emitterContext(), {
+      transportId: this.transportId(),
+      reason,
+      willRetry,
+    });
+    void this.fireTransportHook('disconnected', {
+      transportId: this.transportId(),
+      reason,
+      willRetry,
+    });
+  }
+
+  private emitTransportTerminalFailure(error: string): void {
+    if (!this.runtimeBus || this.transportClosed) return;
+    this.transportClosed = true;
+    emitTransportTerminalFailure(this.runtimeBus, this.emitterContext(), {
+      transportId: this.transportId(),
+      error,
+    });
+    void this.fireTransportHook('failed', {
+      transportId: this.transportId(),
+      error,
+    });
+  }
+
+  private async fireTransportHook(specific: string, payload: Record<string, unknown>): Promise<void> {
+    try {
+      await getHookDispatcher().fire({
+        path: `Lifecycle:transport:${specific}` as HookEventPath,
+        phase: 'Lifecycle' as HookPhase,
+        category: 'transport' as HookCategory,
+        specific,
+        sessionId: 'acp-connection',
+        timestamp: Date.now(),
+        payload,
+      });
+    } catch {
+      // Transport hooks are best-effort and must not break ACP transport.
+    }
   }
 
   private cleanup(): void {
@@ -251,6 +371,11 @@ export class AcpConnection {
           tool: toolTitle,
           args: (params.toolCall?.rawInput as Record<string, unknown>) ?? {},
           category,
+          analysis: analyzePermissionRequest(
+            toolTitle,
+            (params.toolCall?.rawInput as Record<string, unknown>) ?? {},
+            category,
+          ),
         }).then(({ approved }) => {
           if (approved) {
             return {

@@ -5,6 +5,7 @@ import { DiscordIntegration } from './discord.ts';
 import { DeliveryQueue } from './delivery.ts';
 import type { DeliveryQueueConfig, IntegrationQueueStatus } from './delivery.ts';
 import { snapshotQueueStatus } from './delivery.ts';
+import { getServiceRegistry } from '../config/service-registry.ts';
 
 // ---------------------------------------------------------------------------
 // Notifier
@@ -36,13 +37,26 @@ export class Notifier {
   }
 
   /**
-   * Create a Notifier pre-wired from environment variables.
+   * Create a Notifier pre-wired from configured services and environment variables.
    */
-  static fromEnv(): Notifier {
-    const slackWebhook = process.env.SLACK_WEBHOOK_URL;
-    const slackToken = process.env.SLACK_BOT_TOKEN;
-    const discordWebhook = process.env.DISCORD_WEBHOOK_URL;
-    const discordToken = process.env.DISCORD_BOT_TOKEN;
+  static async fromConfig(): Promise<Notifier> {
+    const registry = getServiceRegistry();
+    const [
+      slackWebhookFromService,
+      slackTokenFromService,
+      discordWebhookFromService,
+      discordTokenFromService,
+    ] = await Promise.all([
+      registry.resolveSecret('slack', 'webhookUrl'),
+      registry.resolveSecret('slack', 'primary'),
+      registry.resolveSecret('discord', 'webhookUrl'),
+      registry.resolveSecret('discord', 'primary'),
+    ]);
+
+    const slackWebhook = slackWebhookFromService ?? process.env.SLACK_WEBHOOK_URL;
+    const slackToken = slackTokenFromService ?? process.env.SLACK_BOT_TOKEN;
+    const discordWebhook = discordWebhookFromService ?? process.env.DISCORD_WEBHOOK_URL;
+    const discordToken = discordTokenFromService ?? process.env.DISCORD_BOT_TOKEN;
 
     const slack =
       slackWebhook || slackToken

@@ -1,8 +1,27 @@
 /** Represents a tool the LLM can invoke. Parameters follow JSON Schema. */
+export type ToolSideEffect =
+  | 'read_fs'
+  | 'write_fs'
+  | 'network'
+  | 'exec'
+  | 'agent'
+  | 'workflow'
+  | 'state';
+
+export type ToolConcurrencyMode = 'serial' | 'parallel' | 'singleton';
+
 export interface ToolDefinition {
   name: string;
   description: string;
   parameters: Record<string, unknown>;
+  /** Side effects the tool may perform when executed successfully. */
+  sideEffects?: readonly ToolSideEffect[];
+  /** Whether multiple calls can safely run in parallel. */
+  concurrency?: ToolConcurrencyMode;
+  /** Whether the tool can emit meaningful progress before final completion. */
+  supportsProgress?: boolean;
+  /** Whether results may be streamed or delivered incrementally. */
+  supportsStreamingOutput?: boolean;
 }
 
 /** A tool invocation requested by the LLM. */

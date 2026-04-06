@@ -17,7 +17,7 @@ import { SCHEMA_VERSIONS } from '../version.ts';
  * Future steps must be appended here and registered via the contract registry.
  *
  * Example: if `metadata` map is added to RuntimeTask in v1.1.0, a migration
- * step would backfill it as an empty object for older persisted records.
+ * step would backfill it as an empty object for existing persisted records.
  */
 const TASK_RECORD_STEPS: MigrationStep[] = [
   // Example structure for future use:

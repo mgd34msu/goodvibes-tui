@@ -24,6 +24,10 @@ export function getConfigManager(): ConfigManager {
   return _configManager;
 }
 
+export function _resetConfigManagerForTesting(): void {
+  _configManager = undefined;
+}
+
 export const configManager: ConfigManager = new Proxy({} as ConfigManager, {
   get(_target, prop: string | symbol) {
     const manager = getConfigManager();

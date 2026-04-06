@@ -74,6 +74,23 @@ export type {
 export { createInitialAgentsState } from './agents.ts';
 
 export type {
+  OrchestrationMode,
+  OrchestrationNodeRole,
+  OrchestrationNodeState,
+  OrchestrationGraphState,
+  OrchestrationNodeRecord,
+  OrchestrationGraphRecord,
+  OrchestrationDomainState,
+} from './orchestration.ts';
+export { createInitialOrchestrationState } from './orchestration.ts';
+
+export type {
+  RuntimeCommunicationRecord,
+  CommunicationDomainState,
+} from './communication.ts';
+export { createInitialCommunicationState } from './communication.ts';
+
+export type {
   ProviderStatus,
   CompositeHealthStatus,
   ProviderCallStats,

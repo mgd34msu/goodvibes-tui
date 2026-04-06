@@ -1,9 +1,14 @@
-import { describe, test, expect, beforeEach, mock } from 'bun:test';
+import { describe, test, expect, beforeEach, afterEach, mock } from 'bun:test';
 import { AgentOrchestrator, summarizeToolArgs } from '../../agents/orchestrator.ts';
 import type { AgentRecord } from '../../tools/agent/index.ts';
 import type { LLMProvider, ChatRequest, ChatResponse } from '../../providers/interface.ts';
 import { getProviderRegistry, _resetProviderRegistryForTesting } from '../../providers/registry.ts';
 import type { ProviderRegistry } from '../../providers/registry.ts';
+import { getMemoryStore, getMemoryRegistry, _resetMemoryRegistryForTesting } from '../../state/index.ts';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { randomUUID } from 'node:crypto';
+import { existsSync, unlinkSync } from 'node:fs';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -18,7 +23,11 @@ function makeRecord(overrides: Partial<AgentRecord> = {}): AgentRecord {
     tools: [],
     status: 'pending',
     startedAt: Date.now(),
+    orchestrationDepth: 0,
     toolCallCount: 0,
+    executionProtocol: 'gather-plan-apply',
+    reviewMode: 'wrfc',
+    communicationLane: 'direct',
     ...overrides,
   };
 }
@@ -91,6 +100,10 @@ async function withMockProvider<T>(provider: LLMProvider, fn: () => Promise<T>):
 // ---------------------------------------------------------------------------
 
 describe('AgentOrchestrator', () => {
+  let memoryDbPath: string;
+  const repoRoot = join(import.meta.dir, '..', '..', '..');
+  const originalCwd = process.cwd();
+
   async function getSystemPrompt(record: AgentRecord): Promise<string> {
     // eslint-disable-next-line prefer-const
     let capturedRef: { value: ChatRequest | null } = { value: null };
@@ -118,9 +131,18 @@ describe('AgentOrchestrator', () => {
   let orchestrator: AgentOrchestrator;
 
   beforeEach(() => {
+    process.chdir(repoRoot);
     AgentOrchestrator.resetInstance();
     _resetProviderRegistryForTesting();
+    _resetMemoryRegistryForTesting();
     orchestrator = new AgentOrchestrator();
+    memoryDbPath = join(tmpdir(), `agent-orchestrator-${randomUUID()}.db`);
+  });
+
+  afterEach(() => {
+    process.chdir(originalCwd);
+    _resetMemoryRegistryForTesting();
+    if (existsSync(memoryDbPath)) unlinkSync(memoryDbPath);
   });
 
   // -------------------------------------------------------------------------
@@ -235,6 +257,33 @@ describe('AgentOrchestrator', () => {
       }));
 
       expect(prompt).toContain('## Role: Engineer');
+    });
+
+    test('injects relevant reviewed project knowledge and records the sources', async () => {
+      const store = getMemoryStore(memoryDbPath);
+      await store.init();
+      getMemoryRegistry(memoryDbPath);
+      await store.add({
+        cls: 'runbook',
+        summary: 'Use targeted runtime edits for orchestration store changes',
+        detail: 'Prefer src/runtime/store paths when adjusting graph-node behavior.',
+        tags: ['runtime', 'orchestration', 'store'],
+        provenance: [{ kind: 'file', ref: 'src/runtime/store/index.ts' }],
+        review: { state: 'reviewed', confidence: 92, reviewedBy: 'operator' },
+      });
+
+      const record = makeRecord({
+        template: 'engineer',
+        task: 'Update orchestration store behavior for graph nodes',
+        tools: ['read', 'edit'],
+        writeScope: ['src/runtime/store'],
+      });
+      const prompt = await getSystemPrompt(record);
+
+      expect(prompt).toContain('Injected Project Knowledge');
+      expect(prompt).toContain('Use targeted runtime edits for orchestration store changes');
+      expect(record.knowledgeInjections?.length).toBeGreaterThan(0);
+      expect(record.knowledgeInjections?.[0]?.reason).toContain('matched');
     });
   });
 

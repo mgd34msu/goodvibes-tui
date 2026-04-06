@@ -149,6 +149,8 @@ export function createRegistryTool(toolRegistry: ToolRegistry): Tool {
       + ' Modes: search finds items by keyword; recommend lists items sorted by relevance;'
       + ' dependencies reads a skill\'s dependency chain; content returns full markdown file.',
     parameters: REGISTRY_TOOL_SCHEMA as unknown as Record<string, unknown>,
+    sideEffects: ['read_fs'],
+    concurrency: 'parallel',
   };
 
   async function execute(

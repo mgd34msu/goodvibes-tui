@@ -430,6 +430,10 @@ export class ForensicsCollector {
       tool?: string;
       approved?: boolean;
       source?: string;
+      reasonCode?: string;
+      classification?: string;
+      riskLevel?: string;
+      summary?: string;
     };
     const callId = payload.callId;
     if (!callId) return;
@@ -443,6 +447,9 @@ export class ForensicsCollector {
         callId,
         tool: payload.tool ?? 'unknown',
         requestedAt: env.ts,
+        classification: payload.classification,
+        riskLevel: payload.riskLevel,
+        summary: payload.summary,
       });
       return;
     }
@@ -458,6 +465,10 @@ export class ForensicsCollector {
           durationMs: existing.requestedAt !== undefined ? env.ts - existing.requestedAt : undefined,
           approved: payload.approved,
           source: payload.source,
+          reasonCode: payload.reasonCode,
+          classification: payload.classification ?? existing.classification,
+          riskLevel: payload.riskLevel ?? existing.riskLevel,
+          summary: payload.summary ?? existing.summary,
         };
       } else {
         tracker.permissionEvidence.push({
@@ -466,6 +477,10 @@ export class ForensicsCollector {
           decidedAt: env.ts,
           approved: payload.approved,
           source: payload.source,
+          reasonCode: payload.reasonCode,
+          classification: payload.classification,
+          riskLevel: payload.riskLevel,
+          summary: payload.summary,
         });
       }
     }

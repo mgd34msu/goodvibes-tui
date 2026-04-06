@@ -2,12 +2,24 @@ import { join, resolve } from 'path';
 import { homedir } from 'node:os';
 import { writeFile } from 'node:fs/promises';
 import { pluginManager, type PluginStatus } from '../../plugins/manager.ts';
-import { PLUGINS_DIR } from '../../plugins/loader.ts';
+import { PLUGINS_DIR, getPluginDirectories } from '../../plugins/loader.ts';
 import { GitService } from '../../git/service.ts';
 import { handleReplayCommand } from '../../core/replay-command-handler.ts';
 import { exportToHTML, exportToJSON, exportToMarkdownExtended, defaultExportPath } from '../../export/session-export.ts';
 import { logger } from '../../utils/logger.ts';
 import type { CommandRegistry } from '../command-registry.ts';
+import { getPanelManager } from '../../panels/panel-manager.ts';
+import {
+  installEcosystemCatalogEntry,
+  listInstalledEcosystemEntries,
+  loadEcosystemCatalog,
+  removeEcosystemCatalogEntry,
+  reviewEcosystemCatalogEntry,
+  searchEcosystemCatalog,
+  updateInstalledEcosystemEntry,
+  upsertEcosystemCatalogEntry,
+  uninstallEcosystemCatalogEntry,
+} from '../../runtime/ecosystem/catalog.ts';
 
 async function enrichSemanticDiff(
   panel: InstanceType<typeof import('../../panels/diff-panel.ts').DiffPanel>,
@@ -251,6 +263,9 @@ export function registerIntegrationRuntimeCommands(registry: CommandRegistry): v
     argsHint: '[tools [server]]',
     async handler(args, ctx) {
       const subcommand = args[0];
+      if (!subcommand && ctx.openMcpPanel) {
+        ctx.openMcpPanel();
+      }
       if (subcommand === 'tools') {
         const filterServer = args[1];
         ctx.print('Fetching MCP tool list...');
@@ -281,7 +296,59 @@ export function registerIntegrationRuntimeCommands(registry: CommandRegistry): v
         return;
       }
 
-      const servers = ctx.mcpRegistry.listServers();
+      if (subcommand === 'trust') {
+        const serverName = args[1];
+        const mode = args[2] as 'constrained' | 'ask-on-risk' | 'allow-all' | 'blocked' | undefined;
+        if (serverName && mode) {
+          if (mode === 'allow-all') {
+            ctx.print(`Use /settings → MCP to explicitly enable allow-all for ${serverName}. Direct CLI escalation is blocked.`);
+            ctx.openSettingsModal?.();
+            return;
+          }
+          ctx.mcpRegistry.setServerTrustMode(serverName, mode);
+          ctx.print(`Updated MCP trust mode for ${serverName} to ${mode}.`);
+          return;
+        }
+        if (serverName || mode) {
+          ctx.print('Usage: /mcp trust <server> <constrained|ask-on-risk|blocked>\nUse /settings → MCP to explicitly enable allow-all.');
+          return;
+        }
+      }
+
+      if (subcommand === 'role') {
+        const serverName = args[1];
+        const role = args[2] as 'general' | 'docs' | 'filesystem' | 'git' | 'database' | 'browser' | 'automation' | 'ops' | 'remote' | undefined;
+        if (serverName && role) {
+          ctx.mcpRegistry.setServerRole(serverName, role);
+          ctx.print(`Updated MCP role for ${serverName} to ${role}.`);
+          return;
+        }
+        if (serverName || role) {
+          ctx.print('Usage: /mcp role <server> <general|docs|filesystem|git|database|browser|automation|ops|remote>');
+          return;
+        }
+      }
+
+      if (subcommand === 'quarantine') {
+        const serverName = args[1];
+        const action = args[2];
+        if (!serverName) {
+          ctx.print('Usage: /mcp quarantine <server> [detail]\n       /mcp quarantine <server> approve [operatorId]');
+          return;
+        }
+        if (action === 'approve') {
+          const operatorId = args[3] || 'operator';
+          ctx.mcpRegistry.approveSchemaQuarantine(serverName, operatorId);
+          ctx.print(`Approved MCP schema quarantine override for ${serverName} as ${operatorId}. Refresh is still recommended.`);
+          return;
+        }
+        const detail = args.slice(2).join(' ') || 'quarantined by operator';
+        ctx.mcpRegistry.quarantineSchema(serverName, 'operator_flagged', detail);
+        ctx.print(`Quarantined MCP schema for ${serverName}.\nReason: ${detail}`);
+        return;
+      }
+
+      const servers = ctx.mcpRegistry.listServerSecurity();
       if (servers.length === 0) {
         ctx.print(
           'No MCP servers configured.\n'
@@ -300,11 +367,18 @@ export function registerIntegrationRuntimeCommands(registry: CommandRegistry): v
       const disconnected = servers.filter(s => !s.connected);
       const lines: string[] = [`MCP Servers (${connected.length}/${servers.length} connected):`];
       for (const s of servers) {
-        lines.push(`  ${s.connected ? '[connected]   ' : '[disconnected]'}  ${s.name}`);
+        const pathScope = s.allowedPaths.length > 0 ? ` paths=${s.allowedPaths.length}` : '';
+        const hostScope = s.allowedHosts.length > 0 ? ` hosts=${s.allowedHosts.length}` : '';
+        const freshness = ` freshness=${s.schemaFreshness}`;
+        const quarantine = s.schemaFreshness === 'quarantined' ? ` quarantine=${s.quarantineReason ?? 'unknown'}` : '';
+        lines.push(`  ${s.connected ? '[connected]   ' : '[disconnected]'}  ${s.name}  trust=${s.trustMode}  role=${s.role}${freshness}${quarantine}${pathScope}${hostScope}`);
       }
       if (connected.length > 0) {
         lines.push('');
         lines.push('Run "/mcp tools" to list all tools, or "/mcp tools <server>" for a specific server.');
+        lines.push('Run "/mcp trust <server> <mode>" to change trust mode, or "/mcp role <server> <role>" to change its coherence role.');
+        lines.push('Run "/mcp quarantine <server> [detail]" to block a server, or "/mcp quarantine <server> approve [operatorId]" to approve a temporary override.');
+        lines.push('Use /settings → MCP to explicitly enable allow-all for a server.');
       }
       if (disconnected.length > 0) {
         lines.push('');
@@ -419,16 +493,29 @@ export function registerIntegrationRuntimeCommands(registry: CommandRegistry): v
   registry.register({
     name: 'plugin',
     aliases: [],
-    description: 'Manage plugins (list, enable, disable, reload)',
-    usage: 'list | enable <name> | disable <name> | reload',
-    argsHint: 'list | enable | disable | reload',
+    description: 'Manage plugins, trust, review, and ecosystem paths',
+    usage: 'list | dirs | inspect <name> | review | installed | catalog-review <id> | publish-local <id> <path> <summary...> | unpublish <id> | install <id> [project|user] | update <id> [project|user] | uninstall <id> [project|user] | enable <name> | disable <name> | reload',
+    argsHint: 'list | dirs | inspect | review | installed | catalog-review | publish-local | unpublish | install | update | uninstall | enable | disable | reload',
     async handler(args, ctx) {
       const sub = args[0];
 
-      if (!sub || sub === 'list') {
+      if (!sub || sub === 'open' || sub === 'panel') {
+        const panelManager = getPanelManager();
+        panelManager.open('plugins');
+        panelManager.show();
+        ctx.renderRequest();
+        return;
+      }
+
+      if (sub === 'list') {
         const plugins = pluginManager.list() as PluginStatus[];
         if (plugins.length === 0) {
-          ctx.print(`No plugins installed.\nPlugin directory: ${PLUGINS_DIR}\nPlace a plugin folder there with manifest.json and index.ts.`);
+          const directories = getPluginDirectories()
+            .map((dir) => `  ${dir}`)
+            .join('\n');
+          ctx.print(
+            `No plugins installed.\nPlugin search directories:\n${directories}\nPlace a plugin folder in one of those locations with manifest.json and index.ts.`
+          );
           return;
         }
         const lines: string[] = ['Installed plugins:'];
@@ -440,6 +527,208 @@ export function registerIntegrationRuntimeCommands(registry: CommandRegistry): v
         lines.push('');
         lines.push('Use /plugin enable <name> or /plugin disable <name> to toggle plugins.');
         ctx.print(lines.join('\n'));
+        return;
+      }
+      if (sub === 'dirs') {
+        const directories = getPluginDirectories();
+        ctx.print([
+          'Plugin Search Directories',
+          ...directories.map((dir) => `  ${dir}`),
+        ].join('\n'));
+        return;
+      }
+      if (sub === 'inspect') {
+        const name = args[1];
+        if (!name) {
+          ctx.print('Usage: /plugin inspect <name>');
+          return;
+        }
+        const status = pluginManager.list().find((plugin) => plugin.name === name);
+        if (!status) {
+          ctx.print(`Error: Plugin '${name}' not found.`);
+          return;
+        }
+        const capabilities = pluginManager.capabilities(name);
+        const trust = pluginManager.getTrustRecord(name);
+        const quarantine = pluginManager.getQuarantineRecord(name);
+        ctx.print([
+          `Plugin ${name}`,
+          `  version: ${status.version}`,
+          `  state: ${status.active ? 'active' : status.enabled ? 'enabled' : 'disabled'}`,
+          `  trustTier: ${status.trustTier}`,
+          `  quarantined: ${status.quarantined ? 'yes' : 'no'}`,
+          `  requestedCapabilities: ${capabilities?.requested.length ?? 0}`,
+          `  highRiskCapabilities: ${capabilities?.highRisk.length ?? 0}`,
+          `  blockedCapabilities: ${capabilities?.blocked.length ?? 0}`,
+          `  signedFingerprint: ${trust?.signatureFingerprint ?? 'n/a'}`,
+          `  quarantineReason: ${quarantine?.reason ?? 'n/a'}`,
+        ].join('\n'));
+        return;
+      }
+      if (sub === 'review') {
+        const plugins = pluginManager.list();
+        ctx.print([
+          'Plugin Security Review',
+          `  total: ${plugins.length}`,
+          `  active: ${plugins.filter((plugin) => plugin.active).length}`,
+          `  trusted: ${plugins.filter((plugin) => plugin.trustTier === 'trusted').length}`,
+          `  limited: ${plugins.filter((plugin) => plugin.trustTier === 'limited').length}`,
+          `  untrusted: ${plugins.filter((plugin) => plugin.trustTier === 'untrusted').length}`,
+          `  quarantined: ${plugins.filter((plugin) => plugin.quarantined).length}`,
+        ].join('\n'));
+        return;
+      }
+      if (sub === 'browse' || sub === 'catalog') {
+        const query = args.slice(1).join(' ');
+        const entries = query
+          ? searchEcosystemCatalog('plugin', query)
+          : loadEcosystemCatalog('plugin');
+        if (entries.length === 0) {
+          ctx.print(query
+            ? `No curated plugin catalog entries matched "${query}".`
+            : 'No curated plugin catalog entries found. Add .goodvibes/tui/ecosystem/plugins.json to publish a local-first plugin catalog.');
+          return;
+        }
+        ctx.print([
+          `Curated Plugin Catalog (${entries.length})`,
+          ...entries.map((entry) => `  ${entry.id}  ${entry.name}  [${entry.tags.join(', ') || 'untagged'}]  ${entry.summary}`),
+        ].join('\n'));
+        return;
+      }
+      if (sub === 'installed') {
+        const receipts = listInstalledEcosystemEntries('plugin');
+        if (receipts.length === 0) {
+          ctx.print('No curated plugins installed from local catalogs yet.');
+          return;
+        }
+        ctx.print([
+          `Installed Curated Plugins (${receipts.length})`,
+          ...receipts.map((receipt) => `  ${receipt.entry.id}  ${receipt.scope}  ${receipt.targetPath}`),
+        ].join('\n'));
+        return;
+      }
+      if (sub === 'catalog-review') {
+        const entryId = args[1];
+        if (!entryId) {
+          ctx.print('Usage: /plugin catalog-review <catalog-id>');
+          return;
+        }
+        const entry = loadEcosystemCatalog('plugin').find((candidate) => candidate.id === entryId);
+        if (!entry) {
+          ctx.print(`Unknown curated plugin entry: ${entryId}`);
+          return;
+        }
+        const review = reviewEcosystemCatalogEntry(entry);
+        ctx.print([
+          `Plugin Catalog Review: ${entry.name}`,
+          `  id: ${entry.id}`,
+          `  source: ${entry.source}`,
+          `  sourceKind: ${review.sourceKind}`,
+          `  sourceExists: ${review.sourceExists ? 'yes' : 'no'}`,
+          `  recommendedScope: ${review.recommendedScope}`,
+          `  risk: ${review.riskLevel}`,
+          `  trust notes: ${entry.trustNotes ?? '(none)'}`,
+          `  provenance: ${entry.provenance ?? '(none)'}`,
+          `  update hint: ${entry.updateHint ?? '(none)'}`,
+        ].join('\n'));
+        return;
+      }
+      if (sub === 'install-hint') {
+        const entryId = args[1];
+        if (!entryId) {
+          ctx.print('Usage: /plugin install-hint <catalog-id>');
+          return;
+        }
+        const entry = loadEcosystemCatalog('plugin').find((candidate) => candidate.id === entryId);
+        if (!entry) {
+          ctx.print(`Unknown curated plugin entry: ${entryId}`);
+          return;
+        }
+        ctx.print([
+          `Plugin Install Guidance: ${entry.name}`,
+          `  id: ${entry.id}`,
+          `  source: ${entry.source}`,
+          `  tags: ${entry.tags.join(', ') || '(none)'}`,
+          `  trust notes: ${entry.trustNotes ?? '(none)'}`,
+          `  install hint: ${entry.installHint ?? 'Place the plugin under a configured plugin search directory and use /plugin reload.'}`,
+        ].join('\n'));
+        return;
+      }
+      if (sub === 'publish-local') {
+        const entryId = args[1];
+        const sourcePath = args[2];
+        const summary = args.slice(3).join(' ').trim();
+        if (!entryId || !sourcePath || !summary) {
+          ctx.print('Usage: /plugin publish-local <catalog-id> <path> <summary...>');
+          return;
+        }
+        const result = upsertEcosystemCatalogEntry({
+          id: entryId,
+          kind: 'plugin',
+          name: entryId.replace(/[-_]/g, ' ').replace(/\b\w/g, (char) => char.toUpperCase()),
+          summary,
+          source: sourcePath,
+          tags: ['local-first', 'published'],
+          provenance: 'operator-published',
+          updateHint: 'Use /plugin publish-local again to refresh catalog metadata after edits.',
+        });
+        ctx.print(result.ok
+          ? `Published curated plugin ${entryId} into ${result.path}`
+          : `Error: ${result.error}`);
+        return;
+      }
+      if (sub === 'unpublish') {
+        const entryId = args[1];
+        if (!entryId) {
+          ctx.print('Usage: /plugin unpublish <catalog-id>');
+          return;
+        }
+        const result = removeEcosystemCatalogEntry('plugin', entryId);
+        ctx.print(result.ok
+          ? `Removed curated plugin ${entryId} from ${result.path}`
+          : `Error: ${result.error}`);
+        return;
+      }
+      if (sub === 'install') {
+        const entryId = args[1];
+        const scopeArg = args[2];
+        if (!entryId) {
+          ctx.print('Usage: /plugin install <catalog-id> [project|user]');
+          return;
+        }
+        const scope = scopeArg === 'user' ? 'user' : 'project';
+        const result = installEcosystemCatalogEntry('plugin', entryId, { scope });
+        ctx.print(result.ok
+          ? `Installed curated plugin ${entryId} into ${result.receipt.targetPath}`
+          : `Error: ${result.error}`);
+        return;
+      }
+      if (sub === 'update') {
+        const entryId = args[1];
+        const scopeArg = args[2];
+        if (!entryId) {
+          ctx.print('Usage: /plugin update <catalog-id> [project|user]');
+          return;
+        }
+        const scope = scopeArg === 'user' ? 'user' : 'project';
+        const result = updateInstalledEcosystemEntry('plugin', entryId, { scope });
+        ctx.print(result.ok
+          ? `Updated curated plugin ${entryId} in ${result.receipt.targetPath}`
+          : `Error: ${result.error}`);
+        return;
+      }
+      if (sub === 'uninstall') {
+        const entryId = args[1];
+        const scopeArg = args[2];
+        if (!entryId) {
+          ctx.print('Usage: /plugin uninstall <catalog-id> [project|user]');
+          return;
+        }
+        const scope = scopeArg === 'user' ? 'user' : 'project';
+        const result = uninstallEcosystemCatalogEntry('plugin', entryId, { scope });
+        ctx.print(result.ok
+          ? `Uninstalled curated plugin ${entryId} from ${result.removedPath}`
+          : `Error: ${result.error}`);
         return;
       }
       if (sub === 'enable') {
@@ -557,6 +846,14 @@ export function registerIntegrationRuntimeCommands(registry: CommandRegistry): v
         + '  trust <name> <tier> [note] — set trust tier (untrusted|limited|trusted)\n'
         + '  verify <name>              — inspect a plugin manifest signature\n'
         + '  capabilities <name>        — show capability grants and blocks\n'
+        + '  browse [query]             — browse curated local-first plugin catalog entries\n'
+        + '  installed                  — list curated catalog installs with provenance receipts\n'
+        + '  catalog-review <id>        — review source, provenance, and risk for a curated plugin\n'
+        + '  publish-local <id> <path> <summary...> — publish a local plugin directory into the curated catalog\n'
+        + '  unpublish <id>             — remove a local curated plugin catalog entry\n'
+        + '  install-hint <catalog-id>  — show install guidance for a curated plugin entry\n'
+        + '  install <catalog-id> [scope]   — install a local-path curated plugin into project|user scope\n'
+        + '  uninstall <catalog-id> [scope] — remove a curated plugin install receipt and target path\n'
         + '  quarantine <name> [reason] — quarantine a plugin (revoke high-risk caps)\n'
         + '  quarantine <name> lift     — lift quarantine from a plugin'
       );

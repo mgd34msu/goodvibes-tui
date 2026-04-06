@@ -14,7 +14,20 @@ import { logger } from '../utils/logger.ts';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-export type MemoryClass = 'decision' | 'constraint' | 'incident' | 'pattern';
+export type MemoryClass =
+  | 'decision'
+  | 'constraint'
+  | 'incident'
+  | 'pattern'
+  | 'fact'
+  | 'risk'
+  | 'runbook'
+  | 'architecture'
+  | 'ownership';
+
+export type MemoryScope = 'session' | 'project' | 'team';
+
+export type MemoryReviewState = 'fresh' | 'reviewed' | 'stale' | 'contradicted';
 
 export type ProvenanceLinkKind = 'session' | 'turn' | 'task' | 'event' | 'file';
 
@@ -29,6 +42,8 @@ export interface ProvenanceLink {
 export interface MemoryRecord {
   /** Auto-assigned, unique within the store. */
   id: string;
+  /** Scope of the record for retrieval and sharing workflows. */
+  scope: MemoryScope;
   /** Memory class — governs retrieval priority and display grouping. */
   cls: MemoryClass;
   /** Brief summary (one sentence). */
@@ -39,6 +54,16 @@ export interface MemoryRecord {
   tags: string[];
   /** Provenance links back to the source context. */
   provenance: ProvenanceLink[];
+  /** Operator/state review signal. */
+  reviewState: MemoryReviewState;
+  /** Confidence score from 0-100. Higher means the record is more trusted for retrieval. */
+  confidence: number;
+  /** Last explicit review timestamp, if any. */
+  reviewedAt?: number;
+  /** Reviewer identity, if recorded. */
+  reviewedBy?: string;
+  /** If stale/contradicted, why. */
+  staleReason?: string;
   /** Creation timestamp (epoch ms). */
   createdAt: number;
   /** Last updated timestamp (epoch ms). */
@@ -57,31 +82,72 @@ export interface MemoryLink {
 }
 
 export interface MemorySearchFilter {
+  scope?: MemoryScope;
   cls?: MemoryClass;
   tags?: string[];
   /** Full-text substring match on summary and detail. */
   query?: string;
   /** Return records created after this timestamp. */
   since?: number;
+  /** Match a specific review state or a small set of states. */
+  reviewState?: MemoryReviewState | MemoryReviewState[];
+  /** Minimum confidence threshold, 0-100. */
+  minConfidence?: number;
+  /** Restrict to records with at least one matching provenance kind. */
+  provenanceKinds?: ProvenanceLinkKind[];
+  /** Convenience flag for review queue retrieval. */
+  staleOnly?: boolean;
   limit?: number;
 }
 
 export interface MemoryAddOptions {
+  scope?: MemoryScope;
   cls: MemoryClass;
   summary: string;
   detail?: string;
   tags?: string[];
   provenance?: ProvenanceLink[];
+  review?: {
+    state?: MemoryReviewState;
+    confidence?: number;
+    reviewedAt?: number;
+    reviewedBy?: string;
+    staleReason?: string;
+  };
+}
+
+export interface MemoryReviewPatch {
+  state?: MemoryReviewState;
+  confidence?: number;
+  reviewedBy?: string;
+  staleReason?: string;
+}
+
+export interface MemoryBundle {
+  schemaVersion: 'v1';
+  exportedAt: number;
+  scope: MemoryScope | 'all';
+  recordCount: number;
+  linkCount: number;
+  records: MemoryRecord[];
+  links: MemoryLink[];
+}
+
+export interface MemoryImportResult {
+  importedRecords: number;
+  skippedRecords: number;
+  importedLinks: number;
 }
 
 // ── Internal schema helper ────────────────────────────────────────────────────
 
-function createSchema(db: { run(sql: string): void }): void {
+function createSchema(db: { run(sql: string): void; exec(sql: string, params?: (string | number)[]): Array<{ columns: string[]; values: unknown[][] }> }): void {
   db.run('PRAGMA foreign_keys = ON');
 
   db.run(`
     CREATE TABLE IF NOT EXISTS memory_records (
       id         TEXT PRIMARY KEY,
+      scope      TEXT NOT NULL DEFAULT 'project',
       cls        TEXT NOT NULL,
       summary    TEXT NOT NULL,
       detail     TEXT,
@@ -105,7 +171,36 @@ function createSchema(db: { run(sql: string): void }): void {
   `);
 
   db.run(`CREATE INDEX IF NOT EXISTS idx_memory_cls ON memory_records(cls)`);
+  db.run(`CREATE INDEX IF NOT EXISTS idx_memory_scope ON memory_records(scope)`);
   db.run(`CREATE INDEX IF NOT EXISTS idx_memory_created ON memory_records(created_at)`);
+
+  ensureColumn(db, 'memory_records', 'scope TEXT NOT NULL DEFAULT \'project\'', 'scope');
+  ensureColumn(db, 'memory_records', 'review_state TEXT NOT NULL DEFAULT \'fresh\'', 'review_state');
+  ensureColumn(db, 'memory_records', 'confidence INTEGER NOT NULL DEFAULT 60', 'confidence');
+  ensureColumn(db, 'memory_records', 'reviewed_at INTEGER', 'reviewed_at');
+  ensureColumn(db, 'memory_records', 'reviewed_by TEXT', 'reviewed_by');
+  ensureColumn(db, 'memory_records', 'stale_reason TEXT', 'stale_reason');
+}
+
+function ensureColumn(
+  db: { run(sql: string): void; exec(sql: string, params?: (string | number)[]): Array<{ columns: string[]; values: unknown[][] }> },
+  table: string,
+  columnSql: string,
+  columnName: string,
+): void {
+  const rows = db.exec(`PRAGMA table_info(${table})`);
+  const existing = new Set<string>();
+  if (rows[0]) {
+    const nameIndex = rows[0].columns.indexOf('name');
+    for (const value of rows[0].values) {
+      if (nameIndex >= 0) {
+        existing.add(String(value[nameIndex]));
+      }
+    }
+  }
+  if (!existing.has(columnName)) {
+    db.run(`ALTER TABLE ${table} ADD COLUMN ${columnSql}`);
+  }
 }
 
 // ── MemoryRegistry — panel-observable counter ─────────────────────────────────
@@ -147,6 +242,20 @@ export class MemoryRegistry {
     return this.store.search(filter);
   }
 
+  reviewQueue(limit = 10): MemoryRecord[] {
+    return this.store.reviewQueue(limit);
+  }
+
+  exportBundle(filter: MemorySearchFilter = {}): MemoryBundle {
+    return this.store.exportBundle(filter);
+  }
+
+  async importBundle(bundle: MemoryBundle): Promise<MemoryImportResult> {
+    const result = await this.store.importBundle(bundle);
+    this.notify();
+    return result;
+  }
+
   get(id: string): MemoryRecord | null {
     return this.store.get(id);
   }
@@ -161,8 +270,14 @@ export class MemoryRegistry {
     return this.store.linksFor(id);
   }
 
-  update(id: string, patch: { summary?: string; detail?: string; tags?: string[] }): MemoryRecord | null {
+  update(id: string, patch: { scope?: MemoryScope; summary?: string; detail?: string; tags?: string[] }): MemoryRecord | null {
     const record = this.store.update(id, patch);
+    if (record) this.notify();
+    return record;
+  }
+
+  review(id: string, patch: MemoryReviewPatch): MemoryRecord | null {
+    const record = this.store.review(id, patch);
     if (record) this.notify();
     return record;
   }
@@ -208,26 +323,38 @@ export class MemoryStore {
 
     const record: MemoryRecord = {
       id,
+      scope: opts.scope ?? 'project',
       cls: opts.cls,
       summary: opts.summary,
       detail: opts.detail,
       tags: opts.tags ?? [],
       provenance: opts.provenance ?? [],
+      reviewState: opts.review?.state ?? 'fresh',
+      confidence: clampConfidence(opts.review?.confidence ?? 60),
+      reviewedAt: opts.review?.reviewedAt,
+      reviewedBy: opts.review?.reviewedBy,
+      staleReason: opts.review?.staleReason,
       createdAt: now,
       updatedAt: now,
     };
 
     this.sqlite.run(
       `INSERT INTO memory_records
-         (id, cls, summary, detail, tags, provenance, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+         (id, scope, cls, summary, detail, tags, provenance, review_state, confidence, reviewed_at, reviewed_by, stale_reason, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         record.id,
+        record.scope,
         record.cls,
         record.summary,
         record.detail ?? null,
         JSON.stringify(record.tags),
         JSON.stringify(record.provenance),
+        record.reviewState,
+        record.confidence,
+        record.reviewedAt ?? null,
+        record.reviewedBy ?? null,
+        record.staleReason ?? null,
         record.createdAt,
         record.updatedAt,
       ],
@@ -242,7 +369,7 @@ export class MemoryStore {
     if (!this.ready) return null;
 
     const rows = this.sqlite.exec(
-      `SELECT id, cls, summary, detail, tags, provenance, created_at, updated_at
+      `SELECT id, scope, cls, summary, detail, tags, provenance, review_state, confidence, reviewed_at, reviewed_by, stale_reason, created_at, updated_at
          FROM memory_records WHERE id = ? LIMIT 1`,
       [id],
     );
@@ -258,6 +385,11 @@ export class MemoryStore {
     const conditions: string[] = [];
     const params: (string | number)[] = [];
 
+    if (filter.scope) {
+      conditions.push('scope = ?');
+      params.push(filter.scope);
+    }
+
     if (filter.cls) {
       conditions.push('cls = ?');
       params.push(filter.cls);
@@ -266,6 +398,16 @@ export class MemoryStore {
     if (filter.since) {
       conditions.push('created_at >= ?');
       params.push(filter.since);
+    }
+
+    if (filter.reviewState) {
+      if (Array.isArray(filter.reviewState)) {
+        conditions.push(`review_state IN (${filter.reviewState.map(() => '?').join(', ')})`);
+        params.push(...filter.reviewState);
+      } else {
+        conditions.push('review_state = ?');
+        params.push(filter.reviewState);
+      }
     }
 
     if (filter.query) {
@@ -283,21 +425,122 @@ export class MemoryStore {
     }
 
     const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
-    const limit = filter.limit ?? 100;
-
     const rows = this.sqlite.exec(
-      `SELECT id, cls, summary, detail, tags, provenance, created_at, updated_at
+      `SELECT id, scope, cls, summary, detail, tags, provenance, review_state, confidence, reviewed_at, reviewed_by, stale_reason, created_at, updated_at
          FROM memory_records ${where}
-         ORDER BY created_at DESC
-         LIMIT ?`,
-      [...params, limit],
+         ORDER BY updated_at DESC, created_at DESC`,
+      params,
     );
 
     if (!rows.length) return [];
 
     let records = rows[0].values.map(v => this.rowToRecord(rows[0].columns, v));
 
+    if (filter.minConfidence !== undefined) {
+      records = records.filter((record) => record.confidence >= filter.minConfidence!);
+    }
+
+    if (filter.provenanceKinds?.length) {
+      const allowed = new Set(filter.provenanceKinds);
+      records = records.filter((record) => record.provenance.some((link) => allowed.has(link.kind)));
+    }
+
+    if (filter.staleOnly) {
+      records = records.filter((record) => isReviewFlagged(record));
+    }
+
+    records = records.sort((a, b) => scoreRecord(b, filter) - scoreRecord(a, filter) || b.updatedAt - a.updatedAt || b.createdAt - a.createdAt);
+
+    if (filter.limit !== undefined) {
+      records = records.slice(0, filter.limit);
+    }
+
     return records;
+  }
+
+  reviewQueue(limit = 10): MemoryRecord[] {
+    const records = this.search({ limit: Math.max(limit * 4, 25) });
+    const candidates = records.filter((record) => isReviewCandidate(record));
+    return candidates
+      .sort((a, b) => reviewQueueScore(b) - reviewQueueScore(a) || b.updatedAt - a.updatedAt || b.createdAt - a.createdAt)
+      .slice(0, limit);
+  }
+
+  exportBundle(filter: MemorySearchFilter = {}): MemoryBundle {
+    const records = this.search(filter);
+    const recordIds = new Set(records.map((record) => record.id));
+    const links: MemoryLink[] = [];
+    for (const record of records) {
+      for (const link of this.linksFor(record.id)) {
+        if (!recordIds.has(link.fromId) || !recordIds.has(link.toId)) continue;
+        const duplicate = links.some((existing) => (
+          existing.fromId === link.fromId
+          && existing.toId === link.toId
+          && existing.relation === link.relation
+        ));
+        if (!duplicate) links.push(link);
+      }
+    }
+
+    return {
+      schemaVersion: 'v1',
+      exportedAt: Date.now(),
+      scope: filter.scope ?? 'all',
+      recordCount: records.length,
+      linkCount: links.length,
+      records,
+      links,
+    };
+  }
+
+  async importBundle(bundle: MemoryBundle): Promise<MemoryImportResult> {
+    if (!this.ready) throw new Error('MemoryStore: not initialized');
+
+    let importedRecords = 0;
+    let skippedRecords = 0;
+    let importedLinks = 0;
+
+    for (const record of bundle.records) {
+      if (this.get(record.id)) {
+        skippedRecords++;
+        continue;
+      }
+      this.sqlite.run(
+        `INSERT INTO memory_records
+           (id, scope, cls, summary, detail, tags, provenance, review_state, confidence, reviewed_at, reviewed_by, stale_reason, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          record.id,
+          normalizeScope(record.scope),
+          record.cls,
+          record.summary,
+          record.detail ?? null,
+          JSON.stringify(record.tags),
+          JSON.stringify(record.provenance),
+          normalizeReviewState(record.reviewState),
+          clampConfidence(record.confidence),
+          record.reviewedAt ?? null,
+          record.reviewedBy ?? null,
+          record.staleReason ?? null,
+          record.createdAt,
+          record.updatedAt,
+        ],
+      );
+      importedRecords++;
+    }
+
+    for (const link of bundle.links) {
+      if (!this.get(link.fromId) || !this.get(link.toId)) continue;
+      this.sqlite.run(
+        `INSERT OR REPLACE INTO memory_links (from_id, to_id, relation, created_at)
+         VALUES (?, ?, ?, ?)`,
+        [link.fromId, link.toId, link.relation, link.createdAt],
+      );
+      importedLinks++;
+    }
+
+    logger.info('MemoryStore: bundle imported', { importedRecords, skippedRecords, importedLinks });
+    return { importedRecords, skippedRecords, importedLinks };
   }
 
   /** Create a directed link between two records. */
@@ -360,7 +603,7 @@ export class MemoryStore {
   }
 
   /** Update mutable fields of an existing record. */
-  update(id: string, patch: { summary?: string; detail?: string; tags?: string[] }): MemoryRecord | null {
+  update(id: string, patch: { scope?: MemoryScope; summary?: string; detail?: string; tags?: string[] }): MemoryRecord | null {
     if (!this.ready) return null;
 
     const existing = this.get(id);
@@ -370,19 +613,57 @@ export class MemoryStore {
     }
 
     const now = Date.now();
+    const newScope   = patch.scope   ?? existing.scope;
     const newSummary = patch.summary ?? existing.summary;
     const newDetail  = patch.detail  !== undefined ? patch.detail : existing.detail;
     const newTags    = patch.tags    ?? existing.tags;
 
     this.sqlite.run(
       `UPDATE memory_records
-         SET summary = ?, detail = ?, tags = ?, updated_at = ?
+         SET scope = ?, summary = ?, detail = ?, tags = ?, updated_at = ?
          WHERE id = ?`,
-      [newSummary, newDetail ?? null, JSON.stringify(newTags), now, id],
+      [newScope, newSummary, newDetail ?? null, JSON.stringify(newTags), now, id],
     );
 
     logger.info('MemoryStore: record updated', { id });
-    return { ...existing, summary: newSummary, detail: newDetail, tags: newTags, updatedAt: now };
+    return { ...existing, scope: newScope, summary: newSummary, detail: newDetail, tags: newTags, updatedAt: now };
+  }
+
+  review(id: string, patch: MemoryReviewPatch): MemoryRecord | null {
+    if (!this.ready) return null;
+
+    const existing = this.get(id);
+    if (!existing) {
+      logger.warn('MemoryStore: review target not found', { id });
+      return null;
+    }
+
+    const now = Date.now();
+    const reviewState = patch.state ?? existing.reviewState;
+    const confidence = clampConfidence(patch.confidence ?? existing.confidence);
+    const reviewedAt = now;
+    const reviewedBy = patch.reviewedBy ?? existing.reviewedBy;
+    const staleReason = reviewState === 'stale' || reviewState === 'contradicted'
+      ? (patch.staleReason ?? existing.staleReason ?? 'marked by operator')
+      : undefined;
+
+    this.sqlite.run(
+      `UPDATE memory_records
+         SET review_state = ?, confidence = ?, reviewed_at = ?, reviewed_by = ?, stale_reason = ?, updated_at = ?
+         WHERE id = ?`,
+      [
+        reviewState,
+        confidence,
+        reviewedAt,
+        reviewedBy ?? null,
+        staleReason ?? null,
+        now,
+        id,
+      ],
+    );
+
+    logger.info('MemoryStore: record reviewed', { id, reviewState, confidence });
+    return { ...existing, reviewState, confidence, reviewedAt, reviewedBy, staleReason, updatedAt: now };
   }
 
   /** Delete a record and all its links. */
@@ -417,15 +698,119 @@ export class MemoryStore {
 
     return {
       id:         String(get('id')),
+      scope:      normalizeScope(get('scope')),
       cls:        String(get('cls')) as MemoryClass,
       summary:    String(get('summary')),
       detail:     get('detail') != null ? String(get('detail')) : undefined,
       tags:       Array.isArray(tagsRaw) ? tagsRaw : safeParseJson<string[]>(String(tagsRaw), []),
       provenance: Array.isArray(provRaw) ? provRaw : safeParseJson<ProvenanceLink[]>(String(provRaw), []),
+      reviewState: normalizeReviewState(get('review_state')),
+      confidence: clampConfidence(Number(get('confidence') ?? 60)),
+      reviewedAt: get('reviewed_at') != null ? Number(get('reviewed_at')) : undefined,
+      reviewedBy: get('reviewed_by') != null ? String(get('reviewed_by')) : undefined,
+      staleReason: get('stale_reason') != null ? String(get('stale_reason')) : undefined,
       createdAt:  Number(get('created_at')),
       updatedAt:  Number(get('updated_at')),
     };
   }
+}
+
+function normalizeReviewState(value: unknown): MemoryReviewState {
+  switch (String(value ?? 'fresh')) {
+    case 'reviewed':
+    case 'stale':
+    case 'contradicted':
+      return String(value) as MemoryReviewState;
+    default:
+      return 'fresh';
+  }
+}
+
+function normalizeScope(value: unknown): MemoryScope {
+  switch (String(value ?? 'project')) {
+    case 'session':
+    case 'team':
+      return String(value) as MemoryScope;
+    default:
+      return 'project';
+  }
+}
+
+function clampConfidence(value: number): number {
+  if (!Number.isFinite(value)) return 60;
+  return Math.max(0, Math.min(100, Math.round(value)));
+}
+
+function isReviewFlagged(record: MemoryRecord): boolean {
+  return record.reviewState === 'stale' || record.reviewState === 'contradicted' || record.confidence < 70 || !record.reviewedAt;
+}
+
+function isReviewCandidate(record: MemoryRecord): boolean {
+  return record.reviewState !== 'reviewed' || record.confidence < 80 || !record.reviewedAt;
+}
+
+function reviewQueueScore(record: MemoryRecord): number {
+  let score = 0;
+  switch (record.reviewState) {
+    case 'contradicted':
+      score += 120;
+      break;
+    case 'stale':
+      score += 100;
+      break;
+    case 'fresh':
+      score += 60;
+      break;
+    case 'reviewed':
+      score += 10;
+      break;
+  }
+  if (!record.reviewedAt) score += 30;
+  if (record.confidence < 80) score += 80 - record.confidence;
+  const ageDays = Math.max(0, (Date.now() - record.updatedAt) / 86400000);
+  score += Math.min(ageDays, 30);
+  return score;
+}
+
+function scoreRecord(record: MemoryRecord, filter: MemorySearchFilter): number {
+  let score = 0;
+  const ageMinutes = Math.max(0, (Date.now() - record.updatedAt) / 60000);
+  score += Math.max(0, 360 - ageMinutes) / 10;
+  score += record.confidence / 5;
+
+  switch (record.reviewState) {
+    case 'reviewed':
+      score += 30;
+      break;
+    case 'fresh':
+      score += 10;
+      break;
+    case 'stale':
+      score -= 40;
+      break;
+    case 'contradicted':
+      score -= 60;
+      break;
+  }
+
+  if (filter.query) {
+    const q = filter.query.trim().toLowerCase();
+    const haystack = [
+      record.summary,
+      record.detail ?? '',
+      record.tags.join(' '),
+      record.provenance.map((p) => `${p.kind}:${p.ref} ${p.label ?? ''}`).join(' '),
+    ].join(' ').toLowerCase();
+    for (const token of q.split(/\s+/).filter(Boolean)) {
+      if (haystack.includes(token)) {
+        score += 12;
+      }
+    }
+  }
+
+  score += Math.min(record.provenance.length, 4) * 2;
+  score += Math.min(record.tags.length, 4);
+  return score;
 }
 
 function safeParseJson<T>(raw: string, fallback: T): T {
@@ -453,4 +838,12 @@ export function getMemoryRegistry(dbPath?: string): MemoryRegistry {
     _registry = new MemoryRegistry(getMemoryStore(dbPath));
   }
   return _registry;
+}
+
+export function _resetMemoryRegistryForTesting(): void {
+  _registry = undefined;
+  if (_store) {
+    _store.close();
+    _store = undefined;
+  }
 }

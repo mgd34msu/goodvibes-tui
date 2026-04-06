@@ -13,7 +13,7 @@
  */
 
 export { McpLifecycleManager, type McpEventHandler, type McpLifecycleManagerOptions } from './manager.ts';
-export { McpPermissionManager } from './permissions.ts';
+export { McpPermissionManager, buildMcpAttackPathReview } from './permissions.ts';
 export { McpSchemaFreshnessTracker } from './schema-freshness.ts';
 export {
   canTransition,
@@ -30,7 +30,19 @@ export type {
   QuarantineReason,
   QuarantineRecord,
   McpTrustLevel,
+  McpTrustMode,
+  McpServerRole,
+  McpCapabilityClass,
+  McpCoherenceVerdict,
+  McpRiskLevel,
   McpPermission,
+  McpTrustProfile,
+  McpCoherenceAssessment,
+  McpDecisionRecord,
+  McpSecuritySnapshot,
+  McpAttackPathFindingKind,
+  McpAttackPathFinding,
+  McpAttackPathReview,
   McpToolPermission,
   McpServerPermissions,
   McpServerEntry,

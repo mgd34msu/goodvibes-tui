@@ -56,7 +56,11 @@ describe('AgentRecord streamingContent field', () => {
       tools: ['read'],
       status: 'running',
       startedAt: Date.now(),
+      orchestrationDepth: 0,
       toolCallCount: 0,
+      executionProtocol: 'gather-plan-apply',
+      reviewMode: 'wrfc',
+      communicationLane: 'direct',
       streamingContent: 'live content',
     };
     expect(rec.streamingContent).toBe('live content');

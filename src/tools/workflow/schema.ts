@@ -14,6 +14,8 @@ export const workflowSchema: ToolDefinition = {
     'and workflow state tracking (internal bookkeeping — does not execute anything). ' +
     'Modes: triggers (manage event-driven automations), schedule (manage recurring tasks), ' +
     'start/status/transition/cancel/list (state tracking only — no execution).',
+  sideEffects: ['workflow', 'state'],
+  concurrency: 'serial',
   parameters: {
     type: 'object',
     required: ['mode'],

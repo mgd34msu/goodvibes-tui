@@ -14,6 +14,16 @@ import type { McpToolInfo, McpToolSchema } from './client.ts';
 import type { McpServerConfig } from './config.ts';
 import { getHookDispatcher } from '../hooks/index.ts';
 import type { HookEvent } from '../hooks/types.ts';
+import { McpPermissionManager } from '../runtime/mcp/permissions.ts';
+import { McpSchemaFreshnessTracker } from '../runtime/mcp/schema-freshness.ts';
+import type { McpDecisionRecord, QuarantineReason, SchemaFreshness } from '../runtime/mcp/types.ts';
+import type { RuntimeEventBus } from '../runtime/events/index.ts';
+import {
+  emitMcpConfigured,
+  emitMcpPolicyUpdated,
+  emitMcpSchemaQuarantineApproved,
+  emitMcpSchemaQuarantined,
+} from '../runtime/emitters/mcp.ts';
 
 export interface RegisteredTool {
   /** Fully-qualified tool name: mcp:<server>:<tool> */
@@ -25,6 +35,13 @@ export interface RegisteredTool {
 
 export class McpRegistry {
   private clients = new Map<string, McpClient>();
+  private permissions = new McpPermissionManager();
+  private freshness = new McpSchemaFreshnessTracker();
+  private runtimeBus: RuntimeEventBus | null = null;
+
+  setRuntimeBus(runtimeBus: RuntimeEventBus | null): void {
+    this.runtimeBus = runtimeBus;
+  }
 
   /**
    * connectAll — Load config from .goodvibes/mcp.json and connect to all servers.
@@ -98,6 +115,20 @@ export class McpRegistry {
     if (!client.isConnected) {
       throw new Error(`McpRegistry: server '${parsed.serverName}' is not connected`);
     }
+    if (this.freshness.isQuarantined(parsed.serverName)) {
+      const record = this.freshness.getRecord(parsed.serverName);
+      throw new Error(
+        `MCP call '${qualifiedName}' blocked: schema quarantined (${record?.quarantine?.reason ?? 'unknown'})${record?.quarantine?.detail ? ` — ${record.quarantine.detail}` : ''}`,
+      );
+    }
+
+    const permission = this.permissions.evaluateToolCall(parsed.serverName, parsed.toolName, args);
+    if (permission.verdict === 'deny') {
+      throw new Error(`MCP call '${qualifiedName}' denied: ${permission.reason}`);
+    }
+    if (permission.verdict === 'ask') {
+      throw new Error(`MCP call '${qualifiedName}' requires approval: ${permission.reason}`);
+    }
 
     // Pre:mcp:call hook
     const dispatcher = getHookDispatcher();
@@ -116,6 +147,7 @@ export class McpRegistry {
 
     try {
       const result = await client.callTool(parsed.toolName, args);
+      this.freshness.markFresh(parsed.serverName);
       // Post:mcp:call hook (fire-and-forget)
       const postEvent: HookEvent = {
         path: 'Post:mcp:call',
@@ -128,6 +160,7 @@ export class McpRegistry {
       dispatcher.fire(postEvent).catch((err: unknown) => { logger.debug('Post:mcp:call hook error', { error: String(err) }); });
       return result;
     } catch (err) {
+      this.freshness.markFailed(parsed.serverName, err instanceof Error ? err.message : String(err));
       // Fail:mcp:call hook (fire-and-forget)
       const failEvent: HookEvent = {
         path: 'Fail:mcp:call',
@@ -187,6 +220,72 @@ export class McpRegistry {
     }));
   }
 
+  listServerSecurity(): Array<{
+    name: string;
+    connected: boolean;
+    role: import('../runtime/mcp/types.ts').McpServerRole;
+    trustMode: import('../runtime/mcp/types.ts').McpTrustMode;
+    allowedPaths: string[];
+    allowedHosts: string[];
+    schemaFreshness: SchemaFreshness;
+    quarantineReason?: QuarantineReason;
+    quarantineDetail?: string;
+    quarantineApprovedBy?: string;
+  }> {
+    return this.listServers().map((server) => {
+      const permissions = this.permissions.getServerPermissions(server.name);
+      const freshnessRecord = this.freshness.getRecord(server.name);
+      return {
+        name: server.name,
+        connected: server.connected,
+        role: permissions?.profile.role ?? 'general',
+        trustMode: permissions?.profile.mode ?? 'ask-on-risk',
+        allowedPaths: permissions?.profile.allowedPaths ?? [],
+        allowedHosts: permissions?.profile.allowedHosts ?? [],
+        schemaFreshness: this.freshness.getFreshness(server.name),
+        quarantineReason: freshnessRecord?.quarantine?.reason,
+        quarantineDetail: freshnessRecord?.quarantine?.detail,
+        quarantineApprovedBy: freshnessRecord?.quarantine?.overrideAcknowledgedBy,
+      };
+    });
+  }
+
+  setServerTrustMode(serverName: string, mode: import('../runtime/mcp/types.ts').McpTrustMode): void {
+    this.permissions.setTrustMode(serverName, mode);
+    this._emitPolicyUpdate(serverName);
+  }
+
+  setServerRole(serverName: string, role: import('../runtime/mcp/types.ts').McpServerRole): void {
+    this.permissions.setServerRole(serverName, role);
+    this._emitPolicyUpdate(serverName);
+  }
+
+  listRecentSecurityDecisions(limit = 8): McpDecisionRecord[] {
+    return this.permissions.listRecentDecisions(limit);
+  }
+
+  quarantineSchema(serverName: string, reason: QuarantineReason, detail?: string): void {
+    this.freshness.markQuarantined(serverName, reason, detail);
+    if (this.runtimeBus) {
+      emitMcpSchemaQuarantined(this.runtimeBus, {
+        sessionId: 'mcp-registry',
+        traceId: `mcp-registry:${serverName}:schema-quarantined`,
+        source: 'mcp-registry',
+      }, { serverId: serverName, reason, ...(detail ? { detail } : {}) });
+    }
+  }
+
+  approveSchemaQuarantine(serverName: string, operatorId: string): void {
+    this.freshness.approveQuarantine(serverName, operatorId);
+    if (this.runtimeBus) {
+      emitMcpSchemaQuarantineApproved(this.runtimeBus, {
+        sessionId: 'mcp-registry',
+        traceId: `mcp-registry:${serverName}:schema-approved`,
+        source: 'mcp-registry',
+      }, { serverId: serverName, operatorId });
+    }
+  }
+
   // ---------------------------------------------------------------------------
   // Private helpers
   // ---------------------------------------------------------------------------
@@ -198,10 +297,32 @@ export class McpRegistry {
       return;
     }
     const client = new McpClient(serverConfig);
+    this.freshness.registerServer(name);
     try {
       await client.connect();
+      this.permissions.registerServer(name, 'standard', {
+        role: serverConfig.role ?? 'general',
+        mode: serverConfig.trustMode ?? 'ask-on-risk',
+        allowedPaths: serverConfig.allowedPaths ?? [],
+        allowedHosts: serverConfig.allowedHosts ?? [],
+      });
       this.clients.set(name, client);
+      this.freshness.markFresh(name);
       logger.info('McpRegistry: server connected', { name });
+      if (this.runtimeBus) {
+        emitMcpConfigured(this.runtimeBus, {
+          sessionId: 'mcp-registry',
+          traceId: `mcp-registry:${name}:configured`,
+          source: 'mcp-registry',
+        }, {
+          serverId: name,
+          transport: 'stdio',
+          role: serverConfig.role ?? 'general',
+          trustMode: serverConfig.trustMode ?? 'ask-on-risk',
+          allowedPaths: serverConfig.allowedPaths ?? [],
+          allowedHosts: serverConfig.allowedHosts ?? [],
+        });
+      }
       // Lifecycle:mcp:connected hook (fire-and-forget)
       const connectedEvent: HookEvent = {
         path: 'Lifecycle:mcp:connected',
@@ -213,6 +334,7 @@ export class McpRegistry {
       };
       getHookDispatcher().fire(connectedEvent).catch((err: unknown) => { logger.debug('Lifecycle:mcp:connected hook error', { error: String(err) }); });
     } catch (err) {
+      this.freshness.markFailed(name, err instanceof Error ? err.message : String(err));
       logger.error('McpRegistry: failed to connect server', { name, err: String(err) });
       // Don't register the client — it's not usable
     }
@@ -230,6 +352,23 @@ export class McpRegistry {
     const toolName = parts.slice(2).join(':');
     if (!serverName || !toolName) return null;
     return { serverName, toolName };
+  }
+
+  private _emitPolicyUpdate(serverName: string): void {
+    if (!this.runtimeBus) return;
+    const permissions = this.permissions.getServerPermissions(serverName);
+    if (!permissions) return;
+    emitMcpPolicyUpdated(this.runtimeBus, {
+      sessionId: 'mcp-registry',
+      traceId: `mcp-registry:${serverName}:policy`,
+      source: 'mcp-registry',
+    }, {
+      serverId: serverName,
+      role: permissions.profile.role,
+      trustMode: permissions.profile.mode,
+      allowedPaths: [...permissions.profile.allowedPaths],
+      allowedHosts: [...permissions.profile.allowedHosts],
+    });
   }
 }
 

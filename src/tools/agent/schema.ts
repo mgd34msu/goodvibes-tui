@@ -22,6 +22,9 @@ export const AGENT_TOOL_SCHEMA: ToolDefinition = {
     'cohort-status (JSON summary of all agents in a named cohort), ' +
     'cohort-report (markdown table report for all agents in a named cohort).' +
     ' Discovery: use mode=list to see all agents and their status, mode=templates to see available agent templates.',
+  sideEffects: ['agent', 'workflow', 'state'],
+  concurrency: 'serial',
+  supportsProgress: true,
   parameters: {
     type: 'object',
     required: ['mode'],
@@ -62,6 +65,52 @@ export const AGENT_TOOL_SCHEMA: ToolDefinition = {
         type: 'string',
         description: 'Additional context to provide to the spawned agent (mode: spawn).',
       },
+      successCriteria: {
+        type: 'array',
+        items: { type: 'string' },
+        description: 'Concrete success criteria the spawned agent must satisfy (mode: spawn).',
+      },
+      requiredEvidence: {
+        type: 'array',
+        items: { type: 'string' },
+        description: 'Evidence the spawned agent must return before completion (mode: spawn).',
+      },
+      writeScope: {
+        type: 'array',
+        items: { type: 'string' },
+        description: 'Expected file or path scope for writes owned by the spawned agent (mode: spawn).',
+      },
+      executionProtocol: {
+        type: 'string',
+        enum: ['direct', 'gather-plan-apply'],
+        description: 'Execution discipline the spawned agent should follow (mode: spawn). Default: gather-plan-apply.',
+      },
+      reviewMode: {
+        type: 'string',
+        enum: ['none', 'wrfc'],
+        description: 'Review loop requirement for the spawned agent (mode: spawn). Default: wrfc unless explicitly disabled.',
+      },
+      communicationLane: {
+        type: 'string',
+        enum: ['parent-only', 'parent-and-children', 'cohort', 'direct'],
+        description: 'Permitted communication lane for the spawned agent (mode: spawn). Default: parent-only for children, direct for root workers.',
+      },
+      parentAgentId: {
+        type: 'string',
+        description: 'Parent agent whose capability ceiling and communication lane this worker inherits (mode: spawn).',
+      },
+      orchestrationGraphId: {
+        type: 'string',
+        description: 'Explicit orchestration graph id to attach the spawned worker to (mode: spawn).',
+      },
+      orchestrationNodeId: {
+        type: 'string',
+        description: 'Explicit orchestration node id for the spawned worker (mode: spawn).',
+      },
+      parentNodeId: {
+        type: 'string',
+        description: 'Parent orchestration node id for the spawned worker (mode: spawn).',
+      },
       restrictTools: {
         type: 'boolean',
         description:
@@ -89,6 +138,16 @@ export const AGENT_TOOL_SCHEMA: ToolDefinition = {
             tools: { type: 'array', items: { type: 'string' }, description: 'Tool subset.' },
             restrictTools: { type: 'boolean', description: 'If true, use ONLY the specified tools (override mode). Default: false.' },
             context: { type: 'string', description: 'Additional context.' },
+            successCriteria: { type: 'array', items: { type: 'string' }, description: 'Concrete success criteria.' },
+            requiredEvidence: { type: 'array', items: { type: 'string' }, description: 'Evidence the spawned agent must return.' },
+            writeScope: { type: 'array', items: { type: 'string' }, description: 'Expected write ownership scope.' },
+            executionProtocol: { type: 'string', enum: ['direct', 'gather-plan-apply'], description: 'Execution discipline.' },
+            reviewMode: { type: 'string', enum: ['none', 'wrfc'], description: 'Review loop requirement.' },
+            communicationLane: { type: 'string', enum: ['parent-only', 'parent-and-children', 'cohort', 'direct'], description: 'Permitted communication lane.' },
+            parentAgentId: { type: 'string', description: 'Parent agent to inherit capability ceiling from.' },
+            orchestrationGraphId: { type: 'string', description: 'Graph id to attach the worker to.' },
+            orchestrationNodeId: { type: 'string', description: 'Explicit node id for the worker.' },
+            parentNodeId: { type: 'string', description: 'Parent node id for the worker.' },
             dangerously_disable_wrfc: { type: 'boolean', description: 'Skip WRFC review.' },
           },
         },
@@ -114,6 +173,11 @@ export const AGENT_TOOL_SCHEMA: ToolDefinition = {
         type: 'string',
         description: 'Message content to send to an agent (mode: message).',
       },
+      kind: {
+        type: 'string',
+        enum: ['directive', 'status', 'question', 'finding', 'review', 'handoff', 'escalation', 'completion'],
+        description: 'Structured communication kind for the message (mode: message). Default: directive.',
+      },
       // mode: wrfc-history
       wrfcId: {
         type: 'string',
@@ -134,6 +198,16 @@ export interface AgentInput {
   tools?: string[];
   restrictTools?: boolean;
   context?: string;
+  successCriteria?: string[];
+  requiredEvidence?: string[];
+  writeScope?: string[];
+  executionProtocol?: 'direct' | 'gather-plan-apply';
+  reviewMode?: 'none' | 'wrfc';
+  communicationLane?: 'parent-only' | 'parent-and-children' | 'cohort' | 'direct';
+  parentAgentId?: string;
+  orchestrationGraphId?: string;
+  orchestrationNodeId?: string;
+  parentNodeId?: string;
   dangerously_disable_wrfc?: boolean;
   // cohort grouping
   cohort?: string;
@@ -146,6 +220,16 @@ export interface AgentInput {
     tools?: string[];
     restrictTools?: boolean;
     context?: string;
+    successCriteria?: string[];
+    requiredEvidence?: string[];
+    writeScope?: string[];
+    executionProtocol?: 'direct' | 'gather-plan-apply';
+    reviewMode?: 'none' | 'wrfc';
+    communicationLane?: 'parent-only' | 'parent-and-children' | 'cohort' | 'direct';
+    parentAgentId?: string;
+    orchestrationGraphId?: string;
+    orchestrationNodeId?: string;
+    parentNodeId?: string;
     dangerously_disable_wrfc?: boolean;
   }>;
   // status / cancel / get / budget / plan / wait / message
@@ -154,6 +238,7 @@ export interface AgentInput {
   timeoutMs?: number;
   // message
   message?: string;
+  kind?: 'directive' | 'status' | 'question' | 'finding' | 'review' | 'handoff' | 'escalation' | 'completion';
   // wrfc-history
   wrfcId?: string;
 }

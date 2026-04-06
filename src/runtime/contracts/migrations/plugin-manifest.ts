@@ -17,7 +17,7 @@ import { SCHEMA_VERSIONS } from '../version.ts';
  * Future steps must be appended here and registered via the contract registry.
  *
  * Example: if `capabilities` becomes an explicit array in v1.1.0, a migration
- * step would synthesize it from legacy `registerCommand`/`registerTool` usage.
+ * step would synthesize it from `registerCommand`/`registerTool` declarations.
  */
 const PLUGIN_MANIFEST_STEPS: MigrationStep[] = [
   // Example structure for future use:

@@ -98,12 +98,164 @@ export interface McpSchemaRecord {
  */
 export type McpTrustLevel = 'trusted' | 'standard' | 'restricted' | 'blocked';
 
+/** Runtime trust mode used by the hardened MCP policy layer. */
+export type McpTrustMode = 'constrained' | 'ask-on-risk' | 'allow-all' | 'blocked';
+
+/** High-level server role used for coherence evaluation. */
+export type McpServerRole =
+  | 'general'
+  | 'docs'
+  | 'filesystem'
+  | 'git'
+  | 'database'
+  | 'browser'
+  | 'automation'
+  | 'ops'
+  | 'remote';
+
+/** Capability classes inferred for MCP tool calls. */
+export type McpCapabilityClass =
+  | 'metadata'
+  | 'read_fs'
+  | 'write_fs'
+  | 'exec'
+  | 'network_read'
+  | 'network_write'
+  | 'secret_read'
+  | 'spawn_agent'
+  | 'config_mutation'
+  | 'system_mutation'
+  | 'generic';
+
+export type McpCoherenceVerdict = 'allow' | 'ask' | 'deny';
+export type McpRiskLevel = 'low' | 'medium' | 'high' | 'critical';
+
+export interface McpTrustProfile {
+  serverName: string;
+  role: McpServerRole;
+  mode: McpTrustMode;
+  allowedPaths: string[];
+  allowedHosts: string[];
+  allowedCapabilities: McpCapabilityClass[];
+  notes?: string;
+  lastModifiedAt: number;
+}
+
+export interface McpCoherenceAssessment {
+  verdict: McpCoherenceVerdict;
+  riskLevel: McpRiskLevel;
+  capability: McpCapabilityClass;
+  incoherent: boolean;
+  reason: string;
+}
+
+export interface McpDecisionRecord {
+  serverName: string;
+  toolName: string;
+  verdict: McpCoherenceVerdict;
+  riskLevel: McpRiskLevel;
+  capability: McpCapabilityClass;
+  incoherent: boolean;
+  reason: string;
+  profileMode: McpTrustMode;
+  evaluatedAt: number;
+}
+
+/** Snapshot of a managed MCP server used for attack-path review. */
+export interface McpSecuritySnapshot {
+  /** Server name. */
+  name: string;
+  /** High-level role used for coherence evaluation. */
+  role: McpServerRole;
+  /** Runtime trust mode. */
+  trustMode: McpTrustMode;
+  /** Allowed filesystem scope. */
+  allowedPaths: readonly string[];
+  /** Allowed network host scope. */
+  allowedHosts: readonly string[];
+  /** Current schema freshness state. */
+  schemaFreshness: SchemaFreshness;
+  /** Active quarantine reason when schema execution is blocked. */
+  quarantineReason?: QuarantineReason;
+  /** Human-readable quarantine detail. */
+  quarantineDetail?: string;
+  /** Whether the server is currently connected. */
+  connected?: boolean;
+}
+
+/** Type of attack-path finding surfaced by the security review. */
+export type McpAttackPathFindingKind = 'server-posture' | 'recent-decision';
+
+/** Single MCP attack-path finding. */
+export interface McpAttackPathFinding {
+  /** Finding classification. */
+  kind: McpAttackPathFindingKind;
+  /** Related server name. */
+  serverName: string;
+  /** Human-readable route summary. */
+  route: string;
+  /** Allow/ask/deny posture inferred from the review. */
+  verdict: McpCoherenceVerdict;
+  /** Risk level associated with the route. */
+  severity: McpRiskLevel;
+  /** Whether the finding indicates incoherent or suspicious behavior. */
+  incoherent: boolean;
+  /** Human-readable explanation. */
+  reason: string;
+  /** Evidence strings used to derive the finding. */
+  evidence: readonly string[];
+  /** Optional tool name for recent decision findings. */
+  toolName?: string;
+  /** Optional capability class for recent decision findings. */
+  capability?: McpCapabilityClass;
+  /** Optional timestamp for recent decision findings. */
+  evaluatedAt?: number;
+}
+
+/** Aggregated attack-path review across all MCP servers and recent decisions. */
+export interface McpAttackPathReview {
+  /** Epoch ms when the review was generated. */
+  reviewedAt: number;
+  /** Total server count included in the review. */
+  totalServers: number;
+  /** Connected server count. */
+  connectedServers: number;
+  /** Servers operating in allow-all mode. */
+  allowAllServers: number;
+  /** Servers operating in ask-on-risk mode. */
+  askOnRiskServers: number;
+  /** Servers operating in constrained mode. */
+  constrainedServers: number;
+  /** Servers blocked entirely. */
+  blockedServers: number;
+  /** Servers with quarantined schemas. */
+  quarantinedServers: number;
+  /** Findings with incoherent posture or behavior. */
+  incoherentFindings: number;
+  /** Findings with high or critical severity. */
+  criticalFindings: number;
+  /** Ordered findings, most severe first. */
+  findings: readonly McpAttackPathFinding[];
+  /** Human-readable summary of the review. */
+  summary: string;
+}
+
 /** Permission verdict for a single tool invocation. */
 export interface McpPermission {
   /** Whether the tool call is permitted. */
   allowed: boolean;
   /** Human-readable explanation for the verdict. */
   reason: string;
+  /** Richer verdict used by the hardened trust layer. */
+  verdict?: McpCoherenceVerdict;
+  /** Risk associated with the evaluated tool call. */
+  riskLevel?: McpRiskLevel;
+  /** Inferred capability class. */
+  capability?: McpCapabilityClass;
+  /** Whether the request was flagged as incoherent for its server role. */
+  incoherent?: boolean;
+  /** Effective trust mode when the decision was made. */
+  profileMode?: McpTrustMode;
 }
 
 /** Per-tool permission override stored in a server's permission record. */
@@ -122,6 +274,8 @@ export interface McpServerPermissions {
   serverName: string;
   /** Overall trust level governing default tool access. */
   trustLevel: McpTrustLevel;
+  /** Runtime trust profile used by the coherence engine. */
+  profile: McpTrustProfile;
   /** Explicit per-tool overrides applied after the trust-level default. */
   toolOverrides: Map<string, McpToolPermission>;
   /** Epoch ms when permissions were last modified. */

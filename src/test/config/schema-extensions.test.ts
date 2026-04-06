@@ -19,7 +19,7 @@ function makeTmpDir(): string {
 // Suite
 // ---------------------------------------------------------------------------
 
-describe('Config schema extensions: danger + tools categories', () => {
+describe('Config schema extensions: orchestration, danger, and tools categories', () => {
   let tmpDir: string;
 
   beforeEach(() => {
@@ -37,36 +37,41 @@ describe('Config schema extensions: danger + tools categories', () => {
   // except for keys that project config explicitly controls (see 'get/set' tests).
   // -------------------------------------------------------------------------
 
-  describe('defaults: danger category', () => {
+  describe('defaults: orchestration category', () => {
+    test('orchestration category fields have correct types when no project config exists', () => {
+      const mgr = new ConfigManager({ workingDir: tmpDir });
+      expect(typeof mgr.get('orchestration.recursionEnabled')).toBe('boolean');
+      expect(typeof mgr.get('orchestration.maxActiveAgents')).toBe('number');
+      expect(typeof mgr.get('orchestration.maxDepth')).toBe('number');
+    });
+
     test('danger category fields have correct types when no project config exists', () => {
       const mgr = new ConfigManager({ workingDir: tmpDir });
-      expect(typeof mgr.get('danger.agentRecursion')).toBe('boolean');
-      expect(typeof mgr.get('danger.maxGlobalAgents')).toBe('number');
-      expect(typeof mgr.get('danger.maxRecursionDepth')).toBe('number');
       expect(typeof mgr.get('danger.daemon')).toBe('boolean');
       expect(typeof mgr.get('danger.httpListener')).toBe('boolean');
     });
 
+    test('DEFAULT_CONFIG.orchestration has correct default values', () => {
+      expect(DEFAULT_CONFIG.orchestration.recursionEnabled).toBe(false);
+      expect(DEFAULT_CONFIG.orchestration.maxActiveAgents).toBe(8);
+      expect(DEFAULT_CONFIG.orchestration.maxDepth).toBe(0);
+    });
+
     test('DEFAULT_CONFIG.danger has correct default values', () => {
-      // These verify what the defaults ARE — not what a running instance may have
-      // after global config merging
-      expect(DEFAULT_CONFIG.danger.agentRecursion).toBe(false);
-      expect(DEFAULT_CONFIG.danger.maxGlobalAgents).toBe(8);
-      expect(DEFAULT_CONFIG.danger.maxRecursionDepth).toBe(0);
       expect(DEFAULT_CONFIG.danger.daemon).toBe(false);
       expect(DEFAULT_CONFIG.danger.httpListener).toBe(false);
     });
 
-    test('project config overrides win for danger fields', () => {
+    test('project config overrides win for orchestration fields', () => {
       const projectSettingsDir = join(tmpDir, '.goodvibes', 'tui');
       mkdirSync(projectSettingsDir, { recursive: true });
       writeFileSync(
         join(projectSettingsDir, 'settings.json'),
-        JSON.stringify({ danger: { maxGlobalAgents: 4 } }, null, 2),
+        JSON.stringify({ orchestration: { maxActiveAgents: 4 } }, null, 2),
         'utf-8'
       );
       const mgr = new ConfigManager({ workingDir: tmpDir });
-      expect(mgr.get('danger.maxGlobalAgents')).toBe(4);
+      expect(mgr.get('orchestration.maxActiveAgents')).toBe(4);
     });
   });
 
@@ -105,30 +110,36 @@ describe('Config schema extensions: danger + tools categories', () => {
   // get / set round-trips
   // -------------------------------------------------------------------------
 
-  describe('get/set: danger category', () => {
-    test('set and get danger.agentRecursion', () => {
+  describe('get/set: orchestration category', () => {
+    test('set and get orchestration.recursionEnabled', () => {
       const mgr = new ConfigManager({ workingDir: tmpDir });
-      mgr.set('danger.agentRecursion', true);
-      expect(mgr.get('danger.agentRecursion')).toBe(true);
+      mgr.set('orchestration.recursionEnabled', true);
+      expect(mgr.get('orchestration.recursionEnabled')).toBe(true);
     });
 
-    test('set and get danger.maxGlobalAgents with valid value', () => {
+    test('set and get orchestration.maxActiveAgents with valid value', () => {
       const mgr = new ConfigManager({ workingDir: tmpDir });
-      mgr.set('danger.maxGlobalAgents', 12);
-      expect(mgr.get('danger.maxGlobalAgents')).toBe(12);
+      mgr.set('orchestration.maxActiveAgents', 12);
+      expect(mgr.get('orchestration.maxActiveAgents')).toBe(12);
     });
 
-    test('set and get danger.maxRecursionDepth to 1', () => {
+    test('set and get orchestration.maxDepth to 1', () => {
       const mgr = new ConfigManager({ workingDir: tmpDir });
-      mgr.set('danger.maxRecursionDepth', 1);
-      expect(mgr.get('danger.maxRecursionDepth')).toBe(1);
+      mgr.set('orchestration.maxDepth', 1);
+      expect(mgr.get('orchestration.maxDepth')).toBe(1);
     });
 
-    test('set and get danger.maxRecursionDepth back to 0', () => {
+    test('set and get orchestration.maxDepth to 3', () => {
       const mgr = new ConfigManager({ workingDir: tmpDir });
-      mgr.set('danger.maxRecursionDepth', 1);
-      mgr.set('danger.maxRecursionDepth', 0);
-      expect(mgr.get('danger.maxRecursionDepth')).toBe(0);
+      mgr.set('orchestration.maxDepth', 3);
+      expect(mgr.get('orchestration.maxDepth')).toBe(3);
+    });
+
+    test('set and get orchestration.maxDepth back to 0', () => {
+      const mgr = new ConfigManager({ workingDir: tmpDir });
+      mgr.set('orchestration.maxDepth', 1);
+      mgr.set('orchestration.maxDepth', 0);
+      expect(mgr.get('orchestration.maxDepth')).toBe(0);
     });
 
     test('set and get danger.daemon', () => {
@@ -180,42 +191,43 @@ describe('Config schema extensions: danger + tools categories', () => {
   // Validation: invalid values must throw
   // -------------------------------------------------------------------------
 
-  describe('validation: danger category', () => {
-    test('danger.maxRecursionDepth rejects value 2', () => {
+  describe('validation: orchestration category', () => {
+    test('orchestration.maxDepth accepts value 2', () => {
       const mgr = new ConfigManager({ workingDir: tmpDir });
-      expect(() => mgr.set('danger.maxRecursionDepth', 2 as never)).toThrow();
+      mgr.set('orchestration.maxDepth', 2);
+      expect(mgr.get('orchestration.maxDepth')).toBe(2);
     });
 
-    test('danger.maxRecursionDepth rejects negative value', () => {
+    test('orchestration.maxDepth rejects negative value', () => {
       const mgr = new ConfigManager({ workingDir: tmpDir });
-      expect(() => mgr.set('danger.maxRecursionDepth', -1 as never)).toThrow();
+      expect(() => mgr.set('orchestration.maxDepth', -1 as never)).toThrow();
     });
 
-    test('danger.maxRecursionDepth rejects value 3', () => {
+    test('orchestration.maxDepth rejects value 6', () => {
       const mgr = new ConfigManager({ workingDir: tmpDir });
-      expect(() => mgr.set('danger.maxRecursionDepth', 3 as never)).toThrow();
+      expect(() => mgr.set('orchestration.maxDepth', 6 as never)).toThrow();
     });
 
-    test('danger.maxGlobalAgents rejects 0 (below minimum)', () => {
+    test('orchestration.maxActiveAgents rejects 0 (below minimum)', () => {
       const mgr = new ConfigManager({ workingDir: tmpDir });
-      expect(() => mgr.set('danger.maxGlobalAgents', 0 as never)).toThrow();
+      expect(() => mgr.set('orchestration.maxActiveAgents', 0 as never)).toThrow();
     });
 
-    test('danger.maxGlobalAgents rejects 21 (above maximum)', () => {
+    test('orchestration.maxActiveAgents rejects 21 (above maximum)', () => {
       const mgr = new ConfigManager({ workingDir: tmpDir });
-      expect(() => mgr.set('danger.maxGlobalAgents', 21 as never)).toThrow();
+      expect(() => mgr.set('orchestration.maxActiveAgents', 21 as never)).toThrow();
     });
 
-    test('danger.maxGlobalAgents accepts boundary value 1', () => {
+    test('orchestration.maxActiveAgents accepts boundary value 1', () => {
       const mgr = new ConfigManager({ workingDir: tmpDir });
-      mgr.set('danger.maxGlobalAgents', 1);
-      expect(mgr.get('danger.maxGlobalAgents')).toBe(1);
+      mgr.set('orchestration.maxActiveAgents', 1);
+      expect(mgr.get('orchestration.maxActiveAgents')).toBe(1);
     });
 
-    test('danger.maxGlobalAgents accepts boundary value 20', () => {
+    test('orchestration.maxActiveAgents accepts boundary value 20', () => {
       const mgr = new ConfigManager({ workingDir: tmpDir });
-      mgr.set('danger.maxGlobalAgents', 20);
-      expect(mgr.get('danger.maxGlobalAgents')).toBe(20);
+      mgr.set('orchestration.maxActiveAgents', 20);
+      expect(mgr.get('orchestration.maxActiveAgents')).toBe(20);
     });
   });
 
@@ -248,12 +260,12 @@ describe('Config schema extensions: danger + tools categories', () => {
   // -------------------------------------------------------------------------
 
   describe('getAll includes new categories', () => {
-    test('getAll returns danger category with correct field types', () => {
+    test('getAll returns orchestration and danger categories with correct field types', () => {
       const mgr = new ConfigManager({ workingDir: tmpDir });
       const all = mgr.getAll();
-      expect(typeof all.danger.agentRecursion).toBe('boolean');
-      expect(typeof all.danger.maxGlobalAgents).toBe('number');
-      expect(typeof all.danger.maxRecursionDepth).toBe('number');
+      expect(typeof all.orchestration.recursionEnabled).toBe('boolean');
+      expect(typeof all.orchestration.maxActiveAgents).toBe('number');
+      expect(typeof all.orchestration.maxDepth).toBe('number');
       expect(typeof all.danger.daemon).toBe('boolean');
       expect(typeof all.danger.httpListener).toBe('boolean');
     });
@@ -270,14 +282,14 @@ describe('Config schema extensions: danger + tools categories', () => {
 
     test('getAll snapshot does not reflect subsequent mutations (deep clone)', () => {
       const mgr = new ConfigManager({ workingDir: tmpDir });
-      const valueBefore = mgr.get('danger.maxGlobalAgents');
+      const valueBefore = mgr.get('orchestration.maxActiveAgents');
       const snapshot = mgr.getAll();
       // Set to a value that differs from whatever was loaded (pick 1 if current is > 1, else pick 2)
       const newValue = valueBefore !== 1 ? 1 : 2;
-      mgr.set('danger.maxGlobalAgents', newValue);
+      mgr.set('orchestration.maxActiveAgents', newValue);
       // Snapshot must not reflect the mutation
-      expect(snapshot.danger.maxGlobalAgents).toBe(valueBefore);
-      expect(mgr.get('danger.maxGlobalAgents')).toBe(newValue);
+      expect(snapshot.orchestration.maxActiveAgents).toBe(valueBefore);
+      expect(mgr.get('orchestration.maxActiveAgents')).toBe(newValue);
     });
   });
 
@@ -286,11 +298,12 @@ describe('Config schema extensions: danger + tools categories', () => {
   // -------------------------------------------------------------------------
 
   describe('DEFAULT_CONFIG shape', () => {
-    test('DEFAULT_CONFIG.danger has all required keys', () => {
+    test('DEFAULT_CONFIG.orchestration and danger have all required keys', () => {
+      expect(DEFAULT_CONFIG.orchestration).toBeDefined();
+      expect(typeof DEFAULT_CONFIG.orchestration.recursionEnabled).toBe('boolean');
+      expect(typeof DEFAULT_CONFIG.orchestration.maxActiveAgents).toBe('number');
+      expect(typeof DEFAULT_CONFIG.orchestration.maxDepth).toBe('number');
       expect(DEFAULT_CONFIG.danger).toBeDefined();
-      expect(typeof DEFAULT_CONFIG.danger.agentRecursion).toBe('boolean');
-      expect(typeof DEFAULT_CONFIG.danger.maxGlobalAgents).toBe('number');
-      expect(typeof DEFAULT_CONFIG.danger.maxRecursionDepth).toBe('number');
       expect(typeof DEFAULT_CONFIG.danger.daemon).toBe('boolean');
       expect(typeof DEFAULT_CONFIG.danger.httpListener).toBe('boolean');
     });

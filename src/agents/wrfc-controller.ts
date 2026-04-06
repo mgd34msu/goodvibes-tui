@@ -1,6 +1,7 @@
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { WrfcWorkmap } from './wrfc-workmap.ts';
+import { AgentMessageBus } from './message-bus.ts';
 import { AgentManager, type AgentRecord } from '../tools/agent/index.ts';
 import { type CompletionReport, type ReviewerReport, parseCompletionReport } from './completion-report.ts';
 import type { WrfcChain, WrfcState, QualityGateResult, QueuedChain } from './wrfc-types.ts';
@@ -10,6 +11,11 @@ import { logger } from '../utils/logger.ts';
 import { planManager } from '../core/plan-manager-instance.ts';
 import type { AgentEvent, RuntimeEventBus } from '../runtime/events/index.ts';
 import {
+  emitOrchestrationGraphCreated,
+  emitOrchestrationNodeAdded,
+  emitOrchestrationNodeCompleted,
+  emitOrchestrationNodeFailed,
+  emitOrchestrationNodeStarted,
   emitWorkflowAutoCommitted,
   emitWorkflowCascadeAborted,
   emitWorkflowChainCreated,
@@ -141,6 +147,7 @@ const GATE_TIMEOUT_MS = 120_000;
 
 type WorkflowContext = { sessionId: string; traceId: string; source: string };
 type RuntimeEventSource = Extract<AgentEvent['type'], 'AGENT_COMPLETED' | 'AGENT_FAILED'>;
+type WrfcNodeRole = 'engineer' | 'reviewer' | 'fixer' | 'verifier';
 
 // ---------------------------------------------------------------------------
 // WrfcController
@@ -396,6 +403,18 @@ export class WrfcController {
     chain.reviewerAgentId = reviewerRecord.id;
     chain.allAgentIds.push(reviewerRecord.id);
     reviewerRecord.wrfcId = chain.id;
+    AgentMessageBus.getInstance().registerAgent({
+      agentId: reviewerRecord.id,
+      role: 'reviewer',
+      wrfcId: chain.id,
+    });
+    this.startOrchestrationNode(
+      chain,
+      `review:${chain.reviewCycles + 1}`,
+      'reviewer',
+      'Reviewer assessment',
+      reviewerRecord.id,
+    );
 
     logger.debug('WrfcController.startReview', {
       chainId: chain.id,
@@ -405,6 +424,10 @@ export class WrfcController {
 
   private async processReview(chain: WrfcChain, review: ReviewerReport): Promise<void> {
     const threshold = configManager.get('wrfc.scoreThreshold') as number;
+    this.completeCurrentNode(
+      chain,
+      `Score ${review.score}/10${review.passed ? ' passed' : ' needs fixes'}`,
+    );
 
     emitWorkflowReviewCompleted(this.runtimeBus, this.workflowContext(chain.id), {
       chainId: chain.id,
@@ -479,6 +502,18 @@ export class WrfcController {
     chain.fixerAgentId = fixerRecord.id;
     chain.allAgentIds.push(fixerRecord.id);
     fixerRecord.wrfcId = chain.id;
+    AgentMessageBus.getInstance().registerAgent({
+      agentId: fixerRecord.id,
+      role: 'fixer',
+      wrfcId: chain.id,
+    });
+    this.startOrchestrationNode(
+      chain,
+      `fix:${chain.fixAttempts}`,
+      'fixer',
+      `Fix attempt ${chain.fixAttempts}`,
+      fixerRecord.id,
+    );
 
     this.workmap.append({ ts: new Date().toISOString(), wrfcId: chain.id, event: 'fix_started', agentId: fixerRecord.id, attempt: chain.fixAttempts });
 
@@ -495,6 +530,7 @@ export class WrfcController {
 
   private async runGates(chain: WrfcChain): Promise<QualityGateResult[]> {
     this.transition(chain, 'gating');
+    this.startOrchestrationNode(chain, `gate:${chain.reviewCycles}:${chain.fixAttempts}`, 'verifier', 'Quality gates');
 
     const gates = this.getEnabledGates();
 
@@ -564,12 +600,21 @@ export class WrfcController {
     chain: WrfcChain,
     results: QualityGateResult[]
   ): Promise<void> {
+    if (!chain.currentNodeId?.includes(':gate:')) {
+      this.startOrchestrationNode(chain, `gate:${chain.reviewCycles}:${chain.fixAttempts}`, 'verifier', 'Quality gates');
+    }
     const allPassed = results.length === 0 || results.every((r) => r.passed);
     const autoCommit = configManager.get('wrfc.autoCommit') as boolean;
 
     for (const r of results) {
       this.workmap.append({ ts: new Date().toISOString(), wrfcId: chain.id, event: 'gate_result', gate: r.gate, passed: r.passed, gateOutput: r.output.slice(0, 200) });
     }
+    this.completeCurrentNode(
+      chain,
+      allPassed
+        ? 'All quality gates passed'
+        : `${results.filter((r) => !r.passed).length} quality gate(s) failed`,
+    );
 
       if (allPassed) {
         this.workmap.append({ ts: new Date().toISOString(), wrfcId: chain.id, event: 'chain_passed' });
@@ -769,6 +814,7 @@ export class WrfcController {
     }
 
     const wasActive = chain.state !== 'passed' && chain.state !== 'failed' && chain.state !== 'pending';
+    this.failCurrentNode(chain, reason);
     try {
       this.transition(chain, 'failed');
     } catch {
@@ -857,6 +903,67 @@ export class WrfcController {
     };
   }
 
+  private orchestrationGraphId(chainId: string): string {
+    return `wrfc:${chainId}`;
+  }
+
+  private startOrchestrationNode(
+    chain: WrfcChain,
+    suffix: string,
+    role: WrfcNodeRole,
+    title: string,
+    agentId?: string,
+  ): void {
+    const nodeId = `${chain.id}:${suffix}`;
+    const context = {
+      sessionId: this.sessionId,
+      traceId: `${this.sessionId}:orchestration:${chain.id}:${suffix}`,
+      source: 'wrfc-controller',
+      ...(agentId !== undefined ? { agentId } : {}),
+    };
+    emitOrchestrationNodeAdded(this.runtimeBus, context, {
+      graphId: this.orchestrationGraphId(chain.id),
+      nodeId,
+      title,
+      role,
+      ...(agentId !== undefined ? { agentId } : {}),
+    });
+    emitOrchestrationNodeStarted(this.runtimeBus, context, {
+      graphId: this.orchestrationGraphId(chain.id),
+      nodeId,
+      ...(agentId !== undefined ? { agentId } : {}),
+    });
+    chain.currentNodeId = nodeId;
+  }
+
+  private completeCurrentNode(chain: WrfcChain, summary?: string): void {
+    if (!chain.currentNodeId) return;
+    emitOrchestrationNodeCompleted(this.runtimeBus, {
+      sessionId: this.sessionId,
+      traceId: `${this.sessionId}:orchestration:${chain.currentNodeId}:complete`,
+      source: 'wrfc-controller',
+    }, {
+      graphId: this.orchestrationGraphId(chain.id),
+      nodeId: chain.currentNodeId,
+      ...(summary !== undefined ? { summary } : {}),
+    });
+    chain.currentNodeId = undefined;
+  }
+
+  private failCurrentNode(chain: WrfcChain, error: string): void {
+    if (!chain.currentNodeId) return;
+    emitOrchestrationNodeFailed(this.runtimeBus, {
+      sessionId: this.sessionId,
+      traceId: `${this.sessionId}:orchestration:${chain.currentNodeId}:fail`,
+      source: 'wrfc-controller',
+    }, {
+      graphId: this.orchestrationGraphId(chain.id),
+      nodeId: chain.currentNodeId,
+      error,
+    });
+    chain.currentNodeId = undefined;
+  }
+
   private createBaseChain(engineerRecord: AgentRecord): WrfcChain {
     const chain: WrfcChain = {
       id: this.generateWrfcId(),
@@ -871,7 +978,17 @@ export class WrfcController {
       createdAt: Date.now(),
     };
     this.chains.set(chain.id, chain);
+    emitOrchestrationGraphCreated(this.runtimeBus, this.workflowContext(chain.id), {
+      graphId: this.orchestrationGraphId(chain.id),
+      title: `WRFC: ${engineerRecord.task}`,
+      mode: 'review-loop',
+    });
     engineerRecord.wrfcId = chain.id;
+    AgentMessageBus.getInstance().registerAgent({
+      agentId: engineerRecord.id,
+      template: engineerRecord.template,
+      wrfcId: chain.id,
+    });
     this.attachPendingParentChain(chain, engineerRecord.id);
     return chain;
   }
@@ -890,6 +1007,13 @@ export class WrfcController {
   private startEngineeringChain(chain: WrfcChain, emitCreated: boolean): void {
     this.activeChainCount++;
     this.transition(chain, 'engineering');
+    this.startOrchestrationNode(
+      chain,
+      `engineer:${chain.fixAttempts}`,
+      'engineer',
+      'Engineer implementation',
+      chain.engineerAgentId,
+    );
     if (emitCreated) {
       this.emitChainCreated(chain.id, chain.task);
     }
@@ -902,6 +1026,9 @@ export class WrfcController {
       version: 1,
       archetype: template ?? 'engineer',
       summary: rawOutput.slice(0, 500) || '(no output)',
+      gatheredContext: [],
+      plannedActions: [],
+      appliedChanges: [],
       result: rawOutput,
     } as CompletionReport;
   }
@@ -937,6 +1064,7 @@ export class WrfcController {
   }
 
   private handleEngineerCompletion(chain: WrfcChain, agentId: string, report: CompletionReport): void {
+    this.completeCurrentNode(chain, report.summary);
     if (chain.state === 'engineering') {
       chain.engineerReport = report;
       this.workmap.append({ ts: new Date().toISOString(), wrfcId: chain.id, event: 'engineer_complete', agentId, task: chain.task });
@@ -957,10 +1085,11 @@ export class WrfcController {
       ``,
       `Instructions:`,
       `1. Read all files listed in the engineer report (filesCreated, filesModified).`,
-      `2. Verify the implementation meets all stated requirements.`,
-      `3. Score the implementation using the 10-dimension review rubric.`,
-      `4. The passing score threshold is ${threshold}/10.`,
-      `5. Return a structured ReviewerReport JSON block in your final response.`,
+      `2. Inspect the engineer's gatheredContext, plannedActions, and appliedChanges for discipline and coherence.`,
+      `3. Verify the implementation meets all stated requirements.`,
+      `4. Score the implementation using the 10-dimension review rubric.`,
+      `5. The passing score threshold is ${threshold}/10.`,
+      `6. Return a structured ReviewerReport JSON block in your final response.`,
       ``,
       `The ReviewerReport must include:`,
       `- version: 1`,
@@ -995,7 +1124,8 @@ export class WrfcController {
       `Instructions:`,
       `1. Address ALL issues listed above, prioritizing critical and major items.`,
       `2. Fix each issue completely — partial fixes will reduce your score.`,
-      `3. Return a structured EngineerReport JSON block in your final response.`,
+      `3. Re-run Gather, Plan, Apply explicitly before writing your final answer.`,
+      `4. Return a structured EngineerReport JSON block including gatheredContext, plannedActions, and appliedChanges in your final response.`,
     ].join('\n');
   }
 

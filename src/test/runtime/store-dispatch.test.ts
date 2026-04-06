@@ -216,10 +216,38 @@ describe('createDomainDispatch', () => {
       version: '1.0.0',
     });
     dispatch.dispatchMcpEvent({
+      type: 'MCP_CONFIGURED',
+      serverId: 'mcp-1',
+      transport: 'stdio',
+      role: 'docs',
+      trustMode: 'ask-on-risk',
+      allowedPaths: ['/workspace'],
+      allowedHosts: ['docs.example.com'],
+    });
+    dispatch.dispatchMcpEvent({
       type: 'MCP_CONNECTED',
       serverId: 'mcp-1',
       toolCount: 3,
       resourceCount: 1,
+    });
+    dispatch.dispatchMcpEvent({
+      type: 'MCP_POLICY_UPDATED',
+      serverId: 'mcp-1',
+      role: 'ops',
+      trustMode: 'allow-all',
+      allowedPaths: ['/srv/app'],
+      allowedHosts: ['ops.example.com'],
+    });
+    dispatch.dispatchMcpEvent({
+      type: 'MCP_SCHEMA_QUARANTINED',
+      serverId: 'mcp-1',
+      reason: 'operator_flagged',
+      detail: 'unexpected deploy surface',
+    });
+    dispatch.dispatchMcpEvent({
+      type: 'MCP_SCHEMA_QUARANTINE_APPROVED',
+      serverId: 'mcp-1',
+      operatorId: 'alice',
     });
     dispatch.dispatchTransportEvent({
       type: 'TRANSPORT_CONNECTED',
@@ -234,6 +262,134 @@ describe('createDomainDispatch', () => {
     expect(state.agents.agents.get('agent-1')?.latestOutput).toBe('hello world');
     expect(state.plugins.plugins.get('plugin-1')?.status).toBe('discovered');
     expect(state.mcp.connectedServerNames).toEqual(['mcp-1']);
+    expect(state.mcp.availableToolCount).toBe(3);
+    expect(state.mcp.servers.get('mcp-1')?.trustMode).toBe('allow-all');
+    expect(state.mcp.servers.get('mcp-1')?.role).toBe('ops');
+    expect(state.mcp.servers.get('mcp-1')?.allowedPaths).toEqual(['/srv/app']);
+    expect(state.mcp.servers.get('mcp-1')?.schemaFreshness).toBe('stale');
+    expect(state.mcp.servers.get('mcp-1')?.quarantineReason).toBe('operator_flagged');
+    expect(state.mcp.servers.get('mcp-1')?.quarantineApprovedBy).toBe('alice');
     expect(state.daemon.transportState).toBe('connected');
+  });
+
+  test('tracks orchestration graphs, node state, and recursion guard evidence', () => {
+    const store = createRuntimeStore();
+    const dispatch = createDomainDispatch(store);
+
+    dispatch.dispatchOrchestrationEvent({
+      type: 'ORCHESTRATION_GRAPH_CREATED',
+      graphId: 'graph-1',
+      title: 'Graph run',
+      mode: 'graph-execute',
+    });
+    dispatch.dispatchOrchestrationEvent({
+      type: 'ORCHESTRATION_NODE_ADDED',
+      graphId: 'graph-1',
+      nodeId: 'node-1',
+      title: 'Engineer node',
+      role: 'engineer',
+    });
+    dispatch.dispatchOrchestrationEvent({
+      type: 'ORCHESTRATION_NODE_ADDED',
+      graphId: 'graph-1',
+      nodeId: 'node-2',
+      title: 'Reviewer node',
+      role: 'reviewer',
+      dependsOn: ['node-1'],
+    });
+    dispatch.dispatchOrchestrationEvent({
+      type: 'ORCHESTRATION_NODE_READY',
+      graphId: 'graph-1',
+      nodeId: 'node-1',
+    });
+    dispatch.dispatchOrchestrationEvent({
+      type: 'ORCHESTRATION_NODE_STARTED',
+      graphId: 'graph-1',
+      nodeId: 'node-1',
+      agentId: 'agent-1',
+      taskId: 'task-1',
+    });
+    dispatch.dispatchOrchestrationEvent({
+      type: 'ORCHESTRATION_NODE_PROGRESS',
+      graphId: 'graph-1',
+      nodeId: 'node-1',
+      message: 'gathered files',
+    });
+    dispatch.dispatchOrchestrationEvent({
+      type: 'ORCHESTRATION_RECURSION_GUARD_TRIGGERED',
+      graphId: 'graph-1',
+      nodeId: 'node-1',
+      depth: 2,
+      activeAgents: 9,
+      reason: 'breadth limit',
+    });
+    dispatch.dispatchOrchestrationEvent({
+      type: 'ORCHESTRATION_NODE_COMPLETED',
+      graphId: 'graph-1',
+      nodeId: 'node-1',
+      summary: 'done',
+    });
+    dispatch.dispatchOrchestrationEvent({
+      type: 'ORCHESTRATION_NODE_BLOCKED',
+      graphId: 'graph-1',
+      nodeId: 'node-2',
+      reason: 'awaiting review input',
+    });
+
+    const state = store.getState();
+    const graph = state.orchestration.graphs.get('graph-1');
+    expect(graph?.status).toBe('blocked');
+    expect(graph?.nodes.get('node-1')?.status).toBe('completed');
+    expect(graph?.nodes.get('node-1')?.latestMessage).toBe('done');
+    expect(graph?.nodes.get('node-2')?.dependencyNodeIds).toEqual(['node-1']);
+    expect(graph?.lastRecursionGuard?.reason).toBe('breadth limit');
+    expect(state.orchestration.recursionGuardTrips).toBe(1);
+    expect(state.orchestration.activeGraphIds).toEqual(['graph-1']);
+  });
+
+  test('tracks structured communication history and blocked-route evidence', () => {
+    const store = createRuntimeStore();
+    const dispatch = createDomainDispatch(store);
+
+    dispatch.dispatchCommunicationEvent({
+      type: 'COMMUNICATION_SENT',
+      messageId: 'comm-1',
+      fromId: 'reviewer-1',
+      toId: 'engineer-1',
+      scope: 'direct',
+      kind: 'review',
+      content: 'Please address findings.',
+      fromRole: 'reviewer',
+      toRole: 'engineer',
+      wrfcId: 'wrfc-1',
+    });
+    dispatch.dispatchCommunicationEvent({
+      type: 'COMMUNICATION_DELIVERED',
+      messageId: 'comm-1',
+      fromId: 'reviewer-1',
+      toId: 'engineer-1',
+      scope: 'direct',
+      kind: 'review',
+    });
+    dispatch.dispatchCommunicationEvent({
+      type: 'COMMUNICATION_BLOCKED',
+      messageId: 'comm-2',
+      fromId: 'reviewer-1',
+      toId: '*',
+      scope: 'broadcast',
+      kind: 'status',
+      reason: 'broadcast reserved for orchestrator',
+      fromRole: 'reviewer',
+    });
+
+    const state = store.getState();
+    expect(state.communication.totalSent).toBe(1);
+    expect(state.communication.totalDelivered).toBe(1);
+    expect(state.communication.totalBlocked).toBe(1);
+    expect(state.communication.recentRecordIds).toEqual(['comm-2', 'comm-1']);
+    expect(state.communication.records.get('comm-1')?.status).toBe('delivered');
+    expect(state.communication.records.get('comm-1')?.kind).toBe('review');
+    expect(state.communication.records.get('comm-2')?.status).toBe('blocked');
+    expect(state.communication.records.get('comm-2')?.reason).toContain('broadcast');
   });
 });
