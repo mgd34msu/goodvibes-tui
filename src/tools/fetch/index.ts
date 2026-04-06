@@ -934,6 +934,10 @@ export const fetchTool: Tool = {
       + ' per-URL timeouts, caching, rate limiting, auth refresh, content-length limits,'
       + ' redirect tracking, timing metrics, token estimation, and verbosity control.',
     parameters: FETCH_TOOL_SCHEMA as unknown as Record<string, unknown>,
+    sideEffects: ['network'],
+    concurrency: 'parallel',
+    supportsProgress: true,
+    supportsStreamingOutput: true,
   },
 
   async execute(

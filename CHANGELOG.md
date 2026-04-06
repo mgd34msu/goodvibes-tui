@@ -4,6 +4,39 @@ All notable changes to GoodVibes TUI.
 
 ---
 
+## [0.14.2] — 2026-04-05
+
+### Roadmap Completion
+
+- Completed the full post-comparison roadmap implementation across hooks, MCP hardening, orchestration, operator surfaces, self-hosted remote, knowledge, and product breadth
+- Finished the remaining Claude-led breadth gaps in a GoodVibes-specific way instead of copying hosted-service assumptions
+- Ended the cycle with the codebase fully wired, type-clean, and release-gate clean
+
+### Hooks, MCP, And Security
+
+- Added canonical hook point contracts, broader lifecycle coverage, recent hook activity tracking, and managed hook workflow authoring surfaces
+- Added per-server MCP trust modes, role/coherence review, quarantine and approval flow, settings-gated `allow-all`, and programmatic attack-path analysis
+- Expanded proactive security tooling with policy lint, simulation, preflight review, richer permission prompt specialization, and a unified security control room
+
+### Orchestration, WRFC, And Communication
+
+- Added live orchestration graph state, bounded recursive spawn policy, graph/subtree cancellation, cockpit visibility, and richer task control surfaces
+- Integrated WRFC loops into orchestration graphs and added explicit Gather / Plan / Apply evidence to engineer completion reporting
+- Replaced the old lightweight agent bus assumptions with structured communication lanes, routing policy, runtime/store evidence, and operator-facing communication review
+
+### Remote, Knowledge, And Product Breadth
+
+- Added typed remote runner contracts, runner pools, portable remote replay/review artifacts, pool-aware dispatch, remote task sync, and broader `/remote` and `/tasks` command surfaces
+- Expanded durable knowledge with typed scopes, policy/MCP/plugin/incident capture, review queue workflows, handoff/export flows, and explainable task-time knowledge injection
+- Added broader setup, services, plugin, skill, incident, and security product operations including setup transfer bundles, curated ecosystem publish/install/update flows, incident export/capture, and auth-review/operator support flows
+
+### Verification
+
+- Full suite passes: `6404 pass, 0 fail`
+- Full typecheck passes: `bun x tsc --noEmit --pretty false`
+- No new production `any` typing was introduced
+- No roadmap items remain from this implementation cycle
+
 ## [0.14.1] — 2026-04-05
 
 ### Runtime Hardening And Evidence Model

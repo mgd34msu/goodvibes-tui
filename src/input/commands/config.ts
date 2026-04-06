@@ -1,6 +1,60 @@
 import type { CommandRegistry } from '../command-registry.ts';
 import { CONFIG_SCHEMA, type ConfigKey } from '../../config/index.ts';
 import { getProfileManager } from '../../profiles/manager.ts';
+import { dirname, join, resolve } from 'node:path';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+
+interface ConfigBundle {
+  readonly schemaVersion: 'v1';
+  readonly exportedAt: number;
+  readonly config: Record<string, unknown>;
+  readonly services?: Record<string, unknown>;
+  readonly ecosystem?: {
+    readonly plugins?: Record<string, unknown>;
+    readonly skills?: Record<string, unknown>;
+  };
+}
+
+function inspectConfigBundle(bundle: ConfigBundle): string {
+  const ecosystemPluginCount = bundle.ecosystem?.plugins && Array.isArray((bundle.ecosystem.plugins as { entries?: unknown[] }).entries)
+    ? ((bundle.ecosystem.plugins as { entries: unknown[] }).entries.length)
+    : 0;
+  const ecosystemSkillCount = bundle.ecosystem?.skills && Array.isArray((bundle.ecosystem.skills as { entries?: unknown[] }).entries)
+    ? ((bundle.ecosystem.skills as { entries: unknown[] }).entries.length)
+    : 0;
+  return [
+    'Config Bundle Review',
+    `  schemaVersion: ${bundle.schemaVersion}`,
+    `  exportedAt: ${new Date(bundle.exportedAt).toISOString()}`,
+    `  config keys: ${Object.keys(bundle.config ?? {}).length}`,
+    `  includes services: ${bundle.services ? 'yes' : 'no'}`,
+    `  curated plugins: ${ecosystemPluginCount}`,
+    `  curated skills: ${ecosystemSkillCount}`,
+  ].join('\n');
+}
+
+function readOptionalJson(path: string): Record<string, unknown> | undefined {
+  if (!existsSync(path)) return undefined;
+  try {
+    return JSON.parse(readFileSync(path, 'utf-8')) as Record<string, unknown>;
+  } catch {
+    return undefined;
+  }
+}
+
+function buildConfigSnapshot(
+  manager: { get: (key: ConfigKey) => unknown },
+): Record<string, unknown> {
+  const snapshot: Record<string, unknown> = {};
+  for (const entry of CONFIG_SCHEMA) {
+    try {
+      snapshot[entry.key] = structuredClone(manager.get(entry.key));
+    } catch {
+      // ignore unreadable keys
+    }
+  }
+  return snapshot;
+}
 
 function coerceValue(
   raw: string,
@@ -130,6 +184,92 @@ export function registerConfigCommand(registry: CommandRegistry): void {
         }
         if (changed === 0) lines.push('  (none)');
         ctx.print(lines.join('\n'));
+        return;
+      }
+
+      if (args[0] === 'bundle') {
+        const sub = args[1];
+        const bundlePath = args[2];
+        if (sub === 'export') {
+          if (!bundlePath) {
+            ctx.print('Usage: /config bundle export <path>');
+            return;
+          }
+          const targetPath = resolve(process.cwd(), bundlePath);
+          const servicesPath = join(process.cwd(), '.goodvibes', 'tui', 'services.json');
+          const pluginCatalogPath = join(process.cwd(), '.goodvibes', 'tui', 'ecosystem', 'plugins.json');
+          const skillCatalogPath = join(process.cwd(), '.goodvibes', 'tui', 'ecosystem', 'skills.json');
+          const bundle: ConfigBundle = {
+            schemaVersion: 'v1',
+            exportedAt: Date.now(),
+            config: buildConfigSnapshot(cm),
+            services: readOptionalJson(servicesPath),
+            ecosystem: {
+              plugins: readOptionalJson(pluginCatalogPath),
+              skills: readOptionalJson(skillCatalogPath),
+            },
+          };
+          mkdirSync(dirname(targetPath), { recursive: true });
+          writeFileSync(targetPath, JSON.stringify(bundle, null, 2) + '\n', 'utf-8');
+          ctx.print(`Config bundle exported to ${targetPath}`);
+          return;
+        }
+
+        if (sub === 'inspect') {
+          if (!bundlePath) {
+            ctx.print('Usage: /config bundle inspect <path>');
+            return;
+          }
+          const sourcePath = resolve(process.cwd(), bundlePath);
+          try {
+            const bundle = JSON.parse(readFileSync(sourcePath, 'utf-8')) as ConfigBundle;
+            ctx.print(`${inspectConfigBundle(bundle)}\n  path: ${sourcePath}`);
+          } catch (error) {
+            ctx.print(`Failed to read config bundle: ${(error as Error).message}`);
+          }
+          return;
+        }
+
+        if (sub === 'import') {
+          if (!bundlePath) {
+            ctx.print('Usage: /config bundle import <path>');
+            return;
+          }
+          const sourcePath = resolve(process.cwd(), bundlePath);
+          let bundle: ConfigBundle;
+          try {
+            bundle = JSON.parse(readFileSync(sourcePath, 'utf-8')) as ConfigBundle;
+          } catch (error) {
+            ctx.print(`Failed to read config bundle: ${(error as Error).message}`);
+            return;
+          }
+          for (const entry of CONFIG_SCHEMA) {
+            const value = (bundle.config as Record<string, unknown>)[entry.key];
+            if (value === undefined) continue;
+            cm.setDynamic(entry.key, value);
+            if (entry.key === 'provider.model') ctx.runtime.model = value as string;
+            if (entry.key === 'provider.provider') ctx.runtime.provider = value as string;
+            if (entry.key === 'provider.reasoningEffort') ctx.runtime.reasoningEffort = value as string;
+          }
+
+          const ecosystemDir = join(process.cwd(), '.goodvibes', 'tui', 'ecosystem');
+          if (bundle.services) {
+            mkdirSync(dirname(join(process.cwd(), '.goodvibes', 'tui', 'services.json')), { recursive: true });
+            writeFileSync(join(process.cwd(), '.goodvibes', 'tui', 'services.json'), JSON.stringify(bundle.services, null, 2) + '\n', 'utf-8');
+          }
+          if (bundle.ecosystem?.plugins) {
+            mkdirSync(ecosystemDir, { recursive: true });
+            writeFileSync(join(ecosystemDir, 'plugins.json'), JSON.stringify(bundle.ecosystem.plugins, null, 2) + '\n', 'utf-8');
+          }
+          if (bundle.ecosystem?.skills) {
+            mkdirSync(ecosystemDir, { recursive: true });
+            writeFileSync(join(ecosystemDir, 'skills.json'), JSON.stringify(bundle.ecosystem.skills, null, 2) + '\n', 'utf-8');
+          }
+          ctx.print(`Config bundle imported from ${sourcePath}`);
+          return;
+        }
+
+        ctx.print('Usage: /config bundle export <path> | inspect <path> | import <path>');
         return;
       }
 

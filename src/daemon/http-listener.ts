@@ -102,7 +102,7 @@ export class HttpListener {
       return;
     }
     if (this.authToken === null) {
-      logger.error('HttpListener: starting without auth token — requests require session-based authentication via UserAuth');
+      logger.info('HttpListener: starting with session-based authentication via UserAuth');
     }
     if (this.server !== null) {
       logger.info('HttpListener: already running');

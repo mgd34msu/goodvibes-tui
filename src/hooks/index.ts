@@ -1,5 +1,7 @@
 export { HookDispatcher } from './dispatcher.ts';
 export { ChainEngine } from './chain-engine.ts';
+export { HookActivityTracker, getHookActivityTracker } from './activity.ts';
+export { getHookWorkbench, _resetHookWorkbenchForTesting } from './workbench.ts';
 export type {
   HookPhase,
   HookCategory,
@@ -12,6 +14,14 @@ export type {
   HookChain,
   HooksConfig,
 } from './types.ts';
+export type { HookActivityRecord } from './activity.ts';
+export type { HookAuthoringAction, HookSimulationResult } from './workbench.ts';
+export type { HookExecutionMode, HookAuthority, HookPointContract } from './contracts.ts';
+export {
+  listHookPointContracts,
+  getHookPointContract,
+  parseHookPath,
+} from './contracts.ts';
 
 import { HookDispatcher } from './dispatcher.ts';
 

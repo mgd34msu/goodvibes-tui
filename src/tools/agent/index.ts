@@ -5,6 +5,7 @@ import { AgentMessageBus } from '../../agents/message-bus.ts';
 import { ArchetypeLoader } from '../../agents/archetypes.ts';
 import { WrfcController } from '../../agents/wrfc-controller.ts';
 import { AGENT_TEMPLATES, AgentManager } from './manager.ts';
+import { evaluateOrchestrationSpawn } from '../../runtime/orchestration/spawn-policy.ts';
 export type { AgentRecord } from './manager.ts';
 export { AGENT_TEMPLATES, AgentManager } from './manager.ts';
 
@@ -54,11 +55,34 @@ export const agentTool: Tool = {
           }
         }
 
-        const record = manager.spawn(input);
+        let record;
+        try {
+          record = manager.spawn(input);
+        } catch (error) {
+          return {
+            success: false,
+            error: error instanceof Error ? error.message : String(error),
+          };
+        }
 
         return {
           success: true,
-          output: JSON.stringify({ agentId: record.id, status: 'spawned', template: record.template, task: record.task, tools: record.tools }),
+          output: JSON.stringify({
+            agentId: record.id,
+            status: 'spawned',
+            template: record.template,
+            task: record.task,
+            tools: record.tools,
+            capabilityCeilingTools: record.capabilityCeilingTools ?? record.tools,
+            successCriteria: record.successCriteria ?? [],
+            requiredEvidence: record.requiredEvidence ?? [],
+            writeScope: record.writeScope ?? [],
+            executionProtocol: record.executionProtocol,
+            reviewMode: record.reviewMode,
+            communicationLane: record.communicationLane,
+            knowledgeInjections: record.knowledgeInjections ?? [],
+            parentAgentId: record.parentAgentId ?? null,
+          }),
         };
       }
 
@@ -179,6 +203,17 @@ export const agentTool: Tool = {
             toolCallCount: record.toolCallCount,
             progress: record.progress,
             error: record.error,
+            capabilityCeilingTools: record.capabilityCeilingTools ?? record.tools,
+            successCriteria: record.successCriteria ?? [],
+            requiredEvidence: record.requiredEvidence ?? [],
+            writeScope: record.writeScope ?? [],
+            executionProtocol: record.executionProtocol,
+            reviewMode: record.reviewMode,
+            communicationLane: record.communicationLane,
+            knowledgeInjections: record.knowledgeInjections ?? [],
+            parentAgentId: record.parentAgentId ?? null,
+            orchestrationGraphId: record.orchestrationGraphId ?? null,
+            orchestrationNodeId: record.orchestrationNodeId ?? null,
             recentMessages: recentMessages.map((m) => ({
               from: m.from,
               content: m.content,
@@ -239,8 +274,13 @@ export const agentTool: Tool = {
             template: record.template,
             templateDescription: templateDef?.description ?? null,
             tools: record.tools,
+            capabilityCeilingTools: record.capabilityCeilingTools ?? record.tools,
             model: record.model ?? null,
             provider: record.provider ?? null,
+            successCriteria: record.successCriteria ?? [],
+            requiredEvidence: record.requiredEvidence ?? [],
+            writeScope: record.writeScope ?? [],
+            parentAgentId: record.parentAgentId ?? null,
           }),
         };
       }
@@ -318,7 +358,15 @@ export const agentTool: Tool = {
         }
 
         const bus = AgentMessageBus.getInstance();
-        bus.send('orchestrator', input.agentId, input.message);
+        const sent = bus.send('orchestrator', input.agentId, input.message, {
+          kind: input.kind ?? 'directive',
+        });
+        if (!sent) {
+          return {
+            success: false,
+            error: `Communication to agent '${input.agentId}' was blocked by policy.`,
+          };
+        }
 
         return {
           success: true,
@@ -326,6 +374,7 @@ export const agentTool: Tool = {
             agentId: input.agentId,
             sent: true,
             content: input.message,
+            kind: input.kind ?? 'directive',
           }),
         };
       }
@@ -337,16 +386,19 @@ export const agentTool: Tool = {
         if (input.tasks.length > 20) {
           return { success: false, error: 'batch-spawn limited to 20 tasks per batch.' };
         }
-        // Respect maxGlobalAgents limit
-        const { configManager } = await import('../../config/index.ts');
-        const { DEFAULT_CONFIG } = await import('../../config/schema.ts');
-        const maxAgents = (configManager.get('danger.maxGlobalAgents') as number) || DEFAULT_CONFIG.danger.maxGlobalAgents;
         const currentCount = manager.list().filter(a => a.status === 'pending' || a.status === 'running').length;
-        const available = Math.max(0, maxAgents - currentCount);
-        if (available === 0) {
-          return { success: false, error: `Agent limit reached (${currentCount}/${maxAgents}). No capacity for batch-spawn.` };
+        const spawnDecision = evaluateOrchestrationSpawn({
+          mode: 'manual-batch',
+          activeAgents: currentCount,
+          requestedDepth: 0,
+        });
+        if (!spawnDecision.allowed || spawnDecision.availableSlots === 0) {
+          return {
+            success: false,
+            error: spawnDecision.reason ?? `Agent limit reached (${currentCount}/${spawnDecision.maxAgents}). No capacity for batch-spawn.`,
+          };
         }
-        const tasksToSpawn = input.tasks.slice(0, available);
+        const tasksToSpawn = input.tasks.slice(0, spawnDecision.availableSlots);
         const skipped = input.tasks.length - tasksToSpawn.length;
 
         const results: Array<{ id: string; task: string; template: string; cohort?: string }> = [];
@@ -374,13 +426,40 @@ export const agentTool: Tool = {
             tools: taskDef.tools ?? input.tools,
             restrictTools: taskDef.restrictTools ?? input.restrictTools,
             context: taskDef.context ?? input.context,
+            successCriteria: taskDef.successCriteria ?? input.successCriteria,
+            requiredEvidence: taskDef.requiredEvidence ?? input.requiredEvidence,
+            writeScope: taskDef.writeScope ?? input.writeScope,
+            executionProtocol: taskDef.executionProtocol ?? input.executionProtocol,
+            reviewMode: taskDef.reviewMode ?? input.reviewMode,
+            communicationLane: taskDef.communicationLane ?? input.communicationLane,
+            parentAgentId: taskDef.parentAgentId ?? input.parentAgentId,
+            orchestrationGraphId: taskDef.orchestrationGraphId ?? input.orchestrationGraphId,
+            orchestrationNodeId: taskDef.orchestrationNodeId,
+            parentNodeId: taskDef.parentNodeId ?? input.parentNodeId,
             dangerously_disable_wrfc: taskDef.dangerously_disable_wrfc ?? input.dangerously_disable_wrfc,
             cohort: input.cohort,
           };
-          const record = manager.spawn(spawnInput);
+          let record;
+          try {
+            record = manager.spawn(spawnInput);
+          } catch (error) {
+            return {
+              success: false,
+              error: error instanceof Error ? error.message : String(error),
+            };
+          }
           results.push({ id: record.id, task: taskDef.task.slice(0, 80), template: record.template, cohort: record.cohort });
         }
-        return { success: true, output: JSON.stringify({ agents: results, count: results.length, cohort: input.cohort, skipped, maxAgents }) };
+        return {
+          success: true,
+          output: JSON.stringify({
+            agents: results,
+            count: results.length,
+            cohort: input.cohort,
+            skipped,
+            maxAgents: spawnDecision.maxAgents,
+          }),
+        };
       }
 
       case 'cohort-status': {

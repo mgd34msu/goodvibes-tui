@@ -31,15 +31,17 @@ describe('MemoryStore', () => {
   describe('add', () => {
     it('creates a record with correct fields', async () => {
       const rec = await store.add({
-        cls: 'decision',
+        cls: 'fact',
         summary: 'Use SQLite for storage',
         tags: ['db', 'arch'],
       });
 
       expect(rec.id).toMatch(/^mem_/);
-      expect(rec.cls).toBe('decision');
+      expect(rec.cls).toBe('fact');
       expect(rec.summary).toBe('Use SQLite for storage');
       expect(rec.tags).toEqual(['db', 'arch']);
+      expect(rec.reviewState).toBe('fresh');
+      expect(rec.confidence).toBeGreaterThan(0);
       expect(rec.createdAt).toBeGreaterThan(0);
       expect(rec.updatedAt).toBe(rec.createdAt);
     });
@@ -67,10 +69,10 @@ describe('MemoryStore', () => {
 
   describe('search', () => {
     beforeEach(async () => {
-      await store.add({ cls: 'decision', summary: 'Use Bun runtime', tags: ['runtime'] });
-      await store.add({ cls: 'constraint', summary: 'No eval in production', tags: ['security'] });
-      await store.add({ cls: 'incident', summary: 'Memory leak in parser', tags: ['runtime', 'bug'] });
-      await store.add({ cls: 'pattern', summary: 'Retry with backoff', tags: ['resilience'] });
+      await store.add({ cls: 'decision', summary: 'Use Bun runtime', tags: ['runtime'], review: { state: 'reviewed', confidence: 90 } });
+      await store.add({ cls: 'constraint', summary: 'No eval in production', tags: ['security'], review: { state: 'fresh', confidence: 75 } });
+      await store.add({ cls: 'incident', summary: 'Memory leak in parser', tags: ['runtime', 'bug'], review: { state: 'stale', confidence: 40, staleReason: 'parser architecture changed' } });
+      await store.add({ cls: 'pattern', summary: 'Retry with backoff', tags: ['resilience'], review: { state: 'fresh', confidence: 65 } });
     });
 
     it('returns all records with no filter', () => {
@@ -82,6 +84,13 @@ describe('MemoryStore', () => {
       const results = store.search({ cls: 'decision' });
       expect(results.length).toBe(1);
       expect(results[0].cls).toBe('decision');
+    });
+
+    it('filters by scope', async () => {
+      await store.add({ scope: 'team', cls: 'runbook', summary: 'Team deploy checklist' });
+      const results = store.search({ scope: 'team' });
+      expect(results.length).toBe(1);
+      expect(results[0].scope).toBe('team');
     });
 
     it('filters by query (summary match via SQL LIKE)', () => {
@@ -126,6 +135,12 @@ describe('MemoryStore', () => {
       const results = store.search({ tags: ['nonexistent-tag'] });
       expect(results.length).toBe(0);
     });
+
+    it('orders higher confidence reviewed records first for search results', () => {
+      const results = store.search({});
+      expect(results[0].summary).toContain('Use Bun runtime');
+      expect(results[results.length - 1].reviewState).toBe('stale');
+    });
   });
 
   describe('update', () => {
@@ -138,6 +153,14 @@ describe('MemoryStore', () => {
       expect(updated!.updatedAt).toBeGreaterThanOrEqual(rec.updatedAt);
     });
 
+    it('updates scope for team handoff workflows', async () => {
+      const rec = await store.add({ scope: 'session', cls: 'decision', summary: 'Session-only knowledge' });
+      const updated = store.update(rec.id, { scope: 'team' });
+      expect(updated).not.toBeNull();
+      expect(updated!.scope).toBe('team');
+      expect(store.get(rec.id)?.scope).toBe('team');
+    });
+
     it('persists the update (round-trips through get)', async () => {
       const rec = await store.add({ cls: 'pattern', summary: 'Before' });
       store.update(rec.id, { summary: 'After' });
@@ -147,6 +170,84 @@ describe('MemoryStore', () => {
 
     it('returns null for unknown ID', () => {
       expect(store.update('bogus', { summary: 'x' })).toBeNull();
+    });
+  });
+
+  describe('review', () => {
+    it('updates review state, confidence, and reviewer fields', async () => {
+      const rec = await store.add({ cls: 'fact', summary: 'Knowledge record' });
+      const reviewed = store.review(rec.id, {
+        state: 'reviewed',
+        confidence: 88,
+        reviewedBy: 'operator',
+      });
+      expect(reviewed).not.toBeNull();
+      expect(reviewed!.reviewState).toBe('reviewed');
+      expect(reviewed!.confidence).toBe(88);
+      expect(reviewed!.reviewedBy).toBe('operator');
+      expect(reviewed!.reviewedAt).toBeGreaterThan(0);
+      expect(store.get(rec.id)?.reviewState).toBe('reviewed');
+    });
+
+    it('marks stale records with a reason', async () => {
+      const rec = await store.add({ cls: 'risk', summary: 'Risky fact' });
+      const reviewed = store.review(rec.id, {
+        state: 'stale',
+        staleReason: 'changed upstream source',
+      });
+      expect(reviewed).not.toBeNull();
+      expect(reviewed!.reviewState).toBe('stale');
+      expect(reviewed!.staleReason).toContain('changed upstream source');
+    });
+  });
+
+  describe('reviewQueue', () => {
+    it('prioritizes stale and low-confidence records for operator review', async () => {
+      const reviewed = await store.add({ cls: 'decision', summary: 'Reviewed', review: { state: 'reviewed', confidence: 90 } });
+      const stale = await store.add({ cls: 'incident', summary: 'Stale', review: { state: 'stale', confidence: 30 } });
+      const fresh = await store.add({ cls: 'fact', summary: 'Fresh', review: { state: 'fresh', confidence: 60 } });
+
+      const queue = store.reviewQueue(3);
+      expect(queue[0].id).toBe(stale.id);
+      expect(queue.some((record) => record.id === reviewed.id)).toBe(true);
+      expect(queue.some((record) => record.id === fresh.id)).toBe(true);
+    });
+  });
+
+  describe('bundle import/export', () => {
+    it('exports filtered bundles with records and links', async () => {
+      const a = await store.add({ scope: 'team', cls: 'decision', summary: 'Share the deployment path' });
+      const b = await store.add({ scope: 'team', cls: 'runbook', summary: 'Deploy checklist' });
+      await store.link(a.id, b.id, 'references');
+
+      const bundle = store.exportBundle({ scope: 'team' });
+      expect(bundle.scope).toBe('team');
+      expect(bundle.recordCount).toBe(2);
+      expect(bundle.linkCount).toBe(1);
+      expect(bundle.records.every((record) => record.scope === 'team')).toBe(true);
+    });
+
+    it('imports bundles while preserving ids and links', async () => {
+      const source = await store.add({ scope: 'team', cls: 'decision', summary: 'Source memory' });
+      const target = await store.add({ scope: 'team', cls: 'pattern', summary: 'Related pattern' });
+      await store.link(source.id, target.id, 'supports');
+      const bundle = store.exportBundle({ scope: 'team' });
+
+      const otherPath = tempDbPath();
+      const otherStore = new MemoryStore(otherPath);
+      await otherStore.init();
+
+      try {
+        const result = await otherStore.importBundle(bundle);
+        expect(result.importedRecords).toBe(2);
+        expect(result.skippedRecords).toBe(0);
+        expect(result.importedLinks).toBe(1);
+        expect(otherStore.get(source.id)?.scope).toBe('team');
+        expect(otherStore.linksFor(source.id)[0]?.relation).toBe('supports');
+      } finally {
+        otherStore.close();
+        if (existsSync(otherPath)) unlinkSync(otherPath);
+      }
     });
   });
 
@@ -235,6 +336,14 @@ describe('MemoryRegistry', () => {
     let called = 0;
     registry.subscribe(() => { called++; });
     registry.update(rec.id, { summary: 'B' });
+    expect(called).toBe(1);
+  });
+
+  it('notifies listeners on review', async () => {
+    const rec = await registry.add({ cls: 'pattern', summary: 'A' });
+    let called = 0;
+    registry.subscribe(() => { called++; });
+    registry.review(rec.id, { state: 'reviewed', confidence: 95, reviewedBy: 'operator' });
     expect(called).toBe(1);
   });
 

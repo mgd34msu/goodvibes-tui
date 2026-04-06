@@ -16,6 +16,9 @@ export const analyzeSchema: ToolDefinition = {
     'breaking (API breaking changes between refs), semantic_diff (LLM-powered diff summary), ' +
     'upgrade (npm registry version check), permissions (dangerous pattern scan), ' +
     'env_audit (.env file key comparison), test_find (locate test files for source files).',
+  sideEffects: ['read_fs', 'network'],
+  concurrency: 'parallel',
+  supportsProgress: true,
   parameters: {
     type: 'object',
     required: ['mode'],

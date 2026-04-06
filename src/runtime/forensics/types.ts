@@ -160,6 +160,10 @@ export interface PermissionEvidenceEntry {
   readonly durationMs?: number;
   readonly approved?: boolean;
   readonly source?: string;
+  readonly reasonCode?: string;
+  readonly classification?: string;
+  readonly riskLevel?: string;
+  readonly summary?: string;
 }
 
 export interface BudgetBreachEvidence {

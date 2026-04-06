@@ -9,6 +9,7 @@ import { SettingsModal, SETTINGS_CATEGORIES } from '../../input/settings-modal.t
 import { ConfigManager } from '../../config/manager.ts';
 import { createFeatureFlagManager } from '../../runtime/feature-flags/manager.ts';
 import type { FeatureFlagManager } from '../../runtime/feature-flags/manager.ts';
+import type { McpRegistry } from '../../mcp/registry.ts';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -29,12 +30,27 @@ describe('SettingsModal', () => {
   let cm: ConfigManager;
   let ffm: FeatureFlagManager;
   let modal: SettingsModal;
+  let mcpRegistry: McpRegistry;
 
   beforeEach(() => {
     tmpDir = makeTmpDir();
     cm = new ConfigManager({ workingDir: tmpDir });
     ffm = createFeatureFlagManager();
     modal = new SettingsModal();
+    mcpRegistry = {
+      listServerSecurity: () => [
+        {
+          name: 'docs-server',
+          connected: true,
+          role: 'docs',
+          trustMode: 'ask-on-risk',
+          allowedPaths: ['/workspace/docs'],
+          allowedHosts: [],
+          schemaFreshness: 'fresh',
+        },
+      ],
+      setServerTrustMode: () => {},
+    } as unknown as McpRegistry;
   });
 
   afterEach(() => {
@@ -46,7 +62,7 @@ describe('SettingsModal', () => {
   });
 
   test('open() activates modal and loads config groups', () => {
-    modal.open(cm, ffm);
+    modal.open(cm, ffm, mcpRegistry);
     expect(modal.active).toBe(true);
     expect(modal.categoryIndex).toBe(0);
     expect(modal.selectedIndex).toBe(0);
@@ -54,7 +70,7 @@ describe('SettingsModal', () => {
   });
 
   test('open() populates all categories', () => {
-    modal.open(cm, ffm);
+    modal.open(cm, ffm, mcpRegistry);
     for (const cat of SETTINGS_CATEGORIES) {
       if (cat === 'flags') {
         expect(Array.isArray(modal.flagEntries)).toBe(true);
@@ -67,25 +83,25 @@ describe('SettingsModal', () => {
   });
 
   test('currentCategory returns correct category', () => {
-    modal.open(cm, ffm);
+    modal.open(cm, ffm, mcpRegistry);
     expect(modal.currentCategory).toBe(SETTINGS_CATEGORIES[0]);
   });
 
   test('nextCategory cycles through categories', () => {
-    modal.open(cm, ffm);
+    modal.open(cm, ffm, mcpRegistry);
     const initial = modal.categoryIndex;
     modal.nextCategory();
     expect(modal.categoryIndex).toBe((initial + 1) % SETTINGS_CATEGORIES.length);
   });
 
   test('prevCategory cycles backwards', () => {
-    modal.open(cm, ffm);
+    modal.open(cm, ffm, mcpRegistry);
     modal.prevCategory();
     expect(modal.categoryIndex).toBe(SETTINGS_CATEGORIES.length - 1);
   });
 
   test('nextCategory resets selectedIndex to 0', () => {
-    modal.open(cm, ffm);
+    modal.open(cm, ffm, mcpRegistry);
     modal.moveDown();
     modal.moveDown();
     modal.nextCategory();
@@ -93,21 +109,21 @@ describe('SettingsModal', () => {
   });
 
   test('moveDown increments selectedIndex', () => {
-    modal.open(cm, ffm);
+    modal.open(cm, ffm, mcpRegistry);
     const before = modal.selectedIndex;
     modal.moveDown();
     expect(modal.selectedIndex).toBe(before + 1);
   });
 
   test('moveUp wraps around to last item', () => {
-    modal.open(cm, ffm);
+    modal.open(cm, ffm, mcpRegistry);
     modal.moveUp();
     const len = modal.currentItems.length;
     expect(modal.selectedIndex).toBe(len - 1);
   });
 
   test('getSelected returns the selected SettingEntry', () => {
-    modal.open(cm, ffm);
+    modal.open(cm, ffm, mcpRegistry);
     const entry = modal.getSelected();
     expect(entry).not.toBeNull();
     expect(entry!.setting).toBeDefined();
@@ -115,7 +131,7 @@ describe('SettingsModal', () => {
   });
 
   test('activateSelected toggles boolean setting', () => {
-    modal.open(cm, ffm);
+    modal.open(cm, ffm, mcpRegistry);
     // Navigate to a boolean setting (display.stream is first in display)
     const items = modal.currentItems;
     const boolIdx = items.findIndex(e => e.setting.type === 'boolean');
@@ -131,7 +147,7 @@ describe('SettingsModal', () => {
   });
 
   test('activateSelected enters editingMode for string setting', () => {
-    modal.open(cm, ffm);
+    modal.open(cm, ffm, mcpRegistry);
     // Navigate to a string setting (display.theme)
     const items = modal.currentItems;
     const strIdx = items.findIndex(e => e.setting.type === 'string');
@@ -144,7 +160,7 @@ describe('SettingsModal', () => {
   });
 
   test('editChar appends to editBuffer', () => {
-    modal.open(cm, ffm);
+    modal.open(cm, ffm, mcpRegistry);
     const items = modal.currentItems;
     const strIdx = items.findIndex(e => e.setting.type === 'string');
     for (let i = 0; i < strIdx; i++) modal.moveDown();
@@ -155,7 +171,7 @@ describe('SettingsModal', () => {
   });
 
   test('editBackspace removes last char', () => {
-    modal.open(cm, ffm);
+    modal.open(cm, ffm, mcpRegistry);
     const items = modal.currentItems;
     const strIdx = items.findIndex(e => e.setting.type === 'string');
     for (let i = 0; i < strIdx; i++) modal.moveDown();
@@ -166,7 +182,7 @@ describe('SettingsModal', () => {
   });
 
   test('cancelEdit exits editingMode without saving', () => {
-    modal.open(cm, ffm);
+    modal.open(cm, ffm, mcpRegistry);
     const items = modal.currentItems;
     const strIdx = items.findIndex(e => e.setting.type === 'string');
     for (let i = 0; i < strIdx; i++) modal.moveDown();
@@ -181,7 +197,7 @@ describe('SettingsModal', () => {
   });
 
   test('commitEdit saves string value', () => {
-    modal.open(cm, ffm);
+    modal.open(cm, ffm, mcpRegistry);
     // Go to provider category which has model (string)
     while (modal.currentCategory !== 'provider') modal.nextCategory();
     const items = modal.currentItems;
@@ -195,7 +211,7 @@ describe('SettingsModal', () => {
   });
 
   test('close() deactivates modal and clears editing state', () => {
-    modal.open(cm, ffm);
+    modal.open(cm, ffm, mcpRegistry);
     modal.editingMode = true;
     modal.editBuffer = 'partial';
     modal.close();
@@ -205,7 +221,7 @@ describe('SettingsModal', () => {
   });
 
   test('navigating categories does not change settings in other categories', () => {
-    modal.open(cm, ffm);
+    modal.open(cm, ffm, mcpRegistry);
     modal.nextCategory();
     const items = modal.currentItems;
     expect(items.length).toBeGreaterThan(0);
@@ -215,7 +231,7 @@ describe('SettingsModal', () => {
   });
 
   test('editingMode blocks category and direction navigation', () => {
-    modal.open(cm, ffm);
+    modal.open(cm, ffm, mcpRegistry);
     modal.editingMode = true;
     const catBefore = modal.categoryIndex;
     const idxBefore = modal.selectedIndex;
@@ -225,5 +241,44 @@ describe('SettingsModal', () => {
     modal.moveUp();
     expect(modal.categoryIndex).toBe(catBefore);
     expect(modal.selectedIndex).toBe(idxBefore);
+  });
+
+  test('mcp category loads registered servers', () => {
+    modal.open(cm, ffm, mcpRegistry);
+    while (modal.currentCategory !== 'mcp') modal.nextCategory();
+    expect(modal.mcpEntries.length).toBe(1);
+    expect(modal.getSelectedMcp()?.name).toBe('docs-server');
+  });
+
+  test('mcp trust mode requires explicit allow-all confirmation', () => {
+    let updatedMode: string | null = null;
+    mcpRegistry = {
+      listServerSecurity: () => [
+        {
+          name: 'docs-server',
+          connected: true,
+          role: 'docs',
+          trustMode: 'ask-on-risk',
+          allowedPaths: ['/workspace/docs'],
+          allowedHosts: [],
+          schemaFreshness: 'fresh',
+        },
+      ],
+      setServerTrustMode: (_name: string, mode: 'constrained' | 'ask-on-risk' | 'allow-all' | 'blocked') => {
+        updatedMode = mode;
+      },
+    } as unknown as McpRegistry;
+
+    modal.open(cm, ffm, mcpRegistry);
+    while (modal.currentCategory !== 'mcp') modal.nextCategory();
+    modal.activateSelected();
+    expect(modal.editingMode).toBe(true);
+    modal.editBuffer = 'allow-all';
+    expect(modal.commitEdit()).toBe(false);
+    expect(modal.mcpAllowAllConfirmationTarget).toBe('docs-server');
+    expect(updatedMode as string | null).toBeNull();
+    modal.editBuffer = 'ALLOW ALL docs-server';
+    expect(modal.commitEdit()).toBe(true);
+    expect(updatedMode as string | null).toBe('allow-all');
   });
 });

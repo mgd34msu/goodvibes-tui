@@ -15,7 +15,10 @@
 
 import type { SlashCommand, CommandContext } from '../command-registry.ts';
 import {
+  buildPolicyPreflightReview,
   createPermissionSimulator,
+  lintPolicyConfig,
+  runPolicySimulationScenarios,
 } from '../../runtime/permissions/index.ts';
 import { DivergenceDashboard } from '../../runtime/permissions/divergence-dashboard.ts';
 import { getPolicyRuntimeState } from '../../runtime/permissions/policy-runtime.ts';
@@ -183,9 +186,11 @@ async function handleSimulate(
   // Immediately take a baseline divergence snapshot
   const report = simulator.getDivergenceReport();
   const gateResult = dashboard.checkEnforceGate();
+  const scenarioSummary = runPolicySimulationScenarios(simulator);
 
   // Attach the simulation report (transitions candidate to 'promoting' state)
   registry.attachSimulationReport(report, gateResult);
+  policyState.recordSimulationSummary(scenarioSummary);
 
   const candidate2 = registry.getCandidate();
   policyState.notify();
@@ -193,6 +198,11 @@ async function handleSimulate(
     `[policy] Baseline divergence: ${fmtRate(report.overall.divergenceRate)} ` +
     `(${report.overall.total} divergences / ${report.overall.totalEvaluations} evaluations). ` +
     `Gate: ${gateResult.status}.`,
+  );
+  context.print(
+    `[policy] Scenario run: ${scenarioSummary.totalScenarios} samples, ` +
+    `${scenarioSummary.divergentScenarios} diverged, ` +
+    `${scenarioSummary.allowedByActual}/${scenarioSummary.allowedBySimulated} allowed (actual/candidate).`,
   );
 
   if (candidate2) {
@@ -278,6 +288,69 @@ async function handleDiff(
         );
       }
     }
+  }
+}
+
+async function handleLint(
+  _args: string[],
+  context: CommandContext,
+): Promise<void> {
+  const registry = getRegistry(context);
+  const current = registry.getCurrent();
+  const candidate = registry.getCandidate();
+
+  if (!current && !candidate) {
+    context.print('[policy] No policy bundles loaded. Use `/policy load` to begin.');
+    return;
+  }
+
+  const findings = [
+    ...(current ? lintPolicyConfig({ mode: 'custom', rules: current.rules }).map((finding) => ({ scope: 'current', ...finding })) : []),
+    ...(candidate ? lintPolicyConfig({ mode: 'custom', rules: candidate.rules }).map((finding) => ({ scope: 'candidate', ...finding })) : []),
+  ];
+
+  if (findings.length === 0) {
+    context.print('[policy] No lint findings for the active or candidate bundles.');
+    return;
+  }
+
+  context.print(`[policy] Lint findings (${findings.length}):`);
+  for (const finding of findings) {
+    context.print(`  [${finding.scope}] ${finding.severity.toUpperCase()} ${finding.ruleId ? `${finding.ruleId}: ` : ''}${finding.message}`);
+  }
+}
+
+async function handlePreflight(
+  _args: string[],
+  context: CommandContext,
+): Promise<void> {
+  const registry = getRegistry(context);
+  const policyState = getPolicyState();
+  const current = registry.getCurrent();
+  const candidate = registry.getCandidate();
+  const lintFindings = [
+    ...(current ? lintPolicyConfig({ mode: 'custom', rules: current.rules }) : []),
+    ...(candidate ? lintPolicyConfig({ mode: 'custom', rules: candidate.rules }) : []),
+  ];
+  const review = buildPolicyPreflightReview({
+    config: context.config,
+    lintFindings,
+    mcpServers: context.mcpRegistry.listServerSecurity().map((server) => ({
+      serverName: server.name,
+      trustMode: server.trustMode,
+      role: server.role,
+      allowedPaths: server.allowedPaths,
+      allowedHosts: server.allowedHosts,
+    })),
+  });
+
+  policyState.recordPreflightReview(review);
+  context.print(`[policy] Preflight review: ${review.status.toUpperCase()} (${review.issueCount} issue${review.issueCount === 1 ? '' : 's'})`);
+  context.print(`[policy] ${review.summary}`);
+  for (const issue of review.issues.slice(0, 8)) {
+    const subject = issue.serverName ? ` ${issue.serverName}` : '';
+    const detail = issue.detail ? ` — ${issue.detail}` : '';
+    context.print(`  [${issue.severity.toUpperCase()}] ${issue.source}${subject}: ${issue.message}${detail}`);
   }
 }
 
@@ -407,7 +480,7 @@ export const policyCommand: SlashCommand = {
   aliases: ['pol'],
   description: 'Open the policy panel or manage versioned policy bundles (load, simulate, diff, promote, rollback).',
   usage: '<subcommand> [args]',
-  argsHint: 'load|simulate|diff|promote|rollback|status',
+  argsHint: 'load|simulate|diff|lint|preflight|promote|rollback|status',
   handler: async (args: string[], context: CommandContext): Promise<void> => {
     const [sub, ...rest] = args;
 
@@ -432,6 +505,15 @@ export const policyCommand: SlashCommand = {
         await handleDiff(rest, context);
         break;
 
+      case 'lint':
+        await handleLint(rest, context);
+        break;
+
+      case 'preflight':
+      case 'pf':
+        await handlePreflight(rest, context);
+        break;
+
       case 'promote':
         await handlePromote(rest, context);
         break;
@@ -453,6 +535,8 @@ export const policyCommand: SlashCommand = {
           '  load <bundle-id> [rule-count]  — Load a candidate bundle',
           '  simulate [mode]               — Run simulation (silent|warn|enforce)',
           '  diff                          — Show rule diff (current vs candidate)',
+          '  lint                          — Lint active and candidate bundles',
+          '  preflight                     — Review proactive policy and MCP risk state',
           '  promote [--force]             — Promote candidate to enforcement',
           '  rollback                      — Restore the previous active bundle',
           '  status                        — Show current policy state',

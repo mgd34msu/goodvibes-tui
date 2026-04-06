@@ -11,6 +11,8 @@ import type { ToolEvent } from './tools.ts';
 import type { TaskEvent } from './tasks.ts';
 import type { AgentEvent } from './agents.ts';
 import type { WorkflowEvent } from './workflows.ts';
+import type { OrchestrationEvent } from './orchestration.ts';
+import type { CommunicationEvent } from './communication.ts';
 import type { PlannerEvent } from './planner.ts';
 import type { PermissionEvent } from './permissions.ts';
 import type { PluginEvent } from './plugins.ts';
@@ -31,6 +33,8 @@ export type AnyRuntimeEvent =
   | TaskEvent
   | AgentEvent
   | WorkflowEvent
+  | OrchestrationEvent
+  | CommunicationEvent
   | PlannerEvent
   | PermissionEvent
   | PluginEvent
@@ -67,6 +71,8 @@ export type RuntimeEventDomain =
   | 'tasks'
   | 'agents'
   | 'workflows'
+  | 'orchestration'
+  | 'communication'
   | 'planner'
   | 'permissions'
   | 'plugins'
@@ -87,6 +93,8 @@ export type DomainEventMap = {
   tasks: TaskEvent;
   agents: AgentEvent;
   workflows: WorkflowEvent;
+  orchestration: OrchestrationEvent;
+  communication: CommunicationEvent;
   planner: PlannerEvent;
   permissions: PermissionEvent;
   plugins: PluginEvent;

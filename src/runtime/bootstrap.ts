@@ -13,18 +13,21 @@ import { ConversationManager } from '../core/conversation.ts';
 import { Orchestrator } from '../core/orchestrator.ts';
 import { SelectionManager } from '../input/selection.ts';
 import { configManager, getConfiguredSystemPrompt, getWorkingDirectory } from '../config/index.ts';
+import { getServiceRegistry } from '../config/service-registry.ts';
 import { providerRegistry } from '../providers/registry.ts';
 import { ToolRegistry } from '../tools/registry.ts';
 import { registerAllTools } from '../tools/index.ts';
 import { agentOrchestrator } from '../agents/orchestrator.ts';
+import { AgentMessageBus } from '../agents/message-bus.ts';
 import { PermissionManager } from '../permissions/manager.ts';
 import { AcpManager } from '../acp/manager.ts';
-import { getHookDispatcher } from '../hooks/index.ts';
+import { getHookDispatcher, getHookWorkbench } from '../hooks/index.ts';
 import { CommandRegistry } from '../input/command-registry.ts';
 import type { CommandContext } from '../input/command-registry.ts';
 import { AgentManager } from '../tools/agent/index.ts';
 import { WrfcController } from '../agents/wrfc-controller.ts';
 import { registerBuiltinCommands } from '../input/commands.ts';
+import { Notifier } from '../integrations/notifier.ts';
 import { WebhookNotifier, setWebhookNotifier } from '../integrations/webhooks.ts';
 import { InputHistory } from '../input/input-history.ts';
 import { loadSystemPrompt as _loadSystemPrompt } from '../utils/prompt-loader.ts';
@@ -53,8 +56,10 @@ import { createFeatureFlagManager, FeatureFlagManager } from './feature-flags/in
 import type { AgentEvent, OpsEvent, ProviderEvent, WorkflowEvent } from './events/index.ts';
 import { RuntimeEventBus } from './events/index.ts';
 import { createRuntimeStore, createDomainDispatch } from './store/index.ts';
+import type { IntegrationRecord } from './store/domains/integrations.ts';
 import { createTaskManager } from './tasks/index.ts';
 import { OpsControlPlane } from './ops/control-plane.ts';
+import { AcpTaskAdapter } from './tasks/adapters/acp-adapter.ts';
 import { ForensicsCollector, ForensicsRegistry } from './forensics/index.ts';
 import { setOpsRuntimeContext } from './ops/runtime-context.ts';
 import { getPolicyRuntimeState } from './permissions/policy-runtime.ts';
@@ -70,6 +75,8 @@ import {
 } from './session-persistence.ts';
 import { createBootstrapCommandContext } from './bootstrap-command-context.ts';
 import { scheduleMcpAutodiscovery, startBackgroundProviderRegistration } from './bootstrap-background.ts';
+import { startExternalServices } from './bootstrap-services.ts';
+import { getTokenAuditor } from '../security/token-audit.ts';
 
 // ── Internal helpers ──────────────────────────────────────────────────────
 
@@ -77,6 +84,36 @@ import { scheduleMcpAutodiscovery, startBackgroundProviderRegistration } from '.
 function loadSystemPrompt(): string {
   return _loadSystemPrompt(
     () => configManager.get('provider.systemPromptFile') as string | undefined,
+  );
+}
+
+async function syncConfiguredServices(
+  syncIntegration: (record: IntegrationRecord, source?: string) => void,
+): Promise<void> {
+  const registry = getServiceRegistry();
+  const services = registry.getAll();
+  await Promise.all(
+    Object.entries(services).map(async ([id, config]) => {
+      const inspection = await registry.inspect(id);
+      if (!inspection) return;
+      syncIntegration({
+        id,
+        displayName: config.name || id,
+        category: 'custom',
+        status: inspection.hasPrimaryCredential ? 'healthy' : 'unconfigured',
+        enabled: true,
+        successCount: 0,
+        errorCount: 0,
+        meta: {
+          authType: config.authType,
+          baseUrl: config.baseUrl ?? null,
+          hasPrimaryCredential: inspection.hasPrimaryCredential,
+          hasWebhookUrl: inspection.hasWebhookUrl,
+          hasSigningSecret: inspection.hasSigningSecret,
+          hasPublicKey: inspection.hasPublicKey,
+        },
+      }, 'bootstrap.services');
+    }),
   );
 }
 
@@ -213,6 +250,7 @@ export async function bootstrapRuntime(
   const forensicsRegistry = new ForensicsRegistry();
   const forensicsCollector = new ForensicsCollector(runtimeBus, forensicsRegistry);
   const policyRuntimeState = getPolicyRuntimeState();
+  const tokenAuditor = getTokenAuditor();
   setOpsRuntimeContext({
     runtimeBus,
     store,
@@ -222,6 +260,7 @@ export async function bootstrapRuntime(
 
   setSyntheticRuntimeBus(runtimeBus);
   setPlanRuntimeBus(runtimeBus);
+  AgentMessageBus.getInstance().setRuntimeBus(runtimeBus);
 
   const conversation = new ConversationManager(() => {
     const w = stdout.columns || 80;
@@ -264,6 +303,15 @@ export async function bootstrapRuntime(
   }));
   runtimeUnsubs.push(runtimeBus.onDomain('agents', (env) => {
     domainDispatch.dispatchAgentEvent(env.payload);
+  }));
+  runtimeUnsubs.push(runtimeBus.onDomain('orchestration', (env) => {
+    domainDispatch.dispatchOrchestrationEvent(env.payload);
+  }));
+  runtimeUnsubs.push(runtimeBus.onDomain('communication', (env) => {
+    domainDispatch.dispatchCommunicationEvent(env.payload);
+  }));
+  runtimeUnsubs.push(runtimeBus.onDomain('transport', (env) => {
+    domainDispatch.dispatchTransportEvent(env.payload);
   }));
 
   runtimeUnsubs.push(runtimeBus.on<Extract<WorkflowEvent, { type: 'WORKFLOW_CASCADE_ABORTED' }>>('WORKFLOW_CASCADE_ABORTED', ({ payload }) => {
@@ -431,10 +479,49 @@ export async function bootstrapRuntime(
     const webhookNotifier = WebhookNotifier.fromConfig(webhookUrls);
     webhookNotifier.attachToRuntimeBus(runtimeBus);
     setWebhookNotifier(webhookNotifier);
+    domainDispatch.syncIntegration({
+      id: 'webhooks',
+      displayName: 'Webhooks',
+      category: 'communication',
+      status: 'healthy',
+      enabled: true,
+      successCount: 0,
+      errorCount: 0,
+      meta: { urlCount: webhookUrls.length },
+    }, 'bootstrap.webhooks');
   }
+
+  const notifier = await Notifier.fromConfig();
+  const queueStatuses = notifier.getQueueStatus();
+  if (queueStatuses.length > 0) {
+    notifier.attachToRuntimeBus(runtimeBus);
+    for (const queueStatus of queueStatuses) {
+      domainDispatch.syncIntegration({
+        id: queueStatus.channel,
+        displayName: queueStatus.channel[0]!.toUpperCase() + queueStatus.channel.slice(1),
+        category: 'communication',
+        status: queueStatus.metrics.deadLettered > 0 ? 'degraded' : 'healthy',
+        enabled: true,
+        successCount: queueStatus.metrics.delivered,
+        errorCount: queueStatus.metrics.deadLettered,
+        ...(queueStatus.dlqEntries[0]?.deadAt ? { lastErrorAt: queueStatus.dlqEntries[0].deadAt } : {}),
+        ...(queueStatus.dlqEntries[0]?.finalError ? { lastError: queueStatus.dlqEntries[0].finalError } : {}),
+        meta: {
+          attempts: queueStatus.metrics.totalAttempts,
+          retrying: queueStatus.metrics.retrying,
+          deadLetters: queueStatus.metrics.deadLettered,
+          dlqSize: queueStatus.metrics.dlqSize,
+          sloEnforced: queueStatus.sloEnforced,
+        },
+      }, 'bootstrap.notifier');
+    }
+  }
+
+  await syncConfiguredServices(domainDispatch.syncIntegration);
 
   const permissionManager = new PermissionManager((request) => permissionPromptRef.requestPermission(request));
   const hookDispatcher = getHookDispatcher();
+  await getHookWorkbench().loadAndApplyManagedHooks();
 
   // ── Phase 5b: Runtime state object ───────────────────────────────────────
 
@@ -515,6 +602,97 @@ export async function bootstrapRuntime(
   runtimeUnsubs.push(runtimeBus.on<Extract<WorkflowEvent, { type: 'WORKFLOW_CHAIN_FAILED' }>>('WORKFLOW_CHAIN_FAILED', ({ payload }) => {
     fireHook('Lifecycle:workflow:failed', 'Lifecycle', 'workflow', 'failed', { chainId: payload.chainId, reason: payload.reason });
   }));
+  runtimeUnsubs.push(runtimeBus.on<Extract<WorkflowEvent, { type: 'WORKFLOW_REVIEW_COMPLETED' }>>('WORKFLOW_REVIEW_COMPLETED', ({ payload }) => {
+    fireHook('Lifecycle:workflow:reviewed', 'Lifecycle', 'workflow', 'reviewed', {
+      chainId: payload.chainId,
+      score: payload.score,
+      passed: payload.passed,
+    });
+  }));
+  runtimeUnsubs.push(runtimeBus.on<Extract<WorkflowEvent, { type: 'WORKFLOW_FIX_ATTEMPTED' }>>('WORKFLOW_FIX_ATTEMPTED', ({ payload }) => {
+    fireHook('Lifecycle:workflow:fix-attempted', 'Lifecycle', 'workflow', 'fix-attempted', {
+      chainId: payload.chainId,
+      attempt: payload.attempt,
+      maxAttempts: payload.maxAttempts,
+    });
+  }));
+  runtimeUnsubs.push(runtimeBus.on<Extract<WorkflowEvent, { type: 'WORKFLOW_GATE_RESULT' }>>('WORKFLOW_GATE_RESULT', ({ payload }) => {
+    fireHook('Lifecycle:workflow:gate-result', 'Lifecycle', 'workflow', 'gate-result', {
+      chainId: payload.chainId,
+      gate: payload.gate,
+      passed: payload.passed,
+    });
+  }));
+  runtimeUnsubs.push(runtimeBus.on<Extract<import('../runtime/events/orchestration.ts').OrchestrationEvent, { type: 'ORCHESTRATION_GRAPH_CREATED' }>>('ORCHESTRATION_GRAPH_CREATED', ({ payload }) => {
+    fireHook('Lifecycle:orchestration:graph-created', 'Lifecycle', 'orchestration', 'graph-created', {
+      graphId: payload.graphId,
+      title: payload.title,
+      mode: payload.mode,
+    });
+  }));
+  runtimeUnsubs.push(runtimeBus.on<Extract<import('../runtime/events/orchestration.ts').OrchestrationEvent, { type: 'ORCHESTRATION_NODE_STARTED' }>>('ORCHESTRATION_NODE_STARTED', ({ payload }) => {
+    fireHook('Lifecycle:orchestration:node-started', 'Lifecycle', 'orchestration', 'node-started', {
+      graphId: payload.graphId,
+      nodeId: payload.nodeId,
+      ...(payload.taskId !== undefined ? { taskId: payload.taskId } : {}),
+      ...(payload.agentId !== undefined ? { agentId: payload.agentId } : {}),
+    });
+  }));
+  runtimeUnsubs.push(runtimeBus.on<Extract<import('../runtime/events/orchestration.ts').OrchestrationEvent, { type: 'ORCHESTRATION_NODE_COMPLETED' }>>('ORCHESTRATION_NODE_COMPLETED', ({ payload }) => {
+    fireHook('Lifecycle:orchestration:node-completed', 'Lifecycle', 'orchestration', 'node-completed', {
+      graphId: payload.graphId,
+      nodeId: payload.nodeId,
+      ...(payload.summary !== undefined ? { summary: payload.summary } : {}),
+    });
+  }));
+  runtimeUnsubs.push(runtimeBus.on<Extract<import('../runtime/events/orchestration.ts').OrchestrationEvent, { type: 'ORCHESTRATION_NODE_FAILED' }>>('ORCHESTRATION_NODE_FAILED', ({ payload }) => {
+    fireHook('Lifecycle:orchestration:node-failed', 'Lifecycle', 'orchestration', 'node-failed', {
+      graphId: payload.graphId,
+      nodeId: payload.nodeId,
+      error: payload.error,
+    });
+  }));
+  runtimeUnsubs.push(runtimeBus.on<Extract<import('../runtime/events/orchestration.ts').OrchestrationEvent, { type: 'ORCHESTRATION_RECURSION_GUARD_TRIGGERED' }>>('ORCHESTRATION_RECURSION_GUARD_TRIGGERED', ({ payload }) => {
+    fireHook('Change:orchestration:recursion-guard', 'Change', 'orchestration', 'recursion-guard', {
+      graphId: payload.graphId,
+      ...(payload.nodeId !== undefined ? { nodeId: payload.nodeId } : {}),
+      depth: payload.depth,
+      activeAgents: payload.activeAgents,
+      reason: payload.reason,
+    });
+  }));
+  runtimeUnsubs.push(runtimeBus.on<Extract<import('../runtime/events/communication.ts').CommunicationEvent, { type: 'COMMUNICATION_SENT' }>>('COMMUNICATION_SENT', ({ payload }) => {
+    fireHook('Lifecycle:communication:sent', 'Lifecycle', 'communication', 'sent', {
+      messageId: payload.messageId,
+      fromId: payload.fromId,
+      toId: payload.toId,
+      scope: payload.scope,
+      kind: payload.kind,
+      ...(payload.fromRole !== undefined ? { fromRole: payload.fromRole } : {}),
+      ...(payload.toRole !== undefined ? { toRole: payload.toRole } : {}),
+    });
+  }));
+  runtimeUnsubs.push(runtimeBus.on<Extract<import('../runtime/events/communication.ts').CommunicationEvent, { type: 'COMMUNICATION_DELIVERED' }>>('COMMUNICATION_DELIVERED', ({ payload }) => {
+    fireHook('Lifecycle:communication:delivered', 'Lifecycle', 'communication', 'delivered', {
+      messageId: payload.messageId,
+      fromId: payload.fromId,
+      toId: payload.toId,
+      scope: payload.scope,
+      kind: payload.kind,
+    });
+  }));
+  runtimeUnsubs.push(runtimeBus.on<Extract<import('../runtime/events/communication.ts').CommunicationEvent, { type: 'COMMUNICATION_BLOCKED' }>>('COMMUNICATION_BLOCKED', ({ payload }) => {
+    fireHook('Change:communication:blocked', 'Change', 'communication', 'blocked', {
+      messageId: payload.messageId,
+      fromId: payload.fromId,
+      toId: payload.toId,
+      scope: payload.scope,
+      kind: payload.kind,
+      reason: payload.reason,
+      ...(payload.fromRole !== undefined ? { fromRole: payload.fromRole } : {}),
+      ...(payload.toRole !== undefined ? { toRole: payload.toRole } : {}),
+    });
+  }));
 
   runtimeUnsubs.push(runtimeBus.on<Extract<OpsEvent, { type: 'OPS_CONTEXT_WARNING' }>>('OPS_CONTEXT_WARNING', ({ payload: { usage, threshold } }) => {
     const specific = usage >= threshold ? 'exceeded' : 'warning';
@@ -551,6 +729,12 @@ export async function bootstrapRuntime(
   );
 
   const acpManager = new AcpManager((request) => permissionPromptRef.requestPermission(request), runtimeBus);
+  const acpTaskAdapter = new AcpTaskAdapter(store);
+  const ACP_TASK_SYNC_INTERVAL_MS = 1_000;
+  const acpTaskSyncInterval = setInterval(() => {
+    acpTaskAdapter.sync(acpManager);
+  }, ACP_TASK_SYNC_INTERVAL_MS);
+  bootstrapUnsubs.push(() => clearInterval(acpTaskSyncInterval));
   orchestrator.registerDelegateTool(acpManager);
 
   // ── Phase 7: MCP auto-connect + panel manager ─────────────────────────
@@ -568,6 +752,8 @@ export async function bootstrapRuntime(
     runtimeBus,
     forensicsRegistry,
     policyRuntimeState,
+    runtimeStore: store,
+    tokenAuditor,
   });
 
   // ── System message router ────────────────────────────────────────────────
@@ -581,6 +767,7 @@ export async function bootstrapRuntime(
     systemMessageRouter,
     requestRender,
   });
+  mcpRegistry.setRuntimeBus(runtimeBus);
 
   // ── Phase 8: Command registry + plugin init + CommandContext ───────────────
 
@@ -609,6 +796,7 @@ export async function bootstrapRuntime(
     mcpRegistry,
     forensicsRegistry,
     policyRuntimeState,
+    runtimeStore: store,
     loadSystemPrompt,
     activatePlan: (_planId, task) => {
       setTimeout(() => {
@@ -621,6 +809,12 @@ export async function bootstrapRuntime(
       compositor.resetDiff();
     },
   });
+
+  const externalServices = await startExternalServices(
+    configManager,
+    runtimeBus,
+    hookDispatcher,
+  );
 
   // ── Phase 9: Input handler ──────────────────────────────────────────────
   // Note: getViewportHeight and scroll are UI concerns; main.ts constructs these
@@ -718,6 +912,7 @@ export async function bootstrapRuntime(
       runtimeUnsubs.forEach((fn) => fn());
       runtimeUnsubs.length = 0;
       forensicsCollector.dispose();
+      await externalServices.stop();
       // Clear agent status interval via ref (consistent with agentStatusIntervalRef usage)
       if (agentStatusIntervalRef.value !== null) {
         clearInterval(agentStatusIntervalRef.value);
@@ -738,6 +933,8 @@ export async function bootstrapRuntime(
   // The store and task manager are created unconditionally so they reflect the
   // real runtime state (tasks registered before the flag check are visible).
   const opsTaskManager = createTaskManager(store, runtimeBus, userSessionId);
+  ctx.commandContext.taskManager = opsTaskManager;
+  ctx.commandContext.acpManager = acpManager;
   if (featureFlags.isEnabled('operator-control-plane')) {
     const opsControlPlane = new OpsControlPlane(opsTaskManager, runtimeBus, store, userSessionId);
     ctx.commandContext.opsControlPlane = opsControlPlane;

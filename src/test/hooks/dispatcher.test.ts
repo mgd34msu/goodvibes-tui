@@ -245,5 +245,19 @@ describe('HookDispatcher', () => {
       }));
       expect(result.additionalContext).toBe('fail-ctx');
     });
+
+    test('Post hook cannot force a deny decision through the contract layer', async () => {
+      dispatcher.register('Post:tool:*', {
+        match: 'Post:tool:*',
+        type: 'command',
+        command: 'echo \'{"ok":true,"decision":"deny","reason":"should-be-ignored"}\'',
+      });
+      const result = await dispatcher.fire(makeEvent({
+        path: 'Post:tool:read',
+        phase: 'Post',
+        specific: 'read',
+      }));
+      expect(result.decision).not.toBe('deny');
+    });
   });
 });

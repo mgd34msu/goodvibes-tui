@@ -53,6 +53,22 @@ export interface PluginStatus {
   quarantined: boolean;
 }
 
+export interface PluginManagerObserver {
+  subscribe(callback: () => void): () => void;
+  list(): PluginStatus[];
+  capabilities(name: string): {
+    ok: boolean;
+    error?: string;
+    requested: string[];
+    highRisk: string[];
+    safe: string[];
+    tier: PluginTrustTier;
+    blocked: string[];
+  } | null;
+  getTrustRecord(name: string): Readonly<PluginTrustRecord> | undefined;
+  getQuarantineRecord(name: string): Readonly<QuarantineRecord> | undefined;
+}
+
 const DEFAULT_STATE: PluginState = { enabled: {}, config: {}, trust: {}, quarantine: {} };
 
 /**
@@ -69,6 +85,7 @@ export class PluginManager {
   private readonly trustStore = new PluginTrustStore();
   /** Quarantine engine — manages plugin quarantine state. */
   private readonly quarantineEngine = new PluginQuarantineEngine();
+  private readonly subscribers = new Set<() => void>();
 
   private constructor() {}
 
@@ -107,6 +124,19 @@ export class PluginManager {
     });
   }
 
+  subscribe(callback: () => void): () => void {
+    this.subscribers.add(callback);
+    return () => this.subscribers.delete(callback);
+  }
+
+  getTrustRecord(name: string): Readonly<PluginTrustRecord> | undefined {
+    return this.trustStore.getRecord(name);
+  }
+
+  getQuarantineRecord(name: string): Readonly<QuarantineRecord> | undefined {
+    return this.quarantineEngine.getRecord(name);
+  }
+
   /**
    * trust — Set the trust tier for a plugin.
    *
@@ -138,6 +168,7 @@ export class PluginManager {
     this.state.trust[name] = record;
     this.saveState();
     logger.info(`[plugins] ${name}: trust tier set to '${tier}'`);
+    this.notifySubscribers();
     return { ok: true };
   }
 
@@ -167,6 +198,7 @@ export class PluginManager {
 
     this.state.trust[name] = result.record;
     this.saveState();
+    this.notifySubscribers();
     return { ok: true, fingerprint: result.record.signatureFingerprint };
   }
 
@@ -257,6 +289,7 @@ export class PluginManager {
     this.state.quarantine[name] = { ...record, revokedCapabilities: [...record.revokedCapabilities] };
     this.saveState();
     logger.warn(`[plugins] ${name}: quarantined — ${reason}`);
+    this.notifySubscribers();
     return { ok: true };
   }
 
@@ -274,6 +307,7 @@ export class PluginManager {
     }
     this.saveState();
     logger.info(`[plugins] ${name}: quarantine lifted`);
+    this.notifySubscribers();
     return { ok: true };
   }
 
@@ -295,6 +329,7 @@ export class PluginManager {
       const loaded = await loadPlugin(discovered, this.deps);
       if (loaded) {
         this.plugins.set(name, loaded);
+        this.notifySubscribers();
       } else {
         // Revert enable on load failure
         delete this.state.enabled[name];
@@ -320,6 +355,7 @@ export class PluginManager {
 
     delete this.state.enabled[name];
     this.saveState();
+    this.notifySubscribers();
     return { ok: true };
   }
 
@@ -355,7 +391,7 @@ export class PluginManager {
         }
       }
     }
-
+    this.notifySubscribers();
     return { reloaded, failed };
   }
 
@@ -381,6 +417,7 @@ export class PluginManager {
         this.plugins.set(d.manifest.name, loaded);
       }
     }
+    this.notifySubscribers();
   }
 
   private loadState(): void {
@@ -410,6 +447,18 @@ export class PluginManager {
       writeFileSync(PLUGINS_STATE_FILE, JSON.stringify(this.state, null, 2), 'utf-8');
     } catch (err) {
       logger.warn(`[plugins] Could not save state: ${String(err)}`);
+    }
+  }
+
+  private notifySubscribers(): void {
+    for (const callback of this.subscribers) {
+      try {
+        callback();
+      } catch (err) {
+        logger.debug('[plugins] subscriber callback failed', {
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
     }
   }
 

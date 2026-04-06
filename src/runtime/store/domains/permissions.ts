@@ -4,6 +4,7 @@
  */
 
 import type { PermissionCategory } from '../../../permissions/manager.ts';
+import type { PermissionRiskLevel } from '../../../permissions/types.ts';
 
 /** Permission evaluation modes (maps to PermissionsToolConfig). */
 export type PermissionMode =
@@ -29,6 +30,7 @@ export type PermissionDecisionOutcome = 'approved' | 'denied' | 'deferred';
 /** Source layer that determined the permission outcome. */
 export type PermissionSourceLayer =
   | 'config_policy'
+  | 'managed_policy'
   | 'runtime_mode'
   | 'session_override'
   | 'safety_check'
@@ -38,7 +40,10 @@ export type PermissionSourceLayer =
 export type PermissionDecisionReason =
   | 'config_allow'
   | 'config_deny'
+  | 'managed_policy_allow'
+  | 'managed_policy_deny'
   | 'mode_allow_all'
+  | 'mode_denied'
   | 'mode_plan_deny'
   | 'mode_background_restricted'
   | 'session_cached_approval'
@@ -65,6 +70,12 @@ export interface PermissionDecision {
   sourceLayer: PermissionSourceLayer;
   /** Whether the decision was persisted to session approvals. */
   persisted: boolean;
+  /** Semantic classification surfaced with the decision. */
+  classification?: string;
+  /** Risk level surfaced with the decision. */
+  riskLevel?: PermissionRiskLevel;
+  /** Human-readable summary for operators and the prompt UI. */
+  summary?: string;
   /** Epoch ms when the decision was emitted. */
   decidedAt: number;
 }

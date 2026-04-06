@@ -31,6 +31,9 @@ import type {
   McpPermission,
   SchemaFreshness,
   QuarantineReason,
+  McpTrustMode,
+  McpServerRole,
+  McpServerPermissions,
 } from './types.ts';
 import { DEFAULT_RECONNECT_CONFIG } from './types.ts';
 
@@ -165,6 +168,14 @@ export class McpLifecycleManager {
     this.permissions.setTrustLevel(serverName, level);
   }
 
+  setTrustMode(serverName: string, mode: McpTrustMode): void {
+    this.permissions.setTrustMode(serverName, mode);
+  }
+
+  setServerRole(serverName: string, role: McpServerRole): void {
+    this.permissions.setServerRole(serverName, role);
+  }
+
   /**
    * Explicitly allow a tool for a server.
    *
@@ -185,6 +196,14 @@ export class McpLifecycleManager {
    */
   denyTool(serverName: string, toolName: string, note?: string): void {
     this.permissions.denyTool(serverName, toolName, note);
+  }
+
+  getServerPermissions(serverName: string): McpServerPermissions | null {
+    return this.permissions.getServerPermissions(serverName);
+  }
+
+  listTrustProfiles(): Array<McpServerPermissions['profile']> {
+    return this.permissions.listProfiles();
   }
 
   // ── Schema freshness ──────────────────────────────────────────────────────
@@ -295,7 +314,12 @@ export class McpLifecycleManager {
     }
 
     // Register in subsystems
-    this.permissions.registerServer(name);
+    this.permissions.registerServer(name, 'standard', {
+      role: config.role ?? 'general',
+      mode: config.trustMode ?? 'ask-on-risk',
+      allowedPaths: config.allowedPaths ?? [],
+      allowedHosts: config.allowedHosts ?? [],
+    });
     this.freshness.registerServer(name);
 
     // Create entry in configured state

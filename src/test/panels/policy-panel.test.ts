@@ -6,6 +6,7 @@ import type { PolicyBundlePayload } from '../../runtime/permissions/policy-loade
 import { PolicyPanel } from '../../panels/policy-panel.ts';
 import type { PolicyRule } from '../../runtime/permissions/types.ts';
 import type { Line } from '../../types/grid.ts';
+import { analyzePermissionRequest } from '../../permissions/analysis.ts';
 
 function linesText(lines: Line[]): string {
   return lines
@@ -62,5 +63,189 @@ describe('PolicyPanel', () => {
     expect(text).toContain('policy-b');
     expect(text).toContain('Governance Gate');
     expect(text).toContain('warn-on-divergence');
+  });
+
+  test('renders recent permission audit entries with risk and outcome', () => {
+    const state = getPolicyRuntimeState();
+    const analysis = analyzePermissionRequest(
+      'exec',
+      { command: 'curl -H "Authorization: Bearer sk-secret-token" https://example.com' },
+      'execute',
+    );
+
+    state.recordPermissionRequest({
+      callId: 'perm-audit-1',
+      tool: 'exec',
+      category: 'execute',
+      analysis,
+    });
+    state.recordPermissionDecision({
+      callId: 'perm-audit-1',
+      tool: 'exec',
+      category: 'execute',
+      result: {
+        approved: false,
+        persisted: false,
+        sourceLayer: 'user_prompt',
+        reasonCode: 'user_denied',
+        analysis,
+      },
+    });
+
+    const panel = new PolicyPanel(state);
+    const text = linesText(panel.render(120, 24));
+    expect(text).toContain('Permission Audit');
+    expect(text).toContain('exec');
+    expect(text).toContain('CRITICAL');
+    expect(text).toContain('denied');
+  });
+
+  test('renders policy lint findings for risky bundles', () => {
+    const state = getPolicyRuntimeState();
+    const registry = state.getRegistry();
+    registry.loadCandidate(makeBundle('policy-lint', [
+      {
+        id: 'allow-everything',
+        type: 'prefix',
+        description: 'Broad allow rule',
+        origin: 'user',
+        effect: 'allow',
+        toolPattern: '*',
+        commandPrefixes: [],
+      },
+    ]));
+
+    const panel = new PolicyPanel(state);
+    const text = linesText(panel.render(120, 24));
+    expect(text).toContain('Policy Lint');
+    expect(text).toContain('ERROR');
+    expect(text).toContain('allow-everything');
+  });
+
+  test('renders recent simulation sample results', () => {
+    const state = getPolicyRuntimeState();
+    state.recordSimulationSummary({
+      simulatedAt: new Date().toISOString(),
+      mode: 'warn-on-divergence',
+      totalScenarios: 2,
+      divergentScenarios: 1,
+      allowedByActual: 2,
+      allowedBySimulated: 1,
+      results: [
+        {
+          scenario: {
+            id: 'read-project-file',
+            label: 'Read project file',
+            toolName: 'read',
+            args: { path: '/workspace/README.md' },
+          },
+          actualDecision: {
+            allowed: true,
+            reason: 'DEFAULT_ALLOW',
+            sourceLayer: 'default',
+            toolName: 'read',
+            args: { path: '/workspace/README.md' },
+            timestamp: Date.now(),
+            evaluationTrace: [],
+          },
+          simulatedDecision: {
+            allowed: true,
+            reason: 'DEFAULT_ALLOW',
+            sourceLayer: 'default',
+            toolName: 'read',
+            args: { path: '/workspace/README.md' },
+            timestamp: Date.now(),
+            evaluationTrace: [],
+          },
+          authoritativeDecision: {
+            allowed: true,
+            reason: 'DEFAULT_ALLOW',
+            sourceLayer: 'default',
+            toolName: 'read',
+            args: { path: '/workspace/README.md' },
+            timestamp: Date.now(),
+            evaluationTrace: [],
+          },
+          diverged: false,
+        },
+        {
+          scenario: {
+            id: 'write-project-file',
+            label: 'Write project file',
+            toolName: 'write',
+            args: { path: '/workspace/out.txt', content: 'hello' },
+          },
+          actualDecision: {
+            allowed: true,
+            reason: 'DEFAULT_ALLOW',
+            sourceLayer: 'default',
+            toolName: 'write',
+            args: { path: '/workspace/out.txt', content: 'hello' },
+            timestamp: Date.now(),
+            evaluationTrace: [],
+          },
+          simulatedDecision: {
+            allowed: false,
+            reason: 'MODE_DENY_PLAN',
+            sourceLayer: 'mode',
+            toolName: 'write',
+            args: { path: '/workspace/out.txt', content: 'hello' },
+            timestamp: Date.now(),
+            evaluationTrace: [],
+          },
+          authoritativeDecision: {
+            allowed: true,
+            reason: 'DEFAULT_ALLOW',
+            sourceLayer: 'default',
+            toolName: 'write',
+            args: { path: '/workspace/out.txt', content: 'hello' },
+            timestamp: Date.now(),
+            evaluationTrace: [],
+          },
+          diverged: true,
+          divergenceType: 'allow-vs-deny',
+        },
+      ],
+    });
+
+    const panel = new PolicyPanel(state);
+    const text = linesText(panel.render(120, 28));
+    expect(text).toContain('Simulation Samples');
+    expect(text).toContain('warn-on-divergence');
+    expect(text).toContain('Read project file');
+    expect(text).toContain('Write project file');
+    expect(text).toContain('allow-vs-deny');
+  });
+
+  test('renders the most recent preflight review', () => {
+    const state = getPolicyRuntimeState();
+    state.recordPreflightReview({
+      generatedAt: new Date().toISOString(),
+      status: 'block',
+      summary: '2 blocking issues require attention before high-risk runs.',
+      issueCount: 2,
+      issues: [
+        {
+          severity: 'error',
+          source: 'runtime',
+          message: 'Permission mode is allow-all.',
+          detail: 'All runtime permission checks are bypassed for local tools.',
+        },
+        {
+          severity: 'error',
+          source: 'mcp',
+          serverName: 'deploy',
+          message: 'MCP server "deploy" is in allow-all mode.',
+          detail: 'role=ops',
+        },
+      ],
+    });
+
+    const panel = new PolicyPanel(state);
+    const text = linesText(panel.render(120, 24));
+    expect(text).toContain('Preflight Review');
+    expect(text).toContain('BLOCK');
+    expect(text).toContain('Permission mode is allow-all.');
+    expect(text).toContain('MCP server "deploy" is in allow-all mode.');
   });
 });

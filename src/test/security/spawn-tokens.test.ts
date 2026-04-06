@@ -1,6 +1,6 @@
 import { describe, test, expect, beforeEach } from 'bun:test';
 import { SpawnTokenManager } from '../../security/spawn-tokens.ts';
-import type { SpawnToken, DangerConfig } from '../../security/spawn-tokens.ts';
+import type { SpawnToken, OrchestrationPolicyConfig } from '../../security/spawn-tokens.ts';
 
 // ---------------------------------------------------------------------------
 // Setup: reset singleton between tests
@@ -14,11 +14,11 @@ beforeEach(() => {
 // Helpers
 // ---------------------------------------------------------------------------
 
-function defaultConfig(overrides: Partial<DangerConfig> = {}): DangerConfig {
+function defaultConfig(overrides: Partial<OrchestrationPolicyConfig> = {}): OrchestrationPolicyConfig {
   return {
-    agentRecursion: true,
-    maxRecursionDepth: 1,
-    maxGlobalAgents: 8,
+    recursionEnabled: true,
+    maxDepth: 1,
+    maxActiveAgents: 8,
     ...overrides,
   };
 }
@@ -181,30 +181,30 @@ describe('canSpawn', () => {
     expect(result.allowed).toBe(true);
   });
 
-  test('denies when agentRecursion is false', () => {
+  test('denies when recursive orchestration is disabled', () => {
     const manager = SpawnTokenManager.getInstance('sess-004');
     const token = manager.createOrchestratorToken();
-    const result = manager.canSpawn(token, defaultConfig({ agentRecursion: false }), 0);
+    const result = manager.canSpawn(token, defaultConfig({ recursionEnabled: false }), 0);
     expect(result.allowed).toBe(false);
-    expect(result.reason).toContain('agentRecursion');
+    expect(result.reason).toContain('recursive orchestration');
   });
 
-  test('denies when maxGlobalAgents is exceeded', () => {
+  test('denies when maxActiveAgents is exceeded', () => {
     const manager = SpawnTokenManager.getInstance('sess-004');
     const token = manager.createOrchestratorToken();
-    const result = manager.canSpawn(token, defaultConfig({ maxGlobalAgents: 3 }), 3);
+    const result = manager.canSpawn(token, defaultConfig({ maxActiveAgents: 3 }), 3);
     expect(result.allowed).toBe(false);
-    expect(result.reason).toContain('maxGlobalAgents');
+    expect(result.reason).toContain('maxActiveAgents');
   });
 
-  test('denies when depth exceeds maxRecursionDepth', () => {
+  test('denies when depth exceeds maxDepth', () => {
     const manager = SpawnTokenManager.getInstance('sess-004');
     const orchestrator = manager.createOrchestratorToken();
     const agentToken = manager.generateAgentToken(orchestrator, 'agent-deep')!;
-    // Agent token has depth=1; maxRecursionDepth=0 means no recursion allowed
-    const result = manager.canSpawn(agentToken, defaultConfig({ maxRecursionDepth: 0 }), 0);
+    // Agent token has depth=1; maxDepth=0 means no recursion allowed
+    const result = manager.canSpawn(agentToken, defaultConfig({ maxDepth: 0 }), 0);
     expect(result.allowed).toBe(false);
-    expect(result.reason).toContain('maxRecursionDepth');
+    expect(result.reason).toContain('maxDepth');
   });
 
   test('denies when token is invalid (revoked)', () => {
@@ -219,7 +219,7 @@ describe('canSpawn', () => {
   test('denies when currentAgentCount is exactly at the limit', () => {
     const manager = SpawnTokenManager.getInstance('sess-004');
     const token = manager.createOrchestratorToken();
-    const result = manager.canSpawn(token, defaultConfig({ maxGlobalAgents: 5 }), 5);
+    const result = manager.canSpawn(token, defaultConfig({ maxActiveAgents: 5 }), 5);
     expect(result.allowed).toBe(false);
   });
 });

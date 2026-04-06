@@ -53,6 +53,22 @@ export interface McpServerRecord {
   lastError?: string;
   /** Number of reconnect attempts. */
   reconnectAttempts: number;
+  /** Runtime trust mode for this server. */
+  trustMode: import('../../mcp/types.ts').McpTrustMode;
+  /** High-level role used for coherence evaluation. */
+  role: import('../../mcp/types.ts').McpServerRole;
+  /** Allowed filesystem scope. */
+  allowedPaths: string[];
+  /** Allowed network host scope. */
+  allowedHosts: string[];
+  /** Current schema freshness state. */
+  schemaFreshness: import('../../mcp/types.ts').SchemaFreshness;
+  /** Active quarantine reason when schema execution is blocked. */
+  quarantineReason?: import('../../mcp/types.ts').QuarantineReason;
+  /** Human-readable quarantine detail. */
+  quarantineDetail?: string;
+  /** Operator id that approved the last quarantine override. */
+  quarantineApprovedBy?: string;
 }
 
 /**

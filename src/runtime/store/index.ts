@@ -20,6 +20,8 @@ import type { PartialToolCall } from '../../providers/interface.ts';
 import type { PermissionEvent } from '../events/permissions.ts';
 import type { TaskEvent } from '../events/tasks.ts';
 import type { AgentEvent } from '../events/agents.ts';
+import type { OrchestrationEvent } from '../events/orchestration.ts';
+import type { CommunicationEvent } from '../events/communication.ts';
 import type { PluginEvent } from '../events/plugins.ts';
 import type { McpEvent } from '../events/mcp.ts';
 import type { TransportEvent } from '../events/transport.ts';
@@ -28,13 +30,31 @@ import type {
   ActiveToolCall,
   ToolExecutionState,
 } from './domains/conversation.ts';
-import type { PermissionDomainState, PermissionDecisionMachineState } from './domains/permissions.ts';
+import type {
+  PermissionDomainState,
+  PermissionDecisionMachineState,
+  PermissionDecision,
+} from './domains/permissions.ts';
 import type { TaskDomainState, RuntimeTask, TaskLifecycleState } from './domains/tasks.ts';
 import type { AgentDomainState, RuntimeAgent, AgentLifecycleState } from './domains/agents.ts';
+import type {
+  OrchestrationDomainState,
+  OrchestrationGraphRecord,
+  OrchestrationNodeRecord,
+} from './domains/orchestration.ts';
+import type {
+  CommunicationDomainState,
+  RuntimeCommunicationRecord,
+} from './domains/communication.ts';
 import type { PluginDomainState, RuntimePlugin, PluginLifecycleState } from './domains/plugins.ts';
 import type { McpDomainState, McpServerRecord, McpServerLifecycleState } from './domains/mcp.ts';
 import type { AcpDomainState, AcpTransportState } from './domains/acp.ts';
 import type { DaemonDomainState, DaemonTransportState } from './domains/daemon.ts';
+import type {
+  IntegrationDomainState,
+  IntegrationRecord,
+  IntegrationStatus,
+} from './domains/integrations.ts';
 
 // ---------------------------------------------------------------------------
 // Store type
@@ -436,9 +456,12 @@ function updatePermissionState(
           category: inferPermissionCategory(event.tool),
           machineState: 'decision_emitted',
           outcome: event.approved ? 'approved' : 'denied',
-          reason: event.approved ? 'user_approved' : 'user_denied',
-          sourceLayer: event.source === 'user_prompt' ? 'user_prompt' : 'config_policy',
-          persisted: false,
+          reason: (event.reasonCode as PermissionDecision['reason']) ?? (event.approved ? 'user_approved' : 'user_denied'),
+          sourceLayer: (event.sourceLayer as PermissionDecision['sourceLayer']) ?? (event.source as PermissionDecision['sourceLayer']) ?? 'config_policy',
+          persisted: event.persisted ?? false,
+          classification: event.classification,
+          riskLevel: event.riskLevel as PermissionDecision['riskLevel'],
+          summary: event.summary,
           decidedAt: now(),
         },
       };
@@ -669,6 +692,198 @@ function transitionAgentDomainRecord(
   };
 }
 
+function orchestrationGraphStatus(graph: OrchestrationGraphRecord): OrchestrationGraphRecord['status'] {
+  const nodes = [...graph.nodes.values()];
+  if (nodes.length === 0) return 'planning';
+  if (nodes.some((node) => node.status === 'failed')) return 'failed';
+  if (nodes.some((node) => node.status === 'blocked')) return 'blocked';
+  if (nodes.some((node) => node.status === 'running')) return 'running';
+  if (nodes.every((node) => node.status === 'cancelled')) return 'cancelled';
+  if (nodes.every((node) => node.status === 'completed')) return 'completed';
+  if (nodes.every((node) => node.status === 'pending' || node.status === 'ready')) {
+    return nodes.some((node) => node.status === 'ready') ? 'ready' : 'planning';
+  }
+  return 'running';
+}
+
+function updateOrchestrationState(
+  domain: OrchestrationDomainState,
+  event: OrchestrationEvent,
+): OrchestrationDomainState {
+  const graphs = new Map(domain.graphs);
+  const timestamp = now();
+  const existing = 'graphId' in event ? graphs.get(event.graphId) : undefined;
+
+  switch (event.type) {
+    case 'ORCHESTRATION_GRAPH_CREATED': {
+      graphs.set(event.graphId, {
+        id: event.graphId,
+        title: event.title,
+        mode: event.mode,
+        status: 'planning',
+        nodeOrder: [],
+        nodes: new Map(),
+        createdAt: timestamp,
+      });
+      break;
+    }
+    case 'ORCHESTRATION_NODE_ADDED': {
+      if (!existing) return domain;
+      const nodes = new Map(existing.nodes);
+      const previousParent = event.parentNodeId ? nodes.get(event.parentNodeId) : undefined;
+      const nextNode: OrchestrationNodeRecord = {
+        id: event.nodeId,
+        title: event.title,
+        role: event.role,
+        status: 'pending',
+        parentNodeId: event.parentNodeId,
+        childNodeIds: [],
+        dependencyNodeIds: event.dependsOn ?? [],
+        ...(event.taskId !== undefined ? { taskId: event.taskId } : {}),
+        ...(event.agentId !== undefined ? { agentId: event.agentId } : {}),
+        ...(event.contract !== undefined ? { contract: event.contract } : {}),
+      };
+      nodes.set(event.nodeId, nextNode);
+      if (previousParent) {
+        nodes.set(event.parentNodeId!, {
+          ...previousParent,
+          childNodeIds: uniq([...previousParent.childNodeIds, event.nodeId]),
+        });
+      }
+      const graph: OrchestrationGraphRecord = {
+        ...existing,
+        nodeOrder: uniq([...existing.nodeOrder, event.nodeId]),
+        nodes,
+      };
+      graph.status = orchestrationGraphStatus(graph);
+      graphs.set(event.graphId, graph);
+      break;
+    }
+    case 'ORCHESTRATION_NODE_READY':
+    case 'ORCHESTRATION_NODE_STARTED':
+    case 'ORCHESTRATION_NODE_PROGRESS':
+    case 'ORCHESTRATION_NODE_BLOCKED':
+    case 'ORCHESTRATION_NODE_COMPLETED':
+    case 'ORCHESTRATION_NODE_FAILED':
+    case 'ORCHESTRATION_NODE_CANCELLED':
+    case 'ORCHESTRATION_RECURSION_GUARD_TRIGGERED': {
+      if (!existing) return domain;
+      const nodes = new Map(existing.nodes);
+      const nodeId = 'nodeId' in event ? event.nodeId : undefined;
+      if (nodeId) {
+        const node = nodes.get(nodeId);
+        if (!node) return domain;
+        const updatedNode: OrchestrationNodeRecord =
+          event.type === 'ORCHESTRATION_NODE_READY'
+            ? { ...node, status: 'ready' }
+            : event.type === 'ORCHESTRATION_NODE_STARTED'
+              ? {
+                  ...node,
+                  status: 'running',
+                  startedAt: node.startedAt ?? timestamp,
+                  ...(event.taskId !== undefined ? { taskId: event.taskId } : {}),
+                  ...(event.agentId !== undefined ? { agentId: event.agentId } : {}),
+                }
+              : event.type === 'ORCHESTRATION_NODE_PROGRESS'
+                ? { ...node, latestMessage: event.message }
+                : event.type === 'ORCHESTRATION_NODE_BLOCKED'
+                  ? { ...node, status: 'blocked', error: event.reason }
+                  : event.type === 'ORCHESTRATION_NODE_COMPLETED'
+                    ? { ...node, status: 'completed', endedAt: timestamp, latestMessage: event.summary ?? node.latestMessage }
+                    : event.type === 'ORCHESTRATION_NODE_FAILED'
+                      ? { ...node, status: 'failed', endedAt: timestamp, error: event.error }
+                      : { ...node, status: 'cancelled', endedAt: timestamp, error: event.reason };
+        nodes.set(nodeId, updatedNode);
+      }
+      const graph: OrchestrationGraphRecord = {
+        ...existing,
+        nodes,
+        ...(event.type === 'ORCHESTRATION_NODE_STARTED' ? { startedAt: existing.startedAt ?? timestamp } : {}),
+        ...(event.type === 'ORCHESTRATION_RECURSION_GUARD_TRIGGERED'
+          ? {
+              lastRecursionGuard: {
+                depth: event.depth,
+                activeAgents: event.activeAgents,
+                reason: event.reason,
+                ...(event.nodeId !== undefined ? { nodeId: event.nodeId } : {}),
+                triggeredAt: timestamp,
+              },
+            }
+          : {}),
+      };
+      graph.status = orchestrationGraphStatus(graph);
+      if (graph.status === 'completed' || graph.status === 'failed' || graph.status === 'cancelled') {
+        graph.endedAt = graph.endedAt ?? timestamp;
+      }
+      graphs.set(graph.id, graph);
+      break;
+    }
+  }
+
+  const activeGraphIds = [...graphs.values()]
+    .filter((graph) => !['completed', 'failed', 'cancelled'].includes(graph.status))
+    .map((graph) => graph.id);
+
+  return {
+    ...updateDomainMetadata(domain, event.type),
+    graphs,
+    activeGraphIds,
+    totalGraphs: graphs.size,
+    totalCompletedGraphs: [...graphs.values()].filter((graph) => graph.status === 'completed').length,
+    totalFailedGraphs: [...graphs.values()].filter((graph) => graph.status === 'failed').length,
+    recursionGuardTrips:
+      domain.recursionGuardTrips + (event.type === 'ORCHESTRATION_RECURSION_GUARD_TRIGGERED' ? 1 : 0),
+  };
+}
+
+function updateCommunicationState(
+  domain: CommunicationDomainState,
+  event: CommunicationEvent,
+): CommunicationDomainState {
+  const timestamp = now();
+  const records = new Map(domain.records);
+  const base: RuntimeCommunicationRecord | undefined =
+    event.type === 'COMMUNICATION_SENT' || event.type === 'COMMUNICATION_BLOCKED'
+      ? {
+          id: event.messageId,
+          fromId: event.fromId,
+          toId: event.toId,
+          scope: event.scope,
+          kind: event.kind,
+          content: 'content' in event ? event.content : '',
+          timestamp,
+          status: event.type === 'COMMUNICATION_BLOCKED' ? 'blocked' : 'sent',
+          ...(event.fromRole !== undefined ? { fromRole: event.fromRole } : {}),
+          ...(event.toRole !== undefined ? { toRole: event.toRole } : {}),
+          ...(event.cohort !== undefined ? { cohort: event.cohort } : {}),
+          ...(event.wrfcId !== undefined ? { wrfcId: event.wrfcId } : {}),
+          ...(event.parentAgentId !== undefined ? { parentAgentId: event.parentAgentId } : {}),
+          ...('reason' in event && event.reason !== undefined ? { reason: event.reason } : {}),
+        }
+      : undefined;
+
+  if (base) {
+    records.set(event.messageId, base);
+  } else {
+    const existing = records.get(event.messageId);
+    if (!existing) return domain;
+    records.set(event.messageId, {
+      ...existing,
+      status: event.type === 'COMMUNICATION_DELIVERED' ? 'delivered' : existing.status,
+    });
+  }
+
+  const recentRecordIds = uniq([event.messageId, ...domain.recentRecordIds]).slice(0, 200);
+  return {
+    ...updateDomainMetadata(domain, event.type),
+    records,
+    recentRecordIds,
+    totalSent: domain.totalSent + (event.type === 'COMMUNICATION_SENT' ? 1 : 0),
+    totalDelivered: domain.totalDelivered + (event.type === 'COMMUNICATION_DELIVERED' ? 1 : 0),
+    totalBlocked: domain.totalBlocked + (event.type === 'COMMUNICATION_BLOCKED' ? 1 : 0),
+  };
+}
+
 function pluginStatusForEvent(event: PluginEvent): PluginLifecycleState {
   switch (event.type) {
     case 'PLUGIN_DISCOVERED':
@@ -767,6 +982,8 @@ function mcpStatusForEvent(event: McpEvent): McpServerLifecycleState {
       return 'reconnecting';
     case 'MCP_DISCONNECTED':
       return 'disconnected';
+    case 'MCP_POLICY_UPDATED':
+      return 'configured';
   }
 }
 
@@ -786,10 +1003,43 @@ function updateMcpState(domain: McpDomainState, event: McpEvent): McpDomainState
       callCount: 0,
       errorCount: 0,
       reconnectAttempts: 0,
+      trustMode: event.type === 'MCP_POLICY_UPDATED'
+        ? event.trustMode
+        : event.type === 'MCP_CONFIGURED'
+          ? event.trustMode ?? 'ask-on-risk'
+          : 'ask-on-risk',
+      role: event.type === 'MCP_POLICY_UPDATED'
+        ? event.role
+        : event.type === 'MCP_CONFIGURED'
+          ? event.role ?? 'general'
+          : 'general',
+      allowedPaths: event.type === 'MCP_POLICY_UPDATED'
+        ? [...event.allowedPaths]
+        : event.type === 'MCP_CONFIGURED'
+          ? [...(event.allowedPaths ?? [])]
+          : [],
+      allowedHosts: event.type === 'MCP_POLICY_UPDATED'
+        ? [...event.allowedHosts]
+        : event.type === 'MCP_CONFIGURED'
+          ? [...(event.allowedHosts ?? [])]
+          : [],
+      schemaFreshness: event.type === 'MCP_SCHEMA_QUARANTINED'
+        ? 'quarantined'
+        : event.type === 'MCP_SCHEMA_QUARANTINE_APPROVED'
+          ? 'stale'
+          : 'unknown',
+      quarantineReason: event.type === 'MCP_SCHEMA_QUARANTINED' ? event.reason : undefined,
+      quarantineDetail: event.type === 'MCP_SCHEMA_QUARANTINED' ? event.detail : undefined,
+      quarantineApprovedBy: event.type === 'MCP_SCHEMA_QUARANTINE_APPROVED' ? event.operatorId : undefined,
     };
   servers.set(event.serverId, {
     ...server,
-    status: mcpStatusForEvent(event),
+    status:
+      event.type === 'MCP_POLICY_UPDATED'
+      || event.type === 'MCP_SCHEMA_QUARANTINED'
+      || event.type === 'MCP_SCHEMA_QUARANTINE_APPROVED'
+        ? server.status
+        : mcpStatusForEvent(event),
     transport:
       event.type === 'MCP_CONFIGURED'
         ? event.transport === 'sse' || event.transport === 'http'
@@ -799,6 +1049,46 @@ function updateMcpState(domain: McpDomainState, event: McpEvent): McpDomainState
     toolCount: event.type === 'MCP_CONNECTED' ? event.toolCount : server.toolCount,
     connectedAt: event.type === 'MCP_CONNECTED' ? timestamp : server.connectedAt,
     reconnectAttempts: event.type === 'MCP_RECONNECTING' ? event.attempt : server.reconnectAttempts,
+    trustMode: event.type === 'MCP_POLICY_UPDATED'
+      ? event.trustMode
+      : event.type === 'MCP_CONFIGURED'
+        ? event.trustMode ?? server.trustMode
+        : server.trustMode,
+    role: event.type === 'MCP_POLICY_UPDATED'
+      ? event.role
+      : event.type === 'MCP_CONFIGURED'
+        ? event.role ?? server.role
+        : server.role,
+    allowedPaths: event.type === 'MCP_POLICY_UPDATED'
+      ? [...event.allowedPaths]
+      : event.type === 'MCP_CONFIGURED'
+        ? [...(event.allowedPaths ?? server.allowedPaths)]
+        : server.allowedPaths,
+    allowedHosts: event.type === 'MCP_POLICY_UPDATED'
+      ? [...event.allowedHosts]
+      : event.type === 'MCP_CONFIGURED'
+        ? [...(event.allowedHosts ?? server.allowedHosts)]
+        : server.allowedHosts,
+    schemaFreshness:
+      event.type === 'MCP_SCHEMA_QUARANTINED'
+        ? 'quarantined'
+        : event.type === 'MCP_SCHEMA_QUARANTINE_APPROVED'
+          ? 'stale'
+          : event.type === 'MCP_CONNECTED'
+            ? 'fresh'
+            : server.schemaFreshness,
+    quarantineReason:
+      event.type === 'MCP_SCHEMA_QUARANTINED'
+        ? event.reason
+        : server.quarantineReason,
+    quarantineDetail:
+      event.type === 'MCP_SCHEMA_QUARANTINED'
+        ? event.detail
+        : server.quarantineDetail,
+    quarantineApprovedBy:
+      event.type === 'MCP_SCHEMA_QUARANTINE_APPROVED'
+        ? event.operatorId
+        : server.quarantineApprovedBy,
     lastError:
       event.type === 'MCP_DEGRADED'
         ? event.reason
@@ -882,6 +1172,35 @@ function updateTransportState(
   return { acp: nextAcp, daemon: nextDaemon };
 }
 
+function updateIntegrationDomainFromRecord(
+  domain: IntegrationDomainState,
+  record: IntegrationRecord,
+  source: string,
+): IntegrationDomainState {
+  const integrations = new Map(domain.integrations);
+  const previous = integrations.get(record.id);
+  integrations.set(record.id, record);
+
+  const problemStatuses: IntegrationStatus[] = ['degraded', 'error'];
+  const healthyIds = [...integrations.values()]
+    .filter((value) => value.status === 'healthy')
+    .map((value) => value.id);
+  const problemIds = [...integrations.values()]
+    .filter((value) => problemStatuses.includes(value.status))
+    .map((value) => value.id);
+
+  return {
+    ...updateDomainMetadata(domain, source),
+    integrations,
+    healthyIds,
+    problemIds,
+    totalOperations:
+      domain.totalOperations + ((record.successCount ?? 0) - (previous?.successCount ?? 0)),
+    totalErrors:
+      domain.totalErrors + ((record.errorCount ?? 0) - (previous?.errorCount ?? 0)),
+  };
+}
+
 function mutateRuntimeStore(
   store: RuntimeStore,
   updater: (state: RuntimeState) => RuntimeState,
@@ -921,6 +1240,18 @@ export function createDomainDispatch(store: RuntimeStore): DomainDispatch {
         agents: updateAgentState(state.agents, event),
       }));
     },
+    dispatchOrchestrationEvent(event) {
+      mutateRuntimeStore(store, (state) => ({
+        ...state,
+        orchestration: updateOrchestrationState(state.orchestration, event),
+      }));
+    },
+    dispatchCommunicationEvent(event) {
+      mutateRuntimeStore(store, (state) => ({
+        ...state,
+        communication: updateCommunicationState(state.communication, event),
+      }));
+    },
     dispatchPluginEvent(event) {
       mutateRuntimeStore(store, (state) => ({
         ...state,
@@ -955,6 +1286,12 @@ export function createDomainDispatch(store: RuntimeStore): DomainDispatch {
       mutateRuntimeStore(store, (state) => ({
         ...state,
         agents: transitionAgentDomainRecord(state.agents, agentId, status, patch, source),
+      }));
+    },
+    syncIntegration(record, source = 'domain-dispatch') {
+      mutateRuntimeStore(store, (state) => ({
+        ...state,
+        integrations: updateIntegrationDomainFromRecord(state.integrations, record, source),
       }));
     },
   };
@@ -1005,6 +1342,18 @@ export interface DomainDispatch {
   dispatchAgentEvent(event: AgentEvent): void;
 
   /**
+   * Dispatch an orchestration graph lifecycle event.
+   * Updates graph, node, and recursion-guard runtime state.
+   */
+  dispatchOrchestrationEvent(event: OrchestrationEvent): void;
+
+  /**
+   * Dispatch a structured communication event.
+   * Updates operator-visible communication history and blocked-route evidence.
+   */
+  dispatchCommunicationEvent(event: CommunicationEvent): void;
+
+  /**
    * Dispatch a plugin lifecycle event (discovered, loading, active, etc.).
    * Updates the plugins domain's plugin registry.
    */
@@ -1046,6 +1395,11 @@ export interface DomainDispatch {
     patch?: Partial<RuntimeAgent>,
     source?: string,
   ): void;
+
+  /**
+   * Upsert an external integration/service record through the store mutation layer.
+   */
+  syncIntegration(record: IntegrationRecord, source?: string): void;
 }
 
 // ---------------------------------------------------------------------------

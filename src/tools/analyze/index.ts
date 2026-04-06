@@ -294,6 +294,61 @@ function parseSemanticDiffResponse(
   return { summary, impact, risk };
 }
 
+function buildSemanticDiffFallback(
+  fullDiff: string,
+  changedFiles: string[],
+): SemanticDiffSummary {
+  const hasAsyncShift = /\basync\s+function\b|\bawait\b/.test(fullDiff);
+  const hasExportShift = /^\s*[+-]\s*export\s/m.test(fullDiff);
+  const hasSignatureShift = /^\s*[+-].*\([^)]*\)/m.test(fullDiff);
+  const hasBehaviorShift =
+    /^\s*[+-].*\breturn\b/m.test(fullDiff) ||
+    /^\s*[+-].*\bthrow\b/m.test(fullDiff) ||
+    /^\s*[+-].*\bif\b/m.test(fullDiff);
+
+  let risk: 'low' | 'medium' | 'high' = 'low';
+  if (hasExportShift || hasSignatureShift) {
+    risk = 'high';
+  } else if (hasAsyncShift || hasBehaviorShift || changedFiles.length > 1) {
+    risk = 'medium';
+  }
+
+  const summaryParts: string[] = [];
+  if (changedFiles.length === 0) {
+    summaryParts.push('No changed files were detected in the requested diff.');
+  } else if (changedFiles.length === 1) {
+    summaryParts.push(`Changed ${changedFiles[0]}.`);
+  } else {
+    summaryParts.push(`Changed ${changedFiles.length} files.`);
+  }
+  if (hasAsyncShift) {
+    summaryParts.push('The diff introduces or expands asynchronous behavior.');
+  }
+  if (hasExportShift || hasSignatureShift) {
+    summaryParts.push('Public callable surfaces or signatures changed.');
+  } else if (hasBehaviorShift) {
+    summaryParts.push('The implementation behavior changed within existing code paths.');
+  }
+
+  const impact = changedFiles.map((file) => `Review downstream callers and tests for ${file}.`);
+  return {
+    summary: summaryParts.join(' ').trim() || 'Diff analyzed without LLM assistance.',
+    impact,
+    risk,
+  };
+}
+
+async function trySemanticDiffLlm(prompt: string): Promise<string> {
+  try {
+    return await Promise.race([
+      toolLLM.chat(prompt, { maxTokens: 512 }),
+      new Promise<string>((resolve) => setTimeout(() => resolve(''), 1200)),
+    ]);
+  } catch {
+    return '';
+  }
+}
+
 function findEntryPoint(targetDir: string, candidates: string[]): string | null {
   for (const name of candidates) {
     const candidate = join(targetDir, name);
@@ -1138,6 +1193,7 @@ async function runSemanticDiff(
 
   // Parse changed files for impact analysis
   const changedFiles = parseDiffStats(statOutput).map((file) => file.file);
+  const fallback = buildSemanticDiffFallback(fullDiff, changedFiles);
 
   // Build LLM prompt with diff context
   const truncatedDiff = truncateDiffAtBoundary(fullDiff, 6000);
@@ -1152,9 +1208,10 @@ Respond in JSON with fields: summary (string), impact (array of strings), risk (
 Diff (${before}..${after}):
 ${truncatedDiff}`;
 
-  const llmResponse = await toolLLM.chat(prompt, { maxTokens: 512 });
-
-  const { summary, impact, risk } = parseSemanticDiffResponse(llmResponse, changedFiles);
+  const llmResponse = await trySemanticDiffLlm(prompt);
+  const { summary, impact, risk } = llmResponse
+    ? parseSemanticDiffResponse(llmResponse, changedFiles)
+    : fallback;
 
   return {
     before,

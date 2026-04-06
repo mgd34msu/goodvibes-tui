@@ -9,7 +9,16 @@ import type { EmitterContext } from './index.ts';
 export function emitPermissionRequested(
   bus: RuntimeEventBus,
   ctx: EmitterContext,
-  data: { callId: string; tool: string; args: Record<string, unknown>; category: string }
+  data: {
+    callId: string;
+    tool: string;
+    args: Record<string, unknown>;
+    category: string;
+    classification?: string;
+    riskLevel?: string;
+    summary?: string;
+    reasons?: readonly string[];
+  }
 ): void {
   bus.emit('permissions', createEventEnvelope('PERMISSION_REQUESTED', { type: 'PERMISSION_REQUESTED', ...data }, ctx));
 }
@@ -72,7 +81,18 @@ export function emitSafetyChecked(
 export function emitPermissionDecision(
   bus: RuntimeEventBus,
   ctx: EmitterContext,
-  data: { callId: string; tool: string; approved: boolean; source: string }
+  data: {
+    callId: string;
+    tool: string;
+    approved: boolean;
+    source: string;
+    sourceLayer?: string;
+    persisted?: boolean;
+    reasonCode?: string;
+    classification?: string;
+    riskLevel?: string;
+    summary?: string;
+  }
 ): void {
   bus.emit('permissions', createEventEnvelope('DECISION_EMITTED', { type: 'DECISION_EMITTED', ...data }, ctx));
 }

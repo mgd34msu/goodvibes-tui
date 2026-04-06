@@ -141,7 +141,13 @@ export async function handleToolResponseOutcome(args: {
         const summary = planManager.getSummary(activePlan);
         const nextItems = planManager.getNextItems(activePlan);
         if (nextItems.length > 0) {
-          const autoSpawnedDescs = autoSpawnPendingItems(args.conversation, activePlan, nextItems);
+          const autoSpawnedDescs = autoSpawnPendingItems(
+            args.conversation,
+            activePlan,
+            nextItems,
+            args.runtimeBus,
+            args.emitterContext(args.turnId),
+          );
           if (autoSpawnedDescs.length > 0) {
             args.conversation.addSystemMessage(
               `[Plan] Auto-spawned ${autoSpawnedDescs.length} agent(s) for remaining plan items: ${autoSpawnedDescs.join(', ')}. Plan progress: ${summary}.`
@@ -219,7 +225,13 @@ export function handleFinalResponseOutcome(args: {
       if (updatedPlan) {
         const nextItems = planManager.getNextItems(updatedPlan);
         if (nextItems.length > 0) {
-          const spawned = autoSpawnPendingItems(args.conversation, updatedPlan, nextItems);
+          const spawned = autoSpawnPendingItems(
+            args.conversation,
+            updatedPlan,
+            nextItems,
+            args.runtimeBus,
+            args.emitterContext(args.turnId),
+          );
           if (spawned.length > 0) {
             args.conversation.addSystemMessage(
               `[Plan] Parsed ${parsed.items.length} item(s) from your plan. Auto-spawned ${spawned.length} agent(s) for items with no blockers: ${spawned.join(', ')}.`
@@ -251,7 +263,13 @@ export function handleFinalResponseOutcome(args: {
         const stillPending = planManager.getNextItems(stillActivePlan);
         if (stillPending.length === 0) return;
 
-        const spawned = autoSpawnPendingItems(args.conversation, stillActivePlan, stillPending);
+        const spawned = autoSpawnPendingItems(
+          args.conversation,
+          stillActivePlan,
+          stillPending,
+          args.runtimeBus,
+          args.emitterContext(args.turnId),
+        );
         if (spawned.length > 0) {
           args.conversation.addSystemMessage(
             `[Plan] Timeout fallback auto-spawned ${spawned.length} agent(s) for plan items the model did not address: ${spawned.join(', ')}.`

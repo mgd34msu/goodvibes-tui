@@ -2,6 +2,10 @@ import { describe, test, expect, beforeEach, afterEach } from 'bun:test';
 import { PermissionManager } from '../../permissions/manager.ts';
 import { configManager, getConfigSnapshot } from '../../config/index.ts';
 import type { PermissionPromptRequest, PermissionPromptDecision } from '../../permissions/prompt.ts';
+import { getPolicyRuntimeState, resetPolicyRuntimeStateForTests } from '../../runtime/permissions/policy-runtime.ts';
+import { createUnsignedBundle } from '../../runtime/permissions/policy-loader.ts';
+import type { PolicyBundlePayload } from '../../runtime/permissions/policy-loader.ts';
+import type { PolicyRule } from '../../runtime/permissions/types.ts';
 
 // behavior.autoApprove reflects the --no-worries-just-vibes flag.
 // In the test environment (no CLI flag), it is false.
@@ -16,6 +20,7 @@ describe('PermissionManager', () => {
   let decisions: PermissionPromptDecision[];
 
   beforeEach(() => {
+    resetPolicyRuntimeStateForTests();
     // Snapshot current config state
     savedMode = getConfigSnapshot().permissions.mode ?? 'prompt';
     savedAutoApprove = getConfigSnapshot().behavior.autoApprove ?? false;
@@ -31,6 +36,7 @@ describe('PermissionManager', () => {
   });
 
   afterEach(() => {
+    resetPolicyRuntimeStateForTests();
     // Restore config state after each test
     configManager.set('permissions.mode', savedMode as 'prompt' | 'allow-all' | 'custom');
     configManager.set('behavior.autoApprove', savedAutoApprove);
@@ -224,6 +230,92 @@ describe('PermissionManager', () => {
       const result = await manager.check('workflow', { name: 'deploy' });
       expect(requests).toHaveLength(1);
       expect(result).toBe(true);
+    });
+
+    test('exec prompt carries critical secret-exposure analysis when command includes inline credentials', async () => {
+      expect.assertions(3);
+      decisions.push({ approved: false });
+
+      await manager.check('exec', { command: 'curl -H \"Authorization: Bearer sk-secret-token-value\" https://example.com' });
+
+      expect(requests).toHaveLength(1);
+      expect(requests[0]!.analysis.riskLevel).toBe('critical');
+      expect(requests[0]!.analysis.reasons.join(' ')).toContain('credential');
+    });
+
+    test('write prompt marks sensitive credential paths as high risk', async () => {
+      expect.assertions(3);
+      decisions.push({ approved: false });
+
+      await manager.check('write', { path: '.env.production' });
+
+      expect(requests).toHaveLength(1);
+      expect(requests[0]!.analysis.riskLevel).toBe('high');
+      expect(requests[0]!.analysis.reasons.join(' ')).toContain('secret or credential file');
+    });
+
+    test('managed policy deny blocks without prompting', async () => {
+      expect.assertions(2);
+      const rule: PolicyRule = {
+        type: 'prefix',
+        id: 'deny-rm',
+        description: 'Block rm commands',
+        origin: 'managed',
+        effect: 'deny',
+        toolPattern: 'exec',
+        commandPrefixes: ['rm'],
+      };
+      const payload: PolicyBundlePayload = { version: 1, rules: [rule] };
+      const registry = getPolicyRuntimeState().getRegistry();
+      registry.loadCandidate(createUnsignedBundle('policy-deny-rm', payload));
+      registry.markSimulating();
+      registry.attachSimulationReport(
+        {
+          overall: { total: 0, byType: { 'allow-vs-deny': 0, 'deny-vs-allow': 0, 'reason-mismatch': 0 }, divergenceRate: 0, totalEvaluations: 0 },
+          byToolClass: {},
+          byCommandPrefix: {},
+          byMode: {},
+          records: [],
+        },
+        { status: 'allowed', threshold: 0.05, divergenceRate: 0, totalEvaluations: 0, message: 'ok' },
+      );
+      registry.promote(true);
+
+      const result = await manager.check('exec', { command: 'rm build.log' });
+      expect(result).toBe(false);
+      expect(requests).toHaveLength(0);
+    });
+
+    test('managed policy allow auto-approves matching command without prompting', async () => {
+      expect.assertions(2);
+      const rule: PolicyRule = {
+        type: 'prefix',
+        id: 'allow-npm-test',
+        description: 'Allow npm test',
+        origin: 'managed',
+        effect: 'allow',
+        toolPattern: 'exec',
+        commandPrefixes: ['npm test'],
+      };
+      const payload: PolicyBundlePayload = { version: 1, rules: [rule] };
+      const registry = getPolicyRuntimeState().getRegistry();
+      registry.loadCandidate(createUnsignedBundle('policy-allow-npm-test', payload));
+      registry.markSimulating();
+      registry.attachSimulationReport(
+        {
+          overall: { total: 0, byType: { 'allow-vs-deny': 0, 'deny-vs-allow': 0, 'reason-mismatch': 0 }, divergenceRate: 0, totalEvaluations: 0 },
+          byToolClass: {},
+          byCommandPrefix: {},
+          byMode: {},
+          records: [],
+        },
+        { status: 'allowed', threshold: 0.05, divergenceRate: 0, totalEvaluations: 0, message: 'ok' },
+      );
+      registry.promote(true);
+
+      const result = await manager.check('exec', { command: 'npm test' });
+      expect(result).toBe(true);
+      expect(requests).toHaveLength(0);
     });
   });
 

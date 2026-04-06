@@ -1,7 +1,7 @@
 import { readFileSync, existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { join, resolve, relative } from 'node:path';
 import { readdir } from 'node:fs/promises';
-import type { Tool } from '../../types/tools.ts';
+import type { Tool, ToolDefinition } from '../../types/tools.ts';
 import { INSPECT_TOOL_SCHEMA } from './schema.ts';
 import { appendSchemaFingerprint } from '../shared/schema-fingerprint.ts';
 import type {
@@ -1242,7 +1242,7 @@ function inspectErrorBoundary(content: string, file: string): ErrorBoundaryInfo 
 // ---------------------------------------------------------------------------
 
 export class InspectTool implements Tool {
-  readonly definition = {
+  readonly definition: ToolDefinition = {
     name: 'inspect',
     description:
       'Inspect and analyze a project or file. Modes: project (structure), api (routes),'
@@ -1251,6 +1251,9 @@ export class InspectTool implements Tool {
       + ' database (schema), components (React), layout (CSS/Tailwind),'
       + ' accessibility (a11y issues), scaffold (module skeleton generator).',
     parameters: INSPECT_TOOL_SCHEMA,
+    sideEffects: ['read_fs'],
+    concurrency: 'parallel',
+    supportsProgress: true,
   };
 
   /**

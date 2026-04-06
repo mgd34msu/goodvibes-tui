@@ -4,7 +4,8 @@ export type HookPhase = 'Pre' | 'Post' | 'Fail' | 'Change' | 'Lifecycle';
 /** Hook event categories */
 export type HookCategory =
   | 'tool' | 'file' | 'git' | 'agent' | 'compact'
-  | 'llm' | 'mcp' | 'config' | 'budget' | 'session' | 'workflow';
+  | 'llm' | 'mcp' | 'config' | 'budget' | 'session' | 'workflow'
+  | 'permission' | 'transport' | 'orchestration' | 'communication';
 
 /** A fully qualified hook event path: Phase:Category:Specific */
 export type HookEventPath = `${HookPhase}:${HookCategory}:${string}`;

@@ -133,33 +133,45 @@ function getPluginManagerTestAccess(
 // ─── discoverPlugins ──────────────────────────────────────────────────────────
 
 describe('discoverPlugins', () => {
-  // discoverPlugins reads from PLUGINS_DIR which is $HOME/.goodvibes/tui/plugins.
-  // We can't trivially override it, so we test the loader indirectly via
-  // a temp directory approach, or just verify behavior at the function level.
-
-  test('returns empty array when plugins dir does not exist', async () => {
-    // Patch the PLUGINS_DIR via a dedicated test by importing and calling
-    // the internal scan logic.
+  test('returns an array when no plugin directories exist', async () => {
     const { discoverPlugins } = await import('../../plugins/loader.ts');
-    // PLUGINS_DIR points to $HOME/.goodvibes/tui/plugins — likely missing in CI.
-    // The function is spec'd to return [] when the dir doesn't exist.
-    // If the dir happens to exist, the result should still be an array.
-    const result = discoverPlugins();
+    const result = discoverPlugins(makeTempDir());
     expect(Array.isArray(result)).toBe(true);
   });
 
   test('skips directories without manifest.json', async () => {
-    const { discoverPlugins, PLUGINS_DIR } = await import('../../plugins/loader.ts');
-    const pluginDir = join(PLUGINS_DIR, `missing-manifest-${process.pid}-${Date.now()}`);
-    const hadPluginsDir = existsSync(PLUGINS_DIR);
+    const { discoverPlugins } = await import('../../plugins/loader.ts');
+    const tempRoot = makeTempDir();
+    const pluginDir = join(tempRoot, '.goodvibes', 'plugins', `missing-manifest-${process.pid}-${Date.now()}`);
     mkdirSync(pluginDir, { recursive: true });
 
     try {
-      const result = discoverPlugins();
+      const result = discoverPlugins(tempRoot);
       expect(result.some((plugin) => plugin.pluginDir === pluginDir)).toBe(false);
     } finally {
-      rmSync(pluginDir, { recursive: true, force: true });
-      if (!hadPluginsDir) {
+      rmSync(tempRoot, { recursive: true, force: true });
+    }
+  });
+
+  test('prefers project-local plugins over global plugins with the same name', async () => {
+    const { discoverPlugins, PLUGINS_DIR } = await import('../../plugins/loader.ts');
+    const tempRoot = makeTempDir();
+    const localPluginDir = join(tempRoot, '.goodvibes', 'plugins', 'duplicate-plugin');
+    const globalPluginDir = join(PLUGINS_DIR, `duplicate-plugin-${process.pid}-${Date.now()}`);
+    const hadGlobalDir = existsSync(PLUGINS_DIR);
+    mkdirSync(localPluginDir, { recursive: true });
+    mkdirSync(globalPluginDir, { recursive: true });
+    makeManifest(localPluginDir, { name: 'duplicate-plugin', description: 'local' });
+    makeManifest(globalPluginDir, { name: 'duplicate-plugin', description: 'global' });
+
+    try {
+      const result = discoverPlugins(tempRoot);
+      expect(result.filter((plugin) => plugin.manifest.name === 'duplicate-plugin')).toHaveLength(1);
+      expect(result.find((plugin) => plugin.manifest.name === 'duplicate-plugin')?.pluginDir).toBe(localPluginDir);
+    } finally {
+      rmSync(tempRoot, { recursive: true, force: true });
+      rmSync(globalPluginDir, { recursive: true, force: true });
+      if (!hadGlobalDir) {
         rmSync(PLUGINS_DIR, { recursive: true, force: true });
       }
     }

@@ -1,4 +1,4 @@
-import { existsSync, statSync, watch } from 'fs';
+import { existsSync, statSync, watch, watchFile, unwatchFile, type Stats } from 'fs';
 import type { FSWatcher } from 'fs';
 import { join, resolve } from 'path';
 import { logger } from '../utils/logger.ts';
@@ -46,6 +46,8 @@ export class FileWatcher {
   private watchers: Map<string, FSWatcher> = new Map();
   /** Pending debounce timers keyed by absolute path */
   private debounceTimers: Map<string, ReturnType<typeof setTimeout>> = new Map();
+  /** watchFile listeners keyed by absolute path for reliable polling fallback */
+  private pollListeners: Map<string, (curr: Stats, prev: Stats) => void> = new Map();
 
   private watching = false;
 
@@ -124,6 +126,10 @@ export class FileWatcher {
       try { watcher.close(); } catch (err) { logger.debug('FileWatcher: watcher close error', { error: String(err) }); }
     }
     this.watchers.clear();
+    for (const [absPath, listener] of this.pollListeners) {
+      try { unwatchFile(absPath, listener); } catch (err) { logger.debug('FileWatcher: unwatchFile error', { absPath, error: String(err) }); }
+    }
+    this.pollListeners.clear();
     this.watchedPaths.clear();
 
     logger.debug('FileWatcher: stopped');
@@ -176,6 +182,11 @@ export class FileWatcher {
       try { watcher.close(); } catch (err) { logger.debug('FileWatcher: watcher close error', { error: String(err) }); }
       this.watchers.delete(absPath);
     }
+    const pollListener = this.pollListeners.get(absPath);
+    if (pollListener) {
+      try { unwatchFile(absPath, pollListener); } catch (err) { logger.debug('FileWatcher: unwatchFile error', { absPath, error: String(err) }); }
+      this.pollListeners.delete(absPath);
+    }
   }
 
   /** Return a snapshot of all watched absolute paths. */
@@ -218,6 +229,16 @@ export class FileWatcher {
       });
 
       this.watchers.set(absPath, watcher);
+
+      if (!isDir && !this.pollListeners.has(absPath)) {
+        const pollListener = (curr: Stats, prev: Stats) => {
+          if (curr.mtimeMs !== prev.mtimeMs || curr.size !== prev.size) {
+            this._scheduleChange(absPath);
+          }
+        };
+        watchFile(absPath, { interval: FileWatcher.DEBOUNCE_MS }, pollListener);
+        this.pollListeners.set(absPath, pollListener);
+      }
     } catch (err) {
       logger.debug('FileWatcher: failed to open watcher', { absPath, error: String(err) });
     }

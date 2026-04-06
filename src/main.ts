@@ -446,7 +446,7 @@ async function main() {
     // Calculate how many rows are consumed by overlays (thinking, permissions, queue, file picker)
     let overlayRows = 0;
     if (orchestrator.isThinking) overlayRows += 2; // spinner + blank
-    if (pendingPermission) overlayRows += 8; // permission prompt
+    if (pendingPermission) overlayRows += PermissionPromptUI.getPromptHeight(pendingPermission);
     overlayRows += orchestrator.messageQueue.length * 3; // queued messages
     // File picker and model picker overlay rows computed from actual rendered line count below
     // Selection modal overlay rows are computed from actual rendered line count below
@@ -701,6 +701,7 @@ async function main() {
     providerRegistry,
     runtime,
     featureFlags: ctx.featureFlags,
+    mcpRegistry,
     getConfiguredProviderIds,
     getPinned,
     render,

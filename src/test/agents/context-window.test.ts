@@ -33,7 +33,11 @@ function makeRecord(overrides: Partial<AgentRecord> = {}): AgentRecord {
     tools: [],
     status: 'pending',
     startedAt: Date.now(),
+    orchestrationDepth: 0,
     toolCallCount: 0,
+    executionProtocol: 'gather-plan-apply',
+    reviewMode: 'wrfc',
+    communicationLane: 'direct',
     ...overrides,
   };
 }

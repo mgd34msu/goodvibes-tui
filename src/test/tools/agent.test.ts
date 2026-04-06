@@ -1,7 +1,10 @@
-import { describe, test, expect, beforeEach, spyOn } from 'bun:test';
+import { describe, test, expect, beforeEach, afterEach, spyOn } from 'bun:test';
 import { agentTool } from '../../tools/agent/index.ts';
 import { AgentManager } from '../../tools/agent/index.ts';
 import { AgentMessageBus } from '../../agents/message-bus.ts';
+import { RuntimeEventBus } from '../../runtime/events/index.ts';
+import { configManager } from '../../config/index.ts';
+import type { OrchestrationEvent } from '../../runtime/events/orchestration.ts';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -24,6 +27,15 @@ async function runAgentMayFail(args: Record<string, unknown>) {
 beforeEach(() => {
   AgentManager.resetInstance();
   AgentMessageBus.resetInstance();
+  configManager.set('orchestration.maxActiveAgents', 8);
+  configManager.set('orchestration.maxDepth', 1);
+  configManager.set('orchestration.recursionEnabled', true);
+});
+
+afterEach(() => {
+  configManager.set('orchestration.maxActiveAgents', 8);
+  configManager.set('orchestration.maxDepth', 0);
+  configManager.set('orchestration.recursionEnabled', false);
 });
 
 // ---------------------------------------------------------------------------
@@ -31,6 +43,30 @@ beforeEach(() => {
 // ---------------------------------------------------------------------------
 
 describe('spawn mode', () => {
+  test('cohort spawn emits orchestration graph events on the runtime bus', () => {
+    const bus = new RuntimeEventBus();
+    const manager = AgentManager.getInstance();
+    manager.setRuntimeBus(bus);
+    const seen: string[] = [];
+
+    const unsub = bus.onDomain('orchestration', (event) => {
+      seen.push(event.type);
+    });
+
+    manager.spawn({
+      mode: 'spawn',
+      task: 'Stuck task',
+      cohort: 'alpha',
+      template: 'engineer',
+      tools: [],
+    });
+
+    unsub();
+    expect(seen).toContain('ORCHESTRATION_GRAPH_CREATED');
+    expect(seen).toContain('ORCHESTRATION_NODE_ADDED');
+    expect(seen).toContain('ORCHESTRATION_NODE_STARTED');
+  });
+
   test('spawn creates agent with correct ID format', async () => {
     const result = await runAgent({ mode: 'spawn', task: 'Implement user auth' });
     expect(typeof result.agentId).toBe('string');
@@ -130,6 +166,227 @@ describe('spawn mode', () => {
 
     expect(statusB.tools).toEqual(['read']);
     expect((statusB.tools as string[])).not.toContain('write');
+  });
+
+  test('child spawn inherits and enforces the parent capability ceiling', async () => {
+    const parent = await runAgent({
+      mode: 'spawn',
+      task: 'Parent engineer',
+      template: 'engineer',
+      tools: ['read', 'find'],
+      restrictTools: true,
+    });
+
+    const child = await runAgent({
+      mode: 'spawn',
+      task: 'Child researcher',
+      template: 'general',
+      tools: ['read', 'exec', 'find'],
+      restrictTools: true,
+      parentAgentId: parent.agentId as string,
+      successCriteria: ['answer the question'],
+      requiredEvidence: ['file list'],
+      writeScope: ['src/runtime'],
+      executionProtocol: 'gather-plan-apply',
+      reviewMode: 'wrfc',
+      communicationLane: 'parent-only',
+    });
+
+    expect(child.tools).toEqual(['read', 'find']);
+    expect(child.capabilityCeilingTools).toEqual(['read', 'find']);
+    expect(child.parentAgentId).toBe(parent.agentId);
+    expect(child.successCriteria).toEqual(['answer the question']);
+    expect(child.requiredEvidence).toEqual(['file list']);
+    expect(child.writeScope).toEqual(['src/runtime']);
+    expect(child.executionProtocol).toBe('gather-plan-apply');
+    expect(child.reviewMode).toBe('wrfc');
+    expect(child.communicationLane).toBe('parent-only');
+  });
+
+  test('child spawn fails when parent capability ceiling would remove all tools', async () => {
+    const parent = await runAgent({
+      mode: 'spawn',
+      task: 'Parent reviewer',
+      template: 'reviewer',
+      tools: ['read'],
+      restrictTools: true,
+    });
+
+    const result = await runAgentMayFail({
+      mode: 'spawn',
+      task: 'Child exec attempt',
+      template: 'general',
+      tools: ['exec'],
+      restrictTools: true,
+      parentAgentId: parent.agentId as string,
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.error).toContain('capability ceiling');
+  });
+
+  test('child spawn is blocked when recursive orchestration is disabled', async () => {
+    const parent = await runAgent({
+      mode: 'spawn',
+      task: 'Parent engineer',
+      template: 'engineer',
+      tools: ['read', 'find'],
+      restrictTools: true,
+    });
+
+    configManager.set('orchestration.recursionEnabled', false);
+    const result = await runAgentMayFail({
+      mode: 'spawn',
+      task: 'Blocked child',
+      template: 'general',
+      tools: ['read'],
+      restrictTools: true,
+      parentAgentId: parent.agentId as string,
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.error).toContain('recursive orchestration is disabled');
+  });
+
+  test('grandchild spawn is blocked when depth exceeds policy and emits recursion guard evidence', () => {
+    const bus = new RuntimeEventBus();
+    const manager = AgentManager.getInstance();
+    manager.setRuntimeBus(bus);
+    const seen: string[] = [];
+
+    const unsub = bus.on<Extract<OrchestrationEvent, { type: 'ORCHESTRATION_RECURSION_GUARD_TRIGGERED' }>>('ORCHESTRATION_RECURSION_GUARD_TRIGGERED', ({ payload }) => {
+      seen.push(`${payload.graphId}:${payload.reason}`);
+    });
+
+    const parent = manager.spawn({
+      mode: 'spawn',
+      task: 'Stuck task',
+      template: 'engineer',
+      tools: ['read', 'find'],
+      restrictTools: true,
+      cohort: 'alpha',
+    });
+    const child = manager.spawn({
+      mode: 'spawn',
+      task: 'Stuck task',
+      template: 'engineer',
+      tools: ['read'],
+      restrictTools: true,
+      parentAgentId: parent.id,
+      parentNodeId: parent.orchestrationNodeId,
+      orchestrationGraphId: parent.orchestrationGraphId,
+      orchestrationNodeId: 'child-node',
+    });
+
+    expect(() => manager.spawn({
+      mode: 'spawn',
+      task: 'Stuck task',
+      template: 'engineer',
+      tools: ['read'],
+      restrictTools: true,
+      parentAgentId: child.id,
+      parentNodeId: child.orchestrationNodeId,
+      orchestrationGraphId: child.orchestrationGraphId,
+      orchestrationNodeId: 'grandchild-node',
+    })).toThrow(/depth/i);
+
+    unsub();
+    expect(seen.some((entry) => entry.includes('cohort:alpha'))).toBe(true);
+  });
+
+  test('cohort spawn emits orchestration node contracts on the runtime bus', () => {
+    const bus = new RuntimeEventBus();
+    const manager = AgentManager.getInstance();
+    manager.setRuntimeBus(bus);
+    const payloads: Array<Record<string, unknown>> = [];
+
+    const unsub = bus.on('ORCHESTRATION_NODE_ADDED', ({ payload }) => {
+      payloads.push(payload as unknown as Record<string, unknown>);
+    });
+
+    manager.spawn({
+      mode: 'spawn',
+      task: 'Stuck task',
+      cohort: 'alpha',
+      template: 'engineer',
+      tools: ['read', 'edit'],
+      restrictTools: true,
+      successCriteria: ['edit target file'],
+      requiredEvidence: ['changed lines'],
+      writeScope: ['src/core'],
+      executionProtocol: 'gather-plan-apply',
+      reviewMode: 'wrfc',
+      communicationLane: 'parent-only',
+    });
+
+    unsub();
+    const node = payloads[0];
+    expect(node).toBeDefined();
+    expect(node?.contract).toEqual({
+      allowedTools: ['read', 'edit'],
+      capabilityCeiling: ['read', 'edit'],
+      successCriteria: ['edit target file'],
+      requiredEvidence: ['changed lines'],
+      writeScope: ['src/core'],
+      executionProtocol: 'gather-plan-apply',
+      reviewMode: 'wrfc',
+      inheritsParentConstraints: false,
+      communicationLane: 'parent-only',
+    });
+  });
+
+  test('cancel subtree cancels the root and all descendants', () => {
+    const manager = AgentManager.getInstance();
+    configManager.set('orchestration.maxDepth', 2);
+    const parent = manager.spawn({
+      mode: 'spawn',
+      task: 'Stuck task',
+      template: 'engineer',
+      tools: ['read'],
+      restrictTools: true,
+      cohort: 'alpha',
+    });
+    const child = manager.spawn({
+      mode: 'spawn',
+      task: 'Stuck task',
+      template: 'engineer',
+      tools: ['read'],
+      restrictTools: true,
+      parentAgentId: parent.id,
+      parentNodeId: parent.orchestrationNodeId,
+      orchestrationGraphId: parent.orchestrationGraphId,
+      orchestrationNodeId: 'child-node',
+    });
+    const grandchild = manager.spawn({
+      mode: 'spawn',
+      task: 'Stuck task',
+      template: 'engineer',
+      tools: ['read'],
+      restrictTools: true,
+      parentAgentId: child.id,
+      parentNodeId: child.orchestrationNodeId,
+      orchestrationGraphId: child.orchestrationGraphId,
+      orchestrationNodeId: 'grandchild-node',
+    });
+
+    const cancelled = manager.cancelSubtree(parent.id);
+    expect(cancelled).toEqual([parent.id, child.id, grandchild.id]);
+    expect(manager.getStatus(parent.id)?.status).toBe('cancelled');
+    expect(manager.getStatus(child.id)?.status).toBe('cancelled');
+    expect(manager.getStatus(grandchild.id)?.status).toBe('cancelled');
+  });
+
+  test('cancel graph cancels all agents in the target graph only', () => {
+    const manager = AgentManager.getInstance();
+    const alphaA = manager.spawn({ mode: 'spawn', task: 'Stuck task', template: 'engineer', tools: ['read'], restrictTools: true, cohort: 'alpha' });
+    const alphaB = manager.spawn({ mode: 'spawn', task: 'Stuck task', template: 'engineer', tools: ['read'], restrictTools: true, cohort: 'alpha' });
+    const beta = manager.spawn({ mode: 'spawn', task: 'Stuck task', template: 'engineer', tools: ['read'], restrictTools: true, cohort: 'beta' });
+
+    const cancelled = manager.cancelGraph('cohort:alpha');
+    expect(cancelled.sort()).toEqual([alphaA.id, alphaB.id].sort());
+    expect(manager.getStatus(alphaA.id)?.status).toBe('cancelled');
+    expect(manager.getStatus(alphaB.id)?.status).toBe('cancelled');
+    expect(manager.getStatus(beta.id)?.status).toBe('pending');
   });
 
   test('spawn without task returns error', async () => {

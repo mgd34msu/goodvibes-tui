@@ -20,6 +20,7 @@
 export const DOMAINS = [
   'acp',
   'agents',
+  'communication',
   'conversation',
   'daemon',
   'discovery',
@@ -28,6 +29,7 @@ export const DOMAINS = [
   'intelligence',
   'mcp',
   'model',
+  'orchestration',
   'overlays',
   'panels',
   'permissions',

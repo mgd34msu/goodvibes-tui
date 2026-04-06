@@ -7,6 +7,7 @@ import type { ContentPart } from '../providers/interface.ts';
 import type { CommandContext } from './command-registry.ts';
 import { getBookmarkManager } from '../bookmarks/manager.ts';
 import { resolveAndValidatePath } from '../utils/path-safety.ts';
+import { analyzePermissionRequest } from '../permissions/analysis.ts';
 import { logger } from '../utils/logger.ts';
 import type { SelectionManager } from './selection.ts';
 
@@ -344,6 +345,11 @@ export function handleDiffApply(
     tool: 'edit',
     args: { path: diff.filePath, original: diff.original, updated: diff.updated },
     category,
+    analysis: analyzePermissionRequest(
+      'edit',
+      { path: diff.filePath, original: diff.original, updated: diff.updated },
+      category,
+    ),
   }).then(({ approved }) => {
     if (!approved) return;
     let resolvedPath: string;

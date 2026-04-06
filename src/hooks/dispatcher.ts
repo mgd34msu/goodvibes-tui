@@ -1,6 +1,8 @@
 import { readFileSync, statSync } from 'fs';
 import type { HookDefinition, HookChain, HookEvent, HookResult } from './types.ts';
 import { matchesEventPath, matchesMatcher } from './matcher.ts';
+import { getHookPointContract } from './contracts.ts';
+import { getHookActivityTracker } from './activity.ts';
 import { logger } from '../utils/logger.ts';
 import type { HooksConfig } from './types.ts';
 import * as commandRunner from './runners/command.ts';
@@ -158,6 +160,7 @@ export class HookDispatcher {
    * Async hooks fire and forget.
    */
   async fire(event: HookEvent): Promise<HookResult> {
+    const contract = getHookPointContract(event.path);
     const matchingEntries: Array<{ pattern: string; hook: HookDefinition }> = [];
 
     for (const [pattern, defs] of this.hooks.entries()) {
@@ -192,17 +195,39 @@ export class HookDispatcher {
 
       // Async hooks fire and forget
       if (hook.async) {
-        runHook(hook, event).catch((err) => {
-          logger.error('HookDispatcher: async hook error', {
-            path: event.path,
-            error: err instanceof Error ? err.message : String(err),
+        const asyncStart = Date.now();
+        runHook(hook, event)
+          .then((result) => {
+            getHookActivityTracker().record(event, {
+              pattern,
+              hookName: hook.name,
+              hookType: hook.type,
+              result,
+              durationMs: Date.now() - asyncStart,
+              async: true,
+            });
+          })
+          .catch((err) => {
+            const message = err instanceof Error ? err.message : String(err);
+            logger.error('HookDispatcher: async hook error', {
+              path: event.path,
+              error: message,
+            });
+            getHookActivityTracker().record(event, {
+              pattern,
+              hookName: hook.name,
+              hookType: hook.type,
+              result: { ok: false, error: message },
+              durationMs: Date.now() - asyncStart,
+              async: true,
+            });
           });
-        });
         if (hook.once) onceToRemove.push({ pattern, hook });
         continue;
       }
 
       let result: HookResult;
+      const hookStart = Date.now();
       try {
         result = await runHook(hook, event);
       } catch (err) {
@@ -213,6 +238,14 @@ export class HookDispatcher {
         });
         result = { ok: false, error: message };
       }
+      getHookActivityTracker().record(event, {
+        pattern,
+        hookName: hook.name,
+        hookType: hook.type,
+        result,
+        durationMs: Date.now() - hookStart,
+        async: false,
+      });
 
       if (hook.once) onceToRemove.push({ pattern, hook });
 
@@ -222,22 +255,22 @@ export class HookDispatcher {
       }
 
       // For Pre hooks: first deny wins
-      if (event.phase === 'Pre' && result.decision === 'deny') {
+      if ((contract?.canDeny ?? event.phase === 'Pre') && result.decision === 'deny') {
         if (aggregated.decision !== 'deny') {
           aggregated.decision = 'deny';
           aggregated.reason = result.reason;
         }
-      } else if (result.decision && aggregated.decision !== 'deny') {
+      } else if (result.decision && (contract?.canDeny ?? event.phase === 'Pre') && aggregated.decision !== 'deny') {
         aggregated.decision = result.decision;
         if (result.reason) aggregated.reason = result.reason;
       }
 
       // Last updatedInput wins
-      if (result.updatedInput) {
+      if (result.updatedInput && (contract?.canMutateInput ?? true)) {
         updatedInput = result.updatedInput;
       }
 
-      if (result.additionalContext) {
+      if (result.additionalContext && (contract?.canInjectContext ?? true)) {
         contextParts.push(result.additionalContext);
       }
     }

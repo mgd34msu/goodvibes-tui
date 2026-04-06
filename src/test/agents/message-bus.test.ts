@@ -75,6 +75,36 @@ describe('send', () => {
     expect(msgs).toHaveLength(3);
     expect(msgs.map((m) => m.content)).toEqual(['first', 'second', 'third']);
   });
+
+  test('enforces direct-route policy when both sender and recipient are registered', () => {
+    const bus = AgentMessageBus.getInstance();
+    bus.registerAgent({ agentId: 'engineer-1', role: 'engineer', wrfcId: 'wrfc-1' });
+    bus.registerAgent({ agentId: 'reviewer-1', role: 'reviewer', wrfcId: 'wrfc-1' });
+
+    const allowed = bus.send('reviewer-1', 'engineer-1', 'Please address findings', {
+      kind: 'review',
+    });
+
+    expect(allowed).toBe(true);
+    const msgs = bus.getMessages('engineer-1');
+    expect(msgs).toHaveLength(1);
+    expect(msgs[0]?.kind).toBe('review');
+    expect(msgs[0]?.fromRole).toBe('reviewer');
+    expect(msgs[0]?.toRole).toBe('engineer');
+  });
+
+  test('blocks direct routes outside the registered communication policy', () => {
+    const bus = AgentMessageBus.getInstance();
+    bus.registerAgent({ agentId: 'reviewer-1', role: 'reviewer', wrfcId: 'wrfc-1' });
+    bus.registerAgent({ agentId: 'general-1', role: 'general', cohort: 'team-1' });
+
+    const allowed = bus.send('reviewer-1', 'general-1', 'Broadcasting review detail sideways', {
+      kind: 'review',
+    });
+
+    expect(allowed).toBe(false);
+    expect(bus.getMessages('general-1')).toEqual([]);
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -108,6 +138,18 @@ describe('broadcast', () => {
     bus.broadcast('agent-a', 'Global');
     expect(bus.getMessages('agent-x').some((m) => m.content === 'Global')).toBe(true);
     expect(bus.getMessages('agent-y').some((m) => m.content === 'Global')).toBe(true);
+  });
+
+  test('blocks broadcast for registered roles outside broadcast policy', () => {
+    const bus = AgentMessageBus.getInstance();
+    bus.registerAgent({ agentId: 'reviewer-1', role: 'reviewer', wrfcId: 'wrfc-1' });
+
+    const allowed = bus.broadcast('reviewer-1', 'Everyone listen up', {
+      kind: 'status',
+    });
+
+    expect(allowed).toBe(false);
+    expect(bus.getMessages('agent-b')).toEqual([]);
   });
 });
 

@@ -17,6 +17,7 @@ import { describe, test, expect, beforeEach, afterEach, mock, spyOn } from 'bun:
 import { AcpConnection } from '../../acp/connection.ts';
 import { AcpManager } from '../../acp/manager.ts';
 import { RuntimeEventBus } from '../../runtime/events/index.ts';
+import type { TransportEvent } from '../../runtime/events/transport.ts';
 import type {
   SubagentInfo,
   SubagentResult,
@@ -214,9 +215,19 @@ describe('AcpConnection', () => {
 
   describe('cancel — no active session', () => {
     test('cancel when not yet running sets status to cancelled', async () => {
+      const transportEvents: TransportEvent[] = [];
+      runtimeBus.onDomain('transport', ({ payload }) => transportEvents.push(payload));
       const conn = new AcpConnection('conn-cancel', makeTask(), ['bun'], undefined, runtimeBus);
       await conn.cancel();
       expect(conn.getInfo().status).toBe('cancelled');
+      expect(transportEvents).toEqual([
+        {
+          type: 'TRANSPORT_DISCONNECTED',
+          transportId: 'acp:conn-cancel',
+          reason: 'ACP session cancelled',
+          willRetry: false,
+        },
+      ]);
     });
 
     test('cancel is idempotent (calling twice does not throw)', async () => {
@@ -274,6 +285,27 @@ describe('AcpConnection', () => {
       expect(errors).toHaveLength(1);
       expect(errors[0].agentId).toBe('err-emit');
       expect(errors[0].error).toContain('spawn failure');
+    });
+
+    test('run emits transport terminal failure when spawn throws', async () => {
+      (Bun as unknown as Record<string, unknown>).spawn = () => {
+        throw new Error('spawn failure');
+      };
+      const events: TransportEvent[] = [];
+      runtimeBus.onDomain('transport', ({ payload }) => events.push(payload));
+
+      const conn = new AcpConnection('transport-err', makeTask(), ['bun'], undefined, runtimeBus);
+      await conn.run();
+
+      expect(events.map((event) => event.type)).toEqual([
+        'TRANSPORT_INITIALIZING',
+        'TRANSPORT_TERMINAL_FAILURE',
+      ]);
+      expect(events[1]).toEqual({
+        type: 'TRANSPORT_TERMINAL_FAILURE',
+        transportId: 'acp:transport-err',
+        error: 'spawn failure',
+      });
     });
 
     test('run sets status to error when spawn throws', async () => {

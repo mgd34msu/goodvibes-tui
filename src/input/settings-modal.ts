@@ -14,19 +14,21 @@ import { CONFIG_SCHEMA, type ConfigSetting, type ConfigKey, type PersistedFlagSt
 import type { ConfigManager } from '../config/manager.ts';
 import type { FeatureFlagManager } from '../runtime/feature-flags/index.ts';
 import type { FeatureFlag, FlagState } from '../runtime/feature-flags/types.ts';
+import type { McpRegistry } from '../mcp/registry.ts';
 import { logger } from '../utils/logger.ts';
 
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
 
-export type SettingsCategory = 'display' | 'provider' | 'behavior' | 'permissions' | 'danger' | 'tools' | 'flags';
+export type SettingsCategory = 'display' | 'provider' | 'behavior' | 'permissions' | 'mcp' | 'danger' | 'tools' | 'flags';
 
 export const SETTINGS_CATEGORIES: SettingsCategory[] = [
   'display',
   'provider',
   'behavior',
   'permissions',
+  'mcp',
   'danger',
   'tools',
   'flags',
@@ -42,6 +44,15 @@ export interface SettingEntry {
 export interface FlagEntry {
   flag: FeatureFlag;
   state: FlagState;
+}
+
+export interface McpEntry {
+  name: string;
+  connected: boolean;
+  role: 'general' | 'docs' | 'filesystem' | 'git' | 'database' | 'browser' | 'automation' | 'ops' | 'remote';
+  trustMode: 'constrained' | 'ask-on-risk' | 'allow-all' | 'blocked';
+  allowedPaths: string[];
+  allowedHosts: string[];
 }
 
 // ---------------------------------------------------------------------------
@@ -62,15 +73,20 @@ export class SettingsModal {
 
   /** Current value of the inline edit buffer. */
   public editBuffer = '';
+  /** Server awaiting explicit allow-all confirmation, if any. */
+  public mcpAllowAllConfirmationTarget: string | null = null;
 
   /** Settings grouped by category. */
   public groups: Map<SettingsCategory, SettingEntry[]> = new Map();
 
   /** Feature flag entries (populated when flags tab is active). */
   public flagEntries: FlagEntry[] = [];
+  /** MCP server trust entries (populated when mcp tab is active). */
+  public mcpEntries: McpEntry[] = [];
 
   private configManager: ConfigManager | null = null;
   private featureFlagManager: FeatureFlagManager | null = null;
+  private mcpRegistry: McpRegistry | null = null;
 
   /**
    * Open the modal, loading current config values from configManager.
@@ -78,15 +94,18 @@ export class SettingsModal {
    * @param configManager - Config manager instance for reading/writing settings.
    * @param featureFlagManager - Feature flag manager for the flags tab.
    */
-  open(configManager: ConfigManager, featureFlagManager: FeatureFlagManager): void {
+  open(configManager: ConfigManager, featureFlagManager: FeatureFlagManager, mcpRegistry?: McpRegistry): void {
     this.configManager = configManager;
     this.featureFlagManager = featureFlagManager;
+    this.mcpRegistry = mcpRegistry ?? null;
     this._loadGroups(configManager);
     this._loadFlagEntries();
+    this._loadMcpEntries();
     this.categoryIndex = 0;
     this.selectedIndex = 0;
     this.editingMode = false;
     this.editBuffer = '';
+    this.mcpAllowAllConfirmationTarget = null;
     this.active = true;
   }
 
@@ -94,6 +113,7 @@ export class SettingsModal {
     this.active = false;
     this.editingMode = false;
     this.editBuffer = '';
+    this.mcpAllowAllConfirmationTarget = null;
   }
 
   /** Cycle to the next category (Tab). */
@@ -103,6 +123,8 @@ export class SettingsModal {
     this.selectedIndex = 0;
     if (this.currentCategory === 'flags') {
       this._loadFlagEntries();
+    } else if (this.currentCategory === 'mcp') {
+      this._loadMcpEntries();
     }
   }
 
@@ -113,6 +135,8 @@ export class SettingsModal {
     this.selectedIndex = 0;
     if (this.currentCategory === 'flags') {
       this._loadFlagEntries();
+    } else if (this.currentCategory === 'mcp') {
+      this._loadMcpEntries();
     }
   }
 
@@ -122,6 +146,8 @@ export class SettingsModal {
     if (items.length === 0) {
       if (this.currentCategory === 'flags' && this.flagEntries.length > 0) {
         this.selectedIndex = (this.selectedIndex - 1 + this.flagEntries.length) % this.flagEntries.length;
+      } else if (this.currentCategory === 'mcp' && this.mcpEntries.length > 0) {
+        this.selectedIndex = (this.selectedIndex - 1 + this.mcpEntries.length) % this.mcpEntries.length;
       }
       return;
     }
@@ -134,6 +160,8 @@ export class SettingsModal {
     if (items.length === 0) {
       if (this.currentCategory === 'flags' && this.flagEntries.length > 0) {
         this.selectedIndex = (this.selectedIndex + 1) % this.flagEntries.length;
+      } else if (this.currentCategory === 'mcp' && this.mcpEntries.length > 0) {
+        this.selectedIndex = (this.selectedIndex + 1) % this.mcpEntries.length;
       }
       return;
     }
@@ -150,6 +178,11 @@ export class SettingsModal {
     return this.flagEntries[this.selectedIndex] ?? null;
   }
 
+  getSelectedMcp(): McpEntry | null {
+    if (this.currentCategory !== 'mcp') return null;
+    return this.mcpEntries[this.selectedIndex] ?? null;
+  }
+
   get currentCategory(): SettingsCategory {
     return SETTINGS_CATEGORIES[this.categoryIndex];
   }
@@ -162,6 +195,15 @@ export class SettingsModal {
    * Toggle boolean or begin cycling enum values, or enter edit mode for string/number.
    */
   activateSelected(): void {
+    if (this.currentCategory === 'mcp') {
+      const entry = this.getSelectedMcp();
+      if (!entry) return;
+      this.editingMode = true;
+      this.editBuffer = entry.trustMode;
+      this.mcpAllowAllConfirmationTarget = null;
+      return;
+    }
+
     const entry = this.getSelected();
     if (!entry || !this.configManager) return;
 
@@ -223,8 +265,47 @@ export class SettingsModal {
    * Returns true on success, false if validation failed.
    */
   commitEdit(): boolean {
+    if (!this.editingMode) return false;
+
+    if (this.currentCategory === 'mcp') {
+      const entry = this.getSelectedMcp();
+      if (!entry || !this.mcpRegistry) return false;
+      if (this.mcpAllowAllConfirmationTarget) {
+        const expected = `ALLOW ALL ${this.mcpAllowAllConfirmationTarget}`;
+        if (this.editBuffer.trim() !== expected) {
+          return false;
+        }
+        this.mcpRegistry.setServerTrustMode(entry.name, 'allow-all');
+        this._loadMcpEntries();
+        this.editingMode = false;
+        this.editBuffer = '';
+        this.mcpAllowAllConfirmationTarget = null;
+        return true;
+      }
+
+      const nextMode = this.editBuffer.trim() as McpEntry['trustMode'];
+      const validModes: McpEntry['trustMode'][] = ['constrained', 'ask-on-risk', 'allow-all', 'blocked'];
+      if (!validModes.includes(nextMode)) {
+        this.editingMode = false;
+        this.editBuffer = '';
+        this.mcpAllowAllConfirmationTarget = null;
+        return false;
+      }
+      if (nextMode === 'allow-all' && entry.trustMode !== 'allow-all') {
+        this.mcpAllowAllConfirmationTarget = entry.name;
+        this.editBuffer = '';
+        return false;
+      }
+      this.mcpRegistry.setServerTrustMode(entry.name, nextMode);
+      this._loadMcpEntries();
+      this.editingMode = false;
+      this.editBuffer = '';
+      this.mcpAllowAllConfirmationTarget = null;
+      return true;
+    }
+
     const entry = this.getSelected();
-    if (!entry || !this.configManager || !this.editingMode) return false;
+    if (!entry || !this.configManager) return false;
 
     const { setting } = entry;
     let parsed: unknown = this.editBuffer;
@@ -254,6 +335,7 @@ export class SettingsModal {
   cancelEdit(): void {
     this.editingMode = false;
     this.editBuffer = '';
+    this.mcpAllowAllConfirmationTarget = null;
   }
 
   /** Handle a keystroke in edit mode: regular chars appended, Backspace removes last char. */
@@ -301,6 +383,21 @@ export class SettingsModal {
     }));
   }
 
+  private _loadMcpEntries(): void {
+    if (!this.mcpRegistry) {
+      this.mcpEntries = [];
+      return;
+    }
+    this.mcpEntries = this.mcpRegistry.listServerSecurity().map((entry) => ({
+      name: entry.name,
+      connected: entry.connected,
+      role: entry.role,
+      trustMode: entry.trustMode,
+      allowedPaths: [...entry.allowedPaths],
+      allowedHosts: [...entry.allowedHosts],
+    }));
+  }
+
   /**
    * Persist a flag state override to config.
    * Deletes the entry when reverting to defaultState. Skips killed state.
@@ -325,7 +422,7 @@ export class SettingsModal {
 
   /** Returns [] for the flags category (flags use flagEntries instead). */
   private _currentItems(): SettingEntry[] {
-    if (this.currentCategory === 'flags') return [];
+    if (this.currentCategory === 'flags' || this.currentCategory === 'mcp') return [];
     return this.groups.get(this.currentCategory) ?? [];
   }
 

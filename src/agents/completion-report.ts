@@ -14,6 +14,9 @@ export interface BaseCompletionReport {
 /** Engineer agent completion report. */
 export interface EngineerReport extends BaseCompletionReport {
   archetype: 'engineer';
+  gatheredContext: string[];
+  plannedActions: string[];
+  appliedChanges: string[];
   filesCreated: string[];
   filesModified: string[];
   filesDeleted: string[];

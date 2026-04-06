@@ -22,6 +22,11 @@ const C = {
   constraint:  '#f97316',
   incident:    '#ef4444',
   pattern:     '#a78bfa',
+  fact:        '#22c55e',
+  risk:        '#f43f5e',
+  runbook:     '#eab308',
+  architecture:'#60a5fa',
+  ownership:   '#14b8a6',
   summary:     '#e2e8f0',
   detail:      '#94a3b8',
   tag:         '#22c55e',
@@ -50,6 +55,11 @@ function classColor(cls: MemoryClass): string {
     case 'constraint': return C.constraint;
     case 'incident':   return C.incident;
     case 'pattern':    return C.pattern;
+    case 'fact':       return C.fact;
+    case 'risk':       return C.risk;
+    case 'runbook':    return C.runbook;
+    case 'architecture': return C.architecture;
+    case 'ownership':  return C.ownership;
   }
 }
 
@@ -229,7 +239,7 @@ export class MemoryPanel extends BasePanel {
       const idShort = r.id.slice(-8);
 
       // Row 1: [cls] id  timestamp  tags
-      const rowText = `  [${r.cls.slice(0, 3).toUpperCase()}] ${idShort}  ${ts}${tagStr}`;
+      const rowText = `  [${r.scope.slice(0, 1).toUpperCase()}/${r.cls.slice(0, 3).toUpperCase()}] ${idShort}  ${ts}${tagStr}`;
       const row1 = createEmptyLine(width);
       let col = 0;
       for (const ch of rowText) {

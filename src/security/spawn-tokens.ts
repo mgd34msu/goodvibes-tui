@@ -24,10 +24,10 @@ export interface SpawnToken {
   signature: string;        // HMAC-SHA256
 }
 
-export interface DangerConfig {
-  agentRecursion: boolean;
-  maxRecursionDepth: number;
-  maxGlobalAgents: number;
+export interface OrchestrationPolicyConfig {
+  recursionEnabled: boolean;
+  maxDepth: number;
+  maxActiveAgents: number;
 }
 
 interface ValidateResult {
@@ -45,11 +45,11 @@ interface CanSpawnResult {
 // ---------------------------------------------------------------------------
 
 /**
- * Manages spawn tokens for the agent recursion security model.
+ * Manages spawn tokens for the bounded recursive orchestration security model.
  *
  * Security model (3 layers):
- *   1. Config gate   — agentRecursion must be true
- *   2. Capacity gate — currentAgentCount < maxGlobalAgents && depth <= maxRecursionDepth
+ *   1. Policy gate   — recursionEnabled must be true
+ *   2. Capacity gate — currentAgentCount < maxActiveAgents && depth <= maxDepth
  *   3. Token gate    — token must be valid, authentic, not expired, and canGenerate
  */
 export class SpawnTokenManager {
@@ -198,25 +198,25 @@ export class SpawnTokenManager {
    */
   canSpawn(
     token: SpawnToken,
-    config: DangerConfig,
+    config: OrchestrationPolicyConfig,
     currentAgentCount: number,
   ): CanSpawnResult {
-    // Layer 1: config gate
-    if (!config.agentRecursion) {
-      return { allowed: false, reason: 'agentRecursion is disabled in config' };
+    // Layer 1: policy gate
+    if (!config.recursionEnabled) {
+      return { allowed: false, reason: 'recursive orchestration is disabled in policy' };
     }
 
     // Layer 2: capacity checks
-    if (currentAgentCount >= config.maxGlobalAgents) {
+    if (currentAgentCount >= config.maxActiveAgents) {
       return {
         allowed: false,
-        reason: `maxGlobalAgents limit reached (${currentAgentCount}/${config.maxGlobalAgents})`,
+        reason: `maxActiveAgents limit reached (${currentAgentCount}/${config.maxActiveAgents})`,
       };
     }
-    if (token.depth > config.maxRecursionDepth) {
+    if (token.depth > config.maxDepth) {
       return {
         allowed: false,
-        reason: `depth ${token.depth} exceeds maxRecursionDepth ${config.maxRecursionDepth}`,
+        reason: `depth ${token.depth} exceeds maxDepth ${config.maxDepth}`,
       };
     }
 

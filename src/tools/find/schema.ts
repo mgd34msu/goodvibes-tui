@@ -9,6 +9,9 @@ export const findSchema: ToolDefinition = {
   description:
     'Search the codebase using glob patterns, regex content search, or symbol extraction. ' +
     'Supports multiple queries in one call. Modes: files (glob), content (grep), symbols (regex).',
+  sideEffects: ['read_fs'],
+  concurrency: 'parallel',
+  supportsProgress: true,
   parameters: {
     type: 'object',
     properties: {

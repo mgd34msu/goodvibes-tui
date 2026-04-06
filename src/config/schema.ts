@@ -58,10 +58,12 @@ export interface GoodVibesConfig {
     mode: PermissionMode;       // default: 'prompt'
     tools: PermissionsToolConfig;
   };
+  orchestration: {
+    recursionEnabled: boolean;  // default: false — allow recursive agent spawning under bounded policy
+    maxActiveAgents: number;    // default: 8 — total active agents across the orchestration tree
+    maxDepth: number;           // default: 0 — 0=off, higher values allow deeper bounded recursion
+  };
   danger: {
-    agentRecursion: boolean;        // default: false — allow agents to spawn subagents
-    maxGlobalAgents: number;        // default: 8 — total agents across all levels
-    maxRecursionDepth: number;      // default: 0 — 0=off, 1=one level (max allowed)
     daemon: boolean;                // default: false — enable daemon mode
     httpListener: boolean;          // default: false — enable HTTP webhook listener
   };
@@ -143,9 +145,9 @@ export type ConfigKey =
   | 'permissions.tools.registry'
   | 'permissions.tools.delegate'
   | 'permissions.tools.mcp'
-  | 'danger.agentRecursion'
-  | 'danger.maxGlobalAgents'
-  | 'danger.maxRecursionDepth'
+  | 'orchestration.recursionEnabled'
+  | 'orchestration.maxActiveAgents'
+  | 'orchestration.maxDepth'
   | 'danger.daemon'
   | 'danger.httpListener'
   | 'tools.llmProvider'
@@ -176,8 +178,8 @@ export const CONFIG_KEYS = new Set<string>([
   'permissions.tools.exec', 'permissions.tools.find', 'permissions.tools.fetch',
   'permissions.tools.analyze', 'permissions.tools.inspect', 'permissions.tools.agent',
   'permissions.tools.state', 'permissions.tools.workflow', 'permissions.tools.registry',
-  'permissions.tools.delegate', 'permissions.tools.mcp', 'danger.agentRecursion', 'danger.maxGlobalAgents',
-  'danger.maxRecursionDepth', 'danger.daemon', 'danger.httpListener',
+  'permissions.tools.delegate', 'permissions.tools.mcp', 'orchestration.recursionEnabled', 'orchestration.maxActiveAgents',
+  'orchestration.maxDepth', 'danger.daemon', 'danger.httpListener',
   'tools.llmProvider', 'tools.llmModel', 'tools.autoHeal', 'tools.defaultTokenBudget',
   'tools.hooksFile', 'wrfc.scoreThreshold', 'wrfc.maxFixAttempts', 'wrfc.autoCommit',
   'cache.enabled', 'cache.stableTtl', 'cache.monitorHitRate', 'cache.hitRateWarningThreshold',
@@ -224,9 +226,9 @@ export type ConfigValue<K extends ConfigKey> =
   K extends 'permissions.tools.registry' ? PermissionAction :
   K extends 'permissions.tools.delegate' ? PermissionAction :
   K extends 'permissions.tools.mcp' ? PermissionAction :
-  K extends 'danger.agentRecursion' ? boolean :
-  K extends 'danger.maxGlobalAgents' ? number :
-  K extends 'danger.maxRecursionDepth' ? number :
+  K extends 'orchestration.recursionEnabled' ? boolean :
+  K extends 'orchestration.maxActiveAgents' ? number :
+  K extends 'orchestration.maxDepth' ? number :
   K extends 'danger.daemon' ? boolean :
   K extends 'danger.httpListener' ? boolean :
   K extends 'tools.llmProvider' ? string :
@@ -290,10 +292,12 @@ export const DEFAULT_CONFIG: GoodVibesConfig = {
       mcp: 'prompt',
     },
   },
+  orchestration: {
+    recursionEnabled: false,
+    maxActiveAgents: 8,
+    maxDepth: 0,
+  },
   danger: {
-    agentRecursion: false,
-    maxGlobalAgents: 8,
-    maxRecursionDepth: 0,
     daemon: false,
     httpListener: false,
   },
@@ -537,24 +541,24 @@ export const CONFIG_SCHEMA: ConfigSetting[] = [
     enumValues: ['allow', 'prompt', 'deny'],
   },
   {
-    key: 'danger.agentRecursion',
+    key: 'orchestration.recursionEnabled',
     type: 'boolean',
     default: false,
-    description: 'Allow agents to spawn subagents (dangerous: can cause runaway recursion)',
+    description: 'Allow recursive agent orchestration under bounded policy controls',
   },
   {
-    key: 'danger.maxGlobalAgents',
+    key: 'orchestration.maxActiveAgents',
     type: 'number',
     default: 8,
-    description: 'Total concurrent agents allowed across all recursion levels',
+    description: 'Total active agents allowed across the orchestration tree',
     validate: (v) => typeof v === 'number' && v >= 1 && v <= 20,
   },
   {
-    key: 'danger.maxRecursionDepth',
+    key: 'orchestration.maxDepth',
     type: 'number',
     default: 0,
-    description: 'Maximum agent recursion depth: 0=disabled, 1=one level (maximum allowed)',
-    validate: (v) => typeof v === 'number' && (v === 0 || v === 1),
+    description: 'Maximum recursive orchestration depth: 0=disabled, higher values allow deeper bounded recursion',
+    validate: (v) => typeof v === 'number' && v >= 0 && v <= 5,
   },
   {
     key: 'danger.daemon',

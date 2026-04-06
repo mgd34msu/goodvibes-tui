@@ -24,6 +24,7 @@ export interface WrfcChain {
   id: string;
   state: WrfcState;
   task: string;
+  currentNodeId?: string;
   engineerAgentId?: string;
   reviewerAgentId?: string;
   fixerAgentId?: string;

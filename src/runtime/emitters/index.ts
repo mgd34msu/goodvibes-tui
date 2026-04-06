@@ -38,6 +38,8 @@ export * from './tools.ts';
 export * from './tasks.ts';
 export * from './agents.ts';
 export * from './workflows.ts';
+export * from './orchestration.ts';
+export * from './communication.ts';
 export * from './planner.ts';
 export * from './permissions.ts';
 export * from './plugins.ts';

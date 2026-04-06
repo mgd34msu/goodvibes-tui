@@ -7,6 +7,9 @@ import type { ToolRegistry } from '../tools/registry.ts';
 import type { PermissionRequestHandler } from '../permissions/prompt.ts';
 import type { SelectionItem, SelectionResult, SelectionAction } from './selection-modal.ts';
 import type { FileUndoManager } from '../state/file-undo.ts';
+import type { RuntimeStore } from '../runtime/store/index.ts';
+import type { TaskManager } from '../runtime/tasks/types.ts';
+import type { AcpManager } from '../acp/manager.ts';
 
 /**
  * CommandContext - Passed to every slash command handler so commands can
@@ -94,12 +97,30 @@ export interface CommandContext {
   openPanelPicker?: () => void;
   /** Toggle the Operator Control Plane (Ops) panel. */
   openOpsPanel?: () => void;
+  /** Open the unified operator cockpit panel. */
+  openCockpitPanel?: () => void;
+  /** Open the orchestration graph control-room panel. */
+  openOrchestrationPanel?: () => void;
   /** OpsControlPlane instance for operator intervention commands. */
   opsControlPlane?: import('../runtime/ops/control-plane.ts').OpsControlPlane;
   /** Open the Failure Forensics panel. */
   openForensicsPanel?: () => void;
+  /** Open the incident review panel. */
+  openIncidentPanel?: () => void;
   /** Open the policy/governance panel. */
   openPolicyPanel?: () => void;
+  /** Open the hooks control-room panel. */
+  openHooksPanel?: () => void;
+  /** Open the structured communication control-room panel. */
+  openCommunicationPanel?: () => void;
+  /** Open the MCP control-room panel. */
+  openMcpPanel?: () => void;
+  /** Open the token security control-room panel. */
+  openSecurityPanel?: () => void;
+  /** Open the project knowledge control-room panel. */
+  openKnowledgePanel?: () => void;
+  /** Open the remote/transport control-room panel. */
+  openRemotePanel?: () => void;
   /** ForensicsRegistry for /forensics command subcommands. */
   forensicsRegistry?: import('../runtime/forensics/registry.ts').ForensicsRegistry;
   /** PolicyRegistry for /policy command subcommands. */
@@ -126,6 +147,12 @@ export interface CommandContext {
    * `getSessionOrchestration()` when undefined.
    */
   sessionOrchestration?: import('../sessions/orchestration/index.ts').CrossSessionTaskRegistry;
+  /** Runtime store for live control-room commands. */
+  runtimeStore?: RuntimeStore;
+  /** Unified runtime task manager for richer task control surfaces. */
+  taskManager?: TaskManager;
+  /** ACP manager for self-hosted remote subagent dispatch and cancellation. */
+  acpManager?: AcpManager;
 }
 
 /**

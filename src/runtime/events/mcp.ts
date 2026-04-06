@@ -6,7 +6,7 @@
 
 export type McpEvent =
   /** MCP server configuration has been parsed and validated. */
-  | { type: 'MCP_CONFIGURED'; serverId: string; transport: string; url?: string }
+  | { type: 'MCP_CONFIGURED'; serverId: string; transport: string; url?: string; role?: import('../mcp/types.ts').McpServerRole; trustMode?: import('../mcp/types.ts').McpTrustMode; allowedPaths?: string[]; allowedHosts?: string[] }
   /** Connection attempt to MCP server is in progress. */
   | { type: 'MCP_CONNECTING'; serverId: string }
   /** Connection to MCP server established successfully. */
@@ -31,7 +31,9 @@ export type McpEvent =
    * execution override. Freshness transitions to `stale`; a refresh is still
    * recommended.
    */
-  | { type: 'MCP_SCHEMA_QUARANTINE_APPROVED'; serverId: string; operatorId: string };
+  | { type: 'MCP_SCHEMA_QUARANTINE_APPROVED'; serverId: string; operatorId: string }
+  /** MCP trust/role policy has changed. */
+  | { type: 'MCP_POLICY_UPDATED'; serverId: string; role: import('../mcp/types.ts').McpServerRole; trustMode: import('../mcp/types.ts').McpTrustMode; allowedPaths: string[]; allowedHosts: string[] };
 
 /** All MCP event type literals as a union. */
 export type McpEventType = McpEvent['type'];

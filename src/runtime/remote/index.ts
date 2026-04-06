@@ -42,6 +42,10 @@ export type {
   RemoteHealth,
   RemoteSubstrateConfig,
   RemoteConnectionHealth,
+  RemoteRunnerContract,
+  RemoteRunnerCapabilityCeiling,
+  RemoteExecutionArtifact,
+  RemoteRunnerEvidenceSummary,
   TransportMessage,
   ControlMessage,
   DataMessage,
@@ -119,6 +123,13 @@ export { DurableIdentityManager } from './identity.ts';
 export { ReconnectEngine, generateIdempotencyKey } from './reconnect.ts';
 export { RemoteStateSyncer, createNoOpSyncCallbacks, buildAcpConnectionEntry, countActiveRemoteConnections, extractRemoteTaskIds } from './sync.ts';
 export { RemoteObservabilityProvider } from './observability.ts';
+export {
+  RemoteRunnerRegistry,
+  getRemoteRunnerRegistry,
+  _resetRemoteRunnerRegistryForTesting,
+  exportRemoteArtifactForAgent,
+  importRemoteArtifact,
+} from './runner-registry.ts';
 
 // ── RemoteSubstrate facade ────────────────────────────────────────────────────
 

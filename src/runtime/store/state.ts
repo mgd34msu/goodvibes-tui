@@ -1,6 +1,6 @@
 /**
  * RuntimeState — the canonical top-level state shape for the goodvibes-tui
- * runtime store. All 19 domain slices are defined here.
+ * runtime store. All domain slices are defined here.
  *
  * Each domain includes revision, lastUpdatedAt, and source metadata fields.
  * These are defined per-domain in the domain files.
@@ -14,6 +14,8 @@ import type { PanelDomainState } from './domains/panels.ts';
 import type { PermissionDomainState } from './domains/permissions.ts';
 import type { TaskDomainState } from './domains/tasks.ts';
 import type { AgentDomainState } from './domains/agents.ts';
+import type { OrchestrationDomainState } from './domains/orchestration.ts';
+import type { CommunicationDomainState } from './domains/communication.ts';
 import type { ProviderHealthDomainState } from './domains/provider-health.ts';
 import type { McpDomainState } from './domains/mcp.ts';
 import type { PluginDomainState } from './domains/plugins.ts';
@@ -34,6 +36,8 @@ import { createInitialPanelsState } from './domains/panels.ts';
 import { createInitialPermissionsState } from './domains/permissions.ts';
 import { createInitialTasksState } from './domains/tasks.ts';
 import { createInitialAgentsState } from './domains/agents.ts';
+import { createInitialOrchestrationState } from './domains/orchestration.ts';
+import { createInitialCommunicationState } from './domains/communication.ts';
 import { createInitialProviderHealthState } from './domains/provider-health.ts';
 import { createInitialMcpState } from './domains/mcp.ts';
 import { createInitialPluginsState } from './domains/plugins.ts';
@@ -49,7 +53,7 @@ import { createInitialUiPerfState } from './domains/ui-perf.ts';
 /**
  * RuntimeState — the complete state shape managed by the runtime store.
  *
- * 19 domain slices, each with revision/lastUpdatedAt/source metadata.
+ * Domain slices, each with revision/lastUpdatedAt/source metadata.
  * All mutations must go through typed domain dispatch APIs.
  */
 export interface RuntimeState {
@@ -61,6 +65,8 @@ export interface RuntimeState {
   permissions: PermissionDomainState;
   tasks: TaskDomainState;
   agents: AgentDomainState;
+  orchestration: OrchestrationDomainState;
+  communication: CommunicationDomainState;
   providerHealth: ProviderHealthDomainState;
   mcp: McpDomainState;
   plugins: PluginDomainState;
@@ -90,6 +96,8 @@ export function createInitialRuntimeState(): RuntimeState {
     permissions: createInitialPermissionsState(),
     tasks: createInitialTasksState(),
     agents: createInitialAgentsState(),
+    orchestration: createInitialOrchestrationState(),
+    communication: createInitialCommunicationState(),
     providerHealth: createInitialProviderHealthState(),
     mcp: createInitialMcpState(),
     plugins: createInitialPluginsState(),

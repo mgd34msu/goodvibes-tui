@@ -3,6 +3,7 @@ import { logger } from '../utils/logger.ts';
 import { VERSION } from '../version.ts';
 import { AgentManager } from '../tools/agent/index.ts';
 import { ConfigManager } from '../config/manager.ts';
+import { ServiceRegistry } from '../config/service-registry.ts';
 import type { ConfigKey } from '../config/schema.ts';
 import { isValidConfigKey } from '../config/schema.ts';
 import type { AgentRecord } from '../tools/agent/index.ts';
@@ -10,6 +11,15 @@ import { UserAuthManager } from '../security/user-auth.ts';
 import { TaskScheduler } from '../scheduler/scheduler.ts';
 import { SlackIntegration, DiscordIntegration, DiscordInteractionResponseType, DiscordInteractionType } from '../integrations/index.ts';
 import { GitHubIntegration } from '../integrations/github.ts';
+import type { RuntimeEventBus } from '../runtime/events/index.ts';
+import {
+  emitTransportConnected,
+  emitTransportDisconnected,
+  emitTransportInitializing,
+  emitTransportTerminalFailure,
+} from '../runtime/emitters/index.ts';
+import { getHookDispatcher } from '../hooks/index.ts';
+import type { HookCategory, HookEventPath, HookPhase } from '../hooks/types.ts';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -23,6 +33,8 @@ interface DaemonConfig {
   githubWebhookSecret?: string;
   /** Optional pre-configured UserAuthManager (for testing). */
   userAuth?: UserAuthManager;
+  /** Optional typed runtime bus for transport lifecycle emission. */
+  runtimeBus?: RuntimeEventBus;
 }
 
 interface DaemonDangerConfig {
@@ -56,6 +68,8 @@ export class DaemonServer {
   private userAuth: UserAuthManager;
   private githubWebhookSecret: string | null;
   private scheduler: TaskScheduler;
+  private runtimeBus: RuntimeEventBus | null;
+  private readonly serviceRegistry: ServiceRegistry;
 
   constructor(private config: DaemonConfig = {}, _configManager?: ConfigManager) {
     this.port = config.port ?? 3421;
@@ -63,6 +77,7 @@ export class DaemonServer {
     this.agentManager = config.agentManager ?? AgentManager.getInstance();
     this.configManager = _configManager ?? new ConfigManager();
     this.userAuth = config.userAuth ?? new UserAuthManager();
+    this.serviceRegistry = new ServiceRegistry();
     // Webhook secrets follow 12-factor app conventions (https://12factor.net/config):
     // prefer explicit config object values (e.g. from a vault-injected object) and
     // fall back to environment variables so the binary works in any deployment
@@ -70,6 +85,7 @@ export class DaemonServer {
     this.githubWebhookSecret =
       config.githubWebhookSecret ?? process.env.GITHUB_WEBHOOK_SECRET ?? null;
     this.scheduler = TaskScheduler.getInstance();
+    this.runtimeBus = config.runtimeBus ?? null;
   }
 
   /**
@@ -96,7 +112,7 @@ export class DaemonServer {
       return;
     }
     if (this.authToken === null) {
-      logger.error('DaemonServer: starting without auth token — requests require session-based authentication via UserAuth');
+      logger.info('DaemonServer: starting with session-based authentication via UserAuth');
     }
     if (this.server !== null) {
       logger.info('DaemonServer: already running');
@@ -104,16 +120,24 @@ export class DaemonServer {
     }
 
     const self = this;
-    this.server = Bun.serve({
-      port: this.port,
-      hostname: this.host,
-      async fetch(req: Request): Promise<Response> {
-        return self.handleRequest(req);
-      },
-    });
+    this.emitTransportInitializing();
+    try {
+      this.server = Bun.serve({
+        port: this.port,
+        hostname: this.host,
+        async fetch(req: Request): Promise<Response> {
+          return self.handleRequest(req);
+        },
+      });
 
-    await this.scheduler.start();
-    logger.info('DaemonServer started', { port: this.port, host: this.host });
+      await this.scheduler.start();
+      this.emitTransportConnected();
+      logger.info('DaemonServer started', { port: this.port, host: this.host });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      this.emitTransportTerminalFailure(message);
+      throw err;
+    }
   }
 
   /**
@@ -124,6 +148,7 @@ export class DaemonServer {
     this.scheduler.stop();
     this.server.stop(true);
     this.server = null;
+    this.emitTransportDisconnected('Daemon server stopped', false);
     logger.info('DaemonServer stopped');
   }
 
@@ -315,8 +340,12 @@ export class DaemonServer {
       return Response.json({ error: 'Failed to read request body' }, { status: 400 });
     }
 
+    const githubWebhookSecret =
+      this.githubWebhookSecret
+      ?? await this.serviceRegistry.resolveSecret('github', 'signingSecret');
+
     // Reject if no secret is configured
-    if (!this.githubWebhookSecret) {
+    if (!githubWebhookSecret) {
       logger.warn('DaemonServer: GITHUB_WEBHOOK_SECRET not configured — rejecting');
       return Response.json({ error: 'Webhook not configured' }, { status: 503 });
     }
@@ -326,7 +355,7 @@ export class DaemonServer {
     if (!signature) {
       return Response.json({ error: 'Missing X-Hub-Signature-256 header' }, { status: 401 });
     }
-    if (!GitHubIntegration.verifySignature(rawBody, signature, this.githubWebhookSecret)) {
+    if (!GitHubIntegration.verifySignature(rawBody, signature, githubWebhookSecret)) {
       logger.warn('DaemonServer: GitHub webhook signature verification failed');
       return Response.json({ error: 'Invalid webhook signature' }, { status: 401 });
     }
@@ -380,7 +409,9 @@ export class DaemonServer {
       return Response.json({ error: 'Payload too large' }, { status: 413 });
     }
 
-    const signingSecret = process.env.SLACK_SIGNING_SECRET;
+    const signingSecret =
+      await this.serviceRegistry.resolveSecret('slack', 'signingSecret')
+      ?? process.env.SLACK_SIGNING_SECRET;
     if (!signingSecret) {
       logger.warn('DaemonServer.handleSlackWebhook: SLACK_SIGNING_SECRET not set — rejecting');
       return Response.json({ error: 'Webhook not configured' }, { status: 503 });
@@ -391,8 +422,8 @@ export class DaemonServer {
     const rawBody = await req.text();
 
     const slack = new SlackIntegration(
-      process.env.SLACK_WEBHOOK_URL,
-      process.env.SLACK_BOT_TOKEN,
+      await this.serviceRegistry.resolveSecret('slack', 'webhookUrl') ?? process.env.SLACK_WEBHOOK_URL,
+      await this.serviceRegistry.resolveSecret('slack', 'primary') ?? process.env.SLACK_BOT_TOKEN,
     );
 
     if (!slack.verifySignature(rawBody, timestamp, signature, signingSecret)) {
@@ -487,7 +518,9 @@ export class DaemonServer {
       return Response.json({ error: 'Payload too large' }, { status: 413 });
     }
 
-    const publicKey = process.env.DISCORD_PUBLIC_KEY;
+    const publicKey =
+      await this.serviceRegistry.resolveSecret('discord', 'publicKey')
+      ?? process.env.DISCORD_PUBLIC_KEY;
     if (!publicKey) {
       logger.warn('DaemonServer.handleDiscordWebhook: DISCORD_PUBLIC_KEY not set — rejecting');
       return Response.json({ error: 'Webhook not configured' }, { status: 503 });
@@ -498,8 +531,8 @@ export class DaemonServer {
     const rawBody = await req.text();
 
     const discord = new DiscordIntegration(
-      process.env.DISCORD_WEBHOOK_URL,
-      process.env.DISCORD_BOT_TOKEN,
+      await this.serviceRegistry.resolveSecret('discord', 'webhookUrl') ?? process.env.DISCORD_WEBHOOK_URL,
+      await this.serviceRegistry.resolveSecret('discord', 'primary') ?? process.env.DISCORD_BOT_TOKEN,
     );
 
     const valid = await discord.verifySignature(rawBody, signature, timestamp, publicKey);
@@ -701,5 +734,87 @@ export class DaemonServer {
 
   private findSchedule(id: string): ScheduleRecord | undefined {
     return this.scheduler.list().find((task) => task.id === id || task.id.startsWith(id));
+  }
+
+  private transportId(): string {
+    return `daemon:http:${this.host}:${this.port}`;
+  }
+
+  private transportEndpoint(): string {
+    return `http://${this.host}:${this.port}`;
+  }
+
+  private emitterContext(): import('../runtime/emitters/index.ts').EmitterContext {
+    return {
+      sessionId: 'daemon-server',
+      traceId: `daemon-server:${this.host}:${this.port}`,
+      source: 'daemon-server',
+    };
+  }
+
+  private emitTransportInitializing(): void {
+    if (!this.runtimeBus) return;
+    emitTransportInitializing(this.runtimeBus, this.emitterContext(), {
+      transportId: this.transportId(),
+      protocol: 'http-daemon',
+    });
+    void this.fireTransportHook('initializing', {
+      transportId: this.transportId(),
+      protocol: 'http-daemon',
+    });
+  }
+
+  private emitTransportConnected(): void {
+    if (!this.runtimeBus) return;
+    emitTransportConnected(this.runtimeBus, this.emitterContext(), {
+      transportId: this.transportId(),
+      endpoint: this.transportEndpoint(),
+    });
+    void this.fireTransportHook('connected', {
+      transportId: this.transportId(),
+      endpoint: this.transportEndpoint(),
+    });
+  }
+
+  private emitTransportDisconnected(reason: string, willRetry: boolean): void {
+    if (!this.runtimeBus) return;
+    emitTransportDisconnected(this.runtimeBus, this.emitterContext(), {
+      transportId: this.transportId(),
+      reason,
+      willRetry,
+    });
+    void this.fireTransportHook('disconnected', {
+      transportId: this.transportId(),
+      reason,
+      willRetry,
+    });
+  }
+
+  private emitTransportTerminalFailure(error: string): void {
+    if (!this.runtimeBus) return;
+    emitTransportTerminalFailure(this.runtimeBus, this.emitterContext(), {
+      transportId: this.transportId(),
+      error,
+    });
+    void this.fireTransportHook('failed', {
+      transportId: this.transportId(),
+      error,
+    });
+  }
+
+  private async fireTransportHook(specific: string, payload: Record<string, unknown>): Promise<void> {
+    try {
+      await getHookDispatcher().fire({
+        path: `Lifecycle:transport:${specific}` as HookEventPath,
+        phase: 'Lifecycle' as HookPhase,
+        category: 'transport' as HookCategory,
+        specific,
+        sessionId: 'daemon-server',
+        timestamp: Date.now(),
+        payload,
+      });
+    } catch {
+      // Transport hooks are best-effort and must not break daemon lifecycle.
+    }
   }
 }

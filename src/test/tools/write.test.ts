@@ -6,6 +6,7 @@ import { join } from 'node:path';
 import { createWriteTool } from '../../tools/write/index.ts';
 import { FileStateCache } from '../../state/file-cache.ts';
 import { ProjectIndex } from '../../state/project-index.ts';
+import { _resetConfigManagerForTesting, configManager } from '../../config/index.ts';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -63,9 +64,20 @@ describe('write tool', () => {
     const t = await makeTempDir();
     tmpDir = t.dir;
     cleanup = t.cleanup;
+    _resetConfigManagerForTesting();
+    const orig = process.cwd();
+    process.chdir(tmpDir);
+    try {
+      configManager.set('tools.autoHeal', false);
+      configManager.set('tools.llmProvider', '');
+      configManager.set('tools.llmModel', '');
+    } finally {
+      process.chdir(orig);
+    }
   });
 
   afterEach(async () => {
+    _resetConfigManagerForTesting();
     await cleanup();
   });
 

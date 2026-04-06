@@ -44,6 +44,11 @@ function makeServerRecord(name: string): McpServerRecord {
     lastCallAt: undefined,
     lastError: undefined,
     reconnectAttempts: 0,
+    trustMode: 'ask-on-risk',
+    role: 'general',
+    allowedPaths: [],
+    allowedHosts: [],
+    schemaFreshness: 'unknown',
   };
 }
 

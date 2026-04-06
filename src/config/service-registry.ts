@@ -34,6 +34,35 @@ export interface ServiceConfig {
   passwordKey?: string;
   /** For api-key auth: the header name. Defaults to X-API-Key. */
   apiKeyHeader?: string;
+  /** Optional secret key holding a webhook or callback URL for this service. */
+  webhookUrlKey?: string;
+  /** Optional secret key for inbound request signing/verification. */
+  signingSecretKey?: string;
+  /** Optional public-key secret used for inbound signature verification. */
+  publicKeyKey?: string;
+}
+
+export type ServiceSecretField =
+  | 'primary'
+  | 'password'
+  | 'webhookUrl'
+  | 'signingSecret'
+  | 'publicKey';
+
+export interface ServiceInspection {
+  readonly config: ServiceConfig;
+  readonly hasPrimaryCredential: boolean;
+  readonly hasPasswordCredential: boolean;
+  readonly hasWebhookUrl: boolean;
+  readonly hasSigningSecret: boolean;
+  readonly hasPublicKey: boolean;
+}
+
+export interface ServiceConnectionTestResult {
+  readonly ok: boolean;
+  readonly status: number | null;
+  readonly testedUrl: string | null;
+  readonly error?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -135,6 +164,104 @@ export class ServiceRegistry {
       default:
         return null;
     }
+  }
+
+  async resolveSecret(
+    serviceName: string,
+    field: ServiceSecretField,
+  ): Promise<string | null> {
+    const config = this.get(serviceName);
+    if (!config) return null;
+
+    const secrets = getSecretsManager();
+    switch (field) {
+      case 'primary':
+        return secrets.get(config.tokenKey);
+      case 'password':
+        return config.passwordKey ? secrets.get(config.passwordKey) : null;
+      case 'webhookUrl':
+        return config.webhookUrlKey ? secrets.get(config.webhookUrlKey) : null;
+      case 'signingSecret':
+        return config.signingSecretKey ? secrets.get(config.signingSecretKey) : null;
+      case 'publicKey':
+        return config.publicKeyKey ? secrets.get(config.publicKeyKey) : null;
+    }
+  }
+
+  async inspect(serviceName: string): Promise<ServiceInspection | null> {
+    const config = this.get(serviceName);
+    if (!config) return null;
+
+    const [
+      primary,
+      password,
+      webhookUrl,
+      signingSecret,
+      publicKey,
+    ] = await Promise.all([
+      this.resolveSecret(serviceName, 'primary'),
+      this.resolveSecret(serviceName, 'password'),
+      this.resolveSecret(serviceName, 'webhookUrl'),
+      this.resolveSecret(serviceName, 'signingSecret'),
+      this.resolveSecret(serviceName, 'publicKey'),
+    ]);
+
+    return {
+      config,
+      hasPrimaryCredential: primary !== null && primary.length > 0,
+      hasPasswordCredential: password !== null && password.length > 0,
+      hasWebhookUrl: webhookUrl !== null && webhookUrl.length > 0,
+      hasSigningSecret: signingSecret !== null && signingSecret.length > 0,
+      hasPublicKey: publicKey !== null && publicKey.length > 0,
+    };
+  }
+
+  async testConnection(serviceName: string): Promise<ServiceConnectionTestResult> {
+    const config = this.get(serviceName);
+    if (!config) {
+      return { ok: false, status: null, testedUrl: null, error: 'Unknown service' };
+    }
+
+    const baseUrl = config.baseUrl?.trim() ?? '';
+    if (!baseUrl) {
+      return { ok: false, status: null, testedUrl: null, error: 'No baseUrl configured' };
+    }
+
+    const headers = await this.resolveAuth(serviceName);
+    const reqHeaders: Record<string, string> = {
+      Accept: 'application/json',
+      ...(headers ?? {}),
+    };
+    const candidates = [
+      `${baseUrl.replace(/\/$/, '')}/health`,
+      baseUrl.replace(/\/$/, ''),
+    ];
+
+    for (const url of candidates) {
+      try {
+        const response = await fetch(url, {
+          method: 'GET',
+          headers: reqHeaders,
+          signal: AbortSignal.timeout(5000),
+        });
+        return {
+          ok: response.ok,
+          status: response.status,
+          testedUrl: url,
+          ...(response.ok ? {} : { error: `HTTP ${response.status}` }),
+        };
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        logger.debug('ServiceRegistry: service test failed', { serviceName, url, error: message });
+      }
+    }
+
+    return {
+      ok: false,
+      status: null,
+      testedUrl: candidates[candidates.length - 1] ?? null,
+      error: 'Connection failed',
+    };
   }
 }
 

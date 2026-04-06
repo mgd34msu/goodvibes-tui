@@ -1731,6 +1731,9 @@ export function createEditTool(fileCache: FileStateCache, options?: EditToolOpti
       'Detects OCC conflicts when files have been modified externally. ' +
       'Also supports Jupyter notebook (.ipynb) cell operations via notebook_operations field.',
     parameters: editSchema as unknown as Record<string, unknown>,
+    sideEffects: ['write_fs'],
+    concurrency: 'serial',
+    supportsProgress: true,
   };
 
   async function execute(

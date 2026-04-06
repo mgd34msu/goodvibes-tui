@@ -13,6 +13,8 @@ import { describe, test, expect } from 'bun:test';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 
+const repoRoot = join(import.meta.dir, '..', '..', '..');
+
 // ---------------------------------------------------------------------------
 // @ast-grep/napi
 // ---------------------------------------------------------------------------
@@ -136,7 +138,7 @@ describe('sql.js', () => {
 // ---------------------------------------------------------------------------
 
 describe('tree-sitter WASM files', () => {
-  const nmRoot = join(process.cwd(), 'node_modules');
+  const nmRoot = join(repoRoot, 'node_modules');
 
   test('tree-sitter-typescript WASM exists', () => {
     const wasmPath = join(nmRoot, 'tree-sitter-typescript', 'tree-sitter-typescript.wasm');
@@ -222,13 +224,13 @@ describe('simple-git', () => {
 
   test('can create a git instance for the project root', async () => {
     const { default: simpleGit } = await import('simple-git');
-    const git = simpleGit(process.cwd());
+    const git = simpleGit(repoRoot);
     expect(git).toBeDefined();
   });
 
   test('can check if directory is a git repo', async () => {
     const { default: simpleGit } = await import('simple-git');
-    const git = simpleGit(process.cwd());
+    const git = simpleGit(repoRoot);
     const isRepo = await git.checkIsRepo();
     // The project is a git repo
     expect(typeof isRepo).toBe('boolean');
@@ -237,7 +239,7 @@ describe('simple-git', () => {
 
   test('can retrieve git version', async () => {
     const { default: simpleGit } = await import('simple-git');
-    const git = simpleGit(process.cwd());
+    const git = simpleGit(repoRoot);
     const version = await git.version();
     expect(version).toBeDefined();
     expect(version.major).toBeGreaterThanOrEqual(2);

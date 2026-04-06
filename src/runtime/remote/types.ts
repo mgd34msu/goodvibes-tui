@@ -242,6 +242,92 @@ export interface RemoteSession {
   readonly lastAckedOffset: number;
 }
 
+// Remote runner contracts and portable review artifacts.
+
+export interface RemoteRunnerCapabilityCeiling {
+  readonly allowedTools: readonly string[];
+  readonly capabilityCeilingTools: readonly string[];
+  readonly executionProtocol: 'direct' | 'gather-plan-apply';
+  readonly reviewMode: 'none' | 'wrfc';
+  readonly communicationLane: 'parent-only' | 'parent-and-children' | 'cohort' | 'direct';
+  readonly orchestrationDepth: number;
+  readonly successCriteria: readonly string[];
+  readonly requiredEvidence: readonly string[];
+  readonly writeScope: readonly string[];
+}
+
+export interface RemoteRunnerContract {
+  readonly id: string;
+  readonly runnerId: string;
+  readonly poolId?: string;
+  readonly taskId?: string;
+  readonly label: string;
+  readonly sourceTransport: 'acp' | 'daemon';
+  readonly trustClass: 'self-hosted-acp' | 'local-daemon';
+  readonly template: string;
+  readonly parentAgentId?: string;
+  readonly orchestrationGraphId?: string;
+  readonly orchestrationNodeId?: string;
+  readonly capabilityCeiling: RemoteRunnerCapabilityCeiling;
+  readonly createdAt: number;
+  readonly lastUpdatedAt: number;
+  readonly transport: {
+    readonly state: DaemonTransportState;
+    readonly connectedAt?: number;
+    readonly messageCount: number;
+    readonly errorCount: number;
+    readonly lastError?: string;
+  };
+}
+
+export interface RemoteRunnerPool {
+  readonly id: string;
+  readonly label: string;
+  readonly description?: string;
+  readonly trustClass: RemoteRunnerContract['trustClass'] | 'mixed';
+  readonly preferredTemplate?: string;
+  readonly maxRunners?: number;
+  readonly runnerIds: readonly string[];
+  readonly createdAt: number;
+  readonly lastUpdatedAt: number;
+}
+
+export interface RemoteRunnerEvidenceSummary {
+  readonly toolCallCount: number;
+  readonly messageCount: number;
+  readonly errorCount: number;
+  readonly transportState: DaemonTransportState;
+  readonly connectedAt?: number;
+  readonly lastError?: string;
+  readonly hasKnowledgeInjections: boolean;
+}
+
+export interface RemoteExecutionArtifact {
+  readonly id: string;
+  readonly runnerId: string;
+  readonly createdAt: number;
+  readonly runnerContract: RemoteRunnerContract;
+  readonly task: {
+    readonly task: string;
+    readonly status: 'pending' | 'running' | 'completed' | 'failed' | 'cancelled';
+    readonly startedAt: number;
+    readonly completedAt?: number;
+    readonly summary: string;
+    readonly fullOutput?: string;
+    readonly error?: string;
+    readonly progress?: string;
+  };
+  readonly evidence: RemoteRunnerEvidenceSummary;
+  readonly knowledgeInjections: readonly {
+    readonly id: string;
+    readonly cls: string;
+    readonly summary: string;
+    readonly reason: string;
+    readonly confidence: number;
+    readonly reviewState: 'fresh' | 'reviewed' | 'stale' | 'contradicted';
+  }[];
+}
+
 // Protocol version compatibility.
 
 /**

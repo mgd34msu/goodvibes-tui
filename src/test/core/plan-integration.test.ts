@@ -193,8 +193,8 @@ describe('autoSpawnPendingItems helper behavior', () => {
    * The Orchestrator.autoSpawnPendingItems method is private, but its observable
    * effects are:
    * 1. Calls planManager.updateItem(planId, itemId, 'in_progress', agentId) for spawned items
-   * 2. Stops spawning when running agent count >= maxGlobalAgents
-   * 3. Returns empty array immediately when agentRecursion is disabled
+   * 2. Stops spawning when running agent count >= maxActiveAgents
+   * 3. Returns empty array immediately when recursive orchestration is disabled
    *
    * We test these effects using ExecutionPlanManager + a fake AgentManager-like
    * implementation that mirrors the helper's spawn loop logic.
@@ -205,13 +205,13 @@ describe('autoSpawnPendingItems helper behavior', () => {
     plan: ExecutionPlan,
     items: PlanItem[],
     manager: ExecutionPlanManager,
-    opts: { agentRecursion: boolean; maxGlobalAgents: number; runningCount: number }
+    opts: { recursionEnabled: boolean; maxActiveAgents: number; runningCount: number }
   ): { spawned: string[]; limitReached: boolean } {
     // Mirrors the logic of Orchestrator.autoSpawnPendingItems
-    if (!opts.agentRecursion) {
+    if (!opts.recursionEnabled) {
       return { spawned: [], limitReached: false };
     }
-    const maxAgents = opts.maxGlobalAgents || 8;
+    const maxAgents = opts.maxActiveAgents || 8;
     const spawned: string[] = [];
     let limitReached = false;
     let running = opts.runningCount;
@@ -229,15 +229,15 @@ describe('autoSpawnPendingItems helper behavior', () => {
     return { spawned, limitReached };
   }
 
-  test('returns empty array when agentRecursion is disabled', () => {
+  test('returns empty array when recursive orchestration is disabled', () => {
     const manager = new ExecutionPlanManager();
     const plan = manager.create('Recursion disabled test', [
       { phase: 'Phase 1', description: 'Task A', dependencies: [] },
     ]);
     const items = manager.getNextItems(plan);
     const result = fakeSpawnLoop(plan, items, manager, {
-      agentRecursion: false,
-      maxGlobalAgents: 8,
+      recursionEnabled: false,
+      maxActiveAgents: 8,
       runningCount: 0,
     });
     expect(result.spawned).toHaveLength(0);
@@ -247,7 +247,7 @@ describe('autoSpawnPendingItems helper behavior', () => {
     expect(loaded.items[0].status).toBe('pending');
   });
 
-  test('marks items in_progress when agentRecursion is enabled', () => {
+  test('marks items in_progress when recursive orchestration is enabled', () => {
     const manager = new ExecutionPlanManager();
     const plan = manager.create('Recursion enabled test', [
       { phase: 'Phase 1', description: 'Task A', dependencies: [] },
@@ -255,8 +255,8 @@ describe('autoSpawnPendingItems helper behavior', () => {
     ]);
     const items = manager.getNextItems(plan);
     const result = fakeSpawnLoop(plan, items, manager, {
-      agentRecursion: true,
-      maxGlobalAgents: 8,
+      recursionEnabled: true,
+      maxActiveAgents: 8,
       runningCount: 0,
     });
     expect(result.spawned).toHaveLength(2);
@@ -266,7 +266,7 @@ describe('autoSpawnPendingItems helper behavior', () => {
     expect(loaded.items[1].status).toBe('in_progress');
   });
 
-  test('stops spawning when running agent count reaches maxGlobalAgents', () => {
+  test('stops spawning when running agent count reaches maxActiveAgents', () => {
     const manager = new ExecutionPlanManager();
     const plan = manager.create('Max agents test', [
       { phase: 'Phase 1', description: 'Task A', dependencies: [] },
@@ -274,10 +274,10 @@ describe('autoSpawnPendingItems helper behavior', () => {
       { phase: 'Phase 1', description: 'Task C', dependencies: [] },
     ]);
     const items = manager.getNextItems(plan);
-    // Simulate 2 agents already running, maxGlobalAgents = 2
+    // Simulate 2 agents already running, maxActiveAgents = 2
     const result = fakeSpawnLoop(plan, items, manager, {
-      agentRecursion: true,
-      maxGlobalAgents: 2,
+      recursionEnabled: true,
+      maxActiveAgents: 2,
       runningCount: 2,
     });
     expect(result.spawned).toHaveLength(0);
@@ -295,10 +295,10 @@ describe('autoSpawnPendingItems helper behavior', () => {
       { phase: 'Phase 1', description: 'Task C', dependencies: [] },
     ]);
     const items = manager.getNextItems(plan);
-    // 1 agent running, maxGlobalAgents = 2 — should spawn 1 more
+    // 1 agent running, maxActiveAgents = 2 — should spawn 1 more
     const result = fakeSpawnLoop(plan, items, manager, {
-      agentRecursion: true,
-      maxGlobalAgents: 2,
+      recursionEnabled: true,
+      maxActiveAgents: 2,
       runningCount: 1,
     });
     expect(result.spawned).toHaveLength(1);
@@ -317,8 +317,8 @@ describe('autoSpawnPendingItems helper behavior', () => {
     ]);
     const items = manager.getNextItems(plan);
     fakeSpawnLoop(plan, items, manager, {
-      agentRecursion: true,
-      maxGlobalAgents: 8,
+      recursionEnabled: true,
+      maxActiveAgents: 8,
       runningCount: 0,
     });
     const loaded = manager.load(plan.id)!;
