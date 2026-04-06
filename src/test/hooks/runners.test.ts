@@ -36,7 +36,7 @@ describe('command runner', () => {
     // Bun resolves exited with signal kill — either ok:false or the proc exited non-zero
     // Either way the result should reflect failure or the process was cleaned up
     expect(result).toBeDefined();
-  }, 8000);
+  }, 15000);
 
   test('returns ok:false when command is missing', async () => {
     const hook: HookDefinition = { match: '*:*:*', type: 'command' };

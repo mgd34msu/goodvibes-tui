@@ -10,6 +10,9 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
 permissions:
   contents: read
 
@@ -76,20 +79,22 @@ jobs:
       - name: Install dependencies
         run: bun install
       - name: Restore eval baseline
-        uses: actions/cache@v4
+        id: eval-baseline-restore
+        uses: actions/cache/restore@v4
         with:
           path: .goodvibes/eval/baseline.json
-          key: eval-baseline-${{ github.ref_name }}
+          key: eval-baseline-${{ github.ref_name }}-${{ github.sha }}
           restore-keys: |
-            eval-baseline-main
+            eval-baseline-${{ github.ref_name }}-
+            eval-baseline-main-
       - name: Run eval gate
         run: bun run eval:gate
       - name: Save eval baseline (main branch only)
-        if: github.ref == 'refs/heads/main' && success()
+        if: github.ref == 'refs/heads/main' && success() && steps.eval-baseline-restore.outputs.cache-hit != 'true'
         uses: actions/cache/save@v4
         with:
           path: .goodvibes/eval/baseline.json
-          key: eval-baseline-${{ github.ref_name }}
+          key: eval-baseline-${{ github.ref_name }}-${{ github.sha }}
 
   build:
     runs-on: ubuntu-latest
