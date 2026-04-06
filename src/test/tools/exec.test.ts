@@ -130,13 +130,13 @@ describe('exec tool — parallel', () => {
 describe('exec tool — timeout', () => {
   test('kills process on timeout and marks timed_out', async () => {
     const result = await execTool.execute({
-      commands: [{ cmd: 'sleep 30', timeout_ms: 200 }],
+      commands: [{ cmd: 'exec sleep 30', timeout_ms: 200 }],
     });
     expect(result.success).toBe(false);
     const out = parseOutput(result.output);
     expect(out.timed_out).toBe(true);
     expect(out.exit_code).toBeNull();
-  }, 30000);
+  }, 10000);
 });
 
 // ---------------------------------------------------------------------------
