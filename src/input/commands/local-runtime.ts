@@ -131,6 +131,38 @@ interface SetupTransferBundle {
   };
 }
 
+type RemoteConnectionLike = { agentId: string };
+type RemoteCancelContext = Pick<CommandContext, 'print' | 'acpManager'>;
+type RemoteCancelAgentManager = Pick<AgentManager, 'cancel'>;
+
+export function handleRemoteCancelCommand(
+  agentId: string | undefined,
+  activeConnections: RemoteConnectionLike[],
+  ctx: RemoteCancelContext,
+  agentManager: RemoteCancelAgentManager = AgentManager.getInstance(),
+): void {
+  if (!agentId) {
+    ctx.print('Usage: /remote cancel <agentId>');
+    return;
+  }
+  const connection = activeConnections.find((entry) => entry.agentId === agentId);
+  if (!connection) {
+    ctx.print(`Unknown remote connection: ${agentId}`);
+    return;
+  }
+  const localAgentCancelled = agentManager.cancel(agentId);
+  if (localAgentCancelled) {
+    ctx.print(`Cancelled remote agent ${agentId}.`);
+    return;
+  }
+  if (!ctx.acpManager) {
+    ctx.print(`Remote agent ${agentId} could not be cancelled in this runtime.`);
+    return;
+  }
+  void ctx.acpManager.cancel(agentId);
+  ctx.print(`Cancellation requested for remote runner ${agentId}.`);
+}
+
 function inspectSetupTransferBundle(bundle: SetupTransferBundle): string {
   const ecosystemPluginCount = bundle.ecosystem?.plugins && Array.isArray((bundle.ecosystem.plugins as { entries?: unknown[] }).entries)
     ? ((bundle.ecosystem.plugins as { entries: unknown[] }).entries.length)
@@ -1147,27 +1179,7 @@ export function registerLocalRuntimeCommands(registry: CommandRegistry): void {
       }
 
       if (subcommand === 'cancel') {
-        const agentId = args[1];
-        if (!agentId) {
-          ctx.print('Usage: /remote cancel <agentId>');
-          return;
-        }
-        const connection = activeConnections.find((entry) => entry.agentId === agentId);
-        if (!connection) {
-          ctx.print(`Unknown remote connection: ${agentId}`);
-          return;
-        }
-        const localAgentCancelled = AgentManager.getInstance().cancel(agentId);
-        if (localAgentCancelled) {
-          ctx.print(`Cancelled remote agent ${agentId}.`);
-          return;
-        }
-        if (!ctx.acpManager) {
-          ctx.print(`Remote agent ${agentId} could not be cancelled in this runtime.`);
-          return;
-        }
-        void ctx.acpManager.cancel(agentId);
-        ctx.print(`Cancellation requested for remote runner ${agentId}.`);
+        handleRemoteCancelCommand(args[1], activeConnections, ctx);
         return;
       }
 

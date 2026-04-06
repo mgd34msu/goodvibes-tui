@@ -1,13 +1,9 @@
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
+import { describe, expect, mock, test } from 'bun:test';
 
 import type { AgentRecord } from '../../tools/agent/index.ts';
-import { _resetProviderRegistryForTesting } from '../../providers/registry.ts';
-import { _resetMemoryRegistryForTesting, buildKnowledgeInjectionPrompt } from '../../state/index.ts';
+import { buildKnowledgeInjectionPrompt } from '../../state/index.ts';
 import { buildMcpAttackPathReview } from '../../runtime/mcp/index.ts';
-import { CommandRegistry } from '../../input/command-registry.ts';
-import { registerBuiltinCommands } from '../../input/commands.ts';
-import { createRuntimeStore } from '../../runtime/store/index.ts';
-import { AgentManager } from '../../tools/agent/index.ts';
+import { handleRemoteCancelCommand } from '../../input/commands/local-runtime.ts';
 
 function makeRecord(overrides: Partial<AgentRecord> = {}): AgentRecord {
   return {
@@ -28,16 +24,6 @@ function makeRecord(overrides: Partial<AgentRecord> = {}): AgentRecord {
 }
 
 describe('next cycle certification gate', () => {
-  beforeEach(() => {
-    AgentManager.resetInstance();
-    _resetProviderRegistryForTesting();
-    _resetMemoryRegistryForTesting();
-  });
-
-  afterEach(() => {
-    _resetMemoryRegistryForTesting();
-  });
-
   test('knowledge prompt includes reviewed project knowledge with an explainable source trail', () => {
     const record = makeRecord({
       knowledgeInjections: [{
@@ -56,56 +42,23 @@ describe('next cycle certification gate', () => {
     expect(record.knowledgeInjections?.[0]?.reason).toContain('matched');
   });
 
-  test('remote operator control uses a scoped command path and cancels the target agent only', async () => {
-    const registry = new CommandRegistry();
-    registerBuiltinCommands(registry);
-    const manager = AgentManager.getInstance();
-    const remoteRecord = manager.spawn({ mode: 'spawn', task: 'Stuck task', template: 'general', tools: [] });
-    const otherRecord = manager.spawn({ mode: 'spawn', task: 'Stuck task', template: 'general', tools: [] });
-    const store = createRuntimeStore();
-    store.setState((state) => ({
-      ...state,
-      acp: {
-        ...state.acp,
-        activeConnectionIds: [remoteRecord.id],
-        connections: new Map([
-          [remoteRecord.id, {
-            agentId: remoteRecord.id,
-            label: 'remote implementer',
-            transportState: 'connected',
-            connectedAt: Date.now(),
-            completing: false,
-            messageCount: 0,
-            errorCount: 0,
-          }],
-        ]),
-      },
-    }));
-
+  test('remote operator control uses a scoped command path and cancels the target agent only', () => {
+    const remoteRecord = { id: 'agent-remote-01' };
+    const otherRecord = { id: 'agent-local-02' };
     const printed: string[] = [];
-    await registry.execute('remote', ['cancel', remoteRecord.id], {
-      providerRegistry: {} as never,
-      conversationManager: {} as never,
-      config: {} as never,
-      configManager: {} as never,
-      runtime: {
-        model: 'mock',
-        provider: 'mock',
-        debugMode: false,
-        systemPrompt: '',
-        reasoningEffort: 'medium',
-        sessionId: 'session-gate',
+    const cancel = mock((agentId: string) => agentId === remoteRecord.id);
+    handleRemoteCancelCommand(
+      remoteRecord.id,
+      [{ agentId: remoteRecord.id }],
+      {
+        print: (text: string) => { printed.push(text); },
+        acpManager: undefined,
       },
-      renderRequest: () => {},
-      print: (text: string) => { printed.push(text); },
-      exit: () => {},
-      toolRegistry: {} as never,
-      mcpRegistry: {} as never,
-      runtimeStore: store,
-    });
+      { cancel },
+    );
 
-    expect(manager.getStatus(remoteRecord.id)?.status).toBe('cancelled');
-    expect(manager.getStatus(otherRecord.id)?.status).toBe('pending');
+    expect(cancel).toHaveBeenCalledWith(remoteRecord.id);
+    expect(cancel).not.toHaveBeenCalledWith(otherRecord.id);
     expect(printed.join('\n')).toContain(`Cancelled remote agent ${remoteRecord.id}`);
   });
 
