@@ -3,11 +3,28 @@
 // ---------------------------------------------------------------------------
 
 import type { Line } from '../types/grid.ts';
-import { createStyledCell, createEmptyLine } from '../types/grid.ts';
 import { BasePanel } from './base-panel.ts';
 import { getSessionManager } from '../sessions/manager.ts';
 import type { SessionInfo } from '../sessions/manager.ts';
 import { logger } from '../utils/logger.ts';
+import {
+  buildEmptyState,
+  buildPanelLine,
+  buildSearchInputLine,
+  buildStyledPanelLine,
+  buildPanelWorkspace,
+  DEFAULT_PANEL_PALETTE,
+  type PanelWorkspaceSection,
+} from './polish.ts';
+import { getTrackedVisibleWindow } from '../renderer/surface-layout.ts';
+import { truncateDisplay } from '../utils/terminal-width.ts';
+import {
+  getPanelSearchFocusTransition,
+  isPanelSearchBackspace,
+  isPanelSearchCancel,
+  isPanelSearchCommit,
+  isPanelSearchPrintable,
+} from './search-focus.ts';
 
 const C = {
   headerBg:   '#1a1a2e',
@@ -27,25 +44,6 @@ const C = {
   errorFg:    '#ff6666',
   separator:  '#333355',
 } as const;
-
-function renderText(
-  width: number,
-  text: string,
-  fg: string,
-  bg: string,
-  bold = false,
-  dim = false,
-): Line {
-  const cells: Line = [];
-  const truncated = text.length > width ? text.slice(0, width) : text;
-  for (const ch of truncated) {
-    cells.push(createStyledCell(ch, { fg, bg, bold, dim }));
-  }
-  while (cells.length < width) {
-    cells.push(createStyledCell(' ', { fg: '', bg }));
-  }
-  return cells.slice(0, width);
-}
 
 function shortDate(ts: number): string {
   const d = new Date(ts);
@@ -107,17 +105,24 @@ export class SessionBrowserPanel extends BasePanel {
 
     // Search mode
     if (this.searching) {
-      if (key === 'escape' || key === 'return') {
+      const transition = getPanelSearchFocusTransition(key, { selectedIndex: this.cursorIndex, itemCount: this.filtered.length });
+      if (transition === 'focus-list') {
+        this.searching = false;
+        this.cursorIndex = 0;
+        this.markDirty();
+        return true;
+      }
+      if (isPanelSearchCancel(key) || isPanelSearchCommit(key)) {
         this.searching = false;
         this.markDirty();
         return true;
       }
-      if (key === 'backspace') {
+      if (isPanelSearchBackspace(key)) {
         this.searchQuery = this.searchQuery.slice(0, -1);
         this._filter();
         return true;
       }
-      if (key.length === 1) {
+      if (isPanelSearchPrintable(key)) {
         this.searchQuery += key;
         this._filter();
         return true;
@@ -125,12 +130,17 @@ export class SessionBrowserPanel extends BasePanel {
       return false;
     }
 
+    const transition = getPanelSearchFocusTransition(key, { selectedIndex: this.cursorIndex, itemCount: this.filtered.length });
+    if (transition === 'focus-search') {
+      this._startSearch();
+      return true;
+    }
+
     switch (key) {
       case 'up':       this._move(-1);      return true;
       case 'down':     this._move(1);       return true;
       case 'pageup':   this._move(-10);     return true;
       case 'pagedown': this._move(10);      return true;
-      case '/':        this._startSearch(); return true;
       case 'return':   this._resume();      return true;
       case 'd':        this._promptDelete(); return true;
       case 'r':        this._load();        return true;
@@ -139,108 +149,121 @@ export class SessionBrowserPanel extends BasePanel {
   }
 
   render(width: number, height: number): Line[] {
-    const lines: Line[] = [];
-    if (height <= 0 || width <= 0) return lines;
+    if (height <= 0 || width <= 0) return [];
 
-    // Header
     const count = this.filtered.length;
     const total = this.sessions.length;
-    const title = ` Sessions [${count}/${total}]`;
-    lines.push(renderText(width, title, C.headerFg, C.headerBg, true));
-    if (height <= 1) return lines.slice(0, height);
-
-    // Search bar
     const searchLine = this.searching
-      ? ` Search: ${this.searchQuery}▊`
+      ? ` Search: ${this.searchQuery}_`
       : this.loadError
       ? ` Error: ${this.loadError}`
       : this.deleteError
       ? ` Error: ${this.deleteError}`
       : this.searchQuery
-      ? ` Filter: ${this.searchQuery}  (/ to edit)`
-      : ` / to search  Enter: resume  d: delete  r: refresh`;
-    const statusFg = this.loadError || this.deleteError ? C.errorFg : C.statusFg;
-    lines.push(renderText(width, searchLine, this.searching ? C.selected : statusFg, C.statusBar));
-    if (height <= 2) return lines.slice(0, height);
+      ? ` Filter: ${this.searchQuery}  (/ or up at top to edit)`
+      : ` / or up at top to search  Enter: resume  d: delete  r: refresh`;
+    const statusFg = this.loadError || this.deleteError ? DEFAULT_PANEL_PALETTE.bad : this.searching ? DEFAULT_PANEL_PALETTE.info : DEFAULT_PANEL_PALETTE.dim;
+    const footerLines = [
+      buildSearchInputLine(width, '', searchLine.trimStart(), DEFAULT_PANEL_PALETTE, { active: this.searching, valueColor: statusFg }),
+    ];
 
-    // Confirmation overlay
     if (this.confirm) {
-      const msg = ` Delete "${this.confirm.sessionName}"? (y/n)`;
-      lines.push(renderText(width, msg, C.warnFg, C.headerBg, true));
-      while (lines.length < height) lines.push(createEmptyLine(width));
-      return lines.slice(0, height);
+      return buildPanelWorkspace(width, height, {
+        title: ` Sessions [${count}/${total}]`,
+        intro: 'Browse, search, resume, and prune saved conversations.',
+        sections: [
+          {
+            title: 'Confirmation',
+            lines: [
+              buildPanelLine(width, [[` Delete "${this.confirm.sessionName}"?`, DEFAULT_PANEL_PALETTE.warn]]),
+              buildPanelLine(width, [[' y', DEFAULT_PANEL_PALETTE.info], ['  confirm delete', DEFAULT_PANEL_PALETTE.dim], ['   n / Esc', DEFAULT_PANEL_PALETTE.info], ['  cancel', DEFAULT_PANEL_PALETTE.dim]]),
+            ],
+          },
+        ],
+        footerLines,
+        palette: DEFAULT_PANEL_PALETTE,
+      });
     }
 
-    // Session list
-    const listHeight = height - 2;
     if (this.filtered.length === 0) {
-      const msg = this.searchQuery
-        ? ` No sessions match "${this.searchQuery}"`
-        : ` No sessions found. Conversations are saved automatically.`;
-      lines.push(renderText(width, msg, C.dim, '', false, true));
-      while (lines.length < height) lines.push(createEmptyLine(width));
-      return lines.slice(0, height);
+      const emptyTitle = this.searchQuery ? ` No sessions match "${this.searchQuery}"` : ' No sessions found';
+      const emptyBody = this.searchQuery
+        ? 'Clear or change the current filter to surface saved conversations again.'
+        : 'Conversations are saved automatically. Once you have saved sessions, they appear here for review and resume.';
+      return buildPanelWorkspace(width, height, {
+        title: ` Sessions [${count}/${total}]`,
+        intro: 'Browse, search, resume, and prune saved conversations.',
+        sections: [
+          {
+            lines: buildEmptyState(width, emptyTitle, emptyBody, [], DEFAULT_PANEL_PALETTE),
+          },
+        ],
+        footerLines,
+        palette: DEFAULT_PANEL_PALETTE,
+      });
     }
 
-    // Clamp cursor
     this.cursorIndex = Math.max(0, Math.min(this.cursorIndex, this.filtered.length - 1));
-    // Scroll to keep cursor visible
-    if (this.cursorIndex < this.scrollOffset) this.scrollOffset = this.cursorIndex;
-    if (this.cursorIndex >= this.scrollOffset + listHeight) this.scrollOffset = this.cursorIndex - listHeight + 1;
+    const summary: PanelWorkspaceSection = {
+      title: 'Summary',
+      lines: [
+        buildPanelLine(width, [
+          [' Sessions ', DEFAULT_PANEL_PALETTE.label],
+          [String(total), DEFAULT_PANEL_PALETTE.value],
+          ['   Visible ', DEFAULT_PANEL_PALETTE.label],
+          [String(count), DEFAULT_PANEL_PALETTE.info],
+          ['   Search ', DEFAULT_PANEL_PALETTE.label],
+          [this.searchQuery || 'none', this.searchQuery ? DEFAULT_PANEL_PALETTE.warn : DEFAULT_PANEL_PALETTE.dim],
+        ]),
+      ],
+    };
 
-    const visible = this.filtered.slice(this.scrollOffset, this.scrollOffset + listHeight);
-    for (let i = 0; i < visible.length; i++) {
-      const sess = visible[i]!;
-      const absIdx = this.scrollOffset + i;
-      const isCursor = absIdx === this.cursorIndex;
-      lines.push(this._renderSession(width, sess, isCursor));
-    }
+    const window = getTrackedVisibleWindow(this.filtered.length, this.cursorIndex, Math.max(6, height - 8), this.scrollOffset, 1);
+    this.scrollOffset = window.start;
+    const sessionRows = this.filtered.slice(window.start, window.end).map((sess, index) =>
+      this._renderSession(width, sess, window.start + index === this.cursorIndex),
+    );
 
-    while (lines.length < height) lines.push(createEmptyLine(width));
-    return lines.slice(0, height);
+    const selected = this.filtered[this.cursorIndex];
+    const selectedSection: PanelWorkspaceSection = selected
+      ? {
+          title: 'Selected',
+          lines: [
+            buildPanelLine(width, [[' Title ', DEFAULT_PANEL_PALETTE.label], [selected.title || selected.name || '(untitled)', DEFAULT_PANEL_PALETTE.value]]),
+            buildPanelLine(width, [[' Model ', DEFAULT_PANEL_PALETTE.label], [selected.model || 'unknown', DEFAULT_PANEL_PALETTE.info]]),
+            buildPanelLine(width, [[' Date ', DEFAULT_PANEL_PALETTE.label], [shortDate(selected.timestamp), DEFAULT_PANEL_PALETTE.value], ['   Messages ', DEFAULT_PANEL_PALETTE.label], [String(selected.messageCount), DEFAULT_PANEL_PALETTE.value]]),
+          ],
+        }
+      : { title: 'Selected', lines: [] };
+
+    return buildPanelWorkspace(width, height, {
+      title: ` Sessions [${count}/${total}]`,
+      intro: 'Browse, search, resume, and prune saved conversations.',
+      sections: [
+        summary,
+        { title: 'Sessions', lines: sessionRows },
+        selectedSection,
+      ],
+      footerLines,
+      palette: DEFAULT_PANEL_PALETTE,
+    });
   }
 
   private _renderSession(width: number, sess: SessionInfo, isCursor: boolean): Line {
     const bg = isCursor ? C.selectedBg : '';
-    const cells: Line = [];
-
-    // Cursor indicator
-    cells.push(createStyledCell(isCursor ? '>' : ' ', { fg: C.selected, bg, bold: isCursor }));
-
-    // Date (16 chars)
     const date = shortDate(sess.timestamp);
-    for (const ch of date) {
-      cells.push(createStyledCell(ch, { fg: C.dateFg, bg }));
-    }
-    cells.push(createStyledCell(' ', { fg: '', bg }));
-
-    // Message count (5 chars)
     const cnt = String(sess.messageCount).padStart(3) + 'm ';
-    for (const ch of cnt) {
-      if (cells.length >= width) break;
-      cells.push(createStyledCell(ch, { fg: C.countFg, bg }));
-    }
-
-    // Model (truncated to 20 chars)
     const model = (sess.model || 'unknown').slice(0, 18).padEnd(18) + ' ';
-    for (const ch of model) {
-      if (cells.length >= width) break;
-      cells.push(createStyledCell(ch, { fg: C.modelFg, bg }));
-    }
-
-    // Title / name (rest of width)
-    const used = cells.length;
-    const remaining = Math.max(0, width - used);
-    const title = (sess.title || sess.name || '(untitled)').slice(0, remaining);
-    for (const ch of title) {
-      if (cells.length >= width) break;
-      cells.push(createStyledCell(ch, { fg: isCursor ? C.selected : C.normal, bg, bold: isCursor }));
-    }
-
-    while (cells.length < width) {
-      cells.push(createStyledCell(' ', { fg: '', bg }));
-    }
-    return cells.slice(0, width);
+    const prefixLength = 1 + 16 + 1 + 4 + 19;
+    const title = truncateDisplay(sess.title || sess.name || '(untitled)', Math.max(0, width - prefixLength));
+    return buildStyledPanelLine(width, [
+      { text: isCursor ? '>' : ' ', fg: C.selected, bg, bold: isCursor },
+      { text: date, fg: C.dateFg, bg },
+      { text: ' ', fg: C.normal, bg },
+      { text: cnt, fg: C.countFg, bg },
+      { text: model, fg: C.modelFg, bg },
+      { text: title, fg: isCursor ? C.selected : C.normal, bg, bold: isCursor },
+    ]);
   }
 
   private _load(): void {

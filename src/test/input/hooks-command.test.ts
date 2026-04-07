@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
-import { existsSync, mkdtempSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { CommandRegistry } from '../../input/command-registry.ts';
@@ -60,5 +60,65 @@ describe('hooks command', () => {
     out.length = 0;
     await hooks!.handler(['simulate', 'Pre:tool:edit'], ctx);
     expect(out.join('\n')).toContain('matched hooks: 1');
+  });
+
+  test('inspects and imports managed hook bundles', async () => {
+    const registry = new CommandRegistry();
+    registerBuiltinCommands(registry);
+    const hooks = registry.get('hooks');
+    expect(hooks).toBeDefined();
+
+    const bundlePath = join(tempDir, 'incoming-hooks.json');
+    writeFileSync(bundlePath, JSON.stringify({
+      hooks: {
+        'Post:tool:*': [{
+          name: 'after-tool',
+          match: 'Post:tool:*',
+          type: 'command',
+          command: 'echo after',
+          enabled: true,
+        }],
+      },
+      chains: [{
+        name: 'review-loop',
+        steps: [{ match: 'Post:tool:edit' }],
+        action: {
+          name: 'review-loop-action',
+          match: 'Post:tool:edit',
+          type: 'command',
+          command: 'echo review',
+        },
+      }],
+    }, null, 2));
+
+    const out: string[] = [];
+    const ctx = {
+      providerRegistry: {} as never,
+      conversationManager: {} as never,
+      config: {} as never,
+      configManager,
+      runtime: {
+        model: '',
+        provider: '',
+        debugMode: false,
+        systemPrompt: '',
+        reasoningEffort: '',
+        sessionId: 'sess-hooks-import',
+      },
+      renderRequest: () => {},
+      print: (text: string) => { out.push(text); },
+      exit: () => {},
+      toolRegistry: {} as never,
+      mcpRegistry: {} as never,
+    };
+
+    await hooks!.handler(['inspect', bundlePath], ctx);
+    expect(out.join('\n')).toContain('Hook bundle inspection');
+    expect(out.join('\n')).toContain('hooks: 1');
+
+    out.length = 0;
+    await hooks!.handler(['import', bundlePath, 'replace'], ctx);
+    expect(out.join('\n')).toContain('Imported managed hooks');
+    expect(readFileSync(configManager.get('tools.hooksFile') as string, 'utf-8')).toContain('after-tool');
   });
 });

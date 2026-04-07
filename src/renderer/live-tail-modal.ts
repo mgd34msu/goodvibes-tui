@@ -3,6 +3,7 @@ import { ModalFactory } from './modal-factory.ts';
 import { ProcessManager } from '../tools/shared/process-manager.ts';
 import { AgentManager } from '../tools/agent/index.ts';
 import type { ProcessEntry } from './process-modal.ts';
+import { getOverlaySurfaceMetrics, getStableOverlayContentRows } from './overlay-viewport.ts';
 
 // ─── LiveTailModal ────────────────────────────────────────────────────────────
 
@@ -93,10 +94,17 @@ export class LiveTailModal {
 export function renderLiveTailModal(
   modal: LiveTailModal,
   width: number,
-  maxOutputLines = 16,
+  viewportHeight = 24,
 ): Line[] {
   const entry = modal.entry;
   if (!entry) return [];
+  const metrics = getOverlaySurfaceMetrics(width, viewportHeight, {
+    chromeRows: 4,
+    minContentRows: 6,
+    maxContentRows: 10,
+  });
+  const maxOutputLines = metrics.contentRows;
+  const targetContentRows = getStableOverlayContentRows(metrics.contentRows, 8);
 
   const output = modal.getOutput();
   const allLines = output.split('\n');
@@ -116,7 +124,7 @@ export function renderLiveTailModal(
 
   // Build scroll indicator for text section header
   const scrollInfo = totalLines > maxOutputLines
-    ? `  Lines ${startIdx + 1}-${Math.min(endIdx, totalLines)} of ${totalLines} · [↑↓] Scroll`
+    ? `  Lines ${startIdx + 1}-${Math.min(endIdx, totalLines)} of ${totalLines}  [Up/Down] Scroll`
     : '';
 
   const contentText = visibleLines.join('\n') || '(no output yet)';
@@ -132,9 +140,10 @@ export function renderLiveTailModal(
 
   return ModalFactory.createModal({
     title,
-    width: width - 4,
+    width: metrics.boxWidth,
     margin: 2,
+    targetContentRows,
     sections,
-    hints: ['[↑↓] Scroll', '[k] Kill', '[Esc] Back'],
+    hints: ['[Up/Down] Scroll', '[k] Kill', '[Esc] Back'],
   }, width);
 }

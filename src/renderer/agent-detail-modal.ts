@@ -6,6 +6,7 @@ import { AgentManager } from '../tools/agent/index.ts';
 import { AgentMessageBus } from '../agents/message-bus.ts';
 import { formatDuration } from './modal-utils.ts';
 import { logger } from '../utils/logger.ts';
+import { getOverlaySurfaceMetrics, getStableOverlayContentRows } from './overlay-viewport.ts';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -110,15 +111,25 @@ function estimateTokens(toolCallCount: number): number {
 export function renderAgentDetailModal(
   modal: AgentDetailModal,
   width: number,
+  viewportHeight = 24,
 ): Line[] {
   if (!modal.agentId) return [];
+  const metrics = getOverlaySurfaceMetrics(width, viewportHeight, {
+    margin: 2,
+    maxWidth: width - 4,
+    chromeRows: 6,
+    minContentRows: 10,
+    maxContentRows: 22,
+  });
+  const targetContentRows = Math.max(18, Math.min(22, getStableOverlayContentRows(metrics.contentRows, 12) + 8));
 
   const rec = AgentManager.getInstance().getStatus(modal.agentId);
   if (!rec) {
     return ModalFactory.createModal({
       title: 'Agent Detail',
-      width: width - 4,
-      margin: 2,
+      width: metrics.boxWidth,
+      margin: metrics.margin,
+      targetContentRows,
       sections: [
         { type: 'text', content: '(agent not found)' },
       ],
@@ -256,8 +267,9 @@ export function renderAgentDetailModal(
 
   return ModalFactory.createModal({
     title: `Agent: ${rec.id.slice(0, AGENT_ID_DISPLAY_LENGTH)}`,
-    width: width - 4,
-    margin: 2,
+    width: metrics.boxWidth,
+    margin: metrics.margin,
+    targetContentRows,
     sections,
     hints: ['[Esc] Close'],
   }, width);

@@ -38,9 +38,11 @@ describe('SecurityPanel', () => {
 
   test('renders empty guidance when no tokens are registered', () => {
     const panel = new SecurityPanel(makeAuditor());
-    const text = linesText(panel.render(120, 12));
+    const text = linesText(panel.render(120, 16));
     expect(text).toContain('Security Control Room');
+    expect(text).toContain('Token audit');
     expect(text).toContain('No API tokens are registered');
+    expect(text).toContain('/policy preflight');
   });
 
   test('renders token audit posture and details', () => {

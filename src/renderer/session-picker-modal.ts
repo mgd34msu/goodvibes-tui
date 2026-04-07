@@ -11,6 +11,8 @@ import type { Line } from '../types/grid.ts';
 import { ModalFactory } from './modal-factory.ts';
 import type { SessionPickerModal } from '../input/session-picker-modal.ts';
 import { formatTimestamp } from './modal-utils.ts';
+import { fitDisplay } from '../utils/terminal-width.ts';
+import { getOverlaySurfaceMetrics, getStableOverlayContentRows } from './overlay-viewport.ts';
 
 // ---------------------------------------------------------------------------
 // Renderer
@@ -25,11 +27,19 @@ import { formatTimestamp } from './modal-utils.ts';
 export function renderSessionPickerModal(
   modal: SessionPickerModal,
   width: number,
+  viewportHeight = 24,
 ): Line[] {
-  const boxMargin = 4;
-  const maxBoxW = 76;
-  const boxW = Math.min(width - boxMargin * 2, maxBoxW);
-  const contentW = boxW - 4;
+  const metrics = getOverlaySurfaceMetrics(width, viewportHeight, {
+    chromeRows: 6,
+    minContentRows: 5,
+    maxContentRows: 9,
+  });
+  const boxMargin = metrics.margin;
+  const boxW = metrics.boxWidth;
+  const contentW = metrics.contentWidth;
+  const visibleRows = metrics.contentRows;
+  const targetContentRows = getStableOverlayContentRows(metrics.contentRows, 8);
+  modal.setVisibleRows(visibleRows);
 
   const sections: import('./modal-factory.ts').ModalSection[] = [];
 
@@ -51,9 +61,9 @@ export function renderSessionPickerModal(
     const msgW = Math.max(4, contentW - nameW - tsW - 4); // 4 = separators/spaces
 
     // Column header
-    const nameHdr = 'Name'.padEnd(nameW);
-    const tsHdr   = 'Saved'.padEnd(tsW);
-    const msgHdr  = 'Msgs'.padEnd(msgW);
+    const nameHdr = fitDisplay('Name', nameW);
+    const tsHdr   = fitDisplay('Saved', tsW);
+    const msgHdr  = fitDisplay('Msgs', msgW);
     sections.push({
       type: 'text',
       content: `${nameHdr}  ${tsHdr}  ${msgHdr}`,
@@ -61,21 +71,28 @@ export function renderSessionPickerModal(
     });
     sections.push({ type: 'separator' });
 
-    const listItems: import('./modal-factory.ts').ModalListItem[] = modal.sessions.map((sess, idx) => {
-      const isSelected = idx === modal.selectedIndex;
+    const visibleSessions = modal.sessions.slice(modal.scrollOffset, modal.scrollOffset + visibleRows);
+    const listItems: import('./modal-factory.ts').ModalListItem[] = visibleSessions.map((sess, idx) => {
+      const isSelected = modal.scrollOffset + idx === modal.selectedIndex;
 
-      const nameStr = sess.name.length > nameW
-        ? sess.name.slice(0, nameW - 1) + '\u2026'
-        : sess.name.padEnd(nameW);
+      const nameStr = fitDisplay(sess.name, nameW);
 
-      const tsStr = formatTimestamp(sess.timestamp).padEnd(tsW);
-      const msgStr = String(sess.messageCount).padEnd(msgW);
+      const tsStr = fitDisplay(formatTimestamp(sess.timestamp), tsW);
+      const msgStr = fitDisplay(String(sess.messageCount), msgW);
 
       const label = `${nameStr}  ${tsStr}  ${msgStr}`;
       return { label, selected: isSelected };
     });
 
     sections.push({ type: 'list', items: listItems });
+    if (modal.sessions.length > visibleRows) {
+      sections.push({ type: 'separator' });
+      sections.push({
+        type: 'text',
+        content: `[${modal.scrollOffset + 1}-${Math.min(modal.sessions.length, modal.scrollOffset + visibleRows)} of ${modal.sessions.length}]`,
+        style: { fg: '244', dim: true },
+      });
+    }
   }
 
   // Status message if present
@@ -84,7 +101,15 @@ export function renderSessionPickerModal(
     sections.push({
       type: 'text',
       content: modal.statusMessage,
-      style: { fg: '#00ffcc' },
+      style: { fg: modal.deleteConfirmationTarget ? '#f59e0b' : '#00ffcc' },
+    });
+  }
+
+  if (modal.deleteConfirmationTarget) {
+    sections.push({
+      type: 'text',
+      content: `Deletion is armed for ${modal.deleteConfirmationTarget}. Move selection or press Esc to cancel.`,
+      style: { fg: '244', dim: true },
     });
   }
 
@@ -93,8 +118,9 @@ export function renderSessionPickerModal(
       title: 'Sessions',
       width: boxW,
       margin: boxMargin,
+      targetContentRows,
       sections,
-      hints: ['[\u2191\u2193] Navigate', '[Enter] Load', '[d] Delete', '[Esc] Close'],
+      hints: ['[\u2191\u2193] Navigate', '[Enter] Load', '[d] Arm / Delete', '[Esc] Close'],
     },
     width,
   );

@@ -12,10 +12,12 @@ import type {
   RemoteRunnerCapabilityCeiling,
   RemoteRunnerEvidenceSummary,
   RemoteRunnerPool,
+  RemoteSessionBundle,
 } from './types.ts';
 import type { RuntimeTask } from '../store/domains/tasks.ts';
 
 const DEFAULT_ARTIFACT_DIR = '.goodvibes/remote-artifacts';
+const DEFAULT_SESSION_BUNDLE_DIR = '.goodvibes/remote-sessions';
 
 function buildCapabilityCeiling(agent: AgentRecord): RemoteRunnerCapabilityCeiling {
   return Object.freeze({
@@ -342,6 +344,48 @@ export class RemoteRunnerRegistry {
     const parsed = JSON.parse(raw) as RemoteExecutionArtifact;
     this.artifacts.set(parsed.id, parsed);
     this.contracts.set(parsed.runnerId, parsed.runnerContract);
+    return parsed;
+  }
+
+  buildSessionBundle(store?: RuntimeStore): RemoteSessionBundle {
+    this.ensureContractsFromStore(store);
+    const activeConnectionIds = store?.getState().acp.activeConnectionIds ?? [];
+    return Object.freeze({
+      version: 1,
+      exportedAt: Date.now(),
+      sessionId: store?.getState().session.id || 'unknown-session',
+      activeConnectionIds: Object.freeze([...activeConnectionIds]),
+      pools: Object.freeze(this.listPools()),
+      contracts: Object.freeze(this.listContracts()),
+      artifacts: Object.freeze(this.listArtifacts()),
+    });
+  }
+
+  async exportSessionBundle(
+    store?: RuntimeStore,
+    explicitPath?: string,
+  ): Promise<{ bundle: RemoteSessionBundle; path: string }> {
+    const bundle = this.buildSessionBundle(store);
+    const path = explicitPath
+      ? resolve(explicitPath)
+      : resolve(DEFAULT_SESSION_BUNDLE_DIR, `${bundle.sessionId}-${bundle.exportedAt}.json`);
+    mkdirSync(dirname(path), { recursive: true });
+    await writeFile(path, `${JSON.stringify(bundle, null, 2)}\n`, 'utf-8');
+    return { bundle, path };
+  }
+
+  async importSessionBundle(path: string): Promise<RemoteSessionBundle> {
+    const raw = await readFile(resolve(path), 'utf-8');
+    const parsed = JSON.parse(raw) as RemoteSessionBundle;
+    for (const pool of parsed.pools) {
+      this.pools.set(pool.id, pool);
+    }
+    for (const contract of parsed.contracts) {
+      this.contracts.set(contract.runnerId, contract);
+    }
+    for (const artifact of parsed.artifacts) {
+      this.artifacts.set(artifact.id, artifact);
+    }
     return parsed;
   }
 

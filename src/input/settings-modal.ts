@@ -12,6 +12,9 @@
 
 import { CONFIG_SCHEMA, type ConfigSetting, type ConfigKey, type PersistedFlagState } from '../config/schema.ts';
 import type { ConfigManager } from '../config/manager.ts';
+import { ServiceRegistry } from '../config/service-registry.ts';
+import { getSubscriptionManager } from '../config/subscriptions.ts';
+import { listBuiltinSubscriptionProviders } from '../config/subscription-providers.ts';
 import type { FeatureFlagManager } from '../runtime/feature-flags/index.ts';
 import type { FeatureFlag, FlagState } from '../runtime/feature-flags/types.ts';
 import type { McpRegistry } from '../mcp/registry.ts';
@@ -21,14 +24,17 @@ import { logger } from '../utils/logger.ts';
 // Types
 // ---------------------------------------------------------------------------
 
-export type SettingsCategory = 'display' | 'provider' | 'behavior' | 'permissions' | 'mcp' | 'danger' | 'tools' | 'flags';
+export type SettingsCategory = 'display' | 'ui' | 'provider' | 'subscriptions' | 'behavior' | 'permissions' | 'mcp' | 'sandbox' | 'danger' | 'tools' | 'flags';
 
 export const SETTINGS_CATEGORIES: SettingsCategory[] = [
   'display',
+  'ui',
   'provider',
+  'subscriptions',
   'behavior',
   'permissions',
   'mcp',
+  'sandbox',
   'danger',
   'tools',
   'flags',
@@ -55,6 +61,14 @@ export interface McpEntry {
   allowedHosts: string[];
 }
 
+export interface SubscriptionEntry {
+  provider: string;
+  state: 'active' | 'pending' | 'available';
+  tokenType?: string;
+  expiresAt?: number;
+  oauthConfigured: boolean;
+}
+
 // ---------------------------------------------------------------------------
 // SettingsModal
 // ---------------------------------------------------------------------------
@@ -75,6 +89,8 @@ export class SettingsModal {
   public editBuffer = '';
   /** Server awaiting explicit allow-all confirmation, if any. */
   public mcpAllowAllConfirmationTarget: string | null = null;
+  /** Provider awaiting explicit logout confirmation, if any. */
+  public subscriptionLogoutConfirmationTarget: string | null = null;
 
   /** Settings grouped by category. */
   public groups: Map<SettingsCategory, SettingEntry[]> = new Map();
@@ -83,6 +99,8 @@ export class SettingsModal {
   public flagEntries: FlagEntry[] = [];
   /** MCP server trust entries (populated when mcp tab is active). */
   public mcpEntries: McpEntry[] = [];
+  /** Provider subscription entries (populated when subscriptions tab is active). */
+  public subscriptionEntries: SubscriptionEntry[] = [];
 
   private configManager: ConfigManager | null = null;
   private featureFlagManager: FeatureFlagManager | null = null;
@@ -101,11 +119,13 @@ export class SettingsModal {
     this._loadGroups(configManager);
     this._loadFlagEntries();
     this._loadMcpEntries();
+    this._loadSubscriptionEntries();
     this.categoryIndex = 0;
     this.selectedIndex = 0;
     this.editingMode = false;
     this.editBuffer = '';
     this.mcpAllowAllConfirmationTarget = null;
+    this.subscriptionLogoutConfirmationTarget = null;
     this.active = true;
   }
 
@@ -114,6 +134,7 @@ export class SettingsModal {
     this.editingMode = false;
     this.editBuffer = '';
     this.mcpAllowAllConfirmationTarget = null;
+    this.subscriptionLogoutConfirmationTarget = null;
   }
 
   /** Cycle to the next category (Tab). */
@@ -121,10 +142,13 @@ export class SettingsModal {
     if (this.editingMode) return;
     this.categoryIndex = (this.categoryIndex + 1) % SETTINGS_CATEGORIES.length;
     this.selectedIndex = 0;
+    this.subscriptionLogoutConfirmationTarget = null;
     if (this.currentCategory === 'flags') {
       this._loadFlagEntries();
     } else if (this.currentCategory === 'mcp') {
       this._loadMcpEntries();
+    } else if (this.currentCategory === 'subscriptions') {
+      this._loadSubscriptionEntries();
     }
   }
 
@@ -133,10 +157,13 @@ export class SettingsModal {
     if (this.editingMode) return;
     this.categoryIndex = (this.categoryIndex - 1 + SETTINGS_CATEGORIES.length) % SETTINGS_CATEGORIES.length;
     this.selectedIndex = 0;
+    this.subscriptionLogoutConfirmationTarget = null;
     if (this.currentCategory === 'flags') {
       this._loadFlagEntries();
     } else if (this.currentCategory === 'mcp') {
       this._loadMcpEntries();
+    } else if (this.currentCategory === 'subscriptions') {
+      this._loadSubscriptionEntries();
     }
   }
 
@@ -148,10 +175,14 @@ export class SettingsModal {
         this.selectedIndex = (this.selectedIndex - 1 + this.flagEntries.length) % this.flagEntries.length;
       } else if (this.currentCategory === 'mcp' && this.mcpEntries.length > 0) {
         this.selectedIndex = (this.selectedIndex - 1 + this.mcpEntries.length) % this.mcpEntries.length;
+      } else if (this.currentCategory === 'subscriptions' && this.subscriptionEntries.length > 0) {
+        this.selectedIndex = (this.selectedIndex - 1 + this.subscriptionEntries.length) % this.subscriptionEntries.length;
+        this.subscriptionLogoutConfirmationTarget = null;
       }
       return;
     }
     this.selectedIndex = (this.selectedIndex - 1 + items.length) % items.length;
+    this.subscriptionLogoutConfirmationTarget = null;
   }
 
   moveDown(): void {
@@ -162,10 +193,14 @@ export class SettingsModal {
         this.selectedIndex = (this.selectedIndex + 1) % this.flagEntries.length;
       } else if (this.currentCategory === 'mcp' && this.mcpEntries.length > 0) {
         this.selectedIndex = (this.selectedIndex + 1) % this.mcpEntries.length;
+      } else if (this.currentCategory === 'subscriptions' && this.subscriptionEntries.length > 0) {
+        this.selectedIndex = (this.selectedIndex + 1) % this.subscriptionEntries.length;
+        this.subscriptionLogoutConfirmationTarget = null;
       }
       return;
     }
     this.selectedIndex = (this.selectedIndex + 1) % items.length;
+    this.subscriptionLogoutConfirmationTarget = null;
   }
 
   getSelected(): SettingEntry | null {
@@ -181,6 +216,11 @@ export class SettingsModal {
   getSelectedMcp(): McpEntry | null {
     if (this.currentCategory !== 'mcp') return null;
     return this.mcpEntries[this.selectedIndex] ?? null;
+  }
+
+  getSelectedSubscription(): SubscriptionEntry | null {
+    if (this.currentCategory !== 'subscriptions') return null;
+    return this.subscriptionEntries[this.selectedIndex] ?? null;
   }
 
   get currentCategory(): SettingsCategory {
@@ -201,6 +241,21 @@ export class SettingsModal {
       this.editingMode = true;
       this.editBuffer = entry.trustMode;
       this.mcpAllowAllConfirmationTarget = null;
+      return;
+    }
+
+    if (this.currentCategory === 'subscriptions') {
+      const entry = this.getSelectedSubscription();
+      if (!entry) return;
+      if (entry.state === 'active' || entry.state === 'pending') {
+        if (this.subscriptionLogoutConfirmationTarget !== entry.provider) {
+          this.subscriptionLogoutConfirmationTarget = entry.provider;
+          return;
+        }
+        getSubscriptionManager().logout(entry.provider);
+        this._loadSubscriptionEntries();
+        this.subscriptionLogoutConfirmationTarget = null;
+      }
       return;
     }
 
@@ -369,6 +424,17 @@ export class SettingsModal {
       };
       this.groups.get(cat)!.push(entry);
     }
+
+    const uiEntries = this.groups.get('ui');
+    if (uiEntries) {
+      const uiPriority: Record<string, number> = {
+        'ui.systemMessages': 0,
+        'ui.operationalMessages': 1,
+        'ui.wrfcMessages': 2,
+        'ui.voiceEnabled': 3,
+      };
+      uiEntries.sort((a, b) => (uiPriority[a.setting.key] ?? 99) - (uiPriority[b.setting.key] ?? 99));
+    }
   }
 
   /** Load or refresh the flags tab entries from the feature flag manager. */
@@ -398,6 +464,51 @@ export class SettingsModal {
     }));
   }
 
+  private _loadSubscriptionEntries(): void {
+    const manager = getSubscriptionManager();
+    const services = new ServiceRegistry().getAll();
+    const providers = new Map<string, SubscriptionEntry>();
+
+    for (const builtin of listBuiltinSubscriptionProviders()) {
+      providers.set(builtin.provider, {
+        provider: builtin.provider,
+        state: 'available',
+        oauthConfigured: true,
+      });
+    }
+
+    for (const service of Object.values(services)) {
+      if (service.authType === 'oauth' && service.oauth) {
+        const provider = service.providerId ?? service.name;
+        providers.set(provider, {
+          provider,
+          state: 'available',
+          oauthConfigured: true,
+        });
+      }
+    }
+
+    for (const pending of manager.listPending()) {
+      providers.set(pending.provider, {
+        provider: pending.provider,
+        state: 'pending',
+        oauthConfigured: providers.get(pending.provider)?.oauthConfigured ?? false,
+      });
+    }
+
+    for (const subscription of manager.list()) {
+      providers.set(subscription.provider, {
+        provider: subscription.provider,
+        state: 'active',
+        tokenType: subscription.tokenType,
+        expiresAt: subscription.expiresAt,
+        oauthConfigured: providers.get(subscription.provider)?.oauthConfigured ?? false,
+      });
+    }
+
+    this.subscriptionEntries = [...providers.values()].sort((a, b) => a.provider.localeCompare(b.provider));
+  }
+
   /**
    * Persist a flag state override to config.
    * Deletes the entry when reverting to defaultState. Skips killed state.
@@ -422,7 +533,7 @@ export class SettingsModal {
 
   /** Returns [] for the flags category (flags use flagEntries instead). */
   private _currentItems(): SettingEntry[] {
-    if (this.currentCategory === 'flags' || this.currentCategory === 'mcp') return [];
+    if (this.currentCategory === 'flags' || this.currentCategory === 'mcp' || this.currentCategory === 'subscriptions') return [];
     return this.groups.get(this.currentCategory) ?? [];
   }
 

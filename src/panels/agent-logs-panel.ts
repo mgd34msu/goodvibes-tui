@@ -5,20 +5,22 @@ import { BasePanel } from './base-panel.ts';
 import { AgentManager } from '../tools/agent/index.ts';
 import type { AgentRecord } from '../tools/agent/index.ts';
 import type { RuntimeEventBus, AgentEvent } from '../runtime/events/index.ts';
-
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
-
-type FilterType = 'all' | 'assistant' | 'tool' | 'error';
-
-interface LogEntry {
-  raw: Record<string, unknown>;
-  type: string;
-  text: string;
-  color: string;
-  bold: boolean;
-}
+import {
+  buildEmptyState,
+  buildPanelLine,
+  buildStyledPanelLine,
+  buildPanelWorkspace,
+  DEFAULT_PANEL_PALETTE,
+} from './polish.ts';
+import { getTrackedVisibleWindow } from '../renderer/surface-layout.ts';
+import {
+  type AgentLogEntry as LogEntry,
+  type AgentLogFilterType as FilterType,
+  AGENT_LOG_COLORS as COLOR,
+  AGENT_LOG_FILTER_CYCLE as FILTER_CYCLE,
+  AGENT_LOG_FILTER_LABELS as FILTER_LABELS,
+  parseAgentJsonl,
+} from './agent-logs-shared.ts';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -26,37 +28,6 @@ interface LogEntry {
 
 const POLL_INTERVAL_MS = 500;
 
-const FILTER_LABELS: Record<FilterType, string> = {
-  all: 'All',
-  assistant: 'Assistant',
-  tool: 'Tool',
-  error: 'Error',
-};
-
-const FILTER_CYCLE: FilterType[] = ['all', 'assistant', 'tool', 'error'];
-
-// ANSI 256-color codes / hex for coloring
-const COLOR = {
-  header_bg: '235',
-  header_fg: '250',
-  header_accent: '#00ffff',
-  header_label: '244',
-  agent_selected: '#00ffff',
-  agent_running: '#00ff87',
-  agent_pending: '220',
-  agent_done: '244',
-  agent_error: '#ff5f5f',
-  assistant: '255',
-  tool: '#00e5ff',
-  error: '#ff5f5f',
-  dim: '240',
-  paused: '220',
-  auto_follow: '#00ff87',
-  session_start: '238',
-  separator: '237',
-  filter_active: '#00ffff',
-  filter_inactive: '244',
-} as const;
 
 // ---------------------------------------------------------------------------
 // AgentLogsPanel
@@ -151,52 +122,98 @@ export class AgentLogsPanel extends BasePanel {
 
   render(width: number, height: number): Line[] {
     this.needsRender = false;
-    const lines: Line[] = [];
+    const footerLines = [
+      buildPanelLine(width, [
+        [' Tab', DEFAULT_PANEL_PALETTE.info], [' next agent', DEFAULT_PANEL_PALETTE.dim],
+        ['   Space', DEFAULT_PANEL_PALETTE.info], [' pause', DEFAULT_PANEL_PALETTE.dim],
+        ['   f', DEFAULT_PANEL_PALETTE.info], [' filter', DEFAULT_PANEL_PALETTE.dim],
+        ['   g/G', DEFAULT_PANEL_PALETTE.info], [' scroll', DEFAULT_PANEL_PALETTE.dim],
+      ]),
+    ];
 
-    // Header (1 line)
-    lines.push(this._renderHeader(width));
+    const summaryLines = [
+      buildPanelLine(width, [
+        [' Agents ', DEFAULT_PANEL_PALETTE.label],
+        [String(this.agents.length), DEFAULT_PANEL_PALETTE.value],
+        ['   Filter ', DEFAULT_PANEL_PALETTE.label],
+        [FILTER_LABELS[this.filter], DEFAULT_PANEL_PALETTE.info],
+        ['   Mode ', DEFAULT_PANEL_PALETTE.label],
+        [this.paused ? 'paused' : this.autoFollow ? 'auto-follow' : 'manual', this.paused ? DEFAULT_PANEL_PALETTE.warn : this.autoFollow ? DEFAULT_PANEL_PALETTE.good : DEFAULT_PANEL_PALETTE.dim],
+      ]),
+    ];
 
-    // Agent selector (1 line, shown if any agents exist)
-    if (this.agents.length > 0) {
-      lines.push(this._renderAgentSelector(width));
-    } else {
-      lines.push(this._renderNoAgents(width));
+    if (this.agents.length === 0) {
+      return buildPanelWorkspace(width, height, {
+        title: ' Agent Logs',
+        intro: 'Tail per-agent JSONL session logs, filter entries, and switch between running or completed agents.',
+        sections: [
+          { title: 'Summary', lines: summaryLines },
+          {
+            lines: buildEmptyState(
+              width,
+              ' No agents running',
+              'Spawn or attach to an agent session and its structured logs will appear here.',
+              [],
+              DEFAULT_PANEL_PALETTE,
+            ),
+          },
+        ],
+        footerLines,
+        palette: DEFAULT_PANEL_PALETTE,
+      });
     }
 
-    // Separator
-    lines.push(this._renderSeparator(width));
-
-    const bodyHeight = height - 3; // header + selector + separator
-    if (bodyHeight <= 0) return lines;
-
-    if (this.agents.length === 0 || this.filteredEntries.length === 0) {
-      lines.push(...this._renderEmpty(width, bodyHeight));
-      return lines;
+    const selectedAgent = this._selectedAgent();
+    const selectorLine = this._renderAgentSelector(width);
+    if (selectedAgent) {
+      summaryLines.push(buildPanelLine(width, [
+        [' Selected ', DEFAULT_PANEL_PALETTE.label],
+        [selectedAgent.id, DEFAULT_PANEL_PALETTE.info],
+        ['   Status ', DEFAULT_PANEL_PALETTE.label],
+        [selectedAgent.status, selectedAgent.status === 'running' ? DEFAULT_PANEL_PALETTE.good : selectedAgent.status === 'failed' ? DEFAULT_PANEL_PALETTE.bad : DEFAULT_PANEL_PALETTE.dim],
+      ]));
     }
 
-    // Clamp scroll
-    const maxScroll = Math.max(0, this.filteredEntries.length - bodyHeight);
-    if (this.autoFollow) {
-      this.scrollOffset = maxScroll;
-    } else {
-      this.scrollOffset = Math.min(this.scrollOffset, maxScroll);
+    if (this.filteredEntries.length === 0) {
+      return buildPanelWorkspace(width, height, {
+        title: ' Agent Logs',
+        intro: 'Tail per-agent JSONL session logs, filter entries, and switch between running or completed agents.',
+        sections: [
+          { title: 'Summary', lines: summaryLines },
+          { title: 'Agents', lines: [selectorLine] },
+          {
+            lines: buildEmptyState(
+              width,
+              ` No ${this.filter === 'all' ? '' : `${this.filter} `}log entries yet`,
+              'Once the selected agent writes session events, they will appear here and can be filtered by type.',
+              [],
+              DEFAULT_PANEL_PALETTE,
+            ),
+          },
+        ],
+        footerLines,
+        palette: DEFAULT_PANEL_PALETTE,
+      });
     }
 
-    const visible = this.filteredEntries.slice(
-      this.scrollOffset,
-      this.scrollOffset + bodyHeight,
-    );
+    const focusIndex = this.autoFollow
+      ? Math.max(0, this.filteredEntries.length - 1)
+      : Math.min(this.scrollOffset, Math.max(0, this.filteredEntries.length - 1));
+    const window = getTrackedVisibleWindow(this.filteredEntries.length, focusIndex, Math.max(8, height - 10), this.scrollOffset, 1);
+    this.scrollOffset = window.start;
+    const visible = this.filteredEntries.slice(window.start, window.end).map((entry) => this._renderEntry(entry, width));
 
-    for (const entry of visible) {
-      lines.push(this._renderEntry(entry, width));
-    }
-
-    // Pad remaining rows
-    while (lines.length < height) {
-      lines.push(createEmptyLine(width));
-    }
-
-    return lines;
+    return buildPanelWorkspace(width, height, {
+      title: ' Agent Logs',
+      intro: 'Tail per-agent JSONL session logs, filter entries, and switch between running or completed agents.',
+      sections: [
+        { title: 'Summary', lines: summaryLines },
+        { title: 'Agents', lines: [selectorLine] },
+        { title: 'Log Stream', lines: visible },
+      ],
+      footerLines,
+      palette: DEFAULT_PANEL_PALETTE,
+    });
   }
 
   // ── Private: polling ─────────────────────────────────────────────────────
@@ -233,7 +250,7 @@ export class AgentLogsPanel extends BasePanel {
       this.lastFileSize = content.length;
 
       // Re-parse all lines (simple: no partial-line tracking needed at 500ms)
-      this.allEntries = this._parseJsonl(content);
+      this.allEntries = parseAgentJsonl(content);
       this._applyFilter();
       if (this.autoFollow) {
         this.scrollOffset = Math.max(0, this.filteredEntries.length - 1);
@@ -366,7 +383,7 @@ export class AgentLogsPanel extends BasePanel {
     try {
       const content = readFileSync(sessionFile, 'utf-8');
       this.lastFileSize = content.length;
-      this.allEntries = this._parseJsonl(content);
+      this.allEntries = parseAgentJsonl(content);
       this._applyFilter();
       if (this.autoFollow) {
         this.scrollOffset = Math.max(0, this.filteredEntries.length - 1);
@@ -379,103 +396,6 @@ export class AgentLogsPanel extends BasePanel {
 
   private _sessionFilePath(agentId: string): string {
     return `${process.cwd()}/.goodvibes/tui/sessions/${agentId}.jsonl`;
-  }
-
-  // ── Private: JSONL parsing ─────────────────────────────────────────────────
-
-  private _parseJsonl(content: string): LogEntry[] {
-    const entries: LogEntry[] = [];
-    for (const line of content.split('\n')) {
-      const trimmed = line.trim();
-      if (!trimmed) continue;
-      try {
-        const obj = JSON.parse(trimmed) as Record<string, unknown>;
-        entries.push(this._toLogEntry(obj));
-      } catch {
-        // Skip malformed lines
-      }
-    }
-    return entries;
-  }
-
-  private _toLogEntry(obj: Record<string, unknown>): LogEntry {
-    const type = typeof obj['type'] === 'string' ? obj['type'] : 'unknown';
-
-    switch (type) {
-      case 'meta':
-      case 'session_start': {
-        const agentId = String(obj['agentId'] ?? '');
-        const model = String(obj['model'] ?? '');
-        const provider = String(obj['provider'] ?? '');
-        const ts = String(obj['timestamp'] ?? '').replace('T', ' ').replace(/\.\d+Z$/, '');
-        return {
-          raw: obj,
-          type: 'session_start',
-          text: `[${ts}] Session started  agent=${agentId}  model=${model}  provider=${provider}`,
-          color: COLOR.session_start,
-          bold: false,
-        };
-      }
-      case 'assistant': {
-        const content = String(obj['content'] ?? obj['text'] ?? '');
-        return {
-          raw: obj,
-          type: 'assistant',
-          text: content,
-          color: COLOR.assistant,
-          bold: false,
-        };
-      }
-      case 'tool_call': {
-        const tool = String(obj['tool'] ?? obj['name'] ?? '');
-        const args = obj['args'] ?? obj['arguments'] ?? {};
-        const argsStr = typeof args === 'string' ? args : JSON.stringify(args);
-        return {
-          raw: obj,
-          type: 'tool',
-          text: `[tool] ${tool}  ${argsStr.slice(0, 120)}`,
-          color: COLOR.tool,
-          bold: false,
-        };
-      }
-      case 'tool_result': {
-        const tool = String(obj['tool'] ?? obj['name'] ?? '');
-        const result = obj['result'] ?? obj['output'] ?? '';
-        const resultStr = typeof result === 'string' ? result : JSON.stringify(result);
-        return {
-          raw: obj,
-          type: 'tool',
-          text: `[result] ${tool}  ${resultStr.slice(0, 120)}`,
-          color: COLOR.tool,
-          bold: false,
-        };
-      }
-      case 'error': {
-        const msg = String(obj['error'] ?? obj['message'] ?? obj['msg'] ?? JSON.stringify(obj));
-        return {
-          raw: obj,
-          type: 'error',
-          text: `[error] ${msg}`,
-          color: COLOR.error,
-          bold: true,
-        };
-      }
-      default: {
-        // Generic: render as compact JSON or text
-        const text = typeof obj['text'] === 'string'
-          ? obj['text']
-          : typeof obj['content'] === 'string'
-            ? obj['content']
-            : `[${type}] ${JSON.stringify(obj).slice(0, 120)}`;
-        return {
-          raw: obj,
-          type,
-          text,
-          color: COLOR.dim,
-          bold: false,
-        };
-      }
-    }
   }
 
   // ── Private: filter ───────────────────────────────────────────────────────
@@ -517,54 +437,26 @@ export class AgentLogsPanel extends BasePanel {
 
   /** Top header bar: title + filter label + mode indicators */
   private _renderHeader(width: number): Line {
-    const line = createEmptyLine(width);
-    let x = 0;
-
-    // Title
     const title = ' Agent Logs ';
-    for (const ch of title) {
-      if (x >= width) break;
-      line[x++] = createStyledCell(ch, { fg: COLOR.header_accent, bold: true });
-    }
-
-    // Filter label
     const filterLabel = `[${FILTER_LABELS[this.filter]}] `;
-    for (const ch of filterLabel) {
-      if (x >= width) break;
-      line[x++] = createStyledCell(ch, { fg: COLOR.filter_active });
-    }
-
-    // Right-side mode indicators
     const pause = this.paused ? ' PAUSED ' : '';
     const follow = this.autoFollow ? ' AUTO-FOLLOW ' : '';
     const keyhints = '  Tab:next  Space:pause  f:filter  g/G:scroll ';
-    const right = `${pause}${follow}${keyhints}`;
-    const rightStart = width - right.length;
-
-    for (let i = 0; i < right.length; i++) {
-      const rx = rightStart + i;
-      if (rx < 0 || rx >= width) continue;
-      const ch = right[i]!;
-      let fg: string = COLOR.header_label;
-      if (pause && i < pause.length) fg = COLOR.paused;
-      else if (follow && i >= pause.length && i < pause.length + follow.length) fg = COLOR.auto_follow;
-      line[rx] = createStyledCell(ch, { fg });
-    }
-
-    return line;
+    return buildStyledPanelLine(width, [
+      { text: title, fg: COLOR.header_accent, bold: true },
+      { text: filterLabel, fg: COLOR.filter_active },
+      { text: pause, fg: COLOR.paused },
+      { text: follow, fg: COLOR.auto_follow },
+      { text: keyhints, fg: COLOR.header_label },
+    ]);
   }
 
   /** Agent selector bar: shows running agents with cycle indicator */
   private _renderAgentSelector(width: number): Line {
-    const line = createEmptyLine(width);
-    let x = 0;
-
     const prefix = ' Agents: ';
-    for (const ch of prefix) {
-      if (x >= width) break;
-      line[x++] = createStyledCell(ch, { fg: COLOR.header_label });
-    }
-
+    const segments: Array<{ text: string; fg: string; bold?: boolean }> = [
+      { text: prefix, fg: COLOR.header_label },
+    ];
     for (let i = 0; i < this.agents.length; i++) {
       const agent = this.agents[i]!;
       const isSelected = i === this.selectedAgentIndex;
@@ -573,36 +465,22 @@ export class AgentLogsPanel extends BasePanel {
       const label = isSelected
         ? `[${shortId}:${agent.status}] `
         : `${shortId}:${agent.status}  `;
-
-      for (const ch of label) {
-        if (x >= width) break;
-        line[x++] = createStyledCell(ch, {
-          fg: isSelected ? COLOR.agent_selected : statusColor,
-          bold: isSelected,
-        });
-      }
+      segments.push({
+        text: label,
+        fg: isSelected ? COLOR.agent_selected : statusColor,
+        bold: isSelected,
+      });
     }
-
-    return line;
+    return buildStyledPanelLine(width, segments);
   }
 
   private _renderNoAgents(width: number): Line {
-    const line = createEmptyLine(width);
     const msg = ' No agents running. ';
-    let x = 0;
-    for (const ch of msg) {
-      if (x >= width) break;
-      line[x++] = createStyledCell(ch, { fg: COLOR.dim });
-    }
-    return line;
+    return buildStyledPanelLine(width, [{ text: msg, fg: COLOR.dim }]);
   }
 
   private _renderSeparator(width: number): Line {
-    const line = createEmptyLine(width);
-    for (let i = 0; i < width; i++) {
-      line[i] = createStyledCell('─', { fg: COLOR.separator });
-    }
-    return line;
+    return buildStyledPanelLine(width, [{ text: '─'.repeat(width), fg: COLOR.separator }]);
   }
 
   private _renderEmpty(width: number, bodyHeight: number): Line[] {
@@ -610,33 +488,23 @@ export class AgentLogsPanel extends BasePanel {
     const msg = this.agents.length === 0
       ? ' No agents running '
       : ` No ${this.filter === 'all' ? '' : this.filter + ' '}log entries yet `;
-    const emptyLine = createEmptyLine(width);
-    const textLine = createEmptyLine(width);
     const offset = Math.max(0, Math.floor((width - msg.length) / 2));
-    let x = offset;
-    for (const ch of msg) {
-      if (x >= width) break;
-      textLine[x++] = createStyledCell(ch, { fg: COLOR.dim });
-    }
+    const textLine = buildStyledPanelLine(width, [
+      { text: ' '.repeat(offset), fg: COLOR.dim },
+      { text: msg, fg: COLOR.dim },
+    ]);
     lines.push(textLine);
     while (lines.length < bodyHeight) {
       lines.push(createEmptyLine(width));
     }
-    void emptyLine;
     return lines;
   }
 
   private _renderEntry(entry: LogEntry, width: number): Line {
-    const line = createEmptyLine(width);
     // Indent non-session entries
     const prefix = entry.type === 'session_start' ? '' : '  ';
     const fullText = prefix + entry.text;
-    let x = 0;
-    for (const ch of fullText) {
-      if (x >= width) break;
-      line[x++] = createStyledCell(ch, { fg: entry.color, bold: entry.bold });
-    }
-    return line;
+    return buildStyledPanelLine(width, [{ text: fullText, fg: entry.color, bold: entry.bold }]);
   }
 
   private _agentStatusColor(status: AgentRecord['status']): string {

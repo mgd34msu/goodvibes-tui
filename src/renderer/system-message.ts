@@ -1,15 +1,11 @@
-/**
- * Render system messages with typed left borders.
- * Error = red, Warning = yellow, Info = cyan.
- */
-import { type Line, createStyledCell, createEmptyLine } from '../types/grid.ts';
-import { LAYOUT, BORDERS, COLORS } from './layout.ts';
-import { wrapText } from '../utils/terminal-width.ts';
+import { type Line } from '../types/grid.ts';
+import { BORDERS, COLORS } from './layout.ts';
+import { renderConversationNotice } from './conversation-surface.ts';
 
 /** Exported for use by typeOverride callers and tests. */
 export type SystemMessageType = 'error' | 'warning' | 'info';
 
-const BALLOT_X = '\u2717';
+const FAILURE_MARKERS = ['x', '\u2717'] as const;
 
 export function classifySystemMessage(content: string): SystemMessageType {
   // Bracket-prefixed messages: classify by prefix first to prevent task
@@ -31,7 +27,7 @@ export function classifySystemMessage(content: string): SystemMessageType {
   // [Agents] messages
   if (/^\[Agents\]/.test(content)) {
     // ✗ individual agent failure → error (red)
-    if (content.startsWith(`[Agents] ${BALLOT_X}`)) return 'error';
+    if (FAILURE_MARKERS.some((marker) => content.startsWith(`[Agents] ${marker}`))) return 'error';
     // Cohort summary: warn only if ≥1 agent failed, otherwise info
     if (/^\[Agents\] Cohort/.test(content)) {
       return /\b[1-9]\d* failed\b/.test(content) ? 'warning' : 'info';
@@ -58,7 +54,7 @@ export function classifySystemMessage(content: string): SystemMessageType {
 
   // Generic messages: strip quoted substrings before keyword scan to avoid
   // false positives from task descriptions like "Fix the error in auth.ts".
-  const stripped = content.replace(/"[^"]*"|'[^']*'|`[^`]*`/g, '"…"');
+  const stripped = content.replace(/"[^"]*"|'[^']*'|`[^`]*`/g, '"..."');
   // error: catches runtime failures, permission denials, crash and variants (crashed, crashing, etc.), unhandled exceptions
   if (/\b(error|failed|denied|crash\w*|exception)\b/i.test(stripped)) return 'error';
   // warning: catches advisory notices, high-usage alerts, deprecation notices
@@ -74,31 +70,14 @@ export function renderSystemMessage(
   width: number,
   typeOverride?: SystemMessageType,
 ): Line[] {
-  const lines: Line[] = [];
   const msgType = typeOverride ?? classifySystemMessage(content);
   const border = msgType === 'error' ? BORDERS.ERROR
     : msgType === 'warning' ? BORDERS.WARNING
     : BORDERS.INFO;
-
-  const borderCol = LAYOUT.LEFT_MARGIN - 1;
-  const textStartCol = LAYOUT.LEFT_MARGIN + 1;
-  const textWidth = width - textStartCol - LAYOUT.RIGHT_MARGIN;
   const textColor = msgType === 'info' ? COLORS.DIM_TEXT : border.color;
-  const dim = msgType === 'info';
-
-  const wrapped = wrapText(content, textWidth);
-
-  for (const lineText of wrapped) {
-    const line = createEmptyLine(width);
-    line[borderCol] = createStyledCell(border.char, { fg: border.color });
-    let col = textStartCol;
-    for (const ch of lineText) {
-      if (col >= width - LAYOUT.RIGHT_MARGIN) break;
-      line[col] = createStyledCell(ch, { fg: textColor, dim });
-      col++;
-    }
-    lines.push(line);
-  }
-
-  return lines;
+  return renderConversationNotice(content, width, {
+    accent: border.color,
+    text: textColor,
+    dim: msgType === 'info',
+  }, border.char);
 }

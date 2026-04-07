@@ -10,6 +10,7 @@
 import { logger } from '../utils/logger.ts';
 import { loadMcpConfig } from './config.ts';
 import { McpClient } from './client.ts';
+import type { McpProcessSpec } from './client.ts';
 import type { McpToolInfo, McpToolSchema } from './client.ts';
 import type { McpServerConfig } from './config.ts';
 import { getHookDispatcher } from '../hooks/index.ts';
@@ -24,6 +25,19 @@ import {
   emitMcpSchemaQuarantineApproved,
   emitMcpSchemaQuarantined,
 } from '../runtime/emitters/mcp.ts';
+import type { ConfigManager } from '../config/manager.ts';
+import { getSandboxConfigSnapshot } from '../runtime/sandbox/manager.ts';
+import {
+  getSandboxSessionRegistry,
+  type SandboxSessionRegistry,
+} from '../runtime/sandbox/session-registry.ts';
+import { resolveSandboxCommandPlan } from '../runtime/sandbox/backend.ts';
+
+function compactEnv(env: NodeJS.ProcessEnv | Record<string, string>): Record<string, string> {
+  return Object.fromEntries(
+    Object.entries(env).filter((entry): entry is [string, string] => typeof entry[1] === 'string'),
+  );
+}
 
 export interface RegisteredTool {
   /** Fully-qualified tool name: mcp:<server>:<tool> */
@@ -38,9 +52,17 @@ export class McpRegistry {
   private permissions = new McpPermissionManager();
   private freshness = new McpSchemaFreshnessTracker();
   private runtimeBus: RuntimeEventBus | null = null;
+  private sandboxConfigManager: ConfigManager | null = null;
+  private sandboxSessions: SandboxSessionRegistry = getSandboxSessionRegistry();
+  private sandboxSessionByServer = new Map<string, string>();
 
   setRuntimeBus(runtimeBus: RuntimeEventBus | null): void {
     this.runtimeBus = runtimeBus;
+  }
+
+  setSandboxRuntime(configManager: ConfigManager, sessions: SandboxSessionRegistry = getSandboxSessionRegistry()): void {
+    this.sandboxConfigManager = configManager;
+    this.sandboxSessions = sessions;
   }
 
   /**
@@ -196,6 +218,10 @@ export class McpRegistry {
       Array.from(this.clients.values()).map((client) => client.disconnect()),
     );
     this.clients.clear();
+    for (const sessionId of this.sandboxSessionByServer.values()) {
+      this.sandboxSessions.stop(sessionId);
+    }
+    this.sandboxSessionByServer.clear();
   }
 
   /**
@@ -250,6 +276,30 @@ export class McpRegistry {
     });
   }
 
+  listServerSandboxBindings(): Array<{
+    name: string;
+    sessionId?: string;
+    profileId?: 'mcp-shared' | 'mcp-per-server';
+    state?: import('../runtime/sandbox/types.ts').SandboxSessionState;
+    backend?: import('../runtime/sandbox/types.ts').SandboxResolvedBackend | import('../runtime/sandbox/types.ts').SandboxVmBackend;
+    startupStatus?: 'verified' | 'planned' | 'failed';
+  }> {
+    return this.serverNames.map((name) => {
+      const sessionId = this.sandboxSessionByServer.get(name);
+      const session = sessionId ? this.sandboxSessions.get(sessionId) : null;
+      return {
+        name,
+        sessionId: sessionId ?? undefined,
+        profileId: session?.profileId === 'mcp-shared' || session?.profileId === 'mcp-per-server'
+          ? session.profileId
+          : undefined,
+        state: session?.state,
+        backend: session?.resolvedBackend ?? session?.backend,
+        startupStatus: session?.startupStatus,
+      };
+    });
+  }
+
   setServerTrustMode(serverName: string, mode: import('../runtime/mcp/types.ts').McpTrustMode): void {
     this.permissions.setTrustMode(serverName, mode);
     this._emitPolicyUpdate(serverName);
@@ -296,7 +346,14 @@ export class McpRegistry {
       logger.info('McpRegistry: server already registered', { name });
       return;
     }
-    const client = new McpClient(serverConfig);
+    let sandboxSessionId: string | null = null;
+    let processSpec: McpProcessSpec | undefined;
+    if (this.sandboxConfigManager) {
+      const resolved = await this._resolveSandboxProcessSpec(serverConfig);
+      sandboxSessionId = resolved?.sessionId ?? null;
+      processSpec = resolved?.processSpec;
+    }
+    const client = new McpClient(serverConfig, processSpec ? { processSpec } : undefined);
     this.freshness.registerServer(name);
     try {
       await client.connect();
@@ -307,6 +364,9 @@ export class McpRegistry {
         allowedHosts: serverConfig.allowedHosts ?? [],
       });
       this.clients.set(name, client);
+      if (sandboxSessionId) {
+        this.sandboxSessionByServer.set(name, sandboxSessionId);
+      }
       this.freshness.markFresh(name);
       logger.info('McpRegistry: server connected', { name });
       if (this.runtimeBus) {
@@ -334,10 +394,75 @@ export class McpRegistry {
       };
       getHookDispatcher().fire(connectedEvent).catch((err: unknown) => { logger.debug('Lifecycle:mcp:connected hook error', { error: String(err) }); });
     } catch (err) {
+      if (sandboxSessionId) {
+        this.sandboxSessions.stop(sandboxSessionId);
+        this.sandboxSessionByServer.delete(name);
+      }
       this.freshness.markFailed(name, err instanceof Error ? err.message : String(err));
       logger.error('McpRegistry: failed to connect server', { name, err: String(err) });
       // Don't register the client — it's not usable
     }
+  }
+
+  private async _resolveSandboxProcessSpec(
+    serverConfig: McpServerConfig,
+  ): Promise<{ sessionId: string; processSpec: McpProcessSpec } | null> {
+    const configManager = this.sandboxConfigManager;
+    if (!configManager) return null;
+    const sandbox = getSandboxConfigSnapshot(configManager);
+    if (sandbox.mcpIsolation === 'disabled') return null;
+
+    const profileId = this._selectSandboxProfile(serverConfig);
+    const label = `${serverConfig.name} MCP`;
+    const session = await this.sandboxSessions.start(profileId, label, configManager);
+    if (!session.launchPlan) {
+      throw new Error(`Sandbox session ${session.id} for MCP server '${serverConfig.name}' is missing a launch plan.`);
+    }
+    const resolvedPlan = resolveSandboxCommandPlan(
+      session.launchPlan,
+      serverConfig.command,
+      serverConfig.args ?? [],
+      configManager,
+    );
+    return {
+      sessionId: session.id,
+      processSpec: {
+        command: resolvedPlan.command,
+        args: [...resolvedPlan.args],
+        env: compactEnv({ ...(serverConfig.env ?? {}), ...(resolvedPlan.env ?? {}) }),
+        cwd: session.launchPlan.workspaceRoot,
+        summary: resolvedPlan.summary,
+        sandboxSessionId: session.id,
+      },
+    };
+  }
+
+  private _selectSandboxProfile(serverConfig: McpServerConfig): 'mcp-shared' | 'mcp-per-server' {
+    const configManager = this.sandboxConfigManager;
+    if (!configManager) return 'mcp-shared';
+    const sandbox = getSandboxConfigSnapshot(configManager);
+    switch (sandbox.mcpIsolation) {
+      case 'per-server-vm':
+        return 'mcp-per-server';
+      case 'shared-vm':
+        return 'mcp-shared';
+      case 'hybrid':
+        return this._requiresDedicatedMcpSandbox(serverConfig) ? 'mcp-per-server' : 'mcp-shared';
+      case 'disabled':
+      default:
+        return 'mcp-shared';
+    }
+  }
+
+  private _requiresDedicatedMcpSandbox(serverConfig: McpServerConfig): boolean {
+    return Boolean(
+      (serverConfig.allowedHosts?.length ?? 0) > 0
+      || (serverConfig.allowedPaths?.length ?? 0) > 0
+      || serverConfig.role === 'automation'
+      || serverConfig.role === 'browser'
+      || serverConfig.role === 'ops'
+      || serverConfig.role === 'remote',
+    );
   }
 
   /**

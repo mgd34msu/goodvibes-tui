@@ -3,9 +3,18 @@
 // ---------------------------------------------------------------------------
 
 import type { Line } from '../types/grid.ts';
-import { createStyledCell, createEmptyLine } from '../types/grid.ts';
 import { BasePanel } from './base-panel.ts';
 import type { RuntimeEventBus, TurnEvent } from '../runtime/events/index.ts';
+import {
+  buildEmptyState,
+  buildPanelLine,
+  buildStyledPanelLine,
+  buildPanelWorkspace,
+  DEFAULT_PANEL_PALETTE,
+  type PanelWorkspaceSection,
+} from './polish.ts';
+import { getTrackedVisibleWindow } from '../renderer/surface-layout.ts';
+import { truncateDisplay } from '../utils/terminal-width.ts';
 
 const C = {
   headerBg:    '#1a1a2e',
@@ -88,98 +97,104 @@ export class ThinkingPanel extends BasePanel {
   }
 
   render(width: number, height: number): Line[] {
-    const lines: Line[] = [];
-    if (height <= 0 || width <= 0) return lines;
+    if (height <= 0 || width <= 0) return [];
     this.lastWidth = width;
 
     const hasActive = this.blocks.some(b => b.active);
-    const title = hasActive ? ' Thinking  \u25cf streaming...' : ` Thinking [${this.blocks.length} blocks]`;
-    lines.push(this._renderHdr(width, title, hasActive));
-    if (height <= 1) return lines.slice(0, height);
-
     const flat = this._buildFlat(width);
-    const listHeight = height - 2;
+    const title = hasActive ? ' Thinking [streaming]' : ` Thinking [${this.blocks.length} blocks]`;
+    const footerLines = [
+      buildPanelLine(width, [
+        [' Up/Down', DEFAULT_PANEL_PALETTE.info],
+        [' scroll', DEFAULT_PANEL_PALETTE.dim],
+        ['   Enter', DEFAULT_PANEL_PALETTE.info],
+        [' collapse', DEFAULT_PANEL_PALETTE.dim],
+        ['   g', DEFAULT_PANEL_PALETTE.info],
+        [' jump to end', DEFAULT_PANEL_PALETTE.dim],
+        [this.autoScroll ? '   auto-scroll ON' : '   manual', this.autoScroll ? DEFAULT_PANEL_PALETTE.good : DEFAULT_PANEL_PALETTE.warn],
+      ]),
+    ];
+
+    if (flat.length === 0) {
+      return buildPanelWorkspace(width, height, {
+        title,
+        intro: 'Live reasoning blocks stream here while the model is actively thinking.',
+        sections: [
+          {
+            title: 'Reasoning',
+            lines: buildEmptyState(
+              width,
+              ' No reasoning content yet',
+              'When the model emits thinking or reasoning deltas, they accumulate here in expandable blocks.',
+              [],
+              DEFAULT_PANEL_PALETTE,
+            ),
+          },
+        ],
+        footerLines,
+        palette: DEFAULT_PANEL_PALETTE,
+      });
+    }
 
     if (this.autoScroll) {
-      this.scrollOffset = Math.max(0, flat.length - listHeight);
       this.cursorIndex = Math.max(0, flat.length - 1);
     }
 
     this.cursorIndex = Math.max(0, Math.min(this.cursorIndex, Math.max(0, flat.length - 1)));
-    if (this.cursorIndex < this.scrollOffset) this.scrollOffset = this.cursorIndex;
-    if (this.cursorIndex >= this.scrollOffset + listHeight) this.scrollOffset = this.cursorIndex - listHeight + 1;
+    const window = getTrackedVisibleWindow(flat.length, this.cursorIndex, Math.max(8, height - 8), this.scrollOffset, 1);
+    this.scrollOffset = window.start;
+    const visible = flat.slice(window.start, window.end);
 
-    const visible = flat.slice(this.scrollOffset, this.scrollOffset + listHeight);
-    for (let i = 0; i < visible.length; i++) {
-      const row = visible[i]!;
-      const absIdx = this.scrollOffset + i;
-      const isCursor = absIdx === this.cursorIndex;
-      lines.push(this._renderRow(width, row, isCursor));
-    }
+    const summary: PanelWorkspaceSection = {
+      title: 'Summary',
+      lines: [
+        buildPanelLine(width, [
+          [' Blocks ', DEFAULT_PANEL_PALETTE.label],
+          [String(this.blocks.length), DEFAULT_PANEL_PALETTE.value],
+          ['   Active ', DEFAULT_PANEL_PALETTE.label],
+          [String(this.blocks.filter((block) => block.active).length), hasActive ? DEFAULT_PANEL_PALETTE.warn : DEFAULT_PANEL_PALETTE.dim],
+          ['   Mode ', DEFAULT_PANEL_PALETTE.label],
+          [this.autoScroll ? 'auto-scroll' : 'manual', this.autoScroll ? DEFAULT_PANEL_PALETTE.good : DEFAULT_PANEL_PALETTE.info],
+        ]),
+      ],
+    };
 
-    if (flat.length === 0) {
-      lines.push(this._renderDim(width, ' No reasoning content yet. Model will populate this when thinking.'));
-    }
+    const reasoningRows = visible.map((row, index) => this._renderRow(width, row, window.start + index === this.cursorIndex));
+    const selectedRow = flat[this.cursorIndex];
+    const selectedSection: PanelWorkspaceSection = {
+      title: 'Selected',
+      lines: [
+        buildPanelLine(width, [[' Row Type ', DEFAULT_PANEL_PALETTE.label], [selectedRow?.kind ?? 'none', DEFAULT_PANEL_PALETTE.value]]),
+      ],
+    };
 
-    while (lines.length < height - 1) lines.push(createEmptyLine(width));
-    // Status bar
-    const hint = ` \u2191\u2193: scroll  Enter: collapse  g: jump to end  ${this.autoScroll ? '[auto-scroll ON]' : '[manual]'}`;
-    lines.push(this._renderStatus(width, hint));
-
-    return lines.slice(0, height);
-  }
-
-  private _renderHdr(width: number, text: string, active: boolean): Line {
-    const cells: Line = [];
-    const truncated = text.slice(0, width);
-    for (const ch of truncated) {
-      cells.push(createStyledCell(ch, { fg: active ? C.activeLabel : C.headerFg, bg: C.headerBg, bold: true }));
-    }
-    while (cells.length < width) cells.push(createStyledCell(' ', { fg: '', bg: C.headerBg }));
-    return cells.slice(0, width);
-  }
-
-  private _renderStatus(width: number, text: string): Line {
-    const cells: Line = [];
-    const truncated = text.slice(0, width);
-    for (const ch of truncated) {
-      cells.push(createStyledCell(ch, { fg: C.statusFg, bg: C.statusBar }));
-    }
-    while (cells.length < width) cells.push(createStyledCell(' ', { fg: '', bg: C.statusBar }));
-    return cells.slice(0, width);
-  }
-
-  private _renderDim(width: number, text: string): Line {
-    const cells: Line = [];
-    const truncated = text.slice(0, width);
-    for (const ch of truncated) {
-      cells.push(createStyledCell(ch, { fg: C.dimFg, bg: '' }));
-    }
-    while (cells.length < width) cells.push(createStyledCell(' ', { fg: '', bg: '' }));
-    return cells.slice(0, width);
+    return buildPanelWorkspace(width, height, {
+      title,
+      intro: 'Live reasoning blocks stream here while the model is actively thinking.',
+      sections: [
+        summary,
+        { title: 'Reasoning', lines: reasoningRows },
+        selectedSection,
+      ],
+      footerLines,
+      palette: DEFAULT_PANEL_PALETTE,
+    });
   }
 
   private _renderRow(width: number, row: FlatRow, isCursor: boolean): Line {
     const bg = isCursor ? C.selectedBg : '';
-    const cells: Line = [];
     if (row.kind === 'header') {
       const indicator = this.blocks[row.blockIndex]?.collapsed ? '[+]' : '[-]';
       const active = this.blocks[row.blockIndex]?.active;
       const bullet = active ? '\u25cf ' : '\u25e6 ';
-      const text = ` ${bullet}${row.text} ${indicator}`;
-      for (const ch of text.slice(0, width)) {
-        cells.push(createStyledCell(ch, { fg: active ? C.activeLabel : C.turnLabel, bg, bold: true }));
-      }
-    } else {
-      cells.push(createStyledCell(' ', { fg: '', bg }));
-      cells.push(createStyledCell(' ', { fg: '', bg }));
-      const text = row.text.slice(0, width - 2);
-      for (const ch of text) {
-        cells.push(createStyledCell(ch, { fg: isCursor ? C.activeFg : C.reasoningFg, bg }));
-      }
+      return buildStyledPanelLine(width, [
+        { text: truncateDisplay(` ${bullet}${row.text} ${indicator}`, width), fg: active ? C.activeLabel : C.turnLabel, bg, bold: true },
+      ]);
     }
-    while (cells.length < width) cells.push(createStyledCell(' ', { fg: '', bg }));
-    return cells.slice(0, width);
+    return buildStyledPanelLine(width, [
+      { text: '  ', fg: C.reasoningFg, bg },
+      { text: truncateDisplay(row.text, Math.max(0, width - 2)), fg: isCursor ? C.activeFg : C.reasoningFg, bg },
+    ]);
   }
 
   private _buildFlat(width: number): FlatRow[] {

@@ -77,6 +77,9 @@ function analyzeExec(args: Record<string, unknown>): PermissionRequestAnalysis {
       reasons: ['Shell execution can mutate files, spawn processes, or access the network.'],
       target: '',
       targetKind: 'command',
+      surface: 'shell',
+      blastRadius: 'project',
+      sideEffects: ['process execution', 'filesystem mutation', 'possible network access'],
     };
   }
 
@@ -117,6 +120,19 @@ function analyzeExec(args: Record<string, unknown>): PermissionRequestAnalysis {
         : [`Highest detected shell risk: ${classification}.`],
     target: truncatePreview(command),
     targetKind: 'command',
+    surface: 'shell',
+    blastRadius:
+      secretWarnings.length > 0 || classification === 'destructive'
+        ? 'platform'
+        : classification === 'network'
+          ? 'external'
+          : 'project',
+    sideEffects: cleanReasons([
+      classification === 'network' ? 'outbound network access' : '',
+      classification === 'write' || classification === 'destructive' ? 'filesystem mutation' : '',
+      classification === 'escalation' || classification === 'destructive' ? 'privileged or chained execution' : '',
+      'process execution',
+    ]),
   };
 }
 
@@ -150,6 +166,13 @@ function analyzeFetch(args: Record<string, unknown>): PermissionRequestAnalysis 
         : ['Outbound network access can disclose local context and pull remote content into the session.'],
     target: truncatePreview(rawUrl),
     targetKind: 'url',
+    surface: 'network',
+    blastRadius: 'external',
+    sideEffects: cleanReasons([
+      'outbound network access',
+      'remote content ingestion',
+      trust?.tier === 'unknown' || trust?.tier === 'blocked' ? 'untrusted host interaction' : '',
+    ]),
     host: host ?? undefined,
   };
 }
@@ -181,6 +204,12 @@ function analyzePathTool(
     ]),
     target: path,
     targetKind: 'path',
+    surface: 'filesystem',
+    blastRadius: pathLooksSensitive(path) ? 'platform' : 'project',
+    sideEffects: cleanReasons([
+      category === 'write' ? 'filesystem mutation' : 'filesystem read',
+      pathLooksSensitive(path) ? 'possible secret exposure' : '',
+    ]),
   };
 }
 
@@ -204,6 +233,9 @@ function analyzeDelegate(
     reasons: ['Delegated execution can fan out work, tools, and side effects beyond the current step.'],
     target: truncatePreview(task),
     targetKind: 'task',
+    surface: 'orchestration',
+    blastRadius: 'delegated',
+    sideEffects: ['delegated execution', 'task fan-out', 'tool-capability inheritance'],
   };
 }
 
@@ -219,9 +251,11 @@ export function analyzePermissionRequest(
 
   return {
     classification: category,
-    riskLevel: category === 'execute' ? 'high' : 'medium',
+    riskLevel: 'high',
     summary: `Request permission for ${toolName}`,
     reasons: ['Review the target and intent before approving this action.'],
     targetKind: 'generic',
+    surface: 'shell',
+    blastRadius: 'project',
   };
 }

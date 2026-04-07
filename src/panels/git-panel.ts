@@ -2,6 +2,14 @@ import { BasePanel } from './base-panel.ts';
 import { createEmptyLine, createStyledCell, type Line } from '../types/grid.ts';
 import { GitService } from '../git/service.ts';
 import { logger } from '../utils/logger.ts';
+import {
+  buildEmptyState,
+  buildPanelLine,
+  buildPanelWorkspace,
+  buildStyledPanelLine,
+  DEFAULT_PANEL_PALETTE,
+} from './polish.ts';
+import { getTrackedVisibleWindow, getVisibleWindow } from '../renderer/surface-layout.ts';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -73,7 +81,7 @@ const C = {
 
 export class GitPanel extends BasePanel {
   private data: GitData = {
-    branch: '…',
+    branch: '...',
     ahead: 0,
     behind: 0,
     stagedFiles: [],
@@ -334,7 +342,7 @@ export class GitPanel extends BasePanel {
 
   override render(width: number, height: number): Line[] {
     if (this.loading) {
-      return this.renderMessage(width, height, 'Loading git status…', C.branch);
+      return this.renderMessage(width, height, 'Loading git status...', C.branch);
     }
     if (this.error) {
       return this.renderMessage(width, height, `Git error: ${this.error}`, C.unstaged);
@@ -348,14 +356,7 @@ export class GitPanel extends BasePanel {
   // -- Helpers -----------------------------------------------------------------
 
   private renderMessage(width: number, height: number, msg: string, fg: string): Line[] {
-    const lines: Line[] = [];
-    const line = createEmptyLine(width);
-    let x = 0;
-    for (const ch of msg) {
-      if (x >= width) break;
-      line[x++] = createStyledCell(ch, { fg });
-    }
-    lines.push(line);
+    const lines: Line[] = [buildStyledPanelLine(width, [{ text: msg, fg }])];
     while (lines.length < height) lines.push(createEmptyLine(width));
     return lines;
   }
@@ -381,19 +382,19 @@ export class GitPanel extends BasePanel {
     const line = createEmptyLine(width);
     let x = 0;
 
-    const branchIcon = ' ⎇ ';
+    const branchIcon = ' git: ';
     x = this.paintText(line, branchIcon, x, width, C.sectionHeader);
     x = this.paintText(line, this.data.branch, x, width, C.branch, { bold: true });
 
     if (this.data.ahead > 0) {
-      x = this.paintText(line, ` ↑${this.data.ahead}`, x, width, C.ahead);
+      x = this.paintText(line, ` +${this.data.ahead}`, x, width, C.ahead);
     }
     if (this.data.behind > 0) {
-      x = this.paintText(line, ` ↓${this.data.behind}`, x, width, C.behind);
+      x = this.paintText(line, ` -${this.data.behind}`, x, width, C.behind);
     }
 
     const isDirty = this.data.stagedFiles.length > 0 || this.data.unstagedFiles.length > 0;
-    const statusText = isDirty ? ' ● dirty' : ' ✓ clean';
+    const statusText = isDirty ? ' * dirty' : ' y clean';
     const statusFg = isDirty ? C.dirty : C.clean;
     this.paintText(line, statusText, x, width, statusFg);
 
@@ -401,10 +402,7 @@ export class GitPanel extends BasePanel {
   }
 
   private renderSectionHeader(label: string, width: number): Line {
-    const line = createEmptyLine(width);
-    const text = `── ${label} `;
-    this.paintText(line, text, 0, width, C.sectionHeader, { dim: true });
-    return line;
+    return buildStyledPanelLine(width, [{ text: `-- ${label} `, fg: C.sectionHeader, dim: true }]);
   }
 
   private renderFileRow(entry: GitFileEntry, selected: boolean, width: number): Line {
@@ -432,7 +430,7 @@ export class GitPanel extends BasePanel {
   private renderCommitRow(entry: CommitEntry, selected: boolean, width: number): Line {
     const line = createEmptyLine(width);
     const hashPart = `  ${entry.hash} `;
-    const msgPart = entry.message.length > 60 ? `${entry.message.slice(0, 57)}…` : entry.message;
+    const msgPart = entry.message.length > 60 ? `${entry.message.slice(0, 57)}...` : entry.message;
 
     if (selected) {
       for (let i = 0; i < width; i++) {
@@ -455,9 +453,6 @@ export class GitPanel extends BasePanel {
   }
 
   private renderList(width: number, height: number): Line[] {
-    const lines: Line[] = [];
-
-    // Build all renderable rows
     const rows: Line[] = [];
     for (let i = 0; i < this.items.length; i++) {
       const item = this.items[i];
@@ -479,43 +474,86 @@ export class GitPanel extends BasePanel {
           rows.push(this.renderCommitRow(item.entry, selected, width));
           break;
         case 'empty': {
-          const emptyLine = createEmptyLine(width);
-          this.paintText(emptyLine, item.label, 0, width, C.sectionHeader, { dim: true });
-          rows.push(emptyLine);
+          rows.push(buildStyledPanelLine(width, [{ text: item.label, fg: C.sectionHeader, dim: true }]));
           break;
         }
       }
     }
 
-    // Auto-scroll to keep selected row visible
     const selectedRowIndex = this.getRowIndexForItem(this.selectedIndex);
     if (selectedRowIndex >= 0) {
-      if (selectedRowIndex < this.scrollOffset) {
-        this.scrollOffset = selectedRowIndex;
-      } else if (selectedRowIndex >= this.scrollOffset + height - 1) {
-        this.scrollOffset = selectedRowIndex - height + 2;
+      const window = getTrackedVisibleWindow(rows.length, selectedRowIndex, Math.max(8, height - 8), this.scrollOffset, 1);
+      this.scrollOffset = window.start;
+      const visibleRows = rows.slice(window.start, window.end);
+      const isDirty = this.data.stagedFiles.length > 0 || this.data.unstagedFiles.length > 0;
+      const selectedItem = this.items[this.selectedIndex];
+      const selectedLines: Line[] = [];
+      if (selectedItem?.kind === 'file') {
+        selectedLines.push(buildPanelLine(width, [
+          [' File ', DEFAULT_PANEL_PALETTE.label],
+          [selectedItem.entry.path, DEFAULT_PANEL_PALETTE.value],
+          ['   State ', DEFAULT_PANEL_PALETTE.label],
+          [selectedItem.entry.staged ? 'staged' : 'unstaged', selectedItem.entry.staged ? DEFAULT_PANEL_PALETTE.good : DEFAULT_PANEL_PALETTE.warn],
+        ]));
+      } else if (selectedItem?.kind === 'commit') {
+        selectedLines.push(buildPanelLine(width, [
+          [' Commit ', DEFAULT_PANEL_PALETTE.label],
+          [selectedItem.entry.hash, DEFAULT_PANEL_PALETTE.info],
+          ['   Author ', DEFAULT_PANEL_PALETTE.label],
+          [selectedItem.entry.author, DEFAULT_PANEL_PALETTE.value],
+        ]));
+        selectedLines.push(buildPanelLine(width, [
+          [' Message ', DEFAULT_PANEL_PALETTE.label],
+          [selectedItem.entry.message, DEFAULT_PANEL_PALETTE.value],
+        ]));
       }
+
+      return buildPanelWorkspace(width, height, {
+        title: ' Git',
+        intro: 'Review branch status, staged and unstaged files, and recent commits. Open a file row to inspect its diff.',
+        sections: [
+          {
+            title: 'Summary',
+            lines: [
+              buildPanelLine(width, [
+                [' Branch ', DEFAULT_PANEL_PALETTE.label],
+                [this.data.branch, DEFAULT_PANEL_PALETTE.info],
+                ['   Ahead ', DEFAULT_PANEL_PALETTE.label],
+                [String(this.data.ahead), this.data.ahead > 0 ? DEFAULT_PANEL_PALETTE.good : DEFAULT_PANEL_PALETTE.dim],
+                ['   Behind ', DEFAULT_PANEL_PALETTE.label],
+                [String(this.data.behind), this.data.behind > 0 ? DEFAULT_PANEL_PALETTE.bad : DEFAULT_PANEL_PALETTE.dim],
+                ['   Status ', DEFAULT_PANEL_PALETTE.label],
+                [isDirty ? 'dirty' : 'clean', isDirty ? DEFAULT_PANEL_PALETTE.warn : DEFAULT_PANEL_PALETTE.good],
+              ]),
+            ],
+          },
+          {
+            title: 'Workspace',
+            lines: visibleRows.length > 0
+              ? visibleRows
+              : buildEmptyState(width, ' No git rows', 'This repository has no files or commits to display yet.', [], DEFAULT_PANEL_PALETTE),
+          },
+          {
+            title: 'Selected',
+            lines: selectedLines,
+          },
+        ],
+        footerLines: [
+          buildPanelLine(width, [[' Up/Down', DEFAULT_PANEL_PALETTE.info], [' navigate', DEFAULT_PANEL_PALETTE.dim], ['   Enter', DEFAULT_PANEL_PALETTE.info], [' diff', DEFAULT_PANEL_PALETTE.dim], ['   r', DEFAULT_PANEL_PALETTE.info], [' refresh', DEFAULT_PANEL_PALETTE.dim]]),
+        ],
+        palette: DEFAULT_PANEL_PALETTE,
+      });
     }
-    if (this.scrollOffset < 0) this.scrollOffset = 0;
-
-    // Slice visible rows
-    const visible = rows.slice(this.scrollOffset, this.scrollOffset + height);
-    lines.push(...visible);
-
-    // Footer hint
-    if (lines.length > 0) {
-      const hintLine = createEmptyLine(width);
-      const hint = ' ↑↓ navigate  Enter diff  r refresh  Esc close diff';
-      this.paintText(hintLine, hint, 0, width, C.sectionHeader, { dim: true });
-      // Replace the last line with the hint when we have room
-      if (lines.length < height) {
-        while (lines.length < height - 1) lines.push(createEmptyLine(width));
-        lines.push(hintLine);
-      }
-    }
-
-    while (lines.length < height) lines.push(createEmptyLine(width));
-    return lines;
+    return buildPanelWorkspace(width, height, {
+      title: ' Git',
+      intro: 'Review branch status, staged and unstaged files, and recent commits. Open a file row to inspect its diff.',
+      sections: [
+        {
+          lines: buildEmptyState(width, ' No git rows', 'This repository has no files or commits to display yet.', [], DEFAULT_PANEL_PALETTE),
+        },
+      ],
+      palette: DEFAULT_PANEL_PALETTE,
+    });
   }
 
   /**
@@ -576,7 +614,7 @@ export class GitPanel extends BasePanel {
 
     // Hint line
     const hintLine = createEmptyLine(width);
-    this.paintText(hintLine, ' ↑↓ scroll  Esc/q close', 0, width, C.sectionHeader, { dim: true });
+    this.paintText(hintLine, ' Up/Down scroll  Esc/q close', 0, width, C.sectionHeader, { dim: true });
     lines.push(hintLine);
 
     return lines;

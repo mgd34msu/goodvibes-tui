@@ -1,48 +1,48 @@
 /**
  * MemoryPanel — project memory substrate TUI panel.
- *
- * Displays durable memory records (decisions, constraints, incidents, patterns)
- * with full provenance and cross-record links. Supports keyboard navigation
- * and inline search.
  */
 
 import type { Line } from '../types/grid.ts';
 import type { MemoryRegistry } from '../state/memory-store.ts';
 import type { MemoryRecord, MemoryClass } from '../state/memory-store.ts';
 import { BasePanel } from './base-panel.ts';
-import { createStyledCell, createEmptyLine } from '../types/grid.ts';
+import {
+  buildBodyText,
+  buildEmptyState,
+  buildGuidanceLine,
+  buildKeyValueLine,
+  buildPanelLine,
+  buildSearchInputLine,
+  buildPanelWorkspace,
+  DEFAULT_PANEL_PALETTE,
+  type PanelWorkspaceSection,
+} from './polish.ts';
+import { getTrackedVisibleWindow } from '../renderer/surface-layout.ts';
+import {
+  getPanelSearchFocusTransition,
+  isPanelSearchBackspace,
+  isPanelSearchCancel,
+  isPanelSearchCommit,
+  isPanelSearchPrintable,
+} from './search-focus.ts';
 
-// ── Colour palette ──────────────────────────────────────────────────────────────────
 const C = {
-  header:      '#94a3b8',
-  headerBg:    '#1e293b',
-  id:          '#475569',
-  timestamp:   '#64748b',
-  decision:    '#38bdf8',
-  constraint:  '#f97316',
-  incident:    '#ef4444',
-  pattern:     '#a78bfa',
-  fact:        '#22c55e',
-  risk:        '#f43f5e',
-  runbook:     '#eab308',
-  architecture:'#60a5fa',
-  ownership:   '#14b8a6',
-  summary:     '#e2e8f0',
-  detail:      '#94a3b8',
-  tag:         '#22c55e',
-  provKey:     '#64748b',
-  provVal:     '#cbd5e1',
-  linkArrow:   '#38bdf8',
-  linkRel:     '#94a3b8',
-  selected:    '#1e3a5f',
-  separator:   '#1e293b',
-  dim:         '#334155',
-  empty:       '#4b5563',
-  searchBg:    '#0f172a',
-  searchFg:    '#e2e8f0',
+  ...DEFAULT_PANEL_PALETTE,
+  header: '#94a3b8',
+  headerBg: '#1e293b',
+  decision: '#38bdf8',
+  constraint: '#f97316',
+  incident: '#ef4444',
+  pattern: '#a78bfa',
+  fact: '#22c55e',
+  risk: '#f43f5e',
+  runbook: '#eab308',
+  architecture: '#60a5fa',
+  ownership: '#14b8a6',
+  selected: '#1e3a5f',
+  searchBg: '#0f172a',
+  searchFg: '#e2e8f0',
 } as const;
-
-// ── Helpers ───────────────────────────────────────────────────────────────────────
 
 function fmtTime(ts: number): string {
   const d = new Date(ts);
@@ -51,41 +51,23 @@ function fmtTime(ts: number): string {
 
 function classColor(cls: MemoryClass): string {
   switch (cls) {
-    case 'decision':   return C.decision;
+    case 'decision': return C.decision;
     case 'constraint': return C.constraint;
-    case 'incident':   return C.incident;
-    case 'pattern':    return C.pattern;
-    case 'fact':       return C.fact;
-    case 'risk':       return C.risk;
-    case 'runbook':    return C.runbook;
+    case 'incident': return C.incident;
+    case 'pattern': return C.pattern;
+    case 'fact': return C.fact;
+    case 'risk': return C.risk;
+    case 'runbook': return C.runbook;
     case 'architecture': return C.architecture;
-    case 'ownership':  return C.ownership;
+    case 'ownership': return C.ownership;
   }
 }
-
-function writeLine(width: number, text: string, fg: string, bg = '', bold = false): Line {
-  const line = createEmptyLine(width);
-  let col = 0;
-  for (const ch of text) {
-    if (col >= width) break;
-    line[col] = createStyledCell(ch, { fg, bg, bold });
-    col++;
-  }
-  if (bg) {
-    for (let i = col; i < width; i++) {
-      line[i] = createStyledCell(' ', { fg, bg });
-    }
-  }
-  return line;
-}
-
-// ── MemoryPanel ───────────────────────────────────────────────────────────────────
 
 export class MemoryPanel extends BasePanel {
   private registry: MemoryRegistry;
   private records: MemoryRecord[] = [];
   private selectedIdx = 0;
-  private scrollTop = 0;
+  private scrollOffset = 0;
   private searchMode = false;
   private searchQuery = '';
   private unsubscribe?: () => void;
@@ -123,8 +105,13 @@ export class MemoryPanel extends BasePanel {
   }
 
   handleInput(key: string): boolean {
-    if (this.searchMode) {
-      return this.handleSearchInput(key);
+    if (this.searchMode) return this.handleSearchInput(key);
+
+    const transition = getPanelSearchFocusTransition(key, { selectedIndex: this.selectedIdx, itemCount: this.records.length });
+    if (transition === 'focus-search') {
+      this.searchMode = true;
+      this.markDirty();
+      return true;
     }
 
     switch (key) {
@@ -135,7 +122,6 @@ export class MemoryPanel extends BasePanel {
           this.markDirty();
         }
         return true;
-
       case 'ArrowDown':
       case 'j':
         if (this.selectedIdx < this.records.length - 1) {
@@ -143,13 +129,6 @@ export class MemoryPanel extends BasePanel {
           this.markDirty();
         }
         return true;
-
-      case '/':
-        this.searchMode = true;
-        this.searchQuery = '';
-        this.markDirty();
-        return true;
-
       case 'Escape':
         if (this.searchQuery) {
           this.searchQuery = '';
@@ -157,29 +136,34 @@ export class MemoryPanel extends BasePanel {
           this.markDirty();
         }
         return true;
-
       case 'r':
         this.reload();
         this.markDirty();
         return true;
     }
-
     return false;
   }
 
   private handleSearchInput(key: string): boolean {
-    if (key === 'Enter' || key === 'Escape') {
+    const transition = getPanelSearchFocusTransition(key, { selectedIndex: this.selectedIdx, itemCount: this.records.length });
+    if (transition === 'focus-list') {
+      this.searchMode = false;
+      this.selectedIdx = 0;
+      this.markDirty();
+      return true;
+    }
+    if (isPanelSearchCommit(key) || isPanelSearchCancel(key)) {
       this.searchMode = false;
       this.reload();
       this.markDirty();
       return true;
     }
-    if (key === 'Backspace') {
+    if (isPanelSearchBackspace(key)) {
       this.searchQuery = this.searchQuery.slice(0, -1);
       this.markDirty();
       return true;
     }
-    if (key.length === 1) {
+    if (isPanelSearchPrintable(key)) {
       this.searchQuery += key;
       this.markDirty();
       return true;
@@ -188,100 +172,111 @@ export class MemoryPanel extends BasePanel {
   }
 
   render(width: number, height: number): Line[] {
-    const lines: Line[] = [];
+    const intro = 'Durable project memory across decisions, constraints, incidents, patterns, risks, runbooks, and related provenance.';
 
-    // Header
-    const countStr = `${this.records.length} record${this.records.length !== 1 ? 's' : ''}`;
-    const headerText = `  MEMORY  ${countStr.padStart(width - 10 - 1)}`;
-    lines.push(writeLine(width, headerText, C.header, C.headerBg, true));
-
-    if (height <= 1) return lines;
-
-    // Search bar
-    if (this.searchMode || this.searchQuery) {
-      const prefix = this.searchMode ? '/ ' : '~ ';
-      const bar = `${prefix}${this.searchQuery}${this.searchMode ? '_' : ''}`;
-      lines.push(writeLine(width, bar.padEnd(width), C.searchFg, C.searchBg));
+    if (!this.records.length && !this.searchQuery) {
+      this.reload();
     }
-
-    const contentHeight = height - lines.length;
 
     if (!this.records.length) {
-      const msg = this.searchQuery
+      const message = this.searchQuery
         ? `No records matching "${this.searchQuery}"`
         : 'No memory records. Use /recall add <class> <summary> to create one.';
-      lines.push(writeLine(width, '  ' + msg, C.empty));
-      while (lines.length < height) lines.push(createEmptyLine(width));
-      return lines;
+      return buildPanelWorkspace(width, height, {
+        title: 'Memory',
+        intro,
+        sections: [{
+          lines: buildEmptyState(
+            width,
+            ` ${message}`,
+            'Memory becomes useful once durable facts, incidents, and decisions are promoted into the project substrate.',
+            [
+              { command: '/recall add fact <summary>', summary: 'capture a durable fact directly' },
+              { command: '/recall capture incident latest', summary: 'promote the latest incident into memory' },
+            ],
+            C,
+          ),
+        }],
+        footerLines: [
+          buildPanelLine(width, [['  / search  j/k or Up/Down move  r reload', C.dim]]),
+        ],
+        palette: C,
+      });
     }
 
-    // Each record renders up to 4 lines (header, summary, provenance, separator)
-    const visibleCount = Math.max(1, Math.floor(contentHeight / 4));
-
-    // Adjust scroll so selected row is visible
-    if (this.selectedIdx < this.scrollTop) {
-      this.scrollTop = this.selectedIdx;
-    } else if (this.selectedIdx >= this.scrollTop + visibleCount) {
-      this.scrollTop = this.selectedIdx - visibleCount + 1;
+    const byClass = new Map<MemoryClass, number>();
+    for (const record of this.records) {
+      byClass.set(record.cls, (byClass.get(record.cls) ?? 0) + 1);
     }
 
-    const visible = this.records.slice(this.scrollTop, this.scrollTop + visibleCount);
+    const summaryLines = [
+      buildKeyValueLine(width, [
+        { label: 'records', value: String(this.records.length), valueColor: C.value },
+        { label: 'facts', value: String(byClass.get('fact') ?? 0), valueColor: C.fact },
+        { label: 'decisions', value: String(byClass.get('decision') ?? 0), valueColor: C.decision },
+        { label: 'incidents', value: String(byClass.get('incident') ?? 0), valueColor: C.incident },
+        { label: 'runbooks', value: String(byClass.get('runbook') ?? 0), valueColor: C.runbook },
+      ], C),
+      ...(this.searchMode || this.searchQuery
+        ? [buildSearchInputLine(width, '', `${this.searchMode ? '/ ' : '~ '}${this.searchQuery}${this.searchMode ? '_' : ''}`, C, { active: this.searchMode, bg: C.searchBg, valueColor: C.searchFg })]
+        : []),
+      buildGuidanceLine(width, '/recall review', 'review durable knowledge and queue posture from the command surface', C),
+    ];
 
-    for (let i = 0; i < visible.length; i++) {
-      const r = visible[i];
-      const absIdx = this.scrollTop + i;
-      const isSelected = absIdx === this.selectedIdx;
-      const bg = isSelected ? C.selected : '';
-
-      const clsColor = classColor(r.cls);
-      const ts = fmtTime(r.createdAt);
-      const tagStr = r.tags.length ? ` [${r.tags.join(' ')}]` : '';
-      const idShort = r.id.slice(-8);
-
-      // Row 1: [cls] id  timestamp  tags
-      const rowText = `  [${r.scope.slice(0, 1).toUpperCase()}/${r.cls.slice(0, 3).toUpperCase()}] ${idShort}  ${ts}${tagStr}`;
-      const row1 = createEmptyLine(width);
-      let col = 0;
-      for (const ch of rowText) {
-        if (col >= width) break;
-        const fg = col < 2 ? C.dim
-                 : col < 7 ? clsColor
-                 : col < 10 ? C.id
-                 : col < 10 + ts.length + 2 ? C.timestamp
-                 : C.tag;
-        row1[col] = createStyledCell(ch, { fg, bg, bold: isSelected });
-        col++;
+    const selected = this.records[this.selectedIdx];
+    const selectedLines: Line[] = [];
+    if (selected) {
+      selectedLines.push(buildKeyValueLine(width, [
+        { label: 'scope', value: selected.scope, valueColor: C.info },
+        { label: 'class', value: selected.cls, valueColor: classColor(selected.cls) },
+        { label: 'created', value: fmtTime(selected.createdAt), valueColor: C.dim },
+      ], C));
+      selectedLines.push(...buildBodyText(width, selected.summary, C, C.value));
+      if (selected.detail) selectedLines.push(...buildBodyText(width, `Detail: ${selected.detail}`, C, C.dim));
+      if (selected.tags.length) selectedLines.push(buildPanelLine(width, [[`  Tags: ${selected.tags.join(', ')}`, C.good]]));
+      if (selected.provenance.length) {
+        selectedLines.push(...buildBodyText(
+          width,
+          `Provenance: ${selected.provenance.map((p) => `${p.kind}:${p.ref}`).join('  ')}`,
+          C,
+          C.dim,
+        ));
       }
-      if (bg) for (let c = col; c < width; c++) row1[c] = createStyledCell(' ', { fg: '', bg });
-      lines.push(row1);
-
-      // Row 2: summary
-      const summaryText = `       ${r.summary}`.slice(0, width);
-      lines.push(writeLine(width, summaryText, C.summary, bg));
-
-      // Provenance (compact)
-      if (r.provenance.length) {
-        const provStr = r.provenance.map(p => `${p.kind}:${p.ref}`).join('  ');
-        const provLine = `       via ${provStr}`.slice(0, width);
-        lines.push(writeLine(width, provLine, C.provKey, bg));
-      }
-
-      // Separator
-      if (!isSelected) {
-        const sep = createEmptyLine(width);
-        for (let c = 0; c < width; c++) {
-          sep[c] = createStyledCell(c < 4 ? ' ' : '─', { fg: C.separator });
-        }
-        lines.push(sep);
-      } else {
-        lines.push(createEmptyLine(width));
-      }
-
-      if (lines.length >= height) break;
     }
 
-    // Fill remaining lines
-    while (lines.length < height) lines.push(createEmptyLine(width));
-    return lines;
+    const listBudget = Math.max(4, height - 12 - Math.min(8, selectedLines.length));
+    const window = getTrackedVisibleWindow(this.records.length, this.selectedIdx, listBudget, this.scrollOffset, 1);
+    const listLines = this.records.slice(window.start, window.end).map((record, index) => {
+      const globalIndex = window.start + index;
+      const bg = globalIndex === this.selectedIdx ? C.selected : undefined;
+      return buildPanelLine(width, [
+        ['  ', C.label, bg],
+        [`[${record.scope.slice(0, 1).toUpperCase()}/${record.cls.slice(0, 3).toUpperCase()}] `, classColor(record.cls), bg],
+        [record.id.slice(-8), C.dim, bg],
+        ['  ', C.label, bg],
+        [fmtTime(record.createdAt), C.dim, bg],
+        ['  ', C.label, bg],
+        [record.summary.slice(0, Math.max(0, width - 33)), C.value, bg],
+      ]);
+    });
+    if (this.records.length > window.count) {
+      listLines.push(buildPanelLine(width, [[`  showing ${window.start + 1}-${window.end} of ${this.records.length}`, C.dim]]));
+    }
+
+    const sections: PanelWorkspaceSection[] = [
+      { title: 'Summary', lines: summaryLines },
+      { title: 'Records', lines: listLines },
+    ];
+    if (selectedLines.length > 0) sections.push({ title: 'Selected', lines: selectedLines });
+
+    return buildPanelWorkspace(width, height, {
+      title: 'Memory',
+      intro,
+      sections,
+      footerLines: [
+        buildPanelLine(width, [['  / search  j/k or Up/Down move  r reload  Esc clear search', C.dim]]),
+      ],
+      palette: C,
+    });
   }
 }

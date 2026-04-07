@@ -3,9 +3,18 @@
 // ---------------------------------------------------------------------------
 
 import type { Line } from '../types/grid.ts';
-import { createStyledCell, createEmptyLine } from '../types/grid.ts';
 import { BasePanel } from './base-panel.ts';
 import type { RuntimeEventBus, ToolEvent, TurnEvent } from '../runtime/events/index.ts';
+import {
+  buildEmptyState,
+  buildPanelLine,
+  buildStyledPanelLine,
+  buildPanelWorkspace,
+  DEFAULT_PANEL_PALETTE,
+  type PanelWorkspaceSection,
+} from './polish.ts';
+import { getTrackedVisibleWindow } from '../renderer/surface-layout.ts';
+import { truncateDisplay } from '../utils/terminal-width.ts';
 
 const C = {
   headerBg:    '#1a1a2e',
@@ -105,95 +114,112 @@ export class ToolInspectorPanel extends BasePanel {
   }
 
   render(width: number, height: number): Line[] {
-    const lines: Line[] = [];
-    if (height <= 0 || width <= 0) return lines;
+    if (height <= 0 || width <= 0) return [];
 
     const running = this.records.filter(r => r.endMs === undefined).length;
     const filterLabel = this.filterMode === 'all' ? '' : ` [${this.filterMode}]`;
     const title = ` Tools [${this.records.length} calls${running > 0 ? `, ${running} running` : ''}]${filterLabel}`;
-    lines.push(this._renderHdr(width, title));
-    if (height <= 1) return lines.slice(0, height);
-
-    const hint = ` \u2191\u2193: scroll  Enter: expand  f: filter  c: clear  g: end`;
-    lines.push(this._renderStatus(width, hint));
-    if (height <= 2) return lines.slice(0, height);
+    const footerLines = [
+      buildPanelLine(width, [
+        [' Up/Down', DEFAULT_PANEL_PALETTE.info],
+        [' scroll', DEFAULT_PANEL_PALETTE.dim],
+        ['   Enter', DEFAULT_PANEL_PALETTE.info],
+        [' expand', DEFAULT_PANEL_PALETTE.dim],
+        ['   f', DEFAULT_PANEL_PALETTE.info],
+        [' filter', DEFAULT_PANEL_PALETTE.dim],
+        ['   c', DEFAULT_PANEL_PALETTE.info],
+        [' clear', DEFAULT_PANEL_PALETTE.dim],
+        ['   g', DEFAULT_PANEL_PALETTE.info],
+        [' end', DEFAULT_PANEL_PALETTE.dim],
+      ]),
+    ];
 
     const flat = this._getFlat();
-    const listHeight = height - 2;
 
     if (this.autoScroll) {
-      this.scrollOffset = Math.max(0, flat.length - listHeight);
       this.cursorIndex = Math.max(0, flat.length - 1);
     }
 
-    this.cursorIndex = Math.max(0, Math.min(this.cursorIndex, Math.max(0, flat.length - 1)));
-    if (this.cursorIndex < this.scrollOffset) this.scrollOffset = this.cursorIndex;
-    if (this.cursorIndex >= this.scrollOffset + listHeight) this.scrollOffset = this.cursorIndex - listHeight + 1;
-
     if (flat.length === 0) {
-      lines.push(this._renderDim(width, ' No tool calls yet.'));
-      while (lines.length < height) lines.push(createEmptyLine(width));
-      return lines.slice(0, height);
+      return buildPanelWorkspace(width, height, {
+        title,
+        intro: 'Inspect chronological tool activity, arguments, results, errors, and running calls.',
+        sections: [
+          {
+            title: 'Calls',
+            lines: buildEmptyState(
+              width,
+              ' No tool calls yet',
+              'Tool executions appear here as the agent works. Expand a call to inspect its arguments and result payload.',
+              [],
+              DEFAULT_PANEL_PALETTE,
+            ),
+          },
+        ],
+        footerLines,
+        palette: DEFAULT_PANEL_PALETTE,
+      });
     }
 
-    const visible = flat.slice(this.scrollOffset, this.scrollOffset + listHeight);
-    for (let i = 0; i < visible.length; i++) {
-      const row = visible[i]!;
-      const absIdx = this.scrollOffset + i;
-      const isCursor = absIdx === this.cursorIndex;
-      lines.push(this._renderRow(width, row, isCursor));
+    this.cursorIndex = Math.max(0, Math.min(this.cursorIndex, Math.max(0, flat.length - 1)));
+    const window = getTrackedVisibleWindow(flat.length, this.cursorIndex, Math.max(8, height - 8), this.scrollOffset, 1);
+    this.scrollOffset = window.start;
+    const visible = flat.slice(window.start, window.end);
+
+    const summary: PanelWorkspaceSection = {
+      title: 'Summary',
+      lines: [
+        buildPanelLine(width, [
+          [' Calls ', DEFAULT_PANEL_PALETTE.label],
+          [String(this.records.length), DEFAULT_PANEL_PALETTE.value],
+          ['   Running ', DEFAULT_PANEL_PALETTE.label],
+          [String(running), running > 0 ? DEFAULT_PANEL_PALETTE.warn : DEFAULT_PANEL_PALETTE.dim],
+          ['   Filter ', DEFAULT_PANEL_PALETTE.label],
+          [this.filterMode === 'all' ? 'all' : this.filterMode, this.filterMode === 'all' ? DEFAULT_PANEL_PALETTE.dim : DEFAULT_PANEL_PALETTE.info],
+        ]),
+      ],
+    };
+
+    const callRows = visible.map((row, index) => this._renderRow(width, row, window.start + index === this.cursorIndex));
+    const selected = flat[this.cursorIndex];
+    const detailLines: Line[] = [];
+    if (selected?.kind === 'call') {
+      const filtered = this.filterMode === 'all'
+        ? this.records
+        : this.records.filter(r => r.tool === this.filterMode);
+      const rec = filtered[selected.recordIndex];
+      if (rec) {
+        detailLines.push(buildPanelLine(width, [[' Tool ', DEFAULT_PANEL_PALETTE.label], [rec.tool, DEFAULT_PANEL_PALETTE.info], ['   Started ', DEFAULT_PANEL_PALETTE.label], [shortTime(rec.startMs), DEFAULT_PANEL_PALETTE.value]]));
+        detailLines.push(buildPanelLine(width, [[' Status ', DEFAULT_PANEL_PALETTE.label], [rec.endMs === undefined ? 'running' : rec.error ? 'error' : 'completed', rec.endMs === undefined ? DEFAULT_PANEL_PALETTE.warn : rec.error ? DEFAULT_PANEL_PALETTE.bad : DEFAULT_PANEL_PALETTE.good]]));
+        if (rec.error) detailLines.push(buildPanelLine(width, [[' Error ', DEFAULT_PANEL_PALETTE.bad], [rec.error, DEFAULT_PANEL_PALETTE.value]]));
+      }
     }
 
-    while (lines.length < height) lines.push(createEmptyLine(width));
-    return lines.slice(0, height);
-  }
-
-  private _renderHdr(width: number, text: string): Line {
-    const cells: Line = [];
-    for (const ch of text.slice(0, width)) {
-      cells.push(createStyledCell(ch, { fg: C.headerFg, bg: C.headerBg, bold: true }));
-    }
-    while (cells.length < width) cells.push(createStyledCell(' ', { fg: '', bg: C.headerBg }));
-    return cells.slice(0, width);
-  }
-
-  private _renderStatus(width: number, text: string): Line {
-    const cells: Line = [];
-    for (const ch of text.slice(0, width)) {
-      cells.push(createStyledCell(ch, { fg: C.statusFg, bg: C.statusBar }));
-    }
-    while (cells.length < width) cells.push(createStyledCell(' ', { fg: '', bg: C.statusBar }));
-    return cells.slice(0, width);
-  }
-
-  private _renderDim(width: number, text: string): Line {
-    const cells: Line = [];
-    for (const ch of text.slice(0, width)) {
-      cells.push(createStyledCell(ch, { fg: C.dimFg, bg: '' }));
-    }
-    while (cells.length < width) cells.push(createStyledCell(' ', { fg: '', bg: '' }));
-    return cells.slice(0, width);
+    return buildPanelWorkspace(width, height, {
+      title,
+      intro: 'Inspect chronological tool activity, arguments, results, errors, and running calls.',
+      sections: [
+        summary,
+        { title: 'Calls', lines: callRows },
+        { title: 'Selected', lines: detailLines },
+      ],
+      footerLines,
+      palette: DEFAULT_PANEL_PALETTE,
+    });
   }
 
   private _renderRow(width: number, row: FlatRow, isCursor: boolean): Line {
     const bg = isCursor ? C.selectedBg : '';
-    const cells: Line = [];
     if (row.kind === 'call') {
-      cells.push(createStyledCell(isCursor ? '>' : ' ', { fg: C.selected, bg, bold: isCursor }));
-      const text = row.text.slice(0, width - 1);
-      for (const ch of text) {
-        cells.push(createStyledCell(ch, { fg: isCursor ? C.selected : C.toolFg, bg, bold: isCursor }));
-      }
-    } else {
-      cells.push(createStyledCell(' ', { fg: '', bg }));
-      cells.push(createStyledCell(' ', { fg: '', bg }));
-      const text = row.text.slice(0, width - 2);
-      for (const ch of text) {
-        cells.push(createStyledCell(ch, { fg: row.isError ? C.errorFg : C.argsFg, bg }));
-      }
+      return buildStyledPanelLine(width, [
+        { text: isCursor ? '>' : ' ', fg: C.selected, bg, bold: isCursor },
+        { text: truncateDisplay(row.text, Math.max(0, width - 1)), fg: isCursor ? C.selected : C.toolFg, bg, bold: isCursor },
+      ]);
     }
-    while (cells.length < width) cells.push(createStyledCell(' ', { fg: '', bg }));
-    return cells.slice(0, width);
+    return buildStyledPanelLine(width, [
+      { text: '  ', fg: C.argsFg, bg },
+      { text: truncateDisplay(row.text, Math.max(0, width - 2)), fg: row.isError ? C.errorFg : C.argsFg, bg },
+    ]);
   }
 
   private _getFlat(): FlatRow[] {

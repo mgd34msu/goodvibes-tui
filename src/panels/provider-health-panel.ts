@@ -2,6 +2,17 @@ import { BasePanel } from './base-panel.ts';
 import { createEmptyLine, createStyledCell, type Line } from '../types/grid.ts';
 import type { RuntimeEventBus, ProviderEvent, TurnEvent } from '../runtime/events/index.ts';
 import { providerRegistry } from '../providers/registry.ts';
+import {
+  buildBodyText,
+  buildEmptyState,
+  buildGuidanceLine,
+  buildKeyValueLine,
+  buildPanelLine,
+  buildPanelWorkspace,
+  DEFAULT_PANEL_PALETTE,
+  type PanelWorkspaceSection,
+} from './polish.ts';
+import { getTrackedVisibleWindow } from '../renderer/surface-layout.ts';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -177,10 +188,10 @@ const LATENCY_BAD_MS  = 5_000;
 
 function statusDot(status: ProviderStatus): { char: string; color: string } {
   switch (status) {
-    case 'online':       return { char: '●', color: C.online };
-    case 'rate-limited': return { char: '◑', color: C.rateLimit };
-    case 'error':        return { char: '●', color: C.error };
-    default:             return { char: '○', color: C.unknown };
+    case 'online':       return { char: '*', color: C.online };
+    case 'rate-limited': return { char: '!', color: C.rateLimit };
+    case 'error':        return { char: 'x', color: C.error };
+    default:             return { char: 'o', color: C.unknown };
   }
 }
 
@@ -200,14 +211,14 @@ function latencyColor(ms: number): string {
 }
 
 function fmtMs(ms: number): string {
-  if (ms <= 0)      return '—';
+  if (ms <= 0)      return 'n/a';
   if (ms >= 10_000) return `${(ms / 1000).toFixed(1)}s`;
   if (ms >= 1_000)  return `${(ms / 1000).toFixed(2)}s`;
   return `${Math.round(ms)}ms`;
 }
 
 function fmtAgo(ts: number | undefined): string {
-  if (!ts) return '—';
+  if (!ts) return 'n/a';
   const sec = Math.floor((Date.now() - ts) / 1000);
   if (sec < 60)  return `${sec}s ago`;
   if (sec < 3600) return `${Math.floor(sec / 60)}m ago`;
@@ -237,6 +248,8 @@ function fmtCooldown(expiresAt: number): string {
 export class ProviderHealthPanel extends BasePanel {
   private _unsubs: Array<() => void> = [];
   private _refreshTimer: ReturnType<typeof setInterval> | null = null;
+  private _selectedIndex = 0;
+  private _scrollOffset = 0;
 
   constructor(
     private readonly runtimeBus: RuntimeEventBus,
@@ -316,159 +329,132 @@ export class ProviderHealthPanel extends BasePanel {
     this._unsubs = [];
   }
 
-  // -------------------------------------------------------------------------
-  // Rendering
-  // -------------------------------------------------------------------------
-
-  override render(width: number, height: number): Line[] {
-    const lines: Line[] = [];
-
-    lines.push(this._titleLine(width));
-    lines.push(this._hrLine(width));
-
-    // Collect known providers from registry + any with recorded health
+  handleInput(key: string): boolean {
     const knownSet = new Set<string>();
     try {
       for (const m of providerRegistry.listModels()) knownSet.add(m.provider);
     } catch { /* ignore */ }
     for (const h of providerHealthTracker.getAll()) knownSet.add(h.name);
-
     const providers = [...knownSet].sort();
+    if (providers.length === 0) return false;
+    if (key === 'j' || key === 'down' || key === '\x1b[B') {
+      this._selectedIndex = Math.min(providers.length - 1, this._selectedIndex + 1);
+      this.markDirty();
+      return true;
+    }
+    if (key === 'k' || key === 'up' || key === '\x1b[A') {
+      this._selectedIndex = Math.max(0, this._selectedIndex - 1);
+      this.markDirty();
+      return true;
+    }
+    return false;
+  }
+
+  // -------------------------------------------------------------------------
+  // Rendering
+  // -------------------------------------------------------------------------
+
+  override render(width: number, height: number): Line[] {
+    const intro = 'Live provider posture across latency, rate limits, recent failures, and runtime reachability.';
+
+    const knownSet = new Set<string>();
+    try {
+      for (const m of providerRegistry.listModels()) knownSet.add(m.provider);
+    } catch { /* ignore */ }
+    for (const h of providerHealthTracker.getAll()) knownSet.add(h.name);
+    const providers = [...knownSet].sort();
+    this._selectedIndex = Math.min(this._selectedIndex, Math.max(0, providers.length - 1));
 
     if (providers.length === 0) {
-      lines.push(this._textLine('  No providers registered.', C.dim, width));
-    } else {
-      for (const name of providers) {
-        if (lines.length >= height - 2) break;
-        const health = providerHealthTracker.get(name);
-        lines.push(...this._providerRows(name, health, width));
-        lines.push(this._hrLine(width));
-      }
+      return buildPanelWorkspace(width, height, {
+        title: 'Provider Health',
+        intro,
+        sections: [{
+          lines: buildEmptyState(
+            width,
+            ' No providers registered.',
+            'Provider health appears here once model providers are available and the runtime begins making requests.',
+            [
+              { command: '/provider', summary: 'review current provider and model selection' },
+              { command: '/subscription', summary: 'review provider login and subscription state' },
+            ],
+            { ...DEFAULT_PANEL_PALETTE, header: C.title, headerBg: '#0f172a' },
+          ),
+        }],
+        palette: { ...DEFAULT_PANEL_PALETTE, header: C.title, headerBg: '#0f172a' },
+      });
     }
 
-    while (lines.length < height) lines.push(createEmptyLine(width));
-    return lines.slice(0, height);
-  }
-
-  // -------------------------------------------------------------------------
-  // Line builders
-  // -------------------------------------------------------------------------
-
-  private _titleLine(width: number): Line {
-    const line = createEmptyLine(width);
-    const text = ' Provider Health';
-    let x = 0;
-    for (const ch of text) {
-      if (x >= width) break;
-      line[x++] = createStyledCell(ch, { fg: C.title, bold: true });
+    let online = 0;
+    let rateLimited = 0;
+    let errored = 0;
+    for (const name of providers) {
+      const status = providerHealthTracker.get(name)?.status ?? 'unknown';
+      if (status === 'online') online++;
+      else if (status === 'rate-limited') rateLimited++;
+      else if (status === 'error') errored++;
     }
-    return line;
-  }
 
-  private _hrLine(width: number): Line {
-    return Array.from({ length: width }, () =>
-      createStyledCell('\u2500', { fg: C.separator }),
-    );
-  }
-
-  private _textLine(text: string, fg: string, width: number): Line {
-    const line = createEmptyLine(width);
-    let x = 0;
-    for (const ch of text) {
-      if (x >= width) break;
-      line[x++] = createStyledCell(ch, { fg });
-    }
-    return line;
-  }
-
-  private _providerRows(
-    name: string,
-    health: ProviderHealth | undefined,
-    width: number,
-  ): Line[] {
-    const rows: Line[] = [];
-    const status = health?.status ?? 'unknown';
-    const dot = statusDot(status);
-
-    // --- Row 1: status dot + provider name + status label + latency ---
-    const row1 = createEmptyLine(width);
-    const segments1: Array<{ text: string; fg: string; bold?: boolean }> = [
-      { text: '  ', fg: C.dim },
-      { text: dot.char, fg: dot.color },
-      { text: ' ', fg: C.dim },
-      { text: name.padEnd(16), fg: C.provName, bold: true },
-      { text: statusLabel(status).padEnd(13), fg: dot.color },
+    const summaryLines = [
+      buildKeyValueLine(width, [
+        { label: 'providers', value: String(providers.length), valueColor: C.value },
+        { label: 'online', value: String(online), valueColor: C.online },
+        { label: 'rate-limited', value: String(rateLimited), valueColor: C.rateLimit },
+        { label: 'error', value: String(errored), valueColor: C.error },
+      ], { ...DEFAULT_PANEL_PALETTE, header: C.title, headerBg: '#0f172a' }),
+      buildGuidanceLine(width, '/provider', 'review provider selection and routing if health posture degrades', { ...DEFAULT_PANEL_PALETTE, header: C.title, headerBg: '#0f172a' }),
     ];
 
-    if (health?.lastLatencyMs !== undefined) {
-      segments1.push(
-        { text: 'lat: ', fg: C.label },
-        { text: fmtMs(health.lastLatencyMs), fg: latencyColor(health.lastLatencyMs) },
-      );
-    }
+    const listBudget = Math.max(4, height - 12);
+    const window = getTrackedVisibleWindow(providers.length, this._selectedIndex, listBudget, this._scrollOffset, 1);
+    this._scrollOffset = window.start;
+    const providerLines: Line[] = providers.slice(window.start, window.end).map((name, index) => {
+      const health = providerHealthTracker.get(name);
+      const status = health?.status ?? 'unknown';
+      const globalIndex = window.start + index;
+      const bg = globalIndex === this._selectedIndex ? '#111827' : undefined;
+      const latency = health?.lastLatencyMs !== undefined ? fmtMs(health.lastLatencyMs) : 'n/a';
+      const latencyFg = health?.lastLatencyMs !== undefined ? latencyColor(health.lastLatencyMs) : C.dim;
+      return buildPanelLine(width, [
+        ['  ', C.label, bg],
+        [name.padEnd(16), C.provName, bg],
+        [statusLabel(status).padEnd(14), statusDot(status).color, bg],
+        [' lat ', C.label, bg],
+        [latency.padEnd(8), latencyFg, bg],
+        [' ok ', C.label, bg],
+        [fmtAgo(health?.lastSuccessAt).padEnd(10), C.value, bg],
+      ]);
+    });
 
-    let col = 0;
-    for (const seg of segments1) {
-      for (const ch of seg.text) {
-        if (col >= width) break;
-        row1[col++] = createStyledCell(ch, { fg: seg.fg, bold: seg.bold ?? false });
+    const selectedName = providers[this._selectedIndex];
+    const selectedHealth = selectedName ? providerHealthTracker.get(selectedName) : undefined;
+    const selectedLines: Line[] = [];
+    if (selectedName) {
+      const status = selectedHealth?.status ?? 'unknown';
+      selectedLines.push(buildKeyValueLine(width, [
+        { label: 'provider', value: selectedName, valueColor: C.provName },
+        { label: 'status', value: statusLabel(status), valueColor: statusDot(status).color },
+        { label: 'last ok', value: fmtAgo(selectedHealth?.lastSuccessAt), valueColor: C.value },
+      ], { ...DEFAULT_PANEL_PALETTE, header: C.title, headerBg: '#0f172a' }));
+      if (selectedHealth?.rateLimitExpiresAt && selectedHealth.rateLimitExpiresAt > Date.now()) {
+        selectedLines.push(...buildBodyText(width, `Cooldown: ${fmtCooldown(selectedHealth.rateLimitExpiresAt)}`, { ...DEFAULT_PANEL_PALETTE, header: C.title, headerBg: '#0f172a' }, C.rateLimit));
+      }
+      if (selectedHealth?.lastErrorMessage) {
+        selectedLines.push(...buildBodyText(width, `Last error: ${selectedHealth.lastErrorMessage}`, { ...DEFAULT_PANEL_PALETTE, header: C.title, headerBg: '#0f172a' }, C.errMsg));
       }
     }
-    rows.push(row1);
 
-    // --- Row 2: last seen + cooldown (if rate-limited) ---
-    const row2Parts: Array<{ text: string; fg: string }> = [
-      { text: '     ', fg: C.dim },
+    const sections: PanelWorkspaceSection[] = [
+      { title: 'Summary', lines: summaryLines },
+      { title: 'Providers', lines: providerLines },
     ];
-
-    if (health?.lastSuccessAt) {
-      row2Parts.push(
-        { text: 'last ok: ', fg: C.label },
-        { text: fmtAgo(health.lastSuccessAt), fg: C.value },
-        { text: '  ', fg: C.dim },
-      );
-    }
-
-    const now = Date.now();
-    if (health?.rateLimitExpiresAt && health.rateLimitExpiresAt > now) {
-      row2Parts.push(
-        { text: fmtCooldown(health.rateLimitExpiresAt), fg: C.rateLimit },
-      );
-    } else if (health?.lastErrorAt && health.status !== 'online') {
-      row2Parts.push(
-        { text: 'last err: ', fg: C.label },
-        { text: fmtAgo(health.lastErrorAt), fg: C.errMsg },
-      );
-    }
-
-    const row2 = createEmptyLine(width);
-    let c2 = 0;
-    for (const part of row2Parts) {
-      for (const ch of part.text) {
-        if (c2 >= width) break;
-        row2[c2++] = createStyledCell(ch, { fg: part.fg });
-      }
-    }
-    rows.push(row2);
-
-    // --- Row 3: last error message (if any) ---
-    if (health?.lastErrorMessage) {
-      const prefix = '     err: ';
-      const maxMsgLen = width - prefix.length;
-      const msg = health.lastErrorMessage.slice(0, Math.max(0, maxMsgLen));
-      const row3 = createEmptyLine(width);
-      let c3 = 0;
-      for (const ch of prefix) {
-        if (c3 >= width) break;
-        row3[c3++] = createStyledCell(ch, { fg: C.label });
-      }
-      for (const ch of msg) {
-        if (c3 >= width) break;
-        row3[c3++] = createStyledCell(ch, { fg: C.errMsg, dim: true });
-      }
-      rows.push(row3);
-    }
-
-    return rows;
+    if (selectedLines.length > 0) sections.push({ title: 'Selected', lines: selectedLines });
+    return buildPanelWorkspace(width, height, {
+      title: 'Provider Health',
+      intro,
+      sections,
+      footerLines: [buildPanelLine(width, [['  j/k or Up/Down move  live cooldowns refresh while active', C.dim]])],
+      palette: { ...DEFAULT_PANEL_PALETTE, header: C.title, headerBg: '#0f172a' },
+    });
   }
 }

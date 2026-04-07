@@ -1,6 +1,7 @@
 import type { CommandRegistry } from '../command-registry.ts';
 import { CONFIG_SCHEMA, type ConfigKey } from '../../config/index.ts';
 import { getProfileManager } from '../../profiles/manager.ts';
+import { configSnapshotToProfileData, profileDataToConfigSnapshot } from '../../profiles/shape.ts';
 import { dirname, join, resolve } from 'node:path';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 
@@ -121,7 +122,7 @@ export function registerConfigCommand(registry: CommandRegistry): void {
             return;
           }
           try {
-            const data = currentConfig as Record<string, unknown>;
+            const data = configSnapshotToProfileData(currentConfig as Record<string, unknown>);
             const filePath = pm.save(profileName, data);
             ctx.print(`Profile saved: ${profileName}\n  → ${filePath}`);
           } catch (e) {
@@ -137,8 +138,8 @@ export function registerConfigCommand(registry: CommandRegistry): void {
           }
           try {
             const { data } = pm.load(profileName);
-            for (const [key, value] of Object.entries(data)) {
-              const schema = CONFIG_SCHEMA.find((entry) => entry.key === key);
+            for (const [key, value] of Object.entries(profileDataToConfigSnapshot(data))) {
+              const schema = CONFIG_SCHEMA.find((entry) => entry.key === key as ConfigKey);
               if (!schema) continue;
               cm.setDynamic(key as ConfigKey, value);
               if (key === 'provider.model') ctx.runtime.model = value as string;

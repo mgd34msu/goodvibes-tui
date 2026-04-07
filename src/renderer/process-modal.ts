@@ -4,6 +4,8 @@ import { formatDuration } from './modal-utils.ts';
 import { ProcessManager } from '../tools/shared/process-manager.ts';
 import { AgentManager, type AgentRecord } from '../tools/agent/index.ts';
 import { WrfcController } from '../agents/wrfc-controller.ts';
+import { getOverlaySurfaceMetrics, getStableOverlayContentRows } from './overlay-viewport.ts';
+import { getVisibleWindow } from './surface-layout.ts';
 
 // ─── ProcessEntry ─────────────────────────────────────────────────────────────
 
@@ -26,14 +28,8 @@ export interface ProcessEntry {
 
 /** Maximum characters from agent task / exec command stored in ProcessEntry.label. */
 const MAX_LABEL_LENGTH = 80;
-/** Columns subtracted from terminal width to derive the dynamic label width. */
-const LABEL_WIDTH_SUBTRACT = 40;
-/** Fixed-width columns reserved for status, duration, and padding in the process list row. */
-const STATUS_COLUMNS_WIDTH = 25;
 /** Border and margin width subtracted from terminal width to get modal content width. */
 const MODAL_BORDER_WIDTH = 8;
-/** Minimum width for the dynamic process label column. */
-const MIN_LABEL_WIDTH = 20;
 
 /** Build a display label for an agent based on its task and template. */
 function buildAgentLabel(rec: AgentRecord): string {
@@ -83,13 +79,13 @@ function getChainTask(wrfcId: string | undefined): string | null {
 /** Truncate to first line, capped at max chars. */
 function truncateFirst(text: string, max: number): string {
   const line = text.split('\n')[0].trim();
-  return line.length > max ? line.slice(0, max - 1) + '\u2026' : line;
+  return line.length > max ? line.slice(0, Math.max(0, max - 3)) + '...' : line;
 }
 
 /** Truncate a command string to first line, capped at MAX_LABEL_LENGTH. */
 function truncateCmd(text: string): string {
   const firstLine = text.split('\n')[0].trim();
-  if (firstLine.length > MAX_LABEL_LENGTH) return firstLine.slice(0, MAX_LABEL_LENGTH - 3) + '\u2026';
+  if (firstLine.length > MAX_LABEL_LENGTH) return firstLine.slice(0, MAX_LABEL_LENGTH - 3) + '...';
   return firstLine;
 }
 
@@ -217,17 +213,27 @@ export class ProcessModal {
  * @param modal  ProcessModal state
  * @param width  Terminal width
  */
-export function renderProcessModal(modal: ProcessModal, width: number): Line[] {
+export function renderProcessModal(modal: ProcessModal, width: number, viewportHeight = 24): Line[] {
   modal.refresh();
 
-  const modalContentW = Math.max(4, width - MODAL_BORDER_WIDTH); // borders + margin
-  const dynamicLabelW = Math.min(Math.max(MIN_LABEL_WIDTH, width - LABEL_WIDTH_SUBTRACT), modalContentW - STATUS_COLUMNS_WIDTH);
+  const metrics = getOverlaySurfaceMetrics(width, viewportHeight, {
+    margin: 2,
+    maxWidth: Math.max(24, width - 4),
+    chromeRows: 4,
+    minContentRows: 5,
+    maxContentRows: 9,
+  });
+  const boxMargin = metrics.margin;
+  const boxW = metrics.boxWidth;
+  const maxVisibleRows = metrics.contentRows;
+  const targetContentRows = getStableOverlayContentRows(metrics.contentRows, 7);
 
   if (modal.entries.length === 0) {
     return ModalFactory.createModal({
       title: 'Background Processes',
-      width: width - 4,
-      margin: 2,
+      width: boxW,
+      margin: boxMargin,
+      targetContentRows,
       sections: [
         { type: 'text', content: 'No background processes running.' },
       ],
@@ -235,36 +241,47 @@ export function renderProcessModal(modal: ProcessModal, width: number): Line[] {
     }, width);
   }
 
-  const maxLabelW = Math.max(10, (width - 4) - 8); // modal content minus borders/padding
+  const maxLabelW = Math.max(10, boxW - MODAL_BORDER_WIDTH);
+  const window = getVisibleWindow(modal.entries.length, modal.selectedIndex, maxVisibleRows);
+  const visibleEntries = modal.entries.slice(window.start, window.end);
 
-  const items = modal.entries.map((e, i) => {
+  const items = visibleEntries.map((e, i) => {
+    const absoluteIndex = window.start + i;
     const statusIcon = {
-      running: '\u25cf',
-      pending: '\u25cb',
-      completed: '\u2713',
-      failed: '\u2717',
-      cancelled: '\u2298',
-    }[e.status] ?? '\u25cf';
+      running: '*',
+      pending: 'o',
+      completed: 'y',
+      failed: 'x',
+      cancelled: '-',
+    }[e.status] ?? '*';
     const typeTag = e.type === 'agent' ? '[agent]' : '[exec]';
     const dur = formatDuration(e.elapsedMs);
     const statusStr = e.streamSnippet ? `streaming  ${dur}` : `${e.status}  ${dur}`;
     const suffix = `  ${statusStr}`;
     const maxDescW = maxLabelW - typeTag.length - suffix.length - 4; // icon + spaces
-    const desc = e.label.length > maxDescW ? e.label.slice(0, maxDescW - 1) + '\u2026' : e.label;
+    const desc = e.label.length > maxDescW ? e.label.slice(0, Math.max(0, maxDescW - 3)) + '...' : e.label;
     const label = `${statusIcon} ${typeTag} ${desc}${suffix}`;
     return {
       label,
-      selected: i === modal.selectedIndex,
+      selected: absoluteIndex === modal.selectedIndex,
     };
   });
+  const sections: import('./modal-factory.ts').ModalSection[] = [
+    { type: 'list', items },
+  ];
+  if (modal.entries.length > maxVisibleRows) {
+    sections.push({ type: 'separator' });
+  }
 
   return ModalFactory.createModal({
     title: 'Background Processes',
-    width: width - 4,
-    margin: 2,
-    sections: [
-      { type: 'list', items },
-    ],
-    hints: ['[↑↓] Navigate', '[Enter] Peek output', '[k] Kill', '[Esc] Close'],
+    width: boxW,
+    margin: boxMargin,
+    targetContentRows,
+    sections,
+    helpers: modal.entries.length > maxVisibleRows
+      ? [{ content: `[${window.start + 1}-${window.end} of ${modal.entries.length}]` }]
+      : undefined,
+    hints: ['[Up/Down] Navigate', '[Enter] Peek output', '[k] Kill', '[Esc] Close'],
   }, width);
 }

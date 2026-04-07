@@ -421,6 +421,8 @@ describe('PermissionPromptUI — renders correctly per category', () => {
     expect(text).toContain('Shell Execution Approval');
     expect(text).toContain('Command');
     expect(text).toContain('Decision  : shell-execution');
+    expect(text).toContain('Surface   : shell  radius=project');
+    expect(text).toContain('Effects   : process execution');
     expect(text).toContain('Checklist : Confirm shell side effects');
   });
 
@@ -437,6 +439,9 @@ describe('PermissionPromptUI — renders correctly per category', () => {
         reasons: ['Review external host access before approval.'],
         target: 'https://example.com/docs',
         targetKind: 'url' as const,
+        surface: 'network' as const,
+        blastRadius: 'external' as const,
+        sideEffects: ['outbound network access', 'remote content ingestion'],
         host: 'example.com',
       },
       resolve: (_approved: boolean) => {},
@@ -448,11 +453,46 @@ describe('PermissionPromptUI — renders correctly per category', () => {
     expect(text).toContain('Host');
     expect(text).toContain('example.com');
     expect(text).toContain('Decision  : external-access');
+    expect(text).toContain('Surface   : network  radius=external');
   });
 
   test('createPromptLines specializes write prompts for file mutation review', () => {
     const request = {
       callId: 'test-call-8',
+      tool: 'write',
+      args: { path: 'src/output.ts' },
+      category: 'write' as const,
+      analysis: analyzePermissionRequest('write', { path: 'src/output.ts' }, 'write'),
+      resolve: (_approved: boolean) => {},
+    };
+    const text = PermissionPromptUI.createPromptLines(WIDTH, request)
+      .map((line) => line.map((c) => c.char).join(''))
+      .join('\n');
+    expect(text).toContain('File Mutation Approval');
+    expect(text).toContain('Decision  : file-mutation');
+    expect(text).toContain('Checklist : Confirm target path');
+  });
+
+  test('createPromptLines specializes notebook edits separately from generic file mutation', () => {
+    const request = {
+      callId: 'test-call-8b',
+      tool: 'edit',
+      args: { path: 'notebooks/analysis.ipynb' },
+      category: 'write' as const,
+      analysis: analyzePermissionRequest('edit', { path: 'notebooks/analysis.ipynb' }, 'write'),
+      resolve: (_approved: boolean) => {},
+    };
+    const text = PermissionPromptUI.createPromptLines(WIDTH, request)
+      .map((line) => line.map((c) => c.char).join(''))
+      .join('\n');
+    expect(text).toContain('Notebook Edit Approval');
+    expect(text).toContain('Decision  : notebook-edit');
+    expect(text).toContain('Checklist : Confirm notebook cell intent');
+  });
+
+  test('createPromptLines specializes config mutations separately from generic file mutation', () => {
+    const request = {
+      callId: 'test-call-8c',
       tool: 'write',
       args: { path: '.env.production' },
       category: 'write' as const,
@@ -462,9 +502,26 @@ describe('PermissionPromptUI — renders correctly per category', () => {
     const text = PermissionPromptUI.createPromptLines(WIDTH, request)
       .map((line) => line.map((c) => c.char).join(''))
       .join('\n');
-    expect(text).toContain('File Mutation Approval');
-    expect(text).toContain('Decision  : file-mutation');
-    expect(text).toContain('Checklist : Confirm target path');
+    expect(text).toContain('Configuration Mutation Approval');
+    expect(text).toContain('Decision  : config-mutation');
+    expect(text).toContain('Checklist : Confirm configuration blast radius');
+  });
+
+  test('createPromptLines specializes dependency installs separately from generic shell execution', () => {
+    const request = {
+      callId: 'test-call-8d',
+      tool: 'exec',
+      args: { command: 'bun install' },
+      category: 'execute' as const,
+      analysis: analyzePermissionRequest('exec', { command: 'bun install' }, 'execute'),
+      resolve: (_approved: boolean) => {},
+    };
+    const text = PermissionPromptUI.createPromptLines(WIDTH, request)
+      .map((line) => line.map((c) => c.char).join(''))
+      .join('\n');
+    expect(text).toContain('Dependency Install Approval');
+    expect(text).toContain('Decision  : dependency-install');
+    expect(text).toContain('Checklist : Confirm dependency provenance');
   });
 
   test('createPromptLines specializes delegation prompts for fan-out review', () => {
@@ -481,7 +538,110 @@ describe('PermissionPromptUI — renders correctly per category', () => {
       .join('\n');
     expect(text).toContain('Agent Delegation Approval');
     expect(text).toContain('Decision  : delegation');
+    expect(text).toContain('Surface   : orchestration  radius=delegated');
     expect(text).toContain('Checklist : Confirm delegated scope');
+  });
+
+  test('createPromptLines specializes agent spawn approvals separately from generic delegation', () => {
+    const request = {
+      callId: 'test-call-9b',
+      tool: 'agent',
+      args: { mode: 'spawn', task: 'delegate release verification' },
+      category: 'delegate' as const,
+      analysis: analyzePermissionRequest('agent', { task: 'delegate release verification' }, 'delegate'),
+      resolve: (_approved: boolean) => {},
+    };
+    const text = PermissionPromptUI.createPromptLines(WIDTH, request)
+      .map((line) => line.map((c) => c.char).join(''))
+      .join('\n');
+    expect(text).toContain('Agent Spawn Approval');
+    expect(text).toContain('Decision  : agent-spawn');
+    expect(text).toContain('Checklist : Confirm spawned agent scope');
+  });
+
+  test('createPromptLines specializes remote dispatch approvals', () => {
+    const request = {
+      callId: 'test-call-10',
+      tool: 'remote_trigger',
+      args: { mode: 'dispatch', task: 'run remote verification' },
+      category: 'delegate' as const,
+      analysis: analyzePermissionRequest('remote_trigger', { mode: 'dispatch', task: 'run remote verification' }, 'delegate'),
+      resolve: (_approved: boolean) => {},
+    };
+    const text = PermissionPromptUI.createPromptLines(WIDTH, request)
+      .map((line) => line.map((c) => c.char).join(''))
+      .join('\n');
+    expect(text).toContain('Remote Dispatch Approval');
+    expect(text).toContain('Decision  : remote-dispatch');
+    expect(text).toContain('Checklist : Confirm remote target');
+  });
+
+  test('createPromptLines specializes MCP trust escalation approvals', () => {
+    const request = {
+      callId: 'test-call-11',
+      tool: 'mcp_resource',
+      args: { mode: 'set-trust', serverName: 'docs', trustMode: 'allow-all' },
+      category: 'delegate' as const,
+      analysis: analyzePermissionRequest('mcp_resource', { mode: 'set-trust', serverName: 'docs', trustMode: 'allow-all' }, 'delegate'),
+      resolve: (_approved: boolean) => {},
+    };
+    const text = PermissionPromptUI.createPromptLines(WIDTH, request)
+      .map((line) => line.map((c) => c.char).join(''))
+      .join('\n');
+    expect(text).toContain('MCP Trust Escalation Approval');
+    expect(text).toContain('Decision  : mcp-escalation');
+    expect(text).toContain('Checklist : Confirm server identity');
+  });
+
+  test('createPromptLines specializes hook execution approvals', () => {
+    const request = {
+      callId: 'test-call-12',
+      tool: 'workflow',
+      args: { eventPath: 'Pre:tool:edit', hookName: 'guard-edit' },
+      category: 'delegate' as const,
+      analysis: analyzePermissionRequest('workflow', { eventPath: 'Pre:tool:edit', hookName: 'guard-edit' }, 'delegate'),
+      resolve: (_approved: boolean) => {},
+    };
+    const text = PermissionPromptUI.createPromptLines(WIDTH, request)
+      .map((line) => line.map((c) => c.char).join(''))
+      .join('\n');
+    expect(text).toContain('Hook Execution Approval');
+    expect(text).toContain('Decision  : hook-execution');
+    expect(text).toContain('Checklist : Confirm hook source');
+  });
+
+  test('createPromptLines specializes plugin lifecycle approvals', () => {
+    const request = {
+      callId: 'test-call-13',
+      tool: 'write',
+      args: { path: '.goodvibes/plugins/deploy-audit/manifest.json' },
+      category: 'write' as const,
+      analysis: analyzePermissionRequest('write', { path: '.goodvibes/plugins/deploy-audit/manifest.json' }, 'write'),
+      resolve: (_approved: boolean) => {},
+    };
+    const text = PermissionPromptUI.createPromptLines(WIDTH, request)
+      .map((line) => line.map((c) => c.char).join(''))
+      .join('\n');
+    expect(text).toContain('Plugin Lifecycle Approval');
+    expect(text).toContain('Decision  : plugin-lifecycle');
+    expect(text).toContain('Checklist : Confirm package provenance');
+  });
+
+  test('createPromptLines specializes sandbox policy change approvals', () => {
+    const request = {
+      callId: 'test-call-14',
+      tool: 'write',
+      args: { path: 'sandbox.vmBackend' },
+      category: 'write' as const,
+      analysis: analyzePermissionRequest('write', { path: 'sandbox.vmBackend' }, 'write'),
+      resolve: (_approved: boolean) => {},
+    };
+    const text = PermissionPromptUI.createPromptLines(WIDTH, request)
+      .map((line) => line.map((c) => c.char).join(''))
+      .join('\n');
+    expect(text).toContain('Sandbox Policy Change Approval');
+    expect(text).toContain('Decision  : sandbox-policy-change');
+    expect(text).toContain('Checklist : Confirm isolation-mode impact');
   });
 
   test('getDisplayArg returns path when args has path', () => {

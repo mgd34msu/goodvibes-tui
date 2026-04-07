@@ -7,15 +7,24 @@
  * Requires the `operator-control-plane` feature flag to be enabled.
  * Open via Ctrl+O keybind or `/ops view` command.
  */
-import type { Line, Cell } from '../types/grid.ts';
+import type { Line } from '../types/grid.ts';
 import type { RuntimeEventBus } from '../runtime/events/index.ts';
 import type { OpsAuditEntry } from '../runtime/diagnostics/panels/ops.ts';
 import { OpsPanel } from '../runtime/diagnostics/panels/ops.ts';
 import { BasePanel } from './base-panel.ts';
-import { createStyledCell, createEmptyLine } from '../types/grid.ts';
+import { createEmptyLine } from '../types/grid.ts';
+import {
+  buildEmptyState,
+  buildPanelLine,
+  buildPanelWorkspace,
+  DEFAULT_PANEL_PALETTE,
+  type PanelWorkspaceSection,
+} from './polish.ts';
+import { getTrackedVisibleWindow } from '../renderer/surface-layout.ts';
 
 // ── Colour palette ──────────────────────────────────────────────────────────
 const C = {
+  ...DEFAULT_PANEL_PALETTE,
   header:     '#94a3b8',
   headerBg:   '#1e293b',
   success:    '#22c55e',
@@ -29,6 +38,7 @@ const C = {
   taskColor:  '#22d3ee',
   agentColor: '#a78bfa',
   empty:      '#334155',
+  selectBg:   '#0f172a',
 } as const;
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -59,20 +69,6 @@ function outcomeLabel(outcome: OpsAuditEntry['outcome']): string {
 
 function targetColor(kind: OpsAuditEntry['targetKind']): string {
   return kind === 'task' ? C.taskColor : C.agentColor;
-}
-
-/** Build a Line from a sequence of [text, fg, bg?] segments, padded to width. */
-function buildLine(width: number, segments: Array<[string, string, string?]>): Line {
-  const cells: Cell[] = [];
-  let used = 0;
-  for (const [text, fg, bg] of segments) {
-    cells.push(createStyledCell(text, { fg, bg: bg ?? '' }));
-    used += text.length;
-  }
-  if (used < width) {
-    cells.push(createStyledCell(' '.repeat(width - used), { fg: '' }));
-  }
-  return cells;
 }
 
 // ── OpsControlPanel ──────────────────────────────────────────────────────────
@@ -109,32 +105,38 @@ export class OpsControlPanel extends BasePanel {
 
   public render(width: number, height: number): Line[] {
     this.needsRender = false;
-    const lines: Line[] = [];
-
-    // Header
-    const title = ' Operator Control Plane';
-    const pad = Math.max(0, width - title.length);
-    lines.push(buildLine(width, [[title + ' '.repeat(pad), C.header, C.headerBg]]));
-
-    // Column headers
-    const colHdr = ' SEQ  TIME      ACTION          TARGET             OUT    NOTE';
-    lines.push(buildLine(width, [[colHdr.slice(0, width), C.label]]));
-
     const entries = this._opsPanel.getSnapshot();
-    const bodyHeight = Math.max(1, height - 2);
+    const intro = 'Operator interventions, outcomes, and task or agent targets across the active control plane.';
 
     if (entries.length === 0) {
-      lines.push(buildLine(width, [[' No operator interventions recorded.', C.empty]]));
-      while (lines.length < height) lines.push(createEmptyLine(width));
-      return lines;
+      const workspace = buildPanelWorkspace(width, height, {
+        title: 'Operator Control Plane',
+        intro,
+        sections: [{
+          lines: buildEmptyState(
+            width,
+            ' No operator interventions recorded.',
+            'Actions like pause, retry, cancel, move, and approval decisions will appear here once the operator starts intervening in runtime workflows.',
+            [{ command: '/cockpit', summary: 'open the cockpit and drive runtime interventions from the control rooms' }],
+            C,
+          ),
+        }],
+        palette: C,
+      });
+      while (workspace.length < height) workspace.push(createEmptyLine(width));
+      return workspace;
     }
 
-    // Newest first with scroll
     const reversed = [...entries].reverse();
-    const maxScroll = Math.max(0, reversed.length - bodyHeight);
-    const offset = Math.min(this._scrollOffset, maxScroll);
-    const visible = reversed.slice(offset, offset + bodyHeight);
+    const window = getTrackedVisibleWindow(reversed.length, this._scrollOffset, Math.max(4, height - 8), this._scrollOffset, 1);
+    const maxScroll = Math.max(0, reversed.length - window.count);
+    const offset = Math.min(window.start, maxScroll);
+    this._scrollOffset = offset;
+    const visible = reversed.slice(offset, offset + window.count);
 
+    const entryLines: Line[] = [
+      buildPanelLine(width, [['  SEQ  TIME      ACTION          TARGET             OUT    NOTE', C.label]]),
+    ];
     for (const entry of visible) {
       const seqStr   = String(entry.seq).padStart(4, ' ');
       const timeStr  = fmtTime(entry.ts);
@@ -154,17 +156,24 @@ export class OpsControlPanel extends BasePanel {
         [outLabel, outcomeColor(entry.outcome)],
       ];
       if (noteRaw) segs.push([` ${noteRaw}`, C.note]);
-      lines.push(buildLine(width, segs));
+      entryLines.push(buildPanelLine(width, segs));
     }
 
-    // Scroll indicator
     if (maxScroll > 0) {
       const lo = offset + 1;
-      const hi = Math.min(offset + bodyHeight, reversed.length);
-      const indicator = ` [${lo}-${hi}/${reversed.length}] ↑/↓ to scroll`;
-      lines[lines.length - 1] = buildLine(width, [[indicator.slice(0, width), C.label]]);
+      const hi = Math.min(offset + window.count, reversed.length);
+      const indicator = ` [${lo}-${hi}/${reversed.length}] Up/Down to scroll`;
+      entryLines.push(buildPanelLine(width, [[indicator.slice(0, width), C.label]]));
     }
 
+    const sections: PanelWorkspaceSection[] = [{ title: 'Audit Log', lines: entryLines }];
+    const lines = buildPanelWorkspace(width, height, {
+      title: 'Operator Control Plane',
+      intro,
+      sections,
+      footerLines: [buildPanelLine(width, [['  Up/Down scroll the intervention log', C.dim]])],
+      palette: C,
+    });
     while (lines.length < height) lines.push(createEmptyLine(width));
     return lines;
   }

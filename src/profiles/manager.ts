@@ -31,11 +31,15 @@ export interface ProfileInfo {
  * permissions and API keys are never included.
  */
 export class ProfileManager {
-  private profilesDir: string;
+  private readonly profilesDir: string;
   private lastTimestamp = 0;
 
   constructor(baseDir?: string) {
-    this.profilesDir = baseDir ?? join(homedir(), '.goodvibes', 'tui', 'profiles');
+    this.profilesDir = baseDir ?? join(resolveGoodVibesHome(), '.goodvibes', 'tui', 'profiles');
+  }
+
+  public get storagePath(): string {
+    return this.profilesDir;
   }
 
   /**
@@ -154,9 +158,16 @@ export class ProfileManager {
   }
 }
 
+function resolveGoodVibesHome(): string {
+  return process.env.HOME || homedir();
+}
+
 /** Lazy singleton. */
 let _instance: ProfileManager | undefined;
 export function getProfileManager(): ProfileManager {
-  if (!_instance) _instance = new ProfileManager();
+  const defaultProfilesDir = join(resolveGoodVibesHome(), '.goodvibes', 'tui', 'profiles');
+  if (!_instance || _instance.storagePath !== defaultProfilesDir) {
+    _instance = new ProfileManager(defaultProfilesDir);
+  }
   return _instance;
 }

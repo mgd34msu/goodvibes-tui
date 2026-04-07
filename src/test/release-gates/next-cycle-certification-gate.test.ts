@@ -3,7 +3,7 @@ import { describe, expect, mock, test } from 'bun:test';
 import type { AgentRecord } from '../../tools/agent/index.ts';
 import { buildKnowledgeInjectionPrompt } from '../../state/index.ts';
 import { buildMcpAttackPathReview } from '../../runtime/mcp/index.ts';
-import { handleRemoteCancelCommand } from '../../input/commands/local-runtime.ts';
+import { handleRemoteCancelCommand } from '../../input/commands/remote-runtime.ts';
 
 function makeRecord(overrides: Partial<AgentRecord> = {}): AgentRecord {
   return {

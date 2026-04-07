@@ -9,6 +9,15 @@ import { logger } from '../utils/logger.ts';
 import { VERSION } from '../version.ts';
 import type { McpServerConfig } from './config.ts';
 
+export interface McpProcessSpec {
+  command: string;
+  args?: string[];
+  env?: Record<string, string>;
+  cwd?: string;
+  summary?: string;
+  sandboxSessionId?: string;
+}
+
 export interface McpToolInfo {
   name: string;
   description: string;
@@ -60,7 +69,7 @@ export class McpClient {
 
   constructor(
     private config: McpServerConfig,
-    private options?: { timeout?: number },
+    private options?: { timeout?: number; processSpec?: McpProcessSpec },
   ) {}
 
   get name(): string {
@@ -179,9 +188,11 @@ export class McpClient {
   // ---------------------------------------------------------------------------
 
   private async _startProcess(): Promise<void> {
-    const cmd = this.config.command;
-    const args = this.config.args ?? [];
-    const env = this.config.env ? { ...process.env, ...this.config.env } : undefined;
+    const processSpec = this.options?.processSpec;
+    const cmd = processSpec?.command ?? this.config.command;
+    const args = processSpec?.args ?? this.config.args ?? [];
+    const env = { ...process.env, ...(this.config.env ?? {}), ...(processSpec?.env ?? {}) };
+    const cwd = processSpec?.cwd;
 
     try {
       this.proc = Bun.spawn([cmd, ...args], {
@@ -189,6 +200,7 @@ export class McpClient {
         stdout: 'pipe',
         stderr: 'pipe',
         env,
+        ...(cwd ? { cwd } : {}),
       });
       this.buffer = '';
       this.restartCount = 0;

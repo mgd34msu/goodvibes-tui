@@ -112,7 +112,7 @@ describe('renderModelPickerOverlay — model mode', () => {
 
   test('selected item has arrow indicator', () => {
     const lines = renderModelPickerOverlay(makePicker(), W);
-    const hasArrow = lines.some(line => line.some(cell => cell.char === '\u25b6'));
+    const hasArrow = lines.some(line => line.some(cell => cell.char === '>'));
     expect(hasArrow).toBe(true);
   });
 
@@ -234,7 +234,7 @@ describe('renderModelPickerOverlay — provider mode', () => {
 
   test('selected item has arrow indicator', () => {
     const lines = renderModelPickerOverlay(makeProviderPicker(), W);
-    const hasArrow = lines.some(line => line.some(cell => cell.char === '\u25b6'));
+    const hasArrow = lines.some(line => line.some(cell => cell.char === '>'));
     expect(hasArrow).toBe(true);
   });
 
@@ -246,8 +246,7 @@ describe('renderModelPickerOverlay — provider mode', () => {
 
   test('search bar is present in provider mode', () => {
     const texts = linesToText(renderModelPickerOverlay(makeProviderPicker(), W)).join('\n');
-    // Search bar renders a magnifying glass emoji (🔍 = \uD83D\uDD0D)
-    expect(texts).toContain('\uD83D\uDD0D');
+    expect(texts).toContain('/ _');
   });
 
   test('query filters provider list', () => {
@@ -336,7 +335,7 @@ describe('renderModelPickerOverlay — effort mode', () => {
 
   test('selected item has arrow indicator', () => {
     const lines = renderModelPickerOverlay(makeEffortPicker(), W);
-    const hasArrow = lines.some(line => line.some(cell => cell.char === '\u25b6'));
+    const hasArrow = lines.some(line => line.some(cell => cell.char === '>'));
     expect(hasArrow).toBe(true);
   });
 
@@ -364,20 +363,18 @@ describe('renderModelPickerOverlay — Stage 5 features', () => {
     expect(texts).toMatch(/\[S\]|\[A\]|\[B\]|\[C\]/);
   });
 
-  test('free indicator ◆ renders for free-tier models', () => {
+  test('free indicator renders for free-tier models', () => {
     _setEntriesForTest([]);
     const picker = makePicker({ selectedIndex: 0 });
-    // MODEL_A is tier: free — should show ◆ (\u25c6)
     const texts = linesToText(renderModelPickerOverlay(picker, W)).join('\n');
-    expect(texts).toContain('\u25c6');
+    expect(texts).toContain('*');
   });
 
-  test('pin star ★ renders for pinned models', () => {
+  test('pin star renders for pinned models', () => {
     const picker = makePicker();
     picker.pinnedIds = new Set(['model-a']);
     const texts = linesToText(renderModelPickerOverlay(picker, W)).join('\n');
-    // Star char ★ (\u2605) should appear in the model row
-    expect(texts).toContain('\u2605');
+    expect(texts).toContain('> * model-a');
   });
 
   test('no pin star when model is not pinned', () => {

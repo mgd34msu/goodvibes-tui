@@ -34,9 +34,9 @@ describe('CockpitPanel', () => {
     });
 
     const text = linesText(new CockpitPanel(store, policyState).render(140, 12));
-    expect(text).toContain('policy preflight');
+    expect(text).toContain('preflight');
     expect(text).toContain('WARN');
-    expect(text).toContain('preflight issues');
+    expect(text).toContain('issues');
   });
 
   test('renders empty guidance when the runtime store is missing', () => {
@@ -124,16 +124,28 @@ describe('CockpitPanel', () => {
       },
     }));
 
-    const text = linesText(new CockpitPanel(store, undefined, registry, tokenAuditor).render(140, 14));
+    const text = linesText(new CockpitPanel(store, undefined, registry, tokenAuditor).render(140, 18));
     expect(text).toContain('Operator Cockpit');
-    expect(text).toContain('active graphs');
+    expect(text).toContain('graphs');
     expect(text).toContain('blocked comms');
-    expect(text).toContain('policy preflight');
+    expect(text).toContain('Governance');
     expect(text).toContain('token blocked');
     expect(text).toContain('allow-all MCP');
     expect(text).toContain('incidents');
     expect(text).toContain('latest incident');
-    expect(text).toContain('errored plugins');
-    expect(text).toContain('Use /cockpit');
+    expect(text).toContain('plugins');
+    expect(text).toContain('Selected Workspace');
+    expect(text).toContain('/orchestration');
+  });
+
+  test('supports workspace focus changes with targeted action rails', () => {
+    const store = createRuntimeStore();
+    const panel = new CockpitPanel(store);
+    expect(panel.handleInput('right')).toBe(true);
+    expect(panel.handleInput('right')).toBe(true);
+    const text = linesText(panel.render(140, 18));
+    expect(text).toContain('focus=health');
+    expect(text).toContain('Selected Workspace');
+    expect(text).toContain('/incident latest');
   });
 });

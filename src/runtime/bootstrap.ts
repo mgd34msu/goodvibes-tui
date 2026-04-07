@@ -77,6 +77,7 @@ import { createBootstrapCommandContext } from './bootstrap-command-context.ts';
 import { scheduleMcpAutodiscovery, startBackgroundProviderRegistration } from './bootstrap-background.ts';
 import { startExternalServices } from './bootstrap-services.ts';
 import { getTokenAuditor } from '../security/token-audit.ts';
+import { getSandboxSessionRegistry } from './sandbox/session-registry.ts';
 
 // ── Internal helpers ──────────────────────────────────────────────────────
 
@@ -316,7 +317,7 @@ export async function bootstrapRuntime(
 
   runtimeUnsubs.push(runtimeBus.on<Extract<WorkflowEvent, { type: 'WORKFLOW_CASCADE_ABORTED' }>>('WORKFLOW_CASCADE_ABORTED', ({ payload }) => {
     const { chainId, reason } = payload;
-    systemMessageRouter.high(`[WRFC] Cascade abort: ${reason} (chain ${chainId})`);
+    systemMessageRouter.wrfc(`[WRFC] Cascade abort: ${reason} (chain ${chainId})`);
     requestRender();
   }));
 
@@ -330,7 +331,7 @@ export async function bootstrapRuntime(
 
   runtimeUnsubs.push(runtimeBus.on<Extract<WorkflowEvent, { type: 'WORKFLOW_CHAIN_CREATED' }>>('WORKFLOW_CHAIN_CREATED', ({ payload }) => {
     const { chainId, task } = payload;
-    systemMessageRouter.high(`[WRFC] Chain ${chainId} started: ${task}`);
+    systemMessageRouter.wrfc(`[WRFC] Chain ${chainId} started: ${task}`);
     requestRender();
   }));
 
@@ -339,13 +340,13 @@ export async function bootstrapRuntime(
     const icon = passed ? '\u2713' : '\u2717';
     const threshold = configManager.get('wrfc.scoreThreshold') as number;
     const suffix = passed ? '' : ` - Minimum score is ${threshold}/10, spawning a fix agent ...`;
-    systemMessageRouter.high(`[WRFC] ${icon} Review ${chainId.slice(0, 12)}: ${score}/10${suffix}`);
+    systemMessageRouter.wrfc(`[WRFC] ${icon} Review ${chainId.slice(0, 12)}: ${score}/10${suffix}`);
     requestRender();
   }));
 
   runtimeUnsubs.push(runtimeBus.on<Extract<WorkflowEvent, { type: 'WORKFLOW_CHAIN_PASSED' }>>('WORKFLOW_CHAIN_PASSED', ({ payload }) => {
     const { chainId } = payload;
-    systemMessageRouter.high(`[WRFC] \u2713 Chain ${chainId.slice(0, 12)} PASSED \u2014 all gates clear`);
+    systemMessageRouter.wrfc(`[WRFC] \u2713 Chain ${chainId.slice(0, 12)} PASSED \u2014 all gates clear`);
     // Re-check cohort completion now that a WRFC chain finished
     const chain = WrfcController.getInstance().getChain(chainId);
     if (chain?.engineerAgentId) {
@@ -357,7 +358,7 @@ export async function bootstrapRuntime(
 
   runtimeUnsubs.push(runtimeBus.on<Extract<WorkflowEvent, { type: 'WORKFLOW_CHAIN_FAILED' }>>('WORKFLOW_CHAIN_FAILED', ({ payload }) => {
     const { chainId, reason } = payload;
-    systemMessageRouter.high(`[WRFC] \u2717 Chain ${chainId.slice(0, 12)} FAILED: ${reason.slice(0, 80)}`);
+    systemMessageRouter.wrfc(`[WRFC] \u2717 Chain ${chainId.slice(0, 12)} FAILED: ${reason.slice(0, 80)}`);
     // Re-check cohort completion now that a WRFC chain finished
     const chain = WrfcController.getInstance().getChain(chainId);
     if (chain?.engineerAgentId) {
@@ -370,14 +371,14 @@ export async function bootstrapRuntime(
   runtimeUnsubs.push(runtimeBus.on<Extract<WorkflowEvent, { type: 'WORKFLOW_AUTO_COMMITTED' }>>('WORKFLOW_AUTO_COMMITTED', ({ payload }) => {
     const { chainId, commitHash } = payload;
     const suffix = commitHash ? ` (${commitHash.slice(0, 7)})` : '';
-    systemMessageRouter.high(`[WRFC] Auto-committed chain ${chainId.slice(0, 12)}${suffix}`);
+    systemMessageRouter.wrfc(`[WRFC] Auto-committed chain ${chainId.slice(0, 12)}${suffix}`);
     requestRender();
   }));
 
   runtimeUnsubs.push(runtimeBus.on<Extract<WorkflowEvent, { type: 'WORKFLOW_GATE_RESULT' }>>('WORKFLOW_GATE_RESULT', ({ payload }) => {
     const { gate, passed } = payload;
     const icon = passed ? '\u2713' : '\u2717';
-    systemMessageRouter.high(`[WRFC]   ${icon} Gate: ${gate} ${passed ? 'passed' : 'FAILED'}`);
+    systemMessageRouter.wrfc(`[WRFC]   ${icon} Gate: ${gate} ${passed ? 'passed' : 'FAILED'}`);
     requestRender();
   }));
 
@@ -768,6 +769,7 @@ export async function bootstrapRuntime(
     requestRender,
   });
   mcpRegistry.setRuntimeBus(runtimeBus);
+  mcpRegistry.setSandboxRuntime(configManager, getSandboxSessionRegistry());
 
   // ── Phase 8: Command registry + plugin init + CommandContext ───────────────
 

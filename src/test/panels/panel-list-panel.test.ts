@@ -111,9 +111,9 @@ describe('PanelListPanel', () => {
       expect(text).toContain('Beta');
     });
 
-    test('shows header row "Panel List"', () => {
+    test('shows header row "Panel Workspace"', () => {
       const text = linesText(panel.render(80, 20));
-      expect(text).toContain('Panel List');
+      expect(text).toContain('Panel Workspace');
     });
 
     test('shows Filter bar', () => {
@@ -140,6 +140,7 @@ describe('PanelListPanel', () => {
     });
 
     test('query matching name filters down to matching panels', () => {
+      panel.handleInput('/');
       panel.handleInput('a'); // query = 'a'
       panel.handleInput('l');
       panel.handleInput('p');
@@ -152,6 +153,7 @@ describe('PanelListPanel', () => {
     });
 
     test('query matching description filters correctly', () => {
+      panel.handleInput('/');
       panel.handleInput('x');
       panel.handleInput('y');
       panel.handleInput('z'); // query = 'xyz'
@@ -170,6 +172,7 @@ describe('PanelListPanel', () => {
     });
 
     test('query with no match shows "No panels match filter" message', () => {
+      panel.handleInput('/');
       panel.handleInput('z');
       panel.handleInput('z');
       panel.handleInput('z'); // query = 'zzz' — no matches
@@ -230,14 +233,27 @@ describe('PanelListPanel', () => {
   // ── search input ─────────────────────────────────────────────────────────
 
   describe('search input', () => {
+    test('up at top focuses filter; down returns focus to list', () => {
+      panel.handleInput('up');
+      panel.handleInput('a');
+      let text = linesText(panel.render(80, 20));
+      expect(text).toContain('Filter: a_');
+
+      panel.handleInput('down');
+      panel.handleInput('B');
+      expect(mgr.isBottomPaneVisible()).toBe(true);
+    });
+
     test('printable characters append to query and appear in filter bar', () => {
+      panel.handleInput('/');
       panel.handleInput('a');
       panel.handleInput('B');
       const text = linesText(panel.render(80, 20));
-      expect(text).toContain('ab');
+      expect(text).toContain('aB');
     });
 
     test('handleInput returns true for printable characters', () => {
+      panel.handleInput('/');
       expect(panel.handleInput('x')).toBe(true);
     });
 
@@ -246,6 +262,7 @@ describe('PanelListPanel', () => {
     });
 
     test('backspace removes last character from query', () => {
+      panel.handleInput('/');
       panel.handleInput('a');
       panel.handleInput('b');
       panel.handleInput('c');
@@ -260,6 +277,7 @@ describe('PanelListPanel', () => {
     });
 
     test('delete key also removes last character', () => {
+      panel.handleInput('/');
       panel.handleInput('a');
       panel.handleInput('delete');
       // query is now empty — no filter active
@@ -269,8 +287,10 @@ describe('PanelListPanel', () => {
     });
 
     test('escape clears the query', () => {
+      panel.handleInput('/');
       panel.handleInput('a');
       panel.handleInput('l');
+      panel.handleInput('escape');
       panel.handleInput('escape');
       const text = linesText(panel.render(80, 30));
       // After escape, all panels should be visible again
@@ -286,6 +306,7 @@ describe('PanelListPanel', () => {
     test('typing resets selection to first item', () => {
       panel.handleInput('down');
       panel.handleInput('down');
+      panel.handleInput('/');
       panel.handleInput('a'); // typing resets selectedIndex
       const text = linesText(panel.render(80, 20));
       expect(text).toContain('[1/');
@@ -323,6 +344,13 @@ describe('PanelListPanel', () => {
       expect(mgr.getFocusedPane()).toBe('bottom');
       panel.handleInput('tab');
       expect(mgr.getFocusedPane()).toBe('top');
+    });
+
+    test('selected row uses Unicode placement marker instead of T* text badges', () => {
+      panel.handleInput('T');
+      const text = linesText(panel.render(80, 20));
+      expect(text).not.toContain('T*Panel List');
+      expect(text).toContain('▶●▲ Alpha Panel');
     });
   });
 
@@ -379,6 +407,7 @@ describe('PanelListPanel', () => {
       // Navigate to the openable panel — it is registered in 'session',
       // so navigate until its id appears as selected in getAllOpen().
       // Easier: just type its name to filter down to it as the only result.
+      panel.handleInput('/');
       panel.handleInput('o');
       panel.handleInput('p');
       panel.handleInput('e');
@@ -395,6 +424,7 @@ describe('PanelListPanel', () => {
     });
 
     test('pressing enter (alias) also opens the selected panel', () => {
+      panel.handleInput('/');
       panel.handleInput('o');
       panel.handleInput('p');
       panel.handleInput('e');
@@ -412,6 +442,7 @@ describe('PanelListPanel', () => {
 
     test('handleInput returns true for return even when no panel matches (no-op open)', () => {
       // With an empty list (query matches nothing), return still returns true.
+      panel.handleInput('/');
       panel.handleInput('z');
       panel.handleInput('z');
       panel.handleInput('z'); // no match

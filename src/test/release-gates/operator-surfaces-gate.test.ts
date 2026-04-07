@@ -35,6 +35,10 @@ describe('operator surfaces gate', () => {
     expect(ids).toContain('communication');
     expect(ids).toContain('cockpit');
     expect(ids).toContain('security');
+    expect(ids).toContain('marketplace');
+    expect(ids).toContain('sandbox');
+    expect(ids).toContain('approval');
+    expect(ids).toContain('subscription');
     expect(ids).toContain('knowledge');
     expect(ids).toContain('remote');
     expect(ids).toContain('incident');
@@ -57,6 +61,12 @@ describe('operator surfaces gate', () => {
     expect(registry.get('hooks')).toBeDefined();
     expect(registry.get('communication')).toBeDefined();
     expect(registry.get('security')).toBeDefined();
+    expect(registry.get('marketplace')).toBeDefined();
+    expect(registry.get('sandbox')).toBeDefined();
+    expect(registry.get('approval')).toBeDefined();
+    expect(registry.get('subscription')).toBeDefined();
+    expect(registry.get('storage')).toBeDefined();
+    expect(registry.get('deeplink')).toBeDefined();
     expect(registry.get('knowledge')).toBeDefined();
     expect(registry.get('remote')).toBeDefined();
     expect(registry.get('mcp')).toBeDefined();
@@ -157,6 +167,39 @@ describe('operator surfaces gate', () => {
       toolRegistry: {} as never,
       mcpRegistry: {} as never,
       openCommunicationPanel: () => {
+        opened = true;
+      },
+    });
+
+    expect(opened).toBe(true);
+  });
+
+  test('subscription command opens the subscription panel', async () => {
+    const registry = new CommandRegistry();
+    registerBuiltinCommands(registry);
+    const subscription = registry.get('subscription');
+    expect(subscription).toBeDefined();
+
+    let opened = false;
+    await subscription!.handler([], {
+      providerRegistry: {} as never,
+      conversationManager: {} as never,
+      config: {} as never,
+      configManager: {} as never,
+      runtime: {
+        model: '',
+        provider: '',
+        debugMode: false,
+        systemPrompt: '',
+        reasoningEffort: '',
+        sessionId: 'sess-subscription-panel',
+      },
+      renderRequest: () => {},
+      print: () => {},
+      exit: () => {},
+      toolRegistry: {} as never,
+      mcpRegistry: {} as never,
+      openSubscriptionPanel: () => {
         opened = true;
       },
     });

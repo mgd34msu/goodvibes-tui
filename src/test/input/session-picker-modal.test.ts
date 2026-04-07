@@ -107,10 +107,27 @@ describe('SessionPickerModal', () => {
     modal.sessions = sessions;
     modal.selectedIndex = 0;
 
+    const firstAttempt = modal.deleteSelected();
+    expect(firstAttempt).toBe(false);
+    expect(modal.statusMessage).toContain('Press d again to delete');
+
     const deleted = modal.deleteSelected();
     // Check that the file is gone
     expect(deleted).toBe(true);
     expect(existsSync(sessions[0].filePath)).toBe(false);
+  });
+
+  test('moving selection clears pending delete confirmation', () => {
+    modal = new SessionPickerModal();
+    modal.sessions = [
+      { name: 'a', title: 'A', model: '', provider: '', timestamp: 1, messageCount: 2, filePath: '/a' },
+      { name: 'b', title: 'B', model: '', provider: '', timestamp: 2, messageCount: 3, filePath: '/b' },
+    ];
+    modal.selectedIndex = 0;
+    modal.deleteSelected();
+    expect(modal.deleteConfirmationTarget).toBe('a');
+    modal.moveDown();
+    expect(modal.deleteConfirmationTarget).toBeNull();
   });
 
   test('close() deactivates modal', () => {

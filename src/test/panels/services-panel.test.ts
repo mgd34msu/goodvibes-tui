@@ -3,6 +3,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { ServiceRegistry } from '../../config/service-registry.ts';
+import { _resetSubscriptionManagerForTesting, getSubscriptionManager } from '../../config/subscriptions.ts';
 import { ServicesPanel } from '../../panels/services-panel.ts';
 import type { Line } from '../../types/grid.ts';
 
@@ -14,12 +15,16 @@ function linesText(lines: Line[]): string {
 }
 
 describe('ServicesPanel', () => {
+  const originalCwd = process.cwd();
+  const originalHome = process.env.HOME;
   let root: string;
   let filePath: string;
   let registry: ServiceRegistry;
 
   beforeEach(() => {
     root = mkdtempSync(join(tmpdir(), 'gv-services-panel-'));
+    process.env.HOME = root;
+    process.chdir(root);
     filePath = join(root, '.goodvibes', 'tui', 'services.json');
     mkdirSync(join(root, '.goodvibes', 'tui'), { recursive: true });
     writeFileSync(filePath, JSON.stringify({
@@ -36,12 +41,17 @@ describe('ServicesPanel', () => {
     process.env.SLACK_WEBHOOK_URL = 'https://hooks.slack.test/example';
     process.env.SLACK_SIGNING_SECRET = 'secret';
     registry = new ServiceRegistry(filePath);
+    _resetSubscriptionManagerForTesting();
   });
 
   afterEach(() => {
     delete process.env.SLACK_BOT_TOKEN;
     delete process.env.SLACK_WEBHOOK_URL;
     delete process.env.SLACK_SIGNING_SECRET;
+    _resetSubscriptionManagerForTesting();
+    process.chdir(originalCwd);
+    if (originalHome === undefined) delete process.env.HOME;
+    else process.env.HOME = originalHome;
     rmSync(root, { recursive: true, force: true });
     mock.restore();
   });
@@ -73,5 +83,38 @@ describe('ServicesPanel', () => {
     } finally {
       globalThis.fetch = originalFetch;
     }
+  });
+
+  test('shows oauth-backed provider overrides in auth summary', async () => {
+    writeFileSync(filePath, JSON.stringify({
+      openai: {
+        name: 'openai',
+        baseUrl: 'https://api.openai.test/v1',
+        authType: 'oauth',
+        tokenKey: 'OPENAI_API_KEY',
+        providerId: 'openai',
+        oauth: {
+          authUrl: 'https://auth.openai.test/authorize',
+          tokenUrl: 'https://auth.openai.test/token',
+          clientId: 'openai-client',
+          redirectUri: 'http://127.0.0.1/callback',
+        },
+      },
+    }), 'utf-8');
+    _resetSubscriptionManagerForTesting();
+    getSubscriptionManager().saveSubscription({
+      provider: 'openai',
+      accessToken: 'oauth-openai-token',
+      tokenType: 'Bearer',
+      authMode: 'oauth',
+      overrideAmbientApiKeys: true,
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    });
+    registry = new ServiceRegistry(filePath);
+    const panel = new ServicesPanel(registry);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    const text = linesText(panel.render(120, 14));
+    expect(text).toContain('oauth(active)');
   });
 });

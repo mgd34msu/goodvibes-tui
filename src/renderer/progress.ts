@@ -3,9 +3,9 @@ import { UIFactory } from './ui-factory.ts';
 import { getDisplayWidth } from '../utils/terminal-width.ts';
 
 // Rich spinner frames (used by progress indicators)
-export const SPINNER_FRAMES = ['⣷', '⣯', '⣟', '⡿', '⢿', '⣻', '⣽', '⣾'];
+export const SPINNER_FRAMES = ['|', '/', '-', '\\', '|', '/', '-', '\\'];
 // Braille thinking spinner frames (used by the orchestrator thinking animation)
-export const THINKING_SPINNER_FRAMES = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
+export const THINKING_SPINNER_FRAMES = ['.', 'o', 'O', 'o', '.', 'o', 'O', 'o', '.', 'o'];
 
 /**
  * renderSpinner - Render a spinner with label as a single Line.
@@ -55,7 +55,7 @@ export function renderTokenBar(
   const maxK = max >= 1000 ? `${(max / 1000).toFixed(1)}k` : String(max);
   const pct = max > 0 ? Math.min(100, Math.round((used / max) * 100)) : 0;
   const toolStr = toolCount > 0 ? `  tools:${toolCount}` : '';
-  const statsText = ` ${model}  ↑${usedK}/${maxK} (${pct}%)${toolStr}`;
+  const statsText = ` ${model}  in:${usedK}/${maxK} (${pct}%)${toolStr}`;
 
   // Progress bar
   const barLabel = ' ctx ';
@@ -67,7 +67,7 @@ export function renderTokenBar(
   // Color based on usage
   const barFg = pct > 85 ? '#ef4444' : pct > 60 ? '#ffcc00' : '#22c55e';
 
-  const bar = '█'.repeat(filled) + '░'.repeat(empty);
+  const bar = '#'.repeat(filled) + '-'.repeat(empty);
   const barText = barLabel + bar;
 
   const statsW = getDisplayWidth(statsText);
@@ -87,10 +87,10 @@ export function renderTokenBar(
     barStartX += cw;
   }
   for (let i = 0; i < filled && barStartX + i < width; i++) {
-    line[barStartX + i] = { char: '█', fg: barFg, bg: '', bold: false, dim: false, underline: false, italic: false, strikethrough: false };
+    line[barStartX + i] = { char: '#', fg: barFg, bg: '', bold: false, dim: false, underline: false, italic: false, strikethrough: false };
   }
   for (let i = 0; i < empty && barStartX + filled + i < width; i++) {
-    line[barStartX + filled + i] = { char: '░', fg: '238', bg: '', bold: false, dim: true, underline: false, italic: false, strikethrough: false };
+    line[barStartX + filled + i] = { char: '-', fg: '238', bg: '', bold: false, dim: true, underline: false, italic: false, strikethrough: false };
   }
 
   lines.push(line);

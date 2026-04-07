@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import { CommandRegistry } from '../../input/command-registry.ts';
-import { registerLocalRuntimeCommands } from '../../input/commands/local-runtime.ts';
+import { registerRemoteRuntimeCommands } from '../../input/commands/remote-runtime.ts';
 import { createRuntimeStore } from '../../runtime/store/index.ts';
 import { AgentManager } from '../../tools/agent/index.ts';
 
@@ -34,7 +34,7 @@ function makeContext(store = createRuntimeStore()) {
 describe('local runtime remote commands', () => {
   test('shows active remote connection details', async () => {
     const registry = new CommandRegistry();
-    registerLocalRuntimeCommands(registry);
+    registerRemoteRuntimeCommands(registry);
     const store = createRuntimeStore();
     store.setState((state) => ({
       ...state,
@@ -71,7 +71,7 @@ describe('local runtime remote commands', () => {
     const record = manager.spawn({ mode: 'spawn', task: 'Stuck task', template: 'general', tools: [], orchestrationNodeId: 'remote-node', orchestrationGraphId: 'graph-remote' });
 
     const registry = new CommandRegistry();
-    registerLocalRuntimeCommands(registry);
+    registerRemoteRuntimeCommands(registry);
     const store = createRuntimeStore();
     store.setState((state) => ({
       ...state,

@@ -5,6 +5,13 @@ import { createStyledCell, createEmptyLine } from '../types/grid.ts';
 import { BasePanel } from './base-panel.ts';
 import { syntaxHighlighter, type SyntaxToken } from '../renderer/syntax-highlighter.ts';
 import { getDisplayWidth } from '../utils/terminal-width.ts';
+import {
+  buildEmptyState,
+  buildPanelLine,
+  buildPanelWorkspace,
+  DEFAULT_PANEL_PALETTE,
+} from './polish.ts';
+import { getVisibleWindow } from '../renderer/surface-layout.ts';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -149,34 +156,74 @@ export class FilePreviewPanel extends BasePanel {
   // ─── Rendering ───────────────────────────────────────────────────────────────
 
   render(width: number, height: number): Line[] {
-    const lines: Line[] = [];
-
-    // Header bar
-    lines.push(this.renderHeader(width));
-
-    const contentHeight = height - 1; // minus header
-    if (contentHeight <= 0) return lines;
+    const title = this.filePath === null
+      ? ' Preview'
+      : ` Preview / ${path.basename(this.filePath)}`;
+    const intro = this.filePath
+      ? `${this.filePath}${this.fenceTag ? `  [${this.fenceTag}]` : ''}`
+      : 'Open a file to inspect its contents with line numbers and syntax highlighting.';
 
     if (this.filePath === null) {
-      lines.push(...this.renderEmpty(width, contentHeight, 'No file open'));
-      return lines;
+      return buildPanelWorkspace(width, height, {
+        title,
+        intro,
+        sections: [
+          {
+            lines: buildEmptyState(
+              width,
+              ' No file open',
+              'Use the explorer or a file-targeting command to load a file into the preview surface.',
+              [],
+              DEFAULT_PANEL_PALETTE,
+            ),
+          },
+        ],
+        palette: DEFAULT_PANEL_PALETTE,
+      });
     }
 
     if (this.oversized) {
-      lines.push(...this.renderEmpty(width, contentHeight,
-        `File too large to preview (> 100 KB): ${path.basename(this.filePath)}`));
-      return lines;
+      return buildPanelWorkspace(width, height, {
+        title,
+        intro,
+        sections: [
+          {
+            lines: buildEmptyState(
+              width,
+              ` File too large to preview`,
+              `The selected file exceeds the 100 KB preview limit: ${path.basename(this.filePath)}.`,
+              [],
+              DEFAULT_PANEL_PALETTE,
+            ),
+          },
+        ],
+        palette: DEFAULT_PANEL_PALETTE,
+      });
     }
 
     if (this.fileLines.length === 0) {
-      lines.push(...this.renderEmpty(width, contentHeight, '(empty file)'));
-      return lines;
+      return buildPanelWorkspace(width, height, {
+        title,
+        intro,
+        sections: [
+          {
+            lines: buildEmptyState(
+              width,
+              ' Empty file',
+              'The selected file has no content.',
+              [],
+              DEFAULT_PANEL_PALETTE,
+            ),
+          },
+        ],
+        palette: DEFAULT_PANEL_PALETTE,
+      });
     }
 
-    // Clamp in case height changed
-    this.clampScroll(contentHeight);
+    const contentHeight = Math.max(8, height - 8);
+    const window = getVisibleWindow(this.fileLines.length, this.scrollOffset, contentHeight);
+    this.scrollOffset = window.start;
 
-    // Retrieve tree-sitter highlight result (may be null on first render)
     const fullCode = this.fileLines.join('\n');
     const hlLines = this.fenceTag
       ? syntaxHighlighter.highlight(fullCode, this.fenceTag)
@@ -184,14 +231,8 @@ export class FilePreviewPanel extends BasePanel {
 
     const lineNumW = String(this.fileLines.length).length;
     const contentX = lineNumW + 2; // "NNN | "
-
-    for (let i = 0; i < contentHeight; i++) {
-      const fileIdx = this.scrollOffset + i;
-      if (fileIdx >= this.fileLines.length) {
-        // Past end of file — render empty background row
-        lines.push(this.renderBgLine(width));
-        continue;
-      }
+    const previewLines: Line[] = [];
+    for (let fileIdx = window.start; fileIdx < window.end; fileIdx++) {
 
       const rawLine = this.fileLines[fileIdx];
       const tokens: SyntaxToken[] =
@@ -199,54 +240,35 @@ export class FilePreviewPanel extends BasePanel {
           ? (hlLines[fileIdx] as SyntaxToken[])
           : [{ text: rawLine, fg: '' }];
 
-      lines.push(this.renderCodeLine(fileIdx, lineNumW, contentX, tokens, width));
+      previewLines.push(this.renderCodeLine(fileIdx, lineNumW, contentX, tokens, width));
     }
 
     this.needsRender = false;
-    return lines;
-  }
-
-  // ─── Private helpers ─────────────────────────────────────────────────────────
-
-  private renderHeader(width: number): Line {
-    const line = createEmptyLine(width);
-    let label: string;
-
-    if (this.filePath === null) {
-      label = ' Preview ';
-    } else {
-      const basename = path.basename(this.filePath);
-      const lineCount = this.oversized ? '?' : String(this.fileLines.length);
-      label = ` ${basename}  ${lineCount} lines `;
-    }
-
-    // Fill header background
-    for (let x = 0; x < width; x++) {
-      line[x] = createStyledCell(' ', { fg: HEADER_FG, bg: HEADER_BG });
-    }
-
-    // Write label starting at x=1
-    let cx = 1;
-    for (const ch of label) {
-      if (cx >= width - 1) break;
-      const isAccent = ch !== ' ' && cx <= label.length;
-      line[cx] = createStyledCell(ch, {
-        fg: cx === 1 ? HEADER_ACCENT : HEADER_FG,
-        bg: HEADER_BG,
-        bold: true,
-      });
-      cx++;
-    }
-    // Accent the filename portion only
-    let nameEnd = 2;
-    if (this.filePath !== null) {
-      nameEnd = 1 + path.basename(this.filePath).length + 1;
-    }
-    for (let x = 1; x < Math.min(nameEnd, width - 1); x++) {
-      line[x] = createStyledCell(line[x].char, { fg: HEADER_ACCENT, bg: HEADER_BG, bold: true });
-    }
-
-    return line;
+    return buildPanelWorkspace(width, height, {
+      title,
+      intro,
+      sections: [
+        {
+          title: 'Summary',
+          lines: [
+            buildPanelLine(width, [
+              [' Lines ', DEFAULT_PANEL_PALETTE.label],
+              [String(this.fileLines.length), DEFAULT_PANEL_PALETTE.value],
+              ['   Scroll ', DEFAULT_PANEL_PALETTE.label],
+              [`${window.start + 1}-${window.end}`, DEFAULT_PANEL_PALETTE.info],
+            ]),
+          ],
+        },
+        {
+          title: 'Preview',
+          lines: previewLines,
+        },
+      ],
+      footerLines: [
+        buildPanelLine(width, [[' Up/Down', DEFAULT_PANEL_PALETTE.info], [' scroll', DEFAULT_PANEL_PALETTE.dim], ['   PgUp/PgDn', DEFAULT_PANEL_PALETTE.info], [' page', DEFAULT_PANEL_PALETTE.dim], ['   Home/End', DEFAULT_PANEL_PALETTE.info], [' bounds', DEFAULT_PANEL_PALETTE.dim]]),
+      ],
+      palette: DEFAULT_PANEL_PALETTE,
+    });
   }
 
   private renderCodeLine(

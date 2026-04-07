@@ -1,5 +1,6 @@
 import { describe, test, expect, beforeEach } from 'bun:test';
 import { ConversationManager } from '../../core/conversation.ts';
+import { getDisplayWidth } from '../../utils/terminal-width.ts';
 
 // ConversationManager has renderer dependencies for display;
 // we test the LLM message interface and state management which are renderer-independent.
@@ -83,6 +84,37 @@ describe('ConversationManager', () => {
       cm.addAssistantMessage('response');
       cm.resetAll();
       expect(cm.getMessagesForLLM()).toEqual([]);
+    });
+  });
+
+  describe('splash suppression', () => {
+    test('rebuilds history when splash suppression changes', () => {
+      const splashConversation = new ConversationManager(() => 40);
+      const before = splashConversation.getDisplayBlocks().map((line) => line.map((cell) => cell.char).join('')).join('\n');
+      expect(before).toContain('GOODVIBES');
+
+      splashConversation.setSplashSuppressed(true);
+      const after = splashConversation.getDisplayBlocks().map((line) => line.map((cell) => cell.char).join('')).join('\n');
+      expect(after).not.toContain('GOODVIBES');
+    });
+
+    test('rebuilds splash against a narrower width provider before suppression', () => {
+      let width = 96;
+      const splashConversation = new ConversationManager(() => width);
+      const wide = splashConversation.getDisplayBlocks().map((line) => line.map((cell) => cell.char).join(''));
+      expect(wide.join('\n')).toContain('[ ｇｏｏｄ ｖｉｂｅｓ ・ Ａ Ｉ ・ いい雰囲気 ]');
+      expect(wide.every((line) => getDisplayWidth(line) <= width)).toBe(true);
+
+      width = 34;
+      splashConversation.setWidthProvider(() => width);
+      const narrow = splashConversation.getDisplayBlocks().map((line) => line.map((cell) => cell.char).join(''));
+      expect(narrow.join('\n')).toContain('GOODVIBES');
+      expect(narrow.every((line) => getDisplayWidth(line) <= width)).toBe(true);
+
+      splashConversation.setSplashSuppressed(true);
+      const suppressed = splashConversation.getDisplayBlocks().map((line) => line.map((cell) => cell.char).join(''));
+      expect(suppressed.join('\n')).not.toContain('GOODVIBES');
+      expect(suppressed.every((line) => getDisplayWidth(line) <= width)).toBe(true);
     });
   });
 

@@ -34,6 +34,7 @@ describe('KnowledgePanel', () => {
     const text = linesText(panel.render(120, 12));
     expect(text).toContain('Knowledge Control Room');
     expect(text).toContain('No durable project knowledge');
+    expect(text).toContain('Suggested next steps');
   });
 
   test('renders knowledge counts and summaries', async () => {
@@ -47,7 +48,7 @@ describe('KnowledgePanel', () => {
     expect(text).toContain('risks');
     expect(text).toContain('Runbooks');
     expect(text).toContain('Architecture Notes');
-    expect(text).toContain('Recent Incidents');
+    expect(text).toContain('Selected');
     expect(text).toContain('MCP deploy surface');
     expect(text).toContain('Review Queue');
     expect(text).toContain('stale');

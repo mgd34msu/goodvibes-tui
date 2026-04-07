@@ -1,103 +1,154 @@
 import { type Line } from '../types/grid.ts';
-import { UIFactory } from './ui-factory.ts';
-import { getDisplayWidth } from '../utils/terminal-width.ts';
+import { fitDisplay, getDisplayWidth, truncateDisplay } from '../utils/terminal-width.ts';
 import type { AutocompleteEngine } from '../input/autocomplete.ts';
+import {
+  createOverlayBorderLine,
+  createOverlayBoxLayout,
+  createOverlayContentLine,
+  DEFAULT_OVERLAY_PALETTE,
+  putOverlayText,
+} from './overlay-box.ts';
+import { getOverlaySurfaceMetrics } from './overlay-viewport.ts';
 
-/** Maximum number of completions to show at once. */
-const MAX_VISIBLE = 8;
+const BORDER_FG = DEFAULT_OVERLAY_PALETTE.borderFg;
+const TITLE_FG = DEFAULT_OVERLAY_PALETTE.titleFg;
+const BODY_FG = DEFAULT_OVERLAY_PALETTE.bodyFg;
+const MUTED_FG = DEFAULT_OVERLAY_PALETTE.mutedFg;
+const SELECTED_BG = DEFAULT_OVERLAY_PALETTE.selectedBg;
+
+interface CellStyle {
+  fg: string;
+  bg?: string;
+  bold?: boolean;
+  dim?: boolean;
+}
+
+function putText(line: Line, startX: number, maxWidth: number, text: string, style: CellStyle): void {
+  putOverlayText(line, startX, maxWidth, text, style);
+}
 
 /**
  * Render the slash command autocomplete dropdown as Line[] for overlay in the viewport.
- * Shows a bordered box with matching command names and descriptions.
- * The selected item is highlighted in cyan.
  */
 export function renderAutocompleteOverlay(
   autocomplete: AutocompleteEngine,
   width: number,
+  viewportHeight = 24,
 ): Line[] {
   const state = autocomplete.getState();
   if (!state.active || state.results.length === 0) return [];
 
   const lines: Line[] = [];
-  // boxMargin is intentionally 2 (not 4 like other overlays) so the autocomplete
-  // docks close to the input rather than indenting deeply into the viewport.
-  const boxMargin = 2;
-  const boxW = Math.max(20, Math.min(width - boxMargin * 2, 88));
-  const contentW = boxW - 4; // 2 border chars + 2 padding chars each side
-  const pad = ' '.repeat(boxMargin);
+  const metrics = getOverlaySurfaceMetrics(width, viewportHeight, {
+    margin: 2,
+    maxWidth: 88,
+    chromeRows: 4,
+    minContentRows: 6,
+    maxContentRows: 10,
+  });
+  const layout = createOverlayBoxLayout(width, metrics.margin, metrics.boxWidth);
 
-  // ── Title bar ──────────────────────────────────────────────────────────────
-  const titleText = '\u2500 Commands ';
-  const queryDisplay = state.query ? `/${state.query}` : '/';
-  const queryHint = ` ${queryDisplay} `;
-  const availForQuery = Math.max(0, boxW - 2 - getDisplayWidth(titleText));
-  const truncatedHint = getDisplayWidth(queryHint) > availForQuery
-    ? queryHint.slice(0, availForQuery - 1) + '\u2026'
-    : queryHint;
-  const rightW = Math.max(0, boxW - 2 - getDisplayWidth(titleText) - getDisplayWidth(truncatedHint));
-  const titleLine =
-    pad + '\u250c' + titleText + '\u2500'.repeat(rightW) + truncatedHint.trimEnd() + '\u2510';
-  lines.push(UIFactory.stringToLine(titleLine, width, { fg: '#00ffff' }));
+  lines.push(createOverlayBorderLine(width, layout, '┌', '─', '┐'));
 
-  // ── Command list ───────────────────────────────────────────────────────────
+  const titleLine = createOverlayContentLine(width, layout);
+  const titleText = ' Commands';
+  const queryText = state.query ? `/${state.query}` : '/';
+  const queryWidth = Math.min(Math.floor(layout.innerWidth / 2), Math.max(8, layout.innerWidth - getDisplayWidth(titleText) - 2));
+  const leftText = fitDisplay(titleText, Math.max(0, layout.innerWidth - queryWidth));
+  const rightText = truncateDisplay(queryText, queryWidth);
+  putText(titleLine, layout.margin + 2, layout.innerWidth - queryWidth, leftText, { fg: TITLE_FG, bold: true });
+  putText(
+    titleLine,
+    layout.margin + 2 + layout.innerWidth - queryWidth,
+    queryWidth,
+    fitDisplay(rightText, queryWidth),
+    { fg: TITLE_FG, dim: true },
+  );
+  lines.push(titleLine);
+
   const results = state.results;
   const total = results.length;
-
-  // Compute scroll window so selected item is always visible
+  const maxVisible = metrics.contentRows;
   let startIdx = 0;
-  if (total > MAX_VISIBLE) {
+  if (total > maxVisible) {
     startIdx = Math.max(
       0,
       Math.min(
-        state.selectedIndex - Math.floor(MAX_VISIBLE / 2),
-        total - MAX_VISIBLE,
+        state.selectedIndex - Math.floor(maxVisible / 2),
+        total - maxVisible,
       ),
     );
   }
-  const endIdx = Math.min(startIdx + MAX_VISIBLE, total);
+  const endIdx = Math.min(startIdx + maxVisible, total);
+
+  const indicatorWidth = 2;
+  const maxCommandWidth = Math.min(18, Math.max(10, Math.floor(layout.innerWidth * 0.28)));
+  const gapWidth = 2;
+  const descWidth = Math.max(0, layout.innerWidth - indicatorWidth - maxCommandWidth - gapWidth);
 
   for (let i = startIdx; i < endIdx; i++) {
     const { command } = results[i];
     const isSelected = i === state.selectedIndex;
-    const indicator = isSelected ? '\u25b6 ' : '  ';
-
-    // Left column: command name with leading '/' (max ~14 chars)
-    const maxCmdLen = 14;
-    const cmdRaw = '/' + command.name;
-    const cmdStr = cmdRaw.length > maxCmdLen
-      ? cmdRaw.slice(0, maxCmdLen - 1) + '\u2026'
-      : cmdRaw.padEnd(maxCmdLen);
-
-    // Right column: description (remaining space)
-    const gap = 2;
-    const descWidth = contentW - maxCmdLen - gap - 2; // 2 = indicator
-    const descRaw = command.description;
-    const descStr = descRaw.length > descWidth
-      ? descRaw.slice(0, descWidth - 1) + '\u2026'
-      : descRaw;
-    const descPadded = descStr + ' '.repeat(Math.max(0, descWidth - getDisplayWidth(descStr)));
-
-    const rowText = pad + '\u2502 ' + indicator + cmdStr + ' '.repeat(gap) + descPadded + ' \u2502';
-    lines.push(UIFactory.stringToLine(rowText, width, {
-      fg: isSelected ? '#00ffff' : '252',
+    const line = createOverlayContentLine(width, layout, BORDER_FG, isSelected ? SELECTED_BG : '');
+    const indicator = isSelected ? '> ' : '  ';
+    const commandText = fitDisplay(
+      truncateDisplay(`/${command.name}`, maxCommandWidth),
+      maxCommandWidth,
+    );
+    const descriptionText = fitDisplay(
+      truncateDisplay(command.description, descWidth),
+      descWidth,
+    );
+    let x = layout.margin + 2;
+    putText(line, x, indicatorWidth, indicator, {
+      fg: isSelected ? TITLE_FG : MUTED_FG,
+      bg: isSelected ? SELECTED_BG : '',
       bold: isSelected,
-      bg: isSelected ? '#1a2a3a' : '',
-    }));
+    });
+    x += indicatorWidth;
+    putText(line, x, maxCommandWidth, commandText, {
+      fg: isSelected ? TITLE_FG : BODY_FG,
+      bg: isSelected ? SELECTED_BG : '',
+      bold: isSelected,
+    });
+    x += maxCommandWidth;
+    putText(line, x, gapWidth, '  ', {
+      fg: BODY_FG,
+      bg: isSelected ? SELECTED_BG : '',
+    });
+    x += gapWidth;
+    putText(line, x, descWidth, descriptionText, {
+      fg: isSelected ? BODY_FG : MUTED_FG,
+      bg: isSelected ? SELECTED_BG : '',
+      bold: false,
+    });
+    lines.push(line);
   }
 
-  // ── Scroll indicator when list is truncated ───────────────────────────────
-  if (total > MAX_VISIBLE) {
-    const scrollInfo = `${state.selectedIndex + 1}/${total}`;
-    const scrollLine = pad + '\u2502' + ' '.repeat(Math.max(0, boxW - 2 - getDisplayWidth(scrollInfo) - 1)) + scrollInfo + ' \u2502';
-    lines.push(UIFactory.stringToLine(scrollLine, width, { fg: '240', dim: true }));
+  if (total > maxVisible) {
+      const scrollLine = createOverlayContentLine(width, layout);
+    const scrollText = `${state.selectedIndex + 1}/${total}`;
+    putText(
+      scrollLine,
+      layout.margin + 2 + Math.max(0, layout.innerWidth - getDisplayWidth(scrollText)),
+      getDisplayWidth(scrollText),
+      scrollText,
+      { fg: MUTED_FG, dim: true },
+    );
+    lines.push(scrollLine);
   }
 
-  // ── Bottom border with hints ───────────────────────────────────────────────
-  const hints = ' [Tab] Complete  [\u2191\u2193] Navigate  [Enter] Execute  [Esc] Cancel ';
-  const hintW = getDisplayWidth(hints);
-  const bottomLine =
-    pad + '\u2514' + hints + '\u2500'.repeat(Math.max(0, boxW - 2 - hintW)) + '\u2518';
-  lines.push(UIFactory.stringToLine(bottomLine, width, { fg: '240' }));
+  const footerLine = createOverlayContentLine(width, layout);
+  const hints = '[Tab] Complete  [Up/Down] Navigate  [Enter] Execute  [Esc] Cancel';
+  putText(
+    footerLine,
+    layout.margin + 2,
+    layout.innerWidth,
+    fitDisplay(truncateDisplay(hints, layout.innerWidth), layout.innerWidth),
+    { fg: MUTED_FG, dim: true },
+  );
+  lines.push(footerLine);
 
+  lines.push(createOverlayBorderLine(width, layout, '└', '─', '┘', MUTED_FG));
   return lines;
 }

@@ -2,11 +2,12 @@
  * Tests for renderSettingsModal renderer.
  */
 import { describe, test, expect, beforeEach, afterEach } from 'bun:test';
-import { mkdirSync, rmSync, existsSync } from 'fs';
+import { mkdirSync, rmSync, existsSync, writeFileSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
 import { SettingsModal, SETTINGS_CATEGORIES } from '../../input/settings-modal.ts';
 import { ConfigManager } from '../../config/manager.ts';
+import { _resetSubscriptionManagerForTesting } from '../../config/subscriptions.ts';
 import { createFeatureFlagManager } from '../../runtime/feature-flags/manager.ts';
 import type { FeatureFlagManager } from '../../runtime/feature-flags/manager.ts';
 import type { McpRegistry } from '../../mcp/registry.ts';
@@ -22,6 +23,8 @@ function makeTmpDir(): string {
 }
 
 describe('renderSettingsModal', () => {
+  const originalCwd = process.cwd();
+  const originalHome = process.env.HOME;
   let tmpDir: string;
   let cm: ConfigManager;
   let ffm: FeatureFlagManager;
@@ -30,6 +33,8 @@ describe('renderSettingsModal', () => {
 
   beforeEach(() => {
     tmpDir = makeTmpDir();
+    process.env.HOME = tmpDir;
+    process.chdir(tmpDir);
     cm = new ConfigManager({ workingDir: tmpDir });
     ffm = createFeatureFlagManager();
     modal = new SettingsModal();
@@ -47,10 +52,31 @@ describe('renderSettingsModal', () => {
       ],
       setServerTrustMode: () => {},
     } as unknown as McpRegistry;
+    mkdirSync(join(tmpDir, '.goodvibes', 'tui'), { recursive: true });
+    writeFileSync(join(tmpDir, '.goodvibes', 'tui', 'subscriptions.json'), JSON.stringify({
+      version: 1,
+      subscriptions: {
+        openai: {
+          provider: 'openai',
+          accessToken: 'token',
+          tokenType: 'Bearer',
+          authMode: 'oauth',
+          overrideAmbientApiKeys: true,
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+        },
+      },
+      pending: {},
+    }, null, 2));
+    _resetSubscriptionManagerForTesting();
     modal.open(cm, ffm, mcpRegistry);
   });
 
   afterEach(() => {
+    _resetSubscriptionManagerForTesting();
+    process.chdir(originalCwd);
+    if (originalHome === undefined) delete process.env.HOME;
+    else process.env.HOME = originalHome;
     if (existsSync(tmpDir)) rmSync(tmpDir, { recursive: true, force: true });
   });
 
@@ -96,7 +122,7 @@ describe('renderSettingsModal', () => {
 
   test('selected item has arrow indicator', () => {
     const lines = renderSettingsModal(modal, W);
-    const hasArrow = lines.some(line => line.some(cell => cell.char === '\u25b6'));
+    const hasArrow = lines.some(line => line.some(cell => cell.char === '>'));
     expect(hasArrow).toBe(true);
   });
 
@@ -148,6 +174,36 @@ describe('renderSettingsModal', () => {
     const lines = renderSettingsModal(modal, W);
     const texts = linesToText(lines).join('\n');
     expect(texts).toContain('ALLOW ALL docs-server');
+  });
+
+  test('subscriptions category renders provider override state', () => {
+    while (modal.currentCategory !== 'subscriptions') modal.nextCategory();
+    modal.subscriptionEntries = [{
+      provider: 'openai',
+      state: 'active',
+      tokenType: 'Bearer',
+      oauthConfigured: true,
+    }];
+    const lines = renderSettingsModal(modal, W);
+    const texts = linesToText(lines).join('\n');
+    expect(texts).toContain('[SUBSCRIPTIONS]');
+    expect(texts).toContain('openai');
+    expect(texts).toContain('active');
+    expect(texts).toContain('ambient key ov');
+  });
+
+  test('subscriptions category renders explicit logout confirmation guidance when armed', () => {
+    while (modal.currentCategory !== 'subscriptions') modal.nextCategory();
+    modal.subscriptionEntries = [{
+      provider: 'openai',
+      state: 'active',
+      tokenType: 'Bearer',
+      oauthConfigured: true,
+    }];
+    modal.subscriptionLogoutConfirmationTarget = 'openai';
+    const lines = renderSettingsModal(modal, W);
+    const texts = linesToText(lines).join('\n');
+    expect(texts).toContain('Press Enter again to sign out openai');
   });
 
   test('works with narrow terminal width', () => {

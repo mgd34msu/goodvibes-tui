@@ -1,32 +1,60 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { CommandRegistry } from '../../input/command-registry.ts';
+import type { CommandContext } from '../../input/command-registry.ts';
 import { registerBuiltinCommands } from '../../input/commands.ts';
 import { createRuntimeStore } from '../../runtime/store/index.ts';
 import { CONFIG_SCHEMA } from '../../config/index.ts';
 import type { ConfigKey } from '../../config/index.ts';
+import { _resetSubscriptionManagerForTesting, getSubscriptionManager } from '../../config/subscriptions.ts';
+import {
+  _resetSubscriptionBrowserOpenerForTesting,
+  _setSubscriptionBrowserOpenerForTesting,
+} from '../../input/commands/subscription-runtime.ts';
 import { ForensicsRegistry } from '../../runtime/forensics/registry.ts';
 import type { MemoryAddOptions } from '../../state/memory-store.ts';
+import { _resetRemoteRunnerRegistryForTesting, getRemoteRunnerRegistry } from '../../runtime/remote/runner-registry.ts';
+import type { TaskManager } from '../../runtime/tasks/types.ts';
 
 describe('product breadth commands', () => {
   const originalCwd = process.cwd();
   const originalHome = process.env.HOME;
+  const originalPath = process.env.PATH;
+  const originalQemuImgBin = process.env.QEMU_IMG_BIN;
+  const originalFetch = globalThis.fetch;
   let root = '';
 
   beforeEach(() => {
+    _resetRemoteRunnerRegistryForTesting();
+    _resetSubscriptionManagerForTesting();
+    _resetSubscriptionBrowserOpenerForTesting();
     root = mkdtempSync(join(tmpdir(), 'gv-product-commands-'));
     process.env.HOME = root;
     process.chdir(root);
   });
 
   afterEach(() => {
+    _resetRemoteRunnerRegistryForTesting();
+    _resetSubscriptionManagerForTesting();
+    _resetSubscriptionBrowserOpenerForTesting();
+    globalThis.fetch = originalFetch;
     process.chdir(originalCwd);
     if (originalHome === undefined) {
       delete process.env.HOME;
     } else {
       process.env.HOME = originalHome;
+    }
+    if (originalPath === undefined) {
+      delete process.env.PATH;
+    } else {
+      process.env.PATH = originalPath;
+    }
+    if (originalQemuImgBin === undefined) {
+      delete process.env.QEMU_IMG_BIN;
+    } else {
+      process.env.QEMU_IMG_BIN = originalQemuImgBin;
     }
   });
 
@@ -66,6 +94,10 @@ describe('product breadth commands', () => {
         set: (key: ConfigKey, value: unknown) => { values.set(key, value); },
         setDynamic: (key: ConfigKey, value: unknown) => { values.set(key, value); },
         getAll: () => Object.fromEntries(values),
+        getCategory: (category: string) => {
+          const entries = [...values.entries()].filter(([key]) => key.startsWith(`${category}.`));
+          return Object.fromEntries(entries.map(([key, value]) => [key.slice(category.length + 1), value]));
+        },
       } as never,
       runtime: {
         model: '',
@@ -95,6 +127,21 @@ describe('product breadth commands', () => {
           memoryRecords.push(record);
           return record as never;
         },
+        reviewQueue: (_limit: number) => [],
+        exportBundle: (filter?: { scope?: string }) => ({
+          schemaVersion: 'v1',
+          exportedAt: Date.now(),
+          scope: (filter?.scope as 'session' | 'project' | 'team' | 'all' | undefined) ?? 'all',
+          recordCount: memoryRecords.length,
+          linkCount: 0,
+          records: [],
+          links: [],
+        }),
+        importBundle: async () => ({
+          importedRecords: 0,
+          skippedRecords: 0,
+          importedLinks: 0,
+        }),
       } as never,
     };
   }
@@ -176,6 +223,7 @@ describe('product breadth commands', () => {
     await setup!.handler(['review'], ctx);
     expect(out.join('\n')).toContain('Startup Readiness Review');
     expect(out.join('\n')).toContain('skills discovered:');
+    expect(out.join('\n')).toContain('sandbox backend:');
 
     out.length = 0;
     await setup!.handler(['doctor'], ctx);
@@ -186,6 +234,14 @@ describe('product breadth commands', () => {
     await setup!.handler(['onboarding'], ctx);
     expect(out.join('\n')).toContain('Onboarding Checklist');
     expect(out.join('\n')).toContain('/hooks scaffold');
+    expect(out.join('\n')).toContain('sandbox:');
+    expect(out.join('\n')).toContain('/setup sandbox');
+    expect(out.join('\n')).toContain('/sandbox qemu bootstrap .goodvibes/tui/sandbox 20');
+
+    out.length = 0;
+    await setup!.handler(['sandbox'], ctx);
+    expect(out.join('\n')).toContain('Setup Sandbox Review');
+    expect(out.join('\n')).toContain('/sandbox qemu bootstrap .goodvibes/tui/sandbox 20');
 
     const exportPath = join(root, 'artifacts', 'startup-review.json');
     out.length = 0;
@@ -199,6 +255,114 @@ describe('product breadth commands', () => {
     expect(out.join('\n')).toContain('Exported support bundle');
     expect(existsSync(join(supportDir, 'startup-review.json'))).toBe(true);
     expect(existsSync(join(supportDir, 'remote-summary.json'))).toBe(true);
+    expect(existsSync(join(supportDir, 'qemu-wrapper.template.sh'))).toBe(true);
+  });
+
+  test('experience commands expose remote setup/env, tunnel/bootstrap, runner pools, approval workspace, memory review, and voice review', async () => {
+    const registry = new CommandRegistry();
+    registerBuiltinCommands(registry);
+    const remoteSetup = registry.get('remote-setup');
+    const remoteEnv = registry.get('remote-env');
+    const tunnel = registry.get('tunnel');
+    const bootstrap = registry.get('bootstrap');
+    const runnerPool = registry.get('runner-pool');
+    const memoryReview = registry.get('memory-review');
+    const approval = registry.get('approval');
+    const voice = registry.get('voice');
+    expect(remoteSetup).toBeDefined();
+    expect(remoteEnv).toBeDefined();
+    expect(tunnel).toBeDefined();
+    expect(bootstrap).toBeDefined();
+    expect(runnerPool).toBeDefined();
+    expect(memoryReview).toBeDefined();
+    expect(approval).toBeDefined();
+    expect(voice).toBeDefined();
+
+    const out: string[] = [];
+    const ctx = makeContext(out) as ReturnType<typeof makeContext> & { executeCommand?: (name: string, args: string[]) => Promise<boolean> };
+    ctx.executeCommand = async (name, args) => {
+      const delegated = registry.get(name);
+      expect(delegated).toBeDefined();
+      await delegated!.handler(args, ctx);
+      return true;
+    };
+
+    await remoteSetup!.handler(['review'], ctx);
+    expect(out.join('\n')).toContain('Remote Setup Review');
+
+    out.length = 0;
+    await remoteEnv!.handler(['review'], ctx);
+    expect(out.join('\n')).toContain('Remote Environment');
+
+    out.length = 0;
+    await tunnel!.handler(['review'], ctx);
+    expect(out.join('\n')).toContain('Remote Tunnel Review');
+
+    const bootstrapPath = join(root, 'artifacts', 'bootstrap.json');
+    out.length = 0;
+    await bootstrap!.handler(['export', bootstrapPath], ctx);
+    expect(out.join('\n')).toContain('Exported remote bootstrap bundle');
+
+    out.length = 0;
+    await runnerPool!.handler(['list'], ctx);
+    expect(out.join('\n')).toContain('No remote runner pools defined yet.');
+
+    out.length = 0;
+    await memoryReview!.handler(['queue', '5'], ctx);
+    expect(out.join('\n')).toContain('Knowledge review queue is empty');
+
+    out.length = 0;
+    await approval!.handler(['matrix'], ctx);
+    expect(out.join('\n')).toContain('Approval Matrix');
+
+    out.length = 0;
+    await approval!.handler(['review', 'sandbox'], ctx);
+    expect(out.join('\n')).toContain('Approval Review: sandbox');
+    expect(out.join('\n')).toContain('sandbox');
+
+    out.length = 0;
+    await voice!.handler(['review'], ctx);
+    expect(out.join('\n')).toContain('Voice Review');
+  });
+
+  test('memory product commands expose sync, handoff, and scoped session/team flows', async () => {
+    const registry = new CommandRegistry();
+    registerBuiltinCommands(registry);
+    const memorySync = registry.get('memory-sync');
+    const handoff = registry.get('handoff');
+    const sessionMemory = registry.get('session-memory');
+    const teamMemory = registry.get('team-memory');
+    expect(memorySync).toBeDefined();
+    expect(handoff).toBeDefined();
+    expect(sessionMemory).toBeDefined();
+    expect(teamMemory).toBeDefined();
+
+    const out: string[] = [];
+    const ctx = makeContext(out) as ReturnType<typeof makeContext> & { executeCommand?: (name: string, args: string[]) => Promise<boolean> };
+    ctx.executeCommand = async (name, args) => {
+      const delegated = registry.get(name);
+      expect(delegated).toBeDefined();
+      await delegated!.handler(args, ctx);
+      return true;
+    };
+
+    const exportPath = join(root, 'artifacts', 'memory.json');
+    await memorySync!.handler(['export', exportPath, 'project'], ctx);
+    expect(out.join('\n')).toContain('Exported');
+
+    out.length = 0;
+    const handoffPath = join(root, 'artifacts', 'handoff.json');
+    await handoff!.handler(['export', handoffPath, 'team'], ctx);
+    expect(out.join('\n')).toContain('handoff bundle');
+
+    out.length = 0;
+    await sessionMemory!.handler(['queue', '3'], ctx);
+    expect(out.join('\n')).toContain('Review queue');
+
+    out.length = 0;
+    const teamPath = join(root, 'artifacts', 'team-handoff.json');
+    await teamMemory!.handler(['export', teamPath], ctx);
+    expect(out.join('\n')).toContain('handoff bundle');
   });
 
   test('security command prints review and attack-path summaries', async () => {
@@ -534,5 +698,779 @@ describe('product breadth commands', () => {
     out.length = 0;
     await incident!.handler(['capture', 'latest'], ctx);
     expect(out.join('\n')).toContain('Captured incident incident-1 into durable memory');
+  });
+
+  test('trust command exports review posture and portable trust bundles', async () => {
+    const registry = new CommandRegistry();
+    registerBuiltinCommands(registry);
+    const trust = registry.get('trust');
+    expect(trust).toBeDefined();
+
+    const out: string[] = [];
+    const ctx = makeContext(out);
+    ctx.runtimeStore!.setState((state) => ({
+      ...state,
+      mcp: {
+        ...state.mcp,
+        servers: new Map([
+          ['docs', {
+            name: 'docs',
+            displayName: 'Docs',
+            status: 'connected',
+            transport: 'stdio',
+            toolCount: 1,
+            toolNames: ['docs__search'],
+            callCount: 0,
+            errorCount: 0,
+            reconnectAttempts: 0,
+            role: 'docs',
+            trustMode: 'constrained',
+            allowedPaths: [],
+            allowedHosts: [],
+            schemaFreshness: 'fresh',
+          }],
+        ]),
+      },
+    }));
+
+    await trust!.handler(['review'], ctx);
+    expect(out.join('\n')).toContain('Trust Review');
+    expect(out.join('\n')).toContain('permission mode:');
+
+    const bundlePath = join(root, 'artifacts', 'trust-bundle.json');
+    out.length = 0;
+    await trust!.handler(['bundle', 'export', bundlePath], ctx);
+    expect(out.join('\n')).toContain('Trust bundle exported');
+    expect(existsSync(bundlePath)).toBe(true);
+
+    out.length = 0;
+    await trust!.handler(['bundle', 'inspect', bundlePath], ctx);
+    expect(out.join('\n')).toContain('Trust Bundle Review');
+  });
+
+  test('marketplace command exposes combined ecosystem flows', async () => {
+    mkdirSync(join(root, '.goodvibes', 'tui', 'ecosystem'), { recursive: true });
+    mkdirSync(join(root, 'catalog', 'plugins', 'deploy-audit'), { recursive: true });
+    mkdirSync(join(root, 'catalog', 'skills', 'release-gate'), { recursive: true });
+    mkdirSync(join(root, 'catalog', 'hooks', 'guard-pack'), { recursive: true });
+    mkdirSync(join(root, 'catalog', 'policies', 'strict-policy'), { recursive: true });
+    writeFileSync(join(root, 'catalog', 'plugins', 'deploy-audit', 'manifest.json'), JSON.stringify({
+      name: 'deploy-audit',
+      version: '1.0.0',
+      description: 'Reviews deploy surfaces before release',
+    }, null, 2));
+    writeFileSync(join(root, 'catalog', 'plugins', 'deploy-audit', 'index.ts'), 'export function init() {}\n');
+    writeFileSync(join(root, 'catalog', 'skills', 'release-gate', 'SKILL.md'), [
+      '---',
+      'name: release-gate',
+      'description: Runs release certification and deploy checks',
+      '---',
+      '',
+      '@shared/checklist',
+    ].join('\n'));
+    writeFileSync(join(root, 'catalog', 'hooks', 'guard-pack', 'hooks.json'), JSON.stringify({
+      hooks: { 'Pre:tool:*': [{ name: 'guard-edit', match: 'Pre:tool:*', type: 'command', command: 'echo guard' }] },
+      chains: [],
+    }, null, 2));
+    writeFileSync(join(root, 'catalog', 'policies', 'strict-policy', 'policy.json'), JSON.stringify({
+      bundleId: 'strict-policy',
+      rules: [{ id: 'deny-exec', action: 'deny', match: { tool: 'exec' } }],
+    }, null, 2));
+    writeFileSync(join(root, '.goodvibes', 'tui', 'ecosystem', 'plugins.json'), JSON.stringify({
+      version: 1,
+      entries: [{
+        id: 'deploy-audit',
+        kind: 'plugin',
+        name: 'Deploy Audit',
+        summary: 'Reviews deploy surfaces before release',
+        version: '1.0.0',
+        author: 'GoodVibes',
+        source: './catalog/plugins/deploy-audit',
+        tags: ['security'],
+        provenance: 'curated-local',
+        compatibility: { minAppVersion: '0.14.0' },
+      }],
+    }, null, 2));
+    writeFileSync(join(root, '.goodvibes', 'tui', 'ecosystem', 'skills.json'), JSON.stringify({
+      version: 1,
+      entries: [{
+        id: 'release-gate',
+        kind: 'skill',
+        name: 'Release Gate',
+        summary: 'Runs release certification and deploy checks',
+        source: './catalog/skills/release-gate',
+        tags: ['release'],
+      }],
+    }, null, 2));
+    writeFileSync(join(root, '.goodvibes', 'tui', 'ecosystem', 'hook-packs.json'), JSON.stringify({
+      version: 1,
+      entries: [{
+        id: 'guard-pack',
+        kind: 'hook-pack',
+        name: 'Guard Pack',
+        summary: 'Shared hook guards for risky tool paths',
+        source: './catalog/hooks/guard-pack',
+        tags: ['hooks', 'security'],
+      }],
+    }, null, 2));
+    writeFileSync(join(root, '.goodvibes', 'tui', 'ecosystem', 'policy-packs.json'), JSON.stringify({
+      version: 1,
+      entries: [{
+        id: 'strict-policy',
+        kind: 'policy-pack',
+        name: 'Strict Policy',
+        summary: 'Operator-reviewed restrictive policy pack',
+        source: './catalog/policies/strict-policy',
+        tags: ['policy', 'security'],
+      }],
+    }, null, 2));
+
+    const registry = new CommandRegistry();
+    registerBuiltinCommands(registry);
+    const marketplace = registry.get('marketplace');
+    expect(marketplace).toBeDefined();
+
+    const out: string[] = [];
+    const ctx = makeContext(out);
+
+    await marketplace!.handler(['overview'], ctx);
+    expect(out.join('\n')).toContain('Marketplace Overview');
+    expect(out.join('\n')).toContain('curated plugins: 1');
+
+    out.length = 0;
+    await marketplace!.handler(['browse'], ctx);
+    expect(out.join('\n')).toContain('Marketplace Browse');
+    expect(out.join('\n')).toContain('deploy-audit');
+    expect(out.join('\n')).toContain('release-gate');
+    expect(out.join('\n')).toContain('guard-pack');
+    expect(out.join('\n')).toContain('strict-policy');
+
+    out.length = 0;
+    await marketplace!.handler(['review', 'plugin', 'deploy-audit'], ctx);
+    expect(out.join('\n')).toContain('Marketplace Review: Deploy Audit');
+    expect(out.join('\n')).toContain('compatibility:');
+
+    out.length = 0;
+    await marketplace!.handler(['provenance', 'plugin', 'deploy-audit'], ctx);
+    expect(out.join('\n')).toContain('Marketplace Provenance: Deploy Audit');
+    expect(out.join('\n')).toContain('curated-local');
+
+    out.length = 0;
+    await marketplace!.handler(['install-hint', 'skill', 'release-gate'], ctx);
+    expect(out.join('\n')).toContain('Marketplace Install Guidance: Release Gate');
+
+    out.length = 0;
+    await marketplace!.handler(['install', 'hook-pack', 'guard-pack', 'project'], ctx);
+    expect(out.join('\n')).toContain('Installed curated hook-pack guard-pack');
+
+    out.length = 0;
+    await marketplace!.handler(['install', 'policy-pack', 'strict-policy', 'project'], ctx);
+    expect(out.join('\n')).toContain('Installed curated policy-pack strict-policy');
+
+    out.length = 0;
+    await marketplace!.handler(['install', 'plugin', 'deploy-audit', 'project'], ctx);
+    expect(out.join('\n')).toContain('Installed curated plugin deploy-audit');
+    const installedPluginPath = join(root, '.goodvibes', 'plugins', 'deploy-audit', 'index.ts');
+    expect(readFileSync(installedPluginPath, 'utf-8')).toContain('init');
+
+    out.length = 0;
+    await marketplace!.handler(['installed'], ctx);
+    expect(out.join('\n')).toContain('Marketplace Installs');
+    expect(out.join('\n')).toContain('deploy-audit');
+    expect(out.join('\n')).toContain('guard-pack');
+    expect(out.join('\n')).toContain('strict-policy');
+
+    out.length = 0;
+    await marketplace!.handler(['receipt', 'plugin', 'deploy-audit', 'project'], ctx);
+    expect(out.join('\n')).toContain('Marketplace Receipt: Deploy Audit');
+    expect(out.join('\n')).toContain('fingerprint:');
+
+    writeFileSync(join(root, 'catalog', 'plugins', 'deploy-audit', 'index.ts'), 'export function init() { return "updated"; }\n');
+    out.length = 0;
+    await marketplace!.handler(['update', 'plugin', 'deploy-audit', 'project'], ctx);
+    expect(out.join('\n')).toContain('Updated curated plugin deploy-audit');
+    expect(readFileSync(installedPluginPath, 'utf-8')).toContain('updated');
+
+    out.length = 0;
+    await marketplace!.handler(['history', 'plugin', 'deploy-audit', 'project'], ctx);
+    expect(out.join('\n')).toContain('Marketplace Rollback History: plugin deploy-audit');
+    expect(out.join('\n')).toContain('update');
+
+    out.length = 0;
+    await marketplace!.handler(['rollback', 'plugin', 'deploy-audit', 'project'], ctx);
+    expect(out.join('\n')).toContain('Rolled back curated plugin deploy-audit');
+    expect(readFileSync(installedPluginPath, 'utf-8')).toContain('export function init() {}');
+
+    const bundlePath = join(root, 'artifacts', 'marketplace-bundle.json');
+    out.length = 0;
+    await marketplace!.handler(['bundle', 'export', bundlePath, 'project'], ctx);
+    expect(out.join('\n')).toContain('Marketplace bundle exported');
+    expect(existsSync(bundlePath)).toBe(true);
+
+    out.length = 0;
+    await marketplace!.handler(['bundle', 'inspect', bundlePath], ctx);
+    expect(out.join('\n')).toContain('Marketplace Bundle Review');
+
+    out.length = 0;
+    await marketplace!.handler(['bundle', 'import', bundlePath, 'user'], ctx);
+    expect(out.join('\n')).toContain('Marketplace bundle imported');
+
+    out.length = 0;
+    await marketplace!.handler(['uninstall', 'plugin', 'deploy-audit', 'project'], ctx);
+    expect(out.join('\n')).toContain('Uninstalled curated plugin deploy-audit');
+  });
+
+  test('bridge command exposes bridge pools, contracts, and artifact review', async () => {
+    const registry = new CommandRegistry();
+    registerBuiltinCommands(registry);
+    const bridge = registry.get('bridge');
+    expect(bridge).toBeDefined();
+
+    const remote = getRemoteRunnerRegistry();
+    remote.createPool({ id: 'ops-pool', label: 'Ops Pool' });
+    remote.registerContract({
+      id: 'runner:agent-remote',
+      runnerId: 'agent-remote',
+      poolId: 'ops-pool',
+      taskId: 'task-remote',
+      label: 'Ops Runner',
+      sourceTransport: 'acp',
+      trustClass: 'self-hosted-acp',
+      template: 'general',
+      capabilityCeiling: {
+        allowedTools: ['read', 'edit'],
+        capabilityCeilingTools: ['read', 'edit'],
+        executionProtocol: 'gather-plan-apply',
+        reviewMode: 'wrfc',
+        communicationLane: 'parent-only',
+        orchestrationDepth: 2,
+        successCriteria: ['clean result'],
+        requiredEvidence: ['summary'],
+        writeScope: ['src/**'],
+      },
+      createdAt: Date.now(),
+      lastUpdatedAt: Date.now(),
+      transport: {
+        state: 'connected',
+        connectedAt: Date.now(),
+        messageCount: 2,
+        errorCount: 0,
+      },
+    });
+    const importedArtifactPath = join(root, 'artifacts', 'remote-artifact.json');
+    mkdirSync(dirname(importedArtifactPath), { recursive: true });
+    writeFileSync(importedArtifactPath, JSON.stringify({
+      id: 'artifact:agent-remote:1',
+      runnerId: 'agent-remote',
+      createdAt: Date.now(),
+      runnerContract: remote.getContract('agent-remote'),
+      task: {
+        task: 'Review release surfaces',
+        status: 'completed',
+        startedAt: Date.now() - 1000,
+        completedAt: Date.now(),
+        summary: 'Completed remote review',
+      },
+      evidence: {
+        toolCallCount: 3,
+        messageCount: 2,
+        errorCount: 0,
+        transportState: 'connected',
+        hasKnowledgeInjections: false,
+      },
+      knowledgeInjections: [],
+    }, null, 2));
+
+    const out: string[] = [];
+    const ctx = makeContext(out);
+
+    await bridge!.handler(['status'], ctx);
+    expect(out.join('\n')).toContain('Bridge Status');
+
+    out.length = 0;
+    await bridge!.handler(['pools'], ctx);
+    expect(out.join('\n')).toContain('Bridge Pools');
+    expect(out.join('\n')).toContain('ops-pool');
+
+    out.length = 0;
+    await bridge!.handler(['runner', 'agent-remote'], ctx);
+    expect(out.join('\n')).toContain('Bridge Runner agent-remote');
+
+    out.length = 0;
+    await bridge!.handler(['import', importedArtifactPath], ctx);
+    expect(out.join('\n')).toContain('Imported remote bridge artifact');
+
+    out.length = 0;
+    await bridge!.handler(['review', 'artifact:agent-remote:1'], ctx);
+    expect(out.join('\n')).toContain('Remote Artifact artifact:agent-remote:1');
+
+    const exportedPath = join(root, 'artifacts', 'bridge-export.json');
+    out.length = 0;
+    await bridge!.handler(['export', 'artifact:agent-remote:1', exportedPath], ctx);
+    expect(out.join('\n')).toContain('Exported remote bridge artifact');
+    expect(existsSync(exportedPath)).toBe(true);
+  });
+
+  test('release command exposes certification review and release bundles', async () => {
+    const registry = new CommandRegistry();
+    registerBuiltinCommands(registry);
+    const release = registry.get('release');
+    expect(release).toBeDefined();
+
+    const out: string[] = [];
+    const ctx = makeContext(out);
+
+    await release!.handler(['review'], ctx);
+    expect(out.join('\n')).toContain('Release Review');
+    expect(out.join('\n')).toContain('eval suites:');
+
+    out.length = 0;
+    await release!.handler(['checklist'], ctx);
+    expect(out.join('\n')).toContain('Release Checklist');
+    expect(out.join('\n')).toContain('/eval gate <suite>');
+
+    const bundlePath = join(root, 'artifacts', 'release-bundle.json');
+    out.length = 0;
+    await release!.handler(['bundle', 'export', bundlePath], ctx);
+    expect(out.join('\n')).toContain('Release bundle exported');
+    expect(existsSync(bundlePath)).toBe(true);
+
+    out.length = 0;
+    await release!.handler(['bundle', 'inspect', bundlePath], ctx);
+    expect(out.join('\n')).toContain('Release Bundle Review');
+  });
+
+  test('profilesync command exports and imports portable profile bundles', async () => {
+    const registry = new CommandRegistry();
+    registerBuiltinCommands(registry);
+    const profilesync = registry.get('profilesync');
+    const config = registry.get('config');
+    expect(profilesync).toBeDefined();
+    expect(config).toBeDefined();
+
+    const out: string[] = [];
+    const ctx = makeContext(out);
+
+    await config!.handler(['profile', 'save', 'release'], ctx);
+    expect(out.join('\n')).toContain('Profile saved: release');
+
+    const bundlePath = join(root, 'artifacts', 'profiles.json');
+    out.length = 0;
+    await profilesync!.handler(['export', bundlePath], ctx);
+    expect(out.join('\n')).toContain('Profile sync bundle exported');
+    expect(existsSync(bundlePath)).toBe(true);
+
+    out.length = 0;
+    await profilesync!.handler(['inspect', bundlePath], ctx);
+    expect(out.join('\n')).toContain('Profile Sync Bundle Review');
+
+    out.length = 0;
+    await profilesync!.handler(['import', bundlePath, 'team'], ctx);
+    expect(out.join('\n')).toContain('Profile sync bundle imported');
+
+    out.length = 0;
+    await profilesync!.handler(['list'], ctx);
+    expect(out.join('\n')).toContain('team-release');
+  });
+
+  test('managed command exports, inspects, and applies managed settings bundles', async () => {
+    const registry = new CommandRegistry();
+    registerBuiltinCommands(registry);
+    const managed = registry.get('managed');
+    const config = registry.get('config');
+    expect(managed).toBeDefined();
+    expect(config).toBeDefined();
+
+    const out: string[] = [];
+    const ctx = makeContext(out);
+
+    await config!.handler(['provider.model', 'model-1'], ctx);
+    out.length = 0;
+    await config!.handler(['profile', 'save', 'ops'], ctx);
+    expect(out.join('\n')).toContain('Profile saved: ops');
+
+    const bundlePath = join(root, 'artifacts', 'managed.json');
+    out.length = 0;
+    await managed!.handler(['export', 'ops', bundlePath], ctx);
+    expect(out.join('\n')).toContain('Managed settings bundle exported');
+
+    out.length = 0;
+    await managed!.handler(['inspect', bundlePath], ctx);
+    expect(out.join('\n')).toContain('Managed Settings Review');
+
+    await config!.handler(['provider.model', 'changed-model'], ctx);
+    out.length = 0;
+    await managed!.handler(['apply', bundlePath], ctx);
+    expect(out.join('\n')).toContain('Managed settings bundle applied');
+    expect(ctx.runtime.model).toBe('model-1');
+  });
+
+  test('config profile load restores saved provider settings', async () => {
+    const registry = new CommandRegistry();
+    registerBuiltinCommands(registry);
+    const config = registry.get('config');
+    expect(config).toBeDefined();
+
+    const out: string[] = [];
+    const ctx = makeContext(out);
+
+    await config!.handler(['provider.model', 'model-1'], ctx);
+    out.length = 0;
+    await config!.handler(['profile', 'save', 'restore-me'], ctx);
+    expect(out.join('\n')).toContain('Profile saved: restore-me');
+
+    await config!.handler(['provider.model', 'changed-model'], ctx);
+    expect(ctx.runtime.model).toBe('changed-model');
+
+    out.length = 0;
+    await config!.handler(['profile', 'load', 'restore-me'], ctx);
+    expect(out.join('\n')).toContain('Profile loaded: restore-me');
+    expect(ctx.runtime.model).toBe('model-1');
+  });
+
+  test('install command exports and inspects install bundles', async () => {
+    const registry = new CommandRegistry();
+    registerBuiltinCommands(registry);
+    const install = registry.get('install');
+    expect(install).toBeDefined();
+
+    const out: string[] = [];
+    const ctx = makeContext(out);
+
+    await install!.handler(['review'], ctx);
+    expect(out.join('\n')).toContain('Install Review');
+
+    const bundlePath = join(root, 'artifacts', 'install.json');
+    out.length = 0;
+    await install!.handler(['bundle', 'export', bundlePath], ctx);
+    expect(out.join('\n')).toContain('Install bundle exported');
+    expect(existsSync(bundlePath)).toBe(true);
+
+    out.length = 0;
+    await install!.handler(['bundle', 'inspect', bundlePath], ctx);
+    expect(out.join('\n')).toContain('Install Bundle Review');
+  });
+
+  test('update command reviews channel posture and exports update bundles', async () => {
+    const registry = new CommandRegistry();
+    registerBuiltinCommands(registry);
+    const update = registry.get('update');
+    expect(update).toBeDefined();
+
+    const out: string[] = [];
+    const ctx = makeContext(out);
+
+    await update!.handler(['review'], ctx);
+    expect(out.join('\n')).toContain('Update Review');
+    expect(out.join('\n')).toContain('channel:');
+
+    out.length = 0;
+    await update!.handler(['channel', 'preview'], ctx);
+    expect(out.join('\n')).toContain('Update channel set to preview.');
+
+    const bundlePath = join(root, 'artifacts', 'update.json');
+    out.length = 0;
+    await update!.handler(['bundle', 'export', bundlePath], ctx);
+    expect(out.join('\n')).toContain('Update bundle exported');
+
+    out.length = 0;
+    await update!.handler(['bundle', 'inspect', bundlePath], ctx);
+    expect(out.join('\n')).toContain('Update Bundle Review');
+  });
+
+  test('auth command exports review bundles and exchanges session tokens with local services', async () => {
+    const registry = new CommandRegistry();
+    registerBuiltinCommands(registry);
+    const auth = registry.get('auth');
+    expect(auth).toBeDefined();
+    getSubscriptionManager().logout('openai');
+    getSubscriptionManager().logout('anthropic');
+
+    const out: string[] = [];
+    const ctx = makeContext(out);
+
+    await auth!.handler(['review'], ctx);
+    expect(out.join('\n')).toContain('Auth Review');
+    expect(out.join('\n')).toContain('active subscriptions: 0');
+
+    const bundlePath = join(root, 'artifacts', 'auth.json');
+    out.length = 0;
+    await auth!.handler(['bundle', 'export', bundlePath], ctx);
+    expect(out.join('\n')).toContain('Auth review bundle exported');
+
+    out.length = 0;
+    await auth!.handler(['bundle', 'inspect', bundlePath], ctx);
+    expect(out.join('\n')).toContain('Auth Review Bundle');
+    expect(out.join('\n')).toContain('active subscriptions: 0');
+
+    const { DaemonServer } = await import('../../daemon/server.ts');
+    const { UserAuthManager } = await import('../../security/user-auth.ts');
+    const daemon = new DaemonServer({
+      port: 39451,
+      host: '127.0.0.1',
+      userAuth: new UserAuthManager({
+        users: [{ username: 'admin', passwordHash: UserAuthManager.hashPassword('admin'), roles: ['admin'] }],
+      }),
+    });
+    daemon.enable({ daemon: true });
+    await daemon.start();
+    try {
+      out.length = 0;
+      await auth!.handler(['login', 'daemon', 'http://127.0.0.1:39451', 'admin', 'admin', 'DAEMON_SESSION'], ctx);
+      expect(out.join('\n')).toContain('Stored daemon session token');
+    } finally {
+      await daemon.stop();
+    }
+  });
+
+  test('login and logout commands provide a packaged auth front door', async () => {
+    const registry = new CommandRegistry();
+    registerBuiltinCommands(registry);
+    const login = registry.get('login');
+    const logout = registry.get('logout');
+    expect(login).toBeDefined();
+    expect(logout).toBeDefined();
+
+    const out: string[] = [];
+    const ctx = makeContext(out) as ReturnType<typeof makeContext> & Pick<CommandContext, 'executeCommand'>;
+    ctx.executeCommand = async (name: string, args: string[]) => registry.execute(name, args, ctx as never);
+    _setSubscriptionBrowserOpenerForTesting(async () => true);
+
+    await login!.handler(['provider', 'openai', 'start', '--manual'], ctx);
+    expect(out.join('\n')).toContain('Subscription OAuth Start: openai');
+    expect(out.join('\n')).toContain('source: builtin');
+    expect(out.join('\n')).toContain('browser: opened');
+
+    out.length = 0;
+    globalThis.fetch = ((async () => ({
+      ok: true,
+      json: async () => ({ access_token: 'oauth-openai-token', refresh_token: 'oauth-openai-refresh', token_type: 'Bearer', expires_in: 3600 }),
+    })) as unknown) as typeof fetch;
+    await login!.handler(['provider', 'openai', 'finish', 'oauth-code-456'], ctx);
+    expect(out.join('\n')).toContain('Stored subscription session for openai.');
+
+    out.length = 0;
+    await logout!.handler(['provider', 'openai'], ctx);
+    expect(out.join('\n')).toContain('Logged out of openai.');
+  });
+
+  test('sandbox command probes host posture and exports bundles', async () => {
+    const registry = new CommandRegistry();
+    registerBuiltinCommands(registry);
+    const sandbox = registry.get('sandbox');
+    expect(sandbox).toBeDefined();
+
+    const out: string[] = [];
+    const ctx = makeContext(out);
+
+    await sandbox!.handler(['probe'], ctx);
+    expect(out.join('\n')).toContain('Sandbox Probe');
+
+    const bundlePath = join(root, 'artifacts', 'sandbox.json');
+    out.length = 0;
+    await sandbox!.handler(['bundle', 'export', bundlePath], ctx);
+    expect(out.join('\n')).toContain('Sandbox bundle exported');
+
+    out.length = 0;
+    await sandbox!.handler(['bundle', 'inspect', bundlePath], ctx);
+    expect(out.join('\n')).toContain('Sandbox Bundle Review');
+
+    out.length = 0;
+    await sandbox!.handler(['session', 'start', 'eval-py', 'Python', 'isolation'], ctx);
+    expect(out.join('\n')).toContain('Started sandbox session');
+    expect(out.join('\n')).toContain('startup=');
+
+    out.length = 0;
+    await sandbox!.handler(['session', 'list'], ctx);
+    expect(out.join('\n')).toContain('Sandbox Sessions');
+    expect(out.join('\n')).toContain('eval-py');
+
+    const sessionIdMatch = out.join('\n').match(/sandbox_[a-z0-9_]+/i);
+    expect(sessionIdMatch).not.toBeNull();
+
+    out.length = 0;
+    await sandbox!.handler(['session', 'inspect', sessionIdMatch![0]], ctx);
+    expect(out.join('\n')).toContain(`Sandbox session ${sessionIdMatch![0]}`);
+    expect(out.join('\n')).toContain('profile: eval-py');
+
+    out.length = 0;
+    await sandbox!.handler(['session', 'run', sessionIdMatch![0], 'bash', '-lc', 'printf session-run-ok'], ctx);
+    expect(out.join('\n')).toContain('Sandbox session run');
+    expect(out.join('\n')).toContain('session-run-ok');
+
+    const wrapperPath = join(root, 'artifacts', 'qemu-wrapper.sh');
+    out.length = 0;
+    await sandbox!.handler(['scaffold-qemu-wrapper', wrapperPath], ctx);
+    expect(out.join('\n')).toContain('Scaffolded QEMU wrapper');
+
+    out.length = 0;
+    await sandbox!.handler(['guest-test', 'eval-js'], ctx);
+    expect(out.join('\n')).toContain('Sandbox guest test requires sandbox.qemuGuestHost');
+
+    const initDir = join(root, 'artifacts', 'qemu-init');
+    out.length = 0;
+    await sandbox!.handler(['init-qemu', initDir], ctx);
+    expect(out.join('\n')).toContain('Initialized QEMU sandbox bundle');
+    expect(existsSync(join(initDir, 'qemu-wrapper.sh'))).toBe(true);
+    expect(existsSync(join(initDir, 'guest-bundle.json'))).toBe(true);
+    expect(existsSync(join(initDir, 'README.txt'))).toBe(true);
+
+    const binDir = join(root, 'bin');
+    mkdirSync(binDir, { recursive: true });
+    const qemuImgPath = join(binDir, 'qemu-img');
+    writeFileSync(qemuImgPath, '#!/usr/bin/env bash\nset -euo pipefail\n: "${4:?missing image path}"\nmkdir -p "$(dirname "$4")"\n: > "$4"\n', 'utf-8');
+    chmodSync(qemuImgPath, 0o755);
+    process.env.PATH = `${binDir}:${process.env.PATH ?? ''}`;
+    process.env.QEMU_IMG_BIN = qemuImgPath;
+
+    out.length = 0;
+    await sandbox!.handler(['qemu', 'bootstrap', join(root, 'artifacts', 'qemu-bootstrap'), '1'], ctx);
+    expect(out.join('\n')).toContain('Bootstrapped QEMU sandbox');
+    expect(out.join('\n')).toContain('applied: backend=qemu');
+
+    out.length = 0;
+    await sandbox!.handler(['set-qemu-guest-host', '127.0.0.1'], ctx);
+    await sandbox!.handler(['set-qemu-guest-port', '2222'], ctx);
+    await sandbox!.handler(['set-qemu-guest-user', 'goodvibes'], ctx);
+    await sandbox!.handler(['set-qemu-workspace', '/workspace'], ctx);
+    await sandbox!.handler(['set-qemu-session-mode', 'launch-per-command'], ctx);
+    expect(out.join('\n')).toContain('Sandbox QEMU guest host set to 127.0.0.1.');
+    expect(out.join('\n')).toContain('Sandbox QEMU guest workspace set to /workspace.');
+    expect(out.join('\n')).toContain('Sandbox QEMU session mode set to launch-per-command.');
+  });
+
+  test('subscription command manages oauth-backed provider sessions and logout', async () => {
+    const registry = new CommandRegistry();
+    registerBuiltinCommands(registry);
+    const subscription = registry.get('subscription');
+    expect(subscription).toBeDefined();
+
+    const out: string[] = [];
+    const ctx = makeContext(out);
+    _setSubscriptionBrowserOpenerForTesting(async () => true);
+
+    await subscription!.handler(['review'], ctx);
+    expect(out.join('\n')).toContain('No provider subscriptions stored yet');
+
+    out.length = 0;
+    await subscription!.handler(['login', 'openai', 'start', '--manual'], ctx);
+    expect(out.join('\n')).toContain('Subscription OAuth Start: openai');
+    expect(out.join('\n')).toContain('source: builtin');
+    expect(out.join('\n')).toContain('browser: opened');
+    expect(out.join('\n')).toContain('authorizationUrl:');
+
+    globalThis.fetch = ((async () => ({
+      ok: true,
+      json: async () => ({ access_token: 'oauth-openai-token', refresh_token: 'oauth-openai-refresh', token_type: 'Bearer', expires_in: 3600 }),
+    })) as unknown) as typeof fetch;
+
+    out.length = 0;
+    await subscription!.handler(['login', 'openai', 'finish', 'oauth-code-123'], ctx);
+    expect(out.join('\n')).toContain('Stored subscription session for openai');
+    expect(out.join('\n')).toContain('stored for subscription-backed flows only');
+
+    out.length = 0;
+    await subscription!.handler(['inspect', 'openai'], ctx);
+    expect(out.join('\n')).toContain('Subscription openai');
+
+    out.length = 0;
+    await subscription!.handler(['logout', 'openai'], ctx);
+    expect(out.join('\n')).toContain('Logged out of openai');
+  });
+
+  test('sandbox command reviews and updates isolation posture', async () => {
+    const registry = new CommandRegistry();
+    registerBuiltinCommands(registry);
+    const sandbox = registry.get('sandbox');
+    expect(sandbox).toBeDefined();
+
+    const out: string[] = [];
+    const ctx = makeContext(out);
+
+    await sandbox!.handler(['review'], ctx);
+    expect(out.join('\n')).toContain('Sandbox Review');
+    expect(out.join('\n')).toContain('repl isolation');
+
+    out.length = 0;
+    await sandbox!.handler(['recommend'], ctx);
+    expect(out.join('\n')).toContain('Sandbox Recommendation');
+
+    out.length = 0;
+    await sandbox!.handler(['profiles'], ctx);
+    expect(out.join('\n')).toContain('Sandbox Profiles');
+
+    out.length = 0;
+    await sandbox!.handler(['set-mcp', 'per-server-vm'], ctx);
+    expect(out.join('\n')).toContain('Sandbox MCP isolation set to per-server-vm');
+
+    out.length = 0;
+    await sandbox!.handler(['set-repl', 'shared-vm'], ctx);
+    expect(out.join('\n')).toContain('Sandbox REPL isolation set to shared-vm');
+  });
+
+  test('storage and deeplink commands expose platform-service breadth', async () => {
+    const registry = new CommandRegistry();
+    registerBuiltinCommands(registry);
+    const storage = registry.get('storage');
+    const deeplink = registry.get('deeplink');
+    expect(storage).toBeDefined();
+    expect(deeplink).toBeDefined();
+
+    const out: string[] = [];
+    const ctx = makeContext(out);
+
+    await storage!.handler(['review'], ctx);
+    expect(out.join('\n')).toContain('Secure Storage Review');
+
+    out.length = 0;
+    const storageBundle = join(root, 'artifacts', 'storage-bundle.json');
+    await storage!.handler(['bundle', 'export', storageBundle], ctx);
+    expect(out.join('\n')).toContain('Secure storage bundle exported');
+    expect(existsSync(storageBundle)).toBe(true);
+
+    out.length = 0;
+    await deeplink!.handler(['review'], ctx);
+    expect(out.join('\n')).toContain('Deep Link Review');
+    expect(out.join('\n')).toContain('goodvibes://open/marketplace');
+
+    out.length = 0;
+    const deeplinkBundle = join(root, 'artifacts', 'deeplink-bundle.json');
+    await deeplink!.handler(['bundle', 'export', deeplinkBundle], ctx);
+    expect(out.join('\n')).toContain('Deep link bundle exported');
+    expect(existsSync(deeplinkBundle)).toBe(true);
+  });
+
+  test('teamwork command exposes packaged modes, recipes, and task creation', async () => {
+    const registry = new CommandRegistry();
+    registerBuiltinCommands(registry);
+    const teamwork = registry.get('teamwork');
+    expect(teamwork).toBeDefined();
+
+    const out: string[] = [];
+    const created: Array<{ kind: string; owner: string; title: string; description?: string }> = [];
+    const ctx = makeContext(out) as ReturnType<typeof makeContext> & { taskManager?: TaskManager };
+    ctx.taskManager = {
+      createTask(input: { kind: string; owner: string; title: string; description?: string }) {
+        created.push(input);
+        return { id: `task-${created.length}` };
+      },
+    } as never;
+
+    await teamwork!.handler(['modes'], ctx);
+    expect(out.join('\n')).toContain('Teamwork Modes');
+    expect(out.join('\n')).toContain('remote-engineer');
+    expect(out.join('\n')).toContain('dream');
+
+    out.length = 0;
+    await teamwork!.handler(['recipes'], ctx);
+    expect(out.join('\n')).toContain('Teamwork Recipes');
+    expect(out.join('\n')).toContain('remote-certification');
+    expect(out.join('\n')).toContain('dream-then-certify');
+
+    out.length = 0;
+    await teamwork!.handler(['create-mode', 'remote-engineer', 'Remote', 'bridge', 'certification'], ctx);
+    expect(out.join('\n')).toContain('Created teamwork task');
+    expect(created[0]?.kind).toBe('acp');
+    expect(created[0]?.owner).toBe('remote-engineer');
   });
 });

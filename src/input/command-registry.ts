@@ -121,6 +121,8 @@ export interface CommandContext {
   openKnowledgePanel?: () => void;
   /** Open the remote/transport control-room panel. */
   openRemotePanel?: () => void;
+  /** Open the provider subscription control-room panel. */
+  openSubscriptionPanel?: () => void;
   /** ForensicsRegistry for /forensics command subcommands. */
   forensicsRegistry?: import('../runtime/forensics/registry.ts').ForensicsRegistry;
   /** PolicyRegistry for /policy command subcommands. */

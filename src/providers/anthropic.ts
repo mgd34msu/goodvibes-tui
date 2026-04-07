@@ -55,6 +55,12 @@ const ANTHROPIC_MAX_OUTPUT: Array<{ match: (m: string) => boolean; cap: number }
 ];
 const ANTHROPIC_DEFAULT_MAX_OUTPUT = 16384;
 
+function normalizeAnthropicModel(model: string): string {
+  if (model.startsWith('anthropic:')) return model.slice('anthropic:'.length);
+  if (model.startsWith('anthropic/')) return model.slice('anthropic/'.length);
+  return model;
+}
+
 /** Clamp max_tokens to the model's known limit. */
 function clampMaxTokens(model: string, requested: number): number {
   for (const { match, cap } of ANTHROPIC_MAX_OUTPUT) {
@@ -73,7 +79,7 @@ export class AnthropicProvider implements LLMProvider {
   readonly name = 'anthropic';
   readonly models: string[] = [];
 
-  private apiKey: string;
+  private readonly apiKey: string;
 
   constructor(apiKey: string) {
     this.apiKey = apiKey;
@@ -83,13 +89,14 @@ export class AnthropicProvider implements LLMProvider {
     const { messages, tools, model, maxTokens, signal, systemPrompt, onDelta, reasoningEffort } = params;
 
     return withRetry(async () => {
+      const resolvedModel = normalizeAnthropicModel(model);
       // Build Anthropic-formatted messages and tools early so we can inject cache_control.
       const anthropicMessages = toAnthropicMessages(messages);
       const anthropicTools = (tools && tools.length > 0) ? toAnthropicTools(tools) : null;
 
       const body: Record<string, unknown> = {
-        model,
-        max_tokens: clampMaxTokens(model, maxTokens ?? 8192),
+        model: resolvedModel,
+        max_tokens: clampMaxTokens(resolvedModel, maxTokens ?? 8192),
         stream: true,
       };
 
@@ -220,8 +227,8 @@ export class AnthropicProvider implements LLMProvider {
 
       const headers: Record<string, string> = {
         'Content-Type': 'application/json',
-        'x-api-key': this.apiKey,
         'anthropic-version': ANTHROPIC_API_VERSION,
+        'x-api-key': this.apiKey,
       };
       // Build beta headers: thinking and/or extended TTL prompt caching.
       const betaFeatures: string[] = [];
@@ -253,7 +260,7 @@ export class AnthropicProvider implements LLMProvider {
 
       if (!res.ok) {
         const text = await res.text().catch(() => 'unknown error');
-        throw new ProviderError(`Anthropic API error ${res.status}: ${text}`, res.status);
+        throw new ProviderError(formatAnthropicErrorText(res.status, text), res.status);
       }
 
       // Parse SSE stream
@@ -384,5 +391,20 @@ export class AnthropicProvider implements LLMProvider {
         },
       };
     });
+  }
+}
+
+function formatAnthropicErrorText(status: number, text: string): string {
+  try {
+    const parsed = JSON.parse(text) as { error?: unknown; type?: unknown; request_id?: unknown };
+    const details = (() => {
+      if (parsed.error && typeof parsed.error === 'object') return JSON.stringify(parsed.error);
+      if (typeof parsed.error === 'string') return parsed.error;
+      return JSON.stringify(parsed);
+    })();
+    const requestId = typeof parsed.request_id === 'string' ? ` (request_id=${parsed.request_id})` : '';
+    return `Anthropic API error ${status}: ${details}${requestId}`;
+  } catch {
+    return `Anthropic API error ${status}: ${text}`;
   }
 }

@@ -1,5 +1,5 @@
-import type { Line, Cell } from '../types/grid.ts';
-import { createEmptyLine, createStyledCell } from '../types/grid.ts';
+import type { Line } from '../types/grid.ts';
+import { createEmptyLine } from '../types/grid.ts';
 import { BasePanel } from './base-panel.ts';
 import {
   ServiceRegistry,
@@ -7,8 +7,18 @@ import {
   type ServiceInspection,
   type ServiceConnectionTestResult,
 } from '../config/service-registry.ts';
+import { getSubscriptionManager } from '../config/subscriptions.ts';
+import {
+  buildEmptyState,
+  buildPanelLine,
+  buildPanelWorkspace,
+  DEFAULT_PANEL_PALETTE,
+  type PanelWorkspaceSection,
+} from './polish.ts';
+import { getTrackedVisibleWindow } from '../renderer/surface-layout.ts';
 
 const C = {
+  ...DEFAULT_PANEL_PALETTE,
   header: '#94a3b8',
   headerBg: '#1e293b',
   label: '#64748b',
@@ -28,17 +38,6 @@ interface ServicePanelEntry {
   readonly lastTest?: ServiceConnectionTestResult;
 }
 
-function buildLine(width: number, segments: Array<[string, string, string?]>): Line {
-  const cells: Cell[] = [];
-  let used = 0;
-  for (const [text, fg, bg] of segments) {
-    cells.push(createStyledCell(text, { fg, bg: bg ?? '' }));
-    used += text.length;
-  }
-  if (used < width) cells.push(createStyledCell(' '.repeat(width - used), { fg: '' }));
-  return cells;
-}
-
 function statusLabel(entry: ServicePanelEntry): string {
   if (!entry.inspection.hasPrimaryCredential) return 'UNCONFIGURED';
   if (entry.lastTest?.ok) return 'HEALTHY';
@@ -55,13 +54,21 @@ function statusColor(entry: ServicePanelEntry): string {
 }
 
 function authSummary(config: ServiceConfig): string {
+  const provider = config.providerId ?? config.name;
+  const manager = getSubscriptionManager();
+  const hasActiveSubscription = manager.get(provider) != null;
+  const hasOverride = manager.getAccessToken(provider) != null;
   switch (config.authType) {
     case 'bearer':
-      return 'bearer';
+      return hasOverride ? 'bearer+subscription' : 'bearer';
     case 'basic':
       return 'basic';
     case 'api-key':
-      return config.apiKeyHeader ? `api-key:${config.apiKeyHeader}` : 'api-key';
+      return hasOverride
+        ? 'oauth-override'
+        : config.apiKeyHeader ? `api-key:${config.apiKeyHeader}` : 'api-key';
+    case 'oauth':
+      return hasActiveSubscription ? 'oauth(active)' : 'oauth';
   }
 }
 
@@ -69,6 +76,7 @@ export class ServicesPanel extends BasePanel {
   private readonly registry: ServiceRegistry;
   private entries: ServicePanelEntry[] = [];
   private selectedIndex = 0;
+  private scrollOffset = 0;
   private loading = false;
 
   public constructor(registry: ServiceRegistry = new ServiceRegistry()) {
@@ -142,31 +150,48 @@ export class ServicesPanel extends BasePanel {
 
   public render(width: number, height: number): Line[] {
     this.needsRender = false;
-    const lines: Line[] = [];
-    lines.push(buildLine(width, [[' Service Control Room', C.header, C.headerBg]]));
+    const intro = 'Credential posture, subscription overrides, and live connection checks for configured services.';
 
     if (this.loading && this.entries.length === 0) {
-      lines.push(buildLine(width, [[' Loading configured services…', C.info]]));
+      const lines = buildPanelWorkspace(width, height, {
+        title: 'Service Control Room',
+        intro,
+        sections: [{ lines: [buildPanelLine(width, [[' Loading configured services...', C.info]])] }],
+        palette: C,
+      });
       while (lines.length < height) lines.push(createEmptyLine(width));
       return lines;
     }
 
     if (this.entries.length === 0) {
-      lines.push(buildLine(width, [[' No services configured. Add entries to .goodvibes/tui/services.json and secrets via /secrets.', C.empty]]));
-      while (lines.length < height) lines.push(createEmptyLine(width));
-      return lines;
+      const workspace = buildPanelWorkspace(width, height, {
+        title: 'Service Control Room',
+        intro,
+        sections: [{
+          lines: buildEmptyState(
+            width,
+            ' No services configured.',
+            'Add entries to .goodvibes/tui/services.json and store secrets before using service-backed product flows.',
+            [
+              { command: '/services auth-review', summary: 'inspect service auth posture and registry config' },
+              { command: '/subscription', summary: 'review provider login state and override posture' },
+            ],
+            C,
+          ),
+        }],
+        palette: C,
+      });
+      while (workspace.length < height) workspace.push(createEmptyLine(width));
+      return workspace;
     }
 
-    const bodyHeight = Math.max(1, height - 1);
-    const visibleRows = Math.max(1, bodyHeight - 7);
-    const start = Math.max(0, Math.min(this.selectedIndex - Math.floor(visibleRows / 2), this.entries.length - visibleRows));
-    const visible = this.entries.slice(start, start + visibleRows);
-
-    for (let index = 0; index < visible.length; index++) {
-      const entry = visible[index]!;
-      const absoluteIndex = start + index;
-      const bg = absoluteIndex === this.selectedIndex ? C.selectBg : undefined;
-      lines.push(buildLine(width, [
+    const window = getTrackedVisibleWindow(this.entries.length, this.selectedIndex, Math.max(4, height - 12), this.scrollOffset, 1);
+    this.scrollOffset = window.start;
+    const listLines: Line[] = [];
+    for (let absolute = window.start; absolute < window.end; absolute++) {
+      const entry = this.entries[absolute]!;
+      const bg = absolute === this.selectedIndex ? C.selectBg : undefined;
+      listLines.push(buildPanelLine(width, [
         [' ', C.label, bg],
         [entry.name.padEnd(16), C.value, bg],
         [` ${statusLabel(entry).padEnd(12)}`, statusColor(entry), bg],
@@ -174,28 +199,32 @@ export class ServicesPanel extends BasePanel {
         [` ${entry.inspection.config.baseUrl ?? '(no baseUrl)'}`, C.dim, bg],
       ]));
     }
+    if (this.entries.length > window.end - window.start) {
+      listLines.push(buildPanelLine(width, [[`  showing ${window.start + 1}-${window.end} of ${this.entries.length}`, C.dim]]));
+    }
 
     const selected = this.entries[this.selectedIndex]!;
     const inspect = selected.inspection;
-    lines.push(buildLine(width, [[' Details', C.label]]));
-    lines.push(buildLine(width, [
-      ['  Service: ', C.label],
-      [selected.name, C.value],
-      ['  State: ', C.label],
-      [statusLabel(selected), statusColor(selected)],
-      ['  Auth: ', C.label],
-      [authSummary(inspect.config), C.info],
-    ]));
-    lines.push(buildLine(width, [
-      ['  Primary credential: ', C.label],
-      [inspect.hasPrimaryCredential ? 'present' : 'missing', inspect.hasPrimaryCredential ? C.ok : C.error],
-      ['  Webhook URL: ', C.label],
-      [inspect.hasWebhookUrl ? 'present' : 'missing', inspect.hasWebhookUrl ? C.ok : C.dim],
-      ['  Signing secret: ', C.label],
-      [inspect.hasSigningSecret ? 'present' : 'missing', inspect.hasSigningSecret ? C.ok : C.dim],
-    ]));
+    const detailLines: Line[] = [
+      buildPanelLine(width, [
+        ['  Service: ', C.label],
+        [selected.name, C.value],
+        ['  State: ', C.label],
+        [statusLabel(selected), statusColor(selected)],
+        ['  Auth: ', C.label],
+        [authSummary(inspect.config), C.info],
+      ]),
+      buildPanelLine(width, [
+        ['  Primary credential: ', C.label],
+        [inspect.hasPrimaryCredential ? 'present' : 'missing', inspect.hasPrimaryCredential ? C.ok : C.error],
+        ['  Webhook URL: ', C.label],
+        [inspect.hasWebhookUrl ? 'present' : 'missing', inspect.hasWebhookUrl ? C.ok : C.dim],
+        ['  Signing secret: ', C.label],
+        [inspect.hasSigningSecret ? 'present' : 'missing', inspect.hasSigningSecret ? C.ok : C.dim],
+      ]),
+    ];
     if (selected.lastTest) {
-      lines.push(buildLine(width, [
+      detailLines.push(buildPanelLine(width, [
         ['  Last test: ', C.label],
         [selected.lastTest.ok ? 'ok' : 'failed', selected.lastTest.ok ? C.ok : C.error],
         ['  Status: ', C.label],
@@ -204,16 +233,27 @@ export class ServicesPanel extends BasePanel {
         [(selected.lastTest.testedUrl ?? 'n/a').slice(0, Math.max(0, width - 34)), C.dim],
       ]));
       if (selected.lastTest.error) {
-        lines.push(buildLine(width, [
+        detailLines.push(buildPanelLine(width, [
           ['  Error: ', C.label],
           [selected.lastTest.error.slice(0, Math.max(0, width - 10)), C.error],
         ]));
       }
     } else {
-      lines.push(buildLine(width, [['  Press t to test the selected service or r to refresh credential status.', C.dim]]));
+      detailLines.push(buildPanelLine(width, [['  Press t to test the selected service or r to refresh credential status.', C.dim]]));
     }
-    lines.push(buildLine(width, [['  Services resolve credentials through the encrypted secrets store and project-local config.', C.dim]]));
+    detailLines.push(buildPanelLine(width, [['  Services resolve credentials through the encrypted secrets store and project-local config.', C.dim]]));
 
+    const sections: PanelWorkspaceSection[] = [
+      { title: 'Services', lines: listLines },
+      { title: 'Details', lines: detailLines },
+    ];
+    const lines = buildPanelWorkspace(width, height, {
+      title: 'Service Control Room',
+      intro,
+      sections,
+      footerLines: [buildPanelLine(width, [['  Up/Down move  t test selected service  r refresh inspections', C.dim]])],
+      palette: C,
+    });
     while (lines.length < height) lines.push(createEmptyLine(width));
     return lines.slice(0, height);
   }

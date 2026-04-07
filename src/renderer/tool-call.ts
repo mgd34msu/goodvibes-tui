@@ -2,6 +2,7 @@ import { type Line, createStyledCell, createEmptyLine } from '../types/grid.ts';
 import { LAYOUT, TOOL_STATUS } from './layout.ts';
 import { getDisplayWidth } from '../utils/terminal-width.ts';
 import type { ToolCall } from '../types/tools.ts';
+import { renderConversationKeyValueRow } from './conversation-surface.ts';
 
 const KEY_ARG_RIGHT_RESERVE = 20;
 const SUMMARY_RIGHT_RESERVE = 8;
@@ -114,7 +115,7 @@ export function renderToolCallBlock(
 
   // Error message (for failed calls)
   if (status === 'error' && errorMsg) {
-    const errText = ' — ' + errorMsg.slice(0, 40);
+    const errText = ' - ' + errorMsg.slice(0, 40);
     for (const ch of errText) {
       if (col >= width - rightMargin) break;
       line[col] = createStyledCell(ch, { fg: '#ef4444', dim: true });
@@ -156,7 +157,24 @@ export function renderToolCallBlock(
     }
   }
 
-  return [line];
+  // Normalize the base row through the shared conversation row contract.
+  const rightText = (() => {
+    if (durationMs !== undefined && status === 'done') {
+      return durationMs < 1000 ? `${durationMs}ms` : `${(durationMs / 1000).toFixed(1)}s`;
+    }
+    return status === 'executing' ? '...' : '';
+  })();
+  const leftText = line.map((cell) => cell.char).join('').trimEnd();
+  const normalized = renderConversationKeyValueRow(width, leftText, rightText, {
+    leftFg: '#e2e8f0',
+    rightFg: '238',
+  });
+  // Re-apply rich cell styling from the original row where present.
+  for (let i = 0; i < width; i++) {
+    if (line[i].char !== ' ') normalized[i] = line[i];
+  }
+
+  return [normalized];
 }
 
 /**

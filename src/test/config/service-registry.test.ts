@@ -1,12 +1,14 @@
 import { describe, test, expect, beforeEach, afterEach } from 'bun:test';
-import { mkdirSync, writeFileSync, rmSync } from 'fs';
+import { existsSync, mkdirSync, writeFileSync, rmSync } from 'fs';
 import { join } from 'path';
-import { tmpdir } from 'os';
+import { homedir, tmpdir } from 'os';
 import {
   ServiceRegistry,
   _resetServiceRegistryForTesting,
 } from '../../config/service-registry.ts';
 import { SecretsManager, _resetSecretsManagerForTesting } from '../../config/secrets.ts';
+import { getSubscriptionManager, _resetSubscriptionManagerForTesting } from '../../config/subscriptions.ts';
+const originalFetch = globalThis.fetch;
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -22,6 +24,13 @@ function writeServicesFile(dir: string, services: Record<string, unknown>): stri
   const filePath = join(dir, 'services.json');
   writeFileSync(filePath, JSON.stringify(services, null, 2) + '\n', 'utf-8');
   return filePath;
+}
+
+function clearDefaultSubscriptionStore(): void {
+  const filePath = join(homedir(), '.goodvibes', 'tui', 'subscriptions.json');
+  if (existsSync(filePath)) {
+    rmSync(filePath, { force: true });
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -95,6 +104,8 @@ describe('ServiceRegistry - resolveAuth bearer', () => {
   beforeEach(() => {
     _resetSecretsManagerForTesting();
     _resetServiceRegistryForTesting();
+    _resetSubscriptionManagerForTesting();
+    clearDefaultSubscriptionStore();
     dir = makeTmpDir();
     encPath = join(dir, 'secrets.enc');
     servicesPath = join(dir, 'services.json');
@@ -103,6 +114,9 @@ describe('ServiceRegistry - resolveAuth bearer', () => {
   afterEach(() => {
     _resetSecretsManagerForTesting();
     _resetServiceRegistryForTesting();
+    _resetSubscriptionManagerForTesting();
+    clearDefaultSubscriptionStore();
+    globalThis.fetch = originalFetch;
     rmSync(dir, { recursive: true, force: true });
   });
 
@@ -148,6 +162,31 @@ describe('ServiceRegistry - resolveAuth bearer', () => {
     const registry = new ServiceRegistry(servicesPath);
     const headers = await registry.resolveAuth('nonexistent');
     expect(headers).toBeNull();
+  });
+
+  test('prefers provider subscription token over ambient bearer token', async () => {
+    writeServicesFile(dir, {
+      openai: { name: 'openai', authType: 'bearer', tokenKey: 'OPENAI_API_KEY', providerId: 'openai' },
+    });
+    process.env['OPENAI_API_KEY'] = 'env-token';
+    const manager = getSubscriptionManager();
+    const oauth = {
+      authUrl: 'https://auth.example.com/authorize',
+      tokenUrl: 'https://auth.example.com/token',
+      clientId: 'client-id',
+      redirectUri: 'http://127.0.0.1/callback',
+      scopes: ['chat'],
+    } as const;
+    manager.beginOAuthLogin('openai', oauth);
+    globalThis.fetch = ((async () => ({
+      ok: true,
+      json: async () => ({ access_token: 'subscription-token', token_type: 'Bearer' }),
+    })) as unknown) as typeof fetch;
+    await manager.completeOAuthLogin('openai', oauth, 'code-123');
+    const registry = new ServiceRegistry(servicesPath);
+    const headers = await registry.resolveAuth('openai');
+    expect(headers).not.toBeNull();
+    expect(headers!['Authorization']).toBe('Bearer subscription-token');
   });
 });
 

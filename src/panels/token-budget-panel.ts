@@ -1,6 +1,13 @@
 import { BasePanel } from './base-panel.ts';
 import { createEmptyLine, createStyledCell, type Line } from '../types/grid.ts';
 import type { Orchestrator } from '../core/orchestrator.ts';
+import {
+  buildEmptyState,
+  buildStyledPanelLine,
+  buildPanelWorkspace,
+  DEFAULT_PANEL_PALETTE,
+  type PanelWorkspaceSection,
+} from './polish.ts';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -176,57 +183,52 @@ export class TokenBudgetPanel extends BasePanel {
   // ---------------------------------------------------------------------------
 
   override render(width: number, height: number): Line[] {
-    const lines: Line[] = [];
+    const sections: PanelWorkspaceSection[] = [];
 
-    // 1. Panel title
-    lines.push(this.renderTitle(width));
-    lines.push(createEmptyLine(width));
-
-    // 2. Context window progress bar (only when contextWindow is known)
     if (this.contextWindow > 0) {
-      lines.push(...this.renderContextBar(width));
-      lines.push(createEmptyLine(width));
+      sections.push({
+        title: 'Context',
+        lines: this.renderContextBar(width),
+      });
     }
 
-    // 3. Session stacked bar
-    lines.push(...this.renderStackedBar(width, this.sessionUsage, 'Session'));
-    lines.push(createEmptyLine(width));
+    sections.push({
+      title: 'Session',
+      lines: [
+        ...this.renderStackedBar(width, this.sessionUsage, 'Session'),
+        ...this.renderTotals(width),
+      ],
+    });
 
-    // 4. Session cumulative totals
-    lines.push(...this.renderTotals(width));
-    lines.push(createEmptyLine(width));
-
-    // 5. Per-turn history table
     if (this.turnHistory.length > 0) {
-      lines.push(...this.renderTurnHistory(width, height - lines.length - 1));
+      sections.push({
+        title: 'Recent Turns',
+        lines: this.renderTurnHistory(width, Math.max(6, height - 10)),
+      });
     } else {
-      lines.push(this.paintTextLine('  No turns recorded yet.', width, C.dim, { dim: true }));
+      sections.push({
+        title: 'Recent Turns',
+        lines: buildEmptyState(
+          width,
+          ' No turns recorded yet',
+          'Token deltas appear here after completed turns so you can see context growth and cache usage.',
+          [],
+          DEFAULT_PANEL_PALETTE,
+        ),
+      });
     }
 
-    // Pad to height
-    while (lines.length < height) lines.push(createEmptyLine(width));
-    // Trim to height
-    return lines.slice(0, height);
-  }
-
-  // ---------------------------------------------------------------------------
-  // Render helpers
-  // ---------------------------------------------------------------------------
-
-  private renderTitle(width: number): Line {
-    const line = createEmptyLine(width);
-    const text = ' Token Budget';
-    let x = 0;
-    for (const ch of text) {
-      if (x >= width) break;
-      line[x++] = createStyledCell(ch, { fg: C.title, bold: true });
-    }
-    return line;
+    return buildPanelWorkspace(width, height, {
+      title: ' Token Budget',
+      intro: 'Live context pressure, session token composition, cache usage, and recent turn deltas.',
+      sections,
+      palette: DEFAULT_PANEL_PALETTE,
+    });
   }
 
   /**
    * Renders a compact stacked proportion bar:
-   *   [████████░░░░░░░░░░░░] (input=cyan, output=purple, cacheR=green, cacheW=yellow)
+   *   [########............] (input=cyan, output=purple, cacheR=green, cacheW=yellow)
    */
   private renderStackedBar(
     width: number,
@@ -266,22 +268,13 @@ export class TokenBudgetPanel extends BasePanel {
     }
 
     // Build bar line
-    const barLine = createEmptyLine(width);
-    let x = 2;
-    barLine[0] = createStyledCell(' ', {});
-    barLine[1] = createStyledCell('[', { fg: C.label });
-    for (const seg of segments) {
-      for (let i = 0; i < seg.cells; i++) {
-        if (x >= width - 1) break;
-        barLine[x++] = createStyledCell('█', { fg: seg.color });
-      }
-    }
-    // Fill remaining bar width with dim background
-    while (x < 2 + BAR_W && x < width - 1) {
-      barLine[x++] = createStyledCell('░', { fg: C.barBg });
-    }
-    if (x < width) barLine[x++] = createStyledCell(']', { fg: C.label });
-    lines.push(barLine);
+    const usedCells = segments.reduce((sum, seg) => sum + seg.cells, 0);
+    lines.push(buildStyledPanelLine(width, [
+      { text: ' [', fg: C.label },
+      ...segments.map((seg) => ({ text: '#'.repeat(seg.cells), fg: seg.color })),
+      { text: '.'.repeat(Math.max(0, BAR_W - usedCells)), fg: C.barBg },
+      { text: ']', fg: C.label },
+    ]));
 
     // Legend line: In:12.3k  Out:4.5k  CR:6.7k  CW:1.2k  Total:24.7k
     const allSegs = [
@@ -290,26 +283,14 @@ export class TokenBudgetPanel extends BasePanel {
       { color: C.cacheRead,  label: 'CR',    count: u.cacheRead },
       { color: C.cacheWrite, label: 'CW',    count: u.cacheWrite },
     ];
-    const legendLine = createEmptyLine(width);
-    let lx = 2;
-    for (const seg of allSegs) {
-      const part = ` ${seg.label}:${fmtTok(seg.count)}`;
-      const colonIdx = part.indexOf(':');
-      let charIdx = 0;
-      for (const ch of part) {
-        if (lx >= width) break;
-        const isLabel = charIdx <= colonIdx;
-        legendLine[lx++] = createStyledCell(ch, { fg: isLabel ? seg.color : C.value });
-        charIdx++;
-      }
-    }
-    // Total
-    const totalStr = `  Total:${fmtTok(total)}`;
-    for (const ch of totalStr) {
-      if (lx >= width) break;
-      legendLine[lx++] = createStyledCell(ch, { fg: C.value, bold: true });
-    }
-    lines.push(legendLine);
+    lines.push(buildStyledPanelLine(width, [
+      { text: ' ', fg: C.dim },
+      ...allSegs.flatMap((seg) => ([
+        { text: `${seg.label}:`, fg: seg.color },
+        { text: `${fmtTok(seg.count)} `, fg: C.value },
+      ])),
+      { text: ` Total:${fmtTok(total)}`, fg: C.value, bold: true },
+    ]));
 
     return lines;
   }
@@ -327,10 +308,10 @@ export class TokenBudgetPanel extends BasePanel {
     let warnSuffix = '';
     if (pct >= WARN_RED) {
       barColor = C.warnRed;
-      warnSuffix = ' ⚠ CRITICAL';
+      warnSuffix = ' ! CRITICAL';
     } else if (pct >= WARN_YELLOW) {
       barColor = C.warnYellow;
-      warnSuffix = ' ⚠ HIGH';
+      warnSuffix = ' ! HIGH';
     } else {
       barColor = C.good;
     }
@@ -339,10 +320,12 @@ export class TokenBudgetPanel extends BasePanel {
     const suffix = ` ${fmtTok(this.lastInputTokens)}/${fmtTok(this.contextWindow)} (${pctInt}%)${warnSuffix}`;
     const BAR_W = Math.max(8, width - label.length - suffix.length - 2);
     const filled = Math.round(pct * BAR_W);
-    const bar = '█'.repeat(filled) + '░'.repeat(BAR_W - filled);
-    const full = label + bar + suffix;
-
-    lines.push(this.paintTextLine(full.slice(0, width), width, barColor, { dim: pct < WARN_YELLOW }));
+    lines.push(buildStyledPanelLine(width, [
+      { text: label, fg: C.label },
+      { text: '#'.repeat(filled), fg: barColor, dim: pct < WARN_YELLOW },
+      { text: '.'.repeat(Math.max(0, BAR_W - filled)), fg: C.barBg, dim: pct < WARN_YELLOW },
+      { text: suffix, fg: barColor, dim: pct < WARN_YELLOW },
+    ]));
     return lines;
   }
 
@@ -364,18 +347,10 @@ export class TokenBudgetPanel extends BasePanel {
 
     for (const [lbl, val, color] of rows) {
       if (lines.length >= 8) break; // guard — don't overflow the section
-      const line = createEmptyLine(width);
-      let x = 0;
-      for (const ch of lbl) {
-        if (x >= width) break;
-        line[x++] = createStyledCell(ch, { fg: C.label });
-      }
-      const valStr = fmtTok(val);
-      for (const ch of valStr) {
-        if (x >= width) break;
-        line[x++] = createStyledCell(ch, { fg: color, bold: lbl.includes('Total') });
-      }
-      lines.push(line);
+      lines.push(buildStyledPanelLine(width, [
+        { text: lbl, fg: C.label },
+        { text: fmtTok(val), fg: color, bold: lbl.includes('Total') },
+      ]));
     }
 
     return lines;
@@ -384,9 +359,6 @@ export class TokenBudgetPanel extends BasePanel {
   /** Last N turns table: turn#, in, out, CR, CW, total. */
   private renderTurnHistory(width: number, maxRows: number): Line[] {
     const lines: Line[] = [];
-
-    const headerLabel = ` Recent Turns (last ${MAX_TURN_HISTORY}):`;
-    lines.push(this.paintTextLine(headerLabel, width, C.label));
 
     // Column headers
     const colLine = createEmptyLine(width);
@@ -402,7 +374,7 @@ export class TokenBudgetPanel extends BasePanel {
     }
     lines.push(colLine);
 
-    const available = Math.max(0, maxRows - 2); // minus header + col header
+    const available = Math.max(0, maxRows - 1); // minus col header
     const toShow = this.turnHistory.slice(-Math.max(0, available));
 
     toShow.forEach((t, i) => {
@@ -417,15 +389,7 @@ export class TokenBudgetPanel extends BasePanel {
         [fmtTok(t.cacheWrite).padStart(6), C.cacheWrite],
         [fmtTok(total).padStart(9),        C.value],
       ];
-      const row = createEmptyLine(width);
-      let rx = 0;
-      for (const [val, color] of cells) {
-        for (const ch of val) {
-          if (rx >= width) break;
-          row[rx++] = createStyledCell(ch, { fg: color });
-        }
-      }
-      lines.push(row);
+      lines.push(buildStyledPanelLine(width, cells.map(([val, color]) => ({ text: val, fg: color }))));
     });
 
     return lines;

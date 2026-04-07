@@ -47,9 +47,11 @@ describe('ProfilePickerModal', () => {
   test('close() deactivates modal and clears statusMessage', () => {
     modal.active = true;
     modal.statusMessage = 'something';
+    modal.deleteConfirmationTarget = 'work-profile';
     modal.close();
     expect(modal.active).toBe(false);
     expect(modal.statusMessage).toBe('');
+    expect(modal.deleteConfirmationTarget).toBeNull();
   });
 
   test('navigation wraps around (moveUp from 0 → last)', () => {
@@ -68,8 +70,10 @@ describe('ProfilePickerModal', () => {
       { name: 'b', timestamp: 2, filePath: '/b' },
     ];
     modal.selectedIndex = 0;
+    modal.deleteConfirmationTarget = 'a';
     modal.moveDown();
     expect(modal.selectedIndex).toBe(1);
+    expect(modal.deleteConfirmationTarget).toBeNull();
   });
 
   test('moveDown wraps around', () => {
@@ -107,15 +111,16 @@ describe('ProfilePickerModal', () => {
     expect(modal.statusMessage).toBeTruthy();
   });
 
-  test('deleteSelected removes selected profile', () => {
+  test('deleteSelected requires confirmation before removal', () => {
     pm.save('test-profile', { display: {}, behavior: {} });
     // We can't easily inject pm into the modal since it uses getProfileManager(),
     // so test the interface with manually set profiles
     modal.profiles = [{ name: 'nonexistent-xyz', timestamp: 1, filePath: '/nonexistent' }];
     modal.selectedIndex = 0;
-    const result = modal.deleteSelected();
-    // Should return false since file doesn't exist
-    expect(typeof result).toBe('boolean');
+    const first = modal.deleteSelected();
+    expect(first).toBe(false);
+    expect(modal.deleteConfirmationTarget).toBe('nonexistent-xyz');
+    expect(modal.statusMessage).toContain('Press delete again');
   });
 
   test('loadSelected on missing profile returns false with status message', () => {

@@ -1,6 +1,7 @@
 import { type Line } from '../types/grid.ts';
 import { ModalFactory } from './modal-factory.ts';
 import type { ConversationManager } from '../core/conversation.ts';
+import { getOverlayContentBudget, getOverlaySurfaceMetrics, getStableOverlayContentRows } from './overlay-viewport.ts';
 
 // ─── ContextInspectorModal ────────────────────────────────────────────────────
 
@@ -51,16 +52,25 @@ function fmtPct(ratio: number): string {
 export function renderContextInspector(
   conversation: ConversationManager,
   width: number,
-  _height = 40,
+  viewportHeight = 24,
   contextWindow = 0,
 ): Line[] {
   const messages = conversation.getMessagesForLLM();
+  const metrics = getOverlaySurfaceMetrics(width, viewportHeight, {
+    margin: 1,
+    maxWidth: 78,
+    chromeRows: 7,
+    minContentRows: 6,
+    maxContentRows: 10,
+  });
+  const targetContentRows = getStableOverlayContentRows(metrics.contentRows, 8);
 
   if (messages.length === 0) {
     return ModalFactory.createModal({
       title: 'Context Inspector',
-      width: 78,
-      margin: 1,
+      width: metrics.boxWidth,
+      margin: metrics.margin,
+      targetContentRows,
       sections: [
         { type: 'text', content: 'No messages in conversation yet.' },
       ],
@@ -104,9 +114,9 @@ export function renderContextInspector(
 
     let label: string;
     if (role === 'user') {
-      label = `user: ${text.slice(0, 40).replace(/\n/g, ' ')}${text.length > 40 ? '\u2026' : ''}`;
+      label = `user: ${text.slice(0, 40).replace(/\n/g, ' ')}${text.length > 40 ? '...' : ''}`;
     } else if (role === 'assistant') {
-      label = `assistant: ${text.slice(0, 36).replace(/\n/g, ' ')}${text.length > 36 ? '\u2026' : ''}`;
+      label = `assistant: ${text.slice(0, 36).replace(/\n/g, ' ')}${text.length > 36 ? '...' : ''}`;
     } else if (role === 'tool') {
       const toolMsg = msg as { callId?: string };
       label = `tool-result (${(toolMsg.callId ?? '').slice(0, 12)})`;
@@ -149,7 +159,12 @@ export function renderContextInspector(
   sections.push({ type: 'separator' });
 
   // Per-message list (up to 20 rows to keep modal manageable)
-  const display = entries.slice(-20);
+  const maxVisibleRows = getOverlayContentBudget(viewportHeight, {
+    chromeRows: 7,
+    minContentRows: 6,
+    maxContentRows: 10,
+  });
+  const display = entries.slice(-maxVisibleRows);
   const startOffset = entries.length - display.length;
   if (startOffset > 0) {
     sections.push({
@@ -165,7 +180,7 @@ export function renderContextInspector(
     const pctStr = fmtPct(pct).padStart(6);
     const tokStr = `~${fmtN(e.tokens)}`.padStart(8);
     const isLarge = e.tokens > largeThreshold;
-    const marker = isLarge ? '\u25cf ' : '  ';
+    const marker = isLarge ? '* ' : '  ';
     const line = `${marker}${pctStr}  ${tokStr}  ${e.label}`;
     sections.push({
       type: 'text',
@@ -195,9 +210,10 @@ export function renderContextInspector(
 
   return ModalFactory.createModal({
     title: 'Context Inspector',
-    width: 78,
-    margin: 1,
+    width: metrics.boxWidth,
+    margin: metrics.margin,
+    targetContentRows,
     sections,
-    hints: ['[\u25cf] >10% of context', '[Esc] Close'],
+    hints: ['[*] >10% of context', '[Esc] Close'],
   }, width);
 }

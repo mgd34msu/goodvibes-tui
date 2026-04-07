@@ -1,42 +1,31 @@
-import type { Cell, Line } from '../types/grid.ts';
-import { createEmptyLine, createStyledCell } from '../types/grid.ts';
+import type { Line } from '../types/grid.ts';
+import { createEmptyLine } from '../types/grid.ts';
 import { BasePanel } from './base-panel.ts';
 import type { RuntimeStore } from '../runtime/store/index.ts';
 import type { RuntimeTask, TaskLifecycleState } from '../runtime/store/domains/tasks.ts';
 import { selectTasks } from '../runtime/store/selectors/index.ts';
+import {
+  buildEmptyState,
+  buildPanelLine,
+  buildPanelWorkspace,
+  DEFAULT_PANEL_PALETTE,
+  type PanelWorkspaceSection,
+} from './polish.ts';
+import { getTrackedVisibleWindow } from '../renderer/surface-layout.ts';
 
 const C = {
+  ...DEFAULT_PANEL_PALETTE,
   header: '#94a3b8',
   headerBg: '#1e293b',
-  label: '#64748b',
-  value: '#e2e8f0',
-  dim: '#475569',
   queued: '#38bdf8',
   running: '#22c55e',
   blocked: '#f59e0b',
   failed: '#ef4444',
   completed: '#a78bfa',
-  selectedBg: '#0f172a',
-  empty: '#334155',
-  hint: '#475569',
+  selectBg: '#0f172a',
 } as const;
 
 const STATUS_ORDER: TaskLifecycleState[] = ['queued', 'running', 'blocked', 'failed', 'completed'];
-
-function buildLine(width: number, segments: Array<[string, string, string?]>): Line {
-  const cells: Cell[] = [];
-  for (const [text, fg, bg] of segments) {
-    const style = { fg, bg: bg ?? '' };
-    for (const ch of text) {
-      if (cells.length >= width) break;
-      cells.push(createStyledCell(ch, style));
-    }
-  }
-  while (cells.length < width) {
-    cells.push(createStyledCell(' ', { fg: '' }));
-  }
-  return cells.slice(0, width);
-}
 
 function formatWhen(value?: number): string {
   return value ? new Date(value).toLocaleString() : 'n/a';
@@ -117,7 +106,6 @@ export class TasksPanel extends BasePanel {
   public override onActivate(): void {
     super.onActivate();
     this.selectedIndex = 0;
-    this.scrollOffset = 0;
   }
 
   public override onDestroy(): void {
@@ -156,54 +144,70 @@ export class TasksPanel extends BasePanel {
     return sortTasks([...tasksState.tasks.values()]);
   }
 
-  private _selected(tasks: RuntimeTask[]): RuntimeTask | undefined {
-    if (tasks.length === 0) return undefined;
-    this.selectedIndex = Math.min(this.selectedIndex, tasks.length - 1);
-    return tasks[this.selectedIndex];
-  }
-
   public render(width: number, height: number): Line[] {
     this.needsRender = false;
-    const lines: Line[] = [];
-    lines.push(buildLine(width, [[' Task Control Room', C.header, C.headerBg]]));
+    const intro = 'Live task lifecycle, ownership, retries, and result/error details across runtime execution domains.';
 
     if (!this.store) {
-      lines.push(buildLine(width, [[' Runtime store not wired into this panel yet.', C.empty]]));
-      lines.push(buildLine(width, [[' Use the Tasks panel with a runtime store to see live task state.', C.hint]]));
-      while (lines.length < height) lines.push(createEmptyLine(width));
-      return lines;
+      const workspace = buildPanelWorkspace(width, height, {
+        title: 'Task Control Room',
+        intro,
+        sections: [{
+          lines: buildEmptyState(
+            width,
+            ' Runtime store not wired into this panel yet.',
+            'Use the Tasks panel with a live runtime store to review active execution, cancellations, retries, and completion results.',
+            [{ command: '/tasks', summary: 'open or operate the task surface from a shell-owned runtime' }],
+            C,
+          ),
+        }],
+        palette: C,
+      });
+      while (workspace.length < height) workspace.push(createEmptyLine(width));
+      return workspace;
     }
 
     const tasks = this._tasks();
     if (tasks.length === 0) {
-      lines.push(buildLine(width, [[' No tasks recorded yet.', C.empty]]));
-      lines.push(buildLine(width, [[' Tasks will appear here as exec, agent, ACP, scheduler, daemon, MCP, plugin, and integration work starts.', C.hint]]));
-      while (lines.length < height) lines.push(createEmptyLine(width));
-      return lines;
+      const workspace = buildPanelWorkspace(width, height, {
+        title: 'Task Control Room',
+        intro,
+        sections: [{
+          title: 'Overview',
+          lines: [
+            buildPanelLine(width, [[' queued:0  running:0  blocked:0  failed:0  completed:0', C.dim]]),
+            ...buildEmptyState(
+              width,
+              ' No tasks recorded yet.',
+              'Tasks will appear here as exec, agent, ACP, scheduler, daemon, MCP, plugin, and integration work starts.',
+              [
+                { command: '/tasks create', summary: 'create a tracked task from the shell' },
+                { command: '/orchestration', summary: 'review graph-native task execution and WRFC flows' },
+              ],
+              C,
+            ),
+          ],
+        }],
+        palette: C,
+      });
+      while (workspace.length < height) workspace.push(createEmptyLine(width));
+      return workspace;
     }
 
+    this.selectedIndex = Math.min(this.selectedIndex, tasks.length - 1);
     const counts = STATUS_ORDER.map((status) => ({
       status,
       count: tasks.filter((task) => task.status === status).length,
     }));
-    lines.push(buildLine(width, [[
-      counts.map(({ status, count }) => `${status}:${count}`).join('  '),
-      C.dim,
-    ]]));
-
-    const bodyHeight = Math.max(1, height - 3);
-    const visibleRows = Math.max(1, bodyHeight - 7);
-    if (this.selectedIndex < this.scrollOffset) this.scrollOffset = this.selectedIndex;
-    if (this.selectedIndex >= this.scrollOffset + visibleRows) {
-      this.scrollOffset = this.selectedIndex - visibleRows + 1;
-    }
-    const visible = tasks.slice(this.scrollOffset, this.scrollOffset + visibleRows);
-
-    for (let index = 0; index < visible.length; index++) {
-      const task = visible[index]!;
-      const absoluteIndex = this.scrollOffset + index;
-      const bg = absoluteIndex === this.selectedIndex ? C.selectedBg : undefined;
-      lines.push(buildLine(width, [
+    const window = getTrackedVisibleWindow(tasks.length, this.selectedIndex, Math.max(4, height - 14), this.scrollOffset, 1);
+    this.scrollOffset = window.start;
+    const listLines: Line[] = [
+      buildPanelLine(width, [[counts.map(({ status, count }) => `${status}:${count}`).join('  '), C.dim]]),
+    ];
+    for (let absolute = window.start; absolute < window.end; absolute++) {
+      const task = tasks[absolute]!;
+      const bg = absolute === this.selectedIndex ? C.selectBg : undefined;
+      listLines.push(buildPanelLine(width, [
         [' ', C.label, bg],
         [task.status.padEnd(10), statusColor(task.status), bg],
         [` ${kindLabel(task.kind).padEnd(12)}`, C.value, bg],
@@ -211,73 +215,84 @@ export class TasksPanel extends BasePanel {
         [task.title.slice(0, Math.max(0, width - 35)), C.value, bg],
       ]));
     }
+    if (tasks.length > window.count) {
+      listLines.push(buildPanelLine(width, [[`  showing ${window.start + 1}-${window.end} of ${tasks.length}`, C.dim]]));
+    }
 
-    const selected = this._selected(tasks);
-    if (selected) {
-      lines.push(buildLine(width, [[' Details', C.label]]));
-      lines.push(buildLine(width, [
+    const selected = tasks[this.selectedIndex]!;
+    const detailLines: Line[] = [
+      buildPanelLine(width, [
         ['  Title: ', C.label],
         [selected.title, C.value],
         ['  Status: ', C.label],
         [selected.status, statusColor(selected.status)],
         ['  Kind: ', C.label],
         [selected.kind, C.value],
-      ]));
-      lines.push(buildLine(width, [
+      ]),
+      buildPanelLine(width, [
         ['  Owner: ', C.label],
         [selected.owner, C.value],
         ['  Cancellable: ', C.label],
         [selected.cancellable ? 'yes' : 'no', selected.cancellable ? C.running : C.failed],
         ['  Queue: ', C.label],
         [formatWhen(selected.queuedAt), C.dim],
-      ]));
-      if (selected.correlationId || selected.turnId) {
-        lines.push(buildLine(width, [
-          ['  Correlation: ', C.label],
-          [selected.correlationId ?? 'n/a', C.dim],
-          ['  Turn: ', C.label],
-          [selected.turnId ?? 'n/a', C.dim],
-        ]));
-      }
-      lines.push(buildLine(width, [
+      ]),
+      buildPanelLine(width, [
         ['  Started: ', C.label],
         [formatWhen(selected.startedAt), C.dim],
         ['  Ended: ', C.label],
         [formatWhen(selected.endedAt), C.dim],
         ['  Duration: ', C.label],
         [formatDuration(selected.startedAt, selected.endedAt), C.dim],
+      ]),
+    ];
+    if (selected.correlationId || selected.turnId) {
+      detailLines.push(buildPanelLine(width, [
+        ['  Correlation: ', C.label],
+        [selected.correlationId ?? 'n/a', C.dim],
+        ['  Turn: ', C.label],
+        [selected.turnId ?? 'n/a', C.dim],
       ]));
-      if (selected.parentTaskId || selected.childTaskIds.length > 0) {
-        lines.push(buildLine(width, [
-          ['  Parent: ', C.label],
-          [selected.parentTaskId ?? 'none', C.dim],
-          ['  Children: ', C.label],
-          [selected.childTaskIds.length > 0 ? selected.childTaskIds.join(', ') : 'none', C.dim],
-        ]));
-      }
-      if (selected.retryPolicy) {
-        lines.push(buildLine(width, [
-          ['  Retry: ', C.label],
-          [`${selected.retryPolicy.currentAttempt}/${selected.retryPolicy.maxAttempts} ${selected.retryPolicy.backoff}`, C.value],
-        ]));
-      }
-      if (selected.error) {
-        lines.push(buildLine(width, [
-          ['  Error: ', C.label],
-          [selected.error.slice(0, Math.max(0, width - 10)), C.failed],
-        ]));
-      }
-      if (selected.result !== undefined) {
-        const resultText = safeJson(selected.result);
-        lines.push(buildLine(width, [
-          ['  Result: ', C.label],
-          [resultText.slice(0, Math.max(0, width - 11)), C.dim],
-        ]));
-      }
+    }
+    if (selected.parentTaskId || selected.childTaskIds.length > 0) {
+      detailLines.push(buildPanelLine(width, [
+        ['  Parent: ', C.label],
+        [selected.parentTaskId ?? 'none', C.dim],
+        ['  Children: ', C.label],
+        [selected.childTaskIds.length > 0 ? selected.childTaskIds.join(', ') : 'none', C.dim],
+      ]));
+    }
+    if (selected.retryPolicy) {
+      detailLines.push(buildPanelLine(width, [
+        ['  Retry: ', C.label],
+        [`${selected.retryPolicy.currentAttempt}/${selected.retryPolicy.maxAttempts} ${selected.retryPolicy.backoff}`, C.value],
+      ]));
+    }
+    if (selected.error) {
+      detailLines.push(buildPanelLine(width, [
+        ['  Error: ', C.label],
+        [selected.error.slice(0, Math.max(0, width - 10)), C.failed],
+      ]));
+    }
+    if (selected.result !== undefined) {
+      const resultText = safeJson(selected.result);
+      detailLines.push(buildPanelLine(width, [
+        ['  Result: ', C.label],
+        [resultText.slice(0, Math.max(0, width - 11)), C.dim],
+      ]));
     }
 
-    lines.push(buildLine(width, [['  Use ↑/↓ to move, Home/End to jump.', C.hint]]));
-
+    const sections: PanelWorkspaceSection[] = [
+      { title: 'Tasks', lines: listLines },
+      { title: 'Selected Task', lines: detailLines },
+    ];
+    const lines = buildPanelWorkspace(width, height, {
+      title: 'Task Control Room',
+      intro,
+      sections,
+      footerLines: [buildPanelLine(width, [['  Up/Down move  Home/End jump', C.dim]])],
+      palette: C,
+    });
     while (lines.length < height) lines.push(createEmptyLine(width));
     return lines.slice(0, height);
   }

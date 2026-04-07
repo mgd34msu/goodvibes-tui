@@ -1,7 +1,14 @@
 import { type Line } from '../types/grid.ts';
-import { UIFactory } from './ui-factory.ts';
-import { getDisplayWidth } from '../utils/terminal-width.ts';
+import { fitDisplay, getDisplayWidth, truncateDisplay } from '../utils/terminal-width.ts';
 import type { FilePickerModal } from '../input/file-picker.ts';
+import {
+  createOverlayBorderLine,
+  createOverlayBoxLayout,
+  createOverlayContentLine,
+  DEFAULT_OVERLAY_PALETTE,
+  putOverlayText,
+} from './overlay-box.ts';
+import { getOverlaySurfaceMetrics } from './overlay-viewport.ts';
 
 /**
  * Render the file picker modal as Line[] for overlay in the viewport.
@@ -9,34 +16,48 @@ import type { FilePickerModal } from '../input/file-picker.ts';
  */
 export function renderFilePickerOverlay(
   picker: FilePickerModal,
-  width: number
+  width: number,
+  viewportHeight = 24,
 ): Line[] {
   const lines: Line[] = [];
-  const boxMargin = 4;
-  const boxW = Math.max(4, Math.min(width - boxMargin * 2, 70));
-  const contentW = boxW - 4;
-  const pad = ' '.repeat(boxMargin);
+  const metrics = getOverlaySurfaceMetrics(width, viewportHeight, {
+    chromeRows: 4,
+    maxWidth: 70,
+    minContentRows: 6,
+    maxContentRows: 10,
+  });
+  const layout = createOverlayBoxLayout(width, metrics.margin, metrics.boxWidth);
+  const contentW = layout.innerWidth;
+  const borderFg = DEFAULT_OVERLAY_PALETTE.borderFg;
+  const titleFg = DEFAULT_OVERLAY_PALETTE.titleFg;
+  const bodyFg = DEFAULT_OVERLAY_PALETTE.bodyFg;
+  const mutedFg = DEFAULT_OVERLAY_PALETTE.mutedFg;
+  const selectedBg = DEFAULT_OVERLAY_PALETTE.selectedBg;
 
   // Title bar
-  const queryDisplay = picker.query || '';
-  const title = ` @ ${queryDisplay}`;
-  const titleLine = pad + '\u250c' + '\u2500 Select File ' + '\u2500'.repeat(Math.max(0, boxW - 16)) + '\u2510';
-  lines.push(UIFactory.stringToLine(titleLine, width, { fg: '#00ffff' }));
+  const titleLine = createOverlayBorderLine(width, layout, '┌', '─', '┐', titleFg);
+  putOverlayText(titleLine, layout.margin + 2, layout.width - 4, 'Select File', { fg: titleFg, bold: true });
+  lines.push(titleLine);
 
   // Search input
-  const searchLine = pad + '\u2502 @ ' + queryDisplay + '\u2588' + ' '.repeat(Math.max(0, contentW - getDisplayWidth(queryDisplay) - 3)) + '\u2502';
-  lines.push(UIFactory.stringToLine(searchLine, width, { fg: '252' }));
+  const queryDisplay = picker.query || '';
+  const searchLine = createOverlayContentLine(width, layout, borderFg);
+  const searchPrefix = '@ ';
+  const queryText = fitDisplay(`${queryDisplay}_`, Math.max(0, contentW - getDisplayWidth(searchPrefix)));
+  putOverlayText(searchLine, layout.margin + 2, getDisplayWidth(searchPrefix), searchPrefix, { fg: bodyFg });
+  putOverlayText(searchLine, layout.margin + 2 + getDisplayWidth(searchPrefix), contentW - getDisplayWidth(searchPrefix), queryText, { fg: bodyFg });
+  lines.push(searchLine);
 
   // Separator
-  const sepLine = pad + '\u251c' + '\u2500'.repeat(boxW - 2) + '\u2524';
-  lines.push(UIFactory.stringToLine(sepLine, width, { fg: '240' }));
+  lines.push(createOverlayBorderLine(width, layout, '├', '─', '┤', mutedFg));
 
   // Results
   if (picker.results.length === 0) {
-    const noResults = pad + '\u2502 ' + 'No matching files'.padEnd(contentW) + ' \u2502';
-    lines.push(UIFactory.stringToLine(noResults, width, { fg: '244', dim: true }));
+    const noResults = createOverlayContentLine(width, layout, borderFg);
+    putOverlayText(noResults, layout.margin + 2, contentW, fitDisplay('No matching files', contentW), { fg: '244', dim: true });
+    lines.push(noResults);
   } else {
-    const maxVisible = 12;
+    const maxVisible = metrics.contentRows;
     let startIdx = 0;
     if (picker.results.length > maxVisible) {
       startIdx = Math.max(0, Math.min(
@@ -49,23 +70,31 @@ export function renderFilePickerOverlay(
     for (let i = startIdx; i < endIdx; i++) {
       const file = picker.results[i];
       const isSelected = i === picker.selectedIndex;
-      const indicator = isSelected ? '\u25b6 ' : '  ';
-      const displayFile = file.length > contentW - 4
-        ? '\u2026' + file.slice(-(contentW - 5))
+      const indicator = isSelected ? '> ' : '  ';
+      const displayFile = getDisplayWidth(file) > contentW - 2
+        ? truncateDisplay(file, contentW - 2)
         : file;
-      const line = pad + '\u2502 ' + indicator + displayFile.padEnd(contentW - 2) + '\u2502';
-      lines.push(UIFactory.stringToLine(line, width, {
-        fg: isSelected ? '#00ffff' : file.endsWith('/') ? '#00ffff' : '252',
-        bold: isSelected,
-        bg: isSelected ? '#1a2a3a' : '',
-      }));
+      const line = createOverlayContentLine(width, layout, borderFg, isSelected ? selectedBg : '');
+      putOverlayText(
+        line,
+        layout.margin + 2,
+        contentW,
+        fitDisplay(indicator + fitDisplay(displayFile, contentW - 2), contentW),
+        {
+          fg: isSelected ? titleFg : file.endsWith('/') ? titleFg : bodyFg,
+          bg: isSelected ? selectedBg : '',
+          bold: isSelected,
+        },
+      );
+      lines.push(line);
     }
   }
 
   // Bottom border with hints
-  const hints = ' [\u2191\u2193] Navigate  [Enter] Select  [Esc] Cancel ';
-  const bottomLine = pad + '\u2514' + hints + '\u2500'.repeat(Math.max(0, boxW - 2 - getDisplayWidth(hints))) + '\u2518';
-  lines.push(UIFactory.stringToLine(bottomLine, width, { fg: '240' }));
+  const hints = '[Up/Down] Navigate  [Enter] Select  [Esc] Cancel';
+  const bottomLine = createOverlayBorderLine(width, layout, '└', '─', '┘', mutedFg);
+  putOverlayText(bottomLine, layout.margin + 2, layout.width - 4, truncateDisplay(hints, layout.width - 4), { fg: mutedFg, dim: true });
+  lines.push(bottomLine);
 
   return lines;
 }

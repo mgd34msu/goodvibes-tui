@@ -114,11 +114,11 @@ export function wireShellUiOpeners(options: WireShellUiOpenersOptions): void {
         }
       }
       panelManager.show();
-      conversation.suppressSplash = true;
+      conversation.setSplashSuppressed(true);
       conversation.rebuildHistory();
     } else {
       panelManager.hide();
-      conversation.suppressSplash = false;
+      conversation.setSplashSuppressed(false);
       conversation.rebuildHistory();
     }
     render();
