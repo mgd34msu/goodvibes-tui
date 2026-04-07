@@ -2,8 +2,18 @@ import type { Line } from '../types/grid.ts';
 import type { WrfcChain, WrfcState, QualityGateResult } from '../agents/wrfc-types.ts';
 import { WrfcController } from '../agents/wrfc-controller.ts';
 import { BasePanel } from './base-panel.ts';
-import { createStyledCell, createEmptyCell } from '../types/grid.ts';
 import type { RuntimeEventBus, WorkflowEvent } from '../runtime/events/index.ts';
+import {
+  buildPanelLine,
+  buildPanelWorkspace,
+  DEFAULT_PANEL_PALETTE,
+  type PanelWorkspaceSection,
+  buildSelectablePanelLine,
+  buildStyledPanelLine,
+  buildEmptyState,
+} from './polish.ts';
+import { getTrackedVisibleWindow } from '../renderer/surface-layout.ts';
+import { getDisplayWidth } from '../utils/terminal-width.ts';
 
 // ---------------------------------------------------------------------------
 // Colour palette
@@ -42,7 +52,7 @@ const C = {
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
-const SPARKLINE_CHARS = '▁▂▃▄▅▆▇█';
+const SPARKLINE_CHARS = '._-:=+*#';
 
 export function sparkline(scores: number[], maxScore = 10): string {
   if (scores.length === 0) return '';
@@ -101,62 +111,9 @@ function issuePrefix(severity: string): string {
   }
 }
 
-// Build a fixed-width Line from a string of characters with a uniform style.
-function makeLine(
-  text: string,
-  width: number,
-  options: {
-    fg?: string;
-    bg?: string;
-    bold?: boolean;
-    dim?: boolean;
-  } = {},
-): Line {
-  const line: Line = [];
-  for (let i = 0; i < width; i++) {
-    const ch = i < text.length ? text[i] : ' ';
-    line.push(createStyledCell(ch, {
-      fg:   options.fg   ?? '',
-      bg:   options.bg   ?? '',
-      bold: options.bold ?? false,
-      dim:  options.dim  ?? false,
-    }));
-  }
-  return line;
-}
-
-// Build a Line where different segments can have different styles.
-interface Segment {
-  text:  string;
-  fg?:   string;
-  bg?:   string;
-  bold?: boolean;
-  dim?:  boolean;
-}
-
-function makeSegmentedLine(segments: Segment[], width: number, bg = ''): Line {
-  const line: Line = [];
-  for (const seg of segments) {
-    for (const ch of seg.text) {
-      if (line.length >= width) break;
-      line.push(createStyledCell(ch, {
-        fg:   seg.fg   ?? '',
-        bg:   seg.bg   ?? bg,
-        bold: seg.bold ?? false,
-        dim:  seg.dim  ?? false,
-      }));
-    }
-    if (line.length >= width) break;
-  }
-  while (line.length < width) {
-    line.push(createStyledCell(' ', { bg }));
-  }
-  return line;
-}
-
 export function truncate(s: string, max: number): string {
   if (s.length <= max) return s;
-  return s.slice(0, max - 1) + '…';
+  return s.slice(0, max - 3) + '...';
 }
 
 // ---------------------------------------------------------------------------
@@ -165,6 +122,7 @@ export function truncate(s: string, max: number): string {
 export class WrfcPanel extends BasePanel {
   private chains: WrfcChain[] = [];
   private selectedIndex = 0;
+  private scrollOffset = 0;
   private expandedChainIds = new Set<string>();
   private unsubscribers: Array<() => void> = [];
   private controller: WrfcController | null = null;
@@ -205,53 +163,99 @@ export class WrfcPanel extends BasePanel {
   // Render
   // -------------------------------------------------------------------------
   render(width: number, height: number): Line[] {
-    const lines: Line[] = [];
-
-    // Header
-    // activeCount includes 'pending' chains (not yet started) as well as in-progress ones
     const activeCount  = this.chains.filter(c => !['passed', 'failed'].includes(c.state)).length;
     const passedCount  = this.chains.filter(c => c.state === 'passed').length;
     const failedCount  = this.chains.filter(c => c.state === 'failed').length;
-    const headerLeft   = ' WRFC Chain Monitor';
-    const headerRight  = ` active:${activeCount} pass:${passedCount} fail:${failedCount} `;
-    const gap          = Math.max(1, width - headerLeft.length - headerRight.length);
-
-    lines.push(makeSegmentedLine([
-      { text: headerLeft,        fg: C.headerBold, bold: true },
-      { text: ' '.repeat(gap),   fg: '' },
-      { text: headerRight,       fg: C.header },
-    ], width));
-
-    // Divider
-    lines.push(makeLine('─'.repeat(width), width, { fg: C.border }));
 
     if (this.chains.length === 0) {
-      lines.push(makeLine('  No WRFC chains yet.', width, { fg: C.dim, dim: true }));
-      this.padToHeight(lines, height, width);
-      return lines;
+      return buildPanelWorkspace(width, height, {
+        title: ' WRFC Chain Monitor',
+        intro: 'Track WRFC engineering, review, fixing, gating, and final chain outcomes.',
+        sections: [
+          {
+            lines: buildEmptyState(
+              width,
+              ' No WRFC chains yet',
+              'WRFC chains appear here as review/fix cycles execute. Expanded rows show scores, gates, issues, and failure detail.',
+              [],
+              DEFAULT_PANEL_PALETTE,
+            ),
+          },
+        ],
+        palette: DEFAULT_PANEL_PALETTE,
+      });
     }
 
-    // Chain list
+    const chainLines: Line[] = [];
     for (let i = 0; i < this.chains.length; i++) {
-      if (lines.length >= height) break;
-
       const chain      = this.chains[i];
       const isSelected = i === this.selectedIndex;
       const isExpanded = this.expandedChainIds.has(chain.id);
       const rowBg      = isSelected ? C.selected : '';
       const rowFg      = isSelected ? C.selectedFg : '';
 
-      // Chain summary row
-      lines.push(...this.renderChainRow(chain, width, isSelected, isExpanded, rowBg, rowFg));
+      chainLines.push(...this.renderChainRow(chain, width, isSelected, isExpanded, rowBg, rowFg));
 
-      // Expanded detail
-      if (isExpanded && lines.length < height) {
-        lines.push(...this.renderChainDetail(chain, width, height - lines.length));
+      if (isExpanded) {
+        chainLines.push(...this.renderChainDetail(chain, width, 12));
       }
     }
 
-    this.padToHeight(lines, height, width);
-    return lines;
+    const window = getTrackedVisibleWindow(chainLines.length, this.selectedIndex, Math.max(8, height - 8), this.scrollOffset, 1);
+    this.scrollOffset = window.start;
+    const selectedChain = this.chains[this.selectedIndex];
+    const selectedLines: Line[] = selectedChain
+      ? [
+          buildPanelLine(width, [
+            [' State ', DEFAULT_PANEL_PALETTE.label],
+            [stateLabel(selectedChain.state), stateColor(selectedChain.state)],
+            ['   Task ', DEFAULT_PANEL_PALETTE.label],
+            [truncate(selectedChain.task, Math.max(8, width - 24)), DEFAULT_PANEL_PALETTE.value],
+          ]),
+          buildPanelLine(width, [
+            [' Reviews ', DEFAULT_PANEL_PALETTE.label],
+            [String(selectedChain.reviewCycles), DEFAULT_PANEL_PALETTE.value],
+            ['   Fixes ', DEFAULT_PANEL_PALETTE.label],
+            [String(selectedChain.fixAttempts), DEFAULT_PANEL_PALETTE.value],
+            ['   Scores ', DEFAULT_PANEL_PALETTE.label],
+            [selectedChain.reviewScores.length > 0 ? selectedChain.reviewScores.map((score) => score.toFixed(0)).join(' -> ') : 'none', DEFAULT_PANEL_PALETTE.info],
+          ]),
+        ]
+      : [];
+
+    const sections: PanelWorkspaceSection[] = [
+      {
+        title: 'Summary',
+        lines: [
+          buildPanelLine(width, [
+            [' Active ', DEFAULT_PANEL_PALETTE.label],
+            [String(activeCount), activeCount > 0 ? DEFAULT_PANEL_PALETTE.warn : DEFAULT_PANEL_PALETTE.dim],
+            ['   Passed ', DEFAULT_PANEL_PALETTE.label],
+            [String(passedCount), DEFAULT_PANEL_PALETTE.good],
+            ['   Failed ', DEFAULT_PANEL_PALETTE.label],
+            [String(failedCount), failedCount > 0 ? DEFAULT_PANEL_PALETTE.bad : DEFAULT_PANEL_PALETTE.dim],
+          ]),
+        ],
+      },
+      {
+        title: 'Chains',
+        lines: chainLines.slice(window.start, window.end),
+      },
+      {
+        title: 'Selected',
+        lines: selectedLines,
+      },
+    ];
+
+    return buildPanelWorkspace(width, height, {
+      title: ' WRFC Chain Monitor',
+      intro: 'Track WRFC engineering, review, fixing, gating, and final chain outcomes.',
+      sections,
+      footerLines: [
+        buildPanelLine(width, [[' Up/Down', DEFAULT_PANEL_PALETTE.info], [' navigate', DEFAULT_PANEL_PALETTE.dim], ['   Enter', DEFAULT_PANEL_PALETTE.info], [' expand', DEFAULT_PANEL_PALETTE.dim]]),
+      ],
+      palette: DEFAULT_PANEL_PALETTE,
+    });
   }
 
   // -------------------------------------------------------------------------
@@ -267,7 +271,7 @@ export class WrfcPanel extends BasePanel {
   ): Line[] {
     const stateCol   = stateColor(chain.state);
     const stateTag   = ` ${stateLabel(chain.state).padEnd(6)}`;
-    const arrow      = isExpanded ? '▼' : '▶';
+    const arrow      = isExpanded ? 'v' : '>';
     const chainIdShort = chain.id.slice(-6);
     const prefix     = ` ${arrow} [${chainIdShort}] `;
     const fixes      = chain.fixAttempts > 0 ? ` fix:${chain.fixAttempts}` : '';
@@ -280,13 +284,13 @@ export class WrfcPanel extends BasePanel {
     // Compute how much space the task text can use, then check if rightInfo fits.
     // If the terminal is narrow and rightInfo would overflow, omit it entirely
     // rather than producing corrupted layout.
-    const usedWithoutTask = prefix.length + stateTag.length + 1; // prefix + stateTag + space
-    const taskMax    = width - usedWithoutTask - rightInfo.length;
+    const usedWithoutTask = getDisplayWidth(prefix) + getDisplayWidth(stateTag) + 1; // prefix + stateTag + space
+    const taskMax    = width - usedWithoutTask - getDisplayWidth(rightInfo);
     const taskText   = truncate(chain.task, Math.max(8, taskMax));
-    const usedWidth  = usedWithoutTask + taskText.length;
+    const usedWidth  = usedWithoutTask + getDisplayWidth(taskText);
     const remaining  = width - usedWidth;
 
-    const segments: Segment[] = [
+    const segments = [
       { text: prefix,   fg: isSelected ? fg : C.header },
       { text: stateTag, fg: stateCol, bold: true },
       { text: ' ',      fg: '' },
@@ -298,7 +302,11 @@ export class WrfcPanel extends BasePanel {
     }
     // else: no room — makeSegmentedLine will pad with spaces to fill width
 
-    const row = makeSegmentedLine(segments, width, bg);
+    const row = buildSelectablePanelLine(width, segments, {
+      selected: isSelected,
+      selectedBg: bg,
+      fillFg: isSelected ? fg : '',
+    });
 
     return [row];
   }
@@ -312,26 +320,26 @@ export class WrfcPanel extends BasePanel {
       const spark = sparkline(chain.reviewScores);
       const latestScore = chain.reviewScores[chain.reviewScores.length - 1];
       const sparkColor  = latestScore >= 8 ? C.sparkHigh : latestScore >= 5 ? C.spark : C.sparkLow;
-      lines.push(makeSegmentedLine([
+      lines.push(buildStyledPanelLine(width, [
         { text: `${indent}Scores  `, fg: C.label },
         { text: spark,               fg: sparkColor },
-        { text: ` (${chain.reviewScores.map(s => s.toFixed(0)).join('→')})`, fg: C.dim },
-      ], width));
+        { text: ` (${chain.reviewScores.map(s => s.toFixed(0)).join(' -> ')})`, fg: C.dim },
+      ]));
     }
 
     // Fix attempts + review cycles
     if (chain.fixAttempts > 0 || chain.reviewCycles > 0) {
-      lines.push(makeSegmentedLine([
+      lines.push(buildStyledPanelLine(width, [
         { text: `${indent}Cycles  `, fg: C.label },
         { text: `${chain.reviewCycles} review`,  fg: C.value },
         { text: '  ',                             fg: '' },
         { text: `${chain.fixAttempts} fix`,       fg: chain.fixAttempts > 0 ? C.fixing : C.value },
-      ], width));
+      ]));
     }
 
     // Quality gate results
     if (chain.gateResults && chain.gateResults.length > 0) {
-      lines.push(makeLine(`${indent}Gates`, width, { fg: C.label }));
+      lines.push(buildStyledPanelLine(width, [{ text: `${indent}Gates`, fg: C.label }]));
       for (const gate of chain.gateResults) {
         if (lines.length >= maxLines) break;
         lines.push(this.renderGateResult(gate, width, indent + '  '));
@@ -341,62 +349,56 @@ export class WrfcPanel extends BasePanel {
     // Gate status (no results yet but state is gating)
     if (chain.state === 'gating' || chain.state === 'awaiting_gates') {
       if (!chain.gateResults || chain.gateResults.length === 0) {
-        lines.push(makeLine(`${indent}Gates   awaiting…`, width, { fg: C.gating, dim: true }));
+        lines.push(buildStyledPanelLine(width, [{ text: `${indent}Gates   awaiting...`, fg: C.gating, dim: true }]));
       }
     }
 
     // Issues from reviewer
     const issues = chain.reviewerReport?.issues ?? [];
     if (issues.length > 0 && lines.length < maxLines) {
-      lines.push(makeLine(`${indent}Issues`, width, { fg: C.label }));
+      lines.push(buildStyledPanelLine(width, [{ text: `${indent}Issues`, fg: C.label }]));
       for (const issue of issues) {
         if (lines.length >= maxLines) break;
         const prefix = `${indent}  ${issuePrefix(issue.severity)}`;
         const descMax = width - prefix.length;
         const desc = truncate(issue.description, Math.max(8, descMax));
-        lines.push(makeSegmentedLine([
+        lines.push(buildStyledPanelLine(width, [
           { text: prefix, fg: issueColor(issue.severity), bold: issue.severity === 'critical' },
           { text: desc,   fg: C.value },
-        ], width));
+        ]));
       }
     }
 
     // Error
     if (chain.error && lines.length < maxLines) {
       const errPrefix = `${indent}Error   `;
-      lines.push(makeSegmentedLine([
+      lines.push(buildStyledPanelLine(width, [
         { text: errPrefix,                                fg: C.failed, bold: true },
         { text: truncate(chain.error, width - errPrefix.length), fg: C.value },
-      ], width));
+      ]));
     }
 
     // Divider after expanded section
     if (lines.length < maxLines) {
-      lines.push(makeLine('  ' + '·'.repeat(Math.max(0, width - 4)) + '  ', width, { fg: C.border, dim: true }));
+      lines.push(buildStyledPanelLine(width, [{ text: '  ' + '-'.repeat(Math.max(0, width - 4)) + '  ', fg: C.border, dim: true }]));
     }
 
     return lines.slice(0, maxLines);
   }
 
   private renderGateResult(gate: QualityGateResult, width: number, indent: string): Line {
-    const icon   = gate.passed ? '✓' : '✗';
+    const icon   = gate.passed ? 'y' : 'x';
     const iconFg = gate.passed ? C.gatePass : C.gateFail;
     const dur    = `${gate.durationMs}ms`;
     const nameMax = width - indent.length - 2 - dur.length - 4;
     const name   = truncate(gate.gate, Math.max(8, nameMax));
 
-    return makeSegmentedLine([
+    return buildStyledPanelLine(width, [
       { text: indent,          fg: C.dim },
       { text: `${icon} `,      fg: iconFg, bold: true },
       { text: name,            fg: gate.passed ? C.value : C.failed },
       { text: ` (${dur})`,     fg: C.dim },
-    ], width);
-  }
-
-  private padToHeight(lines: Line[], height: number, width: number): void {
-    while (lines.length < height) {
-      lines.push(Array.from({ length: width }, createEmptyCell));
-    }
+    ]);
   }
 
   // -------------------------------------------------------------------------

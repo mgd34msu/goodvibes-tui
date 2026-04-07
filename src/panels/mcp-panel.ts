@@ -1,33 +1,27 @@
-import type { Line, Cell } from '../types/grid.ts';
-import { createEmptyLine, createStyledCell } from '../types/grid.ts';
+import type { Line } from '../types/grid.ts';
+import { createEmptyLine } from '../types/grid.ts';
 import { BasePanel } from './base-panel.ts';
 import { mcpRegistry, type McpRegistry } from '../mcp/registry.ts';
 import type { McpDecisionRecord } from '../runtime/mcp/types.ts';
+import { truncateDisplay } from '../utils/terminal-width.ts';
+import {
+  buildEmptyState,
+  buildPanelLine,
+  buildPanelWorkspace,
+  DEFAULT_PANEL_PALETTE,
+  type PanelWorkspaceSection,
+} from './polish.ts';
+import { getTrackedVisibleWindow } from '../renderer/surface-layout.ts';
 
 const C = {
+  ...DEFAULT_PANEL_PALETTE,
   header: '#94a3b8',
   headerBg: '#1e293b',
-  label: '#64748b',
-  value: '#e2e8f0',
-  dim: '#475569',
   ok: '#22c55e',
   warn: '#eab308',
   error: '#ef4444',
-  info: '#38bdf8',
   selectBg: '#0f172a',
-  empty: '#334155',
 } as const;
-
-function buildLine(width: number, segments: Array<[string, string, string?]>): Line {
-  const cells: Cell[] = [];
-  let used = 0;
-  for (const [text, fg, bg] of segments) {
-    cells.push(createStyledCell(text, { fg, bg: bg ?? '' }));
-    used += text.length;
-  }
-  if (used < width) cells.push(createStyledCell(' '.repeat(width - used), { fg: '' }));
-  return cells;
-}
 
 function modeColor(mode: string): string {
   switch (mode) {
@@ -67,6 +61,7 @@ function decisionColor(decision: McpDecisionRecord): string {
 export class McpPanel extends BasePanel {
   private readonly registry: McpRegistry;
   private selectedIndex = 0;
+  private scrollOffset = 0;
 
   public constructor(registry: McpRegistry = mcpRegistry) {
     super('mcp', 'MCP', 'Z', 'monitoring');
@@ -95,24 +90,41 @@ export class McpPanel extends BasePanel {
 
   public render(width: number, height: number): Line[] {
     this.needsRender = false;
-    const lines: Line[] = [];
-    lines.push(buildLine(width, [[' MCP Control Room', C.header, C.headerBg]]));
-
+    const intro = 'Trust, quarantine, scope, and recent security decisions for configured MCP servers.';
     const entries = this.registry.listServerSecurity();
+
     if (entries.length === 0) {
-      lines.push(buildLine(width, [[' No MCP servers configured or connected. Use /mcp for setup hints.', C.empty]]));
-      while (lines.length < height) lines.push(createEmptyLine(width));
-      return lines;
+      const workspace = buildPanelWorkspace(width, height, {
+        title: 'MCP Control Room',
+        intro,
+        sections: [{
+          lines: buildEmptyState(
+            width,
+            ' No MCP servers configured or connected.',
+            'Add MCP servers, inspect trust posture, and review risk-scoped policies here once the registry is populated.',
+            [
+              { command: '/mcp', summary: 'list server state and security posture' },
+              { command: '/settings', summary: 'open the MCP settings category for trust and scope controls' },
+            ],
+            C,
+          ),
+        }],
+        palette: C,
+      });
+      while (workspace.length < height) workspace.push(createEmptyLine(width));
+      return workspace;
     }
 
     this.selectedIndex = Math.min(this.selectedIndex, entries.length - 1);
     const selected = entries[this.selectedIndex]!;
-    const visible = entries.slice(0, Math.max(1, height - 6));
-
-    for (let index = 0; index < visible.length; index++) {
-      const entry = visible[index]!;
-      const bg = index === this.selectedIndex ? C.selectBg : undefined;
-      lines.push(buildLine(width, [
+    const sandboxBinding = this.registry.listServerSandboxBindings().find((entry) => entry.name === selected.name);
+    const window = getTrackedVisibleWindow(entries.length, this.selectedIndex, Math.max(4, height - 16), this.scrollOffset, 1);
+    this.scrollOffset = window.start;
+    const listLines: Line[] = [];
+    for (let absolute = window.start; absolute < window.end; absolute++) {
+      const entry = entries[absolute]!;
+      const bg = absolute === this.selectedIndex ? C.selectBg : undefined;
+      listLines.push(buildPanelLine(width, [
         [' ', C.label, bg],
         [entry.name.padEnd(20), C.value, bg],
         [` ${(entry.connected ? 'CONNECTED' : 'DISCONNECTED').padEnd(13)}`, entry.connected ? C.ok : C.error, bg],
@@ -121,54 +133,72 @@ export class McpPanel extends BasePanel {
         [` ${entry.schemaFreshness}`, freshnessColor(entry.schemaFreshness), bg],
       ]));
     }
+    if (entries.length > window.count) {
+      listLines.push(buildPanelLine(width, [[`  showing ${window.start + 1}-${window.end} of ${entries.length}`, C.dim]]));
+    }
 
-    lines.push(buildLine(width, [[' Details', C.label]]));
-    lines.push(buildLine(width, [
-      ['  Server: ', C.label],
-      [selected.name, C.value],
-      ['  Trust: ', C.label],
-      [selected.trustMode, modeColor(selected.trustMode)],
-      ['  Role: ', C.label],
-      [selected.role, C.info],
-    ]));
-    lines.push(buildLine(width, [
-      ['  Schema: ', C.label],
-      [selected.schemaFreshness, freshnessColor(selected.schemaFreshness)],
-      ['  Approved by: ', C.label],
-      [(selected.quarantineApprovedBy ?? 'n/a').slice(0, Math.max(0, width - 31)), selected.quarantineApprovedBy ? C.info : C.dim],
-    ]));
-    lines.push(buildLine(width, [
-      ['  Path scope: ', C.label],
-      [(selected.allowedPaths.length > 0 ? selected.allowedPaths.join(', ') : 'unbounded').slice(0, Math.max(0, width - 15)), selected.allowedPaths.length > 0 ? C.value : C.dim],
-    ]));
-    lines.push(buildLine(width, [
-      ['  Host scope: ', C.label],
-      [(selected.allowedHosts.length > 0 ? selected.allowedHosts.join(', ') : 'unbounded').slice(0, Math.max(0, width - 15)), selected.allowedHosts.length > 0 ? C.value : C.dim],
-    ]));
+    const detailLines: Line[] = [
+      buildPanelLine(width, [
+        ['  Server: ', C.label],
+        [selected.name, C.value],
+        ['  Trust: ', C.label],
+        [selected.trustMode, modeColor(selected.trustMode)],
+        ['  Role: ', C.label],
+        [selected.role, C.info],
+      ]),
+      buildPanelLine(width, [
+        ['  Schema: ', C.label],
+        [selected.schemaFreshness, freshnessColor(selected.schemaFreshness)],
+        ['  Approved by: ', C.label],
+        [truncateDisplay(selected.quarantineApprovedBy ?? 'n/a', Math.max(0, width - 31)), selected.quarantineApprovedBy ? C.info : C.dim],
+      ]),
+      buildPanelLine(width, [
+        ['  Scope: ', C.label],
+        [truncateDisplay(
+          `paths ${selected.allowedPaths.length > 0 ? selected.allowedPaths.join(', ') : 'unbounded'}  hosts ${selected.allowedHosts.length > 0 ? selected.allowedHosts.join(', ') : 'unbounded'}`,
+          Math.max(0, width - 10),
+        ), (selected.allowedPaths.length > 0 || selected.allowedHosts.length > 0) ? C.value : C.dim],
+      ]),
+      buildPanelLine(width, [
+        ['  Sandbox: ', C.label],
+        [truncateDisplay(
+          sandboxBinding?.sessionId
+            ? `${sandboxBinding.profileId ?? 'mcp'} ${sandboxBinding.state ?? 'unknown'} ${sandboxBinding.backend ?? 'n/a'} ${sandboxBinding.startupStatus ?? 'n/a'} (${sandboxBinding.sessionId})`
+            : 'not isolated',
+          Math.max(0, width - 13),
+        ), sandboxBinding?.sessionId ? C.info : C.dim],
+      ]),
+    ];
     if (selected.schemaFreshness === 'quarantined') {
-      lines.push(buildLine(width, [
+      detailLines.push(buildPanelLine(width, [
         ['  Quarantine: ', C.label],
-        [`${selected.quarantineReason ?? 'unknown'}${selected.quarantineDetail ? ` — ${selected.quarantineDetail}` : ''}`.slice(0, Math.max(0, width - 15)), C.error],
-      ]));
-    }
-    lines.push(buildLine(width, [['  Use /mcp role <server> <role> and /settings -> MCP to adjust security posture.', C.dim]]));
-
-    const decisionLines = Math.max(0, height - lines.length);
-    const decisions = this.registry.listRecentSecurityDecisions?.(Math.max(0, decisionLines - 1)) ?? [];
-    if (decisionLines > 0) {
-      lines.push(buildLine(width, [[' Recent Decisions', C.label]]));
-    }
-    if (decisionLines > 1 && decisions.length === 0) {
-      lines.push(buildLine(width, [['  No MCP decisions recorded yet.', C.dim]]));
-    }
-    for (const decision of decisions.slice(0, Math.max(0, height - lines.length))) {
-      const summary = `${decision.serverName}:${decision.toolName} ${decision.verdict.toUpperCase()} ${decision.capability}${decision.incoherent ? ' incoherent' : ''}`;
-      lines.push(buildLine(width, [
-        ['  ', C.label],
-        [summary.slice(0, Math.max(0, width - 2)), decisionColor(decision)],
+        [truncateDisplay(`${selected.quarantineReason ?? 'unknown'}${selected.quarantineDetail ? ` - ${selected.quarantineDetail}` : ''}`, Math.max(0, width - 15)), C.error],
       ]));
     }
 
+    const decisions = this.registry.listRecentSecurityDecisions?.(Math.max(0, height - 18)) ?? [];
+    const decisionLines: Line[] = decisions.length === 0
+      ? [buildPanelLine(width, [['  No MCP decisions recorded yet.', C.dim]])]
+      : decisions.map((decision) => {
+          const summary = `${decision.serverName}:${decision.toolName} ${decision.verdict.toUpperCase()} ${decision.capability}${decision.incoherent ? ' incoherent' : ''}`;
+          return buildPanelLine(width, [
+            ['  ', C.label],
+            [truncateDisplay(summary, Math.max(0, width - 2)), decisionColor(decision)],
+          ]);
+        });
+
+    const sections: PanelWorkspaceSection[] = [
+      { title: 'Servers', lines: listLines },
+      { title: 'Selected Server', lines: detailLines },
+      { title: 'Recent Decisions', lines: decisionLines },
+    ];
+    const lines = buildPanelWorkspace(width, height, {
+      title: 'MCP Control Room',
+      intro,
+      sections,
+      footerLines: [buildPanelLine(width, [['  Up/Down move  r refresh', C.dim]])],
+      palette: C,
+    });
     while (lines.length < height) lines.push(createEmptyLine(width));
     return lines.slice(0, height);
   }

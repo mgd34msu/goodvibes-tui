@@ -17,6 +17,16 @@ import { createStateTool } from './state/index.ts';
 import { workflowTool } from './workflow/index.ts';
 import { createRegistryTool } from './registry-tool/index.ts';
 import { KVState } from '../state/kv-state.ts';
+import { taskTool } from './task/index.ts';
+import { teamTool } from './team/index.ts';
+import { worklistTool } from './worklist/index.ts';
+import { mcpResourceTool } from './mcp-resource/index.ts';
+import { briefTool } from './brief/index.ts';
+import { questionTool } from './question/index.ts';
+import { remoteTool } from './remote-trigger/index.ts';
+import { replTool } from './repl/index.ts';
+import { controlTool } from './control/index.ts';
+import { powershellTool } from './powershell/index.ts';
 
 /**
  * Register all built-in tools into the given registry.
@@ -46,5 +56,15 @@ export function registerAllTools(
   registry.register(workflowTool);
   registry.register(fetchTool);
   registry.register(createRegistryTool(registry));
+  registry.register(taskTool);
+  registry.register(teamTool);
+  registry.register(worklistTool);
+  registry.register(mcpResourceTool);
+  registry.register(briefTool);
+  registry.register(questionTool);
+  registry.register(remoteTool);
+  registry.register(replTool);
+  registry.register(controlTool);
+  registry.register(powershellTool);
   return { fileCache, projectIndex };
 }

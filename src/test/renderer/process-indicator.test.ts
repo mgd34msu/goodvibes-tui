@@ -18,7 +18,7 @@ describe('renderProcessIndicator', () => {
   test('idle state contains idle label text', () => {
     const lines = renderProcessIndicator(W, 0, 0);
     const text = lineToString(lines[0]);
-    expect(text).toContain('No background processes');
+    expect(text).toContain('bg: none');
   });
 
   test('idle state cells are dimmed', () => {
@@ -76,18 +76,16 @@ describe('renderProcessIndicator', () => {
     expect(text).not.toContain('1 tools running');
   });
 
-  test('down arrow hint present when active', () => {
+  test('open hint present when active', () => {
     const lines = renderProcessIndicator(W, 1, 0);
     const text = lineToString(lines[0]);
-    // hint contains ↓ and "Enter to view" text
-    expect(text).toContain('\u2193');
     expect(text).toContain('Enter to view');
   });
 
-  test('down arrow hint not present when idle', () => {
+  test('open hint not present when idle', () => {
     const lines = renderProcessIndicator(W, 0, 0);
     const text = lineToString(lines[0]);
-    expect(text).not.toContain('\u2193');
+    expect(text).not.toContain('Enter to view');
   });
 
   test('width handling: narrow terminal (40 cols)', () => {
@@ -104,11 +102,11 @@ describe('renderProcessIndicator', () => {
     expect(cyanBold.length).toBeGreaterThan(0);
   });
 
-  test('focused with zero processes shows arrow prefix', () => {
+  test('focused with zero processes shows focus prefix', () => {
     const lines = renderProcessIndicator(80, 0, 0, true);
     expect(lines.length).toBe(1);
     const text = lines[0].map(c => c.char).join('');
-    expect(text).toContain('\u25b6');
+    expect(text).toContain('>');
     expect(text).toContain('No background processes');
   });
 
@@ -141,7 +139,7 @@ describe('renderProcessIndicator', () => {
   });
 
   test('agentProgress appears in rendered output when passed', () => {
-    const progress = 'Turn 3 · precision_write';
+    const progress = 'Turn 3 | precision_write';
     const lines = renderProcessIndicator(W, 1, 0, false, progress);
     const text = lineToString(lines[0]);
     expect(text).toContain(progress);
@@ -161,8 +159,8 @@ describe('renderProcessIndicator', () => {
   test('no agentProgress shows no progress suffix', () => {
     const lines = renderProcessIndicator(W, 1, 0, false, undefined);
     const text = lineToString(lines[0]);
-    // Should contain agent count but no ' · Turn' style suffix beyond it
+    // Should contain agent count but no progress suffix beyond it
     expect(text).toContain('1 agent');
-    expect(text).not.toContain(' · Turn');
+    expect(text).not.toContain(' | Turn');
   });
 });

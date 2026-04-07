@@ -117,6 +117,24 @@ rl.on('line', (line) => {
     }
   });
 
+  test('connect() can use an injected process spec', async () => {
+    const client = new McpClient(makeConfig(), {
+      timeout: 5000,
+      processSpec: {
+        command: 'bun',
+        args: ['--eval', stubScript],
+      },
+    });
+    try {
+      await client.connect();
+      expect(client.isConnected).toBe(true);
+      const tools = await client.listTools();
+      expect(tools).toHaveLength(2);
+    } finally {
+      await client.disconnect();
+    }
+  });
+
   test('listTools() returns tool names and descriptions', async () => {
     const client = new McpClient(makeStubConfig(), { timeout: 5000 });
     try {

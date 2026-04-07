@@ -2,6 +2,15 @@ import { BasePanel } from './base-panel.ts';
 import { createEmptyLine, createStyledCell, type Line } from '../types/grid.ts';
 import type { RuntimeEventBus, TurnEvent } from '../runtime/events/index.ts';
 import type { Orchestrator } from '../core/orchestrator.ts';
+import {
+  buildEmptyState,
+  buildPanelLine,
+  buildStyledPanelLine,
+  buildPanelWorkspace,
+  DEFAULT_PANEL_PALETTE,
+  type PanelWorkspaceSection,
+} from './polish.ts';
+import { getVisibleWindow } from '../renderer/surface-layout.ts';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -74,7 +83,7 @@ function fmtTok(n: number): string {
 }
 
 function fmtMs(ms: number): string {
-  if (ms <= 0)       return '—';
+  if (ms <= 0)       return 'n/a';
   if (ms >= 10_000)  return `${(ms / 1000).toFixed(1)}s`;
   if (ms >= 1_000)   return `${(ms / 1000).toFixed(2)}s`;
   return `${Math.round(ms)}ms`;
@@ -257,29 +266,48 @@ export class DebugPanel extends BasePanel {
   // -------------------------------------------------------------------------
 
   override render(width: number, height: number): Line[] {
-    const lines: Line[] = [];
+    const sections: PanelWorkspaceSection[] = [
+      {
+        title: 'Session',
+        lines: this._renderSummary(width),
+      },
+    ];
 
-    // 1. Title
-    lines.push(this._titleLine(width));
-    lines.push(this._hrLine(width));
-
-    // 2. Session summary
-    lines.push(...this._renderSummary(width));
-    lines.push(this._hrLine(width));
-
-    // 3. Per-call log
-    const remainingForLog = height - lines.length - (this._errors.length > 0 ? 4 : 0) - 3;
-    lines.push(...this._renderCallLog(width, Math.max(3, remainingForLog)));
-
-    // 4. Error history (only if there are errors)
-    if (this._errors.length > 0) {
-      lines.push(this._hrLine(width));
-      lines.push(...this._renderErrorHistory(width, Math.max(3, height - lines.length - 1)));
+    if (this._calls.length === 0) {
+      sections.push({
+        title: 'API Call Log',
+        lines: buildEmptyState(
+          width,
+          ' No calls yet',
+          'Completed provider calls and API failures will appear here with timing, token counts, and status codes.',
+          [],
+          DEFAULT_PANEL_PALETTE,
+        ),
+      });
+    } else {
+      const rows = this._renderCallLog(width);
+      const window = getVisibleWindow(rows.length, rows.length - 1, Math.max(8, height - 10));
+      sections.push({
+        title: 'API Call Log',
+        lines: rows.slice(window.start, window.end),
+      });
     }
 
-    // Pad / trim
-    while (lines.length < height) lines.push(createEmptyLine(width));
-    return lines.slice(0, height);
+    if (this._errors.length > 0) {
+      const errors = this._renderErrorHistory(width);
+      const errorWindow = getVisibleWindow(errors.length, errors.length - 1, Math.max(4, Math.floor((height - 10) / 3)));
+      sections.push({
+        title: 'Error History',
+        lines: errors.slice(errorWindow.start, errorWindow.end),
+      });
+    }
+
+    return buildPanelWorkspace(width, height, {
+      title: ' API Debug',
+      intro: 'Recent provider calls, token deltas, latency, status codes, and error history.',
+      sections,
+      palette: DEFAULT_PANEL_PALETTE,
+    });
   }
 
   // -------------------------------------------------------------------------
@@ -289,41 +317,22 @@ export class DebugPanel extends BasePanel {
   private _renderSummary(width: number): Line[] {
     const errCount = this._totalErrors;
     const okCount  = this._totalCalls - this._totalErrors;
-    const parts: Array<[string, string]> = [
-      [' Calls: ',    C.label],
-      [String(this._totalCalls), C.value],
-      ['  OK: ',      C.label],
-      [String(okCount),          C.ok],
-      ['  Errors: ',  C.label],
-      [String(errCount),         errCount > 0 ? C.error : C.dim],
+    return [
+      buildStyledPanelLine(width, [
+        { text: ' Calls: ', fg: C.label },
+        { text: String(this._totalCalls), fg: C.value },
+        { text: '  OK: ', fg: C.label },
+        { text: String(okCount), fg: C.ok },
+        { text: '  Errors: ', fg: C.label },
+        { text: String(errCount), fg: errCount > 0 ? C.error : C.dim },
+      ]),
     ];
-    const line = createEmptyLine(width);
-    let x = 0;
-    for (const [text, fg] of parts) {
-      for (const ch of text) {
-        if (x >= width) break;
-        line[x++] = createStyledCell(ch, { fg });
-      }
-    }
-    return [line];
   }
 
-  private _renderCallLog(width: number, maxRows: number): Line[] {
+  private _renderCallLog(width: number): Line[] {
     const lines: Line[] = [];
-    lines.push(this._textLine(' API Call Log:', C.sectionHdr, width));
-
-    if (this._calls.length === 0) {
-      lines.push(this._textLine('  No calls yet.', C.dim, width));
-      return lines;
-    }
-
-    // Column header
     lines.push(this._callLogHeader(width));
-
-    const available = Math.max(0, maxRows - lines.length);
-    const toShow = this._calls.slice(-available);
-
-    for (const entry of toShow) {
+    for (const entry of this._calls) {
       lines.push(this._callLogRow(entry, width));
     }
 
@@ -337,10 +346,8 @@ export class DebugPanel extends BasePanel {
   }
 
   private _callLogRow(e: ApiCallEntry, width: number): Line {
-    const line = createEmptyLine(width);
-
     const timeStr    = fmtAgo(e.ts).padEnd(8);
-    const statusChar = e.status === 'ok' ? '●' : '✗';
+    const statusChar = e.status === 'ok' ? '*' : 'x';
     const statusFg   = e.status === 'ok' ? C.ok : C.error;
     const provStr    = e.provider.slice(0, 11).padEnd(12);
     const modelStr   = e.model.slice(0, 19).padEnd(20);
@@ -363,24 +370,15 @@ export class DebugPanel extends BasePanel {
       segments.push({ text: ` [${e.statusCode}]`, fg: C.error });
     }
 
-    let x = 0;
-    for (const seg of segments) {
-      for (const ch of seg.text) {
-        if (x >= width) break;
-        line[x++] = createStyledCell(ch, { fg: seg.fg, bold: seg.bold });
-      }
-    }
-    return line;
+    return buildStyledPanelLine(
+      width,
+      segments.map((seg) => ({ text: seg.text, fg: seg.fg, bold: seg.bold })),
+    );
   }
 
-  private _renderErrorHistory(width: number, maxRows: number): Line[] {
+  private _renderErrorHistory(width: number): Line[] {
     const lines: Line[] = [];
-    lines.push(this._textLine(' Error History:', C.sectionHdr, width));
-
-    const available = Math.max(0, maxRows - 1);
-    const toShow = this._errors.slice(-available);
-
-    for (const e of toShow) {
+    for (const e of this._errors) {
       lines.push(this._errorRow(e, width));
     }
 
@@ -399,35 +397,12 @@ export class DebugPanel extends BasePanel {
   // Line-builder helpers
   // -------------------------------------------------------------------------
 
-  private _titleLine(width: number): Line {
-    const line = createEmptyLine(width);
-    const text = ' API Debug';
-    let x = 0;
-    for (const ch of text) {
-      if (x >= width) break;
-      line[x++] = createStyledCell(ch, { fg: C.title, bold: true });
-    }
-    return line;
-  }
-
-  private _hrLine(width: number): Line {
-    return Array.from({ length: width }, () =>
-      createStyledCell('\u2500', { fg: C.separator }),
-    );
-  }
-
   private _textLine(
     text: string,
     fg: string,
     width: number,
     opts: { dim?: boolean } = {},
   ): Line {
-    const line = createEmptyLine(width);
-    let x = 0;
-    for (const ch of text) {
-      if (x >= width) break;
-      line[x++] = createStyledCell(ch, { fg, dim: opts.dim });
-    }
-    return line;
+    return buildStyledPanelLine(width, [{ text, fg, dim: opts.dim }]);
   }
 }

@@ -6,11 +6,12 @@
  */
 
 import { describe, test, expect, beforeEach, afterEach } from 'bun:test';
-import { mkdirSync, rmSync } from 'fs';
+import { existsSync, mkdirSync, rmSync } from 'fs';
 import { join } from 'path';
-import { tmpdir } from 'os';
+import { homedir, tmpdir } from 'os';
 import { resolveApiKeys } from '../../config/index.ts';
 import { SecretsManager, _resetSecretsManagerForTesting } from '../../config/secrets.ts';
+import { getSubscriptionManager, _resetSubscriptionManagerForTesting } from '../../config/subscriptions.ts';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -20,6 +21,13 @@ function makeTmpDir(): string {
   const dir = join(tmpdir(), `gv-resolve-test-${Date.now()}-${Math.random().toString(36).slice(2)}`);
   mkdirSync(dir, { recursive: true });
   return dir;
+}
+
+function clearDefaultSubscriptionStore(): void {
+  const filePath = join(homedir(), '.goodvibes', 'tui', 'subscriptions.json');
+  if (existsSync(filePath)) {
+    rmSync(filePath, { force: true });
+  }
 }
 
 /** Known provider env var names for cleanup — must match all envVars in resolveApiKeys(). */
@@ -41,6 +49,7 @@ const PROVIDER_ENV_VARS = [
 
 /** Snapshot env vars before each test. */
 let savedEnvVars: Record<string, string | undefined> = {};
+const originalFetch = globalThis.fetch;
 
 beforeEach(() => {
   savedEnvVars = {};
@@ -49,6 +58,9 @@ beforeEach(() => {
     delete process.env[key];
   }
   _resetSecretsManagerForTesting();
+  _resetSubscriptionManagerForTesting();
+  clearDefaultSubscriptionStore();
+  globalThis.fetch = originalFetch;
 });
 
 afterEach(() => {
@@ -60,6 +72,8 @@ afterEach(() => {
     }
   }
   _resetSecretsManagerForTesting();
+  _resetSubscriptionManagerForTesting();
+  clearDefaultSubscriptionStore();
 });
 
 // ---------------------------------------------------------------------------
@@ -138,6 +152,22 @@ describe('resolveApiKeys', () => {
       process.env['OPENAI_KEY'] = 'secondary';
       const keys = await resolveApiKeys();
       expect(keys['openai']).toBe('primary');
+    });
+
+    test('ambient provider API keys remain unchanged when subscriptions exist', async () => {
+      process.env['ANTHROPIC_API_KEY'] = 'env-anthropic-key';
+      const manager = getSubscriptionManager();
+      manager.saveSubscription({
+        provider: 'openai',
+        accessToken: 'subscription-openai-token',
+        tokenType: 'Bearer',
+        authMode: 'oauth',
+        overrideAmbientApiKeys: false,
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      });
+      const keys = await resolveApiKeys();
+      expect(keys['anthropic']).toBe('env-anthropic-key');
     });
   });
 

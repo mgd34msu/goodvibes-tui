@@ -3,11 +3,18 @@
 // ---------------------------------------------------------------------------
 
 import type { Line } from '../types/grid.ts';
-import { createStyledCell, createEmptyLine } from '../types/grid.ts';
-import { getDisplayWidth } from '../utils/terminal-width.ts';
 import { BasePanel } from './base-panel.ts';
 import type { ToolRegistry } from '../tools/registry.ts';
 import type { ProviderRegistry } from '../providers/registry.ts';
+import { buildPanelLine, buildPanelWorkspace, buildSearchInputLine, DEFAULT_PANEL_PALETTE } from './polish.ts';
+import { getTrackedVisibleWindow } from '../renderer/surface-layout.ts';
+import {
+  getPanelSearchFocusTransition,
+  isPanelSearchBackspace,
+  isPanelSearchCancel,
+  isPanelSearchCommit,
+  isPanelSearchPrintable,
+} from './search-focus.ts';
 
 const C = {
   headerBg:   '#1a1a2e',
@@ -43,8 +50,8 @@ const SHORTCUTS: Array<{ key: string; desc: string }> = [
   { key: '/',           desc: 'Start slash command' },
   { key: 'Enter',       desc: 'Submit prompt' },
   { key: 'Esc',         desc: 'Close overlay / cancel search' },
-  { key: '\u2191\u2193',          desc: 'Scroll history / navigate list' },
-  { key: 'Alt+\u2191\u2193',     desc: 'Move cursor in multi-line input' },
+  { key: 'Up/Down',      desc: 'Scroll history / navigate list' },
+  { key: 'Alt+Up/Down',  desc: 'Move cursor in multi-line input' },
   { key: 'Ctrl+A/E',    desc: 'Jump to start/end of line' },
   { key: 'Ctrl+W',      desc: 'Delete word backward' },
   { key: 'Ctrl+U',      desc: 'Clear line' },
@@ -64,25 +71,10 @@ interface FlatRow {
 
 function renderRow(width: number, row: FlatRow, isCursor: boolean): Line {
   const bg = isCursor ? C.selectedBg : row.bg;
-  const line: Line = new Array(width);
-  // Column 0: cursor indicator (always 1 display cell)
-  line[0] = createStyledCell(isCursor ? '>' : ' ', { fg: C.selected, bg, bold: isCursor });
-  let col = 1;
-  for (const ch of row.text) {
-    if (col >= width) break;
-    const cw = getDisplayWidth(ch);
-    if (col + cw > width) break;
-    line[col] = createStyledCell(ch, { fg: isCursor ? C.selected : row.fg, bg, bold: row.bold || isCursor });
-    if (cw === 2 && col + 1 < width) {
-      line[col + 1] = { ...line[col]!, char: '' };
-    }
-    col += cw;
-  }
-  // Pad remaining columns with spaces
-  while (col < width) {
-    line[col++] = createStyledCell(' ', { fg: '', bg });
-  }
-  return line;
+  return buildPanelLine(width, [
+    [isCursor ? '>' : ' ', C.selected, bg],
+    [row.text, isCursor ? C.selected : row.fg, bg],
+  ]);
 }
 
 export class DocsPanel extends BasePanel {
@@ -108,17 +100,24 @@ export class DocsPanel extends BasePanel {
 
   handleInput(key: string): boolean {
     if (this.searching) {
-      if (key === 'escape' || key === 'return') {
+      const transition = getPanelSearchFocusTransition(key, { selectedIndex: this.cursorIndex, itemCount: this.rows.length });
+      if (transition === 'focus-list') {
+        this.searching = false;
+        this.cursorIndex = 0;
+        this.markDirty();
+        return true;
+      }
+      if (isPanelSearchCancel(key) || isPanelSearchCommit(key)) {
         this.searching = false;
         this._buildRows();
         return true;
       }
-      if (key === 'backspace') {
+      if (isPanelSearchBackspace(key)) {
         this.searchQuery = this.searchQuery.slice(0, -1);
         this._buildRows();
         return true;
       }
-      if (key.length === 1) {
+      if (isPanelSearchPrintable(key)) {
         this.searchQuery += key;
         this._buildRows();
         return true;
@@ -126,12 +125,17 @@ export class DocsPanel extends BasePanel {
       return false;
     }
 
+    const transition = getPanelSearchFocusTransition(key, { selectedIndex: this.cursorIndex, itemCount: this.rows.length });
+    if (transition === 'focus-search') {
+      this._startSearch();
+      return true;
+    }
+
     switch (key) {
       case 'up':       this._move(-1);         return true;
       case 'down':     this._move(1);          return true;
       case 'pageup':   this._move(-10);        return true;
       case 'pagedown': this._move(10);         return true;
-      case '/':        this._startSearch();    return true;
       case 't':        this._setSection('tools');     return true;
       case 'm':        this._setSection('models');    return true;
       case 'k':        this._setSection('shortcuts'); return true;
@@ -140,39 +144,46 @@ export class DocsPanel extends BasePanel {
   }
 
   render(width: number, height: number): Line[] {
-    const lines: Line[] = [];
-    if (height <= 0 || width <= 0) return lines;
-
-    // Header
+    if (height <= 0 || width <= 0) return [];
     const sectionLabel = this.section === 'tools' ? 'Tools' : this.section === 'models' ? 'Models' : 'Shortcuts';
-    lines.push(_renderBg(width, ` Docs / ${sectionLabel}  [t]ools [m]odels [k]eyboard`, C.headerFg, C.headerBg, true));
-    if (height <= 1) return lines.slice(0, height);
-
-    // Search bar
     const searchLine = this.searching
       ? ` Search: ${this.searchQuery}\u258a`
       : this.searchQuery
-      ? ` Filter: ${this.searchQuery}  (/ to edit)`
-      : ` / to search`;
-    lines.push(_renderBg(width, searchLine, this.searching ? C.selected : C.statusFg, C.statusBar));
-    if (height <= 2) return lines.slice(0, height);
-
-    // Content rows
-    const listHeight = height - 2;
+      ? ` Filter: ${this.searchQuery}  (/ or up at top to edit)`
+      : ` / or up at top to search`;
     this.cursorIndex = Math.max(0, Math.min(this.cursorIndex, Math.max(0, this.rows.length - 1)));
-    if (this.cursorIndex < this.scrollOffset) this.scrollOffset = this.cursorIndex;
-    if (this.cursorIndex >= this.scrollOffset + listHeight) this.scrollOffset = this.cursorIndex - listHeight + 1;
-
-    const visible = this.rows.slice(this.scrollOffset, this.scrollOffset + listHeight);
-    for (let i = 0; i < visible.length; i++) {
-      const row = visible[i]!;
-      const absIdx = this.scrollOffset + i;
+    const window = getTrackedVisibleWindow(this.rows.length, this.cursorIndex, Math.max(8, height - 8), this.scrollOffset, 1);
+    this.scrollOffset = window.start;
+    const visible = this.rows.slice(window.start, window.end);
+    const sectionRows = visible.map((row, index) => {
+      const absIdx = window.start + index;
       const isCursor = absIdx === this.cursorIndex && row.kind !== 'header' && row.kind !== 'empty';
-      lines.push(renderRow(width, row, isCursor));
-    }
+      return renderRow(width, row, isCursor);
+    });
 
-    while (lines.length < height) lines.push(createEmptyLine(width));
-    return lines.slice(0, height);
+    return buildPanelWorkspace(width, height, {
+      title: ` Docs / ${sectionLabel}`,
+      intro: 'Browse built-in tool docs, available models, and keyboard shortcuts from one shared reference surface.',
+      sections: [
+        {
+          title: 'Controls',
+          lines: [
+            buildPanelLine(width, [
+              [' t', DEFAULT_PANEL_PALETTE.info], [' tools', DEFAULT_PANEL_PALETTE.dim],
+              ['   m', DEFAULT_PANEL_PALETTE.info], [' models', DEFAULT_PANEL_PALETTE.dim],
+              ['   k', DEFAULT_PANEL_PALETTE.info], [' shortcuts', DEFAULT_PANEL_PALETTE.dim],
+              ['   /', DEFAULT_PANEL_PALETTE.info], [' search', DEFAULT_PANEL_PALETTE.dim],
+            ]),
+            buildSearchInputLine(width, '', searchLine.trimStart(), DEFAULT_PANEL_PALETTE, { active: this.searching }),
+          ],
+        },
+        {
+          title: sectionLabel,
+          lines: sectionRows.length > 0 ? sectionRows : [buildPanelLine(width, [[' No matching docs', DEFAULT_PANEL_PALETTE.dim]])],
+        },
+      ],
+      palette: DEFAULT_PANEL_PALETTE,
+    });
   }
 
   private _setSection(section: DocSection): void {
@@ -224,7 +235,7 @@ export class DocsPanel extends BasePanel {
             metadata.push('streaming');
           }
           if (metadata.length > 0) {
-            rows.push({ kind: 'detail', text: `    ${metadata.join('  •  ')}`, fg: C.dimFg, bg: '' });
+            rows.push({ kind: 'detail', text: `    ${metadata.join('  |  ')}`, fg: C.dimFg, bg: '' });
           }
         }
       }
@@ -265,24 +276,4 @@ export class DocsPanel extends BasePanel {
     this.cursorIndex = Math.min(this.cursorIndex, Math.max(0, rows.length - 1));
     this.markDirty();
   }
-}
-
-function _renderBg(width: number, text: string, fg: string, bg: string, bold = false): Line {
-  const line: Line = new Array(width);
-  let col = 0;
-  for (const ch of text) {
-    if (col >= width) break;
-    const cw = getDisplayWidth(ch);
-    if (col + cw > width) break;
-    line[col] = createStyledCell(ch, { fg, bg, bold });
-    if (cw === 2 && col + 1 < width) {
-      line[col + 1] = { ...line[col]!, char: '' };
-    }
-    col += cw;
-  }
-  // Pad remaining columns with spaces
-  while (col < width) {
-    line[col++] = createStyledCell(' ', { fg: '', bg });
-  }
-  return line;
 }

@@ -58,7 +58,7 @@ describe('renderSessionPickerModal', () => {
 
   test('selected item has arrow indicator', () => {
     const lines = renderSessionPickerModal(makeModal(), W);
-    const hasArrow = lines.some(line => line.some(cell => cell.char === '\u25b6'));
+    const hasArrow = lines.some(line => line.some(cell => cell.char === '>'));
     expect(hasArrow).toBe(true);
   });
 
@@ -76,6 +76,16 @@ describe('renderSessionPickerModal', () => {
     const lines = renderSessionPickerModal(modal, W);
     const texts = linesToText(lines).join('\n');
     expect(texts).toContain('Deleted: alpha-session');
+  });
+
+  test('delete confirmation guidance is displayed when armed', () => {
+    const modal = makeModal();
+    modal.deleteConfirmationTarget = 'alpha-session';
+    modal.statusMessage = 'Press d again to delete alpha-session.';
+    const lines = renderSessionPickerModal(modal, W);
+    const texts = linesToText(lines).join('\n');
+    expect(texts).toContain('Deletion is armed for alpha-session');
+    expect(texts).toContain('Arm / Delete');
   });
 
   test('works at narrow terminal width', () => {

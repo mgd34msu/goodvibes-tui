@@ -9,7 +9,7 @@ import { matchesEventPath, matchesMatcher } from './matcher.ts';
 import type { HookChain, HookDefinition, HookEvent, HookResult, HookType, HooksConfig } from './types.ts';
 
 export interface HookAuthoringAction {
-  readonly kind: 'load' | 'save' | 'reload' | 'scaffold-hook' | 'scaffold-chain' | 'remove' | 'toggle' | 'simulate' | 'export';
+  readonly kind: 'load' | 'save' | 'reload' | 'scaffold-hook' | 'scaffold-chain' | 'remove' | 'toggle' | 'simulate' | 'export' | 'import' | 'inspect';
   readonly target: string;
   readonly timestamp: number;
   readonly detail?: string;
@@ -28,6 +28,13 @@ export interface HookSimulationResult {
     readonly stepMatches: number;
   }[];
   readonly capturedAt: number;
+}
+
+export interface HookConfigInspection {
+  readonly path: string;
+  readonly hookCount: number;
+  readonly chainCount: number;
+  readonly patterns: readonly string[];
 }
 
 const EMPTY_CONFIG: HooksConfig = Object.freeze({ hooks: {}, chains: [] });
@@ -229,6 +236,62 @@ export class HookWorkbench {
     await this.saveManagedConfig(path);
     this.recordAction({ kind: 'export', target: path, timestamp: Date.now() });
     return path;
+  }
+
+  inspectManagedConfig(path: string): HookConfigInspection {
+    const config = ensureConfigShape(JSON.parse(readFileSync(path, 'utf-8')) as unknown);
+    const inspection: HookConfigInspection = {
+      path,
+      hookCount: Object.values(config.hooks ?? {}).reduce((sum, defs) => sum + defs.length, 0),
+      chainCount: (config.chains ?? []).length,
+      patterns: Object.keys(config.hooks ?? {}).sort((a, b) => a.localeCompare(b)),
+    };
+    this.recordAction({
+      kind: 'inspect',
+      target: path,
+      timestamp: Date.now(),
+      detail: `${inspection.hookCount} hooks / ${inspection.chainCount} chains`,
+    });
+    return inspection;
+  }
+
+  importManagedConfig(path: string, strategy: 'merge' | 'replace' = 'merge'): HooksConfig {
+    const incoming = ensureConfigShape(JSON.parse(readFileSync(path, 'utf-8')));
+    if (strategy === 'replace') {
+      this.managedConfig = cloneConfig(incoming);
+    } else {
+      const merged = cloneConfig(this.managedConfig);
+      merged.hooks ??= {};
+      for (const [pattern, defs] of Object.entries(incoming.hooks ?? {})) {
+        const existing = merged.hooks[pattern] ?? [];
+        const byName = new Map(existing.map((def) => [def.name ?? `${pattern}:${def.type}:${existing.indexOf(def)}`, { ...def }]));
+        for (const def of defs) {
+          byName.set(def.name ?? `${pattern}:${def.type}:${byName.size}`, { ...def });
+        }
+        merged.hooks[pattern] = [...byName.values()];
+      }
+      const existingChains = new Map((merged.chains ?? []).map((chain) => [chain.name, {
+        ...chain,
+        steps: chain.steps.map((step) => ({ ...step })),
+        action: { ...chain.action },
+      }]));
+      for (const chain of incoming.chains ?? []) {
+        existingChains.set(chain.name, {
+          ...chain,
+          steps: chain.steps.map((step) => ({ ...step })),
+          action: { ...chain.action },
+        });
+      }
+      merged.chains = [...existingChains.values()];
+      this.managedConfig = merged;
+    }
+    this.recordAction({
+      kind: 'import',
+      target: path,
+      timestamp: Date.now(),
+      detail: `${strategy} -> ${this.listManagedHooks().length} hooks / ${this.listManagedChains().length} chains`,
+    });
+    return this.getManagedConfig();
   }
 
   simulate(eventPath: string, payload: Record<string, unknown> = {}): HookSimulationResult {

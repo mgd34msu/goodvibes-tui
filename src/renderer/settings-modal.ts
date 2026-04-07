@@ -12,8 +12,11 @@
 
 import type { Line } from '../types/grid.ts';
 import { ModalFactory } from './modal-factory.ts';
-import type { SettingsModal, SettingEntry, FlagEntry, McpEntry } from '../input/settings-modal.ts';
+import type { SettingsModal, SettingEntry, FlagEntry, McpEntry, SubscriptionEntry } from '../input/settings-modal.ts';
 import { SETTINGS_CATEGORIES } from '../input/settings-modal.ts';
+import { fitDisplay, truncateDisplay } from '../utils/terminal-width.ts';
+import { getOverlaySurfaceMetrics, getStableOverlayContentRows } from './overlay-viewport.ts';
+import { getVisibleWindow } from './surface-layout.ts';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -53,6 +56,61 @@ function mcpTrustColor(mode: McpEntry['trustMode']): string {
   }
 }
 
+function subscriptionStateColor(state: SubscriptionEntry['state']): string {
+  switch (state) {
+    case 'active':
+      return '#00ffcc';
+    case 'pending':
+      return '#eab308';
+    case 'available':
+      return '#38bdf8';
+    default:
+      return '244';
+  }
+}
+
+const CATEGORY_LABELS: Record<(typeof SETTINGS_CATEGORIES)[number], string> = {
+  display: 'Display',
+  ui: 'UI',
+  provider: 'Provider',
+  subscriptions: 'Subscriptions',
+  behavior: 'Behavior',
+  permissions: 'Permissions',
+  mcp: 'MCP',
+  sandbox: 'Sandbox',
+  danger: 'Danger',
+  tools: 'Tools',
+  flags: 'Flags',
+};
+
+const SETTING_LABELS: Partial<Record<string, string>> = {
+  'ui.systemMessages': 'System Message Target',
+  'ui.operationalMessages': 'Operational Message Target',
+  'ui.wrfcMessages': 'WRFC Message Target',
+  'ui.voiceEnabled': 'Voice Surface',
+  'sandbox.vmBackend': 'Sandbox Backend',
+  'sandbox.qemuBinary': 'QEMU Binary',
+  'sandbox.qemuImagePath': 'QEMU Image',
+  'sandbox.qemuExecWrapper': 'QEMU Wrapper',
+};
+
+function getSettingLabel(entry: SettingEntry): string {
+  return SETTING_LABELS[entry.setting.key] ?? entry.setting.key.replace(/^[^.]+\./, '');
+}
+
+function describeUiRouting(value: string): string {
+  switch (value) {
+    case 'panel':
+      return 'render in panels only';
+    case 'conversation':
+      return 'render inline in conversation';
+    case 'both':
+      return 'render in both conversation and panels';
+    default:
+      return value;
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Renderer
 // ---------------------------------------------------------------------------
@@ -66,27 +124,41 @@ function mcpTrustColor(mode: McpEntry['trustMode']): string {
 export function renderSettingsModal(
   modal: SettingsModal,
   width: number,
+  viewportHeight = 24,
 ): Line[] {
-  const boxMargin = 4;
-  const maxBoxW = 76;
-  const boxW = Math.min(width - boxMargin * 2, maxBoxW);
-  const contentW = boxW - 4;
+  const metrics = getOverlaySurfaceMetrics(width, viewportHeight, {
+    chromeRows: 8,
+    minContentRows: 5,
+    maxContentRows: 8,
+  });
+  const boxMargin = metrics.margin;
+  const boxW = metrics.boxWidth;
+  const contentW = metrics.contentWidth;
+  const maxVisibleRows = metrics.contentRows;
+  const targetContentRows = getStableOverlayContentRows(maxVisibleRows, 8);
 
   const sections: import('./modal-factory.ts').ModalSection[] = [];
 
-  // ── Category tabs ────────────────────────────────────────────
-  const tabParts = SETTINGS_CATEGORIES.map((cat, i) => {
-    const isActive = i === modal.categoryIndex;
-    return isActive ? `[${cat.toUpperCase()}]` : ` ${cat} `;
-  });
-  const tabLine = tabParts.join(' ');
   const isDangerTab = SETTINGS_CATEGORIES[modal.categoryIndex] === 'danger';
   const isMcpTab = SETTINGS_CATEGORIES[modal.categoryIndex] === 'mcp';
+  const isSubscriptionsTab = SETTINGS_CATEGORIES[modal.categoryIndex] === 'subscriptions';
   const isFlagsTab = SETTINGS_CATEGORIES[modal.categoryIndex] === 'flags';
+  const isUiTab = SETTINGS_CATEGORIES[modal.categoryIndex] === 'ui';
+  let persistentHelpers: import('./modal-factory.ts').ModalHelperRow[] | undefined;
   sections.push({
     type: 'text',
-    content: tabLine,
-    style: { fg: isDangerTab ? '#ef4444' : isFlagsTab ? '#a78bfa' : isMcpTab ? '#38bdf8' : '#00ffff', bold: true },
+    content: isDangerTab
+      ? 'High-impact configuration. Treat changes here as operational overrides, not everyday preferences.'
+      : isMcpTab
+        ? 'Review MCP role, trust, and scope. High-risk escalation is intentionally more explicit here.'
+        : isSubscriptionsTab
+          ? 'Manage provider login state and subscription-backed routing without dropping into raw config files.'
+          : isUiTab
+            ? 'Control shell presentation, including where operational and WRFC updates render across conversation and panels.'
+          : isFlagsTab
+            ? 'Feature flags control staged or experimental behavior. Some changes may require restart.'
+            : 'Browse and adjust operator-facing runtime settings by category.',
+    style: { fg: '246', dim: true },
   });
 
   sections.push({ type: 'separator' });
@@ -120,8 +192,10 @@ export function renderSettingsModal(
       });
       sections.push({ type: 'separator' });
 
-      const listItems: import('./modal-factory.ts').ModalListItem[] = flagEntries.map((entry, idx) => {
-        const isSelected = idx === modal.selectedIndex;
+      const window = getVisibleWindow(flagEntries.length, modal.selectedIndex, maxVisibleRows);
+      const visibleFlags = flagEntries.slice(window.start, window.end);
+      const listItems: import('./modal-factory.ts').ModalListItem[] = visibleFlags.map((entry, idx) => {
+        const isSelected = window.start + idx === modal.selectedIndex;
         const isKilled = entry.state === 'killed';
 
         const nameStr = entry.flag.name.length > nameW
@@ -149,6 +223,13 @@ export function renderSettingsModal(
       });
 
       sections.push({ type: 'list', items: listItems });
+      if (flagEntries.length > maxVisibleRows) {
+        sections.push({
+          type: 'text',
+          content: `[${window.start + 1}-${window.end} of ${flagEntries.length}]`,
+          style: { fg: '244', dim: true },
+        });
+      }
 
       // Description of selected flag
       const selected = modal.getSelectedFlag();
@@ -181,8 +262,14 @@ export function renderSettingsModal(
         title: 'Settings',
         width: boxW,
         margin: boxMargin,
+        targetContentRows,
+        tabs: SETTINGS_CATEGORIES.map((category, index) => ({
+          label: CATEGORY_LABELS[category],
+          active: index === modal.categoryIndex,
+        })),
         sections,
         hints,
+        helpers: persistentHelpers,
       },
       width,
     );
@@ -198,6 +285,7 @@ export function renderSettingsModal(
         style: { fg: '240', dim: true },
       });
     } else {
+      const visibleRows = Math.max(1, maxVisibleRows - 4);
       const nameW = Math.floor(contentW * 0.28);
       const roleW = 12;
       const trustW = 13;
@@ -205,13 +293,15 @@ export function renderSettingsModal(
 
       sections.push({
         type: 'text',
-        content: `${'Server'.padEnd(nameW)}  ${'Role'.padEnd(roleW)}  ${'Trust'.padEnd(trustW)}  Scope`,
+        content: `${fitDisplay('Server', nameW)}  ${fitDisplay('Role', roleW)}  ${fitDisplay('Trust', trustW)}  Scope`,
         style: { fg: '240', dim: true },
       });
       sections.push({ type: 'separator' });
 
-      const listItems: import('./modal-factory.ts').ModalListItem[] = mcpEntries.map((entry, idx) => {
-        const isSelected = idx === modal.selectedIndex;
+      const window = getVisibleWindow(mcpEntries.length, modal.selectedIndex, visibleRows);
+      const visibleMcpEntries = mcpEntries.slice(window.start, window.end);
+      const listItems: import('./modal-factory.ts').ModalListItem[] = visibleMcpEntries.map((entry, idx) => {
+        const isSelected = window.start + idx === modal.selectedIndex;
         const isEditing = isSelected && modal.editingMode;
         const trustValue = isEditing ? `${modal.editBuffer}\u2588` : entry.trustMode;
         const scopeValue = entry.allowedPaths.length > 0
@@ -219,7 +309,7 @@ export function renderSettingsModal(
           : entry.allowedHosts.length > 0
             ? `hosts:${entry.allowedHosts.length}`
             : 'unbounded';
-        const label = `${entry.name.padEnd(nameW).slice(0, nameW)}  ${entry.role.padEnd(roleW).slice(0, roleW)}  ${trustValue.padEnd(trustW).slice(0, trustW)}  ${scopeValue.slice(0, scopeW)}`;
+        const label = `${fitDisplay(entry.name, nameW)}  ${fitDisplay(entry.role, roleW)}  ${fitDisplay(trustValue, trustW)}  ${fitDisplay(scopeValue, scopeW)}`;
         return {
           label,
           selected: isSelected,
@@ -228,6 +318,13 @@ export function renderSettingsModal(
       });
 
       sections.push({ type: 'list', items: listItems });
+      if (mcpEntries.length > visibleRows) {
+        sections.push({
+          type: 'text',
+          content: `[${window.start + 1}-${window.end} of ${mcpEntries.length}]`,
+          style: { fg: '244', dim: true },
+        });
+      }
 
       const selected = modal.getSelectedMcp();
       if (selected) {
@@ -244,7 +341,7 @@ export function renderSettingsModal(
             : 'No explicit path or host scope is configured.';
         sections.push({
           type: 'text',
-          content: scope.length > contentW ? `${scope.slice(0, contentW - 1)}…` : scope,
+          content: truncateDisplay(scope, contentW),
           style: { fg: '240', dim: true },
         });
         const guidance = modal.mcpAllowAllConfirmationTarget
@@ -252,23 +349,132 @@ export function renderSettingsModal(
           : 'Press Enter to edit trust mode. Type constrained, ask-on-risk, allow-all, or blocked, then press Enter.';
         sections.push({
           type: 'text',
-          content: guidance.length > contentW ? `${guidance.slice(0, contentW - 1)}…` : guidance,
+          content: truncateDisplay(guidance, contentW),
           style: { fg: modal.mcpAllowAllConfirmationTarget ? '#ef4444' : '#38bdf8', dim: true },
         });
+        if (modal.mcpAllowAllConfirmationTarget) {
+          persistentHelpers = [{ content: truncateDisplay(guidance, contentW), accent: true }];
+        }
       }
     }
 
     const hints = modal.editingMode
       ? ['[Enter] Confirm', '[Esc] Cancel']
-      : ['[Tab] Category', '[↑↓] Navigate', '[Enter] Edit Trust', '[Esc] Close'];
+      : ['[Tab] Category', '[Up/Down] Navigate', '[Enter] Edit Trust', '[Esc] Close'];
 
     return ModalFactory.createModal(
       {
         title: 'Settings',
         width: boxW,
         margin: boxMargin,
+        targetContentRows,
+        tabs: SETTINGS_CATEGORIES.map((category, index) => ({
+          label: CATEGORY_LABELS[category],
+          active: index === modal.categoryIndex,
+        })),
+        sections,
+        helpers: persistentHelpers,
+        hints,
+      },
+      width,
+    );
+  }
+
+  if (isSubscriptionsTab) {
+    const subscriptionEntries = modal.subscriptionEntries;
+
+    if (subscriptionEntries.length === 0) {
+      sections.push({
+        type: 'text',
+        content: '(no provider subscriptions available or configured)',
+        style: { fg: '240', dim: true },
+      });
+    } else {
+      const visibleRows = Math.max(1, maxVisibleRows - 4);
+      const providerW = Math.floor(contentW * 0.28);
+      const stateW = 12;
+      const tokenW = 12;
+      const scopeW = Math.max(0, contentW - providerW - stateW - tokenW - 6);
+
+      sections.push({
+        type: 'text',
+        content: `${fitDisplay('Provider', providerW)}  ${fitDisplay('State', stateW)}  ${fitDisplay('Token', tokenW)}  Notes`,
+        style: { fg: '240', dim: true },
+      });
+      sections.push({ type: 'separator' });
+
+      const window = getVisibleWindow(subscriptionEntries.length, modal.selectedIndex, visibleRows);
+      const visibleSubscriptions = subscriptionEntries.slice(window.start, window.end);
+      const listItems: import('./modal-factory.ts').ModalListItem[] = visibleSubscriptions.map((entry, idx) => {
+        const isSelected = window.start + idx === modal.selectedIndex;
+        const note = entry.state === 'active'
+          ? 'ambient key override'
+          : entry.state === 'pending'
+            ? 'awaiting code exchange'
+            : entry.oauthConfigured
+              ? 'ready for login'
+              : 'config required';
+        const label = `${fitDisplay(entry.provider, providerW)}  ${fitDisplay(entry.state, stateW)}  ${fitDisplay(entry.tokenType ?? 'n/a', tokenW)}  ${fitDisplay(note, scopeW)}`;
+        return {
+          label,
+          selected: isSelected,
+          style: isSelected ? undefined : { fg: subscriptionStateColor(entry.state) },
+        };
+      });
+
+      sections.push({ type: 'list', items: listItems });
+      if (subscriptionEntries.length > visibleRows) {
+        sections.push({
+          type: 'text',
+          content: `[${window.start + 1}-${window.end} of ${subscriptionEntries.length}]`,
+          style: { fg: '244', dim: true },
+        });
+      }
+
+      const selected = modal.getSelectedSubscription();
+      if (selected) {
+        sections.push({ type: 'separator' });
+        const expires = selected.expiresAt ? new Date(selected.expiresAt).toISOString() : 'n/a';
+        sections.push({
+          type: 'text',
+          content: `Subscription ${selected.provider} is ${selected.state}. OAuth config is ${selected.oauthConfigured ? 'present' : 'missing'}.`,
+          style: { fg: '246', dim: true },
+        });
+        sections.push({
+          type: 'text',
+          content: truncateDisplay(`Expires: ${expires}`, contentW),
+          style: { fg: '240', dim: true },
+        });
+        const guidance = selected.state === 'active' || selected.state === 'pending'
+          ? modal.subscriptionLogoutConfirmationTarget === selected.provider
+            ? `Press Enter again to sign out ${selected.provider}. Move selection or close settings to cancel.`
+            : 'Press Enter to review sign-out for this provider session.'
+          : 'Use /subscription login <provider> start to begin OAuth sign-in for this provider.';
+        sections.push({
+          type: 'text',
+          content: truncateDisplay(guidance, contentW),
+          style: { fg: selected.state === 'active' || selected.state === 'pending' ? '#f59e0b' : '#38bdf8', dim: true },
+        });
+        if (modal.subscriptionLogoutConfirmationTarget === selected.provider) {
+          persistentHelpers = [{ content: truncateDisplay(guidance, contentW), accent: true }];
+        }
+      }
+    }
+
+    const hints = ['[Tab] Category', '[Up/Down] Navigate', '[Enter] Review / Confirm', '[Esc] Close'];
+    return ModalFactory.createModal(
+      {
+        title: 'Settings',
+        width: boxW,
+        margin: boxMargin,
+        targetContentRows,
+        tabs: SETTINGS_CATEGORIES.map((category, index) => ({
+          label: CATEGORY_LABELS[category],
+          active: index === modal.categoryIndex,
+        })),
         sections,
         hints,
+        helpers: persistentHelpers,
       },
       width,
     );
@@ -288,8 +494,8 @@ export function renderSettingsModal(
     const valW = Math.floor(contentW * 0.22);
 
     // Column header
-    const keyHdr = 'Setting'.padEnd(keyW);
-    const valHdr = 'Value'.padEnd(valW);
+    const keyHdr = fitDisplay('Setting', keyW);
+    const valHdr = fitDisplay('Value', valW);
     const defHdr = 'Default';
     sections.push({
       type: 'text',
@@ -299,8 +505,10 @@ export function renderSettingsModal(
     sections.push({ type: 'separator' });
 
     const isDangerCategory = modal.currentCategory === 'danger';
-    const listItems: import('./modal-factory.ts').ModalListItem[] = items.map((entry, idx) => {
-      const isSelected = idx === modal.selectedIndex;
+    const window = getVisibleWindow(items.length, modal.selectedIndex, maxVisibleRows);
+    const visibleSettings = items.slice(window.start, window.end);
+    const listItems: import('./modal-factory.ts').ModalListItem[] = visibleSettings.map((entry, idx) => {
+      const isSelected = window.start + idx === modal.selectedIndex;
 
       // If this is selected and editing, show edit buffer
       const isEditing = isSelected && modal.editingMode;
@@ -308,14 +516,8 @@ export function renderSettingsModal(
         ? modal.editBuffer + '\u2588'
         : formatValue(entry);
 
-      const shortKey = entry.setting.key.replace(/^[^.]+\./, ''); // strip category prefix
-      const keyStr = shortKey.length > keyW
-        ? shortKey.slice(0, keyW - 1) + '\u2026'
-        : shortKey.padEnd(keyW);
-
-      const valStr = valueStr.length > valW
-        ? valueStr.slice(0, valW - 1) + '\u2026'
-        : valueStr.padEnd(valW);
+      const keyStr = fitDisplay(getSettingLabel(entry), keyW);
+      const valStr = fitDisplay(valueStr, valW);
 
       const defStr = String(entry.setting.default);
 
@@ -329,30 +531,47 @@ export function renderSettingsModal(
     });
 
     sections.push({ type: 'list', items: listItems });
+    if (items.length > maxVisibleRows) {
+      sections.push({
+        type: 'text',
+        content: `[${window.start + 1}-${window.end} of ${items.length}]`,
+        style: { fg: '244', dim: true },
+      });
+    }
 
     // Description of selected item
     const selected = modal.getSelected();
     if (selected) {
       sections.push({ type: 'separator' });
       const desc = selected.setting.description;
-      const truncated = desc.length > contentW
-        ? desc.slice(0, contentW - 1) + '\u2026'
-        : desc;
+      const truncated = truncateDisplay(desc, contentW);
       sections.push({
         type: 'text',
         content: truncated,
         style: { fg: '246', dim: true },
       });
+      if (
+        selected.setting.key === 'ui.systemMessages'
+        || selected.setting.key === 'ui.operationalMessages'
+        || selected.setting.key === 'ui.wrfcMessages'
+      ) {
+        sections.push({
+          type: 'text',
+          content: truncateDisplay(`Current route: ${describeUiRouting(String(selected.currentValue))}.`, contentW),
+          style: { fg: '#38bdf8', dim: true },
+        });
+      }
       // Show enum options if applicable
       if (selected.setting.type === 'enum' && selected.setting.enumValues) {
         const opts = selected.setting.enumValues.join(' | ');
-        const optStr = `Options: ${opts}`;
-        const optTrunc = optStr.length > contentW
-          ? optStr.slice(0, contentW - 1) + '\u2026'
-          : optStr;
+        const optStr = selected.setting.key === 'ui.systemMessages'
+          || selected.setting.key === 'ui.operationalMessages'
+          || selected.setting.key === 'ui.wrfcMessages'
+          ? 'Options: panel | conversation | both'
+          : `Options: ${opts}`;
         sections.push({
           type: 'text',
-          content: optTrunc,
+          content: truncateDisplay(optStr, contentW),
           style: { fg: '240', dim: true },
         });
       }
@@ -361,13 +580,18 @@ export function renderSettingsModal(
 
   const hints = modal.editingMode
     ? ['[Enter] Confirm', '[Esc] Cancel']
-    : ['[Tab] Category', '[\u2191\u2193] Navigate', '[Enter] Toggle/Edit', '[Esc] Close'];
+    : ['[Tab] Category', '[\u2191\u2193] Navigate', '[Enter] Toggle / Edit', '[Esc] Close'];
 
   return ModalFactory.createModal(
     {
       title: 'Settings',
       width: boxW,
       margin: boxMargin,
+      targetContentRows,
+      tabs: SETTINGS_CATEGORIES.map((category, index) => ({
+        label: CATEGORY_LABELS[category],
+        active: index === modal.categoryIndex,
+      })),
       sections,
       hints,
     },

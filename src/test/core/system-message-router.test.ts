@@ -1,5 +1,5 @@
 import { describe, test, expect, beforeEach, mock } from 'bun:test';
-import { SystemMessageRouter, createSystemMessageRouter } from '../../core/system-message-router.ts';
+import { SystemMessageRouter, createSystemMessageRouter, type SystemMessageKind, type SystemMessageTarget } from '../../core/system-message-router.ts';
 import type { SystemMessagesPanel, SystemMessagePriority } from '../../panels/system-messages-panel.ts';
 import type { ConversationManager } from '../../core/conversation.ts';
 
@@ -20,6 +20,12 @@ function makePanel(): { push: ReturnType<typeof mock>; handleInput: ReturnType<t
   return { push, handleInput, _pushed } as unknown as { push: ReturnType<typeof mock>; handleInput: ReturnType<typeof mock>; _pushed: { text: string; priority: SystemMessagePriority }[] };
 }
 
+function makeTargetResolver(
+  overrides: Partial<Record<SystemMessageKind, SystemMessageTarget>> = {},
+): (kind: SystemMessageKind) => SystemMessageTarget {
+  return (kind) => overrides[kind] ?? (kind === 'wrfc' ? 'both' : 'panel');
+}
+
 // ---------------------------------------------------------------------------
 // classifyPriority — tested indirectly through routeAuto
 // ---------------------------------------------------------------------------
@@ -35,27 +41,32 @@ describe('classifyPriority (via routeAuto)', () => {
     router = createSystemMessageRouter(
       conv as unknown as ConversationManager,
       panel as unknown as SystemMessagesPanel,
+      makeTargetResolver(),
     );
   });
 
   test('messages with [Model] prefix classify as high', () => {
     router.routeAuto('[Model] Switched to gpt-5 (openai)');
-    expect(conv.addSystemMessage).toHaveBeenCalledTimes(1);
+    expect(conv.addSystemMessage).not.toHaveBeenCalled();
+    expect(panel.push).toHaveBeenCalledTimes(1);
   });
 
   test('messages with [Session] saved classify as high', () => {
     router.routeAuto('[Session] saved abc123');
-    expect(conv.addSystemMessage).toHaveBeenCalledTimes(1);
+    expect(conv.addSystemMessage).not.toHaveBeenCalled();
+    expect(panel.push).toHaveBeenCalledTimes(1);
   });
 
   test('messages with [Recovery] Failed classify as high', () => {
     router.routeAuto('[Recovery] Failed to restore: disk error');
-    expect(conv.addSystemMessage).toHaveBeenCalledTimes(1);
+    expect(conv.addSystemMessage).not.toHaveBeenCalled();
+    expect(panel.push).toHaveBeenCalledTimes(1);
   });
 
   test('messages with fatal classify as high', () => {
     router.routeAuto('A fatal error occurred');
-    expect(conv.addSystemMessage).toHaveBeenCalledTimes(1);
+    expect(conv.addSystemMessage).not.toHaveBeenCalled();
+    expect(panel.push).toHaveBeenCalledTimes(1);
   });
 
   test('[Scan] messages classify as low (not sent to conversation)', () => {
@@ -69,6 +80,16 @@ describe('classifyPriority (via routeAuto)', () => {
     router.routeAuto('[Agents] 3 running:\n  abc12345: working');
     expect(conv.addSystemMessage).not.toHaveBeenCalled();
     expect(panel._pushed[0]!.priority).toBe('low');
+  });
+
+  test('[Tool] activity messages classify as operational and can route separately', () => {
+    const opsRouter = createSystemMessageRouter(
+      conv as unknown as ConversationManager,
+      panel as unknown as SystemMessagesPanel,
+      makeTargetResolver({ operational: 'conversation' }),
+    );
+    opsRouter.routeAuto('[Tool] edit applied to src/main.ts');
+    expect(conv.addSystemMessage).toHaveBeenCalledWith('[Tool] edit applied to src/main.ts');
   });
 
   test('[MCP] discovery messages classify as low', () => {
@@ -92,12 +113,13 @@ describe('routeSystemMessage', () => {
     router = createSystemMessageRouter(
       conv as unknown as ConversationManager,
       panel as unknown as SystemMessagesPanel,
+      makeTargetResolver(),
     );
   });
 
-  test('high priority routes to both conversation and panel', () => {
+  test('system messages respect panel-only default target', () => {
     router.routeSystemMessage('high message', 'high');
-    expect(conv.addSystemMessage).toHaveBeenCalledWith('high message');
+    expect(conv.addSystemMessage).not.toHaveBeenCalled();
     expect(panel.push).toHaveBeenCalledWith('high message', 'high');
   });
 
@@ -109,8 +131,14 @@ describe('routeSystemMessage', () => {
 
   test('high convenience method routes high', () => {
     router.high('important!');
-    expect(conv.addSystemMessage).toHaveBeenCalledWith('important!');
+    expect(conv.addSystemMessage).not.toHaveBeenCalled();
     expect(panel.push).toHaveBeenCalledWith('important!', 'high');
+  });
+
+  test('wrfc convenience method routes to both by default', () => {
+    router.wrfc('[WRFC] Chain abc started');
+    expect(conv.addSystemMessage).toHaveBeenCalledWith('[WRFC] Chain abc started');
+    expect(panel.push).toHaveBeenCalledWith('[WRFC] Chain abc started', 'high');
   });
 
   test('low convenience method routes low (panel only)', () => {
@@ -120,7 +148,7 @@ describe('routeSystemMessage', () => {
   });
 
   test('null panel does not throw on high route', () => {
-    const noPanel = createSystemMessageRouter(conv as unknown as ConversationManager, null);
+    const noPanel = createSystemMessageRouter(conv as unknown as ConversationManager, null, makeTargetResolver({ system: 'conversation' }));
     expect(() => noPanel.high('msg')).not.toThrow();
     expect(conv.addSystemMessage).toHaveBeenCalledTimes(1);
   });
@@ -128,7 +156,24 @@ describe('routeSystemMessage', () => {
   test('null panel does not throw on low route', () => {
     const noPanel = createSystemMessageRouter(conv as unknown as ConversationManager, null);
     expect(() => noPanel.low('msg')).not.toThrow();
-    expect(conv.addSystemMessage).not.toHaveBeenCalled();
+    expect(conv.addSystemMessage).toHaveBeenCalledWith('msg');
+  });
+
+  test('panel-targeted routes fall back to conversation when no panel is attached', () => {
+    const noPanel = createSystemMessageRouter(conv as unknown as ConversationManager, null, makeTargetResolver({ system: 'panel' }));
+    noPanel.routeSystemMessage('panel fallback', 'low');
+    expect(conv.addSystemMessage).toHaveBeenCalledWith('panel fallback');
+  });
+
+  test('custom system target can route to both', () => {
+    const bothRouter = createSystemMessageRouter(
+      conv as unknown as ConversationManager,
+      panel as unknown as SystemMessagesPanel,
+      makeTargetResolver({ system: 'both' }),
+    );
+    bothRouter.routeSystemMessage('both message', 'high');
+    expect(conv.addSystemMessage).toHaveBeenCalledWith('both message');
+    expect(panel.push).toHaveBeenCalledWith('both message', 'high');
   });
 });
 
@@ -142,7 +187,7 @@ describe('routeAuto classification', () => {
 
   beforeEach(() => {
     conv = makeConversation();
-    router = createSystemMessageRouter(conv as unknown as ConversationManager, null);
+    router = createSystemMessageRouter(conv as unknown as ConversationManager, null, makeTargetResolver());
   });
 
   const highCases = [
@@ -162,24 +207,28 @@ describe('routeAuto classification', () => {
     '[Local] ollama at localhost:11434',
     '[Agents] 2 running: task a',
     '[MCP] Discovered server foo',
-    '[WRFC] Chain abc123 started',
     '[Plugin] loaded my-plugin',
+    '[Tool] edit wrote app.ts',
   ];
 
   for (const msg of highCases) {
     test(`classifies as high: "${msg.slice(0, 40)}"`, () => {
       router.routeAuto(msg);
-      expect(conv.addSystemMessage).toHaveBeenCalledTimes(1);
-      conv.addSystemMessage.mockClear();
+      expect(conv.addSystemMessage).toHaveBeenCalledWith(msg);
     });
   }
 
   for (const msg of lowCases) {
     test(`classifies as low: "${msg.slice(0, 40)}"`, () => {
       router.routeAuto(msg);
-      expect(conv.addSystemMessage).not.toHaveBeenCalled();
+      expect(conv.addSystemMessage).toHaveBeenCalledWith(msg);
     });
   }
+
+  test('WRFC messages classify as wrfc and follow WRFC target policy', () => {
+    router.routeAuto('[WRFC] Chain abc123 started');
+    expect(conv.addSystemMessage).toHaveBeenCalledWith('[WRFC] Chain abc123 started');
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -193,6 +242,7 @@ describe('SystemMessagesPanel integration', () => {
     const router = createSystemMessageRouter(
       conv as unknown as ConversationManager,
       panel as unknown as SystemMessagesPanel,
+      makeTargetResolver(),
     );
 
     router.low('[Scan] discovered server');
@@ -207,6 +257,7 @@ describe('SystemMessagesPanel integration', () => {
     const router = createSystemMessageRouter(
       conv as unknown as ConversationManager,
       panel as unknown as SystemMessagesPanel,
+      makeTargetResolver(),
     );
 
     router.high('[Model] switched');
@@ -225,6 +276,7 @@ describe('getPanel', () => {
     const router = createSystemMessageRouter(
       conv as unknown as ConversationManager,
       panel as unknown as SystemMessagesPanel,
+      makeTargetResolver(),
     );
     expect(router.getPanel()).toBe(panel as unknown as SystemMessagesPanel);
   });

@@ -1,13 +1,28 @@
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
-import type { Cell, Line } from '../types/grid.ts';
-import { createEmptyLine, createStyledCell } from '../types/grid.ts';
-import { getDisplayWidth } from '../utils/terminal-width.ts';
+import type { Line } from '../types/grid.ts';
+import { createEmptyLine } from '../types/grid.ts';
 import { BasePanel } from './base-panel.ts';
+import {
+  buildEmptyState,
+  buildPanelLine,
+  buildSearchInputLine,
+  buildPanelWorkspace,
+  DEFAULT_PANEL_PALETTE,
+  type PanelWorkspaceSection,
+} from './polish.ts';
+import { getTrackedVisibleWindow } from '../renderer/surface-layout.ts';
+import {
+  getPanelSearchFocusTransition,
+  isPanelSearchBackspace,
+  isPanelSearchCancel,
+  isPanelSearchPrintable,
+} from './search-focus.ts';
 
 const C = {
-  headerFg: '#94a3b8',
+  ...DEFAULT_PANEL_PALETTE,
+  header: '#94a3b8',
   headerBg: '#1e293b',
   searchFg: '#f97316',
   searchBg: '#1e293b',
@@ -21,6 +36,7 @@ const C = {
   global: '#a78bfa',
   hint: '#475569',
   path: '#94a3b8',
+  selectBg: '#1e3a5f',
 } as const;
 
 export type SkillOrigin = 'project-local' | 'global' | 'custom';
@@ -167,25 +183,6 @@ function wordWrap(text: string, maxWidth: number): string[] {
   return lines.length > 0 ? lines : [''];
 }
 
-function buildLine(width: number, segments: Array<[string, string, string?]>): Line {
-  const cells: Cell[] = [];
-  for (const [text, fg, bg] of segments) {
-    const style = { fg, bg: bg ?? '' };
-    for (const ch of text) {
-      if (cells.length >= width) break;
-      const cw = getDisplayWidth(ch);
-      cells.push(createStyledCell(ch, style));
-      if (cw === 2 && cells.length < width) {
-        cells.push(createStyledCell('', style));
-      }
-    }
-  }
-  while (cells.length < width) {
-    cells.push(createStyledCell(' ', { fg: '' }));
-  }
-  return cells.slice(0, width);
-}
-
 function originLabel(origin: SkillOrigin): string {
   switch (origin) {
     case 'project-local':
@@ -212,6 +209,7 @@ export class SkillsPanel extends BasePanel {
   private readonly cwd: string;
   private readonly homeDir: string;
   private query = '';
+  private filterFocused = false;
   private selectedIndex = 0;
   private scrollOffset = 0;
   private cached: SkillRecord[] | null = null;
@@ -226,6 +224,7 @@ export class SkillsPanel extends BasePanel {
   public override onActivate(): void {
     super.onActivate();
     this.query = '';
+    this.filterFocused = false;
     this.selectedIndex = 0;
     this.scrollOffset = 0;
     this.cacheDirty = true;
@@ -235,6 +234,44 @@ export class SkillsPanel extends BasePanel {
 
   public handleInput(key: string): boolean {
     const records = this._filteredSkills();
+    if (this.filterFocused) {
+      const transition = getPanelSearchFocusTransition(key, { selectedIndex: this.selectedIndex, itemCount: records.length });
+      if (transition === 'focus-list') {
+        this.filterFocused = false;
+        this.selectedIndex = 0;
+        this.scrollOffset = 0;
+        this.markDirty();
+        return true;
+      }
+      if (isPanelSearchBackspace(key)) {
+        if (this.query.length === 0) return true;
+        this.query = this.query.slice(0, -1);
+        this.selectedIndex = 0;
+        this.scrollOffset = 0;
+        this.markDirty();
+        return true;
+      }
+      if (isPanelSearchCancel(key)) {
+        this.filterFocused = false;
+        this.markDirty();
+        return true;
+      }
+      if (isPanelSearchPrintable(key)) {
+        this.query += key;
+        this.selectedIndex = 0;
+        this.scrollOffset = 0;
+        this.markDirty();
+        return true;
+      }
+      return false;
+    }
+
+    const transition = getPanelSearchFocusTransition(key, { selectedIndex: this.selectedIndex, itemCount: records.length });
+    if (transition === 'focus-search') {
+      this.filterFocused = true;
+      this.markDirty();
+      return true;
+    }
 
     if (key === 'up' || key === 'k') {
       this.selectedIndex = Math.max(0, this.selectedIndex - 1);
@@ -266,7 +303,7 @@ export class SkillsPanel extends BasePanel {
       this.markDirty();
       return true;
     }
-    if (key === 'backspace' || key === 'delete') {
+    if (isPanelSearchBackspace(key)) {
       if (this.query.length === 0) return false;
       this.query = this.query.slice(0, -1);
       this.selectedIndex = 0;
@@ -274,16 +311,9 @@ export class SkillsPanel extends BasePanel {
       this.markDirty();
       return true;
     }
-    if (key === 'escape') {
+    if (isPanelSearchCancel(key)) {
       if (this.query.length === 0) return false;
       this.query = '';
-      this.selectedIndex = 0;
-      this.scrollOffset = 0;
-      this.markDirty();
-      return true;
-    }
-    if (key.length === 1 && key >= ' ') {
-      this.query += key;
       this.selectedIndex = 0;
       this.scrollOffset = 0;
       this.markDirty();
@@ -299,23 +329,31 @@ export class SkillsPanel extends BasePanel {
 
     const start = Date.now();
     this.needsRender = false;
-    const lines: Line[] = [];
+    const intro = 'Discover project-local and global skill packs, filter by name or description, and inspect path, dependencies, and includes.';
     const skills = this._filteredSkills();
-    const detailHeight = skills.length > 0 ? (height > 8 ? 4 : 2) : 4;
-    const listHeight = Math.max(1, height - 2 - 1 - detailHeight);
-
-    lines.push(buildLine(width, [[' Skills — discover project-local and global skill packs', C.headerFg, C.headerBg]]));
-    lines.push(buildLine(width, [
-      [' Filter: ', C.label, C.searchBg],
-      [this.query || ' ', C.searchFg, C.searchBg],
-      [' '.repeat(Math.max(0, width - 9 - Math.max(1, this.query.length))), C.dim, C.searchBg],
-    ]));
 
     if (skills.length === 0) {
-      lines.push(buildLine(width, [[' No skills discovered.', C.empty]]));
-      lines.push(buildLine(width, [[' Create .goodvibes/skills or .goodvibes/tui/skills in this repo,', C.dim]]));
-      lines.push(buildLine(width, [[' or ~/.goodvibes/skills / ~/.goodvibes/tui/skills for global packs.', C.dim]]));
-      lines.push(buildLine(width, [[' Use /registry search skills to inspect the same directories.', C.dim]]));
+      const lines = buildPanelWorkspace(width, height, {
+        title: 'Skills - discover project-local and global skill packs',
+        intro,
+        sections: [{
+          title: 'Filter',
+          lines: [buildSearchInputLine(width, ' query: ', `${this.query}${this.filterFocused ? '_' : ''}`, C, {
+            active: this.filterFocused,
+            emptyLabel: this.filterFocused ? '(type to filter)' : '(/ or up at top)',
+            valueColor: this.query ? C.searchFg : undefined,
+          })],
+        }, {
+          lines: buildEmptyState(
+            width,
+            ' No skills discovered.',
+            'Create .goodvibes/skills or .goodvibes/tui/skills in this repo, or ~/.goodvibes/skills and ~/.goodvibes/tui/skills for global packs.',
+            [{ command: '/registry search skills', summary: 'inspect the same skill directories from the shell' }],
+            C,
+          ),
+        }],
+        palette: C,
+      });
       while (lines.length < height) lines.push(createEmptyLine(width));
       this.reportRenderDuration(Date.now() - start);
       return lines.slice(0, height);
@@ -323,19 +361,27 @@ export class SkillsPanel extends BasePanel {
 
     this._clampSelection(skills);
     const selected = skills[this.selectedIndex];
-    this._clampScroll(skills, listHeight);
+    const listWindow = getTrackedVisibleWindow(skills.length, this.selectedIndex, Math.max(4, height - 14), this.scrollOffset, 1);
+    this.scrollOffset = listWindow.start;
+    this._clampScroll(skills, listWindow.count);
 
-    const visible = skills.slice(this.scrollOffset, this.scrollOffset + listHeight);
+    const listLines: Line[] = [
+      buildSearchInputLine(width, ' query: ', `${this.query}${this.filterFocused ? '_' : ''}`, C, {
+        active: this.filterFocused,
+        emptyLabel: this.filterFocused ? '(type to filter)' : '(/ or up at top)',
+        valueColor: this.query ? C.searchFg : undefined,
+      }),
+    ];
+    const visible = skills.slice(listWindow.start, listWindow.end);
     for (const skill of visible) {
       const isSelected = skills[this.selectedIndex]?.name === skill.name;
-      const bg = isSelected ? C.selectedBg : '';
-      const arrow = isSelected ? '▶' : ' ';
-      const dot = skill.origin === 'project-local' ? '●' : '○';
+      const bg = isSelected ? C.selectBg : undefined;
+      const dot = skill.origin === 'project-local' ? '*' : 'o';
       const desc = skill.description || 'No description provided.';
       const descWidth = Math.max(1, width - 4 - skill.name.length - 6);
       const descLines = wordWrap(desc, descWidth);
-      lines.push(buildLine(width, [
-        [arrow, C.selectedFg, bg],
+      listLines.push(buildPanelLine(width, [
+        [isSelected ? '>' : ' ', C.selectedFg, bg],
         [' ', C.dim, bg],
         [dot, originColor(skill.origin), bg],
         [' ', C.dim, bg],
@@ -344,32 +390,34 @@ export class SkillsPanel extends BasePanel {
         [descLines[0] ?? '', isSelected ? C.selectedFg : C.dim, bg],
       ]));
     }
-
-    const detailsHeader = selected
-      ? ` Selected: ${selected.name}  [${originLabel(selected.origin)}]`
-      : ' Selected: none';
-    lines.push(buildLine(width, [[detailsHeader.slice(0, width), C.label]]));
-
-    if (selected) {
-      const selectedPath = ` Path: ${selected.path}`;
-      const selectedDesc = ` Desc: ${selected.description || 'No description provided.'}`;
-      const selectedDeps = ` Depends: ${selected.dependencies.length > 0 ? selected.dependencies.join(', ') : 'none'}`;
-      const selectedIncludes = ` Includes: ${selected.includes.length > 0 ? selected.includes.join(', ') : 'none'}`;
-      lines.push(buildLine(width, [[selectedPath.slice(0, width), C.path]]));
-      if (detailHeight > 2) {
-        lines.push(buildLine(width, [[selectedDesc.slice(0, width), C.value]]));
-        lines.push(buildLine(width, [[`${selectedDeps}  ${selectedIncludes}`.slice(0, width), C.dim]]));
-      }
-    } else {
-      lines.push(buildLine(width, [[' No selection.', C.dim]]));
-      if (detailHeight > 2) {
-        lines.push(buildLine(width, [[' ', C.dim]]));
-        lines.push(buildLine(width, [[' ', C.dim]]));
-      }
+    if (skills.length > visible.length) {
+      listLines.push(buildPanelLine(width, [[`  showing ${this.scrollOffset + 1}-${Math.min(skills.length, this.scrollOffset + visible.length)} of ${skills.length}`, C.dim]]));
     }
 
-    lines.push(buildLine(width, [[' ↑/↓ navigate  type to filter  Backspace clear  Esc reset', C.hint]]));
+    const detailLines: Line[] = [];
+    if (selected) {
+      detailLines.push(
+        buildPanelLine(width, [['  Selected: ', C.label], [selected.name, C.value], ['  [', C.dim], [originLabel(selected.origin), originColor(selected.origin)], [']', C.dim]]),
+        buildPanelLine(width, [['  Path: ', C.label], [selected.path, C.path]]),
+        buildPanelLine(width, [['  Desc: ', C.label], [selected.description || 'No description provided.', C.value]]),
+        buildPanelLine(width, [['  Depends: ', C.label], [selected.dependencies.length > 0 ? selected.dependencies.join(', ') : 'none', C.dim]]),
+        buildPanelLine(width, [['  Includes: ', C.label], [selected.includes.length > 0 ? selected.includes.join(', ') : 'none', C.dim]]),
+      );
+    } else {
+      detailLines.push(buildPanelLine(width, [[' No selection.', C.dim]]));
+    }
 
+    const sections: PanelWorkspaceSection[] = [
+      { title: 'Discovery', lines: listLines },
+      { title: 'Selected Skill', lines: detailLines },
+    ];
+    const lines = buildPanelWorkspace(width, height, {
+      title: 'Skills - discover project-local and global skill packs',
+      intro,
+      sections,
+      footerLines: [buildPanelLine(width, [['  Up/Down navigate  / or Up-at-top focus filter  Esc blur  Backspace clear', C.hint]])],
+      palette: C,
+    });
     while (lines.length < height) lines.push(createEmptyLine(width));
     this.reportRenderDuration(Date.now() - start);
     return lines.slice(0, height);

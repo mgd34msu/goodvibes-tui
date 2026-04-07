@@ -50,7 +50,7 @@ export function handleReplayCommand(
         if (!ledger) {
           return {
             ok: false,
-            output: 'Usage: /replay load <runId>\n\nNo ledger configured — cannot list runs.',
+            output: 'Usage: /replay load <runId>\n\nNo ledger configured - cannot list runs.',
           };
         }
         const ids = ledger.listRunIds();
@@ -148,7 +148,7 @@ export function handleReplayCommand(
         lines.push(`  [rev ${frame.rev}] ${eventName}`);
       }
       if (after.status === 'exhausted') {
-        lines.push('\nReplay exhausted — all events have been replayed.');
+        lines.push('\nReplay exhausted - all events have been replayed.');
       }
 
       return { ok: true, output: lines.join('\n') };
@@ -167,7 +167,7 @@ export function handleReplayCommand(
       if (isNaN(rev) || rev < 0) {
         return {
           ok: false,
-          output: `Usage: /replay seek <rev>\nValid range: 0 – ${snap.totalRevisions}.`,
+          output: `Usage: /replay seek <rev>\nValid range: 0 - ${snap.totalRevisions}.`,
         };
       }
 
@@ -258,11 +258,11 @@ export function handleReplayCommand(
           `Unknown /replay subcommand: '${subcommand}'.`,
           '',
           'Available commands:',
-          '  /replay load [runId]      — load a recorded run (omit runId to list)',
-          '  /replay step [n]          — advance n steps (default 1)',
-          '  /replay seek <rev>        — jump to a specific revision',
-          '  /replay diff              — compare replayed vs recorded (mismatch report)',
-          '  /replay export <path>     — export report to JSON file',
+          '  /replay load [runId]      - load a recorded run (omit runId to list)',
+          '  /replay step [n]          - advance n steps (default 1)',
+          '  /replay seek <rev>        - jump to a specific revision',
+          '  /replay diff              - compare replayed vs recorded (mismatch report)',
+          '  /replay export <path>     - export report to JSON file',
           '',
           statusLine,
         ].join('\n'),

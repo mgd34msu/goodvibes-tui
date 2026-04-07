@@ -24,6 +24,8 @@ export type PermissionDecisionReasonCode =
   | 'user_denied';
 
 export type PermissionAnalysisTargetKind = 'command' | 'path' | 'url' | 'task' | 'generic';
+export type PermissionAnalysisSurface = 'filesystem' | 'shell' | 'network' | 'orchestration' | 'platform' | 'generic';
+export type PermissionBlastRadius = 'local' | 'project' | 'external' | 'delegated' | 'platform';
 
 export interface PermissionRequestAnalysis {
   readonly classification: string;
@@ -32,6 +34,9 @@ export interface PermissionRequestAnalysis {
   readonly reasons: readonly string[];
   readonly target?: string;
   readonly targetKind?: PermissionAnalysisTargetKind;
+  readonly surface?: PermissionAnalysisSurface;
+  readonly blastRadius?: PermissionBlastRadius;
+  readonly sideEffects?: readonly string[];
   readonly host?: string;
 }
 

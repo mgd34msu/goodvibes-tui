@@ -1,10 +1,17 @@
 import { type Line } from '../types/grid.ts';
-import { UIFactory } from './ui-factory.ts';
-import { getDisplayWidth } from '../utils/terminal-width.ts';
+import { fitDisplay, getDisplayWidth, truncateDisplay } from '../utils/terminal-width.ts';
 import type { ModelPickerModal } from '../input/model-picker.ts';
 import { EFFORT_DESCRIPTIONS } from '../providers/effort-levels.ts';
 import { getBenchmarks, getQualityTier, getQualityTierFromScore } from '../providers/model-benchmarks.ts';
 import { getSyntheticModelInfoFromCatalog } from '../providers/model-catalog.ts';
+import {
+  createOverlayBorderLine,
+  createOverlayBoxLayout,
+  createOverlayContentLine,
+  DEFAULT_OVERLAY_PALETTE,
+  putOverlayText,
+} from './overlay-box.ts';
+import { getOverlaySurfaceMetrics } from './overlay-viewport.ts';
 
 /** Format a context window number into a short human-readable string. */
 function fmtContext(n: number): string {
@@ -15,10 +22,10 @@ function fmtContext(n: number): string {
 
 /** Title text per picker mode. */
 const MODE_TITLES: Record<string, string> = {
-  model: '\u2500 Select Model ',
-  provider: '\u2500 Select Provider ',
-  effort: '\u2500 Select Effort Level ',
-  contextCap: '\u2500 Set Context Window ',
+  model: 'Select Model',
+  provider: 'Select Provider',
+  effort: 'Select Effort Level',
+  contextCap: 'Set Context Window',
 };
 
 /**
@@ -26,6 +33,10 @@ const MODE_TITLES: Record<string, string> = {
  * Used by callers to compute maxVisible item rows.
  */
 export const MODEL_PICKER_CHROME_LINES = 7;
+
+function putRowText(line: Line, startX: number, maxWidth: number, text: string, fg: string, bg = '', bold = false, dim = false): void {
+  putOverlayText(line, startX, maxWidth, text, { fg, bg, bold, dim });
+}
 
 /**
  * Render the model picker modal as Line[] for overlay in the viewport.
@@ -38,23 +49,41 @@ export function renderModelPickerOverlay(
   picker: ModelPickerModal,
   width: number,
   maxVisible = 20,
+  viewportHeight?: number,
 ): Line[] {
   const lines: Line[] = [];
-  const boxMargin = 4;
-  const boxW = Math.max(4, Math.min(width - boxMargin * 2, 72));
-  const contentW = boxW - 4; // 2 border chars + 2 padding chars each side
-  const pad = ' '.repeat(boxMargin);
+  const metrics = getOverlaySurfaceMetrics(width, viewportHeight ?? 24, {
+    chromeRows: MODEL_PICKER_CHROME_LINES,
+    maxWidth: 72,
+    minContentRows: 6,
+    maxContentRows: Math.max(10, maxVisible),
+  });
+  const layout = createOverlayBoxLayout(width, metrics.margin, metrics.boxWidth);
+  const contentW = layout.innerWidth;
+  const borderFg = DEFAULT_OVERLAY_PALETTE.borderFg;
+  const titleFg = DEFAULT_OVERLAY_PALETTE.titleFg;
+  const bodyFg = DEFAULT_OVERLAY_PALETTE.bodyFg;
+  const mutedFg = DEFAULT_OVERLAY_PALETTE.mutedFg;
+  const selectedBg = DEFAULT_OVERLAY_PALETTE.selectedBg;
 
   // ── Title bar ───────────────────────────────────────────────────────────────────────
-  const titleText = MODE_TITLES[picker.mode] ?? MODE_TITLES.model;
-  const titleLine =
-    pad + '\u250c' + titleText + '\u2500'.repeat(Math.max(0, boxW - 2 - getDisplayWidth(titleText))) + '\u2510';
-  lines.push(UIFactory.stringToLine(titleLine, width, { fg: '#00ffff' }));
+  const titleLine = createOverlayBorderLine(width, layout, '┌', '─', '┐', titleFg);
+  putRowText(
+    titleLine,
+    layout.margin + 2,
+    layout.width - 4,
+    truncateDisplay((MODE_TITLES[picker.mode] ?? MODE_TITLES.model).replace(/^─\s*/, '').trim(), layout.width - 4),
+    titleFg,
+    '',
+    true,
+  );
+  lines.push(titleLine);
 
   // ── Search bar (model and provider modes) ────────────────────────────────────
   if (picker.mode === 'model' || picker.mode === 'provider') {
-    const searchPrefix = '\u2502 \ud83d\udd0d ';
-    const cursorChar = picker.query.length > 0 ? '' : '\u2592'; // block cursor when empty
+    const searchLine = createOverlayContentLine(width, layout, borderFg);
+    const searchPrefix = '/ ';
+    const cursorChar = picker.query.length > 0 ? '' : '_';
     const queryDisplay = picker.query + cursorChar;
     let filterTag = '';
     let filterTagW = 0;
@@ -65,39 +94,44 @@ export function renderModelPickerOverlay(
       filterTag = `[${filterLabel}]`;
       filterTagW = getDisplayWidth(filterTag);
     }
-    // Available space for query: contentW minus prefix-after-border (3 for search icon+space) minus filter tag minus gap
-    const maxQueryW = contentW - 3 - filterTagW - (filterTagW > 0 ? 2 : 1);
+    const maxQueryW = contentW - getDisplayWidth(searchPrefix) - filterTagW - (filterTagW > 0 ? 2 : 0);
     const queryTrunc = getDisplayWidth(queryDisplay) > maxQueryW
-      ? '\u2026' + queryDisplay.slice(-(maxQueryW - 1))
+      ? truncateDisplay(queryDisplay, maxQueryW)
       : queryDisplay;
-    const spacer = ' '.repeat(Math.max(0, contentW - 3 - getDisplayWidth(queryTrunc) - filterTagW - (filterTagW > 0 ? 1 : 0)));
-    const searchRowText = filterTag
-      ? pad + searchPrefix + queryTrunc + spacer + filterTag + ' \u2502'
-      : pad + searchPrefix + queryTrunc + spacer + '\u2502';
-    lines.push(UIFactory.stringToLine(searchRowText, width, {
-      fg: picker.query.length > 0 ? '#ffffff' : '244',
-    }));
+    let rowX = layout.margin + 2;
+    putRowText(searchLine, rowX, getDisplayWidth(searchPrefix), searchPrefix, picker.query.length > 0 ? bodyFg : mutedFg);
+    rowX += getDisplayWidth(searchPrefix);
+    const queryAreaWidth = filterTag
+      ? Math.max(0, contentW - getDisplayWidth(searchPrefix) - filterTagW - 1)
+      : Math.max(0, contentW - getDisplayWidth(searchPrefix));
+    putRowText(searchLine, rowX, queryAreaWidth, fitDisplay(queryTrunc, queryAreaWidth), picker.query.length > 0 ? '#ffffff' : mutedFg);
+    if (filterTag) {
+      putRowText(
+        searchLine,
+        layout.margin + 2 + contentW - filterTagW,
+        filterTagW,
+        filterTag,
+        mutedFg,
+      );
+    }
+    lines.push(searchLine);
 
     // Thin divider under search bar
-    const searchDivider = pad + '\u251c' + '\u2500'.repeat(boxW - 2) + '\u2524';
-    lines.push(UIFactory.stringToLine(searchDivider, width, { fg: '238' }));
+    lines.push(createOverlayBorderLine(width, layout, '├', '─', '┤', '238'));
   } else {
-    // Empty separator for effort mode
-    const emptyRow = pad + '\u2502' + ' '.repeat(boxW - 2) + '\u2502';
-    lines.push(UIFactory.stringToLine(emptyRow, width, { fg: '240' }));
+    lines.push(createOverlayContentLine(width, layout, borderFg));
   }
-
-  const emptyRow = pad + '\u2502' + ' '.repeat(boxW - 2) + '\u2502';
 
   if (picker.mode === 'model') {
     // ── Model list (grouped, with scroll window) ────────────────────────────────────
     const filtered = picker.getFilteredModels();
     if (filtered.length === 0) {
       const msg = picker.query.length > 0
-        ? `No models match "${picker.query.length > 20 ? picker.query.slice(0, 20) + '\u2026' : picker.query}"`
+        ? `No models match "${picker.query.length > 20 ? picker.query.slice(0, 20) + '...' : picker.query}"`
         : 'No models available';
-      const noModels = pad + '\u2502 ' + msg.padEnd(contentW) + ' \u2502';
-      lines.push(UIFactory.stringToLine(noModels, width, { fg: '244', dim: true }));
+      const noModels = createOverlayContentLine(width, layout, borderFg);
+      putRowText(noModels, layout.margin + 2, contentW, fitDisplay(truncateDisplay(msg, contentW), contentW), '244', '', false, true);
+      lines.push(noModels);
     } else {
       // Determine the visible slice [scrollOffset, scrollOffset + maxVisible)
       const scrollOffset = Math.max(0, Math.min(picker.scrollOffset, Math.max(0, filtered.length - maxVisible)));
@@ -106,8 +140,9 @@ export function renderModelPickerOverlay(
 
       // Scroll indicators
       if (scrollOffset > 0) {
-        const upHint = pad + '\u2502' + (` \u25b4 ${scrollOffset} more above`).padEnd(boxW - 2) + '\u2502';
-        lines.push(UIFactory.stringToLine(upHint, width, { fg: '240', dim: true }));
+        const upHint = createOverlayContentLine(width, layout, borderFg);
+        putRowText(upHint, layout.margin + 2, contentW, fitDisplay(`^ ${scrollOffset} more above`, contentW), mutedFg, '', false, true);
+        lines.push(upHint);
       }
 
       let lastGroupKey = '';
@@ -121,14 +156,14 @@ export function renderModelPickerOverlay(
         // For the first visible item, always check if header is needed
         const groupKey = picker.getModelGroupKey(model);
         if (groupKey !== lastGroupKey) {
-          const headerText = ' \u25e4 ' + groupKey;
-          const headerRow = pad + '\u2502' + headerText.padEnd(boxW - 2) + '\u2502';
-          lines.push(UIFactory.stringToLine(headerRow, width, { fg: '#4488cc', bold: false }));
+          const headerRow = createOverlayContentLine(width, layout, borderFg);
+          putRowText(headerRow, layout.margin + 2, contentW, fitDisplay(`[${groupKey}]`, contentW), '#4488cc');
+          lines.push(headerRow);
           lastGroupKey = groupKey;
         }
 
         const isSelected = absIdx === picker.selectedIndex;
-        const indicator = isSelected ? '\u25b6 ' : '  ';
+        const indicator = isSelected ? '> ' : '  ';
 
         // Pre-compute synthetic info once per model (avoid 3 separate lookups per frame)
         const synthInfo = model.provider === 'synthetic' ? getSyntheticModelInfoFromCatalog(model.id) : null;
@@ -145,9 +180,9 @@ export function renderModelPickerOverlay(
         }
         const tierBadge = tier ? `[${tier}]` : '   ';
         // Pin star: ★ if pinned
-        const pinStar = picker.pinnedIds.has(model.id) ? '\u2605 ' : '  ';
+        const pinStar = picker.pinnedIds.has(model.id) ? '* ' : '  ';
         // Free badge
-        const freeBadge = model.tier === 'free' ? '\u25c6' : ' ';
+        const freeBadge = model.tier === 'free' ? '*' : ' ';
         // Provider count for synthetic models
         let providerCountStr = '     '; // 5 chars wide (fixed)
         if (synthInfo) {
@@ -160,38 +195,37 @@ export function renderModelPickerOverlay(
         const provCountW = 5;
         const badgesW = 3 + 1 + 2; // tierBadge(3) + freeBadge(1) + gap(2)
         const idStr = model.id.length > maxIdLen
-          ? model.id.slice(0, maxIdLen - 1) + '\u2026'
+          ? model.id.slice(0, maxIdLen - 3) + '...'
           : model.id.padEnd(maxIdLen);
         const remaining = contentW - maxIdLen - 4 - badgesW - 2 - provCountW; // 4 = indicator+pin, 2 = gap before name
         const nameStr = model.displayName.length > Math.max(0, remaining)
-          ? model.displayName.slice(0, Math.max(0, remaining) - 1) + '\u2026'
+          ? model.displayName.slice(0, Math.max(0, remaining) - 3) + '...'
           : model.displayName.padEnd(Math.max(0, remaining));
 
-        const rowText = pad + '\u2502 ' + indicator + pinStar + idStr + '  ' + nameStr + providerCountStr + ' ' + freeBadge + tierBadge + ' \u2502';
-        lines.push(UIFactory.stringToLine(rowText, width, {
-          fg: isSelected ? '#00ffff' : '252',
-          bold: isSelected,
-          bg: isSelected ? '#1a2a3a' : '',
-        }));
+        const row = createOverlayContentLine(width, layout, borderFg, isSelected ? selectedBg : '');
+        let x = layout.margin + 2;
+        const rowText = indicator + pinStar + idStr + '  ' + nameStr + providerCountStr + ' ' + freeBadge + tierBadge;
+        putRowText(row, x, contentW, fitDisplay(truncateDisplay(rowText, contentW), contentW), isSelected ? titleFg : bodyFg, isSelected ? selectedBg : '', isSelected);
+        lines.push(row);
       }
 
       if (visibleEnd < filtered.length) {
         const remaining2 = filtered.length - visibleEnd;
-        const downHint = pad + '\u2502' + (` \u25be ${remaining2} more below`).padEnd(boxW - 2) + '\u2502';
-        lines.push(UIFactory.stringToLine(downHint, width, { fg: '240', dim: true }));
+        const downHint = createOverlayContentLine(width, layout, borderFg);
+        putRowText(downHint, layout.margin + 2, contentW, fitDisplay(`v ${remaining2} more below`, contentW), mutedFg, '', false, true);
+        lines.push(downHint);
       }
     }
 
     // ── Divider ────────────────────────────────────────────────────────────────────
-    const divider = pad + '\u251c' + '\u2500'.repeat(boxW - 2) + '\u2524';
-    lines.push(UIFactory.stringToLine(divider, width, { fg: '240' }));
+    lines.push(createOverlayBorderLine(width, layout, '├', '─', '┤', mutedFg));
 
     // ── Capability detail for selected model ────────────────────────────────────────────
     const selected = picker.getSelected();
     if (selected) {
-      const providerLine = pad + '\u2502 ' +
-        ('Provider: ' + selected.provider).padEnd(contentW) + ' \u2502';
-      lines.push(UIFactory.stringToLine(providerLine, width, { fg: '244' }));
+      const providerLine = createOverlayContentLine(width, layout, borderFg);
+      putRowText(providerLine, layout.margin + 2, contentW, fitDisplay(`Provider: ${selected.provider}`, contentW), '244');
+      lines.push(providerLine);
 
       const caps = selected.capabilities ?? { reasoning: false, multimodal: false, toolCalling: false, codeEditing: false };
       const ctxStr = `Context: ${fmtContext(selected.contextWindow)}`;
@@ -201,12 +235,12 @@ export function renderModelPickerOverlay(
       if (caps.toolCalling) capParts.push('Tools: \u2713');
       if (caps.codeEditing) capParts.push('Code: \u2713');
       const capText = capParts.join('  ');
-      const capPadded = capText + ' '.repeat(Math.max(0, contentW - getDisplayWidth(capText)));
-      const capLine = pad + '\u2502 ' + capPadded + ' \u2502';
-      lines.push(UIFactory.stringToLine(capLine, width, { fg: '244' }));
+      const capLine = createOverlayContentLine(width, layout, borderFg);
+      putRowText(capLine, layout.margin + 2, contentW, fitDisplay(truncateDisplay(capText, contentW), contentW), '244');
+      lines.push(capLine);
     } else {
-      lines.push(UIFactory.stringToLine(emptyRow, width, { fg: '240' }));
-      lines.push(UIFactory.stringToLine(emptyRow, width, { fg: '240' }));
+      lines.push(createOverlayContentLine(width, layout, borderFg));
+      lines.push(createOverlayContentLine(width, layout, borderFg));
     }
   } else if (picker.mode === 'provider') {
     // ── Provider list (grouped: Popular / All Providers) ───────────────────────────────────
@@ -214,10 +248,11 @@ export function renderModelPickerOverlay(
     const selectableCount = picker.getFilteredProviders().length;
     if (selectableCount === 0) {
       const msg = picker.query.length > 0
-        ? `No providers match "${picker.query.length > 20 ? picker.query.slice(0, 20) + '\u2026' : picker.query}"`
+        ? `No providers match "${picker.query.length > 20 ? picker.query.slice(0, 20) + '...' : picker.query}"`
         : 'No providers available';
-      const noProviders = pad + '\u2502 ' + msg.padEnd(contentW) + ' \u2502';
-      lines.push(UIFactory.stringToLine(noProviders, width, { fg: '244', dim: true }));
+      const noProviders = createOverlayContentLine(width, layout, borderFg);
+      putRowText(noProviders, layout.margin + 2, contentW, fitDisplay(truncateDisplay(msg, contentW), contentW), '244', '', false, true);
+      lines.push(noProviders);
     } else {
       // Build the flat selectable index → item-list-index mapping for scroll tracking
       // scrollOffset / selectedIndex track selectable items only
@@ -226,8 +261,9 @@ export function renderModelPickerOverlay(
 
       // Scroll indicator — items above
       if (providerScrollOffset > 0) {
-        const upHint = pad + '\u2502' + (` \u25b4 ${providerScrollOffset} more above`).padEnd(boxW - 2) + '\u2502';
-        lines.push(UIFactory.stringToLine(upHint, width, { fg: '240', dim: true }));
+        const upHint = createOverlayContentLine(width, layout, borderFg);
+        putRowText(upHint, layout.margin + 2, contentW, fitDisplay(`^ ${providerScrollOffset} more above`, contentW), mutedFg, '', false, true);
+        lines.push(upHint);
       }
 
       // Walk all provider items (headers + selectables), rendering only selectables
@@ -250,41 +286,40 @@ export function renderModelPickerOverlay(
 
         // Emit pending group header before first visible item in the group
         if (pendingHeader !== null) {
-          const headerText = ' \u25e4 ' + pendingHeader;
-          const headerRow = pad + '\u2502' + headerText.padEnd(boxW - 2) + '\u2502';
-          lines.push(UIFactory.stringToLine(headerRow, width, { fg: '#4488cc' }));
+          const headerRow = createOverlayContentLine(width, layout, borderFg);
+          putRowText(headerRow, layout.margin + 2, contentW, fitDisplay(`[${pendingHeader}]`, contentW), '#4488cc');
+          lines.push(headerRow);
           pendingHeader = null;
         }
 
         const isSelected = selectableIdx === picker.selectedIndex;
-        const indicator = isSelected ? '\u25b6 ' : '  ';
-        const checkmark = item.isConfigured ? '\u2713 ' : '  ';
+        const indicator = isSelected ? '> ' : '  ';
+        const checkmark = item.isConfigured ? 'y ' : '  ';
         const labelW = contentW - 2 - 2; // indicator(2) + checkmark(2)
         const labelStr = item.label.length > labelW
-          ? item.label.slice(0, labelW - 1) + '\u2026'
+          ? item.label.slice(0, labelW - 3) + '...'
           : item.label.padEnd(labelW);
-        const rowText = pad + '\u2502 ' + indicator + checkmark + labelStr + ' \u2502';
-        lines.push(UIFactory.stringToLine(rowText, width, {
-          fg: isSelected ? '#00ffff' : '252',
-          bold: isSelected,
-          bg: isSelected ? '#1a2a3a' : '',
-        }));
+        const row = createOverlayContentLine(width, layout, borderFg, isSelected ? selectedBg : '');
+        const rowText = indicator + checkmark + labelStr;
+        putRowText(row, layout.margin + 2, contentW, fitDisplay(truncateDisplay(rowText, contentW), contentW), isSelected ? titleFg : bodyFg, isSelected ? selectedBg : '', isSelected);
+        lines.push(row);
       }
 
       // Scroll indicator — items below
       if (providerVisibleEnd < selectableCount) {
         const remaining2 = selectableCount - providerVisibleEnd;
-        const downHint = pad + '\u2502' + (` \u25be ${remaining2} more below`).padEnd(boxW - 2) + '\u2502';
-        lines.push(UIFactory.stringToLine(downHint, width, { fg: '240', dim: true }));
+        const downHint = createOverlayContentLine(width, layout, borderFg);
+        putRowText(downHint, layout.margin + 2, contentW, fitDisplay(`v ${remaining2} more below`, contentW), mutedFg, '', false, true);
+        lines.push(downHint);
       }
     }
 
     // ── Divider + hint ──────────────────────────────────────────────────────────────────
-    const divider = pad + '\u251c' + '\u2500'.repeat(boxW - 2) + '\u2524';
-    lines.push(UIFactory.stringToLine(divider, width, { fg: '240' }));
-    const hintLine = pad + '\u2502 ' + 'Select a provider to browse its models'.padEnd(contentW) + ' \u2502';
-    lines.push(UIFactory.stringToLine(hintLine, width, { fg: '244' }));
-    lines.push(UIFactory.stringToLine(emptyRow, width, { fg: '240' }));
+    lines.push(createOverlayBorderLine(width, layout, '├', '─', '┤', mutedFg));
+    const hintLine = createOverlayContentLine(width, layout, borderFg);
+    putRowText(hintLine, layout.margin + 2, contentW, fitDisplay('Select a provider to browse its models', contentW), '244');
+    lines.push(hintLine);
+    lines.push(createOverlayContentLine(width, layout, borderFg));
   } else if (picker.mode === 'contextCap') {
     // ── Context cap input ──────────────────────────────────────────────────────────────
     const capModel = picker.contextCapPendingModel;
@@ -293,53 +328,52 @@ export function renderModelPickerOverlay(
     const provenance = capModel?.contextWindowProvenance ?? 'configured_cap';
 
     const promptLabel = 'Context window (tokens):';
-    const cursorChar = '\u2592'; // block cursor
+    const cursorChar = '_';
     const inputDisplay = picker.contextCapQuery + cursorChar;
-    const promptRow = pad + '\u2502 ' + promptLabel + ' ' + inputDisplay.padEnd(Math.max(0, contentW - promptLabel.length - 2)) + ' \u2502';
-    lines.push(UIFactory.stringToLine(promptRow, width, { fg: '#ffffff' }));
+    const promptRow = createOverlayContentLine(width, layout, borderFg);
+    putRowText(promptRow, layout.margin + 2, contentW, fitDisplay(`${promptLabel} ${inputDisplay}`, contentW), '#ffffff');
+    lines.push(promptRow);
 
-    const blankRow = pad + '\u2502' + ' '.repeat(boxW - 2) + '\u2502';
-    lines.push(UIFactory.stringToLine(blankRow, width, { fg: '240' }));
+    lines.push(createOverlayContentLine(width, layout, borderFg));
 
     const hintText = `Leave blank to use default (current: ${currentCtx}, source: ${provenance})`;
     const hintTrunc = getDisplayWidth(hintText) > contentW
-      ? hintText.slice(0, contentW - 1) + '\u2026'
+      ? hintText.slice(0, contentW - 3) + '...'
       : hintText;
-    const hintRow = pad + '\u2502 ' + hintTrunc.padEnd(contentW) + ' \u2502';
-    lines.push(UIFactory.stringToLine(hintRow, width, { fg: '244', dim: true }));
+    const hintRow = createOverlayContentLine(width, layout, borderFg);
+    putRowText(hintRow, layout.margin + 2, contentW, fitDisplay(hintTrunc, contentW), '244', '', false, true);
+    lines.push(hintRow);
 
     // Divider + model info
-    const divider2 = pad + '\u251c' + '\u2500'.repeat(boxW - 2) + '\u2524';
-    lines.push(UIFactory.stringToLine(divider2, width, { fg: '240' }));
-    const modelInfoLine = pad + '\u2502 ' + `Model: ${modelName}`.padEnd(contentW) + ' \u2502';
-    lines.push(UIFactory.stringToLine(modelInfoLine, width, { fg: '244' }));
-    lines.push(UIFactory.stringToLine(emptyRow, width, { fg: '240' }));
+    lines.push(createOverlayBorderLine(width, layout, '├', '─', '┤', mutedFg));
+    const modelInfoLine = createOverlayContentLine(width, layout, borderFg);
+    putRowText(modelInfoLine, layout.margin + 2, contentW, fitDisplay(`Model: ${modelName}`, contentW), '244');
+    lines.push(modelInfoLine);
+    lines.push(createOverlayContentLine(width, layout, borderFg));
   } else {
     // ── Effort list ────────────────────────────────────────────────────────────────────────
     for (let i = 0; i < picker.effortLevels.length; i++) {
       const level = picker.effortLevels[i];
       const isSelected = i === picker.selectedIndex;
-      const indicator = isSelected ? '\u25b6 ' : '  ';
+      const indicator = isSelected ? '> ' : '  ';
       const desc = EFFORT_DESCRIPTIONS[level] ?? '';
       const labelW = 10;
       const labelStr = level.padEnd(labelW);
       const remaining = contentW - labelW - 4;
-      const descStr = desc.length > remaining ? desc.slice(0, remaining - 1) + '\u2026' : desc.padEnd(remaining);
-      const rowText = pad + '\u2502 ' + indicator + labelStr + '  ' + descStr + ' \u2502';
-      lines.push(UIFactory.stringToLine(rowText, width, {
-        fg: isSelected ? '#00ffff' : '252',
-        bold: isSelected,
-        bg: isSelected ? '#1a2a3a' : '',
-      }));
+      const descStr = desc.length > remaining ? desc.slice(0, remaining - 3) + '...' : desc.padEnd(remaining);
+      const row = createOverlayContentLine(width, layout, borderFg, isSelected ? selectedBg : '');
+      const rowText = indicator + labelStr + '  ' + descStr;
+      putRowText(row, layout.margin + 2, contentW, fitDisplay(truncateDisplay(rowText, contentW), contentW), isSelected ? titleFg : bodyFg, isSelected ? selectedBg : '', isSelected);
+      lines.push(row);
     }
 
     // ── Divider + model context ──────────────────────────────────────────────────────
-    const divider = pad + '\u251c' + '\u2500'.repeat(boxW - 2) + '\u2524';
-    lines.push(UIFactory.stringToLine(divider, width, { fg: '240' }));
+    lines.push(createOverlayBorderLine(width, layout, '├', '─', '┤', mutedFg));
     const modelName = picker.pendingModel ? picker.pendingModel.displayName : 'unknown';
-    const modelLine = pad + '\u2502 ' + `Model: ${modelName}`.padEnd(contentW) + ' \u2502';
-    lines.push(UIFactory.stringToLine(modelLine, width, { fg: '244' }));
-    lines.push(UIFactory.stringToLine(emptyRow, width, { fg: '240' }));
+    const modelLine = createOverlayContentLine(width, layout, borderFg);
+    putRowText(modelLine, layout.margin + 2, contentW, fitDisplay(`Model: ${modelName}`, contentW), '244');
+    lines.push(modelLine);
+    lines.push(createOverlayContentLine(width, layout, borderFg));
   }
 
   // ── Bottom border with hints ─────────────────────────────────────────────────────────
@@ -350,14 +384,14 @@ export function renderModelPickerOverlay(
   const showContextCapHint = selectedModel != null && selectedModel.contextWindowProvenance !== undefined;
   const hints = picker.mode === 'model'
     ? showContextCapHint
-      ? ` [\u2191\u2193] Navigate  [Enter] Select  [Space] Context Cap  [Esc] Clear/Cancel  [Tab] Filter: ${filterLabelFooter}  [G] Group: ${groupByLabel} `
-      : ` [\u2191\u2193] Navigate  [Enter] Select  [Esc] Clear/Cancel  [Tab] Filter: ${filterLabelFooter}  [G] Group: ${groupByLabel} `
+      ? `[Up/Down] [Enter] [Space] Ctx [Esc] [Tab] Filter: ${filterLabelFooter} [G] Group: ${groupByLabel}`
+      : `[Up/Down] [Enter] [Esc] [Tab] Filter: ${filterLabelFooter} [G] Group: ${groupByLabel}`
     : picker.mode === 'contextCap'
-    ? ' [Enter] Confirm  [Esc] Cancel '
-    : ' [\u2191\u2193] Navigate  [Enter] Select  [Esc] Cancel ';
-  const bottomLine =
-    pad + '\u2514' + hints + '\u2500'.repeat(Math.max(0, boxW - 2 - getDisplayWidth(hints))) + '\u2518';
-  lines.push(UIFactory.stringToLine(bottomLine, width, { fg: '240' }));
+    ? '[Enter] Confirm  [Esc] Cancel'
+    : '[Up/Down] Nav  [Enter] Select  [Esc] Cancel';
+  const footerLine = createOverlayBorderLine(width, layout, '└', '─', '┘', mutedFg);
+  putRowText(footerLine, layout.margin + 2, contentW, fitDisplay(truncateDisplay(hints, contentW), contentW), mutedFg, '', false, true);
+  lines.push(footerLine);
 
   return lines;
 }

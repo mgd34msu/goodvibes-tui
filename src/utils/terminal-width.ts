@@ -99,6 +99,33 @@ export function center(text: string, width: number): string {
   return ' '.repeat(left) + text;
 }
 
+export function truncateDisplay(text: string, width: number, ellipsis = '…'): string {
+  if (width <= 0) return '';
+  if (getDisplayWidth(text) <= width) return text;
+  const ellipsisWidth = getDisplayWidth(ellipsis);
+  if (ellipsisWidth >= width) return truncateDisplay(ellipsis, width, '');
+
+  let result = '';
+  let currentWidth = 0;
+  for (const char of text) {
+    const charWidth = getDisplayWidth(char);
+    if (currentWidth + charWidth + ellipsisWidth > width) break;
+    result += char;
+    currentWidth += charWidth;
+  }
+  return result + ellipsis;
+}
+
+export function padDisplayEnd(text: string, width: number): string {
+  const currentWidth = getDisplayWidth(text);
+  if (currentWidth >= width) return text;
+  return text + ' '.repeat(width - currentWidth);
+}
+
+export function fitDisplay(text: string, width: number, ellipsis = '…'): string {
+  return padDisplayEnd(truncateDisplay(text, width, ellipsis), width);
+}
+
 /**
  * Smart Word Wrapping.
  */

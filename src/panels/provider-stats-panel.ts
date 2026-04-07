@@ -1,14 +1,22 @@
 import { BasePanel } from './base-panel.ts';
 import type { Line } from '../types/grid.ts';
-import { createStyledCell, createEmptyLine } from '../types/grid.ts';
 import type { RuntimeEventBus, ProviderEvent, TurnEvent } from '../runtime/events/index.ts';
 import { providerRegistry } from '../providers/registry.ts';
+import {
+  buildEmptyState,
+  buildKeyValueLine,
+  buildStyledPanelLine,
+  buildPanelWorkspace,
+  DEFAULT_PANEL_PALETTE,
+  type PanelWorkspaceSection,
+} from './polish.ts';
+import { truncateDisplay } from '../utils/terminal-width.ts';
 
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
 
-const SPARKLINE_CHARS = '▁▂▃▄▅▆▇█';
+const SPARKLINE_CHARS = '._-:=+*#';
 const LATENCY_RING_SIZE = 20;
 
 /** Latency thresholds in ms for color-coding. */
@@ -179,69 +187,69 @@ export class ProviderStatsPanel extends BasePanel {
   // -------------------------------------------------------------------------
 
   override render(width: number, height: number): Line[] {
-    const lines: Line[] = [];
-
-    // Title bar
-    lines.push(this._buildTitleLine(width));
-
-    // Separator
-    lines.push(this._buildHRLine(width));
-
-    // Provider rows
     const allProviders = providerRegistry.listModels().map(m => m.provider);
     const knownProviders = [...new Set(allProviders)];
 
     if (knownProviders.length === 0) {
-      lines.push(this._buildTextLine('  No providers registered.', '#888888', width));
-    } else {
-      for (const provName of knownProviders) {
-        const rec = this.records.get(provName);
-        lines.push(...this._buildProviderRows(provName, rec, width));
-      }
+      return buildPanelWorkspace(width, height, {
+        title: ' Provider Stats',
+        intro: 'Per-provider request performance, latency distribution, error pressure, and session totals.',
+        sections: [
+          {
+            lines: buildEmptyState(
+              width,
+              ' No providers registered',
+              'Load or configure a provider to begin collecting per-provider latency and error metrics.',
+              [],
+              DEFAULT_PANEL_PALETTE,
+            ),
+          },
+        ],
+        palette: DEFAULT_PANEL_PALETTE,
+      });
     }
 
-    // Separator before totals
-    lines.push(this._buildHRLine(width));
+    const totalReq = [...this.records.values()].reduce((sum, rec) => sum + rec.requests, 0);
+    const totalErr = [...this.records.values()].reduce((sum, rec) => sum + rec.errors, 0);
+    const totalTok = [...this.records.values()].reduce((sum, rec) => sum + rec.totalTokens, 0);
+    const allLatencies = [...this.records.values()].flatMap((rec) => rec.latencies);
+    const providerSections: PanelWorkspaceSection[] = [
+      {
+        title: 'Session',
+        lines: [
+          buildKeyValueLine(width, [
+            { label: 'Providers', value: String(knownProviders.length) },
+            { label: 'Requests', value: String(totalReq), valueColor: DEFAULT_PANEL_PALETTE.info },
+            { label: 'Errors', value: String(totalErr), valueColor: totalErr > 0 ? DEFAULT_PANEL_PALETTE.bad : DEFAULT_PANEL_PALETTE.good },
+            { label: 'Tokens', value: String(totalTok), valueColor: DEFAULT_PANEL_PALETTE.value },
+          ], DEFAULT_PANEL_PALETTE),
+          buildKeyValueLine(width, [
+            { label: 'Avg Latency', value: this._fmtMs(this._avg(allLatencies)), valueColor: this._latencyColor(this._avg(allLatencies)) },
+            { label: 'P95', value: this._fmtMs(this._p95(allLatencies)), valueColor: DEFAULT_PANEL_PALETTE.warn },
+          ], DEFAULT_PANEL_PALETTE),
+        ],
+      },
+    ];
 
-    // Session totals
-    lines.push(this._buildTotalsLine(width));
-
-    // Pad to fill height
-    while (lines.length < height) {
-      lines.push(createEmptyLine(width));
+    for (const provName of knownProviders) {
+      const rec = this.records.get(provName);
+      providerSections.push({
+        title: provName,
+        lines: this._buildProviderRows(provName, rec, width),
+      });
     }
 
-    return lines.slice(0, height);
+    return buildPanelWorkspace(width, height, {
+      title: ' Provider Stats',
+      intro: 'Per-provider request performance, latency distribution, error pressure, and session totals.',
+      sections: providerSections,
+      palette: DEFAULT_PANEL_PALETTE,
+    });
   }
 
   // -------------------------------------------------------------------------
   // Line builders
   // -------------------------------------------------------------------------
-
-  private _buildTitleLine(width: number): Line {
-    const label = ' Providers — per-provider performance metrics';
-    const cells: Line = [];
-    for (let i = 0; i < width; i++) {
-      const ch = i < label.length ? label[i] : ' ';
-      cells.push(createStyledCell(ch ?? ' ', { fg: '#e2e8f0', bold: i < 10 }));
-    }
-    return cells;
-  }
-
-  private _buildHRLine(width: number): Line {
-    return Array.from({ length: width }, () =>
-      createStyledCell('\u2500', { fg: '#374151' }),
-    );
-  }
-
-  private _buildTextLine(text: string, fg: string, width: number): Line {
-    const cells: Line = [];
-    for (let i = 0; i < width; i++) {
-      const ch = i < text.length ? text[i] : ' ';
-      cells.push(createStyledCell(ch ?? ' ', { fg }));
-    }
-    return cells;
-  }
 
   private _buildProviderRows(
     provName: string,
@@ -255,43 +263,30 @@ export class ProviderStatsPanel extends BasePanel {
     const dotColor = hasErrors ? '#ef4444' : '#22c55e';
 
     // Model ID (truncated)
-    const modelId = rec?.lastModelId ?? '—';
-    const modelDisplay = modelId.length > 30 ? modelId.slice(0, 27) + '...' : modelId;
+    const modelId = rec?.lastModelId ?? 'n/a';
+    const modelDisplay = truncateDisplay(modelId, 30);
 
-    // Header row: ● provider  model
+    // Header row: * provider  model
     // Build as segments to avoid multi-byte char indexing issues
-    const headerLine: Line = [];
-    const segments: Array<{ text: string; fg: string; bold?: boolean }> = [
+    const headerLine = buildStyledPanelLine(width, [
       { text: '  ', fg: '#94a3b8' },
-      { text: '●', fg: dotColor },
+      { text: '*', fg: dotColor },
       { text: ' ', fg: '#94a3b8' },
-      { text: provName.padEnd(14), fg: '#e2e8f0', bold: true },
-      { text: ' ', fg: '#94a3b8' },
+      { text: `${truncateDisplay(provName, 14).padEnd(14)} `, fg: '#e2e8f0', bold: true },
       { text: modelDisplay, fg: '#cbd5e1' },
-    ];
+    ]);
 
-    let col = 0;
-    for (const seg of segments) {
-      for (const ch of seg.text) {
-        if (col >= width) break;
-        headerLine.push(createStyledCell(ch, { fg: seg.fg, bold: seg.bold ?? false }));
-        col++;
-      }
-    }
-    while (col < width) {
-      headerLine.push(createStyledCell(' ', { fg: '' }));
-      col++;
-    }
     rows.push(headerLine);
 
-    // Stats row
     if (rec === undefined || rec.requests === 0) {
-      rows.push(this._buildTextLine('    No requests yet.', '#6b7280', width));
+      rows.push(buildStyledPanelLine(width, [
+        { text: '    No requests yet.', fg: '#6b7280' },
+      ]));
     } else {
       const avgLatency = this._avg(rec.latencies);
       const p95Latency = this._p95(rec.latencies);
-      const errRate    = rec.requests > 0 ? (rec.errors / rec.requests) * 100 : 0;
-      const sparkline  = this._sparkline(rec.latencies);
+      const errRate = rec.requests > 0 ? (rec.errors / rec.requests) * 100 : 0;
+      const sparkline = this._sparkline(rec.latencies);
 
       const latFg = avgLatency < LATENCY_GREEN
         ? '#22c55e'
@@ -299,67 +294,24 @@ export class ProviderStatsPanel extends BasePanel {
           ? '#eab308'
           : '#ef4444';
 
-      const statsLine: Line = [];
-      let scol = 0;
-
-      const push = (ch: string, fg: string, bold = false): void => {
-        if (scol < width) {
-          statsLine.push(createStyledCell(ch, { fg, bold }));
-          scol++;
-        }
-      };
-
-      const pushStr = (s: string, fg: string, bold = false): void => {
-        for (const ch of s) push(ch, fg, bold);
-      };
-
-      pushStr('    avg', '#6b7280');
-      pushStr(this._fmtMs(avgLatency).padStart(6), latFg, true);
-      pushStr('  p95', '#6b7280');
-      pushStr(this._fmtMs(p95Latency).padStart(6), '#a78bfa');
-      pushStr('  ', '#374151');
-      pushStr(sparkline, latFg);
-      pushStr('  err', '#6b7280');
-      pushStr(errRate.toFixed(0).padStart(3) + '%', errRate > 0 ? '#ef4444' : '#22c55e');
-      pushStr('  ' + rec.requests.toString().padStart(4) + 'r', '#94a3b8');
-      if (rec.totalTokens > 0) {
-        pushStr('  ' + rec.totalTokens.toString().padStart(6) + 'tok', '#64748b');
-      }
-
-      // Pad remainder
-      while (scol < width) {
-        statsLine.push(createStyledCell(' ', { fg: '' }));
-        scol++;
-      }
-
-      rows.push(statsLine);
+      const segments = [
+        { text: '    avg ', fg: '#6b7280' },
+        { text: this._fmtMs(avgLatency).padStart(6), fg: latFg, bold: true },
+        { text: '  p95 ', fg: '#6b7280' },
+        { text: this._fmtMs(p95Latency).padStart(6), fg: '#a78bfa' },
+        { text: '  ', fg: '#374151' },
+        { text: sparkline, fg: latFg },
+        { text: '  err ', fg: '#6b7280' },
+        { text: `${errRate.toFixed(0).padStart(3)}%`, fg: errRate > 0 ? '#ef4444' : '#22c55e' },
+        { text: `  ${rec.requests.toString().padStart(4)}r`, fg: '#94a3b8' },
+      ] as const;
+      const tokenSegment = rec.totalTokens > 0
+        ? [{ text: `  ${rec.totalTokens.toString().padStart(6)}tok`, fg: '#64748b' }]
+        : [];
+      rows.push(buildStyledPanelLine(width, [...segments, ...tokenSegment]));
     }
 
     return rows;
-  }
-
-  private _buildTotalsLine(width: number): Line {
-    let totalReq = 0;
-    let totalErr = 0;
-    let totalTok = 0;
-    const allLatencies: number[] = [];
-
-    for (const rec of this.records.values()) {
-      totalReq += rec.requests;
-      totalErr += rec.errors;
-      totalTok += rec.totalTokens;
-      for (const lat of rec.latencies) allLatencies.push(lat);
-    }
-
-    const avgAll = allLatencies.length > 0 ? this._avg(allLatencies) : 0;
-    const tokPart = totalTok > 0 ? ` | ${totalTok} tok` : '';
-    const text = ` Session: ${totalReq} req${tokPart} | ${totalErr} err | ${this._fmtMs(avgAll)} avg`;
-    const line: Line = [];
-    for (let i = 0; i < width; i++) {
-      const ch = text[i] ?? ' ';
-      line.push(createStyledCell(ch, { fg: '#6b7280', italic: true }));
-    }
-    return line;
   }
 
   // -------------------------------------------------------------------------
@@ -389,7 +341,7 @@ export class ProviderStatsPanel extends BasePanel {
         SPARKLINE_CHARS.length - 1,
         Math.floor(((v - minV) / range) * (SPARKLINE_CHARS.length - 1)),
       );
-      return SPARKLINE_CHARS[idx] ?? '▁';
+      return SPARKLINE_CHARS[idx] ?? '.';
     });
     // Pad left to always be LATENCY_RING_SIZE wide
     while (spark.length < LATENCY_RING_SIZE) spark.unshift(' ');
@@ -397,9 +349,16 @@ export class ProviderStatsPanel extends BasePanel {
   }
 
   private _fmtMs(ms: number): string {
-    if (ms <= 0) return '—';
+    if (ms <= 0) return 'n/a';
     if (ms >= 10000) return `${(ms / 1000).toFixed(1)}s`;
     if (ms >= 1000) return `${(ms / 1000).toFixed(2)}s`;
     return `${Math.round(ms)}ms`;
+  }
+
+  private _latencyColor(ms: number): string {
+    if (ms <= 0) return DEFAULT_PANEL_PALETTE.dim;
+    if (ms < LATENCY_GREEN) return DEFAULT_PANEL_PALETTE.good;
+    if (ms < LATENCY_YELLOW) return DEFAULT_PANEL_PALETTE.warn;
+    return DEFAULT_PANEL_PALETTE.bad;
   }
 }

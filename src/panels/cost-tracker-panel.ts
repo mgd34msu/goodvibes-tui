@@ -8,6 +8,15 @@ import { BasePanel } from './base-panel.ts';
 import type { RuntimeEventBus, AgentEvent, TurnEvent } from '../runtime/events/index.ts';
 import { getPricingForModel } from '../providers/model-limits.ts';
 import { getCostFromCatalog } from '../providers/model-catalog.ts';
+import {
+  buildEmptyState,
+  buildPanelLine,
+  buildStyledPanelLine,
+  buildPanelWorkspace,
+  DEFAULT_PANEL_PALETTE,
+  type PanelWorkspaceSection,
+} from './polish.ts';
+import { getVisibleWindow } from '../renderer/surface-layout.ts';
 
 // ---------------------------------------------------------------------------
 // Pricing table  (USD per 1M tokens)
@@ -114,17 +123,17 @@ interface AgentEntry {
 }
 
 // Sparkline history (rolling last N cost-per-turn values)
-const SPARKLINE_BARS = '▁▂▃▄▅▆▇█';
+const SPARKLINE_BARS = '._-:=+*#';
 const SPARKLINE_LEN = 16;
 
 function buildSparkline(history: number[]): string {
   if (history.length === 0) return '';
   const max = Math.max(...history);
-  if (max === 0) return '▁'.repeat(history.length);
+  if (max === 0) return '.'.repeat(history.length);
   return history
     .map(v => {
       const idx = Math.round((v / max) * (SPARKLINE_BARS.length - 1));
-      return SPARKLINE_BARS[idx] ?? '▁';
+      return SPARKLINE_BARS[idx] ?? '.';
     })
     .join('');
 }
@@ -202,7 +211,7 @@ export class CostTrackerPanel extends BasePanel {
       runtimeBus.on<Extract<AgentEvent, { type: 'AGENT_SPAWNING' }>>('AGENT_SPAWNING', ({ payload }) => {
         this.agents.set(payload.agentId, {
           id: payload.agentId.slice(0, 8),
-          task: payload.task.length > 40 ? payload.task.slice(0, 37) + '…' : payload.task,
+          task: payload.task.length > 40 ? payload.task.slice(0, 37) + '...' : payload.task,
           model: 'unknown',
           inputTokens: 0,
           outputTokens: 0,
@@ -309,214 +318,126 @@ export class CostTrackerPanel extends BasePanel {
   render(width: number, height: number): Line[] {
     if (height <= 0 || width <= 0) return [];
 
-    const lines: Line[] = [];
-
     const sessionProvider = this.sessionModel.includes('/') ? this.sessionModel.split('/')[0]! : '';
     const pricing = getPricing(this.sessionModel, sessionProvider);
     const totalInputTokens = this.sessionUsage.input + this.sessionUsage.cacheRead + this.sessionUsage.cacheWrite;
     const sessionCost = calcCost(this.sessionUsage.input + this.sessionUsage.cacheRead + this.sessionUsage.cacheWrite, this.sessionUsage.output, pricing);
     const overBudget = this.budgetThreshold > 0 && sessionCost > this.budgetThreshold;
-
-    // ── Running total header ─────────────────────────────────────────────────
-    lines.push(this.renderSectionHeader(width, ' SESSION COST'));
-    if (lines.length >= height) return lines.slice(0, height);
-
-    // Cost + sparkline row
     const sparkline = buildSparkline(this.costHistory);
     const costStr = formatCost(sessionCost);
     const costFg = overBudget ? C.alert : C.cost;
     const budgetStr = this.budgetThreshold > 0
       ? ` / ${formatCost(this.budgetThreshold)}`
       : '';
-    const alertStr = overBudget ? ' ⚠ OVER BUDGET' : '';
-    lines.push(this.renderKeyValue(
-      width,
-      ' Total',
-      `${costStr}${budgetStr}${alertStr}`,
-      costFg,
-    ));
-    if (lines.length >= height) return lines.slice(0, height);
-
-    // Sparkline
-    if (sparkline.length > 0) {
-      lines.push(this.renderLabeledLine(width, ' Trend', sparkline, C.value));
-      if (lines.length >= height) return lines.slice(0, height);
-    }
-
-    // Token breakdown
-    lines.push(this.renderKeyValue(width, ' Input',  formatTokens(this.sessionUsage.input),  C.label));
-    if (lines.length >= height) return lines.slice(0, height);
-    lines.push(this.renderKeyValue(width, ' Output', formatTokens(this.sessionUsage.output), C.label));
-    if (lines.length >= height) return lines.slice(0, height);
+    const alertStr = overBudget ? ' ! OVER BUDGET' : '';
+    const sessionLines: Line[] = [
+      this.renderKeyValue(width, ' Total', `${costStr}${budgetStr}${alertStr}`, costFg),
+    ];
+    if (sparkline.length > 0) sessionLines.push(this.renderLabeledLine(width, ' Trend', sparkline, C.value));
+    sessionLines.push(this.renderKeyValue(width, ' Input',  formatTokens(this.sessionUsage.input),  C.label));
+    sessionLines.push(this.renderKeyValue(width, ' Output', formatTokens(this.sessionUsage.output), C.label));
     if (this.sessionUsage.cacheRead > 0 || this.sessionUsage.cacheWrite > 0) {
-      lines.push(this.renderKeyValue(width, ' Cache↑', formatTokens(this.sessionUsage.cacheWrite), C.dim));
-      if (lines.length >= height) return lines.slice(0, height);
-      lines.push(this.renderKeyValue(width, ' Cache↓', formatTokens(this.sessionUsage.cacheRead), C.dim));
-      if (lines.length >= height) return lines.slice(0, height);
+      sessionLines.push(this.renderKeyValue(width, ' Cache W', formatTokens(this.sessionUsage.cacheWrite), C.dim));
+      sessionLines.push(this.renderKeyValue(width, ' Cache R', formatTokens(this.sessionUsage.cacheRead), C.dim));
     }
-    lines.push(this.renderKeyValue(width, ' Total T', formatTokens(totalInputTokens + this.sessionUsage.output), C.label));
-    if (lines.length >= height) return lines.slice(0, height);
+    sessionLines.push(this.renderKeyValue(width, ' Total T', formatTokens(totalInputTokens + this.sessionUsage.output), C.label));
+    sessionLines.push(this.renderKeyValue(width, ' Model', this.sessionModel, C.model));
 
-    // Model
-    lines.push(this.renderKeyValue(width, ' Model', this.sessionModel, C.model));
-    if (lines.length >= height) return lines.slice(0, height);
+    const sections: PanelWorkspaceSection[] = [
+      {
+        title: 'Session Cost',
+        lines: sessionLines,
+      },
+    ];
 
-    // ── Per-plan cost (sum across all agents) ────────────────────────────────
     const agentList = Array.from(this.agents.values());
     if (agentList.length > 0) {
-      lines.push(this.renderEmpty(width));
-      if (lines.length >= height) return lines.slice(0, height);
-      lines.push(this.renderSectionHeader(width, ' AGENTS'));
-      if (lines.length >= height) return lines.slice(0, height);
-
       const planCost = agentList.reduce((sum, a) => sum + a.cost, 0);
-      lines.push(this.renderKeyValue(width, ' Plan total', formatCost(planCost + sessionCost), C.cost));
-      if (lines.length >= height) return lines.slice(0, height);
-
-      lines.push(this.renderDivider(width));
-      if (lines.length >= height) return lines.slice(0, height);
-
-      // Scrollable agent list
-      const agentStart = Math.min(this.scrollOffset, Math.max(0, agentList.length - 1));
-      const visibleAgents = agentList.slice(agentStart);
+      const agentRows: Line[] = [
+        this.renderKeyValue(width, ' Plan total', formatCost(planCost + sessionCost), C.cost),
+        this.renderDivider(width),
+      ];
+      const selectedAgentIndex = Math.min(this.scrollOffset, Math.max(0, agentList.length - 1));
+      const agentWindow = getVisibleWindow(agentList.length, selectedAgentIndex, Math.max(4, Math.floor((height - 12) / 2)));
+      this.scrollOffset = agentWindow.start;
+      const visibleAgents = agentList.slice(agentWindow.start, agentWindow.end);
       for (const agent of visibleAgents) {
         const statusFg = agent.status === 'running' ? C.running
           : agent.status === 'failed' ? C.failed
           : C.done;
-        const statusIcon = agent.status === 'running' ? '…'
-          : agent.status === 'failed' ? '✗'
-          : '✓';
+        const statusIcon = agent.status === 'running' ? '...'
+          : agent.status === 'failed' ? 'x'
+          : 'y';
 
-        // Agent header row: icon + id + task truncated
         const agentLabel = `${statusIcon} ${agent.id}`;
         const taskText = agent.task;
-        lines.push(this.renderAgent(width, agentLabel, taskText, statusFg));
-        if (lines.length >= height) return lines.slice(0, height);
+        agentRows.push(this.renderAgent(width, agentLabel, taskText, statusFg));
 
-        // Token + cost row (if we have data)
         if (agent.inputTokens > 0 || agent.outputTokens > 0) {
           const tokenInfo = `  in:${formatTokens(agent.inputTokens)} out:${formatTokens(agent.outputTokens)} ${formatCost(agent.cost)}`;
-          lines.push(this.renderLabeledLine(width, '', tokenInfo, C.dim));
-          if (lines.length >= height) return lines.slice(0, height);
+          agentRows.push(this.renderLabeledLine(width, '', tokenInfo, C.dim));
         }
       }
+      sections.push({
+        title: 'Agents',
+        lines: agentRows,
+      });
     } else {
-      // No agents — show placeholder
-      lines.push(this.renderEmpty(width));
-      if (lines.length >= height) return lines.slice(0, height);
-      lines.push(this.renderDimText(width, ' No agents spawned this session'));
-      if (lines.length >= height) return lines.slice(0, height);
+      sections.push({
+        title: 'Agents',
+        lines: buildEmptyState(
+          width,
+          ' No agents spawned this session',
+          'Agent-level cost estimates appear here once delegated or background agents start running.',
+          [],
+          DEFAULT_PANEL_PALETTE,
+        ),
+      });
     }
 
-    // Pad remainder
-    while (lines.length < height) {
-      lines.push(createEmptyLine(width));
-    }
-
-    return lines.slice(0, height);
+    return buildPanelWorkspace(width, height, {
+      title: ' Cost Tracker',
+      intro: 'Track per-session and per-agent token spend using model pricing and live usage snapshots.',
+      sections,
+      footerLines: [
+        buildPanelLine(width, [[' Up/Down', DEFAULT_PANEL_PALETTE.info], [' scroll agents', DEFAULT_PANEL_PALETTE.dim]]),
+      ],
+      palette: DEFAULT_PANEL_PALETTE,
+    });
   }
 
   // -------------------------------------------------------------------------
   // Render helpers
   // -------------------------------------------------------------------------
 
-  private renderSectionHeader(width: number, text: string): Line {
-    const cells: Line = [];
-    const padded = text.padEnd(width);
-    for (let i = 0; i < Math.min(padded.length, width); i++) {
-      cells.push(createStyledCell(padded[i]!, { fg: C.header, bg: C.separator, bold: true }));
-    }
-    while (cells.length < width) {
-      cells.push(createStyledCell(' ', { fg: '', bg: C.separator }));
-    }
-    return cells.slice(0, width);
-  }
-
   private renderKeyValue(width: number, label: string, value: string, valueFg: string): Line {
-    const cells: Line = [];
-    // Label (fixed at 10 chars)
     const LABEL_W = 10;
-    const paddedLabel = label.padEnd(LABEL_W).slice(0, LABEL_W);
-    for (const ch of paddedLabel) {
-      cells.push(createStyledCell(ch, { fg: C.label, bg: C.bg }));
-    }
-    // Colon separator
-    cells.push(createStyledCell(':', { fg: C.dim, bg: C.bg }));
-    cells.push(createStyledCell(' ', { fg: '', bg: C.bg }));
-    // Value
-    const remaining = width - LABEL_W - 2;
-    const trimmed = value.length > remaining ? value.slice(0, remaining) : value;
-    for (const ch of trimmed) {
-      if (cells.length >= width) break;
-      cells.push(createStyledCell(ch, { fg: valueFg, bg: C.bg, bold: true }));
-    }
-    while (cells.length < width) {
-      cells.push(createStyledCell(' ', { fg: '', bg: C.bg }));
-    }
-    return cells.slice(0, width);
+    return buildStyledPanelLine(width, [
+      { text: label.padEnd(LABEL_W).slice(0, LABEL_W), fg: C.label, bg: C.bg },
+      { text: ': ', fg: C.dim, bg: C.bg },
+      { text: value, fg: valueFg, bg: C.bg, bold: true },
+    ]);
   }
 
   private renderLabeledLine(width: number, label: string, value: string, valueFg: string): Line {
-    const cells: Line = [];
-    if (label.length > 0) {
-      for (const ch of label.slice(0, 10).padEnd(10)) {
-        cells.push(createStyledCell(ch, { fg: C.label }));
-      }
-      cells.push(createStyledCell(' ', { fg: '' }));
-    }
-    for (const ch of value) {
-      if (cells.length >= width) break;
-      cells.push(createStyledCell(ch, { fg: valueFg }));
-    }
-    while (cells.length < width) {
-      cells.push(createStyledCell(' ', { fg: '' }));
-    }
-    return cells.slice(0, width);
+    return buildStyledPanelLine(width, [
+      ...(label.length > 0 ? [{ text: `${label.slice(0, 10).padEnd(10)} `, fg: C.label }] : []),
+      { text: value, fg: valueFg },
+    ]);
   }
 
   private renderAgent(width: number, label: string, task: string, fg: string): Line {
-    const cells: Line = [];
-    // label (e.g. "✓ abc12345") — ~12 chars
     const LABEL_W = 12;
-    const paddedLabel = label.padEnd(LABEL_W).slice(0, LABEL_W);
-    for (const ch of paddedLabel) {
-      cells.push(createStyledCell(ch, { fg, bold: true }));
-    }
-    cells.push(createStyledCell(' ', { fg: '' }));
-    // Task text fills remainder
     const remaining = width - LABEL_W - 1;
-    const trimmed = task.length > remaining ? task.slice(0, remaining - 1) + '…' : task;
-    for (const ch of trimmed) {
-      if (cells.length >= width) break;
-      cells.push(createStyledCell(ch, { fg: C.label }));
-    }
-    while (cells.length < width) {
-      cells.push(createStyledCell(' ', { fg: '' }));
-    }
-    return cells.slice(0, width);
+    const trimmed = task.length > remaining ? task.slice(0, remaining - 3) + '...' : task;
+    return buildStyledPanelLine(width, [
+      { text: `${label.padEnd(LABEL_W).slice(0, LABEL_W)} `, fg, bold: true },
+      { text: trimmed, fg: C.label },
+    ]);
   }
 
   private renderDivider(width: number): Line {
-    const cells: Line = [];
-    for (let i = 0; i < width; i++) {
-      cells.push(createStyledCell('─', { fg: C.separator }));
-    }
-    return cells;
+    return buildStyledPanelLine(width, [{ text: '─'.repeat(width), fg: C.separator }]);
   }
 
-  private renderEmpty(width: number): Line {
-    return createEmptyLine(width);
-  }
-
-  private renderDimText(width: number, text: string): Line {
-    const cells: Line = [];
-    const truncated = text.slice(0, width);
-    for (const ch of truncated) {
-      cells.push(createStyledCell(ch, { fg: C.dim }));
-    }
-    while (cells.length < width) {
-      cells.push(createStyledCell(' ', { fg: '' }));
-    }
-    return cells.slice(0, width);
-  }
 }

@@ -166,6 +166,12 @@ export class ConversationManager {
     this.configManager = cm;
   }
 
+  /** Update the width provider so shell layout can own transcript width. */
+  public setWidthProvider(getWidth: () => number): void {
+    this.getWidth = getWidth;
+    this.markDirty();
+  }
+
   /** Returns messages formatted for LLM provider consumption. */
   public getMessagesForLLM(): ProviderMessage[] {
     const result: ProviderMessage[] = [];
@@ -387,7 +393,7 @@ export class ConversationManager {
   private renderUserMessage(message: Extract<Message, { role: 'user' }>, width: number): void {
     const displayText = extractUserDisplayText(message.content);
     if (message.cancelled) {
-      this.history.addLines(UIFactory.createMessageBar(width, displayText, '#3a1a1a', '196', ' × ', true));
+      this.history.addLines(UIFactory.createMessageBar(width, displayText, '#3a1a1a', '196', ' x ', true));
       return;
     }
     this.history.addLines(UIFactory.createMessageBar(width, displayText));
@@ -529,7 +535,7 @@ export class ConversationManager {
       const preview = contentLines[0].slice(0, width - LAYOUT.LEFT_MARGIN - LAYOUT.RIGHT_MARGIN - COLLAPSE_SUFFIX_RESERVE);
       const hiddenCount = lineCount - 1;
       const collapsedText = hiddenCount > 0
-        ? `${preview}…  [+${hiddenCount} lines]`
+        ? `${preview}...  [+${hiddenCount} lines]`
         : preview;
       const rendered = renderSystemMessage(collapsedText, width, 'info');
       this.history.addLines(rendered);
@@ -687,6 +693,12 @@ export class ConversationManager {
 
   public suppressSplash: boolean = false;
   public splashOptions: SplashOptions = {};
+
+  public setSplashSuppressed(suppressed: boolean): void {
+    if (this.suppressSplash === suppressed) return;
+    this.suppressSplash = suppressed;
+    this.markDirty();
+  }
 
   private addSplashScreen(width: number): void {
     const splashStrings = getSplashLines(width, this.splashOptions);

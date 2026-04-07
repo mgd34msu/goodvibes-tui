@@ -4,13 +4,15 @@
  *
  * Shows a list of saved profiles with:
  *   - name, timestamp (formatted), settings preview
- * Footer hints: [↑↓] Navigate  [Enter] Load  [d] Delete  [s] Save current  [Esc] Close
+ * Footer hints: [Up/Down] Navigate  [Enter] Load  [d] Arm/Delete  [s] Save current  [Esc] Close
  */
 
 import type { Line } from '../types/grid.ts';
 import { ModalFactory } from './modal-factory.ts';
 import type { ProfilePickerModal } from '../input/profile-picker-modal.ts';
 import { formatTimestamp } from './modal-utils.ts';
+import { fitDisplay } from '../utils/terminal-width.ts';
+import { getOverlaySurfaceMetrics, getStableOverlayContentRows } from './overlay-viewport.ts';
 
 // ---------------------------------------------------------------------------
 // Renderer
@@ -25,11 +27,19 @@ import { formatTimestamp } from './modal-utils.ts';
 export function renderProfilePickerModal(
   modal: ProfilePickerModal,
   width: number,
+  viewportHeight = 24,
 ): Line[] {
-  const boxMargin = 4;
-  const maxBoxW = 76;
-  const boxW = Math.min(width - boxMargin * 2, maxBoxW);
-  const contentW = boxW - 4;
+  const metrics = getOverlaySurfaceMetrics(width, viewportHeight, {
+    chromeRows: 6,
+    minContentRows: 5,
+    maxContentRows: 9,
+  });
+  const boxMargin = metrics.margin;
+  const boxW = metrics.boxWidth;
+  const contentW = metrics.contentWidth;
+  const visibleRows = metrics.contentRows;
+  const targetContentRows = getStableOverlayContentRows(metrics.contentRows, 8);
+  modal.setVisibleRows(visibleRows);
 
   const sections: import('./modal-factory.ts').ModalSection[] = [];
 
@@ -51,9 +61,9 @@ export function renderProfilePickerModal(
     const previewW = Math.max(4, contentW - nameW - tsW - 4);
 
     // Column header
-    const nameHdr    = 'Name'.padEnd(nameW);
-    const tsHdr      = 'Saved'.padEnd(tsW);
-    const previewHdr = 'Settings'.padEnd(previewW);
+    const nameHdr    = fitDisplay('Name', nameW);
+    const tsHdr      = fitDisplay('Saved', tsW);
+    const previewHdr = fitDisplay('Settings', previewW);
     sections.push({
       type: 'text',
       content: `${nameHdr}  ${tsHdr}  ${previewHdr}`,
@@ -61,24 +71,31 @@ export function renderProfilePickerModal(
     });
     sections.push({ type: 'separator' });
 
-    const listItems: import('./modal-factory.ts').ModalListItem[] = modal.profiles.map((prof, idx) => {
-      const isSelected = idx === modal.selectedIndex;
+    const visibleProfiles = modal.profiles.slice(modal.scrollOffset, modal.scrollOffset + visibleRows);
+    const listItems: import('./modal-factory.ts').ModalListItem[] = visibleProfiles.map((prof, idx) => {
+      const isSelected = modal.scrollOffset + idx === modal.selectedIndex;
 
-      const nameStr = prof.name.length > nameW
-        ? prof.name.slice(0, nameW - 1) + '\u2026'
-        : prof.name.padEnd(nameW);
+      const nameStr = fitDisplay(prof.name, nameW);
 
-      const tsStr = formatTimestamp(prof.timestamp).padEnd(tsW);
+      const tsStr = fitDisplay(formatTimestamp(prof.timestamp), tsW);
 
       // Read the profile file to get a preview of settings
       // (We only have name/timestamp in ProfileInfo, so show a placeholder)
-      const preview = '(display/provider/behavior)'.padEnd(previewW);
+      const preview = fitDisplay('(display/provider/behavior)', previewW);
 
       const label = `${nameStr}  ${tsStr}  ${preview}`;
       return { label, selected: isSelected };
     });
 
     sections.push({ type: 'list', items: listItems });
+    if (modal.profiles.length > visibleRows) {
+      sections.push({ type: 'separator' });
+      sections.push({
+        type: 'text',
+        content: `[${modal.scrollOffset + 1}-${Math.min(modal.profiles.length, modal.scrollOffset + visibleRows)} of ${modal.profiles.length}]`,
+        style: { fg: '244', dim: true },
+      });
+    }
   }
 
   // Status message if present
@@ -90,14 +107,22 @@ export function renderProfilePickerModal(
       style: { fg: '#00ffcc' },
     });
   }
+  if (modal.deleteConfirmationTarget) {
+    sections.push({
+      type: 'text',
+      content: `Press [d] again to permanently delete ${modal.deleteConfirmationTarget}.`,
+      style: { fg: '#f59e0b', dim: true },
+    });
+  }
 
   return ModalFactory.createModal(
     {
       title: 'Profiles',
       width: boxW,
       margin: boxMargin,
+      targetContentRows,
       sections,
-      hints: ['[\u2191\u2193] Navigate', '[Enter] Load', '[d] Delete', '[s] Save current', '[Esc] Close'],
+      hints: ['[Up/Down] Navigate', '[Enter] Load', '[d] Arm/Delete', '[s] Save current', '[Esc] Close'],
     },
     width,
   );

@@ -2,6 +2,7 @@ import { describe, test, expect, beforeEach } from 'bun:test';
 import { ProcessModal, renderProcessModal } from '../../renderer/process-modal.ts';
 import { AgentManager } from '../../tools/agent/index.ts';
 import { ProcessManager } from '../../tools/shared/process-manager.ts';
+import { configManager } from '../../config/index.ts';
 import { lineToString, linesToText } from '../setup.ts';
 
 const W = 100;
@@ -9,6 +10,8 @@ const W = 100;
 beforeEach(() => {
   AgentManager.resetInstance();
   ProcessManager.resetInstance();
+  configManager.set('orchestration.recursionEnabled', true);
+  configManager.set('orchestration.maxActiveAgents', 8);
 });
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -178,7 +181,7 @@ describe('ProcessModal state', () => {
     const modal = new ProcessModal();
     modal.refresh();
     expect(modal.entries[0].label.length).toBeLessThanOrEqual(80);
-    expect(modal.entries[0].label.endsWith('\u2026')).toBe(true);
+    expect(modal.entries[0].label.endsWith('...')).toBe(true);
   });
 });
 
@@ -216,10 +219,12 @@ describe('renderProcessModal', () => {
     modal.open();
     modal.moveDown();
     const lines = renderProcessModal(modal, W);
-    const texts = linesToText(lines);
-    const selectedLine = texts.find((t) => t.includes('\u25b6'));
-    expect(selectedLine).toBeDefined();
-    expect(selectedLine).toContain('Task B');
+    const text = linesToText(lines).join('\n');
+    expect(text).toContain('Task B');
+    const selectedCell = lines
+      .flat()
+      .find((cell) => cell.bg === '#1a2a3a');
+    expect(selectedCell).toBeDefined();
   });
 
   test('renders type tag [agent] in entry label', () => {

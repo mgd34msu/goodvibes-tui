@@ -98,7 +98,7 @@ describe('SkillsPanel', () => {
 
     const panel = new SkillsPanel({ cwd, homeDir });
     const text = linesText(panel.render(120, 16));
-    expect(text).toContain('Skills — discover project-local and global skill packs');
+    expect(text).toContain('Skills - discover project-local and global skill packs');
     expect(text).toContain('alpha');
     expect(text).toContain('Project-local alpha skill');
     expect(text).toContain(projectPath);
@@ -124,6 +124,7 @@ describe('SkillsPanel', () => {
     );
 
     const panel = new SkillsPanel({ cwd, homeDir });
+    panel.handleInput('/');
     for (const ch of 'needle-42') {
       expect(panel.handleInput(ch)).toBe(true);
     }
@@ -137,6 +138,30 @@ describe('SkillsPanel', () => {
     const second = linesText(panel.render(120, 16));
     expect(second).toContain('Selected: beta');
     expect(second).toContain('Path:');
-    expect(second).toContain('↑/↓ navigate');
+    expect(second).toContain('Up/Down navigate');
+  });
+
+  test('up at top focuses filter and down returns to list navigation', () => {
+    writeSkill(
+      cwd,
+      '.goodvibes/tui/skills/alpha/SKILL.md',
+      ['---', 'name: alpha', 'description: Alpha skill', '---', ''].join('\n'),
+    );
+    writeSkill(
+      cwd,
+      '.goodvibes/tui/skills/beta/SKILL.md',
+      ['---', 'name: beta', 'description: Beta skill', '---', ''].join('\n'),
+    );
+
+    const panel = new SkillsPanel({ cwd, homeDir });
+    panel.handleInput('up');
+    panel.handleInput('b');
+    let text = linesText(panel.render(120, 16));
+    expect(text).toContain('query: b_');
+
+    panel.handleInput('down');
+    panel.handleInput('down');
+    text = linesText(panel.render(120, 16));
+    expect(text).toContain('Selected: beta');
   });
 });

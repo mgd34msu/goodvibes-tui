@@ -5,12 +5,14 @@ import type { DiscoveredServer } from '../discovery/scanner.ts';
 import { OpenAIProvider } from './openai.ts';
 import { OpenAICompatProvider } from './openai-compat.ts';
 import { AnthropicProvider } from './anthropic.ts';
+import { OpenAICodexProvider } from './openai-codex.ts';
 import { GeminiProvider } from './gemini.ts';
 import { getConfiguredApiKeys, getConfiguredModelId, getConfiguredProviderId } from '../config/index.ts';
 import type { RuntimeEventBus } from '../runtime/events/index.ts';
 import { emitProvidersChanged, emitProviderWarning } from '../runtime/emitters/index.ts';
 import { loadCustomProviders, watchCustomProviders } from './custom-loader.ts';
 import { SyntheticProvider } from './synthetic.ts';
+import { getSubscriptionManager } from '../config/subscriptions.ts';
 
 import { getCatalogModelDefinitions, getSyntheticModelDefinitions, getSyntheticBackendModelIds } from './model-catalog.ts';
 
@@ -312,6 +314,7 @@ export class ProviderRegistry {
 
     this.register(new OpenAIProvider(apiKey('openai')));
     this.register(new AnthropicProvider(apiKey('anthropic')));
+    this.register(new OpenAICodexProvider());
     this.register(new GeminiProvider(apiKey('gemini')));
 
     this.register(
@@ -667,6 +670,10 @@ export class ProviderRegistry {
 
   /** Retrieve a provider by name. Throws if not found. */
   get(name: string): LLMProvider {
+    if (name === 'openai' && getSubscriptionManager().get('openai')) {
+      const subscriber = this.providers.get('openai-subscriber');
+      if (subscriber) return subscriber;
+    }
     const p = this.providers.get(name);
     if (p) return p;
     // Check alias map — catalog may use a different name than the registered provider

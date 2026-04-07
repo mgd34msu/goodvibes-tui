@@ -6,12 +6,33 @@
 import { join } from 'node:path';
 import { readFile } from 'node:fs/promises';
 import type { Line } from '../types/grid.ts';
-import { createStyledCell, createEmptyLine } from '../types/grid.ts';
+import { createEmptyLine } from '../types/grid.ts';
 import { BasePanel } from './base-panel.ts';
 import { AgentManager } from '../tools/agent/index.ts';
 import type { AgentRecord } from '../tools/agent/index.ts';
 import { AgentMessageBus } from '../agents/message-bus.ts';
 import { logger } from '../utils/logger.ts';
+import {
+  buildEmptyState,
+  buildPanelLine,
+  buildSelectablePanelLine,
+  type StyledPanelSegment,
+  buildStyledPanelLine,
+  buildPanelWorkspace,
+  DEFAULT_PANEL_PALETTE,
+} from './polish.ts';
+import { truncateDisplay } from '../utils/terminal-width.ts';
+import { getTrackedVisibleWindow } from '../renderer/surface-layout.ts';
+import {
+  type AgentDisplayRow as DisplayRow,
+  type AgentInspectorEntryKind as EntryKind,
+  type AgentTimelineEntry as TimelineEntry,
+  agentKindStyle,
+  agentStatusColor,
+  formatAgentDuration as formatMs,
+  formatAgentTime as shortTime,
+  jsonlToTimeline,
+} from './agent-inspector-shared.ts';
 
 // ---------------------------------------------------------------------------
 // Constants & colour palette
@@ -51,173 +72,6 @@ const COLOR = {
   dimmed:      '#555566',
   expandHint:  '#445566',
 } as const;
-
-// ---------------------------------------------------------------------------
-// Timeline entry types
-// ---------------------------------------------------------------------------
-
-type EntryKind = 'user' | 'assistant' | 'tool_call' | 'tool_result' | 'session' | 'error';
-
-interface TimelineEntry {
-  kind: EntryKind;
-  timestamp: number;    // Unix ms
-  label: string;        // role / tool name
-  content: string;      // primary display text
-  detail?: string;      // args / result — shown when expanded
-  expanded: boolean;
-}
-
-// ---------------------------------------------------------------------------
-// Rendering helpers
-// ---------------------------------------------------------------------------
-
-function renderText(
-  width: number,
-  text: string,
-  fg: string,
-  bg: string,
-  bold = false,
-  dim = false,
-): Line {
-  const cells: Line = [];
-  const truncated = text.length > width ? text.slice(0, width) : text;
-  for (const ch of truncated) {
-    cells.push(createStyledCell(ch, { fg, bg, bold, dim }));
-  }
-  while (cells.length < width) {
-    cells.push(createStyledCell(' ', { fg: '', bg }));
-  }
-  return cells.slice(0, width);
-}
-
-function statusColor(status: string): string {
-  switch (status) {
-    case 'pending':   return COLOR.pending;
-    case 'running':   return COLOR.running;
-    case 'completed': return COLOR.completed;
-    case 'failed':    return COLOR.failed;
-    case 'cancelled': return COLOR.cancelled;
-    default:          return COLOR.system;
-  }
-}
-
-function formatMs(ms: number): string {
-  if (ms < 1000)  return `${ms}ms`;
-  if (ms < 60000) return `${(ms / 1000).toFixed(1)}s`;
-  return `${Math.floor(ms / 60000)}m${Math.floor((ms % 60000) / 1000)}s`;
-}
-
-function shortTime(ts: number): string {
-  const d = new Date(ts);
-  const h = String(d.getHours()).padStart(2, '0');
-  const m = String(d.getMinutes()).padStart(2, '0');
-  const s = String(d.getSeconds()).padStart(2, '0');
-  return `${h}:${m}:${s}`;
-}
-
-// ---------------------------------------------------------------------------
-// JSONL parsing — agent session log
-// ---------------------------------------------------------------------------
-
-type JsonlRow = Record<string, unknown>;
-
-function jsonlToTimeline(rows: JsonlRow[]): TimelineEntry[] {
-  const entries: TimelineEntry[] = [];
-
-  for (const row of rows) {
-    const type = String(row.type ?? 'unknown');
-    const rawTs = row.timestamp;
-    const ts = typeof rawTs === 'string'
-      ? Date.parse(rawTs)
-      : typeof rawTs === 'number'
-        ? rawTs
-        : Date.now();
-
-    switch (type) {
-      case 'tool_execution': {
-        const toolName = String(row.toolName ?? 'tool');
-        const argsStr = row.args !== undefined
-          ? JSON.stringify(row.args, null, 2)
-          : undefined;
-        const resultStr = row.result !== undefined
-          ? JSON.stringify(row.result, null, 2)
-          : undefined;
-        const detail = [argsStr ? `Args:\n${argsStr}` : '', resultStr ? `Result:\n${resultStr}` : '']
-          .filter(Boolean).join('\n\n');
-        entries.push({
-          kind: 'tool_call',
-          timestamp: ts,
-          label: toolName,
-          content: `[tool] ${toolName}` + (row.durationMs !== undefined ? ` (${row.durationMs}ms)` : ''),
-          detail: detail || undefined,
-          expanded: false,
-        });
-        break;
-      }
-
-      case 'llm_response': {
-        const toolCount = Number(row.toolCallCount ?? 0);
-        const charLen = Number(row.contentLength ?? 0);
-        entries.push({
-          kind: 'assistant',
-          timestamp: ts,
-          label: 'assistant',
-          content: `[assistant] ${charLen} chars, ${toolCount} tool calls`,
-          expanded: false,
-        });
-        break;
-      }
-
-      case 'meta':
-      case 'session_start': {
-        entries.push({
-          kind: 'session',
-          timestamp: ts,
-          label: 'session',
-          content: `[session start] ${String(row.agentId ?? '')}`,
-          expanded: false,
-        });
-        break;
-      }
-
-      case 'session_end': {
-        entries.push({
-          kind: 'session',
-          timestamp: ts,
-          label: 'session',
-          content: `[session end] ${String(row.status ?? 'unknown')}`,
-          expanded: false,
-        });
-        break;
-      }
-
-      case 'error': {
-        entries.push({
-          kind: 'error',
-          timestamp: ts,
-          label: 'error',
-          content: `[error] ${String(row.message ?? row.error ?? 'unknown error')}`,
-          expanded: false,
-        });
-        break;
-      }
-
-      default: {
-        // Unknown JSONL row type — render as a dim session line
-        entries.push({
-          kind: 'session',
-          timestamp: ts,
-          label: type,
-          content: `[${type}]`,
-          expanded: false,
-        });
-        break;
-      }
-    }
-  }
-
-  return entries;
-}
 
 // ---------------------------------------------------------------------------
 // AgentInspectorPanel
@@ -312,60 +166,95 @@ export class AgentInspectorPanel extends BasePanel {
   // -------------------------------------------------------------------------
 
   render(width: number, height: number): Line[] {
-    const lines: Line[] = [];
-    if (height <= 0 || width <= 0) return lines;
+    if (height <= 0 || width <= 0) return [];
 
     const manager = AgentManager.getInstance();
     const agents = manager.list();
-
-    // ── Header bar ──────────────────────────────────────────────────────────
-    lines.push(this._renderHeader(width, agents.length));
-
-    if (height <= 1) return lines.slice(0, height);
-
-    // ── Agent selector bar ──────────────────────────────────────────────────
-    lines.push(this._renderSelector(width, agents));
-
-    if (height <= 2) return lines.slice(0, height);
-
-    // ── No agent selected / no agents ───────────────────────────────────────
     const rec = this.selectedAgentId
       ? manager.getStatus(this.selectedAgentId)
       : null;
+    const selectorLine = this._renderSelector(width, agents);
+    const summaryLines = [
+      buildPanelLine(width, [
+        [' Agents ', DEFAULT_PANEL_PALETTE.label],
+        [String(agents.length), DEFAULT_PANEL_PALETTE.value],
+        ['   Selected ', DEFAULT_PANEL_PALETTE.label],
+        [this.selectedAgentId ? this.selectedAgentId.slice(-8) : 'none', this.selectedAgentId ? DEFAULT_PANEL_PALETTE.info : DEFAULT_PANEL_PALETTE.dim],
+      ]),
+    ];
 
     if (!rec) {
-      const msg = agents.length === 0
-        ? ' No agents running. Spawn an agent to inspect.'
-        : ' No agent selected. Press Tab to cycle agents.';
-      lines.push(renderText(width, msg, COLOR.dimmed, '', false, true));
-      while (lines.length < height) lines.push(createEmptyLine(width));
-      return lines.slice(0, height);
+      return buildPanelWorkspace(width, height, {
+        title: ` Inspector [${agents.length} agent${agents.length !== 1 ? 's' : ''}]`,
+        intro: 'Inspect a selected agent timeline, tool activity, expanded details, and live/historical message flow.',
+        sections: [
+          { title: 'Summary', lines: summaryLines },
+          { title: 'Agents', lines: [selectorLine] },
+          {
+            lines: buildEmptyState(
+              width,
+              agents.length === 0 ? ' No agents running' : ' No agent selected',
+              agents.length === 0
+                ? 'Spawn an agent to inspect its live and historical timeline.'
+                : 'Press Tab to cycle through available agents and open one in the inspector.',
+              [],
+              DEFAULT_PANEL_PALETTE,
+            ),
+          },
+        ],
+        footerLines: [
+          buildPanelLine(width, [[' Tab', DEFAULT_PANEL_PALETTE.info], [' cycle agents', DEFAULT_PANEL_PALETTE.dim], ['   Up/Down', DEFAULT_PANEL_PALETTE.info], [' navigate', DEFAULT_PANEL_PALETTE.dim], ['   Enter', DEFAULT_PANEL_PALETTE.info], [' expand', DEFAULT_PANEL_PALETTE.dim]]),
+        ],
+        palette: DEFAULT_PANEL_PALETTE,
+      });
     }
 
-    // ── Agent info bar ──────────────────────────────────────────────────────
-    lines.push(this._renderAgentInfo(width, rec));
+    summaryLines.push(this._renderAgentInfoSummary(width, rec));
+    const allRows = this._getCachedRows();
+    if (allRows.length === 0) {
+      return buildPanelWorkspace(width, height, {
+        title: ` Inspector [${agents.length} agent${agents.length !== 1 ? 's' : ''}]`,
+        intro: 'Inspect a selected agent timeline, tool activity, expanded details, and live/historical message flow.',
+        sections: [
+          { title: 'Summary', lines: summaryLines },
+          { title: 'Agents', lines: [selectorLine] },
+          {
+            lines: buildEmptyState(
+              width,
+              ' No messages yet',
+              'The selected agent has not emitted any visible timeline entries yet.',
+              [],
+              DEFAULT_PANEL_PALETTE,
+            ),
+          },
+        ],
+        footerLines: [
+          buildPanelLine(width, [[' Tab', DEFAULT_PANEL_PALETTE.info], [' cycle agents', DEFAULT_PANEL_PALETTE.dim], ['   Up/Down', DEFAULT_PANEL_PALETTE.info], [' navigate', DEFAULT_PANEL_PALETTE.dim], ['   Enter', DEFAULT_PANEL_PALETTE.info], [' expand', DEFAULT_PANEL_PALETTE.dim]]),
+        ],
+        palette: DEFAULT_PANEL_PALETTE,
+      });
+    }
 
-    if (height <= 3) return lines.slice(0, height);
+    this.cursorIndex = Math.max(0, Math.min(this.cursorIndex, allRows.length - 1));
+    const window = getTrackedVisibleWindow(allRows.length, this.cursorIndex, Math.max(8, height - 10), this.scrollOffset, 1);
+    this.scrollOffset = window.start;
+    const visibleRows = allRows.slice(window.start, window.end).map((row, index) =>
+      this._renderTimelineRow(width, row, window.start + index === this.cursorIndex),
+    );
 
-    // ── Timeline ────────────────────────────────────────────────────────────
-    const timelineHeight = height - 4; // header + selector + info + status bar
-    const contentLines = this._renderTimeline(width, timelineHeight);
-    for (const l of contentLines) lines.push(l);
-    while (lines.length < height - 1) lines.push(createEmptyLine(width));
-
-    // ── Status bar ──────────────────────────────────────────────────────────
-    lines.push(this._renderStatusBar(width));
-
-    return lines.slice(0, height);
-  }
-
-  // -------------------------------------------------------------------------
-  // Private — rendering
-  // -------------------------------------------------------------------------
-
-  private _renderHeader(width: number, agentCount: number): Line {
-    const title = ` Inspector [${agentCount} agent${agentCount !== 1 ? 's' : ''}]`;
-    return renderText(width, title, COLOR.headerFg, COLOR.headerBg, true);
+    return buildPanelWorkspace(width, height, {
+      title: ` Inspector [${agents.length} agent${agents.length !== 1 ? 's' : ''}]`,
+      intro: 'Inspect a selected agent timeline, tool activity, expanded details, and live/historical message flow.',
+      sections: [
+        { title: 'Summary', lines: summaryLines },
+        { title: 'Agents', lines: [selectorLine] },
+        { title: 'Timeline', lines: visibleRows },
+      ],
+      footerLines: [
+        buildPanelLine(width, [[` L${this.cursorIndex + 1}/${allRows.length}`, DEFAULT_PANEL_PALETTE.dim], ['   Tab', DEFAULT_PANEL_PALETTE.info], [' cycle agents', DEFAULT_PANEL_PALETTE.dim], ['   Up/Down', DEFAULT_PANEL_PALETTE.info], [' navigate', DEFAULT_PANEL_PALETTE.dim], ['   Enter', DEFAULT_PANEL_PALETTE.info], [' expand', DEFAULT_PANEL_PALETTE.dim]]),
+      ],
+      palette: DEFAULT_PANEL_PALETTE,
+    });
   }
 
   private _renderSelector(
@@ -373,133 +262,44 @@ export class AgentInspectorPanel extends BasePanel {
     agents: AgentRecord[],
   ): Line {
     if (agents.length === 0) {
-      return renderText(width, ' (no agents)', COLOR.dimmed, COLOR.statusBar, false, true);
+      return buildStyledPanelLine(width, [
+        { text: ' (no agents)', fg: COLOR.dimmed, bg: COLOR.statusBar, dim: true },
+      ]);
     }
-
-    const cells: Line = [];
-    const prefix = ' ';
-    for (const ch of prefix) {
-      cells.push(createStyledCell(ch, { fg: COLOR.statusFg, bg: COLOR.statusBar }));
-    }
-
+    const segments: StyledPanelSegment[] = [{ text: ' ', fg: COLOR.statusFg, bg: COLOR.statusBar }];
     for (const agent of agents) {
       const isSelected = agent.id === this.selectedAgentId;
       const shortId = agent.id.slice(-8);
       const badge = ` ${shortId} `;
-      const fg = isSelected ? COLOR.selected : COLOR.dimmed;
-      const bold = isSelected;
-
-      for (const ch of badge) {
-        if (cells.length >= width - 1) break;
-        cells.push(createStyledCell(ch, { fg, bg: COLOR.statusBar, bold }));
-      }
-
-      if (cells.length < width - 1) {
-        cells.push(createStyledCell('|', { fg: COLOR.separator, bg: COLOR.statusBar }));
-      }
+      segments.push({
+        text: badge,
+        fg: isSelected ? COLOR.selected : COLOR.dimmed,
+        bg: COLOR.statusBar,
+        bold: isSelected,
+      });
+      segments.push({ text: '|', fg: COLOR.separator, bg: COLOR.statusBar });
     }
-
-    while (cells.length < width) {
-      cells.push(createStyledCell(' ', { fg: '', bg: COLOR.statusBar }));
-    }
-
-    return cells.slice(0, width);
+    return buildStyledPanelLine(width, segments);
   }
 
-  private _renderAgentInfo(
-    width: number,
-    rec: AgentRecord,
-  ): Line {
+  private _renderAgentInfoSummary(width: number, rec: AgentRecord): Line {
     const now = Date.now();
     const elapsed = (rec.completedAt ?? now) - rec.startedAt;
-    const statusFg = statusColor(rec.status);
     const taskPreview = rec.task.split('\n')[0] ?? '';
     const maxTask = Math.max(0, width - 40);
     const taskDisplay = taskPreview.length > maxTask
       ? taskPreview.slice(0, maxTask - 1) + '\u2026'
       : taskPreview;
-
-    const cells: Line = [];
-
-    // Status badge
-    const badge = ` ${rec.status.toUpperCase()} `;
-    for (const ch of badge) {
-      cells.push(createStyledCell(ch, { fg: statusFg, bg: COLOR.headerBg, bold: true }));
-    }
-
-    // Separator
-    cells.push(createStyledCell(' ', { fg: '', bg: COLOR.headerBg }));
-
-    // Duration
-    const dur = `${formatMs(elapsed)} `;
-    for (const ch of dur) {
-      cells.push(createStyledCell(ch, { fg: COLOR.label, bg: COLOR.headerBg }));
-    }
-
-    // Tool count
-    const tools = `T:${rec.toolCallCount} `;
-    for (const ch of tools) {
-      if (cells.length >= width) break;
-      cells.push(createStyledCell(ch, { fg: COLOR.tool, bg: COLOR.headerBg }));
-    }
-
-    // Task preview
-    for (const ch of taskDisplay) {
-      if (cells.length >= width) break;
-      cells.push(createStyledCell(ch, { fg: COLOR.value, bg: COLOR.headerBg }));
-    }
-
-    while (cells.length < width) {
-      cells.push(createStyledCell(' ', { fg: '', bg: COLOR.headerBg }));
-    }
-
-    return cells.slice(0, width);
-  }
-
-  private _renderTimeline(width: number, height: number): Line[] {
-    const lines: Line[] = [];
-    if (height <= 0) return lines;
-
-    // Merge bus messages into a flat view
-    const allEntries = this._getCachedRows();
-
-    if (allEntries.length === 0) {
-      lines.push(renderText(width, ' No messages yet.', COLOR.dimmed, '', false, true));
-      while (lines.length < height) lines.push(createEmptyLine(width));
-      return lines.slice(0, height);
-    }
-
-    // Clamp cursor
-    const maxCursor = allEntries.length - 1;
-    this.cursorIndex = Math.max(0, Math.min(this.cursorIndex, maxCursor));
-
-    // Auto-scroll to keep cursor visible
-    if (this.cursorIndex < this.scrollOffset) {
-      this.scrollOffset = this.cursorIndex;
-    }
-    if (this.cursorIndex >= this.scrollOffset + height) {
-      this.scrollOffset = this.cursorIndex - height + 1;
-    }
-
-    const visibleRows = allEntries.slice(this.scrollOffset, this.scrollOffset + height);
-
-    for (let i = 0; i < visibleRows.length && lines.length < height; i++) {
-      const row = visibleRows[i]!;
-      const absIdx = this.scrollOffset + i;
-      const isCursor = absIdx === this.cursorIndex;
-      lines.push(this._renderTimelineRow(width, row, isCursor));
-    }
-
-    while (lines.length < height) lines.push(createEmptyLine(width));
-    return lines;
-  }
-
-  private _renderStatusBar(width: number): Line {
-    const total = this._getCachedRows().length;
-    const hint = '  Tab: cycle agents  ↑↓: scroll  Enter: expand/collapse';
-    const pos = ` L${this.cursorIndex + 1}/${total}`;
-    const text = pos + hint;
-    return renderText(width, text, COLOR.statusFg, COLOR.statusBar);
+    return buildPanelLine(width, [
+      [' Status ', DEFAULT_PANEL_PALETTE.label],
+      [rec.status.toUpperCase(), rec.status === 'running' ? DEFAULT_PANEL_PALETTE.good : rec.status === 'failed' ? DEFAULT_PANEL_PALETTE.bad : DEFAULT_PANEL_PALETTE.dim],
+      ['   Duration ', DEFAULT_PANEL_PALETTE.label],
+      [formatMs(elapsed), DEFAULT_PANEL_PALETTE.value],
+      ['   Tools ', DEFAULT_PANEL_PALETTE.label],
+      [String(rec.toolCallCount), DEFAULT_PANEL_PALETTE.info],
+      ['   Task ', DEFAULT_PANEL_PALETTE.label],
+      [taskDisplay, DEFAULT_PANEL_PALETTE.value],
+    ]);
   }
 
   // -------------------------------------------------------------------------
@@ -511,57 +311,25 @@ export class AgentInspectorPanel extends BasePanel {
     row: DisplayRow,
     isCursor: boolean,
   ): Line {
-    const cells: Line = [];
     const bg = isCursor ? '#1a2233' : '';
-
-    // Cursor indicator
-    cells.push(createStyledCell(isCursor ? '>' : ' ', { fg: COLOR.selected, bg, bold: isCursor }));
-
-    // Timestamp (8 chars)
     const ts = shortTime(row.timestamp);
-    for (const ch of ts) {
-      cells.push(createStyledCell(ch, { fg: COLOR.timestamp, bg, dim: true }));
-    }
-    cells.push(createStyledCell(' ', { fg: '', bg }));
+    const { fg, prefix } = agentKindStyle(row.kind, COLOR);
+    const hint = row.hasDetail ? (row.expanded ? ' [-]' : ' [+]') : '';
+    const prefixText = `${isCursor ? '>' : ' '} ${ts} ${prefix} `;
+    const reserved = prefixText.length + hint.length;
+    const contentBudget = Math.max(0, width - reserved);
+    const text = truncateDisplay(row.content, contentBudget);
 
-    // Role / kind prefix
-    const { fg, prefix } = kindStyle(row.kind);
-    for (const ch of prefix) {
-      if (cells.length >= width) break;
-      cells.push(createStyledCell(ch, { fg, bg, bold: true }));
-    }
-    cells.push(createStyledCell(' ', { fg: '', bg }));
-
-    // Content text
-    const usedWidth = cells.length;
-    const remaining = Math.max(0, width - usedWidth);
-    const text = row.content.length > remaining
-      ? row.content.slice(0, remaining - 1) + '\u2026'
-      : row.content;
-
-    for (const ch of text) {
-      if (cells.length >= width) break;
-      cells.push(createStyledCell(ch, { fg: COLOR.value, bg }));
-    }
-
-    // Expand indicator (if has detail)
-    if (row.hasDetail && cells.length < width - 1) {
-      const hint = row.expanded ? ' [-]' : ' [+]';
-      const hintStart = Math.max(cells.length, width - hint.length);
-      // Pad to hint start
-      while (cells.length < hintStart) {
-        cells.push(createStyledCell(' ', { fg: '', bg }));
-      }
-      for (const ch of hint) {
-        if (cells.length >= width) break;
-        cells.push(createStyledCell(ch, { fg: COLOR.expandHint, bg, dim: true }));
-      }
-    }
-
-    while (cells.length < width) {
-      cells.push(createStyledCell(' ', { fg: '', bg }));
-    }
-    return cells.slice(0, width);
+    return buildSelectablePanelLine(width, [
+      { text: isCursor ? '>' : ' ', fg: COLOR.selected, bg, bold: isCursor },
+      { text: ' ', fg: COLOR.value, bg },
+      { text: ts, fg: COLOR.timestamp, bg, dim: true },
+      { text: ' ', fg: COLOR.value, bg },
+      { text: prefix, fg, bg, bold: true },
+      { text: ' ', fg: COLOR.value, bg },
+      { text: text, fg: COLOR.value, bg },
+      { text: hint.length > 0 ? hint.padStart(Math.max(hint.length, width - (prefixText.length + text.length))) : '', fg: COLOR.expandHint, bg, dim: true },
+    ], { selected: isCursor, selectedBg: bg, fillFg: isCursor ? COLOR.selected : '' });
   }
 
   // -------------------------------------------------------------------------
@@ -658,10 +426,10 @@ export class AgentInspectorPanel extends BasePanel {
       const rows = logLines
         .slice(-MAX_JSONL_ENTRIES)
         .map((line) => {
-          try { return JSON.parse(line) as JsonlRow; }
+          try { return JSON.parse(line) as Record<string, unknown>; }
           catch { return null; }
         })
-        .filter((r): r is JsonlRow => r !== null);
+        .filter((r): r is Record<string, unknown> => r !== null);
       this.timeline = jsonlToTimeline(rows);
     } catch (err) {
       const code = (err as NodeJS.ErrnoException).code;
@@ -724,35 +492,5 @@ export class AgentInspectorPanel extends BasePanel {
     if (next) {
       this.inspectAgent(next.id);
     }
-  }
-}
-
-// ---------------------------------------------------------------------------
-// DisplayRow — flattened row for the renderer (timeline + detail sub-rows)
-// ---------------------------------------------------------------------------
-
-interface DisplayRow {
-  kind: EntryKind;
-  timestamp: number;
-  content: string;
-  hasDetail: boolean;
-  expanded: boolean;
-  /** Pointer back to the TimelineEntry so expand/collapse can mutate it. */
-  entryRef: TimelineEntry | null;
-}
-
-// ---------------------------------------------------------------------------
-// Kind style map
-// ---------------------------------------------------------------------------
-
-function kindStyle(kind: EntryKind): { fg: string; prefix: string } {
-  switch (kind) {
-    case 'user':        return { fg: COLOR.user,       prefix: '[user]     ' };
-    case 'assistant':   return { fg: COLOR.assistant,  prefix: '[assistant]' };
-    case 'tool_call':   return { fg: COLOR.tool,       prefix: '[tool]     ' };
-    case 'tool_result': return { fg: COLOR.toolResult, prefix: '  \u2514     ' };
-    case 'session':     return { fg: COLOR.system,     prefix: '[session]  ' };
-    case 'error':       return { fg: COLOR.error,      prefix: '[error]    ' };
-    default:            return { fg: COLOR.dimmed,     prefix: '[?]        ' };
   }
 }

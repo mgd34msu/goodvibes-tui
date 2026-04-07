@@ -206,7 +206,7 @@ describe('UIFactory.createHeader with gitInfo', () => {
     expect(text).toContain('main');
   });
 
-  test('shows dirty indicator (\u25cf) when dirty', () => {
+  test('shows dirty indicator (*) when dirty', () => {
     const lines = UIFactory.createHeader(WIDTH, 'model', 'provider', undefined, {
       branch: 'feature',
       dirty: true,
@@ -214,7 +214,7 @@ describe('UIFactory.createHeader with gitInfo', () => {
       behind: 0,
     });
     const text = lineToString(lines[0]);
-    expect(text).toContain('\u25cf');
+    expect(text).toContain('*');
   });
 
   test('shows ahead/behind indicators when out of sync', () => {
@@ -225,8 +225,8 @@ describe('UIFactory.createHeader with gitInfo', () => {
       behind: 1,
     });
     const text = lineToString(lines[0]);
-    expect(text).toContain('\u21912');
-    expect(text).toContain('\u21931');
+    expect(text).toContain('+2');
+    expect(text).toContain('-1');
   });
 
   test('omits git section when gitInfo is undefined', () => {
@@ -239,8 +239,8 @@ describe('UIFactory.createHeader with gitInfo', () => {
     const withoutGit = UIFactory.createHeader(WIDTH, 'model', 'provider', undefined, undefined);
     const textWith = lineToString(withGit[0]);
     const textWithout = lineToString(withoutGit[0]);
-    expect(textWith).toContain('\u2387'); // branch symbol present with git
-    expect(textWithout).not.toContain('\u2387'); // no branch symbol without git
+    expect(textWith).toContain('git:main');
+    expect(textWithout).not.toContain('git:');
   });
 
   test('does not throw when gitInfo has empty branch', () => {

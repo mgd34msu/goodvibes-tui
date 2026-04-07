@@ -12,13 +12,15 @@ import { getBookmarkManager, type BookmarkEntry } from '../bookmarks/manager.ts'
 // ---------------------------------------------------------------------------
 
 export class BookmarkModal {
+  public static readonly DEFAULT_VISIBLE_ROWS = 8;
+  public static readonly VISIBLE_ROWS = BookmarkModal.DEFAULT_VISIBLE_ROWS;
   public active = false;
   public entries: BookmarkEntry[] = [];
   public selectedIndex = 0;
   /** Scroll offset for the list (number of items scrolled past the top). */
   public scrollOffset = 0;
   /** Max visible list rows. */
-  public static readonly VISIBLE_ROWS = 10;
+  public visibleRows = BookmarkModal.DEFAULT_VISIBLE_ROWS;
 
   private bookmarkManager!: ReturnType<typeof getBookmarkManager>;
   // Note: bookmarkManager is initialized lazily in open() to pick up any state changes
@@ -36,6 +38,11 @@ export class BookmarkModal {
 
   close(): void {
     this.active = false;
+  }
+
+  setVisibleRows(rows: number): void {
+    this.visibleRows = Math.max(3, rows);
+    this._clampScroll();
   }
 
   moveUp(): void {
@@ -98,11 +105,13 @@ export class BookmarkModal {
   // ---------------------------------------------------------------------------
 
   private _clampScroll(): void {
-    const visRows = BookmarkModal.VISIBLE_ROWS;
+    const visRows = Math.max(3, this.visibleRows);
     if (this.selectedIndex < this.scrollOffset) {
       this.scrollOffset = this.selectedIndex;
     } else if (this.selectedIndex >= this.scrollOffset + visRows) {
       this.scrollOffset = this.selectedIndex - visRows + 1;
     }
+    const maxOffset = Math.max(0, this.entries.length - visRows);
+    this.scrollOffset = Math.max(0, Math.min(this.scrollOffset, maxOffset));
   }
 }

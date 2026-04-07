@@ -1,0 +1,60 @@
+import { describe, expect, test } from 'bun:test';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { join } from 'node:path';
+import { tmpdir } from 'node:os';
+import {
+  applySandboxQemuSetupManifest,
+  inspectSandboxQemuSetupManifest,
+  loadSandboxQemuSetupManifest,
+  scaffoldSandboxQemuSetupBundle,
+} from '../../../runtime/sandbox/provisioning.ts';
+
+function makeManager(overrides: Partial<Record<string, unknown>> = {}) {
+  const values = new Map<string, unknown>([
+    ['sandbox.vmBackend', 'local'],
+    ['sandbox.qemuBinary', 'qemu-system-x86_64'],
+    ['sandbox.qemuImagePath', ''],
+    ['sandbox.qemuExecWrapper', ''],
+    ['sandbox.qemuGuestHost', '127.0.0.1'],
+    ['sandbox.qemuGuestPort', 2222],
+    ['sandbox.qemuGuestUser', 'goodvibes'],
+    ['sandbox.qemuWorkspacePath', '/workspace'],
+    ['sandbox.qemuSessionMode', 'attach'],
+    ...Object.entries(overrides),
+  ]);
+  return {
+    get(key: string) {
+      return values.get(key);
+    },
+    setDynamic(key: string, value: unknown) {
+      values.set(key, value);
+    },
+  };
+}
+
+describe('sandbox provisioning', () => {
+  test('scaffolded setup bundle includes an inspectable/applyable manifest', () => {
+    const cwd = mkdtempSync(join(tmpdir(), 'gv-sandbox-provision-'));
+    const previous = process.cwd();
+    process.chdir(cwd);
+    try {
+      const manager = makeManager();
+      const bundle = scaffoldSandboxQemuSetupBundle(manager as never, '.goodvibes/tui/sandbox');
+      const manifest = loadSandboxQemuSetupManifest(bundle.manifestPath);
+      expect(manifest.recommendedSettings.backend).toBe('qemu');
+      expect(inspectSandboxQemuSetupManifest(manifest)).toContain('Sandbox QEMU Setup Manifest');
+
+      const target = makeManager();
+      applySandboxQemuSetupManifest(target as never, manifest);
+      expect(target.get('sandbox.vmBackend')).toBe('qemu');
+      expect(target.get('sandbox.qemuExecWrapper')).toBe(bundle.wrapperPath);
+      expect(target.get('sandbox.qemuImagePath')).toBe(bundle.imagePath);
+      expect(target.get('sandbox.qemuGuestHost')).toBe('127.0.0.1');
+      expect(target.get('sandbox.qemuGuestWorkspacePath')).toBeUndefined();
+      expect(target.get('sandbox.qemuWorkspacePath')).toBe('/workspace');
+    } finally {
+      process.chdir(previous);
+      rmSync(cwd, { recursive: true, force: true });
+    }
+  });
+});

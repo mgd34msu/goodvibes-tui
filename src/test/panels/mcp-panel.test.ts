@@ -34,6 +34,14 @@ function makeRegistry(entries: Array<{
   return {
     listServerSecurity: () => entries,
     listRecentSecurityDecisions: () => decisions,
+    listServerSandboxBindings: () => entries.map((entry) => ({
+      name: entry.name,
+      sessionId: `sandbox-${entry.name}`,
+      profileId: entry.role === 'ops' ? 'mcp-per-server' : 'mcp-shared',
+      state: entry.connected ? 'running' : 'planned',
+      backend: 'local',
+      startupStatus: entry.connected ? 'verified' : 'planned',
+    })),
   } as const;
 }
 
@@ -92,23 +100,25 @@ describe('McpPanel', () => {
       },
     ]) as never);
 
-    const first = linesText(panel.render(120, 14));
+    const first = linesText(panel.render(120, 16));
     expect(first).toContain('MCP Control Room');
     expect(first).toContain('docs-server');
     expect(first).toContain('constrained');
     expect(first).toContain('docs.example.com');
     expect(first).toContain('fresh');
+    expect(first).toContain('sandbox-docs-server');
     expect(first).toContain('Recent Decisions');
     expect(first).toContain('docs-server:search_docs ALLOW read_fs');
 
     panel.handleInput('down');
-    const second = linesText(panel.render(120, 14));
+    const second = linesText(panel.render(120, 16));
     expect(second).toContain('ops-server');
     expect(second).toContain('allow-all');
     expect(second).toContain('quarantined');
     expect(second).toContain('operator_flagged');
     expect(second).toContain('alice');
     expect(second).toContain('/workspace');
+    expect(second).toContain('sandbox-ops-server');
     expect(second).toContain('ops-server:exec_shell DENY exec incoherent');
   });
 });

@@ -36,10 +36,73 @@ export interface PermissionRequest extends PermissionPromptRequest {
  *   Escape -> Deny
  */
 export class PermissionPromptUI {
+  private static isConfigLikePath(path: string): boolean {
+    return /(^|\/)(\.env(\.|$)|package\.json$|tsconfig(\.[^.]+)?\.json$|bunfig\.toml$|\.npmrc$|\.bashrc$|\.zshrc$|settings\.json$|config\.[^.]+$)/i.test(path);
+  }
+
+  private static isNotebookPath(path: string): boolean {
+    return path.toLowerCase().endsWith('.ipynb');
+  }
+
+  private static isDependencyInstallCommand(command: string): boolean {
+    return /\b(npm|pnpm|yarn|bun)\s+(install|add|update|upgrade)\b/i.test(command);
+  }
+
+  private static isAgentSpawnRequest(request: PermissionPromptRequest): boolean {
+    return request.tool === 'agent'
+      && typeof request.args.mode === 'string'
+      && (request.args.mode === 'spawn' || request.args.mode === 'batch-spawn');
+  }
+
+  private static isRemoteDispatchRequest(request: PermissionPromptRequest): boolean {
+    return (request.tool === 'remote' || request.tool === 'remote_trigger')
+      || (request.tool === 'agent' && typeof request.args.template === 'string' && String(request.args.template).includes('remote'));
+  }
+
+  private static isMcpEscalationRequest(request: PermissionPromptRequest): boolean {
+    return request.tool === 'mcp_resource'
+      && typeof request.args.mode === 'string'
+      && request.args.mode === 'set-trust'
+      && typeof request.args.trustMode === 'string'
+      && request.args.trustMode === 'allow-all';
+  }
+
+  private static isHookExecutionRequest(request: PermissionPromptRequest): boolean {
+    return request.tool === 'workflow'
+      && (typeof request.args.eventPath === 'string' || typeof request.args.hookName === 'string' || typeof request.args.chainName === 'string');
+  }
+
+  private static isPluginLifecycleRequest(request: PermissionPromptRequest): boolean {
+    const target = String(request.analysis?.target ?? this.getDisplayArg(request.tool, request.args));
+    return /(^|\/)\.goodvibes\/(plugins|skills|hooks|policies)\b/.test(target)
+      || (request.tool === 'write' && /(^|\/)(plugins|skills|hooks|policies)\//.test(target));
+  }
+
+  private static isSandboxPolicyChangeRequest(request: PermissionPromptRequest): boolean {
+    const target = String(request.analysis?.target ?? this.getDisplayArg(request.tool, request.args));
+    return /sandbox\.(replIsolation|mcpIsolation|windowsMode|vmBackend)/.test(target)
+      || /(^|\/)(sandbox|vm)-/.test(target);
+  }
+
   private static getDecisionModeLabel(request: PermissionPromptRequest): string {
     const analysis = this.fallbackAnalysis(request);
+    if (this.isMcpEscalationRequest(request)) return 'mcp-escalation';
+    if (this.isRemoteDispatchRequest(request)) return 'remote-dispatch';
+    if (this.isHookExecutionRequest(request)) return 'hook-execution';
+    if (this.isPluginLifecycleRequest(request)) return 'plugin-lifecycle';
+    if (this.isSandboxPolicyChangeRequest(request)) return 'sandbox-policy-change';
     if (analysis.targetKind === 'url') return 'external-access';
+    if (analysis.targetKind === 'path' && this.isNotebookPath(String(analysis.target ?? this.getDisplayArg(request.tool, request.args)))) {
+      return 'notebook-edit';
+    }
+    if (analysis.targetKind === 'path' && this.isConfigLikePath(String(analysis.target ?? this.getDisplayArg(request.tool, request.args)))) {
+      return 'config-mutation';
+    }
     if (analysis.targetKind === 'path' && request.category === 'write') return 'file-mutation';
+    if (request.category === 'execute' && this.isDependencyInstallCommand(this.getDisplayArg(request.tool, request.args))) {
+      return 'dependency-install';
+    }
+    if (request.category === 'delegate' && this.isAgentSpawnRequest(request)) return 'agent-spawn';
     if (request.category === 'execute') return 'shell-execution';
     if (request.category === 'delegate') return 'delegation';
     return 'permission-review';
@@ -47,11 +110,38 @@ export class PermissionPromptUI {
 
   private static getChecklist(request: PermissionPromptRequest): string {
     const analysis = this.fallbackAnalysis(request);
+    if (this.isMcpEscalationRequest(request)) {
+      return 'Confirm server identity, trust justification, host/path scope, and why constrained or ask-on-risk modes are insufficient.';
+    }
+    if (this.isRemoteDispatchRequest(request)) {
+      return 'Confirm remote target, capability ceiling, trust class, artifact expectations, and whether the work should leave the local runtime.';
+    }
+    if (this.isHookExecutionRequest(request)) {
+      return 'Confirm hook source, execution mode, deny/mutate authority, and whether this workflow should block the current step.';
+    }
+    if (this.isPluginLifecycleRequest(request)) {
+      return 'Confirm package provenance, capability impact, install/update scope, and whether this changes the trusted extension surface.';
+    }
+    if (this.isSandboxPolicyChangeRequest(request)) {
+      return 'Confirm isolation-mode impact, Windows/WSL posture, runtime blast radius, and whether this weakens the security boundary.';
+    }
     if (analysis.targetKind === 'url') {
       return 'Confirm host trust, scope, and whether remote content should enter session context.';
     }
+    if (analysis.targetKind === 'path' && this.isNotebookPath(String(analysis.target ?? this.getDisplayArg(request.tool, request.args)))) {
+      return 'Confirm notebook cell intent, hidden output safety, and whether execution metadata should change.';
+    }
+    if (analysis.targetKind === 'path' && this.isConfigLikePath(String(analysis.target ?? this.getDisplayArg(request.tool, request.args)))) {
+      return 'Confirm configuration blast radius, secret exposure risk, and whether this mutation changes startup or auth behavior.';
+    }
     if (analysis.targetKind === 'path' && request.category === 'write') {
       return 'Confirm target path, write intent, and whether the path could contain secrets or critical state.';
+    }
+    if (request.category === 'execute' && this.isDependencyInstallCommand(this.getDisplayArg(request.tool, request.args))) {
+      return 'Confirm dependency provenance, lockfile impact, install scripts, and whether this changes the trusted runtime surface.';
+    }
+    if (request.category === 'delegate' && this.isAgentSpawnRequest(request)) {
+      return 'Confirm spawned agent scope, tool ceiling, recursion depth, and whether this fan-out is justified for the current task.';
     }
     if (request.category === 'execute') {
       return 'Confirm shell side effects, network behavior, and whether command text exposes credentials.';
@@ -76,7 +166,7 @@ export class PermissionPromptUI {
   static getPromptHeight(request: PermissionPromptRequest): number {
     const analysis = this.fallbackAnalysis(request);
     const reasonLines = Math.min(2, Math.max(1, analysis.reasons.length));
-    const extraLines = analysis.host ? 1 : 0;
+    const extraLines = (analysis.host ? 1 : 0) + (analysis.surface ? 1 : 0) + (analysis.sideEffects && analysis.sideEffects.length > 0 ? 1 : 0);
     return 12 + reasonLines + extraLines;
   }
 
@@ -101,8 +191,23 @@ export class PermissionPromptUI {
 
   static getPromptTitle(request: PermissionPromptRequest): string {
     const analysis = this.fallbackAnalysis(request);
+    if (this.isMcpEscalationRequest(request)) return 'MCP Trust Escalation Approval';
+    if (this.isRemoteDispatchRequest(request)) return 'Remote Dispatch Approval';
+    if (this.isHookExecutionRequest(request)) return 'Hook Execution Approval';
+    if (this.isPluginLifecycleRequest(request)) return 'Plugin Lifecycle Approval';
+    if (this.isSandboxPolicyChangeRequest(request)) return 'Sandbox Policy Change Approval';
     if (analysis.targetKind === 'url') return 'Network Access Approval';
+    if (analysis.targetKind === 'path' && this.isNotebookPath(String(analysis.target ?? this.getDisplayArg(request.tool, request.args)))) {
+      return 'Notebook Edit Approval';
+    }
+    if (analysis.targetKind === 'path' && this.isConfigLikePath(String(analysis.target ?? this.getDisplayArg(request.tool, request.args)))) {
+      return 'Configuration Mutation Approval';
+    }
     if (analysis.targetKind === 'path') return request.category === 'write' ? 'File Mutation Approval' : 'Filesystem Access Approval';
+    if (request.category === 'execute' && this.isDependencyInstallCommand(this.getDisplayArg(request.tool, request.args))) {
+      return 'Dependency Install Approval';
+    }
+    if (request.category === 'delegate' && this.isAgentSpawnRequest(request)) return 'Agent Spawn Approval';
     if (request.category === 'execute') return 'Shell Execution Approval';
     if (request.category === 'delegate') return 'Agent Delegation Approval';
     return 'Permission Review';
@@ -170,6 +275,11 @@ export class PermissionPromptUI {
     const riskLine = `   Risk      : ${analysis.riskLevel.toUpperCase()} (${analysis.classification})`;
     lines.push(UIFactory.stringToLine(riskLine.padEnd(width), width, { fg: WARN }));
 
+    if (analysis.surface || analysis.blastRadius) {
+      const surfaceLine = `   Surface   : ${analysis.surface ?? 'generic'}${analysis.blastRadius ? `  radius=${analysis.blastRadius}` : ''}`;
+      lines.push(UIFactory.stringToLine(surfaceLine.padEnd(width), width, { fg: DIM }));
+    }
+
     if (analysis.host) {
       const hostLine = `   Host      : ${analysis.host}`;
       lines.push(UIFactory.stringToLine(hostLine.padEnd(width), width, { fg: DIM }));
@@ -183,6 +293,15 @@ export class PermissionPromptUI {
 
     const modeLine = `   Decision  : ${this.getDecisionModeLabel(request)}`;
     lines.push(UIFactory.stringToLine(modeLine.padEnd(width), width, { fg: DIM }));
+
+    if (analysis.sideEffects && analysis.sideEffects.length > 0) {
+      const effects = analysis.sideEffects.join(', ');
+      const maxEffectsLen = Math.max(10, width - 16);
+      const truncatedEffects =
+        effects.length > maxEffectsLen ? `${effects.slice(0, maxEffectsLen - 3)}...` : effects;
+      const effectsLine = `   Effects   : ${truncatedEffects}`;
+      lines.push(UIFactory.stringToLine(effectsLine.padEnd(width), width, { fg: DIM }));
+    }
 
     for (const reason of analysis.reasons.slice(0, 2)) {
       const maxReasonLen = Math.max(10, width - 16);

@@ -50,6 +50,16 @@ describe('ModalFactory.createModal', () => {
     expect(last).toContain('\u2518');
   });
 
+  test('content rows use box-drawing vertical borders', () => {
+    const lines = ModalFactory.createModal({
+      title: 'Test',
+      sections: [{ type: 'text', content: 'Hello World' }],
+    }, W);
+    const body = linesToText(lines).find((line) => line.includes('Hello World'));
+    expect(body).toBeDefined();
+    expect(body).toContain('│');
+  });
+
   test('hints appear in the footer line', () => {
     const lines = ModalFactory.createModal({
       title: 'Test',
@@ -69,6 +79,19 @@ describe('ModalFactory.createModal', () => {
     }, W);
     const last = lineToString(lines[lines.length - 1]);
     expect(last).toContain('Esc');
+  });
+
+  test('renders tabs and helpers through the shared modal chrome', () => {
+    const lines = ModalFactory.createModal({
+      title: 'Test',
+      tabs: [{ label: 'General', active: true }, { label: 'Advanced' }],
+      helpers: [{ content: '[1-5 of 20]' }],
+      sections: [{ type: 'text', content: 'Body' }],
+    }, W);
+    const text = linesToText(lines).join('\n');
+    expect(text).toContain('[GENERAL]');
+    expect(text).toContain('Advanced');
+    expect(text).toContain('[1-5 of 20]');
   });
 
   test('respects custom box width', () => {
@@ -166,7 +189,7 @@ describe('ModalFactory.createModal', () => {
       }],
     }, W);
     const texts = linesToText(lines);
-    const selectedLine = texts.find((t) => t.includes('\u25b6') && t.includes('Two'));
+    const selectedLine = texts.find((t) => t.includes('>') && t.includes('Two'));
     expect(selectedLine).toBeTruthy();
   });
 
@@ -180,7 +203,7 @@ describe('ModalFactory.createModal', () => {
     }, W);
     // The line with the selected item should have bold cells
     const selectedLineIndex = lines.findIndex((line) =>
-      line.some((cell) => cell.char === '\u25b6'),
+      line.some((cell) => cell.char === '>'),
     );
     expect(selectedLineIndex).toBeGreaterThan(-1);
     const hasBold = lines[selectedLineIndex].some((c) => c.bold);
@@ -196,7 +219,7 @@ describe('ModalFactory.createModal', () => {
       }],
     }, W);
     const texts = linesToText(lines);
-    const hasArrow = texts.some((t) => t.includes('\u25b6') && t.includes('NotSelected'));
+    const hasArrow = texts.some((t) => t.includes('>') && t.includes('NotSelected'));
     expect(hasArrow).toBe(false);
   });
 
@@ -207,7 +230,7 @@ describe('ModalFactory.createModal', () => {
     }, W);
     const text = linesToText(lines).join('\n');
     expect(text).toContain('myquery');
-    expect(text).toContain('\u2588'); // block cursor
+    expect(text).toContain('_');
   });
 
   test('input section renders empty query with cursor', () => {
@@ -216,7 +239,7 @@ describe('ModalFactory.createModal', () => {
       sections: [{ type: 'input', content: '' }],
     }, W);
     const text = linesToText(lines).join('\n');
-    expect(text).toContain('\u2588');
+    expect(text).toContain('_');
   });
 
   test('multiple sections rendered in order', () => {
@@ -234,6 +257,43 @@ describe('ModalFactory.createModal', () => {
     expect(firstIdx).toBeGreaterThan(-1);
     expect(secondIdx).toBeGreaterThan(-1);
     expect(secondIdx).toBeGreaterThan(firstIdx);
+  });
+
+  test('title sections render with their own row style', () => {
+    const lines = ModalFactory.createModal({
+      title: 'T',
+      sections: [
+        { type: 'title', content: 'Section Heading' },
+        { type: 'text', content: 'Body' },
+      ],
+    }, W);
+    const text = linesToText(lines).join('\n');
+    expect(text).toContain('Section Heading');
+    expect(text).toContain('Body');
+  });
+
+  test('spacer sections reserve a blank body row', () => {
+    const lines = ModalFactory.createModal({
+      title: 'T',
+      sections: [
+        { type: 'text', content: 'Top' },
+        { type: 'spacer' },
+        { type: 'text', content: 'Bottom' },
+      ],
+    }, W);
+    const texts = linesToText(lines);
+    const topIndex = texts.findIndex((line) => line.includes('Top'));
+    const bottomIndex = texts.findIndex((line) => line.includes('Bottom'));
+    expect(bottomIndex).toBeGreaterThan(topIndex + 1);
+  });
+
+  test('targetContentRows pads the body to a stable size', () => {
+    const lines = ModalFactory.createModal({
+      title: 'T',
+      targetContentRows: 4,
+      sections: [{ type: 'text', content: 'Only one row' }],
+    }, W);
+    expect(lines.length).toBe(1 + 4 + 1);
   });
 });
 
@@ -304,14 +364,14 @@ describe('ModalFactory.renderListItem', () => {
   test('selected item has indicator', () => {
     const line = ModalFactory.renderListItem(72, 4, 'item', true, W);
     const text = lineToString(line);
-    expect(text).toContain('\u25b6');
+    expect(text).toContain('>');
     expect(text).toContain('item');
   });
 
   test('unselected item has no indicator', () => {
     const line = ModalFactory.renderListItem(72, 4, 'item', false, W);
     const text = lineToString(line);
-    expect(text).not.toContain('\u25b6');
+    expect(text).not.toContain('>');
     expect(text).toContain('item');
   });
 
@@ -338,7 +398,7 @@ describe('ModalFactory.renderListItem', () => {
   test('contains border chars on both sides', () => {
     const line = ModalFactory.renderListItem(72, 4, 'x', false, W);
     const text = lineToString(line);
-    expect(text).toContain('\u2502');
+    expect(text).toContain('│');
   });
 });
 

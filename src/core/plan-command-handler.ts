@@ -152,11 +152,11 @@ export function handlePlanCommand(
           `Unknown /plan subcommand: '${subcommand}'.`,
           '',
           'Available commands:',
-          '  /plan mode [auto|single|cohort|background|remote]  — get or set mode',
-          '  /plan override <strategy>                          — force a strategy',
-          '  /plan explain                                      — explain last decision',
-          '  /plan status                                       — show current state',
-          '  /plan clear                                        — reset to auto',
+          '  /plan mode [auto|single|cohort|background|remote]  - get or set mode',
+          '  /plan override <strategy>                          - force a strategy',
+          '  /plan explain                                      - explain last decision',
+          '  /plan status                                       - show current state',
+          '  /plan clear                                        - reset to auto',
         ].join('\n'),
       };
     }

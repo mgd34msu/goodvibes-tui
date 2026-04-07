@@ -328,6 +328,16 @@ export interface RemoteExecutionArtifact {
   }[];
 }
 
+export interface RemoteSessionBundle {
+  readonly version: 1;
+  readonly exportedAt: number;
+  readonly sessionId: string;
+  readonly activeConnectionIds: readonly string[];
+  readonly pools: readonly RemoteRunnerPool[];
+  readonly contracts: readonly RemoteRunnerContract[];
+  readonly artifacts: readonly RemoteExecutionArtifact[];
+}
+
 // Protocol version compatibility.
 
 /**

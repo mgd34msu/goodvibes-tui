@@ -6,15 +6,24 @@
  *
  * Open via /forensics or the panel picker.
  */
-import type { Line, Cell } from '../types/grid.ts';
+import type { Line } from '../types/grid.ts';
 import type { ForensicsRegistry } from '../runtime/forensics/registry.ts';
 import type { FailureReport, CausalChainEntry, PhaseTimingEntry } from '../runtime/forensics/types.ts';
 import { ForensicsDataPanel } from '../runtime/diagnostics/panels/forensics.ts';
 import { BasePanel } from './base-panel.ts';
-import { createStyledCell, createEmptyLine } from '../types/grid.ts';
+import { createEmptyLine } from '../types/grid.ts';
+import {
+  buildEmptyState,
+  buildPanelLine,
+  buildPanelWorkspace,
+  DEFAULT_PANEL_PALETTE,
+  type PanelWorkspaceSection,
+} from './polish.ts';
+import { getTrackedVisibleWindow, getVisibleWindow } from '../renderer/surface-layout.ts';
 
 // ── Colour palette ────────────────────────────────────────────────────────────
 const C = {
+  ...DEFAULT_PANEL_PALETTE,
   header:          '#94a3b8',
   headerBg:        '#1e293b',
   reportId:        '#475569',
@@ -36,6 +45,7 @@ const C = {
   separator:       '#1e293b',
   dim:             '#334155',
   empty:           '#4b5563',
+  selectBg:        '#1e3a5f',
 } as const;
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
@@ -67,24 +77,6 @@ function classificationColor(cls: FailureReport['classification']): string {
     case 'compaction_error': return C.classError;
     default:                 return C.classification;
   }
-}
-
-/** Build a Line from a sequence of [text, fg, bg?] segments. */
-function buildLine(width: number, segments: Array<[string, string, string?]>): Line {
-  const cells: Cell[] = [];
-  let used = 0;
-  for (const [text, fg, bg] of segments) {
-    cells.push(createStyledCell(text, { fg, bg: bg ?? '' }));
-    used += text.length;
-  }
-  if (used < width) {
-    cells.push(createStyledCell(' '.repeat(width - used), { fg: '' }));
-  }
-  return cells;
-}
-
-function buildSeparator(width: number): Line {
-  return buildLine(width, [['─'.repeat(width), C.separator]]);
 }
 
 // ── ForensicsPanel ────────────────────────────────────────────────────────────
@@ -161,30 +153,38 @@ export class ForensicsPanel extends BasePanel {
 
   public render(width: number, height: number): Line[] {
     this.needsRender = false;
-    const lines: Line[] = [];
-
-    // Panel header
-    const titleText = ' Failure Forensics';
-    const pad = Math.max(0, width - titleText.length);
-    lines.push(buildLine(width, [[titleText + ' '.repeat(pad), C.header, C.headerBg]]));
-
+    const intro = 'Recent failure reports, causal chains, phase timings, and cross-panel jump targets for incident investigation.';
     const reports = this._data.getAll();
 
     if (reports.length === 0) {
-      lines.push(buildLine(width, [[' No failure reports. All systems nominal.', C.empty]]));
-      while (lines.length < height) lines.push(createEmptyLine(width));
-      return lines;
+      const workspace = buildPanelWorkspace(width, height, {
+        title: 'Failure Forensics',
+        intro,
+        sections: [{
+          lines: buildEmptyState(
+            width,
+            ' No failure reports. All systems nominal.',
+            'Failures will appear here with classification, causal chains, phase timings, and jump links as runtime incidents are captured.',
+            [{ command: '/incident', summary: 'open the incident review workspace and forensics surfaces' }],
+            C,
+          ),
+        }],
+        palette: C,
+      });
+      while (workspace.length < height) workspace.push(createEmptyLine(width));
+      return workspace;
     }
 
+    const lines: Line[] = [];
     if (this._mode === 'list') {
-      this._renderList(lines, reports, width, height);
+      this._renderList(lines, reports, width, height, intro);
     } else {
       const report = reports[this._selectedIndex];
       if (report) {
-        this._renderDetail(lines, report, width, height);
+        this._renderDetail(lines, report, width, height, intro);
       } else {
         this._mode = 'list';
-        this._renderList(lines, reports, width, height);
+        this._renderList(lines, reports, width, height, intro);
       }
     }
 
@@ -194,21 +194,20 @@ export class ForensicsPanel extends BasePanel {
 
   // ── List view ──────────────────────────────────────────────────────────────
 
-  private _renderList(lines: Line[], reports: FailureReport[], width: number, height: number): void {
-    // Column headers
-    const colHdr = ' ID       TIME      CLASS                 SUMMARY';
-    lines.push(buildLine(width, [[colHdr.slice(0, width), C.label]]));
-
-    const bodyHeight = Math.max(1, height - 2);
-    const maxScroll = Math.max(0, reports.length - bodyHeight);
-    const offset = Math.min(this._selectedIndex > bodyHeight - 1 ? this._selectedIndex - bodyHeight + 1 : 0, maxScroll);
-    const visible = reports.slice(offset, offset + bodyHeight);
+  private _renderList(lines: Line[], reports: FailureReport[], width: number, height: number, intro: string): void {
+    const window = getTrackedVisibleWindow(reports.length, this._selectedIndex, Math.max(4, height - 8), this._scrollOffset, 1);
+    const maxScroll = Math.max(0, reports.length - window.count);
+    const offset = Math.min(window.start, maxScroll);
+    const visible = reports.slice(offset, offset + window.count);
+    const reportLines: Line[] = [
+      buildPanelLine(width, [['  ID       TIME      CLASS                 SUMMARY', C.label]]),
+    ];
 
     for (let i = 0; i < visible.length; i++) {
       const report = visible[i]!;
       const absIdx = offset + i;
       const isSelected = absIdx === this._selectedIndex;
-      const bg = isSelected ? '#1e3a5f' : '';
+      const bg = isSelected ? C.selectBg : undefined;
 
       const idStr   = report.id.slice(0, 8).padEnd(8, ' ');
       const timeStr = fmtTime(report.generatedAt);
@@ -218,92 +217,88 @@ export class ForensicsPanel extends BasePanel {
       const summaryStr = report.summary.slice(0, summaryMax);
 
       const segs: Array<[string, string, string?]> = [
-        [isSelected ? '▶' : ' ', C.jumpLink, bg],
+        [isSelected ? '>' : ' ', C.jumpLink, bg],
         [`${idStr} `, C.reportId, bg],
         [`${timeStr} `, C.timestamp, bg],
         [`${cls} `, clsColor, bg],
         [summaryStr, C.summaryText, bg],
       ];
-      lines.push(buildLine(width, segs));
+      reportLines.push(buildPanelLine(width, segs));
     }
 
     if (reports.length > 0) {
-      const hint = ` [${this._selectedIndex + 1}/${reports.length}] ↑/↓ navigate  Enter expand`;
-      const hintLine = buildLine(width, [[hint.slice(0, width), C.label]]);
-      // Replace last visible line if it's the last slot, else append footer
-      if (lines.length < height) {
-        lines.push(hintLine);
-      } else {
-        lines[lines.length - 1] = hintLine;
-      }
+      reportLines.push(buildPanelLine(width, [[` [${this._selectedIndex + 1}/${reports.length}] Up/Down navigate  Enter expand`, C.label]]));
     }
+
+    lines.push(...buildPanelWorkspace(width, height, {
+      title: 'Failure Forensics',
+      intro,
+      sections: [{ title: 'Reports', lines: reportLines }],
+      palette: C,
+    }));
   }
 
   // ── Detail view ────────────────────────────────────────────────────────────
 
-  private _renderDetail(lines: Line[], report: FailureReport, width: number, height: number): void {
+  private _renderDetail(lines: Line[], report: FailureReport, width: number, height: number, intro: string): void {
     const detailLines: Line[] = [];
 
-    // Report header
-    const hdr = ` Report ${report.id}  ${fmtTime(report.generatedAt)}`;
-    detailLines.push(buildLine(width, [[hdr, C.header, C.headerBg]]));
-    detailLines.push(buildSeparator(width));
-
-    // Classification + summary
-    detailLines.push(buildLine(width, [
+    detailLines.push(buildPanelLine(width, [
+      [' Report: ', C.label],
+      [report.id, C.value],
+      ['  Generated: ', C.label],
+      [fmtTime(report.generatedAt), C.timestamp],
+    ]));
+    detailLines.push(buildPanelLine(width, [
       [' Class:   ', C.label],
       [report.classification, classificationColor(report.classification)],
     ]));
-    detailLines.push(buildLine(width, [
+    detailLines.push(buildPanelLine(width, [
       [' Summary: ', C.label],
       [report.summary.slice(0, width - 11), C.summaryText],
     ]));
 
     if (report.errorMessage) {
-      detailLines.push(buildLine(width, [
+      detailLines.push(buildPanelLine(width, [
         [' Error:   ', C.label],
         [report.errorMessage.slice(0, width - 11), C.classError],
       ]));
     }
     if (report.stopReason) {
-      detailLines.push(buildLine(width, [
+      detailLines.push(buildPanelLine(width, [
         [' Stop:    ', C.label],
         [report.stopReason, C.classWarn],
       ]));
     }
     if (report.taskId) {
-      detailLines.push(buildLine(width, [[` Task:    ${report.taskId}`, C.value]]));
+      detailLines.push(buildPanelLine(width, [[` Task:    ${report.taskId}`, C.value]]));
     }
     if (report.turnId) {
-      detailLines.push(buildLine(width, [[` Turn:    ${report.turnId}`, C.value]]));
+      detailLines.push(buildPanelLine(width, [[` Turn:    ${report.turnId}`, C.value]]));
     }
-
-    detailLines.push(buildSeparator(width));
 
     // Phase timings
     if (report.phaseTimings.length > 0) {
-      detailLines.push(buildLine(width, [[' Phase Timings:', C.label]]));
+      detailLines.push(buildPanelLine(width, [[' Phase Timings:', C.label]]));
       for (const pt of report.phaseTimings) {
         this._renderPhase(detailLines, pt, width);
       }
-      detailLines.push(buildSeparator(width));
     }
 
     // Causal chain
     if (report.causalChain.length > 0) {
-      detailLines.push(buildLine(width, [[' Causal Chain:', C.label]]));
+      detailLines.push(buildPanelLine(width, [[' Causal Chain:', C.label]]));
       for (const entry of report.causalChain) {
         this._renderCausal(detailLines, entry, width);
       }
-      detailLines.push(buildSeparator(width));
     }
 
     // Jump links
     if (report.jumpLinks.length > 0) {
-      detailLines.push(buildLine(width, [[' Jump Links:', C.label]]));
+      detailLines.push(buildPanelLine(width, [[' Jump Links:', C.label]]));
       for (const link of report.jumpLinks) {
         const kindTag = link.kind === 'panel' ? '[panel]' : '[cmd]  ';
-        detailLines.push(buildLine(width, [
+        detailLines.push(buildPanelLine(width, [
           ['  ', C.dim],
           [kindTag, C.timestamp],
           [` ${link.label}`, C.jumpLink],
@@ -312,25 +307,29 @@ export class ForensicsPanel extends BasePanel {
       }
     }
 
-    detailLines.push(buildLine(width, [[' Esc/q: back to list  ↑/↓: scroll', C.dim]]));
+    detailLines.push(buildPanelLine(width, [[' Esc/q: back to list  Up/Down: scroll', C.dim]]));
 
-    // Apply scroll
-    const bodyHeight = Math.max(1, height - 1); // account for panel header already in `lines`
+    const bodyHeight = Math.max(1, height - 6);
     const maxScroll = Math.max(0, detailLines.length - bodyHeight);
     const offset = Math.min(this._scrollOffset, maxScroll);
     this._scrollOffset = offset;
 
     const visible = detailLines.slice(offset, offset + bodyHeight);
-    for (const l of visible) lines.push(l);
+    lines.push(...buildPanelWorkspace(width, height, {
+      title: 'Failure Forensics',
+      intro,
+      sections: [{ title: 'Report Detail', lines: visible }],
+      palette: C,
+    }));
   }
 
   private _renderPhase(lines: Line[], pt: PhaseTimingEntry, width: number): void {
-    const statusChar = pt.success ? '✓' : '✗';
+    const statusChar = pt.success ? 'y' : 'x';
     const statusColor = pt.success ? C.phaseOk : C.phaseFail;
     const dur = fmtDuration(pt.durationMs);
     const phaseLabel = pt.phase.slice(0, 14).padEnd(14, ' ');
     const errPart = pt.error ? `  ${pt.error.slice(0, Math.max(0, width - 32))}` : '';
-    lines.push(buildLine(width, [
+    lines.push(buildPanelLine(width, [
       ['  ', C.dim],
       [statusChar + ' ', statusColor],
       [phaseLabel, C.value],
@@ -340,11 +339,11 @@ export class ForensicsPanel extends BasePanel {
   }
 
   private _renderCausal(lines: Line[], entry: CausalChainEntry, width: number): void {
-    const prefix = entry.isRootCause ? '  ● ' : '  · ';
+    const prefix = entry.isRootCause ? '  * ' : '  - ';
     const color = entry.isRootCause ? C.chainRoot : C.chainEntry;
     const timeStr = fmtTime(entry.ts);
     const descMax = Math.max(0, width - prefix.length - 9);
-    lines.push(buildLine(width, [
+    lines.push(buildPanelLine(width, [
       [prefix, color],
       [`${timeStr} `, C.timestamp],
       [entry.description.slice(0, descMax), color],

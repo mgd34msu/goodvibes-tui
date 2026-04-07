@@ -1,6 +1,14 @@
 import { BasePanel } from './base-panel.ts';
-import { createEmptyLine, createStyledCell, type Line } from '../types/grid.ts';
+import { type Line } from '../types/grid.ts';
 import { TaskScheduler, type ScheduledTask, type TaskRunRecord } from '../scheduler/scheduler.ts';
+import {
+  buildEmptyState,
+  buildPanelLine,
+  buildPanelWorkspace,
+  DEFAULT_PANEL_PALETTE,
+  type PanelWorkspaceSection,
+} from './polish.ts';
+import { getTrackedVisibleWindow } from '../renderer/surface-layout.ts';
 
 // ---------------------------------------------------------------------------
 // Colors
@@ -163,68 +171,63 @@ export class SchedulePanel extends BasePanel {
   // -------------------------------------------------------------------------
 
   override render(width: number, height: number): Line[] {
-    const rows: Line[] = [];
-
-    for (let i = 0; i < this.items.length; i++) {
-      const item = this.items[i];
-      if (!item) continue;
-      const selected = i === this.selectedIndex;
-
-      switch (item.kind) {
-        case 'header':
-          rows.push(this.renderHeader(width));
-          rows.push(createEmptyLine(width)); // spacer
-          break;
-        case 'task':
-          rows.push(...this.renderTask(item.task, item.history, selected, width));
-          break;
-        case 'empty': {
-          const line = createEmptyLine(width);
-          this.paintText(line, '  (no scheduled tasks)  use /schedule add to create one', 0, width, C.sectionHeader, { dim: true });
-          rows.push(line);
-          break;
-        }
-      }
-    }
-
-    // Auto-scroll to keep selected row visible
-    if (this.selectedIndex >= 0) {
-      const selRow = this.getRowForItem(this.selectedIndex);
-      if (selRow >= 0) {
-        if (selRow < this.scrollOffset) {
-          this.scrollOffset = selRow;
-        } else if (selRow >= this.scrollOffset + height - 1) {
-          this.scrollOffset = selRow - height + 2;
-        }
-      }
-    }
-    if (this.scrollOffset < 0) this.scrollOffset = 0;
-
-    const visible = rows.slice(this.scrollOffset, this.scrollOffset + height);
-    const lines: Line[] = [...visible];
-
-    // Hint footer
-    while (lines.length < height - 1) lines.push(createEmptyLine(width));
-    if (lines.length < height) {
-      const hint = createEmptyLine(width);
-      this.paintText(hint, ' \u2191\u2193 navigate  Space toggle  r run now  R refresh', 0, width, C.hint, { dim: true });
-      lines.push(hint);
-    }
-
-    while (lines.length < height) lines.push(createEmptyLine(width));
-    return lines;
-  }
-
-  // -- Row helpers ------------------------------------------------------------
-
-  private renderHeader(width: number): Line {
-    const line = createEmptyLine(width);
     const scheduler = TaskScheduler.getInstance();
     const tasks = scheduler.list();
     const enabled = tasks.filter((t) => t.enabled).length;
-    const text = ` Scheduled Tasks  (${enabled}/${tasks.length} enabled)`;
-    this.paintText(line, text, 0, width, C.header, { bold: true });
-    return line;
+    if (tasks.length === 0) {
+      return buildPanelWorkspace(width, height, {
+        title: ' Schedule',
+        intro: 'Review recurring scheduled tasks, next run timing, recent history, and enablement state.',
+        sections: [
+          {
+            lines: buildEmptyState(
+              width,
+              ' No scheduled tasks',
+              'Use /schedule add to create a recurring task. Scheduled runs and history will appear here.',
+              [],
+              DEFAULT_PANEL_PALETTE,
+            ),
+          },
+        ],
+        footerLines: [
+          buildPanelLine(width, [[' Up/Down', DEFAULT_PANEL_PALETTE.info], [' navigate', DEFAULT_PANEL_PALETTE.dim], ['   Space', DEFAULT_PANEL_PALETTE.info], [' toggle', DEFAULT_PANEL_PALETTE.dim], ['   r', DEFAULT_PANEL_PALETTE.info], [' run now', DEFAULT_PANEL_PALETTE.dim], ['   R', DEFAULT_PANEL_PALETTE.info], [' refresh', DEFAULT_PANEL_PALETTE.dim]]),
+        ],
+        palette: DEFAULT_PANEL_PALETTE,
+      });
+    }
+
+    const taskItems = this.items.filter((item): item is Extract<ViewItem, { kind: 'task' }> => item.kind === 'task');
+    this.selectedIndex = Math.max(0, Math.min(this.selectedIndex, taskItems.length - 1));
+    const window = getTrackedVisibleWindow(taskItems.length, this.selectedIndex, Math.max(6, Math.floor((height - 8) / 4)), this.scrollOffset, 1);
+    this.scrollOffset = window.start;
+    const visibleTasks = taskItems.slice(window.start, window.end);
+    const sections: PanelWorkspaceSection[] = [
+      {
+        title: 'Summary',
+        lines: [
+          buildPanelLine(width, [
+            [' Tasks ', DEFAULT_PANEL_PALETTE.label],
+            [String(tasks.length), DEFAULT_PANEL_PALETTE.value],
+            ['   Enabled ', DEFAULT_PANEL_PALETTE.label],
+            [String(enabled), enabled > 0 ? DEFAULT_PANEL_PALETTE.good : DEFAULT_PANEL_PALETTE.dim],
+          ]),
+        ],
+      },
+      {
+        title: 'Scheduled Tasks',
+        lines: visibleTasks.flatMap((item, index) => this.renderTask(item.task, item.history, window.start + index === this.selectedIndex, width)),
+      },
+    ];
+
+    return buildPanelWorkspace(width, height, {
+      title: ' Schedule',
+      intro: 'Review recurring scheduled tasks, next run timing, recent history, and enablement state.',
+      sections,
+      footerLines: [
+        buildPanelLine(width, [[' Up/Down', DEFAULT_PANEL_PALETTE.info], [' navigate', DEFAULT_PANEL_PALETTE.dim], ['   Space', DEFAULT_PANEL_PALETTE.info], [' toggle', DEFAULT_PANEL_PALETTE.dim], ['   r', DEFAULT_PANEL_PALETTE.info], [' run now', DEFAULT_PANEL_PALETTE.dim], ['   R', DEFAULT_PANEL_PALETTE.info], [' refresh', DEFAULT_PANEL_PALETTE.dim]]),
+      ],
+      palette: DEFAULT_PANEL_PALETTE,
+    });
   }
 
   /**
@@ -237,104 +240,52 @@ export class SchedulePanel extends BasePanel {
     const bg = selected ? C.selected : undefined;
     const fgBase = selected ? C.selectedFg : undefined;
 
-    // --- Row 1: status bullet + id + name + cron ---
-    const row1 = createEmptyLine(width);
-    if (selected) {
-      for (let i = 0; i < width; i++) row1[i] = createStyledCell(' ', { bg: C.selected, fg: C.selectedFg });
-    }
-    let x = 0;
-    const bullet = task.enabled ? '\u25cf ' : '\u25cb ';
+    const bullet = task.enabled ? '* ' : 'o ';
     const bulletFg = task.enabled ? C.enabled : C.disabled;
-    x = this.paintText(row1, bullet, x, width, bulletFg, { bg });
-    x = this.paintText(row1, task.id.slice(0, 12), x, width, fgBase ?? C.id, { bg });
-    x = this.paintText(row1, '  ', x, width, fgBase ?? C.prompt, { bg });
-    const nameStr = task.name.length > 28 ? task.name.slice(0, 26) + '\u2026' : task.name.padEnd(28);
-    x = this.paintText(row1, nameStr, x, width, fgBase ?? C.prompt, { bg, bold: selected });
-    x = this.paintText(row1, '  ', x, width, fgBase ?? C.prompt, { bg });
-    this.paintText(row1, task.cron, x, width, fgBase ?? C.cron, { bg });
+    const nameStr = task.name.length > 28 ? task.name.slice(0, 25) + '...' : task.name.padEnd(28);
+    const row1 = buildPanelLine(width, [
+      [bullet, bulletFg, bg],
+      [task.id.slice(0, 12), fgBase ?? C.id, bg],
+      ['  ', fgBase ?? C.prompt, bg],
+      [nameStr, fgBase ?? C.prompt, bg],
+      ['  ', fgBase ?? C.prompt, bg],
+      [task.cron, fgBase ?? C.cron, bg],
+    ]);
 
-    // --- Row 2: next/last run times ---
-    const row2 = createEmptyLine(width);
-    if (selected) {
-      for (let i = 0; i < width; i++) row2[i] = createStyledCell(' ', { bg: C.selected, fg: C.selectedFg });
-    }
     const indent = '    ';
-    let x2 = 0;
-    x2 = this.paintText(row2, indent, x2, width, fgBase ?? C.prompt, { bg });
     const nextStr = task.nextRun
       ? `next: ${new Date(task.nextRun).toLocaleString()}`
       : 'next: unknown';
-    x2 = this.paintText(row2, nextStr.padEnd(36), x2, width, fgBase ?? C.nextRun, { bg });
     const lastStr = task.lastRun
       ? `last: ${new Date(task.lastRun).toLocaleString()}`
       : 'last: never';
-    x2 = this.paintText(row2, lastStr.padEnd(32), x2, width, fgBase ?? C.lastRun, { bg });
-    this.paintText(row2, `runs: ${task.runCount}`, x2, width, fgBase ?? C.runCount, { bg });
+    const row2 = buildPanelLine(width, [
+      [indent, fgBase ?? C.prompt, bg],
+      [nextStr.padEnd(36), fgBase ?? C.nextRun, bg],
+      [lastStr.padEnd(32), fgBase ?? C.lastRun, bg],
+      [`runs: ${task.runCount}`, fgBase ?? C.runCount, bg],
+    ]);
 
-    // --- Row 3: prompt preview + run history ---
-    const row3 = createEmptyLine(width);
-    if (selected) {
-      for (let i = 0; i < width; i++) row3[i] = createStyledCell(' ', { bg: C.selected, fg: C.selectedFg });
-    }
-    let x3 = 0;
-    x3 = this.paintText(row3, indent, x3, width, fgBase ?? C.prompt, { bg });
     const maxPromptLen = Math.max(20, width - indent.length - 30);
     const promptPreview = task.prompt.length > maxPromptLen
       ? task.prompt.slice(0, maxPromptLen - 1) + '\u2026'
       : task.prompt;
-    x3 = this.paintText(row3, promptPreview, x3, width, fgBase ?? C.prompt, { bg, dim: !selected });
 
     // Show last 3 run statuses as colored dots
     const recentRuns = history.slice(-3);
-    if (recentRuns.length > 0) {
-      x3 = this.paintText(row3, '  ', x3, width, fgBase ?? C.prompt, { bg });
-      for (const run of recentRuns) {
-        const dot = run.status === 'failed' ? '\u25cf' : '\u25cf';
-        const dotFg = run.status === 'failed' ? C.statusFailed : C.statusRunning;
-        x3 = this.paintText(row3, dot, x3, width, dotFg, { bg });
-      }
-    }
+    const runSegments = recentRuns.flatMap((run) => {
+      const dotFg = run.status === 'failed' ? C.statusFailed : C.statusRunning;
+      return [['\u25cf', dotFg, bg] as [string, string, string?]];
+    });
+    const row3 = buildPanelLine(width, [
+      [indent, fgBase ?? C.prompt, bg],
+      [promptPreview, fgBase ?? C.prompt, bg],
+      ...(runSegments.length > 0 ? [['  ', fgBase ?? C.prompt, bg] as [string, string, string?], ...runSegments] : []),
+    ]);
 
     // spacer row between tasks
-    const spacer = createEmptyLine(width);
+    const spacer = buildPanelLine(width, [['', fgBase ?? C.prompt, bg]]);
 
     return [row1, row2, row3, spacer];
-  }
-
-  // -- Text painting ----------------------------------------------------------
-
-  private paintText(
-    line: Line,
-    text: string,
-    startX: number,
-    width: number,
-    fg?: string,
-    opts: { bold?: boolean; dim?: boolean; bg?: string } = {},
-  ): number {
-    let x = startX;
-    for (const ch of text) {
-      if (x >= width) break;
-      line[x++] = createStyledCell(ch, { fg, bg: opts.bg, bold: opts.bold, dim: opts.dim });
-    }
-    return x;
-  }
-
-  /**
-   * Map an item index to its rendered row start position,
-   * accounting for multi-row tasks (4 rows each) and the header (2 rows).
-   */
-  private getRowForItem(itemIndex: number): number {
-    let row = 0;
-    for (let i = 0; i < itemIndex && i < this.items.length; i++) {
-      const it = this.items[i];
-      if (it?.kind === 'header') {
-        row += 2; // header + spacer
-      } else if (it?.kind === 'task') {
-        row += 4; // 3 content rows + spacer
-      } else {
-        row += 1;
-      }
-    }
-    return row;
   }
 }

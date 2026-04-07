@@ -35,6 +35,11 @@ import { McpPanel } from './mcp-panel.ts';
 import { HooksPanel } from './hooks-panel.ts';
 import { SecurityPanel } from './security-panel.ts';
 import { RemotePanel } from './remote-panel.ts';
+import { MarketplacePanel } from './marketplace-panel.ts';
+import { SandboxPanel } from './sandbox-panel.ts';
+import { ApprovalPanel } from './approval-panel.ts';
+import { WelcomePanel } from './welcome-panel.ts';
+import { SubscriptionPanel } from './subscription-panel.ts';
 import type { RuntimeEventBus } from '../runtime/events/index.ts';
 import type { ToolRegistry } from '../tools/registry.ts';
 import type { ProviderRegistry } from '../providers/registry.ts';
@@ -153,6 +158,24 @@ export function registerBuiltinPanels(manager: PanelManager, deps: BuiltinPanelD
   });
 
   manager.registerType({
+    id: 'approval',
+    name: 'Approval',
+    icon: 'A',
+    category: 'monitoring',
+    description: 'Action-specific approval workspace for why-prompted, why-denied, and what-if review',
+    factory: () => new ApprovalPanel(),
+  });
+
+  manager.registerType({
+    id: 'welcome',
+    name: 'Welcome',
+    icon: 'W',
+    category: 'monitoring',
+    description: 'Guided start surface for setup, security, marketplace, remote, and operator workflows',
+    factory: () => new WelcomePanel(),
+  });
+
+  manager.registerType({
     id: 'plugins',
     name: 'Plugins',
     icon: 'P',
@@ -177,6 +200,15 @@ export function registerBuiltinPanels(manager: PanelManager, deps: BuiltinPanelD
     category: 'monitoring',
     description: 'Configured external services, credential presence, and connection health tests',
     factory: () => new ServicesPanel(),
+  });
+
+  manager.registerType({
+    id: 'subscription',
+    name: 'Subscriptions',
+    icon: 'B',
+    category: 'monitoring',
+    description: 'OAuth-backed provider subscriptions and supported provider override posture',
+    factory: () => new SubscriptionPanel(),
   });
 
   manager.registerType({
@@ -209,6 +241,24 @@ export function registerBuiltinPanels(manager: PanelManager, deps: BuiltinPanelD
       deps.runtimeStore,
       deps.forensicsRegistry,
     ),
+  });
+
+  manager.registerType({
+    id: 'marketplace',
+    name: 'Marketplace',
+    icon: 'M',
+    category: 'monitoring',
+    description: 'Curated plugin and skill marketplace with provenance, compatibility, and install posture',
+    factory: () => new MarketplacePanel(),
+  });
+
+  manager.registerType({
+    id: 'sandbox',
+    name: 'Sandbox',
+    icon: 'X',
+    category: 'monitoring',
+    description: 'VM isolation posture for MCP servers and evaluation runtimes',
+    factory: () => new SandboxPanel(),
   });
 
   manager.registerType({

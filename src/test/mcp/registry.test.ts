@@ -4,6 +4,7 @@ import type { McpServerConfig } from '../../mcp/config.ts';
 import { join } from 'path';
 import { mkdirSync, writeFileSync, rmSync, existsSync } from 'fs';
 import { tmpdir } from 'os';
+import { SandboxSessionRegistry } from '../../runtime/sandbox/session-registry.ts';
 
 // Minimal stub MCP server script for registry tests
 const STUB_SCRIPT = /* js */ `
@@ -103,6 +104,64 @@ describe('McpRegistry — with stub server', () => {
     await registry.connectServer(stubServerConfig('alpha'));
     expect(registry.serverNames).toContain('alpha');
     expect(registry.listServerSecurity()[0]?.trustMode).toBe('ask-on-risk');
+  });
+
+  test('connectServer() can route MCP startup through the sandbox session backend', async () => {
+    registry = new McpRegistry();
+    const sandboxSessions = new SandboxSessionRegistry();
+    const configManager = {
+      get(key: string) {
+        const values: Record<string, unknown> = {
+          'sandbox.replIsolation': 'shared-vm',
+          'sandbox.mcpIsolation': 'shared-vm',
+          'sandbox.windowsMode': 'native-basic',
+          'sandbox.vmBackend': 'local',
+          'sandbox.qemuBinary': 'qemu-system-x86_64',
+          'sandbox.qemuImagePath': '',
+          'sandbox.qemuExecWrapper': '',
+        };
+        return values[key];
+      },
+    };
+    registry.setSandboxRuntime(configManager as never, sandboxSessions);
+
+    await registry.connectServer(stubServerConfig('sandboxed'));
+
+    expect(registry.serverNames).toContain('sandboxed');
+    const sessions = sandboxSessions.list();
+    expect(sessions).toHaveLength(1);
+    expect(sessions[0]?.profileId).toBe('mcp-shared');
+    expect(sessions[0]?.state).toBe('running');
+  });
+
+  test('hybrid MCP isolation uses dedicated sessions for higher-risk servers', async () => {
+    registry = new McpRegistry();
+    const sandboxSessions = new SandboxSessionRegistry();
+    const configManager = {
+      get(key: string) {
+        const values: Record<string, unknown> = {
+          'sandbox.replIsolation': 'shared-vm',
+          'sandbox.mcpIsolation': 'hybrid',
+          'sandbox.windowsMode': 'native-basic',
+          'sandbox.vmBackend': 'local',
+          'sandbox.qemuBinary': 'qemu-system-x86_64',
+          'sandbox.qemuImagePath': '',
+          'sandbox.qemuExecWrapper': '',
+        };
+        return values[key];
+      },
+    };
+    registry.setSandboxRuntime(configManager as never, sandboxSessions);
+
+    await registry.connectServer({
+      ...stubServerConfig('hybrid-risky'),
+      role: 'ops',
+      allowedHosts: ['api.example.com'],
+    });
+
+    const sessions = sandboxSessions.list();
+    expect(sessions).toHaveLength(1);
+    expect(sessions[0]?.profileId).toBe('mcp-per-server');
   });
 
   test('getClient() returns the McpClient after connecting', async () => {

@@ -2,7 +2,7 @@
 // Main shell entrypoint. Composition-heavy startup remains here, with
 // lower-level session/bootstrap/input helpers extracted into focused modules.
 import { Compositor } from './renderer/compositor.ts';
-import { createEmptyLine, type Line } from './types/grid.ts';
+import { type Line } from './types/grid.ts';
 import { UIFactory } from './renderer/ui-factory.ts';
 import { Orchestrator } from './core/orchestrator.ts';
 import { InputHandler } from './input/handler.ts';
@@ -20,31 +20,23 @@ import { getHookDispatcher } from './hooks/index.ts';
 import { PermissionPromptUI } from './permissions/prompt.ts';
 import { CommandRegistry } from './input/command-registry.ts';
 import type { CommandContext } from './input/command-registry.ts';
-import { renderFilePickerOverlay } from './renderer/file-picker-overlay.ts';
-import { renderModelPickerOverlay, MODEL_PICKER_CHROME_LINES } from './renderer/model-picker-overlay.ts';
-import { renderSearchOverlay } from './renderer/search-overlay.ts';
-import { renderHistorySearchOverlay } from './renderer/history-search-overlay.ts';
 import { renderProcessIndicator } from './renderer/process-indicator.ts';
 import { AgentManager } from './tools/agent/index.ts';
 import { WrfcController } from './agents/wrfc-controller.ts';
 import { ProcessManager } from './tools/shared/process-manager.ts';
-import { renderSelectionModalOverlay } from './renderer/selection-modal-overlay.ts';
 import { registerBuiltinCommands } from './input/commands.ts';
 import { ScheduleManager } from './tools/workflow/index.ts';
 import { InputHistory } from './input/input-history.ts';
 import { getTierPromptSupplement, getTierForContextWindow } from './providers/tier-prompts.ts';
 import { GitStatusProvider } from './renderer/git-status.ts';
 import type { GitHeaderInfo } from './renderer/git-status.ts';
-import { renderHelpOverlay, renderShortcutsOverlay } from './renderer/help-overlay.ts';
-import { renderSettingsModal } from './renderer/settings-modal.ts';
-import { renderSessionPickerModal } from './renderer/session-picker-modal.ts';
-import { renderProfilePickerModal } from './renderer/profile-picker-modal.ts';
-import { renderBookmarkModal } from './renderer/bookmark-modal.ts';
-import { renderProcessModal } from './renderer/process-modal.ts';
-import { renderAgentDetailModal } from './renderer/agent-detail-modal.ts';
-import { renderLiveTailModal } from './renderer/live-tail-modal.ts';
-import { renderContextInspector } from './renderer/context-inspector.ts';
-import { renderAutocompleteOverlay } from './renderer/autocomplete-overlay.ts';
+import { createShellLayout } from './renderer/layout-engine.ts';
+import { buildShellFooter, estimateShellFooterHeight } from './renderer/shell-surface.ts';
+import {
+  buildConversationViewport,
+} from './renderer/conversation-layout.ts';
+import { applyConversationOverlays } from './renderer/conversation-overlays.ts';
+import { buildPanelCompositeData } from './renderer/panel-composite.ts';
 import { logger } from './utils/logger.ts';
 import { getPinned } from './providers/favorites.ts';
 import { initModelLimits, getContextWindowForModel } from './providers/model-limits.ts';
@@ -119,6 +111,8 @@ async function main() {
     _getConfiguredProviderIds: getConfiguredProviderIds,
     systemMessageRouter,
   } = ctx;
+  let activeConversationWidth = stdout.columns || 80;
+  conversation.setWidthProvider(() => activeConversationWidth);
   if (!runtimeBus) {
     throw new Error('bootstrapRuntime must provide RuntimeEventBus');
   }
@@ -157,20 +151,10 @@ async function main() {
     return boxWidth - 4 - 3; // minus padding (4) minus prefix width (3: ' > ')
   };
 
-  /** Base footer row count: separator + prompt box (top+content+bottom) + blank +
-   *  token line + ctx bar + compact bar + context line (blank+info+blank) + help/exit line + trailing blank.
-   *  Process indicator (1 row, always shown) is accounted for separately in getViewportHeight.
-   */
-  const FOOTER_BASE_ROWS = 9;
-
-  const getViewportHeight = () => {
-    const promptLines = input.getVisiblePromptLineCount(getPromptContentWidth());
-    // FOOTER_BASE_ROWS base footer rows + 2 progress bars (always shown when model has contextWindow) + prompt lines
-    // + 1 process indicator row (always shown: idle, focused, or active states)
+  const getViewportHeight = (): number => {
+    const promptLines: number = input.getVisiblePromptLineCount(getPromptContentWidth());
     const currentModel = providerRegistry.getCurrentModel();
-    const hasProgressBars = currentModel.contextWindow > 0 ? 2 : 0;
-    const processIndicatorRows = 1; // always shown (idle, focused, or active)
-    return (stdout.rows || 24) - 2 - (FOOTER_BASE_ROWS + promptLines + hasProgressBars + processIndicatorRows);
+    return (stdout.rows || 24) - 2 - estimateShellFooterHeight(promptLines, currentModel.contextWindow);
   };
 
   const scroll = (delta: number) => {
@@ -313,7 +297,7 @@ async function main() {
   // orchestratorRefs.getViewportHeight and .scrollToEnd are patched immediately after.
 
   // ── InputHandler ────────────────────────────────────────────────────────
-  const input = new InputHandler(
+  const input: InputHandler = new InputHandler(
     () => render(),
     selection,
     () => scrollTop,
@@ -369,7 +353,6 @@ async function main() {
     // Show first running agent's progress (detail modal shows all)
     const runningAgentProgress = runningAgents[0]?.progress;
     const runningProcessCount = ProcessManager.getInstance().list().filter((p) => !p.status.startsWith('done')).length;
-    const processIndicatorLines = renderProcessIndicator(width, runningAgentCount, runningProcessCount, input.indicatorFocused, runningAgentProgress);
     const cw = getPromptContentWidth();
     const promptInfo = input.getWrappedPromptInfo(cw);
     // Compute args hint for slash commands — shown in dim grey after cursor
@@ -407,21 +390,25 @@ async function main() {
       if (!cmd) return undefined;
       return cmd.argsHint ?? cmd.usage;
     })();
-    const footerContentLines = UIFactory.createFooter(
+    const footerLines = buildShellFooter({
       width,
-      promptInfo.visibleLines.join('\n'),
-      { up: orchestrator.usage.input, down: orchestrator.usage.output },
-      input.showExitNotice,
-      input.lastCopyTime,
-      runtime.model, toolRegistry.list().length,
-      promptInfo.visibleCursorLine >= 0
-        ? promptInfo.visibleLines.slice(0, promptInfo.visibleCursorLine).reduce((s, l) => s + l.length + 1, 0) + promptInfo.visibleCursorCol
+      promptText: promptInfo.visibleLines.join('\n'),
+      promptLineCount: promptInfo.visibleLines.length,
+      promptCursorPos: promptInfo.visibleCursorLine >= 0
+        ? promptInfo.visibleLines
+          .slice(0, promptInfo.visibleCursorLine)
+          .reduce((sum: number, line: string) => sum + line.length + 1, 0) + promptInfo.visibleCursorCol
         : undefined,
-      getWorkingDirectory(),
-      runtime.provider,
-      currentModel.contextWindow,
-      configManager.get('behavior.autoCompactThreshold') as number,
-      (() => {
+      usage: { up: orchestrator.usage.input, down: orchestrator.usage.output },
+      showExitNotice: input.showExitNotice,
+      lastCopyTime: input.lastCopyTime,
+      model: runtime.model,
+      toolCount: toolRegistry.list().length,
+      workingDir: getWorkingDirectory(),
+      provider: runtime.provider,
+      contextWindow: currentModel.contextWindow,
+      compactThreshold: configManager.get('behavior.autoCompactThreshold') as number,
+      dangerMode: (() => {
         if (configManager.get('behavior.autoApprove')) return true;
         const permMode = configManager.get('permissions.mode');
         if (permMode === 'allow-all') return true;
@@ -431,17 +418,29 @@ async function main() {
         }
         return false;
       })(),
-      orchestrator.lastInputTokens,
+      lastInputTokens: orchestrator.lastInputTokens,
       commandArgsHint,
-      ModeManager.getInstance().getHITLMode(),
-    );
-    // Insert process indicator directly after the input box (top border + content rows + bottom border)
-    const inputBoxRows = promptInfo.visibleLines.length + 2;
-    footerContentLines.splice(inputBoxRows, 0, ...processIndicatorLines);
-    const footerLines = footerContentLines;
+      hitlMode: ModeManager.getInstance().getHITLMode(),
+      runningAgentCount,
+      runningProcessCount,
+      indicatorFocused: input.indicatorFocused,
+      runningAgentProgress,
+    }).lines;
 
-    // Exact viewport height from actual header/footer sizes
-    const vHeight = Math.max(0, height - headerLines.length - footerLines.length);
+    const shellLayout = createShellLayout({
+      width,
+      height,
+      headerHeight: headerLines.length,
+      footerHeight: footerLines.length,
+      panelWidth: panelManager.isVisible() && panelManager.getAllOpen().length > 0
+        ? panelManager.getRightWidth(width)
+        : 0,
+    });
+    const vHeight = shellLayout.body.height;
+    const conversationWidth = shellLayout.conversation.width;
+    activeConversationWidth = conversationWidth;
+    const hasPanelWorkspace = panelManager.isVisible() && panelManager.getAllOpen().length > 0;
+    conversation.setSplashSuppressed(hasPanelWorkspace);
 
     // Calculate how many rows are consumed by overlays (thinking, permissions, queue, file picker)
     let overlayRows = 0;
@@ -454,23 +453,23 @@ async function main() {
       overlayRows += 1;
     }
 
-    // Shrink viewport to make room for overlays
-    const effectiveVHeight = Math.max(0, vHeight - overlayRows);
-
-    // Auto-scroll to bottom when orchestrator is active or user was near bottom
-    const maxScroll = Math.max(0, conversation.history.getLineCount() - effectiveVHeight);
-    if (scrollLocked) {
-      scrollTop = maxScroll;
-    }
-
-    const viewport = conversation.history.getSnapshot(scrollTop, effectiveVHeight, width);
+    const conversationViewport = buildConversationViewport({
+      conversation,
+      width: conversationWidth,
+      viewportHeight: vHeight,
+      scrollTop,
+      scrollLocked,
+      overlayRows,
+    });
+    scrollTop = conversationViewport.nextScrollTop;
+    let viewport = conversationViewport.viewport;
 
     if (orchestrator.isThinking) {
       const showSpeed = configManager.get('display.showTokenSpeed') as boolean;
       const showPreview = configManager.get('display.showToolPreview') as boolean;
       const partialToolPreview = showPreview ? selectStreamToolPreview(store.getState()) : undefined;
       const thinking = UIFactory.createThinkingFragment(
-        width,
+        conversationWidth,
         orchestrator.getSpinner(),
         orchestrator.thinkingFrame,
         showSpeed ? streamTokenSpeed : undefined,
@@ -482,194 +481,29 @@ async function main() {
     }
 
     if (pendingPermission) {
-      viewport.push(...PermissionPromptUI.createPromptLines(width, pendingPermission));
+      viewport.push(...PermissionPromptUI.createPromptLines(conversationWidth, pendingPermission));
     }
 
     orchestrator.messageQueue.forEach(msg => {
-      viewport.push(...UIFactory.createQueuedMessageFragment(width, msg.text));
+      viewport.push(...UIFactory.createQueuedMessageFragment(conversationWidth, msg.text));
     });
 
-    if (input.filePicker.active) {
-      const fpLines = renderFilePickerOverlay(input.filePicker, width);
-      const fpStart = Math.max(0, vHeight - fpLines.length);
-      viewport.length = Math.min(viewport.length, fpStart);
-      while (viewport.length < fpStart) viewport.push(createEmptyLine(width));
-      viewport.push(...fpLines);
-    }
-
-    if (input.modelPicker.active) {
-      // Reserve 4 extra lines for scroll indicators (up to 2) and visible group headers (up to 2).
-      // MODEL_PICKER_CHROME_LINES only counts fixed chrome; dynamic rows push total height higher.
-      const mpMaxVisible = Math.max(5, vHeight - MODEL_PICKER_CHROME_LINES - 4);
-      const mpLines = renderModelPickerOverlay(input.modelPicker, width, mpMaxVisible);
-      const mpStart = Math.max(0, vHeight - mpLines.length);
-      viewport.length = Math.min(viewport.length, mpStart);
-      while (viewport.length < mpStart) viewport.push(createEmptyLine(width));
-      viewport.push(...mpLines);
-    }
-
-    if (input.selectionModal.active) {
-      const selLines = renderSelectionModalOverlay(input.selectionModal, width);
-      // Replace the bottom of the viewport with the modal, keeping conversation above
-      const targetStart = Math.max(0, vHeight - selLines.length);
-      viewport.length = Math.min(viewport.length, targetStart);
-      // Pad if viewport is shorter than targetStart
-      while (viewport.length < targetStart) viewport.push(createEmptyLine(width));
-      viewport.push(...selLines);
-    }
-
-    if (input.searchManager.active) {
-      viewport.push(...renderSearchOverlay(input.searchManager, width));
-    }
-
-    if (input.historySearch.active) {
-      viewport.push(...renderHistorySearchOverlay(input.historySearch, width));
-    }
-
-
-    if (input.processModal.active) {
-      const pmLines = renderProcessModal(input.processModal, width);
-      const pmStart = Math.max(0, vHeight - pmLines.length);
-      viewport.length = Math.min(viewport.length, pmStart);
-      while (viewport.length < pmStart) viewport.push(createEmptyLine(width));
-      viewport.push(...pmLines);
-    }
-
-    if (input.agentDetailModal.active) {
-      const adLines = renderAgentDetailModal(input.agentDetailModal, width);
-      const adStart = Math.max(0, vHeight - adLines.length);
-      viewport.length = Math.min(viewport.length, adStart);
-      while (viewport.length < adStart) viewport.push(createEmptyLine(width));
-      viewport.push(...adLines);
-    }
-
-    if (input.liveTailModal.active) {
-      const ltLines = renderLiveTailModal(input.liveTailModal, width);
-      const ltStart = Math.max(0, vHeight - ltLines.length);
-      viewport.length = Math.min(viewport.length, ltStart);
-      while (viewport.length < ltStart) viewport.push(createEmptyLine(width));
-      viewport.push(...ltLines);
-    }
-
-    if (input.contextInspectorModal.active) {
-      const ciLines = renderContextInspector(conversation, width, undefined, currentModel.contextWindow);
-      const ciStart = Math.max(0, vHeight - ciLines.length);
-      viewport.length = Math.min(viewport.length, ciStart);
-      while (viewport.length < ciStart) viewport.push(createEmptyLine(width));
-      viewport.push(...ciLines);
-    }
-    if (input.settingsModal.active) {
-      const smLines = renderSettingsModal(input.settingsModal, width);
-      const smStart = Math.max(0, vHeight - smLines.length);
-      viewport.length = Math.min(viewport.length, smStart);
-      while (viewport.length < smStart) viewport.push(createEmptyLine(width));
-      viewport.push(...smLines);
-    }
-
-    if (input.sessionPickerModal.active) {
-      viewport.push(...renderSessionPickerModal(input.sessionPickerModal, width));
-    }
-
-    if (input.profilePickerModal.active) {
-      viewport.push(...renderProfilePickerModal(input.profilePickerModal, width));
-    }
-
-    if (input.bookmarkModal.active) {
-      const bmLines = renderBookmarkModal(input.bookmarkModal, width);
-      const bmStart = Math.max(0, vHeight - bmLines.length);
-      viewport.length = Math.min(viewport.length, bmStart);
-      while (viewport.length < bmStart) viewport.push(createEmptyLine(width));
-      viewport.push(...bmLines);
-    }
-
-    if (input.helpOverlayActive) {
-      viewport.length = 0;
-      const helpLines = renderHelpOverlay(width, commandRegistry.getAll(), input.helpScrollOffset);
-      const helpPad = Math.max(0, vHeight - helpLines.length);
-
-      for (let i = 0; i < helpPad; i++) viewport.push(createEmptyLine(width));
-      viewport.push(...helpLines);
-    }
-
-    if (input.shortcutsOverlayActive) {
-      viewport.length = 0;
-      const shortcutLines = renderShortcutsOverlay(width, input.shortcutsScrollOffset);
-      const scPad = Math.max(0, vHeight - shortcutLines.length);
-      for (let i = 0; i < scPad; i++) viewport.push(createEmptyLine(width));
-      viewport.push(...shortcutLines);
-    }
-
-    // Autocomplete dropdown: shown when command mode is active and there are matches
-    if (input.commandMode && input.autocomplete?.isActive) {
-      const acLines = renderAutocompleteOverlay(input.autocomplete, width);
-      if (acLines.length > 0) {
-        const acStart = Math.max(0, vHeight - acLines.length);
-        viewport.length = Math.min(viewport.length, acStart);
-        while (viewport.length < acStart) viewport.push(createEmptyLine(width));
-        viewport.push(...acLines);
-      }
-    }
+    viewport = applyConversationOverlays(viewport, {
+      input,
+      conversation,
+      commandRegistry,
+      conversationWidth,
+      viewportHeight: vHeight,
+      contextWindow: currentModel.contextWindow,
+    });
 
     // Panel composite data
-    let panelData: import('./renderer/compositor.ts').PanelCompositeData | undefined;
-    let panelWidth: number | undefined;
-    if (panelManager.isVisible() && panelManager.getAllOpen().length > 0) {
-      const pWidth = panelManager.getRightWidth(width);
-      if (pWidth > 0) {
-        const topPane = panelManager.getTopPane();
-        const bottomPane = panelManager.getBottomPane();
-        const focusedPane = panelManager.getFocusedPane();
-        const verticalSplitRatio = panelManager.getVerticalSplitRatio(); // used in panelData below
-
-        // Compute actual pane heights based on whether bottom pane is visible
-        const hasBottom = panelManager.isBottomPaneVisible() && bottomPane.panels.length > 0;
-        let topContent: Line[];
-        let bottomTabBar: Line | undefined;
-        let bottomContent: Line[] | undefined;
-
-        // Top pane
-        const topActivePanel = topPane.panels[topPane.activeIndex] ?? null;
-        const topTabBar = renderPanelTabBar(
-          topPane.panels,
-          topPane.activeIndex,
-          pWidth,
-          input.panelFocused && focusedPane === 'top',
-        );
-
-        if (hasBottom) {
-          const ratio = panelManager.getVerticalSplitRatio();
-          const contentRows = Math.max(0, vHeight - 3); // 2 tab bars + 1 separator
-          const topH = Math.max(1, Math.floor(contentRows * ratio));
-          const bottomH = Math.max(1, contentRows - topH);
-          topContent = topActivePanel ? topActivePanel.render(pWidth, topH) : [];
-
-          // Bottom pane
-          const bottomActivePanel = bottomPane.panels[bottomPane.activeIndex] ?? null;
-          bottomTabBar = renderPanelTabBar(
-            bottomPane.panels,
-            bottomPane.activeIndex,
-            pWidth,
-            input.panelFocused && focusedPane === 'bottom',
-          );
-          bottomContent = bottomActivePanel ? bottomActivePanel.render(pWidth, bottomH) : [];
-        } else {
-          const topH = Math.max(0, vHeight - 1); // 1 tab bar
-          topContent = topActivePanel ? topActivePanel.render(pWidth, topH) : [];
-        }
-
-        panelData = {
-          topTabBar,
-          topContent,
-          topFocused: input.panelFocused && focusedPane === 'top',
-          bottomTabBar,
-          bottomContent,
-          bottomFocused: input.panelFocused && focusedPane === 'bottom',
-          separator: true,
-          verticalSplitRatio,
-        };
-        panelWidth = pWidth;
-      }
-    }
+    const panelComposite = buildPanelCompositeData(
+      panelManager,
+      input,
+      shellLayout.panel?.width ?? 0,
+      shellLayout.panel?.height ?? vHeight,
+    );
 
     compositor.composite({
       width, height,
@@ -686,8 +520,8 @@ async function main() {
         scrollTop,
         viewportStartY: 2,
       } : undefined,
-      panel: panelData,
-      panelWidth,
+      panel: panelComposite.panelData,
+      panelWidth: panelComposite.panelWidth,
     });
   };
 

@@ -215,9 +215,31 @@ describe('remote command', () => {
     expect(out.join('\n')).toContain('acp agent command:');
 
     out.length = 0;
+    const setupBundle = join(dir, 'remote-setup.json');
+    await remote!.handler(['setup', 'export', setupBundle], ctx);
+    expect(out.join('\n')).toContain('Exported remote setup bundle');
+    expect(readFileSync(setupBundle, 'utf-8')).toContain('acpAgentCommand');
+
+    out.length = 0;
     await remote!.handler(['env', 'export', envPath], ctx);
     expect(out.join('\n')).toContain('Exported remote environment snippet');
     expect(readFileSync(envPath, 'utf-8')).toContain('ACP_AGENT_CMD');
+
+    out.length = 0;
+    const tunnelPath = join(dir, 'remote-tunnel.txt');
+    await remote!.handler(['tunnel', 'export', tunnelPath], ctx);
+    expect(out.join('\n')).toContain('Exported remote tunnel review');
+    expect(readFileSync(tunnelPath, 'utf-8')).toContain('Remote Tunnel Review');
+
+    out.length = 0;
+    const bootstrapPath = join(dir, 'remote-bootstrap.json');
+    await remote!.handler(['bootstrap', 'export', bootstrapPath], ctx);
+    expect(out.join('\n')).toContain('Exported remote bootstrap bundle');
+    expect(readFileSync(bootstrapPath, 'utf-8')).toContain('GOODVIBES_REMOTE_SESSION');
+
+    out.length = 0;
+    await remote!.handler(['bootstrap', 'inspect', bootstrapPath], ctx);
+    expect(out.join('\n')).toContain('Remote Bootstrap Bundle Review');
   });
 
   test('manages remote runner pools and pool-aware dispatch from the command surface', async () => {
@@ -273,5 +295,70 @@ describe('remote command', () => {
     out.length = 0;
     await remote!.handler(['list'], ctx);
     expect(out.join('\n')).toContain('runner pools: 1');
+  });
+
+  test('teleport command exports, inspects, and imports portable remote-session bundles', async () => {
+    AgentManager.resetInstance();
+    _resetRemoteRunnerRegistryForTesting();
+    const registry = new CommandRegistry();
+    registerBuiltinCommands(registry);
+    const teleport = registry.get('teleport');
+    expect(teleport).toBeDefined();
+
+    const store = createRuntimeStore();
+    const out: string[] = [];
+    const dir = mkdtempSync(join(tmpdir(), 'gv-teleport-cmd-'));
+    const ctx = {
+      providerRegistry: {} as never,
+      conversationManager: {} as never,
+      config: {} as never,
+      configManager: {} as never,
+      runtime: {
+        model: '',
+        provider: '',
+        debugMode: false,
+        systemPrompt: '',
+        reasoningEffort: '',
+        sessionId: 'sess-teleport-command',
+      },
+      renderRequest: () => {},
+      print: (text: string) => { out.push(text); },
+      exit: () => {},
+      toolRegistry: {} as never,
+      mcpRegistry: {} as never,
+      runtimeStore: store,
+    };
+    store.setState((state) => ({
+      ...state,
+      acp: {
+        ...state.acp,
+        activeConnectionIds: ['runner-1'],
+        connections: new Map([
+          ['runner-1', {
+            agentId: 'runner-1',
+            label: 'remote runner',
+            transportState: 'connected',
+            completing: false,
+            connectedAt: 123,
+            messageCount: 4,
+            errorCount: 0,
+            taskId: 'task-1',
+            lastError: undefined,
+          }],
+        ]),
+      },
+    }));
+
+    const bundlePath = join(dir, 'teleport.json');
+    await teleport!.handler(['export', bundlePath], ctx);
+    expect(out.join('\n')).toContain('Teleport bundle exported');
+
+    out.length = 0;
+    await teleport!.handler(['inspect', bundlePath], ctx);
+    expect(out.join('\n')).toContain('Teleport Bundle Review');
+
+    out.length = 0;
+    await teleport!.handler(['import', bundlePath], ctx);
+    expect(out.join('\n')).toContain('Imported teleport bundle');
   });
 });

@@ -97,4 +97,33 @@ describe('recall command breadth', () => {
       rmSync(importDir, { recursive: true, force: true });
     }
   });
+
+  test('supports handoff inspection and import flows', async () => {
+    const context = makeBaseContext(registry, printed);
+    await registry.add({ scope: 'team', cls: 'runbook', summary: 'Shared rollout checklist' });
+    const handoffPath = join(dir, 'handoff', 'team.json');
+
+    recallCommand.handler(['handoff-export', handoffPath, '--scope', 'team'], context);
+    expect(readFileSync(handoffPath, 'utf-8')).toContain('"scope": "team"');
+
+    printed.length = 0;
+    recallCommand.handler(['handoff-inspect', handoffPath], context);
+    expect(printed.some((line) => line.includes('Memory Handoff Review'))).toBe(true);
+
+    const importDir = mkdtempSync(join(tmpdir(), 'gv-recall-handoff-import-'));
+    const importStore = new MemoryStore(join(importDir, 'memory.sqlite'));
+    await importStore.init();
+    const importRegistry = new MemoryRegistry(importStore);
+    const importPrinted: string[] = [];
+
+    try {
+      const importContext = makeBaseContext(importRegistry, importPrinted);
+      await recallCommand.handler(['handoff-import', handoffPath], importContext);
+      expect(importRegistry.getAll()).toHaveLength(1);
+      expect(importPrinted.some((line) => line.includes('Imported bundle'))).toBe(true);
+    } finally {
+      importStore.close();
+      rmSync(importDir, { recursive: true, force: true });
+    }
+  });
 });

@@ -1,7 +1,7 @@
-import { type Line, type Cell } from '../types/grid.ts';
-import { UIFactory } from './ui-factory.ts';
+import type { Line } from '../types/grid.ts';
 import { getDisplayWidth } from '../utils/terminal-width.ts';
 import type { HistorySearch } from '../input/input-history.ts';
+import { createBottomBarLine, writeBottomBarText } from './bottom-bar.ts';
 
 /**
  * Truncate `text` to at most `maxWidth` display columns, then pad with spaces
@@ -51,30 +51,22 @@ export function renderHistorySearchOverlay(
   const label = prefix + queryPart;
   const full = truncateToWidth(label + matchText, width);
 
-  // Render the whole line teal
-  const line = UIFactory.stringToLine(full, width, { fg: '#000000', bg: '#00ffcc', bold: false });
+  const line = createBottomBarLine(width, { fg: '#000000', bg: '#00ffcc' });
+  writeBottomBarText(line, 0, width, full, { fg: '#000000', bg: '#00ffcc' });
 
   // Highlight the matched region in the match text with dim styling
   if (hasMatch && match) {
     const labelW = getDisplayWidth(label);
     const matchStartCol = labelW + match.matchStart;
     const matchEndCol = matchStartCol + match.matchLength;
-    const highlightStyle: Cell = {
-      char: ' ',
+    const highlightWidth = Math.max(0, matchEndCol - matchStartCol);
+    const matchedSlice = truncateToWidth(match.entry.slice(match.matchStart, match.matchStart + match.matchLength), highlightWidth);
+    writeBottomBarText(line, matchStartCol, highlightWidth, matchedSlice, {
       fg: '#000000',
       bg: '#00ffcc',
       bold: true,
-      dim: false,
       underline: true,
-      italic: false,
-      strikethrough: false,
-    };
-    for (let col = matchStartCol; col < matchEndCol && col < width; col++) {
-      const existing = line[col];
-      if (existing) {
-        line[col] = { ...highlightStyle, char: existing.char };
-      }
-    }
+    });
   }
 
   return [line];

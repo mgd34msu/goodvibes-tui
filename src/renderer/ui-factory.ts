@@ -1,8 +1,9 @@
 import { type Line, type Cell, createEmptyLine, createEmptyCell } from '../types/grid.ts';
 import { LAYOUT } from './layout.ts';
 import { VERSION } from '../version.ts';
-import { getDisplayWidth, wrapText, interpolateColor } from '../utils/terminal-width.ts';
+import { fitDisplay, getDisplayWidth, truncateDisplay, wrapText, interpolateColor } from '../utils/terminal-width.ts';
 import type { GitHeaderInfo } from './git-status.ts';
+import { renderConversationFragment, renderConversationStatusLine, type ConversationStatusSegment } from './conversation-surface.ts';
 
 /** Number of frames before the animated gradient completes one full cycle. */
 const GRADIENT_CYCLE_FRAMES = 50;
@@ -11,13 +12,13 @@ const PHRASE_ROTATION_FRAMES = 375;
 
 /** Build the git segment string and its display width. Single source of truth for header layout. */
 function buildGitSegment(gitInfo: GitHeaderInfo): { text: string; width: number } {
-  const branch = ` ⎇ ${gitInfo.branch}`;
+  const branch = ` git:${gitInfo.branch}`;
   if (gitInfo.dirty) {
-    const text = `${branch} ● `;
+    const text = `${branch} * `;
     return { text, width: getDisplayWidth(text) };
   }
   if (gitInfo.ahead > 0 || gitInfo.behind > 0) {
-    const arrows = (gitInfo.ahead > 0 ? ` ↑${gitInfo.ahead}` : '') + (gitInfo.behind > 0 ? ` ↓${gitInfo.behind}` : '');
+    const arrows = (gitInfo.ahead > 0 ? ` +${gitInfo.ahead}` : '') + (gitInfo.behind > 0 ? ` -${gitInfo.behind}` : '');
     const text = `${branch}${arrows} `;
     return { text, width: getDisplayWidth(text) };
   }
@@ -66,7 +67,7 @@ export class UIFactory {
         let w = 0;
         for (const ch of titleStr) {
           const cw = getDisplayWidth(ch);
-          if (w + cw > maxTitleW - 1) { truncated += '…'; break; }
+          if (w + cw > maxTitleW - 3) { truncated += '...'; break; }
           truncated += ch;
           w += cw;
         }
@@ -103,77 +104,26 @@ export class UIFactory {
     bgColor = '#2a2a2a', textColor = '252', prefixStr = ' › ',
     strikethrough = false
   ): Line[] {
-    return this.createGenericBar(width, text, bgColor, textColor, prefixStr, strikethrough);
+    return renderConversationFragment(text, width, {
+      prefix: prefixStr,
+      prefixFg: '135',
+      text: textColor,
+      bodyBg: bgColor,
+      strikethrough,
+    });
   }
 
   /**
    * createQueuedMessageFragment - Renders a dimmed message bar for queued prompts.
    */
   public static createQueuedMessageFragment(width: number, text: string): Line[] {
-    return this.createGenericBar(width, text, '#1a1a1a', '240', ' (...) ');
-  }
-
-  /**
-   * createGenericBar - Shared logic for "Ghost Box" style bars.
-   * Correctly handles multi-line hugging by finding the max line width.
-   */
-  private static createGenericBar(width: number, text: string, bgColor: string, textColor: string, prefixStr: string, strikethrough = false): Line[] {
-    const lines: Line[] = [];
-    const boxMargin = LAYOUT.USER_BOX_MARGIN;
-    const prefixW = getDisplayWidth(prefixStr);
-    
-    // 1. Calculate max available content space
-    const maxAvailableContentW = width - (boxMargin * 2) - prefixW - 2;
-    
-    // 2. Wrap text to that space
-    const wrappedLines = wrapText(text, maxAvailableContentW);
-    
-    // 3. Find the longest resulting line to determine the "hug" width
-    const maxContentW = wrappedLines.length > 0 ? Math.max(...wrappedLines.map(l => getDisplayWidth(l))) : 0;
-    const internalWidth = maxContentW + prefixW + 2;
-    const boxStartX = boxMargin;
-
-    const createBaseLine = () => {
-      const l = createEmptyLine(width);
-      for (let x = 0; x < width; x++) l[x].bg = ''; 
-      return l;
-    };
-
-    // 1. Top
-    const topLine = createBaseLine();
-    for (let x = 0; x < internalWidth; x++) {
-      topLine[boxStartX + x] = { char: '▄', fg: bgColor, bg: '', bold: false, dim: false, underline: false, italic: false, strikethrough: false };
-    }
-    lines.push(topLine);
-
-    // 2. Content lines
-    wrappedLines.forEach((lineText, i) => {
-      const prefix = i === 0 ? prefixStr : ' '.repeat(prefixW);
-      const contentLine = createBaseLine();
-      for (let x = 0; x < internalWidth; x++) {
-        const char = (x >= prefixW && x < internalWidth - 1) ? lineText[x - prefixW] || ' ' : (x < prefixW ? prefix[x] : ' ');
-        contentLine[boxStartX + x] = {
-          char,
-          fg: (x < prefixW && i === 0) ? '135' : textColor,
-          bg: bgColor,
-          bold: false,
-          dim: false,
-          underline: false,
-          italic: false,
-          strikethrough: strikethrough && x >= prefixW
-        };
-      }
-      lines.push(contentLine);
+    return renderConversationFragment(text, width, {
+      prefix: ' (...) ',
+      prefixFg: '135',
+      text: '240',
+      bodyBg: '#1a1a1a',
+      dim: true,
     });
-
-    // 3. Bottom
-    const bottomLine = createBaseLine();
-    for (let x = 0; x < internalWidth; x++) {
-      bottomLine[boxStartX + x] = { char: '▀', fg: bgColor, bg: '', bold: false, dim: false, underline: false, italic: false, strikethrough: false };
-    }
-    lines.push(bottomLine);
-
-    return lines;
   }
 
   public static createFooter(
@@ -211,7 +161,7 @@ export class UIFactory {
       const prefix = i === 0 ? ' › ' : '   ';
       // Render text without cursor insertion — cursor is overlaid after
       const rawText = `${prefix}${text}`;
-      const paddedText = rawText.padEnd(contentW);
+      const paddedText = fitDisplay(rawText, contentW);
       const contentLine = createBaseLine();
       for (let x = 0; x < boxWidth; x++) {
         const char = (x >= 2 && x < boxWidth - 2) ? paddedText[x - 2] || ' ' : ' ';
@@ -230,7 +180,7 @@ export class UIFactory {
             const cell = contentLine[cursorX];
             // Invert: bright fg on the text bg, swap to make cursor visible
             contentLine[cursorX] = {
-              char: cell.char === ' ' ? '\u2588' : cell.char,
+              char: cell.char === ' ' ? '█' : cell.char,
               fg: cell.char === ' ' ? '252' : '#000000',
               bg: cell.char === ' ' ? BG_COLOR : '#ffffff',
               bold: false, dim: false, underline: false, italic: false, strikethrough: false
@@ -241,7 +191,7 @@ export class UIFactory {
         // No cursorPos provided — show block at end (fallback)
         const endX = boxStartX + 2 + prefix.length + text.length;
         if (endX < boxStartX + boxWidth - 2) {
-          contentLine[endX] = { char: '\u2588', fg: '252', bg: BG_COLOR, bold: false, dim: false, underline: false, italic: false, strikethrough: false };
+          contentLine[endX] = { char: '█', fg: '252', bg: BG_COLOR, bold: false, dim: false, underline: false, italic: false, strikethrough: false };
         }
       }
 
@@ -312,22 +262,22 @@ export class UIFactory {
       }
       if (toolCount) ctxParts.push(`${toolCount} tools`);
       if (hitlMode) ctxParts.push(`hitl:${hitlMode}`);
-      const ctxLine = '   ' + ctxParts.join('  \u00B7  ');
+      const ctxLine = '   ' + ctxParts.join('  |  ');
       lines.push(createBaseLine());
-      lines.push(this.stringToLine(ctxLine.slice(0, width), width, { fg: '240', dim: true }));
+      lines.push(this.stringToLine(truncateDisplay(ctxLine, width), width, { fg: '240', dim: true }));
       lines.push(createBaseLine());
     }
     if (showExitNotice) {
       const notice = `   !!! Press Ctrl+C again to exit !!! `;
-      lines.push(this.stringToLine(notice.padEnd(width), width, { fg: '196', bold: true }));
+      lines.push(this.stringToLine(fitDisplay(notice, width), width, { fg: '196', bold: true }));
     } else {
       const help = `   /help for commands  -  Ctrl+C to quit `;
-      const dangerWarn = dangerMode ? `⚠ DANGER MODE — ALL CHANGES AUTO-APPROVED ` : '';
+      const dangerWarn = dangerMode ? `! DANGER MODE - ALL CHANGES AUTO-APPROVED ` : '';
       const helpW = getDisplayWidth(help);
       const dangerW = getDisplayWidth(dangerWarn);
       const spacerW = Math.max(0, width - helpW - dangerW);
       const combinedLine = help + ' '.repeat(spacerW) + dangerWarn;
-      const line = this.stringToLine(combinedLine.slice(0, width), width, { fg: '240', dim: true });
+      const line = this.stringToLine(truncateDisplay(combinedLine, width), width, { fg: '240', dim: true });
       // Overlay the danger warning in red bold
       if (dangerMode && dangerW > 0) {
         let col = helpW + spacerW;
@@ -380,41 +330,24 @@ export class UIFactory {
     const speedSuffix = (tokenSpeed !== undefined && tokenSpeed > 0) ? ` (${Math.round(tokenSpeed)} tok/s)` : '';
     const text = `  ${spinner} ${phrase}${speedSuffix} `;
 
-    // Build line with animated gradient
-    const line = createEmptyLine(width);
-    let col = 0;
-    for (const char of text) {
-      if (col >= width) break;
-      const code = char.codePointAt(0) ?? 0;
-      if (code < 32 || code === 127) continue;
-      // Animated gradient: ping-pong (triangle wave) for smooth cyan↔purple sweep
-      // Use positive-safe modulo: JS % can return negative for large frame values
-      const rawUnwrapped = (col / Math.max(1, getDisplayWidth(text) - 1)) - (frame % GRADIENT_CYCLE_FRAMES) * 0.02;
+    const textWidth = Math.max(1, getDisplayWidth(text) - 1);
+    const segments: ConversationStatusSegment[] = Array.from(text).map((char, index) => {
+      const rawUnwrapped = (index / textWidth) - (frame % GRADIENT_CYCLE_FRAMES) * 0.02;
       const raw = ((rawUnwrapped % 1.0) + 1.0) % 1.0;
-      const gradientPos = raw <= 0.5 ? raw * 2 : (1 - raw) * 2; // triangle wave: 0→1→0
-      const fg = interpolateColor(this.THINK_GRADIENT_START, this.THINK_GRADIENT_END, gradientPos);
-      line[col] = { char, fg, bg: '', bold: true, dim: false, underline: false, italic: false, strikethrough: false };
-      col++;
-    }
-
-    // Append live token counter: ↑ <input> ↓ <output> (dim grey for input side, cyan for output side)
+      const gradientPos = raw <= 0.5 ? raw * 2 : (1 - raw) * 2;
+      return {
+        text: char,
+        fg: interpolateColor(this.THINK_GRADIENT_START, this.THINK_GRADIENT_END, gradientPos),
+        bold: true,
+      };
+    });
     if (inputTokens !== undefined || outputTokens !== undefined) {
       const inTok = inputTokens ?? 0;
       const outTok = outputTokens ?? 0;
-      // Render input side in dim grey, output side in cyan
-      const inputPart = ` \u2191 ${fmtNum(inTok)} `;
-      const outputPart = `\u2193 ${fmtNum(outTok)}`;
-      for (const char of inputPart) {
-        if (col >= width) break;
-        line[col] = { char, fg: '243', bg: '', bold: false, dim: true, underline: false, italic: false, strikethrough: false };
-        col++;
-      }
-      for (const char of outputPart) {
-        if (col >= width) break;
-        line[col] = { char, fg: '#00ffff', bg: '', bold: false, dim: false, underline: false, italic: false, strikethrough: false };
-        col++;
-      }
+      segments.push({ text: ` in ${fmtNum(inTok)} `, fg: '243', dim: true });
+      segments.push({ text: `out ${fmtNum(outTok)}`, fg: '#00ffff' });
     }
+    const line = renderConversationStatusLine(width, segments, { marker: '|', markerFg: '#475569' });
 
     const lines: Line[] = [
       this.stringToLine(' '.repeat(width), width),
@@ -422,17 +355,16 @@ export class UIFactory {
     ];
 
     if (toolPreview) {
-      // Build the tool preview line with display-width-aware truncation
-      const previewText = `  🔧 ${toolPreview}`;
-      let truncated = '';
-      let w = 0;
-      for (const ch of previewText) {
-        const cw = getDisplayWidth(ch);
-        if (w + cw > width) break;
-        truncated += ch;
-        w += cw;
-      }
-      lines.push(this.stringToLine(truncated.padEnd(width), width, { fg: '243', dim: true }));
+      lines.push(
+        renderConversationStatusLine(
+          width,
+          [
+            { text: 'tool: ', fg: '#38bdf8', bold: true },
+            { text: toolPreview, fg: '243', dim: true },
+          ],
+          { marker: '|', markerFg: '#334155' },
+        ),
+      );
     }
 
     lines.push(this.stringToLine(' '.repeat(width), width));
@@ -450,10 +382,10 @@ export class UIFactory {
     const pctDisplay = Math.round(pct * 100);
     const filled = Math.round(pct * barWidth);
     const color = pct < 0.6 ? '82' : pct < 0.85 ? '220' : '196';
-    const bar = '\u2588'.repeat(filled) + '\u2591'.repeat(barWidth - filled);
+    const bar = '#'.repeat(filled) + '-'.repeat(barWidth - filled);
     const pctStr = `  ${pctDisplay}%`;
     const full = label + bar + pctStr + (suffix ?? '');
-    return this.stringToLine(full.slice(0, lineWidth), lineWidth, { fg: color, dim: true });
+    return this.stringToLine(truncateDisplay(full, lineWidth), lineWidth, { fg: color, dim: true });
   }
 
   public static stringToLine(text: string, width: number, style: Partial<Cell> = {}): Line {

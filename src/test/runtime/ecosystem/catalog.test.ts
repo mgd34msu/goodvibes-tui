@@ -3,6 +3,9 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
+  exportEcosystemCatalogBundle,
+  importEcosystemCatalogBundle,
+  inspectInstalledEcosystemEntry,
   installEcosystemCatalogEntry,
   listInstalledEcosystemEntries,
   loadEcosystemCatalog,
@@ -104,10 +107,96 @@ describe('ecosystem catalog', () => {
     const receipts = listInstalledEcosystemEntries('plugin', { cwd: root, homeDir });
     expect(receipts).toHaveLength(1);
     expect(receipts[0]?.entry.id).toBe('deploy-audit');
+    expect(receipts[0]?.fingerprint).toHaveLength(64);
     expect(readFileSync(join(root, '.goodvibes', 'tui', 'ecosystem', 'installed', 'plugin-deploy-audit.json'), 'utf-8')).toContain('"scope": "project"');
+
+    const inspected = inspectInstalledEcosystemEntry('plugin', 'deploy-audit', { cwd: root, homeDir, scope: 'project' });
+    expect(inspected.ok).toBe(true);
+    if (inspected.ok) {
+      expect(inspected.receipt.compatibility.appVersion).toBeDefined();
+      expect(inspected.receipt.provenanceSummary).toBe('./catalog/plugins/deploy-audit');
+    }
 
     const uninstallResult = uninstallEcosystemCatalogEntry('plugin', 'deploy-audit', { cwd: root, homeDir, scope: 'project' });
     expect(uninstallResult.ok).toBe(true);
     expect(existsSync(join(root, '.goodvibes', 'plugins', 'deploy-audit'))).toBe(false);
+  });
+
+  test('exports and imports ecosystem catalog bundles', () => {
+    writeFileSync(join(root, '.goodvibes', 'tui', 'ecosystem', 'plugins.json'), JSON.stringify({
+      version: 1,
+      entries: [
+        {
+          id: 'deploy-audit',
+          kind: 'plugin',
+          name: 'Deploy Audit',
+          summary: 'Reviews deploy surfaces before release',
+          version: '1.0.0',
+          author: 'GoodVibes',
+          source: './catalog/plugins/deploy-audit',
+          tags: ['security', 'release'],
+          provenance: 'curated-local',
+        },
+      ],
+    }, null, 2));
+    writeFileSync(join(root, '.goodvibes', 'tui', 'ecosystem', 'skills.json'), JSON.stringify({
+      version: 1,
+      entries: [
+        {
+          id: 'release-gate',
+          kind: 'skill',
+          name: 'Release Gate',
+          summary: 'Runs release certification and deploy checks',
+          source: './catalog/skills/release-gate',
+          tags: ['release'],
+          compatibility: { minAppVersion: '0.14.0' },
+        },
+      ],
+    }, null, 2));
+    writeFileSync(join(root, '.goodvibes', 'tui', 'ecosystem', 'hook-packs.json'), JSON.stringify({
+      version: 1,
+      entries: [
+        {
+          id: 'guard-pack',
+          kind: 'hook-pack',
+          name: 'Guard Pack',
+          summary: 'Shared hook guards for risky tool paths',
+          source: './catalog/hooks/guard-pack',
+          tags: ['hooks', 'security'],
+        },
+      ],
+    }, null, 2));
+    writeFileSync(join(root, '.goodvibes', 'tui', 'ecosystem', 'policy-packs.json'), JSON.stringify({
+      version: 1,
+      entries: [
+        {
+          id: 'strict-policy',
+          kind: 'policy-pack',
+          name: 'Strict Policy',
+          summary: 'Operator-reviewed restrictive policy pack',
+          source: './catalog/policies/strict-policy',
+          tags: ['policy', 'security'],
+        },
+      ],
+    }, null, 2));
+
+    const bundle = exportEcosystemCatalogBundle('project', { cwd: root, homeDir });
+    expect(bundle.entries).toHaveLength(4);
+
+    const importedRoot = join(root, 'imported');
+    mkdirSync(join(importedRoot, '.goodvibes', 'tui', 'ecosystem'), { recursive: true });
+    const imported = importEcosystemCatalogBundle(bundle, { cwd: importedRoot, homeDir, scope: 'project' });
+    expect(imported.imported).toBe(4);
+
+    const importedPlugins = loadEcosystemCatalog('plugin', { cwd: importedRoot, homeDir });
+    const importedSkills = loadEcosystemCatalog('skill', { cwd: importedRoot, homeDir });
+    const importedHookPacks = loadEcosystemCatalog('hook-pack', { cwd: importedRoot, homeDir });
+    const importedPolicyPacks = loadEcosystemCatalog('policy-pack', { cwd: importedRoot, homeDir });
+    expect(importedPlugins).toHaveLength(1);
+    expect(importedSkills).toHaveLength(1);
+    expect(importedHookPacks).toHaveLength(1);
+    expect(importedPolicyPacks).toHaveLength(1);
+    expect(importedPlugins[0]?.author).toBe('GoodVibes');
+    expect(importedSkills[0]?.compatibility?.minAppVersion).toBe('0.14.0');
   });
 });

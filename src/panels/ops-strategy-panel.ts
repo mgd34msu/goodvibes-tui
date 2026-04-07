@@ -9,14 +9,17 @@
 
 import { BasePanel } from './base-panel.ts';
 import type { Line } from '../types/grid.ts';
-import { createStyledCell } from '../types/grid.ts';
 import type { RuntimeEventBus, PlannerEvent } from '../runtime/events/index.ts';
 import { adaptivePlanner } from '../core/adaptive-planner-instance.ts';
 import type { PlannerDecision, ExecutionStrategy } from '../core/adaptive-planner.ts';
-
-// ---------------------------------------------------------------------------
-// Cell rendering helpers — follows the WrfcPanel pattern
-// ---------------------------------------------------------------------------
+import {
+  buildEmptyState,
+  buildPanelLine,
+  buildStyledPanelLine,
+  buildPanelWorkspace,
+  DEFAULT_PANEL_PALETTE,
+} from './polish.ts';
+import { getVisibleWindow } from '../renderer/surface-layout.ts';
 
 const STRATEGY_FG: Record<ExecutionStrategy, string> = {
   auto:       '#00cccc',
@@ -27,59 +30,12 @@ const STRATEGY_FG: Record<ExecutionStrategy, string> = {
 };
 
 const STRATEGY_ICON: Record<ExecutionStrategy, string> = {
-  auto:       '\u27f3', // ⟳
-  single:     '\u25b6', // ▶
-  cohort:     '\u25c8', // ◈
-  background: '\u231b', // ⌛
-  remote:     '\u21dd', // ⇝
+  auto:       '~',
+  single:     '>',
+  cohort:     '*',
+  background: '.',
+  remote:     '>',
 };
-
-function makeLine(
-  text: string,
-  width: number,
-  opts: { fg?: string; bg?: string; bold?: boolean; dim?: boolean } = {},
-): Line {
-  const line: Line = [];
-  const chars = [...text]; // unicode-safe split
-  for (let i = 0; i < width; i++) {
-    const ch = i < chars.length ? (chars[i] ?? ' ') : ' ';
-    line.push(createStyledCell(ch, {
-      fg:   opts.fg   ?? '',
-      bg:   opts.bg   ?? '',
-      bold: opts.bold ?? false,
-      dim:  opts.dim  ?? false,
-    }));
-  }
-  return line;
-}
-
-interface Seg {
-  text:  string;
-  fg?:   string;
-  bg?:   string;
-  bold?: boolean;
-  dim?:  boolean;
-}
-
-function makeSegLine(segs: Seg[], width: number): Line {
-  const line: Line = [];
-  for (const seg of segs) {
-    for (const ch of [...seg.text]) {
-      if (line.length >= width) break;
-      line.push(createStyledCell(ch, {
-        fg:   seg.fg   ?? '',
-        bg:   seg.bg   ?? '',
-        bold: seg.bold ?? false,
-        dim:  seg.dim  ?? false,
-      }));
-    }
-    if (line.length >= width) break;
-  }
-  while (line.length < width) {
-    line.push(createStyledCell(' ', {}));
-  }
-  return line;
-}
 
 // ---------------------------------------------------------------------------
 // OpsStrategyPanel
@@ -139,60 +95,66 @@ export class OpsStrategyPanel extends BasePanel {
   }
 
   render(width: number, height: number): Line[] {
-    const lines: Line[] = [];
-
-    // Header
-    lines.push(makeLine(' Ops: Adaptive Execution Planner', width, { fg: '#00cccc', bold: true }));
-    lines.push(makeLine('\u2500'.repeat(width), width, { dim: true }));
-
-    // Status block
     const latest   = adaptivePlanner.getLatest();
     const mode     = adaptivePlanner.getMode();
     const override = adaptivePlanner.getOverride();
-
-    lines.push(makeSegLine([
-      { text: ' Mode:     ', dim: true },
-      { text: mode.toUpperCase(), bold: true },
-    ], width));
-
-    if (override) {
-      lines.push(makeSegLine([
-        { text: ' Override: ', dim: true },
-        { text: `${override.toUpperCase()} [ACTIVE]`, fg: '#cccc00', bold: true },
-      ], width));
-    } else {
-      lines.push(makeLine(' Override: none', width, { dim: true }));
-    }
+    const statusLines: Line[] = [
+      buildPanelLine(width, [
+        [' Mode ', DEFAULT_PANEL_PALETTE.label],
+        [mode.toUpperCase(), DEFAULT_PANEL_PALETTE.value],
+        ['   Override ', DEFAULT_PANEL_PALETTE.label],
+        [override ? `${override.toUpperCase()} [ACTIVE]` : 'none', override ? DEFAULT_PANEL_PALETTE.warn : DEFAULT_PANEL_PALETTE.dim],
+      ]),
+    ];
 
     if (latest) {
-      const fg   = STRATEGY_FG[latest.selected];
-      const icon = STRATEGY_ICON[latest.selected];
-      lines.push(makeSegLine([
-        { text: ' Last:     ', dim: true },
-        { text: `${icon} ${latest.selected.toUpperCase()}`, fg, bold: true },
-      ], width));
-      lines.push(makeLine(` Reason:   ${latest.reasonCode}`, width, { dim: true }));
-    } else {
-      lines.push(makeLine(' No decisions recorded yet.', width, { dim: true }));
+      statusLines.push(buildPanelLine(width, [
+        [' Last ', DEFAULT_PANEL_PALETTE.label],
+        [`${STRATEGY_ICON[latest.selected]} ${latest.selected.toUpperCase()}`, STRATEGY_FG[latest.selected]],
+        ['   Reason ', DEFAULT_PANEL_PALETTE.label],
+        [latest.reasonCode, DEFAULT_PANEL_PALETTE.dim],
+      ]));
     }
 
-    lines.push(makeLine('\u2500'.repeat(width), width, { dim: true }));
-
-    // History — scrollable section
-    const headerRowCount = lines.length;
-    const bodyHeight     = Math.max(1, height - headerRowCount);
-    const historyLines   = this._renderHistory(width);
-    const maxScroll      = Math.max(0, historyLines.length - bodyHeight);
-    this.scrollOffset    = Math.min(this.scrollOffset, maxScroll);
-    const slice          = historyLines.slice(this.scrollOffset, this.scrollOffset + bodyHeight);
-    for (const l of slice) lines.push(l);
-
-    // Pad to full height
-    while (lines.length < height) {
-      lines.push(makeLine('', width));
+    if (this.history.length === 0) {
+      return buildPanelWorkspace(width, height, {
+        title: ' Ops Strategy',
+        intro: 'Review adaptive execution planner decisions, overrides, and recent strategy history.',
+        sections: [
+          { title: 'Status', lines: statusLines },
+          {
+            lines: buildEmptyState(
+              width,
+              ' No decisions recorded yet',
+              'Adaptive planner decisions appear here once the planner begins selecting strategies.',
+              [],
+              DEFAULT_PANEL_PALETTE,
+            ),
+          },
+        ],
+        footerLines: [
+          buildPanelLine(width, [[' Up/Down', DEFAULT_PANEL_PALETTE.info], [' scroll history', DEFAULT_PANEL_PALETTE.dim], ['   g/G', DEFAULT_PANEL_PALETTE.info], [' top/bottom', DEFAULT_PANEL_PALETTE.dim]]),
+        ],
+        palette: DEFAULT_PANEL_PALETTE,
+      });
     }
 
-    return lines.slice(0, height);
+    const historyLines = this._renderHistory(width);
+    const window = getVisibleWindow(historyLines.length, Math.min(this.scrollOffset, Math.max(0, historyLines.length - 1)), Math.max(8, height - 8));
+    this.scrollOffset = window.start;
+
+    return buildPanelWorkspace(width, height, {
+      title: ' Ops Strategy',
+      intro: 'Review adaptive execution planner decisions, overrides, and recent strategy history.',
+      sections: [
+        { title: 'Status', lines: statusLines },
+        { title: 'Decision History', lines: historyLines.slice(window.start, window.end) },
+      ],
+      footerLines: [
+        buildPanelLine(width, [[' Up/Down', DEFAULT_PANEL_PALETTE.info], [' scroll history', DEFAULT_PANEL_PALETTE.dim], ['   g/G', DEFAULT_PANEL_PALETTE.info], [' top/bottom', DEFAULT_PANEL_PALETTE.dim]]),
+      ],
+      palette: DEFAULT_PANEL_PALETTE,
+    });
   }
 
   // -------------------------------------------------------------------------
@@ -205,11 +167,11 @@ export class OpsStrategyPanel extends BasePanel {
 
   private _renderHistory(width: number): Line[] {
     if (this.history.length === 0) {
-      return [makeLine('  No history yet.', width, { dim: true })];
+      return [buildStyledPanelLine(width, [{ text: '  No history yet.', fg: DEFAULT_PANEL_PALETTE.dim, dim: true }])];
     }
 
     const lines: Line[] = [];
-    lines.push(makeLine(' Decision History', width, { bold: true }));
+    lines.push(buildStyledPanelLine(width, [{ text: ' Decision History', fg: DEFAULT_PANEL_PALETTE.value, bold: true }]));
 
     const reversed = [...this.history].reverse();
     for (let i = 0; i < reversed.length; i++) {
@@ -224,26 +186,26 @@ export class OpsStrategyPanel extends BasePanel {
       const leftBase  = ` ${num}. ${icon} ${d.selected.toUpperCase()}${overrideMark}`;
       const rightText = `  ${ts}`;
       const pad       = Math.max(1, width - leftBase.length - rightText.length);
-      lines.push(makeSegLine([
-        { text: ` ${num}. `, dim: true },
+      lines.push(buildStyledPanelLine(width, [
+        { text: ` ${num}. `, fg: DEFAULT_PANEL_PALETTE.dim, dim: true },
         { text: `${icon} ${d.selected.toUpperCase()}`, fg, bold: true },
-        { text: overrideMark, fg: '#cccc00' },
-        { text: ' '.repeat(pad) },
-        { text: rightText, dim: true },
-      ], width));
+        { text: overrideMark, fg: DEFAULT_PANEL_PALETTE.warn },
+        { text: ' '.repeat(pad), fg: DEFAULT_PANEL_PALETTE.dim },
+        { text: rightText, fg: DEFAULT_PANEL_PALETTE.dim, dim: true },
+      ]));
 
       // Row 2: reason code
-      lines.push(makeLine(`       ${d.reasonCode}`, width, { dim: true }));
+      lines.push(buildStyledPanelLine(width, [{ text: `       ${d.reasonCode}`, fg: DEFAULT_PANEL_PALETTE.dim, dim: true }]));
 
       // Row 3+: top-2 scored candidates (auto mode only)
       if (!d.overrideActive && d.candidates.length > 1) {
         const top2 = d.candidates.slice(0, 2);
         for (const c of top2) {
-          lines.push(makeSegLine([
-            { text: '         ', dim: true },
+          lines.push(buildStyledPanelLine(width, [
+            { text: '         ', fg: DEFAULT_PANEL_PALETTE.dim, dim: true },
             { text: c.strategy.padEnd(12), fg: STRATEGY_FG[c.strategy] },
-            { text: ` score ${c.score}`, dim: true },
-          ], width));
+            { text: ` score ${c.score}`, fg: DEFAULT_PANEL_PALETTE.dim, dim: true },
+          ]));
         }
       }
     }

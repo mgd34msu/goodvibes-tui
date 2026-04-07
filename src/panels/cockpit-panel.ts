@@ -1,41 +1,26 @@
-import type { Cell, Line } from '../types/grid.ts';
-import { createEmptyLine, createStyledCell } from '../types/grid.ts';
+import type { Line } from '../types/grid.ts';
+import { createEmptyLine } from '../types/grid.ts';
 import { BasePanel } from './base-panel.ts';
 import type { RuntimeStore } from '../runtime/store/index.ts';
 import type { PolicyRuntimeState } from '../runtime/permissions/policy-runtime.ts';
 import type { ForensicsRegistry } from '../runtime/forensics/registry.ts';
 import type { ApiTokenAuditor } from '../security/token-audit.ts';
+import { buildGuidanceLine, buildKeyValueLine, buildPanelLine, buildPanelWorkspace, buildStatPill, DEFAULT_PANEL_PALETTE, type PanelWorkspaceSection } from './polish.ts';
 
 const C = {
+  ...DEFAULT_PANEL_PALETTE,
   header: '#cbd5e1',
   headerBg: '#0f172a',
-  label: '#94a3b8',
-  value: '#e2e8f0',
-  good: '#22c55e',
-  warn: '#f59e0b',
-  bad: '#ef4444',
-  dim: '#475569',
-  empty: '#334155',
 } as const;
-
-function buildLine(width: number, segments: Array<[string, string, string?]>): Line {
-  const cells: Cell[] = [];
-  for (const [text, fg, bg] of segments) {
-    const style = { fg, bg: bg ?? '' };
-    for (const ch of text) {
-      if (cells.length >= width) break;
-      cells.push(createStyledCell(ch, style));
-    }
-  }
-  while (cells.length < width) cells.push(createStyledCell(' ', { fg: '' }));
-  return cells.slice(0, width);
-}
 
 function pickColor(value: number, warnAt = 1, badAt = 3): string {
   if (value >= badAt) return C.bad;
   if (value >= warnAt) return C.warn;
   return C.good;
 }
+
+const WORKSPACE_IDS = ['flow', 'governance', 'health', 'domains'] as const;
+type WorkspaceId = (typeof WORKSPACE_IDS)[number];
 
 export class CockpitPanel extends BasePanel {
   private readonly store?: RuntimeStore;
@@ -45,6 +30,7 @@ export class CockpitPanel extends BasePanel {
   private readonly storeUnsub: (() => void) | null;
   private readonly policyUnsub: (() => void) | null;
   private readonly forensicsUnsub: (() => void) | null;
+  private selectedWorkspaceIndex = 0;
 
   public constructor(
     store?: RuntimeStore,
@@ -68,15 +54,42 @@ export class CockpitPanel extends BasePanel {
     this.forensicsUnsub?.();
   }
 
+  public handleInput(key: string): boolean {
+    if (key === 'left' || key === 'h') {
+      this.selectedWorkspaceIndex = Math.max(0, this.selectedWorkspaceIndex - 1);
+      this.markDirty();
+      return true;
+    }
+    if (key === 'right' || key === 'l') {
+      this.selectedWorkspaceIndex = Math.min(WORKSPACE_IDS.length - 1, this.selectedWorkspaceIndex + 1);
+      this.markDirty();
+      return true;
+    }
+    if (key === 'home') {
+      this.selectedWorkspaceIndex = 0;
+      this.markDirty();
+      return true;
+    }
+    if (key === 'end') {
+      this.selectedWorkspaceIndex = WORKSPACE_IDS.length - 1;
+      this.markDirty();
+      return true;
+    }
+    return false;
+  }
+
   public render(width: number, height: number): Line[] {
     this.needsRender = false;
-    const lines: Line[] = [];
-    lines.push(buildLine(width, [[' Operator Cockpit', C.header, C.headerBg]]));
 
     if (!this.store) {
-      lines.push(buildLine(width, [[' Runtime store not wired into this panel yet.', C.empty]]));
-      while (lines.length < height) lines.push(createEmptyLine(width));
-      return lines;
+      const lines: Line[] = [buildPanelLine(width, [[' Runtime store not wired into this panel yet.', C.empty]])];
+      const workspace = buildPanelWorkspace(width, height, {
+        title: 'Operator Cockpit',
+        sections: [{ lines }],
+        palette: C,
+      });
+      while (workspace.length < height) workspace.push(createEmptyLine(width));
+      return workspace;
     }
 
     const state = this.store.getState();
@@ -104,75 +117,105 @@ export class CockpitPanel extends BasePanel {
     )).length;
     const erroredPlugins = state.plugins.erroredPluginNames.length;
     const failingIntegrations = [...state.integrations.integrations.values()].filter((record) => record.status === 'error').length;
+    const selectedWorkspace = WORKSPACE_IDS[this.selectedWorkspaceIndex] ?? 'flow';
 
-    lines.push(buildLine(width, [
-      [' active graphs ', C.label],
-      [String(activeGraphs), pickColor(activeGraphs, 1, 4)],
-      ['  running tasks ', C.label],
-      [String(runningTasks), C.value],
-      ['  blocked tasks ', C.label],
-      [String(blockedTasks), pickColor(blockedTasks)],
-      ['  failed tasks ', C.label],
-      [String(failedTasks), pickColor(failedTasks)],
-    ]));
-    lines.push(buildLine(width, [
-      [' recursion guards ', C.label],
-      [String(guardTrips), pickColor(guardTrips)],
-      ['  blocked comms ', C.label],
-      [String(blockedMessages), pickColor(blockedMessages)],
-      ['  pending permissions ', C.label],
-      [String(pendingPermissions), pickColor(pendingPermissions)],
-      ['  denied permissions ', C.label],
-      [String(deniedPermissions), pickColor(deniedPermissions)],
-    ]));
-    lines.push(buildLine(width, [
-      [' policy preflight ', C.label],
-      [String(preflightStatus).toUpperCase(), preflightStatus === 'block' ? C.bad : preflightStatus === 'warn' ? C.warn : preflightStatus === 'pass' ? C.good : C.dim],
-      ['  preflight issues ', C.label],
-      [String(preflightIssueCount), pickColor(preflightIssueCount)],
-      ['  lint findings ', C.label],
-      [String(lintFindingCount), pickColor(lintFindingCount)],
-    ]));
-    lines.push(buildLine(width, [
-      [' token blocked ', C.label],
-      [String(tokenAudit?.blocked.length ?? 0), pickColor(tokenAudit?.blocked.length ?? 0)],
-      ['  token overdue ', C.label],
-      [String(tokenAudit?.rotationOverdue.length ?? 0), pickColor(tokenAudit?.rotationOverdue.length ?? 0)],
-      ['  token scope violations ', C.label],
-      [String(tokenAudit?.scopeViolations.length ?? 0), pickColor(tokenAudit?.scopeViolations.length ?? 0)],
-      ['  token warnings ', C.label],
-      [String(tokenAudit?.rotationWarnings.length ?? 0), pickColor(tokenAudit?.rotationWarnings.length ?? 0)],
-    ]));
-    lines.push(buildLine(width, [
-      [' allow-all MCP ', C.label],
-      [String(elevatedMcp), pickColor(elevatedMcp)],
-      ['  unhealthy MCP ', C.label],
-      [String(unhealthyMcp), pickColor(unhealthyMcp)],
-      ['  incidents ', C.label],
-      [String(incidentCount), pickColor(incidentCount)],
-      ['  errored plugins ', C.label],
-      [String(erroredPlugins), pickColor(erroredPlugins)],
-      ['  failing integrations ', C.label],
-      [String(failingIntegrations), pickColor(failingIntegrations)],
-    ]));
+    const flowLines: Line[] = [
+      buildPanelLine(width, [
+      ...buildStatPill('graphs', String(activeGraphs), C.label, pickColor(activeGraphs, 1, 4)),
+      ...buildStatPill('running', String(runningTasks), C.label, C.value),
+      ...buildStatPill('blocked', String(blockedTasks), C.label, pickColor(blockedTasks)),
+      ...buildStatPill('failed', String(failedTasks), C.label, pickColor(failedTasks)),
+      ...buildStatPill('guards', String(guardTrips), C.label, pickColor(guardTrips)),
+      ]),
+      buildPanelLine(width, [
+      ...buildStatPill('blocked comms', String(blockedMessages), C.label, pickColor(blockedMessages)),
+      ...buildStatPill('pending approvals', String(pendingPermissions), C.label, pickColor(pendingPermissions)),
+      ...buildStatPill('denied', String(deniedPermissions), C.label, pickColor(deniedPermissions)),
+      ]),
+    ];
+    const governanceLines: Line[] = [
+      buildPanelLine(width, [
+      ...buildStatPill('preflight', String(preflightStatus).toUpperCase(), C.label, preflightStatus === 'block' ? C.bad : preflightStatus === 'warn' ? C.warn : preflightStatus === 'pass' ? C.good : C.dim),
+      ...buildStatPill('issues', String(preflightIssueCount), C.label, pickColor(preflightIssueCount)),
+      ...buildStatPill('lint', String(lintFindingCount), C.label, pickColor(lintFindingCount)),
+      ...buildStatPill('allow-all MCP', String(elevatedMcp), C.label, pickColor(elevatedMcp)),
+      ...buildStatPill('unhealthy MCP', String(unhealthyMcp), C.label, pickColor(unhealthyMcp)),
+      ]),
+      buildPanelLine(width, [
+      ...buildStatPill('token blocked', String(tokenAudit?.blocked.length ?? 0), C.label, pickColor(tokenAudit?.blocked.length ?? 0)),
+      ...buildStatPill('overdue', String(tokenAudit?.rotationOverdue.length ?? 0), C.label, pickColor(tokenAudit?.rotationOverdue.length ?? 0)),
+      ...buildStatPill('scope violations', String(tokenAudit?.scopeViolations.length ?? 0), C.label, pickColor(tokenAudit?.scopeViolations.length ?? 0)),
+      ...buildStatPill('warnings', String(tokenAudit?.rotationWarnings.length ?? 0), C.label, pickColor(tokenAudit?.rotationWarnings.length ?? 0)),
+      ]),
+    ];
+    const healthLines: Line[] = [
+      buildPanelLine(width, [
+      ...buildStatPill('incidents', String(incidentCount), C.label, pickColor(incidentCount)),
+      ...buildStatPill('plugins', String(erroredPlugins), C.label, pickColor(erroredPlugins)),
+      ...buildStatPill('integrations', String(failingIntegrations), C.label, pickColor(failingIntegrations)),
+      ]),
+    ];
     if (latestIncident) {
-      lines.push(buildLine(width, [
+      healthLines.push(buildPanelLine(width, [
         [' latest incident ', C.label],
         [latestIncident.classification, C.bad],
         ['  ', C.label],
         [latestIncident.summary.slice(0, Math.max(0, width - 19 - latestIncident.classification.length)), C.dim],
       ]));
     }
-    lines.push(buildLine(width, [[' Domains', C.label]]));
-    lines.push(buildLine(width, [[
+    const domainLines: Line[] = [buildPanelLine(width, [[
       `tasks:${state.tasks.tasks.size} agents:${state.agents.agents.size} graphs:${state.orchestration.totalGraphs} comms:${state.communication.records.size} mcp:${state.mcp.servers.size} plugins:${state.plugins.plugins.size}`,
       C.dim,
-    ]]));
-    lines.push(buildLine(width, [[
-      'Use /cockpit for this view, /orchestration for graph controls, /policy for simulation, /mcp for trust, and /hooks for execution visibility.',
-      C.dim,
-    ]]));
+    ]])];
+    const workspaceLines: Line[] = [];
+    if (selectedWorkspace === 'flow') {
+      workspaceLines.push(buildKeyValueLine(width, [
+        { label: 'running', value: String(runningTasks), valueColor: C.value },
+        { label: 'blocked', value: String(blockedTasks), valueColor: pickColor(blockedTasks) },
+        { label: 'graphs', value: String(activeGraphs), valueColor: pickColor(activeGraphs, 1, 4) },
+      ], C));
+      workspaceLines.push(buildGuidanceLine(width, '/orchestration', 'inspect graph state, retries, and subtree controls', C));
+      workspaceLines.push(buildGuidanceLine(width, '/tasks', 'review active task pressure and task-specific output', C));
+    } else if (selectedWorkspace === 'governance') {
+      workspaceLines.push(buildKeyValueLine(width, [
+        { label: 'preflight', value: String(preflightStatus).toUpperCase(), valueColor: preflightStatus === 'block' ? C.bad : preflightStatus === 'warn' ? C.warn : preflightStatus === 'pass' ? C.good : C.dim },
+        { label: 'lint', value: String(lintFindingCount), valueColor: pickColor(lintFindingCount) },
+        { label: 'allow-all mcp', value: String(elevatedMcp), valueColor: pickColor(elevatedMcp) },
+      ], C));
+      workspaceLines.push(buildGuidanceLine(width, '/policy', 'run simulation, preflight, and bundle review', C));
+      workspaceLines.push(buildGuidanceLine(width, '/security', 'inspect trust, tokens, quarantines, and incident pressure', C));
+    } else if (selectedWorkspace === 'health') {
+      workspaceLines.push(buildKeyValueLine(width, [
+        { label: 'incidents', value: String(incidentCount), valueColor: pickColor(incidentCount) },
+        { label: 'plugins', value: String(erroredPlugins), valueColor: pickColor(erroredPlugins) },
+        { label: 'integrations', value: String(failingIntegrations), valueColor: pickColor(failingIntegrations) },
+      ], C));
+      workspaceLines.push(buildGuidanceLine(width, '/incident latest', 'inspect the latest incident bundle and replay fallout', C));
+      workspaceLines.push(buildGuidanceLine(width, '/plugins', 'review errored plugins and provenance posture', C));
+    } else {
+      workspaceLines.push(buildKeyValueLine(width, [
+        { label: 'tasks', value: String(state.tasks.tasks.size), valueColor: C.value },
+        { label: 'comms', value: String(state.communication.records.size), valueColor: C.value },
+        { label: 'mcp', value: String(state.mcp.servers.size), valueColor: C.value },
+      ], C));
+      workspaceLines.push(buildGuidanceLine(width, '/mcp', 'inspect trust, quarantine, and risky server posture', C));
+      workspaceLines.push(buildGuidanceLine(width, '/communication', 'review blocked lanes and agent message flow', C));
+    }
 
+    const sections: PanelWorkspaceSection[] = [
+      { title: 'Flow', lines: flowLines },
+      { title: 'Governance', lines: governanceLines },
+      { title: 'Health', lines: healthLines },
+      { title: 'Domains', lines: domainLines },
+      { title: 'Selected Workspace', lines: workspaceLines },
+    ];
+    const lines = buildPanelWorkspace(width, height, {
+      title: 'Operator Cockpit',
+      intro: 'Live runtime pressure across orchestration, approvals, governance, integrations, and provider trust posture.',
+      sections,
+      footerLines: [buildPanelLine(width, [[`  Left/Right move workspace focus  Home/End jump  focus=${selectedWorkspace}`, C.dim]])],
+      palette: C,
+    });
     while (lines.length < height) lines.push(createEmptyLine(width));
     return lines.slice(0, height);
   }

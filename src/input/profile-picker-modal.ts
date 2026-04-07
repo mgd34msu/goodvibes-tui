@@ -50,6 +50,9 @@ export class ProfilePickerModal {
   public active = false;
   public profiles: ProfileInfo[] = [];
   public selectedIndex = 0;
+  public scrollOffset = 0;
+  public visibleRows = 8;
+  public deleteConfirmationTarget: string | null = null;
 
   /** Last status message (success/error feedback). */
   public statusMessage = '';
@@ -61,23 +64,35 @@ export class ProfilePickerModal {
     const manager = getProfileManager();
     this.profiles = manager.list();
     this.selectedIndex = 0;
+    this.scrollOffset = 0;
     this.statusMessage = '';
+    this.deleteConfirmationTarget = null;
     this.active = true;
   }
 
   close(): void {
     this.active = false;
     this.statusMessage = '';
+    this.deleteConfirmationTarget = null;
   }
 
   moveUp(): void {
     if (this.profiles.length === 0) return;
     this.selectedIndex = (this.selectedIndex - 1 + this.profiles.length) % this.profiles.length;
+    this._clampScroll();
+    this.deleteConfirmationTarget = null;
   }
 
   moveDown(): void {
     if (this.profiles.length === 0) return;
     this.selectedIndex = (this.selectedIndex + 1) % this.profiles.length;
+    this._clampScroll();
+    this.deleteConfirmationTarget = null;
+  }
+
+  setVisibleRows(rows: number): void {
+    this.visibleRows = Math.max(3, rows);
+    this._clampScroll();
   }
 
   getSelected(): ProfileInfo | null {
@@ -132,21 +147,30 @@ export class ProfilePickerModal {
   deleteSelected(): boolean {
     const profile = this.getSelected();
     if (!profile) return false;
+    if (this.deleteConfirmationTarget !== profile.name) {
+      this.deleteConfirmationTarget = profile.name;
+      this.statusMessage = `Press delete again to remove profile: ${profile.name}`;
+      return false;
+    }
 
     try {
       const manager = getProfileManager();
       const deleted = manager.delete(profile.name);
       if (!deleted) {
         this.statusMessage = `Profile not found: ${profile.name}`;
+        this.deleteConfirmationTarget = null;
         return false;
       }
       this.profiles = manager.list();
       if (this.selectedIndex >= this.profiles.length) {
         this.selectedIndex = Math.max(0, this.profiles.length - 1);
       }
+      this._clampScroll();
+      this.deleteConfirmationTarget = null;
       this.statusMessage = `Deleted: ${profile.name}`;
       return true;
     } catch (e) {
+      this.deleteConfirmationTarget = null;
       this.statusMessage = `Error: ${(e as Error).message}`;
       return false;
     }
@@ -178,10 +202,22 @@ export class ProfilePickerModal {
       // Reload list
       this.profiles = manager.list();
       this.statusMessage = `Saved profile: ${name}`;
+      this._clampScroll();
       return true;
     } catch (e) {
       this.statusMessage = `Error: ${(e as Error).message}`;
       return false;
     }
+  }
+
+  private _clampScroll(): void {
+    const visRows = Math.max(3, this.visibleRows);
+    if (this.selectedIndex < this.scrollOffset) {
+      this.scrollOffset = this.selectedIndex;
+    } else if (this.selectedIndex >= this.scrollOffset + visRows) {
+      this.scrollOffset = this.selectedIndex - visRows + 1;
+    }
+    const maxOffset = Math.max(0, this.profiles.length - visRows);
+    this.scrollOffset = Math.max(0, Math.min(this.scrollOffset, maxOffset));
   }
 }

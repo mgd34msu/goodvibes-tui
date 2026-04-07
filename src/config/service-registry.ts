@@ -15,6 +15,8 @@
 import { readFileSync } from 'fs';
 import { join } from 'path';
 import { getSecretsManager } from './secrets.ts';
+import type { OAuthProviderConfig } from './subscriptions.ts';
+import { getSubscriptionManager } from './subscriptions.ts';
 import { logger } from '../utils/logger.ts';
 
 // ---------------------------------------------------------------------------
@@ -27,7 +29,7 @@ export interface ServiceConfig {
   /** Base URL for the service (informational). */
   baseUrl?: string;
   /** Auth type used by this service. */
-  authType: 'bearer' | 'basic' | 'api-key';
+  authType: 'bearer' | 'basic' | 'api-key' | 'oauth';
   /** SecretsManager key that holds the primary credential (token or API key). */
   tokenKey: string;
   /** For basic auth: SecretsManager key that holds the password. */
@@ -40,6 +42,10 @@ export interface ServiceConfig {
   signingSecretKey?: string;
   /** Optional public-key secret used for inbound signature verification. */
   publicKeyKey?: string;
+  /** Optional provider ID used for subscription token override lookup. */
+  providerId?: string;
+  /** OAuth metadata for subscription-backed services. */
+  oauth?: OAuthProviderConfig;
 }
 
 export type ServiceSecretField =
@@ -129,6 +135,10 @@ export class ServiceRegistry {
     }
 
     const secrets = getSecretsManager();
+    const providerOverride = getSubscriptionManager().getAccessToken(config.providerId ?? serviceName);
+    if (providerOverride) {
+      return { Authorization: `Bearer ${providerOverride}` };
+    }
 
     switch (config.authType) {
       case 'bearer': {
@@ -159,6 +169,15 @@ export class ServiceRegistry {
         }
         const headerName = config.apiKeyHeader ?? 'X-API-Key';
         return { [headerName]: key };
+      }
+
+      case 'oauth': {
+        const token = await secrets.get(config.tokenKey);
+        if (!token) {
+          logger.debug('ServiceRegistry: oauth token not found', { serviceName, key: config.tokenKey });
+          return null;
+        }
+        return { Authorization: `Bearer ${token}` };
       }
 
       default:

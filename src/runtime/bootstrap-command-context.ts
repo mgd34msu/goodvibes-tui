@@ -174,6 +174,11 @@ export function createBootstrapCommandContext(
       pm.open('remote');
       requestRender();
     },
+    openSubscriptionPanel: () => {
+      const pm = getPanelManager();
+      pm.open('subscription');
+      requestRender();
+    },
     runtimeStore,
   };
 }

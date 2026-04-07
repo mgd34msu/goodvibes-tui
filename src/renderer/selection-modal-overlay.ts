@@ -1,55 +1,89 @@
 import { type Line } from '../types/grid.ts';
-import { UIFactory } from './ui-factory.ts';
-import { getDisplayWidth } from '../utils/terminal-width.ts';
+import { fitDisplay, getDisplayWidth, truncateDisplay } from '../utils/terminal-width.ts';
 import type { SelectionModal } from '../input/selection-modal.ts';
+import {
+  createOverlayBorderLine,
+  createOverlayBoxLayout,
+  createOverlayContentLine,
+  DEFAULT_OVERLAY_PALETTE,
+  putOverlayText,
+} from './overlay-box.ts';
+import { getOverlaySurfaceMetrics } from './overlay-viewport.ts';
+
+const BORDER_FG = DEFAULT_OVERLAY_PALETTE.borderFg;
+const TITLE_FG = DEFAULT_OVERLAY_PALETTE.titleFg;
+const BODY_FG = DEFAULT_OVERLAY_PALETTE.bodyFg;
+const MUTED_FG = DEFAULT_OVERLAY_PALETTE.mutedFg;
+const CATEGORY_FG = '#4488cc';
+const SELECTED_BG = DEFAULT_OVERLAY_PALETTE.selectedBg;
+
+interface CellStyle {
+  fg: string;
+  bg?: string;
+  bold?: boolean;
+  dim?: boolean;
+}
+
+function putText(line: Line, startX: number, maxWidth: number, text: string, style: CellStyle): void {
+  putOverlayText(line, startX, maxWidth, text, style);
+}
 
 /**
  * Render the selection modal as Line[] for overlay in the viewport.
- * Shows a bordered box with title, fuzzy search input, item list, and action hints.
  */
 export function renderSelectionModalOverlay(
   modal: SelectionModal,
   width: number,
+  viewportHeight = 24,
 ): Line[] {
   const lines: Line[] = [];
-  const boxMargin = 4;
-  const boxW = Math.max(4, Math.min(width - boxMargin * 2, 72));
-  const contentW = boxW - 4; // 2 border chars + 2 padding chars each side
-  const pad = ' '.repeat(boxMargin);
+  const metrics = getOverlaySurfaceMetrics(width, viewportHeight, {
+    margin: 4,
+    maxWidth: 72,
+    chromeRows: modal.allowSearch ? 5 : 4,
+    minContentRows: 6,
+    maxContentRows: 10,
+  });
+  const layout = createOverlayBoxLayout(width, metrics.margin, metrics.boxWidth);
 
-  // ── Title bar ──────────────────────────────────────────────────────────────
-  const titleText = `\u2500 ${modal.title} `;
-  const titleFill = Math.max(0, boxW - 2 - getDisplayWidth(titleText));
-  const titleLine = pad + '\u250c' + titleText + '\u2500'.repeat(titleFill) + '\u2510';
-  lines.push(UIFactory.stringToLine(titleLine, width, { fg: '#00ffff' }));
+  lines.push(createOverlayBorderLine(width, layout, '┌', '─', '┐'));
 
-  // ── Search input (always shown when allowSearch is true) ───────────────────
+  const titleLine = createOverlayContentLine(width, layout);
+  putText(
+    titleLine,
+    layout.margin + 2,
+    layout.innerWidth,
+    fitDisplay(truncateDisplay(modal.title, layout.innerWidth), layout.innerWidth),
+    { fg: TITLE_FG, bold: true },
+  );
+  lines.push(titleLine);
+
   if (modal.allowSearch) {
-    const queryRaw = modal.query;
-    const queryDisplay = getDisplayWidth(queryRaw) > contentW - 3 ? queryRaw.slice(0, contentW - 4) + '\u2026' : queryRaw;
-    const searchLine = pad + '\u2502 \u2315 ' + queryDisplay + '\u2588' +
-      ' '.repeat(Math.max(0, contentW - getDisplayWidth(queryDisplay) - 3)) + '\u2502';
-    lines.push(UIFactory.stringToLine(searchLine, width, { fg: '252' }));
-
-    // Separator after search
-    const sepLine = pad + '\u251c' + '\u2500'.repeat(boxW - 2) + '\u2524';
-    lines.push(UIFactory.stringToLine(sepLine, width, { fg: '240' }));
+    const searchLine = createOverlayContentLine(width, layout);
+    const prefix = '/ ';
+    const queryAreaWidth = layout.innerWidth - getDisplayWidth(prefix);
+    const queryText = fitDisplay(
+      truncateDisplay(`${modal.query}_`, queryAreaWidth),
+      queryAreaWidth,
+    );
+    putText(searchLine, layout.margin + 2, getDisplayWidth(prefix), prefix, { fg: BODY_FG });
+    putText(searchLine, layout.margin + 2 + getDisplayWidth(prefix), queryAreaWidth, queryText, {
+      fg: modal.query.length > 0 ? BODY_FG : MUTED_FG,
+    });
+    lines.push(searchLine);
+    lines.push(createOverlayBorderLine(width, layout, '├', '─', '┤', MUTED_FG));
   } else {
-    // Empty separator row
-    const emptyRow = pad + '\u2502' + ' '.repeat(boxW - 2) + '\u2502';
-    lines.push(UIFactory.stringToLine(emptyRow, width, { fg: '240' }));
+    lines.push(createOverlayContentLine(width, layout));
   }
 
-  // ── Items list ─────────────────────────────────────────────────────────────
   const items = modal.filteredItems;
-
   if (items.length === 0) {
-    const msg = modal.query ? 'No matching items' : 'No items';
-    const noItems = pad + '\u2502 ' + msg.padEnd(contentW) + ' \u2502';
-    lines.push(UIFactory.stringToLine(noItems, width, { fg: '244', dim: true }));
+    const line = createOverlayContentLine(width, layout);
+    const message = modal.query ? 'No matching items' : 'No items';
+    putText(line, layout.margin + 2, layout.innerWidth, fitDisplay(message, layout.innerWidth), { fg: MUTED_FG, dim: true });
+    lines.push(line);
   } else {
-    // Compute visible window: show up to 12 items, centered on selection
-    const maxVisible = 12;
+    const maxVisible = metrics.contentRows;
     let startIdx = 0;
     if (items.length > maxVisible) {
       startIdx = Math.max(0, Math.min(
@@ -58,88 +92,89 @@ export function renderSelectionModalOverlay(
       ));
     }
     const endIdx = Math.min(startIdx + maxVisible, items.length);
-
-    // Track last-rendered category to show headers
-    let lastCategory: string | undefined = undefined;
+    let lastCategory: string | undefined;
 
     for (let i = startIdx; i < endIdx; i++) {
       const item = items[i];
       const isSelected = i === modal.selectedIndex;
 
-      // Category header
       if (item.category && item.category !== lastCategory) {
         lastCategory = item.category;
-        const catText = '  ' + item.category;
-        const catLine = pad + '\u2502 ' + catText.padEnd(contentW) + ' \u2502';
-        lines.push(UIFactory.stringToLine(catLine, width, { fg: '240', dim: true }));
+        const categoryLine = createOverlayContentLine(width, layout);
+        putText(categoryLine, layout.margin + 2, layout.innerWidth, fitDisplay(`  ${item.category}`, layout.innerWidth), {
+          fg: CATEGORY_FG,
+          dim: true,
+        });
+        lines.push(categoryLine);
       }
 
-      const indicator = isSelected ? '\u25b6 ' : '  ';
+      const row = createOverlayContentLine(width, layout, BORDER_FG, isSelected ? SELECTED_BG : '');
+      const indicator = isSelected ? '> ' : '  ';
+      const indicatorWidth = 2;
+      putText(row, layout.margin + 2, indicatorWidth, indicator, {
+        fg: isSelected ? TITLE_FG : MUTED_FG,
+        bg: isSelected ? SELECTED_BG : '',
+        bold: isSelected,
+      });
 
-      // Label + detail layout
+      let x = layout.margin + 2 + indicatorWidth;
+      const remaining = layout.innerWidth - indicatorWidth;
       if (item.detail) {
-        // Left: label, right: detail right-aligned
-        const maxLabelLen = Math.floor(contentW * 0.6) - 2;
-        const labelStr = getDisplayWidth(item.label) > maxLabelLen
-          ? item.label.slice(0, maxLabelLen - 1) + '\u2026'
-          : item.label;
-        const detailSpace = contentW - maxLabelLen - 4; // indicator(2) + gap(2)
-        const detailStr = getDisplayWidth(item.detail) > detailSpace
-          ? item.detail.slice(0, detailSpace - 1) + '\u2026'
-          : item.detail.padStart(detailSpace);
-        const rowText = pad + '\u2502 ' + indicator + labelStr.padEnd(maxLabelLen) + '  ' + detailStr + ' \u2502';
-        lines.push(UIFactory.stringToLine(rowText, width, {
-          fg: isSelected ? '#00ffff' : (item.fg ?? '252'),
+        const labelWidth = Math.max(10, Math.floor(remaining * 0.6) - 2);
+        const detailWidth = Math.max(0, remaining - labelWidth - 2);
+        putText(row, x, labelWidth, fitDisplay(truncateDisplay(item.label, labelWidth), labelWidth), {
+          fg: isSelected ? TITLE_FG : (item.fg ?? BODY_FG),
+          bg: isSelected ? SELECTED_BG : '',
           bold: isSelected,
-          bg: isSelected ? '#1a2a3a' : '',
-        }));
+        });
+        x += labelWidth;
+        putText(row, x, 2, '  ', {
+          fg: BODY_FG,
+          bg: isSelected ? SELECTED_BG : '',
+        });
+        x += 2;
+        putText(row, x, detailWidth, fitDisplay(truncateDisplay(item.detail, detailWidth), detailWidth), {
+          fg: isSelected ? BODY_FG : MUTED_FG,
+          bg: isSelected ? SELECTED_BG : '',
+        });
       } else {
-        const labelStr = getDisplayWidth(item.label) > contentW - 2
-          ? item.label.slice(0, contentW - 3) + '\u2026'
-          : item.label;
-        const rowText = pad + '\u2502 ' + indicator + labelStr.padEnd(contentW - 2) + '\u2502';
-        lines.push(UIFactory.stringToLine(rowText, width, {
-          fg: isSelected ? '#00ffff' : (item.fg ?? '252'),
+        putText(row, x, remaining, fitDisplay(truncateDisplay(item.label, remaining), remaining), {
+          fg: isSelected ? TITLE_FG : (item.fg ?? BODY_FG),
+          bg: isSelected ? SELECTED_BG : '',
           bold: isSelected,
-          bg: isSelected ? '#1a2a3a' : '',
-        }));
+        });
       }
+      lines.push(row);
     }
 
-    // Scroll indicator if truncated
     if (items.length > maxVisible) {
       const above = startIdx;
       const below = items.length - endIdx;
-      let scrollHint: string;
-      if (above > 0 && below > 0) {
-        scrollHint = `  (${above} above, ${below} below)`;
-      } else if (below > 0) {
-        scrollHint = `  (${below} below)`;
-      } else {
-        scrollHint = `  (${above} above)`;
-      }
-      const hintLine = pad + '\u2502 ' + scrollHint.padEnd(contentW) + ' \u2502';
-      lines.push(UIFactory.stringToLine(hintLine, width, { fg: '240', dim: true }));
+      const scrollHint = above > 0 && below > 0
+        ? `(${above} above, ${below} below)`
+        : below > 0
+        ? `(${below} below)`
+        : `(${above} above)`;
+      const hintLine = createOverlayContentLine(width, layout);
+      putText(hintLine, layout.margin + 2, layout.innerWidth, fitDisplay(scrollHint, layout.innerWidth), { fg: MUTED_FG, dim: true });
+      lines.push(hintLine);
     }
   }
 
-  // ── Bottom border with action hints ───────────────────────────────────────
-  // Build hint string including custom actions
-  let hints = ' [\u2191\u2193] Navigate  [Enter] Select  [Esc] Close';
-  if (modal.allowSearch) {
-    hints += '  [type to search]';
-  }
-
-  // Add custom action hints from a selected item
+  const footerLine = createOverlayContentLine(width, layout);
+  let hints = '[Up/Down] Navigate  [Enter] Select  [Esc] Close';
+  if (modal.allowSearch) hints += '  [type to search]';
   const selectedItem = modal.getSelected();
-  if (selectedItem?.actions) {
-    hints += `  ${selectedItem.actions}`;
-  }
-  hints += ' ';
-
-  const bottomFill = Math.max(0, boxW - 2 - getDisplayWidth(hints));
-  const bottomLine = pad + '\u2514' + hints + '\u2500'.repeat(bottomFill) + '\u2518';
-  lines.push(UIFactory.stringToLine(bottomLine, width, { fg: '240' }));
+  if (selectedItem?.actions) hints += `  ${selectedItem.actions}`;
+  putText(
+    footerLine,
+    layout.margin + 2,
+    layout.innerWidth,
+    fitDisplay(truncateDisplay(hints, layout.innerWidth), layout.innerWidth),
+    { fg: MUTED_FG, dim: true },
+  );
+  lines.push(footerLine);
+  lines.push(createOverlayBorderLine(width, layout, '└', '─', '┘', MUTED_FG));
 
   return lines;
 }

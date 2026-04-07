@@ -121,8 +121,8 @@ describe('renderContextInspector', () => {
     conv.addUserMessage('x'); // tiny message
     const lines = renderContextInspector(conv, W, H);
     const text = linesToText(lines).join('\n');
-    // The large message entry should have the bullet marker
-    expect(text).toContain('\u25cf');
+    // The large message entry should have the highlight marker
+    expect(text).toContain('* ');
   });
 
   test('shows compaction hint when large consumers exist', () => {

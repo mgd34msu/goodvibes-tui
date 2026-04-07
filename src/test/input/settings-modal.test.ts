@@ -2,11 +2,12 @@
  * Tests for SettingsModal state class.
  */
 import { describe, test, expect, beforeEach, afterEach } from 'bun:test';
-import { mkdirSync, rmSync, existsSync } from 'fs';
+import { mkdirSync, rmSync, existsSync, readFileSync, writeFileSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
 import { SettingsModal, SETTINGS_CATEGORIES } from '../../input/settings-modal.ts';
 import { ConfigManager } from '../../config/manager.ts';
+import { _resetSubscriptionManagerForTesting, getSubscriptionManager } from '../../config/subscriptions.ts';
 import { createFeatureFlagManager } from '../../runtime/feature-flags/manager.ts';
 import type { FeatureFlagManager } from '../../runtime/feature-flags/manager.ts';
 import type { McpRegistry } from '../../mcp/registry.ts';
@@ -26,6 +27,8 @@ function makeTmpDir(): string {
 // ---------------------------------------------------------------------------
 
 describe('SettingsModal', () => {
+  const originalCwd = process.cwd();
+  const originalHome = process.env.HOME;
   let tmpDir: string;
   let cm: ConfigManager;
   let ffm: FeatureFlagManager;
@@ -34,6 +37,8 @@ describe('SettingsModal', () => {
 
   beforeEach(() => {
     tmpDir = makeTmpDir();
+    process.env.HOME = tmpDir;
+    process.chdir(tmpDir);
     cm = new ConfigManager({ workingDir: tmpDir });
     ffm = createFeatureFlagManager();
     modal = new SettingsModal();
@@ -51,9 +56,15 @@ describe('SettingsModal', () => {
       ],
       setServerTrustMode: () => {},
     } as unknown as McpRegistry;
+    mkdirSync(join(tmpDir, '.goodvibes', 'tui'), { recursive: true });
+    _resetSubscriptionManagerForTesting();
   });
 
   afterEach(() => {
+    _resetSubscriptionManagerForTesting();
+    process.chdir(originalCwd);
+    if (originalHome === undefined) delete process.env.HOME;
+    else process.env.HOME = originalHome;
     if (existsSync(tmpDir)) rmSync(tmpDir, { recursive: true, force: true });
   });
 
@@ -248,6 +259,43 @@ describe('SettingsModal', () => {
     while (modal.currentCategory !== 'mcp') modal.nextCategory();
     expect(modal.mcpEntries.length).toBe(1);
     expect(modal.getSelectedMcp()?.name).toBe('docs-server');
+  });
+
+  test('subscriptions category requires confirmation before sign out', () => {
+    const manager = getSubscriptionManager();
+    const started = manager.beginOAuthLogin('openai', {
+      authUrl: 'https://auth.openai.test/authorize',
+      tokenUrl: 'https://auth.openai.test/token',
+      clientId: 'openai-client',
+      redirectUri: 'http://127.0.0.1/callback',
+    });
+    manager.saveSubscription({
+      provider: 'openai',
+      accessToken: 'token',
+      tokenType: 'Bearer',
+      authMode: 'oauth',
+      overrideAmbientApiKeys: false,
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    });
+    void started;
+
+    modal.open(cm, ffm, mcpRegistry);
+    while (modal.currentCategory !== 'subscriptions') modal.nextCategory();
+    expect(modal.subscriptionEntries.some((entry) => entry.provider === 'openai' && entry.state === 'active')).toBe(true);
+
+    const openaiIndex = modal.subscriptionEntries.findIndex((entry) => entry.provider === 'openai');
+    expect(openaiIndex).toBeGreaterThanOrEqual(0);
+    modal.selectedIndex = openaiIndex;
+    expect(modal.getSelectedSubscription()?.provider).toBe('openai');
+    expect(modal.getSelectedSubscription()?.state).toBe('active');
+
+    modal.activateSelected();
+    expect(modal.subscriptionLogoutConfirmationTarget).toBe('openai');
+    expect(getSubscriptionManager().get('openai')).not.toBeNull();
+
+    modal.activateSelected();
+    expect(getSubscriptionManager().get('openai')).toBeNull();
   });
 
   test('mcp trust mode requires explicit allow-all confirmation', () => {

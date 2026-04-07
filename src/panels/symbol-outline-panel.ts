@@ -1,6 +1,15 @@
 import { BasePanel } from './base-panel.ts';
-import { createEmptyLine, createStyledCell } from '../types/grid.ts';
+import { createEmptyLine } from '../types/grid.ts';
 import type { Line } from '../types/grid.ts';
+import {
+  buildEmptyState,
+  buildPanelLine,
+  buildSelectablePanelLine,
+  buildPanelWorkspace,
+  DEFAULT_PANEL_PALETTE,
+} from './polish.ts';
+import { getTrackedVisibleWindow } from '../renderer/surface-layout.ts';
+import { getDisplayWidth } from '../utils/terminal-width.ts';
 
 // ── Symbol types ────────────────────────────────────────────────────────────
 
@@ -166,50 +175,87 @@ export class SymbolOutlinePanel extends BasePanel {
 
   render(width: number, height: number): Line[] {
     this.needsRender = false;
-    const lines: Line[] = [];
 
     if (this.symbols.length === 0) {
-      // Empty state
-      const emptyLine = createEmptyLine(width);
-      const msg = this.currentPath ? ' No symbols found' : ' No file loaded';
-      _writeText(emptyLine, 1, msg, '245', '');
-      lines.push(emptyLine);
-      // Pad to height
-      while (lines.length < height) lines.push(createEmptyLine(width));
-      return lines;
+      return buildPanelWorkspace(width, height, {
+        title: ' Symbols',
+        intro: 'Outline the current file into navigable symbols and lightweight parent/child structure.',
+        sections: [
+          {
+            lines: buildEmptyState(
+              width,
+              this.currentPath ? ' No symbols found' : ' No file loaded',
+              this.currentPath
+                ? 'The current file did not produce outline entries with the lightweight parser heuristics.'
+                : 'Load a file in the preview panel to populate its outline here.',
+              [],
+              DEFAULT_PANEL_PALETTE,
+            ),
+          },
+        ],
+        palette: DEFAULT_PANEL_PALETTE,
+      });
     }
 
     const visible = this._visibleRows();
-
-    // Clamp scroll: bottom edge
-    if (this.selectedIndex >= this.scrollOffset + height) {
-      this.scrollOffset = this.selectedIndex - height + 1;
-    }
-
-    // Render rows from scrollOffset up to height
-    for (let i = 0; i < height; i++) {
-      const rowIdx = this.scrollOffset + i;
-      const row = visible[rowIdx];
-      const line = createEmptyLine(width);
-
-      if (!row) {
-        lines.push(line);
-        continue;
-      }
-
-      const isSelected = rowIdx === this.selectedIndex;
+    const window = getTrackedVisibleWindow(visible.length, this.selectedIndex, Math.max(8, height - 8), this.scrollOffset, 1);
+    this.scrollOffset = window.start;
+    const rows: Line[] = [];
+    for (let i = window.start; i < window.end; i++) {
+      const row = visible[i];
+      if (!row) continue;
+      const isSelected = i === this.selectedIndex;
       const bgColor = isSelected ? '236' : '';
-
-      if (row.kind === 'header') {
-        _renderHeader(line, width, row, isSelected, bgColor, this.collapsed);
-      } else {
-        _renderSymbol(line, width, row, isSelected, bgColor);
-      }
-
-      lines.push(line);
+      rows.push(
+        row.kind === 'header'
+          ? _renderHeader(width, row, isSelected, bgColor, this.collapsed)
+          : _renderSymbol(width, row, isSelected, bgColor),
+      );
     }
 
-    return lines;
+    const selected = visible[this.selectedIndex];
+    return buildPanelWorkspace(width, height, {
+      title: ' Symbols',
+      intro: this.currentPath ? this.currentPath : 'Outline the current file into navigable symbols and lightweight parent/child structure.',
+      sections: [
+        {
+          title: 'Summary',
+          lines: [
+            buildPanelLine(width, [
+              [' Symbols ', DEFAULT_PANEL_PALETTE.label],
+              [String(this.symbols.length), DEFAULT_PANEL_PALETTE.value],
+              ['   Collapsed ', DEFAULT_PANEL_PALETTE.label],
+              [String(this.collapsed.size), this.collapsed.size > 0 ? DEFAULT_PANEL_PALETTE.warn : DEFAULT_PANEL_PALETTE.dim],
+            ]),
+          ],
+        },
+        {
+          title: 'Outline',
+          lines: rows,
+        },
+        {
+          title: 'Selected',
+          lines: selected
+            ? [
+                buildPanelLine(width, [
+                  [' Kind ', DEFAULT_PANEL_PALETTE.label],
+                  [selected.kind === 'header' ? selected.symbolKind : selected.symbol.kind, DEFAULT_PANEL_PALETTE.info],
+                  ['   Line ', DEFAULT_PANEL_PALETTE.label],
+                  [String(selected.kind === 'header' ? selected.line : selected.symbol.line), DEFAULT_PANEL_PALETTE.value],
+                ]),
+                buildPanelLine(width, [
+                  [' Name ', DEFAULT_PANEL_PALETTE.label],
+                  [selected.kind === 'header' ? selected.name : selected.symbol.name, DEFAULT_PANEL_PALETTE.value],
+                ]),
+              ]
+            : [],
+        },
+      ],
+      footerLines: [
+        buildPanelLine(width, [[' Up/Down', DEFAULT_PANEL_PALETTE.info], [' navigate', DEFAULT_PANEL_PALETTE.dim], ['   Space', DEFAULT_PANEL_PALETTE.info], [' collapse', DEFAULT_PANEL_PALETTE.dim], ['   Enter', DEFAULT_PANEL_PALETTE.info], [' jump target', DEFAULT_PANEL_PALETTE.dim]]),
+      ],
+      palette: DEFAULT_PANEL_PALETTE,
+    });
   }
 
   // ── Private helpers ────────────────────────────────────────────────────────
@@ -352,90 +398,50 @@ function buildVisibleRows(symbols: SymbolEntry[], collapsed: Set<string>): Visib
 /**
  * Write a string into a Line starting at column x, applying fg/bg/style.
  */
-function _writeText(
-  line: Line,
-  x: number,
-  text: string,
-  fg: string,
-  bg: string,
-  opts: { bold?: boolean; dim?: boolean } = {},
-): number {
-  let col = x;
-  for (const char of text) {
-    if (col >= line.length) break;
-    line[col] = createStyledCell(char, { fg, bg, bold: opts.bold ?? false, dim: opts.dim ?? false });
-    col++;
-  }
-  return col;
-}
-
-/** Fill an entire line with a background color. */
-function _fillBg(line: Line, bg: string): void {
-  for (let i = 0; i < line.length; i++) {
-    line[i].bg = bg;
-  }
-}
-
 /** Render a container header row (class / namespace). */
 function _renderHeader(
-  line: Line,
   width: number,
   row: Extract<VisibleRow, { kind: 'header' }>,
   isSelected: boolean,
   bgColor: string,
   collapsed: Set<string>,
-): void {
-  if (bgColor) _fillBg(line, bgColor);
-
-  let col = 1;
-
+): Line {
   // Collapse indicator
   const isCollapsed = collapsed.has(row.name);
-  const chevron = row.hasChildren ? (isCollapsed ? '▶ ' : '▼ ') : '  ';
-  col = _writeText(line, col, chevron, '245', bgColor);
-
-  // Kind label
-  const kindLabel = KIND_LABELS[row.symbolKind];
-  col = _writeText(line, col, kindLabel, KIND_COLORS[row.symbolKind], bgColor, { bold: true });
-  col = _writeText(line, col, ' ', '', bgColor);
-
-  // Name
-  col = _writeText(line, col, row.name, isSelected ? '255' : '252', bgColor, { bold: isSelected });
-
-  // Line number (right-aligned)
+  const chevron = row.hasChildren ? (isCollapsed ? '> ' : 'v ') : '  ';
   const lineNumStr = `:${row.line}`;
-  const lineNumStart = width - lineNumStr.length - 1;
-  if (lineNumStart > col) {
-    _writeText(line, lineNumStart, lineNumStr, '240', bgColor);
-  }
+  const kindLabel = KIND_LABELS[row.symbolKind];
+  const leadingWidth = 1 + getDisplayWidth(chevron) + getDisplayWidth(kindLabel) + 1 + getDisplayWidth(row.name);
+  const gap = Math.max(1, width - leadingWidth - getDisplayWidth(lineNumStr) - 1);
+  return buildSelectablePanelLine(width, [
+    { text: ` ${chevron}`, fg: '245' },
+    { text: kindLabel, fg: KIND_COLORS[row.symbolKind], bold: true },
+    { text: ' ', fg: isSelected ? '255' : '252' },
+    { text: row.name, fg: isSelected ? '255' : '252', bold: isSelected },
+    { text: ' '.repeat(gap), fg: DEFAULT_PANEL_PALETTE.dim },
+    { text: lineNumStr, fg: DEFAULT_PANEL_PALETTE.dim },
+  ], { selected: isSelected, selectedBg: bgColor, fillFg: isSelected ? '255' : '' });
 }
 
 /** Render a regular symbol row. */
 function _renderSymbol(
-  line: Line,
   width: number,
   row: Extract<VisibleRow, { kind: 'symbol' }>,
   isSelected: boolean,
   bgColor: string,
-): void {
-  if (bgColor) _fillBg(line, bgColor);
-
+): Line {
   const { symbol, depth } = row;
   const indent = depth === 0 ? 1 : 3; // children indented by 3 (chevron + space)
-  let col = indent;
-
-  // Kind label
   const kindLabel = KIND_LABELS[symbol.kind];
-  col = _writeText(line, col, kindLabel, KIND_COLORS[symbol.kind], bgColor);
-  col = _writeText(line, col, ' ', '', bgColor);
-
-  // Name
-  col = _writeText(line, col, symbol.name, isSelected ? '255' : '251', bgColor, { bold: isSelected });
-
-  // Line number (right-aligned)
   const lineNumStr = `:${symbol.line}`;
-  const lineNumStart = width - lineNumStr.length - 1;
-  if (lineNumStart > col) {
-    _writeText(line, lineNumStart, lineNumStr, '240', bgColor);
-  }
+  const leadingWidth = indent + getDisplayWidth(kindLabel) + 1 + getDisplayWidth(symbol.name);
+  const gap = Math.max(1, width - leadingWidth - getDisplayWidth(lineNumStr) - 1);
+  return buildSelectablePanelLine(width, [
+    { text: ' '.repeat(indent), fg: DEFAULT_PANEL_PALETTE.dim },
+    { text: kindLabel, fg: KIND_COLORS[symbol.kind] },
+    { text: ' ', fg: isSelected ? '255' : '251' },
+    { text: symbol.name, fg: isSelected ? '255' : '251', bold: isSelected },
+    { text: ' '.repeat(gap), fg: DEFAULT_PANEL_PALETTE.dim },
+    { text: lineNumStr, fg: DEFAULT_PANEL_PALETTE.dim },
+  ], { selected: isSelected, selectedBg: bgColor, fillFg: isSelected ? '255' : '' });
 }

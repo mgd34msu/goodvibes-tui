@@ -1,15 +1,21 @@
 import { type Line } from '../types/grid.ts';
-import { UIFactory } from './ui-factory.ts';
-import { getDisplayWidth } from '../utils/terminal-width.ts';
+import { fitDisplay, getDisplayWidth, truncateDisplay } from '../utils/terminal-width.ts';
 import type { PanelPicker } from '../panels/panel-picker.ts';
 import { CATEGORY_LABELS, CATEGORY_ORDER } from '../panels/panel-picker.ts';
 import type { PanelCategory, PanelRegistration } from '../panels/types.ts';
+import {
+  createOverlayBorderLine,
+  createOverlayBoxLayout,
+  createOverlayContentLine,
+  putOverlayText,
+} from './overlay-box.ts';
+import { getOverlaySurfaceMetrics } from './overlay-viewport.ts';
 
-/** Maximum number of content rows (items + category headers) visible at once. */
-const MAX_VISIBLE = 12;
-
-/** Dim purple used for category header text. */
-const CATEGORY_FG = '#8877aa';
+const TITLE_FG = '#cbd5e1';
+const CATEGORY_FG = '#94a3b8';
+const SELECTED_FG = '#e2e8f0';
+const SELECTED_BG = '#1e293b';
+const BODY_FG = '252';
 
 /**
  * Render the panel picker modal as Line[] for overlay in the viewport.
@@ -19,45 +25,53 @@ const CATEGORY_FG = '#8877aa';
 export function renderPanelPickerOverlay(
   picker: PanelPicker,
   width: number,
+  viewportHeight = 24,
 ): Line[] {
   if (!picker.active) return [];
 
   const lines: Line[] = [];
-  const boxMargin = 4;
-  const boxW = Math.max(4, Math.min(width - boxMargin * 2, 72));
-  const contentW = boxW - 4; // 2 border chars + 2 padding chars each side
-  const pad = ' '.repeat(boxMargin);
-
-  const emptyRow = pad + '\u2502' + ' '.repeat(boxW - 2) + '\u2502';
+  const metrics = getOverlaySurfaceMetrics(width, viewportHeight, {
+    margin: 4,
+    maxWidth: 72,
+    chromeRows: picker.searchQuery.length > 0 ? 7 : 6,
+    minContentRows: 6,
+    maxContentRows: 10,
+  });
+  const layout = createOverlayBoxLayout(width, metrics.margin, metrics.boxWidth);
+  const contentW = layout.innerWidth;
+  const titleFg = TITLE_FG;
+  const borderFg = '240';
 
   // ── Title bar ──────────────────────────────────────────────────────────────
-  const titleText = '\u2500 Select Panel ';
-  const titleLine =
-    pad + '\u250c' + titleText + '\u2500'.repeat(Math.max(0, boxW - 2 - getDisplayWidth(titleText))) + '\u2510';
-  lines.push(UIFactory.stringToLine(titleLine, width, { fg: '#00ffff' }));
+  const titleLine = createOverlayBorderLine(width, layout, '┌', '─', '┐', titleFg);
+  putOverlayText(titleLine, layout.margin + 2, layout.width - 4, 'Open Panel Workspace', { fg: titleFg, bold: true });
+  lines.push(titleLine);
 
   // ── Search bar (shown when query is non-empty) ──────────────────────────────
   if (picker.searchQuery.length > 0) {
+    const searchLine = createOverlayContentLine(width, layout, borderFg);
     const searchLabel = '\u2315 ';
     const queryAvail = contentW - getDisplayWidth(searchLabel);
-    const queryText = picker.searchQuery.length > queryAvail
-      ? picker.searchQuery.slice(0, queryAvail - 1) + '\u2026'
-      : picker.searchQuery.padEnd(queryAvail);
-    const searchRow = pad + '\u2502 ' + searchLabel + queryText + ' \u2502';
-    lines.push(UIFactory.stringToLine(searchRow, width, { fg: '#00ffff' }));
+    const queryText = fitDisplay(picker.searchQuery, queryAvail);
+    putOverlayText(searchLine, layout.margin + 2, getDisplayWidth(searchLabel), searchLabel, { fg: titleFg });
+    putOverlayText(searchLine, layout.margin + 2 + getDisplayWidth(searchLabel), queryAvail, queryText, { fg: titleFg });
+    lines.push(searchLine);
 
-    const searchDivider = pad + '\u251c' + '\u2500'.repeat(boxW - 2) + '\u2524';
-    lines.push(UIFactory.stringToLine(searchDivider, width, { fg: '240' }));
+    lines.push(createOverlayBorderLine(width, layout, '├', '─', '┤', borderFg));
   } else {
-    lines.push(UIFactory.stringToLine(emptyRow, width, { fg: '240' }));
+    const placeholder = ' Browse by category or start typing to filter by panel name, purpose, or category.';
+    const row = createOverlayContentLine(width, layout, borderFg);
+    putOverlayText(row, layout.margin + 2, contentW, fitDisplay(placeholder, contentW), { fg: '244', dim: true });
+    lines.push(row);
   }
 
   const visible = picker.getVisible();
 
   if (visible.length === 0) {
     const noResults = 'No panels match your search';
-    const noRow = pad + '\u2502 ' + noResults.padEnd(contentW) + ' \u2502';
-    lines.push(UIFactory.stringToLine(noRow, width, { fg: '244', dim: true }));
+    const noRow = createOverlayContentLine(width, layout, borderFg);
+    putOverlayText(noRow, layout.margin + 2, contentW, fitDisplay(noResults, contentW), { fg: '244', dim: true });
+    lines.push(noRow);
   } else {
     // Build a flat render list of { type: 'header' | 'item', ... } entries
     // so we can compute the correct scroll window over all rows.
@@ -98,28 +112,28 @@ export function renderPanelPickerOverlay(
       e => e.type === 'item' && e.flatIndex === picker.selectedIndex,
     );
     const total = renderEntries.length;
+    const maxVisible = metrics.contentRows;
     let startEntry = 0;
-    if (total > MAX_VISIBLE && selectedEntryIdx >= 0) {
+    if (total > maxVisible && selectedEntryIdx >= 0) {
       startEntry = Math.max(
         0,
         Math.min(
-          selectedEntryIdx - Math.floor(MAX_VISIBLE / 2),
-          total - MAX_VISIBLE,
+          selectedEntryIdx - Math.floor(maxVisible / 2),
+          total - maxVisible,
         ),
       );
     }
-    const endEntry = Math.min(startEntry + MAX_VISIBLE, total);
+    const endEntry = Math.min(startEntry + maxVisible, total);
 
     for (let i = startEntry; i < endEntry; i++) {
       const entry = renderEntries[i];
 
       if (entry.type === 'header') {
-        // Category header row — dim purple, no border padding detail
+        // Category header row
         const label = CATEGORY_LABELS[entry.category].toUpperCase();
-        const headerText = '  ' + label + ' ';
-        const headerFill = '\u2500'.repeat(Math.max(0, contentW - getDisplayWidth(headerText)));
-        const headerRow = pad + '\u2502 ' + headerText + headerFill + ' \u2502';
-        lines.push(UIFactory.stringToLine(headerRow, width, { fg: CATEGORY_FG, dim: true }));
+        const headerRow = createOverlayContentLine(width, layout, borderFg);
+        putOverlayText(headerRow, layout.margin + 2, contentW, fitDisplay(`  ${label}`, contentW), { fg: CATEGORY_FG, dim: true });
+        lines.push(headerRow);
       } else {
         const { reg, flatIndex } = entry;
         const isSelected = flatIndex === picker.selectedIndex;
@@ -138,40 +152,49 @@ export function renderPanelPickerOverlay(
         const descMaxW = contentW - 2 - iconW - nameMaxW - sepW;
 
         const nameRaw = reg.name;
-        const nameStr = nameRaw.length > nameMaxW
-          ? nameRaw.slice(0, nameMaxW - 1) + '\u2026'
-          : nameRaw.padEnd(nameMaxW);
+        const nameStr = fitDisplay(nameRaw, nameMaxW);
 
         const descRaw = reg.description;
-        const descStr = descRaw.length > descMaxW
-          ? descRaw.slice(0, descMaxW - 1) + '\u2026'
-          : descRaw.padEnd(descMaxW);
+        const descStr = fitDisplay(descRaw, descMaxW);
 
-        const rowText = pad + '\u2502 ' + indicator + iconStr + nameStr + sep + descStr + ' \u2502';
-        lines.push(UIFactory.stringToLine(rowText, width, {
-          fg: isSelected ? '#00ffff' : '252',
+        const row = createOverlayContentLine(width, layout, borderFg, isSelected ? SELECTED_BG : '');
+        const rowText = indicator + iconStr + nameStr + sep + descStr;
+        putOverlayText(row, layout.margin + 2, contentW, fitDisplay(truncateDisplay(rowText, contentW), contentW), {
+          fg: isSelected ? SELECTED_FG : BODY_FG,
+          bg: isSelected ? SELECTED_BG : '',
           bold: isSelected,
-          bg: isSelected ? '#1a2a3a' : '',
-        }));
+        });
+        lines.push(row);
       }
     }
 
+    const selected = picker.getSelected();
+    if (selected) {
+      lines.push(createOverlayBorderLine(width, layout, '├', '─', '┤', borderFg));
+      const categoryLabel = CATEGORY_LABELS[selected.category].toUpperCase();
+      const selectedLine = createOverlayContentLine(width, layout, borderFg);
+      putOverlayText(selectedLine, layout.margin + 2, contentW, fitDisplay(`${selected.icon} ${selected.name}  [${categoryLabel}]`, contentW), { fg: SELECTED_FG });
+      lines.push(selectedLine);
+      const desc = fitDisplay(truncateDisplay(selected.description, contentW), contentW);
+      const descRow = createOverlayContentLine(width, layout, borderFg);
+      putOverlayText(descRow, layout.margin + 2, contentW, desc, { fg: '244', dim: true });
+      lines.push(descRow);
+    }
+
     // ── Scroll indicator ───────────────────────────────────────────────────
-    if (total > MAX_VISIBLE) {
+    if (total > maxVisible) {
       const scrollInfo = `${picker.selectedIndex + 1}/${visible.length}`;
-      const scrollRow =
-        pad + '\u2502' +
-        ' '.repeat(Math.max(0, boxW - 2 - getDisplayWidth(scrollInfo) - 1)) +
-        scrollInfo + ' \u2502';
-      lines.push(UIFactory.stringToLine(scrollRow, width, { fg: '240', dim: true }));
+      const scrollRow = createOverlayContentLine(width, layout, borderFg);
+      putOverlayText(scrollRow, layout.margin + 2 + Math.max(0, contentW - getDisplayWidth(scrollInfo)), getDisplayWidth(scrollInfo), scrollInfo, { fg: '240', dim: true });
+      lines.push(scrollRow);
     }
   }
 
   // ── Bottom border with hints ───────────────────────────────────────────────
-  const hints = ' [\u2191\u2193] Navigate  [Enter] Open  [/] Search  [Esc] Cancel ';
-  const bottomLine =
-    pad + '\u2514' + hints + '\u2500'.repeat(Math.max(0, boxW - 2 - getDisplayWidth(hints))) + '\u2518';
-  lines.push(UIFactory.stringToLine(bottomLine, width, { fg: '240' }));
+  const hints = '[Up/Down] Navigate  [Enter] Open  [/] Filter  [Esc] Cancel';
+  const bottomLine = createOverlayBorderLine(width, layout, '└', '─', '┘', borderFg);
+  putOverlayText(bottomLine, layout.margin + 2, layout.width - 4, truncateDisplay(hints, layout.width - 4), { fg: '240', dim: true });
+  lines.push(bottomLine);
 
   return lines;
 }

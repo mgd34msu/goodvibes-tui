@@ -41,6 +41,7 @@ describe('IncidentReviewPanel', () => {
     const text = linesText(panel.render(120, 12));
     expect(text).toContain('Incident Review Workspace');
     expect(text).toContain('No incidents recorded yet');
+    expect(text).toContain('/recall capture incident latest');
   });
 
   test('renders bundle evidence for the selected incident', () => {
@@ -54,6 +55,7 @@ describe('IncidentReviewPanel', () => {
     expect(text).toContain('Permissions denied');
     expect(text).toContain('Budget breaches');
     expect(text).toContain('Related IDs');
+    expect(text).toContain('Action Rail');
   });
 
   test('renders replay and permission detail from the selected bundle', () => {
@@ -93,5 +95,17 @@ describe('IncidentReviewPanel', () => {
     expect(text).toContain('Replay link:');
     expect(text).toContain('Replay owners:');
     expect(text).toContain('turn:1');
+  });
+
+  test('supports focused incident review actions for the selected bundle', () => {
+    const registry = new ForensicsRegistry();
+    registry.push(makeReport('incident-3'));
+    registry.push(makeReport('incident-4'));
+    const panel = new IncidentReviewPanel(registry);
+    expect(panel.handleInput('end')).toBe(true);
+    const text = linesText(panel.render(140, 20));
+    expect(text).toContain('selected 2/2');
+    expect(text).toContain('Action Rail');
+    expect(text).toMatch(/\/recall capture incident incident-[34]/);
   });
 });

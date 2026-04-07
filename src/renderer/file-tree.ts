@@ -39,8 +39,8 @@ export function renderFileTree(
 
   // Optional header
   if (title) {
-    lines.push(UIFactory.stringToLine(` 📁 ${title}`, width, { fg: '#00ffff', bold: true }));
-    lines.push(UIFactory.stringToLine(' ' + '─'.repeat(width - 2), width, { fg: '240' }));
+    lines.push(UIFactory.stringToLine(` [dir] ${title}`, width, { fg: '#00ffff', bold: true }));
+    lines.push(UIFactory.stringToLine(' ' + '-'.repeat(width - 2), width, { fg: '240' }));
   }
 
   for (const entry of entries) {
@@ -50,11 +50,11 @@ export function renderFileTree(
     let prefix = '';
     for (let d = 0; d < depth; d++) {
       if (d < depth - 1) {
-        prefix += isLastAtDepth[d] ? '   ' : '│  ';
+        prefix += isLastAtDepth[d] ? '   ' : '|  ';
       }
     }
     if (depth > 0) {
-      prefix += isLast ? '└── ' : '├── ';
+      prefix += isLast ? '`-- ' : '|-- ';
     } else {
       prefix += '';
     }
@@ -75,7 +75,7 @@ export function renderFileTree(
     const nameW = getDisplayWidth(fullText);
     const maxNameW = width - sizeW - 1;
 
-    const truncated = nameW > maxNameW ? fullText.slice(0, maxNameW - 1) + '…' : fullText;
+    const truncated = nameW > maxNameW ? fullText.slice(0, Math.max(0, maxNameW - 3)) + '...' : fullText;
 
     // Compose: name + padding + size
     const paddingW = Math.max(0, width - getDisplayWidth(truncated) - sizeW);
@@ -135,7 +135,7 @@ export function parseListDirOutput(output: string, rootDir: string): FileTreeEnt
     entries[i].isLast = nextSameOrLower === 0 || nextSameOrLower === -1;
 
     // Build isLastAtDepth[d] = true if the ancestor at depth d was the last child
-    // of its parent. This governs whether to draw '│  ' or '   ' vertical bars.
+    // of its parent. This governs whether to draw '|  ' or '   ' vertical bars.
     const isLastAtDepth: boolean[] = new Array(entries[i].depth).fill(false);
     for (let d = 0; d < entries[i].depth; d++) {
       // Walk backwards to find the most recent ancestor at depth d

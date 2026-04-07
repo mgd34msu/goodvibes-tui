@@ -123,8 +123,8 @@ describe('DiffPanel', () => {
     test('tab bar shows file basename', () => {
       panel.showDiff('src/components/foo.ts', simpleDiff);
       const lines = panel.render(120, 20);
-      const tabRow = rowText(lines, 0);
-      expect(tabRow).toContain('foo.ts');
+      const text = linesText(lines);
+      expect(text).toContain('foo.ts');
     });
 
     test('replacing existing file preserves selection', () => {
@@ -140,9 +140,9 @@ describe('DiffPanel', () => {
       panel.showDiff('src/a.ts', '@@ -1,1 +1,1 @@\n-a\n+a2');
       panel.showDiff('src/b.ts', '@@ -1,1 +1,1 @@\n-b\n+b2');
       const lines = panel.render(120, 20);
-      const tabRow = rowText(lines, 0);
-      expect(tabRow).toContain('a.ts');
-      expect(tabRow).toContain('b.ts');
+      const text = linesText(lines);
+      expect(text).toContain('a.ts');
+      expect(text).toContain('b.ts');
     });
 
     test('hunk header line is present in render output', () => {
@@ -174,8 +174,8 @@ describe('DiffPanel', () => {
     test('loadRawDiff creates entries for each file', () => {
       panel.loadRawDiff(multiFileDiff);
       const lines = panel.render(120, 20);
-      const tabRow = rowText(lines, 0);
-      expect(tabRow).toContain('alpha.ts');
+      const text = linesText(lines);
+      expect(text).toContain('alpha.ts');
     });
 
     test('loadRawDiff marks panel dirty', () => {

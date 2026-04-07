@@ -19,7 +19,7 @@ function makeTmpDir(): string {
 // Suite
 // ---------------------------------------------------------------------------
 
-describe('Config schema extensions: orchestration, danger, and tools categories', () => {
+describe('Config schema extensions: orchestration, sandbox, danger, and tools categories', () => {
   let tmpDir: string;
 
   beforeEach(() => {
@@ -51,6 +51,23 @@ describe('Config schema extensions: orchestration, danger, and tools categories'
       expect(typeof mgr.get('danger.httpListener')).toBe('boolean');
     });
 
+    test('sandbox category fields have correct types when no project config exists', () => {
+      const mgr = new ConfigManager({ workingDir: tmpDir });
+      expect(typeof mgr.get('sandbox.replIsolation')).toBe('string');
+      expect(typeof mgr.get('sandbox.mcpIsolation')).toBe('string');
+      expect(typeof mgr.get('sandbox.windowsMode')).toBe('string');
+      expect(typeof mgr.get('sandbox.vmBackend')).toBe('string');
+      expect(typeof mgr.get('sandbox.qemuBinary')).toBe('string');
+      expect(typeof mgr.get('sandbox.qemuImagePath')).toBe('string');
+      expect(typeof mgr.get('sandbox.qemuExecWrapper')).toBe('string');
+      expect(typeof mgr.get('sandbox.qemuGuestHost')).toBe('string');
+      expect(typeof mgr.get('sandbox.qemuGuestPort')).toBe('number');
+      expect(typeof mgr.get('sandbox.qemuGuestUser')).toBe('string');
+      expect(typeof mgr.get('sandbox.qemuWorkspacePath')).toBe('string');
+      expect(typeof mgr.get('sandbox.qemuSessionMode')).toBe('string');
+      expect(typeof mgr.get('release.channel')).toBe('string');
+    });
+
     test('DEFAULT_CONFIG.orchestration has correct default values', () => {
       expect(DEFAULT_CONFIG.orchestration.recursionEnabled).toBe(false);
       expect(DEFAULT_CONFIG.orchestration.maxActiveAgents).toBe(8);
@@ -60,6 +77,22 @@ describe('Config schema extensions: orchestration, danger, and tools categories'
     test('DEFAULT_CONFIG.danger has correct default values', () => {
       expect(DEFAULT_CONFIG.danger.daemon).toBe(false);
       expect(DEFAULT_CONFIG.danger.httpListener).toBe(false);
+    });
+
+    test('DEFAULT_CONFIG.sandbox has correct default values', () => {
+      expect(DEFAULT_CONFIG.sandbox.replIsolation).toBe('shared-vm');
+      expect(DEFAULT_CONFIG.sandbox.mcpIsolation).toBe('disabled');
+      expect(DEFAULT_CONFIG.sandbox.windowsMode).toBe('native-basic');
+      expect(DEFAULT_CONFIG.sandbox.vmBackend).toBe('local');
+      expect(DEFAULT_CONFIG.sandbox.qemuBinary).toBe('qemu-system-x86_64');
+      expect(DEFAULT_CONFIG.sandbox.qemuImagePath).toBe('');
+      expect(DEFAULT_CONFIG.sandbox.qemuExecWrapper).toBe('');
+      expect(DEFAULT_CONFIG.sandbox.qemuGuestHost).toBe('');
+      expect(DEFAULT_CONFIG.sandbox.qemuGuestPort).toBe(2222);
+      expect(DEFAULT_CONFIG.sandbox.qemuGuestUser).toBe('goodvibes');
+      expect(DEFAULT_CONFIG.sandbox.qemuWorkspacePath).toBe('/workspace');
+      expect(DEFAULT_CONFIG.sandbox.qemuSessionMode).toBe('attach');
+      expect(DEFAULT_CONFIG.release.channel).toBe('stable');
     });
 
     test('project config overrides win for orchestration fields', () => {
@@ -152,6 +185,84 @@ describe('Config schema extensions: orchestration, danger, and tools categories'
       const mgr = new ConfigManager({ workingDir: tmpDir });
       mgr.set('danger.httpListener', true);
       expect(mgr.get('danger.httpListener')).toBe(true);
+    });
+
+    test('set and get sandbox.replIsolation', () => {
+      const mgr = new ConfigManager({ workingDir: tmpDir });
+      mgr.set('sandbox.replIsolation', 'shared-vm');
+      expect(mgr.get('sandbox.replIsolation')).toBe('shared-vm');
+    });
+
+    test('set and get sandbox.mcpIsolation', () => {
+      const mgr = new ConfigManager({ workingDir: tmpDir });
+      mgr.set('sandbox.mcpIsolation', 'per-server-vm');
+      expect(mgr.get('sandbox.mcpIsolation')).toBe('per-server-vm');
+    });
+
+    test('set and get sandbox.windowsMode', () => {
+      const mgr = new ConfigManager({ workingDir: tmpDir });
+      mgr.set('sandbox.windowsMode', 'native-basic');
+      expect(mgr.get('sandbox.windowsMode')).toBe('native-basic');
+    });
+
+    test('set and get sandbox.vmBackend', () => {
+      const mgr = new ConfigManager({ workingDir: tmpDir });
+      mgr.set('sandbox.vmBackend', 'qemu');
+      expect(mgr.get('sandbox.vmBackend')).toBe('qemu');
+    });
+
+    test('set and get sandbox.qemuBinary', () => {
+      const mgr = new ConfigManager({ workingDir: tmpDir });
+      mgr.set('sandbox.qemuBinary', 'qemu-system-aarch64');
+      expect(mgr.get('sandbox.qemuBinary')).toBe('qemu-system-aarch64');
+    });
+
+    test('set and get sandbox.qemuImagePath', () => {
+      const mgr = new ConfigManager({ workingDir: tmpDir });
+      mgr.set('sandbox.qemuImagePath', '/tmp/gv-sandbox.qcow2');
+      expect(mgr.get('sandbox.qemuImagePath')).toBe('/tmp/gv-sandbox.qcow2');
+    });
+
+    test('set and get sandbox.qemuExecWrapper', () => {
+      const mgr = new ConfigManager({ workingDir: tmpDir });
+      mgr.set('sandbox.qemuExecWrapper', '/tmp/gv-qemu-wrapper');
+      expect(mgr.get('sandbox.qemuExecWrapper')).toBe('/tmp/gv-qemu-wrapper');
+    });
+
+    test('set and get sandbox.qemuGuestHost', () => {
+      const mgr = new ConfigManager({ workingDir: tmpDir });
+      mgr.set('sandbox.qemuGuestHost', '127.0.0.1');
+      expect(mgr.get('sandbox.qemuGuestHost')).toBe('127.0.0.1');
+    });
+
+    test('set and get sandbox.qemuGuestPort', () => {
+      const mgr = new ConfigManager({ workingDir: tmpDir });
+      mgr.set('sandbox.qemuGuestPort', 2222);
+      expect(mgr.get('sandbox.qemuGuestPort')).toBe(2222);
+    });
+
+    test('set and get sandbox.qemuGuestUser', () => {
+      const mgr = new ConfigManager({ workingDir: tmpDir });
+      mgr.set('sandbox.qemuGuestUser', 'goodvibes');
+      expect(mgr.get('sandbox.qemuGuestUser')).toBe('goodvibes');
+    });
+
+    test('set and get sandbox.qemuWorkspacePath', () => {
+      const mgr = new ConfigManager({ workingDir: tmpDir });
+      mgr.set('sandbox.qemuWorkspacePath', '/workspace');
+      expect(mgr.get('sandbox.qemuWorkspacePath')).toBe('/workspace');
+    });
+
+    test('set and get sandbox.qemuSessionMode', () => {
+      const mgr = new ConfigManager({ workingDir: tmpDir });
+      mgr.set('sandbox.qemuSessionMode', 'launch-per-command');
+      expect(mgr.get('sandbox.qemuSessionMode')).toBe('launch-per-command');
+    });
+
+    test('set and get release.channel', () => {
+      const mgr = new ConfigManager({ workingDir: tmpDir });
+      mgr.set('release.channel', 'preview');
+      expect(mgr.get('release.channel')).toBe('preview');
     });
   });
 

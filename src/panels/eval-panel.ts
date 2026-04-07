@@ -6,8 +6,14 @@
  */
 
 import { BasePanel } from './base-panel.ts';
-import type { Line, Cell } from '../types/grid.ts';
-import { createStyledCell } from '../types/grid.ts';
+import type { Line } from '../types/grid.ts';
+import { createEmptyLine } from '../types/grid.ts';
+import {
+  buildEmptyState,
+  buildPanelLine,
+  buildPanelWorkspace,
+  DEFAULT_PANEL_PALETTE,
+} from './polish.ts';
 
 // ── EvalRegistry ─────────────────────────────────────────────────────────────
 
@@ -73,6 +79,7 @@ export class EvalRegistry {
 // ── Colour palette (hex fg colours for createStyledCell) ─────────────────────
 
 const C = {
+  ...DEFAULT_PANEL_PALETTE,
   header:   '#94a3b8',
   headerBg: '#1e293b',
   cyan:     '#38bdf8',
@@ -85,28 +92,10 @@ const C = {
   selected: '#f1f5f9',
   sep:      '#1e293b',
   white:    '#cbd5e1',
+  selectBg: '#0f172a',
 } as const;
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
-
-/** Build a Line (Cell[]) from [text, fg, bg?] segments, padding to width. */
-function buildLine(width: number, segments: Array<[string, string, string?]>): Line {
-  const cells: Cell[] = [];
-  let used = 0;
-  for (const [text, fg, bg] of segments) {
-    if (text.length === 0) continue;
-    cells.push(createStyledCell(text, { fg, bg: bg ?? '' }));
-    used += text.length;
-  }
-  if (used < width) {
-    cells.push(createStyledCell(' '.repeat(width - used), { fg: '' }));
-  }
-  return cells;
-}
-
-function sep(width: number): Line {
-  return buildLine(width, [['─'.repeat(width), C.sep]]);
-}
 
 function scoreColor(score: number): string {
   if (score >= 80) return C.green;
@@ -211,33 +200,50 @@ export class EvalPanel extends BasePanel {
   }
 
   public render(width: number, height: number): Line[] {
-    const lines: Line[] = [];
+    this.needsRender = false;
     const suites = this._registry.getSuiteResults();
     const gates = this._registry.getGateResults();
+    const intro = 'Evaluation harness runs, gates, scenario scorecards, and regression indicators for model and product validation.';
 
-    // Header
     const running = this._registry.isRunning();
     const lastRun = this._registry.getLastRunAt();
-    const headerSegs: Array<[string, string, string?]> = [
-      ['Eval Harness', C.cyan, C.headerBg],
-    ];
-    if (running) headerSegs.push(['  [running...]', C.yellow]);
-    if (lastRun) headerSegs.push([`  last: ${new Date(lastRun).toLocaleTimeString()}`, C.dim]);
-    lines.push(buildLine(width, headerSegs));
-    lines.push(sep(width));
+    const summaryLine = buildPanelLine(width, [
+      ['  state: ', C.label],
+      [running ? 'running' : 'idle', running ? C.yellow : C.dim],
+      ['  last: ', C.label],
+      [lastRun ? new Date(lastRun).toLocaleTimeString() : 'n/a', C.dim],
+    ]);
 
     if (suites.length === 0) {
-      lines.push(buildLine(width, [['No results — run /eval run <suite> to start.', C.dim]]));
-      lines.push(buildLine(width, [['Suites: core-performance, safety-baseline, cost-tokens', C.label]]));
-      return lines;
+      const workspace = buildPanelWorkspace(width, height, {
+        title: 'Eval Harness',
+        intro,
+        sections: [{
+          title: 'Status',
+          lines: [
+            summaryLine,
+            ...buildEmptyState(
+              width,
+              ' No results yet.',
+              'Run an eval suite to populate this workspace with suite scores, gate results, and per-scenario detail.',
+              [{ command: '/eval run <suite>', summary: 'start a suite such as core-performance, safety-baseline, or cost-tokens' }],
+              C,
+            ),
+          ],
+        }],
+        palette: C,
+      });
+      while (workspace.length < height) workspace.push(createEmptyLine(width));
+      return workspace;
     }
 
+    const lines: Line[] = [];
     if (this._mode === 'list') {
-      this._renderList(lines, suites, gates, width, height);
+      this._renderList(lines, suites, gates, width, height, intro, summaryLine);
     } else {
       const suite = suites[this._selectedSuiteIdx];
       if (suite) {
-        this._renderDetail(lines, suite, width, height);
+        this._renderDetail(lines, suite, width, height, intro, summaryLine);
       }
     }
 
@@ -252,17 +258,20 @@ export class EvalPanel extends BasePanel {
     gates: EvalGateResult[],
     width: number,
     _height: number,
+    intro: string,
+    summaryLine: Line,
   ): void {
     const gateMap = new Map(gates.map((g) => [g.suite, g]));
-
-    lines.push(buildLine(width, [
+    const sectionLines: Line[] = [
+      summaryLine,
+      buildPanelLine(width, [
       ['Suite'.padEnd(28), C.header],
       ['Score'.padEnd(8), C.header],
       ['Pass'.padEnd(6), C.header],
       ['Gate'.padEnd(6), C.header],
       ['Duration', C.header],
-    ]));
-    lines.push(sep(width));
+      ]),
+    ];
 
     suites.forEach((suite, idx) => {
       const selected = idx === this._selectedSuiteIdx;
@@ -273,20 +282,26 @@ export class EvalPanel extends BasePanel {
       const scoreC = scoreColor(suite.meanScore);
       const passC = suite.passed ? C.green : C.red;
       const nameColor = selected ? C.selected : C.white;
+      const bg = selected ? C.selectBg : undefined;
       const prefix = selected ? '> ' : '  ';
       const name = suite.suite.slice(0, 24).padEnd(26);
 
-      lines.push(buildLine(width, [
-        [prefix + name, nameColor],
-        [suite.meanScore.toFixed(1).padEnd(8), scoreC],
-        [(suite.passed ? 'PASS' : 'FAIL').padEnd(6), passC],
-        [gateStr.padEnd(6), gateColor],
-        [fmtTime(durationMs), C.dim],
+      sectionLines.push(buildPanelLine(width, [
+        [prefix + name, nameColor, bg],
+        [suite.meanScore.toFixed(1).padEnd(8), scoreC, bg],
+        [(suite.passed ? 'PASS' : 'FAIL').padEnd(6), passC, bg],
+        [gateStr.padEnd(6), gateColor, bg],
+        [fmtTime(durationMs), C.dim, bg],
       ]));
     });
 
-    lines.push(sep(width));
-    lines.push(buildLine(width, [['Enter/l: detail  j/k: navigate', C.dim]]));
+    sectionLines.push(buildPanelLine(width, [[' Enter/l: detail  j/k: navigate', C.dim]]));
+    lines.push(...buildPanelWorkspace(width, _height, {
+      title: 'Eval Harness',
+      intro,
+      sections: [{ title: 'Suites', lines: sectionLines }],
+      palette: C,
+    }));
   }
 
   // ── Detail view ──────────────────────────────────────────────────────────────
@@ -296,15 +311,19 @@ export class EvalPanel extends BasePanel {
     suite: EvalSuiteResult,
     width: number,
     height: number,
+    intro: string,
+    summaryLine: Line,
   ): void {
-    lines.push(buildLine(width, [
+    const sectionLines: Line[] = [
+      summaryLine,
+      buildPanelLine(width, [
       [`Suite: ${suite.suite}`, C.cyan],
       ['  mean=', C.label],
       [suite.meanScore.toFixed(1), scoreColor(suite.meanScore)],
       ['  ', C.label],
       [suite.passed ? 'PASS' : 'FAIL', suite.passed ? C.green : C.red],
-    ]));
-    lines.push(sep(width));
+      ]),
+    ];
 
     const allDetailLines: Line[] = [];
     suite.results.forEach((result, idx) => {
@@ -312,13 +331,16 @@ export class EvalPanel extends BasePanel {
       this._renderScenarioBlock(allDetailLines, result, selected, width);
     });
 
-    // Scroll window
-    const maxVisible = Math.max(1, height - lines.length - 2);
+    const maxVisible = Math.max(1, height - 8);
     const visible = allDetailLines.slice(this._scrollOffset, this._scrollOffset + maxVisible);
-    for (const l of visible) lines.push(l);
-
-    lines.push(sep(width));
-    lines.push(buildLine(width, [['Esc/q: back  j/k: scenario  PgUp/PgDn: scroll', C.dim]]));
+    sectionLines.push(...visible);
+    sectionLines.push(buildPanelLine(width, [[' Esc/q: back  j/k: scenario  PgUp/PgDn: scroll', C.dim]]));
+    lines.push(...buildPanelWorkspace(width, height, {
+      title: 'Eval Harness',
+      intro,
+      sections: [{ title: 'Scenario Detail', lines: sectionLines }],
+      palette: C,
+    }));
   }
 
   private _renderScenarioBlock(
@@ -334,11 +356,11 @@ export class EvalPanel extends BasePanel {
     const passC = sc.passed ? C.green : C.red;
     const nameLen = Math.max(1, width - 22);
 
-    lines.push(buildLine(width, [
-      [prefix + result.scenario.name.slice(0, nameLen).padEnd(nameLen + 2), nameColor],
-      [sc.compositeScore.toFixed(1).padStart(5), scoreC],
-      ['  ', C.label],
-      [sc.passed ? 'PASS' : 'FAIL', passC],
+    lines.push(buildPanelLine(width, [
+      [prefix + result.scenario.name.slice(0, nameLen).padEnd(nameLen + 2), nameColor, selected ? C.selectBg : undefined],
+      [sc.compositeScore.toFixed(1).padStart(5), scoreC, selected ? C.selectBg : undefined],
+      ['  ', C.label, selected ? C.selectBg : undefined],
+      [sc.passed ? 'PASS' : 'FAIL', passC, selected ? C.selectBg : undefined],
     ]));
 
     if (selected) {
@@ -346,8 +368,8 @@ export class EvalPanel extends BasePanel {
         const d = sc.dimensions.find((x) => x.dimension === dim);
         if (!d) continue;
         const filled = Math.round(d.score / 10);
-        const bar = '█'.repeat(filled) + '░'.repeat(10 - filled);
-        lines.push(buildLine(width, [
+        const bar = '#'.repeat(filled) + '.'.repeat(10 - filled);
+        lines.push(buildPanelLine(width, [
           ['    ' + dim.padEnd(10) + ' ', C.label],
           [bar, scoreColor(d.score)],
           [` ${d.score.toFixed(0).padStart(3)}/100`, C.value],
@@ -356,7 +378,7 @@ export class EvalPanel extends BasePanel {
 
       if (sc.notes && sc.notes.length > 0) {
         for (const note of sc.notes) {
-          lines.push(buildLine(width, [
+          lines.push(buildPanelLine(width, [
             ['    ! ', C.yellow],
             [note.slice(0, width - 6), C.yellow],
           ]));

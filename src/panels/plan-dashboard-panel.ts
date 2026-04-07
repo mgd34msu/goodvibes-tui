@@ -1,19 +1,26 @@
 import type { Line } from '../types/grid.ts';
 import type { ExecutionPlan, PlanItem, PlanItemStatus } from '../core/execution-plan.ts';
 import { BasePanel } from './base-panel.ts';
-import { UIFactory } from '../renderer/ui-factory.ts';
 import { planManager } from '../core/plan-manager-instance.ts';
+import {
+  buildEmptyState,
+  buildPanelLine,
+  buildPanelWorkspace,
+  DEFAULT_PANEL_PALETTE,
+  type PanelWorkspaceSection,
+} from './polish.ts';
+import { getTrackedVisibleWindow } from '../renderer/surface-layout.ts';
 
 // ---------------------------------------------------------------------------
 // Status display maps
 // ---------------------------------------------------------------------------
 
 const STATUS_ICON: Record<PlanItemStatus, string> = {
-  complete: '✓',
-  in_progress: '◆',
-  pending: '○',
-  failed: '✗',
-  skipped: '⊘',
+  complete: 'y',
+  in_progress: '>',
+  pending: 'o',
+  failed: 'x',
+  skipped: '-',
 };
 
 const STATUS_FG: Record<PlanItemStatus, string> = {
@@ -71,63 +78,33 @@ export class PlanDashboardPanel extends BasePanel {
   // --------------------------------------------------------------------------
 
   render(width: number, height: number): Line[] {
-    // Always read fresh plan state from disk
     const plan = planManager.getActive();
-
-    const lines: Line[] = [];
-
     if (!plan) {
-      lines.push(...this.renderEmptyState(width));
-    } else {
-      lines.push(...this.renderPlan(plan, width, height));
+      return buildPanelWorkspace(width, height, {
+        title: ' Plan Dashboard',
+        intro: 'Track the active execution plan, item status, phase grouping, and overall completion.',
+        sections: [
+          {
+            lines: buildEmptyState(
+              width,
+              ' No active execution plan',
+              'Use /plan to create a plan and the execution dashboard will populate here.',
+              [],
+              DEFAULT_PANEL_PALETTE,
+            ),
+          },
+        ],
+        palette: DEFAULT_PANEL_PALETTE,
+      });
     }
-
-    // Pad to fill height
-    while (lines.length < height) {
-      lines.push(UIFactory.stringToLine('', width));
-    }
-
-    // Slice to viewport height
-    return lines.slice(0, height);
+    return this.renderPlan(plan, width, height);
   }
 
   // --------------------------------------------------------------------------
   // Empty state
   // --------------------------------------------------------------------------
 
-  private renderEmptyState(width: number): Line[] {
-    const lines: Line[] = [];
-    lines.push(UIFactory.stringToLine('', width));
-    lines.push(
-      UIFactory.stringToLine(
-        ' No active execution plan.',
-        width,
-        { fg: '244', dim: true },
-      ),
-    );
-    lines.push(UIFactory.stringToLine('', width));
-    lines.push(
-      UIFactory.stringToLine(
-        ' Use /plan to create a plan.',
-        width,
-        { fg: '238', dim: true },
-      ),
-    );
-    return lines;
-  }
-
-  // --------------------------------------------------------------------------
-  // Plan rendering
-  // --------------------------------------------------------------------------
-
   private renderPlan(plan: ExecutionPlan, width: number, height: number): Line[] {
-    const allLines: Line[] = [];
-
-    // --- Overall header ---
-    allLines.push(...this.renderHeader(plan, width));
-    allLines.push(UIFactory.stringToLine('', width));
-
-    // --- Group items by phase ---
     const phaseOrder: string[] = [];
     const byPhase = new Map<string, PlanItem[]>();
     for (const item of plan.items) {
@@ -145,16 +122,12 @@ export class PlanDashboardPanel extends BasePanel {
         .map((i) => i.id),
     );
 
-    // Track navigable row count for cursor clamping
     let rowCount = 0;
+    const planLines: Line[] = [];
 
     for (const phase of phaseOrder) {
       const items = byPhase.get(phase)!;
-
-      // Phase header
-      allLines.push(...this.renderPhaseHeader(phase, items, width));
-
-      // Phase items
+      planLines.push(this.renderPhaseHeaderLine(phase, items, width));
       for (const item of items) {
         const isSelected = rowCount === this.selectedIndex;
         const isBlocked =
@@ -163,79 +136,54 @@ export class PlanDashboardPanel extends BasePanel {
           item.dependencies.length > 0 &&
           !item.dependencies.every((depId) => completeIds.has(depId));
 
-        allLines.push(...this.renderItem(item, isSelected, isBlocked, width));
+        planLines.push(this.renderItem(item, isSelected, isBlocked, width));
         rowCount++;
       }
-
-      allLines.push(UIFactory.stringToLine('', width));
     }
 
-    // Store total navigable rows for key handling
     this.totalRows = rowCount;
-
-    // Clamp selectedIndex
     if (this.selectedIndex >= this.totalRows) {
       this.selectedIndex = Math.max(0, this.totalRows - 1);
     }
+    const window = getTrackedVisibleWindow(planLines.length, this.selectedIndex, Math.max(8, height - 8), this.scrollOffset, 1);
+    this.scrollOffset = window.start;
 
-    // Scroll so selected row stays visible.
-    // Header is 2 lines (header + blank), each phase adds 1 header line + items + 1 blank.
-    // Approximate: find selected item's output line index.
-    this.adjustScroll(allLines.length, height);
+    const total = plan.items.length;
+    const done = plan.items.filter((i) => i.status === 'complete' || i.status === 'skipped').length;
+    const pct = total > 0 ? Math.round((done / total) * 100) : 0;
+    const summary: PanelWorkspaceSection = {
+      title: 'Summary',
+      lines: [
+        buildPanelLine(width, [
+          [' Status ', DEFAULT_PANEL_PALETTE.label],
+          [plan.status, this.statusColor(plan.status)],
+          ['   Progress ', DEFAULT_PANEL_PALETTE.label],
+          [`${pct}%`, pct === 100 ? DEFAULT_PANEL_PALETTE.good : DEFAULT_PANEL_PALETTE.info],
+          ['   Items ', DEFAULT_PANEL_PALETTE.label],
+          [`${done}/${total}`, DEFAULT_PANEL_PALETTE.value],
+        ]),
+      ],
+    };
 
-    return allLines.slice(this.scrollOffset);
+    return buildPanelWorkspace(width, height, {
+      title: ` Plan Dashboard`,
+      intro: plan.title,
+      sections: [
+        summary,
+        { title: 'Execution Plan', lines: planLines.slice(window.start, window.end) },
+      ],
+      footerLines: [
+        buildPanelLine(width, [[' Up/Down', DEFAULT_PANEL_PALETTE.info], [' navigate', DEFAULT_PANEL_PALETTE.dim]]),
+      ],
+      palette: DEFAULT_PANEL_PALETTE,
+    });
   }
 
   // --------------------------------------------------------------------------
   // Header — title + overall completion percentage
   // --------------------------------------------------------------------------
 
-  private renderHeader(plan: ExecutionPlan, width: number): Line[] {
-    const total = plan.items.length;
-    const done = plan.items.filter(
-      (i) => i.status === 'complete' || i.status === 'skipped',
-    ).length;
-    const pct = total > 0 ? Math.round((done / total) * 100) : 0;
-
-    const statusFg =
-      plan.status === 'complete'
-        ? '#22c55e'
-        : plan.status === 'failed'
-        ? '#ef4444'
-        : plan.status === 'active'
-        ? '#00ffff'
-        : '244';
-
-    const titleText = ` ${plan.title}`;
-    const pctText = `${pct}% `;
-    const pad = Math.max(1, width - titleText.length - pctText.length);
-    const headerText = titleText + ' '.repeat(pad) + pctText;
-
-    const headerLine = UIFactory.stringToLine(headerText.slice(0, width), width, {
-      fg: statusFg,
-      bold: true,
-    });
-
-    // Render completion bar below title
-    const barWidth = Math.min(width - 4, 40);
-    const filled = Math.round((pct / 100) * barWidth);
-    const empty = barWidth - filled;
-    const barStr = '  ' + '█'.repeat(filled) + '░'.repeat(empty) + `  ${done}/${total} items`;
-    const barLine = UIFactory.stringToLine(barStr.slice(0, width), width, {
-      fg: pct === 100 ? '#22c55e' : pct > 50 ? '#00ffff' : '244',
-    });
-
-    // Separator
-    const sepLine = UIFactory.stringToLine('─'.repeat(width), width, { fg: '238' });
-
-    return [headerLine, barLine, sepLine];
-  }
-
-  // --------------------------------------------------------------------------
-  // Phase header with progress bar
-  // --------------------------------------------------------------------------
-
-  private renderPhaseHeader(phase: string, items: PlanItem[], width: number): Line[] {
+  private renderPhaseHeaderLine(phase: string, items: PlanItem[], width: number): Line {
     const done = items.filter(
       (i) => i.status === 'complete' || i.status === 'skipped',
     ).length;
@@ -247,16 +195,17 @@ export class PlanDashboardPanel extends BasePanel {
 
     const barW = 8;
     const filledB = total > 0 ? Math.round((done / total) * barW) : 0;
-    const bar = '█'.repeat(filledB) + '░'.repeat(barW - filledB);
+    const bar = '#'.repeat(filledB) + '-'.repeat(barW - filledB);
 
     const progressText = `[${bar}] ${done}/${total}`;
-    const phaseText = ` ▸ ${phase}`;
-    const pad = Math.max(1, width - phaseText.length - progressText.length - 1);
-    const full = phaseText + ' '.repeat(pad) + progressText + ' ';
-
-    return [
-      UIFactory.stringToLine(full.slice(0, width), width, { fg: phaseFg, bold: true }),
-    ];
+    const phaseText = ` > ${phase}`;
+    const spacer = Math.max(1, width - phaseText.length - progressText.length - 1);
+    return buildPanelLine(width, [
+      [phaseText, phaseFg],
+      [' '.repeat(spacer), phaseFg],
+      [progressText, phaseFg],
+      [' ', phaseFg],
+    ]);
   }
 
   // --------------------------------------------------------------------------
@@ -268,14 +217,14 @@ export class PlanDashboardPanel extends BasePanel {
     isSelected: boolean,
     isBlocked: boolean,
     width: number,
-  ): Line[] {
+  ): Line {
     const icon = STATUS_ICON[item.status];
     const fg = isBlocked ? '238' : STATUS_FG[item.status];
     const dim = item.status === 'skipped' || isBlocked;
 
     // Indent blocked items to visually signal they depend on others
     const indent = isBlocked ? '      ' : '   ';
-    const selectedMark = isSelected ? '▶' : ' ';
+    const selectedMark = isSelected ? '>' : ' ';
 
     let text = `${selectedMark}${indent}${icon} ${item.description}`;
 
@@ -289,39 +238,16 @@ export class PlanDashboardPanel extends BasePanel {
       text += ' (blocked)';
     }
 
-    // Truncate to width
-    if (text.length > width) {
-      text = text.slice(0, width - 1) + '…';
-    }
-
-    const line = UIFactory.stringToLine(text.padEnd(width).slice(0, width), width, {
-      fg,
-      dim,
-      bg: isSelected ? '#1e293b' : '',
-    });
-
-    return [line];
+    return buildPanelLine(width, [[text, fg, isSelected ? '#1e293b' : undefined]]);
   }
 
-  // --------------------------------------------------------------------------
-  // Scroll adjustment
-  // --------------------------------------------------------------------------
-
-  private adjustScroll(totalLineCount: number, height: number): void {
-    // Approximate line position of selected item:
-    // header (3) + blank (1) = 4 fixed lines at top before phase groups.
-    // Each phase group: 1 header + N items + 1 blank. We don't track exact
-    // offsets here, so we use a simple heuristic: scroll to keep selected
-    // near the vertical center of the viewport.
-    const visibleRows = height - 4; // leave header visible
-    if (this.selectedIndex < this.scrollOffset) {
-      this.scrollOffset = this.selectedIndex;
-    } else if (this.selectedIndex >= this.scrollOffset + visibleRows) {
-      this.scrollOffset = this.selectedIndex - visibleRows + 1;
-    }
-    // Clamp
-    const maxOffset = Math.max(0, totalLineCount - height);
-    if (this.scrollOffset > maxOffset) this.scrollOffset = maxOffset;
-    if (this.scrollOffset < 0) this.scrollOffset = 0;
+  private statusColor(status: ExecutionPlan['status']): string {
+    return status === 'complete'
+      ? DEFAULT_PANEL_PALETTE.good
+      : status === 'failed'
+      ? DEFAULT_PANEL_PALETTE.bad
+      : status === 'active'
+      ? DEFAULT_PANEL_PALETTE.info
+      : DEFAULT_PANEL_PALETTE.dim;
   }
 }

@@ -63,6 +63,29 @@ export interface GoodVibesConfig {
     maxActiveAgents: number;    // default: 8 — total active agents across the orchestration tree
     maxDepth: number;           // default: 0 — 0=off, higher values allow deeper bounded recursion
   };
+  sandbox: {
+    replIsolation: 'shared-vm' | 'per-runtime-vm';
+    mcpIsolation: 'disabled' | 'shared-vm' | 'hybrid' | 'per-server-vm';
+    windowsMode: 'native-basic' | 'require-wsl';
+    vmBackend: 'local' | 'qemu';
+    qemuBinary: string;
+    qemuImagePath: string;
+    qemuExecWrapper: string;
+    qemuGuestHost: string;
+    qemuGuestPort: number;
+    qemuGuestUser: string;
+    qemuWorkspacePath: string;
+    qemuSessionMode: 'attach' | 'launch-per-command';
+  };
+  ui: {
+    voiceEnabled: boolean;
+    systemMessages: 'panel' | 'conversation' | 'both';
+    operationalMessages: 'panel' | 'conversation' | 'both';
+    wrfcMessages: 'panel' | 'conversation' | 'both';
+  };
+  release: {
+    channel: 'stable' | 'preview';
+  };
   danger: {
     daemon: boolean;                // default: false — enable daemon mode
     httpListener: boolean;          // default: false — enable HTTP webhook listener
@@ -148,6 +171,23 @@ export type ConfigKey =
   | 'orchestration.recursionEnabled'
   | 'orchestration.maxActiveAgents'
   | 'orchestration.maxDepth'
+  | 'sandbox.replIsolation'
+  | 'sandbox.mcpIsolation'
+  | 'sandbox.windowsMode'
+  | 'sandbox.vmBackend'
+  | 'sandbox.qemuBinary'
+  | 'sandbox.qemuImagePath'
+  | 'sandbox.qemuExecWrapper'
+  | 'sandbox.qemuGuestHost'
+  | 'sandbox.qemuGuestPort'
+  | 'sandbox.qemuGuestUser'
+  | 'sandbox.qemuWorkspacePath'
+  | 'sandbox.qemuSessionMode'
+  | 'ui.voiceEnabled'
+  | 'ui.systemMessages'
+  | 'ui.operationalMessages'
+  | 'ui.wrfcMessages'
+  | 'release.channel'
   | 'danger.daemon'
   | 'danger.httpListener'
   | 'tools.llmProvider'
@@ -179,7 +219,8 @@ export const CONFIG_KEYS = new Set<string>([
   'permissions.tools.analyze', 'permissions.tools.inspect', 'permissions.tools.agent',
   'permissions.tools.state', 'permissions.tools.workflow', 'permissions.tools.registry',
   'permissions.tools.delegate', 'permissions.tools.mcp', 'orchestration.recursionEnabled', 'orchestration.maxActiveAgents',
-  'orchestration.maxDepth', 'danger.daemon', 'danger.httpListener',
+  'orchestration.maxDepth', 'sandbox.replIsolation', 'sandbox.mcpIsolation', 'sandbox.windowsMode',
+  'sandbox.vmBackend', 'sandbox.qemuBinary', 'sandbox.qemuImagePath', 'sandbox.qemuExecWrapper', 'sandbox.qemuGuestHost', 'sandbox.qemuGuestPort', 'sandbox.qemuGuestUser', 'sandbox.qemuWorkspacePath', 'sandbox.qemuSessionMode', 'ui.voiceEnabled', 'ui.systemMessages', 'ui.operationalMessages', 'ui.wrfcMessages', 'release.channel', 'danger.daemon', 'danger.httpListener',
   'tools.llmProvider', 'tools.llmModel', 'tools.autoHeal', 'tools.defaultTokenBudget',
   'tools.hooksFile', 'wrfc.scoreThreshold', 'wrfc.maxFixAttempts', 'wrfc.autoCommit',
   'cache.enabled', 'cache.stableTtl', 'cache.monitorHitRate', 'cache.hitRateWarningThreshold',
@@ -229,6 +270,23 @@ export type ConfigValue<K extends ConfigKey> =
   K extends 'orchestration.recursionEnabled' ? boolean :
   K extends 'orchestration.maxActiveAgents' ? number :
   K extends 'orchestration.maxDepth' ? number :
+  K extends 'sandbox.replIsolation' ? 'shared-vm' | 'per-runtime-vm' :
+  K extends 'sandbox.mcpIsolation' ? 'disabled' | 'shared-vm' | 'hybrid' | 'per-server-vm' :
+  K extends 'sandbox.windowsMode' ? 'native-basic' | 'require-wsl' :
+  K extends 'sandbox.vmBackend' ? 'local' | 'qemu' :
+  K extends 'sandbox.qemuBinary' ? string :
+  K extends 'sandbox.qemuImagePath' ? string :
+  K extends 'sandbox.qemuExecWrapper' ? string :
+  K extends 'sandbox.qemuGuestHost' ? string :
+  K extends 'sandbox.qemuGuestPort' ? number :
+  K extends 'sandbox.qemuGuestUser' ? string :
+  K extends 'sandbox.qemuWorkspacePath' ? string :
+  K extends 'sandbox.qemuSessionMode' ? 'attach' | 'launch-per-command' :
+  K extends 'ui.voiceEnabled' ? boolean :
+  K extends 'ui.systemMessages' ? 'panel' | 'conversation' | 'both' :
+  K extends 'ui.operationalMessages' ? 'panel' | 'conversation' | 'both' :
+  K extends 'ui.wrfcMessages' ? 'panel' | 'conversation' | 'both' :
+  K extends 'release.channel' ? 'stable' | 'preview' :
   K extends 'danger.daemon' ? boolean :
   K extends 'danger.httpListener' ? boolean :
   K extends 'tools.llmProvider' ? string :
@@ -296,6 +354,29 @@ export const DEFAULT_CONFIG: GoodVibesConfig = {
     recursionEnabled: false,
     maxActiveAgents: 8,
     maxDepth: 0,
+  },
+  sandbox: {
+    replIsolation: 'shared-vm',
+    mcpIsolation: 'disabled',
+    windowsMode: 'native-basic',
+    vmBackend: 'local',
+    qemuBinary: 'qemu-system-x86_64',
+    qemuImagePath: '',
+    qemuExecWrapper: '',
+    qemuGuestHost: '',
+    qemuGuestPort: 2222,
+    qemuGuestUser: 'goodvibes',
+    qemuWorkspacePath: '/workspace',
+    qemuSessionMode: 'attach',
+  },
+  ui: {
+    voiceEnabled: false,
+    systemMessages: 'panel',
+    operationalMessages: 'panel',
+    wrfcMessages: 'both',
+  },
+  release: {
+    channel: 'stable',
   },
   danger: {
     daemon: false,
@@ -559,6 +640,118 @@ export const CONFIG_SCHEMA: ConfigSetting[] = [
     default: 0,
     description: 'Maximum recursive orchestration depth: 0=disabled, higher values allow deeper bounded recursion',
     validate: (v) => typeof v === 'number' && v >= 0 && v <= 5,
+  },
+  {
+    key: 'sandbox.replIsolation',
+    type: 'enum',
+    default: 'shared-vm',
+    description: 'Preferred isolation mode for evaluation runtimes once virtualization is enabled',
+    enumValues: ['shared-vm', 'per-runtime-vm'],
+  },
+  {
+    key: 'sandbox.mcpIsolation',
+    type: 'enum',
+    default: 'disabled',
+    description: 'Preferred isolation mode for MCP servers once virtualization is enabled',
+    enumValues: ['disabled', 'shared-vm', 'hybrid', 'per-server-vm'],
+  },
+  {
+    key: 'sandbox.windowsMode',
+    type: 'enum',
+    default: 'native-basic',
+    description: 'Windows host posture: native basic mode or require WSL before enabling virtualized sandboxing',
+    enumValues: ['native-basic', 'require-wsl'],
+  },
+  {
+    key: 'sandbox.vmBackend',
+    type: 'enum',
+    default: 'local',
+    description: 'Sandbox backend: local host execution by default, or QEMU for virtualized isolation',
+    enumValues: ['local', 'qemu'],
+  },
+  {
+    key: 'sandbox.qemuBinary',
+    type: 'string',
+    default: 'qemu-system-x86_64',
+    description: 'QEMU system binary to use when vmBackend=qemu',
+  },
+  {
+    key: 'sandbox.qemuImagePath',
+    type: 'string',
+    default: '',
+    description: 'Disk image path for QEMU-backed sandbox sessions; when empty, QEMU sessions remain planned-only',
+  },
+  {
+    key: 'sandbox.qemuExecWrapper',
+    type: 'string',
+    default: '',
+    description: 'Host-side wrapper/bridge used to execute guest commands inside a configured QEMU sandbox',
+  },
+  {
+    key: 'sandbox.qemuGuestHost',
+    type: 'string',
+    default: '',
+    description: 'Optional guest host/IP used by the QEMU wrapper for real guest command transport',
+  },
+  {
+    key: 'sandbox.qemuGuestPort',
+    type: 'number',
+    default: 2222,
+    description: 'Optional guest SSH port used by the QEMU wrapper for real guest command transport',
+    validate: (v) => typeof v === 'number' && Number.isInteger(v) && v >= 1 && v <= 65535,
+  },
+  {
+    key: 'sandbox.qemuGuestUser',
+    type: 'string',
+    default: 'goodvibes',
+    description: 'Optional guest username used by the QEMU wrapper for real guest command transport',
+  },
+  {
+    key: 'sandbox.qemuWorkspacePath',
+    type: 'string',
+    default: '/workspace',
+    description: 'Guest workspace path used by the QEMU wrapper when executing commands inside the guest',
+  },
+  {
+    key: 'sandbox.qemuSessionMode',
+    type: 'enum',
+    enumValues: ['attach', 'launch-per-command'],
+    default: 'attach',
+    description: 'Whether the QEMU wrapper attaches to an already running guest or launches a guest per command',
+  },
+  {
+    key: 'ui.voiceEnabled',
+    type: 'boolean',
+    default: false,
+    description: 'Enable the optional local-first voice control surface',
+  },
+  {
+    key: 'ui.systemMessages',
+    type: 'enum',
+    default: 'panel',
+    description: 'Where operational system messages render by default: panel, conversation, or both',
+    enumValues: ['panel', 'conversation', 'both'],
+  },
+  {
+    key: 'ui.operationalMessages',
+    type: 'enum',
+    default: 'panel',
+    description: 'Where tool, agent, MCP, plugin, and other operational activity messages render by default: panel, conversation, or both',
+    enumValues: ['panel', 'conversation', 'both'],
+  },
+  {
+    key: 'ui.wrfcMessages',
+    type: 'enum',
+    default: 'both',
+    description: 'Where WRFC lifecycle updates render by default: panel, conversation, or both',
+    enumValues: ['panel', 'conversation', 'both'],
+  },
+  {
+    key: 'release.channel',
+    type: 'enum',
+    default: 'stable',
+    description: 'Preferred release channel for install/update flows',
+    enumValues: ['stable', 'preview'],
   },
   {
     key: 'danger.daemon',

@@ -5,8 +5,17 @@
 import { readdirSync, statSync } from 'node:fs';
 import { join, relative, basename } from 'node:path';
 import type { Line } from '../types/grid.ts';
-import { createStyledCell, createEmptyLine } from '../types/grid.ts';
+import { createEmptyLine } from '../types/grid.ts';
 import { BasePanel } from './base-panel.ts';
+import {
+  buildEmptyState,
+  buildPanelLine,
+  buildSelectablePanelLine,
+  buildPanelWorkspace,
+  DEFAULT_PANEL_PALETTE,
+} from './polish.ts';
+import { getTrackedVisibleWindow } from '../renderer/surface-layout.ts';
+import { getDisplayWidth } from '../utils/terminal-width.ts';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -92,24 +101,6 @@ function formatSize(bytes: number): string {
   return `${(bytes / 1024 / 1024).toFixed(1)}M`;
 }
 
-/**
- * Write a string into a Line starting at `col`, applying a flat style.
- * Returns the column after the last written character.
- */
-function writeStr(
-  line: Line,
-  text: string,
-  col: number,
-  width: number,
-  style: Parameters<typeof createStyledCell>[1] = {},
-): number {
-  for (const ch of text) {
-    if (col >= width) break;
-    line[col++] = createStyledCell(ch, style);
-  }
-  return col;
-}
-
 // ---------------------------------------------------------------------------
 // FileExplorerPanel
 // ---------------------------------------------------------------------------
@@ -187,78 +178,108 @@ export class FileExplorerPanel extends BasePanel {
   render(width: number, height: number): Line[] {
     if (!this.cacheValid) this._buildTree();
     this.needsRender = false;
-
-    const lines: Line[] = [];
-
-    // ── Header row ───────────────────────────────────────────────────────────
-    const headerLine = createEmptyLine(width);
     const headerLabel = this.searchMode
-      ? `/ ${this.searchQuery}█`
-      : ` Explorer  ${relative(process.cwd(), this.rootPath) || '.'}  [r]efresh`;
-    writeStr(headerLine, headerLabel.slice(0, width), 0, width,
-      this.searchMode
-        ? { fg: CLR_SEARCH_FG, bg: CLR_SEARCH_BG, bold: true }
-        : { fg: '#888888', dim: true });
-    lines.push(headerLine);
+      ? `/ ${this.searchQuery}_`
+      : `Root: ${relative(process.cwd(), this.rootPath) || '.'}`;
 
-    const viewHeight = height - 1; // reserve 1 row for header
-    if (viewHeight <= 0) return lines;
+    if (this.flat.length === 0) {
+      return buildPanelWorkspace(width, height, {
+        title: ' Explorer',
+        intro: 'Browse the project tree, expand directories, and search for paths.',
+        sections: [
+          {
+            lines: buildEmptyState(
+              width,
+              ' No files found',
+              this.searchQuery
+                ? 'No files or directories match the current search.'
+                : 'This root did not produce any visible files after the explorer filters were applied.',
+              [],
+              DEFAULT_PANEL_PALETTE,
+            ),
+          },
+        ],
+        footerLines: [
+          buildPanelLine(width, [[` ${headerLabel}`, this.searchMode ? DEFAULT_PANEL_PALETTE.info : DEFAULT_PANEL_PALETTE.dim]]),
+          buildPanelLine(width, [[' Up/Down', DEFAULT_PANEL_PALETTE.info], [' navigate', DEFAULT_PANEL_PALETTE.dim], ['   Enter/Right', DEFAULT_PANEL_PALETTE.info], [' expand', DEFAULT_PANEL_PALETTE.dim], ['   Left', DEFAULT_PANEL_PALETTE.info], [' collapse', DEFAULT_PANEL_PALETTE.dim], ['   /', DEFAULT_PANEL_PALETTE.info], [' search', DEFAULT_PANEL_PALETTE.dim], ['   r', DEFAULT_PANEL_PALETTE.info], [' refresh', DEFAULT_PANEL_PALETTE.dim]]),
+        ],
+        palette: DEFAULT_PANEL_PALETTE,
+      });
+    }
 
-    // ── Adjust scroll ────────────────────────────────────────────────────────
-    this._clampScroll(viewHeight);
-
-    const visible = this.flat.slice(this.scrollTop, this.scrollTop + viewHeight);
-
-    for (let i = 0; i < viewHeight; i++) {
+    const window = getTrackedVisibleWindow(this.flat.length, this.cursor, Math.max(8, height - 8), this.scrollTop, 1);
+    this.scrollTop = window.start;
+    const visible = this.flat.slice(window.start, window.end);
+    const rows: Line[] = [];
+    for (let i = 0; i < visible.length; i++) {
       const node = visible[i];
-      const line = createEmptyLine(width);
-
-      if (!node) {
-        lines.push(line);
-        continue;
-      }
-
-      const absoluteIdx = this.scrollTop + i;
+      if (!node) continue;
+      const absoluteIdx = window.start + i;
       const isCursor = absoluteIdx === this.cursor;
       const baseBg = isCursor ? CLR_CURSOR : '';
       const baseFg = isCursor ? CLR_CURSOR_FG : (node.isDir ? CLR_DIR : CLR_FILE);
-
-      let col = 0;
-
-      // indent (2 spaces per depth level)
       const indent = '  '.repeat(node.depth);
-      col = writeStr(line, indent, col, width, { fg: baseFg, bg: baseBg });
-
-      if (node.isDir) {
-        // toggle arrow
-        const arrow = node.expanded ? '▼ ' : '▶ ';
-        col = writeStr(line, arrow, col, width, { fg: CLR_TOGGLE, bg: baseBg, bold: isCursor });
-      } else {
-        // file type icon
-        const icon = fileIcon(node.name) + ' ';
-        col = writeStr(line, icon, col, width, { fg: CLR_ICON, bg: baseBg, dim: !isCursor });
-      }
-
-      // name
-      col = writeStr(line, node.name, col, width, {
-        fg: baseFg,
-        bg: baseBg,
-        bold: node.isDir || isCursor,
-      });
-
-      // file size (right-aligned, only for files)
+      const segments = [
+        { text: indent, fg: baseFg },
+        node.isDir
+          ? { text: node.expanded ? 'v ' : '> ', fg: CLR_TOGGLE, bold: isCursor }
+          : { text: `${fileIcon(node.name)} `, fg: CLR_ICON, dim: !isCursor },
+        { text: node.name, fg: baseFg, bold: node.isDir || isCursor },
+      ];
       if (!node.isDir && node.size > 0) {
         const sizeStr = ` ${formatSize(node.size)}`;
-        const sizeStart = Math.max(col + 1, width - sizeStr.length);
-        if (sizeStart + sizeStr.length <= width) {
-          writeStr(line, sizeStr, sizeStart, width, { fg: CLR_SIZE, bg: baseBg, dim: true });
-        }
+        const contentWidth = getDisplayWidth(indent) + 2 + getDisplayWidth(node.name);
+        const gap = Math.max(1, width - contentWidth - getDisplayWidth(sizeStr));
+        segments.push({ text: ' '.repeat(gap), fg: baseFg });
+        segments.push({ text: sizeStr, fg: CLR_SIZE, dim: true });
       }
-
-      lines.push(line);
+      rows.push(buildSelectablePanelLine(width, segments, { selected: isCursor, selectedBg: baseBg, fillFg: baseFg }));
     }
 
-    return lines;
+    const selected = this.flat[this.cursor];
+    return buildPanelWorkspace(width, height, {
+      title: ' Explorer',
+      intro: 'Browse the project tree, expand directories, and search for paths.',
+      sections: [
+        {
+          title: 'Summary',
+          lines: [
+            buildPanelLine(width, [
+              [' Visible ', DEFAULT_PANEL_PALETTE.label],
+              [String(this.flat.length), DEFAULT_PANEL_PALETTE.value],
+              ['   Search ', DEFAULT_PANEL_PALETTE.label],
+              [this.searchQuery || 'none', this.searchQuery ? DEFAULT_PANEL_PALETTE.info : DEFAULT_PANEL_PALETTE.dim],
+            ]),
+          ],
+        },
+        {
+          title: 'Tree',
+          lines: rows,
+        },
+        {
+          title: 'Selected',
+          lines: selected
+            ? [
+                buildPanelLine(width, [
+                  [' Name ', DEFAULT_PANEL_PALETTE.label],
+                  [selected.name, DEFAULT_PANEL_PALETTE.value],
+                  ['   Type ', DEFAULT_PANEL_PALETTE.label],
+                  [selected.isDir ? 'directory' : 'file', selected.isDir ? DEFAULT_PANEL_PALETTE.info : DEFAULT_PANEL_PALETTE.value],
+                ]),
+                buildPanelLine(width, [
+                  [' Path ', DEFAULT_PANEL_PALETTE.label],
+                  [selected.path, DEFAULT_PANEL_PALETTE.dim],
+                ]),
+              ]
+            : [],
+        },
+      ],
+      footerLines: [
+        buildPanelLine(width, [[` ${headerLabel}`, this.searchMode ? DEFAULT_PANEL_PALETTE.info : DEFAULT_PANEL_PALETTE.dim]]),
+        buildPanelLine(width, [[' Up/Down', DEFAULT_PANEL_PALETTE.info], [' navigate', DEFAULT_PANEL_PALETTE.dim], ['   Enter/Right', DEFAULT_PANEL_PALETTE.info], [' expand', DEFAULT_PANEL_PALETTE.dim], ['   Left', DEFAULT_PANEL_PALETTE.info], [' collapse', DEFAULT_PANEL_PALETTE.dim], ['   /', DEFAULT_PANEL_PALETTE.info], [' search', DEFAULT_PANEL_PALETTE.dim], ['   r', DEFAULT_PANEL_PALETTE.info], [' refresh', DEFAULT_PANEL_PALETTE.dim]]),
+      ],
+      palette: DEFAULT_PANEL_PALETTE,
+    });
   }
 
   // ── Private: tree building ─────────────────────────────────────────────────

@@ -138,7 +138,7 @@ export class Compositor {
 
         // Separator column (vertical bar between left and panel area)
         if (p.separator) {
-          newBuffer.setCell(sepX, screenY, createStyledCell('\u2502', { fg: sepFg }));
+          newBuffer.setCell(sepX, screenY, createStyledCell('│', { fg: sepFg }));
         }
 
         const panelStartX = sepX + 1;
@@ -174,13 +174,13 @@ export class Compositor {
             // Render ─ chars across the panel width
             const focusFg = p.bottomFocused ? '36' : '238'; // cyan if bottom pane focused
             for (let x = 0; x < panelWidth; x++) {
-              newBuffer.setCell(panelStartX + x, screenY, createStyledCell('\u2500', { fg: focusFg }));
+              newBuffer.setCell(panelStartX + x, screenY, createStyledCell('─', { fg: focusFg }));
             }
             // Also update the separator column char to T-junction (├):
             // ├ connects the vertical left-separator with the horizontal pane divider,
             // forming a clean T-shaped joint at the split point.
             if (p.separator) {
-              newBuffer.setCell(sepX, screenY, createStyledCell('\u251c', { fg: focusFg }));
+              newBuffer.setCell(sepX, screenY, createStyledCell('├', { fg: focusFg }));
             }
           } else if (i === hSepRow + 1) {
             panelLine = p.bottomTabBar;
@@ -232,7 +232,7 @@ export class Compositor {
       for (let i = viewport.length; i < vHeight; i++) {
         const screenY = viewportStartY + i;
         if (screenY >= height) break;
-        newBuffer.setCell(sepX, screenY, createStyledCell('\u2502', { fg: sepFg }));
+        newBuffer.setCell(sepX, screenY, createStyledCell('│', { fg: sepFg }));
       }
     }
 

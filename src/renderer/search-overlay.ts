@@ -1,11 +1,11 @@
-import { type Line, type Cell } from '../types/grid.ts';
-import { UIFactory } from './ui-factory.ts';
-import { getDisplayWidth } from '../utils/terminal-width.ts';
+import type { Line } from '../types/grid.ts';
+import { fitDisplay, getDisplayWidth, truncateDisplay } from '../utils/terminal-width.ts';
 import type { SearchManager } from '../input/search.ts';
+import { createBottomBarLine, writeBottomBarText } from './bottom-bar.ts';
 
 /**
  * Render the search bar as a single Line[] overlay at the bottom of the viewport.
- * Format: [ Find: <query>   3/17 ▲▼  [n] next [N] prev [Esc] close ]
+ * Format: [ Find: <query>   3/17 up/down  [n] next [N] prev [Esc] close ]
  * The match count is dim grey; the rest of the bar is teal.
  */
 export function renderSearchOverlay(
@@ -14,16 +14,16 @@ export function renderSearchOverlay(
 ): Line[] {
   // Match count text — displayed in dim grey, right of query, left of hints
   const matchCount = manager.matches?.length > 0
-    ? `${manager.currentMatch + 1}/${manager.matches.length} \u25b2\u25bc`
+    ? `${manager.currentMatch + 1}/${manager.matches.length} up/down`
     : manager.query.length > 0
       ? 'No matches'
       : '';
 
   const locked = manager.locked;
-  const cursor = locked ? '' : '\u2588'; // block cursor only when typing
+  const cursor = locked ? '' : '_';
   const queryDisplay = manager.query + cursor;
   const hints = locked
-    ? '  [\u2191\u2193] or [jk] navigate  [Bksp] edit  [Esc] close'
+    ? '  [Up/Down] or [jk] navigate  [Bksp] edit  [Esc] close'
     : '  [Enter/Tab] lock  [Esc] close';
   const label = ' Find: ';
   const matchStr = matchCount ? ` ${matchCount}` : '';
@@ -34,36 +34,20 @@ export function renderSearchOverlay(
   const matchStrW = getDisplayWidth(matchStr);
   // Available width for left content (query area)
   const leftWidth = width - hintsW - matchStrW - 2;
-  const truncatedLeft = getDisplayWidth(leftPart) > leftWidth
-    ? leftPart.slice(0, leftWidth - 1) + '\u2026'
-    : leftPart.padEnd(leftWidth);
+  const truncatedLeft = fitDisplay(
+    getDisplayWidth(leftPart) > leftWidth ? truncateDisplay(leftPart, leftWidth) : leftPart,
+    leftWidth,
+  );
 
   // Build the full line text (match count embedded for positional tracking)
-  const fullLine = (truncatedLeft + matchStr + hints + ' ').slice(0, width);
-
-  // Render entire line with teal styling first
-  const line = UIFactory.stringToLine(fullLine, width, { fg: '#000000', bg: '#00ffcc', bold: false });
+  const fullLine = truncatedLeft + matchStr + hints + ' ';
+  const line = createBottomBarLine(width, { fg: '#000000', bg: '#00ffcc' });
+  writeBottomBarText(line, 0, width, fitDisplay(truncateDisplay(fullLine, width), width), { fg: '#000000', bg: '#00ffcc' });
 
   // Overwrite match count segment with dim grey styling
   if (matchStr.length > 0) {
     const matchStart = getDisplayWidth(truncatedLeft);
-    const matchEnd = matchStart + matchStrW;
-    const dimStyle: Cell = {
-      char: ' ',
-      fg: '#888888',
-      bg: '#00ffcc',
-      bold: false,
-      dim: true,
-      underline: false,
-      italic: false,
-      strikethrough: false,
-    };
-    for (let col = matchStart; col < matchEnd && col < width; col++) {
-      const existing = line[col];
-      if (existing) {
-        line[col] = { ...dimStyle, char: existing.char };
-      }
-    }
+    writeBottomBarText(line, matchStart, matchStrW, matchStr, { fg: '#888888', bg: '#00ffcc', dim: true });
   }
 
   return [line];

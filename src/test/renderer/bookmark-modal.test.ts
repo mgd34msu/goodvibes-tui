@@ -68,7 +68,7 @@ describe('renderBookmarkModal', () => {
     seedBookmarks(3);
     modal.open();
     const lines = renderBookmarkModal(modal, W);
-    const hasArrow = lines.some(line => line.some(cell => cell.char === '\u25b6'));
+    const hasArrow = lines.some(line => line.some(cell => cell.char === '>'));
     expect(hasArrow).toBe(true);
   });
 

@@ -1,33 +1,27 @@
-import type { Line, Cell } from '../types/grid.ts';
-import { createEmptyLine, createStyledCell } from '../types/grid.ts';
+import type { Line } from '../types/grid.ts';
+import { createEmptyLine } from '../types/grid.ts';
 import { BasePanel } from './base-panel.ts';
 import { pluginManager } from '../plugins/manager.ts';
 import type { PluginManagerObserver, PluginStatus } from '../plugins/manager.ts';
+import {
+  buildEmptyState,
+  buildPanelLine,
+  buildPanelWorkspace,
+  DEFAULT_PANEL_PALETTE,
+  type PanelWorkspaceSection,
+} from './polish.ts';
+import { getTrackedVisibleWindow } from '../renderer/surface-layout.ts';
 
 const C = {
+  ...DEFAULT_PANEL_PALETTE,
   header: '#94a3b8',
   headerBg: '#1e293b',
-  label: '#64748b',
-  value: '#e2e8f0',
-  dim: '#475569',
   ok: '#22c55e',
   warn: '#eab308',
   error: '#ef4444',
   info: '#38bdf8',
   selectBg: '#0f172a',
-  empty: '#334155',
 } as const;
-
-function buildLine(width: number, segments: Array<[string, string, string?]>): Line {
-  const cells: Cell[] = [];
-  let used = 0;
-  for (const [text, fg, bg] of segments) {
-    cells.push(createStyledCell(text, { fg, bg: bg ?? '' }));
-    used += text.length;
-  }
-  if (used < width) cells.push(createStyledCell(' '.repeat(width - used), { fg: '' }));
-  return cells;
-}
 
 function trustColor(tier: PluginStatus['trustTier']): string {
   switch (tier) {
@@ -69,7 +63,6 @@ export class PluginsPanel extends BasePanel {
   public override onActivate(): void {
     super.onActivate();
     this.selectedIndex = 0;
-    this.scrollOffset = 0;
   }
 
   public override onDestroy(): void {
@@ -94,35 +87,44 @@ export class PluginsPanel extends BasePanel {
 
   public render(width: number, height: number): Line[] {
     this.needsRender = false;
-    const lines: Line[] = [];
-    lines.push(buildLine(width, [[' Plugin Control Room', C.header, C.headerBg]]));
-
+    const intro = 'Plugin trust, capabilities, signatures, and quarantine posture for the active ecosystem surface.';
     const plugins = this.manager.list();
+
     if (plugins.length === 0) {
-      lines.push(buildLine(width, [[' No plugins discovered. Use /plugin list for search paths and install hints.', C.empty]]));
-      while (lines.length < height) lines.push(createEmptyLine(width));
-      return lines;
+      const workspace = buildPanelWorkspace(width, height, {
+        title: 'Plugin Control Room',
+        intro,
+        sections: [{
+          lines: buildEmptyState(
+            width,
+            ' No plugins discovered.',
+            'Use /plugin list for search paths, install hints, and trust review before activating plugin-backed flows.',
+            [
+              { command: '/plugin list', summary: 'inspect plugin discovery paths and current registry state' },
+              { command: '/marketplace', summary: 'review curated ecosystem entries and provenance posture' },
+            ],
+            C,
+          ),
+        }],
+        palette: C,
+      });
+      while (workspace.length < height) workspace.push(createEmptyLine(width));
+      return workspace;
     }
 
-    const bodyHeight = Math.max(1, height - 1);
-    const maxScroll = Math.max(0, plugins.length - bodyHeight);
-    this.scrollOffset = Math.min(this.scrollOffset, maxScroll);
-    if (this.selectedIndex < this.scrollOffset) this.scrollOffset = this.selectedIndex;
-    if (this.selectedIndex >= this.scrollOffset + bodyHeight) {
-      this.scrollOffset = this.selectedIndex - bodyHeight + 1;
-    }
-
+    this.selectedIndex = Math.min(this.selectedIndex, plugins.length - 1);
     const selected = plugins[this.selectedIndex]!;
     const selectedCaps = this.manager.capabilities(selected.name);
     const trustRecord = this.manager.getTrustRecord(selected.name);
     const quarantineRecord = this.manager.getQuarantineRecord(selected.name);
+    const window = getTrackedVisibleWindow(plugins.length, this.selectedIndex, Math.max(4, height - 14), this.scrollOffset, 1);
+    this.scrollOffset = window.start;
 
-    const visible = plugins.slice(this.scrollOffset, this.scrollOffset + Math.max(1, bodyHeight - 6));
-    for (let index = 0; index < visible.length; index++) {
-      const plugin = visible[index]!;
-      const absoluteIndex = this.scrollOffset + index;
-      const bg = absoluteIndex === this.selectedIndex ? C.selectBg : undefined;
-      lines.push(buildLine(width, [
+    const pluginLines: Line[] = [];
+    for (let absolute = window.start; absolute < window.end; absolute++) {
+      const plugin = plugins[absolute]!;
+      const bg = absolute === this.selectedIndex ? C.selectBg : undefined;
+      pluginLines.push(buildPanelLine(width, [
         [' ', C.label, bg],
         [plugin.name.padEnd(22), C.value, bg],
         [` ${statusLabel(plugin).padEnd(11)}`, statusColor(plugin), bg],
@@ -130,23 +132,27 @@ export class PluginsPanel extends BasePanel {
         [` ${plugin.version}`, C.dim, bg],
       ]));
     }
+    if (plugins.length > window.count) {
+      pluginLines.push(buildPanelLine(width, [[`  showing ${window.start + 1}-${window.end} of ${plugins.length}`, C.dim]]));
+    }
 
-    lines.push(buildLine(width, [[' Details', C.label]]));
-    lines.push(buildLine(width, [
-      ['  Plugin: ', C.label],
-      [selected.name, C.value],
-      ['  State: ', C.label],
-      [statusLabel(selected), statusColor(selected)],
-      ['  Trust: ', C.label],
-      [selected.trustTier, trustColor(selected.trustTier)],
-    ]));
-    lines.push(buildLine(width, [
-      ['  Description: ', C.label],
-      [selected.description.slice(0, Math.max(0, width - 15)), C.dim],
-    ]));
+    const detailLines: Line[] = [
+      buildPanelLine(width, [
+        ['  Plugin: ', C.label],
+        [selected.name, C.value],
+        ['  State: ', C.label],
+        [statusLabel(selected), statusColor(selected)],
+        ['  Trust: ', C.label],
+        [selected.trustTier, trustColor(selected.trustTier)],
+      ]),
+      buildPanelLine(width, [
+        ['  Description: ', C.label],
+        [selected.description.slice(0, Math.max(0, width - 15)), C.dim],
+      ]),
+    ];
 
     if (selectedCaps) {
-      lines.push(buildLine(width, [
+      detailLines.push(buildPanelLine(width, [
         ['  Capabilities: ', C.label],
         [String(selectedCaps.requested.length), C.value],
         ['  High-risk: ', C.label],
@@ -157,21 +163,32 @@ export class PluginsPanel extends BasePanel {
     }
 
     if (trustRecord?.signatureFingerprint) {
-      lines.push(buildLine(width, [
+      detailLines.push(buildPanelLine(width, [
         ['  Signature: ', C.label],
         [trustRecord.signatureFingerprint, C.info],
       ]));
     }
 
     if (quarantineRecord) {
-      lines.push(buildLine(width, [
+      detailLines.push(buildPanelLine(width, [
         ['  Quarantine: ', C.label],
         [quarantineRecord.reason.slice(0, Math.max(0, width - 14)), C.error],
       ]));
     }
 
-    lines.push(buildLine(width, [['  Inspect trust and capability state here, then use /plugin to take action.', C.dim]]));
+    detailLines.push(buildPanelLine(width, [['  Inspect trust and capability state here, then use /plugin to take action.', C.dim]]));
 
+    const sections: PanelWorkspaceSection[] = [
+      { title: 'Plugins', lines: pluginLines },
+      { title: 'Selected Plugin', lines: detailLines },
+    ];
+    const lines = buildPanelWorkspace(width, height, {
+      title: 'Plugin Control Room',
+      intro,
+      sections,
+      footerLines: [buildPanelLine(width, [['  Up/Down move through discovered plugins', C.dim]])],
+      palette: C,
+    });
     while (lines.length < height) lines.push(createEmptyLine(width));
     return lines.slice(0, height);
   }

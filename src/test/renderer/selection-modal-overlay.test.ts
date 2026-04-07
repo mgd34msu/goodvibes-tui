@@ -1,0 +1,41 @@
+import { describe, expect, test } from 'bun:test';
+import { renderSelectionModalOverlay } from '../../renderer/selection-modal-overlay.ts';
+import { SelectionModal } from '../../input/selection-modal.ts';
+
+describe('renderSelectionModalOverlay', () => {
+  test('keeps selected-row highlight inside intact borders', () => {
+    const modal = new SelectionModal();
+    modal.open('Pick Workspace', [
+      { id: 'a', label: 'Alpha', detail: 'first workspace', category: 'Recent' },
+      { id: 'b', label: 'Bravo', detail: 'second workspace', category: 'Recent' },
+      { id: 'c', label: 'Gamma', detail: 'third workspace', category: 'Other' },
+    ]);
+    modal.selectedIndex = 1;
+
+    const width = 84;
+    const lines = renderSelectionModalOverlay(modal, width);
+
+    for (const line of lines) {
+      expect(line.length).toBe(width);
+    }
+
+    const boxMargin = lines[0]?.findIndex((cell) => cell.char === '┌') ?? -1;
+    const rightX = lines[0]?.findLastIndex((cell) => cell.char === '┐') ?? -1;
+
+    expect(lines[0]?.[boxMargin]?.char).toBe('┌');
+    expect(lines[0]?.[rightX]?.char).toBe('┐');
+    expect(lines.at(-1)?.[boxMargin]?.char).toBe('└');
+    expect(lines.at(-1)?.[rightX]?.char).toBe('┘');
+
+    const selectedRow = lines.find((line) =>
+      line.some((cell) => cell.bg === '#103040' && cell.char.trim().length > 0)
+    );
+    expect(selectedRow).toBeDefined();
+    expect(selectedRow?.[boxMargin]?.char).toBe('│');
+    expect(selectedRow?.[boxMargin]?.bg).toBe('');
+    expect(selectedRow?.[rightX]?.char).toBe('│');
+    expect(selectedRow?.[rightX]?.bg).toBe('');
+    expect(selectedRow?.[boxMargin + 1]?.bg).toBe('#103040');
+    expect(selectedRow?.[rightX - 1]?.bg).toBe('#103040');
+  });
+});

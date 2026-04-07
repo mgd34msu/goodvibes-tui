@@ -28,6 +28,7 @@
  * notifications with policy-based routing.
  */
 
+import { getConfigSnapshot } from '../config/index.ts';
 import type { ConversationManager } from './conversation.ts';
 import type { SystemMessagesPanel, SystemMessagePriority } from '../panels/system-messages-panel.ts';
 
@@ -52,6 +53,39 @@ function classifyPriority(message: string): SystemMessagePriority {
   return HIGH_PRIORITY_RE.test(message) ? 'high' : 'low';
 }
 
+export type SystemMessageKind = 'system' | 'operational' | 'wrfc';
+export type SystemMessageTarget = 'conversation' | 'panel' | 'both';
+
+function classifyKind(message: string): SystemMessageKind {
+  if (/^\[WRFC\]/i.test(message)) return 'wrfc';
+  if (/^\[(Scan|Local|Agents|MCP|Plugin|Hook|Tool|Exec|Remote|Bridge|Approval)\]/i.test(message)) {
+    return 'operational';
+  }
+  return 'system';
+}
+
+function targetForKind(kind: SystemMessageKind): SystemMessageTarget {
+  const ui = getConfigSnapshot().ui;
+  if (kind === 'wrfc') return ui.wrfcMessages;
+  if (kind === 'operational') return ui.operationalMessages;
+  return ui.systemMessages;
+}
+
+function resolveDelivery(
+  target: SystemMessageTarget,
+  hasPanel: boolean,
+): { readonly toPanel: boolean; readonly toConversation: boolean } {
+  if (target === 'both') {
+    return { toPanel: hasPanel, toConversation: true };
+  }
+  if (target === 'conversation') {
+    return { toPanel: false, toConversation: true };
+  }
+  return hasPanel
+    ? { toPanel: true, toConversation: false }
+    : { toPanel: false, toConversation: true };
+}
+
 // ---------------------------------------------------------------------------
 // SystemMessageRouter
 // ---------------------------------------------------------------------------
@@ -64,6 +98,7 @@ export class SystemMessageRouter {
   constructor(
     private readonly conversation: ConversationManager,
     private panel: SystemMessagesPanel | null,
+    private readonly getTargetForKind: (kind: SystemMessageKind) => SystemMessageTarget = targetForKind,
   ) {}
 
   // ── Public API ────────────────────────────────────────────────────────────
@@ -77,14 +112,23 @@ export class SystemMessageRouter {
    * @param message  - Message text.
    * @param priority - 'high' | 'low'.
    */
-  routeSystemMessage(message: string, priority: SystemMessagePriority): void {
-    // Always send to panel
-    this.panel?.push(message, priority);
-
-    // Only send high-priority messages to the conversation
-    if (priority === 'high') {
+  routeTypedSystemMessage(
+    message: string,
+    priority: SystemMessagePriority,
+    kind: SystemMessageKind,
+  ): void {
+    const target = this.getTargetForKind(kind);
+    const delivery = resolveDelivery(target, this.panel !== null);
+    if (delivery.toPanel) {
+      this.panel?.push(message, priority);
+    }
+    if (delivery.toConversation) {
       this.conversation.addSystemMessage(message);
     }
+  }
+
+  routeSystemMessage(message: string, priority: SystemMessagePriority): void {
+    this.routeTypedSystemMessage(message, priority, classifyKind(message));
   }
 
   /**
@@ -97,7 +141,7 @@ export class SystemMessageRouter {
    */
   routeAuto(message: string): void {
     const priority = classifyPriority(message);
-    this.routeSystemMessage(message, priority);
+    this.routeTypedSystemMessage(message, priority, classifyKind(message));
   }
 
   /**
@@ -114,6 +158,10 @@ export class SystemMessageRouter {
    */
   low(message: string): void {
     this.routeSystemMessage(message, 'low');
+  }
+
+  wrfc(message: string, priority: SystemMessagePriority = 'high'): void {
+    this.routeTypedSystemMessage(message, priority, 'wrfc');
   }
 
   /**
@@ -147,6 +195,7 @@ export class SystemMessageRouter {
 export function createSystemMessageRouter(
   conversation: ConversationManager,
   panel: SystemMessagesPanel | null = null,
+  getTargetForKind: (kind: SystemMessageKind) => SystemMessageTarget = targetForKind,
 ): SystemMessageRouter {
-  return new SystemMessageRouter(conversation, panel);
+  return new SystemMessageRouter(conversation, panel, getTargetForKind);
 }

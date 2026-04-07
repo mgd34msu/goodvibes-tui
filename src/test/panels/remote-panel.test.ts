@@ -68,6 +68,7 @@ describe('RemotePanel', () => {
     const text = linesText(new RemotePanel().render(120, 12));
     expect(text).toContain('Remote Control Room');
     expect(text).toContain('Runtime store not wired');
+    expect(text).toContain('/remote setup');
   });
 
   test('renders daemon posture and selected ACP connection detail', () => {
@@ -123,5 +124,31 @@ describe('RemotePanel', () => {
     expect(text).toContain('remote reviewer');
     expect(text).toContain('connection lost');
     expect(text).toContain('Task:');
+  });
+
+  test('can switch to contract browsing when no active connection is selected', () => {
+    AgentManager.resetInstance();
+    _resetRemoteRunnerRegistryForTesting();
+    const manager = AgentManager.getInstance();
+    const agent = manager.spawn({
+      mode: 'spawn',
+      task: 'Inspect remote contracts',
+      template: 'engineer',
+      tools: ['read'],
+      dangerously_disable_wrfc: true,
+    });
+
+    const store = createRuntimeStore();
+    const registry = getRemoteRunnerRegistry();
+    registry.ensureContractsFromStore(store);
+    registry.upsertContractForAgent(agent.id, store);
+
+    const panel = new RemotePanel(store);
+    expect(panel.handleInput('tab')).toBe(true);
+    const text = linesText(panel.render(140, 20));
+    expect(text).toContain('focus=contracts');
+    expect(text).toContain('Registered Remote Runner Contracts');
+    expect(text).toContain('Selected Contract');
+    expect(text).toContain(agent.id);
   });
 });

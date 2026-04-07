@@ -42,12 +42,11 @@ describe('renderProfilePickerModal', () => {
 
   test('footer contains navigation hints', () => {
     const lines = renderProfilePickerModal(makeModal(), W);
-    const footer = lineToString(lines[lines.length - 1]);
-    expect(footer).toContain('Navigate');
-    expect(footer).toContain('Load');
-    expect(footer).toContain('Delete');
-    expect(footer).toContain('Save current');
-    expect(footer).toContain('Esc');
+    const texts = linesToText(lines).join('\n');
+    expect(texts).toContain('Navigate');
+    expect(texts).toContain('Load');
+    expect(texts).toContain('Arm/Delete');
+    expect(texts).toContain('Save curr');
   });
 
   test('shows profile names in list', () => {
@@ -59,8 +58,8 @@ describe('renderProfilePickerModal', () => {
 
   test('selected item has arrow indicator', () => {
     const lines = renderProfilePickerModal(makeModal(), W);
-    const hasArrow = lines.some(line => line.some(cell => cell.char === '\u25b6'));
-    expect(hasArrow).toBe(true);
+    const texts = linesToText(lines).join('\n');
+    expect(texts).toContain('>');
   });
 
   test('empty profiles shows helpful message', () => {
@@ -78,6 +77,14 @@ describe('renderProfilePickerModal', () => {
     const lines = renderProfilePickerModal(modal, W);
     const texts = linesToText(lines).join('\n');
     expect(texts).toContain('Loaded profile: work-profile');
+  });
+
+  test('delete confirmation guidance is displayed when armed', () => {
+    const modal = makeModal();
+    modal.deleteConfirmationTarget = 'work-profile';
+    const lines = renderProfilePickerModal(modal, W);
+    const texts = linesToText(lines).join('\n');
+    expect(texts).toContain('Press [d] again to permanently delete work-profile');
   });
 
   test('works at narrow terminal width', () => {

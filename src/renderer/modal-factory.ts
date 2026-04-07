@@ -1,6 +1,12 @@
 import { type Line, type Cell } from '../types/grid.ts';
-import { UIFactory } from './ui-factory.ts';
-import { getDisplayWidth } from '../utils/terminal-width.ts';
+import { fitDisplay, getDisplayWidth, truncateDisplay, wrapText } from '../utils/terminal-width.ts';
+import {
+  createOverlayBorderLine,
+  createOverlayBoxLayout,
+  createOverlayContentLine,
+  putOverlayText,
+} from './overlay-box.ts';
+import { getOverlayMaxWidth } from './overlay-viewport.ts';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -9,15 +15,7 @@ import { getDisplayWidth } from '../utils/terminal-width.ts';
  * Handles wide characters (CJK, emoji) correctly via getDisplayWidth.
  */
 function truncateToWidth(text: string, maxWidth: number): string {
-  let width = 0;
-  let i = 0;
-  for (const char of text) {
-    const cw = getDisplayWidth(char);
-    if (width + cw > maxWidth) break;
-    width += cw;
-    i += char.length;
-  }
-  return text.slice(0, i);
+  return truncateDisplay(text, maxWidth, '');
 }
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -30,7 +28,7 @@ export interface ModalSectionStyle {
 }
 
 export interface ModalSection {
-  type: 'text' | 'list' | 'input' | 'separator';
+  type: 'text' | 'list' | 'input' | 'separator' | 'title' | 'spacer';
   /** Text content for 'text' and 'input' types. */
   content?: string;
   /** Items for 'list' type. Each item: { label, selected?, style? } */
@@ -51,6 +49,19 @@ export interface ModalStyle {
   selectedFg?: string;
   selectedBg?: string;
   textFg?: string;
+  accentFg?: string;
+  titleRowFg?: string;
+}
+
+export interface ModalTab {
+  label: string;
+  active?: boolean;
+}
+
+export interface ModalHelperRow {
+  label?: string;
+  content: string;
+  accent?: boolean;
 }
 
 export interface ModalConfig {
@@ -59,7 +70,11 @@ export interface ModalConfig {
   width?: number;
   /** Horizontal margin (spaces on left). Default: 4. */
   margin?: number;
+  tabs?: ModalTab[];
+  search?: string;
   sections: ModalSection[];
+  targetContentRows?: number;
+  helpers?: ModalHelperRow[];
   /** Footer hint string. If omitted, no bottom hint text is inlined. */
   footer?: string;
   /** Keyboard hint strings to join with spaces in the footer border. */
@@ -76,6 +91,8 @@ const DEFAULT_STYLE: Required<ModalStyle> = {
   selectedFg: '#00ffff',
   selectedBg: '#1a2a3a',
   textFg: '252',
+  accentFg: '#38bdf8',
+  titleRowFg: '#cbd5e1',
 };
 
 // ── ModalFactory ─────────────────────────────────────────────────────────────
@@ -100,7 +117,7 @@ export class ModalFactory {
   static createModal(config: ModalConfig, terminalWidth: number): Line[] {
     const margin = config.margin ?? 4;
     const maxBoxW = config.width ?? 72;
-    const boxW = Math.max(4, Math.min(terminalWidth - margin * 2, maxBoxW));
+    const boxW = Math.max(24, getOverlayMaxWidth(terminalWidth, margin, maxBoxW));
     const style = { ...DEFAULT_STYLE, ...(config.style ?? {}) };
     const lines: Line[] = [];
 
@@ -108,20 +125,50 @@ export class ModalFactory {
     lines.push(ModalFactory.renderTitle(boxW, margin, config.title, terminalWidth, style));
 
     // Sections
+    const sectionLines: Line[] = [];
+    if (config.tabs && config.tabs.length > 0) {
+      lines.push(ModalFactory._renderTabsRow(boxW, margin, terminalWidth, config.tabs, style));
+    }
+    if (typeof config.search === 'string') {
+      lines.push(...ModalFactory._renderInputSection({ type: 'input', content: config.search }, boxW, margin, terminalWidth, style));
+    }
+
     for (const section of config.sections) {
       switch (section.type) {
         case 'text':
-          lines.push(...ModalFactory._renderTextSection(section, boxW, margin, terminalWidth, style));
+          sectionLines.push(...ModalFactory._renderTextSection(section, boxW, margin, terminalWidth, style));
           break;
         case 'list':
-          lines.push(...ModalFactory._renderListSection(section, boxW, margin, terminalWidth, style));
+          sectionLines.push(...ModalFactory._renderListSection(section, boxW, margin, terminalWidth, style));
           break;
         case 'input':
-          lines.push(...ModalFactory._renderInputSection(section, boxW, margin, terminalWidth, style));
+          sectionLines.push(...ModalFactory._renderInputSection(section, boxW, margin, terminalWidth, style));
           break;
         case 'separator':
-          lines.push(ModalFactory._renderSeparatorLine(boxW, margin, terminalWidth, style));
+          sectionLines.push(ModalFactory._renderSeparatorLine(boxW, margin, terminalWidth, style));
           break;
+        case 'title':
+          sectionLines.push(ModalFactory._renderSectionTitle(section, boxW, margin, terminalWidth, style));
+          break;
+        case 'spacer':
+          sectionLines.push(ModalFactory._renderEmptyRow(boxW, margin, terminalWidth, style));
+          break;
+      }
+    }
+
+    if (typeof config.targetContentRows === 'number' && config.targetContentRows > 0) {
+      const bounded = sectionLines.slice(0, config.targetContentRows);
+      while (bounded.length < config.targetContentRows) {
+        bounded.push(ModalFactory._renderEmptyRow(boxW, margin, terminalWidth, style));
+      }
+      lines.push(...bounded);
+    } else {
+      lines.push(...sectionLines);
+    }
+
+    if (config.helpers && config.helpers.length > 0) {
+      for (const helper of config.helpers) {
+        lines.push(ModalFactory._renderHelperRow(boxW, margin, terminalWidth, helper, style));
       }
     }
 
@@ -148,13 +195,11 @@ export class ModalFactory {
     style: Partial<ModalStyle> = {},
   ): Line[] {
     const s = { ...DEFAULT_STYLE, ...style };
-    const pad = ' '.repeat(margin);
-    const top = pad + '\u250c' + '\u2500'.repeat(boxW - 2) + '\u2510';
-    const bottom = pad + '\u2514' + '\u2500'.repeat(boxW - 2) + '\u2518';
+    const layout = createOverlayBoxLayout(terminalWidth, margin, boxW);
     return [
-      UIFactory.stringToLine(top, terminalWidth, { fg: s.borderFg }),
+      createOverlayBorderLine(terminalWidth, layout, '┌', '─', '┐', s.borderFg),
       ...content,
-      UIFactory.stringToLine(bottom, terminalWidth, { fg: s.borderFg }),
+      createOverlayBorderLine(terminalWidth, layout, '└', '─', '┘', s.borderFg),
     ];
   }
 
@@ -169,11 +214,10 @@ export class ModalFactory {
     style: Partial<ModalStyle> = {},
   ): Line {
     const s = { ...DEFAULT_STYLE, ...style };
-    const pad = ' '.repeat(margin);
-    const titleText = '\u2500 ' + title + ' ';
-    const fill = Math.max(0, boxW - 2 - getDisplayWidth(titleText));
-    const text = pad + '\u250c' + titleText + '\u2500'.repeat(fill) + '\u2510';
-    return UIFactory.stringToLine(text, terminalWidth, { fg: s.titleFg });
+    const layout = createOverlayBoxLayout(terminalWidth, margin, boxW);
+    const line = createOverlayBorderLine(terminalWidth, layout, '┌', '─', '┐', s.titleFg);
+    putOverlayText(line, layout.margin + 2, layout.width - 4, title, { fg: s.titleFg, bold: true });
+    return line;
   }
 
   /**
@@ -188,11 +232,15 @@ export class ModalFactory {
     style: Partial<ModalStyle> = {},
   ): Line {
     const s = { ...DEFAULT_STYLE, ...style };
-    const pad = ' '.repeat(margin);
-    const hintPadded = hints.length > 0 ? ' ' + hints + ' ' : '';
-    const fill = Math.max(0, boxW - 2 - getDisplayWidth(hintPadded));
-    const text = pad + '\u2514' + hintPadded + '\u2500'.repeat(fill) + '\u2518';
-    return UIFactory.stringToLine(text, terminalWidth, { fg: s.hintFg });
+    const layout = createOverlayBoxLayout(terminalWidth, margin, boxW);
+    const line = createOverlayBorderLine(terminalWidth, layout, '└', '─', '┘', s.hintFg);
+    if (hints.length > 0) {
+      putOverlayText(line, layout.margin + 2, layout.width - 4, truncateDisplay(hints, layout.width - 4), {
+        fg: s.hintFg,
+        dim: true,
+      });
+    }
+    return line;
   }
 
   /**
@@ -208,18 +256,21 @@ export class ModalFactory {
     style: Partial<ModalStyle> = {},
   ): Line {
     const s = { ...DEFAULT_STYLE, ...style };
-    const contentW = boxW - 4;
-    const pad = ' '.repeat(margin);
-    const indicator = selected ? '\u25b6 ' : '  ';
+    const layout = createOverlayBoxLayout(terminalWidth, margin, boxW);
+    const contentW = layout.innerWidth;
+    const indicator = selected ? '> ' : '  ';
     const displayText = getDisplayWidth(text) > contentW - 2
-      ? truncateToWidth(text, contentW - 3) + '\u2026'
+      ? truncateDisplay(text, contentW - 2)
       : text;
-    const padded = displayText + ' '.repeat(Math.max(0, contentW - 2 - getDisplayWidth(displayText)));
-    const row = pad + '\u2502 ' + indicator + padded + ' \u2502';
-    const cellStyle: Partial<Cell> = selected
-      ? { fg: s.selectedFg, bg: s.selectedBg, bold: true }
-      : { fg: s.textFg };
-    return UIFactory.stringToLine(row, terminalWidth, cellStyle);
+    const padded = fitDisplay(displayText, contentW - 2);
+    const row = createOverlayContentLine(terminalWidth, layout, s.borderFg, selected ? s.selectedBg : '');
+    const cellStyle: Partial<Cell> = selected ? { fg: s.selectedFg, bg: s.selectedBg, bold: true } : { fg: s.textFg };
+    putOverlayText(row, layout.margin + 2, contentW, indicator + padded, {
+      fg: cellStyle.fg ?? s.textFg,
+      bg: cellStyle.bg ?? '',
+      bold: cellStyle.bold ?? false,
+    });
+    return row;
   }
 
   // ── Private section renderers ────────────────────────────────────────────────
@@ -232,22 +283,22 @@ export class ModalFactory {
     style: Required<ModalStyle>,
   ): Line[] {
     const contentW = boxW - 4;
-    const pad = ' '.repeat(margin);
     const text = section.content ?? '';
     const fg = section.style?.fg ?? style.textFg;
     const bg = section.style?.bg ?? '';
     const bold = section.style?.bold ?? false;
     const dim = section.style?.dim ?? false;
 
-    // Word-wrap: split on \n first, then truncate
-    const rawLines = text.split('\n');
-    return rawLines.map((rawLine) => {
-      const truncated = getDisplayWidth(rawLine) > contentW
-        ? truncateToWidth(rawLine, contentW - 1) + '\u2026'
-        : rawLine;
-      const padded = truncated + ' '.repeat(Math.max(0, contentW - getDisplayWidth(truncated)));
-      const row = pad + '\u2502 ' + padded + ' \u2502';
-      return UIFactory.stringToLine(row, terminalWidth, { fg, bg, bold, dim });
+    const wrappedLines = wrapText(text, Math.max(8, contentW));
+    return wrappedLines.map((wrappedLine) => {
+      const truncated = getDisplayWidth(wrappedLine) > contentW
+        ? truncateDisplay(wrappedLine, contentW)
+        : wrappedLine;
+      const padded = fitDisplay(truncated, contentW);
+      const layout = createOverlayBoxLayout(terminalWidth, margin, boxW);
+      const row = createOverlayContentLine(terminalWidth, layout, style.borderFg, bg);
+      putOverlayText(row, layout.margin + 2, contentW, padded, { fg, bg, bold, dim });
+      return row;
     });
   }
 
@@ -281,15 +332,75 @@ export class ModalFactory {
     style: Required<ModalStyle>,
   ): Line[] {
     const contentW = boxW - 4;
-    const pad = ' '.repeat(margin);
     const query = section.content ?? '';
-    const cursor = '\u2588'; // block cursor
+    const cursor = '_';
     const displayQuery = getDisplayWidth(query) > contentW - 4
-      ? truncateToWidth(query, contentW - 5) + '\u2026'
+      ? truncateDisplay(query, contentW - 4)
       : query;
-    const trailing = ' '.repeat(Math.max(0, contentW - getDisplayWidth(displayQuery) - 3));
-    const row = pad + '\u2502 \u2315 ' + displayQuery + cursor + trailing + '\u2502';
-    return [UIFactory.stringToLine(row, terminalWidth, { fg: style.textFg })];
+    const layout = createOverlayBoxLayout(terminalWidth, margin, boxW);
+    const row = createOverlayContentLine(terminalWidth, layout, style.borderFg);
+    const text = fitDisplay(`/ ${displayQuery}${cursor}`, contentW);
+    putOverlayText(row, layout.margin + 2, contentW, text, { fg: style.textFg });
+    return [row];
+  }
+
+  private static _renderTabsRow(
+    boxW: number,
+    margin: number,
+    terminalWidth: number,
+    tabs: readonly ModalTab[],
+    style: Required<ModalStyle>,
+  ): Line {
+    const layout = createOverlayBoxLayout(terminalWidth, margin, boxW);
+    const row = createOverlayContentLine(terminalWidth, layout, style.borderFg);
+    const active = tabs.find((tab) => tab.active);
+    const inactive = tabs.filter((tab) => !tab.active);
+    const text = [
+      ...(active ? [`[${active.label.toUpperCase()}]`] : []),
+      ...inactive.map((tab) => tab.label),
+    ].join('  ');
+    putOverlayText(row, layout.margin + 2, layout.innerWidth, fitDisplay(text, layout.innerWidth), {
+      fg: style.accentFg,
+      bold: true,
+    });
+    return row;
+  }
+
+  private static _renderSectionTitle(
+    section: ModalSection,
+    boxW: number,
+    margin: number,
+    terminalWidth: number,
+    style: Required<ModalStyle>,
+  ): Line {
+    const layout = createOverlayBoxLayout(terminalWidth, margin, boxW);
+    const row = createOverlayContentLine(terminalWidth, layout, style.borderFg);
+    const text = fitDisplay(truncateToWidth(section.content ?? '', layout.innerWidth), layout.innerWidth);
+    putOverlayText(row, layout.margin + 2, layout.innerWidth, text, {
+      fg: section.style?.fg ?? style.titleRowFg,
+      bg: section.style?.bg ?? '',
+      bold: section.style?.bold ?? true,
+      dim: section.style?.dim ?? false,
+    });
+    return row;
+  }
+
+  private static _renderHelperRow(
+    boxW: number,
+    margin: number,
+    terminalWidth: number,
+    helper: ModalHelperRow,
+    style: Required<ModalStyle>,
+  ): Line {
+    const layout = createOverlayBoxLayout(terminalWidth, margin, boxW);
+    const row = createOverlayContentLine(terminalWidth, layout, style.borderFg);
+    const prefix = helper.label ? `${helper.label}  ` : '';
+    const helperText = fitDisplay(`${prefix}${helper.content}`, layout.innerWidth);
+    putOverlayText(row, layout.margin + 2, layout.innerWidth, helperText, {
+      fg: helper.accent ? style.accentFg : style.hintFg,
+      dim: !helper.accent,
+    });
+    return row;
   }
 
   private static _renderSeparatorLine(
@@ -298,9 +409,8 @@ export class ModalFactory {
     terminalWidth: number,
     style: Required<ModalStyle>,
   ): Line {
-    const pad = ' '.repeat(margin);
-    const text = pad + '\u251c' + '\u2500'.repeat(boxW - 2) + '\u2524';
-    return UIFactory.stringToLine(text, terminalWidth, { fg: style.borderFg });
+    const layout = createOverlayBoxLayout(terminalWidth, margin, boxW);
+    return createOverlayBorderLine(terminalWidth, layout, '├', '─', '┤', style.borderFg);
   }
 
   private static _renderEmptyRow(
@@ -309,8 +419,7 @@ export class ModalFactory {
     terminalWidth: number,
     style: Required<ModalStyle>,
   ): Line {
-    const pad = ' '.repeat(margin);
-    const text = pad + '\u2502' + ' '.repeat(boxW - 2) + '\u2502';
-    return UIFactory.stringToLine(text, terminalWidth, { fg: style.borderFg });
+    const layout = createOverlayBoxLayout(terminalWidth, margin, boxW);
+    return createOverlayContentLine(terminalWidth, layout, style.borderFg);
   }
 }

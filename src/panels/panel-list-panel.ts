@@ -16,10 +16,28 @@ import type { Line, Cell } from '../types/grid.ts';
 import type { PanelCategory, PanelRegistration } from './types.ts';
 import { BasePanel } from './base-panel.ts';
 import { getPanelManager } from './panel-manager.ts';
-import { createStyledCell, createEmptyLine } from '../types/grid.ts';
+import { createEmptyLine } from '../types/grid.ts';
+import {
+  buildEmptyState,
+  buildPanelLine,
+  buildSearchInputLine,
+  buildPanelWorkspace,
+  DEFAULT_PANEL_PALETTE,
+  type PanelWorkspaceSection,
+} from './polish.ts';
+import { truncateDisplay } from '../utils/terminal-width.ts';
+import { getTrackedVisibleWindow } from '../renderer/surface-layout.ts';
+import {
+  getPanelSearchFocusTransition,
+  isPanelSearchBackspace,
+  isPanelSearchCancel,
+  isPanelSearchCommit,
+  isPanelSearchPrintable,
+} from './search-focus.ts';
 
 // ── Colour palette ────────────────────────────────────────────────────────────
 const C = {
+  ...DEFAULT_PANEL_PALETTE,
   header:      '#94a3b8',
   headerBg:    '#1e293b',
   category:    '#64748b',
@@ -38,6 +56,7 @@ const C = {
   dim:         '#334155',
   paneTop:     '#38bdf8',
   paneBottom:  '#a78bfa',
+  intro:       '#94a3b8',
 } as const;
 
 const CATEGORY_ORDER: PanelCategory[] = ['development', 'agent', 'monitoring', 'session', 'ai'];
@@ -53,47 +72,46 @@ const CATEGORY_LABELS: Record<PanelCategory, string> = {
 const NAME_COL_WIDTH = 22;
 const PREFIX_WIDTH = 4; // arrow + dot + space + space
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
-
-/** Word-wrap text to lines of maxWidth, breaking at spaces. No leading spaces on any line. */
-function wordWrap(text: string, maxWidth: number): string[] {
-  const words = text.split(' ');
-  const result: string[] = [];
-  let line = '';
-  for (const word of words) {
-    if (line.length === 0) {
-      line = word;
-    } else if (line.length + 1 + word.length <= maxWidth) {
-      line += ' ' + word;
-    } else {
-      result.push(line);
-      line = word;
-    }
-  }
-  if (line.length > 0) result.push(line);
-  return result.length > 0 ? result : [''];
-}
-
-/** Build a Line from [text, fg, bg?] segments, one Cell per character, padded to width. */
-function buildLine(width: number, segments: Array<[string, string, string?]>): Line {
-  const cells: Cell[] = [];
-  for (const [text, fg, bg] of segments) {
-    const style = { fg, bg: bg ?? '' };
-    for (const ch of text) {
-      if (cells.length >= width) break;
-      cells.push(createStyledCell(ch, style));
-    }
-  }
-  while (cells.length < width) {
-    cells.push(createStyledCell(' ', { fg: '' }));
-  }
-  return cells;
-}
-
 /** A flat entry in the navigable list — either a category header or a panel row. */
 type ListEntry =
   | { kind: 'header'; category: PanelCategory }
   | { kind: 'panel'; reg: PanelRegistration };
+
+function panelPlacementMarker(options: {
+  isTopOpen: boolean;
+  isBottomOpen: boolean;
+  focusedPane: 'top' | 'bottom';
+}): { text: string; color: string } {
+  const { isTopOpen, isBottomOpen, focusedPane } = options;
+  if (isTopOpen && isBottomOpen) return { text: '◆', color: C.selected };
+  if (isTopOpen) return { text: focusedPane === 'top' ? '▲' : '△', color: C.paneTop };
+  if (isBottomOpen) return { text: focusedPane === 'bottom' ? '▼' : '▽', color: C.paneBottom };
+  return { text: ' ', color: C.dim };
+}
+
+function wrapPanelDescription(text: string, width: number, maxLines = 2): string[] {
+  if (width <= 0) return [''];
+  const words = text.split(/\s+/).filter(Boolean);
+  if (words.length === 0) return [''];
+  const lines: string[] = [];
+  let current = '';
+  for (const word of words) {
+    const next = current ? `${current} ${word}` : word;
+    if (next.length <= width) {
+      current = next;
+      continue;
+    }
+    if (current) lines.push(current);
+    current = word;
+    if (lines.length === maxLines - 1) break;
+  }
+  if (current && lines.length < maxLines) lines.push(current);
+  if (lines.length > maxLines) lines.length = maxLines;
+  if (lines.length === maxLines && words.join(' ').length > lines.join(' ').length) {
+    lines[maxLines - 1] = truncateDisplay(lines[maxLines - 1] ?? '', width);
+  }
+  return lines;
+}
 
 // ── PanelListPanel ────────────────────────────────────────────────────────────
 
@@ -101,6 +119,7 @@ export class PanelListPanel extends BasePanel {
   private _selectedIndex  = 0;
   private _scrollOffset   = 0;
   private _query          = '';
+  private _filterFocused  = false;
   private _cachedEntries: ListEntry[] | null = null;
   private _entriesDirty   = true;
 
@@ -113,6 +132,7 @@ export class PanelListPanel extends BasePanel {
     this._selectedIndex  = 0;
     this._scrollOffset   = 0;
     this._query          = '';
+    this._filterFocused  = false;
     this._entriesDirty   = true;
   }
 
@@ -123,6 +143,58 @@ export class PanelListPanel extends BasePanel {
 
   public handleInput(key: string): boolean {
     const entries = this._buildEntries();
+    const panelCount = entries.filter(e => e.kind === 'panel').length;
+
+    if (this._filterFocused) {
+      const transition = getPanelSearchFocusTransition(key, { selectedIndex: this._selectedIndex, itemCount: panelCount });
+      if (transition === 'focus-list') {
+        this._filterFocused = false;
+        this._selectedIndex = 0;
+        this._scrollOffset = 0;
+        this.markDirty();
+        return true;
+      }
+      if (isPanelSearchBackspace(key)) {
+        if (this._query.length === 0) return true;
+        this._query = this._query.slice(0, -1);
+        this._clampSelection(entries);
+        this.markDirty();
+        return true;
+      }
+      if (isPanelSearchCancel(key)) {
+        this._filterFocused = false;
+        this.markDirty();
+        return true;
+      }
+      if (isPanelSearchCommit(key)) {
+        this._filterFocused = false;
+        const selectedPanel = this._getSelectedPanelEntry(this._buildEntries());
+        if (selectedPanel) {
+          try {
+            getPanelManager().open(selectedPanel.reg.id);
+          } catch (err) {
+            console.debug('[panel-list] failed to open panel:', err);
+          }
+        }
+        this.markDirty();
+        return true;
+      }
+      if (isPanelSearchPrintable(key)) {
+        this._query += key;
+        this._selectedIndex = 0;
+        this._scrollOffset = 0;
+        this.markDirty();
+        return true;
+      }
+      return false;
+    }
+
+    const transition = getPanelSearchFocusTransition(key, { selectedIndex: this._selectedIndex, itemCount: panelCount });
+    if (transition === 'focus-search') {
+      this._filterFocused = true;
+      this.markDirty();
+      return true;
+    }
 
     // Navigation
     if (key === 'up' || key === 'k') {
@@ -192,7 +264,7 @@ export class PanelListPanel extends BasePanel {
     }
 
     // Search: backspace
-    if (key === 'backspace' || key === 'delete') {
+    if (isPanelSearchBackspace(key)) {
       if (this._query.length > 0) {
         this._query = this._query.slice(0, -1);
         this._clampSelection(entries);
@@ -203,7 +275,7 @@ export class PanelListPanel extends BasePanel {
     }
 
     // Escape: clear search
-    if (key === 'escape') {
+    if (isPanelSearchCancel(key)) {
       if (this._query.length > 0) {
         this._query = '';
         this._clampSelection(entries);
@@ -214,14 +286,6 @@ export class PanelListPanel extends BasePanel {
     }
 
     // Printable character: append to search query
-    if (key.length === 1 && key >= ' ') {
-      this._query += key;
-      this._selectedIndex = 0;
-      this._scrollOffset  = 0;
-      this.markDirty();
-      return true;
-    }
-
     return false;
   }
 
@@ -231,51 +295,63 @@ export class PanelListPanel extends BasePanel {
     }
     const start = Date.now();
     this.needsRender = false;
-    const lines: Line[] = [];
-
-    // Panel header
-    const titleText = ' Panel List';
-    const pad = Math.max(0, width - titleText.length);
-    lines.push(buildLine(width, [[titleText + ' '.repeat(pad), C.header, C.headerBg]]));
-
-    // Search bar
-    const searchLabel = ' Filter: ';
-    const searchValue = this._query || '';
-    const cursor = '▊';
-    lines.push(buildLine(width, [
-      [searchLabel,              C.hint, C.searchBg],
-      [searchValue + cursor,     C.search, C.searchBg],
-      [' '.repeat(Math.max(0, width - searchLabel.length - searchValue.length - 1)), C.dim, C.searchBg],
-    ]));
-
-    const headerCount = 2; // title + search bar
-    const bodyHeight = Math.max(1, height - headerCount - 1); // -1 for hint line
-
+    const intro = 'Browse, place, split, and move panels without dropping into raw panel-management commands.';
     const entries = this._buildEntries();
 
     if (entries.length === 0) {
-      lines.push(buildLine(width, [[' No panels match filter.', C.hint]]));
+      const lines = buildPanelWorkspace(width, height, {
+        title: 'Panel Workspace',
+        intro,
+        sections: [{
+          title: 'Filter',
+          lines: [buildSearchInputLine(width, 'Filter: ', `${this._query}${this._filterFocused ? '_' : ''}`, C, {
+            active: this._filterFocused,
+            bg: C.searchBg,
+            emptyLabel: this._filterFocused ? '(type to filter)' : '(/ or up at top)',
+            valueColor: C.search,
+          })],
+        }, {
+          lines: buildEmptyState(
+            width,
+            ' No panels match filter.',
+            'Clear the filter or search for another panel by id, name, description, or category.',
+            [{ command: '/panel list', summary: 'reopen the panel workspace from the shell' }],
+            C,
+          ),
+        }],
+        palette: C,
+      });
       while (lines.length < height) lines.push(createEmptyLine(width));
       if (lines.length > height) lines.length = height;
       this.reportRenderDuration(Date.now() - start);
       return lines;
     }
 
-    // Clamp scroll so selected row is visible
-    this._clampScroll(entries, bodyHeight);
-
-    const visible = entries.slice(this._scrollOffset, this._scrollOffset + bodyHeight);
+    const panelEntries = entries.filter(e => e.kind === 'panel');
+    const bodyHeight = Math.max(1, height - 7);
     const pm = getPanelManager();
     const topIds = new Set(pm.getTopPane().panels.map(p => p.id));
     const bottomIds = new Set(pm.getBottomPane().panels.map(p => p.id));
     const focusedPane = pm.getFocusedPane();
-
-    for (const entry of visible) {
+    const entryLines: Line[] = [
+      buildSearchInputLine(width, 'Filter: ', `${this._query}${this._filterFocused ? '_' : ''}`, C, {
+        active: this._filterFocused,
+        bg: C.searchBg,
+        emptyLabel: this._filterFocused ? '(type to filter)' : '(/ or up at top)',
+        valueColor: C.search,
+      }),
+    ];
+    const renderedBlocks: Array<{ entry: ListEntry; lines: Line[]; panelFlatIndex?: number }> = [];
+    let flatPanelIndex = 0;
+    for (const entry of entries) {
       if (entry.kind === 'header') {
         const label = ` ── ${CATEGORY_LABELS[entry.category]} ${'─'.repeat(Math.max(0, width - 6 - CATEGORY_LABELS[entry.category].length))}`;
-        lines.push(buildLine(width, [[label.slice(0, width), C.category, C.categoryBg]]));
+        renderedBlocks.push({
+          entry,
+          lines: [buildPanelLine(width, [[label.slice(0, width), C.category, C.categoryBg]])],
+        });
       } else {
-        const flatIdx = this._flatPanelIndex(entries, entry.reg.id);
+        const flatIdx = flatPanelIndex++;
         const isSelected = flatIdx === this._selectedIndex;
         const bg = isSelected ? C.selectedBg : '';
         const isTopOpen = topIds.has(entry.reg.id);
@@ -287,49 +363,64 @@ export class PanelListPanel extends BasePanel {
         const nameStr = entry.reg.name.padEnd(NAME_COL_WIDTH, ' ').slice(0, NAME_COL_WIDTH);
         const descStartCol = PREFIX_WIDTH + NAME_COL_WIDTH + 1;
         const descWidth = Math.max(1, width - descStartCol);
-        const fullDesc = entry.reg.description;
-        const descLines = wordWrap(fullDesc, descWidth);
-        const paneBadge =
-          isTopOpen && isBottomOpen ? '2' :
-          isTopOpen ? 'T' :
-          isBottomOpen ? 'B' :
-          ' ';
-        const paneBadgeColor =
-          isTopOpen && isBottomOpen ? C.selected :
-          isTopOpen ? C.paneTop :
-          isBottomOpen ? C.paneBottom :
-          C.dim;
-        const focusBadge =
-          (isTopOpen && focusedPane === 'top') || (isBottomOpen && focusedPane === 'bottom')
-            ? '*'
-            : ' ';
-
-        // Line 1: prefix + name + first chunk of description
-        lines.push(buildLine(width, [
-          [arrow,            C.selIcon, bg],
-          [dot,              dotColor,  bg],
-          [paneBadge,        paneBadgeColor, bg],
-          [focusBadge,       C.selected, bg],
-          [nameStr + ' ',    nameColor, bg],
-          [descLines[0] ?? '', C.desc,  bg],
-        ]));
-
-        // Line 2+: wrapped remainder, justified to description start column
-        const indent = ' '.repeat(descStartCol);
-        for (let i = 1; i < descLines.length; i++) {
-          lines.push(buildLine(width, [
-            [indent,           '',        bg],
-            [descLines[i]!,    C.desc,    bg],
+        const descLines = wrapPanelDescription(entry.reg.description, descWidth, 2);
+        const placement = panelPlacementMarker({ isTopOpen, isBottomOpen, focusedPane });
+        const blockLines: Line[] = [
+          buildPanelLine(width, [
+            [arrow, C.selIcon, bg],
+            [dot, dotColor, bg],
+            [placement.text, placement.color, bg],
+            [' ', C.dim, bg],
+            [nameStr + ' ', nameColor, bg],
+            [descLines[0] ?? '', C.desc, bg],
+          ]),
+        ];
+        if ((descLines[1] ?? '').length > 0) {
+          blockLines.push(buildPanelLine(width, [
+            [' '.repeat(PREFIX_WIDTH), C.dim, bg],
+            [' '.repeat(NAME_COL_WIDTH), C.dim, bg],
+            [' ', C.dim, bg],
+            [descLines[1] ?? '', C.desc, bg],
           ]));
         }
+        renderedBlocks.push({ entry, lines: blockLines, panelFlatIndex: flatIdx });
       }
     }
+    const blockStarts: number[] = [];
+    let totalRows = 0;
+    for (const block of renderedBlocks) {
+      blockStarts.push(totalRows);
+      totalRows += block.lines.length;
+    }
+    const selectedEntryIndex = renderedBlocks.findIndex((block) => block.panelFlatIndex === this._selectedIndex);
+    const selectedRow = selectedEntryIndex >= 0 ? blockStarts[selectedEntryIndex] ?? 0 : 0;
+    const window = getTrackedVisibleWindow(totalRows, selectedRow, bodyHeight, this._scrollOffset, 1);
+    this._scrollOffset = window.start;
+    let consumedRows = 0;
+    for (let i = 0; i < renderedBlocks.length; i++) {
+      const block = renderedBlocks[i]!;
+      const startRow = blockStarts[i] ?? 0;
+      const endRow = startRow + block.lines.length;
+      if (endRow <= window.start) continue;
+      if (startRow >= window.end) break;
+      const sliceStart = Math.max(0, window.start - startRow);
+      const sliceEnd = Math.min(block.lines.length, window.end - startRow);
+      for (const line of block.lines.slice(sliceStart, sliceEnd)) {
+        entryLines.push(line);
+        consumedRows++;
+      }
+      if (consumedRows >= bodyHeight) break;
+    }
 
-    // Hint line
-    const panelEntries = entries.filter(e => e.kind === 'panel');
     const hintText = ` [${this._selectedIndex + 1}/${panelEntries.length}] ↑/↓ nav  Enter open  T/B place  M move  S split  Tab focus`;
-    while (lines.length < height - 1) lines.push(createEmptyLine(width));
-    lines.push(buildLine(width, [[hintText.slice(0, width), C.hint]]));
+    const sections: PanelWorkspaceSection[] = [{ title: 'Panels', lines: entryLines }];
+    const lines = buildPanelWorkspace(width, height, {
+      title: 'Panel Workspace',
+      intro,
+      sections,
+      footerLines: [buildPanelLine(width, [[hintText.slice(0, width), C.hint]])],
+      palette: C,
+    });
 
     while (lines.length < height) lines.push(createEmptyLine(width));
     if (lines.length > height) lines.length = height;
@@ -413,31 +504,4 @@ export class PanelListPanel extends BasePanel {
     this._selectedIndex = Math.max(0, Math.min(this._selectedIndex, panelCount - 1));
   }
 
-  /**
-   * Adjust _scrollOffset so that the entry containing the selected panel
-   * is within the visible window.
-   */
-  private _clampScroll(entries: ListEntry[], bodyHeight: number): void {
-    // Find the flat (entries) index of the selected panel entry
-    let panelsSeen = 0;
-    let entryIdx = 0;
-    for (let i = 0; i < entries.length; i++) {
-      const e = entries[i]!;
-      if (e.kind === 'panel') {
-        if (panelsSeen === this._selectedIndex) {
-          entryIdx = i;
-          break;
-        }
-        panelsSeen++;
-      }
-    }
-
-    const maxScroll = Math.max(0, entries.length - bodyHeight);
-    if (entryIdx < this._scrollOffset) {
-      this._scrollOffset = entryIdx;
-    } else if (entryIdx >= this._scrollOffset + bodyHeight) {
-      this._scrollOffset = entryIdx - bodyHeight + 1;
-    }
-    this._scrollOffset = Math.min(this._scrollOffset, maxScroll);
-  }
 }

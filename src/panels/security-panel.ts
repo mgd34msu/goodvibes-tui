@@ -17,31 +17,18 @@ import type { RuntimeStore } from '../runtime/store/index.ts';
 import type { ForensicsRegistry } from '../runtime/forensics/registry.ts';
 import { mcpRegistry } from '../mcp/registry.ts';
 import { pluginManager, type PluginManagerObserver, type PluginStatus } from '../plugins/manager.ts';
+import { buildEmptyState, buildGuidanceLine, buildPanelLine, buildPanelWorkspace, DEFAULT_PANEL_PALETTE, type PanelWorkspaceSection } from './polish.ts';
 
 const C = {
+  ...DEFAULT_PANEL_PALETTE,
   header: '#94a3b8',
   headerBg: '#1e293b',
-  label: '#64748b',
-  value: '#e2e8f0',
   dim: '#475569',
   ok: '#22c55e',
   warn: '#eab308',
   error: '#ef4444',
-  info: '#38bdf8',
-  empty: '#334155',
   selectBg: '#0f172a',
 } as const;
-
-function buildLine(width: number, segments: Array<[string, string, string?]>): Line {
-  const cells: Cell[] = [];
-  let used = 0;
-  for (const [text, fg, bg] of segments) {
-    cells.push(createStyledCell(text, { fg, bg: bg ?? '' }));
-    used += text.length;
-  }
-  if (used < width) cells.push(createStyledCell(' '.repeat(width - used), { fg: '' }));
-  return cells;
-}
 
 function managedColor(managed: boolean): string {
   return managed ? C.warn : C.info;
@@ -173,10 +160,8 @@ export class SecurityPanel extends BasePanel {
     const plugins = this.plugins.list();
     const quarantinedPlugins = plugins.filter((plugin) => plugin.quarantined);
     const untrustedPlugins = plugins.filter((plugin) => plugin.trustTier === 'untrusted');
-    const lines: Line[] = [];
-
-    lines.push(buildLine(width, [[' Security Control Room', C.header, C.headerBg]]));
-    lines.push(buildLine(width, [
+    const governanceLines: Line[] = [
+      buildPanelLine(width, [
       [' mode ', C.label],
       [view.managed ? 'MANAGED' : 'ADVISORY', managedColor(view.managed)],
       ['  tokens ', C.label],
@@ -189,8 +174,8 @@ export class SecurityPanel extends BasePanel {
       [String(view.rotationOverdue.length), view.rotationOverdue.length > 0 ? C.error : C.ok],
       ['  warnings ', C.label],
       [String(view.rotationWarnings.length), view.rotationWarnings.length > 0 ? C.warn : C.ok],
-    ]));
-    lines.push(buildLine(width, [
+      ]),
+      buildPanelLine(width, [
       [' preflight ', C.label],
       [(preflight?.status ?? 'n/a').toUpperCase(), preflight?.status === 'block' ? C.error : preflight?.status === 'warn' ? C.warn : preflight?.status === 'pass' ? C.ok : C.dim],
       ['  issues ', C.label],
@@ -199,8 +184,10 @@ export class SecurityPanel extends BasePanel {
       [String(lintFindingCount), lintFindingCount > 0 ? C.warn : C.ok],
       ['  denied permissions ', C.label],
       [String(deniedPermissions), deniedPermissions > 0 ? C.warn : C.ok],
-    ]));
-    lines.push(buildLine(width, [
+      ]),
+    ];
+    const threatLines: Line[] = [
+      buildPanelLine(width, [
       [' quarantined MCP ', C.label],
       [String(quarantinedMcp.length), quarantinedMcp.length > 0 ? C.error : C.ok],
       ['  elevated MCP ', C.label],
@@ -209,37 +196,67 @@ export class SecurityPanel extends BasePanel {
       [String(quarantinedPlugins.length), quarantinedPlugins.length > 0 ? C.error : C.ok],
       ['  untrusted plugins ', C.label],
       [String(untrustedPlugins.length), untrustedPlugins.length > 0 ? C.warn : C.ok],
-    ]));
-    lines.push(buildLine(width, [
+      ]),
+      buildPanelLine(width, [
       ['  incidents ', C.label],
       [String(incidents.length), incidents.length > 0 ? C.warn : C.ok],
-    ]));
-    lines.push(buildLine(width, [
+      ]),
+    ];
+    const attackPathLines: Line[] = [
+      buildPanelLine(width, [
       ['  attack paths ', C.label],
       [String(attackPathReview.criticalFindings), attackPathReview.criticalFindings > 0 ? C.error : C.ok],
       [' critical ', C.label],
       [String(attackPathReview.incoherentFindings), attackPathReview.incoherentFindings > 0 ? C.warn : C.ok],
       [' review ', C.label],
       [attackPathReview.summary.slice(0, Math.max(0, width - 36)), C.dim],
-    ]));
+      ]),
+    ];
+    const footerLines = [
+      buildGuidanceLine(width, '/policy preflight', 'run a proactive policy review before risky work starts', C),
+    ] as const;
 
     if (view.results.length === 0) {
-      lines.push(buildLine(width, [[' No API tokens are registered with the security auditor yet.', C.empty]]));
-      lines.push(buildLine(width, [[' Register token policies and token metadata to audit scope minimization and rotation cadence.', C.dim]]));
+      const emptyLines = [
+        ...governanceLines,
+        ...threatLines,
+        ...buildEmptyState(
+          width,
+          ' No API tokens are registered with the security auditor yet.',
+          'The security control room can already review policy, MCP, plugin, and incident posture, but token-specific scope and rotation audit data has not been registered.',
+          [
+            { command: '/storage review', summary: 'inspect secure secret storage and environment overrides' },
+            { command: '/policy preflight', summary: 'run a live preflight posture review' },
+            { command: '/mcp trust', summary: 'inspect active MCP trust and quarantine posture' },
+          ],
+          C,
+        ),
+      ];
       if (quarantinedMcp.length > 0) {
-        lines.push(buildLine(width, [[' MCP quarantine still active despite no registered tokens.', C.warn]]));
+        emptyLines.push(buildPanelLine(width, [[' MCP quarantine still active despite no registered tokens.', C.warn]]));
       }
-      while (lines.length < height) lines.push(createEmptyLine(width));
-      return lines.slice(0, height);
+      const workspace = buildPanelWorkspace(width, height, {
+        title: 'Security Control Room',
+        intro: 'Token audit, policy posture, MCP attack-path review, plugin trust, and incident pressure.',
+        sections: [
+          { title: 'Governance', lines: emptyLines },
+          { title: 'Attack Paths', lines: attackPathLines },
+        ],
+        footerLines,
+        palette: C,
+      });
+      while (workspace.length < height) workspace.push(createEmptyLine(width));
+      return workspace.slice(0, height);
     }
 
     this.selectedIndex = Math.min(this.selectedIndex, view.results.length - 1);
     const selected = view.results[this.selectedIndex]!;
-    const visible = view.results.slice(0, Math.max(1, height - 8));
+    const tokenLines: Line[] = [];
+    const visible = view.results.slice(0, Math.max(1, height - 10));
     for (let index = 0; index < visible.length; index++) {
       const result = visible[index]!;
       const bg = index === this.selectedIndex ? C.selectBg : undefined;
-      lines.push(buildLine(width, [
+      tokenLines.push(buildPanelLine(width, [
         [' ', C.label, bg],
         [result.label.padEnd(22), C.value, bg],
         [` ${result.tokenId.padEnd(12)}`, C.info, bg],
@@ -248,8 +265,8 @@ export class SecurityPanel extends BasePanel {
       ]));
     }
 
-    lines.push(buildLine(width, [[' Details', C.label]]));
-    lines.push(buildLine(width, [
+    const detailLines: Line[] = [];
+    detailLines.push(buildPanelLine(width, [
       ['  Token: ', C.label],
       [selected.label, C.value],
       ['  Policy: ', C.label],
@@ -257,13 +274,13 @@ export class SecurityPanel extends BasePanel {
       ['  Blocked: ', C.label],
       [selected.blocked ? 'yes' : 'no', selected.blocked ? C.error : C.ok],
     ]));
-    lines.push(buildLine(width, [
+    detailLines.push(buildPanelLine(width, [
       ['  Scope: ', C.label],
       [selected.scope.outcome, selected.scope.outcome === 'violation' ? C.error : C.ok],
       ['  Excess: ', C.label],
       [(selected.scope.excessScopes.length > 0 ? selected.scope.excessScopes.join(', ') : 'none').slice(0, Math.max(0, width - 27)), selected.scope.excessScopes.length > 0 ? C.error : C.dim],
     ]));
-    lines.push(buildLine(width, [
+    detailLines.push(buildPanelLine(width, [
       ['  Rotation: ', C.label],
       [selected.rotation.outcome, selected.rotation.outcome === 'ok' ? C.ok : selected.rotation.outcome === 'warning' ? C.warn : C.error],
       ['  Due: ', C.label],
@@ -271,60 +288,73 @@ export class SecurityPanel extends BasePanel {
       ['  Age(d): ', C.label],
       [String(Math.floor(selected.rotation.ageMs / (24 * 60 * 60 * 1000))), C.value],
     ]));
-    lines.push(buildLine(width, [[
+    detailLines.push(buildPanelLine(width, [[
       `Last audit: ${view.lastAuditAt ? new Date(view.lastAuditAt).toISOString() : 'never'}  Press r to refresh.`,
       C.dim,
     ]]));
     if (preflight) {
-      lines.push(buildLine(width, [[
+      detailLines.push(buildPanelLine(width, [[
         `Policy preflight: ${preflight.summary}`.slice(0, width),
         preflight.status === 'block' ? C.error : preflight.status === 'warn' ? C.warn : C.dim,
       ]]));
     }
     if (quarantinedMcp.length > 0) {
       const server = quarantinedMcp[0]!;
-      lines.push(buildLine(width, [[
-        `MCP quarantine: ${server.name} ${server.quarantineReason ?? 'unknown'}${server.quarantineDetail ? ` — ${server.quarantineDetail}` : ''}`.slice(0, width),
+      detailLines.push(buildPanelLine(width, [[
+        `MCP quarantine: ${server.name} ${server.quarantineReason ?? 'unknown'}${server.quarantineDetail ? ` - ${server.quarantineDetail}` : ''}`.slice(0, width),
         C.error,
       ]]));
     }
     if (quarantinedPlugins.length > 0) {
       const plugin = quarantinedPlugins[0]!;
-      lines.push(buildLine(width, [[
+      detailLines.push(buildPanelLine(width, [[
         `Plugin quarantine: ${plugin.name} (${plugin.trustTier})`.slice(0, width),
         C.error,
       ]]));
     } else if (untrustedPlugins.length > 0) {
       const plugin = untrustedPlugins[0]!;
-      lines.push(buildLine(width, [[
+      detailLines.push(buildPanelLine(width, [[
         `Plugin trust warning: ${plugin.name} remains untrusted.`.slice(0, width),
         C.warn,
       ]]));
     }
     if (latestIncident) {
-      lines.push(buildLine(width, [[
-        `Latest incident: ${latestIncident.classification} — ${latestIncident.summary}`.slice(0, width),
+      detailLines.push(buildPanelLine(width, [[
+        `Latest incident: ${latestIncident.classification} - ${latestIncident.summary}`.slice(0, width),
         C.warn,
       ]]));
     }
     if (attackPathReview.findings.length > 0) {
-      lines.push(buildLine(width, [[' MCP attack-path review', C.label]]));
+      attackPathLines.push(buildPanelLine(width, [[' MCP attack-path review', C.label]]));
       for (const finding of attackPathReview.findings.slice(0, 3)) {
-        lines.push(buildLine(width, [[
+        attackPathLines.push(buildPanelLine(width, [[
           `  ${finding.severity.toUpperCase()} ${finding.serverName}: ${finding.route}`.slice(0, width),
           severityColor(finding.severity),
         ]]));
-        lines.push(buildLine(width, [[
+        attackPathLines.push(buildPanelLine(width, [[
           `    ${finding.reason}`.slice(0, width),
           C.dim,
         ]]));
-        lines.push(buildLine(width, [[
+        attackPathLines.push(buildPanelLine(width, [[
           `    evidence: ${finding.evidence.join(' | ')}`.slice(0, width),
           C.dim,
         ]]));
       }
     }
 
+    const lines = buildPanelWorkspace(width, height, {
+      title: 'Security Control Room',
+      intro: 'Token audit, policy posture, MCP attack-path review, plugin trust, and incident pressure.',
+      sections: [
+        { title: 'Governance', lines: governanceLines },
+        { title: 'Policy And Trust', lines: threatLines },
+        { title: 'Token Audit', lines: tokenLines },
+        { title: 'Selected Token', lines: detailLines },
+        { title: 'Attack Paths', lines: attackPathLines },
+      ] satisfies readonly PanelWorkspaceSection[],
+      footerLines,
+      palette: C,
+    });
     while (lines.length < height) lines.push(createEmptyLine(width));
     return lines.slice(0, height);
   }

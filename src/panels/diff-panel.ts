@@ -5,6 +5,14 @@
 import type { Line } from '../types/grid.ts';
 import { createStyledCell, createEmptyLine } from '../types/grid.ts';
 import { BasePanel } from './base-panel.ts';
+import {
+  buildBodyText,
+  buildEmptyState,
+  buildPanelWorkspace,
+  buildStyledPanelLine,
+  type PanelWorkspaceSection,
+  DEFAULT_PANEL_PALETTE,
+} from './polish.ts';
 
 // ---------------------------------------------------------------------------
 // Colour palette
@@ -134,56 +142,26 @@ function makeLine(
   numFg:    string,
   bold:     boolean = false,
 ): Line {
-  const cells: Line = [];
-
   // Left line number (5 chars + space)
   const LEFT_W = 5;
-  const padLeft = leftNum.padStart(LEFT_W);
-  for (const ch of padLeft) {
-    cells.push(createStyledCell(ch, { fg: numFg, bg, dim: true }));
-  }
-  cells.push(createStyledCell(' ', { fg: '', bg }));
-
-  // Right line number (5 chars + space)
-  const padRight = rightNum.padStart(LEFT_W);
-  for (const ch of padRight) {
-    cells.push(createStyledCell(ch, { fg: numFg, bg, dim: true }));
-  }
-  cells.push(createStyledCell(' ', { fg: '', bg }));
-
-  // Separator
-  cells.push(createStyledCell('|', { fg: COLOR.lineNum, bg }));
-  cells.push(createStyledCell(' ', { fg: '', bg }));
-
-  // Content — truncate/pad to remaining width
   const usedForNums = LEFT_W + 1 + LEFT_W + 1 + 2; // 14
   const contentWidth = Math.max(0, width - usedForNums);
   const truncated = content.length > contentWidth
     ? content.slice(0, contentWidth)
     : content;
-
-  for (const ch of truncated) {
-    cells.push(createStyledCell(ch, { fg, bg, bold }));
-  }
-
-  // Pad remainder
-  while (cells.length < width) {
-    cells.push(createStyledCell(' ', { fg: '', bg }));
-  }
-
-  return cells.slice(0, width);
+  return buildStyledPanelLine(width, [
+    { text: leftNum.padStart(LEFT_W), fg: numFg, bg, dim: true },
+    { text: ' ', fg: '', bg },
+    { text: rightNum.padStart(LEFT_W), fg: numFg, bg, dim: true },
+    { text: ' ', fg: '', bg },
+    { text: '| ', fg: COLOR.lineNum, bg },
+    { text: truncated, fg, bg, bold },
+  ]);
 }
 
 function renderText(width: number, text: string, fg: string, bg: string, bold = false): Line {
-  const cells: Line = [];
   const truncated = text.length > width ? text.slice(0, width) : text;
-  for (const ch of truncated) {
-    cells.push(createStyledCell(ch, { fg, bg, bold }));
-  }
-  while (cells.length < width) {
-    cells.push(createStyledCell(' ', { fg: '', bg }));
-  }
-  return cells.slice(0, width);
+  return buildStyledPanelLine(width, [{ text: truncated, fg, bg, bold }]);
 }
 
 // ---------------------------------------------------------------------------
@@ -364,46 +342,76 @@ export class DiffPanel extends BasePanel {
   // -------------------------------------------------------------------------
 
   render(width: number, height: number): Line[] {
-    const lines: Line[] = [];
-    if (height <= 0 || width <= 0) return lines;
+    if (height <= 0 || width <= 0) return [];
 
-    // ── Empty state ────────────────────────────────────────────────────────
     if (this.entries.length === 0) {
-      lines.push(renderText(width, ' No diff to display. Press Tab to open git diff.', COLOR.context, ''));
-      while (lines.length < height) lines.push(createEmptyLine(width));
-      return lines.slice(0, height);
+      return buildPanelWorkspace(width, height, {
+        title: 'Diff Workspace',
+        palette: {
+          ...DEFAULT_PANEL_PALETTE,
+          info: COLOR.hunk,
+          dim: COLOR.context,
+          value: COLOR.filename,
+        },
+        sections: [{
+          title: 'Diff',
+          lines: buildEmptyState(
+            width,
+            ' No diff to display.',
+            'Load a git diff or select a changed file to populate the workspace.',
+            [{ command: '/git diff', summary: 'load the current working-tree diff into the diff workspace' }],
+            {
+              ...DEFAULT_PANEL_PALETTE,
+              info: COLOR.hunk,
+              dim: COLOR.context,
+              value: COLOR.filename,
+              empty: COLOR.context,
+            },
+          ),
+        }],
+      });
     }
 
-    // ── File tab bar ───────────────────────────────────────────────────────
-    // Row 1: tab bar
-    const tabLine = this.renderTabBar(width);
-    lines.push(tabLine);
-
-    // ── Diff content ───────────────────────────────────────────────────────
-    const contentHeight = height - 1 - 1; // minus tab bar, minus status bar
     const entry = this.currentEntry();
-
-    if (!entry || contentHeight <= 0) {
-      while (lines.length < height - 1) lines.push(createEmptyLine(width));
-      lines.push(this.renderStatusBar(width, entry));
-      return lines.slice(0, height);
+    if (!entry) {
+      return Array.from({ length: height }, () => createEmptyLine(width));
     }
 
+    const contentHeight = Math.max(1, height - 4);
     const visibleLines = entry.lines.slice(this.scrollOffset, this.scrollOffset + contentHeight);
-
-    for (const pl of visibleLines) {
-      lines.push(this.renderParsedLine(pl, width));
-    }
-
-    // Pad short diffs with empty lines
-    while (lines.length < height - 1) {
-      lines.push(createEmptyLine(width));
-    }
-
-    // ── Status bar ─────────────────────────────────────────────────────────
-    lines.push(this.renderStatusBar(width, entry));
-
-    return lines.slice(0, height);
+    const compact = height <= 12;
+    const summaryLines = entry.semanticSummary
+      ? buildBodyText(width, `Semantic summary: ${entry.semanticSummary}`, {
+          ...DEFAULT_PANEL_PALETTE,
+          dim: COLOR.context,
+          value: COLOR.filename,
+        }, COLOR.context)
+      : [];
+    const sections: PanelWorkspaceSection[] = [
+      {
+        title: compact ? undefined : 'Files',
+        lines: [
+          this.renderTabBar(width),
+          ...summaryLines,
+        ],
+      },
+      {
+        title: compact ? undefined : 'Changes',
+        lines: visibleLines.map((pl) => this.renderParsedLine(pl, width)),
+      },
+    ];
+    return buildPanelWorkspace(width, height, {
+      title: 'Diff Workspace',
+      palette: {
+        ...DEFAULT_PANEL_PALETTE,
+        info: COLOR.hunk,
+        dim: COLOR.context,
+        value: COLOR.filename,
+        headerBg: COLOR.tabBg,
+      },
+      sections,
+      footerLines: [this.renderStatusBar(width, entry)],
+    });
   }
 
   // ── Tab bar ──────────────────────────────────────────────────────────────
@@ -443,9 +451,9 @@ export class DiffPanel extends BasePanel {
       ? `${entry.filePath} [${this.selectedFile + 1}/${this.entries.length}]`
       : 'No file';
     const scroll = entry
-      ? `  L${this.scrollOffset + 1}/${entry.lines.length}  Tab: next file  ↑↓: scroll`
+      ? `  L${this.scrollOffset + 1}/${entry.lines.length}  Tab: next file  Up/Down: scroll`
       : '';
-    const semantic = entry?.semanticSummary ? `  ◆ ${entry.semanticSummary}` : '';
+    const semantic = entry?.semanticSummary ? `  * ${entry.semanticSummary}` : '';
     const text = ` ${fileInfo}${scroll}${semantic}`;
     return renderText(width, text, COLOR.tabActive, COLOR.statusBar);
   }
