@@ -19,7 +19,7 @@ function makeTmpDir(): string {
 // Suite
 // ---------------------------------------------------------------------------
 
-describe('Config schema extensions: orchestration, sandbox, danger, and tools categories', () => {
+describe('Config schema extensions: orchestration, storage, sandbox, danger, and tools categories', () => {
   let tmpDir: string;
 
   beforeEach(() => {
@@ -51,6 +51,11 @@ describe('Config schema extensions: orchestration, sandbox, danger, and tools ca
       expect(typeof mgr.get('danger.httpListener')).toBe('boolean');
     });
 
+    test('storage category fields have correct types when no project config exists', () => {
+      const mgr = new ConfigManager({ workingDir: tmpDir });
+      expect(typeof mgr.get('storage.secretPolicy')).toBe('string');
+    });
+
     test('sandbox category fields have correct types when no project config exists', () => {
       const mgr = new ConfigManager({ workingDir: tmpDir });
       expect(typeof mgr.get('sandbox.replIsolation')).toBe('string');
@@ -77,6 +82,10 @@ describe('Config schema extensions: orchestration, sandbox, danger, and tools ca
     test('DEFAULT_CONFIG.danger has correct default values', () => {
       expect(DEFAULT_CONFIG.danger.daemon).toBe(false);
       expect(DEFAULT_CONFIG.danger.httpListener).toBe(false);
+    });
+
+    test('DEFAULT_CONFIG.storage has correct default values', () => {
+      expect(DEFAULT_CONFIG.storage.secretPolicy).toBe('preferred_secure');
     });
 
     test('DEFAULT_CONFIG.sandbox has correct default values', () => {
@@ -185,6 +194,12 @@ describe('Config schema extensions: orchestration, sandbox, danger, and tools ca
       const mgr = new ConfigManager({ workingDir: tmpDir });
       mgr.set('danger.httpListener', true);
       expect(mgr.get('danger.httpListener')).toBe(true);
+    });
+
+    test('set and get storage.secretPolicy', () => {
+      const mgr = new ConfigManager({ workingDir: tmpDir });
+      mgr.set('storage.secretPolicy', 'require_secure');
+      expect(mgr.get('storage.secretPolicy')).toBe('require_secure');
     });
 
     test('set and get sandbox.replIsolation', () => {

@@ -24,6 +24,20 @@ describe('renderFilePickerOverlay', () => {
     picker.results = ['src/app.ts'];
 
     const lines = renderFilePickerOverlay(picker, 80, 24);
-    expect(lineToString(lines[0]).startsWith('      ┌')).toBe(true);
+    expect(lineToString(lines[0]).startsWith('    ┌')).toBe(true);
+  });
+
+  test('shows a block cursor only when the search field is focused', () => {
+    const picker = new FilePickerModal();
+    picker.active = true;
+    picker.results = ['src/app.ts'];
+    picker.searchFocused = false;
+
+    const unfocused = lineToString(renderFilePickerOverlay(picker, 80, 24)[1]!);
+    expect(unfocused).not.toContain('█');
+
+    picker.searchFocused = true;
+    const focused = lineToString(renderFilePickerOverlay(picker, 80, 24)[1]!);
+    expect(focused).toContain('█');
   });
 });

@@ -59,7 +59,7 @@ describe('renderProfilePickerModal', () => {
   test('selected item has arrow indicator', () => {
     const lines = renderProfilePickerModal(makeModal(), W);
     const texts = linesToText(lines).join('\n');
-    expect(texts).toContain('>');
+    expect(texts).toContain('▸');
   });
 
   test('empty profiles shows helpful message', () => {

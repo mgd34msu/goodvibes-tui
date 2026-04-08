@@ -19,18 +19,38 @@ import { getSecretsManager } from './secrets.ts';
 
 /** Lazy singleton — initialized on first access to avoid sync I/O at import time. */
 let _configManager: ConfigManager | undefined;
+let _configManagerModeKey: string | undefined;
 export function getConfigManager(): ConfigManager {
-  if (!_configManager) _configManager = new ConfigManager();
+  const modeKey = ConfigManager.getTestMode() ?? '__default__';
+  if (!_configManager || _configManagerModeKey !== modeKey) {
+    _configManager = new ConfigManager();
+    _configManagerModeKey = modeKey;
+  }
   return _configManager;
 }
 
 export function _resetConfigManagerForTesting(): void {
   _configManager = undefined;
+  _configManagerModeKey = undefined;
 }
 
 export const configManager: ConfigManager = new Proxy({} as ConfigManager, {
   get(_target, prop: string | symbol) {
+    const target = _target as unknown as Record<string | symbol, unknown>;
+    if (prop in target) {
+      const overridden = target[prop];
+      if (typeof overridden === 'function') {
+        return (overridden as Function).bind(target);
+      }
+      return overridden;
+    }
     const manager = getConfigManager();
+    const prototypeMethod = typeof prop === 'string'
+      ? (ConfigManager.prototype as unknown as Record<string, unknown>)[prop]
+      : undefined;
+    if (typeof prototypeMethod === 'function') {
+      return (prototypeMethod as Function).bind(manager);
+    }
     // Proxy handler requires untyped index access — TypeScript does not allow
     // bracket-notation on a typed class, so we cast through Record to read any
     // property by string/symbol at runtime.
@@ -43,6 +63,12 @@ export const configManager: ConfigManager = new Proxy({} as ConfigManager, {
     return value;
   },
   set(_target, prop: string | symbol, value: unknown) {
+    if (typeof prop === 'string') {
+      const prototypeMethod = (ConfigManager.prototype as unknown as Record<string, unknown>)[prop];
+      if (typeof prototypeMethod === 'function') {
+        return true;
+      }
+    }
     // Same rationale as the getter: runtime property assignment via bracket notation.
     (getConfigManager() as unknown as Record<string | symbol, unknown>)[prop] = value;
     return true;
@@ -120,7 +146,7 @@ function loadEnvApiKeys(): Record<string, string> {
  *
  * Resolution order per key:
  *   1. Environment variable (process.env)
- *   2. SecretsManager encrypted store (.goodvibes/tui/secrets.enc)
+ *   2. SecretsManager hierarchy-aware stores (secure preferred, plaintext policy-aware)
  *   3. Omitted from result (null → skip)
  *
  * Returns a map of provider → apiKey for all providers where a key is found.
@@ -155,7 +181,7 @@ export async function resolveApiKeys(): Promise<Record<string, string>> {
       }
     }
 
-    // Tier 2: SecretsManager encrypted store
+    // Tier 2: SecretsManager hierarchy-aware secure/plaintext stores
     if (value === null) {
       for (const envVar of envVars) {
         const stored = await secrets.get(envVar);

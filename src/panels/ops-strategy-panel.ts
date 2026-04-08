@@ -31,10 +31,10 @@ const STRATEGY_FG: Record<ExecutionStrategy, string> = {
 
 const STRATEGY_ICON: Record<ExecutionStrategy, string> = {
   auto:       '~',
-  single:     '>',
-  cohort:     '*',
+  single:     '▸',
+  cohort:     '◆',
   background: '.',
-  remote:     '>',
+  remote:     '▸',
 };
 
 // ---------------------------------------------------------------------------

@@ -49,7 +49,7 @@ describe('config diff logic', () => {
     // Reset to defaults first to ensure clean baseline
     cm.reset();
     // Change a setting from its default
-    cm.set('display.lineNumbers', true);
+    cm.set('display.lineNumbers', 'all');
     const schema = cm.getSchema();
     const diffs: string[] = [];
     for (const setting of schema) {

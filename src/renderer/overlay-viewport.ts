@@ -14,9 +14,9 @@ export function getOverlayContentBudget(
   options: OverlayViewportBudgetOptions,
 ): number {
   const safeViewportHeight = Math.max(8, viewportHeight);
-  const defaultTargetTotalRows = Math.max(12, Math.min(Math.max(12, safeViewportHeight - 2), Math.round(safeViewportHeight * (options.targetRatio ?? 0.45))));
-  const minTotalRows = options.minTotalRows ?? defaultTargetTotalRows;
-  const maxTotalRows = options.maxTotalRows ?? defaultTargetTotalRows;
+  const defaultTargetTotalRows = Math.max(12, Math.min(Math.max(12, safeViewportHeight - 3), Math.round(safeViewportHeight * (options.targetRatio ?? 0.45))));
+  const minTotalRows = options.minTotalRows ?? 12;
+  const maxTotalRows = options.maxTotalRows ?? Math.max(minTotalRows, Math.min(22, safeViewportHeight - 2));
   const targetTotalRows = Math.max(
     minTotalRows,
     Math.min(maxTotalRows, defaultTargetTotalRows),
@@ -74,12 +74,12 @@ export function getOverlaySurfaceMetrics(
   options: OverlaySurfaceMetricsOptions,
 ): OverlaySurfaceMetrics {
   // Keep overlays comfortably inset from shell panels and avoid wide, low-information modals.
-  const margin = options.margin ?? 6;
-  const boxWidth = getOverlayMaxWidth(viewportWidth, margin, options.maxWidth ?? 68);
+  const margin = options.margin ?? (viewportWidth >= 120 ? 6 : 4);
+  const boxWidth = getOverlayMaxWidth(viewportWidth, margin, options.maxWidth ?? (viewportWidth >= 120 ? 84 : viewportWidth >= 100 ? 78 : 72));
   const contentRows = getOverlayContentBudget(viewportHeight, {
     chromeRows: options.chromeRows,
     minContentRows: options.minContentRows ?? 8,
-    maxContentRows: options.maxContentRows ?? 12,
+    maxContentRows: options.maxContentRows ?? 14,
     targetRatio: options.targetRatio ?? 0.45,
     minTotalRows: options.minTotalRows,
     maxTotalRows: options.maxTotalRows,

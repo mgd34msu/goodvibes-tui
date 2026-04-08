@@ -15,6 +15,8 @@ import type { ConfigManager } from '../config/manager.ts';
 import { ServiceRegistry } from '../config/service-registry.ts';
 import { getSubscriptionManager } from '../config/subscriptions.ts';
 import { listBuiltinSubscriptionProviders } from '../config/subscription-providers.ts';
+import type { ProviderAuthFreshness, ProviderAuthRoute } from '../runtime/provider-accounts/registry.ts';
+import { getResolvedSettingLookup } from '../runtime/settings/control-plane.ts';
 import type { FeatureFlagManager } from '../runtime/feature-flags/index.ts';
 import type { FeatureFlag, FlagState } from '../runtime/feature-flags/types.ts';
 import type { McpRegistry } from '../mcp/registry.ts';
@@ -24,7 +26,7 @@ import { logger } from '../utils/logger.ts';
 // Types
 // ---------------------------------------------------------------------------
 
-export type SettingsCategory = 'display' | 'ui' | 'provider' | 'subscriptions' | 'behavior' | 'permissions' | 'mcp' | 'sandbox' | 'danger' | 'tools' | 'flags';
+export type SettingsCategory = 'display' | 'ui' | 'provider' | 'subscriptions' | 'behavior' | 'storage' | 'permissions' | 'mcp' | 'sandbox' | 'danger' | 'tools' | 'flags';
 
 export const SETTINGS_CATEGORIES: SettingsCategory[] = [
   'display',
@@ -32,6 +34,7 @@ export const SETTINGS_CATEGORIES: SettingsCategory[] = [
   'provider',
   'subscriptions',
   'behavior',
+  'storage',
   'permissions',
   'mcp',
   'sandbox',
@@ -44,6 +47,11 @@ export interface SettingEntry {
   setting: ConfigSetting;
   currentValue: unknown;
   isDefault: boolean;
+  effectiveSource?: 'default' | 'local' | 'synced' | 'managed';
+  locked?: boolean;
+  conflict?: boolean;
+  sourceLabel?: string;
+  lockReason?: string;
 }
 
 /** A single feature flag entry for the flags tab. */
@@ -67,6 +75,12 @@ export interface SubscriptionEntry {
   tokenType?: string;
   expiresAt?: number;
   oauthConfigured: boolean;
+  activeRoute?: ProviderAuthRoute;
+  preferredRoute?: ProviderAuthRoute;
+  authFreshness?: ProviderAuthFreshness;
+  routeReason?: string;
+  issues?: string[];
+  nextActions?: string[];
 }
 
 // ---------------------------------------------------------------------------
@@ -417,10 +431,16 @@ export class SettingsModal {
       const cat = setting.key.split('.')[0] as SettingsCategory;
       if (!this.groups.has(cat)) continue;
       const currentValue = configManager.get(setting.key as ConfigKey);
+      const resolved = getResolvedSettingLookup(configManager, setting.key as ConfigKey)?.entry;
       const entry: SettingEntry = {
         setting,
         currentValue,
         isDefault: currentValue === setting.default,
+        effectiveSource: resolved?.effectiveSource,
+        locked: resolved?.locked,
+        conflict: resolved?.conflict,
+        sourceLabel: resolved?.sourceLabel,
+        lockReason: resolved?.lockReason,
       };
       this.groups.get(cat)!.push(entry);
     }
@@ -468,12 +488,25 @@ export class SettingsModal {
     const manager = getSubscriptionManager();
     const services = new ServiceRegistry().getAll();
     const providers = new Map<string, SubscriptionEntry>();
+    const builtinProviders = new Set(listBuiltinSubscriptionProviders().map((builtin) => builtin.provider));
 
-    for (const builtin of listBuiltinSubscriptionProviders()) {
-      providers.set(builtin.provider, {
-        provider: builtin.provider,
+    const determineFreshness = (expiresAt?: number): ProviderAuthFreshness => {
+      if (typeof expiresAt !== 'number' || !Number.isFinite(expiresAt)) return 'healthy';
+      if (expiresAt <= Date.now()) return 'expired';
+      if (expiresAt <= Date.now() + 24 * 60 * 60 * 1000) return 'expiring';
+      return 'healthy';
+    };
+
+    for (const provider of builtinProviders) {
+      providers.set(provider, {
+        provider,
         state: 'available',
         oauthConfigured: true,
+        preferredRoute: 'subscription',
+        activeRoute: 'unconfigured',
+        authFreshness: 'unconfigured',
+        routeReason: 'Built-in subscription adapter is available, but no active subscription session is stored yet.',
+        nextActions: [`Use /subscription login ${provider} start to begin browser sign-in.`],
       });
     }
 
@@ -484,6 +517,11 @@ export class SettingsModal {
           provider,
           state: 'available',
           oauthConfigured: true,
+          preferredRoute: 'subscription',
+          activeRoute: providers.get(provider)?.activeRoute ?? 'unconfigured',
+          authFreshness: providers.get(provider)?.authFreshness ?? 'unconfigured',
+          routeReason: providers.get(provider)?.routeReason ?? 'OAuth metadata is configured for this provider.',
+          nextActions: providers.get(provider)?.nextActions ?? [`Use /subscription login ${provider} start to begin browser sign-in.`],
         });
       }
     }
@@ -493,16 +531,40 @@ export class SettingsModal {
         provider: pending.provider,
         state: 'pending',
         oauthConfigured: providers.get(pending.provider)?.oauthConfigured ?? false,
+        preferredRoute: 'subscription',
+        activeRoute: 'unconfigured',
+        authFreshness: 'pending',
+        routeReason: 'OAuth login is pending completion for this provider.',
+        nextActions: [`Finish /subscription login ${pending.provider} finish <code> to activate this session.`],
       });
     }
 
     for (const subscription of manager.list()) {
+      const freshness = determineFreshness(subscription.expiresAt);
+      const issues = freshness === 'expired'
+        ? ['Stored subscription session is expired and needs refresh.']
+        : freshness === 'expiring'
+          ? ['Stored subscription session expires within 24 hours.']
+          : [];
+      const nextActions = freshness === 'expired'
+        ? [`Refresh or replace the ${subscription.provider} subscription session.`]
+        : freshness === 'expiring'
+          ? [`Verify or renew the ${subscription.provider} subscription session soon.`]
+          : [];
       providers.set(subscription.provider, {
         provider: subscription.provider,
         state: 'active',
         tokenType: subscription.tokenType,
         expiresAt: subscription.expiresAt,
-        oauthConfigured: providers.get(subscription.provider)?.oauthConfigured ?? false,
+        oauthConfigured: providers.get(subscription.provider)?.oauthConfigured ?? builtinProviders.has(subscription.provider),
+        activeRoute: freshness === 'expired' ? 'unconfigured' : 'subscription',
+        preferredRoute: 'subscription',
+        authFreshness: freshness,
+        routeReason: subscription.overrideAmbientApiKeys
+          ? 'Subscription route overrides ambient API-key resolution for this provider.'
+          : 'Subscription route is stored for supported flows without automatically replacing ambient API-key resolution.',
+        issues,
+        nextActions,
       });
     }
 

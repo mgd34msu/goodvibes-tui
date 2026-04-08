@@ -46,7 +46,7 @@ export function renderSelectionModalOverlay(
   });
   const layout = createOverlayBoxLayout(width, metrics.margin, metrics.boxWidth);
 
-  lines.push(createOverlayBorderLine(width, layout, '┌', '─', '┐'));
+  lines.push(createOverlayBorderLine(width, layout, '┌', '─', '┐', BORDER_FG));
 
   const titleLine = createOverlayContentLine(width, layout);
   putText(
@@ -62,16 +62,17 @@ export function renderSelectionModalOverlay(
     const searchLine = createOverlayContentLine(width, layout);
     const prefix = '/ ';
     const queryAreaWidth = layout.innerWidth - getDisplayWidth(prefix);
+    const queryValue = modal.query + (modal.searchFocused ? '█' : '');
     const queryText = fitDisplay(
-      truncateDisplay(`${modal.query}_`, queryAreaWidth),
+      truncateDisplay(queryValue, queryAreaWidth),
       queryAreaWidth,
     );
-    putText(searchLine, layout.margin + 2, getDisplayWidth(prefix), prefix, { fg: BODY_FG });
+    putText(searchLine, layout.margin + 2, getDisplayWidth(prefix), prefix, { fg: modal.searchFocused ? BODY_FG : MUTED_FG });
     putText(searchLine, layout.margin + 2 + getDisplayWidth(prefix), queryAreaWidth, queryText, {
-      fg: modal.query.length > 0 ? BODY_FG : MUTED_FG,
+      fg: modal.query.length > 0 || modal.searchFocused ? BODY_FG : MUTED_FG,
     });
     lines.push(searchLine);
-    lines.push(createOverlayBorderLine(width, layout, '├', '─', '┤', MUTED_FG));
+    lines.push(createOverlayBorderLine(width, layout, '├', '─', '┤', BORDER_FG));
   } else {
     lines.push(createOverlayContentLine(width, layout));
   }
@@ -109,7 +110,7 @@ export function renderSelectionModalOverlay(
       }
 
       const row = createOverlayContentLine(width, layout, BORDER_FG, isSelected ? SELECTED_BG : '');
-      const indicator = isSelected ? '> ' : '  ';
+      const indicator = isSelected ? '▸ ' : '  ';
       const indicatorWidth = 2;
       putText(row, layout.margin + 2, indicatorWidth, indicator, {
         fg: isSelected ? TITLE_FG : MUTED_FG,
@@ -163,7 +164,7 @@ export function renderSelectionModalOverlay(
 
   const footerLine = createOverlayContentLine(width, layout);
   let hints = '[Up/Down] Navigate  [Enter] Select  [Esc] Close';
-  if (modal.allowSearch) hints += '  [type to search]';
+  if (modal.allowSearch) hints += '  [/] Search';
   const selectedItem = modal.getSelected();
   if (selectedItem?.actions) hints += `  ${selectedItem.actions}`;
   putText(
@@ -174,7 +175,7 @@ export function renderSelectionModalOverlay(
     { fg: MUTED_FG, dim: true },
   );
   lines.push(footerLine);
-  lines.push(createOverlayBorderLine(width, layout, '└', '─', '┘', MUTED_FG));
+  lines.push(createOverlayBorderLine(width, layout, '└', '─', '┘', BORDER_FG));
 
   return lines;
 }

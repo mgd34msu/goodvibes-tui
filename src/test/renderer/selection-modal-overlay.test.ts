@@ -38,4 +38,20 @@ describe('renderSelectionModalOverlay', () => {
     expect(selectedRow?.[boxMargin + 1]?.bg).toBe('#103040');
     expect(selectedRow?.[rightX - 1]?.bg).toBe('#103040');
   });
+
+  test('shows a block cursor only when search is focused', () => {
+    const modal = new SelectionModal();
+    modal.open('Pick Workspace', [
+      { id: 'a', label: 'Alpha' },
+      { id: 'b', label: 'Bravo' },
+    ], { allowSearch: true });
+    modal.searchFocused = false;
+
+    const unfocused = renderSelectionModalOverlay(modal, 84).map(line => line.map(cell => cell.char).join('')).join('\n');
+    expect(unfocused).not.toContain('█');
+
+    modal.searchFocused = true;
+    const focused = renderSelectionModalOverlay(modal, 84).map(line => line.map(cell => cell.char).join('')).join('\n');
+    expect(focused).toContain('█');
+  });
 });

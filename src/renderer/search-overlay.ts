@@ -20,7 +20,7 @@ export function renderSearchOverlay(
       : '';
 
   const locked = manager.locked;
-  const cursor = locked ? '' : '_';
+  const cursor = locked ? '' : '█';
   const queryDisplay = manager.query + cursor;
   const hints = locked
     ? '  [Up/Down] or [jk] navigate  [Bksp] edit  [Esc] close'

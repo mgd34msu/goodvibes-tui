@@ -9,6 +9,8 @@ import {
   DEFAULT_PANEL_PALETTE,
 } from './polish.ts';
 import { getTrackedVisibleWindow } from '../renderer/surface-layout.ts';
+import { getPolicyRuntimeState } from '../runtime/permissions/policy-runtime.ts';
+import { buildPermissionRuleSuggestions } from '../runtime/permissions/rule-suggestions.ts';
 
 const C = {
   ...DEFAULT_PANEL_PALETTE,
@@ -61,6 +63,7 @@ export class ApprovalPanel extends BasePanel {
 
   public render(width: number, height: number): Line[] {
     this.needsRender = false;
+    const policySnapshot = getPolicyRuntimeState().getSnapshot();
     const overviewLines = [buildKeyValueLine(width, [
       { label: 'why prompted', value: 'risk summary', valueColor: C.value },
       { label: 'what-if', value: '/policy simulate + preflight', valueColor: C.info },
@@ -93,12 +96,38 @@ export class ApprovalPanel extends BasePanel {
       detailLines.push(buildPanelLine(width, [[` ${selected[1]}`, C.value]]));
       detailLines.push(buildGuidanceLine(width, selected[2].replace('review via ', ''), `open the ${selected[0]} review path`, C));
     }
+    const recentAuditLines: Line[] = [];
+    for (const entry of policySnapshot.recentPermissionAudit.slice(0, 5)) {
+      const decision = entry.approved === undefined ? 'pending' : entry.approved ? 'approved' : 'denied';
+      const decisionColor = entry.approved === undefined ? C.info : entry.approved ? C.good : C.bad;
+      recentAuditLines.push(buildPanelLine(width, [
+        [`  ${decision.padEnd(8)}`, decisionColor],
+        [`${entry.tool}`.padEnd(14), C.label],
+        [entry.summary.slice(0, Math.max(0, width - 28)), C.value],
+      ]));
+      if (entry.reasons[0]) {
+        recentAuditLines.push(buildPanelLine(width, [[`    ${entry.reasons[0]}`, C.dim]]));
+      }
+    }
+    if (recentAuditLines.length === 0) {
+      recentAuditLines.push(buildPanelLine(width, [[`  No recent approval pressure. Live requests and decisions will appear here.`, C.dim]]));
+    }
+    const ruleSuggestionLines: Line[] = [];
+    for (const suggestion of buildPermissionRuleSuggestions(policySnapshot.recentPermissionAudit).slice(0, 3)) {
+      ruleSuggestionLines.push(buildPanelLine(width, [[`  ${suggestion.summary}`, C.info]]));
+      ruleSuggestionLines.push(buildGuidanceLine(width, suggestion.command, suggestion.reason, C));
+    }
+    if (ruleSuggestionLines.length === 0) {
+      ruleSuggestionLines.push(buildPanelLine(width, [[`  No repeated denials currently suggest a durable rule.`, C.dim]]));
+    }
     const lines = buildPanelWorkspace(width, height, {
       title: 'Approval Control Room',
       intro: 'Action-specific review lanes for approvals, denials, escalations, and preflight guidance.',
       sections: [
         { title: 'Overview', lines: overviewLines },
         { title: 'Selected Lane', lines: detailLines },
+        { title: 'Recent Pressure', lines: recentAuditLines },
+        { title: 'Rule Suggestions', lines: ruleSuggestionLines },
         { title: 'Review Lanes', lines: laneLines },
       ],
       footerLines,

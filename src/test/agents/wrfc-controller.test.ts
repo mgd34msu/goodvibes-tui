@@ -2,6 +2,7 @@ import { describe, test, expect, mock, spyOn, beforeEach, afterEach, afterAll } 
 import { join } from 'node:path';
 import { RuntimeEventBus, createEventEnvelope } from '../../runtime/events/index.ts';
 import type { AgentRecord } from '../../tools/agent/index.ts';
+const realConfigIndex = await import('../../config/index.ts');
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -101,7 +102,6 @@ const mockConfigGetCategoryState = {
   maxFixAttempts: 3,
   autoCommit: false,
 };
-const mockConfigGetCategory = mock((_category: string) => ({ ...mockConfigGetCategoryState }));
 const mockConfig = {
   autoApprove: false,
   apiKeys: {} as Record<string, string>,
@@ -128,16 +128,6 @@ const mockConfigSet = mock((key: string, value: unknown) => {
     mockConfig.permissions.tools[key.slice('permissions.tools.'.length)] = value;
   }
 });
-
-mock.module('../../config/index.ts', () => ({
-  config: mockConfig,
-  DEFAULT_CONFIG: mockConfig,
-  configManager: {
-    get: mockConfigGet,
-    getCategory: mockConfigGetCategory,
-    set: mockConfigSet,
-  },
-}));
 
 // Mock AgentWorktree
 const mockMerge = mock(async (_agentId: string) => 'abc123');
@@ -190,7 +180,7 @@ mock.module('../../agents/message-bus.ts', () => ({
 }));
 
 // Now import WrfcController after mocks are registered
-const { WrfcController, _setWrfcAgentManagerResolverForTest } = await import('../../agents/wrfc-controller.ts');
+const { WrfcController, _setWrfcAgentManagerResolverForTest, _setWrfcConfigResolverForTest } = await import('../../agents/wrfc-controller.ts');
 
 // ---------------------------------------------------------------------------
 // Cleanup — restore all module mocks after all tests to prevent leaking into
@@ -199,6 +189,7 @@ const { WrfcController, _setWrfcAgentManagerResolverForTest } = await import('..
 
 afterAll(() => {
   _setWrfcAgentManagerResolverForTest(null);
+  _setWrfcConfigResolverForTest(null);
   mock.restore();
 });
 
@@ -239,10 +230,16 @@ describe('WrfcController', () => {
       listByCohort: () => [],
       clear: () => {},
     }));
+    _setWrfcConfigResolverForTest(() => ({
+      scoreThreshold: Number(mockConfigState['wrfc.scoreThreshold'] ?? mockConfigGetCategoryState.scoreThreshold ?? 9.9),
+      maxFixAttempts: Number(mockConfigState['wrfc.maxFixAttempts'] ?? mockConfigGetCategoryState.maxFixAttempts ?? 3),
+      autoCommit: Boolean(mockConfigState['wrfc.autoCommit'] ?? mockConfigGetCategoryState.autoCommit ?? false),
+      gates: [...mockConfigGetCategoryState.gates],
+    }));
     mockSpawn.mockClear();
     mockGetStatus.mockClear();
     mockConfigGet.mockClear();
-    mockConfigGetCategory.mockClear();
+    mockConfigSet.mockClear();
     mockMerge.mockClear();
     mockCleanup.mockClear();
     mockRegisterAgent.mockClear();
@@ -261,8 +258,10 @@ describe('WrfcController', () => {
   });
 
   afterEach(() => {
+    emitSpy?.mockRestore();
     process.chdir(originalCwd);
     _setWrfcAgentManagerResolverForTest(null);
+    _setWrfcConfigResolverForTest(null);
     WrfcController.resetInstance();
   });
 

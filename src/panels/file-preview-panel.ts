@@ -291,7 +291,7 @@ export class FilePreviewPanel extends BasePanel {
     }
     // Separator " | "
     line[cx++] = createStyledCell(' ', { bg: BG });
-    line[cx++] = createStyledCell('|', { fg: LINE_NUM_FG, bg: BG, dim: true });
+    line[cx++] = createStyledCell('│', { fg: LINE_NUM_FG, bg: BG, dim: true });
     line[cx++] = createStyledCell(' ', { bg: BG });
 
     // Syntax tokens

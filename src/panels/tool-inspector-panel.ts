@@ -44,6 +44,11 @@ interface ToolCallRecord {
   result?: unknown;
   error?: string;
   expanded: boolean;
+  approved?: boolean;
+  outputClass?: string;
+  policyAction?: string;
+  spillBackend?: string;
+  resultSummary?: string;
 }
 
 type FilterMode = 'all' | string;
@@ -66,6 +71,28 @@ function formatMs(ms: number): string {
 function truncateJson(val: unknown, maxLen = 120): string {
   const s = JSON.stringify(val) ?? 'null';
   return s.length > maxLen ? s.slice(0, maxLen - 1) + '\u2026' : s;
+}
+
+function summarizeResult(result: unknown): string | undefined {
+  if (!result || typeof result !== 'object') return undefined;
+  const record = result as Record<string, unknown>;
+  if (typeof record.output === 'string' && record.output.trim()) {
+    const compact = record.output.replace(/\s+/g, ' ').trim();
+    return compact.length > 72 ? `${compact.slice(0, 69)}\u2026` : compact;
+  }
+  if (typeof record.error === 'string' && record.error.trim()) {
+    return record.error;
+  }
+  return undefined;
+}
+
+function detectOutputClass(tool: string, args: Record<string, unknown>): string {
+  const name = tool.toLowerCase();
+  if (name.includes('read') || name.includes('find') || name.includes('inspect') || name.includes('grep')) return 'read';
+  if (name.includes('write') || name.includes('edit') || name.includes('patch')) return 'write';
+  if (name.includes('exec') || name.includes('shell') || name.includes('bash') || typeof args.command === 'string') return 'execute';
+  if (name.includes('fetch') || name.includes('http') || name.includes('remote')) return 'network';
+  return 'analyze';
 }
 
 export class ToolInspectorPanel extends BasePanel {
@@ -191,6 +218,23 @@ export class ToolInspectorPanel extends BasePanel {
       if (rec) {
         detailLines.push(buildPanelLine(width, [[' Tool ', DEFAULT_PANEL_PALETTE.label], [rec.tool, DEFAULT_PANEL_PALETTE.info], ['   Started ', DEFAULT_PANEL_PALETTE.label], [shortTime(rec.startMs), DEFAULT_PANEL_PALETTE.value]]));
         detailLines.push(buildPanelLine(width, [[' Status ', DEFAULT_PANEL_PALETTE.label], [rec.endMs === undefined ? 'running' : rec.error ? 'error' : 'completed', rec.endMs === undefined ? DEFAULT_PANEL_PALETTE.warn : rec.error ? DEFAULT_PANEL_PALETTE.bad : DEFAULT_PANEL_PALETTE.good]]));
+        detailLines.push(buildPanelLine(width, [
+          [' Risk ', DEFAULT_PANEL_PALETTE.label],
+          [rec.outputClass ?? detectOutputClass(rec.tool, rec.args), DEFAULT_PANEL_PALETTE.warn],
+          ['   Approved ', DEFAULT_PANEL_PALETTE.label],
+          [rec.approved === undefined ? 'unknown' : rec.approved ? 'yes' : 'no', rec.approved === false ? DEFAULT_PANEL_PALETTE.bad : DEFAULT_PANEL_PALETTE.value],
+        ]));
+        if (rec.policyAction || rec.spillBackend) {
+          detailLines.push(buildPanelLine(width, [
+            [' Output ', DEFAULT_PANEL_PALETTE.label],
+            [rec.policyAction ?? 'none', rec.policyAction && rec.policyAction !== 'none' ? DEFAULT_PANEL_PALETTE.warn : DEFAULT_PANEL_PALETTE.value],
+            ['   Spill ', DEFAULT_PANEL_PALETTE.label],
+            [rec.spillBackend ?? 'none', rec.spillBackend ? DEFAULT_PANEL_PALETTE.info : DEFAULT_PANEL_PALETTE.dim],
+          ]));
+        }
+        if (rec.resultSummary) {
+          detailLines.push(buildPanelLine(width, [[' Summary ', DEFAULT_PANEL_PALETTE.label], [rec.resultSummary, DEFAULT_PANEL_PALETTE.value]]));
+        }
         if (rec.error) detailLines.push(buildPanelLine(width, [[' Error ', DEFAULT_PANEL_PALETTE.bad], [rec.error, DEFAULT_PANEL_PALETTE.value]]));
       }
     }
@@ -212,7 +256,7 @@ export class ToolInspectorPanel extends BasePanel {
     const bg = isCursor ? C.selectedBg : '';
     if (row.kind === 'call') {
       return buildStyledPanelLine(width, [
-        { text: isCursor ? '>' : ' ', fg: C.selected, bg, bold: isCursor },
+        { text: isCursor ? '▸' : ' ', fg: C.selected, bg, bold: isCursor },
         { text: truncateDisplay(row.text, Math.max(0, width - 1)), fg: isCursor ? C.selected : C.toolFg, bg, bold: isCursor },
       ]);
     }
@@ -232,14 +276,27 @@ export class ToolInspectorPanel extends BasePanel {
     for (let i = 0; i < filtered.length; i++) {
       const rec = filtered[i]!;
       const dur = rec.endMs !== undefined ? ` (${formatMs(rec.endMs - rec.startMs)})` : ' (running)';
-      const expand = rec.expanded ? ' [-]' : ' [+]';
+      const expand = rec.expanded ? ' ▾' : ' ▸';
       const ts = shortTime(rec.startMs);
-      const callText = `${ts} ${rec.tool}${dur}${expand}`;
+      const risk = rec.outputClass ?? detectOutputClass(rec.tool, rec.args);
+      const action = rec.policyAction && rec.policyAction !== 'none' ? ` ${rec.policyAction}` : '';
+      const callText = `${ts} ${rec.tool} [${risk}]${action}${dur}${expand}`;
       flat.push({ kind: 'call', recordIndex: i, text: callText });
 
       if (rec.expanded) {
         const argsStr = truncateJson(rec.args, 200);
         flat.push({ kind: 'detail', text: `Args: ${argsStr}`, isError: false });
+        flat.push({ kind: 'detail', text: `Risk: ${risk}${rec.approved === undefined ? '' : `  Approved: ${rec.approved ? 'yes' : 'no'}`}`, isError: false });
+        if (rec.policyAction || rec.spillBackend) {
+          flat.push({
+            kind: 'detail',
+            text: `Output policy: ${rec.policyAction ?? 'none'}${rec.spillBackend ? `  Spill: ${rec.spillBackend}` : ''}`,
+            isError: false,
+          });
+        }
+        if (rec.resultSummary) {
+          flat.push({ kind: 'detail', text: `Summary: ${rec.resultSummary}`, isError: false });
+        }
         if (rec.result !== undefined) {
           flat.push({ kind: 'detail', text: `Result: ${truncateJson(rec.result, 200)}`, isError: false });
         }
@@ -297,8 +354,15 @@ export class ToolInspectorPanel extends BasePanel {
         args: data.args,
         startMs: Date.now(),
         expanded: false,
+        outputClass: detectOutputClass(data.tool, data.args),
       });
       this.autoScroll = true;
+      this.markDirty();
+    }));
+
+    this.unsubs.push(this.runtimeBus.on<Extract<ToolEvent, { type: 'TOOL_PERMISSIONED' }>>('TOOL_PERMISSIONED', ({ payload: data }) => {
+      const rec = this.records.findLast(r => r.callId === data.callId);
+      if (rec) rec.approved = data.approved;
       this.markDirty();
     }));
 
@@ -307,6 +371,13 @@ export class ToolInspectorPanel extends BasePanel {
       if (rec) {
         rec.endMs = Date.now();
         rec.result = data.result;
+        if (data.result && typeof data.result === 'object') {
+          const audit = (data.result as { _policyAudit?: { actionTaken?: string; spillBackend?: string; policyId?: string } })._policyAudit;
+          rec.policyAction = audit?.actionTaken;
+          rec.spillBackend = audit?.spillBackend;
+          rec.outputClass = audit?.policyId ?? rec.outputClass;
+        }
+        rec.resultSummary = summarizeResult(data.result);
       }
       this.markDirty();
     }));
@@ -317,6 +388,13 @@ export class ToolInspectorPanel extends BasePanel {
         rec.endMs = Date.now();
         rec.result = data.result;
         rec.error = data.error;
+        if (data.result && typeof data.result === 'object') {
+          const audit = (data.result as { _policyAudit?: { actionTaken?: string; spillBackend?: string; policyId?: string } })._policyAudit;
+          rec.policyAction = audit?.actionTaken;
+          rec.spillBackend = audit?.spillBackend;
+          rec.outputClass = audit?.policyId ?? rec.outputClass;
+        }
+        rec.resultSummary = summarizeResult(data.result) ?? data.error;
       }
       this.markDirty();
     }));

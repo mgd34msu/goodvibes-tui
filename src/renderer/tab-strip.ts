@@ -39,7 +39,7 @@ function makeSegments(
   let used = 0;
   let hasOverflow = false;
   for (const tab of tabs) {
-    const separatorWidth = getDisplayWidth('|');
+    const separatorWidth = getDisplayWidth('│');
     const labelText = tab.active ? `[${tab.label}]` : tab.label;
     const labelWidth = getDisplayWidth(labelText);
     const entryWidth = separatorWidth + labelWidth + 1;
@@ -47,7 +47,7 @@ function makeSegments(
       hasOverflow = true;
       break;
     }
-    segments.push({ text: '|', fg: style.separatorFg });
+    segments.push({ text: '│', fg: style.separatorFg });
     segments.push({
       text: `${labelText} `,
       fg: tab.active ? style.activeFg : style.inactiveFg,
@@ -57,8 +57,8 @@ function makeSegments(
     used += entryWidth;
   }
 
-  if (segments.length > 0 && used + getDisplayWidth('|') <= maxWidth) {
-    segments.push({ text: '|', fg: style.separatorFg });
+  if (segments.length > 0 && used + getDisplayWidth('│') <= maxWidth) {
+    segments.push({ text: '│', fg: style.separatorFg });
   }
   return { segments, hasOverflow };
 }
@@ -70,7 +70,7 @@ export function renderTabStrip(config: TabStripConfig): Line {
     style,
     prefixLabel,
     suffixLabel,
-  overflowIndicator = '>',
+  overflowIndicator = '›',
   } = config;
 
   const reservedSuffixWidth = suffixLabel ? getDisplayWidth(suffixLabel) : 0;

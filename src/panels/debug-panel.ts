@@ -347,7 +347,7 @@ export class DebugPanel extends BasePanel {
 
   private _callLogRow(e: ApiCallEntry, width: number): Line {
     const timeStr    = fmtAgo(e.ts).padEnd(8);
-    const statusChar = e.status === 'ok' ? '*' : 'x';
+    const statusChar = e.status === 'ok' ? '✓' : '✕';
     const statusFg   = e.status === 'ok' ? C.ok : C.error;
     const provStr    = e.provider.slice(0, 11).padEnd(12);
     const modelStr   = e.model.slice(0, 19).padEnd(20);

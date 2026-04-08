@@ -7,6 +7,7 @@ import { ServiceRegistry } from '../../config/service-registry.ts';
 import { getSubscriptionManager } from '../../config/subscriptions.ts';
 import type { OAuthProviderConfig, ProviderSubscription } from '../../config/subscriptions.ts';
 import { getSubscriptionProviderConfig, listAvailableSubscriptionProviders } from '../../config/subscription-providers.ts';
+import { inspectProviderAuth } from '../../runtime/auth/inspection.ts';
 import { openExternalUrl } from '../../utils/open-external.ts';
 
 interface SubscriptionBundle {
@@ -120,33 +121,37 @@ export function registerSubscriptionRuntimeCommands(registry: CommandRegistry): 
           ctx.print('Usage: /subscription inspect <provider>');
           return;
         }
-        const record = manager.get(provider);
         const resolved = getSubscriptionProviderConfig(provider, services.get(provider));
-        if (!record && !resolved) {
+        if (!resolved && !manager.get(provider) && !manager.getPending(provider)) {
           ctx.print(`No stored or available subscription provider named ${provider}.`);
           return;
         }
+        const inspection = await inspectProviderAuth(provider);
         ctx.print([
           `Subscription ${provider}`,
-          `  configured: ${resolved ? 'yes' : 'no'}`,
+          `  configured: ${inspection.configured ? 'yes' : 'no'}`,
+          `  freshness: ${inspection.freshness}`,
+          `  callbackMode: ${inspection.callbackMode}`,
           ...(resolved ? [
             `  source: ${resolved.source}`,
             `  redirectUri: ${resolved.oauth.redirectUri}`,
             `  authUrl: ${resolved.oauth.authUrl}`,
             `  tokenUrl: ${resolved.oauth.tokenUrl}`,
+            ...(inspection.localCallback ? [`  localCallback: ${inspection.localCallback}`] : []),
           ] : []),
-          ...(record ? [
-            `  authMode: ${record.authMode}`,
-            `  tokenType: ${record.tokenType}`,
-            `  createdAt: ${new Date(record.createdAt).toISOString()}`,
-            `  updatedAt: ${new Date(record.updatedAt).toISOString()}`,
-            `  expiresAt: ${record.expiresAt ? new Date(record.expiresAt).toISOString() : 'n/a'}`,
-            `  refreshToken: ${record.refreshToken ? 'present' : 'absent'}`,
-            describePrecedence(record),
+          ...(inspection.activeSubscription ? [
+            `  authMode: ${manager.get(provider)?.authMode ?? 'oauth'}`,
+            `  tokenType: ${inspection.tokenType ?? 'n/a'}`,
+            `  createdAt: ${manager.get(provider)?.createdAt ? new Date(manager.get(provider)!.createdAt).toISOString() : 'n/a'}`,
+            `  updatedAt: ${manager.get(provider)?.updatedAt ? new Date(manager.get(provider)!.updatedAt).toISOString() : 'n/a'}`,
+            `  expiresAt: ${inspection.expiresAt ? new Date(inspection.expiresAt).toISOString() : 'n/a'}`,
+            `  refreshToken: ${manager.get(provider)?.refreshToken ? 'present' : 'absent'}`,
+            describePrecedence(manager.get(provider)!),
           ] : [
-            '  state: available for login',
-            `  next: /subscription login ${provider} start`,
+            `  state: ${inspection.freshness === 'pending' ? 'pending login' : 'available for login'}`,
           ]),
+          ...inspection.issues.map((issue) => `  issue: ${issue}`),
+          ...inspection.nextActions.map((action) => `  next: ${action}`),
         ].join('\n'));
         return;
       }

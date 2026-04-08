@@ -270,7 +270,7 @@ export class ProviderStatsPanel extends BasePanel {
     // Build as segments to avoid multi-byte char indexing issues
     const headerLine = buildStyledPanelLine(width, [
       { text: '  ', fg: '#94a3b8' },
-      { text: '*', fg: dotColor },
+      { text: '●', fg: dotColor },
       { text: ' ', fg: '#94a3b8' },
       { text: `${truncateDisplay(provName, 14).padEnd(14)} `, fg: '#e2e8f0', bold: true },
       { text: modelDisplay, fg: '#cbd5e1' },

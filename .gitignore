@@ -17,9 +17,12 @@ dist/
 !.goodvibes/skills/
 !.goodvibes/agents/
 !.goodvibes/GOODVIBES.md
+.codex
 
 # Artifacts
 scripts/reset-suite.sh
 .test-tmp/
 test-tmp-hooks/
+test-tmp*
 tmp/
+tmp*

@@ -215,7 +215,7 @@ export class ModalFactory {
   ): Line {
     const s = { ...DEFAULT_STYLE, ...style };
     const layout = createOverlayBoxLayout(terminalWidth, margin, boxW);
-    const line = createOverlayBorderLine(terminalWidth, layout, '┌', '─', '┐', s.titleFg);
+    const line = createOverlayBorderLine(terminalWidth, layout, '┌', '─', '┐', s.borderFg);
     putOverlayText(line, layout.margin + 2, layout.width - 4, title, { fg: s.titleFg, bold: true });
     return line;
   }
@@ -233,7 +233,7 @@ export class ModalFactory {
   ): Line {
     const s = { ...DEFAULT_STYLE, ...style };
     const layout = createOverlayBoxLayout(terminalWidth, margin, boxW);
-    const line = createOverlayBorderLine(terminalWidth, layout, '└', '─', '┘', s.hintFg);
+    const line = createOverlayBorderLine(terminalWidth, layout, '└', '─', '┘', s.borderFg);
     if (hints.length > 0) {
       putOverlayText(line, layout.margin + 2, layout.width - 4, truncateDisplay(hints, layout.width - 4), {
         fg: s.hintFg,
@@ -258,7 +258,7 @@ export class ModalFactory {
     const s = { ...DEFAULT_STYLE, ...style };
     const layout = createOverlayBoxLayout(terminalWidth, margin, boxW);
     const contentW = layout.innerWidth;
-    const indicator = selected ? '> ' : '  ';
+    const indicator = selected ? '▸ ' : '  ';
     const displayText = getDisplayWidth(text) > contentW - 2
       ? truncateDisplay(text, contentW - 2)
       : text;
@@ -313,15 +313,39 @@ export class ModalFactory {
     if (items.length === 0) {
       return [ModalFactory._renderEmptyRow(boxW, margin, terminalWidth, style)];
     }
-    return items.map((item) =>
-      ModalFactory.renderListItem(boxW, margin, item.label, item.selected ?? false, terminalWidth, {
+    const contentW = boxW - 4;
+    const rows: Line[] = [];
+    for (const item of items) {
+      const itemStyle = {
         ...style,
         ...(item.style ? {
           selectedFg: item.style.fg ?? style.selectedFg,
           textFg: item.style.fg ?? style.textFg,
         } : {}),
-      }),
-    );
+      };
+      const wrapped = wrapText(item.label, Math.max(8, contentW - 2));
+      const displayLines = wrapped.length > 0 ? wrapped : [''];
+      for (let i = 0; i < displayLines.length; i++) {
+        const isFirst = i === 0;
+        const indicator = isFirst
+          ? (item.selected ? '▸ ' : '  ')
+          : '  ';
+        const row = createOverlayContentLine(
+          terminalWidth,
+          createOverlayBoxLayout(terminalWidth, margin, boxW),
+          itemStyle.borderFg,
+          item.selected ? itemStyle.selectedBg : '',
+        );
+        const padded = fitDisplay(truncateToWidth(`${indicator}${displayLines[i] ?? ''}`, contentW), contentW);
+        putOverlayText(row, margin + 2, contentW, padded, {
+          fg: item.selected ? itemStyle.selectedFg : itemStyle.textFg,
+          bg: item.selected ? itemStyle.selectedBg : '',
+          bold: item.selected && isFirst,
+        });
+        rows.push(row);
+      }
+    }
+    return rows;
   }
 
   private static _renderInputSection(
@@ -333,7 +357,7 @@ export class ModalFactory {
   ): Line[] {
     const contentW = boxW - 4;
     const query = section.content ?? '';
-    const cursor = '_';
+    const cursor = '█';
     const displayQuery = getDisplayWidth(query) > contentW - 4
       ? truncateDisplay(query, contentW - 4)
       : query;

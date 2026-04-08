@@ -10,7 +10,7 @@ import { ScheduleManager } from '../tools/workflow/index.ts';
 import { providerRegistry } from '../providers/registry.ts';
 import { logger } from '../utils/logger.ts';
 export { saveSession } from './session-persistence.ts';
-import { saveSession } from './session-persistence.ts';
+import { saveSession, type SessionSnapshot } from './session-persistence.ts';
 
 // ── Startup lifecycle ────────────────────────────────────────────────────────
 
@@ -58,7 +58,7 @@ export function fireSessionStart(sessionId: string): void {
  */
 export async function shutdownRuntime(
   sessionId: string,
-  sessionData: { messages: object[]; timestamp?: number },
+  sessionData: SessionSnapshot,
   model: string,
   provider: string,
   title = '',

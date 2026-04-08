@@ -277,7 +277,7 @@ export class AgentInspectorPanel extends BasePanel {
         bg: COLOR.statusBar,
         bold: isSelected,
       });
-      segments.push({ text: '|', fg: COLOR.separator, bg: COLOR.statusBar });
+      segments.push({ text: '│', fg: COLOR.separator, bg: COLOR.statusBar });
     }
     return buildStyledPanelLine(width, segments);
   }
@@ -314,14 +314,14 @@ export class AgentInspectorPanel extends BasePanel {
     const bg = isCursor ? '#1a2233' : '';
     const ts = shortTime(row.timestamp);
     const { fg, prefix } = agentKindStyle(row.kind, COLOR);
-    const hint = row.hasDetail ? (row.expanded ? ' [-]' : ' [+]') : '';
-    const prefixText = `${isCursor ? '>' : ' '} ${ts} ${prefix} `;
+    const hint = row.hasDetail ? (row.expanded ? ' ▾' : ' ▸') : '';
+    const prefixText = `${isCursor ? '▸' : ' '} ${ts} ${prefix} `;
     const reserved = prefixText.length + hint.length;
     const contentBudget = Math.max(0, width - reserved);
     const text = truncateDisplay(row.content, contentBudget);
 
     return buildSelectablePanelLine(width, [
-      { text: isCursor ? '>' : ' ', fg: COLOR.selected, bg, bold: isCursor },
+      { text: isCursor ? '▸' : ' ', fg: COLOR.selected, bg, bold: isCursor },
       { text: ' ', fg: COLOR.value, bg },
       { text: ts, fg: COLOR.timestamp, bg, dim: true },
       { text: ' ', fg: COLOR.value, bg },

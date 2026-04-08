@@ -20,6 +20,7 @@ import {
   type EcosystemCatalogEntry,
   type EcosystemEntryKind,
 } from '../../runtime/ecosystem/catalog.ts';
+import { buildEcosystemRecommendations } from '../../runtime/ecosystem/recommendations.ts';
 
 function resolveMarketplaceEntry(kind: EcosystemEntryKind, entryId: string): EcosystemCatalogEntry | null {
   return loadEcosystemCatalog(kind).find((candidate) => candidate.id === entryId) ?? null;
@@ -35,7 +36,7 @@ export function registerMarketplaceRuntimeCommands(registry: CommandRegistry): v
     name: 'marketplace',
     aliases: ['catalog'],
     description: 'Browse the unified plugin and skill marketplace',
-    usage: '[open|overview|browse [query]|review <plugin|skill|hook-pack|policy-pack> <id>|provenance <plugin|skill|hook-pack|policy-pack> <id>|install-hint <plugin|skill|hook-pack|policy-pack> <id>|install <plugin|skill|hook-pack|policy-pack> <id> [project|user]|update <plugin|skill|hook-pack|policy-pack> <id> [project|user]|rollback <plugin|skill|hook-pack|policy-pack> <id> [project|user] [backupId]|history <plugin|skill|hook-pack|policy-pack> <id> [project|user]|uninstall <plugin|skill|hook-pack|policy-pack> <id> [project|user]|receipt <plugin|skill|hook-pack|policy-pack> <id> [project|user]|bundle export <path> [project|user]|bundle inspect <path>|bundle import <path> [project|user]|installed]',
+    usage: '[open|overview|recommend|browse [query]|review <plugin|skill|hook-pack|policy-pack> <id>|provenance <plugin|skill|hook-pack|policy-pack> <id>|install-hint <plugin|skill|hook-pack|policy-pack> <id>|install <plugin|skill|hook-pack|policy-pack> <id> [project|user]|update <plugin|skill|hook-pack|policy-pack> <id> [project|user]|rollback <plugin|skill|hook-pack|policy-pack> <id> [project|user] [backupId]|history <plugin|skill|hook-pack|policy-pack> <id> [project|user]|uninstall <plugin|skill|hook-pack|policy-pack> <id> [project|user]|receipt <plugin|skill|hook-pack|policy-pack> <id> [project|user]|bundle export <path> [project|user]|bundle inspect <path>|bundle import <path> [project|user]|installed]',
     handler(args, ctx) {
       const sub = args[0] ?? 'open';
       if (sub === 'open' || sub === 'panel') {
@@ -83,6 +84,17 @@ export function registerMarketplaceRuntimeCommands(registry: CommandRegistry): v
           `  policy packs: ${policyPackEntries.length}`,
           ...policyPackEntries.map((entry) => `    policy-pack ${entry.id}  ${entry.name}  ${entry.summary}`),
         ].join('\n'));
+        return;
+      }
+      if (sub === 'recommend') {
+        const recommendations = buildEcosystemRecommendations(ctx.runtimeStore);
+        ctx.print(recommendations.length > 0
+          ? [
+            'Marketplace Recommendations',
+            ...recommendations.map((recommendation) => `  ${recommendation.kind} ${recommendation.entry.id}  ${recommendation.title}`),
+            ...recommendations.map((recommendation) => `    ${recommendation.reason}  next=${recommendation.command}`),
+          ].join('\n')
+          : 'Marketplace Recommendations\n  No contextual recommendations right now.');
         return;
       }
       if (sub === 'installed') {
@@ -269,7 +281,7 @@ export function registerMarketplaceRuntimeCommands(registry: CommandRegistry): v
         ctx.print(`Uninstalled curated ${kind} ${entryId} from ${result.removedPath}`);
         return;
       }
-      ctx.print('Usage: /marketplace [open|overview|browse [query]|review <plugin|skill|hook-pack|policy-pack> <id>|provenance <plugin|skill|hook-pack|policy-pack> <id>|install-hint <plugin|skill|hook-pack|policy-pack> <id>|install <plugin|skill|hook-pack|policy-pack> <id> [project|user]|update <plugin|skill|hook-pack|policy-pack> <id> [project|user]|rollback <plugin|skill|hook-pack|policy-pack> <id> [project|user] [backupId]|history <plugin|skill|hook-pack|policy-pack> <id> [project|user]|uninstall <plugin|skill|hook-pack|policy-pack> <id> [project|user]|receipt <plugin|skill|hook-pack|policy-pack> <id> [project|user]|bundle export <path> [project|user]|bundle inspect <path>|bundle import <path> [project|user]|installed]');
+      ctx.print('Usage: /marketplace [open|overview|recommend|browse [query]|review <plugin|skill|hook-pack|policy-pack> <id>|provenance <plugin|skill|hook-pack|policy-pack> <id>|install-hint <plugin|skill|hook-pack|policy-pack> <id>|install <plugin|skill|hook-pack|policy-pack> <id> [project|user]|update <plugin|skill|hook-pack|policy-pack> <id> [project|user]|rollback <plugin|skill|hook-pack|policy-pack> <id> [project|user] [backupId]|history <plugin|skill|hook-pack|policy-pack> <id> [project|user]|uninstall <plugin|skill|hook-pack|policy-pack> <id> [project|user]|receipt <plugin|skill|hook-pack|policy-pack> <id> [project|user]|bundle export <path> [project|user]|bundle inspect <path>|bundle import <path> [project|user]|installed]');
     },
   });
 }

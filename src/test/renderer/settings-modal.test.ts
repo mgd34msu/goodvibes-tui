@@ -122,7 +122,7 @@ describe('renderSettingsModal', () => {
 
   test('selected item has arrow indicator', () => {
     const lines = renderSettingsModal(modal, W);
-    const hasArrow = lines.some(line => line.some(cell => cell.char === '>'));
+    const hasArrow = lines.some(line => line.some(cell => cell.char === '▸'));
     expect(hasArrow).toBe(true);
   });
 
@@ -131,6 +131,32 @@ describe('renderSettingsModal', () => {
     const texts = linesToText(lines).join('\n');
     // The first setting in display is 'display.stream' with description containing 'Stream'
     expect(texts).toMatch(/stream|Stream/);
+  });
+
+  test('selected setting surfaces resolved source metadata', () => {
+    const lines = renderSettingsModal(modal, W);
+    const texts = linesToText(lines).join('\n');
+    expect(texts).toContain('Source');
+  });
+
+  test('selected conflicting setting surfaces conflict provenance', () => {
+    const selected = modal.getSelected();
+    expect(selected).not.toBeNull();
+    selected!.conflict = true;
+    modal.groups.set(modal.currentCategory, [selected!]);
+    const lines = renderSettingsModal(modal, W, 40);
+    const texts = linesToText(lines).join('\n');
+    expect(texts).toContain('conflict');
+  });
+
+  test('selected synced setting surfaces synced provenance', () => {
+    const selected = modal.getSelected();
+    expect(selected).not.toBeNull();
+    selected!.effectiveSource = 'synced';
+    modal.groups.set(modal.currentCategory, [selected!]);
+    const lines = renderSettingsModal(modal, W, 40);
+    const texts = linesToText(lines).join('\n');
+    expect(texts).toContain('Source: synced');
   });
 
   test('footer shows [Enter] Confirm/[Esc] Cancel in editing mode', () => {

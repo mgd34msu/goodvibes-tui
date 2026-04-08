@@ -4,6 +4,7 @@
 
 export type PermissionMode = 'prompt' | 'allow-all' | 'custom';
 export type PermissionAction = 'allow' | 'prompt' | 'deny';
+export type LineNumberMode = 'all' | 'code' | 'off';
 
 /** Persisted feature flag override state stored in config file. */
 export type PersistedFlagState = 'enabled' | 'disabled';
@@ -32,7 +33,7 @@ export interface NotificationsConfig {
 export interface GoodVibesConfig {
   display: {
     stream: boolean;            // default: true
-    lineNumbers: boolean;       // default: false
+    lineNumbers: LineNumberMode; // default: 'off'
     collapseThreshold: number;  // default: 30
     theme: string;              // default: 'vaporwave'
     showThinking: boolean;      // default: false
@@ -49,10 +50,16 @@ export interface GoodVibesConfig {
   behavior: {
     autoApprove: boolean;       // default: false
     autoCompactThreshold: number; // default: 80
+    staleContextWarnings: boolean; // default: true
     saveHistory: boolean;       // default: true
     notifyOnComplete: boolean;  // default: true
     suggestAlternativeOnProviderFail: boolean; // default: false
     hitlMode: 'quiet' | 'balanced' | 'operator'; // default: 'balanced'
+    returnContextMode: 'off' | 'local' | 'assisted'; // default: 'off'
+    guidanceMode: 'off' | 'minimal' | 'guided'; // default: 'minimal'
+  };
+  storage: {
+    secretPolicy: 'plaintext_allowed' | 'preferred_secure' | 'require_secure'; // default: 'preferred_secure'
   };
   permissions: {
     mode: PermissionMode;       // default: 'prompt'
@@ -149,10 +156,14 @@ export type ConfigKey =
   | 'provider.systemPromptFile'
   | 'behavior.autoApprove'
   | 'behavior.autoCompactThreshold'
+  | 'behavior.staleContextWarnings'
   | 'behavior.saveHistory'
   | 'behavior.notifyOnComplete'
   | 'behavior.suggestAlternativeOnProviderFail'
   | 'behavior.hitlMode'
+  | 'behavior.returnContextMode'
+  | 'behavior.guidanceMode'
+  | 'storage.secretPolicy'
   | 'permissions.mode'
   | 'permissions.tools.read'
   | 'permissions.tools.write'
@@ -212,8 +223,8 @@ export const CONFIG_KEYS = new Set<string>([
   'display.showThinking', 'display.showReasoningSummary', 'display.showTokenSpeed',
   'display.showToolPreview', 'provider.reasoningEffort', 'provider.model',
   'provider.provider', 'provider.systemPromptFile', 'behavior.autoApprove',
-  'behavior.autoCompactThreshold', 'behavior.saveHistory', 'behavior.notifyOnComplete',
-  'behavior.suggestAlternativeOnProviderFail', 'behavior.hitlMode', 'permissions.mode',
+  'behavior.autoCompactThreshold', 'behavior.staleContextWarnings', 'behavior.saveHistory', 'behavior.notifyOnComplete',
+  'behavior.suggestAlternativeOnProviderFail', 'behavior.hitlMode', 'behavior.returnContextMode', 'behavior.guidanceMode', 'storage.secretPolicy', 'permissions.mode',
   'permissions.tools.read', 'permissions.tools.write', 'permissions.tools.edit',
   'permissions.tools.exec', 'permissions.tools.find', 'permissions.tools.fetch',
   'permissions.tools.analyze', 'permissions.tools.inspect', 'permissions.tools.agent',
@@ -235,7 +246,7 @@ export function isValidConfigKey(key: string): key is ConfigKey {
 /** Maps a ConfigKey to its value type. */
 export type ConfigValue<K extends ConfigKey> =
   K extends 'display.stream' ? boolean :
-  K extends 'display.lineNumbers' ? boolean :
+  K extends 'display.lineNumbers' ? LineNumberMode :
   K extends 'display.collapseThreshold' ? number :
   K extends 'display.theme' ? string :
   K extends 'display.showThinking' ? boolean :
@@ -248,10 +259,14 @@ export type ConfigValue<K extends ConfigKey> =
   K extends 'provider.systemPromptFile' ? string :
   K extends 'behavior.autoApprove' ? boolean :
   K extends 'behavior.autoCompactThreshold' ? number :
+  K extends 'behavior.staleContextWarnings' ? boolean :
   K extends 'behavior.saveHistory' ? boolean :
   K extends 'behavior.notifyOnComplete' ? boolean :
   K extends 'behavior.suggestAlternativeOnProviderFail' ? boolean :
   K extends 'behavior.hitlMode' ? 'quiet' | 'balanced' | 'operator' :
+  K extends 'behavior.returnContextMode' ? 'off' | 'local' | 'assisted' :
+  K extends 'behavior.guidanceMode' ? 'off' | 'minimal' | 'guided' :
+  K extends 'storage.secretPolicy' ? 'plaintext_allowed' | 'preferred_secure' | 'require_secure' :
   K extends 'permissions.mode' ? PermissionMode :
   K extends 'permissions.tools.read' ? PermissionAction :
   K extends 'permissions.tools.write' ? PermissionAction :
@@ -309,7 +324,7 @@ export type ConfigValue<K extends ConfigKey> =
 export const DEFAULT_CONFIG: GoodVibesConfig = {
   display: {
     stream: true,
-    lineNumbers: false,
+    lineNumbers: 'off',
     collapseThreshold: 30,
     theme: 'vaporwave',
     showThinking: false,
@@ -326,10 +341,16 @@ export const DEFAULT_CONFIG: GoodVibesConfig = {
   behavior: {
     autoApprove: false,
     autoCompactThreshold: 80,
+    staleContextWarnings: true,
     saveHistory: true,
     notifyOnComplete: true,
     suggestAlternativeOnProviderFail: false,
     hitlMode: 'balanced',
+    returnContextMode: 'off',
+    guidanceMode: 'minimal',
+  },
+  storage: {
+    secretPolicy: 'preferred_secure',
   },
   permissions: {
     mode: 'prompt',
@@ -425,9 +446,10 @@ export const CONFIG_SCHEMA: ConfigSetting[] = [
   },
   {
     key: 'display.lineNumbers',
-    type: 'boolean',
-    default: false,
-    description: 'Show line numbers in code blocks',
+    type: 'enum',
+    default: 'off',
+    description: 'Show line numbers for all assistant output, code blocks only, or not at all',
+    enumValues: ['all', 'code', 'off'],
   },
   {
     key: 'display.collapseThreshold',
@@ -505,6 +527,12 @@ export const CONFIG_SCHEMA: ConfigSetting[] = [
     validate: (v) => typeof v === 'number' && v >= 10 && v <= 100,
   },
   {
+    key: 'behavior.staleContextWarnings',
+    type: 'boolean',
+    default: true,
+    description: 'Emit proactive context-pressure warnings before compaction is required',
+  },
+  {
     key: 'behavior.saveHistory',
     type: 'boolean',
     default: true,
@@ -515,6 +543,27 @@ export const CONFIG_SCHEMA: ConfigSetting[] = [
     type: 'boolean',
     default: true,
     description: 'Emit terminal bell and desktop notification when a long turn completes',
+  },
+  {
+    key: 'behavior.returnContextMode',
+    type: 'enum',
+    default: 'off',
+    description: 'Resume summary mode: off, local deterministic summary, or helper-assisted summary',
+    enumValues: ['off', 'local', 'assisted'],
+  },
+  {
+    key: 'behavior.guidanceMode',
+    type: 'enum',
+    default: 'minimal',
+    description: 'Operational guidance mode: off, minimal, or guided',
+    enumValues: ['off', 'minimal', 'guided'],
+  },
+  {
+    key: 'storage.secretPolicy',
+    type: 'enum',
+    default: 'preferred_secure',
+    description: 'Secret persistence policy: plaintext allowed, preferred secure, or require secure',
+    enumValues: ['plaintext_allowed', 'preferred_secure', 'require_secure'],
   },
   {
     key: 'permissions.mode',

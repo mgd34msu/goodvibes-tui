@@ -68,7 +68,7 @@ describe('workspace panel migrations', () => {
     panel.handleInput('up');
     panel.handleInput('r');
     const text = linesText(panel.render(80, 20));
-    expect(text).toContain('Search: r_');
+    expect(text).toContain('Search: r█');
     expect(text).not.toContain('refresh');
   });
 
@@ -138,6 +138,14 @@ describe('workspace panel migrations', () => {
     expect(lines).toHaveLength(20);
     expect(lines.every((line) => line.length === 80)).toBe(true);
     expect(linesText(lines)).toContain('Explorer');
+  });
+
+  test('FileExplorerPanel supports explicit search focus from top navigation', () => {
+    const panel = new FileExplorerPanel('/definitely/not/a/real/path');
+    panel.handleInput('up');
+    panel.handleInput('r');
+    const text = linesText(panel.render(80, 20));
+    expect(text).toContain('/ r█');
   });
 
   test('FilePreviewPanel renders shared workspace empty state cleanly', () => {

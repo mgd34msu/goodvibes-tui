@@ -237,7 +237,7 @@ describe('PanelListPanel', () => {
       panel.handleInput('up');
       panel.handleInput('a');
       let text = linesText(panel.render(80, 20));
-      expect(text).toContain('Filter: a_');
+      expect(text).toContain('Filter: a█');
 
       panel.handleInput('down');
       panel.handleInput('B');

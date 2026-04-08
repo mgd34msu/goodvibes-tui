@@ -50,6 +50,23 @@ describe('ModalFactory.createModal', () => {
     expect(last).toContain('\u2518');
   });
 
+  test('frame border keeps one border color around the perimeter', () => {
+    const lines = ModalFactory.createModal({
+      title: 'Test',
+      sections: [{ type: 'text', content: 'Hello World' }],
+    }, W);
+    const top = lines[0];
+    const bottom = lines[lines.length - 1];
+    const leftX = top.findIndex((cell) => cell.char === '┌');
+    const rightX = top.findLastIndex((cell) => cell.char === '┐');
+    expect(leftX).toBeGreaterThanOrEqual(0);
+    expect(rightX).toBeGreaterThan(leftX);
+    expect(top[leftX].fg).toBe('240');
+    expect(top[rightX].fg).toBe('240');
+    expect(bottom[leftX].fg).toBe('240');
+    expect(bottom[rightX].fg).toBe('240');
+  });
+
   test('content rows use box-drawing vertical borders', () => {
     const lines = ModalFactory.createModal({
       title: 'Test',
@@ -189,7 +206,7 @@ describe('ModalFactory.createModal', () => {
       }],
     }, W);
     const texts = linesToText(lines);
-    const selectedLine = texts.find((t) => t.includes('>') && t.includes('Two'));
+    const selectedLine = texts.find((t) => t.includes('▸') && t.includes('Two'));
     expect(selectedLine).toBeTruthy();
   });
 
@@ -203,7 +220,7 @@ describe('ModalFactory.createModal', () => {
     }, W);
     // The line with the selected item should have bold cells
     const selectedLineIndex = lines.findIndex((line) =>
-      line.some((cell) => cell.char === '>'),
+      line.some((cell) => cell.char === '▸'),
     );
     expect(selectedLineIndex).toBeGreaterThan(-1);
     const hasBold = lines[selectedLineIndex].some((c) => c.bold);
@@ -230,7 +247,7 @@ describe('ModalFactory.createModal', () => {
     }, W);
     const text = linesToText(lines).join('\n');
     expect(text).toContain('myquery');
-    expect(text).toContain('_');
+    expect(text).toContain('█');
   });
 
   test('input section renders empty query with cursor', () => {
@@ -239,7 +256,7 @@ describe('ModalFactory.createModal', () => {
       sections: [{ type: 'input', content: '' }],
     }, W);
     const text = linesToText(lines).join('\n');
-    expect(text).toContain('_');
+    expect(text).toContain('█');
   });
 
   test('multiple sections rendered in order', () => {
@@ -364,7 +381,7 @@ describe('ModalFactory.renderListItem', () => {
   test('selected item has indicator', () => {
     const line = ModalFactory.renderListItem(72, 4, 'item', true, W);
     const text = lineToString(line);
-    expect(text).toContain('>');
+    expect(text).toContain('▸');
     expect(text).toContain('item');
   });
 

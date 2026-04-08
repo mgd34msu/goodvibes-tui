@@ -12,6 +12,7 @@ import {
   type PanelWorkspaceSection,
 } from './polish.ts';
 import { getTrackedVisibleWindow } from '../renderer/surface-layout.ts';
+import { reviewWorktreeAttachments } from '../runtime/worktree/registry.ts';
 
 const C = {
   ...DEFAULT_PANEL_PALETTE,
@@ -88,6 +89,25 @@ function safeJson(value: unknown): string {
     return JSON.stringify(value);
   } catch {
     return String(value);
+  }
+}
+
+interface TaskDescriptorMeta {
+  readonly mode?: string;
+  readonly template?: string;
+  readonly reviewMode?: string;
+  readonly executionProtocol?: string;
+  readonly source?: string;
+  readonly family?: string;
+}
+
+function parseTaskDescriptor(description: string): TaskDescriptorMeta | null {
+  try {
+    const parsed = JSON.parse(description) as TaskDescriptorMeta;
+    if (!parsed || typeof parsed !== 'object') return null;
+    return parsed;
+  } catch {
+    return null;
   }
 }
 
@@ -220,6 +240,7 @@ export class TasksPanel extends BasePanel {
     }
 
     const selected = tasks[this.selectedIndex]!;
+    const descriptor = selected.description ? parseTaskDescriptor(selected.description) : null;
     const detailLines: Line[] = [
       buildPanelLine(width, [
         ['  Title: ', C.label],
@@ -246,6 +267,26 @@ export class TasksPanel extends BasePanel {
         [formatDuration(selected.startedAt, selected.endedAt), C.dim],
       ]),
     ];
+    if (descriptor?.mode || descriptor?.family || descriptor?.source) {
+      detailLines.push(buildPanelLine(width, [
+        ['  Mode: ', C.label],
+        [descriptor?.mode ?? 'n/a', C.value],
+        ['  Family: ', C.label],
+        [descriptor?.family ?? 'n/a', C.info],
+        ['  Source: ', C.label],
+        [descriptor?.source ?? 'builtin/runtime', C.dim],
+      ]));
+    }
+    if (descriptor?.reviewMode || descriptor?.executionProtocol || descriptor?.template) {
+      detailLines.push(buildPanelLine(width, [
+        ['  Review: ', C.label],
+        [descriptor?.reviewMode ?? 'n/a', C.value],
+        ['  Protocol: ', C.label],
+        [descriptor?.executionProtocol ?? 'n/a', C.value],
+        ['  Template: ', C.label],
+        [descriptor?.template ?? 'n/a', C.dim],
+      ]));
+    }
     if (selected.correlationId || selected.turnId) {
       detailLines.push(buildPanelLine(width, [
         ['  Correlation: ', C.label],
@@ -261,6 +302,27 @@ export class TasksPanel extends BasePanel {
         ['  Children: ', C.label],
         [selected.childTaskIds.length > 0 ? selected.childTaskIds.join(', ') : 'none', C.dim],
       ]));
+    }
+    const attachedWorktrees = reviewWorktreeAttachments('task', selected.id);
+    if (attachedWorktrees.total > 0) {
+      detailLines.push(buildPanelLine(width, [
+        ['  Worktrees: ', C.label],
+        [`${attachedWorktrees.total} tracked`, C.info],
+        ['  Active: ', C.label],
+        [String(attachedWorktrees.active), attachedWorktrees.active > 0 ? C.running : C.dim],
+        ['  Paused: ', C.label],
+        [String(attachedWorktrees.paused), attachedWorktrees.paused > 0 ? C.blocked : C.dim],
+      ]));
+      detailLines.push(buildPanelLine(width, [[
+        `  Next: /worktree task ${selected.id}  /worktree recover task ${selected.id}`,
+        C.dim,
+      ]]));
+      for (const record of attachedWorktrees.records.slice(0, 2)) {
+        detailLines.push(buildPanelLine(width, [[
+          `  ${record.state.padEnd(15)} ${record.path}`.slice(0, Math.max(0, width - 2)),
+          record.state === 'active' ? C.running : record.state === 'paused' ? C.blocked : C.dim,
+        ]]));
+      }
     }
     if (selected.retryPolicy) {
       detailLines.push(buildPanelLine(width, [

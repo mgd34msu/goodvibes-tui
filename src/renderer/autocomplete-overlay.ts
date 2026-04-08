@@ -48,7 +48,7 @@ export function renderAutocompleteOverlay(
   });
   const layout = createOverlayBoxLayout(width, metrics.margin, metrics.boxWidth);
 
-  lines.push(createOverlayBorderLine(width, layout, '┌', '─', '┐'));
+  lines.push(createOverlayBorderLine(width, layout, '┌', '─', '┐', BORDER_FG));
 
   const titleLine = createOverlayContentLine(width, layout);
   const titleText = ' Commands';
@@ -90,7 +90,7 @@ export function renderAutocompleteOverlay(
     const { command } = results[i];
     const isSelected = i === state.selectedIndex;
     const line = createOverlayContentLine(width, layout, BORDER_FG, isSelected ? SELECTED_BG : '');
-    const indicator = isSelected ? '> ' : '  ';
+    const indicator = isSelected ? '▸ ' : '  ';
     const commandText = fitDisplay(
       truncateDisplay(`/${command.name}`, maxCommandWidth),
       maxCommandWidth,
@@ -149,6 +149,6 @@ export function renderAutocompleteOverlay(
   );
   lines.push(footerLine);
 
-  lines.push(createOverlayBorderLine(width, layout, '└', '─', '┘', MUTED_FG));
+  lines.push(createOverlayBorderLine(width, layout, '└', '─', '┘', BORDER_FG));
   return lines;
 }

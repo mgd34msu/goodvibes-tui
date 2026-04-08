@@ -2,6 +2,8 @@ import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync, unlink
 import { join } from 'path';
 import { logger } from '../utils/logger.ts';
 import type { AgentRecord } from '../tools/agent/index.ts';
+import type { SessionReturnContextSummary } from '../runtime/session-return-context.ts';
+import type { ConversationTitleSource } from '../core/conversation.ts';
 
 /**
  * Metadata for a saved session (the first JSONL line).
@@ -11,6 +13,8 @@ export interface SessionMeta {
   model: string;
   provider: string;
   timestamp: number;
+  titleSource?: ConversationTitleSource;
+  returnContext?: SessionReturnContextSummary;
 }
 
 /**
@@ -24,6 +28,8 @@ export interface SessionInfo {
   timestamp: number;
   messageCount: number;
   filePath: string;
+  titleSource?: ConversationTitleSource;
+  returnContext?: SessionReturnContextSummary;
 }
 
 /**
@@ -66,6 +72,8 @@ export class SessionManager {
       title: meta.title,
       model: meta.model,
       provider: meta.provider,
+      titleSource: meta.titleSource ?? 'system',
+      returnContext: meta.returnContext,
     };
     lines.push(JSON.stringify(metaRecord));
 
@@ -104,7 +112,7 @@ export class SessionManager {
     const raw = readFileSync(filePath, 'utf-8');
     const lines = raw.split('\n').filter(l => l.trim().length > 0);
 
-    let meta: SessionMeta = { title: '', model: '', provider: '', timestamp: 0 };
+    let meta: SessionMeta = { title: '', model: '', provider: '', timestamp: 0, titleSource: 'system' };
     const messages: object[] = [];
     const agentRecords: AgentRecord[] = [];
 
@@ -125,6 +133,10 @@ export class SessionManager {
           model: String(record.model ?? ''),
           provider: String(record.provider ?? ''),
           timestamp: Number(record.timestamp ?? 0),
+          titleSource: record.titleSource === 'user' ? 'user' : 'system',
+          returnContext: (record.returnContext && typeof record.returnContext === 'object')
+            ? (record.returnContext as SessionReturnContextSummary)
+            : undefined,
         };
       } else if (record.type === 'message') {
         // Skip messages marked as removed (F2 future feature)
@@ -165,7 +177,7 @@ export class SessionManager {
       const name = file.replace(/\.jsonl$/, '');
       const filePath = join(this.sessionsDir, file);
 
-      let meta: SessionMeta = { title: '', model: '', provider: '', timestamp: 0 };
+      let meta: SessionMeta = { title: '', model: '', provider: '', timestamp: 0, titleSource: 'system' };
       let messageCount = 0;
 
       try {
@@ -182,6 +194,10 @@ export class SessionManager {
                 model: String(first.model ?? ''),
                 provider: String(first.provider ?? ''),
                 timestamp: Number(first.timestamp ?? 0),
+                titleSource: first.titleSource === 'user' ? 'user' : 'system',
+                returnContext: (first.returnContext && typeof first.returnContext === 'object')
+                  ? (first.returnContext as SessionReturnContextSummary)
+                  : undefined,
               };
             }
           } catch {
@@ -217,6 +233,8 @@ export class SessionManager {
         timestamp: meta.timestamp,
         messageCount,
         filePath,
+        titleSource: meta.titleSource,
+        returnContext: meta.returnContext,
       });
     }
 
@@ -245,6 +263,10 @@ export class SessionManager {
         model: String(record.model ?? ''),
         provider: String(record.provider ?? ''),
         timestamp: Number(record.timestamp ?? 0),
+        titleSource: record.titleSource === 'user' ? 'user' : 'system',
+        returnContext: (record.returnContext && typeof record.returnContext === 'object')
+          ? (record.returnContext as SessionReturnContextSummary)
+          : undefined,
       };
     } catch {
       // Non-fatal: session file unreadable or missing meta — return null to caller

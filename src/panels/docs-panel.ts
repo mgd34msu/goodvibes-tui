@@ -72,7 +72,7 @@ interface FlatRow {
 function renderRow(width: number, row: FlatRow, isCursor: boolean): Line {
   const bg = isCursor ? C.selectedBg : row.bg;
   return buildPanelLine(width, [
-    [isCursor ? '>' : ' ', C.selected, bg],
+    [isCursor ? '▸' : ' ', C.selected, bg],
     [row.text, isCursor ? C.selected : row.fg, bg],
   ]);
 }

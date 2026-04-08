@@ -40,6 +40,19 @@ describe('conversation layout helpers', () => {
     expect(next[4][0]?.char).toBe('Y');
   });
 
+  test('overlayViewportBottom respects a bottom inset for search bars and lower shell chrome', () => {
+    const width = 4;
+    const viewport = [makeLine(width, 'A'), makeLine(width, 'B'), makeLine(width, 'C'), makeLine(width, 'D'), makeLine(width, 'E')];
+    const overlay = [makeLine(width, 'X'), makeLine(width, 'Y')];
+
+    const next = overlayViewportBottom(viewport, overlay, width, 5, 1);
+    expect(next).toHaveLength(4);
+    expect(next[0][0]?.char).toBe('A');
+    expect(next[1][0]?.char).toBe('B');
+    expect(next[2][0]?.char).toBe('X');
+    expect(next[3][0]?.char).toBe('Y');
+  });
+
   test('replaceViewportWithOverlay builds a full-height padded overlay surface', () => {
     const width = 5;
     const overlay = [makeLine(width, 'X'), makeLine(width, 'Y')];

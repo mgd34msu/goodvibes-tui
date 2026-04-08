@@ -58,7 +58,7 @@ describe('renderSessionPickerModal', () => {
 
   test('selected item has arrow indicator', () => {
     const lines = renderSessionPickerModal(makeModal(), W);
-    const hasArrow = lines.some(line => line.some(cell => cell.char === '>'));
+    const hasArrow = lines.some(line => line.some(cell => cell.char === '▸'));
     expect(hasArrow).toBe(true);
   });
 

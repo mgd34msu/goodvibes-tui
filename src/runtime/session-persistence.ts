@@ -16,16 +16,22 @@ import { dirname, join } from 'path';
 
 import { getSessionManager, type SessionManager, type SessionMeta } from '../sessions/manager.ts';
 import { logger } from '../utils/logger.ts';
+import type { SessionReturnContextSummary } from './session-return-context.ts';
+import type { ConversationTitleSource } from '../core/conversation.ts';
 
 export type SessionSnapshot = {
   messages: Array<Record<string, unknown>>;
   timestamp?: number;
+  title?: string;
+  titleSource?: ConversationTitleSource;
+  returnContext?: SessionReturnContextSummary;
 };
 
 export type RecoveryFileInfo = {
   title: string;
   timestamp: number;
   sessionId: string;
+  returnContext?: SessionReturnContextSummary;
 };
 
 export type SessionPersistenceOptions = {
@@ -56,7 +62,7 @@ export function generateUserSessionId(): string {
 
 export function saveSession(
   sessionId: string,
-  data: { messages: object[]; timestamp?: number },
+  data: SessionSnapshot,
   model: string,
   provider: string,
   title = '',
@@ -69,6 +75,8 @@ export function saveSession(
       model,
       provider,
       timestamp: data.timestamp ?? Date.now(),
+      titleSource: data.titleSource,
+      returnContext: data.returnContext,
     };
     sm.save(sessionId, data.messages as Array<Record<string, unknown>>, meta);
   } catch (e) {
@@ -78,7 +86,7 @@ export function saveSession(
 
 export function persistConversation(
   sessionId: string,
-  data: { messages: object[]; timestamp?: number },
+  data: SessionSnapshot,
   model: string,
   provider: string,
   title = '',
@@ -139,6 +147,16 @@ export function writeRecoveryFile(
     const recoveryFile = getRecoveryFilePath(options?.homeDir);
     const lines: string[] = [];
     lines.push(JSON.stringify({ type: 'meta', sessionId, title, timestamp: Date.now() }));
+    if (snapshot.titleSource || snapshot.returnContext) {
+      lines[0] = JSON.stringify({
+        type: 'meta',
+        sessionId,
+        title,
+        timestamp: Date.now(),
+        titleSource: snapshot.titleSource,
+        returnContext: snapshot.returnContext,
+      });
+    }
     for (const msg of snapshot.messages) {
       lines.push(JSON.stringify({ type: 'message', ...msg }));
     }
@@ -174,11 +192,12 @@ export function checkRecoveryFile(options?: SessionPersistenceOptions): Recovery
     const bytesRead = readSync(fd, buf, 0, 4096, 0);
     closeSync(fd);
     const firstLine = buf.toString('utf-8', 0, bytesRead).split('\n')[0];
-    const meta = JSON.parse(firstLine) as { title?: string; timestamp?: number; sessionId?: string };
+    const meta = JSON.parse(firstLine) as { title?: string; timestamp?: number; sessionId?: string; returnContext?: SessionReturnContextSummary };
     return {
       title: meta.title ?? '',
       timestamp: meta.timestamp ?? 0,
       sessionId: meta.sessionId ?? '',
+      returnContext: meta.returnContext,
     };
   } catch (err) {
     logger.debug('[Recovery] Check failed', { error: String(err) });
@@ -193,6 +212,30 @@ export function loadRecoveryConversation(options?: SessionPersistenceOptions): S
     const lines = raw.split('\n').filter(Boolean);
     if (lines.length < 2) return { messages: [] };
     return {
+      title: (() => {
+        try {
+          const metaLine = JSON.parse(lines[0]) as { title?: string; titleSource?: ConversationTitleSource; returnContext?: SessionReturnContextSummary };
+          return metaLine.title;
+        } catch {
+          return undefined;
+        }
+      })(),
+      titleSource: (() => {
+        try {
+          const metaLine = JSON.parse(lines[0]) as { titleSource?: ConversationTitleSource };
+          return metaLine.titleSource;
+        } catch {
+          return undefined;
+        }
+      })(),
+      returnContext: (() => {
+        try {
+          const metaLine = JSON.parse(lines[0]) as { returnContext?: SessionReturnContextSummary };
+          return metaLine.returnContext;
+        } catch {
+          return undefined;
+        }
+      })(),
       messages: lines.slice(1).map((line) => {
         const { type: _type, ...rest } = JSON.parse(line) as { type: string } & Record<string, unknown>;
         return rest;

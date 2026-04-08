@@ -12,6 +12,7 @@ import { TaskScheduler } from '../scheduler/scheduler.ts';
 import { SlackIntegration, DiscordIntegration, DiscordInteractionResponseType, DiscordInteractionType } from '../integrations/index.ts';
 import { GitHubIntegration } from '../integrations/github.ts';
 import type { RuntimeEventBus } from '../runtime/events/index.ts';
+import type { RuntimeEventDomain } from '../runtime/events/index.ts';
 import {
   emitTransportConnected,
   emitTransportDisconnected,
@@ -20,6 +21,23 @@ import {
 } from '../runtime/emitters/index.ts';
 import { getHookDispatcher } from '../hooks/index.ts';
 import type { HookCategory, HookEventPath, HookPhase } from '../hooks/types.ts';
+import {
+  buildIntegrationHelperReview,
+  createIntegrationEventStream,
+  getIntegrationApprovalSnapshot,
+  getIntegrationHealthSnapshot,
+  getIntegrationAccountsSnapshot,
+  getIntegrationRemoteSnapshot,
+  getIntegrationSessionSnapshot,
+  getIntegrationTaskSnapshot,
+  getIntegrationSettingsSnapshot,
+  getIntegrationLocalAuthSnapshot,
+  getIntegrationContinuitySnapshot,
+  getIntegrationWorktreeSnapshot,
+  getIntegrationIntelligenceSnapshot,
+  listIntegrationPanels,
+  openIntegrationPanel,
+} from '../runtime/integration/helpers.ts';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -175,6 +193,26 @@ export class DaemonServer {
     return this.userAuth.validateSession(bearer) !== null;
   }
 
+  private requireAuthenticatedSession(req: Request): { username: string; roles: readonly string[] } | null {
+    const bearer = req.headers.get('authorization')?.replace('Bearer ', '') ?? '';
+    if (!bearer || this.authToken) return null;
+    const session = this.userAuth.validateSession(bearer);
+    if (!session) return null;
+    const user = this.userAuth.getUser(session.username);
+    if (!user) return null;
+    return user;
+  }
+
+  private requireAdmin(req: Request): Response | null {
+    if (this.authToken) return null;
+    const user = this.requireAuthenticatedSession(req);
+    if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
+    if (!user.roles.includes('admin')) {
+      return Response.json({ error: 'Admin role required' }, { status: 403 });
+    }
+    return null;
+  }
+
   // -------------------------------------------------------------------------
   // Request handling
   // -------------------------------------------------------------------------
@@ -205,6 +243,117 @@ export class DaemonServer {
     if (pathname === '/status' && method === 'GET') {
       // health check
       return Response.json({ status: 'running', version: VERSION });
+    }
+    if (pathname === '/api/review' && method === 'GET') {
+      return Response.json(buildIntegrationHelperReview());
+    }
+    if (pathname === '/api/session' && method === 'GET') {
+      return Response.json(getIntegrationSessionSnapshot());
+    }
+    if (pathname === '/api/tasks' && method === 'GET') {
+      return Response.json(getIntegrationTaskSnapshot());
+    }
+    if (pathname === '/api/approvals' && method === 'GET') {
+      return Response.json(getIntegrationApprovalSnapshot());
+    }
+    if (pathname === '/api/remote' && method === 'GET') {
+      return Response.json(getIntegrationRemoteSnapshot());
+    }
+    if (pathname === '/api/health' && method === 'GET') {
+      return Response.json(getIntegrationHealthSnapshot());
+    }
+    if (pathname === '/api/accounts' && method === 'GET') {
+      return Response.json(await getIntegrationAccountsSnapshot());
+    }
+    if (pathname === '/api/settings' && method === 'GET') {
+      return Response.json(getIntegrationSettingsSnapshot());
+    }
+    if (pathname === '/api/continuity' && method === 'GET') {
+      return Response.json(getIntegrationContinuitySnapshot());
+    }
+    if (pathname === '/api/worktrees' && method === 'GET') {
+      return Response.json(getIntegrationWorktreeSnapshot());
+    }
+    if (pathname === '/api/intelligence' && method === 'GET') {
+      return Response.json(getIntegrationIntelligenceSnapshot());
+    }
+    if (pathname === '/api/local-auth' && method === 'GET') {
+      const admin = this.requireAdmin(req);
+      if (admin) return admin;
+      return Response.json(getIntegrationLocalAuthSnapshot());
+    }
+    if (pathname === '/api/local-auth/users' && method === 'POST') {
+      const admin = this.requireAdmin(req);
+      if (admin) return admin;
+      const body = await this.parseJsonBody(req);
+      if (body instanceof Response) return body;
+      const username = typeof body.username === 'string' ? body.username : '';
+      const password = typeof body.password === 'string' ? body.password : '';
+      const roles = Array.isArray(body.roles) ? body.roles.filter((value): value is string => typeof value === 'string') : ['admin'];
+      try {
+        return Response.json({ user: this.userAuth.addUser(username, password, roles) }, { status: 201 });
+      } catch (error) {
+        return Response.json({ error: (error as Error).message }, { status: 400 });
+      }
+    }
+    const userMatch = pathname.match(/^\/api\/local-auth\/users\/([^/]+)$/);
+    if (userMatch && method === 'DELETE') {
+      const admin = this.requireAdmin(req);
+      if (admin) return admin;
+      try {
+        const removed = this.userAuth.deleteUser(decodeURIComponent(userMatch[1]));
+        return removed
+          ? Response.json({ deleted: true })
+          : Response.json({ error: 'Unknown user' }, { status: 404 });
+      } catch (error) {
+        return Response.json({ error: (error as Error).message }, { status: 400 });
+      }
+    }
+    const passwordMatch = pathname.match(/^\/api\/local-auth\/users\/([^/]+)\/password$/);
+    if (passwordMatch && method === 'POST') {
+      const admin = this.requireAdmin(req);
+      if (admin) return admin;
+      const body = await this.parseJsonBody(req);
+      if (body instanceof Response) return body;
+      const password = typeof body.password === 'string' ? body.password : '';
+      try {
+        this.userAuth.rotatePassword(decodeURIComponent(passwordMatch[1]), password);
+        return Response.json({ rotated: true });
+      } catch (error) {
+        return Response.json({ error: (error as Error).message }, { status: 400 });
+      }
+    }
+    const sessionMatch = pathname.match(/^\/api\/local-auth\/sessions\/([^/]+)$/);
+    if (sessionMatch && method === 'DELETE') {
+      const admin = this.requireAdmin(req);
+      if (admin) return admin;
+      return this.userAuth.revokeSession(decodeURIComponent(sessionMatch[1]))
+        ? Response.json({ revoked: true })
+        : Response.json({ error: 'Unknown session' }, { status: 404 });
+    }
+    if (pathname === '/api/local-auth/bootstrap-file' && method === 'DELETE') {
+      const admin = this.requireAdmin(req);
+      if (admin) return admin;
+      return Response.json({ removed: this.userAuth.clearBootstrapCredentialFile() });
+    }
+    if (pathname === '/api/panels' && method === 'GET') {
+      return Response.json({ panels: listIntegrationPanels() });
+    }
+    if (pathname === '/api/panels/open' && method === 'POST') {
+      const body = await this.parseJsonBody(req);
+      if (body instanceof Response) return body;
+      const panelId = typeof body.id === 'string' ? body.id : '';
+      const pane = body.pane === 'bottom' ? 'bottom' : 'top';
+      if (!panelId) return Response.json({ error: 'Missing panel id' }, { status: 400 });
+      const ok = openIntegrationPanel(panelId, pane);
+      return ok
+        ? Response.json({ opened: true, id: panelId, pane })
+        : Response.json({ error: `Unknown panel: ${panelId}` }, { status: 404 });
+    }
+    if (pathname === '/api/events' && method === 'GET') {
+      const rawDomains = url.searchParams.get('domains');
+      const domains = (rawDomains ? rawDomains.split(',').map((value) => value.trim()).filter(Boolean) : []) as RuntimeEventDomain[];
+      return createIntegrationEventStream(req, domains);
     }
     if (pathname === '/config' && method === 'GET') {
       // return full config snapshot

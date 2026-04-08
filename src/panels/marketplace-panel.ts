@@ -17,6 +17,8 @@ import {
   type EcosystemCatalogEntry,
   type EcosystemEntryKind,
 } from '../runtime/ecosystem/catalog.ts';
+import { buildEcosystemRecommendations } from '../runtime/ecosystem/recommendations.ts';
+import type { RuntimeStore } from '../runtime/store/index.ts';
 
 const C = {
   ...DEFAULT_PANEL_PALETTE,
@@ -39,7 +41,7 @@ export class MarketplacePanel extends BasePanel {
   private selectedIndex = 0;
   private scrollOffset = 0;
 
-  public constructor() {
+  public constructor(private readonly runtimeStore?: RuntimeStore) {
     super('marketplace', 'Marketplace', 'M', 'monitoring');
   }
 
@@ -84,6 +86,20 @@ export class MarketplacePanel extends BasePanel {
 
     const intro = 'Curated local-first ecosystem with provenance, compatibility, rollback history, and receipt-aware lifecycle review.';
     const installedCount = this.rows.filter((row) => row.installed).length;
+    const recommendations = buildEcosystemRecommendations(this.runtimeStore);
+    const runtimeState = this.runtimeStore?.getState();
+    const startupIssues: string[] = [];
+    if ((runtimeState?.permissions.denialCount ?? 0) >= 3) {
+      startupIssues.push(`${runtimeState?.permissions.denialCount} permission denials suggest a policy-pack or trust posture review.`);
+    }
+    const authRequiredServers = [...(runtimeState?.mcp.servers.values() ?? [])].filter((server) => server.status === 'auth_required');
+    if (authRequiredServers.length > 0) {
+      startupIssues.push(`${authRequiredServers.length} MCP server${authRequiredServers.length === 1 ? '' : 's'} need auth or reconnect repair.`);
+    }
+    const staleSchemas = [...(runtimeState?.mcp.servers.values() ?? [])].filter((server) => server.schemaFreshness !== 'fresh');
+    if (staleSchemas.length > 0) {
+      startupIssues.push(`${staleSchemas.length} MCP server schema${staleSchemas.length === 1 ? ' is' : 's are'} stale or quarantined.`);
+    }
 
     if (this.rows.length === 0) {
       return buildPanelWorkspace(width, height, {
@@ -118,17 +134,29 @@ export class MarketplacePanel extends BasePanel {
       buildGuidanceLine(width, '/marketplace open', 'browse curated entries and inspect compatibility, provenance, and receipts', C),
     ];
 
+    const recommendationLines = recommendations.length > 0
+      ? recommendations.slice(0, 4).map((recommendation) => buildPanelLine(width, [
+          ['  ', C.label],
+          [`${recommendation.kind} ${recommendation.entry.id}`.slice(0, 28).padEnd(28), C.info],
+          [` ${recommendation.title}`.slice(0, Math.max(0, width - 31)), C.dim],
+        ]))
+      : [buildPanelLine(width, [['  No contextual marketplace recommendations right now.', C.dim]])];
+
+    const startupIssueLines = startupIssues.length > 0
+      ? startupIssues.slice(0, 4).map((issue) => buildPanelLine(width, [['  ', C.label], [issue.slice(0, Math.max(0, width - 2)), C.warn]]))
+      : [buildPanelLine(width, [['  No startup or lifecycle issues are currently pushing marketplace repair recommendations.', C.dim]])];
+
     const selected = this.rows[this.selectedIndex];
     const selectedLines: Line[] = [];
     if (selected) {
       const review = reviewEcosystemCatalogEntry(selected.entry);
       selectedLines.push(buildPanelLine(width, [
-        ['  Source: ', C.label],
-        [selected.entry.source.slice(0, Math.max(0, width - 11)), C.value],
+        ['  Provenance: ', C.label],
+        [(selected.entry.provenance ?? '(none)').slice(0, Math.max(0, width - 15)), selected.entry.provenance ? C.info : C.dim],
       ]));
       selectedLines.push(buildPanelLine(width, [
-        ['  Provenance: ', C.label],
-        [(selected.entry.provenance ?? '(none)').slice(0, Math.max(0, width - 15)), C.dim],
+        ['  Source: ', C.label],
+        [selected.entry.source.slice(0, Math.max(0, width - 11)), C.value],
       ]));
       selectedLines.push(buildKeyValueLine(width, [
         { label: 'Compatibility', value: review.compatibility.status, valueColor: review.compatibility.status === 'compatible' ? C.good : C.warn },
@@ -147,10 +175,12 @@ export class MarketplacePanel extends BasePanel {
     const catalogLines = this.rows.slice(window.start, window.end).map((row, index) => {
       const globalIndex = window.start + index;
       const bg = globalIndex === this.selectedIndex ? C.selectBg : undefined;
+      const provenance = row.entry.provenance ?? 'local';
       return buildPanelLine(width, [
         ['  ', C.label, bg],
         [row.kind.padEnd(11), C.info, bg],
-        [row.entry.name.slice(0, 24).padEnd(24), C.value, bg],
+        [row.entry.name.slice(0, 20).padEnd(20), C.value, bg],
+        [` ${provenance.slice(0, 16).padEnd(16)}`, provenance === 'local' ? C.dim : C.info, bg],
         [` ${(row.installed ? 'INSTALLED' : 'CURATED').padEnd(9)} `, statusColor(row.installed), bg],
         [` ${row.entry.version ?? 'n/a'}`, C.dim, bg],
       ]);
@@ -161,9 +191,13 @@ export class MarketplacePanel extends BasePanel {
 
     const sections: PanelWorkspaceSection[] = [
       { title: 'Catalog Summary', lines: summaryLines },
+      { title: 'Startup Issues', lines: startupIssueLines },
+      { title: 'Recommendations', lines: recommendationLines },
       { title: 'Catalog', lines: catalogLines },
     ];
-    if (selectedLines.length > 0) sections.push({ title: 'Selected', lines: selectedLines });
+    if (selectedLines.length > 0 && height >= 20) {
+      sections.push({ title: 'Selected', lines: selectedLines });
+    }
 
     return buildPanelWorkspace(width, height, {
       title: 'Marketplace Control Room',

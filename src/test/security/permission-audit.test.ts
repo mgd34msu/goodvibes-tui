@@ -13,9 +13,11 @@ import { analyzePermissionRequest } from '../../permissions/analysis.ts';
 import { configManager } from '../../config/index.ts';
 import { DaemonServer } from '../../daemon/server.ts';
 import { HttpListener } from '../../daemon/http-listener.ts';
+import { UserAuthManager } from '../../security/user-auth.ts';
 import { SpawnTokenManager } from '../../security/spawn-tokens.ts';
 import { resolveAndValidatePath } from '../../utils/path-safety.ts';
 import type { PermissionMode } from '../../config/schema.ts';
+import { resetSettingsControlPlaneForTesting } from '../../runtime/settings/control-plane.ts';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -32,6 +34,12 @@ function makeManager(
   return { requests, mgr };
 }
 
+function makeUserAuth(): UserAuthManager {
+  return new UserAuthManager({
+    users: [{ username: 'admin', passwordHash: UserAuthManager.hashPassword('admin'), roles: ['admin'] }],
+  });
+}
+
 // ---------------------------------------------------------------------------
 // Setup / teardown — force autoApprove=false and prompt mode for all tests
 // ---------------------------------------------------------------------------
@@ -40,6 +48,7 @@ let savedAutoApprove: boolean;
 let savedMode: PermissionMode;
 
 beforeEach(() => {
+  resetSettingsControlPlaneForTesting();
   savedAutoApprove = configManager.get('behavior.autoApprove') as boolean ?? false;
   savedMode = configManager.get('permissions.mode') ?? 'prompt';
   configManager.set('behavior.autoApprove', false);
@@ -47,6 +56,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  resetSettingsControlPlaneForTesting();
   configManager.set('behavior.autoApprove', savedAutoApprove);
   configManager.set('permissions.mode', savedMode);
 });
@@ -141,26 +151,26 @@ describe('Unknown tools default to delegate category', () => {
 describe('Danger-gated features check config before enabling', () => {
   describe('DaemonServer', () => {
     test('refuses to enable when danger.daemon = false', () => {
-      const server = new DaemonServer();
+      const server = new DaemonServer({ userAuth: makeUserAuth() });
       const result = server.enable({ daemon: false });
       expect(result).toBe(false);
     });
 
     test('enables when danger.daemon = true', () => {
-      const server = new DaemonServer();
+      const server = new DaemonServer({ userAuth: makeUserAuth() });
       const result = server.enable({ daemon: true });
       expect(result).toBe(true);
     });
 
     test('refuses to start when not enabled (enable not called)', async () => {
-      const server = new DaemonServer({ port: 0 });
+      const server = new DaemonServer({ port: 0, userAuth: makeUserAuth() });
       // Should not throw, just no-op
       await expect(server.start()).resolves.toBeUndefined();
       expect(server.isRunning).toBe(false);
     });
 
     test('refuses to start after enable({ daemon: false })', async () => {
-      const server = new DaemonServer({ port: 0 });
+      const server = new DaemonServer({ port: 0, userAuth: makeUserAuth() });
       server.enable({ daemon: false });
       await server.start();
       expect(server.isRunning).toBe(false);
@@ -169,19 +179,19 @@ describe('Danger-gated features check config before enabling', () => {
 
   describe('HttpListener', () => {
     test('refuses to enable when danger.httpListener = false', () => {
-      const listener = new HttpListener();
+      const listener = new HttpListener({ userAuth: makeUserAuth() });
       const result = listener.enable({ httpListener: false });
       expect(result).toBe(false);
     });
 
     test('enables when danger.httpListener = true', () => {
-      const listener = new HttpListener();
+      const listener = new HttpListener({ userAuth: makeUserAuth() });
       const result = listener.enable({ httpListener: true });
       expect(result).toBe(true);
     });
 
     test('refuses to start when not enabled', async () => {
-      const listener = new HttpListener({ port: 0 });
+      const listener = new HttpListener({ port: 0, userAuth: makeUserAuth() });
       await expect(listener.start()).resolves.toBeUndefined();
       expect(listener.isRunning).toBe(false);
     });

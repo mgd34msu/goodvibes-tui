@@ -122,6 +122,7 @@ export const POPULAR_PROVIDERS: ReadonlySet<string> = new Set([
 export class ModelPickerModal {
   public active = false;
   public mode: PickerMode = 'model';
+  public searchFocused = false;
   /** Tracks the mode we came from, for back-navigation. */
   public previousMode: PickerMode | null = null;
   public selectedIndex = 0;
@@ -222,6 +223,7 @@ export class ModelPickerModal {
     this.mode = 'model';
     this.active = true;
     this.pendingModel = null;
+    this.searchFocused = false;
     this.query = '';
     this.categoryFilter = 'all';
     this.capabilityFilter = 'none';
@@ -238,6 +240,7 @@ export class ModelPickerModal {
     this.mode = 'provider';
     this.active = true;
     this.pendingModel = null;
+    this.searchFocused = false;
     this.query = '';
     this.categoryFilter = 'all';
     this.capabilityFilter = 'none';
@@ -251,6 +254,7 @@ export class ModelPickerModal {
     this.previousMode = 'provider';
     this.models = models;
     this.mode = 'model';
+    this.searchFocused = false;
     this.query = '';
     this.categoryFilter = 'all';
     this.capabilityFilter = 'none';
@@ -265,6 +269,7 @@ export class ModelPickerModal {
   showEffortPicker(model: ModelDefinition, currentEffort: string): void {
     this.previousMode = 'model';
     this.pendingModel = model;
+    this.searchFocused = false;
     this.effortLevels = model.reasoningEffort ?? [];
     this.mode = 'effort';
     const idx = this.effortLevels.indexOf(currentEffort);
@@ -281,6 +286,7 @@ export class ModelPickerModal {
     this.pendingModel = null;
     this.contextCapPendingModel = null;
     this.contextCapQuery = '';
+    this.searchFocused = false;
     this.selectedIndex = 0;
     this.scrollOffset = 0;
     this.query = '';
@@ -308,6 +314,18 @@ export class ModelPickerModal {
   clearQuery(): void {
     this.query = '';
     this._clampSelection();
+  }
+
+  canFocusSearch(): boolean {
+    return this.mode === 'model' || this.mode === 'provider';
+  }
+
+  focusSearch(): void {
+    if (this.canFocusSearch()) this.searchFocused = true;
+  }
+
+  blurSearch(): void {
+    this.searchFocused = false;
   }
 
   /** Set category filter and clamp selectedIndex. */

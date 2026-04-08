@@ -23,6 +23,12 @@ export interface AgentArchetype {
   systemPrompt?: string;
   /** True if loaded from a markdown file, false if built-in. */
   isCustom: boolean;
+  /** Where this archetype came from. */
+  origin: 'builtin' | 'local-markdown';
+  /** Source path when loaded from a markdown file. */
+  sourcePath?: string;
+  /** Validation or schema issues discovered while loading. */
+  validationIssues?: readonly string[];
 }
 
 // ---------------------------------------------------------------------------
@@ -37,30 +43,35 @@ const BUILT_IN_ARCHETYPES: AgentArchetype[] = [
     description: 'Full-stack implementation agent',
     tools: ['read', 'write', 'edit', 'find', 'exec', 'analyze', 'inspect', 'fetch', 'registry'],
     isCustom: false,
+    origin: 'builtin',
   },
   {
     name: 'reviewer',
     description: 'Code review and quality assessment',
     tools: ['read', 'find', 'analyze', 'inspect', 'fetch', 'registry'],
     isCustom: false,
+    origin: 'builtin',
   },
   {
     name: 'tester',
     description: 'Test writing and execution',
     tools: ['read', 'write', 'find', 'exec', 'analyze', 'inspect'],
     isCustom: false,
+    origin: 'builtin',
   },
   {
     name: 'researcher',
     description: 'Codebase exploration and analysis',
     tools: ['read', 'find', 'analyze', 'inspect', 'fetch', 'registry'],
     isCustom: false,
+    origin: 'builtin',
   },
   {
     name: 'general',
     description: 'General purpose agent',
     tools: ['read', 'write', 'edit', 'find', 'exec', 'analyze', 'inspect', 'fetch', 'registry'],
     isCustom: false,
+    origin: 'builtin',
   },
 ];
 
@@ -167,6 +178,16 @@ function extractFrontmatter(content: string): { raw: string; body: string } | nu
   return { raw, body };
 }
 
+function validateArchetype(archetype: Omit<AgentArchetype, 'validationIssues'>): string[] {
+  const issues: string[] = [];
+  if (!archetype.name.trim()) issues.push('missing name');
+  if (!archetype.description.trim()) issues.push('missing description');
+  if (archetype.tools.length === 0) issues.push('no tools declared');
+  const uniqueTools = new Set(archetype.tools.map((tool) => tool.trim()).filter(Boolean));
+  if (uniqueTools.size !== archetype.tools.length) issues.push('duplicate or empty tool declarations');
+  return issues;
+}
+
 // ---------------------------------------------------------------------------
 // ArchetypeLoader
 // ---------------------------------------------------------------------------
@@ -250,6 +271,8 @@ export class ArchetypeLoader {
           provider: fm.provider,
           // systemPrompt intentionally omitted here — lazy loaded
           isCustom: true,
+          origin: 'local-markdown',
+          sourcePath: filePath,
         };
 
         // Store body for lazy loading
@@ -260,6 +283,8 @@ export class ArchetypeLoader {
           // Otherwise, the markdown body is the system prompt
           this.bodyCache.set(name, parsed.body);
         }
+
+        archetype.validationIssues = validateArchetype(archetype);
 
         this.cache.set(name, archetype);
       } catch (err) {

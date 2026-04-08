@@ -339,6 +339,11 @@ describe('ModelPickerModal', () => {
       picker.openAllModels([FREE_MODEL], 'free-1');
       expect(picker.selectedIndex).toBe(0);
     });
+
+    test('starts with list focus instead of search focus', () => {
+      picker.openAllModels(ALL_MODELS, 'free-1');
+      expect(picker.searchFocused).toBe(false);
+    });
   });
 
   // ── showModelsForProvider ───────────────────────────────────────────────────
@@ -358,6 +363,12 @@ describe('ModelPickerModal', () => {
       expect(picker.mode).toBe('model');
       expect(picker.query).toBe('');
       expect(picker.categoryFilter).toBe('all');
+    });
+
+    test('returns to list focus when switching from provider list to model list', () => {
+      picker.searchFocused = true;
+      picker.showModelsForProvider(ALL_MODELS, 'provA');
+      expect(picker.searchFocused).toBe(false);
     });
   });
 
@@ -431,6 +442,14 @@ describe('ModelPickerModal', () => {
       picker.query = 'hello';
       picker.clearQuery();
       expect(picker.query).toBe('');
+    });
+
+    test('can focus and blur search in searchable modes', () => {
+      picker.openAllModels(ALL_MODELS, 'free-1');
+      picker.focusSearch();
+      expect(picker.searchFocused).toBe(true);
+      picker.blurSearch();
+      expect(picker.searchFocused).toBe(false);
     });
 
     test('setCategoryFilter updates filter and clamps', () => {

@@ -40,6 +40,12 @@ import { SandboxPanel } from './sandbox-panel.ts';
 import { ApprovalPanel } from './approval-panel.ts';
 import { WelcomePanel } from './welcome-panel.ts';
 import { SubscriptionPanel } from './subscription-panel.ts';
+import { SettingsSyncPanel } from './settings-sync-panel.ts';
+import { WorktreePanel } from './worktree-panel.ts';
+import { ProviderAccountsPanel } from './provider-accounts-panel.ts';
+import { LocalAuthPanel } from './local-auth-panel.ts';
+import { IntelligencePanel } from './intelligence-panel.ts';
+import type { ConfigManager } from '../config/index.ts';
 import type { RuntimeEventBus } from '../runtime/events/index.ts';
 import type { ToolRegistry } from '../tools/registry.ts';
 import type { ProviderRegistry } from '../providers/registry.ts';
@@ -59,6 +65,8 @@ import type { ApiTokenAuditor } from '../security/token-audit.ts';
  * Call this once during application startup, before opening any panels.
  */
 export interface BuiltinPanelDeps {
+  /** Config manager for settings-sync and other config-backed panels. */
+  configManager?: ConfigManager;
   /** Getter returning the main orchestrator's cumulative token usage. */
   getOrchestratorUsage?: () => { input: number; output: number; cacheRead: number; cacheWrite: number; model?: string };
   /** Optional cost budget alert threshold in USD (0 = disabled). */
@@ -212,6 +220,51 @@ export function registerBuiltinPanels(manager: PanelManager, deps: BuiltinPanelD
   });
 
   manager.registerType({
+    id: 'local-auth',
+    name: 'Local Auth',
+    icon: 'U',
+    category: 'monitoring',
+    description: 'Local daemon/listener auth users, bootstrap posture, and active sessions',
+    factory: () => new LocalAuthPanel(),
+  });
+
+  manager.registerType({
+    id: 'accounts',
+    name: 'Accounts',
+    icon: 'Q',
+    category: 'monitoring',
+    description: 'Provider auth routes, subscription quota-window hints, and billing-path safety notes',
+    factory: () => new ProviderAccountsPanel(),
+  });
+
+  manager.registerType({
+    id: 'settings-sync',
+    name: 'Settings Sync',
+    icon: 'Y',
+    category: 'monitoring',
+    description: 'Local, synced, and managed settings posture with recent sync events and active locks',
+    factory: () => new SettingsSyncPanel(deps.configManager as ConfigManager),
+  });
+
+  manager.registerType({
+    id: 'intelligence',
+    name: 'Intelligence',
+    icon: 'J',
+    category: 'development',
+    description: 'Workspace diagnostics, symbol search, hover, and completion readiness with recovery guidance',
+    factory: () => new IntelligencePanel(deps.runtimeStore),
+  });
+
+  manager.registerType({
+    id: 'worktrees',
+    name: 'Worktrees',
+    icon: 'W',
+    category: 'monitoring',
+    description: 'Orchestrator-owned git worktree lifecycle, attachments, and cleanup state',
+    factory: () => new WorktreePanel(),
+  });
+
+  manager.registerType({
     id: 'mcp',
     name: 'MCP',
     icon: 'Z',
@@ -249,7 +302,7 @@ export function registerBuiltinPanels(manager: PanelManager, deps: BuiltinPanelD
     icon: 'M',
     category: 'monitoring',
     description: 'Curated plugin and skill marketplace with provenance, compatibility, and install posture',
-    factory: () => new MarketplacePanel(),
+    factory: () => new MarketplacePanel(deps.runtimeStore),
   });
 
   manager.registerType({
@@ -334,6 +387,7 @@ export function registerBuiltinPanels(manager: PanelManager, deps: BuiltinPanelD
       runtimeBus,
       deps.getOrchestratorUsage,
       deps.contextWindow,
+      deps.runtimeStore,
     ),
   });
 
@@ -428,7 +482,7 @@ export function registerBuiltinPanels(manager: PanelManager, deps: BuiltinPanelD
     icon: 'N',
     category: 'monitoring',
     description: 'Provider health dashboard: real-time status, latency, errors, and rate-limit cooldowns',
-    factory: () => new ProviderHealthPanel(runtimeBus, deps.requestRender),
+    factory: () => new ProviderHealthPanel(runtimeBus, deps.requestRender, deps.runtimeStore, deps.configManager),
   });
 
   manager.registerType({
@@ -540,7 +594,7 @@ export function registerBuiltinPanels(manager: PanelManager, deps: BuiltinPanelD
     factory: () => {
       const panel = new TokenBudgetPanel();
       if (deps.orchestrator && deps.getCtxWindow) {
-        panel.wire(deps.orchestrator, deps.getCtxWindow);
+        panel.wire(deps.orchestrator, deps.getCtxWindow, deps.runtimeStore);
       }
       return panel;
     },

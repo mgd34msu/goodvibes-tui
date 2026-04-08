@@ -4,6 +4,9 @@ import { HttpListener } from '../../daemon/http-listener.ts';
 import { UserAuthManager } from '../../security/user-auth.ts';
 import { RuntimeEventBus } from '../../runtime/events/index.ts';
 import type { TransportEvent } from '../../runtime/events/transport.ts';
+import { setIntegrationHelpersContext, clearIntegrationHelpersContext } from '../../runtime/integration/helpers.ts';
+import { createRuntimeStore } from '../../runtime/store/index.ts';
+import { getPanelManager } from '../../panels/panel-manager.ts';
 
 const TEST_TOKEN = 'test-secret-token-abc123';
 
@@ -20,10 +23,36 @@ describe('DaemonServer', () => {
       users: [{ username: 'admin', passwordHash: UserAuthManager.hashPassword('admin'), roles: ['admin'] }],
     });
     daemon = new DaemonServer({ port: 39421, host: '127.0.0.1', userAuth });
+    setIntegrationHelpersContext({
+      runtimeStore: createRuntimeStore(),
+      runtimeBus: new RuntimeEventBus(),
+      getConversationTitle: () => 'Daemon Test',
+    });
+    getPanelManager().registerType({
+      id: 'test-helper-panel',
+      name: 'Test Helper Panel',
+      icon: 'T',
+      category: 'monitoring',
+      description: 'Test integration helper panel',
+      factory: () => ({
+        id: 'test-helper-panel',
+        name: 'Test Helper Panel',
+        icon: 'T',
+        category: 'monitoring',
+        isTransient: false,
+        isPinned: false,
+        needsRender: false,
+        onActivate() {},
+        onDeactivate() {},
+        onDestroy() {},
+        render: () => [],
+      }),
+    });
   });
 
   afterEach(async () => {
     await daemon.stop();
+    clearIntegrationHelpersContext();
   });
 
   test('isRunning is false before start', () => {
@@ -124,6 +153,55 @@ describe('DaemonServer', () => {
     expect(typeof body.token).toBe('string');
   });
 
+  test('local auth admin API can inspect, add users, rotate password, and revoke sessions', async () => {
+    daemon.enable({ daemon: true });
+    await daemon.start();
+
+    const login = await fetch('http://127.0.0.1:39421/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username: 'admin', password: 'admin' }),
+    });
+    const loginBody = await login.json() as { token: string };
+    const authz = { Authorization: `Bearer ${loginBody.token}`, 'Content-Type': 'application/json' };
+
+    const inspect = await fetch('http://127.0.0.1:39421/api/local-auth', { headers: authz });
+    expect(inspect.status).toBe(200);
+    const inspectBody = await inspect.json() as { userCount: number };
+    expect(inspectBody.userCount).toBe(1);
+
+    const add = await fetch('http://127.0.0.1:39421/api/local-auth/users', {
+      method: 'POST',
+      headers: authz,
+      body: JSON.stringify({ username: 'ops', password: 'supersecret', roles: ['admin', 'operator'] }),
+    });
+    expect(add.status).toBe(201);
+
+    const rotate = await fetch('http://127.0.0.1:39421/api/local-auth/users/admin/password', {
+      method: 'POST',
+      headers: authz,
+      body: JSON.stringify({ password: 'newadminpass' }),
+    });
+    expect(rotate.status).toBe(200);
+
+    const relogin = await fetch('http://127.0.0.1:39421/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username: 'admin', password: 'newadminpass' }),
+    });
+    expect(relogin.status).toBe(200);
+    const reloginBody = await relogin.json() as { token: string };
+
+    const revoke = await fetch(`http://127.0.0.1:39421/api/local-auth/sessions/${reloginBody.token}`, {
+      method: 'DELETE',
+      headers: {
+        Authorization: `Bearer ${reloginBody.token}`,
+        'Content-Type': 'application/json',
+      },
+    });
+    expect(revoke.status).toBe(200);
+  });
+
   test('GET /status returns 401 with wrong token', async () => {
     daemon.enable({ daemon: true }, TEST_TOKEN);
     await daemon.start();
@@ -142,6 +220,56 @@ describe('DaemonServer', () => {
     expect(res.status).toBe(200);
     const body = await res.json() as Record<string, unknown>;
     expect(body.status).toBe('running');
+  });
+
+  test('integration helper API exposes review and panel operations', async () => {
+    daemon.enable({ daemon: true }, TEST_TOKEN);
+    await daemon.start();
+
+    const review = await fetch('http://127.0.0.1:39421/api/review', {
+      headers: { Authorization: `Bearer ${TEST_TOKEN}` },
+    });
+    expect(review.status).toBe(200);
+    const reviewBody = await review.json() as Record<string, unknown>;
+    expect(Array.isArray(reviewBody.apiFamilies)).toBe(true);
+    expect(Array.isArray(reviewBody.routes)).toBe(true);
+    expect((reviewBody.routes as string[]).includes('GET /api/settings')).toBe(true);
+
+    const panels = await fetch('http://127.0.0.1:39421/api/panels', {
+      headers: { Authorization: `Bearer ${TEST_TOKEN}` },
+    });
+    expect(panels.status).toBe(200);
+    const panelsBody = await panels.json() as { panels: Array<{ id: string }> };
+    expect(panelsBody.panels.some((panel) => panel.id === 'test-helper-panel')).toBe(true);
+
+    const open = await fetch('http://127.0.0.1:39421/api/panels/open', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${TEST_TOKEN}`,
+      },
+      body: JSON.stringify({ id: 'test-helper-panel', pane: 'top' }),
+    });
+    expect(open.status).toBe(200);
+    const openBody = await open.json() as Record<string, unknown>;
+    expect(openBody.opened).toBe(true);
+
+    const settings = await fetch('http://127.0.0.1:39421/api/settings', {
+      headers: { Authorization: `Bearer ${TEST_TOKEN}` },
+    });
+    expect(settings.status).toBe(200);
+
+    const continuity = await fetch('http://127.0.0.1:39421/api/continuity', {
+      headers: { Authorization: `Bearer ${TEST_TOKEN}` },
+    });
+    expect(continuity.status).toBe(200);
+
+    const remote = await fetch('http://127.0.0.1:39421/api/remote', {
+      headers: { Authorization: `Bearer ${TEST_TOKEN}` },
+    });
+    expect(remote.status).toBe(200);
+    const remoteBody = await remote.json() as { registry: { contractEntries: unknown[] } };
+    expect(Array.isArray(remoteBody.registry.contractEntries)).toBe(true);
   });
 
   test('POST /task returns 401 without token', async () => {
@@ -320,7 +448,13 @@ describe('HttpListener', () => {
 
   test('rate limit: 61st request within window returns 429', async () => {
     // Use a fresh instance to get a clean rate-limit counter
-    const rl = new HttpListener({ port: 39423, host: '127.0.0.1' });
+    const rl = new HttpListener({
+      port: 39423,
+      host: '127.0.0.1',
+      userAuth: new UserAuthManager({
+        users: [{ username: 'admin', passwordHash: UserAuthManager.hashPassword('admin'), roles: ['admin'] }],
+      }),
+    });
     rl.enable({ httpListener: true }, TEST_TOKEN);
     await rl.start();
     try {

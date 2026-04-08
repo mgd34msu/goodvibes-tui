@@ -1,4 +1,7 @@
-import { describe, expect, test } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { createRuntimeStore } from '../../runtime/store/index.ts';
 import { createInitialTasksState } from '../../runtime/store/domains/tasks.ts';
 import { TasksPanel } from '../../panels/tasks-panel.ts';
@@ -15,6 +18,20 @@ function linesText(lines: Line[]): string {
 }
 
 describe('TasksPanel', () => {
+  const originalCwd = process.cwd();
+  let root = '';
+
+  beforeEach(() => {
+    root = mkdtempSync(join(tmpdir(), 'gv-tasks-panel-'));
+    process.chdir(root);
+  });
+
+  afterEach(() => {
+    process.chdir(originalCwd);
+    rmSync(join(root, '.goodvibes'), { recursive: true, force: true });
+    rmSync(join(originalCwd, '.goodvibes', 'tui', 'worktrees.json'), { force: true });
+  });
+
   test('renders empty guidance when no tasks exist', () => {
     const store = createRuntimeStore();
     const panel = new TasksPanel(store);
@@ -26,6 +43,24 @@ describe('TasksPanel', () => {
   test('renders task summaries and selection detail from the runtime store', () => {
     const store = createRuntimeStore();
     const now = Date.now();
+    const worktreeStore = JSON.stringify({
+      version: 1,
+      records: {
+        [join(originalCwd, '.goodvibes', '.worktrees', 'agent-running')]: {
+          path: join(originalCwd, '.goodvibes', '.worktrees', 'agent-running'),
+          kind: 'agent',
+          state: 'paused',
+          ownerId: 'agent-running',
+          taskId: 'running-1',
+          sessionId: 'sess-1',
+          updatedAt: now,
+        },
+      },
+    }, null, 2);
+    mkdirSync(join(originalCwd, '.goodvibes', 'tui'), { recursive: true });
+    writeFileSync(join(originalCwd, '.goodvibes', 'tui', 'worktrees.json'), worktreeStore);
+    mkdirSync(join(root, '.goodvibes', 'tui'), { recursive: true });
+    writeFileSync(join(root, '.goodvibes', 'tui', 'worktrees.json'), worktreeStore);
     store.setState((state) => ({
       ...state,
       tasks: {
@@ -108,7 +143,7 @@ describe('TasksPanel', () => {
     }));
 
     const panel = new TasksPanel(store);
-    const initial = linesText(panel.render(120, 20));
+    const initial = linesText(panel.render(120, 24));
     expect(initial).toContain('queued:1');
     expect(initial).toContain('running:1');
     expect(initial).toContain('blocked:1');
@@ -118,15 +153,17 @@ describe('TasksPanel', () => {
     expect(initial).toContain('Status: queued');
 
     panel.handleInput('down');
-    const second = linesText(panel.render(120, 20));
+    const second = linesText(panel.render(120, 24));
     expect(second).toContain('Running agent task');
     expect(second).toContain('Owner: agent-orchestrator');
     expect(second).toContain('Children: blocked-1');
     expect(second).toContain('Correlation:');
+    expect(second).toContain('Worktrees:');
+    expect(second).toContain('/worktree recover task running-1');
     expect(second).toContain('running');
 
     panel.handleInput('end');
-    const last = linesText(panel.render(120, 20));
+    const last = linesText(panel.render(120, 24));
     expect(last).toContain('Completed scheduler task');
     expect(last).toContain('Result:');
   });

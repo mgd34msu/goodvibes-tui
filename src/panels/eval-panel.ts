@@ -283,7 +283,7 @@ export class EvalPanel extends BasePanel {
       const passC = suite.passed ? C.green : C.red;
       const nameColor = selected ? C.selected : C.white;
       const bg = selected ? C.selectBg : undefined;
-      const prefix = selected ? '> ' : '  ';
+      const prefix = selected ? '▸ ' : '  ';
       const name = suite.suite.slice(0, 24).padEnd(26);
 
       sectionLines.push(buildPanelLine(width, [
@@ -350,7 +350,7 @@ export class EvalPanel extends BasePanel {
     width: number,
   ): void {
     const sc = result.scorecard;
-    const prefix = selected ? '> ' : '  ';
+    const prefix = selected ? '▸ ' : '  ';
     const nameColor = selected ? C.selected : C.white;
     const scoreC = scoreColor(sc.compositeScore);
     const passC = sc.passed ? C.green : C.red;

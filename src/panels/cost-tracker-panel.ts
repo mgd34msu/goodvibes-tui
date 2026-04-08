@@ -365,9 +365,9 @@ export class CostTrackerPanel extends BasePanel {
         const statusFg = agent.status === 'running' ? C.running
           : agent.status === 'failed' ? C.failed
           : C.done;
-        const statusIcon = agent.status === 'running' ? '...'
-          : agent.status === 'failed' ? 'x'
-          : 'y';
+        const statusIcon = agent.status === 'running' ? '…'
+          : agent.status === 'failed' ? '✕'
+          : '✓';
 
         const agentLabel = `${statusIcon} ${agent.id}`;
         const taskText = agent.task;

@@ -50,8 +50,9 @@ export function prepareConversationForTurn(
   conversation: ConversationManager,
   text: string,
   content: ContentPart[] | undefined,
+  sessionId?: string,
 ): ExecutionPlan | null {
-  const preTurnPlan = planManager.getActive();
+  const preTurnPlan = planManager.getActive(sessionId);
   if (preTurnPlan) {
     const planMd = planManager.toMarkdown(preTurnPlan);
     conversation.addSystemMessage(
@@ -77,7 +78,7 @@ export function prepareConversationForTurn(
     conversation.addUserMessage(content ?? text);
   }
 
-  const activePlan = planManager.getActive();
+  const activePlan = planManager.getActive(sessionId);
   if (!activePlan) {
     const classification = classifyIntent(text);
     if (classification.intent === 'project' && classification.confidence > 0.5) {
@@ -103,6 +104,7 @@ export async function handleToolResponseOutcome(args: {
   setPendingToolCalls: (calls: ToolCall[]) => void;
   messageQueueLength: number;
   requestRender: () => void;
+  sessionId?: string;
 }): Promise<{ continueLoop: boolean; results: ToolResult[] }> {
   args.setPendingToolCalls(args.response.toolCalls);
   args.conversation.addAssistantMessage(args.response.content, {
@@ -136,7 +138,7 @@ export async function handleToolResponseOutcome(args: {
 
   if (spawnedAgents || args.messageQueueLength > 0) {
     if (spawnedAgents) {
-      const activePlan = planManager.getActive();
+      const activePlan = planManager.getActive(args.sessionId);
       if (activePlan) {
         const summary = planManager.getSummary(activePlan);
         const nextItems = planManager.getNextItems(activePlan);
@@ -177,7 +179,7 @@ export async function handleToolResponseOutcome(args: {
     return { continueLoop: false, results };
   }
 
-  if (planManager.getActive()) {
+  if (planManager.getActive(args.sessionId)) {
     args.conversation.addSystemMessage(
       'Update the execution plan to reflect completed work. Mark items as COMPLETE or IN_PROGRESS with the agent ID.'
     );
@@ -196,6 +198,7 @@ export function handleFinalResponseOutcome(args: {
   requestRender: () => void;
   setAutoSpawnTimeout: (timeout: ReturnType<typeof setTimeout> | null) => void;
   autoSpawnTimeoutMs: number;
+  sessionId?: string;
 }): false {
   args.conversation.addAssistantMessage(args.response.content, {
     reasoningContent: args.response.reasoning || undefined,
@@ -221,7 +224,7 @@ export function handleFinalResponseOutcome(args: {
         filledPlan.awaitingPlan = false;
         planManager.save(filledPlan);
       }
-      const updatedPlan = planManager.getActive();
+      const updatedPlan = planManager.getActive(args.sessionId);
       if (updatedPlan) {
         const nextItems = planManager.getNextItems(updatedPlan);
         if (nextItems.length > 0) {
@@ -252,13 +255,13 @@ export function handleFinalResponseOutcome(args: {
     }
   }
 
-  const pendingPlan = planManager.getActive();
+  const pendingPlan = planManager.getActive(args.sessionId);
   if (pendingPlan) {
     const pendingItems = planManager.getNextItems(pendingPlan);
     if (pendingItems.length > 0) {
       args.setAutoSpawnTimeout(setTimeout(() => {
         args.setAutoSpawnTimeout(null);
-        const stillActivePlan = planManager.getActive();
+        const stillActivePlan = planManager.getActive(args.sessionId);
         if (!stillActivePlan) return;
         const stillPending = planManager.getNextItems(stillActivePlan);
         if (stillPending.length === 0) return;

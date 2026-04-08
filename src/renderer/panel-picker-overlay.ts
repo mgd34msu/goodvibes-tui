@@ -7,6 +7,7 @@ import {
   createOverlayBorderLine,
   createOverlayBoxLayout,
   createOverlayContentLine,
+  DEFAULT_OVERLAY_PALETTE,
   putOverlayText,
 } from './overlay-box.ts';
 import { getOverlaySurfaceMetrics } from './overlay-viewport.ts';
@@ -16,6 +17,7 @@ const CATEGORY_FG = '#94a3b8';
 const SELECTED_FG = '#e2e8f0';
 const SELECTED_BG = '#1e293b';
 const BODY_FG = '252';
+const BORDER_FG = DEFAULT_OVERLAY_PALETTE.borderFg;
 
 /**
  * Render the panel picker modal as Line[] for overlay in the viewport.
@@ -40,10 +42,10 @@ export function renderPanelPickerOverlay(
   const layout = createOverlayBoxLayout(width, metrics.margin, metrics.boxWidth);
   const contentW = layout.innerWidth;
   const titleFg = TITLE_FG;
-  const borderFg = '240';
+  const borderFg = BORDER_FG;
 
   // ── Title bar ──────────────────────────────────────────────────────────────
-  const titleLine = createOverlayBorderLine(width, layout, '┌', '─', '┐', titleFg);
+  const titleLine = createOverlayBorderLine(width, layout, '┌', '─', '┐', borderFg);
   putOverlayText(titleLine, layout.margin + 2, layout.width - 4, 'Open Panel Workspace', { fg: titleFg, bold: true });
   lines.push(titleLine);
 

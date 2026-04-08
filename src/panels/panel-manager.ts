@@ -381,6 +381,7 @@ export class PanelManager {
     }
     this.topPane = { panels: [], activeIndex: 0 };
     this.bottomPane = { panels: [], activeIndex: 0 };
+    this.registry = [];
     this._focusedPane = 'top';
     this._bottomPaneVisible = false;
     this._visible = false;

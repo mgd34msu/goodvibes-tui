@@ -2,7 +2,7 @@ import { resolve } from 'node:path';
 import type { CommandRegistry, CommandContext } from '../command-registry.ts';
 import { AgentManager } from '../../tools/agent/index.ts';
 import { AGENT_TEMPLATES } from '../../tools/agent/manager.ts';
-import { exportRemoteArtifactForAgent, getRemoteRunnerRegistry, importRemoteArtifact } from '../../runtime/remote/index.ts';
+import { exportRemoteArtifactForAgent, getRemoteRunnerRegistry, getRemoteSupervisor, importRemoteArtifact } from '../../runtime/remote/index.ts';
 import { handleRemoteSetupCommand } from './remote-runtime-setup.ts';
 import { handleRemotePoolCommand } from './remote-runtime-pool.ts';
 
@@ -43,7 +43,7 @@ export function registerRemoteRuntimeCommands(registry: CommandRegistry): void {
     name: 'remote',
     aliases: [],
     description: 'Inspect, dispatch, and review self-hosted remote runners and artifacts',
-    usage: '[list | show [agentId] | setup [export <path>] | env [export <path>] | tunnel [review|export <path>] | bootstrap [export <path>|inspect <path>] | session <export|inspect|import> <path> | pool <list|show|create|assign|unassign> ... | dispatch [template] <description> | dispatch-pool <pool> [template] <description> | contract [agentId] | cancel <agentId> | export <agentId> [path] | artifact list | artifact show <id> | artifact export <id> [path] | review <id> | rerun-local <id> | import <path>]',
+    usage: '[list | show [agentId] | supervisor [runnerId] | capabilities [runnerId] | recover [runnerId] | setup [export <path>] | env [export <path>] | tunnel [review|export <path>] | bootstrap [export <path>|inspect <path>] | session <export|inspect|import> <path> | pool <list|show|create|assign|unassign> ... | dispatch [template] <description> | dispatch-pool <pool> [template] <description> | contract [agentId] | cancel <agentId> | export <agentId> [path] | artifact list | artifact show <id> | artifact export <id> [path] | review <id> | rerun-local <id> | import <path>]',
     async handler(args, ctx) {
       if (args.length === 0) {
         if (ctx.openRemotePanel) {
@@ -72,6 +72,7 @@ export function registerRemoteRuntimeCommands(registry: CommandRegistry): void {
       }
 
       if (subcommand === 'list') {
+        const supervisor = getRemoteSupervisor().getSnapshot(store);
         const contracts = remoteRegistry.listContracts();
         const pools = remoteRegistry.listPools();
         const artifacts = remoteRegistry.listArtifacts();
@@ -81,6 +82,8 @@ export function registerRemoteRuntimeCommands(registry: CommandRegistry): void {
           `  runner contracts: ${contracts.length}`,
           `  runner pools: ${pools.length}`,
           `  review artifacts: ${artifacts.length}`,
+          `  supervisor sessions: ${supervisor.sessions.length}`,
+          `  degraded sessions: ${supervisor.degradedConnections}`,
         ];
         if (activeConnections.length > 0) {
           lines.push('  connections:');
@@ -95,6 +98,96 @@ export function registerRemoteRuntimeCommands(registry: CommandRegistry): void {
           }
         }
         ctx.print(lines.join('\n'));
+        return;
+      }
+
+      if (subcommand === 'supervisor') {
+        const snapshot = getRemoteSupervisor().getSnapshot(store);
+        const runnerId = args[1];
+        const selected = runnerId
+          ? snapshot.sessions.find((entry) => entry.runnerId === runnerId)
+          : snapshot.sessions[0];
+        if (!selected) {
+          ctx.print(runnerId ? `Unknown remote supervisor session: ${runnerId}` : 'No remote supervisor sessions are currently tracked.');
+          return;
+        }
+        ctx.print([
+          `Remote Supervisor ${selected.runnerId}`,
+          `  label: ${selected.label}`,
+          `  transport: ${selected.transportState}`,
+          `  heartbeat: ${selected.heartbeat.status}`,
+          `  heartbeat detail: ${selected.heartbeat.detail}`,
+          `  executionProtocol: ${selected.negotiation.executionProtocol}`,
+          `  reviewMode: ${selected.negotiation.reviewMode}`,
+          `  communicationLane: ${selected.negotiation.communicationLane}`,
+          `  trustClass: ${selected.negotiation.trustClass}`,
+          `  taskId: ${selected.taskId ?? 'n/a'}`,
+          `  messageCount: ${selected.messageCount}`,
+          `  errorCount: ${selected.errorCount}`,
+          ...(selected.lastError ? [`  lastError: ${selected.lastError}`] : []),
+          '  capabilities:',
+          ...selected.capabilities.map((capability) => `    ${capability.id}: ${capability.supported ? 'yes' : 'no'} (${capability.detail})`),
+          '  recovery:',
+          ...selected.recovery.map((action) => `    ${action.command} — ${action.reason}`),
+        ].join('\n'));
+        return;
+      }
+
+      if (subcommand === 'capabilities') {
+        const snapshot = getRemoteSupervisor().getSnapshot(store);
+        const runnerId = args[1];
+        const selected = runnerId
+          ? snapshot.sessions.find((entry) => entry.runnerId === runnerId)
+          : snapshot.sessions[0];
+        if (!selected) {
+          ctx.print(runnerId ? `Unknown remote runner: ${runnerId}` : 'No remote supervisor sessions are currently tracked.');
+          return;
+        }
+        ctx.print([
+          `Remote Capabilities ${selected.runnerId}`,
+          `  label: ${selected.label}`,
+          `  transport: ${selected.transportState}`,
+          `  executionProtocol: ${selected.negotiation.executionProtocol}`,
+          `  reviewMode: ${selected.negotiation.reviewMode}`,
+          `  communicationLane: ${selected.negotiation.communicationLane}`,
+          `  trustClass: ${selected.negotiation.trustClass}`,
+          '  capabilities:',
+          ...selected.capabilities.map((capability) => (
+            `    ${capability.id}: ${capability.supported ? 'supported' : 'missing'} — ${capability.detail}`
+          )),
+        ].join('\n'));
+        return;
+      }
+
+      if (subcommand === 'recover') {
+        const snapshot = getRemoteSupervisor().getSnapshot(store);
+        const runnerId = args[1];
+        const selected = runnerId
+          ? snapshot.sessions.find((entry) => entry.runnerId === runnerId)
+          : snapshot.sessions.find((entry) => entry.recovery.length > 0) ?? snapshot.sessions[0];
+        if (!selected) {
+          ctx.print(runnerId ? `Unknown remote runner: ${runnerId}` : 'No remote supervisor sessions are currently tracked.');
+          return;
+        }
+        const nextSteps = selected.recovery.length > 0
+          ? selected.recovery
+          : [{
+              id: 'show',
+              label: 'Review remote runtime',
+              command: `/remote show ${selected.runnerId}`,
+              reason: 'Inspect the current remote session before deciding on recovery.',
+            }];
+        ctx.print([
+          `Remote Recovery ${selected.runnerId}`,
+          `  label: ${selected.label}`,
+          `  transport: ${selected.transportState}`,
+          `  heartbeat: ${selected.heartbeat.status}`,
+          `  detail: ${selected.heartbeat.detail}`,
+          ...(selected.lastError ? [`  lastError: ${selected.lastError}`] : []),
+          ...(selected.taskId ? [`  bound task: ${selected.taskId}`] : []),
+          '  actions:',
+          ...nextSteps.map((action) => `    ${action.command} — ${action.reason}`),
+        ].join('\n'));
         return;
       }
 

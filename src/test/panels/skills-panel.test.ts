@@ -157,7 +157,7 @@ describe('SkillsPanel', () => {
     panel.handleInput('up');
     panel.handleInput('b');
     let text = linesText(panel.render(120, 16));
-    expect(text).toContain('query: b_');
+    expect(text).toContain('query: b█');
 
     panel.handleInput('down');
     panel.handleInput('down');

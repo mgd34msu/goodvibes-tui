@@ -6,9 +6,14 @@ type SelectionRouteState = {
   selectionModal: {
     active: boolean;
     query: string;
+    searchFocused: boolean;
+    allowSearch: boolean;
     customActions: Map<string, SelectionAction>;
+    selectedIndex: number;
     getSelected: () => SelectionResult['item'] | null | undefined;
     setQuery: (query: string) => void;
+    focusSearch: () => void;
+    blurSearch: () => void;
     moveUp: () => void;
     moveDown: () => void;
     close: () => void;
@@ -23,16 +28,35 @@ export function handleSelectionModalToken(state: SelectionRouteState, token: Inp
   if (!state.selectionModal.active) return false;
 
   if (token.type === 'text') {
-    if (token.value === ' ') {
+    if (state.selectionModal.allowSearch && !state.selectionModal.searchFocused && token.value === '/') {
+      state.selectionModal.focusSearch();
+    } else if (state.selectionModal.allowSearch && state.selectionModal.searchFocused) {
+      state.selectionModal.setQuery(state.selectionModal.query + token.value);
+    } else if (token.value === ' ') {
       const selected = state.selectionModal.getSelected();
       if (selected && state.selectionCallback) {
         state.selectionCallback({ item: selected, action: 'toggle' });
       }
     } else {
-      state.selectionModal.setQuery(state.selectionModal.query + token.value);
+      const action = state.selectionModal.customActions.get(token.value);
+      if (action) {
+        const selected = state.selectionModal.getSelected();
+        if (selected) {
+          const cb = state.selectionCallback;
+          state.selectionCallback = null;
+          state.selectionModal.close();
+          cb?.({ item: selected, action });
+        }
+      }
     }
   } else if (token.type === 'key') {
     if (token.logicalName === 'escape') {
+      if (state.selectionModal.allowSearch && state.selectionModal.searchFocused) {
+        if (state.selectionModal.query.length > 0) state.selectionModal.setQuery('');
+        else state.selectionModal.blurSearch();
+        state.requestRender();
+        return true;
+      }
       state.handleEscape();
       return true;
     }
@@ -49,14 +73,24 @@ export function handleSelectionModalToken(state: SelectionRouteState, token: Inp
         cb?.({ item: selected, action: customAction ?? 'select' });
       }
     } else if (token.logicalName === 'up') {
-      state.selectionModal.moveUp();
+      if (state.selectionModal.allowSearch && !state.selectionModal.searchFocused && state.selectionModal.selectedIndex === 0) {
+        state.selectionModal.focusSearch();
+      } else {
+        state.selectionModal.moveUp();
+      }
     } else if (token.logicalName === 'down') {
-      state.selectionModal.moveDown();
+      if (state.selectionModal.allowSearch && state.selectionModal.searchFocused) {
+        state.selectionModal.blurSearch();
+      } else {
+        state.selectionModal.moveDown();
+      }
     } else if (token.logicalName === 'backspace') {
-      if (state.selectionModal.query.length > 0) {
+      if (state.selectionModal.allowSearch && state.selectionModal.searchFocused && state.selectionModal.query.length > 0) {
         state.selectionModal.setQuery(state.selectionModal.query.slice(0, -1));
       }
-    } else if (token.logicalName && token.logicalName.length === 1) {
+    } else if (state.selectionModal.allowSearch && !state.selectionModal.searchFocused && token.logicalName === '/') {
+      state.selectionModal.focusSearch();
+    } else if (!state.selectionModal.searchFocused && token.logicalName && token.logicalName.length === 1) {
       const action = state.selectionModal.customActions.get(token.logicalName);
       if (action) {
         const selected = state.selectionModal.getSelected();

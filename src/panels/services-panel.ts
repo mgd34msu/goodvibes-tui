@@ -241,7 +241,7 @@ export class ServicesPanel extends BasePanel {
     } else {
       detailLines.push(buildPanelLine(width, [['  Press t to test the selected service or r to refresh credential status.', C.dim]]));
     }
-    detailLines.push(buildPanelLine(width, [['  Services resolve credentials through the encrypted secrets store and project-local config.', C.dim]]));
+    detailLines.push(buildPanelLine(width, [['  Services resolve credentials through hierarchy-aware secure storage, plaintext fallback policy, and project-local config.', C.dim]]));
 
     const sections: PanelWorkspaceSection[] = [
       { title: 'Services', lines: listLines },

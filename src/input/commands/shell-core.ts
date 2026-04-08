@@ -107,7 +107,7 @@ export function registerShellCoreCommands(registry: CommandRegistry): void {
           { id: '/config reset', label: '/config reset [key]', detail: 'Reset to defaults', category: 'Config & Display' },
           { id: '/config profile', label: '/config profile ...', detail: 'Save/load/list/delete profiles', category: 'Config & Display' },
           { id: '/debug', label: '/debug', detail: 'Toggle debug mode', category: 'Config & Display' },
-          { id: '/lines', label: '/lines', detail: 'Toggle line numbers', category: 'Config & Display' },
+          { id: '/lines', label: '/lines', detail: 'Set line numbers: all, code, or off', category: 'Config & Display' },
           { id: '/expand', label: '/expand [type]', detail: 'Expand blocks (all|thinking|tool|code)', category: 'Config & Display' },
           { id: '/collapse', label: '/collapse [type]', detail: 'Collapse blocks', category: 'Config & Display' },
           { id: '/bookmarks', label: '/bookmarks', detail: 'List bookmarked blocks', category: 'Config & Display' },
@@ -289,11 +289,26 @@ export function registerShellCoreCommands(registry: CommandRegistry): void {
   registry.register({
     name: 'lines',
     aliases: [],
-    description: 'Toggle line numbers on/off',
-    handler(_args, ctx) {
+    description: 'Set line-number display: all, code, or off',
+    handler(args, ctx) {
       const current = ctx.configManager.get('display.lineNumbers');
-      ctx.configManager.set('display.lineNumbers', !current);
-      ctx.print(`Line numbers: ${!current ? 'ON' : 'OFF'}`);
+      const aliases: Record<string, 'all' | 'code' | 'off'> = {
+        on: 'all',
+        all: 'all',
+        code: 'code',
+        blocks: 'code',
+        off: 'off',
+      };
+      const cycle: Array<'all' | 'code' | 'off'> = ['all', 'code', 'off'];
+      const requested = args[0]?.toLowerCase();
+      const next = requested ? aliases[requested] : cycle[(cycle.indexOf(current) + 1) % cycle.length]!;
+      if (requested && !next) {
+        ctx.print('Usage: /lines [all|code|off]');
+        return;
+      }
+      ctx.configManager.set('display.lineNumbers', next);
+      const label = next === 'all' ? 'ON (all lines)' : next === 'code' ? 'CODE BLOCKS ONLY' : 'OFF';
+      ctx.print(`Line numbers: ${label}`);
       ctx.renderRequest();
     },
   });

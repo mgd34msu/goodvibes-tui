@@ -28,13 +28,60 @@ import {
 } from '../runtime/emitters/index.ts';
 
 type AgentManagerLike = Pick<AgentManager, 'spawn' | 'getStatus' | 'list' | 'cancel' | 'listByCohort' | 'clear'>;
+type WrfcConfigLike = {
+  scoreThreshold: number;
+  maxFixAttempts: number;
+  autoCommit: boolean;
+  gates: Array<{ name: string; command: string; enabled: boolean }>;
+};
 
 let agentManagerResolver: () => AgentManagerLike = () => AgentManager.getInstance();
+let wrfcConfigResolver: () => WrfcConfigLike = () => {
+  const wrfcConfig = configManager.getCategory('wrfc') as Partial<WrfcConfigLike> | undefined;
+  return {
+    scoreThreshold:
+      typeof configManager.get('wrfc.scoreThreshold') === 'number'
+        ? (configManager.get('wrfc.scoreThreshold') as number)
+        : wrfcConfig?.scoreThreshold ?? 9.9,
+    maxFixAttempts:
+      typeof configManager.get('wrfc.maxFixAttempts') === 'number'
+        ? (configManager.get('wrfc.maxFixAttempts') as number)
+        : wrfcConfig?.maxFixAttempts ?? 3,
+    autoCommit:
+      typeof configManager.get('wrfc.autoCommit') === 'boolean'
+        ? (configManager.get('wrfc.autoCommit') as boolean)
+        : wrfcConfig?.autoCommit ?? false,
+    gates: Array.isArray(wrfcConfig?.gates) ? wrfcConfig.gates : [],
+  };
+};
 
 export function _setWrfcAgentManagerResolverForTest(
   resolver: (() => AgentManagerLike) | null,
 ): void {
   agentManagerResolver = resolver ?? (() => AgentManager.getInstance());
+}
+
+export function _setWrfcConfigResolverForTest(
+  resolver: (() => WrfcConfigLike) | null,
+): void {
+  wrfcConfigResolver = resolver ?? (() => {
+    const wrfcConfig = configManager.getCategory('wrfc') as Partial<WrfcConfigLike> | undefined;
+    return {
+      scoreThreshold:
+        typeof configManager.get('wrfc.scoreThreshold') === 'number'
+          ? (configManager.get('wrfc.scoreThreshold') as number)
+          : wrfcConfig?.scoreThreshold ?? 9.9,
+      maxFixAttempts:
+        typeof configManager.get('wrfc.maxFixAttempts') === 'number'
+          ? (configManager.get('wrfc.maxFixAttempts') as number)
+          : wrfcConfig?.maxFixAttempts ?? 3,
+      autoCommit:
+        typeof configManager.get('wrfc.autoCommit') === 'boolean'
+          ? (configManager.get('wrfc.autoCommit') as boolean)
+          : wrfcConfig?.autoCommit ?? false,
+      gates: Array.isArray(wrfcConfig?.gates) ? wrfcConfig.gates : [],
+    };
+  });
 }
 
 /**
@@ -423,7 +470,7 @@ export class WrfcController {
   }
 
   private async processReview(chain: WrfcChain, review: ReviewerReport): Promise<void> {
-    const threshold = configManager.get('wrfc.scoreThreshold') as number;
+    const threshold = this.getWrfcScoreThreshold();
     this.completeCurrentNode(
       chain,
       `Score ${review.score}/10${review.passed ? ' passed' : ' needs fixes'}`,
@@ -469,7 +516,7 @@ export class WrfcController {
       }
 
       // Check if max fix attempts exhausted before starting another fix
-      const maxFixAttempts = configManager.get('wrfc.maxFixAttempts') as number;
+      const maxFixAttempts = this.getWrfcMaxFixAttempts();
       if (chain.fixAttempts >= maxFixAttempts) {
         this.failChain(
           chain,
@@ -490,7 +537,7 @@ export class WrfcController {
     chain.fixAttempts += 1;
     this.transition(chain, 'fixing');
 
-    const maxAttempts = configManager.get('wrfc.maxFixAttempts') as number;
+    const maxAttempts = this.getWrfcMaxFixAttempts();
     emitWorkflowFixAttempted(this.runtimeBus, this.workflowContext(chain.id), {
       chainId: chain.id,
       attempt: chain.fixAttempts,
@@ -533,6 +580,13 @@ export class WrfcController {
     this.startOrchestrationNode(chain, `gate:${chain.reviewCycles}:${chain.fixAttempts}`, 'verifier', 'Quality gates');
 
     const gates = this.getEnabledGates();
+
+    if (gates.length === 0) {
+      logger.debug('WrfcController.runGates: no gates configured', {
+        chainId: chain.id,
+      });
+      return [];
+    }
 
     logger.debug('WrfcController.runGates', {
       chainId: chain.id,
@@ -604,7 +658,7 @@ export class WrfcController {
       this.startOrchestrationNode(chain, `gate:${chain.reviewCycles}:${chain.fixAttempts}`, 'verifier', 'Quality gates');
     }
     const allPassed = results.length === 0 || results.every((r) => r.passed);
-    const autoCommit = configManager.get('wrfc.autoCommit') as boolean;
+    const autoCommit = this.getWrfcAutoCommit();
 
     for (const r of results) {
       this.workmap.append({ ts: new Date().toISOString(), wrfcId: chain.id, event: 'gate_result', gate: r.gate, passed: r.passed, gateOutput: r.output.slice(0, 200) });
@@ -636,7 +690,7 @@ export class WrfcController {
         .join('|');
 
       // Use stored depth — no ancestry walk needed (ancestors may be cleaned up after 60s)
-      const maxGateRetries = configManager.get('wrfc.maxFixAttempts') as number;
+      const maxGateRetries = this.getWrfcMaxFixAttempts();
 
       // Store fingerprint on current chain before transitioning
       chain.gateFailureFingerprint = fingerprint;
@@ -1039,7 +1093,7 @@ export class WrfcController {
       return reviewerReport as ReviewerReport;
     }
     const extractedScore = extractScoreFromText(rawOutput);
-    const threshold = configManager.get('wrfc.scoreThreshold') as number;
+    const threshold = this.getWrfcScoreThreshold();
     const extractedPassed = extractedScore !== null
       ? extractPassedFromText(rawOutput, extractedScore, threshold)
       : false;
@@ -1073,7 +1127,7 @@ export class WrfcController {
   }
 
   private buildReviewTask(chain: WrfcChain, report: CompletionReport): string {
-    const threshold = configManager.get('wrfc.scoreThreshold') as number;
+    const threshold = this.getWrfcScoreThreshold();
     return [
       `WRFC Review Request`,
       `Chain ID: ${chain.id}`,
@@ -1102,7 +1156,7 @@ export class WrfcController {
   }
 
   private buildFixTask(chain: WrfcChain, review: ReviewerReport): string {
-    const threshold = configManager.get('wrfc.scoreThreshold') as number;
+    const threshold = this.getWrfcScoreThreshold();
     const issueList = review.issues
       .map((issue) => {
         const location = issue.file ? ` (${issue.file}${issue.line ? `:${issue.line}` : ''})` : '';
@@ -1143,8 +1197,40 @@ export class WrfcController {
   }
 
   private getEnabledGates() {
-    const wrfcConfig = configManager.getCategory('wrfc');
-    return (wrfcConfig.gates ?? []).filter((gate) => gate.enabled);
+    return wrfcConfigResolver().gates.filter((gate) => gate.enabled);
+  }
+
+  private getWrfcConfig(): {
+    scoreThreshold?: number;
+    maxFixAttempts?: number;
+    autoCommit?: boolean;
+    gates?: Array<{ name: string; command: string; enabled: boolean }>;
+  } {
+    return wrfcConfigResolver();
+  }
+
+  private getWrfcScoreThreshold(): number {
+    const wrfcConfig = this.getWrfcConfig();
+    if (typeof wrfcConfig.scoreThreshold === 'number') {
+      return wrfcConfig.scoreThreshold;
+    }
+    return 9.9;
+  }
+
+  private getWrfcMaxFixAttempts(): number {
+    const wrfcConfig = this.getWrfcConfig();
+    if (typeof wrfcConfig.maxFixAttempts === 'number') {
+      return wrfcConfig.maxFixAttempts;
+    }
+    return 3;
+  }
+
+  private getWrfcAutoCommit(): boolean {
+    const wrfcConfig = this.getWrfcConfig();
+    if (typeof wrfcConfig.autoCommit === 'boolean') {
+      return wrfcConfig.autoCommit;
+    }
+    return false;
   }
 
   private async loadPackageScripts(cwd: string): Promise<Record<string, string>> {

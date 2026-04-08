@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { renderConversationNotice, renderConversationKeyValueRow } from '../../renderer/conversation-surface.ts';
+import { renderConversationNotice, renderConversationKeyValueRow, renderConversationFragment } from '../../renderer/conversation-surface.ts';
 import { lineToString } from '../setup.ts';
 
 describe('conversation surface', () => {
@@ -10,7 +10,7 @@ describe('conversation surface', () => {
       { accent: '#00ffff', text: '#cbd5e1', dim: true },
     );
     expect(lines.length).toBeGreaterThan(1);
-    expect(lineToString(lines[0])).toContain('|');
+    expect(lineToString(lines[0])).toContain('▌');
   });
 
   test('renders a key/value row with right-aligned status text', () => {
@@ -33,5 +33,25 @@ describe('conversation surface', () => {
     );
     const italicCell = lines[0]?.find((cell, index) => index >= 5 && cell.char.trim().length > 0);
     expect(italicCell?.italic).toBe(true);
+  });
+
+  test('renders message fragments with half-height top and bottom borders', () => {
+    const lines = renderConversationFragment('hello', 40, {
+      prefix: ' › ',
+      prefixFg: '135',
+      text: '252',
+      bodyBg: '#2a2a2a',
+    });
+    expect(lineToString(lines[0])).toContain('▄');
+    expect(lineToString(lines[lines.length - 1]!)).toContain('▀');
+  });
+
+  test('status line defaults to unicode gutter marker', () => {
+    const lines = renderConversationNotice(
+      'Status row test',
+      40,
+      { accent: '#00ffff', text: '#cbd5e1', dim: true },
+    );
+    expect(lineToString(lines[0])).toContain('▌');
   });
 });

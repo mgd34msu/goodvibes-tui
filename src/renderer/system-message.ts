@@ -5,7 +5,7 @@ import { renderConversationNotice } from './conversation-surface.ts';
 /** Exported for use by typeOverride callers and tests. */
 export type SystemMessageType = 'error' | 'warning' | 'info';
 
-const FAILURE_MARKERS = ['x', '\u2717'] as const;
+const FAILURE_MARKERS = ['✗', '\u2717'] as const;
 
 export function classifySystemMessage(content: string): SystemMessageType {
   // Bracket-prefixed messages: classify by prefix first to prevent task

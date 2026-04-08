@@ -99,6 +99,9 @@ describe('frontmatter parsing', () => {
     expect(archetype!.description).toBe('A custom agent');
     expect(archetype!.tools).toEqual(['read', 'write', 'analyze']);
     expect(archetype!.isCustom).toBe(true);
+    expect(archetype!.origin).toBe('local-markdown');
+    expect(archetype!.sourcePath).toContain('custom.md');
+    expect(archetype!.validationIssues).toEqual([]);
   });
 
   test('loads system prompt from markdown body (lazy)', () => {

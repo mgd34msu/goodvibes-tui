@@ -7,6 +7,8 @@ import { getProfileManager } from '../../profiles/manager.ts';
 import { getSecretsManager } from '../../config/secrets.ts';
 import { getSubscriptionManager } from '../../config/subscriptions.ts';
 import { listBuiltinSubscriptionProviders } from '../../config/subscription-providers.ts';
+import { handleLocalAuthCommand } from './local-auth-runtime.ts';
+import { buildAuthInspectionSnapshot, inspectProviderAuth } from '../../runtime/auth/inspection.ts';
 
 interface InstallBundle {
   readonly version: 1;
@@ -265,23 +267,71 @@ export function registerPlatformAccessRuntimeCommands(registry: CommandRegistry)
   registry.register({
     name: 'auth',
     description: 'Review auth posture and exchange session login tokens with local services',
-    usage: '[review|bundle export <path>|bundle inspect <path>|login <daemon|listener> <baseUrl> <username> <password> [secretKey]]',
+    usage: '[review|show <provider>|repair <provider>|bundle export <path>|bundle inspect <path>|login <daemon|listener> <baseUrl> <username> <password> [secretKey]|local <review|panel|add-user|delete-user|rotate-password|revoke-session|clear-bootstrap-file>]',
     async handler(args, ctx) {
       const sub = args[0] ?? 'review';
+      if (sub === 'local') {
+        handleLocalAuthCommand(args.slice(1), ctx);
+        return;
+      }
       if (sub === 'review') {
-        const secretKeys = await getSecretsManager().list();
-        const subscriptions = getSubscriptionManager();
-        const activeSubscriptions = subscriptions.list().map((entry) => entry.provider);
-        const pendingSubscriptions = subscriptions.listPending().map((entry) => entry.provider);
+        const snapshot = await buildAuthInspectionSnapshot();
         const builtinProviders = listBuiltinSubscriptionProviders().map((entry) => entry.provider);
         ctx.print([
           'Auth Review',
           '  daemon login route: /login',
           '  listener login route: /login',
-          `  stored secrets: ${secretKeys.length}`,
+          `  stored secrets: ${snapshot.secretKeyCount}`,
           `  built-in providers: ${builtinProviders.length}${builtinProviders.length > 0 ? ` (${builtinProviders.join(', ')})` : ''}`,
-          `  active subscriptions: ${activeSubscriptions.length}${activeSubscriptions.length > 0 ? ` (${activeSubscriptions.join(', ')})` : ''}`,
-          `  pending subscriptions: ${pendingSubscriptions.length}${pendingSubscriptions.length > 0 ? ` (${pendingSubscriptions.join(', ')})` : ''}`,
+          `  active subscriptions: ${snapshot.activeSubscriptions}${snapshot.activeSubscriptions > 0 ? ` (${snapshot.providers.filter((provider) => provider.activeSubscription).map((provider) => provider.provider).join(', ')})` : ''}`,
+          `  pending subscriptions: ${snapshot.pendingSubscriptions}${snapshot.pendingSubscriptions > 0 ? ` (${snapshot.providers.filter((provider) => provider.pendingLogin).map((provider) => provider.provider).join(', ')})` : ''}`,
+          ...snapshot.providers.map((provider) => `  ${provider.provider}  freshness=${provider.freshness}  mode=${provider.callbackMode}  configured=${provider.configured ? 'yes' : 'no'}`),
+        ].join('\n'));
+        return;
+      }
+
+      if (sub === 'show') {
+        const provider = args[1];
+        if (!provider) {
+          ctx.print('Usage: /auth show <provider>');
+          return;
+        }
+        const inspection = await inspectProviderAuth(provider);
+        ctx.print([
+          `Auth Provider ${provider}`,
+          `  configured: ${inspection.configured ? 'yes' : 'no'}`,
+          ...(inspection.source ? [`  source: ${inspection.source}`] : []),
+          `  freshness: ${inspection.freshness}`,
+          `  callbackMode: ${inspection.callbackMode}`,
+          ...(inspection.redirectUri ? [`  redirectUri: ${inspection.redirectUri}`] : []),
+          ...(inspection.localCallback ? [`  localCallback: ${inspection.localCallback}`] : []),
+          `  activeSubscription: ${inspection.activeSubscription ? 'yes' : 'no'}`,
+          `  pendingLogin: ${inspection.pendingLogin ? 'yes' : 'no'}`,
+          `  overrideAmbientApiKeys: ${inspection.overrideAmbientApiKeys ? 'yes' : 'no'}`,
+          ...(inspection.tokenType ? [`  tokenType: ${inspection.tokenType}`] : []),
+          ...(inspection.expiresAt ? [`  expiresAt: ${new Date(inspection.expiresAt).toISOString()}`] : []),
+          ...inspection.issues.map((issue) => `  issue: ${issue}`),
+          ...inspection.nextActions.map((action) => `  next: ${action}`),
+        ].join('\n'));
+        return;
+      }
+
+      if (sub === 'repair') {
+        const provider = args[1];
+        if (!provider) {
+          ctx.print('Usage: /auth repair <provider>');
+          return;
+        }
+        const inspection = await inspectProviderAuth(provider);
+        ctx.print([
+          `Auth Repair ${provider}`,
+          `  configured: ${inspection.configured ? 'yes' : 'no'}`,
+          `  freshness: ${inspection.freshness}`,
+          `  callbackMode: ${inspection.callbackMode}`,
+          ...inspection.issues.map((issue) => `  issue: ${issue}`),
+          ...(inspection.nextActions.length > 0
+            ? ['  next:', ...inspection.nextActions.map((action) => `    ${action}`)]
+            : ['  No active repair actions suggested.']),
         ].join('\n'));
         return;
       }
@@ -345,11 +395,11 @@ export function registerPlatformAccessRuntimeCommands(registry: CommandRegistry)
           return;
         }
         await getSecretsManager().set(secretKey, body.token);
-        ctx.print(`Stored ${target} session token in encrypted secrets as ${secretKey}.`);
+        ctx.print(`Stored ${target} session token in secure storage as ${secretKey}.`);
         return;
       }
 
-      ctx.print('Usage: /auth [review|bundle export <path>|bundle inspect <path>|login <daemon|listener> <baseUrl> <username> <password> [secretKey]]');
+      ctx.print('Usage: /auth [review|show <provider>|bundle export <path>|bundle inspect <path>|login <daemon|listener> <baseUrl> <username> <password> [secretKey]|local <review|panel|add-user|delete-user|rotate-password|revoke-session|clear-bootstrap-file>]');
     },
   });
 }

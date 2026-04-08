@@ -80,6 +80,17 @@ describe('renderModelPickerOverlay — model mode', () => {
     expect(footer).toContain('Filter');
   });
 
+  test('search row shows a cursor only when search is focused', () => {
+    const picker = makePicker();
+    picker.searchFocused = false;
+    const unfocused = lineToString(renderModelPickerOverlay(picker, W)[1]!);
+    expect(unfocused).not.toContain('█');
+
+    picker.searchFocused = true;
+    const focused = lineToString(renderModelPickerOverlay(picker, W)[1]!);
+    expect(focused).toContain('█');
+  });
+
   test('footer shows current filter label', () => {
     const picker = makePicker();
     picker.categoryFilter = 'free';
@@ -112,7 +123,7 @@ describe('renderModelPickerOverlay — model mode', () => {
 
   test('selected item has arrow indicator', () => {
     const lines = renderModelPickerOverlay(makePicker(), W);
-    const hasArrow = lines.some(line => line.some(cell => cell.char === '>'));
+    const hasArrow = lines.some(line => line.some(cell => cell.char === '▸'));
     expect(hasArrow).toBe(true);
   });
 
@@ -179,6 +190,15 @@ describe('renderModelPickerOverlay — model mode', () => {
       expect(line.length).toBe(narrowW);
     }
   });
+
+  test('free-tier and pinned model markers keep Unicode glyphs', () => {
+    const picker = makePicker();
+    picker.pinnedIds.add('model-a');
+    const texts = linesToText(renderModelPickerOverlay(picker, W)).join('\n');
+    expect(texts).toContain('★  model-a');
+    expect(texts).toContain('Alpha                                •');
+    expect(texts).not.toContain('* model-a');
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -234,7 +254,7 @@ describe('renderModelPickerOverlay — provider mode', () => {
 
   test('selected item has arrow indicator', () => {
     const lines = renderModelPickerOverlay(makeProviderPicker(), W);
-    const hasArrow = lines.some(line => line.some(cell => cell.char === '>'));
+    const hasArrow = lines.some(line => line.some(cell => cell.char === '▸'));
     expect(hasArrow).toBe(true);
   });
 
@@ -246,7 +266,7 @@ describe('renderModelPickerOverlay — provider mode', () => {
 
   test('search bar is present in provider mode', () => {
     const texts = linesToText(renderModelPickerOverlay(makeProviderPicker(), W)).join('\n');
-    expect(texts).toContain('/ _');
+    expect(texts).toContain('/ ');
   });
 
   test('query filters provider list', () => {
@@ -256,6 +276,14 @@ describe('renderModelPickerOverlay — provider mode', () => {
     expect(texts).toContain('openai');
     expect(texts).not.toContain('anthropic');
     expect(texts).not.toContain('gemini');
+  });
+
+  test('configured providers use a Unicode checkmark instead of letter markers', () => {
+    const picker = makeProviderPicker();
+    picker.configuredProviders = new Set(['openai']);
+    const texts = linesToText(renderModelPickerOverlay(picker, W)).join('\n');
+    expect(texts).toContain('✓ openai');
+    expect(texts).not.toContain('y openai');
   });
 
   test('no-match query shows helpful message', () => {
@@ -335,7 +363,7 @@ describe('renderModelPickerOverlay — effort mode', () => {
 
   test('selected item has arrow indicator', () => {
     const lines = renderModelPickerOverlay(makeEffortPicker(), W);
-    const hasArrow = lines.some(line => line.some(cell => cell.char === '>'));
+    const hasArrow = lines.some(line => line.some(cell => cell.char === '▸'));
     expect(hasArrow).toBe(true);
   });
 
@@ -367,14 +395,14 @@ describe('renderModelPickerOverlay — Stage 5 features', () => {
     _setEntriesForTest([]);
     const picker = makePicker({ selectedIndex: 0 });
     const texts = linesToText(renderModelPickerOverlay(picker, W)).join('\n');
-    expect(texts).toContain('*');
+    expect(texts).toContain('•');
   });
 
   test('pin star renders for pinned models', () => {
     const picker = makePicker();
     picker.pinnedIds = new Set(['model-a']);
     const texts = linesToText(renderModelPickerOverlay(picker, W)).join('\n');
-    expect(texts).toContain('> * model-a');
+    expect(texts).toContain('▸ ★  model-a');
   });
 
   test('no pin star when model is not pinned', () => {
@@ -396,7 +424,7 @@ describe('renderModelPickerOverlay — Stage 5 features', () => {
     picker.groupBy = 'family';
     const lines = renderModelPickerOverlay(picker, W);
     const footer = lineToString(lines[lines.length - 1]);
-    expect(footer).toContain('family');
+    expect(footer).toContain('Group: fam');
   });
 
   test('paid filter label shows Paid in footer', () => {

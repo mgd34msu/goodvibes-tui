@@ -14,6 +14,7 @@ export { PermissionSimulator, SimulationEnforcementError } from './simulation.ts
 export { buildDefaultPolicySimulationScenarios, runPolicySimulationScenarios } from './simulation-scenarios.ts';
 export { lintPolicyConfig } from './lint.ts';
 export { buildPolicyPreflightReview } from './preflight.ts';
+export { buildPermissionRuleSuggestions } from './rule-suggestions.ts';
 // Policy signing
 export { signBundle, verifyBundle, canonicalise } from './policy-signer.ts';
 export { loadPolicyBundle, createUnsignedBundle, PolicySignatureError } from './policy-loader.ts';
@@ -45,6 +46,7 @@ export type {
 export type { DecisionLogEntry, DecisionLogQuery } from './decision-log.ts';
 export type { SafetyCheckResult } from './safety-checks.ts';
 export type { PolicyLintFinding, PolicyLintSeverity } from './lint.ts';
+export type { PermissionRuleSuggestion } from './rule-suggestions.ts';
 export type {
   PolicyPreflightStatus,
   PolicyPreflightServer,

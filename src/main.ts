@@ -64,6 +64,10 @@ import {
 } from './runtime/session-persistence.ts';
 import { handleBlockingShellInput, type PendingPermissionState } from './shell/blocking-input.ts';
 import { wireShellUiOpeners } from './shell/ui-openers.ts';
+import { deriveComposerState } from './core/composer-state.ts';
+import { buildPersistedSessionContext, formatReturnContextForDisplay, getReturnContextMode, maybeAssistReturnContextSummary } from './runtime/session-return-context.ts';
+import { getRemoteRunnerRegistry } from './runtime/remote/index.ts';
+import { listPersistedWorktreeMeta } from './runtime/worktree/registry.ts';
 
 
 const ALT_SCREEN_ENTER = '\x1b[?1049h';
@@ -126,6 +130,20 @@ async function main() {
 
   // Use the singleton panel manager (already initialized in bootstrap)
   const panelManager = getPanelManager();
+  const buildSessionContinuityHints = () => {
+    const remoteContracts = getRemoteRunnerRegistry().listContracts();
+    const worktrees = listPersistedWorktreeMeta();
+    return {
+      pendingApprovals: store.getState().permissions.approvalCount,
+      activeTasks: store.getState().tasks.runningIds.length + store.getState().tasks.queuedIds.length,
+      blockedTasks: store.getState().tasks.blockedIds.length,
+      remoteContracts: remoteContracts.length,
+      remoteRunners: remoteContracts.slice(0, 4).map((contract) => contract.runnerId),
+      worktreeCount: worktrees.length,
+      worktreePaths: worktrees.slice(0, 3).map((record) => record.path),
+      openPanels: panelManager.getAllOpen().map((panel) => panel.id),
+    };
+  };
 
   // Permission state — set while a permission prompt is blocking the orchestrator
   let pendingPermission: PendingPermissionState | null = null;
@@ -188,7 +206,8 @@ async function main() {
     // Clear main.ts-owned event subscriptions
     unsubs.forEach(fn => fn());
     // Clear bootstrap-owned unsubs + interval via ctx.shutdown()
-    ctx.shutdown(conversation.toJSON() as { messages: object[]; timestamp?: number }).catch((err) => {
+    const snapshot = conversation.toJSON() as { messages: Array<import('./core/conversation.ts').ConversationMessageSnapshot>; timestamp?: number };
+    ctx.shutdown({ ...snapshot, ...buildPersistedSessionContext(snapshot.messages, conversation.getTitleSource(), buildSessionContinuityHints()) }).catch((err) => {
       logger.debug('ctx.shutdown error during exitApp (non-fatal)', { error: String(err) });
     });
     // Clear recovery interval
@@ -390,6 +409,14 @@ async function main() {
       if (!cmd) return undefined;
       return cmd.argsHint ?? cmd.usage;
     })();
+    const composerState = deriveComposerState({
+      text: input.prompt,
+      commandMode: input.commandMode,
+      panelFocused: input.panelFocused,
+      pendingApproval: pendingPermission !== null,
+      hasAttachments: input.getImageAttachments().size > 0,
+      turnState: store.getState().conversation.turnState,
+    });
     const footerLines = buildShellFooter({
       width,
       promptText: promptInfo.visibleLines.join('\n'),
@@ -425,6 +452,9 @@ async function main() {
       runningProcessCount,
       indicatorFocused: input.indicatorFocused,
       runningAgentProgress,
+      composerMode: composerState.modeLabel,
+      composerStatus: composerState.statusLabel,
+      composerFlags: composerState.flags,
     }).lines;
 
     const shellLayout = createShellLayout({
@@ -545,7 +575,12 @@ async function main() {
   // Refresh git status after each turn completes or after tool results arrive
   unsubs.push(runtimeBus.on<Extract<TurnEvent, { type: 'TURN_COMPLETED' }>>('TURN_COMPLETED', () => {
     // Auto-save after every LLM turn so kills don't lose the session
-    try { persistConversation(runtime.sessionId, conversation.toJSON() as { messages: object[]; timestamp?: number }, runtime.model, runtime.provider, conversation.title || ''); hookDispatcher.fire({ path: 'Lifecycle:session:save' as HookEventPath, phase: 'Lifecycle' as HookPhase, category: 'session' as HookCategory, specific: 'save', sessionId: runtime.sessionId, timestamp: Date.now(), payload: { sessionId: runtime.sessionId } }).catch((err: unknown) => logger.debug('hook fire error', { error: String(err) })); } catch (e) { logger.debug('auto-save on turn:complete failed', { error: String(e) }); }
+    try {
+      const snapshot = conversation.toJSON() as { messages: Array<import('./core/conversation.ts').ConversationMessageSnapshot>; timestamp?: number };
+      const persisted = buildPersistedSessionContext(snapshot.messages, conversation.getTitleSource(), buildSessionContinuityHints());
+      persistConversation(runtime.sessionId, { ...snapshot, ...persisted }, runtime.model, runtime.provider, conversation.title || '');
+      hookDispatcher.fire({ path: 'Lifecycle:session:save' as HookEventPath, phase: 'Lifecycle' as HookPhase, category: 'session' as HookCategory, specific: 'save', sessionId: runtime.sessionId, timestamp: Date.now(), payload: { sessionId: runtime.sessionId } }).catch((err: unknown) => logger.debug('hook fire error', { error: String(err) }));
+    } catch (e) { logger.debug('auto-save on turn:complete failed', { error: String(e) }); }
     gitStatusProvider.refresh().then((info) => {
       lastGitInfoRef.value = info;
       render();
@@ -643,14 +678,19 @@ async function main() {
   const recoveryInfo = checkRecoveryFile();
   if (recoveryInfo) {
     systemMessageRouter.high(`[Recovery] Found unsaved session from ${new Date(recoveryInfo.timestamp).toLocaleString()}. Title: "${recoveryInfo.title}". Press R to restore, any other key to discard.`);
+    for (const line of formatReturnContextForDisplay(recoveryInfo.returnContext)) {
+      systemMessageRouter.low(`[Recovery] ${line}`);
+    }
     render();
     recoveryPending = true;
   }
 
   // --- Auto-save to recovery file every 60s ---
   recoveryInterval = setInterval(() => {
+    const snapshot = conversation.toJSON() as { messages: Array<import('./core/conversation.ts').ConversationMessageSnapshot> };
+    const persisted = buildPersistedSessionContext(snapshot.messages, conversation.getTitleSource(), buildSessionContinuityHints());
     writeRecoveryFile(
-      conversation.toJSON() as { messages: Array<Record<string, unknown>> },
+      { ...snapshot, ...persisted },
       runtime.sessionId,
       conversation.title ?? '',
     );

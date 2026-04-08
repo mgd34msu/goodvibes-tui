@@ -34,21 +34,22 @@ export function applyConversationOverlays(
 ): Line[] {
   const { input, conversation, commandRegistry, conversationWidth, viewportHeight, contextWindow } = context;
   let next = viewport;
+  const bottomDockInset = 1 + (input.searchManager.active || input.historySearch.active ? 1 : 0);
 
   if (input.filePicker.active) {
     const lines = renderFilePickerOverlay(input.filePicker, conversationWidth, viewportHeight);
-    next = overlayViewportBottom(next, lines, conversationWidth, viewportHeight);
+    next = overlayViewportBottom(next, lines, conversationWidth, viewportHeight, bottomDockInset);
   }
 
   if (input.modelPicker.active) {
     const maxVisible = Math.max(5, viewportHeight - MODEL_PICKER_CHROME_LINES - 4);
     const lines = renderModelPickerOverlay(input.modelPicker, conversationWidth, maxVisible, viewportHeight);
-    next = overlayViewportBottom(next, lines, conversationWidth, viewportHeight);
+    next = overlayViewportBottom(next, lines, conversationWidth, viewportHeight, bottomDockInset);
   }
 
   if (input.selectionModal.active) {
     const lines = renderSelectionModalOverlay(input.selectionModal, conversationWidth, viewportHeight);
-    next = overlayViewportBottom(next, lines, conversationWidth, viewportHeight);
+    next = overlayViewportBottom(next, lines, conversationWidth, viewportHeight, bottomDockInset);
   }
 
   if (input.searchManager.active) {
@@ -61,40 +62,42 @@ export function applyConversationOverlays(
 
   if (input.processModal.active) {
     const lines = renderProcessModal(input.processModal, conversationWidth, viewportHeight);
-    next = overlayViewportBottom(next, lines, conversationWidth, viewportHeight);
+    next = overlayViewportBottom(next, lines, conversationWidth, viewportHeight, bottomDockInset);
   }
 
   if (input.agentDetailModal.active) {
     const lines = renderAgentDetailModal(input.agentDetailModal, conversationWidth);
-    next = overlayViewportBottom(next, lines, conversationWidth, viewportHeight);
+    next = overlayViewportBottom(next, lines, conversationWidth, viewportHeight, bottomDockInset);
   }
 
   if (input.liveTailModal.active) {
     const lines = renderLiveTailModal(input.liveTailModal, conversationWidth, viewportHeight);
-    next = overlayViewportBottom(next, lines, conversationWidth, viewportHeight);
+    next = overlayViewportBottom(next, lines, conversationWidth, viewportHeight, bottomDockInset);
   }
 
   if (input.contextInspectorModal.active) {
     const lines = renderContextInspector(conversation, conversationWidth, viewportHeight, contextWindow);
-    next = overlayViewportBottom(next, lines, conversationWidth, viewportHeight);
+    next = overlayViewportBottom(next, lines, conversationWidth, viewportHeight, bottomDockInset);
   }
 
   if (input.settingsModal.active) {
     const lines = renderSettingsModal(input.settingsModal, conversationWidth, viewportHeight);
-    next = overlayViewportBottom(next, lines, conversationWidth, viewportHeight);
+    next = overlayViewportBottom(next, lines, conversationWidth, viewportHeight, bottomDockInset);
   }
 
   if (input.sessionPickerModal.active) {
-    next.push(...renderSessionPickerModal(input.sessionPickerModal, conversationWidth, viewportHeight));
+    const lines = renderSessionPickerModal(input.sessionPickerModal, conversationWidth, viewportHeight);
+    next = overlayViewportBottom(next, lines, conversationWidth, viewportHeight, bottomDockInset);
   }
 
   if (input.profilePickerModal.active) {
-    next.push(...renderProfilePickerModal(input.profilePickerModal, conversationWidth, viewportHeight));
+    const lines = renderProfilePickerModal(input.profilePickerModal, conversationWidth, viewportHeight);
+    next = overlayViewportBottom(next, lines, conversationWidth, viewportHeight, bottomDockInset);
   }
 
   if (input.bookmarkModal.active) {
     const lines = renderBookmarkModal(input.bookmarkModal, conversationWidth, viewportHeight);
-    next = overlayViewportBottom(next, lines, conversationWidth, viewportHeight);
+    next = overlayViewportBottom(next, lines, conversationWidth, viewportHeight, bottomDockInset);
   }
 
   if (input.helpOverlayActive) {
@@ -110,7 +113,7 @@ export function applyConversationOverlays(
   if (input.commandMode && input.autocomplete?.isActive) {
     const lines = renderAutocompleteOverlay(input.autocomplete, conversationWidth, viewportHeight);
     if (lines.length > 0) {
-      next = overlayViewportBottom(next, lines, conversationWidth, viewportHeight);
+      next = overlayViewportBottom(next, lines, conversationWidth, viewportHeight, bottomDockInset);
     }
   }
 

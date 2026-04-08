@@ -18,6 +18,7 @@ import {
 } from './polish.ts';
 import { getTrackedVisibleWindow } from '../renderer/surface-layout.ts';
 import { truncateDisplay } from '../utils/terminal-width.ts';
+import { formatReturnContextForDisplay } from '../runtime/session-return-context.ts';
 import {
   getPanelSearchFocusTransition,
   isPanelSearchBackspace,
@@ -230,8 +231,28 @@ export class SessionBrowserPanel extends BasePanel {
           title: 'Selected',
           lines: [
             buildPanelLine(width, [[' Title ', DEFAULT_PANEL_PALETTE.label], [selected.title || selected.name || '(untitled)', DEFAULT_PANEL_PALETTE.value]]),
-            buildPanelLine(width, [[' Model ', DEFAULT_PANEL_PALETTE.label], [selected.model || 'unknown', DEFAULT_PANEL_PALETTE.info]]),
+            buildPanelLine(width, [[' Model ', DEFAULT_PANEL_PALETTE.label], [selected.model || 'unknown', DEFAULT_PANEL_PALETTE.info], ['   Title ', DEFAULT_PANEL_PALETTE.label], [selected.titleSource === 'user' ? 'user-set' : 'system', selected.titleSource === 'user' ? DEFAULT_PANEL_PALETTE.good : DEFAULT_PANEL_PALETTE.dim]]),
             buildPanelLine(width, [[' Date ', DEFAULT_PANEL_PALETTE.label], [shortDate(selected.timestamp), DEFAULT_PANEL_PALETTE.value], ['   Messages ', DEFAULT_PANEL_PALETTE.label], [String(selected.messageCount), DEFAULT_PANEL_PALETTE.value]]),
+            buildPanelLine(width, [
+              [' Tasks ', DEFAULT_PANEL_PALETTE.label],
+              [String(selected.returnContext?.activeTasks ?? 0), (selected.returnContext?.activeTasks ?? 0) > 0 ? DEFAULT_PANEL_PALETTE.info : DEFAULT_PANEL_PALETTE.dim],
+              ['   Blocked ', DEFAULT_PANEL_PALETTE.label],
+              [String(selected.returnContext?.blockedTasks ?? 0), (selected.returnContext?.blockedTasks ?? 0) > 0 ? DEFAULT_PANEL_PALETTE.warn : DEFAULT_PANEL_PALETTE.dim],
+              ['   Approvals ', DEFAULT_PANEL_PALETTE.label],
+              [String(selected.returnContext?.pendingApprovals ?? 0), (selected.returnContext?.pendingApprovals ?? 0) > 0 ? DEFAULT_PANEL_PALETTE.warn : DEFAULT_PANEL_PALETTE.dim],
+            ]),
+            buildPanelLine(width, [
+              [' Remote ', DEFAULT_PANEL_PALETTE.label],
+              [String(selected.returnContext?.remoteRunners?.length ?? 0), (selected.returnContext?.remoteRunners?.length ?? 0) > 0 ? DEFAULT_PANEL_PALETTE.info : DEFAULT_PANEL_PALETTE.dim],
+              ['   Worktrees ', DEFAULT_PANEL_PALETTE.label],
+              [String(selected.returnContext?.worktreePaths?.length ?? 0), (selected.returnContext?.worktreePaths?.length ?? 0) > 0 ? DEFAULT_PANEL_PALETTE.info : DEFAULT_PANEL_PALETTE.dim],
+              ['   Panels ', DEFAULT_PANEL_PALETTE.label],
+              [String(selected.returnContext?.openPanels?.length ?? 0), (selected.returnContext?.openPanels?.length ?? 0) > 0 ? DEFAULT_PANEL_PALETTE.good : DEFAULT_PANEL_PALETTE.dim],
+            ]),
+            ...formatReturnContextForDisplay(selected.returnContext).map((line) =>
+              buildPanelLine(width, [[' ', DEFAULT_PANEL_PALETTE.dim], [truncateDisplay(line, Math.max(0, width - 2)), DEFAULT_PANEL_PALETTE.dim]])
+            ),
+            buildPanelLine(width, [[' Next ', DEFAULT_PANEL_PALETTE.label], [selected.returnContext?.remoteRunners?.length ? `/remote recover ${selected.returnContext.remoteRunners[0]}` : '/session resume', DEFAULT_PANEL_PALETTE.dim]]),
           ],
         }
       : { title: 'Selected', lines: [] };
@@ -257,7 +278,7 @@ export class SessionBrowserPanel extends BasePanel {
     const prefixLength = 1 + 16 + 1 + 4 + 19;
     const title = truncateDisplay(sess.title || sess.name || '(untitled)', Math.max(0, width - prefixLength));
     return buildStyledPanelLine(width, [
-      { text: isCursor ? '>' : ' ', fg: C.selected, bg, bold: isCursor },
+      { text: isCursor ? '▸' : ' ', fg: C.selected, bg, bold: isCursor },
       { text: date, fg: C.dateFg, bg },
       { text: ' ', fg: C.normal, bg },
       { text: cnt, fg: C.countFg, bg },

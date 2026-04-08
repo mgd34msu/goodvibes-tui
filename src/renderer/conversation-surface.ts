@@ -67,7 +67,7 @@ export function renderConversationNotice(
   content: string,
   width: number,
   palette: ConversationSurfacePalette,
-  marker = '|',
+  marker = '▌',
 ): Line[] {
   const borderCol = LAYOUT.LEFT_MARGIN - 1;
   const textStartCol = LAYOUT.LEFT_MARGIN + 1;
@@ -117,7 +117,23 @@ export function renderConversationFragment(
     return line;
   };
 
-  lines.push(createFilledLine());
+  const topLine = createEmptyLine(width);
+  const bottomLine = createEmptyLine(width);
+  for (let x = 0; x < fragmentWidth && startCol + x < width; x++) {
+    topLine[startCol + x] = createStyledCell('▄', {
+      fg: palette.bodyBg,
+      bg: '',
+      dim: palette.dim ?? false,
+      italic: palette.italic ?? false,
+    });
+    bottomLine[startCol + x] = createStyledCell('▀', {
+      fg: palette.bodyBg,
+      bg: '',
+      dim: palette.dim ?? false,
+      italic: palette.italic ?? false,
+    });
+  }
+  lines.push(topLine);
   for (let index = 0; index < wrapped.length; index++) {
     const line = createFilledLine();
     const prefix = index === 0 ? palette.prefix : ' '.repeat(prefixWidth);
@@ -134,8 +150,30 @@ export function renderConversationFragment(
     });
     lines.push(line);
   }
-  lines.push(createFilledLine());
+  lines.push(bottomLine);
   return lines;
+}
+
+export function renderConversationCollapsedFragment(
+  content: string,
+  width: number,
+  options: {
+    readonly prefix?: string;
+    readonly prefixFg?: string;
+    readonly text?: string;
+    readonly bodyBg?: string;
+    readonly dim?: boolean;
+    readonly italic?: boolean;
+  } = {},
+): Line[] {
+  return renderConversationFragment(content, width, {
+    prefix: options.prefix ?? ' ▸ ',
+    prefixFg: options.prefixFg ?? '#38bdf8',
+    text: options.text ?? '244',
+    bodyBg: options.bodyBg ?? '#1a1a1a',
+    dim: options.dim ?? true,
+    italic: options.italic ?? false,
+  });
 }
 
 export function renderConversationKeyValueRow(
@@ -172,7 +210,7 @@ export function renderConversationStatusLine(
   const markerCol = LAYOUT.LEFT_MARGIN - 1;
   const startCol = LAYOUT.LEFT_MARGIN + 1;
   const endCol = Math.max(startCol, width - LAYOUT.RIGHT_MARGIN);
-  line[markerCol] = createStyledCell(options.marker ?? '|', {
+  line[markerCol] = createStyledCell(options.marker ?? '▌', {
     fg: options.markerFg ?? '#64748b',
     bg: options.markerBg ?? options.bodyBg ?? '',
     bold: true,

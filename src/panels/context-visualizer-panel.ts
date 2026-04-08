@@ -5,8 +5,12 @@
 import type { Line } from '../types/grid.ts';
 import { BasePanel } from './base-panel.ts';
 import type { RuntimeEventBus } from '../runtime/events/index.ts';
+import type { RuntimeStore } from '../runtime/store/index.ts';
+import { sessionMemoryStore } from '../core/session-memory.ts';
+import { evaluateSessionMaintenance } from '../runtime/session-maintenance.ts';
 import {
   buildEmptyState,
+  buildGuidanceLine,
   buildMeterLine,
   buildPanelLine,
   buildStyledPanelLine,
@@ -41,6 +45,7 @@ export class ContextVisualizerPanel extends BasePanel {
     private runtimeBus: RuntimeEventBus,
     private getUsage?: () => { input: number; output: number; cacheRead: number; cacheWrite: number; model?: string },
     private contextLimit?: number,
+    private runtimeStore?: RuntimeStore,
   ) {
     super('context', 'Context', 'C', 'ai');
   }
@@ -112,6 +117,10 @@ export class ContextVisualizerPanel extends BasePanel {
             buildPanelLine(width, [[` ${formatK(input)} / ${formatK(limit)} tokens  (${pct}%)  Refreshes each LLM call`, DEFAULT_PANEL_PALETTE.dim]]),
           ],
         },
+        {
+          title: 'Maintenance',
+          lines: this._renderMaintenance(width),
+        },
       ],
       palette: DEFAULT_PANEL_PALETTE,
     });
@@ -147,6 +156,25 @@ export class ContextVisualizerPanel extends BasePanel {
       this.snapshot.limit = this.contextLimit ?? 0;
     }
     this.markDirty();
+  }
+
+  private _renderMaintenance(width: number): Line[] {
+    const status = evaluateSessionMaintenance({
+      currentTokens: this.snapshot.input,
+      contextWindow: this.snapshot.limit,
+      sessionMemoryCount: sessionMemoryStore.list().length,
+      session: this.runtimeStore?.getState().session,
+    });
+    const lines: Line[] = [
+      buildPanelLine(width, [[` ${status.summary}`, DEFAULT_PANEL_PALETTE.label]]),
+    ];
+    if (status.reasons[0]) {
+      lines.push(buildPanelLine(width, [[` ${status.reasons[0]}`, DEFAULT_PANEL_PALETTE.dim]]));
+    }
+    if (status.guidanceMode !== 'off' && status.nextSteps[0]) {
+      lines.push(buildGuidanceLine(width, status.nextSteps[0], 'open the suggested maintenance action', DEFAULT_PANEL_PALETTE));
+    }
+    return lines;
   }
 
   private _attachBus(): void {

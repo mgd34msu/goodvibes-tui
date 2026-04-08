@@ -124,6 +124,45 @@ export { ReconnectEngine, generateIdempotencyKey } from './reconnect.ts';
 export { RemoteStateSyncer, createNoOpSyncCallbacks, buildAcpConnectionEntry, countActiveRemoteConnections, extractRemoteTaskIds } from './sync.ts';
 export { RemoteObservabilityProvider } from './observability.ts';
 export {
+  deriveRemoteCapabilities,
+} from './capabilities.ts';
+export type {
+  RemoteCapabilityId,
+  RemoteCapabilitySnapshot,
+} from './capabilities.ts';
+export {
+  deriveRemoteHeartbeat,
+} from './heartbeat.ts';
+export type {
+  RemoteHeartbeatSnapshot,
+} from './heartbeat.ts';
+export {
+  deriveRemoteNegotiation,
+} from './negotiation.ts';
+export type {
+  RemoteNegotiationSnapshot,
+} from './negotiation.ts';
+export {
+  deriveRemoteRecoveryActions,
+} from './recovery.ts';
+export type {
+  RemoteRecoveryAction,
+} from './recovery.ts';
+export {
+  buildRemoteSessionStateSnapshot,
+} from './session-state.ts';
+export type {
+  RemoteSessionStateSnapshot,
+} from './session-state.ts';
+export {
+  RemoteSupervisor,
+  getRemoteSupervisor,
+  resetRemoteSupervisorForTesting,
+} from './supervisor.ts';
+export type {
+  RemoteSupervisorSnapshot,
+} from './supervisor.ts';
+export {
   RemoteRunnerRegistry,
   getRemoteRunnerRegistry,
   _resetRemoteRunnerRegistryForTesting,
