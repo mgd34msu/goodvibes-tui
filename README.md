@@ -48,7 +48,7 @@ The runtime is organized around typed store domains, typed runtime events, a sha
 
 ### Panels, Control Rooms, And Workspaces
 - Split-pane panel system with panel picker, layout control, and keyboard-first focus behavior
-- Dedicated control rooms for provider accounts, provider health, local auth, settings sync, remote, MCP, marketplace, orchestration, tasks, intelligence, worktrees, approvals, system messages, and more
+- Dedicated control rooms for provider accounts, provider health, local auth, settings sync, remote, MCP, marketplace, orchestration, tasks, intelligence, worktrees, approvals, forensics, security, policy, cockpit, system messages, and more
 - Summary-first heavy panels with posture, issues, next actions, and detail regions instead of raw inventories first
 - Routed system-message workspace for startup discovery and operational noise that does not belong in the main conversation
 
@@ -80,8 +80,9 @@ The runtime is organized around typed store domains, typed runtime events, a sha
 ### Runtime Foundations
 - Typed runtime store and typed runtime-event system
 - Bootstrap composition root with explicit initialization order
-- Session continuity, return-context summaries, knowledge capture, compaction, guidance, diagnostics, and integration-helper APIs
+- Session continuity, return-context summaries, knowledge capture, compaction, guidance, diagnostics, notifications, retention, idempotency, and integration-helper APIs
 - Feature flags, profiles, live settings editing, and UI routing controls for system / operational / WRFC messages
+- Performance budgets, panel-health contracts, telemetry exporters, and operator playbooks for stuck turns, reconnect failures, permission deadlocks, plugin degradation, and recovery scenarios
 
 ### Evaluation, Replay, And Incident Analysis
 - Evaluation harness with built-in suites, baselines, scorecards, and regression gates
@@ -390,6 +391,16 @@ Routing is configurable with:
 - `ui.wrfcMessages`
 
 This is how startup discovery, runtime notices, and orchestration chatter can be sent to a panel, the conversation, or both.
+
+The notification layer is also policy-aware instead of being a raw append-only log:
+
+- quiet-while-typing suppression
+- adaptive batching and burst control
+- domain verbosity settings
+- panel jump and dismiss actions
+- routing decisions that favor control rooms for low-signal operational noise
+
+That routing stack lives under `src/runtime/notifications/*` and is one of the reasons the conversation surface can stay compact even when the runtime is busy.
 
 ---
 
@@ -761,6 +772,10 @@ GoodVibes includes a substantial post-execution and operator-repair stack:
 - `/incident` opens, exports, and captures forensics bundles
 - `Health` and diagnostics surfaces expose repair actions, transport issues, task failure state, and replay hooks
 - the state inspector subsystem tracks transitions, time-travel snapshots, and selector hotspots
+- telemetry exporters can write to local ledgers, console sinks, or OTLP bridges
+- retention and pruning policy keeps checkpoint/snapshot growth bounded
+- idempotency keys prevent duplicate tool execution across replay, reconnect, and retry scenarios
+- operational playbooks describe symptoms, checks, and resolution steps for runtime failure classes
 
 This is backed by:
 
@@ -771,6 +786,16 @@ This is backed by:
 - [src/runtime/telemetry/index.ts](/home/buzzkill/Projects/goodvibes-tui/src/runtime/telemetry/index.ts)
 
 So the product is not just “chat plus tools.” It also includes validation, replay, incident, telemetry, and repair infrastructure.
+
+The adjacent reliability subsystems include:
+
+- [src/runtime/notifications/index.ts](/home/buzzkill/Projects/goodvibes-tui/src/runtime/notifications/index.ts)
+- [src/runtime/perf/index.ts](/home/buzzkill/Projects/goodvibes-tui/src/runtime/perf/index.ts)
+- [src/runtime/retention/index.ts](/home/buzzkill/Projects/goodvibes-tui/src/runtime/retention/index.ts)
+- [src/runtime/idempotency/index.ts](/home/buzzkill/Projects/goodvibes-tui/src/runtime/idempotency/index.ts)
+- [src/runtime/ops/index.ts](/home/buzzkill/Projects/goodvibes-tui/src/runtime/ops/index.ts)
+
+Those pieces cover conversation-noise routing, panel-health/performance budgets, snapshot pruning, duplicate-execution protection, and machine-readable recovery playbooks used by the diagnostics surface.
 
 ---
 

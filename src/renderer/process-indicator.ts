@@ -33,7 +33,7 @@ export function renderProcessIndicator(
 ): Line[] {
   const total = agentCount + toolCount;
   const renderPlainStatus = (text: string, style: { fg: string; bold?: boolean; dim?: boolean }): Line[] => (
-    [UIFactory.stringToLine(` ${text}`, width, style)]
+    [UIFactory.stringToLine(`   ${text}`, width, style)]
   );
 
   // --- Focused state: always render before idle/active branches ---
