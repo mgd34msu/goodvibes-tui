@@ -1281,3 +1281,58 @@ describe('test_find mode', () => {
     expect(mappings[0].exists).toBe(true);
   });
 });
+
+describe('analyze output formatting', () => {
+  test('summary output is materially smaller for dead_code mode', async () => {
+    const detailed = await analyzeTool.execute({
+      mode: 'dead_code',
+      projectRoot: dir,
+      output: { format: 'detailed' },
+    });
+    const summary = await analyzeTool.execute({
+      mode: 'dead_code',
+      projectRoot: dir,
+      output: { format: 'summary' },
+    });
+
+    expect(detailed.success).toBe(true);
+    expect(summary.success).toBe(true);
+    expect((detailed.output ?? '').length).toBeGreaterThan((summary.output ?? '').length);
+
+    const summaryData = JSON.parse(summary.output!) as Record<string, unknown>;
+    expect(summaryData).toHaveProperty('dead_export_count');
+    expect(summaryData).not.toHaveProperty('totalExportsByFile');
+  });
+
+  test('summary output for security mode preserves top findings but omits raw nested payloads', async () => {
+    await writeTempFile(
+      dir,
+      'src/config.ts',
+      "const apiKey = 'sk-aBcDeFgHiJkLmNoPqRsTuVwX';\nconst token = 'my-secret-token-value-here';\nexport { apiKey, token };",
+    );
+
+    const result = await analyze({
+      mode: 'security',
+      securityScope: 'all',
+      projectRoot: dir,
+      output: { format: 'summary' },
+    });
+
+    expect(result).toHaveProperty('secretFindingCount');
+    expect(result).toHaveProperty('topSecretFindings');
+    expect(result).not.toHaveProperty('secrets');
+  });
+
+  test('max_tokens truncates serialized analyze output', async () => {
+    const result = await analyzeTool.execute({
+      mode: 'surface',
+      projectRoot: dir,
+      files: ['src'],
+      output: { format: 'json', max_tokens: 20 },
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.output!.length).toBeLessThanOrEqual(81);
+    expect(result.output!.endsWith('…')).toBe(true);
+  });
+});
