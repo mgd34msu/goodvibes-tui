@@ -21,6 +21,13 @@ import type { StateInput } from './schema.ts';
  */
 const RESERVED_KEYS = new Set(['id', 'started_at', '__proto__', 'constructor', 'prototype']);
 
+function summarizeEntries(entries: Record<string, unknown>): Array<{ key: string; type: string }> {
+  return Object.entries(entries).map(([key, value]) => ({
+    key,
+    type: Array.isArray(value) ? 'array' : value === null ? 'null' : typeof value,
+  }));
+}
+
 /**
  * Sanitize a memory key to prevent path traversal.
  * Only alphanumeric characters, hyphens, and underscores are allowed.
@@ -153,6 +160,7 @@ async function runAnalytics(
   }
 
   const action = input.analyticsAction ?? 'summary';
+  const view = input.view ?? 'summary';
 
   if (action === 'record') {
     const tool = input.analyticsTool;
@@ -185,7 +193,21 @@ async function runAnalytics(
       const records = db.query(filter);
       return {
         success: true,
-        output: JSON.stringify({ mode: 'analytics', action: 'query', count: records.length, records }),
+        output: JSON.stringify({
+          mode: 'analytics',
+          action: 'query',
+          view,
+          count: records.length,
+          records: view === 'full'
+            ? records
+            : records.map((record) => ({
+              tool: record.tool,
+              status: record.status,
+              durationMs: record.duration_ms,
+              tokenCount: record.tokens,
+              timestamp: record.timestamp,
+            })),
+        }),
       };
     } catch (err) {
       return { success: false, error: `query failed: ${err instanceof Error ? err.message : String(err)}` };
@@ -226,8 +248,17 @@ async function runAnalytics(
         output: JSON.stringify({
           mode: 'analytics',
           action: 'dashboard',
+          view,
           summary,
-          recent: recentRecords,
+          recent: view === 'full'
+            ? recentRecords
+            : recentRecords.map((record) => ({
+              tool: record.tool,
+              status: record.status,
+              durationMs: record.duration_ms,
+              tokenCount: record.tokens,
+              timestamp: record.timestamp,
+            })),
         }),
       };
     } catch (err) {
@@ -266,20 +297,25 @@ function runHooks(
 
   if (action === 'list') {
     const entries = dispatcher.listHooks();
+    const view = input.view ?? 'summary';
     return {
       success: true,
       output: JSON.stringify({
         mode: 'hooks',
         action: 'list',
+        view,
         count: entries.length,
-        hooks: entries.map(({ pattern, hook }) => ({
-          pattern,
-          name: hook.name ?? null,
-          type: hook.type,
-          match: hook.match,
-          enabled: hook.enabled !== false,
-          description: hook.description ?? null,
-        })),
+        hooks: entries.map(({ pattern, hook }) => {
+          const summary = {
+            pattern,
+            name: hook.name ?? null,
+            type: hook.type,
+            match: hook.match,
+            enabled: hook.enabled !== false,
+            description: hook.description ?? null,
+          };
+          return view === 'full' ? { ...summary, hook } : summary;
+        }),
       }),
     };
   }
@@ -347,18 +383,26 @@ function runMode(
 
   if (action === 'list') {
     const modes = mm.listModes();
+    const view = input.view ?? 'full';
     return {
       success: true,
       output: JSON.stringify({
         mode: 'mode',
         action: 'list',
+        view,
         count: modes.length,
-        modes: modes.map((m) => ({
-          name: m.name,
-          description: m.description,
-          verbosityDefaults: m.verbosityDefaults,
-          enforcement: m.enforcement,
-        })),
+        modes: modes.map((m) => view === 'full'
+          ? {
+            name: m.name,
+            description: m.description,
+            verbosityDefaults: m.verbosityDefaults,
+            enforcement: m.enforcement,
+          }
+          : {
+            name: m.name,
+            description: m.description,
+            enforcement: m.enforcement,
+          }),
       }),
     };
   }
@@ -419,13 +463,15 @@ async function runList(
   kvState: KVState,
 ): Promise<{ success: boolean; output?: string; error?: string }> {
   const entries = await kvState.list(input.prefix);
+  const view = input.view ?? 'full';
   return {
     success: true,
     output: JSON.stringify({
       mode: 'list',
+      view,
       prefix: input.prefix ?? null,
       count: Object.keys(entries).length,
-      entries,
+      entries: view === 'full' ? entries : summarizeEntries(entries),
     }),
   };
 }
@@ -504,13 +550,14 @@ async function runMemory(
 ): Promise<{ success: boolean; output?: string; error?: string }> {
   const action = input.memoryAction ?? 'list';
   const memoryDir = join(process.cwd(), '.goodvibes', 'memory');
+  const view = action === 'get' ? (input.view ?? 'full') : (input.view ?? 'summary');
 
   if (action === 'list') {
     try {
       if (!existsSync(memoryDir)) {
         return {
           success: true,
-          output: JSON.stringify({ mode: 'memory', action: 'list', keys: [] }),
+          output: JSON.stringify({ mode: 'memory', action: 'list', view, keys: [] }),
         };
       }
       const keys = readdirSync(memoryDir)
@@ -518,7 +565,19 @@ async function runMemory(
         .map(f => f.slice(0, -5)); // strip .json
       return {
         success: true,
-        output: JSON.stringify({ mode: 'memory', action: 'list', keys }),
+        output: JSON.stringify({
+          mode: 'memory',
+          action: 'list',
+          view,
+          keys,
+          entries: view === 'full'
+            ? keys.map((key) => {
+              const filePath = join(memoryDir, `${key}.json`);
+              const raw = readFileSync(filePath, 'utf-8');
+              return { key, bytes: raw.length };
+            })
+            : undefined,
+        }),
       };
     } catch (err) {
       return {
@@ -554,7 +613,16 @@ async function runMemory(
       }
       return {
         success: true,
-        output: JSON.stringify({ mode: 'memory', action: 'get', key: safeKey, value }),
+        output: JSON.stringify(view === 'full'
+          ? { mode: 'memory', action: 'get', view, key: safeKey, value }
+          : {
+            mode: 'memory',
+            action: 'get',
+            view,
+            key: safeKey,
+            type: Array.isArray(value) ? 'array' : value === null ? 'null' : typeof value,
+            bytes: raw.length,
+          }),
       };
     } catch (err) {
       return {

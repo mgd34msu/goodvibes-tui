@@ -7,6 +7,7 @@ export const QUERY_TOOL_SCHEMA: ToolDefinition = {
     type: 'object',
     properties: {
       mode: { type: 'string', enum: ['ask', 'list', 'show', 'answer', 'close'] },
+      view: { type: 'string', enum: ['summary', 'full'] },
       queryId: { type: 'string' },
       prompt: { type: 'string' },
       askedBy: { type: 'string' },
@@ -21,6 +22,7 @@ export const QUERY_TOOL_SCHEMA: ToolDefinition = {
 
 export interface QueryToolInput {
   readonly mode: 'ask' | 'list' | 'show' | 'answer' | 'close';
+  readonly view?: 'summary' | 'full';
   readonly queryId?: string;
   readonly prompt?: string;
   readonly askedBy?: string;

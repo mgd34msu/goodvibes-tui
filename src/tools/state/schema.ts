@@ -29,6 +29,11 @@ export const STATE_TOOL_SCHEMA = {
       type: 'string',
       description: '(mode: list) Optional prefix filter. Returns only keys starting with this string.',
     },
+    view: {
+      type: 'string',
+      enum: ['summary', 'full'],
+      description: '(modes: list, memory, hooks, mode, analytics) Output detail level. Default: summary for inventory/reporting surfaces.',
+    },
     clearKeys: {
       type: 'array',
       items: { type: 'string' },
@@ -160,6 +165,7 @@ export interface StateInput {
 
   // mode: list
   prefix?: string;
+  view?: 'summary' | 'full';
 
   // mode: clear
   clearKeys?: string[];

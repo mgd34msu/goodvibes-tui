@@ -23,6 +23,18 @@ interface TeamFile {
   readonly teams: readonly TeamRecord[];
 }
 
+function summarizeTeam(team: TeamRecord) {
+  return {
+    id: team.id,
+    name: team.name,
+    summary: team.summary,
+    memberCount: team.members.length,
+    lanes: Array.from(new Set(team.members.flatMap((member) => member.lanes))).sort(),
+    createdAt: team.createdAt,
+    updatedAt: team.updatedAt,
+  };
+}
+
 function teamsPath(): string {
   return join(process.cwd(), '.goodvibes', 'tui', 'teams.json');
 }
@@ -59,6 +71,7 @@ export const teamTool: Tool = {
     }
     const input = args as TeamToolInput;
     const teams = loadTeams();
+    const view = input.view ?? 'summary';
 
     if (input.mode === 'create') {
       if (!input.teamId || !input.name || !input.summary) {
@@ -81,17 +94,34 @@ export const teamTool: Tool = {
     }
 
     if (input.mode === 'list') {
-      return { success: true, output: JSON.stringify({ count: teams.length, teams }) };
+      return {
+        success: true,
+        output: JSON.stringify({
+          view,
+          count: teams.length,
+          teams: view === 'full' ? teams : teams.map(summarizeTeam),
+        }),
+      };
     }
 
     const index = teams.findIndex((team) => team.id === input.teamId);
     if (index < 0) {
       return { success: false, error: `Unknown team: ${input.teamId ?? '(missing)'}` };
     }
-    const current = index >= 0 ? teams[index]! : null;
+    const current = teams[index]!;
 
     if (input.mode === 'show') {
-      return { success: true, output: JSON.stringify(current) };
+      return {
+        success: true,
+        output: JSON.stringify(view === 'full' ? current : {
+          ...summarizeTeam(current),
+          members: current.members.map((member) => ({
+            id: member.id,
+            role: member.role,
+            lanes: member.lanes,
+          })),
+        }),
+      };
     }
 
     if (input.mode === 'delete') {

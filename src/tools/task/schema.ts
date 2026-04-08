@@ -5,6 +5,7 @@ export const TASK_TOOL_SCHEMA = {
       type: 'string',
       enum: ['create', 'list', 'show', 'status', 'depend', 'cancel', 'handoff', 'handoffs'],
     },
+    view: { type: 'string', enum: ['summary', 'full'] },
     sessionId: { type: 'string' },
     taskId: { type: 'string' },
     title: { type: 'string' },
@@ -28,6 +29,7 @@ export const TASK_TOOL_SCHEMA = {
 
 export type TaskToolInput = {
   mode: 'create' | 'list' | 'show' | 'status' | 'depend' | 'cancel' | 'handoff' | 'handoffs';
+  view?: 'summary' | 'full';
   sessionId?: string;
   taskId?: string;
   title?: string;

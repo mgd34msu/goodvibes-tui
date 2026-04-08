@@ -5,6 +5,7 @@ export const TEAM_TOOL_SCHEMA = {
       type: 'string',
       enum: ['create', 'list', 'show', 'add-member', 'remove-member', 'set-lanes', 'delete'],
     },
+    view: { type: 'string', enum: ['summary', 'full'] },
     teamId: { type: 'string' },
     name: { type: 'string' },
     summary: { type: 'string' },
@@ -21,6 +22,7 @@ export const TEAM_TOOL_SCHEMA = {
 
 export type TeamToolInput = {
   mode: 'create' | 'list' | 'show' | 'add-member' | 'remove-member' | 'set-lanes' | 'delete';
+  view?: 'summary' | 'full';
   teamId?: string;
   name?: string;
   summary?: string;

@@ -24,6 +24,20 @@ interface WorklistFile {
   readonly worklists: readonly WorklistRecord[];
 }
 
+function summarizeWorklist(record: WorklistRecord) {
+  const openCount = record.items.filter((item) => item.status === 'open').length;
+  const doneCount = record.items.filter((item) => item.status === 'done').length;
+  return {
+    id: record.id,
+    title: record.title,
+    itemCount: record.items.length,
+    openCount,
+    doneCount,
+    createdAt: record.createdAt,
+    updatedAt: record.updatedAt,
+  };
+}
+
 function worklistsPath(): string {
   return join(process.cwd(), '.goodvibes', 'tui', 'worklists.json');
 }
@@ -60,6 +74,7 @@ export const worklistTool: Tool = {
     }
     const input = args as WorklistToolInput;
     const worklists = loadWorklists();
+    const view = input.view ?? 'summary';
 
     if (input.mode === 'create') {
       if (!input.worklistId || !input.title) {
@@ -81,7 +96,14 @@ export const worklistTool: Tool = {
     }
 
     if (input.mode === 'list') {
-      return { success: true, output: JSON.stringify({ count: worklists.length, worklists }) };
+      return {
+        success: true,
+        output: JSON.stringify({
+          view,
+          count: worklists.length,
+          worklists: view === 'full' ? worklists : worklists.map(summarizeWorklist),
+        }),
+      };
     }
 
     const index = worklists.findIndex((entry) => entry.id === input.worklistId);
@@ -91,7 +113,19 @@ export const worklistTool: Tool = {
     const current = worklists[index]!;
 
     if (input.mode === 'show') {
-      return { success: true, output: JSON.stringify(current) };
+      return {
+        success: true,
+        output: JSON.stringify(view === 'full' ? current : {
+          ...summarizeWorklist(current),
+          items: current.items.map((item) => ({
+            id: item.id,
+            text: item.text,
+            status: item.status,
+            owner: item.owner,
+            priority: item.priority,
+          })),
+        }),
+      };
     }
 
     if (input.mode === 'add-item') {

@@ -163,6 +163,11 @@ export const AGENT_TOOL_SCHEMA: ToolDefinition = {
         type: 'string',
         description: 'Agent ID to query, cancel, get, budget, plan, wait, or message (mode: status, cancel, get, budget, plan, wait, message).',
       },
+      detail: {
+        type: 'string',
+        enum: ['summary', 'contract', 'messages', 'full'],
+        description: 'Detail level for inspection/reporting modes. Summary keeps the core execution state; contract adds capability/ownership data; messages adds recent bus traffic; full returns everything.',
+      },
       // mode: wait
       timeoutMs: {
         type: 'number',
@@ -234,6 +239,7 @@ export interface AgentInput {
   }>;
   // status / cancel / get / budget / plan / wait / message
   agentId?: string;
+  detail?: 'summary' | 'contract' | 'messages' | 'full';
   // wait
   timeoutMs?: number;
   // message

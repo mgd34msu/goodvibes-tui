@@ -17,6 +17,22 @@ interface PacketRecord {
   readonly publishedAt?: number;
 }
 
+function summarizePacket(record: PacketRecord) {
+  return {
+    id: record.id,
+    title: record.title,
+    summary: record.summary,
+    goalCount: record.goals.length,
+    constraintCount: record.constraints.length,
+    riskCount: record.risks.length,
+    audience: record.audience,
+    status: record.status,
+    createdAt: record.createdAt,
+    updatedAt: record.updatedAt,
+    publishedAt: record.publishedAt,
+  };
+}
+
 const PACKETS_PATH = join('.goodvibes', 'tui', 'packets.json');
 
 function loadPackets(): PacketRecord[] {
@@ -47,6 +63,7 @@ export const packetTool: Tool = {
     }
     const input = args as unknown as PacketToolInput;
     const records = loadPackets();
+    const view = input.view ?? 'summary';
 
     if (input.mode === 'create') {
       if (!input.packetId || !input.title || !input.summary) {
@@ -70,14 +87,21 @@ export const packetTool: Tool = {
     }
 
     if (input.mode === 'list') {
-      return { success: true, output: JSON.stringify({ count: records.length, briefs: records }) };
+      return {
+        success: true,
+        output: JSON.stringify({
+          view,
+          count: records.length,
+          packets: view === 'full' ? records : records.map(summarizePacket),
+        }),
+      };
     }
 
     const record = records.find((entry) => entry.id === input.packetId);
     if (!record) return { success: false, error: `Unknown packet: ${input.packetId ?? '(missing)'}` };
 
     if (input.mode === 'show') {
-      return { success: true, output: JSON.stringify(record) };
+      return { success: true, output: JSON.stringify(view === 'full' ? record : summarizePacket(record)) };
     }
 
     if (input.mode === 'revise') {

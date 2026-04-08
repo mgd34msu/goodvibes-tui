@@ -245,6 +245,30 @@ describe('progressive loading', () => {
     expect(archetype!.tools).toEqual(['read', 'find']);
     expect(archetype!.isCustom).toBe(true);
   });
+
+  test('list exposes preview/includes while load materializes @ references', () => {
+    const dir = makeTempDir();
+    writeAgentMd(dir, 'shared.md', 'Shared instructions.');
+    writeAgentMd(dir, 'withrefs.md', [
+      '---',
+      'name: withrefs',
+      'description: Uses linked prompt fragments',
+      'tools: [read]',
+      '---',
+      '',
+      'Before include.',
+      '@shared.md',
+      'After include.',
+    ].join('\n'));
+
+    const loader = new ArchetypeLoader(dir);
+    const listed = loader.listArchetypes().find((entry) => entry.name === 'withrefs');
+    expect(listed?.preview).toContain('Before include.');
+    expect(listed?.includes).toEqual(['shared.md']);
+
+    const loaded = loader.loadArchetype('withrefs');
+    expect(loaded?.systemPrompt).toContain('Shared instructions.');
+  });
 });
 
 // ---------------------------------------------------------------------------
