@@ -6,10 +6,14 @@
  * returns results.
  */
 import { describe, test, expect, beforeEach, afterEach } from 'bun:test';
+import { mkdirSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { RuntimeEventBus, createEventEnvelope } from '../../runtime/events/index.ts';
 import { ToolRegistry } from '../../tools/registry.ts';
 import { PermissionManager } from '../../permissions/manager.ts';
-import { configManager } from '../../config/index.ts';
+import { ConfigManager } from '../../config/manager.ts';
+import { _resetConfigManagerForTesting, configManager } from '../../config/index.ts';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -143,18 +147,30 @@ describe('Tool execution pipeline — ToolRegistry', () => {
 
 describe('Tool execution pipeline — permission + registry', () => {
   let savedAutoApprove: boolean;
+  let savedPermissionMode: 'prompt' | 'allow-all' | 'custom';
+  let tmpConfigDir: string;
 
   beforeEach(() => {
-    savedAutoApprove = false;
+    tmpConfigDir = join(tmpdir(), `gv-tool-execution-test-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+    mkdirSync(tmpConfigDir, { recursive: true });
+    ConfigManager.setTestMode(tmpConfigDir);
+    _resetConfigManagerForTesting();
+    savedAutoApprove = (configManager.get('behavior.autoApprove') as boolean | undefined) ?? false;
+    savedPermissionMode = (configManager.get('permissions.mode') as 'prompt' | 'allow-all' | 'custom' | undefined) ?? 'prompt';
     configManager.set('behavior.autoApprove', true);
+    configManager.set('permissions.mode', 'prompt');
   });
 
   afterEach(() => {
     configManager.set('behavior.autoApprove', savedAutoApprove);
+    configManager.set('permissions.mode', savedPermissionMode);
+    _resetConfigManagerForTesting();
+    ConfigManager.setTestMode(undefined);
+    rmSync(tmpConfigDir, { recursive: true, force: true });
   });
 
   test('autoApprove=true: check() always resolves true', async () => {
-    const { bus, pm } = buildStack();
+    const { pm } = buildStack();
     const approved = await pm.check('exec', {});
     expect(approved).toBe(true);
   });
@@ -162,19 +178,17 @@ describe('Tool execution pipeline — permission + registry', () => {
   test('allow-all mode: check() always resolves true', async () => {
     configManager.set('behavior.autoApprove', false);
     configManager.set('permissions.mode', 'allow-all');
-    const { bus, pm } = buildStack();
+    const { pm } = buildStack();
     const approved = await pm.check('exec', {});
-    configManager.set('permissions.mode', 'prompt');
     expect(approved).toBe(true);
   });
 
   test('prompt mode: read tool auto-approved without user input', async () => {
     configManager.set('behavior.autoApprove', false);
     configManager.set('permissions.mode', 'prompt');
-    const { bus, pm } = buildStack();
+    const { pm } = buildStack();
     // 'read' is a read-category tool — auto-approved in prompt mode
     const approved = await pm.check('read', {});
-    configManager.set('permissions.mode', 'prompt');
     expect(approved).toBe(true);
   });
 

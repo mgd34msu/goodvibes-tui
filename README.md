@@ -348,6 +348,147 @@ Per-tool values: `allow`, `prompt`, `deny`.
 
 ---
 
+## Control Rooms, Routing, And Operator Surfaces
+
+GoodVibes is built around the idea that runtime state should be routed to the right place instead of dumped into the transcript.
+
+The current product ships dedicated workspaces for:
+
+- provider accounts and provider health
+- local auth and local service posture
+- settings sync and managed-settings review
+- remote runners, pools, contracts, and artifacts
+- sandbox posture, presets, setup, and recovery
+- MCP posture, trust, reconnect, and repair
+- marketplace, plugins, hooks, orchestration, tasks, intelligence, worktrees, approvals, and system messages
+
+Heavy operational surfaces are summary-first:
+
+- posture
+- current issues
+- next actions
+- then deeper detail
+
+Routing is configurable with:
+
+- `ui.systemMessages`
+- `ui.operationalMessages`
+- `ui.wrfcMessages`
+
+This is how startup discovery, runtime notices, and orchestration chatter can be sent to a panel, the conversation, or both.
+
+---
+
+## Sandbox, Isolation, And QEMU
+
+GoodVibes includes a real sandbox control plane for both evaluation runtimes and MCP isolation.
+
+Isolation controls:
+
+- REPL isolation: `shared-vm` or `per-runtime-vm`
+- MCP isolation: `disabled`, `shared-vm`, `hybrid`, `per-server-vm`
+- host posture on Windows: `native-basic` or `require-wsl`
+- VM backend: `local` or `qemu`
+
+The QEMU path is productized rather than just being a config stub:
+
+- setup bundle generation
+- first-run bootstrap scaffolding
+- `qemu-img` image creation helpers
+- host-side wrapper generation
+- guest-test and wrapper-test validation
+- session-backed command execution
+- guest bundle export / inspect flows
+- setup manifest export / apply flows
+- `attach` and `launch-per-command` execution modes
+
+Key commands:
+
+- `/setup sandbox`
+- `/sandbox review`
+- `/sandbox recommend`
+- `/sandbox doctor`
+- `/sandbox probe`
+- `/sandbox qemu setup <dir>`
+- `/sandbox qemu bootstrap <dir> [size-gb]`
+- `/sandbox qemu create-image <path> [size-gb]`
+- `/sandbox qemu inspect-setup <manifest>`
+- `/sandbox qemu apply-setup <manifest>`
+- `/sandbox session ...`
+- `/sandbox guest-bundle export <path>`
+- `/sandbox guest-bundle inspect <path>`
+
+Typical first-run path:
+
+```sh
+/sandbox qemu bootstrap .goodvibes/tui/sandbox 20
+/sandbox doctor
+/sandbox guest-test eval-js
+```
+
+---
+
+## Remote, Local Services, And Integration Helpers
+
+### Remote runtime
+
+The remote runtime tracks more than just a live connection:
+
+- runner pools
+- runner contracts
+- remote review artifacts
+- recovery posture
+- capability inspection
+- rerun-local-from-artifact flows
+
+Key commands:
+
+- `/remote`
+- `/remote show <runner>`
+- `/remote capabilities [runner]`
+- `/remote recover [runner]`
+- `/remote dispatch ...`
+- `/remote dispatch-pool <pool> ...`
+- `/remote export <runner>`
+- `/remote artifact show <id>`
+- `/remote import <path>`
+
+### Local daemon and HTTP listener
+
+Local service surfaces are opt-in:
+
+- `danger.daemon`
+- `danger.httpListener`
+
+They are protected by local auth, which now includes:
+
+- bootstrap credentials written to the bootstrap file
+- local user management
+- password rotation
+- session revocation
+- review surfaces in both commands and panels
+
+Key commands:
+
+- `/auth local review`
+- `/auth local add-user <username> <password> [roles]`
+- `/auth local rotate-password <username> <password>`
+- `/auth local revoke-session <token>`
+- `/auth local clear-bootstrap-file`
+
+### Integration helpers
+
+GoodVibes also exposes integration-helper APIs for future clients and helpers:
+
+- another GoodVibes instance
+- a future web frontend
+- setup/auth helpers
+- operational integrations that need session, approval, account, or health posture
+
+This layer is meant to expose control/state APIs, not a UI protocol.
+
+---
+
 ## Tools
 
 goodvibes-tui ships 12 built-in tools that go well beyond the read/write/exec primitives found in Claude Code, Gemini CLI, and Codex. Each tool is designed for agentic workloads: batch operations, token-efficient extraction, structural code understanding, and composable automation — not just wrapping shell commands.
@@ -492,7 +633,7 @@ Discover and introspect skills, agents, and tools.
 | `/effort [level]` | `/e` | Show or set reasoning effort level |
 | `/config [key] [value]` | `/cfg` | Show, set, or reset config values. Subcommands: `profile`, `diff`, `reset` |
 | `/debug` | — | Toggle debug mode |
-| `/lines` | — | Toggle line numbers on/off |
+| `/lines [all\|code\|off]` | — | Cycle or set line-number mode |
 | `/expand [type]` | — | Expand blocks by type (all/thinking/tool/code) |
 | `/collapse [type]` | — | Collapse blocks by type |
 | `/bookmarks` | `/bm` | List bookmarked blocks |
@@ -515,6 +656,8 @@ Discover and introspect skills, agents, and tools.
 | `/permissions` | `/perms` | Show or set permission mode and per-tool settings |
 | `/secrets` | — | Manage encrypted API key secrets (set/get/list/delete) |
 | `/services` | `/svc` | Manage API service configurations |
+| `/accounts [action]` | — | Review provider-account routes, auth posture, and repair actions |
+| `/auth [action]` | — | Review auth posture and manage local service auth users/sessions |
 | `/memory [action]` | — | Session memory management: `list`, `add <text>`, `remove <id>` |
 | `/context` | `/ctx` | Inspect context window usage (token breakdown per message) |
 | `/next-error` | `/ne` | Jump to the next error message in the conversation |
@@ -527,11 +670,18 @@ Discover and introspect skills, agents, and tools.
 | `/plan [task]` | — | Manage execution plans: create, list, or `show <id>` |
 | `/panel [action]` | `/panels` | Panel management: open, close, list, toggle, move, focus, split, width, height |
 | `/plugin [action]` | — | Manage plugins (enable/disable/reload/list) |
+| `/marketplace [action]` | — | Browse curated plugin, skill, hook-pack, and policy-pack surfaces |
 | `/branch [name]` | `/br` | List conversation branches or switch to one |
 | `/fork [name]` | `/branch-save` | Save a named snapshot of the current conversation |
 | `/merge <name>` | — | Append messages from a branch after the fork point |
 | `/agents` | — | List active and completed agents |
 | `/wrfc` | — | Show WRFC chain status |
+| `/health [action]` | — | Unified runtime health review and repair entry point |
+| `/guidance [action]` | — | Contextual operational guidance without cluttering the conversation |
+| `/remote [action]` | — | Remote runner, pool, contract, and artifact control room |
+| `/sandbox [action]` | — | Isolation presets, doctor/probe, sessions, and QEMU setup flows |
+| `/setup [action]` | — | First-run readiness, services, sandbox, transfer bundles, and deep links |
+| `/worktree [action]` | — | Inspect orchestrator-owned worktrees and recovery posture |
 | `/commands` | `/cmds` | Browse all commands in a scrollable list |
 | `/shortcuts` | `/keys`, `/keybinds` | Show keyboard shortcuts reference |
 | `/keybindings` | `/kb` | List current keyboard bindings and their config file path |
@@ -761,6 +911,20 @@ MCP tools appear in the tool registry as `mcp:<server-name>:<tool-name>`. Tool s
 
 MCP tool calls respect the `permissions.tools.mcp` setting (default: `prompt`).
 
+Current MCP product loops also include:
+
+- trust posture and quarantine review
+- auth-review and reconnect flows
+- sandbox-backed execution when isolation is configured
+- routing into dedicated MCP and Health workspaces instead of transcript spam
+
+Useful commands:
+
+- `/mcp`
+- `/mcp review`
+- `/mcp auth-review`
+- `/mcp repair`
+
 ---
 
 ## Plugin System
@@ -831,20 +995,20 @@ src/
 ├── mcp/
 │   ├── client.ts        — JSON-RPC 2.0 stdio client
 │   ├── config.ts        — .goodvibes/mcp.json reader
-│   └── registry.ts      — McpRegistry: connect, list tools, call tools
-├── renderer/            — Cell-based TUI: buffer, compositor, overlays, modals
+│   └── registry.ts      — McpRegistry: connect, isolate, list tools, call tools
+├── renderer/            — Cell-based TUI: glyph primitives, layout helpers, overlays, modals
 ├── input/
-│   ├── commands.ts      — All slash command registrations
-│   └── handler.ts       — Raw stdin input processing
+│   ├── commands.ts      — Slash-command registrations
+│   └── handler.ts       — Raw stdin input processing and focus routing
 ├── config/
 │   ├── schema.ts        — GoodVibesConfig type, ConfigKey, defaults
 │   ├── helper-model.ts  — Helper model router + singleton (HelperModel, HelperRouter)
 │   ├── index.ts         — Config loader and live-edit manager
-│   └── secrets.ts       — AES-256-GCM encrypted secret storage
+│   └── secrets.ts       — hierarchy-aware secure/plaintext secret storage
 ├── state/               — KV store, project index, file cache, mode manager, telemetry
 ├── permissions/         — Permission manager with per-tool enforcement
-├── security/            — Spawn tokens (HMAC + TTL)
-├── daemon/              — HTTP daemon server and webhook listener
+├── security/            — Spawn tokens and local user auth
+├── daemon/              — Local daemon server and HTTP listener
 ├── git/                 — GitService wrapping simple-git
 ├── acp/                 — Agent Client Protocol (subagent child processes)
 ├── discovery/           — Local LLM scanner + MCP server auto-discovery
@@ -863,8 +1027,12 @@ src/
 │   ├── diagnostics/     — Diagnostics providers and inspector panels
 │   ├── forensics/       — Failure classification and forensic bundles
 │   ├── eval/            — Evaluation harness and scorecard logic
-│   ├── remote/          — ReconnectEngine, DurableIdentityManager, RemoteStateSyncer
-│   ├── compaction/      — 5 compaction strategies and resume repair pipeline
+│   ├── remote/          — Supervisor, recovery, contracts, artifacts, and session control
+│   ├── sandbox/         — backend planning, session registry, QEMU provisioning, guest bundles
+│   ├── provider-accounts/ — account posture, route selection, auth freshness, usage windows
+│   ├── auth/            — shared OAuth core and auth inspection
+│   ├── settings/        — settings control plane, sync, managed staging, rollback
+│   ├── compaction/      — compaction strategies and resume repair pipeline
 │   └── bootstrap.ts     — Composition root: typed initialization with dependency ordering
 ├── panels/              — panel workspaces, control rooms, and panel-management UI
 ├── integrations/        — Discord, Slack, GitHub webhook integrations
@@ -908,7 +1076,7 @@ bun run dev
 bun test
 ```
 
-1,200+ tests across contract, security, release gate, chaos, and UX anti-regression suites. Performance budget gate runs as part of CI — the build fails if any of the 5 perf budgets (store update latency, event dispatch latency, tool execution overhead, compaction duration, startup time) are exceeded.
+6,600+ tests across contract, security, release gate, runtime, renderer, panel, integration, and UX anti-regression suites. Performance budget gate runs as part of CI — the build fails if any of the 5 perf budgets (store update latency, event dispatch latency, tool execution overhead, compaction duration, startup time) are exceeded.
 
 ### Build standalone binary
 
@@ -923,6 +1091,7 @@ bun run build
 - Tool parameter schemas live in `src/tools/<name>/schema.ts`
 - Tests mirror the source tree under `src/test/`
 - Runtime data (sessions, conversations, hooks, memory) lives in `.goodvibes/` in the working directory
+- TUI-specific settings, secrets, auth state, worktree state, and caches live under `.goodvibes/tui/`
 - Agent archetypes go in `.goodvibes/agents/*.md`
 - MCP server config goes in `.goodvibes/mcp.json`
 - Hook config goes in `.goodvibes/hooks.json` (or the file set in `tools.hooksFile`)

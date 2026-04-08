@@ -6,11 +6,12 @@ All notable changes to GoodVibes TUI.
 
 ## [0.15.1] — 2026-04-08
 
-### UI Systems And Renderer Hardening
+### UI Systems, Routing, And Renderer Hardening
 
 - Added an explicit shared Unicode glyph registry for renderer primitives, including canonical frame, surface, navigation, status, and meter glyphs
-- Added shared low-level text/layout helpers for hanging-indent wrapping and label/detail column fitting
+- Added shared low-level text/layout helpers for hanging-indent wrapping and label/detail column fitting, with width-band overlay behavior and more deterministic modal geometry
 - Restored and locked the intended Unicode-heavy visual language across shared shell, conversation, modal, process, and panel renderer paths
+- Restored half-height message surfaces, block cursors, modal/search glyphs, and canonical status/selection markers after ASCII/raw-character regressions
 - Added a UI release-gate test to lock canonical glyphs, routing defaults, panel focus behavior, transcript-event navigation, and overlay width-band behavior
 
 ### Conversation, Routing, And Navigation
@@ -19,26 +20,47 @@ All notable changes to GoodVibes TUI.
 - Improved conversation rendering around event rows, collapsed fragments, footer posture, and line-number behavior
 - Added routing defaults so non-conversational system and operational chatter can land in dedicated workspaces instead of always polluting the main transcript
 - Added line-number modes `all`, `code`, and `off`, with clipboard stripping so copied content does not carry visual gutters
+- Fixed stale active-plan leakage so ordinary turns stop inheriting old plans across sessions
+- Reworked startup/system-message routing so discovery and other low-priority runtime chatter has a proper panel destination
 
 ### Panels, Modals, And UI Focus Behavior
 
 - Reworked panel open/focus behavior so shell-driven panel opens show and focus the panel workspace immediately
 - Added deterministic modal focus restoration back to prompt, panel, or indicator regions after closing the last modal
+- Added explicit modal search/list focus behavior so typable hotkeys remain available while list/body focus owns input
 - Added shared overlay width bands and stable overlay metrics for narrow, medium, and wide terminal classes
 - Improved heavy operational panels to lead with posture, issues, next actions, and detail sections instead of dumping raw inventories first
 - Expanded the `System Messages` panel so startup and runtime operational messages have a proper panel destination and routing posture summary
 
-### Control Rooms, Auth, And Operational Surfaces
+### Settings Control Plane, Accounts, And Auth
 
+- Deepened the settings control plane with effective-source review, managed staging/review, conflict reporting, failure reporting, and rollback history surfaces
+- Added commands and panel support for staged managed changes, settings conflicts, sync failures, rollback history, and review-first application of managed settings
 - Added richer provider-account posture surfacing, including active route, preferred route, freshness, fallback risk, route records, usage-window hints, and recommended actions
-- Added local-auth management surfaces and command/runtime integration for reviewing local users, bootstrap posture, and auth-session state
-- Expanded control-room presentation across tasks, intelligence, MCP, orchestration, remote, sandbox, approval, subscription, settings-sync, and related operator surfaces
+- Added auth inspection surfaces for provider auth/subscription posture and route visibility
+- Added local-auth management surfaces and command/runtime integration for reviewing local users, bootstrap posture, auth-store state, password rotation, and auth-session state
+- Fixed the shared daemon/listener auth bootstrap flow so both services use one shared local auth manager instead of generating conflicting bootstrap passwords
 
-### Verification, Release, And Documentation
+### Sandbox, Remote, And Session Continuity
 
-- Re-ran full typecheck and full test suite for the release state
+- Productized the sandbox control plane around secure presets, doctor/probe flows, session-backed execution, guest bundle import/export, and QEMU setup/bootstrap/apply/inspect flows
+- Added QEMU setup helpers including wrapper scaffolding, image creation support, guest bootstrap manifests, session recovery, and guest validation commands
+- Deepened remote operator flows with capabilities, recovery, export/import of review artifacts, pool-aware dispatch, and control-room presentation
+- Expanded session continuity with return-context metadata for tasks, approvals, remote contracts, worktrees, and open panel state
+
+### Tasking, Intelligence, Health, And Guidance
+
+- Expanded task/archetype productization with validation/review flows, richer metadata, and stronger task-panel surfacing
+- Improved intelligence entry points with diagnostics, repair commands, and more explicit readiness/recovery presentation
+- Continued deepening Health as the operator repair workspace across providers, auth, local services, remote, sandbox, and settings posture
+- Added contextual guidance and session-maintenance posture tied to Health and token/return-context workflows
+
+### Documentation, Verification, And Release
+
+- Substantially rewrote the README to cover the current renderer architecture, operator control rooms, routing model, sandbox/QEMU flows, local auth, remote/runtime surfaces, line-number modes, return-context settings, guidance modes, and secret-storage policy
+- Updated slash-command and architecture documentation to match the current product shape rather than the older pre-roadmap surfaces
 - Added regression coverage for modal focus restoration, UI primitives, shell panel openers, selection-copy behavior, transcript event navigation, and updated panel/control-room expectations
-- Rewrote the README overview and configuration documentation to reflect the current renderer architecture, routing behavior, panel/control-room model, line-number modes, return-context settings, guidance modes, and secret-storage policy
+- Re-ran full typecheck and full test suite for the release state
 
 ### Verification
 
