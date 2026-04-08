@@ -1493,3 +1493,40 @@ describe('inspect — error_boundary mode', () => {
     expect(requireData<ErrorBoundaryInspectResult>(r).hasErrorBoundary).toBe(false);
   });
 });
+
+describe('inspect — output formatting', () => {
+  test('summary output is semantically smaller than detailed for project mode', async () => {
+    write(tmpDir, 'package.json', JSON.stringify({
+      name: 'format-project',
+      version: '1.0.0',
+      scripts: { test: 'bun test', build: 'bun build src/main.ts' },
+      dependencies: { react: '^19.0.0', next: '^16.0.0' },
+      devDependencies: { typescript: '^5.0.0', vitest: '^3.0.0' },
+    }));
+    write(tmpDir, 'src/main.ts', 'export const main = true;');
+
+    const detailed = await exec(tool, { mode: 'project', projectRoot: tmpDir, output: { format: 'detailed' } });
+    const summary = await exec(tool, { mode: 'project', projectRoot: tmpDir, output: { format: 'summary' } });
+
+    const summaryData = requireData<Record<string, unknown>>(summary);
+    expect((detailed.output ?? '').length).toBeGreaterThan((summary.output ?? '').length);
+    expect(summaryData).toHaveProperty('dependencyCount');
+    expect(summaryData).not.toHaveProperty('scripts');
+  });
+
+  test('summary output reduces api route detail', async () => {
+    write(tmpDir, 'package.json', JSON.stringify({ dependencies: { express: '^5.0.0' } }));
+    write(tmpDir, 'src/server.ts', [
+      'app.get("/health", (_req, res) => res.json({ ok: true }));',
+      'app.post("/items", (_req, res) => res.json({ ok: true }));',
+    ].join('\n'));
+
+    const summary = await exec(tool, { mode: 'api', projectRoot: tmpDir, framework: 'express', output: { format: 'summary' } });
+    const data = requireData<Record<string, unknown>>(summary);
+    const routes = data.routes as Array<Record<string, unknown>>;
+
+    expect(data.count).toBe(2);
+    expect(routes[0]).toHaveProperty('path');
+    expect(routes[0]).not.toHaveProperty('line');
+  });
+});
