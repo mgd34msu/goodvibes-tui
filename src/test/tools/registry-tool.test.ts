@@ -66,6 +66,12 @@ type ContentModeOutput = {
     description?: string;
   };
 };
+type PreviewModeOutput = {
+  preview: string;
+  includes: string[];
+  dependencies: string[];
+  sections: string[];
+};
 
 // ---------------------------------------------------------------------------
 // Fixture setup
@@ -266,9 +272,15 @@ describe('dependencies mode', () => {
 
 describe('content mode', () => {
   test('returns full content and metadata for skill file', async () => {
+    writeFileSync(join(tmpDir, '.goodvibes', 'skills', 'snippet.md'), 'Included snippet body.', 'utf-8');
+    writeFileSync(
+      join(tmpDir, '.goodvibes', 'skills', 'code-review.md'),
+      '---\nname: code-review\ndescription: Automated code review workflow\n---\n\nBody content here.\n@snippet.md\n',
+    );
     const filePath = join(tmpDir, '.goodvibes', 'skills', 'code-review.md');
     const res = await run<ContentModeOutput>(tool, { mode: 'content', path: filePath });
     expect(res.parsed.content).toContain('Body content here');
+    expect(res.parsed.content).toContain('Included snippet body.');
     expect(res.parsed.metadata.name).toBe('code-review');
     expect(res.parsed.metadata.description).toBe('Automated code review workflow');
   });
@@ -290,6 +302,16 @@ describe('content mode', () => {
     const res = await tool.execute({ mode: 'content' });
     expect(res.success).toBe(false);
     expect(res.error).toContain('path');
+  });
+});
+
+describe('preview mode', () => {
+  test('returns preview metadata without full body materialization', async () => {
+    const filePath = join(tmpDir, '.goodvibes', 'skills', 'test-driven.md');
+    const res = await run<PreviewModeOutput>(tool, { mode: 'preview', path: filePath });
+    expect(res.parsed.preview).toContain('Body here.');
+    expect(res.parsed.includes).toContain('some-include');
+    expect(res.parsed.dependencies).toContain('code-review');
   });
 });
 

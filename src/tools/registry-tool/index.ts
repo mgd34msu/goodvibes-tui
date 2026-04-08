@@ -3,6 +3,14 @@ import { join, resolve, isAbsolute } from 'node:path';
 import { homedir } from 'node:os';
 import Fuse from 'fuse.js';
 import { logger } from '../../utils/logger.ts';
+import {
+  collectMarkdownReferences,
+  extractMarkdownPreview,
+  normalizeFrontmatterList,
+  parseMarkdownFrontmatter,
+  readMarkdownDisclosure,
+  materializeMarkdownBody,
+} from '../../utils/markdown-disclosure.ts';
 import type { Tool, ToolDefinition } from '../../types/tools.ts';
 import type { ToolRegistry } from '../registry.ts';
 import { REGISTRY_TOOL_SCHEMA } from './schema.ts';
@@ -32,6 +40,10 @@ interface RegistryMatch {
   type: 'skill' | 'agent' | 'tool';
   description: string;
   path: string;
+  preview?: string;
+  dependencies?: string[];
+  includes?: string[];
+  sections?: string[];
 }
 
 function scanDirectory(
@@ -67,10 +79,18 @@ function scanDirectoryAll(
       } catch {
         continue;
       }
-      const frontmatter = parseFrontmatter(content);
-      const name = frontmatter['name'] ?? entry.replace(/\.md$/, '');
-      const description = frontmatter['description'] ?? '';
-      results.push({ name, type: itemType, description, path: filePath });
+      const { metadata: frontmatter, body } = parseMarkdownFrontmatter(content);
+      const name = typeof frontmatter['name'] === 'string' ? frontmatter['name'] : entry.replace(/\.md$/, '');
+      const description = typeof frontmatter['description'] === 'string' ? frontmatter['description'] : '';
+      results.push({
+        name,
+        type: itemType,
+        description,
+        path: filePath,
+        preview: extractMarkdownPreview(body),
+        dependencies: normalizeFrontmatterList(frontmatter['depends_on']),
+        includes: collectMarkdownReferences(body),
+      });
       continue;
     }
 
@@ -84,10 +104,18 @@ function scanDirectoryAll(
       } catch {
         continue;
       }
-      const frontmatter = parseFrontmatter(content);
-      const name = frontmatter['name'] ?? entry;
-      const description = frontmatter['description'] ?? '';
-      results.push({ name, type: itemType, description, path: markerPath });
+      const { metadata: frontmatter, body } = parseMarkdownFrontmatter(content);
+      const name = typeof frontmatter['name'] === 'string' ? frontmatter['name'] : entry;
+      const description = typeof frontmatter['description'] === 'string' ? frontmatter['description'] : '';
+      results.push({
+        name,
+        type: itemType,
+        description,
+        path: markerPath,
+        preview: extractMarkdownPreview(body),
+        dependencies: normalizeFrontmatterList(frontmatter['depends_on']),
+        includes: collectMarkdownReferences(body),
+      });
     }
   }
   return results;
@@ -167,6 +195,7 @@ export function createRegistryTool(toolRegistry: ToolRegistry): Tool {
         case 'search':       return runSearch(input, toolRegistry);
         case 'recommend':    return runRecommend(input, toolRegistry);
         case 'dependencies': return runDependencies(input);
+        case 'preview':      return runPreview(input);
         case 'content':      return runContent(input);
         default: {
           return { success: false, error: `Unknown mode: ${String(mode)}` };
@@ -356,22 +385,11 @@ function runDependencies(
     });
   }
 
-  const frontmatter = parseFrontmatter(content);
+  const { metadata: frontmatter, body } = parseMarkdownFrontmatter(content);
 
   // Parse depends_on: can be a comma-separated string or single name
-  const dependsOnRaw = frontmatter['depends_on'] ?? '';
-  const dependencies = dependsOnRaw
-    ? dependsOnRaw.split(',').map((s) => s.trim()).filter(Boolean)
-    : [];
-
-  // Also check for @ include directives in the body (strip frontmatter first)
-  const body = content.replace(/^---\n[\s\S]*?\n---\n?/, '');
-  const includeRegex = /^@([\w/-]+)/gm;
-  const includes: string[] = [];
-  let includeMatch: RegExpExecArray | null;
-  while ((includeMatch = includeRegex.exec(body)) !== null) {
-    includes.push(includeMatch[1]);
-  }
+  const dependencies = normalizeFrontmatterList(frontmatter['depends_on']);
+  const includes = collectMarkdownReferences(body);
 
   return Promise.resolve({
     success: true,
@@ -385,54 +403,78 @@ function runDependencies(
   });
 }
 
-function runContent(
+function runPreview(
   input: RegistryInput,
 ): Promise<{ success: boolean; output?: string; error?: string }> {
-  const filePath = input.path;
-  if (!filePath) {
-    return Promise.resolve({
-      success: false,
-      error: 'mode "content" requires "path"',
-    });
-  }
+  const resolvedPath = resolveRegistryPath(input.path);
+  if (!resolvedPath.ok) return Promise.resolve({ success: false, error: resolvedPath.error });
 
-  const resolvedPath = isAbsolute(filePath)
-    ? filePath
-    : resolve(process.cwd(), filePath);
-
-  if (!resolvedPath.includes('.goodvibes/')) {
-    return Promise.resolve({
-      success: false,
-      error: 'content mode can only read files within .goodvibes/ directories',
-    });
-  }
-
-  if (!existsSync(resolvedPath)) {
-    return Promise.resolve({
-      success: false,
-      error: `File not found: ${resolvedPath}`,
-    });
-  }
-
-  let content: string;
   try {
-    content = readFileSync(resolvedPath, 'utf-8');
+    const disclosure = readMarkdownDisclosure(resolvedPath.path);
+    return Promise.resolve({
+      success: true,
+      output: JSON.stringify({
+        mode: 'preview',
+        path: disclosure.path,
+        metadata: disclosure.metadata,
+        preview: disclosure.preview,
+        includes: disclosure.includes,
+        sections: disclosure.sections,
+        dependencies: normalizeFrontmatterList(disclosure.metadata['depends_on']),
+      }),
+    });
   } catch (err) {
     return Promise.resolve({
       success: false,
-      error: `Failed to read file: ${err instanceof Error ? err.message : String(err)}`,
+      error: `Failed to preview file: ${err instanceof Error ? err.message : String(err)}`,
     });
   }
+}
 
-  const frontmatter = parseFrontmatter(content);
+function runContent(
+  input: RegistryInput,
+): Promise<{ success: boolean; output?: string; error?: string }> {
+  const resolvedPath = resolveRegistryPath(input.path);
+  if (!resolvedPath.ok) return Promise.resolve({ success: false, error: resolvedPath.error });
 
   return Promise.resolve({
     success: true,
     output: JSON.stringify({
       mode: 'content',
-      path: resolvedPath,
-      metadata: frontmatter,
-      content,
+      path: resolvedPath.path,
+      metadata: readMarkdownDisclosure(resolvedPath.path).metadata,
+      content: materializeMarkdownBody(resolvedPath.path),
     }),
   });
+}
+
+function resolveRegistryPath(path: string | undefined):
+  | { ok: true; path: string }
+  | { ok: false; error: string } {
+  if (!path) {
+    return {
+      ok: false,
+      error: 'mode requires "path"',
+    };
+  }
+
+  const resolvedPath = isAbsolute(path)
+    ? path
+    : resolve(process.cwd(), path);
+
+  if (!resolvedPath.includes('.goodvibes/')) {
+    return {
+      ok: false,
+      error: 'mode can only read files within .goodvibes/ directories',
+    };
+  }
+
+  if (!existsSync(resolvedPath)) {
+    return {
+      ok: false,
+      error: `File not found: ${resolvedPath}`,
+    };
+  }
+
+  return { ok: true, path: resolvedPath };
 }

@@ -6,12 +6,13 @@ export const REGISTRY_TOOL_SCHEMA = {
   properties: {
     mode: {
       type: 'string',
-      enum: ['search', 'recommend', 'dependencies', 'content'],
+      enum: ['search', 'recommend', 'dependencies', 'preview', 'content'],
       description:
         'Operation mode: search finds skills/agents/tools by query;'
         + ' recommend lists items sorted by relevance to a task;'
         + ' dependencies reads a skill\'s depends_on;'
-        + ' content returns the full markdown file and parsed metadata.'
+        + ' preview returns metadata, references, and preview text without materializing linked content;'
+        + ' content returns the materialized markdown body and parsed metadata.'
         + ' Discovery: use mode=search with no query to list all available items;'
         + ' use mode=search type=skills to list skills, type=agents for agents, type=tools for tools.',
     },
@@ -39,14 +40,14 @@ export const REGISTRY_TOOL_SCHEMA = {
     },
     path: {
       type: 'string',
-      description: '(mode: content) Absolute or relative path to a skill/agent markdown file.',
+      description: '(mode: preview/content) Absolute or relative path to a skill/agent markdown file.',
     },
   },
   required: ['mode'],
 } as const;
 
 /** Valid operation modes for the registry tool. */
-export type RegistryMode = 'search' | 'recommend' | 'dependencies' | 'content';
+export type RegistryMode = 'search' | 'recommend' | 'dependencies' | 'preview' | 'content';
 
 /** Full input shape for the registry tool. */
 export interface RegistryInput {
@@ -63,6 +64,6 @@ export interface RegistryInput {
   // mode: dependencies
   skillName?: string;
 
-  // mode: content
+  // mode: preview/content
   path?: string;
 }

@@ -609,6 +609,24 @@ describe('get mode', () => {
     expect(messages.some((m) => m.content === 'Hello agent!')).toBe(true);
   });
 
+  test('get supports targeted detail views', async () => {
+    const spawned = await runAgent({ mode: 'spawn', task: 'Targeted detail', template: 'engineer' });
+    const agentId = spawned.agentId as string;
+    await runAgent({ mode: 'message', agentId, message: 'Contract only' });
+
+    const summary = await runAgent({ mode: 'get', agentId, detail: 'summary' });
+    expect(summary.tools).toBeUndefined();
+    expect(summary.recentMessages).toBeUndefined();
+
+    const contract = await runAgent({ mode: 'get', agentId, detail: 'contract' });
+    expect(Array.isArray(contract.tools)).toBe(true);
+    expect(contract.recentMessages).toBeUndefined();
+
+    const messages = await runAgent({ mode: 'get', agentId, detail: 'messages' });
+    expect(messages.tools).toBeUndefined();
+    expect(Array.isArray(messages.recentMessages)).toBe(true);
+  });
+
   test('get returns error for unknown agent', async () => {
     const result = await runAgentMayFail({ mode: 'get', agentId: 'agent-unknown99' });
     expect(result.success).toBe(false);

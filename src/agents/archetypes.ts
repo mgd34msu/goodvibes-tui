@@ -1,6 +1,12 @@
 import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { logger } from '../utils/logger.ts';
+import {
+  collectMarkdownReferences,
+  extractMarkdownPreview,
+  extractMarkdownSections,
+  materializeMarkdownBody,
+} from '../utils/markdown-disclosure.ts';
 
 // ---------------------------------------------------------------------------
 // AgentArchetype type
@@ -29,6 +35,12 @@ export interface AgentArchetype {
   sourcePath?: string;
   /** Validation or schema issues discovered while loading. */
   validationIssues?: readonly string[];
+  /** Brief preview of the archetype body. */
+  preview?: string;
+  /** Lazy @ references discovered in the body. */
+  includes?: readonly string[];
+  /** Markdown headings discovered in the body. */
+  sections?: readonly string[];
 }
 
 // ---------------------------------------------------------------------------
@@ -282,6 +294,9 @@ export class ArchetypeLoader {
         } else {
           // Otherwise, the markdown body is the system prompt
           this.bodyCache.set(name, parsed.body);
+          archetype.preview = extractMarkdownPreview(parsed.body);
+          archetype.includes = collectMarkdownReferences(parsed.body);
+          archetype.sections = extractMarkdownSections(parsed.body);
         }
 
         archetype.validationIssues = validateArchetype(archetype);
@@ -310,7 +325,10 @@ export class ArchetypeLoader {
 
     // Lazy-load body as system prompt if not yet resolved
     if (!archetype.systemPrompt && this.bodyCache.has(name)) {
-      archetype.systemPrompt = this.bodyCache.get(name);
+      const body = this.bodyCache.get(name)!;
+      archetype.systemPrompt = archetype.sourcePath
+        ? materializeMarkdownBody(archetype.sourcePath, body)
+        : body;
       this.bodyCache.delete(name);
     }
 

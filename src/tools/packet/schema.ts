@@ -7,6 +7,7 @@ export const PACKET_TOOL_SCHEMA: ToolDefinition = {
     type: 'object',
     properties: {
       mode: { type: 'string', enum: ['create', 'list', 'show', 'revise', 'publish'] },
+      view: { type: 'string', enum: ['summary', 'full'] },
       packetId: { type: 'string' },
       title: { type: 'string' },
       summary: { type: 'string' },
@@ -22,6 +23,7 @@ export const PACKET_TOOL_SCHEMA: ToolDefinition = {
 
 export interface PacketToolInput {
   readonly mode: 'create' | 'list' | 'show' | 'revise' | 'publish';
+  readonly view?: 'summary' | 'full';
   readonly packetId?: string;
   readonly title?: string;
   readonly summary?: string;

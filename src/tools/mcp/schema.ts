@@ -10,6 +10,10 @@ export const MCP_TOOL_SCHEMA: ToolDefinition = {
         type: 'string',
         enum: ['servers', 'tools', 'schema', 'resources', 'security', 'auth', 'approve-quarantine', 'set-trust', 'set-role'],
       },
+      view: {
+        type: 'string',
+        enum: ['descriptor', 'preview', 'full'],
+      },
       qualifiedName: { type: 'string' },
       serverName: { type: 'string' },
       operatorId: { type: 'string' },
@@ -29,6 +33,7 @@ export const MCP_TOOL_SCHEMA: ToolDefinition = {
 
 export interface McpToolInput {
   readonly mode: 'servers' | 'tools' | 'schema' | 'resources' | 'security' | 'auth' | 'approve-quarantine' | 'set-trust' | 'set-role';
+  readonly view?: 'descriptor' | 'preview' | 'full';
   readonly qualifiedName?: string;
   readonly serverName?: string;
   readonly operatorId?: string;

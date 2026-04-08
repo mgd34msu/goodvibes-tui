@@ -2,6 +2,38 @@ import type { Tool } from '../../types/tools.ts';
 import { mcpRegistry } from '../../mcp/registry.ts';
 import { MCP_TOOL_SCHEMA, type McpToolInput } from './schema.ts';
 
+function summarizeServer(server: ReturnType<typeof mcpRegistry.listServerSecurity>[number]) {
+  return {
+    name: server.name,
+    connected: server.connected,
+    role: server.role,
+    trustMode: server.trustMode,
+    schemaFreshness: server.schemaFreshness,
+    quarantined: server.schemaFreshness === 'quarantined',
+  };
+}
+
+function previewServer(server: ReturnType<typeof mcpRegistry.listServerSecurity>[number]) {
+  return {
+    ...summarizeServer(server),
+    allowedPathCount: server.allowedPaths.length,
+    allowedHostCount: server.allowedHosts.length,
+    quarantineReason: server.quarantineReason,
+    quarantineDetail: server.quarantineDetail,
+    quarantineApprovedBy: server.quarantineApprovedBy,
+  };
+}
+
+function summarizeDecision(decision: ReturnType<typeof mcpRegistry.listRecentSecurityDecisions>[number]) {
+  return {
+    serverName: decision.serverName,
+    toolName: decision.toolName,
+    verdict: decision.verdict,
+    reason: decision.reason,
+    evaluatedAt: decision.evaluatedAt,
+  };
+}
+
 export const mcpTool: Tool = {
   definition: {
     name: 'mcp',
@@ -16,14 +48,33 @@ export const mcpTool: Tool = {
       return { success: false, error: 'Invalid args: mode is required.' };
     }
     const input = args as unknown as McpToolInput;
+    const view = input.view ?? 'descriptor';
 
     if (input.mode === 'servers') {
-      return { success: true, output: JSON.stringify({ servers: mcpRegistry.listServers() }) };
+      const security = mcpRegistry.listServerSecurity();
+      const filtered = input.serverName
+        ? security.filter((server) => server.name === input.serverName)
+        : security;
+      const payload = filtered.map((server) => {
+        if (view === 'full') return server;
+        if (view === 'preview') return previewServer(server);
+        return summarizeServer(server);
+      });
+      return { success: true, output: JSON.stringify({ view, count: payload.length, servers: payload }) };
     }
 
     if (input.mode === 'tools') {
       const tools = await mcpRegistry.listAllTools();
-      return { success: true, output: JSON.stringify({ count: tools.length, tools }) };
+      const filtered = input.serverName
+        ? tools.filter((tool) => tool.serverName === input.serverName)
+        : tools;
+      const summarized = filtered.map((tool) => ({
+        qualifiedName: tool.qualifiedName,
+        serverName: tool.serverName,
+        toolName: tool.toolName,
+        description: tool.description,
+      }));
+      return { success: true, output: JSON.stringify({ view, count: summarized.length, tools: summarized }) };
     }
 
     if (input.mode === 'schema') {
@@ -34,42 +85,73 @@ export const mcpTool: Tool = {
     }
 
     if (input.mode === 'resources') {
+      const security = mcpRegistry.listServerSecurity();
+      const filtered = input.serverName
+        ? security.filter((server) => server.name === input.serverName)
+        : security;
       return {
         success: true,
         output: JSON.stringify({
-          servers: mcpRegistry.listServerSecurity().map((server) => ({
+          view,
+          count: filtered.length,
+          servers: filtered.map((server) => ({
             name: server.name,
             resourceCount: 0,
             availableResources: [],
             note: 'resource inventory is not surfaced by the lightweight MCP registry path yet',
+            trustMode: server.trustMode,
+            schemaFreshness: server.schemaFreshness,
           })),
         }),
       };
     }
 
     if (input.mode === 'security') {
+      const servers = mcpRegistry.listServerSecurity();
+      const filtered = input.serverName
+        ? servers.filter((server) => server.name === input.serverName)
+        : servers;
+      const recentDecisions = mcpRegistry.listRecentSecurityDecisions();
       return {
         success: true,
         output: JSON.stringify({
-          servers: mcpRegistry.listServerSecurity(),
-          recentDecisions: mcpRegistry.listRecentSecurityDecisions(),
+          view,
+          servers: filtered.map((server) => {
+            if (view === 'full') return server;
+            if (view === 'preview') return previewServer(server);
+            return summarizeServer(server);
+          }),
+          recentDecisions: view === 'full'
+            ? recentDecisions
+            : recentDecisions.slice(0, 8).map(summarizeDecision),
         }),
       };
     }
 
     if (input.mode === 'auth') {
+      const servers = mcpRegistry.listServerSecurity();
+      const filtered = input.serverName
+        ? servers.filter((server) => server.name === input.serverName)
+        : servers;
+      const recentDecisions = mcpRegistry.listRecentSecurityDecisions();
       return {
         success: true,
         output: JSON.stringify({
-          servers: mcpRegistry.listServerSecurity().map((server) => ({
-            name: server.name,
-            trustMode: server.trustMode,
-            role: server.role,
-            connected: server.connected,
-            schemaFreshness: server.schemaFreshness,
-            quarantined: server.schemaFreshness === 'quarantined',
-          })),
-          recentDecisions: mcpRegistry.listRecentSecurityDecisions(),
+          view,
+          servers: filtered.map((server) => {
+            if (view === 'full') {
+              return {
+                ...server,
+                allowedPaths: server.allowedPaths,
+                allowedHosts: server.allowedHosts,
+              };
+            }
+            if (view === 'preview') return previewServer(server);
+            return summarizeServer(server);
+          }),
+          recentDecisions: view === 'full'
+            ? recentDecisions
+            : recentDecisions.slice(0, 8).map(summarizeDecision),
         }),
       };
     }

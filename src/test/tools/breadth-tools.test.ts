@@ -54,6 +54,10 @@ describe('tool breadth additions', () => {
     const handoffs = await taskTool.execute({ mode: 'handoffs' });
     expect(handoffs.success).toBe(true);
     expect(handoffs.output).toContain('"toSessionId":"sess-b"');
+
+    const summaryList = await taskTool.execute({ mode: 'list', sessionId: 'sess-a', view: 'summary' });
+    expect(summaryList.success).toBe(true);
+    expect(summaryList.output).toContain('"title":"Implement remote runner pool"');
   });
 
   test('team tool persists team definitions and role lanes', async () => {
@@ -71,6 +75,10 @@ describe('tool breadth additions', () => {
     const listed = await teamTool.execute({ mode: 'list' });
     expect(listed.success).toBe(true);
     expect(listed.output).toContain('Release Core');
+
+    const summary = await teamTool.execute({ mode: 'show', teamId: 'release-core', view: 'summary' });
+    expect(summary.success).toBe(true);
+    expect(summary.output).toContain('"memberCount":1');
 
     expect(existsSync(join(root, '.goodvibes', 'tui', 'teams.json'))).toBe(true);
     expect(readFileSync(join(root, '.goodvibes', 'tui', 'teams.json'), 'utf-8')).toContain('release-core');
@@ -102,6 +110,10 @@ describe('tool breadth additions', () => {
     const listed = await worklistTool.execute({ mode: 'list' });
     expect(listed.success).toBe(true);
     expect(listed.output).toContain('roadmap-2');
+
+    const summary = await worklistTool.execute({ mode: 'show', worklistId: 'roadmap-2', view: 'summary' });
+    expect(summary.success).toBe(true);
+    expect(summary.output).toContain('"itemCount":1');
   });
 
   test('packet and query tools manage durable operator packets and Q&A', async () => {
@@ -137,6 +149,14 @@ describe('tool breadth additions', () => {
     });
     expect(answer.success).toBe(true);
     expect(answer.output).toContain('upper capability ceiling');
+
+    const packetList = await packetTool.execute({ mode: 'list', view: 'summary' });
+    expect(packetList.success).toBe(true);
+    expect(packetList.output).toContain('"packets"');
+
+    const queryList = await queryTool.execute({ mode: 'list', view: 'summary' });
+    expect(queryList.success).toBe(true);
+    expect(queryList.output).toContain('"hasAnswer":true');
   });
 
   test('remote tool manages pools, contracts, artifacts, and review', async () => {
@@ -179,6 +199,10 @@ describe('tool breadth additions', () => {
     const contracts = await remoteTool.execute({ mode: 'contracts' });
     expect(contracts.success).toBe(true);
     expect(contracts.output).toContain('remote-1');
+
+    const summaryPools = await remoteTool.execute({ mode: 'pools', view: 'summary' });
+    expect(summaryPools.success).toBe(true);
+    expect(summaryPools.output).toContain('"runnerCount":1');
   });
 
   test('repl tool evaluates bounded expressions and records history', async () => {
@@ -195,6 +219,7 @@ describe('tool breadth additions', () => {
     const security = await mcpTool.execute({ mode: 'security' });
     expect(security.success).toBe(true);
     expect(security.output).toContain('recentDecisions');
+    expect(security.output).toContain('"view":"descriptor"');
 
     const auth = await mcpTool.execute({ mode: 'auth' });
     expect(auth.success).toBe(true);

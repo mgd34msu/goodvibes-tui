@@ -15,6 +15,20 @@ interface QueryRecord {
   readonly updatedAt: number;
 }
 
+function summarizeQuery(record: QueryRecord) {
+  return {
+    id: record.id,
+    prompt: record.prompt,
+    askedBy: record.askedBy,
+    target: record.target,
+    status: record.status,
+    hasAnswer: typeof record.answer === 'string' && record.answer.length > 0,
+    hasResolution: typeof record.resolution === 'string' && record.resolution.length > 0,
+    createdAt: record.createdAt,
+    updatedAt: record.updatedAt,
+  };
+}
+
 const QUERIES_PATH = join('.goodvibes', 'tui', 'queries.json');
 
 function loadQueries(): QueryRecord[] {
@@ -45,6 +59,7 @@ export const queryTool: Tool = {
     }
     const input = args as unknown as QueryToolInput;
     const records = loadQueries();
+    const view = input.view ?? 'summary';
 
     if (input.mode === 'ask') {
       if (!input.queryId || !input.prompt) {
@@ -65,14 +80,21 @@ export const queryTool: Tool = {
     }
 
     if (input.mode === 'list') {
-      return { success: true, output: JSON.stringify({ count: records.length, queries: records }) };
+      return {
+        success: true,
+        output: JSON.stringify({
+          view,
+          count: records.length,
+          queries: view === 'full' ? records : records.map(summarizeQuery),
+        }),
+      };
     }
 
     const record = records.find((entry) => entry.id === input.queryId);
     if (!record) return { success: false, error: `Unknown query: ${input.queryId ?? '(missing)'}` };
 
     if (input.mode === 'show') {
-      return { success: true, output: JSON.stringify(record) };
+      return { success: true, output: JSON.stringify(view === 'full' ? record : summarizeQuery(record)) };
     }
 
     if (input.mode === 'answer') {

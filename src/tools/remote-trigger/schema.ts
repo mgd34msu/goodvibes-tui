@@ -7,6 +7,7 @@ export const REMOTE_TRIGGER_TOOL_SCHEMA: ToolDefinition = {
     type: 'object',
     properties: {
       mode: { type: 'string', enum: ['create-pool', 'pools', 'assign', 'unassign', 'contracts', 'artifacts', 'review', 'import-artifact'] },
+      view: { type: 'string', enum: ['summary', 'full'] },
       poolId: { type: 'string' },
       label: { type: 'string' },
       runnerId: { type: 'string' },
@@ -20,6 +21,7 @@ export const REMOTE_TRIGGER_TOOL_SCHEMA: ToolDefinition = {
 
 export interface RemoteTriggerToolInput {
   readonly mode: 'create-pool' | 'pools' | 'assign' | 'unassign' | 'contracts' | 'artifacts' | 'review' | 'import-artifact';
+  readonly view?: 'summary' | 'full';
   readonly poolId?: string;
   readonly label?: string;
   readonly runnerId?: string;

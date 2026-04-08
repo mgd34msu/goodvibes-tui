@@ -13,6 +13,17 @@ export { AGENT_TEMPLATES, AgentManager } from './manager.ts';
 // Tool implementation
 // ---------------------------------------------------------------------------
 
+function summarizeWrfcEvent(event: Record<string, unknown>) {
+  return {
+    type: event.type,
+    timestamp: event.timestamp,
+    status: event.status,
+    score: event.score,
+    gate: event.gate,
+    issueCount: Array.isArray(event.issues) ? event.issues.length : undefined,
+  };
+}
+
 export const agentTool: Tool = {
   definition: AGENT_TOOL_SCHEMA,
 
@@ -188,38 +199,53 @@ export const agentTool: Tool = {
           record.completedAt !== undefined
             ? record.completedAt - record.startedAt
             : Date.now() - record.startedAt;
+        const detail = input.detail ?? 'full';
+
+        const base = {
+          id: record.id,
+          task: record.task,
+          template: record.template,
+          model: record.model,
+          provider: record.provider,
+          status: record.status,
+          durationMs: duration,
+          toolCallCount: record.toolCallCount,
+          progress: record.progress,
+          error: record.error,
+          executionProtocol: record.executionProtocol,
+          reviewMode: record.reviewMode,
+          communicationLane: record.communicationLane,
+          parentAgentId: record.parentAgentId ?? null,
+          orchestrationGraphId: record.orchestrationGraphId ?? null,
+          orchestrationNodeId: record.orchestrationNodeId ?? null,
+        };
+
+        const contract = {
+          tools: record.tools,
+          capabilityCeilingTools: record.capabilityCeilingTools ?? record.tools,
+          successCriteria: record.successCriteria ?? [],
+          requiredEvidence: record.requiredEvidence ?? [],
+          writeScope: record.writeScope ?? [],
+          knowledgeInjections: record.knowledgeInjections ?? [],
+        };
+
+        const messages = {
+          recentMessages: recentMessages.map((m) => ({
+            from: m.from,
+            content: m.content,
+            timestamp: m.timestamp,
+          })),
+        };
 
         return {
           success: true,
-          output: JSON.stringify({
-            id: record.id,
-            task: record.task,
-            template: record.template,
-            model: record.model,
-            provider: record.provider,
-            tools: record.tools,
-            status: record.status,
-            durationMs: duration,
-            toolCallCount: record.toolCallCount,
-            progress: record.progress,
-            error: record.error,
-            capabilityCeilingTools: record.capabilityCeilingTools ?? record.tools,
-            successCriteria: record.successCriteria ?? [],
-            requiredEvidence: record.requiredEvidence ?? [],
-            writeScope: record.writeScope ?? [],
-            executionProtocol: record.executionProtocol,
-            reviewMode: record.reviewMode,
-            communicationLane: record.communicationLane,
-            knowledgeInjections: record.knowledgeInjections ?? [],
-            parentAgentId: record.parentAgentId ?? null,
-            orchestrationGraphId: record.orchestrationGraphId ?? null,
-            orchestrationNodeId: record.orchestrationNodeId ?? null,
-            recentMessages: recentMessages.map((m) => ({
-              from: m.from,
-              content: m.content,
-              timestamp: m.timestamp,
-            })),
-          }),
+          output: JSON.stringify(detail === 'full'
+            ? { ...base, ...contract, ...messages }
+            : detail === 'contract'
+              ? { ...base, ...contract }
+              : detail === 'messages'
+                ? { ...base, ...messages }
+                : base),
         };
       }
 
@@ -507,9 +533,23 @@ export const agentTool: Tool = {
         try {
           const workmap = WrfcController.getInstance().getWorkmap();
           const chains = workmap.listChains();
+          const detail = input.detail ?? 'summary';
           return {
             success: true,
-            output: JSON.stringify({ mode: 'wrfc-chains', chains, count: chains.length }),
+            output: JSON.stringify({
+              mode: 'wrfc-chains',
+              detail,
+              count: chains.length,
+              chains: detail === 'full'
+                ? chains
+                : chains.map((chain) => ({
+                  wrfcId: chain.wrfcId,
+                  status: chain.status,
+                  lastScore: chain.lastScore,
+                  task: chain.task,
+                  events: chain.events,
+                })),
+            }),
           };
         } catch (err) {
           return { success: false, error: `Failed to list WRFC chains: ${err instanceof Error ? err.message : String(err)}` };
@@ -523,9 +563,18 @@ export const agentTool: Tool = {
         try {
           const workmap = WrfcController.getInstance().getWorkmap();
           const events = workmap.read(input.wrfcId);
+          const detail = input.detail ?? 'summary';
           return {
             success: true,
-            output: JSON.stringify({ mode: 'wrfc-history', wrfcId: input.wrfcId, events, count: events.length }),
+            output: JSON.stringify({
+              mode: 'wrfc-history',
+              detail,
+              wrfcId: input.wrfcId,
+              events: detail === 'full'
+                ? events
+                : events.map((event) => summarizeWrfcEvent(event as unknown as Record<string, unknown>)),
+              count: events.length,
+            }),
           };
         } catch (err) {
           return { success: false, error: `Failed to get WRFC history: ${err instanceof Error ? err.message : String(err)}` };

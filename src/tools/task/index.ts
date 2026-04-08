@@ -4,6 +4,19 @@ import { TASK_TOOL_SCHEMA, type TaskToolInput } from './schema.ts';
 
 const DEFAULT_SESSION_ID = 'local';
 
+function summarizeRef(ref: ReturnType<ReturnType<typeof getSessionOrchestration>['getRef']>) {
+  if (!ref) return null;
+  return {
+    sessionId: ref.sessionId,
+    taskId: ref.taskId,
+    title: ref.title,
+    label: ref.label,
+    status: ref.status,
+    createdAt: ref.createdAt,
+    updatedAt: ref.updatedAt,
+  };
+}
+
 export const taskTool: Tool = {
   definition: {
     name: 'task',
@@ -20,6 +33,7 @@ export const taskTool: Tool = {
     const input = args as TaskToolInput;
     const registry = getSessionOrchestration();
     const sessionId = input.sessionId?.trim() || DEFAULT_SESSION_ID;
+    const view = input.view ?? 'summary';
 
     if (input.mode === 'create') {
       if (!input.taskId || !input.title) {
@@ -41,7 +55,15 @@ export const taskTool: Tool = {
 
     if (input.mode === 'list') {
       const refs = registry.getRefsBySession(sessionId);
-      return { success: true, output: JSON.stringify({ sessionId, count: refs.length, refs }) };
+      return {
+        success: true,
+        output: JSON.stringify({
+          sessionId,
+          view,
+          count: refs.length,
+          refs: view === 'full' ? refs : refs.map((ref) => summarizeRef(ref)),
+        }),
+      };
     }
 
     if (input.mode === 'show') {
@@ -51,7 +73,7 @@ export const taskTool: Tool = {
       return {
         success: true,
         output: JSON.stringify({
-          ref,
+          ref: view === 'full' ? ref : summarizeRef(ref),
           dependencies: registry.getDependencies(sessionId, input.taskId),
           dependents: registry.getDependents(sessionId, input.taskId),
         }),
@@ -116,7 +138,24 @@ export const taskTool: Tool = {
     }
 
     if (input.mode === 'handoffs') {
-      return { success: true, output: JSON.stringify({ handoffs: registry.getHandoffs() }) };
+      const handoffs = registry.getHandoffs();
+      return {
+        success: true,
+        output: JSON.stringify({
+          view,
+          count: handoffs.length,
+          handoffs: view === 'full'
+            ? handoffs
+            : handoffs.map((handoff) => ({
+              handoffId: handoff.handoffId,
+              fromSessionId: handoff.fromSessionId,
+              toSessionId: handoff.toSessionId,
+              taskRef: handoff.taskRef,
+              acknowledged: handoff.acknowledged,
+              initiatedAt: handoff.initiatedAt,
+            })),
+        }),
+      };
     }
 
     return { success: false, error: `Unknown mode: ${input.mode}` };

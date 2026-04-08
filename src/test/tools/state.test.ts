@@ -161,6 +161,13 @@ describe('StateTool', () => {
     expect(res.parsed.entries).toEqual({});
   });
 
+  test('list supports summary view for inventory-only scans', async () => {
+    await tool.execute({ mode: 'set', values: { alpha: 1 } });
+    const res = await run<{ entries: Array<{ key: string; type: string }> }>(tool, { mode: 'list', view: 'summary' });
+    const alpha = res.parsed.entries.find((entry) => entry.key === 'alpha');
+    expect(alpha?.type).toBe('number');
+  });
+
   // -------------------------------------------------------------------------
   // clear
   // -------------------------------------------------------------------------
@@ -301,6 +308,24 @@ describe('StateTool', () => {
       });
       expect(res.parsed.key).toBe('myData');
       expect(res.parsed.value).toEqual({ x: 42 });
+    });
+
+    test('memory get supports summary view without returning the full value', async () => {
+      await tool.execute({
+        mode: 'memory',
+        memoryAction: 'set',
+        memoryKey: 'myCompactData',
+        memoryValue: '{"x":42}',
+      });
+      const res = await run<{ key: string; type: string; bytes: number }>(tool, {
+        mode: 'memory',
+        memoryAction: 'get',
+        memoryKey: 'myCompactData',
+        view: 'summary',
+      });
+      expect(res.parsed.key).toBe('myCompactData');
+      expect(res.parsed.type).toBe('object');
+      expect(res.parsed.bytes).toBeGreaterThan(0);
     });
 
     test('memory get returns null value for missing key', async () => {
@@ -608,6 +633,17 @@ describe('StateTool', () => {
       }
       expect(typeof def.verbosityDefaults).toBe('object');
       expect(typeof def.verbosityDefaults.write).toBe('string');
+    });
+
+    test('mode list supports summary view', async () => {
+      const res = await run<{ modes: Array<{ name: string; description: string; enforcement: string }> }>(modeTool, {
+        mode: 'mode',
+        modeAction: 'list',
+        view: 'summary',
+      });
+      const def = res.parsed.modes.find((m) => m.name === 'default');
+      expect(def).toBeDefined();
+      expect(def?.description).toBeTruthy();
     });
 
     test('mode set switches to vibecoding', async () => {
