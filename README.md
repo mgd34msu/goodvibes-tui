@@ -59,7 +59,7 @@ The runtime is organized around typed store domains, typed runtime events, a sha
 - Automated WRFC loops with review/fix/check chains, configurable gates, and explicit evidence in completion reports
 
 ### Tools And Intelligence
-- Built-in native tools: `read`, `write`, `edit`, `find`, `exec`, `fetch`, `analyze`, `inspect`, `agent`, `state`, `workflow`, and `registry`
+- Built-in native tools: `read`, `write`, `edit`, `find`, `exec`, `fetch`, `analyze`, `inspect`, `agent`, `state`, `workflow`, `registry`, `task`, `team`, `worklist`, `mcp_resource`, `brief`, `question`, `remote`, `repl`, `control`, and `powershell`
 - Native file tooling with notebook-aware read/write/edit, AST-aware editing, validation hooks, undo, and compact output shaping
 - Sandbox-backed REPL/eval tooling with bounded JavaScript, TypeScript, Python, SQL, and GraphQL runtimes plus persisted REPL history
 - Durable knowledge/memory substrate with reviewable records, provenance, links, scoped export/import, and task-time knowledge injection
@@ -82,6 +82,18 @@ The runtime is organized around typed store domains, typed runtime events, a sha
 - Bootstrap composition root with explicit initialization order
 - Session continuity, return-context summaries, knowledge capture, compaction, guidance, diagnostics, and integration-helper APIs
 - Feature flags, profiles, live settings editing, and UI routing controls for system / operational / WRFC messages
+
+### Evaluation, Replay, And Incident Analysis
+- Evaluation harness with built-in suites, baselines, scorecards, and regression gates
+- Deterministic replay tooling with load / step / seek / diff / export flows
+- Forensics collector and registry with incident bundles, replay mismatch evidence, root-cause summaries, and export/capture flows
+- State inspector and telemetry substrate with transition logs, time-travel buffers, hotspot sampling, and local ledger exporters
+
+### Integrations, Notifications, And Delivery
+- Slack, Discord, GitHub, and generic webhook integration modules
+- Delivery queue, dead-letter handling, delivery classification, and notification routing policies
+- Local notification/webhook front doors plus portable remote/session handoff bundles
+- Optional voice surface and teleport bundle workflows for adjacent operator experiences
 
 ---
 
@@ -493,7 +505,7 @@ This layer is meant to expose control/state APIs, not a UI protocol.
 
 ## Tools
 
-goodvibes-tui ships 12 built-in tools that go well beyond the read/write/exec primitives found in Claude Code, Gemini CLI, and Codex. Each tool is designed for agentic workloads: batch operations, token-efficient extraction, structural code understanding, and composable automation — not just wrapping shell commands.
+goodvibes-tui ships 22 built-in tools. They cover native file and shell operations, bounded eval, coordination/work management, MCP and remote control, planning artifacts, and product-control inspection surfaces.
 
 ### REPL / Eval runtimes
 
@@ -705,6 +717,30 @@ Workflow state machines, automation triggers, and scheduled tasks.
 - Cron scheduler: full 5-field cron expressions with IANA timezone support, missed-run detection, per-task run history, and enable/disable control. Persists to `.goodvibes/tui/schedules.json`
 - Full lifecycle: start, transition, cancel, list active instances
 
+### task / team / worklist
+
+Structured execution and coordination tools beyond a single conversation turn.
+
+- `task`: create, inspect, block, cancel, depend, and hand off tasks across sessions
+- `team`: define teams, members, lanes, and role assignments
+- `worklist`: manage durable worklists with ownership and priority
+
+### brief / question
+
+Durable planning and operator-communication artifacts.
+
+- `brief`: create, revise, publish, and list implementation briefs / execution packets
+- `question`: track operator questions, answers, escalation targets, and closure state
+
+### mcp_resource / remote / control / powershell
+
+Additional product-control tools that expose runtime breadth directly.
+
+- `mcp_resource`: inspect MCP servers, tools, schema freshness, security posture, auth posture, and quarantine controls
+- `remote`: inspect and manage remote runner pools, contracts, artifacts, and review flows
+- `control`: inspect packaged command families, panel/control-room families, built-in subscription providers, and sandbox presets
+- `powershell`: inspect PowerShell availability and run bounded PowerShell commands where supported
+
 ### registry
 
 Discover and introspect skills, agents, and tools.
@@ -713,6 +749,28 @@ Discover and introspect skills, agents, and tools.
 - Task-based recommendations: describe what you want to do, get ranked suggestions
 - Dependency chain resolution for skills
 - Full content retrieval for any registry item
+
+---
+
+## Evaluation, Replay, Diagnostics, And Incidents
+
+GoodVibes includes a substantial post-execution and operator-repair stack:
+
+- `/eval` runs built-in evaluation suites, compares baselines, and applies regression gates
+- `/replay` loads and steps deterministic replay runs
+- `/incident` opens, exports, and captures forensics bundles
+- `Health` and diagnostics surfaces expose repair actions, transport issues, task failure state, and replay hooks
+- the state inspector subsystem tracks transitions, time-travel snapshots, and selector hotspots
+
+This is backed by:
+
+- [src/runtime/eval/index.ts](/home/buzzkill/Projects/goodvibes-tui/src/runtime/eval/index.ts)
+- [src/runtime/forensics/index.ts](/home/buzzkill/Projects/goodvibes-tui/src/runtime/forensics/index.ts)
+- [src/runtime/diagnostics/index.ts](/home/buzzkill/Projects/goodvibes-tui/src/runtime/diagnostics/index.ts)
+- [src/runtime/ui/state-inspector/index.ts](/home/buzzkill/Projects/goodvibes-tui/src/runtime/ui/state-inspector/index.ts)
+- [src/runtime/telemetry/index.ts](/home/buzzkill/Projects/goodvibes-tui/src/runtime/telemetry/index.ts)
+
+So the product is not just “chat plus tools.” It also includes validation, replay, incident, telemetry, and repair infrastructure.
 
 ---
 
@@ -775,6 +833,10 @@ Discover and introspect skills, agents, and tools.
 | `/sandbox [action]` | — | Isolation presets, doctor/probe, sessions, and QEMU setup flows |
 | `/setup [action]` | — | First-run readiness, services, sandbox, transfer bundles, and deep links |
 | `/worktree [action]` | — | Inspect orchestrator-owned worktrees and recovery posture |
+| `/eval [action]` | — | Evaluation harness: suites, baselines, and regression gates |
+| `/replay [action]` | `/rep` | Deterministic replay load / step / seek / diff / export |
+| `/incident [action]` | — | Incident bundle review, export, and durable-memory capture |
+| `/teleport [action]` | — | Portable remote-session handoff bundles |
 | `/commands` | `/cmds` | Browse all commands in a scrollable list |
 | `/shortcuts` | `/keys`, `/keybinds` | Show keyboard shortcuts reference |
 | `/keybindings` | `/kb` | List current keyboard bindings and their config file path |
@@ -789,6 +851,8 @@ Discover and introspect skills, agents, and tools.
 | `/quit` | `/q`, `/:q` | Exit the application |
 
 > **Tip:** Use the `/add-provider` skill for interactive guided provider setup with smart defaults for popular providers.
+>
+> Additional front doors exist for narrower product surfaces, including `approval`, `knowledge`, `memory-review`, `memory-sync`, `session-memory`, `team-memory`, `remote-setup`, `remote-env`, `runner-pool`, `bootstrap`, `tunnel`, `voice`, `hooks`, `security`, `policy`, `orchestration`, `communication`, `ops`, `cockpit`, `trust`, `welcome`, `login`, `logout`, `bridge`, `install`, `update`, and related setup/review helpers.
 
 ---
 
