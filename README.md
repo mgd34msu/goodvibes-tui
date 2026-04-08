@@ -57,6 +57,7 @@ The runtime is organized around typed store domains, typed runtime events, a sha
 - Archetype registry that supports built-ins and user-defined markdown archetypes
 - Task lifecycle tracking across exec, agent, MCP, plugin, integration, daemon, scheduler, and ACP work
 - Automated WRFC loops with review/fix/check chains, configurable gates, and explicit evidence in completion reports
+- Built-in planning/strategy layer with execution plans, adaptive plan modes, and status/explain/override controls
 
 ### Tools And Intelligence
 - Built-in native tools: `read`, `write`, `edit`, `find`, `exec`, `fetch`, `analyze`, `inspect`, `agent`, `state`, `workflow`, `registry`, `task`, `team`, `worklist`, `mcp_resource`, `brief`, `question`, `remote`, `repl`, `control`, and `powershell`
@@ -82,7 +83,7 @@ The runtime is organized around typed store domains, typed runtime events, a sha
 - Typed runtime store and typed runtime-event system with domain-specific dispatch instead of ad hoc mutation
 - Bootstrap composition root with explicit initialization order
 - Session continuity, return-context summaries, knowledge capture, compaction, guidance, diagnostics, notifications, retention, idempotency, and integration-helper APIs
-- Feature flags, profiles, live settings editing, and UI routing controls for system / operational / WRFC messages
+- Feature flags, profiles, profile sync bundles, live settings editing, and UI routing controls for system / operational / WRFC messages
 - Performance budgets, panel-health contracts, telemetry exporters, and operator playbooks for stuck turns, reconnect failures, permission deadlocks, plugin degradation, and recovery scenarios
 
 ### Evaluation, Replay, And Incident Analysis
@@ -96,6 +97,7 @@ The runtime is organized around typed store domains, typed runtime events, a sha
 - Delivery queue, dead-letter handling, delivery classification, and notification routing policies
 - Local notification/webhook front doors plus portable remote/session handoff bundles
 - Optional voice surface and teleport bundle workflows for adjacent operator experiences
+- Managed hook workflows, contract inspection, hook simulation, and cron-like scheduled agent tasks
 
 ---
 
@@ -515,6 +517,33 @@ GoodVibes also exposes integration-helper APIs for future clients and helpers:
 
 This layer is meant to expose control/state APIs, not a UI protocol.
 
+The adjacent local-product access layer also includes dedicated front doors for:
+
+- provider login/logout flows
+- install and update posture review
+- trust review bundles
+- bridge status/review/export/import paths
+- setup deep links and portable install/update/auth review bundles
+- deeplink review and bundle packaging for operator surfaces
+
+Key commands:
+
+- `/login`
+- `/logout`
+- `/install`
+- `/update`
+- `/trust`
+- `/bridge`
+- `/profilesync`
+
+The setup surface is also broader than a single readiness screen:
+
+- onboarding and doctor flows
+- service, hook, remote, and sandbox review
+- support-bundle export
+- setup-transfer export / inspect / import
+- deep links for cockpit, security, remote, knowledge, incident, hooks, orchestration, and tasks
+
 ---
 
 ## Policy, Permissions, And Trust
@@ -544,6 +573,78 @@ This work is implemented under:
 - [src/runtime/ecosystem/recommendations.ts](/home/buzzkill/Projects/goodvibes-tui/src/runtime/ecosystem/recommendations.ts)
 
 The result is that approvals, policy rollout, trust posture, and plugin degradation are all inspectable product behavior, not opaque internals.
+
+---
+
+## Automation, Hooks, And Scheduling
+
+GoodVibes includes a real automation layer instead of only ad hoc slash commands:
+
+- managed hooks with scaffold, chain, enable/disable, inspect, import/export, and simulation flows
+- hook-point contracts with execution authority, mutation/injection permissions, timeout policy, and failure policy metadata
+- workflow state machines such as `wrfc`, `fix_loop`, `test_then_fix`, and `review_only`
+- cron-like scheduled agent tasks with timezone-aware schedules, missed-run tracking, run history, and manual trigger support
+- planning commands with active-plan review, mode/explain/override/status controls, and model-authored execution-plan generation
+
+Key commands:
+
+- `/hooks`
+- `/workflow`
+- `/schedule`
+- `/plan`
+
+These surfaces are implemented across:
+
+- [src/input/commands/hooks-runtime.ts](/home/buzzkill/Projects/goodvibes-tui/src/input/commands/hooks-runtime.ts)
+- [src/input/commands/schedule-runtime.ts](/home/buzzkill/Projects/goodvibes-tui/src/input/commands/schedule-runtime.ts)
+- [src/input/commands/planning-runtime.ts](/home/buzzkill/Projects/goodvibes-tui/src/input/commands/planning-runtime.ts)
+- [src/tools/workflow/index.ts](/home/buzzkill/Projects/goodvibes-tui/src/tools/workflow/index.ts)
+
+The point is not “automation because automation.” It is to make recurring operational work, review loops, and reaction policies explicit, inspectable, and schedulable.
+
+---
+
+## Services, Profiles, And Setup Transfer
+
+The services/config side is also productized beyond a flat JSON file:
+
+- named service registry with inspect, auth resolution, connectivity tests, auth review, and doctor output
+- live profile management plus portable profile sync bundle export/import
+- setup transfer bundles that can move config/services/ecosystem posture between environments
+
+Key commands:
+
+- `/services inspect|test|resolve|auth|auth-review|doctor|export|import`
+- `/profiles`
+- `/profilesync`
+- `/setup transfer export|inspect|import`
+
+---
+
+## Marketplace, Plugins, And Curated Ecosystem Paths
+
+The ecosystem layer is broader than a basic enable/disable plugin list.
+
+Current capabilities include:
+
+- local plugin discovery across configured search directories
+- plugin inspect/review output with trust tier, quarantine posture, capability counts, and signature fingerprint visibility
+- curated ecosystem catalogs with publish-local, unpublish, catalog review, install, update, uninstall, and installed-receipt flows
+- local-first curated plugin distribution via `.goodvibes/tui/ecosystem/*.json`
+- recommendations tied to installed state, denials, and missing capabilities
+
+Key commands:
+
+- `/plugin list|inspect|review|browse|catalog-review|publish-local|install|update|uninstall`
+- `/marketplace`
+
+This is implemented by:
+
+- [src/input/commands/integration-runtime.ts](/home/buzzkill/Projects/goodvibes-tui/src/input/commands/integration-runtime.ts)
+- [src/runtime/ecosystem/catalog.ts](/home/buzzkill/Projects/goodvibes-tui/src/runtime/ecosystem/catalog.ts)
+- [src/runtime/ecosystem/recommendations.ts](/home/buzzkill/Projects/goodvibes-tui/src/runtime/ecosystem/recommendations.ts)
+
+So the product supports both direct local plugins and a curated local-first ecosystem channel with review and receipt tracking.
 
 ---
 
@@ -640,6 +741,13 @@ Key commands:
 - `/recall handoff-import ...`
 
 This is not just a note store. It is a reviewed knowledge substrate used by the runtime when preparing task context.
+
+There are also dedicated front doors for memory workflows outside `/recall`:
+
+- `/memory-sync` for durable export/import
+- `/handoff` for reviewable handoff bundles
+- `/session-memory` for session-scoped review/capture
+- `/team-memory` for shared/team-oriented exchange
 
 ### read
 
