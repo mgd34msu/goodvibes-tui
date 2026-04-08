@@ -68,17 +68,18 @@ The runtime is organized around typed store domains, typed runtime events, a sha
 
 ### Security, Auth, And Operational Controls
 - Prompt / allow-all / custom permission modes with layered evaluation and risk analysis
+- Policy bundle loading, signing, verification, divergence simulation, and rule-suggestion flows for permission changes
 - Secure-secret hierarchy with `preferred_secure` storage policy by default
 - Local daemon/listener auth with bootstrap credentials, local user management, password rotation, session revocation, and review surfaces
 - Health, policy, security, and setup control surfaces for reviewing and repairing runtime posture
 
 ### Ecosystem, MCP, And Remote
-- Curated marketplace, plugin trust model, rollback flows, and product-control commands
+- Curated marketplace, plugin trust model, quarantine engine, rollback flows, recommendations, and product-control commands
 - MCP lifecycle with trust posture, quarantine, reconnect behavior, repair flows, and tool projection into the main registry
 - Remote runner registry, pool-aware dispatch, replay/review artifacts, and operator-facing remote inspection/recovery surfaces
 
 ### Runtime Foundations
-- Typed runtime store and typed runtime-event system
+- Typed runtime store and typed runtime-event system with domain-specific dispatch instead of ad hoc mutation
 - Bootstrap composition root with explicit initialization order
 - Session continuity, return-context summaries, knowledge capture, compaction, guidance, diagnostics, notifications, retention, idempotency, and integration-helper APIs
 - Feature flags, profiles, live settings editing, and UI routing controls for system / operational / WRFC messages
@@ -402,6 +403,8 @@ The notification layer is also policy-aware instead of being a raw append-only l
 
 That routing stack lives under `src/runtime/notifications/*` and is one of the reasons the conversation surface can stay compact even when the runtime is busy.
 
+Underneath those surfaces, GoodVibes uses a typed runtime store backed by `zustand/vanilla`, not a React state tree. Conversation, session, permissions, tasks, agents, orchestration, communication, plugins, MCP, ACP/daemon transport, integrations, intelligence, and other domains are updated through typed dispatch paths rather than arbitrary renderer-local state mutation.
+
 ---
 
 ## Sandbox, Isolation, And QEMU
@@ -511,6 +514,36 @@ GoodVibes also exposes integration-helper APIs for future clients and helpers:
 - operational integrations that need session, approval, account, or health posture
 
 This layer is meant to expose control/state APIs, not a UI protocol.
+
+---
+
+## Policy, Permissions, And Trust
+
+The permission system is more than a prompt toggle. The runtime includes:
+
+- layered policy evaluation for prefix rules, arg-shape rules, path scope, network scope, and mode constraints
+- decision logs for audit and review
+- policy preflight review before applying bundles
+- rule suggestion generation from actual approval decisions
+- policy signing and signature verification
+- simulation and divergence reporting for candidate policy bundles before promotion
+- policy runtime state with bundle lifecycle, promote, rollback, and diff support
+
+The adjacent trust layer covers:
+
+- plugin trust tiers
+- quarantine and degraded posture
+- marketplace and MCP trust review
+- security/policy control-room surfaces instead of silent background policy changes
+
+This work is implemented under:
+
+- [src/runtime/permissions/index.ts](/home/buzzkill/Projects/goodvibes-tui/src/runtime/permissions/index.ts)
+- [src/runtime/plugins/manager.ts](/home/buzzkill/Projects/goodvibes-tui/src/runtime/plugins/manager.ts)
+- [src/runtime/plugins/quarantine.ts](/home/buzzkill/Projects/goodvibes-tui/src/runtime/plugins/quarantine.ts)
+- [src/runtime/ecosystem/recommendations.ts](/home/buzzkill/Projects/goodvibes-tui/src/runtime/ecosystem/recommendations.ts)
+
+The result is that approvals, policy rollout, trust posture, and plugin degradation are all inspectable product behavior, not opaque internals.
 
 ---
 
