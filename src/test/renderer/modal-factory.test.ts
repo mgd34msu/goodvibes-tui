@@ -227,6 +227,15 @@ describe('ModalFactory.createModal', () => {
     expect(hasBold).toBe(true);
   });
 
+  test('input sections use the shared block cursor glyph', () => {
+    const lines = ModalFactory.createModal({
+      title: 'Search',
+      search: 'abc',
+      sections: [],
+    }, W);
+    expect(linesToText(lines).join('\n')).toContain('█');
+  });
+
   test('list section: unselected items do not show indicator', () => {
     const lines = ModalFactory.createModal({
       title: 'T',

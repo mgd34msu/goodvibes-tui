@@ -54,4 +54,14 @@ describe('renderSelectionModalOverlay', () => {
     const focused = renderSelectionModalOverlay(modal, 84).map(line => line.map(cell => cell.char).join('')).join('\n');
     expect(focused).toContain('█');
   });
+
+  test('wraps detail text onto a follow-on line when the modal is narrow', () => {
+    const modal = new SelectionModal();
+    modal.open('Pick Workspace', [
+      { id: 'a', label: 'Alpha Workspace', detail: 'detail text that should wrap instead of clipping away in narrow modal widths' },
+    ]);
+    const text = renderSelectionModalOverlay(modal, 44, 18).map(line => line.map(cell => cell.char).join('')).join('\n');
+    expect(text).toContain('Alpha Workspace');
+    expect(text).toContain('detail text');
+  });
 });

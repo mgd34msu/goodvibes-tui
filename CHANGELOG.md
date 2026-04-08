@@ -4,6 +4,47 @@ All notable changes to GoodVibes TUI.
 
 ---
 
+## [0.15.1] — 2026-04-08
+
+### UI Systems And Renderer Hardening
+
+- Added an explicit shared Unicode glyph registry for renderer primitives, including canonical frame, surface, navigation, status, and meter glyphs
+- Added shared low-level text/layout helpers for hanging-indent wrapping and label/detail column fitting
+- Restored and locked the intended Unicode-heavy visual language across shared shell, conversation, modal, process, and panel renderer paths
+- Added a UI release-gate test to lock canonical glyphs, routing defaults, panel focus behavior, transcript-event navigation, and overlay width-band behavior
+
+### Conversation, Routing, And Navigation
+
+- Added transcript event-family navigation so the conversation surface can jump to the next or previous matching event line instead of acting like raw scrollback only
+- Improved conversation rendering around event rows, collapsed fragments, footer posture, and line-number behavior
+- Added routing defaults so non-conversational system and operational chatter can land in dedicated workspaces instead of always polluting the main transcript
+- Added line-number modes `all`, `code`, and `off`, with clipboard stripping so copied content does not carry visual gutters
+
+### Panels, Modals, And UI Focus Behavior
+
+- Reworked panel open/focus behavior so shell-driven panel opens show and focus the panel workspace immediately
+- Added deterministic modal focus restoration back to prompt, panel, or indicator regions after closing the last modal
+- Added shared overlay width bands and stable overlay metrics for narrow, medium, and wide terminal classes
+- Improved heavy operational panels to lead with posture, issues, next actions, and detail sections instead of dumping raw inventories first
+- Expanded the `System Messages` panel so startup and runtime operational messages have a proper panel destination and routing posture summary
+
+### Control Rooms, Auth, And Operational Surfaces
+
+- Added richer provider-account posture surfacing, including active route, preferred route, freshness, fallback risk, route records, usage-window hints, and recommended actions
+- Added local-auth management surfaces and command/runtime integration for reviewing local users, bootstrap posture, and auth-session state
+- Expanded control-room presentation across tasks, intelligence, MCP, orchestration, remote, sandbox, approval, subscription, settings-sync, and related operator surfaces
+
+### Verification, Release, And Documentation
+
+- Re-ran full typecheck and full test suite for the release state
+- Added regression coverage for modal focus restoration, UI primitives, shell panel openers, selection-copy behavior, transcript event navigation, and updated panel/control-room expectations
+- Rewrote the README overview and configuration documentation to reflect the current renderer architecture, routing behavior, panel/control-room model, line-number modes, return-context settings, guidance modes, and secret-storage policy
+
+### Verification
+
+- Full suite passes: `6672 pass, 0 fail`
+- Full typecheck passes: `bun x tsc --noEmit --pretty false`
+
 ## [0.14.2] — 2026-04-05
 
 ### Roadmap Completion

@@ -86,4 +86,31 @@ describe('shell surface', () => {
     expect(lineToString(result.lines[0])).toContain('▄');
     expect(lineToString(result.lines[2])).toContain('▀');
   });
+
+  test('composer posture line surfaces mode and pending risk without bloating the footer', () => {
+    const result = buildShellFooter({
+      width: 100,
+      promptText: 'hello',
+      promptLineCount: 1,
+      usage: { up: 0, down: 0 },
+      showExitNotice: false,
+      lastCopyTime: 0,
+      model: 'gpt-test',
+      toolCount: 3,
+      workingDir: '/tmp/demo',
+      provider: 'openai',
+      contextWindow: 0,
+      runningAgentCount: 0,
+      runningProcessCount: 0,
+      indicatorFocused: false,
+      composerMode: 'shell',
+      composerStatus: 'preflight',
+      composerFlags: ['approval'],
+      composerPendingRisk: 'shell',
+    });
+    const text = result.lines.map(lineToString).join('\n');
+    expect(text).toContain('risk:shell');
+    expect(text).toContain('state:preflight');
+    expect(text).toContain('flags:approval');
+  });
 });

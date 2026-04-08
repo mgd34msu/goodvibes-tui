@@ -13,18 +13,24 @@ export function registerOperatorPanelCommand(registry: CommandRegistry): void {
       const sub = args[0]?.toLowerCase() ?? '';
       if (!sub || sub === 'toggle') {
         try {
-          pm.open('panel-list');
-          pm.show();
-          ctx.renderRequest();
+          if (ctx.showPanel) ctx.showPanel('panel-list');
+          else {
+            pm.open('panel-list');
+            pm.show();
+            ctx.renderRequest();
+          }
         } catch {
           pm.toggle();
           ctx.renderRequest();
         }
       } else if (sub === 'list') {
         try {
-          pm.open('panel-list');
-          pm.show();
-          ctx.renderRequest();
+          if (ctx.showPanel) ctx.showPanel('panel-list');
+          else {
+            pm.open('panel-list');
+            pm.show();
+            ctx.renderRequest();
+          }
         } catch {
           pm.show();
           ctx.renderRequest();
@@ -38,9 +44,12 @@ export function registerOperatorPanelCommand(registry: CommandRegistry): void {
           return;
         }
         try {
-          pm.open(id, pane as 'top' | 'bottom' | undefined);
-          pm.show();
-          ctx.renderRequest();
+          if (ctx.showPanel) ctx.showPanel(id, pane as 'top' | 'bottom' | undefined);
+          else {
+            pm.open(id, pane as 'top' | 'bottom' | undefined);
+            pm.show();
+            ctx.renderRequest();
+          }
           ctx.print(`Panel opened: ${id}${pane ? ` (${pane} pane)` : ''}`);
         } catch (e) {
           ctx.print(`Error: ${(e as Error).message}`);
@@ -116,9 +125,12 @@ export function registerOperatorPanelCommand(registry: CommandRegistry): void {
       } else {
         const id = args[0]!;
         try {
-          pm.open(id);
-          pm.show();
-          ctx.renderRequest();
+          if (ctx.showPanel) ctx.showPanel(id);
+          else {
+            pm.open(id);
+            pm.show();
+            ctx.renderRequest();
+          }
         } catch {
           ctx.print(`Unknown panel "${id}". Use /panel list to see available panels.`);
         }

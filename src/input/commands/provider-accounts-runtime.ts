@@ -11,10 +11,13 @@ export function registerProviderAccountsRuntimeCommands(registry: CommandRegistr
     async handler(args, ctx) {
       const sub = (args[0] ?? 'review').toLowerCase();
       if (sub === 'panel' || sub === 'open') {
-        const panelManager = getPanelManager();
-        panelManager.open('accounts');
-        panelManager.show();
-        ctx.renderRequest();
+        if (ctx.showPanel) ctx.showPanel('accounts');
+        else {
+          const panelManager = getPanelManager();
+          panelManager.open('accounts');
+          panelManager.show();
+          ctx.renderRequest();
+        }
         return;
       }
       const snapshot = await buildProviderAccountSnapshot();

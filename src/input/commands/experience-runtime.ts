@@ -153,9 +153,12 @@ export function registerExperienceRuntimeCommands(registry: CommandRegistry): vo
     handler(args, ctx) {
       const sub = (args[0] ?? 'matrix').toLowerCase();
       if (sub === 'open' || sub === 'panel') {
-        const panelManager = getPanelManager();
-        panelManager.open('approval');
-        panelManager.show();
+        if (ctx.showPanel) ctx.showPanel('approval');
+        else {
+          const panelManager = getPanelManager();
+          panelManager.open('approval');
+          panelManager.show();
+        }
         return;
       }
       const matrix = [

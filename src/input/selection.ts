@@ -77,7 +77,7 @@ export class SelectionManager {
         if (cell && cell.char !== '') lineText += cell.char;
       }
 
-      const trimmed = lineText.trim();
+      const trimmed = this.stripDecorativePrefix(lineText.trim());
       if (trimmed || r === start.row || r === end.row) {
         lines.push(trimmed);
       }
@@ -104,6 +104,13 @@ export class SelectionManager {
     if (!sawDigit) return 0;
     if (i < line.length && line[i]?.char === ' ') i++;
     return i > start ? i : 0;
+  }
+
+  private stripDecorativePrefix(text: string): string {
+    return text
+      .replace(/^(?:[▸▾▶►●○◆▲△▼▽•✕✓▌]\s+)+/u, '')
+      .replace(/^\[(?:x|~| )\]\s+/u, '')
+      .trimEnd();
   }
 
   public isCellSelected(col: number, absoluteRow: number): boolean {

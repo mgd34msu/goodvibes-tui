@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { renderConversationNotice, renderConversationKeyValueRow, renderConversationFragment } from '../../renderer/conversation-surface.ts';
+import { renderConversationNotice, renderConversationKeyValueRow, renderConversationFragment, renderConversationEventLine } from '../../renderer/conversation-surface.ts';
 import { lineToString } from '../setup.ts';
 
 describe('conversation surface', () => {
@@ -53,5 +53,21 @@ describe('conversation surface', () => {
       { accent: '#00ffff', text: '#cbd5e1', dim: true },
     );
     expect(lineToString(lines[0])).toContain('▌');
+  });
+
+  test('renders event lines with a strong label and marker for transcript families', () => {
+    const line = renderConversationEventLine(60, {
+      marker: '●',
+      markerFg: '#22d3ee',
+      label: 'assistant',
+      labelFg: '#22d3ee',
+    }, [
+      { text: ' gpt-5.4 (openai) ', fg: '#94a3b8', dim: true },
+      { text: ' ● tools:2 ', fg: '#38bdf8' },
+    ]);
+    const text = lineToString([line][0]);
+    expect(text).toContain('assistant');
+    expect(text).toContain('tools:2');
+    expect(text).toContain('●');
   });
 });

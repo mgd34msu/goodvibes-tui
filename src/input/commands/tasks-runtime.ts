@@ -35,10 +35,13 @@ export function registerTasksRuntimeCommands(registry: CommandRegistry): void {
     usage: '[list [status|kind] | show <taskId> | output <taskId> | create <kind> <owner> <title...> | update <taskId> <title|description|result> <value...> | complete <taskId> [result] | fail <taskId> <error...> | cancel <taskId> [note] | pause <taskId> [note] | resume <taskId> [note] | retry <taskId> [note]]',
     handler(args, ctx) {
       if (args.length === 0) {
-        const panelManager = getPanelManager();
-        panelManager.open('tasks');
-        panelManager.show();
-        ctx.renderRequest();
+        if (ctx.showPanel) ctx.showPanel('tasks');
+        else {
+          const panelManager = getPanelManager();
+          panelManager.open('tasks');
+          panelManager.show();
+          ctx.renderRequest();
+        }
         return;
       }
 

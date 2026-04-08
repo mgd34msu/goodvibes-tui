@@ -1,7 +1,7 @@
 import type { Line } from '../types/grid.ts';
 import { createEmptyLine } from '../types/grid.ts';
 import { BasePanel } from './base-panel.ts';
-import { buildPanelLine, buildPanelWorkspace, DEFAULT_PANEL_PALETTE, type PanelWorkspaceSection } from './polish.ts';
+import { buildGuidanceLine, buildPanelLine, buildPanelWorkspace, DEFAULT_PANEL_PALETTE, type PanelWorkspaceSection } from './polish.ts';
 import { getSettingsControlPlaneSnapshot } from '../runtime/settings/control-plane.ts';
 import type { ConfigManager } from '../config/index.ts';
 import { getTrackedVisibleWindow } from '../renderer/surface-layout.ts';
@@ -44,7 +44,17 @@ export class SettingsSyncPanel extends BasePanel {
     const snapshot = getSettingsControlPlaneSnapshot(this.configManager);
     const safeSelectedIndex = Math.max(0, Math.min(this.selectedIndex, Math.max(0, snapshot.resolvedEntries.length - 1)));
     this.selectedIndex = safeSelectedIndex;
+    const postureLines: Line[] = [
+      buildPanelLine(width, [[' resolved keys ', C.label], [String(snapshot.resolvedEntries.length), C.value], ['  conflicts ', C.label], [String(snapshot.conflicts.length), snapshot.conflicts.length > 0 ? C.error : C.good], ['  failures ', C.label], [String(snapshot.recentFailures.length), snapshot.recentFailures.length > 0 ? C.warn : C.good]]),
+      buildPanelLine(width, [[' managed locks ', C.label], [String(snapshot.managedLockCount), snapshot.managedLockCount > 0 ? C.warn : C.dim], ['  staged bundle ', C.label], [snapshot.stagedManagedBundle ? snapshot.stagedManagedBundle.profileName : 'none', snapshot.stagedManagedBundle ? C.info : C.dim]]),
+      buildGuidanceLine(width, '/settingssync conflicts', 'review conflicting synced values before they silently shape effective configuration', C),
+      buildGuidanceLine(width, '/managed review', 'inspect staged managed changes, risk posture, and rollback records', C),
+    ];
     const sections: PanelWorkspaceSection[] = [
+      {
+        title: 'Posture',
+        lines: postureLines,
+      },
       {
         title: 'Layers',
         lines: [

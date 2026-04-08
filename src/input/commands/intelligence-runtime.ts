@@ -55,10 +55,13 @@ export function registerIntelligenceRuntimeCommands(registry: CommandRegistry): 
     async handler(args, ctx) {
       const sub = (args[0] ?? 'review').toLowerCase();
       if (sub === 'panel' || sub === 'open') {
-        const panelManager = getPanelManager();
-        panelManager.open('intelligence');
-        panelManager.show();
-        ctx.renderRequest();
+        if (ctx.showPanel) ctx.showPanel('intelligence');
+        else {
+          const panelManager = getPanelManager();
+          panelManager.open('intelligence');
+          panelManager.show();
+          ctx.renderRequest();
+        }
         return;
       }
 

@@ -36,6 +36,8 @@ describe('conversation runtime command', () => {
       runtime: { model: 'gpt-5.4', provider: 'openai', debugMode: false, systemPrompt: '', reasoningEffort: '', sessionId: 'sess-1' },
       renderRequest: () => {},
       print: (text: string) => { out.push(text); },
+      getScrollTop: () => 0,
+      scrollToLine: (line: number) => { out.push(`[scroll:${line}]`); },
       exit: () => {},
       toolRegistry: {} as never,
       mcpRegistry: {} as never,
@@ -75,5 +77,10 @@ describe('conversation runtime command', () => {
     out.length = 0;
     await command!.handler(['restore'], ctx);
     expect(out.join('\n')).toContain('Conversation Restore Review');
+
+    out.length = 0;
+    await command!.handler(['next', 'tool_result'], ctx);
+    expect(out.join('\n')).toContain('[scroll:');
+    expect(out.join('\n')).toContain('Jumped to tool_result event');
   });
 });

@@ -2,6 +2,7 @@ import type { Line } from '../types/grid.ts';
 import { createEmptyLine, createStyledCell } from '../types/grid.ts';
 import { getDisplayWidth, wrapText } from '../utils/terminal-width.ts';
 import { getSurfaceContentRows } from '../renderer/surface-layout.ts';
+import { GLYPHS } from '../renderer/ui-primitives.ts';
 
 export interface PanelPalette {
   readonly label: string;
@@ -142,7 +143,7 @@ export function buildSectionHeader(
   title: string,
   palette: PanelPalette,
 ): Line {
-  const divider = '-'.repeat(Math.max(0, width - getDisplayWidth(title) - 3));
+  const divider = GLYPHS.frame.horizontal.repeat(Math.max(0, width - getDisplayWidth(title) - 3));
   return buildPanelLine(width, [
     [' ', palette.label],
     [title, palette.label],
@@ -189,7 +190,7 @@ export function buildSearchInputLine(
 ): Line {
   const active = options.active ?? false;
   const normalizedValue = active && value.endsWith('_')
-    ? `${value.slice(0, -1)}█`
+    ? `${value.slice(0, -1)}${GLYPHS.surface.cursor}`
     : value;
   const hasValue = normalizedValue.trim().length > 0;
   const content = hasValue ? normalizedValue : (options.emptyLabel ?? '(none)');
@@ -230,13 +231,13 @@ export function buildMeterLine(
 ): Line {
   const prefix = options.prefix ?? ' ';
   const suffix = options.suffix ?? ' ';
-  const filledChar = options.filledChar ?? '#';
-  const emptyChar = options.emptyChar ?? '.';
+  const emptyChar = options.emptyChar ?? GLYPHS.meter.empty;
+  const normalizedFilledChar = options.filledChar ?? GLYPHS.meter.filled;
   const barWidth = Math.max(1, total);
   const clampedFilled = Math.max(0, Math.min(barWidth, filled));
   const segments: StyledPanelSegment[] = [{ text: prefix, fg: colors.label ?? colors.filled }];
   if (clampedFilled > 0) {
-    segments.push({ text: filledChar.repeat(clampedFilled), fg: colors.filled });
+    segments.push({ text: normalizedFilledChar.repeat(clampedFilled), fg: colors.filled });
   }
   if (clampedFilled < barWidth) {
     segments.push({ text: emptyChar.repeat(barWidth - clampedFilled), fg: colors.empty });
@@ -303,7 +304,8 @@ export function buildPanelWorkspace(
   );
 
   let consumed = 0;
-  for (const section of config.sections) {
+  for (let sectionIndex = 0; sectionIndex < config.sections.length; sectionIndex++) {
+    const section = config.sections[sectionIndex]!;
     if (consumed >= contentBudget) break;
     if (section.title) {
       if (consumed >= contentBudget) break;

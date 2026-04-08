@@ -8,11 +8,17 @@ import type { SelectionResult } from './selection-modal.ts';
 
 export type ModalStackState = ActiveModalState & {
   modalStack: string[];
+  modalReturnFocus?: 'prompt' | 'panel' | 'indicator';
+  panelFocused: boolean;
+  indicatorFocused: boolean;
 };
 
 export function modalOpened(state: ModalStackState, name: string): void {
   if (getActiveModalName(state) === null && state.modalStack.length > 0) {
     state.modalStack.length = 0;
+  }
+  if (state.modalStack.length === 0) {
+    state.modalReturnFocus = state.indicatorFocused ? 'indicator' : state.panelFocused ? 'panel' : 'prompt';
   }
   state.modalStack.push(name);
 }
@@ -50,6 +56,8 @@ export function handleEscape(state: EscapeState): {
   shortcutsOverlayActive: boolean;
   shortcutsScrollOffset: number;
   selectionCallback: ((result: SelectionResult | null) => void) | null;
+  panelFocused: boolean;
+  indicatorFocused: boolean;
 } {
   let prompt = state.prompt;
   let cursorPos = state.cursorPos;
@@ -59,6 +67,20 @@ export function handleEscape(state: EscapeState): {
   let shortcutsOverlayActive = state.shortcutsOverlayActive;
   let shortcutsScrollOffset = state.shortcutsScrollOffset;
   let selectionCallback = state.selectionCallback;
+  let panelFocused = state.panelFocused;
+  let indicatorFocused = state.indicatorFocused;
+
+  const restoreFocus = (): void => {
+    if (state.modalStack.length > 0 || getActiveModalName({
+      ...state,
+      helpOverlayActive,
+      shortcutsOverlayActive,
+      commandMode,
+    }) !== null) return;
+    panelFocused = state.modalReturnFocus === 'panel';
+    indicatorFocused = state.modalReturnFocus === 'indicator';
+    state.modalReturnFocus = 'prompt';
+  };
 
   if (state.settingsModal.active && state.settingsModal.editingMode) {
     state.settingsModal.cancelEdit();
@@ -72,6 +94,8 @@ export function handleEscape(state: EscapeState): {
       shortcutsOverlayActive,
       shortcutsScrollOffset,
       selectionCallback,
+      panelFocused,
+      indicatorFocused,
     };
   }
 
@@ -133,6 +157,8 @@ export function handleEscape(state: EscapeState): {
     closeModal(current);
     if (previous) {
       reopenModal(previous);
+    } else {
+      restoreFocus();
     }
     state.requestRender();
     return {
@@ -144,6 +170,8 @@ export function handleEscape(state: EscapeState): {
       shortcutsOverlayActive,
       shortcutsScrollOffset,
       selectionCallback,
+      panelFocused,
+      indicatorFocused,
     };
   }
 
@@ -155,6 +183,7 @@ export function handleEscape(state: EscapeState): {
   });
   if (active) {
     closeModal(active);
+    restoreFocus();
     state.requestRender();
     return {
       prompt,
@@ -165,6 +194,8 @@ export function handleEscape(state: EscapeState): {
       shortcutsOverlayActive,
       shortcutsScrollOffset,
       selectionCallback,
+      panelFocused,
+      indicatorFocused,
     };
   }
 
@@ -181,6 +212,8 @@ export function handleEscape(state: EscapeState): {
       shortcutsOverlayActive,
       shortcutsScrollOffset,
       selectionCallback,
+      panelFocused,
+      indicatorFocused,
     };
   }
 
@@ -194,5 +227,7 @@ export function handleEscape(state: EscapeState): {
     shortcutsOverlayActive,
     shortcutsScrollOffset,
     selectionCallback,
+    panelFocused,
+    indicatorFocused,
   };
 }

@@ -95,9 +95,12 @@ export function registerPlatformSandboxRuntimeCommands(registry: CommandRegistry
     async handler(args, ctx) {
       const sub = args[0] ?? 'open';
       if (sub === 'open' || sub === 'panel') {
-        const panelManager = getPanelManager();
-        panelManager.open('sandbox');
-        panelManager.show();
+        if (ctx.showPanel) ctx.showPanel('sandbox');
+        else {
+          const panelManager = getPanelManager();
+          panelManager.open('sandbox');
+          panelManager.show();
+        }
         return;
       }
       if (sub === 'review') {

@@ -245,7 +245,7 @@ export class SandboxPanel extends BasePanel {
     }
 
     const sections: PanelWorkspaceSection[] = [
-      { title: 'Overview', lines: overviewLines },
+      { title: 'Posture', lines: overviewLines },
       ...(selectionLines.length > 0
         ? [{ title: selectedProfile ? 'Selected Profile' : 'Selected Session', lines: selectionLines }]
         : []),

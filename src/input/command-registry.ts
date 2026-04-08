@@ -95,6 +95,10 @@ export interface CommandContext {
   getScrollTop?: () => number;
   /** Toggle the panel sidebar (open/close). */
   openPanelPicker?: () => void;
+  /** Open a panel, show the panel workspace, and focus it for direct user interaction. */
+  showPanel?: (panelId: string, pane?: 'top' | 'bottom') => void;
+  /** Move keyboard focus into the visible panel workspace. */
+  focusPanels?: () => void;
   /** Toggle the Operator Control Plane (Ops) panel. */
   openOpsPanel?: () => void;
   /** Open the unified operator cockpit panel. */

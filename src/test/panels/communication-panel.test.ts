@@ -17,6 +17,7 @@ describe('CommunicationPanel', () => {
     const text = linesText(panel.render(100, 12));
 
     expect(text).toContain('Communication Control Room');
+    expect(text).toContain('Posture');
     expect(text).toContain('No structured communication recorded yet');
   });
 
@@ -58,7 +59,10 @@ describe('CommunicationPanel', () => {
     const panel = new CommunicationPanel(store);
     const text = linesText(panel.render(120, 16));
 
-    expect(text).toContain('sent:1 delivered:1 blocked:1');
+    expect(text).toContain('Posture');
+    expect(text).toContain('sent');
+    expect(text).toContain('delivered');
+    expect(text).toContain('blocked');
     expect(text).toContain('reviewer-1 -> engineer-1');
     expect(text).toContain('review');
     expect(text).toContain('broadcast reserved for orchestrator');

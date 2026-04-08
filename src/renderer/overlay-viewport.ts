@@ -1,5 +1,13 @@
 import { getSurfaceContentRows } from './surface-layout.ts';
 
+export type OverlayWidthClass = 'narrow' | 'medium' | 'wide';
+
+export function getOverlayWidthClass(viewportWidth: number): OverlayWidthClass {
+  if (viewportWidth < 88) return 'narrow';
+  if (viewportWidth < 120) return 'medium';
+  return 'wide';
+}
+
 export interface OverlayViewportBudgetOptions {
   readonly chromeRows: number;
   readonly minContentRows?: number;
@@ -74,8 +82,10 @@ export function getOverlaySurfaceMetrics(
   options: OverlaySurfaceMetricsOptions,
 ): OverlaySurfaceMetrics {
   // Keep overlays comfortably inset from shell panels and avoid wide, low-information modals.
-  const margin = options.margin ?? (viewportWidth >= 120 ? 6 : 4);
-  const boxWidth = getOverlayMaxWidth(viewportWidth, margin, options.maxWidth ?? (viewportWidth >= 120 ? 84 : viewportWidth >= 100 ? 78 : 72));
+  const widthClass = getOverlayWidthClass(viewportWidth);
+  const margin = options.margin ?? (widthClass === 'wide' ? 6 : 4);
+  const defaultMaxWidth = widthClass === 'wide' ? 84 : widthClass === 'medium' ? 78 : 72;
+  const boxWidth = getOverlayMaxWidth(viewportWidth, margin, options.maxWidth ?? defaultMaxWidth);
   const contentRows = getOverlayContentBudget(viewportHeight, {
     chromeRows: options.chromeRows,
     minContentRows: options.minContentRows ?? 8,

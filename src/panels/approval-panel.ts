@@ -64,11 +64,19 @@ export class ApprovalPanel extends BasePanel {
   public render(width: number, height: number): Line[] {
     this.needsRender = false;
     const policySnapshot = getPolicyRuntimeState().getSnapshot();
-    const overviewLines = [buildKeyValueLine(width, [
-      { label: 'why prompted', value: 'risk summary', valueColor: C.value },
-      { label: 'what-if', value: '/policy simulate + preflight', valueColor: C.info },
-      { label: 'operator', value: '/security + /cockpit', valueColor: C.good },
-    ], C)];
+    const postureLines = [
+      buildKeyValueLine(width, [
+        { label: 'why prompted', value: 'risk summary', valueColor: C.value },
+        { label: 'what-if', value: '/policy simulate + preflight', valueColor: C.info },
+        { label: 'operator', value: '/security + /cockpit', valueColor: C.good },
+      ], C),
+      buildKeyValueLine(width, [
+        { label: 'recent approvals', value: String(policySnapshot.recentPermissionAudit.filter((entry) => entry.approved === true).length), valueColor: C.good },
+        { label: 'recent denials', value: String(policySnapshot.recentPermissionAudit.filter((entry) => entry.approved === false).length), valueColor: C.bad },
+        { label: 'pending', value: String(policySnapshot.recentPermissionAudit.filter((entry) => entry.approved === undefined).length), valueColor: C.info },
+      ], C),
+      buildGuidanceLine(width, '/approval review shell', 'inspect the highest-risk approval lane and refine scoped review posture', C),
+    ];
     const footerLines = [buildPanelLine(width, [[`  Up/Down move  Home/End jump  selected lane opens the next command path`, C.dim]])];
 
     const window = getTrackedVisibleWindow(APPROVAL_ROWS.length, this.selectedIndex, Math.max(4, height - 12), this.scrollOffset, 1);
@@ -124,7 +132,7 @@ export class ApprovalPanel extends BasePanel {
       title: 'Approval Control Room',
       intro: 'Action-specific review lanes for approvals, denials, escalations, and preflight guidance.',
       sections: [
-        { title: 'Overview', lines: overviewLines },
+        { title: 'Posture', lines: postureLines },
         { title: 'Selected Lane', lines: detailLines },
         { title: 'Recent Pressure', lines: recentAuditLines },
         { title: 'Rule Suggestions', lines: ruleSuggestionLines },

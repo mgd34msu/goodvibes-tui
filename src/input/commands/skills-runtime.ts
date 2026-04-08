@@ -22,10 +22,13 @@ export function registerSkillsRuntimeCommands(registry: CommandRegistry): void {
     handler(args, ctx) {
       const sub = args[0] ?? 'open';
       if (sub === 'open' || sub === 'panel') {
-        const panelManager = getPanelManager();
-        panelManager.open('skills');
-        panelManager.show();
-        ctx.renderRequest();
+        if (ctx.showPanel) ctx.showPanel('skills');
+        else {
+          const panelManager = getPanelManager();
+          panelManager.open('skills');
+          panelManager.show();
+          ctx.renderRequest();
+        }
         return;
       }
       const skills = discoverSkills();

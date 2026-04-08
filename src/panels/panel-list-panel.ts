@@ -19,6 +19,7 @@ import { getPanelManager } from './panel-manager.ts';
 import { createEmptyLine } from '../types/grid.ts';
 import {
   buildEmptyState,
+  buildKeyValueLine,
   buildPanelLine,
   buildSearchInputLine,
   buildPanelWorkspace,
@@ -27,6 +28,7 @@ import {
 } from './polish.ts';
 import { truncateDisplay } from '../utils/terminal-width.ts';
 import { getTrackedVisibleWindow } from '../renderer/surface-layout.ts';
+import { wrapWithHangingIndent } from '../renderer/text-layout.ts';
 import {
   getPanelSearchFocusTransition,
   isPanelSearchBackspace,
@@ -91,26 +93,8 @@ function panelPlacementMarker(options: {
 
 function wrapPanelDescription(text: string, width: number, maxLines = 2): string[] {
   if (width <= 0) return [''];
-  const words = text.split(/\s+/).filter(Boolean);
-  if (words.length === 0) return [''];
-  const lines: string[] = [];
-  let current = '';
-  for (const word of words) {
-    const next = current ? `${current} ${word}` : word;
-    if (next.length <= width) {
-      current = next;
-      continue;
-    }
-    if (current) lines.push(current);
-    current = word;
-    if (lines.length === maxLines - 1) break;
-  }
-  if (current && lines.length < maxLines) lines.push(current);
-  if (lines.length > maxLines) lines.length = maxLines;
-  if (lines.length === maxLines && words.join(' ').length > lines.join(' ').length) {
-    lines[maxLines - 1] = truncateDisplay(lines[maxLines - 1] ?? '', width);
-  }
-  return lines;
+  const lines = wrapWithHangingIndent(text, width, '', maxLines);
+  return lines.length > 0 ? lines.map((line) => truncateDisplay(line, width)) : [''];
 }
 
 // ── PanelListPanel ────────────────────────────────────────────────────────────
@@ -333,6 +317,15 @@ export class PanelListPanel extends BasePanel {
     const topIds = new Set(pm.getTopPane().panels.map(p => p.id));
     const bottomIds = new Set(pm.getBottomPane().panels.map(p => p.id));
     const focusedPane = pm.getFocusedPane();
+    const postureLines: Line[] = [
+      buildKeyValueLine(width, [
+        { label: 'visible panels', value: String(pm.getAllOpen().length), valueColor: pm.getAllOpen().length > 0 ? C.name : C.dim },
+        { label: 'focused pane', value: focusedPane, valueColor: focusedPane === 'top' ? C.paneTop : C.paneBottom },
+        { label: 'split', value: pm.isBottomPaneVisible() ? 'dual' : 'single', valueColor: pm.isBottomPaneVisible() ? C.info : C.dim },
+        { label: 'results', value: String(panelEntries.length), valueColor: C.value },
+      ], C),
+      buildPanelLine(width, [[` Filter owns input only when selected. Open and switch operations should land directly in focused panel state.`, C.intro]]),
+    ];
     const entryLines: Line[] = [
       buildSearchInputLine(width, 'Filter: ', `${this._query}${this._filterFocused ? '_' : ''}`, C, {
         active: this._filterFocused,
@@ -413,7 +406,10 @@ export class PanelListPanel extends BasePanel {
     }
 
     const hintText = ` [${this._selectedIndex + 1}/${panelEntries.length}] ↑/↓ nav  Enter open  T/B place  M move  S split  Tab focus`;
-    const sections: PanelWorkspaceSection[] = [{ title: 'Panels', lines: entryLines }];
+    const sections: PanelWorkspaceSection[] = [
+      { title: 'Posture', lines: postureLines },
+      { title: 'Panels', lines: entryLines },
+    ];
     const lines = buildPanelWorkspace(width, height, {
       title: 'Panel Workspace',
       intro,

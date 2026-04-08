@@ -66,10 +66,13 @@ export function registerLocalRuntimeCommands(registry: CommandRegistry): void {
       const sub = (args[0] ?? '').toLowerCase();
       if (sub === 'panel' || sub === 'review') {
         try {
-          const panelManager = getPanelManager();
-          panelManager.open('tools');
-          panelManager.show();
-          ctx.renderRequest();
+          if (ctx.showPanel) ctx.showPanel('tools');
+          else {
+            const panelManager = getPanelManager();
+            panelManager.open('tools');
+            panelManager.show();
+            ctx.renderRequest();
+          }
         } catch {
           // Panel registry may be unavailable in lightweight command-only contexts.
         }

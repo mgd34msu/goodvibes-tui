@@ -1,6 +1,7 @@
 import { type Line } from '../types/grid.ts';
 import { UIFactory } from './ui-factory.ts';
 import { getDisplayWidth } from '../utils/terminal-width.ts';
+import { GLYPHS } from './ui-primitives.ts';
 
 /** Truncate a string to fit within maxWidth display columns. */
 function truncateToWidth(text: string, maxWidth: number): string {
@@ -41,8 +42,8 @@ export function renderProcessIndicator(
     if (agentCount > 0) parts.push(`${agentCount} agent${agentCount !== 1 ? 's' : ''}`);
     if (toolCount > 0) parts.push(`${toolCount} tool${toolCount !== 1 ? 's' : ''} running`);
     const label = total === 0
-      ? 'No background processes  •  back to input'
-      : `${parts.join(' │ ')}  •  Enter to open  •  back to input`;
+      ? `No background processes  ${GLYPHS.status.pending}  back to input`
+      : `${parts.join(` ${GLYPHS.navigation.pipeSeparator} `)}  ${GLYPHS.status.pending}  Enter to open  ${GLYPHS.status.pending}  back to input`;
     return renderPlainStatus(label, { fg: '#00ffff', bold: true });
   }
 
@@ -69,7 +70,7 @@ export function renderProcessIndicator(
   const progressSuffix = agentProgress && progressMaxLen > 10
     ? ` | ${agentProgress.length > progressMaxLen ? agentProgress.slice(0, Math.max(0, progressMaxLen - 3)) + '...' : agentProgress}`
     : '';
-  const label = `${parts.join(' │ ')}${progressSuffix}`;
-  const hint = '  •  Enter to view';
+  const label = `${parts.join(` ${GLYPHS.navigation.pipeSeparator} `)}${progressSuffix}`;
+  const hint = `  ${GLYPHS.status.pending}  Enter to view`;
   return renderPlainStatus(`${label}${hint}`, { fg: '#00ffff', bold: true });
 }

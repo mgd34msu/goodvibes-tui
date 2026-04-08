@@ -54,6 +54,7 @@ describe('renderProcessIndicator', () => {
     const text = lineToString(lines[0]);
     expect(text).toContain('1 agent');
     expect(text).toContain('2 tools running');
+    expect(text).toContain('│');
   });
 
   test('pluralization: 1 agent singular', () => {
@@ -116,6 +117,7 @@ describe('renderProcessIndicator', () => {
     const text = lines[0].map(c => c.char).join('');
     expect(text).toContain('Enter to open');
     expect(text).toContain('back to input');
+    expect(text).toContain('•');
   });
 
   test('focused line uses cyan bold styling', () => {

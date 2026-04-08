@@ -18,7 +18,9 @@ import type { CompactionContext } from './context-compaction.ts';
 import { sessionMemoryStore } from './session-memory.ts';
 import { sessionLineageTracker } from './session-lineage.ts';
 import { buildTranscriptEventIndex } from './transcript-events/index.ts';
-import { renderConversationCollapsedFragment } from '../renderer/conversation-surface.ts';
+import type { TranscriptEventKind } from './transcript-events/index.ts';
+import { renderConversationCollapsedFragment, renderConversationEventLine } from '../renderer/conversation-surface.ts';
+import { GLYPHS } from '../renderer/ui-primitives.ts';
 
 /**
  * ConversationManager - Owns conversation messages and the rendered history buffer.
@@ -148,6 +150,8 @@ export class ConversationManager {
   private collapseState: Map<string, boolean> = new Map();
   /** Block registry: track rendered blocks for copy/apply. */
   protected blockRegistry: BlockMeta[] = [];
+  /** Message index -> first rendered line index in the history buffer. */
+  private messageLineRegistry: number[] = [];
   /** Registry of rendered line indices for system messages matching /error/i. */
   private errorLineRegistry: number[] = [];
   /** Streaming block start line in history buffer (for incremental streaming update). */
@@ -361,6 +365,7 @@ export class ConversationManager {
     this.history.clear();
     this.appendedUpTo = 0;
     this.blockRegistry = [];
+    this.messageLineRegistry = [];
     this.errorLineRegistry = [];
     const width = this.getWidth();
     this.lastRenderedWidth = width;
@@ -412,6 +417,26 @@ export class ConversationManager {
     collapseThreshold: number,
     msgIdx: number,
   ): void {
+    const assistantHeaderDetails = [];
+    if (message.model) {
+      assistantHeaderDetails.push({ text: ` ${message.model}${message.provider ? ` (${message.provider})` : ''} `, fg: '#94a3b8', dim: true });
+    }
+    if (message.toolCalls && message.toolCalls.length > 0) {
+      assistantHeaderDetails.push({ text: ` ${GLYPHS.status.pending} tools:${message.toolCalls.length} `, fg: '#38bdf8' });
+    }
+    if (message.reasoningContent || message.reasoningSummary) {
+      assistantHeaderDetails.push({ text: ` ${GLYPHS.status.active} reasoning `, fg: '#a855f7', dim: true });
+    }
+    if (assistantHeaderDetails.length > 0) {
+      this.history.addLine(renderConversationEventLine(width, {
+        marker: GLYPHS.status.active,
+        markerFg: '#22d3ee',
+        label: 'assistant',
+        labelFg: '#22d3ee',
+        detailFg: '244',
+      }, assistantHeaderDetails));
+    }
+
     // Render reasoning/thinking block if enabled and present
     const showThinking = this.configManager?.get('display.showThinking') ?? false;
     const showReasoningSummary = this.configManager?.get('display.showReasoningSummary') ?? false;
@@ -436,16 +461,6 @@ export class ConversationManager {
       const summaryLines = renderThinkingBlock(message.reasoningSummary, width);
       this.history.addLines(summaryLines);
       this.history.addLine(createEmptyLine(width));
-    }
-    // Render model label if present (dim, above content)
-    if (message.model) {
-      const labelText = message.provider ? `${message.model} (${message.provider})` : message.model;
-      const labelLine = createEmptyLine(width);
-      const labelStr = ' '.repeat(LAYOUT.LEFT_MARGIN) + labelText;
-      for (let ci = 0; ci < labelStr.length && ci < width; ci++) {
-        labelLine[ci] = { char: labelStr[ci], fg: '238', bg: '', bold: false, dim: true, underline: false, italic: false, strikethrough: false };
-      }
-      this.history.addLine(labelLine);
     }
     // Render assistant content using the markdown renderer
     if (message.content) {
@@ -547,6 +562,17 @@ export class ConversationManager {
       this.collapseState.set(collapseKey, isShort ? false : true);
     }
 
+    this.history.addLine(renderConversationEventLine(width, {
+      marker: blockType === 'diff' ? GLYPHS.status.dualPane : GLYPHS.status.active,
+      markerFg: blockType === 'diff' ? '#f59e0b' : '#38bdf8',
+      label: blockType === 'diff' ? 'diff' : 'tool result',
+      labelFg: blockType === 'diff' ? '#f59e0b' : '#38bdf8',
+      detailFg: '244',
+    }, [
+      { text: ` ${message.callId || 'standalone'} `, fg: '244', dim: true },
+      { text: ` ${isCollapsed ? GLYPHS.navigation.collapsed : GLYPHS.navigation.expanded} ${lineCount} line${lineCount === 1 ? '' : 's'} `, fg: '244', dim: true },
+    ]));
+
     if (isCollapsed) {
       // Collapsed tool/diff output stays in the fragment language used by the
       // transcript, instead of regressing to a generic system notice row.
@@ -554,10 +580,10 @@ export class ConversationManager {
       const preview = contentLines[0].slice(0, width - LAYOUT.LEFT_MARGIN - LAYOUT.RIGHT_MARGIN - COLLAPSE_SUFFIX_RESERVE);
       const hiddenCount = lineCount - 1;
       const collapsedText = hiddenCount > 0
-        ? `${preview}...  [+${hiddenCount} lines]`
+        ? `${preview}...  [${GLYPHS.navigation.collapsed} ${hiddenCount} hidden]`
         : preview;
       const rendered = renderConversationCollapsedFragment(collapsedText, width, {
-        prefix: blockType === 'diff' ? ' ≋ ' : ' ▸ ',
+        prefix: blockType === 'diff' ? ` ${GLYPHS.status.dualPane} ` : ` ${GLYPHS.navigation.collapsed} `,
         prefixFg: blockType === 'diff' ? '#f59e0b' : '#38bdf8',
         text: '244',
         bodyBg: '#1a1a1a',
@@ -607,6 +633,7 @@ export class ConversationManager {
 
     for (let msgIdx = 0; msgIdx < messages.length; msgIdx++) {
       const m = messages[msgIdx];
+      this.messageLineRegistry[msgIdx] = this.history.getLineCount();
       if (m.role === 'user') {
         this.renderUserMessage(m, width);
       } else if (m.role === 'assistant') {
@@ -714,6 +741,34 @@ export class ConversationManager {
     if (errors.length === 0) return -1;
     const before = [...errors].reverse().find(l => l < currentLine);
     return before ?? errors[errors.length - 1];
+  }
+
+  public nextTranscriptEventLine(currentLine: number, kind: TranscriptEventKind | 'all' = 'all'): number {
+    this.flushHistory();
+    const index = this.getTranscriptEventIndex();
+    const events = kind === 'all' ? index.events : index.events.filter((event) => event.kind === kind);
+    if (events.length === 0) return -1;
+    const lines = events
+      .map((event) => this.messageLineRegistry[event.messageIndex] ?? -1)
+      .filter((line) => line >= 0)
+      .sort((a, b) => a - b);
+    if (lines.length === 0) return -1;
+    const after = lines.find((line) => line > currentLine);
+    return after ?? lines[0]!;
+  }
+
+  public prevTranscriptEventLine(currentLine: number, kind: TranscriptEventKind | 'all' = 'all'): number {
+    this.flushHistory();
+    const index = this.getTranscriptEventIndex();
+    const events = kind === 'all' ? index.events : index.events.filter((event) => event.kind === kind);
+    if (events.length === 0) return -1;
+    const lines = events
+      .map((event) => this.messageLineRegistry[event.messageIndex] ?? -1)
+      .filter((line) => line >= 0)
+      .sort((a, b) => a - b);
+    if (lines.length === 0) return -1;
+    const before = [...lines].reverse().find((line) => line < currentLine);
+    return before ?? lines[lines.length - 1]!;
   }
 
   public suppressSplash: boolean = false;

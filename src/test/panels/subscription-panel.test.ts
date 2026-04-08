@@ -62,6 +62,7 @@ describe('SubscriptionPanel', () => {
       panel.handleInput('ArrowDown');
       const text = linesText(panel.render(110, 14));
       expect(text).toContain('Provider Subscriptions');
+      expect(text).toContain('Posture');
       expect(text).toContain('openai');
       expect(text).toContain('ACTIVE');
       expect(text).toContain('override=active');
@@ -102,6 +103,7 @@ describe('SubscriptionPanel', () => {
       expect(panel.handleInput('enter')).toBe(true);
       let text = linesText(panel.render(110, 16));
       expect(text).toContain('Press Enter or X again to sign out openai.');
+      expect(text).toContain('/subscription login <provider> start');
       expect(manager.get('openai')).not.toBeNull();
       expect(panel.handleInput('enter')).toBe(true);
       text = linesText(panel.render(110, 16));

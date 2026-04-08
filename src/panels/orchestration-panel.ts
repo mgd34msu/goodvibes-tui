@@ -4,6 +4,8 @@ import { BasePanel } from './base-panel.ts';
 import type { RuntimeStore } from '../runtime/store/index.ts';
 import {
   buildEmptyState,
+  buildGuidanceLine,
+  buildKeyValueLine,
   buildPanelLine,
   buildPanelWorkspace,
   DEFAULT_PANEL_PALETTE,
@@ -102,17 +104,24 @@ export class OrchestrationPanel extends BasePanel {
 
     const domain = this.store.getState().orchestration;
     const graphs = this._graphs();
+    const postureLines = [
+      buildKeyValueLine(width, [
+        { label: 'graphs', value: String(domain.totalGraphs), valueColor: domain.totalGraphs > 0 ? C.value : C.dim },
+        { label: 'active', value: String(domain.activeGraphIds.length), valueColor: domain.activeGraphIds.length > 0 ? C.running : C.dim },
+        { label: 'completed', value: String(domain.totalCompletedGraphs), valueColor: domain.totalCompletedGraphs > 0 ? C.completed : C.dim },
+        { label: 'failed', value: String(domain.totalFailedGraphs), valueColor: domain.totalFailedGraphs > 0 ? C.failed : C.dim },
+        { label: 'guards', value: String(domain.recursionGuardTrips), valueColor: domain.recursionGuardTrips > 0 ? C.blocked : C.dim },
+      ], C),
+      buildGuidanceLine(width, '/orchestration', 'inspect recursive execution posture, graph health, and node contract flow', C),
+    ];
     if (graphs.length === 0) {
       const workspace = buildPanelWorkspace(width, height, {
         title: 'Orchestration Control Room',
         intro,
         sections: [{
-          title: 'Overview',
+          title: 'Posture',
           lines: [
-            buildPanelLine(width, [[
-              `graphs:${domain.totalGraphs} active:${domain.activeGraphIds.length} completed:${domain.totalCompletedGraphs} failed:${domain.totalFailedGraphs} guards:${domain.recursionGuardTrips}`,
-              C.dim,
-            ]]),
+            ...postureLines,
             ...buildEmptyState(
               width,
               ' No orchestration graphs recorded yet.',
@@ -135,12 +144,7 @@ export class OrchestrationPanel extends BasePanel {
     const selected = graphs[this.selectedIndex]!;
     const graphWindow = getTrackedVisibleWindow(graphs.length, this.selectedIndex, Math.max(4, height - 16), this.scrollOffset, 1);
     this.scrollOffset = graphWindow.start;
-    const graphLines: Line[] = [
-      buildPanelLine(width, [[
-        `graphs:${domain.totalGraphs} active:${domain.activeGraphIds.length} completed:${domain.totalCompletedGraphs} failed:${domain.totalFailedGraphs} guards:${domain.recursionGuardTrips}`,
-        C.dim,
-      ]]),
-    ];
+    const graphLines: Line[] = [];
     for (let absolute = graphWindow.start; absolute < graphWindow.end; absolute++) {
       const graph = graphs[absolute]!;
       const bg = absolute === this.selectedIndex ? C.selectBg : undefined;
@@ -223,6 +227,7 @@ export class OrchestrationPanel extends BasePanel {
         });
 
     const sections: PanelWorkspaceSection[] = [
+      { title: 'Posture', lines: postureLines },
       { title: 'Graphs', lines: graphLines },
       { title: 'Selected Graph', lines: detailLines },
       { title: 'Nodes', lines: nodeLines },

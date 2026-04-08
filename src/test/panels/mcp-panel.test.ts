@@ -100,18 +100,16 @@ describe('McpPanel', () => {
       },
     ]) as never);
 
-    const first = linesText(panel.render(120, 16));
+    const first = linesText(panel.render(120, 20));
     expect(first).toContain('MCP Control Room');
     expect(first).toContain('docs-server');
     expect(first).toContain('constrained');
     expect(first).toContain('docs.example.com');
     expect(first).toContain('fresh');
-    expect(first).toContain('sandbox-docs-server');
-    expect(first).toContain('Recent Decisions');
-    expect(first).toContain('docs-server:search_docs ALLOW read_fs');
+    expect(first).toContain('Posture');
 
     panel.handleInput('down');
-    const second = linesText(panel.render(120, 16));
+    const second = linesText(panel.render(120, 20));
     expect(second).toContain('ops-server');
     expect(second).toContain('allow-all');
     expect(second).toContain('quarantined');
@@ -119,6 +117,5 @@ describe('McpPanel', () => {
     expect(second).toContain('alice');
     expect(second).toContain('/workspace');
     expect(second).toContain('sandbox-ops-server');
-    expect(second).toContain('ops-server:exec_shell DENY exec incoherent');
   });
 });

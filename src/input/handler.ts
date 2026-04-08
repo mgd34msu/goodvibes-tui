@@ -127,6 +127,7 @@ export class InputHandler {
    * Used to support back-navigation via Escape.
    */
   public modalStack: string[] = [];
+  public modalReturnFocus: 'prompt' | 'panel' | 'indicator' = 'prompt';
   public sessionPickerModal = new SessionPickerModal();
   public profilePickerModal = new ProfilePickerModal();
   /** True when the help overlay is visible. */
@@ -396,6 +397,9 @@ export class InputHandler {
       selectionModal: this.selectionModal,
       commandMode: this.commandMode,
       modalStack: this.modalStack,
+      modalReturnFocus: this.modalReturnFocus,
+      panelFocused: this.panelFocused,
+      indicatorFocused: this.indicatorFocused,
       prompt: this.prompt,
       cursorPos: this.cursorPos,
       requestRender: this.requestRender,
@@ -414,6 +418,9 @@ export class InputHandler {
     this.shortcutsOverlayActive = result.shortcutsOverlayActive;
     this.shortcutsScrollOffset = result.shortcutsScrollOffset;
     this.selectionCallback = result.selectionCallback;
+    this.panelFocused = result.panelFocused;
+    this.indicatorFocused = result.indicatorFocused;
+    this.modalReturnFocus = 'prompt';
   }
 
   /**

@@ -1,3 +1,5 @@
+import { GLYPHS } from './ui-primitives.ts';
+
 /**
  * Layout constants — single source of truth for margins and content width.
  * All renderers import these instead of hardcoding indent values.
@@ -11,10 +13,10 @@ export const LAYOUT = {
 } as const;
 
 export const TOOL_STATUS = {
-  SUCCESS_ICON: '✓',
+  SUCCESS_ICON: GLYPHS.status.success,
   SPINNER_FRAMES: ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'],
-  FAIL_ICON: '✗',
-  PENDING_ICON: '•',
+  FAIL_ICON: GLYPHS.status.failure,
+  PENDING_ICON: GLYPHS.status.pending,
   TOOL_NAME_PAD: 8,
 } as const;
 
