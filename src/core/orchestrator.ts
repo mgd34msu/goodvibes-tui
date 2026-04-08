@@ -377,7 +377,7 @@ export class Orchestrator {
 
     // Pre-turn plan injection: if an active plan exists, inject its current state into
     // the conversation so the LLM can refer to it and update item statuses.
-    const preTurnPlan = prepareConversationForTurn(this.conversation, text, content);
+    const preTurnPlan = prepareConversationForTurn(this.conversation, text, content, this.sessionId);
 
     this.turnStartMessageCount = this.conversation.getMessageCount();
     this.scrollToEnd(this.getViewportHeight());
@@ -671,6 +671,7 @@ export class Orchestrator {
             setPendingToolCalls: (calls) => { this._pendingToolCalls = calls; },
             messageQueueLength: this.messageQueue.length,
             requestRender: this.requestRender,
+            sessionId: this.sessionId,
           });
 
           // --- Consecutive error circuit breaker ---
@@ -724,6 +725,7 @@ export class Orchestrator {
             requestRender: this.requestRender,
             setAutoSpawnTimeout: (timeout) => { this.autoSpawnTimeout = timeout; },
             autoSpawnTimeoutMs: AUTO_SPAWN_FALLBACK_DELAY_MS,
+            sessionId: this.sessionId,
           });
         }
       }

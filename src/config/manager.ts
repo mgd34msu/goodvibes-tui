@@ -7,6 +7,7 @@ import { ConfigError } from '../types/errors.ts';
 import { logger } from '../utils/logger.ts';
 import { getHookDispatcher } from '../hooks/index.ts';
 import type { HookEvent } from '../hooks/types.ts';
+import { getManagedSettingLock } from '../runtime/settings/control-plane.ts';
 
 /** Deep immutable type — prevents mutation of nested objects returned from getAll(). */
 type DeepReadonly<T> = {
@@ -23,6 +24,10 @@ export interface ConfigOverrides {
   configDir?: string;
 }
 
+export interface ConfigSetOptions {
+  bypassManagedLock?: boolean;
+}
+
 const DEFAULT_CONFIG_SNAPSHOT = structuredClone(DEFAULT_CONFIG) as GoodVibesConfig;
 const PERMISSION_TOOL_KEYS = new Set(Object.keys(DEFAULT_CONFIG.permissions.tools));
 
@@ -32,6 +37,10 @@ function cloneDefaultConfig(): GoodVibesConfig {
 
 function sanitizeConfigShape(config: GoodVibesConfig): GoodVibesConfig {
   const sanitized = structuredClone(config) as GoodVibesConfig;
+  const lineNumbers = (sanitized.display as Record<string, unknown>).lineNumbers;
+  if (typeof lineNumbers === 'boolean') {
+    sanitized.display.lineNumbers = lineNumbers ? 'all' : 'off';
+  }
   for (const key of Object.keys(sanitized.permissions.tools)) {
     if (!PERMISSION_TOOL_KEYS.has(key)) {
       delete (sanitized.permissions.tools as Record<string, unknown>)[key];
@@ -64,6 +73,7 @@ function ensureSharedConfig(): void {
  */
 export class ConfigManager {
   private config: GoodVibesConfig;
+  private readonly configDir: string;
   private readonly configPath: string;
   private readonly projectConfigPath: string;
 
@@ -76,11 +86,18 @@ export class ConfigManager {
 
   static setTestMode(tempDir: string | undefined): void {
     ConfigManager.testConfigDir = tempDir;
+    const runtime = globalThis as typeof globalThis & { __gvTestConfigDir?: string };
+    runtime.__gvTestConfigDir = tempDir;
+  }
+
+  static getTestMode(): string | undefined {
+    return ConfigManager.testConfigDir;
   }
 
   constructor(overrides?: ConfigOverrides) {
     const configDirOverride = overrides?.configDir;
     const base = configDirOverride ?? ConfigManager.testConfigDir ?? join(homedir(), '.goodvibes', 'tui');
+    this.configDir = base;
     this.configPath = join(base, 'settings.json');
     const projectRoot = overrides?.workingDir ?? process.cwd();
     this.projectConfigPath = join(projectRoot, '.goodvibes', 'tui', 'settings.json');
@@ -108,6 +125,10 @@ export class ConfigManager {
         this.config.provider.systemPromptFile = overrides.systemPromptFile;
       }
     }
+  }
+
+  getControlPlaneConfigDir(): string {
+    return this.configDir;
   }
 
   private resolvePath(
@@ -141,13 +162,19 @@ export class ConfigManager {
   }
 
   /** Set a config value by dot-path key and auto-save to disk. Supports 2-level and 3-level keys. */
-  set<K extends ConfigKey>(key: K, value: ConfigValue<K>): void {
+  set<K extends ConfigKey>(key: K, value: ConfigValue<K>, options: ConfigSetOptions = {}): void {
     const schema = CONFIG_SCHEMA.find(s => s.key === key);
     if (schema?.validate && !schema.validate(value)) {
       throw new ConfigError(`Invalid value for ${key}: ${String(value)}`);
     }
     if (schema?.type === 'enum' && schema.enumValues && !schema.enumValues.includes(value as string)) {
       throw new ConfigError(`Invalid value for ${key}: "${String(value)}". Allowed: ${schema.enumValues.join(', ')}`);
+    }
+    if (!options.bypassManagedLock) {
+      const lock = getManagedSettingLock(key, this.configDir);
+      if (lock) {
+        throw new ConfigError(`Setting ${key} is locked by ${lock.source}: ${lock.reason}`);
+      }
     }
 
     const { parent, field } = this.resolvePath(key);
@@ -185,8 +212,8 @@ export class ConfigManager {
    * Used when iterating schema entries where the value type cannot be statically
    * inferred. Runtime validation is still applied by the underlying set() method.
    */
-  setDynamic(key: ConfigKey, value: unknown): void {
-    this.set(key, value as never);
+  setDynamic(key: ConfigKey, value: unknown, options: ConfigSetOptions = {}): void {
+    this.set(key, value as never, options);
   }
 
   /** Return a deep-readonly snapshot of the full config. Nested objects are immutable. */

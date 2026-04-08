@@ -248,12 +248,12 @@ export function renderProcessModal(modal: ProcessModal, width: number, viewportH
   const items = visibleEntries.map((e, i) => {
     const absoluteIndex = window.start + i;
     const statusIcon = {
-      running: '*',
-      pending: 'o',
-      completed: 'y',
-      failed: 'x',
-      cancelled: '-',
-    }[e.status] ?? '*';
+      running: '●',
+      pending: '•',
+      completed: '✓',
+      failed: '✗',
+      cancelled: '–',
+    }[e.status] ?? '•';
     const typeTag = e.type === 'agent' ? '[agent]' : '[exec]';
     const dur = formatDuration(e.elapsedMs);
     const statusStr = e.streamSnippet ? `streaming  ${dur}` : `${e.status}  ${dur}`;

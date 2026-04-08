@@ -2,6 +2,7 @@ import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import type { CommandRegistry } from '../command-registry.ts';
 import { getSecretsManager } from '../../config/secrets.ts';
+import { buildIntegrationHelperReview } from '../../runtime/integration/helpers.ts';
 
 interface SecureStorageBundle {
   readonly version: 1;
@@ -14,6 +15,13 @@ interface DeepLinkBundle {
   readonly version: 1;
   readonly exportedAt: number;
   readonly links: readonly string[];
+}
+
+interface IntegrationHelperBundle {
+  readonly version: 1;
+  readonly exportedAt: number;
+  readonly apiFamilies: readonly string[];
+  readonly routes: readonly string[];
 }
 
 function buildSetupLink(surface: string, target?: string): string {
@@ -38,6 +46,15 @@ function inspectDeepLinkBundle(bundle: DeepLinkBundle): string {
   ].join('\n');
 }
 
+function inspectIntegrationHelperBundle(bundle: IntegrationHelperBundle): string {
+  return [
+    'Integration Helper Review',
+    `  exportedAt: ${new Date(bundle.exportedAt).toISOString()}`,
+    `  apiFamilies: ${bundle.apiFamilies.length}`,
+    `  routes: ${bundle.routes.length}`,
+  ].join('\n');
+}
+
 export function registerPlatformServicesRuntimeCommands(registry: CommandRegistry): void {
   registry.register({
     name: 'storage',
@@ -46,22 +63,28 @@ export function registerPlatformServicesRuntimeCommands(registry: CommandRegistr
     async handler(args, ctx) {
       const manager = getSecretsManager();
       const sub = args[0] ?? 'review';
+      const review = await manager.inspect();
       const storedKeys = await manager.list();
-      const envBackedKeys = storedKeys.filter((key) => process.env[key] !== undefined);
+      const detailedKeys = await manager.listDetailed();
+      const envBackedKeys = [...new Set(detailedKeys.filter((record) => record.source === 'env').map((record) => record.key))];
 
       if (sub === 'review') {
         ctx.print([
           'Secure Storage Review',
+          `  policy: ${review.policy}`,
           `  stored keys: ${storedKeys.length}`,
           `  env-backed keys: ${envBackedKeys.length}`,
-          '  storage: encrypted local secrets + environment overrides',
+          `  secure keys: ${review.secureKeys}`,
+          `  plaintext keys: ${review.plaintextKeys}`,
+          ...review.locations.map((location) => `  ${location.source}: ${location.exists ? 'present' : 'absent'} (${location.path})`),
+          ...(review.warnings.length > 0 ? review.warnings.map((warning) => `  warning: ${warning}`) : []),
         ].join('\n'));
         return;
       }
       if (sub === 'list') {
-        ctx.print(storedKeys.length > 0
-          ? ['Secure Storage Keys', ...storedKeys.map((key) => `  ${key}${process.env[key] !== undefined ? ' (env override)' : ''}`)].join('\n')
-          : 'Secure Storage Keys\n  No encrypted secrets stored yet.');
+        ctx.print(detailedKeys.filter((record) => record.source !== 'env').length > 0
+          ? ['Secure Storage Keys', ...detailedKeys.filter((record) => record.source !== 'env').map((record) => `  ${record.key} (${record.source}${record.overriddenByEnv ? ', env override' : ''})`)].join('\n')
+          : 'Secure Storage Keys\n  No stored secrets yet.');
         return;
       }
       if (sub === 'delete') {
@@ -101,6 +124,59 @@ export function registerPlatformServicesRuntimeCommands(registry: CommandRegistr
         }
       }
       ctx.print('Usage: /storage [review|list|delete <key>|bundle export <path>|bundle inspect <path>]');
+    },
+  });
+
+  registry.register({
+    name: 'helpers',
+    aliases: ['integration-api'],
+    description: 'Review local integration helper API surfaces for remote clients and future web frontends',
+    usage: '[review|bundle export <path>|bundle inspect <path>]',
+    handler(args, ctx) {
+      const sub = args[0] ?? 'review';
+      const review = buildIntegrationHelperReview();
+      if (sub === 'review') {
+        ctx.print([
+          'Integration Helper Review',
+          `  sessions: ${review.sessions}`,
+          `  tasks: ${review.tasks}`,
+          `  pending approvals: ${review.pendingApprovals}`,
+          `  remote contracts: ${review.remoteContracts}`,
+          `  registered panels: ${review.panels}`,
+          '  api families:',
+          ...review.apiFamilies.map((family) => `    - ${family}`),
+          '  routes:',
+          ...review.routes.map((route) => `    - ${route}`),
+        ].join('\n'));
+        return;
+      }
+      if (sub === 'bundle') {
+        const mode = args[1];
+        const pathArg = args[2];
+        if ((mode === 'export' || mode === 'inspect') && !pathArg) {
+          ctx.print(`Usage: /helpers bundle ${mode} <path>`);
+          return;
+        }
+        const targetPath = resolve(process.cwd(), pathArg!);
+        if (mode === 'export') {
+          const bundle: IntegrationHelperBundle = {
+            version: 1,
+            exportedAt: Date.now(),
+            apiFamilies: review.apiFamilies,
+            routes: review.routes,
+          };
+          mkdirSync(dirname(targetPath), { recursive: true });
+          writeFileSync(targetPath, `${JSON.stringify(bundle, null, 2)}\n`, 'utf-8');
+          ctx.print(`Integration helper bundle exported to ${targetPath}`);
+          return;
+        }
+        if (mode === 'inspect') {
+          const bundle = JSON.parse(readFileSync(targetPath, 'utf-8')) as IntegrationHelperBundle;
+          ctx.print(inspectIntegrationHelperBundle(bundle));
+          return;
+        }
+      }
+      ctx.print('Usage: /helpers [review|bundle export <path>|bundle inspect <path>]');
     },
   });
 

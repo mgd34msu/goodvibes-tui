@@ -18,7 +18,7 @@ describe('renderProcessIndicator', () => {
   test('idle state contains idle label text', () => {
     const lines = renderProcessIndicator(W, 0, 0);
     const text = lineToString(lines[0]);
-    expect(text).toContain('bg: none');
+    expect(text).toContain('No background processes');
   });
 
   test('idle state cells are dimmed', () => {
@@ -102,11 +102,11 @@ describe('renderProcessIndicator', () => {
     expect(cyanBold.length).toBeGreaterThan(0);
   });
 
-  test('focused with zero processes shows focus prefix', () => {
+  test('focused with zero processes shows the focused idle hint without gutter chrome', () => {
     const lines = renderProcessIndicator(80, 0, 0, true);
     expect(lines.length).toBe(1);
     const text = lines[0].map(c => c.char).join('');
-    expect(text).toContain('>');
+    expect(text).not.toContain('▸');
     expect(text).toContain('No background processes');
   });
 

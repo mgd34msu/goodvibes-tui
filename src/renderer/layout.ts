@@ -11,10 +11,10 @@ export const LAYOUT = {
 } as const;
 
 export const TOOL_STATUS = {
-  SUCCESS_ICON: 'y',
-  SPINNER_FRAMES: ['|', '/', '-', '\\', '|', '/', '-', '\\'],
-  FAIL_ICON: 'x',
-  PENDING_ICON: '-', 
+  SUCCESS_ICON: '✓',
+  SPINNER_FRAMES: ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'],
+  FAIL_ICON: '✗',
+  PENDING_ICON: '•',
   TOOL_NAME_PAD: 8,
 } as const;
 
@@ -23,8 +23,8 @@ export const COLORS = {
 } as const;
 
 export const BORDERS = {
-  THINKING: { char: '|', color: '#9945FF' },
-  ERROR:    { char: '|', color: '#ef4444' },
-  WARNING:  { char: '|', color: '#eab308' },
-  INFO:     { char: '|', color: '#22d3ee' },
+  THINKING: { char: '▌', color: '#9945FF' },
+  ERROR:    { char: '▌', color: '#ef4444' },
+  WARNING:  { char: '▌', color: '#eab308' },
+  INFO:     { char: '▌', color: '#22d3ee' },
 } as const;

@@ -10,6 +10,7 @@ import { getWorkingDirectory } from '../config/index.ts';
 export class FilePickerModal {
   public active = false;
   public query = '';
+  public searchFocused = true;
   public results: string[] = [];
   public selectedIndex = 0;
   /** Position in the prompt where @ was typed — used to replace @query with the selected path */
@@ -32,6 +33,7 @@ export class FilePickerModal {
   open(insertPos: number, injectMode = false): void {
     this.active = true;
     this.query = '';
+    this.searchFocused = true;
     this.selectedIndex = 0;
     this.insertPos = insertPos;
     this.injectMode = injectMode;
@@ -54,6 +56,7 @@ export class FilePickerModal {
   close(): void {
     this.active = false;
     this.query = '';
+    this.searchFocused = true;
     this.results = [];
     this.selectedIndex = 0;
     this.injectMode = false;
@@ -64,6 +67,18 @@ export class FilePickerModal {
     this.query = q;
     this.selectedIndex = 0;
     this.updateResults();
+  }
+
+  canFocusSearch(): boolean {
+    return true;
+  }
+
+  focusSearch(): void {
+    this.searchFocused = true;
+  }
+
+  blurSearch(): void {
+    this.searchFocused = false;
   }
 
   /** Move selection up. */

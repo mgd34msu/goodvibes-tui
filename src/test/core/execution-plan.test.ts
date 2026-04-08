@@ -65,8 +65,8 @@ describe('ExecutionPlanManager.create', () => {
   });
 
   test('created plan becomes active', () => {
-    const plan = manager.create('Active Task', []);
-    const active = manager.getActive();
+    const plan = manager.create('Active Task', [], 'session-a');
+    const active = manager.getActive('session-a');
     expect(active).not.toBeNull();
     expect(active!.id).toBe(plan.id);
   });
@@ -128,9 +128,14 @@ describe('ExecutionPlanManager.getActive', () => {
   });
 
   test('returns the most recently created plan', () => {
-    manager.create('First', []);
-    const second = manager.create('Second', []);
-    expect(manager.getActive()!.id).toBe(second.id);
+    manager.create('First', [], 'session-a');
+    const second = manager.create('Second', [], 'session-a');
+    expect(manager.getActive('session-a')!.id).toBe(second.id);
+  });
+
+  test('session-scoped active lookup ignores plans from other sessions', () => {
+    manager.create('First', [], 'session-a');
+    expect(manager.getActive('session-b')).toBeNull();
   });
 
   test('setActive(null) causes getActive() to return null', () => {

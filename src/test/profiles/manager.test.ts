@@ -20,11 +20,11 @@ describe('ProfileManager', () => {
   describe('save/load round-trip', () => {
     it('saves and reloads display settings', () => {
       pm.save('test', {
-        display: { stream: false, lineNumbers: true, collapseThreshold: 50, theme: 'dark', showThinking: false, showReasoningSummary: false },
+        display: { stream: false, lineNumbers: 'all', collapseThreshold: 50, theme: 'dark', showThinking: false, showReasoningSummary: false },
       });
       const { data } = pm.load('test');
       expect(data.display?.stream).toBe(false);
-      expect(data.display?.lineNumbers).toBe(true);
+      expect(data.display?.lineNumbers).toBe('all');
       expect(data.display?.theme).toBe('dark');
     });
 

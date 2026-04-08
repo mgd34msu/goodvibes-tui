@@ -25,11 +25,13 @@ import type { CommunicationEvent } from '../events/communication.ts';
 import type { PluginEvent } from '../events/plugins.ts';
 import type { McpEvent } from '../events/mcp.ts';
 import type { TransportEvent } from '../events/transport.ts';
+import type { CompactionEvent } from '../events/compaction.ts';
 import type {
   ConversationDomainState,
   ActiveToolCall,
   ToolExecutionState,
 } from './domains/conversation.ts';
+import type { SessionDomainState } from './domains/session.ts';
 import type {
   PermissionDomainState,
   PermissionDecisionMachineState,
@@ -389,6 +391,67 @@ function updateConversationState(
       };
     default:
       return updateDomainMetadata(domain, source);
+  }
+}
+
+function updateSessionState(
+  domain: SessionDomainState,
+  event: CompactionEvent,
+): SessionDomainState {
+  const base = updateDomainMetadata(domain, event.type);
+  switch (event.type) {
+    case 'COMPACTION_CHECK':
+      return {
+        ...base,
+        compactionState: 'checking_threshold',
+      };
+    case 'COMPACTION_MICROCOMPACT':
+      return {
+        ...base,
+        compactionState: 'microcompact',
+      };
+    case 'COMPACTION_COLLAPSE':
+      return {
+        ...base,
+        compactionState: 'collapse',
+        compactionMessageCount: event.messageCount,
+      };
+    case 'COMPACTION_AUTOCOMPACT':
+      return {
+        ...base,
+        compactionState: 'autocompact',
+      };
+    case 'COMPACTION_REACTIVE':
+      return {
+        ...base,
+        compactionState: 'reactive_compact',
+      };
+    case 'COMPACTION_BOUNDARY_COMMIT':
+      return {
+        ...base,
+        compactionState: 'boundary_commit',
+      };
+    case 'COMPACTION_DONE':
+      return {
+        ...base,
+        compactionState: 'done',
+        lastCompactedAt: now(),
+      };
+    case 'COMPACTION_FAILED':
+      return {
+        ...base,
+        compactionState: 'failed',
+        recoveryError: event.error,
+      };
+    case 'COMPACTION_RESUME_REPAIR':
+      return {
+        ...base,
+        wasRepaired: event.repaired,
+        recoveryState: event.safeToResume ? 'ready' : domain.recoveryState,
+      };
+    case 'COMPACTION_QUALITY_SCORE':
+    case 'COMPACTION_STRATEGY_SWITCH':
+      return base;
   }
 }
 
@@ -1270,6 +1333,21 @@ export function createDomainDispatch(store: RuntimeStore): DomainDispatch {
         ...updateTransportState(state.acp, state.daemon, event),
       }));
     },
+    dispatchCompactionEvent(event) {
+      mutateRuntimeStore(store, (state) => ({
+        ...state,
+        session: updateSessionState(state.session, event),
+      }));
+    },
+    syncSessionState(patch, source = 'domain-dispatch') {
+      mutateRuntimeStore(store, (state) => ({
+        ...state,
+        session: {
+          ...updateDomainMetadata(state.session, source),
+          ...patch,
+        },
+      }));
+    },
     syncRuntimeTask(task, source = 'domain-dispatch') {
       mutateRuntimeStore(store, (state) => ({
         ...state,
@@ -1370,6 +1448,17 @@ export interface DomainDispatch {
    * Updates the acp and daemon domains' transport state machines.
    */
   dispatchTransportEvent(event: TransportEvent): void;
+
+  /**
+   * Dispatch a compaction lifecycle event.
+   * Updates session compaction posture and recovery metadata.
+   */
+  dispatchCompactionEvent(event: CompactionEvent): void;
+
+  /**
+   * Upsert session lifecycle and identity metadata through the store mutation layer.
+   */
+  syncSessionState(patch: Partial<SessionDomainState>, source?: string): void;
 
   /**
    * Upsert a concrete runtime task record through the store mutation layer.

@@ -8,6 +8,7 @@ import { getProviderRegistry } from '../../providers/registry.ts';
 import type { ProviderRegistry } from '../../providers/registry.ts';
 import type { LLMProvider, ChatRequest, ChatResponse } from '../../providers/interface.ts';
 import { RuntimeEventBus } from '../../runtime/events/index.ts';
+import { resetSettingsControlPlaneForTesting } from '../../runtime/settings/control-plane.ts';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -50,11 +51,13 @@ describe('Orchestrator', () => {
     testExecutionLock = new Promise<void>((resolve) => {
       releaseTestExecutionLock = resolve;
     });
+    resetSettingsControlPlaneForTesting();
     runtimeBus = new RuntimeEventBus();
     toolRegistry = new ToolRegistry();
   });
 
   afterEach(() => {
+    resetSettingsControlPlaneForTesting();
     releaseTestExecutionLock?.();
     releaseTestExecutionLock = null;
   });

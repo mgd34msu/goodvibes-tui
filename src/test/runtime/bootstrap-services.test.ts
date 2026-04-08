@@ -28,25 +28,30 @@ describe('startExternalServices', () => {
     const listenerStart = mock(async () => {});
     const listenerStop = mock(async () => {});
     const listenerEnable = mock(() => true);
+    const daemonFactory = mock((_bus: RuntimeEventBus, _userAuth: object) => ({
+      enable: daemonEnable,
+      start: daemonStart,
+      stop: daemonStop,
+    }));
+    const listenerFactory = mock((_dispatcher: HookDispatcher, _userAuth: object) => ({
+      enable: listenerEnable,
+      start: listenerStart,
+      stop: listenerStop,
+    }));
 
     const services = await startExternalServices(
       createConfig({ daemon: true, httpListener: true }),
       runtimeBus,
       hookDispatcher,
       {
-        createDaemonServer: () => ({
-          enable: daemonEnable,
-          start: daemonStart,
-          stop: daemonStop,
-        }),
-        createHttpListener: () => ({
-          enable: listenerEnable,
-          start: listenerStart,
-          stop: listenerStop,
-        }),
+        createDaemonServer: daemonFactory,
+        createHttpListener: listenerFactory,
       },
     );
 
+    expect(daemonFactory).toHaveBeenCalledTimes(1);
+    expect(listenerFactory).toHaveBeenCalledTimes(1);
+    expect(daemonFactory.mock.calls[0]?.[1]).toBe(listenerFactory.mock.calls[0]?.[1]);
     expect(daemonEnable).toHaveBeenCalledWith({ daemon: true });
     expect(daemonStart).toHaveBeenCalled();
     expect(listenerEnable).toHaveBeenCalledWith({ httpListener: true });
@@ -83,5 +88,59 @@ describe('startExternalServices', () => {
     expect(listenerFactory).not.toHaveBeenCalled();
     expect(services.daemonServer).toBeNull();
     expect(services.httpListener).toBeNull();
+  });
+
+  test('continues boot when daemon port is already in use', async () => {
+    const listenerStart = mock(async () => {});
+    const services = await startExternalServices(
+      createConfig({ daemon: true, httpListener: true }),
+      runtimeBus,
+      hookDispatcher,
+      {
+        createDaemonServer: () => ({
+          enable: mock(() => true),
+          start: mock(async () => {
+            throw new Error('listen EADDRINUSE: Address already in use 127.0.0.1:3421');
+          }),
+          stop: mock(async () => {}),
+        }),
+        createHttpListener: () => ({
+          enable: mock(() => true),
+          start: listenerStart,
+          stop: mock(async () => {}),
+        }),
+      },
+    );
+
+    expect(services.daemonServer).toBeNull();
+    expect(services.httpListener).not.toBeNull();
+    expect(listenerStart).toHaveBeenCalled();
+  });
+
+  test('continues boot when listener port is already in use', async () => {
+    const daemonStart = mock(async () => {});
+    const services = await startExternalServices(
+      createConfig({ daemon: true, httpListener: true }),
+      runtimeBus,
+      hookDispatcher,
+      {
+        createDaemonServer: () => ({
+          enable: mock(() => true),
+          start: daemonStart,
+          stop: mock(async () => {}),
+        }),
+        createHttpListener: () => ({
+          enable: mock(() => true),
+          start: mock(async () => {
+            throw new Error('listen EADDRINUSE: Address already in use 127.0.0.1:3422');
+          }),
+          stop: mock(async () => {}),
+        }),
+      },
+    );
+
+    expect(services.daemonServer).not.toBeNull();
+    expect(services.httpListener).toBeNull();
+    expect(daemonStart).toHaveBeenCalled();
   });
 });

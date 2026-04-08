@@ -164,10 +164,12 @@ describe('Config persistence — display fields', () => {
   });
 
   test('display.lineNumbers can be set and retrieved', () => {
-    configManager.set('display.lineNumbers', true);
-    expect(configManager.get('display.lineNumbers')).toBe(true);
-    configManager.set('display.lineNumbers', false);
-    expect(configManager.get('display.lineNumbers')).toBe(false);
+    configManager.set('display.lineNumbers', 'all');
+    expect(configManager.get('display.lineNumbers')).toBe('all');
+    configManager.set('display.lineNumbers', 'code');
+    expect(configManager.get('display.lineNumbers')).toBe('code');
+    configManager.set('display.lineNumbers', 'off');
+    expect(configManager.get('display.lineNumbers')).toBe('off');
   });
 });
 

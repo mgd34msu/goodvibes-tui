@@ -12,6 +12,7 @@ const mockConfigGet = mock((key: string): unknown => {
 await mock.module('../../../config/index.ts', () => ({
   configManager: {
     get: mockConfigGet,
+    setDynamic: mock(() => {}),
   },
 }));
 
@@ -257,6 +258,10 @@ describe('AutoHealer — HealResult shape', () => {
     const result = await healer.heal('test.ts', VALID_TS, ['error']);
     expect(validMethods).toContain(result.method);
   });
+});
+
+afterAll(() => {
+  mock.restore();
 });
 
 afterAll(() => {

@@ -67,7 +67,7 @@ export function renderModelPickerOverlay(
   const selectedBg = DEFAULT_OVERLAY_PALETTE.selectedBg;
 
   // ── Title bar ───────────────────────────────────────────────────────────────────────
-  const titleLine = createOverlayBorderLine(width, layout, '┌', '─', '┐', titleFg);
+  const titleLine = createOverlayBorderLine(width, layout, '┌', '─', '┐', borderFg);
   putRowText(
     titleLine,
     layout.margin + 2,
@@ -83,8 +83,7 @@ export function renderModelPickerOverlay(
   if (picker.mode === 'model' || picker.mode === 'provider') {
     const searchLine = createOverlayContentLine(width, layout, borderFg);
     const searchPrefix = '/ ';
-    const cursorChar = picker.query.length > 0 ? '' : '_';
-    const queryDisplay = picker.query + cursorChar;
+    const queryDisplay = picker.query + (picker.searchFocused ? '█' : '');
     let filterTag = '';
     let filterTagW = 0;
     if (picker.mode === 'model') {
@@ -99,12 +98,12 @@ export function renderModelPickerOverlay(
       ? truncateDisplay(queryDisplay, maxQueryW)
       : queryDisplay;
     let rowX = layout.margin + 2;
-    putRowText(searchLine, rowX, getDisplayWidth(searchPrefix), searchPrefix, picker.query.length > 0 ? bodyFg : mutedFg);
+    putRowText(searchLine, rowX, getDisplayWidth(searchPrefix), searchPrefix, picker.searchFocused ? bodyFg : mutedFg);
     rowX += getDisplayWidth(searchPrefix);
     const queryAreaWidth = filterTag
       ? Math.max(0, contentW - getDisplayWidth(searchPrefix) - filterTagW - 1)
       : Math.max(0, contentW - getDisplayWidth(searchPrefix));
-    putRowText(searchLine, rowX, queryAreaWidth, fitDisplay(queryTrunc, queryAreaWidth), picker.query.length > 0 ? '#ffffff' : mutedFg);
+    putRowText(searchLine, rowX, queryAreaWidth, fitDisplay(queryTrunc, queryAreaWidth), picker.query.length > 0 || picker.searchFocused ? '#ffffff' : mutedFg);
     if (filterTag) {
       putRowText(
         searchLine,
@@ -117,7 +116,7 @@ export function renderModelPickerOverlay(
     lines.push(searchLine);
 
     // Thin divider under search bar
-    lines.push(createOverlayBorderLine(width, layout, '├', '─', '┤', '238'));
+    lines.push(createOverlayBorderLine(width, layout, '├', '─', '┤', borderFg));
   } else {
     lines.push(createOverlayContentLine(width, layout, borderFg));
   }
@@ -141,7 +140,7 @@ export function renderModelPickerOverlay(
       // Scroll indicators
       if (scrollOffset > 0) {
         const upHint = createOverlayContentLine(width, layout, borderFg);
-        putRowText(upHint, layout.margin + 2, contentW, fitDisplay(`^ ${scrollOffset} more above`, contentW), mutedFg, '', false, true);
+        putRowText(upHint, layout.margin + 2, contentW, fitDisplay(`↑ ${scrollOffset} more above`, contentW), mutedFg, '', false, true);
         lines.push(upHint);
       }
 
@@ -163,7 +162,7 @@ export function renderModelPickerOverlay(
         }
 
         const isSelected = absIdx === picker.selectedIndex;
-        const indicator = isSelected ? '> ' : '  ';
+        const indicator = isSelected ? '▸ ' : '  ';
 
         // Pre-compute synthetic info once per model (avoid 3 separate lookups per frame)
         const synthInfo = model.provider === 'synthetic' ? getSyntheticModelInfoFromCatalog(model.id) : null;
@@ -179,10 +178,10 @@ export function renderModelPickerOverlay(
           tier = bData ? getQualityTier(bData.benchmarks) : null;
         }
         const tierBadge = tier ? `[${tier}]` : '   ';
-        // Pin star: ★ if pinned
-        const pinStar = picker.pinnedIds.has(model.id) ? '* ' : '  ';
-        // Free badge
-        const freeBadge = model.tier === 'free' ? '*' : ' ';
+        // Pin marker: keep the Unicode star instead of ASCII fallback
+        const pinStar = picker.pinnedIds.has(model.id) ? '★ ' : '  ';
+        // Free badge: dot marker, not an asterisk
+        const freeBadge = model.tier === 'free' ? '•' : ' ';
         // Provider count for synthetic models
         let providerCountStr = '     '; // 5 chars wide (fixed)
         if (synthInfo) {
@@ -212,13 +211,13 @@ export function renderModelPickerOverlay(
       if (visibleEnd < filtered.length) {
         const remaining2 = filtered.length - visibleEnd;
         const downHint = createOverlayContentLine(width, layout, borderFg);
-        putRowText(downHint, layout.margin + 2, contentW, fitDisplay(`v ${remaining2} more below`, contentW), mutedFg, '', false, true);
+        putRowText(downHint, layout.margin + 2, contentW, fitDisplay(`↓ ${remaining2} more below`, contentW), mutedFg, '', false, true);
         lines.push(downHint);
       }
     }
 
     // ── Divider ────────────────────────────────────────────────────────────────────
-    lines.push(createOverlayBorderLine(width, layout, '├', '─', '┤', mutedFg));
+    lines.push(createOverlayBorderLine(width, layout, '├', '─', '┤', borderFg));
 
     // ── Capability detail for selected model ────────────────────────────────────────────
     const selected = picker.getSelected();
@@ -262,7 +261,7 @@ export function renderModelPickerOverlay(
       // Scroll indicator — items above
       if (providerScrollOffset > 0) {
         const upHint = createOverlayContentLine(width, layout, borderFg);
-        putRowText(upHint, layout.margin + 2, contentW, fitDisplay(`^ ${providerScrollOffset} more above`, contentW), mutedFg, '', false, true);
+        putRowText(upHint, layout.margin + 2, contentW, fitDisplay(`↑ ${providerScrollOffset} more above`, contentW), mutedFg, '', false, true);
         lines.push(upHint);
       }
 
@@ -293,8 +292,8 @@ export function renderModelPickerOverlay(
         }
 
         const isSelected = selectableIdx === picker.selectedIndex;
-        const indicator = isSelected ? '> ' : '  ';
-        const checkmark = item.isConfigured ? 'y ' : '  ';
+        const indicator = isSelected ? '▸ ' : '  ';
+        const checkmark = item.isConfigured ? '✓ ' : '  ';
         const labelW = contentW - 2 - 2; // indicator(2) + checkmark(2)
         const labelStr = item.label.length > labelW
           ? item.label.slice(0, labelW - 3) + '...'
@@ -309,13 +308,13 @@ export function renderModelPickerOverlay(
       if (providerVisibleEnd < selectableCount) {
         const remaining2 = selectableCount - providerVisibleEnd;
         const downHint = createOverlayContentLine(width, layout, borderFg);
-        putRowText(downHint, layout.margin + 2, contentW, fitDisplay(`v ${remaining2} more below`, contentW), mutedFg, '', false, true);
+        putRowText(downHint, layout.margin + 2, contentW, fitDisplay(`↓ ${remaining2} more below`, contentW), mutedFg, '', false, true);
         lines.push(downHint);
       }
     }
 
     // ── Divider + hint ──────────────────────────────────────────────────────────────────
-    lines.push(createOverlayBorderLine(width, layout, '├', '─', '┤', mutedFg));
+    lines.push(createOverlayBorderLine(width, layout, '├', '─', '┤', borderFg));
     const hintLine = createOverlayContentLine(width, layout, borderFg);
     putRowText(hintLine, layout.margin + 2, contentW, fitDisplay('Select a provider to browse its models', contentW), '244');
     lines.push(hintLine);
@@ -328,7 +327,7 @@ export function renderModelPickerOverlay(
     const provenance = capModel?.contextWindowProvenance ?? 'configured_cap';
 
     const promptLabel = 'Context window (tokens):';
-    const cursorChar = '_';
+    const cursorChar = '█';
     const inputDisplay = picker.contextCapQuery + cursorChar;
     const promptRow = createOverlayContentLine(width, layout, borderFg);
     putRowText(promptRow, layout.margin + 2, contentW, fitDisplay(`${promptLabel} ${inputDisplay}`, contentW), '#ffffff');
@@ -345,7 +344,7 @@ export function renderModelPickerOverlay(
     lines.push(hintRow);
 
     // Divider + model info
-    lines.push(createOverlayBorderLine(width, layout, '├', '─', '┤', mutedFg));
+    lines.push(createOverlayBorderLine(width, layout, '├', '─', '┤', borderFg));
     const modelInfoLine = createOverlayContentLine(width, layout, borderFg);
     putRowText(modelInfoLine, layout.margin + 2, contentW, fitDisplay(`Model: ${modelName}`, contentW), '244');
     lines.push(modelInfoLine);
@@ -355,7 +354,7 @@ export function renderModelPickerOverlay(
     for (let i = 0; i < picker.effortLevels.length; i++) {
       const level = picker.effortLevels[i];
       const isSelected = i === picker.selectedIndex;
-      const indicator = isSelected ? '> ' : '  ';
+      const indicator = isSelected ? '▸ ' : '  ';
       const desc = EFFORT_DESCRIPTIONS[level] ?? '';
       const labelW = 10;
       const labelStr = level.padEnd(labelW);
@@ -368,7 +367,7 @@ export function renderModelPickerOverlay(
     }
 
     // ── Divider + model context ──────────────────────────────────────────────────────
-    lines.push(createOverlayBorderLine(width, layout, '├', '─', '┤', mutedFg));
+    lines.push(createOverlayBorderLine(width, layout, '├', '─', '┤', borderFg));
     const modelName = picker.pendingModel ? picker.pendingModel.displayName : 'unknown';
     const modelLine = createOverlayContentLine(width, layout, borderFg);
     putRowText(modelLine, layout.margin + 2, contentW, fitDisplay(`Model: ${modelName}`, contentW), '244');
@@ -384,12 +383,12 @@ export function renderModelPickerOverlay(
   const showContextCapHint = selectedModel != null && selectedModel.contextWindowProvenance !== undefined;
   const hints = picker.mode === 'model'
     ? showContextCapHint
-      ? `[Up/Down] [Enter] [Space] Ctx [Esc] [Tab] Filter: ${filterLabelFooter} [G] Group: ${groupByLabel}`
-      : `[Up/Down] [Enter] [Esc] [Tab] Filter: ${filterLabelFooter} [G] Group: ${groupByLabel}`
+      ? `[Up/Down] [Enter] [/] Search [Space] Ctx [Esc] [Tab] Filter: ${filterLabelFooter} [G] Group: ${groupByLabel}`
+      : `[Up/Down] [Enter] [/] Search [Esc] [Tab] Filter: ${filterLabelFooter} [G] Group: ${groupByLabel}`
     : picker.mode === 'contextCap'
     ? '[Enter] Confirm  [Esc] Cancel'
     : '[Up/Down] Nav  [Enter] Select  [Esc] Cancel';
-  const footerLine = createOverlayBorderLine(width, layout, '└', '─', '┘', mutedFg);
+  const footerLine = createOverlayBorderLine(width, layout, '└', '─', '┘', borderFg);
   putRowText(footerLine, layout.margin + 2, contentW, fitDisplay(truncateDisplay(hints, contentW), contentW), mutedFg, '', false, true);
   lines.push(footerLine);
 

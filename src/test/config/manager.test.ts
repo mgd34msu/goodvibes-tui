@@ -64,7 +64,7 @@ describe('ConfigManager', () => {
     const before = structuredClone(DEFAULT_CONFIG);
     cm.set('provider.provider', 'anthropic');
     cm.set('behavior.autoApprove', true);
-    cm.set('display.lineNumbers', true);
+    cm.set('display.lineNumbers', 'all');
     expect(DEFAULT_CONFIG).toEqual(before);
   });
 });

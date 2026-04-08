@@ -27,6 +27,7 @@ export interface ExecutionPlan {
   title: string;
   createdAt: string;
   updatedAt: string;
+  sessionId?: string;
   status: 'draft' | 'active' | 'complete' | 'failed';
   items: PlanItem[];
   specPath?: string; // path to the spec document
@@ -135,28 +136,34 @@ export class ExecutionPlanManager {
   }
 
   /** Get the active plan for the current session, if any. */
-  getActive(): ExecutionPlan | null {
+  getActive(sessionId?: string): ExecutionPlan | null {
     if (!existsSync(this.activeFile)) return null;
     try {
       const raw = readFileSync(this.activeFile, 'utf-8');
-      const { planId } = JSON.parse(raw) as { planId: string | null };
+      const { planId, sessionId: activeSessionId } = JSON.parse(raw) as { planId: string | null; sessionId?: string | null };
       if (!planId) return null;
-      return this.load(planId);
+      if (sessionId && activeSessionId && activeSessionId !== sessionId) return null;
+      if (sessionId && !activeSessionId) return null;
+      const plan = this.load(planId);
+      if (!plan) return null;
+      if (sessionId && plan.sessionId && plan.sessionId !== sessionId) return null;
+      if (sessionId && !plan.sessionId) return null;
+      return plan;
     } catch {
       return null;
     }
   }
 
-  private setActive(planId: string | null): void {
+  private setActive(planId: string | null, sessionId?: string | null): void {
     mkdirSync(this.plansDir, { recursive: true });
     if (planId === null) {
       if (existsSync(this.activeFile)) {
         // Remove tracking entry when no active plan
-        writeFileSync(this.activeFile, JSON.stringify({ planId: null }, null, 2) + '\n', 'utf-8');
+        writeFileSync(this.activeFile, JSON.stringify({ planId: null, sessionId: sessionId ?? null }, null, 2) + '\n', 'utf-8');
       }
       return;
     }
-    writeFileSync(this.activeFile, JSON.stringify({ planId }, null, 2) + '\n', 'utf-8');
+    writeFileSync(this.activeFile, JSON.stringify({ planId, sessionId: sessionId ?? null }, null, 2) + '\n', 'utf-8');
   }
 
   // --------------------------------------------------------------------------
@@ -164,13 +171,14 @@ export class ExecutionPlanManager {
   // --------------------------------------------------------------------------
 
   /** Create a new plan and set it as active. */
-  create(title: string, items: Omit<PlanItem, 'id' | 'status'>[]): ExecutionPlan {
+  create(title: string, items: Omit<PlanItem, 'id' | 'status'>[], sessionId?: string): ExecutionPlan {
     const now = this.nextCreatedAt();
     const plan: ExecutionPlan = {
       id: randomUUID(),
       title,
       createdAt: now,
       updatedAt: now,
+      sessionId,
       status: 'draft',
       items: items.map((item) => ({
         ...item,
@@ -179,7 +187,7 @@ export class ExecutionPlanManager {
       })),
     };
     this.save(plan);
-    this.setActive(plan.id);
+    this.setActive(plan.id, sessionId ?? null);
     return plan;
   }
 

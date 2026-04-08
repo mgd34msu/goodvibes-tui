@@ -188,8 +188,11 @@ export function buildSearchInputLine(
   options: { active?: boolean; bg?: string; emptyLabel?: string; valueColor?: string } = {},
 ): Line {
   const active = options.active ?? false;
-  const hasValue = value.trim().length > 0;
-  const content = hasValue ? value : (options.emptyLabel ?? '(none)');
+  const normalizedValue = active && value.endsWith('_')
+    ? `${value.slice(0, -1)}█`
+    : value;
+  const hasValue = normalizedValue.trim().length > 0;
+  const content = hasValue ? normalizedValue : (options.emptyLabel ?? '(none)');
   const fg = active
     ? options.valueColor ?? palette.info
     : hasValue

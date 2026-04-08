@@ -11,6 +11,7 @@ import { getBookmarkManager } from '../../bookmarks/manager.ts';
 import { getSecretsManager } from '../../config/secrets.ts';
 import { pinModel, unpinModel, isModelPinned, getPinned } from '../../providers/favorites.ts';
 import { getPluginDirectories } from '../../plugins/loader.ts';
+import { getPanelManager } from '../../panels/panel-manager.ts';
 
 function toggleBlocks(typeFilter: string, collapsed: boolean, ctx: CommandContext): void {
   const VALID_TYPES = ['all', 'thinking', 'tool', 'code'] as const;
@@ -59,8 +60,31 @@ export function registerLocalRuntimeCommands(registry: CommandRegistry): void {
   registry.register({
     name: 'tools',
     aliases: ['t'],
-    description: 'List available tools',
-    handler(_args, ctx) {
+    description: 'List available tools and review compact native tool capability surfaces',
+    usage: '[review|panel]',
+    handler(args, ctx) {
+      const sub = (args[0] ?? '').toLowerCase();
+      if (sub === 'panel' || sub === 'review') {
+        try {
+          const panelManager = getPanelManager();
+          panelManager.open('tools');
+          panelManager.show();
+          ctx.renderRequest();
+        } catch {
+          // Panel registry may be unavailable in lightweight command-only contexts.
+        }
+        if (sub === 'review') {
+          ctx.print([
+            'Tool Surface Review',
+            '  Native file tools stay compact by default.',
+            '  Read/write/edit/notebook capabilities are available through the native tool stack, with detail routed to the tools panel and approval surfaces instead of transcript bloat.',
+            '  Shell and native tool approvals classify work into read, mutation, destructive, dependency, config, notebook, network, remote, and lifecycle risk families.',
+            '  Use /tools panel to inspect risk class, output-policy actions, spill posture, compact summaries, and approval posture for recent calls.',
+            '  Use /approval review shell or /approval review file when you need the action-specific why-prompted posture.',
+          ].join('\n'));
+        }
+        return;
+      }
       const tools = ctx.toolRegistry.list();
       if (ctx.openSelection) {
         const items: SelectionItem[] = tools.map(t => ({
@@ -115,25 +139,35 @@ export function registerLocalRuntimeCommands(registry: CommandRegistry): void {
 
   registry.register({
     name: 'secrets',
-    description: 'Manage encrypted API key secrets',
-    usage: 'set <KEY> <value> | get <KEY> | list | delete <KEY>',
+    description: 'Manage hierarchy-aware secrets with secure/plaintext storage policy controls',
+    usage: 'set <KEY> <value> [--user|--project] [--secure|--plaintext] | get <KEY> | list | delete <KEY> [--user|--project] [--secure|--plaintext]',
     argsHint: '<set|get|list|delete> [KEY]',
     async handler(args, ctx) {
       const mgr = getSecretsManager();
       const [sub, ...rest] = args;
       if (!sub || sub === 'list') {
-        const keys = await mgr.list();
-        ctx.print(keys.length === 0 ? '[secrets] No secrets stored. Use: /secrets set <KEY> <value>' : ['[secrets] Stored keys (values are encrypted at rest):', ...keys.map(k => `  ${k}`)].join('\n'));
+        const records = await mgr.listDetailed();
+        const storedRecords = records.filter((record) => record.source !== 'env');
+        ctx.print(storedRecords.length === 0
+          ? '[secrets] No secrets stored. Use: /secrets set <KEY> <value>'
+          : [
+            '[secrets] Stored keys:',
+            ...storedRecords.map((record) => `  ${record.key} (${record.source}${record.overriddenByEnv ? ', env override' : ''})`),
+          ].join('\n'));
         return;
       }
       if (sub === 'set') {
-        const [key, ...valueParts] = rest;
+        const flags = new Set(rest.filter((value) => value.startsWith('--')));
+        const valueParts = rest.filter((value) => !value.startsWith('--'));
+        const [key, ...rawValueParts] = valueParts;
         if (!key || valueParts.length === 0) {
-          ctx.print('[secrets] Usage: /secrets set <KEY> <value>');
+          ctx.print('[secrets] Usage: /secrets set <KEY> <value> [--user|--project] [--secure|--plaintext]');
           return;
         }
-        await mgr.set(key, valueParts.join(' '));
-        ctx.print(`[secrets] Stored: ${key} (encrypted at rest)`);
+        const scope = flags.has('--user') ? 'user' : 'project';
+        const medium = flags.has('--plaintext') ? 'plaintext' : 'secure';
+        await mgr.set(key, rawValueParts.join(' '), { scope, medium });
+        ctx.print(`[secrets] Stored: ${key} (${scope}, ${medium})`);
         return;
       }
       if (sub === 'get') {
@@ -147,16 +181,20 @@ export function registerLocalRuntimeCommands(registry: CommandRegistry): void {
         return;
       }
       if (sub === 'delete') {
-        const [key] = rest;
+        const flags = new Set(rest.filter((value) => value.startsWith('--')));
+        const [key] = rest.filter((value) => !value.startsWith('--'));
         if (!key) {
-          ctx.print('[secrets] Usage: /secrets delete <KEY>');
+          ctx.print('[secrets] Usage: /secrets delete <KEY> [--user|--project] [--secure|--plaintext]');
           return;
         }
-        await mgr.delete(key);
+        await mgr.delete(key, {
+          scope: flags.has('--user') ? 'user' : flags.has('--project') ? 'project' : undefined,
+          medium: flags.has('--plaintext') ? 'plaintext' : flags.has('--secure') ? 'secure' : undefined,
+        });
         ctx.print(`[secrets] Deleted: ${key}`);
         return;
       }
-      ctx.print('[secrets] Usage: /secrets set <KEY> <value> | get <KEY> | list | delete <KEY>');
+      ctx.print('[secrets] Usage: /secrets set <KEY> <value> [--user|--project] [--secure|--plaintext] | get <KEY> | list | delete <KEY> [--user|--project] [--secure|--plaintext]');
     },
   });
 

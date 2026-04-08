@@ -24,6 +24,9 @@ export interface ShellFooterBuildOptions {
   readonly runningProcessCount: number;
   readonly indicatorFocused: boolean;
   readonly runningAgentProgress?: string;
+  readonly composerMode?: string;
+  readonly composerStatus?: string;
+  readonly composerFlags?: readonly string[];
 }
 
 export interface ShellFooterBuildResult {
@@ -64,6 +67,9 @@ export function buildShellFooter(
     options.lastInputTokens,
     options.commandArgsHint,
     options.hitlMode,
+    options.composerMode,
+    options.composerStatus,
+    options.composerFlags,
   );
   const processIndicator = renderProcessIndicator(
     options.width,

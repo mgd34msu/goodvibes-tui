@@ -432,7 +432,7 @@ export class DiffPanel extends BasePanel {
       }
 
       if (cells.length < width) {
-        cells.push(createStyledCell('|', { fg: COLOR.lineNum, bg: COLOR.tabBg }));
+        cells.push(createStyledCell('│', { fg: COLOR.lineNum, bg: COLOR.tabBg }));
       }
     }
 

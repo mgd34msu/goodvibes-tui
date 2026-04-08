@@ -76,8 +76,10 @@ import {
 import { createBootstrapCommandContext } from './bootstrap-command-context.ts';
 import { scheduleMcpAutodiscovery, startBackgroundProviderRegistration } from './bootstrap-background.ts';
 import { startExternalServices } from './bootstrap-services.ts';
+import { clearIntegrationHelpersContext, setIntegrationHelpersContext } from './integration/helpers.ts';
 import { getTokenAuditor } from '../security/token-audit.ts';
 import { getSandboxSessionRegistry } from './sandbox/session-registry.ts';
+import { formatReturnContextForDisplay, getReturnContextMode, maybeAssistReturnContextSummary } from './session-return-context.ts';
 
 // ── Internal helpers ──────────────────────────────────────────────────────
 
@@ -311,6 +313,9 @@ export async function bootstrapRuntime(
   runtimeUnsubs.push(runtimeBus.onDomain('communication', (env) => {
     domainDispatch.dispatchCommunicationEvent(env.payload);
   }));
+  runtimeUnsubs.push(runtimeBus.onDomain('compaction', (env) => {
+    domainDispatch.dispatchCompactionEvent(env.payload);
+  }));
   runtimeUnsubs.push(runtimeBus.onDomain('transport', (env) => {
     domainDispatch.dispatchTransportEvent(env.payload);
   }));
@@ -535,6 +540,18 @@ export async function bootstrapRuntime(
     sessionId: userSessionId,
   };
 
+  domainDispatch.syncSessionState({
+    id: userSessionId,
+    projectRoot: getWorkingDirectory(),
+    status: 'active',
+    startedAt: Date.now(),
+    recoveryState: 'ready',
+    isResumed: false,
+    wasRepaired: false,
+    lineageId: userSessionId,
+    lineage: [{ sessionId: userSessionId, createdAt: Date.now() }],
+  }, 'bootstrap.session');
+
   // ── Phase 5c: Hook bridge subscriptions ────────────────────────────────
 
   const fireHook = (path: HookEventPath, phase: HookPhase, category: HookCategory, specific: string, payload: Record<string, unknown>): void => {
@@ -561,12 +578,50 @@ export async function bootstrapRuntime(
         sessionId,
         turnCount: messages.length,
       });
-      conversation.fromJSON({ messages: messages as Parameters<typeof conversation.fromJSON>[0]['messages'] });
+      conversation.fromJSON({
+        messages: messages as Parameters<typeof conversation.fromJSON>[0]['messages'],
+        title: meta.title,
+        titleSource: meta.titleSource,
+      });
       runtime.sessionId = sessionId;
       if (meta?.model) runtime.model = meta.model;
       if (meta?.provider) runtime.provider = meta.provider;
       writeLastSessionPointer(sessionId);
       conversation.log(`Resumed session: ${sessionId}`, { fg: '135' });
+      const reopenedPanels: string[] = [];
+      if (meta.returnContext?.openPanels?.length) {
+        const panelManager = getPanelManager();
+        for (const panelId of meta.returnContext.openPanels.slice(0, 4)) {
+          try {
+            panelManager.open(panelId);
+            reopenedPanels.push(panelId);
+          } catch {
+            // Ignore unavailable panels during restore.
+          }
+        }
+        if (reopenedPanels.length > 0) panelManager.show();
+      }
+      if (getReturnContextMode() !== 'off' && meta.returnContext) {
+        for (const line of formatReturnContextForDisplay(meta.returnContext)) {
+          conversation.log(`Resume: ${line}`, { fg: '244' });
+        }
+        if (reopenedPanels.length > 0) {
+          conversation.log(`Resume: Reopened panels: ${reopenedPanels.join(', ')}`, { fg: '244' });
+        }
+        if ((meta.returnContext.remoteRunners?.length ?? 0) > 0) {
+          conversation.log(`Resume: Remote re-entry -> /remote recover ${meta.returnContext.remoteRunners![0]}`, { fg: '244' });
+        }
+        if ((meta.returnContext.worktreePaths?.length ?? 0) > 0) {
+          conversation.log('Resume: Worktree re-entry -> /worktree review', { fg: '244' });
+        }
+        if (getReturnContextMode() === 'assisted') {
+          void maybeAssistReturnContextSummary(meta.returnContext).then((assisted) => {
+            if (!assisted.assistedNarrative) return;
+            conversation.log(`Resume: ${assisted.assistedNarrative}`, { fg: '244' });
+            requestRender();
+          });
+        }
+      }
       fireHook('Lifecycle:session:load', 'Lifecycle', 'session', 'load', { sessionId });
     } catch (e) {
       logger.debug('resumeSession failed', { error: String(e) });
@@ -742,6 +797,7 @@ export async function bootstrapRuntime(
 
   const panelManager = getPanelManager();
   registerBuiltinPanels(panelManager, {
+    configManager,
     getOrchestratorUsage: () => orchestrator.usage as { input: number; output: number; cacheRead: number; cacheWrite: number; model?: string },
     toolRegistry,
     providerRegistry,
@@ -811,6 +867,14 @@ export async function bootstrapRuntime(
       compositor.resetDiff();
     },
   });
+
+  setIntegrationHelpersContext({
+    runtimeStore: store,
+    runtimeBus,
+    configManager,
+    getConversationTitle: () => conversation.title,
+  });
+  bootstrapUnsubs.push(() => clearIntegrationHelpersContext());
 
   const externalServices = await startExternalServices(
     configManager,

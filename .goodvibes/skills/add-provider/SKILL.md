@@ -59,7 +59,7 @@ ollama:
   displayName: Ollama
   type: openai-compat
   baseURL: http://localhost:11434/v1
-  apiKeyEnv: null  # No key needed
+  apiKeyEnv: null
 
 together:
   displayName: Together AI
@@ -83,7 +83,7 @@ lm-studio:
   displayName: LM Studio
   type: openai-compat
   baseURL: http://localhost:1234/v1
-  apiKeyEnv: null  # No key needed
+  apiKeyEnv: null
 
 fireworks:
   displayName: Fireworks AI
@@ -95,7 +95,7 @@ vllm:
   displayName: vLLM
   type: openai-compat
   baseURL: http://localhost:8000/v1
-  apiKeyEnv: null  # No key needed
+  apiKeyEnv: null
 ```
 
 If the name does not match a known provider, ask for all fields individually.

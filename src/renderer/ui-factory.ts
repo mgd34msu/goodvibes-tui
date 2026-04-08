@@ -54,7 +54,7 @@ export class UIFactory {
     for (const char of ver) { line[curX++] = { char, fg: GREY, bg: '', bold: false, dim: true, underline: false, italic: false, strikethrough: false }; }
     // Optional conversation title — shown after brand/ver, truncated to fit
     if (title) {
-      const titleStr = `| ${title} `;
+      const titleStr = `│ ${title} `;
       // Reserve space for git info (if present) + model/provider on the right
       const gitReserved = gitInfo ? buildGitSegment(gitInfo).width : 0;
       const rightReserved = getDisplayWidth(stats + prov) + gitReserved;
@@ -143,6 +143,9 @@ export class UIFactory {
     lastInputTokens?: number,
     commandArgsHint?: string,
     hitlMode?: string,
+    composerMode?: string,
+    composerStatus?: string,
+    composerFlags?: readonly string[],
   ): Line[] {
     const lines: Line[] = [];
     const promptLines = prompt.split('\n');
@@ -235,7 +238,7 @@ export class UIFactory {
     const cr = u.cacheRead ?? 0;
     const cw = u.cacheWrite ?? 0;
     const total = inp + out + cr + cw;
-    const tokenLine = ` Token Usage [ Input: ${fmtNum(inp)} | Output: ${fmtNum(out)} | Cache Read: ${fmtNum(cr)} | Cache Write: ${fmtNum(cw)} | Total: ${fmtNum(total)} ]`;
+    const tokenLine = ` Token Usage [ Input: ${fmtNum(inp)} │ Output: ${fmtNum(out)} │ Cache Read: ${fmtNum(cr)} │ Cache Write: ${fmtNum(cw)} │ Total: ${fmtNum(total)} ]`;
     const copiedNotice = isRecentlyCopied ? ` [COPIED] ` : '';
     const statsLine = '  ' + tokenLine + ' '.repeat(Math.max(0, width - 4 - getDisplayWidth(tokenLine) - getDisplayWidth(copiedNotice))) + copiedNotice;
     lines.push(this.stringToLine(statsLine, width, { fg: isRecentlyCopied ? '81' : '244', bold: isRecentlyCopied }));
@@ -262,7 +265,10 @@ export class UIFactory {
       }
       if (toolCount) ctxParts.push(`${toolCount} tools`);
       if (hitlMode) ctxParts.push(`hitl:${hitlMode}`);
-      const ctxLine = '   ' + ctxParts.join('  |  ');
+      if (composerMode) ctxParts.push(`mode:${composerMode}`);
+      if (composerStatus && composerStatus !== 'idle') ctxParts.push(`status:${composerStatus}`);
+      if (composerFlags && composerFlags.length > 0) ctxParts.push(composerFlags.join(','));
+      const ctxLine = '   ' + ctxParts.join('  │  ');
       lines.push(createBaseLine());
       lines.push(this.stringToLine(truncateDisplay(ctxLine, width), width, { fg: '240', dim: true }));
       lines.push(createBaseLine());
@@ -347,7 +353,30 @@ export class UIFactory {
       segments.push({ text: ` in ${fmtNum(inTok)} `, fg: '243', dim: true });
       segments.push({ text: `out ${fmtNum(outTok)}`, fg: '#00ffff' });
     }
-    const line = renderConversationStatusLine(width, segments, { marker: '|', markerFg: '#475569' });
+    const line = createEmptyLine(width);
+    let col = 1;
+    for (const segment of segments) {
+      for (const char of segment.text) {
+        if (col >= width) break;
+        const charWidth = getDisplayWidth(char);
+        if (charWidth <= 0 || col + charWidth > width) break;
+        line[col] = {
+          char,
+          fg: segment.fg,
+          bg: '',
+          bold: segment.bold ?? false,
+          dim: segment.dim ?? false,
+          underline: false,
+          italic: segment.italic ?? false,
+          strikethrough: false,
+        };
+        if (charWidth === 2 && col + 1 < width) {
+          line[col + 1] = { ...line[col], char: '' };
+        }
+        col += charWidth;
+      }
+      if (col >= width) break;
+    }
 
     const lines: Line[] = [
       this.stringToLine(' '.repeat(width), width),
@@ -355,16 +384,43 @@ export class UIFactory {
     ];
 
     if (toolPreview) {
-      lines.push(
-        renderConversationStatusLine(
-          width,
-          [
-            { text: 'tool: ', fg: '#38bdf8', bold: true },
-            { text: toolPreview, fg: '243', dim: true },
-          ],
-          { marker: '|', markerFg: '#334155' },
-        ),
-      );
+      const previewLine = createEmptyLine(width);
+      const label = ' tool: ';
+      let px = 0;
+      for (const ch of label) {
+        if (px >= width) break;
+        previewLine[px] = {
+          char: ch,
+          fg: '#38bdf8',
+          bg: '',
+          bold: true,
+          dim: false,
+          underline: false,
+          italic: false,
+          strikethrough: false,
+        };
+        px += getDisplayWidth(ch);
+      }
+      for (const ch of toolPreview) {
+        if (px >= width) break;
+        const charWidth = getDisplayWidth(ch);
+        if (charWidth <= 0 || px + charWidth > width) break;
+        previewLine[px] = {
+          char: ch,
+          fg: '243',
+          bg: '',
+          bold: false,
+          dim: true,
+          underline: false,
+          italic: false,
+          strikethrough: false,
+        };
+        if (charWidth === 2 && px + 1 < width) {
+          previewLine[px + 1] = { ...previewLine[px], char: '' };
+        }
+        px += charWidth;
+      }
+      lines.push(previewLine);
     }
 
     lines.push(this.stringToLine(' '.repeat(width), width));
@@ -382,7 +438,7 @@ export class UIFactory {
     const pctDisplay = Math.round(pct * 100);
     const filled = Math.round(pct * barWidth);
     const color = pct < 0.6 ? '82' : pct < 0.85 ? '220' : '196';
-    const bar = '#'.repeat(filled) + '-'.repeat(barWidth - filled);
+    const bar = '█'.repeat(filled) + '░'.repeat(barWidth - filled);
     const pctStr = `  ${pctDisplay}%`;
     const full = label + bar + pctStr + (suffix ?? '');
     return this.stringToLine(truncateDisplay(full, lineWidth), lineWidth, { fg: color, dim: true });

@@ -1,8 +1,12 @@
 import { BasePanel } from './base-panel.ts';
 import { createEmptyLine, createStyledCell, type Line } from '../types/grid.ts';
 import type { Orchestrator } from '../core/orchestrator.ts';
+import type { RuntimeStore } from '../runtime/store/index.ts';
+import { sessionMemoryStore } from '../core/session-memory.ts';
+import { evaluateSessionMaintenance } from '../runtime/session-maintenance.ts';
 import {
   buildEmptyState,
+  buildGuidanceLine,
   buildStyledPanelLine,
   buildPanelWorkspace,
   DEFAULT_PANEL_PALETTE,
@@ -90,6 +94,7 @@ export class TokenBudgetPanel extends BasePanel {
   private refreshTimer: ReturnType<typeof setInterval> | null = null;
   private orchestrator: Orchestrator | null = null;
   private getContextWindow: (() => number) | null = null;
+  private runtimeStore: RuntimeStore | null = null;
 
   constructor() {
     super('tokens', 'Tokens', 'T', 'monitoring');
@@ -105,9 +110,10 @@ export class TokenBudgetPanel extends BasePanel {
    * @param orchestrator  The main Orchestrator instance (for usage + lastInputTokens).
    * @param getCtxWindow  Callback returning the current model's contextWindow value.
    */
-  wire(orchestrator: Orchestrator, getCtxWindow: () => number): void {
+  wire(orchestrator: Orchestrator, getCtxWindow: () => number, runtimeStore?: RuntimeStore): void {
     this.orchestrator = orchestrator;
     this.getContextWindow = getCtxWindow;
+    this.runtimeStore = runtimeStore ?? null;
   }
 
   /**
@@ -218,12 +224,41 @@ export class TokenBudgetPanel extends BasePanel {
       });
     }
 
+    sections.push({
+      title: 'Maintenance',
+      lines: this.renderMaintenance(width),
+    });
+
     return buildPanelWorkspace(width, height, {
       title: ' Token Budget',
       intro: 'Live context pressure, session token composition, cache usage, and recent turn deltas.',
       sections,
       palette: DEFAULT_PANEL_PALETTE,
     });
+  }
+
+  private renderMaintenance(width: number): Line[] {
+    const status = evaluateSessionMaintenance({
+      currentTokens: this.lastInputTokens,
+      contextWindow: this.contextWindow,
+      messageCount: this.runtimeStore?.getState().conversation.totalTurns,
+      sessionMemoryCount: sessionMemoryStore.list().length,
+      session: this.runtimeStore?.getState().session,
+    });
+
+    const lines: Line[] = [
+      this.paintTextLine(` ${status.summary}`, width, C.label),
+    ];
+
+    if (status.reasons[0]) {
+      lines.push(this.paintTextLine(` ${status.reasons[0]}`, width, C.dim, { dim: true }));
+    }
+
+    if (status.guidanceMode !== 'off' && status.nextSteps.length > 0) {
+      lines.push(buildGuidanceLine(width, status.nextSteps[0]!, 'open the next maintenance action directly', DEFAULT_PANEL_PALETTE));
+    }
+
+    return lines;
   }
 
   /**

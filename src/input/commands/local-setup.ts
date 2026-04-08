@@ -128,6 +128,7 @@ export function registerLocalSetupCommands(registry: CommandRegistry): void {
           `  skills: ${snapshot.skillCount > 0 ? '[ready]' : '[optional]'}`,
           '',
           'Recommended next commands:',
+          '  /health review',
           '  /provider',
           '  /services doctor',
           '  /subscription review',

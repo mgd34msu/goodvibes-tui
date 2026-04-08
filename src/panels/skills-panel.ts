@@ -376,12 +376,12 @@ export class SkillsPanel extends BasePanel {
     for (const skill of visible) {
       const isSelected = skills[this.selectedIndex]?.name === skill.name;
       const bg = isSelected ? C.selectBg : undefined;
-      const dot = skill.origin === 'project-local' ? '*' : 'o';
+      const dot = skill.origin === 'project-local' ? '◆' : '•';
       const desc = skill.description || 'No description provided.';
       const descWidth = Math.max(1, width - 4 - skill.name.length - 6);
       const descLines = wordWrap(desc, descWidth);
       listLines.push(buildPanelLine(width, [
-        [isSelected ? '>' : ' ', C.selectedFg, bg],
+        [isSelected ? '▸' : ' ', C.selectedFg, bg],
         [' ', C.dim, bg],
         [dot, originColor(skill.origin), bg],
         [' ', C.dim, bg],

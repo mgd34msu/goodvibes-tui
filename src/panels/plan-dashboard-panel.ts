@@ -16,11 +16,11 @@ import { getTrackedVisibleWindow } from '../renderer/surface-layout.ts';
 // ---------------------------------------------------------------------------
 
 const STATUS_ICON: Record<PlanItemStatus, string> = {
-  complete: 'y',
-  in_progress: '>',
-  pending: 'o',
-  failed: 'x',
-  skipped: '-',
+  complete: '✓',
+  in_progress: '▸',
+  pending: '•',
+  failed: '✗',
+  skipped: '–',
 };
 
 const STATUS_FG: Record<PlanItemStatus, string> = {
@@ -224,7 +224,7 @@ export class PlanDashboardPanel extends BasePanel {
 
     // Indent blocked items to visually signal they depend on others
     const indent = isBlocked ? '      ' : '   ';
-    const selectedMark = isSelected ? '>' : ' ';
+    const selectedMark = isSelected ? '▸' : ' ';
 
     let text = `${selectedMark}${indent}${icon} ${item.description}`;
 

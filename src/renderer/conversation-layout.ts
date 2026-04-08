@@ -43,10 +43,11 @@ export function overlayViewportBottom(
   overlay: readonly Line[],
   width: number,
   viewportHeight: number,
+  bottomInset: number = 0,
 ): Line[] {
   if (overlay.length === 0) return [...viewport];
   const next = [...viewport];
-  const targetStart = Math.max(0, viewportHeight - overlay.length);
+  const targetStart = Math.max(0, viewportHeight - bottomInset - overlay.length);
   next.length = Math.min(next.length, targetStart);
   while (next.length < targetStart) next.push(createEmptyLine(width));
   next.push(...overlay);

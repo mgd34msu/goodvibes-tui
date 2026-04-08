@@ -17,6 +17,8 @@ import { compactMessages, estimateConversationTokens } from './context-compactio
 import type { CompactionContext } from './context-compaction.ts';
 import { sessionMemoryStore } from './session-memory.ts';
 import { sessionLineageTracker } from './session-lineage.ts';
+import { buildTranscriptEventIndex } from './transcript-events/index.ts';
+import { renderConversationCollapsedFragment } from '../renderer/conversation-surface.ts';
 
 /**
  * ConversationManager - Owns conversation messages and the rendered history buffer.
@@ -30,11 +32,14 @@ export type TokenUsage = { inputTokens: number; outputTokens: number; cacheReadT
 
 type AssistantMessage = { role: 'assistant'; content: string; toolCalls?: ToolCall[]; reasoningContent?: string; reasoningSummary?: string; usage?: TokenUsage; model?: string; provider?: string };
 
-type Message =
+export type ConversationMessageSnapshot =
   | { role: 'user'; content: string | ContentPart[]; cancelled?: boolean }
   | AssistantMessage
   | { role: 'system'; content: string }
   | { role: 'tool'; callId: string; content: string; toolName?: string };
+
+type Message = ConversationMessageSnapshot;
+export type ConversationTitleSource = 'system' | 'user';
 
 function cloneMessages(messages: Message[]): Message[] {
   return structuredClone(messages);
@@ -127,7 +132,8 @@ export interface BlockMeta {
 export class ConversationManager {
   public history = new InfiniteBuffer();
   /** Auto-generated or manually set conversation title. */
-  public title = '';
+  private _title = '';
+  private _titleSource: ConversationTitleSource = 'system';
   private messages: Message[] = [];
   private getWidth: () => number;
   /** Tracks the rendered width; a change invalidates the full history. */
@@ -190,8 +196,8 @@ export class ConversationManager {
 
   public addUserMessage(content: string | ContentPart[]): void {
     // Auto-generate title from first user message if not already set
-    if (this.title === '' && typeof content === 'string' && content.trim().length > 0) {
-      this.title = deriveConversationTitle(content);
+    if (this._title === '' && typeof content === 'string' && content.trim().length > 0) {
+      this.setSystemTitle(deriveConversationTitle(content));
     }
     this.messages.push({ role: 'user', content });
     // Clear undo stack when new user input is added (can't redo past new input)
@@ -399,7 +405,13 @@ export class ConversationManager {
     this.history.addLines(UIFactory.createMessageBar(width, displayText));
   }
 
-  private renderAssistantMessage(message: Extract<Message, { role: 'assistant' }>, width: number, showLineNumbers: boolean, collapseThreshold: number, msgIdx: number): void {
+  private renderAssistantMessage(
+    message: Extract<Message, { role: 'assistant' }>,
+    width: number,
+    lineNumberMode: 'all' | 'code' | 'off',
+    collapseThreshold: number,
+    msgIdx: number,
+  ): void {
     // Render reasoning/thinking block if enabled and present
     const showThinking = this.configManager?.get('display.showThinking') ?? false;
     const showReasoningSummary = this.configManager?.get('display.showReasoningSummary') ?? false;
@@ -437,16 +449,22 @@ export class ConversationManager {
     }
     // Render assistant content using the markdown renderer
     if (message.content) {
+      const showAllLineNumbers = lineNumberMode === 'all';
+      const showCodeBlockLineNumbers = lineNumberMode === 'all' ? false : lineNumberMode === 'code';
       // Calculate gutter width dynamically based on total line count
-      const preRendered = showLineNumbers ? renderMarkdown(message.content, width) : null;
+      const preRendered = showAllLineNumbers
+        ? renderMarkdown(message.content, width, { codeBlockLineNumbers: false })
+        : null;
       const totalLines = preRendered?.length ?? 0;
       const numWidth = Math.max(3, String(totalLines).length); // minimum 3 digits wide
       const gutterW = numWidth + 3; // digits + ' │ '
-      const contentWidth = showLineNumbers ? width - gutterW : width;
-      const renderWidth = showLineNumbers ? contentWidth : width;
+      const contentWidth = showAllLineNumbers ? width - gutterW : width;
+      const renderWidth = showAllLineNumbers ? contentWidth : width;
 
       // Use tracked render to register code blocks in blockRegistry
-      const { lines: tracked, codeBlocks } = renderMarkdownTracked(message.content, renderWidth);
+      const { lines: tracked, codeBlocks } = renderMarkdownTracked(message.content, renderWidth, {
+        codeBlockLineNumbers: showCodeBlockLineNumbers,
+      });
 
       // Register each code block found in this message
       const msgBaseLineOffset = this.history.getLineCount();
@@ -469,7 +487,7 @@ export class ConversationManager {
       }
 
       const rendered = tracked;
-      if (showLineNumbers) {
+      if (showAllLineNumbers) {
         // Prepend dimmed gutter and shift content right
         const numbered = rendered.map((line, i) => {
           const label = String(i + 1).padStart(numWidth) + ' \u2502 ';
@@ -530,14 +548,21 @@ export class ConversationManager {
     }
 
     if (isCollapsed) {
-      // Collapsed: single dim line with preview
+      // Collapsed tool/diff output stays in the fragment language used by the
+      // transcript, instead of regressing to a generic system notice row.
       const COLLAPSE_SUFFIX_RESERVE = 30; // space for '… [+N lines]' suffix
       const preview = contentLines[0].slice(0, width - LAYOUT.LEFT_MARGIN - LAYOUT.RIGHT_MARGIN - COLLAPSE_SUFFIX_RESERVE);
       const hiddenCount = lineCount - 1;
       const collapsedText = hiddenCount > 0
         ? `${preview}...  [+${hiddenCount} lines]`
         : preview;
-      const rendered = renderSystemMessage(collapsedText, width, 'info');
+      const rendered = renderConversationCollapsedFragment(collapsedText, width, {
+        prefix: blockType === 'diff' ? ' ≋ ' : ' ▸ ',
+        prefixFg: blockType === 'diff' ? '#f59e0b' : '#38bdf8',
+        text: '244',
+        bodyBg: '#1a1a1a',
+        dim: true,
+      });
       this.history.addLines(rendered);
     } else {
       // Expanded: render through markdown pipeline
@@ -577,7 +602,7 @@ export class ConversationManager {
 
   /** Render a slice of messages into the history buffer. */
   private appendMessages(messages: Message[], width: number): void {
-    const showLineNumbers = this.configManager?.get('display.lineNumbers') ?? false;
+    const lineNumberMode = this.configManager?.get('display.lineNumbers') ?? 'off';
     const collapseThreshold = this.configManager?.get('display.collapseThreshold') ?? 30;
 
     for (let msgIdx = 0; msgIdx < messages.length; msgIdx++) {
@@ -585,7 +610,7 @@ export class ConversationManager {
       if (m.role === 'user') {
         this.renderUserMessage(m, width);
       } else if (m.role === 'assistant') {
-        this.renderAssistantMessage(m, width, showLineNumbers, collapseThreshold, msgIdx);
+        this.renderAssistantMessage(m, width, lineNumberMode, collapseThreshold, msgIdx);
       } else if (m.role === 'system') {
         this.renderSystemMessage(m, width);
       } else if (m.role === 'tool') {
@@ -694,6 +719,25 @@ export class ConversationManager {
   public suppressSplash: boolean = false;
   public splashOptions: SplashOptions = {};
 
+  public get title(): string {
+    return this._title;
+  }
+
+  public set title(value: string) {
+    this._title = String(value ?? '');
+    this._titleSource = this._title.trim().length > 0 ? 'user' : 'system';
+  }
+
+  public getTitleSource(): ConversationTitleSource {
+    return this._titleSource;
+  }
+
+  public setSystemTitle(value: string): void {
+    if (this._titleSource === 'user') return;
+    this._title = String(value ?? '');
+    this._titleSource = 'system';
+  }
+
   public setSplashSuppressed(suppressed: boolean): void {
     if (this.suppressSplash === suppressed) return;
     this.suppressSplash = suppressed;
@@ -773,7 +817,8 @@ export class ConversationManager {
    */
   public resetAll(): void {
     this.messages = [];
-    this.title = '';
+    this._title = '';
+    this._titleSource = 'system';
     this.undoStack = [];
     this.branches.clear();
     this.currentBranch = 'main';
@@ -784,6 +829,14 @@ export class ConversationManager {
     this.collapseState.clear();
     this.blockRegistry = [];
     this.streamingStartLine = -1;
+  }
+
+  public getMessageSnapshot(): ConversationMessageSnapshot[] {
+    return cloneMessages(this.messages);
+  }
+
+  public getTranscriptEventIndex() {
+    return buildTranscriptEventIndex(this.getMessageSnapshot());
   }
 
 
@@ -957,6 +1010,8 @@ export class ConversationManager {
     return {
       messages: cloneMessages(this.messages),
       timestamp: Date.now(),
+      title: this._title,
+      titleSource: this._titleSource,
       branches: branchesObj,
       currentBranch: this.currentBranch,
     };
@@ -965,8 +1020,12 @@ export class ConversationManager {
   /**
    * fromJSON - Restore conversation from persisted data.
    */
-  public fromJSON(data: { messages: Message[]; branches?: Record<string, Message[]>; currentBranch?: string }): void {
+  public fromJSON(data: { messages: Message[]; branches?: Record<string, Message[]>; currentBranch?: string; title?: string; titleSource?: ConversationTitleSource }): void {
     this.messages = data.messages ?? [];
+    this._title = typeof data.title === 'string' ? data.title : '';
+    this._titleSource = data.titleSource === 'user' || data.titleSource === 'system'
+      ? data.titleSource
+      : (this._title ? 'user' : 'system');
     this.branches = restoreBranchMap(data.branches);
     this.currentBranch = data.currentBranch ?? 'main';
     this.history.clear();

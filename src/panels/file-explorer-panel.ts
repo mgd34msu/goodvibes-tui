@@ -10,12 +10,20 @@ import { BasePanel } from './base-panel.ts';
 import {
   buildEmptyState,
   buildPanelLine,
+  buildSearchInputLine,
   buildSelectablePanelLine,
   buildPanelWorkspace,
   DEFAULT_PANEL_PALETTE,
 } from './polish.ts';
 import { getTrackedVisibleWindow } from '../renderer/surface-layout.ts';
 import { getDisplayWidth } from '../utils/terminal-width.ts';
+import {
+  getPanelSearchFocusTransition,
+  isPanelSearchBackspace,
+  isPanelSearchCancel,
+  isPanelSearchCommit,
+  isPanelSearchPrintable,
+} from './search-focus.ts';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -157,6 +165,12 @@ export class FileExplorerPanel extends BasePanel {
   handleInput(key: string): boolean {
     if (this.searchMode) return this._handleSearchInput(key);
 
+    const transition = getPanelSearchFocusTransition(key, { selectedIndex: this.cursor, itemCount: this.flat.length });
+    if (transition === 'focus-search') {
+      this._enterSearch();
+      return true;
+    }
+
     switch (key) {
       case 'up':    case 'k': this._moveCursor(-1); return true;
       case 'down':  case 'j': this._moveCursor(1);  return true;
@@ -178,9 +192,11 @@ export class FileExplorerPanel extends BasePanel {
   render(width: number, height: number): Line[] {
     if (!this.cacheValid) this._buildTree();
     this.needsRender = false;
-    const headerLabel = this.searchMode
+    const searchLine = this.searchMode
       ? `/ ${this.searchQuery}_`
-      : `Root: ${relative(process.cwd(), this.rootPath) || '.'}`;
+      : this.searchQuery
+        ? `Filter: ${this.searchQuery}  (/ or up at top to edit)`
+        : `Root: ${relative(process.cwd(), this.rootPath) || '.'}  (/ or up at top to search)`;
 
     if (this.flat.length === 0) {
       return buildPanelWorkspace(width, height, {
@@ -200,7 +216,10 @@ export class FileExplorerPanel extends BasePanel {
           },
         ],
         footerLines: [
-          buildPanelLine(width, [[` ${headerLabel}`, this.searchMode ? DEFAULT_PANEL_PALETTE.info : DEFAULT_PANEL_PALETTE.dim]]),
+          buildSearchInputLine(width, '', searchLine, DEFAULT_PANEL_PALETTE, {
+            active: this.searchMode,
+            valueColor: this.searchMode ? DEFAULT_PANEL_PALETTE.info : DEFAULT_PANEL_PALETTE.dim,
+          }),
           buildPanelLine(width, [[' Up/Down', DEFAULT_PANEL_PALETTE.info], [' navigate', DEFAULT_PANEL_PALETTE.dim], ['   Enter/Right', DEFAULT_PANEL_PALETTE.info], [' expand', DEFAULT_PANEL_PALETTE.dim], ['   Left', DEFAULT_PANEL_PALETTE.info], [' collapse', DEFAULT_PANEL_PALETTE.dim], ['   /', DEFAULT_PANEL_PALETTE.info], [' search', DEFAULT_PANEL_PALETTE.dim], ['   r', DEFAULT_PANEL_PALETTE.info], [' refresh', DEFAULT_PANEL_PALETTE.dim]]),
         ],
         palette: DEFAULT_PANEL_PALETTE,
@@ -222,7 +241,7 @@ export class FileExplorerPanel extends BasePanel {
       const segments = [
         { text: indent, fg: baseFg },
         node.isDir
-          ? { text: node.expanded ? 'v ' : '> ', fg: CLR_TOGGLE, bold: isCursor }
+          ? { text: node.expanded ? '▾ ' : '▸ ', fg: CLR_TOGGLE, bold: isCursor }
           : { text: `${fileIcon(node.name)} `, fg: CLR_ICON, dim: !isCursor },
         { text: node.name, fg: baseFg, bold: node.isDir || isCursor },
       ];
@@ -275,7 +294,10 @@ export class FileExplorerPanel extends BasePanel {
         },
       ],
       footerLines: [
-        buildPanelLine(width, [[` ${headerLabel}`, this.searchMode ? DEFAULT_PANEL_PALETTE.info : DEFAULT_PANEL_PALETTE.dim]]),
+        buildSearchInputLine(width, '', searchLine, DEFAULT_PANEL_PALETTE, {
+          active: this.searchMode,
+          valueColor: this.searchMode ? DEFAULT_PANEL_PALETTE.info : DEFAULT_PANEL_PALETTE.dim,
+        }),
         buildPanelLine(width, [[' Up/Down', DEFAULT_PANEL_PALETTE.info], [' navigate', DEFAULT_PANEL_PALETTE.dim], ['   Enter/Right', DEFAULT_PANEL_PALETTE.info], [' expand', DEFAULT_PANEL_PALETTE.dim], ['   Left', DEFAULT_PANEL_PALETTE.info], [' collapse', DEFAULT_PANEL_PALETTE.dim], ['   /', DEFAULT_PANEL_PALETTE.info], [' search', DEFAULT_PANEL_PALETTE.dim], ['   r', DEFAULT_PANEL_PALETTE.info], [' refresh', DEFAULT_PANEL_PALETTE.dim]]),
       ],
       palette: DEFAULT_PANEL_PALETTE,
@@ -474,27 +496,35 @@ export class FileExplorerPanel extends BasePanel {
   }
 
   private _handleSearchInput(key: string): boolean {
-    if (key === 'escape') {
+    const transition = getPanelSearchFocusTransition(key, { selectedIndex: this.cursor, itemCount: this.flat.length });
+    if (transition === 'focus-list') {
+      this.searchMode = false;
+      this.cursor = 0;
+      this.scrollTop = 0;
+      this.markDirty();
+      return true;
+    }
+    if (isPanelSearchCancel(key)) {
       this.searchMode = false;
       this.searchQuery = '';
       this._rebuildFlat();
       this.markDirty();
       return true;
     }
-    if (key === 'return' || key === 'enter') {
+    if (isPanelSearchCommit(key)) {
       // Confirm search, stay in results, exit search-input mode
       this.searchMode = false;
       this.markDirty();
       return true;
     }
-    if (key === 'delete' || key === 'backspace') {
+    if (isPanelSearchBackspace(key)) {
       this.searchQuery = this.searchQuery.slice(0, -1);
       this._rebuildFlat();
       this.markDirty();
       return true;
     }
     // Printable single characters
-    if (key.length === 1) {
+    if (isPanelSearchPrintable(key)) {
       this.searchQuery += key;
       this._rebuildFlat();
       this.markDirty();

@@ -2,6 +2,9 @@ import type { HookDispatcher } from '../hooks/dispatcher.ts';
 import type { RuntimeEventBus } from './events/index.ts';
 import { DaemonServer } from '../daemon/server.ts';
 import { HttpListener } from '../daemon/http-listener.ts';
+import { UserAuthManager } from '../security/user-auth.ts';
+import { logger } from '../utils/logger.ts';
+import { getLocalUserAuthManager, setLocalUserAuthManager } from './local-auth.ts';
 
 interface DaemonService {
   enable(config: { daemon: boolean }, token?: string): boolean;
@@ -16,8 +19,8 @@ interface HttpListenerService {
 }
 
 interface ServiceFactories {
-  createDaemonServer?: (runtimeBus: RuntimeEventBus) => DaemonService;
-  createHttpListener?: (hookDispatcher: HookDispatcher) => HttpListenerService;
+  createDaemonServer?: (runtimeBus: RuntimeEventBus, userAuth: UserAuthManager) => DaemonService;
+  createHttpListener?: (hookDispatcher: HookDispatcher, userAuth: UserAuthManager) => HttpListenerService;
 }
 
 export interface ExternalServicesHandle {
@@ -36,22 +39,46 @@ export async function startExternalServices(
   hookDispatcher: HookDispatcher,
   factories: ServiceFactories = {},
 ): Promise<ExternalServicesHandle> {
-  const createDaemonServer = factories.createDaemonServer ?? ((bus: RuntimeEventBus): DaemonService => new DaemonServer({ runtimeBus: bus }));
-  const createHttpListener = factories.createHttpListener ?? ((dispatcher: HookDispatcher): HttpListenerService => new HttpListener({ hookDispatcher: dispatcher }));
+  const sharedUserAuth = getLocalUserAuthManager();
+  setLocalUserAuthManager(sharedUserAuth);
+  const createDaemonServer = factories.createDaemonServer ?? ((bus: RuntimeEventBus, userAuth: UserAuthManager): DaemonService =>
+    new DaemonServer({ runtimeBus: bus, userAuth }));
+  const createHttpListener = factories.createHttpListener ?? ((dispatcher: HookDispatcher, userAuth: UserAuthManager): HttpListenerService =>
+    new HttpListener({ hookDispatcher: dispatcher, userAuth }));
 
   let daemonServer: DaemonService | null = null;
   let httpListener: HttpListenerService | null = null;
 
   if (config.get('danger.daemon') as boolean) {
-    daemonServer = createDaemonServer(runtimeBus);
+    daemonServer = createDaemonServer(runtimeBus, sharedUserAuth);
     daemonServer.enable({ daemon: true });
-    await daemonServer.start();
+    try {
+      await daemonServer.start();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      if (message.includes('EADDRINUSE') || message.includes('Address already in use')) {
+        logger.warn('Daemon server port already in use; continuing without local daemon in this TUI instance', { error: message });
+        daemonServer = null;
+      } else {
+        throw error;
+      }
+    }
   }
 
   if (config.get('danger.httpListener') as boolean) {
-    httpListener = createHttpListener(hookDispatcher);
+    httpListener = createHttpListener(hookDispatcher, sharedUserAuth);
     httpListener.enable({ httpListener: true });
-    await httpListener.start();
+    try {
+      await httpListener.start();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      if (message.includes('EADDRINUSE') || message.includes('Address already in use')) {
+        logger.warn('HTTP listener port already in use; continuing without local listener in this TUI instance', { error: message });
+        httpListener = null;
+      } else {
+        throw error;
+      }
+    }
   }
 
   return {

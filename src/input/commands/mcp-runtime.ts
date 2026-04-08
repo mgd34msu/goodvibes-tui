@@ -5,12 +5,32 @@ export function registerMcpRuntimeCommands(registry: CommandRegistry): void {
     name: 'mcp',
     aliases: [],
     description: 'List connected MCP servers and their tools',
-    usage: '[tools [<server>]]',
-    argsHint: '[tools [server]]',
+    usage: '[review|tools [<server>]|auth-review|repair [server]]',
+    argsHint: '[review|tools [server]|auth-review|repair [server]]',
     async handler(args, ctx) {
+      const listServerSecurity = (): ReturnType<typeof ctx.mcpRegistry.listServerSecurity> => {
+        const api = ctx.mcpRegistry as typeof ctx.mcpRegistry & {
+          listServerSecurity?: () => ReturnType<typeof ctx.mcpRegistry.listServerSecurity>;
+        };
+        return api.listServerSecurity?.() ?? [];
+      };
       const subcommand = args[0];
       if (!subcommand && ctx.openMcpPanel) {
         ctx.openMcpPanel();
+      }
+      if (subcommand === 'review') {
+        const servers = listServerSecurity();
+        const authRequired = servers.filter((server) => !server.connected || server.schemaFreshness === 'quarantined');
+        ctx.print([
+          'MCP Review',
+          `  servers: ${servers.length}`,
+          `  connected: ${servers.filter((server) => server.connected).length}`,
+          `  auth or repair attention: ${authRequired.length}`,
+          ...servers.map((server) => `  ${server.name}  trust=${server.trustMode}  role=${server.role}  freshness=${server.schemaFreshness}  connected=${server.connected ? 'yes' : 'no'}`),
+          '  next: /mcp auth-review',
+          '  next: /mcp repair <server>',
+        ].join('\n'));
+        return;
       }
       if (subcommand === 'tools') {
         const filterServer = args[1];
@@ -39,6 +59,54 @@ export function registerMcpRuntimeCommands(registry: CommandRegistry): void {
           lines.push(`    ${tool.toolName}${tool.description ? `  — ${tool.description}` : ''}`);
         }
         ctx.print(lines.join('\n'));
+        return;
+      }
+
+      if (subcommand === 'auth-review') {
+        const servers = listServerSecurity();
+        const needingAttention = servers.filter((server) => !server.connected || server.schemaFreshness === 'quarantined');
+        ctx.print(needingAttention.length > 0
+          ? [
+              'MCP Auth Review',
+              ...needingAttention.map((server) => (
+                `  ${server.name}  connected=${server.connected ? 'yes' : 'no'}  freshness=${server.schemaFreshness}  trust=${server.trustMode}`
+              )),
+              '  next: /services auth-review',
+              '  next: /mcp repair <server>',
+            ].join('\n')
+          : 'MCP Auth Review\n  No MCP servers currently need auth or quarantine recovery.');
+        return;
+      }
+
+      if (subcommand === 'repair') {
+        const serverName = args[1];
+        const servers = listServerSecurity();
+        const selected = serverName ? servers.find((server) => server.name === serverName) : servers.find((server) => !server.connected || server.schemaFreshness === 'quarantined');
+        if (!selected) {
+          ctx.print(serverName
+            ? `Unknown MCP server: ${serverName}`
+            : 'MCP Repair\n  No MCP server currently needs repair.');
+          return;
+        }
+        const nextSteps = [
+          selected.schemaFreshness === 'quarantined'
+            ? `/mcp quarantine ${selected.name} approve operator`
+            : null,
+          !selected.connected ? '/services auth-review' : null,
+          '/mcp review',
+          '/health review',
+        ].filter((entry): entry is string => entry !== null);
+        ctx.print([
+          `MCP Repair: ${selected.name}`,
+          `  connected: ${selected.connected ? 'yes' : 'no'}`,
+          `  trust: ${selected.trustMode}`,
+          `  role: ${selected.role}`,
+          `  freshness: ${selected.schemaFreshness}`,
+          ...(selected.quarantineReason ? [`  quarantine: ${selected.quarantineReason}`] : []),
+          ...(selected.quarantineDetail ? [`  detail: ${selected.quarantineDetail}`] : []),
+          '  next:',
+          ...nextSteps.map((step) => `    ${step}`),
+        ].join('\n'));
         return;
       }
 
@@ -94,7 +162,7 @@ export function registerMcpRuntimeCommands(registry: CommandRegistry): void {
         return;
       }
 
-      const servers = ctx.mcpRegistry.listServerSecurity();
+      const servers = listServerSecurity();
       if (servers.length === 0) {
         ctx.print(
           'No MCP servers configured.\n'

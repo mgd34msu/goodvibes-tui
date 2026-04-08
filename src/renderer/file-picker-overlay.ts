@@ -35,7 +35,7 @@ export function renderFilePickerOverlay(
   const selectedBg = DEFAULT_OVERLAY_PALETTE.selectedBg;
 
   // Title bar
-  const titleLine = createOverlayBorderLine(width, layout, '┌', '─', '┐', titleFg);
+  const titleLine = createOverlayBorderLine(width, layout, '┌', '─', '┐', borderFg);
   putOverlayText(titleLine, layout.margin + 2, layout.width - 4, 'Select File', { fg: titleFg, bold: true });
   lines.push(titleLine);
 
@@ -43,13 +43,13 @@ export function renderFilePickerOverlay(
   const queryDisplay = picker.query || '';
   const searchLine = createOverlayContentLine(width, layout, borderFg);
   const searchPrefix = '@ ';
-  const queryText = fitDisplay(`${queryDisplay}_`, Math.max(0, contentW - getDisplayWidth(searchPrefix)));
-  putOverlayText(searchLine, layout.margin + 2, getDisplayWidth(searchPrefix), searchPrefix, { fg: bodyFg });
-  putOverlayText(searchLine, layout.margin + 2 + getDisplayWidth(searchPrefix), contentW - getDisplayWidth(searchPrefix), queryText, { fg: bodyFg });
+  const queryText = fitDisplay(`${queryDisplay}${picker.searchFocused ? '█' : ''}`, Math.max(0, contentW - getDisplayWidth(searchPrefix)));
+  putOverlayText(searchLine, layout.margin + 2, getDisplayWidth(searchPrefix), searchPrefix, { fg: picker.searchFocused ? bodyFg : mutedFg });
+  putOverlayText(searchLine, layout.margin + 2 + getDisplayWidth(searchPrefix), contentW - getDisplayWidth(searchPrefix), queryText, { fg: picker.query.length > 0 || picker.searchFocused ? bodyFg : mutedFg });
   lines.push(searchLine);
 
   // Separator
-  lines.push(createOverlayBorderLine(width, layout, '├', '─', '┤', mutedFg));
+  lines.push(createOverlayBorderLine(width, layout, '├', '─', '┤', borderFg));
 
   // Results
   if (picker.results.length === 0) {
@@ -70,7 +70,7 @@ export function renderFilePickerOverlay(
     for (let i = startIdx; i < endIdx; i++) {
       const file = picker.results[i];
       const isSelected = i === picker.selectedIndex;
-      const indicator = isSelected ? '> ' : '  ';
+      const indicator = isSelected ? '▸ ' : '  ';
       const displayFile = getDisplayWidth(file) > contentW - 2
         ? truncateDisplay(file, contentW - 2)
         : file;
@@ -91,8 +91,8 @@ export function renderFilePickerOverlay(
   }
 
   // Bottom border with hints
-  const hints = '[Up/Down] Navigate  [Enter] Select  [Esc] Cancel';
-  const bottomLine = createOverlayBorderLine(width, layout, '└', '─', '┘', mutedFg);
+  const hints = '[Up/Down] Navigate  [/] Search  [Enter] Select  [Esc] Cancel';
+  const bottomLine = createOverlayBorderLine(width, layout, '└', '─', '┘', borderFg);
   putOverlayText(bottomLine, layout.margin + 2, layout.width - 4, truncateDisplay(hints, layout.width - 4), { fg: mutedFg, dim: true });
   lines.push(bottomLine);
 

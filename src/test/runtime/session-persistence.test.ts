@@ -44,6 +44,22 @@ describe('runtime/session-persistence', () => {
       {
         messages: [{ role: 'user', content: 'hello' }],
         timestamp: 1_700_000_000_000,
+        titleSource: 'user',
+        returnContext: {
+          activityLabel: 'user prompt queued',
+          statusLabel: 'awaiting response',
+          pendingApprovals: 0,
+          toolCallCount: 0,
+          toolResultCount: 0,
+          assistantTurnCount: 0,
+          userTurnCount: 1,
+          activeTasks: 2,
+          blockedTasks: 1,
+          remoteContracts: 1,
+          worktreeCount: 3,
+          openPanels: ['remote', 'approval'],
+          lines: ['Activity: user prompt queued', 'Status: awaiting response'],
+        },
       },
       'gpt-test',
       'openai',
@@ -60,6 +76,10 @@ describe('runtime/session-persistence', () => {
     expect(meta.model).toBe('gpt-test');
     expect(meta.provider).toBe('openai');
     expect(meta.timestamp).toBe(1_700_000_000_000);
+    expect(meta.titleSource).toBe('user');
+    expect(meta.returnContext?.statusLabel).toBe('awaiting response');
+    expect(meta.returnContext?.worktreeCount).toBe(3);
+    expect(meta.returnContext?.openPanels).toEqual(['remote', 'approval']);
     expect(messages).toEqual([{ role: 'user', content: 'hello' }]);
   });
 
@@ -87,9 +107,13 @@ describe('runtime/session-persistence', () => {
     expect(info).not.toBeNull();
     expect(info?.sessionId).toBe('user-recovery');
     expect(info?.title).toBe('Recovered Session');
+    expect(info?.returnContext).toBeUndefined();
 
     const loaded = loadRecoveryConversation({ homeDir });
     expect(loaded).toEqual({
+      title: 'Recovered Session',
+      titleSource: undefined,
+      returnContext: undefined,
       messages: [
         { role: 'user', content: 'recover me' },
         { role: 'assistant', content: 'restored' },
@@ -98,5 +122,44 @@ describe('runtime/session-persistence', () => {
 
     deleteRecoveryFile({ homeDir });
     expect(existsSync(getRecoveryFilePath(homeDir))).toBe(false);
+  });
+
+  test('recovery helpers preserve return context metadata when provided', () => {
+    writeRecoveryFile(
+      {
+        titleSource: 'system',
+        returnContext: {
+          activityLabel: 'assistant replied',
+          statusLabel: 'ready for next turn',
+          pendingApprovals: 0,
+          toolCallCount: 1,
+          toolResultCount: 1,
+          assistantTurnCount: 1,
+          userTurnCount: 1,
+          activeTasks: 2,
+          blockedTasks: 1,
+          remoteContracts: 1,
+          worktreeCount: 2,
+          openPanels: ['remote', 'approval'],
+          lines: ['Activity: assistant replied', 'Status: ready for next turn'],
+        },
+        messages: [
+          { role: 'user', content: 'recover me' },
+          { role: 'assistant', content: 'restored' },
+        ],
+      },
+      'user-recovery',
+      'Recovered Session',
+      { homeDir },
+    );
+
+    const info = checkRecoveryFile({ cwd: cwdDir, homeDir });
+    expect(info?.returnContext?.activityLabel).toBe('assistant replied');
+
+    const loaded = loadRecoveryConversation({ homeDir });
+    expect(loaded?.titleSource).toBe('system');
+    expect(loaded?.returnContext?.statusLabel).toBe('ready for next turn');
+    expect(loaded?.returnContext?.remoteContracts).toBe(1);
+    expect(loaded?.returnContext?.openPanels).toEqual(['remote', 'approval']);
   });
 });

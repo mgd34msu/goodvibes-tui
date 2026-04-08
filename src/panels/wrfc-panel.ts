@@ -271,7 +271,7 @@ export class WrfcPanel extends BasePanel {
   ): Line[] {
     const stateCol   = stateColor(chain.state);
     const stateTag   = ` ${stateLabel(chain.state).padEnd(6)}`;
-    const arrow      = isExpanded ? 'v' : '>';
+    const arrow      = isExpanded ? '▾' : '▸';
     const chainIdShort = chain.id.slice(-6);
     const prefix     = ` ${arrow} [${chainIdShort}] `;
     const fixes      = chain.fixAttempts > 0 ? ` fix:${chain.fixAttempts}` : '';
@@ -387,7 +387,7 @@ export class WrfcPanel extends BasePanel {
   }
 
   private renderGateResult(gate: QualityGateResult, width: number, indent: string): Line {
-    const icon   = gate.passed ? 'y' : 'x';
+    const icon   = gate.passed ? '✓' : '✕';
     const iconFg = gate.passed ? C.gatePass : C.gateFail;
     const dur    = `${gate.durationMs}ms`;
     const nameMax = width - indent.length - 2 - dur.length - 4;

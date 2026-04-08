@@ -3,9 +3,9 @@ import { UIFactory } from './ui-factory.ts';
 import { getDisplayWidth } from '../utils/terminal-width.ts';
 
 // Rich spinner frames (used by progress indicators)
-export const SPINNER_FRAMES = ['|', '/', '-', '\\', '|', '/', '-', '\\'];
+export const SPINNER_FRAMES = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
 // Braille thinking spinner frames (used by the orchestrator thinking animation)
-export const THINKING_SPINNER_FRAMES = ['.', 'o', 'O', 'o', '.', 'o', 'O', 'o', '.', 'o'];
+export const THINKING_SPINNER_FRAMES = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
 
 /**
  * renderSpinner - Render a spinner with label as a single Line.

@@ -16,9 +16,9 @@ describe('overlay viewport policy', () => {
 
   test('returns a stable shared overlay footprint', () => {
     const compact = getOverlaySurfaceMetrics(80, 24, { chromeRows: 6 });
-    expect(compact.margin).toBe(6);
-    expect(compact.boxWidth).toBe(68);
-    expect(compact.contentWidth).toBe(64);
+    expect(compact.margin).toBe(4);
+    expect(compact.boxWidth).toBe(72);
+    expect(compact.contentWidth).toBe(68);
     expect(compact.contentRows).toBeGreaterThanOrEqual(6);
 
     const roomy = getOverlaySurfaceMetrics(120, 40, {
@@ -35,5 +35,12 @@ describe('overlay viewport policy', () => {
   test('stable overlay target rows clamp to a shared minimum band', () => {
     expect(getStableOverlayContentRows(5, 8)).toBe(8);
     expect(getStableOverlayContentRows(9, 8)).toBe(9);
+  });
+
+  test('uses a bounded row band instead of a single fixed overlay height', () => {
+    const compact = getOverlayContentBudget(24, { chromeRows: 4, minContentRows: 6, maxContentRows: 10 });
+    const tall = getOverlayContentBudget(50, { chromeRows: 4, minContentRows: 6, maxContentRows: 14 });
+    expect(compact).toBe(8);
+    expect(tall).toBe(14);
   });
 });

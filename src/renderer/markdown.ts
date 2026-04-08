@@ -4,6 +4,10 @@ import { renderCodeBlock } from './code-block.ts';
 import { getDisplayWidth } from '../utils/terminal-width.ts';
 import { LAYOUT } from './layout.ts';
 
+export interface MarkdownRenderOptions {
+  codeBlockLineNumbers?: boolean;
+}
+
 /** Module-level set of inline markdown special characters (hoisted out of hot loop). */
 const INLINE_SPECIAL_CHARS = new Set(['[', '`', '*', '_', '~']);
 
@@ -11,7 +15,7 @@ const INLINE_SPECIAL_CHARS = new Set(['[', '`', '*', '_', '~']);
  * renderMarkdown - Parse markdown text into styled Line[] using a line-by-line state machine.
  * Supports headers, bold, italic, inline code, code blocks, lists, and links.
  */
-export function renderMarkdown(text: string, width: number): Line[] {
+export function renderMarkdown(text: string, width: number, options: MarkdownRenderOptions = {}): Line[] {
   const lines: Line[] = [];
   const rawLines = text.split('\n');
 
@@ -35,7 +39,9 @@ export function renderMarkdown(text: string, width: number): Line[] {
     if (inCodeBlock) {
       if (raw.trimStart().startsWith('```')) {
         // End of code block - delegate to code block renderer
-        const rendered = renderCodeBlock(codeBlockLines, codeBlockLang, width);
+        const rendered = renderCodeBlock(codeBlockLines, codeBlockLang, width, {
+          showLineNumbers: options.codeBlockLineNumbers ?? true,
+        });
         lines.push(...rendered);
         inCodeBlock = false;
         codeBlockLang = '';
@@ -146,7 +152,9 @@ export function renderMarkdown(text: string, width: number): Line[] {
 
   // Handle unclosed code block
   if (inCodeBlock && codeBlockLines.length > 0) {
-    const rendered = renderCodeBlock(codeBlockLines, codeBlockLang, width);
+    const rendered = renderCodeBlock(codeBlockLines, codeBlockLang, width, {
+      showLineNumbers: options.codeBlockLineNumbers ?? true,
+    });
     lines.push(...rendered);
   }
 
@@ -170,6 +178,7 @@ export interface CodeBlockSpan {
 export function renderMarkdownTracked(
   text: string,
   width: number,
+  options: MarkdownRenderOptions = {},
 ): { lines: ReturnType<typeof renderMarkdown>; codeBlocks: CodeBlockSpan[] } {
   const lines: ReturnType<typeof renderMarkdown> = [];
   const codeBlocks: CodeBlockSpan[] = [];
@@ -193,7 +202,9 @@ export function renderMarkdownTracked(
     if (inCodeBlock) {
       if (raw.trimStart().startsWith('```')) {
         const blockStart = lines.length;
-        const rendered = renderCodeBlock(codeBlockLines, codeBlockLang, width);
+        const rendered = renderCodeBlock(codeBlockLines, codeBlockLang, width, {
+          showLineNumbers: options.codeBlockLineNumbers ?? true,
+        });
         codeBlocks.push({
           startOffset: blockStart,
           lineCount: rendered.length,
@@ -211,13 +222,15 @@ export function renderMarkdownTracked(
     // Delegate non-code-block lines to renderMarkdown by rendering one chunk at a time.
     // For efficiency, re-use the full renderMarkdown for non-fence lines.
     // We push the single line through a minimal inline render.
-    const singleLine = renderMarkdown(raw, width);
+    const singleLine = renderMarkdown(raw, width, options);
     lines.push(...singleLine);
   }
 
   if (inCodeBlock && codeBlockLines.length > 0) {
     const blockStart = lines.length;
-    const rendered = renderCodeBlock(codeBlockLines, codeBlockLang, width);
+    const rendered = renderCodeBlock(codeBlockLines, codeBlockLang, width, {
+      showLineNumbers: options.codeBlockLineNumbers ?? true,
+    });
     codeBlocks.push({
       startOffset: blockStart,
       lineCount: rendered.length,

@@ -408,7 +408,7 @@ function _renderHeader(
 ): Line {
   // Collapse indicator
   const isCollapsed = collapsed.has(row.name);
-  const chevron = row.hasChildren ? (isCollapsed ? '> ' : 'v ') : '  ';
+  const chevron = row.hasChildren ? (isCollapsed ? '▸ ' : '▾ ') : '  ';
   const lineNumStr = `:${row.line}`;
   const kindLabel = KIND_LABELS[row.symbolKind];
   const leadingWidth = 1 + getDisplayWidth(chevron) + getDisplayWidth(kindLabel) + 1 + getDisplayWidth(row.name);

@@ -184,7 +184,7 @@ export class ThinkingPanel extends BasePanel {
   private _renderRow(width: number, row: FlatRow, isCursor: boolean): Line {
     const bg = isCursor ? C.selectedBg : '';
     if (row.kind === 'header') {
-      const indicator = this.blocks[row.blockIndex]?.collapsed ? '[+]' : '[-]';
+      const indicator = this.blocks[row.blockIndex]?.collapsed ? '▸' : '▾';
       const active = this.blocks[row.blockIndex]?.active;
       const bullet = active ? '\u25cf ' : '\u25e6 ';
       return buildStyledPanelLine(width, [

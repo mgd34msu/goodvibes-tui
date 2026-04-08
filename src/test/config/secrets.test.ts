@@ -21,10 +21,16 @@ function makeTmpDir(): string {
 describe('SecretsManager', () => {
   let tmpDir: string;
   let encPath: string;
+  let projectRoot: string;
+  let userHome: string;
 
   beforeEach(() => {
     tmpDir = makeTmpDir();
     encPath = join(tmpDir, '.goodvibes', 'tui', 'secrets.enc');
+    projectRoot = join(tmpDir, 'workspace');
+    userHome = join(tmpDir, 'home');
+    mkdirSync(projectRoot, { recursive: true });
+    mkdirSync(userHome, { recursive: true });
     _resetSecretsManagerForTesting();
   });
 
@@ -34,6 +40,60 @@ describe('SecretsManager', () => {
     // Clean up any env vars set during tests
     delete process.env['TEST_SECRET_KEY'];
     delete process.env['MY_API_KEY'];
+    delete process.env['OPENAI_API_KEY'];
+    delete process.env['ANTHROPIC_API_KEY'];
+    delete process.env['GEMINI_API_KEY'];
+  });
+
+  describe('hierarchy-aware resolution', () => {
+    test('prefers nearest project secure store over user secure store', async () => {
+      delete process.env['OPENAI_API_KEY'];
+      const manager = new SecretsManager({ projectRoot, globalHome: userHome });
+      await manager.set('OPENAI_API_KEY', 'user-value', { scope: 'user', medium: 'secure' });
+      await manager.set('OPENAI_API_KEY', 'project-value', { scope: 'project', medium: 'secure' });
+      expect(await manager.get('OPENAI_API_KEY')).toBe('project-value');
+    });
+
+    test('preferred_secure reads plaintext fallback when present', async () => {
+      delete process.env['ANTHROPIC_API_KEY'];
+      const manager = new SecretsManager({
+        projectRoot,
+        globalHome: userHome,
+        policy: 'preferred_secure',
+      });
+      await manager.set('ANTHROPIC_API_KEY', 'plaintext-value', { scope: 'project', medium: 'plaintext' });
+      expect(await manager.get('ANTHROPIC_API_KEY')).toBe('plaintext-value');
+    });
+
+    test('require_secure ignores plaintext stores', async () => {
+      delete process.env['GEMINI_API_KEY'];
+      const writer = new SecretsManager({
+        projectRoot,
+        globalHome: userHome,
+        policy: 'plaintext_allowed',
+      });
+      await writer.set('GEMINI_API_KEY', 'plaintext-value', { scope: 'project', medium: 'plaintext' });
+
+      const reader = new SecretsManager({
+        projectRoot,
+        globalHome: userHome,
+        policy: 'require_secure',
+      });
+      expect(await reader.get('GEMINI_API_KEY')).toBeNull();
+    });
+
+    test('inspect reports plaintext warnings when preferred secure falls back', async () => {
+      const manager = new SecretsManager({
+        projectRoot,
+        globalHome: userHome,
+        policy: 'preferred_secure',
+      });
+      await manager.set('OPENROUTER_API_KEY', 'plaintext-value', { scope: 'project', medium: 'plaintext' });
+      const review = await manager.inspect();
+      expect(review.policy).toBe('preferred_secure');
+      expect(review.plaintextKeys).toBe(1);
+      expect(review.warnings).toContain('plaintext fallback secrets are present');
+    });
   });
 
   // -------------------------------------------------------------------------

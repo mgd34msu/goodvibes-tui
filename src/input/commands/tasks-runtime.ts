@@ -1,6 +1,7 @@
 import type { CommandRegistry } from '../command-registry.ts';
 import type { RuntimeTask, TaskLifecycleState } from '../../runtime/store/domains/tasks.ts';
 import { getPanelManager } from '../../panels/panel-manager.ts';
+import { reviewWorktreeAttachments } from '../../runtime/worktree/registry.ts';
 
 function sortRuntimeTasks(tasks: RuntimeTask[]): RuntimeTask[] {
   const statusOrder: TaskLifecycleState[] = ['running', 'queued', 'blocked', 'failed', 'completed', 'cancelled'];
@@ -88,6 +89,15 @@ export function registerTasksRuntimeCommands(registry: CommandRegistry): void {
           `  parent: ${task.parentTaskId ?? 'none'}`,
           `  children: ${task.childTaskIds.join(', ') || '(none)'}`,
           `  correlationId: ${task.correlationId ?? 'n/a'}`,
+          ...(() => {
+            const worktrees = reviewWorktreeAttachments('task', task.id);
+            return worktrees.total > 0
+              ? [
+                  `  worktrees: ${worktrees.total} tracked (${worktrees.active} active / ${worktrees.paused} paused / ${worktrees.cleanupPending} cleanup)`,
+                  `  worktree next: /worktree task ${task.id}`,
+                ]
+              : [];
+          })(),
           `  summary: ${summarizeTaskResult(task)}`,
         ].join('\n'));
         return;

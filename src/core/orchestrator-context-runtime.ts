@@ -91,7 +91,7 @@ export async function checkContextWindowPreflight(
         lineageEntries: sessionLineageTracker.getEntries(),
         agents: AgentManager.getInstance().list().filter(a => a.status === 'running' || a.status === 'pending'),
         wrfcChains: WrfcController.getInstance().listChains(),
-        activePlan: planManager.getActive(),
+        activePlan: planManager.getActive(deps.sessionId),
         compactionCount: sessionLineageTracker.getCompactionCount(),
         contextWindow,
         trigger: 'auto',
@@ -217,6 +217,7 @@ export async function handlePostTurnContextMaintenance(
 
   const usagePct = Math.round((totalTokens / maxTokens) * 100);
   const configuredThreshold = configManager.get('behavior.autoCompactThreshold') as number;
+  const warningsEnabled = configManager.get('behavior.staleContextWarnings') as boolean;
   const autoCompactEnabled = configuredThreshold > 0;
   const bracket = Math.floor(usagePct / 10) * 10;
 
@@ -287,7 +288,7 @@ export async function handlePostTurnContextMaintenance(
           lineageEntries: sessionLineageTracker.getEntries(),
           agents: AgentManager.getInstance().list().filter(a => a.status === 'running' || a.status === 'pending'),
           wrfcChains: WrfcController.getInstance().listChains(),
-          activePlan: planManager.getActive(),
+          activePlan: planManager.getActive(deps.sessionId),
           compactionCount: sessionLineageTracker.getCompactionCount(),
           contextWindow: maxTokens,
           trigger: 'auto',
@@ -342,7 +343,12 @@ export async function handlePostTurnContextMaintenance(
       deps.conversation.addSystemMessage(`[Compact] Auto-compaction failed: ${String(compactErr)}`);
       deps.requestRender();
     }
-  } else if (autoCompactEnabled && (maxTokens - totalTokens) <= COMPACTION_BUFFER_TOKENS * 2 && bracket > deps.lastWarningBracket) {
+  } else if (
+    warningsEnabled &&
+    autoCompactEnabled &&
+    (maxTokens - totalTokens) <= COMPACTION_BUFFER_TOKENS * 2 &&
+    bracket > deps.lastWarningBracket
+  ) {
     deps.setLastWarningBracket(bracket);
     deps.conversation.addSystemMessage(
       `Context usage at ${usagePct}% (${totalTokens}/${maxTokens} tokens). Auto-compact will trigger within ${COMPACTION_BUFFER_TOKENS.toLocaleString()} remaining tokens.`

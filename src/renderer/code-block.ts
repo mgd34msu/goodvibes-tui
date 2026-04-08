@@ -272,12 +272,18 @@ function tokenizePlain(line: string): SyntaxToken[] {
  * renderCodeBlock - Render lines of code with syntax highlighting and line numbers.
  * Returns Line[] for the cell-based pipeline.
  */
-export function renderCodeBlock(codeLines: string[], lang: string, width: number): Line[] {
+export function renderCodeBlock(
+  codeLines: string[],
+  lang: string,
+  width: number,
+  opts: { showLineNumbers?: boolean } = {},
+): Line[] {
   const lines: Line[] = [];
   const language = detectLanguage(lang);
   const leftMargin = LAYOUT.LEFT_MARGIN;
-  const lineNumW = String(codeLines.length).length + 1; // e.g. "10 "
-  const contentStartX = leftMargin + lineNumW + 1;
+  const showLineNumbers = opts.showLineNumbers ?? true;
+  const lineNumW = showLineNumbers ? String(codeLines.length).length + 1 : 0; // e.g. "10 "
+  const contentStartX = showLineNumbers ? leftMargin + lineNumW + 1 : leftMargin;
   const BG = '#0d0d0d';
   const LINE_NUM_FG = '238';
   const effectiveWidth = width - LAYOUT.RIGHT_MARGIN;
@@ -328,13 +334,14 @@ export function renderCodeBlock(codeLines: string[], lang: string, width: number
       line[m] = createStyledCell(' ');
     }
 
-    // Line number (offset by left margin)
     let cx = leftMargin;
-    for (const ch of lineNum) {
-      if (cx >= contentStartX) break;
-      line[cx++] = createStyledCell(ch, { fg: LINE_NUM_FG, bg: BG, dim: true });
+    if (showLineNumbers) {
+      for (const ch of lineNum) {
+        if (cx >= contentStartX) break;
+        line[cx++] = createStyledCell(ch, { fg: LINE_NUM_FG, bg: BG, dim: true });
+      }
+      line[cx++] = createStyledCell(' ', { bg: BG });
     }
-    line[cx++] = createStyledCell(' ', { bg: BG });
 
     // Syntax tokens
     for (const token of tokens) {

@@ -45,6 +45,13 @@ import { registerServicesRuntimeCommands } from './commands/services-runtime.ts'
 import { registerTasksRuntimeCommands } from './commands/tasks-runtime.ts';
 import { registerPermissionsRuntimeCommands } from './commands/permissions-runtime.ts';
 import { registerLocalProviderRuntimeCommands } from './commands/local-provider-runtime.ts';
+import { registerHealthRuntimeCommands } from './commands/health-runtime.ts';
+import { registerSettingsSyncRuntimeCommands } from './commands/settings-sync-runtime.ts';
+import { registerWorktreeRuntimeCommands } from './commands/worktree-runtime.ts';
+import { registerProviderAccountsRuntimeCommands } from './commands/provider-accounts-runtime.ts';
+import { registerLocalAuthRuntimeCommands } from './commands/local-auth-runtime.ts';
+import { registerIntelligenceRuntimeCommands } from './commands/intelligence-runtime.ts';
+import { registerConversationRuntimeCommands } from './commands/conversation-runtime.ts';
 
 /**
  * registerBuiltinCommands - Register all built-in slash commands into the registry.
@@ -84,6 +91,13 @@ export function registerBuiltinCommands(registry: CommandRegistry): void {
   registerTasksRuntimeCommands(registry);
   registerPermissionsRuntimeCommands(registry);
   registerLocalProviderRuntimeCommands(registry);
+  registerHealthRuntimeCommands(registry);
+  registerSettingsSyncRuntimeCommands(registry);
+  registerWorktreeRuntimeCommands(registry);
+  registerProviderAccountsRuntimeCommands(registry);
+  registerLocalAuthRuntimeCommands(registry);
+  registerIntelligenceRuntimeCommands(registry);
+  registerConversationRuntimeCommands(registry);
   registerLocalRuntimeCommands(registry);
   registerSessionWorkflowCommands(registry);
   registerDiscoveryRuntimeCommands(registry);

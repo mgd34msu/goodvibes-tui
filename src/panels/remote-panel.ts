@@ -2,7 +2,7 @@ import type { Line } from '../types/grid.ts';
 import { createEmptyLine } from '../types/grid.ts';
 import { BasePanel } from './base-panel.ts';
 import type { RuntimeStore } from '../runtime/store/index.ts';
-import { getRemoteRunnerRegistry } from '../runtime/remote/index.ts';
+import { getRemoteRunnerRegistry, getRemoteSupervisor } from '../runtime/remote/index.ts';
 import {
   buildEmptyState,
   buildGuidanceLine,
@@ -140,6 +140,7 @@ export class RemotePanel extends BasePanel {
     const acp = state.acp;
     const activeConnections = this.getActiveConnections();
     const remoteRegistry = getRemoteRunnerRegistry();
+    const supervisor = getRemoteSupervisor().getSnapshot(this.store);
     remoteRegistry.ensureContractsFromStore(this.store);
     const artifactCount = remoteRegistry.listArtifacts().length;
     const pools = remoteRegistry.listPools();
@@ -171,6 +172,14 @@ export class RemotePanel extends BasePanel {
         [String(pools.length), pools.length > 0 ? C.info : C.dim],
         ['  review artifacts ', C.label],
         [String(artifactCount), artifactCount > 0 ? C.ok : C.dim],
+      ]),
+      buildPanelLine(width, [
+        [' supervisor ', C.label],
+        [String(supervisor.sessions.length), C.info],
+        ['  degraded ', C.label],
+        [String(supervisor.degradedConnections), supervisor.degradedConnections > 0 ? C.warn : C.ok],
+        ['  captured ', C.label],
+        [formatTimestamp(supervisor.capturedAt), C.dim],
       ]),
     ];
 
@@ -273,6 +282,12 @@ export class RemotePanel extends BasePanel {
         ['  Errors: ', C.label],
         [String(selected.errorCount), selected.errorCount > 0 ? C.warn : C.dim],
       ]));
+      if (selected.lastError) {
+        detailLines.push(buildPanelLine(width, [
+          ['  Last error: ', C.label],
+          [selected.lastError.slice(0, Math.max(0, width - 13)), C.error],
+        ]));
+      }
 
       const contract = remoteRegistry.getContract(selected.agentId);
       if (contract) {
@@ -309,6 +324,19 @@ export class RemotePanel extends BasePanel {
         ]));
       }
 
+      const supervisorEntry = supervisor.sessions.find((entry) => entry.runnerId === selected.agentId);
+      if (supervisorEntry) {
+        detailLines.push(buildPanelLine(width, [
+          ['  Heartbeat: ', C.label],
+          [supervisorEntry.heartbeat.status, supervisorEntry.heartbeat.status === 'fresh' ? C.ok : supervisorEntry.heartbeat.status === 'stale' ? C.warn : C.error],
+          ['  Protocol: ', C.label],
+          [supervisorEntry.negotiation.executionProtocol, C.value],
+          ['  Review: ', C.label],
+          [supervisorEntry.negotiation.reviewMode, supervisorEntry.negotiation.reviewMode === 'wrfc' ? C.ok : C.dim],
+        ]));
+        detailLines.push(buildPanelLine(width, [[`  ${supervisorEntry.heartbeat.detail}`.slice(0, width), C.dim]]));
+      }
+
       const recentArtifact = remoteRegistry.listArtifacts().find((artifact) => artifact.runnerId === selected.agentId);
       if (recentArtifact) {
         detailLines.push(buildPanelLine(width, [[' Recent Review Artifact', C.label]]));
@@ -321,13 +349,6 @@ export class RemotePanel extends BasePanel {
         detailLines.push(buildPanelLine(width, [
           ['  Summary: ', C.label],
           [truncate(recentArtifact.task.summary, Math.max(0, width - 12)), C.dim],
-        ]));
-      }
-
-      if (selected.lastError) {
-        detailLines.push(buildPanelLine(width, [
-          ['  Last error: ', C.label],
-          [selected.lastError.slice(0, Math.max(0, width - 13)), C.error],
         ]));
       }
       detailLines.push(buildPanelLine(width, [
@@ -361,6 +382,18 @@ export class RemotePanel extends BasePanel {
         ['  Tools: ', C.label],
         [truncate(selectedContract.capabilityCeiling.allowedTools.join(', ') || '(none)', Math.max(0, width - 10)), C.dim],
       ]));
+      const supervisorEntry = supervisor.sessions.find((entry) => entry.runnerId === selectedContract.runnerId);
+      if (supervisorEntry) {
+        detailLines.push(buildPanelLine(width, [
+          ['  Heartbeat: ', C.label],
+          [supervisorEntry.heartbeat.status, supervisorEntry.heartbeat.status === 'fresh' ? C.ok : supervisorEntry.heartbeat.status === 'stale' ? C.warn : C.error],
+          ['  Lane: ', C.label],
+          [supervisorEntry.negotiation.communicationLane, C.info],
+        ]));
+        for (const action of supervisorEntry.recovery.slice(0, 2)) {
+          detailLines.push(buildGuidanceLine(width, action.command, action.reason, C));
+        }
+      }
       const recentArtifact = remoteRegistry.listArtifacts().find((artifact) => artifact.runnerId === selectedContract.runnerId);
       if (recentArtifact) {
         detailLines.push(buildPanelLine(width, [

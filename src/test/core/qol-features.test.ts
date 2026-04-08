@@ -50,6 +50,15 @@ describe('ConversationManager - title', () => {
     cm.addUserMessage('Auto title message');
     cm.title = 'My custom title';
     expect(cm.title).toBe('My custom title');
+    expect(cm.getTitleSource()).toBe('user');
+  });
+
+  test('system title updates do not override manual titles', () => {
+    cm.addUserMessage('Auto title message');
+    cm.title = 'My custom title';
+    cm.setSystemTitle('Generated replacement');
+    expect(cm.title).toBe('My custom title');
+    expect(cm.getTitleSource()).toBe('user');
   });
 
   test('resetAll clears the title', () => {

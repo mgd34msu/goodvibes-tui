@@ -19,7 +19,7 @@ export function registerPlanningRuntimeCommands(registry: CommandRegistry): void
       }
 
       if (args.length === 0) {
-        const active = planManager.getActive();
+        const active = planManager.getActive(ctx.runtime.sessionId);
         if (!active) {
           ctx.print('No active plan. Use /plan <task description> to create one.');
           return;
@@ -60,7 +60,7 @@ export function registerPlanningRuntimeCommands(registry: CommandRegistry): void
 
       const taskDescription = args.join(' ');
       const classification = classifyIntent(taskDescription);
-      const plan = planManager.create(taskDescription, []);
+      const plan = planManager.create(taskDescription, [], ctx.runtime.sessionId);
       plan.awaitingPlan = true;
       planManager.save(plan);
       sessionLineageTracker.setOriginalTask(taskDescription.slice(0, 200));

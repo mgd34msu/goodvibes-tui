@@ -21,6 +21,7 @@ import type { SlashCommand, CommandContext } from '../command-registry.ts';
 import { getSessionOrchestration } from '../../sessions/orchestration/index.ts';
 import type { CancellationScope, CrossSessionTaskRef } from '../../sessions/orchestration/index.ts';
 import { VALID_SCOPES } from '../../sessions/orchestration/index.ts';
+import { handleSessionWorkflowCommand } from './session-workflow.ts';
 
 // ── Argument parsing helpers ──────────────────────────────────────────────────
 
@@ -351,18 +352,23 @@ export const sessionCommand: SlashCommand = {
         break;
 
       default: {
-        const usage = [
-          'Usage: /session <subcommand>',
-          '  link-task <taskId> [--session <sid>] [--depends-on <sid:taskId>] [--label <label>]',
-          '                                 — Register a task in the cross-session graph',
-          '  handoff <taskId> --to <sid>  [--session <sid>] [--reason <reason>]',
-          '                                 — Hand a task off to another session',
-          '  graph [--session <sid>] [--format text|json]',
-          '                                 — Display the cross-session task dependency graph',
-          '  cancel <taskId> [--scope task|subtree|session] [--session <sid>] [--reason <reason>]',
-          '                                 — Cancel tasks with scoped semantics',
-        ].join('\n');
-        context.print(usage);
+        const handled = await handleSessionWorkflowCommand(args, context);
+        if (!handled) {
+          const usage = [
+            'Usage: /session <subcommand>',
+            '  list | rename <name> | resume <id|name> | fork [name] | save [name] | info [id] | export <id> [format] | search <query> | delete <id>',
+            '                                 — Session continuity, export, resume, and pruning',
+            '  link-task <taskId> [--session <sid>] [--depends-on <sid:taskId>] [--label <label>]',
+            '                                 — Register a task in the cross-session graph',
+            '  handoff <taskId> --to <sid>  [--session <sid>] [--reason <reason>]',
+            '                                 — Hand a task off to another session',
+            '  graph [--session <sid>] [--format text|json]',
+            '                                 — Display the cross-session task dependency graph',
+            '  cancel <taskId> [--scope task|subtree|session] [--session <sid>] [--reason <reason>]',
+            '                                 — Cancel tasks with scoped semantics',
+          ].join('\n');
+          context.print(usage);
+        }
         break;
       }
     }

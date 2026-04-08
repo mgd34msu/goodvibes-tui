@@ -177,6 +177,14 @@ export class McpPanel extends BasePanel {
     }
 
     const decisions = this.registry.listRecentSecurityDecisions?.(Math.max(0, height - 18)) ?? [];
+    const selectedDecision = decisions.find((decision) => decision.serverName === selected.name);
+    if (selectedDecision) {
+      const summary = `${selectedDecision.serverName}:${selectedDecision.toolName} ${selectedDecision.verdict.toUpperCase()} ${selectedDecision.capability}${selectedDecision.incoherent ? ' incoherent' : ''}`;
+      detailLines.push(buildPanelLine(width, [
+        ['  Recent: ', C.label],
+        [truncateDisplay(summary, Math.max(0, width - 10)), decisionColor(selectedDecision)],
+      ]));
+    }
     const decisionLines: Line[] = decisions.length === 0
       ? [buildPanelLine(width, [['  No MCP decisions recorded yet.', C.dim]])]
       : decisions.map((decision) => {
@@ -187,9 +195,24 @@ export class McpPanel extends BasePanel {
           ]);
         });
 
+    const repairLines: Line[] = [];
+    if (!selected.connected) {
+      repairLines.push(buildPanelLine(width, [['  /mcp repair', C.warn], ['  review reconnect and startup posture for this server', C.dim]]));
+    }
+    if (selected.schemaFreshness !== 'fresh') {
+      repairLines.push(buildPanelLine(width, [['  /mcp review', C.warn], ['  inspect schema freshness, quarantine, and trust posture', C.dim]]));
+    }
+    if (sandboxBinding?.sessionId) {
+      repairLines.push(buildPanelLine(width, [['  /sandbox review', C.info], ['  verify the bound MCP isolation session and startup status', C.dim]]));
+    }
+    if (repairLines.length === 0) {
+      repairLines.push(buildPanelLine(width, [['  No immediate MCP repair actions suggested for the selected server.', C.dim]]));
+    }
+
     const sections: PanelWorkspaceSection[] = [
       { title: 'Servers', lines: listLines },
       { title: 'Selected Server', lines: detailLines },
+      { title: 'Repair', lines: repairLines },
       { title: 'Recent Decisions', lines: decisionLines },
     ];
     const lines = buildPanelWorkspace(width, height, {

@@ -3,6 +3,7 @@ import { dirname, resolve } from 'node:path';
 import type { CommandRegistry } from '../command-registry.ts';
 import { getProfileManager } from '../../profiles/manager.ts';
 import type { ProfileBundleEntry, ProfileSyncBundle } from '../../runtime/sandbox/types.ts';
+import { recordSettingsSyncEvent, recordSettingsSyncFailure } from '../../runtime/settings/control-plane.ts';
 
 function inspectProfileSyncBundle(bundle: ProfileSyncBundle): string {
   return [
@@ -54,6 +55,13 @@ export function registerProfileSyncRuntimeCommands(registry: CommandRegistry): v
         };
         mkdirSync(dirname(targetPath), { recursive: true });
         writeFileSync(targetPath, JSON.stringify(bundle, null, 2) + '\n', 'utf-8');
+        recordSettingsSyncEvent({
+          surface: 'profiles',
+          direction: 'export',
+          path: targetPath,
+          timestamp: Date.now(),
+          detail: `${profiles.length} profiles exported`,
+        });
         ctx.print(`Profile sync bundle exported to ${targetPath}`);
         return;
       }
@@ -71,10 +79,18 @@ export function registerProfileSyncRuntimeCommands(registry: CommandRegistry): v
           const name = prefix ? `${prefix}-${entry.name}` : entry.name;
           pm.save(name, entry.data);
         }
+        recordSettingsSyncEvent({
+          surface: 'profiles',
+          direction: 'import',
+          path: targetPath,
+          timestamp: Date.now(),
+          detail: `${bundle.profiles.length} profiles imported${prefix ? ` with prefix ${prefix}` : ''}`,
+        });
         ctx.print(`Profile sync bundle imported from ${targetPath}`);
         return;
       }
 
+      recordSettingsSyncFailure('profiles', `unsupported subcommand: ${sub}`);
       ctx.print('Usage: /profilesync [list|export <path>|inspect <path>|import <path> [prefix]]');
     },
   });

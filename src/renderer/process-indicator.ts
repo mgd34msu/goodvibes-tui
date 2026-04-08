@@ -1,7 +1,6 @@
 import { type Line } from '../types/grid.ts';
 import { UIFactory } from './ui-factory.ts';
 import { getDisplayWidth } from '../utils/terminal-width.ts';
-import { renderConversationStatusLine, type ConversationStatusSegment } from './conversation-surface.ts';
 
 /** Truncate a string to fit within maxWidth display columns. */
 function truncateToWidth(text: string, maxWidth: number): string {
@@ -32,27 +31,23 @@ export function renderProcessIndicator(
   agentProgress?: string,
 ): Line[] {
   const total = agentCount + toolCount;
+  const renderPlainStatus = (text: string, style: { fg: string; bold?: boolean; dim?: boolean }): Line[] => (
+    [UIFactory.stringToLine(` ${text}`, width, style)]
+  );
 
   // --- Focused state: always render before idle/active branches ---
   if (focused) {
     const parts: string[] = [];
     if (agentCount > 0) parts.push(`${agentCount} agent${agentCount !== 1 ? 's' : ''}`);
     if (toolCount > 0) parts.push(`${toolCount} tool${toolCount !== 1 ? 's' : ''} running`);
-    const segments: ConversationStatusSegment[] = total === 0
-      ? [
-          { text: 'No background processes', fg: '#00ffff', bold: true },
-          { text: '  back to input', fg: '#facc15' },
-        ]
-      : [
-          { text: parts.join(' | '), fg: '#00ffff', bold: true },
-          { text: '  Enter to open  back to input', fg: '#facc15' },
-        ];
-    const line = renderConversationStatusLine(width, segments, { marker: '>', markerFg: '#00ffff' });
-    return [line];
+    const label = total === 0
+      ? 'No background processes  •  back to input'
+      : `${parts.join(' │ ')}  •  Enter to open  •  back to input`;
+    return renderPlainStatus(label, { fg: '#00ffff', bold: true });
   }
 
   if (total === 0) {
-    return [renderConversationStatusLine(width, [{ text: 'bg: none', fg: '238', dim: true }], { marker: '|', markerFg: '238' })];
+    return renderPlainStatus('No background processes', { fg: '238', dim: true });
   }
 
   // Build the label: "bg: 2 agents | Turn 3 | write - src/foo.ts"
@@ -74,12 +69,7 @@ export function renderProcessIndicator(
   const progressSuffix = agentProgress && progressMaxLen > 10
     ? ` | ${agentProgress.length > progressMaxLen ? agentProgress.slice(0, Math.max(0, progressMaxLen - 3)) + '...' : agentProgress}`
     : '';
-  const label = `bg: ${parts.join(' | ')}${progressSuffix}`;
-  const hint = '  Enter to view';
-  return [
-    renderConversationStatusLine(width, [
-      { text: label, fg: '#00ffff', bold: true },
-      { text: hint, fg: '#ffcc00' },
-    ], { marker: '|', markerFg: '#00ffff' }),
-  ];
+  const label = `${parts.join(' │ ')}${progressSuffix}`;
+  const hint = '  •  Enter to view';
+  return renderPlainStatus(`${label}${hint}`, { fg: '#00ffff', bold: true });
 }

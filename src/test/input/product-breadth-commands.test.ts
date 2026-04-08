@@ -17,6 +17,8 @@ import { ForensicsRegistry } from '../../runtime/forensics/registry.ts';
 import type { MemoryAddOptions } from '../../state/memory-store.ts';
 import { _resetRemoteRunnerRegistryForTesting, getRemoteRunnerRegistry } from '../../runtime/remote/runner-registry.ts';
 import type { TaskManager } from '../../runtime/tasks/types.ts';
+import { resetLocalUserAuthManagerForTesting, setLocalUserAuthManager } from '../../runtime/local-auth.ts';
+import { UserAuthManager } from '../../security/user-auth.ts';
 
 describe('product breadth commands', () => {
   const originalCwd = process.cwd();
@@ -30,15 +32,20 @@ describe('product breadth commands', () => {
     _resetRemoteRunnerRegistryForTesting();
     _resetSubscriptionManagerForTesting();
     _resetSubscriptionBrowserOpenerForTesting();
+    resetLocalUserAuthManagerForTesting();
     root = mkdtempSync(join(tmpdir(), 'gv-product-commands-'));
     process.env.HOME = root;
     process.chdir(root);
+    setLocalUserAuthManager(new UserAuthManager({
+      users: [{ username: 'admin', passwordHash: UserAuthManager.hashPassword('admin-pass'), roles: ['admin'] }],
+    }));
   });
 
   afterEach(() => {
     _resetRemoteRunnerRegistryForTesting();
     _resetSubscriptionManagerForTesting();
     _resetSubscriptionBrowserOpenerForTesting();
+    resetLocalUserAuthManagerForTesting();
     globalThis.fetch = originalFetch;
     process.chdir(originalCwd);
     if (originalHome === undefined) {
@@ -189,6 +196,53 @@ describe('product breadth commands', () => {
     expect(existsSync(exported)).toBe(true);
   });
 
+  test('accounts and health commands surface provider route posture and fallback risk', async () => {
+    process.env.OPENAI_API_KEY = 'sk-test';
+    getSubscriptionManager().saveSubscription({
+      provider: 'openai',
+      accessToken: 'header.payload.signature',
+      tokenType: 'Bearer',
+      expiresAt: Date.now() - 5_000,
+      authMode: 'oauth',
+      overrideAmbientApiKeys: true,
+      createdAt: Date.now() - 10_000,
+      updatedAt: Date.now() - 10_000,
+    });
+
+    const registry = new CommandRegistry();
+    registerBuiltinCommands(registry);
+    const accounts = registry.get('accounts');
+    const health = registry.get('health');
+    expect(accounts).toBeDefined();
+    expect(health).toBeDefined();
+
+    const out: string[] = [];
+    const ctx = makeContext(out) as ReturnType<typeof makeContext> & { openSecurityPanel?: () => void };
+
+    await accounts!.handler(['review'], ctx);
+    expect(out.join('\n')).toContain('preferred=subscription');
+    expect(out.join('\n')).toContain('active=api-key');
+
+    out.length = 0;
+    await accounts!.handler(['show', 'openai'], ctx);
+    expect(out.join('\n')).toContain('fallbackRoute: api-key');
+    expect(out.join('\n')).toContain('route subscription: usable=no');
+
+    out.length = 0;
+    await accounts!.handler(['routes', 'openai'], ctx);
+    expect(out.join('\n')).toContain('Provider Routes openai');
+    expect(out.join('\n')).toContain('preferred: subscription');
+
+    out.length = 0;
+    await accounts!.handler(['repair', 'openai'], ctx);
+    expect(out.join('\n')).toContain('Provider Account Repair openai');
+    expect(out.join('\n')).toContain('fallback:');
+
+    out.length = 0;
+    await health!.handler(['accounts'], ctx);
+    expect(out.join('\n')).toContain('preferred subscription path');
+  });
+
   test('skills and setup commands surface discovered skills and startup posture', async () => {
     mkdirSync(join(root, '.goodvibes', 'skills', 'deploy-check'), { recursive: true });
     writeFileSync(join(root, '.goodvibes', 'skills', 'deploy-check', 'SKILL.md'), [
@@ -256,6 +310,142 @@ describe('product breadth commands', () => {
     expect(existsSync(join(supportDir, 'startup-review.json'))).toBe(true);
     expect(existsSync(join(supportDir, 'remote-summary.json'))).toBe(true);
     expect(existsSync(join(supportDir, 'qemu-wrapper.template.sh'))).toBe(true);
+  });
+
+  test('health and guidance commands surface maintenance posture', async () => {
+    const registry = new CommandRegistry();
+    registerBuiltinCommands(registry);
+    const health = registry.get('health');
+    const guidance = registry.get('guidance');
+    const intelligence = registry.get('intelligence');
+    expect(health).toBeDefined();
+    expect(guidance).toBeDefined();
+    expect(intelligence).toBeDefined();
+
+    const out: string[] = [];
+    const ctx = makeContext(out);
+    (ctx.configManager as { setDynamic: (key: ConfigKey, value: unknown) => void }).setDynamic('behavior.guidanceMode', 'guided');
+    ctx.conversationManager = {
+      getMessagesForLLM: () => [
+        { role: 'user', content: 'x'.repeat(80_000) },
+        { role: 'assistant', content: 'done' },
+      ],
+    } as never;
+    ctx.providerRegistry = {
+      getCurrentModel: () => ({ id: 'openrouter/free', provider: 'openrouter' }),
+      listModels: () => [{ id: 'model-1' }],
+    } as never;
+
+    await guidance!.handler(['review'], ctx as never);
+    expect(out.join('\n')).toContain('Guidance Review');
+    expect(out.join('\n')).toMatch(/Maintenance:/);
+    expect(out.join('\n')).toContain('dismiss: /guidance dismiss');
+
+    out.length = 0;
+    await health!.handler(['review'], ctx as never);
+    expect(out.join('\n')).toContain('Health Review');
+    expect(out.join('\n')).toMatch(/Maintenance:/);
+
+    out.length = 0;
+    await intelligence!.handler(['review'], ctx as never);
+    expect(out.join('\n')).toContain('Intelligence Review');
+    expect(out.join('\n')).toContain('/intelligence symbols <file>');
+
+    out.length = 0;
+    await intelligence!.handler(['diagnostics'], ctx as never);
+    expect(out.join('\n')).toContain('Intelligence Diagnostics');
+
+    out.length = 0;
+    await intelligence!.handler(['repair'], ctx as never);
+    expect(out.join('\n')).toContain('Intelligence Repair');
+    expect(out.join('\n')).toContain('verify: /health intelligence');
+
+    out.length = 0;
+    await health!.handler(['intelligence'], ctx as never);
+    expect(out.join('\n')).toContain('Health Review: Intelligence');
+
+    out.length = 0;
+    await health!.handler(['mcp'], ctx as never);
+    expect(out.join('\n')).toContain('Health Review: MCP');
+
+    out.length = 0;
+    await health!.handler(['continuity'], ctx as never);
+    expect(out.join('\n')).toContain('Health Review: Continuity');
+
+    const intelligenceFile = join(root, 'src', 'intel-fixture.txt');
+    mkdirSync(dirname(intelligenceFile), { recursive: true });
+    writeFileSync(intelligenceFile, 'plain text fixture\n', 'utf-8');
+
+    out.length = 0;
+    await intelligence!.handler(['symbols', intelligenceFile], ctx as never);
+    expect(out.join('\n')).toContain('Intelligence Symbols:');
+
+    out.length = 0;
+    await intelligence!.handler(['outline', intelligenceFile], ctx as never);
+    expect(out.join('\n')).toContain('Intelligence Outline:');
+
+    out.length = 0;
+    await intelligence!.handler(['definition', intelligenceFile, '1', '1'], ctx as never);
+    expect(out.join('\n')).toContain('Intelligence Definition:');
+
+    out.length = 0;
+    await intelligence!.handler(['references', intelligenceFile, '1', '1'], ctx as never);
+    expect(out.join('\n')).toContain('Intelligence References:');
+
+    out.length = 0;
+    await intelligence!.handler(['hover', intelligenceFile, '1', '1'], ctx as never);
+    expect(out.join('\n')).toContain('Intelligence Hover:');
+
+    out.length = 0;
+    await health!.handler(['repair', 'intelligence'], ctx as never);
+    expect(out.join('\n')).toContain('verify: /health intelligence');
+  });
+
+  test('session and tools commands expose transcript structure and compact tool-surface review', async () => {
+    const registry = new CommandRegistry();
+    registerBuiltinCommands(registry);
+    const session = registry.get('session');
+    const tools = registry.get('tools');
+    expect(session).toBeDefined();
+    expect(tools).toBeDefined();
+
+    const out: string[] = [];
+    const ctx = makeContext(out);
+    ctx.conversationManager = {
+      getTranscriptEventIndex: () => ({
+        events: [
+          { kind: 'user_input', messageIndex: 0, title: 'User input', detail: 'review auth flow' },
+          { kind: 'tool_call', messageIndex: 1, title: 'read', detail: '{\"path\":\"src/main.ts\"}' },
+          { kind: 'tool_result', messageIndex: 2, title: 'read', detail: '200 lines loaded' },
+          { kind: 'remote_status', messageIndex: 3, title: 'remote status', detail: 'runner attached' },
+        ],
+        groups: [
+          { kind: 'tool_call', title: 'read', messageIndexes: [1, 2], events: [{}, {}] },
+          { kind: 'remote_status', title: 'remote status', messageIndexes: [3], events: [{}] },
+        ],
+      }),
+    } as never;
+    ctx.toolRegistry = {
+      list: () => [],
+    } as never;
+
+    await session!.handler(['events', 'tool_call'], ctx as never);
+    expect(out.join('\n')).toContain('Transcript Events: tool_call');
+    expect(out.join('\n')).toContain('read');
+
+    out.length = 0;
+    await session!.handler(['groups'], ctx as never);
+    expect(out.join('\n')).toContain('Transcript Groups');
+
+    out.length = 0;
+    await session!.handler(['hotspots'], ctx as never);
+    expect(out.join('\n')).toContain('Transcript Hotspots');
+    expect(out.join('\n')).toContain('remote_status');
+
+    out.length = 0;
+    await tools!.handler(['review'], ctx as never);
+    expect(out.join('\n')).toContain('Tool Surface Review');
+    expect(out.join('\n')).toContain('Native file tools stay compact by default');
   });
 
   test('experience commands expose remote setup/env, tunnel/bootstrap, runner pools, approval workspace, memory review, and voice review', async () => {
@@ -838,6 +1028,10 @@ describe('product breadth commands', () => {
     expect(out.join('\n')).toContain('curated plugins: 1');
 
     out.length = 0;
+    await marketplace!.handler(['recommend'], ctx);
+    expect(out.join('\n')).toContain('Marketplace Recommendations');
+
+    out.length = 0;
     await marketplace!.handler(['browse'], ctx);
     expect(out.join('\n')).toContain('Marketplace Browse');
     expect(out.join('\n')).toContain('deploy-audit');
@@ -1078,8 +1272,10 @@ describe('product breadth commands', () => {
     registerBuiltinCommands(registry);
     const managed = registry.get('managed');
     const config = registry.get('config');
+    const settingsSync = registry.get('settingssync');
     expect(managed).toBeDefined();
     expect(config).toBeDefined();
+    expect(settingsSync).toBeDefined();
 
     const out: string[] = [];
     const ctx = makeContext(out);
@@ -1097,12 +1293,47 @@ describe('product breadth commands', () => {
     out.length = 0;
     await managed!.handler(['inspect', bundlePath], ctx);
     expect(out.join('\n')).toContain('Managed Settings Review');
+    expect(out.join('\n')).toContain('changes:');
 
     await config!.handler(['provider.model', 'changed-model'], ctx);
     out.length = 0;
     await managed!.handler(['apply', bundlePath], ctx);
     expect(out.join('\n')).toContain('Managed settings bundle applied');
     expect(ctx.runtime.model).toBe('model-1');
+
+    const rollbackToken = out.join('\n').match(/rollback ([A-Za-z0-9-]+)/)?.[1];
+    expect(rollbackToken).toBeDefined();
+
+    out.length = 0;
+    await managed!.handler(['rollback', rollbackToken!], ctx);
+    expect(out.join('\n')).toContain('Managed rollback');
+
+    const syncPath = join(root, 'artifacts', 'settings-sync.json');
+    out.length = 0;
+    await settingsSync!.handler(['export', syncPath], ctx);
+    expect(out.join('\n')).toContain('Settings sync bundle exported');
+
+    out.length = 0;
+    await settingsSync!.handler(['inspect', syncPath], ctx);
+    expect(out.join('\n')).toContain('Settings Sync Bundle');
+
+    out.length = 0;
+    await settingsSync!.handler(['show', 'provider.model'], ctx);
+    expect(out.join('\n')).toContain('Resolved Setting Review');
+    expect(out.join('\n')).toContain('key: provider.model');
+
+    await config!.handler(['provider.model', 'sync-model'], ctx);
+    out.length = 0;
+    await settingsSync!.handler(['pull', syncPath], ctx);
+    expect(out.join('\n')).toContain('Settings sync bundle pulled');
+
+    out.length = 0;
+    await managed!.handler(['stage', bundlePath], ctx);
+    expect(out.join('\n')).toContain('Managed settings bundle staged');
+
+    out.length = 0;
+    await managed!.handler(['staged'], ctx);
+    expect(out.join('\n')).toContain('Staged Managed Bundle Review');
   });
 
   test('config profile load restores saved provider settings', async () => {
@@ -1126,6 +1357,49 @@ describe('product breadth commands', () => {
     await config!.handler(['profile', 'load', 'restore-me'], ctx);
     expect(out.join('\n')).toContain('Profile loaded: restore-me');
     expect(ctx.runtime.model).toBe('model-1');
+  });
+
+  test('session command surfaces saved return-context posture in list and info output', async () => {
+    const registry = new CommandRegistry();
+    registerBuiltinCommands(registry);
+    const session = registry.get('session');
+    expect(session).toBeDefined();
+
+    const out: string[] = [];
+    const ctx: any = makeContext(out);
+    ctx.conversationManager.title = 'Resume Me';
+    ctx.runtime.sessionId = 'sess-demo';
+    ctx.conversationManager.toJSON = () => ({
+      messages: [{ role: 'user', content: 'hello' }],
+      title: 'Resume Me',
+      returnContext: {
+        summary: 'returning to blocked work',
+        lines: ['Pending approvals spotted: 2', 'Remote runners: runner-a', 'Worktree paths: /tmp/demo-worktree', 'Open panels: remote, approval'],
+        pendingApprovals: 2,
+        activeTasks: 1,
+        blockedTasks: 1,
+        remoteContracts: 1,
+        remoteRunners: ['runner-a'],
+        worktreeCount: 1,
+        worktreePaths: ['/tmp/demo-worktree'],
+        openPanels: ['remote', 'approval'],
+      },
+    }) as never;
+
+    await session!.handler(['save', 'resume-demo'], ctx);
+    expect(out.join('\n')).toContain('Session saved:');
+
+    out.length = 0;
+    await session!.handler(['list'], ctx);
+    expect(out.join('\n')).toContain('posture:');
+    expect(out.join('\n')).toContain('approvals=2');
+
+    out.length = 0;
+    await session!.handler(['info', 'resume-demo'], ctx);
+    expect(out.join('\n')).toContain('Pending approvals spotted: 2');
+    expect(out.join('\n')).toContain('Remote runners: runner-a');
+    expect(out.join('\n')).toContain('Worktree paths: /tmp/demo-worktree');
+    expect(out.join('\n')).toContain('Open panels: remote, approval');
   });
 
   test('install command exports and inspects install bundles', async () => {
@@ -1185,13 +1459,26 @@ describe('product breadth commands', () => {
     expect(auth).toBeDefined();
     getSubscriptionManager().logout('openai');
     getSubscriptionManager().logout('anthropic');
+    getSubscriptionManager().savePending({
+      provider: 'openai',
+      state: 'pending-state',
+      verifier: 'pending-verifier',
+      redirectUri: 'http://localhost:1455/auth/callback',
+      createdAt: Date.now(),
+    });
 
     const out: string[] = [];
     const ctx = makeContext(out);
 
     await auth!.handler(['review'], ctx);
     expect(out.join('\n')).toContain('Auth Review');
-    expect(out.join('\n')).toContain('active subscriptions: 0');
+    expect(out.join('\n')).toContain('pending subscriptions: 1 (openai)');
+
+    out.length = 0;
+    await auth!.handler(['show', 'openai'], ctx);
+    expect(out.join('\n')).toContain('Auth Provider openai');
+    expect(out.join('\n')).toContain('callbackMode: local');
+    expect(out.join('\n')).toContain('pendingLogin: yes');
 
     const bundlePath = join(root, 'artifacts', 'auth.json');
     out.length = 0;
@@ -1372,6 +1659,8 @@ describe('product breadth commands', () => {
     out.length = 0;
     await subscription!.handler(['inspect', 'openai'], ctx);
     expect(out.join('\n')).toContain('Subscription openai');
+    expect(out.join('\n')).toContain('freshness: expiring');
+    expect(out.join('\n')).toContain('callbackMode: local');
 
     out.length = 0;
     await subscription!.handler(['logout', 'openai'], ctx);
@@ -1412,8 +1701,10 @@ describe('product breadth commands', () => {
     const registry = new CommandRegistry();
     registerBuiltinCommands(registry);
     const storage = registry.get('storage');
+    const helpers = registry.get('helpers');
     const deeplink = registry.get('deeplink');
     expect(storage).toBeDefined();
+    expect(helpers).toBeDefined();
     expect(deeplink).toBeDefined();
 
     const out: string[] = [];
@@ -1421,6 +1712,13 @@ describe('product breadth commands', () => {
 
     await storage!.handler(['review'], ctx);
     expect(out.join('\n')).toContain('Secure Storage Review');
+    expect(out.join('\n')).toContain('policy:');
+
+    out.length = 0;
+    await helpers!.handler(['review'], ctx);
+    expect(out.join('\n')).toContain('Integration Helper Review');
+    expect(out.join('\n')).toContain('GET /api/session');
+    expect(out.join('\n')).toContain('GET /api/settings');
 
     out.length = 0;
     const storageBundle = join(root, 'artifacts', 'storage-bundle.json');
@@ -1456,6 +1754,11 @@ describe('product breadth commands', () => {
       },
     } as never;
 
+    await teamwork!.handler(['review'], ctx);
+    expect(out.join('\n')).toContain('Teamwork Review');
+    expect(out.join('\n')).toContain('modes:');
+
+    out.length = 0;
     await teamwork!.handler(['modes'], ctx);
     expect(out.join('\n')).toContain('Teamwork Modes');
     expect(out.join('\n')).toContain('remote-engineer');
@@ -1472,5 +1775,170 @@ describe('product breadth commands', () => {
     expect(out.join('\n')).toContain('Created teamwork task');
     expect(created[0]?.kind).toBe('acp');
     expect(created[0]?.owner).toBe('remote-engineer');
+
+    mkdirSync(join(root, '.goodvibes', 'agents'), { recursive: true });
+    writeFileSync(join(root, '.goodvibes', 'agents', 'doc-specialist.md'), [
+      '---',
+      'name: doc-specialist',
+      'description: Documentation specialist for operator handoff notes',
+      'tools: [read, write, analyze]',
+      '---',
+      '',
+      'You write precise operator-facing docs.',
+    ].join('\n'));
+
+    out.length = 0;
+    await teamwork!.handler(['archetypes'], ctx);
+    expect(out.join('\n')).toContain('doc-specialist');
+    expect(out.join('\n')).toContain('implement');
+
+    out.length = 0;
+    await teamwork!.handler(['validate'], ctx);
+    expect(out.join('\n')).toContain('Teamwork Archetype Validation');
+
+    out.length = 0;
+    await teamwork!.handler(['archetype', 'doc-specialist'], ctx);
+    expect(out.join('\n')).toContain('Teamwork Archetype doc-specialist');
+    expect(out.join('\n')).toContain('source: custom');
+
+    out.length = 0;
+    await teamwork!.handler(['create-archetype', 'doc-specialist', 'Document', 'handoff'], ctx);
+    expect(out.join('\n')).toContain('Created teamwork task');
+    expect(created[1]?.kind).toBe('agent');
+    expect(created[1]?.owner).toBe('custom:doc-specialist');
+  });
+
+  test('health command exposes unified setup, service, sandbox, and provider surfaces', async () => {
+    const registry = new CommandRegistry();
+    registerBuiltinCommands(registry);
+    const health = registry.get('health');
+    const remote = registry.get('remote');
+    const worktree = registry.get('worktree');
+    expect(health).toBeDefined();
+    expect(remote).toBeDefined();
+    expect(worktree).toBeDefined();
+
+    const out: string[] = [];
+    const ctx = makeContext(out);
+
+    await health!.handler(['review'], ctx);
+    expect(out.join('\n')).toContain('Health Review');
+    expect(out.join('\n')).toContain('Next steps:');
+
+    out.length = 0;
+    await health!.handler(['services'], ctx);
+    expect(out.join('\n')).toContain('Health Review: Services');
+
+    out.length = 0;
+    await health!.handler(['sandbox'], ctx);
+    expect(out.join('\n')).toContain('Health Review: Sandbox');
+
+    out.length = 0;
+    await health!.handler(['auth'], ctx);
+    expect(out.join('\n')).toContain('Health Review: Local Auth');
+
+    out.length = 0;
+    await health!.handler(['settings'], ctx);
+    expect(out.join('\n')).toContain('Health Review: Settings');
+
+    out.length = 0;
+    await registry.get('settingssync')!.handler(['conflicts'], ctx);
+    expect(out.join('\n')).toContain('Settings Sync Conflicts');
+
+    const syncBundlePath = join(root, 'artifacts', 'settings-sync.json');
+    out.length = 0;
+    await registry.get('settingssync')!.handler(['push', syncBundlePath], ctx);
+    expect(existsSync(syncBundlePath)).toBe(true);
+
+    await registry.get('config')!.handler(['provider.model', 'local-conflict-model'], ctx);
+    out.length = 0;
+    await registry.get('settingssync')!.handler(['pull', syncBundlePath], ctx);
+    expect(out.join('\n')).toContain('conflicts');
+
+    out.length = 0;
+    await registry.get('settingssync')!.handler(['resolve', 'provider.model', 'local'], ctx);
+    expect(out.join('\n')).toContain('Resolved synced conflict for provider.model using the local value.');
+
+    out.length = 0;
+    await registry.get('settingssync')!.handler(['failures'], ctx);
+    expect(out.join('\n')).toContain('Settings Sync Failures');
+
+    out.length = 0;
+    await registry.get('managed')!.handler(['rollback-history'], ctx);
+    expect(out.join('\n')).toContain('Managed Rollback History');
+
+    out.length = 0;
+    await health!.handler(['remote'], ctx);
+    expect(out.join('\n')).toContain('Health Review: Remote');
+
+    out.length = 0;
+    await health!.handler(['worktrees'], ctx);
+    expect(out.join('\n')).toContain('Health Review: Worktrees');
+
+    out.length = 0;
+    await health!.handler(['repair', 'remote'], ctx);
+    expect(out.join('\n')).toContain('Health Repair');
+    expect(out.join('\n')).toContain('/remote supervisor');
+
+    out.length = 0;
+    await health!.handler(['repair', 'accounts'], ctx);
+    expect(out.join('\n')).toContain('/accounts review');
+
+    out.length = 0;
+    await health!.handler(['repair', 'sandbox'], ctx);
+    expect(out.join('\n')).toContain('/sandbox review');
+
+    out.length = 0;
+    await remote!.handler(['recover'], ctx);
+    expect(out.join('\n')).toContain('No remote supervisor sessions are currently tracked.');
+
+    out.length = 0;
+    await worktree!.handler(['attach', '/tmp/demo-worktree', 'session', 'demo-session'], ctx);
+    expect(out.join('\n')).toContain('Attached /tmp/demo-worktree to session demo-session.');
+
+    out.length = 0;
+    await worktree!.handler(['inspect', '/tmp/demo-worktree'], ctx);
+    expect(out.join('\n')).toContain('Worktree Inspect');
+    expect(out.join('\n')).toContain('/worktree session demo-session');
+
+    out.length = 0;
+    await worktree!.handler(['session', 'demo-session'], ctx);
+    expect(out.join('\n')).toContain('Worktree Attachment Review: session demo-session');
+
+    out.length = 0;
+    await worktree!.handler(['recover', 'session', 'demo-session'], ctx);
+    expect(out.join('\n')).toContain('Worktree Recovery: session demo-session');
+  });
+
+  test('auth command exposes local admin management surface', async () => {
+    const registry = new CommandRegistry();
+    registerBuiltinCommands(registry);
+    const auth = registry.get('auth');
+    const mcp = registry.get('mcp');
+    expect(auth).toBeDefined();
+    expect(mcp).toBeDefined();
+
+    const out: string[] = [];
+    const ctx = makeContext(out);
+
+    await auth!.handler(['local', 'review'], ctx);
+    expect(out.join('\n')).toContain('Local Auth Review');
+    expect(out.join('\n')).toContain('bootstrap file');
+
+    out.length = 0;
+    await auth!.handler(['repair', 'openai'], ctx);
+    expect(out.join('\n')).toContain('Auth Repair openai');
+
+    out.length = 0;
+    await mcp!.handler(['review'], ctx);
+    expect(out.join('\n')).toContain('MCP Review');
+
+    out.length = 0;
+    await mcp!.handler(['auth-review'], ctx);
+    expect(out.join('\n')).toContain('MCP Auth Review');
+
+    out.length = 0;
+    await mcp!.handler(['repair'], ctx);
+    expect(out.join('\n')).toContain('MCP Repair');
   });
 });

@@ -1,6 +1,7 @@
 import { type Line } from '../types/grid.ts';
 import { UIFactory } from '../renderer/ui-factory.ts';
 import type { PermissionCategory, PermissionRequestAnalysis } from './types.ts';
+import { buildPermissionApprovalBrief, getDisplayArg } from './briefs/build.ts';
 
 export interface PermissionPromptRequest {
   callId: string;
@@ -36,129 +37,13 @@ export interface PermissionRequest extends PermissionPromptRequest {
  *   Escape -> Deny
  */
 export class PermissionPromptUI {
-  private static isConfigLikePath(path: string): boolean {
-    return /(^|\/)(\.env(\.|$)|package\.json$|tsconfig(\.[^.]+)?\.json$|bunfig\.toml$|\.npmrc$|\.bashrc$|\.zshrc$|settings\.json$|config\.[^.]+$)/i.test(path);
-  }
-
-  private static isNotebookPath(path: string): boolean {
-    return path.toLowerCase().endsWith('.ipynb');
-  }
-
-  private static isDependencyInstallCommand(command: string): boolean {
-    return /\b(npm|pnpm|yarn|bun)\s+(install|add|update|upgrade)\b/i.test(command);
-  }
-
-  private static isAgentSpawnRequest(request: PermissionPromptRequest): boolean {
-    return request.tool === 'agent'
-      && typeof request.args.mode === 'string'
-      && (request.args.mode === 'spawn' || request.args.mode === 'batch-spawn');
-  }
-
-  private static isRemoteDispatchRequest(request: PermissionPromptRequest): boolean {
-    return (request.tool === 'remote' || request.tool === 'remote_trigger')
-      || (request.tool === 'agent' && typeof request.args.template === 'string' && String(request.args.template).includes('remote'));
-  }
-
-  private static isMcpEscalationRequest(request: PermissionPromptRequest): boolean {
-    return request.tool === 'mcp_resource'
-      && typeof request.args.mode === 'string'
-      && request.args.mode === 'set-trust'
-      && typeof request.args.trustMode === 'string'
-      && request.args.trustMode === 'allow-all';
-  }
-
-  private static isHookExecutionRequest(request: PermissionPromptRequest): boolean {
-    return request.tool === 'workflow'
-      && (typeof request.args.eventPath === 'string' || typeof request.args.hookName === 'string' || typeof request.args.chainName === 'string');
-  }
-
-  private static isPluginLifecycleRequest(request: PermissionPromptRequest): boolean {
-    const target = String(request.analysis?.target ?? this.getDisplayArg(request.tool, request.args));
-    return /(^|\/)\.goodvibes\/(plugins|skills|hooks|policies)\b/.test(target)
-      || (request.tool === 'write' && /(^|\/)(plugins|skills|hooks|policies)\//.test(target));
-  }
-
-  private static isSandboxPolicyChangeRequest(request: PermissionPromptRequest): boolean {
-    const target = String(request.analysis?.target ?? this.getDisplayArg(request.tool, request.args));
-    return /sandbox\.(replIsolation|mcpIsolation|windowsMode|vmBackend)/.test(target)
-      || /(^|\/)(sandbox|vm)-/.test(target);
-  }
-
-  private static getDecisionModeLabel(request: PermissionPromptRequest): string {
-    const analysis = this.fallbackAnalysis(request);
-    if (this.isMcpEscalationRequest(request)) return 'mcp-escalation';
-    if (this.isRemoteDispatchRequest(request)) return 'remote-dispatch';
-    if (this.isHookExecutionRequest(request)) return 'hook-execution';
-    if (this.isPluginLifecycleRequest(request)) return 'plugin-lifecycle';
-    if (this.isSandboxPolicyChangeRequest(request)) return 'sandbox-policy-change';
-    if (analysis.targetKind === 'url') return 'external-access';
-    if (analysis.targetKind === 'path' && this.isNotebookPath(String(analysis.target ?? this.getDisplayArg(request.tool, request.args)))) {
-      return 'notebook-edit';
-    }
-    if (analysis.targetKind === 'path' && this.isConfigLikePath(String(analysis.target ?? this.getDisplayArg(request.tool, request.args)))) {
-      return 'config-mutation';
-    }
-    if (analysis.targetKind === 'path' && request.category === 'write') return 'file-mutation';
-    if (request.category === 'execute' && this.isDependencyInstallCommand(this.getDisplayArg(request.tool, request.args))) {
-      return 'dependency-install';
-    }
-    if (request.category === 'delegate' && this.isAgentSpawnRequest(request)) return 'agent-spawn';
-    if (request.category === 'execute') return 'shell-execution';
-    if (request.category === 'delegate') return 'delegation';
-    return 'permission-review';
-  }
-
-  private static getChecklist(request: PermissionPromptRequest): string {
-    const analysis = this.fallbackAnalysis(request);
-    if (this.isMcpEscalationRequest(request)) {
-      return 'Confirm server identity, trust justification, host/path scope, and why constrained or ask-on-risk modes are insufficient.';
-    }
-    if (this.isRemoteDispatchRequest(request)) {
-      return 'Confirm remote target, capability ceiling, trust class, artifact expectations, and whether the work should leave the local runtime.';
-    }
-    if (this.isHookExecutionRequest(request)) {
-      return 'Confirm hook source, execution mode, deny/mutate authority, and whether this workflow should block the current step.';
-    }
-    if (this.isPluginLifecycleRequest(request)) {
-      return 'Confirm package provenance, capability impact, install/update scope, and whether this changes the trusted extension surface.';
-    }
-    if (this.isSandboxPolicyChangeRequest(request)) {
-      return 'Confirm isolation-mode impact, Windows/WSL posture, runtime blast radius, and whether this weakens the security boundary.';
-    }
-    if (analysis.targetKind === 'url') {
-      return 'Confirm host trust, scope, and whether remote content should enter session context.';
-    }
-    if (analysis.targetKind === 'path' && this.isNotebookPath(String(analysis.target ?? this.getDisplayArg(request.tool, request.args)))) {
-      return 'Confirm notebook cell intent, hidden output safety, and whether execution metadata should change.';
-    }
-    if (analysis.targetKind === 'path' && this.isConfigLikePath(String(analysis.target ?? this.getDisplayArg(request.tool, request.args)))) {
-      return 'Confirm configuration blast radius, secret exposure risk, and whether this mutation changes startup or auth behavior.';
-    }
-    if (analysis.targetKind === 'path' && request.category === 'write') {
-      return 'Confirm target path, write intent, and whether the path could contain secrets or critical state.';
-    }
-    if (request.category === 'execute' && this.isDependencyInstallCommand(this.getDisplayArg(request.tool, request.args))) {
-      return 'Confirm dependency provenance, lockfile impact, install scripts, and whether this changes the trusted runtime surface.';
-    }
-    if (request.category === 'delegate' && this.isAgentSpawnRequest(request)) {
-      return 'Confirm spawned agent scope, tool ceiling, recursion depth, and whether this fan-out is justified for the current task.';
-    }
-    if (request.category === 'execute') {
-      return 'Confirm shell side effects, network behavior, and whether command text exposes credentials.';
-    }
-    if (request.category === 'delegate') {
-      return 'Confirm delegated scope, tool ceiling, and whether this work should fan out beyond the current step.';
-    }
-    return 'Confirm scope, target, and expected side effects before approving.';
-  }
-
   private static fallbackAnalysis(request: PermissionPromptRequest): PermissionRequestAnalysis {
     return request.analysis ?? {
       classification: request.category,
       riskLevel: request.category === 'read' ? 'low' : request.category === 'write' ? 'medium' : 'high',
       summary: `Review ${request.tool} request`,
       reasons: ['Inspect the target and intent before approving this action.'],
-      target: this.getDisplayArg(request.tool, request.args),
+      target: getDisplayArg(request.tool, request.args),
       targetKind: 'generic',
     };
   }
@@ -172,11 +57,7 @@ export class PermissionPromptUI {
 
   /** Returns the key argument to display for a given tool invocation. */
   static getDisplayArg(tool: string, args: Record<string, unknown>): string {
-    if (typeof args['path'] === 'string') return args['path'];
-    if (typeof args['command'] === 'string') return args['command'];
-    if (typeof args['pattern'] === 'string') return args['pattern'];
-    const first = Object.values(args)[0];
-    return typeof first === 'string' ? first : JSON.stringify(args).slice(0, 60);
+    return getDisplayArg(tool, args);
   }
 
   /** Returns the category label and ANSI 256-color code for display. */
@@ -190,43 +71,11 @@ export class PermissionPromptUI {
   }
 
   static getPromptTitle(request: PermissionPromptRequest): string {
-    const analysis = this.fallbackAnalysis(request);
-    if (this.isMcpEscalationRequest(request)) return 'MCP Trust Escalation Approval';
-    if (this.isRemoteDispatchRequest(request)) return 'Remote Dispatch Approval';
-    if (this.isHookExecutionRequest(request)) return 'Hook Execution Approval';
-    if (this.isPluginLifecycleRequest(request)) return 'Plugin Lifecycle Approval';
-    if (this.isSandboxPolicyChangeRequest(request)) return 'Sandbox Policy Change Approval';
-    if (analysis.targetKind === 'url') return 'Network Access Approval';
-    if (analysis.targetKind === 'path' && this.isNotebookPath(String(analysis.target ?? this.getDisplayArg(request.tool, request.args)))) {
-      return 'Notebook Edit Approval';
-    }
-    if (analysis.targetKind === 'path' && this.isConfigLikePath(String(analysis.target ?? this.getDisplayArg(request.tool, request.args)))) {
-      return 'Configuration Mutation Approval';
-    }
-    if (analysis.targetKind === 'path') return request.category === 'write' ? 'File Mutation Approval' : 'Filesystem Access Approval';
-    if (request.category === 'execute' && this.isDependencyInstallCommand(this.getDisplayArg(request.tool, request.args))) {
-      return 'Dependency Install Approval';
-    }
-    if (request.category === 'delegate' && this.isAgentSpawnRequest(request)) return 'Agent Spawn Approval';
-    if (request.category === 'execute') return 'Shell Execution Approval';
-    if (request.category === 'delegate') return 'Agent Delegation Approval';
-    return 'Permission Review';
+    return buildPermissionApprovalBrief(request).title;
   }
 
   static getSubjectLabel(request: PermissionPromptRequest): string {
-    const analysis = this.fallbackAnalysis(request);
-    switch (analysis.targetKind) {
-      case 'command':
-        return 'Command';
-      case 'path':
-        return 'Path';
-      case 'url':
-        return 'URL';
-      case 'task':
-        return 'Task';
-      default:
-        return 'Target';
-    }
+    return buildPermissionApprovalBrief(request).subjectLabel;
   }
 
   /**
@@ -237,6 +86,7 @@ export class PermissionPromptUI {
     const lines: Line[] = [];
     const { tool, args, category } = request;
     const analysis = this.fallbackAnalysis(request);
+    const brief = buildPermissionApprovalBrief(request);
     const displayArg = this.getDisplayArg(tool, args);
     const { label, color } = this.getCategoryLabel(category);
 
@@ -249,7 +99,7 @@ export class PermissionPromptUI {
     lines.push(UIFactory.stringToLine('─'.repeat(width), width, { fg: ACCENT, dim: true }));
 
     // Title bar: category badge + title
-    const titleText = this.getPromptTitle(request);
+    const titleText = brief.title;
     const titleLine = ` [${label}] ${titleText} `;
     lines.push(UIFactory.stringToLine(titleLine.padEnd(width), width, { fg: WARN, bold: true }));
 
@@ -262,7 +112,7 @@ export class PermissionPromptUI {
     const truncatedArg = displayArg.length > maxArgLen
       ? '...' + displayArg.slice(-(maxArgLen - 3))
       : displayArg;
-    const argLine = `   ${this.getSubjectLabel(request).padEnd(9)}: ${truncatedArg}`;
+    const argLine = `   ${brief.subjectLabel.padEnd(9)}: ${truncatedArg}`;
     lines.push(UIFactory.stringToLine(argLine.padEnd(width), width, { fg: TEXT }));
 
     // Working directory row
@@ -291,7 +141,7 @@ export class PermissionPromptUI {
     const summaryLine = `   Summary   : ${summary}`;
     lines.push(UIFactory.stringToLine(summaryLine.padEnd(width), width, { fg: TEXT }));
 
-    const modeLine = `   Decision  : ${this.getDecisionModeLabel(request)}`;
+    const modeLine = `   Decision  : ${brief.decisionModeLabel}`;
     lines.push(UIFactory.stringToLine(modeLine.padEnd(width), width, { fg: DIM }));
 
     if (analysis.sideEffects && analysis.sideEffects.length > 0) {
@@ -311,7 +161,7 @@ export class PermissionPromptUI {
       lines.push(UIFactory.stringToLine(reasonLine.padEnd(width), width, { fg: DIM }));
     }
 
-    const checklist = this.getChecklist(request);
+    const checklist = brief.checklist;
     const maxChecklistLen = Math.max(10, width - 16);
     const truncatedChecklist =
       checklist.length > maxChecklistLen ? `${checklist.slice(0, maxChecklistLen - 3)}...` : checklist;

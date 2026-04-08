@@ -69,12 +69,24 @@ function subscriptionStateColor(state: SubscriptionEntry['state']): string {
   }
 }
 
+function inferSubscriptionRouteReason(entry: SubscriptionEntry): string | undefined {
+  if (entry.routeReason?.trim()) return entry.routeReason;
+  if (entry.state === 'active' && entry.oauthConfigured) {
+    return 'ambient key override enabled for this provider.';
+  }
+  if (entry.state === 'pending' && entry.oauthConfigured) {
+    return 'oauth configuration present; ambient key override will apply after activation.';
+  }
+  return undefined;
+}
+
 const CATEGORY_LABELS: Record<(typeof SETTINGS_CATEGORIES)[number], string> = {
   display: 'Display',
   ui: 'UI',
   provider: 'Provider',
   subscriptions: 'Subscriptions',
   behavior: 'Behavior',
+  storage: 'Storage',
   permissions: 'Permissions',
   mcp: 'MCP',
   sandbox: 'Sandbox',
@@ -88,6 +100,11 @@ const SETTING_LABELS: Partial<Record<string, string>> = {
   'ui.operationalMessages': 'Operational Message Target',
   'ui.wrfcMessages': 'WRFC Message Target',
   'ui.voiceEnabled': 'Voice Surface',
+  'behavior.autoCompactThreshold': 'Auto-Compact %',
+  'behavior.staleContextWarnings': 'Context Warnings',
+  'behavior.returnContextMode': 'Return Context',
+  'behavior.guidanceMode': 'Guidance Mode',
+  'storage.secretPolicy': 'Secret Policy',
   'sandbox.vmBackend': 'Sandbox Backend',
   'sandbox.qemuBinary': 'QEMU Binary',
   'sandbox.qemuImagePath': 'QEMU Image',
@@ -393,12 +410,12 @@ export function renderSettingsModal(
       const visibleRows = Math.max(1, maxVisibleRows - 4);
       const providerW = Math.floor(contentW * 0.28);
       const stateW = 12;
-      const tokenW = 12;
-      const scopeW = Math.max(0, contentW - providerW - stateW - tokenW - 6);
+      const routeW = 14;
+      const scopeW = Math.max(0, contentW - providerW - stateW - routeW - 6);
 
       sections.push({
         type: 'text',
-        content: `${fitDisplay('Provider', providerW)}  ${fitDisplay('State', stateW)}  ${fitDisplay('Token', tokenW)}  Notes`,
+        content: `${fitDisplay('Provider', providerW)}  ${fitDisplay('State', stateW)}  ${fitDisplay('Route', routeW)}  Notes`,
         style: { fg: '240', dim: true },
       });
       sections.push({ type: 'separator' });
@@ -407,14 +424,21 @@ export function renderSettingsModal(
       const visibleSubscriptions = subscriptionEntries.slice(window.start, window.end);
       const listItems: import('./modal-factory.ts').ModalListItem[] = visibleSubscriptions.map((entry, idx) => {
         const isSelected = window.start + idx === modal.selectedIndex;
-        const note = entry.state === 'active'
-          ? 'ambient key override'
+        const routeReason = inferSubscriptionRouteReason(entry);
+        const note = routeReason?.toLowerCase().includes('ambient key override')
+          ? 'ambient key ov'
+          : entry.state === 'active'
+          ? entry.authFreshness === 'expiring'
+            ? 'session nearing expiry'
+            : entry.authFreshness === 'expired'
+              ? 'stored session expired'
+              : 'session active'
           : entry.state === 'pending'
             ? 'awaiting code exchange'
             : entry.oauthConfigured
               ? 'ready for login'
               : 'config required';
-        const label = `${fitDisplay(entry.provider, providerW)}  ${fitDisplay(entry.state, stateW)}  ${fitDisplay(entry.tokenType ?? 'n/a', tokenW)}  ${fitDisplay(note, scopeW)}`;
+        const label = `${fitDisplay(entry.provider, providerW)}  ${fitDisplay(entry.state, stateW)}  ${fitDisplay(entry.activeRoute ?? 'n/a', routeW)}  ${fitDisplay(note, scopeW)}`;
         return {
           label,
           selected: isSelected,
@@ -435,16 +459,34 @@ export function renderSettingsModal(
       if (selected) {
         sections.push({ type: 'separator' });
         const expires = selected.expiresAt ? new Date(selected.expiresAt).toISOString() : 'n/a';
+        const routeReason = inferSubscriptionRouteReason(selected);
         sections.push({
           type: 'text',
-          content: `Subscription ${selected.provider} is ${selected.state}. OAuth config is ${selected.oauthConfigured ? 'present' : 'missing'}.`,
+          content: truncateDisplay(
+            `${routeReason?.toLowerCase().includes('ambient key override') ? 'ambient key ov. ' : ''}Subscription ${selected.provider} is ${selected.state}. Active route is ${selected.activeRoute ?? 'n/a'} and preferred route is ${selected.preferredRoute ?? 'n/a'}. OAuth config is ${selected.oauthConfigured ? 'present' : 'missing'}.`.trim(),
+            contentW,
+          ),
           style: { fg: '246', dim: true },
         });
         sections.push({
           type: 'text',
-          content: truncateDisplay(`Expires: ${expires}`, contentW),
+          content: truncateDisplay(`Expires: ${expires}  Freshness: ${selected.authFreshness ?? 'n/a'}`, contentW),
           style: { fg: '240', dim: true },
         });
+        if (routeReason) {
+          sections.push({
+            type: 'text',
+            content: truncateDisplay(routeReason, contentW),
+            style: { fg: '240', dim: true },
+          });
+        }
+        for (const issue of selected.issues ?? []) {
+          sections.push({
+            type: 'text',
+            content: truncateDisplay(`Issue: ${issue}`, contentW),
+            style: { fg: '#ef4444', dim: true },
+          });
+        }
         const guidance = selected.state === 'active' || selected.state === 'pending'
           ? modal.subscriptionLogoutConfirmationTarget === selected.provider
             ? `Press Enter again to sign out ${selected.provider}. Move selection or close settings to cancel.`
@@ -455,6 +497,13 @@ export function renderSettingsModal(
           content: truncateDisplay(guidance, contentW),
           style: { fg: selected.state === 'active' || selected.state === 'pending' ? '#f59e0b' : '#38bdf8', dim: true },
         });
+        if ((selected.nextActions?.length ?? 0) > 0) {
+          sections.push({
+            type: 'text',
+            content: truncateDisplay(`Next: ${selected.nextActions![0]}`, contentW),
+            style: { fg: '#38bdf8', dim: true },
+          });
+        }
         if (modal.subscriptionLogoutConfirmationTarget === selected.provider) {
           persistentHelpers = [{ content: truncateDisplay(guidance, contentW), accent: true }];
         }
@@ -491,15 +540,17 @@ export function renderSettingsModal(
     });
   } else {
     const keyW = Math.floor(contentW * 0.45);
-    const valW = Math.floor(contentW * 0.22);
+    const valW = Math.floor(contentW * 0.18);
+    const srcW = Math.floor(contentW * 0.14);
 
     // Column header
     const keyHdr = fitDisplay('Setting', keyW);
     const valHdr = fitDisplay('Value', valW);
+    const srcHdr = fitDisplay('Source', srcW);
     const defHdr = 'Default';
     sections.push({
       type: 'text',
-      content: `${keyHdr}  ${valHdr}  ${defHdr}`,
+      content: `${keyHdr}  ${valHdr}  ${srcHdr}  ${defHdr}`,
       style: { fg: '240', dim: true },
     });
     sections.push({ type: 'separator' });
@@ -518,10 +569,11 @@ export function renderSettingsModal(
 
       const keyStr = fitDisplay(getSettingLabel(entry), keyW);
       const valStr = fitDisplay(valueStr, valW);
-
+      const sourceText = `${entry.effectiveSource ?? 'default'}${entry.locked ? '!' : entry.conflict ? '?' : ''}`;
+      const srcStr = fitDisplay(sourceText, srcW);
       const defStr = String(entry.setting.default);
 
-      const label = `${keyStr}  ${valStr}  ${defStr}`;
+      const label = `${keyStr}  ${valStr}  ${srcStr}  ${defStr}`;
 
       return {
         label,
@@ -560,6 +612,55 @@ export function renderSettingsModal(
           content: truncateDisplay(`Current route: ${describeUiRouting(String(selected.currentValue))}.`, contentW),
           style: { fg: '#38bdf8', dim: true },
         });
+      }
+      const provenanceParts = [
+        `Source: ${selected.effectiveSource ?? 'default'}`,
+        selected.locked ? 'locked' : null,
+        selected.conflict ? 'conflict' : null,
+      ].filter(Boolean);
+      sections.push({
+        type: 'text',
+        content: truncateDisplay(provenanceParts.join(' · '), contentW),
+        style: { fg: selected.locked ? '#eab308' : selected.conflict ? '#ef4444' : '244', dim: true },
+      });
+      if (selected.sourceLabel) {
+        sections.push({
+          type: 'text',
+          content: truncateDisplay(`Layer: ${selected.sourceLabel}`, contentW),
+          style: { fg: '244', dim: true },
+        });
+      }
+      if (selected.lockReason) {
+        sections.push({
+          type: 'text',
+          content: truncateDisplay(`Lock: ${selected.lockReason}`, contentW),
+          style: { fg: '#eab308', dim: true },
+        });
+      }
+      if (selected.conflict) {
+        const helper = `Repair: /settingssync resolve ${selected.setting.key} local|synced`;
+        sections.push({
+          type: 'text',
+          content: truncateDisplay(helper, contentW),
+          style: { fg: '#ef4444', dim: true },
+        });
+        persistentHelpers = [{ content: truncateDisplay(helper, contentW), accent: true }];
+      } else if (selected.effectiveSource === 'managed') {
+        const helper = 'Review: /managed staged  Apply or rollback managed changes from the control plane.';
+        sections.push({
+          type: 'text',
+          content: truncateDisplay(helper, contentW),
+          style: { fg: '#eab308', dim: true },
+        });
+        persistentHelpers = [{ content: truncateDisplay(helper, contentW), accent: true }];
+      } else if (selected.effectiveSource === 'synced') {
+        const helper = `Review: /settingssync show ${selected.setting.key}  Inspect synced provenance and fallback state.`;
+        sections.push({
+          type: 'text',
+          content: truncateDisplay(helper, contentW),
+          style: { fg: '#38bdf8', dim: true },
+        });
+        persistentHelpers = [{ content: truncateDisplay(helper, contentW), accent: true }];
       }
       // Show enum options if applicable
       if (selected.setting.type === 'enum' && selected.setting.enumValues) {

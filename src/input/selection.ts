@@ -1,4 +1,5 @@
 import type { InfiniteBuffer } from '../core/history.ts';
+import type { Cell } from '../types/grid.ts';
 
 export interface SelectionPoint {
   col: number;
@@ -67,9 +68,11 @@ export class SelectionManager {
 
       const startCol = r === start.row ? start.col : 0;
       const endCol = r === end.row ? end.col : line.length;
+      const gutterEnd = this.findLineNumberGutterEnd(line);
+      const effectiveStartCol = startCol < gutterEnd ? gutterEnd : startCol;
 
       let lineText = '';
-      for (let c = Math.max(0, startCol); c < Math.min(line.length, endCol); c++) {
+      for (let c = Math.max(0, effectiveStartCol); c < Math.min(line.length, endCol); c++) {
         const cell = line[c];
         if (cell && cell.char !== '') lineText += cell.char;
       }
@@ -81,6 +84,26 @@ export class SelectionManager {
     }
 
     return lines.join('\n');
+  }
+
+  private findLineNumberGutterEnd(line: Cell[]): number {
+    let i = 0;
+    while (i < line.length && line[i]?.char === ' ' && !line[i]?.dim) i++;
+    const start = i;
+    let sawDigit = false;
+    while (i < line.length) {
+      const cell = line[i];
+      const ch = cell?.char ?? '';
+      if (cell?.dim && ch !== '' && /[0-9 │]/.test(ch)) {
+        if (/[0-9]/.test(ch)) sawDigit = true;
+        i++;
+        continue;
+      }
+      break;
+    }
+    if (!sawDigit) return 0;
+    if (i < line.length && line[i]?.char === ' ') i++;
+    return i > start ? i : 0;
   }
 
   public isCellSelected(col: number, absoluteRow: number): boolean {

@@ -16,6 +16,7 @@ import type { ProviderRegistry } from '../providers/registry.ts';
 import type { RuntimeStore } from './store/index.ts';
 import type { RuntimeEventBus } from './events/index.ts';
 import type { FeatureFlagManager } from './feature-flags/index.ts';
+import type { SessionSnapshot } from './session-persistence.ts';
 
 /**
  * Mutable runtime state that may be changed by slash commands or model-picker events.
@@ -131,5 +132,5 @@ export interface RuntimeContext {
    *
    * @param sessionData - Latest conversation data to persist.
    */
-  shutdown: (sessionData: { messages: object[]; timestamp?: number }) => Promise<void>;
+  shutdown: (sessionData: SessionSnapshot) => Promise<void>;
 }

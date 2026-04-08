@@ -1,5 +1,6 @@
 import type { CommandRegistry, CommandContext } from '../command-registry.ts';
 import { AGENT_TEMPLATES } from '../../tools/agent/manager.ts';
+import { ArchetypeLoader, type AgentArchetype } from '../../agents/archetypes.ts';
 
 type TeamworkModeId =
   | 'local-engineer'
@@ -26,6 +27,33 @@ interface TeamworkRecipe {
   readonly id: string;
   readonly summary: string;
   readonly steps: readonly string[];
+}
+
+interface ResolvedArchetypeMode {
+  readonly id: string;
+  readonly label: string;
+  readonly owner: string;
+  readonly taskKind: 'agent' | 'exec' | 'acp' | 'integration';
+  readonly template?: string;
+  readonly reviewMode: 'none' | 'wrfc';
+  readonly executionProtocol: 'direct' | 'gather-plan-apply';
+  readonly source: 'builtin' | 'custom';
+  readonly family: 'implement' | 'review' | 'test' | 'research' | 'general';
+  readonly sourcePath?: string;
+  readonly validationIssues: readonly string[];
+  readonly tools: readonly string[];
+}
+
+interface TeamworkReviewSnapshot {
+  readonly builtinArchetypes: number;
+  readonly customArchetypes: number;
+  readonly archetypesWithIssues: number;
+  readonly implementArchetypes: number;
+  readonly reviewArchetypes: number;
+  readonly researchArchetypes: number;
+  readonly activeTaskCount: number;
+  readonly blockedTaskCount: number;
+  readonly reviewTaskCount: number;
 }
 
 const TEAMWORK_MODES: readonly TeamworkMode[] = [
@@ -67,6 +95,58 @@ function formatMode(mode: TeamworkMode): string {
   return `  ${mode.id.padEnd(18)} ${mode.taskKind.padEnd(11)} ${mode.owner.padEnd(16)} ${mode.reviewMode.padEnd(4)} ${mode.executionProtocol}${mode.template ? `  template=${mode.template}` : ''}`;
 }
 
+function classifyArchetype(archetype: AgentArchetype): ResolvedArchetypeMode['family'] {
+  const haystack = `${archetype.name} ${archetype.description}`.toLowerCase();
+  const tools = new Set(archetype.tools.map((tool) => tool.toLowerCase()));
+  if (haystack.includes('review') || haystack.includes('audit')) return 'review';
+  if (haystack.includes('test') || tools.has('exec') && tools.has('write') && !tools.has('edit')) return 'test';
+  if (haystack.includes('research') || haystack.includes('analysis') || (tools.has('find') && tools.has('analyze') && !tools.has('write') && !tools.has('edit'))) return 'research';
+  if (tools.has('write') || tools.has('edit')) return 'implement';
+  return 'general';
+}
+
+function buildArchetypeMode(archetype: AgentArchetype): ResolvedArchetypeMode {
+  const family = classifyArchetype(archetype);
+  const source = archetype.isCustom ? 'custom' : 'builtin';
+  return {
+    id: archetype.name,
+    label: archetype.description || `${archetype.name} archetype`,
+    owner: source === 'custom' ? `custom:${archetype.name}` : archetype.name,
+    taskKind: 'agent',
+    template: archetype.name,
+    reviewMode: family === 'review' ? 'wrfc' : 'none',
+    executionProtocol: family === 'research' ? 'gather-plan-apply' : family === 'implement' ? 'gather-plan-apply' : 'direct',
+    source,
+    family,
+    sourcePath: archetype.sourcePath,
+    validationIssues: archetype.validationIssues ?? [],
+    tools: archetype.tools,
+  };
+}
+
+function listArchetypeModes(): ResolvedArchetypeMode[] {
+  const loader = new ArchetypeLoader();
+  return loader.listArchetypes()
+    .map(buildArchetypeMode)
+    .sort((a, b) => a.id.localeCompare(b.id));
+}
+
+function buildTeamworkReviewSnapshot(ctx: CommandContext): TeamworkReviewSnapshot {
+  const archetypes = listArchetypeModes();
+  const tasks = ctx.runtimeStore ? [...ctx.runtimeStore.getState().tasks.tasks.values()] : [];
+  return {
+    builtinArchetypes: archetypes.filter((entry) => entry.source === 'builtin').length,
+    customArchetypes: archetypes.filter((entry) => entry.source === 'custom').length,
+    archetypesWithIssues: archetypes.filter((entry) => entry.validationIssues.length > 0).length,
+    implementArchetypes: archetypes.filter((entry) => entry.family === 'implement').length,
+    reviewArchetypes: archetypes.filter((entry) => entry.family === 'review').length,
+    researchArchetypes: archetypes.filter((entry) => entry.family === 'research').length,
+    activeTaskCount: tasks.filter((task) => task.status === 'running' || task.status === 'queued').length,
+    blockedTaskCount: tasks.filter((task) => task.status === 'blocked').length,
+    reviewTaskCount: tasks.filter((task) => task.owner === 'review' || task.owner === 'verifier').length,
+  };
+}
+
 function createModeTask(mode: TeamworkMode, title: string, ctx: CommandContext): string {
   if (!ctx.taskManager) {
     throw new Error('Task manager is not available for teamwork task creation in this runtime.');
@@ -86,14 +166,55 @@ function createModeTask(mode: TeamworkMode, title: string, ctx: CommandContext):
   return task.id;
 }
 
+function createResolvedModeTask(mode: ResolvedArchetypeMode, title: string, ctx: CommandContext): string {
+  if (!ctx.taskManager) {
+    throw new Error('Task manager is not available for teamwork task creation in this runtime.');
+  }
+  const task = ctx.taskManager.createTask({
+    kind: mode.taskKind,
+    owner: mode.owner,
+    title,
+    description: JSON.stringify({
+      title,
+      mode: mode.id,
+      template: mode.template,
+      reviewMode: mode.reviewMode,
+      executionProtocol: mode.executionProtocol,
+      source: mode.source,
+      family: mode.family,
+    }),
+  });
+  return task.id;
+}
+
 export function registerTeamworkRuntimeCommands(registry: CommandRegistry): void {
   registry.register({
     name: 'teamwork',
     aliases: ['teammates'],
     description: 'Packaged task modes, teammate templates, and orchestration recipes',
-    usage: '[modes|mode <id>|create-mode <id> <title...>|recipes|recipe <id>|templates]',
+    usage: '[review|modes|mode <id>|create-mode <id> <title...>|recipes|recipe <id>|templates|archetypes|validate|archetype <name>|create-archetype <name> <title...>]',
     handler(args, ctx) {
-      const sub = args[0]?.toLowerCase() ?? 'modes';
+      const sub = args[0]?.toLowerCase() ?? 'review';
+
+      if (sub === 'review') {
+        const snapshot = buildTeamworkReviewSnapshot(ctx);
+        ctx.print([
+          'Teamwork Review',
+          `  modes: ${TEAMWORK_MODES.length}`,
+          `  recipes: ${TEAMWORK_RECIPES.length}`,
+          `  builtin archetypes: ${snapshot.builtinArchetypes}`,
+          `  custom archetypes: ${snapshot.customArchetypes}`,
+          `  archetypes with issues: ${snapshot.archetypesWithIssues}`,
+          `  implement/review/research: ${snapshot.implementArchetypes}/${snapshot.reviewArchetypes}/${snapshot.researchArchetypes}`,
+          `  active tasks: ${snapshot.activeTaskCount}`,
+          `  blocked tasks: ${snapshot.blockedTaskCount}`,
+          `  review tasks: ${snapshot.reviewTaskCount}`,
+          '  next: /teamwork archetypes',
+          '  next: /teamwork validate',
+          '  next: /tasks',
+        ].join('\n'));
+        return;
+      }
 
       if (sub === 'modes') {
         ctx.print([
@@ -163,16 +284,93 @@ export function registerTeamworkRuntimeCommands(registry: CommandRegistry): void
       }
 
       if (sub === 'templates') {
+        const archetypes = listArchetypeModes();
         ctx.print([
           'Teamwork Templates',
           ...Object.entries(AGENT_TEMPLATES).map(([name, template]) => (
             `  ${name.padEnd(12)} ${template.description}`
           )),
+          '',
+          'Discovered Archetypes',
+          ...archetypes.map((entry) => `  ${entry.id.padEnd(12)} ${entry.family.padEnd(10)} ${entry.source.padEnd(7)} ${entry.label}`),
         ].join('\n'));
         return;
       }
 
-      ctx.print('Usage: /teamwork [modes|mode <id>|create-mode <id> <title...>|recipes|recipe <id>|templates]');
+      if (sub === 'archetypes') {
+        const archetypes = listArchetypeModes();
+        ctx.print([
+          'Teamwork Archetypes',
+          ...archetypes.map((entry) => `  ${entry.id.padEnd(18)} ${entry.family.padEnd(10)} ${entry.source.padEnd(7)} ${entry.reviewMode.padEnd(4)} ${entry.executionProtocol}${entry.validationIssues.length > 0 ? '  issues' : ''}`),
+        ].join('\n'));
+        return;
+      }
+
+      if (sub === 'validate') {
+        const archetypes = listArchetypeModes();
+        const invalid = archetypes.filter((entry) => entry.validationIssues.length > 0);
+        ctx.print(invalid.length > 0
+          ? [
+              'Teamwork Archetype Validation',
+              ...invalid.flatMap((entry) => [
+                `  ${entry.id} (${entry.source})`,
+                ...entry.validationIssues.map((issue) => `    issue: ${issue}`),
+              ]),
+            ].join('\n')
+          : 'Teamwork Archetype Validation\n  All discovered archetypes are currently valid.');
+        return;
+      }
+
+      if (sub === 'archetype') {
+        const archetypeName = args[1];
+        if (!archetypeName) {
+          ctx.print('Usage: /teamwork archetype <name>');
+          return;
+        }
+        const mode = listArchetypeModes().find((entry) => entry.id === archetypeName);
+        if (!mode) {
+          ctx.print(`Unknown archetype: ${archetypeName}`);
+          return;
+        }
+        ctx.print([
+          `Teamwork Archetype ${mode.id}`,
+          `  label: ${mode.label}`,
+          `  family: ${mode.family}`,
+          `  source: ${mode.source}`,
+          `  owner: ${mode.owner}`,
+          `  reviewMode: ${mode.reviewMode}`,
+          `  executionProtocol: ${mode.executionProtocol}`,
+          `  tools: ${mode.tools.join(', ') || '(none)'}`,
+          `  sourcePath: ${mode.sourcePath ?? '(builtin)'}`,
+          ...(mode.validationIssues.length > 0
+            ? mode.validationIssues.map((issue) => `  issue: ${issue}`)
+            : ['  validation: clean']),
+        ].join('\n'));
+        return;
+      }
+
+      if (sub === 'create-archetype') {
+        const archetypeName = args[1];
+        const title = args.slice(2).join(' ').trim();
+        if (!archetypeName || !title) {
+          ctx.print('Usage: /teamwork create-archetype <name> <title...>');
+          return;
+        }
+        const mode = listArchetypeModes().find((entry) => entry.id === archetypeName);
+        if (!mode) {
+          ctx.print(`Unknown archetype: ${archetypeName}`);
+          return;
+        }
+        try {
+          const taskId = createResolvedModeTask(mode, title, ctx);
+          ctx.print(`Created teamwork task ${taskId} using archetype ${mode.id}.`);
+        } catch (error) {
+          ctx.print(String((error as Error).message ?? error));
+        }
+        return;
+      }
+
+      ctx.print('Usage: /teamwork [review|modes|mode <id>|create-mode <id> <title...>|recipes|recipe <id>|templates|archetypes|validate|archetype <name>|create-archetype <name> <title...>]');
     },
   });
 }

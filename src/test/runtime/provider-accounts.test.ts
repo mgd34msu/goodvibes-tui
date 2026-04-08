@@ -1,0 +1,82 @@
+import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
+import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { _resetServiceRegistryForTesting } from '../../config/service-registry.ts';
+import { _resetSubscriptionManagerForTesting, getSubscriptionManager } from '../../config/subscriptions.ts';
+import { buildProviderAccountSnapshot } from '../../runtime/provider-accounts/registry.ts';
+
+describe('provider account snapshot', () => {
+  const originalHome = process.env.HOME;
+  const originalOpenAiKey = process.env.OPENAI_API_KEY;
+  const originalCwd = process.cwd();
+  let root = '';
+
+  beforeEach(() => {
+    _resetSubscriptionManagerForTesting();
+    _resetServiceRegistryForTesting();
+    root = mkdtempSync(join(tmpdir(), 'gv-provider-accounts-'));
+    process.env.HOME = root;
+    process.chdir(root);
+  });
+
+  afterEach(() => {
+    _resetSubscriptionManagerForTesting();
+    _resetServiceRegistryForTesting();
+    process.chdir(originalCwd);
+    if (originalHome === undefined) delete process.env.HOME;
+    else process.env.HOME = originalHome;
+    if (originalOpenAiKey === undefined) delete process.env.OPENAI_API_KEY;
+    else process.env.OPENAI_API_KEY = originalOpenAiKey;
+  });
+
+  test('marks expired subscription fallback to API key explicitly', async () => {
+    process.env.OPENAI_API_KEY = 'sk-test';
+    getSubscriptionManager().saveSubscription({
+      provider: 'openai',
+      accessToken: 'header.payload.signature',
+      tokenType: 'Bearer',
+      expiresAt: Date.now() - 5_000,
+      authMode: 'oauth',
+      overrideAmbientApiKeys: true,
+      createdAt: Date.now() - 10_000,
+      updatedAt: Date.now() - 10_000,
+    });
+
+    const snapshot = await buildProviderAccountSnapshot();
+    const openai = snapshot.providers.find((entry) => entry.providerId === 'openai');
+    expect(openai).toBeDefined();
+    expect(openai?.preferredRoute).toBe('subscription');
+    expect(openai?.activeRoute).toBe('api-key');
+    expect(openai?.fallbackRoute).toBe('api-key');
+    expect(openai?.fallbackRisk).toContain('preferred subscription path');
+    expect(openai?.issues.some((issue) => issue.includes('expired'))).toBe(true);
+  });
+
+  test('surfaces unusable service OAuth posture as a repair issue', async () => {
+    mkdirSync(join(root, '.goodvibes', 'tui'), { recursive: true });
+    writeFileSync(join(root, '.goodvibes', 'tui', 'services.json'), JSON.stringify({
+      testsvc: {
+        name: 'testsvc',
+        providerId: 'test-provider',
+        baseUrl: 'https://example.invalid',
+        authType: 'oauth',
+        tokenKey: 'TEST_PROVIDER_TOKEN',
+        oauth: {
+          authUrl: 'https://example.invalid/auth',
+          tokenUrl: 'https://example.invalid/token',
+          clientId: 'client-id',
+          redirectUri: 'http://localhost:1455/callback',
+        },
+      },
+    }, null, 2));
+
+    const snapshot = await buildProviderAccountSnapshot();
+    const provider = snapshot.providers.find((entry) => entry.providerId === 'test-provider');
+    expect(provider).toBeDefined();
+    expect(provider?.oauthReady).toBe(true);
+    expect(provider?.activeRoute).toBe('unconfigured');
+    expect(provider?.issues.some((issue) => issue.includes('missing a usable credential'))).toBe(true);
+    expect(provider?.recommendedActions.some((action) => action.includes('/services'))).toBe(true);
+  });
+});

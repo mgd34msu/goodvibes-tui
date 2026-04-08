@@ -6,6 +6,7 @@ import { getPolicyRuntimeState, resetPolicyRuntimeStateForTests } from '../../ru
 import { createUnsignedBundle } from '../../runtime/permissions/policy-loader.ts';
 import type { PolicyBundlePayload } from '../../runtime/permissions/policy-loader.ts';
 import type { PolicyRule } from '../../runtime/permissions/types.ts';
+import { resetSettingsControlPlaneForTesting } from '../../runtime/settings/control-plane.ts';
 
 // behavior.autoApprove reflects the --no-worries-just-vibes flag.
 // In the test environment (no CLI flag), it is false.
@@ -21,6 +22,7 @@ describe('PermissionManager', () => {
 
   beforeEach(() => {
     resetPolicyRuntimeStateForTests();
+    resetSettingsControlPlaneForTesting();
     // Snapshot current config state
     savedMode = getConfigSnapshot().permissions.mode ?? 'prompt';
     savedAutoApprove = getConfigSnapshot().behavior.autoApprove ?? false;
@@ -37,6 +39,7 @@ describe('PermissionManager', () => {
 
   afterEach(() => {
     resetPolicyRuntimeStateForTests();
+    resetSettingsControlPlaneForTesting();
     // Restore config state after each test
     configManager.set('permissions.mode', savedMode as 'prompt' | 'allow-all' | 'custom');
     configManager.set('behavior.autoApprove', savedAutoApprove);

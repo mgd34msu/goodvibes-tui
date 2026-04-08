@@ -217,7 +217,7 @@ export class ForensicsPanel extends BasePanel {
       const summaryStr = report.summary.slice(0, summaryMax);
 
       const segs: Array<[string, string, string?]> = [
-        [isSelected ? '>' : ' ', C.jumpLink, bg],
+        [isSelected ? '▸' : ' ', C.jumpLink, bg],
         [`${idStr} `, C.reportId, bg],
         [`${timeStr} `, C.timestamp, bg],
         [`${cls} `, clsColor, bg],
@@ -324,7 +324,7 @@ export class ForensicsPanel extends BasePanel {
   }
 
   private _renderPhase(lines: Line[], pt: PhaseTimingEntry, width: number): void {
-    const statusChar = pt.success ? 'y' : 'x';
+    const statusChar = pt.success ? '✓' : '✕';
     const statusColor = pt.success ? C.phaseOk : C.phaseFail;
     const dur = fmtDuration(pt.durationMs);
     const phaseLabel = pt.phase.slice(0, 14).padEnd(14, ' ');
