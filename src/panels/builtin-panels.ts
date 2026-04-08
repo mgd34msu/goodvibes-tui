@@ -99,6 +99,8 @@ export interface BuiltinPanelDeps {
   runtimeStore?: RuntimeStore;
   /** Token auditor for the security control-room panel. */
   tokenAuditor?: ApiTokenAuditor;
+  /** Shared system-messages panel instance attached from boot so low-priority chatter stays out of conversation. */
+  systemMessagesPanel?: SystemMessagesPanel;
 }
 
 export function registerBuiltinPanels(manager: PanelManager, deps: BuiltinPanelDeps): void {
@@ -576,13 +578,15 @@ export function registerBuiltinPanels(manager: PanelManager, deps: BuiltinPanelD
     factory: () => new PanelListPanel(),
   });
 
+  const systemMessagesPanel = deps.systemMessagesPanel ?? new SystemMessagesPanel();
+
   manager.registerType({
     id: 'system-messages',
     name: 'System Messages',
     icon: 'J',
     category: 'monitoring',
     description: 'Operational system messages routed away from the main conversation (scans, discovery, plugin events, tool status)',
-    factory: () => new SystemMessagesPanel(),
+    factory: () => systemMessagesPanel,
   });
 
   manager.registerType({

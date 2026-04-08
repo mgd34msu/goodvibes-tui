@@ -7,6 +7,7 @@ import {
   putOverlayText,
 } from './overlay-box.ts';
 import { getOverlayMaxWidth } from './overlay-viewport.ts';
+import { GLYPHS } from './ui-primitives.ts';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -328,7 +329,7 @@ export class ModalFactory {
       for (let i = 0; i < displayLines.length; i++) {
         const isFirst = i === 0;
         const indicator = isFirst
-          ? (item.selected ? '▸ ' : '  ')
+          ? (item.selected ? `${GLYPHS.navigation.selected} ` : '  ')
           : '  ';
         const row = createOverlayContentLine(
           terminalWidth,
@@ -357,7 +358,7 @@ export class ModalFactory {
   ): Line[] {
     const contentW = boxW - 4;
     const query = section.content ?? '';
-    const cursor = '█';
+    const cursor = GLYPHS.surface.cursor;
     const displayQuery = getDisplayWidth(query) > contentW - 4
       ? truncateDisplay(query, contentW - 4)
       : query;

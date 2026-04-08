@@ -122,7 +122,7 @@ export class MarketplacePanel extends BasePanel {
       });
     }
 
-    const summaryLines = [
+    const postureLines = [
       buildKeyValueLine(width, [
         { label: 'curated', value: String(this.rows.length), valueColor: C.value },
         { label: 'installed', value: String(installedCount), valueColor: installedCount > 0 ? C.good : C.dim },
@@ -167,7 +167,7 @@ export class MarketplacePanel extends BasePanel {
     }
 
     const introRows = 1;
-    const fixedRows = summaryLines.length + Math.min(5, selectedLines.length) + 5;
+    const fixedRows = postureLines.length + Math.min(5, selectedLines.length) + 5;
     const listBudget = Math.max(4, height - introRows - fixedRows);
     const window = getTrackedVisibleWindow(this.rows.length, this.selectedIndex, listBudget, this.scrollOffset, 1);
     this.scrollOffset = window.start;
@@ -190,7 +190,7 @@ export class MarketplacePanel extends BasePanel {
     }
 
     const sections: PanelWorkspaceSection[] = [
-      { title: 'Catalog Summary', lines: summaryLines },
+      { title: 'Posture', lines: postureLines },
       { title: 'Startup Issues', lines: startupIssueLines },
       { title: 'Recommendations', lines: recommendationLines },
       { title: 'Catalog', lines: catalogLines },

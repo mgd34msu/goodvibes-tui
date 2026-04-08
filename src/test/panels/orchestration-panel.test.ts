@@ -20,6 +20,7 @@ describe('OrchestrationPanel', () => {
     const panel = new OrchestrationPanel(store);
     const text = linesText(panel.render(120, 12));
     expect(text).toContain('Orchestration Control Room');
+    expect(text).toContain('Posture');
     expect(text).toContain('No orchestration graphs recorded yet');
   });
 
@@ -91,7 +92,9 @@ describe('OrchestrationPanel', () => {
 
     const panel = new OrchestrationPanel(store);
     const text = linesText(panel.render(140, 18));
-    expect(text).toContain('graphs:1 active:1');
+    expect(text).toContain('Posture');
+    expect(text).toContain('graphs');
+    expect(text).toContain('/orchestration');
     expect(text).toContain('Parallel review graph');
     expect(text).toContain('Recursion guard');
     expect(text).toContain('spawn breadth limit reached');

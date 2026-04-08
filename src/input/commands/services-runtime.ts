@@ -21,10 +21,13 @@ export function registerServicesRuntimeCommands(registry: CommandRegistry): void
     async handler(args, ctx) {
       const sub = args[0] ?? 'open';
       if (sub === 'open' || sub === 'panel') {
-        const panelManager = getPanelManager();
-        panelManager.open('services');
-        panelManager.show();
-        ctx.renderRequest();
+        if (ctx.showPanel) ctx.showPanel('services');
+        else {
+          const panelManager = getPanelManager();
+          panelManager.open('services');
+          panelManager.show();
+          ctx.renderRequest();
+        }
         return;
       }
       const svcRegistry = getServiceRegistry();

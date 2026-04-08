@@ -144,11 +144,13 @@ describe('TasksPanel', () => {
 
     const panel = new TasksPanel(store);
     const initial = linesText(panel.render(120, 24));
-    expect(initial).toContain('queued:1');
-    expect(initial).toContain('running:1');
-    expect(initial).toContain('blocked:1');
-    expect(initial).toContain('failed:1');
-    expect(initial).toContain('completed:1');
+    expect(initial).toContain('Posture');
+    expect(initial).toContain('queued 1');
+    expect(initial).toContain('running 1');
+    expect(initial).toContain('blocked 1');
+    expect(initial).toContain('failed 1');
+    expect(initial).toContain('completed 1');
+    expect(initial).toContain('/teamwork review');
     expect(initial).toContain('Queued task');
     expect(initial).toContain('Status: queued');
 
@@ -175,5 +177,27 @@ describe('TasksPanel', () => {
       runtimeStore: createRuntimeStore(),
     });
     expect(manager.getRegisteredTypes().some((entry) => entry.id === 'tasks')).toBe(true);
+  });
+
+  test('provider accounts, local auth, and settings sync panels render posture-first summaries', async () => {
+    const { ProviderAccountsPanel } = await import('../../panels/provider-accounts-panel.ts');
+    const { LocalAuthPanel } = await import('../../panels/local-auth-panel.ts');
+    const { SettingsSyncPanel } = await import('../../panels/settings-sync-panel.ts');
+    const { getConfigManager } = await import('../../config/index.ts');
+
+    const accountsPanel = new ProviderAccountsPanel();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    const accountsText = linesText(accountsPanel.render(120, 18));
+    expect(accountsText).toContain('Posture');
+    expect(accountsText).toContain('/accounts repair <provider>');
+
+    const authText = linesText(new LocalAuthPanel().render(120, 18));
+    expect(authText).toContain('Posture');
+    expect(authText).toContain('/auth local rotate-password <user> <password>');
+
+    const settingsText = linesText(new SettingsSyncPanel(getConfigManager()).render(120, 20));
+    expect(settingsText).toContain('Posture');
+    expect(settingsText).toContain('/settingssync conflicts');
+    expect(settingsText).toContain('/managed review');
   });
 });

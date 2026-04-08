@@ -29,10 +29,13 @@ export function registerSettingsSyncRuntimeCommands(registry: CommandRegistry): 
     handler(args, ctx) {
       const sub = (args[0] ?? 'review').toLowerCase();
       if (sub === 'panel' || sub === 'open') {
-        const panelManager = getPanelManager();
-        panelManager.open('settings-sync');
-        panelManager.show();
-        ctx.renderRequest();
+        if (ctx.showPanel) ctx.showPanel('settings-sync');
+        else {
+          const panelManager = getPanelManager();
+          panelManager.open('settings-sync');
+          panelManager.show();
+          ctx.renderRequest();
+        }
         return;
       }
       if (sub === 'show') {

@@ -54,7 +54,14 @@ export function createBootstrapCommandContext(
     completeModelSelectionSideEffect,
   } = options;
 
-  return {
+  const showPanel = (panelId: string, pane?: 'top' | 'bottom') => {
+    const pm = getPanelManager();
+    pm.open(panelId, pane);
+    pm.show();
+    requestRender();
+  };
+
+  const context: CommandContext = {
     providerRegistry,
     conversationManager: conversation,
     config: getConfigSnapshot(),
@@ -114,71 +121,50 @@ export function createBootstrapCommandContext(
       unwiredShellAction('exit');
     },
     reloadSystemPrompt: loadSystemPrompt,
+    showPanel,
     toolRegistry,
     mcpRegistry,
     fileUndoManager: FileUndoManager.getInstance(),
     forensicsRegistry,
     policyRegistry: policyRuntimeState.getRegistry(),
     openForensicsPanel: () => {
-      const pm = getPanelManager();
-      pm.open('forensics');
-      requestRender();
+      (context.showPanel ?? showPanel)('forensics');
     },
     openIncidentPanel: () => {
-      const pm = getPanelManager();
-      pm.open('incident');
-      requestRender();
+      (context.showPanel ?? showPanel)('incident');
     },
     openPolicyPanel: () => {
-      const pm = getPanelManager();
-      pm.open('policy');
-      requestRender();
+      (context.showPanel ?? showPanel)('policy');
     },
     openHooksPanel: () => {
-      const pm = getPanelManager();
-      pm.open('hooks');
-      requestRender();
+      (context.showPanel ?? showPanel)('hooks');
     },
     openCommunicationPanel: () => {
-      const pm = getPanelManager();
-      pm.open('communication');
-      requestRender();
+      (context.showPanel ?? showPanel)('communication');
     },
     openOrchestrationPanel: () => {
-      const pm = getPanelManager();
-      pm.open('orchestration');
-      requestRender();
+      (context.showPanel ?? showPanel)('orchestration');
     },
     openCockpitPanel: () => {
-      const pm = getPanelManager();
-      pm.open('cockpit');
-      requestRender();
+      (context.showPanel ?? showPanel)('cockpit');
     },
     openMcpPanel: () => {
-      const pm = getPanelManager();
-      pm.open('mcp');
-      requestRender();
+      (context.showPanel ?? showPanel)('mcp');
     },
     openSecurityPanel: () => {
-      const pm = getPanelManager();
-      pm.open('security');
-      requestRender();
+      (context.showPanel ?? showPanel)('security');
     },
     openKnowledgePanel: () => {
-      const pm = getPanelManager();
-      pm.open('knowledge');
-      requestRender();
+      (context.showPanel ?? showPanel)('knowledge');
     },
     openRemotePanel: () => {
-      const pm = getPanelManager();
-      pm.open('remote');
-      requestRender();
+      (context.showPanel ?? showPanel)('remote');
     },
     openSubscriptionPanel: () => {
-      const pm = getPanelManager();
-      pm.open('subscription');
-      requestRender();
+      (context.showPanel ?? showPanel)('subscription');
     },
     runtimeStore,
   };
+
+  return context;
 }

@@ -38,10 +38,13 @@ export function registerHealthRuntimeCommands(registry: CommandRegistry): void {
       const sub = (args[0] ?? 'review').toLowerCase();
 
       if (sub === 'open' || sub === 'panel' || sub === 'provider') {
-        const panelManager = getPanelManager();
-        panelManager.open('provider-health');
-        panelManager.show();
-        ctx.renderRequest();
+        if (ctx.showPanel) ctx.showPanel('provider-health');
+        else {
+          const panelManager = getPanelManager();
+          panelManager.open('provider-health');
+          panelManager.show();
+          ctx.renderRequest();
+        }
         return;
       }
 

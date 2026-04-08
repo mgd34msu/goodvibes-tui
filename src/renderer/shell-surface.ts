@@ -27,6 +27,7 @@ export interface ShellFooterBuildOptions {
   readonly composerMode?: string;
   readonly composerStatus?: string;
   readonly composerFlags?: readonly string[];
+  readonly composerPendingRisk?: 'none' | 'approval-wait' | 'shell' | 'command' | 'remote';
 }
 
 export interface ShellFooterBuildResult {
@@ -70,6 +71,7 @@ export function buildShellFooter(
     options.composerMode,
     options.composerStatus,
     options.composerFlags,
+    options.composerPendingRisk,
   );
   const processIndicator = renderProcessIndicator(
     options.width,

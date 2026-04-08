@@ -1,7 +1,7 @@
 import type { Line } from '../types/grid.ts';
 import { createEmptyLine } from '../types/grid.ts';
 import { BasePanel } from './base-panel.ts';
-import { buildPanelLine, buildPanelWorkspace, DEFAULT_PANEL_PALETTE, type PanelWorkspaceSection } from './polish.ts';
+import { buildGuidanceLine, buildPanelLine, buildPanelWorkspace, DEFAULT_PANEL_PALETTE, type PanelWorkspaceSection } from './polish.ts';
 import { getLocalUserAuthManager } from '../runtime/local-auth.ts';
 import { getTrackedVisibleWindow } from '../renderer/surface-layout.ts';
 
@@ -44,9 +44,15 @@ export class LocalAuthPanel extends BasePanel {
   public render(width: number, height: number): Line[] {
     this.needsRender = false;
     const snapshot = getLocalUserAuthManager().inspect();
+    this.selectedIndex = Math.min(this.selectedIndex, Math.max(0, snapshot.users.length - 1));
+    const selected = snapshot.users[this.selectedIndex];
+    const issueMessages: string[] = [];
+    if (snapshot.bootstrapCredentialPresent) issueMessages.push('Bootstrap credential file still exists and should be cleared after password rotation.');
+    if (snapshot.userCount <= 1) issueMessages.push('Only one local auth user is configured.');
+    if (snapshot.sessionCount === 0) issueMessages.push('No active local auth sessions are currently tracked.');
     const sections: PanelWorkspaceSection[] = [
       {
-        title: 'Overview',
+        title: 'Posture',
         lines: [
           buildPanelLine(width, [
             [' users ', C.label],
@@ -58,6 +64,10 @@ export class LocalAuthPanel extends BasePanel {
           ]),
           buildPanelLine(width, [[' user store ', C.label], [snapshot.userStorePath.slice(0, Math.max(0, width - 13)), C.dim]]),
           buildPanelLine(width, [[' bootstrap file ', C.label], [snapshot.bootstrapCredentialPath.slice(0, Math.max(0, width - 18)), C.dim]]),
+          ...(issueMessages.length > 0
+            ? issueMessages.map((issue) => buildPanelLine(width, [[` issue: ${issue}`.slice(0, Math.max(0, width)), C.warn]]))
+            : [buildPanelLine(width, [[' local auth posture looks healthy.', C.good]])]),
+          buildGuidanceLine(width, '/auth local rotate-password <user> <password>', 'rotate bootstrap/default credentials and revoke older sessions as needed', C),
         ],
       },
     ];
@@ -76,6 +86,16 @@ export class LocalAuthPanel extends BasePanel {
         ]));
       }
       sections.push({ title: 'Users', lines: userLines });
+      if (selected) {
+        sections.push({
+          title: 'Selected User',
+          lines: [
+            buildPanelLine(width, [[' username ', C.label], [selected.username, C.value], ['  roles ', C.label], [formatRoles(selected.roles).slice(0, Math.max(0, width - 23)), C.info]]),
+            buildPanelLine(width, [[` next: /auth local rotate-password ${selected.username} <password>`.slice(0, Math.max(0, width)), C.dim]]),
+            buildPanelLine(width, [[` next: /auth local delete-user ${selected.username}`.slice(0, Math.max(0, width)), C.dim]]),
+          ],
+        });
+      }
     }
 
     if (snapshot.sessions.length > 0) {

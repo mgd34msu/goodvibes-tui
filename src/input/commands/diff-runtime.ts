@@ -68,6 +68,7 @@ export function registerDiffRuntimeCommands(registry: CommandRegistry): void {
       }
       pm.activateById('diff');
       if (!pm.isVisible()) pm.show();
+      ctx.focusPanels?.();
 
       const diffPanel = panel as InstanceType<typeof DiffPanel>;
       const sub = (args[0] ?? 'session').toLowerCase();

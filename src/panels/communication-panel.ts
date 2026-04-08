@@ -6,6 +6,8 @@ import { truncateDisplay } from '../utils/terminal-width.ts';
 import {
   buildBodyText,
   buildEmptyState,
+  buildGuidanceLine,
+  buildKeyValueLine,
   buildPanelLine,
   buildPanelWorkspace,
   DEFAULT_PANEL_PALETTE,
@@ -95,9 +97,14 @@ export class CommunicationPanel extends BasePanel {
         title: 'Communication Control Room',
         intro,
         sections: [{
-          title: 'Overview',
+          title: 'Posture',
           lines: [
-            buildPanelLine(width, [[` sent:${domain.totalSent} delivered:${domain.totalDelivered} blocked:${domain.totalBlocked}`, C.dim]]),
+            buildKeyValueLine(width, [
+              { label: 'sent', value: String(domain.totalSent), valueColor: domain.totalSent > 0 ? C.info : C.dim },
+              { label: 'delivered', value: String(domain.totalDelivered), valueColor: domain.totalDelivered > 0 ? C.ok : C.dim },
+              { label: 'blocked', value: String(domain.totalBlocked), valueColor: domain.totalBlocked > 0 ? C.error : C.dim },
+            ], C),
+            buildGuidanceLine(width, '/communication', 'review structured message flow, delivery posture, and blocked routing decisions', C),
             ...buildEmptyState(
               width,
               ' No structured communication recorded yet.',
@@ -119,9 +126,16 @@ export class CommunicationPanel extends BasePanel {
     this.selectedIndex = Math.min(this.selectedIndex, records.length - 1);
     const window = getTrackedVisibleWindow(records.length, this.selectedIndex, Math.max(4, height - 14), this.scrollOffset, 1);
     this.scrollOffset = window.start;
-    const overviewLines: Line[] = [
-      buildPanelLine(width, [[` sent:${domain.totalSent} delivered:${domain.totalDelivered} blocked:${domain.totalBlocked}`, C.dim]]),
+    const postureLines: Line[] = [
+      buildKeyValueLine(width, [
+        { label: 'sent', value: String(domain.totalSent), valueColor: domain.totalSent > 0 ? C.info : C.dim },
+        { label: 'delivered', value: String(domain.totalDelivered), valueColor: domain.totalDelivered > 0 ? C.ok : C.dim },
+        { label: 'blocked', value: String(domain.totalBlocked), valueColor: domain.totalBlocked > 0 ? C.error : C.dim },
+        { label: 'selected', value: `${records[this.selectedIndex]?.fromId ?? 'n/a'} -> ${records[this.selectedIndex]?.toId ?? 'n/a'}`, valueColor: C.value },
+      ], C),
+      buildGuidanceLine(width, '/orchestration', 'inspect recursive routing, message handoff, and blocked broadcast posture', C),
     ];
+    const overviewLines: Line[] = [];
     for (let absolute = window.start; absolute < window.end; absolute++) {
       const record = records[absolute]!;
       const bg = absolute === this.selectedIndex ? C.selectBg : undefined;
@@ -150,6 +164,7 @@ export class CommunicationPanel extends BasePanel {
     detailLines.push(...buildBodyText(width, ` Content: ${selected.content}`, C));
 
     const sections: PanelWorkspaceSection[] = [
+      { title: 'Posture', lines: postureLines },
       { title: 'Recent Messages', lines: overviewLines },
       { title: 'Selected Message', lines: detailLines },
     ];

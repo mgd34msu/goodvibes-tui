@@ -3,6 +3,7 @@ import { createEmptyLine } from '../types/grid.ts';
 import { BasePanel } from './base-panel.ts';
 import {
   buildEmptyState,
+  buildGuidanceLine,
   buildKeyValueLine,
   buildPanelLine,
   buildPanelWorkspace,
@@ -86,6 +87,10 @@ export class ProviderAccountsPanel extends BasePanel {
       while (lines.length < height) lines.push(createEmptyLine(width));
       return lines;
     }
+    const issueCount = this.records.reduce((sum, record) => sum + record.issues.length + (record.fallbackRisk ? 1 : 0), 0);
+    const expiredCount = this.records.filter((record) => record.authFreshness === 'expired').length;
+    const pendingCount = this.records.filter((record) => record.pendingLogin).length;
+    const fallbackCount = this.records.filter((record) => Boolean(record.fallbackRisk)).length;
     const window = getTrackedVisibleWindow(this.records.length, this.selectedIndex, Math.max(4, height - 12), this.scrollOffset, 1);
     this.scrollOffset = window.start;
     const listLines: Line[] = [];
@@ -102,6 +107,21 @@ export class ProviderAccountsPanel extends BasePanel {
       ]));
     }
     const selected = this.records[this.selectedIndex]!;
+    const postureLines: Line[] = [
+      buildKeyValueLine(width, [
+        { label: 'providers', value: String(this.records.length), valueColor: C.value },
+        { label: 'expired auth', value: String(expiredCount), valueColor: expiredCount > 0 ? C.bad : C.good },
+        { label: 'pending login', value: String(pendingCount), valueColor: pendingCount > 0 ? C.warn : C.dim },
+        { label: 'fallback risk', value: String(fallbackCount), valueColor: fallbackCount > 0 ? C.warn : C.good },
+      ], C),
+      buildKeyValueLine(width, [
+        { label: 'total issues', value: String(issueCount), valueColor: issueCount > 0 ? C.bad : C.good },
+        { label: 'selected', value: selected.providerId, valueColor: C.info },
+        { label: 'route', value: selected.activeRoute, valueColor: selected.activeRoute === 'subscription' ? C.info : selected.activeRoute === 'api-key' ? C.warn : C.value },
+        { label: 'freshness', value: selected.authFreshness, valueColor: selected.authFreshness === 'expired' ? C.bad : selected.authFreshness === 'expiring' || selected.authFreshness === 'pending' ? C.warn : C.good },
+      ], C),
+      buildGuidanceLine(width, '/accounts repair <provider>', 'review routing safety, fallback cost, and provider-specific recovery steps', C),
+    ];
     const detailLines: Line[] = [
       buildKeyValueLine(width, [
         { label: 'provider', value: selected.providerId, valueColor: C.value },
@@ -153,6 +173,7 @@ export class ProviderAccountsPanel extends BasePanel {
       detailLines.push(buildPanelLine(width, [['  No active account warnings for this provider.', C.dim]]));
     }
     const sections: PanelWorkspaceSection[] = [
+      { title: 'Posture', lines: postureLines },
       { title: 'Providers', lines: listLines },
       { title: 'Details', lines: detailLines },
     ];

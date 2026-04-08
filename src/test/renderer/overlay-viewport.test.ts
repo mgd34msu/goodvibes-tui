@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { getOverlayContentBudget, getOverlayMaxWidth, getOverlaySurfaceMetrics, getStableOverlayContentRows } from '../../renderer/overlay-viewport.ts';
+import { getOverlayContentBudget, getOverlayMaxWidth, getOverlaySurfaceMetrics, getOverlayWidthClass, getStableOverlayContentRows } from '../../renderer/overlay-viewport.ts';
 
 describe('overlay viewport policy', () => {
   test('keeps content budgets within a stable half-screen band', () => {
@@ -42,5 +42,11 @@ describe('overlay viewport policy', () => {
     const tall = getOverlayContentBudget(50, { chromeRows: 4, minContentRows: 6, maxContentRows: 14 });
     expect(compact).toBe(8);
     expect(tall).toBe(14);
+  });
+
+  test('classifies overlay width bands for predictable narrow/medium/wide behavior', () => {
+    expect(getOverlayWidthClass(70)).toBe('narrow');
+    expect(getOverlayWidthClass(100)).toBe('medium');
+    expect(getOverlayWidthClass(140)).toBe('wide');
   });
 });

@@ -146,7 +146,7 @@ export class RemotePanel extends BasePanel {
     const pools = remoteRegistry.listPools();
     const contracts = remoteRegistry.listContracts();
 
-    const summaryLines: Line[] = [
+    const postureLines: Line[] = [
       buildPanelLine(width, [
         [' daemon ', C.label],
         [daemon.transportState.toUpperCase(), stateColor(daemon.transportState)],
@@ -184,11 +184,15 @@ export class RemotePanel extends BasePanel {
     ];
 
     if (daemon.lastError) {
-      summaryLines.push(buildPanelLine(width, [
+      postureLines.push(buildPanelLine(width, [
         [' daemon error ', C.label],
         [daemon.lastError.slice(0, Math.max(0, width - 14)), C.error],
       ]));
     }
+    postureLines.push(
+      buildGuidanceLine(width, '/remote recover', 'resume remote state with runner, capability, and disconnect recovery hints', C),
+      buildGuidanceLine(width, '/remote capabilities', 'inspect transport support before routing remote work or reattaching a session', C),
+    );
 
     const footerLines = [
       buildGuidanceLine(width, '/remote setup', 'review bridge, tunnel, env, and bootstrap flows for self-hosted remote work', C),
@@ -197,7 +201,7 @@ export class RemotePanel extends BasePanel {
 
     if (activeConnections.length === 0 && contracts.length === 0) {
       const idleLines = [
-        ...summaryLines,
+        ...postureLines,
         ...buildEmptyState(
           width,
           ' No active ACP or remote subagent connections.',
@@ -213,7 +217,7 @@ export class RemotePanel extends BasePanel {
       const lines = buildPanelWorkspace(width, height, {
         title: 'Remote Control Room',
         intro,
-        sections: [{ title: 'Overview', lines: idleLines }],
+        sections: [{ title: 'Posture', lines: idleLines }],
         footerLines,
         palette: C,
       });
@@ -406,7 +410,7 @@ export class RemotePanel extends BasePanel {
     }
 
     const sections: PanelWorkspaceSection[] = [
-      { title: 'Overview', lines: summaryLines },
+      { title: 'Posture', lines: postureLines },
       { title: viewingConnections ? 'Active Connections' : 'Registered Remote Runner Contracts', lines: browseLines },
       { title: selected ? 'Selected Connection' : 'Selected Contract', lines: detailLines },
     ];

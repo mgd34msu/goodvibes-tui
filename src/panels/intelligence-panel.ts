@@ -71,7 +71,7 @@ export class IntelligencePanel extends BasePanel {
 
     const sections: PanelWorkspaceSection[] = [
       {
-        title: 'Summary',
+        title: 'Posture',
         lines: [
           buildKeyValueLine(width, [
             { label: 'diagnostics', value: state.diagnosticsStatus, valueColor: statusColor(state.diagnosticsStatus) },
@@ -85,6 +85,13 @@ export class IntelligencePanel extends BasePanel {
             { label: 'requests', value: String(state.totalRequests), valueColor: C.value },
             { label: 'avg latency', value: `${Math.round(state.avgLatencyMs)}ms`, valueColor: C.info },
           ], C),
+        ],
+      },
+      {
+        title: 'Next Actions',
+        lines: [
+          buildGuidanceLine(width, '/intelligence diagnostics', 'review readiness posture and current diagnostics activity', C),
+          buildGuidanceLine(width, '/intelligence repair', 'surface repair-oriented guidance when symbols, hover, or completions degrade', C),
         ],
       },
       {

@@ -81,7 +81,7 @@ export class WorktreePanel extends BasePanel {
     } else {
       const summary = summarizeWorktreeOwnership(this.rows);
       sections.push({
-        title: 'Summary',
+        title: 'Posture',
         lines: [
           buildKeyValueLine(width, [
             { label: 'total', value: String(summary.total), valueColor: C.value },
@@ -95,6 +95,18 @@ export class WorktreePanel extends BasePanel {
             { label: 'agent owned', value: String(summary.agentOwned), valueColor: summary.agentOwned > 0 ? C.value : C.dim },
             { label: 'orchestrator', value: String(summary.orchestratorOwned), valueColor: summary.orchestratorOwned > 0 ? C.value : C.dim },
           ], C),
+        ],
+      });
+      sections.push({
+        title: 'Next Actions',
+        lines: [
+          buildPanelLine(width, [[
+            summary.cleanupPending > 0 || summary.discard > 0
+              ? ' Review cleanup-pending and discard-marked worktrees before they drift from orchestrator ownership.'
+              : ' Worktree ownership is healthy. Use the task and session links below for restore, merge, or cleanup review.',
+            summary.cleanupPending > 0 || summary.discard > 0 ? C.warn : C.dim,
+          ]]),
+          buildPanelLine(width, [['  /worktree task <task-id>  /worktree session <session-id>  /worktree inspect <path>', C.info]]),
         ],
       });
       const window = getTrackedVisibleWindow(this.rows.length, this.selectedIndex, Math.max(4, height - 14), this.scrollOffset, 1);

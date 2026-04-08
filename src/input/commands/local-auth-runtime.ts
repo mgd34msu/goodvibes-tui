@@ -10,10 +10,13 @@ export function handleLocalAuthCommand(args: string[], ctx: CommandContext): voi
   const sub = (args[0] ?? 'review').toLowerCase();
   const auth = getLocalUserAuthManager();
   if (sub === 'panel' || sub === 'open') {
-    const panelManager = getPanelManager();
-    panelManager.open('local-auth');
-    panelManager.show();
-    ctx.renderRequest();
+    if (ctx.showPanel) ctx.showPanel('local-auth');
+    else {
+      const panelManager = getPanelManager();
+      panelManager.open('local-auth');
+      panelManager.show();
+      ctx.renderRequest();
+    }
     return;
   }
 

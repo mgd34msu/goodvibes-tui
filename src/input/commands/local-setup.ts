@@ -265,10 +265,13 @@ export function registerLocalSetupCommands(registry: CommandRegistry): void {
           orchestration: ctx.openOrchestrationPanel,
         };
         if (parsed.surface === 'tasks') {
-          const panelManager = getPanelManager();
-          panelManager.open('tasks');
-          panelManager.show();
-          ctx.renderRequest();
+          if (ctx.showPanel) ctx.showPanel('tasks');
+          else {
+            const panelManager = getPanelManager();
+            panelManager.open('tasks');
+            panelManager.show();
+            ctx.renderRequest();
+          }
           ctx.print(`Opened setup link for tasks${parsed.target ? ` (${parsed.target})` : ''}.`);
           return;
         }

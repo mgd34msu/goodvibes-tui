@@ -1,6 +1,6 @@
 {
   "name": "goodvibes-tui",
-  "version": "0.14.2",
+  "version": "0.15.1",
   "type": "module",
   "main": "src/main.ts",
   "scripts": {

@@ -142,12 +142,19 @@ export class SubscriptionPanel extends BasePanel {
 
     const activeCount = this.rows.filter((row) => row.subscription).length;
     const pendingCount = this.rows.filter((row) => row.pending).length;
-    const overviewLine = buildKeyValueLine(width, [
-      { label: 'configured', value: String(this.rows.filter((row) => row.hasOAuthConfig).length), valueColor: C.info },
-      { label: 'active', value: String(activeCount), valueColor: activeCount > 0 ? C.good : C.dim },
-      { label: 'pending', value: String(pendingCount), valueColor: pendingCount > 0 ? C.warn : C.dim },
-      { label: 'providers', value: String(this.rows.length), valueColor: C.value },
-    ], C);
+    const postureLines = [
+      buildKeyValueLine(width, [
+        { label: 'configured', value: String(this.rows.filter((row) => row.hasOAuthConfig).length), valueColor: C.info },
+        { label: 'active', value: String(activeCount), valueColor: activeCount > 0 ? C.good : C.dim },
+        { label: 'pending', value: String(pendingCount), valueColor: pendingCount > 0 ? C.warn : C.dim },
+        { label: 'providers', value: String(this.rows.length), valueColor: C.value },
+      ], C),
+      buildKeyValueLine(width, [
+        { label: 'selected', value: (this.rows[this.selectedIndex]?.provider ?? 'none'), valueColor: this.rows[this.selectedIndex] ? C.value : C.dim },
+        { label: 'status', value: this.rows[this.selectedIndex] ? statusOf(this.rows[this.selectedIndex]!) : 'n/a', valueColor: this.rows[this.selectedIndex] ? statusColor(statusOf(this.rows[this.selectedIndex]!)) : C.dim },
+      ], C),
+      buildGuidanceLine(width, '/subscription login <provider> start', 'start or repair browser login for the selected provider route', C),
+    ];
     const footerLines = [
       buildGuidanceLine(width, '/subscription login <provider> start', 'start browser-based provider login from the packaged subscription surface', C),
       buildPanelLine(width, [['  Up/Down move  Enter/X sign out selected provider  r refresh', C.dim]]),
@@ -155,7 +162,7 @@ export class SubscriptionPanel extends BasePanel {
 
     if (this.rows.length === 0) {
       const lines: Line[] = [];
-      lines.push(overviewLine);
+      lines.push(...postureLines);
       lines.push(...buildEmptyState(
         width,
         ' No provider subscriptions are active yet.',
@@ -170,7 +177,7 @@ export class SubscriptionPanel extends BasePanel {
       const workspace = buildPanelWorkspace(width, height, {
         title: 'Provider Subscriptions',
         intro: 'Review provider login state, subscription-backed routing, and pending browser auth handshakes.',
-        sections: [{ lines }] satisfies readonly PanelWorkspaceSection[],
+        sections: [{ title: 'Posture', lines }] satisfies readonly PanelWorkspaceSection[],
         footerLines,
         palette: C,
       });
@@ -234,7 +241,7 @@ export class SubscriptionPanel extends BasePanel {
     }
 
     const sections: PanelWorkspaceSection[] = [
-      { title: 'Overview', lines: [overviewLine] },
+      { title: 'Posture', lines: postureLines },
       { title: 'Providers', lines: listLines },
       { title: 'Selected Provider', lines: detailLines },
     ];

@@ -15,9 +15,12 @@ export function registerGuidanceRuntimeCommands(registry: CommandRegistry): void
     handler(args, ctx) {
       const sub = args[0] ?? 'open';
       if (sub === 'open' || sub === 'panel') {
-        const panelManager = getPanelManager();
-        panelManager.open('welcome');
-        panelManager.show();
+        if (ctx.showPanel) ctx.showPanel('welcome');
+        else {
+          const panelManager = getPanelManager();
+          panelManager.open('welcome');
+          panelManager.show();
+        }
         return;
       }
       if (sub === 'print') {

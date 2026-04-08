@@ -26,10 +26,13 @@ export function registerIntegrationRuntimeCommands(registry: CommandRegistry): v
       const sub = args[0];
 
       if (!sub || sub === 'open' || sub === 'panel') {
-        const panelManager = getPanelManager();
-        panelManager.open('plugins');
-        panelManager.show();
-        ctx.renderRequest();
+        if (ctx.showPanel) ctx.showPanel('plugins');
+        else {
+          const panelManager = getPanelManager();
+          panelManager.open('plugins');
+          panelManager.show();
+          ctx.renderRequest();
+        }
         return;
       }
 

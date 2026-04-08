@@ -139,7 +139,7 @@ export class SystemMessagesPanel extends BasePanel {
     const highCount = this._messages.filter((entry) => entry.priority === 'high').length;
     const lowCount = this._messages.length - highCount;
     const ui = getConfigSnapshot().ui;
-    const summaryLines = [
+    const postureLines = [
       buildKeyValueLine(width, [
         { label: 'messages', value: String(this._messages.length), valueColor: C.value },
         { label: 'high', value: String(highCount), valueColor: highCount > 0 ? C.high : C.dim },
@@ -168,7 +168,7 @@ export class SystemMessagesPanel extends BasePanel {
     }
 
     const sections: PanelWorkspaceSection[] = [
-      { title: 'Summary', lines: summaryLines },
+      { title: 'Posture', lines: postureLines },
       { title: 'Messages', lines: messageLines },
     ];
     const lines = buildPanelWorkspace(width, height, {

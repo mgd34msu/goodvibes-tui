@@ -631,7 +631,7 @@ export class ProviderHealthPanel extends BasePanel {
       }
     }
 
-    const summaryLines = [
+    const postureLines = [
       buildKeyValueLine(width, [
         { label: 'providers', value: String(providers.length), valueColor: C.value },
         { label: 'online', value: String(online), valueColor: C.online },
@@ -741,7 +741,7 @@ export class ProviderHealthPanel extends BasePanel {
     }
 
     const sections: PanelWorkspaceSection[] = [
-      { title: 'Summary', lines: summaryLines },
+      { title: 'Posture', lines: postureLines },
       { title: 'Repair Domains', lines: domainLines },
       ...(maintenanceLines.length > 0 ? [{ title: 'Session Maintenance', lines: maintenanceLines }] : []),
       { title: 'Providers', lines: providerLines },

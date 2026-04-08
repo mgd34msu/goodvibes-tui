@@ -43,6 +43,7 @@ import { setSyntheticRuntimeBus } from '../providers/synthetic.ts';
 import { initCatalog, getConfiguredProviderIds } from '../providers/model-catalog.ts';
 import { getPanelManager } from '../panels/panel-manager.ts';
 import { registerBuiltinPanels } from '../panels/builtin-panels.ts';
+import { SystemMessagesPanel } from '../panels/system-messages-panel.ts';
 import { mcpRegistry } from '../mcp/registry.ts';
 import { getKeybindingsManager } from '../input/keybindings.ts';
 import { sessionMemoryStore } from '../core/session-memory.ts';
@@ -796,6 +797,7 @@ export async function bootstrapRuntime(
   // ── Phase 7: MCP auto-connect + panel manager ─────────────────────────
 
   const panelManager = getPanelManager();
+  const systemMessagesPanel = new SystemMessagesPanel();
   registerBuiltinPanels(panelManager, {
     configManager,
     getOrchestratorUsage: () => orchestrator.usage as { input: number; output: number; cacheRead: number; cacheWrite: number; model?: string },
@@ -811,14 +813,12 @@ export async function bootstrapRuntime(
     policyRuntimeState,
     runtimeStore: store,
     tokenAuditor,
+    systemMessagesPanel,
   });
 
   // ── System message router ────────────────────────────────────────────────
   // Instantiated here so bootstrap event handlers can route through it.
-  // The panel reference is null at startup (SystemMessagesPanel is created lazily
-  // when the user opens it). Messages to the panel are silently dropped until
-  // a panel instance is available.
-  const systemMessageRouter = createSystemMessageRouter(conversation, null);
+  const systemMessageRouter = createSystemMessageRouter(conversation, systemMessagesPanel);
   scheduleMcpAutodiscovery({
     mcpRegistry,
     systemMessageRouter,
@@ -1005,9 +1005,12 @@ export async function bootstrapRuntime(
     const opsControlPlane = new OpsControlPlane(opsTaskManager, runtimeBus, store, userSessionId);
     ctx.commandContext.opsControlPlane = opsControlPlane;
     ctx.commandContext.openOpsPanel = () => {
-      const pm = getPanelManager();
-      pm.open('ops-control');
-      requestRender();
+      if (ctx.commandContext.showPanel) ctx.commandContext.showPanel('ops-control');
+      else {
+        const pm = getPanelManager();
+        pm.open('ops-control');
+        requestRender();
+      }
     };
   }
 

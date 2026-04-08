@@ -6,6 +6,8 @@ import type { McpDecisionRecord } from '../runtime/mcp/types.ts';
 import { truncateDisplay } from '../utils/terminal-width.ts';
 import {
   buildEmptyState,
+  buildGuidanceLine,
+  buildKeyValueLine,
   buildPanelLine,
   buildPanelWorkspace,
   DEFAULT_PANEL_PALETTE,
@@ -118,6 +120,10 @@ export class McpPanel extends BasePanel {
     this.selectedIndex = Math.min(this.selectedIndex, entries.length - 1);
     const selected = entries[this.selectedIndex]!;
     const sandboxBinding = this.registry.listServerSandboxBindings().find((entry) => entry.name === selected.name);
+    const connected = entries.filter((entry) => entry.connected).length;
+    const quarantined = entries.filter((entry) => entry.schemaFreshness === 'quarantined').length;
+    const disconnected = entries.length - connected;
+    const staleSchemas = entries.filter((entry) => entry.schemaFreshness !== 'fresh').length;
     const window = getTrackedVisibleWindow(entries.length, this.selectedIndex, Math.max(4, height - 16), this.scrollOffset, 1);
     this.scrollOffset = window.start;
     const listLines: Line[] = [];
@@ -210,6 +216,20 @@ export class McpPanel extends BasePanel {
     }
 
     const sections: PanelWorkspaceSection[] = [
+      {
+        title: 'Posture',
+        lines: [
+          buildKeyValueLine(width, [
+            { label: 'servers', value: String(entries.length), valueColor: C.value },
+            { label: 'connected', value: String(connected), valueColor: connected > 0 ? C.ok : C.dim },
+            { label: 'disconnected', value: String(disconnected), valueColor: disconnected > 0 ? C.warn : C.dim },
+            { label: 'stale schema', value: String(staleSchemas), valueColor: staleSchemas > 0 ? C.warn : C.dim },
+            { label: 'quarantined', value: String(quarantined), valueColor: quarantined > 0 ? C.error : C.dim },
+          ], C),
+          buildGuidanceLine(width, '/mcp review', 'inspect trust, freshness, and quarantine posture for configured servers', C),
+          buildGuidanceLine(width, '/mcp repair', 'review reconnect, auth, import, and startup remediation guidance', C),
+        ],
+      },
       { title: 'Servers', lines: listLines },
       { title: 'Selected Server', lines: detailLines },
       { title: 'Repair', lines: repairLines },

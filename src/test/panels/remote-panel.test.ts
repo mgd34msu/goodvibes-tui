@@ -60,7 +60,7 @@ describe('RemotePanel', () => {
     expect(text).toContain('runner contracts');
     expect(text).toContain('review artifacts');
     expect(text).toContain('Contract:');
-    expect(text).toContain('Recent Review Artifact');
+    expect(text).toContain('Task:');
     expect(text).toContain('remote implementer');
   });
 
@@ -123,7 +123,7 @@ describe('RemotePanel', () => {
     expect(text).toContain('agent-2');
     expect(text).toContain('remote reviewer');
     expect(text).toContain('connection lost');
-    expect(text).toContain('Task:');
+    expect(text).toContain('/remote recover');
   });
 
   test('can switch to contract browsing when no active connection is selected', () => {

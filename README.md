@@ -1,8 +1,8 @@
 # goodvibes-tui
 
-A terminal AI coding agent with automated write-review-fix-check pipelines, multi-provider LLM support, and a vaporwave aesthetic.
+A terminal-native AI coding and operations console with multi-provider LLM support, typed runtime systems, and a Unicode-rich custom renderer.
 
-Version: **0.14.2**
+Version: **0.15.1**
 
 <!-- screenshot -->
 
@@ -10,199 +10,76 @@ Version: **0.14.2**
 
 ## What is this
 
-goodvibes-tui is a coding agent TUI in the same space as Claude Code, Gemini CLI, and Codex.
+goodvibes-tui is a serious terminal product in the same broad space as Claude Code, Gemini CLI, and Codex, but it is built around a different set of constraints:
 
-The interface is built around a cell-based renderer that writes directly to the alternate screen buffer using raw ANSI escape sequences — no framework, no virtual DOM. Every message, tool call, diff, and code block is a typed cell that can be collapsed, bookmarked, copied, or applied inline.
+- terminal-native rendering, not a React app inside a terminal
+- Unicode-rich, cell-accurate UI primitives
+- compact, token-efficient transcript behavior
+- operator-facing control rooms for non-conversational state
+- explicit runtime visibility for permissions, routing, health, remote execution, and orchestration
 
-The agent system runs subagents in-process, each with its own conversation history, scoped tool registry, and optional git worktree. Agents can communicate through a dedicated inter-agent message bus, while the main runtime itself is coordinated through the runtime store, typed `RuntimeEventBus` domains, and direct controller calls. The hook system fires lifecycle events on every tool call, git operation, LLM exchange, and more — and routes them to shell commands, HTTP endpoints, prompt-based handlers, or TypeScript modules.
+The interface is rendered directly to the alternate screen buffer with raw ANSI escape sequences. Conversation, panels, modals, overlays, and the footer all sit on the same renderer foundation instead of mixing framework surfaces with terminal escape hacks.
+
+The runtime is organized around typed store domains, typed runtime events, a shared control plane for permissions and orchestration, and product surfaces for reviewing and repairing state. Agents run in-process with isolated histories, scoped tools, and optional worktrees, while operational state such as MCP posture, provider routing, local auth, remote sessions, settings control-plane state, and task execution is routed into dedicated panels instead of dumped into the main transcript.
 
 ---
 
 ## Features
 
-### Multi-Provider LLM Support
-- Native provider adapters: Anthropic, OpenAI, Google Gemini, and InceptionLabs (diffusion LLM)
-- **15+ auto-registerable providers** — Groq, Cerebras, Mistral, Ollama Cloud, NVIDIA NIM, HuggingFace, LLM7, OpenRouter, AIHubMix, and more
-- **Dynamic catalog** — 4,102 models from 105 providers sourced from models.dev with 24h TTL cache; set an env var and the provider auto-configures
-- **Custom providers**: add any OpenAI-compatible API via JSON config in `~/.goodvibes/tui/providers/`
-- Hot-reload: provider configs are watched and reloaded automatically on change
-- Hot-swap models mid-conversation with `/model` or the interactive model picker
-- Per-provider reasoning effort control (instant / low / medium / high)
-- **Prompt caching strategy layer** — multi-breakpoint placement for Anthropic (1h/5m TTL), session affinity for Fireworks, cache hit tracking across all providers
-- **Helper model routing** — offload grunt work (cache planning, compaction, commit messages) to cheaper/free models with 4-step resolution chain
-- Streaming responses with token speed display
-- Interactive `/add-provider` skill for guided setup
+### Multi-Provider Models And Routing
+- Native OpenAI, Anthropic, Gemini, and InceptionLabs support plus a broad OpenAI-compatible provider layer
+- Dynamic model catalog with benchmark metadata, provider auto-registration, custom provider JSON, and hot-reload
+- Interactive model and provider pickers with family, capability, availability, and tier filtering
+- Synthetic-provider failover that preserves free / paid / subscription boundaries instead of silently mixing billing paths
+- Provider account control room with route posture, auth freshness, fallback risk, and recovery actions
 
-### Dynamic Model Catalog
-- Models sourced from models.dev (4,102 models, 105 providers) with 24h TTL cache
-- Benchmark integration from ZeroEval (275 models, 22 scoring dimensions)
-- Auto-provider registration — set an env var, the provider appears automatically
-- Catalog-driven SyntheticProvider with tier-isolated failover (free/paid/subscription tiers never mix)
-- `best-free` synthetic model — always resolves to the highest-benchmarked free model with a configured key
-- Change notifications when catalog refreshes, filtered to your favorites and top-benchmarked models
+### Terminal-Native UI System
+- Raw ANSI renderer with no Ink, React, or virtual DOM
+- Shared Unicode glyph primitives for borders, cursors, meters, markers, and selection states
+- Conversation, panels, and modals built on the same low-level renderer instead of ad hoc surface logic
+- Width-aware overlays, stable bottom docking above the prompt, half-height message surfaces, and structured footer layers
+- Copy/selection logic that strips decorative gutters and visual scaffolding from clipboard output
 
-### Model Picker
-- Pricing tier filter: Free / Paid / Subscription / All
-- Family grouping: GPT, Claude, Gemini, Llama, Qwen, GLM, MiniMax, DeepSeek, and more
-- Capability filters: Reasoning, Tool Use, Structured Output, Multimodal, Open Weights
-- Available-only toggle (default on) — hides models without a configured key
-- Benchmark sort: SWE-bench, GPQA, composite score
-- Quality tier badges [S/A/B/C] displayed next to model names
-- Pinned/favorite models shown at top with star indicator
-- Synthetic model grouping: "Top Models" (A/S-tier benchmark) and "All Synthetic"
-- Provider count per synthetic model (e.g., "4 providers")
-- Provider search mode with Configured/Popular/All grouping
+### Conversation And Transcript Workflow
+- Markdown rendering, syntax highlighting, inline diffs, collapsible blocks, bookmarks, block copy, and block save
+- Transcript event navigation by family for operational browsing of long sessions
+- Search overlays, compact line-number modes (`all`, `code`, `off`), and block-level collapse/expand
+- Presentation routing so non-conversational runtime chatter can live in control-room panels instead of the main transcript
 
-### Favorites & Usage Tracking
-- `/pin` and `/unpin` to star models as favorites
-- Usage history tracking (model, timestamp, count) persists across sessions
-- Favorites surface at the top of the model picker automatically
+### Panels, Control Rooms, And Workspaces
+- Split-pane panel system with panel picker, layout control, and keyboard-first focus behavior
+- Dedicated control rooms for provider accounts, provider health, local auth, settings sync, remote, MCP, marketplace, orchestration, tasks, intelligence, worktrees, approvals, system messages, and more
+- Summary-first heavy panels with posture, issues, next actions, and detail regions instead of raw inventories first
+- Routed system-message workspace for startup discovery and operational noise that does not belong in the main conversation
 
-### Cell-Based TUI Renderer
-- Raw ANSI escape sequences — no Ink, no React
-- Alternate screen buffer, mouse support, bracketed paste
-- Kitty keyboard protocol support for accurate key events in Ghostty and kitty terminals
-- Markdown rendering with syntax highlighting
-- Inline diff viewer with one-keystroke apply (`Ctrl+A`)
-- Collapsible blocks — tool calls, thinking traces, code blocks
-- Bookmarks, block copy (`Ctrl+Y`), block save to file (`Ctrl+S`)
-- Conversation search overlay (`Ctrl+F`)
-- File picker overlay with fuzzy search and Tab completion
-- Git status in header (branch, dirty indicator, ahead/behind)
-- Background process indicator and live-tail modal
+### Agents, Tasks, And WRFC
+- In-process agents with isolated history, scoped tools, optional worktrees, and structured communication lanes
+- Archetype registry that supports built-ins and user-defined markdown archetypes
+- Task lifecycle tracking across exec, agent, MCP, plugin, integration, daemon, scheduler, and ACP work
+- Automated WRFC loops with review/fix/check chains, configurable gates, and explicit evidence in completion reports
 
-### Sidebar Panels
-- 28 built-in panel types across 5 categories: development, agent, monitoring, session, and ai
-- **Development**: Git, Diff, File Explorer, File Preview, Symbol Outline
-- **Agent**: Plan Dashboard, Agent Inspector, Agent Logs, WRFC Chain Viewer, Schedule, Ops Strategy, Ops Control, Memory
-- **Monitoring**: Cost Tracker, Provider Stats, Provider Health, Debug, Forensics, Policy, Eval, System Messages, Token Budget
-- **Session**: Session Browser, Docs, Panel List
-- **AI**: Thinking, Tool Inspector, Context Visualizer
-- Split-pane layout with top/bottom panes and resizable divider
-- Panel picker overlay (`Ctrl+P`) with category grouping and search
-- Layout control with `/panel open|move|focus|split|width|height` or the panel picker
-- Unified operator cockpit plus dedicated security, incident review, knowledge, communication, hooks, remote, MCP, orchestration, plugins, services, and tasks control rooms
+### Tools And Intelligence
+- Built-in native tools: `read`, `write`, `edit`, `find`, `exec`, `fetch`, `analyze`, `inspect`, `agent`, `state`, `workflow`, and `registry`
+- Native file tooling with notebook-aware read/write/edit, AST-aware editing, validation hooks, undo, and compact output shaping
+- Language intelligence with bundled LSP servers, tree-sitter grammars, diagnostics, symbols, references, hover, and outline support
+- Intelligence control room with readiness, workflow entry points, and recovery guidance
 
-### Session & Profile Management
-- JSONL session files with auto-save on every turn and crash recovery
-- `/save`, `/load`, `/sessions` for named session management
-- Session search across all saved conversations
-- Named config profiles via `/profiles` — save and load display/provider/behavior settings
-- Session browser panel with resume support
+### Security, Auth, And Operational Controls
+- Prompt / allow-all / custom permission modes with layered evaluation and risk analysis
+- Secure-secret hierarchy with `preferred_secure` storage policy by default
+- Local daemon/listener auth with bootstrap credentials, local user management, password rotation, session revocation, and review surfaces
+- Health, policy, security, and setup control surfaces for reviewing and repairing runtime posture
 
-### Export
-- Export conversations as Markdown, JSON, or self-contained HTML
-- Sensitive data redaction (API keys, file paths, tokens)
-- Token usage summaries and cost tracking in exports
+### Ecosystem, MCP, And Remote
+- Curated marketplace, plugin trust model, rollback flows, and product-control commands
+- MCP lifecycle with trust posture, quarantine, reconnect behavior, repair flows, and tool projection into the main registry
+- Remote runner registry, pool-aware dispatch, replay/review artifacts, and operator-facing remote inspection/recovery surfaces
 
-### Local LLM Auto-Discovery
-- Network scanner probes localhost and local subnets for LLM servers
-- Detects Ollama, LM Studio, vLLM, llama.cpp, LocalAI, TGI, Jan, GPT4All, KoboldCPP, Aphrodite
-- Auto-registers discovered servers with dynamic context window and output limit detection
-- **Verbose-first context discovery**: probes LM Studio `/api/v1/models`, Ollama `/api/show`, vLLM, llama.cpp `/props`, TGI `/info` for accurate context windows
-- **Context cap UI**: press Space in the model picker to set a custom context window for local models
-- Persists discovered providers across sessions; reconciles on background re-scan
-
-### 12 Built-In Tools
-Read, write, edit, find, exec, fetch, analyze, inspect, agent, state, workflow, registry.
-Language intelligence powered by bundled LSP servers (TypeScript, Python, Bash, CSS, HTML, JSON) and tree-sitter grammars for 17 languages — no manual setup required. Rust and Go LSP servers auto-download on first use.
-
-### Agent System
-- In-process subagents with isolated conversation history
-- Non-blocking agent wait mode with 0ms default and 5s cap
-- Agent progress indicator: shows current turn and active tool instead of a static spinner
-- Consecutive error circuit breaker: warns at 5 consecutive all-fail turns, stops at 10
-- Named archetypes (engineer, reviewer, tester, researcher, general)
-- Custom archetypes via `.goodvibes/agents/*.md` with YAML frontmatter
-- Git worktree isolation per agent
-- Structured inter-agent communication lanes with policy-aware routing and operator-visible history
-- Agent detail modal and background process tracking
-- Bounded recursive orchestration with graph/state visibility, subtree cancellation, and remote runner contracts
-
-### Automated WRFC Review Chains
-- **Work → Review → Fix → Check** — every agent spawns an automated quality chain
-- 10-dimension reviewer with scored rubric (Correctness, Type Safety, Error Handling, Security, Performance, Code Quality, Testing, Documentation, Completeness, Integration)
-- Configurable minimum score threshold (default 9.9/10; 9.5 will get you working code, 9.9 is a bit cleaner, 10 may take a few unnecessary turns)
-- Automated fix cycles: fixer agent receives full issue list with point values
-- Quality gates after review: typecheck, lint, test, build (configurable)
-- Gate failures spawn new chains automatically
-- Auto-commit on chain completion via git worktree merge
-- `skipWrfc` flag for utility agents that don't need review
-- Engineer completion reports now carry explicit Gather / Plan / Apply evidence for tighter review and replay
-
-### Hook System
-- 5 hook types: command, prompt, agent, http, ts
-- 5 lifecycle phases: Pre, Post, Fail, Change, Lifecycle
-- 11 event categories: tool, file, git, agent, compact, llm, mcp, config, budget, session, workflow
-- Provides a total of over 135 usable hooks that can be called
-- Hook chaining and dynamic workflow hooks provide even more flexibility
-- Multi-event chains with temporal matching, debounce, and conditions
-- Async hooks that run without blocking the main conversation
-- Managed hook workflow authoring with scaffold, chain, simulate, reload, export, and recent activity inspection
-
-### MCP Integration
-- Connect to any MCP server via `.goodvibes/mcp.json`
-- JSON-RPC 2.0 over stdio, auto-restart on crash
-- Progressive schema loading — names at startup, full schemas on first use
-- Tools appear in the main tool registry as `mcp:<server>:<tool>`
-- Per-server trust profiles, coherence review, quarantine, explicit settings-gated `allow-all`, and attack-path analysis
-
-### Permissions & Security
-- Three modes: `prompt`, `allow-all`, `custom`
-- Per-tool permission overrides (`allow`, `prompt`, `deny`)
-- Encrypted secret storage (AES-256-GCM) via `/secrets`
-- Spawn tokens with HMAC + 1-hour TTL
-- HTTP listener with bearer auth, rate limiting, and localhost enforcement
-- Policy lint, simulation, and preflight review with operator-facing security workspace and audit visibility
-
-### Knowledge, Remote, And Product Operations
-- Durable typed knowledge store with session/project/team scopes, review queue, contradiction handling, bundle export/import, and explainable task-time knowledge injection
-- Self-hosted remote runner registry with runner pools, scoped remote dispatch, portable replay/review artifacts, rerun-local flows, and remote control surfaces
-- Product breadth commands for setup review/transfer, services auth review, curated plugin and skill catalog publish/install/update flows, and runtime task CRUD/control
-
-### Runtime Architecture
-- **Zustand vanilla store** — 19 domain slices (session, model, conversation, overlays, panels, permissions, tasks, agents, providerHealth, mcp, plugins, daemon, acp, integrations, telemetry, git, discovery, intelligence, uiPerf) as the single source of truth for shared runtime state
-- **Typed runtime event system** — 17 domain event modules with discriminated unions, domain-scoped subscriptions, typed emitter wrappers, and immutable event envelopes with correlation IDs
-- **No legacy runtime bus** — the old `EventBus` runtime path has been removed; shell control flow now uses direct controller calls, typed runtime events, and store-driven rendering
-- **RuntimeHealthAggregator** — derives composite health from all domain slices; CascadeEngine applies 8 declarative cascade rules so degradation in one domain automatically affects dependent domains
-- **Phased tool executor** — 6-phase pipeline (validate → prehook → permission → execute → map → posthook) with AbortController cancellation and per-phase timeouts
-- **LayeredPolicyEvaluator** — 5-layer permission stack (safety → mode → session → policy → default) with 19 decision reason codes; safety layer is bypass-immune
-- **UnifiedTaskManager** — single lifecycle state machine for process, agent, ACP, and scheduled tasks with retry and parent/child tracking
-- **10 state machines** across plugin lifecycle (8-state), MCP lifecycle (7-state), task types, and WRFC chains
-- **OTel-compatible telemetry** — lightweight tracer/meter with no OTel SDK dependency, ExportQueue with bounded ring buffer, and OtlpExporter for batch export
-- **Bootstrap composition root** — initialization extracted from `main.ts` with explicit dependency ordering
-
-### Feature Flags
-- 8 runtime feature flags: `phasedTools`, `layeredPermissions`, `unifiedTasks`, `notificationRouter`, `pluginLifecycle`, `mcpLifecycle`, `remoteSubstrate`, `otelExport`
-- Enable/disable/kill lifecycle — kill permanently disables a flag for the session
-- Toggleable at runtime via the `/settings` modal Feature Flags tab; changes persist to `.goodvibes/config.json`
-- Subscriber pattern for reactive flag-change propagation with full audit log
-
-### Configuration
-- Live config editing via `/config` or `/settings` modal
-- Named profiles for saving and loading config sets
-- Prompt templates system with save, browse, and execute
-- Session persistence with save/load/list
-
-### Context Compaction
-- **Hybrid structured compaction** — deterministic framework with targeted LLM extraction for specific tasks
-- **10 discrete sections** with per-section token budgets (current task, running agents, recent conversation, tool results, agent activity table, resolved problems, plan progress, session lineage, and more)
-- **Intentionally small output** — less compaction = more post-compaction working space; unused budget stays unused
-- **Auto-compacts when within 15k tokens of context limit** (configurable) — small windows (<12k) use simplified compaction
-- Empty sections are omitted entirely — no placeholder headers, no wasted tokens
-- Multi-turn coherence: user-assistant pairs are always kept together during message filtering
-- Post-compaction validation: checks that critical sections (handoff header, current task, running agents, session memories) are present
-- **Session lineage** — append-only micro-log that survives every compaction without degradation; each entry is one line, new lines are added per compaction, old lines never change
-- **Handoff header** — first line of every compacted context tells the LLM the session is not new and prompts it to read the handoff for proper resumption
-- Trigger manually with `/compact` or automatically when context usage crosses the threshold
-
-### Session Memory
-- **`!#` prefix** — pin any message as session memory: the message is sent normally (prefix stripped) and stored for the session
-- Session memories survive all compactions unconditionally, always at the top of the compacted context
-- **`/memory list`** — view all pinned memories with their IDs
-- **`/memory add <text>`** — add a memory without sending a message
-- **`/memory remove <id>`** — remove a specific memory by ID
-- No token cap — users control how much of their context memories occupy
+### Runtime Foundations
+- Typed runtime store and typed runtime-event system
+- Bootstrap composition root with explicit initialization order
+- Session continuity, return-context summaries, knowledge capture, compaction, guidance, diagnostics, and integration-helper APIs
+- Feature flags, profiles, live settings editing, and UI routing controls for system / operational / WRFC messages
 
 ---
 
@@ -430,7 +307,7 @@ Configuration is stored in `.goodvibes/config.json` in the current working direc
 | Key | Default | Description |
 |-----|---------|-------------|
 | `display.stream` | `true` | Stream responses token by token |
-| `display.lineNumbers` | `false` | Show line numbers in code blocks |
+| `display.lineNumbers` | `off` | Line-number mode: `off`, `code`, or `all` |
 | `display.collapseThreshold` | `30` | Lines before a block auto-collapses |
 | `display.theme` | `vaporwave` | Color theme |
 | `display.showThinking` | `false` | Show model thinking traces |
@@ -441,7 +318,13 @@ Configuration is stored in `.goodvibes/config.json` in the current working direc
 | `behavior.autoApprove` | `false` | Auto-approve all tool permission prompts |
 | `behavior.autoCompactThreshold` | `80` | Context % before auto-compact triggers |
 | `behavior.saveHistory` | `true` | Persist conversation history |
+| `behavior.returnContextMode` | `off` | Session return-context mode: `off`, `local`, `assisted` |
+| `behavior.guidanceMode` | `minimal` | Operational guidance mode: `off`, `minimal`, `guided` |
+| `storage.secretPolicy` | `preferred_secure` | Secret storage policy: prefer secure backing store, fall back when allowed |
 | `permissions.mode` | `prompt` | Permission mode: `prompt`, `allow-all`, `custom` |
+| `ui.systemMessages` | `panel` | Route general system messages to `panel`, `conversation`, or `both` |
+| `ui.operationalMessages` | `panel` | Route operational runtime notices to `panel`, `conversation`, or `both` |
+| `ui.wrfcMessages` | `both` | Route WRFC/orchestration updates to `panel`, `conversation`, or `both` |
 | `danger.agentRecursion` | `false` | Allow agents to spawn subagents |
 | `danger.maxGlobalAgents` | `8` | Max simultaneous agents |
 | `danger.daemon` | `false` | Enable daemon mode (POST /task) |
@@ -983,7 +866,7 @@ src/
 │   ├── remote/          — ReconnectEngine, DurableIdentityManager, RemoteStateSyncer
 │   ├── compaction/      — 5 compaction strategies and resume repair pipeline
 │   └── bootstrap.ts     — Composition root: typed initialization with dependency ordering
-├── panels/              — 28 built-in sidebar panel types and panel-management UI
+├── panels/              — panel workspaces, control rooms, and panel-management UI
 ├── integrations/        — Discord, Slack, GitHub webhook integrations
 ├── export/              — Markdown, JSON, HTML session export with redaction
 ├── plugins/             — Plugin system (manifest, loader, sandboxed API)

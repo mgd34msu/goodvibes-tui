@@ -114,13 +114,30 @@ export function wireShellUiOpeners(options: WireShellUiOpenersOptions): void {
         }
       }
       panelManager.show();
+      input.panelFocused = true;
       conversation.setSplashSuppressed(true);
       conversation.rebuildHistory();
     } else {
       panelManager.hide();
+      input.panelFocused = false;
       conversation.setSplashSuppressed(false);
       conversation.rebuildHistory();
     }
+    render();
+  };
+
+  commandContext.focusPanels = () => {
+    if (!panelManager.isVisible() || panelManager.getAllOpen().length === 0) return;
+    input.panelFocused = true;
+    render();
+  };
+
+  commandContext.showPanel = (panelId, pane) => {
+    panelManager.open(panelId, pane);
+    panelManager.show();
+    input.panelFocused = true;
+    conversation.setSplashSuppressed(true);
+    conversation.rebuildHistory();
     render();
   };
 }

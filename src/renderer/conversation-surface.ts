@@ -1,6 +1,7 @@
 import { type Line, createEmptyLine, createStyledCell } from '../types/grid.ts';
 import { getDisplayWidth, truncateDisplay, wrapText } from '../utils/terminal-width.ts';
 import { LAYOUT } from './layout.ts';
+import { GLYPHS } from './ui-primitives.ts';
 
 export interface ConversationSurfacePalette {
   readonly accent: string;
@@ -26,6 +27,14 @@ export interface ConversationStatusSegment {
   readonly bold?: boolean;
   readonly dim?: boolean;
   readonly italic?: boolean;
+}
+
+export interface ConversationEventTone {
+  readonly marker: string;
+  readonly markerFg: string;
+  readonly label: string;
+  readonly labelFg: string;
+  readonly detailFg?: string;
 }
 
 function writeText(
@@ -120,13 +129,13 @@ export function renderConversationFragment(
   const topLine = createEmptyLine(width);
   const bottomLine = createEmptyLine(width);
   for (let x = 0; x < fragmentWidth && startCol + x < width; x++) {
-    topLine[startCol + x] = createStyledCell('▄', {
+    topLine[startCol + x] = createStyledCell(GLYPHS.surface.top, {
       fg: palette.bodyBg,
       bg: '',
       dim: palette.dim ?? false,
       italic: palette.italic ?? false,
     });
-    bottomLine[startCol + x] = createStyledCell('▀', {
+    bottomLine[startCol + x] = createStyledCell(GLYPHS.surface.bottom, {
       fg: palette.bodyBg,
       bg: '',
       dim: palette.dim ?? false,
@@ -167,7 +176,7 @@ export function renderConversationCollapsedFragment(
   } = {},
 ): Line[] {
   return renderConversationFragment(content, width, {
-    prefix: options.prefix ?? ' ▸ ',
+    prefix: options.prefix ?? ` ${GLYPHS.navigation.selected} `,
     prefixFg: options.prefixFg ?? '#38bdf8',
     text: options.text ?? '244',
     bodyBg: options.bodyBg ?? '#1a1a1a',
@@ -227,4 +236,25 @@ export function renderConversationStatusLine(
     col += getDisplayWidth(segment.text);
   }
   return line;
+}
+
+export function renderConversationEventLine(
+  width: number,
+  tone: ConversationEventTone,
+  details: readonly ConversationStatusSegment[] = [],
+): Line {
+  return renderConversationStatusLine(
+    width,
+    [
+      { text: ` ${tone.label} `, fg: tone.labelFg, bold: true },
+      ...details.map((segment) => ({
+        ...segment,
+        fg: segment.fg || tone.detailFg || tone.labelFg,
+      })),
+    ],
+    {
+      marker: tone.marker,
+      markerFg: tone.markerFg,
+    },
+  );
 }

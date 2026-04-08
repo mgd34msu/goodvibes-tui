@@ -40,9 +40,12 @@ export function registerMarketplaceRuntimeCommands(registry: CommandRegistry): v
     handler(args, ctx) {
       const sub = args[0] ?? 'open';
       if (sub === 'open' || sub === 'panel') {
-        const panelManager = getPanelManager();
-        panelManager.open('marketplace');
-        panelManager.show();
+        if (ctx.showPanel) ctx.showPanel('marketplace');
+        else {
+          const panelManager = getPanelManager();
+          panelManager.open('marketplace');
+          panelManager.show();
+        }
         return;
       }
       if (sub === 'overview') {

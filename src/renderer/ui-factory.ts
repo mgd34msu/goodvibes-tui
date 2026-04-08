@@ -4,6 +4,7 @@ import { VERSION } from '../version.ts';
 import { fitDisplay, getDisplayWidth, truncateDisplay, wrapText, interpolateColor } from '../utils/terminal-width.ts';
 import type { GitHeaderInfo } from './git-status.ts';
 import { renderConversationFragment, renderConversationStatusLine, type ConversationStatusSegment } from './conversation-surface.ts';
+import { GLYPHS } from './ui-primitives.ts';
 
 /** Number of frames before the animated gradient completes one full cycle. */
 const GRADIENT_CYCLE_FRAMES = 50;
@@ -146,6 +147,7 @@ export class UIFactory {
     composerMode?: string,
     composerStatus?: string,
     composerFlags?: readonly string[],
+    composerPendingRisk?: 'none' | 'approval-wait' | 'shell' | 'command' | 'remote',
   ): Line[] {
     const lines: Line[] = [];
     const promptLines = prompt.split('\n');
@@ -157,7 +159,7 @@ export class UIFactory {
       return l;
     };
     const topLine = createBaseLine();
-    for (let x = 0; x < boxWidth; x++) topLine[boxStartX + x] = { char: '▄', fg: BG_COLOR, bg: '', bold: false, dim: false, underline: false, italic: false, strikethrough: false };
+    for (let x = 0; x < boxWidth; x++) topLine[boxStartX + x] = { char: GLYPHS.surface.top, fg: BG_COLOR, bg: '', bold: false, dim: false, underline: false, italic: false, strikethrough: false };
     lines.push(topLine);
     promptLines.forEach((text, i) => {
       const contentW = boxWidth - 4;
@@ -183,7 +185,7 @@ export class UIFactory {
             const cell = contentLine[cursorX];
             // Invert: bright fg on the text bg, swap to make cursor visible
             contentLine[cursorX] = {
-              char: cell.char === ' ' ? '█' : cell.char,
+              char: cell.char === ' ' ? GLYPHS.surface.cursor : cell.char,
               fg: cell.char === ' ' ? '252' : '#000000',
               bg: cell.char === ' ' ? BG_COLOR : '#ffffff',
               bold: false, dim: false, underline: false, italic: false, strikethrough: false
@@ -194,7 +196,7 @@ export class UIFactory {
         // No cursorPos provided — show block at end (fallback)
         const endX = boxStartX + 2 + prefix.length + text.length;
         if (endX < boxStartX + boxWidth - 2) {
-          contentLine[endX] = { char: '█', fg: '252', bg: BG_COLOR, bold: false, dim: false, underline: false, italic: false, strikethrough: false };
+          contentLine[endX] = { char: GLYPHS.surface.cursor, fg: '252', bg: BG_COLOR, bold: false, dim: false, underline: false, italic: false, strikethrough: false };
         }
       }
 
@@ -227,9 +229,46 @@ export class UIFactory {
       lines.push(contentLine);
     });
     const bottomLine = createBaseLine();
-    for (let x = 0; x < boxWidth; x++) bottomLine[boxStartX + x] = { char: '▀', fg: BG_COLOR, bg: '', bold: false, dim: false, underline: false, italic: false, strikethrough: false };
+    for (let x = 0; x < boxWidth; x++) bottomLine[boxStartX + x] = { char: GLYPHS.surface.bottom, fg: BG_COLOR, bg: '', bold: false, dim: false, underline: false, italic: false, strikethrough: false };
     lines.push(bottomLine);
     lines.push(createBaseLine());
+    const composerTokens: Array<{ text: string; fg: string; bold?: boolean; dim?: boolean }> = [];
+    if (composerMode) composerTokens.push({ text: ` ${GLYPHS.status.active} ${composerMode} `, fg: '#38bdf8', bold: true });
+    if (composerPendingRisk && composerPendingRisk !== 'none') {
+      const riskColor = composerPendingRisk === 'approval-wait'
+        ? '#f59e0b'
+        : composerPendingRisk === 'shell'
+          ? '#ef4444'
+          : composerPendingRisk === 'remote'
+            ? '#a78bfa'
+            : '#f59e0b';
+      composerTokens.push({ text: ` risk:${composerPendingRisk} `, fg: riskColor, bold: true });
+    }
+    if (composerStatus && composerStatus !== 'idle') composerTokens.push({ text: ` state:${composerStatus} `, fg: '244', dim: true });
+    if (composerFlags && composerFlags.length > 0) composerTokens.push({ text: ` flags:${composerFlags.join(',')} `, fg: '244', dim: true });
+    if (composerTokens.length > 0) {
+      const postureLine = createBaseLine();
+      let px = 2;
+      for (const token of composerTokens) {
+        for (const ch of token.text) {
+          if (px >= width) break;
+          postureLine[px] = {
+            char: ch,
+            fg: token.fg,
+            bg: '',
+            bold: token.bold ?? false,
+            dim: token.dim ?? false,
+            underline: false,
+            italic: false,
+            strikethrough: false,
+          };
+          px += getDisplayWidth(ch);
+        }
+        if (px >= width) break;
+      }
+      lines.push(postureLine);
+      lines.push(createBaseLine());
+    }
     const isRecentlyCopied = Date.now() - lastCopyTime < 2000;
     // Token usage line
     const u = usage as { input?: number; output?: number; cacheRead?: number; cacheWrite?: number; up?: number; down?: number };
@@ -238,7 +277,8 @@ export class UIFactory {
     const cr = u.cacheRead ?? 0;
     const cw = u.cacheWrite ?? 0;
     const total = inp + out + cr + cw;
-    const tokenLine = ` Token Usage [ Input: ${fmtNum(inp)} │ Output: ${fmtNum(out)} │ Cache Read: ${fmtNum(cr)} │ Cache Write: ${fmtNum(cw)} │ Total: ${fmtNum(total)} ]`;
+    const tokenSep = ` ${GLYPHS.navigation.pipeSeparator} `;
+    const tokenLine = ` Token Usage [ Input: ${fmtNum(inp)}${tokenSep}Output: ${fmtNum(out)}${tokenSep}Cache Read: ${fmtNum(cr)}${tokenSep}Cache Write: ${fmtNum(cw)}${tokenSep}Total: ${fmtNum(total)} ]`;
     const copiedNotice = isRecentlyCopied ? ` [COPIED] ` : '';
     const statsLine = '  ' + tokenLine + ' '.repeat(Math.max(0, width - 4 - getDisplayWidth(tokenLine) - getDisplayWidth(copiedNotice))) + copiedNotice;
     lines.push(this.stringToLine(statsLine, width, { fg: isRecentlyCopied ? '81' : '244', bold: isRecentlyCopied }));
@@ -268,7 +308,7 @@ export class UIFactory {
       if (composerMode) ctxParts.push(`mode:${composerMode}`);
       if (composerStatus && composerStatus !== 'idle') ctxParts.push(`status:${composerStatus}`);
       if (composerFlags && composerFlags.length > 0) ctxParts.push(composerFlags.join(','));
-      const ctxLine = '   ' + ctxParts.join('  │  ');
+      const ctxLine = '   ' + ctxParts.join(`  ${GLYPHS.navigation.pipeSeparator}  `);
       lines.push(createBaseLine());
       lines.push(this.stringToLine(truncateDisplay(ctxLine, width), width, { fg: '240', dim: true }));
       lines.push(createBaseLine());
@@ -438,7 +478,7 @@ export class UIFactory {
     const pctDisplay = Math.round(pct * 100);
     const filled = Math.round(pct * barWidth);
     const color = pct < 0.6 ? '82' : pct < 0.85 ? '220' : '196';
-    const bar = '█'.repeat(filled) + '░'.repeat(barWidth - filled);
+    const bar = GLYPHS.meter.filled.repeat(filled) + GLYPHS.meter.empty.repeat(barWidth - filled);
     const pctStr = `  ${pctDisplay}%`;
     const full = label + bar + pctStr + (suffix ?? '');
     return this.stringToLine(truncateDisplay(full, lineWidth), lineWidth, { fg: color, dim: true });

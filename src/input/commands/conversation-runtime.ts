@@ -137,7 +137,7 @@ export function registerConversationRuntimeCommands(registry: CommandRegistry): 
     name: 'conversation',
     aliases: ['transcript', 'composer'],
     description: 'Review conversation structure, transcript hotspots, and composer posture',
-    usage: '[review|events [kind]|groups [kind]|hotspots|composer|find <query> [kind]|restore]',
+    usage: '[review|events [kind]|groups [kind]|hotspots|composer|find <query> [kind]|next [kind]|prev [kind]|restore]',
     handler(args, ctx) {
       const sub = (args[0] ?? 'review').toLowerCase();
       if (sub === 'composer') {
@@ -158,13 +158,27 @@ export function registerConversationRuntimeCommands(registry: CommandRegistry): 
         ctx.print(buildConversationRestoreReview(ctx).join('\n'));
         return;
       }
+      if (sub === 'next' || sub === 'prev') {
+        const kind = parseTranscriptKind(args[1]);
+        const currentLine = ctx.getScrollTop?.() ?? 0;
+        const targetLine = sub === 'next'
+          ? ctx.conversationManager.nextTranscriptEventLine(currentLine, kind)
+          : ctx.conversationManager.prevTranscriptEventLine(currentLine, kind);
+        if (targetLine < 0) {
+          ctx.print(`No ${kind === 'all' ? 'transcript' : kind} events found.`);
+          return;
+        }
+        ctx.scrollToLine?.(targetLine);
+        ctx.print(`Jumped to ${kind === 'all' ? 'next transcript event' : `${kind} event`} at line ${targetLine + 1}.`);
+        return;
+      }
       if (sub === 'events' || sub === 'groups' || sub === 'hotspots') {
         const kind = parseTranscriptKind(args[1]);
         ctx.print(buildTranscriptLines(ctx, kind, sub).join('\n'));
         return;
       }
       if (sub !== 'review' && sub !== 'status') {
-        ctx.print('Usage: /conversation [review|events [kind]|groups [kind]|hotspots|composer|find <query> [kind]|restore]');
+        ctx.print('Usage: /conversation [review|events [kind]|groups [kind]|hotspots|composer|find <query> [kind]|next [kind]|prev [kind]|restore]');
         return;
       }
 
@@ -185,6 +199,7 @@ export function registerConversationRuntimeCommands(registry: CommandRegistry): 
         '  next: /conversation hotspots',
         '  next: /conversation composer',
         '  next: /conversation find approval approval_request',
+        '  next: /conversation next tool_result',
         '  next: /conversation restore',
       ].join('\n'));
     },

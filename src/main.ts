@@ -455,6 +455,7 @@ async function main() {
       composerMode: composerState.modeLabel,
       composerStatus: composerState.statusLabel,
       composerFlags: composerState.flags,
+      composerPendingRisk: composerState.pendingRisk,
     }).lines;
 
     const shellLayout = createShellLayout({

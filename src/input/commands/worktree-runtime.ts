@@ -12,10 +12,13 @@ export function registerWorktreeRuntimeCommands(registry: CommandRegistry): void
       const sub = (args[0] ?? 'review').toLowerCase();
       const runtime = getWorktreeRegistry();
       if (sub === 'panel' || sub === 'open') {
-        const panelManager = getPanelManager();
-        panelManager.open('worktrees');
-        panelManager.show();
-        ctx.renderRequest();
+        if (ctx.showPanel) ctx.showPanel('worktrees');
+        else {
+          const panelManager = getPanelManager();
+          panelManager.open('worktrees');
+          panelManager.show();
+          ctx.renderRequest();
+        }
         return;
       }
       if (sub === 'inspect') {

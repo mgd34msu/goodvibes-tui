@@ -6,6 +6,7 @@ import type { RuntimeTask, TaskLifecycleState } from '../runtime/store/domains/t
 import { selectTasks } from '../runtime/store/selectors/index.ts';
 import {
   buildEmptyState,
+  buildGuidanceLine,
   buildPanelLine,
   buildPanelWorkspace,
   DEFAULT_PANEL_PALETTE,
@@ -219,11 +220,14 @@ export class TasksPanel extends BasePanel {
       status,
       count: tasks.filter((task) => task.status === status).length,
     }));
+    const blockedCount = counts.find((entry) => entry.status === 'blocked')?.count ?? 0;
+    const failedCount = counts.find((entry) => entry.status === 'failed')?.count ?? 0;
+    const runningCount = counts.find((entry) => entry.status === 'running')?.count ?? 0;
+    const queuedCount = counts.find((entry) => entry.status === 'queued')?.count ?? 0;
+    const completedCount = counts.find((entry) => entry.status === 'completed')?.count ?? 0;
     const window = getTrackedVisibleWindow(tasks.length, this.selectedIndex, Math.max(4, height - 14), this.scrollOffset, 1);
     this.scrollOffset = window.start;
-    const listLines: Line[] = [
-      buildPanelLine(width, [[counts.map(({ status, count }) => `${status}:${count}`).join('  '), C.dim]]),
-    ];
+    const listLines: Line[] = [];
     for (let absolute = window.start; absolute < window.end; absolute++) {
       const task = tasks[absolute]!;
       const bg = absolute === this.selectedIndex ? C.selectBg : undefined;
@@ -240,6 +244,32 @@ export class TasksPanel extends BasePanel {
     }
 
     const selected = tasks[this.selectedIndex]!;
+    const postureLines: Line[] = [
+      buildPanelLine(width, [
+        [' queued ', C.label],
+        [String(queuedCount), queuedCount > 0 ? C.queued : C.dim],
+        ['  running ', C.label],
+        [String(runningCount), runningCount > 0 ? C.running : C.dim],
+        ['  blocked ', C.label],
+        [String(blockedCount), blockedCount > 0 ? C.blocked : C.dim],
+        ['  failed ', C.label],
+        [String(failedCount), failedCount > 0 ? C.failed : C.dim],
+        ['  completed ', C.label],
+        [String(completedCount), completedCount > 0 ? C.completed : C.dim],
+      ]),
+      buildPanelLine(width, [
+        [' selected ', C.label],
+        [selected.id, C.info],
+        ['  status ', C.label],
+        [selected.status, statusColor(selected.status)],
+        ['  kind ', C.label],
+        [selected.kind, C.value],
+        ['  owner ', C.label],
+        [selected.owner.slice(0, Math.max(0, width - 46)), C.dim],
+      ]),
+      buildGuidanceLine(width, '/teamwork review', 'inspect task-family posture, archetype metadata, and recovery options for active work', C),
+      buildGuidanceLine(width, '/worktree task <task-id>', 'review worktree ownership, restore, and merge posture for the selected task', C),
+    ];
     const descriptor = selected.description ? parseTaskDescriptor(selected.description) : null;
     const detailLines: Line[] = [
       buildPanelLine(width, [
@@ -345,6 +375,7 @@ export class TasksPanel extends BasePanel {
     }
 
     const sections: PanelWorkspaceSection[] = [
+      { title: 'Posture', lines: postureLines },
       { title: 'Tasks', lines: listLines },
       { title: 'Selected Task', lines: detailLines },
     ];

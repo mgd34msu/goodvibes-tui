@@ -30,6 +30,7 @@ describe('SandboxPanel', () => {
     const panel = new SandboxPanel(config, sessions);
     const text = panel.render(100, 36).flat().map((cell) => cell.char).join('');
     expect(text).toContain('Sandbox Control Room');
+    expect(text).toContain('Posture');
     expect(text).toContain('shared-vm');
     expect(text).toContain('guest host');
     expect(text).toContain('127.0.0.1');
@@ -43,6 +44,7 @@ describe('SandboxPanel', () => {
     const panel = new SandboxPanel(config, sessions);
     expect(panel.handleInput('end')).toBe(true);
     const text = panel.render(100, 36).flat().map((cell) => cell.char).join('');
+    expect(text).toContain('Posture');
     expect(text).toContain('Sessions');
     expect(text).toContain('eval-py');
   });
