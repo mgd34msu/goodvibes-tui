@@ -39,7 +39,10 @@ describe('SettingsModal', () => {
     tmpDir = makeTmpDir();
     process.env.HOME = tmpDir;
     process.chdir(tmpDir);
-    cm = new ConfigManager({ workingDir: tmpDir });
+    cm = new ConfigManager({
+      workingDir: tmpDir,
+      configDir: join(tmpDir, '.goodvibes', 'tui'),
+    });
     ffm = createFeatureFlagManager();
     modal = new SettingsModal();
     mcpRegistry = {
@@ -143,17 +146,16 @@ describe('SettingsModal', () => {
 
   test('activateSelected toggles boolean setting', () => {
     modal.open(cm, ffm, mcpRegistry);
-    // Navigate to a boolean setting (display.stream is first in display)
     const items = modal.currentItems;
-    const boolIdx = items.findIndex(e => e.setting.type === 'boolean');
+    const boolIdx = items.findIndex((entry) => entry.setting.key === 'display.stream');
     expect(boolIdx).toBeGreaterThanOrEqual(0);
     for (let i = 0; i < boolIdx; i++) modal.moveDown();
 
     const before = modal.getSelected()!.currentValue as boolean;
     modal.activateSelected();
-    // Reload
     const afterEntry = modal.getSelected();
     const after = afterEntry?.currentValue as boolean;
+    expect(cm.get('display.stream')).toBe(!before);
     expect(after).toBe(!before);
   });
 
