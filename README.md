@@ -61,6 +61,8 @@ The runtime is organized around typed store domains, typed runtime events, a sha
 ### Tools And Intelligence
 - Built-in native tools: `read`, `write`, `edit`, `find`, `exec`, `fetch`, `analyze`, `inspect`, `agent`, `state`, `workflow`, and `registry`
 - Native file tooling with notebook-aware read/write/edit, AST-aware editing, validation hooks, undo, and compact output shaping
+- Sandbox-backed REPL/eval tooling with bounded JavaScript, TypeScript, Python, SQL, and GraphQL runtimes plus persisted REPL history
+- Durable knowledge/memory substrate with reviewable records, provenance, links, scoped export/import, and task-time knowledge injection
 - Language intelligence with bundled LSP servers, tree-sitter grammars, diagnostics, symbols, references, hover, and outline support
 - Intelligence control room with readiness, workflow entry points, and recovery guidance
 
@@ -493,6 +495,96 @@ This layer is meant to expose control/state APIs, not a UI protocol.
 
 goodvibes-tui ships 12 built-in tools that go well beyond the read/write/exec primitives found in Claude Code, Gemini CLI, and Codex. Each tool is designed for agentic workloads: batch operations, token-efficient extraction, structural code understanding, and composable automation — not just wrapping shell commands.
 
+### REPL / Eval runtimes
+
+GoodVibes also ships a live bounded `repl` tool backed by the sandbox/session layer. The current runtimes are:
+
+- JavaScript
+- TypeScript
+- Python
+- SQL
+- GraphQL
+
+The implementation is in:
+
+- [src/tools/repl/index.ts](/home/buzzkill/Projects/goodvibes-tui/src/tools/repl/index.ts)
+- [src/tools/repl/schema.ts](/home/buzzkill/Projects/goodvibes-tui/src/tools/repl/schema.ts)
+- [src/runtime/sandbox/manager.ts](/home/buzzkill/Projects/goodvibes-tui/src/runtime/sandbox/manager.ts)
+
+These are real runtime profiles, not placeholder names. They are wired through sandbox profiles such as `eval-js`, `eval-ts`, `eval-py`, `eval-sql`, and `eval-graphql`, and REPL history is persisted under `.goodvibes/tui/repl-history.json`.
+
+The important nuance is that the runtimes are intentionally bounded:
+
+- JavaScript and TypeScript evaluate inside the sandbox exec path
+- Python runs in an ephemeral virtualenv
+- SQL evaluates against an ephemeral in-memory SQLite database
+- GraphQL currently provides bounded GraphQL expression analysis/normalization through the REPL path rather than a general remote GraphQL executor
+
+### Durable memory / knowledge
+
+GoodVibes has two distinct memory layers:
+
+- session memory for lightweight pinned notes that only live for the current session
+- durable project knowledge stored in SQLite for reuse, review, export, and task-time injection
+
+The durable system is implemented in:
+
+- [src/state/memory-store.ts](/home/buzzkill/Projects/goodvibes-tui/src/state/memory-store.ts)
+- [src/state/knowledge-injection.ts](/home/buzzkill/Projects/goodvibes-tui/src/state/knowledge-injection.ts)
+- [src/input/commands/memory.ts](/home/buzzkill/Projects/goodvibes-tui/src/input/commands/memory.ts)
+- [src/panels/memory-panel.ts](/home/buzzkill/Projects/goodvibes-tui/src/panels/memory-panel.ts)
+- [src/panels/knowledge-panel.ts](/home/buzzkill/Projects/goodvibes-tui/src/panels/knowledge-panel.ts)
+
+Durable record classes currently include:
+
+- `decision`
+- `constraint`
+- `incident`
+- `pattern`
+- `fact`
+- `risk`
+- `runbook`
+- `architecture`
+- `ownership`
+
+Key capabilities:
+
+- scopes: `session`, `project`, `team`
+- review states: `fresh`, `reviewed`, `stale`, `contradicted`
+- confidence scores
+- provenance links back to sessions, turns, tasks, events, and files
+- links between memory records
+- review queues and promotion flows
+- bundle export/import and handoff export/import
+- task-time knowledge selection and injection based on task text and write scope
+- structured capture from incidents, policy preflight, MCP posture, and plugin posture
+
+There is also a genuine self-improvement loop here:
+
+- failures and incidents can be captured into durable memory
+- policy, MCP, and plugin posture can be promoted into durable reviewed knowledge
+- operators can review, mark stale, contradict, or promote records
+- future tasks can receive automatically selected reviewed knowledge injections
+- the runtime can explain exactly which knowledge records it would inject for a task and why
+
+So the system is not just archival storage. It supports iterative operator review and reuse of lessons learned in later work.
+
+Key commands:
+
+- `/recall add ...`
+- `/recall search ...`
+- `/recall queue`
+- `/recall review ...`
+- `/recall explain ...`
+- `/recall promote ...`
+- `/recall capture ...`
+- `/recall export ...`
+- `/recall import ...`
+- `/recall handoff-export ...`
+- `/recall handoff-import ...`
+
+This is not just a note store. It is a reviewed knowledge substrate used by the runtime when preparing task context.
+
 ### read
 
 Read files with token-efficient extraction modes. Not just cat-to-context.
@@ -597,7 +689,7 @@ In-process subagent system with 15 management modes.
 Session state, persistent memory, telemetry, hooks, and output modes — all in one tool.
 
 - KV state: session-scoped key-value store with atomic persistence
-- Persistent memory: read/write `.goodvibes/memory/` files that survive across sessions
+- Durable memory posture: inspect the reviewed knowledge substrate and related runtime state, while the full durable-memory workflow lives under `/recall` and the knowledge panels
 - Hook management: list, enable, disable, add, and remove hooks at runtime
 - Output mode switching: switch between `default`, `vibecoding`, and `justvibes` verbosity presets
 - Analytics: record tool calls, query by filter, export as JSON/CSV, dashboard view — backed by WASM SQLite
@@ -659,6 +751,7 @@ Discover and introspect skills, agents, and tools.
 | `/accounts [action]` | — | Review provider-account routes, auth posture, and repair actions |
 | `/auth [action]` | — | Review auth posture and manage local service auth users/sessions |
 | `/memory [action]` | — | Session memory management: `list`, `add <text>`, `remove <id>` |
+| `/recall [action]` | `/rc` | Durable knowledge and memory substrate: capture, review, explain, export, import, and handoff |
 | `/context` | `/ctx` | Inspect context window usage (token breakdown per message) |
 | `/next-error` | `/ne` | Jump to the next error message in the conversation |
 | `/prev-error` | `/pe` | Jump to the previous error message in the conversation |
