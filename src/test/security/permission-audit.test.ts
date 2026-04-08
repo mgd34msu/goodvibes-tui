@@ -589,10 +589,10 @@ describe('PermissionPromptUI — renders correctly per category', () => {
   test('createPromptLines specializes MCP trust escalation approvals', () => {
     const request = {
       callId: 'test-call-11',
-      tool: 'mcp_resource',
+      tool: 'mcp',
       args: { mode: 'set-trust', serverName: 'docs', trustMode: 'allow-all' },
       category: 'delegate' as const,
-      analysis: analyzePermissionRequest('mcp_resource', { mode: 'set-trust', serverName: 'docs', trustMode: 'allow-all' }, 'delegate'),
+      analysis: analyzePermissionRequest('mcp', { mode: 'set-trust', serverName: 'docs', trustMode: 'allow-all' }, 'delegate'),
       resolve: (_approved: boolean) => {},
     };
     const text = PermissionPromptUI.createPromptLines(WIDTH, request)

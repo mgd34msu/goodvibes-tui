@@ -328,10 +328,10 @@ export function renderCodeBlock(
         ? (hlLines[i] as HLToken[])
         : regexTokenize(rawLine);
 
-    const line: Cell[] = new Array(width).fill(null).map(() => createStyledCell(' ', { bg: BG }));
-    // Clear left margin — no code block bg in margin area
-    for (let m = 0; m < leftMargin; m++) {
-      line[m] = createStyledCell(' ');
+    const line: Cell[] = createEmptyLine(width);
+    // Paint only the code-block body band so body rows match the header/footer width.
+    for (let x = leftMargin; x < effectiveWidth; x++) {
+      line[x] = createStyledCell(' ', { bg: BG });
     }
 
     let cx = leftMargin;

@@ -1,5 +1,6 @@
 import { describe, test, expect } from 'bun:test';
 import { renderCodeBlock } from '../../renderer/code-block.ts';
+import { LAYOUT } from '../../renderer/layout.ts';
 import { lineToString } from '../setup.ts';
 
 const WIDTH = 80;
@@ -97,6 +98,16 @@ describe('renderCodeBlock', () => {
     const codeCells = bodyLine.filter((c) => c.char !== ' ');
     if (codeCells.length > 0) {
       expect(codeCells[0].bg).toBe('#0d0d0d');
+    }
+  });
+
+  test('body rows keep the shared right margin unpainted', () => {
+    const result = renderCodeBlock(['const x = 1;'], 'ts', WIDTH);
+    const bodyLine = result[1];
+    const contentEnd = WIDTH - LAYOUT.RIGHT_MARGIN;
+
+    for (let x = contentEnd; x < WIDTH; x++) {
+      expect(bodyLine[x]?.bg).toBe('');
     }
   });
 

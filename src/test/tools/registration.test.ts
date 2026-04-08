@@ -3,10 +3,10 @@ import { ToolRegistry } from '../../tools/registry.ts';
 import { registerAllTools } from '../../tools/index.ts';
 
 describe('registerAllTools', () => {
-  test('registers exactly 22 tools', () => {
+  test('registers exactly 21 tools', () => {
     const registry = new ToolRegistry();
     registerAllTools(registry);
-    expect(registry.list()).toHaveLength(22);
+    expect(registry.list()).toHaveLength(21);
   });
 
   test('registers a tool named "read"', () => {
@@ -81,12 +81,13 @@ describe('registerAllTools', () => {
     expect(registry.has('registry')).toBe(true);
   });
 
-  test('registers breadth tools for control, powershell, task, team, worklist, mcp_resource, question, brief, remote, and repl', () => {
+  test('registers breadth tools for control, task, team, worklist, mcp, query, packet, remote, and repl', () => {
     const registry = new ToolRegistry();
     registerAllTools(registry);
-    for (const name of ['control', 'powershell', 'task', 'team', 'worklist', 'mcp_resource', 'question', 'brief', 'remote', 'repl']) {
+    for (const name of ['control', 'task', 'team', 'worklist', 'mcp', 'query', 'packet', 'remote', 'repl']) {
       expect(registry.has(name)).toBe(true);
     }
+    expect(registry.has('powershell')).toBe(false);
   });
 
   test('each tool has a definition with name and description', () => {
