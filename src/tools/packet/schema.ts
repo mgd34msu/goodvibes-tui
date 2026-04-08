@@ -1,13 +1,13 @@
 import type { ToolDefinition } from '../../types/tools.ts';
 
-export const BRIEF_TOOL_SCHEMA: ToolDefinition = {
-  name: 'brief',
-  description: 'Manage durable implementation briefs and published execution packets.',
+export const PACKET_TOOL_SCHEMA: ToolDefinition = {
+  name: 'packet',
+  description: 'Manage durable implementation packets and published execution packets.',
   parameters: {
     type: 'object',
     properties: {
       mode: { type: 'string', enum: ['create', 'list', 'show', 'revise', 'publish'] },
-      briefId: { type: 'string' },
+      packetId: { type: 'string' },
       title: { type: 'string' },
       summary: { type: 'string' },
       goals: { type: 'array', items: { type: 'string' } },
@@ -20,9 +20,9 @@ export const BRIEF_TOOL_SCHEMA: ToolDefinition = {
   },
 };
 
-export interface BriefToolInput {
+export interface PacketToolInput {
   readonly mode: 'create' | 'list' | 'show' | 'revise' | 'publish';
-  readonly briefId?: string;
+  readonly packetId?: string;
   readonly title?: string;
   readonly summary?: string;
   readonly goals?: readonly string[];

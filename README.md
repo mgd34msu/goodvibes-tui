@@ -60,7 +60,7 @@ The runtime is organized around typed store domains, typed runtime events, a sha
 - Built-in planning/strategy layer with execution plans, adaptive plan modes, and status/explain/override controls
 
 ### Tools And Intelligence
-- Built-in native tools: `read`, `write`, `edit`, `find`, `exec`, `fetch`, `analyze`, `inspect`, `agent`, `state`, `workflow`, `registry`, `task`, `team`, `worklist`, `mcp_resource`, `brief`, `question`, `remote`, `repl`, `control`, and `powershell`
+- Built-in native tools: `read`, `write`, `edit`, `find`, `exec`, `fetch`, `analyze`, `inspect`, `agent`, `state`, `workflow`, `registry`, `task`, `team`, `worklist`, `mcp`, `packet`, `query`, `remote`, `repl`, and `control`
 - Native file tooling with notebook-aware read/write/edit, AST-aware editing, validation hooks, undo, and compact output shaping
 - Sandbox-backed REPL/eval tooling with bounded JavaScript, TypeScript, Python, SQL, and GraphQL runtimes plus persisted REPL history
 - Durable knowledge/memory substrate with reviewable records, provenance, links, scoped export/import, and task-time knowledge injection
@@ -650,7 +650,7 @@ So the product supports both direct local plugins and a curated local-first ecos
 
 ## Tools
 
-goodvibes-tui ships 22 built-in tools. They cover native file and shell operations, bounded eval, coordination/work management, MCP and remote control, planning artifacts, and product-control inspection surfaces.
+goodvibes-tui ships 21 built-in tools. They cover native file and shell operations, bounded eval, coordination/work management, MCP and remote control, planning artifacts, and product-control inspection surfaces.
 
 ### REPL / Eval runtimes
 
@@ -877,21 +877,20 @@ Structured execution and coordination tools beyond a single conversation turn.
 - `team`: define teams, members, lanes, and role assignments
 - `worklist`: manage durable worklists with ownership and priority
 
-### brief / question
+### packet / query
 
 Durable planning and operator-communication artifacts.
 
-- `brief`: create, revise, publish, and list implementation briefs / execution packets
-- `question`: track operator questions, answers, escalation targets, and closure state
+- `packet`: create, revise, publish, and list implementation packets / execution packets
+- `query`: track operator queries, answers, escalation targets, and closure state
 
-### mcp_resource / remote / control / powershell
+### mcp / remote / control
 
 Additional product-control tools that expose runtime breadth directly.
 
-- `mcp_resource`: inspect MCP servers, tools, schema freshness, security posture, auth posture, and quarantine controls
+- `mcp`: inspect MCP servers, tools, schema freshness, security posture, auth posture, and quarantine controls
 - `remote`: inspect and manage remote runner pools, contracts, artifacts, and review flows
 - `control`: inspect packaged command families, panel/control-room families, built-in subscription providers, and sandbox presets
-- `powershell`: inspect PowerShell availability and run bounded PowerShell commands where supported
 
 ### registry
 

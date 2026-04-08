@@ -5,13 +5,12 @@ import { join } from 'node:path';
 import { taskTool } from '../../tools/task/index.ts';
 import { teamTool } from '../../tools/team/index.ts';
 import { worklistTool } from '../../tools/worklist/index.ts';
-import { briefTool } from '../../tools/brief/index.ts';
-import { questionTool } from '../../tools/question/index.ts';
+import { packetTool } from '../../tools/packet/index.ts';
+import { queryTool } from '../../tools/query/index.ts';
 import { remoteTool } from '../../tools/remote-trigger/index.ts';
 import { replTool } from '../../tools/repl/index.ts';
-import { mcpResourceTool } from '../../tools/mcp-resource/index.ts';
+import { mcpTool } from '../../tools/mcp/index.ts';
 import { controlTool } from '../../tools/control/index.ts';
-import { powershellTool } from '../../tools/powershell/index.ts';
 import { _resetForTesting as resetSessionOrchestration } from '../../sessions/orchestration/registry.ts';
 import { _resetRemoteRunnerRegistryForTesting, getRemoteRunnerRegistry } from '../../runtime/remote/runner-registry.ts';
 
@@ -105,35 +104,35 @@ describe('tool breadth additions', () => {
     expect(listed.output).toContain('roadmap-2');
   });
 
-  test('brief and question tools manage durable operator packets and Q&A', async () => {
-    const brief = await briefTool.execute({
+  test('packet and query tools manage durable operator packets and Q&A', async () => {
+    const packet = await packetTool.execute({
       mode: 'create',
-      briefId: 'bridge-rollout',
+      packetId: 'bridge-rollout',
       title: 'Bridge rollout',
       summary: 'Roll out the self-hosted bridge path.',
       goals: ['runner pools', 'artifact review'],
       constraints: ['no SaaS'],
       risks: ['mis-scoped trust'],
     });
-    expect(brief.success).toBe(true);
-    expect(brief.output).toContain('bridge-rollout');
+    expect(packet.success).toBe(true);
+    expect(packet.output).toContain('bridge-rollout');
 
-    const publish = await briefTool.execute({ mode: 'publish', briefId: 'bridge-rollout' });
+    const publish = await packetTool.execute({ mode: 'publish', packetId: 'bridge-rollout' });
     expect(publish.success).toBe(true);
     expect(publish.output).toContain('"status":"published"');
 
-    const question = await questionTool.execute({
+    const query = await queryTool.execute({
       mode: 'ask',
-      questionId: 'q-1',
+      queryId: 'q-1',
       prompt: 'Should remote pools inherit parent trust?',
       askedBy: 'operator',
       target: 'security-review',
     });
-    expect(question.success).toBe(true);
+    expect(query.success).toBe(true);
 
-    const answer = await questionTool.execute({
+    const answer = await queryTool.execute({
       mode: 'answer',
-      questionId: 'q-1',
+      queryId: 'q-1',
       answer: 'Yes, but only as an upper capability ceiling.',
     });
     expect(answer.success).toBe(true);
@@ -192,16 +191,16 @@ describe('tool breadth additions', () => {
     expect(history.output).toContain('Math.max(a, b)');
   });
 
-  test('mcp resource tool reports current MCP posture', async () => {
-    const security = await mcpResourceTool.execute({ mode: 'security' });
+  test('mcp tool reports current MCP posture', async () => {
+    const security = await mcpTool.execute({ mode: 'security' });
     expect(security.success).toBe(true);
     expect(security.output).toContain('recentDecisions');
 
-    const auth = await mcpResourceTool.execute({ mode: 'auth' });
+    const auth = await mcpTool.execute({ mode: 'auth' });
     expect(auth.success).toBe(true);
     expect(auth.output).toContain('servers');
 
-    const resources = await mcpResourceTool.execute({ mode: 'resources' });
+    const resources = await mcpTool.execute({ mode: 'resources' });
     expect(resources.success).toBe(true);
     expect(resources.output).toContain('servers');
   });
@@ -216,9 +215,4 @@ describe('tool breadth additions', () => {
     expect(presets.output).toContain('secure-balanced');
   });
 
-  test('powershell tool reports availability without requiring pwsh on every host', async () => {
-    const availability = await powershellTool.execute({ mode: 'availability' });
-    expect(availability.success).toBe(true);
-    expect(availability.output).toContain('available');
-  });
 });

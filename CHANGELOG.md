@@ -59,6 +59,7 @@ All notable changes to GoodVibes TUI.
 
 - Substantially rewrote the README to cover the current renderer architecture, operator control rooms, routing model, sandbox/QEMU flows, local auth, remote/runtime surfaces, line-number modes, return-context settings, guidance modes, and secret-storage policy
 - Updated slash-command and architecture documentation to match the current product shape rather than the older pre-roadmap surfaces
+- Renamed the `brief`, `question`, and `mcp_resource` tool surfaces to `packet`, `query`, and `mcp`, including the durable storage-file renames for `packet` and `query`, and removed the `powershell` tool from the built-in tool inventory
 - Added regression coverage for modal focus restoration, UI primitives, shell panel openers, selection-copy behavior, transcript event navigation, and updated panel/control-room expectations
 - Re-ran full typecheck and full test suite for the release state
 

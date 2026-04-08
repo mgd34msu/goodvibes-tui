@@ -1,9 +1,9 @@
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { Tool } from '../../types/tools.ts';
-import { QUESTION_TOOL_SCHEMA, type QuestionToolInput } from './schema.ts';
+import { QUERY_TOOL_SCHEMA, type QueryToolInput } from './schema.ts';
 
-interface QuestionRecord {
+interface QueryRecord {
   readonly id: string;
   readonly prompt: string;
   readonly askedBy?: string;
@@ -15,26 +15,26 @@ interface QuestionRecord {
   readonly updatedAt: number;
 }
 
-const QUESTIONS_PATH = join('.goodvibes', 'tui', 'questions.json');
+const QUERIES_PATH = join('.goodvibes', 'tui', 'queries.json');
 
-function loadQuestions(): QuestionRecord[] {
+function loadQueries(): QueryRecord[] {
   try {
-    return JSON.parse(readFileSync(QUESTIONS_PATH, 'utf-8')) as QuestionRecord[];
+    return JSON.parse(readFileSync(QUERIES_PATH, 'utf-8')) as QueryRecord[];
   } catch {
     return [];
   }
 }
 
-function saveQuestions(records: readonly QuestionRecord[]): void {
+function saveQueries(records: readonly QueryRecord[]): void {
   mkdirSync(join('.goodvibes', 'tui'), { recursive: true });
-  writeFileSync(QUESTIONS_PATH, `${JSON.stringify(records, null, 2)}\n`, 'utf-8');
+  writeFileSync(QUERIES_PATH, `${JSON.stringify(records, null, 2)}\n`, 'utf-8');
 }
 
-export const questionTool: Tool = {
+export const queryTool: Tool = {
   definition: {
-    name: 'question',
-    description: 'Track operator questions, answers, escalation, and closure.',
-    parameters: QUESTION_TOOL_SCHEMA.parameters,
+    name: 'query',
+    description: 'Track operator queries, answers, escalation, and closure.',
+    parameters: QUERY_TOOL_SCHEMA.parameters,
     sideEffects: ['workflow', 'state'],
     concurrency: 'serial',
   },
@@ -43,16 +43,16 @@ export const questionTool: Tool = {
     if (!args || typeof args !== 'object' || typeof args.mode !== 'string') {
       return { success: false, error: 'Invalid args: mode is required.' };
     }
-    const input = args as unknown as QuestionToolInput;
-    const records = loadQuestions();
+    const input = args as unknown as QueryToolInput;
+    const records = loadQueries();
 
     if (input.mode === 'ask') {
-      if (!input.questionId || !input.prompt) {
-        return { success: false, error: 'ask requires questionId and prompt.' };
+      if (!input.queryId || !input.prompt) {
+        return { success: false, error: 'ask requires queryId and prompt.' };
       }
       const now = Date.now();
-      const record: QuestionRecord = {
-        id: input.questionId,
+      const record: QueryRecord = {
+        id: input.queryId,
         prompt: input.prompt,
         ...(input.askedBy ? { askedBy: input.askedBy } : {}),
         ...(input.target ? { target: input.target } : {}),
@@ -60,16 +60,16 @@ export const questionTool: Tool = {
         createdAt: now,
         updatedAt: now,
       };
-      saveQuestions([...records.filter((entry) => entry.id !== record.id), record]);
+      saveQueries([...records.filter((entry) => entry.id !== record.id), record]);
       return { success: true, output: JSON.stringify(record) };
     }
 
     if (input.mode === 'list') {
-      return { success: true, output: JSON.stringify({ count: records.length, questions: records }) };
+      return { success: true, output: JSON.stringify({ count: records.length, queries: records }) };
     }
 
-    const record = records.find((entry) => entry.id === input.questionId);
-    if (!record) return { success: false, error: `Unknown question: ${input.questionId ?? '(missing)'}` };
+    const record = records.find((entry) => entry.id === input.queryId);
+    if (!record) return { success: false, error: `Unknown query: ${input.queryId ?? '(missing)'}` };
 
     if (input.mode === 'show') {
       return { success: true, output: JSON.stringify(record) };
@@ -77,24 +77,24 @@ export const questionTool: Tool = {
 
     if (input.mode === 'answer') {
       if (!input.answer) return { success: false, error: 'answer requires answer text.' };
-      const next: QuestionRecord = {
+      const next: QueryRecord = {
         ...record,
         answer: input.answer,
         status: 'answered',
         updatedAt: Date.now(),
       };
-      saveQuestions(records.map((entry) => (entry.id === next.id ? next : entry)));
+      saveQueries(records.map((entry) => (entry.id === next.id ? next : entry)));
       return { success: true, output: JSON.stringify(next) };
     }
 
     if (input.mode === 'close') {
-      const next: QuestionRecord = {
+      const next: QueryRecord = {
         ...record,
         ...(input.resolution ? { resolution: input.resolution } : {}),
         status: 'closed',
         updatedAt: Date.now(),
       };
-      saveQuestions(records.map((entry) => (entry.id === next.id ? next : entry)));
+      saveQueries(records.map((entry) => (entry.id === next.id ? next : entry)));
       return { success: true, output: JSON.stringify(next) };
     }
 

@@ -44,7 +44,7 @@ export function classifyPermissionRiskFamily(
   const target = String(analysis.target ?? '');
   const command = typeof args.command === 'string' ? args.command : '';
 
-  if (toolName === 'mcp_resource' && args.mode === 'set-trust' && args.trustMode === 'allow-all') {
+  if (toolName === 'mcp' && args.mode === 'set-trust' && args.trustMode === 'allow-all') {
     return { family: 'mcp-escalation', level: 'critical', headline: 'MCP trust escalation' };
   }
   if ((toolName === 'remote' || toolName === 'remote_trigger') || (toolName === 'agent' && typeof args.template === 'string' && String(args.template).includes('remote'))) {

@@ -1,13 +1,13 @@
 import type { ToolDefinition } from '../../types/tools.ts';
 
-export const QUESTION_TOOL_SCHEMA: ToolDefinition = {
-  name: 'question',
-  description: 'Track operator questions, answers, escalation, and closure.',
+export const QUERY_TOOL_SCHEMA: ToolDefinition = {
+  name: 'query',
+  description: 'Track operator queries, answers, escalation, and closure.',
   parameters: {
     type: 'object',
     properties: {
       mode: { type: 'string', enum: ['ask', 'list', 'show', 'answer', 'close'] },
-      questionId: { type: 'string' },
+      queryId: { type: 'string' },
       prompt: { type: 'string' },
       askedBy: { type: 'string' },
       target: { type: 'string' },
@@ -19,9 +19,9 @@ export const QUESTION_TOOL_SCHEMA: ToolDefinition = {
   },
 };
 
-export interface QuestionToolInput {
+export interface QueryToolInput {
   readonly mode: 'ask' | 'list' | 'show' | 'answer' | 'close';
-  readonly questionId?: string;
+  readonly queryId?: string;
   readonly prompt?: string;
   readonly askedBy?: string;
   readonly target?: string;

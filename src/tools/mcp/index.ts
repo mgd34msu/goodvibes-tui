@@ -1,12 +1,12 @@
 import type { Tool } from '../../types/tools.ts';
 import { mcpRegistry } from '../../mcp/registry.ts';
-import { MCP_RESOURCE_TOOL_SCHEMA, type McpResourceToolInput } from './schema.ts';
+import { MCP_TOOL_SCHEMA, type McpToolInput } from './schema.ts';
 
-export const mcpResourceTool: Tool = {
+export const mcpTool: Tool = {
   definition: {
-    name: 'mcp_resource',
+    name: 'mcp',
     description: 'Inspect MCP servers, tools, schemas, and trust state.',
-    parameters: MCP_RESOURCE_TOOL_SCHEMA.parameters,
+    parameters: MCP_TOOL_SCHEMA.parameters,
     sideEffects: ['state'],
     concurrency: 'serial',
   },
@@ -15,7 +15,7 @@ export const mcpResourceTool: Tool = {
     if (!args || typeof args !== 'object' || typeof args.mode !== 'string') {
       return { success: false, error: 'Invalid args: mode is required.' };
     }
-    const input = args as unknown as McpResourceToolInput;
+    const input = args as unknown as McpToolInput;
 
     if (input.mode === 'servers') {
       return { success: true, output: JSON.stringify({ servers: mcpRegistry.listServers() }) };

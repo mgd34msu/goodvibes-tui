@@ -1,7 +1,7 @@
 import type { ToolDefinition } from '../../types/tools.ts';
 
-export const MCP_RESOURCE_TOOL_SCHEMA: ToolDefinition = {
-  name: 'mcp_resource',
+export const MCP_TOOL_SCHEMA: ToolDefinition = {
+  name: 'mcp',
   description: 'Inspect MCP servers, tools, security posture, and quarantine state.',
   parameters: {
     type: 'object',
@@ -27,7 +27,7 @@ export const MCP_RESOURCE_TOOL_SCHEMA: ToolDefinition = {
   },
 };
 
-export interface McpResourceToolInput {
+export interface McpToolInput {
   readonly mode: 'servers' | 'tools' | 'schema' | 'resources' | 'security' | 'auth' | 'approve-quarantine' | 'set-trust' | 'set-role';
   readonly qualifiedName?: string;
   readonly serverName?: string;
