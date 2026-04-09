@@ -2,7 +2,7 @@
 
 A terminal-native AI coding and operations console with multi-provider LLM support, typed runtime systems, and a Unicode-rich custom renderer.
 
-Version: **0.15.2**
+Version: **0.15.3**
 
 <!-- screenshot -->
 
@@ -54,6 +54,8 @@ The runtime is organized around typed store domains, typed runtime events, a sha
 - Summary-first heavy panels with posture, issues, next actions, and detail regions instead of raw inventories first
 - Routed system-message workspace for startup discovery and operational noise that does not belong in the main conversation
 - Cross-panel actions between Explorer, Preview, and Symbols so file browsing can open previews and jump to symbol locations directly from panel focus
+- Live panels stay subscribed while open, so switching tabs no longer freezes agent/tool/thinking updates until the panel is reopened
+- Dedicated `Agents` panel provides a view-only live peek into running agent sessions while the background-process strip remains the fast-access surface below the prompt
 
 ### Modal And Selection UX
 - Modal stack navigation that unwinds correctly back to the slash-command menu and prior nested modals
@@ -64,6 +66,7 @@ The runtime is organized around typed store domains, typed runtime events, a sha
 ### Token And Usage Visibility
 - Live thinking-strip token output that continues to advance even when visible response streaming is disabled
 - Fresh-input versus cached-context accounting in the footer and token surfaces, so per-turn request counts stop double-counting cache-read tokens while the context bar still reflects the full prompt footprint
+- Reasoning-heavy OpenAI/OpenAI-compatible streams now advance live token/output indicators even when providers emit reasoning deltas instead of plain text deltas
 
 ### Agents, Tasks, And WRFC
 - In-process agents with isolated history, scoped tools, optional worktrees, and structured communication lanes
@@ -91,6 +94,7 @@ The runtime is organized around typed store domains, typed runtime events, a sha
 - Curated marketplace, plugin trust model, quarantine engine, rollback flows, recommendations, and product-control commands
 - MCP lifecycle with trust posture, quarantine, reconnect behavior, repair flows, and tool projection into the main registry
 - Remote runner registry, pool-aware dispatch, replay/review artifacts, and operator-facing remote inspection/recovery surfaces
+- Second TUI instances now skip already-owned daemon/listener ports cleanly instead of hanging while trying to start duplicate local services
 
 ### Runtime Foundations
 - Typed runtime store and typed runtime-event system with domain-specific dispatch instead of ad hoc mutation

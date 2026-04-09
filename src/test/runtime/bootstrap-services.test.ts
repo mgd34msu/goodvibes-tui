@@ -46,6 +46,8 @@ describe('startExternalServices', () => {
       {
         createDaemonServer: daemonFactory,
         createHttpListener: listenerFactory,
+        probeDaemonPortInUse: async () => false,
+        probeHttpListenerPortInUse: async () => false,
       },
     );
 
@@ -97,6 +99,8 @@ describe('startExternalServices', () => {
       runtimeBus,
       hookDispatcher,
       {
+        probeDaemonPortInUse: async () => false,
+        probeHttpListenerPortInUse: async () => false,
         createDaemonServer: () => ({
           enable: mock(() => true),
           start: mock(async () => {
@@ -124,6 +128,8 @@ describe('startExternalServices', () => {
       runtimeBus,
       hookDispatcher,
       {
+        probeDaemonPortInUse: async () => false,
+        probeHttpListenerPortInUse: async () => false,
         createDaemonServer: () => ({
           enable: mock(() => true),
           start: daemonStart,
@@ -142,5 +148,57 @@ describe('startExternalServices', () => {
     expect(services.daemonServer).not.toBeNull();
     expect(services.httpListener).toBeNull();
     expect(daemonStart).toHaveBeenCalled();
+  });
+
+  test('skips daemon startup when another process already owns the default port', async () => {
+    const daemonStart = mock(async () => {});
+    const services = await startExternalServices(
+      createConfig({ daemon: true }),
+      runtimeBus,
+      hookDispatcher,
+      {
+        probeDaemonPortInUse: async () => true,
+        createDaemonServer: () => ({
+          enable: mock(() => true),
+          start: daemonStart,
+          stop: mock(async () => {}),
+        }),
+      },
+    );
+
+    expect(services.daemonServer).toBeNull();
+    expect(daemonStart).not.toHaveBeenCalled();
+  });
+
+  test('continues boot when daemon startup hangs', async () => {
+    const daemonStart = mock(async () => {
+      await new Promise(() => {});
+    });
+    const listenerStart = mock(async () => {});
+
+    const services = await startExternalServices(
+      createConfig({ daemon: true, httpListener: true }),
+      runtimeBus,
+      hookDispatcher,
+      {
+        startupTimeoutMs: 20,
+        probeDaemonPortInUse: async () => false,
+        probeHttpListenerPortInUse: async () => false,
+        createDaemonServer: () => ({
+          enable: mock(() => true),
+          start: daemonStart,
+          stop: mock(async () => {}),
+        }),
+        createHttpListener: () => ({
+          enable: mock(() => true),
+          start: listenerStart,
+          stop: mock(async () => {}),
+        }),
+      },
+    );
+
+    expect(services.daemonServer).toBeNull();
+    expect(services.httpListener).not.toBeNull();
+    expect(listenerStart).toHaveBeenCalled();
   });
 });

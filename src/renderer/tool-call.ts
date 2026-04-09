@@ -164,7 +164,7 @@ export function renderToolCallBlock(
     }
     return status === 'executing' ? '...' : '';
   })();
-  const leftText = line.map((cell) => cell.char).join('').trimEnd();
+  const leftText = line.map((cell) => cell.char).join('').trim();
   const normalized = renderConversationKeyValueRow(width, leftText, rightText, {
     leftFg: '#e2e8f0',
     rightFg: '238',

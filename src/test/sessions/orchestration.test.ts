@@ -298,6 +298,37 @@ describe('SessionTaskGraph', () => {
   });
 });
 
+describe('CrossSessionTaskRegistry lifecycle', () => {
+  let baseExitListeners = 0;
+
+  beforeEach(() => {
+    baseExitListeners = process.listenerCount('exit');
+  });
+
+  afterEach(() => {
+    _resetForTesting();
+  });
+
+  test('dispose removes the process exit listener it installs', () => {
+    const registry = new CrossSessionTaskRegistry();
+    expect(process.listenerCount('exit')).toBe(baseExitListeners + 1);
+
+    registry.dispose();
+
+    expect(process.listenerCount('exit')).toBe(baseExitListeners);
+  });
+
+  test('disposeSessionOrchestration tears down the singleton without leaving exit listeners behind', () => {
+    const registry = getSessionOrchestration();
+    expect(registry).toBeDefined();
+    expect(process.listenerCount('exit')).toBe(baseExitListeners + 1);
+
+    _resetForTesting();
+
+    expect(process.listenerCount('exit')).toBe(baseExitListeners);
+  });
+});
+
 // ── CrossSessionTaskRegistry persistence ─────────────────────────────────────
 
 describe('CrossSessionTaskRegistry persistence', () => {

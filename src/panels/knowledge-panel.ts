@@ -63,8 +63,7 @@ export class KnowledgePanel extends BasePanel {
   }
 
   public override onDeactivate(): void {
-    this.unsubscribe?.();
-    this.unsubscribe = undefined;
+    super.onDeactivate();
   }
 
   public override onDestroy(): void {

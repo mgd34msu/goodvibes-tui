@@ -175,6 +175,8 @@ export type BootstrapContext = RuntimeContext & {
   agentStatusIntervalRef: { value: ReturnType<typeof setInterval> | null };
   /** Mutable refs for viewport/scroll/render functions; main.ts patches these after constructing UI state. */
   orchestratorRefs: { getViewportHeight: () => number; scrollToEnd: (vHeight: number) => void; requestRender: () => void };
+  /** Patch the bootstrap-owned render bridge after main.ts constructs the real render loop. */
+  setRenderRequest: (fn: () => void) => void;
   /** Shell-owned permission prompt bridge that main.ts patches after UI setup. */
   permissionPromptRef: { requestPermission: PermissionRequestHandler };
   /** Load the most recently saved conversation from disk. */
@@ -819,6 +821,7 @@ export async function bootstrapRuntime(
   // ── System message router ────────────────────────────────────────────────
   // Instantiated here so bootstrap event handlers can route through it.
   const systemMessageRouter = createSystemMessageRouter(conversation, systemMessagesPanel);
+  orchestrator.setSystemMessageRouter(systemMessageRouter);
   scheduleMcpAutodiscovery({
     mcpRegistry,
     systemMessageRouter,
@@ -963,6 +966,9 @@ export async function bootstrapRuntime(
     bootstrapUnsubs,
     agentStatusIntervalRef,
     orchestratorRefs,
+    setRenderRequest: (fn: () => void) => {
+      renderRequestRef.value = fn;
+    },
     permissionPromptRef,
     loadLastConversation: loadLastConversation,
     _writeLastSessionPointer: writeLastSessionPointer,

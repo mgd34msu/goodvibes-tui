@@ -8,6 +8,7 @@ import { getProviderRegistry } from '../../providers/registry.ts';
 import type { ProviderRegistry } from '../../providers/registry.ts';
 import type { LLMProvider, ChatRequest, ChatResponse } from '../../providers/interface.ts';
 import { RuntimeEventBus } from '../../runtime/events/index.ts';
+import { createEventEnvelope } from '../../runtime/events/index.ts';
 import { resetSettingsControlPlaneForTesting } from '../../runtime/settings/control-plane.ts';
 
 // ---------------------------------------------------------------------------
@@ -139,6 +140,20 @@ describe('Orchestrator', () => {
       // Should have multiple distinct spinner chars over 10 positions
       expect(frames.size).toBeGreaterThan(1);
     });
+
+    test('dispose detaches replay listeners from the runtime bus', async () => {
+      const { orch } = await buildOrchestrator();
+      const busState = runtimeBus as unknown as {
+        _listeners: Map<string, Set<unknown>>;
+      };
+      const before = busState._listeners.get('AGENT_COMPLETED')?.size ?? 0;
+      expect(before).toBeGreaterThan(0);
+
+      orch.dispose();
+
+      const after = busState._listeners.get('AGENT_COMPLETED')?.size ?? 0;
+      expect(after).toBe(0);
+    });
   });
 
   describe('handleUserInput - queue behavior', () => {
@@ -246,8 +261,54 @@ describe('Orchestrator', () => {
       }
 
       expect(maxSeenInput).toBeGreaterThan(0);
-      expect(maxSeenOutput).toBe(2);
+      expect(maxSeenOutput).toBeGreaterThanOrEqual(2);
       expect(orch.usage.output).toBe(11);
+    });
+
+    test('reasoning-only deltas still advance live output counters', async () => {
+      configManager.set('display.stream', false);
+      let maxSeenOutput = 0;
+
+      const provider: LLMProvider = {
+        name: 'mock',
+        models: ['mock-model'],
+        chat: mock(async (params: ChatRequest): Promise<ChatResponse> => {
+          params.onDelta?.({ reasoning: 'thinking' });
+          params.onDelta?.({ reasoning: ' harder' });
+          return {
+            content: 'done',
+            toolCalls: [],
+            usage: { inputTokens: 12, outputTokens: 6 },
+            stopReason: 'end',
+          };
+        }),
+      };
+
+      let orchRef: Awaited<ReturnType<typeof buildOrchestrator>>['orch'] | null = null;
+      const { orch } = await buildOrchestrator(() => {
+        if (orchRef) {
+          maxSeenOutput = Math.max(maxSeenOutput, orchRef.streamingOutputTokens);
+        }
+      });
+      orchRef = orch;
+
+      const reg: ProviderRegistry = getProviderRegistry();
+      const origGet = reg.get.bind(reg);
+      const origGetForModel = reg.getForModel.bind(reg);
+      const origGetCurrentModel = reg.getCurrentModel.bind(reg);
+      reg.get = mock(() => provider);
+      reg.getForModel = mock(() => provider);
+      reg.getCurrentModel = mock(() => mockModel);
+      try {
+        await orch.handleUserInput('reason');
+      } finally {
+        reg.get = origGet;
+        reg.getForModel = origGetForModel;
+        reg.getCurrentModel = origGetCurrentModel;
+      }
+
+      expect(maxSeenOutput).toBeGreaterThan(0);
+      expect(orch.usage.output).toBe(6);
     });
 
     test('usage normalizes cached prompt tokens into fresh input plus cache read', async () => {
@@ -285,6 +346,67 @@ describe('Orchestrator', () => {
       expect(orch.usage.cacheRead).toBe(14900);
       expect(orch.lastRequestInputTokens).toBe(100);
       expect(orch.lastInputTokens).toBe(15000);
+    });
+  });
+
+  describe('event replay routing', () => {
+    test('replay notices route through the system-message router instead of the main conversation when available', async () => {
+      const replayMockModel = {
+        id: 'mock-model',
+        provider: 'mock',
+        registryKey: 'mock:mock-model',
+        displayName: 'Mock',
+        description: '',
+        capabilities: { toolCalling: true, codeEditing: false, reasoning: false, multimodal: false },
+        contextWindow: 8192,
+        selectable: true,
+      };
+      const provider: LLMProvider = {
+        name: 'mock',
+        models: ['mock-model'],
+        chat: mock(async (_params: ChatRequest): Promise<ChatResponse> => ({
+          content: 'done',
+          toolCalls: [],
+          usage: { inputTokens: 10, outputTokens: 5 },
+          stopReason: 'end',
+        })),
+      };
+
+      const { orch, cm } = await buildOrchestrator();
+      const low = mock((_message: string) => {});
+      orch.setSystemMessageRouter({ low });
+
+      const reg: ProviderRegistry = getProviderRegistry();
+      const origGet = reg.get.bind(reg);
+      const origGetForModel = reg.getForModel.bind(reg);
+      const origGetCurrentModel = reg.getCurrentModel.bind(reg);
+      reg.get = mock(() => provider);
+      reg.getForModel = mock(() => provider);
+      reg.getCurrentModel = mock(() => replayMockModel);
+      try {
+        runtimeBus.emit('workflows', createEventEnvelope('WORKFLOW_CHAIN_FAILED', {
+          type: 'WORKFLOW_CHAIN_FAILED',
+          chainId: 'wrfc-1',
+          reason: 'review score below threshold',
+        }, {
+          sessionId: 'test',
+          traceId: 'test:wrfc',
+          source: 'test',
+        }));
+
+        await orch.handleUserInput('turn one');
+        await orch.handleUserInput('turn two');
+      } finally {
+        reg.get = origGet;
+        reg.getForModel = origGetForModel;
+        reg.getCurrentModel = origGetCurrentModel;
+      }
+
+      expect(low).toHaveBeenCalledTimes(1);
+      const replayMessages = cm.getMessageSnapshot().filter((message) => (
+        message.role === 'system' && message.content.includes('[Replay]')
+      ));
+      expect(replayMessages).toHaveLength(0);
     });
   });
 

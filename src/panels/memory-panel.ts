@@ -87,8 +87,7 @@ export class MemoryPanel extends BasePanel {
   }
 
   onDeactivate(): void {
-    this.unsubscribe?.();
-    this.unsubscribe = undefined;
+    super.onDeactivate();
   }
 
   onDestroy(): void {

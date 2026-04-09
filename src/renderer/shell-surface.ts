@@ -7,6 +7,7 @@ export interface ShellFooterBuildOptions {
   readonly promptText: string;
   readonly promptLineCount: number;
   readonly promptCursorPos?: number;
+  readonly promptFocused?: boolean;
   readonly usage: { up: number; down: number };
   readonly showExitNotice: boolean;
   readonly lastCopyTime: number;
@@ -68,6 +69,7 @@ export function buildShellFooter(
     options.lastInputTokens,
     options.commandArgsHint,
     options.hitlMode,
+    options.promptFocused ?? !options.indicatorFocused,
     options.composerMode,
     options.composerStatus,
     options.composerFlags,

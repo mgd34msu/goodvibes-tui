@@ -108,6 +108,7 @@ async function main() {
     bootstrapUnsubs,
     agentStatusIntervalRef,
     orchestratorRefs,
+    setRenderRequest,
     permissionPromptRef,
     loadLastConversation,
     _writeLastSessionPointer: writeLastSessionPointer,
@@ -202,6 +203,39 @@ async function main() {
    * Clears main.ts-owned listeners, calls ctx.shutdown() for logical teardown,
    * then tears down the terminal and exits the process.
    */
+  const sigintHandler = (): void => input.feed('\x03');
+  // Track unhandled rejections to detect cascading failures
+  let _unhandledRejectionCount = 0;
+  let _unhandledRejectionWindowStart = Date.now();
+  const unhandledRejectionHandler = (reason: unknown): void => {
+    const now = Date.now();
+    if (now - _unhandledRejectionWindowStart > 10000) {
+      _unhandledRejectionCount = 0;
+      _unhandledRejectionWindowStart = now;
+    }
+    _unhandledRejectionCount++;
+    const msg = reason instanceof Error ? reason.message : String(reason);
+    if (_unhandledRejectionCount > 3) {
+      logger.error('CRITICAL: cascading unhandled rejections — consider restarting', {
+        count: _unhandledRejectionCount,
+        windowMs: now - _unhandledRejectionWindowStart,
+        error: String(reason),
+      });
+      systemMessageRouter.high(
+        `[Critical] Multiple errors detected (${_unhandledRejectionCount} in 10s). If the issue persists, please restart. Latest: ${msg}`
+      );
+    } else {
+      systemMessageRouter.high(`[Error] ${msg}`);
+      logger.error('unhandledRejection', { error: String(reason) });
+    }
+    render();
+  };
+  const resizeHandler = (): void => {
+    input.setContentWidth(getPromptContentWidth());
+    compositor.resetDiff();
+    render();
+  };
+
   const exitApp = (): void => {
     // Clear main.ts-owned event subscriptions
     unsubs.forEach(fn => fn());
@@ -215,7 +249,9 @@ async function main() {
     deleteRecoveryFile();
     // Terminal teardown — main.ts exclusively owns these
     stdin.removeAllListeners('data');
-    stdout.removeAllListeners('resize');
+    stdout.removeListener('resize', resizeHandler);
+    process.removeListener('SIGINT', sigintHandler);
+    process.removeListener('unhandledRejection', unhandledRejectionHandler);
     stdout.write(PASTE_DISABLE + KEYBOARD_EXT_DISABLE + MOUSE_DISABLE + CURSOR_SHOW + ALT_SCREEN_EXIT);
     stdin.setRawMode(false);
     process.exit(0);
@@ -367,10 +403,24 @@ async function main() {
 
     // Build header and footer FIRST so we know the exact viewport height
     const headerLines = UIFactory.createHeader(width, currentModel.id, currentModel.provider, conversation.title || undefined, lastGitInfoRef.value);
-    const runningAgents = AgentManager.getInstance().list().filter((a) => a.status === 'running' || a.status === 'pending');
-    const runningAgentCount = runningAgents.length;
-    // Show first running agent's progress (detail modal shows all)
-    const runningAgentProgress = runningAgents[0]?.progress;
+    const managerAgents = AgentManager.getInstance().list().filter(
+      (a) => a.status === 'running' || a.status === 'pending',
+    );
+    const agentDomain = store.getState().agents;
+    const runtimeAgents = agentDomain.activeAgentIds
+      .map((id) => agentDomain.agents.get(id))
+      .filter((agent): agent is NonNullable<typeof agent> => agent != null);
+    const runningAgentIds = new Set<string>();
+    let runningAgentProgress: string | undefined;
+    for (const agent of managerAgents) {
+      runningAgentIds.add(agent.id);
+      if (!runningAgentProgress && agent.progress) runningAgentProgress = agent.progress;
+    }
+    for (const agent of runtimeAgents) {
+      runningAgentIds.add(agent.id);
+      if (!runningAgentProgress && agent.latestProgress) runningAgentProgress = agent.latestProgress;
+    }
+    const runningAgentCount = runningAgentIds.size;
     const runningProcessCount = ProcessManager.getInstance().list().filter((p) => !p.status.startsWith('done')).length;
     const cw = getPromptContentWidth();
     const promptInfo = input.getWrappedPromptInfo(cw);
@@ -556,6 +606,7 @@ async function main() {
     });
   };
 
+  setRenderRequest(render);
   orchestratorRefs.requestRender = render;
   commandContext.renderRequest = render;
   wireShellUiOpeners({
@@ -638,38 +689,9 @@ async function main() {
 
     input.feed(data);
   });
-  process.on('SIGINT', () => input.feed('\x03'));
-  // Track unhandled rejections to detect cascading failures
-  let _unhandledRejectionCount = 0;
-  let _unhandledRejectionWindowStart = Date.now();
-  process.on('unhandledRejection', (reason: unknown) => {
-    const now = Date.now();
-    if (now - _unhandledRejectionWindowStart > 10000) {
-      _unhandledRejectionCount = 0;
-      _unhandledRejectionWindowStart = now;
-    }
-    _unhandledRejectionCount++;
-    const msg = reason instanceof Error ? reason.message : String(reason);
-    if (_unhandledRejectionCount > 3) {
-      logger.error('CRITICAL: cascading unhandled rejections — consider restarting', {
-        count: _unhandledRejectionCount,
-        windowMs: now - _unhandledRejectionWindowStart,
-        error: String(reason),
-      });
-      systemMessageRouter.high(
-        `[Critical] Multiple errors detected (${_unhandledRejectionCount} in 10s). If the issue persists, please restart. Latest: ${msg}`
-      );
-    } else {
-      systemMessageRouter.high(`[Error] ${msg}`);
-      logger.error('unhandledRejection', { error: String(reason) });
-    }
-    render();
-  });
-  stdout.on('resize', () => {
-    input.setContentWidth(getPromptContentWidth());
-    compositor.resetDiff();
-    render();
-  });
+  process.on('SIGINT', sigintHandler);
+  process.on('unhandledRejection', unhandledRejectionHandler);
+  stdout.on('resize', resizeHandler);
 
   // Initial render
   conversation.rebuildHistory();

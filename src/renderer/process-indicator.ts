@@ -35,6 +35,26 @@ export function renderProcessIndicator(
   const renderPlainStatus = (text: string, style: { fg: string; bold?: boolean; dim?: boolean }): Line[] => (
     [UIFactory.stringToLine(`   ${text}`, width, style)]
   );
+  const renderFocusedStatus = (text: string): Line[] => {
+    const bg = '#31506f';
+    const fg = '#eefaff';
+    const markerFg = '#7dd3fc';
+    const line = UIFactory.stringToLine(' '.repeat(width), width, { fg: '238' });
+    const prefix = `${GLYPHS.navigation.selected} `;
+    const body = truncateToWidth(text, Math.max(0, width - 8));
+    const highlighted = ` ${prefix}${body} `;
+    const startX = 2;
+    for (let i = 0; i < highlighted.length && startX + i < width - 2; i++) {
+      const ch = highlighted[i]!;
+      const isMarker = i < prefix.length + 1;
+      line[startX + i].char = ch;
+      line[startX + i].fg = isMarker ? markerFg : fg;
+      line[startX + i].bg = bg;
+      line[startX + i].bold = true;
+      line[startX + i].dim = false;
+    }
+    return [line];
+  };
 
   // --- Focused state: always render before idle/active branches ---
   if (focused) {
@@ -44,7 +64,7 @@ export function renderProcessIndicator(
     const label = total === 0
       ? `No background processes  ${GLYPHS.status.pending}  back to input`
       : `${parts.join(` ${GLYPHS.navigation.pipeSeparator} `)}  ${GLYPHS.status.pending}  Enter to open  ${GLYPHS.status.pending}  back to input`;
-    return renderPlainStatus(label, { fg: '#00ffff', bold: true });
+    return renderFocusedStatus(label);
   }
 
   if (total === 0) {

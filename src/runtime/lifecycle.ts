@@ -11,6 +11,7 @@ import { providerRegistry } from '../providers/registry.ts';
 import { logger } from '../utils/logger.ts';
 export { saveSession } from './session-persistence.ts';
 import { saveSession, type SessionSnapshot } from './session-persistence.ts';
+import { disposeSessionOrchestration } from '../sessions/orchestration/registry.ts';
 
 // ── Startup lifecycle ────────────────────────────────────────────────────────
 
@@ -91,4 +92,7 @@ export async function shutdownRuntime(
 
   // Step 4: stop provider registry watcher
   try { providerRegistry.stopWatching(); } catch (err) { logger.debug('providerRegistry.stopWatching failed (non-fatal)', { error: String(err) }); }
+
+  // Step 5: dispose cross-session orchestration singleton if it was initialized
+  try { disposeSessionOrchestration(); } catch (err) { logger.debug('disposeSessionOrchestration failed (non-fatal)', { error: String(err) }); }
 }

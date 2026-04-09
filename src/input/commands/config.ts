@@ -16,6 +16,26 @@ interface ConfigBundle {
   };
 }
 
+function roundToPrecision(value: number, precision: number): number {
+  const factor = 10 ** precision;
+  return Math.round(value * factor) / factor;
+}
+
+function getConfigSelectionAdjustmentMeta(schema: { key: ConfigKey; type: 'boolean' | 'number' | 'string' | 'enum' }) {
+  if (schema.type !== 'number') return {};
+  if (schema.key === 'wrfc.scoreThreshold') {
+    return {
+      adjustStep: 0.1,
+      adjustMin: 0,
+      adjustMax: 10,
+      adjustPrecision: 1,
+    };
+  }
+  return {
+    adjustStep: 1,
+  };
+}
+
 function inspectConfigBundle(bundle: ConfigBundle): string {
   const ecosystemPluginCount = bundle.ecosystem?.plugins && Array.isArray((bundle.ecosystem.plugins as { entries?: unknown[] }).entries)
     ? ((bundle.ecosystem.plugins as { entries: unknown[] }).entries.length)
@@ -308,6 +328,7 @@ export function registerConfigCommand(registry: CommandRegistry): void {
             }
             const toggleable = schema.type === 'boolean' || schema.type === 'enum';
             const adjustable = toggleable || schema.type === 'number';
+            const adjustmentMeta = getConfigSelectionAdjustmentMeta(schema);
             return {
               id: schema.key,
               label: schema.key,
@@ -315,6 +336,7 @@ export function registerConfigCommand(registry: CommandRegistry): void {
               category: schema.key.split('.')[0],
               primaryAction: toggleable ? 'toggle' as const : 'select' as const,
               adjustable,
+              ...adjustmentMeta,
               actions: schema.type === 'number'
                 ? '[←/→] adjust  [⇧←/⇧→] ±10  [Enter] inspect'
                 : toggleable
@@ -347,7 +369,13 @@ export function registerConfigCommand(registry: CommandRegistry): void {
               } else if (schema.type === 'number') {
                 const currentNumber = Number(currentValue);
                 const delta = result.action === 'decrement' ? -(result.step ?? 1) : (result.step ?? 1);
-                nextValue = currentNumber + delta;
+                const precision = result.item.adjustPrecision ?? 0;
+                const rounded = roundToPrecision(currentNumber + delta, precision);
+                const clamped = Math.min(
+                  result.item.adjustMax ?? rounded,
+                  Math.max(result.item.adjustMin ?? rounded, rounded),
+                );
+                nextValue = clamped;
               }
               cm.setDynamic(key, nextValue);
               if (key === 'provider.model') ctx.runtime.model = nextValue as string;

@@ -12,6 +12,10 @@ export interface SelectionItem {
   fg?: string;             // optional foreground color override for this item
   primaryAction?: SelectionAction; // default Enter/Space behavior for this row
   adjustable?: boolean;   // supports left/right adjustment without leaving the modal
+  adjustStep?: number;    // base step for left/right adjustments
+  adjustMin?: number;     // minimum numeric value when adjustable
+  adjustMax?: number;     // maximum numeric value when adjustable
+  adjustPrecision?: number; // decimal places to preserve for numeric adjustments
 }
 
 export type SelectionAction = 'select' | 'delete' | 'edit' | 'toggle' | 'increment' | 'decrement';

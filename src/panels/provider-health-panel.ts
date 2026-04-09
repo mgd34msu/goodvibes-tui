@@ -360,14 +360,14 @@ export class ProviderHealthPanel extends BasePanel {
   }
 
   override onDeactivate(): void {
+    super.onDeactivate();
+  }
+
+  override onDestroy(): void {
     if (this._refreshTimer !== null) {
       clearInterval(this._refreshTimer);
       this._refreshTimer = null;
     }
-  }
-
-  override onDestroy(): void {
-    this.onDeactivate();
     for (const unsub of this._unsubs) unsub();
     this._unsubs = [];
   }
