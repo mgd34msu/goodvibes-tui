@@ -1,5 +1,12 @@
 import { describe, expect, test } from 'bun:test';
-import { buildPanelLine, buildPanelWorkspace, buildSectionHeader, DEFAULT_PANEL_PALETTE } from '../../panels/polish.ts';
+import {
+  buildDetailBlock,
+  buildPanelLine,
+  buildPanelListRow,
+  buildPanelWorkspace,
+  buildSectionHeader,
+  DEFAULT_PANEL_PALETTE,
+} from '../../panels/polish.ts';
 
 describe('panel polish primitives', () => {
   test('buildPanelLine preserves exact width with wide characters', () => {
@@ -13,6 +20,23 @@ describe('panel polish primitives', () => {
   test('buildSectionHeader preserves exact width with wide characters', () => {
     const line = buildSectionHeader(32, '状态 Overview', DEFAULT_PANEL_PALETTE);
     expect(line).toHaveLength(32);
+  });
+
+  test('buildPanelListRow renders a selected marker and fill background', () => {
+    const line = buildPanelListRow(24, [
+      { text: 'Remote', fg: DEFAULT_PANEL_PALETTE.value },
+    ], DEFAULT_PANEL_PALETTE, { selected: true });
+    expect(line[0]?.char).toBe('▸');
+    expect(line[0]?.bg).toBe(DEFAULT_PANEL_PALETTE.selectBg);
+    expect(line[3]?.bg).toBe(DEFAULT_PANEL_PALETTE.selectBg);
+  });
+
+  test('buildDetailBlock lifts rows onto the shared surface background', () => {
+    const block = buildDetailBlock(24, 'Selected', [
+      buildPanelLine(24, [[' detail row', DEFAULT_PANEL_PALETTE.value]]),
+    ], DEFAULT_PANEL_PALETTE);
+    expect(block).toHaveLength(2);
+    expect(block[1]?.[0]?.bg).toBe(DEFAULT_PANEL_PALETTE.surfaceBg);
   });
 
   test('buildPanelWorkspace keeps footer lines docked at the bottom', () => {

@@ -17,9 +17,9 @@ import {
   buildPanelLine,
   buildStyledPanelLine,
   buildPanelWorkspace,
+  resolveScrollablePanelSection,
   DEFAULT_PANEL_PALETTE,
 } from './polish.ts';
-import { getVisibleWindow } from '../renderer/surface-layout.ts';
 
 const STRATEGY_FG: Record<ExecutionStrategy, string> = {
   auto:       '#00cccc',
@@ -140,15 +140,29 @@ export class OpsStrategyPanel extends BasePanel {
     }
 
     const historyLines = this._renderHistory(width);
-    const window = getVisibleWindow(historyLines.length, Math.min(this.scrollOffset, Math.max(0, historyLines.length - 1)), Math.max(8, height - 8));
-    this.scrollOffset = window.start;
+    const statusSection = { title: 'Status', lines: statusLines } as const;
+    const historySection = resolveScrollablePanelSection(width, height, {
+      intro: 'Review adaptive execution planner decisions, overrides, and recent strategy history.',
+      footerLines: [
+        buildPanelLine(width, [[' Up/Down', DEFAULT_PANEL_PALETTE.info], [' scroll history', DEFAULT_PANEL_PALETTE.dim], ['   g/G', DEFAULT_PANEL_PALETTE.info], [' top/bottom', DEFAULT_PANEL_PALETTE.dim]]),
+      ],
+      palette: DEFAULT_PANEL_PALETTE,
+      beforeSections: [statusSection],
+      section: {
+        title: 'Decision History',
+        scrollableLines: historyLines,
+        scrollOffset: Math.min(this.scrollOffset, Math.max(0, historyLines.length - 1)),
+        minRows: 8,
+      },
+    });
+    this.scrollOffset = historySection.scrollOffset;
 
     return buildPanelWorkspace(width, height, {
       title: ' Ops Strategy',
       intro: 'Review adaptive execution planner decisions, overrides, and recent strategy history.',
       sections: [
-        { title: 'Status', lines: statusLines },
-        { title: 'Decision History', lines: historyLines.slice(window.start, window.end) },
+        statusSection,
+        historySection.section,
       ],
       footerLines: [
         buildPanelLine(width, [[' Up/Down', DEFAULT_PANEL_PALETTE.info], [' scroll history', DEFAULT_PANEL_PALETTE.dim], ['   g/G', DEFAULT_PANEL_PALETTE.info], [' top/bottom', DEFAULT_PANEL_PALETTE.dim]]),

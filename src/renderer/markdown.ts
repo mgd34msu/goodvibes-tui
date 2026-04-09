@@ -11,6 +11,24 @@ export interface MarkdownRenderOptions {
 /** Module-level set of inline markdown special characters (hoisted out of hot loop). */
 const INLINE_SPECIAL_CHARS = new Set(['[', '`', '*', '_', '~']);
 
+function splitTableCells(row: string): string[] {
+  const cells = row.trim().split('|').map((c) => c.trim());
+  if (cells.length > 0 && cells[0] === '') cells.shift();
+  if (cells.length > 0 && cells[cells.length - 1] === '') cells.pop();
+  return cells;
+}
+
+function isLikelyTableSeparatorRow(row: string): boolean {
+  if (!row.includes('|')) return false;
+  const cells = splitTableCells(row);
+  if (cells.length === 0) return false;
+  return cells.every((cell) => /:?-{3,}:?/.test(cell));
+}
+
+function isLikelyTableHeaderRow(row: string): boolean {
+  return splitTableCells(row).length >= 2;
+}
+
 /**
  * renderMarkdown - Parse markdown text into styled Line[] using a line-by-line state machine.
  * Supports headers, bold, italic, inline code, code blocks, lists, and links.
@@ -133,7 +151,7 @@ export function renderMarkdown(text: string, width: number, options: MarkdownRen
     }
 
     // --- Table ---
-    if (raw.includes('|') && i + 1 < rawLines.length && /^[\s|:-]+$/.test(rawLines[i + 1])) {
+    if (raw.includes('|') && i + 1 < rawLines.length && isLikelyTableHeaderRow(raw) && isLikelyTableSeparatorRow(rawLines[i + 1])) {
       const tableRows: string[] = [];
       let j = i;
       while (j < rawLines.length && rawLines[j].includes('|')) {
@@ -188,6 +206,7 @@ export function renderMarkdownTracked(
   let codeBlockLang = '';
   let codeBlockLines: string[] = [];
   const indent = LAYOUT.LEFT_MARGIN;
+  const contentWidth = LAYOUT.contentWidth(width);
 
   for (let i = 0; i < rawLines.length; i++) {
     const raw = rawLines[i];
@@ -219,11 +238,94 @@ export function renderMarkdownTracked(
       }
       continue;
     }
-    // Delegate non-code-block lines to renderMarkdown by rendering one chunk at a time.
-    // For efficiency, re-use the full renderMarkdown for non-fence lines.
-    // We push the single line through a minimal inline render.
-    const singleLine = renderMarkdown(raw, width, options);
-    lines.push(...singleLine);
+
+    if (raw.trim() === '') {
+      lines.push(UIFactory.stringToLine('', width));
+      continue;
+    }
+
+    const h3 = raw.match(/^### (.+)/);
+    const h2 = raw.match(/^## (.+)/);
+    const h1 = raw.match(/^# (.+)/);
+    if (h1) {
+      lines.push(UIFactory.stringToLine(' '.repeat(indent) + h1[1].toUpperCase(), width, { fg: '#00ffff', bold: true }));
+      lines.push(UIFactory.stringToLine(' '.repeat(indent) + '━'.repeat(Math.min(getDisplayWidth(h1[1]), contentWidth)), width, { fg: '244' }));
+      continue;
+    }
+    if (h2) {
+      lines.push(UIFactory.stringToLine(' '.repeat(indent) + h2[1], width, { fg: '#00ffff', bold: true }));
+      lines.push(UIFactory.stringToLine(' '.repeat(indent) + '─'.repeat(Math.min(getDisplayWidth(h2[1]), contentWidth)), width, { fg: '240' }));
+      continue;
+    }
+    if (h3) {
+      lines.push(UIFactory.stringToLine(' '.repeat(indent) + h3[1], width, { fg: '111', bold: true }));
+      continue;
+    }
+
+    const taskMatch = raw.match(/^(\s*)[-*] \[([ xX])\] (.+)/);
+    if (taskMatch) {
+      const listIndent = Math.floor(taskMatch[1].length / 2);
+      const checked = taskMatch[2] !== ' ';
+      const bulletX = indent + listIndent * 2;
+      const textStartX = bulletX + 4;
+      const checkbox = checked ? '\u2611 ' : '\u2610 ';
+      const rendered = renderInlineMarkdown(taskMatch[3]);
+      const prefix = ' '.repeat(bulletX) + checkbox;
+      const style = checked ? { fg: '244', strikethrough: true } : {};
+      lines.push(...compositeInlineLine(prefix, rendered, width, { fg: checked ? '#22c55e' : '252', ...style }, textStartX));
+      continue;
+    }
+
+    const ulMatch = raw.match(/^(\s*)[-*] (.+)/);
+    if (ulMatch) {
+      const listIndent = Math.floor(ulMatch[1].length / 2);
+      const bulletX = indent + listIndent * 2;
+      const textStartX = bulletX + 2;
+      const rendered = renderInlineMarkdown(ulMatch[2]);
+      const prefix = ' '.repeat(bulletX) + '• ';
+      lines.push(...compositeInlineLine(prefix, rendered, width, { fg: '135', bold: false }, textStartX));
+      continue;
+    }
+
+    const olMatch = raw.match(/^(\s*)(\d+)\. (.+)/);
+    if (olMatch) {
+      const listIndent = Math.floor(olMatch[1].length / 2);
+      const numStr = olMatch[2] + '. ';
+      const bulletX = indent + listIndent * 2;
+      const textStartX = bulletX + numStr.length;
+      const rendered = renderInlineMarkdown(olMatch[3]);
+      const prefix = ' '.repeat(bulletX) + numStr;
+      lines.push(...compositeInlineLine(prefix, rendered, width, { fg: '135', bold: false }, textStartX));
+      continue;
+    }
+
+    if (/^[-*_]{3,}$/.test(raw.trim())) {
+      lines.push(UIFactory.stringToLine(' '.repeat(indent) + '─'.repeat(contentWidth), width, { fg: '240' }));
+      continue;
+    }
+
+    const bqMatch = raw.match(/^> (.*)/);
+    if (bqMatch) {
+      const rendered = renderInlineMarkdown(bqMatch[1]);
+      const prefix = ' '.repeat(indent) + '┃ ';
+      lines.push(...compositeInlineLine(prefix, rendered, width, { fg: '244', italic: true }, indent + 3));
+      continue;
+    }
+
+    if (raw.includes('|') && i + 1 < rawLines.length && isLikelyTableHeaderRow(raw) && isLikelyTableSeparatorRow(rawLines[i + 1])) {
+      const tableRows: string[] = [];
+      let j = i;
+      while (j < rawLines.length && rawLines[j].includes('|')) {
+        tableRows.push(rawLines[j]);
+        j++;
+      }
+      i = j - 1;
+      lines.push(...renderTable(tableRows, width, indent));
+      continue;
+    }
+
+    const rendered = renderInlineMarkdown(raw);
+    lines.push(...compositeInlineLine(' '.repeat(indent), rendered, width, {}, indent));
   }
 
   if (inCodeBlock && codeBlockLines.length > 0) {
@@ -267,14 +369,11 @@ function renderTable(rows: string[], width: number, indent: number): Line[] {
   let hasSeparator = false;
   for (const row of rows) {
     const trimmed = row.trim();
-    if (/^[\s|:-]+$/.test(trimmed) && trimmed.includes('-')) {
+    if (isLikelyTableSeparatorRow(trimmed)) {
       hasSeparator = true;
       continue;
     }
-    const cells = trimmed.split('|').map(c => c.trim());
-    // Remove empty leading/trailing from outer pipes
-    if (cells.length > 0 && cells[0] === '') cells.shift();
-    if (cells.length > 0 && cells[cells.length - 1] === '') cells.pop();
+    const cells = splitTableCells(trimmed);
     if (cells.length > 0) parsedRows.push(cells);
   }
 

@@ -2,14 +2,14 @@ import { type Line } from '../types/grid.ts';
 import { fitDisplay, getDisplayWidth, truncateDisplay } from '../utils/terminal-width.ts';
 import type { SelectionModal } from '../input/selection-modal.ts';
 import {
-  createOverlayBorderLine,
   createOverlayBoxLayout,
   createOverlayContentLine,
+  createOverlayFilledBorderLine,
   DEFAULT_OVERLAY_PALETTE,
+  OVERLAY_GLYPHS,
   putOverlayText,
 } from './overlay-box.ts';
 import { getOverlaySurfaceMetrics } from './overlay-viewport.ts';
-import { GLYPHS } from './ui-primitives.ts';
 import { fitLabelDetailColumns, wrapWithHangingIndent } from './text-layout.ts';
 
 const BORDER_FG = DEFAULT_OVERLAY_PALETTE.borderFg;
@@ -48,9 +48,9 @@ export function renderSelectionModalOverlay(
   });
   const layout = createOverlayBoxLayout(width, metrics.margin, metrics.boxWidth);
 
-  lines.push(createOverlayBorderLine(width, layout, '┌', '─', '┐', BORDER_FG));
+  lines.push(createOverlayFilledBorderLine(width, layout, OVERLAY_GLYPHS.topLeft, OVERLAY_GLYPHS.horizontal, OVERLAY_GLYPHS.topRight, BORDER_FG, DEFAULT_OVERLAY_PALETTE.titleBg));
 
-  const titleLine = createOverlayContentLine(width, layout);
+  const titleLine = createOverlayContentLine(width, layout, BORDER_FG, DEFAULT_OVERLAY_PALETTE.titleBg);
   putText(
     titleLine,
     layout.margin + 2,
@@ -61,16 +61,16 @@ export function renderSelectionModalOverlay(
   lines.push(titleLine);
 
   if (modal.allowSearch) {
-    const labelLine = createOverlayContentLine(width, layout);
+    const labelLine = createOverlayContentLine(width, layout, BORDER_FG, DEFAULT_OVERLAY_PALETTE.sectionBg);
     putText(labelLine, layout.margin + 2, layout.innerWidth, fitDisplay(' Search', layout.innerWidth), {
       fg: CATEGORY_FG,
       dim: true,
     });
     lines.push(labelLine);
-    const searchLine = createOverlayContentLine(width, layout);
+    const searchLine = createOverlayContentLine(width, layout, BORDER_FG, DEFAULT_OVERLAY_PALETTE.inputBg);
     const prefix = '/ ';
     const queryAreaWidth = layout.innerWidth - getDisplayWidth(prefix);
-    const queryValue = modal.query + (modal.searchFocused ? GLYPHS.surface.cursor : '');
+    const queryValue = modal.query + (modal.searchFocused ? OVERLAY_GLYPHS.cursor : '');
     const queryText = fitDisplay(
       truncateDisplay(queryValue, queryAreaWidth),
       queryAreaWidth,
@@ -80,12 +80,12 @@ export function renderSelectionModalOverlay(
       fg: modal.query.length > 0 || modal.searchFocused ? BODY_FG : MUTED_FG,
     });
     lines.push(searchLine);
-    lines.push(createOverlayBorderLine(width, layout, '├', '─', '┤', BORDER_FG));
+    lines.push(createOverlayFilledBorderLine(width, layout, OVERLAY_GLYPHS.teeLeft, OVERLAY_GLYPHS.horizontal, OVERLAY_GLYPHS.teeRight, BORDER_FG, DEFAULT_OVERLAY_PALETTE.sectionBg));
   } else {
-    lines.push(createOverlayContentLine(width, layout));
+    lines.push(createOverlayContentLine(width, layout, BORDER_FG, DEFAULT_OVERLAY_PALETTE.sectionBg));
   }
 
-  const listTitle = createOverlayContentLine(width, layout);
+  const listTitle = createOverlayContentLine(width, layout, BORDER_FG, DEFAULT_OVERLAY_PALETTE.sectionBg);
   putText(listTitle, layout.margin + 2, layout.innerWidth, fitDisplay(' Results', layout.innerWidth), {
     fg: CATEGORY_FG,
     dim: true,
@@ -94,7 +94,7 @@ export function renderSelectionModalOverlay(
 
   const items = modal.filteredItems;
   if (items.length === 0) {
-    const line = createOverlayContentLine(width, layout);
+    const line = createOverlayContentLine(width, layout, BORDER_FG, DEFAULT_OVERLAY_PALETTE.bodyBg);
     const message = modal.query ? 'No matching items' : 'No items';
     putText(line, layout.margin + 2, layout.innerWidth, fitDisplay(message, layout.innerWidth), { fg: MUTED_FG, dim: true });
     lines.push(line);
@@ -116,7 +116,7 @@ export function renderSelectionModalOverlay(
 
       if (item.category && item.category !== lastCategory) {
         lastCategory = item.category;
-        const categoryLine = createOverlayContentLine(width, layout);
+        const categoryLine = createOverlayContentLine(width, layout, BORDER_FG, DEFAULT_OVERLAY_PALETTE.sectionBg);
         putText(categoryLine, layout.margin + 2, layout.innerWidth, fitDisplay(`  ${item.category}`, layout.innerWidth), {
           fg: CATEGORY_FG,
           dim: true,
@@ -124,7 +124,7 @@ export function renderSelectionModalOverlay(
         lines.push(categoryLine);
       }
 
-      const indicator = isSelected ? `${GLYPHS.navigation.selected} ` : '  ';
+      const indicator = isSelected ? `${OVERLAY_GLYPHS.selected} ` : '  ';
       const indicatorWidth = 2;
       const remaining = layout.innerWidth - indicatorWidth;
       const labelColor = isSelected ? TITLE_FG : (item.fg ?? BODY_FG);
@@ -132,15 +132,15 @@ export function renderSelectionModalOverlay(
       const labelWidth = item.detail
         ? fitLabelDetailColumns(item.label, item.detail, remaining).labelWidth
         : remaining;
-      const labelLine = createOverlayContentLine(width, layout, BORDER_FG, isSelected ? SELECTED_BG : '');
-      putText(labelLine, layout.margin + 2, indicatorWidth, indicator, {
-        fg: isSelected ? TITLE_FG : MUTED_FG,
-        bg: isSelected ? SELECTED_BG : '',
-        bold: isSelected,
-      });
+      const labelLine = createOverlayContentLine(width, layout, BORDER_FG, isSelected ? SELECTED_BG : DEFAULT_OVERLAY_PALETTE.bodyBg);
+        putText(labelLine, layout.margin + 2, indicatorWidth, indicator, {
+          fg: isSelected ? TITLE_FG : MUTED_FG,
+          bg: isSelected ? SELECTED_BG : DEFAULT_OVERLAY_PALETTE.bodyBg,
+          bold: isSelected,
+        });
       putText(labelLine, layout.margin + 2 + indicatorWidth, labelWidth, fitDisplay(truncateDisplay(item.label, labelWidth), labelWidth), {
         fg: labelColor,
-        bg: isSelected ? SELECTED_BG : '',
+        bg: isSelected ? SELECTED_BG : DEFAULT_OVERLAY_PALETTE.bodyBg,
         bold: isSelected,
       });
       if (item.detail) {
@@ -148,21 +148,21 @@ export function renderSelectionModalOverlay(
         if (detailWidth >= 12) {
           putText(labelLine, layout.margin + 2 + indicatorWidth + labelWidth, 2, '  ', {
             fg: BODY_FG,
-            bg: isSelected ? SELECTED_BG : '',
+            bg: isSelected ? SELECTED_BG : DEFAULT_OVERLAY_PALETTE.bodyBg,
           });
           putText(labelLine, layout.margin + 2 + indicatorWidth + labelWidth + 2, detailWidth, fitDisplay(truncateDisplay(item.detail, detailWidth), detailWidth), {
             fg: detailColor,
-            bg: isSelected ? SELECTED_BG : '',
+            bg: isSelected ? SELECTED_BG : DEFAULT_OVERLAY_PALETTE.bodyBg,
           });
           lines.push(labelLine);
         } else {
           lines.push(labelLine);
           const wrappedDetails = wrapWithHangingIndent(item.detail, Math.max(8, remaining), '', 2);
           for (const detailLineText of wrappedDetails) {
-            const detailLine = createOverlayContentLine(width, layout, BORDER_FG, isSelected ? SELECTED_BG : '');
+            const detailLine = createOverlayContentLine(width, layout, BORDER_FG, isSelected ? SELECTED_BG : DEFAULT_OVERLAY_PALETTE.bodyBg);
             putText(detailLine, layout.margin + 2 + indicatorWidth, remaining, fitDisplay(truncateDisplay(detailLineText, remaining), remaining), {
               fg: detailColor,
-              bg: isSelected ? SELECTED_BG : '',
+              bg: isSelected ? SELECTED_BG : DEFAULT_OVERLAY_PALETTE.bodyBg,
               dim: !isSelected,
             });
             lines.push(detailLine);
@@ -181,16 +181,24 @@ export function renderSelectionModalOverlay(
         : below > 0
         ? `(${below} below)`
         : `(${above} above)`;
-      const hintLine = createOverlayContentLine(width, layout);
+      const hintLine = createOverlayContentLine(width, layout, BORDER_FG, DEFAULT_OVERLAY_PALETTE.sectionBg);
       putText(hintLine, layout.margin + 2, layout.innerWidth, fitDisplay(scrollHint, layout.innerWidth), { fg: MUTED_FG, dim: true });
       lines.push(hintLine);
     }
   }
 
-  const footerLine = createOverlayContentLine(width, layout);
-  let hints = '[Up/Down] Navigate  [Enter] Select  [Esc] Close';
-  if (modal.allowSearch) hints += '  [/] Search';
+  const footerLine = createOverlayContentLine(width, layout, BORDER_FG, DEFAULT_OVERLAY_PALETTE.sectionBg);
   const selectedItem = modal.getSelected();
+  const primaryVerb = selectedItem?.primaryAction === 'toggle'
+    ? '[Enter] Toggle'
+    : selectedItem?.primaryAction === 'edit'
+    ? '[Enter] Edit'
+    : selectedItem?.primaryAction === 'delete'
+    ? '[Enter] Delete'
+    : '[Enter] Select';
+  let hints = `[Up/Down] Navigate  ${primaryVerb}  [Esc] Close`;
+  if (modal.allowSearch) hints += '  [/] Search';
+  if (selectedItem?.primaryAction === 'toggle' && !selectedItem.actions) hints += '  [Space] Toggle';
   if (selectedItem?.actions) hints += `  ${selectedItem.actions}`;
   putText(
     footerLine,
@@ -200,7 +208,7 @@ export function renderSelectionModalOverlay(
     { fg: MUTED_FG, dim: true },
   );
   lines.push(footerLine);
-  lines.push(createOverlayBorderLine(width, layout, '└', '─', '┘', BORDER_FG));
+  lines.push(createOverlayFilledBorderLine(width, layout, OVERLAY_GLYPHS.bottomLeft, OVERLAY_GLYPHS.horizontal, OVERLAY_GLYPHS.bottomRight, BORDER_FG, DEFAULT_OVERLAY_PALETTE.sectionBg));
 
   return lines;
 }

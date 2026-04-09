@@ -306,11 +306,20 @@ export function registerConfigCommand(registry: CommandRegistry): void {
             } catch {
               current = '(unavailable)';
             }
+            const toggleable = schema.type === 'boolean' || schema.type === 'enum';
+            const adjustable = toggleable || schema.type === 'number';
             return {
               id: schema.key,
               label: schema.key,
               detail: `${current} — ${schema.description}`,
               category: schema.key.split('.')[0],
+              primaryAction: toggleable ? 'toggle' as const : 'select' as const,
+              adjustable,
+              actions: schema.type === 'number'
+                ? '[←/→] adjust  [⇧←/⇧→] ±10  [Enter] inspect'
+                : toggleable
+                ? '[Space/Enter] toggle  [←/→] adjust'
+                : '[Enter] inspect',
             };
           });
           ctx.openSelection('Config Settings', items, { allowSearch: true }, (result) => {
@@ -318,6 +327,36 @@ export function registerConfigCommand(registry: CommandRegistry): void {
             const key = result.item.id as ConfigKey;
             const schema = CONFIG_SCHEMA.find((entry) => entry.key === key);
             if (!schema) return;
+            if ((result.action === 'toggle' || result.action === 'increment' || result.action === 'decrement')
+              && (schema.type === 'boolean' || schema.type === 'enum' || schema.type === 'number')) {
+              const currentValue = cm.get(key);
+              let nextValue: unknown = currentValue;
+              if (schema.type === 'boolean') {
+                if (result.action === 'increment') nextValue = true;
+                else if (result.action === 'decrement') nextValue = false;
+                else {
+                  nextValue = !Boolean(currentValue);
+                }
+              } else if (schema.type === 'enum' && schema.enumValues && schema.enumValues.length > 0) {
+                const currentIndex = Math.max(0, schema.enumValues.indexOf(String(currentValue)));
+                if (result.action === 'decrement') {
+                  nextValue = schema.enumValues[(currentIndex - 1 + schema.enumValues.length) % schema.enumValues.length]!;
+                } else {
+                  nextValue = schema.enumValues[(currentIndex + 1) % schema.enumValues.length]!;
+                }
+              } else if (schema.type === 'number') {
+                const currentNumber = Number(currentValue);
+                const delta = result.action === 'decrement' ? -(result.step ?? 1) : (result.step ?? 1);
+                nextValue = currentNumber + delta;
+              }
+              cm.setDynamic(key, nextValue);
+              if (key === 'provider.model') ctx.runtime.model = nextValue as string;
+              if (key === 'provider.provider') ctx.runtime.provider = nextValue as string;
+              if (key === 'provider.reasoningEffort') ctx.runtime.reasoningEffort = nextValue as string;
+              result.item.detail = `${String(nextValue)} — ${schema.description}`;
+              ctx.renderRequest();
+              return;
+            }
             const value = cm.get(key);
             const lines = [
               `${key}`,

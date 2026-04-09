@@ -8,9 +8,9 @@ import {
   buildPanelLine,
   buildPanelWorkspace,
   DEFAULT_PANEL_PALETTE,
+  resolvePrimaryScrollableSection,
   type PanelWorkspaceSection,
 } from './polish.ts';
-import { getTrackedVisibleWindow } from '../renderer/surface-layout.ts';
 
 const C = {
   ...DEFAULT_PANEL_PALETTE,
@@ -117,25 +117,6 @@ export class PluginsPanel extends BasePanel {
     const selectedCaps = this.manager.capabilities(selected.name);
     const trustRecord = this.manager.getTrustRecord(selected.name);
     const quarantineRecord = this.manager.getQuarantineRecord(selected.name);
-    const window = getTrackedVisibleWindow(plugins.length, this.selectedIndex, Math.max(4, height - 14), this.scrollOffset, 1);
-    this.scrollOffset = window.start;
-
-    const pluginLines: Line[] = [];
-    for (let absolute = window.start; absolute < window.end; absolute++) {
-      const plugin = plugins[absolute]!;
-      const bg = absolute === this.selectedIndex ? C.selectBg : undefined;
-      pluginLines.push(buildPanelLine(width, [
-        [' ', C.label, bg],
-        [plugin.name.padEnd(22), C.value, bg],
-        [` ${statusLabel(plugin).padEnd(11)}`, statusColor(plugin), bg],
-        [` ${plugin.trustTier.toUpperCase().padEnd(10)}`, trustColor(plugin.trustTier), bg],
-        [` ${plugin.version}`, C.dim, bg],
-      ]));
-    }
-    if (plugins.length > window.count) {
-      pluginLines.push(buildPanelLine(width, [[`  showing ${window.start + 1}-${window.end} of ${plugins.length}`, C.dim]]));
-    }
-
     const detailLines: Line[] = [
       buildPanelLine(width, [
         ['  Plugin: ', C.label],
@@ -177,10 +158,36 @@ export class PluginsPanel extends BasePanel {
     }
 
     detailLines.push(buildPanelLine(width, [['  Inspect trust and capability state here, then use /plugin to take action.', C.dim]]));
+    const detailSection: PanelWorkspaceSection = { title: 'Selected Plugin', lines: detailLines };
+    const resolvedPluginsSection = resolvePrimaryScrollableSection(width, height, {
+      intro,
+      footerLines: [buildPanelLine(width, [['  Up/Down move through discovered plugins', C.dim]])],
+      palette: C,
+      section: {
+        title: 'Plugins',
+        scrollableLines: plugins.map((plugin, absolute) => {
+          const bg = absolute === this.selectedIndex ? C.selectBg : undefined;
+          return buildPanelLine(width, [
+            [' ', C.label, bg],
+            [plugin.name.padEnd(22), C.value, bg],
+            [` ${statusLabel(plugin).padEnd(11)}`, statusColor(plugin), bg],
+            [` ${plugin.trustTier.toUpperCase().padEnd(10)}`, trustColor(plugin.trustTier), bg],
+            [` ${plugin.version}`, C.dim, bg],
+          ]);
+        }),
+        selectedIndex: this.selectedIndex,
+        scrollOffset: this.scrollOffset,
+        guardRows: 1,
+        minRows: 4,
+        appendWindowSummary: { dimColor: C.dim },
+      },
+      afterSections: [detailSection],
+    });
+    this.scrollOffset = resolvedPluginsSection.scrollOffset;
 
     const sections: PanelWorkspaceSection[] = [
-      { title: 'Plugins', lines: pluginLines },
-      { title: 'Selected Plugin', lines: detailLines },
+      resolvedPluginsSection.section,
+      detailSection,
     ];
     const lines = buildPanelWorkspace(width, height, {
       title: 'Plugin Control Room',

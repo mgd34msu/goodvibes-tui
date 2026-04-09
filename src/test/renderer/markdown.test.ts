@@ -1,5 +1,5 @@
 import { describe, test, expect } from 'bun:test';
-import { renderMarkdown, renderInlineMarkdown } from '../../renderer/markdown.ts';
+import { renderMarkdown, renderMarkdownTracked, renderInlineMarkdown } from '../../renderer/markdown.ts';
 import { lineToString, linesToText } from '../setup.ts';
 
 const WIDTH = 80;
@@ -113,6 +113,56 @@ describe('renderMarkdown', () => {
     expect(contentCells.some((c) => c.bold)).toBe(true);
   });
 });
+
+
+  test('renders GitHub-style pipe tables', () => {
+    const md = [
+      'Summary of Best Practices',
+      '| Feature | In-Memory Implementation | Redis/Distributed Implementation |',
+      '| :--- | :--- | :--- |',
+      '| Use Case | CLI tools, single-process scripts. | Production APIs, Microservices. |',
+      '| Complexity | Low (Standard Class). | Medium (Requires Lua scripting). |',
+    ].join('\n');
+    const result = renderMarkdown(md, WIDTH);
+    const text = textLines(result).join('\n');
+    expect(text).toContain('┌');
+    expect(text).toContain('Feature');
+    expect(text).toContain('Use Case');
+    expect(text).toContain('Redis/Distributed');
+    expect(text).toContain('┬');
+  });
+
+  test('tracked markdown preserves table rendering for assistant content', () => {
+    const md = [
+      'Summary of Best Practices',
+      '| Feature | In-Memory Implementation | Redis/Distributed Implementation |',
+      '| :--- | :--- | :--- |',
+      '| Use Case | CLI tools, single-process scripts. | Production APIs, Microservices. |',
+      '| Race Conditions | Possible if using async logic. | Prevented via Redis Atomicity/Lua. |',
+    ].join('\n');
+    const result = renderMarkdownTracked(md, WIDTH);
+    const text = textLines(result.lines).join('\n');
+    expect(text).toContain('┌');
+    expect(text).toContain('Feature');
+    expect(text).toContain('Race Condit');
+    expect(text).toContain('┴');
+  });
+
+
+  test('renders tables with malformed alignment rows tolerantly', () => {
+    const md = [
+      '| Algorithm | Pros | Cons | Best Use Case |',
+      '| :--- ability | :--- | :--- | :--- |',
+      '| Fixed Window | Extremely fast/simple. | Boundary problem | Simple API throttling. |',
+      '| Token Bucket | Allows bursts while maintaining a steady rate. | Slightly more complex math. | Most Web APIs & Microservices. |',
+    ].join('\n');
+    const result = renderMarkdownTracked(md, WIDTH);
+    const text = textLines(result.lines).join('\n');
+    expect(text).toContain('┌');
+    expect(text).toContain('Algori');
+    expect(text).toContain('Token');
+    expect(text).toContain('┼');
+  });
 
 describe('renderInlineMarkdown', () => {
   test('returns text token for plain text', () => {

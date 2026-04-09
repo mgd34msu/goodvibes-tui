@@ -9,6 +9,7 @@ import {
   buildGuidanceLine,
   buildStyledPanelLine,
   buildPanelWorkspace,
+  resolveScrollablePanelSection,
   DEFAULT_PANEL_PALETTE,
   type PanelWorkspaceSection,
 } from './polish.ts';
@@ -207,10 +208,23 @@ export class TokenBudgetPanel extends BasePanel {
     });
 
     if (this.turnHistory.length > 0) {
-      sections.push({
-        title: 'Recent Turns',
-        lines: this.renderTurnHistory(width, Math.max(6, height - 10)),
+      const priorSections = [...sections];
+      const turnsSection = resolveScrollablePanelSection(width, height, {
+        intro: 'Live context pressure, session token composition, cache usage, and recent turn deltas.',
+        palette: DEFAULT_PANEL_PALETTE,
+        beforeSections: priorSections,
+        section: {
+          title: 'Recent Turns',
+          scrollableLines: this.renderTurnHistory(width, this.turnHistory.length + 1),
+          scrollOffset: Math.max(0, this.turnHistory.length),
+          minRows: 6,
+        },
+        afterSections: [{
+          title: 'Maintenance',
+          lines: this.renderMaintenance(width),
+        }],
       });
+      sections.push(turnsSection.section);
     } else {
       sections.push({
         title: 'Recent Turns',

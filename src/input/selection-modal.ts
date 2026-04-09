@@ -10,13 +10,16 @@ export interface SelectionItem {
   category?: string;      // optional grouping header
   actions?: string;       // hint text for available actions (e.g., "[d] delete")
   fg?: string;             // optional foreground color override for this item
+  primaryAction?: SelectionAction; // default Enter/Space behavior for this row
+  adjustable?: boolean;   // supports left/right adjustment without leaving the modal
 }
 
-export type SelectionAction = 'select' | 'delete' | 'edit' | 'toggle';
+export type SelectionAction = 'select' | 'delete' | 'edit' | 'toggle' | 'increment' | 'decrement';
 
 export interface SelectionResult {
   item: SelectionItem;
   action: SelectionAction;
+  step?: number;
 }
 
 export class SelectionModal {

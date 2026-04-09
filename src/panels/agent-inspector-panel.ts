@@ -19,10 +19,10 @@ import {
   type StyledPanelSegment,
   buildStyledPanelLine,
   buildPanelWorkspace,
+  resolveScrollablePanelSection,
   DEFAULT_PANEL_PALETTE,
 } from './polish.ts';
 import { truncateDisplay } from '../utils/terminal-width.ts';
-import { getTrackedVisibleWindow } from '../renderer/surface-layout.ts';
 import {
   type AgentDisplayRow as DisplayRow,
   type AgentInspectorEntryKind as EntryKind,
@@ -236,19 +236,32 @@ export class AgentInspectorPanel extends BasePanel {
     }
 
     this.cursorIndex = Math.max(0, Math.min(this.cursorIndex, allRows.length - 1));
-    const window = getTrackedVisibleWindow(allRows.length, this.cursorIndex, Math.max(8, height - 10), this.scrollOffset, 1);
-    this.scrollOffset = window.start;
-    const visibleRows = allRows.slice(window.start, window.end).map((row, index) =>
-      this._renderTimelineRow(width, row, window.start + index === this.cursorIndex),
-    );
+    const summarySection = { title: 'Summary', lines: summaryLines } as const;
+    const agentsSection = { title: 'Agents', lines: [selectorLine] } as const;
+    const timelineSection = resolveScrollablePanelSection(width, height, {
+      intro: 'Inspect a selected agent timeline, tool activity, expanded details, and live/historical message flow.',
+      footerLines: [
+        buildPanelLine(width, [[` L${this.cursorIndex + 1}/${allRows.length}`, DEFAULT_PANEL_PALETTE.dim], ['   Tab', DEFAULT_PANEL_PALETTE.info], [' cycle agents', DEFAULT_PANEL_PALETTE.dim], ['   Up/Down', DEFAULT_PANEL_PALETTE.info], [' navigate', DEFAULT_PANEL_PALETTE.dim], ['   Enter', DEFAULT_PANEL_PALETTE.info], [' expand', DEFAULT_PANEL_PALETTE.dim]]),
+      ],
+      palette: DEFAULT_PANEL_PALETTE,
+      beforeSections: [summarySection, agentsSection],
+      section: {
+        title: 'Timeline',
+        scrollableLines: allRows.map((row, index) => this._renderTimelineRow(width, row, index === this.cursorIndex)),
+        selectedIndex: this.cursorIndex,
+        scrollOffset: this.scrollOffset,
+        minRows: 8,
+      },
+    });
+    this.scrollOffset = timelineSection.scrollOffset;
 
     return buildPanelWorkspace(width, height, {
       title: ` Inspector [${agents.length} agent${agents.length !== 1 ? 's' : ''}]`,
       intro: 'Inspect a selected agent timeline, tool activity, expanded details, and live/historical message flow.',
       sections: [
-        { title: 'Summary', lines: summaryLines },
-        { title: 'Agents', lines: [selectorLine] },
-        { title: 'Timeline', lines: visibleRows },
+        summarySection,
+        agentsSection,
+        timelineSection.section,
       ],
       footerLines: [
         buildPanelLine(width, [[` L${this.cursorIndex + 1}/${allRows.length}`, DEFAULT_PANEL_PALETTE.dim], ['   Tab', DEFAULT_PANEL_PALETTE.info], [' cycle agents', DEFAULT_PANEL_PALETTE.dim], ['   Up/Down', DEFAULT_PANEL_PALETTE.info], [' navigate', DEFAULT_PANEL_PALETTE.dim], ['   Enter', DEFAULT_PANEL_PALETTE.info], [' expand', DEFAULT_PANEL_PALETTE.dim]]),

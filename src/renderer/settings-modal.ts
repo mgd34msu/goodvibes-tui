@@ -273,7 +273,7 @@ export function renderSettingsModal(
       }
     }
 
-    const hints = ['[Tab] Category', '[\u2191\u2193] Navigate', '[Enter] Toggle', '[Esc] Close'];
+    const hints = ['[Tab] Category', '[\u2191\u2193] Navigate', '[←/→] Adjust', '[Enter] Toggle', '[Esc] Close'];
     return ModalFactory.createModal(
       {
         title: 'Settings',
@@ -377,7 +377,7 @@ export function renderSettingsModal(
 
     const hints = modal.editingMode
       ? ['[Enter] Confirm', '[Esc] Cancel']
-      : ['[Tab] Category', '[Up/Down] Navigate', '[Enter] Edit Trust', '[Esc] Close'];
+      : ['[Tab] Category', '[Up/Down] Navigate', '[←/→] Cycle Trust', '[Enter] Edit Trust', '[Esc] Close'];
 
     return ModalFactory.createModal(
       {
@@ -681,7 +681,7 @@ export function renderSettingsModal(
 
   const hints = modal.editingMode
     ? ['[Enter] Confirm', '[Esc] Cancel']
-    : ['[Tab] Category', '[\u2191\u2193] Navigate', '[Enter] Toggle / Edit', '[Esc] Close'];
+    : ['[Tab] Category', '[\u2191\u2193] Navigate', '[←/→] Adjust', '[Enter] Toggle / Edit', '[Esc] Close'];
 
   return ModalFactory.createModal(
     {

@@ -1,9 +1,18 @@
 import type { Line } from '../types/grid.ts';
 import { createEmptyLine } from '../types/grid.ts';
 import { BasePanel } from './base-panel.ts';
-import { buildGuidanceLine, buildPanelLine, buildPanelWorkspace, DEFAULT_PANEL_PALETTE, type PanelWorkspaceSection } from './polish.ts';
+import {
+  buildDetailBlock,
+  buildGuidanceLine,
+  buildPanelListRow,
+  buildPanelLine,
+  buildSummaryBlock,
+  buildPanelWorkspace,
+  DEFAULT_PANEL_PALETTE,
+  resolvePrimaryScrollableSection,
+  type PanelWorkspaceSection,
+} from './polish.ts';
 import { getLocalUserAuthManager } from '../runtime/local-auth.ts';
-import { getTrackedVisibleWindow } from '../renderer/surface-layout.ts';
 
 const C = {
   ...DEFAULT_PANEL_PALETTE,
@@ -43,6 +52,8 @@ export class LocalAuthPanel extends BasePanel {
 
   public render(width: number, height: number): Line[] {
     this.needsRender = false;
+    const intro = 'Manage local daemon and HTTP-listener auth users, bootstrap state, and active sessions.';
+    const footerLines = [buildPanelLine(width, [[' /auth local review  /auth local add-user  /auth local rotate-password  /auth local revoke-session ', C.dim]])];
     const snapshot = getLocalUserAuthManager().inspect();
     this.selectedIndex = Math.min(this.selectedIndex, Math.max(0, snapshot.users.length - 1));
     const selected = snapshot.users[this.selectedIndex];
@@ -52,8 +63,7 @@ export class LocalAuthPanel extends BasePanel {
     if (snapshot.sessionCount === 0) issueMessages.push('No active local auth sessions are currently tracked.');
     const sections: PanelWorkspaceSection[] = [
       {
-        title: 'Posture',
-        lines: [
+        lines: buildSummaryBlock(width, 'Local auth posture', [
           buildPanelLine(width, [
             [' users ', C.label],
             [String(snapshot.userCount), C.value],
@@ -68,52 +78,63 @@ export class LocalAuthPanel extends BasePanel {
             ? issueMessages.map((issue) => buildPanelLine(width, [[` issue: ${issue}`.slice(0, Math.max(0, width)), C.warn]]))
             : [buildPanelLine(width, [[' local auth posture looks healthy.', C.good]])]),
           buildGuidanceLine(width, '/auth local rotate-password <user> <password>', 'rotate bootstrap/default credentials and revoke older sessions as needed', C),
-        ],
+        ], C),
       },
     ];
 
     if (snapshot.users.length > 0) {
-      const window = getTrackedVisibleWindow(snapshot.users.length, this.selectedIndex, Math.max(4, height - 14), this.scrollOffset, 1);
-      this.scrollOffset = window.start;
-      const userLines: Line[] = [];
-      for (let absolute = window.start; absolute < window.end; absolute++) {
-        const user = snapshot.users[absolute]!;
-        const bg = absolute === this.selectedIndex ? C.selectBg : undefined;
-        userLines.push(buildPanelLine(width, [
-          [' ', C.label, bg],
-          [user.username.padEnd(20), C.value, bg],
-          [` roles=${formatRoles(user.roles)}`.slice(0, Math.max(0, width - 22)), C.info, bg],
-        ]));
-      }
-      sections.push({ title: 'Users', lines: userLines });
-      if (selected) {
-        sections.push({
-          title: 'Selected User',
-          lines: [
-            buildPanelLine(width, [[' username ', C.label], [selected.username, C.value], ['  roles ', C.label], [formatRoles(selected.roles).slice(0, Math.max(0, width - 23)), C.info]]),
-            buildPanelLine(width, [[` next: /auth local rotate-password ${selected.username} <password>`.slice(0, Math.max(0, width)), C.dim]]),
-            buildPanelLine(width, [[` next: /auth local delete-user ${selected.username}`.slice(0, Math.max(0, width)), C.dim]]),
-          ],
-        });
-      }
-    }
-
-    if (snapshot.sessions.length > 0) {
-      sections.push({
-        title: 'Active Sessions',
-        lines: snapshot.sessions.slice(0, 8).map((session) => buildPanelLine(width, [
-          [' ', C.label],
-          [session.username.padEnd(18), C.value],
-          [` expires ${new Date(session.expiresAt).toLocaleString()}`.slice(0, Math.max(0, width - 20)), C.dim],
-        ])),
+      const selectedUserSection: PanelWorkspaceSection | null = selected
+        ? {
+            lines: buildDetailBlock(width, 'Selected user', [
+              buildPanelLine(width, [[' username ', C.label], [selected.username, C.value], ['  roles ', C.label], [formatRoles(selected.roles).slice(0, Math.max(0, width - 23)), C.info]]),
+              buildPanelLine(width, [[` next: /auth local rotate-password ${selected.username} <password>`.slice(0, Math.max(0, width)), C.dim]]),
+              buildPanelLine(width, [[` next: /auth local delete-user ${selected.username}`.slice(0, Math.max(0, width)), C.dim]]),
+            ], C),
+          }
+        : null;
+      const activeSessionsSection: PanelWorkspaceSection | null = snapshot.sessions.length > 0
+        ? {
+            title: 'Active Sessions',
+            lines: snapshot.sessions.slice(0, 8).map((session) => buildPanelLine(width, [
+              [' ', C.label],
+              [session.username.padEnd(18), C.value],
+              [` expires ${new Date(session.expiresAt).toLocaleString()}`.slice(0, Math.max(0, width - 20)), C.dim],
+            ])),
+          }
+        : null;
+      const rawUserLines: Line[] = snapshot.users.map((user, absolute) => {
+        return buildPanelListRow(width, [
+          { text: user.username.padEnd(20), fg: C.value },
+          { text: ` roles=${formatRoles(user.roles)}`.slice(0, Math.max(0, width - 24)), fg: C.info },
+        ], C, { selected: absolute === this.selectedIndex });
       });
+      const resolvedUsersSection = resolvePrimaryScrollableSection(width, height, {
+        intro,
+        footerLines,
+        palette: C,
+        beforeSections: sections,
+        section: {
+          title: 'Users',
+          scrollableLines: rawUserLines,
+          selectedIndex: this.selectedIndex,
+          scrollOffset: this.scrollOffset,
+          guardRows: 1,
+          minRows: 4,
+          appendWindowSummary: { dimColor: C.dim },
+        },
+        afterSections: [selectedUserSection, activeSessionsSection].filter(Boolean) as PanelWorkspaceSection[],
+      });
+      this.scrollOffset = resolvedUsersSection.scrollOffset;
+      sections.push(resolvedUsersSection.section);
+      if (selectedUserSection) sections.push(selectedUserSection);
+      if (activeSessionsSection) sections.push(activeSessionsSection);
     }
 
     const lines = buildPanelWorkspace(width, height, {
       title: 'Local Auth Control Room',
-      intro: 'Manage local daemon and HTTP-listener auth users, bootstrap state, and active sessions.',
+      intro,
       sections,
-      footerLines: [buildPanelLine(width, [[' /auth local review  /auth local add-user  /auth local rotate-password  /auth local revoke-session ', C.dim]])],
+      footerLines,
       palette: C,
     });
     while (lines.length < height) lines.push(createEmptyLine(width));

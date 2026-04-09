@@ -71,7 +71,7 @@ export class IntelligencePanel extends BasePanel {
 
     const sections: PanelWorkspaceSection[] = [
       {
-        title: 'Posture',
+        title: 'Intelligence posture',
         lines: [
           buildKeyValueLine(width, [
             { label: 'diagnostics', value: state.diagnosticsStatus, valueColor: statusColor(state.diagnosticsStatus) },

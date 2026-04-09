@@ -27,6 +27,39 @@ type SelectionRouteState = {
 export function handleSelectionModalToken(state: SelectionRouteState, token: InputToken): boolean {
   if (!state.selectionModal.active) return false;
 
+  const getPrimaryAction = (selected: NonNullable<ReturnType<typeof state.selectionModal.getSelected>> | null | undefined): SelectionAction | null => {
+    if (selected?.primaryAction) return selected.primaryAction;
+    const enterAction = state.selectionModal.customActions.get('enter');
+    return enterAction ?? null;
+  };
+
+  const getSpaceAction = (selected: NonNullable<ReturnType<typeof state.selectionModal.getSelected>> | null | undefined): SelectionAction | null => {
+    if (selected?.primaryAction === 'toggle') return 'toggle';
+    const direct = state.selectionModal.customActions.get(' ');
+    if (direct) return direct;
+    const enterAction = getPrimaryAction(selected);
+    if (enterAction === 'toggle') return enterAction;
+    return null;
+  };
+
+  const dispatchSelectionAction = (
+    action: SelectionAction,
+    selected: NonNullable<ReturnType<typeof state.selectionModal.getSelected>>,
+    step?: number,
+  ): void => {
+    if (action === 'toggle' || action === 'increment' || action === 'decrement') {
+      state.selectionCallback?.({ item: selected, action, step });
+      return;
+    }
+    const cb = state.selectionCallback;
+    state.selectionCallback = null;
+    state.selectionModal.close();
+    if (state.modalStack.length > 0 && state.modalStack[state.modalStack.length - 1] === 'selection') {
+      state.modalStack.pop();
+    }
+    cb?.({ item: selected, action, step });
+  };
+
   if (token.type === 'text') {
     if (state.selectionModal.allowSearch && !state.selectionModal.searchFocused && token.value === '/') {
       state.selectionModal.focusSearch();
@@ -34,18 +67,16 @@ export function handleSelectionModalToken(state: SelectionRouteState, token: Inp
       state.selectionModal.setQuery(state.selectionModal.query + token.value);
     } else if (token.value === ' ') {
       const selected = state.selectionModal.getSelected();
-      if (selected && state.selectionCallback) {
-        state.selectionCallback({ item: selected, action: 'toggle' });
+      const action = getSpaceAction(selected);
+      if (action && selected && state.selectionCallback) {
+        state.selectionCallback({ item: selected, action });
       }
     } else {
       const action = state.selectionModal.customActions.get(token.value);
       if (action) {
         const selected = state.selectionModal.getSelected();
         if (selected) {
-          const cb = state.selectionCallback;
-          state.selectionCallback = null;
-          state.selectionModal.close();
-          cb?.({ item: selected, action });
+          dispatchSelectionAction(action, selected);
         }
       }
     }
@@ -61,16 +92,15 @@ export function handleSelectionModalToken(state: SelectionRouteState, token: Inp
       return true;
     }
     if (token.logicalName === 'enter') {
-      const customAction = state.selectionModal.customActions.get('enter');
       const selected = state.selectionModal.getSelected();
       if (selected) {
-        const cb = state.selectionCallback;
-        state.selectionCallback = null;
-        state.selectionModal.close();
-        if (state.modalStack.length > 0 && state.modalStack[state.modalStack.length - 1] === 'selection') {
-          state.modalStack.pop();
-        }
-        cb?.({ item: selected, action: customAction ?? 'select' });
+        dispatchSelectionAction(getPrimaryAction(selected) ?? 'select', selected);
+      }
+    } else if (token.logicalName === 'space') {
+      const selected = state.selectionModal.getSelected();
+      const action = getSpaceAction(selected);
+      if (action && selected && state.selectionCallback) {
+        state.selectionCallback({ item: selected, action });
       }
     } else if (token.logicalName === 'up') {
       if (state.selectionModal.allowSearch && !state.selectionModal.searchFocused && state.selectionModal.selectedIndex === 0) {
@@ -84,6 +114,11 @@ export function handleSelectionModalToken(state: SelectionRouteState, token: Inp
       } else {
         state.selectionModal.moveDown();
       }
+    } else if ((token.logicalName === 'left' || token.logicalName === 'right') && !state.selectionModal.searchFocused) {
+      const selected = state.selectionModal.getSelected();
+      if (selected?.adjustable) {
+        dispatchSelectionAction(token.logicalName === 'right' ? 'increment' : 'decrement', selected, token.shift ? 10 : 1);
+      }
     } else if (token.logicalName === 'backspace') {
       if (state.selectionModal.allowSearch && state.selectionModal.searchFocused && state.selectionModal.query.length > 0) {
         state.selectionModal.setQuery(state.selectionModal.query.slice(0, -1));
@@ -95,10 +130,7 @@ export function handleSelectionModalToken(state: SelectionRouteState, token: Inp
       if (action) {
         const selected = state.selectionModal.getSelected();
         if (selected) {
-          const cb = state.selectionCallback;
-          state.selectionCallback = null;
-          state.selectionModal.close();
-          cb?.({ item: selected, action });
+          dispatchSelectionAction(action, selected);
         }
       }
     }
@@ -165,6 +197,7 @@ type SettingsRouteState = {
     commitEdit: () => void;
     toggleSelectedFlag: () => void;
     activateSelected: () => void;
+    adjustSelected: (direction: 'left' | 'right', step?: number) => void;
     moveUp: () => void;
     moveDown: () => void;
     nextCategory: () => void;
@@ -183,16 +216,23 @@ export function handleSettingsModalToken(state: SettingsRouteState, token: Input
       state.handleEscape();
       return true;
     }
-    if (token.logicalName === 'enter') {
+    if (token.logicalName === 'enter' || (token.logicalName === 'space' && !state.settingsModal.editingMode)) {
       if (state.settingsModal.editingMode) state.settingsModal.commitEdit();
       else if (state.settingsModal.currentCategory === 'flags') state.settingsModal.toggleSelectedFlag();
       else state.settingsModal.activateSelected();
+    } else if ((token.logicalName === 'left' || token.logicalName === 'right') && !state.settingsModal.editingMode) {
+      state.settingsModal.adjustSelected(token.logicalName, token.shift ? 10 : 1);
     } else if (token.logicalName === 'up') state.settingsModal.moveUp();
     else if (token.logicalName === 'down') state.settingsModal.moveDown();
     else if (token.logicalName === 'tab') state.settingsModal.nextCategory();
     else if (token.logicalName === 'backspace' && state.settingsModal.editingMode) state.settingsModal.editBackspace();
-  } else if (token.type === 'text' && state.settingsModal.editingMode) {
-    state.settingsModal.editChar(token.value);
+  } else if (token.type === 'text') {
+    if (token.value === ' ' && !state.settingsModal.editingMode) {
+      if (state.settingsModal.currentCategory === 'flags') state.settingsModal.toggleSelectedFlag();
+      else state.settingsModal.activateSelected();
+    } else if (state.settingsModal.editingMode) {
+      state.settingsModal.editChar(token.value);
+    }
   }
 
   state.requestRender();

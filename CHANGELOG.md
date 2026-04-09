@@ -4,6 +4,50 @@ All notable changes to GoodVibes TUI.
 
 ---
 
+## [0.15.2] — 2026-04-08
+
+### UI System Rollout And Panel Layout Centralization
+
+- Continued the shared UI design-system rollout across renderer, panel workspace, and modal surfaces with stronger shared glyph, tone, and posture/list/detail presentation rules
+- Centralized common panel scroll-budget logic into the shared workspace layer so panels stop guessing visible rows with panel-local `height - N` math
+- Migrated the broader panel set onto shared budgeting and fixed bottom-row clipping so the selected final row remains visible instead of disappearing beneath the footer
+
+### Modal Stack, Search Focus, And Toggle Behavior
+
+- Repaired nested modal backstack behavior so `Esc` unwinds to the previously open modal instead of flattening the stack
+- Fixed slash-command modal restoration so modal handoffs launched from `/` return to the actual slash-command menu
+- Fixed slash-command close behavior so pressing `Esc` on the `/` menu fully dismisses command mode, clears the slash prompt, and keeps later typing in normal prompt mode
+- Reworked searchable modal focus ownership so search/filter rows can be explicitly focused and typable hotkeys continue working when list focus owns input
+- Added real row-level adjustable modal behavior for toggleable selection modals:
+  - `Space` / `Enter` perform the selected row's primary action
+  - `Left` / `Right` adjust booleans, enums, and numeric values in place
+  - `Shift+Left` / `Shift+Right` change numeric values in steps of `10`
+- Fixed settings/config and other toggleable modals so they no longer dump help text into the main conversation when a row should toggle inline
+
+### Panel Integration Wiring
+
+- Wired Explorer -> Preview so selecting a file in the file explorer can open it in the preview pane directly from panel focus
+- Wired Preview -> Symbols synchronization so the symbol outline updates from the active previewed file
+- Wired Symbols -> Preview jumps so selecting a symbol can move the preview pane to the symbol location
+- Wired approval-panel activation so `Enter` on the selected approval row executes the actual review action instead of only describing it
+
+### Markdown And Transcript Rendering
+
+- Fixed tracked assistant-message markdown rendering so pipe tables render in the main conversation path, not just in the standalone markdown renderer
+- Added tolerant table parsing for slightly malformed LLM-generated alignment rows, allowing real-world model output to render as tables instead of falling back to plain text
+
+### Token Accounting And Streaming Visibility
+
+- Fixed live thinking-strip output token growth so it continues to advance even when `display.stream` is disabled
+- Added immediate current-turn input estimation for the thinking strip so live `in` values do not remain `0` until the provider response completes
+- Normalized provider usage at the orchestrator boundary so fresh input tokens and cache-read tokens are separated correctly for UI display
+- Fixed footer/token-surface accounting so cache-read traffic is no longer double-counted inside `Input` while context occupancy still reflects the full prompt footprint
+
+### Verification
+
+- Typecheck passes: `bun x tsc --noEmit --pretty false`
+- Focused orchestrator/shell/token suites pass after the token-accounting changes
+
 ## [0.15.1] — 2026-04-08
 
 ### UI Systems, Routing, And Renderer Hardening

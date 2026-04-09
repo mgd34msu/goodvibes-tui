@@ -10,10 +10,10 @@ import {
   buildPanelLine,
   buildStyledPanelLine,
   buildPanelWorkspace,
+  resolveScrollablePanelSection,
   DEFAULT_PANEL_PALETTE,
   type PanelWorkspaceSection,
 } from './polish.ts';
-import { getTrackedVisibleWindow } from '../renderer/surface-layout.ts';
 import { truncateDisplay } from '../utils/terminal-width.ts';
 
 const C = {
@@ -189,10 +189,6 @@ export class ToolInspectorPanel extends BasePanel {
     }
 
     this.cursorIndex = Math.max(0, Math.min(this.cursorIndex, Math.max(0, flat.length - 1)));
-    const window = getTrackedVisibleWindow(flat.length, this.cursorIndex, Math.max(8, height - 8), this.scrollOffset, 1);
-    this.scrollOffset = window.start;
-    const visible = flat.slice(window.start, window.end);
-
     const summary: PanelWorkspaceSection = {
       title: 'Summary',
       lines: [
@@ -207,7 +203,6 @@ export class ToolInspectorPanel extends BasePanel {
       ],
     };
 
-    const callRows = visible.map((row, index) => this._renderRow(width, row, window.start + index === this.cursorIndex));
     const selected = flat[this.cursorIndex];
     const detailLines: Line[] = [];
     if (selected?.kind === 'call') {
@@ -239,13 +234,30 @@ export class ToolInspectorPanel extends BasePanel {
       }
     }
 
+    const selectedSection: PanelWorkspaceSection = { title: 'Selected', lines: detailLines };
+    const callsSection = resolveScrollablePanelSection(width, height, {
+      intro: 'Inspect chronological tool activity, arguments, results, errors, and running calls.',
+      footerLines,
+      palette: DEFAULT_PANEL_PALETTE,
+      beforeSections: [summary],
+      section: {
+        title: 'Calls',
+        scrollableLines: flat.map((row, index) => this._renderRow(width, row, index === this.cursorIndex)),
+        selectedIndex: this.cursorIndex,
+        scrollOffset: this.scrollOffset,
+        minRows: 8,
+      },
+      afterSections: [selectedSection],
+    });
+    this.scrollOffset = callsSection.scrollOffset;
+
     return buildPanelWorkspace(width, height, {
       title,
       intro: 'Inspect chronological tool activity, arguments, results, errors, and running calls.',
       sections: [
         summary,
-        { title: 'Calls', lines: callRows },
-        { title: 'Selected', lines: detailLines },
+        callsSection.section,
+        selectedSection,
       ],
       footerLines,
       palette: DEFAULT_PANEL_PALETTE,

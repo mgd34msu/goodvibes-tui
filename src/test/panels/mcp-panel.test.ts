@@ -106,7 +106,7 @@ describe('McpPanel', () => {
     expect(first).toContain('constrained');
     expect(first).toContain('docs.example.com');
     expect(first).toContain('fresh');
-    expect(first).toContain('Posture');
+    expect(first).toContain('MCP posture');
 
     panel.handleInput('down');
     const second = linesText(panel.render(120, 20));

@@ -6,13 +6,13 @@ import type { RuntimeEventBus, WorkflowEvent } from '../runtime/events/index.ts'
 import {
   buildPanelLine,
   buildPanelWorkspace,
+  resolveScrollablePanelSection,
   DEFAULT_PANEL_PALETTE,
   type PanelWorkspaceSection,
   buildSelectablePanelLine,
   buildStyledPanelLine,
   buildEmptyState,
 } from './polish.ts';
-import { getTrackedVisibleWindow } from '../renderer/surface-layout.ts';
 import { getDisplayWidth } from '../utils/terminal-width.ts';
 
 // ---------------------------------------------------------------------------
@@ -187,6 +187,7 @@ export class WrfcPanel extends BasePanel {
     }
 
     const chainLines: Line[] = [];
+    let selectedLineIndex = 0;
     for (let i = 0; i < this.chains.length; i++) {
       const chain      = this.chains[i];
       const isSelected = i === this.selectedIndex;
@@ -194,6 +195,7 @@ export class WrfcPanel extends BasePanel {
       const rowBg      = isSelected ? C.selected : '';
       const rowFg      = isSelected ? C.selectedFg : '';
 
+      if (isSelected) selectedLineIndex = chainLines.length;
       chainLines.push(...this.renderChainRow(chain, width, isSelected, isExpanded, rowBg, rowFg));
 
       if (isExpanded) {
@@ -201,8 +203,6 @@ export class WrfcPanel extends BasePanel {
       }
     }
 
-    const window = getTrackedVisibleWindow(chainLines.length, this.selectedIndex, Math.max(8, height - 8), this.scrollOffset, 1);
-    this.scrollOffset = window.start;
     const selectedChain = this.chains[this.selectedIndex];
     const selectedLines: Line[] = selectedChain
       ? [
@@ -223,29 +223,41 @@ export class WrfcPanel extends BasePanel {
         ]
       : [];
 
-    const sections: PanelWorkspaceSection[] = [
-      {
-        title: 'Summary',
-        lines: [
-          buildPanelLine(width, [
-            [' Active ', DEFAULT_PANEL_PALETTE.label],
-            [String(activeCount), activeCount > 0 ? DEFAULT_PANEL_PALETTE.warn : DEFAULT_PANEL_PALETTE.dim],
-            ['   Passed ', DEFAULT_PANEL_PALETTE.label],
-            [String(passedCount), DEFAULT_PANEL_PALETTE.good],
-            ['   Failed ', DEFAULT_PANEL_PALETTE.label],
-            [String(failedCount), failedCount > 0 ? DEFAULT_PANEL_PALETTE.bad : DEFAULT_PANEL_PALETTE.dim],
-          ]),
-        ],
-      },
-      {
+    const summarySection: PanelWorkspaceSection = {
+      title: 'Summary',
+      lines: [
+        buildPanelLine(width, [
+          [' Active ', DEFAULT_PANEL_PALETTE.label],
+          [String(activeCount), activeCount > 0 ? DEFAULT_PANEL_PALETTE.warn : DEFAULT_PANEL_PALETTE.dim],
+          ['   Passed ', DEFAULT_PANEL_PALETTE.label],
+          [String(passedCount), DEFAULT_PANEL_PALETTE.good],
+          ['   Failed ', DEFAULT_PANEL_PALETTE.label],
+          [String(failedCount), failedCount > 0 ? DEFAULT_PANEL_PALETTE.bad : DEFAULT_PANEL_PALETTE.dim],
+        ]),
+      ],
+    };
+    const selectedSection: PanelWorkspaceSection = {
+      title: 'Selected',
+      lines: selectedLines,
+    };
+    const chainsSection = resolveScrollablePanelSection(width, height, {
+      intro: 'Track WRFC engineering, review, fixing, gating, and final chain outcomes.',
+      footerLines: [
+        buildPanelLine(width, [[' Up/Down', DEFAULT_PANEL_PALETTE.info], [' navigate', DEFAULT_PANEL_PALETTE.dim], ['   Enter', DEFAULT_PANEL_PALETTE.info], [' expand', DEFAULT_PANEL_PALETTE.dim]]),
+      ],
+      palette: DEFAULT_PANEL_PALETTE,
+      beforeSections: [summarySection],
+      section: {
         title: 'Chains',
-        lines: chainLines.slice(window.start, window.end),
+        scrollableLines: chainLines,
+        selectedIndex: selectedLineIndex,
+        scrollOffset: this.scrollOffset,
+        minRows: 8,
       },
-      {
-        title: 'Selected',
-        lines: selectedLines,
-      },
-    ];
+      afterSections: [selectedSection],
+    });
+    this.scrollOffset = chainsSection.scrollOffset;
+    const sections: PanelWorkspaceSection[] = [summarySection, chainsSection.section, selectedSection];
 
     return buildPanelWorkspace(width, height, {
       title: ' WRFC Chain Monitor',

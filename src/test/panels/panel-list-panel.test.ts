@@ -350,7 +350,7 @@ describe('PanelListPanel', () => {
       panel.handleInput('T');
       const text = linesText(panel.render(80, 20));
       expect(text).not.toContain('T*Panel List');
-      expect(text).toContain('▶●▲ Alpha Panel');
+      expect(text).toContain('▸ ●▲ Alpha Panel');
     });
   });
 
@@ -380,6 +380,22 @@ describe('PanelListPanel', () => {
       for (let i = 0; i < 5; i++) panel.handleInput('up');
       const lines = panel.render(80, 20);
       expect(lines).toHaveLength(20);
+    });
+
+    test('last selected panel remains visible in tall real-world lists', () => {
+      for (let i = 0; i < 44; i++) {
+        mgr.registerType(makeReg({
+          id: `bulk-${i}`,
+          name: `Bulk ${i}`,
+          category: i % 2 === 0 ? 'monitoring' : 'ai',
+          description: `Bulk panel ${i}`,
+        }));
+      }
+      panel.onActivate();
+      for (let i = 0; i < 60; i++) panel.handleInput('down');
+      const text = linesText(panel.render(95, 40));
+      expect(text).toContain('[48/48]');
+      expect(text).toContain('▸');
     });
   });
 

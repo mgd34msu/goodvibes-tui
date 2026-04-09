@@ -5,14 +5,17 @@ import type { RuntimeStore } from '../runtime/store/index.ts';
 import type { RuntimeTask, TaskLifecycleState } from '../runtime/store/domains/tasks.ts';
 import { selectTasks } from '../runtime/store/selectors/index.ts';
 import {
+  buildDetailBlock,
   buildEmptyState,
   buildGuidanceLine,
+  buildPanelListRow,
   buildPanelLine,
+  buildSummaryBlock,
   buildPanelWorkspace,
   DEFAULT_PANEL_PALETTE,
+  resolvePrimaryScrollableSection,
   type PanelWorkspaceSection,
 } from './polish.ts';
-import { getTrackedVisibleWindow } from '../renderer/surface-layout.ts';
 import { reviewWorktreeAttachments } from '../runtime/worktree/registry.ts';
 
 const C = {
@@ -168,6 +171,7 @@ export class TasksPanel extends BasePanel {
   public render(width: number, height: number): Line[] {
     this.needsRender = false;
     const intro = 'Live task lifecycle, ownership, retries, and result/error details across runtime execution domains.';
+    const footerLines = [buildPanelLine(width, [['  Up/Down move  Home/End jump', C.dim]])];
 
     if (!this.store) {
       const workspace = buildPanelWorkspace(width, height, {
@@ -225,23 +229,6 @@ export class TasksPanel extends BasePanel {
     const runningCount = counts.find((entry) => entry.status === 'running')?.count ?? 0;
     const queuedCount = counts.find((entry) => entry.status === 'queued')?.count ?? 0;
     const completedCount = counts.find((entry) => entry.status === 'completed')?.count ?? 0;
-    const window = getTrackedVisibleWindow(tasks.length, this.selectedIndex, Math.max(4, height - 14), this.scrollOffset, 1);
-    this.scrollOffset = window.start;
-    const listLines: Line[] = [];
-    for (let absolute = window.start; absolute < window.end; absolute++) {
-      const task = tasks[absolute]!;
-      const bg = absolute === this.selectedIndex ? C.selectBg : undefined;
-      listLines.push(buildPanelLine(width, [
-        [' ', C.label, bg],
-        [task.status.padEnd(10), statusColor(task.status), bg],
-        [` ${kindLabel(task.kind).padEnd(12)}`, C.value, bg],
-        [` ${task.id.slice(0, 8)} `, C.dim, bg],
-        [task.title.slice(0, Math.max(0, width - 35)), C.value, bg],
-      ]));
-    }
-    if (tasks.length > window.count) {
-      listLines.push(buildPanelLine(width, [[`  showing ${window.start + 1}-${window.end} of ${tasks.length}`, C.dim]]));
-    }
 
     const selected = tasks[this.selectedIndex]!;
     const postureLines: Line[] = [
@@ -271,7 +258,7 @@ export class TasksPanel extends BasePanel {
       buildGuidanceLine(width, '/worktree task <task-id>', 'review worktree ownership, restore, and merge posture for the selected task', C),
     ];
     const descriptor = selected.description ? parseTaskDescriptor(selected.description) : null;
-    const detailLines: Line[] = [
+    const detailRows: Line[] = [
       buildPanelLine(width, [
         ['  Title: ', C.label],
         [selected.title, C.value],
@@ -298,7 +285,7 @@ export class TasksPanel extends BasePanel {
       ]),
     ];
     if (descriptor?.mode || descriptor?.family || descriptor?.source) {
-      detailLines.push(buildPanelLine(width, [
+      detailRows.push(buildPanelLine(width, [
         ['  Mode: ', C.label],
         [descriptor?.mode ?? 'n/a', C.value],
         ['  Family: ', C.label],
@@ -308,7 +295,7 @@ export class TasksPanel extends BasePanel {
       ]));
     }
     if (descriptor?.reviewMode || descriptor?.executionProtocol || descriptor?.template) {
-      detailLines.push(buildPanelLine(width, [
+      detailRows.push(buildPanelLine(width, [
         ['  Review: ', C.label],
         [descriptor?.reviewMode ?? 'n/a', C.value],
         ['  Protocol: ', C.label],
@@ -318,7 +305,7 @@ export class TasksPanel extends BasePanel {
       ]));
     }
     if (selected.correlationId || selected.turnId) {
-      detailLines.push(buildPanelLine(width, [
+      detailRows.push(buildPanelLine(width, [
         ['  Correlation: ', C.label],
         [selected.correlationId ?? 'n/a', C.dim],
         ['  Turn: ', C.label],
@@ -326,7 +313,7 @@ export class TasksPanel extends BasePanel {
       ]));
     }
     if (selected.parentTaskId || selected.childTaskIds.length > 0) {
-      detailLines.push(buildPanelLine(width, [
+      detailRows.push(buildPanelLine(width, [
         ['  Parent: ', C.label],
         [selected.parentTaskId ?? 'none', C.dim],
         ['  Children: ', C.label],
@@ -335,7 +322,7 @@ export class TasksPanel extends BasePanel {
     }
     const attachedWorktrees = reviewWorktreeAttachments('task', selected.id);
     if (attachedWorktrees.total > 0) {
-      detailLines.push(buildPanelLine(width, [
+      detailRows.push(buildPanelLine(width, [
         ['  Worktrees: ', C.label],
         [`${attachedWorktrees.total} tracked`, C.info],
         ['  Active: ', C.label],
@@ -343,47 +330,76 @@ export class TasksPanel extends BasePanel {
         ['  Paused: ', C.label],
         [String(attachedWorktrees.paused), attachedWorktrees.paused > 0 ? C.blocked : C.dim],
       ]));
-      detailLines.push(buildPanelLine(width, [[
+      detailRows.push(buildPanelLine(width, [[
         `  Next: /worktree task ${selected.id}  /worktree recover task ${selected.id}`,
         C.dim,
       ]]));
       for (const record of attachedWorktrees.records.slice(0, 2)) {
-        detailLines.push(buildPanelLine(width, [[
+        detailRows.push(buildPanelLine(width, [[
           `  ${record.state.padEnd(15)} ${record.path}`.slice(0, Math.max(0, width - 2)),
           record.state === 'active' ? C.running : record.state === 'paused' ? C.blocked : C.dim,
         ]]));
       }
     }
     if (selected.retryPolicy) {
-      detailLines.push(buildPanelLine(width, [
+      detailRows.push(buildPanelLine(width, [
         ['  Retry: ', C.label],
         [`${selected.retryPolicy.currentAttempt}/${selected.retryPolicy.maxAttempts} ${selected.retryPolicy.backoff}`, C.value],
       ]));
     }
     if (selected.error) {
-      detailLines.push(buildPanelLine(width, [
+      detailRows.push(buildPanelLine(width, [
         ['  Error: ', C.label],
         [selected.error.slice(0, Math.max(0, width - 10)), C.failed],
       ]));
     }
     if (selected.result !== undefined) {
       const resultText = safeJson(selected.result);
-      detailLines.push(buildPanelLine(width, [
+      detailRows.push(buildPanelLine(width, [
         ['  Result: ', C.label],
         [resultText.slice(0, Math.max(0, width - 11)), C.dim],
       ]));
     }
+    const postureSection: PanelWorkspaceSection = { lines: buildSummaryBlock(width, 'Task posture', postureLines, C) };
+    const selectedSection: PanelWorkspaceSection = { lines: buildDetailBlock(width, 'Selected task', detailRows, C) };
+    const rawTaskLines: Line[] = [];
+    for (let absolute = 0; absolute < tasks.length; absolute++) {
+      const task = tasks[absolute]!;
+      rawTaskLines.push(buildPanelListRow(width, [
+        { text: task.status.padEnd(10), fg: statusColor(task.status) },
+        { text: ` ${kindLabel(task.kind).padEnd(12)}`, fg: C.value },
+        { text: ` ${task.id.slice(0, 8)} `, fg: C.dim },
+        { text: task.title.slice(0, Math.max(0, width - 37)), fg: C.value },
+      ], C, { selected: absolute === this.selectedIndex }));
+    }
+    const resolvedTasksSection = resolvePrimaryScrollableSection(width, height, {
+      intro,
+      footerLines,
+      palette: C,
+      beforeSections: [postureSection],
+      section: {
+        title: 'Tasks',
+        scrollableLines: rawTaskLines,
+        selectedIndex: this.selectedIndex,
+        scrollOffset: this.scrollOffset,
+        guardRows: 1,
+        minRows: 4,
+        appendWindowSummary: { dimColor: C.dim },
+      },
+      afterSections: [selectedSection],
+    });
+    this.scrollOffset = resolvedTasksSection.scrollOffset;
 
     const sections: PanelWorkspaceSection[] = [
-      { title: 'Posture', lines: postureLines },
-      { title: 'Tasks', lines: listLines },
-      { title: 'Selected Task', lines: detailLines },
+      postureSection,
+      resolvedTasksSection.section,
+      selectedSection,
     ];
     const lines = buildPanelWorkspace(width, height, {
       title: 'Task Control Room',
       intro,
       sections,
-      footerLines: [buildPanelLine(width, [['  Up/Down move  Home/End jump', C.dim]])],
+      footerLines,
       palette: C,
     });
     while (lines.length < height) lines.push(createEmptyLine(width));

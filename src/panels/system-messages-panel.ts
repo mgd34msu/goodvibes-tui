@@ -7,15 +7,17 @@ import { BasePanel } from './base-panel.ts';
 import type { Line } from '../types/grid.ts';
 import {
   buildBodyText,
+  buildDetailBlock,
   buildEmptyState,
   buildGuidanceLine,
   buildKeyValueLine,
   buildPanelLine,
+  buildSummaryBlock,
   buildPanelWorkspace,
+  resolveScrollablePanelSection,
   DEFAULT_PANEL_PALETTE,
   type PanelWorkspaceSection,
 } from './polish.ts';
-import { getTrackedVisibleWindow } from '../renderer/surface-layout.ts';
 import { getConfigSnapshot } from '../config/index.ts';
 
 const MAX_MESSAGES = 500;
@@ -153,23 +155,45 @@ export class SystemMessagesPanel extends BasePanel {
       buildGuidanceLine(width, '/settings', 'adjust where operational and WRFC messages render across panels and conversation', C),
     ];
 
-    const bodyBudget = Math.max(4, height - 9);
-    const window = getTrackedVisibleWindow(this._messages.length, this._lastVisibleIdx, bodyBudget, this._scrollOffset, 1);
-    this._scrollOffset = window.start;
-    const messageLines: Line[] = [];
-    for (const entry of this._messages.slice(window.start, window.end)) {
+    const messageRows: Line[] = [];
+    let selectedLineIndex = 0;
+    for (let index = 0; index < this._messages.length; index++) {
+      const entry = this._messages[index]!;
       const prefix = `${fmtTime(entry.ts)}  `;
       const fg = entry.priority === 'high' ? C.high : C.low;
       const wrapped = buildBodyText(width, `${prefix}${entry.text}`, C, fg);
-      messageLines.push(...wrapped);
-    }
-    if (window.start > 0 || window.end < this._messages.length) {
-      messageLines.unshift(buildPanelLine(width, [[`  showing ${window.start + 1}-${window.end} of ${this._messages.length}`, C.ts]]));
+      if (index === this._lastVisibleIdx) {
+        selectedLineIndex = messageRows.length;
+      }
+      messageRows.push(...wrapped);
     }
 
+    const postureSection: PanelWorkspaceSection = { lines: buildSummaryBlock(width, 'System posture', postureLines, C) };
+    const messagesSection = resolveScrollablePanelSection(width, height, {
+      intro,
+      palette: C,
+      beforeSections: [postureSection],
+      section: {
+        title: 'Messages',
+        scrollableLines: messageRows.map((line, idx) => (
+          idx === selectedLineIndex
+            ? line.map((cell, col) => ({
+                ...cell,
+                bg: C.selectBg,
+                fg: col === 0 && cell.char !== ' ' ? C.info : cell.fg,
+              }))
+            : line
+        )),
+        selectedIndex: selectedLineIndex,
+        scrollOffset: this._scrollOffset,
+        minRows: 4,
+        appendWindowSummary: { dimColor: C.ts },
+      },
+    });
+    this._scrollOffset = messagesSection.scrollOffset;
     const sections: PanelWorkspaceSection[] = [
-      { title: 'Posture', lines: postureLines },
-      { title: 'Messages', lines: messageLines },
+      postureSection,
+      messagesSection.section,
     ];
     const lines = buildPanelWorkspace(width, height, {
       title: 'System Messages',

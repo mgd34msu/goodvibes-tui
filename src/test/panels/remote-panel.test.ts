@@ -119,7 +119,7 @@ describe('RemotePanel', () => {
     expect(text).toContain('daemon');
     expect(text).toContain('ACP');
     expect(text).toContain('active connections');
-    expect(text).toContain('Selected Connection');
+    expect(text).toContain('Selected connection');
     expect(text).toContain('agent-2');
     expect(text).toContain('remote reviewer');
     expect(text).toContain('connection lost');
@@ -148,7 +148,7 @@ describe('RemotePanel', () => {
     const text = linesText(panel.render(140, 20));
     expect(text).toContain('focus=contracts');
     expect(text).toContain('Registered Remote Runner Contracts');
-    expect(text).toContain('Selected Contract');
+    expect(text).toContain('Selected contract');
     expect(text).toContain(agent.id);
   });
 });

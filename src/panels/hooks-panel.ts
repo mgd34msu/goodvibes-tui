@@ -12,9 +12,9 @@ import {
   buildPanelLine,
   buildPanelWorkspace,
   DEFAULT_PANEL_PALETTE,
+  resolvePrimaryScrollableSection,
   type PanelWorkspaceSection,
 } from './polish.ts';
-import { getTrackedVisibleWindow } from '../renderer/surface-layout.ts';
 
 const C = {
   ...DEFAULT_PANEL_PALETTE,
@@ -145,24 +145,6 @@ export class HooksPanel extends BasePanel {
 
     this.selectedIndex = Math.min(this.selectedIndex, hooks.length - 1);
     const selected = hooks[this.selectedIndex]!;
-    const window = getTrackedVisibleWindow(hooks.length, this.selectedIndex, Math.max(4, height - 16), this.scrollOffset, 1);
-    this.scrollOffset = window.start;
-    const hookLines: Line[] = [];
-    for (let absolute = window.start; absolute < window.end; absolute++) {
-      const entry = hooks[absolute]!;
-      const bg = absolute === this.selectedIndex ? C.selectBg : undefined;
-      hookLines.push(buildPanelLine(width, [
-        [' ', C.label, bg],
-        [truncateDisplay(entry.hook.name ?? '(unnamed)', 20).padEnd(20), C.value, bg],
-        [` ${truncateDisplay(entry.pattern, 28).padEnd(28)}`, C.info, bg],
-        [` ${(entry.hook.enabled === false ? 'DISABLED' : 'ENABLED').padEnd(8)}`, entry.hook.enabled === false ? C.warn : C.ok, bg],
-        [` ${entry.hook.type}`, C.dim, bg],
-      ]));
-    }
-    if (hooks.length > window.count) {
-      hookLines.push(buildPanelLine(width, [[`  showing ${window.start + 1}-${window.end} of ${hooks.length}`, C.dim]]));
-    }
-
     const contract = contracts.find((candidate) => candidate.pattern === selected.pattern);
     const detailLines: Line[] = [
       buildPanelLine(width, [
@@ -233,12 +215,40 @@ export class HooksPanel extends BasePanel {
         [`hooks=${lastSimulation.matchedHooks.length} chains=${lastSimulation.matchedChains.length}`, C.dim],
       ]));
     }
+    const selectedSection: PanelWorkspaceSection = { title: 'Selected Hook', lines: detailLines };
+    const activitySection: PanelWorkspaceSection = { title: 'Recent Activity', lines: activityLines };
+    const authoringSection: PanelWorkspaceSection = { title: 'Authoring', lines: authoringLines };
+    const resolvedHooksSection = resolvePrimaryScrollableSection(width, height, {
+      intro,
+      footerLines: [buildPanelLine(width, [['  Up/Down move  r refresh  /hooks for full contract listing', C.dim]])],
+      palette: C,
+      section: {
+        title: 'Hooks',
+        scrollableLines: hooks.map((entry, absolute) => {
+          const bg = absolute === this.selectedIndex ? C.selectBg : undefined;
+          return buildPanelLine(width, [
+            [' ', C.label, bg],
+            [truncateDisplay(entry.hook.name ?? '(unnamed)', 20).padEnd(20), C.value, bg],
+            [` ${truncateDisplay(entry.pattern, 28).padEnd(28)}`, C.info, bg],
+            [` ${(entry.hook.enabled === false ? 'DISABLED' : 'ENABLED').padEnd(8)}`, entry.hook.enabled === false ? C.warn : C.ok, bg],
+            [` ${entry.hook.type}`, C.dim, bg],
+          ]);
+        }),
+        selectedIndex: this.selectedIndex,
+        scrollOffset: this.scrollOffset,
+        guardRows: 1,
+        minRows: 4,
+        appendWindowSummary: { dimColor: C.dim },
+      },
+      afterSections: [selectedSection, activitySection, authoringSection],
+    });
+    this.scrollOffset = resolvedHooksSection.scrollOffset;
 
     const sections: PanelWorkspaceSection[] = [
-      { title: 'Hooks', lines: hookLines },
-      { title: 'Selected Hook', lines: detailLines },
-      { title: 'Recent Activity', lines: activityLines },
-      { title: 'Authoring', lines: authoringLines },
+      resolvedHooksSection.section,
+      selectedSection,
+      activitySection,
+      authoringSection,
     ];
     const lines = buildPanelWorkspace(width, height, {
       title: 'Hooks Control Room',

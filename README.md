@@ -2,7 +2,7 @@
 
 A terminal-native AI coding and operations console with multi-provider LLM support, typed runtime systems, and a Unicode-rich custom renderer.
 
-Version: **0.15.1**
+Version: **0.15.2**
 
 <!-- screenshot -->
 
@@ -38,6 +38,7 @@ The runtime is organized around typed store domains, typed runtime events, a sha
 - Shared Unicode glyph primitives for borders, cursors, meters, markers, and selection states
 - Conversation, panels, and modals built on the same low-level renderer instead of ad hoc surface logic
 - Width-aware overlays, stable bottom docking above the prompt, half-height message surfaces, and structured footer layers
+- Shared panel workspace layout budgeting so scroll regions use the renderer-owned visible-row budget instead of panel-local `height - N` guesses
 - Copy/selection logic that strips decorative gutters and visual scaffolding from clipboard output
 
 ### Conversation And Transcript Workflow
@@ -45,12 +46,24 @@ The runtime is organized around typed store domains, typed runtime events, a sha
 - Transcript event navigation by family for operational browsing of long sessions
 - Search overlays, compact line-number modes (`all`, `code`, `off`), and block-level collapse/expand
 - Presentation routing so non-conversational runtime chatter can live in control-room panels instead of the main transcript
+- Tracked assistant-message rendering that supports markdown tables, including tolerant handling of slightly malformed LLM-generated separator rows
 
 ### Panels, Control Rooms, And Workspaces
 - Split-pane panel system with panel picker, layout control, and keyboard-first focus behavior
 - Dedicated control rooms for provider accounts, provider health, local auth, settings sync, remote, MCP, marketplace, orchestration, tasks, intelligence, worktrees, approvals, forensics, security, policy, cockpit, system messages, and more
 - Summary-first heavy panels with posture, issues, next actions, and detail regions instead of raw inventories first
 - Routed system-message workspace for startup discovery and operational noise that does not belong in the main conversation
+- Cross-panel actions between Explorer, Preview, and Symbols so file browsing can open previews and jump to symbol locations directly from panel focus
+
+### Modal And Selection UX
+- Modal stack navigation that unwinds correctly back to the slash-command menu and prior nested modals
+- Search/list focus ownership in searchable modals, so typing only targets filter input when that row is actually focused
+- Toggleable selection-modal behavior with `Space` / `Enter` for primary actions, `Left` / `Right` for booleans, enums, and numeric adjustments, and `Shift+Left` / `Shift+Right` for step-by-10 number changes
+- Slash-command menu close behavior that fully clears command mode and prompt state on `Esc`
+
+### Token And Usage Visibility
+- Live thinking-strip token output that continues to advance even when visible response streaming is disabled
+- Fresh-input versus cached-context accounting in the footer and token surfaces, so per-turn request counts stop double-counting cache-read tokens while the context bar still reflects the full prompt footprint
 
 ### Agents, Tasks, And WRFC
 - In-process agents with isolated history, scoped tools, optional worktrees, and structured communication lanes

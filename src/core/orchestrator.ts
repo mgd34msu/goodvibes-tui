@@ -18,7 +18,7 @@ import { ConsecutiveErrorBreaker } from './circuit-breaker.ts';
 import type { ExecutionPlan, PlanItem } from './execution-plan.ts';
 import { classifyIntent } from './intent-classifier.ts';
 import { getTokenLimitsForModel, getContextWindowForModel } from '../providers/model-limits.ts';
-import { estimateConversationTokens } from './context-compaction.ts';
+import { estimateConversationTokens, estimateTokens } from './context-compaction.ts';
 import { sessionMemoryStore } from './session-memory.ts';
 import { sessionLineageTracker } from './session-lineage.ts';
 import { getCatalog } from '../providers/model-catalog.ts';
@@ -97,6 +97,8 @@ export class Orchestrator {
    * Value is 0 before the first LLM response (context bar shows empty, which is correct).
    */
   public lastInputTokens = 0;
+  /** Fresh input tokens from the most recent turn (excluding cache-read reuse where applicable). */
+  public lastRequestInputTokens = 0;
   /** Approximate input tokens for the current streaming turn (from prior turn's response). */
   public streamingInputTokens = 0;
   /** Output tokens received so far in the current streaming turn (one per delta chunk). */
@@ -162,6 +164,47 @@ export class Orchestrator {
    */
   private _pendingToolCalls: ToolCall[] = [];
   private readonly requestRender: () => void;
+
+  private normalizeUsage(
+    usage: Awaited<ReturnType<LLMProvider['chat']>>['usage'],
+  ): Awaited<ReturnType<LLMProvider['chat']>>['usage'] {
+    const cacheReadTokens = usage.cacheReadTokens ?? 0;
+    const hasExplicitCacheBreakout = Object.prototype.hasOwnProperty.call(usage, 'cacheWriteTokens');
+    const freshInputTokens = hasExplicitCacheBreakout
+      ? usage.inputTokens
+      : Math.max(0, usage.inputTokens - cacheReadTokens);
+    return {
+      ...usage,
+      inputTokens: freshInputTokens,
+    };
+  }
+
+  private estimateFreshTurnInputTokens(
+    currentEstimatedTokens: number,
+    text: string,
+    content?: ContentPart[],
+  ): number {
+    const explicitContentTokens = content?.reduce((sum, part) => {
+      if (part.type === 'text') return sum + estimateTokens(part.text);
+      return sum;
+    }, 0) ?? 0;
+    const currentTurnPayloadTokens = Math.max(explicitContentTokens, estimateTokens(text));
+
+    if (this.lastInputTokens <= 0) {
+      return Math.max(currentEstimatedTokens, currentTurnPayloadTokens);
+    }
+
+    const deltaFromPreviousContext = currentEstimatedTokens - this.lastInputTokens;
+    if (deltaFromPreviousContext > 0) {
+      return Math.max(deltaFromPreviousContext, currentTurnPayloadTokens);
+    }
+
+    if (currentEstimatedTokens < Math.floor(this.lastInputTokens * 0.8)) {
+      return Math.max(currentEstimatedTokens, currentTurnPayloadTokens);
+    }
+
+    return currentTurnPayloadTokens;
+  }
 
   constructor(
     private conversation: ConversationManager,
@@ -296,10 +339,10 @@ export class Orchestrator {
     }
   }
 
-  private startThinking(): void {
+  private startThinking(estimatedInputTokens?: number): void {
     this.isThinking = true;
     this.thinkingFrame = 0; // Reset each turn so gradient starts clean and frame never grows unbounded
-    this.streamingInputTokens = this.lastInputTokens;
+    this.streamingInputTokens = estimatedInputTokens ?? this.lastRequestInputTokens;
     this.streamingOutputTokens = 0;
     this.abortController = new AbortController();
     if (this.animInterval) clearInterval(this.animInterval);
@@ -382,7 +425,8 @@ export class Orchestrator {
     this.turnStartMessageCount = this.conversation.getMessageCount();
     this.scrollToEnd(this.getViewportHeight());
 
-    this.startThinking();
+    const initialEstimatedTokens = estimateConversationTokens(this.conversation.getMessagesForLLM());
+    this.startThinking(this.estimateFreshTurnInputTokens(initialEstimatedTokens, text, content));
 
     try {
       const model = providerRegistry.getCurrentModel();
@@ -398,11 +442,13 @@ export class Orchestrator {
         // Wire up streaming delta handler when streaming is enabled
         let streamAccumulated = '';
         let reasoningAccumulated = '';
-        const onDelta = streamEnabled
-          ? (delta: StreamDelta) => {
+        let streamSessionStarted = false;
+        const onDelta = (delta: StreamDelta) => {
               if (delta.content) {
                 streamAccumulated += delta.content;
-                this.conversation.updateStreamingBlock(streamAccumulated);
+                if (streamEnabled) {
+                  this.conversation.updateStreamingBlock(streamAccumulated);
+                }
                 this.streamingOutputTokens++;
               }
               if (delta.reasoning) {
@@ -419,15 +465,6 @@ export class Orchestrator {
               }
               this.requestRender();
             }
-          : undefined;
-
-        if (onDelta) {
-          this.isStreaming = true;
-          this.conversation.startStreamingBlock();
-          if (this.runtimeBus) {
-            emitStreamStart(this.runtimeBus, this.emitterContext(turnId), { turnId });
-          }
-        }
 
         // ── Context window pre-flight check ─────────────────────────────────
         // Before calling the provider, verify the request fits within the model's
@@ -439,12 +476,12 @@ export class Orchestrator {
         const preflightResult = await this.checkContextWindowPreflight(turnId, model);
         if (preflightResult === 'error') {
           // Error message already added to conversation; clean up streaming block
-          if (onDelta) {
+          if (streamEnabled) {
             this.isStreaming = false;
             this.conversation.finalizeStreamingBlock();
-            if (this.runtimeBus) {
-              emitStreamEnd(this.runtimeBus, this.emitterContext(turnId), { turnId });
-            }
+          }
+          if (this.runtimeBus) {
+            emitStreamEnd(this.runtimeBus, this.emitterContext(turnId), { turnId });
           }
           if (this.runtimeBus) {
             emitPreflightFail(this.runtimeBus, this.emitterContext(turnId), {
@@ -461,6 +498,21 @@ export class Orchestrator {
         if (this.runtimeBus) {
           emitPreflightOk(this.runtimeBus, this.emitterContext(turnId), { turnId });
         }
+
+        this.streamingInputTokens = this.estimateFreshTurnInputTokens(
+          estimateConversationTokens(this.conversation.getMessagesForLLM()),
+          text,
+          content,
+        );
+
+        if (streamEnabled) {
+          this.isStreaming = true;
+          this.conversation.startStreamingBlock();
+        }
+        if (this.runtimeBus) {
+          emitStreamStart(this.runtimeBus, this.emitterContext(turnId), { turnId });
+        }
+        streamSessionStarted = true;
 
         const tokenLimits = getTokenLimitsForModel(model);
 
@@ -509,12 +561,12 @@ export class Orchestrator {
           });
         } catch (chatErr) {
           // Clean up streaming block on error
-          if (onDelta) {
+          if (streamEnabled) {
             this.isStreaming = false;
             this.conversation.finalizeStreamingBlock();
-            if (this.runtimeBus) {
-              emitStreamEnd(this.runtimeBus, this.emitterContext(turnId), { turnId });
-            }
+          }
+          if (streamSessionStarted && this.runtimeBus) {
+            emitStreamEnd(this.runtimeBus, this.emitterContext(turnId), { turnId });
           }
           // Intercept 429 exhaustion for synthetic paid/subscription models and show actionable UX
           if (chatErr instanceof ProviderError && chatErr.statusCode === 429 && model.provider === 'synthetic' && model.tier !== 'free') {
@@ -552,13 +604,18 @@ export class Orchestrator {
           throw chatErr;
         }
 
-        if (onDelta) {
+        if (streamEnabled) {
           this.isStreaming = false;
           this.conversation.finalizeStreamingBlock();
-          if (this.runtimeBus) {
-            emitStreamEnd(this.runtimeBus, this.emitterContext(turnId), { turnId });
-          }
         }
+        if (streamSessionStarted && this.runtimeBus) {
+          emitStreamEnd(this.runtimeBus, this.emitterContext(turnId), { turnId });
+        }
+
+        response = {
+          ...response,
+          usage: this.normalizeUsage(response.usage),
+        };
 
         void recordUsage(model.id);
         this.usage.input += response.usage.inputTokens;
@@ -605,6 +662,7 @@ export class Orchestrator {
           logger.info(`[Cache] Low hit rate: ${pct}% over ${cacheMetrics.turns} turns`);
         }
 
+        this.lastRequestInputTokens = response.usage.inputTokens;
         this.lastInputTokens = response.usage.inputTokens
           + (response.usage.cacheReadTokens ?? 0)
           + (response.usage.cacheWriteTokens ?? 0);

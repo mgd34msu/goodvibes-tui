@@ -114,6 +114,7 @@ describe('Orchestrator', () => {
       const { orch } = await buildOrchestrator();
       expect(orch.usage.input).toBe(0);
       expect(orch.usage.output).toBe(0);
+      expect(orch.lastRequestInputTokens).toBe(0);
     });
 
     test('abort() does not throw when not thinking', async () => {
@@ -172,6 +173,118 @@ describe('Orchestrator', () => {
       orch.handleUserInput('third');
 
       expect(orch.messageQueue.map(m => m.text)).toEqual(['first', 'second', 'third']);
+    });
+  });
+
+  describe('token accounting', () => {
+    let savedAutoApprove: boolean;
+    let savedStream: boolean;
+    const mockModel = {
+      id: 'mock-model',
+      provider: 'mock',
+      registryKey: 'mock:mock-model',
+      displayName: 'Mock',
+      description: '',
+      capabilities: { toolCalling: true, codeEditing: false, reasoning: false, multimodal: false },
+      contextWindow: 8192,
+      selectable: true,
+    };
+
+    beforeEach(() => {
+      savedAutoApprove = getConfigSnapshot().behavior.autoApprove ?? false;
+      savedStream = getConfigSnapshot().display.stream ?? true;
+      configManager.set('behavior.autoApprove', true);
+    });
+
+    afterEach(() => {
+      configManager.set('behavior.autoApprove', savedAutoApprove);
+      configManager.set('display.stream', savedStream);
+    });
+
+    test('non-streaming turns still advance live output counters via hidden deltas', async () => {
+      configManager.set('display.stream', false);
+      let maxSeenInput = 0;
+      let maxSeenOutput = 0;
+
+      const provider: LLMProvider = {
+        name: 'mock',
+        models: ['mock-model'],
+        chat: mock(async (params: ChatRequest): Promise<ChatResponse> => {
+          params.onDelta?.({ content: 'hello' });
+          params.onDelta?.({ content: ' world' });
+          return {
+            content: 'hello world',
+            toolCalls: [],
+            usage: { inputTokens: 42, outputTokens: 11 },
+            stopReason: 'end',
+          };
+        }),
+      };
+
+      let orchRef: Awaited<ReturnType<typeof buildOrchestrator>>['orch'] | null = null;
+      const { orch } = await buildOrchestrator(() => {
+        if (orchRef) {
+          maxSeenInput = Math.max(maxSeenInput, orchRef.streamingInputTokens);
+          maxSeenOutput = Math.max(maxSeenOutput, orchRef.streamingOutputTokens);
+        }
+      });
+      orchRef = orch;
+
+      const reg: ProviderRegistry = getProviderRegistry();
+      const origGet = reg.get.bind(reg);
+      const origGetForModel = reg.getForModel.bind(reg);
+      const origGetCurrentModel = reg.getCurrentModel.bind(reg);
+      reg.get = mock(() => provider);
+      reg.getForModel = mock(() => provider);
+      reg.getCurrentModel = mock(() => mockModel);
+      try {
+        await orch.handleUserInput('say hello');
+      } finally {
+        reg.get = origGet;
+        reg.getForModel = origGetForModel;
+        reg.getCurrentModel = origGetCurrentModel;
+      }
+
+      expect(maxSeenInput).toBeGreaterThan(0);
+      expect(maxSeenOutput).toBe(2);
+      expect(orch.usage.output).toBe(11);
+    });
+
+    test('usage normalizes cached prompt tokens into fresh input plus cache read', async () => {
+      configManager.set('display.stream', false);
+
+      const provider: LLMProvider = {
+        name: 'mock',
+        models: ['mock-model'],
+        chat: mock(async (_params: ChatRequest): Promise<ChatResponse> => ({
+          content: 'done',
+          toolCalls: [],
+          usage: { inputTokens: 15000, outputTokens: 80, cacheReadTokens: 14900 },
+          stopReason: 'end',
+        })),
+      };
+
+      const { orch } = await buildOrchestrator();
+
+      const reg: ProviderRegistry = getProviderRegistry();
+      const origGet = reg.get.bind(reg);
+      const origGetForModel = reg.getForModel.bind(reg);
+      const origGetCurrentModel = reg.getCurrentModel.bind(reg);
+      reg.get = mock(() => provider);
+      reg.getForModel = mock(() => provider);
+      reg.getCurrentModel = mock(() => mockModel);
+      try {
+        await orch.handleUserInput('cached request');
+      } finally {
+        reg.get = origGet;
+        reg.getForModel = origGetForModel;
+        reg.getCurrentModel = origGetCurrentModel;
+      }
+
+      expect(orch.usage.input).toBe(100);
+      expect(orch.usage.cacheRead).toBe(14900);
+      expect(orch.lastRequestInputTokens).toBe(100);
+      expect(orch.lastInputTokens).toBe(15000);
     });
   });
 

@@ -20,14 +20,16 @@ import { createEmptyLine } from '../types/grid.ts';
 import {
   buildEmptyState,
   buildKeyValueLine,
+  buildPanelListRow,
   buildPanelLine,
   buildSearchInputLine,
+  buildSummaryBlock,
   buildPanelWorkspace,
   DEFAULT_PANEL_PALETTE,
+  resolvePrimaryScrollableSection,
   type PanelWorkspaceSection,
 } from './polish.ts';
 import { truncateDisplay } from '../utils/terminal-width.ts';
-import { getTrackedVisibleWindow } from '../renderer/surface-layout.ts';
 import { wrapWithHangingIndent } from '../renderer/text-layout.ts';
 import {
   getPanelSearchFocusTransition,
@@ -312,11 +314,11 @@ export class PanelListPanel extends BasePanel {
     }
 
     const panelEntries = entries.filter(e => e.kind === 'panel');
-    const bodyHeight = Math.max(1, height - 7);
     const pm = getPanelManager();
     const topIds = new Set(pm.getTopPane().panels.map(p => p.id));
     const bottomIds = new Set(pm.getBottomPane().panels.map(p => p.id));
     const focusedPane = pm.getFocusedPane();
+    const footerLines = [buildPanelLine(width, [[` [${this._selectedIndex + 1}/${panelEntries.length}] ↑/↓ nav  Enter open  T/B place  M move  S split  Tab focus`.slice(0, width), C.hint]])];
     const postureLines: Line[] = [
       buildKeyValueLine(width, [
         { label: 'visible panels', value: String(pm.getAllOpen().length), valueColor: pm.getAllOpen().length > 0 ? C.name : C.dim },
@@ -346,12 +348,10 @@ export class PanelListPanel extends BasePanel {
       } else {
         const flatIdx = flatPanelIndex++;
         const isSelected = flatIdx === this._selectedIndex;
-        const bg = isSelected ? C.selectedBg : '';
         const isTopOpen = topIds.has(entry.reg.id);
         const isBottomOpen = bottomIds.has(entry.reg.id);
         const dot = isTopOpen || isBottomOpen ? '●' : '○';
         const dotColor = isTopOpen || isBottomOpen ? C.openDot : C.closedDot;
-        const arrow = isSelected ? '▶' : ' ';
         const nameColor = isSelected ? C.selected : C.name;
         const nameStr = entry.reg.name.padEnd(NAME_COL_WIDTH, ' ').slice(0, NAME_COL_WIDTH);
         const descStartCol = PREFIX_WIDTH + NAME_COL_WIDTH + 1;
@@ -359,21 +359,20 @@ export class PanelListPanel extends BasePanel {
         const descLines = wrapPanelDescription(entry.reg.description, descWidth, 2);
         const placement = panelPlacementMarker({ isTopOpen, isBottomOpen, focusedPane });
         const blockLines: Line[] = [
-          buildPanelLine(width, [
-            [arrow, C.selIcon, bg],
-            [dot, dotColor, bg],
-            [placement.text, placement.color, bg],
-            [' ', C.dim, bg],
-            [nameStr + ' ', nameColor, bg],
-            [descLines[0] ?? '', C.desc, bg],
-          ]),
+          buildPanelListRow(width, [
+            { text: dot, fg: dotColor },
+            { text: placement.text, fg: placement.color },
+            { text: ' ', fg: C.dim },
+            { text: `${nameStr} `, fg: nameColor },
+            { text: descLines[0] ?? '', fg: C.desc },
+          ], C, { selected: isSelected, selectedBg: C.selectedBg, markerColor: C.selIcon }),
         ];
         if ((descLines[1] ?? '').length > 0) {
           blockLines.push(buildPanelLine(width, [
-            [' '.repeat(PREFIX_WIDTH), C.dim, bg],
-            [' '.repeat(NAME_COL_WIDTH), C.dim, bg],
-            [' ', C.dim, bg],
-            [descLines[1] ?? '', C.desc, bg],
+            [' '.repeat(PREFIX_WIDTH), C.dim, isSelected ? C.selectedBg : C.surfaceBg],
+            [' '.repeat(NAME_COL_WIDTH), C.dim, isSelected ? C.selectedBg : C.surfaceBg],
+            [' ', C.dim, isSelected ? C.selectedBg : C.surfaceBg],
+            [descLines[1] ?? '', C.desc, isSelected ? C.selectedBg : C.surfaceBg],
           ]));
         }
         renderedBlocks.push({ entry, lines: blockLines, panelFlatIndex: flatIdx });
@@ -387,34 +386,36 @@ export class PanelListPanel extends BasePanel {
     }
     const selectedEntryIndex = renderedBlocks.findIndex((block) => block.panelFlatIndex === this._selectedIndex);
     const selectedRow = selectedEntryIndex >= 0 ? blockStarts[selectedEntryIndex] ?? 0 : 0;
-    const window = getTrackedVisibleWindow(totalRows, selectedRow, bodyHeight, this._scrollOffset, 1);
-    this._scrollOffset = window.start;
-    let consumedRows = 0;
-    for (let i = 0; i < renderedBlocks.length; i++) {
-      const block = renderedBlocks[i]!;
-      const startRow = blockStarts[i] ?? 0;
-      const endRow = startRow + block.lines.length;
-      if (endRow <= window.start) continue;
-      if (startRow >= window.end) break;
-      const sliceStart = Math.max(0, window.start - startRow);
-      const sliceEnd = Math.min(block.lines.length, window.end - startRow);
-      for (const line of block.lines.slice(sliceStart, sliceEnd)) {
-        entryLines.push(line);
-        consumedRows++;
-      }
-      if (consumedRows >= bodyHeight) break;
-    }
+    const postureSection: PanelWorkspaceSection = { lines: buildSummaryBlock(width, 'Panel posture', postureLines, C) };
+    const resolvedSection = resolvePrimaryScrollableSection(width, height, {
+      intro,
+      footerLines,
+      palette: C,
+      beforeSections: [postureSection],
+      section: {
+        title: 'Panels',
+        fixedLines: entryLines,
+        scrollableLines: renderedBlocks.flatMap((block) => block.lines),
+        selectedIndex: selectedRow,
+        scrollOffset: this._scrollOffset,
+        guardRows: 1,
+        minRows: 1,
+        appendWindowSummary: {
+          dimColor: C.dim,
+        },
+      },
+    });
+    this._scrollOffset = resolvedSection.scrollOffset;
 
-    const hintText = ` [${this._selectedIndex + 1}/${panelEntries.length}] ↑/↓ nav  Enter open  T/B place  M move  S split  Tab focus`;
     const sections: PanelWorkspaceSection[] = [
-      { title: 'Posture', lines: postureLines },
-      { title: 'Panels', lines: entryLines },
+      postureSection,
+      resolvedSection.section,
     ];
     const lines = buildPanelWorkspace(width, height, {
       title: 'Panel Workspace',
       intro,
       sections,
-      footerLines: [buildPanelLine(width, [[hintText.slice(0, width), C.hint]])],
+      footerLines,
       palette: C,
     });
 

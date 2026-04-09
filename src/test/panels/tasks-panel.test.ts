@@ -144,7 +144,7 @@ describe('TasksPanel', () => {
 
     const panel = new TasksPanel(store);
     const initial = linesText(panel.render(120, 24));
-    expect(initial).toContain('Posture');
+    expect(initial).toContain('Task posture');
     expect(initial).toContain('queued 1');
     expect(initial).toContain('running 1');
     expect(initial).toContain('blocked 1');
@@ -188,15 +188,15 @@ describe('TasksPanel', () => {
     const accountsPanel = new ProviderAccountsPanel();
     await new Promise((resolve) => setTimeout(resolve, 0));
     const accountsText = linesText(accountsPanel.render(120, 18));
-    expect(accountsText).toContain('Posture');
+    expect(accountsText).toContain('Provider posture');
     expect(accountsText).toContain('/accounts repair <provider>');
 
     const authText = linesText(new LocalAuthPanel().render(120, 18));
-    expect(authText).toContain('Posture');
+    expect(authText).toContain('Local auth posture');
     expect(authText).toContain('/auth local rotate-password <user> <password>');
 
     const settingsText = linesText(new SettingsSyncPanel(getConfigManager()).render(120, 20));
-    expect(settingsText).toContain('Posture');
+    expect(settingsText).toContain('Settings posture');
     expect(settingsText).toContain('/settingssync conflicts');
     expect(settingsText).toContain('/managed review');
   });

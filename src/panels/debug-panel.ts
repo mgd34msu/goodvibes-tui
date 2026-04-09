@@ -7,10 +7,11 @@ import {
   buildPanelLine,
   buildStyledPanelLine,
   buildPanelWorkspace,
+  resolveScrollablePanelSection,
+  resolveStackedScrollableSections,
   DEFAULT_PANEL_PALETTE,
   type PanelWorkspaceSection,
 } from './polish.ts';
-import { getVisibleWindow } from '../renderer/surface-layout.ts';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -286,20 +287,42 @@ export class DebugPanel extends BasePanel {
       });
     } else {
       const rows = this._renderCallLog(width);
-      const window = getVisibleWindow(rows.length, rows.length - 1, Math.max(8, height - 10));
-      sections.push({
-        title: 'API Call Log',
-        lines: rows.slice(window.start, window.end),
-      });
-    }
-
-    if (this._errors.length > 0) {
-      const errors = this._renderErrorHistory(width);
-      const errorWindow = getVisibleWindow(errors.length, errors.length - 1, Math.max(4, Math.floor((height - 10) / 3)));
-      sections.push({
-        title: 'Error History',
-        lines: errors.slice(errorWindow.start, errorWindow.end),
-      });
+      if (this._errors.length > 0) {
+        const errors = this._renderErrorHistory(width);
+        const [callSection, errorSection] = resolveStackedScrollableSections(width, height, {
+          palette: DEFAULT_PANEL_PALETTE,
+          beforeSections: sections,
+          sections: [
+            {
+              title: 'API Call Log',
+              scrollableLines: rows,
+              scrollOffset: Math.max(0, rows.length - 1),
+              minRows: 8,
+              weight: 2,
+            },
+            {
+              title: 'Error History',
+              scrollableLines: errors,
+              scrollOffset: Math.max(0, errors.length - 1),
+              minRows: 4,
+              weight: 1,
+            },
+          ],
+        });
+        sections.push(callSection!.section, errorSection!.section);
+      } else {
+        const callSection = resolveScrollablePanelSection(width, height, {
+          palette: DEFAULT_PANEL_PALETTE,
+          beforeSections: sections,
+          section: {
+            title: 'API Call Log',
+            scrollableLines: rows,
+            scrollOffset: Math.max(0, rows.length - 1),
+            minRows: 8,
+          },
+        });
+        sections.push(callSection.section);
+      }
     }
 
     return buildPanelWorkspace(width, height, {

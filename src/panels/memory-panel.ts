@@ -14,10 +14,10 @@ import {
   buildPanelLine,
   buildSearchInputLine,
   buildPanelWorkspace,
+  resolveScrollablePanelSection,
   DEFAULT_PANEL_PALETTE,
   type PanelWorkspaceSection,
 } from './polish.ts';
-import { getTrackedVisibleWindow } from '../renderer/surface-layout.ts';
 import {
   getPanelSearchFocusTransition,
   isPanelSearchBackspace,
@@ -244,30 +244,42 @@ export class MemoryPanel extends BasePanel {
       }
     }
 
-    const listBudget = Math.max(4, height - 12 - Math.min(8, selectedLines.length));
-    const window = getTrackedVisibleWindow(this.records.length, this.selectedIdx, listBudget, this.scrollOffset, 1);
-    const listLines = this.records.slice(window.start, window.end).map((record, index) => {
-      const globalIndex = window.start + index;
-      const bg = globalIndex === this.selectedIdx ? C.selected : undefined;
-      return buildPanelLine(width, [
-        ['  ', C.label, bg],
-        [`[${record.scope.slice(0, 1).toUpperCase()}/${record.cls.slice(0, 3).toUpperCase()}] `, classColor(record.cls), bg],
-        [record.id.slice(-8), C.dim, bg],
-        ['  ', C.label, bg],
-        [fmtTime(record.createdAt), C.dim, bg],
-        ['  ', C.label, bg],
-        [record.summary.slice(0, Math.max(0, width - 33)), C.value, bg],
-      ]);
+    const summarySection: PanelWorkspaceSection = { title: 'Summary', lines: summaryLines };
+    const selectedSection: PanelWorkspaceSection = selectedLines.length > 0 ? { title: 'Selected', lines: selectedLines } : { title: 'Selected', lines: [] };
+    const recordsSection = resolveScrollablePanelSection(width, height, {
+      intro,
+      footerLines: [
+        buildPanelLine(width, [['  / search  j/k or Up/Down move  r reload  Esc clear search', C.dim]]),
+      ],
+      palette: C,
+      beforeSections: [summarySection],
+      section: {
+        title: 'Records',
+        scrollableLines: this.records.map((record, globalIndex) => {
+          const bg = globalIndex === this.selectedIdx ? C.selected : undefined;
+          return buildPanelLine(width, [
+            ['  ', C.label, bg],
+            [`[${record.scope.slice(0, 1).toUpperCase()}/${record.cls.slice(0, 3).toUpperCase()}] `, classColor(record.cls), bg],
+            [record.id.slice(-8), C.dim, bg],
+            ['  ', C.label, bg],
+            [fmtTime(record.createdAt), C.dim, bg],
+            ['  ', C.label, bg],
+            [record.summary.slice(0, Math.max(0, width - 33)), C.value, bg],
+          ]);
+        }),
+        selectedIndex: this.selectedIdx,
+        scrollOffset: this.scrollOffset,
+        minRows: 4,
+        appendWindowSummary: { dimColor: C.dim },
+      },
+      afterSections: selectedLines.length > 0 ? [selectedSection] : [],
     });
-    if (this.records.length > window.count) {
-      listLines.push(buildPanelLine(width, [[`  showing ${window.start + 1}-${window.end} of ${this.records.length}`, C.dim]]));
-    }
-
+    this.scrollOffset = recordsSection.scrollOffset;
     const sections: PanelWorkspaceSection[] = [
-      { title: 'Summary', lines: summaryLines },
-      { title: 'Records', lines: listLines },
+      summarySection,
+      recordsSection.section,
     ];
-    if (selectedLines.length > 0) sections.push({ title: 'Selected', lines: selectedLines });
+    if (selectedLines.length > 0) sections.push(selectedSection);
 
     return buildPanelWorkspace(width, height, {
       title: 'Memory',

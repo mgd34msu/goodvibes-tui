@@ -8,10 +8,10 @@ import {
   buildKeyValueLine,
   buildPanelLine,
   buildPanelWorkspace,
+  resolveScrollablePanelSection,
   DEFAULT_PANEL_PALETTE,
   type PanelWorkspaceSection,
 } from './polish.ts';
-import { getTrackedVisibleWindow } from '../renderer/surface-layout.ts';
 
 const C = {
   ...DEFAULT_PANEL_PALETTE,
@@ -119,7 +119,7 @@ export class OrchestrationPanel extends BasePanel {
         title: 'Orchestration Control Room',
         intro,
         sections: [{
-          title: 'Posture',
+          title: 'Orchestration posture',
           lines: [
             ...postureLines,
             ...buildEmptyState(
@@ -142,24 +142,6 @@ export class OrchestrationPanel extends BasePanel {
 
     this.selectedIndex = Math.min(this.selectedIndex, graphs.length - 1);
     const selected = graphs[this.selectedIndex]!;
-    const graphWindow = getTrackedVisibleWindow(graphs.length, this.selectedIndex, Math.max(4, height - 16), this.scrollOffset, 1);
-    this.scrollOffset = graphWindow.start;
-    const graphLines: Line[] = [];
-    for (let absolute = graphWindow.start; absolute < graphWindow.end; absolute++) {
-      const graph = graphs[absolute]!;
-      const bg = absolute === this.selectedIndex ? C.selectBg : undefined;
-      graphLines.push(buildPanelLine(width, [
-        [' ', C.label, bg],
-        [graph.status.padEnd(10), statusColor(graph.status), bg],
-        [` ${graph.mode.padEnd(17)}`, C.value, bg],
-        [` ${graph.id.slice(0, 8)} `, C.dim, bg],
-        [graph.title.slice(0, Math.max(0, width - 39)), C.value, bg],
-      ]));
-    }
-    if (graphs.length > graphWindow.count) {
-      graphLines.push(buildPanelLine(width, [[`  showing ${graphWindow.start + 1}-${graphWindow.end} of ${graphs.length}`, C.dim]]));
-    }
-
     const detailLines: Line[] = [
       buildPanelLine(width, [
         ['  Title: ', C.label],
@@ -226,11 +208,39 @@ export class OrchestrationPanel extends BasePanel {
           ]);
         });
 
+    const postureSection: PanelWorkspaceSection = { title: 'Orchestration posture', lines: postureLines };
+    const selectedGraphSection: PanelWorkspaceSection = { title: 'Selected Graph', lines: detailLines };
+    const nodesSection: PanelWorkspaceSection = { title: 'Nodes', lines: nodeLines };
+    const graphsSection = resolveScrollablePanelSection(width, height, {
+      intro,
+      palette: C,
+      beforeSections: [postureSection],
+      section: {
+        title: 'Graphs',
+        scrollableLines: graphs.map((graph, absolute) => {
+          const bg = absolute === this.selectedIndex ? C.selectBg : undefined;
+          return buildPanelLine(width, [
+            [' ', C.label, bg],
+            [graph.status.padEnd(10), statusColor(graph.status), bg],
+            [` ${graph.mode.padEnd(17)}`, C.value, bg],
+            [` ${graph.id.slice(0, 8)} `, C.dim, bg],
+            [graph.title.slice(0, Math.max(0, width - 39)), C.value, bg],
+          ]);
+        }),
+        selectedIndex: this.selectedIndex,
+        scrollOffset: this.scrollOffset,
+        minRows: 4,
+        appendWindowSummary: { dimColor: C.dim },
+      },
+      afterSections: [selectedGraphSection, nodesSection],
+    });
+    this.scrollOffset = graphsSection.scrollOffset;
+
     const sections: PanelWorkspaceSection[] = [
-      { title: 'Posture', lines: postureLines },
-      { title: 'Graphs', lines: graphLines },
-      { title: 'Selected Graph', lines: detailLines },
-      { title: 'Nodes', lines: nodeLines },
+      postureSection,
+      graphsSection.section,
+      selectedGraphSection,
+      nodesSection,
     ];
     const lines = buildPanelWorkspace(width, height, {
       title: 'Orchestration Control Room',

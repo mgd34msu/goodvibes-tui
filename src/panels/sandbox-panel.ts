@@ -11,10 +11,10 @@ import {
   buildKeyValueLine,
   buildPanelLine,
   buildPanelWorkspace,
+  resolveStackedScrollableSections,
   DEFAULT_PANEL_PALETTE,
   type PanelWorkspaceSection,
 } from './polish.ts';
-import { getTrackedVisibleWindow } from '../renderer/surface-layout.ts';
 
 const C = {
   ...DEFAULT_PANEL_PALETTE,
@@ -174,7 +174,6 @@ export class SandboxPanel extends BasePanel {
       selectionLines.push(...buildBodyText(width, selectedSession.notes.join(' | '), C, C.dim));
     }
 
-    const listBudget = Math.max(2, Math.floor(Math.max(1, height - 14) / 2));
     const sessionLines: Line[] = [];
     if (sessions.length === 0) {
       sessionLines.push(...buildEmptyState(
@@ -185,15 +184,7 @@ export class SandboxPanel extends BasePanel {
         C,
       ));
     } else {
-      const sessionWindow = getTrackedVisibleWindow(
-        sessions.length,
-        selectedSession ? sessions.findIndex((session) => session.id === selectedSession.id) : 0,
-        listBudget,
-        this.scrollOffset,
-        1,
-      );
-      this.scrollOffset = sessionWindow.start;
-      for (const session of sessions.slice(sessionWindow.start, sessionWindow.end)) {
+      for (const session of sessions) {
         const bg = selectedSession?.id === session.id ? C.headerBg : undefined;
         sessionLines.push(buildPanelLine(width, [
           ['  ', C.label],
@@ -205,9 +196,6 @@ export class SandboxPanel extends BasePanel {
           [` ${String(session.executionCount ?? 0).padStart(3)}x`, C.info, bg],
           [` ${session.id.slice(0, Math.max(8, Math.min(14, width - 64)))}`, C.dim, bg],
         ]));
-      }
-      if (sessions.length > listBudget) {
-        sessionLines.push(buildPanelLine(width, [[`  [${sessionWindow.start + 1}-${sessionWindow.end} of ${sessions.length}]`, C.dim]]));
       }
     }
 
@@ -223,14 +211,7 @@ export class SandboxPanel extends BasePanel {
     }
 
     const profileLines: Line[] = [];
-    const profileWindow = getTrackedVisibleWindow(
-      profiles.length,
-      selectedProfile ? profiles.findIndex((profile) => profile.id === selectedProfile.id) : 0,
-      listBudget,
-      this.scrollOffset,
-      1,
-    );
-    for (const profile of profiles.slice(profileWindow.start, profileWindow.end)) {
+    for (const profile of profiles) {
       const bg = selectedProfile?.id === profile.id ? C.headerBg : undefined;
       profileLines.push(buildPanelLine(width, [
         ['  ', C.label],
@@ -240,18 +221,56 @@ export class SandboxPanel extends BasePanel {
         [` vm=${profile.requiresVm ? 'yes' : 'no'}`, profile.requiresVm ? C.good : C.warn, bg],
       ]));
     }
-    if (profiles.length > listBudget) {
-      profileLines.push(buildPanelLine(width, [[`  [${profileWindow.start + 1}-${profileWindow.end} of ${profiles.length}]`, C.dim]]));
-    }
+    const postureSection: PanelWorkspaceSection = { title: 'Sandbox posture', lines: overviewLines };
+    const selectedSection: PanelWorkspaceSection = { title: selectedProfile ? 'Selected Profile' : 'Selected Session', lines: selectionLines };
+    const presetsSection: PanelWorkspaceSection = { title: 'Presets', lines: presetLines };
+    const [sessionsSection, profilesSection] = resolveStackedScrollableSections(width, height, {
+      intro,
+      footerLines: [
+        buildGuidanceLine(width, '/sandbox presets', 'compare secure, balanced, and shared sandbox operating modes', C),
+        buildGuidanceLine(width, '/sandbox apply-preset <id>', 'change local vs QEMU isolation policy without editing config by hand', C),
+      ],
+      palette: C,
+      beforeSections: [
+        postureSection,
+        ...(selectionLines.length > 0 ? [selectedSection] : []),
+      ],
+      sections: [
+        {
+          title: 'Sessions',
+          scrollableLines: sessionLines,
+          selectedIndex: selectedSession ? Math.max(0, sessions.findIndex((session) => session.id === selectedSession.id)) : undefined,
+          scrollOffset: this.scrollOffset,
+          minRows: 2,
+          weight: 1,
+          appendWindowSummary: sessions.length > 0 ? {
+            dimColor: C.dim,
+            formatter: (window) => buildPanelLine(width, [[`  [${window.start + 1}-${window.end} of ${sessions.length}]`, C.dim]]),
+          } : undefined,
+        },
+        {
+          title: 'Profiles',
+          scrollableLines: profileLines,
+          selectedIndex: selectedProfile ? Math.max(0, profiles.findIndex((profile) => profile.id === selectedProfile.id)) : undefined,
+          scrollOffset: this.scrollOffset,
+          minRows: 2,
+          weight: 1,
+          appendWindowSummary: profiles.length > 0 ? {
+            dimColor: C.dim,
+            formatter: (window) => buildPanelLine(width, [[`  [${window.start + 1}-${window.end} of ${profiles.length}]`, C.dim]]),
+          } : undefined,
+        },
+      ],
+      afterSections: [presetsSection],
+    });
+    this.scrollOffset = sessionsSection?.scrollOffset ?? this.scrollOffset;
 
     const sections: PanelWorkspaceSection[] = [
-      { title: 'Posture', lines: overviewLines },
-      ...(selectionLines.length > 0
-        ? [{ title: selectedProfile ? 'Selected Profile' : 'Selected Session', lines: selectionLines }]
-        : []),
-      { title: 'Sessions', lines: sessionLines },
-      { title: 'Presets', lines: presetLines },
-      { title: 'Profiles', lines: profileLines },
+      postureSection,
+      ...(selectionLines.length > 0 ? [selectedSection] : []),
+      sessionsSection?.section ?? { title: 'Sessions', lines: sessionLines },
+      presetsSection,
+      profilesSection?.section ?? { title: 'Profiles', lines: profileLines },
     ];
 
     const lines = buildPanelWorkspace(width, height, {

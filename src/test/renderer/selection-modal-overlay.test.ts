@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import { renderSelectionModalOverlay } from '../../renderer/selection-modal-overlay.ts';
+import { DEFAULT_OVERLAY_PALETTE } from '../../renderer/overlay-box.ts';
 import { SelectionModal } from '../../input/selection-modal.ts';
 
 describe('renderSelectionModalOverlay', () => {
@@ -28,15 +29,15 @@ describe('renderSelectionModalOverlay', () => {
     expect(lines.at(-1)?.[rightX]?.char).toBe('┘');
 
     const selectedRow = lines.find((line) =>
-      line.some((cell) => cell.bg === '#103040' && cell.char.trim().length > 0)
+      line.some((cell) => cell.bg === DEFAULT_OVERLAY_PALETTE.selectedBg && cell.char.trim().length > 0)
     );
     expect(selectedRow).toBeDefined();
     expect(selectedRow?.[boxMargin]?.char).toBe('│');
     expect(selectedRow?.[boxMargin]?.bg).toBe('');
     expect(selectedRow?.[rightX]?.char).toBe('│');
     expect(selectedRow?.[rightX]?.bg).toBe('');
-    expect(selectedRow?.[boxMargin + 1]?.bg).toBe('#103040');
-    expect(selectedRow?.[rightX - 1]?.bg).toBe('#103040');
+    expect(selectedRow?.[boxMargin + 1]?.bg).toBe(DEFAULT_OVERLAY_PALETTE.selectedBg);
+    expect(selectedRow?.[rightX - 1]?.bg).toBe(DEFAULT_OVERLAY_PALETTE.selectedBg);
   });
 
   test('shows a block cursor only when search is focused', () => {

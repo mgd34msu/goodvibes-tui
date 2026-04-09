@@ -6,9 +6,9 @@ import {
   buildPanelLine,
   buildSelectablePanelLine,
   buildPanelWorkspace,
+  resolveScrollablePanelSection,
   DEFAULT_PANEL_PALETTE,
 } from './polish.ts';
-import { getTrackedVisibleWindow } from '../renderer/surface-layout.ts';
 import { getDisplayWidth } from '../utils/terminal-width.ts';
 
 // ── Symbol types ────────────────────────────────────────────────────────────
@@ -198,20 +198,62 @@ export class SymbolOutlinePanel extends BasePanel {
     }
 
     const visible = this._visibleRows();
-    const window = getTrackedVisibleWindow(visible.length, this.selectedIndex, Math.max(8, height - 8), this.scrollOffset, 1);
-    this.scrollOffset = window.start;
-    const rows: Line[] = [];
-    for (let i = window.start; i < window.end; i++) {
-      const row = visible[i];
-      if (!row) continue;
-      const isSelected = i === this.selectedIndex;
-      const bgColor = isSelected ? '236' : '';
-      rows.push(
-        row.kind === 'header'
-          ? _renderHeader(width, row, isSelected, bgColor, this.collapsed)
-          : _renderSymbol(width, row, isSelected, bgColor),
-      );
-    }
+    const outlineSection = resolveScrollablePanelSection(width, height, {
+      intro: this.currentPath ? this.currentPath : 'Outline the current file into navigable symbols and lightweight parent/child structure.',
+      footerLines: [
+        buildPanelLine(width, [[' Up/Down', DEFAULT_PANEL_PALETTE.info], [' navigate', DEFAULT_PANEL_PALETTE.dim], ['   Space', DEFAULT_PANEL_PALETTE.info], [' collapse', DEFAULT_PANEL_PALETTE.dim], ['   Enter', DEFAULT_PANEL_PALETTE.info], [' jump target', DEFAULT_PANEL_PALETTE.dim]]),
+      ],
+      palette: DEFAULT_PANEL_PALETTE,
+      beforeSections: [
+        {
+          title: 'Summary',
+          lines: [
+            buildPanelLine(width, [
+              [' Symbols ', DEFAULT_PANEL_PALETTE.label],
+              [String(this.symbols.length), DEFAULT_PANEL_PALETTE.value],
+              ['   Collapsed ', DEFAULT_PANEL_PALETTE.label],
+              [String(this.collapsed.size), this.collapsed.size > 0 ? DEFAULT_PANEL_PALETTE.warn : DEFAULT_PANEL_PALETTE.dim],
+            ]),
+          ],
+        },
+      ],
+      section: {
+        title: 'Outline',
+        scrollableLines: visible.map((row, i) => {
+          const isSelected = i === this.selectedIndex;
+          const bgColor = isSelected ? '236' : '';
+          return row.kind === 'header'
+            ? _renderHeader(width, row, isSelected, bgColor, this.collapsed)
+            : _renderSymbol(width, row, isSelected, bgColor);
+        }),
+        selectedIndex: this.selectedIndex,
+        scrollOffset: this.scrollOffset,
+        minRows: 8,
+      },
+      afterSections: [
+        {
+          title: 'Selected',
+          lines: (() => {
+            const selected = visible[this.selectedIndex];
+            return selected
+              ? [
+                  buildPanelLine(width, [
+                    [' Kind ', DEFAULT_PANEL_PALETTE.label],
+                    [selected.kind === 'header' ? selected.symbolKind : selected.symbol.kind, DEFAULT_PANEL_PALETTE.info],
+                    ['   Line ', DEFAULT_PANEL_PALETTE.label],
+                    [String(selected.kind === 'header' ? selected.line : selected.symbol.line), DEFAULT_PANEL_PALETTE.value],
+                  ]),
+                  buildPanelLine(width, [
+                    [' Name ', DEFAULT_PANEL_PALETTE.label],
+                    [selected.kind === 'header' ? selected.name : selected.symbol.name, DEFAULT_PANEL_PALETTE.value],
+                  ]),
+                ]
+              : [];
+          })(),
+        },
+      ],
+    });
+    this.scrollOffset = outlineSection.scrollOffset;
 
     const selected = visible[this.selectedIndex];
     return buildPanelWorkspace(width, height, {
@@ -229,10 +271,7 @@ export class SymbolOutlinePanel extends BasePanel {
             ]),
           ],
         },
-        {
-          title: 'Outline',
-          lines: rows,
-        },
+        outlineSection.section,
         {
           title: 'Selected',
           lines: selected

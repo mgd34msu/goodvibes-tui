@@ -12,6 +12,7 @@ import {
   buildEmptyState,
   buildPanelLine,
   buildPanelWorkspace,
+  resolveScrollablePanelSection,
   DEFAULT_PANEL_PALETTE,
 } from './polish.ts';
 
@@ -331,9 +332,18 @@ export class EvalPanel extends BasePanel {
       this._renderScenarioBlock(allDetailLines, result, selected, width);
     });
 
-    const maxVisible = Math.max(1, height - 8);
-    const visible = allDetailLines.slice(this._scrollOffset, this._scrollOffset + maxVisible);
-    sectionLines.push(...visible);
+    const detailSection = resolveScrollablePanelSection(width, height, {
+      intro,
+      palette: C,
+      beforeSections: [{ title: 'Scenario Detail', lines: sectionLines }],
+      section: {
+        scrollableLines: allDetailLines,
+        scrollOffset: this._scrollOffset,
+        minRows: 1,
+      },
+    });
+    this._scrollOffset = detailSection.scrollOffset;
+    sectionLines.push(...detailSection.section.lines);
     sectionLines.push(buildPanelLine(width, [[' Esc/q: back  j/k: scenario  PgUp/PgDn: scroll', C.dim]]));
     lines.push(...buildPanelWorkspace(width, height, {
       title: 'Eval Harness',

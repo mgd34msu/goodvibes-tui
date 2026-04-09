@@ -4,11 +4,15 @@ import { BasePanel } from './base-panel.ts';
 import type { RuntimeStore } from '../runtime/store/index.ts';
 import { getRemoteRunnerRegistry, getRemoteSupervisor } from '../runtime/remote/index.ts';
 import {
+  buildDetailBlock,
   buildEmptyState,
   buildGuidanceLine,
+  buildPanelListRow,
   buildPanelLine,
+  buildSummaryBlock,
   buildPanelWorkspace,
   DEFAULT_PANEL_PALETTE,
+  resolvePrimaryScrollableSection,
   type PanelWorkspaceSection,
 } from './polish.ts';
 import { truncateDisplay } from '../utils/terminal-width.ts';
@@ -217,7 +221,7 @@ export class RemotePanel extends BasePanel {
       const lines = buildPanelWorkspace(width, height, {
         title: 'Remote Control Room',
         intro,
-        sections: [{ title: 'Posture', lines: idleLines }],
+        sections: [{ lines: buildSummaryBlock(width, 'Remote posture', idleLines, C) }],
         footerLines,
         palette: C,
       });
@@ -231,46 +235,12 @@ export class RemotePanel extends BasePanel {
       Math.max(0, (viewingConnections ? activeConnections.length : contracts.length) - 1),
     );
     const browseCount = viewingConnections ? activeConnections.length : contracts.length;
-    const browseWindow = getTrackedVisibleWindow(browseCount, this.selectedIndex, Math.max(4, height - 16), this.scrollOffset, 1);
-    this.scrollOffset = browseWindow.start;
-    const browseLines: Line[] = [];
-
-    if (viewingConnections) {
-      for (let absolute = browseWindow.start; absolute < browseWindow.end; absolute++) {
-        const connection = activeConnections[absolute]!;
-        const bg = absolute === this.selectedIndex ? C.headerBg : undefined;
-        browseLines.push(buildPanelLine(width, [
-          ['  ', C.label],
-          [connection.agentId.padEnd(18), C.value, bg],
-          [` ${connection.transportState.padEnd(18)}`, stateColor(connection.transportState), bg],
-          [` msgs=${String(connection.messageCount).padEnd(6)}`, C.info, bg],
-          [` errs=${String(connection.errorCount).padEnd(4)}`, connection.errorCount > 0 ? C.warn : C.dim, bg],
-          [` ${connection.label}`.slice(0, Math.max(0, width - 54)), C.dim, bg],
-        ]));
-      }
-    } else {
-      for (let absolute = browseWindow.start; absolute < browseWindow.end; absolute++) {
-        const contract = contracts[absolute]!;
-        const bg = absolute === this.selectedIndex ? C.headerBg : undefined;
-        browseLines.push(buildPanelLine(width, [
-          ['  ', C.label],
-          [contract.runnerId.padEnd(18), C.value, bg],
-          [` ${contract.transport.state.padEnd(18)}`, stateColor(contract.transport.state), bg],
-          [` ${contract.template}`.slice(0, Math.max(0, width - 40)), C.dim, bg],
-        ]));
-      }
-      browseLines.push(buildPanelLine(width, [[' No active connection is currently attached to these contracts.', C.dim]]));
-    }
-    if (browseCount > browseWindow.end - browseWindow.start) {
-      browseLines.push(buildPanelLine(width, [[`  showing ${browseWindow.start + 1}-${browseWindow.end} of ${browseCount}`, C.dim]]));
-    }
-
     const selected = viewingConnections ? activeConnections[this.selectedIndex] ?? null : null;
     const selectedContract = !viewingConnections ? contracts[this.selectedIndex] ?? null : null;
-    const detailLines: Line[] = [];
+    const detailRows: Line[] = [];
 
     if (selected) {
-      detailLines.push(buildPanelLine(width, [
+      detailRows.push(buildPanelLine(width, [
         ['  Agent: ', C.label],
         [selected.agentId, C.value],
         ['  State: ', C.label],
@@ -278,7 +248,7 @@ export class RemotePanel extends BasePanel {
         ['  Completing: ', C.label],
         [selected.completing ? 'yes' : 'no', selected.completing ? C.warn : C.dim],
       ]));
-      detailLines.push(buildPanelLine(width, [
+      detailRows.push(buildPanelLine(width, [
         ['  Connected: ', C.label],
         [formatTimestamp(selected.connectedAt), C.dim],
         ['  Messages: ', C.label],
@@ -287,7 +257,7 @@ export class RemotePanel extends BasePanel {
         [String(selected.errorCount), selected.errorCount > 0 ? C.warn : C.dim],
       ]));
       if (selected.lastError) {
-        detailLines.push(buildPanelLine(width, [
+        detailRows.push(buildPanelLine(width, [
           ['  Last error: ', C.label],
           [selected.lastError.slice(0, Math.max(0, width - 13)), C.error],
         ]));
@@ -295,19 +265,19 @@ export class RemotePanel extends BasePanel {
 
       const contract = remoteRegistry.getContract(selected.agentId);
       if (contract) {
-        detailLines.push(buildPanelLine(width, [
+        detailRows.push(buildPanelLine(width, [
           ['  Contract: ', C.label],
           [`${contract.template} / ${contract.trustClass}`, C.info],
           ['  Pool: ', C.label],
           [contract.poolId ?? '(none)', contract.poolId ? C.info : C.dim],
         ]));
-        detailLines.push(buildPanelLine(width, [
+        detailRows.push(buildPanelLine(width, [
           ['  Depth: ', C.label],
           [String(contract.capabilityCeiling.orchestrationDepth), C.value],
           ['  Pools: ', C.label],
           [String(pools.length), pools.length > 0 ? C.info : C.dim],
         ]));
-        detailLines.push(buildPanelLine(width, [
+        detailRows.push(buildPanelLine(width, [
           ['  Protocol: ', C.label],
           [contract.capabilityCeiling.executionProtocol, C.value],
           ['  Review: ', C.label],
@@ -315,14 +285,14 @@ export class RemotePanel extends BasePanel {
           ['  Lane: ', C.label],
           [contract.capabilityCeiling.communicationLane, C.value],
         ]));
-        detailLines.push(buildPanelLine(width, [
+        detailRows.push(buildPanelLine(width, [
           ['  Tools: ', C.label],
           [truncate(contract.capabilityCeiling.allowedTools.join(', ') || '(none)', Math.max(0, width - 10)), C.dim],
         ]));
       }
 
       if (selected.taskId) {
-        detailLines.push(buildPanelLine(width, [
+        detailRows.push(buildPanelLine(width, [
           ['  Task: ', C.label],
           [selected.taskId, C.value],
         ]));
@@ -330,7 +300,7 @@ export class RemotePanel extends BasePanel {
 
       const supervisorEntry = supervisor.sessions.find((entry) => entry.runnerId === selected.agentId);
       if (supervisorEntry) {
-        detailLines.push(buildPanelLine(width, [
+        detailRows.push(buildPanelLine(width, [
           ['  Heartbeat: ', C.label],
           [supervisorEntry.heartbeat.status, supervisorEntry.heartbeat.status === 'fresh' ? C.ok : supervisorEntry.heartbeat.status === 'stale' ? C.warn : C.error],
           ['  Protocol: ', C.label],
@@ -338,29 +308,29 @@ export class RemotePanel extends BasePanel {
           ['  Review: ', C.label],
           [supervisorEntry.negotiation.reviewMode, supervisorEntry.negotiation.reviewMode === 'wrfc' ? C.ok : C.dim],
         ]));
-        detailLines.push(buildPanelLine(width, [[`  ${supervisorEntry.heartbeat.detail}`.slice(0, width), C.dim]]));
+        detailRows.push(buildPanelLine(width, [[`  ${supervisorEntry.heartbeat.detail}`.slice(0, width), C.dim]]));
       }
 
       const recentArtifact = remoteRegistry.listArtifacts().find((artifact) => artifact.runnerId === selected.agentId);
       if (recentArtifact) {
-        detailLines.push(buildPanelLine(width, [[' Recent Review Artifact', C.label]]));
-        detailLines.push(buildPanelLine(width, [
+        detailRows.push(buildPanelLine(width, [[' Recent Review Artifact', C.label]]));
+        detailRows.push(buildPanelLine(width, [
           ['  Artifact: ', C.label],
           [recentArtifact.id, C.value],
           ['  Status: ', C.label],
           [recentArtifact.task.status, stateColor(recentArtifact.evidence.transportState)],
         ]));
-        detailLines.push(buildPanelLine(width, [
+        detailRows.push(buildPanelLine(width, [
           ['  Summary: ', C.label],
           [truncate(recentArtifact.task.summary, Math.max(0, width - 12)), C.dim],
         ]));
       }
-      detailLines.push(buildPanelLine(width, [
+      detailRows.push(buildPanelLine(width, [
         ['  Tip: ', C.label],
         ['Use Up/Down or j/k to inspect another connection.', C.dim],
       ]));
     } else if (selectedContract) {
-      detailLines.push(buildPanelLine(width, [
+      detailRows.push(buildPanelLine(width, [
         ['  Runner: ', C.label],
         [selectedContract.runnerId, C.value],
         ['  Template: ', C.label],
@@ -368,13 +338,13 @@ export class RemotePanel extends BasePanel {
         ['  Trust: ', C.label],
         [selectedContract.trustClass, C.value],
       ]));
-      detailLines.push(buildPanelLine(width, [
+      detailRows.push(buildPanelLine(width, [
         ['  Pool: ', C.label],
         [selectedContract.poolId ?? '(none)', selectedContract.poolId ? C.info : C.dim],
         ['  Transport: ', C.label],
         [selectedContract.transport.state, stateColor(selectedContract.transport.state)],
       ]));
-      detailLines.push(buildPanelLine(width, [
+      detailRows.push(buildPanelLine(width, [
         ['  Protocol: ', C.label],
         [selectedContract.capabilityCeiling.executionProtocol, C.value],
         ['  Review: ', C.label],
@@ -382,25 +352,25 @@ export class RemotePanel extends BasePanel {
         ['  Lane: ', C.label],
         [selectedContract.capabilityCeiling.communicationLane, C.value],
       ]));
-      detailLines.push(buildPanelLine(width, [
+      detailRows.push(buildPanelLine(width, [
         ['  Tools: ', C.label],
         [truncate(selectedContract.capabilityCeiling.allowedTools.join(', ') || '(none)', Math.max(0, width - 10)), C.dim],
       ]));
       const supervisorEntry = supervisor.sessions.find((entry) => entry.runnerId === selectedContract.runnerId);
       if (supervisorEntry) {
-        detailLines.push(buildPanelLine(width, [
+        detailRows.push(buildPanelLine(width, [
           ['  Heartbeat: ', C.label],
           [supervisorEntry.heartbeat.status, supervisorEntry.heartbeat.status === 'fresh' ? C.ok : supervisorEntry.heartbeat.status === 'stale' ? C.warn : C.error],
           ['  Lane: ', C.label],
           [supervisorEntry.negotiation.communicationLane, C.info],
         ]));
         for (const action of supervisorEntry.recovery.slice(0, 2)) {
-          detailLines.push(buildGuidanceLine(width, action.command, action.reason, C));
+          detailRows.push(buildGuidanceLine(width, action.command, action.reason, C));
         }
       }
       const recentArtifact = remoteRegistry.listArtifacts().find((artifact) => artifact.runnerId === selectedContract.runnerId);
       if (recentArtifact) {
-        detailLines.push(buildPanelLine(width, [
+        detailRows.push(buildPanelLine(width, [
           ['  Recent artifact: ', C.label],
           [recentArtifact.id, C.ok],
           ['  Status: ', C.label],
@@ -408,11 +378,53 @@ export class RemotePanel extends BasePanel {
         ]));
       }
     }
+    const postureSection: PanelWorkspaceSection = { lines: buildSummaryBlock(width, 'Remote posture', postureLines, C) };
+    const detailSection: PanelWorkspaceSection = {
+      lines: buildDetailBlock(width, selected ? 'Selected connection' : 'Selected contract', detailRows, C),
+    };
+    const browseTitle = viewingConnections ? 'Active Connections' : 'Registered Remote Runner Contracts';
+    const rawBrowseLines: Line[] = viewingConnections
+      ? activeConnections.map((connection, absolute) => {
+          return buildPanelListRow(width, [
+            { text: connection.agentId.padEnd(18), fg: C.value },
+            { text: ` ${connection.transportState.padEnd(18)}`, fg: stateColor(connection.transportState) },
+            { text: ` msgs=${String(connection.messageCount).padEnd(6)}`, fg: C.info },
+            { text: ` errs=${String(connection.errorCount).padEnd(4)}`, fg: connection.errorCount > 0 ? C.warn : C.dim },
+            { text: ` ${connection.label}`.slice(0, Math.max(0, width - 56)), fg: C.dim },
+          ], C, { selected: absolute === this.selectedIndex, selectedBg: C.headerBg });
+        })
+      : [
+          ...contracts.map((contract, absolute) => {
+            return buildPanelListRow(width, [
+              { text: contract.runnerId.padEnd(18), fg: C.value },
+              { text: ` ${contract.transport.state.padEnd(18)}`, fg: stateColor(contract.transport.state) },
+              { text: ` ${contract.template}`.slice(0, Math.max(0, width - 42)), fg: C.dim },
+            ], C, { selected: absolute === this.selectedIndex, selectedBg: C.headerBg });
+          }),
+          buildPanelLine(width, [[' No active connection is currently attached to these contracts.', C.dim]]),
+        ];
+    const resolvedBrowseSection = resolvePrimaryScrollableSection(width, height, {
+      intro,
+      footerLines,
+      palette: C,
+      beforeSections: [postureSection],
+      section: {
+        title: browseTitle,
+        scrollableLines: rawBrowseLines,
+        selectedIndex: this.selectedIndex,
+        scrollOffset: this.scrollOffset,
+        guardRows: 1,
+        minRows: 4,
+        appendWindowSummary: viewingConnections ? { dimColor: C.dim } : undefined,
+      },
+      afterSections: [detailSection],
+    });
+    this.scrollOffset = resolvedBrowseSection.scrollOffset;
 
     const sections: PanelWorkspaceSection[] = [
-      { title: 'Posture', lines: postureLines },
-      { title: viewingConnections ? 'Active Connections' : 'Registered Remote Runner Contracts', lines: browseLines },
-      { title: selected ? 'Selected Connection' : 'Selected Contract', lines: detailLines },
+      postureSection,
+      resolvedBrowseSection.section,
+      detailSection,
     ];
     const lines = buildPanelWorkspace(width, height, {
       title: 'Remote Control Room',
