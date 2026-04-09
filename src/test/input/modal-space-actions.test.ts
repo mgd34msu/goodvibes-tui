@@ -188,6 +188,44 @@ describe('modal space actions', () => {
     expect(results[0]!.step).toBe(10);
   });
 
+  test('selection modal uses per-item decimal step metadata for adjustable values', () => {
+    const results: Array<{ action: SelectionAction; step?: number }> = [];
+    const state = {
+      selectionModal: {
+        active: true,
+        query: '',
+        searchFocused: false,
+        allowSearch: true,
+        customActions: new Map<string, SelectionAction>(),
+        selectedIndex: 0,
+        getSelected: () => ({
+          id: 'wrfc.scoreThreshold',
+          label: 'wrfc.scoreThreshold',
+          adjustable: true,
+          adjustStep: 0.1,
+          adjustMin: 0,
+          adjustMax: 10,
+          adjustPrecision: 1,
+        }),
+        setQuery: () => {},
+        focusSearch: () => {},
+        blurSearch: () => {},
+        moveUp: () => {},
+        moveDown: () => {},
+        close: () => {},
+      },
+      selectionCallback: (result: { action: SelectionAction; step?: number } | null) => { if (result) results.push(result); },
+      modalStack: ['selection'],
+      requestRender: () => {},
+      handleEscape: () => {},
+    };
+    handleSelectionModalToken(state, { type: 'key', name: '', logicalName: 'right', ctrl: false, shift: false, meta: false });
+    handleSelectionModalToken(state, { type: 'key', name: '', logicalName: 'left', ctrl: false, shift: true, meta: false });
+    expect(results).toHaveLength(2);
+    expect(results[0]!.step).toBe(0.1);
+    expect(results[1]!.step).toBe(1);
+  });
+
   test('settings modal toggles the selected value on space', () => {
     const dir = join(tmpdir(), `gv-settings-space-${Date.now()}-${Math.random().toString(36).slice(2)}`);
     mkdirSync(dir, { recursive: true });
@@ -260,4 +298,5 @@ describe('modal space actions', () => {
       rmSync(dir, { recursive: true, force: true });
     }
   });
+
 });

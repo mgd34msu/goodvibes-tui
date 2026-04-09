@@ -56,7 +56,7 @@ export class AgentLogsPanel extends BasePanel {
   private runtimeBus: RuntimeEventBus;
 
   constructor(runtimeBus: RuntimeEventBus) {
-    super('agent-logs', 'Agent Logs', 'A', 'agent');
+    super('agent-logs', 'Agents', 'A', 'agent');
     this.runtimeBus = runtimeBus;
   }
 
@@ -70,8 +70,7 @@ export class AgentLogsPanel extends BasePanel {
   }
 
   override onDeactivate(): void {
-    this._stopPolling();
-    this._unsubscribeEvents();
+    super.onDeactivate();
   }
 
   override onDestroy(): void {
@@ -144,8 +143,8 @@ export class AgentLogsPanel extends BasePanel {
 
     if (this.agents.length === 0) {
       return buildPanelWorkspace(width, height, {
-        title: ' Agent Logs',
-        intro: 'Tail per-agent JSONL session logs, filter entries, and switch between running or completed agents.',
+        title: ' Agents',
+        intro: 'View-only live session stream for running agents, with per-agent switching and filtered event tails.',
         sections: [
           { title: 'Summary', lines: summaryLines },
           {
@@ -176,8 +175,8 @@ export class AgentLogsPanel extends BasePanel {
 
     if (this.filteredEntries.length === 0) {
       return buildPanelWorkspace(width, height, {
-        title: ' Agent Logs',
-        intro: 'Tail per-agent JSONL session logs, filter entries, and switch between running or completed agents.',
+        title: ' Agents',
+        intro: 'View-only live session stream for running agents, with per-agent switching and filtered event tails.',
         sections: [
           { title: 'Summary', lines: summaryLines },
           { title: 'Agents', lines: [selectorLine] },
@@ -217,8 +216,8 @@ export class AgentLogsPanel extends BasePanel {
     this.scrollOffset = logStreamSection.scrollOffset;
 
     return buildPanelWorkspace(width, height, {
-      title: ' Agent Logs',
-      intro: 'Tail per-agent JSONL session logs, filter entries, and switch between running or completed agents.',
+      title: ' Agents',
+      intro: 'View-only live session stream for running agents, with per-agent switching and filtered event tails.',
       sections: [
         summarySection,
         agentsSection,

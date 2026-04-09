@@ -257,6 +257,20 @@ export class CrossSessionTaskRegistry {
     this._flushSync();
   }
 
+  /**
+   * Release process-level resources held by the registry.
+   *
+   * Safe to call multiple times. Flushes pending state before detaching the
+   * process exit handler.
+   */
+  public dispose(): void {
+    this.flush();
+    if (this._exitHandler) {
+      process.removeListener('exit', this._exitHandler);
+      this._exitHandler = null;
+    }
+  }
+
   // ── Private ───────────────────────────────────────────────────────────────────
 
   /**
@@ -352,11 +366,20 @@ export function getSessionOrchestration(): CrossSessionTaskRegistry {
 }
 
 /**
+ * Dispose the singleton registry if it has been initialized.
+ */
+export function disposeSessionOrchestration(): void {
+  if (_instance) {
+    _instance.dispose();
+    _instance = undefined;
+  }
+}
+
+/**
  * Reset the singleton instance — for use in tests only.
  * Clears the cached instance so the next call to getSessionOrchestration()
  * constructs a fresh registry.
  */
 export function _resetForTesting(): void {
-  if (_instance?._exitHandler) process.removeListener('exit', _instance._exitHandler);
-  _instance = undefined;
+  disposeSessionOrchestration();
 }

@@ -156,14 +156,14 @@ export class TokenBudgetPanel extends BasePanel {
   }
 
   override onDeactivate(): void {
+    super.onDeactivate();
+  }
+
+  override onDestroy(): void {
     if (this.refreshTimer !== null) {
       clearInterval(this.refreshTimer);
       this.refreshTimer = null;
     }
-  }
-
-  override onDestroy(): void {
-    this.onDeactivate();
   }
 
   // ---------------------------------------------------------------------------

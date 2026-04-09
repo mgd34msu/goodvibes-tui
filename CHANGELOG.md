@@ -4,6 +4,54 @@ All notable changes to GoodVibes TUI.
 
 ---
 
+## [0.15.3] — 2026-04-09
+
+### Streaming, Usage, And Provider Delta Handling
+
+- Fixed reasoning-heavy streaming so live output/token indicators continue advancing even when OpenAI-compatible providers emit reasoning deltas instead of plain text chunks
+- Added shared OpenAI stream-delta normalization for `delta.content`, typed content arrays, `delta.reasoning`, `delta.reasoning_content`, and reasoning-summary shapes
+- Fixed live token/output visibility with streaming disabled so the thinking strip keeps moving while the provider is still producing output
+- Corrected live input accounting so the per-turn request estimate appears during the turn and cache-read tokens are not double-counted into fresh input display
+
+### Local Runtime, Multi-Instance, And Lifecycle Hygiene
+
+- Hardened daemon/listener bootstrap so a second `goodvibes-tui` instance skips already-owned default ports instead of hanging while trying to start duplicate local services
+- Added startup timeout fallback for local bootstrap services so stalled service startup no longer blocks the TUI indefinitely
+- Fixed a late async watcher race in custom provider loading so shutdown cannot accidentally recreate a file watcher after close
+- Added explicit orchestrator and orchestration-registry disposal hygiene for replay listeners, timers, and process-exit handlers
+- Removed unreleased process-level signal/rejection handlers during shutdown to avoid lifecycle leaks in tests, embedding, and restart flows
+
+### Panel Live Updates, Agent Visibility, And Background Process UX
+
+- Fixed live panels that were detaching subscriptions or timers on blur, so switching to another panel no longer freezes updates until reopen
+- Restored background-process strip agent visibility by sourcing active agents from both `AgentManager` and the runtime agents domain
+- Kept the background-process strip as the fast access surface while promoting the detailed live agent-session view into the dedicated `Agents` panel
+- Reworked process-strip focus styling so:
+  - the prompt loses focus visually and hides its cursor
+  - the selected process row uses a brighter bounded highlight
+  - the highlight no longer bleeds into outer margins or floods the entire row
+
+### Conversation, Panels, And Tool Rendering Fixes
+
+- Fixed WRFC replay notices so they route through the system-message path instead of spamming the main conversation
+- Fixed tool-call row alignment so tool output blocks no longer collide with or begin underneath compact tool status labels
+- Fixed tracked markdown table rendering for assistant content and added tolerant handling of slightly malformed alignment rows from model output
+- Fixed Explorer -> Preview, Preview -> Symbols, and Symbols -> Preview panel handoff paths so cross-panel browsing actions execute instead of only advertising the action
+- Fixed approval-panel activation so selecting an approval row and pressing `Enter` executes the review action path
+
+### Modal And Settings Interaction Fixes
+
+- Reworked toggleable selection-modals so rows that should toggle/adjust do so through the correct modal contract rather than leaking help text into conversation
+- Added per-row numeric adjustment metadata for modal rows, including decimal step/clamp/precision support
+- Fixed config/settings adjustments so `wrfc.scoreThreshold` now changes by `0.1`, clamps to `0.0–10.0`, and uses `Shift+Left/Right` for larger jumps
+- Fixed slash-command modal dismissal so pressing `Esc` fully closes the `/` menu, clears the slash prompt, and only reopens it when `/` is typed again
+
+### Verification
+
+- Renderer, panel, orchestrator, provider-stream, bootstrap-service, and orchestration lifecycle regressions were expanded to lock the new behavior
+- Full suite passes in release state
+- Full typecheck passes: `bun x tsc --noEmit --pretty false`
+
 ## [0.15.2] — 2026-04-08
 
 ### UI System Rollout And Panel Layout Centralization

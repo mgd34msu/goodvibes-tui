@@ -440,10 +440,10 @@ export function registerBuiltinPanels(manager: PanelManager, deps: BuiltinPanelD
 
   manager.registerType({
     id: 'agent-logs',
-    name: 'Agent Logs',
+    name: 'Agents',
     icon: 'A',
     category: 'agent',
-    description: 'Live log stream from all running agents',
+    description: 'View-only live session stream from running agents with per-agent switching',
     factory: () => new AgentLogsPanel(runtimeBus),
   });
 

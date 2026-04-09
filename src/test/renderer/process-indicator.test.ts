@@ -107,7 +107,7 @@ describe('renderProcessIndicator', () => {
     const lines = renderProcessIndicator(80, 0, 0, true);
     expect(lines.length).toBe(1);
     const text = lines[0].map(c => c.char).join('');
-    expect(text).not.toContain('▸');
+    expect(text).toContain('▸');
     expect(text).toContain('No background processes');
   });
 
@@ -123,8 +123,16 @@ describe('renderProcessIndicator', () => {
   test('focused line uses cyan bold styling', () => {
     const lines = renderProcessIndicator(80, 1, 0, true);
     const firstNonSpace = lines[0].find(c => c.char.trim() !== '');
-    expect(firstNonSpace?.fg).toBe('#00ffff');
+    expect(firstNonSpace?.fg).toBe('#7dd3fc');
     expect(firstNonSpace?.bold).toBe(true);
+  });
+
+  test('focused line uses a bounded background highlight', () => {
+    const lines = renderProcessIndicator(80, 1, 0, true);
+    const highlighted = lines[0].filter((c) => c.bg === '#31506f');
+    expect(highlighted.length).toBeGreaterThan(10);
+    expect(lines[0][0]?.bg).not.toBe('#31506f');
+    expect(lines[0][79]?.bg).not.toBe('#31506f');
   });
 
   test('focused line respects terminal width', () => {

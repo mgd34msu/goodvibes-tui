@@ -24,6 +24,7 @@ import { sessionLineageTracker } from './session-lineage.ts';
 import { getCatalog } from '../providers/model-catalog.ts';
 import { recordUsage } from '../providers/favorites.ts';
 import { EventReplayQueue } from './event-replay.ts';
+import type { SystemMessageRouter } from './system-message-router.ts';
 import { AgentManager } from '../tools/agent/index.ts';
 import { WrfcController } from '../agents/wrfc-controller.ts';
 import { THINKING_SPINNER_FRAMES } from '../renderer/progress.ts';
@@ -164,6 +165,7 @@ export class Orchestrator {
    */
   private _pendingToolCalls: ToolCall[] = [];
   private readonly requestRender: () => void;
+  private systemMessageRouter: Pick<SystemMessageRouter, 'low'> | null = null;
 
   private normalizeUsage(
     usage: Awaited<ReturnType<LLMProvider['chat']>>['usage'],
@@ -303,12 +305,38 @@ export class Orchestrator {
     return THINKING_SPINNER_FRAMES[this.thinkingFrame % THINKING_SPINNER_FRAMES.length];
   }
 
+  public setSystemMessageRouter(router: Pick<SystemMessageRouter, 'low'> | null): void {
+    this.systemMessageRouter = router;
+  }
+
   /** Abort the current in-flight LLM request, if any. */
   public abort(): void {
     this.abortController?.abort();
     if (this.autoSpawnTimeout !== null) {
       clearTimeout(this.autoSpawnTimeout);
       this.autoSpawnTimeout = null;
+    }
+  }
+
+  /**
+   * Dispose long-lived runtime attachments owned by this orchestrator.
+   *
+   * Safe to call multiple times. Intended for process shutdown and tests that
+   * construct transient orchestrators against a shared RuntimeEventBus.
+   */
+  public dispose(): void {
+    this.abort();
+    if (this.animInterval) {
+      clearInterval(this.animInterval);
+      this.animInterval = null;
+    }
+    this.isThinking = false;
+    this.isStreaming = false;
+    this.streamingInputTokens = 0;
+    this.streamingOutputTokens = 0;
+    if (this.detachReplay) {
+      this.detachReplay();
+      this.detachReplay = null;
     }
   }
 
@@ -449,10 +477,15 @@ export class Orchestrator {
                 if (streamEnabled) {
                   this.conversation.updateStreamingBlock(streamAccumulated);
                 }
-                this.streamingOutputTokens++;
               }
               if (delta.reasoning) {
                 reasoningAccumulated += delta.reasoning;
+              }
+              if (delta.content || delta.reasoning) {
+                this.streamingOutputTokens += Math.max(
+                  1,
+                  estimateTokens(delta.content ?? delta.reasoning ?? ''),
+                );
               }
               if (this.runtimeBus) {
                 emitStreamDelta(this.runtimeBus, this.emitterContext(turnId), {
@@ -881,7 +914,11 @@ export class Orchestrator {
       if (eventsToReplay.length > 0) {
         const messages = this.replayQueue.formatReplays(eventsToReplay);
         for (const msg of messages) {
-          this.conversation.addSystemMessage(msg);
+          if (this.systemMessageRouter) {
+            this.systemMessageRouter.low(msg);
+          } else {
+            this.conversation.addSystemMessage(msg);
+          }
         }
         this.requestRender();
       }

@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, test } from 'bun:test';
-import type { RuntimeEventBus } from '../../runtime/events/index.ts';
+import { RuntimeEventBus, createEventEnvelope } from '../../runtime/events/index.ts';
 import type { Line } from '../../types/grid.ts';
 import { ProviderStatsPanel } from '../../panels/provider-stats-panel.ts';
 import { ToolInspectorPanel } from '../../panels/tool-inspector-panel.ts';
@@ -22,10 +22,7 @@ function linesText(lines: Line[]): string {
 }
 
 function createRuntimeBusStub(): RuntimeEventBus {
-  return {
-    on: () => () => {},
-    emit: () => {},
-  } as unknown as RuntimeEventBus;
+  return new RuntimeEventBus();
 }
 
 describe('workspace panel migrations', () => {
@@ -171,7 +168,7 @@ describe('workspace panel migrations', () => {
     const lines = panel.render(80, 20);
     expect(lines).toHaveLength(20);
     expect(lines.every((line) => line.length === 80)).toBe(true);
-    expect(linesText(lines)).toContain('Agent Logs');
+    expect(linesText(lines)).toContain('Agents');
     expect(linesText(lines)).toContain('No agents running');
   });
 
@@ -182,5 +179,53 @@ describe('workspace panel migrations', () => {
     expect(lines.every((line) => line.length === 80)).toBe(true);
     expect(linesText(lines)).toContain('Inspector');
     expect(linesText(lines)).toContain('No agents running');
+  });
+
+  test('ThinkingPanel keeps ingesting stream events while deactivated', () => {
+    const panel = new ThinkingPanel(runtimeBus);
+    panel.onActivate();
+    panel.onDeactivate();
+    runtimeBus.emit(
+      'turn',
+      createEventEnvelope('STREAM_START', { type: 'STREAM_START', turnId: 'turn-1' }, {
+        sessionId: 'sess-1',
+        source: 'test',
+        turnId: 'turn-1',
+      }),
+    );
+    runtimeBus.emit(
+      'turn',
+      createEventEnvelope(
+        'STREAM_DELTA',
+        { type: 'STREAM_DELTA', turnId: 'turn-1', content: '', accumulated: '', reasoning: 'reasoning after blur' },
+        {
+          sessionId: 'sess-1',
+          source: 'test',
+          turnId: 'turn-1',
+        },
+      ),
+    );
+    const text = linesText(panel.render(80, 20));
+    expect(text).toContain('reasoning after blur');
+  });
+
+  test('ToolInspectorPanel keeps ingesting tool events while deactivated', () => {
+    const panel = new ToolInspectorPanel(runtimeBus);
+    panel.onActivate();
+    panel.onDeactivate();
+    runtimeBus.emit(
+      'tools',
+      createEventEnvelope(
+        'TOOL_RECEIVED',
+        { type: 'TOOL_RECEIVED', callId: 'call-1', turnId: 'turn-1', tool: 'write', args: { path: 'x.ts' } },
+        {
+          sessionId: 'sess-1',
+          source: 'test',
+          turnId: 'turn-1',
+        },
+      ),
+    );
+    const text = linesText(panel.render(80, 20));
+    expect(text).toContain('write');
   });
 });

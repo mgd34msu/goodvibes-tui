@@ -89,4 +89,38 @@ describe('/config selection modal', () => {
       rmSync(dir, { recursive: true, force: true });
     }
   });
+
+  test('uses decimal stepping metadata for wrfc score threshold and clamps updates', async () => {
+    const dir = join(tmpdir(), `gv-config-selection-wrfc-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+    mkdirSync(dir, { recursive: true });
+    try {
+      const registry = new CommandRegistry();
+      registerConfigCommand(registry);
+      const command = registry.get('config');
+      expect(command).toBeDefined();
+
+      const { ctx, cm, calls } = makeContext(dir);
+      await command!.handler([], ctx);
+
+      const item = calls.selection!.items.find((entry) => entry.id === 'wrfc.scoreThreshold');
+      expect(item).toBeDefined();
+      expect(item?.adjustable).toBe(true);
+      expect(item?.adjustStep).toBe(0.1);
+      expect(item?.adjustMin).toBe(0);
+      expect(item?.adjustMax).toBe(10);
+      expect(item?.adjustPrecision).toBe(1);
+
+      calls.selection!.callback({ item: item!, action: 'increment', step: 0.1 });
+      expect(cm.get('wrfc.scoreThreshold')).toBe(10);
+
+      calls.selection!.callback({ item: item!, action: 'increment', step: 0.1 });
+      expect(cm.get('wrfc.scoreThreshold')).toBe(10);
+
+      calls.selection!.callback({ item: item!, action: 'decrement', step: 1 });
+      expect(cm.get('wrfc.scoreThreshold')).toBe(9);
+      expect(calls.printed).toHaveLength(0);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
 });

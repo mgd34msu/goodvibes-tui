@@ -12,6 +12,7 @@ import type { OpenAIToolCall } from './tool-formats.ts';
 import { getCacheCapability } from './cache-capability.ts';
 import type { ProviderCacheCapability } from './cache-capability.ts';
 import { cacheHitTracker } from './cache-strategy.ts';
+import { extractOpenAIStreamTextDelta } from './openai-stream-delta.ts';
 
 export interface OpenAICompatOptions {
   name: string;
@@ -127,16 +128,18 @@ export class OpenAICompatProvider implements LLMProvider {
           };
 
           const delta = raw.choices[0]?.delta;
-
-          if (delta?.content) {
-            responseText += delta.content;
-            if (onDelta) onDelta({ content: delta.content });
+          const textDelta = extractOpenAIStreamTextDelta(raw);
+          for (const contentDelta of textDelta.content) {
+            responseText += contentDelta;
+            if (onDelta) onDelta({ content: contentDelta });
+          }
+          for (const reasoningDelta of textDelta.reasoning) {
+            if (onDelta) onDelta({ reasoning: reasoningDelta });
           }
 
           // Mercury-2: reasoning_summary may appear on any chunk — capture and emit
           if (raw.reasoning_summary) {
             reasoningSummaryText = raw.reasoning_summary;
-            if (onDelta) onDelta({ reasoning: raw.reasoning_summary });
           }
 
           // Accumulate streaming tool_calls deltas

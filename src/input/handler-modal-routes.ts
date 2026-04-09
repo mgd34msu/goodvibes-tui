@@ -60,6 +60,14 @@ export function handleSelectionModalToken(state: SelectionRouteState, token: Inp
     cb?.({ item: selected, action, step });
   };
 
+  const getAdjustmentStep = (
+    selected: NonNullable<ReturnType<typeof state.selectionModal.getSelected>> | null | undefined,
+    shift: boolean,
+  ): number => {
+    const baseStep = selected?.adjustStep ?? 1;
+    return shift ? baseStep * 10 : baseStep;
+  };
+
   if (token.type === 'text') {
     if (state.selectionModal.allowSearch && !state.selectionModal.searchFocused && token.value === '/') {
       state.selectionModal.focusSearch();
@@ -117,7 +125,11 @@ export function handleSelectionModalToken(state: SelectionRouteState, token: Inp
     } else if ((token.logicalName === 'left' || token.logicalName === 'right') && !state.selectionModal.searchFocused) {
       const selected = state.selectionModal.getSelected();
       if (selected?.adjustable) {
-        dispatchSelectionAction(token.logicalName === 'right' ? 'increment' : 'decrement', selected, token.shift ? 10 : 1);
+        dispatchSelectionAction(
+          token.logicalName === 'right' ? 'increment' : 'decrement',
+          selected,
+          getAdjustmentStep(selected, token.shift),
+        );
       }
     } else if (token.logicalName === 'backspace') {
       if (state.selectionModal.allowSearch && state.selectionModal.searchFocused && state.selectionModal.query.length > 0) {

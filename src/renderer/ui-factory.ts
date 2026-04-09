@@ -144,6 +144,7 @@ export class UIFactory {
     lastInputTokens?: number,
     commandArgsHint?: string,
     hitlMode?: string,
+    promptFocused: boolean = true,
     composerMode?: string,
     composerStatus?: string,
     composerFlags?: readonly string[],
@@ -151,7 +152,9 @@ export class UIFactory {
   ): Line[] {
     const lines: Line[] = [];
     const promptLines = prompt.split('\n');
-    const TEXT_COLOR = '252'; const BG_COLOR = '#2a2a2a'; 
+    const TEXT_COLOR = promptFocused ? '252' : '246';
+    const BG_COLOR = promptFocused ? '#2a2a2a' : '#1f2430';
+    const BORDER_COLOR = promptFocused ? BG_COLOR : '#334155';
     const boxMargin = 2; const boxWidth = width - (boxMargin * 2); const boxStartX = boxMargin;
     const createBaseLine = () => {
       const l = createEmptyLine(width);
@@ -159,7 +162,7 @@ export class UIFactory {
       return l;
     };
     const topLine = createBaseLine();
-    for (let x = 0; x < boxWidth; x++) topLine[boxStartX + x] = { char: GLYPHS.surface.top, fg: BG_COLOR, bg: '', bold: false, dim: false, underline: false, italic: false, strikethrough: false };
+    for (let x = 0; x < boxWidth; x++) topLine[boxStartX + x] = { char: GLYPHS.surface.top, fg: BORDER_COLOR, bg: '', bold: false, dim: false, underline: false, italic: false, strikethrough: false };
     lines.push(topLine);
     promptLines.forEach((text, i) => {
       const contentW = boxWidth - 4;
@@ -170,11 +173,20 @@ export class UIFactory {
       const contentLine = createBaseLine();
       for (let x = 0; x < boxWidth; x++) {
         const char = (x >= 2 && x < boxWidth - 2) ? paddedText[x - 2] || ' ' : ' ';
-        contentLine[boxStartX + x] = { char, fg: (x < 5 && i === 0) ? '135' : TEXT_COLOR, bg: BG_COLOR, bold: false, dim: false, underline: false, italic: false, strikethrough: false };
+        contentLine[boxStartX + x] = {
+          char,
+          fg: (x < 5 && i === 0) ? (promptFocused ? '135' : '244') : TEXT_COLOR,
+          bg: BG_COLOR,
+          bold: false,
+          dim: !promptFocused,
+          underline: false,
+          italic: false,
+          strikethrough: false,
+        };
       }
 
-      // Overlay cursor: find if cursorPos falls on this line, invert that cell
-      if (cursorPos !== undefined) {
+      // Overlay cursor only while the prompt owns focus.
+      if (promptFocused && cursorPos !== undefined) {
         let lineStart = 0;
         for (let li = 0; li < i; li++) lineStart += promptLines[li].length + 1;
         const posInLine = cursorPos - lineStart;
@@ -187,16 +199,16 @@ export class UIFactory {
             contentLine[cursorX] = {
               char: cell.char === ' ' ? GLYPHS.surface.cursor : cell.char,
               fg: cell.char === ' ' ? '252' : '#000000',
-              bg: cell.char === ' ' ? BG_COLOR : '#ffffff',
+              bg: cell.char === ' ' ? (promptFocused ? BG_COLOR : '#334155') : '#ffffff',
               bold: false, dim: false, underline: false, italic: false, strikethrough: false
             };
           }
         }
-      } else if (i === promptLines.length - 1) {
+      } else if (promptFocused && i === promptLines.length - 1) {
         // No cursorPos provided — show block at end (fallback)
         const endX = boxStartX + 2 + prefix.length + text.length;
         if (endX < boxStartX + boxWidth - 2) {
-          contentLine[endX] = { char: GLYPHS.surface.cursor, fg: '252', bg: BG_COLOR, bold: false, dim: false, underline: false, italic: false, strikethrough: false };
+          contentLine[endX] = { char: GLYPHS.surface.cursor, fg: '252', bg: promptFocused ? BG_COLOR : '#334155', bold: false, dim: false, underline: false, italic: false, strikethrough: false };
         }
       }
 
@@ -229,7 +241,7 @@ export class UIFactory {
       lines.push(contentLine);
     });
     const bottomLine = createBaseLine();
-    for (let x = 0; x < boxWidth; x++) bottomLine[boxStartX + x] = { char: GLYPHS.surface.bottom, fg: BG_COLOR, bg: '', bold: false, dim: false, underline: false, italic: false, strikethrough: false };
+    for (let x = 0; x < boxWidth; x++) bottomLine[boxStartX + x] = { char: GLYPHS.surface.bottom, fg: BORDER_COLOR, bg: '', bold: false, dim: false, underline: false, italic: false, strikethrough: false };
     lines.push(bottomLine);
     lines.push(createBaseLine());
     const composerTokens: Array<{ text: string; fg: string; bold?: boolean; dim?: boolean }> = [];

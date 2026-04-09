@@ -359,6 +359,7 @@ export function watchCustomProviders(
 ): { close: () => void } {
   let debounceTimer: ReturnType<typeof setTimeout> | null = null;
   let watcher: fs.FSWatcher | null = null;
+  let closed = false;
 
   const emitWarning = (message: string): void => {
     if (runtimeBus) {
@@ -371,6 +372,7 @@ export function watchCustomProviders(
   };
 
   const startWatch = () => {
+    if (closed) return;
     try {
       // Note: fs.watch() may miss atomic renames (e.g. editor save-via-rename) on
       // some Linux filesystems. If that becomes a problem, consider replacing this
@@ -387,9 +389,11 @@ export function watchCustomProviders(
       });
 
       watcher.on('error', (err) => {
+        if (closed) return;
         emitWarning(`[custom-loader] Watcher error: ${err.message}`);
       });
     } catch (err) {
+      if (closed) return;
       emitWarning(`[custom-loader] Could not watch providers directory: ${err instanceof Error ? err.message : String(err)}`);
     }
   };
@@ -397,13 +401,18 @@ export function watchCustomProviders(
   // Ensure the directory exists before starting the watcher
   fsPromises
     .mkdir(PROVIDERS_DIR, { recursive: true })
-    .then(() => startWatch())
+    .then(() => {
+      if (closed) return;
+      startWatch();
+    })
     .catch((err) => {
+      if (closed) return;
       emitWarning(`[custom-loader] Could not create/watch providers directory: ${err instanceof Error ? err.message : String(err)}`);
     });
 
   return {
     close() {
+      closed = true;
       if (debounceTimer) {
         clearTimeout(debounceTimer);
         debounceTimer = null;

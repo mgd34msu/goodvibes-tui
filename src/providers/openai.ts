@@ -10,6 +10,7 @@ import {
 } from './tool-formats.ts';
 import type { OpenAIToolCall } from './tool-formats.ts';
 import { cacheHitTracker } from './cache-strategy.ts';
+import { extractOpenAIStreamTextDelta } from './openai-stream-delta.ts';
 
 /**
  * OpenAIProvider — wraps the official `openai` npm package.
@@ -57,10 +58,13 @@ export class OpenAIProvider implements LLMProvider {
 
         for await (const chunk of stream) {
           const delta = chunk.choices[0]?.delta;
-
-          if (delta?.content) {
-            responseText += delta.content;
-            if (onDelta) onDelta({ content: delta.content });
+          const textDelta = extractOpenAIStreamTextDelta(chunk);
+          for (const contentDelta of textDelta.content) {
+            responseText += contentDelta;
+            if (onDelta) onDelta({ content: contentDelta });
+          }
+          for (const reasoningDelta of textDelta.reasoning) {
+            if (onDelta) onDelta({ reasoning: reasoningDelta });
           }
 
           // Accumulate streaming tool_calls deltas

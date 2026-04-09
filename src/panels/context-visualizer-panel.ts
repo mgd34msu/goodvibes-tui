@@ -57,7 +57,7 @@ export class ContextVisualizerPanel extends BasePanel {
   }
 
   override onDeactivate(): void {
-    this._detachBus();
+    super.onDeactivate();
   }
 
   override onDestroy(): void {

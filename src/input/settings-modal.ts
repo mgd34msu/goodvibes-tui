@@ -83,6 +83,23 @@ export interface SubscriptionEntry {
   nextActions?: string[];
 }
 
+function roundToPrecision(value: number, precision: number): number {
+  const factor = 10 ** precision;
+  return Math.round(value * factor) / factor;
+}
+
+function getNumericAdjustmentMeta(setting: ConfigSetting): {
+  step: number;
+  min?: number;
+  max?: number;
+  precision: number;
+} {
+  if (setting.key === 'wrfc.scoreThreshold') {
+    return { step: 0.1, min: 0, max: 10, precision: 1 };
+  }
+  return { step: 1, precision: 0 };
+}
+
 // ---------------------------------------------------------------------------
 // SettingsModal
 // ---------------------------------------------------------------------------
@@ -338,7 +355,13 @@ export class SettingsModal {
     if (setting.type === 'number') {
       const currentNumber = Number(entry.currentValue ?? 0);
       if (!Number.isFinite(currentNumber)) return;
-      const nextValue = currentNumber + (direction === 'right' ? step : -step);
+      const adjustment = getNumericAdjustmentMeta(setting);
+      const delta = adjustment.step * step;
+      const rounded = roundToPrecision(currentNumber + (direction === 'right' ? delta : -delta), adjustment.precision);
+      const nextValue = Math.min(
+        adjustment.max ?? rounded,
+        Math.max(adjustment.min ?? rounded, rounded),
+      );
       if (setting.validate && !setting.validate(nextValue)) return;
       this._setValue(setting.key, nextValue);
     }

@@ -113,4 +113,44 @@ describe('shell surface', () => {
     expect(text).toContain('state:preflight');
     expect(text).toContain('flags:approval');
   });
+
+  test('prompt box visibly loses focus when the indicator is focused', () => {
+    const focused = buildShellFooter({
+      width: 80,
+      promptText: 'hello',
+      promptLineCount: 1,
+      usage: { up: 0, down: 0 },
+      showExitNotice: false,
+      lastCopyTime: 0,
+      model: 'gpt-test',
+      toolCount: 3,
+      workingDir: '/tmp/demo',
+      provider: 'openai',
+      contextWindow: 0,
+      runningAgentCount: 1,
+      runningProcessCount: 0,
+      indicatorFocused: false,
+    });
+    const unfocused = buildShellFooter({
+      width: 80,
+      promptText: 'hello',
+      promptLineCount: 1,
+      usage: { up: 0, down: 0 },
+      showExitNotice: false,
+      lastCopyTime: 0,
+      model: 'gpt-test',
+      toolCount: 3,
+      workingDir: '/tmp/demo',
+      provider: 'openai',
+      contextWindow: 0,
+      runningAgentCount: 1,
+      runningProcessCount: 0,
+      indicatorFocused: true,
+    });
+    expect(lineToString(focused.lines[1])).toContain('›');
+    expect(lineToString(unfocused.lines[1])).toContain('›');
+    expect(focused.lines[1]![4]!.bg).toBe('#2a2a2a');
+    expect(unfocused.lines[1]![4]!.bg).toBe('#1f2430');
+    expect(lineToString(unfocused.lines[1])).not.toContain('█');
+  });
 });
