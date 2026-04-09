@@ -20,7 +20,7 @@ describe('OrchestrationPanel', () => {
     const panel = new OrchestrationPanel(store);
     const text = linesText(panel.render(120, 12));
     expect(text).toContain('Orchestration Control Room');
-    expect(text).toContain('Posture');
+    expect(text).toContain('Orchestration posture');
     expect(text).toContain('No orchestration graphs recorded yet');
   });
 
@@ -92,7 +92,7 @@ describe('OrchestrationPanel', () => {
 
     const panel = new OrchestrationPanel(store);
     const text = linesText(panel.render(140, 18));
-    expect(text).toContain('Posture');
+    expect(text).toContain('Orchestration posture');
     expect(text).toContain('graphs');
     expect(text).toContain('/orchestration');
     expect(text).toContain('Parallel review graph');

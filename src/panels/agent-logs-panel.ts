@@ -10,9 +10,9 @@ import {
   buildPanelLine,
   buildStyledPanelLine,
   buildPanelWorkspace,
+  resolveScrollablePanelSection,
   DEFAULT_PANEL_PALETTE,
 } from './polish.ts';
-import { getTrackedVisibleWindow } from '../renderer/surface-layout.ts';
 import {
   type AgentLogEntry as LogEntry,
   type AgentLogFilterType as FilterType,
@@ -99,7 +99,7 @@ export class AgentLogsPanel extends BasePanel {
         return true;
       case 'G': // G — jump to bottom / re-enable auto-follow
         this.autoFollow = true;
-        this._clampScroll(0);
+        this._clampScroll();
         this.markDirty();
         return true;
       case 'k': // k / up
@@ -199,17 +199,30 @@ export class AgentLogsPanel extends BasePanel {
     const focusIndex = this.autoFollow
       ? Math.max(0, this.filteredEntries.length - 1)
       : Math.min(this.scrollOffset, Math.max(0, this.filteredEntries.length - 1));
-    const window = getTrackedVisibleWindow(this.filteredEntries.length, focusIndex, Math.max(8, height - 10), this.scrollOffset, 1);
-    this.scrollOffset = window.start;
-    const visible = this.filteredEntries.slice(window.start, window.end).map((entry) => this._renderEntry(entry, width));
+    const summarySection = { title: 'Summary', lines: summaryLines } as const;
+    const agentsSection = { title: 'Agents', lines: [selectorLine] } as const;
+    const logStreamSection = resolveScrollablePanelSection(width, height, {
+      intro: 'Tail per-agent JSONL session logs, filter entries, and switch between running or completed agents.',
+      footerLines,
+      palette: DEFAULT_PANEL_PALETTE,
+      beforeSections: [summarySection, agentsSection],
+      section: {
+        title: 'Log Stream',
+        scrollableLines: this.filteredEntries.map((entry) => this._renderEntry(entry, width)),
+        selectedIndex: focusIndex,
+        scrollOffset: this.scrollOffset,
+        minRows: 8,
+      },
+    });
+    this.scrollOffset = logStreamSection.scrollOffset;
 
     return buildPanelWorkspace(width, height, {
       title: ' Agent Logs',
       intro: 'Tail per-agent JSONL session logs, filter entries, and switch between running or completed agents.',
       sections: [
-        { title: 'Summary', lines: summaryLines },
-        { title: 'Agents', lines: [selectorLine] },
-        { title: 'Log Stream', lines: visible },
+        summarySection,
+        agentsSection,
+        logStreamSection.section,
       ],
       footerLines,
       palette: DEFAULT_PANEL_PALETTE,
@@ -428,9 +441,8 @@ export class AgentLogsPanel extends BasePanel {
     this.markDirty();
   }
 
-  private _clampScroll(height: number): void {
-    const maxScroll = Math.max(0, this.filteredEntries.length - height);
-    this.scrollOffset = Math.min(this.scrollOffset, maxScroll);
+  private _clampScroll(): void {
+    this.scrollOffset = Math.min(this.scrollOffset, Math.max(0, this.filteredEntries.length - 1));
   }
 
   // ── Private: rendering helpers ─────────────────────────────────────────────

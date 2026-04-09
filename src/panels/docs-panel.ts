@@ -6,8 +6,7 @@ import type { Line } from '../types/grid.ts';
 import { BasePanel } from './base-panel.ts';
 import type { ToolRegistry } from '../tools/registry.ts';
 import type { ProviderRegistry } from '../providers/registry.ts';
-import { buildPanelLine, buildPanelWorkspace, buildSearchInputLine, DEFAULT_PANEL_PALETTE } from './polish.ts';
-import { getTrackedVisibleWindow } from '../renderer/surface-layout.ts';
+import { buildPanelLine, buildPanelWorkspace, buildSearchInputLine, resolveScrollablePanelSection, DEFAULT_PANEL_PALETTE } from './polish.ts';
 import {
   getPanelSearchFocusTransition,
   isPanelSearchBackspace,
@@ -152,35 +151,41 @@ export class DocsPanel extends BasePanel {
       ? ` Filter: ${this.searchQuery}  (/ or up at top to edit)`
       : ` / or up at top to search`;
     this.cursorIndex = Math.max(0, Math.min(this.cursorIndex, Math.max(0, this.rows.length - 1)));
-    const window = getTrackedVisibleWindow(this.rows.length, this.cursorIndex, Math.max(8, height - 8), this.scrollOffset, 1);
-    this.scrollOffset = window.start;
-    const visible = this.rows.slice(window.start, window.end);
-    const sectionRows = visible.map((row, index) => {
-      const absIdx = window.start + index;
-      const isCursor = absIdx === this.cursorIndex && row.kind !== 'header' && row.kind !== 'empty';
-      return renderRow(width, row, isCursor);
+    const controlsSection = {
+      title: 'Controls',
+      lines: [
+        buildPanelLine(width, [
+          [' t', DEFAULT_PANEL_PALETTE.info], [' tools', DEFAULT_PANEL_PALETTE.dim],
+          ['   m', DEFAULT_PANEL_PALETTE.info], [' models', DEFAULT_PANEL_PALETTE.dim],
+          ['   k', DEFAULT_PANEL_PALETTE.info], [' shortcuts', DEFAULT_PANEL_PALETTE.dim],
+          ['   /', DEFAULT_PANEL_PALETTE.info], [' search', DEFAULT_PANEL_PALETTE.dim],
+        ]),
+        buildSearchInputLine(width, '', searchLine.trimStart(), DEFAULT_PANEL_PALETTE, { active: this.searching }),
+      ],
+    } as const;
+    const sectionWindow = resolveScrollablePanelSection(width, height, {
+      intro: 'Browse built-in tool docs, available models, and keyboard shortcuts from one shared reference surface.',
+      palette: DEFAULT_PANEL_PALETTE,
+      beforeSections: [controlsSection],
+      section: {
+        title: sectionLabel,
+        scrollableLines: this.rows.map((row, absIdx) => {
+          const isCursor = absIdx === this.cursorIndex && row.kind !== 'header' && row.kind !== 'empty';
+          return renderRow(width, row, isCursor);
+        }),
+        selectedIndex: this.cursorIndex,
+        scrollOffset: this.scrollOffset,
+        minRows: 8,
+      },
     });
+    this.scrollOffset = sectionWindow.scrollOffset;
 
     return buildPanelWorkspace(width, height, {
       title: ` Docs / ${sectionLabel}`,
       intro: 'Browse built-in tool docs, available models, and keyboard shortcuts from one shared reference surface.',
       sections: [
-        {
-          title: 'Controls',
-          lines: [
-            buildPanelLine(width, [
-              [' t', DEFAULT_PANEL_PALETTE.info], [' tools', DEFAULT_PANEL_PALETTE.dim],
-              ['   m', DEFAULT_PANEL_PALETTE.info], [' models', DEFAULT_PANEL_PALETTE.dim],
-              ['   k', DEFAULT_PANEL_PALETTE.info], [' shortcuts', DEFAULT_PANEL_PALETTE.dim],
-              ['   /', DEFAULT_PANEL_PALETTE.info], [' search', DEFAULT_PANEL_PALETTE.dim],
-            ]),
-            buildSearchInputLine(width, '', searchLine.trimStart(), DEFAULT_PANEL_PALETTE, { active: this.searching }),
-          ],
-        },
-        {
-          title: sectionLabel,
-          lines: sectionRows.length > 0 ? sectionRows : [buildPanelLine(width, [[' No matching docs', DEFAULT_PANEL_PALETTE.dim]])],
-        },
+        controlsSection,
+        sectionWindow.section.lines.length > 0 ? sectionWindow.section : { title: sectionLabel, lines: [buildPanelLine(width, [[' No matching docs', DEFAULT_PANEL_PALETTE.dim]])] },
       ],
       palette: DEFAULT_PANEL_PALETTE,
     });

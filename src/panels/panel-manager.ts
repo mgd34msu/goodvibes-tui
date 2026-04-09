@@ -303,6 +303,16 @@ export class PanelManager {
     return p.panels[p.activeIndex] ?? null;
   }
 
+  getPanel(panelId: string): Panel | null {
+    return this.topPane.panels.find((panel) => panel.id === panelId)
+      ?? this.bottomPane.panels.find((panel) => panel.id === panelId)
+      ?? null;
+  }
+
+  getPaneOf(panelId: string): 'top' | 'bottom' | null {
+    return this._findPaneOf(panelId);
+  }
+
   // -------------------------------------------------------------------------
   // Visibility
   // -------------------------------------------------------------------------

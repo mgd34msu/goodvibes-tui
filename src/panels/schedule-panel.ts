@@ -5,10 +5,10 @@ import {
   buildEmptyState,
   buildPanelLine,
   buildPanelWorkspace,
+  resolveScrollablePanelSection,
   DEFAULT_PANEL_PALETTE,
   type PanelWorkspaceSection,
 } from './polish.ts';
-import { getTrackedVisibleWindow } from '../renderer/surface-layout.ts';
 
 // ---------------------------------------------------------------------------
 // Colors
@@ -198,25 +198,36 @@ export class SchedulePanel extends BasePanel {
 
     const taskItems = this.items.filter((item): item is Extract<ViewItem, { kind: 'task' }> => item.kind === 'task');
     this.selectedIndex = Math.max(0, Math.min(this.selectedIndex, taskItems.length - 1));
-    const window = getTrackedVisibleWindow(taskItems.length, this.selectedIndex, Math.max(6, Math.floor((height - 8) / 4)), this.scrollOffset, 1);
-    this.scrollOffset = window.start;
-    const visibleTasks = taskItems.slice(window.start, window.end);
-    const sections: PanelWorkspaceSection[] = [
-      {
-        title: 'Summary',
-        lines: [
-          buildPanelLine(width, [
-            [' Tasks ', DEFAULT_PANEL_PALETTE.label],
-            [String(tasks.length), DEFAULT_PANEL_PALETTE.value],
-            ['   Enabled ', DEFAULT_PANEL_PALETTE.label],
-            [String(enabled), enabled > 0 ? DEFAULT_PANEL_PALETTE.good : DEFAULT_PANEL_PALETTE.dim],
-          ]),
-        ],
-      },
-      {
+    const summarySection: PanelWorkspaceSection = {
+      title: 'Summary',
+      lines: [
+        buildPanelLine(width, [
+          [' Tasks ', DEFAULT_PANEL_PALETTE.label],
+          [String(tasks.length), DEFAULT_PANEL_PALETTE.value],
+          ['   Enabled ', DEFAULT_PANEL_PALETTE.label],
+          [String(enabled), enabled > 0 ? DEFAULT_PANEL_PALETTE.good : DEFAULT_PANEL_PALETTE.dim],
+        ]),
+      ],
+    };
+    const scheduledTasksSection = resolveScrollablePanelSection(width, height, {
+      intro: 'Review recurring scheduled tasks, next run timing, recent history, and enablement state.',
+      footerLines: [
+        buildPanelLine(width, [[' Up/Down', DEFAULT_PANEL_PALETTE.info], [' navigate', DEFAULT_PANEL_PALETTE.dim], ['   Space', DEFAULT_PANEL_PALETTE.info], [' toggle', DEFAULT_PANEL_PALETTE.dim], ['   r', DEFAULT_PANEL_PALETTE.info], [' run now', DEFAULT_PANEL_PALETTE.dim], ['   R', DEFAULT_PANEL_PALETTE.info], [' refresh', DEFAULT_PANEL_PALETTE.dim]]),
+      ],
+      palette: DEFAULT_PANEL_PALETTE,
+      beforeSections: [summarySection],
+      section: {
         title: 'Scheduled Tasks',
-        lines: visibleTasks.flatMap((item, index) => this.renderTask(item.task, item.history, window.start + index === this.selectedIndex, width)),
+        scrollableLines: taskItems.flatMap((item, index) => this.renderTask(item.task, item.history, index === this.selectedIndex, width)),
+        selectedIndex: this.selectedIndex * 3,
+        scrollOffset: this.scrollOffset,
+        minRows: 6,
       },
+    });
+    this.scrollOffset = scheduledTasksSection.scrollOffset;
+    const sections: PanelWorkspaceSection[] = [
+      summarySection,
+      scheduledTasksSection.section,
     ];
 
     return buildPanelWorkspace(width, height, {

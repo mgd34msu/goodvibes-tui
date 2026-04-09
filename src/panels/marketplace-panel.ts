@@ -6,10 +6,10 @@ import {
   buildKeyValueLine,
   buildPanelLine,
   buildPanelWorkspace,
+  resolveScrollablePanelSection,
   DEFAULT_PANEL_PALETTE,
   type PanelWorkspaceSection,
 } from './polish.ts';
-import { getTrackedVisibleWindow } from '../renderer/surface-layout.ts';
 import {
   listInstalledEcosystemEntries,
   loadEcosystemCatalog,
@@ -166,37 +166,45 @@ export class MarketplacePanel extends BasePanel {
       selectedLines.push(buildGuidanceLine(width, '/marketplace review <id>', 'inspect full compatibility and receipt detail for the selected entry', C));
     }
 
-    const introRows = 1;
-    const fixedRows = postureLines.length + Math.min(5, selectedLines.length) + 5;
-    const listBudget = Math.max(4, height - introRows - fixedRows);
-    const window = getTrackedVisibleWindow(this.rows.length, this.selectedIndex, listBudget, this.scrollOffset, 1);
-    this.scrollOffset = window.start;
-
-    const catalogLines = this.rows.slice(window.start, window.end).map((row, index) => {
-      const globalIndex = window.start + index;
-      const bg = globalIndex === this.selectedIndex ? C.selectBg : undefined;
-      const provenance = row.entry.provenance ?? 'local';
-      return buildPanelLine(width, [
-        ['  ', C.label, bg],
-        [row.kind.padEnd(11), C.info, bg],
-        [row.entry.name.slice(0, 20).padEnd(20), C.value, bg],
-        [` ${provenance.slice(0, 16).padEnd(16)}`, provenance === 'local' ? C.dim : C.info, bg],
-        [` ${(row.installed ? 'INSTALLED' : 'CURATED').padEnd(9)} `, statusColor(row.installed), bg],
-        [` ${row.entry.version ?? 'n/a'}`, C.dim, bg],
-      ]);
+    const postureSection: PanelWorkspaceSection = { title: 'Marketplace posture', lines: postureLines };
+    const startupIssuesSection: PanelWorkspaceSection = { title: 'Startup Issues', lines: startupIssueLines };
+    const recommendationsSection: PanelWorkspaceSection = { title: 'Recommendations', lines: recommendationLines };
+    const selectedSection: PanelWorkspaceSection = { title: 'Selected', lines: selectedLines };
+    const catalogSection = resolveScrollablePanelSection(width, height, {
+      intro,
+      palette: C,
+      beforeSections: [postureSection, startupIssuesSection, recommendationsSection],
+      section: {
+        title: 'Catalog',
+        scrollableLines: this.rows.map((row, globalIndex) => {
+          const bg = globalIndex === this.selectedIndex ? C.selectBg : undefined;
+          const provenance = row.entry.provenance ?? 'local';
+          return buildPanelLine(width, [
+            ['  ', C.label, bg],
+            [row.kind.padEnd(11), C.info, bg],
+            [row.entry.name.slice(0, 20).padEnd(20), C.value, bg],
+            [` ${provenance.slice(0, 16).padEnd(16)}`, provenance === 'local' ? C.dim : C.info, bg],
+            [` ${(row.installed ? 'INSTALLED' : 'CURATED').padEnd(9)} `, statusColor(row.installed), bg],
+            [` ${row.entry.version ?? 'n/a'}`, C.dim, bg],
+          ]);
+        }),
+        selectedIndex: this.selectedIndex,
+        scrollOffset: this.scrollOffset,
+        minRows: 4,
+        appendWindowSummary: { dimColor: C.dim },
+      },
+      afterSections: selectedLines.length > 0 && height >= 20 ? [selectedSection] : [],
     });
-    if (this.rows.length > window.count) {
-      catalogLines.push(buildPanelLine(width, [[`  showing ${window.start + 1}-${window.end} of ${this.rows.length}`, C.dim]]));
-    }
+    this.scrollOffset = catalogSection.scrollOffset;
 
     const sections: PanelWorkspaceSection[] = [
-      { title: 'Posture', lines: postureLines },
-      { title: 'Startup Issues', lines: startupIssueLines },
-      { title: 'Recommendations', lines: recommendationLines },
-      { title: 'Catalog', lines: catalogLines },
+      postureSection,
+      startupIssuesSection,
+      recommendationsSection,
+      catalogSection.section,
     ];
     if (selectedLines.length > 0 && height >= 20) {
-      sections.push({ title: 'Selected', lines: selectedLines });
+      sections.push(selectedSection);
     }
 
     return buildPanelWorkspace(width, height, {

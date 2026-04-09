@@ -130,6 +130,15 @@ describe('InputTokenizer', () => {
   });
 
   describe('kitty keyboard protocol', () => {
+
+    test('CSI u space (32) produces key with logicalName=space', () => {
+      const tokens = tokenizer.feed('[32;1u');
+      expect(tokens).toHaveLength(1);
+      const t = tokens[0] as Extract<InputToken, { type: 'key' }>;
+      expect(t.type).toBe('key');
+      expect(t.logicalName).toBe('space');
+    });
+
     test('CSI u insert (57348) produces key with logicalName=insert', () => {
       const tokens = tokenizer.feed('\x1b[57348;1u');
       expect(tokens).toHaveLength(1);

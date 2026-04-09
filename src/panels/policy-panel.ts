@@ -6,9 +6,9 @@ import type { PolicyPanelSnapshot } from '../runtime/diagnostics/panels/policy.t
 import {
   buildPanelLine,
   buildPanelWorkspace,
+  resolveScrollablePanelSection,
   DEFAULT_PANEL_PALETTE,
 } from './polish.ts';
-import { getVisibleWindow } from '../renderer/surface-layout.ts';
 
 const C = {
   ...DEFAULT_PANEL_PALETTE,
@@ -90,13 +90,20 @@ export class PolicyPanel extends BasePanel {
     this.needsRender = false;
     const snapshot = this._state.getSnapshot();
     const content = this._buildContent(width, snapshot);
-    const contentWindow = getVisibleWindow(content.length, this._scrollOffset, Math.max(4, height - 8));
-    const maxScroll = Math.max(0, content.length - contentWindow.count);
-    const offset = Math.min(this._scrollOffset, maxScroll);
-    const visible = content.slice(offset, offset + contentWindow.count);
+    const governanceSection = resolveScrollablePanelSection(width, height, {
+      footerLines: [buildPanelLine(width, [['  Up/Down scroll  r record divergence trend snapshot', C.dim]])],
+      palette: C,
+      section: {
+        title: 'Governance',
+        scrollableLines: content,
+        scrollOffset: this._scrollOffset,
+        minRows: 4,
+      },
+    });
+    this._scrollOffset = governanceSection.scrollOffset;
     const lines = buildPanelWorkspace(width, height, {
       title: 'Policy And Governance',
-      sections: [{ title: 'Governance', lines: visible }],
+      sections: [governanceSection.section],
       footerLines: [buildPanelLine(width, [['  Up/Down scroll  r record divergence trend snapshot', C.dim]])],
       palette: C,
     });

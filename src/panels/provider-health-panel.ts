@@ -13,15 +13,18 @@ import { evaluateSessionMaintenance } from '../runtime/session-maintenance.ts';
 import { listPersistedWorktreeMeta, summarizeWorktreeOwnership } from '../runtime/worktree/registry.ts';
 import {
   buildBodyText,
+  buildDetailBlock,
   buildEmptyState,
   buildGuidanceLine,
   buildKeyValueLine,
+  buildPanelListRow,
   buildPanelLine,
   buildPanelWorkspace,
+  buildSummaryBlock,
   DEFAULT_PANEL_PALETTE,
+  resolvePrimaryScrollableSection,
   type PanelWorkspaceSection,
 } from './polish.ts';
-import { getTrackedVisibleWindow } from '../renderer/surface-layout.ts';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -661,27 +664,6 @@ export class ProviderHealthPanel extends BasePanel {
       }
     }
 
-    const listBudget = Math.max(4, height - 12);
-    const window = getTrackedVisibleWindow(providers.length, this._selectedIndex, listBudget, this._scrollOffset, 1);
-    this._scrollOffset = window.start;
-    const providerLines: Line[] = providers.slice(window.start, window.end).map((name, index) => {
-      const health = providerHealthTracker.get(name);
-      const status = health?.status ?? 'unknown';
-      const globalIndex = window.start + index;
-      const bg = globalIndex === this._selectedIndex ? '#111827' : undefined;
-      const latency = health?.lastLatencyMs !== undefined ? fmtMs(health.lastLatencyMs) : 'n/a';
-      const latencyFg = health?.lastLatencyMs !== undefined ? latencyColor(health.lastLatencyMs) : C.dim;
-      return buildPanelLine(width, [
-        ['  ', C.label, bg],
-        [name.padEnd(16), C.provName, bg],
-        [statusLabel(status).padEnd(14), statusDot(status).color, bg],
-        [' lat ', C.label, bg],
-        [latency.padEnd(8), latencyFg, bg],
-        [' ok ', C.label, bg],
-        [fmtAgo(health?.lastSuccessAt).padEnd(10), C.value, bg],
-      ]);
-    });
-
     const selectedName = providers[this._selectedIndex];
     const selectedHealth = selectedName ? providerHealthTracker.get(selectedName) : undefined;
     const selectedAccount = selectedName ? this._accountRecords.get(selectedName) : undefined;
@@ -740,13 +722,47 @@ export class ProviderHealthPanel extends BasePanel {
       }
     }
 
+    const postureSection: PanelWorkspaceSection = { lines: buildSummaryBlock(width, 'Health posture', postureLines, { ...DEFAULT_PANEL_PALETTE, header: C.title, headerBg: '#0f172a' }) };
+    const domainsSection: PanelWorkspaceSection = { title: 'Repair Domains', lines: domainLines };
+    const maintenanceSections = maintenanceLines.length > 0 ? [{ title: 'Session Maintenance', lines: maintenanceLines } satisfies PanelWorkspaceSection] : [];
+    const selectedSections = selectedLines.length > 0 ? [{ lines: buildDetailBlock(width, 'Selected provider', selectedLines, { ...DEFAULT_PANEL_PALETTE, header: C.title, headerBg: '#0f172a' }) } satisfies PanelWorkspaceSection] : [];
+    const resolvedProvidersSection = resolvePrimaryScrollableSection(width, height, {
+      intro,
+      footerLines: [buildPanelLine(width, [['  j/k or Up/Down move  live cooldowns refresh while active', C.dim]])],
+      palette: { ...DEFAULT_PANEL_PALETTE, header: C.title, headerBg: '#0f172a' },
+      beforeSections: [postureSection, domainsSection, ...maintenanceSections],
+      section: {
+        title: 'Providers',
+        scrollableLines: providers.map((name, absolute) => {
+          const health = providerHealthTracker.get(name);
+          const status = health?.status ?? 'unknown';
+          const latency = health?.lastLatencyMs !== undefined ? fmtMs(health.lastLatencyMs) : 'n/a';
+          const latencyFg = health?.lastLatencyMs !== undefined ? latencyColor(health.lastLatencyMs) : C.dim;
+          return buildPanelListRow(width, [
+            { text: name.padEnd(16), fg: C.provName },
+            { text: statusLabel(status).padEnd(14), fg: statusDot(status).color },
+            { text: ' lat ', fg: C.label },
+            { text: latency.padEnd(8), fg: latencyFg },
+            { text: ' ok ', fg: C.label },
+            { text: fmtAgo(health?.lastSuccessAt).padEnd(10), fg: C.value },
+          ], { ...DEFAULT_PANEL_PALETTE, header: C.title, headerBg: '#0f172a' }, { selected: absolute === this._selectedIndex, selectedBg: '#111827' });
+        }),
+        selectedIndex: this._selectedIndex,
+        scrollOffset: this._scrollOffset,
+        guardRows: 1,
+        minRows: 4,
+        appendWindowSummary: { dimColor: C.dim },
+      },
+      afterSections: selectedSections,
+    });
+    this._scrollOffset = resolvedProvidersSection.scrollOffset;
     const sections: PanelWorkspaceSection[] = [
-      { title: 'Posture', lines: postureLines },
-      { title: 'Repair Domains', lines: domainLines },
-      ...(maintenanceLines.length > 0 ? [{ title: 'Session Maintenance', lines: maintenanceLines }] : []),
-      { title: 'Providers', lines: providerLines },
+      postureSection,
+      domainsSection,
+      ...maintenanceSections,
+      resolvedProvidersSection.section,
+      ...selectedSections,
     ];
-    if (selectedLines.length > 0) sections.push({ title: 'Selected', lines: selectedLines });
     return buildPanelWorkspace(width, height, {
       title: 'Health',
       intro,

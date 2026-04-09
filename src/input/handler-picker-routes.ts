@@ -174,12 +174,13 @@ export function handleProcessModalToken(state: ProcessRouteState, token: InputTo
     else if (token.logicalName === 'enter') {
       const entry = state.processModal.getSelected();
       if (entry) {
-        state.processModal.close();
         if (entry.type === 'agent') {
           state.modalOpened('agentDetail');
+          state.processModal.close();
           state.agentDetailModal.open(entry.id);
         } else {
           state.modalOpened('liveTail');
+          state.processModal.close();
           state.liveTailModal.open(entry);
         }
       }
@@ -213,8 +214,7 @@ export function handleLiveTailToken(state: LiveTailRouteState, token: InputToken
 
   const killAndReturn = (): void => {
     state.liveTailModal.killProcess();
-    state.liveTailModal.close();
-    state.processModal.open();
+    state.handleEscape();
   };
 
   if (token.type === 'key') {

@@ -2,10 +2,11 @@ import { type Line } from '../types/grid.ts';
 import { fitDisplay, getDisplayWidth, truncateDisplay } from '../utils/terminal-width.ts';
 import type { FilePickerModal } from '../input/file-picker.ts';
 import {
-  createOverlayBorderLine,
   createOverlayBoxLayout,
   createOverlayContentLine,
+  createOverlayFilledBorderLine,
   DEFAULT_OVERLAY_PALETTE,
+  OVERLAY_GLYPHS,
   putOverlayText,
 } from './overlay-box.ts';
 import { getOverlaySurfaceMetrics } from './overlay-viewport.ts';
@@ -35,25 +36,25 @@ export function renderFilePickerOverlay(
   const selectedBg = DEFAULT_OVERLAY_PALETTE.selectedBg;
 
   // Title bar
-  const titleLine = createOverlayBorderLine(width, layout, '┌', '─', '┐', borderFg);
+  const titleLine = createOverlayFilledBorderLine(width, layout, OVERLAY_GLYPHS.topLeft, OVERLAY_GLYPHS.horizontal, OVERLAY_GLYPHS.topRight, borderFg, DEFAULT_OVERLAY_PALETTE.titleBg);
   putOverlayText(titleLine, layout.margin + 2, layout.width - 4, 'Select File', { fg: titleFg, bold: true });
   lines.push(titleLine);
 
   // Search input
   const queryDisplay = picker.query || '';
-  const searchLine = createOverlayContentLine(width, layout, borderFg);
+  const searchLine = createOverlayContentLine(width, layout, borderFg, DEFAULT_OVERLAY_PALETTE.inputBg);
   const searchPrefix = '@ ';
-  const queryText = fitDisplay(`${queryDisplay}${picker.searchFocused ? '█' : ''}`, Math.max(0, contentW - getDisplayWidth(searchPrefix)));
+  const queryText = fitDisplay(`${queryDisplay}${picker.searchFocused ? OVERLAY_GLYPHS.cursor : ''}`, Math.max(0, contentW - getDisplayWidth(searchPrefix)));
   putOverlayText(searchLine, layout.margin + 2, getDisplayWidth(searchPrefix), searchPrefix, { fg: picker.searchFocused ? bodyFg : mutedFg });
   putOverlayText(searchLine, layout.margin + 2 + getDisplayWidth(searchPrefix), contentW - getDisplayWidth(searchPrefix), queryText, { fg: picker.query.length > 0 || picker.searchFocused ? bodyFg : mutedFg });
   lines.push(searchLine);
 
   // Separator
-  lines.push(createOverlayBorderLine(width, layout, '├', '─', '┤', borderFg));
+  lines.push(createOverlayFilledBorderLine(width, layout, OVERLAY_GLYPHS.teeLeft, OVERLAY_GLYPHS.horizontal, OVERLAY_GLYPHS.teeRight, borderFg, DEFAULT_OVERLAY_PALETTE.sectionBg));
 
   // Results
   if (picker.results.length === 0) {
-    const noResults = createOverlayContentLine(width, layout, borderFg);
+      const noResults = createOverlayContentLine(width, layout, borderFg, DEFAULT_OVERLAY_PALETTE.bodyBg);
     putOverlayText(noResults, layout.margin + 2, contentW, fitDisplay('No matching files', contentW), { fg: '244', dim: true });
     lines.push(noResults);
   } else {
@@ -70,11 +71,11 @@ export function renderFilePickerOverlay(
     for (let i = startIdx; i < endIdx; i++) {
       const file = picker.results[i];
       const isSelected = i === picker.selectedIndex;
-      const indicator = isSelected ? '▸ ' : '  ';
+      const indicator = isSelected ? `${OVERLAY_GLYPHS.selected} ` : '  ';
       const displayFile = getDisplayWidth(file) > contentW - 2
         ? truncateDisplay(file, contentW - 2)
         : file;
-      const line = createOverlayContentLine(width, layout, borderFg, isSelected ? selectedBg : '');
+      const line = createOverlayContentLine(width, layout, borderFg, isSelected ? selectedBg : DEFAULT_OVERLAY_PALETTE.bodyBg);
       putOverlayText(
         line,
         layout.margin + 2,
@@ -82,7 +83,7 @@ export function renderFilePickerOverlay(
         fitDisplay(indicator + fitDisplay(displayFile, contentW - 2), contentW),
         {
           fg: isSelected ? titleFg : file.endsWith('/') ? titleFg : bodyFg,
-          bg: isSelected ? selectedBg : '',
+          bg: isSelected ? selectedBg : DEFAULT_OVERLAY_PALETTE.bodyBg,
           bold: isSelected,
         },
       );
@@ -92,7 +93,7 @@ export function renderFilePickerOverlay(
 
   // Bottom border with hints
   const hints = '[Up/Down] Navigate  [/] Search  [Enter] Select  [Esc] Cancel';
-  const bottomLine = createOverlayBorderLine(width, layout, '└', '─', '┘', borderFg);
+  const bottomLine = createOverlayFilledBorderLine(width, layout, OVERLAY_GLYPHS.bottomLeft, OVERLAY_GLYPHS.horizontal, OVERLAY_GLYPHS.bottomRight, borderFg, DEFAULT_OVERLAY_PALETTE.sectionBg);
   putOverlayText(bottomLine, layout.margin + 2, layout.width - 4, truncateDisplay(hints, layout.width - 4), { fg: mutedFg, dim: true });
   lines.push(bottomLine);
 

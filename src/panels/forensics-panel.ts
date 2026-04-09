@@ -16,10 +16,10 @@ import {
   buildEmptyState,
   buildPanelLine,
   buildPanelWorkspace,
+  resolveScrollablePanelSection,
   DEFAULT_PANEL_PALETTE,
   type PanelWorkspaceSection,
 } from './polish.ts';
-import { getTrackedVisibleWindow, getVisibleWindow } from '../renderer/surface-layout.ts';
 
 // ── Colour palette ────────────────────────────────────────────────────────────
 const C = {
@@ -195,18 +195,13 @@ export class ForensicsPanel extends BasePanel {
   // ── List view ──────────────────────────────────────────────────────────────
 
   private _renderList(lines: Line[], reports: FailureReport[], width: number, height: number, intro: string): void {
-    const window = getTrackedVisibleWindow(reports.length, this._selectedIndex, Math.max(4, height - 8), this._scrollOffset, 1);
-    const maxScroll = Math.max(0, reports.length - window.count);
-    const offset = Math.min(window.start, maxScroll);
-    const visible = reports.slice(offset, offset + window.count);
-    const reportLines: Line[] = [
+    const reportRows: Line[] = [
       buildPanelLine(width, [['  ID       TIME      CLASS                 SUMMARY', C.label]]),
     ];
 
-    for (let i = 0; i < visible.length; i++) {
-      const report = visible[i]!;
-      const absIdx = offset + i;
-      const isSelected = absIdx === this._selectedIndex;
+    for (let i = 0; i < reports.length; i++) {
+      const report = reports[i]!;
+      const isSelected = i === this._selectedIndex;
       const bg = isSelected ? C.selectBg : undefined;
 
       const idStr   = report.id.slice(0, 8).padEnd(8, ' ');
@@ -223,17 +218,29 @@ export class ForensicsPanel extends BasePanel {
         [`${cls} `, clsColor, bg],
         [summaryStr, C.summaryText, bg],
       ];
-      reportLines.push(buildPanelLine(width, segs));
+      reportRows.push(buildPanelLine(width, segs));
     }
-
-    if (reports.length > 0) {
-      reportLines.push(buildPanelLine(width, [[` [${this._selectedIndex + 1}/${reports.length}] Up/Down navigate  Enter expand`, C.label]]));
-    }
+    const reportsSection = resolveScrollablePanelSection(width, height, {
+      intro,
+      palette: C,
+      section: {
+        title: 'Reports',
+        scrollableLines: reportRows,
+        selectedIndex: this._selectedIndex + 1,
+        scrollOffset: this._scrollOffset,
+        minRows: 4,
+        appendWindowSummary: {
+          dimColor: C.label,
+          formatter: () => buildPanelLine(width, [[` [${this._selectedIndex + 1}/${reports.length}] Up/Down navigate  Enter expand`, C.label]]),
+        },
+      },
+    });
+    this._scrollOffset = reportsSection.scrollOffset;
 
     lines.push(...buildPanelWorkspace(width, height, {
       title: 'Failure Forensics',
       intro,
-      sections: [{ title: 'Reports', lines: reportLines }],
+      sections: [reportsSection.section],
       palette: C,
     }));
   }
@@ -309,16 +316,21 @@ export class ForensicsPanel extends BasePanel {
 
     detailLines.push(buildPanelLine(width, [[' Esc/q: back to list  Up/Down: scroll', C.dim]]));
 
-    const bodyHeight = Math.max(1, height - 6);
-    const maxScroll = Math.max(0, detailLines.length - bodyHeight);
-    const offset = Math.min(this._scrollOffset, maxScroll);
-    this._scrollOffset = offset;
-
-    const visible = detailLines.slice(offset, offset + bodyHeight);
+    const detailSection = resolveScrollablePanelSection(width, height, {
+      intro,
+      palette: C,
+      section: {
+        title: 'Report Detail',
+        scrollableLines: detailLines,
+        scrollOffset: this._scrollOffset,
+        minRows: 1,
+      },
+    });
+    this._scrollOffset = detailSection.scrollOffset;
     lines.push(...buildPanelWorkspace(width, height, {
       title: 'Failure Forensics',
       intro,
-      sections: [{ title: 'Report Detail', lines: visible }],
+      sections: [detailSection.section],
       palette: C,
     }));
   }

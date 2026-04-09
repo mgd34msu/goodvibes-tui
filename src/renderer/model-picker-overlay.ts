@@ -5,10 +5,11 @@ import { EFFORT_DESCRIPTIONS } from '../providers/effort-levels.ts';
 import { getBenchmarks, getQualityTier, getQualityTierFromScore } from '../providers/model-benchmarks.ts';
 import { getSyntheticModelInfoFromCatalog } from '../providers/model-catalog.ts';
 import {
-  createOverlayBorderLine,
   createOverlayBoxLayout,
   createOverlayContentLine,
+  createOverlayFilledBorderLine,
   DEFAULT_OVERLAY_PALETTE,
+  OVERLAY_GLYPHS,
   putOverlayText,
 } from './overlay-box.ts';
 import { getOverlaySurfaceMetrics } from './overlay-viewport.ts';
@@ -67,7 +68,7 @@ export function renderModelPickerOverlay(
   const selectedBg = DEFAULT_OVERLAY_PALETTE.selectedBg;
 
   // ── Title bar ───────────────────────────────────────────────────────────────────────
-  const titleLine = createOverlayBorderLine(width, layout, '┌', '─', '┐', borderFg);
+  const titleLine = createOverlayFilledBorderLine(width, layout, OVERLAY_GLYPHS.topLeft, OVERLAY_GLYPHS.horizontal, OVERLAY_GLYPHS.topRight, borderFg, DEFAULT_OVERLAY_PALETTE.titleBg);
   putRowText(
     titleLine,
     layout.margin + 2,
@@ -81,9 +82,9 @@ export function renderModelPickerOverlay(
 
   // ── Search bar (model and provider modes) ────────────────────────────────────
   if (picker.mode === 'model' || picker.mode === 'provider') {
-    const searchLine = createOverlayContentLine(width, layout, borderFg);
+    const searchLine = createOverlayContentLine(width, layout, borderFg, DEFAULT_OVERLAY_PALETTE.inputBg);
     const searchPrefix = '/ ';
-    const queryDisplay = picker.query + (picker.searchFocused ? '█' : '');
+    const queryDisplay = picker.query + (picker.searchFocused ? OVERLAY_GLYPHS.cursor : '');
     let filterTag = '';
     let filterTagW = 0;
     if (picker.mode === 'model') {
@@ -116,9 +117,9 @@ export function renderModelPickerOverlay(
     lines.push(searchLine);
 
     // Thin divider under search bar
-    lines.push(createOverlayBorderLine(width, layout, '├', '─', '┤', borderFg));
+    lines.push(createOverlayFilledBorderLine(width, layout, OVERLAY_GLYPHS.teeLeft, OVERLAY_GLYPHS.horizontal, OVERLAY_GLYPHS.teeRight, borderFg, DEFAULT_OVERLAY_PALETTE.sectionBg));
   } else {
-    lines.push(createOverlayContentLine(width, layout, borderFg));
+    lines.push(createOverlayContentLine(width, layout, borderFg, DEFAULT_OVERLAY_PALETTE.sectionBg));
   }
 
   if (picker.mode === 'model') {
@@ -128,7 +129,7 @@ export function renderModelPickerOverlay(
       const msg = picker.query.length > 0
         ? `No models match "${picker.query.length > 20 ? picker.query.slice(0, 20) + '...' : picker.query}"`
         : 'No models available';
-      const noModels = createOverlayContentLine(width, layout, borderFg);
+      const noModels = createOverlayContentLine(width, layout, borderFg, DEFAULT_OVERLAY_PALETTE.bodyBg);
       putRowText(noModels, layout.margin + 2, contentW, fitDisplay(truncateDisplay(msg, contentW), contentW), '244', '', false, true);
       lines.push(noModels);
     } else {
@@ -139,8 +140,8 @@ export function renderModelPickerOverlay(
 
       // Scroll indicators
       if (scrollOffset > 0) {
-        const upHint = createOverlayContentLine(width, layout, borderFg);
-        putRowText(upHint, layout.margin + 2, contentW, fitDisplay(`↑ ${scrollOffset} more above`, contentW), mutedFg, '', false, true);
+        const upHint = createOverlayContentLine(width, layout, borderFg, DEFAULT_OVERLAY_PALETTE.sectionBg);
+        putRowText(upHint, layout.margin + 2, contentW, fitDisplay(`${OVERLAY_GLYPHS.moreAbove} ${scrollOffset} more above`, contentW), mutedFg, '', false, true);
         lines.push(upHint);
       }
 
@@ -155,14 +156,14 @@ export function renderModelPickerOverlay(
         // For the first visible item, always check if header is needed
         const groupKey = picker.getModelGroupKey(model);
         if (groupKey !== lastGroupKey) {
-          const headerRow = createOverlayContentLine(width, layout, borderFg);
+          const headerRow = createOverlayContentLine(width, layout, borderFg, DEFAULT_OVERLAY_PALETTE.sectionBg);
           putRowText(headerRow, layout.margin + 2, contentW, fitDisplay(`[${groupKey}]`, contentW), '#4488cc');
           lines.push(headerRow);
           lastGroupKey = groupKey;
         }
 
         const isSelected = absIdx === picker.selectedIndex;
-        const indicator = isSelected ? '▸ ' : '  ';
+        const indicator = isSelected ? `${OVERLAY_GLYPHS.selected} ` : '  ';
 
         // Pre-compute synthetic info once per model (avoid 3 separate lookups per frame)
         const synthInfo = model.provider === 'synthetic' ? getSyntheticModelInfoFromCatalog(model.id) : null;
@@ -201,28 +202,28 @@ export function renderModelPickerOverlay(
           ? model.displayName.slice(0, Math.max(0, remaining) - 3) + '...'
           : model.displayName.padEnd(Math.max(0, remaining));
 
-        const row = createOverlayContentLine(width, layout, borderFg, isSelected ? selectedBg : '');
+        const row = createOverlayContentLine(width, layout, borderFg, isSelected ? selectedBg : DEFAULT_OVERLAY_PALETTE.bodyBg);
         let x = layout.margin + 2;
         const rowText = indicator + pinStar + idStr + '  ' + nameStr + providerCountStr + ' ' + freeBadge + tierBadge;
-        putRowText(row, x, contentW, fitDisplay(truncateDisplay(rowText, contentW), contentW), isSelected ? titleFg : bodyFg, isSelected ? selectedBg : '', isSelected);
+        putRowText(row, x, contentW, fitDisplay(truncateDisplay(rowText, contentW), contentW), isSelected ? titleFg : bodyFg, isSelected ? selectedBg : DEFAULT_OVERLAY_PALETTE.bodyBg, isSelected);
         lines.push(row);
       }
 
       if (visibleEnd < filtered.length) {
         const remaining2 = filtered.length - visibleEnd;
-        const downHint = createOverlayContentLine(width, layout, borderFg);
-        putRowText(downHint, layout.margin + 2, contentW, fitDisplay(`↓ ${remaining2} more below`, contentW), mutedFg, '', false, true);
+        const downHint = createOverlayContentLine(width, layout, borderFg, DEFAULT_OVERLAY_PALETTE.sectionBg);
+        putRowText(downHint, layout.margin + 2, contentW, fitDisplay(`${OVERLAY_GLYPHS.moreBelow} ${remaining2} more below`, contentW), mutedFg, '', false, true);
         lines.push(downHint);
       }
     }
 
     // ── Divider ────────────────────────────────────────────────────────────────────
-    lines.push(createOverlayBorderLine(width, layout, '├', '─', '┤', borderFg));
+    lines.push(createOverlayFilledBorderLine(width, layout, OVERLAY_GLYPHS.teeLeft, OVERLAY_GLYPHS.horizontal, OVERLAY_GLYPHS.teeRight, borderFg, DEFAULT_OVERLAY_PALETTE.sectionBg));
 
     // ── Capability detail for selected model ────────────────────────────────────────────
     const selected = picker.getSelected();
     if (selected) {
-      const providerLine = createOverlayContentLine(width, layout, borderFg);
+      const providerLine = createOverlayContentLine(width, layout, borderFg, DEFAULT_OVERLAY_PALETTE.bodyBg);
       putRowText(providerLine, layout.margin + 2, contentW, fitDisplay(`Provider: ${selected.provider}`, contentW), '244');
       lines.push(providerLine);
 
@@ -234,12 +235,12 @@ export function renderModelPickerOverlay(
       if (caps.toolCalling) capParts.push('Tools: \u2713');
       if (caps.codeEditing) capParts.push('Code: \u2713');
       const capText = capParts.join('  ');
-      const capLine = createOverlayContentLine(width, layout, borderFg);
+      const capLine = createOverlayContentLine(width, layout, borderFg, DEFAULT_OVERLAY_PALETTE.bodyBg);
       putRowText(capLine, layout.margin + 2, contentW, fitDisplay(truncateDisplay(capText, contentW), contentW), '244');
       lines.push(capLine);
     } else {
-      lines.push(createOverlayContentLine(width, layout, borderFg));
-      lines.push(createOverlayContentLine(width, layout, borderFg));
+      lines.push(createOverlayContentLine(width, layout, borderFg, DEFAULT_OVERLAY_PALETTE.bodyBg));
+      lines.push(createOverlayContentLine(width, layout, borderFg, DEFAULT_OVERLAY_PALETTE.bodyBg));
     }
   } else if (picker.mode === 'provider') {
     // ── Provider list (grouped: Popular / All Providers) ───────────────────────────────────
@@ -249,7 +250,7 @@ export function renderModelPickerOverlay(
       const msg = picker.query.length > 0
         ? `No providers match "${picker.query.length > 20 ? picker.query.slice(0, 20) + '...' : picker.query}"`
         : 'No providers available';
-      const noProviders = createOverlayContentLine(width, layout, borderFg);
+      const noProviders = createOverlayContentLine(width, layout, borderFg, DEFAULT_OVERLAY_PALETTE.bodyBg);
       putRowText(noProviders, layout.margin + 2, contentW, fitDisplay(truncateDisplay(msg, contentW), contentW), '244', '', false, true);
       lines.push(noProviders);
     } else {
@@ -260,8 +261,8 @@ export function renderModelPickerOverlay(
 
       // Scroll indicator — items above
       if (providerScrollOffset > 0) {
-        const upHint = createOverlayContentLine(width, layout, borderFg);
-        putRowText(upHint, layout.margin + 2, contentW, fitDisplay(`↑ ${providerScrollOffset} more above`, contentW), mutedFg, '', false, true);
+        const upHint = createOverlayContentLine(width, layout, borderFg, DEFAULT_OVERLAY_PALETTE.sectionBg);
+        putRowText(upHint, layout.margin + 2, contentW, fitDisplay(`${OVERLAY_GLYPHS.moreAbove} ${providerScrollOffset} more above`, contentW), mutedFg, '', false, true);
         lines.push(upHint);
       }
 
@@ -285,40 +286,40 @@ export function renderModelPickerOverlay(
 
         // Emit pending group header before first visible item in the group
         if (pendingHeader !== null) {
-          const headerRow = createOverlayContentLine(width, layout, borderFg);
+          const headerRow = createOverlayContentLine(width, layout, borderFg, DEFAULT_OVERLAY_PALETTE.sectionBg);
           putRowText(headerRow, layout.margin + 2, contentW, fitDisplay(`[${pendingHeader}]`, contentW), '#4488cc');
           lines.push(headerRow);
           pendingHeader = null;
         }
 
         const isSelected = selectableIdx === picker.selectedIndex;
-        const indicator = isSelected ? '▸ ' : '  ';
+        const indicator = isSelected ? `${OVERLAY_GLYPHS.selected} ` : '  ';
         const checkmark = item.isConfigured ? '✓ ' : '  ';
         const labelW = contentW - 2 - 2; // indicator(2) + checkmark(2)
         const labelStr = item.label.length > labelW
           ? item.label.slice(0, labelW - 3) + '...'
           : item.label.padEnd(labelW);
-        const row = createOverlayContentLine(width, layout, borderFg, isSelected ? selectedBg : '');
+        const row = createOverlayContentLine(width, layout, borderFg, isSelected ? selectedBg : DEFAULT_OVERLAY_PALETTE.bodyBg);
         const rowText = indicator + checkmark + labelStr;
-        putRowText(row, layout.margin + 2, contentW, fitDisplay(truncateDisplay(rowText, contentW), contentW), isSelected ? titleFg : bodyFg, isSelected ? selectedBg : '', isSelected);
+        putRowText(row, layout.margin + 2, contentW, fitDisplay(truncateDisplay(rowText, contentW), contentW), isSelected ? titleFg : bodyFg, isSelected ? selectedBg : DEFAULT_OVERLAY_PALETTE.bodyBg, isSelected);
         lines.push(row);
       }
 
       // Scroll indicator — items below
       if (providerVisibleEnd < selectableCount) {
         const remaining2 = selectableCount - providerVisibleEnd;
-        const downHint = createOverlayContentLine(width, layout, borderFg);
-        putRowText(downHint, layout.margin + 2, contentW, fitDisplay(`↓ ${remaining2} more below`, contentW), mutedFg, '', false, true);
+        const downHint = createOverlayContentLine(width, layout, borderFg, DEFAULT_OVERLAY_PALETTE.sectionBg);
+        putRowText(downHint, layout.margin + 2, contentW, fitDisplay(`${OVERLAY_GLYPHS.moreBelow} ${remaining2} more below`, contentW), mutedFg, '', false, true);
         lines.push(downHint);
       }
     }
 
     // ── Divider + hint ──────────────────────────────────────────────────────────────────
-    lines.push(createOverlayBorderLine(width, layout, '├', '─', '┤', borderFg));
-    const hintLine = createOverlayContentLine(width, layout, borderFg);
+    lines.push(createOverlayFilledBorderLine(width, layout, OVERLAY_GLYPHS.teeLeft, OVERLAY_GLYPHS.horizontal, OVERLAY_GLYPHS.teeRight, borderFg, DEFAULT_OVERLAY_PALETTE.sectionBg));
+    const hintLine = createOverlayContentLine(width, layout, borderFg, DEFAULT_OVERLAY_PALETTE.bodyBg);
     putRowText(hintLine, layout.margin + 2, contentW, fitDisplay('Select a provider to browse its models', contentW), '244');
     lines.push(hintLine);
-    lines.push(createOverlayContentLine(width, layout, borderFg));
+    lines.push(createOverlayContentLine(width, layout, borderFg, DEFAULT_OVERLAY_PALETTE.bodyBg));
   } else if (picker.mode === 'contextCap') {
     // ── Context cap input ──────────────────────────────────────────────────────────────
     const capModel = picker.contextCapPendingModel;
@@ -327,52 +328,52 @@ export function renderModelPickerOverlay(
     const provenance = capModel?.contextWindowProvenance ?? 'configured_cap';
 
     const promptLabel = 'Context window (tokens):';
-    const cursorChar = '█';
+    const cursorChar = OVERLAY_GLYPHS.cursor;
     const inputDisplay = picker.contextCapQuery + cursorChar;
-    const promptRow = createOverlayContentLine(width, layout, borderFg);
+    const promptRow = createOverlayContentLine(width, layout, borderFg, DEFAULT_OVERLAY_PALETTE.inputBg);
     putRowText(promptRow, layout.margin + 2, contentW, fitDisplay(`${promptLabel} ${inputDisplay}`, contentW), '#ffffff');
     lines.push(promptRow);
 
-    lines.push(createOverlayContentLine(width, layout, borderFg));
+    lines.push(createOverlayContentLine(width, layout, borderFg, DEFAULT_OVERLAY_PALETTE.bodyBg));
 
     const hintText = `Leave blank to use default (current: ${currentCtx}, source: ${provenance})`;
     const hintTrunc = getDisplayWidth(hintText) > contentW
       ? hintText.slice(0, contentW - 3) + '...'
       : hintText;
-    const hintRow = createOverlayContentLine(width, layout, borderFg);
+    const hintRow = createOverlayContentLine(width, layout, borderFg, DEFAULT_OVERLAY_PALETTE.bodyBg);
     putRowText(hintRow, layout.margin + 2, contentW, fitDisplay(hintTrunc, contentW), '244', '', false, true);
     lines.push(hintRow);
 
     // Divider + model info
-    lines.push(createOverlayBorderLine(width, layout, '├', '─', '┤', borderFg));
-    const modelInfoLine = createOverlayContentLine(width, layout, borderFg);
+    lines.push(createOverlayFilledBorderLine(width, layout, OVERLAY_GLYPHS.teeLeft, OVERLAY_GLYPHS.horizontal, OVERLAY_GLYPHS.teeRight, borderFg, DEFAULT_OVERLAY_PALETTE.sectionBg));
+    const modelInfoLine = createOverlayContentLine(width, layout, borderFg, DEFAULT_OVERLAY_PALETTE.bodyBg);
     putRowText(modelInfoLine, layout.margin + 2, contentW, fitDisplay(`Model: ${modelName}`, contentW), '244');
     lines.push(modelInfoLine);
-    lines.push(createOverlayContentLine(width, layout, borderFg));
+    lines.push(createOverlayContentLine(width, layout, borderFg, DEFAULT_OVERLAY_PALETTE.bodyBg));
   } else {
     // ── Effort list ────────────────────────────────────────────────────────────────────────
     for (let i = 0; i < picker.effortLevels.length; i++) {
       const level = picker.effortLevels[i];
       const isSelected = i === picker.selectedIndex;
-      const indicator = isSelected ? '▸ ' : '  ';
+      const indicator = isSelected ? `${OVERLAY_GLYPHS.selected} ` : '  ';
       const desc = EFFORT_DESCRIPTIONS[level] ?? '';
       const labelW = 10;
       const labelStr = level.padEnd(labelW);
       const remaining = contentW - labelW - 4;
       const descStr = desc.length > remaining ? desc.slice(0, remaining - 3) + '...' : desc.padEnd(remaining);
-      const row = createOverlayContentLine(width, layout, borderFg, isSelected ? selectedBg : '');
+      const row = createOverlayContentLine(width, layout, borderFg, isSelected ? selectedBg : DEFAULT_OVERLAY_PALETTE.bodyBg);
       const rowText = indicator + labelStr + '  ' + descStr;
-      putRowText(row, layout.margin + 2, contentW, fitDisplay(truncateDisplay(rowText, contentW), contentW), isSelected ? titleFg : bodyFg, isSelected ? selectedBg : '', isSelected);
+      putRowText(row, layout.margin + 2, contentW, fitDisplay(truncateDisplay(rowText, contentW), contentW), isSelected ? titleFg : bodyFg, isSelected ? selectedBg : DEFAULT_OVERLAY_PALETTE.bodyBg, isSelected);
       lines.push(row);
     }
 
     // ── Divider + model context ──────────────────────────────────────────────────────
-    lines.push(createOverlayBorderLine(width, layout, '├', '─', '┤', borderFg));
+    lines.push(createOverlayFilledBorderLine(width, layout, OVERLAY_GLYPHS.teeLeft, OVERLAY_GLYPHS.horizontal, OVERLAY_GLYPHS.teeRight, borderFg, DEFAULT_OVERLAY_PALETTE.sectionBg));
     const modelName = picker.pendingModel ? picker.pendingModel.displayName : 'unknown';
-    const modelLine = createOverlayContentLine(width, layout, borderFg);
+    const modelLine = createOverlayContentLine(width, layout, borderFg, DEFAULT_OVERLAY_PALETTE.bodyBg);
     putRowText(modelLine, layout.margin + 2, contentW, fitDisplay(`Model: ${modelName}`, contentW), '244');
     lines.push(modelLine);
-    lines.push(createOverlayContentLine(width, layout, borderFg));
+    lines.push(createOverlayContentLine(width, layout, borderFg, DEFAULT_OVERLAY_PALETTE.bodyBg));
   }
 
   // ── Bottom border with hints ─────────────────────────────────────────────────────────
@@ -388,7 +389,7 @@ export function renderModelPickerOverlay(
     : picker.mode === 'contextCap'
     ? '[Enter] Confirm  [Esc] Cancel'
     : '[Up/Down] Nav  [Enter] Select  [Esc] Cancel';
-  const footerLine = createOverlayBorderLine(width, layout, '└', '─', '┘', borderFg);
+  const footerLine = createOverlayFilledBorderLine(width, layout, OVERLAY_GLYPHS.bottomLeft, OVERLAY_GLYPHS.horizontal, OVERLAY_GLYPHS.bottomRight, borderFg, DEFAULT_OVERLAY_PALETTE.sectionBg);
   putRowText(footerLine, layout.margin + 2, contentW, fitDisplay(truncateDisplay(hints, contentW), contentW), mutedFg, '', false, true);
   lines.push(footerLine);
 

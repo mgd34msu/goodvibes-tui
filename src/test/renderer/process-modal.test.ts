@@ -3,6 +3,7 @@ import { ProcessModal, renderProcessModal } from '../../renderer/process-modal.t
 import { AgentManager } from '../../tools/agent/index.ts';
 import { ProcessManager } from '../../tools/shared/process-manager.ts';
 import { configManager } from '../../config/index.ts';
+import { UI_TONES } from '../../renderer/ui-primitives.ts';
 import { lineToString, linesToText } from '../setup.ts';
 
 const W = 100;
@@ -223,7 +224,7 @@ describe('renderProcessModal', () => {
     expect(text).toContain('Task B');
     const selectedCell = lines
       .flat()
-      .find((cell) => cell.bg === '#1a2a3a');
+      .find((cell) => cell.bg === UI_TONES.bg.selected);
     expect(selectedCell).toBeDefined();
   });
 

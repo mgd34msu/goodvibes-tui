@@ -6,10 +6,10 @@ import {
   buildEmptyState,
   buildPanelLine,
   buildPanelWorkspace,
+  resolveScrollablePanelSection,
   DEFAULT_PANEL_PALETTE,
   type PanelWorkspaceSection,
 } from './polish.ts';
-import { getTrackedVisibleWindow } from '../renderer/surface-layout.ts';
 
 // ---------------------------------------------------------------------------
 // Status display maps
@@ -123,6 +123,7 @@ export class PlanDashboardPanel extends BasePanel {
     );
 
     let rowCount = 0;
+    let selectedLineIndex = 0;
     const planLines: Line[] = [];
 
     for (const phase of phaseOrder) {
@@ -130,6 +131,7 @@ export class PlanDashboardPanel extends BasePanel {
       planLines.push(this.renderPhaseHeaderLine(phase, items, width));
       for (const item of items) {
         const isSelected = rowCount === this.selectedIndex;
+        if (isSelected) selectedLineIndex = planLines.length;
         const isBlocked =
           item.status === 'pending' &&
           item.dependencies !== undefined &&
@@ -145,8 +147,6 @@ export class PlanDashboardPanel extends BasePanel {
     if (this.selectedIndex >= this.totalRows) {
       this.selectedIndex = Math.max(0, this.totalRows - 1);
     }
-    const window = getTrackedVisibleWindow(planLines.length, this.selectedIndex, Math.max(8, height - 8), this.scrollOffset, 1);
-    this.scrollOffset = window.start;
 
     const total = plan.items.length;
     const done = plan.items.filter((i) => i.status === 'complete' || i.status === 'skipped').length;
@@ -165,12 +165,29 @@ export class PlanDashboardPanel extends BasePanel {
       ],
     };
 
+    const planSection = resolveScrollablePanelSection(width, height, {
+      intro: plan.title,
+      footerLines: [
+        buildPanelLine(width, [[' Up/Down', DEFAULT_PANEL_PALETTE.info], [' navigate', DEFAULT_PANEL_PALETTE.dim]]),
+      ],
+      palette: DEFAULT_PANEL_PALETTE,
+      beforeSections: [summary],
+      section: {
+        title: 'Execution Plan',
+        scrollableLines: planLines,
+        selectedIndex: selectedLineIndex,
+        scrollOffset: this.scrollOffset,
+        minRows: 8,
+      },
+    });
+    this.scrollOffset = planSection.scrollOffset;
+
     return buildPanelWorkspace(width, height, {
       title: ` Plan Dashboard`,
       intro: plan.title,
       sections: [
         summary,
-        { title: 'Execution Plan', lines: planLines.slice(window.start, window.end) },
+        planSection.section,
       ],
       footerLines: [
         buildPanelLine(width, [[' Up/Down', DEFAULT_PANEL_PALETTE.info], [' navigate', DEFAULT_PANEL_PALETTE.dim]]),

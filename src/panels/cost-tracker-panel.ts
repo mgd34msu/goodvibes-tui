@@ -13,10 +13,10 @@ import {
   buildPanelLine,
   buildStyledPanelLine,
   buildPanelWorkspace,
+  resolveScrollablePanelSection,
   DEFAULT_PANEL_PALETTE,
   type PanelWorkspaceSection,
 } from './polish.ts';
-import { getVisibleWindow } from '../renderer/surface-layout.ts';
 
 // ---------------------------------------------------------------------------
 // Pricing table  (USD per 1M tokens)
@@ -357,11 +357,7 @@ export class CostTrackerPanel extends BasePanel {
         this.renderKeyValue(width, ' Plan total', formatCost(planCost + sessionCost), C.cost),
         this.renderDivider(width),
       ];
-      const selectedAgentIndex = Math.min(this.scrollOffset, Math.max(0, agentList.length - 1));
-      const agentWindow = getVisibleWindow(agentList.length, selectedAgentIndex, Math.max(4, Math.floor((height - 12) / 2)));
-      this.scrollOffset = agentWindow.start;
-      const visibleAgents = agentList.slice(agentWindow.start, agentWindow.end);
-      for (const agent of visibleAgents) {
+      for (const agent of agentList) {
         const statusFg = agent.status === 'running' ? C.running
           : agent.status === 'failed' ? C.failed
           : C.done;
@@ -378,10 +374,23 @@ export class CostTrackerPanel extends BasePanel {
           agentRows.push(this.renderLabeledLine(width, '', tokenInfo, C.dim));
         }
       }
-      sections.push({
-        title: 'Agents',
-        lines: agentRows,
+      const sessionSection: PanelWorkspaceSection = sections[0]!;
+      const agentsSection = resolveScrollablePanelSection(width, height, {
+        intro: 'Track per-session and per-agent token spend using model pricing and live usage snapshots.',
+        footerLines: [
+          buildPanelLine(width, [[' Up/Down', DEFAULT_PANEL_PALETTE.info], [' scroll agents', DEFAULT_PANEL_PALETTE.dim]]),
+        ],
+        palette: DEFAULT_PANEL_PALETTE,
+        beforeSections: [sessionSection],
+        section: {
+          title: 'Agents',
+          scrollableLines: agentRows,
+          scrollOffset: this.scrollOffset,
+          minRows: 4,
+        },
       });
+      this.scrollOffset = agentsSection.scrollOffset;
+      sections.push(agentsSection.section);
     } else {
       sections.push({
         title: 'Agents',

@@ -1,6 +1,7 @@
 import { createEmptyLine, createStyledCell, type Line } from '../types/grid.ts';
 import { getDisplayWidth } from '../utils/terminal-width.ts';
 import { getOverlayMaxWidth } from './overlay-viewport.ts';
+import { GLYPHS, UI_TONES } from './ui-primitives.ts';
 
 export interface OverlayBoxPalette {
   readonly borderFg: string;
@@ -8,14 +9,22 @@ export interface OverlayBoxPalette {
   readonly bodyFg: string;
   readonly mutedFg: string;
   readonly selectedBg: string;
+  readonly titleBg: string;
+  readonly sectionBg: string;
+  readonly inputBg: string;
+  readonly bodyBg: string;
 }
 
 export const DEFAULT_OVERLAY_PALETTE: Readonly<OverlayBoxPalette> = {
-  borderFg: '#00d7ff',
-  titleFg: '#00ffff',
-  bodyFg: '252',
-  mutedFg: '240',
-  selectedBg: '#103040',
+  borderFg: UI_TONES.fg.secondary,
+  titleFg: UI_TONES.fg.primary,
+  bodyFg: UI_TONES.fg.primary,
+  mutedFg: UI_TONES.fg.dim,
+  selectedBg: UI_TONES.bg.selected,
+  titleBg: UI_TONES.bg.title,
+  sectionBg: UI_TONES.bg.section,
+  inputBg: UI_TONES.bg.input,
+  bodyBg: UI_TONES.bg.surface,
 } as const;
 
 export interface OverlayBoxLayout {
@@ -111,3 +120,46 @@ export function createOverlayContentLine(
   line[rightX] = createStyledCell('│', { fg: borderFg });
   return line;
 }
+
+export function createOverlayFilledBorderLine(
+  terminalWidth: number,
+  layout: OverlayBoxLayout,
+  left: string,
+  fill: string,
+  right: string,
+  fg: string = DEFAULT_OVERLAY_PALETTE.borderFg,
+  bg = '',
+): Line {
+  const line = createEmptyLine(terminalWidth);
+  const leftX = layout.margin;
+  const rightX = layout.margin + layout.width - 1;
+  line[leftX] = createStyledCell(left, { fg, bg });
+  for (let x = leftX + 1; x < rightX; x++) {
+    line[x] = createStyledCell(fill, { fg, bg });
+  }
+  line[rightX] = createStyledCell(right, { fg, bg });
+  return line;
+}
+
+export function createOverlayFrameLine(
+  terminalWidth: number,
+  layout: OverlayBoxLayout,
+  bg = DEFAULT_OVERLAY_PALETTE.bodyBg,
+): Line {
+  return createOverlayContentLine(terminalWidth, layout, DEFAULT_OVERLAY_PALETTE.borderFg, bg);
+}
+
+export const OVERLAY_GLYPHS = {
+  topLeft: GLYPHS.frame.topLeft,
+  topRight: GLYPHS.frame.topRight,
+  bottomLeft: GLYPHS.frame.bottomLeft,
+  bottomRight: GLYPHS.frame.bottomRight,
+  teeLeft: GLYPHS.frame.teeLeft,
+  teeRight: GLYPHS.frame.teeRight,
+  horizontal: GLYPHS.frame.horizontal,
+  selected: GLYPHS.navigation.selected,
+  expanded: GLYPHS.navigation.expanded,
+  cursor: GLYPHS.surface.cursor,
+  moreAbove: GLYPHS.navigation.moreAbove,
+  moreBelow: GLYPHS.navigation.moreBelow,
+} as const;

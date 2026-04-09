@@ -1,0 +1,92 @@
+import { describe, expect, test } from 'bun:test';
+import { join } from 'path';
+import { tmpdir } from 'os';
+import { mkdirSync, rmSync } from 'fs';
+
+import { CommandRegistry, type CommandContext } from '../../input/command-registry.ts';
+import { registerConfigCommand } from '../../input/commands/config.ts';
+import { ConfigManager } from '../../config/manager.ts';
+import type { SelectionAction, SelectionItem, SelectionResult } from '../../input/selection-modal.ts';
+
+function makeContext(dir: string): {
+  ctx: CommandContext;
+  cm: ConfigManager;
+  calls: {
+    printed: string[];
+    renders: number;
+    selection?: {
+      items: SelectionItem[];
+      callback: (result: SelectionResult | null) => void;
+      opts?: { customActions?: Map<string, SelectionAction> };
+    };
+  };
+} {
+  const cm = new ConfigManager({
+    workingDir: dir,
+    configDir: join(dir, '.goodvibes', 'tui'),
+  });
+  const calls: {
+    printed: string[];
+    renders: number;
+    selection?: {
+      items: SelectionItem[];
+      callback: (result: SelectionResult | null) => void;
+      opts?: { customActions?: Map<string, SelectionAction> };
+    };
+  } = {
+    printed: [],
+    renders: 0,
+  };
+  const ctx = {
+    providerRegistry: {} as never,
+    conversationManager: {} as never,
+    config: cm.getAll(),
+    configManager: cm,
+    runtime: { model: '', provider: '', debugMode: false, systemPrompt: '', reasoningEffort: 'medium', sessionId: 's' },
+    renderRequest: () => { calls.renders++; },
+    print: (text: string) => { calls.printed.push(text); },
+    exit: () => {},
+    toolRegistry: {} as never,
+    mcpRegistry: {} as never,
+    openSelection: (
+      title: string,
+      items: SelectionItem[],
+      opts: { customActions?: Map<string, SelectionAction> } | undefined,
+      callback: (result: SelectionResult | null) => void,
+    ) => {
+      void title;
+      calls.selection = { items, opts, callback };
+    },
+  } as unknown as CommandContext;
+  return { ctx, cm, calls };
+}
+
+describe('/config selection modal', () => {
+  test('uses a toggle-style modal contract for toggleable settings', async () => {
+    const dir = join(tmpdir(), `gv-config-selection-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+    mkdirSync(dir, { recursive: true });
+    try {
+      const registry = new CommandRegistry();
+      registerConfigCommand(registry);
+      const command = registry.get('config');
+      expect(command).toBeDefined();
+
+      const { ctx, cm, calls } = makeContext(dir);
+      await command!.handler([], ctx);
+
+      expect(calls.selection).toBeDefined();
+      const item = calls.selection!.items.find((entry) => entry.id === 'display.stream');
+      expect(item).toBeDefined();
+      expect(item?.primaryAction).toBe('toggle');
+      expect(item?.actions).toContain('toggle');
+
+      const before = cm.get('display.stream') as boolean;
+      calls.selection!.callback({ item: item!, action: 'toggle' });
+      expect(cm.get('display.stream')).toBe(!before);
+      expect(calls.renders).toBe(1);
+      expect(calls.printed).toHaveLength(0);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});

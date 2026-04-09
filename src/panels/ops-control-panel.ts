@@ -17,10 +17,10 @@ import {
   buildEmptyState,
   buildPanelLine,
   buildPanelWorkspace,
+  resolveScrollablePanelSection,
   DEFAULT_PANEL_PALETTE,
   type PanelWorkspaceSection,
 } from './polish.ts';
-import { getTrackedVisibleWindow } from '../renderer/surface-layout.ts';
 
 // ── Colour palette ──────────────────────────────────────────────────────────
 const C = {
@@ -128,16 +128,10 @@ export class OpsControlPanel extends BasePanel {
     }
 
     const reversed = [...entries].reverse();
-    const window = getTrackedVisibleWindow(reversed.length, this._scrollOffset, Math.max(4, height - 8), this._scrollOffset, 1);
-    const maxScroll = Math.max(0, reversed.length - window.count);
-    const offset = Math.min(window.start, maxScroll);
-    this._scrollOffset = offset;
-    const visible = reversed.slice(offset, offset + window.count);
-
-    const entryLines: Line[] = [
+    const entryRows: Line[] = [
       buildPanelLine(width, [['  SEQ  TIME      ACTION          TARGET             OUT    NOTE', C.label]]),
     ];
-    for (const entry of visible) {
+    for (const entry of reversed) {
       const seqStr   = String(entry.seq).padStart(4, ' ');
       const timeStr  = fmtTime(entry.ts);
       const action   = entry.action.slice(0, 15).padEnd(15, ' ');
@@ -156,17 +150,26 @@ export class OpsControlPanel extends BasePanel {
         [outLabel, outcomeColor(entry.outcome)],
       ];
       if (noteRaw) segs.push([` ${noteRaw}`, C.note]);
-      entryLines.push(buildPanelLine(width, segs));
+      entryRows.push(buildPanelLine(width, segs));
     }
+    const logSection = resolveScrollablePanelSection(width, height, {
+      intro,
+      footerLines: [buildPanelLine(width, [['  Up/Down scroll the intervention log', C.dim]])],
+      palette: C,
+      section: {
+        title: 'Audit Log',
+        scrollableLines: entryRows,
+        scrollOffset: this._scrollOffset,
+        minRows: 4,
+        appendWindowSummary: {
+          dimColor: C.label,
+          formatter: (window) => buildPanelLine(width, [[` [${window.start + 1}-${window.end}/${window.total}] Up/Down to scroll`.slice(0, width), C.label]]),
+        },
+      },
+    });
+    this._scrollOffset = logSection.scrollOffset;
 
-    if (maxScroll > 0) {
-      const lo = offset + 1;
-      const hi = Math.min(offset + window.count, reversed.length);
-      const indicator = ` [${lo}-${hi}/${reversed.length}] Up/Down to scroll`;
-      entryLines.push(buildPanelLine(width, [[indicator.slice(0, width), C.label]]));
-    }
-
-    const sections: PanelWorkspaceSection[] = [{ title: 'Audit Log', lines: entryLines }];
+    const sections: PanelWorkspaceSection[] = [logSection.section];
     const lines = buildPanelWorkspace(width, height, {
       title: 'Operator Control Plane',
       intro,

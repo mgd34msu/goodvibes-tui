@@ -82,6 +82,11 @@ import {
   handleProcessModalToken,
 } from './handler-picker-routes.ts';
 import { handleGlobalShortcutToken } from './handler-shortcuts.ts';
+import type { Panel } from '../panels/types.ts';
+import { FileExplorerPanel } from '../panels/file-explorer-panel.ts';
+import { FilePreviewPanel } from '../panels/file-preview-panel.ts';
+import { SymbolOutlinePanel } from '../panels/symbol-outline-panel.ts';
+import { ApprovalPanel } from '../panels/approval-panel.ts';
 
 /**
  * InputHandler - Owns prompt text, paste registry, and keyboard/mouse handling.
@@ -407,6 +412,7 @@ export class InputHandler {
       cancelGeneration: this.commandContext?.cancelGeneration,
       selectionCallback: this.selectionCallback,
       autocompleteReset: () => this.autocomplete?.reset(),
+      autocompleteUpdate: (query: string) => this.autocomplete?.update(query),
       helpScrollOffset: this.helpScrollOffset,
       shortcutsScrollOffset: this.shortcutsScrollOffset,
     });
@@ -499,6 +505,7 @@ export class InputHandler {
         requestRender: this.requestRender,
         handlePathCompletion: () => this.handlePathCompletion(),
         cyclePanelTab: (direction) => this.cyclePanelTab(direction),
+        onPanelInputConsumed: (activePanel, key) => this.handlePanelIntegrationAction(activePanel, key),
       }, token);
       this.panelFocused = panelRoute.panelFocused;
       if (panelRoute.handled) {
@@ -588,6 +595,9 @@ export class InputHandler {
           conversationManager: this.conversationManager,
           requestRender: this.requestRender,
           handleEscape: () => this.handleEscape(),
+          syncCommandMode: (active: boolean) => {
+            this.commandMode = active;
+          },
         };
         if (handleCommandModeToken(commandState, token)) {
           this.commandMode = commandState.commandMode;
@@ -828,7 +838,82 @@ export class InputHandler {
     }
   }
 
+  private handlePanelIntegrationAction(activePanel: Panel | null, key: string): void {
+    handlePanelIntegrationAction(activePanel, key, this.commandContext);
+  }
+
   private wordWrapLine(line: string, maxW: number): string[] {
     return wordWrapLine(line, maxW);
   }
+}
+
+function ensurePreviewPanel(): FilePreviewPanel | null {
+  const panelManager = getPanelManager();
+  const existing = panelManager.getPanel('preview');
+  if (existing instanceof FilePreviewPanel) {
+    const pane = panelManager.getPaneOf('preview');
+    panelManager.activateById('preview');
+    if (pane) panelManager.focusPane(pane);
+    return existing;
+  }
+  const targetPane: 'top' | 'bottom' = panelManager.isBottomPaneVisible()
+    ? (panelManager.getFocusedPane() === 'top' ? 'bottom' : 'top')
+    : 'bottom';
+  const opened = panelManager.open('preview', targetPane);
+  panelManager.show();
+  panelManager.focusPane(targetPane);
+  return opened instanceof FilePreviewPanel ? opened : null;
+}
+
+function syncSymbolOutlineFromPreview(previewPanel: FilePreviewPanel): void {
+  const panelManager = getPanelManager();
+  const symbols = panelManager.getPanel('symbols');
+  const filePath = previewPanel.getCurrentFilePath();
+  const source = previewPanel.getSource();
+  if (symbols instanceof SymbolOutlinePanel && filePath && source !== null) {
+    symbols.loadFile(filePath, source);
+  }
+}
+
+export function handlePanelIntegrationAction(
+  activePanel: Panel | null,
+  key: string,
+  commandContext?: CommandContext,
+): boolean {
+  if (!activePanel) return false;
+
+  if ((key === 'enter' || key === 'return' || key === 'right') && activePanel instanceof FileExplorerPanel) {
+    const filePath = activePanel.getFocusedFilePath();
+    if (!filePath) return false;
+    const previewPanel = ensurePreviewPanel();
+    if (!previewPanel) return false;
+    previewPanel.openFile(filePath);
+    syncSymbolOutlineFromPreview(previewPanel);
+    return true;
+  }
+
+  if ((key === 'enter' || key === 'return') && activePanel instanceof SymbolOutlinePanel) {
+    const location = activePanel.getSelectedLocation();
+    if (!location) return false;
+    const previewPanel = ensurePreviewPanel();
+    if (!previewPanel) return false;
+    if (previewPanel.getCurrentFilePath() !== location.path) {
+      previewPanel.openFile(location.path);
+      syncSymbolOutlineFromPreview(previewPanel);
+    }
+    previewPanel.goToLine(location.line);
+    return true;
+  }
+
+  if ((key === 'enter' || key === 'return') && activePanel instanceof ApprovalPanel) {
+    const command = activePanel.getSelectedCommand();
+    if (!command || !commandContext?.executeCommand) return false;
+    const parts = command.replace(/^\//, '').split(/\s+/).filter(Boolean);
+    const [name, ...args] = parts;
+    if (!name) return false;
+    void commandContext.executeCommand(name, args).catch(() => {});
+    return true;
+  }
+
+  return false;
 }

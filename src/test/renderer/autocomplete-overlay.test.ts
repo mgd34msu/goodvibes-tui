@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import { renderAutocompleteOverlay } from '../../renderer/autocomplete-overlay.ts';
+import { DEFAULT_OVERLAY_PALETTE } from '../../renderer/overlay-box.ts';
 import { AutocompleteEngine } from '../../input/autocomplete.ts';
 import { CommandRegistry, type CommandContext } from '../../input/command-registry.ts';
 
@@ -48,8 +49,8 @@ describe('renderAutocompleteOverlay', () => {
     expect(selectedRow[boxMargin].bg).toBe('');
     expect(selectedRow[rightX].char).toBe('│');
     expect(selectedRow[rightX].bg).toBe('');
-    expect(selectedRow[boxMargin + 1].bg).toBe('#103040');
-    expect(selectedRow[rightX - 1].bg).toBe('#103040');
+    expect(selectedRow[boxMargin + 1].bg).toBe(DEFAULT_OVERLAY_PALETTE.selectedBg);
+    expect(selectedRow[rightX - 1].bg).toBe(DEFAULT_OVERLAY_PALETTE.selectedBg);
     expect(selectedRow[boxMargin + 1].char).not.toBe('│');
     expect(selectedRow[rightX - 1].char).not.toBe('│');
   });

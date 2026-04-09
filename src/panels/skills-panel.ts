@@ -10,9 +10,9 @@ import {
   buildSearchInputLine,
   buildPanelWorkspace,
   DEFAULT_PANEL_PALETTE,
+  resolvePrimaryScrollableSection,
   type PanelWorkspaceSection,
 } from './polish.ts';
-import { getTrackedVisibleWindow } from '../renderer/surface-layout.ts';
 import {
   getPanelSearchFocusTransition,
   isPanelSearchBackspace,
@@ -361,38 +361,13 @@ export class SkillsPanel extends BasePanel {
 
     this._clampSelection(skills);
     const selected = skills[this.selectedIndex];
-    const listWindow = getTrackedVisibleWindow(skills.length, this.selectedIndex, Math.max(4, height - 14), this.scrollOffset, 1);
-    this.scrollOffset = listWindow.start;
-    this._clampScroll(skills, listWindow.count);
-
-    const listLines: Line[] = [
+    const fixedDiscoveryLines: Line[] = [
       buildSearchInputLine(width, ' query: ', `${this.query}${this.filterFocused ? '_' : ''}`, C, {
         active: this.filterFocused,
         emptyLabel: this.filterFocused ? '(type to filter)' : '(/ or up at top)',
         valueColor: this.query ? C.searchFg : undefined,
       }),
     ];
-    const visible = skills.slice(listWindow.start, listWindow.end);
-    for (const skill of visible) {
-      const isSelected = skills[this.selectedIndex]?.name === skill.name;
-      const bg = isSelected ? C.selectBg : undefined;
-      const dot = skill.origin === 'project-local' ? '◆' : '•';
-      const desc = skill.description || 'No description provided.';
-      const descWidth = Math.max(1, width - 4 - skill.name.length - 6);
-      const descLines = wordWrap(desc, descWidth);
-      listLines.push(buildPanelLine(width, [
-        [isSelected ? '▸' : ' ', C.selectedFg, bg],
-        [' ', C.dim, bg],
-        [dot, originColor(skill.origin), bg],
-        [' ', C.dim, bg],
-        [skill.name, isSelected ? C.selectedFg : C.value, bg],
-        ['  ', C.dim, bg],
-        [descLines[0] ?? '', isSelected ? C.selectedFg : C.dim, bg],
-      ]));
-    }
-    if (skills.length > visible.length) {
-      listLines.push(buildPanelLine(width, [[`  showing ${this.scrollOffset + 1}-${Math.min(skills.length, this.scrollOffset + visible.length)} of ${skills.length}`, C.dim]]));
-    }
 
     const detailLines: Line[] = [];
     if (selected) {
@@ -406,10 +381,48 @@ export class SkillsPanel extends BasePanel {
     } else {
       detailLines.push(buildPanelLine(width, [[' No selection.', C.dim]]));
     }
+    const detailSection: PanelWorkspaceSection = { title: 'Selected Skill', lines: detailLines };
+    const resolvedDiscoverySection = resolvePrimaryScrollableSection(width, height, {
+      intro,
+      footerLines: [buildPanelLine(width, [['  Up/Down navigate  / or Up-at-top focus filter  Esc blur  Backspace clear', C.hint]])],
+      palette: C,
+      section: {
+        title: 'Discovery',
+        fixedLines: fixedDiscoveryLines,
+        scrollableLines: skills.map((skill, absolute) => {
+          const isSelected = absolute === this.selectedIndex;
+          const bg = isSelected ? C.selectBg : undefined;
+          const dot = skill.origin === 'project-local' ? '◆' : '•';
+          const desc = skill.description || 'No description provided.';
+          const descWidth = Math.max(1, width - 4 - skill.name.length - 6);
+          const descLines = wordWrap(desc, descWidth);
+          return buildPanelLine(width, [
+            [isSelected ? '▸' : ' ', C.selectedFg, bg],
+            [' ', C.dim, bg],
+            [dot, originColor(skill.origin), bg],
+            [' ', C.dim, bg],
+            [skill.name, isSelected ? C.selectedFg : C.value, bg],
+            ['  ', C.dim, bg],
+            [descLines[0] ?? '', isSelected ? C.selectedFg : C.dim, bg],
+          ]);
+        }),
+        selectedIndex: this.selectedIndex,
+        scrollOffset: this.scrollOffset,
+        guardRows: 1,
+        minRows: 4,
+        appendWindowSummary: {
+          dimColor: C.dim,
+          formatter: (window) => buildPanelLine(width, [[`  showing ${window.start + 1}-${window.end} of ${window.total}`, C.dim]]),
+        },
+      },
+      afterSections: [detailSection],
+    });
+    this.scrollOffset = resolvedDiscoverySection.scrollOffset;
+    this._clampScroll(skills, resolvedDiscoverySection.window.count);
 
     const sections: PanelWorkspaceSection[] = [
-      { title: 'Discovery', lines: listLines },
-      { title: 'Selected Skill', lines: detailLines },
+      resolvedDiscoverySection.section,
+      detailSection,
     ];
     const lines = buildPanelWorkspace(width, height, {
       title: 'Skills - discover project-local and global skill packs',

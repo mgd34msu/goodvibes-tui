@@ -1,10 +1,19 @@
 import type { Line } from '../types/grid.ts';
 import { createEmptyLine } from '../types/grid.ts';
 import { BasePanel } from './base-panel.ts';
-import { buildGuidanceLine, buildPanelLine, buildPanelWorkspace, DEFAULT_PANEL_PALETTE, type PanelWorkspaceSection } from './polish.ts';
+import {
+  buildDetailBlock,
+  buildGuidanceLine,
+  buildPanelListRow,
+  buildPanelLine,
+  buildPanelWorkspace,
+  buildSummaryBlock,
+  DEFAULT_PANEL_PALETTE,
+  resolvePrimaryScrollableSection,
+  type PanelWorkspaceSection,
+} from './polish.ts';
 import { getSettingsControlPlaneSnapshot } from '../runtime/settings/control-plane.ts';
 import type { ConfigManager } from '../config/index.ts';
-import { getTrackedVisibleWindow } from '../renderer/surface-layout.ts';
 
 const C = {
   ...DEFAULT_PANEL_PALETTE,
@@ -50,10 +59,9 @@ export class SettingsSyncPanel extends BasePanel {
       buildGuidanceLine(width, '/settingssync conflicts', 'review conflicting synced values before they silently shape effective configuration', C),
       buildGuidanceLine(width, '/managed review', 'inspect staged managed changes, risk posture, and rollback records', C),
     ];
-    const sections: PanelWorkspaceSection[] = [
+    const prefixSections: PanelWorkspaceSection[] = [
       {
-        title: 'Posture',
-        lines: postureLines,
+        lines: buildSummaryBlock(width, 'Settings posture', postureLines, C),
       },
       {
         title: 'Layers',
@@ -102,38 +110,46 @@ export class SettingsSyncPanel extends BasePanel {
           ? snapshot.rollbackHistory.map((entry) => buildPanelLine(width, [[` ${entry.token}`.padEnd(18), C.info], [` ${entry.profileName}`.padEnd(18), C.value], [` restored=${String(entry.restoredKeys.length).padEnd(4)}`, C.warn], [` ${new Date(entry.appliedAt).toLocaleString()}`.slice(0, Math.max(0, width - 46)), C.dim]]))
           : [buildPanelLine(width, [[' No managed rollback records yet.', C.dim]])],
       },
-      {
+    ];
+    const selected = snapshot.resolvedEntries[this.selectedIndex];
+    const selectedSections = !selected ? [] as PanelWorkspaceSection[] : [{
+      lines: buildDetailBlock(width, 'Selected setting', [
+        buildPanelLine(width, [[' key ', C.label], [selected.key, C.value], ['  category ', C.label], [selected.category, C.info]]),
+        buildPanelLine(width, [[' effective ', C.label], [selected.effectiveSource, selected.effectiveSource === 'managed' ? C.warn : selected.effectiveSource === 'synced' ? C.ok : selected.effectiveSource === 'local' ? C.info : C.dim], ['  locked ', C.label], [selected.locked ? 'yes' : 'no', selected.locked ? C.warn : C.dim], ['  conflict ', C.label], [selected.conflict ? 'yes' : 'no', selected.conflict ? C.error : C.good]]),
+        buildPanelLine(width, [[' source ', C.label], [(selected.sourceLabel ?? 'local/default').slice(0, Math.max(0, width - 10)), C.dim]]),
+        buildPanelLine(width, [[' overrides ', C.label], [(selected.overriddenSources.length > 0 ? selected.overriddenSources.join(', ') : 'none').slice(0, Math.max(0, width - 13)), C.dim]]),
+        buildPanelLine(width, [[' local ', C.label], [String(selected.localValue).slice(0, Math.max(0, width - 9)), C.dim]]),
+        buildPanelLine(width, [[' synced ', C.label], [String(selected.syncedValue ?? '(unset)').slice(0, Math.max(0, width - 10)), C.ok]]),
+        buildPanelLine(width, [[' managed ', C.label], [String(selected.managedValue ?? '(unset)').slice(0, Math.max(0, width - 11)), C.warn]]),
+      ], C),
+    }];
+    const resolvedEntriesSection = resolvePrimaryScrollableSection(width, height, {
+      intro: 'Local typed config, synced and managed layers, staged bundle review, conflicts, and control-plane failures.',
+      footerLines: [buildPanelLine(width, [[' ↑/↓ browse  /settingssync show <key>  /settingssync resolve <key> <local|synced>  /managed apply-staged [key...] ', C.dim]])],
+      palette: C,
+      beforeSections: prefixSections,
+      section: {
         title: 'Resolved Entries',
-        lines: (() => {
-          const window = getTrackedVisibleWindow(snapshot.resolvedEntries.length, this.selectedIndex, Math.max(4, height - 24), this.scrollOffset, 1);
-          this.scrollOffset = window.start;
-          return snapshot.resolvedEntries.slice(window.start, window.end).map((entry, index) => {
-            const absolute = window.start + index;
-            const bg = absolute === this.selectedIndex ? C.selectBg : undefined;
-            return buildPanelLine(width, [
-              [` ${entry.key}`.padEnd(32), C.value, bg],
-              [` ${entry.effectiveSource}`.padEnd(10), entry.effectiveSource === 'managed' ? C.warn : entry.effectiveSource === 'synced' ? C.ok : entry.effectiveSource === 'local' ? C.info : C.dim, bg],
-              [` ${String(entry.effectiveValue)}`.slice(0, Math.max(0, width - 44)), entry.locked ? C.warn : C.dim, bg],
-            ]);
-          });
-        })(),
+        scrollableLines: snapshot.resolvedEntries.map((entry, absolute) => {
+          return buildPanelListRow(width, [
+            { text: entry.key.padEnd(32), fg: C.value },
+            { text: ` ${entry.effectiveSource}`.padEnd(11), fg: entry.effectiveSource === 'managed' ? C.warn : entry.effectiveSource === 'synced' ? C.ok : entry.effectiveSource === 'local' ? C.info : C.dim },
+            { text: `${String(entry.effectiveValue)}`.slice(0, Math.max(0, width - 47)), fg: entry.locked ? C.warn : C.dim },
+          ], C, { selected: absolute === this.selectedIndex });
+        }),
+        selectedIndex: this.selectedIndex,
+        scrollOffset: this.scrollOffset,
+        guardRows: 1,
+        minRows: 4,
+        appendWindowSummary: { dimColor: C.dim },
       },
-      ...(() => {
-        const selected = snapshot.resolvedEntries[this.selectedIndex];
-        if (!selected) return [] as PanelWorkspaceSection[];
-        return [{
-          title: 'Selected Setting',
-          lines: [
-            buildPanelLine(width, [[' key ', C.label], [selected.key, C.value], ['  category ', C.label], [selected.category, C.info]]),
-            buildPanelLine(width, [[' effective ', C.label], [selected.effectiveSource, selected.effectiveSource === 'managed' ? C.warn : selected.effectiveSource === 'synced' ? C.ok : selected.effectiveSource === 'local' ? C.info : C.dim], ['  locked ', C.label], [selected.locked ? 'yes' : 'no', selected.locked ? C.warn : C.dim], ['  conflict ', C.label], [selected.conflict ? 'yes' : 'no', selected.conflict ? C.error : C.good]]),
-            buildPanelLine(width, [[' source ', C.label], [(selected.sourceLabel ?? 'local/default').slice(0, Math.max(0, width - 10)), C.dim]]),
-            buildPanelLine(width, [[' overrides ', C.label], [(selected.overriddenSources.length > 0 ? selected.overriddenSources.join(', ') : 'none').slice(0, Math.max(0, width - 13)), C.dim]]),
-            buildPanelLine(width, [[' local ', C.label], [String(selected.localValue).slice(0, Math.max(0, width - 9)), C.dim]]),
-            buildPanelLine(width, [[' synced ', C.label], [String(selected.syncedValue ?? '(unset)').slice(0, Math.max(0, width - 10)), C.ok]]),
-            buildPanelLine(width, [[' managed ', C.label], [String(selected.managedValue ?? '(unset)').slice(0, Math.max(0, width - 11)), C.warn]]),
-          ],
-        }];
-      })(),
+      afterSections: selectedSections,
+    });
+    this.scrollOffset = resolvedEntriesSection.scrollOffset;
+    const sections: PanelWorkspaceSection[] = [
+      ...prefixSections,
+      resolvedEntriesSection.section,
+      ...selectedSections,
     ];
     const lines = buildPanelWorkspace(width, height, {
       title: 'Settings Sync',

@@ -11,6 +11,7 @@ import {
   buildPanelLine,
   buildPanelWorkspace,
   DEFAULT_PANEL_PALETTE,
+  resolvePrimaryScrollableSection,
   type PanelWorkspaceSection,
 } from './polish.ts';
 import { getTrackedVisibleWindow } from '../renderer/surface-layout.ts';
@@ -69,6 +70,7 @@ export class CommunicationPanel extends BasePanel {
   public render(width: number, height: number): Line[] {
     this.needsRender = false;
     const intro = 'Structured agent communication, routing policy outcomes, and delivery status across orchestration trees.';
+    const footerLines = [buildPanelLine(width, [['  Up/Down move through messages', C.dim]])];
 
     if (!this.store) {
       const workspace = buildPanelWorkspace(width, height, {
@@ -97,7 +99,7 @@ export class CommunicationPanel extends BasePanel {
         title: 'Communication Control Room',
         intro,
         sections: [{
-          title: 'Posture',
+          title: 'Communication posture',
           lines: [
             buildKeyValueLine(width, [
               { label: 'sent', value: String(domain.totalSent), valueColor: domain.totalSent > 0 ? C.info : C.dim },
@@ -124,8 +126,6 @@ export class CommunicationPanel extends BasePanel {
     }
 
     this.selectedIndex = Math.min(this.selectedIndex, records.length - 1);
-    const window = getTrackedVisibleWindow(records.length, this.selectedIndex, Math.max(4, height - 14), this.scrollOffset, 1);
-    this.scrollOffset = window.start;
     const postureLines: Line[] = [
       buildKeyValueLine(width, [
         { label: 'sent', value: String(domain.totalSent), valueColor: domain.totalSent > 0 ? C.info : C.dim },
@@ -135,22 +135,6 @@ export class CommunicationPanel extends BasePanel {
       ], C),
       buildGuidanceLine(width, '/orchestration', 'inspect recursive routing, message handoff, and blocked broadcast posture', C),
     ];
-    const overviewLines: Line[] = [];
-    for (let absolute = window.start; absolute < window.end; absolute++) {
-      const record = records[absolute]!;
-      const bg = absolute === this.selectedIndex ? C.selectBg : undefined;
-      const color = record.status === 'blocked' ? C.error : record.status === 'delivered' ? C.ok : C.info;
-      overviewLines.push(buildPanelLine(width, [
-        [' ', C.label, bg],
-        [record.status.padEnd(10), color, bg],
-        [` ${record.kind.padEnd(10)}`, C.info, bg],
-        [` ${truncateDisplay(`${record.fromId} -> ${record.toId}`, 28).padEnd(28)}`, C.value, bg],
-        [` ${truncateDisplay(record.content, Math.max(0, width - 53))}`, C.dim, bg],
-      ]));
-    }
-    if (records.length > window.count) {
-      overviewLines.push(buildPanelLine(width, [[`  showing ${window.start + 1}-${window.end} of ${records.length}`, C.dim]]));
-    }
 
     const selected = records[this.selectedIndex]!;
     const detailLines: Line[] = [
@@ -162,17 +146,47 @@ export class CommunicationPanel extends BasePanel {
       detailLines.push(buildPanelLine(width, [['  Reason: ', C.label], [truncateDisplay(selected.reason, Math.max(0, width - 11)), C.warn]]));
     }
     detailLines.push(...buildBodyText(width, ` Content: ${selected.content}`, C));
+    const postureSection: PanelWorkspaceSection = { title: 'Communication posture', lines: postureLines };
+    const detailSection: PanelWorkspaceSection = { title: 'Selected Message', lines: detailLines };
+    const rawOverviewLines: Line[] = records.map((record, absolute) => {
+      const bg = absolute === this.selectedIndex ? C.selectBg : undefined;
+      const color = record.status === 'blocked' ? C.error : record.status === 'delivered' ? C.ok : C.info;
+      return buildPanelLine(width, [
+        [' ', C.label, bg],
+        [record.status.padEnd(10), color, bg],
+        [` ${record.kind.padEnd(10)}`, C.info, bg],
+        [` ${truncateDisplay(`${record.fromId} -> ${record.toId}`, 28).padEnd(28)}`, C.value, bg],
+        [` ${truncateDisplay(record.content, Math.max(0, width - 53))}`, C.dim, bg],
+      ]);
+    });
+    const resolvedMessagesSection = resolvePrimaryScrollableSection(width, height, {
+      intro,
+      footerLines,
+      palette: C,
+      beforeSections: [postureSection],
+      section: {
+        title: 'Recent Messages',
+        scrollableLines: rawOverviewLines,
+        selectedIndex: this.selectedIndex,
+        scrollOffset: this.scrollOffset,
+        guardRows: 1,
+        minRows: 4,
+        appendWindowSummary: { dimColor: C.dim },
+      },
+      afterSections: [detailSection],
+    });
+    this.scrollOffset = resolvedMessagesSection.scrollOffset;
 
     const sections: PanelWorkspaceSection[] = [
-      { title: 'Posture', lines: postureLines },
-      { title: 'Recent Messages', lines: overviewLines },
-      { title: 'Selected Message', lines: detailLines },
+      postureSection,
+      resolvedMessagesSection.section,
+      detailSection,
     ];
     const lines = buildPanelWorkspace(width, height, {
       title: 'Communication Control Room',
       intro,
       sections,
-      footerLines: [buildPanelLine(width, [['  Up/Down move through messages', C.dim]])],
+      footerLines,
       palette: C,
     });
     while (lines.length < height) lines.push(createEmptyLine(width));

@@ -5,15 +5,18 @@ import { ServiceRegistry } from '../config/service-registry.ts';
 import { getSubscriptionManager, type ProviderSubscription, type PendingSubscriptionLogin } from '../config/subscriptions.ts';
 import { listBuiltinSubscriptionProviders } from '../config/subscription-providers.ts';
 import {
+  buildDetailBlock,
   buildEmptyState,
   buildGuidanceLine,
   buildKeyValueLine,
+  buildPanelListRow,
   buildPanelLine,
+  buildSummaryBlock,
   buildPanelWorkspace,
   DEFAULT_PANEL_PALETTE,
+  resolvePrimaryScrollableSection,
   type PanelWorkspaceSection,
 } from './polish.ts';
-import { getTrackedVisibleWindow } from '../renderer/surface-layout.ts';
 
 const C = {
   ...DEFAULT_PANEL_PALETTE,
@@ -162,7 +165,7 @@ export class SubscriptionPanel extends BasePanel {
 
     if (this.rows.length === 0) {
       const lines: Line[] = [];
-      lines.push(...postureLines);
+      lines.push(...buildSummaryBlock(width, 'Subscription posture', postureLines, C));
       lines.push(...buildEmptyState(
         width,
         ' No provider subscriptions are active yet.',
@@ -177,7 +180,7 @@ export class SubscriptionPanel extends BasePanel {
       const workspace = buildPanelWorkspace(width, height, {
         title: 'Provider Subscriptions',
         intro: 'Review provider login state, subscription-backed routing, and pending browser auth handshakes.',
-        sections: [{ title: 'Posture', lines }] satisfies readonly PanelWorkspaceSection[],
+        sections: [{ lines }] satisfies readonly PanelWorkspaceSection[],
         footerLines,
         palette: C,
       });
@@ -185,31 +188,10 @@ export class SubscriptionPanel extends BasePanel {
       return workspace.slice(0, height);
     }
 
-    const window = getTrackedVisibleWindow(this.rows.length, this.selectedIndex, Math.max(4, height - 14), this.scrollOffset, 1);
-    this.scrollOffset = window.start;
-    const visible = this.rows.slice(window.start, window.end);
-    const listLines: Line[] = [];
-    for (let index = 0; index < visible.length; index++) {
-      const row = visible[index]!;
-      const absolute = window.start + index;
-      const bg = absolute === this.selectedIndex ? C.selectedBg : undefined;
-      const status = statusOf(row);
-      listLines.push(buildPanelLine(width, [
-        [' ', C.label, bg],
-        [row.provider.padEnd(16).slice(0, 16), C.value, bg],
-        [` ${status.toUpperCase().padEnd(12)}`, statusColor(status), bg],
-        [` oauth=${row.hasOAuthConfig ? 'yes' : 'no'} `, row.hasOAuthConfig ? C.info : C.dim, bg],
-        [` override=${row.subscription ? 'active' : 'off'}`, row.subscription ? C.good : C.dim, bg],
-      ]));
-    }
-    if (this.rows.length > visible.length) {
-      listLines.push(buildPanelLine(width, [[`  showing ${window.start + 1}-${window.end} of ${this.rows.length}`, C.dim]]));
-    }
-
     const selected = this.rows[this.selectedIndex];
-    const detailLines: Line[] = [];
+    const detailRows: Line[] = [];
     if (selected) {
-      detailLines.push(buildKeyValueLine(width, [
+      detailRows.push(buildKeyValueLine(width, [
         { label: 'provider', value: selected.provider, valueColor: C.value },
         { label: 'status', value: statusOf(selected), valueColor: statusColor(statusOf(selected)) },
         { label: 'oauth config', value: selected.hasOAuthConfig ? 'present' : 'missing', valueColor: selected.hasOAuthConfig ? C.good : C.bad },
@@ -218,32 +200,60 @@ export class SubscriptionPanel extends BasePanel {
         const expires = selected.subscription.expiresAt
           ? new Date(selected.subscription.expiresAt).toISOString()
           : 'n/a';
-        detailLines.push(buildKeyValueLine(width, [
+        detailRows.push(buildKeyValueLine(width, [
           { label: 'token type', value: selected.subscription.tokenType, valueColor: C.info },
           { label: 'expires', value: expires, valueColor: C.dim },
         ], C));
-        detailLines.push(buildPanelLine(width, [[
+        detailRows.push(buildPanelLine(width, [[
           ` ${selected.subscription.overrideAmbientApiKeys
             ? 'Provider subscription overrides ambient API-key resolution for this provider.'
             : 'Stored for subscription-backed flows. Ambient API-key resolution remains unchanged.'}`,
           C.dim,
         ]]));
         if (this.logoutConfirmationTarget === selected.provider) {
-          detailLines.push(buildPanelLine(width, [[` Press Enter or X again to sign out ${selected.provider}.`, C.warn]]));
+          detailRows.push(buildPanelLine(width, [[` Press Enter or X again to sign out ${selected.provider}.`, C.warn]]));
         }
       } else if (selected.pending) {
-        detailLines.push(buildPanelLine(width, [[' Login is pending. Finish with /subscription login <provider> finish <code>.', C.warn]]));
+        detailRows.push(buildPanelLine(width, [[' Login is pending. Finish with /subscription login <provider> finish <code>.', C.warn]]));
       } else if (selected.hasOAuthConfig) {
-        detailLines.push(buildPanelLine(width, [[' Ready for login. Start with /subscription login <provider> start.', C.dim]]));
+        detailRows.push(buildPanelLine(width, [[' Ready for login. Start with /subscription login <provider> start.', C.dim]]));
       } else {
-        detailLines.push(buildPanelLine(width, [[' Add a provider-specific OAuth config or enable a built-in subscription provider to use subscription login.', C.bad]]));
+        detailRows.push(buildPanelLine(width, [[' Add a provider-specific OAuth config or enable a built-in subscription provider to use subscription login.', C.bad]]));
       }
     }
+    const postureSection: PanelWorkspaceSection = { lines: buildSummaryBlock(width, 'Subscription posture', postureLines, C) };
+    const detailSection: PanelWorkspaceSection = { lines: buildDetailBlock(width, 'Selected provider', detailRows, C) };
+    const rawProviderLines: Line[] = this.rows.map((row, absolute) => {
+      const status = statusOf(row);
+      return buildPanelListRow(width, [
+        { text: row.provider.padEnd(16).slice(0, 16), fg: C.value },
+        { text: ` ${status.toUpperCase().padEnd(12)}`, fg: statusColor(status) },
+        { text: ` oauth=${row.hasOAuthConfig ? 'yes' : 'no'} `, fg: row.hasOAuthConfig ? C.info : C.dim },
+        { text: ` override=${row.subscription ? 'active' : 'off'}`, fg: row.subscription ? C.good : C.dim },
+      ], C, { selected: absolute === this.selectedIndex, selectedBg: C.selectedBg });
+    });
+    const resolvedProvidersSection = resolvePrimaryScrollableSection(width, height, {
+      intro: 'Review provider login state, subscription-backed routing, and pending browser auth handshakes.',
+      footerLines,
+      palette: C,
+      beforeSections: [postureSection],
+      section: {
+        title: 'Providers',
+        scrollableLines: rawProviderLines,
+        selectedIndex: this.selectedIndex,
+        scrollOffset: this.scrollOffset,
+        guardRows: 1,
+        minRows: 4,
+        appendWindowSummary: { dimColor: C.dim },
+      },
+      afterSections: [detailSection],
+    });
+    this.scrollOffset = resolvedProvidersSection.scrollOffset;
 
     const sections: PanelWorkspaceSection[] = [
-      { title: 'Posture', lines: postureLines },
-      { title: 'Providers', lines: listLines },
-      { title: 'Selected Provider', lines: detailLines },
+      postureSection,
+      resolvedProvidersSection.section,
+      detailSection,
     ];
     const lines = buildPanelWorkspace(width, height, {
       title: 'Provider Subscriptions',

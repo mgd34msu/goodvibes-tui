@@ -13,9 +13,9 @@ import {
   buildSearchInputLine,
   buildSelectablePanelLine,
   buildPanelWorkspace,
+  resolveScrollablePanelSection,
   DEFAULT_PANEL_PALETTE,
 } from './polish.ts';
-import { getTrackedVisibleWindow } from '../renderer/surface-layout.ts';
 import { getDisplayWidth } from '../utils/terminal-width.ts';
 import {
   getPanelSearchFocusTransition,
@@ -160,6 +160,11 @@ export class FileExplorerPanel extends BasePanel {
     return this.flat[this.cursor] ?? null;
   }
 
+  getFocusedFilePath(): string | null {
+    const node = this.getFocusedNode();
+    return node && !node.isDir ? node.path : null;
+  }
+
   // ── Input ──────────────────────────────────────────────────────────────────
 
   handleInput(key: string): boolean {
@@ -226,72 +231,83 @@ export class FileExplorerPanel extends BasePanel {
       });
     }
 
-    const window = getTrackedVisibleWindow(this.flat.length, this.cursor, Math.max(8, height - 8), this.scrollTop, 1);
-    this.scrollTop = window.start;
-    const visible = this.flat.slice(window.start, window.end);
-    const rows: Line[] = [];
-    for (let i = 0; i < visible.length; i++) {
-      const node = visible[i];
-      if (!node) continue;
-      const absoluteIdx = window.start + i;
-      const isCursor = absoluteIdx === this.cursor;
-      const baseBg = isCursor ? CLR_CURSOR : '';
-      const baseFg = isCursor ? CLR_CURSOR_FG : (node.isDir ? CLR_DIR : CLR_FILE);
-      const indent = '  '.repeat(node.depth);
-      const segments = [
-        { text: indent, fg: baseFg },
-        node.isDir
-          ? { text: node.expanded ? '▾ ' : '▸ ', fg: CLR_TOGGLE, bold: isCursor }
-          : { text: `${fileIcon(node.name)} `, fg: CLR_ICON, dim: !isCursor },
-        { text: node.name, fg: baseFg, bold: node.isDir || isCursor },
-      ];
-      if (!node.isDir && node.size > 0) {
-        const sizeStr = ` ${formatSize(node.size)}`;
-        const contentWidth = getDisplayWidth(indent) + 2 + getDisplayWidth(node.name);
-        const gap = Math.max(1, width - contentWidth - getDisplayWidth(sizeStr));
-        segments.push({ text: ' '.repeat(gap), fg: baseFg });
-        segments.push({ text: sizeStr, fg: CLR_SIZE, dim: true });
-      }
-      rows.push(buildSelectablePanelLine(width, segments, { selected: isCursor, selectedBg: baseBg, fillFg: baseFg }));
-    }
-
+    const summarySection = {
+      title: 'Summary',
+      lines: [
+        buildPanelLine(width, [
+          [' Visible ', DEFAULT_PANEL_PALETTE.label],
+          [String(this.flat.length), DEFAULT_PANEL_PALETTE.value],
+          ['   Search ', DEFAULT_PANEL_PALETTE.label],
+          [this.searchQuery || 'none', this.searchQuery ? DEFAULT_PANEL_PALETTE.info : DEFAULT_PANEL_PALETTE.dim],
+        ]),
+      ],
+    } as const;
     const selected = this.flat[this.cursor];
+    const selectedSection = {
+      title: 'Selected',
+      lines: selected
+        ? [
+            buildPanelLine(width, [
+              [' Name ', DEFAULT_PANEL_PALETTE.label],
+              [selected.name, DEFAULT_PANEL_PALETTE.value],
+              ['   Type ', DEFAULT_PANEL_PALETTE.label],
+              [selected.isDir ? 'directory' : 'file', selected.isDir ? DEFAULT_PANEL_PALETTE.info : DEFAULT_PANEL_PALETTE.value],
+            ]),
+            buildPanelLine(width, [
+              [' Path ', DEFAULT_PANEL_PALETTE.label],
+              [selected.path, DEFAULT_PANEL_PALETTE.dim],
+            ]),
+          ]
+        : [],
+    } as const;
+    const treeSection = resolveScrollablePanelSection(width, height, {
+      intro: 'Browse the project tree, expand directories, and search for paths.',
+      footerLines: [
+        buildSearchInputLine(width, '', searchLine, DEFAULT_PANEL_PALETTE, {
+          active: this.searchMode,
+          valueColor: this.searchMode ? DEFAULT_PANEL_PALETTE.info : DEFAULT_PANEL_PALETTE.dim,
+        }),
+        buildPanelLine(width, [[' Up/Down', DEFAULT_PANEL_PALETTE.info], [' navigate', DEFAULT_PANEL_PALETTE.dim], ['   Enter/Right', DEFAULT_PANEL_PALETTE.info], [' expand', DEFAULT_PANEL_PALETTE.dim], ['   Left', DEFAULT_PANEL_PALETTE.info], [' collapse', DEFAULT_PANEL_PALETTE.dim], ['   /', DEFAULT_PANEL_PALETTE.info], [' search', DEFAULT_PANEL_PALETTE.dim], ['   r', DEFAULT_PANEL_PALETTE.info], [' refresh', DEFAULT_PANEL_PALETTE.dim]]),
+      ],
+      palette: DEFAULT_PANEL_PALETTE,
+      beforeSections: [summarySection],
+      section: {
+        title: 'Tree',
+        scrollableLines: this.flat.map((node, absoluteIdx) => {
+          const isCursor = absoluteIdx === this.cursor;
+          const baseBg = isCursor ? CLR_CURSOR : '';
+          const baseFg = isCursor ? CLR_CURSOR_FG : (node.isDir ? CLR_DIR : CLR_FILE);
+          const indent = '  '.repeat(node.depth);
+          const segments = [
+            { text: indent, fg: baseFg },
+            node.isDir
+              ? { text: node.expanded ? '▾ ' : '▸ ', fg: CLR_TOGGLE, bold: isCursor }
+              : { text: `${fileIcon(node.name)} `, fg: CLR_ICON, dim: !isCursor },
+            { text: node.name, fg: baseFg, bold: node.isDir || isCursor },
+          ];
+          if (!node.isDir && node.size > 0) {
+            const sizeStr = ` ${formatSize(node.size)}`;
+            const contentWidth = getDisplayWidth(indent) + 2 + getDisplayWidth(node.name);
+            const gap = Math.max(1, width - contentWidth - getDisplayWidth(sizeStr));
+            segments.push({ text: ' '.repeat(gap), fg: baseFg });
+            segments.push({ text: sizeStr, fg: CLR_SIZE, dim: true });
+          }
+          return buildSelectablePanelLine(width, segments, { selected: isCursor, selectedBg: baseBg, fillFg: baseFg });
+        }),
+        selectedIndex: this.cursor,
+        scrollOffset: this.scrollTop,
+        minRows: 8,
+      },
+      afterSections: [selectedSection],
+    });
+    this.scrollTop = treeSection.scrollOffset;
     return buildPanelWorkspace(width, height, {
       title: ' Explorer',
       intro: 'Browse the project tree, expand directories, and search for paths.',
       sections: [
-        {
-          title: 'Summary',
-          lines: [
-            buildPanelLine(width, [
-              [' Visible ', DEFAULT_PANEL_PALETTE.label],
-              [String(this.flat.length), DEFAULT_PANEL_PALETTE.value],
-              ['   Search ', DEFAULT_PANEL_PALETTE.label],
-              [this.searchQuery || 'none', this.searchQuery ? DEFAULT_PANEL_PALETTE.info : DEFAULT_PANEL_PALETTE.dim],
-            ]),
-          ],
-        },
-        {
-          title: 'Tree',
-          lines: rows,
-        },
-        {
-          title: 'Selected',
-          lines: selected
-            ? [
-                buildPanelLine(width, [
-                  [' Name ', DEFAULT_PANEL_PALETTE.label],
-                  [selected.name, DEFAULT_PANEL_PALETTE.value],
-                  ['   Type ', DEFAULT_PANEL_PALETTE.label],
-                  [selected.isDir ? 'directory' : 'file', selected.isDir ? DEFAULT_PANEL_PALETTE.info : DEFAULT_PANEL_PALETTE.value],
-                ]),
-                buildPanelLine(width, [
-                  [' Path ', DEFAULT_PANEL_PALETTE.label],
-                  [selected.path, DEFAULT_PANEL_PALETTE.dim],
-                ]),
-              ]
-            : [],
-        },
+        summarySection,
+        treeSection.section,
+        selectedSection,
       ],
       footerLines: [
         buildSearchInputLine(width, '', searchLine, DEFAULT_PANEL_PALETTE, {

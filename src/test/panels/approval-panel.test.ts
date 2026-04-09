@@ -6,7 +6,7 @@ describe('ApprovalPanel', () => {
     const panel = new ApprovalPanel();
     const text = panel.render(100, 24).flat().map((cell) => cell.char).join('');
     expect(text).toContain('Approval Control Room');
-    expect(text).toContain('Posture');
+    expect(text).toContain('Approval posture');
     expect(text).toContain('shell');
     expect(text).toContain('mcp');
     expect(text).toContain('what-if');

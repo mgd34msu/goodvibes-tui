@@ -292,6 +292,58 @@ export class SettingsModal {
     }
   }
 
+  adjustSelected(direction: 'left' | 'right', step = 1): void {
+    if (this.editingMode) return;
+
+    if (this.currentCategory === 'flags') {
+      const flagEntry = this.getSelectedFlag();
+      if (!flagEntry || flagEntry.state === 'killed' || !this.featureFlagManager || !this.configManager) return;
+      const targetState: FlagState = direction === 'right' ? 'enabled' : 'disabled';
+      if (flagEntry.state !== targetState) this._setSelectedFlagState(flagEntry, targetState);
+      return;
+    }
+
+    if (this.currentCategory === 'mcp') {
+      const entry = this.getSelectedMcp();
+      if (!entry || !this.mcpRegistry) return;
+      const modes: McpEntry['trustMode'][] = ['constrained', 'ask-on-risk', 'allow-all', 'blocked'];
+      const currentIndex = Math.max(0, modes.indexOf(entry.trustMode));
+      const nextIndex = direction === 'right'
+        ? (currentIndex + 1) % modes.length
+        : (currentIndex - 1 + modes.length) % modes.length;
+      this.mcpRegistry.setServerTrustMode(entry.name, modes[nextIndex]!);
+      this._loadMcpEntries();
+      this.mcpAllowAllConfirmationTarget = null;
+      return;
+    }
+
+    const entry = this.getSelected();
+    if (!entry || !this.configManager) return;
+    const { setting } = entry;
+
+    if (setting.type === 'boolean') {
+      this._setValue(setting.key, direction === 'right');
+      return;
+    }
+
+    if (setting.type === 'enum' && setting.enumValues && setting.enumValues.length > 0) {
+      const currentIndex = Math.max(0, setting.enumValues.indexOf(String(entry.currentValue)));
+      const nextIndex = direction === 'right'
+        ? (currentIndex + 1) % setting.enumValues.length
+        : (currentIndex - 1 + setting.enumValues.length) % setting.enumValues.length;
+      this._setValue(setting.key, setting.enumValues[nextIndex]!);
+      return;
+    }
+
+    if (setting.type === 'number') {
+      const currentNumber = Number(entry.currentValue ?? 0);
+      if (!Number.isFinite(currentNumber)) return;
+      const nextValue = currentNumber + (direction === 'right' ? step : -step);
+      if (setting.validate && !setting.validate(nextValue)) return;
+      this._setValue(setting.key, nextValue);
+    }
+  }
+
   /**
    * Toggle the currently selected feature flag.
    *
@@ -308,6 +360,13 @@ export class SettingsModal {
     if (state === 'killed') return;
 
     const newState: FlagState = state === 'enabled' ? 'disabled' : 'enabled';
+
+    this._setSelectedFlagState(flagEntry, newState);
+  }
+
+  private _setSelectedFlagState(flagEntry: FlagEntry, newState: FlagState): void {
+    if (!this.featureFlagManager || !this.configManager) return;
+    const { flag } = flagEntry;
 
     if (!flag.runtimeToggleable) {
       // Persist to config only — takes effect on restart

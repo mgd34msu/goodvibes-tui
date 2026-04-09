@@ -18,6 +18,7 @@ export type PanelFocusRouteState = {
   requestRender: () => void;
   handlePathCompletion: () => boolean;
   cyclePanelTab: (direction: 'next' | 'prev') => void;
+  onPanelInputConsumed?: (activePanel: import('../panels/types.ts').Panel | null, key: string) => void;
 };
 
 export function handlePanelFocusToken(state: PanelFocusRouteState, token: InputToken): {
@@ -90,6 +91,7 @@ export function handlePanelFocusToken(state: PanelFocusRouteState, token: InputT
     if (activePanel?.handleInput) {
       const consumed = activePanel.handleInput(token.logicalName);
       if (consumed) {
+        state.onPanelInputConsumed?.(activePanel, token.logicalName);
         state.requestRender();
         return { handled: true, panelFocused };
       }

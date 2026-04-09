@@ -15,10 +15,24 @@ export type CommandModeRouteState = {
   conversationManager: ConversationManager | null;
   requestRender: () => void;
   handleEscape: () => void;
+  syncCommandMode?: (active: boolean) => void;
 };
 
 export function handleCommandModeToken(state: CommandModeRouteState, token: InputToken): boolean {
   if (!state.commandMode) return false;
+
+  const closeCommandMode = (preserveStackCommand = false): void => {
+    state.commandMode = false;
+    if (!preserveStackCommand) {
+      for (let i = state.modalStack.length - 1; i >= 0; i--) {
+        if (state.modalStack[i] === 'command') state.modalStack.splice(i, 1);
+      }
+    }
+    state.autocomplete?.reset();
+    state.prompt = '';
+    state.cursorPos = 0;
+    state.syncCommandMode?.(false);
+  };
 
   if (token.type !== 'key') return false;
 
@@ -49,11 +63,8 @@ export function handleCommandModeToken(state: CommandModeRouteState, token: Inpu
       state.cursorPos--;
     }
     if (state.prompt === '') {
-      state.commandMode = false;
+      closeCommandMode();
       state.autocomplete?.reset();
-      if (state.modalStack.length > 0 && state.modalStack[state.modalStack.length - 1] === 'command') {
-        state.modalStack.pop();
-      }
     } else {
       const query = state.prompt.startsWith('/') ? state.prompt.slice(1) : '';
       const spaceIdx = query.indexOf(' ');
@@ -66,7 +77,6 @@ export function handleCommandModeToken(state: CommandModeRouteState, token: Inpu
     const raw = selectedCmd ? `/${selectedCmd.name}` : state.prompt.trim();
     state.prompt = '';
     state.cursorPos = 0;
-    state.commandMode = false;
     state.autocomplete?.reset();
     if (raw.startsWith('/') && state.commandRegistry && state.commandContext) {
       const parts = raw.slice(1).trim().split(/\s+/);
@@ -74,6 +84,8 @@ export function handleCommandModeToken(state: CommandModeRouteState, token: Inpu
       const args = parts.slice(1);
       const ctx = state.commandContext;
       (ctx.executeCommand?.(name, args) ?? state.commandRegistry.execute(name, args, ctx)).then((handled) => {
+        const preserveStackCommand = state.modalStack.includes('command') && state.modalStack[state.modalStack.length - 1] !== 'command';
+        closeCommandMode(preserveStackCommand);
         if (handled) {
           state.requestRender();
         } else {
@@ -86,6 +98,8 @@ export function handleCommandModeToken(state: CommandModeRouteState, token: Inpu
           }
         }
       });
+    } else {
+      closeCommandMode();
     }
     return true;
   }

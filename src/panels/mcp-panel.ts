@@ -11,9 +11,9 @@ import {
   buildPanelLine,
   buildPanelWorkspace,
   DEFAULT_PANEL_PALETTE,
+  resolvePrimaryScrollableSection,
   type PanelWorkspaceSection,
 } from './polish.ts';
-import { getTrackedVisibleWindow } from '../renderer/surface-layout.ts';
 
 const C = {
   ...DEFAULT_PANEL_PALETTE,
@@ -124,25 +124,6 @@ export class McpPanel extends BasePanel {
     const quarantined = entries.filter((entry) => entry.schemaFreshness === 'quarantined').length;
     const disconnected = entries.length - connected;
     const staleSchemas = entries.filter((entry) => entry.schemaFreshness !== 'fresh').length;
-    const window = getTrackedVisibleWindow(entries.length, this.selectedIndex, Math.max(4, height - 16), this.scrollOffset, 1);
-    this.scrollOffset = window.start;
-    const listLines: Line[] = [];
-    for (let absolute = window.start; absolute < window.end; absolute++) {
-      const entry = entries[absolute]!;
-      const bg = absolute === this.selectedIndex ? C.selectBg : undefined;
-      listLines.push(buildPanelLine(width, [
-        [' ', C.label, bg],
-        [entry.name.padEnd(20), C.value, bg],
-        [` ${(entry.connected ? 'CONNECTED' : 'DISCONNECTED').padEnd(13)}`, entry.connected ? C.ok : C.error, bg],
-        [` ${entry.trustMode.padEnd(12)}`, modeColor(entry.trustMode), bg],
-        [` ${entry.role.padEnd(10)}`, C.info, bg],
-        [` ${entry.schemaFreshness}`, freshnessColor(entry.schemaFreshness), bg],
-      ]));
-    }
-    if (entries.length > window.count) {
-      listLines.push(buildPanelLine(width, [[`  showing ${window.start + 1}-${window.end} of ${entries.length}`, C.dim]]));
-    }
-
     const detailLines: Line[] = [
       buildPanelLine(width, [
         ['  Server: ', C.label],
@@ -182,7 +163,7 @@ export class McpPanel extends BasePanel {
       ]));
     }
 
-    const decisions = this.registry.listRecentSecurityDecisions?.(Math.max(0, height - 18)) ?? [];
+    const decisions = this.registry.listRecentSecurityDecisions?.(24) ?? [];
     const selectedDecision = decisions.find((decision) => decision.serverName === selected.name);
     if (selectedDecision) {
       const summary = `${selectedDecision.serverName}:${selectedDecision.toolName} ${selectedDecision.verdict.toUpperCase()} ${selectedDecision.capability}${selectedDecision.incoherent ? ' incoherent' : ''}`;
@@ -214,26 +195,57 @@ export class McpPanel extends BasePanel {
     if (repairLines.length === 0) {
       repairLines.push(buildPanelLine(width, [['  No immediate MCP repair actions suggested for the selected server.', C.dim]]));
     }
+    const postureSection: PanelWorkspaceSection = {
+      title: 'MCP posture',
+      lines: [
+        buildKeyValueLine(width, [
+          { label: 'servers', value: String(entries.length), valueColor: C.value },
+          { label: 'connected', value: String(connected), valueColor: connected > 0 ? C.ok : C.dim },
+          { label: 'disconnected', value: String(disconnected), valueColor: disconnected > 0 ? C.warn : C.dim },
+          { label: 'stale schema', value: String(staleSchemas), valueColor: staleSchemas > 0 ? C.warn : C.dim },
+          { label: 'quarantined', value: String(quarantined), valueColor: quarantined > 0 ? C.error : C.dim },
+        ], C),
+        buildGuidanceLine(width, '/mcp review', 'inspect trust, freshness, and quarantine posture for configured servers', C),
+        buildGuidanceLine(width, '/mcp repair', 'review reconnect, auth, import, and startup remediation guidance', C),
+      ],
+    };
+    const selectedSection: PanelWorkspaceSection = { title: 'Selected Server', lines: detailLines };
+    const repairSection: PanelWorkspaceSection = { title: 'Repair', lines: repairLines };
+    const decisionsSection: PanelWorkspaceSection = { title: 'Recent Decisions', lines: decisionLines };
+    const resolvedServersSection = resolvePrimaryScrollableSection(width, height, {
+      intro,
+      footerLines: [buildPanelLine(width, [['  Up/Down move  r refresh', C.dim]])],
+      palette: C,
+      beforeSections: [postureSection],
+      section: {
+        title: 'Servers',
+        scrollableLines: entries.map((entry, absolute) => {
+          const bg = absolute === this.selectedIndex ? C.selectBg : undefined;
+          return buildPanelLine(width, [
+            [' ', C.label, bg],
+            [entry.name.padEnd(20), C.value, bg],
+            [` ${(entry.connected ? 'CONNECTED' : 'DISCONNECTED').padEnd(13)}`, entry.connected ? C.ok : C.error, bg],
+            [` ${entry.trustMode.padEnd(12)}`, modeColor(entry.trustMode), bg],
+            [` ${entry.role.padEnd(10)}`, C.info, bg],
+            [` ${entry.schemaFreshness}`, freshnessColor(entry.schemaFreshness), bg],
+          ]);
+        }),
+        selectedIndex: this.selectedIndex,
+        scrollOffset: this.scrollOffset,
+        guardRows: 1,
+        minRows: 4,
+        appendWindowSummary: { dimColor: C.dim },
+      },
+      afterSections: [selectedSection, repairSection, decisionsSection],
+    });
+    this.scrollOffset = resolvedServersSection.scrollOffset;
 
     const sections: PanelWorkspaceSection[] = [
-      {
-        title: 'Posture',
-        lines: [
-          buildKeyValueLine(width, [
-            { label: 'servers', value: String(entries.length), valueColor: C.value },
-            { label: 'connected', value: String(connected), valueColor: connected > 0 ? C.ok : C.dim },
-            { label: 'disconnected', value: String(disconnected), valueColor: disconnected > 0 ? C.warn : C.dim },
-            { label: 'stale schema', value: String(staleSchemas), valueColor: staleSchemas > 0 ? C.warn : C.dim },
-            { label: 'quarantined', value: String(quarantined), valueColor: quarantined > 0 ? C.error : C.dim },
-          ], C),
-          buildGuidanceLine(width, '/mcp review', 'inspect trust, freshness, and quarantine posture for configured servers', C),
-          buildGuidanceLine(width, '/mcp repair', 'review reconnect, auth, import, and startup remediation guidance', C),
-        ],
-      },
-      { title: 'Servers', lines: listLines },
-      { title: 'Selected Server', lines: detailLines },
-      { title: 'Repair', lines: repairLines },
-      { title: 'Recent Decisions', lines: decisionLines },
+      postureSection,
+      resolvedServersSection.section,
+      selectedSection,
+      repairSection,
+      decisionsSection,
     ];
     const lines = buildPanelWorkspace(width, height, {
       title: 'MCP Control Room',

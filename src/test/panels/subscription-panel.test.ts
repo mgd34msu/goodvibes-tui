@@ -62,7 +62,7 @@ describe('SubscriptionPanel', () => {
       panel.handleInput('ArrowDown');
       const text = linesText(panel.render(110, 14));
       expect(text).toContain('Provider Subscriptions');
-      expect(text).toContain('Posture');
+      expect(text).toContain('Subscription posture');
       expect(text).toContain('openai');
       expect(text).toContain('ACTIVE');
       expect(text).toContain('override=active');

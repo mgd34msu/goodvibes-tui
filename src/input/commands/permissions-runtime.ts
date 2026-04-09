@@ -1,5 +1,5 @@
 import type { CommandRegistry } from '../command-registry.ts';
-import type { SelectionAction, SelectionItem } from '../selection-modal.ts';
+import type { SelectionItem } from '../selection-modal.ts';
 
 const VALID_MODES = ['allow-all', 'prompt', 'custom'] as const;
 const VALID_ACTIONS = ['allow', 'prompt', 'deny'] as const;
@@ -17,32 +17,41 @@ export function registerPermissionsRuntimeCommands(registry: CommandRegistry): v
       const cm = ctx.configManager;
       if (args.length === 0) {
         if (ctx.openSelection) {
-          const cycleActions = new Map<string, SelectionAction>([['enter', 'toggle' as const]]);
           const items: SelectionItem[] = VALID_TOOLS.map((tool) => ({
             id: tool,
             label: tool,
             detail: cm.get(`permissions.tools.${tool}` as Parameters<typeof cm.get>[0]) as string,
             category: 'tools',
-            actions: '[Enter] cycle allow/prompt/deny',
+            adjustable: true,
+            primaryAction: 'toggle',
+            actions: '[Space/Enter] cycle  [←/→] adjust',
           }));
           items.unshift({
             id: '__mode__',
             label: 'permission mode',
             detail: cm.get('permissions.mode') as string,
             category: 'global',
-            actions: '[Enter] cycle allow-all/prompt/custom',
+            adjustable: true,
+            primaryAction: 'toggle',
+            actions: '[Space/Enter] cycle  [←/→] adjust',
           });
-          ctx.openSelection('Permissions', items, { allowSearch: true, customActions: cycleActions }, (result) => {
+          ctx.openSelection('Permissions', items, { allowSearch: true }, (result) => {
             if (!result) return;
             if (result.item.id === '__mode__') {
               const currentMode = cm.get('permissions.mode') as string;
-              const nextMode = VALID_MODES[(VALID_MODES.indexOf(currentMode as typeof VALID_MODES[number]) + 1) % VALID_MODES.length];
+              const currentIndex = Math.max(0, VALID_MODES.indexOf(currentMode as typeof VALID_MODES[number]));
+              const nextMode = result.action === 'decrement'
+                ? VALID_MODES[(currentIndex - 1 + VALID_MODES.length) % VALID_MODES.length]
+                : VALID_MODES[(currentIndex + 1) % VALID_MODES.length];
               cm.setDynamic('permissions.mode', nextMode);
               result.item.detail = nextMode;
             } else {
               const toolKey = `permissions.tools.${result.item.id}` as Parameters<typeof cm.get>[0];
               const currentAction = cm.get(toolKey) as string;
-              const nextAction = VALID_ACTIONS[(VALID_ACTIONS.indexOf(currentAction as typeof VALID_ACTIONS[number]) + 1) % VALID_ACTIONS.length];
+              const currentIndex = Math.max(0, VALID_ACTIONS.indexOf(currentAction as typeof VALID_ACTIONS[number]));
+              const nextAction = result.action === 'decrement'
+                ? VALID_ACTIONS[(currentIndex - 1 + VALID_ACTIONS.length) % VALID_ACTIONS.length]
+                : VALID_ACTIONS[(currentIndex + 1) % VALID_ACTIONS.length];
               cm.setDynamic(toolKey, nextAction);
               result.item.detail = nextAction;
             }

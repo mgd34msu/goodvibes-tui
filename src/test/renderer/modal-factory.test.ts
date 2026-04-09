@@ -61,10 +61,10 @@ describe('ModalFactory.createModal', () => {
     const rightX = top.findLastIndex((cell) => cell.char === '┐');
     expect(leftX).toBeGreaterThanOrEqual(0);
     expect(rightX).toBeGreaterThan(leftX);
-    expect(top[leftX].fg).toBe('240');
-    expect(top[rightX].fg).toBe('240');
-    expect(bottom[leftX].fg).toBe('240');
-    expect(bottom[rightX].fg).toBe('240');
+    expect(top[leftX].fg).toBe('#475569');
+    expect(top[rightX].fg).toBe('#475569');
+    expect(bottom[leftX].fg).toBe('#475569');
+    expect(bottom[rightX].fg).toBe('#475569');
   });
 
   test('content rows use box-drawing vertical borders', () => {

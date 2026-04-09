@@ -10,10 +10,10 @@ import {
   buildPanelLine,
   buildStyledPanelLine,
   buildPanelWorkspace,
+  resolveScrollablePanelSection,
   DEFAULT_PANEL_PALETTE,
   type PanelWorkspaceSection,
 } from './polish.ts';
-import { getTrackedVisibleWindow } from '../renderer/surface-layout.ts';
 import { truncateDisplay } from '../utils/terminal-width.ts';
 
 const C = {
@@ -141,9 +141,6 @@ export class ThinkingPanel extends BasePanel {
     }
 
     this.cursorIndex = Math.max(0, Math.min(this.cursorIndex, Math.max(0, flat.length - 1)));
-    const window = getTrackedVisibleWindow(flat.length, this.cursorIndex, Math.max(8, height - 8), this.scrollOffset, 1);
-    this.scrollOffset = window.start;
-    const visible = flat.slice(window.start, window.end);
 
     const summary: PanelWorkspaceSection = {
       title: 'Summary',
@@ -159,7 +156,6 @@ export class ThinkingPanel extends BasePanel {
       ],
     };
 
-    const reasoningRows = visible.map((row, index) => this._renderRow(width, row, window.start + index === this.cursorIndex));
     const selectedRow = flat[this.cursorIndex];
     const selectedSection: PanelWorkspaceSection = {
       title: 'Selected',
@@ -168,12 +164,28 @@ export class ThinkingPanel extends BasePanel {
       ],
     };
 
+    const reasoningSection = resolveScrollablePanelSection(width, height, {
+      intro: 'Live reasoning blocks stream here while the model is actively thinking.',
+      footerLines,
+      palette: DEFAULT_PANEL_PALETTE,
+      beforeSections: [summary],
+      section: {
+        title: 'Reasoning',
+        scrollableLines: flat.map((row, index) => this._renderRow(width, row, index === this.cursorIndex)),
+        selectedIndex: this.cursorIndex,
+        scrollOffset: this.scrollOffset,
+        minRows: 8,
+      },
+      afterSections: [selectedSection],
+    });
+    this.scrollOffset = reasoningSection.scrollOffset;
+
     return buildPanelWorkspace(width, height, {
       title,
       intro: 'Live reasoning blocks stream here while the model is actively thinking.',
       sections: [
         summary,
-        { title: 'Reasoning', lines: reasoningRows },
+        reasoningSection.section,
         selectedSection,
       ],
       footerLines,

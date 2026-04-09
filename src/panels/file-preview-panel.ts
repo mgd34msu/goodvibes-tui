@@ -9,9 +9,9 @@ import {
   buildEmptyState,
   buildPanelLine,
   buildPanelWorkspace,
+  resolveScrollablePanelSection,
   DEFAULT_PANEL_PALETTE,
 } from './polish.ts';
-import { getVisibleWindow } from '../renderer/surface-layout.ts';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -126,6 +126,25 @@ export class FilePreviewPanel extends BasePanel {
     this.markDirty();
   }
 
+  getCurrentFilePath(): string | null {
+    return this.filePath;
+  }
+
+  getSource(): string | null {
+    if (this.filePath === null || this.oversized) return null;
+    return this.fileLines.join('\n');
+  }
+
+  goToLine(line: number): void {
+    if (!Number.isFinite(line)) return;
+    this.scrollOffset = Math.max(0, Math.min(Math.floor(line) - 1, Math.max(0, this.fileLines.length - 1)));
+    this.markDirty();
+  }
+
+  getScrollOffset(): number {
+    return this.scrollOffset;
+  }
+
   // ─── Lifecycle ───────────────────────────────────────────────────────────────
 
   override onActivate(): void {
@@ -220,10 +239,18 @@ export class FilePreviewPanel extends BasePanel {
       });
     }
 
-    const contentHeight = Math.max(8, height - 8);
-    const window = getVisibleWindow(this.fileLines.length, this.scrollOffset, contentHeight);
-    this.scrollOffset = window.start;
-
+    const summarySection = {
+      title: 'Summary',
+      lines: [
+        buildPanelLine(width, [
+          [' Lines ', DEFAULT_PANEL_PALETTE.label],
+          [String(this.fileLines.length), DEFAULT_PANEL_PALETTE.value],
+        ]),
+      ],
+    } as const;
+    const footerLines = [
+      buildPanelLine(width, [[' Up/Down', DEFAULT_PANEL_PALETTE.info], [' scroll', DEFAULT_PANEL_PALETTE.dim], ['   PgUp/PgDn', DEFAULT_PANEL_PALETTE.info], [' page', DEFAULT_PANEL_PALETTE.dim], ['   Home/End', DEFAULT_PANEL_PALETTE.info], [' bounds', DEFAULT_PANEL_PALETTE.dim]]),
+    ];
     const fullCode = this.fileLines.join('\n');
     const hlLines = this.fenceTag
       ? syntaxHighlighter.highlight(fullCode, this.fenceTag)
@@ -232,7 +259,7 @@ export class FilePreviewPanel extends BasePanel {
     const lineNumW = String(this.fileLines.length).length;
     const contentX = lineNumW + 2; // "NNN | "
     const previewLines: Line[] = [];
-    for (let fileIdx = window.start; fileIdx < window.end; fileIdx++) {
+    for (let fileIdx = 0; fileIdx < this.fileLines.length; fileIdx++) {
 
       const rawLine = this.fileLines[fileIdx];
       const tokens: SyntaxToken[] =
@@ -242,6 +269,20 @@ export class FilePreviewPanel extends BasePanel {
 
       previewLines.push(this.renderCodeLine(fileIdx, lineNumW, contentX, tokens, width));
     }
+    const previewSection = resolveScrollablePanelSection(width, height, {
+      intro,
+      footerLines,
+      palette: DEFAULT_PANEL_PALETTE,
+      beforeSections: [summarySection],
+      section: {
+        title: 'Preview',
+        scrollableLines: previewLines,
+        scrollOffset: this.scrollOffset,
+        minRows: 8,
+      },
+    });
+    this.scrollOffset = previewSection.scrollOffset;
+    const window = previewSection.window;
 
     this.needsRender = false;
     return buildPanelWorkspace(width, height, {
@@ -261,12 +302,10 @@ export class FilePreviewPanel extends BasePanel {
         },
         {
           title: 'Preview',
-          lines: previewLines,
+          lines: previewSection.section.lines,
         },
       ],
-      footerLines: [
-        buildPanelLine(width, [[' Up/Down', DEFAULT_PANEL_PALETTE.info], [' scroll', DEFAULT_PANEL_PALETTE.dim], ['   PgUp/PgDn', DEFAULT_PANEL_PALETTE.info], [' page', DEFAULT_PANEL_PALETTE.dim], ['   Home/End', DEFAULT_PANEL_PALETTE.info], [' bounds', DEFAULT_PANEL_PALETTE.dim]]),
-      ],
+      footerLines,
       palette: DEFAULT_PANEL_PALETTE,
     });
   }

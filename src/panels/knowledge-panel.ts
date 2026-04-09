@@ -8,10 +8,10 @@ import {
   buildKeyValueLine,
   buildPanelLine,
   buildPanelWorkspace,
+  resolveScrollablePanelSection,
   DEFAULT_PANEL_PALETTE,
   type PanelWorkspaceSection,
 } from './polish.ts';
-import { getTrackedVisibleWindow } from '../renderer/surface-layout.ts';
 
 function summarize(records: MemoryRecord[], cls: MemoryClass): MemoryRecord[] {
   return records.filter((record) => record.cls === cls).slice(0, 3);
@@ -281,34 +281,42 @@ export class KnowledgePanel extends BasePanel {
     const footerLines = [
       buildPanelLine(width, [['  Up/Down move  r/Enter reviewed  s stale  c contradicted  f fresh', C.dim]]),
     ];
-    const introRows = buildBodyText(width, intro, C, C.dim).length;
-    const chromeRows = 1 + introRows + footerLines.length;
-    const fixedSectionRows = classLines.length + reviewLines.length + Math.min(8, selectedLines.length) + Math.min(8, recentSummaryLines.length);
-    const queueBudget = Math.max(4, height - chromeRows - fixedSectionRows - 8);
-    const window = getTrackedVisibleWindow(this.records.length, this.selectedIndex, queueBudget, this.scrollOffset, 1);
-    this.scrollOffset = window.start;
-
-    const queueLines: Line[] = this.records.slice(window.start, window.end).map((record, index) => {
-      const globalIndex = window.start + index;
-      const bg = globalIndex === this.selectedIndex ? C.selectBg : undefined;
-      return buildPanelLine(width, [
-        ['  ', C.label, bg],
-        [record.reviewState.padEnd(13), reviewStateColor(record.reviewState), bg],
-        [` ${formatConfidence(record.confidence)} `, C.value, bg],
-        [record.summary.slice(0, Math.max(0, width - 26)), C.value, bg],
-      ]);
+    const classesSection: PanelWorkspaceSection = { title: 'Classes', lines: classLines };
+    const reviewStateSection: PanelWorkspaceSection = { title: 'Review State', lines: reviewLines };
+    const selectedSection: PanelWorkspaceSection = selectedLines.length > 0 ? { title: 'Selected', lines: selectedLines } : { title: 'Selected', lines: [] };
+    const recentSection: PanelWorkspaceSection = { title: 'Recent Risks / Runbooks / Architecture Notes', lines: recentSummaryLines };
+    const queueSection = resolveScrollablePanelSection(width, height, {
+      intro,
+      footerLines,
+      palette: C,
+      beforeSections: [classesSection, reviewStateSection],
+      section: {
+        title: 'Review Queue',
+        scrollableLines: this.records.map((record, globalIndex) => {
+          const bg = globalIndex === this.selectedIndex ? C.selectBg : undefined;
+          return buildPanelLine(width, [
+            ['  ', C.label, bg],
+            [record.reviewState.padEnd(13), reviewStateColor(record.reviewState), bg],
+            [` ${formatConfidence(record.confidence)} `, C.value, bg],
+            [record.summary.slice(0, Math.max(0, width - 26)), C.value, bg],
+          ]);
+        }),
+        selectedIndex: this.selectedIndex,
+        scrollOffset: this.scrollOffset,
+        minRows: 4,
+        appendWindowSummary: { dimColor: C.dim },
+      },
+      afterSections: selectedLines.length > 0 ? [selectedSection, recentSection] : [recentSection],
     });
-    if (this.records.length > window.count) {
-      queueLines.push(buildPanelLine(width, [[`  showing ${window.start + 1}-${window.end} of ${this.records.length}`, C.dim]]));
-    }
+    this.scrollOffset = queueSection.scrollOffset;
 
     const sections: PanelWorkspaceSection[] = [
-      { title: 'Classes', lines: classLines },
-      { title: 'Review State', lines: reviewLines },
-      { title: 'Review Queue', lines: queueLines },
+      classesSection,
+      reviewStateSection,
+      queueSection.section,
     ];
-    if (selectedLines.length > 0) sections.push({ title: 'Selected', lines: selectedLines });
-    sections.push({ title: 'Recent Risks / Runbooks / Architecture Notes', lines: recentSummaryLines });
+    if (selectedLines.length > 0) sections.push(selectedSection);
+    sections.push(recentSection);
 
     return buildPanelWorkspace(width, height, {
       title: 'Knowledge Control Room',

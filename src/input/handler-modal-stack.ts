@@ -45,6 +45,7 @@ export type EscapeState = ModalStackState & {
   };
   selectionModal: ModalStackState['selectionModal'];
   autocompleteReset: () => void;
+  autocompleteUpdate?: (query: string) => void;
 };
 
 export function handleEscape(state: EscapeState): {
@@ -128,6 +129,9 @@ export function handleEscape(state: EscapeState): {
       },
       closeCommandMode: () => {
         commandMode = false;
+        for (let i = state.modalStack.length - 1; i >= 0; i--) {
+          if (state.modalStack[i] === 'command') state.modalStack.splice(i, 1);
+        }
         state.autocompleteReset();
         prompt = '';
         cursorPos = 0;
@@ -146,7 +150,7 @@ export function handleEscape(state: EscapeState): {
         commandMode = true;
         prompt = '/';
         cursorPos = 1;
-        state.autocompleteReset();
+        state.autocompleteUpdate?.('');
       },
     });
   };

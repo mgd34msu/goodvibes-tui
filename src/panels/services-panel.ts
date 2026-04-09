@@ -13,9 +13,9 @@ import {
   buildPanelLine,
   buildPanelWorkspace,
   DEFAULT_PANEL_PALETTE,
+  resolvePrimaryScrollableSection,
   type PanelWorkspaceSection,
 } from './polish.ts';
-import { getTrackedVisibleWindow } from '../renderer/surface-layout.ts';
 
 const C = {
   ...DEFAULT_PANEL_PALETTE,
@@ -185,24 +185,6 @@ export class ServicesPanel extends BasePanel {
       return workspace;
     }
 
-    const window = getTrackedVisibleWindow(this.entries.length, this.selectedIndex, Math.max(4, height - 12), this.scrollOffset, 1);
-    this.scrollOffset = window.start;
-    const listLines: Line[] = [];
-    for (let absolute = window.start; absolute < window.end; absolute++) {
-      const entry = this.entries[absolute]!;
-      const bg = absolute === this.selectedIndex ? C.selectBg : undefined;
-      listLines.push(buildPanelLine(width, [
-        [' ', C.label, bg],
-        [entry.name.padEnd(16), C.value, bg],
-        [` ${statusLabel(entry).padEnd(12)}`, statusColor(entry), bg],
-        [` ${authSummary(entry.inspection.config).padEnd(18)}`, C.info, bg],
-        [` ${entry.inspection.config.baseUrl ?? '(no baseUrl)'}`, C.dim, bg],
-      ]));
-    }
-    if (this.entries.length > window.end - window.start) {
-      listLines.push(buildPanelLine(width, [[`  showing ${window.start + 1}-${window.end} of ${this.entries.length}`, C.dim]]));
-    }
-
     const selected = this.entries[this.selectedIndex]!;
     const inspect = selected.inspection;
     const detailLines: Line[] = [
@@ -242,10 +224,36 @@ export class ServicesPanel extends BasePanel {
       detailLines.push(buildPanelLine(width, [['  Press t to test the selected service or r to refresh credential status.', C.dim]]));
     }
     detailLines.push(buildPanelLine(width, [['  Services resolve credentials through hierarchy-aware secure storage, plaintext fallback policy, and project-local config.', C.dim]]));
+    const detailSection: PanelWorkspaceSection = { title: 'Details', lines: detailLines };
+    const resolvedServicesSection = resolvePrimaryScrollableSection(width, height, {
+      intro,
+      footerLines: [buildPanelLine(width, [['  Up/Down move  t test selected service  r refresh inspections', C.dim]])],
+      palette: C,
+      section: {
+        title: 'Services',
+        scrollableLines: this.entries.map((entry, absolute) => {
+          const bg = absolute === this.selectedIndex ? C.selectBg : undefined;
+          return buildPanelLine(width, [
+            [' ', C.label, bg],
+            [entry.name.padEnd(16), C.value, bg],
+            [` ${statusLabel(entry).padEnd(12)}`, statusColor(entry), bg],
+            [` ${authSummary(entry.inspection.config).padEnd(18)}`, C.info, bg],
+            [` ${entry.inspection.config.baseUrl ?? '(no baseUrl)'}`, C.dim, bg],
+          ]);
+        }),
+        selectedIndex: this.selectedIndex,
+        scrollOffset: this.scrollOffset,
+        guardRows: 1,
+        minRows: 4,
+        appendWindowSummary: { dimColor: C.dim },
+      },
+      afterSections: [detailSection],
+    });
+    this.scrollOffset = resolvedServicesSection.scrollOffset;
 
     const sections: PanelWorkspaceSection[] = [
-      { title: 'Services', lines: listLines },
-      { title: 'Details', lines: detailLines },
+      resolvedServicesSection.section,
+      detailSection,
     ];
     const lines = buildPanelWorkspace(width, height, {
       title: 'Service Control Room',

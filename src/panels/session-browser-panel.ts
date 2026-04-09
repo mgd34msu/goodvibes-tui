@@ -13,10 +13,10 @@ import {
   buildSearchInputLine,
   buildStyledPanelLine,
   buildPanelWorkspace,
+  resolveScrollablePanelSection,
   DEFAULT_PANEL_PALETTE,
   type PanelWorkspaceSection,
 } from './polish.ts';
-import { getTrackedVisibleWindow } from '../renderer/surface-layout.ts';
 import { truncateDisplay } from '../utils/terminal-width.ts';
 import { formatReturnContextForDisplay } from '../runtime/session-return-context.ts';
 import {
@@ -151,6 +151,7 @@ export class SessionBrowserPanel extends BasePanel {
 
   render(width: number, height: number): Line[] {
     if (height <= 0 || width <= 0) return [];
+    const intro = 'Browse, search, resume, and prune saved conversations.';
 
     const count = this.filtered.length;
     const total = this.sessions.length;
@@ -171,7 +172,7 @@ export class SessionBrowserPanel extends BasePanel {
     if (this.confirm) {
       return buildPanelWorkspace(width, height, {
         title: ` Sessions [${count}/${total}]`,
-        intro: 'Browse, search, resume, and prune saved conversations.',
+        intro,
         sections: [
           {
             title: 'Confirmation',
@@ -193,7 +194,7 @@ export class SessionBrowserPanel extends BasePanel {
         : 'Conversations are saved automatically. Once you have saved sessions, they appear here for review and resume.';
       return buildPanelWorkspace(width, height, {
         title: ` Sessions [${count}/${total}]`,
-        intro: 'Browse, search, resume, and prune saved conversations.',
+        intro,
         sections: [
           {
             lines: buildEmptyState(width, emptyTitle, emptyBody, [], DEFAULT_PANEL_PALETTE),
@@ -218,12 +219,6 @@ export class SessionBrowserPanel extends BasePanel {
         ]),
       ],
     };
-
-    const window = getTrackedVisibleWindow(this.filtered.length, this.cursorIndex, Math.max(6, height - 8), this.scrollOffset, 1);
-    this.scrollOffset = window.start;
-    const sessionRows = this.filtered.slice(window.start, window.end).map((sess, index) =>
-      this._renderSession(width, sess, window.start + index === this.cursorIndex),
-    );
 
     const selected = this.filtered[this.cursorIndex];
     const selectedSection: PanelWorkspaceSection = selected
@@ -257,12 +252,30 @@ export class SessionBrowserPanel extends BasePanel {
         }
       : { title: 'Selected', lines: [] };
 
+    const sessionsSection = resolveScrollablePanelSection(width, height, {
+      intro,
+      footerLines,
+      palette: DEFAULT_PANEL_PALETTE,
+      beforeSections: [summary],
+      section: {
+        title: 'Sessions',
+        scrollableLines: this.filtered.map((sess, index) =>
+          this._renderSession(width, sess, index === this.cursorIndex),
+        ),
+        selectedIndex: this.cursorIndex,
+        scrollOffset: this.scrollOffset,
+        minRows: 6,
+      },
+      afterSections: [selectedSection],
+    });
+    this.scrollOffset = sessionsSection.scrollOffset;
+
     return buildPanelWorkspace(width, height, {
       title: ` Sessions [${count}/${total}]`,
-      intro: 'Browse, search, resume, and prune saved conversations.',
+      intro,
       sections: [
         summary,
-        { title: 'Sessions', lines: sessionRows },
+        sessionsSection.section,
         selectedSection,
       ],
       footerLines,

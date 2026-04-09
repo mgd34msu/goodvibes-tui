@@ -1,4 +1,5 @@
-import { type Line, type Cell } from '../types/grid.ts';
+import type { Line, Cell } from '../types/grid.ts';
+import { createStyledCell } from '../types/grid.ts';
 import { fitDisplay, getDisplayWidth, truncateDisplay, wrapText } from '../utils/terminal-width.ts';
 import {
   createOverlayBorderLine,
@@ -7,7 +8,7 @@ import {
   putOverlayText,
 } from './overlay-box.ts';
 import { getOverlayMaxWidth } from './overlay-viewport.ts';
-import { GLYPHS } from './ui-primitives.ts';
+import { GLYPHS, UI_TONES } from './ui-primitives.ts';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -52,6 +53,10 @@ export interface ModalStyle {
   textFg?: string;
   accentFg?: string;
   titleRowFg?: string;
+  titleBg?: string;
+  sectionBg?: string;
+  inputBg?: string;
+  surfaceBg?: string;
 }
 
 export interface ModalTab {
@@ -86,14 +91,18 @@ export interface ModalConfig {
 // ── Defaults ─────────────────────────────────────────────────────────────────
 
 const DEFAULT_STYLE: Required<ModalStyle> = {
-  titleFg: '#00ffff',
-  borderFg: '240',
-  hintFg: '240',
-  selectedFg: '#00ffff',
-  selectedBg: '#1a2a3a',
-  textFg: '252',
-  accentFg: '#38bdf8',
-  titleRowFg: '#cbd5e1',
+  titleFg: UI_TONES.fg.primary,
+  borderFg: UI_TONES.fg.dim,
+  hintFg: UI_TONES.fg.muted,
+  selectedFg: UI_TONES.fg.primary,
+  selectedBg: UI_TONES.bg.selected,
+  textFg: UI_TONES.fg.primary,
+  accentFg: UI_TONES.state.info,
+  titleRowFg: UI_TONES.fg.secondary,
+  titleBg: UI_TONES.bg.title,
+  sectionBg: UI_TONES.bg.section,
+  inputBg: UI_TONES.bg.input,
+  surfaceBg: UI_TONES.bg.surface,
 };
 
 // ── ModalFactory ─────────────────────────────────────────────────────────────
@@ -216,8 +225,11 @@ export class ModalFactory {
   ): Line {
     const s = { ...DEFAULT_STYLE, ...style };
     const layout = createOverlayBoxLayout(terminalWidth, margin, boxW);
-    const line = createOverlayBorderLine(terminalWidth, layout, '┌', '─', '┐', s.borderFg);
-    putOverlayText(line, layout.margin + 2, layout.width - 4, title, { fg: s.titleFg, bold: true });
+    const line = createOverlayBorderLine(terminalWidth, layout, GLYPHS.frame.topLeft, GLYPHS.frame.horizontal, GLYPHS.frame.topRight, s.borderFg);
+    for (let x = layout.margin + 1; x < layout.margin + layout.width - 1; x++) {
+      line[x] = createStyledCell(GLYPHS.frame.horizontal, { fg: s.borderFg, bg: s.titleBg });
+    }
+    putOverlayText(line, layout.margin + 2, layout.width - 4, title, { fg: s.titleFg, bg: s.titleBg, bold: true });
     return line;
   }
 
@@ -234,7 +246,7 @@ export class ModalFactory {
   ): Line {
     const s = { ...DEFAULT_STYLE, ...style };
     const layout = createOverlayBoxLayout(terminalWidth, margin, boxW);
-    const line = createOverlayBorderLine(terminalWidth, layout, '└', '─', '┘', s.borderFg);
+    const line = createOverlayBorderLine(terminalWidth, layout, GLYPHS.frame.bottomLeft, GLYPHS.frame.horizontal, GLYPHS.frame.bottomRight, s.borderFg);
     if (hints.length > 0) {
       putOverlayText(line, layout.margin + 2, layout.width - 4, truncateDisplay(hints, layout.width - 4), {
         fg: s.hintFg,
@@ -264,11 +276,11 @@ export class ModalFactory {
       ? truncateDisplay(text, contentW - 2)
       : text;
     const padded = fitDisplay(displayText, contentW - 2);
-    const row = createOverlayContentLine(terminalWidth, layout, s.borderFg, selected ? s.selectedBg : '');
+    const row = createOverlayContentLine(terminalWidth, layout, s.borderFg, selected ? s.selectedBg : s.surfaceBg);
     const cellStyle: Partial<Cell> = selected ? { fg: s.selectedFg, bg: s.selectedBg, bold: true } : { fg: s.textFg };
     putOverlayText(row, layout.margin + 2, contentW, indicator + padded, {
       fg: cellStyle.fg ?? s.textFg,
-      bg: cellStyle.bg ?? '',
+      bg: cellStyle.bg ?? s.surfaceBg,
       bold: cellStyle.bold ?? false,
     });
     return row;
@@ -297,7 +309,7 @@ export class ModalFactory {
         : wrappedLine;
       const padded = fitDisplay(truncated, contentW);
       const layout = createOverlayBoxLayout(terminalWidth, margin, boxW);
-      const row = createOverlayContentLine(terminalWidth, layout, style.borderFg, bg);
+      const row = createOverlayContentLine(terminalWidth, layout, style.borderFg, bg || style.surfaceBg);
       putOverlayText(row, layout.margin + 2, contentW, padded, { fg, bg, bold, dim });
       return row;
     });
@@ -335,12 +347,12 @@ export class ModalFactory {
           terminalWidth,
           createOverlayBoxLayout(terminalWidth, margin, boxW),
           itemStyle.borderFg,
-          item.selected ? itemStyle.selectedBg : '',
+          item.selected ? itemStyle.selectedBg : itemStyle.surfaceBg,
         );
         const padded = fitDisplay(truncateToWidth(`${indicator}${displayLines[i] ?? ''}`, contentW), contentW);
         putOverlayText(row, margin + 2, contentW, padded, {
           fg: item.selected ? itemStyle.selectedFg : itemStyle.textFg,
-          bg: item.selected ? itemStyle.selectedBg : '',
+          bg: item.selected ? itemStyle.selectedBg : itemStyle.surfaceBg,
           bold: item.selected && isFirst,
         });
         rows.push(row);
@@ -363,9 +375,9 @@ export class ModalFactory {
       ? truncateDisplay(query, contentW - 4)
       : query;
     const layout = createOverlayBoxLayout(terminalWidth, margin, boxW);
-    const row = createOverlayContentLine(terminalWidth, layout, style.borderFg);
+    const row = createOverlayContentLine(terminalWidth, layout, style.borderFg, style.inputBg);
     const text = fitDisplay(`/ ${displayQuery}${cursor}`, contentW);
-    putOverlayText(row, layout.margin + 2, contentW, text, { fg: style.textFg });
+    putOverlayText(row, layout.margin + 2, contentW, text, { fg: style.textFg, bg: style.inputBg, bold: true });
     return [row];
   }
 
@@ -377,7 +389,7 @@ export class ModalFactory {
     style: Required<ModalStyle>,
   ): Line {
     const layout = createOverlayBoxLayout(terminalWidth, margin, boxW);
-    const row = createOverlayContentLine(terminalWidth, layout, style.borderFg);
+    const row = createOverlayContentLine(terminalWidth, layout, style.borderFg, style.sectionBg);
     const active = tabs.find((tab) => tab.active);
     const inactive = tabs.filter((tab) => !tab.active);
     const text = [
@@ -386,6 +398,7 @@ export class ModalFactory {
     ].join('  ');
     putOverlayText(row, layout.margin + 2, layout.innerWidth, fitDisplay(text, layout.innerWidth), {
       fg: style.accentFg,
+      bg: style.sectionBg,
       bold: true,
     });
     return row;
@@ -399,11 +412,11 @@ export class ModalFactory {
     style: Required<ModalStyle>,
   ): Line {
     const layout = createOverlayBoxLayout(terminalWidth, margin, boxW);
-    const row = createOverlayContentLine(terminalWidth, layout, style.borderFg);
+    const row = createOverlayContentLine(terminalWidth, layout, style.borderFg, section.style?.bg ?? style.sectionBg);
     const text = fitDisplay(truncateToWidth(section.content ?? '', layout.innerWidth), layout.innerWidth);
     putOverlayText(row, layout.margin + 2, layout.innerWidth, text, {
       fg: section.style?.fg ?? style.titleRowFg,
-      bg: section.style?.bg ?? '',
+      bg: section.style?.bg ?? style.sectionBg,
       bold: section.style?.bold ?? true,
       dim: section.style?.dim ?? false,
     });
@@ -418,7 +431,7 @@ export class ModalFactory {
     style: Required<ModalStyle>,
   ): Line {
     const layout = createOverlayBoxLayout(terminalWidth, margin, boxW);
-    const row = createOverlayContentLine(terminalWidth, layout, style.borderFg);
+    const row = createOverlayContentLine(terminalWidth, layout, style.borderFg, style.surfaceBg);
     const prefix = helper.label ? `${helper.label}  ` : '';
     const helperText = fitDisplay(`${prefix}${helper.content}`, layout.innerWidth);
     putOverlayText(row, layout.margin + 2, layout.innerWidth, helperText, {
@@ -435,7 +448,11 @@ export class ModalFactory {
     style: Required<ModalStyle>,
   ): Line {
     const layout = createOverlayBoxLayout(terminalWidth, margin, boxW);
-    return createOverlayBorderLine(terminalWidth, layout, '├', '─', '┤', style.borderFg);
+    const line = createOverlayBorderLine(terminalWidth, layout, GLYPHS.frame.teeLeft, GLYPHS.frame.horizontal, GLYPHS.frame.teeRight, style.borderFg);
+    for (let x = layout.margin + 1; x < layout.margin + layout.width - 1; x++) {
+      line[x] = createStyledCell(GLYPHS.frame.horizontal, { fg: style.borderFg, bg: style.sectionBg });
+    }
+    return line;
   }
 
   private static _renderEmptyRow(
@@ -445,6 +462,6 @@ export class ModalFactory {
     style: Required<ModalStyle>,
   ): Line {
     const layout = createOverlayBoxLayout(terminalWidth, margin, boxW);
-    return createOverlayContentLine(terminalWidth, layout, style.borderFg);
+    return createOverlayContentLine(terminalWidth, layout, style.borderFg, style.surfaceBg);
   }
 }

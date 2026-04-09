@@ -6,10 +6,10 @@ import {
   buildEmptyState,
   buildPanelLine,
   buildPanelWorkspace,
+  resolveScrollablePanelSection,
   buildStyledPanelLine,
   DEFAULT_PANEL_PALETTE,
 } from './polish.ts';
-import { getTrackedVisibleWindow, getVisibleWindow } from '../renderer/surface-layout.ts';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -482,9 +482,6 @@ export class GitPanel extends BasePanel {
 
     const selectedRowIndex = this.getRowIndexForItem(this.selectedIndex);
     if (selectedRowIndex >= 0) {
-      const window = getTrackedVisibleWindow(rows.length, selectedRowIndex, Math.max(8, height - 8), this.scrollOffset, 1);
-      this.scrollOffset = window.start;
-      const visibleRows = rows.slice(window.start, window.end);
       const isDirty = this.data.stagedFiles.length > 0 || this.data.unstagedFiles.length > 0;
       const selectedItem = this.items[this.selectedIndex];
       const selectedLines: Line[] = [];
@@ -508,35 +505,47 @@ export class GitPanel extends BasePanel {
         ]));
       }
 
+      const summarySection = {
+        title: 'Summary',
+        lines: [
+          buildPanelLine(width, [
+            [' Branch ', DEFAULT_PANEL_PALETTE.label],
+            [this.data.branch, DEFAULT_PANEL_PALETTE.info],
+            ['   Ahead ', DEFAULT_PANEL_PALETTE.label],
+            [String(this.data.ahead), this.data.ahead > 0 ? DEFAULT_PANEL_PALETTE.good : DEFAULT_PANEL_PALETTE.dim],
+            ['   Behind ', DEFAULT_PANEL_PALETTE.label],
+            [String(this.data.behind), this.data.behind > 0 ? DEFAULT_PANEL_PALETTE.bad : DEFAULT_PANEL_PALETTE.dim],
+            ['   Status ', DEFAULT_PANEL_PALETTE.label],
+            [isDirty ? 'dirty' : 'clean', isDirty ? DEFAULT_PANEL_PALETTE.warn : DEFAULT_PANEL_PALETTE.good],
+          ]),
+        ],
+      } as const;
+      const selectedSection = { title: 'Selected', lines: selectedLines } as const;
+      const workspaceSection = resolveScrollablePanelSection(width, height, {
+        intro: 'Review branch status, staged and unstaged files, and recent commits. Open a file row to inspect its diff.',
+        footerLines: [
+          buildPanelLine(width, [[' Up/Down', DEFAULT_PANEL_PALETTE.info], [' navigate', DEFAULT_PANEL_PALETTE.dim], ['   Enter', DEFAULT_PANEL_PALETTE.info], [' diff', DEFAULT_PANEL_PALETTE.dim], ['   r', DEFAULT_PANEL_PALETTE.info], [' refresh', DEFAULT_PANEL_PALETTE.dim]]),
+        ],
+        palette: DEFAULT_PANEL_PALETTE,
+        beforeSections: [summarySection],
+        section: {
+          title: 'Workspace',
+          scrollableLines: rows,
+          selectedIndex: selectedRowIndex,
+          scrollOffset: this.scrollOffset,
+          minRows: 8,
+        },
+        afterSections: [selectedSection],
+      });
+      this.scrollOffset = workspaceSection.scrollOffset;
+
       return buildPanelWorkspace(width, height, {
         title: ' Git',
         intro: 'Review branch status, staged and unstaged files, and recent commits. Open a file row to inspect its diff.',
         sections: [
-          {
-            title: 'Summary',
-            lines: [
-              buildPanelLine(width, [
-                [' Branch ', DEFAULT_PANEL_PALETTE.label],
-                [this.data.branch, DEFAULT_PANEL_PALETTE.info],
-                ['   Ahead ', DEFAULT_PANEL_PALETTE.label],
-                [String(this.data.ahead), this.data.ahead > 0 ? DEFAULT_PANEL_PALETTE.good : DEFAULT_PANEL_PALETTE.dim],
-                ['   Behind ', DEFAULT_PANEL_PALETTE.label],
-                [String(this.data.behind), this.data.behind > 0 ? DEFAULT_PANEL_PALETTE.bad : DEFAULT_PANEL_PALETTE.dim],
-                ['   Status ', DEFAULT_PANEL_PALETTE.label],
-                [isDirty ? 'dirty' : 'clean', isDirty ? DEFAULT_PANEL_PALETTE.warn : DEFAULT_PANEL_PALETTE.good],
-              ]),
-            ],
-          },
-          {
-            title: 'Workspace',
-            lines: visibleRows.length > 0
-              ? visibleRows
-              : buildEmptyState(width, ' No git rows', 'This repository has no files or commits to display yet.', [], DEFAULT_PANEL_PALETTE),
-          },
-          {
-            title: 'Selected',
-            lines: selectedLines,
-          },
+          summarySection,
+          workspaceSection.section.lines.length > 0 ? workspaceSection.section : { title: 'Workspace', lines: buildEmptyState(width, ' No git rows', 'This repository has no files or commits to display yet.', [], DEFAULT_PANEL_PALETTE) },
+          selectedSection,
         ],
         footerLines: [
           buildPanelLine(width, [[' Up/Down', DEFAULT_PANEL_PALETTE.info], [' navigate', DEFAULT_PANEL_PALETTE.dim], ['   Enter', DEFAULT_PANEL_PALETTE.info], [' diff', DEFAULT_PANEL_PALETTE.dim], ['   r', DEFAULT_PANEL_PALETTE.info], [' refresh', DEFAULT_PANEL_PALETTE.dim]]),
@@ -574,27 +583,11 @@ export class GitPanel extends BasePanel {
   }
 
   private renderDiff(width: number, height: number): Line[] {
-    const lines: Line[] = [];
-
-    // Title bar
     const item = this.items[this.selectedIndex];
     const title =
       item?.kind === 'file' ? `Diff: ${item.entry.path}` : 'Diff';
-    const titleLine = createEmptyLine(width);
-    this.paintText(titleLine, ` ${title}`, 0, width, C.branch, { bold: true });
-    lines.push(titleLine);
-
-    // Diff content (scrollable)
     const diffLines = this.expandedDiff ?? [];
-    const contentHeight = height - 2; // title + hint
-    const clampedOffset = Math.min(
-      this.scrollOffset,
-      Math.max(0, diffLines.length - contentHeight),
-    );
-    this.scrollOffset = clampedOffset;
-
-    const visible = diffLines.slice(clampedOffset, clampedOffset + contentHeight);
-    for (const rawLine of visible) {
+    const renderedLines = diffLines.map((rawLine) => {
       const dLine = createEmptyLine(width);
       let fg: string;
       if (rawLine.startsWith('+') && !rawLine.startsWith('+++')) {
@@ -607,16 +600,28 @@ export class GitPanel extends BasePanel {
         fg = C.diffNeutral;
       }
       this.paintText(dLine, rawLine, 0, width, fg);
-      lines.push(dLine);
-    }
+      return dLine;
+    });
+    const footerLines = [
+      buildPanelLine(width, [[' Up/Down', DEFAULT_PANEL_PALETTE.info], [' scroll', DEFAULT_PANEL_PALETTE.dim], ['   Esc/q', DEFAULT_PANEL_PALETTE.info], [' close', DEFAULT_PANEL_PALETTE.dim]]),
+    ];
+    const diffSection = resolveScrollablePanelSection(width, height, {
+      palette: DEFAULT_PANEL_PALETTE,
+      footerLines,
+      section: {
+        title: 'Patch',
+        scrollableLines: renderedLines,
+        scrollOffset: this.scrollOffset,
+        minRows: 1,
+      },
+    });
+    this.scrollOffset = diffSection.scrollOffset;
 
-    while (lines.length < height - 1) lines.push(createEmptyLine(width));
-
-    // Hint line
-    const hintLine = createEmptyLine(width);
-    this.paintText(hintLine, ' Up/Down scroll  Esc/q close', 0, width, C.sectionHeader, { dim: true });
-    lines.push(hintLine);
-
-    return lines;
+    return buildPanelWorkspace(width, height, {
+      title: ` ${title}`,
+      sections: [diffSection.section],
+      footerLines,
+      palette: DEFAULT_PANEL_PALETTE,
+    });
   }
 }

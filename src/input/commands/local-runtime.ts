@@ -211,13 +211,21 @@ export function registerLocalRuntimeCommands(registry: CommandRegistry): void {
         if (ctx.openSelection) {
           const cm = ctx.configManager;
           const dangerObj = cm.getAll().danger as Record<string, unknown>;
-          const toggleAction = new Map<string, import('../selection-modal.ts').SelectionAction>([['enter', 'toggle' as const]]);
           const items: SelectionItem[] = Object.entries(dangerObj).map(([field, val]) => {
             const key = `danger.${field}`;
             const schema = CONFIG_SCHEMA.find(s => s.key === key);
-            return { id: key, label: key, detail: String(val), fg: '#ef4444', actions: schema ? `[Enter] toggle  ${schema.description}` : undefined };
+            const toggleable = schema?.type === 'boolean';
+            return {
+              id: key,
+              label: key,
+              detail: String(val),
+              fg: '#ef4444',
+              adjustable: toggleable,
+              primaryAction: toggleable ? 'toggle' : 'select',
+              actions: schema ? `${toggleable ? '[Space/Enter] toggle  [←/→] set' : '[Enter] inspect'}  ${schema.description}` : undefined,
+            };
           });
-          ctx.openSelection('⚠ Danger Zone', items, { allowSearch: false, customActions: toggleAction }, (result) => {
+          ctx.openSelection('⚠ Danger Zone', items, { allowSearch: false }, (result) => {
             if (!result) return;
             const key = result.item.id as ConfigKey;
             const schema = CONFIG_SCHEMA.find(s => s.key === key);
@@ -231,6 +239,11 @@ export function registerLocalRuntimeCommands(registry: CommandRegistry): void {
                 ctx.print(`Current: ${key} = ${String(currentVal)}. Use /danger ${key.replace('danger.', '')} <value> to set.`);
                 return;
               }
+              result.item.detail = String(newVal);
+              ctx.renderRequest();
+            } else if ((result.action === 'increment' || result.action === 'decrement') && schema?.type === 'boolean') {
+              const newVal = result.action === 'increment';
+              cm.setDynamic(key, newVal);
               result.item.detail = String(newVal);
               ctx.renderRequest();
             }

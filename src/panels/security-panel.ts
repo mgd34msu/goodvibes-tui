@@ -17,7 +17,7 @@ import type { RuntimeStore } from '../runtime/store/index.ts';
 import type { ForensicsRegistry } from '../runtime/forensics/registry.ts';
 import { mcpRegistry } from '../mcp/registry.ts';
 import { pluginManager, type PluginManagerObserver, type PluginStatus } from '../plugins/manager.ts';
-import { buildEmptyState, buildGuidanceLine, buildPanelLine, buildPanelWorkspace, DEFAULT_PANEL_PALETTE, type PanelWorkspaceSection } from './polish.ts';
+import { buildEmptyState, buildGuidanceLine, buildPanelLine, buildPanelWorkspace, resolveScrollablePanelSection, DEFAULT_PANEL_PALETTE, type PanelWorkspaceSection } from './polish.ts';
 
 const C = {
   ...DEFAULT_PANEL_PALETTE,
@@ -251,12 +251,11 @@ export class SecurityPanel extends BasePanel {
 
     this.selectedIndex = Math.min(this.selectedIndex, view.results.length - 1);
     const selected = view.results[this.selectedIndex]!;
-    const tokenLines: Line[] = [];
-    const visible = view.results.slice(0, Math.max(1, height - 10));
-    for (let index = 0; index < visible.length; index++) {
-      const result = visible[index]!;
+    const tokenRows: Line[] = [];
+    for (let index = 0; index < view.results.length; index++) {
+      const result = view.results[index]!;
       const bg = index === this.selectedIndex ? C.selectBg : undefined;
-      tokenLines.push(buildPanelLine(width, [
+      tokenRows.push(buildPanelLine(width, [
         [' ', C.label, bg],
         [result.label.padEnd(22), C.value, bg],
         [` ${result.tokenId.padEnd(12)}`, C.info, bg],
@@ -342,15 +341,34 @@ export class SecurityPanel extends BasePanel {
       }
     }
 
+    const governanceSection: PanelWorkspaceSection = { title: 'Governance', lines: governanceLines };
+    const trustSection: PanelWorkspaceSection = { title: 'Policy And Trust', lines: threatLines };
+    const selectedSection: PanelWorkspaceSection = { title: 'Selected Token', lines: detailLines };
+    const attackPathSection: PanelWorkspaceSection = { title: 'Attack Paths', lines: attackPathLines };
+    const tokenAuditSection = resolveScrollablePanelSection(width, height, {
+      intro: 'Token audit, policy posture, MCP attack-path review, plugin trust, and incident pressure.',
+      footerLines,
+      palette: C,
+      beforeSections: [governanceSection, trustSection],
+      section: {
+        title: 'Token Audit',
+        scrollableLines: tokenRows,
+        selectedIndex: this.selectedIndex,
+        scrollOffset: this.selectedIndex,
+        minRows: 1,
+      },
+      afterSections: [selectedSection, attackPathSection],
+    });
+
     const lines = buildPanelWorkspace(width, height, {
       title: 'Security Control Room',
       intro: 'Token audit, policy posture, MCP attack-path review, plugin trust, and incident pressure.',
       sections: [
-        { title: 'Governance', lines: governanceLines },
-        { title: 'Policy And Trust', lines: threatLines },
-        { title: 'Token Audit', lines: tokenLines },
-        { title: 'Selected Token', lines: detailLines },
-        { title: 'Attack Paths', lines: attackPathLines },
+        governanceSection,
+        trustSection,
+        tokenAuditSection.section,
+        selectedSection,
+        attackPathSection,
       ] satisfies readonly PanelWorkspaceSection[],
       footerLines,
       palette: C,

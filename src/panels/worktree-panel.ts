@@ -1,8 +1,7 @@
 import type { Line } from '../types/grid.ts';
 import { createEmptyLine } from '../types/grid.ts';
 import { BasePanel } from './base-panel.ts';
-import { buildKeyValueLine, buildPanelLine, buildPanelWorkspace, DEFAULT_PANEL_PALETTE, type PanelWorkspaceSection } from './polish.ts';
-import { getTrackedVisibleWindow } from '../renderer/surface-layout.ts';
+import { buildKeyValueLine, buildPanelLine, buildPanelWorkspace, DEFAULT_PANEL_PALETTE, resolvePrimaryScrollableSection, type PanelWorkspaceSection } from './polish.ts';
 import { getWorktreeRegistry, summarizeWorktreeOwnership, type WorktreeStatusRecord } from '../runtime/worktree/registry.ts';
 
 const C = {
@@ -81,7 +80,7 @@ export class WorktreePanel extends BasePanel {
     } else {
       const summary = summarizeWorktreeOwnership(this.rows);
       sections.push({
-        title: 'Posture',
+        title: 'Worktree posture',
         lines: [
           buildKeyValueLine(width, [
             { label: 'total', value: String(summary.total), valueColor: C.value },
@@ -109,23 +108,8 @@ export class WorktreePanel extends BasePanel {
           buildPanelLine(width, [['  /worktree task <task-id>  /worktree session <session-id>  /worktree inspect <path>', C.info]]),
         ],
       });
-      const window = getTrackedVisibleWindow(this.rows.length, this.selectedIndex, Math.max(4, height - 14), this.scrollOffset, 1);
-      this.scrollOffset = window.start;
-      const listLines: Line[] = [];
-      for (let absolute = window.start; absolute < window.end; absolute++) {
-        const row = this.rows[absolute]!;
-        const bg = absolute === this.selectedIndex ? C.headerBg : undefined;
-        listLines.push(buildPanelLine(width, [
-          [` ${row.kind}`.padEnd(14), C.info, bg],
-          [` ${row.state}`.padEnd(16), stateColor(row.state), bg],
-          [` ${row.branch}`.padEnd(24), C.value, bg],
-          [` ${row.path}`.slice(0, Math.max(0, width - 56)), C.dim, bg],
-        ]));
-      }
-      sections.push({ title: 'Worktrees', lines: listLines });
-
       const selected = this.rows[this.selectedIndex]!;
-      sections.push({
+      const detailSection: PanelWorkspaceSection = {
         title: 'Details',
         lines: [
           buildPanelLine(width, [[' path ', C.label], [selected.path, C.dim]]),
@@ -151,7 +135,34 @@ export class WorktreePanel extends BasePanel {
             C.dim,
           ]]),
         ],
+      };
+      const resolvedWorktreesSection = resolvePrimaryScrollableSection(width, height, {
+        intro: 'Orchestrator-owned worktree lifecycle, attachments, pause/resume posture, and cleanup state.',
+        footerLines: [buildPanelLine(width, [[' r refresh  /worktree inspect <path>  /worktree attach|pause|resume|keep|discard|cleanup ', C.dim]])],
+        palette: C,
+        beforeSections: sections,
+        section: {
+          title: 'Worktrees',
+          scrollableLines: this.rows.map((row, absolute) => {
+            const bg = absolute === this.selectedIndex ? C.headerBg : undefined;
+            return buildPanelLine(width, [
+              [` ${row.kind}`.padEnd(14), C.info, bg],
+              [` ${row.state}`.padEnd(16), stateColor(row.state), bg],
+              [` ${row.branch}`.padEnd(24), C.value, bg],
+              [` ${row.path}`.slice(0, Math.max(0, width - 56)), C.dim, bg],
+            ]);
+          }),
+          selectedIndex: this.selectedIndex,
+          scrollOffset: this.scrollOffset,
+          guardRows: 1,
+          minRows: 4,
+          appendWindowSummary: { dimColor: C.dim },
+        },
+        afterSections: [detailSection],
       });
+      this.scrollOffset = resolvedWorktreesSection.scrollOffset;
+      sections.push(resolvedWorktreesSection.section);
+      sections.push(detailSection);
     }
 
     const lines = buildPanelWorkspace(width, height, {

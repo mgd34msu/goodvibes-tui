@@ -122,6 +122,7 @@ export class InputTokenizer {
           if (suffix === '~' && charCode === 24) logicalName = 'f12';
           if (charCode === 9) logicalName = 'tab';
           if (charCode === 27) logicalName = 'escape';
+          if (charCode === 32) logicalName = 'space';
           if (charCode === 127) logicalName = 'backspace';
           // Kitty keyboard protocol functional key codes (Unicode private use area)
           // These are sent as \x1b[<keycode>;modifier u by Ghostty and other kitty-protocol terminals

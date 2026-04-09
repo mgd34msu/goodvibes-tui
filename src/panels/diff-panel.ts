@@ -9,6 +9,7 @@ import {
   buildBodyText,
   buildEmptyState,
   buildPanelWorkspace,
+  resolveScrollablePanelSection,
   buildStyledPanelLine,
   type PanelWorkspaceSection,
   DEFAULT_PANEL_PALETTE,
@@ -377,8 +378,6 @@ export class DiffPanel extends BasePanel {
       return Array.from({ length: height }, () => createEmptyLine(width));
     }
 
-    const contentHeight = Math.max(1, height - 4);
-    const visibleLines = entry.lines.slice(this.scrollOffset, this.scrollOffset + contentHeight);
     const compact = height <= 12;
     const summaryLines = entry.semanticSummary
       ? buildBodyText(width, `Semantic summary: ${entry.semanticSummary}`, {
@@ -387,6 +386,33 @@ export class DiffPanel extends BasePanel {
           value: COLOR.filename,
         }, COLOR.context)
       : [];
+    const previewSection = resolveScrollablePanelSection(width, height, {
+      palette: {
+        ...DEFAULT_PANEL_PALETTE,
+        info: COLOR.hunk,
+        dim: COLOR.context,
+        value: COLOR.filename,
+        headerBg: COLOR.tabBg,
+      },
+      footerLines: [this.renderStatusBar(width, entry)],
+      beforeSections: [
+        {
+          title: compact ? undefined : 'Files',
+          lines: [
+            this.renderTabBar(width),
+            ...summaryLines,
+          ],
+        },
+      ],
+      section: {
+        title: compact ? undefined : 'Changes',
+        scrollableLines: entry.lines.map((pl) => this.renderParsedLine(pl, width)),
+        scrollOffset: this.scrollOffset,
+        minRows: 1,
+      },
+    });
+    this.scrollOffset = previewSection.scrollOffset;
+
     const sections: PanelWorkspaceSection[] = [
       {
         title: compact ? undefined : 'Files',
@@ -396,8 +422,8 @@ export class DiffPanel extends BasePanel {
         ],
       },
       {
-        title: compact ? undefined : 'Changes',
-        lines: visibleLines.map((pl) => this.renderParsedLine(pl, width)),
+        title: previewSection.section.title,
+        lines: previewSection.section.lines,
       },
     ];
     return buildPanelWorkspace(width, height, {
