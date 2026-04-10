@@ -2,7 +2,17 @@ import { withRetry } from '../utils/retry.ts';
 import { ProviderError } from '../types/errors.ts';
 import type { ToolCall, ToolDefinition } from '../types/tools.ts';
 import type { ProviderCapability } from './capabilities.ts';
-import type { ChatRequest, ChatResponse, ContentPart, LLMProvider, PartialToolCall, ProviderMessage } from './interface.ts';
+import type {
+  ChatRequest,
+  ChatResponse,
+  ContentPart,
+  LLMProvider,
+  PartialToolCall,
+  ProviderEmbeddingRequest,
+  ProviderEmbeddingResult,
+  ProviderMessage,
+  ProviderRuntimeMetadata,
+} from './interface.ts';
 import { OpenAICompatProvider, type OpenAICompatOptions } from './openai-compat.ts';
 import { toOpenAITools } from './tool-formats.ts';
 
@@ -40,17 +50,22 @@ export class OllamaProvider implements LLMProvider {
   readonly models: string[];
   readonly capabilities?: Partial<ProviderCapability>;
 
+  private readonly baseURL: string;
   private readonly defaultModel: string;
   private readonly nativeChatUrl: string;
+  private readonly nativeEmbedUrl: string;
   private readonly nativeFetch: NativeFetch;
   private readonly fallbackProvider: LLMProvider;
+  private readonly embeddingModel = 'embeddinggemma';
 
   constructor(opts: OllamaProviderOptions) {
     this.name = opts.name;
     this.models = opts.models;
     this.capabilities = opts.capabilities;
+    this.baseURL = opts.baseURL;
     this.defaultModel = opts.defaultModel;
     this.nativeChatUrl = deriveOllamaChatUrl(opts.baseURL);
+    this.nativeEmbedUrl = deriveOllamaEmbedUrl(opts.baseURL);
     this.nativeFetch = opts.nativeFetch ?? ((input, init) => fetch(input, init));
     this.fallbackProvider = opts.fallbackProvider ?? new OpenAICompatProvider(opts);
   }
@@ -71,6 +86,89 @@ export class OllamaProvider implements LLMProvider {
 
       return this.fallbackProvider.chat(params);
     });
+  }
+
+  async embed(request: ProviderEmbeddingRequest): Promise<ProviderEmbeddingResult> {
+    try {
+      const response = await this.nativeFetch(this.nativeEmbedUrl, {
+        method: 'POST',
+        headers: {
+          accept: 'application/json',
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: request.model ?? this.embeddingModel,
+          input: request.text,
+          ...(request.dimensions ? { dimensions: request.dimensions } : {}),
+        }),
+        signal: request.signal,
+      });
+
+      if (!response.ok) {
+        throw await buildHttpError('Ollama native embeddings', response);
+      }
+
+      const body = await response.json() as { embeddings?: number[][]; embedding?: number[]; model?: string };
+      const vector = body.embedding ?? body.embeddings?.[0] ?? [];
+      return {
+        vector: Float32Array.from(vector),
+        dimensions: vector.length,
+        modelId: body.model ?? request.model ?? this.embeddingModel,
+        metadata: {
+          usage: request.usage,
+          provider: this.name,
+        },
+      };
+    } catch (err: unknown) {
+      if (this.fallbackProvider.embed) {
+        return this.fallbackProvider.embed(request);
+      }
+      throw normalizeProviderError(err);
+    }
+  }
+
+  async describeRuntime(): Promise<ProviderRuntimeMetadata> {
+    const local = !/^https?:\/\/ollama\.com\b/i.test(this.baseURL);
+    const { buildStandardProviderAuthRoutes } = await import('./runtime-metadata.ts');
+    const authRoutes = await buildStandardProviderAuthRoutes({
+      providerId: this.name,
+      apiKeyEnvVars: ['OLLAMA_API_KEY', 'OLLAMA_CLOUD_API_KEY'],
+      secretKeys: ['OLLAMA_API_KEY', 'OLLAMA_CLOUD_API_KEY'],
+      serviceNames: ['ollama-cloud'],
+      allowAnonymous: local,
+      anonymousConfigured: local,
+      anonymousDetail: 'Local Ollama endpoints can be used without an API key.',
+    });
+    return {
+      auth: {
+        mode: local ? 'anonymous' : 'api-key',
+        configured: local || Boolean(process.env.OLLAMA_API_KEY || process.env.OLLAMA_CLOUD_API_KEY),
+        detail: local
+          ? 'Local Ollama endpoint does not require an API key'
+          : 'Ollama Cloud API key is required',
+        envVars: ['OLLAMA_API_KEY', 'OLLAMA_CLOUD_API_KEY'],
+        routes: authRoutes,
+      },
+      models: {
+        models: this.models,
+        embeddingModel: this.embeddingModel,
+        embeddingDimensions: 384,
+      },
+      usage: {
+        streaming: true,
+        toolCalling: true,
+        parallelTools: false,
+        notes: ['Native Ollama embeddings prefer the /api/embed endpoint.'],
+      },
+      policy: {
+        local,
+        streamProtocol: 'ollama-ndjson',
+        reasoningMode: 'native-think-toggle',
+        supportedReasoningEfforts: ['instant', 'low', 'medium', 'high'],
+        cacheStrategy: 'provider-managed',
+        notes: local ? ['Local-first embedding generation.'] : ['Remote Ollama Cloud usage is subject to service policy.'],
+      },
+    };
   }
 
   private async chatViaNativeOllama(
@@ -174,6 +272,12 @@ function deriveOllamaChatUrl(baseURL: string): string {
   const trimmed = baseURL.replace(/\/+$/, '');
   const origin = trimmed.endsWith('/v1') ? trimmed.slice(0, -3) : trimmed;
   return `${origin}/api/chat`;
+}
+
+function deriveOllamaEmbedUrl(baseURL: string): string {
+  const trimmed = baseURL.replace(/\/+$/, '');
+  const origin = trimmed.endsWith('/v1') ? trimmed.slice(0, -3) : trimmed;
+  return `${origin}/api/embed`;
 }
 
 function canUseNativeOllamaChat(messages: ProviderMessage[]): boolean {

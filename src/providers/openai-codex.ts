@@ -1,4 +1,4 @@
-import type { ChatRequest, ChatResponse, LLMProvider, PartialToolCall, ProviderMessage } from './interface.ts';
+import type { ChatRequest, ChatResponse, LLMProvider, PartialToolCall, ProviderMessage, ProviderRuntimeMetadata } from './interface.ts';
 import type { ToolCall, ToolDefinition } from '../types/tools.ts';
 import { ProviderError } from '../types/errors.ts';
 import { withRetry } from '../utils/retry.ts';
@@ -360,5 +360,38 @@ export class OpenAICodexProvider implements LLMProvider {
       throw new ProviderError('No active OpenAI subscription token found. Run /subscription login openai start.', 401);
     }
     return chatWithOpenAICodex(accessToken, params);
+  }
+
+  async describeRuntime(): Promise<ProviderRuntimeMetadata> {
+    const { buildStandardProviderAuthRoutes } = await import('./runtime-metadata.ts');
+    const authRoutes = await buildStandardProviderAuthRoutes({
+      providerId: this.name,
+      subscriptionProviderId: 'openai',
+    });
+    return {
+      auth: {
+        mode: 'oauth',
+        configured: authRoutes.some((route) => route.route === 'subscription-oauth' && route.configured),
+        detail: 'OpenAI subscriber routing depends on a stored ChatGPT/Codex subscription session.',
+        routes: authRoutes,
+      },
+      models: {
+        models: this.models,
+      },
+      usage: {
+        streaming: true,
+        toolCalling: true,
+        parallelTools: true,
+        promptCaching: true,
+        notes: ['This provider uses the OpenAI subscription-backed Codex responses surface instead of a direct API key.'],
+      },
+      policy: {
+        local: false,
+        streamProtocol: 'openai-codex-responses-sse',
+        reasoningMode: 'responses-reasoning',
+        supportedReasoningEfforts: ['instant', 'low', 'medium', 'high'],
+        cacheStrategy: 'subscription-session-cache-key',
+      },
+    };
   }
 }

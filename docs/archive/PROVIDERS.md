@@ -7,8 +7,10 @@ goodvibes-tui connects to LLM providers via built-in integrations and custom Ope
 For every provider, API keys are resolved in the following order:
 
 1. **Environment variable** — standard env vars checked at startup
-2. **Encrypted secrets store** — set via `/secrets set <KEY> <value>`; stored at `~/.goodvibes/tui/secrets.enc` using AES-256-GCM
+2. **Encrypted secrets store or provider-backed SecretRef** — set via `/secrets set <KEY> <value>` or `/secrets link <KEY> <secret-ref>`; stored at `~/.goodvibes/tui/secrets.enc` using AES-256-GCM
 3. **Not found** — provider is registered without a key and will fail at request time with a clear error
+
+Supported SecretRef providers include env, GoodVibes local storage, file, exec, 1Password, Bitwarden Password Manager, Vaultwarden through the Bitwarden CLI-compatible path, and Bitwarden Secrets Manager through `bws`.
 
 ## Built-in Providers
 

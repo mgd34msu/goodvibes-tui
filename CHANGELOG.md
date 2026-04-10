@@ -4,6 +4,35 @@ All notable changes to GoodVibes TUI.
 
 ---
 
+## [0.15.6] — 2026-04-10
+
+### Gateway, Channels, Providers, Search, And Media Rollout
+
+- Expanded the control-plane method catalog into the authoritative external gateway contract with stable daemon, operator, automation, remote, memory, provider, media, and artifact method coverage, schema metadata, event catalog exposure, and enforced HTTP/WebSocket scope checks
+- Added a shared channel reply pipeline that normalizes assistant text, reasoning, tool lifecycle, plan updates, approvals, command output, patches, compaction, and model selection into consistent Slack, Discord, ntfy, webhook, and web/operator delivery behavior
+- Added channel-owned setup, doctor, repair, secret-target, lifecycle migration, and allowlist edit/resolve contracts and moved more channel posture logic out of bespoke daemon handlers
+- Added built-in Telegram, Google Chat, Signal, WhatsApp, and iMessage channel adapters/plugins with setup metadata, doctor checks, target resolution, and provider-side setup guidance
+- Added provider-owned runtime metadata and plugin SDK breadth for auth posture, repair hints, model normalization/suppression, usage/cost reporting, embeddings posture, and stream/reasoning/cache policy reporting
+- Added provider-backed memory embeddings for OpenAI, OpenAI-compatible and LM Studio, Ollama, Gemini, and Mistral plus sqlite-vec-safe async rebuild/reindex flows and memory doctor diagnostics
+- Added the provider-backed `web_search` domain and tool with DuckDuckGo Lite + Instant Answer as the default no-key provider plus Brave, Exa, Firecrawl, SearXNG, and Tavily adapters, normalized result shaping, verbosity control, and bounded evidence attachment through `fetch`
+- Added a durable artifact/attachment store for arbitrary files with remote URI ingest, SSRF-aware host blocking, MIME/size validation, retention metadata, structured attachment publication, and attachment-aware daemon/control-plane delivery
+- Added concrete artifact-backed image-understanding providers for OpenAI, Gemini, Anthropic, generic multimodal routing, and local OpenAI-compatible multimodal backends
+- Added a Bun/TS reference node-host client covering pair, verify, heartbeat, work pull/complete, generic invoke flows, reconnect/backoff, scoped operation, and command allowlists
+
+### Fetch, Local Provider, And Stability Hardening
+
+- Added URL-encoded `body_data` form support to the low-level `fetch` tool so provider adapters can POST form data without manual encoding
+- Removed config/runtime initialization-cycle hazards from the memory vector store and artifact store defaults so search/media/artifact startup paths do not deadlock on eager imports
+- Hardened local-provider coverage around LM Studio and OpenAI-compatible multimodal/runtime detection, including regression coverage for the newer provider-specific behaviors
+- Expanded deterministic tool/channel/provider/plugin regression coverage to include the new `web_search`, artifact, image-understanding, secret-ref, runtime-metadata, and daemon integration surfaces
+
+### Verification
+
+- Full typecheck passes: `bunx tsc --noEmit`
+- Full test runner passes: `bun test` (`6932` pass, `0` fail)
+- Build passes: `bun run build`
+- Diff hygiene passes: `git diff --check`
+
 ## [0.15.5] — 2026-04-10
 
 ### Automation Gateway Runtime: SDK, Voice, Media, Memory, And Runtime Contracts

@@ -1,7 +1,9 @@
 import { describe, test, expect, beforeEach, afterEach } from 'bun:test';
 import { createHmac } from 'node:crypto';
-import { rmSync } from 'node:fs';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { ArtifactStore } from '../../artifacts/index.ts';
 import { DaemonServer } from '../../daemon/server.ts';
 import { HttpListener } from '../../daemon/http-listener.ts';
 import { UserAuthManager } from '../../security/user-auth.ts';
@@ -16,6 +18,7 @@ import { normalizeEverySchedule } from '../../automation/schedules.ts';
 import { ConfigManager } from '../../config/manager.ts';
 import { ChannelPolicyManager } from '../../channels/index.ts';
 import { resetDistributedRuntimeManagerForTesting } from '../../runtime/remote/index.ts';
+import { MemoryEmbeddingProviderRegistry } from '../../state/index.ts';
 
 const TEST_TOKEN = 'test-secret-token-abc123';
 
@@ -65,6 +68,7 @@ function waitForSocketFrame(
 
 describe('DaemonServer', () => {
   let daemon: DaemonServer;
+  let tempConfigDir: string;
 
   beforeEach(() => {
     AutomationManager.resetInstance();
@@ -72,6 +76,10 @@ describe('DaemonServer', () => {
     SharedSessionBroker.resetInstance();
     ChannelPolicyManager.resetInstance();
     resetDistributedRuntimeManagerForTesting();
+    ArtifactStore.resetActiveForTesting();
+    MemoryEmbeddingProviderRegistry.resetActiveForTesting();
+    tempConfigDir = mkdtempSync(join(tmpdir(), 'gv-daemon-config-'));
+    ConfigManager.setTestMode(tempConfigDir);
     rmSync(join(process.cwd(), '.goodvibes', 'tui', 'remote'), { recursive: true, force: true });
     rmSync(join(process.cwd(), '.goodvibes', 'tui', 'channels'), { recursive: true, force: true });
     // Use a high port to avoid conflicts with system services
@@ -113,8 +121,12 @@ describe('DaemonServer', () => {
     SharedSessionBroker.resetInstance();
     ChannelPolicyManager.resetInstance();
     resetDistributedRuntimeManagerForTesting();
+    ArtifactStore.resetActiveForTesting();
+    MemoryEmbeddingProviderRegistry.resetActiveForTesting();
+    ConfigManager.setTestMode(undefined);
     rmSync(join(process.cwd(), '.goodvibes', 'tui', 'remote'), { recursive: true, force: true });
     rmSync(join(process.cwd(), '.goodvibes', 'tui', 'channels'), { recursive: true, force: true });
+    rmSync(tempConfigDir, { recursive: true, force: true });
     clearIntegrationHelpersContext();
   });
 
@@ -822,7 +834,7 @@ describe('DaemonServer', () => {
     socket.close();
   });
 
-  test('exposes gap-closure contracts for methods, voice, media, memory, heartbeat, and node hosts', async () => {
+  test('exposes gap-closure contracts for methods, voice, web search, artifacts, media, memory, heartbeat, and node hosts', async () => {
     daemon.enable({ daemon: true }, TEST_TOKEN);
     await daemon.start();
 
@@ -844,9 +856,19 @@ describe('DaemonServer', () => {
     expect(voice.status).toBe(200);
     expect((await voice.json() as { note?: string }).note).toContain('Voice capture');
 
+    const webSearch = await fetch('http://127.0.0.1:39421/api/web-search/providers', { headers: auth });
+    expect(webSearch.status).toBe(200);
+    const webSearchBody = await webSearch.json() as { providers: Array<{ id: string }> };
+    expect(webSearchBody.providers.some((provider) => provider.id === 'duckduckgo')).toBe(true);
+
+    const artifacts = await fetch('http://127.0.0.1:39421/api/artifacts', { headers: auth });
+    expect(artifacts.status).toBe(200);
+    expect(await artifacts.json()).toHaveProperty('artifacts');
+
     const media = await fetch('http://127.0.0.1:39421/api/media/providers', { headers: auth });
     expect(media.status).toBe(200);
-    expect(await media.json()).toHaveProperty('providers');
+    const mediaBody = await media.json() as { providers: Array<{ id: string }> };
+    expect(mediaBody.providers.some((provider) => provider.id === 'builtin:image-understanding')).toBe(true);
 
     const memory = await fetch('http://127.0.0.1:39421/api/memory/doctor', { headers: auth });
     expect(memory.status).toBe(200);
@@ -862,6 +884,102 @@ describe('DaemonServer', () => {
     const contractBody = await contract.json() as { contract: { scopes: string[]; endpoints: Array<{ id: string }> } };
     expect(contractBody.contract.scopes).toContain('remote:heartbeat');
     expect(contractBody.contract.endpoints.some((endpoint) => endpoint.id === 'work.pull')).toBe(true);
+  });
+
+  test('control-plane exposes the event catalog and resolves templated method routes through invoke', async () => {
+    daemon.enable({ daemon: true }, TEST_TOKEN);
+    await daemon.start();
+
+    const auth = { Authorization: `Bearer ${TEST_TOKEN}`, 'Content-Type': 'application/json' };
+
+    const events = await fetch('http://127.0.0.1:39421/api/control-plane/events/catalog', {
+      headers: { Authorization: `Bearer ${TEST_TOKEN}` },
+    });
+    expect(events.status).toBe(200);
+    const eventsBody = await events.json() as { events: Array<{ id: string }> };
+    expect(eventsBody.events.some((event) => event.id === 'runtime.automation')).toBe(true);
+    expect(eventsBody.events.some((event) => event.id === 'control.ready')).toBe(true);
+
+    const method = await fetch('http://127.0.0.1:39421/api/control-plane/methods/control.methods.get/invoke', {
+      method: 'POST',
+      headers: auth,
+      body: JSON.stringify({
+        query: { methodId: 'control.status' },
+      }),
+    });
+    expect(method.status).toBe(200);
+    const methodBody = await method.json() as { method: { id: string } };
+    expect(methodBody.method.id).toBe('control.status');
+  });
+
+  test('gateway method invocation enforces scopes for local-auth sessions, including raw websocket route calls', async () => {
+    daemon.enable({ daemon: true });
+    await daemon.start();
+
+    const adminLogin = await fetch('http://127.0.0.1:39421/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username: 'admin', password: 'admin' }),
+    });
+    expect(adminLogin.status).toBe(200);
+    const adminToken = (await adminLogin.json() as { token: string }).token;
+
+    const createUser = await fetch('http://127.0.0.1:39421/api/local-auth/users', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${adminToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ username: 'operator', password: 'operator-pass', roles: ['operator'] }),
+    });
+    expect(createUser.status).toBe(201);
+
+    const operatorLogin = await fetch('http://127.0.0.1:39421/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username: 'operator', password: 'operator-pass' }),
+    });
+    expect(operatorLogin.status).toBe(200);
+    const operatorToken = (await operatorLogin.json() as { token: string }).token;
+
+    const readInvoke = await fetch('http://127.0.0.1:39421/api/control-plane/methods/control.status/invoke', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${operatorToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({}),
+    });
+    expect(readInvoke.status).toBe(200);
+
+    const writeInvoke = await fetch('http://127.0.0.1:39421/api/control-plane/methods/automation.heartbeat.run/invoke', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${operatorToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ body: { source: 'scope-test' } }),
+    });
+    expect(writeInvoke.status).toBe(403);
+    const writeInvokeBody = await writeInvoke.json() as { error: string; missingScopes?: string[] };
+    expect(writeInvokeBody.error).toContain('Missing required scope');
+    expect(writeInvokeBody.missingScopes).toContain('write:automation');
+
+    const socket = new WebSocket(`ws://127.0.0.1:39421/api/control-plane/ws?token=${operatorToken}&clientKind=web&domains=control-plane`);
+    const ready = await waitForSocketFrame(socket, (frame) => frame.type === 'event' && frame.event === 'ready');
+    expect(ready.type).toBe('event');
+
+    socket.send(JSON.stringify({
+      type: 'call',
+      id: 'raw-write-1',
+      method: 'POST',
+      path: '/api/automation/heartbeat',
+      body: { source: 'raw-ws-scope-test' },
+    }));
+    const denied = await waitForSocketFrame(socket, (frame) => frame.type === 'response' && frame.id === 'raw-write-1');
+    expect(denied.status).toBe(403);
+    expect((denied.body as { error?: string }).error).toContain('Missing required scope');
+    socket.close();
   });
 
   test('shared session APIs can create, inspect, and continue sessions', async () => {
@@ -1389,6 +1507,32 @@ describe('DaemonServer', () => {
     };
     expect(integratedBody.channelCount).toBeGreaterThan(0);
     expect(integratedBody.channels.some((entry) => entry.surface === 'slack')).toBe(true);
+
+    const providers = await fetch('http://127.0.0.1:39421/api/providers', {
+      headers: { Authorization: `Bearer ${TEST_TOKEN}` },
+    });
+    expect(providers.status).toBe(200);
+    const providersBody = await providers.json() as {
+      providers: Array<{ providerId: string; runtime: { auth?: { routes?: Array<{ route: string }> } } }>;
+    };
+    expect(providersBody.providers.some((entry) => entry.providerId === 'openai')).toBe(true);
+    expect(providersBody.providers.find((entry) => entry.providerId === 'openai')?.runtime.auth?.routes?.some((route) => route.route === 'subscription-oauth')).toBe(true);
+
+    const provider = await fetch('http://127.0.0.1:39421/api/providers/openai', {
+      headers: { Authorization: `Bearer ${TEST_TOKEN}` },
+    });
+    expect(provider.status).toBe(200);
+    const providerBody = await provider.json() as { providerId: string; models: Array<{ id: string }> };
+    expect(providerBody.providerId).toBe('openai');
+    expect(Array.isArray(providerBody.models)).toBe(true);
+
+    const usage = await fetch('http://127.0.0.1:39421/api/providers/openai/usage', {
+      headers: { Authorization: `Bearer ${TEST_TOKEN}` },
+    });
+    expect(usage.status).toBe(200);
+    const usageBody = await usage.json() as { providerId: string; usage: { streaming: boolean } };
+    expect(usageBody.providerId).toBe('openai');
+    expect(usageBody.usage.streaming).toBe(true);
   });
 
   test('surface, watcher, and service APIs expose control-plane support state', async () => {
@@ -1417,6 +1561,95 @@ describe('DaemonServer', () => {
     const serviceBody = await service.json() as { platform: string; suggestedCommands: string[] };
     expect(typeof serviceBody.platform).toBe('string');
     expect(Array.isArray(serviceBody.suggestedCommands)).toBe(true);
+  });
+
+  test('channel setup, doctor, lifecycle, and allowlist APIs expose expanded surface contracts', async () => {
+    const config = new ConfigManager();
+    config.setDynamic('surfaces.telegram.enabled', true);
+    config.setDynamic('surfaces.telegram.botToken', 'telegram-token');
+    config.setDynamic('surfaces.telegram.botUsername', 'goodvibes_bot');
+    config.setDynamic('surfaces.telegram.defaultChatId', '-100200300');
+    config.setDynamic('surfaces.signal.enabled', true);
+    config.setDynamic('surfaces.signal.bridgeUrl', 'https://signal-bridge.example.test');
+    config.setDynamic('surfaces.signal.account', '+15551234567');
+    daemon = new DaemonServer({
+      port: 39421,
+      host: '127.0.0.1',
+      userAuth: new UserAuthManager({
+        users: [{ username: 'admin', passwordHash: UserAuthManager.hashPassword('admin'), roles: ['admin'] }],
+      }),
+    }, config);
+    daemon.enable({ daemon: true }, TEST_TOKEN);
+    await daemon.start();
+
+    const auth = { Authorization: `Bearer ${TEST_TOKEN}`, 'Content-Type': 'application/json' };
+
+    const setup = await fetch('http://127.0.0.1:39421/api/channels/setup/telegram', { headers: auth });
+    expect(setup.status).toBe(200);
+    const setupBody = await setup.json() as {
+      surface: string;
+      version: number;
+      fields: Array<{ id: string }>;
+      secretTargets: Array<{ id: string; required: boolean }>;
+    };
+    expect(setupBody.surface).toBe('telegram');
+    expect(setupBody.version).toBe(1);
+    expect(setupBody.fields.some((field) => field.id === 'mode')).toBe(true);
+    expect(setupBody.secretTargets.some((target) => target.id === 'primary' && target.required)).toBe(true);
+
+    const doctor = await fetch('http://127.0.0.1:39421/api/channels/doctor/signal', { headers: auth });
+    expect(doctor.status).toBe(200);
+    const doctorBody = await doctor.json() as {
+      surface: string;
+      checks: Array<{ id: string; status: string }>;
+      repairActions: Array<{ id: string }>;
+    };
+    expect(doctorBody.surface).toBe('signal');
+    expect(doctorBody.checks.some((check) => check.id === 'configured')).toBe(true);
+    expect(doctorBody.repairActions.some((action) => action.id === 'migrate-lifecycle')).toBe(true);
+
+    const repairs = await fetch('http://127.0.0.1:39421/api/channels/repair-actions/telegram', { headers: auth });
+    expect(repairs.status).toBe(200);
+    const repairsBody = await repairs.json() as { actions: Array<{ id: string }> };
+    expect(repairsBody.actions.some((action) => action.id === 'inspect')).toBe(true);
+
+    const lifecycleBefore = await fetch('http://127.0.0.1:39421/api/channels/lifecycle/telegram', { headers: auth });
+    expect(lifecycleBefore.status).toBe(200);
+    const lifecycleBeforeBody = await lifecycleBefore.json() as { currentVersion: number; targetVersion: number };
+    expect(lifecycleBeforeBody.currentVersion).toBe(0);
+    expect(lifecycleBeforeBody.targetVersion).toBe(1);
+
+    const migrate = await fetch('http://127.0.0.1:39421/api/channels/lifecycle/telegram/migrate', {
+      method: 'POST',
+      headers: auth,
+      body: JSON.stringify({}),
+    });
+    expect(migrate.status).toBe(200);
+    const migrateBody = await migrate.json() as { currentVersion: number };
+    expect(migrateBody.currentVersion).toBe(1);
+
+    const allowlistResolve = await fetch('http://127.0.0.1:39421/api/channels/allowlist/telegram/resolve', {
+      method: 'POST',
+      headers: auth,
+      body: JSON.stringify({ add: ['@alice', '#ops-room'] }),
+    });
+    expect(allowlistResolve.status).toBe(200);
+    const allowlistResolveBody = await allowlistResolve.json() as { resolved: Array<{ kind: string; id: string }> };
+    expect(allowlistResolveBody.resolved.some((entry) => entry.kind === 'user' && entry.id === 'alice')).toBe(true);
+    expect(allowlistResolveBody.resolved.some((entry) => entry.kind === 'channel' && entry.id === 'ops-room')).toBe(true);
+
+    const allowlistEdit = await fetch('http://127.0.0.1:39421/api/channels/allowlist/telegram/edit', {
+      method: 'POST',
+      headers: auth,
+      body: JSON.stringify({ add: ['@alice', '#ops-room'] }),
+    });
+    expect(allowlistEdit.status).toBe(200);
+    const allowlistEditBody = await allowlistEdit.json() as {
+      updatedPolicy: { surface: string; allowlistUserIds: string[]; allowlistChannelIds: string[] };
+    };
+    expect(allowlistEditBody.updatedPolicy.surface).toBe('telegram');
+    expect(allowlistEditBody.updatedPolicy.allowlistUserIds).toContain('alice');
+    expect(allowlistEditBody.updatedPolicy.allowlistChannelIds).toContain('ops-room');
   });
 
   test('watcher control APIs can register, run, stop, and delete watchers', async () => {
@@ -1679,6 +1912,40 @@ describe('DaemonServer', () => {
     expect(Array.isArray(body.messages)).toBe(true);
   });
 
+  test('artifact APIs can create metadata records and stream stored content', async () => {
+    daemon.enable({ daemon: true }, TEST_TOKEN);
+    await daemon.start();
+
+    const create = await fetch('http://127.0.0.1:39421/api/artifacts', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${TEST_TOKEN}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        filename: 'notes.md',
+        text: '# shipped\n',
+        metadata: { ticket: 'GV-1' },
+      }),
+    });
+    expect(create.status).toBe(201);
+    const createBody = await create.json() as { artifact: { id: string; filename?: string } };
+    expect(createBody.artifact.filename).toBe('notes.md');
+
+    const inspect = await fetch(`http://127.0.0.1:39421/api/artifacts/${createBody.artifact.id}`, {
+      headers: { Authorization: `Bearer ${TEST_TOKEN}` },
+    });
+    expect(inspect.status).toBe(200);
+    expect((await inspect.json() as { artifact: { metadata: { ticket: string } } }).artifact.metadata.ticket).toBe('GV-1');
+
+    const content = await fetch(`http://127.0.0.1:39421/api/artifacts/${createBody.artifact.id}/content?download=0`, {
+      headers: { Authorization: `Bearer ${TEST_TOKEN}` },
+    });
+    expect(content.status).toBe(200);
+    expect(content.headers.get('content-type')).toContain('text/markdown');
+    expect(await content.text()).toBe('# shipped\n');
+  });
+
   test('ntfy webhook creates route bindings and can spawn agents', async () => {
     const config = new ConfigManager();
     config.setDynamic('surfaces.ntfy.enabled', true);
@@ -1745,6 +2012,158 @@ describe('DaemonServer', () => {
       }),
     });
     expect(ntfy.status).toBe(401);
+  });
+
+  test('telegram and Google Chat webhook ingress create route bindings and queue agents', async () => {
+    const config = new ConfigManager();
+    config.setDynamic('surfaces.telegram.enabled', true);
+    config.setDynamic('surfaces.telegram.botUsername', 'goodvibes_bot');
+    config.setDynamic('surfaces.googleChat.enabled', true);
+    config.setDynamic('surfaces.googleChat.verificationToken', 'google-chat-token');
+    daemon = new DaemonServer({
+      port: 39421,
+      host: '127.0.0.1',
+      userAuth: new UserAuthManager({
+        users: [{ username: 'admin', passwordHash: UserAuthManager.hashPassword('admin'), roles: ['admin'] }],
+      }),
+    }, config);
+    daemon.enable({ daemon: true }, TEST_TOKEN);
+    await daemon.start();
+
+    const telegram = await fetch('http://127.0.0.1:39421/webhook/telegram', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        update_id: 10,
+        message: {
+          message_id: 44,
+          text: '/goodvibes summarize the deploy status',
+          message_thread_id: 99,
+          chat: { id: -100777, type: 'supergroup', title: 'Ops' },
+          from: { id: 42, username: 'alice' },
+        },
+      }),
+    });
+    expect(telegram.status).toBe(200);
+    const telegramBody = await telegram.json() as { queued: boolean; bindingId: string };
+    expect(telegramBody.queued).toBe(true);
+
+    const googleChat = await fetch('http://127.0.0.1:39421/webhook/google-chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        type: 'MESSAGE',
+        token: 'google-chat-token',
+        message: {
+          text: 'summarize the release notes',
+          argumentText: 'summarize the release notes',
+          thread: { name: 'spaces/AAA/threads/BBB' },
+        },
+        space: { name: 'spaces/AAA', displayName: 'Ops Space' },
+        user: { name: 'users/123', displayName: 'Alice' },
+      }),
+    });
+    expect(googleChat.status).toBe(200);
+    const googleChatBody = await googleChat.json() as { text: string };
+    expect(googleChatBody.text).toContain('Running');
+
+    const list = await fetch('http://127.0.0.1:39421/api/routes/bindings', {
+      headers: { Authorization: `Bearer ${TEST_TOKEN}` },
+    });
+    const listBody = await list.json() as {
+      bindings: Array<{ id: string; surfaceKind: string; externalId: string; channelId?: string }>;
+    };
+    expect(listBody.bindings.some((binding) => binding.id === telegramBody.bindingId && binding.surfaceKind === 'telegram' && binding.externalId === '99')).toBe(true);
+    expect(listBody.bindings.some((binding) => binding.surfaceKind === 'google-chat' && binding.externalId === 'spaces/AAA/threads/BBB')).toBe(true);
+  });
+
+  test('signal, WhatsApp, and iMessage ingress paths queue work and expose verification flows', async () => {
+    const config = new ConfigManager();
+    config.setDynamic('surfaces.signal.enabled', true);
+    config.setDynamic('surfaces.signal.token', 'signal-bridge-token');
+    config.setDynamic('surfaces.signal.account', '+15550001111');
+    config.setDynamic('surfaces.whatsapp.enabled', true);
+    config.setDynamic('surfaces.whatsapp.verifyToken', 'whatsapp-verify-token');
+    config.setDynamic('surfaces.whatsapp.phoneNumberId', '106540352242922');
+    config.setDynamic('surfaces.imessage.enabled', true);
+    config.setDynamic('surfaces.imessage.token', 'imessage-bridge-token');
+    config.setDynamic('surfaces.imessage.account', 'me@icloud.test');
+    daemon = new DaemonServer({
+      port: 39421,
+      host: '127.0.0.1',
+      userAuth: new UserAuthManager({
+        users: [{ username: 'admin', passwordHash: UserAuthManager.hashPassword('admin'), roles: ['admin'] }],
+      }),
+    }, config);
+    daemon.enable({ daemon: true }, TEST_TOKEN);
+    await daemon.start();
+
+    const challenge = await fetch('http://127.0.0.1:39421/webhook/whatsapp?hub.mode=subscribe&hub.verify_token=whatsapp-verify-token&hub.challenge=abc123');
+    expect(challenge.status).toBe(200);
+    expect(await challenge.text()).toBe('abc123');
+
+    const signal = await fetch('http://127.0.0.1:39421/webhook/signal', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: 'Bearer signal-bridge-token',
+      },
+      body: JSON.stringify({
+        recipient: '+15551212',
+        message: 'signal deploy summary',
+      }),
+    });
+    expect(signal.status).toBe(200);
+    const signalBody = await signal.json() as { queued: boolean; bindingId: string };
+    expect(signalBody.queued).toBe(true);
+
+    const whatsapp = await fetch('http://127.0.0.1:39421/webhook/whatsapp', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        entry: [{
+          changes: [{
+            value: {
+              metadata: { phone_number_id: '106540352242922' },
+              contacts: [{ profile: { name: 'Alice' } }],
+              messages: [{
+                id: 'wamid-123',
+                from: '+15552323',
+                text: { body: 'whatsapp deploy summary' },
+              }],
+            },
+          }],
+        }],
+      }),
+    });
+    expect(whatsapp.status).toBe(200);
+    const whatsappBody = await whatsapp.json() as { queued: boolean; bindingId: string };
+    expect(whatsappBody.queued).toBe(true);
+
+    const imessage = await fetch('http://127.0.0.1:39421/webhook/imessage', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: 'Bearer imessage-bridge-token',
+      },
+      body: JSON.stringify({
+        chatId: 'chat-123',
+        message: 'imessage deploy summary',
+      }),
+    });
+    expect(imessage.status).toBe(200);
+    const imessageBody = await imessage.json() as { queued: boolean; bindingId: string };
+    expect(imessageBody.queued).toBe(true);
+
+    const list = await fetch('http://127.0.0.1:39421/api/routes/bindings', {
+      headers: { Authorization: `Bearer ${TEST_TOKEN}` },
+    });
+    const listBody = await list.json() as {
+      bindings: Array<{ id: string; surfaceKind: string; externalId: string }>;
+    };
+    expect(listBody.bindings.some((binding) => binding.id === signalBody.bindingId && binding.surfaceKind === 'signal' && binding.externalId === '+15551212')).toBe(true);
+    expect(listBody.bindings.some((binding) => binding.id === whatsappBody.bindingId && binding.surfaceKind === 'whatsapp' && binding.externalId === '+15552323')).toBe(true);
+    expect(listBody.bindings.some((binding) => binding.id === imessageBody.bindingId && binding.surfaceKind === 'imessage' && binding.externalId === 'chat-123')).toBe(true);
   });
 
   test('slack interactive approval callbacks resolve approvals through signed actions', async () => {

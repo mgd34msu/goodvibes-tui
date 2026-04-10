@@ -2,7 +2,8 @@ import { listBuiltinSubscriptionProviders } from '../../config/subscription-prov
 import { getServiceRegistry } from '../../config/service-registry.ts';
 import { getSubscriptionManager } from '../../config/subscriptions.ts';
 import { resolveApiKeys } from '../../config/index.ts';
-import { providerRegistry } from '../../providers/registry.ts';
+import { getProviderRegistry } from '../../providers/registry.ts';
+import type { ProviderRuntimeMetadata } from '../../providers/interface.ts';
 import { decodeJwtPayload } from '../auth/oauth-core.ts';
 
 export type ProviderAuthRoute = 'api-key' | 'subscription' | 'service-oauth' | 'unconfigured';
@@ -90,6 +91,7 @@ function determineSubscriptionFreshness(expiresAt?: number): ProviderAuthFreshne
 }
 
 export async function buildProviderAccountSnapshot(): Promise<ProviderAccountSnapshot> {
+  const providerRegistry = getProviderRegistry();
   const allModels = providerRegistry.listModels();
   const currentModel = providerRegistry.getCurrentModel?.();
   const apiKeys = await resolveApiKeys();
@@ -119,13 +121,20 @@ export async function buildProviderAccountSnapshot(): Promise<ProviderAccountSna
     ...services.map((service) => service.providerId ?? service.name),
     ...builtinSubscriptionProviders,
   ]);
-  const providers = [...providerIds]
+  const providers = await Promise.all([...providerIds]
     .sort((a, b) => a.localeCompare(b))
-    .map((providerId) => {
+    .map(async (providerId) => {
       const subscription = subscriptions.get(providerId);
       const pending = subscriptions.getPending(providerId);
       const jwtPayload = subscription ? decodeJwtPayload(subscription.accessToken) : null;
       const serviceOauth = serviceOauthByProvider.get(providerId);
+      let runtimeMetadata: ProviderRuntimeMetadata | undefined;
+      try {
+        const provider = providerRegistry.getRegistered(providerId);
+        runtimeMetadata = provider.describeRuntime ? await provider.describeRuntime() : undefined;
+      } catch {
+        runtimeMetadata = undefined;
+      }
       const subscriptionFreshness = subscription ? determineSubscriptionFreshness(subscription.expiresAt) : 'unconfigured';
       const routes = classifyRoutes({
         providerId,
@@ -222,10 +231,26 @@ export async function buildProviderAccountSnapshot(): Promise<ProviderAccountSna
       if (jwtPayload && typeof jwtPayload['iss'] === 'string') {
         notes.push(`issuer=${jwtPayload['iss']}`);
       }
+      if (runtimeMetadata?.notes) {
+        notes.push(...runtimeMetadata.notes);
+      }
+      if (runtimeMetadata?.usage?.notes) {
+        notes.push(...runtimeMetadata.usage.notes);
+      }
+      if (runtimeMetadata?.policy?.notes) {
+        notes.push(...runtimeMetadata.policy.notes);
+      }
       if (builtinSubscriptionProviders.has(providerId)) {
         notes.push('Built-in subscription adapter available.');
         if (!subscription && !pending) {
           recommendedActions.push(`Start /subscription login ${providerId} start to enable the built-in subscription path.`);
+        }
+      }
+      for (const route of runtimeMetadata?.auth?.routes ?? []) {
+        if (!route.usable || !route.configured) {
+          for (const hint of route.repairHints ?? []) {
+            recommendedActions.push(hint);
+          }
         }
       }
       if (pending) {
@@ -277,10 +302,10 @@ export async function buildProviderAccountSnapshot(): Promise<ProviderAccountSna
         notes,
         usageWindows: builtinWindowsForProvider(providerId),
         issues,
-        recommendedActions,
+        recommendedActions: [...new Set(recommendedActions)],
         routeRecords,
       }) satisfies ProviderAccountRecord;
-    });
+    }));
 
   return Object.freeze({
     capturedAt: Date.now(),

@@ -12,10 +12,11 @@ import { join } from 'path';
 import { RuntimeEventBus, createEventEnvelope } from '../../runtime/events/index.ts';
 import type { SessionEvent } from '../../runtime/events/index.ts';
 import type { CommandRegistry, SlashCommand } from '../../input/command-registry.ts';
-import type { ProviderRegistry } from '../../providers/registry.ts';
+import type { ModelDefinition, ProviderRegistry } from '../../providers/registry.ts';
 import type { ToolRegistry } from '../../tools/registry.ts';
 import type { LoadedPlugin, PluginLoaderDeps } from '../../plugins/loader.ts';
 import type { PluginAPIContext } from '../../plugins/api.ts';
+import { WebSearchProviderRegistry } from '../../web-search/index.ts';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -50,8 +51,9 @@ type FakeToolRegistry = Pick<ToolRegistry, 'has' | 'register'> & {
   _tools: Map<string, unknown>;
 };
 
-type FakeProviderRegistry = Pick<ProviderRegistry, 'register'> & {
+type FakeProviderRegistry = Pick<ProviderRegistry, 'register' | 'registerRuntimeProvider' | 'listModels'> & {
   _providers: unknown[];
+  _models: ModelDefinition[];
 };
 
 type PluginManagerTestAccess = {
@@ -93,9 +95,24 @@ function makeFakeToolRegistry(): FakeToolRegistry {
 
 function makeFakeProviderRegistry(): FakeProviderRegistry {
   const providers: unknown[] = [];
+  const models: ModelDefinition[] = [];
   return {
     register: (p: unknown) => { providers.push(p); },
+    registerRuntimeProvider: (registration) => {
+      providers.push(registration.provider);
+      models.push(...(registration.models ?? []));
+      return () => {
+        const providerIndex = providers.indexOf(registration.provider);
+        if (providerIndex >= 0) providers.splice(providerIndex, 1);
+        for (const model of registration.models ?? []) {
+          const index = models.findIndex((entry) => entry.registryKey === model.registryKey);
+          if (index >= 0) models.splice(index, 1);
+        }
+      };
+    },
+    listModels: () => [...models],
     _providers: providers,
+    _models: models,
   };
 }
 
@@ -545,6 +562,48 @@ describe('createPluginAPI', () => {
     expect(result).toBeInstanceOf(Promise);
     // Allow the promise to settle without throwing in test
     await result.catch(() => {});
+    expect((ctx.providerRegistry as unknown as FakeProviderRegistry)._models.some((model) => model.id === 'model-1')).toBe(true);
+  });
+
+  test('registerProviderInstance registers cleanup-aware provider models', async () => {
+    const { createPluginAPI } = await import('../../plugins/api.ts');
+    const cleanup: Array<() => void> = [];
+    const providerRegistry = makeFakeProviderRegistry();
+    const ctx: PluginAPIContext = {
+      pluginName: 'my-plugin',
+      runtimeBus: makeFakeRuntimeBus(),
+      commandRegistry: makeFakeCommandRegistry() as unknown as CommandRegistry,
+      providerRegistry: providerRegistry as unknown as ProviderRegistry,
+      toolRegistry: makeFakeToolRegistry() as unknown as ToolRegistry,
+      pluginConfig: {},
+      cleanup,
+    };
+    const api = createPluginAPI(ctx);
+    api.registerProviderInstance({
+      provider: {
+        name: 'custom-provider',
+        models: ['custom-model'],
+        chat: async () => ({
+          content: 'ok',
+          toolCalls: [],
+          usage: { inputTokens: 1, outputTokens: 1 },
+          stopReason: 'end',
+        }),
+      },
+      models: [{
+        id: 'custom-model',
+        displayName: 'Custom Model',
+        contextWindow: 16384,
+        capabilities: { toolCalling: true, codeEditing: true, reasoning: true, multimodal: false },
+      }],
+    });
+
+    expect(providerRegistry._providers).toHaveLength(1);
+    expect(providerRegistry._models.some((model) => model.id === 'custom-model')).toBe(true);
+    expect(cleanup).toHaveLength(1);
+    cleanup[0]?.();
+    expect(providerRegistry._providers).toHaveLength(0);
+    expect(providerRegistry._models.some((model) => model.id === 'custom-model')).toBe(false);
   });
 
   test('registers extension SDK contributions for gateway, memory, voice, and media domains', async () => {
@@ -557,6 +616,7 @@ describe('createPluginAPI', () => {
     new MemoryEmbeddingProviderRegistry();
     new VoiceProviderRegistry();
     new MediaProviderRegistry();
+    new WebSearchProviderRegistry();
     const cleanup: Array<() => void> = [];
     const ctx: PluginAPIContext = {
       pluginName: 'my-plugin',
@@ -594,11 +654,20 @@ describe('createPluginAPI', () => {
       label: 'Plugin Media',
       capabilities: ['understand'],
     });
+    api.registerWebSearchProvider({
+      id: 'plugin-search',
+      label: 'Plugin Search',
+      capabilities: ['search'],
+      async search() {
+        return { results: [], metadata: {} };
+      },
+    });
 
     expect(GatewayMethodCatalog.getActive().get('plugin.my-plugin.echo')).not.toBeNull();
     expect(MemoryEmbeddingProviderRegistry.getActive().get('plugin-embeddings')).not.toBeNull();
     expect(VoiceProviderRegistry.getActive().get('plugin-voice')).not.toBeNull();
     expect(MediaProviderRegistry.getActive().get('plugin-media')).not.toBeNull();
+    expect(WebSearchProviderRegistry.getActive().get('plugin-search')).not.toBeNull();
     for (const fn of cleanup) fn();
     expect(GatewayMethodCatalog.getActive().get('plugin.my-plugin.echo')).toBeNull();
   });

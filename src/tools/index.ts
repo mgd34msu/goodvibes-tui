@@ -27,6 +27,7 @@ import { remoteTool } from './remote-trigger/index.ts';
 import { replTool } from './repl/index.ts';
 import { controlTool } from './control/index.ts';
 import { channelTool } from './channel/index.ts';
+import { webSearchTool } from './web-search/index.ts';
 
 /**
  * Register all built-in tools into the given registry.
@@ -55,6 +56,7 @@ export function registerAllTools(
   registry.register(createStateTool(kvState, projectIndex, hookDispatcher, modeManager));
   registry.register(workflowTool);
   registry.register(fetchTool);
+  registry.register(webSearchTool);
   registry.register(createRegistryTool(registry));
   registry.register(taskTool);
   registry.register(teamTool);

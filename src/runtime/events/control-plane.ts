@@ -2,7 +2,21 @@
  * ControlPlaneEvent — discriminated union covering gateway/control-plane client lifecycle events.
  */
 
-export const CONTROL_PLANE_CLIENT_KINDS = ['tui', 'web', 'slack', 'discord', 'ntfy', 'daemon', 'webhook', 'service'] as const;
+export const CONTROL_PLANE_CLIENT_KINDS = [
+  'tui',
+  'web',
+  'slack',
+  'discord',
+  'ntfy',
+  'daemon',
+  'webhook',
+  'service',
+  'telegram',
+  'google-chat',
+  'signal',
+  'whatsapp',
+  'imessage',
+] as const;
 export const CONTROL_PLANE_TRANSPORT_KINDS = ['local', 'http', 'sse', 'ws', 'websocket', 'webhook'] as const;
 export const CONTROL_PLANE_PRINCIPAL_KINDS = ['user', 'bot', 'service', 'token'] as const;
 

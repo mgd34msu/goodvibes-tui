@@ -2,7 +2,7 @@
 
 A terminal-native AI coding and operations console with multi-provider LLM support, typed runtime systems, and a Unicode-rich custom renderer.
 
-Version: **0.15.5**
+Version: **0.15.6**
 
 <!-- screenshot -->
 
@@ -214,21 +214,9 @@ bun install
 
 ### Configure API Keys
 
-API keys can be set in `.goodvibes/config.json`, via environment variables, or stored encrypted using the `/secrets` command.
+API keys resolve from environment variables first, then from the GoodVibes secret store. The local store can hold encrypted values directly or provider-backed secret references for Bitwarden, Vaultwarden, Bitwarden Secrets Manager, 1Password, files, and command-backed resolvers.
 
-```json
-{
-  "apiKeys": {
-    "anthropic": "sk-ant-...",
-    "openai": "sk-...",
-    "gemini": "AIza...",
-    "groq": "gsk_...",
-    "mistral": "..."
-  }
-}
-```
-
-Or set environment variables:
+Set environment variables:
 
 | Provider | Primary Env Var | Accepted Aliases | Type |
 |----------|----------------|-----------------|------|
@@ -246,7 +234,22 @@ Or set environment variables:
 | NVIDIA NIM | `NVIDIA_API_KEY` | — | 1000 free credits |
 | LLM7 | `LLM7_API_KEY` | — | Free |
 
-Alternatively, store keys encrypted using the `/secrets` command — the secrets store takes precedence over env vars when both are set.
+Alternatively, store keys encrypted using the `/secrets` command. Environment variables take precedence when both are set:
+
+```sh
+/secrets set OPENAI_API_KEY sk-...
+```
+
+For self-hosted or external secret managers, link a GoodVibes key to a provider-backed SecretRef:
+
+```sh
+/secrets link OPENAI_API_KEY bw://GoodVibes%20OpenAI/password?sessionEnv=BW_SESSION
+/secrets link SLACK_BOT_TOKEN vaultwarden://GoodVibes%20Slack/password?server=https%3A%2F%2Fvault.example.test
+/secrets link STRIPE_TOKEN bws://00000000-0000-0000-0000-000000000000/value?accessTokenEnv=BWS_ACCESS_TOKEN
+/secrets link OPENAI_API_KEY op://Private/GoodVibes%20OpenAI/API%20Key
+```
+
+Use `/secrets providers` for supported provider shapes and `/secrets test <secret-ref>` to validate a ref without printing its value.
 
 ### Synthetic Failover Provider
 
@@ -626,6 +629,7 @@ The point is not “automation because automation.” It is to make recurring op
 The services/config side is also productized beyond a flat JSON file:
 
 - named service registry with inspect, auth resolution, connectivity tests, auth review, and doctor output
+- first-class SecretRef-backed service credentials through env, GoodVibes local storage, file, exec, 1Password, Bitwarden, Vaultwarden, and Bitwarden Secrets Manager providers
 - live profile management plus portable profile sync bundle export/import
 - setup transfer bundles that can move config/services/ecosystem posture between environments
 
@@ -635,6 +639,24 @@ Key commands:
 - `/profiles`
 - `/profilesync`
 - `/setup transfer export|inspect|import`
+
+Service entries can use existing `tokenKey` fields, a SecretRef in the key field, or explicit `tokenRef` / `passwordRef` / `webhookUrlRef` / `signingSecretRef` / `publicKeyRef` fields:
+
+```json
+{
+  "slack": {
+    "name": "slack",
+    "authType": "bearer",
+    "tokenKey": "SLACK_BOT_TOKEN",
+    "tokenRef": {
+      "source": "vaultwarden",
+      "item": "GoodVibes Slack",
+      "field": "password",
+      "server": "https://vault.example.test"
+    }
+  }
+}
+```
 
 ---
 
@@ -986,7 +1008,7 @@ Those pieces cover conversation-noise routing, panel-health/performance budgets,
 | `/template` | `/tmpl` | Manage prompt templates: save, use, list, edit, delete |
 | `/tools` | `/t` | List available tools |
 | `/permissions` | `/perms` | Show or set permission mode and per-tool settings |
-| `/secrets` | — | Manage encrypted API key secrets (set/get/list/delete) |
+| `/secrets` | — | Manage encrypted and provider-backed API key secrets (set/link/get/test/list/delete) |
 | `/services` | `/svc` | Manage API service configurations |
 | `/accounts [action]` | — | Review provider-account routes, auth posture, and repair actions |
 | `/auth [action]` | — | Review auth posture and manage local service auth users/sessions |
@@ -1343,6 +1365,7 @@ src/
 │   ├── schema.ts        — GoodVibesConfig type, ConfigKey, defaults
 │   ├── helper-model.ts  — Helper model router + singleton (HelperModel, HelperRouter)
 │   ├── index.ts         — Config loader and live-edit manager
+│   ├── secret-refs.ts   — env, file, exec, 1Password, Bitwarden, Vaultwarden, and BWS secret references
 │   └── secrets.ts       — hierarchy-aware secure/plaintext secret storage
 ├── state/               — KV store, project index, file cache, mode manager, telemetry
 ├── permissions/         — Permission manager with per-tool enforcement

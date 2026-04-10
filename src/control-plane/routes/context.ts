@@ -14,6 +14,7 @@ export interface DaemonApiRouteHandlers {
   getControlPlaneMessages(): MaybeResponse;
   getControlPlaneClients(): MaybeResponse;
   getGatewayMethods(url: URL): MaybeResponse;
+  getGatewayEvents(url: URL): MaybeResponse;
   getGatewayMethod(methodId: string): MaybeResponse;
   invokeGatewayMethod(methodId: string, req: Request): MaybeResponse;
   createControlPlaneEventStream(req: Request): MaybeResponse;
@@ -36,6 +37,11 @@ export interface DaemonApiRouteHandlers {
   getChannelSurfaceAccounts(surface: string): MaybeResponse;
   getChannelAccount(surface: string, accountId: string): MaybeResponse;
   postChannelAccountAction(surface: string, accountId: string | null, action: string, req: Request): MaybeResponse;
+  getChannelSetupSchema(surface: string, url: URL): MaybeResponse;
+  getChannelDoctor(surface: string, url: URL): MaybeResponse;
+  getChannelRepairActions(surface: string, url: URL): MaybeResponse;
+  getChannelLifecycle(surface: string, url: URL): MaybeResponse;
+  postChannelLifecycleMigrate(surface: string, req: Request): MaybeResponse;
   getChannelCapabilities(): MaybeResponse;
   getChannelSurfaceCapabilities(surface: string): MaybeResponse;
   getChannelTools(): MaybeResponse;
@@ -48,6 +54,8 @@ export interface DaemonApiRouteHandlers {
   postChannelAction(surface: string, actionId: string, req: Request): MaybeResponse;
   postChannelResolveTarget(surface: string, req: Request): MaybeResponse;
   postChannelAuthorize(surface: string, req: Request): MaybeResponse;
+  postChannelAllowlistResolve(surface: string, req: Request): MaybeResponse;
+  postChannelAllowlistEdit(surface: string, req: Request): MaybeResponse;
   getChannelPolicies(): MaybeResponse;
   postChannelPolicy(surface: string, req: Request): MaybeResponse;
   getChannelPolicyAudit(limit: number): MaybeResponse;
@@ -84,6 +92,9 @@ export interface DaemonApiRouteHandlers {
   getRemoteNodeHostContract(): MaybeResponse;
   getHealth(): MaybeResponse;
   getAccounts(): MaybeResponse;
+  getProviders(): MaybeResponse;
+  getProvider(providerId: string): MaybeResponse;
+  getProviderUsage(providerId: string): MaybeResponse;
   getSettings(): MaybeResponse;
   getContinuity(): MaybeResponse;
   getWorktrees(): MaybeResponse;
@@ -98,6 +109,12 @@ export interface DaemonApiRouteHandlers {
   postVoiceTts(req: Request): MaybeResponse;
   postVoiceStt(req: Request): MaybeResponse;
   postVoiceRealtimeSession(req: Request): MaybeResponse;
+  getWebSearchProviders(): MaybeResponse;
+  postWebSearch(req: Request): MaybeResponse;
+  getArtifacts(): MaybeResponse;
+  postArtifact(req: Request): MaybeResponse;
+  getArtifact(artifactId: string): MaybeResponse;
+  getArtifactContent(artifactId: string, req: Request): MaybeResponse;
   getMediaProviders(): MaybeResponse;
   postMediaAnalyze(req: Request): MaybeResponse;
   postMediaTransform(req: Request): MaybeResponse;

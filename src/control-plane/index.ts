@@ -12,6 +12,9 @@ export {
   getGatewayMethodCatalog,
 } from './method-catalog.ts';
 export type {
+  GatewayEventDescriptor,
+  GatewayEventListOptions,
+  GatewayEventTransport,
   GatewayHttpBinding,
   GatewayMethodAccess,
   GatewayMethodDescriptor,

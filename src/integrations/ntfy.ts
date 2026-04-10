@@ -3,6 +3,7 @@ export interface NtfyPublishOptions {
   readonly priority?: 1 | 2 | 3 | 4 | 5;
   readonly tags?: readonly string[];
   readonly click?: string;
+  readonly attach?: string;
   readonly actions?: readonly string[];
 }
 
@@ -47,6 +48,7 @@ export class NtfyIntegration {
     if (options.priority) headers.set('Priority', String(options.priority));
     if (options.tags?.length) headers.set('Tags', options.tags.join(','));
     if (options.click) headers.set('Click', options.click);
+    if (options.attach) headers.set('Attach', options.attach);
     if (options.actions?.length) headers.set('Actions', options.actions.join(';'));
     if (this.token) headers.set('Authorization', `Bearer ${this.token}`);
 

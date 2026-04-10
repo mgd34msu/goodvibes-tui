@@ -21,6 +21,11 @@ export type AutomationSurfaceKind =
   | 'discord'
   | 'ntfy'
   | 'webhook'
+  | 'telegram'
+  | 'google-chat'
+  | 'signal'
+  | 'whatsapp'
+  | 'imessage'
   | 'service';
 
 export type AutomationRouteKind = 'session' | 'thread' | 'channel' | 'message';

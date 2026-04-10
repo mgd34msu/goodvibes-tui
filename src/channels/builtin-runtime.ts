@@ -2,26 +2,39 @@ import type { AutomationRouteBinding } from '../automation/routes.ts';
 import {
   type GenericWebhookAdapterContext,
   type SurfaceAdapterContext,
+  handleGoogleChatSurfaceWebhook,
   handleDiscordSurfaceWebhook,
   handleGenericWebhookSurface,
+  handleIMessageSurfaceWebhook,
   handleNtfySurfaceWebhook,
+  handleSignalSurfaceWebhook,
   handleSlackSurfaceWebhook,
+  handleTelegramSurfaceWebhook,
+  handleWhatsAppSurfaceWebhook,
 } from '../adapters/index.ts';
 import type { SharedApprovalRecord } from '../control-plane/index.ts';
 import type { ConfigManager } from '../config/manager.ts';
+import type { SurfacesConfig } from '../config/schema.ts';
 import { ServiceRegistry } from '../config/service-registry.ts';
 import type { ServiceSecretField } from '../config/service-registry.ts';
 import { getSecretsManager } from '../config/secrets.ts';
 import { DiscordIntegration, NtfyIntegration, SlackIntegration } from '../integrations/index.ts';
 import type { Tool } from '../types/tools.ts';
+import { ChannelDeliveryRouter, type ChannelDeliveryRequest, type ChannelDeliveryRouteBinding } from './delivery-router.ts';
 import type { ChannelPlugin, ChannelPluginRegistry } from './plugin-registry.ts';
 import type { ChannelProviderRuntimeManager, ProviderRuntimeSurface } from './provider-runtime.ts';
 import type { RouteBindingManager } from './route-manager.ts';
+import { ChannelPolicyManager } from './policy-manager.ts';
 import type {
   ChannelAccountAction,
   ChannelAccountLifecycleAction,
   ChannelAccountLifecycleResult,
   ChannelAccountRecord,
+  ChannelAllowlistEditInput,
+  ChannelAllowlistEditResult,
+  ChannelAllowlistResolution,
+  ChannelAllowlistTarget,
+  ChannelAllowlistTargetKind,
   ChannelActorAuthorizationRequest,
   ChannelActorAuthorizationResult,
   ChannelCapability,
@@ -30,15 +43,37 @@ import type {
   ChannelDirectoryEntry,
   ChannelDirectoryQueryOptions,
   ChannelDirectoryScope,
+  ChannelDoctorCheck,
+  ChannelDoctorReport,
+  ChannelDoctorStatus,
+  ChannelLifecycleMigrationRecord,
+  ChannelLifecycleState,
   ChannelOperatorActionDescriptor,
+  ChannelReasoningVisibility,
   ChannelResolvedTarget,
+  ChannelRenderRequest,
+  ChannelRenderResult,
+  ChannelRenderPolicy,
+  ChannelRepairAction,
   ChannelSecretStatus,
+  ChannelSecretTargetDescriptor,
+  ChannelSetupFieldDescriptor,
+  ChannelSetupSchema,
   ChannelSurface,
   ChannelTargetResolveOptions,
   ChannelToolDescriptor,
 } from './types.ts';
 
-type ManagedSurface = 'slack' | 'discord' | 'ntfy' | 'webhook';
+type ManagedSurface =
+  | 'slack'
+  | 'discord'
+  | 'ntfy'
+  | 'webhook'
+  | 'telegram'
+  | 'google-chat'
+  | 'signal'
+  | 'whatsapp'
+  | 'imessage';
 
 interface BuiltinChannelRuntimeDeps {
   readonly configManager: ConfigManager;
@@ -60,7 +95,47 @@ interface BuiltinChannelRuntimeDeps {
   readonly deliverWebhookApprovalUpdate: (approval: SharedApprovalRecord, binding: AutomationRouteBinding) => Promise<void>;
 }
 
+type SurfaceConfigSection = keyof SurfacesConfig;
+
+const CHANNEL_SETUP_VERSION = 1;
+const DEFAULT_SECRET_BACKENDS = [
+  'env',
+  'goodvibes',
+  'service-registry',
+  '1password',
+  'bitwarden',
+  'vaultwarden',
+  'bitwarden-secrets-manager',
+  'bws',
+  'manual',
+] as const;
+
+function configSectionForSurface(surface: ManagedSurface): SurfaceConfigSection {
+  switch (surface) {
+    case 'slack':
+      return 'slack';
+    case 'discord':
+      return 'discord';
+    case 'ntfy':
+      return 'ntfy';
+    case 'webhook':
+      return 'webhook';
+    case 'telegram':
+      return 'telegram';
+    case 'google-chat':
+      return 'googleChat';
+    case 'signal':
+      return 'signal';
+    case 'whatsapp':
+      return 'whatsapp';
+    case 'imessage':
+      return 'imessage';
+  }
+}
+
 export class BuiltinChannelRuntime {
+  private readonly channelPolicy = ChannelPolicyManager.getInstance();
+
   constructor(private readonly deps: BuiltinChannelRuntimeDeps) {}
 
   registerPlugins(): void {
@@ -84,6 +159,7 @@ export class BuiltinChannelRuntime {
       runTool: (toolId, input) => this.runTool('tui', toolId, input),
       listOperatorActions: async () => this.listOperatorActions('tui'),
       runOperatorAction: (actionId, input) => this.runOperatorAction('tui', actionId, input),
+      ...this.buildContractHooks('tui'),
       ...this.buildProductHooks('tui'),
       lookupDirectory: async (query) => query.trim()
         ? [{ id: 'surface:tui', surface: 'tui', kind: 'service', label: 'Terminal UI', metadata: {} }]
@@ -112,6 +188,7 @@ export class BuiltinChannelRuntime {
       runTool: (toolId, input) => this.runTool('web', toolId, input),
       listOperatorActions: async () => this.listOperatorActions('web'),
       runOperatorAction: (actionId, input) => this.runOperatorAction('web', actionId, input),
+      ...this.buildContractHooks('web'),
       ...this.buildProductHooks('web'),
       lookupDirectory: async () => [{ id: 'surface:web', surface: 'web', kind: 'service', label: 'Web control plane', metadata: {} }],
     });
@@ -145,6 +222,7 @@ export class BuiltinChannelRuntime {
       runTool: (toolId, input) => this.runTool('slack', toolId, input),
       listOperatorActions: async () => this.listOperatorActions('slack'),
       runOperatorAction: (actionId, input) => this.runOperatorAction('slack', actionId, input),
+      ...this.buildContractHooks('slack'),
       ...this.buildProductHooks('slack'),
       lookupDirectory: async (query, options) => this.lookupDirectory('slack', query, options),
     });
@@ -178,6 +256,7 @@ export class BuiltinChannelRuntime {
       runTool: (toolId, input) => this.runTool('discord', toolId, input),
       listOperatorActions: async () => this.listOperatorActions('discord'),
       runOperatorAction: (actionId, input) => this.runOperatorAction('discord', actionId, input),
+      ...this.buildContractHooks('discord'),
       ...this.buildProductHooks('discord'),
       lookupDirectory: async (query, options) => this.lookupDirectory('discord', query, options),
     });
@@ -210,6 +289,7 @@ export class BuiltinChannelRuntime {
       runTool: (toolId, input) => this.runTool('ntfy', toolId, input),
       listOperatorActions: async () => this.listOperatorActions('ntfy'),
       runOperatorAction: (actionId, input) => this.runOperatorAction('ntfy', actionId, input),
+      ...this.buildContractHooks('ntfy'),
       ...this.buildProductHooks('ntfy'),
       lookupDirectory: async (query, options) => this.lookupDirectory('ntfy', query, options),
     });
@@ -240,8 +320,169 @@ export class BuiltinChannelRuntime {
       runTool: (toolId, input) => this.runTool('webhook', toolId, input),
       listOperatorActions: async () => this.listOperatorActions('webhook'),
       runOperatorAction: (actionId, input) => this.runOperatorAction('webhook', actionId, input),
+      ...this.buildContractHooks('webhook'),
       ...this.buildProductHooks('webhook'),
       lookupDirectory: async (query, options) => this.lookupRouteDirectory('webhook', query, options),
+    });
+
+    this.deps.channelPlugins.register({
+      id: 'surface:telegram',
+      surface: 'telegram',
+      displayName: 'Telegram',
+      capabilities: ['ingress', 'egress', 'threaded_reply', 'interactive_actions', 'account_lifecycle', 'target_resolution', 'agent_tools'],
+      webhookPath: '/webhook/telegram',
+      handleInbound: (req) => handleTelegramSurfaceWebhook(req, this.deps.buildSurfaceAdapterContext()),
+      getStatus: async () => {
+        const account = await this.buildAccount('telegram');
+        return {
+          id: 'surface:telegram',
+          surface: 'telegram',
+          label: 'Telegram',
+          state: account.state === 'healthy' ? 'healthy' : account.state === 'disabled' ? 'disabled' : 'degraded',
+          enabled: this.deps.surfaceDeliveryEnabled('telegram'),
+          accountId: account.accountId,
+          metadata: account.metadata,
+        };
+      },
+      listAccounts: async () => [await this.buildAccount('telegram')],
+      getAccount: async (accountId) => this.resolveAccount('telegram', accountId),
+      listCapabilities: async () => this.listCapabilities('telegram'),
+      listTools: async () => this.listTools('telegram'),
+      runTool: (toolId, input) => this.runTool('telegram', toolId, input),
+      listOperatorActions: async () => this.listOperatorActions('telegram'),
+      runOperatorAction: (actionId, input) => this.runOperatorAction('telegram', actionId, input),
+      notifyApproval: (approval, binding) => this.notifyApprovalViaRouter('telegram', approval, binding),
+      ...this.buildContractHooks('telegram'),
+      ...this.buildProductHooks('telegram'),
+      lookupDirectory: async (query, options) => this.lookupDirectory('telegram', query, options),
+    });
+
+    this.deps.channelPlugins.register({
+      id: 'surface:google-chat',
+      surface: 'google-chat',
+      displayName: 'Google Chat',
+      capabilities: ['ingress', 'egress', 'threaded_reply', 'interactive_actions', 'account_lifecycle', 'target_resolution', 'agent_tools'],
+      webhookPath: '/webhook/google-chat',
+      handleInbound: (req) => handleGoogleChatSurfaceWebhook(req, this.deps.buildSurfaceAdapterContext()),
+      getStatus: async () => {
+        const account = await this.buildAccount('google-chat');
+        return {
+          id: 'surface:google-chat',
+          surface: 'google-chat',
+          label: 'Google Chat',
+          state: account.state === 'healthy' ? 'healthy' : account.state === 'disabled' ? 'disabled' : 'degraded',
+          enabled: this.deps.surfaceDeliveryEnabled('google-chat'),
+          accountId: account.accountId,
+          metadata: account.metadata,
+        };
+      },
+      listAccounts: async () => [await this.buildAccount('google-chat')],
+      getAccount: async (accountId) => this.resolveAccount('google-chat', accountId),
+      listCapabilities: async () => this.listCapabilities('google-chat'),
+      listTools: async () => this.listTools('google-chat'),
+      runTool: (toolId, input) => this.runTool('google-chat', toolId, input),
+      listOperatorActions: async () => this.listOperatorActions('google-chat'),
+      runOperatorAction: (actionId, input) => this.runOperatorAction('google-chat', actionId, input),
+      notifyApproval: (approval, binding) => this.notifyApprovalViaRouter('google-chat', approval, binding),
+      ...this.buildContractHooks('google-chat'),
+      ...this.buildProductHooks('google-chat'),
+      lookupDirectory: async (query, options) => this.lookupDirectory('google-chat', query, options),
+    });
+
+    this.deps.channelPlugins.register({
+      id: 'surface:signal',
+      surface: 'signal',
+      displayName: 'Signal',
+      capabilities: ['ingress', 'egress', 'account_lifecycle', 'target_resolution', 'agent_tools'],
+      webhookPath: '/webhook/signal',
+      handleInbound: (req) => handleSignalSurfaceWebhook(req, this.deps.buildSurfaceAdapterContext()),
+      getStatus: async () => {
+        const account = await this.buildAccount('signal');
+        return {
+          id: 'surface:signal',
+          surface: 'signal',
+          label: 'Signal',
+          state: account.state === 'healthy' ? 'healthy' : account.state === 'disabled' ? 'disabled' : 'degraded',
+          enabled: this.deps.surfaceDeliveryEnabled('signal'),
+          accountId: account.accountId,
+          metadata: account.metadata,
+        };
+      },
+      listAccounts: async () => [await this.buildAccount('signal')],
+      getAccount: async (accountId) => this.resolveAccount('signal', accountId),
+      listCapabilities: async () => this.listCapabilities('signal'),
+      listTools: async () => this.listTools('signal'),
+      runTool: (toolId, input) => this.runTool('signal', toolId, input),
+      listOperatorActions: async () => this.listOperatorActions('signal'),
+      runOperatorAction: (actionId, input) => this.runOperatorAction('signal', actionId, input),
+      notifyApproval: (approval, binding) => this.notifyApprovalViaRouter('signal', approval, binding),
+      ...this.buildContractHooks('signal'),
+      ...this.buildProductHooks('signal'),
+      lookupDirectory: async (query, options) => this.lookupDirectory('signal', query, options),
+    });
+
+    this.deps.channelPlugins.register({
+      id: 'surface:whatsapp',
+      surface: 'whatsapp',
+      displayName: 'WhatsApp',
+      capabilities: ['ingress', 'egress', 'interactive_actions', 'account_lifecycle', 'target_resolution', 'agent_tools'],
+      webhookPath: '/webhook/whatsapp',
+      handleInbound: (req) => handleWhatsAppSurfaceWebhook(req, this.deps.buildSurfaceAdapterContext()),
+      getStatus: async () => {
+        const account = await this.buildAccount('whatsapp');
+        return {
+          id: 'surface:whatsapp',
+          surface: 'whatsapp',
+          label: 'WhatsApp',
+          state: account.state === 'healthy' ? 'healthy' : account.state === 'disabled' ? 'disabled' : 'degraded',
+          enabled: this.deps.surfaceDeliveryEnabled('whatsapp'),
+          accountId: account.accountId,
+          metadata: account.metadata,
+        };
+      },
+      listAccounts: async () => [await this.buildAccount('whatsapp')],
+      getAccount: async (accountId) => this.resolveAccount('whatsapp', accountId),
+      listCapabilities: async () => this.listCapabilities('whatsapp'),
+      listTools: async () => this.listTools('whatsapp'),
+      runTool: (toolId, input) => this.runTool('whatsapp', toolId, input),
+      listOperatorActions: async () => this.listOperatorActions('whatsapp'),
+      runOperatorAction: (actionId, input) => this.runOperatorAction('whatsapp', actionId, input),
+      notifyApproval: (approval, binding) => this.notifyApprovalViaRouter('whatsapp', approval, binding),
+      ...this.buildContractHooks('whatsapp'),
+      ...this.buildProductHooks('whatsapp'),
+      lookupDirectory: async (query, options) => this.lookupDirectory('whatsapp', query, options),
+    });
+
+    this.deps.channelPlugins.register({
+      id: 'surface:imessage',
+      surface: 'imessage',
+      displayName: 'iMessage',
+      capabilities: ['ingress', 'egress', 'account_lifecycle', 'target_resolution', 'agent_tools'],
+      webhookPath: '/webhook/imessage',
+      handleInbound: (req) => handleIMessageSurfaceWebhook(req, this.deps.buildSurfaceAdapterContext()),
+      getStatus: async () => {
+        const account = await this.buildAccount('imessage');
+        return {
+          id: 'surface:imessage',
+          surface: 'imessage',
+          label: 'iMessage',
+          state: account.state === 'healthy' ? 'healthy' : account.state === 'disabled' ? 'disabled' : 'degraded',
+          enabled: this.deps.surfaceDeliveryEnabled('imessage'),
+          accountId: account.accountId,
+          metadata: account.metadata,
+        };
+      },
+      listAccounts: async () => [await this.buildAccount('imessage')],
+      getAccount: async (accountId) => this.resolveAccount('imessage', accountId),
+      listCapabilities: async () => this.listCapabilities('imessage'),
+      listTools: async () => this.listTools('imessage'),
+      runTool: (toolId, input) => this.runTool('imessage', toolId, input),
+      listOperatorActions: async () => this.listOperatorActions('imessage'),
+      runOperatorAction: (actionId, input) => this.runOperatorAction('imessage', actionId, input),
+      notifyApproval: (approval, binding) => this.notifyApprovalViaRouter('imessage', approval, binding),
+      ...this.buildContractHooks('imessage'),
+      ...this.buildProductHooks('imessage'),
+      lookupDirectory: async (query, options) => this.lookupDirectory('imessage', query, options),
     });
   }
 
@@ -344,7 +585,106 @@ export class BuiltinChannelRuntime {
           },
         });
       }
+      case 'telegram': {
+        const surfaces = this.deps.configManager.getCategory('surfaces');
+        const secrets = await Promise.all([
+          this.describeSecret('primary', 'Bot token', surfaces.telegram.botToken, ['TELEGRAM_BOT_TOKEN'], 'telegram', 'primary'),
+          this.describeSecret('webhookSecret', 'Webhook secret', surfaces.telegram.webhookSecret, ['TELEGRAM_WEBHOOK_SECRET'], 'telegram', 'signingSecret'),
+        ]);
+        return this.finalizeChannelAccount({
+          surface,
+          label: 'Telegram',
+          enabled: this.deps.surfaceDeliveryEnabled('telegram'),
+          accountId: surfaces.telegram.botUsername || surfaces.telegram.defaultChatId || 'surface:telegram',
+          secrets,
+          metadata: {
+            botUsername: surfaces.telegram.botUsername,
+            defaultChatId: surfaces.telegram.defaultChatId,
+            mode: surfaces.telegram.mode,
+            setupVersion: surfaces.telegram.setupVersion,
+          },
+        });
+      }
+      case 'google-chat': {
+        const surfaces = this.deps.configManager.getCategory('surfaces');
+        const secrets = await Promise.all([
+          this.describeSecret('webhookUrl', 'Webhook URL', surfaces.googleChat.webhookUrl, ['GOOGLE_CHAT_WEBHOOK_URL'], 'google-chat', 'webhookUrl'),
+          this.describeSecret('verificationToken', 'Verification token', surfaces.googleChat.verificationToken, ['GOOGLE_CHAT_VERIFICATION_TOKEN'], 'google-chat', 'signingSecret'),
+        ]);
+        return this.finalizeChannelAccount({
+          surface,
+          label: 'Google Chat',
+          enabled: this.deps.surfaceDeliveryEnabled('google-chat'),
+          accountId: surfaces.googleChat.appId || surfaces.googleChat.spaceId || 'surface:google-chat',
+          secrets,
+          metadata: {
+            appId: surfaces.googleChat.appId,
+            spaceId: surfaces.googleChat.spaceId,
+            setupVersion: surfaces.googleChat.setupVersion,
+          },
+        });
+      }
+      case 'signal': {
+        const surfaces = this.deps.configManager.getCategory('surfaces');
+        const secrets = await Promise.all([
+          this.describeSecret('primary', 'Bridge token', surfaces.signal.token, ['SIGNAL_BRIDGE_TOKEN'], 'signal', 'primary'),
+        ]);
+        return this.finalizeChannelAccount({
+          surface,
+          label: 'Signal',
+          enabled: this.deps.surfaceDeliveryEnabled('signal'),
+          accountId: surfaces.signal.account || surfaces.signal.defaultRecipient || 'surface:signal',
+          secrets,
+          metadata: {
+            bridgeUrl: surfaces.signal.bridgeUrl,
+            account: surfaces.signal.account,
+            defaultRecipient: surfaces.signal.defaultRecipient,
+            setupVersion: surfaces.signal.setupVersion,
+          },
+        });
+      }
+      case 'whatsapp': {
+        const surfaces = this.deps.configManager.getCategory('surfaces');
+        const secrets = await Promise.all([
+          this.describeSecret('primary', 'Access token', surfaces.whatsapp.accessToken, ['WHATSAPP_ACCESS_TOKEN'], 'whatsapp', 'primary'),
+          this.describeSecret('verifyToken', 'Verify token', surfaces.whatsapp.verifyToken, ['WHATSAPP_VERIFY_TOKEN'], 'whatsapp', 'signingSecret'),
+        ]);
+        return this.finalizeChannelAccount({
+          surface,
+          label: 'WhatsApp',
+          enabled: this.deps.surfaceDeliveryEnabled('whatsapp'),
+          accountId: surfaces.whatsapp.phoneNumberId || surfaces.whatsapp.defaultRecipient || 'surface:whatsapp',
+          secrets,
+          metadata: {
+            provider: surfaces.whatsapp.provider,
+            phoneNumberId: surfaces.whatsapp.phoneNumberId,
+            businessAccountId: surfaces.whatsapp.businessAccountId,
+            defaultRecipient: surfaces.whatsapp.defaultRecipient,
+            setupVersion: surfaces.whatsapp.setupVersion,
+          },
+        });
+      }
+      case 'imessage': {
+        const surfaces = this.deps.configManager.getCategory('surfaces');
+        const secrets = await Promise.all([
+          this.describeSecret('primary', 'Bridge token', surfaces.imessage.token, ['IMESSAGE_BRIDGE_TOKEN'], 'imessage', 'primary'),
+        ]);
+        return this.finalizeChannelAccount({
+          surface,
+          label: 'iMessage',
+          enabled: this.deps.surfaceDeliveryEnabled('imessage'),
+          accountId: surfaces.imessage.account || surfaces.imessage.defaultChatId || 'surface:imessage',
+          secrets,
+          metadata: {
+            bridgeUrl: surfaces.imessage.bridgeUrl,
+            account: surfaces.imessage.account,
+            defaultChatId: surfaces.imessage.defaultChatId,
+            setupVersion: surfaces.imessage.setupVersion,
+          },
+        });
+      }
     }
+    throw new Error(`Unsupported built-in surface: ${surface}`);
   }
 
   async resolveAccount(surface: ChannelSurface, accountId: string): Promise<ChannelAccountRecord | null> {
@@ -497,6 +837,70 @@ export class BuiltinChannelRuntime {
         metadata: {},
       },
       {
+        id: 'setup-schema',
+        surface,
+        label: 'Get setup schema',
+        description: 'Return the versioned setup contract, secret targets, and external steps for this surface.',
+        dangerous: false,
+        metadata: {},
+      },
+      {
+        id: 'doctor',
+        surface,
+        label: 'Run doctor',
+        description: 'Return doctor checks and repair actions for this surface.',
+        dangerous: false,
+        inputSchema: {
+          type: 'object',
+          properties: {
+            accountId: { type: 'string' },
+          },
+        },
+        metadata: {},
+      },
+      {
+        id: 'repair-actions',
+        surface,
+        label: 'List repair actions',
+        description: 'Return repair actions for this surface.',
+        dangerous: false,
+        inputSchema: {
+          type: 'object',
+          properties: {
+            accountId: { type: 'string' },
+          },
+        },
+        metadata: {},
+      },
+      {
+        id: 'lifecycle-state',
+        surface,
+        label: 'Get lifecycle state',
+        description: 'Return lifecycle migration posture for this surface.',
+        dangerous: false,
+        inputSchema: {
+          type: 'object',
+          properties: {
+            accountId: { type: 'string' },
+          },
+        },
+        metadata: {},
+      },
+      {
+        id: 'migrate-lifecycle',
+        surface,
+        label: 'Apply lifecycle migration',
+        description: 'Apply lifecycle migrations for this surface.',
+        dangerous: false,
+        inputSchema: {
+          type: 'object',
+          properties: {
+            accountId: { type: 'string' },
+          },
+        },
+        metadata: {},
+      },
+      {
         id: 'list-directory',
         surface,
         label: 'List directory',
@@ -576,6 +980,43 @@ export class BuiltinChannelRuntime {
         metadata: {},
       },
       {
+        id: 'resolve-allowlist',
+        surface,
+        label: 'Resolve allowlist entries',
+        description: 'Resolve allowlist candidates into stable user, channel, or group identifiers.',
+        dangerous: false,
+        inputSchema: {
+          type: 'object',
+          properties: {
+            add: { type: 'array', items: { type: 'string' } },
+            remove: { type: 'array', items: { type: 'string' } },
+            kind: { type: 'string' },
+          },
+          additionalProperties: true,
+        },
+        metadata: {},
+      },
+      {
+        id: 'edit-allowlist',
+        surface,
+        label: 'Edit allowlist',
+        description: 'Apply allowlist additions or removals at the surface or scoped group/channel level.',
+        dangerous: false,
+        inputSchema: {
+          type: 'object',
+          properties: {
+            add: { type: 'array', items: { type: 'string' } },
+            remove: { type: 'array', items: { type: 'string' } },
+            kind: { type: 'string' },
+            groupId: { type: 'string' },
+            channelId: { type: 'string' },
+            workspaceId: { type: 'string' },
+          },
+          additionalProperties: true,
+        },
+        metadata: {},
+      },
+      {
         id: 'provider-api',
         surface,
         label: 'Run provider-native API operation',
@@ -628,6 +1069,85 @@ export class BuiltinChannelRuntime {
         inputSchema: {
           type: 'object',
           additionalProperties: false,
+        },
+        metadata: {},
+      },
+      {
+        id: `${surface}:setup_schema`,
+        surface,
+        name: `${surface}_setup_schema`,
+        description: `Return the setup contract for the ${surface} surface.`,
+        actionIds: ['setup-schema'],
+        inputSchema: {
+          type: 'object',
+          additionalProperties: false,
+        },
+        metadata: {},
+      },
+      {
+        id: `${surface}:doctor`,
+        surface,
+        name: `${surface}_doctor`,
+        description: `Run doctor checks for the ${surface} surface.`,
+        actionIds: ['doctor'],
+        inputSchema: {
+          type: 'object',
+          properties: {
+            accountId: { type: 'string' },
+          },
+          additionalProperties: false,
+        },
+        metadata: {},
+      },
+      {
+        id: `${surface}:lifecycle`,
+        surface,
+        name: `${surface}_lifecycle`,
+        description: `Return lifecycle migration posture for the ${surface} surface.`,
+        actionIds: ['lifecycle-state'],
+        inputSchema: {
+          type: 'object',
+          properties: {
+            accountId: { type: 'string' },
+          },
+          additionalProperties: false,
+        },
+        metadata: {},
+      },
+      {
+        id: `${surface}:allowlist_resolve`,
+        surface,
+        name: `${surface}_allowlist_resolve`,
+        description: `Resolve allowlist candidates for the ${surface} surface.`,
+        actionIds: ['resolve-allowlist'],
+        inputSchema: {
+          type: 'object',
+          properties: {
+            add: { type: 'array', items: { type: 'string' } },
+            remove: { type: 'array', items: { type: 'string' } },
+            kind: { type: 'string' },
+          },
+          additionalProperties: true,
+        },
+        metadata: {},
+      },
+      {
+        id: `${surface}:allowlist_edit`,
+        surface,
+        name: `${surface}_allowlist_edit`,
+        description: `Edit allowlists for the ${surface} surface.`,
+        actionIds: ['edit-allowlist'],
+        inputSchema: {
+          type: 'object',
+          properties: {
+            add: { type: 'array', items: { type: 'string' } },
+            remove: { type: 'array', items: { type: 'string' } },
+            kind: { type: 'string' },
+            groupId: { type: 'string' },
+            channelId: { type: 'string' },
+            workspaceId: { type: 'string' },
+          },
+          additionalProperties: true,
         },
         metadata: {},
       },
@@ -769,6 +1289,25 @@ export class BuiltinChannelRuntime {
     if (actionId === 'inspect-status') {
       return this.deps.channelPlugins.listStatus().then((entries) => entries.find((entry) => entry.surface === surface) ?? null);
     }
+    if (actionId === 'setup-schema') {
+      return this.getSetupSchema(surface);
+    }
+    if (actionId === 'doctor') {
+      const accountId = typeof input?.accountId === 'string' ? input.accountId : undefined;
+      return this.getDoctorReport(surface, accountId);
+    }
+    if (actionId === 'repair-actions') {
+      const accountId = typeof input?.accountId === 'string' ? input.accountId : undefined;
+      return this.listRepairActions(surface, accountId);
+    }
+    if (actionId === 'lifecycle-state') {
+      const accountId = typeof input?.accountId === 'string' ? input.accountId : undefined;
+      return this.getLifecycleState(surface, accountId);
+    }
+    if (actionId === 'migrate-lifecycle') {
+      const accountId = typeof input?.accountId === 'string' ? input.accountId : undefined;
+      return this.migrateLifecycle(surface, accountId, input);
+    }
     if (actionId === 'list-directory') {
       return this.deps.channelPlugins.queryDirectory(surface, {
         query: typeof input?.query === 'string' ? input.query : undefined,
@@ -837,10 +1376,752 @@ export class BuiltinChannelRuntime {
         metadata: {},
       });
     }
+    if (actionId === 'resolve-allowlist') {
+      return this.resolveAllowlist(surface, {
+        ...(Array.isArray(input?.add) ? { add: input.add.filter((entry): entry is string => typeof entry === 'string') } : {}),
+        ...(Array.isArray(input?.remove) ? { remove: input.remove.filter((entry): entry is string => typeof entry === 'string') } : {}),
+        ...(input?.kind === 'user' || input?.kind === 'channel' || input?.kind === 'group' ? { kind: input.kind } : {}),
+      });
+    }
+    if (actionId === 'edit-allowlist') {
+      return this.editAllowlist(surface, {
+        ...(Array.isArray(input?.add) ? { add: input.add.filter((entry): entry is string => typeof entry === 'string') } : {}),
+        ...(Array.isArray(input?.remove) ? { remove: input.remove.filter((entry): entry is string => typeof entry === 'string') } : {}),
+        ...(typeof input?.groupId === 'string' ? { groupId: input.groupId } : {}),
+        ...(typeof input?.channelId === 'string' ? { channelId: input.channelId } : {}),
+        ...(typeof input?.workspaceId === 'string' ? { workspaceId: input.workspaceId } : {}),
+        ...(input?.kind === 'user' || input?.kind === 'channel' || input?.kind === 'group' ? { kind: input.kind } : {}),
+        ...(typeof input?.metadata === 'object' && input.metadata !== null ? { metadata: input.metadata as Record<string, unknown> } : {}),
+      });
+    }
     if (actionId === 'provider-api') {
       return this.runProviderApi(surface, input);
     }
     return null;
+  }
+
+  private buildContractHooks(surface: ChannelSurface): Pick<
+    ChannelPlugin,
+    | 'setupVersion'
+    | 'renderPolicy'
+    | 'getSetupSchema'
+    | 'doctor'
+    | 'listRepairActions'
+    | 'getLifecycleState'
+    | 'migrateLifecycle'
+    | 'resolveAllowlist'
+    | 'editAllowlist'
+  > {
+    return {
+      setupVersion: CHANNEL_SETUP_VERSION,
+      renderPolicy: () => this.renderPolicyFor(surface),
+      getSetupSchema: () => this.getSetupSchema(surface),
+      doctor: (accountId) => this.getDoctorReport(surface, accountId),
+      listRepairActions: (accountId) => this.listRepairActions(surface, accountId),
+      getLifecycleState: (accountId) => this.getLifecycleState(surface, accountId),
+      migrateLifecycle: (accountId, input) => this.migrateLifecycle(surface, accountId, input),
+      resolveAllowlist: (input) => this.resolveAllowlist(surface, input),
+      editAllowlist: (input) => this.editAllowlist(surface, input),
+    };
+  }
+
+  private renderPolicyFor(surface: ChannelSurface): ChannelRenderPolicy {
+    const base = {
+      surface,
+      maxEventsPerUpdate: 16,
+      metadata: { builtIn: true },
+    };
+    switch (surface) {
+      case 'tui':
+        return { ...base, reasoningVisibility: 'public', format: 'markdown', supportsThreads: true, maxChunkChars: 8_000 };
+      case 'web':
+        return { ...base, reasoningVisibility: 'summary', format: 'markdown', supportsThreads: true, maxChunkChars: 8_000 };
+      case 'slack':
+      case 'discord':
+      case 'telegram':
+      case 'google-chat':
+        return {
+          ...base,
+          reasoningVisibility: surface === 'discord' ? 'summary' : 'summary',
+          format: 'markdown',
+          supportsThreads: surface === 'slack' || surface === 'discord' || surface === 'google-chat',
+          maxChunkChars: surface === 'slack' || surface === 'discord' ? 2_500 : 3_500,
+        };
+      case 'ntfy':
+        return { ...base, reasoningVisibility: 'suppress', format: 'plain', supportsThreads: false, maxChunkChars: 1_600 };
+      case 'webhook':
+        return { ...base, reasoningVisibility: 'private', format: 'json', supportsThreads: false, maxChunkChars: 12_000 };
+      case 'signal':
+      case 'whatsapp':
+      case 'imessage':
+        return { ...base, reasoningVisibility: 'summary', format: 'plain', supportsThreads: false, maxChunkChars: 3_500 };
+    }
+  }
+
+  private surfaceLabel(surface: ChannelSurface): string {
+    switch (surface) {
+      case 'tui':
+        return 'Terminal UI';
+      case 'web':
+        return 'Web control plane';
+      case 'slack':
+        return 'Slack';
+      case 'discord':
+        return 'Discord';
+      case 'ntfy':
+        return 'ntfy';
+      case 'webhook':
+        return 'Generic webhook';
+      case 'telegram':
+        return 'Telegram';
+      case 'google-chat':
+        return 'Google Chat';
+      case 'signal':
+        return 'Signal';
+      case 'whatsapp':
+        return 'WhatsApp';
+      case 'imessage':
+        return 'iMessage';
+    }
+  }
+
+  private secretTarget(
+    surface: ChannelSurface,
+    id: string,
+    label: string,
+    required: boolean,
+    detail: string,
+    input: Partial<ChannelSecretTargetDescriptor> = {},
+  ): ChannelSecretTargetDescriptor {
+    return {
+      id,
+      surface,
+      label,
+      required,
+      supports: DEFAULT_SECRET_BACKENDS,
+      detail,
+      metadata: {},
+      ...input,
+    };
+  }
+
+  private setupField(
+    id: string,
+    label: string,
+    kind: ChannelSetupFieldDescriptor['kind'],
+    required: boolean,
+    input: Partial<ChannelSetupFieldDescriptor> = {},
+  ): ChannelSetupFieldDescriptor {
+    return {
+      id,
+      label,
+      kind,
+      required,
+      metadata: {},
+      ...input,
+    };
+  }
+
+  private getSetupSchema(surface: ChannelSurface): ChannelSetupSchema {
+    switch (surface) {
+      case 'tui':
+        return {
+          surface,
+          version: CHANNEL_SETUP_VERSION,
+          label: 'Terminal UI',
+          setupMode: 'config',
+          description: 'The terminal surface is local-only and available whenever the TUI is running.',
+          fields: [],
+          secretTargets: [],
+          externalSteps: [
+            'Launch goodvibes-tui locally.',
+            'Use route bindings if you want automation or remote systems to target the current TUI session.',
+          ],
+          metadata: {},
+        };
+      case 'web':
+        return {
+          surface,
+          version: CHANNEL_SETUP_VERSION,
+          label: 'Web control plane',
+          setupMode: 'config',
+          description: 'The embedded web/control-plane surface exposes HTTP, SSE, and WebSocket contracts for future clients.',
+          fields: [
+            this.setupField('enabled', 'Enabled', 'boolean', false, { configKey: 'web.enabled', defaultValue: false }),
+            this.setupField('publicBaseUrl', 'Public base URL', 'url', false, { configKey: 'web.publicBaseUrl', placeholder: 'https://goodvibes.example.test' }),
+          ],
+          secretTargets: [],
+          externalSteps: [
+            'Enable the web/control-plane surface.',
+            'Point external clients at the control-plane base URL and use daemon auth/session tokens.',
+          ],
+          metadata: {},
+        };
+      case 'slack':
+        return {
+          surface,
+          version: CHANNEL_SETUP_VERSION,
+          label: 'Slack',
+          setupMode: 'oauth',
+          description: 'Slack supports bot-token or OAuth-based setup with optional app-level token and signing secret.',
+          fields: [
+            this.setupField('enabled', 'Enabled', 'boolean', false, { configKey: 'surfaces.slack.enabled', defaultValue: false }),
+            this.setupField('defaultChannel', 'Default channel', 'string', false, { configKey: 'surfaces.slack.defaultChannel', placeholder: '#ops' }),
+            this.setupField('workspaceId', 'Workspace id', 'string', false, { configKey: 'surfaces.slack.workspaceId' }),
+            this.setupField('botToken', 'Bot token', 'secret', false, { configKey: 'surfaces.slack.botToken', secretTargetId: 'primary' }),
+            this.setupField('signingSecret', 'Signing secret', 'secret', false, { configKey: 'surfaces.slack.signingSecret', secretTargetId: 'signingSecret' }),
+            this.setupField('appToken', 'App token', 'secret', false, { configKey: 'surfaces.slack.appToken', secretTargetId: 'appToken' }),
+          ],
+          secretTargets: [
+            this.secretTarget(surface, 'primary', 'Bot token', false, 'Used for API delivery and provider-backed live directory operations.', {
+              serviceName: 'slack',
+              serviceField: 'primary',
+              envKeys: ['SLACK_BOT_TOKEN'],
+              configKeys: ['surfaces.slack.botToken'],
+            }),
+            this.secretTarget(surface, 'signingSecret', 'Signing secret', false, 'Used to verify inbound Slack requests.', {
+              serviceName: 'slack',
+              serviceField: 'signingSecret',
+              envKeys: ['SLACK_SIGNING_SECRET'],
+              configKeys: ['surfaces.slack.signingSecret'],
+            }),
+            this.secretTarget(surface, 'appToken', 'App token', false, 'Used for Slack app socket/runtime flows.', {
+              envKeys: ['SLACK_APP_TOKEN'],
+              configKeys: ['surfaces.slack.appToken'],
+            }),
+          ],
+          externalSteps: [
+            'Create or install the Slack app with the required bot scopes.',
+            'Store the bot token and signing secret in env, GoodVibes secrets, or an external secret reference.',
+            'Optional: generate an OAuth install URL through the provider channel actions.',
+          ],
+          metadata: {},
+        };
+      case 'discord':
+        return {
+          surface,
+          version: CHANNEL_SETUP_VERSION,
+          label: 'Discord',
+          setupMode: 'oauth',
+          description: 'Discord uses a bot token plus application metadata and can register slash commands through the provider actions.',
+          fields: [
+            this.setupField('enabled', 'Enabled', 'boolean', false, { configKey: 'surfaces.discord.enabled', defaultValue: false }),
+            this.setupField('applicationId', 'Application id', 'string', false, { configKey: 'surfaces.discord.applicationId' }),
+            this.setupField('guildId', 'Guild id', 'string', false, { configKey: 'surfaces.discord.guildId' }),
+            this.setupField('defaultChannelId', 'Default channel id', 'string', false, { configKey: 'surfaces.discord.defaultChannelId' }),
+            this.setupField('botToken', 'Bot token', 'secret', false, { configKey: 'surfaces.discord.botToken', secretTargetId: 'primary' }),
+            this.setupField('publicKey', 'Public key', 'secret', false, { configKey: 'surfaces.discord.publicKey', secretTargetId: 'publicKey' }),
+          ],
+          secretTargets: [
+            this.secretTarget(surface, 'primary', 'Bot token', false, 'Used for outbound delivery and provider-backed Discord API operations.', {
+              serviceName: 'discord',
+              serviceField: 'primary',
+              envKeys: ['DISCORD_BOT_TOKEN'],
+              configKeys: ['surfaces.discord.botToken'],
+            }),
+            this.secretTarget(surface, 'publicKey', 'Public key', false, 'Used to verify inbound Discord interaction signatures.', {
+              serviceName: 'discord',
+              serviceField: 'publicKey',
+              envKeys: ['DISCORD_PUBLIC_KEY'],
+              configKeys: ['surfaces.discord.publicKey'],
+            }),
+          ],
+          externalSteps: [
+            'Create a Discord application and bot.',
+            'Store the bot token and public key.',
+            'Install the app into a guild and optionally register slash commands.',
+          ],
+          metadata: {},
+        };
+      case 'ntfy':
+        return {
+          surface,
+          version: CHANNEL_SETUP_VERSION,
+          label: 'ntfy',
+          setupMode: 'webhook',
+          description: 'ntfy is a notification surface backed by a topic, optional token, and subscription URLs.',
+          fields: [
+            this.setupField('enabled', 'Enabled', 'boolean', false, { configKey: 'surfaces.ntfy.enabled', defaultValue: false }),
+            this.setupField('baseUrl', 'Base URL', 'url', false, { configKey: 'surfaces.ntfy.baseUrl', placeholder: 'https://ntfy.sh' }),
+            this.setupField('topic', 'Topic', 'string', true, { configKey: 'surfaces.ntfy.topic' }),
+            this.setupField('token', 'Access token', 'secret', false, { configKey: 'surfaces.ntfy.token', secretTargetId: 'primary' }),
+          ],
+          secretTargets: [
+            this.secretTarget(surface, 'primary', 'Access token', false, 'Used for authenticated ntfy delivery and polling.', {
+              serviceName: 'ntfy',
+              serviceField: 'primary',
+              envKeys: ['NTFY_ACCESS_TOKEN'],
+              configKeys: ['surfaces.ntfy.token'],
+            }),
+          ],
+          externalSteps: [
+            'Choose or create an ntfy topic.',
+            'Optionally configure an authenticated ntfy token.',
+            'Use provider actions to inspect subscribe and poll URLs.',
+          ],
+          metadata: {},
+        };
+      case 'webhook':
+        return {
+          surface,
+          version: CHANNEL_SETUP_VERSION,
+          label: 'Generic webhook',
+          setupMode: 'webhook',
+          description: 'Generic webhook is the universal JSON delivery contract for future clients and bridge services.',
+          fields: [
+            this.setupField('enabled', 'Enabled', 'boolean', false, { configKey: 'surfaces.webhook.enabled', defaultValue: false }),
+            this.setupField('defaultTarget', 'Default target', 'url', false, { configKey: 'surfaces.webhook.defaultTarget' }),
+            this.setupField('secret', 'Shared secret', 'secret', false, { configKey: 'surfaces.webhook.secret', secretTargetId: 'signingSecret' }),
+          ],
+          secretTargets: [
+            this.secretTarget(surface, 'signingSecret', 'Shared secret', false, 'Used to sign or verify webhook payloads.', {
+              configKeys: ['surfaces.webhook.secret'],
+            }),
+          ],
+          externalSteps: [
+            'Point the surface at a public webhook target that can receive GoodVibes JSON payloads.',
+            'Optionally configure a shared secret for callback signing and verification.',
+          ],
+          metadata: {},
+        };
+      case 'telegram':
+        return {
+          surface,
+          version: CHANNEL_SETUP_VERSION,
+          label: 'Telegram',
+          setupMode: 'bot',
+          description: 'Telegram uses a bot token plus either webhook or polling mode and can route into a default chat or channel.',
+          fields: [
+            this.setupField('enabled', 'Enabled', 'boolean', false, { configKey: 'surfaces.telegram.enabled', defaultValue: false }),
+            this.setupField('mode', 'Mode', 'select', true, {
+              configKey: 'surfaces.telegram.mode',
+              options: [{ value: 'webhook', label: 'Webhook' }, { value: 'polling', label: 'Polling' }],
+            }),
+            this.setupField('botUsername', 'Bot username', 'string', false, { configKey: 'surfaces.telegram.botUsername', placeholder: '@goodvibes_bot' }),
+            this.setupField('defaultChatId', 'Default chat id', 'string', false, { configKey: 'surfaces.telegram.defaultChatId', placeholder: '-1001234567890' }),
+            this.setupField('botToken', 'Bot token', 'secret', true, { configKey: 'surfaces.telegram.botToken', secretTargetId: 'primary' }),
+            this.setupField('webhookSecret', 'Webhook secret', 'secret', false, { configKey: 'surfaces.telegram.webhookSecret', secretTargetId: 'signingSecret' }),
+          ],
+          secretTargets: [
+            this.secretTarget(surface, 'primary', 'Bot token', true, 'Used for Telegram bot API calls and inbound verification.', {
+              serviceName: 'telegram',
+              serviceField: 'primary',
+              envKeys: ['TELEGRAM_BOT_TOKEN'],
+              configKeys: ['surfaces.telegram.botToken'],
+            }),
+            this.secretTarget(surface, 'signingSecret', 'Webhook secret', false, 'Used to validate webhook callbacks when Telegram is in webhook mode.', {
+              serviceName: 'telegram',
+              serviceField: 'signingSecret',
+              envKeys: ['TELEGRAM_WEBHOOK_SECRET'],
+              configKeys: ['surfaces.telegram.webhookSecret'],
+            }),
+          ],
+          externalSteps: [
+            'Create a Telegram bot with BotFather.',
+            'Store the bot token and optional webhook secret.',
+            'Choose webhook or polling mode and set the default chat/group/channel if you want direct delivery.',
+          ],
+          metadata: {},
+        };
+      case 'google-chat':
+        return {
+          surface,
+          version: CHANNEL_SETUP_VERSION,
+          label: 'Google Chat',
+          setupMode: 'webhook',
+          description: 'Google Chat can use app callbacks or webhook-style delivery into a default space.',
+          fields: [
+            this.setupField('enabled', 'Enabled', 'boolean', false, { configKey: 'surfaces.googleChat.enabled', defaultValue: false }),
+            this.setupField('appId', 'App id', 'string', false, { configKey: 'surfaces.googleChat.appId' }),
+            this.setupField('spaceId', 'Default space id', 'string', false, { configKey: 'surfaces.googleChat.spaceId' }),
+            this.setupField('webhookUrl', 'Webhook URL', 'secret', false, { configKey: 'surfaces.googleChat.webhookUrl', secretTargetId: 'webhookUrl' }),
+            this.setupField('verificationToken', 'Verification token', 'secret', false, { configKey: 'surfaces.googleChat.verificationToken', secretTargetId: 'signingSecret' }),
+          ],
+          secretTargets: [
+            this.secretTarget(surface, 'webhookUrl', 'Webhook URL', false, 'Used for outbound delivery into Google Chat spaces.', {
+              serviceName: 'google-chat',
+              serviceField: 'webhookUrl',
+              envKeys: ['GOOGLE_CHAT_WEBHOOK_URL'],
+              configKeys: ['surfaces.googleChat.webhookUrl'],
+            }),
+            this.secretTarget(surface, 'signingSecret', 'Verification token', false, 'Used to verify inbound Google Chat events.', {
+              serviceName: 'google-chat',
+              serviceField: 'signingSecret',
+              envKeys: ['GOOGLE_CHAT_VERIFICATION_TOKEN'],
+              configKeys: ['surfaces.googleChat.verificationToken'],
+            }),
+          ],
+          externalSteps: [
+            'Create a Google Chat app or webhook in the target workspace.',
+            'Store the webhook URL and verification token if the app receives events.',
+            'Set a default space id if you want direct delivery routing.',
+          ],
+          metadata: {},
+        };
+      case 'signal':
+        return {
+          surface,
+          version: CHANNEL_SETUP_VERSION,
+          label: 'Signal',
+          setupMode: 'bridge',
+          description: 'Signal relies on a trusted bridge or relay with an account identifier and access token.',
+          fields: [
+            this.setupField('enabled', 'Enabled', 'boolean', false, { configKey: 'surfaces.signal.enabled', defaultValue: false }),
+            this.setupField('bridgeUrl', 'Bridge URL', 'url', true, { configKey: 'surfaces.signal.bridgeUrl', placeholder: 'https://signal-bridge.example.test' }),
+            this.setupField('account', 'Account', 'string', true, { configKey: 'surfaces.signal.account' }),
+            this.setupField('defaultRecipient', 'Default recipient', 'string', false, { configKey: 'surfaces.signal.defaultRecipient' }),
+            this.setupField('token', 'Bridge token', 'secret', false, { configKey: 'surfaces.signal.token', secretTargetId: 'primary' }),
+          ],
+          secretTargets: [
+            this.secretTarget(surface, 'primary', 'Bridge token', false, 'Used to authenticate against the Signal bridge.', {
+              serviceName: 'signal',
+              serviceField: 'primary',
+              envKeys: ['SIGNAL_BRIDGE_TOKEN'],
+              configKeys: ['surfaces.signal.token'],
+            }),
+          ],
+          externalSteps: [
+            'Deploy or point at a trusted Signal bridge.',
+            'Pair the bridge with the Signal account used by GoodVibes.',
+            'Store the bridge URL, account identifier, and access token if required.',
+          ],
+          metadata: {},
+        };
+      case 'whatsapp':
+        return {
+          surface,
+          version: CHANNEL_SETUP_VERSION,
+          label: 'WhatsApp',
+          setupMode: 'bot',
+          description: 'WhatsApp supports Meta Cloud API mode or a bridge-backed mode with provider verification and recipient routing.',
+          fields: [
+            this.setupField('enabled', 'Enabled', 'boolean', false, { configKey: 'surfaces.whatsapp.enabled', defaultValue: false }),
+            this.setupField('provider', 'Provider', 'select', true, {
+              configKey: 'surfaces.whatsapp.provider',
+              options: [{ value: 'meta-cloud', label: 'Meta Cloud API' }, { value: 'bridge', label: 'Bridge' }],
+            }),
+            this.setupField('phoneNumberId', 'Phone number id', 'string', false, { configKey: 'surfaces.whatsapp.phoneNumberId' }),
+            this.setupField('businessAccountId', 'Business account id', 'string', false, { configKey: 'surfaces.whatsapp.businessAccountId' }),
+            this.setupField('defaultRecipient', 'Default recipient', 'string', false, { configKey: 'surfaces.whatsapp.defaultRecipient' }),
+            this.setupField('accessToken', 'Access token', 'secret', true, { configKey: 'surfaces.whatsapp.accessToken', secretTargetId: 'primary' }),
+            this.setupField('verifyToken', 'Verify token', 'secret', false, { configKey: 'surfaces.whatsapp.verifyToken', secretTargetId: 'signingSecret' }),
+          ],
+          secretTargets: [
+            this.secretTarget(surface, 'primary', 'Access token', true, 'Used for WhatsApp provider API calls.', {
+              serviceName: 'whatsapp',
+              serviceField: 'primary',
+              envKeys: ['WHATSAPP_ACCESS_TOKEN'],
+              configKeys: ['surfaces.whatsapp.accessToken'],
+            }),
+            this.secretTarget(surface, 'signingSecret', 'Verify token', false, 'Used for inbound webhook or provider verification.', {
+              serviceName: 'whatsapp',
+              serviceField: 'signingSecret',
+              envKeys: ['WHATSAPP_VERIFY_TOKEN'],
+              configKeys: ['surfaces.whatsapp.verifyToken'],
+            }),
+          ],
+          externalSteps: [
+            'Choose Meta Cloud API or a bridge-backed deployment.',
+            'Store the access token and any verify token required by the provider.',
+            'Set the phone number id, business account id, and default recipient if you want direct routing.',
+          ],
+          metadata: {},
+        };
+      case 'imessage':
+        return {
+          surface,
+          version: CHANNEL_SETUP_VERSION,
+          label: 'iMessage',
+          setupMode: 'bridge',
+          description: 'iMessage is bridge-backed and expects a local or hosted companion that owns platform-native message delivery.',
+          fields: [
+            this.setupField('enabled', 'Enabled', 'boolean', false, { configKey: 'surfaces.imessage.enabled', defaultValue: false }),
+            this.setupField('bridgeUrl', 'Bridge URL', 'url', true, { configKey: 'surfaces.imessage.bridgeUrl', placeholder: 'https://imessage-bridge.example.test' }),
+            this.setupField('account', 'Account', 'string', true, { configKey: 'surfaces.imessage.account' }),
+            this.setupField('defaultChatId', 'Default chat id', 'string', false, { configKey: 'surfaces.imessage.defaultChatId' }),
+            this.setupField('token', 'Bridge token', 'secret', false, { configKey: 'surfaces.imessage.token', secretTargetId: 'primary' }),
+          ],
+          secretTargets: [
+            this.secretTarget(surface, 'primary', 'Bridge token', false, 'Used to authenticate against the iMessage bridge.', {
+              serviceName: 'imessage',
+              serviceField: 'primary',
+              envKeys: ['IMESSAGE_BRIDGE_TOKEN'],
+              configKeys: ['surfaces.imessage.token'],
+            }),
+          ],
+          externalSteps: [
+            'Run or connect to a trusted iMessage bridge or local companion.',
+            'Store the bridge URL and account identifier.',
+            'Configure a bridge token if the companion requires authenticated delivery.',
+          ],
+          metadata: {},
+        };
+    }
+  }
+
+  private async listRepairActions(surface: ChannelSurface, accountId?: string): Promise<readonly ChannelRepairAction[]> {
+    const account = accountId ? await this.resolveAccount(surface, accountId) : await this.buildAccount(surface);
+    const actions = (account?.actions ?? []).map((action): ChannelRepairAction => ({
+      id: action.kind,
+      label: action.label,
+      description: `Run the ${action.kind} lifecycle action for ${this.surfaceLabel(surface)}.`,
+      dangerous: action.kind === 'disconnect' || action.kind === 'logout',
+      inputSchema: action.kind === 'disconnect' || action.kind === 'logout'
+        ? {
+            type: 'object',
+            properties: {
+              confirm: { type: 'boolean' },
+            },
+            required: ['confirm'],
+          }
+        : undefined,
+      metadata: { actionId: action.id, available: action.available },
+    }));
+    const lifecycle = await this.getLifecycleState(surface, accountId);
+    if (lifecycle.currentVersion < lifecycle.targetVersion) {
+      actions.push({
+        id: 'migrate-lifecycle',
+        label: 'Apply lifecycle migration',
+        description: `Advance ${this.surfaceLabel(surface)} setup metadata to version ${lifecycle.targetVersion}.`,
+        dangerous: false,
+        metadata: { fromVersion: lifecycle.currentVersion, toVersion: lifecycle.targetVersion },
+      });
+    }
+    return actions;
+  }
+
+  private async getDoctorReport(surface: ChannelSurface, accountId?: string): Promise<ChannelDoctorReport> {
+    const account = accountId ? await this.resolveAccount(surface, accountId) : await this.buildAccount(surface);
+    const effectiveAccount = account ?? await this.buildAccount(surface);
+    const lifecycle = await this.getLifecycleState(surface, accountId);
+    const checks: ChannelDoctorCheck[] = [];
+    const pushCheck = (id: string, label: string, status: ChannelDoctorStatus, detail: string, repairActionId?: string) => {
+      checks.push({ id, label, status, detail, ...(repairActionId ? { repairActionId } : {}), metadata: {} });
+    };
+
+    pushCheck(
+      'configured',
+      'Configuration present',
+      effectiveAccount.configured ? 'pass' : 'fail',
+      effectiveAccount.configured
+        ? 'Surface configuration or account identity is present.'
+        : 'No durable configuration is present for this surface.',
+      effectiveAccount.configured ? undefined : 'setup',
+    );
+    pushCheck(
+      'credentials',
+      'Credentials linked',
+      effectiveAccount.linked ? 'pass' : effectiveAccount.configured ? 'warn' : 'fail',
+      effectiveAccount.linked
+        ? 'At least one secret source is available.'
+        : effectiveAccount.configured
+          ? 'Configuration exists but no linked credentials were detected.'
+          : 'No credentials were detected.',
+      effectiveAccount.linked ? undefined : 'retest',
+    );
+    pushCheck(
+      'enabled',
+      'Surface enabled',
+      effectiveAccount.enabled ? 'pass' : 'warn',
+      effectiveAccount.enabled
+        ? 'Surface delivery is enabled for the current runtime.'
+        : 'Surface delivery is disabled until it is enabled in config or env.',
+      effectiveAccount.enabled ? undefined : 'start',
+    );
+    pushCheck(
+      'lifecycle',
+      'Lifecycle version',
+      lifecycle.currentVersion >= lifecycle.targetVersion ? 'pass' : 'warn',
+      lifecycle.currentVersion >= lifecycle.targetVersion
+        ? `Setup metadata is at version ${lifecycle.currentVersion}.`
+        : `Setup metadata is at version ${lifecycle.currentVersion}; target is ${lifecycle.targetVersion}.`,
+      lifecycle.currentVersion >= lifecycle.targetVersion ? undefined : 'migrate-lifecycle',
+    );
+
+    const surfaces = this.deps.configManager.getCategory('surfaces');
+    if (surface === 'telegram' && !surfaces.telegram.defaultChatId) {
+      pushCheck('default-target', 'Default chat id', 'warn', 'No default Telegram chat id is configured; direct delivery requires a chat id or route binding.', 'setup');
+    }
+    if (surface === 'google-chat' && !surfaces.googleChat.webhookUrl && !surfaces.googleChat.spaceId) {
+      pushCheck('space-routing', 'Space routing', 'warn', 'Google Chat has neither a webhook URL nor a default space id configured.', 'setup');
+    }
+    if (surface === 'signal' && !surfaces.signal.bridgeUrl) {
+      pushCheck('bridge-url', 'Bridge URL', 'fail', 'Signal requires a bridge URL.', 'setup');
+    }
+    if (surface === 'whatsapp' && !surfaces.whatsapp.phoneNumberId && surfaces.whatsapp.provider === 'meta-cloud') {
+      pushCheck('provider-shape', 'Provider metadata', 'warn', 'Meta Cloud mode works best with a phone number id configured.', 'setup');
+    }
+    if (surface === 'imessage' && !surfaces.imessage.bridgeUrl) {
+      pushCheck('bridge-url', 'Bridge URL', 'fail', 'iMessage requires a bridge URL or local companion endpoint.', 'setup');
+    }
+
+    const failures = checks.filter((check) => check.status === 'fail').length;
+    const warnings = checks.filter((check) => check.status === 'warn').length;
+    const summary = failures > 0
+      ? `${failures} failing checks and ${warnings} warnings.`
+      : warnings > 0
+        ? `${warnings} warnings; no failing checks.`
+        : 'All checks passed.';
+
+    return {
+      surface,
+      ...(accountId ? { accountId } : {}),
+      state: effectiveAccount.state,
+      summary,
+      checkedAt: Date.now(),
+      checks,
+      repairActions: await this.listRepairActions(surface, accountId),
+      metadata: {
+        accountId: effectiveAccount.accountId ?? effectiveAccount.id,
+      },
+    };
+  }
+
+  private async getLifecycleState(surface: ChannelSurface, accountId?: string): Promise<ChannelLifecycleState> {
+    const currentVersion = this.getConfiguredSetupVersion(surface);
+    const migrations: ChannelLifecycleMigrationRecord[] = currentVersion >= CHANNEL_SETUP_VERSION
+      ? [{
+          id: `${surface}:lifecycle:${currentVersion}`,
+          fromVersion: currentVersion,
+          toVersion: CHANNEL_SETUP_VERSION,
+          action: 'noop',
+          applied: true,
+          detail: 'Setup metadata is current.',
+          metadata: {},
+        }]
+      : [{
+          id: `${surface}:lifecycle:${currentVersion}->${CHANNEL_SETUP_VERSION}`,
+          fromVersion: currentVersion,
+          toVersion: CHANNEL_SETUP_VERSION,
+          action: 'migrate',
+          applied: false,
+          detail: 'Setup metadata needs to be upgraded to the current schema version.',
+          metadata: {},
+        }];
+    return {
+      surface,
+      ...(accountId ? { accountId } : {}),
+      currentVersion,
+      targetVersion: CHANNEL_SETUP_VERSION,
+      migrations,
+      metadata: {},
+    };
+  }
+
+  private async migrateLifecycle(
+    surface: ChannelSurface,
+    accountId?: string,
+    _input?: Record<string, unknown>,
+  ): Promise<ChannelLifecycleState> {
+    if (surface === 'tui' || surface === 'web') {
+      return this.getLifecycleState(surface, accountId);
+    }
+    const section = configSectionForSurface(surface);
+    const surfaces = this.deps.configManager.getCategory('surfaces');
+    const current = surfaces[section];
+    const normalized = surface === 'telegram'
+      ? { ...surfaces.telegram, mode: surfaces.telegram.mode || 'webhook', setupVersion: CHANNEL_SETUP_VERSION }
+      : surface === 'whatsapp'
+        ? { ...surfaces.whatsapp, provider: surfaces.whatsapp.provider || 'meta-cloud', setupVersion: CHANNEL_SETUP_VERSION }
+        : { ...current, setupVersion: CHANNEL_SETUP_VERSION };
+    this.deps.configManager.mergeCategory('surfaces', {
+      [section]: normalized,
+    } as Partial<SurfacesConfig>);
+    return this.getLifecycleState(surface, accountId);
+  }
+
+  private async resolveAllowlist(surface: ChannelSurface, input: ChannelAllowlistEditInput): Promise<ChannelAllowlistResolution> {
+    const requested = [...(input.add ?? []), ...(input.remove ?? [])];
+    const resolved: ChannelAllowlistTarget[] = [];
+    const unresolved: string[] = [];
+    const seen = new Set<string>();
+    for (const rawInput of requested) {
+      const candidate = rawInput.trim();
+      if (!candidate || seen.has(candidate)) continue;
+      seen.add(candidate);
+      const target = await this.resolveTarget(surface, {
+        input: candidate,
+        createIfMissing: true,
+        ...(input.kind ? { preferredKind: this.preferredConversationKindForAllowlist(input.kind) } : {}),
+      });
+      if (!target) {
+        unresolved.push(candidate);
+        continue;
+      }
+      const kind = input.kind ?? this.allowlistTargetKindForResolvedTarget(target);
+      const id = this.allowlistTargetId(kind, target);
+      if (!id) {
+        unresolved.push(candidate);
+        continue;
+      }
+      resolved.push({
+        kind,
+        input: candidate,
+        id,
+        label: target.display ?? target.to,
+        metadata: { target },
+      });
+    }
+    return {
+      surface,
+      resolved,
+      unresolved,
+      metadata: {},
+    };
+  }
+
+  private async editAllowlist(surface: ChannelSurface, input: ChannelAllowlistEditInput): Promise<ChannelAllowlistEditResult> {
+    await this.channelPolicy.start();
+    const resolution = await this.resolveAllowlist(surface, input);
+    const addInputs = new Set((input.add ?? []).map((value) => value.trim()).filter(Boolean));
+    const removeInputs = new Set((input.remove ?? []).map((value) => value.trim()).filter(Boolean));
+    const added = resolution.resolved.filter((entry) => addInputs.has(entry.input));
+    const removed = resolution.resolved.filter((entry) => removeInputs.has(entry.input));
+    const existing = this.channelPolicy.getPolicy(surface);
+    const scoped = Boolean(input.groupId || input.channelId || input.workspaceId);
+
+    if (scoped) {
+      const match = existing.groupPolicies.find((entry) => (
+        (input.groupId && entry.groupId === input.groupId)
+        || (input.channelId && entry.channelId === input.channelId)
+        || (input.workspaceId && entry.workspaceId === input.workspaceId)
+      ));
+      const nextGroup = {
+        id: match?.id ?? `allowlist:${surface}:${input.groupId ?? input.channelId ?? input.workspaceId ?? 'scope'}`,
+        ...(match?.label ? { label: match.label } : {}),
+        ...(input.groupId ? { groupId: input.groupId } : match?.groupId ? { groupId: match.groupId } : {}),
+        ...(input.channelId ? { channelId: input.channelId } : match?.channelId ? { channelId: match.channelId } : {}),
+        ...(input.workspaceId ? { workspaceId: input.workspaceId } : match?.workspaceId ? { workspaceId: match.workspaceId } : {}),
+        allowlistUserIds: this.applyAllowlistChanges(match?.allowlistUserIds ?? [], added.filter((entry) => entry.kind === 'user').map((entry) => entry.id), removed.filter((entry) => entry.kind === 'user').map((entry) => entry.id)),
+        allowlistChannelIds: this.applyAllowlistChanges(match?.allowlistChannelIds ?? [], added.filter((entry) => entry.kind === 'channel').map((entry) => entry.id), removed.filter((entry) => entry.kind === 'channel').map((entry) => entry.id)),
+        allowlistGroupIds: this.applyAllowlistChanges(match?.allowlistGroupIds ?? [], added.filter((entry) => entry.kind === 'group').map((entry) => entry.id), removed.filter((entry) => entry.kind === 'group').map((entry) => entry.id)),
+        metadata: match?.metadata ?? {},
+      };
+      const updated = await this.channelPolicy.upsertPolicy(surface, {
+        groupPolicies: [
+          ...existing.groupPolicies.filter((entry) => entry.id !== nextGroup.id),
+          nextGroup,
+        ],
+      });
+      return {
+        surface,
+        updatedPolicy: updated,
+        resolution,
+        metadata: { scoped: true, groupPolicyId: nextGroup.id },
+      };
+    }
+
+    const updated = await this.channelPolicy.upsertPolicy(surface, {
+      allowlistUserIds: this.applyAllowlistChanges(existing.allowlistUserIds, added.filter((entry) => entry.kind === 'user').map((entry) => entry.id), removed.filter((entry) => entry.kind === 'user').map((entry) => entry.id)),
+      allowlistChannelIds: this.applyAllowlistChanges(existing.allowlistChannelIds, added.filter((entry) => entry.kind === 'channel').map((entry) => entry.id), removed.filter((entry) => entry.kind === 'channel').map((entry) => entry.id)),
+      allowlistGroupIds: this.applyAllowlistChanges(existing.allowlistGroupIds, added.filter((entry) => entry.kind === 'group').map((entry) => entry.id), removed.filter((entry) => entry.kind === 'group').map((entry) => entry.id)),
+    });
+    return {
+      surface,
+      updatedPolicy: updated,
+      resolution,
+      metadata: { scoped: false },
+    };
   }
 
   private buildProductHooks(surface: ChannelSurface): Pick<
@@ -852,6 +2133,7 @@ export class BuiltinChannelRuntime {
     | 'resolveTarget'
     | 'resolveSessionTarget'
     | 'resolveParentConversationCandidates'
+    | 'renderEvent'
     | 'listAgentTools'
   > {
     return {
@@ -862,8 +2144,131 @@ export class BuiltinChannelRuntime {
       resolveTarget: (options) => this.resolveTarget(surface, options),
       resolveSessionTarget: (target) => this.resolveSessionTarget(target),
       resolveParentConversationCandidates: (options) => this.resolveParentConversationCandidates(surface, options),
+      renderEvent: (request) => this.renderChannelEvent(surface, request),
       listAgentTools: () => this.listAgentTools(surface),
     };
+  }
+
+  private async renderChannelEvent(surface: ChannelSurface, request: ChannelRenderRequest): Promise<ChannelRenderResult> {
+    const router = ChannelDeliveryRouter.getActive();
+    if (!router) throw new Error('Channel delivery router is not active');
+    const binding = request.routeId ? this.deps.routeBindings.getBinding(request.routeId) : undefined;
+    const responseId = await router.deliver({
+      target: this.buildDeliveryTarget(surface, request, binding),
+      body: request.text,
+      title: request.title,
+      jobId: binding?.jobId ?? request.routeId ?? `channel:${surface}`,
+      runId: binding?.runId ?? request.agentId ?? request.sessionId ?? `${surface}:${Date.now()}`,
+      ...(request.agentId ? { agentId: request.agentId } : {}),
+      status: this.renderStatus(request),
+      includeLinks: request.phase !== 'progress',
+      ...(binding ? { binding: this.toDeliveryRouteBinding(binding) } : {}),
+    });
+    return {
+      delivered: true,
+      ...(responseId ? { responseId } : {}),
+      ...(binding?.threadId ? { threadId: binding.threadId } : {}),
+      metadata: {
+        surface,
+        phase: request.phase,
+        via: 'channel-delivery-router',
+      },
+    };
+  }
+
+  private async notifyApprovalViaRouter(
+    surface: ChannelSurface,
+    approval: SharedApprovalRecord,
+    binding: AutomationRouteBinding,
+  ): Promise<void> {
+    const router = ChannelDeliveryRouter.getActive();
+    if (!router) throw new Error('Channel delivery router is not active');
+    const status = approval.status === 'approved'
+      ? 'completed'
+      : approval.status === 'denied' || approval.status === 'cancelled' || approval.status === 'expired'
+        ? 'failed'
+        : 'running';
+    await router.deliver({
+      target: this.buildDeliveryTarget(surface, { pending: {} }, binding),
+      body: this.formatApprovalMessage(approval),
+      title: `Approval ${approval.status}: ${approval.request.tool}`,
+      jobId: binding.jobId ?? `approval:${approval.id}`,
+      runId: binding.runId ?? approval.id,
+      status,
+      includeLinks: true,
+      binding: this.toDeliveryRouteBinding(binding),
+    });
+  }
+
+  private buildDeliveryTarget(
+    surface: ChannelSurface,
+    request: { readonly pending?: Record<string, unknown> },
+    binding?: AutomationRouteBinding,
+  ): ChannelDeliveryRequest['target'] {
+    const pending = request.pending ?? {};
+    const address = surface === 'webhook'
+      ? this.readPendingString(pending, 'callbackUrl')
+        ?? this.readMetadataString(binding?.metadata, 'callbackUrl')
+      : this.readPendingString(pending, 'targetAddress')
+        ?? this.readPendingString(pending, 'responseUrl')
+        ?? this.readPendingString(pending, 'channelId')
+        ?? this.readPendingString(pending, 'topic')
+        ?? binding?.channelId
+        ?? binding?.externalId;
+    if (surface === 'webhook') {
+      return {
+        kind: 'webhook',
+        surfaceKind: 'webhook',
+        ...(address ? { address } : {}),
+      };
+    }
+    return {
+      kind: 'surface',
+      surfaceKind: surface,
+      ...(address ? { address } : {}),
+    };
+  }
+
+  private toDeliveryRouteBinding(binding: AutomationRouteBinding): ChannelDeliveryRouteBinding {
+    return {
+      id: binding.id,
+      surfaceKind: binding.surfaceKind,
+      surfaceId: binding.surfaceId,
+      externalId: binding.externalId,
+      ...(binding.threadId ? { threadId: binding.threadId } : {}),
+      ...(binding.channelId ? { channelId: binding.channelId } : {}),
+      ...(binding.title ? { title: binding.title } : {}),
+      metadata: { ...binding.metadata },
+    };
+  }
+
+  private renderStatus(request: ChannelRenderRequest): string {
+    if (request.events.some((event) => event.kind === 'error')) return 'failed';
+    if (request.phase === 'final') return 'completed';
+    if (request.phase === 'approval') return 'running';
+    return 'running';
+  }
+
+  private formatApprovalMessage(approval: SharedApprovalRecord): string {
+    const lines = [
+      `Approval ${approval.status}: ${approval.id}`,
+      `Tool: ${approval.request.tool}`,
+      approval.request.analysis.summary,
+      approval.request.analysis.target ? `Target: ${approval.request.analysis.target}` : '',
+      approval.resolvedBy ? `Resolved by: ${approval.resolvedBy}` : '',
+    ].filter((line) => line.trim().length > 0);
+    return lines.join('\n');
+  }
+
+  private readPendingString(pending: Record<string, unknown>, key: string): string | undefined {
+    const value = pending[key];
+    return typeof value === 'string' && value.trim().length > 0 ? value.trim() : undefined;
+  }
+
+  private readMetadataString(metadata: Record<string, unknown> | undefined, key: string): string | undefined {
+    if (!metadata) return undefined;
+    const value = metadata[key];
+    return typeof value === 'string' && value.trim().length > 0 ? value.trim() : undefined;
   }
 
   private listAgentTools(surface: ChannelSurface): readonly Tool[] {
@@ -1544,6 +2949,44 @@ export class BuiltinChannelRuntime {
     return `channel:${target.surface}:${stableId.toLowerCase()}`;
   }
 
+  private getConfiguredSetupVersion(surface: ChannelSurface): number {
+    if (surface === 'tui' || surface === 'web') return CHANNEL_SETUP_VERSION;
+    const managed = this.asManagedSurface(surface);
+    if (!managed) return CHANNEL_SETUP_VERSION;
+    const section = configSectionForSurface(managed);
+    const surfaces = this.deps.configManager.getCategory('surfaces');
+    return Number(surfaces[section].setupVersion ?? 0);
+  }
+
+  private applyAllowlistChanges(existing: readonly string[], add: readonly string[], remove: readonly string[]): string[] {
+    const next = new Set(existing);
+    for (const value of add) {
+      if (value.trim()) next.add(value.trim());
+    }
+    for (const value of remove) {
+      if (value.trim()) next.delete(value.trim());
+    }
+    return [...next].sort((a, b) => a.localeCompare(b));
+  }
+
+  private preferredConversationKindForAllowlist(kind: ChannelAllowlistTargetKind): ChannelConversationKind {
+    if (kind === 'user') return 'direct';
+    if (kind === 'channel') return 'channel';
+    return 'group';
+  }
+
+  private allowlistTargetKindForResolvedTarget(target: ChannelResolvedTarget): ChannelAllowlistTargetKind {
+    if (target.kind === 'direct') return 'user';
+    if (target.kind === 'channel') return 'channel';
+    return 'group';
+  }
+
+  private allowlistTargetId(kind: ChannelAllowlistTargetKind, target: ChannelResolvedTarget): string | null {
+    if (kind === 'user') return target.to || null;
+    if (kind === 'channel') return target.channelId ?? target.to ?? null;
+    return target.groupId ?? target.threadId ?? target.channelId ?? target.to ?? null;
+  }
+
   private scopeForTargetKind(kind?: ChannelConversationKind): ChannelDirectoryScope | undefined {
     if (kind === 'direct') return 'users';
     if (kind === 'channel') return 'channels';
@@ -1631,8 +3074,20 @@ export class BuiltinChannelRuntime {
     return surface === 'slack' || surface === 'discord' || surface === 'ntfy' ? surface : null;
   }
 
+  private asManagedSurface(surface: ChannelSurface): ManagedSurface | null {
+    return this.isManagedSurface(surface) ? surface : null;
+  }
+
   private isManagedSurface(surface: ChannelSurface): surface is ManagedSurface {
-    return surface === 'slack' || surface === 'discord' || surface === 'ntfy' || surface === 'webhook';
+    return surface === 'slack'
+      || surface === 'discord'
+      || surface === 'ntfy'
+      || surface === 'webhook'
+      || surface === 'telegram'
+      || surface === 'google-chat'
+      || surface === 'signal'
+      || surface === 'whatsapp'
+      || surface === 'imessage';
   }
 
   private providerRuntimeStatus(surface: ProviderRuntimeSurface): unknown {
@@ -1682,7 +3137,7 @@ export class BuiltinChannelRuntime {
     label: string,
     configValue: unknown,
     envKeys: readonly string[] = [],
-    serviceName?: 'slack' | 'discord' | 'ntfy',
+    serviceName?: string,
     serviceField?: ServiceSecretField,
   ): Promise<ChannelSecretStatus> {
     const serviceValue = serviceName && serviceField
@@ -1932,6 +3387,101 @@ export class BuiltinChannelRuntime {
         metadata: { provider: 'ntfy', baseUrl: this.deps.configManager.get('surfaces.ntfy.baseUrl') },
       };
       return this.filterProviderDirectory([entry], needle, limit);
+    }
+
+    if (surface === 'telegram') {
+      const surfaces = this.deps.configManager.getCategory('surfaces');
+      const candidates: ChannelDirectoryEntry[] = [];
+      if (surfaces.telegram.defaultChatId) {
+        candidates.push({
+          id: surfaces.telegram.defaultChatId,
+          surface,
+          kind: 'channel',
+          label: surfaces.telegram.defaultChatId,
+          handle: surfaces.telegram.defaultChatId,
+          groupId: surfaces.telegram.defaultChatId,
+          isGroupConversation: true,
+          searchText: [surfaces.telegram.defaultChatId, surfaces.telegram.botUsername].filter(Boolean).join(' '),
+          metadata: { provider: 'telegram', mode: surfaces.telegram.mode },
+        });
+      }
+      if (surfaces.telegram.botUsername) {
+        candidates.push({
+          id: surfaces.telegram.botUsername.replace(/^@/, ''),
+          surface,
+          kind: 'service',
+          label: `@${surfaces.telegram.botUsername.replace(/^@/, '')}`,
+          handle: `@${surfaces.telegram.botUsername.replace(/^@/, '')}`,
+          searchText: surfaces.telegram.botUsername,
+          metadata: { provider: 'telegram', bot: true },
+        });
+      }
+      return this.filterProviderDirectory(candidates, needle, limit);
+    }
+
+    if (surface === 'google-chat') {
+      const surfaces = this.deps.configManager.getCategory('surfaces');
+      if (!surfaces.googleChat.spaceId && !surfaces.googleChat.appId) return [];
+      return this.filterProviderDirectory([{
+        id: surfaces.googleChat.spaceId || surfaces.googleChat.appId,
+        surface,
+        kind: 'channel',
+        label: surfaces.googleChat.spaceId || surfaces.googleChat.appId,
+        handle: surfaces.googleChat.spaceId || surfaces.googleChat.appId,
+        groupId: surfaces.googleChat.spaceId || surfaces.googleChat.appId,
+        isGroupConversation: true,
+        searchText: [surfaces.googleChat.spaceId, surfaces.googleChat.appId].filter(Boolean).join(' '),
+        metadata: { provider: 'google-chat' },
+      }], needle, limit);
+    }
+
+    if (surface === 'signal') {
+      const surfaces = this.deps.configManager.getCategory('surfaces');
+      if (!surfaces.signal.defaultRecipient && !surfaces.signal.account) return [];
+      return this.filterProviderDirectory([{
+        id: surfaces.signal.defaultRecipient || surfaces.signal.account,
+        surface,
+        kind: 'user',
+        label: surfaces.signal.defaultRecipient || surfaces.signal.account,
+        handle: surfaces.signal.defaultRecipient || surfaces.signal.account,
+        isDirect: true,
+        searchText: [surfaces.signal.defaultRecipient, surfaces.signal.account].filter(Boolean).join(' '),
+        metadata: { provider: 'signal', bridgeUrl: surfaces.signal.bridgeUrl },
+      }], needle, limit);
+    }
+
+    if (surface === 'whatsapp') {
+      const surfaces = this.deps.configManager.getCategory('surfaces');
+      if (!surfaces.whatsapp.defaultRecipient && !surfaces.whatsapp.phoneNumberId) return [];
+      return this.filterProviderDirectory([{
+        id: surfaces.whatsapp.defaultRecipient || surfaces.whatsapp.phoneNumberId,
+        surface,
+        kind: 'user',
+        label: surfaces.whatsapp.defaultRecipient || surfaces.whatsapp.phoneNumberId,
+        handle: surfaces.whatsapp.defaultRecipient || surfaces.whatsapp.phoneNumberId,
+        isDirect: true,
+        searchText: [
+          surfaces.whatsapp.defaultRecipient,
+          surfaces.whatsapp.phoneNumberId,
+          surfaces.whatsapp.businessAccountId,
+        ].filter(Boolean).join(' '),
+        metadata: { provider: 'whatsapp', mode: surfaces.whatsapp.provider },
+      }], needle, limit);
+    }
+
+    if (surface === 'imessage') {
+      const surfaces = this.deps.configManager.getCategory('surfaces');
+      if (!surfaces.imessage.defaultChatId && !surfaces.imessage.account) return [];
+      return this.filterProviderDirectory([{
+        id: surfaces.imessage.defaultChatId || surfaces.imessage.account,
+        surface,
+        kind: 'user',
+        label: surfaces.imessage.defaultChatId || surfaces.imessage.account,
+        handle: surfaces.imessage.defaultChatId || surfaces.imessage.account,
+        isDirect: true,
+        searchText: [surfaces.imessage.defaultChatId, surfaces.imessage.account].filter(Boolean).join(' '),
+        metadata: { provider: 'imessage', bridgeUrl: surfaces.imessage.bridgeUrl },
+      }], needle, limit);
     }
 
     return [];

@@ -5,6 +5,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
 import { MemoryStore, MemoryRegistry } from '../../state/memory-store.ts';
 import { resolveMemoryVectorDbPath } from '../../state/memory-vector-store.ts';
+import { DEFAULT_MEMORY_EMBEDDING_DIMS, MemoryEmbeddingProviderRegistry } from '../../state/index.ts';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
@@ -33,6 +34,7 @@ describe('MemoryStore', () => {
   afterEach(() => {
     store.close();
     cleanupDbPair(dbPath);
+    MemoryEmbeddingProviderRegistry.resetActiveForTesting();
   });
 
   describe('add', () => {
@@ -159,6 +161,41 @@ describe('MemoryStore', () => {
       expect(results.length).toBeGreaterThan(0);
       expect(results[0].record.summary).toContain('Use Bun runtime');
       expect(results[0].similarity).toBeGreaterThan(0);
+    });
+
+    it('rebuilds vectors asynchronously through a provider-backed embedding path', async () => {
+      MemoryEmbeddingProviderRegistry.resetActiveForTesting();
+      const registry = new MemoryEmbeddingProviderRegistry();
+      let embedCalls = 0;
+      registry.register({
+        id: 'async-test',
+        label: 'Async Test Embeddings',
+        dimensions: DEFAULT_MEMORY_EMBEDDING_DIMS,
+        async embed(request) {
+          embedCalls += 1;
+          return {
+            vector: new Float32Array(request.dimensions).fill(1),
+            dimensions: request.dimensions,
+            modelId: 'async-test-model',
+          };
+        },
+      }, { makeDefault: true });
+
+      const asyncDbPath = tempDbPath();
+      const asyncStore = new MemoryStore(asyncDbPath);
+      await asyncStore.init();
+      await asyncStore.add({ cls: 'fact', summary: 'Provider-backed rebuild target' });
+
+      try {
+        embedCalls = 0;
+        const stats = await asyncStore.rebuildVectorIndexAsync();
+        expect(embedCalls).toBeGreaterThan(0);
+        expect(stats.indexedRecords).toBeGreaterThan(0);
+      } finally {
+        asyncStore.close();
+        cleanupDbPair(asyncDbPath);
+        MemoryEmbeddingProviderRegistry.resetActiveForTesting();
+      }
     });
   });
 

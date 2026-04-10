@@ -1,4 +1,4 @@
-import type { LLMProvider, ChatRequest, ChatResponse } from './interface.ts';
+import type { LLMProvider, ChatRequest, ChatResponse, ProviderRuntimeMetadata } from './interface.ts';
 import { REASONING_BUDGET_MAP } from './interface.ts';
 import { getCacheCapability } from './cache-capability.ts';
 import { getDefaultStrategy, cacheHitTracker } from './cache-strategy.ts';
@@ -391,6 +391,41 @@ export class AnthropicProvider implements LLMProvider {
         },
       };
     });
+  }
+
+  async describeRuntime(): Promise<ProviderRuntimeMetadata> {
+    const { buildStandardProviderAuthRoutes } = await import('./runtime-metadata.ts');
+    const authRoutes = await buildStandardProviderAuthRoutes({
+      providerId: 'anthropic',
+      apiKeyEnvVars: ['ANTHROPIC_API_KEY', 'CLAUDE_API_KEY'],
+      serviceNames: ['anthropic'],
+    });
+    return {
+      auth: {
+        mode: 'api-key',
+        configured: Boolean(this.apiKey),
+        detail: this.apiKey ? 'Anthropic API key available' : 'Anthropic API key is not configured',
+        envVars: ['ANTHROPIC_API_KEY', 'CLAUDE_API_KEY'],
+        routes: authRoutes,
+      },
+      models: {
+        models: this.models,
+      },
+      usage: {
+        streaming: true,
+        toolCalling: true,
+        parallelTools: true,
+        promptCaching: true,
+        notes: ['Anthropic prompt caching and thinking budgets are handled natively.'],
+      },
+      policy: {
+        local: false,
+        streamProtocol: 'anthropic-sse',
+        reasoningMode: 'thinking_budget',
+        supportedReasoningEfforts: ['instant', 'low', 'medium', 'high'],
+        cacheStrategy: 'anthropic-prompt-cache',
+      },
+    };
   }
 }
 

@@ -47,6 +47,11 @@ function toEventSurfaceKind(surfaceKind: AutomationSurfaceKind): RouteSurfaceKin
     case 'web':
     case 'ntfy':
     case 'webhook':
+    case 'telegram':
+    case 'google-chat':
+    case 'signal':
+    case 'whatsapp':
+    case 'imessage':
     case 'service':
       return surfaceKind;
   }

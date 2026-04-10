@@ -2,7 +2,18 @@
  * Shared channel and route-binding contracts for omnichannel control surfaces.
  */
 
-export type ChannelSurface = 'tui' | 'web' | 'slack' | 'discord' | 'ntfy' | 'webhook';
+export type ChannelSurface =
+  | 'tui'
+  | 'web'
+  | 'slack'
+  | 'discord'
+  | 'ntfy'
+  | 'webhook'
+  | 'telegram'
+  | 'google-chat'
+  | 'signal'
+  | 'whatsapp'
+  | 'imessage';
 export type ChannelCapability =
   | 'ingress'
   | 'egress'
@@ -61,6 +72,7 @@ export interface ChannelAdapterDescriptor {
   surface: ChannelSurface;
   displayName: string;
   capabilities: ChannelCapability[];
+  setupVersion?: number;
 }
 
 export interface ChannelDirectoryEntry {
@@ -304,4 +316,213 @@ export interface ChannelPolicyDecision {
   readonly matchedScope?: ChannelPolicyMatchScope;
   readonly effectiveRequireMention?: boolean;
   readonly effectiveAllowedCommands?: readonly string[];
+}
+
+export type ChannelSecretBackend =
+  | 'env'
+  | 'goodvibes'
+  | 'service-registry'
+  | '1password'
+  | 'bitwarden'
+  | 'vaultwarden'
+  | 'bitwarden-secrets-manager'
+  | 'bws'
+  | 'manual';
+
+export type ChannelSetupFieldKind =
+  | 'string'
+  | 'secret'
+  | 'url'
+  | 'boolean'
+  | 'number'
+  | 'select';
+
+export type ChannelDoctorStatus = 'pass' | 'warn' | 'fail';
+export type ChannelLifecycleAction = 'noop' | 'migrate';
+export type ChannelAllowlistTargetKind = 'user' | 'channel' | 'group';
+export type ChannelReasoningVisibility = 'suppress' | 'private' | 'public' | 'summary';
+export type ChannelRenderFormat = 'plain' | 'markdown' | 'json';
+export type ChannelRenderPhase = 'progress' | 'final' | 'approval';
+export type ChannelRenderEventKind =
+  | 'assistant_text'
+  | 'reasoning'
+  | 'tool_start'
+  | 'tool_result'
+  | 'plan'
+  | 'approval'
+  | 'command_output'
+  | 'patch'
+  | 'compaction'
+  | 'model'
+  | 'status'
+  | 'error';
+
+export interface ChannelSecretTargetDescriptor {
+  readonly id: string;
+  readonly surface: ChannelSurface;
+  readonly label: string;
+  readonly required: boolean;
+  readonly supports: readonly ChannelSecretBackend[];
+  readonly serviceName?: string;
+  readonly serviceField?: string;
+  readonly envKeys?: readonly string[];
+  readonly configKeys?: readonly string[];
+  readonly detail?: string;
+  readonly metadata: Record<string, unknown>;
+}
+
+export interface ChannelSetupFieldOption {
+  readonly value: string;
+  readonly label: string;
+}
+
+export interface ChannelSetupFieldDescriptor {
+  readonly id: string;
+  readonly label: string;
+  readonly kind: ChannelSetupFieldKind;
+  readonly required: boolean;
+  readonly detail?: string;
+  readonly placeholder?: string;
+  readonly configKey?: string;
+  readonly secretTargetId?: string;
+  readonly defaultValue?: string | number | boolean;
+  readonly options?: readonly ChannelSetupFieldOption[];
+  readonly metadata: Record<string, unknown>;
+}
+
+export interface ChannelSetupSchema {
+  readonly surface: ChannelSurface;
+  readonly version: number;
+  readonly label: string;
+  readonly setupMode: 'config' | 'oauth' | 'bot' | 'bridge' | 'webhook';
+  readonly description: string;
+  readonly fields: readonly ChannelSetupFieldDescriptor[];
+  readonly secretTargets: readonly ChannelSecretTargetDescriptor[];
+  readonly externalSteps: readonly string[];
+  readonly metadata: Record<string, unknown>;
+}
+
+export interface ChannelDoctorCheck {
+  readonly id: string;
+  readonly label: string;
+  readonly status: ChannelDoctorStatus;
+  readonly detail: string;
+  readonly repairActionId?: string;
+  readonly metadata: Record<string, unknown>;
+}
+
+export interface ChannelRepairAction {
+  readonly id: string;
+  readonly label: string;
+  readonly description: string;
+  readonly dangerous: boolean;
+  readonly inputSchema?: Record<string, unknown>;
+  readonly metadata: Record<string, unknown>;
+}
+
+export interface ChannelDoctorReport {
+  readonly surface: ChannelSurface;
+  readonly accountId?: string;
+  readonly state: ChannelAccountState;
+  readonly summary: string;
+  readonly checkedAt: number;
+  readonly checks: readonly ChannelDoctorCheck[];
+  readonly repairActions: readonly ChannelRepairAction[];
+  readonly metadata: Record<string, unknown>;
+}
+
+export interface ChannelLifecycleMigrationRecord {
+  readonly id: string;
+  readonly fromVersion: number;
+  readonly toVersion: number;
+  readonly action: ChannelLifecycleAction;
+  readonly applied: boolean;
+  readonly detail: string;
+  readonly metadata: Record<string, unknown>;
+}
+
+export interface ChannelLifecycleState {
+  readonly surface: ChannelSurface;
+  readonly accountId?: string;
+  readonly currentVersion: number;
+  readonly targetVersion: number;
+  readonly migrations: readonly ChannelLifecycleMigrationRecord[];
+  readonly metadata: Record<string, unknown>;
+}
+
+export interface ChannelAllowlistTarget {
+  readonly kind: ChannelAllowlistTargetKind;
+  readonly input: string;
+  readonly id: string;
+  readonly label: string;
+  readonly metadata: Record<string, unknown>;
+}
+
+export interface ChannelAllowlistResolution {
+  readonly surface: ChannelSurface;
+  readonly resolved: readonly ChannelAllowlistTarget[];
+  readonly unresolved: readonly string[];
+  readonly metadata: Record<string, unknown>;
+}
+
+export interface ChannelAllowlistEditInput {
+  readonly add?: readonly string[];
+  readonly remove?: readonly string[];
+  readonly groupId?: string;
+  readonly channelId?: string;
+  readonly workspaceId?: string;
+  readonly kind?: ChannelAllowlistTargetKind;
+  readonly metadata?: Record<string, unknown>;
+}
+
+export interface ChannelAllowlistEditResult {
+  readonly surface: ChannelSurface;
+  readonly updatedPolicy: ChannelPolicyRecord;
+  readonly resolution: ChannelAllowlistResolution;
+  readonly metadata: Record<string, unknown>;
+}
+
+export interface ChannelRenderEvent {
+  readonly id: string;
+  readonly kind: ChannelRenderEventKind;
+  readonly phase: ChannelRenderPhase;
+  readonly ts: number;
+  readonly text?: string;
+  readonly title?: string;
+  readonly provider?: string;
+  readonly model?: string;
+  readonly toolName?: string;
+  readonly callId?: string;
+  readonly summary?: string;
+  readonly metadata: Record<string, unknown>;
+}
+
+export interface ChannelRenderPolicy {
+  readonly surface: ChannelSurface;
+  readonly reasoningVisibility: ChannelReasoningVisibility;
+  readonly format: ChannelRenderFormat;
+  readonly supportsThreads: boolean;
+  readonly maxChunkChars: number;
+  readonly maxEventsPerUpdate: number;
+  readonly metadata: Record<string, unknown>;
+}
+
+export interface ChannelRenderRequest {
+  readonly surface: ChannelSurface;
+  readonly phase: ChannelRenderPhase;
+  readonly agentId?: string;
+  readonly sessionId?: string;
+  readonly routeId?: string;
+  readonly title: string;
+  readonly text: string;
+  readonly events: readonly ChannelRenderEvent[];
+  readonly pending?: Record<string, unknown>;
+  readonly metadata: Record<string, unknown>;
+}
+
+export interface ChannelRenderResult {
+  readonly delivered: boolean;
+  readonly responseId?: string;
+  readonly threadId?: string;
+  readonly metadata: Record<string, unknown>;
 }

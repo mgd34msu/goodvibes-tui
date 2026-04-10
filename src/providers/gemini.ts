@@ -1,4 +1,11 @@
-import type { LLMProvider, ChatRequest, ChatResponse } from './interface.ts';
+import type {
+  LLMProvider,
+  ChatRequest,
+  ChatResponse,
+  ProviderEmbeddingRequest,
+  ProviderEmbeddingResult,
+  ProviderRuntimeMetadata,
+} from './interface.ts';
 import { REASONING_BUDGET_MAP } from './interface.ts';
 import { ProviderError } from '../types/errors.ts';
 import { withRetry } from '../utils/retry.ts';
@@ -40,7 +47,8 @@ export class GeminiProvider implements LLMProvider {
   private thoughtSignatures = new Map<string, string>();
   readonly models: string[] = [];
 
-  private apiKey: string;
+  private readonly apiKey: string;
+  private readonly embeddingModel = 'gemini-embedding-001';
 
   /** Active cached content resource name (e.g., "cachedContents/abc123") */
   private cachedContentName: string | null = null;
@@ -342,5 +350,78 @@ export class GeminiProvider implements LLMProvider {
         stopReason,
       };
     });
+  }
+
+  async embed(request: ProviderEmbeddingRequest): Promise<ProviderEmbeddingResult> {
+    const model = request.model ?? this.embeddingModel;
+    const body: Record<string, unknown> = {
+      content: { parts: [{ text: request.text }] },
+    };
+    if (request.dimensions) {
+      body['config'] = { outputDimensionality: request.dimensions };
+    }
+
+    const res = await fetch(`${GEMINI_API_BASE}/models/${model}:embedContent`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-goog-api-key': this.apiKey,
+      },
+      body: JSON.stringify(body),
+      signal: request.signal,
+    });
+
+    if (!res.ok) {
+      const text = await res.text().catch(() => 'unknown error');
+      throw new ProviderError(`Gemini embeddings API error ${res.status}: ${text}`, res.status);
+    }
+
+    const data = await res.json() as { embedding?: { values?: number[] } };
+    const values = data.embedding?.values ?? [];
+    return {
+      vector: Float32Array.from(values),
+      dimensions: values.length,
+      modelId: model,
+      metadata: {
+        usage: request.usage,
+        provider: this.name,
+      },
+    };
+  }
+
+  async describeRuntime(): Promise<ProviderRuntimeMetadata> {
+    const { buildStandardProviderAuthRoutes } = await import('./runtime-metadata.ts');
+    const authRoutes = await buildStandardProviderAuthRoutes({
+      providerId: 'gemini',
+      apiKeyEnvVars: ['GEMINI_API_KEY', 'GOOGLE_API_KEY', 'GOOGLE_GEMINI_API_KEY'],
+      serviceNames: ['gemini'],
+    });
+    return {
+      auth: {
+        mode: 'api-key',
+        configured: Boolean(this.apiKey),
+        detail: this.apiKey ? 'Gemini API key available' : 'Gemini API key is not configured',
+        envVars: ['GEMINI_API_KEY', 'GOOGLE_API_KEY', 'GOOGLE_GEMINI_API_KEY'],
+        routes: authRoutes,
+      },
+      models: {
+        models: this.models,
+        embeddingModel: this.embeddingModel,
+        embeddingDimensions: 384,
+      },
+      usage: {
+        streaming: true,
+        toolCalling: true,
+        parallelTools: true,
+        notes: ['Embeddings use Gemini embedContent with reduced output dimensionality when requested.'],
+      },
+      policy: {
+        local: false,
+        streamProtocol: 'gemini-sse',
+        reasoningMode: 'thinking_budget',
+        supportedReasoningEfforts: ['instant', 'low', 'medium', 'high'],
+        cacheStrategy: 'gemini-cached-content',
+      },
+    };
   }
 }

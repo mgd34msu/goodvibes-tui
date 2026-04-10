@@ -9,6 +9,7 @@ import { CONFIG_SCHEMA } from '../../config/index.ts';
 import { resolveAndValidatePath } from '../../utils/path-safety.ts';
 import { getBookmarkManager } from '../../bookmarks/manager.ts';
 import { getSecretsManager } from '../../config/secrets.ts';
+import { BUILTIN_SECRET_PROVIDER_SOURCES, describeSecretRef, isSecretRefInput, resolveSecretRef } from '../../config/secret-refs.ts';
 import { pinModel, unpinModel, isModelPinned, getPinned } from '../../providers/favorites.ts';
 import { getPluginDirectories } from '../../plugins/loader.ts';
 import { getPanelManager } from '../../panels/panel-manager.ts';
@@ -142,9 +143,9 @@ export function registerLocalRuntimeCommands(registry: CommandRegistry): void {
 
   registry.register({
     name: 'secrets',
-    description: 'Manage hierarchy-aware secrets with secure/plaintext storage policy controls',
-    usage: 'set <KEY> <value> [--user|--project] [--secure|--plaintext] | get <KEY> | list | delete <KEY> [--user|--project] [--secure|--plaintext]',
-    argsHint: '<set|get|list|delete> [KEY]',
+    description: 'Manage hierarchy-aware secrets, external secret refs, and secure/plaintext storage policy controls',
+    usage: 'set <KEY> <value> [--user|--project] [--secure|--plaintext] | link <KEY> <secret-ref> [--user|--project] [--secure|--plaintext] | get <KEY> | test <secret-ref> | providers | list | delete <KEY> [--user|--project] [--secure|--plaintext]',
+    argsHint: '<set|link|get|test|providers|list|delete> [KEY]',
     async handler(args, ctx) {
       const mgr = getSecretsManager();
       const [sub, ...rest] = args;
@@ -155,22 +156,61 @@ export function registerLocalRuntimeCommands(registry: CommandRegistry): void {
           ? '[secrets] No secrets stored. Use: /secrets set <KEY> <value>'
           : [
             '[secrets] Stored keys:',
-            ...storedRecords.map((record) => `  ${record.key} (${record.source}${record.overriddenByEnv ? ', env override' : ''})`),
+            ...storedRecords.map((record) => `  ${record.key} (${record.source}${record.refSource ? `, ref:${record.refSource}` : ''}${record.overriddenByEnv ? ', env override' : ''})`),
           ].join('\n'));
         return;
       }
-      if (sub === 'set') {
+      if (sub === 'providers') {
+        ctx.print([
+          '[secrets] Built-in secret providers:',
+          ...BUILTIN_SECRET_PROVIDER_SOURCES.map((source) => `  ${source}`),
+          '',
+          'Examples:',
+          '  /secrets link OPENAI_API_KEY secret://env/OPENAI_API_KEY',
+          '  /secrets link SLACK_BOT_TOKEN bw://GoodVibes%20Slack/password?sessionEnv=BW_SESSION',
+          '  /secrets link SLACK_BOT_TOKEN vaultwarden://GoodVibes%20Slack/password?server=https%3A%2F%2Fvault.example.test',
+          '  /secrets link STRIPE_TOKEN bws://00000000-0000-0000-0000-000000000000/value?accessTokenEnv=BWS_ACCESS_TOKEN',
+          '  /secrets link OPENAI_API_KEY op://Private/GoodVibes%20OpenAI/API%20Key',
+        ].join('\n'));
+        return;
+      }
+      if (sub === 'test') {
+        const refText = rest.join(' ').trim();
+        if (!refText) {
+          ctx.print('[secrets] Usage: /secrets test <secret-ref>');
+          return;
+        }
+        if (!isSecretRefInput(refText)) {
+          ctx.print('[secrets] Invalid secret reference. Use /secrets providers for examples.');
+          return;
+        }
+        try {
+          const resolved = await resolveSecretRef(refText, { resolveLocalSecret: (key) => mgr.get(key) });
+          ctx.print(`[secrets] ${describeSecretRef(refText)}: ${resolved.value ? 'resolved <redacted>' : 'missing'}`);
+        } catch (error) {
+          ctx.print(`[secrets] ${describeSecretRef(refText)} failed: ${error instanceof Error ? error.message : String(error)}`);
+        }
+        return;
+      }
+      if (sub === 'set' || sub === 'link') {
         const flags = new Set(rest.filter((value) => value.startsWith('--')));
         const valueParts = rest.filter((value) => !value.startsWith('--'));
         const [key, ...rawValueParts] = valueParts;
         if (!key || valueParts.length === 0) {
-          ctx.print('[secrets] Usage: /secrets set <KEY> <value> [--user|--project] [--secure|--plaintext]');
+          ctx.print(`[secrets] Usage: /secrets ${sub} <KEY> <${sub === 'link' ? 'secret-ref' : 'value'}> [--user|--project] [--secure|--plaintext]`);
+          return;
+        }
+        const value = rawValueParts.join(' ');
+        if (sub === 'link' && !isSecretRefInput(value)) {
+          ctx.print('[secrets] Invalid secret reference. Use /secrets providers for examples.');
           return;
         }
         const scope = flags.has('--user') ? 'user' : 'project';
         const medium = flags.has('--plaintext') ? 'plaintext' : 'secure';
-        await mgr.set(key, rawValueParts.join(' '), { scope, medium });
-        ctx.print(`[secrets] Stored: ${key} (${scope}, ${medium})`);
+        await mgr.set(key, value, { scope, medium });
+        ctx.print(sub === 'link'
+          ? `[secrets] Linked: ${key} -> ${describeSecretRef(value)} (${scope}, ${medium})`
+          : `[secrets] Stored: ${key} (${scope}, ${medium})`);
         return;
       }
       if (sub === 'get') {
@@ -197,7 +237,7 @@ export function registerLocalRuntimeCommands(registry: CommandRegistry): void {
         ctx.print(`[secrets] Deleted: ${key}`);
         return;
       }
-      ctx.print('[secrets] Usage: /secrets set <KEY> <value> [--user|--project] [--secure|--plaintext] | get <KEY> | list | delete <KEY> [--user|--project] [--secure|--plaintext]');
+      ctx.print('[secrets] Usage: /secrets set <KEY> <value> [--user|--project] [--secure|--plaintext] | link <KEY> <secret-ref> [--user|--project] [--secure|--plaintext] | get <KEY> | test <secret-ref> | providers | list | delete <KEY> [--user|--project] [--secure|--plaintext]');
     },
   });
 
