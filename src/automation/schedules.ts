@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { TaskScheduler } from '../scheduler/scheduler.ts';
 
 export interface AutomationAtSchedule {
@@ -15,6 +16,7 @@ export interface AutomationCronSchedule {
   readonly kind: 'cron';
   readonly expression: string;
   readonly timezone?: string;
+  readonly staggerMs?: number;
 }
 
 export type AutomationScheduleDefinition =
@@ -26,6 +28,10 @@ export type AutomationScheduleKind = AutomationScheduleDefinition['kind'];
 
 const EVERY_PATTERN = /^(\d+(?:\.\d+)?)(ms|s|m|h|d)$/;
 const CRON_HELPER = new TaskScheduler('.goodvibes/tui/.automation-cron-helper.json');
+const STAGGER_OFFSET_CACHE_MAX = 1_000;
+const STAGGER_OFFSET_CACHE = new Map<string, number>();
+
+export const DEFAULT_TOP_OF_HOUR_STAGGER_MS = 5 * 60 * 1_000;
 
 function ensurePositiveFinite(value: number, label: string): void {
   if (!Number.isFinite(value) || value <= 0) {
@@ -74,6 +80,60 @@ export function formatEveryInterval(intervalMs: number): string {
   return `${intervalMs}ms`;
 }
 
+function parseCronFields(expression: string): string[] {
+  return expression.trim().split(/\s+/).filter(Boolean);
+}
+
+export function isRecurringTopOfHourCronExpression(expression: string): boolean {
+  const fields = parseCronFields(expression);
+  if (fields.length === 5) {
+    const [minuteField, hourField] = fields;
+    return minuteField === '0' && hourField.includes('*');
+  }
+  if (fields.length === 6) {
+    const [secondField, minuteField, hourField] = fields;
+    return secondField === '0' && minuteField === '0' && hourField.includes('*');
+  }
+  return false;
+}
+
+export function normalizeCronStaggerMs(raw: unknown): number | undefined {
+  const numeric = typeof raw === 'number'
+    ? raw
+    : typeof raw === 'string' && raw.trim().length > 0
+      ? Number(raw)
+      : Number.NaN;
+  if (!Number.isFinite(numeric)) {
+    return undefined;
+  }
+  return Math.max(0, Math.floor(numeric));
+}
+
+export function resolveDefaultCronStaggerMs(expression: string): number | undefined {
+  return isRecurringTopOfHourCronExpression(expression) ? DEFAULT_TOP_OF_HOUR_STAGGER_MS : undefined;
+}
+
+export function resolveAutomationCronStaggerMs(schedule: AutomationCronSchedule): number {
+  const explicit = normalizeCronStaggerMs(schedule.staggerMs);
+  if (explicit !== undefined) return explicit;
+  return resolveDefaultCronStaggerMs(schedule.expression) ?? 0;
+}
+
+export function resolveStableAutomationCronOffsetMs(stableId: string | undefined, staggerMs: number): number {
+  if (!stableId || staggerMs <= 1) return 0;
+  const cacheKey = `${staggerMs}:${stableId}`;
+  const cached = STAGGER_OFFSET_CACHE.get(cacheKey);
+  if (cached !== undefined) return cached;
+  const digest = createHash('sha256').update(stableId).digest();
+  const offset = digest.readUInt32BE(0) % staggerMs;
+  if (STAGGER_OFFSET_CACHE.size >= STAGGER_OFFSET_CACHE_MAX) {
+    const first = STAGGER_OFFSET_CACHE.keys().next();
+    if (!first.done) STAGGER_OFFSET_CACHE.delete(first.value);
+  }
+  STAGGER_OFFSET_CACHE.set(cacheKey, offset);
+  return offset;
+}
+
 export function validateSchedule(schedule: AutomationScheduleDefinition): void {
   switch (schedule.kind) {
     case 'at':
@@ -91,6 +151,9 @@ export function validateSchedule(schedule: AutomationScheduleDefinition): void {
       }
       if (schedule.timezone) {
         TaskScheduler.validateTimezone(schedule.timezone);
+      }
+      if (schedule.staggerMs !== undefined && normalizeCronStaggerMs(schedule.staggerMs) === undefined) {
+        throw new Error('schedule.staggerMs must be a finite number when provided');
       }
       CRON_HELPER.getNextRun(schedule.expression, new Date(), schedule.timezone);
       break;
@@ -114,19 +177,27 @@ export function normalizeEverySchedule(interval: string | number, anchorAt?: num
   return schedule;
 }
 
-export function normalizeCronSchedule(expression: string, timezone?: string): AutomationCronSchedule {
+export function normalizeCronSchedule(expression: string, timezone?: string, staggerMs?: unknown): AutomationCronSchedule {
+  const normalizedStaggerMs = normalizeCronStaggerMs(staggerMs);
+  const effectiveStaggerMs = normalizedStaggerMs ?? resolveDefaultCronStaggerMs(expression);
   const schedule: AutomationCronSchedule = {
     kind: 'cron',
     expression,
     ...(timezone ? { timezone } : {}),
+    ...(effectiveStaggerMs !== undefined ? { staggerMs: effectiveStaggerMs } : {}),
   };
   validateSchedule(schedule);
   return schedule;
 }
 
+function getNextCronOccurrence(schedule: AutomationCronSchedule, fromMs: number): number {
+  return CRON_HELPER.getNextRun(schedule.expression, new Date(fromMs), schedule.timezone).getTime();
+}
+
 export function getNextAutomationOccurrence(
   schedule: AutomationScheduleDefinition,
   fromMs: number = Date.now(),
+  stableId?: string,
 ): number | undefined {
   validateSchedule(schedule);
   switch (schedule.kind) {
@@ -139,8 +210,20 @@ export function getNextAutomationOccurrence(
       const periodsElapsed = Math.floor(elapsed / schedule.intervalMs) + 1;
       return anchorAt + periodsElapsed * schedule.intervalMs;
     }
-    case 'cron':
-      return CRON_HELPER.getNextRun(schedule.expression, new Date(fromMs), schedule.timezone).getTime();
+    case 'cron': {
+      const offsetMs = resolveStableAutomationCronOffsetMs(stableId, resolveAutomationCronStaggerMs(schedule));
+      if (offsetMs <= 0) {
+        return getNextCronOccurrence(schedule, fromMs);
+      }
+      let cursorMs = Math.max(0, fromMs - offsetMs);
+      for (let attempt = 0; attempt < 8; attempt++) {
+        const baseNext = getNextCronOccurrence(schedule, cursorMs);
+        const shiftedNext = baseNext + offsetMs;
+        if (shiftedNext > fromMs) return shiftedNext;
+        cursorMs = Math.max(cursorMs + 1_000, baseNext + 1_000);
+      }
+      return getNextCronOccurrence(schedule, fromMs) + offsetMs;
+    }
   }
 }
 

@@ -32,7 +32,7 @@ export type AutomationSourceKind =
   | 'surface'
   | 'watcher'
   | 'migration';
-export type AutomationExecutionKind = 'isolated' | 'current' | 'pinned' | 'background';
+export type AutomationExecutionKind = 'isolated' | 'current' | 'pinned' | 'background' | 'main';
 export type AutomationDeliveryKind = 'none' | 'webhook' | 'surface' | 'integration' | 'link';
 
 export interface AutomationEntityBase {
@@ -62,6 +62,7 @@ export interface AutomationCronSchedule {
   readonly kind: 'cron';
   readonly expression: string;
   readonly timezone?: string;
+  readonly staggerMs?: number;
 }
 
 export type AutomationSchedule =

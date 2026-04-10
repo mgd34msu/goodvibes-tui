@@ -184,6 +184,27 @@ export interface DistributedPeerAuth {
   readonly token: DistributedPeerTokenRecord;
 }
 
+export interface DistributedNodeHostContract {
+  readonly schemaVersion: 1;
+  readonly transport: 'http-json';
+  readonly basePath: '/api/remote';
+  readonly peerKinds: readonly DistributedPeerKind[];
+  readonly workTypes: readonly DistributedWorkType[];
+  readonly scopes: readonly string[];
+  readonly recommendedHeartbeatMs: number;
+  readonly recommendedWorkPullMs: number;
+  readonly endpoints: readonly {
+    readonly id: string;
+    readonly method: 'GET' | 'POST';
+    readonly path: string;
+    readonly auth: 'none' | 'bearer-peer-token' | 'bearer-operator-token';
+    readonly description: string;
+    readonly requiredScope?: string;
+  }[];
+  readonly workCompletionStatuses: readonly DistributedWorkStatus[];
+  readonly metadata: Record<string, unknown>;
+}
+
 const STORE_PATH = join(process.cwd(), '.goodvibes', 'tui', 'remote', 'distributed-runtime.json');
 const DEFAULT_PAIR_TTL_MS = 10 * 60_000;
 const DEFAULT_CLAIM_LEASE_MS = 45_000;
@@ -195,6 +216,70 @@ const PRIORITY_SCORE: Record<DistributedWorkPriority, number> = {
   normal: 2,
   default: 1,
 };
+
+export function getDistributedNodeHostContract(): DistributedNodeHostContract {
+  return {
+    schemaVersion: 1,
+    transport: 'http-json',
+    basePath: '/api/remote',
+    peerKinds: ['node', 'device'],
+    workTypes: ['invoke', 'status.request', 'location.request', 'session.message', 'automation.run'],
+    scopes: ['remote:heartbeat', 'remote:pull', 'remote:complete'],
+    recommendedHeartbeatMs: 30_000,
+    recommendedWorkPullMs: 2_000,
+    endpoints: [
+      {
+        id: 'pair.request',
+        method: 'POST',
+        path: '/api/remote/pair/request',
+        auth: 'none',
+        description: 'Create a pending pair request and receive a challenge for operator approval.',
+      },
+      {
+        id: 'pair.verify',
+        method: 'POST',
+        path: '/api/remote/pair/verify',
+        auth: 'none',
+        description: 'Exchange an approved pair request and challenge for a scoped peer token.',
+      },
+      {
+        id: 'peer.heartbeat',
+        method: 'POST',
+        path: '/api/remote/heartbeat',
+        auth: 'bearer-peer-token',
+        requiredScope: 'remote:heartbeat',
+        description: 'Report peer liveness, capability, command, version, and client-mode metadata.',
+      },
+      {
+        id: 'work.pull',
+        method: 'POST',
+        path: '/api/remote/work/pull',
+        auth: 'bearer-peer-token',
+        requiredScope: 'remote:pull',
+        description: 'Claim queued work for the authenticated peer.',
+      },
+      {
+        id: 'work.complete',
+        method: 'POST',
+        path: '/api/remote/work/{workId}/complete',
+        auth: 'bearer-peer-token',
+        requiredScope: 'remote:complete',
+        description: 'Complete, fail, or cancel a claimed work item.',
+      },
+      {
+        id: 'operator.snapshot',
+        method: 'GET',
+        path: '/api/remote',
+        auth: 'bearer-operator-token',
+        description: 'Inspect distributed runtime pair requests, peers, work, and audit state.',
+      },
+    ],
+    workCompletionStatuses: ['completed', 'failed', 'cancelled'],
+    metadata: {
+      note: 'Node/device hosts are external processes. GoodVibes owns the pair/token/work protocol and can be controlled from web, channel, or daemon clients.',
+    },
+  };
+}
 
 function hashSecret(secret: string): string {
   return createHash('sha256').update(secret).digest('hex');
@@ -620,6 +705,10 @@ export class DistributedRuntimeManager {
       },
       audit: this.listAudit(100),
     };
+  }
+
+  getNodeHostContract(): DistributedNodeHostContract {
+    return getDistributedNodeHostContract();
   }
 
   async requestPairing(input: {

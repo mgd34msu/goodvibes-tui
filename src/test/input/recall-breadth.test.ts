@@ -65,6 +65,38 @@ describe('recall command breadth', () => {
     expect(printed.some((line) => line.includes('Reviewed'))).toBe(true);
   });
 
+  test('supports sqlite-vec semantic search and vector status commands', async () => {
+    const context = makeBaseContext(registry, printed);
+    await registry.add({
+      scope: 'project',
+      cls: 'runbook',
+      summary: 'Use orchestration graph runtime edits for node scheduling changes',
+      tags: ['runtime', 'orchestration'],
+      review: { state: 'reviewed', confidence: 92 },
+    });
+    await registry.add({
+      scope: 'project',
+      cls: 'fact',
+      summary: 'Slack channel adapter handles slash commands',
+      tags: ['slack'],
+      review: { state: 'reviewed', confidence: 90 },
+    });
+
+    recallCommand.handler(['search', '--semantic', 'orchestration', 'runtime', '--limit', '1'], context);
+    expect(printed.join('\n')).toContain('semantic record');
+    expect(printed.join('\n')).toContain('orchestration graph runtime edits');
+    expect(printed.join('\n')).toContain('sim ');
+
+    printed.length = 0;
+    recallCommand.handler(['vector', 'status'], context);
+    expect(printed.join('\n')).toContain('backend: sqlite-vec');
+    expect(printed.join('\n')).toContain('indexed records: 2');
+
+    printed.length = 0;
+    recallCommand.handler(['vector', 'rebuild'], context);
+    expect(printed.join('\n')).toContain('rebuild complete');
+  });
+
   test('exports and imports durable memory bundles', async () => {
     const context = makeBaseContext(registry, printed);
 

@@ -10,10 +10,14 @@ export interface KnowledgeInjection {
   readonly reviewState: 'fresh' | 'reviewed' | 'stale' | 'contradicted';
 }
 
-let _knowledgeRegistryOverride: Pick<MemoryRegistry, 'getAll'> | undefined;
+type KnowledgeRegistrySource =
+  Pick<MemoryRegistry, 'getAll'> &
+  Partial<Pick<MemoryRegistry, 'searchSemantic'>>;
+
+let _knowledgeRegistryOverride: KnowledgeRegistrySource | undefined;
 
 export function _setKnowledgeRegistryForTesting(
-  registry: Pick<MemoryRegistry, 'getAll'> | undefined,
+  registry: KnowledgeRegistrySource | undefined,
 ): void {
   _knowledgeRegistryOverride = registry;
 }
@@ -26,7 +30,12 @@ function tokenize(value: string): string[] {
     .filter((token) => token.length >= 3);
 }
 
-function determineReason(record: MemoryRecord, taskTokens: readonly string[], scopeTokens: readonly string[]): string {
+function determineReason(
+  record: MemoryRecord,
+  taskTokens: readonly string[],
+  scopeTokens: readonly string[],
+  semanticSimilarity?: number,
+): string {
   const summaryText = `${record.summary} ${record.detail ?? ''}`.toLowerCase();
   const matchingTaskToken = taskTokens.find((token) => summaryText.includes(token) || record.tags.includes(token));
   if (matchingTaskToken) {
@@ -40,6 +49,10 @@ function determineReason(record: MemoryRecord, taskTokens: readonly string[], sc
   ));
   if (matchingScopeToken) {
     return `matched write scope "${matchingScopeToken}"`;
+  }
+
+  if (semanticSimilarity !== undefined) {
+    return `matched sqlite-vec semantic index (${Math.round(semanticSimilarity * 100)}%)`;
   }
 
   return 'ranked as high-confidence relevant knowledge';
@@ -85,9 +98,29 @@ export function selectKnowledgeForTask(
   const registry = _knowledgeRegistryOverride ?? getMemoryRegistry();
   const taskTokens = tokenize(task);
   const scopeTokens = writeScope.flatMap((entry) => tokenize(entry));
-  const records = registry.getAll()
+  const semanticResults = registry.searchSemantic?.({
+    query: [task, ...writeScope].join(' '),
+    minConfidence: 55,
+    limit: Math.max(limit * 4, 12),
+  }) ?? [];
+  const semanticById = new Map(semanticResults.map((entry) => [entry.record.id, entry]));
+  const recordsById = new Map<string, MemoryRecord>();
+  for (const record of registry.getAll()) {
+    recordsById.set(record.id, record);
+  }
+  for (const entry of semanticResults) {
+    recordsById.set(entry.record.id, entry.record);
+  }
+
+  const records = [...recordsById.values()]
     .filter((record) => record.confidence >= 55)
-    .map((record) => ({ record, score: scoreKnowledge(record, taskTokens, scopeTokens) }))
+    .map((record) => {
+      const semantic = semanticById.get(record.id);
+      return {
+        record,
+        score: scoreKnowledge(record, taskTokens, scopeTokens) + (semantic ? semantic.similarity * 70 : 0),
+      };
+    })
     .filter((entry) => entry.score > 0)
     .sort((a, b) => b.score - a.score || b.record.updatedAt - a.record.updatedAt)
     .map((entry) => entry.record);
@@ -98,7 +131,7 @@ export function selectKnowledgeForTask(
       id: record.id,
       cls: record.cls,
       summary: record.summary,
-      reason: determineReason(record, taskTokens, scopeTokens),
+      reason: determineReason(record, taskTokens, scopeTokens, semanticById.get(record.id)?.similarity),
       confidence: record.confidence,
       reviewState: record.reviewState,
     }));

@@ -3,6 +3,16 @@ import type { ProviderRegistry } from '../providers/registry.ts';
 import type { ToolRegistry } from '../tools/registry.ts';
 import type { ToolDefinition } from '../types/tools.ts';
 import type { RuntimeEventBus, AnyRuntimeEvent, RuntimeEventPayload } from '../runtime/events/index.ts';
+import { GatewayMethodCatalog, type GatewayMethodDescriptor, type GatewayMethodHandler } from '../control-plane/index.ts';
+import {
+  ChannelDeliveryRouter,
+  ChannelPluginRegistry,
+  type ChannelDeliveryStrategy,
+  type ChannelPlugin,
+} from '../channels/index.ts';
+import { MemoryEmbeddingProviderRegistry, type MemoryEmbeddingProvider } from '../state/index.ts';
+import { VoiceProviderRegistry, type VoiceProvider } from '../voice/index.ts';
+import { MediaProviderRegistry, type MediaProvider } from '../media/index.ts';
 import { logger } from '../utils/logger.ts';
 
 /**
@@ -59,6 +69,27 @@ export interface PluginAPI {
     schema: PluginToolSchema,
     handler: PluginToolHandler,
   ): void;
+
+  /** Register a callable control-plane gateway method. */
+  registerGatewayMethod(
+    descriptor: Omit<GatewayMethodDescriptor, 'source' | 'pluginId'> & Partial<Pick<GatewayMethodDescriptor, 'source' | 'pluginId'>>,
+    handler: GatewayMethodHandler,
+  ): void;
+
+  /** Register a channel plugin for a surface such as Slack, Discord, ntfy, or webhooks. */
+  registerChannelPlugin(plugin: ChannelPlugin): void;
+
+  /** Register an outbound channel delivery strategy. */
+  registerDeliveryStrategy(strategy: ChannelDeliveryStrategy, options?: { readonly replace?: boolean }): void;
+
+  /** Register a memory embedding provider. Sync providers can power sqlite-vec indexing immediately. */
+  registerMemoryEmbeddingProvider(provider: MemoryEmbeddingProvider, options?: { readonly replace?: boolean; readonly makeDefault?: boolean }): void;
+
+  /** Register a TS-only voice provider for TTS, STT, or realtime session negotiation. */
+  registerVoiceProvider(provider: VoiceProvider, options?: { readonly replace?: boolean }): void;
+
+  /** Register a TS-only media provider for analysis, transform, or generation. */
+  registerMediaProvider(provider: MediaProvider, options?: { readonly replace?: boolean }): void;
 
   /** Subscribe to a typed runtime event. Returns an unsubscribe function. */
   onEvent<K extends AnyRuntimeEvent['type']>(
@@ -165,6 +196,59 @@ export function createPluginAPI(ctx: PluginAPIContext): PluginAPI {
       ctx.cleanup.push(() => {
         logger.warn(`[plugin:${ctx.pluginName}] Tool '${toolName}' cannot be unregistered on deactivate — it persists until process restart`);
       });
+    },
+
+    registerGatewayMethod(descriptor, handler) {
+      const catalog = GatewayMethodCatalog.getActive();
+      const methodId = descriptor.id.startsWith(`plugin.${ctx.pluginName}.`)
+        ? descriptor.id
+        : `plugin.${ctx.pluginName}.${descriptor.id}`;
+      const unregister = catalog.register({
+        ...descriptor,
+        id: methodId,
+        source: 'plugin',
+        pluginId: ctx.pluginName,
+      }, handler);
+      ctx.cleanup.push(unregister);
+      logger.info(`[plugin:${ctx.pluginName}] Registered gateway method '${methodId}'`);
+    },
+
+    registerChannelPlugin(plugin) {
+      const registry = ChannelPluginRegistry.getActive();
+      if (!registry) throw new Error('Channel plugin registry is not active');
+      registry.register(plugin);
+      ctx.cleanup.push(() => {
+        if (registry.get(plugin.id) === plugin) registry.unregister(plugin.id);
+      });
+      logger.info(`[plugin:${ctx.pluginName}] Registered channel plugin '${plugin.id}'`);
+    },
+
+    registerDeliveryStrategy(strategy, options = {}) {
+      const router = ChannelDeliveryRouter.getActive();
+      if (!router) throw new Error('Channel delivery router is not active');
+      router.registerStrategy(strategy, options);
+      ctx.cleanup.push(() => {
+        router.unregisterStrategy(strategy.id);
+      });
+      logger.info(`[plugin:${ctx.pluginName}] Registered delivery strategy '${strategy.id}'`);
+    },
+
+    registerMemoryEmbeddingProvider(provider, options = {}) {
+      const unregister = MemoryEmbeddingProviderRegistry.getActive().register(provider, options);
+      ctx.cleanup.push(unregister);
+      logger.info(`[plugin:${ctx.pluginName}] Registered memory embedding provider '${provider.id}'`);
+    },
+
+    registerVoiceProvider(provider, options = {}) {
+      const unregister = VoiceProviderRegistry.getActive().register(provider, options);
+      ctx.cleanup.push(unregister);
+      logger.info(`[plugin:${ctx.pluginName}] Registered voice provider '${provider.id}'`);
+    },
+
+    registerMediaProvider(provider, options = {}) {
+      const unregister = MediaProviderRegistry.getActive().register(provider, options);
+      ctx.cleanup.push(unregister);
+      logger.info(`[plugin:${ctx.pluginName}] Registered media provider '${provider.id}'`);
     },
 
     onEvent(eventName, handler) {

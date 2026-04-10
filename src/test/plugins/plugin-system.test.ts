@@ -546,6 +546,62 @@ describe('createPluginAPI', () => {
     // Allow the promise to settle without throwing in test
     await result.catch(() => {});
   });
+
+  test('registers extension SDK contributions for gateway, memory, voice, and media domains', async () => {
+    const { createPluginAPI } = await import('../../plugins/api.ts');
+    const { GatewayMethodCatalog } = await import('../../control-plane/index.ts');
+    const { MemoryEmbeddingProviderRegistry } = await import('../../state/index.ts');
+    const { VoiceProviderRegistry } = await import('../../voice/index.ts');
+    const { MediaProviderRegistry } = await import('../../media/index.ts');
+    new GatewayMethodCatalog({ includeBuiltins: false });
+    new MemoryEmbeddingProviderRegistry();
+    new VoiceProviderRegistry();
+    new MediaProviderRegistry();
+    const cleanup: Array<() => void> = [];
+    const ctx: PluginAPIContext = {
+      pluginName: 'my-plugin',
+      runtimeBus: makeFakeRuntimeBus(),
+      commandRegistry: makeFakeCommandRegistry() as unknown as CommandRegistry,
+      providerRegistry: makeFakeProviderRegistry() as unknown as ProviderRegistry,
+      toolRegistry: makeFakeToolRegistry() as unknown as ToolRegistry,
+      pluginConfig: {},
+      cleanup,
+    };
+    const api = createPluginAPI(ctx);
+
+    api.registerGatewayMethod({
+      id: 'echo',
+      title: 'Echo',
+      description: 'Echo body',
+      category: 'test',
+      access: 'authenticated',
+      transport: ['internal'],
+      scopes: ['test:echo'],
+    }, async (input) => input.body);
+    api.registerMemoryEmbeddingProvider({
+      id: 'plugin-embeddings',
+      label: 'Plugin Embeddings',
+      dimensions: 384,
+      embedSync: (request) => ({ vector: new Float32Array(request.dimensions), dimensions: request.dimensions }),
+    });
+    api.registerVoiceProvider({
+      id: 'plugin-voice',
+      label: 'Plugin Voice',
+      capabilities: ['tts'],
+    });
+    api.registerMediaProvider({
+      id: 'plugin-media',
+      label: 'Plugin Media',
+      capabilities: ['understand'],
+    });
+
+    expect(GatewayMethodCatalog.getActive().get('plugin.my-plugin.echo')).not.toBeNull();
+    expect(MemoryEmbeddingProviderRegistry.getActive().get('plugin-embeddings')).not.toBeNull();
+    expect(VoiceProviderRegistry.getActive().get('plugin-voice')).not.toBeNull();
+    expect(MediaProviderRegistry.getActive().get('plugin-media')).not.toBeNull();
+    for (const fn of cleanup) fn();
+    expect(GatewayMethodCatalog.getActive().get('plugin.my-plugin.echo')).toBeNull();
+  });
 });
 
 // ─── PluginManager ────────────────────────────────────────────────────────────

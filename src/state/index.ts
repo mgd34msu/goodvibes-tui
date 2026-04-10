@@ -22,8 +22,33 @@ export type {
   MemoryLink,
   MemoryAddOptions,
   MemorySearchFilter,
+  MemorySemanticSearchResult,
+  MemoryStoreOptions,
+  MemoryDoctorReport,
   ProvenanceLink,
   ProvenanceLinkKind,
 } from './memory-store.ts';
+export {
+  MEMORY_VECTOR_DIMS,
+  embedMemoryText,
+  resolveMemoryVectorDbPath,
+  SqliteVecMemoryIndex,
+} from './memory-vector-store.ts';
+export type { MemoryVectorCandidate, MemoryVectorStats } from './memory-vector-store.ts';
+export {
+  DEFAULT_MEMORY_EMBEDDING_DIMS,
+  HASHED_MEMORY_EMBEDDING_PROVIDER,
+  MemoryEmbeddingProviderRegistry,
+  normalizeMemoryEmbeddingVector,
+} from './memory-embeddings.ts';
+export type {
+  MemoryEmbeddingDoctorReport,
+  MemoryEmbeddingProvider,
+  MemoryEmbeddingProviderState,
+  MemoryEmbeddingProviderStatus,
+  MemoryEmbeddingRequest,
+  MemoryEmbeddingResult,
+  MemoryEmbeddingUsage,
+} from './memory-embeddings.ts';
 export type { KnowledgeInjection } from './knowledge-injection.ts';
 export { selectKnowledgeForTask, buildKnowledgeInjectionPrompt, _setKnowledgeRegistryForTesting } from './knowledge-injection.ts';

@@ -10,6 +10,16 @@
 
 import { randomUUID } from 'node:crypto';
 import { SQLiteStore } from './sqlite-store.ts';
+import {
+  SqliteVecMemoryIndex,
+  type MemoryVectorStats,
+  resolveMemoryVectorDbPath,
+} from './memory-vector-store.ts';
+import {
+  HASHED_MEMORY_EMBEDDING_PROVIDER,
+  MemoryEmbeddingProviderRegistry,
+  type MemoryEmbeddingDoctorReport,
+} from './memory-embeddings.ts';
 import { logger } from '../utils/logger.ts';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -87,6 +97,8 @@ export interface MemorySearchFilter {
   tags?: string[];
   /** Full-text substring match on summary and detail. */
   query?: string;
+  /** Use the sqlite-vec semantic index for query ranking when available. */
+  semantic?: boolean;
   /** Return records created after this timestamp. */
   since?: number;
   /** Match a specific review state or a small set of states. */
@@ -137,6 +149,24 @@ export interface MemoryImportResult {
   importedRecords: number;
   skippedRecords: number;
   importedLinks: number;
+}
+
+export interface MemorySemanticSearchResult {
+  record: MemoryRecord;
+  distance: number;
+  similarity: number;
+  score: number;
+}
+
+export interface MemoryStoreOptions {
+  enableVectorIndex?: boolean;
+  vectorDbPath?: string;
+}
+
+export interface MemoryDoctorReport {
+  readonly vector: MemoryVectorStats;
+  readonly embeddings: MemoryEmbeddingDoctorReport;
+  readonly checkedAt: number;
 }
 
 // ── Internal schema helper ────────────────────────────────────────────────────
@@ -242,6 +272,22 @@ export class MemoryRegistry {
     return this.store.search(filter);
   }
 
+  searchSemantic(filter: MemorySearchFilter = {}): MemorySemanticSearchResult[] {
+    return this.store.searchSemantic(filter);
+  }
+
+  rebuildVectors(): MemoryVectorStats {
+    return this.store.rebuildVectorIndex();
+  }
+
+  vectorStats(): MemoryVectorStats {
+    return this.store.vectorStats();
+  }
+
+  async doctor(): Promise<MemoryDoctorReport> {
+    return this.store.doctor();
+  }
+
   reviewQueue(limit = 10): MemoryRecord[] {
     return this.store.reviewQueue(limit);
   }
@@ -297,16 +343,22 @@ export class MemoryRegistry {
 
 export class MemoryStore {
   private sqlite: SQLiteStore;
+  private vectorIndex: SqliteVecMemoryIndex | null;
   private ready = false;
 
-  constructor(dbPath?: string) {
+  constructor(dbPath?: string, options: MemoryStoreOptions = {}) {
     this.sqlite = new SQLiteStore(dbPath);
+    this.vectorIndex = options.enableVectorIndex === false
+      ? null
+      : new SqliteVecMemoryIndex(options.vectorDbPath ?? resolveMemoryVectorDbPath(dbPath));
   }
 
   async init(): Promise<void> {
     if (this.ready) return;
     await this.sqlite.init(createSchema as Parameters<SQLiteStore['init']>[0]);
     this.ready = true;
+    this.vectorIndex?.init();
+    this.rebuildVectorIndex();
     logger.info('MemoryStore: initialized', { ready: true });
   }
 
@@ -361,6 +413,8 @@ export class MemoryStore {
     );
 
     logger.info('MemoryStore: record added', { id, cls: opts.cls });
+    this.vectorIndex?.upsert(record);
+    this.persist();
     return record;
   }
 
@@ -381,6 +435,9 @@ export class MemoryStore {
   /** Search records with an optional filter. */
   search(filter: MemorySearchFilter = {}): MemoryRecord[] {
     if (!this.ready) return [];
+    if (filter.semantic) {
+      return this.searchSemantic(filter).map((entry) => entry.record);
+    }
 
     const conditions: string[] = [];
     const params: (string | number)[] = [];
@@ -458,6 +515,52 @@ export class MemoryStore {
     return records;
   }
 
+  searchSemantic(filter: MemorySearchFilter = {}): MemorySemanticSearchResult[] {
+    if (!this.ready) return [];
+    const query = filter.query?.trim();
+    if (!query) {
+      return this.search({ ...filter, semantic: false }).map((record) => ({
+        record,
+        distance: Number.POSITIVE_INFINITY,
+        similarity: 0,
+        score: scoreRecord(record, { ...filter, semantic: false }),
+      }));
+    }
+
+    const requestedLimit = Math.max(1, filter.limit ?? 10);
+    const vectorFilter = {
+      ...filter,
+      limit: Math.max(requestedLimit * 8, 50),
+    };
+    const candidates = this.vectorIndex?.search(query, vectorFilter) ?? [];
+    if (candidates.length === 0) {
+      return this.search({ ...filter, semantic: false }).map((record) => ({
+        record,
+        distance: Number.POSITIVE_INFINITY,
+        similarity: 0,
+        score: scoreRecord(record, { ...filter, semantic: false }),
+      }));
+    }
+
+    const results: MemorySemanticSearchResult[] = [];
+    for (const candidate of candidates) {
+      const record = this.get(candidate.id);
+      if (!record) continue;
+      if (!recordMatchesPostSqlFilter(record, filter)) continue;
+      const lexicalScore = scoreRecord(record, { ...filter, query: undefined, semantic: false });
+      results.push({
+        record,
+        distance: candidate.distance,
+        similarity: candidate.similarity,
+        score: candidate.similarity * 100 + lexicalScore * 0.25,
+      });
+    }
+
+    return results
+      .sort((a, b) => b.score - a.score || a.distance - b.distance || b.record.updatedAt - a.record.updatedAt)
+      .slice(0, requestedLimit);
+  }
+
   reviewQueue(limit = 10): MemoryRecord[] {
     const records = this.search({ limit: Math.max(limit * 4, 25) });
     const candidates = records.filter((record) => isReviewCandidate(record));
@@ -527,6 +630,7 @@ export class MemoryStore {
         ],
       );
       importedRecords++;
+      this.vectorIndex?.upsert(record);
     }
 
     for (const link of bundle.links) {
@@ -540,6 +644,7 @@ export class MemoryStore {
     }
 
     logger.info('MemoryStore: bundle imported', { importedRecords, skippedRecords, importedLinks });
+    this.persist();
     return { importedRecords, skippedRecords, importedLinks };
   }
 
@@ -574,6 +679,7 @@ export class MemoryStore {
       return null;
     }
 
+    this.persist();
     return { fromId, toId, relation, createdAt: now };
   }
 
@@ -626,7 +732,10 @@ export class MemoryStore {
     );
 
     logger.info('MemoryStore: record updated', { id });
-    return { ...existing, scope: newScope, summary: newSummary, detail: newDetail, tags: newTags, updatedAt: now };
+    const updated = { ...existing, scope: newScope, summary: newSummary, detail: newDetail, tags: newTags, updatedAt: now };
+    this.vectorIndex?.upsert(updated);
+    this.persist();
+    return updated;
   }
 
   review(id: string, patch: MemoryReviewPatch): MemoryRecord | null {
@@ -663,7 +772,10 @@ export class MemoryStore {
     );
 
     logger.info('MemoryStore: record reviewed', { id, reviewState, confidence });
-    return { ...existing, reviewState, confidence, reviewedAt, reviewedBy, staleReason, updatedAt: now };
+    const reviewed = { ...existing, reviewState, confidence, reviewedAt, reviewedBy, staleReason, updatedAt: now };
+    this.vectorIndex?.upsert(reviewed);
+    this.persist();
+    return reviewed;
   }
 
   /** Delete a record and all its links. */
@@ -673,10 +785,43 @@ export class MemoryStore {
     const existing = this.get(id);
     if (!existing) return false;
 
-    // Links are cascade-deleted via FK constraint (foreign_keys = ON)
+    // Delete links explicitly as well as via FK cascade; sql.js may load older
+    // stores with FK enforcement disabled for a connection.
+    this.sqlite.run('DELETE FROM memory_links WHERE from_id = ? OR to_id = ?', [id, id]);
     this.sqlite.run('DELETE FROM memory_records WHERE id = ?', [id]);
+    this.vectorIndex?.delete(id);
     logger.info('MemoryStore: record deleted', { id });
+    this.persist();
     return true;
+  }
+
+  rebuildVectorIndex(): MemoryVectorStats {
+    if (!this.ready) return this.vectorStats();
+    const records = this.allRecords();
+    this.vectorIndex?.sync(records);
+    return this.vectorStats();
+  }
+
+  vectorStats(): MemoryVectorStats {
+    return this.vectorIndex?.stats() ?? {
+      backend: 'sqlite-vec',
+      enabled: false,
+      available: false,
+      path: '',
+      dimensions: 0,
+      indexedRecords: 0,
+      embeddingProviderId: HASHED_MEMORY_EMBEDDING_PROVIDER.id,
+      embeddingProviderLabel: HASHED_MEMORY_EMBEDDING_PROVIDER.label,
+      error: 'memory vector index disabled',
+    };
+  }
+
+  async doctor(): Promise<MemoryDoctorReport> {
+    return {
+      vector: this.vectorStats(),
+      embeddings: await MemoryEmbeddingProviderRegistry.getActive().doctor(),
+      checkedAt: Date.now(),
+    };
   }
 
   async save(): Promise<boolean> {
@@ -685,6 +830,7 @@ export class MemoryStore {
 
   close(): void {
     this.sqlite.close();
+    this.vectorIndex?.close();
     this.ready = false;
   }
 
@@ -712,6 +858,22 @@ export class MemoryStore {
       createdAt:  Number(get('created_at')),
       updatedAt:  Number(get('updated_at')),
     };
+  }
+
+  private allRecords(): MemoryRecord[] {
+    const rows = this.sqlite.exec(
+      `SELECT id, scope, cls, summary, detail, tags, provenance, review_state, confidence, reviewed_at, reviewed_by, stale_reason, created_at, updated_at
+         FROM memory_records
+         ORDER BY updated_at DESC, created_at DESC`,
+    );
+    if (!rows.length) return [];
+    return rows[0].values.map(v => this.rowToRecord(rows[0].columns, v));
+  }
+
+  private persist(): void {
+    void this.save().catch((err) => {
+      logger.debug('MemoryStore: autosave failed', { error: err instanceof Error ? err.message : String(err) });
+    });
   }
 }
 
@@ -811,6 +973,28 @@ function scoreRecord(record: MemoryRecord, filter: MemorySearchFilter): number {
   score += Math.min(record.provenance.length, 4) * 2;
   score += Math.min(record.tags.length, 4);
   return score;
+}
+
+function recordMatchesPostSqlFilter(record: MemoryRecord, filter: MemorySearchFilter): boolean {
+  if (filter.scope && record.scope !== filter.scope) return false;
+  if (filter.cls && record.cls !== filter.cls) return false;
+  if (filter.since && record.createdAt < filter.since) return false;
+  if (filter.reviewState) {
+    const states = Array.isArray(filter.reviewState) ? filter.reviewState : [filter.reviewState];
+    if (!states.includes(record.reviewState)) return false;
+  }
+  if (filter.minConfidence !== undefined && record.confidence < filter.minConfidence) return false;
+  if (filter.tags?.length) {
+    for (const tag of filter.tags) {
+      if (!record.tags.includes(tag)) return false;
+    }
+  }
+  if (filter.provenanceKinds?.length) {
+    const allowed = new Set(filter.provenanceKinds);
+    if (!record.provenance.some((link) => allowed.has(link.kind))) return false;
+  }
+  if (filter.staleOnly && !isReviewFlagged(record)) return false;
+  return true;
 }
 
 function safeParseJson<T>(raw: string, fallback: T): T {

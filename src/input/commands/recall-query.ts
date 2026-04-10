@@ -11,6 +11,7 @@ export function handleRecallSearch(args: string[], context: CommandContext): voi
 
   const clsIdx = args.indexOf('--cls');
   const limitIdx = args.indexOf('--limit');
+  const semantic = args.includes('--semantic') || args.includes('--vector');
   const filter: MemorySearchFilter = {};
 
   if (clsIdx !== -1 && args[clsIdx + 1]) {
@@ -38,27 +39,67 @@ export function handleRecallSearch(args: string[], context: CommandContext): voi
 
   const queryTokens = args.filter((token, index) => {
     if (token.startsWith('--')) return false;
-    if (index > 0 && args[index - 1].startsWith('--')) return false;
+    if (index > 0 && ['--cls', '--limit', '--scope'].includes(args[index - 1]!)) return false;
     return true;
   });
   if (queryTokens.length) filter.query = queryTokens.join(' ');
+  if (semantic) filter.semantic = true;
 
-  const results = registry.search(filter);
+  const semanticResults = semantic ? registry.searchSemantic(filter) : [];
+  const results = semantic ? semanticResults.map((entry) => entry.record) : registry.search(filter);
   if (!results.length) {
     context.print('[recall] No records found.');
     return;
   }
 
-  context.print(`[recall] ${results.length} record(s):`);
+  context.print(`[recall] ${results.length} ${semantic ? 'semantic ' : ''}record(s):`);
   for (const record of results) {
+    const semanticEntry = semanticResults.find((entry) => entry.record.id === record.id);
     const ts = new Date(record.createdAt).toISOString().slice(0, 16).replace('T', ' ');
     const tagStr = record.tags.length ? ` [${record.tags.join(', ')}]` : '';
-    context.print(`  ${record.id}  [${record.cls}]${tagStr}  ${ts}`);
+    const scoreStr = semanticEntry ? `  sim ${Math.round(semanticEntry.similarity * 100)}%` : '';
+    context.print(`  ${record.id}  [${record.cls}]${tagStr}  ${ts}${scoreStr}`);
     context.print(`    ${record.summary}`);
     if (record.provenance.length) {
       context.print(`    via: ${record.provenance.map((entry) => `${entry.kind}:${entry.ref}`).join(', ')}`);
     }
   }
+}
+
+export function handleRecallVector(args: string[], context: CommandContext): void {
+  const registry = context.memoryRegistry;
+  if (!registry) {
+    context.print('[recall] Memory registry not available.');
+    return;
+  }
+
+  const sub = (args[0] ?? 'status').toLowerCase();
+  if (sub === 'rebuild') {
+    const stats = registry.rebuildVectors();
+    context.print(formatVectorStats(stats, 'rebuild complete'));
+    return;
+  }
+  if (sub === 'status' || sub === 'doctor') {
+    context.print(formatVectorStats(registry.vectorStats(), sub));
+    return;
+  }
+  context.print('[recall] Usage: /recall vector [status|doctor|rebuild]');
+}
+
+function formatVectorStats(
+  stats: ReturnType<NonNullable<CommandContext['memoryRegistry']>['vectorStats']>,
+  label: string,
+): string {
+  return [
+    `[recall] Vector index ${label}`,
+    `  backend: ${stats.backend}`,
+    `  enabled: ${stats.enabled ? 'yes' : 'no'}`,
+    `  available: ${stats.available ? 'yes' : 'no'}`,
+    `  dimensions: ${stats.dimensions}`,
+    `  indexed records: ${stats.indexedRecords}`,
+    ...(stats.path ? [`  path: ${stats.path}`] : []),
+    ...(stats.error ? [`  error: ${stats.error}`] : []),
+  ].join('\n');
 }
 
 export function handleRecallGet(args: string[], context: CommandContext): void {

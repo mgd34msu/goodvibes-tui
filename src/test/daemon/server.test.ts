@@ -622,6 +622,59 @@ describe('DaemonServer', () => {
     expect(typeof runBody.runId).toBe('string');
   });
 
+  test('automation API accepts cron stagger, main target, and upstream-compatible execution metadata', async () => {
+    daemon.enable({ daemon: true }, TEST_TOKEN);
+    await daemon.start();
+
+    const create = await fetch('http://127.0.0.1:39421/api/automation/jobs', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${TEST_TOKEN}`,
+      },
+      body: JSON.stringify({
+        kind: 'cron',
+        cron: '0 * * * *',
+        timezone: 'UTC',
+        staggerMs: 0,
+        name: 'API Metadata Job',
+        prompt: 'Run metadata automation',
+        target: { kind: 'main', createIfMissing: true },
+        wakeMode: 'now',
+        fallbacks: ['openrouter/gpt-4.1-mini'],
+        reasoningEffort: 'high',
+        thinking: 'high',
+        externalContentSource: 'webhook',
+        allowUnsafeExternalContent: false,
+        lightContext: true,
+      }),
+    });
+
+    expect(create.status).toBe(201);
+    const created = await create.json() as {
+      schedule: { kind: string; staggerMs?: number };
+      execution: {
+        target: { kind: string };
+        wakeMode?: string;
+        fallbackModels?: string[];
+        reasoningEffort?: string;
+        thinking?: string;
+        externalContentSource?: string;
+        allowUnsafeExternalContent?: boolean;
+        lightContext?: boolean;
+      };
+    };
+    expect(created.schedule.staggerMs).toBe(0);
+    expect(created.execution.target.kind).toBe('main');
+    expect(created.execution.wakeMode).toBe('now');
+    expect(created.execution.fallbackModels).toEqual(['openrouter/gpt-4.1-mini']);
+    expect(created.execution.reasoningEffort).toBe('high');
+    expect(created.execution.thinking).toBe('high');
+    expect(created.execution.externalContentSource).toBe('webhook');
+    expect(created.execution.allowUnsafeExternalContent).toBe(false);
+    expect(created.execution.lightContext).toBe(true);
+  });
+
   test('automation API can update execution and delivery policy', async () => {
     daemon.enable({ daemon: true }, TEST_TOKEN);
     await daemon.start();
@@ -751,6 +804,15 @@ describe('DaemonServer', () => {
     expect(((snapshot.body as { totals?: { clients?: number } }).totals?.clients ?? 0)).toBeGreaterThanOrEqual(1);
 
     socket.send(JSON.stringify({
+      type: 'call',
+      id: 'status-method-1',
+      methodId: 'control.status',
+    }));
+    const methodStatus = await waitForSocketFrame(socket, (frame) => frame.type === 'response' && frame.id === 'status-method-1');
+    expect(methodStatus.ok).toBe(true);
+    expect((methodStatus.body as { status?: string }).status).toBe('running');
+
+    socket.send(JSON.stringify({
       type: 'subscribe',
       domains: ['routes'],
     }));
@@ -758,6 +820,48 @@ describe('DaemonServer', () => {
     expect(subscribed.type).toBe('subscribed');
 
     socket.close();
+  });
+
+  test('exposes gap-closure contracts for methods, voice, media, memory, heartbeat, and node hosts', async () => {
+    daemon.enable({ daemon: true }, TEST_TOKEN);
+    await daemon.start();
+
+    const auth = { Authorization: `Bearer ${TEST_TOKEN}` };
+    const methods = await fetch('http://127.0.0.1:39421/api/control-plane/methods', { headers: auth });
+    expect(methods.status).toBe(200);
+    const methodsBody = await methods.json() as { methods: Array<{ id: string }> };
+    expect(methodsBody.methods.some((method) => method.id === 'remote.node_host.contract')).toBe(true);
+
+    const statusInvoke = await fetch('http://127.0.0.1:39421/api/control-plane/methods/control.status/invoke', {
+      method: 'POST',
+      headers: { ...auth, 'Content-Type': 'application/json' },
+      body: JSON.stringify({}),
+    });
+    expect(statusInvoke.status).toBe(200);
+    expect((await statusInvoke.json() as { status?: string }).status).toBe('running');
+
+    const voice = await fetch('http://127.0.0.1:39421/api/voice', { headers: auth });
+    expect(voice.status).toBe(200);
+    expect((await voice.json() as { note?: string }).note).toContain('Voice capture');
+
+    const media = await fetch('http://127.0.0.1:39421/api/media/providers', { headers: auth });
+    expect(media.status).toBe(200);
+    expect(await media.json()).toHaveProperty('providers');
+
+    const memory = await fetch('http://127.0.0.1:39421/api/memory/doctor', { headers: auth });
+    expect(memory.status).toBe(200);
+    const memoryBody = await memory.json() as { embeddings: { activeProviderId: string } };
+    expect(memoryBody.embeddings.activeProviderId).toBe('hashed-local');
+
+    const heartbeat = await fetch('http://127.0.0.1:39421/api/automation/heartbeat', { headers: auth });
+    expect(heartbeat.status).toBe(200);
+    expect(await heartbeat.json()).toHaveProperty('pending');
+
+    const contract = await fetch('http://127.0.0.1:39421/api/remote/node-host/contract', { headers: auth });
+    expect(contract.status).toBe(200);
+    const contractBody = await contract.json() as { contract: { scopes: string[]; endpoints: Array<{ id: string }> } };
+    expect(contractBody.contract.scopes).toContain('remote:heartbeat');
+    expect(contractBody.contract.endpoints.some((endpoint) => endpoint.id === 'work.pull')).toBe(true);
   });
 
   test('shared session APIs can create, inspect, and continue sessions', async () => {

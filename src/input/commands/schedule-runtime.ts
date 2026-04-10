@@ -2,22 +2,66 @@ import type { CommandRegistry } from '../command-registry.ts';
 import {
   AutomationManager,
   formatEveryInterval,
+  normalizeCronStaggerMs,
   normalizeAtSchedule,
   normalizeCronSchedule,
   normalizeEverySchedule,
 } from '../../automation/index.ts';
 import type { AutomationJob } from '../../automation/jobs.ts';
 import type { AutomationScheduleDefinition } from '../../automation/schedules.ts';
+import type {
+  AutomationExecutionPolicy,
+  AutomationExternalContentSource,
+  AutomationSessionTarget,
+  AutomationWakeMode,
+} from '../../automation/session-targets.ts';
 
 function formatSchedule(schedule: AutomationScheduleDefinition): string {
   switch (schedule.kind) {
     case 'cron':
-      return schedule.timezone ? `${schedule.expression} [${schedule.timezone}]` : schedule.expression;
+      return [
+        schedule.expression,
+        schedule.timezone ? `[${schedule.timezone}]` : '',
+        schedule.staggerMs !== undefined ? `[stagger ${schedule.staggerMs}ms]` : '',
+      ].filter(Boolean).join(' ');
     case 'every':
       return formatEveryInterval(schedule.intervalMs);
     case 'at':
       return new Date(schedule.at).toLocaleString();
   }
+}
+
+function parseAutomationTarget(raw: string | undefined): AutomationSessionTarget | undefined {
+  if (!raw) return undefined;
+  const value = raw.trim();
+  if (!value) return undefined;
+  if (value.startsWith('session:')) {
+    return { kind: 'session', sessionId: value.slice('session:'.length), createIfMissing: true };
+  }
+  if (value.startsWith('route:')) {
+    return { kind: 'route', routeId: value.slice('route:'.length), preserveThread: true };
+  }
+  if (value === 'main' || value === 'current' || value === 'isolated' || value === 'pinned' || value === 'background') {
+    return { kind: value, createIfMissing: true };
+  }
+  return { kind: 'session', sessionId: value, createIfMissing: true };
+}
+
+function parseReasoningEffort(raw: string | undefined): AutomationExecutionPolicy['reasoningEffort'] | undefined {
+  if (!raw) return undefined;
+  if (raw === 'instant' || raw === 'low' || raw === 'medium' || raw === 'high') return raw;
+  throw new Error(`Invalid reasoning effort: "${raw}". Use instant, low, medium, or high.`);
+}
+
+function parseWakeMode(raw: string | undefined): AutomationWakeMode | undefined {
+  if (!raw) return undefined;
+  if (raw === 'now' || raw === 'next-heartbeat') return raw;
+  throw new Error(`Invalid wake mode: "${raw}". Use now or next-heartbeat.`);
+}
+
+function parseFallbackModels(raw: string | undefined): string[] | undefined {
+  if (!raw) return undefined;
+  return raw.split(',').map((entry) => entry.trim()).filter((entry) => entry.length > 0);
 }
 
 function formatNextRun(nextRunAt?: number): string {
@@ -83,9 +127,9 @@ export function registerScheduleRuntimeCommands(registry: CommandRegistry): void
         if (!scheduleKind) {
           ctx.print(
             'Usage:\n'
-            + '  /schedule add cron "<expr>" <prompt...> [--name <name>] [--model <model>] [--template <tmpl>] [--tz <timezone>]\n'
-            + '  /schedule add every <interval> <prompt...> [--name <name>] [--model <model>] [--template <tmpl>]\n'
-            + '  /schedule add at <timestamp> <prompt...> [--name <name>] [--model <model>] [--template <tmpl>]'
+            + '  /schedule add cron "<expr>" <prompt...> [--name <name>] [--model <model>] [--provider <provider>] [--template <tmpl>] [--tz <timezone>] [--stagger <ms>]\n'
+            + '  /schedule add every <interval> <prompt...> [--name <name>] [--model <model>] [--provider <provider>] [--template <tmpl>]\n'
+            + '  /schedule add at <timestamp> <prompt...> [--name <name>] [--model <model>] [--provider <provider>] [--template <tmpl>]'
           );
           return;
         }
@@ -100,22 +144,63 @@ export function registerScheduleRuntimeCommands(registry: CommandRegistry): void
 
         let name: string | undefined;
         let model: string | undefined;
+        let provider: string | undefined;
         let template: string | undefined;
         let timezone: string | undefined;
+        let staggerMs: number | undefined;
+        let target: AutomationSessionTarget | undefined;
+        let reasoningEffort: AutomationExecutionPolicy['reasoningEffort'] | undefined;
+        let thinking: string | undefined;
+        let wakeMode: AutomationWakeMode | undefined;
+        let fallbackModels: string[] | undefined;
+        let externalContentSource: AutomationExternalContentSource | undefined;
+        let allowUnsafeExternalContent: boolean | undefined;
+        let lightContext: boolean | undefined;
+        const toolAllowlist: string[] = [];
         const promptWords: string[] = [];
-        for (let i = valueStartIndex; i < args.length; i++) {
-          const token = args[i]!;
-          if (token === '--name' && i + 1 < args.length) {
-            name = args[++i];
-          } else if (token === '--model' && i + 1 < args.length) {
-            model = args[++i];
-          } else if (token === '--template' && i + 1 < args.length) {
-            template = args[++i];
-          } else if ((token === '--tz' || token === '--timezone') && i + 1 < args.length) {
-            timezone = args[++i];
-          } else {
-            promptWords.push(token);
+        try {
+          for (let i = valueStartIndex; i < args.length; i++) {
+            const token = args[i]!;
+            if (token === '--name' && i + 1 < args.length) {
+              name = args[++i];
+            } else if (token === '--model' && i + 1 < args.length) {
+              model = args[++i];
+            } else if (token === '--provider' && i + 1 < args.length) {
+              provider = args[++i];
+            } else if (token === '--template' && i + 1 < args.length) {
+              template = args[++i];
+            } else if ((token === '--tz' || token === '--timezone') && i + 1 < args.length) {
+              timezone = args[++i];
+            } else if (token === '--stagger' && i + 1 < args.length) {
+              const parsed = normalizeCronStaggerMs(args[++i]);
+              if (parsed === undefined) throw new Error(`Invalid stagger window: "${args[i]}"`);
+              staggerMs = parsed;
+            } else if (token === '--target' && i + 1 < args.length) {
+              target = parseAutomationTarget(args[++i]);
+            } else if (token === '--reasoning' && i + 1 < args.length) {
+              reasoningEffort = parseReasoningEffort(args[++i]);
+            } else if (token === '--thinking' && i + 1 < args.length) {
+              thinking = args[++i];
+            } else if (token === '--wake' && i + 1 < args.length) {
+              wakeMode = parseWakeMode(args[++i]);
+            } else if ((token === '--fallback' || token === '--fallbacks') && i + 1 < args.length) {
+              fallbackModels = parseFallbackModels(args[++i]);
+            } else if (token === '--tool' && i + 1 < args.length) {
+              const tool = args[++i]?.trim();
+              if (tool) toolAllowlist.push(tool);
+            } else if (token === '--external-source' && i + 1 < args.length) {
+              externalContentSource = args[++i] as AutomationExternalContentSource;
+            } else if (token === '--allow-unsafe-external-content') {
+              allowUnsafeExternalContent = true;
+            } else if (token === '--light-context') {
+              lightContext = true;
+            } else {
+              promptWords.push(token);
+            }
           }
+        } catch (error) {
+          ctx.print(`Error: ${error instanceof Error ? error.message : String(error)}`);
+          return;
         }
 
         const prompt = promptWords.join(' ').trim();
@@ -126,9 +211,9 @@ export function registerScheduleRuntimeCommands(registry: CommandRegistry): void
 
         try {
           const schedule = legacyCronMode
-            ? normalizeCronSchedule(scheduleArg, timezone)
+            ? normalizeCronSchedule(scheduleArg, timezone, staggerMs)
             : scheduleKind === 'cron'
-              ? normalizeCronSchedule(scheduleArg, timezone)
+              ? normalizeCronSchedule(scheduleArg, timezone, staggerMs)
               : scheduleKind === 'every'
                 ? normalizeEverySchedule(scheduleArg)
                 : normalizeAtSchedule(parseAtValue(scheduleArg));
@@ -138,7 +223,17 @@ export function registerScheduleRuntimeCommands(registry: CommandRegistry): void
             schedule,
             description: prompt,
             model,
+            provider,
+            fallbackModels,
             template,
+            target,
+            reasoningEffort,
+            thinking,
+            wakeMode,
+            toolAllowlist: toolAllowlist.length > 0 ? toolAllowlist : undefined,
+            allowUnsafeExternalContent,
+            externalContentSource,
+            lightContext,
             enabled: true,
           });
           ctx.print(
@@ -218,9 +313,9 @@ export function registerScheduleRuntimeCommands(registry: CommandRegistry): void
 
       ctx.print(
         'Usage:\n'
-        + '  /schedule add cron "<expr>" <prompt...>\n'
-        + '  /schedule add every <interval> <prompt...>\n'
-        + '  /schedule add at <timestamp> <prompt...>\n'
+        + '  /schedule add cron "<expr>" <prompt...> [--target main|current|isolated|pinned|session:<id>] [--stagger <ms>]\n'
+        + '  /schedule add every <interval> <prompt...> [--target <target>]\n'
+        + '  /schedule add at <timestamp> <prompt...> [--target <target>]\n'
         + '  /schedule list\n'
         + '  /schedule remove <id>\n'
         + '  /schedule enable <id>\n'

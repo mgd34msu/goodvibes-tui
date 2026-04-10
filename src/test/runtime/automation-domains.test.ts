@@ -87,12 +87,18 @@ describe('automation domain foundation', () => {
       },
       modelProvider: 'openai',
       modelId: 'gpt-5.4',
+      fallbackModels: ['openrouter/gpt-4.1-mini'],
       reasoningEffort: 'medium',
+      thinking: 'high',
+      wakeMode: 'now',
       timeoutMs: 60_000,
       maxAttempts: 2,
       toolAllowlist: ['read', 'write'],
       autoApprove: false,
       sandboxMode: 'inherit',
+      allowUnsafeExternalContent: false,
+      externalContentSource: 'webhook',
+      lightContext: true,
     };
 
     const delivery: AutomationDeliveryPolicy = {
@@ -138,6 +144,7 @@ describe('automation domain foundation', () => {
         kind: 'cron',
         expression: '0 2 * * *',
         timezone: 'America/Chicago',
+        staggerMs: 30_000,
       },
       execution,
       delivery,
@@ -223,7 +230,7 @@ describe('automation domain foundation', () => {
       id: 'job-1',
       status: 'enabled',
       schedule: { kind: 'cron', expression: '0 2 * * *' },
-      execution: { modelProvider: 'openai', modelId: 'gpt-5.4' },
+      execution: { modelProvider: 'openai', modelId: 'gpt-5.4', fallbackModels: ['openrouter/gpt-4.1-mini'], wakeMode: 'now' },
       delivery: { mode: 'surface' },
       failure: { action: 'retry' },
     });

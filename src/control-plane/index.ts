@@ -7,6 +7,21 @@ export type {
 } from './types.ts';
 export type { ControlPlaneGatewayConfig, ControlPlaneEventStreamOptions, ControlPlaneRecentEvent } from './gateway.ts';
 export { ControlPlaneGateway } from './gateway.ts';
+export {
+  GatewayMethodCatalog,
+  getGatewayMethodCatalog,
+} from './method-catalog.ts';
+export type {
+  GatewayHttpBinding,
+  GatewayMethodAccess,
+  GatewayMethodDescriptor,
+  GatewayMethodHandler,
+  GatewayMethodInvocation,
+  GatewayMethodInvocationContext,
+  GatewayMethodListOptions,
+  GatewayMethodSource,
+  GatewayMethodTransport,
+} from './method-catalog.ts';
 export type {
   SharedSessionRecord,
   SharedSessionMessage,

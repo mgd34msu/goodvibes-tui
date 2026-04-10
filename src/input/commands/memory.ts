@@ -16,7 +16,7 @@
 import type { SlashCommand, CommandContext } from '../command-registry.ts';
 import { handleRecallAdd, handleRecallCapture } from './recall-capture.ts';
 import { handleRecallExport, handleRecallHandoffExport, handleRecallHandoffImport, handleRecallHandoffInspect, handleRecallImport } from './recall-bundle.ts';
-import { handleRecallGet, handleRecallLink, handleRecallList, handleRecallRemove, handleRecallSearch } from './recall-query.ts';
+import { handleRecallGet, handleRecallLink, handleRecallList, handleRecallRemove, handleRecallSearch, handleRecallVector } from './recall-query.ts';
 import { handleRecallExplain, handleRecallPromote, handleRecallQueue, handleRecallReview } from './recall-review.ts';
 import { VALID_CLASSES, VALID_REVIEW_STATES, VALID_SCOPES } from './recall-shared.ts';
 
@@ -39,6 +39,11 @@ export const recallCommand: SlashCommand = {
       case 'search':
       case 'find':
         handleRecallSearch(rest, context);
+        break;
+
+      case 'vector':
+      case 'vectors':
+        handleRecallVector(rest, context);
         break;
 
       case 'capture':
@@ -120,7 +125,8 @@ export const recallCommand: SlashCommand = {
           '  capture policy                                  — Capture the latest policy preflight review as durable memory',
           '  capture mcp <server>                            — Capture MCP trust/quarantine posture as durable memory',
           '  capture plugin <name>                           — Capture plugin trust/quarantine posture as durable memory',
-          '  search [query] [--cls <class>] [--scope <scope>] [--limit <n>]  — Full-text + filter search',
+          '  search [query] [--semantic] [--cls <class>] [--scope <scope>] [--limit <n>]  — Full-text or sqlite-vec semantic search',
+          '  vector [status|doctor|rebuild]                  — Inspect or rebuild the sqlite-vec memory index',
           '  get <id>                                       — Show record with provenance + links',
           '  link <fromId> <toId> <relation>               — Create a directed relation between records',
           '  queue [limit]                                  — Show the operator review queue',

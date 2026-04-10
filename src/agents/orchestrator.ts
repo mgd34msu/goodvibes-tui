@@ -19,6 +19,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { ProcessManager } from '../tools/shared/process-manager.ts';
 import { join } from 'node:path';
 import { getContextWindowForModel } from '../providers/model-limits.ts';
+import { getProviderOptimizer } from '../providers/optimizer.ts';
 import {
   estimateTokens,
   estimateConversationTokens,
@@ -273,14 +274,15 @@ export class AgentOrchestrator {
     providerRegistry: ReturnType<typeof getProviderRegistry>,
     record: AgentRecord,
     currentModel: { id: string; provider: string },
-  ): { provider: LLMProvider; modelId: string } {
+  ): { provider: LLMProvider; modelId: string; requestedModelId: string } {
     const requestedModelId = record.model;
     let modelId = requestedModelId ?? currentModel.id;
 
     try {
       return {
         provider: providerRegistry.getForModel(modelId, record.provider),
-        modelId,
+        modelId: this.resolveChatModelId(providerRegistry, modelId, record.provider),
+        requestedModelId: modelId,
       };
     } catch (err) {
       if (requestedModelId && requestedModelId !== currentModel.id) {
@@ -288,7 +290,8 @@ export class AgentOrchestrator {
         try {
           return {
             provider: providerRegistry.getForModel(currentModel.id),
-            modelId: currentModel.id,
+            modelId: this.resolveChatModelId(providerRegistry, currentModel.id),
+            requestedModelId: currentModel.id,
           };
         } catch (fallbackErr) {
           throw new Error(
@@ -307,6 +310,54 @@ export class AgentOrchestrator {
         }`,
       );
     }
+  }
+
+  private resolveChatModelId(
+    providerRegistry: ReturnType<typeof getProviderRegistry>,
+    requestedModelId: string,
+    providerOverride?: string,
+  ): string {
+    const registry = providerRegistry.listModels();
+    const def = requestedModelId.includes(':')
+      ? registry.find((model) => model.registryKey === requestedModelId)
+        ?? registry.find((model) => model.id === requestedModelId && (!providerOverride || model.provider === providerOverride))
+        ?? registry.find((model) => model.id === requestedModelId)
+      : providerOverride
+        ? registry.find((model) => model.id === requestedModelId && model.provider === providerOverride)
+          ?? registry.find((model) => model.id === requestedModelId)
+        : registry.find((model) => model.id === requestedModelId);
+    if (def) return def.id;
+    return requestedModelId;
+  }
+
+  private resolveFallbackModelRoutes(
+    providerRegistry: ReturnType<typeof getProviderRegistry>,
+    record: AgentRecord,
+    primaryRequestedModelId: string,
+  ): Array<{ provider: LLMProvider; modelId: string; requestedModelId: string }> {
+    const fallbacks = record.fallbackModels ?? [];
+    if (fallbacks.length === 0) return [];
+    const seen = new Set([primaryRequestedModelId]);
+    const routes: Array<{ provider: LLMProvider; modelId: string; requestedModelId: string }> = [];
+    for (const rawFallback of fallbacks) {
+      const requestedModelId = rawFallback.trim();
+      if (!requestedModelId || seen.has(requestedModelId)) continue;
+      seen.add(requestedModelId);
+      try {
+        routes.push({
+          provider: providerRegistry.getForModel(requestedModelId),
+          modelId: this.resolveChatModelId(providerRegistry, requestedModelId),
+          requestedModelId,
+        });
+      } catch (error) {
+        logger.warn('[AgentOrchestrator] Ignoring unresolved fallback model', {
+          agentId: record.id,
+          modelId: requestedModelId,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }
+    return routes;
   }
 
   private applyContextWindowAwareness(
@@ -392,7 +443,11 @@ export class AgentOrchestrator {
       const providerRegistry = getProviderRegistry();
       // --- Resolve model and provider ---
       const currentModel = providerRegistry.getCurrentModel();
-      const { provider, modelId } = this.resolveProviderForRecord(providerRegistry, record, currentModel);
+      const primaryRoute = this.resolveProviderForRecord(providerRegistry, record, currentModel);
+      let activeRoute = primaryRoute;
+      let fallbackRouteIndex = 0;
+      const fallbackRoutes = this.resolveFallbackModelRoutes(providerRegistry, record, primaryRoute.requestedModelId);
+      const modelId = primaryRoute.modelId;
 
       session = new AgentSession(record.id, modelId, record.provider ?? currentModel.provider ?? 'unknown');
       session.appendMessage({ type: 'session_config', template: record.template, task: record.task, tools: record.tools, model: modelId, provider: record.provider ?? 'unknown', timestamp: new Date().toISOString() });
@@ -413,11 +468,6 @@ export class AgentOrchestrator {
       // --- System prompt ---
       // Declared as `let` so context-window awareness can rebuild with fewer layers.
       let systemPrompt = this.buildSystemPrompt(record);
-
-      // --- Resolve model definition for context-window lookups ---
-      const modelDef = getModelRegistry().find(
-        (m) => m.id === modelId || m.registryKey === modelId,
-      ) ?? providerRegistry.getCurrentModel();
 
       // --- Turn loop ---
       let continueLoop = true;
@@ -476,10 +526,17 @@ export class AgentOrchestrator {
         // Before calling provider.chat(), estimate total token usage and compact
         // messages or trim the system prompt when approaching the context limit.
         if (this.featureFlagManager?.isEnabled('agent-context-window-awareness') ?? true) {
+          const modelDef = getModelRegistry().find(
+            (m) =>
+              m.id === activeRoute.modelId ||
+              m.registryKey === activeRoute.modelId ||
+              m.id === activeRoute.requestedModelId ||
+              m.registryKey === activeRoute.requestedModelId,
+          ) ?? providerRegistry.getCurrentModel();
           const contextWindow = getContextWindowForModel(modelDef);
           systemPrompt = this.applyContextWindowAwareness(
             record,
-            modelId,
+            activeRoute.modelId,
             contextWindow,
             conversation,
             systemPrompt,
@@ -492,7 +549,7 @@ export class AgentOrchestrator {
         // provider.chat() already has short provider-level retries (~30s total).
         // This outer loop waits for the network to come back (up to ~2.5 min
         // of additional wait) before giving up and failing the agent.
-        let response: Awaited<ReturnType<typeof provider.chat>>;
+        let response: Awaited<ReturnType<LLMProvider['chat']>>;
         {
           let networkAttempt = 0;
           let rateLimitAttempt = 0;
@@ -516,16 +573,53 @@ export class AgentOrchestrator {
             };
 
             try {
-              response = await provider.chat({
-                model: modelId,
+              response = await activeRoute.provider.chat({
+                model: activeRoute.modelId,
                 messages: conversation.getMessagesForLLM(),
                 tools: toolDefinitions.length > 0 ? toolDefinitions : undefined,
                 systemPrompt,
+                ...(record.reasoningEffort ? { reasoningEffort: record.reasoningEffort } : {}),
                 onDelta,
               });
               break; // success — exit retry loop
             } catch (chatErr) {
-              if (isNetworkError(chatErr) && networkAttempt < NETWORK_RETRY_DELAYS_MS.length) {
+              if (
+                isContextSizeExceededError(chatErr) &&
+                !contextRetried &&
+                (this.featureFlagManager?.isEnabled('agent-context-window-awareness') ?? true)
+              ) {
+                // Context size exceeded; compact messages and retry once.
+                contextRetried = true;
+                logger.warn(
+                  `[AgentOrchestrator] context-window awareness: context size exceeded on turn ${turn} - emergency compaction and retry`,
+                  { agentId: record.id, error: chatErr instanceof Error ? chatErr.message : String(chatErr) },
+                );
+                record.progress = `Turn ${turn} · Context exceeded, compacting…`;
+                this.emitAgentProgress(record.id, record.progress);
+                this.emitOrchestrationProgress(record, record.progress);
+                const currentMessages = conversation.getMessagesForLLM();
+                const compacted = compactSmallWindow(
+                  currentMessages,
+                  Math.max(5, Math.floor(currentMessages.length / 3)),
+                );
+                conversation.replaceMessagesForLLM(compacted);
+                // Also strip system prompt to bare minimum
+                systemPrompt = this.buildLayeredSystemPrompt(record, 0);
+              } else if (fallbackRouteIndex < fallbackRoutes.length) {
+                const previousRoute = activeRoute;
+                activeRoute = fallbackRoutes[fallbackRouteIndex++]!;
+                const reason = chatErr instanceof Error ? chatErr.message : String(chatErr);
+                logger.warn('[AgentOrchestrator] switching to fallback model', {
+                  agentId: record.id,
+                  from: previousRoute.requestedModelId,
+                  to: activeRoute.requestedModelId,
+                  reason,
+                });
+                getProviderOptimizer().recordFallbackTransition(previousRoute.requestedModelId, activeRoute.requestedModelId, reason);
+                record.progress = `Model fallback → ${activeRoute.requestedModelId}`;
+                this.emitAgentProgress(record.id, record.progress);
+                this.emitOrchestrationProgress(record, record.progress);
+              } else if (isNetworkError(chatErr) && networkAttempt < NETWORK_RETRY_DELAYS_MS.length) {
                 const delayMs = NETWORK_RETRY_DELAYS_MS[networkAttempt]!;
                 const delaySec = Math.round(delayMs / 1000);
                 logger.warn(
@@ -554,28 +648,6 @@ export class AgentOrchestrator {
                 if ((record as { status: string }).status === 'cancelled') {
                   throw new Error('Agent cancelled during rate limit retry');
                 }
-              } else if (
-                isContextSizeExceededError(chatErr) &&
-                !contextRetried &&
-                (this.featureFlagManager?.isEnabled('agent-context-window-awareness') ?? true)
-              ) {
-                // Context size exceeded; compact messages and retry once.
-                contextRetried = true;
-                logger.warn(
-                  `[AgentOrchestrator] context-window awareness: context size exceeded on turn ${turn} - emergency compaction and retry`,
-                  { agentId: record.id, error: chatErr instanceof Error ? chatErr.message : String(chatErr) },
-                );
-                record.progress = `Turn ${turn} · Context exceeded, compacting…`;
-                this.emitAgentProgress(record.id, record.progress);
-                this.emitOrchestrationProgress(record, record.progress);
-                const currentMessages = conversation.getMessagesForLLM();
-                const compacted = compactSmallWindow(
-                  currentMessages,
-                  Math.max(5, Math.floor(currentMessages.length / 3)),
-                );
-                conversation.replaceMessagesForLLM(compacted);
-                // Also strip system prompt to bare minimum
-                systemPrompt = this.buildLayeredSystemPrompt(record, 0);
               } else {
                 // Not a network/rate-limit/context error, or all retries exhausted — re-throw
                 // to let the outer catch handle it and fail the agent.
@@ -907,6 +979,10 @@ The report format depends on your role:
     const knowledgePrompt = buildKnowledgeInjectionPrompt(knowledgeInjections);
     if (knowledgePrompt) {
       parts.push(knowledgePrompt);
+    }
+
+    if (record.context?.trim()) {
+      parts.push(`## Context\n${record.context.trim()}`);
     }
 
     // --- Layer 5: Task ---

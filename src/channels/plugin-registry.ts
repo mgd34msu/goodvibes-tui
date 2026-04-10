@@ -80,12 +80,38 @@ export class ChannelPluginRegistry {
   }
 
   register(plugin: ChannelPlugin): void {
+    const existingById = this.plugins.get(plugin.id);
+    if (existingById?.webhookPath) {
+      this.pluginsByPath.delete(existingById.webhookPath);
+    }
+    if (existingById && this.pluginsBySurface.get(existingById.surface)?.id === existingById.id) {
+      this.pluginsBySurface.delete(existingById.surface);
+    }
+    const existingBySurface = this.pluginsBySurface.get(plugin.surface);
+    if (existingBySurface && existingBySurface.id !== plugin.id) {
+      this.plugins.delete(existingBySurface.id);
+      if (existingBySurface.webhookPath) this.pluginsByPath.delete(existingBySurface.webhookPath);
+    }
     this.plugins.set(plugin.id, plugin);
     this.pluginsBySurface.set(plugin.surface, plugin);
     if (plugin.webhookPath) {
       this.pluginsByPath.set(plugin.webhookPath, plugin);
     }
     this.version += 1;
+  }
+
+  unregister(pluginId: string): boolean {
+    const plugin = this.plugins.get(pluginId);
+    if (!plugin) return false;
+    this.plugins.delete(pluginId);
+    if (this.pluginsBySurface.get(plugin.surface)?.id === pluginId) {
+      this.pluginsBySurface.delete(plugin.surface);
+    }
+    if (plugin.webhookPath && this.pluginsByPath.get(plugin.webhookPath)?.id === pluginId) {
+      this.pluginsByPath.delete(plugin.webhookPath);
+    }
+    this.version += 1;
+    return true;
   }
 
   getVersion(): number {
@@ -107,6 +133,10 @@ export class ChannelPluginRegistry {
 
   getBySurface(surface: ChannelSurface): ChannelPlugin | null {
     return this.pluginsBySurface.get(surface) ?? null;
+  }
+
+  get(pluginId: string): ChannelPlugin | null {
+    return this.plugins.get(pluginId) ?? null;
   }
 
   getByPath(pathname: string): ChannelPlugin | null {
