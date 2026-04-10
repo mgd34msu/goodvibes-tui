@@ -275,7 +275,7 @@ async function updateImportsAfterMove(
     // Skip if specifier wouldn't change
     if (oldSpecifier === newSpecifier) continue;
 
-    const escaped = oldSpecifier.replace(/[.*+~?^${}()|[\\]\\/g, '\\$&');
+    const escaped = oldSpecifier.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     const importRe = new RegExp(`(from\\s+['"])${escaped}(['"])`, 'g');
     const requireRe = new RegExp(`(require\\(['"])${escaped}(['"]\\))`, 'g');
 

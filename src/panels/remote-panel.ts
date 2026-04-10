@@ -2,7 +2,7 @@ import type { Line } from '../types/grid.ts';
 import { createEmptyLine } from '../types/grid.ts';
 import { BasePanel } from './base-panel.ts';
 import type { RuntimeStore } from '../runtime/store/index.ts';
-import { getRemoteRunnerRegistry, getRemoteSupervisor } from '../runtime/remote/index.ts';
+import { getDistributedRuntimeManager, getRemoteRunnerRegistry, getRemoteSupervisor } from '../runtime/remote/index.ts';
 import {
   buildDetailBlock,
   buildEmptyState,
@@ -144,6 +144,11 @@ export class RemotePanel extends BasePanel {
     const acp = state.acp;
     const activeConnections = this.getActiveConnections();
     const remoteRegistry = getRemoteRunnerRegistry();
+    const distributed = getDistributedRuntimeManager().getSnapshot() as {
+      pairRequests?: { pending?: number };
+      peers?: { total?: number; connected?: number; nodes?: number; devices?: number };
+      work?: { queued?: number; claimed?: number };
+    };
     const supervisor = getRemoteSupervisor().getSnapshot(this.store);
     remoteRegistry.ensureContractsFromStore(this.store);
     const artifactCount = remoteRegistry.listArtifacts().length;
@@ -182,8 +187,12 @@ export class RemotePanel extends BasePanel {
         [String(supervisor.sessions.length), C.info],
         ['  degraded ', C.label],
         [String(supervisor.degradedConnections), supervisor.degradedConnections > 0 ? C.warn : C.ok],
-        ['  captured ', C.label],
-        [formatTimestamp(supervisor.capturedAt), C.dim],
+        [' distributed peers ', C.label],
+        [String(distributed.peers?.total ?? 0), C.info],
+        ['  connected ', C.label],
+        [String(distributed.peers?.connected ?? 0), (distributed.peers?.connected ?? 0) > 0 ? C.ok : C.dim],
+        ['  queued work ', C.label],
+        [String(distributed.work?.queued ?? 0), (distributed.work?.queued ?? 0) > 0 ? C.info : C.dim],
       ]),
     ];
 

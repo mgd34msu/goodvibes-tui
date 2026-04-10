@@ -30,6 +30,89 @@ export interface NotificationsConfig {
   webhookUrls: string[];
 }
 
+export interface AutomationConfig {
+  enabled: boolean;
+  maxConcurrentRuns: number;
+  runHistoryLimit: number;
+  defaultTimeoutMs: number;
+  catchUpWindowMinutes: number;
+  failureCooldownMs: number;
+  deleteAfterRun: boolean;
+}
+
+export interface ControlPlaneConfig {
+  enabled: boolean;
+  host: string;
+  port: number;
+  baseUrl: string;
+  streamMode: 'sse' | 'websocket' | 'both';
+  allowRemote: boolean;
+}
+
+export interface WebConfig {
+  enabled: boolean;
+  host: string;
+  port: number;
+  publicBaseUrl: string;
+  staticAssetsDir: string;
+}
+
+export interface SlackSurfaceConfig {
+  enabled: boolean;
+  signingSecret: string;
+  botToken: string;
+  appToken: string;
+  defaultChannel: string;
+  workspaceId: string;
+}
+
+export interface DiscordSurfaceConfig {
+  enabled: boolean;
+  publicKey: string;
+  botToken: string;
+  applicationId: string;
+  defaultChannelId: string;
+  guildId: string;
+}
+
+export interface NtfySurfaceConfig {
+  enabled: boolean;
+  baseUrl: string;
+  topic: string;
+  token: string;
+  defaultPriority: number;
+}
+
+export interface WebhookSurfaceConfig {
+  enabled: boolean;
+  defaultTarget: string;
+  timeoutMs: number;
+  secret: string;
+}
+
+export interface SurfacesConfig {
+  slack: SlackSurfaceConfig;
+  discord: DiscordSurfaceConfig;
+  ntfy: NtfySurfaceConfig;
+  webhook: WebhookSurfaceConfig;
+}
+
+export interface WatchersConfig {
+  enabled: boolean;
+  pollIntervalMs: number;
+  heartbeatIntervalMs: number;
+  recoveryWindowMinutes: number;
+}
+
+export interface ServiceConfig {
+  enabled: boolean;
+  autostart: boolean;
+  restartOnFailure: boolean;
+  platform: 'auto' | 'systemd' | 'launchd' | 'windows' | 'manual';
+  serviceName: string;
+  logPath: string;
+}
+
 export interface GoodVibesConfig {
   display: {
     stream: boolean;            // default: true
@@ -93,6 +176,12 @@ export interface GoodVibesConfig {
   release: {
     channel: 'stable' | 'preview';
   };
+  automation: AutomationConfig;
+  controlPlane: ControlPlaneConfig;
+  web: WebConfig;
+  surfaces: SurfacesConfig;
+  watchers: WatchersConfig;
+  service: ServiceConfig;
   danger: {
     daemon: boolean;                // default: false — enable daemon mode
     httpListener: boolean;          // default: false — enable HTTP webhook listener
@@ -215,7 +304,56 @@ export type ConfigKey =
   | 'cache.hitRateWarningThreshold'
   | 'helper.enabled'
   | 'helper.globalProvider'
-  | 'helper.globalModel';
+  | 'helper.globalModel'
+  | 'automation.enabled'
+  | 'automation.maxConcurrentRuns'
+  | 'automation.runHistoryLimit'
+  | 'automation.defaultTimeoutMs'
+  | 'automation.catchUpWindowMinutes'
+  | 'automation.failureCooldownMs'
+  | 'automation.deleteAfterRun'
+  | 'controlPlane.enabled'
+  | 'controlPlane.host'
+  | 'controlPlane.port'
+  | 'controlPlane.baseUrl'
+  | 'controlPlane.streamMode'
+  | 'controlPlane.allowRemote'
+  | 'web.enabled'
+  | 'web.host'
+  | 'web.port'
+  | 'web.publicBaseUrl'
+  | 'web.staticAssetsDir'
+  | 'surfaces.slack.enabled'
+  | 'surfaces.slack.signingSecret'
+  | 'surfaces.slack.botToken'
+  | 'surfaces.slack.appToken'
+  | 'surfaces.slack.defaultChannel'
+  | 'surfaces.slack.workspaceId'
+  | 'surfaces.discord.enabled'
+  | 'surfaces.discord.publicKey'
+  | 'surfaces.discord.botToken'
+  | 'surfaces.discord.applicationId'
+  | 'surfaces.discord.defaultChannelId'
+  | 'surfaces.discord.guildId'
+  | 'surfaces.ntfy.enabled'
+  | 'surfaces.ntfy.baseUrl'
+  | 'surfaces.ntfy.topic'
+  | 'surfaces.ntfy.token'
+  | 'surfaces.ntfy.defaultPriority'
+  | 'surfaces.webhook.enabled'
+  | 'surfaces.webhook.defaultTarget'
+  | 'surfaces.webhook.timeoutMs'
+  | 'surfaces.webhook.secret'
+  | 'watchers.enabled'
+  | 'watchers.pollIntervalMs'
+  | 'watchers.heartbeatIntervalMs'
+  | 'watchers.recoveryWindowMinutes'
+  | 'service.enabled'
+  | 'service.autostart'
+  | 'service.restartOnFailure'
+  | 'service.platform'
+  | 'service.serviceName'
+  | 'service.logPath';
 
 /** Set of all valid config keys for runtime validation. */
 export const CONFIG_KEYS = new Set<string>([
@@ -236,6 +374,23 @@ export const CONFIG_KEYS = new Set<string>([
   'tools.hooksFile', 'wrfc.scoreThreshold', 'wrfc.maxFixAttempts', 'wrfc.autoCommit',
   'cache.enabled', 'cache.stableTtl', 'cache.monitorHitRate', 'cache.hitRateWarningThreshold',
   'helper.enabled', 'helper.globalProvider', 'helper.globalModel',
+  'automation.enabled', 'automation.maxConcurrentRuns', 'automation.runHistoryLimit',
+  'automation.defaultTimeoutMs', 'automation.catchUpWindowMinutes',
+  'automation.failureCooldownMs', 'automation.deleteAfterRun',
+  'controlPlane.enabled', 'controlPlane.host', 'controlPlane.port', 'controlPlane.baseUrl',
+  'controlPlane.streamMode', 'controlPlane.allowRemote', 'web.enabled', 'web.host',
+  'web.port', 'web.publicBaseUrl', 'web.staticAssetsDir', 'surfaces.slack.enabled',
+  'surfaces.slack.signingSecret', 'surfaces.slack.botToken', 'surfaces.slack.appToken',
+  'surfaces.slack.defaultChannel', 'surfaces.slack.workspaceId',
+  'surfaces.discord.enabled', 'surfaces.discord.publicKey', 'surfaces.discord.botToken',
+  'surfaces.discord.applicationId', 'surfaces.discord.defaultChannelId',
+  'surfaces.discord.guildId', 'surfaces.ntfy.enabled', 'surfaces.ntfy.baseUrl',
+  'surfaces.ntfy.topic', 'surfaces.ntfy.token', 'surfaces.ntfy.defaultPriority',
+  'surfaces.webhook.enabled', 'surfaces.webhook.defaultTarget',
+  'surfaces.webhook.timeoutMs', 'surfaces.webhook.secret', 'watchers.enabled',
+  'watchers.pollIntervalMs', 'watchers.heartbeatIntervalMs', 'watchers.recoveryWindowMinutes',
+  'service.enabled', 'service.autostart', 'service.restartOnFailure', 'service.platform',
+  'service.serviceName', 'service.logPath',
 ] as const satisfies ConfigKey[]);
 
 /** Type guard: returns true if key is a valid ConfigKey. */
@@ -319,6 +474,55 @@ export type ConfigValue<K extends ConfigKey> =
   K extends 'helper.enabled' ? boolean :
   K extends 'helper.globalProvider' ? string :
   K extends 'helper.globalModel' ? string :
+  K extends 'automation.enabled' ? boolean :
+  K extends 'automation.maxConcurrentRuns' ? number :
+  K extends 'automation.runHistoryLimit' ? number :
+  K extends 'automation.defaultTimeoutMs' ? number :
+  K extends 'automation.catchUpWindowMinutes' ? number :
+  K extends 'automation.failureCooldownMs' ? number :
+  K extends 'automation.deleteAfterRun' ? boolean :
+  K extends 'controlPlane.enabled' ? boolean :
+  K extends 'controlPlane.host' ? string :
+  K extends 'controlPlane.port' ? number :
+  K extends 'controlPlane.baseUrl' ? string :
+  K extends 'controlPlane.streamMode' ? 'sse' | 'websocket' | 'both' :
+  K extends 'controlPlane.allowRemote' ? boolean :
+  K extends 'web.enabled' ? boolean :
+  K extends 'web.host' ? string :
+  K extends 'web.port' ? number :
+  K extends 'web.publicBaseUrl' ? string :
+  K extends 'web.staticAssetsDir' ? string :
+  K extends 'surfaces.slack.enabled' ? boolean :
+  K extends 'surfaces.slack.signingSecret' ? string :
+  K extends 'surfaces.slack.botToken' ? string :
+  K extends 'surfaces.slack.appToken' ? string :
+  K extends 'surfaces.slack.defaultChannel' ? string :
+  K extends 'surfaces.slack.workspaceId' ? string :
+  K extends 'surfaces.discord.enabled' ? boolean :
+  K extends 'surfaces.discord.publicKey' ? string :
+  K extends 'surfaces.discord.botToken' ? string :
+  K extends 'surfaces.discord.applicationId' ? string :
+  K extends 'surfaces.discord.defaultChannelId' ? string :
+  K extends 'surfaces.discord.guildId' ? string :
+  K extends 'surfaces.ntfy.enabled' ? boolean :
+  K extends 'surfaces.ntfy.baseUrl' ? string :
+  K extends 'surfaces.ntfy.topic' ? string :
+  K extends 'surfaces.ntfy.token' ? string :
+  K extends 'surfaces.ntfy.defaultPriority' ? number :
+  K extends 'surfaces.webhook.enabled' ? boolean :
+  K extends 'surfaces.webhook.defaultTarget' ? string :
+  K extends 'surfaces.webhook.timeoutMs' ? number :
+  K extends 'surfaces.webhook.secret' ? string :
+  K extends 'watchers.enabled' ? boolean :
+  K extends 'watchers.pollIntervalMs' ? number :
+  K extends 'watchers.heartbeatIntervalMs' ? number :
+  K extends 'watchers.recoveryWindowMinutes' ? number :
+  K extends 'service.enabled' ? boolean :
+  K extends 'service.autostart' ? boolean :
+  K extends 'service.restartOnFailure' ? boolean :
+  K extends 'service.platform' ? 'auto' | 'systemd' | 'launchd' | 'windows' | 'manual' :
+  K extends 'service.serviceName' ? string :
+  K extends 'service.logPath' ? string :
   never;
 
 export const DEFAULT_CONFIG: GoodVibesConfig = {
@@ -398,6 +602,75 @@ export const DEFAULT_CONFIG: GoodVibesConfig = {
   },
   release: {
     channel: 'stable',
+  },
+  automation: {
+    enabled: false,
+    maxConcurrentRuns: 4,
+    runHistoryLimit: 100,
+    defaultTimeoutMs: 15 * 60 * 1000,
+    catchUpWindowMinutes: 30,
+    failureCooldownMs: 5 * 60 * 1000,
+    deleteAfterRun: false,
+  },
+  controlPlane: {
+    enabled: false,
+    host: '127.0.0.1',
+    port: 3421,
+    baseUrl: 'http://127.0.0.1:3421',
+    streamMode: 'sse',
+    allowRemote: false,
+  },
+  web: {
+    enabled: false,
+    host: '127.0.0.1',
+    port: 3423,
+    publicBaseUrl: 'http://127.0.0.1:3423',
+    staticAssetsDir: 'dist/web',
+  },
+  surfaces: {
+    slack: {
+      enabled: false,
+      signingSecret: '',
+      botToken: '',
+      appToken: '',
+      defaultChannel: '',
+      workspaceId: '',
+    },
+    discord: {
+      enabled: false,
+      publicKey: '',
+      botToken: '',
+      applicationId: '',
+      defaultChannelId: '',
+      guildId: '',
+    },
+    ntfy: {
+      enabled: false,
+      baseUrl: 'https://ntfy.sh',
+      topic: '',
+      token: '',
+      defaultPriority: 3,
+    },
+    webhook: {
+      enabled: false,
+      defaultTarget: '',
+      timeoutMs: 10_000,
+      secret: '',
+    },
+  },
+  watchers: {
+    enabled: false,
+    pollIntervalMs: 60_000,
+    heartbeatIntervalMs: 15_000,
+    recoveryWindowMinutes: 10,
+  },
+  service: {
+    enabled: false,
+    autostart: false,
+    restartOnFailure: true,
+    platform: 'auto',
+    serviceName: 'goodvibes',
+    logPath: '',
   },
   danger: {
     daemon: false,
@@ -801,6 +1074,314 @@ export const CONFIG_SCHEMA: ConfigSetting[] = [
     default: 'stable',
     description: 'Preferred release channel for install/update flows',
     enumValues: ['stable', 'preview'],
+  },
+  {
+    key: 'automation.enabled',
+    type: 'boolean',
+    default: false,
+    description: 'Enable the automation subsystem',
+  },
+  {
+    key: 'automation.maxConcurrentRuns',
+    type: 'number',
+    default: 4,
+    description: 'Maximum automation runs that may execute concurrently',
+    validate: (v) => typeof v === 'number' && Number.isInteger(v) && v >= 1 && v <= 64,
+  },
+  {
+    key: 'automation.runHistoryLimit',
+    type: 'number',
+    default: 100,
+    description: 'Maximum run history entries retained per automation job',
+    validate: (v) => typeof v === 'number' && Number.isInteger(v) && v >= 1 && v <= 5000,
+  },
+  {
+    key: 'automation.defaultTimeoutMs',
+    type: 'number',
+    default: 15 * 60 * 1000,
+    description: 'Default execution timeout for automation runs in milliseconds',
+    validate: (v) => typeof v === 'number' && Number.isInteger(v) && v >= 1_000 && v <= 24 * 60 * 60 * 1000,
+  },
+  {
+    key: 'automation.catchUpWindowMinutes',
+    type: 'number',
+    default: 30,
+    description: 'How long after startup the engine should catch up missed runs',
+    validate: (v) => typeof v === 'number' && Number.isInteger(v) && v >= 0 && v <= 24 * 60,
+  },
+  {
+    key: 'automation.failureCooldownMs',
+    type: 'number',
+    default: 5 * 60 * 1000,
+    description: 'Cooldown applied after a failed automation run before retrying',
+    validate: (v) => typeof v === 'number' && Number.isInteger(v) && v >= 0 && v <= 24 * 60 * 60 * 1000,
+  },
+  {
+    key: 'automation.deleteAfterRun',
+    type: 'boolean',
+    default: false,
+    description: 'Delete one-shot automation jobs after their first successful run',
+  },
+  {
+    key: 'controlPlane.enabled',
+    type: 'boolean',
+    default: false,
+    description: 'Enable the shared gateway/control-plane service',
+  },
+  {
+    key: 'controlPlane.host',
+    type: 'string',
+    default: '127.0.0.1',
+    description: 'Bind host for the control-plane HTTP server',
+  },
+  {
+    key: 'controlPlane.port',
+    type: 'number',
+    default: 3421,
+    description: 'Bind port for the control-plane HTTP server',
+    validate: (v) => typeof v === 'number' && Number.isInteger(v) && v >= 1 && v <= 65535,
+  },
+  {
+    key: 'controlPlane.baseUrl',
+    type: 'string',
+    default: 'http://127.0.0.1:3421',
+    description: 'Public base URL used by route bindings and link generation',
+  },
+  {
+    key: 'controlPlane.streamMode',
+    type: 'enum',
+    default: 'sse',
+    description: 'Live update stream mode for control-plane clients',
+    enumValues: ['sse', 'websocket', 'both'],
+  },
+  {
+    key: 'controlPlane.allowRemote',
+    type: 'boolean',
+    default: false,
+    description: 'Allow remote clients to connect to the control plane',
+  },
+  {
+    key: 'web.enabled',
+    type: 'boolean',
+    default: false,
+    description: 'Enable the browser-based operator surface',
+  },
+  {
+    key: 'web.host',
+    type: 'string',
+    default: '127.0.0.1',
+    description: 'Bind host for the web surface',
+  },
+  {
+    key: 'web.port',
+    type: 'number',
+    default: 3423,
+    description: 'Bind port for the web surface',
+    validate: (v) => typeof v === 'number' && Number.isInteger(v) && v >= 1 && v <= 65535,
+  },
+  {
+    key: 'web.publicBaseUrl',
+    type: 'string',
+    default: 'http://127.0.0.1:3423',
+    description: 'Public base URL for web links and ntfy/notification deep links',
+  },
+  {
+    key: 'web.staticAssetsDir',
+    type: 'string',
+    default: 'dist/web',
+    description: 'Static asset directory for the embedded web surface',
+  },
+  {
+    key: 'surfaces.slack.enabled',
+    type: 'boolean',
+    default: false,
+    description: 'Enable the Slack surface adapter',
+  },
+  {
+    key: 'surfaces.slack.signingSecret',
+    type: 'string',
+    default: '',
+    description: 'Slack signing secret used to verify inbound requests',
+  },
+  {
+    key: 'surfaces.slack.botToken',
+    type: 'string',
+    default: '',
+    description: 'Slack bot token used for outbound replies and thread updates',
+  },
+  {
+    key: 'surfaces.slack.appToken',
+    type: 'string',
+    default: '',
+    description: 'Slack app-level token used for advanced client flows',
+  },
+  {
+    key: 'surfaces.slack.defaultChannel',
+    type: 'string',
+    default: '',
+    description: 'Default Slack channel for notifications and replies',
+  },
+  {
+    key: 'surfaces.slack.workspaceId',
+    type: 'string',
+    default: '',
+    description: 'Slack workspace identifier for route binding',
+  },
+  {
+    key: 'surfaces.discord.enabled',
+    type: 'boolean',
+    default: false,
+    description: 'Enable the Discord surface adapter',
+  },
+  {
+    key: 'surfaces.discord.publicKey',
+    type: 'string',
+    default: '',
+    description: 'Discord application public key used to verify interactions',
+  },
+  {
+    key: 'surfaces.discord.botToken',
+    type: 'string',
+    default: '',
+    description: 'Discord bot token used for outbound replies',
+  },
+  {
+    key: 'surfaces.discord.applicationId',
+    type: 'string',
+    default: '',
+    description: 'Discord application ID used for interaction responses',
+  },
+  {
+    key: 'surfaces.discord.defaultChannelId',
+    type: 'string',
+    default: '',
+    description: 'Default Discord channel for notifications and replies',
+  },
+  {
+    key: 'surfaces.discord.guildId',
+    type: 'string',
+    default: '',
+    description: 'Discord guild identifier for route binding',
+  },
+  {
+    key: 'surfaces.ntfy.enabled',
+    type: 'boolean',
+    default: false,
+    description: 'Enable the ntfy notification surface',
+  },
+  {
+    key: 'surfaces.ntfy.baseUrl',
+    type: 'string',
+    default: 'https://ntfy.sh',
+    description: 'Base URL for ntfy delivery',
+  },
+  {
+    key: 'surfaces.ntfy.topic',
+    type: 'string',
+    default: '',
+    description: 'Default ntfy topic for notifications',
+  },
+  {
+    key: 'surfaces.ntfy.token',
+    type: 'string',
+    default: '',
+    description: 'ntfy access token used for authenticated delivery',
+  },
+  {
+    key: 'surfaces.ntfy.defaultPriority',
+    type: 'number',
+    default: 3,
+    description: 'Default ntfy priority (1-5)',
+    validate: (v) => typeof v === 'number' && Number.isInteger(v) && v >= 1 && v <= 5,
+  },
+  {
+    key: 'surfaces.webhook.enabled',
+    type: 'boolean',
+    default: false,
+    description: 'Enable the generic webhook surface',
+  },
+  {
+    key: 'surfaces.webhook.defaultTarget',
+    type: 'string',
+    default: '',
+    description: 'Default outbound webhook target URL',
+  },
+  {
+    key: 'surfaces.webhook.timeoutMs',
+    type: 'number',
+    default: 10_000,
+    description: 'Outbound webhook timeout in milliseconds',
+    validate: (v) => typeof v === 'number' && Number.isInteger(v) && v >= 1_000 && v <= 60_000,
+  },
+  {
+    key: 'surfaces.webhook.secret',
+    type: 'string',
+    default: '',
+    description: 'Shared secret used to sign or verify webhook payloads',
+  },
+  {
+    key: 'watchers.enabled',
+    type: 'boolean',
+    default: false,
+    description: 'Enable managed watcher/listener services',
+  },
+  {
+    key: 'watchers.pollIntervalMs',
+    type: 'number',
+    default: 60_000,
+    description: 'Polling interval for watcher sources in milliseconds',
+    validate: (v) => typeof v === 'number' && Number.isInteger(v) && v >= 1_000 && v <= 24 * 60 * 60 * 1000,
+  },
+  {
+    key: 'watchers.heartbeatIntervalMs',
+    type: 'number',
+    default: 15_000,
+    description: 'Heartbeat interval for watcher services in milliseconds',
+    validate: (v) => typeof v === 'number' && Number.isInteger(v) && v >= 1_000 && v <= 60 * 60 * 1000,
+  },
+  {
+    key: 'watchers.recoveryWindowMinutes',
+    type: 'number',
+    default: 10,
+    description: 'Recovery window for watcher restart and missed-event catch-up',
+    validate: (v) => typeof v === 'number' && Number.isInteger(v) && v >= 0 && v <= 24 * 60,
+  },
+  {
+    key: 'service.enabled',
+    type: 'boolean',
+    default: false,
+    description: 'Enable service-install and daemon-management features',
+  },
+  {
+    key: 'service.autostart',
+    type: 'boolean',
+    default: false,
+    description: 'Start Goodvibes automatically when the host boots or logs in',
+  },
+  {
+    key: 'service.restartOnFailure',
+    type: 'boolean',
+    default: true,
+    description: 'Restart the service automatically after failure',
+  },
+  {
+    key: 'service.platform',
+    type: 'enum',
+    default: 'auto',
+    description: 'Target service manager platform',
+    enumValues: ['auto', 'systemd', 'launchd', 'windows', 'manual'],
+  },
+  {
+    key: 'service.serviceName',
+    type: 'string',
+    default: 'goodvibes',
+    description: 'Service name used for host integration and install scripts',
+  },
+  {
+    key: 'service.logPath',
+    type: 'string',
+    default: '',
+    description: 'File path for daemon/service logs (empty = platform default under .goodvibes/tui/service/)',
   },
   {
     key: 'danger.daemon',

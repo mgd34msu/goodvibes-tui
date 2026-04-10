@@ -214,7 +214,7 @@ export class DiffPanel extends BasePanel {
   /** Run `git diff` against specific files and populate entries. */
   async showFileDiffs(files: string[], ref?: string): Promise<void> {
     const args = ['diff', ...(ref ? [ref] : []), '--', ...files];
-    const proc = Bun.spawn(['/bin/sh', '-c', `git ${args.join(' ')}`], { stdout: 'pipe', cwd: process.cwd() });
+    const proc = Bun.spawn(['git', ...args], { stdout: 'pipe', cwd: process.cwd() });
     const raw = await new Response(proc.stdout).text();
     await proc.exited;
     this.loadRawDiff(raw);
@@ -223,7 +223,7 @@ export class DiffPanel extends BasePanel {
   /** Run `git diff` and populate all changed files. */
   async showGitDiff(ref?: string): Promise<void> {
     const args = ['diff', ...(ref ? [ref] : [])];
-    const proc = Bun.spawn(['/bin/sh', '-c', `git ${args.join(' ')}`], { stdout: 'pipe', stderr: 'pipe', cwd: process.cwd() });
+    const proc = Bun.spawn(['git', ...args], { stdout: 'pipe', stderr: 'pipe', cwd: process.cwd() });
     const [raw, errText] = await Promise.all([
       new Response(proc.stdout).text(),
       new Response(proc.stderr).text(),

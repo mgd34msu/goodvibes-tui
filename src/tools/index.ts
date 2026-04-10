@@ -26,6 +26,7 @@ import { queryTool } from './query/index.ts';
 import { remoteTool } from './remote-trigger/index.ts';
 import { replTool } from './repl/index.ts';
 import { controlTool } from './control/index.ts';
+import { channelTool } from './channel/index.ts';
 
 /**
  * Register all built-in tools into the given registry.
@@ -64,5 +65,6 @@ export function registerAllTools(
   registry.register(remoteTool);
   registry.register(replTool);
   registry.register(controlTool);
+  registry.register(channelTool);
   return { fileCache, projectIndex };
 }

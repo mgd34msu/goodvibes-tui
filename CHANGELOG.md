@@ -4,6 +4,69 @@ All notable changes to GoodVibes TUI.
 
 ---
 
+## [0.15.4] — 2026-04-10
+
+### Automation, Control Plane, And Channel Gateway Rollout
+
+- Added the first-class automation runtime with durable jobs, runs, schedules, delivery policies, source records, target semantics, manual run/retry/cancel controls, telemetry capture, legacy scheduler migration, and background reconciliation
+- Added route bindings as a shared channel/session targeting layer with deterministic natural-key upserts, thread/channel/session continuity, reply-target capture, and route-domain event emission
+- Added the control-plane gateway API with authenticated snapshots, event streaming, WebSocket transport for API clients, browser-consumable SSE-over-fetch streaming, control-plane messages, method-call support, and shared session/approval/task operations
+- Added shared-session brokering so webhooks, channel events, automation jobs, and remote surfaces can continue live agents or spawn/bind new agents against the same routed session
+- Added watcher support with persistent polling/manual watchers, control-plane watcher APIs, heartbeat/degraded state, start/stop/run/delete operations, and overlap prevention
+- Added daemon CLI/service-management foundations, service status APIs, and startup cleanup so failed or timed-out daemon/listener starts do not leak partial servers or provider/watchers state
+
+### Slack, Discord, ntfy, Generic Webhooks, And Channel Product Surfaces
+
+- Added channel adapter/plugin infrastructure for Slack, Discord, ntfy, generic webhooks, web control-plane delivery, policy checks, target resolution, lifecycle hooks, account posture, channel tools, operator actions, and direct agent tools
+- Added Slack integration support for signed event/interactive webhooks, approvals, bot/webhook replies, OAuth/setup helpers, account inspection, target resolution, policy bypass controls, and thread-aware route binding
+- Added Discord integration support for signed interaction webhooks, bot/webhook replies, interaction follow-ups, setup helpers, account/capability surfaces, target resolution, and route binding
+- Added ntfy integration support for authenticated inbound webhooks, topic routing, outbound delivery, and token-backed setup through config/service registry/environment sources
+- Added generic webhook ingress and delivery with shared-secret or HMAC verification, correlation metadata, callback replies, callback signing, route binding, and public-URL validation
+- Added channel policy APIs and enforcement for mention gating, conversation kinds, group/channel/user allowlists, authorized control-command bypasses, directory/status/audit surfaces, and group-specific overrides
+- Added TUI panels for automation control, control plane, routes, and watchers, plus broader schedule/remote panel updates for the new automation and distributed-runtime state
+
+### Local Provider Detection And Streaming UX
+
+- Added discovered local provider support for LM Studio, llama.cpp, and Ollama on top of the OpenAI-compatible fallback path
+- Added provider trait discovery and custom provider factories so GoodVibes can promote a detected local server from generic OpenAI-compatible behavior to provider-specific behavior when possible
+- Added LM Studio, llama.cpp, and Ollama model metadata tests and provider wiring for richer local-model capability/context handling
+- Fixed OpenAI-compatible streaming delta parsing for LM Studio-style `event: ...` SSE frames and reasoning/content separation so reasoning goes to the thinking panel and final response text goes to the conversation
+- Hardened local provider streaming against malformed or partial tool-call diffs from local LLMs so invalid chunks no longer break the client with raw diff parser errors
+
+### Runtime Domains, Remote Runtime, And Integration Helpers
+
+- Added automation, routes, deliveries, surfaces, watchers, and control-plane runtime domains with typed events, emitters, store state, read-matrix entries, and domain-map coverage
+- Added distributed remote runtime support for pair requests, approvals, challenge verification, peer tokens, scoped remote heartbeat/pull/complete APIs, work queueing/claiming/completion, token rotation/revocation, disconnect/requeue behavior, and remote runtime panels/API state
+- Added runtime integration helpers so daemon/control-plane/channel code can inspect panels, review state, task visibility, continuity, and runtime task records through stable API surfaces
+- Added deferred startup coordination so heavier provider/control-plane/automation startup work can be scheduled without blocking the initial TUI render path
+- Added feature flags for the automation, control-plane gateway, channel, watcher, and local provider rollout points
+
+### TUI UX, Git Quit Flow, Copying, And Splash Rendering
+
+- Added `:wq` shared quit handling that checks for a Git repo, stages all changes, creates an appropriate commit message, waits for commit completion, and exits; non-Git projects still quit normally
+- Fixed startup/splash resize behavior so terminal-size changes refresh the splash, preserve the full-size splash instead of swapping to a compact fallback, and horizontally center it when it fits
+- Fixed code-block selection/copy behavior so intended leading indentation inside code blocks is preserved while visual gutters/margins are not copied
+- Fixed conversation block lookup so actions/copying prefer the block containing the selected line instead of the nearest later block start
+- Added daemon/startup script wiring and shell-command extraction updates needed by the new shared quit and daemon flows
+
+### Security, Safety, And Correctness Hardening
+
+- Required explicit generic webhook and ntfy ingress configuration before inbound requests can spawn agents, with shared-secret/HMAC verification for generic webhooks and token checks for ntfy
+- Added public webhook URL validation for generic callbacks and outbound webhook delivery, blocking non-HTTPS URLs, credentials, localhost, metadata hosts, loopback/private/link-local/multicast IPv4, and unsafe IPv6 or IPv4-mapped IPv6 hosts
+- Enforced remote peer token scopes on heartbeat, pull, and complete endpoints instead of only storing scopes on issued tokens
+- Added admin checks to mutating control-plane/operator APIs for channel actions/tools/policies/authorization, watcher mutation, service lifecycle, route binding mutation, and config mutation
+- Removed control-plane web shell token storage in `localStorage`, stopped putting browser stream tokens in WebSocket/EventSource URLs, escaped HTML attributes, safely serialized inline JSON, and replaced dynamic `innerHTML` rendering with DOM/textContent construction
+- Hardened path safety against symlink escapes by validating real paths for the project root, nearest existing ancestor, and existing targets
+- Treated non-dry-run `inspect scaffold` as a write operation, normalized scaffold module names, and resolved scaffold writes through the project path-safety layer
+- Fixed diff-panel Git commands to use argument-vector spawning instead of shell-string construction
+- Fixed the exec import-rewrite regex escaping bug and watcher polling overlap races
+
+### Verification
+
+- Added regression coverage for webhook/ntfy auth, unsafe callback rejection, public webhook URL validation, symlink path escapes, route binding idempotency, remote token scopes, channel delivery URL safety, daemon/control-plane/channel APIs, code-block lookup, splash sizing, local provider discovery, automation domains, distributed runtime, and bootstrap cleanup
+- Full typecheck passes: `bunx tsc --noEmit -p tsconfig.json`
+- Full test runner passes: `370 test files, passed: 370, failed: 0`
+
 ## [0.15.3] — 2026-04-09
 
 ### Streaming, Usage, And Provider Delta Handling

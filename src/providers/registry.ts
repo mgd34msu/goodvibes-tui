@@ -7,6 +7,8 @@ import { OpenAICompatProvider } from './openai-compat.ts';
 import { AnthropicProvider } from './anthropic.ts';
 import { OpenAICodexProvider } from './openai-codex.ts';
 import { GeminiProvider } from './gemini.ts';
+import { createDiscoveredProvider, getDiscoveredReasoningFormat } from './discovered-factory.ts';
+import { getDiscoveredTraits } from './discovered-traits.ts';
 import { getConfiguredApiKeys, getConfiguredModelId, getConfiguredProviderId } from '../config/index.ts';
 import type { RuntimeEventBus } from '../runtime/events/index.ts';
 import { emitProvidersChanged, emitProviderWarning } from '../runtime/emitters/index.ts';
@@ -627,15 +629,9 @@ export class ProviderRegistry {
       if (server.models.length === 0) continue;
 
       const reasoningFormat = getDiscoveredReasoningFormat(server.serverType);
+      const traits = getDiscoveredTraits(server.serverType);
 
-      const provider = new OpenAICompatProvider({
-        name: server.name,
-        baseURL: server.baseURL,
-        apiKey: '',
-        defaultModel: server.models[0],
-        models: server.models,
-        reasoningFormat,
-      });
+      const provider = createDiscoveredProvider(server);
 
       this.providers.set(server.name, provider);
       this.discoveredProviderNames.add(server.name);
@@ -647,13 +643,8 @@ export class ProviderRegistry {
           registryKey: `${server.name}:${modelId}`,
           displayName: modelId,
           description: `Discovered local model on ${server.baseURL}`,
-          capabilities: {
-            toolCalling: true,
-            codeEditing: true,
-            reasoning: reasoningFormat !== 'none',
-            multimodal: false,
-          },
-          ...(reasoningFormat !== 'none' ? { reasoningEffort: ['low', 'medium', 'high'] } : {}),
+          capabilities: traits.modelCapabilities,
+          ...(traits.reasoningEffort ? { reasoningEffort: traits.reasoningEffort } : {}),
           contextWindow: server.modelContextWindows?.[modelId] ?? 8192,
           ...(server.modelContextWindows?.[modelId] != null
             ? { contextWindowProvenance: 'provider_api' as const }
@@ -976,16 +967,6 @@ export class ProviderRegistry {
         // Non-fatal — don't console.warn (corrupts TUI display)
         this._readyPromise = null;
       });
-  }
-}
-
-function getDiscoveredReasoningFormat(serverType: DiscoveredServer['serverType']): 'llamacpp' | 'none' {
-  switch (serverType) {
-    case 'llamacpp':
-    case 'ollama':
-      return 'llamacpp';
-    default:
-      return 'none';
   }
 }
 

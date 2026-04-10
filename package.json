@@ -1,10 +1,11 @@
 {
   "name": "goodvibes-tui",
-  "version": "0.15.3",
+  "version": "0.15.4",
   "type": "module",
   "main": "src/main.ts",
   "scripts": {
     "dev": "bun run src/main.ts",
+    "daemon": "bun run src/daemon/cli.ts",
     "dev:watch": "bun --watch src/main.ts",
     "prebuild": "bun run scripts/prebuild.ts",
     "build": "bun build src/main.ts --compile --outfile dist/goodvibes",

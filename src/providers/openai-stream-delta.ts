@@ -25,6 +25,41 @@ function collectTextFragments(value: unknown, keys: string[]): string[] {
   return fragments;
 }
 
+function collectContentFragments(
+  value: unknown,
+  options: { includeTypedReasoning: boolean },
+): string[] {
+  if (!Array.isArray(value)) return [];
+
+  const fragments: string[] = [];
+  for (const entry of value) {
+    if (typeof entry === 'string') {
+      if (entry.length > 0) fragments.push(entry);
+      continue;
+    }
+    if (!entry || typeof entry !== 'object') continue;
+    const record = entry as Record<string, unknown>;
+    const type = typeof record.type === 'string' ? record.type.toLowerCase() : '';
+    const text = asString(record.text)
+      ?? asString(record.content)
+      ?? asString(record.reasoning)
+      ?? asString(record.thinking)
+      ?? asString(record.delta);
+    if (!text) continue;
+
+    if (!type) {
+      fragments.push(text);
+      continue;
+    }
+
+    const isReasoning = type.includes('reason') || type.includes('think');
+    if (!isReasoning || options.includeTypedReasoning) {
+      fragments.push(text);
+    }
+  }
+  return fragments;
+}
+
 function collectTypedContentFragments(value: unknown, kind: 'content' | 'reasoning'): string[] {
   if (!Array.isArray(value)) return [];
   const fragments: string[] = [];
@@ -51,11 +86,19 @@ export interface OpenAIStreamTextDelta {
   reasoning: string[];
 }
 
+export interface OpenAIStreamTextDeltaOptions {
+  allowReasoning?: boolean;
+}
+
 /**
  * Normalize the wide variety of OpenAI-compatible streaming delta shapes into
  * plain content/reasoning text fragments.
  */
-export function extractOpenAIStreamTextDelta(rawChunk: unknown): OpenAIStreamTextDelta {
+export function extractOpenAIStreamTextDelta(
+  rawChunk: unknown,
+  options: OpenAIStreamTextDeltaOptions = {},
+): OpenAIStreamTextDelta {
+  const allowReasoning = options.allowReasoning ?? true;
   const raw = rawChunk as {
     choices?: Array<{
       delta?: Record<string, unknown>;
@@ -72,16 +115,25 @@ export function extractOpenAIStreamTextDelta(rawChunk: unknown): OpenAIStreamTex
   const stringReasoningSummary = asString(raw.reasoning_summary);
   const content = [
     ...(stringContent ? [stringContent] : []),
-    ...collectTypedContentFragments(deltaContent, 'content'),
-    ...collectTextFragments(deltaContent, ['text', 'content', 'delta']),
+    ...collectContentFragments(deltaContent, { includeTypedReasoning: !allowReasoning }),
+    ...(!allowReasoning
+      ? [
+          ...(stringReasoning ? [stringReasoning] : []),
+          ...(stringReasoningContent ? [stringReasoningContent] : []),
+          ...(stringReasoningSummary ? [stringReasoningSummary] : []),
+          ...collectTextFragments(deltaReasoningContent, ['text', 'content', 'reasoning', 'thinking', 'delta']),
+        ]
+      : []),
   ];
-  const reasoning = [
-    ...(stringReasoning ? [stringReasoning] : []),
-    ...(stringReasoningContent ? [stringReasoningContent] : []),
-    ...(stringReasoningSummary ? [stringReasoningSummary] : []),
-    ...collectTypedContentFragments(deltaContent, 'reasoning'),
-    ...collectTextFragments(deltaReasoningContent, ['text', 'content', 'reasoning', 'thinking', 'delta']),
-  ];
+  const reasoning = allowReasoning
+    ? [
+        ...(stringReasoning ? [stringReasoning] : []),
+        ...(stringReasoningContent ? [stringReasoningContent] : []),
+        ...(stringReasoningSummary ? [stringReasoningSummary] : []),
+        ...collectTypedContentFragments(deltaContent, 'reasoning'),
+        ...collectTextFragments(deltaReasoningContent, ['text', 'content', 'reasoning', 'thinking', 'delta']),
+      ]
+    : [];
 
   return { content, reasoning };
 }

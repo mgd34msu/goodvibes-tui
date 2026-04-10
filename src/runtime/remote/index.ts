@@ -169,6 +169,28 @@ export {
   exportRemoteArtifactForAgent,
   importRemoteArtifact,
 } from './runner-registry.ts';
+export type {
+  DistributedPeerKind,
+  DistributedPairRequestStatus,
+  DistributedPeerStatus,
+  DistributedWorkPriority,
+  DistributedWorkStatus,
+  DistributedWorkType,
+  DistributedSessionBridge,
+  DistributedApprovalBridge,
+  DistributedAutomationBridge,
+  DistributedRuntimePairRequest,
+  DistributedPeerTokenRecord,
+  DistributedPeerRecord,
+  DistributedPendingWork,
+  DistributedRuntimeAuditRecord,
+  DistributedPeerAuth,
+} from './distributed-runtime.ts';
+export {
+  DistributedRuntimeManager,
+  getDistributedRuntimeManager,
+  resetDistributedRuntimeManagerForTesting,
+} from './distributed-runtime.ts';
 
 // ── RemoteSubstrate facade ────────────────────────────────────────────────────
 

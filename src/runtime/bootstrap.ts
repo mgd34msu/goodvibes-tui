@@ -76,11 +76,16 @@ import {
 } from './session-persistence.ts';
 import { createBootstrapCommandContext } from './bootstrap-command-context.ts';
 import { scheduleMcpAutodiscovery, startBackgroundProviderRegistration } from './bootstrap-background.ts';
-import { startExternalServices } from './bootstrap-services.ts';
+import { startExternalServices, type ExternalServicesHandle } from './bootstrap-services.ts';
 import { clearIntegrationHelpersContext, setIntegrationHelpersContext } from './integration/helpers.ts';
+import { ApprovalBroker, SharedSessionBroker } from '../control-plane/index.ts';
 import { getTokenAuditor } from '../security/token-audit.ts';
 import { getSandboxSessionRegistry } from './sandbox/session-registry.ts';
 import { formatReturnContextForDisplay, getReturnContextMode, maybeAssistReturnContextSummary } from './session-return-context.ts';
+import { AutomationDeliveryManager, AutomationManager } from '../automation/index.ts';
+import { RouteBindingManager, SurfaceRegistry } from '../channels/index.ts';
+import { WatcherRegistry } from '../watchers/index.ts';
+import { createDeferredStartupCoordinator } from './deferred-startup.ts';
 
 // ── Internal helpers ──────────────────────────────────────────────────────
 
@@ -253,6 +258,58 @@ export async function bootstrapRuntime(
   const runtimeBus = new RuntimeEventBus();
   const store = createRuntimeStore();
   const domainDispatch = createDomainDispatch(store);
+  domainDispatch.syncControlPlaneState({
+    enabled: Boolean(configManager.get('controlPlane.enabled')),
+    host: String(configManager.get('controlPlane.host') ?? '127.0.0.1'),
+    port: Number(configManager.get('controlPlane.port') ?? 3421),
+    connectionState: configManager.get('controlPlane.enabled') ? 'connected' : 'disabled',
+    isRunning: Boolean(configManager.get('controlPlane.enabled')),
+  }, 'bootstrap.control-plane');
+  domainDispatch.syncControlPlaneClient({
+    id: 'client:tui',
+    kind: 'tui',
+    label: 'Terminal UI',
+    transport: 'local',
+    connected: true,
+    sessionId: userSessionId,
+    authenticatedAt: Date.now(),
+    lastSeenAt: Date.now(),
+    capabilities: ['session', 'panels', 'commands', 'automation'],
+    metadata: {},
+  }, 'bootstrap.control-plane');
+  const automationManager = AutomationManager.getInstance();
+  const routeBindings = RouteBindingManager.getInstance();
+  routeBindings.attachRuntime({ runtimeBus, runtimeStore: store });
+  const surfaceRegistry = SurfaceRegistry.getInstance();
+  surfaceRegistry.attachRuntime(store);
+  surfaceRegistry.syncConfiguredSurfaces();
+  const watcherRegistry = WatcherRegistry.getInstance();
+  watcherRegistry.attachRuntime({ runtimeBus, runtimeStore: store });
+  if (configManager.get('watchers.enabled')) {
+    watcherRegistry.registerPollingWatcher({
+      id: 'runtime-heartbeat',
+      label: 'Runtime heartbeat',
+      source: {
+        id: 'source:runtime-heartbeat',
+        kind: 'watcher',
+        label: 'Runtime heartbeat',
+        enabled: true,
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+        metadata: {},
+      },
+      intervalMs: Number(configManager.get('watchers.heartbeatIntervalMs') ?? 30_000),
+      run: () => new Date().toISOString(),
+    });
+    watcherRegistry.startWatcher('runtime-heartbeat');
+  }
+  const deliveryManager = new AutomationDeliveryManager({
+    runtimeBus,
+    runtimeStore: store,
+    routeBindings,
+  });
+  automationManager.attachRuntime({ runtimeBus, runtimeStore: store, deliveryManager });
+
   const forensicsRegistry = new ForensicsRegistry();
   const forensicsCollector = new ForensicsCollector(runtimeBus, forensicsRegistry);
   const policyRuntimeState = getPolicyRuntimeState();
@@ -303,6 +360,11 @@ export async function bootstrapRuntime(
   const permissionPromptRef = {
     requestPermission: (async () => ({ approved: false, remember: false })) as PermissionRequestHandler,
   };
+  const approvalBroker = ApprovalBroker.getInstance();
+  void approvalBroker.start();
+  const sharedSessionBroker = SharedSessionBroker.getInstance();
+  void sharedSessionBroker.start();
+  let runtimeSessionId = userSessionId;
   const runtimeUnsubs: Array<() => void> = [];
   runtimeUnsubs.push(runtimeBus.onDomain('turn', (env) => {
     domainDispatch.dispatchTurnEvent(env.payload);
@@ -528,7 +590,11 @@ export async function bootstrapRuntime(
 
   await syncConfiguredServices(domainDispatch.syncIntegration);
 
-  const permissionManager = new PermissionManager((request) => permissionPromptRef.requestPermission(request));
+  const permissionManager = new PermissionManager((request) => approvalBroker.requestApproval({
+    request,
+    sessionId: runtimeSessionId,
+    localPrompt: permissionPromptRef.requestPermission,
+  }));
   const hookDispatcher = getHookDispatcher();
   await getHookWorkbench().loadAndApplyManagedHooks();
 
@@ -542,6 +608,18 @@ export async function bootstrapRuntime(
     reasoningEffort: (configManager.get('provider.reasoningEffort') as string | undefined) ?? '',
     sessionId: userSessionId,
   };
+  runtimeSessionId = runtime.sessionId;
+  void sharedSessionBroker.createSession({
+    id: runtime.sessionId,
+    title: 'Terminal UI session',
+    metadata: { source: 'tui' },
+    participant: {
+      surfaceKind: 'tui',
+      surfaceId: 'surface:tui',
+      displayName: 'Terminal UI',
+      lastSeenAt: Date.now(),
+    },
+  }).catch(() => {});
 
   domainDispatch.syncSessionState({
     id: userSessionId,
@@ -587,9 +665,11 @@ export async function bootstrapRuntime(
         titleSource: meta.titleSource,
       });
       runtime.sessionId = sessionId;
+      runtimeSessionId = runtime.sessionId;
       if (meta?.model) runtime.model = meta.model;
       if (meta?.provider) runtime.provider = meta.provider;
       writeLastSessionPointer(sessionId);
+      void sharedSessionBroker.reopenSession(sessionId).catch(() => {});
       conversation.log(`Resumed session: ${sessionId}`, { fg: '135' });
       const reopenedPanels: string[] = [];
       if (meta.returnContext?.openPanels?.length) {
@@ -821,6 +901,7 @@ export async function bootstrapRuntime(
   // ── System message router ────────────────────────────────────────────────
   // Instantiated here so bootstrap event handlers can route through it.
   const systemMessageRouter = createSystemMessageRouter(conversation, systemMessagesPanel);
+  const deferredStartup = createDeferredStartupCoordinator();
   orchestrator.setSystemMessageRouter(systemMessageRouter);
   scheduleMcpAutodiscovery({
     mcpRegistry,
@@ -834,18 +915,6 @@ export async function bootstrapRuntime(
 
   const commandRegistry = new CommandRegistry();
   registerBuiltinCommands(commandRegistry);
-
-  // Plugin system (singleton, lazy import)
-  { const { pluginManager } = await import('../plugins/manager.ts');
-    await pluginManager.init({
-      runtimeBus,
-      commandRegistry,
-      providerRegistry,
-      toolRegistry,
-      getPluginConfig: (name) => pluginManager.getPluginConfig(name),
-      isEnabled: (name) => pluginManager.isEnabled(name),
-    });
-  }
 
   const commandContext: CommandContext = createBootstrapCommandContext({
     providerRegistry,
@@ -879,11 +948,51 @@ export async function bootstrapRuntime(
   });
   bootstrapUnsubs.push(() => clearIntegrationHelpersContext());
 
-  const externalServices = await startExternalServices(
-    configManager,
-    runtimeBus,
-    hookDispatcher,
-  );
+  let externalServices: ExternalServicesHandle = {
+    daemonServer: null,
+    httpListener: null,
+    async stop(): Promise<void> {},
+  };
+  let externalServicesPromise: Promise<ExternalServicesHandle> | null = null;
+  deferredStartup.schedule({
+    label: 'plugins',
+    run: async () => {
+      const { pluginManager } = await import('../plugins/manager.ts');
+      await pluginManager.init({
+        runtimeBus,
+        commandRegistry,
+        providerRegistry,
+        toolRegistry,
+        getPluginConfig: (name) => pluginManager.getPluginConfig(name),
+        isEnabled: (name) => pluginManager.isEnabled(name),
+      });
+      requestRender();
+    },
+    onError: (error) => {
+      const message = error instanceof Error ? error.message : String(error);
+      logger.error('Deferred plugin startup failed', { error: message });
+      systemMessageRouter.high(`[Startup] Plugin initialization failed: ${message}`);
+      requestRender();
+    },
+  });
+  deferredStartup.schedule({
+    label: 'external-services',
+    run: async () => {
+      externalServicesPromise = startExternalServices(
+        configManager,
+        runtimeBus,
+        hookDispatcher,
+      );
+      externalServices = await externalServicesPromise;
+      requestRender();
+    },
+    onError: (error) => {
+      const message = error instanceof Error ? error.message : String(error);
+      logger.error('Deferred external service startup failed', { error: message });
+      systemMessageRouter.high(`[Startup] Background services failed to start: ${message}`);
+      requestRender();
+    },
+  });
 
   // ── Phase 9: Input handler ──────────────────────────────────────────────
   // Note: getViewportHeight and scroll are UI concerns; main.ts constructs these
@@ -919,6 +1028,21 @@ export async function bootstrapRuntime(
     restoreSavedModel,
     systemMessageRouter,
   });
+  if (configManager.get('automation.enabled')) {
+    deferredStartup.schedule({
+      label: 'automation',
+      run: async () => {
+        await automationManager.start();
+        requestRender();
+      },
+      onError: (error) => {
+        const message = error instanceof Error ? error.message : String(error);
+        logger.error('Deferred automation startup failed', { error: message });
+        systemMessageRouter.high(`[Startup] Automation failed to initialize: ${message}`);
+        requestRender();
+      },
+    });
+  }
 
   // ── Phase 12: Session:start lifecycle hook ─────────────────────────────
 
@@ -984,6 +1108,14 @@ export async function bootstrapRuntime(
       runtimeUnsubs.forEach((fn) => fn());
       runtimeUnsubs.length = 0;
       forensicsCollector.dispose();
+      await deferredStartup.drain(100);
+      if (externalServicesPromise) {
+        try {
+          externalServices = await externalServicesPromise;
+        } catch {
+          // Startup failures are already surfaced through the deferred task handler.
+        }
+      }
       await externalServices.stop();
       // Clear agent status interval via ref (consistent with agentStatusIntervalRef usage)
       if (agentStatusIntervalRef.value !== null) {

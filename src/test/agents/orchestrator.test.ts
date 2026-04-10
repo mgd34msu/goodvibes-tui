@@ -355,6 +355,46 @@ describe('AgentOrchestrator', () => {
 
       expect(record.toolCallCount).toBe(2);
     });
+
+    test('accumulates usage across turns and reasoning summaries', async () => {
+      let callIndex = 0;
+      const provider: LLMProvider = {
+        name: 'mock',
+        models: ['mock-model'],
+        chat: mock(async (): Promise<ChatResponse> => {
+          callIndex += 1;
+          if (callIndex === 1) {
+            return {
+              content: '',
+              toolCalls: [{ id: 'call-1', name: 'noop', arguments: {} }],
+              usage: { inputTokens: 11, outputTokens: 7, cacheReadTokens: 2, cacheWriteTokens: 1 },
+              stopReason: 'tool_use',
+              reasoningSummary: 'plan',
+            };
+          }
+          return {
+            content: 'Done.',
+            toolCalls: [],
+            usage: { inputTokens: 5, outputTokens: 3, cacheReadTokens: 1 },
+            stopReason: 'end',
+          };
+        }),
+      };
+
+      const record = makeRecord();
+      await withMockProvider(provider, () => orchestrator.runAgent(record));
+
+      expect(record.status).toBe('completed');
+      expect(record.usage).toEqual({
+        inputTokens: 16,
+        outputTokens: 10,
+        cacheReadTokens: 3,
+        cacheWriteTokens: 1,
+        llmCallCount: 2,
+        turnCount: 2,
+        reasoningSummaryCount: 1,
+      });
+    });
   });
 
   // -------------------------------------------------------------------------

@@ -1,4 +1,6 @@
 import { describe, test, expect } from 'bun:test';
+import { mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { resolveAndValidatePath } from '../../utils/path-safety.ts';
 
@@ -52,6 +54,21 @@ describe('resolveAndValidatePath', () => {
     expect(() => resolveAndValidatePath('src/../../../../../../etc/shadow')).toThrow(
       /outside the project root/
     );
+  });
+
+  test('throws for symlinks that escape the project root', () => {
+    const outside = mkdtempSync(join(tmpdir(), 'gv-path-safety-'));
+    const outsideFile = join(outside, 'secret.txt');
+    const linkPath = join(PROJECT_ROOT, `.gv-path-link-${process.pid}-${Date.now()}`);
+    writeFileSync(outsideFile, 'secret');
+    symlinkSync(outsideFile, linkPath);
+
+    try {
+      expect(() => resolveAndValidatePath(linkPath)).toThrow(/outside the project root/);
+    } finally {
+      rmSync(linkPath, { force: true });
+      rmSync(outside, { recursive: true, force: true });
+    }
   });
 
   test('returns the resolved absolute path as string', () => {

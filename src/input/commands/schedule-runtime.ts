@@ -1,114 +1,154 @@
 import type { CommandRegistry } from '../command-registry.ts';
-import { TaskScheduler } from '../../scheduler/scheduler.ts';
+import {
+  AutomationManager,
+  formatEveryInterval,
+  normalizeAtSchedule,
+  normalizeCronSchedule,
+  normalizeEverySchedule,
+} from '../../automation/index.ts';
+import type { AutomationJob } from '../../automation/jobs.ts';
+import type { AutomationScheduleDefinition } from '../../automation/schedules.ts';
+
+function formatSchedule(schedule: AutomationScheduleDefinition): string {
+  switch (schedule.kind) {
+    case 'cron':
+      return schedule.timezone ? `${schedule.expression} [${schedule.timezone}]` : schedule.expression;
+    case 'every':
+      return formatEveryInterval(schedule.intervalMs);
+    case 'at':
+      return new Date(schedule.at).toLocaleString();
+  }
+}
+
+function formatNextRun(nextRunAt?: number): string {
+  return nextRunAt ? new Date(nextRunAt).toLocaleString() : 'n/a';
+}
+
+function formatPrompt(job: AutomationJob): string {
+  const prompt = (job.execution.prompt ?? job.description ?? '').trim();
+  return prompt.length > 60 ? `${prompt.slice(0, 60)}...` : prompt;
+}
+
+function resolveJob(manager: AutomationManager, id: string): AutomationJob | undefined {
+  return manager.listJobs().find((job) => job.id === id || job.id.startsWith(id));
+}
+
+function parseAtValue(raw: string): number {
+  const parsed = Date.parse(raw);
+  if (Number.isNaN(parsed)) {
+    throw new Error(`Invalid date/time: "${raw}". Use an ISO timestamp or a format Date.parse understands.`);
+  }
+  return parsed;
+}
 
 export function registerScheduleRuntimeCommands(registry: CommandRegistry): void {
   registry.register({
     name: 'schedule',
     aliases: ['sched'],
-    description: 'Manage scheduled agent tasks (cron-like)',
-    usage: 'add|list|remove|enable|disable|run',
-    argsHint: 'add <cron> <prompt> [--name <n>] [--tz <zone>] | list | remove <id> | enable <id> | disable <id> | run <id>',
+    description: 'Manage automation jobs and scheduled runs',
+    usage: 'add <cron|every|at> <value> <prompt...> | list | remove <id> | enable <id> | disable <id> | run <id>',
+    argsHint: 'add cron <expr> | add every <interval> | add at <timestamp> | list | remove | enable | disable | run',
     async handler(args, ctx) {
-      const scheduler = TaskScheduler.getInstance();
+      const manager = AutomationManager.getInstance();
+      await manager.start();
       const sub = args[0];
 
       if (!sub || sub === 'list') {
-        const tasks = scheduler.list();
-        if (tasks.length === 0) {
-          ctx.print('No scheduled tasks.\nUse: /schedule add "*/30 * * * *" "check build status"');
+        const jobs = manager.listJobs();
+        if (jobs.length === 0) {
+          ctx.print(
+            'No automation jobs.\n'
+            + 'Use:\n'
+            + '  /schedule add cron "*/30 * * * *" "check build status"\n'
+            + '  /schedule add every 15m "summarize open PRs"\n'
+            + '  /schedule add at 2026-04-10T09:00:00 "send release reminder"'
+          );
           return;
         }
-        const lines = ['Scheduled tasks:', ''];
-        for (const task of tasks) {
-          const status = task.enabled ? '● enabled ' : '○ disabled';
-          const tzLabel = task.timezone ? ` [${task.timezone}]` : '';
-          const fmtDate = (ms: number) => {
-            try {
-              const opts: Intl.DateTimeFormatOptions = task.timezone
-                ? { timeZone: task.timezone, dateStyle: 'short', timeStyle: 'short' }
-                : { dateStyle: 'short', timeStyle: 'short' };
-              return new Intl.DateTimeFormat(undefined, opts).format(new Date(ms));
-            } catch {
-              return new Date(ms).toLocaleString();
-            }
-          };
-          const next = task.nextRun ? `next: ${fmtDate(task.nextRun)}${tzLabel}` : 'next: unknown';
-          const last = task.lastRun ? `last: ${fmtDate(task.lastRun)}` : 'last: never';
-          const missed = task.missedRuns > 0 ? `  missed:${task.missedRuns}` : '';
-          lines.push(`  ${task.id.slice(0, 12)}  ${status}  runs:${task.runCount}${missed}  ${next}  ${last}`);
-          lines.push(`    name: ${task.name || '(unnamed)'}  cron: ${task.cron}${tzLabel}`);
-          lines.push(`    prompt: ${task.prompt.slice(0, 60)}${task.prompt.length > 60 ? '…' : ''}`);
+        const lines = ['Automation jobs:', ''];
+        for (const job of jobs) {
+          const status = job.enabled ? '● enabled ' : '○ paused  ';
+          const next = formatNextRun(job.nextRunAt);
+          const last = job.lastRunAt ? new Date(job.lastRunAt).toLocaleString() : 'never';
+          lines.push(`  ${job.id.slice(0, 12)}  ${status} runs:${job.runCount}  next:${next}  last:${last}`);
+          lines.push(`    name: ${job.name}  schedule: ${formatSchedule(job.schedule)}`);
+          lines.push(`    prompt: ${formatPrompt(job)}`);
         }
         ctx.print(lines.join('\n'));
         return;
       }
 
       if (sub === 'add') {
-        const cron = args[1];
-        if (!cron) {
-          ctx.print('Usage: /schedule add "<cron>" "<prompt>" [--name <name>] [--model <model>] [--template <tmpl>] [--tz <timezone>]\n' +
-            'Examples:\n' +
-            '  /schedule add "*/30 * * * *" "check build status and report failures"\n' +
-            '  /schedule add "0 9 * * 1-5" "summarize open PRs" --name morning-standup --tz America/New_York');
+        const scheduleKind = args[1];
+        if (!scheduleKind) {
+          ctx.print(
+            'Usage:\n'
+            + '  /schedule add cron "<expr>" <prompt...> [--name <name>] [--model <model>] [--template <tmpl>] [--tz <timezone>]\n'
+            + '  /schedule add every <interval> <prompt...> [--name <name>] [--model <model>] [--template <tmpl>]\n'
+            + '  /schedule add at <timestamp> <prompt...> [--name <name>] [--model <model>] [--template <tmpl>]'
+          );
           return;
         }
 
-        const remaining = args.slice(2);
+        const legacyCronMode = scheduleKind !== 'cron' && scheduleKind !== 'every' && scheduleKind !== 'at';
+        const scheduleArg = legacyCronMode ? args[1] : args[2];
+        const valueStartIndex = legacyCronMode ? 2 : 3;
+        if (!scheduleArg) {
+          ctx.print('Missing schedule value.');
+          return;
+        }
+
         let name: string | undefined;
         let model: string | undefined;
         let template: string | undefined;
         let timezone: string | undefined;
         const promptWords: string[] = [];
-
-        let i = 0;
-        while (i < remaining.length) {
-          const tok = remaining[i];
-          if (tok === '--name' && i + 1 < remaining.length) {
-            name = remaining[++i];
-          } else if (tok === '--model' && i + 1 < remaining.length) {
-            model = remaining[++i];
-          } else if (tok === '--template' && i + 1 < remaining.length) {
-            template = remaining[++i];
-          } else if ((tok === '--tz' || tok === '--timezone') && i + 1 < remaining.length) {
-            timezone = remaining[++i];
+        for (let i = valueStartIndex; i < args.length; i++) {
+          const token = args[i]!;
+          if (token === '--name' && i + 1 < args.length) {
+            name = args[++i];
+          } else if (token === '--model' && i + 1 < args.length) {
+            model = args[++i];
+          } else if (token === '--template' && i + 1 < args.length) {
+            template = args[++i];
+          } else if ((token === '--tz' || token === '--timezone') && i + 1 < args.length) {
+            timezone = args[++i];
           } else {
-            promptWords.push(tok);
+            promptWords.push(token);
           }
-          i++;
         }
 
-        const prompt = promptWords.join(' ');
+        const prompt = promptWords.join(' ').trim();
         if (!prompt) {
-          ctx.print('Usage: /schedule add "<cron>" "<prompt>"');
+          ctx.print('Missing prompt text for automation job.');
           return;
         }
 
         try {
-          const task = scheduler.add({
+          const schedule = legacyCronMode
+            ? normalizeCronSchedule(scheduleArg, timezone)
+            : scheduleKind === 'cron'
+              ? normalizeCronSchedule(scheduleArg, timezone)
+              : scheduleKind === 'every'
+                ? normalizeEverySchedule(scheduleArg)
+                : normalizeAtSchedule(parseAtValue(scheduleArg));
+          const job = await manager.createJob({
             name: name ?? prompt.slice(0, 40),
-            cron,
             prompt,
+            schedule,
+            description: prompt,
             model,
             template,
-            timezone,
             enabled: true,
           });
-          const tzLabel = task.timezone ? ` [${task.timezone}]` : '';
-          const fmtNext = task.nextRun
-            ? (() => {
-                try {
-                  const opts: Intl.DateTimeFormatOptions = task.timezone
-                    ? { timeZone: task.timezone, dateStyle: 'short', timeStyle: 'short' }
-                    : { dateStyle: 'short', timeStyle: 'short' };
-                  return new Intl.DateTimeFormat(undefined, opts).format(new Date(task.nextRun)) + tzLabel;
-                } catch {
-                  return new Date(task.nextRun).toLocaleString();
-                }
-              })()
-            : 'unknown';
-          ctx.print(`Scheduled task created: ${task.id}\n  name: ${task.name}\n  cron: ${cron}${tzLabel}\n  next run: ${fmtNext}`);
-        } catch (e) {
-          ctx.print(`Error: ${(e as Error).message}`);
+          ctx.print(
+            `Automation job created: ${job.id}\n`
+            + `  name: ${job.name}\n`
+            + `  schedule: ${formatSchedule(job.schedule)}\n`
+            + `  next run: ${formatNextRun(job.nextRunAt)}`
+          );
+        } catch (error) {
+          ctx.print(`Error: ${error instanceof Error ? error.message : String(error)}`);
         }
         return;
       }
@@ -119,49 +159,36 @@ export function registerScheduleRuntimeCommands(registry: CommandRegistry): void
           ctx.print('Usage: /schedule remove <id>');
           return;
         }
-        const all = scheduler.list();
-        const task = all.find((entry) => entry.id === id || entry.id.startsWith(id));
-        if (!task) {
-          ctx.print(`Task not found: ${id}`);
+        const job = resolveJob(manager, id);
+        if (!job) {
+          ctx.print(`Automation job not found: ${id}`);
           return;
         }
-        scheduler.remove(task.id);
-        ctx.print(`Removed scheduled task: ${task.id} (${task.name || task.prompt.slice(0, 30)})`);
+        await manager.removeJob(job.id);
+        ctx.print(`Removed automation job: ${job.id} (${job.name})`);
         return;
       }
 
-      if (sub === 'enable') {
+      if (sub === 'enable' || sub === 'disable') {
         const id = args[1];
         if (!id) {
-          ctx.print('Usage: /schedule enable <id>');
+          ctx.print(`Usage: /schedule ${sub} <id>`);
           return;
         }
-        const all = scheduler.list();
-        const task = all.find((entry) => entry.id === id || entry.id.startsWith(id));
-        if (!task) {
-          ctx.print(`Task not found: ${id}`);
+        const job = resolveJob(manager, id);
+        if (!job) {
+          ctx.print(`Automation job not found: ${id}`);
           return;
         }
-        scheduler.setEnabled(task.id, true);
-        const next = task.nextRun ? new Date(task.nextRun).toLocaleString() : 'unknown';
-        ctx.print(`Enabled task: ${task.id} — next run: ${next}`);
-        return;
-      }
-
-      if (sub === 'disable') {
-        const id = args[1];
-        if (!id) {
-          ctx.print('Usage: /schedule disable <id>');
+        const updated = await manager.setEnabled(job.id, sub === 'enable');
+        if (!updated) {
+          ctx.print(`Automation job not found: ${id}`);
           return;
         }
-        const all = scheduler.list();
-        const task = all.find((entry) => entry.id === id || entry.id.startsWith(id));
-        if (!task) {
-          ctx.print(`Task not found: ${id}`);
-          return;
-        }
-        scheduler.setEnabled(task.id, false);
-        ctx.print(`Disabled task: ${task.id}`);
+        ctx.print(
+          `${sub === 'enable' ? 'Enabled' : 'Disabled'} automation job: ${updated.id}\n`
+          + `  next run: ${formatNextRun(updated.nextRunAt)}`
+        );
         return;
       }
 
@@ -171,28 +198,35 @@ export function registerScheduleRuntimeCommands(registry: CommandRegistry): void
           ctx.print('Usage: /schedule run <id>');
           return;
         }
-        const all = scheduler.list();
-        const task = all.find((entry) => entry.id === id || entry.id.startsWith(id));
-        if (!task) {
-          ctx.print(`Task not found: ${id}`);
+        const job = resolveJob(manager, id);
+        if (!job) {
+          ctx.print(`Automation job not found: ${id}`);
           return;
         }
         try {
-          const agentId = await scheduler.runNow(task.id);
-          ctx.print(`Running task ${task.id} immediately — agent: ${agentId}`);
-        } catch (e) {
-          ctx.print(`Error running task: ${(e as Error).message}`);
+          const run = await manager.runNow(job.id);
+          ctx.print(
+            `Running automation job ${job.id} immediately\n`
+            + `  run: ${run.id}\n`
+            + `  agent: ${run.agentId ?? 'unavailable'}`
+          );
+        } catch (error) {
+          ctx.print(`Error running automation job: ${error instanceof Error ? error.message : String(error)}`);
         }
         return;
       }
 
-      ctx.print('Usage: /schedule add|list|remove|enable|disable|run\n' +
-        '  /schedule add "<cron>" <prompt words...>   Create a new scheduled task\n' +
-        '  /schedule list                             List all scheduled tasks\n' +
-        '  /schedule remove <id>                     Remove a task\n' +
-        '  /schedule enable <id>                     Enable a task\n' +
-        '  /schedule disable <id>                    Disable a task\n' +
-        '  /schedule run <id>                        Run a task immediately');
+      ctx.print(
+        'Usage:\n'
+        + '  /schedule add cron "<expr>" <prompt...>\n'
+        + '  /schedule add every <interval> <prompt...>\n'
+        + '  /schedule add at <timestamp> <prompt...>\n'
+        + '  /schedule list\n'
+        + '  /schedule remove <id>\n'
+        + '  /schedule enable <id>\n'
+        + '  /schedule disable <id>\n'
+        + '  /schedule run <id>'
+      );
     },
   });
 }

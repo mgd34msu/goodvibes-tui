@@ -106,7 +106,7 @@ export class PermissionManager {
 
   async checkDetailed(toolName: string, args: Record<string, unknown>): Promise<PermissionCheckResult> {
     // 1. Auto-approve when --no-worries-just-vibes is active
-    const category = this.getCategory(toolName);
+    const category = this.getCategory(toolName, args);
     const analysis = analyzePermissionRequest(toolName, args, category);
     const callId = crypto.randomUUID();
     await this.fireHook('Pre:permission:request', 'Pre', 'permission', 'request', {
@@ -202,7 +202,10 @@ export class PermissionManager {
   }
 
   /** Returns the permission category for a tool name. Unknown tools default to 'delegate'. */
-  getCategory(toolName: string): PermissionCategory {
+  getCategory(toolName: string, args: Record<string, unknown> = {}): PermissionCategory {
+    if (toolName === 'inspect' && args.mode === 'scaffold' && args.dryRun === false) {
+      return 'write';
+    }
     return TOOL_CATEGORIES[toolName] ?? 'delegate';
   }
 

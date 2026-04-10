@@ -77,10 +77,7 @@ export class SelectionManager {
         if (cell && cell.char !== '') lineText += cell.char;
       }
 
-      const trimmed = this.stripDecorativePrefix(lineText.trim());
-      if (trimmed || r === start.row || r === end.row) {
-        lines.push(trimmed);
-      }
+      lines.push(this.stripDecorativePrefix(lineText));
     }
 
     return lines.join('\n');
@@ -88,7 +85,14 @@ export class SelectionManager {
 
   private findLineNumberGutterEnd(line: Cell[]): number {
     let i = 0;
-    while (i < line.length && line[i]?.char === ' ' && !line[i]?.dim) i++;
+    while (i < line.length) {
+      const cell = line[i];
+      if (cell?.char === ' ' && !cell?.dim && (cell?.bg ?? '') === '') {
+        i++;
+        continue;
+      }
+      break;
+    }
     const start = i;
     let sawDigit = false;
     while (i < line.length) {
@@ -101,15 +105,15 @@ export class SelectionManager {
       }
       break;
     }
-    if (!sawDigit) return 0;
+    if (!sawDigit) return start;
     if (i < line.length && line[i]?.char === ' ') i++;
-    return i > start ? i : 0;
+    return i > start ? i : start;
   }
 
   private stripDecorativePrefix(text: string): string {
     return text
-      .replace(/^(?:[▸▾▶►●○◆▲△▼▽•✕✓▌]\s+)+/u, '')
-      .replace(/^\[(?:x|~| )\]\s+/u, '')
+      .replace(/^(\s*)(?:[▸▾▶►●○◆▲△▼▽•✕✓▌]\s+)+/u, '$1')
+      .replace(/^(\s*)\[(?:x|~| )\]\s+/u, '$1')
       .trimEnd();
   }
 

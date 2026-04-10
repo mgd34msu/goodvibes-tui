@@ -1,6 +1,9 @@
 import { BasePanel } from './base-panel.ts';
 import { type Line } from '../types/grid.ts';
-import { TaskScheduler, type ScheduledTask, type TaskRunRecord } from '../scheduler/scheduler.ts';
+import { AutomationManager, formatEveryInterval } from '../automation/index.ts';
+import type { AutomationJob } from '../automation/jobs.ts';
+import type { AutomationRun } from '../automation/runs.ts';
+import type { AutomationScheduleDefinition } from '../automation/schedules.ts';
 import {
   buildEmptyState,
   buildPanelLine,
@@ -38,8 +41,19 @@ const C = {
 
 type ViewItem =
   | { kind: 'header' }
-  | { kind: 'task'; task: ScheduledTask; history: TaskRunRecord[] }
+  | { kind: 'task'; task: AutomationJob; history: AutomationRun[] }
   | { kind: 'empty' };
+
+function formatSchedule(schedule: AutomationScheduleDefinition): string {
+  switch (schedule.kind) {
+    case 'cron':
+      return schedule.timezone ? `${schedule.expression} [${schedule.timezone}]` : schedule.expression;
+    case 'every':
+      return formatEveryInterval(schedule.intervalMs);
+    case 'at':
+      return new Date(schedule.at).toLocaleString();
+  }
+}
 
 // ---------------------------------------------------------------------------
 // SchedulePanel
@@ -65,6 +79,10 @@ export class SchedulePanel extends BasePanel {
 
   override onActivate(): void {
     super.onActivate();
+    void AutomationManager.getInstance().start().then(() => {
+      this.rebuild();
+      this.markDirty();
+    });
     this.rebuild();
     this.refreshTimer = setInterval(() => {
       this.rebuild();
@@ -88,8 +106,8 @@ export class SchedulePanel extends BasePanel {
   // -------------------------------------------------------------------------
 
   private rebuild(): void {
-    const scheduler = TaskScheduler.getInstance();
-    const tasks = scheduler.list();
+    const manager = AutomationManager.getInstance();
+    const tasks = manager.listJobs();
 
     const items: ViewItem[] = [{ kind: 'header' }];
     if (tasks.length === 0) {
@@ -99,7 +117,7 @@ export class SchedulePanel extends BasePanel {
         items.push({
           kind: 'task',
           task,
-          history: scheduler.getHistory(task.id),
+          history: manager.listRuns(task.id),
         });
       }
     }
@@ -137,9 +155,10 @@ export class SchedulePanel extends BasePanel {
         // Toggle enabled/disabled on selected task
         const item = this.items[this.selectedIndex];
         if (item?.kind === 'task') {
-          TaskScheduler.getInstance().setEnabled(item.task.id, !item.task.enabled);
-          this.rebuild();
-          this.markDirty();
+          void AutomationManager.getInstance().setEnabled(item.task.id, !item.task.enabled).then(() => {
+            this.rebuild();
+            this.markDirty();
+          });
         }
         return true;
       }
@@ -147,7 +166,7 @@ export class SchedulePanel extends BasePanel {
         // Trigger immediate run of selected task
         const item = this.items[this.selectedIndex];
         if (item?.kind === 'task') {
-          TaskScheduler.getInstance().runNow(item.task.id).catch(() => {
+          AutomationManager.getInstance().runNow(item.task.id).catch(() => {
             // Non-fatal — error logged by scheduler
           });
           this.rebuild();
@@ -171,8 +190,7 @@ export class SchedulePanel extends BasePanel {
   // -------------------------------------------------------------------------
 
   override render(width: number, height: number): Line[] {
-    const scheduler = TaskScheduler.getInstance();
-    const tasks = scheduler.list();
+    const tasks = AutomationManager.getInstance().listJobs();
     const enabled = tasks.filter((t) => t.enabled).length;
     if (tasks.length === 0) {
       return buildPanelWorkspace(width, height, {
@@ -243,32 +261,33 @@ export class SchedulePanel extends BasePanel {
 
   /**
    * Render a task as 3 rows:
-   *   Row 1: [status] id  name  cron
+   *   Row 1: [status] id  name  schedule
    *   Row 2:          next: <date>  last: <date>  runs: N
    *   Row 3:          prompt preview  [history]
    */
-  private renderTask(task: ScheduledTask, history: TaskRunRecord[], selected: boolean, width: number): Line[] {
+  private renderTask(task: AutomationJob, history: AutomationRun[], selected: boolean, width: number): Line[] {
     const bg = selected ? C.selected : undefined;
     const fgBase = selected ? C.selectedFg : undefined;
 
     const bullet = task.enabled ? '* ' : 'o ';
     const bulletFg = task.enabled ? C.enabled : C.disabled;
     const nameStr = task.name.length > 28 ? task.name.slice(0, 25) + '...' : task.name.padEnd(28);
+    const scheduleText = formatSchedule(task.schedule);
     const row1 = buildPanelLine(width, [
       [bullet, bulletFg, bg],
       [task.id.slice(0, 12), fgBase ?? C.id, bg],
       ['  ', fgBase ?? C.prompt, bg],
       [nameStr, fgBase ?? C.prompt, bg],
       ['  ', fgBase ?? C.prompt, bg],
-      [task.cron, fgBase ?? C.cron, bg],
+      [scheduleText, fgBase ?? C.cron, bg],
     ]);
 
     const indent = '    ';
-    const nextStr = task.nextRun
-      ? `next: ${new Date(task.nextRun).toLocaleString()}`
+    const nextStr = task.nextRunAt
+      ? `next: ${new Date(task.nextRunAt).toLocaleString()}`
       : 'next: unknown';
-    const lastStr = task.lastRun
-      ? `last: ${new Date(task.lastRun).toLocaleString()}`
+    const lastStr = task.lastRunAt
+      ? `last: ${new Date(task.lastRunAt).toLocaleString()}`
       : 'last: never';
     const row2 = buildPanelLine(width, [
       [indent, fgBase ?? C.prompt, bg],
@@ -278,9 +297,10 @@ export class SchedulePanel extends BasePanel {
     ]);
 
     const maxPromptLen = Math.max(20, width - indent.length - 30);
-    const promptPreview = task.prompt.length > maxPromptLen
-      ? task.prompt.slice(0, maxPromptLen - 1) + '\u2026'
-      : task.prompt;
+    const prompt = task.execution.prompt ?? task.description ?? '';
+    const promptPreview = prompt.length > maxPromptLen
+      ? prompt.slice(0, maxPromptLen - 1) + '\u2026'
+      : prompt;
 
     // Show last 3 run statuses as colored dots
     const recentRuns = history.slice(-3);

@@ -13,6 +13,7 @@ describe('input/registerBuiltinCommands shell core extraction', () => {
     expect(registry.get('clear')?.name).toBe('clear');
     expect(registry.get('compact')?.name).toBe('compact');
     expect(registry.get('quit')?.name).toBe('quit');
+    expect(registry.get('wq')?.name).toBe('wq');
     expect(registry.get('effort')?.name).toBe('effort');
     expect(registry.get('lines')?.name).toBe('lines');
   });

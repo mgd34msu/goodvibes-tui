@@ -34,20 +34,16 @@ describe('recall command breadth', () => {
   let store: MemoryStore;
   let registry: MemoryRegistry;
   let printed: string[];
-  let previousCwd: string;
 
   beforeEach(async () => {
-    previousCwd = process.cwd();
     dir = mkdtempSync(join(tmpdir(), 'gv-recall-'));
     store = new MemoryStore(join(dir, 'memory.sqlite'));
     await store.init();
     registry = new MemoryRegistry(store);
     printed = [];
-    process.chdir(dir);
   });
 
   afterEach(() => {
-    process.chdir(previousCwd);
     store.close();
     rmSync(dir, { recursive: true, force: true });
   });

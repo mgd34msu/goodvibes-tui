@@ -4,6 +4,7 @@ import { getKeybindingsManager } from '../keybindings.ts';
 import { EFFORT_DESCRIPTIONS } from '../../providers/effort-levels.ts';
 import { REASONING_BUDGET_MAP } from '../../providers/interface.ts';
 import { recordUsage } from '../../providers/favorites.ts';
+import { executeWriteQuit } from './quit-shared.ts';
 
 export function registerShellCoreCommands(registry: CommandRegistry): void {
   registry.register({
@@ -146,6 +147,7 @@ export function registerShellCoreCommands(registry: CommandRegistry): void {
           { id: '/danger', label: '/danger [key] [value]', detail: 'DANGEROUS SETTINGS', category: 'Tools & System', fg: '#ef4444' },
           { id: '/help', label: '/help', detail: 'This help', category: 'Tools & System' },
           { id: '/quit', label: '/quit', detail: 'Exit', category: 'Tools & System' },
+          { id: '/wq', label: '/wq', detail: 'Commit all git changes and then exit', category: 'Tools & System' },
         ];
         ctx.openSelection('Help  —  Commands', items, { allowSearch: true }, (result) => {
           if (!result) return;
@@ -159,7 +161,7 @@ export function registerShellCoreCommands(registry: CommandRegistry): void {
         });
         return;
       }
-      ctx.print('Use /help to open the help modal. Commands: /model, /provider, /config, /template, /tools, /permissions, /sessions, /bookmarks, /save, /load, /undo, /redo, /retry, /clear, /reset, /compact, /export, /title, /effort, /lines, /expand, /collapse, /debug, /quit');
+      ctx.print('Use /help to open the help modal. Commands: /model, /provider, /config, /template, /tools, /permissions, /sessions, /bookmarks, /save, /load, /undo, /redo, /retry, /clear, /reset, /compact, /export, /title, /effort, /lines, /expand, /collapse, /debug, /quit, /wq');
     },
   });
 
@@ -210,6 +212,15 @@ export function registerShellCoreCommands(registry: CommandRegistry): void {
     description: 'Exit the application',
     handler(_args, ctx) {
       ctx.exit();
+    },
+  });
+
+  registry.register({
+    name: 'wq',
+    aliases: [':wq'],
+    description: 'Commit all git changes and then exit',
+    async handler(_args, ctx) {
+      await executeWriteQuit(ctx);
     },
   });
 

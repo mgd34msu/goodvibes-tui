@@ -33,4 +33,27 @@ describe('extractOpenAIStreamTextDelta', () => {
       reasoning_summary: 'summary text',
     })).toEqual({ content: [], reasoning: ['summary text'] });
   });
+
+  test('demotes reasoning fragments into content when reasoning is disabled', () => {
+    expect(extractOpenAIStreamTextDelta({
+      choices: [{
+        delta: {
+          content: [
+            { type: 'reasoning', text: 'this should be visible' },
+            { type: 'text', text: ' and continue in the transcript' },
+          ],
+          reasoning_content: ' extra visible text',
+        },
+      }],
+      reasoning_summary: ' trailing summary',
+    }, { allowReasoning: false })).toEqual({
+      content: [
+        'this should be visible',
+        ' and continue in the transcript',
+        ' extra visible text',
+        ' trailing summary',
+      ],
+      reasoning: [],
+    });
+  });
 });

@@ -1,4 +1,4 @@
-import { center } from './terminal-width.ts';
+import { center, getDisplayWidth } from './terminal-width.ts';
 import { VERSION } from '../version.ts';
 
 const ART_LINES = [
@@ -10,7 +10,7 @@ const ART_LINES = [
   ' ╚═════╝    ╚═════╝    ╚═════╝   ╚═════╝     ╚═══╝    ╚═╝  ╚═════╝   ╚══════╝  ╚══════╝',
 ] as const;
 
-const ART_W = 87;
+const ART_W = Math.max(...ART_LINES.map((line) => getDisplayWidth(line)));
 const TOP_BORDER = '━'.repeat(ART_W);
 const SEPARATOR = '━'.repeat(ART_W);
 
@@ -30,28 +30,17 @@ export interface SplashOptions {
 }
 
 export function getSplashLines(columns: number, opts: SplashOptions = {}): string[] {
-  const useCompact = columns < ART_W + 6;
-  const compactWidth = 28;
-  const compactBorder = '-'.repeat(compactWidth);
-  const compactTitle = 'GOODVIBES';
-  const compactTagline = '[ terminal AI ]';
-  const compactVersionLine = `v${VERSION} | /help`;
   const splashHint = 'start chatting or type /help for commands';
-  const compactSplashHint = 'start chatting or type /help';
   const lines: string[] = [
-    center(useCompact ? compactBorder : TOP_BORDER, columns),
-    ...(useCompact
-      ? [
-        center(compactTitle, columns),
-        center(compactBorder, columns),
-      ]
-      : ART_LINES.map((line) => center(line, columns)).concat(center(SEPARATOR, columns))),
-    center(useCompact ? compactTagline : TAGLINE, columns),
-    center(useCompact ? compactVersionLine : VERSION_LINE, columns),
+    center(TOP_BORDER, columns),
+    ...ART_LINES.map((line) => center(line, columns)),
+    center(SEPARATOR, columns),
+    center(TAGLINE, columns),
+    center(VERSION_LINE, columns),
     '',
   ];
 
-  lines.push(center(useCompact ? compactSplashHint : splashHint, columns));
+  lines.push(center(splashHint, columns));
 
   return lines;
 }

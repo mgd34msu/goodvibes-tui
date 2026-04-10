@@ -87,15 +87,43 @@ describe('ConversationManager', () => {
     });
   });
 
+  describe('block lookup', () => {
+    test('prefers the block containing a line over the nearest later block start', () => {
+      cm.addAssistantMessage([
+        '```ts',
+        'function first() {',
+        '  const value = 1;',
+        '  return value;',
+        '}',
+        '```',
+        '',
+        '```ts',
+        'function second() {',
+        '  return 2;',
+        '}',
+        '```',
+      ].join('\n'));
+      cm.getDisplayBlocks();
+
+      const [firstBlock, secondBlock] = cm.getBlockRegistry().filter((block) => block.type === 'code');
+      expect(firstBlock).toBeDefined();
+      expect(secondBlock).toBeDefined();
+
+      const targetLine = firstBlock!.startLine + firstBlock!.lineCount - 1;
+      expect(Math.abs(secondBlock!.startLine - targetLine)).toBeLessThan(Math.abs(firstBlock!.startLine - targetLine));
+      expect(cm.findNearestBlock(targetLine, 'code')).toBe(firstBlock);
+    });
+  });
+
   describe('splash suppression', () => {
     test('rebuilds history when splash suppression changes', () => {
       const splashConversation = new ConversationManager(() => 40);
       const before = splashConversation.getDisplayBlocks().map((line) => line.map((cell) => cell.char).join('')).join('\n');
-      expect(before).toContain('GOODVIBES');
+      expect(before).toContain('██████╗');
 
       splashConversation.setSplashSuppressed(true);
       const after = splashConversation.getDisplayBlocks().map((line) => line.map((cell) => cell.char).join('')).join('\n');
-      expect(after).not.toContain('GOODVIBES');
+      expect(after).not.toContain('██████╗');
     });
 
     test('rebuilds splash against a narrower width provider before suppression', () => {
@@ -108,12 +136,12 @@ describe('ConversationManager', () => {
       width = 34;
       splashConversation.setWidthProvider(() => width);
       const narrow = splashConversation.getDisplayBlocks().map((line) => line.map((cell) => cell.char).join(''));
-      expect(narrow.join('\n')).toContain('GOODVIBES');
+      expect(narrow.join('\n')).toContain('██████╗');
       expect(narrow.every((line) => getDisplayWidth(line) <= width)).toBe(true);
 
       splashConversation.setSplashSuppressed(true);
       const suppressed = splashConversation.getDisplayBlocks().map((line) => line.map((cell) => cell.char).join(''));
-      expect(suppressed.join('\n')).not.toContain('GOODVIBES');
+      expect(suppressed.join('\n')).not.toContain('██████╗');
       expect(suppressed.every((line) => getDisplayWidth(line) <= width)).toBe(true);
     });
   });

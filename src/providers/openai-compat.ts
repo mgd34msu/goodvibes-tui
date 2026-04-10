@@ -1,5 +1,6 @@
 import OpenAI from 'openai';
 import type { LLMProvider, ChatRequest, ChatResponse } from './interface.ts';
+import type { ProviderCapability } from './capabilities.ts';
 import { ProviderError } from '../types/errors.ts';
 import { withRetry } from '../utils/retry.ts';
 import {
@@ -20,6 +21,7 @@ export interface OpenAICompatOptions {
   apiKey: string;
   defaultModel: string;
   models: string[];
+  capabilities?: Partial<ProviderCapability>;
   /** Optional extra HTTP headers sent with every request to this provider. */
   defaultHeaders?: Record<string, string>;
   /** How to send reasoning params. Default: 'none' (don't send). */
@@ -34,6 +36,7 @@ export interface OpenAICompatOptions {
 export class OpenAICompatProvider implements LLMProvider {
   readonly name: string;
   readonly models: string[];
+  readonly capabilities?: Partial<ProviderCapability>;
 
   private client: OpenAI;
   private defaultModel: string;
@@ -43,6 +46,7 @@ export class OpenAICompatProvider implements LLMProvider {
   constructor(opts: OpenAICompatOptions) {
     this.name = opts.name;
     this.models = opts.models;
+    this.capabilities = opts.capabilities;
     this.defaultModel = opts.defaultModel;
     this.reasoningFormat = opts.reasoningFormat ?? 'none';
     this.cacheCapability = getCacheCapability(opts.name);
@@ -67,6 +71,7 @@ export class OpenAICompatProvider implements LLMProvider {
     } = params;
 
     return withRetry(async () => {
+      const allowReasoningStream = this.reasoningFormat !== 'none';
       let responseText = '';
       let inputTokens = 0;
       let outputTokens = 0;
@@ -128,7 +133,7 @@ export class OpenAICompatProvider implements LLMProvider {
           };
 
           const delta = raw.choices[0]?.delta;
-          const textDelta = extractOpenAIStreamTextDelta(raw);
+          const textDelta = extractOpenAIStreamTextDelta(raw, { allowReasoning: allowReasoningStream });
           for (const contentDelta of textDelta.content) {
             responseText += contentDelta;
             if (onDelta) onDelta({ content: contentDelta });
@@ -138,7 +143,7 @@ export class OpenAICompatProvider implements LLMProvider {
           }
 
           // Mercury-2: reasoning_summary may appear on any chunk — capture and emit
-          if (raw.reasoning_summary) {
+          if (allowReasoningStream && raw.reasoning_summary) {
             reasoningSummaryText = raw.reasoning_summary;
           }
 
