@@ -185,6 +185,40 @@ describe('AutomationManager target semantics', () => {
     expect(sessionBroker.getMessages(existingSession.id, 10)).toHaveLength(1);
   });
 
+  test('maps the main target alias to the preferred TUI shared session', async () => {
+    const { manager, sessionBroker } = buildManager((prompt) => `agent-${prompt.length}`);
+
+    await manager.start();
+    const existingSession = await sessionBroker.createSession({
+      id: 'sess-main',
+      title: 'Main Terminal UI session',
+      metadata: { source: 'tui' },
+      participant: {
+        surfaceKind: 'tui',
+        surfaceId: 'surface:tui',
+        displayName: 'Terminal UI',
+        lastSeenAt: Date.now(),
+      },
+    });
+
+    const job = await manager.createJob({
+      name: 'Main target automation',
+      prompt: 'Continue the main terminal workflow',
+      schedule: normalizeEverySchedule('15m'),
+      target: {
+        kind: 'main',
+        createIfMissing: false,
+      },
+    });
+
+    const run = await manager.runNow(job.id);
+
+    expect(run.sessionId).toBe(existingSession.id);
+    expect(run.target.kind).toBe('main');
+    expect(run.continuationMode).toBe('shared-session');
+    expect(sessionBroker.getMessages(existingSession.id, 10)).toHaveLength(1);
+  });
+
   test('forwards to a live agent instead of spawning a new one when the target session is active', async () => {
     let spawnCount = 0;
     const { manager, sessionBroker, setLiveAgent } = buildManager(() => {

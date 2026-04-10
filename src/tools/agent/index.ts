@@ -449,6 +449,8 @@ export const agentTool: Tool = {
             template: taskDef.template ?? input.template ?? 'general',
             model: taskDef.model ?? input.model,
             provider: taskDef.provider ?? input.provider,
+            fallbackModels: taskDef.fallbackModels ?? input.fallbackModels,
+            reasoningEffort: taskDef.reasoningEffort ?? input.reasoningEffort,
             tools: taskDef.tools ?? input.tools,
             restrictTools: taskDef.restrictTools ?? input.restrictTools,
             context: taskDef.context ?? input.context,

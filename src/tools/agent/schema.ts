@@ -54,6 +54,16 @@ export const AGENT_TOOL_SCHEMA: ToolDefinition = {
         type: 'string',
         description: 'Provider override for the spawned agent (mode: spawn).',
       },
+      fallbackModels: {
+        type: 'array',
+        items: { type: 'string' },
+        description: 'Ordered fallback model IDs or registry keys to try if the primary model fails (mode: spawn).',
+      },
+      reasoningEffort: {
+        type: 'string',
+        enum: ['instant', 'low', 'medium', 'high'],
+        description: 'Reasoning effort override for providers/models that support it (mode: spawn).',
+      },
       tools: {
         type: 'array',
         items: { type: 'string' },
@@ -135,6 +145,8 @@ export const AGENT_TOOL_SCHEMA: ToolDefinition = {
             template: { type: 'string', enum: ['engineer', 'reviewer', 'tester', 'researcher', 'general'], description: 'Agent template.' },
             model: { type: 'string', description: 'Model override.' },
             provider: { type: 'string', description: 'Provider override.' },
+            fallbackModels: { type: 'array', items: { type: 'string' }, description: 'Ordered fallback model IDs or registry keys.' },
+            reasoningEffort: { type: 'string', enum: ['instant', 'low', 'medium', 'high'], description: 'Reasoning effort override.' },
             tools: { type: 'array', items: { type: 'string' }, description: 'Tool subset.' },
             restrictTools: { type: 'boolean', description: 'If true, use ONLY the specified tools (override mode). Default: false.' },
             context: { type: 'string', description: 'Additional context.' },
@@ -200,6 +212,8 @@ export interface AgentInput {
   template?: string;
   model?: string;
   provider?: string;
+  fallbackModels?: string[];
+  reasoningEffort?: 'instant' | 'low' | 'medium' | 'high';
   tools?: string[];
   restrictTools?: boolean;
   context?: string;
@@ -222,6 +236,8 @@ export interface AgentInput {
     template?: string;
     model?: string;
     provider?: string;
+    fallbackModels?: string[];
+    reasoningEffort?: 'instant' | 'low' | 'medium' | 'high';
     tools?: string[];
     restrictTools?: boolean;
     context?: string;

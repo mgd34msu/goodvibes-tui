@@ -4,6 +4,7 @@
 
 import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
 import { MemoryStore, MemoryRegistry } from '../../state/memory-store.ts';
+import { resolveMemoryVectorDbPath } from '../../state/memory-vector-store.ts';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
@@ -11,6 +12,12 @@ import { unlinkSync, existsSync } from 'node:fs';
 
 function tempDbPath(): string {
   return join(tmpdir(), `memory-test-${randomUUID()}.db`);
+}
+
+function cleanupDbPair(dbPath: string): void {
+  if (existsSync(dbPath)) unlinkSync(dbPath);
+  const vectorPath = resolveMemoryVectorDbPath(dbPath);
+  if (existsSync(vectorPath)) unlinkSync(vectorPath);
 }
 
 describe('MemoryStore', () => {
@@ -25,7 +32,7 @@ describe('MemoryStore', () => {
 
   afterEach(() => {
     store.close();
-    if (existsSync(dbPath)) unlinkSync(dbPath);
+    cleanupDbPair(dbPath);
   });
 
   describe('add', () => {
@@ -141,6 +148,18 @@ describe('MemoryStore', () => {
       expect(results[0].summary).toContain('Use Bun runtime');
       expect(results[results.length - 1].reviewState).toBe('stale');
     });
+
+    it('uses sqlite-vec for semantic memory search when requested', () => {
+      const stats = store.vectorStats();
+      expect(stats.backend).toBe('sqlite-vec');
+      expect(stats.available).toBe(true);
+      expect(stats.indexedRecords).toBeGreaterThanOrEqual(4);
+
+      const results = store.searchSemantic({ query: 'runtime bun execution', limit: 2 });
+      expect(results.length).toBeGreaterThan(0);
+      expect(results[0].record.summary).toContain('Use Bun runtime');
+      expect(results[0].similarity).toBeGreaterThan(0);
+    });
   });
 
   describe('update', () => {
@@ -166,6 +185,14 @@ describe('MemoryStore', () => {
       store.update(rec.id, { summary: 'After' });
       const fetched = store.get(rec.id);
       expect(fetched!.summary).toBe('After');
+    });
+
+    it('updates the sqlite-vec index after record edits', async () => {
+      const rec = await store.add({ cls: 'pattern', summary: 'Legacy phrasing' });
+      store.update(rec.id, { summary: 'Orchestration graph node runtime edits' });
+
+      const results = store.searchSemantic({ query: 'orchestration graph runtime', limit: 1 });
+      expect(results[0]?.record.id).toBe(rec.id);
     });
 
     it('returns null for unknown ID', () => {
@@ -246,7 +273,7 @@ describe('MemoryStore', () => {
         expect(otherStore.linksFor(source.id)[0]?.relation).toBe('supports');
       } finally {
         otherStore.close();
-        if (existsSync(otherPath)) unlinkSync(otherPath);
+        cleanupDbPair(otherPath);
       }
     });
   });
@@ -257,6 +284,7 @@ describe('MemoryStore', () => {
       const removed = store.delete(rec.id);
       expect(removed).toBe(true);
       expect(store.get(rec.id)).toBeNull();
+      expect(store.searchSemantic({ query: 'Crash on startup', limit: 3 }).some((entry) => entry.record.id === rec.id)).toBe(false);
     });
 
     it('returns false for unknown ID', () => {
@@ -321,7 +349,7 @@ describe('MemoryRegistry', () => {
 
   afterEach(() => {
     store.close();
-    if (existsSync(dbPath)) unlinkSync(dbPath);
+    cleanupDbPair(dbPath);
   });
 
   it('notifies listeners on add', async () => {

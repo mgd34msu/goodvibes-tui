@@ -10,6 +10,9 @@ export async function dispatchOperatorRoutes(
     | 'getControlPlaneRecentEvents'
     | 'getControlPlaneMessages'
     | 'getControlPlaneClients'
+    | 'getGatewayMethods'
+    | 'getGatewayMethod'
+    | 'invokeGatewayMethod'
     | 'createControlPlaneEventStream'
     | 'getRoutesSnapshot'
     | 'getSurfaces'
@@ -74,6 +77,23 @@ export async function dispatchOperatorRoutes(
     | 'getIntegrationTasks'
     | 'getIntegrationAutomation'
     | 'getIntegrationSessions'
+    | 'getAutomationHeartbeat'
+    | 'postAutomationHeartbeat'
+    | 'getMemoryDoctor'
+    | 'getMemoryVectorStats'
+    | 'postMemoryVectorRebuild'
+    | 'postMemoryEmbeddingDefault'
+    | 'getVoiceStatus'
+    | 'getVoiceProviders'
+    | 'getVoiceVoices'
+    | 'postVoiceTts'
+    | 'postVoiceStt'
+    | 'postVoiceRealtimeSession'
+    | 'getMediaProviders'
+    | 'postMediaAnalyze'
+    | 'postMediaTransform'
+    | 'postMediaGenerate'
+    | 'getRemoteNodeHostContract'
   >,
 ): Promise<Response | null> {
   const url = new URL(req.url);
@@ -89,6 +109,11 @@ export async function dispatchOperatorRoutes(
   }
   if (pathname === '/api/control-plane/messages' && method === 'GET') return handlers.getControlPlaneMessages();
   if (pathname === '/api/control-plane/clients' && method === 'GET') return handlers.getControlPlaneClients();
+  if (pathname === '/api/control-plane/methods' && method === 'GET') return handlers.getGatewayMethods(url);
+  const gatewayMethodInvokeMatch = pathname.match(/^\/api\/control-plane\/methods\/([^/]+)\/invoke$/);
+  if (gatewayMethodInvokeMatch && method === 'POST') return handlers.invokeGatewayMethod(decodeURIComponent(gatewayMethodInvokeMatch[1]), req);
+  const gatewayMethodMatch = pathname.match(/^\/api\/control-plane\/methods\/([^/]+)$/);
+  if (gatewayMethodMatch && method === 'GET') return handlers.getGatewayMethod(decodeURIComponent(gatewayMethodMatch[1]));
   if (pathname === '/api/control-plane/events' && method === 'GET') return handlers.createControlPlaneEventStream(req);
   if (pathname === '/api/routes' && method === 'GET') return handlers.getRoutesSnapshot();
   if (pathname === '/api/surfaces' && method === 'GET') return handlers.getSurfaces();
@@ -193,12 +218,34 @@ export async function dispatchOperatorRoutes(
   }
 
   if (pathname === '/api/remote' && method === 'GET') return handlers.getRemote();
+  if ((pathname === '/api/remote/node-host/contract' || pathname === '/api/remote/device/contract') && method === 'GET') {
+    return handlers.getRemoteNodeHostContract();
+  }
   if (pathname === '/api/health' && method === 'GET') return handlers.getHealth();
   if (pathname === '/api/accounts' && method === 'GET') return handlers.getAccounts();
   if (pathname === '/api/settings' && method === 'GET') return handlers.getSettings();
   if (pathname === '/api/continuity' && method === 'GET') return handlers.getContinuity();
   if (pathname === '/api/worktrees' && method === 'GET') return handlers.getWorktrees();
   if (pathname === '/api/intelligence' && method === 'GET') return handlers.getIntelligence();
+
+  if (pathname === '/api/automation/heartbeat' && method === 'GET') return handlers.getAutomationHeartbeat();
+  if (pathname === '/api/automation/heartbeat' && method === 'POST') return handlers.postAutomationHeartbeat(req);
+  if (pathname === '/api/memory/doctor' && method === 'GET') return handlers.getMemoryDoctor();
+  if (pathname === '/api/memory/vector' && method === 'GET') return handlers.getMemoryVectorStats();
+  if (pathname === '/api/memory/vector/rebuild' && method === 'POST') return handlers.postMemoryVectorRebuild(req);
+  if (pathname === '/api/memory/embeddings/default' && method === 'POST') return handlers.postMemoryEmbeddingDefault(req);
+
+  if (pathname === '/api/voice' && method === 'GET') return handlers.getVoiceStatus();
+  if (pathname === '/api/voice/providers' && method === 'GET') return handlers.getVoiceProviders();
+  if (pathname === '/api/voice/voices' && method === 'GET') return handlers.getVoiceVoices(url);
+  if (pathname === '/api/voice/tts' && method === 'POST') return handlers.postVoiceTts(req);
+  if (pathname === '/api/voice/stt' && method === 'POST') return handlers.postVoiceStt(req);
+  if (pathname === '/api/voice/realtime/session' && method === 'POST') return handlers.postVoiceRealtimeSession(req);
+
+  if (pathname === '/api/media/providers' && method === 'GET') return handlers.getMediaProviders();
+  if (pathname === '/api/media/analyze' && method === 'POST') return handlers.postMediaAnalyze(req);
+  if (pathname === '/api/media/transform' && method === 'POST') return handlers.postMediaTransform(req);
+  if (pathname === '/api/media/generate' && method === 'POST') return handlers.postMediaGenerate(req);
 
   if (pathname === '/api/local-auth' && method === 'GET') return handlers.getLocalAuth();
   if (pathname === '/api/local-auth/users' && method === 'POST') return handlers.postLocalAuthUser(req);

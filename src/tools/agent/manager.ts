@@ -65,6 +65,9 @@ export interface AgentRecord {
   template: string;
   model?: string;
   provider?: string;
+  fallbackModels?: string[];
+  reasoningEffort?: 'instant' | 'low' | 'medium' | 'high';
+  context?: string;
   tools: string[];
   status: 'pending' | 'running' | 'completed' | 'failed' | 'cancelled';
   startedAt: number;
@@ -227,6 +230,9 @@ export class AgentManager {
       template,
       model: input.model,
       provider: input.provider,
+      fallbackModels: input.fallbackModels?.filter((model) => typeof model === 'string' && model.trim().length > 0).map((model) => model.trim()),
+      reasoningEffort: input.reasoningEffort,
+      context: input.context,
       tools,
       orchestrationDepth,
       executionProtocol,

@@ -185,9 +185,11 @@ export type {
   DistributedPendingWork,
   DistributedRuntimeAuditRecord,
   DistributedPeerAuth,
+  DistributedNodeHostContract,
 } from './distributed-runtime.ts';
 export {
   DistributedRuntimeManager,
+  getDistributedNodeHostContract,
   getDistributedRuntimeManager,
   resetDistributedRuntimeManagerForTesting,
 } from './distributed-runtime.ts';

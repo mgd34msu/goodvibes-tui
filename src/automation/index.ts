@@ -18,9 +18,15 @@ export type {
   AutomationScheduleKind,
 } from './schedules.ts';
 export {
+  DEFAULT_TOP_OF_HOUR_STAGGER_MS,
   parseEveryInterval,
   formatEveryInterval,
   validateSchedule,
+  isRecurringTopOfHourCronExpression,
+  normalizeCronStaggerMs,
+  resolveDefaultCronStaggerMs,
+  resolveAutomationCronStaggerMs,
+  resolveStableAutomationCronOffsetMs,
   normalizeAtSchedule,
   normalizeEverySchedule,
   normalizeCronSchedule,
@@ -28,7 +34,15 @@ export {
   isAutomationDue,
 } from './schedules.ts';
 
-export type { AutomationExecutionPolicy, AutomationSessionTarget, AutomationSessionTargetKind, AutomationSandboxMode } from './session-targets.ts';
+export type {
+  AutomationExecutionPolicy,
+  AutomationSessionTarget,
+  AutomationSessionTargetKind,
+  AutomationSandboxMode,
+  AutomationWakeMode,
+  AutomationExternalContentSource,
+  AutomationExternalContentSourceKind,
+} from './session-targets.ts';
 export type { AutomationDeliveryMode, AutomationDeliveryTarget, AutomationDeliveryPolicy, AutomationDeliveryAttempt } from './delivery.ts';
 export type { AutomationFailureAction, AutomationRetryStrategy, AutomationRetryPolicy, AutomationFailurePolicy, AutomationFailureRecord } from './failures.ts';
 export type { AutomationSourceRecord, AutomationSourceSnapshot } from './sources.ts';
@@ -49,5 +63,10 @@ export { AutomationJobStore } from './store/jobs.ts';
 export { AutomationRunStore } from './store/runs.ts';
 export { AutomationRouteStore } from './store/routes.ts';
 export { AutomationSourceStore } from './store/sources.ts';
-export type { CreateAutomationJobInput, UpdateAutomationJobInput } from './manager.ts';
+export type {
+  AutomationHeartbeatResult,
+  AutomationHeartbeatWake,
+  CreateAutomationJobInput,
+  UpdateAutomationJobInput,
+} from './manager.ts';
 export { AutomationManager } from './manager.ts';

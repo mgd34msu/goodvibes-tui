@@ -1,6 +1,6 @@
 {
   "name": "goodvibes-tui",
-  "version": "0.15.4",
+  "version": "0.15.5",
   "type": "module",
   "main": "src/main.ts",
   "scripts": {
@@ -38,6 +38,7 @@
     "pyright": "^1.1.408",
     "simple-git": "^3.33.0",
     "sql.js": "^1.14.1",
+    "sqlite-vec": "^0.1.9",
     "tree-sitter-css": "^0.25.0",
     "tree-sitter-javascript": "^0.25.0",
     "tree-sitter-json": "^0.24.8",

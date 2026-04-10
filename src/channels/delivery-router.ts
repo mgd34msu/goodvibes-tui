@@ -255,6 +255,7 @@ export function createDefaultChannelDeliveryStrategies(
 }
 
 export class ChannelDeliveryRouter {
+  private static active: ChannelDeliveryRouter | null = null;
   private readonly strategies: ChannelDeliveryStrategy[];
 
   constructor(config: ChannelDeliveryRouterConfig = {}) {
@@ -263,6 +264,15 @@ export class ChannelDeliveryRouter {
     this.strategies = [
       ...(config.strategies ?? createDefaultChannelDeliveryStrategies(configManager, serviceRegistry)),
     ];
+    ChannelDeliveryRouter.active = this;
+  }
+
+  static getActive(): ChannelDeliveryRouter | null {
+    return ChannelDeliveryRouter.active;
+  }
+
+  static resetActiveForTesting(): void {
+    ChannelDeliveryRouter.active = null;
   }
 
   listStrategies(): readonly ChannelDeliveryStrategy[] {
@@ -279,6 +289,13 @@ export class ChannelDeliveryRouter {
       return;
     }
     this.strategies.push(strategy);
+  }
+
+  unregisterStrategy(strategyId: string): boolean {
+    const existingIndex = this.strategies.findIndex((entry) => entry.id === strategyId);
+    if (existingIndex < 0) return false;
+    this.strategies.splice(existingIndex, 1);
+    return true;
   }
 
   async deliver(request: ChannelDeliveryRequest): Promise<string | undefined> {

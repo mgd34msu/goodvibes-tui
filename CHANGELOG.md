@@ -4,6 +4,26 @@ All notable changes to GoodVibes TUI.
 
 ---
 
+## [0.15.5] — 2026-04-10
+
+### Automation Gateway Runtime: SDK, Voice, Media, Memory, And Runtime Contracts
+
+- Added a first-class control-plane gateway method catalog with typed method descriptors, builtin method discovery, plugin method registration, HTTP method listing/invocation routes, and WebSocket `methodId` invocation support for remote clients
+- Added plugin SDK contribution hooks for gateway methods, channel plugins, delivery strategies, memory embedding providers, voice providers, and media providers, with unload cleanup wired through the active registries
+- Added TS-only voice provider contracts and daemon APIs for status, provider discovery, voice listing, TTS synthesis requests, STT transcription requests, and realtime voice session negotiation without adding native mic/audio dependencies
+- Added TS-only media provider contracts and daemon APIs for provider discovery, media analysis, transforms, and generation so web or companion clients can supply captured attachments while the TUI owns orchestration and policy
+- Added memory embedding provider registration, a deterministic hashed fallback embedding provider, sqlite-vec vector normalization, memory vector rebuild/default-provider APIs, and a memory doctor report for provider/vector-store health
+- Added automation `next-heartbeat` wake semantics so scheduled jobs can queue until an explicit daemon heartbeat trigger, with heartbeat inspection and trigger APIs
+- Added distributed node/device host contract APIs describing pairing, scoped heartbeat/pull/complete endpoints, supported peer kinds, work types, scopes, and operator snapshot surfaces
+
+### Verification
+
+- Added regression coverage for gateway method catalog dispatch, plugin SDK extension cleanup, voice/media provider registries, memory embedding provider behavior, automation heartbeat wake queuing, daemon API routes, and WebSocket gateway method invocation
+- Typecheck passes: `bunx tsc --noEmit -p tsconfig.json`
+- Build passes: `bun run build`
+- Full test runner passes: `bun test` (`6888 pass, 0 fail`)
+- Diff hygiene passes: `git diff --check`
+
 ## [0.15.4] — 2026-04-10
 
 ### Automation, Control Plane, And Channel Gateway Rollout

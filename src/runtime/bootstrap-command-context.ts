@@ -12,6 +12,7 @@ import { FileUndoManager } from '../state/file-undo.ts';
 import { logger } from '../utils/logger.ts';
 import type { McpRegistry } from '../mcp/registry.ts';
 import type { RuntimeStore } from '../runtime/store/index.ts';
+import type { MemoryRegistry } from '../state/memory-store.ts';
 
 export type CreateBootstrapCommandContextOptions = {
   providerRegistry: ProviderRegistry;
@@ -24,6 +25,7 @@ export type CreateBootstrapCommandContextOptions = {
   forensicsRegistry: ForensicsRegistry;
   policyRuntimeState: PolicyRuntimeState;
   runtimeStore: RuntimeStore;
+  memoryRegistry?: MemoryRegistry;
   loadSystemPrompt: () => string;
   activatePlan: (planId: string, task: string) => void;
   completeModelSelectionSideEffect?: () => void;
@@ -49,6 +51,7 @@ export function createBootstrapCommandContext(
     forensicsRegistry,
     policyRuntimeState,
     runtimeStore,
+    memoryRegistry,
     loadSystemPrompt,
     activatePlan,
     completeModelSelectionSideEffect,
@@ -164,6 +167,7 @@ export function createBootstrapCommandContext(
       (context.showPanel ?? showPanel)('subscription');
     },
     runtimeStore,
+    memoryRegistry,
   };
 
   return context;

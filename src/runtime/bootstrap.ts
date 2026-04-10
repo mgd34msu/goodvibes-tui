@@ -49,6 +49,7 @@ import { getKeybindingsManager } from '../input/keybindings.ts';
 import { sessionMemoryStore } from '../core/session-memory.ts';
 import { Compositor } from '../renderer/compositor.ts';
 import type { PermissionRequestHandler } from '../permissions/prompt.ts';
+import { join } from 'node:path';
 
 import type { HookPhase, HookCategory, HookEventPath } from '../hooks/types.ts';
 import type { RuntimeContext, BootstrapOptions, MutableRuntimeState } from './context.ts';
@@ -86,6 +87,7 @@ import { AutomationDeliveryManager, AutomationManager } from '../automation/inde
 import { RouteBindingManager, SurfaceRegistry } from '../channels/index.ts';
 import { WatcherRegistry } from '../watchers/index.ts';
 import { createDeferredStartupCoordinator } from './deferred-startup.ts';
+import { getMemoryRegistry, getMemoryStore } from '../state/memory-store.ts';
 
 // ── Internal helpers ──────────────────────────────────────────────────────
 
@@ -351,6 +353,14 @@ export async function bootstrapRuntime(
 
   // These unsubs are owned by bootstrap; cleared via shutdown()
   const bootstrapUnsubs: Array<() => void> = [];
+  const memoryDbPath = join(options?.workingDir ?? getWorkingDirectory(), '.goodvibes', 'tui', 'memory.sqlite');
+  const memoryStore = getMemoryStore(memoryDbPath);
+  await memoryStore.init();
+  const memoryRegistry = getMemoryRegistry(memoryDbPath);
+  bootstrapUnsubs.push(() => {
+    void memoryStore.save();
+    memoryStore.close();
+  });
   const renderRequestRef = {
     value: (): void => {},
   };
@@ -896,6 +906,7 @@ export async function bootstrapRuntime(
     runtimeStore: store,
     tokenAuditor,
     systemMessagesPanel,
+    memoryRegistry,
   });
 
   // ── System message router ────────────────────────────────────────────────
@@ -927,6 +938,7 @@ export async function bootstrapRuntime(
     forensicsRegistry,
     policyRuntimeState,
     runtimeStore: store,
+    memoryRegistry,
     loadSystemPrompt,
     activatePlan: (_planId, task) => {
       setTimeout(() => {

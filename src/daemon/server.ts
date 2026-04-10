@@ -8,10 +8,20 @@ import type { ConfigKey } from '../config/schema.ts';
 import { isValidConfigKey } from '../config/schema.ts';
 import type { AgentRecord } from '../tools/agent/index.ts';
 import { UserAuthManager } from '../security/user-auth.ts';
-import { AutomationDeliveryManager, AutomationManager, normalizeAtSchedule, normalizeCronSchedule, normalizeEverySchedule } from '../automation/index.ts';
+import {
+  AutomationDeliveryManager,
+  AutomationManager,
+  normalizeAtSchedule,
+  normalizeCronSchedule,
+  normalizeEverySchedule,
+  type AutomationExecutionPolicy,
+  type AutomationExternalContentSource,
+  type AutomationWakeMode,
+} from '../automation/index.ts';
 import type { AutomationJob } from '../automation/jobs.ts';
 import { SlackIntegration, DiscordIntegration, DiscordInteractionResponseType, DiscordInteractionType, NtfyIntegration } from '../integrations/index.ts';
 import { ApprovalBroker, ControlPlaneGateway, SharedSessionBroker } from '../control-plane/index.ts';
+import { GatewayMethodCatalog } from '../control-plane/index.ts';
 import type { SharedApprovalRecord } from '../control-plane/index.ts';
 import {
   BuiltinChannelRuntime,
@@ -46,6 +56,9 @@ import type { HookCategory, HookEventPath, HookPhase } from '../hooks/types.ts';
 import { PlatformServiceManager } from './service-manager.ts';
 import { WatcherRegistry } from '../watchers/index.ts';
 import { type DistributedPeerAuth, getDistributedRuntimeManager } from '../runtime/remote/index.ts';
+import { getMemoryRegistry, MemoryEmbeddingProviderRegistry } from '../state/index.ts';
+import { VoiceService } from '../voice/index.ts';
+import { MediaProviderRegistry } from '../media/index.ts';
 import {
   buildIntegrationHelperReview,
   getIntegrationAutomationSnapshot,
@@ -92,6 +105,36 @@ interface DaemonDangerConfig {
 }
 
 type JsonBody = Record<string, unknown>;
+
+function readStringList(value: unknown): string[] | undefined {
+  if (Array.isArray(value)) {
+    return value
+      .filter((entry): entry is string => typeof entry === 'string' && entry.trim().length > 0)
+      .map((entry) => entry.trim());
+  }
+  if (typeof value === 'string') {
+    return value.split(',').map((entry) => entry.trim()).filter((entry) => entry.length > 0);
+  }
+  return undefined;
+}
+
+function readAutomationWakeMode(value: unknown): AutomationWakeMode | undefined {
+  return value === 'now' || value === 'next-heartbeat' ? value : undefined;
+}
+
+function readAutomationReasoningEffort(value: unknown): AutomationExecutionPolicy['reasoningEffort'] | undefined {
+  return value === 'instant' || value === 'low' || value === 'medium' || value === 'high' ? value : undefined;
+}
+
+function readExternalContentSource(value: unknown): AutomationExternalContentSource | undefined {
+  if (typeof value === 'string' && value.trim().length > 0) {
+    return value.trim() as AutomationExternalContentSource;
+  }
+  if (value && typeof value === 'object') {
+    return value as AutomationExternalContentSource;
+  }
+  return undefined;
+}
 
 function readChannelLifecycleAction(value: unknown): ChannelAccountLifecycleAction | null {
   return value === 'inspect'
@@ -176,6 +219,7 @@ export class DaemonServer {
   private automationManager: AutomationManager;
   private runtimeBus: RuntimeEventBus | null;
   private readonly controlPlaneGateway: ControlPlaneGateway;
+  private readonly gatewayMethods: GatewayMethodCatalog;
   private readonly sessionBroker: SharedSessionBroker;
   private readonly approvalBroker: ApprovalBroker;
   private readonly routeBindings: RouteBindingManager;
@@ -188,6 +232,8 @@ export class DaemonServer {
   private readonly watcherRegistry: WatcherRegistry;
   private readonly platformServiceManager: PlatformServiceManager;
   private readonly distributedRuntime = getDistributedRuntimeManager();
+  private readonly voiceService = VoiceService.getActive();
+  private readonly mediaProviders = MediaProviderRegistry.getActive();
   private readonly serviceRegistry: ServiceRegistry;
   private readonly pendingSurfaceReplies = new Map<string, PendingSurfaceReply>();
   private replyPoller: ReturnType<typeof setInterval> | null = null;
@@ -208,6 +254,7 @@ export class DaemonServer {
       config.githubWebhookSecret ?? process.env.GITHUB_WEBHOOK_SECRET ?? null;
     this.automationManager = AutomationManager.getInstance();
     this.runtimeBus = config.runtimeBus ?? null;
+    this.gatewayMethods = GatewayMethodCatalog.getActive();
     this.sessionBroker = SharedSessionBroker.getInstance();
     this.approvalBroker = ApprovalBroker.getInstance();
     const integrationContext = getIntegrationHelpersContextOptional();
@@ -707,15 +754,27 @@ export class DaemonServer {
 
     if (frame.type === 'call') {
       const id = typeof frame.id === 'string' ? frame.id : `call-${Date.now()}`;
-      const method = typeof frame.method === 'string' ? frame.method.toUpperCase() : 'GET';
-      const path = typeof frame.path === 'string' ? frame.path : '/api/control-plane';
-      const response = await this.invokeWebSocketControlPlaneCall({
-        authToken: ws.data.authToken,
-        method,
-        path,
-        query: typeof frame.query === 'object' && frame.query !== null ? frame.query as Record<string, unknown> : undefined,
-        body: frame.body,
-      });
+      const methodId = typeof frame.methodId === 'string' ? frame.methodId : undefined;
+      const response = methodId
+        ? await this.invokeGatewayMethodCall({
+            authToken: ws.data.authToken,
+            methodId,
+            query: typeof frame.query === 'object' && frame.query !== null ? frame.query as Record<string, unknown> : undefined,
+            body: frame.body,
+            context: {
+              principalId: ws.data.principalId,
+              principalKind: ws.data.principalKind,
+              scopes: ws.data.scopes,
+              clientKind: ws.data.clientKind,
+            },
+          })
+        : await this.invokeWebSocketControlPlaneCall({
+            authToken: ws.data.authToken,
+            method: typeof frame.method === 'string' ? frame.method.toUpperCase() : 'GET',
+            path: typeof frame.path === 'string' ? frame.path : '/api/control-plane',
+            query: typeof frame.query === 'object' && frame.query !== null ? frame.query as Record<string, unknown> : undefined,
+            body: frame.body,
+          });
       ws.send(JSON.stringify({
         type: 'response',
         id,
@@ -773,6 +832,56 @@ export class DaemonServer {
       ok: response.ok,
       body,
     };
+  }
+
+  private async invokeGatewayMethodCall(input: {
+    readonly authToken: string;
+    readonly methodId: string;
+    readonly query?: Record<string, unknown>;
+    readonly body?: unknown;
+    readonly context?: {
+      readonly principalId?: string;
+      readonly principalKind?: 'user' | 'bot' | 'service' | 'token';
+      readonly scopes?: readonly string[];
+      readonly clientKind?: string;
+    };
+  }): Promise<{ status: number; ok: boolean; body: unknown }> {
+    const descriptor = this.gatewayMethods.get(input.methodId);
+    if (!descriptor) {
+      return { status: 404, ok: false, body: { error: `Unknown gateway method: ${input.methodId}` } };
+    }
+    if (this.gatewayMethods.hasHandler(input.methodId)) {
+      try {
+        const body = await this.gatewayMethods.invoke(input.methodId, {
+          body: input.body,
+          query: input.query,
+          context: {
+            authToken: input.authToken,
+            principalId: input.context?.principalId,
+            principalKind: input.context?.principalKind,
+            scopes: input.context?.scopes,
+            clientKind: input.context?.clientKind,
+          },
+        });
+        return { status: 200, ok: true, body };
+      } catch (error) {
+        return {
+          status: 500,
+          ok: false,
+          body: { error: error instanceof Error ? error.message : String(error) },
+        };
+      }
+    }
+    if (!descriptor.http) {
+      return { status: 501, ok: false, body: { error: `Gateway method is not invokable: ${input.methodId}` } };
+    }
+    return this.invokeWebSocketControlPlaneCall({
+      authToken: input.authToken,
+      method: descriptor.http.method,
+      path: descriptor.http.path,
+      query: input.query,
+      body: descriptor.http.method === 'GET' || descriptor.http.method === 'DELETE' ? undefined : input.body,
+    });
   }
 
   // -------------------------------------------------------------------------
@@ -842,6 +951,46 @@ export class DaemonServer {
       getControlPlaneRecentEvents: (limit) => Response.json({ events: this.controlPlaneGateway.listRecentEvents(limit) }),
       getControlPlaneMessages: () => Response.json({ messages: this.controlPlaneGateway.listSurfaceMessages() }),
       getControlPlaneClients: () => Response.json({ clients: this.controlPlaneGateway.listClients() }),
+      getGatewayMethods: (url) => {
+        const category = url.searchParams.get('category') ?? undefined;
+        const source = url.searchParams.get('source');
+        return Response.json({
+          methods: this.gatewayMethods.list({
+            ...(category ? { category } : {}),
+            ...(source === 'builtin' || source === 'plugin' ? { source } : {}),
+          }),
+        });
+      },
+      getGatewayMethod: (methodId) => {
+        const method = this.gatewayMethods.get(methodId);
+        return method
+          ? Response.json({ method })
+          : Response.json({ error: 'Unknown gateway method' }, { status: 404 });
+      },
+      invokeGatewayMethod: async (methodId, request) => {
+        const descriptor = this.gatewayMethods.get(methodId);
+        if (!descriptor) return Response.json({ error: 'Unknown gateway method' }, { status: 404 });
+        if (descriptor.dangerous || descriptor.access === 'admin') {
+          const admin = this.requireAdmin(request);
+          if (admin) return admin;
+        }
+        const body = await this.parseOptionalJsonBody(request);
+        if (body instanceof Response) return body;
+        const payload = body ?? {};
+        const response = await this.invokeGatewayMethodCall({
+          authToken: this.extractAuthToken(request),
+          methodId,
+          query: typeof payload.query === 'object' && payload.query !== null ? payload.query as Record<string, unknown> : undefined,
+          body: Object.hasOwn(payload, 'body') ? payload.body : payload,
+          context: {
+            principalId: this.describeAuthenticatedPrincipal(this.extractAuthToken(request))?.principalId,
+            principalKind: this.describeAuthenticatedPrincipal(this.extractAuthToken(request))?.principalKind,
+            scopes: this.describeAuthenticatedPrincipal(this.extractAuthToken(request))?.scopes,
+            clientKind: 'web',
+          },
+        });
+        return Response.json(response.body, { status: response.status });
+      },
       createControlPlaneEventStream: (request) => {
         const url = new URL(request.url);
         const rawDomains = url.searchParams.get('domains');
@@ -859,6 +1008,15 @@ export class DaemonServer {
       postAutomationJob: (request) => this.handlePostSchedule(request),
       getAutomationRuns: () => Response.json({ runs: this.automationManager.listRuns() }),
       getAutomationRun: (runId) => this.handleGetAutomationRun(runId),
+      getAutomationHeartbeat: () => Response.json({ pending: this.automationManager.listHeartbeatWakes() }),
+      postAutomationHeartbeat: async (request) => {
+        const body = await this.parseOptionalJsonBody(request);
+        if (body instanceof Response) return body;
+        const result = await this.automationManager.triggerHeartbeat({
+          source: body && typeof body.source === 'string' ? body.source : 'api',
+        });
+        return Response.json(result);
+      },
       automationRunAction: (runId, action, request) => this.handleAutomationRunAction(runId, action, request),
       patchAutomationJob: (jobId, request) => this.handlePatchSchedule(jobId, request),
       deleteAutomationJob: async (jobId) => this.handleDeleteSchedule(jobId),
@@ -1196,6 +1354,7 @@ export class DaemonServer {
       getRemoteWork: () => Response.json({ work: this.distributedRuntime.listWork() }),
       invokeRemotePeer: (peerId, request) => this.handleInvokeRemotePeer(peerId, request),
       cancelRemoteWork: (workId, request) => this.handleCancelRemoteWork(workId, request),
+      getRemoteNodeHostContract: () => Response.json({ contract: this.distributedRuntime.getNodeHostContract() }),
       getHealth: () => Response.json(getIntegrationHealthSnapshot()),
       getAccounts: async () => {
         const [snapshot, channelAccounts] = await Promise.all([
@@ -1212,6 +1371,37 @@ export class DaemonServer {
       getContinuity: () => Response.json(getIntegrationContinuitySnapshot()),
       getWorktrees: () => Response.json(getIntegrationWorktreeSnapshot()),
       getIntelligence: () => Response.json(getIntegrationIntelligenceSnapshot()),
+      getMemoryDoctor: async () => Response.json(await getMemoryRegistry().doctor()),
+      getMemoryVectorStats: () => Response.json({ vector: getMemoryRegistry().vectorStats() }),
+      postMemoryVectorRebuild: async (request) => {
+        const admin = this.requireAdmin(request);
+        if (admin) return admin;
+        return Response.json({ vector: getMemoryRegistry().rebuildVectors() });
+      },
+      postMemoryEmbeddingDefault: async (request) => {
+        const admin = this.requireAdmin(request);
+        if (admin) return admin;
+        const body = await this.parseJsonBody(request);
+        if (body instanceof Response) return body;
+        const providerId = typeof body.providerId === 'string' ? body.providerId : '';
+        if (!providerId) return Response.json({ error: 'Missing providerId' }, { status: 400 });
+        try {
+          MemoryEmbeddingProviderRegistry.getActive().setDefaultProvider(providerId);
+          return Response.json(await getMemoryRegistry().doctor());
+        } catch (error) {
+          return Response.json({ error: error instanceof Error ? error.message : String(error) }, { status: 400 });
+        }
+      },
+      getVoiceStatus: async () => Response.json(await this.voiceService.getStatus(Boolean(this.configManager.get('ui.voiceEnabled')))),
+      getVoiceProviders: async () => Response.json({ providers: await this.voiceService.getStatus(Boolean(this.configManager.get('ui.voiceEnabled'))).then((status) => status.providers) }),
+      getVoiceVoices: async (url) => Response.json({ voices: await this.voiceService.listVoices(url.searchParams.get('providerId') ?? undefined) }),
+      postVoiceTts: async (request) => this.handleVoiceTts(request),
+      postVoiceStt: async (request) => this.handleVoiceStt(request),
+      postVoiceRealtimeSession: async (request) => this.handleVoiceRealtimeSession(request),
+      getMediaProviders: async () => Response.json({ providers: await this.mediaProviders.status() }),
+      postMediaAnalyze: async (request) => this.handleMediaAnalyze(request),
+      postMediaTransform: async (request) => this.handleMediaTransform(request),
+      postMediaGenerate: async (request) => this.handleMediaGenerate(request),
       getLocalAuth: () => {
         const admin = this.requireAdmin(req);
         if (admin) return admin;
@@ -1329,6 +1519,124 @@ export class DaemonServer {
       setScheduleEnabled: (scheduleId, enabled) => this.handleSetScheduleEnabled(scheduleId, enabled),
       runScheduleNow: (scheduleId) => this.handleRunScheduleNow(scheduleId),
     });
+  }
+
+  private async handleVoiceTts(req: Request): Promise<Response> {
+    const body = await this.parseJsonBody(req);
+    if (body instanceof Response) return body;
+    const text = typeof body.text === 'string' ? body.text : '';
+    if (!text.trim()) return Response.json({ error: 'Missing text' }, { status: 400 });
+    try {
+      const result = await this.voiceService.synthesize(
+        typeof body.providerId === 'string' ? body.providerId : undefined,
+        {
+          text,
+          voiceId: typeof body.voiceId === 'string' ? body.voiceId : undefined,
+          modelId: typeof body.modelId === 'string' ? body.modelId : undefined,
+          format: typeof body.format === 'string' ? body.format : undefined,
+          speed: typeof body.speed === 'number' ? body.speed : undefined,
+          metadata: typeof body.metadata === 'object' && body.metadata !== null ? body.metadata as Record<string, unknown> : {},
+        },
+      );
+      return Response.json(result);
+    } catch (error) {
+      return Response.json({ error: error instanceof Error ? error.message : String(error) }, { status: 404 });
+    }
+  }
+
+  private async handleVoiceStt(req: Request): Promise<Response> {
+    const body = await this.parseJsonBody(req);
+    if (body instanceof Response) return body;
+    if (typeof body.audio !== 'object' || body.audio === null) {
+      return Response.json({ error: 'Missing audio artifact' }, { status: 400 });
+    }
+    try {
+      const result = await this.voiceService.transcribe(
+        typeof body.providerId === 'string' ? body.providerId : undefined,
+        {
+          audio: body.audio as import('../voice/index.ts').VoiceAudioArtifact,
+          language: typeof body.language === 'string' ? body.language : undefined,
+          modelId: typeof body.modelId === 'string' ? body.modelId : undefined,
+          prompt: typeof body.prompt === 'string' ? body.prompt : undefined,
+          metadata: typeof body.metadata === 'object' && body.metadata !== null ? body.metadata as Record<string, unknown> : {},
+        },
+      );
+      return Response.json(result);
+    } catch (error) {
+      return Response.json({ error: error instanceof Error ? error.message : String(error) }, { status: 404 });
+    }
+  }
+
+  private async handleVoiceRealtimeSession(req: Request): Promise<Response> {
+    const body = await this.parseJsonBody(req);
+    if (body instanceof Response) return body;
+    try {
+      const result = await this.voiceService.openRealtimeSession(
+        typeof body.providerId === 'string' ? body.providerId : undefined,
+        {
+          modelId: typeof body.modelId === 'string' ? body.modelId : undefined,
+          voiceId: typeof body.voiceId === 'string' ? body.voiceId : undefined,
+          inputFormat: typeof body.inputFormat === 'string' ? body.inputFormat : undefined,
+          outputFormat: typeof body.outputFormat === 'string' ? body.outputFormat : undefined,
+          instructions: typeof body.instructions === 'string' ? body.instructions : undefined,
+          metadata: typeof body.metadata === 'object' && body.metadata !== null ? body.metadata as Record<string, unknown> : {},
+        },
+      );
+      return Response.json(result, { status: 201 });
+    } catch (error) {
+      return Response.json({ error: error instanceof Error ? error.message : String(error) }, { status: 404 });
+    }
+  }
+
+  private async handleMediaAnalyze(req: Request): Promise<Response> {
+    const body = await this.parseJsonBody(req);
+    if (body instanceof Response) return body;
+    const provider = this.mediaProviders.findProvider('understand', typeof body.providerId === 'string' ? body.providerId : undefined);
+    if (!provider?.analyze) return Response.json({ error: 'No media analysis provider is registered' }, { status: 404 });
+    if (typeof body.artifact !== 'object' || body.artifact === null) {
+      return Response.json({ error: 'Missing media artifact' }, { status: 400 });
+    }
+    return Response.json(await provider.analyze({
+      artifact: body.artifact as import('../media/index.ts').MediaArtifact,
+      prompt: typeof body.prompt === 'string' ? body.prompt : undefined,
+      modelId: typeof body.modelId === 'string' ? body.modelId : undefined,
+      metadata: typeof body.metadata === 'object' && body.metadata !== null ? body.metadata as Record<string, unknown> : {},
+    }));
+  }
+
+  private async handleMediaTransform(req: Request): Promise<Response> {
+    const body = await this.parseJsonBody(req);
+    if (body instanceof Response) return body;
+    const provider = this.mediaProviders.findProvider('transform', typeof body.providerId === 'string' ? body.providerId : undefined);
+    if (!provider?.transform) return Response.json({ error: 'No media transform provider is registered' }, { status: 404 });
+    if (typeof body.artifact !== 'object' || body.artifact === null) {
+      return Response.json({ error: 'Missing media artifact' }, { status: 400 });
+    }
+    const operation = typeof body.operation === 'string' ? body.operation : '';
+    if (!operation) return Response.json({ error: 'Missing media transform operation' }, { status: 400 });
+    return Response.json(await provider.transform({
+      artifact: body.artifact as import('../media/index.ts').MediaArtifact,
+      operation,
+      outputMimeType: typeof body.outputMimeType === 'string' ? body.outputMimeType : undefined,
+      options: typeof body.options === 'object' && body.options !== null ? body.options as Record<string, unknown> : {},
+      metadata: typeof body.metadata === 'object' && body.metadata !== null ? body.metadata as Record<string, unknown> : {},
+    }));
+  }
+
+  private async handleMediaGenerate(req: Request): Promise<Response> {
+    const body = await this.parseJsonBody(req);
+    if (body instanceof Response) return body;
+    const provider = this.mediaProviders.findProvider('generate', typeof body.providerId === 'string' ? body.providerId : undefined);
+    if (!provider?.generate) return Response.json({ error: 'No media generation provider is registered' }, { status: 404 });
+    const prompt = typeof body.prompt === 'string' ? body.prompt : '';
+    if (!prompt.trim()) return Response.json({ error: 'Missing media generation prompt' }, { status: 400 });
+    return Response.json(await provider.generate({
+      prompt,
+      outputMimeType: typeof body.outputMimeType === 'string' ? body.outputMimeType : undefined,
+      modelId: typeof body.modelId === 'string' ? body.modelId : undefined,
+      options: typeof body.options === 'object' && body.options !== null ? body.options as Record<string, unknown> : {},
+      metadata: typeof body.metadata === 'object' && body.metadata !== null ? body.metadata as Record<string, unknown> : {},
+    }));
   }
 
   private async handleLogin(req: Request): Promise<Response> {
@@ -2125,11 +2433,12 @@ export class DaemonServer {
         ? normalizeEverySchedule(every ?? '')
         : kind === 'at'
           ? normalizeAtSchedule(typeof at === 'number' ? at : Date.parse(String(at)))
-          : normalizeCronSchedule(cron ?? '', timezone);
+          : normalizeCronSchedule(cron ?? '', timezone, body.staggerMs ?? body.stagger);
       const name = typeof body.name === 'string' ? body.name : prompt.slice(0, 40);
       const model = typeof body.model === 'string' ? body.model : undefined;
       const provider = typeof body.provider === 'string' ? body.provider : undefined;
       const template = typeof body.template === 'string' ? body.template : undefined;
+      const fallbackModels = readStringList(body.fallbackModels ?? body.fallbacks);
       const enabled = body.enabled !== false;
       const target = typeof body.target === 'object' && body.target !== null
         ? body.target as import('../automation/session-targets.ts').AutomationSessionTarget
@@ -2147,16 +2456,20 @@ export class DaemonServer {
         description: prompt,
         model,
         provider,
+        fallbackModels,
         template,
         target,
-        reasoningEffort: typeof body.reasoningEffort === 'string'
-          ? body.reasoningEffort as import('../automation/session-targets.ts').AutomationExecutionPolicy['reasoningEffort']
-          : undefined,
+        reasoningEffort: readAutomationReasoningEffort(body.reasoningEffort),
+        thinking: typeof body.thinking === 'string' ? body.thinking : undefined,
+        wakeMode: readAutomationWakeMode(body.wakeMode),
         timeoutMs: typeof body.timeoutMs === 'number' ? body.timeoutMs : undefined,
         toolAllowlist: Array.isArray(body.toolAllowlist)
           ? body.toolAllowlist.filter((value): value is string => typeof value === 'string')
           : undefined,
         autoApprove: typeof body.autoApprove === 'boolean' ? body.autoApprove : undefined,
+        allowUnsafeExternalContent: typeof body.allowUnsafeExternalContent === 'boolean' ? body.allowUnsafeExternalContent : undefined,
+        externalContentSource: readExternalContentSource(body.externalContentSource),
+        lightContext: typeof body.lightContext === 'boolean' ? body.lightContext : undefined,
         delivery,
         failure,
         enabled,
@@ -2183,18 +2496,22 @@ export class DaemonServer {
           : undefined,
         model: typeof body.model === 'string' ? body.model : undefined,
         provider: typeof body.provider === 'string' ? body.provider : undefined,
+        fallbackModels: readStringList(body.fallbackModels ?? body.fallbacks),
         template: typeof body.template === 'string' ? body.template : undefined,
         target: typeof body.target === 'object' && body.target !== null
           ? body.target as import('../automation/session-targets.ts').AutomationSessionTarget
           : undefined,
-        reasoningEffort: typeof body.reasoningEffort === 'string'
-          ? body.reasoningEffort as import('../automation/session-targets.ts').AutomationExecutionPolicy['reasoningEffort']
-          : undefined,
+        reasoningEffort: readAutomationReasoningEffort(body.reasoningEffort),
+        thinking: typeof body.thinking === 'string' ? body.thinking : undefined,
+        wakeMode: readAutomationWakeMode(body.wakeMode),
         timeoutMs: typeof body.timeoutMs === 'number' ? body.timeoutMs : undefined,
         toolAllowlist: Array.isArray(body.toolAllowlist)
           ? body.toolAllowlist.filter((value): value is string => typeof value === 'string')
           : undefined,
         autoApprove: typeof body.autoApprove === 'boolean' ? body.autoApprove : undefined,
+        allowUnsafeExternalContent: typeof body.allowUnsafeExternalContent === 'boolean' ? body.allowUnsafeExternalContent : undefined,
+        externalContentSource: readExternalContentSource(body.externalContentSource),
+        lightContext: typeof body.lightContext === 'boolean' ? body.lightContext : undefined,
         delivery: typeof body.delivery === 'object' && body.delivery !== null
           ? body.delivery as Partial<import('../automation/delivery.ts').AutomationDeliveryPolicy>
           : undefined,

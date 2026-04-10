@@ -1,11 +1,13 @@
 import { describe, expect, test } from 'bun:test';
 import {
+  DEFAULT_TOP_OF_HOUR_STAGGER_MS,
   formatEveryInterval,
   getNextAutomationOccurrence,
   normalizeAtSchedule,
   normalizeCronSchedule,
   normalizeEverySchedule,
   parseEveryInterval,
+  resolveStableAutomationCronOffsetMs,
 } from '../../automation/index.ts';
 
 describe('automation schedules', () => {
@@ -32,5 +34,18 @@ describe('automation schedules', () => {
     const schedule = normalizeCronSchedule('0 2 * * *', 'America/Chicago');
     const next = getNextAutomationOccurrence(schedule, new Date('2024-01-15T07:30:00Z').getTime());
     expect(next).toBeGreaterThan(new Date('2024-01-15T07:30:00Z').getTime());
+  });
+
+  test('defaults and applies deterministic top-of-hour cron staggering when a stable id is provided', () => {
+    const schedule = normalizeCronSchedule('0 * * * *', 'UTC');
+    expect(schedule.staggerMs).toBe(DEFAULT_TOP_OF_HOUR_STAGGER_MS);
+
+    const from = new Date('2024-01-15T09:59:30Z').getTime();
+    const baseHour = new Date('2024-01-15T10:00:00Z').getTime();
+    const offset = resolveStableAutomationCronOffsetMs('job-a', DEFAULT_TOP_OF_HOUR_STAGGER_MS);
+
+    expect(getNextAutomationOccurrence(schedule, from)).toBe(baseHour);
+    expect(getNextAutomationOccurrence(schedule, from, 'job-a')).toBe(baseHour + offset);
+    expect(normalizeCronSchedule('0 * * * *', 'UTC', 0).staggerMs).toBe(0);
   });
 });

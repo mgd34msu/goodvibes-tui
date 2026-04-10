@@ -213,6 +213,70 @@ describe('AgentOrchestrator', () => {
       }
     });
 
+    test('injects agent context and reasoning effort into provider requests', async () => {
+      let captured: ChatRequest | null = null;
+      const provider: LLMProvider = {
+        name: 'mock',
+        models: ['mock-model'],
+        chat: mock(async (params: ChatRequest): Promise<ChatResponse> => {
+          captured = params;
+          return {
+            content: 'Task done.',
+            toolCalls: [],
+            usage: { inputTokens: 10, outputTokens: 5 },
+            stopReason: 'end',
+          };
+        }),
+      };
+      const record = makeRecord({
+        context: 'Automation execution context:\n- External content source: webhook',
+        reasoningEffort: 'high',
+      });
+
+      await withMockProvider(provider, () => orchestrator.runAgent(record));
+
+      expect(captured).not.toBeNull();
+      const request = captured as unknown as ChatRequest;
+      expect(request.systemPrompt).toContain('## Context');
+      expect(request.systemPrompt).toContain('External content source: webhook');
+      expect(request.reasoningEffort).toBe('high');
+    });
+
+    test('uses configured fallback models when the primary provider call fails', async () => {
+      const primaryProvider: LLMProvider = {
+        name: 'primary',
+        models: ['primary-model'],
+        chat: mock(async () => {
+          throw new Error('primary unavailable');
+        }),
+      };
+      const fallbackProvider: LLMProvider = {
+        name: 'fallback',
+        models: ['fallback-model'],
+        chat: mock(async (params: ChatRequest): Promise<ChatResponse> => ({
+          content: `Fallback used ${params.model}`,
+          toolCalls: [],
+          usage: { inputTokens: 10, outputTokens: 5 },
+          stopReason: 'end',
+        })),
+      };
+      const reg = getActualRegistry();
+      const origGetForModel = reg.getForModel.bind(reg);
+      const origGetCurrentModel = reg.getCurrentModel.bind(reg);
+      reg.getForModel = mock((modelId: string) => modelId === 'fallback-model' ? fallbackProvider : primaryProvider);
+      reg.getCurrentModel = mock(() => ({ ...MOCK_MODEL, id: 'primary-model', provider: 'primary' }));
+      try {
+        const record = makeRecord({ model: 'primary-model', fallbackModels: ['fallback-model'] });
+        await orchestrator.runAgent(record);
+        expect(record.status).toBe('completed');
+        expect(fallbackProvider.chat).toHaveBeenCalled();
+        expect(record.fullOutput).toContain('Fallback used fallback-model');
+      } finally {
+        reg.getForModel = origGetForModel;
+        reg.getCurrentModel = origGetCurrentModel;
+      }
+    });
+
     test('never throws — all errors captured in record.error', async () => {
       const origWarn = console.warn;
       console.warn = () => {};
