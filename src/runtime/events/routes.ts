@@ -2,7 +2,20 @@
  * RouteEvent — discriminated union covering external route binding lifecycle events.
  */
 
-export const ROUTE_SURFACE_KINDS = ['tui', 'web', 'slack', 'discord', 'ntfy', 'webhook', 'service'] as const;
+export const ROUTE_SURFACE_KINDS = [
+  'tui',
+  'web',
+  'slack',
+  'discord',
+  'ntfy',
+  'webhook',
+  'telegram',
+  'google-chat',
+  'signal',
+  'whatsapp',
+  'imessage',
+  'service',
+] as const;
 export const ROUTE_TARGET_KINDS = ['session', 'run', 'job', 'task', 'message'] as const;
 
 export type RouteSurfaceKind = (typeof ROUTE_SURFACE_KINDS)[number];

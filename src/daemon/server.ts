@@ -21,10 +21,11 @@ import {
 import type { AutomationJob } from '../automation/jobs.ts';
 import { SlackIntegration, DiscordIntegration, DiscordInteractionResponseType, DiscordInteractionType, NtfyIntegration } from '../integrations/index.ts';
 import { ApprovalBroker, ControlPlaneGateway, SharedSessionBroker } from '../control-plane/index.ts';
-import { GatewayMethodCatalog } from '../control-plane/index.ts';
+import { GatewayMethodCatalog, type GatewayMethodDescriptor } from '../control-plane/index.ts';
 import type { SharedApprovalRecord } from '../control-plane/index.ts';
 import {
   BuiltinChannelRuntime,
+  ChannelReplyPipeline,
   ChannelProviderRuntimeManager,
   ChannelPluginRegistry,
   ChannelPolicyManager,
@@ -32,6 +33,7 @@ import {
   SurfaceRegistry,
   type ChannelAccountLifecycleAction,
   type ChannelConversationKind,
+  type ChannelSurface,
 } from '../channels/index.ts';
 import {
   type GenericWebhookAdapterContext,
@@ -58,7 +60,10 @@ import { WatcherRegistry } from '../watchers/index.ts';
 import { type DistributedPeerAuth, getDistributedRuntimeManager } from '../runtime/remote/index.ts';
 import { getMemoryRegistry, MemoryEmbeddingProviderRegistry } from '../state/index.ts';
 import { VoiceService } from '../voice/index.ts';
-import { MediaProviderRegistry } from '../media/index.ts';
+import { ArtifactStore } from '../artifacts/index.ts';
+import { ensureBuiltinMediaProviders, MediaProviderRegistry } from '../media/index.ts';
+import { WebSearchService } from '../web-search/index.ts';
+import { getProviderRuntimeSnapshot, getProviderUsageSnapshot, listProviderRuntimeSnapshots } from '../providers/runtime-snapshot.ts';
 import {
   buildIntegrationHelperReview,
   getIntegrationAutomationSnapshot,
@@ -118,6 +123,48 @@ function readStringList(value: unknown): string[] | undefined {
   return undefined;
 }
 
+function isJsonRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function scopeMatches(granted: string, required: string): boolean {
+  if (granted === '*' || granted === required) return true;
+  if (granted.endsWith(':*')) {
+    return required.startsWith(granted.slice(0, -1));
+  }
+  return false;
+}
+
+function missingScopes(grantedScopes: readonly string[] | undefined, requiredScopes: readonly string[]): string[] {
+  const granted = grantedScopes ?? [];
+  return requiredScopes.filter((required) => !granted.some((entry) => scopeMatches(entry, required)));
+}
+
+function resolveGatewayPathTemplate(
+  template: string,
+  query?: Record<string, unknown>,
+  body?: unknown,
+): { readonly path: string | null; readonly missing: readonly string[] } {
+  const bodyRecord = isJsonRecord(body) ? body : null;
+  const missingParams: string[] = [];
+  const path = template.replace(/\{([^}]+)\}/g, (_full, rawKey: string) => {
+    const key = rawKey.trim();
+    const queryValue = query?.[key];
+    const bodyValue = bodyRecord?.[key];
+    const value = typeof queryValue === 'string' || typeof queryValue === 'number'
+      ? queryValue
+      : typeof bodyValue === 'string' || typeof bodyValue === 'number'
+        ? bodyValue
+        : null;
+    if (value === null) {
+      missingParams.push(key);
+      return `{${key}}`;
+    }
+    return encodeURIComponent(String(value));
+  });
+  return missingParams.length > 0 ? { path: null, missing: missingParams } : { path, missing: [] };
+}
+
 function readAutomationWakeMode(value: unknown): AutomationWakeMode | undefined {
   return value === 'now' || value === 'next-heartbeat' ? value : undefined;
 }
@@ -159,7 +206,7 @@ function readChannelConversationKind(value: unknown): ChannelConversationKind | 
 
 interface PendingSurfaceReply {
   readonly agentId: string;
-  readonly surfaceKind: 'slack' | 'discord' | 'ntfy' | 'webhook';
+  readonly surfaceKind: ChannelSurface;
   readonly task: string;
   readonly createdAt: number;
   readonly sessionId?: string;
@@ -173,6 +220,9 @@ interface PendingSurfaceReply {
   readonly callbackSecret?: string;
   readonly callbackSignature?: 'shared-secret' | 'hmac-sha256';
   readonly callbackCorrelationId?: string;
+  readonly targetAddress?: string;
+  readonly threadId?: string;
+  [key: string]: unknown;
   lastProgressAt?: number;
   lastProgress?: string;
 }
@@ -186,9 +236,22 @@ interface ControlPlaneWebSocketData {
   readonly authToken: string;
   readonly principalId: string;
   readonly principalKind: 'user' | 'bot' | 'service' | 'token';
+  readonly admin: boolean;
   readonly scopes: readonly string[];
   readonly domains: readonly RuntimeEventDomain[];
-  readonly clientKind: 'tui' | 'web' | 'slack' | 'discord' | 'ntfy' | 'daemon' | 'webhook';
+  readonly clientKind:
+    | 'tui'
+    | 'web'
+    | 'slack'
+    | 'discord'
+    | 'ntfy'
+    | 'webhook'
+    | 'telegram'
+    | 'google-chat'
+    | 'signal'
+    | 'whatsapp'
+    | 'imessage'
+    | 'daemon';
   readonly remoteAddress?: string;
   clientId?: string;
 }
@@ -227,13 +290,16 @@ export class DaemonServer {
   private readonly surfaceRegistry: SurfaceRegistry;
   private readonly channelPolicy: ChannelPolicyManager;
   private readonly channelPlugins: ChannelPluginRegistry;
+  private readonly channelReplyPipeline: ChannelReplyPipeline;
   private readonly providerRuntime: ChannelProviderRuntimeManager;
   private readonly builtinChannels: BuiltinChannelRuntime;
   private readonly watcherRegistry: WatcherRegistry;
   private readonly platformServiceManager: PlatformServiceManager;
   private readonly distributedRuntime = getDistributedRuntimeManager();
   private readonly voiceService = VoiceService.getActive();
+  private readonly webSearchService = WebSearchService.getActive();
   private readonly mediaProviders = MediaProviderRegistry.getActive();
+  private readonly artifactStore: ArtifactStore;
   private readonly serviceRegistry: ServiceRegistry;
   private readonly pendingSurfaceReplies = new Map<string, PendingSurfaceReply>();
   private replyPoller: ReturnType<typeof setInterval> | null = null;
@@ -245,6 +311,7 @@ export class DaemonServer {
     this.configManager = _configManager ?? new ConfigManager();
     this.userAuth = config.userAuth ?? new UserAuthManager();
     this.serviceRegistry = new ServiceRegistry();
+    this.artifactStore = ArtifactStore.getActive({ configManager: this.configManager });
     this.platformServiceManager = new PlatformServiceManager(this.configManager);
     // Webhook secrets follow 12-factor app conventions (https://12factor.net/config):
     // prefer explicit config object values (e.g. from a vault-injected object) and
@@ -266,6 +333,11 @@ export class DaemonServer {
     this.surfaceRegistry = SurfaceRegistry.getInstance();
     this.channelPolicy = ChannelPolicyManager.getInstance();
     this.channelPlugins = new ChannelPluginRegistry();
+    this.channelReplyPipeline = new ChannelReplyPipeline({
+      channelPlugins: this.channelPlugins,
+      routeBindings: this.routeBindings,
+      runtimeBus: this.runtimeBus ?? integrationContext?.runtimeBus ?? null,
+    });
     if (integrationContext?.runtimeStore) {
       this.surfaceRegistry.attachRuntime(integrationContext.runtimeStore);
     }
@@ -310,6 +382,7 @@ export class DaemonServer {
       serviceRegistry: this.serviceRegistry,
       buildSurfaceAdapterContext: () => this.buildSurfaceAdapterContext(),
     });
+    ensureBuiltinMediaProviders(this.mediaProviders);
     this.builtinChannels = new BuiltinChannelRuntime({
       configManager: this.configManager,
       serviceRegistry: this.serviceRegistry,
@@ -590,6 +663,7 @@ export class DaemonServer {
   private describeAuthenticatedPrincipal(token: string): {
     principalId: string;
     principalKind: 'user' | 'bot' | 'service' | 'token';
+    admin: boolean;
     scopes: readonly string[];
   } | null {
     if (this.authToken) {
@@ -598,7 +672,8 @@ export class DaemonServer {
       return {
         principalId: 'shared-token',
         principalKind: 'token',
-        scopes: ['read:events', 'read:control-plane', 'write:control-plane'],
+        admin: true,
+        scopes: this.getGrantedGatewayScopes(true),
       };
     }
     if (!token) return null;
@@ -606,11 +681,72 @@ export class DaemonServer {
     if (!session) return null;
     const user = this.userAuth.getUser(session.username);
     if (!user) return null;
+    const admin = user.roles.includes('admin');
     return {
       principalId: user.username,
       principalKind: 'user',
-      scopes: ['read:events', 'read:control-plane', 'write:control-plane'],
+      admin,
+      scopes: this.getGrantedGatewayScopes(admin),
     };
+  }
+
+  private getGrantedGatewayScopes(includeWrite: boolean): readonly string[] {
+    const scopes = new Set(this.gatewayMethods.getAllScopes({ includeWrite }));
+    scopes.add('read:events');
+    scopes.add('read:control-plane');
+    if (includeWrite) scopes.add('write:control-plane');
+    return [...scopes].sort();
+  }
+
+  private validateGatewayInvocation(
+    descriptor: GatewayMethodDescriptor,
+    context?: {
+      readonly principalKind?: 'user' | 'bot' | 'service' | 'token' | 'remote-peer';
+      readonly scopes?: readonly string[];
+      readonly admin?: boolean;
+    },
+  ): { status: number; ok: false; body: Record<string, unknown> } | null {
+    if (descriptor.invokable === false) {
+      return {
+        status: 400,
+        ok: false,
+        body: {
+          error: `Gateway method is cataloged but not invokable through method dispatch: ${descriptor.id}`,
+        },
+      };
+    }
+    if (descriptor.access === 'admin' && !context?.admin) {
+      return {
+        status: 403,
+        ok: false,
+        body: {
+          error: `Gateway method requires admin access: ${descriptor.id}`,
+        },
+      };
+    }
+    if (descriptor.access === 'remote-peer' && context?.principalKind !== 'remote-peer') {
+      return {
+        status: 403,
+        ok: false,
+        body: {
+          error: `Gateway method requires a remote-peer principal: ${descriptor.id}`,
+        },
+      };
+    }
+    const missing = missingScopes(context?.scopes, descriptor.scopes);
+    if (missing.length > 0) {
+      return {
+        status: 403,
+        ok: false,
+        body: {
+          error: `Missing required scope${missing.length === 1 ? '' : 's'} for ${descriptor.id}: ${missing.join(', ')}`,
+          requiredScopes: [...descriptor.scopes],
+          grantedScopes: [...(context?.scopes ?? [])],
+          missingScopes: missing,
+        },
+      };
+    }
+    return null;
   }
 
   private tryUpgradeControlPlaneWebSocket(
@@ -645,6 +781,7 @@ export class DaemonServer {
         principalId: principal.principalId,
         principalKind: principal.principalKind,
         scopes: principal.scopes,
+        admin: principal.admin,
         domains,
         clientKind,
         remoteAddress: req.headers.get('x-forwarded-for') ?? undefined,
@@ -715,12 +852,12 @@ export class DaemonServer {
         ws.send(JSON.stringify({ type: 'auth', ok: false, error: 'Unauthorized' }));
         return;
       }
-      this.controlPlaneGateway.authenticateClient(clientId, {
-        principalId: principal.principalId,
-        principalKind: principal.principalKind,
-        scopes: principal.scopes,
-        ...(typeof frame.label === 'string' ? { label: frame.label } : {}),
-        ...(Array.isArray(frame.capabilities)
+        this.controlPlaneGateway.authenticateClient(clientId, {
+          principalId: principal.principalId,
+          principalKind: principal.principalKind,
+          scopes: principal.scopes,
+          ...(typeof frame.label === 'string' ? { label: frame.label } : {}),
+          ...(Array.isArray(frame.capabilities)
           ? { capabilities: frame.capabilities.filter((value): value is string => typeof value === 'string') }
           : {}),
       });
@@ -764,6 +901,7 @@ export class DaemonServer {
             context: {
               principalId: ws.data.principalId,
               principalKind: ws.data.principalKind,
+              admin: ws.data.admin,
               scopes: ws.data.scopes,
               clientKind: ws.data.clientKind,
             },
@@ -774,6 +912,11 @@ export class DaemonServer {
             path: typeof frame.path === 'string' ? frame.path : '/api/control-plane',
             query: typeof frame.query === 'object' && frame.query !== null ? frame.query as Record<string, unknown> : undefined,
             body: frame.body,
+            context: {
+              principalKind: ws.data.principalKind,
+              admin: ws.data.admin,
+              scopes: ws.data.scopes,
+            },
           });
       ws.send(JSON.stringify({
         type: 'response',
@@ -801,7 +944,17 @@ export class DaemonServer {
     readonly path: string;
     readonly query?: Record<string, unknown>;
     readonly body?: unknown;
+    readonly context?: {
+      readonly principalKind?: 'user' | 'bot' | 'service' | 'token' | 'remote-peer';
+      readonly admin?: boolean;
+      readonly scopes?: readonly string[];
+    };
   }): Promise<{ status: number; ok: boolean; body: unknown }> {
+    const matchedDescriptor = this.gatewayMethods.findByHttpBinding(input.method, input.path);
+    if (matchedDescriptor) {
+      const denied = this.validateGatewayInvocation(matchedDescriptor, input.context);
+      if (denied) return denied;
+    }
     const url = new URL(`http://${this.host}:${this.port}${input.path.startsWith('/') ? input.path : `/${input.path}`}`);
     for (const [key, value] of Object.entries(input.query ?? {})) {
       if (value === undefined || value === null) continue;
@@ -841,7 +994,8 @@ export class DaemonServer {
     readonly body?: unknown;
     readonly context?: {
       readonly principalId?: string;
-      readonly principalKind?: 'user' | 'bot' | 'service' | 'token';
+      readonly principalKind?: 'user' | 'bot' | 'service' | 'token' | 'remote-peer';
+      readonly admin?: boolean;
       readonly scopes?: readonly string[];
       readonly clientKind?: string;
     };
@@ -850,6 +1004,8 @@ export class DaemonServer {
     if (!descriptor) {
       return { status: 404, ok: false, body: { error: `Unknown gateway method: ${input.methodId}` } };
     }
+    const denied = this.validateGatewayInvocation(descriptor, input.context);
+    if (denied) return denied;
     if (this.gatewayMethods.hasHandler(input.methodId)) {
       try {
         const body = await this.gatewayMethods.invoke(input.methodId, {
@@ -859,6 +1015,7 @@ export class DaemonServer {
             authToken: input.authToken,
             principalId: input.context?.principalId,
             principalKind: input.context?.principalKind,
+            admin: input.context?.admin,
             scopes: input.context?.scopes,
             clientKind: input.context?.clientKind,
           },
@@ -875,12 +1032,28 @@ export class DaemonServer {
     if (!descriptor.http) {
       return { status: 501, ok: false, body: { error: `Gateway method is not invokable: ${input.methodId}` } };
     }
+    const resolvedPath = resolveGatewayPathTemplate(descriptor.http.path, input.query, input.body);
+    if (!resolvedPath.path) {
+      return {
+        status: 400,
+        ok: false,
+        body: {
+          error: `Missing path parameter${resolvedPath.missing.length === 1 ? '' : 's'} for ${input.methodId}: ${resolvedPath.missing.join(', ')}`,
+          missing: [...resolvedPath.missing],
+        },
+      };
+    }
     return this.invokeWebSocketControlPlaneCall({
       authToken: input.authToken,
       method: descriptor.http.method,
-      path: descriptor.http.path,
+      path: resolvedPath.path,
       query: input.query,
       body: descriptor.http.method === 'GET' || descriptor.http.method === 'DELETE' ? undefined : input.body,
+      context: {
+        principalKind: input.context?.principalKind,
+        admin: input.context?.admin,
+        scopes: input.context?.scopes,
+      },
     });
   }
 
@@ -915,7 +1088,7 @@ export class DaemonServer {
     if (url.pathname === '/webhook/github' && req.method === 'POST') {
       return this.handleGitHubWebhook(req);
     }
-    if (req.method === 'POST' && url.pathname.startsWith('/webhook/')) {
+    if (url.pathname.startsWith('/webhook/')) {
       const pluginResponse = await this.channelPlugins.handleInbound(url.pathname, req);
       if (pluginResponse) return pluginResponse;
     }
@@ -961,6 +1134,18 @@ export class DaemonServer {
           }),
         });
       },
+      getGatewayEvents: (url) => {
+        const category = url.searchParams.get('category') ?? undefined;
+        const source = url.searchParams.get('source');
+        const domain = url.searchParams.get('domain') ?? undefined;
+        return Response.json({
+          events: this.gatewayMethods.listEvents({
+            ...(category ? { category } : {}),
+            ...(source === 'builtin' || source === 'plugin' ? { source } : {}),
+            ...(domain ? { domain: domain as RuntimeEventDomain } : {}),
+          }),
+        });
+      },
       getGatewayMethod: (methodId) => {
         const method = this.gatewayMethods.get(methodId);
         return method
@@ -974,6 +1159,7 @@ export class DaemonServer {
           const admin = this.requireAdmin(request);
           if (admin) return admin;
         }
+        const principal = this.describeAuthenticatedPrincipal(this.extractAuthToken(request));
         const body = await this.parseOptionalJsonBody(request);
         if (body instanceof Response) return body;
         const payload = body ?? {};
@@ -983,9 +1169,10 @@ export class DaemonServer {
           query: typeof payload.query === 'object' && payload.query !== null ? payload.query as Record<string, unknown> : undefined,
           body: Object.hasOwn(payload, 'body') ? payload.body : payload,
           context: {
-            principalId: this.describeAuthenticatedPrincipal(this.extractAuthToken(request))?.principalId,
-            principalKind: this.describeAuthenticatedPrincipal(this.extractAuthToken(request))?.principalKind,
-            scopes: this.describeAuthenticatedPrincipal(this.extractAuthToken(request))?.scopes,
+            principalId: principal?.principalId,
+            principalKind: principal?.principalKind,
+            admin: principal?.admin,
+            scopes: principal?.scopes,
             clientKind: 'web',
           },
         });
@@ -995,13 +1182,14 @@ export class DaemonServer {
         const url = new URL(request.url);
         const rawDomains = url.searchParams.get('domains');
         const domains = (rawDomains ? rawDomains.split(',').map((value) => value.trim()).filter(Boolean) : []) as RuntimeEventDomain[];
+        const principal = this.describeAuthenticatedPrincipal(this.extractAuthToken(request));
         return this.controlPlaneGateway.createEventStream(request, {
           clientKind: 'web',
           transport: 'sse',
           domains,
-          principalId: this.authToken ? 'shared-token' : this.requireAuthenticatedSession(request)?.username ?? 'session-user',
-          principalKind: this.authToken ? 'token' : 'user',
-          scopes: ['read:events', 'read:control-plane'],
+          principalId: principal?.principalId ?? (this.authToken ? 'shared-token' : this.requireAuthenticatedSession(request)?.username ?? 'session-user'),
+          principalKind: principal?.principalKind ?? (this.authToken ? 'token' : 'user'),
+          scopes: principal?.scopes ?? ['read:events', 'read:control-plane'],
         });
       },
       getAutomationJobs: () => this.handleGetSchedules(),
@@ -1038,6 +1226,53 @@ export class DaemonServer {
         return account
           ? Response.json(account)
           : Response.json({ error: 'Unknown channel account' }, { status: 404 });
+      },
+      getChannelSetupSchema: async (surface, url) => {
+        const schema = await this.channelPlugins.getSetupSchema(
+          surface as import('../channels/index.ts').ChannelSurface,
+          url.searchParams.get('accountId') ?? undefined,
+        );
+        return schema
+          ? Response.json(schema)
+          : Response.json({ error: 'Unknown channel setup schema' }, { status: 404 });
+      },
+      getChannelDoctor: async (surface, url) => {
+        const report = await this.channelPlugins.doctor(
+          surface as import('../channels/index.ts').ChannelSurface,
+          url.searchParams.get('accountId') ?? undefined,
+        );
+        return report
+          ? Response.json(report)
+          : Response.json({ error: 'Unknown channel doctor surface' }, { status: 404 });
+      },
+      getChannelRepairActions: async (surface, url) => Response.json({
+        actions: await this.channelPlugins.listRepairActions(
+          surface as import('../channels/index.ts').ChannelSurface,
+          url.searchParams.get('accountId') ?? undefined,
+        ),
+      }),
+      getChannelLifecycle: async (surface, url) => {
+        const state = await this.channelPlugins.getLifecycleState(
+          surface as import('../channels/index.ts').ChannelSurface,
+          url.searchParams.get('accountId') ?? undefined,
+        );
+        return state
+          ? Response.json(state)
+          : Response.json({ error: 'Unknown channel lifecycle surface' }, { status: 404 });
+      },
+      postChannelLifecycleMigrate: async (surface, request) => {
+        const admin = this.requireAdmin(request);
+        if (admin) return admin;
+        const body = await this.parseOptionalJsonBody(request);
+        if (body instanceof Response) return body;
+        const state = await this.channelPlugins.migrateLifecycle(
+          surface as import('../channels/index.ts').ChannelSurface,
+          typeof body?.accountId === 'string' ? body.accountId : undefined,
+          body ?? undefined,
+        );
+        return state
+          ? Response.json(state)
+          : Response.json({ error: 'Unknown channel lifecycle surface' }, { status: 404 });
       },
       postChannelAccountAction: async (surface, accountId, action, request) => {
         const admin = this.requireAdmin(request);
@@ -1180,6 +1415,48 @@ export class DaemonServer {
         return result
           ? Response.json({ surface, result })
           : Response.json({ error: 'Unable to authorize channel action' }, { status: 404 });
+      },
+      postChannelAllowlistResolve: async (surface, request) => {
+        const admin = this.requireAdmin(request);
+        if (admin) return admin;
+        const body = await this.parseJsonBody(request);
+        if (body instanceof Response) return body;
+        const result = await this.channelPlugins.resolveAllowlist(
+          surface as import('../channels/index.ts').ChannelSurface,
+          {
+            ...(Array.isArray(body.add) ? { add: body.add.filter((value): value is string => typeof value === 'string') } : {}),
+            ...(Array.isArray(body.remove) ? { remove: body.remove.filter((value): value is string => typeof value === 'string') } : {}),
+            ...(typeof body.groupId === 'string' ? { groupId: body.groupId } : {}),
+            ...(typeof body.channelId === 'string' ? { channelId: body.channelId } : {}),
+            ...(typeof body.workspaceId === 'string' ? { workspaceId: body.workspaceId } : {}),
+            ...(body.kind === 'user' || body.kind === 'channel' || body.kind === 'group' ? { kind: body.kind } : {}),
+            ...(typeof body.metadata === 'object' && body.metadata !== null ? { metadata: body.metadata as Record<string, unknown> } : {}),
+          },
+        );
+        return result
+          ? Response.json(result)
+          : Response.json({ error: 'Unknown channel allowlist surface' }, { status: 404 });
+      },
+      postChannelAllowlistEdit: async (surface, request) => {
+        const admin = this.requireAdmin(request);
+        if (admin) return admin;
+        const body = await this.parseJsonBody(request);
+        if (body instanceof Response) return body;
+        const result = await this.channelPlugins.editAllowlist(
+          surface as import('../channels/index.ts').ChannelSurface,
+          {
+            ...(Array.isArray(body.add) ? { add: body.add.filter((value): value is string => typeof value === 'string') } : {}),
+            ...(Array.isArray(body.remove) ? { remove: body.remove.filter((value): value is string => typeof value === 'string') } : {}),
+            ...(typeof body.groupId === 'string' ? { groupId: body.groupId } : {}),
+            ...(typeof body.channelId === 'string' ? { channelId: body.channelId } : {}),
+            ...(typeof body.workspaceId === 'string' ? { workspaceId: body.workspaceId } : {}),
+            ...(body.kind === 'user' || body.kind === 'channel' || body.kind === 'group' ? { kind: body.kind } : {}),
+            ...(typeof body.metadata === 'object' && body.metadata !== null ? { metadata: body.metadata as Record<string, unknown> } : {}),
+          },
+        );
+        return result
+          ? Response.json(result)
+          : Response.json({ error: 'Unknown channel allowlist surface' }, { status: 404 });
       },
       getChannelPolicies: () => Response.json({ policies: this.channelPolicy.listPolicies() }),
       postChannelPolicy: async (surface, request) => {
@@ -1367,6 +1644,19 @@ export class DaemonServer {
           channels: channelAccounts,
         });
       },
+      getProviders: async () => Response.json({ providers: await listProviderRuntimeSnapshots() }),
+      getProvider: async (providerId) => {
+        const provider = await getProviderRuntimeSnapshot(providerId);
+        return provider
+          ? Response.json(provider)
+          : Response.json({ error: 'Unknown provider' }, { status: 404 });
+      },
+      getProviderUsage: async (providerId) => {
+        const usage = await getProviderUsageSnapshot(providerId);
+        return usage
+          ? Response.json(usage)
+          : Response.json({ error: 'Unknown provider' }, { status: 404 });
+      },
       getSettings: () => Response.json(getIntegrationSettingsSnapshot()),
       getContinuity: () => Response.json(getIntegrationContinuitySnapshot()),
       getWorktrees: () => Response.json(getIntegrationWorktreeSnapshot()),
@@ -1376,7 +1666,7 @@ export class DaemonServer {
       postMemoryVectorRebuild: async (request) => {
         const admin = this.requireAdmin(request);
         if (admin) return admin;
-        return Response.json({ vector: getMemoryRegistry().rebuildVectors() });
+        return Response.json({ vector: await getMemoryRegistry().rebuildVectorsAsync() });
       },
       postMemoryEmbeddingDefault: async (request) => {
         const admin = this.requireAdmin(request);
@@ -1398,6 +1688,17 @@ export class DaemonServer {
       postVoiceTts: async (request) => this.handleVoiceTts(request),
       postVoiceStt: async (request) => this.handleVoiceStt(request),
       postVoiceRealtimeSession: async (request) => this.handleVoiceRealtimeSession(request),
+      getWebSearchProviders: async () => Response.json({ providers: await this.webSearchService.getStatus().then((status) => status.providers) }),
+      postWebSearch: async (request) => this.handleWebSearch(request),
+      getArtifacts: () => Response.json({ artifacts: this.artifactStore.list() }),
+      postArtifact: async (request) => this.handleArtifactCreate(request),
+      getArtifact: (artifactId) => {
+        const artifact = this.artifactStore.get(artifactId);
+        return artifact
+          ? Response.json({ artifact })
+          : Response.json({ error: 'Unknown artifact' }, { status: 404 });
+      },
+      getArtifactContent: async (artifactId, request) => this.handleArtifactContent(artifactId, request),
       getMediaProviders: async () => Response.json({ providers: await this.mediaProviders.status() }),
       postMediaAnalyze: async (request) => this.handleMediaAnalyze(request),
       postMediaTransform: async (request) => this.handleMediaTransform(request),
@@ -1593,15 +1894,87 @@ export class DaemonServer {
     if (body instanceof Response) return body;
     const provider = this.mediaProviders.findProvider('understand', typeof body.providerId === 'string' ? body.providerId : undefined);
     if (!provider?.analyze) return Response.json({ error: 'No media analysis provider is registered' }, { status: 404 });
-    if (typeof body.artifact !== 'object' || body.artifact === null) {
+    const artifact = typeof body.artifact === 'object' && body.artifact !== null
+      ? body.artifact as import('../media/index.ts').MediaArtifact
+      : typeof body.artifactId === 'string' && body.artifactId.trim().length > 0
+        ? {
+            artifactId: body.artifactId.trim(),
+            mimeType: 'application/octet-stream',
+            metadata: {},
+          } satisfies import('../media/index.ts').MediaArtifact
+        : null;
+    if (!artifact) {
       return Response.json({ error: 'Missing media artifact' }, { status: 400 });
     }
     return Response.json(await provider.analyze({
-      artifact: body.artifact as import('../media/index.ts').MediaArtifact,
+      artifact,
       prompt: typeof body.prompt === 'string' ? body.prompt : undefined,
       modelId: typeof body.modelId === 'string' ? body.modelId : undefined,
       metadata: typeof body.metadata === 'object' && body.metadata !== null ? body.metadata as Record<string, unknown> : {},
     }));
+  }
+
+  private async handleArtifactCreate(req: Request): Promise<Response> {
+    const body = await this.parseJsonBody(req);
+    if (body instanceof Response) return body;
+    try {
+      const artifact = await this.artifactStore.create({
+        ...(typeof body.kind === 'string' ? { kind: body.kind as import('../artifacts/index.ts').ArtifactKind } : {}),
+        ...(typeof body.mimeType === 'string' ? { mimeType: body.mimeType } : {}),
+        ...(typeof body.filename === 'string' ? { filename: body.filename } : {}),
+        ...(typeof body.dataBase64 === 'string' ? { dataBase64: body.dataBase64 } : {}),
+        ...(typeof body.text === 'string' ? { text: body.text } : {}),
+        ...(typeof body.path === 'string' ? { path: body.path } : {}),
+        ...(typeof body.uri === 'string' ? { uri: body.uri } : {}),
+        ...(typeof body.retentionMs === 'number' ? { retentionMs: body.retentionMs } : {}),
+        ...(typeof body.metadata === 'object' && body.metadata !== null ? { metadata: body.metadata as Record<string, unknown> } : {}),
+      });
+      return Response.json({ artifact }, { status: 201 });
+    } catch (error) {
+      return Response.json({ error: error instanceof Error ? error.message : String(error) }, { status: 400 });
+    }
+  }
+
+  private async handleArtifactContent(artifactId: string, req: Request): Promise<Response> {
+    try {
+      const { record, buffer } = await this.artifactStore.readContent(artifactId);
+      const headers = new Headers({
+        'Content-Type': record.mimeType,
+        'Content-Length': String(buffer.length),
+        'Cache-Control': 'private, max-age=60',
+      });
+      const download = new URL(req.url).searchParams.get('download');
+      if (record.filename && download !== '0') {
+        headers.set('Content-Disposition', `attachment; filename="${record.filename.replace(/"/g, '\\"')}"`);
+      }
+      return new Response(new Uint8Array(buffer), { status: 200, headers });
+    } catch (error) {
+      return Response.json({ error: error instanceof Error ? error.message : String(error) }, { status: 404 });
+    }
+  }
+
+  private async handleWebSearch(req: Request): Promise<Response> {
+    const body = await this.parseJsonBody(req);
+    if (body instanceof Response) return body;
+    const query = typeof body.query === 'string' ? body.query.trim() : '';
+    if (!query) return Response.json({ error: 'Missing query' }, { status: 400 });
+    try {
+      return Response.json(await this.webSearchService.search({
+        query,
+        ...(typeof body.providerId === 'string' ? { providerId: body.providerId } : {}),
+        ...(typeof body.maxResults === 'number' ? { maxResults: body.maxResults } : {}),
+        ...(typeof body.verbosity === 'string' ? { verbosity: body.verbosity as import('../web-search/index.ts').WebSearchVerbosity } : {}),
+        ...(typeof body.region === 'string' ? { region: body.region } : {}),
+        ...(typeof body.safeSearch === 'string' ? { safeSearch: body.safeSearch as import('../web-search/index.ts').WebSearchSafeSearch } : {}),
+        ...(typeof body.timeRange === 'string' ? { timeRange: body.timeRange as import('../web-search/index.ts').WebSearchTimeRange } : {}),
+        ...(typeof body.includeInstantAnswer === 'boolean' ? { includeInstantAnswer: body.includeInstantAnswer } : {}),
+        ...(typeof body.includeEvidence === 'boolean' ? { includeEvidence: body.includeEvidence } : {}),
+        ...(typeof body.evidenceTopN === 'number' ? { evidenceTopN: body.evidenceTopN } : {}),
+        ...(typeof body.evidenceExtract === 'string' ? { evidenceExtract: body.evidenceExtract as import('../tools/fetch/schema.ts').FetchExtractMode } : {}),
+      }));
+    } catch (error) {
+      return Response.json({ error: error instanceof Error ? error.message : String(error) }, { status: 400 });
+    }
   }
 
   private async handleMediaTransform(req: Request): Promise<Response> {
@@ -2580,7 +2953,18 @@ export class DaemonServer {
     req: Request,
     path: string,
     response: Response,
-    clientKind: 'web' | 'slack' | 'discord' | 'ntfy' | 'daemon' | 'webhook' = 'web',
+    clientKind:
+      | 'web'
+      | 'slack'
+      | 'discord'
+      | 'ntfy'
+      | 'webhook'
+      | 'telegram'
+      | 'google-chat'
+      | 'signal'
+      | 'whatsapp'
+      | 'imessage'
+      | 'daemon' = 'web',
   ): Response {
     this.controlPlaneGateway.recordApiRequest({
       method: req.method,
@@ -2611,7 +2995,10 @@ export class DaemonServer {
         routeId: binding.id,
         responseUrl: typeof binding.metadata.responseUrl === 'string' ? binding.metadata.responseUrl : undefined,
         channelId: binding.channelId,
+        targetAddress: binding.channelId ?? binding.externalId,
+        threadId: binding.threadId,
       });
+      this.channelReplyPipeline.trackPending(this.pendingSurfaceReplies.get(input.agentId)!);
       return;
     }
     if (binding.surfaceKind === 'discord' && this.surfaceDeliveryEnabled('discord')) {
@@ -2625,7 +3012,10 @@ export class DaemonServer {
         channelId: binding.channelId,
         applicationId: typeof binding.metadata.applicationId === 'string' ? binding.metadata.applicationId : undefined,
         interactionToken: typeof binding.metadata.interactionToken === 'string' ? binding.metadata.interactionToken : undefined,
+        targetAddress: binding.channelId ?? binding.externalId,
+        threadId: binding.threadId,
       });
+      this.channelReplyPipeline.trackPending(this.pendingSurfaceReplies.get(input.agentId)!);
       return;
     }
     if (binding.surfaceKind === 'ntfy' && this.surfaceDeliveryEnabled('ntfy')) {
@@ -2637,7 +3027,10 @@ export class DaemonServer {
         sessionId: input.sessionId,
         routeId: binding.id,
         topic: binding.channelId ?? binding.externalId,
+        targetAddress: binding.channelId ?? binding.externalId,
+        threadId: binding.threadId,
       });
+      this.channelReplyPipeline.trackPending(this.pendingSurfaceReplies.get(input.agentId)!);
       return;
     }
     if (binding.surfaceKind === 'webhook' && this.surfaceDeliveryEnabled('webhook')) {
@@ -2653,7 +3046,84 @@ export class DaemonServer {
         callbackSignature: typeof binding.metadata.callbackSignature === 'string'
           ? binding.metadata.callbackSignature as PendingSurfaceReply['callbackSignature']
           : undefined,
+        threadId: binding.threadId,
       });
+      this.channelReplyPipeline.trackPending(this.pendingSurfaceReplies.get(input.agentId)!);
+      return;
+    }
+    if (binding.surfaceKind === 'telegram' && this.surfaceDeliveryEnabled('telegram')) {
+      this.pendingSurfaceReplies.set(input.agentId, {
+        agentId: input.agentId,
+        surfaceKind: 'telegram',
+        task: input.task,
+        createdAt: Date.now(),
+        sessionId: input.sessionId,
+        routeId: binding.id,
+        channelId: binding.channelId,
+        targetAddress: binding.channelId ?? binding.externalId,
+        threadId: binding.threadId,
+      });
+      this.channelReplyPipeline.trackPending(this.pendingSurfaceReplies.get(input.agentId)!);
+      return;
+    }
+    if (binding.surfaceKind === 'google-chat' && this.surfaceDeliveryEnabled('google-chat')) {
+      this.pendingSurfaceReplies.set(input.agentId, {
+        agentId: input.agentId,
+        surfaceKind: 'google-chat',
+        task: input.task,
+        createdAt: Date.now(),
+        sessionId: input.sessionId,
+        routeId: binding.id,
+        channelId: binding.channelId,
+        targetAddress: binding.channelId ?? binding.externalId,
+        threadId: binding.threadId,
+      });
+      this.channelReplyPipeline.trackPending(this.pendingSurfaceReplies.get(input.agentId)!);
+      return;
+    }
+    if (binding.surfaceKind === 'signal' && this.surfaceDeliveryEnabled('signal')) {
+      this.pendingSurfaceReplies.set(input.agentId, {
+        agentId: input.agentId,
+        surfaceKind: 'signal',
+        task: input.task,
+        createdAt: Date.now(),
+        sessionId: input.sessionId,
+        routeId: binding.id,
+        channelId: binding.channelId,
+        targetAddress: binding.channelId ?? binding.externalId,
+        threadId: binding.threadId,
+      });
+      this.channelReplyPipeline.trackPending(this.pendingSurfaceReplies.get(input.agentId)!);
+      return;
+    }
+    if (binding.surfaceKind === 'whatsapp' && this.surfaceDeliveryEnabled('whatsapp')) {
+      this.pendingSurfaceReplies.set(input.agentId, {
+        agentId: input.agentId,
+        surfaceKind: 'whatsapp',
+        task: input.task,
+        createdAt: Date.now(),
+        sessionId: input.sessionId,
+        routeId: binding.id,
+        channelId: binding.channelId,
+        targetAddress: binding.channelId ?? binding.externalId,
+        threadId: binding.threadId,
+      });
+      this.channelReplyPipeline.trackPending(this.pendingSurfaceReplies.get(input.agentId)!);
+      return;
+    }
+    if (binding.surfaceKind === 'imessage' && this.surfaceDeliveryEnabled('imessage')) {
+      this.pendingSurfaceReplies.set(input.agentId, {
+        agentId: input.agentId,
+        surfaceKind: 'imessage',
+        task: input.task,
+        createdAt: Date.now(),
+        sessionId: input.sessionId,
+        routeId: binding.id,
+        channelId: binding.channelId,
+        targetAddress: binding.channelId ?? binding.externalId,
+        threadId: binding.threadId,
+      });
+      this.channelReplyPipeline.trackPending(this.pendingSurfaceReplies.get(input.agentId)!);
     }
   }
 
@@ -2677,6 +3147,7 @@ export class DaemonServer {
       callbackCorrelationId: input.callbackCorrelationId,
       callbackSignature: input.callbackSignature,
     });
+    this.channelReplyPipeline.trackPending(this.pendingSurfaceReplies.get(input.agentId)!);
   }
 
   private parseSurfaceControlCommand(text: string): { readonly action: 'status' | 'cancel' | 'retry'; readonly id: string } | null {
@@ -2827,7 +3298,9 @@ export class DaemonServer {
     return this.automationManager.listJobs().find((job) => job.id === id || job.id.startsWith(id));
   }
 
-  private surfaceDeliveryEnabled(surface: 'slack' | 'discord' | 'ntfy' | 'webhook'): boolean {
+  private surfaceDeliveryEnabled(
+    surface: 'slack' | 'discord' | 'ntfy' | 'webhook' | 'telegram' | 'google-chat' | 'signal' | 'whatsapp' | 'imessage',
+  ): boolean {
     if (surface === 'slack') {
       return Boolean(this.configManager.get('surfaces.slack.enabled') || process.env.SLACK_BOT_TOKEN || process.env.SLACK_APP_TOKEN || process.env.SLACK_WEBHOOK_URL);
     }
@@ -2837,30 +3310,39 @@ export class DaemonServer {
     if (surface === 'webhook') {
       return Boolean(this.configManager.get('surfaces.webhook.enabled') || this.configManager.get('surfaces.webhook.defaultTarget'));
     }
-    return Boolean(this.configManager.get('surfaces.ntfy.enabled') || this.configManager.get('surfaces.ntfy.topic') || process.env.NTFY_ACCESS_TOKEN);
+    if (surface === 'ntfy') {
+      return Boolean(this.configManager.get('surfaces.ntfy.enabled') || this.configManager.get('surfaces.ntfy.topic') || process.env.NTFY_ACCESS_TOKEN);
+    }
+    const surfaces = this.configManager.getCategory('surfaces');
+    if (surface === 'telegram') {
+      return Boolean(surfaces.telegram.enabled || surfaces.telegram.botToken || surfaces.telegram.defaultChatId || process.env.TELEGRAM_BOT_TOKEN);
+    }
+    if (surface === 'google-chat') {
+      return Boolean(surfaces.googleChat.enabled || surfaces.googleChat.webhookUrl || surfaces.googleChat.spaceId || process.env.GOOGLE_CHAT_WEBHOOK_URL);
+    }
+    if (surface === 'signal') {
+      return Boolean(surfaces.signal.enabled || surfaces.signal.bridgeUrl || surfaces.signal.account || process.env.SIGNAL_BRIDGE_TOKEN);
+    }
+    if (surface === 'whatsapp') {
+      return Boolean(surfaces.whatsapp.enabled || surfaces.whatsapp.accessToken || surfaces.whatsapp.phoneNumberId || process.env.WHATSAPP_ACCESS_TOKEN);
+    }
+    return Boolean(surfaces.imessage.enabled || surfaces.imessage.bridgeUrl || surfaces.imessage.account || process.env.IMESSAGE_BRIDGE_TOKEN);
   }
 
   private async pollPendingSurfaceReplies(): Promise<void> {
     if (this.pendingSurfaceReplies.size === 0) return;
     const completed: string[] = [];
     for (const pending of this.pendingSurfaceReplies.values()) {
+      if (!this.channelReplyPipeline.has(pending.agentId)) {
+        completed.push(pending.agentId);
+        continue;
+      }
       const record = this.agentManager.getStatus(pending.agentId);
       if (record && (record.status === 'pending' || record.status === 'running')) {
         const progress = record.progress ?? record.streamingContent;
         if (progress && progress !== pending.lastProgress && (Date.now() - (pending.lastProgressAt ?? 0)) >= 10_000) {
           try {
-            const delivered = await this.channelPlugins.deliverProgress(pending.surfaceKind, {
-              ...pending,
-              lastProgress: progress,
-              lastProgressAt: Date.now(),
-            }, progress);
-            if (!delivered) {
-              await this.deliverSurfaceProgress({
-                ...pending,
-                lastProgress: progress,
-                lastProgressAt: Date.now(),
-              }, progress);
-            }
+            await this.channelReplyPipeline.deliverProgress(pending.agentId, progress, true);
             pending.lastProgress = progress;
             pending.lastProgressAt = Date.now();
           } catch (error) {
@@ -2887,18 +3369,7 @@ export class DaemonServer {
         });
       }
       try {
-        const delivered = await this.channelPlugins.deliverReply(pending.surfaceKind, pending, message);
-        if (!delivered) {
-          if (pending.surfaceKind === 'slack') {
-            await this.deliverSlackAgentReply(pending, message);
-          } else if (pending.surfaceKind === 'discord') {
-            await this.deliverDiscordAgentReply(pending, message);
-          } else if (pending.surfaceKind === 'ntfy') {
-            await this.deliverNtfyAgentReply(pending, message);
-          } else if (pending.surfaceKind === 'webhook') {
-            await this.deliverWebhookAgentReply(pending, message);
-          }
-        }
+        await this.channelReplyPipeline.deliverFinal(pending.agentId, message);
       } catch (error) {
         logger.warn('DaemonServer: surface reply delivery failed', {
           surface: pending.surfaceKind,

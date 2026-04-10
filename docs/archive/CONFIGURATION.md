@@ -265,7 +265,18 @@ API keys can be stored encrypted on disk instead of in environment variables:
 
 Secrets are stored at `~/.goodvibes/tui/secrets.enc` using AES-256-GCM encryption. The encryption key is derived from your machine hostname and OS username — secrets encrypted on one machine cannot be decrypted on another.
 
-**Resolution order:** environment variable → encrypted secrets store → not found.
+**Resolution order:** environment variable → encrypted secrets store or provider-backed SecretRef → not found.
+
+The encrypted store can also hold references into external secret managers:
+
+```
+/secrets link OPENAI_API_KEY bw://GoodVibes%20OpenAI/password?sessionEnv=BW_SESSION
+/secrets link SLACK_BOT_TOKEN vaultwarden://GoodVibes%20Slack/password?server=https%3A%2F%2Fvault.example.test
+/secrets link STRIPE_TOKEN bws://00000000-0000-0000-0000-000000000000/value?accessTokenEnv=BWS_ACCESS_TOKEN
+/secrets link OPENAI_API_KEY op://Private/GoodVibes%20OpenAI/API%20Key
+```
+
+Use `/secrets providers` for the full provider list and `/secrets test <secret-ref>` to validate a reference without printing the resolved value.
 
 ## System Prompt
 

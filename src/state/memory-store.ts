@@ -280,6 +280,10 @@ export class MemoryRegistry {
     return this.store.rebuildVectorIndex();
   }
 
+  async rebuildVectorsAsync(): Promise<MemoryVectorStats> {
+    return this.store.rebuildVectorIndexAsync();
+  }
+
   vectorStats(): MemoryVectorStats {
     return this.store.vectorStats();
   }
@@ -345,6 +349,7 @@ export class MemoryStore {
   private sqlite: SQLiteStore;
   private vectorIndex: SqliteVecMemoryIndex | null;
   private ready = false;
+  private rebuildVectorIndexPromise: Promise<MemoryVectorStats> | null = null;
 
   constructor(dbPath?: string, options: MemoryStoreOptions = {}) {
     this.sqlite = new SQLiteStore(dbPath);
@@ -800,6 +805,26 @@ export class MemoryStore {
     const records = this.allRecords();
     this.vectorIndex?.sync(records);
     return this.vectorStats();
+  }
+
+  async rebuildVectorIndexAsync(): Promise<MemoryVectorStats> {
+    if (!this.ready) return this.vectorStats();
+    if (!this.rebuildVectorIndexPromise) {
+      this.rebuildVectorIndexPromise = (async () => {
+        try {
+          const records = this.allRecords();
+          if (this.vectorIndex?.syncAsync) {
+            await this.vectorIndex.syncAsync(records, { force: true });
+          } else {
+            this.vectorIndex?.sync(records);
+          }
+          return this.vectorStats();
+        } finally {
+          this.rebuildVectorIndexPromise = null;
+        }
+      })();
+    }
+    return this.rebuildVectorIndexPromise;
   }
 
   vectorStats(): MemoryVectorStats {

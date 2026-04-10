@@ -67,10 +67,28 @@ describe('new runtime event domains', () => {
   });
 
   test('event vocabularies cover all first-class GoodVibes surfaces', () => {
-    expect([...ROUTE_SURFACE_KINDS]).toEqual(['tui', 'web', 'slack', 'discord', 'ntfy', 'webhook', 'service']);
+    expect([...ROUTE_SURFACE_KINDS]).toEqual([
+      'tui',
+      'web',
+      'slack',
+      'discord',
+      'ntfy',
+      'webhook',
+      'telegram',
+      'google-chat',
+      'signal',
+      'whatsapp',
+      'imessage',
+      'service',
+    ]);
     expect([...SURFACE_KINDS]).toEqual([...ROUTE_SURFACE_KINDS]);
     expect([...CONTROL_PLANE_CLIENT_KINDS]).toContain('daemon');
     expect([...CONTROL_PLANE_CLIENT_KINDS]).toContain('service');
+    expect([...CONTROL_PLANE_CLIENT_KINDS]).toContain('telegram');
+    expect([...CONTROL_PLANE_CLIENT_KINDS]).toContain('google-chat');
+    expect([...CONTROL_PLANE_CLIENT_KINDS]).toContain('signal');
+    expect([...CONTROL_PLANE_CLIENT_KINDS]).toContain('whatsapp');
+    expect([...CONTROL_PLANE_CLIENT_KINDS]).toContain('imessage');
     expect([...CONTROL_PLANE_TRANSPORT_KINDS]).toContain('ws');
     expect([...CONTROL_PLANE_TRANSPORT_KINDS]).toContain('websocket');
 

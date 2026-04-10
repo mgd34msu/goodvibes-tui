@@ -646,6 +646,29 @@ describe('fetch tool - body_type and headers', () => {
     expect(echo.headers['content-type']).toContain('application/json');
   });
 
+  test('body_data + body_type form URL-encodes form fields', async () => {
+    const result = await fetchTool.execute({
+      urls: [{
+        url: `${base}/echo`,
+        method: 'POST',
+        body_type: 'form',
+        body_data: {
+          q: 'duck duck go',
+          region: 'us-en',
+          safe: '-1',
+        },
+        extract: 'json',
+      }],
+    });
+    expect(result.success).toBe(true);
+    const out = JSON.parse(result.output!);
+    const echo = JSON.parse(out.results[0].content);
+    expect(echo.headers['content-type']).toContain('application/x-www-form-urlencoded');
+    expect(echo.body).toContain('q=duck+duck+go');
+    expect(echo.body).toContain('region=us-en');
+    expect(echo.body).toContain('safe=-1');
+  });
+
   test('explicit Content-Type header is not overridden by body_type', async () => {
     const result = await fetchTool.execute({
       urls: [{

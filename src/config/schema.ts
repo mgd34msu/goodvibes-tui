@@ -64,6 +64,7 @@ export interface SlackSurfaceConfig {
   appToken: string;
   defaultChannel: string;
   workspaceId: string;
+  setupVersion: number;
 }
 
 export interface DiscordSurfaceConfig {
@@ -73,6 +74,7 @@ export interface DiscordSurfaceConfig {
   applicationId: string;
   defaultChannelId: string;
   guildId: string;
+  setupVersion: number;
 }
 
 export interface NtfySurfaceConfig {
@@ -81,6 +83,7 @@ export interface NtfySurfaceConfig {
   topic: string;
   token: string;
   defaultPriority: number;
+  setupVersion: number;
 }
 
 export interface WebhookSurfaceConfig {
@@ -88,6 +91,55 @@ export interface WebhookSurfaceConfig {
   defaultTarget: string;
   timeoutMs: number;
   secret: string;
+  setupVersion: number;
+}
+
+export interface TelegramSurfaceConfig {
+  enabled: boolean;
+  botToken: string;
+  webhookSecret: string;
+  defaultChatId: string;
+  botUsername: string;
+  mode: 'webhook' | 'polling';
+  setupVersion: number;
+}
+
+export interface GoogleChatSurfaceConfig {
+  enabled: boolean;
+  webhookUrl: string;
+  verificationToken: string;
+  appId: string;
+  spaceId: string;
+  setupVersion: number;
+}
+
+export interface SignalSurfaceConfig {
+  enabled: boolean;
+  bridgeUrl: string;
+  account: string;
+  token: string;
+  defaultRecipient: string;
+  setupVersion: number;
+}
+
+export interface WhatsAppSurfaceConfig {
+  enabled: boolean;
+  provider: 'meta-cloud' | 'bridge';
+  accessToken: string;
+  verifyToken: string;
+  phoneNumberId: string;
+  businessAccountId: string;
+  defaultRecipient: string;
+  setupVersion: number;
+}
+
+export interface IMessageSurfaceConfig {
+  enabled: boolean;
+  bridgeUrl: string;
+  account: string;
+  token: string;
+  defaultChatId: string;
+  setupVersion: number;
 }
 
 export interface SurfacesConfig {
@@ -95,6 +147,11 @@ export interface SurfacesConfig {
   discord: DiscordSurfaceConfig;
   ntfy: NtfySurfaceConfig;
   webhook: WebhookSurfaceConfig;
+  telegram: TelegramSurfaceConfig;
+  googleChat: GoogleChatSurfaceConfig;
+  signal: SignalSurfaceConfig;
+  whatsapp: WhatsAppSurfaceConfig;
+  imessage: IMessageSurfaceConfig;
 }
 
 export interface WatchersConfig {
@@ -128,6 +185,7 @@ export interface GoodVibesConfig {
     reasoningEffort: 'instant' | 'low' | 'medium' | 'high'; // default: 'medium'
     model: string;              // default: 'openrouter/free'
     provider: string;           // default: 'openrouter'
+    embeddingProvider: string;  // default: 'hashed-local'
     systemPromptFile: string;   // default: ''
   };
   behavior: {
@@ -242,6 +300,7 @@ export type ConfigKey =
   | 'provider.reasoningEffort'
   | 'provider.model'
   | 'provider.provider'
+  | 'provider.embeddingProvider'
   | 'provider.systemPromptFile'
   | 'behavior.autoApprove'
   | 'behavior.autoCompactThreshold'
@@ -344,6 +403,34 @@ export type ConfigKey =
   | 'surfaces.webhook.defaultTarget'
   | 'surfaces.webhook.timeoutMs'
   | 'surfaces.webhook.secret'
+  | 'surfaces.telegram.enabled'
+  | 'surfaces.telegram.botToken'
+  | 'surfaces.telegram.webhookSecret'
+  | 'surfaces.telegram.defaultChatId'
+  | 'surfaces.telegram.botUsername'
+  | 'surfaces.telegram.mode'
+  | 'surfaces.googleChat.enabled'
+  | 'surfaces.googleChat.webhookUrl'
+  | 'surfaces.googleChat.verificationToken'
+  | 'surfaces.googleChat.appId'
+  | 'surfaces.googleChat.spaceId'
+  | 'surfaces.signal.enabled'
+  | 'surfaces.signal.bridgeUrl'
+  | 'surfaces.signal.account'
+  | 'surfaces.signal.token'
+  | 'surfaces.signal.defaultRecipient'
+  | 'surfaces.whatsapp.enabled'
+  | 'surfaces.whatsapp.provider'
+  | 'surfaces.whatsapp.accessToken'
+  | 'surfaces.whatsapp.verifyToken'
+  | 'surfaces.whatsapp.phoneNumberId'
+  | 'surfaces.whatsapp.businessAccountId'
+  | 'surfaces.whatsapp.defaultRecipient'
+  | 'surfaces.imessage.enabled'
+  | 'surfaces.imessage.bridgeUrl'
+  | 'surfaces.imessage.account'
+  | 'surfaces.imessage.token'
+  | 'surfaces.imessage.defaultChatId'
   | 'watchers.enabled'
   | 'watchers.pollIntervalMs'
   | 'watchers.heartbeatIntervalMs'
@@ -360,7 +447,7 @@ export const CONFIG_KEYS = new Set<string>([
   'display.stream', 'display.lineNumbers', 'display.collapseThreshold', 'display.theme',
   'display.showThinking', 'display.showReasoningSummary', 'display.showTokenSpeed',
   'display.showToolPreview', 'provider.reasoningEffort', 'provider.model',
-  'provider.provider', 'provider.systemPromptFile', 'behavior.autoApprove',
+  'provider.provider', 'provider.embeddingProvider', 'provider.systemPromptFile', 'behavior.autoApprove',
   'behavior.autoCompactThreshold', 'behavior.staleContextWarnings', 'behavior.saveHistory', 'behavior.notifyOnComplete',
   'behavior.suggestAlternativeOnProviderFail', 'behavior.hitlMode', 'behavior.returnContextMode', 'behavior.guidanceMode', 'storage.secretPolicy', 'permissions.mode',
   'permissions.tools.read', 'permissions.tools.write', 'permissions.tools.edit',
@@ -387,7 +474,18 @@ export const CONFIG_KEYS = new Set<string>([
   'surfaces.discord.guildId', 'surfaces.ntfy.enabled', 'surfaces.ntfy.baseUrl',
   'surfaces.ntfy.topic', 'surfaces.ntfy.token', 'surfaces.ntfy.defaultPriority',
   'surfaces.webhook.enabled', 'surfaces.webhook.defaultTarget',
-  'surfaces.webhook.timeoutMs', 'surfaces.webhook.secret', 'watchers.enabled',
+  'surfaces.webhook.timeoutMs', 'surfaces.webhook.secret',
+  'surfaces.telegram.enabled', 'surfaces.telegram.botToken', 'surfaces.telegram.webhookSecret',
+  'surfaces.telegram.defaultChatId', 'surfaces.telegram.botUsername', 'surfaces.telegram.mode',
+  'surfaces.googleChat.enabled', 'surfaces.googleChat.webhookUrl', 'surfaces.googleChat.verificationToken',
+  'surfaces.googleChat.appId', 'surfaces.googleChat.spaceId',
+  'surfaces.signal.enabled', 'surfaces.signal.bridgeUrl', 'surfaces.signal.account',
+  'surfaces.signal.token', 'surfaces.signal.defaultRecipient',
+  'surfaces.whatsapp.enabled', 'surfaces.whatsapp.provider', 'surfaces.whatsapp.accessToken',
+  'surfaces.whatsapp.verifyToken', 'surfaces.whatsapp.phoneNumberId',
+  'surfaces.whatsapp.businessAccountId', 'surfaces.whatsapp.defaultRecipient',
+  'surfaces.imessage.enabled', 'surfaces.imessage.bridgeUrl', 'surfaces.imessage.account',
+  'surfaces.imessage.token', 'surfaces.imessage.defaultChatId', 'watchers.enabled',
   'watchers.pollIntervalMs', 'watchers.heartbeatIntervalMs', 'watchers.recoveryWindowMinutes',
   'service.enabled', 'service.autostart', 'service.restartOnFailure', 'service.platform',
   'service.serviceName', 'service.logPath',
@@ -411,6 +509,7 @@ export type ConfigValue<K extends ConfigKey> =
   K extends 'provider.reasoningEffort' ? 'instant' | 'low' | 'medium' | 'high' :
   K extends 'provider.model' ? string :
   K extends 'provider.provider' ? string :
+  K extends 'provider.embeddingProvider' ? string :
   K extends 'provider.systemPromptFile' ? string :
   K extends 'behavior.autoApprove' ? boolean :
   K extends 'behavior.autoCompactThreshold' ? number :
@@ -513,6 +612,34 @@ export type ConfigValue<K extends ConfigKey> =
   K extends 'surfaces.webhook.defaultTarget' ? string :
   K extends 'surfaces.webhook.timeoutMs' ? number :
   K extends 'surfaces.webhook.secret' ? string :
+  K extends 'surfaces.telegram.enabled' ? boolean :
+  K extends 'surfaces.telegram.botToken' ? string :
+  K extends 'surfaces.telegram.webhookSecret' ? string :
+  K extends 'surfaces.telegram.defaultChatId' ? string :
+  K extends 'surfaces.telegram.botUsername' ? string :
+  K extends 'surfaces.telegram.mode' ? 'webhook' | 'polling' :
+  K extends 'surfaces.googleChat.enabled' ? boolean :
+  K extends 'surfaces.googleChat.webhookUrl' ? string :
+  K extends 'surfaces.googleChat.verificationToken' ? string :
+  K extends 'surfaces.googleChat.appId' ? string :
+  K extends 'surfaces.googleChat.spaceId' ? string :
+  K extends 'surfaces.signal.enabled' ? boolean :
+  K extends 'surfaces.signal.bridgeUrl' ? string :
+  K extends 'surfaces.signal.account' ? string :
+  K extends 'surfaces.signal.token' ? string :
+  K extends 'surfaces.signal.defaultRecipient' ? string :
+  K extends 'surfaces.whatsapp.enabled' ? boolean :
+  K extends 'surfaces.whatsapp.provider' ? 'meta-cloud' | 'bridge' :
+  K extends 'surfaces.whatsapp.accessToken' ? string :
+  K extends 'surfaces.whatsapp.verifyToken' ? string :
+  K extends 'surfaces.whatsapp.phoneNumberId' ? string :
+  K extends 'surfaces.whatsapp.businessAccountId' ? string :
+  K extends 'surfaces.whatsapp.defaultRecipient' ? string :
+  K extends 'surfaces.imessage.enabled' ? boolean :
+  K extends 'surfaces.imessage.bridgeUrl' ? string :
+  K extends 'surfaces.imessage.account' ? string :
+  K extends 'surfaces.imessage.token' ? string :
+  K extends 'surfaces.imessage.defaultChatId' ? string :
   K extends 'watchers.enabled' ? boolean :
   K extends 'watchers.pollIntervalMs' ? number :
   K extends 'watchers.heartbeatIntervalMs' ? number :
@@ -540,6 +667,7 @@ export const DEFAULT_CONFIG: GoodVibesConfig = {
     reasoningEffort: 'medium',
     model: 'openrouter/free',
     provider: 'openrouter',
+    embeddingProvider: 'hashed-local',
     systemPromptFile: '',
   },
   behavior: {
@@ -635,6 +763,7 @@ export const DEFAULT_CONFIG: GoodVibesConfig = {
       appToken: '',
       defaultChannel: '',
       workspaceId: '',
+      setupVersion: 0,
     },
     discord: {
       enabled: false,
@@ -643,6 +772,7 @@ export const DEFAULT_CONFIG: GoodVibesConfig = {
       applicationId: '',
       defaultChannelId: '',
       guildId: '',
+      setupVersion: 0,
     },
     ntfy: {
       enabled: false,
@@ -650,12 +780,57 @@ export const DEFAULT_CONFIG: GoodVibesConfig = {
       topic: '',
       token: '',
       defaultPriority: 3,
+      setupVersion: 0,
     },
     webhook: {
       enabled: false,
       defaultTarget: '',
       timeoutMs: 10_000,
       secret: '',
+      setupVersion: 0,
+    },
+    telegram: {
+      enabled: false,
+      botToken: '',
+      webhookSecret: '',
+      defaultChatId: '',
+      botUsername: '',
+      mode: 'webhook',
+      setupVersion: 0,
+    },
+    googleChat: {
+      enabled: false,
+      webhookUrl: '',
+      verificationToken: '',
+      appId: '',
+      spaceId: '',
+      setupVersion: 0,
+    },
+    signal: {
+      enabled: false,
+      bridgeUrl: '',
+      account: '',
+      token: '',
+      defaultRecipient: '',
+      setupVersion: 0,
+    },
+    whatsapp: {
+      enabled: false,
+      provider: 'meta-cloud',
+      accessToken: '',
+      verifyToken: '',
+      phoneNumberId: '',
+      businessAccountId: '',
+      defaultRecipient: '',
+      setupVersion: 0,
+    },
+    imessage: {
+      enabled: false,
+      bridgeUrl: '',
+      account: '',
+      token: '',
+      defaultChatId: '',
+      setupVersion: 0,
     },
   },
   watchers: {
@@ -779,6 +954,12 @@ export const CONFIG_SCHEMA: ConfigSetting[] = [
     type: 'string',
     default: 'openrouter',
     description: 'Default provider name',
+  },
+  {
+    key: 'provider.embeddingProvider',
+    type: 'string',
+    default: 'hashed-local',
+    description: 'Default memory embedding provider',
   },
   {
     key: 'provider.systemPromptFile',
@@ -1318,6 +1499,176 @@ export const CONFIG_SCHEMA: ConfigSetting[] = [
     type: 'string',
     default: '',
     description: 'Shared secret used to sign or verify webhook payloads',
+  },
+  {
+    key: 'surfaces.telegram.enabled',
+    type: 'boolean',
+    default: false,
+    description: 'Enable the Telegram surface contract',
+  },
+  {
+    key: 'surfaces.telegram.botToken',
+    type: 'string',
+    default: '',
+    description: 'Telegram bot token used for bot setup and delivery',
+  },
+  {
+    key: 'surfaces.telegram.webhookSecret',
+    type: 'string',
+    default: '',
+    description: 'Telegram webhook secret token used to verify inbound callbacks',
+  },
+  {
+    key: 'surfaces.telegram.defaultChatId',
+    type: 'string',
+    default: '',
+    description: 'Default Telegram chat, group, or channel id for delivery',
+  },
+  {
+    key: 'surfaces.telegram.botUsername',
+    type: 'string',
+    default: '',
+    description: 'Telegram bot username used for targeting and setup hints',
+  },
+  {
+    key: 'surfaces.telegram.mode',
+    type: 'enum',
+    default: 'webhook',
+    description: 'Telegram ingress mode: webhook or polling',
+    enumValues: ['webhook', 'polling'],
+  },
+  {
+    key: 'surfaces.googleChat.enabled',
+    type: 'boolean',
+    default: false,
+    description: 'Enable the Google Chat surface contract',
+  },
+  {
+    key: 'surfaces.googleChat.webhookUrl',
+    type: 'string',
+    default: '',
+    description: 'Google Chat outbound webhook or app callback URL',
+  },
+  {
+    key: 'surfaces.googleChat.verificationToken',
+    type: 'string',
+    default: '',
+    description: 'Google Chat verification token or shared secret',
+  },
+  {
+    key: 'surfaces.googleChat.appId',
+    type: 'string',
+    default: '',
+    description: 'Google Chat app identifier used for setup and diagnostics',
+  },
+  {
+    key: 'surfaces.googleChat.spaceId',
+    type: 'string',
+    default: '',
+    description: 'Default Google Chat space identifier for routing',
+  },
+  {
+    key: 'surfaces.signal.enabled',
+    type: 'boolean',
+    default: false,
+    description: 'Enable the Signal bridge surface contract',
+  },
+  {
+    key: 'surfaces.signal.bridgeUrl',
+    type: 'string',
+    default: '',
+    description: 'Signal bridge base URL used for health checks and delivery',
+  },
+  {
+    key: 'surfaces.signal.account',
+    type: 'string',
+    default: '',
+    description: 'Signal account or device identifier paired with the bridge',
+  },
+  {
+    key: 'surfaces.signal.token',
+    type: 'string',
+    default: '',
+    description: 'Signal bridge access token',
+  },
+  {
+    key: 'surfaces.signal.defaultRecipient',
+    type: 'string',
+    default: '',
+    description: 'Default Signal recipient or group identifier for routing',
+  },
+  {
+    key: 'surfaces.whatsapp.enabled',
+    type: 'boolean',
+    default: false,
+    description: 'Enable the WhatsApp surface contract',
+  },
+  {
+    key: 'surfaces.whatsapp.provider',
+    type: 'enum',
+    default: 'meta-cloud',
+    description: 'WhatsApp provider mode: Meta Cloud API or bridge',
+    enumValues: ['meta-cloud', 'bridge'],
+  },
+  {
+    key: 'surfaces.whatsapp.accessToken',
+    type: 'string',
+    default: '',
+    description: 'WhatsApp provider access token',
+  },
+  {
+    key: 'surfaces.whatsapp.verifyToken',
+    type: 'string',
+    default: '',
+    description: 'WhatsApp webhook verify token or shared secret',
+  },
+  {
+    key: 'surfaces.whatsapp.phoneNumberId',
+    type: 'string',
+    default: '',
+    description: 'WhatsApp phone number id used for provider setup',
+  },
+  {
+    key: 'surfaces.whatsapp.businessAccountId',
+    type: 'string',
+    default: '',
+    description: 'WhatsApp business account id used for provider setup',
+  },
+  {
+    key: 'surfaces.whatsapp.defaultRecipient',
+    type: 'string',
+    default: '',
+    description: 'Default WhatsApp recipient or chat id for routing',
+  },
+  {
+    key: 'surfaces.imessage.enabled',
+    type: 'boolean',
+    default: false,
+    description: 'Enable the iMessage bridge surface contract',
+  },
+  {
+    key: 'surfaces.imessage.bridgeUrl',
+    type: 'string',
+    default: '',
+    description: 'iMessage bridge base URL used for health checks and delivery',
+  },
+  {
+    key: 'surfaces.imessage.account',
+    type: 'string',
+    default: '',
+    description: 'iMessage account identifier used by the bridge',
+  },
+  {
+    key: 'surfaces.imessage.token',
+    type: 'string',
+    default: '',
+    description: 'iMessage bridge access token',
+  },
+  {
+    key: 'surfaces.imessage.defaultChatId',
+    type: 'string',
+    default: '',
+    description: 'Default iMessage chat id for routing',
   },
   {
     key: 'watchers.enabled',

@@ -347,18 +347,23 @@ Show or set permission mode and per-tool settings.
 
 ### `/secrets`
 
-Manage encrypted API key secrets stored in `~/.goodvibes/tui/secrets.enc`.
+Manage encrypted API key secrets and provider-backed SecretRefs stored in `~/.goodvibes/tui/secrets.enc`.
 
 ```
-/secrets set <key> <value>   # store a secret
-/secrets get <key>           # resolve a secret (env var, then store)
-/secrets list                # list stored key names
-/secrets delete <key>        # remove a secret
+/secrets set <key> <value>        # store a secret
+/secrets link <key> <secret-ref>  # store a provider-backed reference
+/secrets get <key>                # resolve a secret (env var, then store/ref)
+/secrets test <secret-ref>        # validate a ref without printing its value
+/secrets providers                # list supported ref providers and examples
+/secrets list                     # list stored key names
+/secrets delete <key>             # remove a secret
 ```
 
 **Example:**
 ```
 /secrets set OPENAI_API_KEY sk-mykey
+/secrets link SLACK_BOT_TOKEN vaultwarden://GoodVibes%20Slack/password?server=https%3A%2F%2Fvault.example.test
+/secrets link STRIPE_TOKEN bws://00000000-0000-0000-0000-000000000000/value?accessTokenEnv=BWS_ACCESS_TOKEN
 ```
 
 ### `/services` (alias: `/svc`)

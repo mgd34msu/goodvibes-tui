@@ -83,7 +83,7 @@ export function registerPlatformServicesRuntimeCommands(registry: CommandRegistr
       }
       if (sub === 'list') {
         ctx.print(detailedKeys.filter((record) => record.source !== 'env').length > 0
-          ? ['Secure Storage Keys', ...detailedKeys.filter((record) => record.source !== 'env').map((record) => `  ${record.key} (${record.source}${record.overriddenByEnv ? ', env override' : ''})`)].join('\n')
+          ? ['Secure Storage Keys', ...detailedKeys.filter((record) => record.source !== 'env').map((record) => `  ${record.key} (${record.source}${record.refSource ? `, ref:${record.refSource}` : ''}${record.overriddenByEnv ? ', env override' : ''})`)].join('\n')
           : 'Secure Storage Keys\n  No stored secrets yet.');
         return;
       }

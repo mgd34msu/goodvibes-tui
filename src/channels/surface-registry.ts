@@ -42,44 +42,47 @@ export class SurfaceRegistry {
   syncConfiguredSurfaces(): SurfaceRecord[] {
     const configuredAt = now();
     const pluginDescriptors = this.pluginRegistry?.listDescriptors() ?? [];
+    const enabledForSurface = (surface: string): boolean => {
+      if (surface === 'tui') return true;
+      if (surface === 'web') return Boolean(this.configManager.get('web.enabled') || this.configManager.get('controlPlane.enabled'));
+      if (surface === 'slack') return Boolean(this.configManager.get('surfaces.slack.enabled'));
+      if (surface === 'discord') return Boolean(this.configManager.get('surfaces.discord.enabled'));
+      if (surface === 'ntfy') return Boolean(this.configManager.get('surfaces.ntfy.enabled'));
+      if (surface === 'webhook') {
+        return Boolean(
+          this.configManager.get('surfaces.webhook.enabled')
+          || this.configManager.get('surfaces.webhook.defaultTarget')
+          || this.configManager.get('surfaces.webhook.secret'),
+        );
+      }
+      const surfaces = this.configManager.getCategory('surfaces');
+      if (surface === 'telegram') return Boolean(surfaces.telegram.enabled || surfaces.telegram.botToken || surfaces.telegram.defaultChatId);
+      if (surface === 'google-chat') return Boolean(surfaces.googleChat.enabled || surfaces.googleChat.webhookUrl || surfaces.googleChat.spaceId);
+      if (surface === 'signal') return Boolean(surfaces.signal.enabled || surfaces.signal.bridgeUrl || surfaces.signal.account);
+      if (surface === 'whatsapp') return Boolean(surfaces.whatsapp.enabled || surfaces.whatsapp.accessToken || surfaces.whatsapp.phoneNumberId);
+      if (surface === 'imessage') return Boolean(surfaces.imessage.enabled || surfaces.imessage.bridgeUrl || surfaces.imessage.account);
+      return false;
+    };
+    const accountIdForSurface = (surface: string): string | undefined => {
+      const surfaces = this.configManager.getCategory('surfaces');
+      if (surface === 'slack') return String(this.configManager.get('surfaces.slack.workspaceId') || '') || undefined;
+      if (surface === 'discord') return String(this.configManager.get('surfaces.discord.applicationId') || '') || undefined;
+      if (surface === 'telegram') return surfaces.telegram.botUsername || surfaces.telegram.defaultChatId || undefined;
+      if (surface === 'google-chat') return surfaces.googleChat.appId || surfaces.googleChat.spaceId || undefined;
+      if (surface === 'signal') return surfaces.signal.account || surfaces.signal.defaultRecipient || undefined;
+      if (surface === 'whatsapp') return surfaces.whatsapp.phoneNumberId || surfaces.whatsapp.defaultRecipient || undefined;
+      if (surface === 'imessage') return surfaces.imessage.account || surfaces.imessage.defaultChatId || undefined;
+      return undefined;
+    };
     const records: SurfaceRecord[] = pluginDescriptors.length > 0 ? pluginDescriptors.map((descriptor) => ({
       id: `surface:${descriptor.surface}`,
       kind: descriptor.surface,
       label: descriptor.displayName,
-      enabled: descriptor.surface === 'tui'
-        ? true
-        : descriptor.surface === 'web'
-          ? Boolean(this.configManager.get('web.enabled') || this.configManager.get('controlPlane.enabled'))
-          : descriptor.surface === 'slack'
-            ? Boolean(this.configManager.get('surfaces.slack.enabled'))
-            : descriptor.surface === 'discord'
-              ? Boolean(this.configManager.get('surfaces.discord.enabled'))
-              : descriptor.surface === 'ntfy'
-                ? Boolean(this.configManager.get('surfaces.ntfy.enabled'))
-                : Boolean(
-                    this.configManager.get('surfaces.webhook.enabled')
-                    || this.configManager.get('surfaces.webhook.defaultTarget')
-                    || this.configManager.get('surfaces.webhook.secret'),
-                  ),
-      state: descriptor.surface === 'tui'
-        ? 'healthy'
-        : descriptor.surface === 'web'
-          ? this.configManager.get('web.enabled') || this.configManager.get('controlPlane.enabled') ? 'healthy' : 'disabled'
-          : descriptor.surface === 'slack'
-            ? this.configManager.get('surfaces.slack.enabled') ? 'healthy' : 'disabled'
-            : descriptor.surface === 'discord'
-              ? this.configManager.get('surfaces.discord.enabled') ? 'healthy' : 'disabled'
-              : descriptor.surface === 'ntfy'
-                ? this.configManager.get('surfaces.ntfy.enabled') ? 'healthy' : 'disabled'
-                : this.configManager.get('surfaces.webhook.enabled')
-                  || this.configManager.get('surfaces.webhook.defaultTarget')
-                  || this.configManager.get('surfaces.webhook.secret')
-                  ? 'healthy'
-                  : 'disabled',
+      enabled: enabledForSurface(descriptor.surface),
+      state: enabledForSurface(descriptor.surface) ? 'healthy' : 'disabled',
       configuredAt,
       lastSeenAt: configuredAt,
-      ...(descriptor.surface === 'slack' ? { accountId: String(this.configManager.get('surfaces.slack.workspaceId') || '') } : {}),
-      ...(descriptor.surface === 'discord' ? { accountId: String(this.configManager.get('surfaces.discord.applicationId') || '') } : {}),
+      ...(accountIdForSurface(descriptor.surface) ? { accountId: accountIdForSurface(descriptor.surface) } : {}),
       capabilities: [...descriptor.capabilities],
       metadata: {},
     })) : [

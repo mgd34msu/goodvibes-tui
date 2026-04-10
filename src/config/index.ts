@@ -87,6 +87,10 @@ export function getConfiguredProviderId(): string {
   return getConfigSnapshot().provider.provider;
 }
 
+export function getConfiguredEmbeddingProviderId(): string {
+  return getConfigSnapshot().provider.embeddingProvider;
+}
+
 export function isAutoApproveEnabled(): boolean {
   return getConfigSnapshot().behavior.autoApprove;
 }

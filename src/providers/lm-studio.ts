@@ -1,6 +1,16 @@
 import OpenAI from 'openai';
 import type { ProviderCapability } from './capabilities.ts';
-import type { ChatRequest, ChatResponse, ContentPart, LLMProvider, PartialToolCall, ProviderMessage } from './interface.ts';
+import type {
+  ChatRequest,
+  ChatResponse,
+  ContentPart,
+  LLMProvider,
+  PartialToolCall,
+  ProviderEmbeddingRequest,
+  ProviderEmbeddingResult,
+  ProviderMessage,
+  ProviderRuntimeMetadata,
+} from './interface.ts';
 import type { ToolCall, ToolDefinition } from '../types/tools.ts';
 import { OpenAICompatProvider, type OpenAICompatOptions } from './openai-compat.ts';
 import { ProviderError } from '../types/errors.ts';
@@ -104,6 +114,52 @@ export class LMStudioProvider implements LLMProvider {
 
       return this.fallbackProvider.chat(params);
     });
+  }
+
+  async embed(request: ProviderEmbeddingRequest): Promise<ProviderEmbeddingResult> {
+    if (!this.fallbackProvider.embed) {
+      throw new ProviderError('LM Studio fallback provider does not support embeddings.', 501);
+    }
+    return this.fallbackProvider.embed(request);
+  }
+
+  async describeRuntime(): Promise<ProviderRuntimeMetadata> {
+    const { buildStandardProviderAuthRoutes } = await import('./runtime-metadata.ts');
+    const authRoutes = await buildStandardProviderAuthRoutes({
+      providerId: this.name,
+      apiKeyEnvVars: ['LM_STUDIO_API_KEY'],
+      secretKeys: ['LM_STUDIO_API_KEY', 'OPENAI_COMPATIBLE_API_KEY', 'OPENAI_COMPAT_API_KEY'],
+      allowAnonymous: true,
+      anonymousConfigured: true,
+      anonymousDetail: 'LM Studio local servers can be used anonymously unless the host is configured with auth.',
+    });
+    return {
+      auth: {
+        mode: 'anonymous',
+        configured: true,
+        detail: 'LM Studio is treated as a local-first provider with optional API-key support.',
+        envVars: ['LM_STUDIO_API_KEY'],
+        routes: authRoutes,
+      },
+      models: {
+        defaultModel: this.defaultModel,
+        models: this.models,
+      },
+      usage: {
+        streaming: true,
+        toolCalling: true,
+        parallelTools: true,
+        promptCaching: false,
+        notes: ['LM Studio prefers native chat SSE when possible and falls back to the responses or OpenAI-compatible path when needed.'],
+      },
+      policy: {
+        local: true,
+        streamProtocol: 'lmstudio-native-or-responses',
+        reasoningMode: 'native-reasoning-events',
+        supportedReasoningEfforts: ['instant', 'low', 'medium', 'high'],
+        cacheStrategy: 'provider-managed',
+      },
+    };
   }
 
   private getNativeChatContext(

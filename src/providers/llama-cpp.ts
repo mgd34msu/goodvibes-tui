@@ -2,7 +2,16 @@ import { withRetry } from '../utils/retry.ts';
 import { ProviderError } from '../types/errors.ts';
 import type { ToolCall } from '../types/tools.ts';
 import type { ProviderCapability } from './capabilities.ts';
-import type { ChatRequest, ChatResponse, LLMProvider, PartialToolCall, ProviderMessage } from './interface.ts';
+import type {
+  ChatRequest,
+  ChatResponse,
+  LLMProvider,
+  PartialToolCall,
+  ProviderEmbeddingRequest,
+  ProviderEmbeddingResult,
+  ProviderMessage,
+  ProviderRuntimeMetadata,
+} from './interface.ts';
 import { OpenAICompatProvider, type OpenAICompatOptions } from './openai-compat.ts';
 import {
   extractTextToolCalls,
@@ -74,6 +83,49 @@ export class LlamaCppProvider implements LLMProvider {
       }
       return this.chatViaNonStreamingCompat(params, params.model || this.defaultModel);
     });
+  }
+
+  async embed(request: ProviderEmbeddingRequest): Promise<ProviderEmbeddingResult> {
+    if (!this.fallbackProvider.embed) {
+      throw new ProviderError('llama.cpp fallback provider does not support embeddings.', 501);
+    }
+    return this.fallbackProvider.embed(request);
+  }
+
+  async describeRuntime(): Promise<ProviderRuntimeMetadata> {
+    const { buildStandardProviderAuthRoutes } = await import('./runtime-metadata.ts');
+    const authRoutes = await buildStandardProviderAuthRoutes({
+      providerId: this.name,
+      allowAnonymous: !this.apiKey,
+      anonymousConfigured: !this.apiKey,
+      anonymousDetail: 'Local llama.cpp servers are often exposed without authentication.',
+    });
+    return {
+      auth: {
+        mode: this.apiKey ? 'api-key' : 'anonymous',
+        configured: true,
+        detail: this.apiKey ? 'llama.cpp compat path has an API key configured.' : 'llama.cpp compat path is running without an API key.',
+        routes: authRoutes,
+      },
+      models: {
+        defaultModel: this.defaultModel,
+        models: this.models,
+      },
+      usage: {
+        streaming: true,
+        toolCalling: true,
+        parallelTools: true,
+        promptCaching: false,
+        notes: ['llama.cpp uses a non-streaming recovery path for tool turns and delegates embeddings to the fallback compat provider.'],
+      },
+      policy: {
+        local: true,
+        streamProtocol: 'openai-chat-completions',
+        reasoningMode: this.reasoningFormat ?? 'provider-default',
+        supportedReasoningEfforts: ['instant', 'low', 'medium', 'high'],
+        cacheStrategy: 'provider-managed',
+      },
+    };
   }
 
   private async chatViaNonStreamingCompat(

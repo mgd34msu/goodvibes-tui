@@ -166,4 +166,110 @@ describe('ChannelPluginRegistry', () => {
     });
     expect(registry.listAgentTools('webhook').map((tool) => tool.definition.name)).toEqual(['webhook_direct']);
   });
+
+  test('dispatches setup, doctor, lifecycle, render, and allowlist hooks', async () => {
+    const registry = new ChannelPluginRegistry();
+    registry.register({
+      id: 'surface:telegram',
+      surface: 'telegram',
+      displayName: 'Telegram',
+      capabilities: ['ingress', 'egress', 'account_lifecycle'],
+      setupVersion: 1,
+      getSetupSchema: () => ({
+        surface: 'telegram',
+        version: 1,
+        label: 'Telegram',
+        setupMode: 'bot',
+        description: 'Telegram setup',
+        fields: [],
+        secretTargets: [],
+        externalSteps: [],
+        metadata: {},
+      }),
+      doctor: () => ({
+        surface: 'telegram',
+        state: 'healthy',
+        summary: 'ok',
+        checkedAt: Date.now(),
+        checks: [],
+        repairActions: [],
+        metadata: {},
+      }),
+      listRepairActions: () => [{ id: 'migrate-lifecycle', label: 'Migrate', description: 'migrate', dangerous: false, metadata: {} }],
+      getLifecycleState: () => ({
+        surface: 'telegram',
+        currentVersion: 0,
+        targetVersion: 1,
+        migrations: [],
+        metadata: {},
+      }),
+      migrateLifecycle: () => ({
+        surface: 'telegram',
+        currentVersion: 1,
+        targetVersion: 1,
+        migrations: [],
+        metadata: {},
+      }),
+      resolveAllowlist: () => ({
+        surface: 'telegram',
+        resolved: [{ kind: 'user', input: '@alice', id: 'alice', label: 'alice', metadata: {} }],
+        unresolved: [],
+        metadata: {},
+      }),
+      editAllowlist: () => ({
+        surface: 'telegram',
+        updatedPolicy: {
+          surface: 'telegram',
+          enabled: true,
+          requireMention: false,
+          allowDirectMessages: true,
+          allowGroupMessages: true,
+          allowThreadMessages: true,
+          dmPolicy: 'inherit',
+          groupPolicy: 'inherit',
+          allowTextCommandsWithoutMention: false,
+          allowlistUserIds: ['alice'],
+          allowlistChannelIds: [],
+          allowlistGroupIds: [],
+          allowedCommands: [],
+          groupPolicies: [],
+          updatedAt: Date.now(),
+          metadata: {},
+        },
+        resolution: {
+          surface: 'telegram',
+          resolved: [{ kind: 'user', input: '@alice', id: 'alice', label: 'alice', metadata: {} }],
+          unresolved: [],
+          metadata: {},
+        },
+        metadata: {},
+      }),
+      renderPolicy: () => ({
+        surface: 'telegram',
+        reasoningVisibility: 'summary',
+        format: 'markdown',
+        supportsThreads: false,
+        maxChunkChars: 3500,
+        maxEventsPerUpdate: 10,
+        metadata: {},
+      }),
+      renderEvent: async () => ({ delivered: true, responseId: 'telegram:reply-1', metadata: {} }),
+    });
+
+    await expect(registry.getSetupSchema('telegram')).resolves.toMatchObject({ surface: 'telegram', version: 1 });
+    await expect(registry.doctor('telegram')).resolves.toMatchObject({ surface: 'telegram', state: 'healthy' });
+    await expect(registry.listRepairActions('telegram')).resolves.toMatchObject([{ id: 'migrate-lifecycle' }]);
+    await expect(registry.getLifecycleState('telegram')).resolves.toMatchObject({ currentVersion: 0, targetVersion: 1 });
+    await expect(registry.migrateLifecycle('telegram')).resolves.toMatchObject({ currentVersion: 1, targetVersion: 1 });
+    await expect(registry.resolveAllowlist('telegram', { add: ['@alice'] })).resolves.toMatchObject({ resolved: [{ id: 'alice' }] });
+    await expect(registry.editAllowlist('telegram', { add: ['@alice'] })).resolves.toMatchObject({ updatedPolicy: { allowlistUserIds: ['alice'] } });
+    await expect(registry.render('telegram', {
+      surface: 'telegram',
+      phase: 'final',
+      title: 'Reply',
+      text: 'hello',
+      events: [],
+      metadata: {},
+    })).resolves.toMatchObject({ delivered: true, responseId: 'telegram:reply-1' });
+  });
 });

@@ -46,7 +46,19 @@ export interface ControlPlaneGatewayConfig {
 
 export interface ControlPlaneEventStreamOptions {
   readonly clientId?: string;
-  readonly clientKind?: 'tui' | 'web' | 'slack' | 'discord' | 'ntfy' | 'daemon' | 'webhook';
+  readonly clientKind?:
+    | 'tui'
+    | 'web'
+    | 'slack'
+    | 'discord'
+    | 'ntfy'
+    | 'webhook'
+    | 'telegram'
+    | 'google-chat'
+    | 'signal'
+    | 'whatsapp'
+    | 'imessage'
+    | 'daemon';
   readonly transport?: 'local' | 'http' | 'sse' | 'ws' | 'webhook';
   readonly label?: string;
   readonly domains?: readonly RuntimeEventDomain[];
@@ -69,7 +81,19 @@ export interface ControlPlaneRecentEvent {
 
 interface LiveControlPlaneClient {
   readonly clientId: string;
-  readonly kind: 'tui' | 'web' | 'slack' | 'discord' | 'ntfy' | 'daemon' | 'webhook';
+  readonly kind:
+    | 'tui'
+    | 'web'
+    | 'slack'
+    | 'discord'
+    | 'ntfy'
+    | 'webhook'
+    | 'telegram'
+    | 'google-chat'
+    | 'signal'
+    | 'whatsapp'
+    | 'imessage'
+    | 'daemon';
   readonly surfaceId?: string;
   readonly routeId?: string;
   readonly send: (event: string, payload: unknown) => void;
@@ -353,13 +377,14 @@ export class ControlPlaneGateway {
     }, 'control-plane.gateway.ws-connect');
     this.dispatch?.syncControlPlaneClient(clientRecord, 'control-plane.gateway.ws-connect');
 
+    const eventClientKind = options.clientKind === 'daemon' ? 'service' : (options.clientKind ?? 'web');
     emitControlPlaneClientConnected(this.runtimeBus, {
       sessionId: options.sessionId ?? 'control-plane',
       source: 'control-plane.gateway',
       traceId,
     }, {
       clientId,
-      clientKind: options.clientKind ?? 'web',
+      clientKind: eventClientKind,
       transport: 'ws',
     });
     emitControlPlaneSubscriptionCreated(this.runtimeBus, {
@@ -561,13 +586,14 @@ export class ControlPlaneGateway {
     this.dispatch?.syncControlPlaneClient(clientRecord, 'control-plane.gateway.connect');
 
     const traceId = `control-plane:${clientId}`;
+    const eventClientKind = options.clientKind === 'daemon' ? 'service' : (options.clientKind ?? 'web');
     emitControlPlaneClientConnected(this.runtimeBus, {
       sessionId: options.sessionId ?? 'control-plane',
       source: 'control-plane.gateway',
       traceId,
     }, {
       clientId,
-      clientKind: options.clientKind ?? 'web',
+      clientKind: eventClientKind,
       transport,
     });
     emitControlPlaneSubscriptionCreated(this.runtimeBus, {

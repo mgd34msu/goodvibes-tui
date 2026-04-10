@@ -8,13 +8,20 @@
  * Example services.json:
  * {
  *   "openai": { "name": "openai", "baseUrl": "https://api.openai.com", "authType": "bearer", "tokenKey": "OPENAI_API_KEY" },
- *   "github":  { "name": "github",  "baseUrl": "https://api.github.com",  "authType": "bearer", "tokenKey": "GITHUB_TOKEN" }
+ *   "github":  { "name": "github",  "baseUrl": "https://api.github.com",  "authType": "bearer", "tokenKey": "GITHUB_TOKEN" },
+ *   "slack":   { "name": "slack", "authType": "bearer", "tokenKey": "SLACK_BOT_TOKEN", "tokenRef": { "source": "vaultwarden", "item": "GoodVibes Slack", "field": "password", "server": "https://vault.example.test" } }
  * }
  */
 
 import { readFileSync } from 'fs';
 import { join } from 'path';
 import { getSecretsManager } from './secrets.ts';
+import {
+  describeSecretRef,
+  isSecretRefInput,
+  resolveSecretRef,
+  type SecretRefInput,
+} from './secret-refs.ts';
 import type { OAuthProviderConfig } from './subscriptions.ts';
 import { getSubscriptionManager } from './subscriptions.ts';
 import { logger } from '../utils/logger.ts';
@@ -32,16 +39,26 @@ export interface ServiceConfig {
   authType: 'bearer' | 'basic' | 'api-key' | 'oauth';
   /** SecretsManager key that holds the primary credential (token or API key). */
   tokenKey: string;
+  /** Optional external/local secret reference for the primary credential. */
+  tokenRef?: SecretRefInput;
   /** For basic auth: SecretsManager key that holds the password. */
   passwordKey?: string;
+  /** Optional external/local secret reference for the basic-auth password. */
+  passwordRef?: SecretRefInput;
   /** For api-key auth: the header name. Defaults to X-API-Key. */
   apiKeyHeader?: string;
   /** Optional secret key holding a webhook or callback URL for this service. */
   webhookUrlKey?: string;
+  /** Optional external/local secret reference for a webhook or callback URL. */
+  webhookUrlRef?: SecretRefInput;
   /** Optional secret key for inbound request signing/verification. */
   signingSecretKey?: string;
+  /** Optional external/local secret reference for inbound request signing/verification. */
+  signingSecretRef?: SecretRefInput;
   /** Optional public-key secret used for inbound signature verification. */
   publicKeyKey?: string;
+  /** Optional external/local secret reference for inbound public-key verification. */
+  publicKeyRef?: SecretRefInput;
   /** Optional provider ID used for subscription token override lookup. */
   providerId?: string;
   /** OAuth metadata for subscription-backed services. */
@@ -120,6 +137,34 @@ export class ServiceRegistry {
     return all[serviceName] ?? null;
   }
 
+  private async resolveConfiguredSecret(
+    serviceName: string,
+    field: ServiceSecretField,
+    keyOrRef?: string,
+    ref?: SecretRefInput,
+  ): Promise<string | null> {
+    const secrets = getSecretsManager();
+    const candidate = ref ?? (keyOrRef && isSecretRefInput(keyOrRef) ? keyOrRef : undefined);
+    if (candidate) {
+      try {
+        const resolved = await resolveSecretRef(candidate, {
+          resolveLocalSecret: (key) => secrets.get(key),
+        });
+        return resolved.value;
+      } catch (error) {
+        logger.warn('ServiceRegistry: failed to resolve secret reference', {
+          serviceName,
+          field,
+          ref: describeSecretRef(candidate),
+          error: error instanceof Error ? error.message : String(error),
+        });
+        return null;
+      }
+    }
+
+    return keyOrRef ? secrets.get(keyOrRef) : null;
+  }
+
   /**
    * Resolve auth headers for a named service.
    * Looks up the service config, fetches credential from SecretsManager,
@@ -134,7 +179,6 @@ export class ServiceRegistry {
       return null;
     }
 
-    const secrets = getSecretsManager();
     const providerOverride = getSubscriptionManager().getAccessToken(config.providerId ?? serviceName);
     if (providerOverride) {
       return { Authorization: `Bearer ${providerOverride}` };
@@ -142,7 +186,7 @@ export class ServiceRegistry {
 
     switch (config.authType) {
       case 'bearer': {
-        const token = await secrets.get(config.tokenKey);
+        const token = await this.resolveConfiguredSecret(serviceName, 'primary', config.tokenKey, config.tokenRef);
         if (!token) {
           logger.debug('ServiceRegistry: bearer token not found', { serviceName, key: config.tokenKey });
           return null;
@@ -151,8 +195,8 @@ export class ServiceRegistry {
       }
 
       case 'basic': {
-        const username = await secrets.get(config.tokenKey);
-        const password = config.passwordKey ? await secrets.get(config.passwordKey) : null;
+        const username = await this.resolveConfiguredSecret(serviceName, 'primary', config.tokenKey, config.tokenRef);
+        const password = await this.resolveConfiguredSecret(serviceName, 'password', config.passwordKey, config.passwordRef);
         if (!username) {
           logger.debug('ServiceRegistry: basic username not found', { serviceName, key: config.tokenKey });
           return null;
@@ -162,7 +206,7 @@ export class ServiceRegistry {
       }
 
       case 'api-key': {
-        const key = await secrets.get(config.tokenKey);
+        const key = await this.resolveConfiguredSecret(serviceName, 'primary', config.tokenKey, config.tokenRef);
         if (!key) {
           logger.debug('ServiceRegistry: api key not found', { serviceName, key: config.tokenKey });
           return null;
@@ -172,7 +216,7 @@ export class ServiceRegistry {
       }
 
       case 'oauth': {
-        const token = await secrets.get(config.tokenKey);
+        const token = await this.resolveConfiguredSecret(serviceName, 'primary', config.tokenKey, config.tokenRef);
         if (!token) {
           logger.debug('ServiceRegistry: oauth token not found', { serviceName, key: config.tokenKey });
           return null;
@@ -192,18 +236,17 @@ export class ServiceRegistry {
     const config = this.get(serviceName);
     if (!config) return null;
 
-    const secrets = getSecretsManager();
     switch (field) {
       case 'primary':
-        return secrets.get(config.tokenKey);
+        return this.resolveConfiguredSecret(serviceName, field, config.tokenKey, config.tokenRef);
       case 'password':
-        return config.passwordKey ? secrets.get(config.passwordKey) : null;
+        return this.resolveConfiguredSecret(serviceName, field, config.passwordKey, config.passwordRef);
       case 'webhookUrl':
-        return config.webhookUrlKey ? secrets.get(config.webhookUrlKey) : null;
+        return this.resolveConfiguredSecret(serviceName, field, config.webhookUrlKey, config.webhookUrlRef);
       case 'signingSecret':
-        return config.signingSecretKey ? secrets.get(config.signingSecretKey) : null;
+        return this.resolveConfiguredSecret(serviceName, field, config.signingSecretKey, config.signingSecretRef);
       case 'publicKey':
-        return config.publicKeyKey ? secrets.get(config.publicKeyKey) : null;
+        return this.resolveConfiguredSecret(serviceName, field, config.publicKeyKey, config.publicKeyRef);
     }
   }
 

@@ -1,5 +1,12 @@
 import OpenAI from 'openai';
-import type { LLMProvider, ChatRequest, ChatResponse } from './interface.ts';
+import type {
+  LLMProvider,
+  ChatRequest,
+  ChatResponse,
+  ProviderEmbeddingRequest,
+  ProviderEmbeddingResult,
+  ProviderRuntimeMetadata,
+} from './interface.ts';
 import type { ProviderCapability } from './capabilities.ts';
 import { ProviderError } from '../types/errors.ts';
 import { withRetry } from '../utils/retry.ts';
@@ -21,11 +28,24 @@ export interface OpenAICompatOptions {
   apiKey: string;
   defaultModel: string;
   models: string[];
+  embeddingModel?: string;
   capabilities?: Partial<ProviderCapability>;
   /** Optional extra HTTP headers sent with every request to this provider. */
   defaultHeaders?: Record<string, string>;
   /** How to send reasoning params. Default: 'none' (don't send). */
   reasoningFormat?: 'mercury' | 'openrouter' | 'llamacpp' | 'none';
+  /** Optional env vars or secret keys that can satisfy API-key auth for this provider. */
+  authEnvVars?: readonly string[];
+  /** Optional service names that expose service-owned OAuth for this provider. */
+  serviceNames?: readonly string[];
+  /** Optional subscription-provider identity when this provider can use a stored OAuth session. */
+  subscriptionProviderId?: string;
+  /** Optional provider-owned model suppression list for runtime clients. */
+  suppressedModels?: readonly string[];
+  /** Optional provider aliases exposed to runtime metadata consumers. */
+  aliases?: readonly string[];
+  /** Optional explicit stream protocol label for diagnostics. */
+  streamProtocol?: string;
 }
 
 /**
@@ -40,16 +60,32 @@ export class OpenAICompatProvider implements LLMProvider {
 
   private client: OpenAI;
   private defaultModel: string;
+  private embeddingModel: string;
+  private readonly configured: boolean;
   private reasoningFormat: 'mercury' | 'openrouter' | 'llamacpp' | 'none';
   private cacheCapability: ProviderCacheCapability;
+  private readonly authEnvVars: readonly string[];
+  private readonly serviceNames: readonly string[];
+  private readonly subscriptionProviderId?: string;
+  private readonly suppressedModels: readonly string[];
+  private readonly aliases: readonly string[];
+  private readonly streamProtocol?: string;
 
   constructor(opts: OpenAICompatOptions) {
     this.name = opts.name;
     this.models = opts.models;
     this.capabilities = opts.capabilities;
     this.defaultModel = opts.defaultModel;
+    this.embeddingModel = opts.embeddingModel ?? opts.defaultModel;
+    this.configured = Boolean(opts.apiKey);
     this.reasoningFormat = opts.reasoningFormat ?? 'none';
     this.cacheCapability = getCacheCapability(opts.name);
+    this.authEnvVars = opts.authEnvVars ?? [];
+    this.serviceNames = opts.serviceNames ?? [];
+    this.subscriptionProviderId = opts.subscriptionProviderId;
+    this.suppressedModels = opts.suppressedModels ?? [];
+    this.aliases = opts.aliases ?? [];
+    this.streamProtocol = opts.streamProtocol;
     this.client = new OpenAI({
       apiKey: opts.apiKey,
       baseURL: opts.baseURL,
@@ -231,5 +267,69 @@ export class OpenAICompatProvider implements LLMProvider {
 
       return response;
     });
+  }
+
+  async embed(request: ProviderEmbeddingRequest): Promise<ProviderEmbeddingResult> {
+    const response = await this.client.embeddings.create(
+      {
+        model: request.model ?? this.embeddingModel,
+        input: request.text,
+        ...(request.dimensions ? { dimensions: request.dimensions } : {}),
+      },
+      request.signal ? { signal: request.signal } : undefined,
+    );
+    const embedding = response.data[0]?.embedding ?? [];
+    return {
+      vector: Float32Array.from(embedding),
+      dimensions: embedding.length,
+      modelId: response.model,
+      metadata: {
+        usage: request.usage,
+        provider: this.name,
+      },
+    };
+  }
+
+  async describeRuntime(): Promise<ProviderRuntimeMetadata> {
+    const { buildStandardProviderAuthRoutes } = await import('./runtime-metadata.ts');
+    const authRoutes = await buildStandardProviderAuthRoutes({
+      providerId: this.name,
+      apiKeyEnvVars: this.authEnvVars,
+      secretKeys: this.authEnvVars,
+      serviceNames: this.serviceNames,
+      ...(this.subscriptionProviderId ? { subscriptionProviderId: this.subscriptionProviderId } : {}),
+    });
+    return {
+      auth: {
+        mode: 'api-key',
+        configured: this.configured,
+        detail: this.configured ? `${this.name} API key available` : `API key for ${this.name} is not configured`,
+        ...(this.authEnvVars.length > 0 ? { envVars: this.authEnvVars } : {}),
+        routes: authRoutes,
+      },
+      models: {
+        defaultModel: this.defaultModel,
+        models: this.models,
+        embeddingModel: this.embeddingModel,
+        ...(this.aliases.length > 0 ? { aliases: this.aliases } : {}),
+        ...(this.suppressedModels.length > 0 ? { suppressedModels: this.suppressedModels } : {}),
+      },
+      usage: {
+        streaming: true,
+        toolCalling: this.capabilities?.toolCalling ?? true,
+        parallelTools: this.capabilities?.parallelTools ?? false,
+        promptCaching: this.cacheCapability.type !== 'none',
+        notes: this.reasoningFormat !== 'none'
+          ? ['Provider supports reasoning-aware request routing.']
+          : undefined,
+      },
+      policy: {
+        local: false,
+        streamProtocol: this.streamProtocol ?? 'openai-chat-completions',
+        reasoningMode: this.reasoningFormat === 'none' ? 'provider-default' : this.reasoningFormat,
+        supportedReasoningEfforts: ['instant', 'low', 'medium', 'high'],
+        cacheStrategy: this.cacheCapability.type,
+      },
+    };
   }
 }

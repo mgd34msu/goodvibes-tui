@@ -7,6 +7,7 @@
  *   3. Project/ancestor plaintext stores (.goodvibes/goodvibes.secrets.json), nearest first
  *   4. User secure store (~/.goodvibes/tui/secrets.enc)
  *   5. User plaintext store (~/.goodvibes/goodvibes.secrets.json)
+ *   6. If a resolved value is a SecretRef, resolve through the referenced provider
  *
  * The active policy decides whether plaintext stores are eligible:
  *   - plaintext_allowed  → read/write plaintext or secure
@@ -21,6 +22,7 @@ import { dirname, join, resolve } from 'path';
 import { hostname, homedir, userInfo } from 'os';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
 import { ConfigManager } from './manager.ts';
+import { getSecretRefSource, isSecretRefInput, resolveSecretRef } from './secret-refs.ts';
 import { logger } from '../utils/logger.ts';
 
 export type SecretStorageMode = 'plaintext_allowed' | 'preferred_secure' | 'require_secure';
@@ -40,6 +42,7 @@ export interface SecretRecord {
   readonly secure: boolean;
   readonly path?: string;
   readonly overriddenByEnv: boolean;
+  readonly refSource?: string;
 }
 
 export interface SecretWriteOptions {
@@ -174,10 +177,14 @@ export class SecretsManager {
   }
 
   async get(key: string): Promise<string | null> {
+    return this.getInternal(key, new Set([key]));
+  }
+
+  private async getInternal(key: string, seen: Set<string>): Promise<string | null> {
     const envValue = process.env[key];
     if (envValue !== undefined) {
       logger.debug('SecretsManager: resolved from env', { key });
-      return envValue;
+      return this.resolveMaybeReferencedValue(key, envValue, seen);
     }
 
     for (const path of this.getReadOrder()) {
@@ -186,11 +193,38 @@ export class SecretsManager {
         : this.readPlaintextFile(path.path);
       if (secrets !== null && key in secrets) {
         logger.debug('SecretsManager: resolved from store', { key, source: path.source });
-        return secrets[key] ?? null;
+        const value = secrets[key];
+        return value === undefined ? null : this.resolveMaybeReferencedValue(key, value, seen);
       }
     }
 
     return null;
+  }
+
+  private async resolveMaybeReferencedValue(key: string, value: string, seen: Set<string>): Promise<string | null> {
+    if (!isSecretRefInput(value)) return value;
+
+    try {
+      const resolved = await resolveSecretRef(value, {
+        resolveLocalSecret: async (nextKey) => {
+          if (seen.has(nextKey)) {
+            throw new Error(`Recursive GoodVibes secret reference for ${nextKey}`);
+          }
+          const nextSeen = new Set(seen);
+          nextSeen.add(nextKey);
+          return this.getInternal(nextKey, nextSeen);
+        },
+      });
+      logger.debug('SecretsManager: resolved secret reference', { key, refSource: resolved.source });
+      return resolved.value;
+    } catch (error) {
+      logger.warn('SecretsManager: failed to resolve secret reference', {
+        key,
+        refSource: getSecretRefSource(value) ?? 'unknown',
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return null;
+    }
   }
 
   async set(key: string, value: string, options: SecretWriteOptions = {}): Promise<void> {
@@ -255,6 +289,7 @@ export class SecretsManager {
         : this.readPlaintextFile(path.path);
       if (!values) continue;
       for (const key of Object.keys(values)) {
+        const refSource = getSecretRefSource(values[key]);
         records.push({
           key,
           source: path.source,
@@ -262,6 +297,7 @@ export class SecretsManager {
           secure: path.secure,
           path: path.path,
           overriddenByEnv: envKeys.has(key),
+          ...(refSource ? { refSource } : {}),
         });
       }
     }

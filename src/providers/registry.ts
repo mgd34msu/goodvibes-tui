@@ -86,6 +86,13 @@ export interface ModelDefinition {
   tokenLimits?: TokenLimits;
 }
 
+export interface RuntimeProviderRegistration {
+  readonly provider: LLMProvider;
+  readonly models?: readonly ModelDefinition[];
+  readonly suppressCatalogModels?: readonly string[];
+  readonly replace?: boolean;
+}
+
 
 function withRegistryKey(model: ModelDefinition): ModelDefinition {
   return model.registryKey ? model : { ...model, registryKey: `${model.provider}:${model.id}` };
@@ -121,8 +128,18 @@ function getSyntheticBuiltins(): ModelDefinition[] {
 /** Mutable array of custom-loaded model definitions. */
 let customModels: ModelDefinition[] = [];
 
+/** Mutable array of runtime/plugin-registered model definitions. */
+let runtimeModels: ModelDefinition[] = [];
+
 /** Mutable array of discovered (scanned) model definitions — lowest priority. */
 let discoveredModels: ModelDefinition[] = [];
+
+/** Catalog suppression requests owned by runtime/plugin provider registrations. */
+const runtimeCatalogSuppressions = new Map<string, readonly string[]>();
+
+function getSuppressedCatalogModelIds(): Set<string> {
+  return new Set([...runtimeCatalogSuppressions.values()].flat());
+}
 
 /**
  * Returns the combined model registry.
@@ -136,6 +153,7 @@ let discoveredModels: ModelDefinition[] = [];
 export function getModelRegistry(): ModelDefinition[] {
   const catalogModels = getCatalogBuiltins();
   const syntheticModels = getSyntheticBuiltins();
+  const suppressedCatalogIds = getSuppressedCatalogModelIds();
 
   // Catalog models not overridden by custom providers and not represented as
   // synthetic canonical backends (prevents hf: and other raw backend IDs from
@@ -143,6 +161,8 @@ export function getModelRegistry(): ModelDefinition[] {
   const catalogFiltered = catalogModels.filter(
     (b) =>
       !customModels.some((c) => c.id === b.id) &&
+      !runtimeModels.some((c) => c.id === b.id) &&
+      !suppressedCatalogIds.has(b.id) &&
       // Filter out raw hf: prefixed IDs — these are HuggingFace catalog entries that
       // should not appear in the model picker.
       !b.id.startsWith('hf:'),
@@ -152,11 +172,13 @@ export function getModelRegistry(): ModelDefinition[] {
   const discoveredFiltered = discoveredModels.filter(
     (d) =>
       !catalogModels.some((b) => b.id === d.id) &&
-      !customModels.some((c) => c.id === d.id),
+      !customModels.some((c) => c.id === d.id) &&
+      !runtimeModels.some((c) => c.id === d.id),
   );
 
   return [
     ...customModels.map(withRegistryKey),
+    ...runtimeModels.map(withRegistryKey),
     ...syntheticModels.map(withRegistryKey), // synthetic before catalog so they take priority
     ...catalogFiltered.map(withRegistryKey),
     ...discoveredFiltered.map(withRegistryKey),
@@ -179,6 +201,7 @@ export class ProviderRegistry {
   private providers: Map<string, LLMProvider> = new Map();
   private currentModelId: string;
   private discoveredProviderNames: Set<string> = new Set();
+  private runtimeProviderNames: Set<string> = new Set();
 
   constructor() {
     this.currentModelId = getConfiguredModelId() || 'openrouter/free';
@@ -199,6 +222,9 @@ export class ProviderRegistry {
         defaultModel: 'mercury-2',
         models: ['mercury-2', 'mercury-edit'],
         reasoningFormat: 'mercury',
+        authEnvVars: ['INCEPTION_API_KEY'],
+        serviceNames: ['inceptionlabs'],
+        aliases: ['inception'],
       }),
     );
 
@@ -222,6 +248,8 @@ export class ProviderRegistry {
           'z-ai/glm-4.5-air:free',
         ],
         reasoningFormat: 'openrouter',
+        authEnvVars: ['OPENROUTER_API_KEY'],
+        serviceNames: ['openrouter'],
       }),
     );
 
@@ -240,6 +268,8 @@ export class ProviderRegistry {
           'kimi-for-coding-free', 'mimo-v2-flash-free', 'minimax-m2.5-free', 'step-3.5-flash-free',
         ],
         reasoningFormat: 'none',
+        authEnvVars: ['AIHUBMIX_API_KEY'],
+        serviceNames: ['aihubmix'],
       }),
     );
 
@@ -258,6 +288,8 @@ export class ProviderRegistry {
           'groq/compound', 'groq/compound-mini',
         ],
         reasoningFormat: 'none',
+        authEnvVars: ['GROQ_API_KEY'],
+        serviceNames: ['groq'],
       }),
     );
 
@@ -269,6 +301,8 @@ export class ProviderRegistry {
         defaultModel: 'qwen-3-235b-a22b-instruct-2507',
         models: ['llama3.1-8b', 'qwen-3-235b-a22b-instruct-2507'],
         reasoningFormat: 'none',
+        authEnvVars: ['CEREBRAS_API_KEY'],
+        serviceNames: ['cerebras'],
       }),
     );
 
@@ -278,6 +312,7 @@ export class ProviderRegistry {
         baseURL: 'https://api.mistral.ai/v1',
         apiKey: apiKey('mistral'),
         defaultModel: 'mistral-large-latest',
+        embeddingModel: 'mistral-embed',
         models: [
           'mistral-large-latest', 'mistral-medium-latest', 'mistral-small-latest',
           'codestral-latest', 'devstral-latest', 'devstral-medium-latest', 'devstral-small-latest',
@@ -286,6 +321,8 @@ export class ProviderRegistry {
           'pixtral-large-latest', 'open-mistral-nemo',
         ],
         reasoningFormat: 'none',
+        authEnvVars: ['MISTRAL_API_KEY'],
+        serviceNames: ['mistral'],
       }),
     );
 
@@ -310,6 +347,8 @@ export class ProviderRegistry {
           'rnj-1:8b',
         ],
         reasoningFormat: 'none',
+        authEnvVars: ['OLLAMA_CLOUD_API_KEY', 'OLLAMA_API_KEY'],
+        serviceNames: ['ollama-cloud'],
       }),
     );
 
@@ -452,6 +491,8 @@ export class ProviderRegistry {
           'utter-project/EuroLLM-22B-Instruct-2512',
         ],
         reasoningFormat: 'none',
+        authEnvVars: ['HF_API_KEY', 'HUGGINGFACE_API_KEY', 'HF_TOKEN'],
+        serviceNames: ['huggingface'],
       }),
     );
 
@@ -579,6 +620,8 @@ export class ProviderRegistry {
           'writer/palmyra-med-70b-32k',
         ],
         reasoningFormat: 'none',
+        authEnvVars: ['NVIDIA_API_KEY'],
+        serviceNames: ['nvidia'],
       }),
     );
 
@@ -596,6 +639,8 @@ export class ProviderRegistry {
           'ministral-8b-2512',
         ],
         reasoningFormat: 'none',
+        authEnvVars: ['LLM7_API_KEY'],
+        serviceNames: ['llm7'],
       }),
     );
 
@@ -607,6 +652,42 @@ export class ProviderRegistry {
   /** Register a provider. Overwrites any existing entry with the same name. */
   register(provider: LLMProvider): void {
     this.providers.set(provider.name, provider);
+  }
+
+  /**
+   * Register a runtime/plugin-owned provider and optional model definitions.
+   * Returns an unregister callback so plugin cleanup can remove the provider and
+   * its runtime model/catalog contributions.
+   */
+  registerRuntimeProvider(registration: RuntimeProviderRegistration): () => void {
+    const { provider, models = [], suppressCatalogModels = [], replace = false } = registration;
+    if (this.providers.has(provider.name) && !this.runtimeProviderNames.has(provider.name) && !replace) {
+      throw new Error(`Provider '${provider.name}' is already registered.`);
+    }
+    this.providers.set(provider.name, provider);
+    this.runtimeProviderNames.add(provider.name);
+    runtimeModels = [
+      ...runtimeModels.filter((model) => model.provider !== provider.name),
+      ...models.map((model) => withRegistryKey({
+        ...model,
+        provider: provider.name,
+        registryKey: model.registryKey || `${provider.name}:${model.id}`,
+      })),
+    ];
+    runtimeCatalogSuppressions.set(provider.name, [...new Set(suppressCatalogModels)]);
+    getCapabilityRegistry().invalidate();
+    return () => {
+      if (!this.runtimeProviderNames.has(provider.name)) return;
+      this.providers.delete(provider.name);
+      this.runtimeProviderNames.delete(provider.name);
+      runtimeModels = runtimeModels.filter((model) => model.provider !== provider.name);
+      runtimeCatalogSuppressions.delete(provider.name);
+      getCapabilityRegistry().invalidate();
+    };
+  }
+
+  listProviders(): readonly LLMProvider[] {
+    return [...this.providers.values()].sort((a, b) => a.name.localeCompare(b.name));
   }
 
   /**
@@ -665,6 +746,11 @@ export class ProviderRegistry {
       const subscriber = this.providers.get('openai-subscriber');
       if (subscriber) return subscriber;
     }
+    return this.getRegistered(name);
+  }
+
+  /** Retrieve the directly-registered provider without subscription route aliasing. */
+  getRegistered(name: string): LLMProvider {
     const p = this.providers.get(name);
     if (p) return p;
     // Check alias map — catalog may use a different name than the registered provider
@@ -1003,7 +1089,9 @@ export function getProviderRegistry(): ProviderRegistry {
 export function _resetProviderRegistryForTesting(): void {
   _providerRegistry = undefined;
   customModels = [];
+  runtimeModels = [];
   discoveredModels = [];
+  runtimeCatalogSuppressions.clear();
 }
 
 // Note: this Proxy only traps `get` and `has`. Direct property assignments

@@ -45,13 +45,16 @@ export const FETCH_TOOL_SCHEMA = {
             enum: ['json', 'form', 'raw', 'multipart'],
             description:
               'How to encode the body. json: sets Content-Type application/json;'
-              + ' form: sets Content-Type application/x-www-form-urlencoded;'
+              + ' form: URL-encodes body_data or sends body as application/x-www-form-urlencoded;'
               + ' multipart: builds a FormData body from body_data (object of key-value pairs);'
               + ' raw: sends as-is.',
           },
           body_data: {
             type: 'object',
-            description: 'Key-value pairs for multipart body_type. Each entry becomes a FormData field.',
+            description:
+              'Key-value pairs for structured request bodies.'
+              + ' For form, entries are URL-encoded into the request body.'
+              + ' For multipart, each entry becomes a FormData field.',
             additionalProperties: { type: 'string' },
           },
           extract: {
@@ -212,7 +215,7 @@ export interface FetchUrlInput {
   /** Base64-encoded request body. Decoded before sending. Takes precedence over body. */
   body_base64?: string;
   body_type?: 'json' | 'form' | 'raw' | 'multipart';
-  /** Key-value pairs used when body_type is 'multipart'. */
+  /** Key-value pairs used when body_type is 'form' or 'multipart'. */
   body_data?: Record<string, string>;
   extract?: FetchExtractMode;
   /** CSS selectors for structured extraction mode. */

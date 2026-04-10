@@ -637,6 +637,14 @@ interface PreparedFetchRequest {
   body?: string | FormData;
 }
 
+function encodeFormBodyData(bodyData: Record<string, string>): string {
+  const params = new URLSearchParams();
+  for (const [key, value] of Object.entries(bodyData)) {
+    params.append(key, value);
+  }
+  return params.toString();
+}
+
 async function fetchOneRaw(
   urlInput: FetchUrlInput,
   headers: Record<string, string>,
@@ -700,6 +708,11 @@ async function prepareFetchRequest(urlInput: FetchUrlInput): Promise<PreparedFet
       form.append(k, v);
     }
     body = form;
+  } else if (urlInput.body_type === 'form' && urlInput.body_data) {
+    body = encodeFormBodyData(urlInput.body_data);
+    if (!hasContentType) {
+      headers['Content-Type'] = 'application/x-www-form-urlencoded';
+    }
   } else if (urlInput.body_base64 !== undefined) {
     body = Buffer.from(urlInput.body_base64, 'base64').toString();
     if (!hasContentType) {
@@ -948,67 +961,7 @@ export const fetchTool: Tool = {
     }
 
     try {
-      const input = args as unknown as FetchInput;
-      const globalExtract: FetchExtractMode = input.extract ?? 'raw';
-      const parallel: boolean = input.parallel !== false; // default true
-      const verbosity: FetchVerbosity = input.verbosity ?? 'standard';
-      const cacheTtlSeconds = input.cache_ttl_seconds ?? 0;
-      const rateLimitMs = input.rate_limit_ms ?? 0;
-      const maxContentLength = input.max_content_length;
-
-      const sanitizeMode = resolveSanitizeMode(input.sanitize_mode);
-      const trustTierConfig: TrustTierConfig = {
-        trustedHosts: input.trusted_hosts,
-        blockedHosts: input.blocked_hosts,
-      };
-
-      const fetchOpts: FetchOneOptions = {
-        globalExtract,
-        verbosity,
-        cacheTtlSeconds,
-        maxContentLength,
-        sanitizeMode,
-        trustTierConfig,
-      };
-
-      const wallStart = performance.now();
-      let results: FetchUrlResult[];
-
-      if (parallel) {
-        if (rateLimitMs > 0) {
-          logger.debug('fetch tool: rate_limit_ms is ignored in parallel mode; set parallel: false to enforce rate limiting');
-        }
-        results = await Promise.all(
-          input.urls.map((u) => fetchOne(u, fetchOpts)),
-        );
-      } else {
-        results = [];
-        for (let i = 0; i < input.urls.length; i++) {
-          if (i > 0 && rateLimitMs > 0) {
-            await delay(rateLimitMs);
-          }
-          results.push(await fetchOne(input.urls[i], fetchOpts));
-        }
-      }
-
-      const totalMs = Math.round(performance.now() - wallStart);
-      const succeeded = results.filter((r) => r.error === undefined).length;
-      const failed = results.filter((r) => r.error !== undefined).length;
-
-      const output: FetchOutput = {
-        success: true,
-        summary: {
-          total: results.length,
-          succeeded,
-          failed,
-          total_ms: totalMs,
-        },
-      };
-
-      if (verbosity !== 'count_only') {
-        output.results = results;
-      }
-
+      const output = await executeFetchInput(args as unknown as FetchInput);
       return { success: true, output: JSON.stringify(output) };
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
@@ -1017,3 +970,65 @@ export const fetchTool: Tool = {
     }
   },
 };
+
+export async function executeFetchInput(input: FetchInput): Promise<FetchOutput> {
+  const globalExtract: FetchExtractMode = input.extract ?? 'raw';
+  const parallel: boolean = input.parallel !== false;
+  const verbosity: FetchVerbosity = input.verbosity ?? 'standard';
+  const cacheTtlSeconds = input.cache_ttl_seconds ?? 0;
+  const rateLimitMs = input.rate_limit_ms ?? 0;
+  const maxContentLength = input.max_content_length;
+
+  const sanitizeMode = resolveSanitizeMode(input.sanitize_mode);
+  const trustTierConfig: TrustTierConfig = {
+    trustedHosts: input.trusted_hosts,
+    blockedHosts: input.blocked_hosts,
+  };
+
+  const fetchOpts: FetchOneOptions = {
+    globalExtract,
+    verbosity,
+    cacheTtlSeconds,
+    maxContentLength,
+    sanitizeMode,
+    trustTierConfig,
+  };
+
+  const wallStart = performance.now();
+  let results: FetchUrlResult[];
+
+  if (parallel) {
+    if (rateLimitMs > 0) {
+      logger.debug('fetch tool: rate_limit_ms is ignored in parallel mode; set parallel: false to enforce rate limiting');
+    }
+    results = await Promise.all(input.urls.map((u) => fetchOne(u, fetchOpts)));
+  } else {
+    results = [];
+    for (let i = 0; i < input.urls.length; i++) {
+      if (i > 0 && rateLimitMs > 0) {
+        await delay(rateLimitMs);
+      }
+      results.push(await fetchOne(input.urls[i], fetchOpts));
+    }
+  }
+
+  const totalMs = Math.round(performance.now() - wallStart);
+  const succeeded = results.filter((r) => r.error === undefined).length;
+  const failed = results.filter((r) => r.error !== undefined).length;
+
+  const output: FetchOutput = {
+    success: true,
+    summary: {
+      total: results.length,
+      succeeded,
+      failed,
+      total_ms: totalMs,
+    },
+  };
+
+  if (verbosity !== 'count_only') {
+    output.results = results;
+  }
+
+  return output;
+}

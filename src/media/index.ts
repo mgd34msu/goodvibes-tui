@@ -1,6 +1,7 @@
 export {
   MediaProviderRegistry,
 } from './provider-registry.ts';
+export { ensureBuiltinMediaProviders } from './builtin-providers.ts';
 export type {
   MediaAnalysisRequest,
   MediaAnalysisResult,

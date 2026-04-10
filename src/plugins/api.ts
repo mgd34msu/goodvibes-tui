@@ -1,5 +1,6 @@
 import type { CommandRegistry, SlashCommand } from '../input/command-registry.ts';
-import type { ProviderRegistry } from '../providers/registry.ts';
+import type { ModelDefinition, ProviderRegistry, RuntimeProviderRegistration, TokenLimits, ModelTier } from '../providers/registry.ts';
+import type { LLMProvider } from '../providers/interface.ts';
 import type { ToolRegistry } from '../tools/registry.ts';
 import type { ToolDefinition } from '../types/tools.ts';
 import type { RuntimeEventBus, AnyRuntimeEvent, RuntimeEventPayload } from '../runtime/events/index.ts';
@@ -13,6 +14,7 @@ import {
 import { MemoryEmbeddingProviderRegistry, type MemoryEmbeddingProvider } from '../state/index.ts';
 import { VoiceProviderRegistry, type VoiceProvider } from '../voice/index.ts';
 import { MediaProviderRegistry, type MediaProvider } from '../media/index.ts';
+import { WebSearchProviderRegistry, type WebSearchProvider } from '../web-search/index.ts';
 import { logger } from '../utils/logger.ts';
 
 /**
@@ -28,6 +30,47 @@ export interface PluginProviderConfig {
   models: string[];
   /** Optional display label shown in the model picker. */
   displayName?: string;
+  /** Optional embedding model exposed by the endpoint. */
+  embeddingModel?: string;
+  /** Optional reasoning-format override for compatible endpoints. */
+  reasoningFormat?: 'mercury' | 'openrouter' | 'llamacpp' | 'none';
+  /** Optional context-window metadata for runtime-registered model picker entries. */
+  contextWindow?: number;
+  /** Optional runtime capability hints for the registered model entries. */
+  capabilities?: Partial<ModelDefinition['capabilities']>;
+  /** Optional reasoning effort options surfaced in the picker. */
+  reasoningEffort?: string[];
+  /** Optional provider tier surfaced in the picker. */
+  tier?: ModelTier;
+  /** Optional token limits surfaced in the picker. */
+  tokenLimits?: TokenLimits;
+  /** Optional auth env vars for provider posture. */
+  authEnvVars?: readonly string[];
+  /** Optional service names that expose service-owned OAuth. */
+  serviceNames?: readonly string[];
+  /** Optional subscription-provider identity used for stored OAuth posture. */
+  subscriptionProviderId?: string;
+  /** Optional catalog suppressions for runtime clients. */
+  suppressCatalogModels?: readonly string[];
+}
+
+export interface PluginRuntimeProviderModel {
+  readonly id: string;
+  readonly displayName?: string;
+  readonly description?: string;
+  readonly contextWindow?: number;
+  readonly selectable?: boolean;
+  readonly capabilities?: Partial<ModelDefinition['capabilities']>;
+  readonly reasoningEffort?: string[];
+  readonly tier?: ModelTier;
+  readonly tokenLimits?: TokenLimits;
+}
+
+export interface PluginProviderRegistration {
+  readonly provider: LLMProvider;
+  readonly models?: readonly PluginRuntimeProviderModel[];
+  readonly suppressCatalogModels?: readonly string[];
+  readonly replace?: boolean;
 }
 
 /**
@@ -63,6 +106,9 @@ export interface PluginAPI {
   /** Register a custom LLM provider (OpenAI-compatible endpoint). */
   registerProvider(name: string, config: PluginProviderConfig): Promise<void>;
 
+  /** Register a fully custom runtime provider instance with optional model entries. */
+  registerProviderInstance(registration: PluginProviderRegistration): void;
+
   /** Register a custom tool available to the LLM. */
   registerTool(
     name: string,
@@ -90,6 +136,9 @@ export interface PluginAPI {
 
   /** Register a TS-only media provider for analysis, transform, or generation. */
   registerMediaProvider(provider: MediaProvider, options?: { readonly replace?: boolean }): void;
+
+  /** Register a provider-backed web search adapter. */
+  registerWebSearchProvider(provider: WebSearchProvider, options?: { readonly replace?: boolean }): void;
 
   /** Subscribe to a typed runtime event. Returns an unsubscribe function. */
   onEvent<K extends AnyRuntimeEvent['type']>(
@@ -155,12 +204,37 @@ export function createPluginAPI(ctx: PluginAPIContext): PluginAPI {
             apiKey: config.apiKey ?? '',
             defaultModel: config.models[0] ?? '',
             models: config.models,
+            ...(config.embeddingModel ? { embeddingModel: config.embeddingModel } : {}),
+            ...(config.reasoningFormat ? { reasoningFormat: config.reasoningFormat } : {}),
+            ...(config.authEnvVars ? { authEnvVars: config.authEnvVars } : {}),
+            ...(config.serviceNames ? { serviceNames: config.serviceNames } : {}),
+            ...(config.subscriptionProviderId ? { subscriptionProviderId: config.subscriptionProviderId } : {}),
+            ...(config.suppressCatalogModels ? { suppressedModels: config.suppressCatalogModels } : {}),
           });
-          ctx.providerRegistry.register(provider);
+          const unregister = ctx.providerRegistry.registerRuntimeProvider({
+            provider,
+            models: config.models.map((modelId) => ({
+              id: modelId,
+              provider: name,
+              registryKey: `${name}:${modelId}`,
+              displayName: config.displayName ?? modelId,
+              description: `Plugin provider ${name}`,
+              contextWindow: config.contextWindow ?? 8192,
+              selectable: true,
+              capabilities: {
+                toolCalling: config.capabilities?.toolCalling ?? true,
+                codeEditing: config.capabilities?.codeEditing ?? true,
+                reasoning: config.capabilities?.reasoning ?? false,
+                multimodal: config.capabilities?.multimodal ?? false,
+              },
+              ...(config.reasoningEffort ? { reasoningEffort: config.reasoningEffort } : {}),
+              ...(config.tier ? { tier: config.tier } : {}),
+              ...(config.tokenLimits ? { tokenLimits: config.tokenLimits } : {}),
+            })),
+            suppressCatalogModels: config.suppressCatalogModels,
+          });
+          ctx.cleanup.push(unregister);
           logger.info(`[plugin:${ctx.pluginName}] Registered provider '${name}' with ${config.models.length} model(s)`);
-          // Note: ProviderRegistry.register() has no unregister equivalent.
-          // Plugin providers persist until process restart — same as built-in providers.
-          logger.warn(`[plugin:${ctx.pluginName}] Provider '${name}' cannot be unregistered on deactivate — it persists until process restart`);
         } catch (err) {
           logger.error(`[plugin:${ctx.pluginName}] registerProvider '${name}' failed: ${String(err)}`);
           throw err;
@@ -169,6 +243,34 @@ export function createPluginAPI(ctx: PluginAPIContext): PluginAPI {
         logger.error(`[plugin:${ctx.pluginName}] Could not import OpenAICompatProvider: ${String(err)}`);
         throw err;
       }
+    },
+
+    registerProviderInstance(registration) {
+      const unregister = ctx.providerRegistry.registerRuntimeProvider({
+        provider: registration.provider,
+        models: (registration.models ?? []).map((model) => ({
+          id: model.id,
+          provider: registration.provider.name,
+          registryKey: `${registration.provider.name}:${model.id}`,
+          displayName: model.displayName ?? model.id,
+          description: model.description ?? `Plugin provider ${registration.provider.name}`,
+          contextWindow: model.contextWindow ?? 8192,
+          selectable: model.selectable ?? true,
+          capabilities: {
+            toolCalling: model.capabilities?.toolCalling ?? true,
+            codeEditing: model.capabilities?.codeEditing ?? true,
+            reasoning: model.capabilities?.reasoning ?? false,
+            multimodal: model.capabilities?.multimodal ?? false,
+          },
+          ...(model.reasoningEffort ? { reasoningEffort: model.reasoningEffort } : {}),
+          ...(model.tier ? { tier: model.tier } : {}),
+          ...(model.tokenLimits ? { tokenLimits: model.tokenLimits } : {}),
+        })),
+        suppressCatalogModels: registration.suppressCatalogModels,
+        replace: registration.replace,
+      } satisfies RuntimeProviderRegistration);
+      ctx.cleanup.push(unregister);
+      logger.info(`[plugin:${ctx.pluginName}] Registered provider instance '${registration.provider.name}'`);
     },
 
     registerTool(name, schema, handler) {
@@ -249,6 +351,12 @@ export function createPluginAPI(ctx: PluginAPIContext): PluginAPI {
       const unregister = MediaProviderRegistry.getActive().register(provider, options);
       ctx.cleanup.push(unregister);
       logger.info(`[plugin:${ctx.pluginName}] Registered media provider '${provider.id}'`);
+    },
+
+    registerWebSearchProvider(provider, options = {}) {
+      const unregister = WebSearchProviderRegistry.getActive().register(provider, options);
+      ctx.cleanup.push(unregister);
+      logger.info(`[plugin:${ctx.pluginName}] Registered web search provider '${provider.id}'`);
     },
 
     onEvent(eventName, handler) {

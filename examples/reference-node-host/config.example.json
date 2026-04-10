@@ -1,0 +1,38 @@
+{
+  "baseUrl": "http://127.0.0.1:1455",
+  "label": "goodvibes-reference-node-host",
+  "requestedId": "goodvibes-reference-node-host",
+  "peerKind": "node",
+  "platform": "bun",
+  "deviceFamily": "desktop",
+  "version": "0.1.0",
+  "clientMode": "reference",
+  "capabilities": [
+    "files",
+    "commands",
+    "approvals",
+    "artifacts",
+    "resume"
+  ],
+  "commands": [
+    "status.request",
+    "location.request",
+    "session.message",
+    "automation.run",
+    "invoke"
+  ],
+  "allowedCommands": [
+    "status.request",
+    "location.request",
+    "session.message",
+    "automation.run",
+    "invoke"
+  ],
+  "heartbeatIntervalMs": 30000,
+  "workPullIntervalMs": 2000,
+  "pairingRetryMs": 5000,
+  "verifyRetryMs": 2500,
+  "verifyTimeoutMs": 600000,
+  "maxWorkItemsPerPull": 4,
+  "statePath": "~/.goodvibes/reference-node-host/state.json"
+}

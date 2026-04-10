@@ -3,11 +3,13 @@ export type MediaProviderState = 'healthy' | 'degraded' | 'disabled' | 'unconfig
 
 export interface MediaArtifact {
   readonly id?: string;
+  readonly artifactId?: string;
   readonly mimeType: string;
   readonly dataBase64?: string;
   readonly uri?: string;
   readonly filename?: string;
   readonly sizeBytes?: number;
+  readonly sha256?: string;
   readonly metadata: Record<string, unknown>;
 }
 

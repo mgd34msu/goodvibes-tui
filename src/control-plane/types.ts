@@ -2,8 +2,22 @@
  * Gateway and control-plane contracts shared by the daemon host and clients.
  */
 
+import type { ArtifactAttachment } from '../artifacts/index.ts';
+
 export type ControlPlaneStreamingMode = 'sse' | 'websocket' | 'both';
-export type ControlPlaneClientSurface = 'tui' | 'web' | 'slack' | 'discord' | 'ntfy' | 'webhook' | 'service';
+export type ControlPlaneClientSurface =
+  | 'tui'
+  | 'web'
+  | 'slack'
+  | 'discord'
+  | 'ntfy'
+  | 'webhook'
+  | 'telegram'
+  | 'google-chat'
+  | 'signal'
+  | 'whatsapp'
+  | 'imessage'
+  | 'service';
 
 export interface ControlPlaneServerConfig {
   enabled: boolean;
@@ -40,5 +54,6 @@ export interface ControlPlaneSurfaceMessage {
   routeId?: string;
   surfaceId?: string;
   clientId?: string;
+  attachments?: readonly ArtifactAttachment[];
   metadata?: Record<string, unknown>;
 }

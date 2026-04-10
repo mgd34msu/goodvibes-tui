@@ -1,5 +1,12 @@
 import OpenAI from 'openai';
-import type { LLMProvider, ChatRequest, ChatResponse } from './interface.ts';
+import type {
+  LLMProvider,
+  ChatRequest,
+  ChatResponse,
+  ProviderEmbeddingRequest,
+  ProviderEmbeddingResult,
+  ProviderRuntimeMetadata,
+} from './interface.ts';
 import { ProviderError } from '../types/errors.ts';
 import { withRetry } from '../utils/retry.ts';
 import {
@@ -21,6 +28,7 @@ export class OpenAIProvider implements LLMProvider {
   readonly models: string[] = [];
 
   private client: OpenAI;
+  private readonly embeddingModel = 'text-embedding-3-small';
 
   constructor(apiKey: string) {
     this.client = new OpenAI({ apiKey });
@@ -141,5 +149,64 @@ export class OpenAIProvider implements LLMProvider {
         stopReason,
       };
     });
+  }
+
+  async embed(request: ProviderEmbeddingRequest): Promise<ProviderEmbeddingResult> {
+    const response = await this.client.embeddings.create(
+      {
+        model: request.model ?? this.embeddingModel,
+        input: request.text,
+        ...(request.dimensions ? { dimensions: request.dimensions } : {}),
+      },
+      request.signal ? { signal: request.signal } : undefined,
+    );
+    const embedding = response.data[0]?.embedding ?? [];
+    return {
+      vector: Float32Array.from(embedding),
+      dimensions: embedding.length,
+      modelId: response.model,
+      metadata: {
+        usage: request.usage,
+        provider: this.name,
+      },
+    };
+  }
+
+  async describeRuntime(): Promise<ProviderRuntimeMetadata> {
+    const configured = Boolean(process.env.OPENAI_API_KEY || process.env.OPENAI_KEY);
+    const { buildStandardProviderAuthRoutes } = await import('./runtime-metadata.ts');
+    const authRoutes = await buildStandardProviderAuthRoutes({
+      providerId: 'openai',
+      apiKeyEnvVars: ['OPENAI_API_KEY', 'OPENAI_KEY'],
+      serviceNames: ['openai'],
+      subscriptionProviderId: 'openai',
+    });
+    return {
+      auth: {
+        mode: 'api-key',
+        configured,
+        detail: configured ? 'OpenAI API key available' : 'OPENAI_API_KEY or OPENAI_KEY not set',
+        envVars: ['OPENAI_API_KEY', 'OPENAI_KEY'],
+        routes: authRoutes,
+      },
+      models: {
+        models: this.models,
+        embeddingModel: this.embeddingModel,
+        embeddingDimensions: 384,
+      },
+      usage: {
+        streaming: true,
+        toolCalling: true,
+        parallelTools: true,
+        notes: ['Embeddings use the OpenAI embeddings API.'],
+      },
+      policy: {
+        local: false,
+        streamProtocol: 'openai-chat-completions',
+        reasoningMode: 'provider-default',
+        cacheStrategy: 'implicit-openai-cache-observation',
+        notes: ['OpenAI embedding usage is subject to OpenAI API terms.'],
+      },
+    };
   }
 }

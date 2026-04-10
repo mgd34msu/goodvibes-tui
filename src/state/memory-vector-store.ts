@@ -5,14 +5,16 @@ import { Database, type SQLQueryBindings } from 'bun:sqlite';
 import { load as loadSqliteVec } from 'sqlite-vec';
 import type { MemoryClass, MemoryRecord, MemoryReviewState, MemoryScope } from './memory-store.ts';
 import {
-  DEFAULT_MEMORY_EMBEDDING_DIMS,
   MemoryEmbeddingProviderRegistry,
   embedMemoryText,
   normalizeMemoryEmbeddingVector,
 } from './memory-embeddings.ts';
 import { logger } from '../utils/logger.ts';
 
-export const MEMORY_VECTOR_DIMS = DEFAULT_MEMORY_EMBEDDING_DIMS;
+// Keep this in sync with DEFAULT_MEMORY_EMBEDDING_DIMS in memory-embeddings.ts.
+// Duplicating the literal here avoids an initialization cycle when state/index.ts
+// re-exports both modules during targeted test imports.
+export const MEMORY_VECTOR_DIMS = 384;
 export { embedMemoryText } from './memory-embeddings.ts';
 
 export interface MemoryVectorSearchFilter {
@@ -98,6 +100,7 @@ export class SqliteVecMemoryIndex {
   private available = false;
   private error: string | undefined;
   private readonly embeddingRegistry = MemoryEmbeddingProviderRegistry.getActive();
+  private static readonly rebuildBatchSize = 25;
 
   constructor(
     private readonly dbPath: string,
@@ -142,32 +145,23 @@ export class SqliteVecMemoryIndex {
   upsert(record: MemoryRecord): void {
     if (!this.db || !this.enabled) return;
 
-    const rowid = this.ensureRowId(record.id);
     const sourceHash = memoryVectorSourceHash(record);
     const embedding = this.embedText(buildMemoryEmbeddingText(record), 'record', record.id);
+    this.writeRecord(record, sourceHash, embedding);
+  }
 
-    this.db.query('DELETE FROM memory_vectors WHERE rowid = ?').run(rowid);
-    this.db.query(
-      `INSERT INTO memory_vectors
-         (rowid, embedding, scope, cls, review_state, confidence, record_id, source_hash, updated_at, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    ).run(
-      rowid,
-      embedding,
-      record.scope,
-      record.cls,
-      record.reviewState,
-      record.confidence,
-      record.id,
-      sourceHash,
-      record.updatedAt,
-      record.createdAt,
-    );
-    this.db.query(
-      `UPDATE memory_vector_ids
-         SET source_hash = ?, updated_at = ?, indexed_at = ?
-       WHERE rowid = ?`,
-    ).run(sourceHash, record.updatedAt, Date.now(), rowid);
+  async upsertAsync(record: MemoryRecord): Promise<void> {
+    if (!this.db || !this.enabled) return;
+
+    const sourceHash = memoryVectorSourceHash(record);
+    const result = await this.embeddingRegistry.embedAsync({
+      text: buildMemoryEmbeddingText(record),
+      dimensions: this.dimensions,
+      usage: 'record',
+      recordId: record.id,
+    });
+    const embedding = normalizeMemoryEmbeddingVector(result.vector, this.dimensions);
+    this.writeRecord(record, sourceHash, embedding);
   }
 
   delete(recordId: string): void {
@@ -203,6 +197,55 @@ export class SqliteVecMemoryIndex {
       }
     });
     tx(records);
+  }
+
+  async syncAsync(records: readonly MemoryRecord[], options: { force?: boolean } = {}): Promise<void> {
+    if (!this.db || !this.enabled) return;
+
+    const pending: Array<{ record: MemoryRecord; sourceHash: string; embedding: Float32Array }> = [];
+
+    for (const record of records) {
+      const row = this.db.query<{ source_hash: string }, [string]>(
+        'SELECT source_hash FROM memory_vector_ids WHERE record_id = ? LIMIT 1',
+      ).get(record.id);
+      const sourceHash = memoryVectorSourceHash(record);
+      if (!options.force && row?.source_hash === sourceHash) {
+        continue;
+      }
+
+      const result = await this.embeddingRegistry.embedAsync({
+        text: buildMemoryEmbeddingText(record),
+        dimensions: this.dimensions,
+        usage: 'record',
+        recordId: record.id,
+      });
+      pending.push({
+        record,
+        sourceHash,
+        embedding: normalizeMemoryEmbeddingVector(result.vector, this.dimensions),
+      });
+
+      if (pending.length >= SqliteVecMemoryIndex.rebuildBatchSize) {
+        this.writePendingRebuildBatch(pending.splice(0, pending.length));
+        await yieldToEventLoop();
+      }
+    }
+
+    const staleRows = this.db.query<{ record_id: string }, []>(
+      'SELECT record_id FROM memory_vector_ids',
+    ).all();
+    const staleIds = new Set(staleRows.map((row) => row.record_id));
+    for (const record of records) {
+      staleIds.delete(record.id);
+    }
+
+    if (pending.length > 0) {
+      this.writePendingRebuildBatch(pending);
+    }
+
+    for (const recordId of staleIds) {
+      this.delete(recordId);
+    }
   }
 
   search(query: string, filter: MemoryVectorSearchFilter = {}): MemoryVectorCandidate[] {
@@ -319,6 +362,44 @@ export class SqliteVecMemoryIndex {
     });
     return normalizeMemoryEmbeddingVector(result.vector, this.dimensions);
   }
+
+  private writePendingRebuildBatch(entries: Array<{ record: MemoryRecord; sourceHash: string; embedding: Float32Array }>): void {
+    if (!this.db || !this.enabled || entries.length === 0) return;
+    const tx = this.db.transaction((batch: Array<{ record: MemoryRecord; sourceHash: string; embedding: Float32Array }>) => {
+      for (const entry of batch) {
+        this.writeRecord(entry.record, entry.sourceHash, entry.embedding);
+      }
+    });
+    tx(entries);
+  }
+
+  private writeRecord(record: MemoryRecord, sourceHash: string, embedding: Float32Array): void {
+    if (!this.db) return;
+    const rowid = this.ensureRowId(record.id);
+
+    this.db.query('DELETE FROM memory_vectors WHERE rowid = ?').run(rowid);
+    this.db.query(
+      `INSERT INTO memory_vectors
+         (rowid, embedding, scope, cls, review_state, confidence, record_id, source_hash, updated_at, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    ).run(
+      rowid,
+      embedding,
+      record.scope,
+      record.cls,
+      record.reviewState,
+      record.confidence,
+      record.id,
+      sourceHash,
+      record.updatedAt,
+      record.createdAt,
+    );
+    this.db.query(
+      `UPDATE memory_vector_ids
+         SET source_hash = ?, updated_at = ?, indexed_at = ?
+       WHERE rowid = ?`,
+    ).run(sourceHash, record.updatedAt, Date.now(), rowid);
+  }
 }
 
 function normalizeLimit(value: number | undefined, fallback: number): number {
@@ -329,4 +410,8 @@ function normalizeLimit(value: number | undefined, fallback: number): number {
 function distanceToSimilarity(distance: number): number {
   if (!Number.isFinite(distance)) return 0;
   return Math.max(0, Math.min(1, 1 - (distance / 2)));
+}
+
+function yieldToEventLoop(): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, 0));
 }

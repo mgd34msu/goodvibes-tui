@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import type { ArtifactReference } from '../artifacts/index.ts';
 import { ChannelDeliveryRouter, RouteBindingManager } from '../channels/index.ts';
 import { ConfigManager } from '../config/manager.ts';
 import { ServiceRegistry } from '../config/service-registry.ts';
@@ -56,6 +57,39 @@ function toDeliveryKind(surfaceKind: string): 'notification' | 'reply' | 'action
 
 function toDeliverySurfaceKind(surfaceKind: AutomationDeliveryTarget['surfaceKind']): RouteSurfaceKind {
   return surfaceKind ?? 'webhook';
+}
+
+function extractArtifactReferences(result: unknown): ArtifactReference[] {
+  if (!result || typeof result !== 'object') return [];
+  const record = result as Record<string, unknown>;
+  const rawItems = [
+    ...(Array.isArray(record.artifacts) ? record.artifacts : []),
+    ...(Array.isArray(record.attachments) ? record.attachments : []),
+    ...(Array.isArray(record.artifactIds) ? record.artifactIds.map((artifactId) => ({ artifactId })) : []),
+  ];
+  const references: ArtifactReference[] = [];
+  for (const entry of rawItems) {
+    if (typeof entry === 'string' && entry.trim().length > 0) {
+      references.push({ artifactId: entry.trim() });
+      continue;
+    }
+    if (!entry || typeof entry !== 'object') continue;
+    const candidate = entry as Record<string, unknown>;
+    const artifactId = typeof candidate.artifactId === 'string'
+      ? candidate.artifactId
+      : typeof candidate.id === 'string'
+        ? candidate.id
+        : '';
+    if (!artifactId) continue;
+    references.push({
+      artifactId,
+      ...(typeof candidate.label === 'string' ? { label: candidate.label } : {}),
+      ...(typeof candidate.metadata === 'object' && candidate.metadata !== null
+        ? { metadata: candidate.metadata as Record<string, unknown> }
+        : {}),
+    });
+  }
+  return references.filter((entry, index, values) => values.findIndex((candidate) => candidate.artifactId === entry.artifactId) === index);
 }
 
 interface ResolvedDeliveryTarget {
@@ -248,6 +282,7 @@ export class AutomationDeliveryManager {
       runId: run.id,
       status: run.status,
       includeLinks: job.delivery.includeLinks,
+      ...(run.result !== undefined ? { attachments: extractArtifactReferences(run.result) } : {}),
       ...(run.agentId ? { agentId: run.agentId } : {}),
       ...(resolved.binding ? { binding: resolved.binding } : {}),
     });

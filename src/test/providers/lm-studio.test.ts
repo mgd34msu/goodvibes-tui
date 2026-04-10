@@ -220,6 +220,44 @@ describe('LMStudioProvider', () => {
     expect(fallbackCalls).toHaveLength(1);
   });
 
+  test('delegates embeddings to the fallback provider and surfaces runtime metadata', async () => {
+    const fallbackProvider: LLMProvider = {
+      name: 'fallback',
+      models: ['model-a'],
+      chat: async () => ({
+        content: 'ok',
+        toolCalls: [],
+        usage: { inputTokens: 1, outputTokens: 1 },
+        stopReason: 'end',
+      }),
+      embed: async () => ({
+        vector: Float32Array.from([0.1, 0.2, 0.3]),
+        dimensions: 3,
+        modelId: 'text-embedding',
+      }),
+    };
+
+    const provider = new LMStudioProvider({
+      name: 'LM Studio',
+      baseURL: 'http://127.0.0.1:1234/v1',
+      apiKey: '',
+      defaultModel: 'model-a',
+      models: ['model-a'],
+      fallbackProvider,
+    });
+
+    const embedding = await provider.embed({
+      text: 'hello',
+      dimensions: 3,
+      usage: 'query',
+    });
+    expect(Array.from(embedding.vector as Float32Array).map((value) => Number(value.toFixed(1)))).toEqual([0.1, 0.2, 0.3]);
+
+    const runtime = await provider.describeRuntime();
+    expect(runtime.policy?.streamProtocol).toBe('lmstudio-native-or-responses');
+    expect(runtime.auth?.routes?.some((route) => route.route === 'anonymous')).toBe(true);
+  });
+
   test('uses responses path when native chat cannot continue prior history safely', async () => {
     let nativeCalled = false;
     const provider = new LMStudioProvider({

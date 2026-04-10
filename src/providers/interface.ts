@@ -9,6 +9,91 @@ export const REASONING_BUDGET_MAP: Record<string, number> = {
   high: 32768,
 };
 
+/** Runtime metadata emitted by providers for diagnostics and policy surfaces. */
+export type ProviderDeclaredAuthRoute =
+  | 'api-key'
+  | 'secret-ref'
+  | 'service-oauth'
+  | 'subscription-oauth'
+  | 'anonymous'
+  | 'none';
+
+export interface ProviderAuthRouteDescriptor {
+  readonly route: ProviderDeclaredAuthRoute;
+  readonly label: string;
+  readonly configured: boolean;
+  readonly usable?: boolean;
+  readonly freshness?: 'healthy' | 'expiring' | 'expired' | 'pending' | 'unconfigured';
+  readonly detail?: string;
+  readonly envVars?: readonly string[];
+  readonly secretKeys?: readonly string[];
+  readonly serviceNames?: readonly string[];
+  readonly providerId?: string;
+  readonly repairHints?: readonly string[];
+}
+
+export interface ProviderUsageCostMetadata {
+  readonly source: 'catalog' | 'provider' | 'none';
+  readonly currency?: string;
+  readonly inputPerMillionTokens?: number;
+  readonly outputPerMillionTokens?: number;
+  readonly detail?: string;
+}
+
+export interface ProviderRuntimeMetadata {
+  readonly auth?: {
+    readonly mode: 'api-key' | 'oauth' | 'anonymous' | 'none';
+    readonly configured: boolean;
+    readonly detail?: string;
+    readonly envVars?: readonly string[];
+    readonly routes?: readonly ProviderAuthRouteDescriptor[];
+  };
+  readonly models?: {
+    readonly defaultModel?: string;
+    readonly models: readonly string[];
+    readonly embeddingModel?: string;
+    readonly embeddingDimensions?: number;
+    readonly aliases?: readonly string[];
+    readonly suppressedModels?: readonly string[];
+  };
+  readonly usage?: {
+    readonly streaming: boolean;
+    readonly toolCalling: boolean;
+    readonly parallelTools: boolean;
+    readonly promptCaching?: boolean;
+    readonly cost?: ProviderUsageCostMetadata;
+    readonly notes?: readonly string[];
+  };
+  readonly policy?: {
+    readonly local?: boolean;
+    readonly dataRetention?: string;
+    readonly streamProtocol?: string;
+    readonly reasoningMode?: string;
+    readonly supportedReasoningEfforts?: readonly string[];
+    readonly cacheStrategy?: string;
+    readonly notes?: readonly string[];
+  };
+  readonly notes?: readonly string[];
+}
+
+/** Shared embedding request shape used by providers and provider-backed adapters. */
+export interface ProviderEmbeddingRequest {
+  readonly text: string;
+  readonly dimensions: number;
+  readonly usage: 'record' | 'query' | 'doctor';
+  readonly model?: string;
+  readonly signal?: AbortSignal;
+  readonly metadata?: Record<string, unknown>;
+}
+
+/** Shared embedding response shape used by providers and provider-backed adapters. */
+export interface ProviderEmbeddingResult {
+  readonly vector: Float32Array | readonly number[];
+  readonly dimensions: number;
+  readonly modelId?: string;
+  readonly metadata?: Record<string, unknown>;
+}
+
 /** Contract all LLM providers must implement. */
 export interface LLMProvider {
   readonly name: string;
@@ -23,6 +108,8 @@ export interface LLMProvider {
    */
   readonly capabilities?: Partial<ProviderCapability>;
   chat(params: ChatRequest): Promise<ChatResponse>;
+  embed?(request: ProviderEmbeddingRequest): Promise<ProviderEmbeddingResult>;
+  describeRuntime?(): ProviderRuntimeMetadata | Promise<ProviderRuntimeMetadata>;
 }
 
 /** Incremental tool call data received during streaming. */

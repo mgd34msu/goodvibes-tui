@@ -3,6 +3,9 @@ import type { SharedApprovalRecord } from '../control-plane/index.ts';
 import type { Tool } from '../types/tools.ts';
 import type {
   ChannelAdapterDescriptor,
+  ChannelAllowlistEditInput,
+  ChannelAllowlistEditResult,
+  ChannelAllowlistResolution,
   ChannelAccountRecord,
   ChannelAccountLifecycleAction,
   ChannelAccountLifecycleResult,
@@ -13,8 +16,15 @@ import type {
   ChannelConversationKind,
   ChannelDirectoryEntry,
   ChannelDirectoryQueryOptions,
+  ChannelDoctorReport,
+  ChannelLifecycleState,
   ChannelOperatorActionDescriptor,
+  ChannelRenderPolicy,
+  ChannelRenderRequest,
+  ChannelRenderResult,
   ChannelResolvedTarget,
+  ChannelRepairAction,
+  ChannelSetupSchema,
   ChannelStatusSnapshot,
   ChannelSurface,
   ChannelTargetResolveOptions,
@@ -26,11 +36,21 @@ export interface ChannelPlugin {
   readonly surface: ChannelSurface;
   readonly displayName: string;
   readonly capabilities: readonly ChannelCapability[];
+  readonly setupVersion?: number;
   readonly webhookPath?: string;
   readonly handleInbound?: (req: Request) => Promise<Response>;
+  readonly renderPolicy?: () => ChannelRenderPolicy | Promise<ChannelRenderPolicy>;
+  readonly renderEvent?: (request: ChannelRenderRequest) => Promise<ChannelRenderResult | void>;
   readonly deliverReply?: (pending: unknown, message: string) => Promise<void>;
   readonly deliverProgress?: (pending: unknown, progress: string) => Promise<void>;
   readonly notifyApproval?: (approval: SharedApprovalRecord, binding: AutomationRouteBinding) => Promise<void>;
+  readonly getSetupSchema?: (accountId?: string) => Promise<ChannelSetupSchema> | ChannelSetupSchema;
+  readonly doctor?: (accountId?: string) => Promise<ChannelDoctorReport> | ChannelDoctorReport;
+  readonly listRepairActions?: (accountId?: string) => Promise<readonly ChannelRepairAction[]> | readonly ChannelRepairAction[];
+  readonly getLifecycleState?: (accountId?: string) => Promise<ChannelLifecycleState> | ChannelLifecycleState;
+  readonly migrateLifecycle?: (accountId?: string, input?: Record<string, unknown>) => Promise<ChannelLifecycleState> | ChannelLifecycleState;
+  readonly resolveAllowlist?: (input: ChannelAllowlistEditInput) => Promise<ChannelAllowlistResolution> | ChannelAllowlistResolution;
+  readonly editAllowlist?: (input: ChannelAllowlistEditInput) => Promise<ChannelAllowlistEditResult> | ChannelAllowlistEditResult;
   readonly getStatus?: () => Promise<ChannelStatusSnapshot>;
   readonly listAccounts?: () => Promise<readonly ChannelAccountRecord[]>;
   readonly getAccount?: (accountId: string) => Promise<ChannelAccountRecord | null>;
@@ -128,6 +148,7 @@ export class ChannelPluginRegistry {
       surface: plugin.surface,
       displayName: plugin.displayName,
       capabilities: [...plugin.capabilities],
+      ...(plugin.setupVersion ? { setupVersion: plugin.setupVersion } : {}),
     }));
   }
 
@@ -168,6 +189,77 @@ export class ChannelPluginRegistry {
     if (!plugin?.notifyApproval) return false;
     await plugin.notifyApproval(approval, binding);
     return true;
+  }
+
+  async getRenderPolicy(surface: ChannelSurface): Promise<ChannelRenderPolicy | null> {
+    const plugin = this.getBySurface(surface);
+    if (!plugin?.renderPolicy) return null;
+    return plugin.renderPolicy();
+  }
+
+  async render(surface: ChannelSurface, request: ChannelRenderRequest): Promise<ChannelRenderResult | null> {
+    const plugin = this.getBySurface(surface);
+    if (!plugin) return null;
+    if (plugin.renderEvent) {
+      const result = await plugin.renderEvent(request);
+      if (result) return result;
+      return { delivered: true, metadata: { surface, pluginId: plugin.id } };
+    }
+    if (request.phase === 'final' && plugin.deliverReply) {
+      await plugin.deliverReply(request.pending, request.text);
+      return { delivered: true, metadata: { surface, pluginId: plugin.id, fallback: 'deliverReply' } };
+    }
+    if (request.phase === 'progress' && plugin.deliverProgress) {
+      await plugin.deliverProgress(request.pending, request.text);
+      return { delivered: true, metadata: { surface, pluginId: plugin.id, fallback: 'deliverProgress' } };
+    }
+    return null;
+  }
+
+  async getSetupSchema(surface: ChannelSurface, accountId?: string): Promise<ChannelSetupSchema | null> {
+    const plugin = this.getBySurface(surface);
+    if (!plugin?.getSetupSchema) return null;
+    return plugin.getSetupSchema(accountId);
+  }
+
+  async doctor(surface: ChannelSurface, accountId?: string): Promise<ChannelDoctorReport | null> {
+    const plugin = this.getBySurface(surface);
+    if (!plugin?.doctor) return null;
+    return plugin.doctor(accountId);
+  }
+
+  async listRepairActions(surface: ChannelSurface, accountId?: string): Promise<readonly ChannelRepairAction[]> {
+    const plugin = this.getBySurface(surface);
+    if (!plugin?.listRepairActions) return [];
+    return plugin.listRepairActions(accountId);
+  }
+
+  async getLifecycleState(surface: ChannelSurface, accountId?: string): Promise<ChannelLifecycleState | null> {
+    const plugin = this.getBySurface(surface);
+    if (!plugin?.getLifecycleState) return null;
+    return plugin.getLifecycleState(accountId);
+  }
+
+  async migrateLifecycle(
+    surface: ChannelSurface,
+    accountId?: string,
+    input?: Record<string, unknown>,
+  ): Promise<ChannelLifecycleState | null> {
+    const plugin = this.getBySurface(surface);
+    if (!plugin?.migrateLifecycle) return null;
+    return plugin.migrateLifecycle(accountId, input);
+  }
+
+  async resolveAllowlist(surface: ChannelSurface, input: ChannelAllowlistEditInput): Promise<ChannelAllowlistResolution | null> {
+    const plugin = this.getBySurface(surface);
+    if (!plugin?.resolveAllowlist) return null;
+    return plugin.resolveAllowlist(input);
+  }
+
+  async editAllowlist(surface: ChannelSurface, input: ChannelAllowlistEditInput): Promise<ChannelAllowlistEditResult | null> {
+    const plugin = this.getBySurface(surface);
+    if (!plugin?.editAllowlist) return null;
+    return plugin.editAllowlist(input);
   }
 
   async listStatus(): Promise<ChannelStatusSnapshot[]> {
