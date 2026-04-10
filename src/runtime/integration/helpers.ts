@@ -1,6 +1,9 @@
 import { getPanelManager } from '../../panels/panel-manager.ts';
 import type { ConfigManager } from '../../config/index.ts';
+import { AutomationManager } from '../../automation/index.ts';
+import { ApprovalBroker, SharedSessionBroker } from '../../control-plane/index.ts';
 import { getRemoteRunnerRegistry } from '../remote/runner-registry.ts';
+import { getDistributedRuntimeManager } from '../remote/distributed-runtime.ts';
 import { getRemoteSupervisor } from '../remote/supervisor.ts';
 import type { RuntimeStore } from '../store/index.ts';
 import type { RuntimeEventBus, RuntimeEventDomain, RuntimeEventEnvelope, AnyRuntimeEvent } from '../events/index.ts';
@@ -52,6 +55,10 @@ export function setIntegrationHelpersContext(context: IntegrationHelpersContext)
 
 export function clearIntegrationHelpersContext(): void {
   currentContext = null;
+}
+
+export function getIntegrationHelpersContextOptional(): IntegrationHelpersContext | null {
+  return currentContext;
 }
 
 function getRequiredContext(): IntegrationHelpersContext {
@@ -107,6 +114,38 @@ export function buildIntegrationHelperReview(): {
       'GET /api/review',
       'GET /api/session',
       'GET /api/tasks',
+      'GET /api/automation',
+      'GET /api/sessions',
+      'GET /api/deliveries',
+      'GET /api/control-plane',
+      'GET /api/control-plane/clients',
+      'GET /api/control-plane/events?domains=session,tasks',
+      'GET /api/control-plane/web',
+      'GET /api/routes',
+      'GET /api/routes/bindings',
+      'POST /api/routes/bindings',
+      'GET /api/surfaces',
+      'GET /api/channels/accounts',
+      'GET /api/channels/accounts/:surface',
+      'GET /api/channels/accounts/:surface/:accountId',
+      'POST /api/channels/accounts/:surface/actions/:action',
+      'POST /api/channels/accounts/:surface/:accountId/actions/:action',
+      'GET /api/channels/capabilities',
+      'GET /api/channels/capabilities/:surface',
+      'GET /api/channels/tools',
+      'GET /api/channels/tools/:surface',
+      'GET /api/channels/agent-tools',
+      'GET /api/channels/agent-tools/:surface',
+      'POST /api/channels/tools/:surface/:toolId',
+      'GET /api/channels/actions',
+      'GET /api/channels/actions/:surface',
+      'POST /api/channels/actions/:surface/:actionId',
+      'POST /api/channels/targets/:surface/resolve',
+      'POST /api/channels/authorize/:surface',
+      'GET /api/watchers',
+      'GET /api/service/status',
+      'POST /api/service/install',
+      'POST /api/service/uninstall',
       'GET /api/approvals',
       'GET /api/remote',
       'GET /api/health',
@@ -173,9 +212,69 @@ export function getIntegrationTaskSnapshot(): Record<string, unknown> {
   };
 }
 
+export function getIntegrationAutomationSnapshot(): Record<string, unknown> {
+  const manager = AutomationManager.getInstance();
+  const jobs = manager.listJobs();
+  const runs = manager.listRuns().slice(0, 50);
+  return {
+    totals: {
+      jobs: jobs.length,
+      enabled: jobs.filter((job) => job.enabled).length,
+      paused: jobs.filter((job) => !job.enabled).length,
+      runs: runs.length,
+    },
+    jobs: jobs.map((job) => ({
+      id: job.id,
+      name: job.name,
+      enabled: job.enabled,
+      status: job.status,
+      schedule: job.schedule,
+      nextRunAt: job.nextRunAt,
+      lastRunAt: job.lastRunAt,
+      runCount: job.runCount,
+      failureCount: job.failureCount,
+    })),
+    recentRuns: runs.map((run) => ({
+      id: run.id,
+      jobId: run.jobId,
+      status: run.status,
+      trigger: run.triggeredBy.kind,
+      queuedAt: run.queuedAt,
+      startedAt: run.startedAt,
+      endedAt: run.endedAt,
+      agentId: run.agentId,
+      error: run.error,
+    })),
+  };
+}
+
+export function getIntegrationRouteSnapshot(): Record<string, unknown> {
+  const { runtimeStore } = getRequiredContext();
+  const state = runtimeStore.getState();
+  return {
+    totalBindings: state.routes.bindingIds.length,
+    activeBindings: state.routes.activeBindingIds.length,
+    recentBindings: state.routes.recentBindingIds.length,
+    bindings: [...state.routes.bindings.values()].map((binding) => ({
+      id: binding.id,
+      kind: binding.kind,
+      surfaceKind: binding.surfaceKind,
+      surfaceId: binding.surfaceId,
+      externalId: binding.externalId,
+      threadId: binding.threadId,
+      channelId: binding.channelId,
+      sessionId: binding.sessionId,
+      jobId: binding.jobId,
+      runId: binding.runId,
+      lastSeenAt: binding.lastSeenAt,
+    })),
+  };
+}
+
 export function getIntegrationApprovalSnapshot(): Record<string, unknown> {
   const { runtimeStore } = getRequiredContext();
   const state = runtimeStore.getState();
+  const approvals = ApprovalBroker.getInstance().listApprovals(50);
   return {
     awaitingDecision: state.permissions.awaitingDecision,
     mode: state.permissions.mode,
@@ -184,6 +283,38 @@ export function getIntegrationApprovalSnapshot(): Record<string, unknown> {
     denialCount: state.permissions.denialCount,
     cachedChecks: state.permissions.cachedChecks,
     totalChecks: state.permissions.totalChecks,
+    approvals,
+  };
+}
+
+export function getIntegrationSessionBrokerSnapshot(): Record<string, unknown> {
+  const broker = SharedSessionBroker.getInstance();
+  const sessions = broker.listSessions(50);
+  return {
+    totals: {
+      sessions: sessions.length,
+      active: sessions.filter((session) => session.status === 'active').length,
+      closed: sessions.filter((session) => session.status === 'closed').length,
+    },
+    sessions,
+  };
+}
+
+export function getIntegrationDeliverySnapshot(): Record<string, unknown> {
+  const { runtimeStore } = getRequiredContext();
+  const state = runtimeStore.getState();
+  const attempts = [...state.deliveries.deliveryAttempts.values()]
+    .sort((a, b) => (b.startedAt ?? b.endedAt ?? 0) - (a.startedAt ?? a.endedAt ?? 0))
+    .slice(0, 100);
+  return {
+    totals: {
+      queued: state.deliveries.totalQueued,
+      started: state.deliveries.totalStarted,
+      succeeded: state.deliveries.totalSucceeded,
+      failed: state.deliveries.totalFailed,
+      deadLettered: state.deliveries.totalDeadLettered,
+    },
+    attempts,
   };
 }
 
@@ -191,6 +322,7 @@ export function getIntegrationRemoteSnapshot(): Record<string, unknown> {
   const { runtimeStore } = getRequiredContext();
   const state = runtimeStore.getState();
   const remoteRegistry = getRemoteRunnerRegistry();
+  const distributedRuntime = getDistributedRuntimeManager();
   const supervisor = getRemoteSupervisor().getSnapshot(runtimeStore);
   const contracts = remoteRegistry.listContracts();
   const pools = remoteRegistry.listPools();
@@ -258,6 +390,7 @@ export function getIntegrationRemoteSnapshot(): Record<string, unknown> {
         taskId: entry.taskId,
       })),
     },
+    distributed: distributedRuntime.getSnapshot(),
   };
 }
 

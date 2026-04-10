@@ -34,6 +34,72 @@ export interface DiscordInteraction {
   raw: Record<string, unknown>;
 }
 
+export interface DiscordOAuthAuthorizeOptions {
+  readonly clientId: string;
+  readonly redirectUri?: string;
+  readonly scopes?: readonly string[];
+  readonly permissions?: string;
+  readonly guildId?: string;
+  readonly disableGuildSelect?: boolean;
+  readonly state?: string;
+}
+
+export interface DiscordApplicationCommandOption {
+  readonly type: number;
+  readonly name: string;
+  readonly description: string;
+  readonly required?: boolean;
+}
+
+export interface DiscordApplicationCommand {
+  readonly id?: string;
+  readonly application_id?: string;
+  readonly guild_id?: string;
+  readonly name: string;
+  readonly description: string;
+  readonly type?: number;
+  readonly options?: readonly DiscordApplicationCommandOption[];
+  readonly default_member_permissions?: string | null;
+  readonly dm_permission?: boolean;
+}
+
+export interface DiscordGatewayBotResponse {
+  readonly url: string;
+  readonly shards: number;
+  readonly session_start_limit?: Record<string, unknown>;
+}
+
+export interface DiscordGatewayDispatch {
+  readonly op: number;
+  readonly t?: string;
+  readonly s?: number;
+  readonly d?: Record<string, unknown> | null;
+}
+
+export interface DiscordGatewayClientOptions {
+  readonly token: string;
+  readonly integration: DiscordIntegration;
+  readonly intents?: number;
+  readonly gatewayUrl?: string;
+  readonly onDispatch: (dispatch: DiscordGatewayDispatch, client: DiscordGatewayClient) => void | Promise<void>;
+  readonly WebSocketImpl?: typeof WebSocket;
+}
+
+export const DiscordGatewayOpcode = {
+  Dispatch: 0,
+  Heartbeat: 1,
+  Identify: 2,
+  Hello: 10,
+  HeartbeatAck: 11,
+} as const;
+
+export const DiscordGatewayIntent = {
+  Guilds: 1 << 0,
+  GuildMessages: 1 << 9,
+  DirectMessages: 1 << 12,
+  MessageContent: 1 << 15,
+} as const;
+
 // ---------------------------------------------------------------------------
 // DiscordIntegration
 // ---------------------------------------------------------------------------
@@ -52,6 +118,104 @@ export class DiscordIntegration {
     private webhookUrl?: string,
     private botToken?: string,
   ) {}
+
+  static buildOAuthAuthorizeUrl(options: DiscordOAuthAuthorizeOptions): string {
+    const url = new URL('https://discord.com/oauth2/authorize');
+    url.searchParams.set('client_id', options.clientId);
+    url.searchParams.set('scope', (options.scopes?.length ? options.scopes : ['bot', 'applications.commands']).join(' '));
+    if (options.redirectUri) url.searchParams.set('redirect_uri', options.redirectUri);
+    if (options.permissions) url.searchParams.set('permissions', options.permissions);
+    if (options.guildId) url.searchParams.set('guild_id', options.guildId);
+    if (options.disableGuildSelect !== undefined) url.searchParams.set('disable_guild_select', options.disableGuildSelect ? 'true' : 'false');
+    if (options.state) url.searchParams.set('state', options.state);
+    return url.toString();
+  }
+
+  static buildGoodVibesCommand(): DiscordApplicationCommand {
+    return {
+      name: 'goodvibes',
+      description: 'Send a prompt to GoodVibes.',
+      type: 1,
+      options: [
+        {
+          type: 3,
+          name: 'prompt',
+          description: 'Prompt or control command to run.',
+          required: true,
+        },
+      ],
+    };
+  }
+
+  async getGatewayBot(token = this.botToken): Promise<DiscordGatewayBotResponse> {
+    return this.apiFetch<DiscordGatewayBotResponse>('/gateway/bot', { token });
+  }
+
+  async getCurrentBotUser(token = this.botToken): Promise<Record<string, unknown>> {
+    return this.apiFetch<Record<string, unknown>>('/users/@me', { token });
+  }
+
+  async listGuildChannels(guildId: string, token = this.botToken): Promise<Array<Record<string, unknown>>> {
+    this.validateSnowflake(guildId, 'guildId');
+    return this.apiFetch<Array<Record<string, unknown>>>(`/guilds/${guildId}/channels`, { token });
+  }
+
+  async listGuildMembers(
+    guildId: string,
+    options: { readonly token?: string; readonly limit?: number; readonly after?: string } = {},
+  ): Promise<Array<Record<string, unknown>>> {
+    this.validateSnowflake(guildId, 'guildId');
+    const params = new URLSearchParams({
+      limit: String(Math.max(1, Math.min(1000, options.limit ?? 100))),
+    });
+    if (options.after) params.set('after', options.after);
+    return this.apiFetch<Array<Record<string, unknown>>>(`/guilds/${guildId}/members?${params.toString()}`, {
+      token: options.token ?? this.botToken,
+    });
+  }
+
+  async registerGlobalCommand(
+    applicationId: string,
+    command: DiscordApplicationCommand,
+    token = this.botToken,
+  ): Promise<DiscordApplicationCommand> {
+    this.validateSnowflake(applicationId, 'applicationId');
+    return this.apiFetch<DiscordApplicationCommand>(`/applications/${applicationId}/commands`, {
+      method: 'POST',
+      token,
+      body: command,
+    });
+  }
+
+  async registerGuildCommand(
+    applicationId: string,
+    guildId: string,
+    command: DiscordApplicationCommand,
+    token = this.botToken,
+  ): Promise<DiscordApplicationCommand> {
+    this.validateSnowflake(applicationId, 'applicationId');
+    this.validateSnowflake(guildId, 'guildId');
+    return this.apiFetch<DiscordApplicationCommand>(`/applications/${applicationId}/guilds/${guildId}/commands`, {
+      method: 'POST',
+      token,
+      body: command,
+    });
+  }
+
+  async bulkOverwriteGuildCommands(
+    applicationId: string,
+    guildId: string,
+    commands: readonly DiscordApplicationCommand[],
+    token = this.botToken,
+  ): Promise<DiscordApplicationCommand[]> {
+    this.validateSnowflake(applicationId, 'applicationId');
+    this.validateSnowflake(guildId, 'guildId');
+    return this.apiFetch<DiscordApplicationCommand[]>(`/applications/${applicationId}/guilds/${guildId}/commands`, {
+      method: 'PUT',
+      token,
+      body: commands,
+    });
+  }
 
   // -------------------------------------------------------------------------
   // Inbound: verification
@@ -237,6 +401,33 @@ export class DiscordIntegration {
     }
   }
 
+  private async apiFetch<T>(
+    path: string,
+    options: {
+      readonly method?: string;
+      readonly token?: string;
+      readonly body?: unknown;
+    } = {},
+  ): Promise<T> {
+    const token = options.token ?? this.botToken;
+    if (!token) {
+      throw new Error(`DiscordIntegration: botToken is required for ${path}`);
+    }
+    const res = await fetch(`https://discord.com/api/v10${path}`, {
+      method: options.method ?? 'GET',
+      headers: {
+        Authorization: `Bot ${token}`,
+        ...(options.body !== undefined ? { 'Content-Type': 'application/json' } : {}),
+      },
+      ...(options.body !== undefined ? { body: JSON.stringify(options.body) } : {}),
+    });
+    if (!res.ok) {
+      const err = await res.text();
+      throw new Error(`DiscordIntegration.apiFetch ${path} failed (${res.status}): ${err}`);
+    }
+    return await res.json() as T;
+  }
+
   // -------------------------------------------------------------------------
   // Formatting helpers
   // -------------------------------------------------------------------------
@@ -298,6 +489,107 @@ export class DiscordIntegration {
   private validateSnowflake(id: string, name: string): void {
     if (!/^\d{17,20}$/.test(id)) {
       throw new Error(`DiscordIntegration: invalid ${name}: ${id}`);
+    }
+  }
+}
+
+export class DiscordGatewayClient {
+  private socket: WebSocket | null = null;
+  private heartbeat: ReturnType<typeof setInterval> | null = null;
+  private sequence: number | null = null;
+  private started = false;
+  private readonly WebSocketImpl: typeof WebSocket;
+
+  constructor(private readonly options: DiscordGatewayClientOptions) {
+    this.WebSocketImpl = options.WebSocketImpl ?? WebSocket;
+  }
+
+  async start(): Promise<DiscordGatewayBotResponse> {
+    if (this.started && this.socket) {
+      return {
+        url: this.options.gatewayUrl ?? '',
+        shards: 1,
+      };
+    }
+    const gateway = this.options.gatewayUrl
+      ? { url: this.options.gatewayUrl, shards: 1 }
+      : await this.options.integration.getGatewayBot(this.options.token);
+    const url = `${gateway.url.replace(/\/+$/, '')}/?v=10&encoding=json`;
+    const socket = new this.WebSocketImpl(url);
+    this.socket = socket;
+    this.started = true;
+    socket.addEventListener('message', (event) => {
+      void this.handleMessage(event.data);
+    });
+    socket.addEventListener('close', () => this.cleanup());
+    return gateway;
+  }
+
+  stop(): void {
+    this.cleanup();
+    this.socket?.close();
+    this.socket = null;
+  }
+
+  send(op: number, d: unknown): void {
+    if (!this.socket || this.socket.readyState !== this.WebSocketImpl.OPEN) return;
+    this.socket.send(JSON.stringify({ op, d }));
+  }
+
+  get isStarted(): boolean {
+    return this.started;
+  }
+
+  private async handleMessage(data: unknown): Promise<void> {
+    const raw = typeof data === 'string' ? data : data instanceof Buffer ? data.toString('utf-8') : String(data);
+    let dispatch: DiscordGatewayDispatch;
+    try {
+      dispatch = JSON.parse(raw) as DiscordGatewayDispatch;
+    } catch (error) {
+      logger.warn('DiscordGatewayClient: invalid gateway payload', {
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return;
+    }
+    if (typeof dispatch.s === 'number') this.sequence = dispatch.s;
+    if (dispatch.op === DiscordGatewayOpcode.Hello) {
+      const hello = dispatch.d ?? {};
+      const interval = typeof hello.heartbeat_interval === 'number' ? hello.heartbeat_interval : 45_000;
+      this.startHeartbeat(interval);
+      this.identify();
+      return;
+    }
+    if (dispatch.op === DiscordGatewayOpcode.Dispatch) {
+      await this.options.onDispatch(dispatch, this);
+    }
+  }
+
+  private identify(): void {
+    this.send(DiscordGatewayOpcode.Identify, {
+      token: this.options.token,
+      intents: this.options.intents
+        ?? (DiscordGatewayIntent.Guilds | DiscordGatewayIntent.GuildMessages | DiscordGatewayIntent.DirectMessages | DiscordGatewayIntent.MessageContent),
+      properties: {
+        os: process.platform,
+        browser: 'goodvibes-tui',
+        device: 'goodvibes-tui',
+      },
+    });
+  }
+
+  private startHeartbeat(intervalMs: number): void {
+    if (this.heartbeat) clearInterval(this.heartbeat);
+    this.heartbeat = setInterval(() => {
+      this.send(DiscordGatewayOpcode.Heartbeat, this.sequence);
+    }, intervalMs);
+    this.send(DiscordGatewayOpcode.Heartbeat, this.sequence);
+  }
+
+  private cleanup(): void {
+    this.started = false;
+    if (this.heartbeat) {
+      clearInterval(this.heartbeat);
+      this.heartbeat = null;
     }
   }
 }

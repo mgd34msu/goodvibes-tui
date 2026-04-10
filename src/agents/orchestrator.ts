@@ -3,6 +3,8 @@ import { AgentMessageBus } from './message-bus.ts';
 import { ToolRegistry } from '../tools/registry.ts';
 import { getProviderRegistry, getModelRegistry } from '../providers/registry.ts';
 import { registerAllTools } from '../tools/index.ts';
+import { registerChannelAgentTools } from '../tools/channel/agent-tools.ts';
+import { ChannelPluginRegistry } from '../channels/index.ts';
 import { logger } from '../utils/logger.ts';
 import { ConsecutiveErrorBreaker } from '../core/circuit-breaker.ts';
 import { isRateLimitOrQuotaError, isContextSizeExceededError } from '../types/errors.ts';
@@ -140,6 +142,7 @@ const MAX_TURNS = 50;
 export class AgentOrchestrator {
   private static instance: AgentOrchestrator | null = null;
   private fullRegistry: ToolRegistry | null = null;
+  private fullRegistryChannelVersion = -2;
   private fileCache: FileStateCache | null = null;
   private projectIndex: ProjectIndex | null = null;
   private projectContextCache: string | null | undefined = undefined; // undefined = not cached, null = no context
@@ -367,6 +370,16 @@ export class AgentOrchestrator {
   async runAgent(record: AgentRecord): Promise<void> {
     record.status = 'running';
     record.progress = 'Initialising…';
+    record.usage = {
+      inputTokens: record.usage?.inputTokens ?? 0,
+      outputTokens: record.usage?.outputTokens ?? 0,
+      cacheReadTokens: record.usage?.cacheReadTokens ?? 0,
+      cacheWriteTokens: record.usage?.cacheWriteTokens ?? 0,
+      ...(record.usage?.reasoningTokens !== undefined ? { reasoningTokens: record.usage.reasoningTokens } : {}),
+      llmCallCount: record.usage?.llmCallCount ?? 0,
+      turnCount: record.usage?.turnCount ?? 0,
+      reasoningSummaryCount: record.usage?.reasoningSummaryCount ?? 0,
+    };
     this.emitAgentStarted(record.id);
     this.emitAgentProgress(record.id, record.progress);
     this.emitOrchestrationProgress(record, record.progress);
@@ -574,10 +587,20 @@ export class AgentOrchestrator {
           record.progress = `Turn ${turn} · Thinking…`;
         }
 
-        session.appendMessage({ type: 'llm_response', turn, contentLength: response.content.length, toolCallCount: response.toolCalls.length, usage: response.usage, timestamp: new Date().toISOString() });
+	        session.appendMessage({ type: 'llm_response', turn, contentLength: response.content.length, toolCallCount: response.toolCalls.length, usage: response.usage, timestamp: new Date().toISOString() });
+	        record.usage = {
+	          inputTokens: (record.usage?.inputTokens ?? 0) + response.usage.inputTokens,
+	          outputTokens: (record.usage?.outputTokens ?? 0) + response.usage.outputTokens,
+	          cacheReadTokens: (record.usage?.cacheReadTokens ?? 0) + (response.usage.cacheReadTokens ?? 0),
+	          cacheWriteTokens: (record.usage?.cacheWriteTokens ?? 0) + (response.usage.cacheWriteTokens ?? 0),
+	          ...(record.usage?.reasoningTokens !== undefined ? { reasoningTokens: record.usage.reasoningTokens } : {}),
+	          llmCallCount: (record.usage?.llmCallCount ?? 0) + 1,
+	          turnCount: (record.usage?.turnCount ?? 0) + 1,
+	          reasoningSummaryCount: (record.usage?.reasoningSummaryCount ?? 0) + (response.reasoningSummary ? 1 : 0),
+	        };
 
-        if (response.toolCalls.length > 0) {
-          conversation.addAssistantMessage(response.content, { toolCalls: response.toolCalls, usage: response.usage });
+	        if (response.toolCalls.length > 0) {
+	          conversation.addAssistantMessage(response.content, { toolCalls: response.toolCalls, usage: response.usage });
           const results = await this.executeToolCalls(
             response.toolCalls,
             toolRegistry,
@@ -677,11 +700,14 @@ export class AgentOrchestrator {
     this.fileCache = fileCache;
     this.projectIndex = projectIndex;
     this.fullRegistry = null; // invalidate cached registry so it rebuilds with new deps
+    this.fullRegistryChannelVersion = -2;
   }
 
   /** Lazily build and cache the full ToolRegistry. */
   private getFullRegistry(): ToolRegistry {
-    if (!this.fullRegistry) {
+    const channelRegistry = ChannelPluginRegistry.getActive();
+    const channelVersion = channelRegistry?.getVersion() ?? -1;
+    if (!this.fullRegistry || this.fullRegistryChannelVersion !== channelVersion) {
       this.fullRegistry = new ToolRegistry();
       if ((this.fileCache == null) !== (this.projectIndex == null)) {
         logger.warn('AgentOrchestrator: partial deps — both fileCache and projectIndex should be set together');
@@ -690,6 +716,8 @@ export class AgentOrchestrator {
         ? { fileCache: this.fileCache, projectIndex: this.projectIndex }
         : undefined;
       registerAllTools(this.fullRegistry, deps);
+      registerChannelAgentTools(this.fullRegistry, channelRegistry);
+      this.fullRegistryChannelVersion = channelVersion;
     }
     return this.fullRegistry;
   }

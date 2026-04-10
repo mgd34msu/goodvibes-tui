@@ -653,6 +653,9 @@ export class ConversationManager {
     let nearestDist = Infinity;
     for (const block of this.blockRegistry) {
       if (typeFilter !== undefined && block.type !== typeFilter) continue;
+      if (lineIndex >= block.startLine && lineIndex < block.startLine + block.lineCount) {
+        return block;
+      }
       const dist = Math.abs(block.startLine - lineIndex);
       if (dist < nearestDist) {
         nearestDist = dist;

@@ -30,6 +30,18 @@ export type { CompactionEvent, CompactionEventType } from './compaction.ts';
 export type { UIEvent, UIEventType } from './ui.ts';
 export type { OpsEvent, OpsEventType } from './ops.ts';
 export type { AnyRuntimeEvent, RuntimeEventPayload, RuntimeEventDomain, DomainEventMap } from './domain-map.ts';
+export type { AutomationEvent, AutomationEventType, AutomationScheduleKind, AutomationExecutionMode, AutomationRunOutcome } from './automation.ts';
+export { AUTOMATION_SCHEDULE_KINDS, AUTOMATION_RUN_OUTCOMES } from './automation.ts';
+export type { RouteEvent, RouteEventType, RouteSurfaceKind, RouteTargetKind } from './routes.ts';
+export { ROUTE_SURFACE_KINDS, ROUTE_TARGET_KINDS } from './routes.ts';
+export type { ControlPlaneEvent, ControlPlaneEventType, ControlPlaneClientKind, ControlPlaneTransportKind, ControlPlanePrincipalKind } from './control-plane.ts';
+export { CONTROL_PLANE_CLIENT_KINDS, CONTROL_PLANE_TRANSPORT_KINDS, CONTROL_PLANE_PRINCIPAL_KINDS } from './control-plane.ts';
+export type { DeliveryEvent, DeliveryEventType, DeliveryKind } from './deliveries.ts';
+export { DELIVERY_KINDS } from './deliveries.ts';
+export type { WatcherEvent, WatcherEventType, WatcherSourceKind } from './watchers.ts';
+export { WATCHER_SOURCE_KINDS } from './watchers.ts';
+export type { SurfaceEvent, SurfaceEventType, SurfaceKind } from './surfaces.ts';
+export { SURFACE_KINDS } from './surfaces.ts';
 
 /** Listener callback receiving a fully-formed envelope. */
 export type EnvelopeListener<T extends AnyRuntimeEvent = AnyRuntimeEvent> = (

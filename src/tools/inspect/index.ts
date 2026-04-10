@@ -1,5 +1,5 @@
 import { readFileSync, existsSync, mkdirSync, writeFileSync } from 'node:fs';
-import { join, resolve, relative } from 'node:path';
+import { dirname, join, resolve, relative } from 'node:path';
 import { readdir } from 'node:fs/promises';
 import type { Tool, ToolDefinition } from '../../types/tools.ts';
 import { INSPECT_TOOL_SCHEMA } from './schema.ts';
@@ -855,13 +855,29 @@ function inspectAccessibility(content: string): A11yIssue[] {
 // Mode: scaffold
 // ---------------------------------------------------------------------------
 
+function normalizeScaffoldModuleName(moduleName: string): { kebab: string; pascal: string } {
+  const parts = moduleName
+    .trim()
+    .split(/[^A-Za-z0-9]+/)
+    .map((part) => part.trim())
+    .filter(Boolean);
+  if (parts.length === 0) {
+    throw new Error('moduleName must include at least one alphanumeric segment');
+  }
+  const kebab = parts.map((part) => part.toLowerCase()).join('-');
+  const pascal = parts
+    .map((part) => `${part.charAt(0).toUpperCase()}${part.slice(1).replace(/[^A-Za-z0-9]/g, '')}`)
+    .join('');
+  const identifier = /^[A-Za-z]/.test(pascal) ? pascal : `Module${pascal}`;
+  return { kebab, pascal: identifier };
+}
+
 function buildScaffold(
   moduleName: string,
   projectRoot: string,
   dryRun: boolean,
 ): ScaffoldPlan {
-  const pascal = moduleName.charAt(0).toUpperCase() + moduleName.slice(1);
-  const kebab = moduleName.replace(/([A-Z])/g, '-$1').toLowerCase().replace(/^-/, '');
+  const { kebab, pascal } = normalizeScaffoldModuleName(moduleName);
 
   const files: ScaffoldFile[] = [
     {
@@ -889,8 +905,8 @@ function buildScaffold(
 
   if (!dryRun) {
     for (const f of files) {
-      const absPath = join(projectRoot, f.path);
-      mkdirSync(resolve(absPath, '..'), { recursive: true });
+      const absPath = resolvePath(projectRoot, f.path);
+      mkdirSync(dirname(absPath), { recursive: true });
       writeFileSync(absPath, f.content, 'utf-8');
     }
   }

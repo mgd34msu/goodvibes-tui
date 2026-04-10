@@ -155,13 +155,13 @@ export class ConfigManager {
     };
   }
 
-  /** Get a config value by dot-path key. Supports 2-level (a.b) and 3-level (a.b.c) keys. */
+  /** Get a config value by dot-path key. */
   get<K extends ConfigKey>(key: K): ConfigValue<K> {
     const { parent, field } = this.resolvePath(key);
     return parent[field] as ConfigValue<K>;
   }
 
-  /** Set a config value by dot-path key and auto-save to disk. Supports 2-level and 3-level keys. */
+  /** Set a config value by dot-path key and auto-save to disk. */
   set<K extends ConfigKey>(key: K, value: ConfigValue<K>, options: ConfigSetOptions = {}): void {
     const schema = CONFIG_SCHEMA.find(s => s.key === key);
     if (schema?.validate && !schema.validate(value)) {
@@ -310,18 +310,9 @@ export class ConfigManager {
     } else {
       const schema = CONFIG_SCHEMA.find(s => s.key === key);
       if (!schema) throw new ConfigError(`Unknown config key: ${key}`);
-      const parts = key.split('.');
-      if (parts.length === 3) {
-        const [section, subsection, field] = parts;
-        const sect = this.config[section as keyof GoodVibesConfig] as unknown as Record<string, Record<string, unknown>>;
-        const defaultSect = DEFAULT_CONFIG_SNAPSHOT[section as keyof GoodVibesConfig] as unknown as Record<string, Record<string, unknown>>;
-        sect[subsection][field] = defaultSect[subsection][field];
-      } else {
-        const [category, field] = parts;
-        const cat = this.config[category as keyof GoodVibesConfig] as Record<string, unknown>;
-        const defaultCat = DEFAULT_CONFIG_SNAPSHOT[category as keyof GoodVibesConfig] as Record<string, unknown>;
-        cat[field] = defaultCat[field];
-      }
+      const livePath = this.resolvePath(key);
+      const defaultPath = resolveArbitraryPath(DEFAULT_CONFIG_SNAPSHOT as unknown as Record<string, unknown>, key);
+      livePath.parent[livePath.field] = structuredClone(defaultPath.parent[defaultPath.field]);
     }
     this.save();
   }
@@ -350,4 +341,26 @@ function deepMerge(target: unknown, source: unknown): unknown {
 
 function isObject(val: unknown): val is Record<string, unknown> {
   return val !== null && typeof val === 'object' && !Array.isArray(val);
+}
+
+function resolveArbitraryPath(
+  root: Record<string, unknown>,
+  key: string,
+): { parent: Record<string, unknown>; field: string } {
+  const parts = key.split('.');
+  let cursor: unknown = root;
+  for (let i = 0; i < parts.length - 1; i++) {
+    const part = parts[i]!;
+    if (cursor == null || typeof cursor !== 'object' || !(part in (cursor as Record<string, unknown>))) {
+      throw new Error(`Invalid config path: section '${parts.slice(0, i + 1).join('.')}' does not exist`);
+    }
+    cursor = (cursor as Record<string, unknown>)[part];
+  }
+  if (cursor == null || typeof cursor !== 'object') {
+    throw new Error(`Invalid config path: section '${parts.slice(0, -1).join('.')}' does not exist`);
+  }
+  return {
+    parent: cursor as Record<string, unknown>,
+    field: parts[parts.length - 1]!,
+  };
 }

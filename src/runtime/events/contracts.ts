@@ -11,6 +11,20 @@
  * - Validators are named `is<EventType>` for discoverability
  * - A top-level `validateEvent` dispatcher covers all variants
  */
+import {
+  AUTOMATION_RUN_OUTCOMES,
+  AUTOMATION_SCHEDULE_KINDS,
+} from './automation.ts';
+import {
+  CONTROL_PLANE_CLIENT_KINDS,
+  CONTROL_PLANE_PRINCIPAL_KINDS,
+  CONTROL_PLANE_TRANSPORT_KINDS,
+} from './control-plane.ts';
+import { DELIVERY_KINDS } from './deliveries.ts';
+import { ROUTE_SURFACE_KINDS, ROUTE_TARGET_KINDS } from './routes.ts';
+import { SURFACE_KINDS } from './surfaces.ts';
+import { WATCHER_SOURCE_KINDS } from './watchers.ts';
+
 // ── Primitive validators ──────────────────────────────────────────────────────
 
 function isString(v: unknown): v is string {
@@ -27,6 +41,46 @@ function isBoolean(v: unknown): v is boolean {
 
 function isObject(v: unknown): v is Record<string, unknown> {
   return v !== null && typeof v === 'object' && !Array.isArray(v);
+}
+
+type FieldKind = 'string' | 'number' | 'boolean' | 'string[]' | 'enum';
+
+interface FieldSpec {
+  readonly key: string;
+  readonly kind: FieldKind;
+  readonly values?: readonly string[];
+}
+
+function validateEventFields(type: string, v: unknown, fields: readonly FieldSpec[]): ContractResult {
+  if (!isObject(v)) return fail('event must be an object');
+  if (v['type'] !== type) return fail(`type must be '${type}', got ${String(v['type'])}`);
+
+  const violations: string[] = [];
+  for (const field of fields) {
+    const value = v[field.key];
+    switch (field.kind) {
+      case 'string':
+        if (!isString(value)) violations.push(`${field.key} must be a string`);
+        break;
+      case 'number':
+        if (!isNumber(value)) violations.push(`${field.key} must be a number`);
+        break;
+      case 'boolean':
+        if (!isBoolean(value)) violations.push(`${field.key} must be a boolean`);
+        break;
+      case 'string[]':
+        if (!Array.isArray(value) || value.some((item) => !isString(item))) {
+          violations.push(`${field.key} must be an array of strings`);
+        }
+        break;
+      case 'enum':
+        if (!isString(value) || !(field.values ?? []).includes(value)) {
+          violations.push(`${field.key} must be one of: ${(field.values ?? []).join(', ')}`);
+        }
+        break;
+    }
+  }
+  return violations.length ? { valid: false, violations } : OK;
 }
 
 // ── Contract result ───────────────────────────────────────────────────────────
@@ -297,13 +351,11 @@ export function validateMcpReconnecting(v: unknown): ContractResult {
  * @param v - Candidate event object.
  */
 export function validatePluginLoaded(v: unknown): ContractResult {
-  if (!isObject(v)) return fail('event must be an object');
-  if (v['type'] !== 'PLUGIN_LOADED') return fail(`type must be 'PLUGIN_LOADED', got ${String(v['type'])}`);
-  const violations: string[] = [];
-  if (!isString(v['pluginName'])) violations.push('pluginName must be a string');
-  if (!isString(v['version'])) violations.push('version must be a string');
-  if (!isNumber(v['toolCount'])) violations.push('toolCount must be a number');
-  return violations.length ? { valid: false, violations } : OK;
+  return validateEventFields('PLUGIN_LOADED', v, [
+    { key: 'pluginName', kind: 'string' },
+    { key: 'version', kind: 'string' },
+    { key: 'toolCount', kind: 'number' },
+  ]);
 }
 
 /**
@@ -312,12 +364,354 @@ export function validatePluginLoaded(v: unknown): ContractResult {
  * @param v - Candidate event object.
  */
 export function validatePluginFailed(v: unknown): ContractResult {
-  if (!isObject(v)) return fail('event must be an object');
-  if (v['type'] !== 'PLUGIN_FAILED') return fail(`type must be 'PLUGIN_FAILED', got ${String(v['type'])}`);
-  const violations: string[] = [];
-  if (!isString(v['pluginName'])) violations.push('pluginName must be a string');
-  if (!isString(v['error'])) violations.push('error must be a string');
-  return violations.length ? { valid: false, violations } : OK;
+  return validateEventFields('PLUGIN_FAILED', v, [
+    { key: 'pluginName', kind: 'string' },
+    { key: 'error', kind: 'string' },
+  ]);
+}
+
+// ── Automation event contracts ───────────────────────────────────────────────
+
+export function validateAutomationJobCreated(v: unknown): ContractResult {
+  return validateEventFields('AUTOMATION_JOB_CREATED', v, [
+    { key: 'jobId', kind: 'string' },
+    { key: 'name', kind: 'string' },
+    { key: 'scheduleKind', kind: 'enum', values: AUTOMATION_SCHEDULE_KINDS },
+    { key: 'enabled', kind: 'boolean' },
+  ]);
+}
+
+export function validateAutomationJobUpdated(v: unknown): ContractResult {
+  return validateEventFields('AUTOMATION_JOB_UPDATED', v, [
+    { key: 'jobId', kind: 'string' },
+    { key: 'changedFields', kind: 'string[]' },
+  ]);
+}
+
+export function validateAutomationJobEnabled(v: unknown): ContractResult {
+  return validateEventFields('AUTOMATION_JOB_ENABLED', v, [
+    { key: 'jobId', kind: 'string' },
+  ]);
+}
+
+export function validateAutomationJobDisabled(v: unknown): ContractResult {
+  return validateEventFields('AUTOMATION_JOB_DISABLED', v, [
+    { key: 'jobId', kind: 'string' },
+    { key: 'reason', kind: 'string' },
+  ]);
+}
+
+export function validateAutomationRunQueued(v: unknown): ContractResult {
+  return validateEventFields('AUTOMATION_RUN_QUEUED', v, [
+    { key: 'jobId', kind: 'string' },
+    { key: 'runId', kind: 'string' },
+    { key: 'scheduledAt', kind: 'number' },
+    { key: 'forced', kind: 'boolean' },
+  ]);
+}
+
+export function validateAutomationRunStarted(v: unknown): ContractResult {
+  return validateEventFields('AUTOMATION_RUN_STARTED', v, [
+    { key: 'jobId', kind: 'string' },
+    { key: 'runId', kind: 'string' },
+    { key: 'startedAt', kind: 'number' },
+    { key: 'attempt', kind: 'number' },
+  ]);
+}
+
+export function validateAutomationRunCompleted(v: unknown): ContractResult {
+  return validateEventFields('AUTOMATION_RUN_COMPLETED', v, [
+    { key: 'jobId', kind: 'string' },
+    { key: 'runId', kind: 'string' },
+    { key: 'startedAt', kind: 'number' },
+    { key: 'completedAt', kind: 'number' },
+    { key: 'durationMs', kind: 'number' },
+    { key: 'outcome', kind: 'enum', values: AUTOMATION_RUN_OUTCOMES },
+  ]);
+}
+
+export function validateAutomationRunFailed(v: unknown): ContractResult {
+  return validateEventFields('AUTOMATION_RUN_FAILED', v, [
+    { key: 'jobId', kind: 'string' },
+    { key: 'runId', kind: 'string' },
+    { key: 'startedAt', kind: 'number' },
+    { key: 'failedAt', kind: 'number' },
+    { key: 'error', kind: 'string' },
+    { key: 'retryable', kind: 'boolean' },
+  ]);
+}
+
+export function validateAutomationRunCancelled(v: unknown): ContractResult {
+  return validateEventFields('AUTOMATION_RUN_CANCELLED', v, [
+    { key: 'jobId', kind: 'string' },
+    { key: 'runId', kind: 'string' },
+    { key: 'cancelledAt', kind: 'number' },
+    { key: 'reason', kind: 'string' },
+  ]);
+}
+
+export function validateAutomationScheduleError(v: unknown): ContractResult {
+  return validateEventFields('AUTOMATION_SCHEDULE_ERROR', v, [
+    { key: 'jobId', kind: 'string' },
+    { key: 'scheduleText', kind: 'string' },
+    { key: 'error', kind: 'string' },
+  ]);
+}
+
+export function validateAutomationJobAutoDisabled(v: unknown): ContractResult {
+  return validateEventFields('AUTOMATION_JOB_AUTO_DISABLED', v, [
+    { key: 'jobId', kind: 'string' },
+    { key: 'reason', kind: 'string' },
+    { key: 'consecutiveFailures', kind: 'number' },
+  ]);
+}
+
+// ── Route event contracts ────────────────────────────────────────────────────
+
+export function validateRouteBindingCreated(v: unknown): ContractResult {
+  return validateEventFields('ROUTE_BINDING_CREATED', v, [
+    { key: 'bindingId', kind: 'string' },
+    { key: 'surfaceKind', kind: 'enum', values: ROUTE_SURFACE_KINDS },
+    { key: 'externalId', kind: 'string' },
+    { key: 'targetKind', kind: 'enum', values: ROUTE_TARGET_KINDS },
+    { key: 'targetId', kind: 'string' },
+  ]);
+}
+
+export function validateRouteBindingUpdated(v: unknown): ContractResult {
+  return validateEventFields('ROUTE_BINDING_UPDATED', v, [
+    { key: 'bindingId', kind: 'string' },
+    { key: 'changedFields', kind: 'string[]' },
+  ]);
+}
+
+export function validateRouteBindingResolved(v: unknown): ContractResult {
+  return validateEventFields('ROUTE_BINDING_RESOLVED', v, [
+    { key: 'bindingId', kind: 'string' },
+    { key: 'surfaceKind', kind: 'enum', values: ROUTE_SURFACE_KINDS },
+    { key: 'externalId', kind: 'string' },
+    { key: 'targetKind', kind: 'enum', values: ROUTE_TARGET_KINDS },
+    { key: 'targetId', kind: 'string' },
+  ]);
+}
+
+export function validateRouteReplyTargetCaptured(v: unknown): ContractResult {
+  return validateEventFields('ROUTE_REPLY_TARGET_CAPTURED', v, [
+    { key: 'bindingId', kind: 'string' },
+    { key: 'surfaceKind', kind: 'enum', values: ROUTE_SURFACE_KINDS },
+    { key: 'externalId', kind: 'string' },
+    { key: 'replyTargetId', kind: 'string' },
+    { key: 'threadId', kind: 'string' },
+  ]);
+}
+
+export function validateRouteBindingFailed(v: unknown): ContractResult {
+  return validateEventFields('ROUTE_BINDING_FAILED', v, [
+    { key: 'surfaceKind', kind: 'enum', values: ROUTE_SURFACE_KINDS },
+    { key: 'externalId', kind: 'string' },
+    { key: 'error', kind: 'string' },
+  ]);
+}
+
+// ── Control-plane event contracts ────────────────────────────────────────────
+
+export function validateControlPlaneClientConnected(v: unknown): ContractResult {
+  return validateEventFields('CONTROL_PLANE_CLIENT_CONNECTED', v, [
+    { key: 'clientId', kind: 'string' },
+    { key: 'clientKind', kind: 'enum', values: CONTROL_PLANE_CLIENT_KINDS },
+    { key: 'transport', kind: 'enum', values: CONTROL_PLANE_TRANSPORT_KINDS },
+  ]);
+}
+
+export function validateControlPlaneClientDisconnected(v: unknown): ContractResult {
+  return validateEventFields('CONTROL_PLANE_CLIENT_DISCONNECTED', v, [
+    { key: 'clientId', kind: 'string' },
+    { key: 'reason', kind: 'string' },
+  ]);
+}
+
+export function validateControlPlaneSubscriptionCreated(v: unknown): ContractResult {
+  return validateEventFields('CONTROL_PLANE_SUBSCRIPTION_CREATED', v, [
+    { key: 'clientId', kind: 'string' },
+    { key: 'subscriptionId', kind: 'string' },
+    { key: 'topics', kind: 'string[]' },
+  ]);
+}
+
+export function validateControlPlaneSubscriptionDropped(v: unknown): ContractResult {
+  return validateEventFields('CONTROL_PLANE_SUBSCRIPTION_DROPPED', v, [
+    { key: 'clientId', kind: 'string' },
+    { key: 'subscriptionId', kind: 'string' },
+    { key: 'reason', kind: 'string' },
+  ]);
+}
+
+export function validateControlPlaneAuthGranted(v: unknown): ContractResult {
+  return validateEventFields('CONTROL_PLANE_AUTH_GRANTED', v, [
+    { key: 'clientId', kind: 'string' },
+    { key: 'principalId', kind: 'string' },
+    { key: 'principalKind', kind: 'enum', values: CONTROL_PLANE_PRINCIPAL_KINDS },
+    { key: 'scopes', kind: 'string[]' },
+  ]);
+}
+
+export function validateControlPlaneAuthRejected(v: unknown): ContractResult {
+  return validateEventFields('CONTROL_PLANE_AUTH_REJECTED', v, [
+    { key: 'clientId', kind: 'string' },
+    { key: 'principalId', kind: 'string' },
+    { key: 'reason', kind: 'string' },
+  ]);
+}
+
+// ── Delivery event contracts ─────────────────────────────────────────────────
+
+export function validateDeliveryQueued(v: unknown): ContractResult {
+  return validateEventFields('DELIVERY_QUEUED', v, [
+    { key: 'deliveryId', kind: 'string' },
+    { key: 'jobId', kind: 'string' },
+    { key: 'runId', kind: 'string' },
+    { key: 'surfaceKind', kind: 'enum', values: ROUTE_SURFACE_KINDS },
+    { key: 'targetId', kind: 'string' },
+    { key: 'deliveryKind', kind: 'enum', values: DELIVERY_KINDS },
+  ]);
+}
+
+export function validateDeliveryStarted(v: unknown): ContractResult {
+  return validateEventFields('DELIVERY_STARTED', v, [
+    { key: 'deliveryId', kind: 'string' },
+    { key: 'jobId', kind: 'string' },
+    { key: 'runId', kind: 'string' },
+    { key: 'surfaceKind', kind: 'enum', values: ROUTE_SURFACE_KINDS },
+    { key: 'targetId', kind: 'string' },
+    { key: 'startedAt', kind: 'number' },
+  ]);
+}
+
+export function validateDeliverySucceeded(v: unknown): ContractResult {
+  return validateEventFields('DELIVERY_SUCCEEDED', v, [
+    { key: 'deliveryId', kind: 'string' },
+    { key: 'jobId', kind: 'string' },
+    { key: 'runId', kind: 'string' },
+    { key: 'surfaceKind', kind: 'enum', values: ROUTE_SURFACE_KINDS },
+    { key: 'targetId', kind: 'string' },
+    { key: 'completedAt', kind: 'number' },
+    { key: 'durationMs', kind: 'number' },
+    { key: 'statusCode', kind: 'number' },
+  ]);
+}
+
+export function validateDeliveryFailed(v: unknown): ContractResult {
+  return validateEventFields('DELIVERY_FAILED', v, [
+    { key: 'deliveryId', kind: 'string' },
+    { key: 'jobId', kind: 'string' },
+    { key: 'runId', kind: 'string' },
+    { key: 'surfaceKind', kind: 'enum', values: ROUTE_SURFACE_KINDS },
+    { key: 'targetId', kind: 'string' },
+    { key: 'failedAt', kind: 'number' },
+    { key: 'error', kind: 'string' },
+    { key: 'retryable', kind: 'boolean' },
+  ]);
+}
+
+export function validateDeliveryDeadLettered(v: unknown): ContractResult {
+  return validateEventFields('DELIVERY_DEAD_LETTERED', v, [
+    { key: 'deliveryId', kind: 'string' },
+    { key: 'jobId', kind: 'string' },
+    { key: 'runId', kind: 'string' },
+    { key: 'surfaceKind', kind: 'enum', values: ROUTE_SURFACE_KINDS },
+    { key: 'targetId', kind: 'string' },
+    { key: 'reason', kind: 'string' },
+    { key: 'attempts', kind: 'number' },
+  ]);
+}
+
+// ── Watcher event contracts ──────────────────────────────────────────────────
+
+export function validateWatcherStarted(v: unknown): ContractResult {
+  return validateEventFields('WATCHER_STARTED', v, [
+    { key: 'watcherId', kind: 'string' },
+    { key: 'sourceKind', kind: 'enum', values: WATCHER_SOURCE_KINDS },
+    { key: 'name', kind: 'string' },
+  ]);
+}
+
+export function validateWatcherHeartbeat(v: unknown): ContractResult {
+  return validateEventFields('WATCHER_HEARTBEAT', v, [
+    { key: 'watcherId', kind: 'string' },
+    { key: 'sourceKind', kind: 'enum', values: WATCHER_SOURCE_KINDS },
+    { key: 'seenAt', kind: 'number' },
+    { key: 'checkpoint', kind: 'string' },
+  ]);
+}
+
+export function validateWatcherCheckpointAdvanced(v: unknown): ContractResult {
+  return validateEventFields('WATCHER_CHECKPOINT_ADVANCED', v, [
+    { key: 'watcherId', kind: 'string' },
+    { key: 'sourceKind', kind: 'enum', values: WATCHER_SOURCE_KINDS },
+    { key: 'checkpoint', kind: 'string' },
+  ]);
+}
+
+export function validateWatcherFailed(v: unknown): ContractResult {
+  return validateEventFields('WATCHER_FAILED', v, [
+    { key: 'watcherId', kind: 'string' },
+    { key: 'sourceKind', kind: 'enum', values: WATCHER_SOURCE_KINDS },
+    { key: 'error', kind: 'string' },
+    { key: 'retryable', kind: 'boolean' },
+  ]);
+}
+
+export function validateWatcherStopped(v: unknown): ContractResult {
+  return validateEventFields('WATCHER_STOPPED', v, [
+    { key: 'watcherId', kind: 'string' },
+    { key: 'sourceKind', kind: 'enum', values: WATCHER_SOURCE_KINDS },
+    { key: 'reason', kind: 'string' },
+  ]);
+}
+
+// ── Surface event contracts ──────────────────────────────────────────────────
+
+export function validateSurfaceEnabled(v: unknown): ContractResult {
+  return validateEventFields('SURFACE_ENABLED', v, [
+    { key: 'surfaceKind', kind: 'enum', values: SURFACE_KINDS },
+    { key: 'surfaceId', kind: 'string' },
+    { key: 'accountId', kind: 'string' },
+  ]);
+}
+
+export function validateSurfaceDisabled(v: unknown): ContractResult {
+  return validateEventFields('SURFACE_DISABLED', v, [
+    { key: 'surfaceKind', kind: 'enum', values: SURFACE_KINDS },
+    { key: 'surfaceId', kind: 'string' },
+    { key: 'reason', kind: 'string' },
+  ]);
+}
+
+export function validateSurfaceAccountConnected(v: unknown): ContractResult {
+  return validateEventFields('SURFACE_ACCOUNT_CONNECTED', v, [
+    { key: 'surfaceKind', kind: 'enum', values: SURFACE_KINDS },
+    { key: 'surfaceId', kind: 'string' },
+    { key: 'accountId', kind: 'string' },
+    { key: 'displayName', kind: 'string' },
+  ]);
+}
+
+export function validateSurfaceAccountDegraded(v: unknown): ContractResult {
+  return validateEventFields('SURFACE_ACCOUNT_DEGRADED', v, [
+    { key: 'surfaceKind', kind: 'enum', values: SURFACE_KINDS },
+    { key: 'surfaceId', kind: 'string' },
+    { key: 'accountId', kind: 'string' },
+    { key: 'error', kind: 'string' },
+  ]);
+}
+
+export function validateSurfaceCapabilityChanged(v: unknown): ContractResult {
+  return validateEventFields('SURFACE_CAPABILITY_CHANGED', v, [
+    { key: 'surfaceKind', kind: 'enum', values: SURFACE_KINDS },
+    { key: 'surfaceId', kind: 'string' },
+    { key: 'capability', kind: 'string' },
+    { key: 'enabled', kind: 'boolean' },
+  ]);
 }
 
 // ── Top-level dispatcher ──────────────────────────────────────────────────────
@@ -343,6 +737,43 @@ const EVENT_VALIDATORS: Record<string, (v: unknown) => ContractResult> = {
   MCP_RECONNECTING: validateMcpReconnecting,
   PLUGIN_LOADED: validatePluginLoaded,
   PLUGIN_FAILED: validatePluginFailed,
+  AUTOMATION_JOB_CREATED: validateAutomationJobCreated,
+  AUTOMATION_JOB_UPDATED: validateAutomationJobUpdated,
+  AUTOMATION_JOB_ENABLED: validateAutomationJobEnabled,
+  AUTOMATION_JOB_DISABLED: validateAutomationJobDisabled,
+  AUTOMATION_RUN_QUEUED: validateAutomationRunQueued,
+  AUTOMATION_RUN_STARTED: validateAutomationRunStarted,
+  AUTOMATION_RUN_COMPLETED: validateAutomationRunCompleted,
+  AUTOMATION_RUN_FAILED: validateAutomationRunFailed,
+  AUTOMATION_RUN_CANCELLED: validateAutomationRunCancelled,
+  AUTOMATION_SCHEDULE_ERROR: validateAutomationScheduleError,
+  AUTOMATION_JOB_AUTO_DISABLED: validateAutomationJobAutoDisabled,
+  ROUTE_BINDING_CREATED: validateRouteBindingCreated,
+  ROUTE_BINDING_UPDATED: validateRouteBindingUpdated,
+  ROUTE_BINDING_RESOLVED: validateRouteBindingResolved,
+  ROUTE_REPLY_TARGET_CAPTURED: validateRouteReplyTargetCaptured,
+  ROUTE_BINDING_FAILED: validateRouteBindingFailed,
+  CONTROL_PLANE_CLIENT_CONNECTED: validateControlPlaneClientConnected,
+  CONTROL_PLANE_CLIENT_DISCONNECTED: validateControlPlaneClientDisconnected,
+  CONTROL_PLANE_SUBSCRIPTION_CREATED: validateControlPlaneSubscriptionCreated,
+  CONTROL_PLANE_SUBSCRIPTION_DROPPED: validateControlPlaneSubscriptionDropped,
+  CONTROL_PLANE_AUTH_GRANTED: validateControlPlaneAuthGranted,
+  CONTROL_PLANE_AUTH_REJECTED: validateControlPlaneAuthRejected,
+  DELIVERY_QUEUED: validateDeliveryQueued,
+  DELIVERY_STARTED: validateDeliveryStarted,
+  DELIVERY_SUCCEEDED: validateDeliverySucceeded,
+  DELIVERY_FAILED: validateDeliveryFailed,
+  DELIVERY_DEAD_LETTERED: validateDeliveryDeadLettered,
+  WATCHER_STARTED: validateWatcherStarted,
+  WATCHER_HEARTBEAT: validateWatcherHeartbeat,
+  WATCHER_CHECKPOINT_ADVANCED: validateWatcherCheckpointAdvanced,
+  WATCHER_FAILED: validateWatcherFailed,
+  WATCHER_STOPPED: validateWatcherStopped,
+  SURFACE_ENABLED: validateSurfaceEnabled,
+  SURFACE_DISABLED: validateSurfaceDisabled,
+  SURFACE_ACCOUNT_CONNECTED: validateSurfaceAccountConnected,
+  SURFACE_ACCOUNT_DEGRADED: validateSurfaceAccountDegraded,
+  SURFACE_CAPABILITY_CHANGED: validateSurfaceCapabilityChanged,
 };
 
 /**

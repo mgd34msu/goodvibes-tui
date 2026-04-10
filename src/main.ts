@@ -68,6 +68,7 @@ import { deriveComposerState } from './core/composer-state.ts';
 import { buildPersistedSessionContext, formatReturnContextForDisplay, getReturnContextMode, maybeAssistReturnContextSummary } from './runtime/session-return-context.ts';
 import { getRemoteRunnerRegistry } from './runtime/remote/index.ts';
 import { listPersistedWorktreeMeta } from './runtime/worktree/registry.ts';
+import { ApprovalBroker } from './control-plane/index.ts';
 
 
 const ALT_SCREEN_ENTER = '\x1b[?1049h';
@@ -148,6 +149,13 @@ async function main() {
 
   // Permission state — set while a permission prompt is blocking the orchestrator
   let pendingPermission: PendingPermissionState | null = null;
+  ApprovalBroker.getInstance().subscribe((approval) => {
+    if (!pendingPermission) return;
+    if (pendingPermission.callId !== approval.callId) return;
+    if (approval.status === 'pending' || approval.status === 'claimed') return;
+    pendingPermission = null;
+    render();
+  });
 
   // --- Streaming speed tracking (B2) ---
   let streamStartTime = 0;
@@ -394,8 +402,6 @@ async function main() {
   const render = () => {
     const width = stdout.columns || 80;
     const height = stdout.rows || 24;
-    // Flush any pending message renders before taking snapshot
-    conversation.getDisplayBlocks();
 
     // Cache the current model for consistent values across the entire render frame
     const currentModel = providerRegistry.getCurrentModel();
@@ -522,6 +528,10 @@ async function main() {
     activeConversationWidth = conversationWidth;
     const hasPanelWorkspace = panelManager.isVisible() && panelManager.getAllOpen().length > 0;
     conversation.setSplashSuppressed(hasPanelWorkspace);
+
+    // Flush pending renders after updating the width provider and splash posture
+    // so the transcript and splash rebuild against the current shell layout.
+    conversation.getDisplayBlocks();
 
     // Calculate how many rows are consumed by overlays (thinking, permissions, queue, file picker)
     let overlayRows = 0;

@@ -313,6 +313,76 @@ export const FEATURE_FLAGS: FeatureFlag[] = [
     tier: 6,
     runtimeToggleable: true,
   },
+  {
+    id: 'automation-runtime',
+    name: 'Automation Runtime',
+    description:
+      'Enables the first-class automation job and run model, including durable scheduling, '
+      + 'run history, catch-up behavior, and execution policies. Disable to keep the legacy '
+      + 'scheduler as the active execution path.',
+    defaultState: 'disabled',
+    tier: 6,
+    runtimeToggleable: false,
+  },
+  {
+    id: 'gateway-control-plane',
+    name: 'Gateway Control Plane',
+    description:
+      'Enables the unified control-plane server that exposes shared automation, session, '
+      + 'task, and integration state over authenticated APIs and live event streams.',
+    defaultState: 'disabled',
+    tier: 6,
+    runtimeToggleable: false,
+  },
+  {
+    id: 'omnichannel-route-binding',
+    name: 'Omnichannel Route Binding',
+    description:
+      'Enables route binding and reply-context preservation across TUI, web, Slack, Discord, '
+      + 'ntfy, and generic webhook surfaces.',
+    defaultState: 'disabled',
+    tier: 6,
+    runtimeToggleable: false,
+  },
+  {
+    id: 'omnichannel-surface-adapters',
+    name: 'Omnichannel Surface Adapters',
+    description:
+      'Enables the channel adapter layer for interactive Slack and Discord surfaces plus '
+      + 'notification-oriented ntfy and generic webhook delivery.',
+    defaultState: 'disabled',
+    tier: 7,
+    runtimeToggleable: false,
+  },
+  {
+    id: 'embedded-web-control-ui',
+    name: 'Embedded Web Control UI',
+    description:
+      'Enables the embedded browser operator surface served by the control plane.',
+    defaultState: 'disabled',
+    tier: 7,
+    runtimeToggleable: false,
+  },
+  {
+    id: 'managed-watcher-services',
+    name: 'Managed Watcher Services',
+    description:
+      'Enables the watcher registry and managed long-running source listeners for external '
+      + 'automation triggers and integration health.',
+    defaultState: 'disabled',
+    tier: 7,
+    runtimeToggleable: false,
+  },
+  {
+    id: 'service-installation',
+    name: 'Service Installation',
+    description:
+      'Enables platform service install, autostart, and status management for daemonized '
+      + 'Goodvibes deployments.',
+    defaultState: 'disabled',
+    tier: 7,
+    runtimeToggleable: false,
+  },
 
   // ── Adaptive Notification Suppression ──────────────────────────────────────
   {
@@ -357,6 +427,116 @@ export const FEATURE_FLAGS: FeatureFlag[] = [
       + 'Exposes /tool verify <name>, /tool verify-all, and /tool contract show <name> commands.',
     defaultState: 'enabled',
     tier: 8,
+    runtimeToggleable: true,
+  },
+
+  // ── Automation and Omnichannel Foundation ───────────────────────────────
+  {
+    id: 'automation-domain',
+    name: 'Automation Domain',
+    description:
+      'Enables the first-class automation job/run domain used by the shared scheduling engine. '
+      + 'This is the top-level gate for durable automation records, schedule evaluation, and run history.',
+    defaultState: 'disabled',
+    tier: 10,
+    runtimeToggleable: true,
+  },
+  {
+    id: 'control-plane-gateway',
+    name: 'Control-Plane Gateway',
+    description:
+      'Enables the shared gateway/control-plane host that serves state snapshots, live streams, '
+      + 'and authenticated automation control APIs to the TUI and remote clients.',
+    defaultState: 'disabled',
+    tier: 10,
+    runtimeToggleable: true,
+  },
+  {
+    id: 'route-binding',
+    name: 'Route Binding',
+    description:
+      'Enables durable binding and resolution of external conversation routes, thread contexts, '
+      + 'and reply targets across surfaces.',
+    defaultState: 'disabled',
+    tier: 10,
+    runtimeToggleable: true,
+  },
+  {
+    id: 'delivery-engine',
+    name: 'Delivery Engine',
+    description:
+      'Enables first-class delivery tracking for automation results, retries, dead letters, and '
+      + 'surface-specific delivery outcomes.',
+    defaultState: 'disabled',
+    tier: 10,
+    runtimeToggleable: true,
+  },
+  {
+    id: 'slack-surface',
+    name: 'Slack Surface',
+    description:
+      'Enables the Slack client adapter for interactive command ingress, threaded replies, and '
+      + 'notification delivery.',
+    defaultState: 'disabled',
+    tier: 10,
+    runtimeToggleable: true,
+  },
+  {
+    id: 'discord-surface',
+    name: 'Discord Surface',
+    description:
+      'Enables the Discord client adapter for interaction handling, message replies, and '
+      + 'notification delivery.',
+    defaultState: 'disabled',
+    tier: 10,
+    runtimeToggleable: true,
+  },
+  {
+    id: 'ntfy-surface',
+    name: 'ntfy Surface',
+    description:
+      'Enables the ntfy notification surface for push-style delivery and deep links back into the '
+      + 'control-plane UI.',
+    defaultState: 'disabled',
+    tier: 10,
+    runtimeToggleable: true,
+  },
+  {
+    id: 'webhook-surface',
+    name: 'Webhook Surface',
+    description:
+      'Enables the generic webhook surface for machine-to-machine ingress and egress.',
+    defaultState: 'disabled',
+    tier: 10,
+    runtimeToggleable: true,
+  },
+  {
+    id: 'web-surface',
+    name: 'Web Surface',
+    description:
+      'Enables the browser-based operator surface backed by the shared control plane.',
+    defaultState: 'disabled',
+    tier: 10,
+    runtimeToggleable: true,
+  },
+  {
+    id: 'watcher-framework',
+    name: 'Watcher Framework',
+    description:
+      'Enables managed watcher/listener services, checkpointing, and recovery semantics for '
+      + 'long-running external sources.',
+    defaultState: 'disabled',
+    tier: 10,
+    runtimeToggleable: true,
+  },
+  {
+    id: 'service-management',
+    name: 'Service Management',
+    description:
+      'Enables install/start/stop/status/autostart management for running Goodvibes as a '
+      + 'durable host service.',
+    defaultState: 'disabled',
+    tier: 10,
     runtimeToggleable: true,
   },
 ];

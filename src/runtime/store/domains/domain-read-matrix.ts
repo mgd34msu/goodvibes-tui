@@ -20,9 +20,12 @@
 export const DOMAINS = [
   'acp',
   'agents',
+  'automation',
   'communication',
+  'control-plane',
   'conversation',
   'daemon',
+  'deliveries',
   'discovery',
   'git',
   'integrations',
@@ -35,10 +38,13 @@ export const DOMAINS = [
   'permissions',
   'plugins',
   'provider-health',
+  'routes',
   'session',
+  'surfaces',
   'tasks',
   'telemetry',
   'ui-perf',
+  'watchers',
 ] as const;
 
 export type DomainName = (typeof DOMAINS)[number];

@@ -124,6 +124,47 @@ export type {
 export { createInitialDaemonState } from './daemon.ts';
 
 export type {
+  AutomationDomainState,
+} from './automation.ts';
+export { createInitialAutomationState } from './automation.ts';
+
+export type {
+  RoutesDomainState,
+} from './routes.ts';
+export { createInitialRoutesState } from './routes.ts';
+
+export type {
+  ControlPlaneClientKind,
+  ControlPlaneTransportKind,
+  ControlPlaneConnectionState,
+  ControlPlaneClientRecord,
+  ControlPlaneDomainState,
+} from './control-plane.ts';
+export { createInitialControlPlaneState } from './control-plane.ts';
+
+export type {
+  DeliveryLifecycleState,
+  DeliveryDomainState,
+} from './deliveries.ts';
+export { createInitialDeliveryState } from './deliveries.ts';
+
+export type {
+  WatcherKind,
+  WatcherState,
+  WatcherSourceStatus,
+  WatcherRecord,
+  WatcherDomainState,
+} from './watchers.ts';
+export { createInitialWatcherState } from './watchers.ts';
+
+export type {
+  SurfaceConnectionState,
+  SurfaceRecord,
+  SurfaceDomainState,
+} from './surfaces.ts';
+export { createInitialSurfaceState } from './surfaces.ts';
+
+export type {
   AcpTransportState,
   AcpConnection,
   AcpDomainState,

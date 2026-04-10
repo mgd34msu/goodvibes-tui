@@ -57,6 +57,18 @@ import type {
   IntegrationRecord,
   IntegrationStatus,
 } from './domains/integrations.ts';
+import type { AutomationDomainState } from './domains/automation.ts';
+import type { RoutesDomainState } from './domains/routes.ts';
+import type { ControlPlaneDomainState, ControlPlaneClientRecord } from './domains/control-plane.ts';
+import type { DeliveryDomainState } from './domains/deliveries.ts';
+import type { WatcherDomainState, WatcherRecord } from './domains/watchers.ts';
+import type { SurfaceDomainState, SurfaceRecord } from './domains/surfaces.ts';
+import type { AutomationJob } from '../../automation/jobs.ts';
+import type { AutomationRun } from '../../automation/runs.ts';
+import type { AutomationSourceRecord } from '../../automation/sources.ts';
+import type { AutomationRouteBinding } from '../../automation/routes.ts';
+import type { AutomationSurfaceKind } from '../../automation/types.ts';
+import type { AutomationDeliveryAttempt } from '../../automation/delivery.ts';
 
 // ---------------------------------------------------------------------------
 // Store type
@@ -1264,6 +1276,242 @@ function updateIntegrationDomainFromRecord(
   };
 }
 
+function updateAutomationDomainFromSource(
+  domain: AutomationDomainState,
+  sourceRecord: AutomationSourceRecord,
+  source: string,
+): AutomationDomainState {
+  const sources = new Map(domain.sources);
+  sources.set(sourceRecord.id, sourceRecord);
+  const sourceIds = [...sources.values()]
+    .sort((a, b) => a.label.localeCompare(b.label) || a.createdAt - b.createdAt)
+    .map((record) => record.id);
+  return {
+    ...updateDomainMetadata(domain, source),
+    sources,
+    sourceIds,
+  };
+}
+
+function updateAutomationDomainFromJob(
+  domain: AutomationDomainState,
+  job: AutomationJob,
+  source: string,
+): AutomationDomainState {
+  const jobs = new Map(domain.jobs);
+  const sources = new Map(domain.sources);
+  jobs.set(job.id, job);
+  sources.set(job.source.id, job.source);
+  const allRuns = [...domain.runs.values()];
+  const totalDeadLettered = allRuns.reduce((count, run) => count + (run.deliveryAttempts?.filter((attempt) => attempt.status === 'dead_lettered').length ?? 0), 0);
+  return {
+    ...updateDomainMetadata(domain, source),
+    jobs,
+    jobIds: [...jobs.values()]
+      .sort((a, b) => a.name.localeCompare(b.name) || a.createdAt - b.createdAt)
+      .map((record) => record.id),
+    sources,
+    sourceIds: [...sources.values()]
+      .sort((a, b) => a.label.localeCompare(b.label) || a.createdAt - b.createdAt)
+      .map((record) => record.id),
+    totalJobs: jobs.size,
+    totalRuns: allRuns.length,
+    totalSucceeded: allRuns.filter((run) => run.status === 'completed').length,
+    totalFailed: allRuns.filter((run) => run.status === 'failed').length,
+    totalCancelled: allRuns.filter((run) => run.status === 'cancelled').length,
+    totalDeadLettered,
+  };
+}
+
+function updateAutomationDomainFromRun(
+  domain: AutomationDomainState,
+  run: AutomationRun,
+  source: string,
+): AutomationDomainState {
+  const runs = new Map(domain.runs);
+  const sources = new Map(domain.sources);
+  runs.set(run.id, run);
+  sources.set(run.triggeredBy.id, run.triggeredBy);
+  const allRuns = [...runs.values()];
+  const totalDeadLettered = allRuns.reduce((count, record) => count + (record.deliveryAttempts?.filter((attempt) => attempt.status === 'dead_lettered').length ?? 0), 0);
+  return {
+    ...updateDomainMetadata(domain, source),
+    runs,
+    runIds: allRuns
+      .sort((a, b) => b.queuedAt - a.queuedAt || a.id.localeCompare(b.id))
+      .map((record) => record.id),
+    activeRunIds: allRuns
+      .filter((record) => record.status === 'queued' || record.status === 'running')
+      .map((record) => record.id),
+    failedRunIds: allRuns
+      .filter((record) => record.status === 'failed')
+      .map((record) => record.id),
+    sources,
+    sourceIds: [...sources.values()]
+      .sort((a, b) => a.label.localeCompare(b.label) || a.createdAt - b.createdAt)
+      .map((record) => record.id),
+    totalJobs: domain.jobs.size,
+    totalRuns: allRuns.length,
+    totalSucceeded: allRuns.filter((record) => record.status === 'completed').length,
+    totalFailed: allRuns.filter((record) => record.status === 'failed').length,
+    totalCancelled: allRuns.filter((record) => record.status === 'cancelled').length,
+    totalDeadLettered,
+  };
+}
+
+function buildBindingIdsBySurface(bindings: readonly AutomationRouteBinding[]): Readonly<Record<string, readonly string[]>> {
+  const grouped: Record<string, string[]> = {
+    slack: [],
+    discord: [],
+    web: [],
+    ntfy: [],
+    webhook: [],
+    tui: [],
+    service: [],
+  };
+  for (const binding of bindings) {
+    grouped[binding.surfaceKind] ??= [];
+    grouped[binding.surfaceKind]!.push(binding.id);
+  }
+  return grouped;
+}
+
+function updateRoutesDomainFromBinding(
+  domain: RoutesDomainState,
+  binding: AutomationRouteBinding,
+  source: string,
+): RoutesDomainState {
+  const bindings = new Map(domain.bindings);
+  bindings.set(binding.id, binding);
+  const records = [...bindings.values()].sort((a, b) => b.lastSeenAt - a.lastSeenAt || a.id.localeCompare(b.id));
+  return {
+    ...updateDomainMetadata(domain, source),
+    bindings,
+    bindingIds: records.map((record) => record.id),
+    bindingIdsBySurface: buildBindingIdsBySurface(records),
+    activeBindingIds: records.map((record) => record.id),
+    recentBindingIds: records.slice(0, 20).map((record) => record.id),
+    totalBindings: records.length,
+    totalResolved: records.filter((record) => record.sessionId || record.jobId || record.runId).length,
+  };
+}
+
+function updateRouteFailureState(
+  domain: RoutesDomainState,
+  _surfaceKind: AutomationSurfaceKind,
+  _externalId: string,
+  source: string,
+): RoutesDomainState {
+  return {
+    ...updateDomainMetadata(domain, source),
+    totalFailures: domain.totalFailures + 1,
+  };
+}
+
+function updateControlPlaneDomainFromClient(
+  domain: ControlPlaneDomainState,
+  client: ControlPlaneClientRecord,
+  source: string,
+): ControlPlaneDomainState {
+  const clients = new Map(domain.clients);
+  const previous = clients.get(client.id);
+  clients.set(client.id, client);
+  const records = [...clients.values()].sort((a, b) => (b.lastSeenAt ?? 0) - (a.lastSeenAt ?? 0) || a.id.localeCompare(b.id));
+  const active = records.filter((record) => record.connected);
+  return {
+    ...updateDomainMetadata(domain, source),
+    clients,
+    activeClients: new Map(active.map((record) => [record.id, record])),
+    clientIds: records.map((record) => record.id),
+    activeClientIds: active.map((record) => record.id),
+    isRunning: domain.isRunning || active.length > 0,
+    connectionState: active.length > 0 ? 'connected' : domain.isRunning ? 'disconnected' : domain.connectionState,
+    totalConnections: domain.totalConnections + (client.connected && !previous?.connected ? 1 : 0),
+    totalDisconnects: domain.totalDisconnects + (!client.connected && previous?.connected ? 1 : 0),
+  };
+}
+
+function patchControlPlaneDomain(
+  domain: ControlPlaneDomainState,
+  patch: Partial<ControlPlaneDomainState>,
+  source: string,
+): ControlPlaneDomainState {
+  return {
+    ...updateDomainMetadata(domain, source),
+    ...patch,
+    totalFailures:
+      patch.connectionState === 'terminal_failure'
+        ? domain.totalFailures + 1
+        : patch.totalFailures ?? domain.totalFailures,
+  };
+}
+
+function updateDeliveryDomainFromAttempt(
+  domain: DeliveryDomainState,
+  attempt: AutomationDeliveryAttempt,
+  source: string,
+): DeliveryDomainState {
+  const deliveryAttempts = new Map(domain.deliveryAttempts);
+  deliveryAttempts.set(attempt.id, attempt);
+  const attempts = [...deliveryAttempts.values()].sort((a, b) => (b.startedAt ?? 0) - (a.startedAt ?? 0) || a.id.localeCompare(b.id));
+  return {
+    ...updateDomainMetadata(domain, source),
+    deliveryAttempts,
+    attemptIds: attempts.map((record) => record.id),
+    pendingAttemptIds: attempts.filter((record) => record.status === 'pending' || record.status === 'sending').map((record) => record.id),
+    failedAttemptIds: attempts.filter((record) => record.status === 'failed').map((record) => record.id),
+    deadLetterIds: attempts.filter((record) => record.status === 'dead_lettered').map((record) => record.id),
+    totalQueued: attempts.length,
+    totalStarted: attempts.filter((record) => record.startedAt !== undefined || record.status !== 'pending').length,
+    totalSucceeded: attempts.filter((record) => record.status === 'sent').length,
+    totalFailed: attempts.filter((record) => record.status === 'failed').length,
+    totalDeadLettered: attempts.filter((record) => record.status === 'dead_lettered').length,
+  };
+}
+
+function updateSurfaceDomainFromRecord(
+  domain: SurfaceDomainState,
+  record: SurfaceRecord,
+  source: string,
+): SurfaceDomainState {
+  const surfaces = new Map(domain.surfaces);
+  surfaces.set(record.id, record);
+  const records = [...surfaces.values()].sort((a, b) => a.label.localeCompare(b.label) || a.configuredAt - b.configuredAt);
+  return {
+    ...updateDomainMetadata(domain, source),
+    surfaces,
+    surfaceIds: records.map((entry) => entry.id),
+    enabledSurfaceIds: records.filter((entry) => entry.enabled).map((entry) => entry.id),
+    problemSurfaceIds: records.filter((entry) => entry.state === 'degraded' || entry.state === 'error').map((entry) => entry.id),
+    totalHealthy: records.filter((entry) => entry.state === 'healthy').length,
+    totalDegraded: records.filter((entry) => entry.state === 'degraded' || entry.state === 'error').length,
+    totalDisabled: records.filter((entry) => !entry.enabled || entry.state === 'disabled').length,
+  };
+}
+
+function updateWatcherDomainFromRecord(
+  domain: WatcherDomainState,
+  record: WatcherRecord,
+  source: string,
+): WatcherDomainState {
+  const watchers = new Map(domain.watchers);
+  watchers.set(record.id, record);
+  const records = [...watchers.values()].sort((a, b) => a.label.localeCompare(b.label) || a.id.localeCompare(b.id));
+  return {
+    ...updateDomainMetadata(domain, source),
+    watchers,
+    watcherIds: records.map((entry) => entry.id),
+    activeWatcherIds: records.filter((entry) => entry.state === 'running' || entry.state === 'starting' || entry.state === 'degraded').map((entry) => entry.id),
+    failedWatcherIds: records.filter((entry) => entry.state === 'failed').map((entry) => entry.id),
+    totalStarted: records.filter((entry) => entry.state === 'running' || entry.state === 'starting').length,
+    totalStopped: records.filter((entry) => entry.state === 'stopped').length,
+    totalFailed: records.filter((entry) => entry.state === 'failed').length,
+    totalHeartbeats: records.filter((entry) => entry.lastHeartbeatAt !== undefined).length,
+    totalDegraded: records.filter((entry) => entry.state === 'degraded' || entry.sourceStatus === 'degraded').length,
+    totalLagged: records.filter((entry) => entry.sourceStatus === 'lagging' || entry.sourceStatus === 'stale').length,
+  };
+}
+
 function mutateRuntimeStore(
   store: RuntimeStore,
   updater: (state: RuntimeState) => RuntimeState,
@@ -1370,6 +1618,66 @@ export function createDomainDispatch(store: RuntimeStore): DomainDispatch {
       mutateRuntimeStore(store, (state) => ({
         ...state,
         integrations: updateIntegrationDomainFromRecord(state.integrations, record, source),
+      }));
+    },
+    syncAutomationSource(record, source = 'domain-dispatch') {
+      mutateRuntimeStore(store, (state) => ({
+        ...state,
+        automation: updateAutomationDomainFromSource(state.automation, record, source),
+      }));
+    },
+    syncAutomationJob(record, source = 'domain-dispatch') {
+      mutateRuntimeStore(store, (state) => ({
+        ...state,
+        automation: updateAutomationDomainFromJob(state.automation, record, source),
+      }));
+    },
+    syncAutomationRun(record, source = 'domain-dispatch') {
+      mutateRuntimeStore(store, (state) => ({
+        ...state,
+        automation: updateAutomationDomainFromRun(state.automation, record, source),
+      }));
+    },
+    syncRouteBinding(record, source = 'domain-dispatch') {
+      mutateRuntimeStore(store, (state) => ({
+        ...state,
+        routes: updateRoutesDomainFromBinding(state.routes, record, source),
+      }));
+    },
+    recordRouteBindingFailure(surfaceKind, externalId, source = 'domain-dispatch') {
+      mutateRuntimeStore(store, (state) => ({
+        ...state,
+        routes: updateRouteFailureState(state.routes, surfaceKind, externalId, source),
+      }));
+    },
+    syncControlPlaneClient(record, source = 'domain-dispatch') {
+      mutateRuntimeStore(store, (state) => ({
+        ...state,
+        controlPlane: updateControlPlaneDomainFromClient(state.controlPlane, record, source),
+      }));
+    },
+    syncControlPlaneState(patch, source = 'domain-dispatch') {
+      mutateRuntimeStore(store, (state) => ({
+        ...state,
+        controlPlane: patchControlPlaneDomain(state.controlPlane, patch, source),
+      }));
+    },
+    syncDeliveryAttempt(record, source = 'domain-dispatch') {
+      mutateRuntimeStore(store, (state) => ({
+        ...state,
+        deliveries: updateDeliveryDomainFromAttempt(state.deliveries, record, source),
+      }));
+    },
+    syncSurface(record, source = 'domain-dispatch') {
+      mutateRuntimeStore(store, (state) => ({
+        ...state,
+        surfaces: updateSurfaceDomainFromRecord(state.surfaces, record, source),
+      }));
+    },
+    syncWatcher(record, source = 'domain-dispatch') {
+      mutateRuntimeStore(store, (state) => ({
+        ...state,
+        watchers: updateWatcherDomainFromRecord(state.watchers, record, source),
       }));
     },
   };
@@ -1489,6 +1797,60 @@ export interface DomainDispatch {
    * Upsert an external integration/service record through the store mutation layer.
    */
   syncIntegration(record: IntegrationRecord, source?: string): void;
+
+  /**
+   * Upsert an automation source record through the store mutation layer.
+   */
+  syncAutomationSource(record: AutomationSourceRecord, source?: string): void;
+
+  /**
+   * Upsert an automation job record through the store mutation layer.
+   */
+  syncAutomationJob(record: AutomationJob, source?: string): void;
+
+  /**
+   * Upsert an automation run record through the store mutation layer.
+   */
+  syncAutomationRun(record: AutomationRun, source?: string): void;
+
+  /**
+   * Upsert a route binding record through the store mutation layer.
+   */
+  syncRouteBinding(record: AutomationRouteBinding, source?: string): void;
+
+  /**
+   * Record a route binding failure for observability and dashboards.
+   */
+  recordRouteBindingFailure(
+    surfaceKind: AutomationSurfaceKind,
+    externalId: string,
+    source?: string,
+  ): void;
+
+  /**
+   * Upsert a control-plane client record through the store mutation layer.
+   */
+  syncControlPlaneClient(record: ControlPlaneClientRecord, source?: string): void;
+
+  /**
+   * Patch top-level control-plane runtime state.
+   */
+  syncControlPlaneState(patch: Partial<ControlPlaneDomainState>, source?: string): void;
+
+  /**
+   * Upsert a delivery-attempt record through the store mutation layer.
+   */
+  syncDeliveryAttempt(record: AutomationDeliveryAttempt, source?: string): void;
+
+  /**
+   * Upsert a configured surface record through the store mutation layer.
+   */
+  syncSurface(record: SurfaceRecord, source?: string): void;
+
+  /**
+   * Upsert a watcher record through the store mutation layer.
+   */
+  syncWatcher(record: WatcherRecord, source?: string): void;
 }
 
 // ---------------------------------------------------------------------------

@@ -178,6 +178,10 @@ export class GitService {
     await this.git.add(files);
   }
 
+  async addAll(): Promise<void> {
+    await this.git.raw(['add', '--all']);
+  }
+
   async reset(files?: string | string[]): Promise<void> {
     if (files) {
       await this.git.reset(['HEAD', '--', ...(Array.isArray(files) ? files : [files])]);
@@ -424,6 +428,14 @@ export class GitService {
     const dir = cwd ?? process.cwd();
     const result = Bun.spawnSync(['git', '-C', dir, 'rev-parse', '--git-dir']);
     return result.exitCode === 0;
+  }
+
+  static getRepoRoot(cwd?: string): string | null {
+    const dir = cwd ?? process.cwd();
+    const result = Bun.spawnSync(['git', '-C', dir, 'rev-parse', '--show-toplevel']);
+    if (result.exitCode !== 0 || !result.stdout) return null;
+    const root = new TextDecoder().decode(result.stdout).trim();
+    return root.length > 0 ? root : null;
   }
 
   /** Return the working directory this instance is bound to. */

@@ -71,6 +71,16 @@ export interface AgentRecord {
   completedAt?: number;
   progress?: string;
   toolCallCount: number;
+  usage?: {
+    inputTokens: number;
+    outputTokens: number;
+    cacheReadTokens: number;
+    cacheWriteTokens: number;
+    reasoningTokens?: number;
+    llmCallCount: number;
+    turnCount: number;
+    reasoningSummaryCount?: number;
+  };
   error?: string;
   fullOutput?: string;
   streamingContent?: string;
@@ -225,6 +235,15 @@ export class AgentManager {
       status: 'pending',
       startedAt: Date.now(),
       toolCallCount: 0,
+      usage: {
+        inputTokens: 0,
+        outputTokens: 0,
+        cacheReadTokens: 0,
+        cacheWriteTokens: 0,
+        llmCallCount: 0,
+        turnCount: 0,
+        reasoningSummaryCount: 0,
+      },
       dangerously_disable_wrfc: input.dangerously_disable_wrfc,
       cohort: input.cohort,
       ...(input.orchestrationGraphId ?? input.cohort ? {

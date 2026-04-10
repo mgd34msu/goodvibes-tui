@@ -20,7 +20,13 @@ import type { ProviderHealthDomainState } from './domains/provider-health.ts';
 import type { McpDomainState } from './domains/mcp.ts';
 import type { PluginDomainState } from './domains/plugins.ts';
 import type { DaemonDomainState } from './domains/daemon.ts';
+import type { AutomationDomainState } from './domains/automation.ts';
 import type { AcpDomainState } from './domains/acp.ts';
+import type { RoutesDomainState } from './domains/routes.ts';
+import type { ControlPlaneDomainState } from './domains/control-plane.ts';
+import type { DeliveryDomainState } from './domains/deliveries.ts';
+import type { WatcherDomainState } from './domains/watchers.ts';
+import type { SurfaceDomainState } from './domains/surfaces.ts';
 import type { IntegrationDomainState } from './domains/integrations.ts';
 import type { TelemetryDomainState } from './domains/telemetry.ts';
 import type { GitDomainState } from './domains/git.ts';
@@ -42,7 +48,13 @@ import { createInitialProviderHealthState } from './domains/provider-health.ts';
 import { createInitialMcpState } from './domains/mcp.ts';
 import { createInitialPluginsState } from './domains/plugins.ts';
 import { createInitialDaemonState } from './domains/daemon.ts';
+import { createInitialAutomationState } from './domains/automation.ts';
 import { createInitialAcpState } from './domains/acp.ts';
+import { createInitialRoutesState } from './domains/routes.ts';
+import { createInitialControlPlaneState } from './domains/control-plane.ts';
+import { createInitialDeliveryState } from './domains/deliveries.ts';
+import { createInitialWatcherState } from './domains/watchers.ts';
+import { createInitialSurfaceState } from './domains/surfaces.ts';
 import { createInitialIntegrationsState } from './domains/integrations.ts';
 import { createInitialTelemetryState } from './domains/telemetry.ts';
 import { createInitialGitState } from './domains/git.ts';
@@ -71,6 +83,12 @@ export interface RuntimeState {
   mcp: McpDomainState;
   plugins: PluginDomainState;
   daemon: DaemonDomainState;
+  automation: AutomationDomainState;
+  routes: RoutesDomainState;
+  controlPlane: ControlPlaneDomainState;
+  deliveries: DeliveryDomainState;
+  watchers: WatcherDomainState;
+  surfaces: SurfaceDomainState;
   acp: AcpDomainState;
   integrations: IntegrationDomainState;
   telemetry: TelemetryDomainState;
@@ -102,6 +120,12 @@ export function createInitialRuntimeState(): RuntimeState {
     mcp: createInitialMcpState(),
     plugins: createInitialPluginsState(),
     daemon: createInitialDaemonState(),
+    automation: createInitialAutomationState(),
+    routes: createInitialRoutesState(),
+    controlPlane: createInitialControlPlaneState(),
+    deliveries: createInitialDeliveryState(),
+    watchers: createInitialWatcherState(),
+    surfaces: createInitialSurfaceState(),
     acp: createInitialAcpState(),
     integrations: createInitialIntegrationsState(),
     telemetry: createInitialTelemetryState(),

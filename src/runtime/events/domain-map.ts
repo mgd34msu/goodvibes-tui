@@ -23,6 +23,12 @@ import type { UIEvent } from './ui.ts';
 import type { OpsEvent } from './ops.ts';
 import type { ForensicsEvent } from './forensics.ts';
 import type { SecurityEvent } from './security.ts';
+import type { AutomationEvent } from './automation.ts';
+import type { RouteEvent } from './routes.ts';
+import type { ControlPlaneEvent } from './control-plane.ts';
+import type { DeliveryEvent } from './deliveries.ts';
+import type { WatcherEvent } from './watchers.ts';
+import type { SurfaceEvent } from './surfaces.ts';
 
 /** Union of all runtime domain events. */
 export type AnyRuntimeEvent =
@@ -44,7 +50,13 @@ export type AnyRuntimeEvent =
   | UIEvent
   | OpsEvent
   | ForensicsEvent
-  | SecurityEvent;
+  | SecurityEvent
+  | AutomationEvent
+  | RouteEvent
+  | ControlPlaneEvent
+  | DeliveryEvent
+  | WatcherEvent
+  | SurfaceEvent;
 
 /**
  * Utility type that maps an event type discriminant to its full event shape.
@@ -82,7 +94,13 @@ export type RuntimeEventDomain =
   | 'ui'
   | 'ops'
   | 'forensics'
-  | 'security';
+  | 'security'
+  | 'automation'
+  | 'routes'
+  | 'control-plane'
+  | 'deliveries'
+  | 'watchers'
+  | 'surfaces';
 
 /** Map from domain label to its event union type. */
 export type DomainEventMap = {
@@ -105,4 +123,10 @@ export type DomainEventMap = {
   ops: OpsEvent;
   forensics: ForensicsEvent;
   security: SecurityEvent;
+  automation: AutomationEvent;
+  routes: RouteEvent;
+  'control-plane': ControlPlaneEvent;
+  deliveries: DeliveryEvent;
+  watchers: WatcherEvent;
+  surfaces: SurfaceEvent;
 };

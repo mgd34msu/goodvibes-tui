@@ -1,7 +1,8 @@
-import { describe, test, expect } from 'bun:test';
+import { describe, test, expect, mock } from 'bun:test';
 import { createHmac } from 'crypto';
 import { SlackIntegration } from '../../integrations/slack.ts';
 import { DiscordIntegration } from '../../integrations/discord.ts';
+import { NtfyIntegration } from '../../integrations/ntfy.ts';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -158,5 +159,92 @@ describe('DaemonServer body size limit', () => {
     const contentLength = parseInt('0', 10);
     const tooLarge = contentLength > 1_000_000;
     expect(tooLarge).toBe(false);
+  });
+});
+
+describe('provider-native client helpers', () => {
+  test('Slack OAuth URL and directory calls use provider-native endpoints', async () => {
+    const url = SlackIntegration.buildOAuthAuthorizeUrl({
+      clientId: 'C123',
+      scopes: ['commands', 'chat:write'],
+      redirectUri: 'https://goodvibes.local/oauth/slack',
+      state: 'state-1',
+    });
+    expect(url).toContain('https://slack.com/oauth/v2/authorize');
+    expect(url).toContain('client_id=C123');
+    expect(url).toContain('commands%2Cchat%3Awrite');
+
+    const originalFetch = globalThis.fetch;
+    const fetchMock = mock(async (input: RequestInfo | URL, init?: RequestInit) => {
+      expect(String(input)).toBe('https://slack.com/api/conversations.list');
+      expect((init?.headers as Record<string, string>).Authorization).toBe('Bearer xoxb-test');
+      return Response.json({
+        ok: true,
+        channels: [{ id: 'C1', name: 'ops' }],
+        response_metadata: { next_cursor: '' },
+      });
+    });
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+    try {
+      const page = await new SlackIntegration(undefined, 'xoxb-test').listConversations({ limit: 1 });
+      expect(page.ok).toBe(true);
+      expect(page.entries[0]?.id).toBe('C1');
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  test('Discord OAuth URL, command shape, and command registration use provider-native endpoints', async () => {
+    const url = DiscordIntegration.buildOAuthAuthorizeUrl({
+      clientId: '12345678901234567',
+      guildId: '23456789012345678',
+      permissions: '2048',
+    });
+    expect(url).toContain('https://discord.com/oauth2/authorize');
+    expect(url).toContain('scope=bot+applications.commands');
+    expect(DiscordIntegration.buildGoodVibesCommand().options?.[0]?.name).toBe('prompt');
+
+    const originalFetch = globalThis.fetch;
+    const fetchMock = mock(async (input: RequestInfo | URL, init?: RequestInit) => {
+      expect(String(input)).toBe('https://discord.com/api/v10/applications/12345678901234567/guilds/23456789012345678/commands');
+      expect(init?.method).toBe('POST');
+      expect((init?.headers as Record<string, string>).Authorization).toBe('Bot bot-token');
+      return Response.json({ id: '34567890123456789', ...DiscordIntegration.buildGoodVibesCommand() });
+    });
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+    try {
+      const command = await new DiscordIntegration(undefined, 'bot-token').registerGuildCommand(
+        '12345678901234567',
+        '23456789012345678',
+        DiscordIntegration.buildGoodVibesCommand(),
+      );
+      expect(command.name).toBe('goodvibes');
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  test('ntfy subscribe URLs and polling support stream, websocket, and poll modes', async () => {
+    const ntfy = new NtfyIntegration('https://ntfy.sh', 'token');
+    expect(ntfy.buildSubscribeUrl('ops', 'json')).toBe('https://ntfy.sh/ops/json');
+    expect(ntfy.buildSubscribeUrl('ops', 'ws')).toBe('wss://ntfy.sh/ops/ws');
+    expect(ntfy.buildSubscribeUrl('ops', 'json', { poll: true, since: 'latest' })).toBe('https://ntfy.sh/ops/json?poll=1&since=latest');
+
+    const originalFetch = globalThis.fetch;
+    const fetchMock = mock(async (input: RequestInfo | URL, init?: RequestInit) => {
+      expect(String(input)).toBe('https://ntfy.sh/ops/json?poll=1&since=latest');
+      expect((init?.headers as Headers).get('Authorization')).toBe('Bearer token');
+      return new Response('{"event":"message","topic":"ops","message":"hi"}\n', { status: 200 });
+    });
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+    try {
+      const messages = await ntfy.poll('ops', { since: 'latest' });
+      expect(messages).toHaveLength(1);
+      expect(messages[0]?.message).toBe('hi');
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
   });
 });

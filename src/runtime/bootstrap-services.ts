@@ -65,17 +65,25 @@ async function startWithTimeout(
   label: string,
   start: () => Promise<void>,
   timeoutMs: number,
+  cleanup?: () => Promise<void>,
 ): Promise<'started' | 'timed_out'> {
   let timer: ReturnType<typeof setTimeout> | null = null;
+  const startPromise = start().then(() => 'started' as const);
   try {
     const result = await Promise.race([
-      start().then(() => 'started' as const),
+      startPromise,
       new Promise<'timed_out'>((resolve) => {
         timer = setTimeout(() => resolve('timed_out'), timeoutMs);
       }),
     ]);
     if (result === 'timed_out') {
       logger.warn(`${label} startup timed out; continuing without it in this TUI instance`, { timeoutMs });
+      if (cleanup) {
+        void cleanup().catch((error) => {
+          logger.warn(`${label} cleanup after startup timeout failed`, { error: error instanceof Error ? error.message : String(error) });
+        });
+        void startPromise.then(() => cleanup()).catch(() => {});
+      }
     }
     return result;
   } finally {
@@ -112,7 +120,8 @@ export async function startExternalServices(
       daemonServer = createDaemonServer(runtimeBus, sharedUserAuth);
       daemonServer.enable({ daemon: true });
       try {
-        const result = await startWithTimeout('Daemon server', () => daemonServer!.start(), startupTimeoutMs);
+        const service = daemonServer;
+        const result = await startWithTimeout('Daemon server', () => service.start(), startupTimeoutMs, () => service.stop());
         if (result === 'timed_out') {
           daemonServer = null;
         }
@@ -138,7 +147,8 @@ export async function startExternalServices(
       httpListener = createHttpListener(hookDispatcher, sharedUserAuth);
       httpListener.enable({ httpListener: true });
       try {
-        const result = await startWithTimeout('HTTP listener', () => httpListener!.start(), startupTimeoutMs);
+        const service = httpListener;
+        const result = await startWithTimeout('HTTP listener', () => service.start(), startupTimeoutMs, () => service.stop());
         if (result === 'timed_out') {
           httpListener = null;
         }

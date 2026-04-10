@@ -45,6 +45,10 @@ import { WorktreePanel } from './worktree-panel.ts';
 import { ProviderAccountsPanel } from './provider-accounts-panel.ts';
 import { LocalAuthPanel } from './local-auth-panel.ts';
 import { IntelligencePanel } from './intelligence-panel.ts';
+import { AutomationControlPanel } from './automation-control-panel.ts';
+import { RoutesPanel } from './routes-panel.ts';
+import { WatchersPanel } from './watchers-panel.ts';
+import { ControlPlanePanel } from './control-plane-panel.ts';
 import type { ConfigManager } from '../config/index.ts';
 import type { RuntimeEventBus } from '../runtime/events/index.ts';
 import type { ToolRegistry } from '../tools/registry.ts';
@@ -210,6 +214,42 @@ export function registerBuiltinPanels(manager: PanelManager, deps: BuiltinPanelD
     category: 'monitoring',
     description: 'Configured external services, credential presence, and connection health tests',
     factory: () => new ServicesPanel(),
+  });
+
+  manager.registerType({
+    id: 'automation',
+    name: 'Automation',
+    icon: 'M',
+    category: 'monitoring',
+    description: 'Automation jobs, runs, deliveries, and failure posture across the control plane',
+    factory: () => new AutomationControlPanel(deps.runtimeStore),
+  });
+
+  manager.registerType({
+    id: 'routes',
+    name: 'Routes',
+    icon: 'R',
+    category: 'monitoring',
+    description: 'Cross-surface route bindings and shared session attachment state',
+    factory: () => new RoutesPanel(deps.runtimeStore),
+  });
+
+  manager.registerType({
+    id: 'watchers',
+    name: 'Watchers',
+    icon: 'W',
+    category: 'monitoring',
+    description: 'Watcher health, lag, and degraded source state for automation inputs',
+    factory: () => new WatchersPanel(deps.runtimeStore),
+  });
+
+  manager.registerType({
+    id: 'control-plane',
+    name: 'Control Plane',
+    icon: 'C',
+    category: 'monitoring',
+    description: 'Daemon control-plane state, clients, approvals, and recent operator activity',
+    factory: () => new ControlPlanePanel(deps.runtimeStore),
   });
 
   manager.registerType({

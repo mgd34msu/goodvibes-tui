@@ -1,5 +1,21 @@
-import { resolve, relative } from 'node:path';
+import { existsSync, realpathSync } from 'node:fs';
+import { dirname, resolve, relative } from 'node:path';
 import { getWorkingDirectory } from '../config/index.ts';
+
+function isInsideRoot(root: string, candidate: string): boolean {
+  const rel = relative(root, candidate);
+  return rel === '' || (!rel.startsWith('..') && !rel.includes('/..') && !rel.startsWith('/'));
+}
+
+function nearestExistingPath(path: string): string {
+  let current = path;
+  while (!existsSync(current)) {
+    const parent = dirname(current);
+    if (parent === current) return current;
+    current = parent;
+  }
+  return current;
+}
 
 /**
  * Resolves an input path against the working directory and validates it is
@@ -7,12 +23,23 @@ import { getWorkingDirectory } from '../config/index.ts';
  * root (path traversal attempt).
  */
 export function resolveAndValidatePath(inputPath: string): string {
-  const root = resolve(getWorkingDirectory());
+  const root = realpathSync(resolve(getWorkingDirectory()));
   const resolved = resolve(root, inputPath);
   const rel = relative(root, resolved);
   // NOTE: This check targets Unix paths only. Windows backslash separators are not handled (acceptable for Linux-targeted TUI).
   if (rel.startsWith('..') || rel.includes('/..')) {
     throw new Error(`Path '${inputPath}' is outside the project root`);
+  }
+  const existingPath = nearestExistingPath(resolved);
+  const realExistingPath = realpathSync(existingPath);
+  if (!isInsideRoot(root, realExistingPath)) {
+    throw new Error(`Path '${inputPath}' is outside the project root`);
+  }
+  if (existsSync(resolved)) {
+    const realTargetPath = realpathSync(resolved);
+    if (!isInsideRoot(root, realTargetPath)) {
+      throw new Error(`Path '${inputPath}' is outside the project root`);
+    }
   }
   return resolved;
 }

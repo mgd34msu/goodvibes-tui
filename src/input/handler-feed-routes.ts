@@ -282,6 +282,17 @@ export function handlePromptKeyToken(state: KeyRouteState, token: InputToken): {
   let cursorPos = state.cursorPos;
   let commandMode = state.commandMode;
   let indicatorFocused = state.indicatorFocused;
+  const runQuitShortcut = (commandName: 'quit' | 'wq') => {
+    if (state.commandContext?.executeCommand) {
+      void state.commandContext.executeCommand(commandName, []).catch((error) => {
+        state.commandContext?.print(
+          `[${commandName}] ${error instanceof Error ? error.message : String(error)}`,
+        );
+      });
+      return;
+    }
+    state.exitApp();
+  };
 
   if (token.logicalName === 'tab' && !commandMode) {
     if (!state.handlePathCompletion()) {
@@ -309,8 +320,11 @@ export function handlePromptKeyToken(state: KeyRouteState, token: InputToken): {
         return { handled: true, prompt, cursorPos, commandMode, indicatorFocused };
       }
     }
-    if (text === ':q') {
-      state.exitApp();
+    if (text === ':q' || text === ':wq') {
+      prompt = '';
+      cursorPos = 0;
+      runQuitShortcut(text === ':wq' ? 'wq' : 'quit');
+      state.requestRender();
       return { handled: true, prompt, cursorPos, commandMode, indicatorFocused };
     }
     if (text) {
