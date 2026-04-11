@@ -10,18 +10,18 @@ Version: **0.15.7**
 
 ## What is this
 
-goodvibes-tui is a terminal-native product in the same broad space as Claude Code, Gemini CLI, and Codex, but the codebase is built around a different set of constraints:
+goodvibes-tui is a terminal-native product for coding, operations, automation, knowledge work, and integrations. The codebase is built around:
 
-- terminal-native rendering, not a React app inside a terminal
+- terminal-native rendering
 - Unicode-rich, cell-accurate UI primitives
 - compact, token-efficient transcript behavior
 - operator-facing control rooms for non-conversational state
 - explicit runtime visibility for permissions, routing, health, remote execution, knowledge, and orchestration
 - backend-first external surfaces for channels, future web clients, automation, and remote peers
 
-The interface is rendered directly to the alternate screen buffer with raw ANSI escape sequences. Conversation, panels, modals, overlays, and the footer all sit on the same renderer foundation instead of mixing framework surfaces with terminal escape hacks.
+The interface is rendered directly to the alternate screen buffer with raw ANSI escape sequences. Conversation, panels, modals, overlays, and the footer all share the same renderer foundation.
 
-The runtime is organized around typed store domains, typed runtime events, a shared control plane for permissions and orchestration, and product surfaces for reviewing and repairing state. Agents run in-process with isolated histories, scoped tools, and optional worktrees. Operational state such as provider routing, local auth, daemon/gateway posture, channels, search, artifacts, structured knowledge, multimodal analysis, remote sessions, settings control-plane state, and task execution is routed into dedicated panels and APIs instead of being dumped into the main transcript.
+The runtime is organized around typed store domains, typed runtime events, a shared control plane for permissions and orchestration, and product surfaces for reviewing and repairing state. Agents run in-process with isolated histories, scoped tools, and optional worktrees. Operational state such as provider routing, local auth, daemon/gateway posture, channels, search, artifacts, structured knowledge, multimodal analysis, remote sessions, settings control-plane state, and task execution is routed into dedicated panels and APIs.
 
 ---
 
@@ -31,29 +31,29 @@ The runtime is organized around typed store domains, typed runtime events, a sha
 - Native OpenAI, Anthropic, OpenAI Codex, Gemini, InceptionLabs, Amazon Bedrock, Amazon Bedrock Mantle, Anthropic Vertex, and GitHub Copilot support plus a broad OpenAI-compatible/gateway layer
 - Dynamic model catalog with benchmark metadata, provider auto-registration, custom provider JSON, and hot-reload
 - Interactive model and provider pickers with family, capability, availability, and tier filtering
-- Synthetic-provider failover that preserves free / paid / subscription boundaries instead of silently mixing billing paths
+- Synthetic-provider failover that preserves free / paid / subscription boundaries
 - Provider account control room with route posture, auth freshness, fallback risk, and recovery actions
 
 ### Terminal-Native UI System
-- Raw ANSI renderer with no Ink, React, or virtual DOM
+- Raw ANSI renderer with direct terminal control
 - Shared Unicode glyph primitives for borders, cursors, meters, markers, and selection states
-- Conversation, panels, and modals built on the same low-level renderer instead of ad hoc surface logic
+- Conversation, panels, and modals built on the same low-level renderer
 - Width-aware overlays, stable bottom docking above the prompt, half-height message surfaces, and structured footer layers
-- Shared panel workspace layout budgeting so scroll regions use the renderer-owned visible-row budget instead of panel-local `height - N` guesses
+- Shared panel workspace layout budgeting with renderer-owned visible-row budgets
 - Copy/selection logic that strips decorative gutters and visual scaffolding from clipboard output
 
 ### Conversation And Transcript Workflow
 - Markdown rendering, syntax highlighting, inline diffs, collapsible blocks, bookmarks, block copy, and block save
 - Transcript event navigation by family for operational browsing of long sessions
 - Search overlays, compact line-number modes (`all`, `code`, `off`), and block-level collapse/expand
-- Presentation routing so non-conversational runtime chatter can live in control-room panels instead of the main transcript
+- Presentation routing for non-conversational runtime chatter into control-room panels
 - Tracked assistant-message rendering that supports markdown tables, including tolerant handling of slightly malformed LLM-generated separator rows
 
 ### Panels, Control Rooms, And Workspaces
 - Split-pane panel system with panel picker, layout control, and keyboard-first focus behavior
 - Dedicated control rooms for provider accounts, provider health, local auth, settings sync, remote, MCP, marketplace, orchestration, tasks, intelligence, worktrees, approvals, forensics, security, policy, cockpit, system messages, and more
-- Summary-first heavy panels with posture, issues, next actions, and detail regions instead of raw inventories first
-- Routed system-message workspace for startup discovery and operational noise that does not belong in the main conversation
+- Summary-first heavy panels with posture, issues, next actions, and detail regions
+- Routed system-message workspace for startup discovery and operational notices
 - Cross-panel actions between Explorer, Preview, and Symbols so file browsing can open previews and jump to symbol locations directly from panel focus
 - Live panels stay subscribed while open, so agent, tool, and thinking updates continue while the panel is visible
 - Dedicated `Agents` panel provides a view-only live peek into running agent sessions while the background-process strip remains the fast-access surface below the prompt
@@ -67,7 +67,7 @@ The runtime is organized around typed store domains, typed runtime events, a sha
 ### Token And Usage Visibility
 - Live thinking-strip token output that continues to advance even when visible response streaming is disabled
 - Fresh-input versus cached-context accounting in the footer and token surfaces, so request counts separate new input from cache-read context while the context bar still reflects the full prompt footprint
-- Reasoning-heavy OpenAI/OpenAI-compatible streams advance live token/output indicators even when providers emit reasoning deltas instead of plain text deltas
+- Reasoning-heavy OpenAI/OpenAI-compatible streams advance live token/output indicators for reasoning-delta providers
 
 ### Agents, Tasks, And WRFC
 - In-process agents with isolated history, scoped tools, optional worktrees, and structured communication lanes
@@ -100,7 +100,7 @@ The runtime is organized around typed store domains, typed runtime events, a sha
 - Distributed peer/node-host runtime with pairing, scoped tokens, work pull/complete flows, replay/review artifacts, and operator-facing remote inspection/recovery surfaces
 
 ### Runtime Foundations
-- Typed runtime store and typed runtime-event system with domain-specific dispatch instead of ad hoc mutation
+- Typed runtime store and typed runtime-event system with domain-specific dispatch
 - Bootstrap composition root with explicit initialization order
 - Session continuity, return-context summaries, knowledge capture, compaction, guidance, diagnostics, notifications, retention, idempotency, and integration-helper APIs
 - Feature flags, profiles, profile sync bundles, live settings editing, and UI routing controls for system / operational / WRFC messages
@@ -192,11 +192,11 @@ goodvibes-tui auto-discovers local inference servers on startup. Supported serve
 - **Text Generation Inference (TGI)**
 - **Jan**, **GPT4All**, **KoboldCpp**, **Aphrodite**
 
-Discovered servers are registered automatically as OpenAI-compatible providers with no configuration required.
+Discovered servers are registered automatically as OpenAI-compatible providers at startup.
 
 ### Synthetic Failover Provider
 
-The `synthetic` provider groups the same model across multiple backends under a single selectable entry. When one backend hits a rate limit or error, requests automatically failover to the next — no user action needed. Models are cataloged from models.dev (4,000+ models, 100+ providers) with a 24-hour TTL cache.
+The `synthetic` provider groups the same model across multiple backends under a single selectable entry. When one backend hits a rate limit or error, requests fail over automatically to the next. Models are cataloged from models.dev (4,000+ models, 100+ providers) with a 24-hour TTL cache.
 
 Many model providers support configurable reasoning effort levels. Selectable options include: `instant`, `low`, `medium`, `high`.
 
@@ -238,7 +238,7 @@ Provider configs are hot-reloaded on file change. Use the `/add-provider` skill 
 
 - [Bun](https://bun.sh) v1.0 or later
 - **Optional**: [Go](https://go.dev) for Go LSP support (gopls auto-installs via `go install`)
-- **Optional**: For Rust development, `rust-analyzer` is auto-downloaded from GitHub releases (no Rust toolchain required)
+- **Optional**: For Rust development, `rust-analyzer` is auto-downloaded from GitHub releases
 
 ### Install
 
@@ -294,7 +294,7 @@ Use `/secrets providers` for supported provider shapes and `/secrets test <secre
 
 ### Synthetic Failover Provider
 
-The `synthetic` provider groups models available from multiple backends. When one provider hits a rate limit, requests automatically failover to the next — no user intervention needed. To enable failover, set API keys for multiple free providers:
+The `synthetic` provider groups models available from multiple backends. When one provider hits a rate limit, requests fail over automatically to the next. To enable failover, set API keys for multiple free providers:
 
 ```sh
 # Recommended minimum for failover
@@ -342,7 +342,7 @@ Synthetic models are models available from multiple providers, automatically gro
 
 ### Transparent failover
 
-Failover happens automatically, with no user action required:
+Failover behavior:
 
 - **Rate limit (429)** — immediately retries the next provider in the pool
 - **Server error (500) or network error** — retries the next provider after a 5-second cooldown
@@ -454,7 +454,7 @@ Per-tool values: `allow`, `prompt`, `deny`.
 
 ## Control Rooms, Routing, And Operator Surfaces
 
-GoodVibes is built around the idea that runtime state should be routed to the right place instead of dumped into the transcript.
+GoodVibes is built around routing runtime state to the right surface.
 
 The current product ships dedicated workspaces for:
 
@@ -484,9 +484,9 @@ Routing is configurable with:
 
 This is how startup discovery, runtime notices, and orchestration chatter can be sent to a panel, the conversation, or both.
 
-The gateway/event layer is also a first-class product surface. Runtime domains such as `session`, `tasks`, `agents`, `automation`, `routes`, `control-plane`, `deliveries`, `surfaces`, `watchers`, `transport`, `ops`, and `knowledge` are exposed through the control plane instead of being hidden in renderer-only state.
+The gateway/event layer is also a first-class product surface. Runtime domains such as `session`, `tasks`, `agents`, `automation`, `routes`, `control-plane`, `deliveries`, `surfaces`, `watchers`, `transport`, `ops`, and `knowledge` are exposed through the control plane.
 
-The notification layer is policy-aware instead of being a raw append-only log:
+The notification layer applies policy-aware routing, batching, and visibility controls:
 
 - quiet-while-typing suppression
 - adaptive batching and burst control
@@ -494,9 +494,9 @@ The notification layer is policy-aware instead of being a raw append-only log:
 - panel jump and dismiss actions
 - routing decisions that favor control rooms for low-signal operational noise
 
-That routing stack lives under `src/runtime/notifications/*` and is one of the reasons the conversation surface can stay compact even when the runtime is busy.
+That routing stack lives under `src/runtime/notifications/*` and helps keep the conversation surface compact even when the runtime is busy.
 
-Underneath those surfaces, GoodVibes uses a typed runtime store backed by `zustand/vanilla`, not a React state tree. Conversation, session, permissions, tasks, agents, orchestration, communication, plugins, MCP, ACP/daemon transport, integrations, intelligence, and other domains are updated through typed dispatch paths rather than arbitrary renderer-local state mutation.
+Underneath those surfaces, GoodVibes uses a typed runtime store backed by `zustand/vanilla`. Conversation, session, permissions, tasks, agents, orchestration, communication, plugins, MCP, ACP/daemon transport, integrations, intelligence, and other domains are updated through typed dispatch paths.
 
 ---
 
@@ -511,7 +511,7 @@ Isolation controls:
 - host posture on Windows: `native-basic` or `require-wsl`
 - VM backend: `local` or `qemu`
 
-The QEMU path is productized rather than just being a config stub:
+The QEMU path includes:
 
 - setup bundle generation
 - first-run bootstrap scaffolding
@@ -553,7 +553,7 @@ Typical first-run path:
 
 ### Omnichannel surfaces
 
-GoodVibes has a shared channel/runtime layer rather than one-off notifier integrations.
+GoodVibes includes a shared channel/runtime layer.
 
 Current surfaces:
 
@@ -573,11 +573,11 @@ Current surfaces:
 - `mattermost`
 - `matrix`
 
-Inbound adapters, target resolution, account/setup metadata, doctor hooks, routing, and delivery are all driven through the channel runtime rather than bespoke integration code paths.
+Inbound adapters, target resolution, account/setup metadata, doctor hooks, routing, and delivery are all driven through the channel runtime.
 
 ### Remote runtime
 
-The remote runtime is a distributed peer system, not just a live connection:
+The remote runtime is a distributed peer system with:
 
 - pair requests and challenge verification
 - peer tokens, scopes, heartbeat, and disconnect/revoke flows
@@ -695,22 +695,15 @@ The adjacent trust layer covers:
 - plugin trust tiers
 - quarantine and degraded posture
 - marketplace and MCP trust review
-- security/policy control-room surfaces instead of silent background policy changes
+- security/policy control-room surfaces for review and remediation
 
-This work is implemented under:
-
-- [src/runtime/permissions/index.ts](/home/buzzkill/Projects/goodvibes-tui/src/runtime/permissions/index.ts)
-- [src/runtime/plugins/manager.ts](/home/buzzkill/Projects/goodvibes-tui/src/runtime/plugins/manager.ts)
-- [src/runtime/plugins/quarantine.ts](/home/buzzkill/Projects/goodvibes-tui/src/runtime/plugins/quarantine.ts)
-- [src/runtime/ecosystem/recommendations.ts](/home/buzzkill/Projects/goodvibes-tui/src/runtime/ecosystem/recommendations.ts)
-
-The result is that approvals, policy rollout, trust posture, and plugin degradation are all inspectable product behavior, not opaque internals.
+The result is that approvals, policy rollout, trust posture, and plugin degradation are inspectable product behavior.
 
 ---
 
 ## Automation, Hooks, And Scheduling
 
-GoodVibes includes a real automation layer instead of only ad hoc slash commands:
+GoodVibes includes an automation layer with:
 
 - managed hooks with scaffold, chain, enable/disable, inspect, import/export, and simulation flows
 - hook-point contracts with execution authority, mutation/injection permissions, timeout policy, and failure policy metadata
@@ -725,14 +718,7 @@ Key commands:
 - `/schedule`
 - `/plan`
 
-These surfaces are implemented across:
-
-- [src/input/commands/hooks-runtime.ts](/home/buzzkill/Projects/goodvibes-tui/src/input/commands/hooks-runtime.ts)
-- [src/input/commands/schedule-runtime.ts](/home/buzzkill/Projects/goodvibes-tui/src/input/commands/schedule-runtime.ts)
-- [src/input/commands/planning-runtime.ts](/home/buzzkill/Projects/goodvibes-tui/src/input/commands/planning-runtime.ts)
-- [src/tools/workflow/index.ts](/home/buzzkill/Projects/goodvibes-tui/src/tools/workflow/index.ts)
-
-The point is not “automation because automation.” It is to make recurring operational work, review loops, and reaction policies explicit, inspectable, and schedulable.
+The goal is to make recurring operational work, review loops, and reaction policies explicit, inspectable, and schedulable.
 
 ---
 
@@ -789,12 +775,6 @@ Key commands:
 - `/plugin list|inspect|review|browse|catalog-review|publish-local|install|update|uninstall`
 - `/marketplace`
 
-This is implemented by:
-
-- [src/input/commands/integration-runtime.ts](/home/buzzkill/Projects/goodvibes-tui/src/input/commands/integration-runtime.ts)
-- [src/runtime/ecosystem/catalog.ts](/home/buzzkill/Projects/goodvibes-tui/src/runtime/ecosystem/catalog.ts)
-- [src/runtime/ecosystem/recommendations.ts](/home/buzzkill/Projects/goodvibes-tui/src/runtime/ecosystem/recommendations.ts)
-
 So the product supports both direct local plugins and a curated local-first ecosystem channel with review and receipt tracking.
 
 ---
@@ -813,20 +793,14 @@ GoodVibes also ships a live bounded `repl` tool backed by the sandbox/session la
 - SQL
 - GraphQL
 
-The implementation is in:
-
-- [src/tools/repl/index.ts](/home/buzzkill/Projects/goodvibes-tui/src/tools/repl/index.ts)
-- [src/tools/repl/schema.ts](/home/buzzkill/Projects/goodvibes-tui/src/tools/repl/schema.ts)
-- [src/runtime/sandbox/manager.ts](/home/buzzkill/Projects/goodvibes-tui/src/runtime/sandbox/manager.ts)
-
-These are real runtime profiles, not placeholder names. They are wired through sandbox profiles such as `eval-js`, `eval-ts`, `eval-py`, `eval-sql`, and `eval-graphql`, and REPL history is persisted under `.goodvibes/tui/repl-history.json`.
+These are real runtime profiles wired through sandbox profiles such as `eval-js`, `eval-ts`, `eval-py`, `eval-sql`, and `eval-graphql`, and REPL history is persisted under `.goodvibes/tui/repl-history.json`.
 
 The important nuance is that the runtimes are intentionally bounded:
 
 - JavaScript and TypeScript evaluate inside the sandbox exec path
 - Python runs in an ephemeral virtualenv
 - SQL evaluates against an ephemeral in-memory SQLite database
-- GraphQL currently provides bounded GraphQL expression analysis/normalization through the REPL path rather than a general remote GraphQL executor
+- GraphQL currently provides bounded GraphQL expression analysis/normalization through the REPL path
 
 ### Durable memory / knowledge
 
@@ -835,21 +809,6 @@ GoodVibes has three distinct context layers:
 - session memory for lightweight pinned notes that only live for the current session
 - durable reviewed memory stored in SQLite for reuse, review, export, and task-time injection
 - a structured knowledge store with sources, nodes, edges, issues, extractions, usage records, consolidation candidates/reports, schedules, GraphQL, and markdown/wiki-style projections
-
-The durable memory and knowledge runtime is implemented in:
-
-- [src/state/memory-store.ts](/home/buzzkill/Projects/goodvibes-tui/src/state/memory-store.ts)
-- [src/state/knowledge-injection.ts](/home/buzzkill/Projects/goodvibes-tui/src/state/knowledge-injection.ts)
-- [src/knowledge/store.ts](/home/buzzkill/Projects/goodvibes-tui/src/knowledge/store.ts)
-- [src/knowledge/service.ts](/home/buzzkill/Projects/goodvibes-tui/src/knowledge/service.ts)
-- [src/knowledge/graphql.ts](/home/buzzkill/Projects/goodvibes-tui/src/knowledge/graphql.ts)
-- [src/knowledge/projections.ts](/home/buzzkill/Projects/goodvibes-tui/src/knowledge/projections.ts)
-- [src/knowledge/connectors.ts](/home/buzzkill/Projects/goodvibes-tui/src/knowledge/connectors.ts)
-- [src/knowledge/extractors.ts](/home/buzzkill/Projects/goodvibes-tui/src/knowledge/extractors.ts)
-- [src/input/commands/memory.ts](/home/buzzkill/Projects/goodvibes-tui/src/input/commands/memory.ts)
-- [src/input/commands/knowledge.ts](/home/buzzkill/Projects/goodvibes-tui/src/input/commands/knowledge.ts)
-- [src/panels/memory-panel.ts](/home/buzzkill/Projects/goodvibes-tui/src/panels/memory-panel.ts)
-- [src/panels/knowledge-panel.ts](/home/buzzkill/Projects/goodvibes-tui/src/panels/knowledge-panel.ts)
 
 Durable record classes currently include:
 
@@ -892,7 +851,7 @@ There is also a genuine self-improvement loop here:
 - future tasks can receive automatically selected reviewed knowledge injections
 - the runtime can explain exactly which knowledge records it would inject for a task and why
 
-So the system is not just archival storage. It supports iterative operator review and reuse of lessons learned in later work.
+The system supports iterative operator review and reuse of lessons learned in later work.
 
 Key commands:
 
@@ -909,7 +868,7 @@ Key commands:
 - `/recall handoff-import ...`
 - `/knowledge status|ingest-url|import-bookmarks|import-urls|list|search|get|queue|candidates|reports|schedules|lint|packet|explain|reindex|consolidate`
 
-This is not just a note store. It is a reviewed knowledge substrate used by the runtime when preparing task context.
+This is a reviewed knowledge substrate used by the runtime when preparing task context.
 
 There are also dedicated front doors for memory workflows outside `/recall`:
 
@@ -920,18 +879,18 @@ There are also dedicated front doors for memory workflows outside `/recall`:
 
 ### Web search, artifacts, voice, and multimodal
 
-These systems are first-class runtime families rather than incidental helper features.
+These systems are first-class runtime families.
 
 - `web-search`: provider-backed search with verbosity control, evidence shaping, optional source fetching, and normalized results across DuckDuckGo, SearXNG, Brave, Exa, Firecrawl, Tavily, and Perplexity
 - `artifacts`: durable file/object storage for markdown, text, JSON, CSV, spreadsheets, PDFs, images, audio, video, and generated outputs, with metadata, content access, and delivery reuse
 - `voice`: provider-backed TTS/STT/realtime negotiation with OpenAI, ElevenLabs, Deepgram, Google, Microsoft, and Vydra
 - `multimodal`: unified image/audio/video/document analysis with packet building and optional knowledge write-back
 
-These surfaces are exposed through the daemon/API as well as the TUI panels/commands, which is what makes future web/companion clients easy to build without reimplementing the backend logic.
+These surfaces are exposed through the daemon/API as well as the TUI panels and commands, giving future web and companion clients the same backend runtime.
 
 ### read
 
-Read files with token-efficient extraction modes. Not just cat-to-context.
+Read files with token-efficient extraction modes.
 
 - 5 extract modes: `content` (full text), `outline` (signatures only, significant token savings), `symbols` (exported names, even greater savings), `ast` (structural), `lines` (specific ranges)
 - Tree-sitter powered outline and symbol extraction with regex fallback
@@ -994,7 +953,7 @@ HTTP client with extraction modes, service registry auth, and batch operations.
 
 Higher-level provider-backed search built on top of the lower-level fetch/runtime stack.
 
-- Normalized ranked search results instead of raw SERP HTML
+- Normalized ranked search results
 - Verbosity modes from compact URL lists through richer snippet/evidence bundles
 - Optional instant-answer enrichment and optional fetched evidence for top-ranked sources
 - Provider routing across DuckDuckGo, SearXNG, Brave, Exa, Firecrawl, Tavily, and Perplexity
@@ -1117,23 +1076,15 @@ GoodVibes includes a substantial post-execution and operator-repair stack:
 - idempotency keys prevent duplicate tool execution across replay, reconnect, and retry scenarios
 - operational playbooks describe symptoms, checks, and resolution steps for runtime failure classes
 
-This is backed by:
-
-- [src/runtime/eval/index.ts](/home/buzzkill/Projects/goodvibes-tui/src/runtime/eval/index.ts)
-- [src/runtime/forensics/index.ts](/home/buzzkill/Projects/goodvibes-tui/src/runtime/forensics/index.ts)
-- [src/runtime/diagnostics/index.ts](/home/buzzkill/Projects/goodvibes-tui/src/runtime/diagnostics/index.ts)
-- [src/runtime/ui/state-inspector/index.ts](/home/buzzkill/Projects/goodvibes-tui/src/runtime/ui/state-inspector/index.ts)
-- [src/runtime/telemetry/index.ts](/home/buzzkill/Projects/goodvibes-tui/src/runtime/telemetry/index.ts)
-
-So the product is not just “chat plus tools.” It also includes validation, replay, incident, telemetry, and repair infrastructure.
+The product also includes validation, replay, incident, telemetry, and repair infrastructure.
 
 The adjacent reliability subsystems include:
 
-- [src/runtime/notifications/index.ts](/home/buzzkill/Projects/goodvibes-tui/src/runtime/notifications/index.ts)
-- [src/runtime/perf/index.ts](/home/buzzkill/Projects/goodvibes-tui/src/runtime/perf/index.ts)
-- [src/runtime/retention/index.ts](/home/buzzkill/Projects/goodvibes-tui/src/runtime/retention/index.ts)
-- [src/runtime/idempotency/index.ts](/home/buzzkill/Projects/goodvibes-tui/src/runtime/idempotency/index.ts)
-- [src/runtime/ops/index.ts](/home/buzzkill/Projects/goodvibes-tui/src/runtime/ops/index.ts)
+- notifications
+- performance budgets and panel-health monitoring
+- retention and pruning
+- idempotency protection
+- machine-readable recovery playbooks
 
 Those pieces cover conversation-noise routing, panel-health/performance budgets, snapshot pruning, duplicate-execution protection, and machine-readable recovery playbooks used by the diagnostics surface.
 
@@ -1440,7 +1391,7 @@ Current MCP product loops also include:
 - trust posture and quarantine review
 - auth-review and reconnect flows
 - sandbox-backed execution when isolation is configured
-- routing into dedicated MCP and Health workspaces instead of transcript spam
+- routing into dedicated MCP and Health workspaces
 
 Useful commands:
 
@@ -1510,12 +1461,12 @@ src/
 ### Key Design Decisions
 
 - **Bun runtime** — native TypeScript execution, fast startup, built-in test runner
-- **Raw ANSI renderer** — no framework dependency in the rendering path, direct control over every byte sent to the terminal
+- **Raw ANSI renderer** — direct control over every byte sent to the terminal
 - **In-process agents** — agents share the same process and memory, avoiding IPC overhead while maintaining isolation through scoped registries and namespaced state
 - **Tree-sitter for code intelligence** — 17 language grammars (TypeScript, TSX, JavaScript, Python, Rust, Go, Java, C, C++, Ruby, Bash, JSON, YAML, TOML, CSS, HTML, Markdown) for structural analysis, outline extraction, and AST-level edits — with 6 (TypeScript, TSX, JavaScript, Python, JSON, CSS) embedded as WASM for instant startup
 - **Bundled language servers** — TypeScript, Python, Bash, CSS, HTML, and JSON language servers ship as npm dependencies and work out of the box. Rust (`rust-analyzer`) and Go (`gopls`) are downloaded automatically on first use with SHA256 integrity verification. No manual LSP setup required.
-- **SQL.js for analytics** — WASM SQLite for in-process tool call telemetry without a database server
-- **Zustand vanilla store** — no React dependency; the runtime store is a plain Zustand store with typed selectors and dispatch paths, usable from agents, tools, renderer, hooks, channels, and daemon surfaces
+- **SQL.js for analytics** — WASM SQLite for in-process tool call telemetry
+- **Zustand vanilla store** — a plain Zustand store with typed selectors and dispatch paths, usable from agents, tools, renderer, hooks, channels, and daemon surfaces
 - **Agent Client Protocol** — subagents communicate via @agentclientprotocol/sdk over stdio ndJsonStream
 - **Backend-first external surface** — the daemon/control plane exposes typed HTTP/gateway methods for knowledge, artifacts, media, search, channels, and remote peers so future clients do not have to reimplement runtime logic
 - **Plugin system** — manifest.json + sandboxed API surface for commands, providers, tools, gateway methods, channels, embeddings, voice, media, and search
