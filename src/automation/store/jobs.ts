@@ -1,13 +1,11 @@
-import { join } from 'node:path';
 import { PersistentStore } from '../../state/persistent-store.ts';
 import type { AutomationJob } from '../jobs.ts';
+import { resolveAutomationStorePath, type AutomationStorePathConfig } from './paths.ts';
 
 interface AutomationJobsSnapshot extends Record<string, unknown> {
   version: 1;
   jobs: AutomationJob[];
 }
-
-const DEFAULT_PATH = join(process.cwd(), '.goodvibes', 'tui', 'automation-jobs.json');
 
 function defaultSnapshot(): AutomationJobsSnapshot {
   return {
@@ -16,10 +14,18 @@ function defaultSnapshot(): AutomationJobsSnapshot {
   };
 }
 
+export interface AutomationJobStoreConfig {
+  readonly path?: string;
+  readonly configManager?: AutomationStorePathConfig;
+}
+
 export class AutomationJobStore {
   private readonly store: PersistentStore<AutomationJobsSnapshot>;
 
-  constructor(path: string = DEFAULT_PATH) {
+  constructor(config: string | AutomationJobStoreConfig = {}) {
+    const path = typeof config === 'string'
+      ? config
+      : config.path ?? resolveAutomationStorePath('automation-jobs.json', config.configManager);
     this.store = new PersistentStore<AutomationJobsSnapshot>(path);
   }
 

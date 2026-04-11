@@ -13,6 +13,12 @@ interface SqlJsStatic {
   Database: new (data?: Uint8Array | Buffer) => SqlDatabase;
 }
 
+function isEphemeralDbPath(path: string | null | undefined): boolean {
+  if (!path) return true;
+  if (path === ':memory:') return true;
+  return /^file:.*(?:^|[?&])mode=memory(?:&|$)/.test(path);
+}
+
 export class SQLiteStore {
   private db: SqlDatabase | null = null;
   private readonly dbPath: string | null;
@@ -47,13 +53,14 @@ export class SQLiteStore {
   }
 
   async save(): Promise<boolean> {
-    if (!this.dbPath || !this.db) return false;
+    const dbPath = this.dbPath;
+    if (isEphemeralDbPath(dbPath) || !this.db || !dbPath) return false;
 
     try {
-      mkdirSync(dirname(this.dbPath), { recursive: true });
+      mkdirSync(dirname(dbPath), { recursive: true });
       const data = this.db.export();
-      writeFileSync(this.dbPath, Buffer.from(data));
-      logger.info('SQLiteStore: saved to disk', { path: this.dbPath });
+      writeFileSync(dbPath, Buffer.from(data));
+      logger.info('SQLiteStore: saved to disk', { path: dbPath });
       return true;
     } catch (err) {
       logger.error('SQLiteStore: failed to save', {
@@ -74,10 +81,11 @@ export class SQLiteStore {
       // @ts-ignore — no bundled types for sql.js in this environment
       const initSqlJs = (await import('sql.js')).default;
       const SQL = await initSqlJs() as SqlJsStatic;
+      const dbPath = this.dbPath;
 
-      if (this.dbPath && existsSync(this.dbPath)) {
-        this.db = new SQL.Database(readFileSync(this.dbPath));
-        logger.info('SQLiteStore: loaded from disk', { path: this.dbPath });
+      if (dbPath && !isEphemeralDbPath(dbPath) && existsSync(dbPath)) {
+        this.db = new SQL.Database(readFileSync(dbPath));
+        logger.info('SQLiteStore: loaded from disk', { path: dbPath });
       } else {
         this.db = new SQL.Database();
         logger.info('SQLiteStore: initialized in-memory');

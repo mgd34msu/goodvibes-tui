@@ -26,6 +26,10 @@ export type AutomationSurfaceKind =
   | 'signal'
   | 'whatsapp'
   | 'imessage'
+  | 'msteams'
+  | 'bluebubbles'
+  | 'mattermost'
+  | 'matrix'
   | 'service';
 
 export type AutomationRouteKind = 'session' | 'thread' | 'channel' | 'message';

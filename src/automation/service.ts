@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
-import { join } from 'node:path';
 import { PersistentStore } from '../state/persistent-store.ts';
+import { ConfigManager } from '../config/manager.ts';
 import { AutomationManager } from './manager.ts';
 import { migrateLegacySchedules, type LegacySchedulerSnapshot } from './migration.ts';
 import type { AutomationJob } from './jobs.ts';
@@ -8,11 +8,10 @@ import type { AutomationRouteBinding } from './routes.ts';
 import type { AutomationRun } from './runs.ts';
 import type { AutomationSourceRecord } from './sources.ts';
 import { AutomationJobStore } from './store/jobs.ts';
+import { resolveAutomationStorePath } from './store/paths.ts';
 import { AutomationRouteStore } from './store/routes.ts';
 import { AutomationRunStore } from './store/runs.ts';
 import { AutomationSourceStore } from './store/sources.ts';
-
-const LEGACY_SCHEDULES_PATH = join(process.cwd(), '.goodvibes', 'tui', 'schedules.json');
 
 export interface AutomationServiceConfig {
   readonly jobs?: AutomationJobStore;
@@ -53,11 +52,14 @@ export class AutomationService {
   private loaded = false;
 
   constructor(config: AutomationServiceConfig = {}) {
-    this.jobStore = config.jobs ?? new AutomationJobStore();
-    this.runStore = config.runs ?? new AutomationRunStore();
-    this.routeStore = config.routes ?? new AutomationRouteStore();
-    this.sourceStore = config.sources ?? new AutomationSourceStore();
-    this.legacyStore = config.legacyStore ?? new PersistentStore<LegacySchedulerSnapshot>(LEGACY_SCHEDULES_PATH);
+    const configManager = new ConfigManager();
+    this.jobStore = config.jobs ?? new AutomationJobStore({ configManager });
+    this.runStore = config.runs ?? new AutomationRunStore({ configManager });
+    this.routeStore = config.routes ?? new AutomationRouteStore({ configManager });
+    this.sourceStore = config.sources ?? new AutomationSourceStore({ configManager });
+    this.legacyStore = config.legacyStore ?? new PersistentStore<LegacySchedulerSnapshot>(
+      resolveAutomationStorePath('schedules.json', configManager),
+    );
     this.manager = config.manager ?? AutomationManager.getInstance();
   }
 

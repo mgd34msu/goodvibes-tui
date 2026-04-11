@@ -94,6 +94,46 @@ export async function dispatchOperatorRoutes(
     | 'getMemoryVectorStats'
     | 'postMemoryVectorRebuild'
     | 'postMemoryEmbeddingDefault'
+    | 'getKnowledgeStatus'
+    | 'getKnowledgeSources'
+    | 'getKnowledgeNodes'
+    | 'getKnowledgeIssues'
+    | 'getKnowledgeItem'
+    | 'getKnowledgeConnectors'
+    | 'getKnowledgeConnector'
+    | 'getKnowledgeConnectorDoctor'
+    | 'getKnowledgeProjectionTargets'
+    | 'getKnowledgeGraphqlSchema'
+    | 'getKnowledgeExtractions'
+    | 'getKnowledgeUsage'
+    | 'getKnowledgeCandidates'
+    | 'getKnowledgeCandidate'
+    | 'getKnowledgeReports'
+    | 'getKnowledgeReport'
+    | 'getKnowledgeExtraction'
+    | 'getKnowledgeSourceExtraction'
+    | 'getKnowledgeJobs'
+    | 'getKnowledgeJob'
+    | 'getKnowledgeJobRuns'
+    | 'getKnowledgeSchedules'
+    | 'getKnowledgeSchedule'
+    | 'postKnowledgeIngestUrl'
+    | 'postKnowledgeIngestArtifact'
+    | 'postKnowledgeImportBookmarks'
+    | 'postKnowledgeImportUrls'
+    | 'postKnowledgeIngestConnector'
+    | 'postKnowledgeSearch'
+    | 'postKnowledgePacket'
+    | 'postKnowledgeDecideCandidate'
+    | 'postKnowledgeRunJob'
+    | 'postKnowledgeLint'
+    | 'postKnowledgeReindex'
+    | 'postKnowledgeSaveSchedule'
+    | 'deleteKnowledgeSchedule'
+    | 'postKnowledgeSetScheduleEnabled'
+    | 'postKnowledgeRenderProjection'
+    | 'postKnowledgeMaterializeProjection'
+    | 'executeKnowledgeGraphql'
     | 'getVoiceStatus'
     | 'getVoiceProviders'
     | 'getVoiceVoices'
@@ -110,6 +150,11 @@ export async function dispatchOperatorRoutes(
     | 'postMediaAnalyze'
     | 'postMediaTransform'
     | 'postMediaGenerate'
+    | 'getMultimodalStatus'
+    | 'getMultimodalProviders'
+    | 'postMultimodalAnalyze'
+    | 'postMultimodalPacket'
+    | 'postMultimodalWriteback'
     | 'getRemoteNodeHostContract'
   >,
 ): Promise<Response | null> {
@@ -286,6 +331,59 @@ export async function dispatchOperatorRoutes(
   if (pathname === '/api/memory/vector/rebuild' && method === 'POST') return handlers.postMemoryVectorRebuild(req);
   if (pathname === '/api/memory/embeddings/default' && method === 'POST') return handlers.postMemoryEmbeddingDefault(req);
 
+  if (pathname === '/api/knowledge/status' && method === 'GET') return handlers.getKnowledgeStatus();
+  if (pathname === '/api/knowledge/sources' && method === 'GET') return handlers.getKnowledgeSources(url);
+  if (pathname === '/api/knowledge/nodes' && method === 'GET') return handlers.getKnowledgeNodes(url);
+  if (pathname === '/api/knowledge/issues' && method === 'GET') return handlers.getKnowledgeIssues(url);
+  if (pathname === '/api/knowledge/connectors' && method === 'GET') return handlers.getKnowledgeConnectors();
+  if (pathname === '/api/knowledge/extractions' && method === 'GET') return handlers.getKnowledgeExtractions(url);
+  if (pathname === '/api/knowledge/usage' && method === 'GET') return handlers.getKnowledgeUsage(url);
+  if (pathname === '/api/knowledge/candidates' && method === 'GET') return handlers.getKnowledgeCandidates(url);
+  if (pathname === '/api/knowledge/reports' && method === 'GET') return handlers.getKnowledgeReports(url);
+  if (pathname === '/api/knowledge/jobs' && method === 'GET') return handlers.getKnowledgeJobs();
+  if (pathname === '/api/knowledge/job-runs' && method === 'GET') return handlers.getKnowledgeJobRuns(url);
+  if (pathname === '/api/knowledge/schedules' && method === 'GET') return handlers.getKnowledgeSchedules(url);
+  if (pathname === '/api/knowledge/projections' && method === 'GET') return handlers.getKnowledgeProjectionTargets(url);
+  if (pathname === '/api/knowledge/graphql/schema' && method === 'GET') return handlers.getKnowledgeGraphqlSchema();
+  if (pathname === '/api/knowledge/graphql' && (method === 'GET' || method === 'POST')) return handlers.executeKnowledgeGraphql(req);
+  if (pathname === '/api/knowledge/ingest/url' && method === 'POST') return handlers.postKnowledgeIngestUrl(req);
+  if (pathname === '/api/knowledge/ingest/artifact' && method === 'POST') return handlers.postKnowledgeIngestArtifact(req);
+  if (pathname === '/api/knowledge/ingest/bookmarks' && method === 'POST') return handlers.postKnowledgeImportBookmarks(req);
+  if (pathname === '/api/knowledge/ingest/urls' && method === 'POST') return handlers.postKnowledgeImportUrls(req);
+  if (pathname === '/api/knowledge/ingest/connector' && method === 'POST') return handlers.postKnowledgeIngestConnector(req);
+  if (pathname === '/api/knowledge/search' && method === 'POST') return handlers.postKnowledgeSearch(req);
+  if (pathname === '/api/knowledge/packet' && method === 'POST') return handlers.postKnowledgePacket(req);
+  if (pathname === '/api/knowledge/lint' && method === 'POST') return handlers.postKnowledgeLint(req);
+  if (pathname === '/api/knowledge/reindex' && method === 'POST') return handlers.postKnowledgeReindex(req);
+  if (pathname === '/api/knowledge/schedules' && method === 'POST') return handlers.postKnowledgeSaveSchedule(req);
+  if (pathname === '/api/knowledge/projections/render' && method === 'POST') return handlers.postKnowledgeRenderProjection(req);
+  if (pathname === '/api/knowledge/projections/materialize' && method === 'POST') return handlers.postKnowledgeMaterializeProjection(req);
+  const knowledgeConnectorDoctorMatch = pathname.match(/^\/api\/knowledge\/connectors\/([^/]+)\/doctor$/);
+  if (knowledgeConnectorDoctorMatch && method === 'GET') return handlers.getKnowledgeConnectorDoctor(decodeURIComponent(knowledgeConnectorDoctorMatch[1]));
+  const knowledgeConnectorMatch = pathname.match(/^\/api\/knowledge\/connectors\/([^/]+)$/);
+  if (knowledgeConnectorMatch && method === 'GET') return handlers.getKnowledgeConnector(decodeURIComponent(knowledgeConnectorMatch[1]));
+  const knowledgeExtractionMatch = pathname.match(/^\/api\/knowledge\/extractions\/([^/]+)$/);
+  if (knowledgeExtractionMatch && method === 'GET') return handlers.getKnowledgeExtraction(decodeURIComponent(knowledgeExtractionMatch[1]));
+  const knowledgeCandidateDecideMatch = pathname.match(/^\/api\/knowledge\/candidates\/([^/]+)\/decide$/);
+  if (knowledgeCandidateDecideMatch && method === 'POST') return handlers.postKnowledgeDecideCandidate(decodeURIComponent(knowledgeCandidateDecideMatch[1]), req);
+  const knowledgeCandidateMatch = pathname.match(/^\/api\/knowledge\/candidates\/([^/]+)$/);
+  if (knowledgeCandidateMatch && method === 'GET') return handlers.getKnowledgeCandidate(decodeURIComponent(knowledgeCandidateMatch[1]));
+  const knowledgeReportMatch = pathname.match(/^\/api\/knowledge\/reports\/([^/]+)$/);
+  if (knowledgeReportMatch && method === 'GET') return handlers.getKnowledgeReport(decodeURIComponent(knowledgeReportMatch[1]));
+  const knowledgeSourceExtractionMatch = pathname.match(/^\/api\/knowledge\/sources\/([^/]+)\/extraction$/);
+  if (knowledgeSourceExtractionMatch && method === 'GET') return handlers.getKnowledgeSourceExtraction(decodeURIComponent(knowledgeSourceExtractionMatch[1]));
+  const knowledgeJobRunMatch = pathname.match(/^\/api\/knowledge\/jobs\/([^/]+)\/run$/);
+  if (knowledgeJobRunMatch && method === 'POST') return handlers.postKnowledgeRunJob(decodeURIComponent(knowledgeJobRunMatch[1]), req);
+  const knowledgeJobMatch = pathname.match(/^\/api\/knowledge\/jobs\/([^/]+)$/);
+  if (knowledgeJobMatch && method === 'GET') return handlers.getKnowledgeJob(decodeURIComponent(knowledgeJobMatch[1]));
+  const knowledgeScheduleEnabledMatch = pathname.match(/^\/api\/knowledge\/schedules\/([^/]+)\/enabled$/);
+  if (knowledgeScheduleEnabledMatch && method === 'POST') return handlers.postKnowledgeSetScheduleEnabled(decodeURIComponent(knowledgeScheduleEnabledMatch[1]), req);
+  const knowledgeScheduleMatch = pathname.match(/^\/api\/knowledge\/schedules\/([^/]+)$/);
+  if (knowledgeScheduleMatch && method === 'GET') return handlers.getKnowledgeSchedule(decodeURIComponent(knowledgeScheduleMatch[1]));
+  if (knowledgeScheduleMatch && method === 'DELETE') return handlers.deleteKnowledgeSchedule(decodeURIComponent(knowledgeScheduleMatch[1]), req);
+  const knowledgeItemMatch = pathname.match(/^\/api\/knowledge\/items\/([^/]+)$/);
+  if (knowledgeItemMatch && method === 'GET') return handlers.getKnowledgeItem(decodeURIComponent(knowledgeItemMatch[1]));
+
   if (pathname === '/api/voice' && method === 'GET') return handlers.getVoiceStatus();
   if (pathname === '/api/voice/providers' && method === 'GET') return handlers.getVoiceProviders();
   if (pathname === '/api/voice/voices' && method === 'GET') return handlers.getVoiceVoices(url);
@@ -307,6 +405,12 @@ export async function dispatchOperatorRoutes(
   if (pathname === '/api/media/analyze' && method === 'POST') return handlers.postMediaAnalyze(req);
   if (pathname === '/api/media/transform' && method === 'POST') return handlers.postMediaTransform(req);
   if (pathname === '/api/media/generate' && method === 'POST') return handlers.postMediaGenerate(req);
+
+  if (pathname === '/api/multimodal' && method === 'GET') return handlers.getMultimodalStatus();
+  if (pathname === '/api/multimodal/providers' && method === 'GET') return handlers.getMultimodalProviders();
+  if (pathname === '/api/multimodal/analyze' && method === 'POST') return handlers.postMultimodalAnalyze(req);
+  if (pathname === '/api/multimodal/packet' && method === 'POST') return handlers.postMultimodalPacket(req);
+  if (pathname === '/api/multimodal/writeback' && method === 'POST') return handlers.postMultimodalWriteback(req);
 
   if (pathname === '/api/local-auth' && method === 'GET') return handlers.getLocalAuth();
   if (pathname === '/api/local-auth/users' && method === 'POST') return handlers.postLocalAuthUser(req);

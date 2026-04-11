@@ -60,6 +60,22 @@ export interface AnthropicCompatOptions {
   models: string[];
   /** Optional extra HTTP headers sent with every request */
   defaultHeaders?: Record<string, string>;
+  /** Optional env vars or secret keys that can satisfy auth for this provider. */
+  authEnvVars?: readonly string[];
+  /** Optional service names that expose service-owned OAuth for this provider. */
+  serviceNames?: readonly string[];
+  /** Optional provider aliases exposed to runtime metadata consumers. */
+  aliases?: readonly string[];
+  /** Optional subscription-provider identity when this provider can use a stored OAuth session. */
+  subscriptionProviderId?: string;
+  /** Optional explicit stream protocol label for diagnostics. */
+  streamProtocol?: string;
+  /** Optional auth header mode. Default: x-api-key. */
+  authHeaderMode?: 'x-api-key' | 'bearer';
+  /** Optional anonymous/local access posture. */
+  allowAnonymous?: boolean;
+  anonymousConfigured?: boolean;
+  anonymousDetail?: string;
 }
 
 /**
@@ -79,6 +95,15 @@ export class AnthropicCompatProvider implements LLMProvider {
   private apiKey: string;
   private defaultModel: string;
   private defaultHeaders: Record<string, string>;
+  private readonly authEnvVars: readonly string[];
+  private readonly serviceNames: readonly string[];
+  private readonly aliases: readonly string[];
+  private readonly subscriptionProviderId?: string;
+  private readonly streamProtocol?: string;
+  private readonly authHeaderMode: 'x-api-key' | 'bearer';
+  private readonly allowAnonymous: boolean;
+  private readonly anonymousConfigured: boolean;
+  private readonly anonymousDetail?: string;
 
   constructor(opts: AnthropicCompatOptions) {
     this.name = opts.name;
@@ -87,6 +112,15 @@ export class AnthropicCompatProvider implements LLMProvider {
     this.apiKey = opts.apiKey;
     this.defaultModel = opts.defaultModel;
     this.defaultHeaders = opts.defaultHeaders ?? {};
+    this.authEnvVars = opts.authEnvVars ?? [];
+    this.serviceNames = opts.serviceNames ?? [];
+    this.aliases = opts.aliases ?? [];
+    this.subscriptionProviderId = opts.subscriptionProviderId;
+    this.streamProtocol = opts.streamProtocol;
+    this.authHeaderMode = opts.authHeaderMode ?? 'x-api-key';
+    this.allowAnonymous = opts.allowAnonymous ?? false;
+    this.anonymousConfigured = opts.anonymousConfigured ?? false;
+    this.anonymousDetail = opts.anonymousDetail;
   }
 
   async chat(params: ChatRequest): Promise<ChatResponse> {
@@ -123,10 +157,16 @@ export class AnthropicCompatProvider implements LLMProvider {
 
       const headers: Record<string, string> = {
         'Content-Type': 'application/json',
-        'x-api-key': this.apiKey,
         'anthropic-version': ANTHROPIC_API_VERSION,
         ...this.defaultHeaders,
       };
+      if (this.apiKey) {
+        if (this.authHeaderMode === 'bearer') {
+          headers['Authorization'] = `Bearer ${this.apiKey}`;
+        } else {
+          headers['x-api-key'] = this.apiKey;
+        }
+      }
 
       if (body['thinking']) {
         headers['anthropic-beta'] = 'interleaved-thinking-2025-05-14';
@@ -273,17 +313,30 @@ export class AnthropicCompatProvider implements LLMProvider {
     const { buildStandardProviderAuthRoutes } = await import('./runtime-metadata.ts');
     const authRoutes = await buildStandardProviderAuthRoutes({
       providerId: this.name,
+      apiKeyEnvVars: this.authEnvVars,
+      secretKeys: this.authEnvVars,
+      serviceNames: this.serviceNames,
+      ...(this.subscriptionProviderId ? { subscriptionProviderId: this.subscriptionProviderId } : {}),
+      allowAnonymous: this.allowAnonymous,
+      anonymousConfigured: this.anonymousConfigured,
+      anonymousDetail: this.anonymousDetail,
     });
     return {
       auth: {
-        mode: 'api-key',
-        configured: Boolean(this.apiKey),
-        detail: this.apiKey ? `API key for ${this.name} is available` : `API key for ${this.name} is not configured`,
+        mode: this.allowAnonymous && !this.apiKey ? 'anonymous' : 'api-key',
+        configured: Boolean(this.apiKey) || this.anonymousConfigured,
+        detail: this.apiKey
+          ? `API key for ${this.name} is available`
+          : this.allowAnonymous
+            ? (this.anonymousDetail ?? `${this.name} can be used without a stored API key`)
+            : `API key for ${this.name} is not configured`,
+        ...(this.authEnvVars.length > 0 ? { envVars: this.authEnvVars } : {}),
         routes: authRoutes,
       },
       models: {
         defaultModel: this.defaultModel,
         models: this.models,
+        ...(this.aliases.length > 0 ? { aliases: this.aliases } : {}),
       },
       usage: {
         streaming: true,
@@ -294,7 +347,7 @@ export class AnthropicCompatProvider implements LLMProvider {
       },
       policy: {
         local: false,
-        streamProtocol: 'anthropic-sse',
+        streamProtocol: this.streamProtocol ?? 'anthropic-sse',
         reasoningMode: 'thinking_budget',
         supportedReasoningEfforts: ['instant', 'low', 'medium', 'high'],
         cacheStrategy: 'anthropic-prompt-cache',

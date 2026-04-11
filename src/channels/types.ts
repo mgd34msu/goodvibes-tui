@@ -13,7 +13,11 @@ export type ChannelSurface =
   | 'google-chat'
   | 'signal'
   | 'whatsapp'
-  | 'imessage';
+  | 'imessage'
+  | 'msteams'
+  | 'bluebubbles'
+  | 'mattermost'
+  | 'matrix';
 export type ChannelCapability =
   | 'ingress'
   | 'egress'

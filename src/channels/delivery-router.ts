@@ -123,6 +123,64 @@ function firstNonEmpty(...values: Array<string | undefined | null>): string | un
   return undefined;
 }
 
+function normalizeBaseUrl(value: string): string {
+  return value.replace(/\/+$/, '');
+}
+
+const msTeamsTokenCache = new Map<string, { readonly token: string; readonly expiresAt: number }>();
+
+async function resolveMSTeamsAccessToken(
+  configManager: ConfigManager,
+  serviceRegistry: ServiceRegistry,
+): Promise<string> {
+  const appId = firstNonEmpty(
+    String(configManager.get('surfaces.msteams.appId') ?? ''),
+    process.env.MSTEAMS_APP_ID,
+  );
+  const appPassword = firstNonEmpty(
+    await serviceRegistry.resolveSecret('msteams', 'password'),
+    String(configManager.get('surfaces.msteams.appPassword') ?? ''),
+    process.env.MSTEAMS_APP_PASSWORD,
+  );
+  const tenantId = firstNonEmpty(
+    String(configManager.get('surfaces.msteams.tenantId') ?? ''),
+    process.env.MSTEAMS_TENANT_ID,
+    'botframework.com',
+  )!;
+  if (!appId) throw new Error('Missing Microsoft Teams app id');
+  if (!appPassword) throw new Error('Missing Microsoft Teams app password');
+  const cacheKey = `${tenantId}:${appId}`;
+  const cached = msTeamsTokenCache.get(cacheKey);
+  if (cached && cached.expiresAt > Date.now() + 60_000) {
+    return cached.token;
+  }
+  const body = new URLSearchParams({
+    grant_type: 'client_credentials',
+    client_id: appId,
+    client_secret: appPassword,
+    scope: 'https://api.botframework.com/.default',
+  });
+  const response = await fetch(`https://login.microsoftonline.com/${encodeURIComponent(tenantId)}/oauth2/v2.0/token`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: body.toString(),
+  });
+  const payload = await requireOkResponse('Microsoft Teams token request failed', response);
+  const record = payload && typeof payload === 'object' ? payload as Record<string, unknown> : null;
+  const token = typeof record?.access_token === 'string' ? record.access_token.trim() : '';
+  const expiresIn = typeof record?.expires_in === 'number'
+    ? record.expires_in
+    : typeof record?.expires_in === 'string'
+      ? Number(record.expires_in)
+      : 300;
+  if (!token) throw new Error('Microsoft Teams token request did not return an access token');
+  msTeamsTokenCache.set(cacheKey, {
+    token,
+    expiresAt: Date.now() + Math.max(60, Number.isFinite(expiresIn) ? expiresIn : 300) * 1_000,
+  });
+  return token;
+}
+
 function extractResponseId(payload: unknown): string | undefined {
   if (!payload || typeof payload !== 'object') return undefined;
   const record = payload as Record<string, unknown>;
@@ -653,6 +711,215 @@ function createIMessageDeliveryStrategy(
   };
 }
 
+function createMSTeamsDeliveryStrategy(
+  configManager: ConfigManager,
+  serviceRegistry: ServiceRegistry,
+  artifactStore: ArtifactStore,
+): ChannelDeliveryStrategy {
+  return {
+    id: 'channel-delivery:msteams',
+    canHandle(request) {
+      return resolveChannelDeliverySurfaceKind(request.target) === 'msteams';
+    },
+    async deliver(request) {
+      const attachments = await resolveAttachments(request, artifactStore, configManager, 128 * 1024);
+      const serviceUrl = firstNonEmpty(
+        typeof request.binding?.metadata.serviceUrl === 'string' ? request.binding.metadata.serviceUrl : undefined,
+        String(configManager.get('surfaces.msteams.serviceUrl') ?? ''),
+        process.env.MSTEAMS_SERVICE_URL,
+      );
+      const rawConversationId = firstNonEmpty(
+        request.target.address,
+        typeof request.binding?.metadata.conversationId === 'string' ? request.binding.metadata.conversationId : undefined,
+        request.binding?.channelId,
+        request.binding?.externalId,
+        String(configManager.get('surfaces.msteams.defaultConversationId') ?? ''),
+      );
+      if (!serviceUrl) throw new Error('Missing Microsoft Teams service URL');
+      if (!rawConversationId) throw new Error('Missing Microsoft Teams conversation id');
+      const threadId = firstNonEmpty(
+        request.binding?.threadId,
+        typeof request.binding?.metadata.replyToId === 'string' ? request.binding.metadata.replyToId : undefined,
+      );
+      const conversationId = threadId && !rawConversationId.includes(';messageid=')
+        ? `${rawConversationId};messageid=${threadId}`
+        : rawConversationId;
+      const accessToken = await resolveMSTeamsAccessToken(configManager, serviceRegistry);
+      const response = await fetch(`${normalizeBaseUrl(serviceUrl)}/v3/conversations/${encodeURIComponent(conversationId)}/activities`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify({
+          type: 'message',
+          text: trimForSurface(appendAttachmentSummary(request.body, attachments), 4_000),
+          textFormat: 'plain',
+          ...(threadId ? { replyToId: threadId } : {}),
+        }),
+      });
+      const payload = await requireOkResponse('Microsoft Teams delivery failed', response);
+      return success(extractResponseId(payload) ?? conversationId);
+    },
+  };
+}
+
+function createBlueBubblesDeliveryStrategy(
+  configManager: ConfigManager,
+  serviceRegistry: ServiceRegistry,
+  artifactStore: ArtifactStore,
+): ChannelDeliveryStrategy {
+  return {
+    id: 'channel-delivery:bluebubbles',
+    canHandle(request) {
+      return resolveChannelDeliverySurfaceKind(request.target) === 'bluebubbles';
+    },
+    async deliver(request) {
+      const attachments = await resolveAttachments(request, artifactStore, configManager, 128 * 1024);
+      const serverUrl = firstNonEmpty(
+        String(configManager.get('surfaces.bluebubbles.serverUrl') ?? ''),
+        serviceRegistry.get('bluebubbles')?.baseUrl,
+        process.env.BLUEBUBBLES_SERVER_URL,
+      );
+      const password = firstNonEmpty(
+        await serviceRegistry.resolveSecret('bluebubbles', 'password'),
+        String(configManager.get('surfaces.bluebubbles.password') ?? ''),
+        process.env.BLUEBUBBLES_PASSWORD,
+      );
+      const chatGuid = firstNonEmpty(
+        request.target.address,
+        typeof request.binding?.metadata.chatGuid === 'string' ? request.binding.metadata.chatGuid : undefined,
+        request.binding?.channelId,
+        request.binding?.externalId,
+        String(configManager.get('surfaces.bluebubbles.defaultChatGuid') ?? ''),
+      );
+      if (!serverUrl) throw new Error('Missing BlueBubbles server URL');
+      if (!password) throw new Error('Missing BlueBubbles password');
+      if (!chatGuid) throw new Error('Missing BlueBubbles chat guid');
+      const response = await fetch(`${normalizeBaseUrl(serverUrl)}/api/v1/message/text?password=${encodeURIComponent(password)}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          chatGuid,
+          tempGuid: crypto.randomUUID(),
+          message: trimForSurface(appendAttachmentSummary(request.body, attachments), 8_000),
+        }),
+      });
+      const payload = await requireOkResponse('BlueBubbles delivery failed', response);
+      return success(extractResponseId(payload) ?? chatGuid);
+    },
+  };
+}
+
+function createMattermostDeliveryStrategy(
+  configManager: ConfigManager,
+  serviceRegistry: ServiceRegistry,
+  artifactStore: ArtifactStore,
+): ChannelDeliveryStrategy {
+  return {
+    id: 'channel-delivery:mattermost',
+    canHandle(request) {
+      return resolveChannelDeliverySurfaceKind(request.target) === 'mattermost';
+    },
+    async deliver(request) {
+      const attachments = await resolveAttachments(request, artifactStore, configManager, 128 * 1024);
+      const baseUrl = firstNonEmpty(
+        String(configManager.get('surfaces.mattermost.baseUrl') ?? ''),
+        serviceRegistry.get('mattermost')?.baseUrl,
+        process.env.MATTERMOST_BASE_URL,
+      );
+      const botToken = firstNonEmpty(
+        await serviceRegistry.resolveSecret('mattermost', 'primary'),
+        String(configManager.get('surfaces.mattermost.botToken') ?? ''),
+        process.env.MATTERMOST_BOT_TOKEN,
+      );
+      const channelId = firstNonEmpty(
+        request.target.address,
+        request.binding?.channelId,
+        request.binding?.externalId,
+        String(configManager.get('surfaces.mattermost.defaultChannelId') ?? ''),
+      );
+      if (!baseUrl) throw new Error('Missing Mattermost base URL');
+      if (!botToken) throw new Error('Missing Mattermost bot token');
+      if (!channelId) throw new Error('Missing Mattermost channel id');
+      const response = await fetch(`${normalizeBaseUrl(baseUrl)}/api/v4/posts`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${botToken}`,
+        },
+        body: JSON.stringify({
+          channel_id: channelId,
+          message: trimForSurface(appendAttachmentSummary(request.body, attachments), 12_000),
+          ...(request.binding?.threadId ? { root_id: request.binding.threadId } : {}),
+        }),
+      });
+      const payload = await requireOkResponse('Mattermost delivery failed', response);
+      return success(extractResponseId(payload) ?? channelId);
+    },
+  };
+}
+
+function createMatrixDeliveryStrategy(
+  configManager: ConfigManager,
+  serviceRegistry: ServiceRegistry,
+  artifactStore: ArtifactStore,
+): ChannelDeliveryStrategy {
+  return {
+    id: 'channel-delivery:matrix',
+    canHandle(request) {
+      return resolveChannelDeliverySurfaceKind(request.target) === 'matrix';
+    },
+    async deliver(request) {
+      const attachments = await resolveAttachments(request, artifactStore, configManager, 128 * 1024);
+      const homeserverUrl = firstNonEmpty(
+        String(configManager.get('surfaces.matrix.homeserverUrl') ?? ''),
+        serviceRegistry.get('matrix')?.baseUrl,
+        process.env.MATRIX_HOMESERVER,
+      );
+      const accessToken = firstNonEmpty(
+        await serviceRegistry.resolveSecret('matrix', 'primary'),
+        String(configManager.get('surfaces.matrix.accessToken') ?? ''),
+        process.env.MATRIX_ACCESS_TOKEN,
+      );
+      const roomId = firstNonEmpty(
+        request.target.address,
+        request.binding?.channelId,
+        request.binding?.externalId,
+        String(configManager.get('surfaces.matrix.defaultRoomId') ?? ''),
+      );
+      if (!homeserverUrl) throw new Error('Missing Matrix homeserver URL');
+      if (!accessToken) throw new Error('Missing Matrix access token');
+      if (!roomId) throw new Error('Missing Matrix room id');
+      const txnId = crypto.randomUUID();
+      const threadId = request.binding?.threadId;
+      const response = await fetch(`${normalizeBaseUrl(homeserverUrl)}/_matrix/client/v3/rooms/${encodeURIComponent(roomId)}/send/m.room.message/${encodeURIComponent(txnId)}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify({
+          msgtype: 'm.text',
+          body: trimForSurface(appendAttachmentSummary(request.body, attachments), 8_000),
+          ...(threadId
+            ? {
+                'm.relates_to': {
+                  rel_type: 'm.thread',
+                  event_id: threadId,
+                  is_falling_back: true,
+                  'm.in_reply_to': { event_id: threadId },
+                },
+              }
+            : {}),
+        }),
+      });
+      const payload = await requireOkResponse('Matrix delivery failed', response);
+      return success(extractResponseId(payload) ?? roomId);
+    },
+  };
+}
+
 export function createDefaultChannelDeliveryStrategies(
   configManager: ConfigManager,
   serviceRegistry: ServiceRegistry,
@@ -669,6 +936,10 @@ export function createDefaultChannelDeliveryStrategies(
     createSignalDeliveryStrategy(configManager, serviceRegistry, artifactStore),
     createWhatsAppDeliveryStrategy(configManager, serviceRegistry, artifactStore),
     createIMessageDeliveryStrategy(configManager, serviceRegistry, artifactStore),
+    createMSTeamsDeliveryStrategy(configManager, serviceRegistry, artifactStore),
+    createBlueBubblesDeliveryStrategy(configManager, serviceRegistry, artifactStore),
+    createMattermostDeliveryStrategy(configManager, serviceRegistry, artifactStore),
+    createMatrixDeliveryStrategy(configManager, serviceRegistry, artifactStore),
   ];
 }
 

@@ -42,6 +42,7 @@ export type { WatcherEvent, WatcherEventType, WatcherSourceKind } from './watche
 export { WATCHER_SOURCE_KINDS } from './watchers.ts';
 export type { SurfaceEvent, SurfaceEventType, SurfaceKind } from './surfaces.ts';
 export { SURFACE_KINDS } from './surfaces.ts';
+export type { KnowledgeEvent, KnowledgeEventType } from './knowledge.ts';
 
 /** Listener callback receiving a fully-formed envelope. */
 export type EnvelopeListener<T extends AnyRuntimeEvent = AnyRuntimeEvent> = (

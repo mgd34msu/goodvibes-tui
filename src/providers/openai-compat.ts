@@ -46,6 +46,12 @@ export interface OpenAICompatOptions {
   aliases?: readonly string[];
   /** Optional explicit stream protocol label for diagnostics. */
   streamProtocol?: string;
+  /** Optional anonymous/local access posture. */
+  allowAnonymous?: boolean;
+  anonymousConfigured?: boolean;
+  anonymousDetail?: string;
+  /** Override runtime auth posture when apiKey is an internal transport placeholder. */
+  authConfigured?: boolean;
 }
 
 /**
@@ -70,6 +76,9 @@ export class OpenAICompatProvider implements LLMProvider {
   private readonly suppressedModels: readonly string[];
   private readonly aliases: readonly string[];
   private readonly streamProtocol?: string;
+  private readonly allowAnonymous: boolean;
+  private readonly anonymousConfigured: boolean;
+  private readonly anonymousDetail?: string;
 
   constructor(opts: OpenAICompatOptions) {
     this.name = opts.name;
@@ -77,7 +86,7 @@ export class OpenAICompatProvider implements LLMProvider {
     this.capabilities = opts.capabilities;
     this.defaultModel = opts.defaultModel;
     this.embeddingModel = opts.embeddingModel ?? opts.defaultModel;
-    this.configured = Boolean(opts.apiKey);
+    this.configured = opts.authConfigured ?? Boolean(opts.apiKey);
     this.reasoningFormat = opts.reasoningFormat ?? 'none';
     this.cacheCapability = getCacheCapability(opts.name);
     this.authEnvVars = opts.authEnvVars ?? [];
@@ -86,6 +95,9 @@ export class OpenAICompatProvider implements LLMProvider {
     this.suppressedModels = opts.suppressedModels ?? [];
     this.aliases = opts.aliases ?? [];
     this.streamProtocol = opts.streamProtocol;
+    this.allowAnonymous = opts.allowAnonymous ?? false;
+    this.anonymousConfigured = opts.anonymousConfigured ?? false;
+    this.anonymousDetail = opts.anonymousDetail;
     this.client = new OpenAI({
       apiKey: opts.apiKey,
       baseURL: opts.baseURL,
@@ -298,12 +310,19 @@ export class OpenAICompatProvider implements LLMProvider {
       secretKeys: this.authEnvVars,
       serviceNames: this.serviceNames,
       ...(this.subscriptionProviderId ? { subscriptionProviderId: this.subscriptionProviderId } : {}),
+      allowAnonymous: this.allowAnonymous,
+      anonymousConfigured: this.anonymousConfigured,
+      anonymousDetail: this.anonymousDetail,
     });
     return {
       auth: {
-        mode: 'api-key',
-        configured: this.configured,
-        detail: this.configured ? `${this.name} API key available` : `API key for ${this.name} is not configured`,
+        mode: this.allowAnonymous && !this.configured ? 'anonymous' : 'api-key',
+        configured: this.configured || this.anonymousConfigured,
+        detail: this.configured
+          ? `${this.name} API key available`
+          : this.allowAnonymous
+            ? (this.anonymousDetail ?? `${this.name} can be used without a stored API key`)
+            : `API key for ${this.name} is not configured`,
         ...(this.authEnvVars.length > 0 ? { envVars: this.authEnvVars } : {}),
         routes: authRoutes,
       },

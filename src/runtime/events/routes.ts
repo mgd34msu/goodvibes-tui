@@ -14,6 +14,10 @@ export const ROUTE_SURFACE_KINDS = [
   'signal',
   'whatsapp',
   'imessage',
+  'msteams',
+  'bluebubbles',
+  'mattermost',
+  'matrix',
   'service',
 ] as const;
 export const ROUTE_TARGET_KINDS = ['session', 'run', 'job', 'task', 'message'] as const;

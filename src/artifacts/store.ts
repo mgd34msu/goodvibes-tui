@@ -21,7 +21,7 @@ import {
 export interface ArtifactStoreConfig {
   readonly rootDir?: string;
   readonly configManager?: {
-    getControlPlaneConfigDir(): string;
+    getControlPlaneConfigDir?: () => string;
   };
   readonly maxBytes?: number;
   readonly defaultRetentionMs?: number;
@@ -39,6 +39,14 @@ function resolveDefaultArtifactRootDir(): string {
 const DEFAULT_ARTIFACT_MAX_BYTES = 10 * 1024 * 1024;
 const DEFAULT_ARTIFACT_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
 const DEFAULT_MAX_RETENTION_MS = 90 * 24 * 60 * 60 * 1000;
+
+function resolveArtifactRootDir(config: ArtifactStoreConfig = {}): string {
+  const controlPlaneDir = typeof config.configManager?.getControlPlaneConfigDir === 'function'
+    ? config.configManager.getControlPlaneConfigDir()
+    : undefined;
+  return config.rootDir
+    ?? (controlPlaneDir ? join(controlPlaneDir, 'artifacts') : resolveDefaultArtifactRootDir());
+}
 
 function normalizeMimeType(value: string | undefined, fallbackFilename?: string): string {
   const normalized = value?.split(';')[0]?.trim().toLowerCase();
@@ -81,10 +89,7 @@ export class ArtifactStore {
   private readonly blockedHosts: readonly string[];
 
   constructor(config: ArtifactStoreConfig = {}) {
-    this.rootDir = config.rootDir
-      ?? (config.configManager
-        ? join(config.configManager.getControlPlaneConfigDir(), 'artifacts')
-        : resolveDefaultArtifactRootDir());
+    this.rootDir = resolveArtifactRootDir(config);
     this.maxBytes = Math.max(1, config.maxBytes ?? DEFAULT_ARTIFACT_MAX_BYTES);
     this.defaultRetentionMs = Math.max(0, config.defaultRetentionMs ?? DEFAULT_ARTIFACT_RETENTION_MS);
     this.maxRetentionMs = Math.max(this.defaultRetentionMs, config.maxRetentionMs ?? DEFAULT_MAX_RETENTION_MS);
@@ -99,10 +104,7 @@ export class ArtifactStore {
     if (!config.rootDir && !config.configManager && ArtifactStore.active) {
       return ArtifactStore.active;
     }
-    const requestedRoot = config.rootDir
-      ?? (config.configManager
-        ? join(config.configManager.getControlPlaneConfigDir(), 'artifacts')
-        : resolveDefaultArtifactRootDir());
+    const requestedRoot = resolveArtifactRootDir(config);
     if (!ArtifactStore.active || ArtifactStore.active.rootDir !== requestedRoot) {
       ArtifactStore.active = new ArtifactStore({ ...config, rootDir: requestedRoot });
     }
@@ -292,6 +294,7 @@ export class ArtifactStore {
         buffer: Buffer.from(input.dataBase64, 'base64'),
         mimeType: normalizeMimeType(input.mimeType, filename),
         filename,
+        ...(typeof input.sourceUri === 'string' && input.sourceUri.trim().length > 0 ? { sourceUri: input.sourceUri.trim() } : {}),
       };
     }
     if (typeof input.text === 'string') {
@@ -300,6 +303,7 @@ export class ArtifactStore {
         buffer: Buffer.from(input.text, 'utf-8'),
         mimeType: normalizeMimeType(input.mimeType ?? guessMimeType(filename) ?? 'text/plain', filename),
         filename,
+        ...(typeof input.sourceUri === 'string' && input.sourceUri.trim().length > 0 ? { sourceUri: input.sourceUri.trim() } : {}),
       };
     }
     if (typeof input.path === 'string' && input.path.trim().length > 0) {
@@ -319,10 +323,11 @@ export class ArtifactStore {
         mimeType: normalizeMimeType(mimeType ?? 'application/octet-stream', filename),
         filename,
         path: normalizedPath,
+        ...(typeof input.sourceUri === 'string' && input.sourceUri.trim().length > 0 ? { sourceUri: input.sourceUri.trim() } : {}),
       };
     }
     if (typeof input.uri === 'string' && input.uri.trim().length > 0) {
-      return this.resolveRemoteInput(input.uri.trim(), input.mimeType, input.filename);
+      return this.resolveRemoteInput(input.uri.trim(), input.mimeType, input.filename, Boolean(input.allowPrivateHosts));
     }
     throw new Error('Artifact input requires dataBase64, text, path, or uri');
   }
@@ -331,6 +336,7 @@ export class ArtifactStore {
     uri: string,
     mimeTypeOverride?: string,
     filenameOverride?: string,
+    allowPrivateHosts = false,
   ): Promise<{
     buffer: Buffer;
     mimeType: string;
@@ -344,7 +350,9 @@ export class ArtifactStore {
 
     let current = parsed.toString();
     for (let redirectCount = 0; redirectCount < 5; redirectCount += 1) {
-      this.assertRemoteHostAllowed(current);
+      if (!allowPrivateHosts) {
+        this.assertRemoteHostAllowed(current);
+      }
       const response = await fetch(current, {
         method: 'GET',
         redirect: 'manual',

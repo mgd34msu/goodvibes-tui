@@ -26,6 +26,7 @@ import {
   compactSmallWindow,
 } from '../core/context-compaction.ts';
 import { buildKnowledgeInjectionPrompt, selectKnowledgeForTask } from '../state/index.ts';
+import { buildCuratedKnowledgePromptSync } from '../knowledge/index.ts';
 import type { FeatureFlagManager } from '../runtime/feature-flags/manager.ts';
 import type { RuntimeEventBus } from '../runtime/events/index.ts';
 import {
@@ -979,6 +980,10 @@ The report format depends on your role:
     const knowledgePrompt = buildKnowledgeInjectionPrompt(knowledgeInjections);
     if (knowledgePrompt) {
       parts.push(knowledgePrompt);
+    }
+    const curatedKnowledgePrompt = buildCuratedKnowledgePromptSync(record.task, record.writeScope ?? []);
+    if (curatedKnowledgePrompt) {
+      parts.push(curatedKnowledgePrompt);
     }
 
     if (record.context?.trim()) {

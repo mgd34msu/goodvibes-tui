@@ -5,8 +5,14 @@ import type { DiscoveredServer } from '../discovery/scanner.ts';
 import { OpenAIProvider } from './openai.ts';
 import { OpenAICompatProvider } from './openai-compat.ts';
 import { AnthropicProvider } from './anthropic.ts';
+import { AnthropicCompatProvider } from './anthropic-compat.ts';
 import { OpenAICodexProvider } from './openai-codex.ts';
 import { GeminiProvider } from './gemini.ts';
+import { AmazonBedrockProvider } from './amazon-bedrock.ts';
+import { AmazonBedrockMantleProvider } from './amazon-bedrock-mantle.ts';
+import { AnthropicVertexProvider } from './anthropic-vertex.ts';
+import { GitHubCopilotProvider } from './github-copilot.ts';
+import { BUILTIN_COMPAT_PROVIDERS, type BuiltinCompatDefinition } from './builtin-catalog.ts';
 import { createDiscoveredProvider, getDiscoveredReasoningFormat } from './discovered-factory.ts';
 import { getDiscoveredTraits } from './discovered-traits.ts';
 import { getConfiguredApiKeys, getConfiguredModelId, getConfiguredProviderId } from '../config/index.ts';
@@ -17,6 +23,7 @@ import { SyntheticProvider } from './synthetic.ts';
 import { getSubscriptionManager } from '../config/subscriptions.ts';
 
 import { getCatalogModelDefinitions, getSyntheticModelDefinitions, getSyntheticBackendModelIds } from './model-catalog.ts';
+import { normalizeFoundryEndpoint } from './microsoft-foundry-shared.ts';
 
 // ── Feature flag integration ──────────────────────────────────────────────────
 
@@ -191,7 +198,78 @@ export function getModelRegistry(): ModelDefinition[] {
  */
 const CATALOG_PROVIDER_NAME_ALIASES: Record<string, string> = {
   'inception': 'inceptionlabs',
+  'copilot': 'github-copilot',
+  'azure-openai': 'microsoft-foundry',
+  'azure-openai-responses': 'microsoft-foundry',
+  'dashscope': 'qwen',
+  'volcano-engine': 'volcengine',
+  'x-ai': 'xai',
+  'z-ai': 'zai',
+  'cloudflare-gateway': 'cloudflare-ai-gateway',
+  'ai-gateway': 'vercel-ai-gateway',
 };
+
+function firstEnvValue(envVars: readonly string[]): string | undefined {
+  for (const envVar of envVars) {
+    const value = process.env[envVar];
+    if (typeof value === 'string' && value.trim().length > 0) {
+      return value.trim();
+    }
+  }
+  return undefined;
+}
+
+function resolveFoundryBaseUrl(): string {
+  const endpoint = firstEnvValue(['AZURE_OPENAI_ENDPOINT', 'AZURE_FOUNDRY_ENDPOINT']);
+  if (!endpoint) return 'https://example.openai.azure.com/openai/v1';
+  const normalized = normalizeFoundryEndpoint(endpoint);
+  return normalized.endsWith('/openai/v1') ? normalized : `${normalized}/openai/v1`;
+}
+
+function createBuiltinCompatProvider(definition: BuiltinCompatDefinition, apiKey: string): LLMProvider {
+  if (definition.kind === 'anthropic-compat') {
+    return new AnthropicCompatProvider({
+      name: definition.id,
+      baseURL: definition.baseURL,
+      apiKey,
+      defaultModel: definition.defaultModel,
+      models: [...definition.models],
+      ...(definition.defaultHeaders ? { defaultHeaders: definition.defaultHeaders } : {}),
+      authEnvVars: definition.envVars,
+      serviceNames: definition.serviceNames,
+      aliases: definition.aliases,
+      ...(definition.subscriptionProviderId ? { subscriptionProviderId: definition.subscriptionProviderId } : {}),
+      ...(definition.streamProtocol ? { streamProtocol: definition.streamProtocol } : {}),
+      ...(definition.authHeaderMode ? { authHeaderMode: definition.authHeaderMode } : {}),
+      ...(definition.allowAnonymous ? { allowAnonymous: true } : {}),
+      ...(definition.anonymousConfigured ? { anonymousConfigured: true } : {}),
+      ...(definition.anonymousDetail ? { anonymousDetail: definition.anonymousDetail } : {}),
+    });
+  }
+
+  const baseURL = definition.id === 'microsoft-foundry' ? resolveFoundryBaseUrl() : definition.baseURL;
+  const effectiveApiKey = apiKey || (definition.allowAnonymous ? 'gv-local' : '');
+  return new OpenAICompatProvider({
+    name: definition.id,
+    baseURL,
+    apiKey: effectiveApiKey,
+    authConfigured: Boolean(apiKey),
+    defaultModel: definition.defaultModel,
+    models: [...definition.models],
+    ...(definition.embeddingModel ? { embeddingModel: definition.embeddingModel } : {}),
+    ...(definition.defaultHeaders ? { defaultHeaders: definition.defaultHeaders } : {}),
+    reasoningFormat: definition.reasoningFormat ?? 'none',
+    authEnvVars: definition.envVars,
+    serviceNames: definition.serviceNames,
+    ...(definition.subscriptionProviderId ? { subscriptionProviderId: definition.subscriptionProviderId } : {}),
+    ...(definition.suppressedModels ? { suppressedModels: definition.suppressedModels } : {}),
+    ...(definition.aliases ? { aliases: definition.aliases } : {}),
+    ...(definition.streamProtocol ? { streamProtocol: definition.streamProtocol } : {}),
+    ...(definition.allowAnonymous ? { allowAnonymous: true } : {}),
+    ...(definition.anonymousConfigured ? { anonymousConfigured: true } : {}),
+    ...(definition.anonymousDetail ? { anonymousDetail: definition.anonymousDetail } : {}),
+  });
+}
 
 /**
  * ProviderRegistry — manages LLM provider instances and model selection.
@@ -643,6 +721,17 @@ export class ProviderRegistry {
         serviceNames: ['llm7'],
       }),
     );
+
+    for (const definition of BUILTIN_COMPAT_PROVIDERS) {
+      if (this.providers.has(definition.id)) continue;
+      const resolvedKey = apiKey(definition.id);
+      this.register(createBuiltinCompatProvider(definition, resolvedKey));
+    }
+
+    this.register(new AmazonBedrockProvider());
+    this.register(new AmazonBedrockMantleProvider());
+    this.register(new AnthropicVertexProvider());
+    this.register(new GitHubCopilotProvider());
 
     // Synthetic failover provider — must be after all backends.
     // Stage 3: catalog-driven SyntheticProvider manages its own backend lists.

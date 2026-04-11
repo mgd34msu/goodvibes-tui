@@ -1,13 +1,11 @@
-import { join } from 'node:path';
 import { PersistentStore } from '../../state/persistent-store.ts';
 import type { AutomationRouteBinding } from '../routes.ts';
+import { resolveAutomationStorePath, type AutomationStorePathConfig } from './paths.ts';
 
 interface AutomationRoutesSnapshot extends Record<string, unknown> {
   version: 1;
   routes: AutomationRouteBinding[];
 }
-
-const DEFAULT_PATH = join(process.cwd(), '.goodvibes', 'tui', 'automation-routes.json');
 
 function defaultSnapshot(): AutomationRoutesSnapshot {
   return {
@@ -16,10 +14,18 @@ function defaultSnapshot(): AutomationRoutesSnapshot {
   };
 }
 
+export interface AutomationRouteStoreConfig {
+  readonly path?: string;
+  readonly configManager?: AutomationStorePathConfig;
+}
+
 export class AutomationRouteStore {
   private readonly store: PersistentStore<AutomationRoutesSnapshot>;
 
-  constructor(path: string = DEFAULT_PATH) {
+  constructor(config: string | AutomationRouteStoreConfig = {}) {
+    const path = typeof config === 'string'
+      ? config
+      : config.path ?? resolveAutomationStorePath('automation-routes.json', config.configManager);
     this.store = new PersistentStore<AutomationRoutesSnapshot>(path);
   }
 

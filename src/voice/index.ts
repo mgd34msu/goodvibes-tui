@@ -17,3 +17,4 @@ export { VoiceProviderRegistry } from './provider-registry.ts';
 export type { VoiceProviderDescriptor } from './provider-registry.ts';
 export { VoiceService } from './service.ts';
 export type { VoiceServiceStatus } from './service.ts';
+export { ensureBuiltinVoiceProviders } from './builtin-providers.ts';

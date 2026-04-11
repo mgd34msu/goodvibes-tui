@@ -2,7 +2,7 @@
 
 A terminal-native AI coding and operations console with multi-provider LLM support, typed runtime systems, and a Unicode-rich custom renderer.
 
-Version: **0.15.6**
+Version: **0.15.7**
 
 <!-- screenshot -->
 

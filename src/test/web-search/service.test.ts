@@ -6,6 +6,7 @@ import {
   createDuckDuckGoProvider,
   createExaSearchProvider,
   createFirecrawlSearchProvider,
+  createPerplexitySearchProvider,
   createSearxngSearchProvider,
   createTavilySearchProvider,
 } from '../../web-search/index.ts';
@@ -336,5 +337,35 @@ describe('additional web search providers', () => {
     const response = await provider.search({ query: 'tavily query', maxResults: 1, includeEvidence: true });
     expect(response.instantAnswer?.answer).toBe('Tavily answer text');
     expect(response.results[0]?.evidence?.[0]?.content).toContain('Tavily raw evidence');
+  });
+
+  test('parses Perplexity search API results and registers the provider by default', async () => {
+    const provider = createPerplexitySearchProvider({
+      env: { PERPLEXITY_API_KEY: 'perplexity-test-key' },
+      fetcher: async () => ({
+        success: true,
+        summary: { total: 1, succeeded: 1, failed: 0 },
+        results: [{
+          url: 'https://api.perplexity.ai/search',
+          status: 200,
+          contentType: 'application/json',
+          content: JSON.stringify({
+            results: [{
+              title: 'Perplexity Result',
+              url: 'https://example.com/perplexity',
+              snippet: 'Perplexity snippet',
+              date: '2026-02-01',
+            }],
+          }),
+        }],
+      }),
+    });
+
+    const response = await provider.search({ query: 'perplexity query', maxResults: 1 });
+    expect(response.results[0]?.title).toBe('Perplexity Result');
+    expect(response.results[0]?.metadata.published).toBe('2026-02-01');
+
+    const registry = new WebSearchProviderRegistry();
+    expect(registry.list().some((entry) => entry.id === 'perplexity')).toBe(true);
   });
 });

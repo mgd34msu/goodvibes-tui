@@ -17,6 +17,10 @@ export type ControlPlaneClientSurface =
   | 'signal'
   | 'whatsapp'
   | 'imessage'
+  | 'msteams'
+  | 'bluebubbles'
+  | 'mattermost'
+  | 'matrix'
   | 'service';
 
 export interface ControlPlaneServerConfig {
