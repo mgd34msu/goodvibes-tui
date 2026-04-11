@@ -36,6 +36,7 @@ Common paths:
 - services: `.goodvibes/tui/services.json`
 - custom providers: `~/.goodvibes/tui/providers/*.json`
 - schedules: `.goodvibes/tui/schedules.json`
+- direct TLS certs: `~/.goodvibes/certs/fullchain.pem` and `~/.goodvibes/certs/privkey.pem`
 
 Deployment shapes:
 
@@ -53,6 +54,8 @@ Typical workflows:
 - dispatch and review work across remote peers and node-host runners
 
 The compiled binary is the TUI entrypoint built from `src/main.ts`. When `danger.daemon` and/or `danger.httpListener` are enabled, that same binary starts the daemon and HTTP listener in-process. `bun run daemon` uses the separate headless daemon entrypoint from source.
+
+Inbound TLS can run in `off`, `proxy`, or `direct` mode. Direct mode defaults to the certificate files above unless explicit paths are configured. Outbound HTTPS trust uses Bun’s bundled roots by default and can be extended or replaced with custom CA files/directories for internal or enterprise endpoints.
 
 ---
 

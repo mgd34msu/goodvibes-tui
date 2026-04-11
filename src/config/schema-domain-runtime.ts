@@ -17,6 +17,22 @@ export const runtimeConfigDefaults = {
     baseUrl: 'http://127.0.0.1:3421',
     streamMode: 'sse',
     allowRemote: false,
+    trustProxy: false,
+    tls: {
+      mode: 'off',
+      certFile: '',
+      keyFile: '',
+    },
+  },
+  httpListener: {
+    host: '127.0.0.1',
+    port: 3422,
+    trustProxy: false,
+    tls: {
+      mode: 'off',
+      certFile: '',
+      keyFile: '',
+    },
   },
   web: {
     enabled: false,
@@ -38,6 +54,14 @@ export const runtimeConfigDefaults = {
     platform: 'auto',
     serviceName: 'goodvibes',
     logPath: '',
+  },
+  network: {
+    outboundTls: {
+      mode: 'bundled',
+      customCaFile: '',
+      customCaDir: '',
+      allowInsecureLocalhost: false,
+    },
   },
 };
 
@@ -126,6 +150,69 @@ export const runtimePrimaryConfigSettings: ConfigSettingDefinition[] = [
     type: 'boolean',
     default: false,
     description: 'Allow remote clients to connect to the control plane',
+  },
+  {
+    key: 'controlPlane.trustProxy',
+    type: 'boolean',
+    default: false,
+    description: 'Trust proxy forwarding headers such as x-forwarded-for for the control plane',
+  },
+  {
+    key: 'controlPlane.tls.mode',
+    type: 'enum',
+    default: 'off',
+    description: 'TLS mode for the control-plane HTTP server',
+    enumValues: ['off', 'proxy', 'direct'],
+  },
+  {
+    key: 'controlPlane.tls.certFile',
+    type: 'string',
+    default: '',
+    description: 'Certificate chain PEM path for direct control-plane TLS (empty = ~/.goodvibes/certs/fullchain.pem)',
+  },
+  {
+    key: 'controlPlane.tls.keyFile',
+    type: 'string',
+    default: '',
+    description: 'Private key PEM path for direct control-plane TLS (empty = ~/.goodvibes/certs/privkey.pem)',
+  },
+  {
+    key: 'httpListener.host',
+    type: 'string',
+    default: '127.0.0.1',
+    description: 'Bind host for the webhook HTTP listener',
+  },
+  {
+    key: 'httpListener.port',
+    type: 'number',
+    default: 3422,
+    description: 'Bind port for the webhook HTTP listener',
+    validate: (v) => typeof v === 'number' && Number.isInteger(v) && v >= 1 && v <= 65535,
+  },
+  {
+    key: 'httpListener.trustProxy',
+    type: 'boolean',
+    default: false,
+    description: 'Trust proxy forwarding headers such as x-forwarded-for for the webhook listener',
+  },
+  {
+    key: 'httpListener.tls.mode',
+    type: 'enum',
+    default: 'off',
+    description: 'TLS mode for the webhook HTTP listener',
+    enumValues: ['off', 'proxy', 'direct'],
+  },
+  {
+    key: 'httpListener.tls.certFile',
+    type: 'string',
+    default: '',
+    description: 'Certificate chain PEM path for direct webhook-listener TLS (empty = ~/.goodvibes/certs/fullchain.pem)',
+  },
+  {
+    key: 'httpListener.tls.keyFile',
+    type: 'string',
+    default: '',
+    description: 'Private key PEM path for direct webhook-listener TLS (empty = ~/.goodvibes/certs/privkey.pem)',
   },
   {
     key: 'web.enabled',
@@ -224,5 +311,30 @@ export const runtimeSecondaryConfigSettings: ConfigSettingDefinition[] = [
     type: 'string',
     default: '',
     description: 'File path for daemon/service logs (empty = platform default under .goodvibes/tui/service/)',
+  },
+  {
+    key: 'network.outboundTls.mode',
+    type: 'enum',
+    default: 'bundled',
+    description: 'Outbound HTTPS trust mode for Bun fetch-based network calls',
+    enumValues: ['bundled', 'bundled+custom', 'custom'],
+  },
+  {
+    key: 'network.outboundTls.customCaFile',
+    type: 'string',
+    default: '',
+    description: 'Additional PEM file to trust for outbound HTTPS when using bundled+custom or custom mode',
+  },
+  {
+    key: 'network.outboundTls.customCaDir',
+    type: 'string',
+    default: '',
+    description: 'Directory of PEM/CRT/CER files to trust for outbound HTTPS when using bundled+custom or custom mode',
+  },
+  {
+    key: 'network.outboundTls.allowInsecureLocalhost',
+    type: 'boolean',
+    default: false,
+    description: 'Allow self-signed HTTPS only for localhost/loopback outbound requests',
   },
 ];

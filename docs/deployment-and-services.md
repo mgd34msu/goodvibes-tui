@@ -7,6 +7,8 @@ GoodVibes supports a few distinct deployment shapes:
 - local TUI only
 - TUI with in-process daemon/API host
 - source-run headless daemon/API host
+- daemon/API host behind a reverse proxy with HTTPS termination
+- daemon/API host with direct HTTPS from GoodVibes itself
 - omnichannel runtime with external routes and channel delivery
 - distributed runtime with remote peers and node-host runners
 
@@ -57,6 +59,69 @@ This runs the dedicated daemon CLI entrypoint from `src/daemon/cli.ts`. It start
 - the optional HTTP listener when `danger.httpListener` is enabled
 
 This path is useful for service-style deployments, automation entrypoints, and local integrations that do not need the interactive terminal UI.
+
+## Inbound TLS
+
+GoodVibes now treats inbound TLS as an explicit server concern.
+
+For the control-plane daemon:
+
+- `controlPlane.tls.mode = off | proxy | direct`
+- `controlPlane.trustProxy = true | false`
+- `controlPlane.tls.certFile`
+- `controlPlane.tls.keyFile`
+
+For the webhook listener:
+
+- `httpListener.host`
+- `httpListener.port`
+- `httpListener.tls.mode = off | proxy | direct`
+- `httpListener.trustProxy = true | false`
+- `httpListener.tls.certFile`
+- `httpListener.tls.keyFile`
+
+### Proxy mode
+
+`proxy` is the recommended deployment shape for public HTTPS exposure. In this mode:
+
+- GoodVibes still binds plain HTTP locally
+- a reverse proxy such as Nginx, Caddy, Traefik, or Nginx Proxy Manager terminates HTTPS
+- GoodVibes only trusts forwarded headers when the relevant `trustProxy` setting is enabled
+
+This is the right shape when a future web UI, browser clients, SSE, and WebSocket clients all need to share one public HTTPS origin.
+
+### Direct mode
+
+`direct` makes GoodVibes terminate HTTPS itself through Bun’s native server TLS.
+
+If no explicit certificate paths are configured, GoodVibes looks for:
+
+- `~/.goodvibes/certs/fullchain.pem`
+- `~/.goodvibes/certs/privkey.pem`
+
+That convention also works well with self-hosted Let’s Encrypt deployment patterns where the operator copies or syncs certificate material into the GoodVibes home directory.
+
+If `direct` is enabled and the certificate files are missing or invalid, GoodVibes fails that server startup clearly instead of silently downgrading to plain HTTP.
+
+## Outbound HTTPS trust
+
+GoodVibes now centralizes outbound trust handling for Bun `fetch` traffic. Provider calls, search, webhooks, downloads, telemetry, artifacts, and other fetch-based integrations inherit the same trust policy automatically.
+
+Relevant config:
+
+- `network.outboundTls.mode = bundled | bundled+custom | custom`
+- `network.outboundTls.customCaFile`
+- `network.outboundTls.customCaDir`
+- `network.outboundTls.allowInsecureLocalhost`
+
+Behavior:
+
+- `bundled` uses Bun’s default bundled root certificates
+- `bundled+custom` adds operator-provided PEM roots on top of the bundled roots
+- `custom` trusts only the configured custom PEM roots
+- `allowInsecureLocalhost` disables certificate verification only for loopback HTTPS targets and is intended for local development
+
+This is the right place to add enterprise or internal roots for outbound HTTPS access to providers, registries, proxies, or internal services.
 
 ## Build behavior
 
@@ -110,7 +175,7 @@ The control-plane method catalog is the canonical typed surface for external cli
 
 ## Service startup behavior inside the TUI
 
-When the TUI owns the daemon/listener startup path, it probes the default ports first and skips startup cleanly if another instance already owns them. That avoids duplicate local-service hangs while still allowing the TUI to run normally.
+When the TUI owns the daemon/listener startup path, it probes the configured bind ports first and skips startup cleanly if another instance already owns them. That avoids duplicate local-service hangs while still allowing the TUI to run normally.
 
 ## Related docs
 

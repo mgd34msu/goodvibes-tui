@@ -3,11 +3,30 @@ import { RuntimeEventBus } from '../../runtime/events/index.ts';
 import { HookDispatcher } from '../../hooks/dispatcher.ts';
 import { startExternalServices } from '../../runtime/bootstrap-services.ts';
 
-function createConfig(overrides: { daemon?: boolean; httpListener?: boolean } = {}) {
+function createConfig(overrides: {
+  daemon?: boolean;
+  httpListener?: boolean;
+  controlPlaneHost?: string;
+  controlPlanePort?: number;
+  httpListenerHost?: string;
+  httpListenerPort?: number;
+} = {}) {
   return {
-    get(key: 'danger.daemon' | 'danger.httpListener'): boolean {
+    get(
+      key:
+        | 'danger.daemon'
+        | 'danger.httpListener'
+        | 'controlPlane.host'
+        | 'controlPlane.port'
+        | 'httpListener.host'
+        | 'httpListener.port',
+    ): boolean | string | number {
       if (key === 'danger.daemon') return overrides.daemon ?? false;
-      return overrides.httpListener ?? false;
+      if (key === 'danger.httpListener') return overrides.httpListener ?? false;
+      if (key === 'controlPlane.host') return overrides.controlPlaneHost ?? '127.0.0.1';
+      if (key === 'controlPlane.port') return overrides.controlPlanePort ?? 3421;
+      if (key === 'httpListener.host') return overrides.httpListenerHost ?? '127.0.0.1';
+      return overrides.httpListenerPort ?? 3422;
     },
   };
 }
@@ -200,5 +219,42 @@ describe('startExternalServices', () => {
     expect(services.daemonServer).toBeNull();
     expect(services.httpListener).not.toBeNull();
     expect(listenerStart).toHaveBeenCalled();
+  });
+
+  test('uses configured hosts and ports when probing service bindings', async () => {
+    const probeDaemonPortInUse = mock(async () => false);
+    const probeHttpListenerPortInUse = mock(async () => false);
+
+    await startExternalServices(
+      createConfig({
+        daemon: true,
+        httpListener: true,
+        controlPlaneHost: '0.0.0.0',
+        controlPlanePort: 4444,
+        httpListenerHost: '0.0.0.0',
+        httpListenerPort: 5555,
+      }),
+      runtimeBus,
+      hookDispatcher,
+      {
+        probeDaemonPortInUse,
+        probeHttpListenerPortInUse,
+        createDaemonServer: () => ({
+          enable: mock(() => true),
+          start: mock(async () => {}),
+          stop: mock(async () => {}),
+        }),
+        createHttpListener: () => ({
+          enable: mock(() => true),
+          start: mock(async () => {}),
+          stop: mock(async () => {}),
+        }),
+      },
+    );
+
+    expect(probeDaemonPortInUse).toHaveBeenCalledTimes(1);
+    expect(probeHttpListenerPortInUse).toHaveBeenCalledTimes(1);
+    expect(probeDaemonPortInUse).toHaveBeenCalledWith('0.0.0.0', 4444);
+    expect(probeHttpListenerPortInUse).toHaveBeenCalledWith('0.0.0.0', 5555);
   });
 });

@@ -104,6 +104,14 @@ import {
   handleRemotePeerWorkComplete,
 } from './http/remote-routes.ts';
 import { validatePublicWebhookUrl } from '../utils/url-safety.ts';
+import {
+  extractForwardedClientIp,
+  inspectInboundTls,
+  inspectOutboundTls,
+  installGlobalNetworkTransport,
+  resolveInboundTlsContext,
+  type ResolvedInboundTlsContext,
+} from '../runtime/network/index.ts';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -113,6 +121,7 @@ interface DaemonConfig {
   port?: number;
   host?: string;
   agentManager?: AgentManager;
+  serveFactory?: typeof Bun.serve;
   /** HMAC-SHA256 secret for verifying GitHub webhook signatures. Falls back to GITHUB_WEBHOOK_SECRET env var. */
   githubWebhookSecret?: string;
   /** Optional pre-configured UserAuthManager (for testing). */
@@ -324,15 +333,18 @@ export class DaemonServer {
   private readonly multimodalService: MultimodalService;
   private readonly artifactStore: ArtifactStore;
   private readonly serviceRegistry: ServiceRegistry;
+  private readonly serveFactory: typeof Bun.serve;
   private readonly pendingSurfaceReplies = new Map<string, PendingSurfaceReply>();
   private replyPoller: ReturnType<typeof setInterval> | null = null;
+  private tlsState: ResolvedInboundTlsContext | null = null;
 
   constructor(private config: DaemonConfig = {}, _configManager?: ConfigManager) {
-    this.port = config.port ?? 3421;
-    this.host = config.host ?? '127.0.0.1';
-    this.agentManager = config.agentManager ?? AgentManager.getInstance();
     this.configManager = _configManager ?? new ConfigManager();
+    this.port = config.port ?? Number(this.configManager.get('controlPlane.port') ?? 3421);
+    this.host = config.host ?? String(this.configManager.get('controlPlane.host') ?? '127.0.0.1');
+    this.agentManager = config.agentManager ?? AgentManager.getInstance();
     this.userAuth = config.userAuth ?? new UserAuthManager();
+    this.serveFactory = config.serveFactory ?? Bun.serve;
     this.serviceRegistry = new ServiceRegistry();
     this.artifactStore = ArtifactStore.getActive({ configManager: this.configManager });
     this.knowledgeService = KnowledgeService.getActive({ configManager: this.configManager });
@@ -497,6 +509,7 @@ export class DaemonServer {
       return;
     }
 
+    installGlobalNetworkTransport(this.configManager);
     const integrationContext = getIntegrationHelpersContextOptional();
     if (integrationContext) {
       this.routeBindings.attachRuntime({
@@ -522,9 +535,11 @@ export class DaemonServer {
     const self = this;
     this.emitTransportInitializing();
     try {
-      this.server = Bun.serve({
+      this.tlsState = resolveInboundTlsContext(this.configManager, 'controlPlane');
+      this.server = this.serveFactory({
         port: this.port,
         hostname: this.host,
+        ...(this.tlsState.tls ? { tls: this.tlsState.tls } : {}),
         async fetch(req: Request, server: UpgradeCapableServer): Promise<Response | undefined> {
           const upgrade = self.tryUpgradeControlPlaneWebSocket(req, server);
           if (upgrade === 'upgraded') return;
@@ -581,7 +596,13 @@ export class DaemonServer {
       }
       this.controlPlaneGateway.setServerState({ enabled: true, host: this.host, port: this.port });
       this.emitTransportConnected();
-      logger.info('DaemonServer started', { port: this.port, host: this.host });
+      logger.info('DaemonServer started', {
+        port: this.port,
+        host: this.host,
+        tlsMode: this.tlsState.mode,
+        scheme: this.tlsState.scheme,
+        trustProxy: this.tlsState.trustProxy,
+      });
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       if (this.replyPoller !== null) {
@@ -596,6 +617,7 @@ export class DaemonServer {
         this.server.stop(true);
         this.server = null;
       }
+      this.tlsState = null;
       this.controlPlaneGateway.setServerState({ enabled: this.enabled, host: this.host, port: this.port });
       this.emitTransportTerminalFailure(message);
       throw err;
@@ -617,6 +639,7 @@ export class DaemonServer {
     this.pendingSurfaceReplies.clear();
     this.server.stop(true);
     this.server = null;
+    this.tlsState = null;
     this.controlPlaneGateway.setServerState({ enabled: this.enabled, host: this.host, port: this.port });
     this.emitTransportDisconnected('Daemon server stopped', false);
     logger.info('DaemonServer stopped');
@@ -677,7 +700,7 @@ export class DaemonServer {
     const token = this.extractAuthToken(req);
     const auth = await this.distributedRuntime.authenticatePeerToken(
       token,
-      req.headers.get('x-forwarded-for') ?? undefined,
+      extractForwardedClientIp(req, this.trustProxyEnabled()),
     );
     if (!auth) {
       return Response.json({ error: 'Unauthorized remote peer' }, { status: 401 });
@@ -812,7 +835,7 @@ export class DaemonServer {
         admin: principal.admin,
         domains,
         clientKind,
-        remoteAddress: req.headers.get('x-forwarded-for') ?? undefined,
+        remoteAddress: extractForwardedClientIp(req, this.trustProxyEnabled()),
       } satisfies ControlPlaneWebSocketData,
     });
     return upgraded ? 'upgraded' : Response.json({ error: 'WebSocket upgrade failed' }, { status: 400 });
@@ -1158,7 +1181,15 @@ export class DaemonServer {
 
   private async dispatchApiRoutes(req: Request): Promise<Response | null> {
     return dispatchDaemonApiRoutes(req, {
-      getStatus: () => Response.json({ status: 'running', version: VERSION }),
+      getStatus: () => Response.json({
+        status: 'running',
+        version: VERSION,
+        network: {
+          controlPlane: inspectInboundTls(this.configManager, 'controlPlane'),
+          httpListener: inspectInboundTls(this.configManager, 'httpListener'),
+          outbound: inspectOutboundTls(this.configManager),
+        },
+      }),
       getReview: () => Response.json(buildIntegrationHelperReview()),
       getIntegrationSession: () => Response.json(getIntegrationSessionSnapshot()),
       getIntegrationTasks: () => Response.json(getIntegrationTaskSnapshot()),
@@ -1583,7 +1614,14 @@ export class DaemonServer {
           ? Response.json({ removed: true, id: watcherId })
           : Response.json({ error: 'Unknown watcher' }, { status: 404 });
       },
-      getServiceStatus: () => Response.json(this.platformServiceManager.status()),
+      getServiceStatus: () => Response.json({
+        ...this.platformServiceManager.status(),
+        network: {
+          controlPlane: inspectInboundTls(this.configManager, 'controlPlane'),
+          httpListener: inspectInboundTls(this.configManager, 'httpListener'),
+          outbound: inspectOutboundTls(this.configManager),
+        },
+      }),
       installService: () => {
         const admin = this.requireAdmin(req);
         if (admin) return admin;
@@ -3504,8 +3542,16 @@ export class DaemonServer {
     return `daemon:http:${this.host}:${this.port}`;
   }
 
+  private trustProxyEnabled(): boolean {
+    return this.tlsState?.trustProxy ?? Boolean(this.configManager.get('controlPlane.trustProxy'));
+  }
+
+  private transportScheme(): 'http' | 'https' {
+    return this.tlsState?.scheme ?? 'http';
+  }
+
   private transportEndpoint(): string {
-    return `http://${this.host}:${this.port}`;
+    return `${this.transportScheme()}://${this.host}:${this.port}`;
   }
 
   private emitterContext(): import('../runtime/emitters/index.ts').EmitterContext {

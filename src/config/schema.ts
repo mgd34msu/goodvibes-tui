@@ -51,6 +51,23 @@ export interface ControlPlaneConfig {
   baseUrl: string;
   streamMode: 'sse' | 'websocket' | 'both';
   allowRemote: boolean;
+  trustProxy: boolean;
+  tls: {
+    mode: 'off' | 'proxy' | 'direct';
+    certFile: string;
+    keyFile: string;
+  };
+}
+
+export interface HttpListenerRuntimeConfig {
+  host: string;
+  port: number;
+  trustProxy: boolean;
+  tls: {
+    mode: 'off' | 'proxy' | 'direct';
+    certFile: string;
+    keyFile: string;
+  };
 }
 
 export interface WebConfig {
@@ -217,6 +234,15 @@ export interface ServiceConfig {
   logPath: string;
 }
 
+export interface NetworkConfig {
+  outboundTls: {
+    mode: 'bundled' | 'bundled+custom' | 'custom';
+    customCaFile: string;
+    customCaDir: string;
+    allowInsecureLocalhost: boolean;
+  };
+}
+
 export interface GoodVibesConfig {
   display: {
     stream: boolean;            // default: true
@@ -283,10 +309,12 @@ export interface GoodVibesConfig {
   };
   automation: AutomationConfig;
   controlPlane: ControlPlaneConfig;
+  httpListener: HttpListenerRuntimeConfig;
   web: WebConfig;
   surfaces: SurfacesConfig;
   watchers: WatchersConfig;
   service: ServiceConfig;
+  network: NetworkConfig;
   danger: {
     daemon: boolean;                // default: false — enable daemon mode
     httpListener: boolean;          // default: false — enable HTTP webhook listener
@@ -424,6 +452,16 @@ export type ConfigKey =
   | 'controlPlane.baseUrl'
   | 'controlPlane.streamMode'
   | 'controlPlane.allowRemote'
+  | 'controlPlane.trustProxy'
+  | 'controlPlane.tls.mode'
+  | 'controlPlane.tls.certFile'
+  | 'controlPlane.tls.keyFile'
+  | 'httpListener.host'
+  | 'httpListener.port'
+  | 'httpListener.trustProxy'
+  | 'httpListener.tls.mode'
+  | 'httpListener.tls.certFile'
+  | 'httpListener.tls.keyFile'
   | 'web.enabled'
   | 'web.host'
   | 'web.port'
@@ -510,70 +548,11 @@ export type ConfigKey =
   | 'service.restartOnFailure'
   | 'service.platform'
   | 'service.serviceName'
-  | 'service.logPath';
-
-/** Set of all valid config keys for runtime validation. */
-export const CONFIG_KEYS = new Set<string>([
-  'display.stream', 'display.lineNumbers', 'display.collapseThreshold', 'display.theme',
-  'display.showThinking', 'display.showReasoningSummary', 'display.showTokenSpeed',
-  'display.showToolPreview', 'provider.reasoningEffort', 'provider.model',
-  'provider.provider', 'provider.embeddingProvider', 'provider.systemPromptFile', 'behavior.autoApprove',
-  'behavior.autoCompactThreshold', 'behavior.staleContextWarnings', 'behavior.saveHistory', 'behavior.notifyOnComplete',
-  'behavior.suggestAlternativeOnProviderFail', 'behavior.hitlMode', 'behavior.returnContextMode', 'behavior.guidanceMode', 'storage.secretPolicy', 'permissions.mode',
-  'permissions.tools.read', 'permissions.tools.write', 'permissions.tools.edit',
-  'permissions.tools.exec', 'permissions.tools.find', 'permissions.tools.fetch',
-  'permissions.tools.analyze', 'permissions.tools.inspect', 'permissions.tools.agent',
-  'permissions.tools.state', 'permissions.tools.workflow', 'permissions.tools.registry',
-  'permissions.tools.delegate', 'permissions.tools.mcp', 'orchestration.recursionEnabled', 'orchestration.maxActiveAgents',
-  'orchestration.maxDepth', 'sandbox.replIsolation', 'sandbox.mcpIsolation', 'sandbox.windowsMode',
-  'sandbox.vmBackend', 'sandbox.qemuBinary', 'sandbox.qemuImagePath', 'sandbox.qemuExecWrapper', 'sandbox.qemuGuestHost', 'sandbox.qemuGuestPort', 'sandbox.qemuGuestUser', 'sandbox.qemuWorkspacePath', 'sandbox.qemuSessionMode', 'ui.voiceEnabled', 'ui.systemMessages', 'ui.operationalMessages', 'ui.wrfcMessages', 'release.channel', 'danger.daemon', 'danger.httpListener',
-  'tools.llmProvider', 'tools.llmModel', 'tools.autoHeal', 'tools.defaultTokenBudget',
-  'tools.hooksFile', 'wrfc.scoreThreshold', 'wrfc.maxFixAttempts', 'wrfc.autoCommit',
-  'cache.enabled', 'cache.stableTtl', 'cache.monitorHitRate', 'cache.hitRateWarningThreshold',
-  'helper.enabled', 'helper.globalProvider', 'helper.globalModel',
-  'automation.enabled', 'automation.maxConcurrentRuns', 'automation.runHistoryLimit',
-  'automation.defaultTimeoutMs', 'automation.catchUpWindowMinutes',
-  'automation.failureCooldownMs', 'automation.deleteAfterRun',
-  'controlPlane.enabled', 'controlPlane.host', 'controlPlane.port', 'controlPlane.baseUrl',
-  'controlPlane.streamMode', 'controlPlane.allowRemote', 'web.enabled', 'web.host',
-  'web.port', 'web.publicBaseUrl', 'web.staticAssetsDir', 'surfaces.slack.enabled',
-  'surfaces.slack.signingSecret', 'surfaces.slack.botToken', 'surfaces.slack.appToken',
-  'surfaces.slack.defaultChannel', 'surfaces.slack.workspaceId',
-  'surfaces.discord.enabled', 'surfaces.discord.publicKey', 'surfaces.discord.botToken',
-  'surfaces.discord.applicationId', 'surfaces.discord.defaultChannelId',
-  'surfaces.discord.guildId', 'surfaces.ntfy.enabled', 'surfaces.ntfy.baseUrl',
-  'surfaces.ntfy.topic', 'surfaces.ntfy.token', 'surfaces.ntfy.defaultPriority',
-  'surfaces.webhook.enabled', 'surfaces.webhook.defaultTarget',
-  'surfaces.webhook.timeoutMs', 'surfaces.webhook.secret',
-  'surfaces.telegram.enabled', 'surfaces.telegram.botToken', 'surfaces.telegram.webhookSecret',
-  'surfaces.telegram.defaultChatId', 'surfaces.telegram.botUsername', 'surfaces.telegram.mode',
-  'surfaces.googleChat.enabled', 'surfaces.googleChat.webhookUrl', 'surfaces.googleChat.verificationToken',
-  'surfaces.googleChat.appId', 'surfaces.googleChat.spaceId',
-  'surfaces.signal.enabled', 'surfaces.signal.bridgeUrl', 'surfaces.signal.account',
-  'surfaces.signal.token', 'surfaces.signal.defaultRecipient',
-  'surfaces.whatsapp.enabled', 'surfaces.whatsapp.provider', 'surfaces.whatsapp.accessToken',
-  'surfaces.whatsapp.verifyToken', 'surfaces.whatsapp.phoneNumberId',
-  'surfaces.whatsapp.businessAccountId', 'surfaces.whatsapp.defaultRecipient',
-  'surfaces.imessage.enabled', 'surfaces.imessage.bridgeUrl', 'surfaces.imessage.account',
-  'surfaces.imessage.token', 'surfaces.imessage.defaultChatId',
-  'surfaces.msteams.enabled', 'surfaces.msteams.appId', 'surfaces.msteams.appPassword',
-  'surfaces.msteams.tenantId', 'surfaces.msteams.serviceUrl', 'surfaces.msteams.botId',
-  'surfaces.msteams.defaultConversationId', 'surfaces.msteams.defaultChannelId',
-  'surfaces.bluebubbles.enabled', 'surfaces.bluebubbles.serverUrl', 'surfaces.bluebubbles.password',
-  'surfaces.bluebubbles.account', 'surfaces.bluebubbles.defaultChatGuid',
-  'surfaces.mattermost.enabled', 'surfaces.mattermost.baseUrl', 'surfaces.mattermost.botToken',
-  'surfaces.mattermost.teamId', 'surfaces.mattermost.defaultChannelId',
-  'surfaces.matrix.enabled', 'surfaces.matrix.homeserverUrl', 'surfaces.matrix.accessToken',
-  'surfaces.matrix.userId', 'surfaces.matrix.defaultRoomId', 'watchers.enabled',
-  'watchers.pollIntervalMs', 'watchers.heartbeatIntervalMs', 'watchers.recoveryWindowMinutes',
-  'service.enabled', 'service.autostart', 'service.restartOnFailure', 'service.platform',
-  'service.serviceName', 'service.logPath',
-] as const satisfies ConfigKey[]);
-
-/** Type guard: returns true if key is a valid ConfigKey. */
-export function isValidConfigKey(key: string): key is ConfigKey {
-  return CONFIG_KEYS.has(key);
-}
+  | 'service.logPath'
+  | 'network.outboundTls.mode'
+  | 'network.outboundTls.customCaFile'
+  | 'network.outboundTls.customCaDir'
+  | 'network.outboundTls.allowInsecureLocalhost';
 
 /** Maps a ConfigKey to its value type. */
 export type ConfigValue<K extends ConfigKey> =
@@ -665,6 +644,16 @@ export type ConfigValue<K extends ConfigKey> =
   K extends 'controlPlane.baseUrl' ? string :
   K extends 'controlPlane.streamMode' ? 'sse' | 'websocket' | 'both' :
   K extends 'controlPlane.allowRemote' ? boolean :
+  K extends 'controlPlane.trustProxy' ? boolean :
+  K extends 'controlPlane.tls.mode' ? 'off' | 'proxy' | 'direct' :
+  K extends 'controlPlane.tls.certFile' ? string :
+  K extends 'controlPlane.tls.keyFile' ? string :
+  K extends 'httpListener.host' ? string :
+  K extends 'httpListener.port' ? number :
+  K extends 'httpListener.trustProxy' ? boolean :
+  K extends 'httpListener.tls.mode' ? 'off' | 'proxy' | 'direct' :
+  K extends 'httpListener.tls.certFile' ? string :
+  K extends 'httpListener.tls.keyFile' ? string :
   K extends 'web.enabled' ? boolean :
   K extends 'web.host' ? string :
   K extends 'web.port' ? number :
@@ -752,6 +741,10 @@ export type ConfigValue<K extends ConfigKey> =
   K extends 'service.platform' ? 'auto' | 'systemd' | 'launchd' | 'windows' | 'manual' :
   K extends 'service.serviceName' ? string :
   K extends 'service.logPath' ? string :
+  K extends 'network.outboundTls.mode' ? 'bundled' | 'bundled+custom' | 'custom' :
+  K extends 'network.outboundTls.customCaFile' ? string :
+  K extends 'network.outboundTls.customCaDir' ? string :
+  K extends 'network.outboundTls.allowInsecureLocalhost' ? boolean :
   never;
 
 export const DEFAULT_CONFIG = {
@@ -766,10 +759,12 @@ export const DEFAULT_CONFIG = {
   release: coreConfigDefaults.release,
   automation: runtimeConfigDefaults.automation,
   controlPlane: runtimeConfigDefaults.controlPlane,
+  httpListener: runtimeConfigDefaults.httpListener,
   web: runtimeConfigDefaults.web,
   surfaces: surfaceConfigDefaults as SurfacesConfig,
   watchers: runtimeConfigDefaults.watchers,
   service: runtimeConfigDefaults.service,
+  network: runtimeConfigDefaults.network,
   danger: coreConfigDefaults.danger,
   tools: coreConfigDefaults.tools,
   wrfc: coreConfigDefaults.wrfc,
@@ -786,3 +781,11 @@ export const CONFIG_SCHEMA: ConfigSetting[] = [
   ...runtimeSecondaryConfigSettings,
   ...coreTailConfigSettings,
 ] as ConfigSetting[];
+
+/** Set of all valid config keys for runtime validation. */
+export const CONFIG_KEYS = new Set<string>(CONFIG_SCHEMA.map((setting) => setting.key));
+
+/** Type guard: returns true if key is a valid ConfigKey. */
+export function isValidConfigKey(key: string): key is ConfigKey {
+  return CONFIG_KEYS.has(key);
+}

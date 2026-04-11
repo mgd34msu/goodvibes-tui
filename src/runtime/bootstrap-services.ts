@@ -23,8 +23,8 @@ interface ServiceFactories {
   createDaemonServer?: (runtimeBus: RuntimeEventBus, userAuth: UserAuthManager) => DaemonService;
   createHttpListener?: (hookDispatcher: HookDispatcher, userAuth: UserAuthManager) => HttpListenerService;
   startupTimeoutMs?: number;
-  probeDaemonPortInUse?: () => Promise<boolean>;
-  probeHttpListenerPortInUse?: () => Promise<boolean>;
+  probeDaemonPortInUse?: (host: string, port: number) => Promise<boolean>;
+  probeHttpListenerPortInUse?: (host: string, port: number) => Promise<boolean>;
 }
 
 export interface ExternalServicesHandle {
@@ -34,13 +34,16 @@ export interface ExternalServicesHandle {
 }
 
 export interface ExternalServicesConfig {
-  get(key: 'danger.daemon' | 'danger.httpListener'): boolean;
+  get(
+    key:
+      | 'danger.daemon'
+      | 'danger.httpListener'
+      | 'controlPlane.host'
+      | 'controlPlane.port'
+      | 'httpListener.host'
+      | 'httpListener.port',
+  ): boolean | string | number;
 }
-
-const DEFAULT_DAEMON_HOST = '127.0.0.1';
-const DEFAULT_DAEMON_PORT = 3421;
-const DEFAULT_HTTP_LISTENER_HOST = '127.0.0.1';
-const DEFAULT_HTTP_LISTENER_PORT = 3422;
 const DEFAULT_SERVICE_START_TIMEOUT_MS = 1500;
 
 async function isTcpPortInUse(host: string, port: number, timeoutMs = 250): Promise<boolean> {
@@ -104,17 +107,21 @@ export async function startExternalServices(
   const createHttpListener = factories.createHttpListener ?? ((dispatcher: HookDispatcher, userAuth: UserAuthManager): HttpListenerService =>
     new HttpListener({ hookDispatcher: dispatcher, userAuth }));
   const startupTimeoutMs = factories.startupTimeoutMs ?? DEFAULT_SERVICE_START_TIMEOUT_MS;
-  const probeDaemonPortInUse = factories.probeDaemonPortInUse ?? (() => isTcpPortInUse(DEFAULT_DAEMON_HOST, DEFAULT_DAEMON_PORT));
-  const probeHttpListenerPortInUse = factories.probeHttpListenerPortInUse ?? (() => isTcpPortInUse(DEFAULT_HTTP_LISTENER_HOST, DEFAULT_HTTP_LISTENER_PORT));
+  const daemonHost = String(config.get('controlPlane.host') ?? '127.0.0.1');
+  const daemonPort = Number(config.get('controlPlane.port') ?? 3421);
+  const httpListenerHost = String(config.get('httpListener.host') ?? '127.0.0.1');
+  const httpListenerPort = Number(config.get('httpListener.port') ?? 3422);
+  const probeDaemonPortInUse = factories.probeDaemonPortInUse ?? ((host: string, port: number) => isTcpPortInUse(host, port));
+  const probeHttpListenerPortInUse = factories.probeHttpListenerPortInUse ?? ((host: string, port: number) => isTcpPortInUse(host, port));
 
   let daemonServer: DaemonService | null = null;
   let httpListener: HttpListenerService | null = null;
 
   if (config.get('danger.daemon') as boolean) {
-    if (await probeDaemonPortInUse()) {
+    if (await probeDaemonPortInUse(daemonHost, daemonPort)) {
       logger.warn('Daemon server port already in use; continuing without local daemon in this TUI instance', {
-        host: DEFAULT_DAEMON_HOST,
-        port: DEFAULT_DAEMON_PORT,
+        host: daemonHost,
+        port: daemonPort,
       });
     } else {
       daemonServer = createDaemonServer(runtimeBus, sharedUserAuth);
@@ -138,10 +145,10 @@ export async function startExternalServices(
   }
 
   if (config.get('danger.httpListener') as boolean) {
-    if (await probeHttpListenerPortInUse()) {
+    if (await probeHttpListenerPortInUse(httpListenerHost, httpListenerPort)) {
       logger.warn('HTTP listener port already in use; continuing without local listener in this TUI instance', {
-        host: DEFAULT_HTTP_LISTENER_HOST,
-        port: DEFAULT_HTTP_LISTENER_PORT,
+        host: httpListenerHost,
+        port: httpListenerPort,
       });
     } else {
       httpListener = createHttpListener(hookDispatcher, sharedUserAuth);

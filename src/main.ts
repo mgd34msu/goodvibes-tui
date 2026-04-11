@@ -69,6 +69,7 @@ import { buildPersistedSessionContext, formatReturnContextForDisplay, getReturnC
 import { getRemoteRunnerRegistry } from './runtime/remote/index.ts';
 import { listPersistedWorktreeMeta } from './runtime/worktree/registry.ts';
 import { ApprovalBroker } from './control-plane/index.ts';
+import { installGlobalNetworkTransport } from './runtime/network/index.ts';
 
 
 const ALT_SCREEN_ENTER = '\x1b[?1049h';
@@ -85,6 +86,7 @@ const PASTE_DISABLE    = '\x1b[?2004l';
 async function main() {
   const stdout = process.stdout;
   const stdin = process.stdin;
+  installGlobalNetworkTransport(configManager);
 
   // ── Bootstrap all runtime subsystems ─────────────────────────────────────
   // bootstrapRuntime initializes all subsystems in dependency order and returns

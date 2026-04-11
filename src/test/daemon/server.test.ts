@@ -1,6 +1,6 @@
-import { describe, test, expect, beforeEach, afterEach } from 'bun:test';
+import { describe, test, expect, beforeEach, afterEach, mock } from 'bun:test';
 import { createHmac } from 'node:crypto';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { ArtifactStore } from '../../artifacts/index.ts';
@@ -166,6 +166,47 @@ describe('DaemonServer', () => {
     daemon.enable({ daemon: true }, TEST_TOKEN);
     await daemon.start();
     expect(daemon.isRunning).toBe(true);
+  });
+
+  test('passes TLS options to Bun.serve when direct daemon TLS is enabled', async () => {
+    const certDir = join(tempConfigDir, 'certs');
+    mkdirSync(certDir, { recursive: true });
+    const certFile = join(certDir, 'fullchain.pem');
+    const keyFile = join(certDir, 'privkey.pem');
+    writeFileSync(certFile, 'CERT\n', 'utf-8');
+    writeFileSync(keyFile, 'KEY\n', 'utf-8');
+    const config = new ConfigManager();
+    config.set('controlPlane.tls.mode', 'direct');
+    let capturedOptions: Record<string, unknown> | null = null;
+    const serveFactory = mock((options: unknown) => {
+      capturedOptions = options as Record<string, unknown>;
+      return {
+      stop: mock(() => {}),
+      port: (capturedOptions as Record<string, unknown>).port,
+      hostname: (capturedOptions as Record<string, unknown>).hostname,
+    };
+    });
+    daemon = new DaemonServer({
+      port: 39421,
+      host: '127.0.0.1',
+      userAuth: new UserAuthManager({
+        users: [{ username: 'admin', passwordHash: UserAuthManager.hashPassword('admin'), roles: ['admin'] }],
+      }),
+      serveFactory: serveFactory as unknown as typeof Bun.serve,
+    }, config);
+
+    daemon.enable({ daemon: true }, TEST_TOKEN);
+    await daemon.start();
+
+    expect(serveFactory).toHaveBeenCalledTimes(1);
+    expect(capturedOptions).toMatchObject({
+      port: 39421,
+      hostname: '127.0.0.1',
+      tls: {
+        cert: Bun.file(certFile),
+        key: Bun.file(keyFile),
+      },
+    });
   });
 
   test('emits transport lifecycle when starting and stopping', async () => {
@@ -2738,9 +2779,13 @@ describe('DaemonServer', () => {
 
 describe('HttpListener', () => {
   let listener: HttpListener;
+  let userAuth: UserAuthManager;
+  let tempConfigDir: string;
 
   beforeEach(() => {
-    const userAuth = new UserAuthManager({
+    tempConfigDir = mkdtempSync(join(tmpdir(), 'gv-listener-config-'));
+    ConfigManager.setTestMode(tempConfigDir);
+    userAuth = new UserAuthManager({
       users: [{ username: 'admin', passwordHash: UserAuthManager.hashPassword('admin'), roles: ['admin'] }],
     });
     listener = new HttpListener({ port: 39422, host: '127.0.0.1', userAuth });
@@ -2748,6 +2793,8 @@ describe('HttpListener', () => {
 
   afterEach(async () => {
     await listener.stop();
+    ConfigManager.setTestMode(undefined);
+    rmSync(tempConfigDir, { recursive: true, force: true });
   });
 
   test('isRunning is false before start', () => {
@@ -2773,6 +2820,46 @@ describe('HttpListener', () => {
     listener.enable({ httpListener: true }, TEST_TOKEN);
     await listener.start();
     expect(listener.isRunning).toBe(true);
+  });
+
+  test('passes TLS options to Bun.serve when direct listener TLS is enabled', async () => {
+    const certDir = join(tempConfigDir, 'certs');
+    mkdirSync(certDir, { recursive: true });
+    const certFile = join(certDir, 'fullchain.pem');
+    const keyFile = join(certDir, 'privkey.pem');
+    writeFileSync(certFile, 'CERT\n', 'utf-8');
+    writeFileSync(keyFile, 'KEY\n', 'utf-8');
+    const config = new ConfigManager();
+    config.set('httpListener.tls.mode', 'direct');
+    let capturedOptions: Record<string, unknown> | null = null;
+    const serveFactory = mock((options: unknown) => {
+      capturedOptions = options as Record<string, unknown>;
+      return {
+      stop: mock(() => {}),
+      port: (capturedOptions as Record<string, unknown>).port,
+      hostname: (capturedOptions as Record<string, unknown>).hostname,
+    };
+    });
+    listener = new HttpListener({
+      port: 39422,
+      host: '127.0.0.1',
+      userAuth,
+      configManager: config,
+      serveFactory: serveFactory as unknown as typeof Bun.serve,
+    });
+
+    listener.enable({ httpListener: true }, TEST_TOKEN);
+    await listener.start();
+
+    expect(serveFactory).toHaveBeenCalledTimes(1);
+    expect(capturedOptions).toMatchObject({
+      port: 39422,
+      hostname: '127.0.0.1',
+      tls: {
+        cert: Bun.file(certFile),
+        key: Bun.file(keyFile),
+      },
+    });
   });
 
   test('stop works when running', async () => {
