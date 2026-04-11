@@ -3,6 +3,8 @@ import { logger } from '../utils/logger.ts';
 import { HookDispatcher } from '../hooks/dispatcher.ts';
 import type { HookEvent } from '../hooks/types.ts';
 import { UserAuthManager } from '../security/user-auth.ts';
+import { ConfigManager } from '../config/manager.ts';
+import { extractForwardedClientIp, resolveInboundTlsContext, type ResolvedInboundTlsContext } from '../runtime/network/index.ts';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -13,6 +15,8 @@ interface HttpListenerConfig {
   host?: string;
   allowedOrigins?: string[];
   hookDispatcher?: HookDispatcher;
+  configManager?: ConfigManager;
+  serveFactory?: typeof Bun.serve;
   /** Max requests per 60-second window per IP. Default: 60. */
   rateLimit?: number;
   /** Optional pre-configured UserAuthManager (for testing). */
@@ -68,14 +72,19 @@ export class HttpListener {
   private authToken: string | null = null;
   private userAuth: UserAuthManager;
   private rateLimiter: RateLimiter;
+  private readonly configManager: ConfigManager;
+  private readonly serveFactory: typeof Bun.serve;
+  private tlsState: ResolvedInboundTlsContext | null = null;
 
   constructor(private config: HttpListenerConfig = {}) {
-    this.port = config.port ?? 3422;
-    this.host = config.host ?? '127.0.0.1';
+    this.configManager = config.configManager ?? new ConfigManager();
+    this.port = config.port ?? Number(this.configManager.get('httpListener.port') ?? 3422);
+    this.host = config.host ?? String(this.configManager.get('httpListener.host') ?? '127.0.0.1');
     this.allowedOrigins = config.allowedOrigins ?? [];
     this.hookDispatcher = config.hookDispatcher ?? null;
     this.userAuth = config.userAuth ?? new UserAuthManager();
     this.rateLimiter = new RateLimiter(config.rateLimit ?? 60);
+    this.serveFactory = config.serveFactory ?? Bun.serve;
   }
 
   /**
@@ -110,15 +119,23 @@ export class HttpListener {
     }
 
     const self = this;
-    this.server = Bun.serve({
+    this.tlsState = resolveInboundTlsContext(this.configManager, 'httpListener');
+    this.server = this.serveFactory({
       port: this.port,
       hostname: this.host,
+      ...(this.tlsState.tls ? { tls: this.tlsState.tls } : {}),
       async fetch(req: Request): Promise<Response> {
         return self.handleRequest(req);
       },
     });
 
-    logger.info('HttpListener started', { port: this.port, host: this.host });
+    logger.info('HttpListener started', {
+      port: this.port,
+      host: this.host,
+      tlsMode: this.tlsState.mode,
+      scheme: this.tlsState.scheme,
+      trustProxy: this.tlsState.trustProxy,
+    });
   }
 
   /**
@@ -128,6 +145,7 @@ export class HttpListener {
     if (this.server === null) return;
     this.server.stop(true);
     this.server = null;
+    this.tlsState = null;
     logger.info('HttpListener stopped');
   }
 
@@ -173,7 +191,7 @@ export class HttpListener {
     // Rate limiting (keyed by a synthetic IP-like string from headers)
     // Note: x-forwarded-for is only trustworthy when running behind a trusted reverse proxy.
     // If exposed directly to the internet, clients can spoof this header.
-    const clientIp = req.headers.get('x-forwarded-for') ?? req.headers.get('x-real-ip') ?? 'unknown';
+    const clientIp = extractForwardedClientIp(req, this.tlsState?.trustProxy ?? Boolean(this.configManager.get('httpListener.trustProxy'))) ?? 'unknown';
     if (!this.rateLimiter.check(clientIp)) {
       return Response.json({ error: 'Too many requests' }, { status: 429 });
     }

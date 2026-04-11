@@ -70,3 +70,6 @@ export { bootstrapRuntime } from './bootstrap.ts';
 export type { RuntimeContext, BootstrapOptions } from './context.ts';
 export type { BootstrapContext } from './bootstrap.ts';
 export { shutdownRuntime } from './lifecycle.ts';
+
+// Network
+export * from './network/index.ts';

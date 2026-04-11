@@ -7,9 +7,11 @@ import { DaemonServer } from './server.ts';
 import { HttpListener } from './http-listener.ts';
 import { getHookDispatcher } from '../hooks/index.ts';
 import { logger } from '../utils/logger.ts';
+import { installGlobalNetworkTransport } from '../runtime/network/index.ts';
 
 async function main(): Promise<void> {
   const config = new ConfigManager();
+  installGlobalNetworkTransport(config);
   const runtimeBus = new RuntimeEventBus();
   const runtimeStore = createRuntimeStore();
   setIntegrationHelpersContext({
@@ -21,7 +23,7 @@ async function main(): Promise<void> {
 
   const userAuth = new UserAuthManager();
   const daemon = new DaemonServer({ runtimeBus, userAuth });
-  const listener = new HttpListener({ hookDispatcher: getHookDispatcher(), userAuth });
+  const listener = new HttpListener({ hookDispatcher: getHookDispatcher(), userAuth, configManager: config });
   const token = process.env.GOODVIBES_DAEMON_TOKEN;
   const httpToken = process.env.GOODVIBES_HTTP_TOKEN ?? token;
 

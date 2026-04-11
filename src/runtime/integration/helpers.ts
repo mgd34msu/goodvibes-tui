@@ -12,6 +12,7 @@ import { getLocalUserAuthManager } from '../local-auth.ts';
 import { getSettingsControlPlaneSnapshot } from '../settings/control-plane.ts';
 import { checkRecoveryFile, readLastSessionPointer } from '../session-persistence.ts';
 import { listPersistedWorktreeMeta, summarizeWorktreeOwnership } from '../worktree/registry.ts';
+import { inspectInboundTls, inspectOutboundTls } from '../network/index.ts';
 
 export interface IntegrationHelpersContext {
   readonly runtimeStore: RuntimeStore;
@@ -400,6 +401,7 @@ export function getIntegrationRemoteSnapshot(): Record<string, unknown> {
 export function getIntegrationHealthSnapshot(): Record<string, unknown> {
   const { runtimeStore } = getRequiredContext();
   const state = runtimeStore.getState();
+  const context = getOptionalContext();
   const degradedDomains: string[] = [];
   const providerProblems = [...state.providerHealth.providers.values()]
     .filter((provider) => provider.status !== 'healthy' && provider.status !== 'unknown')
@@ -425,6 +427,13 @@ export function getIntegrationHealthSnapshot(): Record<string, unknown> {
       quarantined: quarantinedServers,
     },
     integrationProblems: state.integrations.problemIds,
+    ...(context?.configManager ? {
+      network: {
+        controlPlane: inspectInboundTls(context.configManager, 'controlPlane'),
+        httpListener: inspectInboundTls(context.configManager, 'httpListener'),
+        outbound: inspectOutboundTls(context.configManager),
+      },
+    } : {}),
   };
 }
 

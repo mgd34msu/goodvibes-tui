@@ -8,7 +8,7 @@ This directory contains the current product documentation for `goodvibes-tui`.
   Installation, first-run setup, provider configuration, common paths, and basic run/build flows.
 
 - [Deployment and services](deployment-and-services.md)
-  TUI-only mode, compiled binary behavior, in-process daemon/listener hosting, source-run daemon mode, and control-plane entrypoints.
+  TUI-only mode, compiled binary behavior, in-process daemon/listener hosting, source-run daemon mode, inbound TLS, outbound trust configuration, and control-plane entrypoints.
 
 - [Providers and routing](providers-and-routing.md)
   Native providers, compatible/gateway providers, local discovery, synthetic failover, search providers, voice providers, and media providers.
