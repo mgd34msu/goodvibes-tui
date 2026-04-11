@@ -29,6 +29,7 @@ All notable changes to GoodVibes TUI.
 - Split configuration schema construction into domain-specific schema modules and shared helpers
 - Split builtin voice providers into provider-specific modules and reduced the runtime store to thin store wiring plus externalized reducer helpers without weakening the domain-boundary contract
 - Split automation manager internals, knowledge-service internals, and builtin channel runtime support into smaller domain modules while preserving the existing public entrypoints
+- Deferred automation cron-helper initialization so scheduler imports no longer create a module-load cycle through `TaskScheduler`
 - Added and updated regression coverage for the new domain boundaries, daemon routing, knowledge commands, multimodal runtime, channel delivery, voice providers, and expanded control-plane/provider behavior
 
 ### Verification

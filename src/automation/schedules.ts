@@ -27,11 +27,18 @@ export type AutomationScheduleDefinition =
 export type AutomationScheduleKind = AutomationScheduleDefinition['kind'];
 
 const EVERY_PATTERN = /^(\d+(?:\.\d+)?)(ms|s|m|h|d)$/;
-const CRON_HELPER = new TaskScheduler('.goodvibes/tui/.automation-cron-helper.json');
+let cronHelper: TaskScheduler | undefined;
 const STAGGER_OFFSET_CACHE_MAX = 1_000;
 const STAGGER_OFFSET_CACHE = new Map<string, number>();
 
 export const DEFAULT_TOP_OF_HOUR_STAGGER_MS = 5 * 60 * 1_000;
+
+function getCronHelper(): TaskScheduler {
+  if (!cronHelper) {
+    cronHelper = new TaskScheduler('.goodvibes/tui/.automation-cron-helper.json');
+  }
+  return cronHelper;
+}
 
 function ensurePositiveFinite(value: number, label: string): void {
   if (!Number.isFinite(value) || value <= 0) {
@@ -155,7 +162,7 @@ export function validateSchedule(schedule: AutomationScheduleDefinition): void {
       if (schedule.staggerMs !== undefined && normalizeCronStaggerMs(schedule.staggerMs) === undefined) {
         throw new Error('schedule.staggerMs must be a finite number when provided');
       }
-      CRON_HELPER.getNextRun(schedule.expression, new Date(), schedule.timezone);
+      getCronHelper().getNextRun(schedule.expression, new Date(), schedule.timezone);
       break;
   }
 }
@@ -191,7 +198,7 @@ export function normalizeCronSchedule(expression: string, timezone?: string, sta
 }
 
 function getNextCronOccurrence(schedule: AutomationCronSchedule, fromMs: number): number {
-  return CRON_HELPER.getNextRun(schedule.expression, new Date(fromMs), schedule.timezone).getTime();
+  return getCronHelper().getNextRun(schedule.expression, new Date(fromMs), schedule.timezone).getTime();
 }
 
 export function getNextAutomationOccurrence(
