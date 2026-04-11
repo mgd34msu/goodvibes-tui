@@ -56,6 +56,20 @@ The compiled binary is the TUI entrypoint built from `src/main.ts`. When `danger
 
 ---
 
+## Documentation
+
+- [Docs index](docs/README.md)
+- [Getting started](docs/getting-started.md)
+- [Deployment and services](docs/deployment-and-services.md)
+- [Providers and routing](docs/providers-and-routing.md)
+- [Knowledge, artifacts, and multimodal](docs/knowledge-artifacts-and-multimodal.md)
+- [Channels, remote runtime, and API](docs/channels-remote-and-api.md)
+- [Tools and commands](docs/tools-and-commands.md)
+
+Historical docs are preserved in [`docs/archive/`](docs/archive/).
+
+---
+
 ## What is this
 
 goodvibes-tui is a terminal-native product for coding, operations, automation, knowledge work, and integrations. The codebase is built around:
