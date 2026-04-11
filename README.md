@@ -1,10 +1,58 @@
 # goodvibes-tui
 
+[![CI](https://github.com/mgd34msu/goodvibes-tui/actions/workflows/ci.yml/badge.svg)](https://github.com/mgd34msu/goodvibes-tui/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Version](https://img.shields.io/badge/version-0.15.7-blue.svg)](https://github.com/mgd34msu/goodvibes-tui)
+
 A terminal-native AI coding, operations, automation, knowledge, and integration console with a typed runtime, omnichannel surfaces, structured memory/knowledge, and a raw ANSI renderer.
 
-Version: **0.15.7**
-
 <!-- screenshot -->
+
+---
+
+## Start Here
+
+```sh
+git clone https://github.com/mgd34msu/goodvibes-tui.git
+cd goodvibes-tui
+bun install
+export OPENAI_API_KEY=...
+bun run dev
+```
+
+Common entrypoints:
+
+- `bun run dev` — run the TUI from source
+- `bun run daemon` — run the headless daemon/API host from source
+- `bun run build` — compile the TUI entrypoint into `dist/goodvibes`
+- `./dist/goodvibes` — run the compiled TUI binary
+
+Common paths:
+
+- global settings: `~/.goodvibes/tui/settings.json`
+- project settings: `.goodvibes/tui/settings.json`
+- secure secrets: `~/.goodvibes/tui/secrets.enc` or `.goodvibes/tui/secrets.enc`
+- compatibility secrets: `~/.goodvibes/goodvibes.secrets.json`
+- services: `.goodvibes/tui/services.json`
+- custom providers: `~/.goodvibes/tui/providers/*.json`
+- schedules: `.goodvibes/tui/schedules.json`
+
+Deployment shapes:
+
+- local TUI only
+- TUI with in-process daemon/API host
+- source-run headless daemon/API host
+- omnichannel runtime with Slack, Discord, Telegram, webhook, Teams, Matrix, and other surfaces
+- remote peer/node-host runtime for distributed execution
+
+Typical workflows:
+
+- code inside the TUI with `read`, `edit`, `find`, `analyze`, `exec`, and live control-room visibility
+- expose the daemon/API host for browser-based operator access, channels, webhooks, and future external clients
+- ingest URLs, bookmarks, docs, spreadsheets, and artifacts into the structured knowledge system for later retrieval
+- dispatch and review work across remote peers and node-host runners
+
+The compiled binary is the TUI entrypoint built from `src/main.ts`. When `danger.daemon` and/or `danger.httpListener` are enabled, that same binary starts the daemon and HTTP listener in-process. `bun run daemon` uses the separate headless daemon entrypoint from source.
 
 ---
 
@@ -232,7 +280,7 @@ Provider configs are hot-reloaded on file change. Use the `/add-provider` skill 
 
 ---
 
-## Quick Start
+## Setup
 
 ### Prerequisites
 
@@ -328,6 +376,8 @@ The daemon/gateway surface is optional, but it is what powers omnichannel routes
 bun run build
 # outputs dist/goodvibes
 ```
+
+`bun run build` compiles `src/main.ts` into `dist/goodvibes`. The compiled binary runs the TUI and can also host the daemon and HTTP listener in-process when `danger.daemon` and/or `danger.httpListener` are enabled in config. The default build does not produce a separate compiled daemon-only executable.
 
 ---
 
