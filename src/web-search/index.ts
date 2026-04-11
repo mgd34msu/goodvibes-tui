@@ -21,5 +21,6 @@ export { createBraveSearchProvider } from './providers/brave.ts';
 export { createDuckDuckGoProvider } from './providers/duckduckgo.ts';
 export { createExaSearchProvider } from './providers/exa.ts';
 export { createFirecrawlSearchProvider } from './providers/firecrawl.ts';
+export { createPerplexitySearchProvider } from './providers/perplexity.ts';
 export { createSearxngSearchProvider } from './providers/searxng.ts';
 export { createTavilySearchProvider } from './providers/tavily.ts';

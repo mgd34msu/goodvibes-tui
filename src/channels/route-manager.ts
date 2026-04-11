@@ -52,6 +52,10 @@ function toEventSurfaceKind(surfaceKind: AutomationSurfaceKind): RouteSurfaceKin
     case 'signal':
     case 'whatsapp':
     case 'imessage':
+    case 'msteams':
+    case 'bluebubbles':
+    case 'mattermost':
+    case 'matrix':
     case 'service':
       return surfaceKind;
   }

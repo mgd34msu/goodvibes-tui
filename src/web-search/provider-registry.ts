@@ -6,6 +6,7 @@ import { createBraveSearchProvider } from './providers/brave.ts';
 import { createDuckDuckGoProvider } from './providers/duckduckgo.ts';
 import { createExaSearchProvider } from './providers/exa.ts';
 import { createFirecrawlSearchProvider } from './providers/firecrawl.ts';
+import { createPerplexitySearchProvider } from './providers/perplexity.ts';
 import { createSearxngSearchProvider } from './providers/searxng.ts';
 import { createTavilySearchProvider } from './providers/tavily.ts';
 
@@ -20,6 +21,7 @@ export class WebSearchProviderRegistry {
     this.register(createExaSearchProvider(), { replace: true });
     this.register(createFirecrawlSearchProvider(), { replace: true });
     this.register(createTavilySearchProvider(), { replace: true });
+    this.register(createPerplexitySearchProvider(), { replace: true });
     WebSearchProviderRegistry.active = this;
   }
 

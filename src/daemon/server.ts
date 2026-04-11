@@ -59,10 +59,12 @@ import { PlatformServiceManager } from './service-manager.ts';
 import { WatcherRegistry } from '../watchers/index.ts';
 import { type DistributedPeerAuth, getDistributedRuntimeManager } from '../runtime/remote/index.ts';
 import { getMemoryRegistry, MemoryEmbeddingProviderRegistry } from '../state/index.ts';
-import { VoiceService } from '../voice/index.ts';
+import { ensureBuiltinVoiceProviders, VoiceService } from '../voice/index.ts';
 import { ArtifactStore } from '../artifacts/index.ts';
 import { ensureBuiltinMediaProviders, MediaProviderRegistry } from '../media/index.ts';
+import { MultimodalService } from '../multimodal/index.ts';
 import { WebSearchService } from '../web-search/index.ts';
+import { KnowledgeGraphqlService, KnowledgeService } from '../knowledge/index.ts';
 import { getProviderRuntimeSnapshot, getProviderUsageSnapshot, listProviderRuntimeSnapshots } from '../providers/runtime-snapshot.ts';
 import {
   buildIntegrationHelperReview,
@@ -87,6 +89,20 @@ import {
   getIntegrationHelpersContextOptional,
 } from '../runtime/integration/helpers.ts';
 import { dispatchDaemonApiRoutes } from '../control-plane/routes/index.ts';
+import {
+  createDaemonKnowledgeRouteHandlers,
+} from './http/knowledge-routes.ts';
+import {
+  createDaemonMediaRouteHandlers,
+} from './http/media-routes.ts';
+import {
+  createDaemonRemoteRouteHandlers,
+  handleRemotePairRequest,
+  handleRemotePairVerify,
+  handleRemotePeerHeartbeat,
+  handleRemotePeerWorkPull,
+  handleRemotePeerWorkComplete,
+} from './http/remote-routes.ts';
 import { validatePublicWebhookUrl } from '../utils/url-safety.ts';
 
 // ---------------------------------------------------------------------------
@@ -251,6 +267,10 @@ interface ControlPlaneWebSocketData {
     | 'signal'
     | 'whatsapp'
     | 'imessage'
+    | 'msteams'
+    | 'bluebubbles'
+    | 'mattermost'
+    | 'matrix'
     | 'daemon';
   readonly remoteAddress?: string;
   clientId?: string;
@@ -298,7 +318,10 @@ export class DaemonServer {
   private readonly distributedRuntime = getDistributedRuntimeManager();
   private readonly voiceService = VoiceService.getActive();
   private readonly webSearchService = WebSearchService.getActive();
+  private readonly knowledgeService: KnowledgeService;
+  private readonly knowledgeGraphqlService: KnowledgeGraphqlService;
   private readonly mediaProviders = MediaProviderRegistry.getActive();
+  private readonly multimodalService: MultimodalService;
   private readonly artifactStore: ArtifactStore;
   private readonly serviceRegistry: ServiceRegistry;
   private readonly pendingSurfaceReplies = new Map<string, PendingSurfaceReply>();
@@ -312,6 +335,9 @@ export class DaemonServer {
     this.userAuth = config.userAuth ?? new UserAuthManager();
     this.serviceRegistry = new ServiceRegistry();
     this.artifactStore = ArtifactStore.getActive({ configManager: this.configManager });
+    this.knowledgeService = KnowledgeService.getActive({ configManager: this.configManager });
+    this.knowledgeGraphqlService = new KnowledgeGraphqlService(this.knowledgeService);
+    this.multimodalService = new MultimodalService(this.artifactStore, this.mediaProviders, this.voiceService, this.knowledgeService);
     this.platformServiceManager = new PlatformServiceManager(this.configManager);
     // Webhook secrets follow 12-factor app conventions (https://12factor.net/config):
     // prefer explicit config object values (e.g. from a vault-injected object) and
@@ -325,6 +351,7 @@ export class DaemonServer {
     this.sessionBroker = SharedSessionBroker.getInstance();
     this.approvalBroker = ApprovalBroker.getInstance();
     const integrationContext = getIntegrationHelpersContextOptional();
+    this.knowledgeService.attachRuntimeBus(this.runtimeBus ?? integrationContext?.runtimeBus ?? null);
     this.routeBindings = RouteBindingManager.getInstance();
     this.routeBindings.attachRuntime({
       runtimeBus: this.runtimeBus ?? integrationContext?.runtimeBus ?? undefined,
@@ -382,6 +409,7 @@ export class DaemonServer {
       serviceRegistry: this.serviceRegistry,
       buildSurfaceAdapterContext: () => this.buildSurfaceAdapterContext(),
     });
+    ensureBuiltinVoiceProviders();
     ensureBuiltinMediaProviders(this.mediaProviders);
     this.builtinChannels = new BuiltinChannelRuntime({
       configManager: this.configManager,
@@ -1069,20 +1097,38 @@ export class DaemonServer {
     }
 
     if (url.pathname === '/api/remote/pair/request' && req.method === 'POST') {
-      return this.handleRemotePairRequest(req);
+      return handleRemotePairRequest({
+        parseJsonBody: (request) => this.parseJsonBody(request),
+        distributedRuntime: this.distributedRuntime,
+      }, req);
     }
     if (url.pathname === '/api/remote/pair/verify' && req.method === 'POST') {
-      return this.handleRemotePairVerify(req);
+      return handleRemotePairVerify({
+        parseJsonBody: (request) => this.parseJsonBody(request),
+        distributedRuntime: this.distributedRuntime,
+      }, req);
     }
     if (url.pathname === '/api/remote/heartbeat' && req.method === 'POST') {
-      return this.handleRemotePeerHeartbeat(req);
+      return handleRemotePeerHeartbeat({
+        parseJsonBody: (request) => this.parseJsonBody(request),
+        requireRemotePeer: (request, scope) => this.requireRemotePeer(request, scope),
+        distributedRuntime: this.distributedRuntime,
+      }, req);
     }
     if (url.pathname === '/api/remote/work/pull' && req.method === 'POST') {
-      return this.handleRemotePeerWorkPull(req);
+      return handleRemotePeerWorkPull({
+        parseJsonBody: (request) => this.parseJsonBody(request),
+        requireRemotePeer: (request, scope) => this.requireRemotePeer(request, scope),
+        distributedRuntime: this.distributedRuntime,
+      }, req);
     }
     const remoteWorkCompleteMatch = url.pathname.match(/^\/api\/remote\/work\/([^/]+)\/complete$/);
     if (remoteWorkCompleteMatch && req.method === 'POST') {
-      return this.handleRemotePeerWorkComplete(remoteWorkCompleteMatch[1], req);
+      return handleRemotePeerWorkComplete({
+        parseJsonBody: (request) => this.parseJsonBody(request),
+        requireRemotePeer: (request, scope) => this.requireRemotePeer(request, scope),
+        distributedRuntime: this.distributedRuntime,
+      }, remoteWorkCompleteMatch[1], req);
     }
 
     if (url.pathname === '/webhook/github' && req.method === 'POST') {
@@ -1621,17 +1667,14 @@ export class DaemonServer {
       getApprovals: () => Response.json(getIntegrationApprovalSnapshot()),
       approvalAction: (approvalId, action, request) => this.handleApprovalAction(approvalId, action, request),
       getRemote: () => Response.json(getIntegrationRemoteSnapshot()),
-      getRemotePairRequests: () => Response.json({ requests: this.distributedRuntime.listPairRequests() }),
-      approveRemotePairRequest: (requestId, request) => this.handleApproveRemotePairRequest(requestId, request),
-      rejectRemotePairRequest: (requestId, request) => this.handleRejectRemotePairRequest(requestId, request),
-      getRemotePeers: () => Response.json({ peers: this.distributedRuntime.listPeers() }),
-      rotateRemotePeerToken: (peerId, request) => this.handleRotateRemotePeerToken(peerId, request),
-      revokeRemotePeerToken: (peerId, request) => this.handleRevokeRemotePeerToken(peerId, request),
-      disconnectRemotePeer: (peerId, request) => this.handleDisconnectRemotePeer(peerId, request),
-      getRemoteWork: () => Response.json({ work: this.distributedRuntime.listWork() }),
-      invokeRemotePeer: (peerId, request) => this.handleInvokeRemotePeer(peerId, request),
-      cancelRemoteWork: (workId, request) => this.handleCancelRemoteWork(workId, request),
-      getRemoteNodeHostContract: () => Response.json({ contract: this.distributedRuntime.getNodeHostContract() }),
+      ...createDaemonRemoteRouteHandlers({
+        authToken: this.authToken,
+        parseJsonBody: (request) => this.parseJsonBody(request),
+        requireAdmin: (request) => this.requireAdmin(request),
+        requireRemotePeer: (request, scope) => this.requireRemotePeer(request, scope),
+        requireAuthenticatedSession: (request) => this.requireAuthenticatedSession(request),
+        distributedRuntime: this.distributedRuntime,
+      }),
       getHealth: () => Response.json(getIntegrationHealthSnapshot()),
       getAccounts: async () => {
         const [snapshot, channelAccounts] = await Promise.all([
@@ -1682,27 +1725,25 @@ export class DaemonServer {
           return Response.json({ error: error instanceof Error ? error.message : String(error) }, { status: 400 });
         }
       },
-      getVoiceStatus: async () => Response.json(await this.voiceService.getStatus(Boolean(this.configManager.get('ui.voiceEnabled')))),
-      getVoiceProviders: async () => Response.json({ providers: await this.voiceService.getStatus(Boolean(this.configManager.get('ui.voiceEnabled'))).then((status) => status.providers) }),
-      getVoiceVoices: async (url) => Response.json({ voices: await this.voiceService.listVoices(url.searchParams.get('providerId') ?? undefined) }),
-      postVoiceTts: async (request) => this.handleVoiceTts(request),
-      postVoiceStt: async (request) => this.handleVoiceStt(request),
-      postVoiceRealtimeSession: async (request) => this.handleVoiceRealtimeSession(request),
-      getWebSearchProviders: async () => Response.json({ providers: await this.webSearchService.getStatus().then((status) => status.providers) }),
-      postWebSearch: async (request) => this.handleWebSearch(request),
-      getArtifacts: () => Response.json({ artifacts: this.artifactStore.list() }),
-      postArtifact: async (request) => this.handleArtifactCreate(request),
-      getArtifact: (artifactId) => {
-        const artifact = this.artifactStore.get(artifactId);
-        return artifact
-          ? Response.json({ artifact })
-          : Response.json({ error: 'Unknown artifact' }, { status: 404 });
-      },
-      getArtifactContent: async (artifactId, request) => this.handleArtifactContent(artifactId, request),
-      getMediaProviders: async () => Response.json({ providers: await this.mediaProviders.status() }),
-      postMediaAnalyze: async (request) => this.handleMediaAnalyze(request),
-      postMediaTransform: async (request) => this.handleMediaTransform(request),
-      postMediaGenerate: async (request) => this.handleMediaGenerate(request),
+      ...createDaemonKnowledgeRouteHandlers({
+        parseJsonBody: (request) => this.parseJsonBody(request),
+        parseOptionalJsonBody: (request) => this.parseOptionalJsonBody(request),
+        parseJsonText: (raw) => this.parseJsonText(raw),
+        requireAdmin: (request) => this.requireAdmin(request),
+        describeAuthenticatedPrincipal: (token) => this.describeAuthenticatedPrincipal(token),
+        extractAuthToken: (request) => this.extractAuthToken(request),
+        knowledgeService: this.knowledgeService,
+        knowledgeGraphqlService: this.knowledgeGraphqlService,
+      }),
+      ...createDaemonMediaRouteHandlers({
+        parseJsonBody: (request) => this.parseJsonBody(request),
+        voiceService: this.voiceService,
+        configManager: this.configManager,
+        webSearchService: this.webSearchService,
+        artifactStore: this.artifactStore,
+        mediaProviders: this.mediaProviders,
+        multimodalService: this.multimodalService,
+      }),
       getLocalAuth: () => {
         const admin = this.requireAdmin(req);
         if (admin) return admin;
@@ -1820,196 +1861,6 @@ export class DaemonServer {
       setScheduleEnabled: (scheduleId, enabled) => this.handleSetScheduleEnabled(scheduleId, enabled),
       runScheduleNow: (scheduleId) => this.handleRunScheduleNow(scheduleId),
     });
-  }
-
-  private async handleVoiceTts(req: Request): Promise<Response> {
-    const body = await this.parseJsonBody(req);
-    if (body instanceof Response) return body;
-    const text = typeof body.text === 'string' ? body.text : '';
-    if (!text.trim()) return Response.json({ error: 'Missing text' }, { status: 400 });
-    try {
-      const result = await this.voiceService.synthesize(
-        typeof body.providerId === 'string' ? body.providerId : undefined,
-        {
-          text,
-          voiceId: typeof body.voiceId === 'string' ? body.voiceId : undefined,
-          modelId: typeof body.modelId === 'string' ? body.modelId : undefined,
-          format: typeof body.format === 'string' ? body.format : undefined,
-          speed: typeof body.speed === 'number' ? body.speed : undefined,
-          metadata: typeof body.metadata === 'object' && body.metadata !== null ? body.metadata as Record<string, unknown> : {},
-        },
-      );
-      return Response.json(result);
-    } catch (error) {
-      return Response.json({ error: error instanceof Error ? error.message : String(error) }, { status: 404 });
-    }
-  }
-
-  private async handleVoiceStt(req: Request): Promise<Response> {
-    const body = await this.parseJsonBody(req);
-    if (body instanceof Response) return body;
-    if (typeof body.audio !== 'object' || body.audio === null) {
-      return Response.json({ error: 'Missing audio artifact' }, { status: 400 });
-    }
-    try {
-      const result = await this.voiceService.transcribe(
-        typeof body.providerId === 'string' ? body.providerId : undefined,
-        {
-          audio: body.audio as import('../voice/index.ts').VoiceAudioArtifact,
-          language: typeof body.language === 'string' ? body.language : undefined,
-          modelId: typeof body.modelId === 'string' ? body.modelId : undefined,
-          prompt: typeof body.prompt === 'string' ? body.prompt : undefined,
-          metadata: typeof body.metadata === 'object' && body.metadata !== null ? body.metadata as Record<string, unknown> : {},
-        },
-      );
-      return Response.json(result);
-    } catch (error) {
-      return Response.json({ error: error instanceof Error ? error.message : String(error) }, { status: 404 });
-    }
-  }
-
-  private async handleVoiceRealtimeSession(req: Request): Promise<Response> {
-    const body = await this.parseJsonBody(req);
-    if (body instanceof Response) return body;
-    try {
-      const result = await this.voiceService.openRealtimeSession(
-        typeof body.providerId === 'string' ? body.providerId : undefined,
-        {
-          modelId: typeof body.modelId === 'string' ? body.modelId : undefined,
-          voiceId: typeof body.voiceId === 'string' ? body.voiceId : undefined,
-          inputFormat: typeof body.inputFormat === 'string' ? body.inputFormat : undefined,
-          outputFormat: typeof body.outputFormat === 'string' ? body.outputFormat : undefined,
-          instructions: typeof body.instructions === 'string' ? body.instructions : undefined,
-          metadata: typeof body.metadata === 'object' && body.metadata !== null ? body.metadata as Record<string, unknown> : {},
-        },
-      );
-      return Response.json(result, { status: 201 });
-    } catch (error) {
-      return Response.json({ error: error instanceof Error ? error.message : String(error) }, { status: 404 });
-    }
-  }
-
-  private async handleMediaAnalyze(req: Request): Promise<Response> {
-    const body = await this.parseJsonBody(req);
-    if (body instanceof Response) return body;
-    const provider = this.mediaProviders.findProvider('understand', typeof body.providerId === 'string' ? body.providerId : undefined);
-    if (!provider?.analyze) return Response.json({ error: 'No media analysis provider is registered' }, { status: 404 });
-    const artifact = typeof body.artifact === 'object' && body.artifact !== null
-      ? body.artifact as import('../media/index.ts').MediaArtifact
-      : typeof body.artifactId === 'string' && body.artifactId.trim().length > 0
-        ? {
-            artifactId: body.artifactId.trim(),
-            mimeType: 'application/octet-stream',
-            metadata: {},
-          } satisfies import('../media/index.ts').MediaArtifact
-        : null;
-    if (!artifact) {
-      return Response.json({ error: 'Missing media artifact' }, { status: 400 });
-    }
-    return Response.json(await provider.analyze({
-      artifact,
-      prompt: typeof body.prompt === 'string' ? body.prompt : undefined,
-      modelId: typeof body.modelId === 'string' ? body.modelId : undefined,
-      metadata: typeof body.metadata === 'object' && body.metadata !== null ? body.metadata as Record<string, unknown> : {},
-    }));
-  }
-
-  private async handleArtifactCreate(req: Request): Promise<Response> {
-    const body = await this.parseJsonBody(req);
-    if (body instanceof Response) return body;
-    try {
-      const artifact = await this.artifactStore.create({
-        ...(typeof body.kind === 'string' ? { kind: body.kind as import('../artifacts/index.ts').ArtifactKind } : {}),
-        ...(typeof body.mimeType === 'string' ? { mimeType: body.mimeType } : {}),
-        ...(typeof body.filename === 'string' ? { filename: body.filename } : {}),
-        ...(typeof body.dataBase64 === 'string' ? { dataBase64: body.dataBase64 } : {}),
-        ...(typeof body.text === 'string' ? { text: body.text } : {}),
-        ...(typeof body.path === 'string' ? { path: body.path } : {}),
-        ...(typeof body.uri === 'string' ? { uri: body.uri } : {}),
-        ...(typeof body.retentionMs === 'number' ? { retentionMs: body.retentionMs } : {}),
-        ...(typeof body.metadata === 'object' && body.metadata !== null ? { metadata: body.metadata as Record<string, unknown> } : {}),
-      });
-      return Response.json({ artifact }, { status: 201 });
-    } catch (error) {
-      return Response.json({ error: error instanceof Error ? error.message : String(error) }, { status: 400 });
-    }
-  }
-
-  private async handleArtifactContent(artifactId: string, req: Request): Promise<Response> {
-    try {
-      const { record, buffer } = await this.artifactStore.readContent(artifactId);
-      const headers = new Headers({
-        'Content-Type': record.mimeType,
-        'Content-Length': String(buffer.length),
-        'Cache-Control': 'private, max-age=60',
-      });
-      const download = new URL(req.url).searchParams.get('download');
-      if (record.filename && download !== '0') {
-        headers.set('Content-Disposition', `attachment; filename="${record.filename.replace(/"/g, '\\"')}"`);
-      }
-      return new Response(new Uint8Array(buffer), { status: 200, headers });
-    } catch (error) {
-      return Response.json({ error: error instanceof Error ? error.message : String(error) }, { status: 404 });
-    }
-  }
-
-  private async handleWebSearch(req: Request): Promise<Response> {
-    const body = await this.parseJsonBody(req);
-    if (body instanceof Response) return body;
-    const query = typeof body.query === 'string' ? body.query.trim() : '';
-    if (!query) return Response.json({ error: 'Missing query' }, { status: 400 });
-    try {
-      return Response.json(await this.webSearchService.search({
-        query,
-        ...(typeof body.providerId === 'string' ? { providerId: body.providerId } : {}),
-        ...(typeof body.maxResults === 'number' ? { maxResults: body.maxResults } : {}),
-        ...(typeof body.verbosity === 'string' ? { verbosity: body.verbosity as import('../web-search/index.ts').WebSearchVerbosity } : {}),
-        ...(typeof body.region === 'string' ? { region: body.region } : {}),
-        ...(typeof body.safeSearch === 'string' ? { safeSearch: body.safeSearch as import('../web-search/index.ts').WebSearchSafeSearch } : {}),
-        ...(typeof body.timeRange === 'string' ? { timeRange: body.timeRange as import('../web-search/index.ts').WebSearchTimeRange } : {}),
-        ...(typeof body.includeInstantAnswer === 'boolean' ? { includeInstantAnswer: body.includeInstantAnswer } : {}),
-        ...(typeof body.includeEvidence === 'boolean' ? { includeEvidence: body.includeEvidence } : {}),
-        ...(typeof body.evidenceTopN === 'number' ? { evidenceTopN: body.evidenceTopN } : {}),
-        ...(typeof body.evidenceExtract === 'string' ? { evidenceExtract: body.evidenceExtract as import('../tools/fetch/schema.ts').FetchExtractMode } : {}),
-      }));
-    } catch (error) {
-      return Response.json({ error: error instanceof Error ? error.message : String(error) }, { status: 400 });
-    }
-  }
-
-  private async handleMediaTransform(req: Request): Promise<Response> {
-    const body = await this.parseJsonBody(req);
-    if (body instanceof Response) return body;
-    const provider = this.mediaProviders.findProvider('transform', typeof body.providerId === 'string' ? body.providerId : undefined);
-    if (!provider?.transform) return Response.json({ error: 'No media transform provider is registered' }, { status: 404 });
-    if (typeof body.artifact !== 'object' || body.artifact === null) {
-      return Response.json({ error: 'Missing media artifact' }, { status: 400 });
-    }
-    const operation = typeof body.operation === 'string' ? body.operation : '';
-    if (!operation) return Response.json({ error: 'Missing media transform operation' }, { status: 400 });
-    return Response.json(await provider.transform({
-      artifact: body.artifact as import('../media/index.ts').MediaArtifact,
-      operation,
-      outputMimeType: typeof body.outputMimeType === 'string' ? body.outputMimeType : undefined,
-      options: typeof body.options === 'object' && body.options !== null ? body.options as Record<string, unknown> : {},
-      metadata: typeof body.metadata === 'object' && body.metadata !== null ? body.metadata as Record<string, unknown> : {},
-    }));
-  }
-
-  private async handleMediaGenerate(req: Request): Promise<Response> {
-    const body = await this.parseJsonBody(req);
-    if (body instanceof Response) return body;
-    const provider = this.mediaProviders.findProvider('generate', typeof body.providerId === 'string' ? body.providerId : undefined);
-    if (!provider?.generate) return Response.json({ error: 'No media generation provider is registered' }, { status: 404 });
-    const prompt = typeof body.prompt === 'string' ? body.prompt : '';
-    if (!prompt.trim()) return Response.json({ error: 'Missing media generation prompt' }, { status: 400 });
-    return Response.json(await provider.generate({
-      prompt,
-      outputMimeType: typeof body.outputMimeType === 'string' ? body.outputMimeType : undefined,
-      modelId: typeof body.modelId === 'string' ? body.modelId : undefined,
-      options: typeof body.options === 'object' && body.options !== null ? body.options as Record<string, unknown> : {},
-      metadata: typeof body.metadata === 'object' && body.metadata !== null ? body.metadata as Record<string, unknown> : {},
-    }));
   }
 
   private async handleLogin(req: Request): Promise<Response> {
@@ -2150,213 +2001,6 @@ export class DaemonServer {
 
   private async handleGenericWebhook(req: Request): Promise<Response> {
     return handleGenericWebhookSurface(req, this.buildGenericWebhookAdapterContext());
-  }
-
-  private async handleRemotePairRequest(req: Request): Promise<Response> {
-    const body = await this.parseJsonBody(req);
-    if (body instanceof Response) return body;
-    const peerKind = body.peerKind === 'device' ? 'device' : 'node';
-    const label = typeof body.label === 'string' ? body.label.trim() : '';
-    if (!label) {
-      return Response.json({ error: 'Missing remote peer label' }, { status: 400 });
-    }
-    const created = await this.distributedRuntime.requestPairing({
-      peerKind,
-      requestedId: typeof body.requestedId === 'string' ? body.requestedId : undefined,
-      label,
-      platform: typeof body.platform === 'string' ? body.platform : undefined,
-      deviceFamily: typeof body.deviceFamily === 'string' ? body.deviceFamily : undefined,
-      version: typeof body.version === 'string' ? body.version : undefined,
-      clientMode: typeof body.clientMode === 'string' ? body.clientMode : undefined,
-      capabilities: Array.isArray(body.capabilities) ? body.capabilities.filter((value): value is string => typeof value === 'string') : [],
-      commands: Array.isArray(body.commands) ? body.commands.filter((value): value is string => typeof value === 'string') : [],
-      metadata: typeof body.metadata === 'object' && body.metadata !== null ? body.metadata as Record<string, unknown> : {},
-      requestedBy: 'remote',
-      remoteAddress: req.headers.get('x-forwarded-for') ?? undefined,
-      ttlMs: typeof body.ttlMs === 'number' ? body.ttlMs : undefined,
-    });
-    return Response.json(created, { status: 201 });
-  }
-
-  private async handleRemotePairVerify(req: Request): Promise<Response> {
-    const body = await this.parseJsonBody(req);
-    if (body instanceof Response) return body;
-    const requestId = typeof body.requestId === 'string' ? body.requestId : '';
-    const challenge = typeof body.challenge === 'string' ? body.challenge : '';
-    if (!requestId || !challenge) {
-      return Response.json({ error: 'Missing requestId or challenge' }, { status: 400 });
-    }
-    const verified = await this.distributedRuntime.verifyPairRequest(requestId, challenge, {
-      remoteAddress: req.headers.get('x-forwarded-for') ?? undefined,
-      metadata: typeof body.metadata === 'object' && body.metadata !== null ? body.metadata as Record<string, unknown> : {},
-    });
-    return verified
-      ? Response.json(verified)
-      : Response.json({ error: 'Pair request not approved, expired, or invalid' }, { status: 404 });
-  }
-
-  private async handleRemotePeerHeartbeat(req: Request): Promise<Response> {
-    const auth = await this.requireRemotePeer(req, 'remote:heartbeat');
-    if (auth instanceof Response) return auth;
-    const body = await this.parseJsonBody(req);
-    if (body instanceof Response) return body;
-    const peer = await this.distributedRuntime.heartbeatPeer(auth, {
-      remoteAddress: req.headers.get('x-forwarded-for') ?? undefined,
-      capabilities: Array.isArray(body.capabilities) ? body.capabilities.filter((value): value is string => typeof value === 'string') : undefined,
-      commands: Array.isArray(body.commands) ? body.commands.filter((value): value is string => typeof value === 'string') : undefined,
-      version: typeof body.version === 'string' ? body.version : undefined,
-      clientMode: typeof body.clientMode === 'string' ? body.clientMode : undefined,
-      metadata: typeof body.metadata === 'object' && body.metadata !== null ? body.metadata as Record<string, unknown> : {},
-    });
-    return Response.json({ peer });
-  }
-
-  private async handleRemotePeerWorkPull(req: Request): Promise<Response> {
-    const auth = await this.requireRemotePeer(req, 'remote:pull');
-    if (auth instanceof Response) return auth;
-    const body = await this.parseJsonBody(req);
-    if (body instanceof Response) return body;
-    const work = await this.distributedRuntime.claimWork(auth, {
-      maxItems: typeof body.maxItems === 'number' ? body.maxItems : undefined,
-      leaseMs: typeof body.leaseMs === 'number' ? body.leaseMs : undefined,
-    });
-    return Response.json({ work });
-  }
-
-  private async handleRemotePeerWorkComplete(workId: string, req: Request): Promise<Response> {
-    const auth = await this.requireRemotePeer(req, 'remote:complete');
-    if (auth instanceof Response) return auth;
-    const body = await this.parseJsonBody(req);
-    if (body instanceof Response) return body;
-    const work = await this.distributedRuntime.completeWork(auth, workId, {
-      status: body.status === 'failed' || body.status === 'cancelled' ? body.status : body.status === 'completed' ? 'completed' : undefined,
-      result: body.result,
-      error: typeof body.error === 'string' ? body.error : undefined,
-      metadata: typeof body.metadata === 'object' && body.metadata !== null ? body.metadata as Record<string, unknown> : {},
-    });
-    return work
-      ? Response.json({ work })
-      : Response.json({ error: 'Unknown or unclaimed remote work item' }, { status: 404 });
-  }
-
-  private async handleApproveRemotePairRequest(requestId: string, req: Request): Promise<Response> {
-    const admin = this.requireAdmin(req);
-    if (admin) return admin;
-    const body = await this.parseJsonBody(req);
-    if (body instanceof Response) return body;
-    const approved = await this.distributedRuntime.approvePairRequest(requestId, {
-      actor: this.authToken ? 'shared-token' : this.requireAuthenticatedSession(req)?.username ?? 'operator',
-      note: typeof body.note === 'string' ? body.note : undefined,
-      label: typeof body.label === 'string' ? body.label : undefined,
-      metadata: typeof body.metadata === 'object' && body.metadata !== null ? body.metadata as Record<string, unknown> : {},
-    });
-    return approved
-      ? Response.json(approved)
-      : Response.json({ error: 'Unknown remote pair request' }, { status: 404 });
-  }
-
-  private async handleRejectRemotePairRequest(requestId: string, req: Request): Promise<Response> {
-    const admin = this.requireAdmin(req);
-    if (admin) return admin;
-    const body = await this.parseJsonBody(req);
-    if (body instanceof Response) return body;
-    const rejected = await this.distributedRuntime.rejectPairRequest(requestId, {
-      actor: this.authToken ? 'shared-token' : this.requireAuthenticatedSession(req)?.username ?? 'operator',
-      note: typeof body.note === 'string' ? body.note : undefined,
-    });
-    return rejected
-      ? Response.json(rejected)
-      : Response.json({ error: 'Unknown remote pair request' }, { status: 404 });
-  }
-
-  private async handleRotateRemotePeerToken(peerId: string, req: Request): Promise<Response> {
-    const admin = this.requireAdmin(req);
-    if (admin) return admin;
-    const body = await this.parseJsonBody(req);
-    if (body instanceof Response) return body;
-    const rotated = await this.distributedRuntime.rotatePeerToken(peerId, {
-      actor: this.authToken ? 'shared-token' : this.requireAuthenticatedSession(req)?.username ?? 'operator',
-      label: typeof body.label === 'string' ? body.label : undefined,
-      scopes: Array.isArray(body.scopes) ? body.scopes.filter((value): value is string => typeof value === 'string') : undefined,
-    });
-    return rotated
-      ? Response.json(rotated)
-      : Response.json({ error: 'Unknown distributed peer' }, { status: 404 });
-  }
-
-  private async handleRevokeRemotePeerToken(peerId: string, req: Request): Promise<Response> {
-    const admin = this.requireAdmin(req);
-    if (admin) return admin;
-    const body = await this.parseJsonBody(req);
-    if (body instanceof Response) return body;
-    const peer = await this.distributedRuntime.revokePeerToken(peerId, {
-      actor: this.authToken ? 'shared-token' : this.requireAuthenticatedSession(req)?.username ?? 'operator',
-      tokenId: typeof body.tokenId === 'string' ? body.tokenId : undefined,
-      note: typeof body.note === 'string' ? body.note : undefined,
-    });
-    return peer
-      ? Response.json({ peer })
-      : Response.json({ error: 'Unknown distributed peer' }, { status: 404 });
-  }
-
-  private async handleDisconnectRemotePeer(peerId: string, req: Request): Promise<Response> {
-    const admin = this.requireAdmin(req);
-    if (admin) return admin;
-    const body = await this.parseJsonBody(req);
-    if (body instanceof Response) return body;
-    const peer = await this.distributedRuntime.disconnectPeer(peerId, {
-      actor: this.authToken ? 'shared-token' : this.requireAuthenticatedSession(req)?.username ?? 'operator',
-      note: typeof body.note === 'string' ? body.note : undefined,
-      requeueClaimedWork: typeof body.requeueClaimedWork === 'boolean' ? body.requeueClaimedWork : undefined,
-    });
-    return peer
-      ? Response.json({ peer })
-      : Response.json({ error: 'Unknown distributed peer' }, { status: 404 });
-  }
-
-  private async handleInvokeRemotePeer(peerId: string, req: Request): Promise<Response> {
-    const admin = this.requireAdmin(req);
-    if (admin) return admin;
-    const body = await this.parseJsonBody(req);
-    if (body instanceof Response) return body;
-    const command = typeof body.command === 'string' ? body.command.trim() : '';
-    if (!command) {
-      return Response.json({ error: 'Missing remote invoke command' }, { status: 400 });
-    }
-    try {
-      const invoked = await this.distributedRuntime.invokePeer({
-        peerId,
-        command,
-        payload: body.payload,
-        priority: body.priority === 'high' || body.priority === 'default' ? body.priority : 'normal',
-        actor: this.authToken ? 'shared-token' : this.requireAuthenticatedSession(req)?.username ?? 'operator',
-        waitMs: typeof body.waitMs === 'number' ? body.waitMs : undefined,
-        timeoutMs: typeof body.timeoutMs === 'number' ? body.timeoutMs : undefined,
-        sessionId: typeof body.sessionId === 'string' ? body.sessionId : undefined,
-        routeId: typeof body.routeId === 'string' ? body.routeId : undefined,
-        automationRunId: typeof body.automationRunId === 'string' ? body.automationRunId : undefined,
-        automationJobId: typeof body.automationJobId === 'string' ? body.automationJobId : undefined,
-        approvalId: typeof body.approvalId === 'string' ? body.approvalId : undefined,
-        metadata: typeof body.metadata === 'object' && body.metadata !== null ? body.metadata as Record<string, unknown> : {},
-      });
-      return Response.json(invoked, { status: 202 });
-    } catch (error) {
-      return Response.json({ error: (error as Error).message }, { status: 404 });
-    }
-  }
-
-  private async handleCancelRemoteWork(workId: string, req: Request): Promise<Response> {
-    const admin = this.requireAdmin(req);
-    if (admin) return admin;
-    const body = await this.parseJsonBody(req);
-    if (body instanceof Response) return body;
-    const work = await this.distributedRuntime.cancelWork(workId, {
-      actor: this.authToken ? 'shared-token' : this.requireAuthenticatedSession(req)?.username ?? 'operator',
-      reason: typeof body.reason === 'string' ? body.reason : undefined,
-    });
-    return work
-      ? Response.json({ work })
-      : Response.json({ error: 'Unknown remote work item' }, { status: 404 });
   }
 
   private async handleRegisterWatcher(req: Request): Promise<Response> {
@@ -2964,6 +2608,10 @@ export class DaemonServer {
       | 'signal'
       | 'whatsapp'
       | 'imessage'
+      | 'msteams'
+      | 'bluebubbles'
+      | 'mattermost'
+      | 'matrix'
       | 'daemon' = 'web',
   ): Response {
     this.controlPlaneGateway.recordApiRequest({
@@ -3115,6 +2763,66 @@ export class DaemonServer {
       this.pendingSurfaceReplies.set(input.agentId, {
         agentId: input.agentId,
         surfaceKind: 'imessage',
+        task: input.task,
+        createdAt: Date.now(),
+        sessionId: input.sessionId,
+        routeId: binding.id,
+        channelId: binding.channelId,
+        targetAddress: binding.channelId ?? binding.externalId,
+        threadId: binding.threadId,
+      });
+      this.channelReplyPipeline.trackPending(this.pendingSurfaceReplies.get(input.agentId)!);
+      return;
+    }
+    if (binding.surfaceKind === 'msteams' && this.surfaceDeliveryEnabled('msteams')) {
+      this.pendingSurfaceReplies.set(input.agentId, {
+        agentId: input.agentId,
+        surfaceKind: 'msteams',
+        task: input.task,
+        createdAt: Date.now(),
+        sessionId: input.sessionId,
+        routeId: binding.id,
+        channelId: binding.channelId,
+        targetAddress: binding.channelId ?? binding.externalId,
+        threadId: binding.threadId,
+      });
+      this.channelReplyPipeline.trackPending(this.pendingSurfaceReplies.get(input.agentId)!);
+      return;
+    }
+    if (binding.surfaceKind === 'bluebubbles' && this.surfaceDeliveryEnabled('bluebubbles')) {
+      this.pendingSurfaceReplies.set(input.agentId, {
+        agentId: input.agentId,
+        surfaceKind: 'bluebubbles',
+        task: input.task,
+        createdAt: Date.now(),
+        sessionId: input.sessionId,
+        routeId: binding.id,
+        channelId: binding.channelId,
+        targetAddress: binding.channelId ?? binding.externalId,
+        threadId: binding.threadId,
+      });
+      this.channelReplyPipeline.trackPending(this.pendingSurfaceReplies.get(input.agentId)!);
+      return;
+    }
+    if (binding.surfaceKind === 'mattermost' && this.surfaceDeliveryEnabled('mattermost')) {
+      this.pendingSurfaceReplies.set(input.agentId, {
+        agentId: input.agentId,
+        surfaceKind: 'mattermost',
+        task: input.task,
+        createdAt: Date.now(),
+        sessionId: input.sessionId,
+        routeId: binding.id,
+        channelId: binding.channelId,
+        targetAddress: binding.channelId ?? binding.externalId,
+        threadId: binding.threadId,
+      });
+      this.channelReplyPipeline.trackPending(this.pendingSurfaceReplies.get(input.agentId)!);
+      return;
+    }
+    if (binding.surfaceKind === 'matrix' && this.surfaceDeliveryEnabled('matrix')) {
+      this.pendingSurfaceReplies.set(input.agentId, {
+        agentId: input.agentId,
+        surfaceKind: 'matrix',
         task: input.task,
         createdAt: Date.now(),
         sessionId: input.sessionId,
@@ -3299,7 +3007,7 @@ export class DaemonServer {
   }
 
   private surfaceDeliveryEnabled(
-    surface: 'slack' | 'discord' | 'ntfy' | 'webhook' | 'telegram' | 'google-chat' | 'signal' | 'whatsapp' | 'imessage',
+    surface: 'slack' | 'discord' | 'ntfy' | 'webhook' | 'telegram' | 'google-chat' | 'signal' | 'whatsapp' | 'imessage' | 'msteams' | 'bluebubbles' | 'mattermost' | 'matrix',
   ): boolean {
     if (surface === 'slack') {
       return Boolean(this.configManager.get('surfaces.slack.enabled') || process.env.SLACK_BOT_TOKEN || process.env.SLACK_APP_TOKEN || process.env.SLACK_WEBHOOK_URL);
@@ -3326,7 +3034,19 @@ export class DaemonServer {
     if (surface === 'whatsapp') {
       return Boolean(surfaces.whatsapp.enabled || surfaces.whatsapp.accessToken || surfaces.whatsapp.phoneNumberId || process.env.WHATSAPP_ACCESS_TOKEN);
     }
-    return Boolean(surfaces.imessage.enabled || surfaces.imessage.bridgeUrl || surfaces.imessage.account || process.env.IMESSAGE_BRIDGE_TOKEN);
+    if (surface === 'imessage') {
+      return Boolean(surfaces.imessage.enabled || surfaces.imessage.bridgeUrl || surfaces.imessage.account || process.env.IMESSAGE_BRIDGE_TOKEN);
+    }
+    if (surface === 'msteams') {
+      return Boolean(surfaces.msteams.enabled || surfaces.msteams.appId || surfaces.msteams.defaultConversationId || process.env.MSTEAMS_APP_ID);
+    }
+    if (surface === 'bluebubbles') {
+      return Boolean(surfaces.bluebubbles.enabled || surfaces.bluebubbles.serverUrl || surfaces.bluebubbles.defaultChatGuid || process.env.BLUEBUBBLES_SERVER_URL);
+    }
+    if (surface === 'mattermost') {
+      return Boolean(surfaces.mattermost.enabled || surfaces.mattermost.baseUrl || surfaces.mattermost.defaultChannelId || process.env.MATTERMOST_BASE_URL);
+    }
+    return Boolean(surfaces.matrix.enabled || surfaces.matrix.homeserverUrl || surfaces.matrix.defaultRoomId || process.env.MATRIX_HOMESERVER);
   }
 
   private async pollPendingSurfaceReplies(): Promise<void> {

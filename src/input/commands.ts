@@ -5,6 +5,7 @@ import { providerCommand } from './commands/provider.ts';
 import { evalCommand } from './commands/eval.ts';
 import { sessionCommand } from './commands/session.ts';
 import { recallCommand } from './commands/memory.ts';
+import { knowledgeCommand } from './commands/knowledge.ts';
 import { registerShellCoreCommands } from './commands/shell-core.ts';
 import { registerConfigCommand } from './commands/config.ts';
 import { registerSessionWorkflowCommands } from './commands/session-workflow.ts';
@@ -120,5 +121,8 @@ export function registerBuiltinCommands(registry: CommandRegistry): void {
 
   // ── /recall ──────────────────────────────────────────────────────────────
   registry.register(recallCommand);
+
+  // ── /knowledge ───────────────────────────────────────────────────────────
+  registry.register(knowledgeCommand);
 
 }

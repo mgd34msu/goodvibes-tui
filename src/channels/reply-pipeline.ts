@@ -138,6 +138,42 @@ const DEFAULT_POLICY: Record<ChannelSurface, ChannelRenderPolicy> = {
     maxEventsPerUpdate: 10,
     metadata: {},
   },
+  msteams: {
+    surface: 'msteams',
+    reasoningVisibility: 'summary',
+    format: 'markdown',
+    supportsThreads: true,
+    maxChunkChars: 3_500,
+    maxEventsPerUpdate: 10,
+    metadata: {},
+  },
+  bluebubbles: {
+    surface: 'bluebubbles',
+    reasoningVisibility: 'summary',
+    format: 'plain',
+    supportsThreads: false,
+    maxChunkChars: 3_500,
+    maxEventsPerUpdate: 10,
+    metadata: {},
+  },
+  mattermost: {
+    surface: 'mattermost',
+    reasoningVisibility: 'summary',
+    format: 'markdown',
+    supportsThreads: true,
+    maxChunkChars: 3_500,
+    maxEventsPerUpdate: 10,
+    metadata: {},
+  },
+  matrix: {
+    surface: 'matrix',
+    reasoningVisibility: 'summary',
+    format: 'markdown',
+    supportsThreads: true,
+    maxChunkChars: 3_500,
+    maxEventsPerUpdate: 10,
+    metadata: {},
+  },
 };
 
 function trimText(value: string, limit: number): string {

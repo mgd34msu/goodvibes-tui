@@ -40,7 +40,9 @@ export interface ArtifactCreateInput {
   readonly text?: string;
   readonly path?: string;
   readonly uri?: string;
+  readonly sourceUri?: string;
   readonly retentionMs?: number;
+  readonly allowPrivateHosts?: boolean;
   readonly metadata?: Record<string, unknown>;
 }
 
@@ -100,16 +102,6 @@ export function inferArtifactKind(mimeType: string, filename?: string): Artifact
   if (lower.startsWith('audio/')) return 'audio';
   if (lower.startsWith('video/')) return 'video';
   if (
-    lower === 'application/pdf'
-    || lower.startsWith('text/')
-    || lower.includes('wordprocessingml')
-    || lower === 'application/msword'
-    || lower.includes('presentationml')
-    || lower === 'application/vnd.ms-powerpoint'
-  ) {
-    return 'document';
-  }
-  if (
     lower === 'application/json'
     || lower === 'text/csv'
     || lower === 'text/tab-separated-values'
@@ -119,6 +111,16 @@ export function inferArtifactKind(mimeType: string, filename?: string): Artifact
     || lower === 'application/vnd.ms-excel'
   ) {
     return 'data';
+  }
+  if (
+    lower === 'application/pdf'
+    || lower.startsWith('text/')
+    || lower.includes('wordprocessingml')
+    || lower === 'application/msword'
+    || lower.includes('presentationml')
+    || lower === 'application/vnd.ms-powerpoint'
+  ) {
+    return 'document';
   }
   if (
     lower === 'application/zip'

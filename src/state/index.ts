@@ -25,6 +25,8 @@ export type {
   MemorySemanticSearchResult,
   MemoryStoreOptions,
   MemoryDoctorReport,
+  MemoryScope,
+  MemoryReviewState,
   ProvenanceLink,
   ProvenanceLinkKind,
 } from './memory-store.ts';

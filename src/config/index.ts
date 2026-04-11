@@ -131,6 +131,26 @@ function loadEnvApiKeys(): Record<string, string> {
     huggingface: 'HF_API_KEY',
     nvidia: 'NVIDIA_API_KEY',
     llm7: 'LLM7_API_KEY',
+    deepseek: 'DEEPSEEK_API_KEY',
+    fireworks: 'FIREWORKS_API_KEY',
+    'github-copilot': 'COPILOT_GITHUB_TOKEN',
+    'microsoft-foundry': 'AZURE_OPENAI_API_KEY',
+    minimax: 'MINIMAX_API_KEY',
+    moonshot: 'MOONSHOT_API_KEY',
+    qianfan: 'QIANFAN_API_KEY',
+    qwen: 'QWEN_API_KEY',
+    sglang: 'SGLANG_API_KEY',
+    stepfun: 'STEPFUN_API_KEY',
+    together: 'TOGETHER_API_KEY',
+    venice: 'VENICE_API_KEY',
+    volcengine: 'VOLCANO_ENGINE_API_KEY',
+    xai: 'XAI_API_KEY',
+    xiaomi: 'XIAOMI_API_KEY',
+    zai: 'ZAI_API_KEY',
+    'cloudflare-ai-gateway': 'CLOUDFLARE_AI_GATEWAY_API_KEY',
+    'vercel-ai-gateway': 'AI_GATEWAY_API_KEY',
+    litellm: 'LITELLM_API_KEY',
+    'copilot-proxy': 'COPILOT_PROXY_API_KEY',
   };
   for (const [prov, envVar] of Object.entries(mapping)) {
     let value = process.env[envVar];
@@ -140,6 +160,9 @@ function loadEnvApiKeys(): Record<string, string> {
     if (!value && prov === 'anthropic') value = process.env['CLAUDE_API_KEY'];
     if (!value && prov === 'ollama-cloud') value = process.env['OLLAMA_API_KEY'];
     if (!value && prov === 'huggingface') value = process.env['HUGGINGFACE_API_KEY'] ?? process.env['HF_TOKEN'];
+    if (!value && prov === 'github-copilot') value = process.env['GH_TOKEN'] ?? process.env['GITHUB_TOKEN'];
+    if (!value && prov === 'qwen') value = process.env['DASHSCOPE_API_KEY'] ?? process.env['MODELSTUDIO_API_KEY'];
+    if (!value && prov === 'zai') value = process.env['Z_AI_API_KEY'];
     if (value) keys[prov] = value;
   }
   return keys;
@@ -171,6 +194,26 @@ export async function resolveApiKeys(): Promise<Record<string, string>> {
     { prov: 'huggingface',   envVars: ['HF_API_KEY', 'HUGGINGFACE_API_KEY', 'HF_TOKEN'] },
     { prov: 'nvidia',        envVars: ['NVIDIA_API_KEY'] },
     { prov: 'llm7',          envVars: ['LLM7_API_KEY'] },
+    { prov: 'deepseek',      envVars: ['DEEPSEEK_API_KEY'] },
+    { prov: 'fireworks',     envVars: ['FIREWORKS_API_KEY'] },
+    { prov: 'github-copilot', envVars: ['COPILOT_GITHUB_TOKEN', 'GH_TOKEN', 'GITHUB_TOKEN'] },
+    { prov: 'microsoft-foundry', envVars: ['AZURE_OPENAI_API_KEY'] },
+    { prov: 'minimax',       envVars: ['MINIMAX_API_KEY'] },
+    { prov: 'moonshot',      envVars: ['MOONSHOT_API_KEY'] },
+    { prov: 'qianfan',       envVars: ['QIANFAN_API_KEY'] },
+    { prov: 'qwen',          envVars: ['QWEN_API_KEY', 'DASHSCOPE_API_KEY', 'MODELSTUDIO_API_KEY'] },
+    { prov: 'sglang',        envVars: ['SGLANG_API_KEY'] },
+    { prov: 'stepfun',       envVars: ['STEPFUN_API_KEY'] },
+    { prov: 'together',      envVars: ['TOGETHER_API_KEY'] },
+    { prov: 'venice',        envVars: ['VENICE_API_KEY'] },
+    { prov: 'volcengine',    envVars: ['VOLCANO_ENGINE_API_KEY'] },
+    { prov: 'xai',           envVars: ['XAI_API_KEY'] },
+    { prov: 'xiaomi',        envVars: ['XIAOMI_API_KEY'] },
+    { prov: 'zai',           envVars: ['ZAI_API_KEY', 'Z_AI_API_KEY'] },
+    { prov: 'cloudflare-ai-gateway', envVars: ['CLOUDFLARE_AI_GATEWAY_API_KEY'] },
+    { prov: 'vercel-ai-gateway', envVars: ['AI_GATEWAY_API_KEY'] },
+    { prov: 'litellm',       envVars: ['LITELLM_API_KEY'] },
+    { prov: 'copilot-proxy', envVars: ['COPILOT_PROXY_API_KEY'] },
   ];
 
   const result: Record<string, string> = {};

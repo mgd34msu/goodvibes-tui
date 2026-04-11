@@ -29,6 +29,7 @@ import type { ControlPlaneEvent } from './control-plane.ts';
 import type { DeliveryEvent } from './deliveries.ts';
 import type { WatcherEvent } from './watchers.ts';
 import type { SurfaceEvent } from './surfaces.ts';
+import type { KnowledgeEvent } from './knowledge.ts';
 
 /** Union of all runtime domain events. */
 export type AnyRuntimeEvent =
@@ -56,7 +57,8 @@ export type AnyRuntimeEvent =
   | ControlPlaneEvent
   | DeliveryEvent
   | WatcherEvent
-  | SurfaceEvent;
+  | SurfaceEvent
+  | KnowledgeEvent;
 
 /**
  * Utility type that maps an event type discriminant to its full event shape.
@@ -100,7 +102,8 @@ export type RuntimeEventDomain =
   | 'control-plane'
   | 'deliveries'
   | 'watchers'
-  | 'surfaces';
+  | 'surfaces'
+  | 'knowledge';
 
 /** Map from domain label to its event union type. */
 export type DomainEventMap = {
@@ -129,4 +132,5 @@ export type DomainEventMap = {
   deliveries: DeliveryEvent;
   watchers: WatcherEvent;
   surfaces: SurfaceEvent;
+  knowledge: KnowledgeEvent;
 };

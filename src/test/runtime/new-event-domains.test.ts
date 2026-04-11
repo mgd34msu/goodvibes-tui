@@ -79,6 +79,10 @@ describe('new runtime event domains', () => {
       'signal',
       'whatsapp',
       'imessage',
+      'msteams',
+      'bluebubbles',
+      'mattermost',
+      'matrix',
       'service',
     ]);
     expect([...SURFACE_KINDS]).toEqual([...ROUTE_SURFACE_KINDS]);
@@ -89,6 +93,10 @@ describe('new runtime event domains', () => {
     expect([...CONTROL_PLANE_CLIENT_KINDS]).toContain('signal');
     expect([...CONTROL_PLANE_CLIENT_KINDS]).toContain('whatsapp');
     expect([...CONTROL_PLANE_CLIENT_KINDS]).toContain('imessage');
+    expect([...CONTROL_PLANE_CLIENT_KINDS]).toContain('msteams');
+    expect([...CONTROL_PLANE_CLIENT_KINDS]).toContain('bluebubbles');
+    expect([...CONTROL_PLANE_CLIENT_KINDS]).toContain('mattermost');
+    expect([...CONTROL_PLANE_CLIENT_KINDS]).toContain('matrix');
     expect([...CONTROL_PLANE_TRANSPORT_KINDS]).toContain('ws');
     expect([...CONTROL_PLANE_TRANSPORT_KINDS]).toContain('websocket');
 

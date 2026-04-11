@@ -4,6 +4,40 @@ All notable changes to GoodVibes TUI.
 
 ---
 
+## [0.15.7] — 2026-04-11
+
+### Knowledge, Memory, And Multimodal Runtime Depth
+
+- Added a structured knowledge system with SQL-backed sources, nodes, edges, issues, extractions, job runs, connector manifests, bookmark import, URL-list ingest, and artifact-linked compile/lint/reindex flows
+- Added knowledge GraphQL and projection surfaces so external clients can query canonical knowledge state, render markdown/wiki projections, materialize derived artifacts, and integrate without a frontend living inside the TUI repo
+- Added deeper knowledge runtime behavior including richer projections, GraphQL query/mutation depth, live knowledge events, background jobs, TS-only document extractors, and connector setup/doctor metadata
+- Added memory and knowledge lifecycle automation with usage ledgers, consolidation candidates, deterministic consolidation reports, freshness policies, graph-aware packet scoring, scheduled light/deep consolidation, and promotion of repeatedly useful context into durable memory
+- Added a unified multimodal runtime for image, audio, video, and document analysis with token-efficient packets and write-back into the structured knowledge store
+
+### Providers, Channels, Voice, Search, And Attachment Expansion
+
+- Added provider/runtime wiring for Bedrock, Bedrock Mantle, Anthropic Vertex, GitHub Copilot, Microsoft Foundry, Perplexity search, expanded OpenAI-compatible capability discovery, and the supporting provider catalog and registry posture surfaces
+- Added channel surfaces for Microsoft Teams, BlueBubbles, Mattermost, and Matrix with builtin runtime registration, setup contracts, doctor hooks, route binding, and delivery wiring
+- Expanded voice support with OpenAI TTS/STT/realtime, Google STT, Deepgram STT, ElevenLabs TTS/STT/realtime, and the shared provider registration/types needed to negotiate those capabilities cleanly through daemon APIs
+- Added generation/media provider registry breadth and search/provider registry breadth needed by the expanded backend integrations
+- Hardened artifact storage and type inference, including safer SQLite path handling and cleaner structured attachment handling across daemon and delivery flows
+
+### Domain And File Architecture Cleanup
+
+- Split the daemon server into route-family modules for remote, knowledge, and media handling while keeping the daemon transport surface stable
+- Extracted control-plane web UI rendering out of the gateway transport file and split the method catalog into domain-specific modules instead of one monolithic catalog
+- Split configuration schema construction into domain-specific schema modules and shared helpers
+- Split builtin voice providers into provider-specific modules and reduced the runtime store to thin store wiring plus externalized reducer helpers without weakening the domain-boundary contract
+- Split automation manager internals, knowledge-service internals, and builtin channel runtime support into smaller domain modules while preserving the existing public entrypoints
+- Added and updated regression coverage for the new domain boundaries, daemon routing, knowledge commands, multimodal runtime, channel delivery, voice providers, and expanded control-plane/provider behavior
+
+### Verification
+
+- Full typecheck passes: `bunx tsc --noEmit`
+- Full test runner passes: `bun test` (`6971` pass, `0` fail)
+- Build passes: `bun run build`
+- Diff hygiene passes: `git diff --check`
+
 ## [0.15.6] — 2026-04-10
 
 ### Gateway, Channels, Providers, Search, And Media Rollout

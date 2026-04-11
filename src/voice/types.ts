@@ -78,7 +78,7 @@ export interface VoiceRealtimeSessionRequest {
 export interface VoiceRealtimeSession {
   readonly providerId: string;
   readonly sessionId: string;
-  readonly transport: 'websocket' | 'sse' | 'http' | 'custom';
+  readonly transport: 'websocket' | 'webrtc' | 'sse' | 'http' | 'custom';
   readonly url?: string;
   readonly expiresAt?: number;
   readonly headers?: Record<string, string>;

@@ -61,6 +61,10 @@ export class SurfaceRegistry {
       if (surface === 'signal') return Boolean(surfaces.signal.enabled || surfaces.signal.bridgeUrl || surfaces.signal.account);
       if (surface === 'whatsapp') return Boolean(surfaces.whatsapp.enabled || surfaces.whatsapp.accessToken || surfaces.whatsapp.phoneNumberId);
       if (surface === 'imessage') return Boolean(surfaces.imessage.enabled || surfaces.imessage.bridgeUrl || surfaces.imessage.account);
+      if (surface === 'msteams') return Boolean(surfaces.msteams.enabled || surfaces.msteams.appId || surfaces.msteams.defaultConversationId);
+      if (surface === 'bluebubbles') return Boolean(surfaces.bluebubbles.enabled || surfaces.bluebubbles.serverUrl || surfaces.bluebubbles.defaultChatGuid);
+      if (surface === 'mattermost') return Boolean(surfaces.mattermost.enabled || surfaces.mattermost.baseUrl || surfaces.mattermost.defaultChannelId);
+      if (surface === 'matrix') return Boolean(surfaces.matrix.enabled || surfaces.matrix.homeserverUrl || surfaces.matrix.defaultRoomId);
       return false;
     };
     const accountIdForSurface = (surface: string): string | undefined => {
@@ -72,6 +76,10 @@ export class SurfaceRegistry {
       if (surface === 'signal') return surfaces.signal.account || surfaces.signal.defaultRecipient || undefined;
       if (surface === 'whatsapp') return surfaces.whatsapp.phoneNumberId || surfaces.whatsapp.defaultRecipient || undefined;
       if (surface === 'imessage') return surfaces.imessage.account || surfaces.imessage.defaultChatId || undefined;
+      if (surface === 'msteams') return surfaces.msteams.botId || surfaces.msteams.defaultConversationId || undefined;
+      if (surface === 'bluebubbles') return surfaces.bluebubbles.account || surfaces.bluebubbles.defaultChatGuid || undefined;
+      if (surface === 'mattermost') return surfaces.mattermost.teamId || surfaces.mattermost.defaultChannelId || undefined;
+      if (surface === 'matrix') return surfaces.matrix.userId || surfaces.matrix.defaultRoomId || undefined;
       return undefined;
     };
     const records: SurfaceRecord[] = pluginDescriptors.length > 0 ? pluginDescriptors.map((descriptor) => ({

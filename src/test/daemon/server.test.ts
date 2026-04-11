@@ -1,16 +1,18 @@
 import { describe, test, expect, beforeEach, afterEach } from 'bun:test';
 import { createHmac } from 'node:crypto';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { ArtifactStore } from '../../artifacts/index.ts';
 import { DaemonServer } from '../../daemon/server.ts';
 import { HttpListener } from '../../daemon/http-listener.ts';
+import { AgentManager } from '../../tools/agent/manager.ts';
 import { UserAuthManager } from '../../security/user-auth.ts';
 import { RuntimeEventBus } from '../../runtime/events/index.ts';
 import type { TransportEvent } from '../../runtime/events/transport.ts';
 import { setIntegrationHelpersContext, clearIntegrationHelpersContext } from '../../runtime/integration/helpers.ts';
 import { createRuntimeStore } from '../../runtime/store/index.ts';
+import { MultimodalService } from '../../multimodal/index.ts';
 import { getPanelManager } from '../../panels/panel-manager.ts';
 import { AutomationManager } from '../../automation/index.ts';
 import { ApprovalBroker, SharedSessionBroker } from '../../control-plane/index.ts';
@@ -18,7 +20,8 @@ import { normalizeEverySchedule } from '../../automation/schedules.ts';
 import { ConfigManager } from '../../config/manager.ts';
 import { ChannelPolicyManager } from '../../channels/index.ts';
 import { resetDistributedRuntimeManagerForTesting } from '../../runtime/remote/index.ts';
-import { MemoryEmbeddingProviderRegistry } from '../../state/index.ts';
+import { MemoryEmbeddingProviderRegistry, _resetMemoryRegistryForTesting } from '../../state/index.ts';
+import { KnowledgeService, KnowledgeStore } from '../../knowledge/index.ts';
 
 const TEST_TOKEN = 'test-secret-token-abc123';
 
@@ -71,12 +74,17 @@ describe('DaemonServer', () => {
   let tempConfigDir: string;
 
   beforeEach(() => {
+    AgentManager.resetInstance();
     AutomationManager.resetInstance();
     ApprovalBroker.resetInstance();
     SharedSessionBroker.resetInstance();
     ChannelPolicyManager.resetInstance();
     resetDistributedRuntimeManagerForTesting();
     ArtifactStore.resetActiveForTesting();
+    KnowledgeStore.resetActiveForTesting();
+    KnowledgeService.resetActiveForTesting();
+    MultimodalService.resetActiveForTesting();
+    _resetMemoryRegistryForTesting();
     MemoryEmbeddingProviderRegistry.resetActiveForTesting();
     tempConfigDir = mkdtempSync(join(tmpdir(), 'gv-daemon-config-'));
     ConfigManager.setTestMode(tempConfigDir);
@@ -116,12 +124,17 @@ describe('DaemonServer', () => {
 
   afterEach(async () => {
     await daemon.stop();
+    AgentManager.resetInstance();
     AutomationManager.resetInstance();
     ApprovalBroker.resetInstance();
     SharedSessionBroker.resetInstance();
     ChannelPolicyManager.resetInstance();
     resetDistributedRuntimeManagerForTesting();
     ArtifactStore.resetActiveForTesting();
+    KnowledgeStore.resetActiveForTesting();
+    KnowledgeService.resetActiveForTesting();
+    MultimodalService.resetActiveForTesting();
+    _resetMemoryRegistryForTesting();
     MemoryEmbeddingProviderRegistry.resetActiveForTesting();
     ConfigManager.setTestMode(undefined);
     rmSync(join(process.cwd(), '.goodvibes', 'tui', 'remote'), { recursive: true, force: true });
@@ -228,6 +241,252 @@ describe('DaemonServer', () => {
     expect(typeof body.token).toBe('string');
   });
 
+  test('knowledge routes ingest and query structured knowledge', async () => {
+    const sourceServer = Bun.serve({
+      port: 0,
+      fetch() {
+        return new Response('<html><head><title>Knowledge Route Page</title></head><body><h1>Knowledge</h1><p>Daemon route coverage.</p></body></html>', {
+          headers: { 'content-type': 'text/html; charset=utf-8' },
+        });
+      },
+    });
+    const sourceUrl = `http://127.0.0.1:${sourceServer.port}/page`;
+    daemon.enable({ daemon: true }, TEST_TOKEN);
+    await daemon.start();
+
+    const ingest = await fetch('http://127.0.0.1:39421/api/knowledge/ingest/url', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${TEST_TOKEN}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ url: sourceUrl, sessionId: 'session-1' }),
+    });
+    expect(ingest.status).toBe(201);
+    const ingested = await ingest.json() as { source: { id: string } };
+    expect(ingested.source.id).toBeTruthy();
+
+    const search = await fetch('http://127.0.0.1:39421/api/knowledge/search', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${TEST_TOKEN}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ query: 'daemon route coverage' }),
+    });
+    expect(search.status).toBe(200);
+    const searchJson = await search.json() as { results: Array<{ id: string }> };
+    expect(searchJson.results.length).toBeGreaterThan(0);
+
+    const connectors = await fetch('http://127.0.0.1:39421/api/knowledge/connectors', {
+      headers: { Authorization: `Bearer ${TEST_TOKEN}` },
+    });
+    expect(connectors.status).toBe(200);
+    const connectorsJson = await connectors.json() as { connectors: Array<{ id: string }> };
+    expect(connectorsJson.connectors.some((connector) => connector.id === 'bookmark')).toBe(true);
+
+    const connectorDoctor = await fetch('http://127.0.0.1:39421/api/knowledge/connectors/bookmark/doctor', {
+      headers: { Authorization: `Bearer ${TEST_TOKEN}` },
+    });
+    expect(connectorDoctor.status).toBe(200);
+    const connectorDoctorJson = await connectorDoctor.json() as { report: { ready: boolean } };
+    expect(connectorDoctorJson.report.ready).toBe(true);
+
+    const sourceExtraction = await fetch(`http://127.0.0.1:39421/api/knowledge/sources/${encodeURIComponent(ingested.source.id)}/extraction`, {
+      headers: { Authorization: `Bearer ${TEST_TOKEN}` },
+    });
+    expect(sourceExtraction.status).toBe(200);
+    const sourceExtractionJson = await sourceExtraction.json() as { extraction: { format: string } };
+    expect(sourceExtractionJson.extraction.format).toBe('html');
+
+    const connectorIngest = await fetch('http://127.0.0.1:39421/api/knowledge/ingest/connector', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${TEST_TOKEN}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        connectorId: 'url-list',
+        content: `${sourceUrl}\n`,
+        sessionId: 'session-connector',
+      }),
+    });
+    expect(connectorIngest.status).toBe(201);
+    const connectorIngestJson = await connectorIngest.json() as { imported: number };
+    expect(connectorIngestJson.imported).toBeGreaterThan(0);
+
+    const csvPath = join(tempConfigDir, 'knowledge.csv');
+    writeFileSync(csvPath, 'project,owner\nGoodVibes,buzzkill\n');
+    const ingestArtifact = await fetch('http://127.0.0.1:39421/api/knowledge/ingest/artifact', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${TEST_TOKEN}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ path: csvPath, connectorId: 'artifact', sessionId: 'session-artifact' }),
+    });
+    expect(ingestArtifact.status).toBe(201);
+    const ingestArtifactJson = await ingestArtifact.json() as { source: { id: string } };
+    expect(ingestArtifactJson.source.id).toBeTruthy();
+
+    const extractions = await fetch('http://127.0.0.1:39421/api/knowledge/extractions?limit=10', {
+      headers: { Authorization: `Bearer ${TEST_TOKEN}` },
+    });
+    expect(extractions.status).toBe(200);
+    const extractionsJson = await extractions.json() as { extractions: Array<{ id: string; format: string }> };
+    expect(extractionsJson.extractions.some((extraction) => extraction.format === 'csv')).toBe(true);
+
+    const projections = await fetch('http://127.0.0.1:39421/api/knowledge/projections?limit=5', {
+      headers: { Authorization: `Bearer ${TEST_TOKEN}` },
+    });
+    expect(projections.status).toBe(200);
+    const projectionsJson = await projections.json() as { targets: Array<{ kind: string }> };
+    expect(projectionsJson.targets.some((target) => target.kind === 'overview')).toBe(true);
+
+    const packet = await fetch('http://127.0.0.1:39421/api/knowledge/packet', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${TEST_TOKEN}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ task: 'daemon route coverage' }),
+    });
+    expect(packet.status).toBe(200);
+    const packetJson = await packet.json() as { items: Array<{ id: string }> };
+    expect(packetJson.items.length).toBeGreaterThan(0);
+
+    for (let index = 0; index < 3; index += 1) {
+      await fetch('http://127.0.0.1:39421/api/knowledge/search', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${TEST_TOKEN}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ query: 'daemon route coverage' }),
+      });
+      await fetch('http://127.0.0.1:39421/api/knowledge/packet', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${TEST_TOKEN}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ task: 'daemon route coverage' }),
+      });
+    }
+
+    const usage = await fetch('http://127.0.0.1:39421/api/knowledge/usage?limit=10', {
+      headers: { Authorization: `Bearer ${TEST_TOKEN}` },
+    });
+    expect(usage.status).toBe(200);
+    expect(((await usage.json()) as { usage: Array<{ usageKind: string }> }).usage.length).toBeGreaterThan(0);
+
+    const jobs = await fetch('http://127.0.0.1:39421/api/knowledge/jobs', {
+      headers: { Authorization: `Bearer ${TEST_TOKEN}` },
+    });
+    expect(jobs.status).toBe(200);
+    const jobsJson = await jobs.json() as { jobs: Array<{ id: string }> };
+    expect(jobsJson.jobs.some((job) => job.id === 'knowledge-lint')).toBe(true);
+    expect(jobsJson.jobs.some((job) => job.id === 'knowledge-light-consolidation')).toBe(true);
+
+    const runJob = await fetch('http://127.0.0.1:39421/api/knowledge/jobs/knowledge-light-consolidation/run', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${TEST_TOKEN}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ mode: 'inline' }),
+    });
+    expect(runJob.status).toBe(200);
+    const runJobJson = await runJob.json() as { run: { id: string; status: string } };
+    expect(runJobJson.run.status).toBe('completed');
+
+    const candidates = await fetch('http://127.0.0.1:39421/api/knowledge/candidates?limit=10', {
+      headers: { Authorization: `Bearer ${TEST_TOKEN}` },
+    });
+    expect(candidates.status).toBe(200);
+    const candidatesJson = await candidates.json() as { candidates: Array<{ candidateType: string }> };
+    expect(candidatesJson.candidates.some((candidate) => candidate.candidateType === 'memory-promotion')).toBe(true);
+
+    const schedules = await fetch('http://127.0.0.1:39421/api/knowledge/schedules?limit=10', {
+      headers: { Authorization: `Bearer ${TEST_TOKEN}` },
+    });
+    expect(schedules.status).toBe(200);
+    const schedulesJson = await schedules.json() as { schedules: Array<{ jobId: string }> };
+    expect(schedulesJson.schedules.some((schedule) => schedule.jobId === 'knowledge-light-consolidation')).toBe(true);
+
+    const jobRuns = await fetch('http://127.0.0.1:39421/api/knowledge/job-runs?limit=10', {
+      headers: { Authorization: `Bearer ${TEST_TOKEN}` },
+    });
+    expect(jobRuns.status).toBe(200);
+    const jobRunsJson = await jobRuns.json() as { runs: Array<{ id: string; jobId: string }> };
+    expect(jobRunsJson.runs.some((run) => run.id === runJobJson.run.id && run.jobId === 'knowledge-light-consolidation')).toBe(true);
+
+    const renderProjection = await fetch('http://127.0.0.1:39421/api/knowledge/projections/render', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${TEST_TOKEN}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ kind: 'source', id: ingested.source.id }),
+    });
+    expect(renderProjection.status).toBe(200);
+    const renderJson = await renderProjection.json() as { pageCount: number; pages: Array<{ content: string }> };
+    expect(renderJson.pageCount).toBe(1);
+    expect(renderJson.pages[0]?.content).toContain('Knowledge Route Page');
+
+    const materializeProjection = await fetch('http://127.0.0.1:39421/api/knowledge/projections/materialize', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${TEST_TOKEN}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ kind: 'source', id: ingested.source.id }),
+    });
+    expect(materializeProjection.status).toBe(201);
+    const materializeJson = await materializeProjection.json() as { artifact: { id: string; mimeType: string } };
+    expect(materializeJson.artifact.id).toBeTruthy();
+    expect(materializeJson.artifact.mimeType).toBe('text/markdown');
+
+    const graphqlSchema = await fetch('http://127.0.0.1:39421/api/knowledge/graphql/schema', {
+      headers: { Authorization: `Bearer ${TEST_TOKEN}` },
+    });
+    expect(graphqlSchema.status).toBe(200);
+    const graphqlSchemaJson = await graphqlSchema.json() as { schema: string };
+    expect(graphqlSchemaJson.schema).toContain('type Query');
+
+    const graphql = await fetch('http://127.0.0.1:39421/api/knowledge/graphql', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${TEST_TOKEN}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        query: `
+          query KnowledgeRouteGraph($sourceId: String!) {
+            status { sourceCount }
+            projection(kind: SOURCE, id: $sourceId) {
+              target { kind }
+              pageCount
+            }
+          }
+        `,
+        variables: { sourceId: ingested.source.id },
+      }),
+    });
+    expect(graphql.status).toBe(200);
+    const graphqlJson = await graphql.json() as {
+      data: {
+        status: { sourceCount: number };
+        projection: { target: { kind: string }; pageCount: number };
+      };
+    };
+    expect(graphqlJson.data.status.sourceCount).toBeGreaterThan(0);
+    expect(graphqlJson.data.projection.target.kind).toBe('SOURCE');
+    expect(graphqlJson.data.projection.pageCount).toBe(1);
+
+    sourceServer.stop();
+  });
+
   test('local auth admin API can inspect, add users, rotate password, and revoke sessions', async () => {
     daemon.enable({ daemon: true });
     await daemon.start();
@@ -275,6 +534,50 @@ describe('DaemonServer', () => {
       },
     });
     expect(revoke.status).toBe(200);
+  });
+
+  test('multimodal routes analyze documents and write results back into knowledge', async () => {
+    daemon.enable({ daemon: true }, TEST_TOKEN);
+    await daemon.start();
+
+    const createArtifact = await fetch('http://127.0.0.1:39421/api/artifacts', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${TEST_TOKEN}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        mimeType: 'text/markdown',
+        filename: 'multimodal-notes.md',
+        text: '# Multimodal Notes\n\nThe knowledge system should improve itself over time.\n',
+      }),
+    });
+    expect(createArtifact.status).toBe(201);
+    const created = await createArtifact.json() as { artifact: { id: string } };
+
+    const analyze = await fetch('http://127.0.0.1:39421/api/multimodal/analyze', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${TEST_TOKEN}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        artifactId: created.artifact.id,
+        includePacket: true,
+        writeback: true,
+        sessionId: 'session-mm-route',
+      }),
+    });
+    expect(analyze.status).toBe(201);
+    const analyzeJson = await analyze.json() as {
+      analysis: { kind: string; providerIds: string[] };
+      packet: { rendered: string };
+      writeback: { knowledgeSourceId?: string };
+    };
+    expect(analyzeJson.analysis.kind).toBe('document');
+    expect(analyzeJson.analysis.providerIds).toContain('knowledge-extractors');
+    expect(analyzeJson.packet.rendered).toContain('Multimodal Analysis');
+    expect(typeof analyzeJson.writeback.knowledgeSourceId).toBe('string');
   });
 
   test('GET /status returns 401 with wrong token', async () => {
@@ -834,7 +1137,7 @@ describe('DaemonServer', () => {
     socket.close();
   });
 
-  test('exposes gap-closure contracts for methods, voice, web search, artifacts, media, memory, heartbeat, and node hosts', async () => {
+  test('exposes gap-closure contracts for methods, voice, web search, artifacts, media, multimodal, memory, heartbeat, and node hosts', async () => {
     daemon.enable({ daemon: true }, TEST_TOKEN);
     await daemon.start();
 
@@ -856,10 +1159,21 @@ describe('DaemonServer', () => {
     expect(voice.status).toBe(200);
     expect((await voice.json() as { note?: string }).note).toContain('Voice capture');
 
+    const voiceProviders = await fetch('http://127.0.0.1:39421/api/voice/providers', { headers: auth });
+    expect(voiceProviders.status).toBe(200);
+    const voiceProvidersBody = await voiceProviders.json() as { providers: Array<{ id: string }> };
+    expect(voiceProvidersBody.providers.some((provider) => provider.id === 'openai')).toBe(true);
+    expect(voiceProvidersBody.providers.some((provider) => provider.id === 'deepgram')).toBe(true);
+    expect(voiceProvidersBody.providers.some((provider) => provider.id === 'google')).toBe(true);
+    expect(voiceProvidersBody.providers.some((provider) => provider.id === 'elevenlabs')).toBe(true);
+    expect(voiceProvidersBody.providers.some((provider) => provider.id === 'microsoft')).toBe(true);
+    expect(voiceProvidersBody.providers.some((provider) => provider.id === 'vydra')).toBe(true);
+
     const webSearch = await fetch('http://127.0.0.1:39421/api/web-search/providers', { headers: auth });
     expect(webSearch.status).toBe(200);
     const webSearchBody = await webSearch.json() as { providers: Array<{ id: string }> };
     expect(webSearchBody.providers.some((provider) => provider.id === 'duckduckgo')).toBe(true);
+    expect(webSearchBody.providers.some((provider) => provider.id === 'perplexity')).toBe(true);
 
     const artifacts = await fetch('http://127.0.0.1:39421/api/artifacts', { headers: auth });
     expect(artifacts.status).toBe(200);
@@ -869,6 +1183,21 @@ describe('DaemonServer', () => {
     expect(media.status).toBe(200);
     const mediaBody = await media.json() as { providers: Array<{ id: string }> };
     expect(mediaBody.providers.some((provider) => provider.id === 'builtin:image-understanding')).toBe(true);
+    expect(mediaBody.providers.some((provider) => provider.id === 'fal')).toBe(true);
+    expect(mediaBody.providers.some((provider) => provider.id === 'comfy')).toBe(true);
+    expect(mediaBody.providers.some((provider) => provider.id === 'runway')).toBe(true);
+    expect(mediaBody.providers.some((provider) => provider.id === 'alibaba')).toBe(true);
+    expect(mediaBody.providers.some((provider) => provider.id === 'byteplus')).toBe(true);
+
+    const multimodal = await fetch('http://127.0.0.1:39421/api/multimodal', { headers: auth });
+    expect(multimodal.status).toBe(200);
+    expect((await multimodal.json() as { note?: string }).note).toContain('Multimodal analysis');
+
+    const multimodalProviders = await fetch('http://127.0.0.1:39421/api/multimodal/providers', { headers: auth });
+    expect(multimodalProviders.status).toBe(200);
+    const multimodalBody = await multimodalProviders.json() as { providers: Array<{ id: string }> };
+    expect(multimodalBody.providers.some((provider) => provider.id === 'knowledge-extractors')).toBe(true);
+    expect(multimodalBody.providers.some((provider) => provider.id === 'openai')).toBe(true);
 
     const memory = await fetch('http://127.0.0.1:39421/api/memory/doctor', { headers: auth });
     expect(memory.status).toBe(200);
@@ -1517,6 +1846,11 @@ describe('DaemonServer', () => {
     };
     expect(providersBody.providers.some((entry) => entry.providerId === 'openai')).toBe(true);
     expect(providersBody.providers.find((entry) => entry.providerId === 'openai')?.runtime.auth?.routes?.some((route) => route.route === 'subscription-oauth')).toBe(true);
+    expect(providersBody.providers.some((entry) => entry.providerId === 'amazon-bedrock')).toBe(true);
+    expect(providersBody.providers.some((entry) => entry.providerId === 'anthropic-vertex')).toBe(true);
+    expect(providersBody.providers.some((entry) => entry.providerId === 'github-copilot')).toBe(true);
+    expect(providersBody.providers.some((entry) => entry.providerId === 'xai')).toBe(true);
+    expect(providersBody.providers.some((entry) => entry.providerId === 'litellm')).toBe(true);
 
     const provider = await fetch('http://127.0.0.1:39421/api/providers/openai', {
       headers: { Authorization: `Bearer ${TEST_TOKEN}` },
@@ -2164,6 +2498,109 @@ describe('DaemonServer', () => {
     expect(listBody.bindings.some((binding) => binding.id === signalBody.bindingId && binding.surfaceKind === 'signal' && binding.externalId === '+15551212')).toBe(true);
     expect(listBody.bindings.some((binding) => binding.id === whatsappBody.bindingId && binding.surfaceKind === 'whatsapp' && binding.externalId === '+15552323')).toBe(true);
     expect(listBody.bindings.some((binding) => binding.id === imessageBody.bindingId && binding.surfaceKind === 'imessage' && binding.externalId === 'chat-123')).toBe(true);
+  });
+
+  test('msteams, BlueBubbles, Mattermost, and Matrix ingress paths queue work and persist route bindings', async () => {
+    const config = new ConfigManager();
+    config.setDynamic('surfaces.msteams.enabled', true);
+    config.setDynamic('surfaces.msteams.appId', 'teams-app-id');
+    config.setDynamic('surfaces.msteams.appPassword', 'teams-app-password');
+    config.setDynamic('surfaces.bluebubbles.enabled', true);
+    config.setDynamic('surfaces.bluebubbles.password', 'bb-pass');
+    config.setDynamic('surfaces.bluebubbles.account', 'me@icloud.test');
+    config.setDynamic('surfaces.mattermost.enabled', true);
+    config.setDynamic('surfaces.mattermost.botToken', 'mattermost-bot-token');
+    config.setDynamic('surfaces.mattermost.baseUrl', 'https://mattermost.example.test');
+    config.setDynamic('surfaces.matrix.enabled', true);
+    config.setDynamic('surfaces.matrix.accessToken', 'matrix-access-token');
+    config.setDynamic('surfaces.matrix.homeserverUrl', 'https://matrix.example.test');
+    daemon = new DaemonServer({
+      port: 39421,
+      host: '127.0.0.1',
+      userAuth: new UserAuthManager({
+        users: [{ username: 'admin', passwordHash: UserAuthManager.hashPassword('admin'), roles: ['admin'] }],
+      }),
+    }, config);
+    daemon.enable({ daemon: true }, TEST_TOKEN);
+    await daemon.start();
+
+    const teams = await fetch('http://127.0.0.1:39421/webhook/msteams', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: 'Bearer forwarded-botframework-jwt',
+      },
+      body: JSON.stringify({
+        type: 'message',
+        serviceUrl: 'https://smba.trafficmanager.net/teams',
+        conversation: { id: 'a:conversation-1', conversationType: 'personal' },
+        from: { id: '29:user-1', name: 'Alice' },
+        text: 'teams deployment summary',
+      }),
+    });
+    expect(teams.status).toBe(200);
+    const teamsBody = await teams.json() as { queued: boolean; bindingId: string };
+    expect(teamsBody.queued).toBe(true);
+
+    const bluebubbles = await fetch('http://127.0.0.1:39421/webhook/bluebubbles?password=bb-pass', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        text: 'bluebubbles deployment summary',
+        chatGuid: 'iMessage;-;+15551234567',
+        senderId: '+15551234567',
+      }),
+    });
+    expect(bluebubbles.status).toBe(200);
+    const bluebubblesBody = await bluebubbles.json() as { queued: boolean; bindingId: string };
+    expect(bluebubblesBody.queued).toBe(true);
+
+    const mattermost = await fetch('http://127.0.0.1:39421/webhook/mattermost', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: 'Bearer mattermost-bot-token',
+      },
+      body: JSON.stringify({
+        channel_id: 'channel-123',
+        team_id: 'team-ops',
+        user_id: 'user-123',
+        text: 'mattermost deployment summary',
+      }),
+    });
+    expect(mattermost.status).toBe(200);
+    const mattermostBody = await mattermost.json() as { queued: boolean; bindingId: string };
+    expect(mattermostBody.queued).toBe(true);
+
+    const matrix = await fetch('http://127.0.0.1:39421/webhook/matrix', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: 'Bearer matrix-access-token',
+      },
+      body: JSON.stringify({
+        room_id: '!room:example.test',
+        sender: '@alice:example.test',
+        content: {
+          body: 'matrix deployment summary',
+          msgtype: 'm.text',
+        },
+      }),
+    });
+    expect(matrix.status).toBe(200);
+    const matrixBody = await matrix.json() as { queued: boolean; bindingId: string };
+    expect(matrixBody.queued).toBe(true);
+
+    const list = await fetch('http://127.0.0.1:39421/api/routes/bindings', {
+      headers: { Authorization: `Bearer ${TEST_TOKEN}` },
+    });
+    const listBody = await list.json() as {
+      bindings: Array<{ id: string; surfaceKind: string; externalId: string }>;
+    };
+    expect(listBody.bindings.some((binding) => binding.id === teamsBody.bindingId && binding.surfaceKind === 'msteams' && binding.externalId === 'a:conversation-1')).toBe(true);
+    expect(listBody.bindings.some((binding) => binding.id === bluebubblesBody.bindingId && binding.surfaceKind === 'bluebubbles' && binding.externalId === 'iMessage;-;+15551234567')).toBe(true);
+    expect(listBody.bindings.some((binding) => binding.id === mattermostBody.bindingId && binding.surfaceKind === 'mattermost' && binding.externalId === 'channel-123')).toBe(true);
+    expect(listBody.bindings.some((binding) => binding.id === matrixBody.bindingId && binding.surfaceKind === 'matrix' && binding.externalId === '!room:example.test')).toBe(true);
   });
 
   test('slack interactive approval callbacks resolve approvals through signed actions', async () => {

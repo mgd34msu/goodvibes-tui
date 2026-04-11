@@ -16,6 +16,10 @@ export const CONTROL_PLANE_CLIENT_KINDS = [
   'signal',
   'whatsapp',
   'imessage',
+  'msteams',
+  'bluebubbles',
+  'mattermost',
+  'matrix',
 ] as const;
 export const CONTROL_PLANE_TRANSPORT_KINDS = ['local', 'http', 'sse', 'ws', 'websocket', 'webhook'] as const;
 export const CONTROL_PLANE_PRINCIPAL_KINDS = ['user', 'bot', 'service', 'token'] as const;

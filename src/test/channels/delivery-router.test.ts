@@ -34,6 +34,10 @@ describe('ChannelDeliveryRouter', () => {
       'channel-delivery:signal',
       'channel-delivery:whatsapp',
       'channel-delivery:imessage',
+      'channel-delivery:msteams',
+      'channel-delivery:bluebubbles',
+      'channel-delivery:mattermost',
+      'channel-delivery:matrix',
     ]);
   });
 
@@ -247,6 +251,130 @@ describe('ChannelDeliveryRouter', () => {
       globalThis.fetch = originalFetch;
       if (originalWhatsAppToken === undefined) delete process.env.WHATSAPP_ACCESS_TOKEN;
       else process.env.WHATSAPP_ACCESS_TOKEN = originalWhatsAppToken;
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  test('delivers Microsoft Teams, BlueBubbles, Mattermost, and Matrix payloads through their native adapters', async () => {
+    const originalFetch = globalThis.fetch;
+    const calls: Array<{ url: string; init?: RequestInit }> = [];
+    const root = mkdtempSync(join(tmpdir(), 'gv-delivery-extended-config-'));
+    const config = new ConfigManager({ configDir: root });
+    globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      calls.push({ url, init });
+      if (url.includes('/oauth2/v2.0/token')) {
+        return new Response(JSON.stringify({ access_token: 'teams-token', expires_in: 3600 }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+      if (url.includes('/v3/conversations/')) {
+        return new Response(JSON.stringify({ id: 'teams-activity-1' }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+      if (url.includes('/api/v1/message/text')) {
+        return new Response(JSON.stringify({ guid: 'bb-msg-1' }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+      if (url.endsWith('/api/v4/posts')) {
+        return new Response(JSON.stringify({ id: 'mm-post-1' }), {
+          status: 201,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+      return new Response(JSON.stringify({ event_id: '$matrix-event-1' }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }) as typeof fetch;
+
+    try {
+      config.set('surfaces.msteams.appId', 'teams-app-id');
+      config.set('surfaces.msteams.appPassword', 'teams-app-password');
+      config.set('surfaces.msteams.serviceUrl', 'https://smba.trafficmanager.net/teams');
+      config.set('surfaces.msteams.defaultConversationId', 'a:conversation-1');
+      config.set('surfaces.bluebubbles.serverUrl', 'http://127.0.0.1:1234');
+      config.set('surfaces.bluebubbles.password', 'bb-pass');
+      config.set('surfaces.bluebubbles.defaultChatGuid', 'iMessage;-;+15551234567');
+      config.set('surfaces.mattermost.baseUrl', 'https://mattermost.example.test');
+      config.set('surfaces.mattermost.botToken', 'mm-bot-token');
+      config.set('surfaces.mattermost.defaultChannelId', 'channel-123');
+      config.set('surfaces.matrix.homeserverUrl', 'https://matrix.example.test');
+      config.set('surfaces.matrix.accessToken', 'matrix-token');
+      config.set('surfaces.matrix.defaultRoomId', '!room:example.test');
+
+      const router = new ChannelDeliveryRouter({ configManager: config });
+
+      await router.deliver({
+        target: { kind: 'surface', surfaceKind: 'msteams', address: 'a:conversation-1' },
+        body: 'teams hello',
+        title: 'Teams delivery',
+        jobId: 'job-teams',
+        runId: 'run-teams',
+        includeLinks: false,
+      });
+      await router.deliver({
+        target: { kind: 'surface', surfaceKind: 'bluebubbles', address: 'iMessage;-;+15551234567' },
+        body: 'bluebubbles hello',
+        title: 'BlueBubbles delivery',
+        jobId: 'job-bb',
+        runId: 'run-bb',
+        includeLinks: false,
+      });
+      await router.deliver({
+        target: { kind: 'surface', surfaceKind: 'mattermost', address: 'channel-123' },
+        body: 'mattermost hello',
+        title: 'Mattermost delivery',
+        jobId: 'job-mm',
+        runId: 'run-mm',
+        includeLinks: false,
+      });
+      await router.deliver({
+        target: { kind: 'surface', surfaceKind: 'matrix', address: '!room:example.test' },
+        body: 'matrix hello',
+        title: 'Matrix delivery',
+        jobId: 'job-matrix',
+        runId: 'run-matrix',
+        includeLinks: false,
+        binding: {
+          id: 'route-matrix',
+          surfaceKind: 'matrix',
+          surfaceId: '@goodvibes:example.test',
+          externalId: '!room:example.test',
+          channelId: '!room:example.test',
+          threadId: '$thread-1',
+          metadata: {},
+        },
+      });
+
+      expect(calls[0]?.url).toContain('/oauth2/v2.0/token');
+      expect(calls[1]?.url).toBe('https://smba.trafficmanager.net/teams/v3/conversations/a%3Aconversation-1/activities');
+      const teamsBody = JSON.parse(String(calls[1]?.init?.body));
+      expect(teamsBody.type).toBe('message');
+      expect(teamsBody.text).toContain('teams hello');
+
+      expect(calls[2]?.url).toBe('http://127.0.0.1:1234/api/v1/message/text?password=bb-pass');
+      const blueBubblesBody = JSON.parse(String(calls[2]?.init?.body));
+      expect(blueBubblesBody.chatGuid).toBe('iMessage;-;+15551234567');
+      expect(blueBubblesBody.message).toContain('bluebubbles hello');
+
+      expect(calls[3]?.url).toBe('https://mattermost.example.test/api/v4/posts');
+      const mattermostBody = JSON.parse(String(calls[3]?.init?.body));
+      expect(mattermostBody.channel_id).toBe('channel-123');
+      expect(mattermostBody.message).toContain('mattermost hello');
+
+      expect(calls[4]?.url).toContain('https://matrix.example.test/_matrix/client/v3/rooms/!room%3Aexample.test/send/m.room.message/');
+      const matrixBody = JSON.parse(String(calls[4]?.init?.body));
+      expect(matrixBody.msgtype).toBe('m.text');
+      expect(matrixBody.body).toContain('matrix hello');
+      expect(matrixBody['m.relates_to']?.event_id).toBe('$thread-1');
+    } finally {
+      globalThis.fetch = originalFetch;
       rmSync(root, { recursive: true, force: true });
     }
   });

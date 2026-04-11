@@ -56,3 +56,4 @@ export * from './control-plane.ts';
 export * from './deliveries.ts';
 export * from './watchers.ts';
 export * from './surfaces.ts';
+export * from './knowledge.ts';
