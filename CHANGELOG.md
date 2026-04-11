@@ -4,6 +4,30 @@ All notable changes to GoodVibes TUI.
 
 ---
 
+## [0.15.8] — 2026-04-11
+
+### TLS Transport Controls And Certificate Handling
+
+- Added a shared runtime network layer for inbound TLS, outbound HTTPS trust, forwarded-header trust handling, and certificate path resolution instead of scattering transport concerns across daemon, listener, and provider code
+- Added inbound TLS configuration for both the control-plane daemon and the HTTP listener with explicit `off`, `proxy`, and `direct` modes, proxy trust controls, and direct-TLS support through Bun server TLS
+- Added default direct-TLS certificate discovery from `~/.goodvibes/certs/fullchain.pem` and `~/.goodvibes/certs/privkey.pem`, along with startup inspection and key-permission checks for operator-facing health/reporting
+- Added centralized outbound HTTPS trust controls with `bundled`, `bundled+custom`, and `custom` trust modes, custom CA file/directory support, and a scoped `allowInsecureLocalhost` escape hatch for local development
+- Installed the outbound transport wrapper at runtime bootstrap and daemon startup so fetch-based provider, search, artifact, webhook, download, telemetry, and integration traffic inherits one trust policy by default
+- Extended daemon status and integration health surfaces to report inbound and outbound network posture, including active TLS mode, trust strategy, configured CA material, and direct-versus-proxied endpoint shape
+- Hardened startup and test behavior by fixing global fetch wrapping so network transport installation composes cleanly under parallel test runs instead of leaking stale global transport state
+
+### Documentation And Docs Layout Cleanup
+
+- Updated the README and deployment guide to document inbound TLS modes, direct certificate paths, reverse-proxy deployment, outbound CA trust configuration, and the compiled-binary versus source daemon transport behavior
+- Removed the archived docs set from the repository now that the new focused docs set owns the current product documentation
+
+### Verification
+
+- Full typecheck passes: `bunx tsc --noEmit`
+- Full test runner passes: `bun test` (`6983` pass, `0` fail)
+- Build passes: `bun run build`
+- Diff hygiene passes: `git diff --check`
+
 ## [0.15.7] — 2026-04-11
 
 ### Knowledge, Memory, And Multimodal Runtime Depth
