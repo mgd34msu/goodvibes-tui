@@ -1,0 +1,175 @@
+# Knowledge, Artifacts, and Multimodal
+
+## Context layers
+
+GoodVibes uses three distinct context layers:
+
+- session memory for lightweight current-session notes
+- durable reviewed memory in SQLite for reuse, review, export, and task-time injection
+- a structured knowledge store with sources, nodes, edges, issues, extractions, usage records, consolidation candidates and reports, schedules, GraphQL, and projections
+
+These layers work together rather than collapsing everything into transcript history.
+
+## Durable memory
+
+Durable memory records support:
+
+- review state
+- confidence
+- provenance
+- links between records
+- scoped reuse across session, project, and team contexts
+- queue/review/promote workflows
+
+Representative record classes include:
+
+- decisions
+- constraints
+- incidents
+- patterns
+- facts
+- risks
+- runbooks
+- architecture
+- ownership
+
+## Structured knowledge
+
+The knowledge runtime supports:
+
+- URL ingest
+- bookmark import
+- URL-list import
+- artifact ingest
+- connector-based ingest
+- search
+- packet building
+- linting
+- reindex
+- projection rendering/materialization
+- scheduled jobs
+- consolidation candidates and reports
+
+The system is designed as a reviewed, self-improving knowledge substrate for future task context.
+
+## Connectors and extractors
+
+Connectors provide the front door for ingest ideas such as:
+
+- single URLs
+- bookmark exports
+- URL lists
+- artifacts
+- future source-specific connectors
+
+Built-in extractors cover:
+
+- HTML
+- text
+- markdown
+- JSON
+- CSV / TSV
+- XML
+- YAML
+- PDF text
+- DOCX
+- XLSX
+- PPTX
+
+## Embeddings and retrieval
+
+The knowledge/memory runtime uses sqlite-vec with a pluggable embedding registry. Current embedding providers include:
+
+- local hashed embeddings
+- OpenAI
+- OpenAI-compatible / LM Studio
+- Gemini
+- Mistral
+- Ollama
+
+The runtime uses these for:
+
+- semantic recall
+- knowledge packet selection
+- review and search support
+
+## GraphQL and projections
+
+The knowledge domain exposes:
+
+- GraphQL schema and execution surfaces
+- projection targets
+- overview pages
+- rollups
+- backlinks
+- source-health views
+- exportable markdown/wiki-style materializations
+
+The canonical store is the structured knowledge database. GraphQL and projections are query and presentation surfaces on top of it.
+
+## Artifacts
+
+Artifacts are first-class runtime objects. The artifact store handles:
+
+- markdown
+- text
+- JSON
+- CSV
+- spreadsheets
+- PDFs
+- images
+- audio
+- video
+- generated outputs
+
+Artifacts can be:
+
+- ingested
+- stored
+- retrieved
+- delivered through channels
+- reused by knowledge and multimodal pipelines
+
+## Multimodal
+
+The unified multimodal runtime handles:
+
+- image analysis
+- audio analysis through STT-backed paths
+- video analysis through keyframe/transcript fusion
+- document analysis through extractors and packet building
+
+It also supports:
+
+- packet building
+- optional write-back into structured knowledge
+- provider routing across media and voice subsystems
+
+## Jobs and schedules
+
+Knowledge jobs include:
+
+- `lint`
+- `reindex`
+- `refresh-stale`
+- `refresh-bookmarks`
+- `rebuild-projections`
+- `light-consolidation`
+- `deep-consolidation`
+
+These can be run directly or saved as schedules through the runtime.
+
+## High-signal commands
+
+- `/recall add|search|queue|review|explain|promote|capture`
+- `/knowledge status|ingest-url|import-bookmarks|import-urls|search|get|queue|candidates|reports|schedules|lint|packet|explain|reindex|consolidate`
+- `/memory-sync`
+- `/handoff`
+- `/session-memory`
+- `/team-memory`
+
+## Related docs
+
+- [Providers and routing](providers-and-routing.md)
+- [Channels, remote runtime, and API](channels-remote-and-api.md)
+- [Tools and commands](tools-and-commands.md)
