@@ -21,7 +21,3 @@ This directory contains the current product documentation for `goodvibes-tui`.
 
 - [Tools and commands](tools-and-commands.md)
   Built-in tool families, slash-command families, and the operator/workflow surfaces that tie them together.
-
-## Historical docs
-
-Older documentation snapshots are preserved in [`archive/`](archive/). They are useful for historical context, but the files in this directory are the current docs set.

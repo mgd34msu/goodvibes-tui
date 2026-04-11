@@ -66,8 +66,6 @@ The compiled binary is the TUI entrypoint built from `src/main.ts`. When `danger
 - [Channels, remote runtime, and API](docs/channels-remote-and-api.md)
 - [Tools and commands](docs/tools-and-commands.md)
 
-Historical docs are preserved in [`docs/archive/`](docs/archive/).
-
 ---
 
 ## What is this
