@@ -29,6 +29,7 @@
  */
 
 import { getConfigSnapshot } from '../config/index.ts';
+import type { ConfigManager } from '../config/manager.ts';
 import type { ConversationManager } from './conversation.ts';
 import type { SystemMessagesPanel, SystemMessagePriority } from '../panels/system-messages-panel.ts';
 
@@ -56,6 +57,11 @@ function classifyPriority(message: string): SystemMessagePriority {
 export type SystemMessageKind = 'system' | 'operational' | 'wrfc';
 export type SystemMessageTarget = 'conversation' | 'panel' | 'both';
 
+function defaultTargetForKind(kind: SystemMessageKind): SystemMessageTarget {
+  if (kind === 'wrfc') return 'both';
+  return 'panel';
+}
+
 function classifyKind(message: string): SystemMessageKind {
   if (/^\[WRFC\]/i.test(message)) return 'wrfc';
   if (/^\[(Scan|Local|Agents|MCP|Plugin|Hook|Tool|Exec|Remote|Bridge|Approval)\]/i.test(message)) {
@@ -64,8 +70,11 @@ function classifyKind(message: string): SystemMessageKind {
   return 'system';
 }
 
-function targetForKind(kind: SystemMessageKind): SystemMessageTarget {
-  const ui = getConfigSnapshot().ui;
+function targetForKind(
+  configManager: Pick<ConfigManager, 'getRaw'>,
+  kind: SystemMessageKind,
+): SystemMessageTarget {
+  const ui = getConfigSnapshot(configManager).ui;
   if (kind === 'wrfc') return ui.wrfcMessages;
   if (kind === 'operational') return ui.operationalMessages;
   return ui.systemMessages;
@@ -98,7 +107,7 @@ export class SystemMessageRouter {
   constructor(
     private readonly conversation: ConversationManager,
     private panel: SystemMessagesPanel | null,
-    private readonly getTargetForKind: (kind: SystemMessageKind) => SystemMessageTarget = targetForKind,
+    private readonly getTargetForKind: (kind: SystemMessageKind) => SystemMessageTarget = defaultTargetForKind,
   ) {}
 
   // ── Public API ────────────────────────────────────────────────────────────
@@ -195,7 +204,7 @@ export class SystemMessageRouter {
 export function createSystemMessageRouter(
   conversation: ConversationManager,
   panel: SystemMessagesPanel | null = null,
-  getTargetForKind: (kind: SystemMessageKind) => SystemMessageTarget = targetForKind,
+  getTargetForKind: (kind: SystemMessageKind) => SystemMessageTarget = defaultTargetForKind,
 ): SystemMessageRouter {
   return new SystemMessageRouter(conversation, panel, getTargetForKind);
 }

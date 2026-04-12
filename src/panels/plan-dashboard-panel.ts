@@ -1,7 +1,6 @@
 import type { Line } from '../types/grid.ts';
-import type { ExecutionPlan, PlanItem, PlanItemStatus } from '../core/execution-plan.ts';
+import { ExecutionPlanManager, type ExecutionPlan, type PlanItem, type PlanItemStatus } from '../core/execution-plan.ts';
 import { BasePanel } from './base-panel.ts';
-import { planManager } from '../core/plan-manager-instance.ts';
 import {
   buildEmptyState,
   buildPanelLine,
@@ -41,9 +40,11 @@ export class PlanDashboardPanel extends BasePanel {
 
   // Flat list of navigable row indices (set during render)
   private totalRows = 0;
+  private readonly planManager: ExecutionPlanManager;
 
-  constructor() {
+  constructor(planManager: ExecutionPlanManager) {
     super('plan', 'Plan', 'P', 'agent');
+    this.planManager = planManager;
   }
 
   override onActivate(): void {
@@ -78,7 +79,7 @@ export class PlanDashboardPanel extends BasePanel {
   // --------------------------------------------------------------------------
 
   render(width: number, height: number): Line[] {
-    const plan = planManager.getActive();
+    const plan = this.planManager.getActive();
     if (!plan) {
       return buildPanelWorkspace(width, height, {
         title: ' Plan Dashboard',

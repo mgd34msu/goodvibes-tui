@@ -1,5 +1,4 @@
 import type { CommandRegistry } from './command-registry.ts';
-import { recordUsage } from '../providers/favorites.ts';
 import { policyCommand } from './commands/policy.ts';
 import { providerCommand } from './commands/provider.ts';
 import { evalCommand } from './commands/eval.ts';

@@ -13,6 +13,9 @@ import {
 import {
   builtinGatewayKnowledgeMethodDescriptors,
 } from './method-catalog-knowledge.ts';
+import {
+  builtinGatewayMediaMethodDescriptors,
+} from './method-catalog-media.ts';
 import type {
   GatewayEventDescriptor,
   GatewayEventListOptions,
@@ -56,6 +59,7 @@ const BUILTIN_GATEWAY_METHODS: readonly GatewayMethodDescriptor[] = [
   ...builtinGatewayChannelMethodDescriptors,
   ...builtinGatewayRuntimeMethodDescriptors,
   ...builtinGatewayKnowledgeMethodDescriptors,
+  ...builtinGatewayMediaMethodDescriptors,
   ...builtinGatewayAdminMethodDescriptors,
 ];
 
@@ -97,7 +101,6 @@ function pathMatchesTemplate(template: string, pathname: string): boolean {
 }
 
 export class GatewayMethodCatalog {
-  private static active: GatewayMethodCatalog | null = null;
   private readonly methods = new Map<string, RegisteredGatewayMethod>();
   private readonly events = new Map<string, RegisteredGatewayEvent>();
 
@@ -110,18 +113,6 @@ export class GatewayMethodCatalog {
         this.registerEvent(descriptor, { replace: true });
       }
     }
-    GatewayMethodCatalog.active = this;
-  }
-
-  static getActive(): GatewayMethodCatalog {
-    if (!GatewayMethodCatalog.active) {
-      GatewayMethodCatalog.active = new GatewayMethodCatalog();
-    }
-    return GatewayMethodCatalog.active;
-  }
-
-  static resetActiveForTesting(): void {
-    GatewayMethodCatalog.active = null;
   }
 
   register(
@@ -248,8 +239,4 @@ export class GatewayMethodCatalog {
     if (!entry.handler) throw new Error(`Gateway method has no internal handler: ${id}`);
     return entry.handler(invocation);
   }
-}
-
-export function getGatewayMethodCatalog(): GatewayMethodCatalog {
-  return GatewayMethodCatalog.getActive();
 }

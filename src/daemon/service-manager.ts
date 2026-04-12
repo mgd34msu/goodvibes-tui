@@ -42,7 +42,7 @@ export interface ManagedServiceManagerOptions {
   readonly actionRunner?: (command: string, args: readonly string[]) => ManagedServiceActionResult;
 }
 
-function detectPlatform(platform: ConfigManager['get'] extends (key: any) => infer _ ? string : string): ManagedServicePlatform {
+function detectPlatform(platform: string): ManagedServicePlatform {
   switch (platform) {
     case 'systemd':
     case 'launchd':

@@ -9,6 +9,8 @@
  * Subscribe to change notifications and call getSnapshot() to render.
  */
 import type { ModelDefinition } from '../../../providers/registry.ts';
+import type { ProviderRegistry } from '../../../providers/registry.ts';
+import type { BenchmarkStore } from '../../../providers/model-benchmarks.ts';
 import type { ProviderHealthDomainState } from '../../store/domains/provider-health.ts';
 import type { ModelDomainState } from '../../store/domains/model.ts';
 import { enrichModelEntries, groupEntriesByProvider } from './health-enrichment.ts';
@@ -21,6 +23,8 @@ export interface ModelPickerDataProviderOptions {
    * Call updatePinnedIds() to update at runtime.
    */
   readonly pinnedIds?: ReadonlySet<string>;
+  readonly benchmarkStore: Pick<BenchmarkStore, 'getBenchmarks'>;
+  readonly providerRegistry: Pick<ProviderRegistry, 'getSyntheticModelInfoFromCatalog' | 'getContextWindowForModel'>;
 }
 
 /**
@@ -47,18 +51,22 @@ export class ModelPickerDataProvider {
   private _modelState: ModelDomainState;
   private _pinnedIds: ReadonlySet<string>;
   private _snapshot: ModelPickerData;
+  private readonly benchmarkStore: Pick<BenchmarkStore, 'getBenchmarks'>;
+  private readonly providerRegistry: Pick<ProviderRegistry, 'getSyntheticModelInfoFromCatalog' | 'getContextWindowForModel'>;
   private readonly _subscribers = new Set<() => void>();
 
   constructor(
     models: readonly ModelDefinition[],
     healthState: ProviderHealthDomainState,
     modelState: ModelDomainState,
-    options: ModelPickerDataProviderOptions = {},
+    options: ModelPickerDataProviderOptions,
   ) {
     this._models = models;
     this._healthState = healthState;
     this._modelState = modelState;
     this._pinnedIds = options.pinnedIds ?? new Set();
+    this.benchmarkStore = options.benchmarkStore;
+    this.providerRegistry = options.providerRegistry;
     this._snapshot = this._buildSnapshot();
   }
 
@@ -136,6 +144,8 @@ export class ModelPickerDataProvider {
       this._healthState,
       this._modelState,
       this._pinnedIds,
+      this.benchmarkStore,
+      this.providerRegistry,
     );
 
     const groups = groupEntriesByProvider(entries);

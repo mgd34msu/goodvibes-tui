@@ -5,7 +5,7 @@ import { tmpdir } from 'os';
 import { ConfigManager } from '../../config/manager.ts';
 
 // Use a fresh ConfigManager instance for each test to avoid pollution from
-// module mocks in other test files that replace the shared configManager singleton.
+// leaked module state in other test files that used to replace shared config helpers.
 describe('ConfigManager reset functionality', () => {
   let mgr: ConfigManager;
   let configDir: string;

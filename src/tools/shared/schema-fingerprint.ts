@@ -12,27 +12,17 @@
  *   3. When the feature flag is disabled the result object is returned unchanged.
  */
 
-// ── Feature flag integration ──────────────────────────────────────────────────
+import type { FeatureFlagManager } from '../../runtime/feature-flags/index.ts';
+
+export interface SchemaFingerprintOptions {
+  readonly featureFlags?: Pick<FeatureFlagManager, 'isEnabled'> | null;
+}
 
 /**
- * Thin adapter: checks the runtime feature flag manager if available.
- * Falls back to `false` (disabled) when the manager is not initialised.
- *
- * We import lazily to avoid circular dependency between tools and runtime.
+ * Checks the runtime feature flags explicitly supplied by the composition root.
  */
-export function isSchemaFingerprintEnabled(): boolean {
-  try {
-    // Lazy CJS require to avoid circular import — matches project convention (see fetch/index.ts)
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const { FeatureFlagManager } = require('../../runtime/feature-flags/manager.ts') as {
-      FeatureFlagManager: { getInstance?: () => { isEnabled(id: string): boolean } };
-    };
-    const manager = FeatureFlagManager.getInstance?.();
-    return manager?.isEnabled('output-schema-fingerprint') ?? false;
-  } catch {
-    // Non-fatal — diagnostics must never block tool execution
-    return false;
-  }
+export function isSchemaFingerprintEnabled(options: SchemaFingerprintOptions = {}): boolean {
+  return options.featureFlags?.isEnabled('output-schema-fingerprint') ?? false;
 }
 
 // ── Core fingerprinting ───────────────────────────────────────────────────────
@@ -193,8 +183,9 @@ export function appendSchemaFingerprint(
   result: Record<string, unknown>,
   tool: string,
   mode: string,
+  options: SchemaFingerprintOptions = {},
 ): Record<string, unknown> {
-  if (!isSchemaFingerprintEnabled()) {
+  if (!isSchemaFingerprintEnabled(options)) {
     return result;
   }
 

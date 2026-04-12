@@ -1,16 +1,21 @@
 import { BasePanel } from './base-panel.ts';
 import { createEmptyLine, createStyledCell, type Line } from '../types/grid.ts';
 import type { RuntimeEventBus, ProviderEvent, TurnEvent } from '../runtime/events/index.ts';
-import { providerRegistry } from '../providers/registry.ts';
-import { buildProviderAccountSnapshot, type ProviderAccountRecord } from '../runtime/provider-accounts/registry.ts';
+import { ProviderRegistry } from '../providers/registry.ts';
+import { ServiceRegistry } from '../config/service-registry.ts';
+import { SubscriptionManager } from '../config/subscriptions.ts';
+import {
+  buildProviderAccountSnapshot,
+  type ProviderAccountRecord,
+} from './provider-account-snapshot.ts';
 import type { RuntimeStore } from '../runtime/store/index.ts';
 import type { ConfigManager } from '../config/index.ts';
-import { getLocalUserAuthManager } from '../runtime/local-auth.ts';
 import { getSettingsControlPlaneSnapshot } from '../runtime/settings/control-plane.ts';
-import { getRemoteSupervisor } from '../runtime/remote/index.ts';
+import type { RemoteSupervisor } from '../runtime/remote/index.ts';
 import { checkRecoveryFile, readLastSessionPointer } from '../runtime/session-persistence.ts';
-import { evaluateSessionMaintenance } from '../runtime/session-maintenance.ts';
+import { evaluateSessionMaintenance } from './session-maintenance.ts';
 import { listPersistedWorktreeMeta, summarizeWorktreeOwnership } from '../runtime/worktree/registry.ts';
+import { UserAuthManager } from '../security/user-auth.ts';
 import {
   buildBodyText,
   buildDetailBlock,
@@ -44,7 +49,7 @@ export interface ProviderHealth {
 }
 
 // ---------------------------------------------------------------------------
-// ProviderHealthTracker — module-level singleton
+// ProviderHealthTracker
 // ---------------------------------------------------------------------------
 
 /**
@@ -95,7 +100,7 @@ export class ProviderHealthTracker {
     this._recordError(providerName, msg, isRateLimit);
   }
 
-  onProvidersChanged(): void {
+  onProvidersChanged(providerRegistry: ProviderRegistry): void {
     // Ensure new providers get an entry (status: unknown)
     try {
       for (const model of providerRegistry.listModels()) {
@@ -166,9 +171,6 @@ export class ProviderHealthTracker {
     );
   }
 }
-
-/** Shared singleton — created once, lives for the process lifetime. */
-export const providerHealthTracker = new ProviderHealthTracker();
 
 // ---------------------------------------------------------------------------
 // Colors
@@ -287,12 +289,18 @@ export class ProviderHealthPanel extends BasePanel {
   private _accountRecords = new Map<string, ProviderAccountRecord>();
   private _accountRefreshAt = 0;
   private _accountLoading = false;
+  private readonly providerHealthTracker = new ProviderHealthTracker();
 
   constructor(
     private readonly runtimeBus: RuntimeEventBus,
+    private readonly providerRegistry: ProviderRegistry,
+    private readonly localAuthManager: UserAuthManager,
+    private readonly serviceRegistry: ServiceRegistry,
+    private readonly subscriptionManager: SubscriptionManager,
     private readonly requestRender: () => void = () => {},
     private readonly runtimeStore?: RuntimeStore,
     private readonly configManager?: ConfigManager,
+    private readonly remoteSupervisor?: RemoteSupervisor,
   ) {
     super('provider-health', 'Health', 'N', 'monitoring');
     this._subscribe();
@@ -305,19 +313,19 @@ export class ProviderHealthPanel extends BasePanel {
   private _subscribe(): void {
     this._unsubs.push(
       this.runtimeBus.on('TURN_SUBMITTED', () => {
-        providerHealthTracker.onTurnStart();
+        this.providerHealthTracker.onTurnStart();
       }),
     );
 
     this._unsubs.push(
       this.runtimeBus.on('STREAM_START', () => {
-        providerHealthTracker.onStreamStart();
+        this.providerHealthTracker.onStreamStart();
       }),
     );
 
     this._unsubs.push(
       this.runtimeBus.on<Extract<TurnEvent, { type: 'LLM_RESPONSE_RECEIVED' }>>('LLM_RESPONSE_RECEIVED', (env) => {
-        providerHealthTracker.onLlmResponse(env.payload.provider);
+        this.providerHealthTracker.onLlmResponse(env.payload.provider);
         this.markDirty();
         this.requestRender();
       }),
@@ -325,7 +333,7 @@ export class ProviderHealthPanel extends BasePanel {
 
     this._unsubs.push(
       this.runtimeBus.on<Extract<TurnEvent, { type: 'TURN_ERROR' }>>('TURN_ERROR', (env) => {
-        providerHealthTracker.onTurnError(env.payload.error);
+        this.providerHealthTracker.onTurnError(env.payload.error);
         this.markDirty();
         this.requestRender();
       }),
@@ -333,7 +341,7 @@ export class ProviderHealthPanel extends BasePanel {
 
     this._unsubs.push(
       this.runtimeBus.on<Extract<ProviderEvent, { type: 'PROVIDERS_CHANGED' }>>('PROVIDERS_CHANGED', () => {
-        providerHealthTracker.onProvidersChanged();
+        this.providerHealthTracker.onProvidersChanged(this.providerRegistry);
         this.markDirty();
         this.requestRender();
       }),
@@ -375,9 +383,9 @@ export class ProviderHealthPanel extends BasePanel {
   handleInput(key: string): boolean {
     const knownSet = new Set<string>();
     try {
-      for (const m of providerRegistry.listModels()) knownSet.add(m.provider);
+      for (const m of this.providerRegistry.listModels()) knownSet.add(m.provider);
     } catch { /* ignore */ }
-    for (const h of providerHealthTracker.getAll()) knownSet.add(h.name);
+    for (const h of this.providerHealthTracker.getAll()) knownSet.add(h.name);
     const providers = [...knownSet].sort();
     if (providers.length === 0) return false;
     if (key === 'j' || key === 'down' || key === '\x1b[B') {
@@ -398,7 +406,11 @@ export class ProviderHealthPanel extends BasePanel {
     if (!force && Date.now() - this._accountRefreshAt < 15_000) return;
     this._accountLoading = true;
     try {
-      const snapshot = await buildProviderAccountSnapshot();
+      const snapshot = await buildProviderAccountSnapshot({
+        providerRegistry: this.providerRegistry,
+        serviceRegistry: this.serviceRegistry,
+        subscriptionManager: this.subscriptionManager,
+      });
       this._accountRecords = new Map(snapshot.providers.map((record) => [record.providerId, record]));
       this._accountRefreshAt = Date.now();
       this.markDirty();
@@ -410,7 +422,7 @@ export class ProviderHealthPanel extends BasePanel {
 
   private _buildDomainSummaries(): HealthDomainSummary[] {
     const summaries: HealthDomainSummary[] = [];
-    const auth = getLocalUserAuthManager().inspect();
+    const auth = this.localAuthManager.inspect();
     summaries.push({
       name: 'auth',
       level: auth.bootstrapCredentialPresent || auth.userCount <= 1 ? 'warn' : 'good',
@@ -451,15 +463,19 @@ export class ProviderHealthPanel extends BasePanel {
 
     if (this.runtimeStore) {
       const state = this.runtimeStore.getState();
-      const remote = getRemoteSupervisor().getSnapshot(this.runtimeStore);
+      const remote = this.remoteSupervisor?.getSnapshot(this.runtimeStore);
       summaries.push({
         name: 'remote',
-        level: remote.degradedConnections > 0 ? 'warn' : remote.sessions.length > 0 ? 'good' : 'info',
-        summary: remote.sessions.length === 0
+        level: !remote ? 'info' : remote.degradedConnections > 0 ? 'warn' : remote.sessions.length > 0 ? 'good' : 'info',
+        summary: !remote
+          ? 'remote supervisor unavailable'
+          : remote.sessions.length === 0
           ? 'no remote sessions tracked'
           : `${remote.sessions.length} sessions / ${remote.degradedConnections} degraded`,
-        next: remote.degradedConnections > 0 ? '/remote recover <runnerId>' : '/remote supervisor',
-        details: remote.sessions.length === 0
+        next: remote && remote.degradedConnections > 0 ? '/remote recover <runnerId>' : '/remote supervisor',
+        details: !remote
+          ? ['remote supervisor is not wired into this runtime']
+          : remote.sessions.length === 0
           ? ['no remote sessions have been attached yet']
           : remote.sessions
               .filter((session) =>
@@ -470,7 +486,7 @@ export class ProviderHealthPanel extends BasePanel {
                 || Boolean(session.lastError))
               .slice(0, 3)
               .map((session) => `${session.runnerId}: transport=${session.transportState} heartbeat=${session.heartbeat.status}${session.lastError ? ` error=${session.lastError}` : ''}`),
-        nextSteps: remote.degradedConnections > 0
+        nextSteps: remote && remote.degradedConnections > 0
           ? ['/remote supervisor', '/remote recover <runnerId>', '/remote capabilities']
           : ['/remote supervisor'],
       });
@@ -589,9 +605,9 @@ export class ProviderHealthPanel extends BasePanel {
 
     const knownSet = new Set<string>();
     try {
-      for (const m of providerRegistry.listModels()) knownSet.add(m.provider);
+      for (const m of this.providerRegistry.listModels()) knownSet.add(m.provider);
     } catch { /* ignore */ }
-    for (const h of providerHealthTracker.getAll()) knownSet.add(h.name);
+    for (const h of this.providerHealthTracker.getAll()) knownSet.add(h.name);
     const providers = [...knownSet].sort();
     this._selectedIndex = Math.min(this._selectedIndex, Math.max(0, providers.length - 1));
 
@@ -621,7 +637,7 @@ export class ProviderHealthPanel extends BasePanel {
     let accountIssues = 0;
     let expiringAuth = 0;
     for (const name of providers) {
-      const status = providerHealthTracker.get(name)?.status ?? 'unknown';
+      const status = this.providerHealthTracker.get(name)?.status ?? 'unknown';
       if (status === 'online') online++;
       else if (status === 'rate-limited') rateLimited++;
       else if (status === 'error') errored++;
@@ -665,7 +681,7 @@ export class ProviderHealthPanel extends BasePanel {
     }
 
     const selectedName = providers[this._selectedIndex];
-    const selectedHealth = selectedName ? providerHealthTracker.get(selectedName) : undefined;
+    const selectedHealth = selectedName ? this.providerHealthTracker.get(selectedName) : undefined;
     const selectedAccount = selectedName ? this._accountRecords.get(selectedName) : undefined;
     const selectedLines: Line[] = [];
     const maintenanceLines: Line[] = [];
@@ -734,7 +750,7 @@ export class ProviderHealthPanel extends BasePanel {
       section: {
         title: 'Providers',
         scrollableLines: providers.map((name, absolute) => {
-          const health = providerHealthTracker.get(name);
+          const health = this.providerHealthTracker.get(name);
           const status = health?.status ?? 'unknown';
           const latency = health?.lastLatencyMs !== undefined ? fmtMs(health.lastLatencyMs) : 'n/a';
           const latencyFg = health?.lastLatencyMs !== undefined ? latencyColor(health.lastLatencyMs) : C.dim;

@@ -1,5 +1,6 @@
 import type { GatewayEventDescriptor } from './method-catalog-shared.ts';
-import { GENERIC_OBJECT_SCHEMA,STRING_SCHEMA,NUMBER_SCHEMA,arraySchema,objectSchema,eventDescriptor,runtimeDomainEvent } from './method-catalog-shared.ts';
+import { STRING_SCHEMA,NUMBER_SCHEMA,arraySchema,objectSchema,eventDescriptor,runtimeDomainEvent } from './method-catalog-shared.ts';
+import { CONTROL_PLANE_SURFACE_MESSAGE_SCHEMA } from './operator-contract-schemas.ts';
 
 export const builtinGatewayEventDescriptors: readonly GatewayEventDescriptor[] = [
   runtimeDomainEvent('session', 'Shared-session lifecycle, participant, and message events.'),
@@ -40,7 +41,7 @@ export const builtinGatewayEventDescriptors: readonly GatewayEventDescriptor[] =
       clientId: STRING_SCHEMA,
       domains: arraySchema(STRING_SCHEMA),
       transport: STRING_SCHEMA,
-    }, ['clientId', 'domains'], { additionalProperties: true }),
+    }, ['clientId', 'domains', 'transport']),
   }),
   eventDescriptor({
     id: 'control.heartbeat',
@@ -63,6 +64,6 @@ export const builtinGatewayEventDescriptors: readonly GatewayEventDescriptor[] =
     transport: ['sse', 'ws'],
     scopes: ['read:events'],
     wireEvents: ['surface-message'],
-    outputSchema: GENERIC_OBJECT_SCHEMA,
+    outputSchema: CONTROL_PLANE_SURFACE_MESSAGE_SCHEMA,
   }),
 ];

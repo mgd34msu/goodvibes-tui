@@ -1,11 +1,13 @@
 import type { Line } from '../types/grid.ts';
 import { createEmptyLine } from '../types/grid.ts';
 import { BasePanel } from './base-panel.ts';
-import { getHookActivityTracker, getHookDispatcher, getHookWorkbench, listHookPointContracts } from '../hooks/index.ts';
+import { listHookPointContracts } from '../hooks/index.ts';
+import type { HookDispatcher } from '../hooks/dispatcher.ts';
 import type { HookPointContract } from '../hooks/contracts.ts';
-import type { HookActivityRecord } from '../hooks/activity.ts';
+import type { HookActivityRecord, HookActivityTracker } from '../hooks/activity.ts';
 import type { HookAuthoringAction, HookSimulationResult } from '../hooks/workbench.ts';
 import type { HookChain, HookDefinition } from '../hooks/types.ts';
+import type { HookWorkbench } from '../hooks/workbench.ts';
 import { truncateDisplay } from '../utils/terminal-width.ts';
 import {
   buildEmptyState,
@@ -43,13 +45,17 @@ export interface HooksPanelDataSource {
   getWorkbench(): HooksPanelWorkbenchView;
 }
 
-function createDefaultDataSource(): HooksPanelDataSource {
+function createDefaultDataSource(
+  hookDispatcher: Pick<HookDispatcher, 'listHooks' | 'getChains'>,
+  hookWorkbench: HookWorkbench,
+  hookActivityTracker: Pick<HookActivityTracker, 'listRecent'>,
+): HooksPanelDataSource {
   return {
     listContracts: () => listHookPointContracts(),
-    listHooks: () => getHookDispatcher().listHooks(),
-    listChains: () => getHookDispatcher().getChains(),
-    listRecentActivity: (limit = 3) => getHookActivityTracker().listRecent(limit),
-    getWorkbench: () => getHookWorkbench(),
+    listHooks: () => hookDispatcher.listHooks(),
+    listChains: () => hookDispatcher.getChains(),
+    listRecentActivity: (limit = 3) => hookActivityTracker.listRecent(limit),
+    getWorkbench: () => hookWorkbench,
   };
 }
 
@@ -58,7 +64,12 @@ export class HooksPanel extends BasePanel {
   private scrollOffset = 0;
   private readonly dataSource: HooksPanelDataSource;
 
-  public constructor(dataSource: HooksPanelDataSource = createDefaultDataSource()) {
+  public constructor(
+    hookDispatcher: Pick<HookDispatcher, 'listHooks' | 'getChains'>,
+    hookWorkbench: HookWorkbench,
+    hookActivityTracker: Pick<HookActivityTracker, 'listRecent'>,
+    dataSource: HooksPanelDataSource = createDefaultDataSource(hookDispatcher, hookWorkbench, hookActivityTracker),
+  ) {
     super('hooks', 'Hooks', 'H', 'monitoring');
     this.dataSource = dataSource;
   }

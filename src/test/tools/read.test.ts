@@ -11,6 +11,7 @@ import { ReadTool } from '../../tools/read/index.ts';
 import { FileStateCache } from '../../state/file-cache.ts';
 import { ProjectIndex } from '../../state/project-index.ts';
 import { CodeIntelligence } from '../../intelligence/facade.ts';
+import { getTestCodeIntelligence, getTestProjectIndex, resetTestProjectIndexes } from '../helpers/runtime-services.ts';
 
 // ---------------------------------------------------------------------------
 // Test helpers
@@ -43,13 +44,14 @@ function writeBinary(dir: string, name: string): string {
   return absPath.slice(PROJECT_ROOT.length + 1);
 }
 
-/** Build a ReadTool with isolated FileStateCache and ProjectIndex. */
-function makeTool(): { tool: ReadTool; cache: FileStateCache; index: ProjectIndex } {
+/** Build a ReadTool with isolated FileStateCache, ProjectIndex, and CodeIntelligence. */
+function makeTool(): { tool: ReadTool; cache: FileStateCache; index: ProjectIndex; intelligence: CodeIntelligence } {
   const cache = new FileStateCache();
-  ProjectIndex._resetInstance();
-  const index = ProjectIndex.getInstance(PROJECT_ROOT);
-  const tool = new ReadTool(cache, index);
-  return { tool, cache, index };
+  resetTestProjectIndexes();
+  const index = getTestProjectIndex(PROJECT_ROOT);
+  const intelligence = getTestCodeIntelligence();
+  const tool = new ReadTool(cache, index, intelligence);
+  return { tool, cache, index, intelligence };
 }
 
 /** Parse the JSON output from tool.execute(). */
@@ -67,14 +69,15 @@ describe('ReadTool', () => {
   let tmpDir: string;
   let tool: ReadTool;
   let cache: FileStateCache;
+  let intelligence: CodeIntelligence;
 
   beforeEach(() => {
     tmpDir = makeTmpDir();
-    ({ tool, cache } = makeTool());
+    ({ tool, cache, intelligence } = makeTool());
   });
 
   afterEach(() => {
-    ProjectIndex._resetInstance();
+    resetTestProjectIndexes();
     if (existsSync(tmpDir)) rmSync(tmpDir, { recursive: true, force: true });
   });
 
@@ -276,8 +279,7 @@ describe('ReadTool', () => {
     test('uses tree-sitter path (getSymbols called) for a .ts file', async () => {
       // Verify that the tree-sitter code path (ci.getSymbols) is invoked for a
       // TypeScript file, not just the regex fallback.
-      const ci = CodeIntelligence.getInstance();
-      const spy = spyOn(ci, 'getSymbols');
+      const spy = spyOn(intelligence, 'getSymbols');
       const src = 'export function doStuff(): void {}\nexport const VALUE = 42;\n';
       const rel = writeRelative(tmpDir, 'sym-spy.ts', src);
       const r = await exec(tool, {
@@ -328,8 +330,7 @@ describe('ReadTool', () => {
     test('uses tree-sitter path (getOutline called) for a .ts file', async () => {
       // Verify that the tree-sitter code path (ci.getOutline) is invoked for a
       // TypeScript file, not just the regex fallback.
-      const ci = CodeIntelligence.getInstance();
-      const spy = spyOn(ci, 'getOutline');
+      const spy = spyOn(intelligence, 'getOutline');
       const src = 'export function myFn() {}\n';
       const rel = writeRelative(tmpDir, 'ts-path.ts', src);
       const r = await exec(tool, {
@@ -636,9 +637,9 @@ describe('ReadTool', () => {
 
   describe('project index integration', () => {
     test('upserts file into project index after read', async () => {
-      ProjectIndex._resetInstance();
-      const idx = ProjectIndex.getInstance(PROJECT_ROOT);
-      const newTool = new ReadTool(cache, idx);
+      resetTestProjectIndexes();
+      const idx = getTestProjectIndex(PROJECT_ROOT);
+      const newTool = new ReadTool(cache, idx, intelligence);
       const rel = writeRelative(tmpDir, 'indexed.ts', 'export const IDX = 1;\n');
       await newTool.execute({ files: [{ path: rel }] });
       const absPath = resolve(PROJECT_ROOT, rel);

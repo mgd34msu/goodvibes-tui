@@ -73,7 +73,7 @@ export async function mapOutputPhase(
     // Apply output policy enforcement after auto-repair annotation
     const toolClass = resolveToolClass(tool);
     const policy = getPolicy(toolClass);
-    const auditedResult = applyOutputPolicy(record.result, policy);
+    const auditedResult = applyOutputPolicy(record.result, policy, _context.overflowHandler!);
     record.result = auditedResult.result;
 
     // Surface spill backend in phase metadata when overflow occurred

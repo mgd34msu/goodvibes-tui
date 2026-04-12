@@ -4,8 +4,12 @@ import { mkdir } from 'node:fs/promises';
 import { mkdirSync, rmSync, writeFileSync } from 'fs';
 import { execSync } from 'child_process';
 import { makeTempDir, writeTempFile } from '../setup.ts';
-import { analyzeTool } from '../../tools/analyze/index.ts';
+import { createAnalyzeTool } from '../../tools/analyze/index.ts';
 import { GitService } from '../../git/service.ts';
+import { createTestManagers } from '../helpers/test-managers.ts';
+import { getTestGitService } from '../helpers/runtime-services.ts';
+
+const analyzeTool = createAnalyzeTool(createTestManagers().toolLLM);
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -564,8 +568,8 @@ describe('diff mode', () => {
   });
 
   afterEach(() => {
-    // Dispose singleton so it doesn't bleed between tests
-    try { GitService.getInstance(gitDir).dispose(); } catch {}
+    // Dispose the shared test-owned intelligence service so it doesn't bleed between tests
+    try { getTestGitService(gitDir).dispose(); } catch {}
     rmSync(gitDir, { recursive: true, force: true });
   });
 
@@ -681,7 +685,7 @@ describe('breaking mode', () => {
   });
 
   afterEach(() => {
-    try { GitService.getInstance(gitDir).dispose(); } catch {}
+    try { getTestGitService(gitDir).dispose(); } catch {}
     rmSync(gitDir, { recursive: true, force: true });
   });
 
@@ -806,7 +810,7 @@ describe('semantic_diff mode', () => {
   });
 
   afterEach(() => {
-    try { GitService.getInstance(gitDir).dispose(); } catch {}
+    try { getTestGitService(gitDir).dispose(); } catch {}
     rmSync(gitDir, { recursive: true, force: true });
   });
 

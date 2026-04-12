@@ -2,8 +2,11 @@ import type { GenericWebhookAdapterContext, SurfaceAdapterContext } from '../../
 import type { AutomationRouteBinding } from '../../automation/routes.ts';
 import type { ConfigManager } from '../../config/manager.ts';
 import type { SurfacesConfig } from '../../config/schema.ts';
+import type { SecretsManager } from '../../config/secrets.ts';
 import type { ServiceRegistry } from '../../config/service-registry.ts';
 import type { SharedApprovalRecord } from '../../control-plane/index.ts';
+import type { ChannelDeliveryRouter } from '../delivery-router.ts';
+import type { ChannelPolicyManager } from '../policy-manager.ts';
 import type { ChannelPluginRegistry } from '../plugin-registry.ts';
 import type { ChannelProviderRuntimeManager } from '../provider-runtime.ts';
 import type { RouteBindingManager } from '../route-manager.ts';
@@ -25,10 +28,13 @@ export type ManagedSurface =
 
 export interface BuiltinChannelRuntimeDeps {
   readonly configManager: ConfigManager;
+  readonly secretsManager: SecretsManager;
   readonly serviceRegistry: ServiceRegistry;
   readonly routeBindings: RouteBindingManager;
+  readonly channelPolicy: ChannelPolicyManager;
   readonly channelPlugins: ChannelPluginRegistry;
   readonly providerRuntime?: ChannelProviderRuntimeManager;
+  readonly deliveryRouter: ChannelDeliveryRouter;
   readonly surfaceDeliveryEnabled: (surface: ManagedSurface) => boolean;
   readonly buildSurfaceAdapterContext: () => SurfaceAdapterContext;
   readonly buildGenericWebhookAdapterContext: () => GenericWebhookAdapterContext;

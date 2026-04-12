@@ -14,7 +14,7 @@ import {
 import { homedir } from 'os';
 import { dirname, join } from 'path';
 
-import { getSessionManager, type SessionManager, type SessionMeta } from '../sessions/manager.ts';
+import { SessionManager, type SessionMeta } from '../sessions/manager.ts';
 import { logger } from '../utils/logger.ts';
 import type { SessionReturnContextSummary } from './session-return-context.ts';
 import type { ConversationTitleSource } from '../core/conversation.ts';
@@ -41,7 +41,7 @@ export type SessionPersistenceOptions = {
 };
 
 function resolveSessionManager(options?: SessionPersistenceOptions): SessionManager {
-  return options?.sessionManager ?? getSessionManager();
+  return options?.sessionManager ?? new SessionManager(options?.cwd);
 }
 
 export function getUserSessionsDir(cwd = process.cwd()): string {

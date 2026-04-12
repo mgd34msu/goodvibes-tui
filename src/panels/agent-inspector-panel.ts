@@ -8,9 +8,8 @@ import { readFile } from 'node:fs/promises';
 import type { Line } from '../types/grid.ts';
 import { createEmptyLine } from '../types/grid.ts';
 import { BasePanel } from './base-panel.ts';
-import { AgentManager } from '../tools/agent/index.ts';
-import type { AgentRecord } from '../tools/agent/index.ts';
-import { AgentMessageBus } from '../agents/message-bus.ts';
+import type { AgentManager, AgentRecord } from '../tools/agent/index.ts';
+import type { AgentMessageBus } from '../agents/message-bus.ts';
 import { logger } from '../utils/logger.ts';
 import {
   buildEmptyState,
@@ -77,6 +76,11 @@ const COLOR = {
 // AgentInspectorPanel
 // ---------------------------------------------------------------------------
 
+export interface AgentInspectorPanelDeps {
+  readonly agentManager: Pick<AgentManager, 'list' | 'getStatus'>;
+  readonly agentMessageBus: Pick<AgentMessageBus, 'getMessages'>;
+}
+
 export class AgentInspectorPanel extends BasePanel {
   // The agent currently being inspected
   private selectedAgentId: string | null = null;
@@ -96,7 +100,7 @@ export class AgentInspectorPanel extends BasePanel {
   // Row cache — cleared on markDirty(), computed once per render cycle
   private _cachedRows: DisplayRow[] | null = null;
 
-  constructor() {
+  constructor(private readonly deps: AgentInspectorPanelDeps) {
     super('inspector', 'Inspector', 'I', 'agent');
   }
 
@@ -168,7 +172,7 @@ export class AgentInspectorPanel extends BasePanel {
   render(width: number, height: number): Line[] {
     if (height <= 0 || width <= 0) return [];
 
-    const manager = AgentManager.getInstance();
+    const manager = this.deps.agentManager;
     const agents = manager.list();
     const rec = this.selectedAgentId
       ? manager.getStatus(this.selectedAgentId)
@@ -395,7 +399,7 @@ export class AgentInspectorPanel extends BasePanel {
 
   private _busToTimeline(): TimelineEntry[] {
     if (!this.selectedAgentId) return [];
-    const messages = AgentMessageBus.getInstance().getMessages(this.selectedAgentId);
+    const messages = this.deps.agentMessageBus.getMessages(this.selectedAgentId);
     const DEDUP_WINDOW_MS = 2000;
     const seen = new Map<string, number>(); // hash -> last timestamp
     const result: TimelineEntry[] = [];
@@ -492,7 +496,7 @@ export class AgentInspectorPanel extends BasePanel {
   }
 
   private _nextAgent(): void {
-    const agents = AgentManager.getInstance().list();
+    const agents = this.deps.agentManager.list();
     if (agents.length === 0) return;
 
     if (!this.selectedAgentId) {

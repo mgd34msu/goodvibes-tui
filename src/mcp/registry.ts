@@ -13,7 +13,7 @@ import { McpClient } from './client.ts';
 import type { McpProcessSpec } from './client.ts';
 import type { McpToolInfo, McpToolSchema } from './client.ts';
 import type { McpServerConfig } from './config.ts';
-import { getHookDispatcher } from '../hooks/index.ts';
+import type { HookDispatcher } from '../hooks/dispatcher.ts';
 import type { HookEvent } from '../hooks/types.ts';
 import { McpPermissionManager } from '../runtime/mcp/permissions.ts';
 import { McpSchemaFreshnessTracker } from '../runtime/mcp/schema-freshness.ts';
@@ -28,7 +28,6 @@ import {
 import type { ConfigManager } from '../config/manager.ts';
 import { getSandboxConfigSnapshot } from '../runtime/sandbox/manager.ts';
 import {
-  getSandboxSessionRegistry,
   type SandboxSessionRegistry,
 } from '../runtime/sandbox/session-registry.ts';
 import { resolveSandboxCommandPlan } from '../runtime/sandbox/backend.ts';
@@ -53,14 +52,23 @@ export class McpRegistry {
   private freshness = new McpSchemaFreshnessTracker();
   private runtimeBus: RuntimeEventBus | null = null;
   private sandboxConfigManager: ConfigManager | null = null;
-  private sandboxSessions: SandboxSessionRegistry = getSandboxSessionRegistry();
+  private sandboxSessions: SandboxSessionRegistry;
   private sandboxSessionByServer = new Map<string, string>();
+  private readonly hookDispatcher: Pick<HookDispatcher, 'fire'>;
+
+  constructor(options: {
+    readonly hookDispatcher: Pick<HookDispatcher, 'fire'>;
+    readonly sandboxSessions: SandboxSessionRegistry;
+  }) {
+    this.hookDispatcher = options.hookDispatcher;
+    this.sandboxSessions = options.sandboxSessions;
+  }
 
   setRuntimeBus(runtimeBus: RuntimeEventBus | null): void {
     this.runtimeBus = runtimeBus;
   }
 
-  setSandboxRuntime(configManager: ConfigManager, sessions: SandboxSessionRegistry = getSandboxSessionRegistry()): void {
+  setSandboxRuntime(configManager: ConfigManager, sessions: SandboxSessionRegistry): void {
     this.sandboxConfigManager = configManager;
     this.sandboxSessions = sessions;
   }
@@ -153,7 +161,7 @@ export class McpRegistry {
     }
 
     // Pre:mcp:call hook
-    const dispatcher = getHookDispatcher();
+    const dispatcher = this.hookDispatcher;
     const preEvent: HookEvent = {
       path: 'Pre:mcp:call',
       phase: 'Pre',
@@ -202,7 +210,7 @@ export class McpRegistry {
    */
   async disconnectAll(): Promise<void> {
     // Lifecycle:mcp:disconnected hooks (fire-and-forget for each server)
-    const dispatcher = getHookDispatcher();
+    const dispatcher = this.hookDispatcher;
     for (const name of this.clients.keys()) {
       const disconnectedEvent: HookEvent = {
         path: 'Lifecycle:mcp:disconnected',
@@ -392,7 +400,7 @@ export class McpRegistry {
         sessionId: '', timestamp: Date.now(),
         payload: { server: name },
       };
-      getHookDispatcher().fire(connectedEvent).catch((err: unknown) => { logger.debug('Lifecycle:mcp:connected hook error', { error: String(err) }); });
+      this.hookDispatcher.fire(connectedEvent).catch((err: unknown) => { logger.debug('Lifecycle:mcp:connected hook error', { error: String(err) }); });
     } catch (err) {
       if (sandboxSessionId) {
         this.sandboxSessions.stop(sandboxSessionId);
@@ -496,6 +504,3 @@ export class McpRegistry {
     });
   }
 }
-
-/** Shared singleton instance — used by main.ts and slash commands. */
-export const mcpRegistry = new McpRegistry();

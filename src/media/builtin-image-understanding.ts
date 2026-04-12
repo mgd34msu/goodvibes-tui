@@ -1,6 +1,6 @@
 import { ArtifactStore } from '../artifacts/index.ts';
-import { providerRegistry } from '../providers/registry.ts';
 import type { ContentPart, LLMProvider, ProviderMessage } from '../providers/interface.ts';
+import type { ModelDefinition, ProviderRegistry } from '../providers/registry.ts';
 import type {
   MediaAnalysisRequest,
   MediaAnalysisResult,
@@ -21,6 +21,8 @@ interface ImageUnderstandingScope {
   readonly allowProviderIds?: readonly string[];
   readonly requireLocal?: boolean;
 }
+
+type ImageModelRegistry = Pick<ProviderRegistry, 'getCurrentModel' | 'getForModel' | 'listModels'>;
 
 function buildAnalysisPrompt(prompt?: string): string {
   const task = prompt?.trim().length
@@ -61,6 +63,7 @@ function normalizeLabels(value: unknown): string[] {
 }
 
 async function modelMatchesScope(
+  providerRegistry: ImageModelRegistry,
   model: Record<string, unknown>,
   scope: ImageUnderstandingScope,
 ): Promise<boolean> {
@@ -82,6 +85,7 @@ async function modelMatchesScope(
 }
 
 async function resolveModel(
+  providerRegistry: ImageModelRegistry,
   scope: ImageUnderstandingScope,
   modelId?: string,
 ): Promise<{
@@ -89,7 +93,7 @@ async function resolveModel(
   provider: LLMProvider;
   modelId: string;
 }> {
-  const models = providerRegistry.listModels();
+  const models: readonly ModelDefinition[] = providerRegistry.listModels();
   const resolveCandidate = async () => {
     if (modelId) {
       const explicit = models.find((model) => model.registryKey === modelId || model.id === modelId);
@@ -99,18 +103,18 @@ async function resolveModel(
       if (!explicit.capabilities.multimodal) {
         throw new Error(`Model does not support image input: ${explicit.displayName}`);
       }
-      if (!await modelMatchesScope(explicit as unknown as Record<string, unknown>, scope)) {
+      if (!await modelMatchesScope(providerRegistry, explicit as unknown as Record<string, unknown>, scope)) {
         throw new Error(`Model does not match media provider scope ${scope.label}: ${explicit.displayName}`);
       }
       return explicit;
     }
     const current = providerRegistry.getCurrentModel();
-    if (current.capabilities.multimodal && await modelMatchesScope(current as unknown as Record<string, unknown>, scope)) {
+    if (current.capabilities.multimodal && await modelMatchesScope(providerRegistry, current as unknown as Record<string, unknown>, scope)) {
       return current;
     }
     for (const candidate of models) {
       if (!candidate.selectable || !candidate.capabilities.multimodal) continue;
-      if (await modelMatchesScope(candidate as unknown as Record<string, unknown>, scope)) {
+      if (await modelMatchesScope(providerRegistry, candidate as unknown as Record<string, unknown>, scope)) {
         return candidate;
       }
     }
@@ -128,7 +132,10 @@ async function resolveModel(
   };
 }
 
-async function resolveArtifactInput(request: MediaAnalysisRequest): Promise<{
+async function resolveArtifactInput(
+  artifactStore: Pick<ArtifactStore, 'readContent'>,
+  request: MediaAnalysisRequest,
+): Promise<{
   mimeType: string;
   dataBase64: string;
   metadata: Record<string, unknown>;
@@ -142,7 +149,7 @@ async function resolveArtifactInput(request: MediaAnalysisRequest): Promise<{
   }
   const artifactId = request.artifact.artifactId ?? request.artifact.id;
   if (artifactId) {
-    const { record, buffer } = await ArtifactStore.getActive().readContent(artifactId);
+    const { record, buffer } = await artifactStore.readContent(artifactId);
     return {
       mimeType: record.mimeType,
       dataBase64: buffer.toString('base64'),
@@ -153,15 +160,17 @@ async function resolveArtifactInput(request: MediaAnalysisRequest): Promise<{
 }
 
 async function analyzeWithScope(
+  providerRegistry: ImageModelRegistry,
   scope: ImageUnderstandingScope,
+  artifactStore: Pick<ArtifactStore, 'readContent'>,
   request: MediaAnalysisRequest,
 ): Promise<MediaAnalysisResult> {
-  const artifact = await resolveArtifactInput(request);
+  const artifact = await resolveArtifactInput(artifactStore, request);
   if (!artifact.mimeType.toLowerCase().startsWith('image/')) {
     throw new Error(`Unsupported media type for image understanding: ${artifact.mimeType}`);
   }
 
-  const selected = await resolveModel(scope, request.modelId);
+  const selected = await resolveModel(providerRegistry, scope, request.modelId);
   const content: ContentPart[] = [
     { type: 'text', text: buildAnalysisPrompt(request.prompt) },
     { type: 'image', data: artifact.dataBase64, mediaType: artifact.mimeType },
@@ -209,7 +218,11 @@ async function analyzeWithScope(
   };
 }
 
-function createScopedImageUnderstandingProvider(scope: ImageUnderstandingScope): MediaProvider {
+function createScopedImageUnderstandingProvider(
+  providerRegistry: ImageModelRegistry,
+  scope: ImageUnderstandingScope,
+  artifactStore: Pick<ArtifactStore, 'readContent'>,
+): MediaProvider {
   return {
     id: scope.providerId,
     label: scope.label,
@@ -218,7 +231,7 @@ function createScopedImageUnderstandingProvider(scope: ImageUnderstandingScope):
       let available = false;
       for (const model of providerRegistry.listModels()) {
         if (!model.selectable || !model.capabilities.multimodal) continue;
-        if (await modelMatchesScope(model as unknown as Record<string, unknown>, scope)) {
+        if (await modelMatchesScope(providerRegistry, model as unknown as Record<string, unknown>, scope)) {
           available = true;
           break;
         }
@@ -235,45 +248,60 @@ function createScopedImageUnderstandingProvider(scope: ImageUnderstandingScope):
         metadata: {},
       };
     },
-    analyze: (request) => analyzeWithScope(scope, request),
+    analyze: (request) => analyzeWithScope(providerRegistry, scope, artifactStore, request),
   };
 }
 
-export function createBuiltinImageUnderstandingProvider(): MediaProvider {
-  return createScopedImageUnderstandingProvider({
+export function createBuiltinImageUnderstandingProvider(
+  providerRegistry: ImageModelRegistry,
+  artifactStore: Pick<ArtifactStore, 'readContent'>,
+): MediaProvider {
+  return createScopedImageUnderstandingProvider(providerRegistry, {
     providerId: 'builtin:image-understanding',
     label: 'Built-in Image Understanding',
-  });
+  }, artifactStore);
 }
 
-export function createOpenAIImageUnderstandingProvider(): MediaProvider {
-  return createScopedImageUnderstandingProvider({
+export function createOpenAIImageUnderstandingProvider(
+  providerRegistry: ImageModelRegistry,
+  artifactStore: Pick<ArtifactStore, 'readContent'>,
+): MediaProvider {
+  return createScopedImageUnderstandingProvider(providerRegistry, {
     providerId: 'builtin:image-openai',
     label: 'OpenAI Image Understanding',
     allowProviderIds: ['openai'],
-  });
+  }, artifactStore);
 }
 
-export function createGeminiImageUnderstandingProvider(): MediaProvider {
-  return createScopedImageUnderstandingProvider({
+export function createGeminiImageUnderstandingProvider(
+  providerRegistry: ImageModelRegistry,
+  artifactStore: Pick<ArtifactStore, 'readContent'>,
+): MediaProvider {
+  return createScopedImageUnderstandingProvider(providerRegistry, {
     providerId: 'builtin:image-gemini',
     label: 'Gemini Image Understanding',
     allowProviderIds: ['gemini'],
-  });
+  }, artifactStore);
 }
 
-export function createAnthropicImageUnderstandingProvider(): MediaProvider {
-  return createScopedImageUnderstandingProvider({
+export function createAnthropicImageUnderstandingProvider(
+  providerRegistry: ImageModelRegistry,
+  artifactStore: Pick<ArtifactStore, 'readContent'>,
+): MediaProvider {
+  return createScopedImageUnderstandingProvider(providerRegistry, {
     providerId: 'builtin:image-anthropic',
     label: 'Anthropic Image Understanding',
     allowProviderIds: ['anthropic'],
-  });
+  }, artifactStore);
 }
 
-export function createLocalImageUnderstandingProvider(): MediaProvider {
-  return createScopedImageUnderstandingProvider({
+export function createLocalImageUnderstandingProvider(
+  providerRegistry: ImageModelRegistry,
+  artifactStore: Pick<ArtifactStore, 'readContent'>,
+): MediaProvider {
+  return createScopedImageUnderstandingProvider(providerRegistry, {
     providerId: 'builtin:image-local',
     label: 'Local OpenAI-Compatible Image Understanding',
     requireLocal: true,
-  });
+  }, artifactStore);
 }

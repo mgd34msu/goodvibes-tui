@@ -4,6 +4,37 @@ All notable changes to GoodVibes TUI.
 
 ---
 
+## [0.16.0] — 2026-04-12
+
+### V1 Architecture Hardening And SDK Readiness
+
+- Replaced ambient runtime ownership with an explicit app-scoped `RuntimeServices` graph built at bootstrap and threaded through the daemon, control-plane, command surfaces, panels, automation runtime, knowledge runtime, and shell integrations
+- Removed retired cross-boundary singleton/global shortcuts, including the old adaptive-planner and plan-manager instance modules, runtime integration-context fallbacks, and other ambient access patterns that blocked clean service ownership
+- Split the remaining high-gravity runtime files into coherent domain modules across daemon routing, channel builtins and delivery, automation manager internals, orchestrator helpers, panel registration families, remote runtime coordination, knowledge store/service helpers, and tool runtimes while preserving public entrypoints
+- Standardized extension-family wiring across providers, channels, hooks, panels, and tools so runtime registration, ownership, and metadata flow through one model instead of per-family singleton-style seams
+
+### Contracts, CI Enforcement, And Strong Typing
+
+- Hardened the operator and peer contracts with dedicated operator schema modules by domain, explicit distributed-runtime peer contracts, and a fully typed method catalog with no remaining generic-object operator method schemas
+- Added architecture enforcement in CI and release workflows for file-size caps, banned ambient runtime access, banned explicit `any`, and contract-schema regressions
+- Updated runtime and command tests to use real owned services and real hook, subscription, provider, and policy contract shapes rather than legacy shims or incomplete mocks
+- Tightened release-gate coverage around operator surfaces, runtime substrate ownership, hooks authoring, and architecture expectations so future regressions fail fast
+
+### UX And Runtime Fixes
+
+- Fixed prompt input rendering so typed characters appear on the same keystroke instead of lagging one character behind
+- Restored builtin `ops` strategy panel registration after the panel-family split so the operator surface remains complete
+- Fixed settings-modal subscription loading, managed-hooks command/workbench usage, recall policy capture wiring, and guidance maintenance context lookups under the stricter ownership model
+- Updated release/build scripts so README version badges stay in sync and explicit minor/major release bumps are supported without hand-editing scripts
+
+### Verification
+
+- Full typecheck passes: `bunx tsc --noEmit --pretty false`
+- Architecture gate passes: `bun run architecture:check`
+- Full test runner passes: `bun test` (`6963` pass, `0` fail)
+- Build passes: `bun run build`
+- Diff hygiene passes: `git diff --check`
+
 ## [0.15.8] — 2026-04-11
 
 ### TLS Transport Controls And Certificate Handling

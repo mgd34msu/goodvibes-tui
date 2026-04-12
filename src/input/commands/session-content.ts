@@ -5,18 +5,11 @@ import { writeFile } from 'node:fs/promises';
 import type { CommandRegistry } from '../command-registry.ts';
 import type { SelectionItem } from '../selection-modal.ts';
 import { exportToMarkdown } from '../../export/markdown.ts';
-import { getSessionManager } from '../../sessions/manager.ts';
-import { AgentManager } from '../../tools/agent/index.ts';
 import { TemplateManager, parseTemplateArgs } from '../../templates/manager.ts';
-import { sessionMemoryStore } from '../../core/session-memory.ts';
-
-let templateManager: TemplateManager | undefined;
-function getTemplateManager(): TemplateManager {
-  if (!templateManager) templateManager = new TemplateManager();
-  return templateManager;
-}
+import { requireSessionManager, requireSessionMemoryStore } from './runtime-services.ts';
 
 export function registerSessionContentCommands(registry: CommandRegistry): void {
+  const templateManager = new TemplateManager();
   registry.register({
     name: 'export',
     description: 'Export conversation to a Markdown file',
@@ -112,7 +105,7 @@ export function registerSessionContentCommands(registry: CommandRegistry): void 
     usage: '[name]',
     argsHint: '[name]',
     handler(args, ctx) {
-      const sessionManager = getSessionManager();
+      const sessionManager = requireSessionManager(ctx);
       const rawName = args[0] || ctx.conversationManager.title || `session-${Date.now()}`;
       const exportData = ctx.conversationManager.toJSON() as { messages: object[] };
       const messages = exportData.messages ?? [];
@@ -123,7 +116,12 @@ export function registerSessionContentCommands(registry: CommandRegistry): void 
         timestamp: Date.now(),
       };
       try {
-        const agentRecords = AgentManager.getInstance().exportState();
+        const agentManager = ctx.agentManager;
+        if (!agentManager) {
+          ctx.print('Agent manager is not available in this runtime.');
+          return;
+        }
+        const agentRecords = agentManager.exportState();
         const { filePath, sanitizedName } = sessionManager.save(rawName, messages, meta, agentRecords);
         ctx.print(`Session saved: ${rawName}${sanitizedName !== rawName ? ` (saved as "${sanitizedName}")` : ''}${agentRecords.length > 0 ? ` [${agentRecords.length} agent records]` : ''}\n  → ${filePath}`);
       } catch (e) {
@@ -142,15 +140,20 @@ export function registerSessionContentCommands(registry: CommandRegistry): void 
         ctx.print('Usage: /load <session-name>\nRun /sessions to list available sessions.');
         return;
       }
-      const sessionManager = getSessionManager();
+      const sessionManager = requireSessionManager(ctx);
       try {
         const { meta, messages, agentRecords } = sessionManager.load(args[0]);
+        const agentManager = ctx.agentManager;
+        if (!agentManager) {
+          ctx.print('Agent manager is not available in this runtime.');
+          return;
+        }
         ctx.conversationManager.resetAll();
         ctx.conversationManager.fromJSON({ messages: messages as never[] });
         if (meta.title) ctx.conversationManager.title = meta.title;
         ctx.conversationManager.rebuildHistory();
-        AgentManager.getInstance().clear();
-        if (agentRecords.length > 0) AgentManager.getInstance().importState(agentRecords);
+        agentManager.clear();
+        if (agentRecords.length > 0) agentManager.importState(agentRecords);
         ctx.renderRequest();
         ctx.print(`Session loaded: ${args[0]} (${messages.length} messages)${agentRecords.length > 0 ? ` [${agentRecords.length} agent records restored]` : ''}`);
       } catch (e) {
@@ -239,7 +242,7 @@ export function registerSessionContentCommands(registry: CommandRegistry): void 
     name: 'sessions',
     description: 'List saved sessions',
     async handler(_args, ctx) {
-      const sessionManager = getSessionManager();
+      const sessionManager = requireSessionManager(ctx);
       const sessions = sessionManager.list();
       if (ctx.openSelection) {
         const deleteAction = new Map([['d', 'delete' as const]]);
@@ -290,7 +293,7 @@ export function registerSessionContentCommands(registry: CommandRegistry): void 
       const sub = args[0];
       const rest = args.slice(1);
       if (!sub || sub === 'list') {
-        const templates = getTemplateManager().list();
+        const templates = templateManager.list();
         if (ctx.openSelection) {
           const actions = new Map([['d', 'delete' as const], ['e', 'edit' as const]]);
           const items: SelectionItem[] = templates.length === 0
@@ -299,10 +302,10 @@ export function registerSessionContentCommands(registry: CommandRegistry): void 
           ctx.openSelection('Templates', items, { allowSearch: true, customActions: actions }, (result) => {
             if (!result) return;
             if (result.action === 'delete') {
-              const deleted = getTemplateManager().delete(result.item.id);
+              const deleted = templateManager.delete(result.item.id);
               ctx.print(deleted ? `Template deleted: ${result.item.id}` : `Template not found: ${result.item.id}`);
             } else {
-              const content = getTemplateManager().load(result.item.id);
+              const content = templateManager.load(result.item.id);
               if (content !== null) {
                 if (result.action === 'edit') ctx.print(`Template: ${result.item.id}\n\n${content}`);
                 else ctx.submitInput?.(content);
@@ -323,7 +326,7 @@ export function registerSessionContentCommands(registry: CommandRegistry): void 
           return;
         }
         try {
-          getTemplateManager().save(name, ctx.conversationManager.getLastUserMessage() || '# Template\n\nReplace this with your template content.\n');
+          templateManager.save(name, ctx.conversationManager.getLastUserMessage() || '# Template\n\nReplace this with your template content.\n');
           ctx.print(`Template saved: ${name}`);
         } catch (e) {
           ctx.print(`Failed to save template: ${(e as Error).message}`);
@@ -336,12 +339,12 @@ export function registerSessionContentCommands(registry: CommandRegistry): void 
           ctx.print('Usage: /template use <name> [args...]');
           return;
         }
-        const templateContent = getTemplateManager().load(name);
+        const templateContent = templateManager.load(name);
         if (templateContent === null) {
           ctx.print(`Template not found: ${name}\nRun /template list to see available templates.`);
           return;
         }
-        ctx.submitInput?.(getTemplateManager().expand(templateContent, parseTemplateArgs(rest.slice(1))));
+        ctx.submitInput?.(templateManager.expand(templateContent, parseTemplateArgs(rest.slice(1))));
         return;
       }
       if (sub === 'edit') {
@@ -350,7 +353,7 @@ export function registerSessionContentCommands(registry: CommandRegistry): void 
           ctx.print('Usage: /template edit <name>');
           return;
         }
-        const content = getTemplateManager().load(name);
+        const content = templateManager.load(name);
         ctx.print(content === null ? `Template not found: ${name}` : `Template: ${name}\n\n${content}`);
         return;
       }
@@ -360,7 +363,7 @@ export function registerSessionContentCommands(registry: CommandRegistry): void 
           ctx.print('Usage: /template delete <name>');
           return;
         }
-        ctx.print(getTemplateManager().delete(name) ? `Template deleted: ${name}` : `Template not found: ${name}`);
+        ctx.print(templateManager.delete(name) ? `Template deleted: ${name}` : `Template not found: ${name}`);
         return;
       }
       ctx.print(`Unknown subcommand: ${sub}\nUsage: /template save|use|list|edit|delete`);
@@ -375,7 +378,7 @@ export function registerSessionContentCommands(registry: CommandRegistry): void 
     handler(args, ctx) {
       const sub = args[0] ?? 'list';
       if (sub === 'list' || args.length === 0) {
-        const memories = sessionMemoryStore.list();
+        const memories = requireSessionMemoryStore(ctx).list();
         ctx.print(memories.length === 0
           ? 'No session memories. Use !# prefix or /memory add <text> to create one.'
           : [`Session Memories (${memories.length}):`, ...memories.map(m => `  [${m.id}] ${m.text}`)].join('\n'));
@@ -385,7 +388,7 @@ export function registerSessionContentCommands(registry: CommandRegistry): void 
           ctx.print('Usage: /memory add <text>');
           return;
         }
-        const id = sessionMemoryStore.add(text);
+        const id = requireSessionMemoryStore(ctx).add(text);
         ctx.print(`Memory added: [${id}] ${text}`);
       } else if (sub === 'remove') {
         const id = args[1];
@@ -393,7 +396,8 @@ export function registerSessionContentCommands(registry: CommandRegistry): void 
           ctx.print('Usage: /memory remove <id>');
           return;
         }
-        ctx.print(sessionMemoryStore.remove(id) ? `Memory removed: [${id}]` : `Memory not found: ${id}`);
+        const store = requireSessionMemoryStore(ctx);
+        ctx.print(store.remove(id) ? `Memory removed: [${id}]` : `Memory not found: ${id}`);
       } else {
         ctx.print('Usage: /memory [list|add <text>|remove <id>]\n  /memory              — list all session memories\n  /memory list         — list all session memories\n  /memory add <text>   — add a memory without sending a message\n  /memory remove <id>  — remove a specific memory');
       }

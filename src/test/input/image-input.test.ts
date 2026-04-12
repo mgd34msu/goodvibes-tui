@@ -2,6 +2,11 @@ import { describe, test, expect, beforeEach } from 'bun:test';
 import { InputHandler } from '../../input/handler.ts';
 import { SelectionManager } from '../../input/selection.ts';
 import { InfiniteBuffer } from '../../core/history.ts';
+import { ConfigManager } from '../../config/manager.ts';
+import { createPermissionConfigReader, PermissionManager } from '../../permissions/manager.ts';
+import { PolicyRuntimeState } from '../../runtime/permissions/policy-runtime.ts';
+import { createDefaultUiRuntimeServices } from '../helpers/ui-services.ts';
+import { getTestProviderRegistry } from '../helpers/runtime-services.ts';
 import type { ContentPart } from '../../providers/interface.ts';
 
 type InputHandlerImageTestAccess = {
@@ -16,7 +21,7 @@ function asImageTestAccess(input: InputHandler): InputHandlerImageTestAccess {
 function makeInput(): InputHandler {
   const sel = new SelectionManager();
   const history = new InfiniteBuffer();
-  return new InputHandler(() => {}, sel, () => 0, () => 20, () => history, () => {}, () => {});
+  return new InputHandler(() => {}, sel, () => 0, () => 20, () => history, () => {}, () => {}, createDefaultUiRuntimeServices());
 }
 
 // ---------------------------------------------------------------------------
@@ -197,17 +202,20 @@ describe('Orchestrator capability check for non-multimodal models', () => {
     const { ToolRegistry } = await import('../../tools/registry.ts');
     const { Orchestrator } = await import('../../core/orchestrator.ts');
     const { ConversationManager } = await import('../../core/conversation.ts');
-    const { PermissionManager } = await import('../../permissions/manager.ts');
-    const { getProviderRegistry } = await import('../../providers/registry.ts');
     const { RuntimeEventBus } = await import('../../runtime/events/index.ts');
 
     const runtimeBus = new RuntimeEventBus();
     const toolRegistry = new ToolRegistry();
     const cm = new ConversationManager(() => 80);
-    const pm = new PermissionManager();
+    const configManager = new ConfigManager();
+    const policyRuntimeState = new PolicyRuntimeState();
+    const pm = new PermissionManager(async () => ({ approved: true }), createPermissionConfigReader(configManager), policyRuntimeState);
     const orch = new Orchestrator(cm, () => 24, () => {}, toolRegistry, pm, () => '', null, null, null, runtimeBus);
-
-    const providerRegistry = getProviderRegistry();
+    orch.setCoreServices({
+      providerRegistry: getTestProviderRegistry(),
+      configManager,
+    });
+    const providerRegistry = getTestProviderRegistry();
 
     // Inject a non-multimodal model into provider registry for this test
     const originalGetCurrentModel = providerRegistry.getCurrentModel.bind(providerRegistry);

@@ -15,7 +15,8 @@
 import type { Line, Cell } from '../types/grid.ts';
 import type { PanelCategory, PanelRegistration } from './types.ts';
 import { BasePanel } from './base-panel.ts';
-import { getPanelManager } from './panel-manager.ts';
+import type { PanelManager } from './panel-manager.ts';
+import type { PanelHealthMonitor } from '../runtime/perf/panel-health-monitor.ts';
 import { createEmptyLine } from '../types/grid.ts';
 import {
   buildEmptyState,
@@ -109,8 +110,11 @@ export class PanelListPanel extends BasePanel {
   private _cachedEntries: ListEntry[] | null = null;
   private _entriesDirty   = true;
 
-  public constructor() {
-    super('panel-list', 'Panel List', 'L', 'session');
+  public constructor(
+    private readonly panelManager: PanelManager,
+    panelHealthMonitor?: PanelHealthMonitor,
+  ) {
+    super('panel-list', 'Panel List', 'L', 'session', panelHealthMonitor);
   }
 
   public override onActivate(): void {
@@ -157,7 +161,7 @@ export class PanelListPanel extends BasePanel {
         const selectedPanel = this._getSelectedPanelEntry(this._buildEntries());
         if (selectedPanel) {
           try {
-            getPanelManager().open(selectedPanel.reg.id);
+            this.panelManager.open(selectedPanel.reg.id);
           } catch (err) {
             console.debug('[panel-list] failed to open panel:', err);
           }
@@ -199,7 +203,7 @@ export class PanelListPanel extends BasePanel {
       const selectedPanel = this._getSelectedPanelEntry(entries);
       if (selectedPanel) {
         try {
-          getPanelManager().open(selectedPanel.reg.id);
+          this.panelManager.open(selectedPanel.reg.id);
         } catch (err) {
           console.debug('[panel-list] failed to open panel:', err);
         }
@@ -213,7 +217,7 @@ export class PanelListPanel extends BasePanel {
       if (selectedPanel) {
         const pane = key === 'T' ? 'top' : 'bottom';
         try {
-          const pm = getPanelManager();
+          const pm = this.panelManager;
           pm.open(selectedPanel.reg.id, pane);
           pm.show();
         } catch (err) {
@@ -228,7 +232,7 @@ export class PanelListPanel extends BasePanel {
       const selectedPanel = this._getSelectedPanelEntry(entries);
       if (selectedPanel) {
         try {
-          getPanelManager().moveToOtherPane(selectedPanel.reg.id);
+          this.panelManager.moveToOtherPane(selectedPanel.reg.id);
         } catch (err) {
           console.debug('[panel-list] failed to move panel:', err);
         }
@@ -238,13 +242,13 @@ export class PanelListPanel extends BasePanel {
     }
 
     if (key === 'S') {
-      getPanelManager().toggleBottomPane();
+      this.panelManager.toggleBottomPane();
       this.markDirty();
       return true;
     }
 
     if (key === 'tab') {
-      getPanelManager().togglePaneFocus();
+      this.panelManager.togglePaneFocus();
       this.markDirty();
       return true;
     }
@@ -314,7 +318,7 @@ export class PanelListPanel extends BasePanel {
     }
 
     const panelEntries = entries.filter(e => e.kind === 'panel');
-    const pm = getPanelManager();
+    const pm = this.panelManager;
     const topIds = new Set(pm.getTopPane().panels.map(p => p.id));
     const bottomIds = new Set(pm.getBottomPane().panels.map(p => p.id));
     const focusedPane = pm.getFocusedPane();
@@ -433,7 +437,7 @@ export class PanelListPanel extends BasePanel {
       return this._cachedEntries;
     }
 
-    const manager = getPanelManager();
+    const manager = this.panelManager;
     const byCategory = manager.getTypesByCategory();
     const q = this._query.toLowerCase();
     const entries: ListEntry[] = [];

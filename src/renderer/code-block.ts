@@ -2,7 +2,7 @@ import { type Line, type Cell, createStyledCell, createEmptyLine } from '../type
 import { UIFactory } from './ui-factory.ts';
 import { getDisplayWidth } from '../utils/terminal-width.ts';
 import { LAYOUT } from './layout.ts';
-import { syntaxHighlighter, type SyntaxToken as HLToken } from './syntax-highlighter.ts';
+import { SyntaxHighlighter, type SyntaxToken as HLToken } from './syntax-highlighter.ts';
 
 // ─── Language Keyword Maps ───────────────────────────────────────────────────
 
@@ -291,7 +291,7 @@ export function renderCodeBlock(
   // Try tree-sitter highlight cache first (populated asynchronously).
   // Falls back to regex tokenizer when parser not yet ready or language unsupported.
   const fullCode = codeLines.join('\n');
-  const hlLines = lang ? syntaxHighlighter.highlight(fullCode, lang) : null;
+  const hlLines = lang ? new SyntaxHighlighter().highlight(fullCode, lang) : null;
 
   // Regex tokenizer fallback (used when tree-sitter not ready)
   const regexTokenize = (line: string): SyntaxToken[] => {

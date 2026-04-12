@@ -9,12 +9,9 @@ import { AnthropicCompatProvider } from './anthropic-compat.ts';
 import type { LLMProvider } from './interface.ts';
 import type { ModelDefinition } from './registry.ts';
 import {
-  ingestLocalProviderContextWindows,
+  LocalContextIngestionService,
   resolveContextWindow,
 } from './local-context-ingestion.ts';
-
-// Re-export for callers that want to clear ingestion cache on provider reload.
-export { clearProviderContextCache } from './local-context-ingestion.ts';
 
 /** Directory where custom provider JSON files are stored. */
 const PROVIDERS_DIR = path.join(os.homedir(), '.goodvibes', 'tui', 'providers');
@@ -82,6 +79,7 @@ export interface LoadCustomProvidersOptions {
    * Defaults to false.
    */
   ingestContextWindows?: boolean;
+  contextIngestion?: Pick<LocalContextIngestionService, 'ingestProviderContextWindows'>;
 }
 
 /**
@@ -295,9 +293,9 @@ export async function loadCustomProviders(
   // Phase 2: Ingest context windows concurrently for all valid providers.
   // Runs only when options.ingestContextWindows is true.
   const ingestionResults: Array<Map<string, number> | null> = validConfigs.map(() => null);
-  if (options.ingestContextWindows && validConfigs.length > 0) {
+  if (options.ingestContextWindows && options.contextIngestion && validConfigs.length > 0) {
     const ingestionPromises = validConfigs.map(({ cfg, apiKey }) =>
-      ingestLocalProviderContextWindows(
+      options.contextIngestion?.ingestProviderContextWindows(
         cfg.name,
         cfg.baseURL,
         apiKey || undefined,
@@ -307,7 +305,7 @@ export async function loadCustomProviders(
     for (let i = 0; i < settled.length; i++) {
       const result = settled[i];
       if (result) {
-        ingestionResults[i] = result.status === 'fulfilled' ? result.value : null;
+        ingestionResults[i] = result.status === 'fulfilled' ? (result.value ?? null) : null;
       }
     }
   }

@@ -5,33 +5,38 @@ import { join } from 'node:path';
 import { createRuntimeStore } from '../../runtime/store/index.ts';
 import { AgentManager } from '../../tools/agent/index.ts';
 import {
-  _resetRemoteRunnerRegistryForTesting,
   exportRemoteArtifactForAgent,
   importRemoteArtifact,
 } from '../../runtime/remote/index.ts';
-import { configManager } from '../../config/index.ts';
-import { _resetHookWorkbenchForTesting, getHookDispatcher, getHookWorkbench } from '../../hooks/index.ts';
+import { ConfigManager } from '../../config/manager.ts';
+import {
+  getTestAgentManager,
+  getTestHookDispatcher,
+  getTestHookWorkbench,
+  getTestRemoteRunnerRegistry,
+  resetTestRuntimeServices,
+} from '../helpers/runtime-services.ts';
 
 describe('remote and hooks authoring gate', () => {
   let originalHooksFile: string;
+  let configManager: ConfigManager;
 
   beforeEach(() => {
-    AgentManager.resetInstance();
-    _resetRemoteRunnerRegistryForTesting();
+    resetTestRuntimeServices();
+    configManager = new ConfigManager({ configDir: join(tmpdir(), `gv-remote-hooks-${Date.now()}-${Math.random().toString(36).slice(2)}`) });
     originalHooksFile = configManager.get('tools.hooksFile') as string;
-    _resetHookWorkbenchForTesting();
-    getHookDispatcher().clear();
+    getTestHookDispatcher().clear();
   });
 
   afterEach(() => {
-    AgentManager.getInstance().clear();
+    getTestAgentManager().clear();
     configManager.set('tools.hooksFile', originalHooksFile);
-    _resetHookWorkbenchForTesting();
-    getHookDispatcher().clear();
+    getTestHookDispatcher().clear();
+    resetTestRuntimeServices();
   });
 
   test('remote runner execution can be exported into a portable review artifact', async () => {
-    const manager = AgentManager.getInstance();
+    const manager = getTestAgentManager();
     const agent = manager.spawn({
       mode: 'spawn',
       task: 'Produce portable remote evidence',
@@ -66,12 +71,13 @@ describe('remote and hooks authoring gate', () => {
 
     const dir = mkdtempSync(join(tmpdir(), 'gv-remote-gate-'));
     const path = join(dir, 'remote-artifact.json');
-    const exported = await exportRemoteArtifactForAgent(agent.id, store, path);
+    const remoteRunnerRegistry = getTestRemoteRunnerRegistry();
+    const exported = await exportRemoteArtifactForAgent(remoteRunnerRegistry, agent.id, store, path);
 
     expect(exported).not.toBeNull();
     expect(existsSync(path)).toBe(true);
 
-    const imported = await importRemoteArtifact(path);
+    const imported = await importRemoteArtifact(remoteRunnerRegistry, path);
     expect(imported.runnerContract.trustClass).toBe('self-hosted-acp');
     expect(imported.task.summary).toContain('Portable remote evidence');
   });
@@ -81,15 +87,15 @@ describe('remote and hooks authoring gate', () => {
     const path = join(dir, 'hooks.json');
     configManager.set('tools.hooksFile', path);
 
-    const workbench = getHookWorkbench();
+    const workbench = getTestHookWorkbench();
     workbench.loadManagedConfig(path);
     workbench.scaffoldHook('remote-guard', 'Pre:tool:edit', 'command');
     workbench.scaffoldChain('edit-review', ['Post:tool:edit', 'Fail:tool:edit']);
     await workbench.saveManagedConfig(path);
     await workbench.loadAndApplyManagedHooks(path);
 
-    expect(getHookDispatcher().listHooks().length).toBeGreaterThan(0);
-    expect(getHookDispatcher().getChains().length).toBeGreaterThan(0);
+    expect(getTestHookDispatcher().listHooks().length).toBeGreaterThan(0);
+    expect(getTestHookDispatcher().getChains().length).toBeGreaterThan(0);
 
     const simulation = workbench.simulate('Pre:tool:edit');
     expect(simulation.matchedHooks[0]?.name).toBe('remote-guard');

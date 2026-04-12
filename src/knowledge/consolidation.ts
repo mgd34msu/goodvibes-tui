@@ -1,5 +1,4 @@
-import { getMemoryRegistry } from '../state/index.ts';
-import type { MemoryClass, MemoryScope } from '../state/index.ts';
+import type { MemoryClass, MemoryRegistry, MemoryScope } from '../state/index.ts';
 import type { KnowledgeStore } from './store.ts';
 import type {
   KnowledgeConsolidationCandidateRecord,
@@ -21,6 +20,7 @@ import {
 
 export interface KnowledgeConsolidationContext {
   readonly store: KnowledgeStore;
+  readonly memoryRegistry: Pick<MemoryRegistry, 'add' | 'getStore'>;
   readonly syncReviewedMemory: () => Promise<void>;
 }
 
@@ -42,8 +42,7 @@ export async function decideKnowledgeConsolidationCandidate(
   let acceptedMemoryId: string | undefined;
   if (decision === 'accept' && candidate.candidateType === 'memory-promotion') {
     const record = context.store.getItem(candidate.subjectId);
-    const memoryRegistry = getMemoryRegistry();
-    await memoryRegistry.getStore().init();
+    await context.memoryRegistry.getStore().init();
     const summary = summarizeCompact(candidate.title, 160) ?? candidate.title;
     const detail = input.detail
       ?? candidate.summary
@@ -56,7 +55,7 @@ export async function decideKnowledgeConsolidationCandidate(
       record?.node?.aliases,
       coerceStringArray(candidate.metadata.tags),
     );
-    const memory = await memoryRegistry.add({
+    const memory = await context.memoryRegistry.add({
       cls: (input.memoryClass ?? candidate.suggestedMemoryClass ?? 'fact') as MemoryClass,
       scope: (input.scope ?? candidate.suggestedScope ?? 'project') as MemoryScope,
       summary,

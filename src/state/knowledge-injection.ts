@@ -1,5 +1,4 @@
-import type { MemoryRecord, MemoryRegistry } from './memory-store.ts';
-import { getMemoryRegistry } from './memory-store.ts';
+import type { MemoryRecord, MemoryRegistry, MemorySemanticSearchResult } from './memory-store.ts';
 
 export interface KnowledgeInjection {
   readonly id: string;
@@ -13,14 +12,6 @@ export interface KnowledgeInjection {
 type KnowledgeRegistrySource =
   Pick<MemoryRegistry, 'getAll'> &
   Partial<Pick<MemoryRegistry, 'searchSemantic'>>;
-
-let _knowledgeRegistryOverride: KnowledgeRegistrySource | undefined;
-
-export function _setKnowledgeRegistryForTesting(
-  registry: KnowledgeRegistrySource | undefined,
-): void {
-  _knowledgeRegistryOverride = registry;
-}
 
 function tokenize(value: string): string[] {
   return value
@@ -91,19 +82,19 @@ function scoreKnowledge(record: MemoryRecord, taskTokens: readonly string[], sco
 }
 
 export function selectKnowledgeForTask(
+  registry: KnowledgeRegistrySource,
   task: string,
   writeScope: readonly string[] = [],
   limit = 3,
 ): KnowledgeInjection[] {
-  const registry = _knowledgeRegistryOverride ?? getMemoryRegistry();
   const taskTokens = tokenize(task);
   const scopeTokens = writeScope.flatMap((entry) => tokenize(entry));
-  const semanticResults = registry.searchSemantic?.({
+  const semanticResults: readonly MemorySemanticSearchResult[] = registry.searchSemantic?.({
     query: [task, ...writeScope].join(' '),
     minConfidence: 55,
     limit: Math.max(limit * 4, 12),
   }) ?? [];
-  const semanticById = new Map(semanticResults.map((entry) => [entry.record.id, entry]));
+  const semanticById = new Map<string, MemorySemanticSearchResult>(semanticResults.map((entry) => [entry.record.id, entry]));
   const recordsById = new Map<string, MemoryRecord>();
   for (const record of registry.getAll()) {
     recordsById.set(record.id, record);

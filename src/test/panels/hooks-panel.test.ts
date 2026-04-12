@@ -1,4 +1,6 @@
 import { describe, expect, test } from 'bun:test';
+import { ConfigManager } from '../../config/manager.ts';
+import { createHookWorkbench } from '../../hooks/index.ts';
 import { HooksPanel } from '../../panels/hooks-panel.ts';
 import type { Line } from '../../types/grid.ts';
 import type { HookPointContract } from '../../hooks/contracts.ts';
@@ -24,19 +26,37 @@ function createPanel(params: {
   simulation?: HookSimulationResult | null;
   hooksFilePath?: string;
 } = {}): HooksPanel {
-  return new HooksPanel({
-    listContracts: () => params.contracts ?? [],
-    listHooks: () => params.hooks ?? [],
-    listChains: () => params.chains ?? [],
-    listRecentActivity: (limit = 3) => (params.activity ?? []).slice(0, limit),
-    getWorkbench: () => ({
-      listManagedHooks: () => params.managedHooks ?? [],
-      listManagedChains: () => params.managedChains ?? [],
-      listRecentActions: (limit = 8) => (params.authoring ?? []).slice(0, limit),
-      getLastSimulation: () => params.simulation ?? null,
-      getHooksFilePath: () => params.hooksFilePath ?? '/tmp/hooks.json',
-    }),
+  const hookWorkbench = createHookWorkbench({
+    hookDispatcher: {
+      clear: () => {},
+      loadFromFile: () => {},
+    },
+    configManager: new ConfigManager(),
+    hooksFilePathResolver: () => params.hooksFilePath ?? '/tmp/hooks.json',
   });
+  return new HooksPanel(
+    {
+      listHooks: () => params.hooks ?? [],
+      getChains: () => params.chains ?? [],
+    },
+    hookWorkbench,
+    {
+      listRecent: (limit = 3) => (params.activity ?? []).slice(0, limit),
+    },
+    {
+      listContracts: () => params.contracts ?? [],
+      listHooks: () => params.hooks ?? [],
+      listChains: () => params.chains ?? [],
+      listRecentActivity: (limit = 3) => (params.activity ?? []).slice(0, limit),
+      getWorkbench: () => ({
+        listManagedHooks: () => params.managedHooks ?? [],
+        listManagedChains: () => params.managedChains ?? [],
+        listRecentActions: (limit = 8) => (params.authoring ?? []).slice(0, limit),
+        getLastSimulation: () => params.simulation ?? null,
+        getHooksFilePath: () => params.hooksFilePath ?? '/tmp/hooks.json',
+      }),
+    },
+  );
 }
 
 describe('HooksPanel', () => {

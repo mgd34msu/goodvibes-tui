@@ -1,13 +1,5 @@
 /**
- * Multi-session Orchestration — barrel exports and factory.
- *
- * Usage:
- * ```ts
- * import { getSessionOrchestration } from './orchestration/index.ts';
- *
- * const orchestration = getSessionOrchestration();
- * orchestration.linkTask({ sessionId, taskId, title, status: 'queued', createdAt: Date.now(), updatedAt: Date.now() });
- * ```
+ * Multi-session orchestration — barrel exports.
  */
 
 export type {
@@ -22,4 +14,4 @@ export type {
 
 export { makeRefKey, VALID_SCOPES } from './types.ts';
 export { SessionTaskGraph } from './graph.ts';
-export { CrossSessionTaskRegistry, getSessionOrchestration, _resetForTesting } from './registry.ts';
+export { CrossSessionTaskRegistry } from './registry.ts';

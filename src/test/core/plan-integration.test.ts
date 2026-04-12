@@ -5,7 +5,7 @@
  * - Pre-turn plan injection adds a system message when an active plan exists
  * - Continuation nudge after agent spawn with active plan includes plan summary and next items
  * - Continuation nudge after agent spawn without active plan uses directive tone
- * - The singleton planManager is used (not a private instance)
+ * - The plan manager is exercised as an owned runtime service, not a hidden global
  */
 
 import { describe, test, expect } from 'bun:test';
@@ -13,10 +13,10 @@ import { ExecutionPlanManager } from '../../core/execution-plan.ts';
 import type { ExecutionPlan, PlanItem } from '../../core/execution-plan.ts';
 
 // ---------------------------------------------------------------------------
-// ExecutionPlanManager unit tests (plan manager singleton behavior)
+// ExecutionPlanManager unit tests
 // ---------------------------------------------------------------------------
 
-describe('ExecutionPlanManager singleton behavior', () => {
+describe('ExecutionPlanManager behavior', () => {
   test('getActive returns null when no active plan file exists', () => {
     // A fresh instance with no active file returns null
     const manager = new ExecutionPlanManager();

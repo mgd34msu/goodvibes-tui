@@ -5,8 +5,6 @@ import { mkdtempSync, existsSync } from 'fs';
 import { SessionTaskGraph } from '../../sessions/orchestration/graph.ts';
 import {
   CrossSessionTaskRegistry,
-  getSessionOrchestration,
-  _resetForTesting,
 } from '../../sessions/orchestration/registry.ts';
 import type { CrossSessionTaskRef, SessionTaskGraphSnapshot } from '../../sessions/orchestration/types.ts';
 
@@ -298,6 +296,26 @@ describe('SessionTaskGraph', () => {
   });
 });
 
+describe('CrossSessionTaskRegistry', () => {
+  let dir: string;
+  let registry: CrossSessionTaskRegistry;
+
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), 'gv-session-orch-'));
+    registry = new CrossSessionTaskRegistry(dir);
+  });
+
+  afterEach(() => {
+    registry.dispose();
+  });
+
+  test('tracks refs via explicit registry instance', () => {
+    const ref = makeRef('s1', 'task-1');
+    expect(registry.linkTask(ref).ok).toBe(true);
+    expect(registry.getRef('s1', 'task-1')?.taskId).toBe('task-1');
+  });
+});
+
 describe('CrossSessionTaskRegistry lifecycle', () => {
   let baseExitListeners = 0;
 
@@ -306,7 +324,7 @@ describe('CrossSessionTaskRegistry lifecycle', () => {
   });
 
   afterEach(() => {
-    _resetForTesting();
+    // No shared helper cache needs resetting in this suite.
   });
 
   test('dispose removes the process exit listener it installs', () => {
@@ -318,13 +336,14 @@ describe('CrossSessionTaskRegistry lifecycle', () => {
     expect(process.listenerCount('exit')).toBe(baseExitListeners);
   });
 
-  test('disposeSessionOrchestration tears down the singleton without leaving exit listeners behind', () => {
-    const registry = getSessionOrchestration();
-    expect(registry).toBeDefined();
+  test('separate instances each install and remove their own exit listeners', () => {
+    const first = new CrossSessionTaskRegistry();
+    const second = new CrossSessionTaskRegistry();
+    expect(process.listenerCount('exit')).toBe(baseExitListeners + 2);
+
+    first.dispose();
     expect(process.listenerCount('exit')).toBe(baseExitListeners + 1);
-
-    _resetForTesting();
-
+    second.dispose();
     expect(process.listenerCount('exit')).toBe(baseExitListeners);
   });
 });
@@ -341,7 +360,7 @@ describe('CrossSessionTaskRegistry persistence', () => {
   });
 
   afterEach(() => {
-    _resetForTesting();
+    registry.dispose();
   });
 
   test('linkTask persists to disk after flush', () => {
@@ -387,23 +406,4 @@ describe('CrossSessionTaskRegistry persistence', () => {
   });
 });
 
-// ── Singleton accessor + reset ───────────────────────────────────────────────
-
-describe('getSessionOrchestration / _resetForTesting', () => {
-  afterEach(() => {
-    _resetForTesting();
-  });
-
-  test('returns the same instance on repeated calls', () => {
-    const a = getSessionOrchestration();
-    const b = getSessionOrchestration();
-    expect(a).toBe(b);
-  });
-
-  test('_resetForTesting causes next call to return a fresh instance', () => {
-    const a = getSessionOrchestration();
-    _resetForTesting();
-    const b = getSessionOrchestration();
-    expect(a).not.toBe(b);
-  });
-});
+// Singleton accessor tests removed: the suite now exercises explicit registry instances only.

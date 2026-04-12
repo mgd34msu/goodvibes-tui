@@ -2,13 +2,12 @@ import { afterEach, describe, expect, test } from 'bun:test';
 import { SecurityPanel } from '../../panels/security-panel.ts';
 import {
   ApiTokenAuditor,
-  _resetTokenAuditorForTesting,
 } from '../../security/token-audit.ts';
 import type { Line } from '../../types/grid.ts';
-import { getPolicyRuntimeState, resetPolicyRuntimeStateForTests } from '../../runtime/permissions/policy-runtime.ts';
+import { PolicyRuntimeState } from '../../runtime/permissions/policy-runtime.ts';
 import { createRuntimeStore } from '../../runtime/store/index.ts';
 import { ForensicsRegistry } from '../../runtime/forensics/registry.ts';
-import type { PluginManagerObserver } from '../../plugins/manager.ts';
+import type { PluginManagerObserver, PluginStatus } from '../../plugins/manager.ts';
 import type { McpDecisionRecord } from '../../runtime/mcp/types.ts';
 
 function linesText(lines: Line[]): string {
@@ -30,14 +29,19 @@ function makeAuditor(): ApiTokenAuditor {
   return auditor;
 }
 
-describe('SecurityPanel', () => {
-  afterEach(() => {
-    _resetTokenAuditorForTesting();
-    resetPolicyRuntimeStateForTests();
-  });
+function makePlugins(entries: PluginStatus[] = []): PluginManagerObserver {
+  return {
+    subscribe: () => () => {},
+    list: () => entries,
+    capabilities: () => null,
+    getTrustRecord: () => undefined,
+    getQuarantineRecord: () => undefined,
+  };
+}
 
+describe('SecurityPanel', () => {
   test('renders empty guidance when no tokens are registered', () => {
-    const panel = new SecurityPanel(makeAuditor());
+    const panel = new SecurityPanel(makePlugins(), makeAuditor());
     const text = linesText(panel.render(120, 16));
     expect(text).toContain('Security Control Room');
     expect(text).toContain('Token audit');
@@ -55,7 +59,7 @@ describe('SecurityPanel', () => {
       grantedScopes: ['models:read', 'responses:write', 'admin:full'],
       policyId: 'openai',
     });
-    const panel = new SecurityPanel(auditor);
+    const panel = new SecurityPanel(makePlugins(), auditor);
     const text = linesText(panel.render(140, 14));
     expect(text).toContain('MANAGED');
     expect(text).toContain('scope violations');
@@ -74,7 +78,7 @@ describe('SecurityPanel', () => {
       policyId: 'openai',
     });
 
-    const policyState = getPolicyRuntimeState();
+    const policyState = new PolicyRuntimeState();
     policyState.recordPreflightReview({
       generatedAt: new Date().toISOString(),
       status: 'warn',
@@ -138,23 +142,17 @@ describe('SecurityPanel', () => {
       jumpLinks: [],
     });
 
-    const plugins: PluginManagerObserver = {
-      subscribe: () => () => {},
-      list: () => [
-        {
-          name: 'dangerous-plugin',
-          version: '1.0.0',
-          description: 'dangerous plugin',
-          enabled: true,
-          active: false,
-          trustTier: 'untrusted',
-          quarantined: true,
-        },
-      ],
-      capabilities: () => null,
-      getTrustRecord: () => undefined,
-      getQuarantineRecord: () => undefined,
-    };
+    const plugins = makePlugins([
+      {
+        name: 'dangerous-plugin',
+        version: '1.0.0',
+        description: 'dangerous plugin',
+        enabled: true,
+        active: false,
+        trustTier: 'untrusted',
+        quarantined: true,
+      },
+    ]);
 
     const mcpSource = {
       listRecentSecurityDecisions: (_limit = 8): McpDecisionRecord[] => [

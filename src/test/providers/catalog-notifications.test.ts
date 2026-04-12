@@ -1,4 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
+import { join } from 'node:path';
+import { mkdirSync, rmSync } from 'node:fs';
 import {
   diffCatalogs,
   filterRelevantChanges,
@@ -6,8 +8,9 @@ import {
 } from '../../providers/model-catalog.ts';
 import type { CatalogModel, CatalogDiff } from '../../providers/model-catalog.ts';
 import type { FavoritesData } from '../../providers/favorites.ts';
-import { _setEntriesForTest } from '../../providers/model-benchmarks.ts';
+import { BenchmarkStore } from '../../providers/model-benchmarks.ts';
 import type { BenchmarkEntry } from '../../providers/model-benchmarks.ts';
+import { writeBenchmarksCache } from '../helpers/provider-cache.ts';
 
 // ---------------------------------------------------------------------------
 // Fixtures
@@ -43,13 +46,20 @@ function makeBenchmarkEntry(
   };
 }
 
-// Restore empty benchmark state after each test
+const TMP_BASE = join(import.meta.dir, '__catalog_notifications_tmp__');
+let tmpHomeDir: string;
+let benchmarkStore: BenchmarkStore;
+
 beforeEach(() => {
-  _setEntriesForTest([]);
+  tmpHomeDir = join(TMP_BASE, `run-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+  mkdirSync(join(tmpHomeDir, '.goodvibes', 'tui'), { recursive: true });
+  benchmarkStore = new BenchmarkStore({ dir: join(tmpHomeDir, '.goodvibes', 'tui') });
+  writeBenchmarksCache([], tmpHomeDir);
+  benchmarkStore.initBenchmarks();
 });
 
 afterEach(() => {
-  _setEntriesForTest([]);
+  rmSync(TMP_BASE, { recursive: true, force: true });
 });
 
 // ---------------------------------------------------------------------------
@@ -173,7 +183,7 @@ describe('filterRelevantChanges', () => {
       history: [{ modelId: 'used-model', lastUsed: '2024-01-01T00:00:00.000Z', count: 5 }],
     };
 
-    const filtered = filterRelevantChanges(diff, favorites);
+    const filtered = filterRelevantChanges(diff, favorites, []);
 
     expect(filtered.added).toHaveLength(1);
     expect(filtered.added[0].id).toBe('used-model');
@@ -193,7 +203,7 @@ describe('filterRelevantChanges', () => {
       history: [],
     };
 
-    const filtered = filterRelevantChanges(diff, favorites);
+    const filtered = filterRelevantChanges(diff, favorites, []);
 
     expect(filtered.removed).toHaveLength(1);
     expect(filtered.removed[0].id).toBe('pinned-model');
@@ -204,7 +214,8 @@ describe('filterRelevantChanges', () => {
     const entries: BenchmarkEntry[] = Array.from({ length: 12 }, (_, i) => (
       makeBenchmarkEntry(`bench-model-${i}`, { swe: (12 - i) / 12, gpqa: (12 - i) / 12 })
     ));
-    _setEntriesForTest(entries);
+    writeBenchmarksCache(entries, tmpHomeDir);
+    benchmarkStore.initBenchmarks();
 
     // Only the top-10 should be included; bench-model-10 and bench-model-11 are lowest
     const diff: CatalogDiff = {
@@ -213,7 +224,7 @@ describe('filterRelevantChanges', () => {
       changed: [],
     };
 
-    const filtered = filterRelevantChanges(diff, emptyFavorites());
+    const filtered = filterRelevantChanges(diff, emptyFavorites(), benchmarkStore.getTopBenchmarkModelIds(10));
 
     expect(filtered.added).toHaveLength(10);
     // The 11th and 12th lowest-scoring models should be excluded
@@ -231,7 +242,7 @@ describe('filterRelevantChanges', () => {
       changed: [],
     };
 
-    const filtered = filterRelevantChanges(diff, emptyFavorites());
+    const filtered = filterRelevantChanges(diff, emptyFavorites(), []);
 
     expect(filtered.added).toHaveLength(0);
   });
@@ -249,7 +260,7 @@ describe('filterRelevantChanges', () => {
       history: [{ modelId: 'shared-model', lastUsed: '2024-01-02T00:00:00.000Z', count: 1 }],
     };
 
-    const filtered = filterRelevantChanges(diff, favorites);
+    const filtered = filterRelevantChanges(diff, favorites, []);
 
     expect(filtered.added).toHaveLength(1);
     expect(filtered.added[0].id).toBe('shared-model');

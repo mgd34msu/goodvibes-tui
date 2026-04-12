@@ -1,15 +1,16 @@
 import { describe, test, expect, beforeEach } from 'bun:test';
 import { ModeManager } from '../../state/mode-manager.ts';
 import type { ModeDefinition } from '../../state/mode-manager.ts';
+import { getTestModeManager, resetTestRuntimeServices } from '../helpers/runtime-services.ts';
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
-// Each test suite resets the singleton so tests are independent.
+// Each suite resets shared helper state so tests are independent.
 function freshManager(): ModeManager {
-  ModeManager.resetInstance();
-  return ModeManager.getInstance();
+  resetTestRuntimeServices();
+  return getTestModeManager();
 }
 
 // ---------------------------------------------------------------------------
@@ -197,30 +198,26 @@ describe('ModeManager', () => {
     });
   });
 
-  // -------------------------------------------------------------------------
-  // Singleton
-  // -------------------------------------------------------------------------
-
-  describe('singleton', () => {
-    test('getInstance returns the same instance', () => {
-      ModeManager.resetInstance();
-      const a = ModeManager.getInstance();
-      const b = ModeManager.getInstance();
+  describe('runtime ownership', () => {
+    test('test runtime exposes one mode manager per runtime graph', () => {
+      resetTestRuntimeServices();
+      const a = getTestModeManager();
+      const b = getTestModeManager();
       expect(a).toBe(b);
     });
 
-    test('resetInstance causes next getInstance to return a fresh instance', () => {
-      const a = ModeManager.getInstance();
+    test('resetting the test runtime yields a fresh mode manager', () => {
+      const a = getTestModeManager();
       a.setMode('vibecoding');
-      ModeManager.resetInstance();
-      const b = ModeManager.getInstance();
+      resetTestRuntimeServices();
+      const b = getTestModeManager();
       expect(b.getMode()).toBe('default');
     });
 
-    test('state changes are visible across getInstance calls without reset', () => {
-      ModeManager.resetInstance();
-      ModeManager.getInstance().setMode('justvibes');
-      expect(ModeManager.getInstance().getMode()).toBe('justvibes');
+    test('state changes remain visible through the same runtime graph', () => {
+      resetTestRuntimeServices();
+      getTestModeManager().setMode('justvibes');
+      expect(getTestModeManager().getMode()).toBe('justvibes');
     });
   });
 });

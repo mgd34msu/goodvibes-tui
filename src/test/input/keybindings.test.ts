@@ -5,8 +5,6 @@ import { tmpdir } from 'node:os';
 import {
   KeybindingsManager,
   DEFAULT_KEYBINDINGS,
-  resetKeybindingsManager,
-  getKeybindingsManager,
   type KeyAction,
   type KeyCombo,
 } from '../../input/keybindings.ts';
@@ -43,7 +41,6 @@ function writeConfig(obj: unknown): string {
 
 beforeEach(() => {
   tmpDir = makeTmpDir();
-  resetKeybindingsManager();
 });
 
 // ---------------------------------------------------------------------------
@@ -236,21 +233,4 @@ describe('getComboLabel()', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// resetKeybindingsManager() / singleton
-// ---------------------------------------------------------------------------
-
-describe('resetKeybindingsManager()', () => {
-  it('clears the singleton so getKeybindingsManager() returns a fresh instance', () => {
-    const first = getKeybindingsManager();
-    resetKeybindingsManager();
-    const second = getKeybindingsManager();
-    expect(first).not.toBe(second);
-  });
-
-  it('fresh singleton after reset retains default bindings', () => {
-    resetKeybindingsManager();
-    const km = getKeybindingsManager();
-    expect(km.matches('search', { logicalName: 'f', ctrl: true })).toBe(true);
-  });
-});
+// Singleton accessors removed; tests now exercise explicit manager instances only.

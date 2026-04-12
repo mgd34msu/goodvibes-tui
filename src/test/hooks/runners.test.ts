@@ -82,7 +82,7 @@ describe('prompt runner', () => {
   test('returns ok:false when prompt field is missing', async () => {
     // prompt runner requires hook.prompt template; missing template returns error
     const hook: HookDefinition = { match: '*:*:*', type: 'prompt' };
-    const result = await runPrompt(hook, makeEvent());
+    const result = await runPrompt(hook, makeEvent(), null);
     expect(result.ok).toBe(false);
     expect(result.error).toBeTruthy();
     expect(result.error).toContain('prompt');

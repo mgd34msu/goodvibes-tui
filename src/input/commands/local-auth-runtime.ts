@@ -1,6 +1,5 @@
-import { getPanelManager } from '../../panels/panel-manager.ts';
-import { getLocalUserAuthManager } from '../../runtime/local-auth.ts';
 import type { CommandContext, CommandRegistry } from '../command-registry.ts';
+import { openCommandPanel, requireLocalUserAuthManager } from './runtime-services.ts';
 
 function formatRoles(roles: readonly string[]): string {
   return roles.length > 0 ? roles.join(', ') : '(none)';
@@ -8,15 +7,9 @@ function formatRoles(roles: readonly string[]): string {
 
 export function handleLocalAuthCommand(args: string[], ctx: CommandContext): void {
   const sub = (args[0] ?? 'review').toLowerCase();
-  const auth = getLocalUserAuthManager();
+  const auth = requireLocalUserAuthManager(ctx);
   if (sub === 'panel' || sub === 'open') {
-    if (ctx.showPanel) ctx.showPanel('local-auth');
-    else {
-      const panelManager = getPanelManager();
-      panelManager.open('local-auth');
-      panelManager.show();
-      ctx.renderRequest();
-    }
+    openCommandPanel(ctx, 'local-auth');
     return;
   }
 

@@ -754,18 +754,3 @@ export class DeterministicReplayEngine {
     }
   }
 }
-
-/** Module-level singleton. */
-let _instance: DeterministicReplayEngine | undefined;
-
-export function getReplayEngine(): DeterministicReplayEngine {
-  if (!_instance) {
-    _instance = new DeterministicReplayEngine();
-  }
-  return _instance;
-}
-
-/** Reset singleton (for testing). */
-export function resetReplayEngine(): void {
-  _instance = undefined;
-}

@@ -46,6 +46,9 @@ jobs:
       - name: Typecheck
         run: bun x tsc --noEmit --pretty false
 
+      - name: Architecture check
+        run: bun run architecture:check
+
       - name: Build binary (${{ matrix.target }})
         run: |
           mkdir -p dist

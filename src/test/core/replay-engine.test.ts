@@ -9,9 +9,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
   DeterministicReplayEngine,
-  resetReplayEngine,
-  getReplayEngine,
 } from '../../core/deterministic-replay.ts';
+import { handleReplayCommand } from '../../core/replay-command-handler.ts';
 import type { LedgerEntry } from '../../runtime/telemetry/exporters/local-ledger.ts';
 import type { RuntimeStateSnapshot } from '../../runtime/diagnostics/types.ts';
 
@@ -56,7 +55,6 @@ describe('DeterministicReplayEngine', () => {
   let engine: DeterministicReplayEngine;
 
   beforeEach(() => {
-    resetReplayEngine();
     engine = new DeterministicReplayEngine();
   });
 
@@ -397,21 +395,28 @@ describe('DeterministicReplayEngine', () => {
     });
   });
 
-  // ── getReplayEngine singleton ─────────────────────────────────────────────
+});
 
-  describe('getReplayEngine singleton', () => {
-    test('returns the same instance across calls after reset', () => {
-      resetReplayEngine();
-      const a = getReplayEngine();
-      const b = getReplayEngine();
-      expect(a).toBe(b);
-    });
+// ── replay command handler ─────────────────────────────────────────────────
 
-    test('resetReplayEngine clears the singleton', () => {
-      const a = getReplayEngine();
-      resetReplayEngine();
-      const b = getReplayEngine();
-      expect(a).not.toBe(b);
-    });
+describe('handleReplayCommand', () => {
+  test('loads a run and reports available entries', () => {
+    const engine = new DeterministicReplayEngine();
+    const ledger = {
+      listRunIds: () => ['run-test-1'],
+      readRunEntries: () => [makeEntry(1, 'turn:start'), makeEntry(2, 'turn:complete')],
+    };
+
+    const result = handleReplayCommand({ replayEngine: engine }, 'load', ['run-test-1'], ledger);
+    expect(result.ok).toBe(true);
+    expect(result.output).toContain('Run "run-test-1" loaded.');
+    expect(engine.getSnapshot().status).toBe('loaded');
+  });
+
+  test('returns usage when no replay engine ledger is available', () => {
+    const engine = new DeterministicReplayEngine();
+    const result = handleReplayCommand({ replayEngine: engine }, 'load', [], undefined);
+    expect(result.ok).toBe(false);
+    expect(result.output).toContain('No ledger configured');
   });
 });

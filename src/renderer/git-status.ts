@@ -54,7 +54,7 @@ export class GitStatusProvider {
     if (this.fetching) return;
     this.fetching = true;
     try {
-      const git = GitService.getInstance();
+      const git = new GitService();
       const [statusResult, branchResult] = await Promise.all([
         git.status(),
         git.branch(),

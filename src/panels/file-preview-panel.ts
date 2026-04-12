@@ -3,7 +3,7 @@ import * as path from 'node:path';
 import type { Line, Cell } from '../types/grid.ts';
 import { createStyledCell, createEmptyLine } from '../types/grid.ts';
 import { BasePanel } from './base-panel.ts';
-import { syntaxHighlighter, type SyntaxToken } from '../renderer/syntax-highlighter.ts';
+import { SyntaxHighlighter, type SyntaxToken } from '../renderer/syntax-highlighter.ts';
 import { getDisplayWidth } from '../utils/terminal-width.ts';
 import {
   buildEmptyState,
@@ -51,6 +51,7 @@ function extToFenceTag(filePath: string): string {
 // ─── Panel ────────────────────────────────────────────────────────────────────
 
 export class FilePreviewPanel extends BasePanel {
+  private readonly syntaxHighlighter = new SyntaxHighlighter();
   private filePath: string | null = null;
   private fileLines: string[] = [];
   private fenceTag: string = '';
@@ -118,7 +119,7 @@ export class FilePreviewPanel extends BasePanel {
 
     // Kick off async tree-sitter parse so subsequent renders get highlighting
     if (this.fenceTag) {
-      syntaxHighlighter.highlight(content, this.fenceTag);
+      this.syntaxHighlighter.highlight(content, this.fenceTag);
     }
 
     // Clamp scroll in case the new file is shorter
@@ -253,7 +254,7 @@ export class FilePreviewPanel extends BasePanel {
     ];
     const fullCode = this.fileLines.join('\n');
     const hlLines = this.fenceTag
-      ? syntaxHighlighter.highlight(fullCode, this.fenceTag)
+      ? this.syntaxHighlighter.highlight(fullCode, this.fenceTag)
       : null;
 
     const lineNumW = String(this.fileLines.length).length;

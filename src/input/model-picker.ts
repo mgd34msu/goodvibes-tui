@@ -1,8 +1,9 @@
 import type { ModelDefinition } from '../providers/registry.ts';
-import { getRecentModels } from '../providers/favorites.ts';
+import type { FavoritesStore } from '../providers/favorites.ts';
 import { EFFORT_DESCRIPTIONS } from '../providers/effort-levels.ts';
-import { getBenchmarks, getQualityTier, getQualityTierFromScore, compositeScore, A_TIER_THRESHOLD } from '../providers/model-benchmarks.ts';
-import { getSyntheticModelInfoFromCatalog } from '../providers/model-catalog.ts';
+import { getQualityTier, getQualityTierFromScore, compositeScore, A_TIER_THRESHOLD } from '../providers/model-benchmarks.ts';
+import type { BenchmarkStore } from '../providers/model-benchmarks.ts';
+import type { ProviderRegistry } from '../providers/registry.ts';
 
 export type PickerMode = 'model' | 'provider' | 'effort' | 'contextCap';
 
@@ -120,6 +121,12 @@ export const POPULAR_PROVIDERS: ReadonlySet<string> = new Set([
  * - Pinned/favorite indicator
  */
 export class ModelPickerModal {
+  constructor(
+    private readonly favoritesStore: Pick<FavoritesStore, 'getRecentModels'>,
+    private readonly benchmarkStore: Pick<BenchmarkStore, 'getBenchmarks'>,
+    private readonly providerRegistry: Pick<ProviderRegistry, 'getSyntheticModelInfoFromCatalog'>,
+  ) {}
+
   public active = false;
   public mode: PickerMode = 'model';
   public searchFocused = false;
@@ -426,21 +433,21 @@ export class ModelPickerModal {
         // (synthetic canonical slugs don't exist in ZeroEval benchmark data)
         if (this.benchmarkSort === 'composite') {
           if (a.provider === 'synthetic') {
-            scoreA = getSyntheticModelInfoFromCatalog(a.id)?.bestCompositeScore ?? null;
+            scoreA = this.providerRegistry.getSyntheticModelInfoFromCatalog(a.id)?.bestCompositeScore ?? null;
           } else {
-            const bA = getBenchmarks(a.id) ?? getBenchmarks(a.displayName);
+            const bA = this.benchmarkStore.getBenchmarks(a.id) ?? this.benchmarkStore.getBenchmarks(a.displayName);
             scoreA = bA ? compositeScore(bA.benchmarks) : null;
           }
           if (b.provider === 'synthetic') {
-            scoreB = getSyntheticModelInfoFromCatalog(b.id)?.bestCompositeScore ?? null;
+            scoreB = this.providerRegistry.getSyntheticModelInfoFromCatalog(b.id)?.bestCompositeScore ?? null;
           } else {
-            const bB = getBenchmarks(b.id) ?? getBenchmarks(b.displayName);
+            const bB = this.benchmarkStore.getBenchmarks(b.id) ?? this.benchmarkStore.getBenchmarks(b.displayName);
             scoreB = bB ? compositeScore(bB.benchmarks) : null;
           }
         } else {
           // swe/gpqa sort — individual benchmark scores not available for synthetic models — only composite is cached
-          const bA = a.provider === 'synthetic' ? null : (getBenchmarks(a.id) ?? getBenchmarks(a.displayName));
-          const bB = b.provider === 'synthetic' ? null : (getBenchmarks(b.id) ?? getBenchmarks(b.displayName));
+          const bA = a.provider === 'synthetic' ? null : (this.benchmarkStore.getBenchmarks(a.id) ?? this.benchmarkStore.getBenchmarks(a.displayName));
+          const bB = b.provider === 'synthetic' ? null : (this.benchmarkStore.getBenchmarks(b.id) ?? this.benchmarkStore.getBenchmarks(b.displayName));
           if (this.benchmarkSort === 'swe') {
             scoreA = bA?.benchmarks.swe ?? null;
             scoreB = bB?.benchmarks.swe ?? null;
@@ -470,8 +477,8 @@ export class ModelPickerModal {
 
         // Sort top models by composite score descending
         topModels.sort((a, b) => {
-          const sA = getSyntheticModelInfoFromCatalog(a.id)?.bestCompositeScore ?? null;
-          const sB = getSyntheticModelInfoFromCatalog(b.id)?.bestCompositeScore ?? null;
+          const sA = this.providerRegistry.getSyntheticModelInfoFromCatalog(a.id)?.bestCompositeScore ?? null;
+          const sB = this.providerRegistry.getSyntheticModelInfoFromCatalog(b.id)?.bestCompositeScore ?? null;
           if (sA == null && sB == null) return 0;
           if (sA == null) return 1;
           if (sB == null) return -1;
@@ -505,7 +512,7 @@ export class ModelPickerModal {
    * Call this when opening the picker to ensure recent models appear near the top.
    */
   async loadRecentModels(n = 10): Promise<void> {
-    this.recentIds = await getRecentModels(n);
+    this.recentIds = await this.favoritesStore.getRecentModels(n);
   }
 
   /**
@@ -527,10 +534,10 @@ export class ModelPickerModal {
       case 'pricingTier': return tierToCategoryFilter(model.tier);
       case 'qualityTier': {
         if (model.provider === 'synthetic') {
-          const info = getSyntheticModelInfoFromCatalog(model.id);
+          const info = this.providerRegistry.getSyntheticModelInfoFromCatalog(model.id);
           return info?.bestCompositeScore != null ? getQualityTierFromScore(info.bestCompositeScore) : 'C';
         }
-        const b = getBenchmarks(model.id) ?? getBenchmarks(model.displayName);
+        const b = this.benchmarkStore.getBenchmarks(model.id) ?? this.benchmarkStore.getBenchmarks(model.displayName);
         return b ? getQualityTier(b.benchmarks) : 'C';
       }
     }
@@ -542,7 +549,7 @@ export class ModelPickerModal {
    * 'all': no benchmark data or score < 0.65
    */
   private _getSyntheticSubgroup(model: ModelDefinition): 'top' | 'all' {
-    const info = getSyntheticModelInfoFromCatalog(model.id);
+    const info = this.providerRegistry.getSyntheticModelInfoFromCatalog(model.id);
     const score = info?.bestCompositeScore ?? null;
     return score !== null && score >= A_TIER_THRESHOLD ? 'top' : 'all';
   }
@@ -617,7 +624,7 @@ export class ModelPickerModal {
     let qualityTier: string | undefined;
     let detail: string;
     if (model.provider === 'synthetic') {
-      const synthInfo = getSyntheticModelInfoFromCatalog(model.id);
+      const synthInfo = this.providerRegistry.getSyntheticModelInfoFromCatalog(model.id);
       if (synthInfo?.bestCompositeScore != null) {
         qualityTier = getQualityTierFromScore(synthInfo.bestCompositeScore);
       }
@@ -627,7 +634,7 @@ export class ModelPickerModal {
         : model.provider;
     } else {
       detail = model.provider;
-      const b = getBenchmarks(model.id) ?? getBenchmarks(model.displayName);
+      const b = this.benchmarkStore.getBenchmarks(model.id) ?? this.benchmarkStore.getBenchmarks(model.displayName);
       qualityTier = b ? getQualityTier(b.benchmarks) : undefined;
     }
     const isFree = tierToCategoryFilter(model.tier) === 'free';
@@ -711,5 +718,13 @@ export class ModelPickerModal {
       // Selection moved below viewport — scroll down
       this.scrollOffset = this.selectedIndex - maxVisible + 1;
     }
+  }
+
+  getSyntheticModelInfo(modelId: string) {
+    return this.providerRegistry.getSyntheticModelInfoFromCatalog(modelId);
+  }
+
+  getBenchmarkEntry(model: ModelDefinition) {
+    return this.benchmarkStore.getBenchmarks(model.id) ?? this.benchmarkStore.getBenchmarks(model.displayName);
   }
 }

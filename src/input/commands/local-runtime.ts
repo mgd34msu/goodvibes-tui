@@ -7,12 +7,9 @@ import type { ContentPart } from '../../providers/interface.ts';
 import type { ConfigKey } from '../../config/index.ts';
 import { CONFIG_SCHEMA } from '../../config/index.ts';
 import { resolveAndValidatePath } from '../../utils/path-safety.ts';
-import { getBookmarkManager } from '../../bookmarks/manager.ts';
-import { getSecretsManager } from '../../config/secrets.ts';
 import { BUILTIN_SECRET_PROVIDER_SOURCES, describeSecretRef, isSecretRefInput, resolveSecretRef } from '../../config/secret-refs.ts';
-import { pinModel, unpinModel, isModelPinned, getPinned } from '../../providers/favorites.ts';
 import { getPluginDirectories } from '../../plugins/loader.ts';
-import { getPanelManager } from '../../panels/panel-manager.ts';
+import { openCommandPanel, requireBookmarkManager, requireSecretsManager } from './runtime-services.ts';
 
 function toggleBlocks(typeFilter: string, collapsed: boolean, ctx: CommandContext): void {
   const VALID_TYPES = ['all', 'thinking', 'tool', 'code'] as const;
@@ -67,13 +64,7 @@ export function registerLocalRuntimeCommands(registry: CommandRegistry): void {
       const sub = (args[0] ?? '').toLowerCase();
       if (sub === 'panel' || sub === 'review') {
         try {
-          if (ctx.showPanel) ctx.showPanel('tools');
-          else {
-            const panelManager = getPanelManager();
-            panelManager.open('tools');
-            panelManager.show();
-            ctx.renderRequest();
-          }
+          openCommandPanel(ctx, 'tools');
         } catch {
           // Panel registry may be unavailable in lightweight command-only contexts.
         }
@@ -119,7 +110,7 @@ export function registerLocalRuntimeCommands(registry: CommandRegistry): void {
         ctx.openBookmarkModal();
         return;
       }
-      const bm = getBookmarkManager();
+      const bm = requireBookmarkManager(ctx);
       const entries = bm.list();
       if (ctx.openSelection) {
         const deleteAction = new Map([['d', 'delete' as const]]);
@@ -147,7 +138,7 @@ export function registerLocalRuntimeCommands(registry: CommandRegistry): void {
     usage: 'set <KEY> <value> [--user|--project] [--secure|--plaintext] | link <KEY> <secret-ref> [--user|--project] [--secure|--plaintext] | get <KEY> | test <secret-ref> | providers | list | delete <KEY> [--user|--project] [--secure|--plaintext]',
     argsHint: '<set|link|get|test|providers|list|delete> [KEY]',
     async handler(args, ctx) {
-      const mgr = getSecretsManager();
+      const mgr = requireSecretsManager(ctx);
       const [sub, ...rest] = args;
       if (!sub || sub === 'list') {
         const records = await mgr.listDetailed();
@@ -379,18 +370,19 @@ export function registerLocalRuntimeCommands(registry: CommandRegistry): void {
       let limitsOk = false;
       ctx.print('Refreshing model catalog...');
       try {
-        const { refreshCatalog, getCatalogModelDefinitions } = await import('../../providers/model-catalog.ts');
-        await refreshCatalog();
+        await ctx.providerRegistry.refreshCatalog();
         catalogOk = true;
-        const models = getCatalogModelDefinitions();
+        const models = ctx.providerRegistry.getCatalogModelDefinitions();
         ctx.print(`Model catalog refreshed: ${models.length} models from ${new Set(models.map((m) => m.provider)).size} providers`);
       } catch (e) {
         ctx.print(`Catalog refresh failed: ${(e as Error).message}`);
       }
       ctx.print('Refreshing benchmarks...');
       try {
-        const { refreshBenchmarks } = await import('../../providers/model-benchmarks.ts');
-        await refreshBenchmarks();
+        if (!ctx.benchmarkStore) {
+          throw new Error('Benchmark store unavailable');
+        }
+        await ctx.benchmarkStore.refreshBenchmarks();
         benchmarksOk = true;
         ctx.print('Benchmarks refreshed.');
       } catch (e) {
@@ -398,8 +390,7 @@ export function registerLocalRuntimeCommands(registry: CommandRegistry): void {
       }
       ctx.print('Refreshing token limits...');
       try {
-        const { refreshModelLimits } = await import('../../providers/model-limits.ts');
-        const count = await refreshModelLimits();
+        const count = await ctx.providerRegistry.refreshModelLimits();
         limitsOk = true;
         ctx.print(`Token limits refreshed: ${count} models updated.`);
       } catch (e) {
@@ -416,16 +407,21 @@ export function registerLocalRuntimeCommands(registry: CommandRegistry): void {
     argsHint: '<model-id>',
     async handler(args, ctx) {
       const modelId = args[0];
+      const favoritesStore = ctx.favoritesStore;
+      if (!favoritesStore) {
+        ctx.print('Favorites store unavailable.');
+        return;
+      }
       if (!modelId) {
-        const pinned = await getPinned();
+        const pinned = await favoritesStore.getPinned();
         ctx.print(pinned.length === 0 ? 'No pinned models. Use /pin <model-id> to pin one.' : `Pinned models:\n${pinned.map(id => `  ★ ${id}`).join('\n')}`);
         return;
       }
-      if (await isModelPinned(modelId)) {
+      if (await favoritesStore.isModelPinned(modelId)) {
         ctx.print(`Model already pinned: ${modelId}`);
         return;
       }
-      await pinModel(modelId);
+      await favoritesStore.pinModel(modelId);
       ctx.print(`Pinned: ${modelId}`);
     },
   });
@@ -437,15 +433,20 @@ export function registerLocalRuntimeCommands(registry: CommandRegistry): void {
     argsHint: '<model-id>',
     async handler(args, ctx) {
       const modelId = args[0];
+      const favoritesStore = ctx.favoritesStore;
+      if (!favoritesStore) {
+        ctx.print('Favorites store unavailable.');
+        return;
+      }
       if (!modelId) {
         ctx.print('Usage: /unpin <model-id>');
         return;
       }
-      if (!await isModelPinned(modelId)) {
+      if (!await favoritesStore.isModelPinned(modelId)) {
         ctx.print(`Model is not pinned: ${modelId}`);
         return;
       }
-      await unpinModel(modelId);
+      await favoritesStore.unpinModel(modelId);
       ctx.print(`Unpinned: ${modelId}`);
     },
   });

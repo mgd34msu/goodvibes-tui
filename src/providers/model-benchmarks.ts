@@ -1,38 +1,15 @@
-/**
- * model-benchmarks.ts
- *
- * Fetches, caches, and resolves ZeroEval benchmark scores for models.
- * Data source: https://api.zeroeval.com/leaderboard/models/full?justCanonicals=true
- * Cache: ~/.goodvibes/tui/benchmarks.json (24hr TTL).
- *
- * Never deletes cache — if fetch fails, stale data is used indefinitely.
- * Atomic writes: write to .tmp then rename over existing.
- *
- * Public API:
- *   initBenchmarks()              — load cache + background refresh if stale
- *   getBenchmarks(modelName)      — fuzzy lookup by name
- *   getQualityTier(benchmarks)    — S/A/B/C tier based on composite score
- *   getQualityTierFromScore(score) — S/A/B/C tier from a raw numeric score
- *   compositeScore(b)             — weighted composite (SWE 0.4, GPQA 0.4, AIME 0.2)
- *   refreshBenchmarks()           — force re-fetch and cache update
- */
-
+import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
-import { readFileSync, writeFileSync, mkdirSync, renameSync } from 'node:fs';
 import { logger } from '../utils/logger.ts';
 
-// ---------------------------------------------------------------------------
-// Public types
-// ---------------------------------------------------------------------------
-
 export interface ModelBenchmarks {
-  gpqa?: number;      // GPQA Diamond — general knowledge / reasoning
-  swe?: number;       // SWE-bench — software engineering tasks
-  aime?: number;      // AIME — math competition
-  terminal?: number;  // Terminal-bench — terminal/CLI tasks
-  tool?: number;      // Tool-use bench
-  mcp?: number;       // MCP bench
+  gpqa?: number;
+  swe?: number;
+  aime?: number;
+  terminal?: number;
+  tool?: number;
+  mcp?: number;
 }
 
 export interface BenchmarkEntry {
@@ -44,10 +21,6 @@ export interface BenchmarkEntry {
 
 export type QualityTier = 'S' | 'A' | 'B' | 'C';
 
-// ---------------------------------------------------------------------------
-// Internal types
-// ---------------------------------------------------------------------------
-
 interface ZeroEvalModel {
   id?: string;
   model_id?: string;
@@ -55,7 +28,6 @@ interface ZeroEvalModel {
   model_name?: string;
   organization?: string;
   org?: string;
-  // Benchmark score fields — ZeroEval may use various key names
   gpqa_score?: number | null;
   gpqa?: number | null;
   gpqa_diamond?: number | null;
@@ -74,15 +46,9 @@ interface ZeroEvalModel {
   mcp_atlas_score?: number | null;
   mcp_bench?: number | null;
   mcp?: number | null;
-  // Scores may also be nested
   scores?: Record<string, number | null>;
-  // Average / composite provided by API
-  average?: number | null;
 }
 
-// Defensive fallback for potential API wrapper formats — the actual ZeroEval API returns a raw
-// array, but this interface handles any envelope shapes that might appear in future API versions
-// or staging environments.
 interface ZeroEvalResponse {
   models?: ZeroEvalModel[];
   data?: ZeroEvalModel[];
@@ -96,76 +62,35 @@ interface BenchmarksCache {
   entries: BenchmarkEntry[];
 }
 
-// ---------------------------------------------------------------------------
-// Constants
-// ---------------------------------------------------------------------------
-
 const ZEROEVAL_URL = 'https://api.zeroeval.com/leaderboard/models/full?justCanonicals=true';
 const FETCH_TIMEOUT_MS = 20_000;
-const CACHE_TTL_MS = 86_400_000; // 24 hours
+const CACHE_TTL_MS = 86_400_000;
 
-// ---------------------------------------------------------------------------
-// Cache path
-// ---------------------------------------------------------------------------
-
-function getCachePath(): string {
-  return join(homedir(), '.goodvibes', 'tui', 'benchmarks.json');
-}
-
-function getTmpPath(): string {
-  return getCachePath() + '.tmp';
-}
-
-// ---------------------------------------------------------------------------
-// In-memory state
-// ---------------------------------------------------------------------------
-
-let _cache: BenchmarksCache | null = null;
-
-// Index for fast lookup: lowercase name → entry
-let _nameIndex: Map<string, BenchmarkEntry> | null = null;
-
-// Callbacks invoked after a successful benchmark refresh (e.g. to clear derived caches).
-const _onRefreshCallbacks: Array<() => void> = [];
-
-/**
- * Register a callback to be called after benchmarks are successfully refreshed.
- * Used by model-catalog.ts to clear its synthetic benchmark score cache without
- * creating a circular import.
- */
-export function onBenchmarksRefreshed(cb: () => void): void {
-  _onRefreshCallbacks.push(cb);
-}
-
-// ---------------------------------------------------------------------------
-// Parse helpers
-// ---------------------------------------------------------------------------
+export const S_TIER_THRESHOLD = 0.80;
+export const A_TIER_THRESHOLD = 0.65;
+export const B_TIER_THRESHOLD = 0.50;
 
 function pickFirst<T>(...values: Array<T | null | undefined>): T | undefined {
-  for (const v of values) {
-    if (v != null) return v;
+  for (const value of values) {
+    if (value != null) return value;
   }
   return undefined;
 }
 
-function parseScore(v: number | null | undefined): number | undefined {
-  if (v == null || isNaN(v)) return undefined;
-  // ZeroEval may return scores as percentages (0-100) or fractions (0-1).
-  // Normalise to 0-1 range.
-  return v > 1 ? v / 100 : v;
+function parseScore(value: number | null | undefined): number | undefined {
+  if (value == null || Number.isNaN(value)) return undefined;
+  return value > 1 ? value / 100 : value;
 }
 
 function extractBenchmarks(model: ZeroEvalModel): ModelBenchmarks {
-  // Direct fields take precedence; fall back to nested scores map.
-  const s = model.scores ?? {};
-
+  const scores = model.scores ?? {};
   const raw = {
-    gpqa: pickFirst(model.gpqa_score, model.gpqa_diamond, model.gpqa, s['gpqa_score'], s['gpqa_diamond'], s['gpqa']),
-    swe: pickFirst(model.swe_bench_verified_score, model.swe_bench, model.swe, s['swe_bench_verified_score'], s['swe_bench'], s['swe']),
-    aime: pickFirst(model.aime_2025_score, model.aime_2024, model.aime, s['aime_2025_score'], s['aime_2024'], s['aime']),
-    terminal: pickFirst(model.terminal_bench_score, model.terminal_bench, model.terminal, s['terminal_bench_score'], s['terminal_bench'], s['terminal']),
-    tool: pickFirst(model.toolathlon_score, model.tool_use, model.tool, s['toolathlon_score'], s['tool_use'], s['tool']),
-    mcp: pickFirst(model.mcp_atlas_score, model.mcp_bench, model.mcp, s['mcp_atlas_score'], s['mcp_bench'], s['mcp']),
+    gpqa: pickFirst(model.gpqa_score, model.gpqa_diamond, model.gpqa, scores.gpqa_score, scores.gpqa_diamond, scores.gpqa),
+    swe: pickFirst(model.swe_bench_verified_score, model.swe_bench, model.swe, scores.swe_bench_verified_score, scores.swe_bench, scores.swe),
+    aime: pickFirst(model.aime_2025_score, model.aime_2024, model.aime, scores.aime_2025_score, scores.aime_2024, scores.aime),
+    terminal: pickFirst(model.terminal_bench_score, model.terminal_bench, model.terminal, scores.terminal_bench_score, scores.terminal_bench, scores.terminal),
+    tool: pickFirst(model.toolathlon_score, model.tool_use, model.tool, scores.toolathlon_score, scores.tool_use, scores.tool),
+    mcp: pickFirst(model.mcp_atlas_score, model.mcp_bench, model.mcp, scores.mcp_atlas_score, scores.mcp_bench, scores.mcp),
   };
 
   const benchmarks: ModelBenchmarks = {};
@@ -175,323 +100,237 @@ function extractBenchmarks(model: ZeroEvalModel): ModelBenchmarks {
   if (raw.terminal != null) benchmarks.terminal = parseScore(raw.terminal);
   if (raw.tool != null) benchmarks.tool = parseScore(raw.tool);
   if (raw.mcp != null) benchmarks.mcp = parseScore(raw.mcp);
-
   return benchmarks;
 }
 
 function parseEntries(json: unknown): BenchmarkEntry[] {
-  let raw: ZeroEvalModel[];
-  if (Array.isArray(json)) {
-    raw = json as ZeroEvalModel[];
-  } else {
-    const resp = json as ZeroEvalResponse;
-    raw = resp.models ?? resp.data ?? resp.leaderboard ?? [];
-  }
+  const raw = Array.isArray(json)
+    ? json as ZeroEvalModel[]
+    : ((json as ZeroEvalResponse).models ?? (json as ZeroEvalResponse).data ?? (json as ZeroEvalResponse).leaderboard ?? []);
 
   if (!Array.isArray(raw)) {
-    logger.warn('[model-benchmarks] Unexpected ZeroEval response shape', { keys: Object.keys(json as object) });
+    logger.warn('[model-benchmarks] Unexpected ZeroEval response shape');
     return [];
   }
 
-  const entries: BenchmarkEntry[] = [];
-  for (const model of raw) {
-    const id = String(model.id ?? model.model_id ?? '');
-    const name = String(model.name ?? model.model_name ?? id);
-    const organization = String(model.organization ?? model.org ?? '');
-    entries.push({
-      modelId: id,
-      name,
-      organization,
-      benchmarks: extractBenchmarks(model),
-    });
-  }
-  return entries;
+  return raw.map((model) => ({
+    modelId: String(model.id ?? model.model_id ?? ''),
+    name: String(model.name ?? model.model_name ?? model.id ?? model.model_id ?? ''),
+    organization: String(model.organization ?? model.org ?? ''),
+    benchmarks: extractBenchmarks(model),
+  }));
 }
 
-// ---------------------------------------------------------------------------
-// Cache management
-// ---------------------------------------------------------------------------
-
-function loadCache(): BenchmarksCache | null {
-  try {
-    const raw = readFileSync(getCachePath(), 'utf-8');
-    const parsed = JSON.parse(raw) as BenchmarksCache;
-    if (parsed.version !== 1 || !Array.isArray(parsed.entries)) return null;
-    return parsed;
-  } catch (err) {
-    const msg = String(err);
-    if (msg.includes('ENOENT') || msg.includes('no such file')) {
-      logger.debug('[model-benchmarks] No cache file found (first run)');
-    } else {
-      logger.warn('[model-benchmarks] Cache load failed (corrupted?)', { error: msg });
-    }
-    return null;
-  }
-}
-
-function saveCache(cache: BenchmarksCache): void {
-  try {
-    const dir = join(homedir(), '.goodvibes', 'tui');
-    mkdirSync(dir, { recursive: true });
-    const tmp = getTmpPath();
-    writeFileSync(tmp, JSON.stringify(cache, null, 2), 'utf-8');
-    renameSync(tmp, getCachePath());
-  } catch (err) {
-    logger.warn('[model-benchmarks] Cache write failed', { error: String(err) });
-  }
-}
-
-function isCacheStale(cache: BenchmarksCache): boolean {
-  return Date.now() - cache.fetchedAt > cache.ttlMs;
-}
-
-function buildNameIndex(entries: BenchmarkEntry[]): Map<string, BenchmarkEntry> {
-  const idx = new Map<string, BenchmarkEntry>();
+function buildNameIndex(entries: readonly BenchmarkEntry[]): Map<string, BenchmarkEntry> {
+  const index = new Map<string, BenchmarkEntry>();
   for (const entry of entries) {
-    idx.set(entry.name.toLowerCase(), entry);
-    // Also index by modelId (lowercase)
+    index.set(entry.name.toLowerCase(), entry);
     if (entry.modelId) {
-      idx.set(entry.modelId.toLowerCase(), entry);
+      index.set(entry.modelId.toLowerCase(), entry);
     }
   }
-  return idx;
+  return index;
 }
 
-// ---------------------------------------------------------------------------
-// Fetch
-// ---------------------------------------------------------------------------
-
-/**
- * Fetch ZeroEval leaderboard and parse into BenchmarkEntry[].
- */
-export async function fetchBenchmarks(): Promise<BenchmarkEntry[]> {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
-
-  try {
-    const response = await fetch(ZEROEVAL_URL, {
-      signal: controller.signal,
-      headers: { Accept: 'application/json' },
-    });
-
-    if (!response.ok) {
-      throw new Error(`ZeroEval API returned ${response.status} ${response.statusText}`);
-    }
-
-    const json = await response.json();
-    const entries = parseEntries(json);
-
-    logger.debug('[model-benchmarks] Fetched entries', { count: entries.length });
-    return entries;
-  } finally {
-    clearTimeout(timer);
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Public API
-// ---------------------------------------------------------------------------
-
-/**
- * Load cache from disk; background-refresh if stale.
- * Never deletes existing cache — stale data is always preferred over nothing.
- */
-export function initBenchmarks(): void {
-  _cache = loadCache();
-  if (_cache) {
-    _nameIndex = buildNameIndex(_cache.entries);
-  }
-
-  if (!_cache || isCacheStale(_cache)) {
-    // Background refresh — do not await
-    refreshBenchmarks().catch((err) => {
-      logger.debug('[model-benchmarks] Background refresh failed', { error: String(err) });
-    });
-  }
-}
-
-/**
- * Force re-fetch from ZeroEval and update cache.
- * Only replaces cache with valid new data — stale cache is preserved on failure.
- */
-export async function refreshBenchmarks(): Promise<void> {
-  const entries = await fetchBenchmarks();
-
-  if (entries.length === 0) {
-    logger.warn('[model-benchmarks] Refresh returned 0 entries — keeping existing cache');
-    return;
-  }
-
-  const newCache: BenchmarksCache = {
-    version: 1,
-    fetchedAt: Date.now(),
-    ttlMs: CACHE_TTL_MS,
-    entries,
-  };
-
-  saveCache(newCache);
-  _cache = newCache;
-  _nameIndex = buildNameIndex(entries);
-  // Notify registered callbacks (e.g. model-catalog clears its synthetic score cache).
-  for (const cb of _onRefreshCallbacks) cb();
-
-  logger.debug('[model-benchmarks] Cache updated', { count: entries.length });
-}
-
-/**
- * Look up benchmark data for a model by name.
- * Fuzzy matching: exact → lowercase → substring (shortest match preferred).
- * Returns undefined if no match found.
- */
-export function getBenchmarks(modelName: string): BenchmarkEntry | undefined {
-  const entries = _cache?.entries;
-  if (!entries || entries.length === 0) return undefined;
-
-  const idx = _nameIndex ?? buildNameIndex(entries);
-
-  // 1. Exact match (case-sensitive)
-  const exactEntry = entries.find((e) => e.name === modelName || e.modelId === modelName);
-  if (exactEntry) return exactEntry;
-
-  // 2. Lowercase match
-  const lower = modelName.toLowerCase();
-  const lowerEntry = idx.get(lower);
-  if (lowerEntry) return lowerEntry;
-
-  // 3. Slug-normalized match — strips all non-alphanumeric chars before comparing.
-  //    Allows synthetic canonical slugs (e.g. 'gpt4o') to match benchmark entries
-  //    with dashes/spaces in their names (e.g. 'GPT-4o', 'gpt-4o').
-  //    Placed before substring match because slug matching is more precise and avoids
-  //    ambiguous substring hits (e.g. 'gpt5' substring-matching a wrong entry).
-  //    Tries exact slug match first, then falls back to slug-prefix match to handle
-  //    canonical slugs that are prefixes of benchmark entry slugs (e.g. 'gpt5' matches 'gpt5o').
-  const slug = lower.replace(/[^a-z0-9]/g, '');
-  if (slug.length > 0) {
-    let slugBest: BenchmarkEntry | undefined;
-    let slugBestLen = Infinity;
-    let slugPrefixBest: BenchmarkEntry | undefined;
-    let slugPrefixBestLen = Infinity;
-    for (const e of entries) {
-      const nameSlug = e.name.toLowerCase().replace(/[^a-z0-9]/g, '');
-      const idSlug = e.modelId.toLowerCase().replace(/[^a-z0-9]/g, '');
-      // Exact slug match
-      if (nameSlug === slug || idSlug === slug) {
-        const len = Math.min(
-          nameSlug === slug ? e.name.length : Infinity,
-          idSlug === slug ? e.modelId.length : Infinity,
-        );
-        if (len < slugBestLen) {
-          slugBestLen = len;
-          slugBest = e;
-        }
-      }
-      // Prefix slug match — entry slug starts with the query slug (e.g. 'gpt5' in 'gpt5o')
-      // Only use as fallback when no exact match found.
-      else if (nameSlug.startsWith(slug) || idSlug.startsWith(slug)) {
-        const len = Math.min(
-          nameSlug.startsWith(slug) ? e.name.length : Infinity,
-          idSlug.startsWith(slug) ? e.modelId.length : Infinity,
-        );
-        if (len < slugPrefixBestLen) {
-          slugPrefixBestLen = len;
-          slugPrefixBest = e;
-        }
-      }
-    }
-    if (slugBest) return slugBest;
-    if (slugPrefixBest) return slugPrefixBest;
-  }
-
-  // 4. Substring match — prefer shortest name/modelId to avoid 'gpt-4' matching 'gpt-4o'
-  let bestEntry: BenchmarkEntry | undefined;
-  let bestLen = Infinity;
-  for (const e of entries) {
-    const nameLow = e.name.toLowerCase();
-    const idLow = e.modelId.toLowerCase();
-    if (nameLow.includes(lower) || idLow.includes(lower)) {
-      const len = Math.min(
-        nameLow.includes(lower) ? e.name.length : Infinity,
-        idLow.includes(lower) ? e.modelId.length : Infinity,
-      );
-      if (len < bestLen) {
-        bestLen = len;
-        bestEntry = e;
-      }
-    }
-  }
-  if (bestEntry) return bestEntry;
-
-  return undefined;
-}
-
-/**
- * Test helper — directly set the internal cache entries and rebuild the name index.
- * ONLY for use in unit tests.
- */
-export function _setEntriesForTest(entries: BenchmarkEntry[]): void {
-  _cache = { version: 1, fetchedAt: Date.now(), ttlMs: CACHE_TTL_MS, entries };
-  _nameIndex = buildNameIndex(entries);
-}
-
-/**
- * Returns the modelIds of the top N entries ranked by composite benchmark score.
- * Used by filterRelevantChanges in model-catalog.ts.
- */
-export function getTopBenchmarkModelIds(n: number): string[] {
-  const entries = _cache?.entries;
-  if (!entries || entries.length === 0) return [];
-
-  const scored = entries
-    .map(e => ({ id: e.modelId, score: compositeScore(e.benchmarks) }))
-    .filter((e): e is { id: string; score: number } => e.score !== null)
-    .sort((a, b) => b.score - a.score);
-
-  return scored.slice(0, n).map(e => e.id);
-}
-
-/**
- * Compute weighted composite score.
- * Weights: SWE 0.4, GPQA 0.4, AIME 0.2.
- * Returns null if none of the scored fields are present.
- */
-export function compositeScore(b: ModelBenchmarks): number | null {
+export function compositeScore(benchmarks: ModelBenchmarks): number | null {
   let total = 0;
   let weight = 0;
-
-  if (b.swe != null) { total += b.swe * 0.4; weight += 0.4; }
-  if (b.gpqa != null) { total += b.gpqa * 0.4; weight += 0.4; }
-  if (b.aime != null) { total += b.aime * 0.2; weight += 0.2; }
-
-  if (weight === 0) return null;
-
-  // Normalise: if only a subset of weights is present, scale to 0-1
-  return total / weight;
+  if (benchmarks.swe != null) { total += benchmarks.swe * 0.4; weight += 0.4; }
+  if (benchmarks.gpqa != null) { total += benchmarks.gpqa * 0.4; weight += 0.4; }
+  if (benchmarks.aime != null) { total += benchmarks.aime * 0.2; weight += 0.2; }
+  return weight === 0 ? null : total / weight;
 }
 
-/** Minimum composite score to qualify as S-tier. */
-export const S_TIER_THRESHOLD = 0.80;
-/** Minimum composite score to qualify as A-tier. Used for 'Top Models' filtering. */
-export const A_TIER_THRESHOLD = 0.65;
-/** Minimum composite score to qualify as B-tier. */
-export const B_TIER_THRESHOLD = 0.50;
-
-/**
- * Determine quality tier based on composite benchmark score.
- * S ≥ 0.80 | A ≥ 0.65 | B ≥ 0.50 | C < 0.50 or no data
- */
 export function getQualityTier(benchmarks: ModelBenchmarks): QualityTier {
   const score = compositeScore(benchmarks);
   if (score == null) return 'C';
   return getQualityTierFromScore(score);
 }
 
-/**
- * Determine quality tier from a pre-computed composite score.
- * S ≥ 0.80 | A ≥ 0.65 | B ≥ 0.50 | C < 0.50
- */
 export function getQualityTierFromScore(score: number): QualityTier {
   if (score >= S_TIER_THRESHOLD) return 'S';
   if (score >= A_TIER_THRESHOLD) return 'A';
   if (score >= B_TIER_THRESHOLD) return 'B';
   return 'C';
+}
+
+export interface BenchmarkStoreOptions {
+  readonly dir?: string;
+}
+
+export class BenchmarkStore {
+  private readonly dir: string;
+  private cache: BenchmarksCache | null = null;
+  private nameIndex: Map<string, BenchmarkEntry> | null = null;
+  private readonly refreshCallbacks = new Set<() => void>();
+
+  constructor(options: BenchmarkStoreOptions = {}) {
+    this.dir = options.dir ?? join(homedir(), '.goodvibes', 'tui');
+  }
+
+  getCachePath(): string {
+    return join(this.dir, 'benchmarks.json');
+  }
+
+  private getTmpPath(): string {
+    return `${this.getCachePath()}.tmp`;
+  }
+
+  onRefreshed(callback: () => void): () => void {
+    this.refreshCallbacks.add(callback);
+    return () => {
+      this.refreshCallbacks.delete(callback);
+    };
+  }
+
+  initBenchmarks(): void {
+    this.cache = this.loadCache();
+    this.nameIndex = this.cache ? buildNameIndex(this.cache.entries) : null;
+    if (!this.cache || this.isCacheStale(this.cache)) {
+      void this.refreshBenchmarks().catch((err) => {
+        logger.debug('[model-benchmarks] Background refresh failed', { error: String(err) });
+      });
+    }
+  }
+
+  async refreshBenchmarks(): Promise<void> {
+    const entries = await this.fetchBenchmarks();
+    if (entries.length === 0) {
+      logger.warn('[model-benchmarks] Refresh returned 0 entries — keeping existing cache');
+      return;
+    }
+    const next: BenchmarksCache = {
+      version: 1,
+      fetchedAt: Date.now(),
+      ttlMs: CACHE_TTL_MS,
+      entries,
+    };
+    this.saveCache(next);
+    this.cache = next;
+    this.nameIndex = buildNameIndex(entries);
+    for (const callback of this.refreshCallbacks) callback();
+    logger.debug('[model-benchmarks] Cache updated', { count: entries.length });
+  }
+
+  getBenchmarks(modelName: string): BenchmarkEntry | undefined {
+    const entries = this.cache?.entries;
+    if (!entries || entries.length === 0) return undefined;
+    const index = this.nameIndex ?? buildNameIndex(entries);
+
+    const exact = entries.find((entry) => entry.name === modelName || entry.modelId === modelName);
+    if (exact) return exact;
+
+    const lower = modelName.toLowerCase();
+    const indexed = index.get(lower);
+    if (indexed) return indexed;
+
+    const slug = lower.replace(/[^a-z0-9]/g, '');
+    if (slug.length > 0) {
+      let slugBest: BenchmarkEntry | undefined;
+      let slugBestLen = Infinity;
+      let slugPrefixBest: BenchmarkEntry | undefined;
+      let slugPrefixBestLen = Infinity;
+      for (const entry of entries) {
+        const nameSlug = entry.name.toLowerCase().replace(/[^a-z0-9]/g, '');
+        const idSlug = entry.modelId.toLowerCase().replace(/[^a-z0-9]/g, '');
+        if (nameSlug === slug || idSlug === slug) {
+          const len = Math.min(
+            nameSlug === slug ? entry.name.length : Infinity,
+            idSlug === slug ? entry.modelId.length : Infinity,
+          );
+          if (len < slugBestLen) {
+            slugBestLen = len;
+            slugBest = entry;
+          }
+        } else if (nameSlug.startsWith(slug) || idSlug.startsWith(slug)) {
+          const len = Math.min(
+            nameSlug.startsWith(slug) ? entry.name.length : Infinity,
+            idSlug.startsWith(slug) ? entry.modelId.length : Infinity,
+          );
+          if (len < slugPrefixBestLen) {
+            slugPrefixBestLen = len;
+            slugPrefixBest = entry;
+          }
+        }
+      }
+      if (slugBest) return slugBest;
+      if (slugPrefixBest) return slugPrefixBest;
+    }
+
+    let best: BenchmarkEntry | undefined;
+    let bestLen = Infinity;
+    for (const entry of entries) {
+      const nameLower = entry.name.toLowerCase();
+      const idLower = entry.modelId.toLowerCase();
+      if (nameLower.includes(lower) || idLower.includes(lower)) {
+        const len = Math.min(
+          nameLower.includes(lower) ? entry.name.length : Infinity,
+          idLower.includes(lower) ? entry.modelId.length : Infinity,
+        );
+        if (len < bestLen) {
+          bestLen = len;
+          best = entry;
+        }
+      }
+    }
+    return best;
+  }
+
+  getTopBenchmarkModelIds(n: number): string[] {
+    const entries = this.cache?.entries;
+    if (!entries || entries.length === 0) return [];
+    return entries
+      .map((entry) => ({ id: entry.modelId, score: compositeScore(entry.benchmarks) }))
+      .filter((entry): entry is { id: string; score: number } => entry.score != null)
+      .sort((a, b) => b.score - a.score)
+      .slice(0, n)
+      .map((entry) => entry.id);
+  }
+
+  private async fetchBenchmarks(): Promise<BenchmarkEntry[]> {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+    try {
+      const response = await fetch(ZEROEVAL_URL, {
+        signal: controller.signal,
+        headers: { Accept: 'application/json' },
+      });
+      if (!response.ok) {
+        throw new Error(`ZeroEval API returned ${response.status} ${response.statusText}`);
+      }
+      return parseEntries(await response.json());
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  private loadCache(): BenchmarksCache | null {
+    try {
+      const parsed = JSON.parse(readFileSync(this.getCachePath(), 'utf-8')) as BenchmarksCache;
+      if (parsed.version !== 1 || !Array.isArray(parsed.entries)) return null;
+      return parsed;
+    } catch (err) {
+      const message = String(err);
+      if (message.includes('ENOENT') || message.includes('no such file')) {
+        logger.debug('[model-benchmarks] No cache file found (first run)');
+      } else {
+        logger.warn('[model-benchmarks] Cache load failed (corrupted?)', { error: message });
+      }
+      return null;
+    }
+  }
+
+  private saveCache(cache: BenchmarksCache): void {
+    try {
+      mkdirSync(this.dir, { recursive: true });
+      writeFileSync(this.getTmpPath(), JSON.stringify(cache, null, 2), 'utf-8');
+      renameSync(this.getTmpPath(), this.getCachePath());
+    } catch (err) {
+      logger.warn('[model-benchmarks] Cache write failed', { error: String(err) });
+    }
+  }
+
+  private isCacheStale(cache: BenchmarksCache): boolean {
+    return Date.now() - cache.fetchedAt > cache.ttlMs;
+  }
 }

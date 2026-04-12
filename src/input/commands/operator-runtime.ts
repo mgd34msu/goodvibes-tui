@@ -1,11 +1,9 @@
 import type { CommandRegistry } from '../command-registry.ts';
-import { getProfileManager } from '../../profiles/manager.ts';
-import { ModeManager } from '../../state/mode-manager.ts';
 import { ToolContractVerifier } from '../../runtime/tools/contract-verifier.ts';
-import { getReplayEngine } from '../../core/deterministic-replay.ts';
 import type { ReplaySnapshotInput } from '../../runtime/forensics/registry.ts';
 import { logger } from '../../utils/logger.ts';
 import { registerOperatorPanelCommand } from './operator-panel-runtime.ts';
+import { requireProfileManager, requireReplayEngine } from './runtime-services.ts';
 
 export function registerOperatorRuntimeCommands(registry: CommandRegistry): void {
   registerOperatorPanelCommand(registry);
@@ -72,7 +70,7 @@ export function registerOperatorRuntimeCommands(registry: CommandRegistry): void
       if (ctx.openProfilePicker) {
         ctx.openProfilePicker();
       } else {
-        const profiles = getProfileManager().list();
+        const profiles = requireProfileManager(ctx).list();
         if (profiles.length === 0) ctx.print('No profiles saved. Use /config profile save <name> to create one.');
         else ctx.print(['Saved profiles:', ...profiles.map(p => `  ${p.name}`)].join('\n'));
       }
@@ -97,7 +95,11 @@ export function registerOperatorRuntimeCommands(registry: CommandRegistry): void
     usage: '[quiet|balanced|operator|show|set-domain <domain> <verbosity>]',
     argsHint: '[preset|show|set-domain]',
     handler(args, ctx) {
-      const mgr = ModeManager.getInstance();
+      const mgr = ctx.modeManager;
+      if (!mgr) {
+        ctx.print('Interaction mode manager is not available in this runtime.');
+        return;
+      }
       const sub = args[0] ?? 'show';
 
       if (sub === 'quiet' || sub === 'balanced' || sub === 'operator') {
@@ -374,7 +376,7 @@ export function registerOperatorRuntimeCommands(registry: CommandRegistry): void
           return;
         }
         const json = ctx.forensicsRegistry.exportBundleAsJson(id, {
-          replaySnapshot: getReplayEngine().getSnapshot() as ReplaySnapshotInput,
+          replaySnapshot: requireReplayEngine(ctx).getSnapshot() as ReplaySnapshotInput,
         });
         if (!json) {
           ctx.print(`[Forensics] No report found with id "${id}".`);

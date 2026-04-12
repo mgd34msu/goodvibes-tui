@@ -138,21 +138,10 @@ export function loadLanguageConfigs(): Map<string, LanguageConfig> {
   return result;
 }
 
-// Module-level cache
-let _cached: Map<string, LanguageConfig> | null = null;
-
 /**
  * Get config for a specific language ID.
- * Loads and caches configs on first call.
+ * Loads configs on demand.
  */
 export function getLanguageConfig(langId: string): LanguageConfig | null {
-  if (!_cached) {
-    _cached = loadLanguageConfigs();
-  }
-  return _cached.get(langId) ?? null;
-}
-
-/** Reset the module-level cache (used in tests). */
-export function _resetConfigCache(): void {
-  _cached = null;
+  return loadLanguageConfigs().get(langId) ?? null;
 }

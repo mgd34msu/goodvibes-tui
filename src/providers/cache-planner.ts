@@ -12,12 +12,17 @@
  *   - When cache hit rate drops below threshold
  */
 
-import type { CacheStrategy, CacheContext, CacheBreakpoint } from './cache-strategy.ts';
-import { getDefaultStrategy, cacheHitTracker } from './cache-strategy.ts';
+import type {
+  CacheStrategy,
+  CacheContext,
+  CacheBreakpoint,
+  CacheHitTracker,
+} from './cache-strategy.ts';
+import { getDefaultStrategy } from './cache-strategy.ts';
 import { getCacheCapability } from './cache-capability.ts';
 import type { ProviderCacheCapability } from './cache-capability.ts';
-import { helperModel } from '../config/helper-model.ts';
-import { configManager } from '../config/index.ts';
+import type { ConfigManager } from '../config/manager.ts';
+import type { HelperModel } from '../config/helper-model.ts';
 import { logger } from '../utils/logger.ts';
 
 /** Result of a strategy planning run. */
@@ -30,23 +35,21 @@ export interface PlanResult {
 /**
  * CachePlanner — manages cache strategy lifecycle.
  * 
- * Singleton. Caches the current strategy and refreshes it based on
+ * Caches the current strategy and refreshes it based on
  * turn count and hit rate thresholds.
  */
 export class CachePlanner {
-  private static _instance: CachePlanner | undefined;
-  
   private currentStrategy: CacheStrategy | null = null;
   private lastPlanTurn = 0;
   private turnsSinceLastPlan = 0;
+  private readonly cacheHitTracker: Pick<CacheHitTracker, 'getMetrics'>;
 
-  private constructor() {}
-
-  static getInstance(): CachePlanner {
-    if (!CachePlanner._instance) {
-      CachePlanner._instance = new CachePlanner();
-    }
-    return CachePlanner._instance;
+  constructor(
+    private readonly configManager: Pick<ConfigManager, 'get'>,
+    private readonly helperModel: Pick<HelperModel, 'chat'>,
+    cacheHitTracker: Pick<CacheHitTracker, 'getMetrics'>,
+  ) {
+    this.cacheHitTracker = cacheHitTracker;
   }
 
   /**
@@ -73,7 +76,7 @@ export class CachePlanner {
     }
 
     // Try LLM-assisted planning first (if helper enabled)
-    const helperEnabled = configManager.get('helper.enabled') as boolean;
+    const helperEnabled = this.configManager.get('helper.enabled') as boolean;
     const cap = getCacheCapability(context.providerName);
 
     if (helperEnabled && cap.type === 'explicit') {
@@ -123,11 +126,11 @@ export class CachePlanner {
     }
 
     // Hit rate dropped below threshold
-    const hitRateThreshold = configManager.get('cache.hitRateWarningThreshold') as number;
+    const hitRateThreshold = this.configManager.get('cache.hitRateWarningThreshold') as number;
     if (
       context.recentCacheHitRate !== undefined &&
       context.recentCacheHitRate < hitRateThreshold &&
-      cacheHitTracker.getMetrics().turns >= 3 // Need enough data
+      this.cacheHitTracker.getMetrics().turns >= 3 // Need enough data
     ) {
       return true;
     }
@@ -145,7 +148,7 @@ export class CachePlanner {
   ): Promise<CacheStrategy | null> {
     const prompt = this.buildHelperPrompt(context, cap);
 
-    const response = await helperModel.chat('cache_strategy', prompt, {
+    const response = await this.helperModel.chat('cache_strategy', prompt, {
       maxTokens: 1024,
       systemPrompt: 'You are a cache optimization assistant. Respond ONLY with valid JSON matching the requested schema. No markdown, no explanation.',
     });
@@ -251,11 +254,4 @@ Respond with JSON only:
     this.currentStrategy = null;
   }
 
-  /** Reset singleton (for tests). */
-  static _reset(): void {
-    CachePlanner._instance = undefined;
-  }
 }
-
-/** Singleton cache planner instance. */
-export const cachePlanner = CachePlanner.getInstance();

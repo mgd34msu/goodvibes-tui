@@ -82,8 +82,6 @@ interface CacheEntry {
   failed: boolean;
 }
 
-const providerCache = new Map<string, CacheEntry>();
-
 // ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
@@ -100,28 +98,54 @@ const providerCache = new Map<string, CacheEntry>();
  * @returns Map of model ID → raw context length from the API, or null if
  *          the provider is offline or returned an unrecognised response.
  */
-export async function ingestLocalProviderContextWindows(
-  providerName: string,
-  baseURL: string,
-  apiKey?: string,
-): Promise<Map<string, number> | null> {
-  const now = Date.now();
-  const cached = providerCache.get(providerName);
-  if (cached && now - cached.fetchedAt < CACHE_TTL_MS) {
-    return cached.failed ? null : cached.models;
+export class LocalContextIngestionService {
+  private readonly providerCache = new Map<string, CacheEntry>();
+
+  async ingestProviderContextWindows(
+    providerName: string,
+    baseURL: string,
+    apiKey?: string,
+  ): Promise<Map<string, number> | null> {
+    const now = Date.now();
+    const cached = this.providerCache.get(providerName);
+    if (cached && now - cached.fetchedAt < CACHE_TTL_MS) {
+      return cached.failed ? null : cached.models;
+    }
+
+    // Use multi-endpoint discovery (probes LM Studio, Ollama, OpenAI-compat, llama.cpp, TGI)
+    // Returns an empty Map when all probes fail — treat that as a fetch failure.
+    const discovered = await discoverContextWindows(baseURL, apiKey);
+    const failed = discovered.size === 0;
+    this.providerCache.set(providerName, {
+      fetchedAt: now,
+      models: discovered,
+      failed,
+    });
+
+    return failed ? null : discovered;
   }
 
-  // Use multi-endpoint discovery (probes LM Studio, Ollama, OpenAI-compat, llama.cpp, TGI)
-  // Returns an empty Map when all probes fail — treat that as a fetch failure.
-  const discovered = await discoverContextWindows(baseURL, apiKey);
-  const failed = discovered.size === 0;
-  providerCache.set(providerName, {
-    fetchedAt: now,
-    models: discovered,
-    failed,
-  });
+  clearProviderCache(providerName: string): void {
+    this.providerCache.delete(providerName);
+  }
 
-  return failed ? null : discovered;
+  clearAllCaches(): void {
+    this.providerCache.clear();
+  }
+
+  getDiagnostics(): Array<{
+    providerName: string;
+    fetchedAt: number;
+    modelCount: number;
+    failed: boolean;
+  }> {
+    return Array.from(this.providerCache.entries()).map(([providerName, entry]) => ({
+      providerName,
+      fetchedAt: entry.fetchedAt,
+      modelCount: entry.models.size,
+      failed: entry.failed,
+    }));
+  }
 }
 
 /**
@@ -166,38 +190,4 @@ export function resolveContextWindow(
     tokens: DEFAULT_CONTEXT_WINDOW,
     provenance: 'fallback',
   };
-}
-
-/**
- * Clear the ingestion cache for a specific provider.
- * Useful after a provider config is reloaded.
- */
-export function clearProviderContextCache(providerName: string): void {
-  providerCache.delete(providerName);
-}
-
-/**
- * Clear the entire ingestion cache.
- * Called when the `local-provider-context-ingestion` feature flag is toggled.
- */
-export function clearAllContextCaches(): void {
-  providerCache.clear();
-}
-
-/**
- * Return the current cache snapshot for diagnostics.
- * Keys are provider names; values include fetchedAt and model count.
- */
-export function getContextIngestionDiagnostics(): Array<{
-  providerName: string;
-  fetchedAt: number;
-  modelCount: number;
-  failed: boolean;
-}> {
-  return Array.from(providerCache.entries()).map(([providerName, entry]) => ({
-    providerName,
-    fetchedAt: entry.fetchedAt,
-    modelCount: entry.models.size,
-    failed: entry.failed,
-  }));
 }

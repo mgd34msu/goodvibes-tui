@@ -13,9 +13,10 @@ import {
   AUTO_REGISTER_CATALOG,
 } from '../../providers/auto-register.ts';
 import type { AutoRegisterEntry } from '../../providers/auto-register.ts';
-import { _resetProviderRegistryForTesting, getProviderRegistry } from '../../providers/registry.ts';
+import type { ProviderRegistry } from '../../providers/registry.ts';
 import { OpenAICompatProvider } from '../../providers/openai-compat.ts';
 import { AnthropicCompatProvider } from '../../providers/anthropic-compat.ts';
+import { createTestManagers } from '../helpers/test-managers.ts';
 import { logger } from '../../utils/logger.ts';
 
 // ---------------------------------------------------------------------------
@@ -33,21 +34,24 @@ const makeEntry = (overrides: Partial<AutoRegisterEntry> = {}): AutoRegisterEntr
   ...overrides,
 });
 
+let providerRegistry: ProviderRegistry;
+
+beforeEach(() => {
+  providerRegistry = createTestManagers().providerRegistry;
+});
+
 // ---------------------------------------------------------------------------
 // isProviderRegistered
 // ---------------------------------------------------------------------------
 
 describe('isProviderRegistered', () => {
-  beforeEach(() => { _resetProviderRegistryForTesting(); });
-  afterEach(() => { _resetProviderRegistryForTesting(); });
-
   it('returns true for a built-in provider like openrouter', () => {
     // openrouter is registered as a builtin in ProviderRegistry
-    expect(isProviderRegistered('openrouter')).toBe(true);
+    expect(isProviderRegistered(providerRegistry, 'openrouter')).toBe(true);
   });
 
   it('returns false for an unregistered provider', () => {
-    expect(isProviderRegistered('totally-unknown-provider-xyz')).toBe(false);
+    expect(isProviderRegistered(providerRegistry, 'totally-unknown-provider-xyz')).toBe(false);
   });
 
   it('returns true after manually registering a provider', () => {
@@ -58,8 +62,8 @@ describe('isProviderRegistered', () => {
       defaultModel: 'manual-model',
       models: ['manual-model'],
     });
-    getProviderRegistry().register(provider);
-    expect(isProviderRegistered('manual-test')).toBe(true);
+    providerRegistry.register(provider);
+    expect(isProviderRegistered(providerRegistry, 'manual-test')).toBe(true);
   });
 });
 
@@ -184,7 +188,6 @@ describe('createProviderFromEntry', () => {
 describe('autoRegisterProviders', () => {
   const originalEnv = process.env;
   beforeEach(() => {
-    _resetProviderRegistryForTesting();
     process.env = { ...originalEnv };
     // Clear any potentially interfering env vars
     for (const entry of AUTO_REGISTER_CATALOG) {
@@ -196,37 +199,36 @@ describe('autoRegisterProviders', () => {
   });
   afterEach(() => {
     process.env = originalEnv;
-    _resetProviderRegistryForTesting();
   });
 
   it('registers a provider when its env var is set', () => {
     process.env.TEST_PROVIDER_API_KEY = 'sk-test';
     const catalog = [makeEntry()];
 
-    const result = autoRegisterProviders(catalog);
+    const result = autoRegisterProviders(providerRegistry, catalog);
 
     expect(result).toContain('Test Provider');
-    expect(isProviderRegistered('test-provider')).toBe(true);
+    expect(isProviderRegistered(providerRegistry, 'test-provider')).toBe(true);
   });
 
   it('skips a provider when its env var is not set', () => {
     delete process.env.TEST_PROVIDER_API_KEY;
     const catalog = [makeEntry()];
 
-    const result = autoRegisterProviders(catalog);
+    const result = autoRegisterProviders(providerRegistry, catalog);
 
     expect(result).toHaveLength(0);
-    expect(isProviderRegistered('test-provider')).toBe(false);
+    expect(isProviderRegistered(providerRegistry, 'test-provider')).toBe(false);
   });
 
   it('skips a provider when its env var is empty string', () => {
     process.env.TEST_PROVIDER_API_KEY = '';
     const catalog = [makeEntry()];
 
-    const result = autoRegisterProviders(catalog);
+    const result = autoRegisterProviders(providerRegistry, catalog);
 
     expect(result).toHaveLength(0);
-    expect(isProviderRegistered('test-provider')).toBe(false);
+    expect(isProviderRegistered(providerRegistry, 'test-provider')).toBe(false);
   });
 
   it('skips already-registered providers', () => {
@@ -237,7 +239,7 @@ describe('autoRegisterProviders', () => {
     // Set the env var so the key check passes
     process.env.TEST_PROVIDER_API_KEY = 'sk-test';
 
-    const result = autoRegisterProviders(catalog);
+    const result = autoRegisterProviders(providerRegistry, catalog);
 
     // Should skip because openrouter is already registered
     expect(result).toHaveLength(0);
@@ -247,8 +249,8 @@ describe('autoRegisterProviders', () => {
     process.env.TEST_PROVIDER_API_KEY = 'sk-test';
     const catalog = [makeEntry()];
 
-    const first = autoRegisterProviders(catalog);
-    const second = autoRegisterProviders(catalog);
+    const first = autoRegisterProviders(providerRegistry, catalog);
+    const second = autoRegisterProviders(providerRegistry, catalog);
 
     expect(first).toHaveLength(1);
     expect(second).toHaveLength(0); // already registered on first call
@@ -262,7 +264,7 @@ describe('autoRegisterProviders', () => {
       makeEntry({ id: 'cerebras-test', name: 'Cerebras', envVars: ['CEREBRAS_API_KEY'] }),
     ];
 
-    const result = autoRegisterProviders(catalog);
+    const result = autoRegisterProviders(providerRegistry, catalog);
 
     expect(result).toContain('Groq');
     expect(result).toContain('Cerebras');
@@ -270,7 +272,7 @@ describe('autoRegisterProviders', () => {
   });
 
   it('returns empty array when no env vars are set', () => {
-    const result = autoRegisterProviders([
+    const result = autoRegisterProviders(providerRegistry, [
       makeEntry({ id: 'p1', name: 'P1', envVars: ['P1_API_KEY'] }),
       makeEntry({ id: 'p2', name: 'P2', envVars: ['P2_API_KEY'] }),
     ]);
@@ -288,7 +290,7 @@ describe('autoRegisterProviders', () => {
       }),
     ];
 
-    const result = autoRegisterProviders(catalog);
+    const result = autoRegisterProviders(providerRegistry, catalog);
     expect(result).toContain('NVIDIA');
   });
 
@@ -304,7 +306,7 @@ describe('autoRegisterProviders', () => {
       }),
     ];
 
-    const result = autoRegisterProviders(catalog);
+    const result = autoRegisterProviders(providerRegistry, catalog);
     expect(result).toContain('NVIDIA');
   });
 
@@ -332,20 +334,20 @@ describe('autoRegisterProviders', () => {
       },
     ];
 
-    const result = autoRegisterProviders(catalog);
+    const result = autoRegisterProviders(providerRegistry, catalog);
 
     expect(result).toContain('ZenMux');
     expect(result).toContain('ZenMux (Anthropic)');
     expect(result).toHaveLength(2);
-    expect(isProviderRegistered('zenmux-test')).toBe(true);
-    expect(isProviderRegistered('zenmux-anthropic-test')).toBe(true);
+    expect(isProviderRegistered(providerRegistry, 'zenmux-test')).toBe(true);
+    expect(isProviderRegistered(providerRegistry, 'zenmux-anthropic-test')).toBe(true);
 
     // Verify routing: openai endpoint → OpenAICompatProvider
-    const openaiProvider = getProviderRegistry().get('zenmux-test');
+    const openaiProvider = providerRegistry.get('zenmux-test');
     expect(openaiProvider).toBeInstanceOf(OpenAICompatProvider);
 
     // Verify routing: anthropic endpoint → AnthropicCompatProvider
-    const anthropicProvider = getProviderRegistry().get('zenmux-anthropic-test');
+    const anthropicProvider = providerRegistry.get('zenmux-anthropic-test');
     expect(anthropicProvider).toBeInstanceOf(AnthropicCompatProvider);
   });
 
@@ -358,12 +360,12 @@ describe('autoRegisterProviders', () => {
     });
 
     try {
-      autoRegisterProviders([makeEntry()]);
+      autoRegisterProviders(providerRegistry, [makeEntry()]);
     } finally {
       spy.mockRestore();
     }
 
-    const logLine = logMessages.find(m => m.includes('[auto-register]'));
+    const logLine = logMessages.find((m: string) => m.includes('[auto-register]'));
     expect(logLine).toBeDefined();
     expect(logLine).toContain('Auto-registered 1 provider');
     expect(logLine).toContain('Test Provider');
@@ -377,12 +379,12 @@ describe('autoRegisterProviders', () => {
     });
 
     try {
-      autoRegisterProviders([makeEntry()]);
+      autoRegisterProviders(providerRegistry, [makeEntry()]);
     } finally {
       spy.mockRestore();
     }
 
-    const logLine = logMessages.find(m => m.includes('[auto-register]'));
+    const logLine = logMessages.find((m: string) => m.includes('[auto-register]'));
     expect(logLine).toContain('1 provider:');
     expect(logLine).not.toContain('1 providers:');
   });
@@ -400,12 +402,12 @@ describe('autoRegisterProviders', () => {
     });
 
     try {
-      autoRegisterProviders(catalog);
+      autoRegisterProviders(providerRegistry, catalog);
     } finally {
       spy.mockRestore();
     }
 
-    const logLine = logMessages.find(m => m.includes('[auto-register]'));
+    const logLine = logMessages.find((m: string) => m.includes('[auto-register]'));
     expect(logLine).toContain('2 providers:');
     expect(logLine).toContain('P One, P Two');
   });
@@ -417,18 +419,18 @@ describe('autoRegisterProviders', () => {
     });
 
     try {
-      autoRegisterProviders([makeEntry()]); // no env var set
+      autoRegisterProviders(providerRegistry, [makeEntry()]); // no env var set
     } finally {
       spy.mockRestore();
     }
 
-    const autoRegisterLogs = logMessages.filter(m => m.includes('[auto-register]'));
+    const autoRegisterLogs = logMessages.filter((m: string) => m.includes('[auto-register]'));
     expect(autoRegisterLogs).toHaveLength(0);
   });
 
   it('uses default catalog when no argument provided', () => {
     // Call with no arguments — should not throw
-    const result = autoRegisterProviders();
+    const result = autoRegisterProviders(providerRegistry);
     // Since no env vars are set (cleared in beforeEach), nothing registers
     expect(Array.isArray(result)).toBe(true);
   });
@@ -446,9 +448,9 @@ describe('autoRegisterProviders', () => {
       warnMessages.push(msg);
     });
 
-    const registry = getProviderRegistry();
+    const registry = providerRegistry;
     let callCount = 0;
-    const registerSpy = spyOn(registry, 'register').mockImplementation((provider) => {
+    const registerSpy = spyOn(registry, 'register').mockImplementation((provider: Parameters<typeof registry.register>[0]) => {
       callCount++;
       if (callCount === 1) {
         throw new Error('simulated registration failure');
@@ -460,7 +462,7 @@ describe('autoRegisterProviders', () => {
 
     let result: string[];
     try {
-      result = autoRegisterProviders(catalog);
+      result = autoRegisterProviders(providerRegistry, catalog);
     } finally {
       warnSpy.mockRestore();
       registerSpy.mockRestore();
@@ -471,7 +473,7 @@ describe('autoRegisterProviders', () => {
 
     // Succeeding provider is included
     expect(result!).toContain('P OK');
-    expect(isProviderRegistered('p-ok')).toBe(true);
+    expect(isProviderRegistered(providerRegistry, 'p-ok')).toBe(true);
 
     // Error logged via logger.warn
     const errorLine = warnMessages.find(m => m.includes('[auto-register] Failed to register P Fail'));

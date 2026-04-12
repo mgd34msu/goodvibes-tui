@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { ArchetypeLoader } from '../../agents/archetypes.ts';
 import type { AgentArchetype } from '../../agents/archetypes.ts';
+import { getTestArchetypeLoader, resetTestRuntimeServices } from '../helpers/runtime-services.ts';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -18,11 +19,11 @@ function writeAgentMd(dir: string, filename: string, content: string): void {
 }
 
 // ---------------------------------------------------------------------------
-// Setup: reset singleton between tests
+// Setup
 // ---------------------------------------------------------------------------
 
 beforeEach(() => {
-  ArchetypeLoader.resetInstance();
+  resetTestRuntimeServices();
 });
 
 // ---------------------------------------------------------------------------
@@ -305,21 +306,17 @@ describe('mergeWithOverrides', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// Singleton
-// ---------------------------------------------------------------------------
-
-describe('singleton', () => {
-  test('getInstance returns the same instance', () => {
-    const a = ArchetypeLoader.getInstance();
-    const b = ArchetypeLoader.getInstance();
+describe('runtime ownership', () => {
+  test('test runtime exposes one archetype loader per runtime graph', () => {
+    const a = getTestArchetypeLoader();
+    const b = getTestArchetypeLoader();
     expect(a).toBe(b);
   });
 
-  test('resetInstance causes new instance on next call', () => {
-    const a = ArchetypeLoader.getInstance();
-    ArchetypeLoader.resetInstance();
-    const b = ArchetypeLoader.getInstance();
+  test('resetting the test runtime creates a fresh loader graph', () => {
+    const a = getTestArchetypeLoader();
+    resetTestRuntimeServices();
+    const b = getTestArchetypeLoader();
     expect(a).not.toBe(b);
   });
 });

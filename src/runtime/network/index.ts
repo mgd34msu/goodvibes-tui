@@ -15,9 +15,8 @@ export type {
 export {
   applyOutboundTlsToFetchInit,
   createNetworkFetch,
+  GlobalNetworkTransportInstaller,
   inspectOutboundTls,
-  installGlobalNetworkTransport,
-  resetGlobalNetworkTransportForTesting,
 } from './outbound.ts';
 export {
   extractForwardedClientIp,

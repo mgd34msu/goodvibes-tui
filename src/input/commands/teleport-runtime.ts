@@ -1,7 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import type { CommandRegistry } from '../command-registry.ts';
-import { getRemoteRunnerRegistry } from '../../runtime/remote/index.ts';
 import type { RemoteSessionBundle } from '../../runtime/remote/types.ts';
 
 function inspectRemoteSessionBundle(bundle: RemoteSessionBundle): string {
@@ -33,8 +32,12 @@ export function registerTeleportRuntimeCommands(registry: CommandRegistry): void
         ctx.print('Runtime store is not available for teleport commands.');
         return;
       }
+      if (!ctx.remoteRunnerRegistry) {
+        ctx.print('Remote runner registry is not available in this runtime.');
+        return;
+      }
       const targetPath = resolve(process.cwd(), pathArg);
-      const remoteRegistry = getRemoteRunnerRegistry();
+      const remoteRegistry = ctx.remoteRunnerRegistry;
       remoteRegistry.ensureContractsFromStore(store);
       if (mode === 'export') {
         const exported = await remoteRegistry.exportSessionBundle(store, targetPath);

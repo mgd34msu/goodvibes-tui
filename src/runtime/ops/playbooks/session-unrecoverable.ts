@@ -7,11 +7,11 @@
 import type { Playbook, DiagnosticCheckResult } from '../types.ts';
 import { safeCheck } from '../safe-check.ts';
 import { existsSync } from 'fs';
-import { getOpsRuntimeContext, readRecoveryFileMetadata } from '../runtime-context.ts';
+import { readRecoveryFileMetadata } from '../runtime-context.ts';
 import type { OpsRuntimeContextState } from '../runtime-context.ts';
 
 export function createSessionUnrecoverablePlaybook(
-  getRuntimeContext: () => OpsRuntimeContextState | null = getOpsRuntimeContext,
+  getRuntimeContext: () => OpsRuntimeContextState | null = () => null,
 ): Playbook {
   return {
   id: 'session-unrecoverable',

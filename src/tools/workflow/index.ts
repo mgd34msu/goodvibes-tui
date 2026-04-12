@@ -65,20 +65,7 @@ const WORKFLOW_EVICT_AFTER_MS = 60 * 60 * 1000; // 1 hour
 const WORKFLOW_MAX_COMPLETED = 50;
 
 export class WorkflowManager {
-  private static _instance: WorkflowManager | null = null;
   private workflows = new Map<string, WorkflowInstance>();
-
-  static getInstance(): WorkflowManager {
-    if (!WorkflowManager._instance) {
-      WorkflowManager._instance = new WorkflowManager();
-    }
-    return WorkflowManager._instance;
-  }
-
-  /** Reset singleton — for testing only. */
-  static _resetForTest(): void {
-    WorkflowManager._instance = null;
-  }
 
   start(definition: string, task: string): WorkflowInstance {
     const def = WORKFLOW_DEFINITIONS[definition];
@@ -173,20 +160,7 @@ export interface TriggerDefinition {
 }
 
 export class TriggerManager {
-  private static _instance: TriggerManager | null = null;
   private triggers = new Map<string, TriggerDefinition>();
-
-  static getInstance(): TriggerManager {
-    if (!TriggerManager._instance) {
-      TriggerManager._instance = new TriggerManager();
-    }
-    return TriggerManager._instance;
-  }
-
-  /** Reset singleton — for testing only. */
-  static _resetForTest(): void {
-    TriggerManager._instance = null;
-  }
 
   add(def: { event: string; condition?: string; action: string }): TriggerDefinition {
     const id = `trg-${crypto.randomUUID().slice(0, 8)}`;
@@ -255,27 +229,11 @@ export function parseInterval(interval: string): number | null {
 }
 
 export class ScheduleManager {
-  private static _instance: ScheduleManager | null = null;
   private schedules = new Map<string, ScheduleEntry>();
   /** Timer IDs keyed by schedule name */
   private timers = new Map<string, ReturnType<typeof setInterval>>();
   /** Spawned process handles tracked for cleanup in destroy() */
   private spawnedProcs: Array<{ pid: number; proc: ReturnType<typeof Bun.spawn> }> = [];
-
-  static getInstance(): ScheduleManager {
-    if (!ScheduleManager._instance) {
-      ScheduleManager._instance = new ScheduleManager();
-    }
-    return ScheduleManager._instance;
-  }
-
-  /** Reset singleton — for testing only. */
-  static _resetForTest(): void {
-    if (ScheduleManager._instance) {
-      ScheduleManager._instance.destroy();
-    }
-    ScheduleManager._instance = null;
-  }
 
   add(name: string, interval: string, command: string): ScheduleEntry {
     // Clear existing timer if re-adding
@@ -333,7 +291,7 @@ export class ScheduleManager {
     return Array.from(this.schedules.values());
   }
 
-  /** Stop all timers and clear state (called on singleton reset). */
+  /** Stop all timers and clear state when the manager is disposed. */
   destroy(): void {
     for (const name of this.timers.keys()) {
       this._clearTimer(name);
@@ -410,25 +368,40 @@ export interface WorkflowInput {
   scheduleCommand?: string;
 }
 
+export interface WorkflowServices {
+  readonly workflowManager: WorkflowManager;
+  readonly triggerManager: TriggerManager;
+  readonly scheduleManager: ScheduleManager;
+}
+
+export function createWorkflowServices(): WorkflowServices {
+  return {
+    workflowManager: new WorkflowManager(),
+    triggerManager: new TriggerManager(),
+    scheduleManager: new ScheduleManager(),
+  };
+}
+
 // ---------------------------------------------------------------------------
 // Tool implementation
 // ---------------------------------------------------------------------------
 
-export const workflowTool: Tool = {
-  definition: workflowSchema,
+export function createWorkflowTool(services: WorkflowServices): Tool {
+  return {
+    definition: workflowSchema,
 
-  async execute(args: Record<string, unknown>): Promise<{ success: boolean; output?: string; error?: string }> {
-    try {
-      if (!args.mode || typeof args.mode !== 'string') {
-        return { success: false, error: 'Missing required "mode" field' };
-      }
+    async execute(args: Record<string, unknown>): Promise<{ success: boolean; output?: string; error?: string }> {
+      try {
+        if (!args.mode || typeof args.mode !== 'string') {
+          return { success: false, error: 'Missing required "mode" field' };
+        }
 
-      const input = args as unknown as WorkflowInput;
-      const wm = WorkflowManager.getInstance();
-      const tm = TriggerManager.getInstance();
-      const sm = ScheduleManager.getInstance();
+        const input = args as unknown as WorkflowInput;
+        const wm = services.workflowManager;
+        const tm = services.triggerManager;
+        const sm = services.scheduleManager;
 
-      switch (input.mode) {
+        switch (input.mode) {
         case 'start': {
           if (!input.definition) {
             return { success: false, error: 'mode "start" requires "definition"' };
@@ -567,16 +540,17 @@ export const workflowTool: Tool = {
           }
         }
 
-        default: {
-          const exhaustive: never = input.mode;
-          return { success: false, error: `Unknown mode: ${exhaustive as string}` };
+          default: {
+            const exhaustive: never = input.mode;
+            return { success: false, error: `Unknown mode: ${exhaustive as string}` };
+          }
         }
+      } catch (err) {
+        return {
+          success: false,
+          error: err instanceof Error ? err.message : String(err),
+        };
       }
-    } catch (err) {
-      return {
-        success: false,
-        error: err instanceof Error ? err.message : String(err),
-      };
-    }
-  },
-};
+    },
+  };
+}

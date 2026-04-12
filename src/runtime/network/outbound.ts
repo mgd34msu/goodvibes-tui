@@ -29,23 +29,13 @@ interface ResolvedOutboundTlsContext {
   readonly caEntries?: readonly string[];
 }
 
-const CACHE_TTL_MS = 5_000;
 const NETWORK_FETCH_WRAPPER = Symbol.for('goodvibes.network.fetch-wrapper');
+const NETWORK_FETCH_MANAGER = Symbol.for('goodvibes.network.fetch-manager');
 
 type WrappedNetworkFetch = typeof globalThis.fetch & {
   [NETWORK_FETCH_WRAPPER]?: true;
+  [NETWORK_FETCH_MANAGER]?: GlobalNetworkTransportInstaller;
 };
-
-const initialFetchRef = globalThis.fetch.bind(globalThis);
-let originalFetchRef: typeof globalThis.fetch | null = null;
-let activeConfigManager: ConfigManager | null = null;
-let lastResolvedContext:
-  | {
-    readonly key: string;
-    readonly expiresAt: number;
-    readonly value: ResolvedOutboundTlsContext;
-  }
-  | null = null;
 
 function readMode(configManager: ConfigManager): OutboundTrustMode {
   return configManager.get('network.outboundTls.mode');
@@ -123,22 +113,7 @@ export function inspectOutboundTls(configManager: ConfigManager): OutboundTlsSna
   };
 }
 
-function buildContextCacheKey(configManager: ConfigManager): string {
-  return JSON.stringify({
-    mode: readMode(configManager),
-    customCaFile: readCustomCaFile(configManager),
-    customCaDir: readCustomCaDir(configManager),
-    allowInsecureLocalhost: readAllowInsecureLocalhost(configManager),
-  });
-}
-
 function resolveOutboundTlsContext(configManager: ConfigManager): ResolvedOutboundTlsContext {
-  const key = buildContextCacheKey(configManager);
-  const now = Date.now();
-  if (lastResolvedContext && lastResolvedContext.key === key && lastResolvedContext.expiresAt > now) {
-    return lastResolvedContext.value;
-  }
-
   const snapshot = inspectOutboundTls(configManager);
   const custom = loadCustomCaEntries(configManager);
   const caEntries = snapshot.mode === 'bundled'
@@ -146,13 +121,7 @@ function resolveOutboundTlsContext(configManager: ConfigManager): ResolvedOutbou
     : snapshot.mode === 'bundled+custom'
       ? [...getBundledCaEntries(), ...custom.entries]
       : [...custom.entries];
-  const value = { snapshot, ...(caEntries ? { caEntries } : {}) };
-  lastResolvedContext = {
-    key,
-    expiresAt: now + CACHE_TTL_MS,
-    value,
-  };
-  return value;
+  return { snapshot, ...(caEntries ? { caEntries } : {}) };
 }
 
 function extractRequestUrl(input: RequestInfo | URL): URL | null {
@@ -212,27 +181,34 @@ export function createNetworkFetch(
   return wrapped;
 }
 
-export function installGlobalNetworkTransport(configManager: ConfigManager): void {
-  activeConfigManager = configManager;
-  const currentFetch = globalThis.fetch as WrappedNetworkFetch;
-  if (!currentFetch[NETWORK_FETCH_WRAPPER]) {
-    originalFetchRef = globalThis.fetch.bind(globalThis);
+export class GlobalNetworkTransportInstaller {
+  private originalFetchRef: typeof globalThis.fetch | null = null;
+  private configManager: ConfigManager | null = null;
+
+  setConfigManager(configManager: ConfigManager): void {
+    this.configManager = configManager;
+  }
+
+  install(configManager: ConfigManager): void {
+    const currentFetch = globalThis.fetch as WrappedNetworkFetch;
+    if (currentFetch[NETWORK_FETCH_MANAGER]) {
+      currentFetch[NETWORK_FETCH_MANAGER]!.setConfigManager(configManager);
+      logger.debug('Updated global network transport', { ...inspectOutboundTls(configManager) });
+      return;
+    }
+
+    this.configManager = configManager;
+    this.originalFetchRef = globalThis.fetch.bind(globalThis);
     const wrapped = (async (input: RequestInfo | URL, init?: RequestInit) => {
-      if (!originalFetchRef || !activeConfigManager) {
+      if (!this.originalFetchRef || !this.configManager) {
         throw new Error('Global network transport is not initialized correctly.');
       }
-      return originalFetchRef(input, applyOutboundTlsToFetchInit(input, init, activeConfigManager));
+      return this.originalFetchRef(input, applyOutboundTlsToFetchInit(input, init, this.configManager));
     }) as WrappedNetworkFetch;
     Object.assign(wrapped, globalThis.fetch);
     wrapped[NETWORK_FETCH_WRAPPER] = true;
+    wrapped[NETWORK_FETCH_MANAGER] = this;
     globalThis.fetch = wrapped;
+    logger.debug('Installed global network transport', { ...inspectOutboundTls(configManager) });
   }
-  logger.debug('Installed global network transport', { ...inspectOutboundTls(configManager) });
-}
-
-export function resetGlobalNetworkTransportForTesting(): void {
-  globalThis.fetch = initialFetchRef;
-  originalFetchRef = null;
-  activeConfigManager = null;
-  lastResolvedContext = null;
 }

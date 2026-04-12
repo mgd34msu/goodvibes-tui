@@ -9,8 +9,6 @@ function now(): number {
 }
 
 export class SurfaceRegistry {
-  private static instance: SurfaceRegistry | null = null;
-
   private readonly configManager: ConfigManager;
   private readonly surfaces = new Map<string, SurfaceRecord>();
   private runtimeDispatch: DomainDispatch | null = null;
@@ -19,13 +17,6 @@ export class SurfaceRegistry {
   constructor(configManager: ConfigManager = new ConfigManager(), runtimeStore?: RuntimeStore) {
     this.configManager = configManager;
     if (runtimeStore) this.runtimeDispatch = createDomainDispatch(runtimeStore);
-  }
-
-  static getInstance(): SurfaceRegistry {
-    if (!SurfaceRegistry.instance) {
-      SurfaceRegistry.instance = new SurfaceRegistry();
-    }
-    return SurfaceRegistry.instance;
   }
 
   attachRuntime(runtimeStore: RuntimeStore): void {

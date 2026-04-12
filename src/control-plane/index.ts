@@ -9,7 +9,6 @@ export type { ControlPlaneGatewayConfig, ControlPlaneEventStreamOptions, Control
 export { ControlPlaneGateway } from './gateway.ts';
 export {
   GatewayMethodCatalog,
-  getGatewayMethodCatalog,
 } from './method-catalog.ts';
 export type {
   GatewayEventDescriptor,

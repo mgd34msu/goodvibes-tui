@@ -280,20 +280,4 @@ export class SandboxSessionRegistry {
   public inspectArtifact(targetPath: string): SandboxSessionArtifact {
     return JSON.parse(readFileSync(targetPath, 'utf-8')) as SandboxSessionArtifact;
   }
-
-  public resetForTesting(): void {
-    this.sessions.clear();
-  }
-}
-
-let singleton: SandboxSessionRegistry | null = null;
-
-export function getSandboxSessionRegistry(): SandboxSessionRegistry {
-  if (!singleton) singleton = new SandboxSessionRegistry();
-  return singleton;
-}
-
-export function resetSandboxSessionRegistryForTesting(): void {
-  singleton?.resetForTesting();
-  singleton = null;
 }

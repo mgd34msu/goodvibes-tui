@@ -1,12 +1,12 @@
 import type { CommandRegistry } from '../command-registry.ts';
 import {
-  AutomationManager,
   formatEveryInterval,
   normalizeCronStaggerMs,
   normalizeAtSchedule,
   normalizeCronSchedule,
   normalizeEverySchedule,
 } from '../../automation/index.ts';
+import type { AutomationManager } from '../../automation/index.ts';
 import type { AutomationJob } from '../../automation/jobs.ts';
 import type { AutomationScheduleDefinition } from '../../automation/schedules.ts';
 import type {
@@ -93,7 +93,11 @@ export function registerScheduleRuntimeCommands(registry: CommandRegistry): void
     usage: 'add <cron|every|at> <value> <prompt...> | list | remove <id> | enable <id> | disable <id> | run <id>',
     argsHint: 'add cron <expr> | add every <interval> | add at <timestamp> | list | remove | enable | disable | run',
     async handler(args, ctx) {
-      const manager = AutomationManager.getInstance();
+      const manager = ctx.automationManager;
+      if (!manager) {
+        ctx.print('Automation manager is not available in this runtime.');
+        return;
+      }
       await manager.start();
       const sub = args[0];
 

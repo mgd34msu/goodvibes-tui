@@ -1,6 +1,6 @@
 import { BasePanel } from './base-panel.ts';
 import { type Line } from '../types/grid.ts';
-import { AutomationManager, formatEveryInterval } from '../automation/index.ts';
+import type { AutomationManager } from '../automation/index.ts';
 import type { AutomationJob } from '../automation/jobs.ts';
 import type { AutomationRun } from '../automation/runs.ts';
 import type { AutomationScheduleDefinition } from '../automation/schedules.ts';
@@ -44,6 +44,11 @@ type ViewItem =
   | { kind: 'task'; task: AutomationJob; history: AutomationRun[] }
   | { kind: 'empty' };
 
+type ScheduleAutomationManager = Pick<
+  AutomationManager,
+  'start' | 'listJobs' | 'listRuns' | 'setEnabled' | 'runNow'
+>;
+
 function formatSchedule(schedule: AutomationScheduleDefinition): string {
   switch (schedule.kind) {
     case 'cron':
@@ -53,6 +58,21 @@ function formatSchedule(schedule: AutomationScheduleDefinition): string {
     case 'at':
       return new Date(schedule.at).toLocaleString();
   }
+}
+
+function formatEveryInterval(intervalMs: number): string {
+  const units: ReadonlyArray<readonly [number, string]> = [
+    [86_400_000, 'd'],
+    [3_600_000, 'h'],
+    [60_000, 'm'],
+    [1_000, 's'],
+  ];
+  for (const [size, unit] of units) {
+    if (intervalMs >= size && intervalMs % size === 0) {
+      return `${intervalMs / size}${unit}`;
+    }
+  }
+  return `${intervalMs}ms`;
 }
 
 // ---------------------------------------------------------------------------
@@ -68,9 +88,11 @@ export class SchedulePanel extends BasePanel {
   private selectedIndex = 0;
   private scrollOffset = 0;
   private refreshTimer: ReturnType<typeof setInterval> | null = null;
+  private readonly automationManager: ScheduleAutomationManager;
 
-  constructor() {
+  constructor(automationManager: ScheduleAutomationManager) {
     super('schedule', 'Schedule', 'Z', 'agent');
+    this.automationManager = automationManager;
   }
 
   // -------------------------------------------------------------------------
@@ -79,7 +101,7 @@ export class SchedulePanel extends BasePanel {
 
   override onActivate(): void {
     super.onActivate();
-    void AutomationManager.getInstance().start().then(() => {
+    void this.automationManager.start().then(() => {
       this.rebuild();
       this.markDirty();
     });
@@ -106,7 +128,7 @@ export class SchedulePanel extends BasePanel {
   // -------------------------------------------------------------------------
 
   private rebuild(): void {
-    const manager = AutomationManager.getInstance();
+    const manager = this.automationManager;
     const tasks = manager.listJobs();
 
     const items: ViewItem[] = [{ kind: 'header' }];
@@ -155,7 +177,7 @@ export class SchedulePanel extends BasePanel {
         // Toggle enabled/disabled on selected task
         const item = this.items[this.selectedIndex];
         if (item?.kind === 'task') {
-          void AutomationManager.getInstance().setEnabled(item.task.id, !item.task.enabled).then(() => {
+          void this.automationManager.setEnabled(item.task.id, !item.task.enabled).then(() => {
             this.rebuild();
             this.markDirty();
           });
@@ -166,7 +188,7 @@ export class SchedulePanel extends BasePanel {
         // Trigger immediate run of selected task
         const item = this.items[this.selectedIndex];
         if (item?.kind === 'task') {
-          AutomationManager.getInstance().runNow(item.task.id).catch(() => {
+          this.automationManager.runNow(item.task.id).catch(() => {
             // Non-fatal — error logged by scheduler
           });
           this.rebuild();
@@ -190,8 +212,8 @@ export class SchedulePanel extends BasePanel {
   // -------------------------------------------------------------------------
 
   override render(width: number, height: number): Line[] {
-    const tasks = AutomationManager.getInstance().listJobs();
-    const enabled = tasks.filter((t) => t.enabled).length;
+    const tasks = this.automationManager.listJobs();
+    const enabled = tasks.filter((task: AutomationJob) => task.enabled).length;
     if (tasks.length === 0) {
       return buildPanelWorkspace(width, height, {
         title: ' Schedule',

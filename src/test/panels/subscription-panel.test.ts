@@ -2,8 +2,9 @@ import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { ServiceRegistry } from '../../config/service-registry.ts';
 import { SubscriptionPanel } from '../../panels/subscription-panel.ts';
-import { _resetSubscriptionManagerForTesting, getSubscriptionManager } from '../../config/subscriptions.ts';
+import { SubscriptionManager } from '../../config/subscriptions.ts';
 import type { Line } from '../../types/grid.ts';
 
 function linesText(lines: Line[]): string {
@@ -16,17 +17,19 @@ function linesText(lines: Line[]): string {
 describe('SubscriptionPanel', () => {
   const originalCwd = process.cwd();
   let root: string;
+  let serviceRegistry: ServiceRegistry;
+  let subscriptionManager: SubscriptionManager;
 
   beforeEach(() => {
     root = mkdtempSync(join(tmpdir(), 'gv-subscription-panel-'));
     process.chdir(root);
     mkdirSync(join(root, '.goodvibes', 'tui'), { recursive: true });
-    _resetSubscriptionManagerForTesting();
+    serviceRegistry = new ServiceRegistry();
+    subscriptionManager = new SubscriptionManager();
   });
 
   afterEach(() => {
     mock.restore();
-    _resetSubscriptionManagerForTesting();
     process.chdir(originalCwd);
     rmSync(root, { recursive: true, force: true });
   });
@@ -41,7 +44,7 @@ describe('SubscriptionPanel', () => {
     globalThis.fetch = fetchMock as unknown as typeof fetch;
 
     try {
-      const manager = getSubscriptionManager();
+      const manager = subscriptionManager;
       manager.beginOAuthLogin('openai', {
         authUrl: 'https://auth.openai.com/oauth/authorize',
         tokenUrl: 'https://auth.openai.com/oauth/token',
@@ -57,7 +60,7 @@ describe('SubscriptionPanel', () => {
         scopes: ['openid', 'profile', 'email', 'offline_access'],
       }, 'oauth-code');
 
-      const panel = new SubscriptionPanel();
+      const panel = new SubscriptionPanel(serviceRegistry, subscriptionManager);
       panel.onActivate();
       panel.handleInput('ArrowDown');
       const text = linesText(panel.render(110, 14));
@@ -82,7 +85,7 @@ describe('SubscriptionPanel', () => {
     globalThis.fetch = fetchMock as unknown as typeof fetch;
 
     try {
-      const manager = getSubscriptionManager();
+      const manager = subscriptionManager;
       manager.beginOAuthLogin('openai', {
         authUrl: 'https://auth.openai.com/oauth/authorize',
         tokenUrl: 'https://auth.openai.com/oauth/token',
@@ -98,7 +101,7 @@ describe('SubscriptionPanel', () => {
         scopes: ['openid', 'profile', 'email', 'offline_access'],
       }, 'oauth-code');
 
-      const panel = new SubscriptionPanel();
+      const panel = new SubscriptionPanel(serviceRegistry, subscriptionManager);
       panel.onActivate();
       expect(panel.handleInput('enter')).toBe(true);
       let text = linesText(panel.render(110, 16));

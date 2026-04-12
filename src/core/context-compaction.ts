@@ -48,8 +48,6 @@ import {
   buildPlanProgress,
   buildSessionLineage,
 } from './compaction-sections.ts';
-import { cacheHitTracker } from '../providers/cache-strategy.ts';
-import { cachePlanner } from '../providers/cache-planner.ts';
 
 export type { CompactionEvent, CompactionResult, CompactionContext } from './compaction-types.ts';
 
@@ -78,9 +76,6 @@ export const COMPACTION_BUFFER_TOKENS = 15_000;
  * instead of the full structured output, since there isn't enough room for extraction calls.
  */
 export const SMALL_WINDOW_THRESHOLD = 12_000;
-
-/** Hit rate threshold for logging cache impact during compaction. */
-const CACHE_HIT_RATE_LOG_THRESHOLD = 0.5;
 
 // ---------------------------------------------------------------------------
 // Compaction event log (in-memory, session-scoped)
@@ -284,20 +279,7 @@ export async function compactMessages(
   ctx: CompactionContext,
   registry: ProviderRegistry,
 ): Promise<CompactionResult> {
-  const result = await runCompaction(ctx, registry);
-
-  // Invalidate cache strategy after compaction — cached message indices are no longer valid
-  cachePlanner.invalidate();
-
-  // Log compaction's impact on cache
-  const recentHitRate = cacheHitTracker.getHitRate();
-  if (recentHitRate > CACHE_HIT_RATE_LOG_THRESHOLD) {
-    logger.info('[Compaction] High cache hit rate before compaction — cache will need rebuild', {
-      hitRate: (recentHitRate * 100).toFixed(0) + '%',
-    });
-  }
-
-  return result;
+  return runCompaction(ctx, registry);
 }
 
 /**

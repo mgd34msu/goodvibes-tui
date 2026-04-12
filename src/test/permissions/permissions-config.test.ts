@@ -1,18 +1,12 @@
 import { describe, test, expect, beforeEach, afterEach } from 'bun:test';
-import { existsSync, readFileSync, writeFileSync } from 'fs';
+import { mkdirSync, rmSync } from 'fs';
 import { join } from 'path';
-import { homedir } from 'os';
-import { PermissionManager } from '../../permissions/manager.ts';
+import { tmpdir } from 'os';
+import { PermissionManager, createPermissionConfigReader } from '../../permissions/manager.ts';
 import { ConfigManager } from '../../config/manager.ts';
-import { configManager } from '../../config/index.ts';
 import type { ConfigKey, PermissionAction, PermissionMode } from '../../config/schema.ts';
 import type { PermissionPromptRequest, PermissionPromptDecision } from '../../permissions/prompt.ts';
-
-/** Path to the shared global settings file. */
-const GLOBAL_SETTINGS_PATH = join(homedir(), '.goodvibes', 'tui', 'settings.json');
-
-/** Snapshot/restore the global settings file to prevent test cross-contamination. */
-let globalSettingsSnapshot: string | null = null;
+import { PolicyRuntimeState } from '../../runtime/permissions/policy-runtime.ts';
 
 const setPermissionMode = (cm: ConfigManager, mode: PermissionMode): void => {
   cm.set('permissions.mode', mode);
@@ -26,46 +20,39 @@ const setPermissionTool = (
   cm.setDynamic(key, action);
 };
 
-function snapshotGlobalSettings(): void {
-  globalSettingsSnapshot = existsSync(GLOBAL_SETTINGS_PATH)
-    ? readFileSync(GLOBAL_SETTINGS_PATH, 'utf-8')
-    : null;
-}
-
-function restoreGlobalSettings(): void {
-  if (globalSettingsSnapshot !== null) {
-    writeFileSync(GLOBAL_SETTINGS_PATH, globalSettingsSnapshot, 'utf-8');
-    // Reload singleton so restored values are live
-    configManager.load();
-  }
-}
-
 describe('PermissionManager — config-driven modes', () => {
   let manager: PermissionManager;
+  let configManager: ConfigManager;
+  let tempDir: string;
   let requests: PermissionPromptRequest[];
   let decisions: PermissionPromptDecision[];
+  let policyRuntimeState: PolicyRuntimeState;
+
+  const createIsolatedConfigManager = () => new ConfigManager({ configDir: tempDir, workingDir: tempDir });
 
   beforeEach(() => {
+    tempDir = join(tmpdir(), `gv-permissions-config-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+    mkdirSync(tempDir, { recursive: true });
+    configManager = createIsolatedConfigManager();
     requests = [];
     decisions = [];
+    policyRuntimeState = new PolicyRuntimeState();
     manager = new PermissionManager(async (request) => {
       requests.push(request);
       return decisions.shift() ?? { approved: true };
-    });
-    snapshotGlobalSettings();
-    // Ensure autoApprove is off for all tests that exercise permission logic
+    }, createPermissionConfigReader(configManager), policyRuntimeState);
     configManager.set('behavior.autoApprove', false);
   });
 
   afterEach(() => {
-    restoreGlobalSettings();
+    rmSync(tempDir, { recursive: true, force: true });
   });
 
   // ── allow-all mode ──────────────────────────────────────
 
   describe('allow-all mode', () => {
     test('allow-all mode config key stores and reads back correctly', () => {
-      const cm = new ConfigManager();
+      const cm = createIsolatedConfigManager();
       setPermissionMode(cm, 'allow-all');
       expect(cm.get('permissions.mode')).toBe('allow-all');
     });
@@ -93,13 +80,13 @@ describe('PermissionManager — config-driven modes', () => {
 
   describe('custom mode', () => {
     test('custom mode config key stores allow for write', () => {
-      const cm = new ConfigManager();
+      const cm = createIsolatedConfigManager();
       setPermissionTool(cm, 'permissions.tools.write', 'allow');
       expect(cm.get('permissions.tools.write')).toBe('allow');
     });
 
     test('custom mode config key stores deny for exec', () => {
-      const cm = new ConfigManager();
+      const cm = createIsolatedConfigManager();
       setPermissionTool(cm, 'permissions.tools.exec', 'deny');
       expect(cm.get('permissions.tools.exec')).toBe('deny');
     });
@@ -188,7 +175,7 @@ describe('PermissionManager — config-driven modes', () => {
   describe('config schema for permissions', () => {
     test('permissions.mode config key is readable/writable (round-trip)', () => {
       // Test in-memory round-trip: set then get on same instance
-      const cm = new ConfigManager();
+      const cm = createIsolatedConfigManager();
       const original = cm.get('permissions.mode');
       setPermissionMode(cm, 'custom');
       expect(cm.get('permissions.mode')).toBe('custom');
@@ -197,7 +184,7 @@ describe('PermissionManager — config-driven modes', () => {
     });
 
     test('permissions.tools.write config key is readable/writable (round-trip)', () => {
-      const cm = new ConfigManager();
+      const cm = createIsolatedConfigManager();
       const original = cm.get('permissions.tools.write');
       setPermissionTool(cm, 'permissions.tools.write', 'allow');
       expect(cm.get('permissions.tools.write')).toBe('allow');
@@ -228,73 +215,73 @@ describe('PermissionManager — config-driven modes', () => {
 
   describe('new tool name config keys', () => {
     test('permissions.tools.read config key stores allow correctly', () => {
-      const cm = new ConfigManager();
+      const cm = createIsolatedConfigManager();
       setPermissionTool(cm, 'permissions.tools.read', 'allow');
       expect(cm.get('permissions.tools.read')).toBe('allow');
     });
 
     test('permissions.tools.write config key stores deny correctly', () => {
-      const cm = new ConfigManager();
+      const cm = createIsolatedConfigManager();
       setPermissionTool(cm, 'permissions.tools.write', 'deny');
       expect(cm.get('permissions.tools.write')).toBe('deny');
     });
 
     test('permissions.tools.edit config key stores prompt correctly', () => {
-      const cm = new ConfigManager();
+      const cm = createIsolatedConfigManager();
       setPermissionTool(cm, 'permissions.tools.edit', 'prompt');
       expect(cm.get('permissions.tools.edit')).toBe('prompt');
     });
 
     test('permissions.tools.exec config key stores allow correctly', () => {
-      const cm = new ConfigManager();
+      const cm = createIsolatedConfigManager();
       setPermissionTool(cm, 'permissions.tools.exec', 'allow');
       expect(cm.get('permissions.tools.exec')).toBe('allow');
     });
 
     test('permissions.tools.find config key stores allow correctly', () => {
-      const cm = new ConfigManager();
+      const cm = createIsolatedConfigManager();
       setPermissionTool(cm, 'permissions.tools.find', 'allow');
       expect(cm.get('permissions.tools.find')).toBe('allow');
     });
 
     test('permissions.tools.fetch config key stores deny correctly', () => {
-      const cm = new ConfigManager();
+      const cm = createIsolatedConfigManager();
       setPermissionTool(cm, 'permissions.tools.fetch', 'deny');
       expect(cm.get('permissions.tools.fetch')).toBe('deny');
     });
 
     test('permissions.tools.analyze config key stores allow correctly', () => {
-      const cm = new ConfigManager();
+      const cm = createIsolatedConfigManager();
       setPermissionTool(cm, 'permissions.tools.analyze', 'allow');
       expect(cm.get('permissions.tools.analyze')).toBe('allow');
     });
 
     test('permissions.tools.inspect config key stores prompt correctly', () => {
-      const cm = new ConfigManager();
+      const cm = createIsolatedConfigManager();
       setPermissionTool(cm, 'permissions.tools.inspect', 'prompt');
       expect(cm.get('permissions.tools.inspect')).toBe('prompt');
     });
 
     test('permissions.tools.agent config key stores deny correctly', () => {
-      const cm = new ConfigManager();
+      const cm = createIsolatedConfigManager();
       setPermissionTool(cm, 'permissions.tools.agent', 'deny');
       expect(cm.get('permissions.tools.agent')).toBe('deny');
     });
 
     test('permissions.tools.state config key stores allow correctly', () => {
-      const cm = new ConfigManager();
+      const cm = createIsolatedConfigManager();
       setPermissionTool(cm, 'permissions.tools.state', 'allow');
       expect(cm.get('permissions.tools.state')).toBe('allow');
     });
 
     test('permissions.tools.workflow config key stores prompt correctly', () => {
-      const cm = new ConfigManager();
+      const cm = createIsolatedConfigManager();
       setPermissionTool(cm, 'permissions.tools.workflow', 'prompt');
       expect(cm.get('permissions.tools.workflow')).toBe('prompt');
     });
 
     test('permissions.tools.registry config key stores allow correctly', () => {
-      const cm = new ConfigManager();
+      const cm = createIsolatedConfigManager();
       setPermissionTool(cm, 'permissions.tools.registry', 'allow');
       expect(cm.get('permissions.tools.registry')).toBe('allow');
     });

@@ -271,14 +271,3 @@ export class SubscriptionManager {
     return subscription;
   }
 }
-
-let subscriptionManager: SubscriptionManager | undefined;
-
-export function getSubscriptionManager(): SubscriptionManager {
-  if (!subscriptionManager) subscriptionManager = new SubscriptionManager();
-  return subscriptionManager;
-}
-
-export function _resetSubscriptionManagerForTesting(): void {
-  subscriptionManager = undefined;
-}

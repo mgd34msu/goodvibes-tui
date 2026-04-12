@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, test, mock } from 'bun:test';
 import type { AgentManager } from '../../tools/agent/manager.ts';
+import { getTestAgentManager, resetTestRuntimeServices } from '../helpers/runtime-services.ts';
 
 describe('Agent lifecycle integration', () => {
   let manager: AgentManager;
@@ -10,8 +11,8 @@ describe('Agent lifecycle integration', () => {
     mock.restore();
 
     const { AgentManager } = await import('../../tools/agent/manager.ts');
-    AgentManager.resetInstance();
-    manager = AgentManager.getInstance();
+    resetTestRuntimeServices();
+    manager = getTestAgentManager();
   });
 
   test('spawn returns a pending record with a valid ID', () => {

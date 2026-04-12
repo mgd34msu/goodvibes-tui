@@ -1,10 +1,8 @@
-import { getPanelManager } from '../../panels/panel-manager.ts';
 import { estimateConversationTokens } from '../../core/context-compaction.ts';
-import { sessionMemoryStore } from '../../core/session-memory.ts';
-import { getContextWindowForModel } from '../../providers/model-limits.ts';
 import { evaluateSessionMaintenance, formatSessionMaintenanceLines, getGuidanceMode } from '../../runtime/session-maintenance.ts';
 import { dismissGuidance, evaluateContextualGuidance, formatGuidanceItems, resetGuidance } from '../../runtime/guidance.ts';
 import type { CommandRegistry } from '../command-registry.ts';
+import { openCommandPanel, requireSessionMemoryStore } from './runtime-services.ts';
 
 export function registerGuidanceRuntimeCommands(registry: CommandRegistry): void {
   registry.register({
@@ -15,12 +13,7 @@ export function registerGuidanceRuntimeCommands(registry: CommandRegistry): void
     handler(args, ctx) {
       const sub = args[0] ?? 'open';
       if (sub === 'open' || sub === 'panel') {
-        if (ctx.showPanel) ctx.showPanel('welcome');
-        else {
-          const panelManager = getPanelManager();
-          panelManager.open('welcome');
-          panelManager.show();
-        }
+        openCommandPanel(ctx, 'welcome');
         return;
       }
       if (sub === 'print') {
@@ -69,16 +62,17 @@ export function registerGuidanceRuntimeCommands(registry: CommandRegistry): void
       const currentModel = ctx.providerRegistry.getCurrentModel?.();
       const llmMessages = ctx.conversationManager.getMessagesForLLM();
       const maintenance = evaluateSessionMaintenance({
+        configManager: ctx.configManager,
         currentTokens: estimateConversationTokens(llmMessages),
-        contextWindow: currentModel ? getContextWindowForModel(currentModel) : 0,
+        contextWindow: currentModel ? ctx.providerRegistry.getContextWindowForModel(currentModel) : 0,
         messageCount: llmMessages.length,
-        sessionMemoryCount: sessionMemoryStore.list().length,
+        sessionMemoryCount: requireSessionMemoryStore(ctx).list().length,
         session: ctx.runtimeStore?.getState().session,
       });
       const contextual = evaluateContextualGuidance(ctx.configManager, ctx.runtimeStore, maintenance);
 
       ctx.print([
-        `Guidance Review (${getGuidanceMode()})`,
+        `Guidance Review (${getGuidanceMode(ctx.configManager)})`,
         '',
         ...formatGuidanceItems(contextual),
         '',

@@ -7,23 +7,18 @@ import { UIFactory } from './renderer/ui-factory.ts';
 import { Orchestrator } from './core/orchestrator.ts';
 import { InputHandler } from './input/handler.ts';
 import { SelectionManager } from './input/selection.ts';
-import { configManager, getWorkingDirectory } from './config/index.ts';
-import { providerRegistry } from './providers/registry.ts';
+import { ConfigManager, getWorkingDirectory } from './config/index.ts';
 import type { ContentPart } from './providers/interface.ts';
 import { ToolRegistry } from './tools/registry.ts';
 import { registerAllTools } from './tools/index.ts';
 import { FileUndoManager } from './state/file-undo.ts';
-import { agentOrchestrator } from './agents/orchestrator.ts';
 import { PermissionManager } from './permissions/manager.ts';
 import { AcpManager } from './acp/manager.ts';
-import { getHookDispatcher } from './hooks/index.ts';
 import { PermissionPromptUI } from './permissions/prompt.ts';
 import { CommandRegistry } from './input/command-registry.ts';
 import type { CommandContext } from './input/command-registry.ts';
 import { renderProcessIndicator } from './renderer/process-indicator.ts';
-import { AgentManager } from './tools/agent/index.ts';
 import { WrfcController } from './agents/wrfc-controller.ts';
-import { ProcessManager } from './tools/shared/process-manager.ts';
 import { registerBuiltinCommands } from './input/commands.ts';
 import { ScheduleManager } from './tools/workflow/index.ts';
 import { InputHistory } from './input/input-history.ts';
@@ -38,21 +33,12 @@ import {
 import { applyConversationOverlays } from './renderer/conversation-overlays.ts';
 import { buildPanelCompositeData } from './renderer/panel-composite.ts';
 import { logger } from './utils/logger.ts';
-import { getPinned } from './providers/favorites.ts';
-import { initModelLimits, getContextWindowForModel } from './providers/model-limits.ts';
-import { initBenchmarks } from './providers/model-benchmarks.ts';
-import { initCatalog, getConfiguredProviderIds } from './providers/model-catalog.ts';
-import { getPanelManager } from './panels/panel-manager.ts';
 import { registerBuiltinPanels } from './panels/builtin-panels.ts';
 import { renderPanelTabBar } from './renderer/panel-tab-bar.ts';
-import { mcpRegistry } from './mcp/registry.ts';
-import { getKeybindingsManager } from './input/keybindings.ts';
-import { sessionMemoryStore } from './core/session-memory.ts';
 import { bootstrapRuntime } from './runtime/bootstrap.ts';
 import type { BootstrapContext } from './runtime/bootstrap.ts';
 import type { ToolEvent, TurnEvent } from './runtime/events/index.ts';
 import { selectStreamToolPreview } from './runtime/store/selectors/index.ts';
-import { ModeManager } from './state/mode-manager.ts';
 import type { HITLMode } from './state/mode-manager.ts';
 import type { HookPhase, HookCategory, HookEventPath } from './hooks/types.ts';
 import {
@@ -66,10 +52,8 @@ import { handleBlockingShellInput, type PendingPermissionState } from './shell/b
 import { wireShellUiOpeners } from './shell/ui-openers.ts';
 import { deriveComposerState } from './core/composer-state.ts';
 import { buildPersistedSessionContext, formatReturnContextForDisplay, getReturnContextMode, maybeAssistReturnContextSummary } from './runtime/session-return-context.ts';
-import { getRemoteRunnerRegistry } from './runtime/remote/index.ts';
 import { listPersistedWorktreeMeta } from './runtime/worktree/registry.ts';
-import { ApprovalBroker } from './control-plane/index.ts';
-import { installGlobalNetworkTransport } from './runtime/network/index.ts';
+import { GlobalNetworkTransportInstaller } from './runtime/network/index.ts';
 
 
 const ALT_SCREEN_ENTER = '\x1b[?1049h';
@@ -86,13 +70,15 @@ const PASTE_DISABLE    = '\x1b[?2004l';
 async function main() {
   const stdout = process.stdout;
   const stdin = process.stdin;
-  installGlobalNetworkTransport(configManager);
+  const workingDir = getWorkingDirectory();
+  const configManager = new ConfigManager({ workingDir });
+  new GlobalNetworkTransportInstaller().install(configManager);
 
   // ── Bootstrap all runtime subsystems ─────────────────────────────────────
   // bootstrapRuntime initializes all subsystems in dependency order and returns
   // a fully-wired BootstrapContext. main.ts owns terminal setup, the render loop,
   // stdin input, and signal handlers — everything else is in bootstrap.
-  const ctx: BootstrapContext = await bootstrapRuntime(stdout);
+  const ctx: BootstrapContext = await bootstrapRuntime(stdout, { configManager, workingDir });
   const {
     runtimeBus,
     store,
@@ -115,10 +101,22 @@ async function main() {
     permissionPromptRef,
     loadLastConversation,
     _writeLastSessionPointer: writeLastSessionPointer,
-    _getPinned: getPinned,
-    _getConfiguredProviderIds: getConfiguredProviderIds,
     systemMessageRouter,
   } = ctx;
+  const { approvalBroker, agentManager, modeManager, processManager, providerRegistry, remoteRunnerRegistry } = ctx.services;
+  conversation.setSessionMemoryStore(ctx.services.sessionMemoryStore);
+  conversation.setSessionLineageTracker(ctx.services.sessionLineageTracker);
+  orchestrator.setCoreServices({
+    configManager,
+    providerRegistry,
+    favoritesStore: ctx.services.favoritesStore,
+    planManager: ctx.services.planManager,
+    adaptivePlanner: ctx.services.adaptivePlanner,
+    sessionMemoryStore: ctx.services.sessionMemoryStore,
+    sessionLineageTracker: ctx.services.sessionLineageTracker,
+    idempotencyStore: ctx.services.idempotencyStore,
+  });
+  ctx.services.wrfcController.setPlanManager(ctx.services.planManager);
   let activeConversationWidth = stdout.columns || 80;
   conversation.setWidthProvider(() => activeConversationWidth);
   if (!runtimeBus) {
@@ -128,14 +126,14 @@ async function main() {
   {
     const hitlMode = configManager.get('behavior.hitlMode') as HITLMode | undefined;
     if (hitlMode && (hitlMode === 'quiet' || hitlMode === 'balanced' || hitlMode === 'operator')) {
-      ModeManager.getInstance().setHITLMode(hitlMode);
+      modeManager.setHITLMode(hitlMode);
     }
   }
 
-  // Use the singleton panel manager (already initialized in bootstrap)
-  const panelManager = getPanelManager();
+  // Use the panel manager owned by the runtime service graph.
+  const panelManager = ctx.services.panelManager;
   const buildSessionContinuityHints = () => {
-    const remoteContracts = getRemoteRunnerRegistry().listContracts();
+    const remoteContracts = remoteRunnerRegistry.listContracts();
     const worktrees = listPersistedWorktreeMeta();
     return {
       pendingApprovals: store.getState().permissions.approvalCount,
@@ -151,7 +149,7 @@ async function main() {
 
   // Permission state — set while a permission prompt is blocking the orchestrator
   let pendingPermission: PendingPermissionState | null = null;
-  ApprovalBroker.getInstance().subscribe((approval) => {
+  approvalBroker.subscribe((approval) => {
     if (!pendingPermission) return;
     if (pendingPermission.callId !== approval.callId) return;
     if (approval.status === 'pending' || approval.status === 'claimed') return;
@@ -298,7 +296,7 @@ async function main() {
         render();
         processedText = '';
       } else {
-        const memId = sessionMemoryStore.add(memoryText);
+        const memId = ctx.services.sessionMemoryStore.add(memoryText);
         systemMessageRouter.high(`[Memory] Pinned: "${memoryText}" (${memId})`);
         processedText = memoryText;
       }
@@ -370,6 +368,20 @@ async function main() {
     () => conversation.history,
     scroll,
     exitApp,
+    {
+      agentManager,
+      agentMessageBus: ctx.services.agentMessageBus,
+      benchmarkStore: ctx.services.benchmarkStore,
+      bookmarkManager: ctx.services.bookmarkManager,
+      favoritesStore: ctx.services.favoritesStore,
+      keybindingsManager: ctx.services.keybindingsManager,
+      panelManager,
+      processManager,
+      profileManager: ctx.services.profileManager,
+      providerRegistry: ctx.services.providerRegistry,
+      sessionManager: ctx.services.sessionManager,
+      wrfcController: ctx.services.wrfcController,
+    },
   );
 
   // Wire orchestratorRefs now that InputHandler is created
@@ -411,7 +423,7 @@ async function main() {
 
     // Build header and footer FIRST so we know the exact viewport height
     const headerLines = UIFactory.createHeader(width, currentModel.id, currentModel.provider, conversation.title || undefined, lastGitInfoRef.value);
-    const managerAgents = AgentManager.getInstance().list().filter(
+    const managerAgents = agentManager.list().filter(
       (a) => a.status === 'running' || a.status === 'pending',
     );
     const agentDomain = store.getState().agents;
@@ -429,7 +441,7 @@ async function main() {
       if (!runningAgentProgress && agent.latestProgress) runningAgentProgress = agent.latestProgress;
     }
     const runningAgentCount = runningAgentIds.size;
-    const runningProcessCount = ProcessManager.getInstance().list().filter((p) => !p.status.startsWith('done')).length;
+    const runningProcessCount = processManager.list().filter((p) => !p.status.startsWith('done')).length;
     const cw = getPromptContentWidth();
     const promptInfo = input.getWrappedPromptInfo(cw);
     // Compute args hint for slash commands — shown in dim grey after cursor
@@ -505,7 +517,7 @@ async function main() {
       })(),
       lastInputTokens: orchestrator.lastInputTokens,
       commandArgsHint,
-      hitlMode: ModeManager.getInstance().getHITLMode(),
+      hitlMode: modeManager.getHITLMode(),
       runningAgentCount,
       runningProcessCount,
       indicatorFocused: input.indicatorFocused,
@@ -585,6 +597,7 @@ async function main() {
       input,
       conversation,
       commandRegistry,
+      keybindingsManager: ctx.services.keybindingsManager,
       conversationWidth,
       viewportHeight: vHeight,
       contextWindow: currentModel.contextWindow,
@@ -626,12 +639,14 @@ async function main() {
     input,
     panelManager,
     conversation,
+    configManager,
     providerRegistry,
     runtime,
     featureFlags: ctx.featureFlags,
-    mcpRegistry,
-    getConfiguredProviderIds,
-    getPinned,
+    mcpRegistry: ctx.services.mcpRegistry,
+    subscriptionManager: ctx.services.subscriptionManager,
+    getConfiguredProviderIds: ctx._getConfiguredProviderIds,
+    getPinned: ctx._getPinned,
     render,
   });
 

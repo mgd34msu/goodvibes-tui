@@ -2,7 +2,7 @@ import type { McpRegistry } from '../mcp/registry.ts';
 import type { ProviderRegistry } from '../providers/registry.ts';
 import type { ConversationManager } from '../core/conversation.ts';
 import type { ConfigManager } from '../config/index.ts';
-import type { GoodVibesConfig } from '../config/index.ts';
+import type { DeepReadonly, GoodVibesConfig } from '../config/index.ts';
 import type { ToolRegistry } from '../tools/registry.ts';
 import type { PermissionRequestHandler } from '../permissions/prompt.ts';
 import type { SelectionItem, SelectionResult, SelectionAction } from './selection-modal.ts';
@@ -10,6 +10,12 @@ import type { FileUndoManager } from '../state/file-undo.ts';
 import type { RuntimeStore } from '../runtime/store/index.ts';
 import type { TaskManager } from '../runtime/tasks/types.ts';
 import type { AcpManager } from '../acp/manager.ts';
+import type { PanelManager } from '../panels/panel-manager.ts';
+import type { KeybindingsManager } from './keybindings.ts';
+import type { PanelHealthMonitor } from '../runtime/perf/panel-health-monitor.ts';
+import type { WorktreeRegistry } from '../runtime/worktree/registry.ts';
+import type { SandboxSessionRegistry } from '../runtime/sandbox/session-registry.ts';
+import type { RuntimeEventBus } from '../runtime/events/index.ts';
 
 /**
  * CommandContext - Passed to every slash command handler so commands can
@@ -18,7 +24,7 @@ import type { AcpManager } from '../acp/manager.ts';
 export interface CommandContext {
   providerRegistry: ProviderRegistry;
   conversationManager: ConversationManager;
-  config: Readonly<GoodVibesConfig>;
+  config: DeepReadonly<GoodVibesConfig>;
   configManager: ConfigManager;
   /** Mutable runtime state — commands can mutate these in-place. */
   runtime: {
@@ -32,6 +38,8 @@ export interface CommandContext {
   };
   /** Request a re-render. */
   renderRequest: () => void;
+  /** Runtime-owned keyboard binding manager for display and lookup surfaces. */
+  keybindingsManager?: KeybindingsManager;
   /** Submit user input directly to the shell/orchestrator path. */
   submitInput?: (text: string, content?: import('../providers/interface.ts').ContentPart[]) => void;
   /** Execute a slash command directly through the shell command path. */
@@ -97,6 +105,14 @@ export interface CommandContext {
   openPanelPicker?: () => void;
   /** Open a panel, show the panel workspace, and focus it for direct user interaction. */
   showPanel?: (panelId: string, pane?: 'top' | 'bottom') => void;
+  /** Explicit panel manager owned by the runtime service graph. */
+  panelManager?: PanelManager;
+  /** Shared panel-health monitor owned by the runtime service graph. */
+  panelHealthMonitor?: PanelHealthMonitor;
+  /** Shared worktree registry owned by the runtime service graph. */
+  worktreeRegistry?: WorktreeRegistry;
+  /** Shared sandbox session registry owned by the runtime service graph. */
+  sandboxSessionRegistry?: SandboxSessionRegistry;
   /** Move keyboard focus into the visible panel workspace. */
   focusPanels?: () => void;
   /** Toggle the Operator Control Plane (Ops) panel. */
@@ -131,30 +147,85 @@ export interface CommandContext {
   forensicsRegistry?: import('../runtime/forensics/registry.ts').ForensicsRegistry;
   /** PolicyRegistry for /policy command subcommands. */
   policyRegistry?: import('../runtime/permissions/policy-registry.ts').PolicyRegistry;
+  /** PolicyRuntimeState for approval, policy, and recall capture flows. */
+  policyRuntimeState?: import('../runtime/permissions/policy-runtime.ts').PolicyRuntimeState;
   /**
    * ProviderOptimizer for /provider command subcommands.
    *
    * @remarks
    * Follows the same deferred-wiring pattern as `policyRegistry` — populated
-   * by the orchestrator when the `provider-optimizer` feature flag is enabled.
-   * Until then it remains `undefined` and command handlers read the optimizer
-   * singleton directly via `getProviderOptimizer()`.
+   * by the runtime when the `provider-optimizer` feature flag is enabled.
+   * Until then it remains `undefined` and command handlers should not assume
+   * optimizer-backed behavior is available.
    */
   providerOptimizer?: import('../providers/optimizer.ts').ProviderOptimizer;
   /** EvalRegistry for /eval command subcommands. */
   evalRegistry?: import('../panels/eval-panel.ts').EvalRegistry;
   /** MemoryRegistry for /memory command subcommands and the Memory panel. */
   memoryRegistry?: import('../state/memory-store.ts').MemoryRegistry;
+  /** Integration helper service for operator/runtime review commands. */
+  integrationHelpers?: import('../runtime/integration/helpers.ts').IntegrationHelperService;
+  /** Shared automation manager owned by the bootstrap/runtime services graph. */
+  automationManager?: import('../automation/index.ts').AutomationManager;
+  /** Shared knowledge service owned by the bootstrap/runtime services graph. */
+  knowledgeService?: import('../knowledge/index.ts').KnowledgeService;
+  /** Shared plugin manager owned by the bootstrap/runtime services graph. */
+  pluginManager?: import('../plugins/manager.ts').PluginManager;
+  /** Shared hook workbench owned by the bootstrap/runtime services graph. */
+  hookWorkbench?: import('../hooks/workbench.ts').HookWorkbench;
+  /** Shared agent manager owned by the bootstrap/runtime services graph. */
+  agentManager?: import('../tools/agent/index.ts').AgentManager;
+  /** Shared interaction mode manager owned by the bootstrap/runtime services graph. */
+  modeManager?: import('../state/mode-manager.ts').ModeManager;
+  /** Shared remote runner registry owned by the bootstrap/runtime services graph. */
+  remoteRunnerRegistry?: import('../runtime/remote/index.ts').RemoteRunnerRegistry;
+  /** Shared remote supervisor owned by the bootstrap/runtime services graph. */
+  remoteSupervisor?: import('../runtime/remote/index.ts').RemoteSupervisor;
+  /** Shared session manager owned by the bootstrap/runtime services graph. */
+  sessionManager?: import('../sessions/manager.ts').SessionManager;
+  /** Shared profile manager owned by the bootstrap/runtime services graph. */
+  profileManager?: import('../profiles/manager.ts').ProfileManager;
+  /** Shared bookmark manager owned by the bootstrap/runtime services graph. */
+  bookmarkManager?: import('../bookmarks/manager.ts').BookmarkManager;
+  /** Shared model favorites store owned by the bootstrap/runtime services graph. */
+  favoritesStore?: import('../providers/favorites.ts').FavoritesStore;
+  /** Shared benchmark store owned by the bootstrap/runtime services graph. */
+  benchmarkStore?: import('../providers/model-benchmarks.ts').BenchmarkStore;
+  /** Shared subscription manager owned by the bootstrap/runtime services graph. */
+  subscriptionManager?: import('../config/subscriptions.ts').SubscriptionManager;
+  /** Shared secrets manager owned by the bootstrap/runtime services graph. */
+  secretsManager?: import('../config/secrets.ts').SecretsManager;
+  /** Shared service registry owned by the bootstrap/runtime services graph. */
+  serviceRegistry?: import('../config/service-registry.ts').ServiceRegistry;
+  /** Shared local user auth manager owned by the bootstrap/runtime services graph. */
+  localUserAuthManager?: import('../security/user-auth.ts').UserAuthManager;
+  /** Shared token auditor owned by the bootstrap/runtime services graph. */
+  tokenAuditor?: import('../security/token-audit.ts').ApiTokenAuditor;
+  /** Shared deterministic replay engine owned by the bootstrap/runtime services graph. */
+  replayEngine?: import('../core/deterministic-replay.ts').DeterministicReplayEngine;
+  /** Shared webhook notifier owned by the bootstrap/runtime services graph. */
+  webhookNotifier?: import('../integrations/webhooks.ts').WebhookNotifier;
+  /** Shared session-memory store owned by the bootstrap/runtime services graph. */
+  sessionMemoryStore?: import('../core/session-memory.ts').SessionMemoryStore;
+  /** Shared session lineage tracker owned by the bootstrap/runtime services graph. */
+  sessionLineageTracker?: import('../core/session-lineage.ts').SessionLineageTracker;
+  /** Shared per-runtime file change tracker used by write/edit and diff surfaces. */
+  changeTracker?: import('../sessions/change-tracker.ts').SessionChangeTracker;
+  /** Shared execution-plan manager owned by the bootstrap/runtime services graph. */
+  planManager?: import('../core/execution-plan.ts').ExecutionPlanManager;
+  /** Shared adaptive planner owned by the bootstrap/runtime services graph. */
+  adaptivePlanner?: import('../core/adaptive-planner.ts').AdaptivePlanner;
   /**
    * CrossSessionTaskRegistry for /session orchestration subcommands.
    *
    * When provided (injected at the app level), the /session command handlers
-   * use this instance. Falls back to the lazy module-level singleton via
-   * `getSessionOrchestration()` when undefined.
+   * use this instance. Command handlers must not create their own registry.
    */
   sessionOrchestration?: import('../sessions/orchestration/index.ts').CrossSessionTaskRegistry;
   /** Runtime store for live control-room commands. */
   runtimeStore?: RuntimeStore;
+  /** Runtime event bus for commands that publish operator/runtime events. */
+  runtimeBus?: RuntimeEventBus;
   /** Unified runtime task manager for richer task control surfaces. */
   taskManager?: TaskManager;
   /** ACP manager for self-hosted remote subagent dispatch and cancellation. */

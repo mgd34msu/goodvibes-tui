@@ -156,16 +156,12 @@ export type {
 } from './session-state.ts';
 export {
   RemoteSupervisor,
-  getRemoteSupervisor,
-  resetRemoteSupervisorForTesting,
 } from './supervisor.ts';
 export type {
   RemoteSupervisorSnapshot,
 } from './supervisor.ts';
 export {
   RemoteRunnerRegistry,
-  getRemoteRunnerRegistry,
-  _resetRemoteRunnerRegistryForTesting,
   exportRemoteArtifactForAgent,
   importRemoteArtifact,
 } from './runner-registry.ts';
@@ -190,8 +186,6 @@ export type {
 export {
   DistributedRuntimeManager,
   getDistributedNodeHostContract,
-  getDistributedRuntimeManager,
-  resetDistributedRuntimeManagerForTesting,
 } from './distributed-runtime.ts';
 
 // ── RemoteSubstrate facade ────────────────────────────────────────────────────

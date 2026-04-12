@@ -1,10 +1,10 @@
 import type { LLMProvider, ChatRequest, ChatResponse } from './interface.ts';
 import { ProviderError, isRateLimitOrQuotaError } from '../types/errors.ts';
 import { logger } from '../utils/logger.ts';
-import { getBenchmarks, compositeScore } from './model-benchmarks.ts';
+import type { BenchmarkEntry } from './model-benchmarks.ts';
+import { compositeScore } from './model-benchmarks.ts';
 import type { RuntimeEventBus } from '../runtime/events/index.ts';
 import { emitModelFallback } from '../runtime/emitters/index.ts';
-import { getProviderRegistry } from './registry.ts';
 
 // --- Types ---
 
@@ -70,68 +70,8 @@ export interface CanonicalModel {
   keyedBackendCount: number;
 }
 
-// --- Live catalog ---
-// Populated by the catalog fetch (model-catalog.ts) after a successful network
-// request. Until then the catalog is empty and the synthetic provider returns
-// no models — there is no hardcoded fallback.
-
-let _canonicalCatalog: CanonicalModel[] | null = null;
-
-let _runtimeBus: RuntimeEventBus | null = null;
-let _providerLookup: ((providerName: string) => LLMProvider) | null = null;
-
-export function setSyntheticRuntimeBus(bus: RuntimeEventBus | null): void {
-  _runtimeBus = bus;
-}
-
-/**
- * Inject the canonical model list fetched from the catalog.
- * Called by the catalog fetch implementation after a successful fetch.
- */
-export function setSyntheticCanonicalModels(models: CanonicalModel[]): void {
-  _canonicalCatalog = models;
-}
-
-/**
- * Inject a custom catalog for testing.
- * @internal
- */
-export function _setSyntheticCatalogForTest(models: CanonicalModel[]): void {
-  _canonicalCatalog = models;
-}
-
-/**
- * Reset the injected catalog to empty (no models available).
- * @internal
- */
-export function _resetSyntheticCatalog(): void {
-  _canonicalCatalog = null;
-}
-
-/**
- * Override provider lookup for tests without process-global module mocking.
- * @internal
- */
-export function _setSyntheticProviderLookupForTest(
-  lookup: ((providerName: string) => LLMProvider) | null,
-): void {
-  _providerLookup = lookup;
-}
-
-function resolveProvider(providerName: string): LLMProvider {
-  if (_providerLookup) {
-    return _providerLookup(providerName);
-  }
-  return getProviderRegistry().get(providerName);
-}
-
-/**
- * Returns the active canonical model catalog.
- * Returns an empty array if the catalog has not been fetched yet.
- */
-function getCatalogModels(): CanonicalModel[] {
-  return _canonicalCatalog ?? [];
-}
+type SyntheticCatalogAccessor = () => readonly CanonicalModel[];
+type BenchmarkLookup = (modelId: string) => BenchmarkEntry | undefined;
 
 /**
  * Returns backend count metadata for a synthetic model ID.
@@ -141,8 +81,9 @@ function getCatalogModels(): CanonicalModel[] {
  */
 export function getSyntheticModelInfo(
   modelId: string,
+  getCatalogModels: SyntheticCatalogAccessor,
 ): { backendCount: number; keyedBackendCount: number; tier: SyntheticTier } | null {
-  const catalog = getCatalogModels();
+  const catalog = [...getCatalogModels()];
   const model = catalog.find(m => m.id === modelId);
   if (!model) return null;
   return {
@@ -168,8 +109,9 @@ export function getSyntheticModelInfo(
  */
 function buildBackendList(
   syntheticId: string,
+  getCatalogModels: SyntheticCatalogAccessor,
 ): { backends: SyntheticBackend[]; canonical: CanonicalModel } | null {
-  const catalog = getCatalogModels();
+  const catalog = [...getCatalogModels()];
   const canonical = catalog.find(m => m.id === syntheticId);
   if (!canonical) return null;
 
@@ -186,12 +128,10 @@ function buildBackendList(
   return { backends: sorted, canonical };
 }
 
-/**
- * Best composite benchmark score across a canonical model's backends.
- * Uses backend model IDs (not canonical slug) because ZeroEval indexes by real model ID.
- * Returns -1 if no benchmarks found.
- */
-function bestCompositeScoreForModel(model: CanonicalModel): number {
+function bestCompositeScoreForModelWithLookup(
+  model: CanonicalModel,
+  getBenchmarks: BenchmarkLookup,
+): number {
   let best = -1;
   for (const b of model.backends) {
     const entry = getBenchmarks(b.modelId);
@@ -209,8 +149,11 @@ function bestCompositeScoreForModel(model: CanonicalModel): number {
  *
  * Returns null if no free models have keys or benchmark data.
  */
-function resolveBestFree(): string | null {
-  const catalog = getCatalogModels();
+function resolveBestFree(
+  getCatalogModels: SyntheticCatalogAccessor,
+  getBenchmarks: BenchmarkLookup,
+): string | null {
+  const catalog = [...getCatalogModels()];
   const freeModels = catalog.filter(m => m.tier === 'free');
 
   let bestId: string | null = null;
@@ -221,7 +164,7 @@ function resolveBestFree(): string | null {
     const hasAnyKey = model.backends.some(hasKey);
     if (!hasAnyKey) continue;
 
-    const effectiveScore = bestCompositeScoreForModel(model);
+    const effectiveScore = bestCompositeScoreForModelWithLookup(model, getBenchmarks);
 
     if (effectiveScore > bestScore) {
       bestScore = effectiveScore;
@@ -236,8 +179,12 @@ function resolveBestFree(): string | null {
  * Resolve the next-best free model by benchmark score, excluding models in `excludeIds`.
  * Returns the canonical model ID or null if no alternatives exist.
  */
-function resolveNextBestFree(excludeIds: Set<string>): string | null {
-  const catalog = getCatalogModels();
+function resolveNextBestFree(
+  excludeIds: Set<string>,
+  getCatalogModels: SyntheticCatalogAccessor,
+  getBenchmarks: BenchmarkLookup,
+): string | null {
+  const catalog = [...getCatalogModels()];
   const freeModels = catalog.filter(m => m.tier === 'free' && !excludeIds.has(m.id));
 
   let bestId: string | null = null;
@@ -247,7 +194,7 @@ function resolveNextBestFree(excludeIds: Set<string>): string | null {
     const hasAnyKey = model.backends.some(hasKey);
     if (!hasAnyKey) continue;
 
-    const effectiveScore = bestCompositeScoreForModel(model);
+    const effectiveScore = bestCompositeScoreForModelWithLookup(model, getBenchmarks);
 
     if (effectiveScore > bestScore) {
       bestScore = effectiveScore;
@@ -278,11 +225,14 @@ const COOLDOWN_BUFFER_MS = 100;
 
 export class SyntheticProvider implements LLMProvider {
   readonly name = 'synthetic';
+  private readonly getCatalogModels: SyntheticCatalogAccessor;
+  private readonly getBenchmarks: BenchmarkLookup;
+  private readonly runtimeBus: RuntimeEventBus | null;
 
   /** Returns a live snapshot of canonical model IDs each time it is accessed. */
   get models(): string[] {
     return [
-      ...getCatalogModels().map(m => m.id),
+      ...this.getCatalogModels().map(m => m.id),
       'best-free',
     ];
   }
@@ -291,15 +241,26 @@ export class SyntheticProvider implements LLMProvider {
   private cooldowns = new Map<string, number[]>();
   // Track active backend index per resolved model ID
   private activeBackend = new Map<string, number>();
+  private readonly resolveProvider: (providerName: string) => LLMProvider;
 
-  constructor() {}
+  constructor(options: {
+    resolveProvider: (providerName: string) => LLMProvider;
+    getCatalogModels: SyntheticCatalogAccessor;
+    getBenchmarks: BenchmarkLookup;
+    runtimeBus?: RuntimeEventBus | null;
+  }) {
+    this.resolveProvider = options.resolveProvider;
+    this.getCatalogModels = options.getCatalogModels;
+    this.getBenchmarks = options.getBenchmarks;
+    this.runtimeBus = options.runtimeBus ?? null;
+  }
 
   async chat(params: ChatRequest): Promise<ChatResponse> {
     let syntheticId = params.model;
 
     // Resolve 'best-free' alias
     if (syntheticId === 'best-free') {
-      const resolved = resolveBestFree();
+      const resolved = resolveBestFree(this.getCatalogModels, this.getBenchmarks);
       if (!resolved) {
         throw new ProviderError(
           'No API keys configured for any provider offering free models',
@@ -310,7 +271,7 @@ export class SyntheticProvider implements LLMProvider {
       syntheticId = resolved;
     }
 
-    const result = buildBackendList(syntheticId);
+    const result = buildBackendList(syntheticId, this.getCatalogModels);
 
     if (!result) {
       throw new ProviderError(`Unknown synthetic model: ${syntheticId}`, 400);
@@ -361,7 +322,7 @@ export class SyntheticProvider implements LLMProvider {
       // Resolve provider
       let provider: LLMProvider;
       try {
-        provider = resolveProvider(backend.providerName);
+        provider = this.resolveProvider(backend.providerName);
       } catch (err) {
         logger.debug(`[Synthetic] Backend ${backend.providerName} not available: ${err}`);
         continue;
@@ -474,7 +435,7 @@ export class SyntheticProvider implements LLMProvider {
 
       // Single retry attempt on the backend that just came off cooldown
       try {
-        const waitProvider = resolveProvider(waitBackend.providerName);
+        const waitProvider = this.resolveProvider(waitBackend.providerName);
         const response = await waitProvider.chat({
           ...params,
           model: waitBackend.modelId,
@@ -500,19 +461,19 @@ export class SyntheticProvider implements LLMProvider {
     // Cross-model failover for free tier only
     if (canonical.tier === 'free') {
       const tried = new Set<string>([syntheticId]);
-      let fallbackId = resolveNextBestFree(tried);
+      let fallbackId = resolveNextBestFree(tried, this.getCatalogModels, this.getBenchmarks);
 
       while (fallbackId) {
         tried.add(fallbackId);
-        const fallbackResult = buildBackendList(fallbackId);
+        const fallbackResult = buildBackendList(fallbackId, this.getCatalogModels);
         if (!fallbackResult || fallbackResult.backends.length === 0) {
-          fallbackId = resolveNextBestFree(tried);
+          fallbackId = resolveNextBestFree(tried, this.getCatalogModels, this.getBenchmarks);
           continue;
         }
 
         for (const backend of fallbackResult.backends) {
           try {
-            const provider = resolveProvider(backend.providerName);
+            const provider = this.resolveProvider(backend.providerName);
             const response = await provider.chat({
               ...params,
               model: backend.modelId,
@@ -521,9 +482,9 @@ export class SyntheticProvider implements LLMProvider {
             this.activeBackend.set(fallbackId, 0);
             logger.info(`[Synthetic] ${syntheticId} exhausted, fell back to ${fallbackId} via ${backend.providerName}`);
 
-            if (_runtimeBus) {
+            if (this.runtimeBus) {
               try {
-                emitModelFallback(_runtimeBus, {
+                emitModelFallback(this.runtimeBus, {
                   sessionId: 'system',
                   traceId: `synthetic:fallback:${syntheticId}:${fallbackId}`,
                   source: 'synthetic-provider',
@@ -545,7 +506,7 @@ export class SyntheticProvider implements LLMProvider {
         }
 
         // All backends for this fallback exhausted, try next model
-        fallbackId = resolveNextBestFree(tried);
+        fallbackId = resolveNextBestFree(tried, this.getCatalogModels, this.getBenchmarks);
       }
 
       // All free models exhausted

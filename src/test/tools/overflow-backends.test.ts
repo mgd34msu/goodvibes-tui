@@ -425,10 +425,8 @@ describe('OverflowHandler — retention policy', () => {
 
 describe('overflowCleanup operator command', () => {
   it('returns beforeCount and delegates cleanup', () => {
-    // The module singleton defaults to file backend.
-    // We call cleanup with a policy — just assert it does not throw
-    // and returns the expected shape.
-    const result = overflowCleanup({ maxAgeMs: 0 });
+    const handler = new OverflowHandler();
+    const result = overflowCleanup(handler, { maxAgeMs: 0 });
     expect(result).toHaveProperty('beforeCount');
     expect(typeof result.beforeCount).toBe('number');
   });

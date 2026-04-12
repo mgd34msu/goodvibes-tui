@@ -15,7 +15,7 @@
 
 import { readFileSync } from 'fs';
 import { join } from 'path';
-import { getSecretsManager } from './secrets.ts';
+import { SecretsManager } from './secrets.ts';
 import {
   describeSecretRef,
   isSecretRefInput,
@@ -23,7 +23,7 @@ import {
   type SecretRefInput,
 } from './secret-refs.ts';
 import type { OAuthProviderConfig } from './subscriptions.ts';
-import { getSubscriptionManager } from './subscriptions.ts';
+import { SubscriptionManager } from './subscriptions.ts';
 import { logger } from '../utils/logger.ts';
 
 // ---------------------------------------------------------------------------
@@ -88,6 +88,11 @@ export interface ServiceConnectionTestResult {
   readonly error?: string;
 }
 
+export interface ServiceRegistryOptions {
+  readonly secretsManager?: SecretsManager;
+  readonly subscriptionManager?: SubscriptionManager;
+}
+
 // ---------------------------------------------------------------------------
 // Internal helpers
 // ---------------------------------------------------------------------------
@@ -117,9 +122,13 @@ function readServicesFile(filePath: string): Record<string, ServiceConfig> {
 
 export class ServiceRegistry {
   private readonly servicesFilePath: string;
+  private readonly secretsManager: SecretsManager;
+  private readonly subscriptionManager: SubscriptionManager;
 
-  constructor(servicesFilePath?: string) {
+  constructor(servicesFilePath?: string, options: ServiceRegistryOptions = {}) {
     this.servicesFilePath = servicesFilePath ?? getServicesFilePath();
+    this.secretsManager = options.secretsManager ?? new SecretsManager();
+    this.subscriptionManager = options.subscriptionManager ?? new SubscriptionManager();
   }
 
   /**
@@ -143,12 +152,11 @@ export class ServiceRegistry {
     keyOrRef?: string,
     ref?: SecretRefInput,
   ): Promise<string | null> {
-    const secrets = getSecretsManager();
     const candidate = ref ?? (keyOrRef && isSecretRefInput(keyOrRef) ? keyOrRef : undefined);
     if (candidate) {
       try {
         const resolved = await resolveSecretRef(candidate, {
-          resolveLocalSecret: (key) => secrets.get(key),
+          resolveLocalSecret: (key) => this.secretsManager.get(key),
         });
         return resolved.value;
       } catch (error) {
@@ -162,7 +170,7 @@ export class ServiceRegistry {
       }
     }
 
-    return keyOrRef ? secrets.get(keyOrRef) : null;
+    return keyOrRef ? this.secretsManager.get(keyOrRef) : null;
   }
 
   /**
@@ -179,7 +187,7 @@ export class ServiceRegistry {
       return null;
     }
 
-    const providerOverride = getSubscriptionManager().getAccessToken(config.providerId ?? serviceName);
+    const providerOverride = this.subscriptionManager.getAccessToken(config.providerId ?? serviceName);
     if (providerOverride) {
       return { Authorization: `Bearer ${providerOverride}` };
     }
@@ -325,30 +333,4 @@ export class ServiceRegistry {
       error: 'Connection failed',
     };
   }
-}
-
-// ---------------------------------------------------------------------------
-// Singleton
-// ---------------------------------------------------------------------------
-
-let _serviceRegistry: ServiceRegistry | undefined;
-
-export function getServiceRegistry(): ServiceRegistry {
-  if (!_serviceRegistry) _serviceRegistry = new ServiceRegistry();
-  return _serviceRegistry;
-}
-
-/**
- * Resolve auth headers for a named service using the singleton registry.
- * Convenience wrapper for use in the fetch tool.
- */
-export async function resolveServiceAuth(
-  serviceName: string,
-): Promise<Record<string, string> | null> {
-  return getServiceRegistry().resolveAuth(serviceName);
-}
-
-/** Reset singleton — for testing only. */
-export function _resetServiceRegistryForTesting(): void {
-  _serviceRegistry = undefined;
 }

@@ -2,19 +2,21 @@ import { describe, test, expect, beforeEach } from 'bun:test';
 import { AgentDetailModal, renderAgentDetailModal } from '../../renderer/agent-detail-modal.ts';
 import { AgentManager } from '../../tools/agent/index.ts';
 import { AgentMessageBus } from '../../agents/message-bus.ts';
+import { createDefaultUiRuntimeServices } from '../helpers/ui-services.ts';
 import { linesToText } from '../setup.ts';
+import { getTestAgentManager, getTestAgentMessageBus, resetTestRuntimeServices } from '../helpers/runtime-services.ts';
 
 const W = 100;
 
 beforeEach(() => {
-  AgentManager.resetInstance();
-  AgentMessageBus.resetInstance();
+  resetTestRuntimeServices();
+  resetTestRuntimeServices();
 });
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function seedAgent(task = 'Do something', status: 'running' | 'pending' = 'running'): string {
-  const am = AgentManager.getInstance();
+  const am = getTestAgentManager();
   const rec = am.spawn({ mode: 'spawn', task, template: 'general', tools: [] });
   const seeded = am.getStatus(rec.id);
   if (!seeded) throw new Error('expected agent record');
@@ -22,24 +24,32 @@ function seedAgent(task = 'Do something', status: 'running' | 'pending' = 'runni
   return rec.id;
 }
 
+function createAgentDetailModal(): AgentDetailModal {
+  const ui = createDefaultUiRuntimeServices();
+  return new AgentDetailModal({
+    agentManager: ui.agentManager,
+    agentMessageBus: ui.agentMessageBus,
+  });
+}
+
 // ─── AgentDetailModal state ────────────────────────────────────────────────────
 
 describe('AgentDetailModal state', () => {
   test('initially inactive with null agentId', () => {
-    const modal = new AgentDetailModal();
+    const modal = createAgentDetailModal();
     expect(modal.active).toBe(false);
     expect(modal.agentId).toBeNull();
   });
 
   test('open() sets active=true and agentId', () => {
-    const modal = new AgentDetailModal();
+    const modal = createAgentDetailModal();
     modal.open('agent-123');
     expect(modal.active).toBe(true);
     expect(modal.agentId).toBe('agent-123');
   });
 
   test('close() resets active and agentId', () => {
-    const modal = new AgentDetailModal();
+    const modal = createAgentDetailModal();
     modal.open('agent-123');
     modal.close();
     expect(modal.active).toBe(false);
@@ -51,13 +61,13 @@ describe('AgentDetailModal state', () => {
 
 describe('renderAgentDetailModal', () => {
   test('returns empty array when agentId is null', () => {
-    const modal = new AgentDetailModal();
+    const modal = createAgentDetailModal();
     const lines = renderAgentDetailModal(modal, W);
     expect(lines).toEqual([]);
   });
 
   test('renders (agent not found) for unknown agentId', () => {
-    const modal = new AgentDetailModal();
+    const modal = createAgentDetailModal();
     modal.open('nonexistent-id');
     const lines = renderAgentDetailModal(modal, W);
     const text = linesToText(lines).join('\n');
@@ -66,7 +76,7 @@ describe('renderAgentDetailModal', () => {
 
   test('all lines have correct terminal width', () => {
     const id = seedAgent('Test task');
-    const modal = new AgentDetailModal();
+    const modal = createAgentDetailModal();
     modal.open(id);
     const lines = renderAgentDetailModal(modal, W);
     for (const line of lines) {
@@ -76,7 +86,7 @@ describe('renderAgentDetailModal', () => {
 
   test('renders title with agent id', () => {
     const id = seedAgent('My task');
-    const modal = new AgentDetailModal();
+    const modal = createAgentDetailModal();
     modal.open(id);
     const lines = renderAgentDetailModal(modal, W);
     const text = linesToText(lines).join('\n');
@@ -85,7 +95,7 @@ describe('renderAgentDetailModal', () => {
 
   test('renders task description', () => {
     const id = seedAgent('Build the feature');
-    const modal = new AgentDetailModal();
+    const modal = createAgentDetailModal();
     modal.open(id);
     const lines = renderAgentDetailModal(modal, W);
     const text = linesToText(lines).join('\n');
@@ -94,7 +104,7 @@ describe('renderAgentDetailModal', () => {
 
   test('renders template name', () => {
     const id = seedAgent('Task A');
-    const modal = new AgentDetailModal();
+    const modal = createAgentDetailModal();
     modal.open(id);
     const lines = renderAgentDetailModal(modal, W);
     const text = linesToText(lines).join('\n');
@@ -104,7 +114,7 @@ describe('renderAgentDetailModal', () => {
 
   test('renders status', () => {
     const id = seedAgent('Task B', 'running');
-    const modal = new AgentDetailModal();
+    const modal = createAgentDetailModal();
     modal.open(id);
     const lines = renderAgentDetailModal(modal, W);
     const text = linesToText(lines).join('\n');
@@ -114,7 +124,7 @@ describe('renderAgentDetailModal', () => {
 
   test('renders duration', () => {
     const id = seedAgent('Timed task');
-    const modal = new AgentDetailModal();
+    const modal = createAgentDetailModal();
     modal.open(id);
     const lines = renderAgentDetailModal(modal, W);
     const text = linesToText(lines).join('\n');
@@ -123,11 +133,11 @@ describe('renderAgentDetailModal', () => {
 
   test('renders tool call count', () => {
     const id = seedAgent('Tool task');
-    const am = AgentManager.getInstance();
+    const am = getTestAgentManager();
     const rec = am.getStatus(id);
     if (!rec) throw new Error('expected agent record');
     rec.toolCallCount = 5;
-    const modal = new AgentDetailModal();
+    const modal = createAgentDetailModal();
     modal.open(id);
     const lines = renderAgentDetailModal(modal, W);
     const text = linesToText(lines).join('\n');
@@ -137,11 +147,11 @@ describe('renderAgentDetailModal', () => {
 
   test('renders estimated token usage', () => {
     const id = seedAgent('Token task');
-    const am = AgentManager.getInstance();
+    const am = getTestAgentManager();
     const rec = am.getStatus(id);
     if (!rec) throw new Error('expected agent record');
     rec.toolCallCount = 3;
-    const modal = new AgentDetailModal();
+    const modal = createAgentDetailModal();
     modal.open(id);
     const lines = renderAgentDetailModal(modal, W);
     const text = linesToText(lines).join('\n');
@@ -151,11 +161,11 @@ describe('renderAgentDetailModal', () => {
 
   test('renders progress text when present', () => {
     const id = seedAgent('Progress task');
-    const am = AgentManager.getInstance();
+    const am = getTestAgentManager();
     const rec = am.getStatus(id);
     if (!rec) throw new Error('expected agent record');
     rec.progress = 'Step 2 of 5';
-    const modal = new AgentDetailModal();
+    const modal = createAgentDetailModal();
     modal.open(id);
     const lines = renderAgentDetailModal(modal, W);
     const text = linesToText(lines).join('\n');
@@ -165,11 +175,11 @@ describe('renderAgentDetailModal', () => {
 
   test('renders error when present', () => {
     const id = seedAgent('Error task');
-    const am = AgentManager.getInstance();
+    const am = getTestAgentManager();
     const rec = am.getStatus(id);
     if (!rec) throw new Error('expected agent record');
     rec.error = 'Something went wrong';
-    const modal = new AgentDetailModal();
+    const modal = createAgentDetailModal();
     modal.open(id);
     const lines = renderAgentDetailModal(modal, W);
     const text = linesToText(lines).join('\n');
@@ -179,9 +189,9 @@ describe('renderAgentDetailModal', () => {
 
   test('renders recent bus messages when present', () => {
     const id = seedAgent('Bus task');
-    const bus = AgentMessageBus.getInstance();
+    const bus = getTestAgentMessageBus();
     bus.send('sender-agent', id, 'Hello from sender');
-    const modal = new AgentDetailModal();
+    const modal = createAgentDetailModal();
     modal.open(id);
     const lines = renderAgentDetailModal(modal, W);
     const text = linesToText(lines).join('\n');
@@ -191,7 +201,7 @@ describe('renderAgentDetailModal', () => {
 
   test('footer contains [Esc] Close hint', () => {
     const id = seedAgent('Hint task');
-    const modal = new AgentDetailModal();
+    const modal = createAgentDetailModal();
     modal.open(id);
     const lines = renderAgentDetailModal(modal, W);
     const text = linesToText(lines).join('\n');

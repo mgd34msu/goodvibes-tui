@@ -1,4 +1,4 @@
-import { configManager } from '../config/index.ts';
+import type { ConfigManager } from '../config/index.ts';
 import type { ConversationManager } from '../core/conversation.ts';
 import type { CommandContext } from '../input/command-registry.ts';
 import type { InputHandler } from '../input/handler.ts';
@@ -7,16 +7,19 @@ import type { ProviderRegistry } from '../providers/registry.ts';
 import type { MutableRuntimeState } from '../runtime/context.ts';
 import type { FeatureFlagManager } from '../runtime/feature-flags/index.ts';
 import type { McpRegistry } from '../mcp/registry.ts';
+import type { SubscriptionManager } from '../config/subscriptions.ts';
 
 type WireShellUiOpenersOptions = {
   commandContext: CommandContext;
   input: InputHandler;
   panelManager: PanelManager;
   conversation: ConversationManager;
+  configManager: ConfigManager;
   providerRegistry: ProviderRegistry;
   runtime: MutableRuntimeState;
   featureFlags: FeatureFlagManager;
   mcpRegistry: McpRegistry;
+  subscriptionManager: SubscriptionManager;
   getConfiguredProviderIds: () => string[];
   getPinned: () => Promise<string[]>;
   render: () => void;
@@ -28,10 +31,12 @@ export function wireShellUiOpeners(options: WireShellUiOpenersOptions): void {
     input,
     panelManager,
     conversation,
+    configManager,
     providerRegistry,
     runtime,
     featureFlags,
     mcpRegistry,
+    subscriptionManager,
     getConfiguredProviderIds,
     getPinned,
     render,
@@ -94,7 +99,7 @@ export function wireShellUiOpeners(options: WireShellUiOpenersOptions): void {
 
   commandContext.openSettingsModal = () => {
     input.modalOpened('settings');
-    input.settingsModal.open(configManager, featureFlags, mcpRegistry);
+    input.settingsModal.open(configManager, featureFlags, subscriptionManager, mcpRegistry);
     render();
   };
 

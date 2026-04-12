@@ -4,7 +4,8 @@ import { createInitialOrchestrationState } from '../../runtime/store/domains/orc
 import { OrchestrationPanel } from '../../panels/orchestration-panel.ts';
 import { registerBuiltinPanels } from '../../panels/builtin-panels.ts';
 import { PanelManager } from '../../panels/panel-manager.ts';
-import type { RuntimeEventBus } from '../../runtime/events/index.ts';
+import { RuntimeEventBus } from '../../runtime/events/index.ts';
+import { createRuntimeServices } from '../../runtime/services.ts';
 import type { Line } from '../../types/grid.ts';
 
 function linesText(lines: Line[]): string {
@@ -111,9 +112,18 @@ describe('OrchestrationPanel', () => {
 
   test('is registered as a built-in panel when a runtime store is provided', () => {
     const manager = new PanelManager();
-    registerBuiltinPanels(manager, {
-      runtimeBus: {} as RuntimeEventBus,
+    const services = createRuntimeServices({
+      runtimeBus: new RuntimeEventBus(),
       runtimeStore: createRuntimeStore(),
+    });
+    registerBuiltinPanels(manager, {
+      runtimeBus: new RuntimeEventBus(),
+      providerRegistry: services.providerRegistry,
+      runtimeStore: createRuntimeStore(),
+      tokenAuditor: services.tokenAuditor,
+      panelHealthMonitor: services.panelHealthMonitor,
+      worktreeRegistry: services.worktreeRegistry,
+      sandboxSessionRegistry: services.sandboxSessionRegistry,
     });
     expect(manager.getRegisteredTypes().some((entry) => entry.id === 'orchestration')).toBe(true);
   });

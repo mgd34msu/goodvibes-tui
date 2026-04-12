@@ -1,26 +1,34 @@
 import { InfiniteBuffer } from './history.ts';
-import { UIFactory } from '../renderer/ui-factory.ts';
-import { renderMarkdown, renderMarkdownTracked } from '../renderer/markdown.ts';
-import { renderToolCallBlock } from '../renderer/tool-call.ts';
-import { renderThinkingBlock } from '../renderer/thinking.ts';
-import { renderSystemMessage } from '../renderer/system-message.ts';
 import { createEmptyLine, type Line, type Cell } from '../types/grid.ts';
-import { getSplashLines, type SplashOptions } from '../utils/splash-lines.ts';
-import { interpolateColor, getDisplayWidth, wrapText } from '../utils/terminal-width.ts';
+import type { SplashOptions } from '../utils/splash-lines.ts';
 import type { ToolCall, ToolResult } from '../types/tools.ts';
 import type { ProviderMessage, ContentPart } from '../providers/interface.ts';
 import { logger } from '../utils/logger.ts';
-import { LAYOUT } from '../renderer/layout.ts';
-import type { ProviderRegistry } from '../providers/registry.ts';
 import type { ConfigManager } from '../config/manager.ts';
-import { compactMessages, estimateConversationTokens } from './context-compaction.ts';
-import type { CompactionContext } from './context-compaction.ts';
-import { sessionMemoryStore } from './session-memory.ts';
-import { sessionLineageTracker } from './session-lineage.ts';
+import type { SessionMemoryStore } from './session-memory.ts';
+import { SessionLineageTracker } from './session-lineage.ts';
 import { buildTranscriptEventIndex } from './transcript-events/index.ts';
 import type { TranscriptEventKind } from './transcript-events/index.ts';
-import { renderConversationCollapsedFragment, renderConversationEventLine } from '../renderer/conversation-surface.ts';
-import { GLYPHS } from '../renderer/ui-primitives.ts';
+import { compactConversation } from './conversation-compaction.ts';
+import {
+  addConversationSplashScreen,
+  appendConversationMessages,
+  conversationTextToLines,
+  logConversationText,
+  renderConversationAssistantMessage,
+  renderConversationSystemMessage,
+  renderConversationToolMessage,
+  renderConversationUserMessage,
+} from './conversation-rendering.ts';
+import { renderMarkdown } from '../renderer/markdown.ts';
+import {
+  cloneBranchMap,
+  cloneMessages,
+  deriveConversationTitle,
+  messagesToInternal,
+  restoreBranchMap,
+} from './conversation-utils.ts';
+import { applyDiffContent, parseDiffForApply } from './conversation-diff.ts';
 
 /**
  * ConversationManager - Owns conversation messages and the rendered history buffer.
@@ -42,73 +50,6 @@ export type ConversationMessageSnapshot =
 
 type Message = ConversationMessageSnapshot;
 export type ConversationTitleSource = 'system' | 'user';
-
-function cloneMessages(messages: Message[]): Message[] {
-  return structuredClone(messages);
-}
-
-function extractAssistantText(content: ProviderMessage['content']): string {
-  if (typeof content === 'string') return content;
-  if (!Array.isArray(content)) return String(content);
-  return content
-    .filter((part): part is { type: 'text'; text: string } => part.type === 'text')
-    .map((part) => part.text)
-    .join('');
-}
-
-function toInternalMessage(message: ProviderMessage): Message {
-  if (message.role === 'user') {
-    return {
-      role: 'user',
-      content: typeof message.content === 'string' ? message.content : (message.content as ContentPart[]),
-    };
-  }
-  if (message.role === 'assistant') {
-    return { role: 'assistant', content: extractAssistantText(message.content) };
-  }
-  const toolMsg = message as { role: 'tool'; callId: string; content: string | unknown };
-  return {
-    role: 'tool',
-    callId: toolMsg.callId ?? '',
-    content: typeof toolMsg.content === 'string' ? toolMsg.content : String(toolMsg.content),
-  };
-}
-
-function messagesToInternal(messages: ProviderMessage[]): Message[] {
-  return messages.map(toInternalMessage);
-}
-
-function cloneBranchMap(branches: Map<string, Message[]>): Record<string, Message[]> {
-  const result: Record<string, Message[]> = {};
-  for (const [name, msgs] of branches) {
-    result[name] = cloneMessages(msgs);
-  }
-  return result;
-}
-
-function restoreBranchMap(branches?: Record<string, Message[]>): Map<string, Message[]> {
-  const restored = new Map<string, Message[]>();
-  if (!branches) return restored;
-  for (const [name, msgs] of Object.entries(branches)) {
-    restored.set(name, msgs);
-  }
-  return restored;
-}
-
-function deriveConversationTitle(content: string): string {
-  const text = content.trim();
-  if (text.length <= 50) return text;
-  let cut = text.lastIndexOf(' ', 50);
-  if (cut <= 0) cut = 50;
-  return text.slice(0, cut);
-}
-
-function extractUserDisplayText(content: string | ContentPart[]): string {
-  if (typeof content === 'string') return content;
-  const textParts = content.filter((part): part is { type: 'text'; text: string } => part.type === 'text');
-  const imageCount = content.filter((part) => part.type === 'image').length;
-  return textParts.map((part) => part.text).join('') + (imageCount > 0 ? ` [+${imageCount} image(s)]` : '');
-}
 
 /** Metadata for a rendered block (code, tool, or diff). */
 export interface BlockMeta {
@@ -146,6 +87,10 @@ export class ConversationManager {
   private appendedUpTo = 0;
   /** Optional config manager for display settings. */
   private configManager: ConfigManager | null = null;
+  /** Session memory store wired by the runtime composition root. */
+  private sessionMemoryStore: Pick<SessionMemoryStore, 'list'> | null = null;
+  /** Session lineage tracker wired by the runtime composition root. */
+  private sessionLineageTracker: SessionLineageTracker = new SessionLineageTracker();
   /** Collapse state: stable key (msg_N) -> collapsed (true = collapsed). */
   private collapseState: Map<string, boolean> = new Map();
   /** Block registry: track rendered blocks for copy/apply. */
@@ -174,6 +119,26 @@ export class ConversationManager {
   /** Wire in a config manager after construction (e.g. from main.ts). */
   public setConfigManager(cm: ConfigManager): void {
     this.configManager = cm;
+  }
+
+  /** Wire in the session memory store used for compaction summaries. */
+  public setSessionMemoryStore(store: Pick<SessionMemoryStore, 'list'>): void {
+    this.sessionMemoryStore = store;
+  }
+
+  /** Wire in the session lineage tracker used for compaction output. */
+  public setSessionLineageTracker(tracker: SessionLineageTracker): void {
+    this.sessionLineageTracker = tracker;
+  }
+
+  /** Read the session memory store used for compaction summaries. */
+  public getSessionMemoryStore(): Pick<SessionMemoryStore, 'list'> | null {
+    return this.sessionMemoryStore;
+  }
+
+  /** Read the session lineage tracker used for compaction output. */
+  public getSessionLineageTracker(): SessionLineageTracker {
+    return this.sessionLineageTracker;
   }
 
   /** Update the width provider so shell layout can own transcript width. */
@@ -401,13 +366,19 @@ export class ConversationManager {
     this.dirty = true;
   }
 
+  private renderingContext() {
+    return {
+      history: this.history,
+      blockRegistry: this.blockRegistry,
+      collapseState: this.collapseState,
+      errorLineRegistry: this.errorLineRegistry,
+      configManager: this.configManager,
+      splashOptions: this.splashOptions,
+    };
+  }
+
   private renderUserMessage(message: Extract<Message, { role: 'user' }>, width: number): void {
-    const displayText = extractUserDisplayText(message.content);
-    if (message.cancelled) {
-      this.history.addLines(UIFactory.createMessageBar(width, displayText, '#3a1a1a', '196', ' x ', true));
-      return;
-    }
-    this.history.addLines(UIFactory.createMessageBar(width, displayText));
+    renderConversationUserMessage(this.renderingContext(), message, width);
   }
 
   private renderAssistantMessage(
@@ -417,234 +388,20 @@ export class ConversationManager {
     collapseThreshold: number,
     msgIdx: number,
   ): void {
-    const assistantHeaderDetails = [];
-    if (message.model) {
-      assistantHeaderDetails.push({ text: ` ${message.model}${message.provider ? ` (${message.provider})` : ''} `, fg: '#94a3b8', dim: true });
-    }
-    if (message.toolCalls && message.toolCalls.length > 0) {
-      assistantHeaderDetails.push({ text: ` ${GLYPHS.status.pending} tools:${message.toolCalls.length} `, fg: '#38bdf8' });
-    }
-    if (message.reasoningContent || message.reasoningSummary) {
-      assistantHeaderDetails.push({ text: ` ${GLYPHS.status.active} reasoning `, fg: '#a855f7', dim: true });
-    }
-    if (assistantHeaderDetails.length > 0) {
-      this.history.addLine(renderConversationEventLine(width, {
-        marker: GLYPHS.status.active,
-        markerFg: '#22d3ee',
-        label: 'assistant',
-        labelFg: '#22d3ee',
-        detailFg: '244',
-      }, assistantHeaderDetails));
-    }
-
-    // Render reasoning/thinking block if enabled and present
-    const showThinking = this.configManager?.get('display.showThinking') ?? false;
-    const showReasoningSummary = this.configManager?.get('display.showReasoningSummary') ?? false;
-    if (showThinking && message.reasoningContent) {
-      const thinkingStartLine = this.history.getLineCount();
-      const thinkingBlockIdx = this.blockRegistry.length;
-      const thinkingCollapseKey = `msg_${msgIdx}_thinking`;
-      const thinkingLines = renderThinkingBlock(message.reasoningContent, width);
-      this.history.addLines(thinkingLines);
-      this.history.addLine(createEmptyLine(width));
-      const thinkingRenderedLines = this.history.getLineCount() - thinkingStartLine;
-      this.blockRegistry.push({
-        blockIndex: thinkingBlockIdx,
-        collapseKey: thinkingCollapseKey,
-        type: 'thinking',
-        startLine: thinkingStartLine,
-        lineCount: thinkingRenderedLines,
-        rawContent: message.reasoningContent,
-      });
-    }
-    if (showReasoningSummary && message.reasoningSummary) {
-      const summaryLines = renderThinkingBlock(message.reasoningSummary, width);
-      this.history.addLines(summaryLines);
-      this.history.addLine(createEmptyLine(width));
-    }
-    // Render assistant content using the markdown renderer
-    if (message.content) {
-      const showAllLineNumbers = lineNumberMode === 'all';
-      const showCodeBlockLineNumbers = lineNumberMode === 'all' ? false : lineNumberMode === 'code';
-      // Calculate gutter width dynamically based on total line count
-      const preRendered = showAllLineNumbers
-        ? renderMarkdown(message.content, width, { codeBlockLineNumbers: false })
-        : null;
-      const totalLines = preRendered?.length ?? 0;
-      const numWidth = Math.max(3, String(totalLines).length); // minimum 3 digits wide
-      const gutterW = numWidth + 3; // digits + ' │ '
-      const contentWidth = showAllLineNumbers ? width - gutterW : width;
-      const renderWidth = showAllLineNumbers ? contentWidth : width;
-
-      // Use tracked render to register code blocks in blockRegistry
-      const { lines: tracked, codeBlocks } = renderMarkdownTracked(message.content, renderWidth, {
-        codeBlockLineNumbers: showCodeBlockLineNumbers,
-      });
-
-      // Register each code block found in this message
-      const msgBaseLineOffset = this.history.getLineCount();
-      for (const cb of codeBlocks) {
-        const blockStartLine = msgBaseLineOffset + cb.startOffset;
-        const blockIdx = this.blockRegistry.length;
-        const collapseKey = `code_${msgIdx}_${blockIdx}`;
-        const isAutoCollapsed = cb.rawContent.split('\n').length > collapseThreshold;
-        if (isAutoCollapsed && !this.collapseState.has(collapseKey)) {
-          this.collapseState.set(collapseKey, true);
-        }
-        this.blockRegistry.push({
-          blockIndex: blockIdx,
-          collapseKey,
-          type: 'code',
-          startLine: blockStartLine,
-          lineCount: cb.lineCount,
-          rawContent: cb.rawContent,
-        });
-      }
-
-      const rendered = tracked;
-      if (showAllLineNumbers) {
-        // Prepend dimmed gutter and shift content right
-        const numbered = rendered.map((line, i) => {
-          const label = String(i + 1).padStart(numWidth) + ' \u2502 ';
-          const gutterCells = UIFactory.stringToLine(label, gutterW, { fg: '238', dim: true });
-          // Build full-width line: gutter + content
-          const fullLine = createEmptyLine(width);
-          for (let ci = 0; ci < gutterW && ci < gutterCells.length; ci++) {
-            fullLine[ci] = gutterCells[ci];
-          }
-          for (let ci = 0; ci < line.length && gutterW + ci < width; ci++) {
-            fullLine[gutterW + ci] = line[ci];
-          }
-          return fullLine;
-        });
-        this.history.addLines(numbered);
-      } else {
-        this.history.addLines(rendered);
-      }
-    }
-    // Render tool calls using the tool-call block renderer
-    if (message.toolCalls && message.toolCalls.length > 0) {
-      for (const tc of message.toolCalls) {
-        const status = 'done'; // Historical messages are always complete
-        this.history.addLines(renderToolCallBlock(tc, status, undefined, width));
-      }
-    }
+    renderConversationAssistantMessage(this.renderingContext(), message, width, lineNumberMode, collapseThreshold, msgIdx);
   }
 
   private renderSystemMessage(message: Extract<Message, { role: 'system' }>, width: number): void {
-    const sysStartLine = this.history.getLineCount();
-    const sysLines = renderSystemMessage(message.content, width);
-    this.history.addLines(sysLines);
-    if (/error/i.test(message.content)) {
-      this.errorLineRegistry.push(sysStartLine);
-    }
+    renderConversationSystemMessage(this.renderingContext(), message, width);
   }
 
   private renderToolMessage(message: Extract<Message, { role: 'tool' }>, width: number, msgIdx: number): void {
-    const collapseKey = `msg_${msgIdx}`;
-    const blockIdx = this.blockRegistry.length;
-    const startLine = this.history.getLineCount();
-    const contentLines = message.content.split('\n');
-    const lineCount = contentLines.length;
-    const hasDiffHeader = contentLines.some(l => l.startsWith('--- ')) && contentLines.some(l => l.startsWith('+++ '));
-    const hasHunk = contentLines.some(l => l.startsWith('@@ '));
-    const isDiff = hasDiffHeader && hasHunk;
-    const blockType: 'diff' | 'tool' = isDiff ? 'diff' : 'tool';
-
-    // Short messages (≤200 chars) are never collapsible
-    const isShort = message.content.length <= 200;
-    const isCollapsed = isShort ? false
-      : this.collapseState.has(collapseKey)
-        ? this.collapseState.get(collapseKey)!
-        : true;  // Collapsed by default
-
-    if (!this.collapseState.has(collapseKey)) {
-      this.collapseState.set(collapseKey, isShort ? false : true);
-    }
-
-    this.history.addLine(renderConversationEventLine(width, {
-      marker: blockType === 'diff' ? GLYPHS.status.dualPane : GLYPHS.status.active,
-      markerFg: blockType === 'diff' ? '#f59e0b' : '#38bdf8',
-      label: blockType === 'diff' ? 'diff' : 'tool result',
-      labelFg: blockType === 'diff' ? '#f59e0b' : '#38bdf8',
-      detailFg: '244',
-    }, [
-      { text: ` ${message.callId || 'standalone'} `, fg: '244', dim: true },
-      { text: ` ${isCollapsed ? GLYPHS.navigation.collapsed : GLYPHS.navigation.expanded} ${lineCount} line${lineCount === 1 ? '' : 's'} `, fg: '244', dim: true },
-    ]));
-
-    if (isCollapsed) {
-      // Collapsed tool/diff output stays in the fragment language used by the
-      // transcript, instead of regressing to a generic system notice row.
-      const COLLAPSE_SUFFIX_RESERVE = 30; // space for '… [+N lines]' suffix
-      const preview = contentLines[0].slice(0, width - LAYOUT.LEFT_MARGIN - LAYOUT.RIGHT_MARGIN - COLLAPSE_SUFFIX_RESERVE);
-      const hiddenCount = lineCount - 1;
-      const collapsedText = hiddenCount > 0
-        ? `${preview}...  [${GLYPHS.navigation.collapsed} ${hiddenCount} hidden]`
-        : preview;
-      const rendered = renderConversationCollapsedFragment(collapsedText, width, {
-        prefix: blockType === 'diff' ? ` ${GLYPHS.status.dualPane} ` : ` ${GLYPHS.navigation.collapsed} `,
-        prefixFg: blockType === 'diff' ? '#f59e0b' : '#38bdf8',
-        text: '244',
-        bodyBg: '#1a1a1a',
-        dim: true,
-      });
-      this.history.addLines(rendered);
-    } else {
-      // Expanded: render through markdown pipeline
-      let contentToRender = message.content;
-
-      // If the content is valid JSON, wrap in a json code fence for syntax highlighting
-      const trimmed = contentToRender.trimStart();
-      if ((trimmed.startsWith('{') || trimmed.startsWith('[')) && contentToRender.length < 100_000) {
-        try {
-          const parsed = JSON.parse(contentToRender);
-          contentToRender = '```json\n' + JSON.stringify(parsed, null, 2) + '\n```';
-        } catch {
-          // Not valid JSON — render as-is through markdown
-        }
-      }
-
-      const rendered = renderMarkdown(contentToRender, width);
-      this.history.addLines(rendered);
-    }
-
-    const renderedLineCount = this.history.getLineCount() - startLine;
-    let meta: BlockMeta = {
-      blockIndex: blockIdx,
-      collapseKey,
-      type: blockType,
-      startLine,
-      lineCount: renderedLineCount,
-      rawContent: message.content,
-    };
-
-    if (isDiff) {
-      meta = { ...meta, ...parseDiffForApply(message.content) };
-    }
-
-    this.blockRegistry.push(meta);
+    renderConversationToolMessage(this.renderingContext(), message, width, msgIdx);
   }
 
   /** Render a slice of messages into the history buffer. */
   private appendMessages(messages: Message[], width: number): void {
-    const lineNumberMode = this.configManager?.get('display.lineNumbers') ?? 'off';
-    const collapseThreshold = this.configManager?.get('display.collapseThreshold') ?? 30;
-
-    for (let msgIdx = 0; msgIdx < messages.length; msgIdx++) {
-      const m = messages[msgIdx];
-      this.messageLineRegistry[msgIdx] = this.history.getLineCount();
-      if (m.role === 'user') {
-        this.renderUserMessage(m, width);
-      } else if (m.role === 'assistant') {
-        this.renderAssistantMessage(m, width, lineNumberMode, collapseThreshold, msgIdx);
-      } else if (m.role === 'system') {
-        this.renderSystemMessage(m, width);
-      } else if (m.role === 'tool') {
-        this.renderToolMessage(m, width, msgIdx);
-      }
-      this.history.addLine(createEmptyLine(width));
-    }
+    appendConversationMessages(this.renderingContext(), messages, width, this.messageLineRegistry);
   }
 
   /** Find the nearest block to a given line index, optionally filtered by type. */
@@ -803,54 +560,15 @@ export class ConversationManager {
   }
 
   private addSplashScreen(width: number): void {
-    const splashStrings = getSplashLines(width, this.splashOptions);
-    const CYAN = '#00ffff';
-    const PURPLE = '#d000ff';
-    const GREY = '244';
-
-    splashStrings.forEach((str, y) => {
-      const line = UIFactory.stringToLine(str, width);
-      const isVersion = y === splashStrings.length - 1;
-      const startX = Math.floor((width - getDisplayWidth(str)) / 2);
-      const endX = startX + getDisplayWidth(str);
-
-      for (let x = 0; x < width; x++) {
-        const cell = line[x];
-        if (cell.char === ' ' && (x < startX || x >= endX)) continue;
-        if (isVersion) {
-          cell.fg = GREY;
-          cell.dim = true;
-        } else {
-          const factor = (x - startX) / (endX - startX || 1);
-          cell.fg = interpolateColor(CYAN, PURPLE, Math.max(0, Math.min(1, factor)));
-          cell.bold = true;
-        }
-      }
-      this.history.addLine(line);
-    });
-    this.history.addLine(createEmptyLine(width));
-    this.history.addLine(createEmptyLine(width));
-    this.history.addLine(createEmptyLine(width));
-    this.history.addLine(createEmptyLine(width));
-    this.history.addLine(createEmptyLine(width));
+    addConversationSplashScreen(this.renderingContext(), width);
   }
 
   public textToLines(text: string, width: number, style: Partial<Cell> = {}): Line[] {
-    const contentWidth = LAYOUT.contentWidth(width);
-    const wrapped = wrapText(text, contentWidth);
-
-    return wrapped.map((l, i) => {
-      const prefix = i === 0 ? '>' + ' '.repeat(LAYOUT.LEFT_MARGIN - 1) : ' '.repeat(LAYOUT.LEFT_MARGIN);
-      return UIFactory.stringToLine(prefix + l, width, style);
-    });
+    return conversationTextToLines(text, width, style);
   }
 
-  public log(text: string, style: Partial<Cell> = {}, indent = ' '.repeat(LAYOUT.LEFT_MARGIN)): void {
-    const width = this.getWidth();
-    const lines = text.split('\n').map((l) =>
-      UIFactory.stringToLine(indent + l, width, style)
-    );
-    this.history.addLines(lines);
+  public log(text: string, style: Partial<Cell> = {}, indent = '      '): void {
+    logConversationText(this.renderingContext(), this.getWidth(), text, style, indent);
   }
 
   /**
@@ -897,7 +615,6 @@ export class ConversationManager {
     return buildTranscriptEventIndex(this.getMessageSnapshot());
   }
 
-
   /**
    * replaceMessagesForLLM - Replace the conversation's LLM-visible messages with a new set.
    * Used by small-window compaction to swap in truncated messages without an LLM call.
@@ -925,66 +642,13 @@ export class ConversationManager {
    * @param context - Structured compaction context
   */
   public async compact(
-    registry: ProviderRegistry,
+    registry: import('../providers/registry.ts').ProviderRegistry,
     modelId: string,
     trigger: 'auto' | 'manual' = 'manual',
     provider?: string,
-    context?: CompactionContext,
+    context?: import('./context-compaction.ts').CompactionContext,
   ): Promise<void> {
-    if (this.messages.length === 0) return;
-
-    try {
-      const llmMessages = this.getMessagesForLLM();
-      const compactionContext: CompactionContext = context ?? {
-        messages: llmMessages,
-        trigger,
-        extractionModelId: modelId,
-        extractionProvider: provider,
-        sessionMemories: [],
-        agents: [],
-        wrfcChains: [],
-        activePlan: null,
-        lineageEntries: [],
-        compactionCount: 0,
-        contextWindow: 0,
-      };
-      const result = await compactMessages(compactionContext, registry);
-
-      // Rebuild internal messages from the compacted LLM-format messages.
-      // ProviderMessage only has 'user', 'assistant', 'tool' roles (no 'system').
-      // Preserve any original system messages from before compaction, then add compacted messages.
-      const originalSystemMessages = this.messages.filter(m => m.role === 'system');
-      const compactedMessages = messagesToInternal(result.messages);
-      this.messages = [...originalSystemMessages, ...compactedMessages];
-
-      this.history.clear();
-      this.appendedUpTo = 0;
-      this.lastRenderedWidth = 0;
-      this.dirty = true;
-
-      const saved = result.tokensBeforeEstimate - result.tokensAfterEstimate;
-
-      // Record this compaction in the session lineage for future handoff context.
-      const memoriesCount = sessionMemoryStore.list().length;
-      const memoriesPart = memoriesCount > 0 ? `, ${memoriesCount} pinned memories` : '';
-      const savedKTokens = Math.round(saved / 1000);
-      sessionLineageTracker.addCompactionEntry(
-        `${trigger} compact, saved ~${savedKTokens}K tokens${memoriesPart}.`
-      );
-
-      logger.info('Conversation compacted', {
-        trigger,
-        messagesBeforeCompaction: result.event.messagesBeforeCompaction,
-        messagesAfterCompaction: result.event.messagesAfterCompaction,
-        tokensBeforeEstimate: result.tokensBeforeEstimate,
-        tokensAfterEstimate: result.tokensAfterEstimate,
-        tokensSaved: saved,
-      });
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : String(err);
-      logger.error('Compact failed', { error: msg });
-      throw err;
-    }
+    return compactConversation(this, registry, modelId, trigger, provider, context);
   }
 
   /**
@@ -1092,70 +756,4 @@ export class ConversationManager {
     this.dirty = true;
   }
 }
-
-/**
- * parseDiffForApply - Extract file path, original, and updated content from a unified diff.
- * Returns partial BlockMeta fields for diff blocks.
- */
-export function parseDiffForApply(diffText: string): Pick<BlockMeta, 'filePath' | 'diffOriginal' | 'diffUpdated'> {
-  const lines = diffText.split('\n');
-  let filePath: string | undefined;
-
-  // Extract file path from +++ line
-  for (const line of lines) {
-    if (line.startsWith('+++ ')) {
-      // '+++ b/src/foo.ts' or '+++ src/foo.ts (updated)'
-      const raw = line.slice(4).trim();
-      const path = raw.startsWith('b/') ? raw.slice(2) : raw.split(' ')[0];
-      if (path && path !== '/dev/null') filePath = path;
-      break;
-    }
-  }
-
-  // Build original and updated from diff hunks
-  const originalLines: string[] = [];
-  const updatedLines: string[] = [];
-
-  for (const line of lines) {
-    if (line.startsWith('---') || line.startsWith('+++') || line.startsWith('@@')) continue;
-    if (line.startsWith('-')) {
-      originalLines.push(line.slice(1));
-    } else if (line.startsWith('+')) {
-      updatedLines.push(line.slice(1));
-    } else {
-      // Context line — belongs to both
-      const content = line.startsWith(' ') ? line.slice(1) : line;
-      originalLines.push(content);
-      updatedLines.push(content);
-    }
-  }
-
-  return {
-    filePath,
-    diffOriginal: originalLines.join('\n'),
-    diffUpdated: updatedLines.join('\n'),
-  };
-}
-
-/**
- * applyDiffContent - Apply a diff's original→updated replacement to file content.
- * Returns the new content on success, or an error string if the pattern is not found
- * or is ambiguous (appears more than once).
- */
-export function applyDiffContent(
-  fileContent: string,
-  original: string,
-  updated: string,
-): { ok: true; content: string } | { ok: false; error: string } {
-  if (!original) {
-    return { ok: false, error: 'empty original pattern' };
-  }
-  if (!fileContent.includes(original)) {
-    return { ok: false, error: 'original text not found in file' };
-  }
-  const occurrenceCount = fileContent.split(original).length - 1;
-  if (occurrenceCount > 1) {
-    return { ok: false, error: `ambiguous: pattern found ${occurrenceCount} times` };
-  }
-  return { ok: true, content: fileContent.replace(original, updated) };
-}
+export { parseDiffForApply, applyDiffContent } from './conversation-diff.ts';

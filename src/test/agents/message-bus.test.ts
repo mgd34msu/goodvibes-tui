@@ -1,37 +1,30 @@
 import { describe, test, expect, beforeEach } from 'bun:test';
 import { AgentMessageBus } from '../../agents/message-bus.ts';
 import type { AgentMessage } from '../../agents/message-bus.ts';
+import { getTestAgentMessageBus, resetTestRuntimeServices } from '../helpers/runtime-services.ts';
 
 beforeEach(() => {
-  AgentMessageBus.resetInstance();
+  resetTestRuntimeServices();
 });
 
-// ---------------------------------------------------------------------------
-// Singleton
-// ---------------------------------------------------------------------------
-
-describe('singleton', () => {
-  test('getInstance returns same instance', () => {
-    const a = AgentMessageBus.getInstance();
-    const b = AgentMessageBus.getInstance();
+describe('runtime ownership', () => {
+  test('test runtime exposes one message bus per runtime graph', () => {
+    const a = getTestAgentMessageBus();
+    const b = getTestAgentMessageBus();
     expect(a).toBe(b);
   });
 
-  test('resetInstance creates fresh instance', () => {
-    const a = AgentMessageBus.getInstance();
-    AgentMessageBus.resetInstance();
-    const b = AgentMessageBus.getInstance();
+  test('resetting the test runtime creates a fresh message bus', () => {
+    const a = getTestAgentMessageBus();
+    resetTestRuntimeServices();
+    const b = getTestAgentMessageBus();
     expect(a).not.toBe(b);
   });
 });
 
-// ---------------------------------------------------------------------------
-// send
-// ---------------------------------------------------------------------------
-
 describe('send', () => {
   test('send stores message for recipient', () => {
-    const bus = AgentMessageBus.getInstance();
+    const bus = getTestAgentMessageBus();
     bus.send('agent-a', 'agent-b', 'Hello from A');
     const msgs = bus.getMessages('agent-b');
     expect(msgs).toHaveLength(1);
@@ -41,7 +34,7 @@ describe('send', () => {
   });
 
   test('send assigns unique ID and timestamp', () => {
-    const bus = AgentMessageBus.getInstance();
+    const bus = getTestAgentMessageBus();
     bus.send('agent-a', 'agent-b', 'msg1');
     bus.send('agent-a', 'agent-b', 'msg2');
     const msgs = bus.getMessages('agent-b');
@@ -50,7 +43,7 @@ describe('send', () => {
   });
 
   test('send delivers to active subscriber', () => {
-    const bus = AgentMessageBus.getInstance();
+    const bus = getTestAgentMessageBus();
     const received: AgentMessage[] = [];
     bus.subscribe('agent-b', (m) => received.push(m));
     bus.send('agent-a', 'agent-b', 'Ping');
@@ -59,7 +52,7 @@ describe('send', () => {
   });
 
   test('send does not deliver to other agents subscribers', () => {
-    const bus = AgentMessageBus.getInstance();
+    const bus = getTestAgentMessageBus();
     const receivedC: AgentMessage[] = [];
     bus.subscribe('agent-c', (m) => receivedC.push(m));
     bus.send('agent-a', 'agent-b', 'Only for B');
@@ -67,7 +60,7 @@ describe('send', () => {
   });
 
   test('multiple messages are stored in order', () => {
-    const bus = AgentMessageBus.getInstance();
+    const bus = getTestAgentMessageBus();
     bus.send('agent-a', 'agent-b', 'first');
     bus.send('agent-a', 'agent-b', 'second');
     bus.send('agent-a', 'agent-b', 'third');
@@ -77,7 +70,7 @@ describe('send', () => {
   });
 
   test('enforces direct-route policy when both sender and recipient are registered', () => {
-    const bus = AgentMessageBus.getInstance();
+    const bus = getTestAgentMessageBus();
     bus.registerAgent({ agentId: 'engineer-1', role: 'engineer', wrfcId: 'wrfc-1' });
     bus.registerAgent({ agentId: 'reviewer-1', role: 'reviewer', wrfcId: 'wrfc-1' });
 
@@ -94,7 +87,7 @@ describe('send', () => {
   });
 
   test('blocks direct routes outside the registered communication policy', () => {
-    const bus = AgentMessageBus.getInstance();
+    const bus = getTestAgentMessageBus();
     bus.registerAgent({ agentId: 'reviewer-1', role: 'reviewer', wrfcId: 'wrfc-1' });
     bus.registerAgent({ agentId: 'general-1', role: 'general', cohort: 'team-1' });
 
@@ -113,7 +106,7 @@ describe('send', () => {
 
 describe('broadcast', () => {
   test('broadcast stores under wildcard', () => {
-    const bus = AgentMessageBus.getInstance();
+    const bus = getTestAgentMessageBus();
     bus.broadcast('agent-a', 'All hands');
     // All agents see broadcasts via getMessages
     const msgs = bus.getMessages('agent-b');
@@ -122,7 +115,7 @@ describe('broadcast', () => {
   });
 
   test('broadcast delivers to all subscribers', () => {
-    const bus = AgentMessageBus.getInstance();
+    const bus = getTestAgentMessageBus();
     const receivedB: AgentMessage[] = [];
     const receivedC: AgentMessage[] = [];
     bus.subscribe('agent-b', (m) => receivedB.push(m));
@@ -134,14 +127,14 @@ describe('broadcast', () => {
   });
 
   test('broadcast included in getMessages for any agent', () => {
-    const bus = AgentMessageBus.getInstance();
+    const bus = getTestAgentMessageBus();
     bus.broadcast('agent-a', 'Global');
     expect(bus.getMessages('agent-x').some((m) => m.content === 'Global')).toBe(true);
     expect(bus.getMessages('agent-y').some((m) => m.content === 'Global')).toBe(true);
   });
 
   test('blocks broadcast for registered roles outside broadcast policy', () => {
-    const bus = AgentMessageBus.getInstance();
+    const bus = getTestAgentMessageBus();
     bus.registerAgent({ agentId: 'reviewer-1', role: 'reviewer', wrfcId: 'wrfc-1' });
 
     const allowed = bus.broadcast('reviewer-1', 'Everyone listen up', {
@@ -159,7 +152,7 @@ describe('broadcast', () => {
 
 describe('subscribe', () => {
   test('subscribe returns unsubscribe function', () => {
-    const bus = AgentMessageBus.getInstance();
+    const bus = getTestAgentMessageBus();
     const received: AgentMessage[] = [];
     const unsub = bus.subscribe('agent-b', (m) => received.push(m));
     bus.send('agent-a', 'agent-b', 'before unsub');
@@ -170,7 +163,7 @@ describe('subscribe', () => {
   });
 
   test('multiple subscribers for same agent all receive messages', () => {
-    const bus = AgentMessageBus.getInstance();
+    const bus = getTestAgentMessageBus();
     const r1: AgentMessage[] = [];
     const r2: AgentMessage[] = [];
     bus.subscribe('agent-b', (m) => r1.push(m));
@@ -181,7 +174,7 @@ describe('subscribe', () => {
   });
 
   test('subscriber error does not crash the bus', () => {
-    const bus = AgentMessageBus.getInstance();
+    const bus = getTestAgentMessageBus();
     bus.subscribe('agent-b', () => {
       throw new Error('subscriber crash');
     });
@@ -195,12 +188,12 @@ describe('subscribe', () => {
 
 describe('getMessages', () => {
   test('returns empty array when no messages', () => {
-    const bus = AgentMessageBus.getInstance();
+    const bus = getTestAgentMessageBus();
     expect(bus.getMessages('agent-nobody')).toEqual([]);
   });
 
   test('returns direct messages and broadcasts combined', () => {
-    const bus = AgentMessageBus.getInstance();
+    const bus = getTestAgentMessageBus();
     bus.send('agent-a', 'agent-b', 'direct');
     bus.broadcast('agent-a', 'broadcast');
     const msgs = bus.getMessages('agent-b');
@@ -209,7 +202,7 @@ describe('getMessages', () => {
   });
 
   test('messages sorted by timestamp ascending', () => {
-    const bus = AgentMessageBus.getInstance();
+    const bus = getTestAgentMessageBus();
     bus.send('agent-a', 'agent-b', 'msg1');
     bus.send('agent-a', 'agent-b', 'msg2');
     const msgs = bus.getMessages('agent-b');
@@ -223,7 +216,7 @@ describe('getMessages', () => {
 
 describe('TTL and cleanup', () => {
   test('expired messages are not returned', () => {
-    const bus = AgentMessageBus.getInstance();
+    const bus = getTestAgentMessageBus();
     // Send with 0 ms TTL — already expired by the time we read
     bus.send('agent-a', 'agent-b', 'expired', 0);
     const msgs = bus.getMessages('agent-b');
@@ -232,14 +225,14 @@ describe('TTL and cleanup', () => {
   });
 
   test('non-expired messages survive cleanup', () => {
-    const bus = AgentMessageBus.getInstance();
+    const bus = getTestAgentMessageBus();
     bus.send('agent-a', 'agent-b', 'alive', 60_000);
     bus.cleanup();
     expect(bus.getMessages('agent-b').some((m) => m.content === 'alive')).toBe(true);
   });
 
   test('cleanup removes only expired messages', () => {
-    const bus = AgentMessageBus.getInstance();
+    const bus = getTestAgentMessageBus();
     bus.send('agent-a', 'agent-b', 'expired', 0);
     bus.send('agent-a', 'agent-b', 'alive', 60_000);
     bus.cleanup();

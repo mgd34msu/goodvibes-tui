@@ -11,8 +11,7 @@ import { describe, test, expect, beforeEach } from 'bun:test';
 import {
   resolveContextWindow,
   DEFAULT_CONTEXT_WINDOW,
-  clearAllContextCaches,
-  getContextIngestionDiagnostics,
+  LocalContextIngestionService,
   type ContextWindowProvenance,
 } from '../../providers/local-context-ingestion.ts';
 
@@ -90,13 +89,15 @@ describe('ContextWindowProvenance values', () => {
 // ---------------------------------------------------------------------------
 
 describe('clearAllContextCaches', () => {
+  const service = new LocalContextIngestionService();
+
   beforeEach(() => {
-    clearAllContextCaches();
+    service.clearAllCaches();
   });
 
   test('clearAllContextCaches empties diagnostics', () => {
-    clearAllContextCaches();
-    const diag = getContextIngestionDiagnostics();
+    service.clearAllCaches();
+    const diag = service.getDiagnostics();
     expect(diag).toEqual([]);
   });
 });

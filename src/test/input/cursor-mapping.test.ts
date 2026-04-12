@@ -2,6 +2,7 @@ import { describe, test, expect, beforeEach } from 'bun:test';
 import { InputHandler } from '../../input/handler.ts';
 import { SelectionManager } from '../../input/selection.ts';
 import { InfiniteBuffer } from '../../core/history.ts';
+import { createDefaultUiRuntimeServices } from '../helpers/ui-services.ts';
 
 describe('Cursor mapping through word-wrap', () => {
   let input: InputHandler;
@@ -9,7 +10,7 @@ describe('Cursor mapping through word-wrap', () => {
   beforeEach(() => {
     const sel = new SelectionManager();
     const history = new InfiniteBuffer();
-    input = new InputHandler(() => {}, sel, () => 0, () => 20, () => history, () => {}, () => {});
+    input = new InputHandler(() => {}, sel, () => 0, () => 20, () => history, () => {}, () => {}, createDefaultUiRuntimeServices());
     input.setContentWidth(20);
   });
 

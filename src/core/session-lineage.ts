@@ -6,7 +6,7 @@
  * omitted entirely from compacted output when no task has been set.
  *
  * Lifecycle:
- *   - Singleton: use the exported `sessionLineageTracker` instance.
+ *   - Owned instance: wire a `SessionLineageTracker` through bootstrap/services.
  *   - Session-scoped: call `reset()` when starting a new session.
  *   - Append-only: entries are never modified or removed after being added.
  *   - `setOriginalTask()` is idempotent — subsequent calls are silently ignored
@@ -72,6 +72,3 @@ export class SessionLineageTracker {
     return lines.join('\n');
   }
 }
-
-/** Singleton instance for use across the application. */
-export const sessionLineageTracker = new SessionLineageTracker();

@@ -102,8 +102,8 @@ describe('ChannelDeliveryRouter', () => {
       filename: 'summary.md',
       text: '# summary\n',
     });
-    new ControlPlaneGateway();
-    const router = new ChannelDeliveryRouter({ configManager: config, artifactStore });
+    const gateway = new ControlPlaneGateway();
+    const router = new ChannelDeliveryRouter({ configManager: config, artifactStore, controlPlaneGateway: gateway });
 
     try {
       await router.deliver({
@@ -116,13 +116,12 @@ describe('ChannelDeliveryRouter', () => {
         attachments: [{ artifactId: artifact.id, label: 'summary' }],
       });
 
-      const messages = ControlPlaneGateway.getActive()!.listSurfaceMessages();
+      const messages = gateway.listSurfaceMessages();
       expect(messages[0]?.attachments).toHaveLength(1);
       expect(messages[0]?.attachments?.[0]?.artifactId).toBe(artifact.id);
       expect(messages[0]?.attachments?.[0]?.contentPath).toBe(`/api/artifacts/${encodeURIComponent(artifact.id)}/content`);
     } finally {
-      ArtifactStore.resetActiveForTesting();
-      rmSync(root, { recursive: true, force: true });
+            rmSync(root, { recursive: true, force: true });
     }
   });
 

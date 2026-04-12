@@ -13,7 +13,7 @@
 import { CONFIG_SCHEMA, type ConfigSetting, type ConfigKey, type PersistedFlagState } from '../config/schema.ts';
 import type { ConfigManager } from '../config/manager.ts';
 import { ServiceRegistry } from '../config/service-registry.ts';
-import { getSubscriptionManager } from '../config/subscriptions.ts';
+import type { SubscriptionManager } from '../config/subscriptions.ts';
 import { listBuiltinSubscriptionProviders } from '../config/subscription-providers.ts';
 import type { ProviderAuthFreshness, ProviderAuthRoute } from '../runtime/provider-accounts/registry.ts';
 import { getResolvedSettingLookup } from '../runtime/settings/control-plane.ts';
@@ -136,6 +136,7 @@ export class SettingsModal {
   private configManager: ConfigManager | null = null;
   private featureFlagManager: FeatureFlagManager | null = null;
   private mcpRegistry: McpRegistry | null = null;
+  private subscriptionManager: SubscriptionManager | null = null;
 
   /**
    * Open the modal, loading current config values from configManager.
@@ -143,9 +144,15 @@ export class SettingsModal {
    * @param configManager - Config manager instance for reading/writing settings.
    * @param featureFlagManager - Feature flag manager for the flags tab.
    */
-  open(configManager: ConfigManager, featureFlagManager: FeatureFlagManager, mcpRegistry?: McpRegistry): void {
+  open(
+    configManager: ConfigManager,
+    featureFlagManager: FeatureFlagManager,
+    subscriptionManager: SubscriptionManager,
+    mcpRegistry?: McpRegistry,
+  ): void {
     this.configManager = configManager;
     this.featureFlagManager = featureFlagManager;
+    this.subscriptionManager = subscriptionManager;
     this.mcpRegistry = mcpRegistry ?? null;
     this._loadGroups(configManager);
     this._loadFlagEntries();
@@ -283,7 +290,7 @@ export class SettingsModal {
           this.subscriptionLogoutConfirmationTarget = entry.provider;
           return;
         }
-        getSubscriptionManager().logout(entry.provider);
+        this.subscriptionManager?.logout(entry.provider);
         this._loadSubscriptionEntries();
         this.subscriptionLogoutConfirmationTarget = null;
       }
@@ -567,7 +574,11 @@ export class SettingsModal {
   }
 
   private _loadSubscriptionEntries(): void {
-    const manager = getSubscriptionManager();
+    const manager = this.subscriptionManager;
+    if (!manager) {
+      this.subscriptionEntries = [];
+      return;
+    }
     const services = new ServiceRegistry().getAll();
     const providers = new Map<string, SubscriptionEntry>();
     const builtinProviders = new Set(listBuiltinSubscriptionProviders().map((builtin) => builtin.provider));

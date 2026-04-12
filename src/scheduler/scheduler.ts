@@ -51,6 +51,15 @@ interface StoreData extends Record<string, unknown> {
   history: TaskRunRecord[];
 }
 
+interface TaskSchedulerConfig {
+  readonly storePath?: string;
+  readonly spawnTask?: (input: {
+    readonly prompt: string;
+    readonly model?: string;
+    readonly template?: string;
+  }) => string;
+}
+
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
@@ -395,30 +404,35 @@ function countMissedRuns(
  * Each execution spawns a fresh agent via AgentManager; no shared state between runs.
  */
 export class TaskScheduler {
-  private static instance: TaskScheduler | null = null;
-
   private tasks: Map<string, ScheduledTask> = new Map();
   private timers: Map<string, ReturnType<typeof setTimeout>> = new Map();
   private history: TaskRunRecord[] = [];
   private store: PersistentStore<StoreData>;
+  private readonly spawnTask: (input: {
+    readonly prompt: string;
+    readonly model?: string;
+    readonly template?: string;
+  }) => string;
   private running = false;
 
-  constructor(storePath: string = SCHEDULES_PATH) {
-    this.store = new PersistentStore<StoreData>(storePath);
-  }
-
-  /** Singleton accessor. */
-  static getInstance(storePath?: string): TaskScheduler {
-    if (!TaskScheduler.instance) {
-      TaskScheduler.instance = new TaskScheduler(storePath);
-    }
-    return TaskScheduler.instance;
-  }
-
-  /** Reset singleton — for testing only. */
-  static resetInstance(): void {
-    TaskScheduler.instance?.stop();
-    TaskScheduler.instance = null;
+  constructor(config: string | TaskSchedulerConfig = SCHEDULES_PATH) {
+    const resolvedConfig = typeof config === 'string'
+      ? { storePath: config }
+      : config;
+    this.store = new PersistentStore<StoreData>(resolvedConfig.storePath ?? SCHEDULES_PATH);
+    const fallbackAgentManager = resolvedConfig.spawnTask ? null : new AgentManager();
+    this.spawnTask = resolvedConfig.spawnTask ?? ((input) => {
+      const record = fallbackAgentManager?.spawn({
+        mode: 'spawn',
+        task: input.prompt,
+        ...(input.model !== undefined ? { model: input.model } : {}),
+        ...(input.template !== undefined ? { template: input.template } : {}),
+      });
+      if (!record) {
+        throw new Error('TaskScheduler spawnTask is not configured');
+      }
+      return record.id;
+    });
   }
 
   // -------------------------------------------------------------------------
@@ -612,17 +626,14 @@ export class TaskScheduler {
   private async executeTask(task: ScheduledTask): Promise<string> {
     logger.info('TaskScheduler: executing task', { taskId: task.id, name: task.name });
 
-    const agentManager = AgentManager.getInstance();
     let agentId: string;
 
     try {
-      const record = agentManager.spawn({
-        mode: 'spawn',
-        task: task.prompt,
-        ...(task.model !== undefined && { model: task.model }),
-        ...(task.template !== undefined && { template: task.template }),
+      agentId = this.spawnTask({
+        prompt: task.prompt,
+        ...(task.model !== undefined ? { model: task.model } : {}),
+        ...(task.template !== undefined ? { template: task.template } : {}),
       });
-      agentId = record.id;
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : String(err);
       logger.error('TaskScheduler: spawn failed', { taskId: task.id, error: errorMsg });

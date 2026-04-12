@@ -1,15 +1,16 @@
 import { describe, test, expect, beforeEach } from 'bun:test';
 import { HookDispatcher } from '../../hooks/dispatcher.ts';
 import { TriggerManager } from '../../tools/workflow/index.ts';
+import { getTestTriggerManager, resetTestRuntimeServices } from '../helpers/runtime-services.ts';
 
 beforeEach(() => {
-  TriggerManager._resetForTest();
+  resetTestRuntimeServices();
 });
 
 describe('HookDispatcher trigger wiring', () => {
   test('setTriggerManager accepts and stores a trigger manager', () => {
     const dispatcher = new HookDispatcher();
-    const tm = TriggerManager.getInstance();
+    const tm = getTestTriggerManager();
     // Should not throw
     dispatcher.setTriggerManager(tm);
     dispatcher.setTriggerManager(null);
@@ -31,7 +32,7 @@ describe('HookDispatcher trigger wiring', () => {
 
   test('fire() with triggerManager fires matching triggers (no hooks registered)', async () => {
     const dispatcher = new HookDispatcher();
-    const tm = TriggerManager.getInstance();
+    const tm = getTestTriggerManager();
     tm.add({ event: 'Post:tool:*', action: 'echo trigger-fired' });
     dispatcher.setTriggerManager(tm);
 
@@ -51,7 +52,7 @@ describe('HookDispatcher trigger wiring', () => {
 
   test('fire() with triggerManager does not fire disabled triggers', async () => {
     const dispatcher = new HookDispatcher();
-    const tm = TriggerManager.getInstance();
+    const tm = getTestTriggerManager();
     const trigger = tm.add({ event: 'Post:tool:*', action: 'echo disabled' });
     tm.disable(trigger.id);
     dispatcher.setTriggerManager(tm);
@@ -71,7 +72,7 @@ describe('HookDispatcher trigger wiring', () => {
 
   test('fire() result is unaffected by triggers (triggers are fire-and-forget)', async () => {
     const dispatcher = new HookDispatcher();
-    const tm = TriggerManager.getInstance();
+    const tm = getTestTriggerManager();
     tm.add({ event: 'Post:tool:*', action: 'echo side-effect' });
     dispatcher.setTriggerManager(tm);
 

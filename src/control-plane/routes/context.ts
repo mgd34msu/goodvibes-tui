@@ -9,6 +9,7 @@ export interface DaemonApiRouteHandlers {
   getIntegrationSessions(): MaybeResponse;
   createSharedSession(req: Request): MaybeResponse;
   getControlPlaneSnapshot(): MaybeResponse;
+  getOperatorContract(): MaybeResponse;
   getControlPlaneWeb(): MaybeResponse;
   getControlPlaneRecentEvents(limit: number): MaybeResponse;
   getControlPlaneMessages(): MaybeResponse;

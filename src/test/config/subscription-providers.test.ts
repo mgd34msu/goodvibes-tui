@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { getBuiltinSubscriptionProvider } from '../../config/subscription-providers.ts';
-import { SubscriptionManager, _resetSubscriptionManagerForTesting } from '../../config/subscriptions.ts';
+import { SubscriptionManager } from '../../config/subscriptions.ts';
 
 describe('subscription providers', () => {
   const originalCwd = process.cwd();
@@ -13,12 +13,10 @@ describe('subscription providers', () => {
     root = mkdtempSync(join(tmpdir(), 'gv-subscription-provider-'));
     process.chdir(root);
     mkdirSync(join(root, '.goodvibes', 'tui'), { recursive: true });
-    _resetSubscriptionManagerForTesting();
   });
 
   afterEach(() => {
     mock.restore();
-    _resetSubscriptionManagerForTesting();
     process.chdir(originalCwd);
     rmSync(root, { recursive: true, force: true });
   });

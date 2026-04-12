@@ -96,27 +96,12 @@ function mergeUnique(...groups: Array<readonly string[] | undefined>): string[] 
 }
 
 export class MultimodalService {
-  private static active: MultimodalService | null = null;
-
   constructor(
-    private readonly artifactStore = ArtifactStore.getActive(),
-    private readonly mediaProviders = MediaProviderRegistry.getActive(),
-    private readonly voiceService = VoiceService.getActive(),
-    private readonly knowledgeService = KnowledgeService.getActive(),
-  ) {
-    MultimodalService.active = this;
-  }
-
-  static getActive(): MultimodalService {
-    if (!MultimodalService.active) {
-      MultimodalService.active = new MultimodalService();
-    }
-    return MultimodalService.active;
-  }
-
-  static resetActiveForTesting(): void {
-    MultimodalService.active = null;
-  }
+    private readonly artifactStore: ArtifactStore,
+    private readonly mediaProviders: MediaProviderRegistry,
+    private readonly voiceService: VoiceService,
+    private readonly knowledgeService: KnowledgeService,
+  ) {}
 
   async getStatus(): Promise<MultimodalServiceStatus> {
     const providers = await this.listProviders();

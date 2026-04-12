@@ -1,8 +1,6 @@
 import { describe, test, expect, beforeEach } from 'bun:test';
 import {
   ApiTokenAuditor,
-  getTokenAuditor,
-  _resetTokenAuditorForTesting,
   DEFAULT_ROTATION_CADENCE_MS,
   DEFAULT_ROTATION_WARNING_THRESHOLD_MS,
 } from '../../security/token-audit.ts';
@@ -429,34 +427,6 @@ describe('managed mode blocking', () => {
   test('isManaged reflects constructor config', () => {
     expect(new ApiTokenAuditor({ managed: true }).isManaged).toBe(true);
     expect(new ApiTokenAuditor({ managed: false }).isManaged).toBe(false);
-  });
-});
-
-// ---------------------------------------------------------------------------
-// Singleton
-// ---------------------------------------------------------------------------
-
-describe('singleton', () => {
-  beforeEach(() => {
-    _resetTokenAuditorForTesting();
-  });
-
-  test('getTokenAuditor returns same instance on repeated calls', () => {
-    const a = getTokenAuditor();
-    const b = getTokenAuditor();
-    expect(a).toBe(b);
-  });
-
-  test('getTokenAuditor defaults to advisory (non-managed) mode', () => {
-    const auditor = getTokenAuditor();
-    expect(auditor.isManaged).toBe(false);
-  });
-
-  test('_resetTokenAuditorForTesting creates a fresh instance', () => {
-    const a = getTokenAuditor();
-    _resetTokenAuditorForTesting();
-    const b = getTokenAuditor();
-    expect(a).not.toBe(b);
   });
 });
 

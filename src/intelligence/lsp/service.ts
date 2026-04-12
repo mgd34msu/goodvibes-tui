@@ -44,20 +44,11 @@ const WELL_KNOWN_SERVERS: Array<{ command: string; langIds: string[]; args: stri
 ];
 
 export class LspService {
-  private static instance: LspService | null = null;
   private clients: Map<string, LspClient> = new Map();
   private configs: Map<string, LspServerConfig> = new Map();
   private initializing: Map<string, Promise<LspClient | null>> = new Map();
 
-  private constructor() {}
-
-  /** Singleton accessor. */
-  static getInstance(): LspService {
-    if (!LspService.instance) {
-      LspService.instance = new LspService();
-    }
-    return LspService.instance;
-  }
+  constructor() {}
 
   /** Register a server configuration for a language. */
   registerServer(langId: string, config: LspServerConfig): void {
@@ -224,10 +215,5 @@ export class LspService {
 
     // Try to download/install the binary
     await ensureBinary(config.command);
-  }
-
-  /** Reset singleton (for testing only). */
-  static _resetInstance(): void {
-    LspService.instance = null;
   }
 }

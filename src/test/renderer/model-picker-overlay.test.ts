@@ -1,12 +1,21 @@
 /**
  * Tests for renderModelPickerOverlay renderer.
  */
-import { describe, test, expect } from 'bun:test';
+import { describe, test, expect, beforeEach, afterEach } from 'bun:test';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { ConfigManager } from '../../config/manager.ts';
+import { SubscriptionManager } from '../../config/subscriptions.ts';
 import { ModelPickerModal } from '../../input/model-picker.ts';
 import { renderModelPickerOverlay } from '../../renderer/model-picker-overlay.ts';
 import { lineToString, linesToText } from '../setup.ts';
 import type { ModelDefinition } from '../../providers/registry.ts';
-import { _setEntriesForTest } from '../../providers/model-benchmarks.ts';
+import { ProviderRegistry } from '../../providers/registry.ts';
+import { CacheHitTracker } from '../../providers/cache-strategy.ts';
+import { ProviderCapabilityRegistry } from '../../providers/capabilities.ts';
+import { FavoritesStore } from '../../providers/favorites.ts';
+import { BenchmarkStore, type BenchmarkEntry } from '../../providers/model-benchmarks.ts';
 
 const W = 120;
 
@@ -39,8 +48,60 @@ const MODEL_B = makeModel({ id: 'model-b', displayName: 'Beta', tier: 'premium',
   capabilities: { toolCalling: true, codeEditing: true, reasoning: true, multimodal: true } });
 const MODEL_C = makeModel({ id: 'model-c', displayName: 'Gamma', tier: 'free', provider: 'anthropic' });
 
+interface PickerHarness {
+  readonly favoritesStore: FavoritesStore;
+  readonly benchmarkStore: BenchmarkStore;
+  readonly providerRegistry: ProviderRegistry;
+  cleanup(): void;
+}
+
+function writeBenchmarks(entries: BenchmarkEntry[], benchmarkStore: BenchmarkStore): void {
+  writeFileSync(
+    benchmarkStore.getCachePath(),
+    JSON.stringify({
+      version: 1 as const,
+      fetchedAt: Date.now(),
+      ttlMs: 86_400_000,
+      entries,
+    }, null, 2),
+  );
+}
+
+function createPickerHarness(): PickerHarness {
+  const rootDir = mkdtempSync(join(tmpdir(), 'gv-model-picker-overlay-'));
+  const configDir = join(rootDir, 'config');
+  const dataDir = join(rootDir, 'provider-data');
+  const subscriptionsPath = join(rootDir, 'subscriptions.json');
+  mkdirSync(configDir, { recursive: true });
+  mkdirSync(dataDir, { recursive: true });
+
+  const favoritesStore = new FavoritesStore({ dir: dataDir });
+  const benchmarkStore = new BenchmarkStore({ dir: dataDir });
+  writeFileSync(favoritesStore.getPath(), JSON.stringify({ pinned: [], history: [] }, null, 2));
+  writeBenchmarks([], benchmarkStore);
+  benchmarkStore.initBenchmarks();
+
+  const providerRegistry = new ProviderRegistry({
+    configManager: new ConfigManager({ configDir }),
+    subscriptionManager: new SubscriptionManager(subscriptionsPath),
+    capabilityRegistry: new ProviderCapabilityRegistry(),
+    cacheHitTracker: new CacheHitTracker(),
+    favoritesStore,
+    benchmarkStore,
+  });
+
+  return {
+    favoritesStore,
+    benchmarkStore,
+    providerRegistry,
+    cleanup: () => rmSync(rootDir, { recursive: true, force: true }),
+  };
+}
+
+let harness: PickerHarness;
+
 function makePicker(overrides: Partial<ModelPickerModal> = {}): ModelPickerModal {
-  const picker = new ModelPickerModal();
+  const picker = new ModelPickerModal(harness.favoritesStore, harness.benchmarkStore, harness.providerRegistry);
   picker.active = true;
   picker.mode = 'model';
   picker.models = [MODEL_A, MODEL_B, MODEL_C];
@@ -48,6 +109,14 @@ function makePicker(overrides: Partial<ModelPickerModal> = {}): ModelPickerModal
   Object.assign(picker, overrides);
   return picker;
 }
+
+beforeEach(() => {
+  harness = createPickerHarness();
+});
+
+afterEach(() => {
+  harness?.cleanup();
+});
 
 // ---------------------------------------------------------------------------
 // Model mode
@@ -207,7 +276,7 @@ describe('renderModelPickerOverlay — model mode', () => {
 
 describe('renderModelPickerOverlay — provider mode', () => {
   function makeProviderPicker(): ModelPickerModal {
-    const picker = new ModelPickerModal();
+    const picker = new ModelPickerModal(harness.favoritesStore, harness.benchmarkStore, harness.providerRegistry);
     picker.active = true;
     picker.mode = 'provider';
     picker.providers = ['anthropic', 'openai', 'gemini'];
@@ -309,7 +378,7 @@ describe('renderModelPickerOverlay — provider mode', () => {
 
 describe('renderModelPickerOverlay — effort mode', () => {
   function makeEffortPicker(): ModelPickerModal {
-    const picker = new ModelPickerModal();
+    const picker = new ModelPickerModal(harness.favoritesStore, harness.benchmarkStore, harness.providerRegistry);
     picker.active = true;
     picker.mode = 'effort';
     picker.effortLevels = ['low', 'medium', 'high'];
@@ -382,9 +451,10 @@ describe('renderModelPickerOverlay — effort mode', () => {
 
 describe('renderModelPickerOverlay — Stage 5 features', () => {
   test('quality tier badge [S]/[A]/[B]/[C] renders for models with benchmark data', () => {
-    _setEntriesForTest([
+    writeBenchmarks([
       { modelId: 'model-a', name: 'model-a', organization: 'test', benchmarks: { swe: 0.92, gpqa: 0.88 } },
-    ]);
+    ], harness.benchmarkStore);
+    harness.benchmarkStore.initBenchmarks();
     const picker = makePicker({ selectedIndex: 0 });
     const texts = linesToText(renderModelPickerOverlay(picker, W)).join('\n');
     // S tier threshold: composite >= 0.80; swe=0.92, gpqa=0.88 → composite ≈ 0.90
@@ -392,7 +462,8 @@ describe('renderModelPickerOverlay — Stage 5 features', () => {
   });
 
   test('free indicator renders for free-tier models', () => {
-    _setEntriesForTest([]);
+    writeBenchmarks([], harness.benchmarkStore);
+    harness.benchmarkStore.initBenchmarks();
     const picker = makePicker({ selectedIndex: 0 });
     const texts = linesToText(renderModelPickerOverlay(picker, W)).join('\n');
     expect(texts).toContain('•');
@@ -446,9 +517,10 @@ describe('renderModelPickerOverlay — Stage 5 features', () => {
   test('lines maintain correct width when pin/badge columns are added', () => {
     const picker = makePicker();
     picker.pinnedIds = new Set(['model-a']);
-    _setEntriesForTest([
+    writeBenchmarks([
       { modelId: 'model-a', name: 'model-a', organization: 'test', benchmarks: { swe: 0.9 } },
-    ]);
+    ], harness.benchmarkStore);
+    harness.benchmarkStore.initBenchmarks();
     const lines = renderModelPickerOverlay(picker, W);
     for (const line of lines) {
       expect(line.length).toBe(W);

@@ -1,5 +1,5 @@
 import { describe, test, expect, beforeAll, afterAll } from 'bun:test';
-import { fetchTool } from '../../tools/fetch/index.ts';
+import { createFetchTool } from '../../tools/fetch/index.ts';
 
 // ---------------------------------------------------------------------------
 // Local test server
@@ -7,6 +7,7 @@ import { fetchTool } from '../../tools/fetch/index.ts';
 
 let server: ReturnType<typeof Bun.serve>;
 let base: string;
+let fetchTool: ReturnType<typeof createFetchTool>;
 
 beforeAll(() => {
   server = Bun.serve({
@@ -90,6 +91,10 @@ beforeAll(() => {
     },
   });
   base = `http://localhost:${server.port}`;
+});
+
+beforeAll(() => {
+  fetchTool = createFetchTool();
 });
 
 afterAll(() => {

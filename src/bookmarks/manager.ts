@@ -121,10 +121,3 @@ export class BookmarkManager {
     }
   }
 }
-
-/** Lazy singleton. */
-let _instance: BookmarkManager | undefined;
-export function getBookmarkManager(): BookmarkManager {
-  if (!_instance) _instance = new BookmarkManager();
-  return _instance;
-}

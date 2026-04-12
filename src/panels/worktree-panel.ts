@@ -2,7 +2,7 @@ import type { Line } from '../types/grid.ts';
 import { createEmptyLine } from '../types/grid.ts';
 import { BasePanel } from './base-panel.ts';
 import { buildKeyValueLine, buildPanelLine, buildPanelWorkspace, DEFAULT_PANEL_PALETTE, resolvePrimaryScrollableSection, type PanelWorkspaceSection } from './polish.ts';
-import { getWorktreeRegistry, summarizeWorktreeOwnership, type WorktreeStatusRecord } from '../runtime/worktree/registry.ts';
+import { summarizeWorktreeOwnership, type WorktreeRegistry, type WorktreeStatusRecord } from '../runtime/worktree/registry.ts';
 
 const C = {
   ...DEFAULT_PANEL_PALETTE,
@@ -27,9 +27,11 @@ export class WorktreePanel extends BasePanel {
   private selectedIndex = 0;
   private scrollOffset = 0;
   private loading = false;
+  private readonly worktreeRegistry: WorktreeRegistry;
 
-  public constructor() {
+  public constructor(worktreeRegistry: WorktreeRegistry) {
     super('worktrees', 'Worktrees', 'W', 'monitoring');
+    this.worktreeRegistry = worktreeRegistry;
     void this.refresh();
   }
 
@@ -61,7 +63,7 @@ export class WorktreePanel extends BasePanel {
     this.loading = true;
     this.markDirty();
     try {
-      this.rows = await getWorktreeRegistry().list();
+      this.rows = await this.worktreeRegistry.list();
       this.selectedIndex = Math.min(this.selectedIndex, Math.max(0, this.rows.length - 1));
     } finally {
       this.loading = false;

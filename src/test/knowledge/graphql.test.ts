@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { ArtifactStore } from '../../artifacts/index.ts';
 import { KnowledgeGraphqlService, KnowledgeService, KnowledgeStore, inspectKnowledgeGraphqlAccess } from '../../knowledge/index.ts';
-import { _resetMemoryRegistryForTesting } from '../../state/index.ts';
+import { MemoryRegistry, MemoryStore } from '../../state/index.ts';
 
 let server: ReturnType<typeof Bun.serve>;
 let baseUrl = '';
@@ -34,18 +34,19 @@ describe('KnowledgeGraphqlService', () => {
   let root: string;
   let artifactStore: ArtifactStore;
   let knowledgeStore: KnowledgeStore;
+  let memoryStore: MemoryStore;
+  let memoryRegistry: MemoryRegistry;
   let service: KnowledgeService;
   let graphqlService: KnowledgeGraphqlService;
 
   beforeEach(async () => {
     root = mkdtempSync(join(tmpdir(), 'gv-knowledge-graphql-'));
-    ArtifactStore.resetActiveForTesting();
-    KnowledgeStore.resetActiveForTesting();
-    KnowledgeService.resetActiveForTesting();
-    _resetMemoryRegistryForTesting();
     artifactStore = new ArtifactStore({ rootDir: join(root, 'artifacts') });
     knowledgeStore = new KnowledgeStore({ dbPath: join(root, 'knowledge.sqlite') });
-    service = new KnowledgeService(knowledgeStore, artifactStore);
+    memoryStore = new MemoryStore(join(root, 'memory.sqlite'));
+    memoryRegistry = new MemoryRegistry(memoryStore);
+    await memoryStore.init();
+    service = new KnowledgeService(knowledgeStore, artifactStore, undefined, { memoryRegistry });
     graphqlService = new KnowledgeGraphqlService(service);
     await knowledgeStore.init();
   });

@@ -367,92 +367,95 @@ describe('VALID_STRATEGIES', () => {
 // ---------------------------------------------------------------------------
 
 describe('handlePlanCommand', () => {
-  // Note: handlePlanCommand uses the module-level adaptivePlanner singleton.
-  // We reset mode and override before each test to ensure isolation.
+  let planner: AdaptivePlanner;
+
   beforeEach(() => {
-    // Reset via the handler itself
-    handlePlanCommand('clear', []);
+    planner = new AdaptivePlanner();
   });
 
+  function handle(subcommand: string, args: string[] = []) {
+    return handlePlanCommand({ adaptivePlanner: planner }, subcommand, args);
+  }
+
   test('mode subcommand with no args returns current mode', () => {
-    const result = handlePlanCommand('mode', []);
+    const result = handle('mode', []);
     expect(result.ok).toBe(true);
     expect(result.output).toContain('auto');
   });
 
   test('mode subcommand sets mode and returns ok', () => {
-    const result = handlePlanCommand('mode', ['single']);
+    const result = handle('mode', ['single']);
     expect(result.ok).toBe(true);
     expect(result.output).toContain('single');
     // Verify mode is actually set
-    const status = handlePlanCommand('mode', []);
+    const status = handle('mode', []);
     expect(status.output).toContain('single');
   });
 
   test('mode subcommand rejects unknown mode', () => {
-    const result = handlePlanCommand('mode', ['turbo']);
+    const result = handle('mode', ['turbo']);
     expect(result.ok).toBe(false);
     expect(result.output).toContain('turbo');
   });
 
   test('explain subcommand returns output string', () => {
-    const result = handlePlanCommand('explain', []);
+    const result = handle('explain', []);
     expect(result.ok).toBe(true);
     expect(typeof result.output).toBe('string');
   });
 
   test('override subcommand with no args returns usage error', () => {
-    const result = handlePlanCommand('override', []);
+    const result = handle('override', []);
     expect(result.ok).toBe(false);
     expect(result.output).toContain('Usage');
   });
 
   test('override subcommand with valid strategy returns ok', () => {
-    const result = handlePlanCommand('override', ['cohort']);
+    const result = handle('override', ['cohort']);
     expect(result.ok).toBe(true);
     expect(result.output).toContain('COHORT');
   });
 
   test('override subcommand with invalid strategy returns error', () => {
-    const result = handlePlanCommand('override', ['warp-drive']);
+    const result = handle('override', ['warp-drive']);
     expect(result.ok).toBe(false);
     expect(result.output).toContain('rejected');
   });
 
   test('override(auto) clears override and returns ok', () => {
-    handlePlanCommand('override', ['cohort']);
-    const result = handlePlanCommand('override', ['auto']);
+    handle('override', ['cohort']);
+    const result = handle('override', ['auto']);
     expect(result.ok).toBe(true);
     expect(result.output).toContain('cleared');
   });
 
   test('status subcommand returns mode and override state', () => {
-    const result = handlePlanCommand('status', []);
+    const result = handle('status', []);
     expect(result.ok).toBe(true);
     expect(result.output).toContain('Mode:');
     expect(result.output).toContain('Override:');
   });
 
   test('status shows active override when one is set', () => {
-    handlePlanCommand('override', ['remote']);
-    const result = handlePlanCommand('status', []);
+    handle('override', ['remote']);
+    const result = handle('status', []);
     expect(result.ok).toBe(true);
     expect(result.output).toContain('REMOTE');
     expect(result.output).toContain('ACTIVE');
   });
 
   test('clear subcommand resets mode and override to auto', () => {
-    handlePlanCommand('mode', ['single']);
-    handlePlanCommand('override', ['background']);
-    const result = handlePlanCommand('clear', []);
+    handle('mode', ['single']);
+    handle('override', ['background']);
+    const result = handle('clear', []);
     expect(result.ok).toBe(true);
-    const status = handlePlanCommand('status', []);
+    const status = handle('status', []);
     expect(status.output).toContain('AUTO');
     expect(status.output).not.toContain('ACTIVE');
   });
 
   test('unknown subcommand returns error with help text', () => {
-    const result = handlePlanCommand('bogus', []);
+    const result = handle('bogus', []);
     expect(result.ok).toBe(false);
     expect(result.output).toContain('bogus');
     expect(result.output).toContain('/plan');

@@ -10,8 +10,8 @@
  *   - appendSchemaFingerprint injects _meta when flag is enabled
  */
 
-import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
-import { createFeatureFlagManager, FeatureFlagManager } from '../../runtime/feature-flags/manager.ts';
+import { describe, it, expect } from 'bun:test';
+import { createFeatureFlagManager } from '../../runtime/feature-flags/manager.ts';
 import {
   computeSchemaFingerprintSync,
   computeSchemaFingerprint,
@@ -20,14 +20,6 @@ import {
   SCHEMA_SHAPE_IDS,
   type SchemaFingerprintMeta,
 } from '../../tools/shared/schema-fingerprint.ts';
-
-function installFlagState(enabled: boolean): void {
-  const manager = createFeatureFlagManager();
-  if (enabled) {
-    manager.enable('output-schema-fingerprint');
-  }
-  FeatureFlagManager.setInstance(manager);
-}
 
 // ---------------------------------------------------------------------------
 // computeSchemaFingerprintSync — stability
@@ -153,17 +145,10 @@ describe('getSchemaShapeId — canonical shape IDs', () => {
 // ---------------------------------------------------------------------------
 
 describe('appendSchemaFingerprint — flag disabled (default)', () => {
-  beforeEach(() => {
-    installFlagState(false);
-  });
-
-  afterEach(() => {
-    FeatureFlagManager.resetInstance();
-  });
-
   it('returns the original object unchanged when flag is disabled', () => {
     const original = { files: ['a.ts'], count: 1 };
-    const result = appendSchemaFingerprint(original, 'find', 'files');
+    const featureFlags = createFeatureFlagManager();
+    const result = appendSchemaFingerprint(original, 'find', 'files', { featureFlags });
 
     expect(result).toBe(original); // reference equality — no copy
     expect(result._meta).toBeUndefined();
@@ -171,9 +156,10 @@ describe('appendSchemaFingerprint — flag disabled (default)', () => {
 
   it('does not throw for any tool/mode combination', () => {
     const data = { matches: [], count: 0 };
-    expect(() => appendSchemaFingerprint(data, 'analyze', 'dead_code')).not.toThrow();
-    expect(() => appendSchemaFingerprint(data, 'inspect', 'components')).not.toThrow();
-    expect(() => appendSchemaFingerprint(data, 'find', 'structural')).not.toThrow();
+    const featureFlags = createFeatureFlagManager();
+    expect(() => appendSchemaFingerprint(data, 'analyze', 'dead_code', { featureFlags })).not.toThrow();
+    expect(() => appendSchemaFingerprint(data, 'inspect', 'components', { featureFlags })).not.toThrow();
+    expect(() => appendSchemaFingerprint(data, 'find', 'structural', { featureFlags })).not.toThrow();
   });
 });
 
@@ -182,17 +168,11 @@ describe('appendSchemaFingerprint — flag disabled (default)', () => {
 // ---------------------------------------------------------------------------
 
 describe('appendSchemaFingerprint — flag enabled (mocked)', () => {
-  beforeEach(() => {
-    installFlagState(true);
-  });
-
-  afterEach(() => {
-    FeatureFlagManager.resetInstance();
-  });
-
   it('appendSchemaFingerprint injects _meta with correct fields when flag is enabled', () => {
     const result = { files: ['a.ts'], count: 1 };
-    const augmented = appendSchemaFingerprint(result, 'find', 'files');
+    const featureFlags = createFeatureFlagManager();
+    featureFlags.enable('output-schema-fingerprint');
+    const augmented = appendSchemaFingerprint(result, 'find', 'files', { featureFlags });
 
     expect(augmented._meta).toBeDefined();
     const meta = augmented._meta as SchemaFingerprintMeta;
@@ -204,7 +184,9 @@ describe('appendSchemaFingerprint — flag enabled (mocked)', () => {
 
   it('appendSchemaFingerprint merges with existing _meta instead of overwriting', () => {
     const existing = { files: ['a.ts'], count: 1, _meta: { customField: 'preserved' } };
-    const augmented = appendSchemaFingerprint(existing as Record<string, unknown>, 'find', 'files');
+    const featureFlags = createFeatureFlagManager();
+    featureFlags.enable('output-schema-fingerprint');
+    const augmented = appendSchemaFingerprint(existing as Record<string, unknown>, 'find', 'files', { featureFlags });
 
     const meta = augmented._meta as Record<string, unknown>;
     expect(meta.customField).toBe('preserved');

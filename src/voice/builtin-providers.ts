@@ -6,7 +6,7 @@ import { createMicrosoftProvider } from './providers/microsoft.ts';
 import { createOpenAIProvider } from './providers/openai.ts';
 import { createVydraProvider } from './providers/vydra.ts';
 
-export function ensureBuiltinVoiceProviders(registry = VoiceProviderRegistry.getActive()): void {
+export function ensureBuiltinVoiceProviders(registry: VoiceProviderRegistry): void {
   registry.register(createOpenAIProvider(), { replace: true });
   registry.register(createDeepgramProvider(), { replace: true });
   registry.register(createGoogleProvider(), { replace: true });

@@ -11,23 +11,7 @@ export interface VoiceProviderDescriptor {
 }
 
 export class VoiceProviderRegistry {
-  private static active: VoiceProviderRegistry | null = null;
   private readonly providers = new Map<string, VoiceProvider>();
-
-  constructor() {
-    VoiceProviderRegistry.active = this;
-  }
-
-  static getActive(): VoiceProviderRegistry {
-    if (!VoiceProviderRegistry.active) {
-      VoiceProviderRegistry.active = new VoiceProviderRegistry();
-    }
-    return VoiceProviderRegistry.active;
-  }
-
-  static resetActiveForTesting(): void {
-    VoiceProviderRegistry.active = null;
-  }
 
   register(provider: VoiceProvider, options: { readonly replace?: boolean } = {}): () => void {
     const id = provider.id.trim();

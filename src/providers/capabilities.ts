@@ -599,28 +599,3 @@ export class ProviderCapabilityRegistry {
     return rejections;
   }
 }
-
-// ---------------------------------------------------------------------------
-// Singleton
-// ---------------------------------------------------------------------------
-
-let _capabilityRegistry: ProviderCapabilityRegistry | undefined;
-
-/**
- * Returns the process-level singleton `ProviderCapabilityRegistry`.
- * Instantiated lazily on first call.
- */
-export function getCapabilityRegistry(): ProviderCapabilityRegistry {
-  if (!_capabilityRegistry) {
-    _capabilityRegistry = new ProviderCapabilityRegistry();
-  }
-  return _capabilityRegistry;
-}
-
-/**
- * Reset the singleton — for testing only.
- * @internal
- */
-export function _resetCapabilityRegistryForTesting(): void {
-  _capabilityRegistry = undefined;
-}

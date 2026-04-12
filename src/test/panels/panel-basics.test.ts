@@ -239,6 +239,7 @@ describe('DiffPanel', () => {
 // ---------------------------------------------------------------------------
 
 import { TokenBudgetPanel } from '../../panels/token-budget-panel.ts';
+import { SessionMemoryStore } from '../../core/session-memory.ts';
 
 describe('TokenBudgetPanel', () => {
   let panel: TokenBudgetPanel;
@@ -263,7 +264,7 @@ describe('TokenBudgetPanel', () => {
   }
 
   beforeEach(() => {
-    panel = new TokenBudgetPanel();
+    panel = new TokenBudgetPanel(new SessionMemoryStore());
   });
 
   describe('render() — unwired panel', () => {

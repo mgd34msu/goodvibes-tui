@@ -153,7 +153,7 @@ export class WorktreeRegistry {
   private readonly git: GitService;
 
   public constructor(cwd?: string) {
-    this.git = GitService.getInstance(cwd);
+    this.git = new GitService(cwd);
   }
 
   public async list(): Promise<WorktreeStatusRecord[]> {
@@ -236,11 +236,4 @@ export class WorktreeRegistry {
     delete store.records[normalized];
     writeStore(store);
   }
-}
-
-let registrySingleton: WorktreeRegistry | null = null;
-
-export function getWorktreeRegistry(): WorktreeRegistry {
-  if (!registrySingleton) registrySingleton = new WorktreeRegistry();
-  return registrySingleton;
 }

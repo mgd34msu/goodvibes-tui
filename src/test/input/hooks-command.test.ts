@@ -4,25 +4,35 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { CommandRegistry } from '../../input/command-registry.ts';
 import { registerBuiltinCommands } from '../../input/commands.ts';
-import { configManager } from '../../config/index.ts';
-import { _resetHookWorkbenchForTesting, getHookDispatcher } from '../../hooks/index.ts';
+import { ConfigManager } from '../../config/manager.ts';
+import { HookWorkbench } from '../../hooks/workbench.ts';
+import {
+  getTestHookDispatcher,
+} from '../helpers/runtime-services.ts';
+
+const configManager = new ConfigManager({
+  configDir: join(tmpdir(), `gv-hooks-config-${Date.now()}-${Math.random().toString(36).slice(2)}`),
+});
 
 describe('hooks command', () => {
   let originalHooksFile: string;
   let tempDir: string;
+  let hookWorkbench: HookWorkbench;
 
   beforeEach(() => {
     originalHooksFile = configManager.get('tools.hooksFile') as string;
     tempDir = mkdtempSync(join(tmpdir(), 'gv-hooks-command-'));
     configManager.set('tools.hooksFile', join(tempDir, 'hooks.json'));
-    _resetHookWorkbenchForTesting();
-    getHookDispatcher().clear();
+    getTestHookDispatcher().clear();
+    hookWorkbench = new HookWorkbench(
+      getTestHookDispatcher(),
+      () => configManager.get('tools.hooksFile') as string,
+    );
   });
 
   afterEach(() => {
     configManager.set('tools.hooksFile', originalHooksFile);
-    _resetHookWorkbenchForTesting();
-    getHookDispatcher().clear();
+    getTestHookDispatcher().clear();
   });
 
   test('scaffolds and simulates managed hooks through the command surface', async () => {
@@ -50,12 +60,13 @@ describe('hooks command', () => {
       exit: () => {},
       toolRegistry: {} as never,
       mcpRegistry: {} as never,
+      hookWorkbench,
     };
 
     await hooks!.handler(['scaffold', 'guard-edit', 'Pre:tool:*', 'command'], ctx);
     expect(existsSync(configManager.get('tools.hooksFile') as string)).toBe(true);
     expect(out.join('\n')).toContain('Scaffolded managed hook');
-    expect(getHookDispatcher().listHooks().length).toBe(1);
+    expect(getTestHookDispatcher().listHooks().length).toBe(1);
 
     out.length = 0;
     await hooks!.handler(['simulate', 'Pre:tool:edit'], ctx);
@@ -110,6 +121,7 @@ describe('hooks command', () => {
       exit: () => {},
       toolRegistry: {} as never,
       mcpRegistry: {} as never,
+      hookWorkbench,
     };
 
     await hooks!.handler(['inspect', bundlePath], ctx);

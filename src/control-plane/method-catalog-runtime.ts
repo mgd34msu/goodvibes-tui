@@ -1,5 +1,43 @@
 import type { GatewayMethodDescriptor } from './method-catalog-shared.ts';
-import { GENERIC_OBJECT_SCHEMA,EMPTY_OBJECT_SCHEMA,STRING_SCHEMA,objectSchema,listOutputSchema,entityOutputSchema,bodyEnvelopeSchema,methodDescriptor,runtimeEventId } from './method-catalog-shared.ts';
+import {
+  EMPTY_OBJECT_SCHEMA,
+  STRING_SCHEMA,
+  objectSchema,
+  listOutputSchema,
+  entityOutputSchema,
+  bodyEnvelopeSchema,
+  methodDescriptor,
+  runtimeEventId,
+} from './method-catalog-shared.ts';
+import {
+  CONTINUITY_SNAPSHOT_SCHEMA,
+  DISTRIBUTED_NODE_HOST_CONTRACT_SCHEMA,
+  HEALTH_SNAPSHOT_SCHEMA,
+  INTELLIGENCE_SNAPSHOT_SCHEMA,
+  MEMORY_DOCTOR_REPORT_SCHEMA,
+  MEMORY_VECTOR_STATS_SCHEMA,
+  PROVIDER_ACCOUNT_SNAPSHOT_SCHEMA,
+  PROVIDER_RUNTIME_SNAPSHOT_SCHEMA,
+  PROVIDER_USAGE_SNAPSHOT_SCHEMA,
+  REMOTE_PAIR_APPROVAL_OUTPUT_SCHEMA,
+  REMOTE_PAIR_REQUEST_OUTPUT_SCHEMA,
+  REMOTE_PAIR_REQUESTS_OUTPUT_SCHEMA,
+  REMOTE_PEERS_OUTPUT_SCHEMA,
+  REMOTE_PAIR_REQUEST_ACTION_INPUT_SCHEMA,
+  REMOTE_PEER_DISCONNECT_INPUT_SCHEMA,
+  REMOTE_PEER_INVOKE_INPUT_SCHEMA,
+  REMOTE_PEER_INVOKE_OUTPUT_SCHEMA,
+  REMOTE_PEER_OUTPUT_SCHEMA,
+  REMOTE_PEER_TOKEN_REVOKE_INPUT_SCHEMA,
+  REMOTE_PEER_TOKEN_ROTATE_INPUT_SCHEMA,
+  REMOTE_PEER_TOKEN_ROTATE_OUTPUT_SCHEMA,
+  REMOTE_SNAPSHOT_SCHEMA,
+  REMOTE_WORK_LIST_OUTPUT_SCHEMA,
+  REMOTE_WORK_CANCEL_INPUT_SCHEMA,
+  REMOTE_WORK_OUTPUT_SCHEMA,
+  SETTINGS_SNAPSHOT_SCHEMA,
+  WORKTREE_SNAPSHOT_SCHEMA,
+} from './operator-contract-schemas.ts';
 
 export const builtinGatewayRuntimeMethodDescriptors: readonly GatewayMethodDescriptor[] = [
   methodDescriptor({
@@ -11,7 +49,7 @@ export const builtinGatewayRuntimeMethodDescriptors: readonly GatewayMethodDescr
     http: { method: 'GET', path: '/api/remote' },
     events: [runtimeEventId('control-plane')],
     inputSchema: EMPTY_OBJECT_SCHEMA,
-    outputSchema: GENERIC_OBJECT_SCHEMA,
+    outputSchema: REMOTE_SNAPSHOT_SCHEMA,
   }),
   methodDescriptor({
     id: 'remote.pair.requests.list',
@@ -21,7 +59,7 @@ export const builtinGatewayRuntimeMethodDescriptors: readonly GatewayMethodDescr
     scopes: ['read:remote'],
     http: { method: 'GET', path: '/api/remote/pair/requests' },
     inputSchema: EMPTY_OBJECT_SCHEMA,
-    outputSchema: listOutputSchema('requests'),
+    outputSchema: REMOTE_PAIR_REQUESTS_OUTPUT_SCHEMA,
   }),
   methodDescriptor({
     id: 'remote.pair.requests.approve',
@@ -31,8 +69,8 @@ export const builtinGatewayRuntimeMethodDescriptors: readonly GatewayMethodDescr
     scopes: ['write:remote'],
     access: 'admin',
     http: { method: 'POST', path: '/api/remote/pair/requests/{requestId}/approve' },
-    inputSchema: GENERIC_OBJECT_SCHEMA,
-    outputSchema: GENERIC_OBJECT_SCHEMA,
+    inputSchema: REMOTE_PAIR_REQUEST_ACTION_INPUT_SCHEMA,
+    outputSchema: REMOTE_PAIR_APPROVAL_OUTPUT_SCHEMA,
   }),
   methodDescriptor({
     id: 'remote.pair.requests.reject',
@@ -42,8 +80,8 @@ export const builtinGatewayRuntimeMethodDescriptors: readonly GatewayMethodDescr
     scopes: ['write:remote'],
     access: 'admin',
     http: { method: 'POST', path: '/api/remote/pair/requests/{requestId}/reject' },
-    inputSchema: GENERIC_OBJECT_SCHEMA,
-    outputSchema: GENERIC_OBJECT_SCHEMA,
+    inputSchema: REMOTE_PAIR_REQUEST_ACTION_INPUT_SCHEMA,
+    outputSchema: REMOTE_PAIR_REQUEST_OUTPUT_SCHEMA,
   }),
   methodDescriptor({
     id: 'remote.peers.list',
@@ -53,7 +91,7 @@ export const builtinGatewayRuntimeMethodDescriptors: readonly GatewayMethodDescr
     scopes: ['read:remote'],
     http: { method: 'GET', path: '/api/remote/peers' },
     inputSchema: EMPTY_OBJECT_SCHEMA,
-    outputSchema: listOutputSchema('peers'),
+    outputSchema: REMOTE_PEERS_OUTPUT_SCHEMA,
   }),
   methodDescriptor({
     id: 'remote.peers.token.rotate',
@@ -63,8 +101,8 @@ export const builtinGatewayRuntimeMethodDescriptors: readonly GatewayMethodDescr
     scopes: ['write:remote'],
     access: 'admin',
     http: { method: 'POST', path: '/api/remote/peers/{peerId}/token/rotate' },
-    inputSchema: GENERIC_OBJECT_SCHEMA,
-    outputSchema: GENERIC_OBJECT_SCHEMA,
+    inputSchema: REMOTE_PEER_TOKEN_ROTATE_INPUT_SCHEMA,
+    outputSchema: REMOTE_PEER_TOKEN_ROTATE_OUTPUT_SCHEMA,
   }),
   methodDescriptor({
     id: 'remote.peers.token.revoke',
@@ -74,8 +112,8 @@ export const builtinGatewayRuntimeMethodDescriptors: readonly GatewayMethodDescr
     scopes: ['write:remote'],
     access: 'admin',
     http: { method: 'POST', path: '/api/remote/peers/{peerId}/token/revoke' },
-    inputSchema: GENERIC_OBJECT_SCHEMA,
-    outputSchema: GENERIC_OBJECT_SCHEMA,
+    inputSchema: REMOTE_PEER_TOKEN_REVOKE_INPUT_SCHEMA,
+    outputSchema: REMOTE_PEER_OUTPUT_SCHEMA,
   }),
   methodDescriptor({
     id: 'remote.peers.disconnect',
@@ -85,8 +123,8 @@ export const builtinGatewayRuntimeMethodDescriptors: readonly GatewayMethodDescr
     scopes: ['write:remote'],
     access: 'admin',
     http: { method: 'POST', path: '/api/remote/peers/{peerId}/disconnect' },
-    inputSchema: GENERIC_OBJECT_SCHEMA,
-    outputSchema: GENERIC_OBJECT_SCHEMA,
+    inputSchema: REMOTE_PEER_DISCONNECT_INPUT_SCHEMA,
+    outputSchema: REMOTE_PEER_OUTPUT_SCHEMA,
   }),
   methodDescriptor({
     id: 'remote.peers.invoke',
@@ -96,8 +134,8 @@ export const builtinGatewayRuntimeMethodDescriptors: readonly GatewayMethodDescr
     scopes: ['write:remote'],
     access: 'admin',
     http: { method: 'POST', path: '/api/remote/peers/{peerId}/invoke' },
-    inputSchema: GENERIC_OBJECT_SCHEMA,
-    outputSchema: GENERIC_OBJECT_SCHEMA,
+    inputSchema: REMOTE_PEER_INVOKE_INPUT_SCHEMA,
+    outputSchema: REMOTE_PEER_INVOKE_OUTPUT_SCHEMA,
   }),
   methodDescriptor({
     id: 'remote.work.list',
@@ -107,7 +145,7 @@ export const builtinGatewayRuntimeMethodDescriptors: readonly GatewayMethodDescr
     scopes: ['read:remote'],
     http: { method: 'GET', path: '/api/remote/work' },
     inputSchema: EMPTY_OBJECT_SCHEMA,
-    outputSchema: listOutputSchema('work'),
+    outputSchema: REMOTE_WORK_LIST_OUTPUT_SCHEMA,
   }),
   methodDescriptor({
     id: 'remote.work.cancel',
@@ -117,8 +155,8 @@ export const builtinGatewayRuntimeMethodDescriptors: readonly GatewayMethodDescr
     scopes: ['write:remote'],
     access: 'admin',
     http: { method: 'POST', path: '/api/remote/work/{workId}/cancel' },
-    inputSchema: GENERIC_OBJECT_SCHEMA,
-    outputSchema: GENERIC_OBJECT_SCHEMA,
+    inputSchema: REMOTE_WORK_CANCEL_INPUT_SCHEMA,
+    outputSchema: REMOTE_WORK_OUTPUT_SCHEMA,
   }),
   methodDescriptor({
     id: 'remote.node_host.contract',
@@ -128,7 +166,7 @@ export const builtinGatewayRuntimeMethodDescriptors: readonly GatewayMethodDescr
     scopes: ['read:remote'],
     http: { method: 'GET', path: '/api/remote/node-host/contract' },
     inputSchema: EMPTY_OBJECT_SCHEMA,
-    outputSchema: entityOutputSchema('contract'),
+    outputSchema: entityOutputSchema('contract', DISTRIBUTED_NODE_HOST_CONTRACT_SCHEMA),
     metadata: { aliasPaths: ['/api/remote/device/contract'] },
   }),
   methodDescriptor({
@@ -139,7 +177,7 @@ export const builtinGatewayRuntimeMethodDescriptors: readonly GatewayMethodDescr
     scopes: ['read:health'],
     http: { method: 'GET', path: '/api/health' },
     inputSchema: EMPTY_OBJECT_SCHEMA,
-    outputSchema: GENERIC_OBJECT_SCHEMA,
+    outputSchema: HEALTH_SNAPSHOT_SCHEMA,
   }),
   methodDescriptor({
     id: 'accounts.snapshot',
@@ -149,7 +187,7 @@ export const builtinGatewayRuntimeMethodDescriptors: readonly GatewayMethodDescr
     scopes: ['read:accounts'],
     http: { method: 'GET', path: '/api/accounts' },
     inputSchema: EMPTY_OBJECT_SCHEMA,
-    outputSchema: GENERIC_OBJECT_SCHEMA,
+    outputSchema: PROVIDER_ACCOUNT_SNAPSHOT_SCHEMA,
   }),
   methodDescriptor({
     id: 'providers.list',
@@ -159,7 +197,7 @@ export const builtinGatewayRuntimeMethodDescriptors: readonly GatewayMethodDescr
     scopes: ['read:providers'],
     http: { method: 'GET', path: '/api/providers' },
     inputSchema: EMPTY_OBJECT_SCHEMA,
-    outputSchema: listOutputSchema('providers'),
+    outputSchema: listOutputSchema('providers', PROVIDER_RUNTIME_SNAPSHOT_SCHEMA),
   }),
   methodDescriptor({
     id: 'providers.get',
@@ -169,7 +207,7 @@ export const builtinGatewayRuntimeMethodDescriptors: readonly GatewayMethodDescr
     scopes: ['read:providers'],
     http: { method: 'GET', path: '/api/providers/{providerId}' },
     inputSchema: objectSchema({ providerId: STRING_SCHEMA }, ['providerId']),
-    outputSchema: GENERIC_OBJECT_SCHEMA,
+    outputSchema: PROVIDER_RUNTIME_SNAPSHOT_SCHEMA,
   }),
   methodDescriptor({
     id: 'providers.usage.get',
@@ -179,7 +217,7 @@ export const builtinGatewayRuntimeMethodDescriptors: readonly GatewayMethodDescr
     scopes: ['read:providers'],
     http: { method: 'GET', path: '/api/providers/{providerId}/usage' },
     inputSchema: objectSchema({ providerId: STRING_SCHEMA }, ['providerId']),
-    outputSchema: GENERIC_OBJECT_SCHEMA,
+    outputSchema: PROVIDER_USAGE_SNAPSHOT_SCHEMA,
   }),
   methodDescriptor({
     id: 'settings.snapshot',
@@ -189,7 +227,7 @@ export const builtinGatewayRuntimeMethodDescriptors: readonly GatewayMethodDescr
     scopes: ['read:settings'],
     http: { method: 'GET', path: '/api/settings' },
     inputSchema: EMPTY_OBJECT_SCHEMA,
-    outputSchema: GENERIC_OBJECT_SCHEMA,
+    outputSchema: SETTINGS_SNAPSHOT_SCHEMA,
   }),
   methodDescriptor({
     id: 'continuity.snapshot',
@@ -199,7 +237,7 @@ export const builtinGatewayRuntimeMethodDescriptors: readonly GatewayMethodDescr
     scopes: ['read:continuity'],
     http: { method: 'GET', path: '/api/continuity' },
     inputSchema: EMPTY_OBJECT_SCHEMA,
-    outputSchema: GENERIC_OBJECT_SCHEMA,
+    outputSchema: CONTINUITY_SNAPSHOT_SCHEMA,
   }),
   methodDescriptor({
     id: 'worktrees.snapshot',
@@ -209,7 +247,7 @@ export const builtinGatewayRuntimeMethodDescriptors: readonly GatewayMethodDescr
     scopes: ['read:worktrees'],
     http: { method: 'GET', path: '/api/worktrees' },
     inputSchema: EMPTY_OBJECT_SCHEMA,
-    outputSchema: GENERIC_OBJECT_SCHEMA,
+    outputSchema: WORKTREE_SNAPSHOT_SCHEMA,
   }),
   methodDescriptor({
     id: 'intelligence.snapshot',
@@ -219,7 +257,7 @@ export const builtinGatewayRuntimeMethodDescriptors: readonly GatewayMethodDescr
     scopes: ['read:intelligence'],
     http: { method: 'GET', path: '/api/intelligence' },
     inputSchema: EMPTY_OBJECT_SCHEMA,
-    outputSchema: GENERIC_OBJECT_SCHEMA,
+    outputSchema: INTELLIGENCE_SNAPSHOT_SCHEMA,
   }),
   methodDescriptor({
     id: 'memory.doctor',
@@ -229,7 +267,7 @@ export const builtinGatewayRuntimeMethodDescriptors: readonly GatewayMethodDescr
     scopes: ['read:memory'],
     http: { method: 'GET', path: '/api/memory/doctor' },
     inputSchema: EMPTY_OBJECT_SCHEMA,
-    outputSchema: GENERIC_OBJECT_SCHEMA,
+    outputSchema: MEMORY_DOCTOR_REPORT_SCHEMA,
   }),
   methodDescriptor({
     id: 'memory.vector.stats',
@@ -239,7 +277,7 @@ export const builtinGatewayRuntimeMethodDescriptors: readonly GatewayMethodDescr
     scopes: ['read:memory'],
     http: { method: 'GET', path: '/api/memory/vector' },
     inputSchema: EMPTY_OBJECT_SCHEMA,
-    outputSchema: GENERIC_OBJECT_SCHEMA,
+    outputSchema: objectSchema({ vector: MEMORY_VECTOR_STATS_SCHEMA }, ['vector']),
   }),
   methodDescriptor({
     id: 'memory.vector.rebuild',
@@ -250,7 +288,7 @@ export const builtinGatewayRuntimeMethodDescriptors: readonly GatewayMethodDescr
     access: 'admin',
     http: { method: 'POST', path: '/api/memory/vector/rebuild' },
     inputSchema: EMPTY_OBJECT_SCHEMA,
-    outputSchema: GENERIC_OBJECT_SCHEMA,
+    outputSchema: objectSchema({ vector: MEMORY_VECTOR_STATS_SCHEMA }, ['vector']),
   }),
   methodDescriptor({
     id: 'memory.embeddings.default.set',
@@ -261,6 +299,6 @@ export const builtinGatewayRuntimeMethodDescriptors: readonly GatewayMethodDescr
     access: 'admin',
     http: { method: 'POST', path: '/api/memory/embeddings/default' },
     inputSchema: bodyEnvelopeSchema({ providerId: STRING_SCHEMA }, ['providerId']),
-    outputSchema: GENERIC_OBJECT_SCHEMA,
+    outputSchema: MEMORY_DOCTOR_REPORT_SCHEMA,
   }),
 ];

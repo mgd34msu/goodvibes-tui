@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { join } from 'node:path';
 import { PersistentStore } from '../state/persistent-store.ts';
 import type { PermissionPromptDecision, PermissionPromptRequest, PermissionRequestHandler } from '../permissions/prompt.ts';
-import { ControlPlaneGateway } from './gateway.ts';
+import type { ControlPlaneSurfaceMessage } from './types.ts';
 
 export type SharedApprovalStatus = 'pending' | 'claimed' | 'approved' | 'denied' | 'cancelled' | 'expired';
 
@@ -47,6 +47,10 @@ export interface RequestSharedApprovalInput {
 }
 
 type ApprovalListener = (approval: SharedApprovalRecord) => void;
+type ApprovalPublisher = {
+  publishEvent(event: string, payload: unknown): void;
+  publishSurfaceMessage(message: Omit<ControlPlaneSurfaceMessage, 'id' | 'createdAt'>): void;
+};
 
 const STORE_PATH = join(process.cwd(), '.goodvibes', 'tui', 'control-plane', 'approvals.json');
 
@@ -66,8 +70,6 @@ function buildAudit(action: SharedApprovalAuditRecord['action'], actor: string, 
 }
 
 export class ApprovalBroker {
-  private static instance: ApprovalBroker | null = null;
-
   private readonly store: PersistentStore<SharedApprovalStoreSnapshot>;
   private readonly approvals = new Map<string, SharedApprovalRecord>();
   private readonly pendingResolvers = new Map<string, {
@@ -75,21 +77,11 @@ export class ApprovalBroker {
     timer?: ReturnType<typeof setTimeout>;
   }>();
   private readonly listeners = new Set<ApprovalListener>();
+  private publisher: ApprovalPublisher | null = null;
   private loaded = false;
 
   constructor(store?: PersistentStore<SharedApprovalStoreSnapshot>) {
     this.store = store ?? new PersistentStore<SharedApprovalStoreSnapshot>(STORE_PATH);
-  }
-
-  static getInstance(): ApprovalBroker {
-    if (!ApprovalBroker.instance) {
-      ApprovalBroker.instance = new ApprovalBroker();
-    }
-    return ApprovalBroker.instance;
-  }
-
-  static resetInstance(): void {
-    ApprovalBroker.instance = null;
   }
 
   subscribe(listener: ApprovalListener): () => void {
@@ -97,6 +89,10 @@ export class ApprovalBroker {
     return () => {
       this.listeners.delete(listener);
     };
+  }
+
+  setPublisher(publisher: ApprovalPublisher | null): void {
+    this.publisher = publisher;
   }
 
   async start(): Promise<void> {
@@ -308,12 +304,11 @@ export class ApprovalBroker {
   }
 
   private publish(approval: SharedApprovalRecord): void {
-    const gateway = ControlPlaneGateway.getActive();
-    gateway?.publishEvent('approval-update', {
+    this.publisher?.publishEvent('approval-update', {
       approval,
       createdAt: Date.now(),
     });
-    gateway?.publishSurfaceMessage({
+    this.publisher?.publishSurfaceMessage({
       surface: 'web',
       title: approval.status === 'pending' || approval.status === 'claimed' ? 'Approval required' : 'Approval resolved',
       body: `${approval.request.tool}: ${approval.request.analysis.summary}`,

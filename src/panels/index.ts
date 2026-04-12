@@ -1,13 +1,13 @@
 export type { Panel, PanelCategory, PanelRegistration } from './types.ts';
 export type { Pane } from './panel-manager.ts';
 export { BasePanel } from './base-panel.ts';
-export { PanelManager, getPanelManager } from './panel-manager.ts';
+export { PanelManager } from './panel-manager.ts';
 export { TokenBudgetPanel } from './token-budget-panel.ts';
 export { CostTrackerPanel } from './cost-tracker-panel.ts';
 export { AgentInspectorPanel } from './agent-inspector-panel.ts';
 export { AgentLogsPanel } from './agent-logs-panel.ts';
 export { WrfcPanel } from './wrfc-panel.ts';
-export { ProviderHealthPanel, ProviderHealthTracker, providerHealthTracker } from './provider-health-panel.ts';
+export { ProviderHealthPanel, ProviderHealthTracker } from './provider-health-panel.ts';
 export type { ProviderHealth, ProviderStatus } from './provider-health-panel.ts';
 export { GitPanel } from './git-panel.ts';
 export { SymbolOutlinePanel } from './symbol-outline-panel.ts';

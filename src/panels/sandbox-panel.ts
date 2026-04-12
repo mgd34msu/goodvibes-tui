@@ -1,9 +1,9 @@
 import type { Line } from '../types/grid.ts';
 import { createEmptyLine } from '../types/grid.ts';
 import { BasePanel } from './base-panel.ts';
-import { getConfigManager, type ConfigManager } from '../config/index.ts';
+import { ConfigManager } from '../config/manager.ts';
 import { buildSandboxReview, listSandboxPresets, listSandboxProfiles } from '../runtime/sandbox/manager.ts';
-import { SandboxSessionRegistry, getSandboxSessionRegistry } from '../runtime/sandbox/session-registry.ts';
+import type { SandboxSessionRegistry } from '../runtime/sandbox/session-registry.ts';
 import {
   buildBodyText,
   buildEmptyState,
@@ -29,8 +29,8 @@ export class SandboxPanel extends BasePanel {
   private readonly sessions: SandboxSessionRegistry;
 
   public constructor(
-    config: ConfigManager = getConfigManager(),
-    sessions: SandboxSessionRegistry = getSandboxSessionRegistry(),
+    config: ConfigManager,
+    sessions: SandboxSessionRegistry,
   ) {
     super('sandbox', 'Sandbox', 'X', 'monitoring');
     this.config = config;

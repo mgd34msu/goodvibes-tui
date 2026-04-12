@@ -1,8 +1,8 @@
-import { describe, test, expect, mock, spyOn, beforeEach, afterEach, afterAll } from 'bun:test';
+import { describe, test, expect, mock, spyOn, beforeEach, afterEach } from 'bun:test';
 import { join } from 'node:path';
+import { WrfcController } from '../../agents/wrfc-controller.ts';
 import { RuntimeEventBus, createEventEnvelope } from '../../runtime/events/index.ts';
 import type { AgentRecord } from '../../tools/agent/index.ts';
-const realConfigIndex = await import('../../config/index.ts');
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -129,69 +129,36 @@ const mockConfigSet = mock((key: string, value: unknown) => {
   }
 });
 
-// Mock AgentWorktree
-const mockMerge = mock(async (_agentId: string) => 'abc123');
-const mockCleanup = mock(async (_agentId: string) => {});
+const mockConfigManager = {
+  get: (key: string) => mockConfigState[key],
+  getCategory: (_category: string) => mockConfigGetCategoryState,
+};
 
-mock.module('../../agents/worktree.ts', () => ({
-  AgentWorktree: class MockAgentWorktree {
-    merge = mockMerge;
-    cleanup = mockCleanup;
-  },
-}));
+const mockAgentManager = {
+  spawn: mockSpawn,
+  getStatus: mockGetStatus,
+  list: () => [],
+  cancel: () => false,
+  listByCohort: () => [],
+  clear: () => {},
+};
 
-// Mock logger (suppress debug/error output in tests)
-mock.module('../../utils/logger.ts', () => ({
-  logger: {
-    debug: mock(() => {}),
-    info: mock(() => {}),
-    warn: mock(() => {}),
-    error: mock(() => {}),
-  },
-}));
-
-// Mock archetypes to avoid filesystem reads
-mock.module('../../agents/archetypes.ts', () => ({
-  ArchetypeLoader: {
-    getInstance: () => ({
-      loadArchetype: () => null,
+function initTestWrfcController(runtimeBus: RuntimeEventBus): WrfcController {
+  return new WrfcController(runtimeBus, { registerAgent: mockRegisterAgent }, {
+    agentManager: mockAgentManager,
+    configManager: mockConfigManager as never,
+    createWorktree: () => ({
+      merge: mockMerge,
+      cleanup: mockCleanup,
     }),
-  },
-}));
+  });
+}
 
-// Mock orchestrator to avoid LLM calls from spawn
-mock.module('../../agents/orchestrator.ts', () => ({
-  agentOrchestrator: {
-    runAgent: mock(async () => {}),
-  },
-  AgentOrchestrator: {
-    getInstance: () => ({ runAgent: mock(async () => {}) }),
-    resetInstance: () => {},
-  },
-}));
+const mockMerge = mock(async (_agentId: string) => true);
+const mockCleanup = mock(async (_agentId: string) => {});
 
 // Mock message bus
 const mockRegisterAgent = mock((_identity: unknown) => {});
-mock.module('../../agents/message-bus.ts', () => ({
-  AgentMessageBus: {
-    getInstance: () => ({ getMessages: () => [], send: () => {}, registerAgent: mockRegisterAgent }),
-    resetInstance: () => {},
-  },
-}));
-
-// Now import WrfcController after mocks are registered
-const { WrfcController, _setWrfcAgentManagerResolverForTest, _setWrfcConfigResolverForTest } = await import('../../agents/wrfc-controller.ts');
-
-// ---------------------------------------------------------------------------
-// Cleanup — restore all module mocks after all tests to prevent leaking into
-// subsequent test files (Bun mock.module() is process-global).
-// ---------------------------------------------------------------------------
-
-afterAll(() => {
-  _setWrfcAgentManagerResolverForTest(null);
-  _setWrfcConfigResolverForTest(null);
-  mock.restore();
-});
 
 // ---------------------------------------------------------------------------
 // Tests
@@ -221,25 +188,8 @@ describe('WrfcController', () => {
 
   beforeEach(() => {
     process.chdir(repoRoot);
-    WrfcController.resetInstance();
-    _setWrfcAgentManagerResolverForTest(() => ({
-      spawn: mockSpawn,
-      getStatus: mockGetStatus,
-      list: () => [],
-      cancel: () => false,
-      listByCohort: () => [],
-      clear: () => {},
-    }));
-    _setWrfcConfigResolverForTest(() => ({
-      scoreThreshold: Number(mockConfigState['wrfc.scoreThreshold'] ?? mockConfigGetCategoryState.scoreThreshold ?? 9.9),
-      maxFixAttempts: Number(mockConfigState['wrfc.maxFixAttempts'] ?? mockConfigGetCategoryState.maxFixAttempts ?? 3),
-      autoCommit: Boolean(mockConfigState['wrfc.autoCommit'] ?? mockConfigGetCategoryState.autoCommit ?? false),
-      gates: [...mockConfigGetCategoryState.gates],
-    }));
     mockSpawn.mockClear();
     mockGetStatus.mockClear();
-    mockConfigGet.mockClear();
-    mockConfigSet.mockClear();
     mockMerge.mockClear();
     mockCleanup.mockClear();
     mockRegisterAgent.mockClear();
@@ -260,9 +210,6 @@ describe('WrfcController', () => {
   afterEach(() => {
     emitSpy?.mockRestore();
     process.chdir(originalCwd);
-    _setWrfcAgentManagerResolverForTest(null);
-    _setWrfcConfigResolverForTest(null);
-    WrfcController.resetInstance();
   });
 
   // -------------------------------------------------------------------------
@@ -271,7 +218,7 @@ describe('WrfcController', () => {
 
   describe('chain lifecycle', () => {
     test('createChain() generates valid wrfc-{uuid8} ID format', () => {
-      const controller = WrfcController.initialize(runtimeBus);
+      const controller = initTestWrfcController(runtimeBus);
       const record = makeRecord();
       const chain = controller.createChain(record);
 
@@ -279,7 +226,7 @@ describe('WrfcController', () => {
     });
 
     test('createChain() links engineer record to chain via wrfcId', () => {
-      const controller = WrfcController.initialize(runtimeBus);
+      const controller = initTestWrfcController(runtimeBus);
       const record = makeRecord();
       const chain = controller.createChain(record);
 
@@ -287,7 +234,7 @@ describe('WrfcController', () => {
     });
 
     test('createChain() transitions from pending to engineering', () => {
-      const controller = WrfcController.initialize(runtimeBus);
+      const controller = initTestWrfcController(runtimeBus);
       const record = makeRecord();
       const chain = controller.createChain(record);
 
@@ -295,7 +242,7 @@ describe('WrfcController', () => {
     });
 
     test('createChain() emits WORKFLOW_CHAIN_CREATED event', () => {
-      const controller = WrfcController.initialize(runtimeBus);
+      const controller = initTestWrfcController(runtimeBus);
       const record = makeRecord();
       const chain = controller.createChain(record);
 
@@ -305,7 +252,7 @@ describe('WrfcController', () => {
     });
 
     test('createChain() emits orchestration graph and engineer node events', () => {
-      const controller = WrfcController.initialize(runtimeBus);
+      const controller = initTestWrfcController(runtimeBus);
       const record = makeRecord();
       const chain = controller.createChain(record);
 
@@ -327,7 +274,7 @@ describe('WrfcController', () => {
     });
 
     test('createChain() initializes allAgentIds with engineer ID', () => {
-      const controller = WrfcController.initialize(runtimeBus);
+      const controller = initTestWrfcController(runtimeBus);
       const record = makeRecord();
       const chain = controller.createChain(record);
 
@@ -336,7 +283,7 @@ describe('WrfcController', () => {
     });
 
     test('getChain() returns chain by ID', () => {
-      const controller = WrfcController.initialize(runtimeBus);
+      const controller = initTestWrfcController(runtimeBus);
       const record = makeRecord();
       const chain = controller.createChain(record);
 
@@ -345,13 +292,13 @@ describe('WrfcController', () => {
     });
 
     test('getChain() returns null for unknown ID', () => {
-      const controller = WrfcController.initialize(runtimeBus);
+      const controller = initTestWrfcController(runtimeBus);
       const result = controller.getChain('wrfc-nonexistent');
       expect(result).toBeNull();
     });
 
     test('listChains() returns all chains', () => {
-      const controller = WrfcController.initialize(runtimeBus);
+      const controller = initTestWrfcController(runtimeBus);
       const r1 = makeRecord();
       const r2 = makeRecord({ id: 'agent-other001' });
 
@@ -371,7 +318,7 @@ describe('WrfcController', () => {
 
   describe('state transitions', () => {
     test('valid transition pending → engineering succeeds', () => {
-      const controller = WrfcController.initialize(runtimeBus);
+      const controller = initTestWrfcController(runtimeBus);
       const record = makeRecord();
       const chain = controller.createChain(record);
       // createChain already does pending → engineering
@@ -379,7 +326,7 @@ describe('WrfcController', () => {
     });
 
     test('every transition emits WORKFLOW_STATE_CHANGED', () => {
-      const controller = WrfcController.initialize(runtimeBus);
+      const controller = initTestWrfcController(runtimeBus);
       const record = makeRecord();
       controller.createChain(record);
 
@@ -393,7 +340,7 @@ describe('WrfcController', () => {
     });
 
     test('invalid transition throws error', async () => {
-      const controller = WrfcController.initialize(runtimeBus);
+      const controller = initTestWrfcController(runtimeBus);
       const record = makeRecord();
       const chain = controller.createChain(record);
       // Chain is now in 'engineering' state
@@ -416,7 +363,7 @@ describe('WrfcController', () => {
     });
 
     test('failChain handles double-fail gracefully (does not throw)', () => {
-      const controller = WrfcController.initialize(runtimeBus);
+      const controller = initTestWrfcController(runtimeBus);
       const record = makeRecord();
       const chain = controller.createChain(record);
 
@@ -438,7 +385,7 @@ describe('WrfcController', () => {
 
   describe('review cycle', () => {
     test('engineer completion spawns reviewer agent', async () => {
-      const controller = WrfcController.initialize(runtimeBus);
+      const controller = initTestWrfcController(runtimeBus);
       const engineerRecord = makeRecord();
       controller.createChain(engineerRecord);
 
@@ -460,7 +407,7 @@ describe('WrfcController', () => {
     });
 
     test('reviewer gets engineer report as task input', async () => {
-      const controller = WrfcController.initialize(runtimeBus);
+      const controller = initTestWrfcController(runtimeBus);
       const engineerRecord = makeRecord();
       controller.createChain(engineerRecord);
 
@@ -481,7 +428,7 @@ describe('WrfcController', () => {
     });
 
     test('reviewer record has dangerously_disable_wrfc=true and same wrfcId', async () => {
-      const controller = WrfcController.initialize(runtimeBus);
+      const controller = initTestWrfcController(runtimeBus);
       const engineerRecord = makeRecord();
       const chain = controller.createChain(engineerRecord);
 
@@ -501,7 +448,7 @@ describe('WrfcController', () => {
     });
 
     test('review score >= threshold transitions chain to gating', async () => {
-      const controller = WrfcController.initialize(runtimeBus);
+      const controller = initTestWrfcController(runtimeBus);
       const engineerRecord = makeRecord();
       const chain = controller.createChain(engineerRecord);
 
@@ -537,7 +484,7 @@ describe('WrfcController', () => {
     });
 
     test('review score < threshold transitions chain to fixing', async () => {
-      const controller = WrfcController.initialize(runtimeBus);
+      const controller = initTestWrfcController(runtimeBus);
       const engineerRecord = makeRecord();
       const chain = controller.createChain(engineerRecord);
 
@@ -572,7 +519,7 @@ describe('WrfcController', () => {
 
   describe('fix cycle', () => {
     test('fixer gets full issue list with point values in task', async () => {
-      const controller = WrfcController.initialize(runtimeBus);
+      const controller = initTestWrfcController(runtimeBus);
       const engineerRecord = makeRecord();
       controller.createChain(engineerRecord);
 
@@ -615,7 +562,7 @@ describe('WrfcController', () => {
     });
 
     test('fixer record has dangerously_disable_wrfc=true and same wrfcId', async () => {
-      const controller = WrfcController.initialize(runtimeBus);
+      const controller = initTestWrfcController(runtimeBus);
       const engineerRecord = makeRecord();
       const chain = controller.createChain(engineerRecord);
 
@@ -657,7 +604,7 @@ describe('WrfcController', () => {
     });
 
     test('fixAttempts increments on each fix', async () => {
-      const controller = WrfcController.initialize(runtimeBus);
+      const controller = initTestWrfcController(runtimeBus);
       const engineerRecord = makeRecord();
       const chain = controller.createChain(engineerRecord);
 
@@ -689,7 +636,7 @@ describe('WrfcController', () => {
     });
 
     test('fix completion spawns reviewer again', async () => {
-      const controller = WrfcController.initialize(runtimeBus);
+      const controller = initTestWrfcController(runtimeBus);
       const engineerRecord = makeRecord();
       controller.createChain(engineerRecord);
 
@@ -735,7 +682,7 @@ describe('WrfcController', () => {
       // Override maxFixAttempts to 1 for this test
       mockConfigState['wrfc.maxFixAttempts'] = 1;
 
-      const controller = WrfcController.initialize(runtimeBus);
+      const controller = initTestWrfcController(runtimeBus);
       const engineerRecord = makeRecord();
       const chain = controller.createChain(engineerRecord);
 
@@ -778,7 +725,7 @@ describe('WrfcController', () => {
     });
 
     test('WORKFLOW_FIX_ATTEMPTED event emitted on each fix', async () => {
-      const controller = WrfcController.initialize(runtimeBus);
+      const controller = initTestWrfcController(runtimeBus);
       const engineerRecord = makeRecord();
       controller.createChain(engineerRecord);
 
@@ -819,7 +766,7 @@ describe('WrfcController', () => {
       // Configure a passing gate
       mockConfigGetCategoryState.gates = [{ name: 'typecheck', command: 'exit 0', enabled: true }];
 
-      const controller = WrfcController.initialize(runtimeBus);
+      const controller = initTestWrfcController(runtimeBus);
       const engineerRecord = makeRecord();
       const chain = controller.createChain(engineerRecord);
 
@@ -848,7 +795,7 @@ describe('WrfcController', () => {
 
     test('no gates configured → chain transitions to passed directly', async () => {
       // Default mock: gates = []
-      const controller = WrfcController.initialize(runtimeBus);
+      const controller = initTestWrfcController(runtimeBus);
       const engineerRecord = makeRecord();
       const chain = controller.createChain(engineerRecord);
 
@@ -875,7 +822,7 @@ describe('WrfcController', () => {
     });
 
     test('gatesPassed set to true when all gates pass', async () => {
-      const controller = WrfcController.initialize(runtimeBus);
+      const controller = initTestWrfcController(runtimeBus);
       const engineerRecord = makeRecord();
       const chain = controller.createChain(engineerRecord);
 
@@ -907,7 +854,7 @@ describe('WrfcController', () => {
         { name: 'lint', command: 'exit 0', enabled: true },
       ];
 
-      const controller = WrfcController.initialize(runtimeBus);
+      const controller = initTestWrfcController(runtimeBus);
       const engineerRecord = makeRecord();
       controller.createChain(engineerRecord);
 
@@ -937,7 +884,7 @@ describe('WrfcController', () => {
     test('gate failure → new chain spawned (without dangerously_disable_wrfc)', async () => {
       mockConfigGetCategoryState.gates = [{ name: 'typecheck', command: 'exit 1', enabled: true }];
 
-      const controller = WrfcController.initialize(runtimeBus);
+      const controller = initTestWrfcController(runtimeBus);
       const engineerRecord = makeRecord();
       const chain = controller.createChain(engineerRecord);
 
@@ -988,7 +935,7 @@ describe('WrfcController', () => {
 
     test('auto-commit on gate pass: transitions through committing to passed', async () => {
       enableAutoCommit();
-      const controller = WrfcController.initialize(runtimeBus);
+      const controller = initTestWrfcController(runtimeBus);
       const engineerRecord = makeRecord();
       const chain = controller.createChain(engineerRecord);
 
@@ -1015,7 +962,7 @@ describe('WrfcController', () => {
 
     test('auto-commit on gate pass: emits WORKFLOW_AUTO_COMMITTED event', async () => {
       enableAutoCommit();
-      const controller = WrfcController.initialize(runtimeBus);
+      const controller = initTestWrfcController(runtimeBus);
       const engineerRecord = makeRecord();
       controller.createChain(engineerRecord);
 
@@ -1042,7 +989,7 @@ describe('WrfcController', () => {
 
     test('auto-commit on gate pass: calls mockMerge with last agent ID', async () => {
       enableAutoCommit();
-      const controller = WrfcController.initialize(runtimeBus);
+      const controller = initTestWrfcController(runtimeBus);
       const engineerRecord = makeRecord();
       const chain = controller.createChain(engineerRecord);
 
@@ -1071,7 +1018,7 @@ describe('WrfcController', () => {
 
     test('auto-commit on gate pass: calls mockCleanup for all agents in chain', async () => {
       enableAutoCommit();
-      const controller = WrfcController.initialize(runtimeBus);
+      const controller = initTestWrfcController(runtimeBus);
       const engineerRecord = makeRecord();
       const chain = controller.createChain(engineerRecord);
 
@@ -1106,7 +1053,7 @@ describe('WrfcController', () => {
       mockMerge.mockImplementation(async (_id: string) => {
         throw new Error('merge conflict');
       });
-      const controller = WrfcController.initialize(runtimeBus);
+      const controller = initTestWrfcController(runtimeBus);
       const engineerRecord = makeRecord();
       const chain = controller.createChain(engineerRecord);
 
@@ -1134,7 +1081,7 @@ describe('WrfcController', () => {
     test('auto-commit with fixer as last agent: mockMerge called with fixer ID', async () => {
       enableAutoCommit();
 
-      const controller = WrfcController.initialize(runtimeBus);
+      const controller = initTestWrfcController(runtimeBus);
       const engineerRecord = makeRecord();
       const chain = controller.createChain(engineerRecord);
 
@@ -1193,7 +1140,7 @@ describe('WrfcController', () => {
 
   describe('error handling', () => {
     test('chain fails when agent has no fullOutput (null output)', async () => {
-      const controller = WrfcController.initialize(runtimeBus);
+      const controller = initTestWrfcController(runtimeBus);
       const engineerRecord = makeRecord({ fullOutput: undefined });
       const chain = controller.createChain(engineerRecord);
 
@@ -1215,7 +1162,7 @@ describe('WrfcController', () => {
     });
 
     test('chain fails when engineer agent fails (subagent:error)', () => {
-      const controller = WrfcController.initialize(runtimeBus);
+      const controller = initTestWrfcController(runtimeBus);
       const engineerRecord = makeRecord();
       const chain = controller.createChain(engineerRecord);
 
@@ -1227,7 +1174,7 @@ describe('WrfcController', () => {
     });
 
     test('chain emits WORKFLOW_CHAIN_FAILED on failure', () => {
-      const controller = WrfcController.initialize(runtimeBus);
+      const controller = initTestWrfcController(runtimeBus);
       const engineerRecord = makeRecord();
       const chain = controller.createChain(engineerRecord);
 
@@ -1239,7 +1186,7 @@ describe('WrfcController', () => {
     });
 
     test('subagent:error for unknown agent ID is ignored', () => {
-      const controller = WrfcController.initialize(runtimeBus);
+      const controller = initTestWrfcController(runtimeBus);
 
       // No chain exists for this agent
       expect(() => {
@@ -1248,7 +1195,7 @@ describe('WrfcController', () => {
     });
 
     test('subagent:complete for unknown agent ID is ignored', async () => {
-      const controller = WrfcController.initialize(runtimeBus);
+      const controller = initTestWrfcController(runtimeBus);
 
       // No chain exists for this agent
       await expect(
@@ -1265,30 +1212,23 @@ describe('WrfcController', () => {
   });
 
   // -------------------------------------------------------------------------
-  // Singleton
+  // Factory behavior
   // -------------------------------------------------------------------------
 
-  describe('singleton', () => {
-    test('getInstance returns same instance', () => {
-      const a = WrfcController.initialize(runtimeBus);
-      const b = WrfcController.getInstance();
-      expect(a).toBe(b);
+  describe('factory', () => {
+    test('initTestWrfcController returns a controller instance', () => {
+      const a = initTestWrfcController(runtimeBus);
+      expect(a).toBeInstanceOf(WrfcController);
     });
 
-    test('getInstance without runtimeBus on first init throws', () => {
-      // Already reset in beforeEach
-      expect(() => WrfcController.getInstance()).toThrow('WrfcController must be initialized before use');
-    });
-
-    test('resetInstance clears singleton', () => {
-      const a = WrfcController.initialize(runtimeBus);
-      WrfcController.resetInstance();
-      const b = WrfcController.initialize(new RuntimeEventBus());
+    test('initTestWrfcController creates distinct controller instances', () => {
+      const a = initTestWrfcController(runtimeBus);
+      const b = initTestWrfcController(new RuntimeEventBus());
       expect(a).not.toBe(b);
     });
 
     test('dispose stops event listener processing', async () => {
-      const controller = WrfcController.initialize(runtimeBus);
+      const controller = initTestWrfcController(runtimeBus);
       const record = makeRecord();
       controller.createChain(record);
       const chain = controller.getChain(record.wrfcId!);

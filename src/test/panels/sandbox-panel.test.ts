@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, test } from 'bun:test';
 import { mkdtempSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { ConfigManager } from '../../config/index.ts';
+import { ConfigManager } from '../../config/manager.ts';
 import { SandboxPanel } from '../../panels/sandbox-panel.ts';
 import { SandboxSessionRegistry } from '../../runtime/sandbox/session-registry.ts';
 

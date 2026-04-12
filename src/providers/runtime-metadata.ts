@@ -1,7 +1,7 @@
-import { getSecretsManager } from '../config/secrets.ts';
-import { getServiceRegistry } from '../config/service-registry.ts';
+import { SecretsManager } from '../config/secrets.ts';
+import { ServiceRegistry } from '../config/service-registry.ts';
 import { listBuiltinSubscriptionProviders } from '../config/subscription-providers.ts';
-import { getSubscriptionManager } from '../config/subscriptions.ts';
+import { SubscriptionManager } from '../config/subscriptions.ts';
 import type { ProviderAuthRouteDescriptor } from './interface.ts';
 
 export interface StandardProviderAuthOptions {
@@ -15,6 +15,12 @@ export interface StandardProviderAuthOptions {
   readonly anonymousDetail?: string;
 }
 
+export interface StandardProviderAuthRouteDeps {
+  readonly secretsManager?: Pick<SecretsManager, 'listDetailed'>;
+  readonly serviceRegistry?: Pick<ServiceRegistry, 'getAll' | 'inspect'>;
+  readonly subscriptionManager?: Pick<SubscriptionManager, 'get' | 'getPending'>;
+}
+
 function determineFreshness(expiresAt?: number): 'healthy' | 'expiring' | 'expired' {
   if (typeof expiresAt !== 'number' || !Number.isFinite(expiresAt)) return 'healthy';
   if (expiresAt <= Date.now()) return 'expired';
@@ -24,10 +30,11 @@ function determineFreshness(expiresAt?: number): 'healthy' | 'expiring' | 'expir
 
 export async function buildStandardProviderAuthRoutes(
   options: StandardProviderAuthOptions,
+  deps: StandardProviderAuthRouteDeps = {},
 ): Promise<readonly ProviderAuthRouteDescriptor[]> {
-  const secrets = getSecretsManager();
-  const serviceRegistry = getServiceRegistry();
-  const subscriptionManager = getSubscriptionManager();
+  const secrets = deps.secretsManager ?? new SecretsManager();
+  const serviceRegistry = deps.serviceRegistry ?? new ServiceRegistry();
+  const subscriptionManager = deps.subscriptionManager ?? new SubscriptionManager();
   const secretKeys = [...new Set([...(options.secretKeys ?? []), ...(options.apiKeyEnvVars ?? [])])];
   const detailedSecrets = await secrets.listDetailed();
   const matchingSecretRecords = detailedSecrets.filter((record) => secretKeys.includes(record.key) && record.source !== 'env');

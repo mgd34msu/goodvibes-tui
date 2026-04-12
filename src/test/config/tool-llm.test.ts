@@ -1,5 +1,7 @@
 import { describe, test, expect, beforeEach, afterEach, mock } from 'bun:test';
 import type { LLMProvider, ChatRequest, ChatResponse } from '../../providers/interface.ts';
+import { resolveToolLLM } from '../../config/tool-llm.ts';
+import { createTestManagers } from '../helpers/test-managers.ts';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -44,17 +46,14 @@ describe('resolveToolLLM', () => {
   // Import fresh each time by resetting module state via re-import.
   // Since Bun caches modules, we directly manipulate registry + config.
 
+  let testManagers: ReturnType<typeof createTestManagers>;
+
   beforeEach(async () => {
-    // Reset singleton between tests
-    const { ToolLLM } = await import('../../config/tool-llm.ts');
-    ToolLLM._reset();
+    testManagers = createTestManagers();
   });
 
   test('uses explicit tools.llmProvider + tools.llmModel when both set', async () => {
-    const { getProviderRegistry } = await import('../../providers/registry.ts');
-    const providerRegistry = getProviderRegistry();
-    const { configManager } = await import('../../config/index.ts');
-    const { resolveToolLLM } = await import('../../config/tool-llm.ts');
+    const { providerRegistry, configManager } = testManagers;
 
     const fakeProvider = makeProvider('test-explicit-provider');
     providerRegistry.register(fakeProvider);
@@ -65,7 +64,7 @@ describe('resolveToolLLM', () => {
     configManager.set('tools.llmModel', 'some-model');
 
     try {
-      const resolved = resolveToolLLM();
+      const resolved = resolveToolLLM({ configManager, providerRegistry });
       expect(resolved).not.toBeNull();
       expect(resolved!.provider.name).toBe('test-explicit-provider');
       expect(resolved!.modelId).toBe('some-model');
@@ -79,11 +78,7 @@ describe('resolveToolLLM', () => {
   test('falls back to current model when tools.llmProvider is empty', async () => {
     // getProviderRegistry() returns the underlying instance (bypasses the Proxy),
     // allowing direct method patching for test isolation.
-    const { getProviderRegistry } = await import('../../providers/registry.ts');
-    const { configManager } = await import('../../config/index.ts');
-    const { resolveToolLLM } = await import('../../config/tool-llm.ts');
-
-    const instance = getProviderRegistry();
+    const { providerRegistry: instance, configManager } = testManagers;
 
     const origProvider = configManager.get('tools.llmProvider');
     const origModel = configManager.get('tools.llmModel');
@@ -110,7 +105,7 @@ describe('resolveToolLLM', () => {
     instance.getForModel = () => fakeFallbackProvider;
 
     try {
-      const resolved = resolveToolLLM();
+      const resolved = resolveToolLLM({ configManager, providerRegistry: instance });
       expect(resolved).not.toBeNull();
       expect(resolved!.modelId).toBe('test-fallback-model');
     } finally {
@@ -124,11 +119,7 @@ describe('resolveToolLLM', () => {
   test('falls back when only one of llmProvider/llmModel is set', async () => {
     // getProviderRegistry() returns the underlying instance (bypasses the Proxy),
     // allowing direct method patching for test isolation.
-    const { getProviderRegistry } = await import('../../providers/registry.ts');
-    const { configManager } = await import('../../config/index.ts');
-    const { resolveToolLLM } = await import('../../config/tool-llm.ts');
-
-    const instance = getProviderRegistry();
+    const { providerRegistry: instance, configManager } = testManagers;
 
     const origProvider = configManager.get('tools.llmProvider');
     const origModel = configManager.get('tools.llmModel');
@@ -156,7 +147,7 @@ describe('resolveToolLLM', () => {
     instance.getForModel = () => fakeFallbackProvider2;
 
     try {
-      const resolved = resolveToolLLM();
+      const resolved = resolveToolLLM({ configManager, providerRegistry: instance });
       expect(resolved).not.toBeNull();
       expect(resolved!.modelId).toBe('test-fallback-only-model');
     } finally {
@@ -168,8 +159,7 @@ describe('resolveToolLLM', () => {
   });
 
   test('returns null when explicit provider name is not registered', async () => {
-    const { configManager } = await import('../../config/index.ts');
-    const { resolveToolLLM } = await import('../../config/tool-llm.ts');
+    const { configManager } = testManagers;
 
     const origProvider = configManager.get('tools.llmProvider');
     const origModel = configManager.get('tools.llmModel');
@@ -177,7 +167,7 @@ describe('resolveToolLLM', () => {
     configManager.set('tools.llmModel', 'some-model');
 
     try {
-      const resolved = resolveToolLLM();
+      const resolved = resolveToolLLM({ configManager, providerRegistry: testManagers.providerRegistry });
       expect(resolved).toBeNull();
     } finally {
       configManager.set('tools.llmProvider', origProvider);
@@ -187,16 +177,14 @@ describe('resolveToolLLM', () => {
 });
 
 describe('ToolLLM.chat', () => {
+  let testManagers: ReturnType<typeof createTestManagers>;
+
   beforeEach(async () => {
-    const { ToolLLM } = await import('../../config/tool-llm.ts');
-    ToolLLM._reset();
+    testManagers = createTestManagers();
   });
 
   test('returns response text on success', async () => {
-    const { getProviderRegistry } = await import('../../providers/registry.ts');
-    const providerRegistry = getProviderRegistry();
-    const { configManager } = await import('../../config/index.ts');
-    const { ToolLLM } = await import('../../config/tool-llm.ts');
+    const { providerRegistry, configManager, toolLLM } = testManagers;
 
     const fakeProvider = makeProvider('test-chat-provider', 'generated commit message');
     providerRegistry.register(fakeProvider);
@@ -207,8 +195,7 @@ describe('ToolLLM.chat', () => {
     configManager.set('tools.llmModel', 'test-model');
 
     try {
-      const instance = ToolLLM.getInstance();
-      const result = await instance.chat('write a commit message');
+      const result = await toolLLM.chat('write a commit message');
       expect(result).toBe('generated commit message');
       expect(fakeProvider.calls.length).toBe(1);
       expect(fakeProvider.calls[0].model).toBe('test-model');
@@ -220,10 +207,7 @@ describe('ToolLLM.chat', () => {
   });
 
   test('passes maxTokens and systemPrompt to provider', async () => {
-    const { getProviderRegistry } = await import('../../providers/registry.ts');
-    const providerRegistry = getProviderRegistry();
-    const { configManager } = await import('../../config/index.ts');
-    const { ToolLLM } = await import('../../config/tool-llm.ts');
+    const { providerRegistry, configManager, toolLLM } = testManagers;
 
     const fakeProvider = makeProvider('test-options-provider', 'result');
     providerRegistry.register(fakeProvider);
@@ -234,8 +218,7 @@ describe('ToolLLM.chat', () => {
     configManager.set('tools.llmModel', 'test-model');
 
     try {
-      const instance = ToolLLM.getInstance();
-      await instance.chat('prompt', { maxTokens: 256, systemPrompt: 'You are a helper.' });
+      await toolLLM.chat('prompt', { maxTokens: 256, systemPrompt: 'You are a helper.' });
       expect(fakeProvider.calls[0].maxTokens).toBe(256);
       expect(fakeProvider.calls[0].systemPrompt).toBe('You are a helper.');
     } finally {
@@ -245,10 +228,7 @@ describe('ToolLLM.chat', () => {
   });
 
   test('returns empty string when provider throws (no API key)', async () => {
-    const { getProviderRegistry } = await import('../../providers/registry.ts');
-    const providerRegistry = getProviderRegistry();
-    const { configManager } = await import('../../config/index.ts');
-    const { ToolLLM } = await import('../../config/tool-llm.ts');
+    const { providerRegistry, configManager, toolLLM } = testManagers;
 
     const badProvider = makeErrorProvider('test-error-provider');
     providerRegistry.register(badProvider);
@@ -259,8 +239,7 @@ describe('ToolLLM.chat', () => {
     configManager.set('tools.llmModel', 'bad-model');
 
     try {
-      const instance = ToolLLM.getInstance();
-      const result = await instance.chat('some prompt');
+      const result = await toolLLM.chat('some prompt');
       expect(result).toBe('');
     } finally {
       configManager.set('tools.llmProvider', origProvider);
@@ -269,8 +248,7 @@ describe('ToolLLM.chat', () => {
   });
 
   test('returns empty string when no provider can be resolved', async () => {
-    const { configManager } = await import('../../config/index.ts');
-    const { ToolLLM } = await import('../../config/tool-llm.ts');
+    const { configManager, toolLLM, providerRegistry } = testManagers;
 
     const origProvider = configManager.get('tools.llmProvider');
     const origModel = configManager.get('tools.llmModel');
@@ -278,8 +256,7 @@ describe('ToolLLM.chat', () => {
     configManager.set('tools.llmModel', 'no-model');
 
     try {
-      const instance = ToolLLM.getInstance();
-      const result = await instance.chat('some prompt');
+      const result = await toolLLM.chat('some prompt');
       expect(result).toBe('');
     } finally {
       configManager.set('tools.llmProvider', origProvider);
@@ -287,19 +264,7 @@ describe('ToolLLM.chat', () => {
     }
   });
 
-  test('getInstance returns the same singleton', async () => {
-    const { ToolLLM } = await import('../../config/tool-llm.ts');
-    const a = ToolLLM.getInstance();
-    const b = ToolLLM.getInstance();
-    expect(a).toBe(b);
-  });
-
-  test('toolLLM export is an instance of ToolLLM with the expected interface', async () => {
-    // Note: _reset() in beforeEach clears the singleton, so the module-level
-    // toolLLM export won't === a freshly-created getInstance() after reset.
-    // We verify it has the right type and interface instead.
-    const { ToolLLM, toolLLM } = await import('../../config/tool-llm.ts');
-    expect(toolLLM).toBeInstanceOf(ToolLLM);
-    expect(typeof toolLLM.chat).toBe('function');
+  test('ToolLLM exposes the expected interface', async () => {
+    expect(typeof testManagers.toolLLM.chat).toBe('function');
   });
 });

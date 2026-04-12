@@ -111,7 +111,7 @@ export const DEFAULT_KEYBINDINGS: Record<KeyAction, KeyCombo[]> = {
 type KeybindingsFile = Partial<Record<KeyAction, KeyCombo | KeyCombo[]>>;
 
 /**
- * KeybindingsManager — singleton that owns the resolved keybinding table.
+ * KeybindingsManager — owns the resolved keybinding table.
  *
  * Call loadFromDisk() once at startup (in main.ts) to merge user config.
  * Then use matches() anywhere a key token is being evaluated.
@@ -239,19 +239,4 @@ export class KeybindingsManager {
   getConfigPath(): string {
     return this.configPath;
   }
-}
-
-/** Module-level singleton — shared across the app. */
-let _instance: KeybindingsManager | undefined;
-
-export function getKeybindingsManager(): KeybindingsManager {
-  if (!_instance) {
-    _instance = new KeybindingsManager();
-  }
-  return _instance;
-}
-
-/** Reset the singleton (for testing). */
-export function resetKeybindingsManager(): void {
-  _instance = undefined;
 }

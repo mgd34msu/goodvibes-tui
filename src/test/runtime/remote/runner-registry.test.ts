@@ -3,26 +3,24 @@ import { mkdtempSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createRuntimeStore } from '../../../runtime/store/index.ts';
-import { AgentManager } from '../../../tools/agent/index.ts';
+import { getTestAgentManager, resetTestRuntimeServices } from '../../helpers/runtime-services.ts';
+import { RemoteRunnerRegistry } from '../../../runtime/remote/runner-registry.ts';
 import {
-  _resetRemoteRunnerRegistryForTesting,
   exportRemoteArtifactForAgent,
-  getRemoteRunnerRegistry,
   importRemoteArtifact,
-} from '../../../runtime/remote/index.ts';
+} from '../../../runtime/remote/runner-registry.ts';
 
 describe('RemoteRunnerRegistry', () => {
   beforeEach(() => {
-    AgentManager.resetInstance();
-    _resetRemoteRunnerRegistryForTesting();
+    resetTestRuntimeServices();
   });
 
   afterEach(() => {
-    AgentManager.getInstance().clear();
+    getTestAgentManager().clear();
   });
 
   test('builds runner contracts from active ACP-backed agents', () => {
-    const manager = AgentManager.getInstance();
+    const manager = getTestAgentManager();
     const agent = manager.spawn({ mode: 'spawn', task: 'Remote contract task', template: 'engineer', tools: ['read', 'edit'], dangerously_disable_wrfc: true });
     const store = createRuntimeStore();
     store.setState((state) => ({
@@ -45,7 +43,7 @@ describe('RemoteRunnerRegistry', () => {
       },
     }));
 
-    const registry = getRemoteRunnerRegistry();
+    const registry = new RemoteRunnerRegistry(getTestAgentManager());
     const contract = registry.upsertContractForAgent(agent.id, store);
     expect(contract).not.toBeNull();
     expect(contract?.trustClass).toBe('self-hosted-acp');
@@ -54,7 +52,7 @@ describe('RemoteRunnerRegistry', () => {
   });
 
   test('captures, exports, and imports remote review artifacts', async () => {
-    const manager = AgentManager.getInstance();
+    const manager = getTestAgentManager();
     const agent = manager.spawn({
       mode: 'spawn',
       task: 'Review remote artifact export',
@@ -75,26 +73,26 @@ describe('RemoteRunnerRegistry', () => {
     }];
 
     const store = createRuntimeStore();
+    const registry = new RemoteRunnerRegistry(manager);
     const dir = mkdtempSync(join(tmpdir(), 'gv-remote-artifacts-'));
     const exportPath = join(dir, 'artifact.json');
 
-    const exported = await exportRemoteArtifactForAgent(agent.id, store, exportPath);
+    const exported = await exportRemoteArtifactForAgent(registry, agent.id, store, exportPath);
     expect(exported).not.toBeNull();
     const exportedArtifact = exported!;
     expect(exportedArtifact.artifact.runnerId).toBe(agent.id);
     expect(exportedArtifact.artifact.knowledgeInjections.length).toBe(1);
     expect(existsSync(exportPath)).toBe(true);
 
-    _resetRemoteRunnerRegistryForTesting();
-    const imported = await importRemoteArtifact(exportPath);
+    const imported = await importRemoteArtifact(registry, exportPath);
     expect(imported.id).toBe(exportedArtifact.artifact.id);
     expect(imported.task.summary).toContain('Completed remote review flow');
   });
 
   test('manages remote runner pools and preserves pool assignment on contracts', () => {
-    const manager = AgentManager.getInstance();
+    const manager = getTestAgentManager();
     const agent = manager.spawn({ mode: 'spawn', task: 'Pool-ready runner', template: 'engineer', tools: ['read'], dangerously_disable_wrfc: true });
-    const registry = getRemoteRunnerRegistry();
+    const registry = new RemoteRunnerRegistry(manager);
     registry.createPool({ id: 'ops', label: 'Ops Pool', preferredTemplate: 'engineer', maxRunners: 2 });
     registry.registerContract({
       id: `runner:${agent.id}`,

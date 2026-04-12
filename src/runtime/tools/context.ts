@@ -3,6 +3,7 @@ import type { PermissionManager } from '../../permissions/manager.ts';
 import type { FileStateCache } from '../../state/file-cache.ts';
 import type { ProjectIndex } from '../../state/project-index.ts';
 import type { RuntimeEventBus } from '../events/index.ts';
+import type { OverflowHandler } from '../../tools/shared/overflow.ts';
 
 /**
  * Minimal read/subscribe interface over the Zustand RuntimeStore.
@@ -56,6 +57,9 @@ export interface ToolRuntimeContext {
     fileCache: FileStateCache;
     projectIndex: ProjectIndex;
   };
+
+  /** Shared overflow handler used by output-policy and exec tool result truncation. */
+  overflowHandler?: OverflowHandler;
 
   /** Active provider and model identifiers. */
   provider: {

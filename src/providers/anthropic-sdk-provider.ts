@@ -20,18 +20,20 @@ const DEFAULT_MAX_OUTPUT = 8192;
 
 type AnthropicStreamCapableClient = {
   messages: {
-    stream: (...args: any[]) => AsyncIterable<MessageStreamEvent> & {
-      finalMessage(): Promise<{
-        content: unknown;
-        usage: {
-          input_tokens: number;
-          output_tokens: number;
-          cache_read_input_tokens?: number | null;
-          cache_creation_input_tokens?: number | null;
-        };
-      }>;
-    };
+    stream: unknown;
   };
+};
+
+type AnthropicMessageStream = AsyncIterable<MessageStreamEvent> & {
+  finalMessage(): Promise<{
+    content: unknown;
+    usage: {
+      input_tokens: number;
+      output_tokens: number;
+      cache_read_input_tokens?: number | null;
+      cache_creation_input_tokens?: number | null;
+    };
+  }>;
 };
 
 function normalizeAnthropicModel(model: string): string {
@@ -105,7 +107,11 @@ export class AnthropicSdkProvider implements LLMProvider {
       let stopReason: ChatResponse['stopReason'] = 'end';
 
       try {
-        const stream = client.messages.stream(body, params.signal ? { signal: params.signal } : undefined);
+        const streamFactory = client.messages.stream as (
+          body: Record<string, unknown>,
+          options?: { signal?: AbortSignal },
+        ) => AnthropicMessageStream;
+        const stream = streamFactory(body, params.signal ? { signal: params.signal } : undefined);
         for await (const event of stream as AsyncIterable<MessageStreamEvent>) {
           if (event.type === 'content_block_start' && event.content_block.type === 'tool_use') {
             const idx = event.index ?? 0;

@@ -14,8 +14,8 @@ export { TelemetryDB } from './telemetry.ts';
 export type { ToolCallRecord, TelemetryFilter, TelemetrySummary } from './telemetry.ts';
 export { FileUndoManager } from './file-undo.ts';
 export type { FileOperation } from './file-undo.ts';
-export { MemoryStore, MemoryRegistry, getMemoryStore, getMemoryRegistry } from './memory-store.ts';
-export { _resetMemoryRegistryForTesting } from './memory-store.ts';
+export { MemoryStore } from './memory-store.ts';
+export { MemoryRegistry } from './memory-registry.ts';
 export type {
   MemoryClass,
   MemoryRecord,
@@ -53,4 +53,4 @@ export type {
   MemoryEmbeddingUsage,
 } from './memory-embeddings.ts';
 export type { KnowledgeInjection } from './knowledge-injection.ts';
-export { selectKnowledgeForTask, buildKnowledgeInjectionPrompt, _setKnowledgeRegistryForTesting } from './knowledge-injection.ts';
+export { selectKnowledgeForTask, buildKnowledgeInjectionPrompt } from './knowledge-injection.ts';

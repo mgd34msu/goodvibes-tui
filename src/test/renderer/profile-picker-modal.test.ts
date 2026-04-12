@@ -3,13 +3,15 @@
  */
 import { describe, test, expect } from 'bun:test';
 import { ProfilePickerModal } from '../../input/profile-picker-modal.ts';
+import { ProfileManager } from '../../profiles/manager.ts';
 import { renderProfilePickerModal } from '../../renderer/profile-picker-modal.ts';
 import { lineToString, linesToText } from '../setup.ts';
 
 const W = 120;
+const profileManager = new ProfileManager();
 
 function makeModal(overrides: Partial<ProfilePickerModal> = {}): ProfilePickerModal {
-  const modal = new ProfilePickerModal();
+  const modal = new ProfilePickerModal(profileManager);
   modal.active = true;
   modal.profiles = [
     { name: 'work-profile',    timestamp: 1700000000000, filePath: '/x/work-profile.json' },

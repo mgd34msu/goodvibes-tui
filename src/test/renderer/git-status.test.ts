@@ -34,7 +34,7 @@ function makeStatus(overrides: Partial<StatusResult> = {}): StatusResult {
 
 /**
  * Create a GitStatusProvider with a fake fetch function.
- * This avoids mock.module() which pollutes the global module registry and
+ * This avoids process-global module mocks, which pollute the global module registry and
  * breaks other test files (e.g. src/test/git/service.test.ts) that import
  * the real GitService constructor.
  */

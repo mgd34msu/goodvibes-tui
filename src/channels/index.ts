@@ -66,7 +66,6 @@ export { ChannelProviderRuntimeManager } from './provider-runtime.ts';
 export type { ProviderRuntimeActionResult, ProviderRuntimeStatus, ProviderRuntimeSurface } from './provider-runtime.ts';
 export { ChannelDeliveryRouter, createDefaultChannelDeliveryStrategies, resolveChannelDeliverySurfaceKind } from './delivery-router.ts';
 export type {
-  ChannelDeliveryRequest,
   ChannelDeliveryResult,
   ChannelDeliveryRouteBinding,
   ChannelDeliveryRouterConfig,
@@ -75,3 +74,4 @@ export type {
   ChannelDeliveryTarget,
   ChannelDeliveryTargetKind,
 } from './delivery-router.ts';
+export type { ChannelDeliveryRequest } from './delivery/types.ts';

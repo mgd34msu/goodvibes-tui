@@ -369,7 +369,7 @@ function runMode(
   input: StateInput,
   manager: ModeManager | undefined,
 ): { success: boolean; output?: string; error?: string } {
-  const mm = manager ?? ModeManager.getInstance();
+  const mm = manager ?? new ModeManager();
   const action = input.modeAction ?? 'get';
 
   if (action === 'get') {

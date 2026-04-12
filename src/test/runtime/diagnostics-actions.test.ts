@@ -32,7 +32,7 @@ import { createRuntimeStore } from '../../runtime/store/index.ts';
 import { createTaskManager } from '../../runtime/tasks/index.ts';
 import { RuntimeEventBus } from '../../runtime/events/index.ts';
 import { OpsControlPlane } from '../../runtime/ops/control-plane.ts';
-import { getReplayEngine, resetReplayEngine } from '../../core/deterministic-replay.ts';
+import { DeterministicReplayEngine } from '../../core/deterministic-replay.ts';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -138,8 +138,7 @@ describe('permission checks', () => {
 
 describe('load-replay', () => {
   test('resets the replay engine and returns success', async () => {
-    resetReplayEngine();
-    const engine = getReplayEngine();
+    const engine = new DeterministicReplayEngine();
     const resetMock = mock(() => {});
     (engine as unknown as { reset: () => void }).reset = resetMock;
 

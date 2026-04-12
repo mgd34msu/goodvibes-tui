@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { ArtifactStore } from '../../artifacts/index.ts';
 import { KnowledgeService, KnowledgeStore } from '../../knowledge/index.ts';
 import { RuntimeEventBus } from '../../runtime/events/index.ts';
-import { _resetMemoryRegistryForTesting, getMemoryRegistry, getMemoryStore } from '../../state/index.ts';
+import { MemoryRegistry, MemoryStore } from '../../state/index.ts';
 
 let server: ReturnType<typeof Bun.serve>;
 let baseUrl = '';
@@ -41,17 +41,18 @@ describe('KnowledgeService', () => {
   let root: string;
   let artifactStore: ArtifactStore;
   let knowledgeStore: KnowledgeStore;
+  let memoryStore: MemoryStore;
+  let memoryRegistry: MemoryRegistry;
   let service: KnowledgeService;
 
   beforeEach(async () => {
     root = mkdtempSync(join(tmpdir(), 'gv-knowledge-'));
-    ArtifactStore.resetActiveForTesting();
-    KnowledgeStore.resetActiveForTesting();
-    KnowledgeService.resetActiveForTesting();
-    _resetMemoryRegistryForTesting();
     artifactStore = new ArtifactStore({ rootDir: join(root, 'artifacts') });
     knowledgeStore = new KnowledgeStore({ dbPath: join(root, 'knowledge.sqlite') });
-    service = new KnowledgeService(knowledgeStore, artifactStore);
+    memoryStore = new MemoryStore(join(root, 'memory.sqlite'));
+    memoryRegistry = new MemoryRegistry(memoryStore);
+    await memoryStore.init();
+    service = new KnowledgeService(knowledgeStore, artifactStore, undefined, { memoryRegistry });
     await knowledgeStore.init();
   });
 
@@ -101,9 +102,7 @@ describe('KnowledgeService', () => {
   });
 
   test('mirrors reviewed memory into the knowledge graph during reindex', async () => {
-    await getMemoryStore(':memory:').init();
-    const memory = getMemoryRegistry(':memory:');
-    await memory.add({
+    await memoryRegistry.add({
       cls: 'decision',
       summary: 'Use sqlite-vec for semantic recall',
       detail: 'Project memory uses sqlite-vec as the default vector store.',
@@ -155,7 +154,7 @@ describe('KnowledgeService', () => {
     const runtimeBus = new RuntimeEventBus();
     const events: string[] = [];
     runtimeBus.onDomain('knowledge', ({ payload }) => events.push(payload.type));
-    service = new KnowledgeService(knowledgeStore, artifactStore, undefined, { runtimeBus });
+    service = new KnowledgeService(knowledgeStore, artifactStore, undefined, { runtimeBus, memoryRegistry });
 
     const result = await service.ingestArtifact({
       path: csvPath,
@@ -229,7 +228,7 @@ describe('KnowledgeService', () => {
 
     const deep = await service.runJob('knowledge-deep-consolidation', { mode: 'inline' });
     expect(deep.status).toBe('completed');
-    expect(getMemoryRegistry().getAll().some((record) => record.summary.toLowerCase().includes('typescript'))).toBe(true);
+    expect(memoryRegistry.getAll().some((record) => record.summary.toLowerCase().includes('typescript'))).toBe(true);
 
     const schedules = service.listSchedules(10);
     expect(schedules.some((schedule) => schedule.jobId === 'knowledge-light-consolidation')).toBe(true);

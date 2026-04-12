@@ -4,6 +4,7 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { FileUndoManager } from '../file-undo.ts';
+import { getTestFileUndoManager, resetTestRuntimeServices } from '../../test/helpers/runtime-services.ts';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -35,15 +36,15 @@ describe('FileUndoManager', () => {
   let manager: FileUndoManager;
 
   beforeEach(() => {
-    FileUndoManager._resetForTest();
-    manager = FileUndoManager.getInstance();
+    resetTestRuntimeServices();
+    manager = getTestFileUndoManager();
     tempDir = mkdtempSync(join(tmpdir(), `gv-file-undo-${randomUUID()}-`));
     testFilePath = join(tempDir, 'test-file.ts');
     mkdirSync(tempDir, { recursive: true });
   });
 
   afterEach(() => {
-    FileUndoManager._resetForTest();
+    resetTestRuntimeServices();
     rmSync(tempDir, { recursive: true, force: true });
     tempDir = '';
     testFilePath = '';
@@ -228,11 +229,9 @@ describe('FileUndoManager', () => {
     expect(manager.redoDepth()).toBe(0);
   });
 
-  // ── singleton ─────────────────────────────────────────────
-
-  it('getInstance returns the same instance', () => {
-    const a = FileUndoManager.getInstance();
-    const b = FileUndoManager.getInstance();
+  it('test runtime exposes one file-undo manager per runtime graph', () => {
+    const a = getTestFileUndoManager();
+    const b = getTestFileUndoManager();
     expect(a).toBe(b);
   });
 });

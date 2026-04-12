@@ -53,33 +53,12 @@ interface CanSpawnResult {
  *   3. Token gate    — token must be valid, authentic, not expired, and canGenerate
  */
 export class SpawnTokenManager {
-  private static instance: SpawnTokenManager | null = null;
-
   private secret: string;
   private tokens = new Map<string, SpawnToken>();
 
   constructor(sessionId: string) {
     // Per-session random secret — never shared outside this instance
     this.secret = `${sessionId}:${randomBytes(32).toString('hex')}`;
-  }
-
-  // -------------------------------------------------------------------------
-  // Singleton
-  // -------------------------------------------------------------------------
-
-  static getInstance(sessionId?: string): SpawnTokenManager {
-    if (!SpawnTokenManager.instance) {
-      if (!sessionId) {
-        sessionId = randomBytes(8).toString('hex');
-      }
-      SpawnTokenManager.instance = new SpawnTokenManager(sessionId);
-    }
-    return SpawnTokenManager.instance;
-  }
-
-  /** Reset the singleton — primarily for testing. */
-  static resetInstance(): void {
-    SpawnTokenManager.instance = null;
   }
 
   // -------------------------------------------------------------------------

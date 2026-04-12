@@ -5,10 +5,13 @@ import { join } from 'node:path';
 import { createRuntimeStore } from '../../runtime/store/index.ts';
 import { createInitialTasksState } from '../../runtime/store/domains/tasks.ts';
 import { TasksPanel } from '../../panels/tasks-panel.ts';
-import { registerBuiltinPanels } from '../../panels/builtin-panels.ts';
 import { PanelManager } from '../../panels/panel-manager.ts';
-import type { RuntimeEventBus } from '../../runtime/events/index.ts';
 import type { Line } from '../../types/grid.ts';
+import { UserAuthManager } from '../../security/user-auth.ts';
+import { ConfigManager } from '../../config/manager.ts';
+import { ServiceRegistry } from '../../config/service-registry.ts';
+import { SubscriptionManager } from '../../config/subscriptions.ts';
+import { createTestProviderRegistry } from '../helpers/test-managers.ts';
 
 function linesText(lines: Line[]): string {
   return lines
@@ -170,11 +173,15 @@ describe('TasksPanel', () => {
     expect(last).toContain('Result:');
   });
 
-  test('is registered as a built-in panel when a runtime store is provided', () => {
+  test('is registerable in a panel manager when a runtime store is provided', () => {
     const manager = new PanelManager();
-    registerBuiltinPanels(manager, {
-      runtimeBus: {} as RuntimeEventBus,
-      runtimeStore: createRuntimeStore(),
+    manager.registerType({
+      id: 'tasks',
+      name: 'Tasks',
+      icon: 'T',
+      category: 'session',
+      description: 'Task Control Room',
+      factory: () => new TasksPanel(createRuntimeStore()),
     });
     expect(manager.getRegisteredTypes().some((entry) => entry.id === 'tasks')).toBe(true);
   });
@@ -183,19 +190,22 @@ describe('TasksPanel', () => {
     const { ProviderAccountsPanel } = await import('../../panels/provider-accounts-panel.ts');
     const { LocalAuthPanel } = await import('../../panels/local-auth-panel.ts');
     const { SettingsSyncPanel } = await import('../../panels/settings-sync-panel.ts');
-    const { getConfigManager } = await import('../../config/index.ts');
 
-    const accountsPanel = new ProviderAccountsPanel();
+    const accountsPanel = new ProviderAccountsPanel({
+      providerRegistry: createTestProviderRegistry(),
+      serviceRegistry: new ServiceRegistry(join(root, '.goodvibes', 'tui', 'services.json')),
+      subscriptionManager: new SubscriptionManager(join(root, '.goodvibes', 'tui', 'subscriptions.json')),
+    });
     await new Promise((resolve) => setTimeout(resolve, 0));
     const accountsText = linesText(accountsPanel.render(120, 18));
     expect(accountsText).toContain('Provider posture');
     expect(accountsText).toContain('/accounts repair <provider>');
 
-    const authText = linesText(new LocalAuthPanel().render(120, 18));
+    const authText = linesText(new LocalAuthPanel(new UserAuthManager()).render(120, 18));
     expect(authText).toContain('Local auth posture');
     expect(authText).toContain('/auth local rotate-password <user> <password>');
 
-    const settingsText = linesText(new SettingsSyncPanel(getConfigManager()).render(120, 20));
+    const settingsText = linesText(new SettingsSyncPanel(new ConfigManager()).render(120, 20));
     expect(settingsText).toContain('Settings posture');
     expect(settingsText).toContain('/settingssync conflicts');
     expect(settingsText).toContain('/managed review');

@@ -1,8 +1,8 @@
 import type { LLMProvider, ChatRequest, ChatResponse, ProviderRuntimeMetadata } from './interface.ts';
 import { REASONING_BUDGET_MAP } from './interface.ts';
 import { getCacheCapability } from './cache-capability.ts';
-import { getDefaultStrategy, cacheHitTracker } from './cache-strategy.ts';
-import type { CacheContext } from './cache-strategy.ts';
+import { getDefaultStrategy } from './cache-strategy.ts';
+import type { CacheContext, CacheHitTracker } from './cache-strategy.ts';
 import { ProviderError } from '../types/errors.ts';
 import { withRetry } from '../utils/retry.ts';
 import { logger } from '../utils/logger.ts';
@@ -54,6 +54,10 @@ const ANTHROPIC_MAX_OUTPUT: Array<{ match: (m: string) => boolean; cap: number }
   { match: (m) => m.includes('haiku'), cap: 8192 },
 ];
 const ANTHROPIC_DEFAULT_MAX_OUTPUT = 16384;
+const NOOP_CACHE_HIT_TRACKER: Pick<CacheHitTracker, 'getHitRate' | 'recordTurn'> = {
+  getHitRate: () => 0,
+  recordTurn: () => {},
+};
 
 function normalizeAnthropicModel(model: string): string {
   if (model.startsWith('anthropic:')) return model.slice('anthropic:'.length);
@@ -80,9 +84,14 @@ export class AnthropicProvider implements LLMProvider {
   readonly models: string[] = [];
 
   private readonly apiKey: string;
+  private readonly cacheHitTracker: Pick<CacheHitTracker, 'getHitRate' | 'recordTurn'>;
 
-  constructor(apiKey: string) {
+  constructor(
+    apiKey: string,
+    cacheHitTracker: Pick<CacheHitTracker, 'getHitRate' | 'recordTurn'> = NOOP_CACHE_HIT_TRACKER,
+  ) {
     this.apiKey = apiKey;
+    this.cacheHitTracker = cacheHitTracker;
   }
 
   async chat(params: ChatRequest): Promise<ChatResponse> {
@@ -122,7 +131,7 @@ export class AnthropicProvider implements LLMProvider {
           messages.reduce((sum, m) =>
             sum + (typeof m.content === 'string' ? m.content.length : JSON.stringify(m.content).length), 0) / 4,
         ),
-        recentCacheHitRate: cacheHitTracker.getHitRate() || undefined,
+        recentCacheHitRate: this.cacheHitTracker.getHitRate() || undefined,
       };
 
       const strategy = getDefaultStrategy(cacheContext);
@@ -371,7 +380,7 @@ export class AnthropicProvider implements LLMProvider {
       const { text, toolCalls } = fromAnthropicContent(contentBlocks);
 
       // Record cache metrics for strategy adaptation.
-      cacheHitTracker.recordTurn({ inputTokens, cacheReadTokens, cacheWriteTokens });
+      this.cacheHitTracker.recordTurn({ inputTokens, cacheReadTokens, cacheWriteTokens });
 
       const cap = getCacheCapability('anthropic');
       // Exclude write tokens from the denominator: writes are a one-time cost and inflate the

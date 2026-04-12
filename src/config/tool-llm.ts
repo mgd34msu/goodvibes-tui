@@ -14,15 +14,20 @@
  *   - Singleton pattern — import `toolLLM` for use
  */
 
+import type { ConfigManager } from './manager.ts';
 import type { LLMProvider } from '../providers/interface.ts';
-import { getProviderRegistry } from '../providers/registry.ts';
-import { configManager } from './index.ts';
+import type { ProviderRegistry } from '../providers/registry.ts';
 import { logger } from '../utils/logger.ts';
 
 /** Resolved provider + model pair for tool-internal LLM calls. */
 export interface ResolvedToolLLM {
   provider: LLMProvider;
   modelId: string;
+}
+
+export interface ToolLLMDeps {
+  readonly configManager: Pick<ConfigManager, 'get'>;
+  readonly providerRegistry: Pick<ProviderRegistry, 'get' | 'getCurrentModel' | 'getForModel'>;
 }
 
 /**
@@ -34,21 +39,20 @@ export interface ResolvedToolLLM {
  *
  * Returns null if resolution fails (e.g. unknown provider name).
  */
-export function resolveToolLLM(): ResolvedToolLLM | null {
+export function resolveToolLLM(deps: ToolLLMDeps): ResolvedToolLLM | null {
   try {
-    const providerRegistry = getProviderRegistry();
-    const cfgProvider = configManager.get('tools.llmProvider');
-    const cfgModel = configManager.get('tools.llmModel');
+    const cfgProvider = deps.configManager.get('tools.llmProvider');
+    const cfgModel = deps.configManager.get('tools.llmModel');
 
     if (cfgProvider && cfgModel) {
       // Explicit config: resolve by provider name
-      const provider = providerRegistry.get(cfgProvider);
+      const provider = deps.providerRegistry.get(cfgProvider);
       return { provider, modelId: cfgModel };
     }
 
     // Fallback: use currently selected provider/model
-    const currentDef = providerRegistry.getCurrentModel();
-    const provider = providerRegistry.getForModel(currentDef.id, currentDef.provider);
+    const currentDef = deps.providerRegistry.getCurrentModel();
+    const provider = deps.providerRegistry.getForModel(currentDef.id, currentDef.provider);
     return { provider, modelId: currentDef.id };
   } catch (err) {
     logger.debug('resolveToolLLM: failed to resolve provider/model', { error: String(err) });
@@ -71,17 +75,7 @@ export interface ToolLLMChatOptions {
  * Always returns a string — empty string on any failure.
  */
 export class ToolLLM {
-  private static _instance: ToolLLM | undefined;
-
-  private constructor() {}
-
-  /** Singleton accessor. */
-  static getInstance(): ToolLLM {
-    if (!ToolLLM._instance) {
-      ToolLLM._instance = new ToolLLM();
-    }
-    return ToolLLM._instance;
-  }
+  constructor(private readonly deps: ToolLLMDeps) {}
 
   /**
    * Send a single-turn prompt to the tool LLM.
@@ -92,7 +86,7 @@ export class ToolLLM {
    */
   async chat(prompt: string, options: ToolLLMChatOptions = {}): Promise<string> {
     try {
-      const resolved = resolveToolLLM();
+      const resolved = resolveToolLLM(this.deps);
       if (!resolved) {
         logger.debug('ToolLLM.chat: no provider resolved, returning empty string');
         return '';
@@ -112,12 +106,4 @@ export class ToolLLM {
       return '';
     }
   }
-
-  /** Reset singleton (used in tests). */
-  static _reset(): void {
-    ToolLLM._instance = undefined;
-  }
 }
-
-/** Singleton instance — import and use everywhere. */
-export const toolLLM: ToolLLM = ToolLLM.getInstance();

@@ -3,13 +3,15 @@
  */
 import { describe, test, expect, beforeEach } from 'bun:test';
 import { SessionPickerModal } from '../../input/session-picker-modal.ts';
+import { SessionManager } from '../../sessions/manager.ts';
 import { renderSessionPickerModal } from '../../renderer/session-picker-modal.ts';
 import { lineToString, linesToText } from '../setup.ts';
 
 const W = 120;
+const sessionManager = new SessionManager();
 
 function makeModal(overrides: Partial<SessionPickerModal> = {}): SessionPickerModal {
-  const modal = new SessionPickerModal();
+  const modal = new SessionPickerModal(sessionManager);
   modal.active = true;
   modal.sessions = [
     { name: 'alpha-session', title: 'Alpha', model: 'gpt-4', provider: 'openai', timestamp: 1700000000000, messageCount: 5, filePath: '/x/alpha.jsonl' },

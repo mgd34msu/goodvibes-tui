@@ -12,8 +12,6 @@
 import { describe, test, expect, beforeEach } from 'bun:test';
 import {
   PanelHealthMonitor,
-  getSharedPanelHealthMonitor,
-  resetSharedPanelHealthMonitor,
 } from '../../../runtime/perf/panel-health-monitor.ts';
 import { buildContract } from '../../../runtime/perf/panel-contracts.ts';
 import { PanelResourcesPanel } from '../../../runtime/diagnostics/panels/panel-resources.ts';
@@ -300,13 +298,9 @@ describe('PanelHealthMonitor: render storm containment', () => {
 // ---------------------------------------------------------------------------
 
 describe('PanelResourcesPanel: diagnostics snapshot', () => {
-  beforeEach(() => {
-    // Reset shared monitor so tests don't bleed
-    resetSharedPanelHealthMonitor();
-  });
-
   test('empty snapshot when no panels are registered', () => {
-    const panel = new PanelResourcesPanel();
+    const monitor = new PanelHealthMonitor();
+    const panel = new PanelResourcesPanel(monitor);
     const snap = panel.getSnapshot();
     expect(snap.panels).toHaveLength(0);
     expect(snap.overloadedCount).toBe(0);
@@ -317,7 +311,7 @@ describe('PanelResourcesPanel: diagnostics snapshot', () => {
   });
 
   test('refresh builds snapshot from shared monitor state', () => {
-    const monitor = getSharedPanelHealthMonitor();
+    const monitor = new PanelHealthMonitor();
     monitor.register('diag-panel-1', 'development');
     monitor.register('diag-panel-2', 'monitoring');
 
@@ -325,7 +319,7 @@ describe('PanelResourcesPanel: diagnostics snapshot', () => {
     monitor.canRender('diag-panel-1', 1000);
     monitor.recordRender('diag-panel-1', 3, 1003);
 
-    const provider = new PanelResourcesPanel();
+    const provider = new PanelResourcesPanel(monitor);
     const snap = provider.refresh(2000);
 
     expect(snap.panels).toHaveLength(2);
@@ -335,7 +329,7 @@ describe('PanelResourcesPanel: diagnostics snapshot', () => {
   });
 
   test('overloaded panels sort before healthy in snapshot', () => {
-    const monitor = getSharedPanelHealthMonitor();
+    const monitor = new PanelHealthMonitor();
 
     // Heavy panel — will be overloaded
     monitor.register('heavy-diag', 'monitoring', {
@@ -352,7 +346,7 @@ describe('PanelResourcesPanel: diagnostics snapshot', () => {
       monitor.canRender('heavy-diag', 500 + i * 5);
     }
 
-    const provider = new PanelResourcesPanel();
+    const provider = new PanelResourcesPanel(monitor);
     const snap = provider.refresh(700);
 
     expect(snap.panels.length).toBeGreaterThanOrEqual(1);
@@ -365,7 +359,7 @@ describe('PanelResourcesPanel: diagnostics snapshot', () => {
   });
 
   test('totalSuppressed aggregates across all panels', () => {
-    const monitor = getSharedPanelHealthMonitor();
+    const monitor = new PanelHealthMonitor();
 
     monitor.register('a', 'monitoring', { maxUpdatesPerSecond: 1, throttleIntervalMs: 100, degradeAfterViolations: 10 });
     monitor.register('b', 'monitoring', { maxUpdatesPerSecond: 1, throttleIntervalMs: 100, degradeAfterViolations: 10 });
@@ -375,7 +369,7 @@ describe('PanelResourcesPanel: diagnostics snapshot', () => {
       monitor.canRender('b', 1000 + i * 20);
     }
 
-    const provider = new PanelResourcesPanel();
+    const provider = new PanelResourcesPanel(monitor);
     const snap = provider.refresh(1300);
 
     const aEntry = snap.panels.find((p) => p.panelId === 'a');

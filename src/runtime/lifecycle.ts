@@ -4,14 +4,14 @@
  * Handles ordered teardown: persist session, fire lifecycle hooks,
  * stop background managers. Terminal teardown remains in main.ts.
  */
-import { getHookDispatcher } from '../hooks/index.ts';
+import type { HookDispatcher } from '../hooks/index.ts';
 import type { HookPhase, HookCategory, HookEventPath } from '../hooks/types.ts';
-import { ScheduleManager } from '../tools/workflow/index.ts';
-import { providerRegistry } from '../providers/registry.ts';
+import type { ScheduleManager } from '../tools/workflow/index.ts';
+import type { ProviderRegistry } from '../providers/registry.ts';
 import { logger } from '../utils/logger.ts';
 export { saveSession } from './session-persistence.ts';
 import { saveSession, type SessionSnapshot } from './session-persistence.ts';
-import { disposeSessionOrchestration } from '../sessions/orchestration/registry.ts';
+import type { CrossSessionTaskRegistry } from '../sessions/orchestration/index.ts';
 
 // ── Startup lifecycle ────────────────────────────────────────────────────────
 
@@ -19,9 +19,13 @@ import { disposeSessionOrchestration } from '../sessions/orchestration/registry.
  * Fire the session:start lifecycle hook.
  * Non-fatal: errors are logged and swallowed.
  */
-export function fireSessionStart(sessionId: string): void {
+export function fireSessionStart(
+  sessionId: string,
+  hookDispatcher: Pick<HookDispatcher, 'fire'> | null,
+): void {
+  if (!hookDispatcher) return;
   try {
-    getHookDispatcher().fire({
+    hookDispatcher.fire({
       path: 'Lifecycle:session:start' as HookEventPath,
       phase: 'Lifecycle' as HookPhase,
       category: 'session' as HookCategory,
@@ -63,14 +67,17 @@ export async function shutdownRuntime(
   model: string,
   provider: string,
   title = '',
+  scheduleManager?: ScheduleManager | null,
+  hookDispatcher?: Pick<HookDispatcher, 'fire'> | null,
+  providerRegistry?: Pick<ProviderRegistry, 'stopWatching'> | null,
+  sessionOrchestration?: Pick<CrossSessionTaskRegistry, 'dispose'> | null,
 ): Promise<void> {
   // Step 1: persist conversation
   saveSession(sessionId, sessionData, model, provider, title);
 
   // Step 2: lifecycle hooks (fire-and-forget, best-effort before process exit)
-  const hookDispatcher = getHookDispatcher();
-
   const fireHook = (specific: string): void => {
+    if (!hookDispatcher) return;
     try {
       hookDispatcher.fire({
         path: `Lifecycle:session:${specific}` as HookEventPath,
@@ -88,11 +95,11 @@ export async function shutdownRuntime(
   fireHook('save');
 
   // Step 3: stop ScheduleManager
-  try { ScheduleManager.getInstance().destroy(); } catch (err) { logger.debug('ScheduleManager.destroy failed (non-fatal)', { error: String(err) }); }
+  try { scheduleManager?.destroy(); } catch (err) { logger.debug('ScheduleManager.destroy failed (non-fatal)', { error: String(err) }); }
 
   // Step 4: stop provider registry watcher
-  try { providerRegistry.stopWatching(); } catch (err) { logger.debug('providerRegistry.stopWatching failed (non-fatal)', { error: String(err) }); }
+  try { providerRegistry?.stopWatching(); } catch (err) { logger.debug('providerRegistry.stopWatching failed (non-fatal)', { error: String(err) }); }
 
-  // Step 5: dispose cross-session orchestration singleton if it was initialized
-  try { disposeSessionOrchestration(); } catch (err) { logger.debug('disposeSessionOrchestration failed (non-fatal)', { error: String(err) }); }
+  // Step 5: dispose cross-session orchestration registry if it is app-owned in this runtime
+  try { sessionOrchestration?.dispose(); } catch (err) { logger.debug('sessionOrchestration.dispose failed (non-fatal)', { error: String(err) }); }
 }

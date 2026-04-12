@@ -3,10 +3,11 @@
  *
  * Provides:
  * - ConfigManager class and all schema types
- * - Lazy singleton accessors for runtime configuration and derived helpers
+ * - Pure helpers that derive values from an explicit ConfigManager instance
  */
 
 export { ConfigManager } from './manager.ts';
+export type { DeepReadonly } from './manager.ts';
 export type { GoodVibesConfig, ConfigKey, ConfigValue, ConfigSetting, PermissionMode, PermissionAction, PermissionsToolConfig, NotificationsConfig } from './schema.ts';
 export { DEFAULT_CONFIG, CONFIG_SCHEMA } from './schema.ts';
 export { ConfigError } from '../types/errors.ts';
@@ -14,93 +15,35 @@ export { ConfigError } from '../types/errors.ts';
 import { readFileSync } from 'fs';
 import { ConfigManager } from './manager.ts';
 import type { GoodVibesConfig } from './schema.ts';
+import { SecretsManager } from './secrets.ts';
 import { logger } from '../utils/logger.ts';
-import { getSecretsManager } from './secrets.ts';
 
-/** Lazy singleton — initialized on first access to avoid sync I/O at import time. */
-let _configManager: ConfigManager | undefined;
-let _configManagerModeKey: string | undefined;
-export function getConfigManager(): ConfigManager {
-  const modeKey = ConfigManager.getTestMode() ?? '__default__';
-  if (!_configManager || _configManagerModeKey !== modeKey) {
-    _configManager = new ConfigManager();
-    _configManagerModeKey = modeKey;
-  }
-  return _configManager;
+export function getConfigSnapshot(configManager: Pick<ConfigManager, 'getRaw'>): Readonly<GoodVibesConfig> {
+  return configManager.getRaw();
 }
 
-export function _resetConfigManagerForTesting(): void {
-  _configManager = undefined;
-  _configManagerModeKey = undefined;
+export function getConfiguredModelId(configManager: Pick<ConfigManager, 'get'>): string {
+  return configManager.get('provider.model');
 }
 
-export const configManager: ConfigManager = new Proxy({} as ConfigManager, {
-  get(_target, prop: string | symbol) {
-    const target = _target as unknown as Record<string | symbol, unknown>;
-    if (prop in target) {
-      const overridden = target[prop];
-      if (typeof overridden === 'function') {
-        return (overridden as Function).bind(target);
-      }
-      return overridden;
-    }
-    const manager = getConfigManager();
-    const prototypeMethod = typeof prop === 'string'
-      ? (ConfigManager.prototype as unknown as Record<string, unknown>)[prop]
-      : undefined;
-    if (typeof prototypeMethod === 'function') {
-      return (prototypeMethod as Function).bind(manager);
-    }
-    // Proxy handler requires untyped index access — TypeScript does not allow
-    // bracket-notation on a typed class, so we cast through Record to read any
-    // property by string/symbol at runtime.
-    const value = (manager as unknown as Record<string | symbol, unknown>)[prop];
-    // Bind methods to the singleton so `this` is correct when called via the proxy.
-    if (typeof value === 'function') {
-      // `as Function` is the narrowest safe cast here; we just need .bind().
-      return (value as Function).bind(manager);
-    }
-    return value;
-  },
-  set(_target, prop: string | symbol, value: unknown) {
-    if (typeof prop === 'string') {
-      const prototypeMethod = (ConfigManager.prototype as unknown as Record<string, unknown>)[prop];
-      if (typeof prototypeMethod === 'function') {
-        return true;
-      }
-    }
-    // Same rationale as the getter: runtime property assignment via bracket notation.
-    (getConfigManager() as unknown as Record<string | symbol, unknown>)[prop] = value;
-    return true;
-  },
-});
-
-export function getConfigSnapshot(): Readonly<GoodVibesConfig> {
-  return getConfigManager().getRaw();
+export function getConfiguredProviderId(configManager: Pick<ConfigManager, 'get'>): string {
+  return configManager.get('provider.provider');
 }
 
-export function getConfiguredModelId(): string {
-  return getConfigSnapshot().provider.model;
+export function getConfiguredEmbeddingProviderId(configManager: Pick<ConfigManager, 'get'>): string {
+  return configManager.get('provider.embeddingProvider');
 }
 
-export function getConfiguredProviderId(): string {
-  return getConfigSnapshot().provider.provider;
-}
-
-export function getConfiguredEmbeddingProviderId(): string {
-  return getConfigSnapshot().provider.embeddingProvider;
-}
-
-export function isAutoApproveEnabled(): boolean {
-  return getConfigSnapshot().behavior.autoApprove;
+export function isAutoApproveEnabled(configManager: Pick<ConfigManager, 'get'>): boolean {
+  return configManager.get('behavior.autoApprove');
 }
 
 export function getWorkingDirectory(): string {
   return process.cwd();
 }
 
-export function getConfiguredSystemPrompt(): string | undefined {
-  const file = getConfigSnapshot().provider.systemPromptFile;
+export function getConfiguredSystemPrompt(configManager: Pick<ConfigManager, 'get'>): string | undefined {
+  const file = configManager.get('provider.systemPromptFile');
   if (!file) return undefined;
   try {
     return readFileSync(file, 'utf-8');
@@ -178,8 +121,9 @@ function loadEnvApiKeys(): Record<string, string> {
  *
  * Returns a map of provider → apiKey for all providers where a key is found.
  */
-export async function resolveApiKeys(): Promise<Record<string, string>> {
-  const secrets = getSecretsManager();
+export async function resolveApiKeys(
+  secrets: Pick<SecretsManager, 'get'> = new SecretsManager(),
+): Promise<Record<string, string>> {
   const mapping: Array<{ prov: string; envVars: string[] }> = [
     { prov: 'openai',       envVars: ['OPENAI_API_KEY', 'OPENAI_KEY'] },
     { prov: 'anthropic',    envVars: ['ANTHROPIC_API_KEY', 'CLAUDE_API_KEY'] },

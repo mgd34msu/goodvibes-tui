@@ -1,11 +1,9 @@
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
+import { beforeEach, describe, expect, test } from 'bun:test';
 import { recallCommand } from '../../input/commands/memory.ts';
 import { MemoryRegistry } from '../../state/memory-store.ts';
 import type { MemoryAddOptions } from '../../state/memory-store.ts';
-import { _setKnowledgeRegistryForTesting } from '../../state/knowledge-injection.ts';
 import { ForensicsRegistry } from '../../runtime/forensics/registry.ts';
-import { getPolicyRuntimeState, resetPolicyRuntimeStateForTests } from '../../runtime/permissions/policy-runtime.ts';
-import { pluginManager } from '../../plugins/manager.ts';
+import { PolicyRuntimeState } from '../../runtime/permissions/policy-runtime.ts';
 import { existsSync, mkdtempSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -79,11 +77,11 @@ function makeRegistry(): MemoryRegistry {
 describe('recallCommand', () => {
   let printed: string[];
   let forensicsRegistry: ForensicsRegistry;
+  let policyRuntimeState: PolicyRuntimeState;
 
   beforeEach(() => {
     printed = [];
-    resetPolicyRuntimeStateForTests();
-    _setKnowledgeRegistryForTesting(undefined);
+    policyRuntimeState = new PolicyRuntimeState();
     forensicsRegistry = new ForensicsRegistry();
     forensicsRegistry.push({
       id: 'incident-1',
@@ -102,10 +100,6 @@ describe('recallCommand', () => {
       budgetBreaches: [],
       jumpLinks: [],
     });
-  });
-
-  afterEach(() => {
-    _setKnowledgeRegistryForTesting(undefined);
   });
 
   test('captures the latest incident into memory', async () => {
@@ -135,7 +129,7 @@ describe('recallCommand', () => {
   });
 
   test('captures the latest policy preflight review into memory', async () => {
-    getPolicyRuntimeState().recordPreflightReview({
+    policyRuntimeState.recordPreflightReview({
       generatedAt: new Date().toISOString(),
       status: 'warn',
       summary: '1 warning detected in the current policy posture.',
@@ -170,6 +164,7 @@ describe('recallCommand', () => {
       mcpRegistry: { listServerSecurity: () => [] } as never,
       memoryRegistry: makeRegistry(),
       forensicsRegistry,
+      policyRuntimeState,
     });
 
     expect(printed.some((line) => line.includes('Captured policy preflight into memory'))).toBe(true);
@@ -279,8 +274,6 @@ describe('recallCommand', () => {
       tags: ['deploy', 'mcp'],
       review: { state: 'reviewed', confidence: 92 },
     });
-    _setKnowledgeRegistryForTesting(registry);
-
     await recallCommand.handler(['explain', 'deploy', 'the', 'release'], {
       providerRegistry: {} as never,
       conversationManager: {} as never,

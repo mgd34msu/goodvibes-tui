@@ -2,7 +2,7 @@ import type { RuntimeEventDomain } from '../runtime/events/index.ts';
 
 export type GatewayMethodTransport = 'http' | 'ws' | 'internal';
 export type GatewayMethodSource = 'builtin' | 'plugin';
-export type GatewayMethodAccess = 'authenticated' | 'admin' | 'remote-peer';
+export type GatewayMethodAccess = 'public' | 'authenticated' | 'admin' | 'remote-peer';
 export type GatewayEventTransport = 'sse' | 'ws' | 'internal';
 
 export interface GatewayHttpBinding {
@@ -74,13 +74,33 @@ export interface GatewayEventListOptions {
   readonly domain?: RuntimeEventDomain;
 }
 
-export const GENERIC_OBJECT_SCHEMA = { type: 'object', additionalProperties: true } as const;
 export const EMPTY_OBJECT_SCHEMA = { type: 'object', properties: {}, additionalProperties: false } as const;
 export const STRING_SCHEMA = { type: 'string' } as const;
 export const BOOLEAN_SCHEMA = { type: 'boolean' } as const;
 export const NUMBER_SCHEMA = { type: 'number' } as const;
+const NULL_SCHEMA = { type: 'null' } as const;
+export const JSON_VALUE_SCHEMA: Record<string, unknown> = {};
+export const JSON_OBJECT_SCHEMA: Record<string, unknown> = {
+  type: 'object',
+  additionalProperties: JSON_VALUE_SCHEMA,
+};
+export const JSON_ARRAY_SCHEMA: Record<string, unknown> = {
+  type: 'array',
+  items: JSON_VALUE_SCHEMA,
+};
 
-export function arraySchema(itemSchema: Record<string, unknown> = GENERIC_OBJECT_SCHEMA): Record<string, unknown> {
+Object.assign(JSON_VALUE_SCHEMA, {
+  anyOf: [
+    STRING_SCHEMA,
+    NUMBER_SCHEMA,
+    BOOLEAN_SCHEMA,
+    NULL_SCHEMA,
+    JSON_OBJECT_SCHEMA,
+    JSON_ARRAY_SCHEMA,
+  ],
+});
+
+export function arraySchema(itemSchema: Record<string, unknown>): Record<string, unknown> {
   return { type: 'array', items: itemSchema };
 }
 
@@ -97,17 +117,65 @@ export function objectSchema(
   };
 }
 
-export function listOutputSchema(key: string): Record<string, unknown> {
-  return objectSchema({ [key]: arraySchema(GENERIC_OBJECT_SCHEMA) }, [key], { additionalProperties: false });
+export const GATEWAY_HTTP_BINDING_SCHEMA = objectSchema({
+  method: STRING_SCHEMA,
+  path: STRING_SCHEMA,
+}, ['method', 'path']);
+
+export const METHOD_DESCRIPTOR_SCHEMA = objectSchema({
+  id: STRING_SCHEMA,
+  title: STRING_SCHEMA,
+  description: STRING_SCHEMA,
+  category: STRING_SCHEMA,
+  source: STRING_SCHEMA,
+  access: STRING_SCHEMA,
+  transport: arraySchema(STRING_SCHEMA),
+  scopes: arraySchema(STRING_SCHEMA),
+  http: GATEWAY_HTTP_BINDING_SCHEMA,
+  events: arraySchema(STRING_SCHEMA),
+  inputSchema: JSON_OBJECT_SCHEMA,
+  outputSchema: JSON_OBJECT_SCHEMA,
+  pluginId: STRING_SCHEMA,
+  dangerous: BOOLEAN_SCHEMA,
+  invokable: BOOLEAN_SCHEMA,
+  metadata: JSON_OBJECT_SCHEMA,
+}, ['id', 'title', 'description', 'category', 'source', 'access', 'transport', 'scopes']);
+
+export const EVENT_DESCRIPTOR_SCHEMA = objectSchema({
+  id: STRING_SCHEMA,
+  title: STRING_SCHEMA,
+  description: STRING_SCHEMA,
+  category: STRING_SCHEMA,
+  source: STRING_SCHEMA,
+  transport: arraySchema(STRING_SCHEMA),
+  scopes: arraySchema(STRING_SCHEMA),
+  domains: arraySchema(STRING_SCHEMA),
+  wireEvents: arraySchema(STRING_SCHEMA),
+  outputSchema: JSON_OBJECT_SCHEMA,
+  pluginId: STRING_SCHEMA,
+  metadata: JSON_OBJECT_SCHEMA,
+}, ['id', 'title', 'description', 'category', 'source', 'transport', 'scopes']);
+
+export function listOutputSchema(
+  key: string,
+  itemSchema: Record<string, unknown>,
+): Record<string, unknown> {
+  return objectSchema({ [key]: arraySchema(itemSchema) }, [key], { additionalProperties: false });
 }
 
-export function entityOutputSchema(key: string): Record<string, unknown> {
-  return objectSchema({ [key]: GENERIC_OBJECT_SCHEMA }, [key], { additionalProperties: false });
+export function entityOutputSchema(
+  key: string,
+  entitySchema: Record<string, unknown>,
+): Record<string, unknown> {
+  return objectSchema({ [key]: entitySchema }, [key], { additionalProperties: false });
 }
 
-export function actionResultOutputSchema(key: string): Record<string, unknown> {
+export function actionResultOutputSchema(
+  key: string,
+  entitySchema: Record<string, unknown>,
+): Record<string, unknown> {
   return objectSchema({
-    [key]: GENERIC_OBJECT_SCHEMA,
+    [key]: entitySchema,
   }, [key], { additionalProperties: true });
 }
 
@@ -150,6 +218,6 @@ export function runtimeDomainEvent(domain: RuntimeEventDomain, description: stri
     scopes: ['read:events'],
     domains: [domain],
     wireEvents: [domain],
-    outputSchema: GENERIC_OBJECT_SCHEMA,
+    outputSchema: JSON_OBJECT_SCHEMA,
   });
 }

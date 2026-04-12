@@ -1,13 +1,10 @@
 import { describe, test, expect, beforeEach, afterEach } from 'bun:test';
 import { existsSync, mkdirSync, writeFileSync, rmSync } from 'fs';
 import { join } from 'path';
-import { homedir, tmpdir } from 'os';
-import {
-  ServiceRegistry,
-  _resetServiceRegistryForTesting,
-} from '../../config/service-registry.ts';
-import { SecretsManager, _resetSecretsManagerForTesting } from '../../config/secrets.ts';
-import { getSubscriptionManager, _resetSubscriptionManagerForTesting } from '../../config/subscriptions.ts';
+import { tmpdir } from 'os';
+import { ServiceRegistry } from '../../config/service-registry.ts';
+import { SecretsManager } from '../../config/secrets.ts';
+import { SubscriptionManager } from '../../config/subscriptions.ts';
 const originalFetch = globalThis.fetch;
 
 // ---------------------------------------------------------------------------
@@ -24,13 +21,6 @@ function writeServicesFile(dir: string, services: Record<string, unknown>): stri
   const filePath = join(dir, 'services.json');
   writeFileSync(filePath, JSON.stringify(services, null, 2) + '\n', 'utf-8');
   return filePath;
-}
-
-function clearDefaultSubscriptionStore(): void {
-  const filePath = join(homedir(), '.goodvibes', 'tui', 'subscriptions.json');
-  if (existsSync(filePath)) {
-    rmSync(filePath, { force: true });
-  }
 }
 
 // ---------------------------------------------------------------------------
@@ -100,22 +90,16 @@ describe('ServiceRegistry - resolveAuth bearer', () => {
   let dir: string;
   let encPath: string;
   let servicesPath: string;
+  let subscriptionManager: SubscriptionManager;
 
   beforeEach(() => {
-    _resetSecretsManagerForTesting();
-    _resetServiceRegistryForTesting();
-    _resetSubscriptionManagerForTesting();
-    clearDefaultSubscriptionStore();
     dir = makeTmpDir();
     encPath = join(dir, 'secrets.enc');
     servicesPath = join(dir, 'services.json');
+    subscriptionManager = new SubscriptionManager(join(dir, 'subscriptions.json'));
   });
 
   afterEach(() => {
-    _resetSecretsManagerForTesting();
-    _resetServiceRegistryForTesting();
-    _resetSubscriptionManagerForTesting();
-    clearDefaultSubscriptionStore();
     globalThis.fetch = originalFetch;
     rmSync(dir, { recursive: true, force: true });
   });
@@ -130,7 +114,10 @@ describe('ServiceRegistry - resolveAuth bearer', () => {
     });
 
     // Override env to use our temp secrets
-    const registry = new ServiceRegistry(servicesPath);
+    const registry = new ServiceRegistry(servicesPath, {
+      secretsManager: secrets,
+      subscriptionManager,
+    });
     // We need a registry that uses our secrets instance.
     // Spy approach: use env var override (tier 1 of SecretsManager)
     const origEnv = process.env['OPENAI_API_KEY'];
@@ -152,14 +139,20 @@ describe('ServiceRegistry - resolveAuth bearer', () => {
     writeServicesFile(dir, {
       openai: { name: 'openai', authType: 'bearer', tokenKey: 'OPENAI_API_KEY_MISSING_XYZ' },
     });
-    const registry = new ServiceRegistry(servicesPath);
+    const registry = new ServiceRegistry(servicesPath, {
+      secretsManager: new SecretsManager(encPath),
+      subscriptionManager,
+    });
     const headers = await registry.resolveAuth('openai');
     expect(headers).toBeNull();
   });
 
   test('returns null for unknown service', async () => {
     writeServicesFile(dir, {});
-    const registry = new ServiceRegistry(servicesPath);
+    const registry = new ServiceRegistry(servicesPath, {
+      secretsManager: new SecretsManager(encPath),
+      subscriptionManager,
+    });
     const headers = await registry.resolveAuth('nonexistent');
     expect(headers).toBeNull();
   });
@@ -169,7 +162,6 @@ describe('ServiceRegistry - resolveAuth bearer', () => {
       openai: { name: 'openai', authType: 'bearer', tokenKey: 'OPENAI_API_KEY', providerId: 'openai' },
     });
     process.env['OPENAI_API_KEY'] = 'env-token';
-    const manager = getSubscriptionManager();
     const oauth = {
       authUrl: 'https://auth.example.com/authorize',
       tokenUrl: 'https://auth.example.com/token',
@@ -177,13 +169,16 @@ describe('ServiceRegistry - resolveAuth bearer', () => {
       redirectUri: 'http://127.0.0.1/callback',
       scopes: ['chat'],
     } as const;
-    manager.beginOAuthLogin('openai', oauth);
+    subscriptionManager.beginOAuthLogin('openai', oauth);
     globalThis.fetch = ((async () => ({
       ok: true,
       json: async () => ({ access_token: 'subscription-token', token_type: 'Bearer' }),
     })) as unknown) as typeof fetch;
-    await manager.completeOAuthLogin('openai', oauth, 'code-123');
-    const registry = new ServiceRegistry(servicesPath);
+    await subscriptionManager.completeOAuthLogin('openai', oauth, 'code-123');
+    const registry = new ServiceRegistry(servicesPath, {
+      secretsManager: new SecretsManager(encPath),
+      subscriptionManager,
+    });
     const headers = await registry.resolveAuth('openai');
     expect(headers).not.toBeNull();
     expect(headers!['Authorization']).toBe('Bearer subscription-token');

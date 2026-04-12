@@ -1,7 +1,7 @@
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import type { CommandRegistry } from '../command-registry.ts';
-import { getPanelManager } from '../../panels/panel-manager.ts';
+import { requirePanelManager } from './runtime-services.ts';
 
 interface VoiceBundle {
   readonly version: 1;
@@ -155,7 +155,7 @@ export function registerExperienceRuntimeCommands(registry: CommandRegistry): vo
       if (sub === 'open' || sub === 'panel') {
         if (ctx.showPanel) ctx.showPanel('approval');
         else {
-          const panelManager = getPanelManager();
+          const panelManager = requirePanelManager(ctx);
           panelManager.open('approval');
           panelManager.show();
         }

@@ -4,6 +4,7 @@ import { join } from 'path';
 import { mkdtempSync } from 'fs';
 import { tmpdir } from 'os';
 import { ProjectIndex } from '../../state/project-index.ts';
+import { getTestProjectIndex, resetTestProjectIndexes } from '../helpers/runtime-services.ts';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -23,14 +24,14 @@ describe('ProjectIndex', () => {
 
   beforeEach(() => {
     tmpDir = makeTmpDir();
-    // Reset singleton so each test gets a fresh instance
-    ProjectIndex._resetInstance();
-    index = ProjectIndex.getInstance(tmpDir);
+    // Reset helper caches so each test gets a fresh instance
+    resetTestProjectIndexes();
+    index = getTestProjectIndex(tmpDir);
   });
 
   afterEach(async () => {
     await index.forceFlush().catch(() => {});
-    ProjectIndex._resetInstance();
+    resetTestProjectIndexes();
     if (existsSync(tmpDir)) rmSync(tmpDir, { recursive: true, force: true });
   });
 
@@ -183,15 +184,15 @@ describe('ProjectIndex', () => {
       await index.forceFlush();
 
       // Create fresh instance from same dir
-      ProjectIndex._resetInstance();
-      const index2 = ProjectIndex.getInstance(tmpDir);
+      resetTestProjectIndexes();
+      const index2 = getTestProjectIndex(tmpDir);
       await index2.load();
 
       expect(index2.getFile('src/main.ts')).not.toBeNull();
       expect(index2.getFile('src/main.ts')!.tokens).toBe(450);
       expect(index2.getFile('src/config/schema.ts')!.tokens).toBe(280);
       await index2.forceFlush().catch(() => {});
-      ProjectIndex._resetInstance();
+      resetTestProjectIndexes();
     });
 
     test('tree format: nested dirs serialize correctly', async () => {
@@ -213,24 +214,19 @@ describe('ProjectIndex', () => {
     });
   });
 
-  // -------------------------------------------------------------------------
-  // Singleton
-  // -------------------------------------------------------------------------
-
-  describe('getInstance', () => {
-    test('returns same instance on repeated calls', () => {
-      const a = ProjectIndex.getInstance(tmpDir);
-      const b = ProjectIndex.getInstance(tmpDir);
+  describe('test helper ownership', () => {
+    test('reuses the same helper-owned index for the same base dir', () => {
+      const a = getTestProjectIndex(tmpDir);
+      const b = getTestProjectIndex(tmpDir);
       expect(a).toBe(b);
     });
 
-    test('_resetInstance creates a new instance', () => {
-      const a = ProjectIndex.getInstance(tmpDir);
-      ProjectIndex._resetInstance();
-      const b = ProjectIndex.getInstance(tmpDir);
+    test('resetting helper caches yields a fresh index instance', () => {
+      const a = getTestProjectIndex(tmpDir);
+      resetTestProjectIndexes();
+      const b = getTestProjectIndex(tmpDir);
       expect(a).not.toBe(b);
-      // Clean up extra instance
-      ProjectIndex._resetInstance();
+      resetTestProjectIndexes();
     });
   });
 
@@ -259,12 +255,12 @@ describe('ProjectIndex.dispose', () => {
 
   beforeEach(() => {
     tmpDir = mkdtempSync(join(tmpdir(), 'gv-pi-dispose-'));
-    ProjectIndex._resetInstance();
-    index = ProjectIndex.getInstance(tmpDir);
+    resetTestProjectIndexes();
+    index = getTestProjectIndex(tmpDir);
   });
 
   afterEach(() => {
-    ProjectIndex._resetInstance();
+    resetTestProjectIndexes();
     if (existsSync(tmpDir)) rmSync(tmpDir, { recursive: true, force: true });
   });
 
@@ -295,13 +291,13 @@ describe('ProjectIndex normalizePath (absolute paths)', () => {
 
   beforeEach(() => {
     tmpDir = mkdtempSync(join(tmpdir(), 'gv-pi-norm-'));
-    ProjectIndex._resetInstance();
-    index = ProjectIndex.getInstance(tmpDir);
+    resetTestProjectIndexes();
+    index = getTestProjectIndex(tmpDir);
   });
 
   afterEach(async () => {
     await index.forceFlush().catch(() => {});
-    ProjectIndex._resetInstance();
+    resetTestProjectIndexes();
     if (existsSync(tmpDir)) rmSync(tmpDir, { recursive: true, force: true });
   });
 
@@ -327,32 +323,31 @@ describe('ProjectIndex normalizePath (absolute paths)', () => {
 });
 
 // ---------------------------------------------------------------------------
-// getInstance with different baseDir warning
+// baseDir ownership
 // ---------------------------------------------------------------------------
 
-describe('ProjectIndex getInstance baseDir warning', () => {
+describe('ProjectIndex baseDir ownership', () => {
   beforeEach(() => {
-    ProjectIndex._resetInstance();
+    resetTestProjectIndexes();
   });
 
   afterEach(async () => {
-    const inst = ProjectIndex.getInstance();
+    const inst = getTestProjectIndex();
     await inst.forceFlush().catch(() => {});
-    ProjectIndex._resetInstance();
+    resetTestProjectIndexes();
   });
 
-  test('returns existing instance when called with different baseDir', () => {
+  test('returns separate instances for different baseDir values', () => {
     const dir1 = mkdtempSync(join(tmpdir(), 'gv-pi-dir1-'));
     const dir2 = mkdtempSync(join(tmpdir(), 'gv-pi-dir2-'));
     try {
-      const a = ProjectIndex.getInstance(dir1);
-      const b = ProjectIndex.getInstance(dir2);
-      // Should return the same instance (dir2 is ignored)
-      expect(a).toBe(b);
-      // baseDir should still be dir1
+      const a = getTestProjectIndex(dir1);
+      const b = getTestProjectIndex(dir2);
+      expect(a).not.toBe(b);
       expect(a.baseDir).toBe(dir1);
+      expect(b.baseDir).toBe(dir2);
     } finally {
-      ProjectIndex._resetInstance();
+      resetTestProjectIndexes();
       rmSync(dir1, { recursive: true, force: true });
       rmSync(dir2, { recursive: true, force: true });
     }

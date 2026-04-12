@@ -13,7 +13,7 @@
 import { OpenAICompatProvider } from './openai-compat.ts';
 import { AnthropicCompatProvider } from './anthropic-compat.ts';
 import type { LLMProvider } from './interface.ts';
-import { getProviderRegistry } from './registry.ts';
+import type { ProviderRegistry } from './registry.ts';
 import { hasKeyForProvider } from './model-catalog.ts';
 import type { CatalogProvider } from './model-catalog.ts';
 import { logger } from '../utils/logger.ts';
@@ -293,9 +293,12 @@ export const AUTO_REGISTER_CATALOG: AutoRegisterEntry[] = [
  *
  * @internal Exported for testing.
  */
-export function isProviderRegistered(providerId: string): boolean {
+export function isProviderRegistered(
+  providerRegistry: Pick<ProviderRegistry, 'get'>,
+  providerId: string,
+): boolean {
   try {
-    getProviderRegistry().get(providerId);
+    providerRegistry.get(providerId);
     return true;
   } catch {
     return false;
@@ -371,6 +374,7 @@ export function createProviderFromEntry(entry: AutoRegisterEntry, apiKey: string
  * // }
  */
 export function autoRegisterProviders(
+  providerRegistry: Pick<ProviderRegistry, 'get' | 'register'>,
   catalog: AutoRegisterEntry[] = AUTO_REGISTER_CATALOG,
 ): string[] {
   const registered: string[] = [];
@@ -382,7 +386,7 @@ export function autoRegisterProviders(
     }
 
     // Skip if provider is already registered (built-in or previously auto-registered)
-    if (isProviderRegistered(entry.id)) {
+    if (isProviderRegistered(providerRegistry, entry.id)) {
       continue;
     }
 
@@ -390,7 +394,7 @@ export function autoRegisterProviders(
 
     try {
       const provider = createProviderFromEntry(entry, apiKey);
-      getProviderRegistry().register(provider);
+      providerRegistry.register(provider);
       registered.push(entry.name);
     } catch (err) {
       const errMsg = err instanceof Error ? err.message : String(err);
@@ -410,4 +414,3 @@ export function autoRegisterProviders(
 
   return registered;
 }
-

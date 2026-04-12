@@ -3,13 +3,14 @@ import { ToolRegistry } from '../../tools/registry.ts';
 import { MockLLMProvider } from '../setup.ts';
 import { HookDispatcher } from '../../hooks/dispatcher.ts';
 import type { HookEvent, HookResult } from '../../hooks/types.ts';
-import { configManager, getConfigSnapshot } from '../../config/index.ts';
-import { getProviderRegistry } from '../../providers/registry.ts';
-import type { ProviderRegistry } from '../../providers/registry.ts';
+import { PermissionManager } from '../../permissions/manager.ts';
 import type { LLMProvider, ChatRequest, ChatResponse } from '../../providers/interface.ts';
 import { RuntimeEventBus } from '../../runtime/events/index.ts';
 import { createEventEnvelope } from '../../runtime/events/index.ts';
-import { resetSettingsControlPlaneForTesting } from '../../runtime/settings/control-plane.ts';
+import { createPermissionConfigReader } from '../../permissions/manager.ts';
+import { PolicyRuntimeState } from '../../runtime/permissions/policy-runtime.ts';
+import { createTestManagers } from '../helpers/test-managers.ts';
+import { resetSettingsControlPlaneStore } from '../helpers/settings-control-plane.ts';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -44,6 +45,8 @@ function _makeMockProvider(responses: MockChatResponse[]) {
 describe('Orchestrator', () => {
   let runtimeBus: RuntimeEventBus;
   let toolRegistry: ToolRegistry;
+  let testManagers: ReturnType<typeof createTestManagers>;
+  let configManager: ReturnType<typeof createTestManagers>['configManager'];
   let testExecutionLock: Promise<void> = Promise.resolve();
   let releaseTestExecutionLock: (() => void) | null = null;
 
@@ -52,13 +55,15 @@ describe('Orchestrator', () => {
     testExecutionLock = new Promise<void>((resolve) => {
       releaseTestExecutionLock = resolve;
     });
-    resetSettingsControlPlaneForTesting();
+    testManagers = createTestManagers();
+    configManager = testManagers.configManager;
+    resetSettingsControlPlaneStore(configManager);
     runtimeBus = new RuntimeEventBus();
     toolRegistry = new ToolRegistry();
   });
 
   afterEach(() => {
-    resetSettingsControlPlaneForTesting();
+    resetSettingsControlPlaneStore(configManager);
     releaseTestExecutionLock?.();
     releaseTestExecutionLock = null;
   });
@@ -66,21 +71,29 @@ describe('Orchestrator', () => {
   async function buildOrchestrator(renderRequest: (() => void) | null = null) {
     const { Orchestrator } = await import('../../core/orchestrator.ts');
     const { ConversationManager } = await import('../../core/conversation.ts');
-    const { PermissionManager } = await import('../../permissions/manager.ts');
-    const cm = new ConversationManager(() => 80);
-    const pm = new PermissionManager();
+    const cm = new ConversationManager(() => 80, configManager);
+    const policyRuntimeState = new PolicyRuntimeState();
+    const pm = new PermissionManager(async () => ({ approved: true }), createPermissionConfigReader(configManager), policyRuntimeState);
     // hookDispatcher is the optional 8th param; omitting it exercises the default constructor path
     const orch = new Orchestrator(cm, () => 24, () => {}, toolRegistry, pm, () => '', null, null, renderRequest, runtimeBus);
+    orch.setCoreServices({
+      providerRegistry: testManagers.providerRegistry,
+      configManager,
+    });
     return { orch, cm, pm };
   }
 
   async function buildOrchestratorWithHooks(hookDispatcher: HookDispatcher) {
     const { Orchestrator } = await import('../../core/orchestrator.ts');
     const { ConversationManager } = await import('../../core/conversation.ts');
-    const { PermissionManager } = await import('../../permissions/manager.ts');
-    const cm = new ConversationManager(() => 80);
-    const pm = new PermissionManager();
+    const cm = new ConversationManager(() => 80, configManager);
+    const policyRuntimeState = new PolicyRuntimeState();
+    const pm = new PermissionManager(async () => ({ approved: true }), createPermissionConfigReader(configManager), policyRuntimeState);
     const orch = new Orchestrator(cm, () => 24, () => {}, toolRegistry, pm, () => '', hookDispatcher, null, null, runtimeBus);
+    orch.setCoreServices({
+      providerRegistry: testManagers.providerRegistry,
+      configManager,
+    });
     return { orch, cm, pm };
   }
 
@@ -206,8 +219,8 @@ describe('Orchestrator', () => {
     };
 
     beforeEach(() => {
-      savedAutoApprove = getConfigSnapshot().behavior.autoApprove ?? false;
-      savedStream = getConfigSnapshot().display.stream ?? true;
+      savedAutoApprove = (configManager.get('behavior.autoApprove') as boolean | undefined) ?? false;
+      savedStream = (configManager.get('display.stream') as boolean | undefined) ?? true;
       configManager.set('behavior.autoApprove', true);
     });
 
@@ -245,7 +258,7 @@ describe('Orchestrator', () => {
       });
       orchRef = orch;
 
-      const reg: ProviderRegistry = getProviderRegistry();
+      const reg = testManagers.providerRegistry;
       const origGet = reg.get.bind(reg);
       const origGetForModel = reg.getForModel.bind(reg);
       const origGetCurrentModel = reg.getCurrentModel.bind(reg);
@@ -292,7 +305,7 @@ describe('Orchestrator', () => {
       });
       orchRef = orch;
 
-      const reg: ProviderRegistry = getProviderRegistry();
+      const reg = testManagers.providerRegistry;
       const origGet = reg.get.bind(reg);
       const origGetForModel = reg.getForModel.bind(reg);
       const origGetCurrentModel = reg.getCurrentModel.bind(reg);
@@ -327,7 +340,7 @@ describe('Orchestrator', () => {
 
       const { orch } = await buildOrchestrator();
 
-      const reg: ProviderRegistry = getProviderRegistry();
+      const reg = testManagers.providerRegistry;
       const origGet = reg.get.bind(reg);
       const origGetForModel = reg.getForModel.bind(reg);
       const origGetCurrentModel = reg.getCurrentModel.bind(reg);
@@ -376,7 +389,7 @@ describe('Orchestrator', () => {
       const low = mock((_message: string) => {});
       orch.setSystemMessageRouter({ low });
 
-      const reg: ProviderRegistry = getProviderRegistry();
+      const reg = testManagers.providerRegistry;
       const origGet = reg.get.bind(reg);
       const origGetForModel = reg.getForModel.bind(reg);
       const origGetCurrentModel = reg.getCurrentModel.bind(reg);
@@ -489,7 +502,7 @@ describe('Orchestrator', () => {
     let savedAutoApprove: boolean;
 
     beforeEach(() => {
-      savedAutoApprove = getConfigSnapshot().behavior.autoApprove ?? false;
+      savedAutoApprove = (configManager.get('behavior.autoApprove') as boolean | undefined) ?? false;
       configManager.set('behavior.autoApprove', true);
     });
 
@@ -671,7 +684,7 @@ describe('Orchestrator', () => {
       });
 
       await waitForTurn;
-      const reg: ProviderRegistry = getProviderRegistry();
+      const reg = testManagers.providerRegistry;
       const origGet = reg.get.bind(reg);
       const origGetForModel = reg.getForModel.bind(reg);
       const origGetCurrentModel = reg.getCurrentModel.bind(reg);
@@ -693,7 +706,7 @@ describe('Orchestrator', () => {
     let savedAutoApprove: boolean;
 
     beforeEach(() => {
-      savedAutoApprove = getConfigSnapshot().behavior.autoApprove ?? false;
+      savedAutoApprove = (configManager.get('behavior.autoApprove') as boolean | undefined) ?? false;
       configManager.set('behavior.autoApprove', true);
     });
 

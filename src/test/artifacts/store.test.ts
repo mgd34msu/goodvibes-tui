@@ -8,8 +8,7 @@ describe('ArtifactStore', () => {
   const roots: string[] = [];
 
   afterEach(() => {
-    ArtifactStore.resetActiveForTesting();
-    while (roots.length > 0) {
+        while (roots.length > 0) {
       rmSync(roots.pop()!, { recursive: true, force: true });
     }
   });
@@ -35,8 +34,7 @@ describe('ArtifactStore', () => {
     expect(attachment.dataBase64).toBe(Buffer.from('# hello\n').toString('base64'));
     expect(attachment.contentPath).toBe(`/api/artifacts/${encodeURIComponent(created.id)}/content`);
 
-    ArtifactStore.resetActiveForTesting();
-    const reloaded = new ArtifactStore({ rootDir: root });
+        const reloaded = new ArtifactStore({ rootDir: root });
     const fetched = reloaded.get(created.id);
     expect(fetched?.sha256).toBe(created.sha256);
 

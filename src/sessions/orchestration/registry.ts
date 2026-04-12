@@ -5,8 +5,8 @@
  * `.goodvibes/tui/sessions/task-graph.json` and reconnect/resume hydration.
  *
  * The registry is the single authoritative source for the cross-session task
- * graph within a process. All command handlers and sync integrations interact
- * with it via the `getSessionOrchestration()` singleton accessor.
+ * graph within a process. Command handlers and sync integrations receive an
+ * owned instance from the runtime service graph.
  */
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
@@ -44,7 +44,6 @@ export class CrossSessionTaskRegistry {
   private readonly _dir: string;
   private _dirEnsured = false;
   private _flushTimer: ReturnType<typeof setTimeout> | null = null;
-  /** @internal — exposed for _resetForTesting only. */
   _exitHandler: (() => void) | null = null;
 
   /**
@@ -350,36 +349,4 @@ export class CrossSessionTaskRegistry {
       });
     }
   }
-}
-
-// ── Singleton accessor ────────────────────────────────────────────────────────
-
-let _instance: CrossSessionTaskRegistry | undefined;
-
-/**
- * Lazy singleton accessor for CrossSessionTaskRegistry.
- * Avoids re-instantiation on every command invocation.
- */
-export function getSessionOrchestration(): CrossSessionTaskRegistry {
-  if (!_instance) _instance = new CrossSessionTaskRegistry();
-  return _instance;
-}
-
-/**
- * Dispose the singleton registry if it has been initialized.
- */
-export function disposeSessionOrchestration(): void {
-  if (_instance) {
-    _instance.dispose();
-    _instance = undefined;
-  }
-}
-
-/**
- * Reset the singleton instance — for use in tests only.
- * Clears the cached instance so the next call to getSessionOrchestration()
- * constructs a fresh registry.
- */
-export function _resetForTesting(): void {
-  disposeSessionOrchestration();
 }

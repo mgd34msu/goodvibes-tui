@@ -1,11 +1,11 @@
 import type { InputToken } from '../core/tokenizer.ts';
-import { getPanelManager } from '../panels/panel-manager.ts';
-import { getKeybindingsManager } from './keybindings.ts';
 import type { CommandContext } from './command-registry.ts';
 import type { SearchManager } from './search.ts';
 import type { HistorySearch } from './input-history.ts';
 import type { ConversationManager } from '../core/conversation.ts';
 import type { AutocompleteEngine } from './autocomplete.ts';
+import type { PanelManager } from '../panels/panel-manager.ts';
+import type { KeybindingsManager } from './keybindings.ts';
 
 type WrappedPromptInfo = {
   wrappedLines: string[];
@@ -14,6 +14,8 @@ type WrappedPromptInfo = {
 };
 
 export type GlobalShortcutRouteState = {
+  panelManager: PanelManager;
+  keybindingsManager: KeybindingsManager;
   prompt: string;
   cursorPos: number;
   commandMode: boolean;
@@ -49,7 +51,7 @@ export function handleGlobalShortcutToken(
 ): boolean {
   if (token.type !== 'key') return false;
 
-  const kb = getKeybindingsManager();
+  const kb = state.keybindingsManager;
   if (kb.matches('copy-selection', token)) {
     state.handleCopy();
     return true;
@@ -67,14 +69,14 @@ export function handleGlobalShortcutToken(
     return true;
   }
   if (kb.matches('panel-close-all', token)) {
-    const pm = getPanelManager();
+    const pm = state.panelManager;
     for (const p of pm.getAllOpen()) pm.close(p.id);
     pm.hide();
     state.requestRender();
     return true;
   }
   if (kb.matches('panel-close', token)) {
-    const pm = getPanelManager();
+    const pm = state.panelManager;
     const active = pm.getActivePanel();
     if (active) {
       pm.close(active.id);

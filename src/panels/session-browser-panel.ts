@@ -4,8 +4,7 @@
 
 import type { Line } from '../types/grid.ts';
 import { BasePanel } from './base-panel.ts';
-import { getSessionManager } from '../sessions/manager.ts';
-import type { SessionInfo } from '../sessions/manager.ts';
+import { SessionManager, type SessionInfo } from '../sessions/manager.ts';
 import { logger } from '../utils/logger.ts';
 import {
   buildEmptyState,
@@ -18,7 +17,6 @@ import {
   type PanelWorkspaceSection,
 } from './polish.ts';
 import { truncateDisplay } from '../utils/terminal-width.ts';
-import { formatReturnContextForDisplay } from '../runtime/session-return-context.ts';
 import {
   getPanelSearchFocusTransition,
   isPanelSearchBackspace,
@@ -56,6 +54,26 @@ function shortDate(ts: number): string {
   return `${Y}-${M}-${D} ${h}:${m}`;
 }
 
+function formatReturnContextLines(returnContext: SessionInfo['returnContext']): string[] {
+  if (!returnContext) return [];
+  const lines: string[] = [];
+  if (returnContext.activityLabel) lines.push(`activity: ${returnContext.activityLabel}`);
+  if (returnContext.statusLabel) lines.push(`status: ${returnContext.statusLabel}`);
+  if (returnContext.activeTasks || returnContext.blockedTasks || returnContext.pendingApprovals) {
+    lines.push(`tasks: active=${returnContext.activeTasks ?? 0} blocked=${returnContext.blockedTasks ?? 0} approvals=${returnContext.pendingApprovals ?? 0}`);
+  }
+  if (returnContext.remoteRunners?.length) {
+    lines.push(`remote runners: ${returnContext.remoteRunners.join(', ')}`);
+  }
+  if (returnContext.worktreePaths?.length) {
+    lines.push(`worktrees: ${returnContext.worktreePaths.join(', ')}`);
+  }
+  if (returnContext.openPanels?.length) {
+    lines.push(`open panels: ${returnContext.openPanels.join(', ')}`);
+  }
+  return lines;
+}
+
 // ---------------------------------------------------------------------------
 // Confirmation state for deletion
 // ---------------------------------------------------------------------------
@@ -73,7 +91,10 @@ export class SessionBrowserPanel extends BasePanel {
   private loadError = '';
   private refreshTimer: ReturnType<typeof setInterval> | null = null;
 
-  constructor(private resumeSession?: (sessionId: string) => void) {
+  constructor(
+    private readonly sessionManager: SessionManager,
+    private resumeSession?: (sessionId: string) => void,
+  ) {
     super('sessions', 'Sessions', 'H', 'session');
   }
 
@@ -244,7 +265,7 @@ export class SessionBrowserPanel extends BasePanel {
               ['   Panels ', DEFAULT_PANEL_PALETTE.label],
               [String(selected.returnContext?.openPanels?.length ?? 0), (selected.returnContext?.openPanels?.length ?? 0) > 0 ? DEFAULT_PANEL_PALETTE.good : DEFAULT_PANEL_PALETTE.dim],
             ]),
-            ...formatReturnContextForDisplay(selected.returnContext).map((line) =>
+            ...formatReturnContextLines(selected.returnContext).map((line) =>
               buildPanelLine(width, [[' ', DEFAULT_PANEL_PALETTE.dim], [truncateDisplay(line, Math.max(0, width - 2)), DEFAULT_PANEL_PALETTE.dim]])
             ),
             buildPanelLine(width, [[' Next ', DEFAULT_PANEL_PALETTE.label], [selected.returnContext?.remoteRunners?.length ? `/remote recover ${selected.returnContext.remoteRunners[0]}` : '/session resume', DEFAULT_PANEL_PALETTE.dim]]),
@@ -302,8 +323,7 @@ export class SessionBrowserPanel extends BasePanel {
 
   private _load(): void {
     try {
-      const sm = getSessionManager();
-      this.sessions = sm.list();
+      this.sessions = this.sessionManager.list();
       this._filter();
       this.loadError = '';
       this.markDirty();
@@ -320,8 +340,7 @@ export class SessionBrowserPanel extends BasePanel {
     } else {
       const q = this.searchQuery.toLowerCase();
       try {
-        const sm = getSessionManager();
-        const results = sm.search(q);
+        const results = this.sessionManager.search(q);
         const names = new Set(results.map(r => r.session.name));
         this.filtered = this.sessions.filter(s => names.has(s.name));
       } catch (e) {
@@ -366,8 +385,7 @@ export class SessionBrowserPanel extends BasePanel {
     const name = this.confirm.sessionName;
     this.confirm = null;
     try {
-      const sm = getSessionManager();
-      sm.delete(name);
+      this.sessionManager.delete(name);
       this.deleteError = '';
       this._load();
     } catch (e) {

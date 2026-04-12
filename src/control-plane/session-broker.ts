@@ -6,7 +6,6 @@ import type { AutomationSurfaceKind } from '../automation/types.ts';
 import type { AutomationRouteBinding } from '../automation/routes.ts';
 import { AgentManager } from '../tools/agent/index.ts';
 import { AgentMessageBus } from '../agents/message-bus.ts';
-import { ControlPlaneGateway } from './gateway.ts';
 
 type SharedSessionStatus = 'active' | 'closed';
 type SharedSessionMessageRole = 'user' | 'assistant' | 'system';
@@ -101,6 +100,7 @@ type SharedSessionAgentStatusProvider = {
 type SharedSessionMessageSender = {
   send(fromId: string, toId: string, content: string, options?: { kind?: 'directive' }): boolean;
 };
+type SharedSessionEventPublisher = (event: string, payload: unknown) => void;
 
 const STORE_PATH = join(process.cwd(), '.goodvibes', 'tui', 'control-plane', 'sessions.json');
 const MAX_PERSISTED_MESSAGES = 2_000;
@@ -119,37 +119,29 @@ function dedupeSurfaceKinds(participants: readonly SharedSessionParticipant[]): 
 }
 
 export class SharedSessionBroker {
-  private static instance: SharedSessionBroker | null = null;
-
   private readonly store: PersistentStore<SharedSessionStoreSnapshot>;
   private readonly routeBindings: RouteBindingManager;
   private readonly agentStatusProvider: SharedSessionAgentStatusProvider;
   private readonly messageSender: SharedSessionMessageSender;
   private readonly sessions = new Map<string, SharedSessionRecord>();
   private readonly messages = new Map<string, SharedSessionMessage[]>();
+  private eventPublisher: SharedSessionEventPublisher | null = null;
   private loaded = false;
 
   constructor(config: {
     readonly store?: PersistentStore<SharedSessionStoreSnapshot>;
-    readonly routeBindings?: RouteBindingManager;
-    readonly agentStatusProvider?: SharedSessionAgentStatusProvider;
-    readonly messageSender?: SharedSessionMessageSender;
-  } = {}) {
+    readonly routeBindings: RouteBindingManager;
+    readonly agentStatusProvider: SharedSessionAgentStatusProvider;
+    readonly messageSender: SharedSessionMessageSender;
+  }) {
     this.store = config.store ?? new PersistentStore<SharedSessionStoreSnapshot>(STORE_PATH);
-    this.routeBindings = config.routeBindings ?? RouteBindingManager.getInstance();
-    this.agentStatusProvider = config.agentStatusProvider ?? AgentManager.getInstance();
-    this.messageSender = config.messageSender ?? AgentMessageBus.getInstance();
+    this.routeBindings = config.routeBindings;
+    this.agentStatusProvider = config.agentStatusProvider;
+    this.messageSender = config.messageSender;
   }
 
-  static getInstance(): SharedSessionBroker {
-    if (!SharedSessionBroker.instance) {
-      SharedSessionBroker.instance = new SharedSessionBroker();
-    }
-    return SharedSessionBroker.instance;
-  }
-
-  static resetInstance(): void {
-    SharedSessionBroker.instance = null;
+  setEventPublisher(publisher: SharedSessionEventPublisher | null): void {
+    this.eventPublisher = publisher;
   }
 
   async start(): Promise<void> {
@@ -579,8 +571,7 @@ export class SharedSessionBroker {
   }
 
   private publishUpdate(event: string, payload: unknown): void {
-    const gateway = ControlPlaneGateway.getActive();
-    gateway?.publishEvent('session-update', {
+    this.eventPublisher?.('session-update', {
       event,
       payload,
       createdAt: Date.now(),

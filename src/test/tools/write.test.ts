@@ -6,7 +6,6 @@ import { join } from 'node:path';
 import { createWriteTool } from '../../tools/write/index.ts';
 import { FileStateCache } from '../../state/file-cache.ts';
 import { ProjectIndex } from '../../state/project-index.ts';
-import { _resetConfigManagerForTesting, configManager } from '../../config/index.ts';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -64,20 +63,9 @@ describe('write tool', () => {
     const t = await makeTempDir();
     tmpDir = t.dir;
     cleanup = t.cleanup;
-    _resetConfigManagerForTesting();
-    const orig = process.cwd();
-    process.chdir(tmpDir);
-    try {
-      configManager.set('tools.autoHeal', false);
-      configManager.set('tools.llmProvider', '');
-      configManager.set('tools.llmModel', '');
-    } finally {
-      process.chdir(orig);
-    }
   });
 
   afterEach(async () => {
-    _resetConfigManagerForTesting();
     await cleanup();
   });
 
@@ -645,9 +633,7 @@ describe('write tool', () => {
   describe('state integration', () => {
     test('updates fileCache after successful write', async () => {
       const fileCache = new FileStateCache();
-      const projectIndex = ProjectIndex.getInstance(tmpDir);
-      ProjectIndex._resetInstance();
-      const freshIndex = ProjectIndex.getInstance(tmpDir);
+      const freshIndex = new ProjectIndex(tmpDir);
 
       const result = await runWriteWithState(
         tmpDir,
@@ -662,14 +648,11 @@ describe('write tool', () => {
       expect(status).toBe('unchanged');
       expect(entry).toBeDefined();
       expect(entry!.byteSize).toBeGreaterThan(0);
-
-      ProjectIndex._resetInstance();
     });
 
     test('updates projectIndex after successful write', async () => {
-      ProjectIndex._resetInstance();
       const fileCache = new FileStateCache();
-      const freshIndex = ProjectIndex.getInstance(tmpDir);
+      const freshIndex = new ProjectIndex(tmpDir);
 
       const result = await runWriteWithState(
         tmpDir,
@@ -682,14 +665,11 @@ describe('write tool', () => {
       const entry = freshIndex.getFile('indexed.ts');
       expect(entry).not.toBeNull();
       expect(entry!.tokens).toBeGreaterThan(0);
-
-      ProjectIndex._resetInstance();
     });
 
     test('does NOT update state during dry run', async () => {
-      ProjectIndex._resetInstance();
       const fileCache = new FileStateCache();
-      const freshIndex = ProjectIndex.getInstance(tmpDir);
+      const freshIndex = new ProjectIndex(tmpDir);
 
       await runWriteWithState(
         tmpDir,
@@ -702,8 +682,6 @@ describe('write tool', () => {
       const { status } = fileCache.lookup(absPath);
       expect(status).toBe('miss');
       expect(freshIndex.getFile('drystate.ts')).toBeNull();
-
-      ProjectIndex._resetInstance();
     });
   });
 

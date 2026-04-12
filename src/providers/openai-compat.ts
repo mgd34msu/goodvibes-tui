@@ -19,8 +19,12 @@ import {
 import type { OpenAIToolCall } from './tool-formats.ts';
 import { getCacheCapability } from './cache-capability.ts';
 import type { ProviderCacheCapability } from './cache-capability.ts';
-import { cacheHitTracker } from './cache-strategy.ts';
+import type { CacheHitTracker } from './cache-strategy.ts';
 import { extractOpenAIStreamTextDelta } from './openai-stream-delta.ts';
+
+const NOOP_CACHE_HIT_TRACKER: Pick<CacheHitTracker, 'recordTurn'> = {
+  recordTurn: () => {},
+};
 
 export interface OpenAICompatOptions {
   name: string;
@@ -52,6 +56,8 @@ export interface OpenAICompatOptions {
   anonymousDetail?: string;
   /** Override runtime auth posture when apiKey is an internal transport placeholder. */
   authConfigured?: boolean;
+  /** Shared cache-hit tracker owned by the runtime service graph. */
+  cacheHitTracker?: Pick<CacheHitTracker, 'recordTurn'>;
 }
 
 /**
@@ -79,6 +85,7 @@ export class OpenAICompatProvider implements LLMProvider {
   private readonly allowAnonymous: boolean;
   private readonly anonymousConfigured: boolean;
   private readonly anonymousDetail?: string;
+  private readonly cacheHitTracker: Pick<CacheHitTracker, 'recordTurn'>;
 
   constructor(opts: OpenAICompatOptions) {
     this.name = opts.name;
@@ -98,6 +105,7 @@ export class OpenAICompatProvider implements LLMProvider {
     this.allowAnonymous = opts.allowAnonymous ?? false;
     this.anonymousConfigured = opts.anonymousConfigured ?? false;
     this.anonymousDetail = opts.anonymousDetail;
+    this.cacheHitTracker = opts.cacheHitTracker ?? NOOP_CACHE_HIT_TRACKER;
     this.client = new OpenAI({
       apiKey: opts.apiKey,
       baseURL: opts.baseURL,
@@ -272,7 +280,7 @@ export class OpenAICompatProvider implements LLMProvider {
         response.reasoningSummary = reasoningSummaryText;
       }
 
-      cacheHitTracker.recordTurn({
+      this.cacheHitTracker.recordTurn({
         inputTokens,
         cacheReadTokens,
       });

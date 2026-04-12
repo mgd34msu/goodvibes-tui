@@ -4,7 +4,7 @@ import { join } from 'path';
 /**
  * Prebuild script — reads version from package.json and updates:
  *   1. src/version.ts (VERSION export used by splash, header, daemon)
- *   2. README.md (Version: **X.Y.Z** badge)
+ *   2. README.md (shields.io version badge)
  *
  * package.json is the single source of truth for the version number.
  * Run via: bun run prebuild (automatically runs before bun run build)
@@ -25,13 +25,13 @@ try {
     console.log('prebuild: src/version.ts — not found, skipping');
   }
 
-  // 2. README.md — update "Version: **X.Y.Z**" line
+  // 2. README.md — update the shields.io version badge
   const readmePath = join(root, 'README.md');
   try {
     let readme = readFileSync(readmePath, 'utf8');
-    const versionRe = /Version: \*\*[^*]+\*\*/;
+    const versionRe = /version-[0-9]+\.[0-9]+\.[0-9]+-blue\.svg/;
     if (versionRe.test(readme)) {
-      readme = readme.replace(versionRe, `Version: **${version}**`);
+      readme = readme.replace(versionRe, `version-${version}-blue.svg`);
       writeFileSync(readmePath, readme);
       console.log(`prebuild: README.md → ${version}`);
     } else {

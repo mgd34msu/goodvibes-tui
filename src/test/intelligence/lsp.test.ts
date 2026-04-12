@@ -3,6 +3,7 @@ import { LspClient } from '../../intelligence/lsp/client.ts';
 import { LspService } from '../../intelligence/lsp/service.ts';
 import { parseCapabilities, hasCapability } from '../../intelligence/lsp/capabilities.ts';
 import type { LspCapabilities } from '../../intelligence/lsp/capabilities.ts';
+import { getTestLspService, resetTestLspService } from '../helpers/runtime-services.ts';
 
 // ---------------------------------------------------------------------------
 // JSON-RPC framing helpers (tested via LspClient static methods)
@@ -308,11 +309,11 @@ describe('LspClient handles server crash gracefully', () => {
 // ---------------------------------------------------------------------------
 
 describe('LspService auto-detection', () => {
-  beforeEach(() => LspService._resetInstance());
-  afterEach(() => LspService._resetInstance());
+  beforeEach(() => resetTestLspService());
+  afterEach(() => resetTestLspService());
 
   test('detectServers returns a Map', async () => {
-    const service = LspService.getInstance();
+    const service = getTestLspService();
     const detected = await service.detectServers();
     expect(detected instanceof Map).toBe(true);
   });
@@ -336,7 +337,7 @@ describe('LspService auto-detection', () => {
     (Bun as { which: (cmd: string) => string | null }).which = () => null;
 
     try {
-      const service = LspService.getInstance();
+      const service = getTestLspService();
       const detected = await service.detectServers();
       // When Bun.which returns null, only bundled servers should be detected
       // (detected.size may be higher due to multi-langId servers, but <= bundled languages)
@@ -355,7 +356,7 @@ describe('LspService auto-detection', () => {
     (Bun as { which: (cmd: string) => string | null }).which = (cmd) =>
       cmd === 'typescript-language-server' ? '/usr/bin/typescript-language-server' : null;
 
-    const service = LspService.getInstance();
+    const service = getTestLspService();
     const detected = await service.detectServers();
     expect(detected.has('typescript')).toBe(true);
     expect(detected.has('javascript')).toBe(true);
@@ -369,7 +370,7 @@ describe('LspService auto-detection', () => {
     (Bun as { which: (cmd: string) => string | null }).which = (cmd) =>
       cmd === 'typescript-language-server' ? '/usr/bin/typescript-language-server' : null;
 
-    const service = LspService.getInstance();
+    const service = getTestLspService();
     service.registerServer('typescript', { command: 'my-custom-ts-server', args: ['--custom'] });
     await service.detectServers();
 
@@ -385,21 +386,21 @@ describe('LspService auto-detection', () => {
 // ---------------------------------------------------------------------------
 
 describe('LspService getClient', () => {
-  beforeEach(() => LspService._resetInstance());
-  afterEach(() => LspService._resetInstance());
+  beforeEach(() => resetTestLspService());
+  afterEach(() => resetTestLspService());
 
   test('returns null for unconfigured language', async () => {
-    const service = LspService.getInstance();
+    const service = getTestLspService();
     expect(await service.getClient('cobol')).toBeNull();
   });
 
   test('returns null for empty language string', async () => {
-    const service = LspService.getInstance();
+    const service = getTestLspService();
     expect(await service.getClient('')).toBeNull();
   });
 
   test('isAvailable returns false for unconfigured language', async () => {
-    const service = LspService.getInstance();
+    const service = getTestLspService();
     expect(await service.isAvailable('cobol')).toBe(false);
   });
 
@@ -407,7 +408,7 @@ describe('LspService getClient', () => {
     const original = Bun.which;
     (Bun as { which: (cmd: string) => string | null }).which = () => null;
 
-    const service = LspService.getInstance();
+    const service = getTestLspService();
     service.registerServer('rust', { command: 'rust-analyzer', args: [] });
     expect(await service.isAvailable('rust')).toBe(false);
 
@@ -418,21 +419,15 @@ describe('LspService getClient', () => {
     const original = Bun.which;
     (Bun as { which: (cmd: string) => string | null }).which = () => '/usr/bin/rust-analyzer';
 
-    const service = LspService.getInstance();
+    const service = getTestLspService();
     service.registerServer('rust', { command: 'rust-analyzer', args: [] });
     expect(await service.isAvailable('rust')).toBe(true);
 
     (Bun as { which: typeof original }).which = original;
   });
 
-  test('singleton returns same instance', () => {
-    const a = LspService.getInstance();
-    const b = LspService.getInstance();
-    expect(a).toBe(b);
-  });
-
   test('shutdown does not throw', async () => {
-    const service = LspService.getInstance();
+    const service = getTestLspService();
     service.registerServer('go', { command: 'gopls', args: [] });
     await expect(service.shutdown()).resolves.toBeUndefined();
   });

@@ -2,8 +2,8 @@ import { join } from 'path';
 import { readFile } from 'fs/promises';
 import { type Line } from '../types/grid.ts';
 import { ModalFactory } from './modal-factory.ts';
-import { AgentManager } from '../tools/agent/index.ts';
-import { AgentMessageBus } from '../agents/message-bus.ts';
+import type { AgentManager } from '../tools/agent/index.ts';
+import type { AgentMessageBus } from '../agents/message-bus.ts';
 import { formatDuration } from './modal-utils.ts';
 import { logger } from '../utils/logger.ts';
 import { getOverlaySurfaceMetrics, getStableOverlayContentRows } from './overlay-viewport.ts';
@@ -13,6 +13,11 @@ import { getOverlaySurfaceMetrics, getStableOverlayContentRows } from './overlay
 const TOKENS_PER_TOOL_CALL = 400;
 const MAX_LOG_ENTRIES = 10;
 const AGENT_ID_DISPLAY_LENGTH = 16;
+
+export interface AgentDetailModalDeps {
+  readonly agentManager: Pick<AgentManager, 'getStatus'>;
+  readonly agentMessageBus: Pick<AgentMessageBus, 'getMessages'>;
+}
 
 // ─── AgentDetailModal ─────────────────────────────────────────────────────────
 
@@ -33,6 +38,8 @@ export class AgentDetailModal {
 
   private refreshTimer: ReturnType<typeof setInterval> | null = null;
   private onRefresh: (() => void) | null = null;
+
+  constructor(readonly deps: AgentDetailModalDeps) {}
 
   /** Set a callback to trigger re-render when log data updates. */
   setOnRefresh(fn: () => void): void {
@@ -123,7 +130,7 @@ export function renderAgentDetailModal(
   });
   const targetContentRows = Math.max(18, Math.min(22, getStableOverlayContentRows(metrics.contentRows, 12) + 8));
 
-  const rec = AgentManager.getInstance().getStatus(modal.agentId);
+  const rec = modal.deps.agentManager.getStatus(modal.agentId);
   if (!rec) {
     return ModalFactory.createModal({
       title: 'Agent Detail',
@@ -188,7 +195,7 @@ export function renderAgentDetailModal(
   }
 
   // Recent messages from AgentMessageBus
-  const recentMessages = AgentMessageBus.getInstance()
+  const recentMessages = modal.deps.agentMessageBus
     .getMessages(modal.agentId)
     .slice(-4); // last 4 messages
 

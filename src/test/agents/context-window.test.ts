@@ -12,14 +12,13 @@ import { describe, test, expect, beforeEach, mock } from 'bun:test';
 import { AgentOrchestrator } from '../../agents/orchestrator.ts';
 import type { AgentRecord } from '../../tools/agent/index.ts';
 import type { LLMProvider, ChatRequest, ChatResponse } from '../../providers/interface.ts';
-import { getProviderRegistry, _resetProviderRegistryForTesting } from '../../providers/registry.ts';
-import type { ProviderRegistry } from '../../providers/registry.ts';
 import {
   estimateTokens,
   estimateConversationTokens,
   compactSmallWindow,
 } from '../../core/context-compaction.ts';
 import { isContextSizeExceededError } from '../../types/errors.ts';
+import { getTestAgentOrchestrator, getTestProviderRegistry, resetTestRuntimeServices } from '../helpers/runtime-services.ts';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -90,16 +89,12 @@ const MOCK_MODEL_LARGE = {
   selectable: true,
 };
 
-function getActualRegistry(): ProviderRegistry {
-  return getProviderRegistry();
-}
-
 async function withMockProvider<T>(
   provider: LLMProvider,
   modelDef: typeof MOCK_MODEL_SMALL,
   fn: () => Promise<T>,
 ): Promise<T> {
-  const reg = getActualRegistry();
+  const reg = getTestProviderRegistry();
   const origGetForModel = reg.getForModel.bind(reg);
   const origGetCurrentModel = reg.getCurrentModel.bind(reg);
   reg.getForModel = mock(() => provider);
@@ -111,11 +106,6 @@ async function withMockProvider<T>(
     reg.getCurrentModel = origGetCurrentModel;
   }
 }
-
-beforeEach(() => {
-  AgentOrchestrator.resetInstance();
-  _resetProviderRegistryForTesting();
-});
 
 // ---------------------------------------------------------------------------
 // Unit: estimateTokens
@@ -239,7 +229,7 @@ describe('AgentOrchestrator context-window awareness', () => {
     const record = makeRecord({ id: 'g01-normal-01' });
 
     await withMockProvider(provider, MOCK_MODEL_LARGE, async () => {
-      const orch = AgentOrchestrator.getInstance();
+      const orch = getTestAgentOrchestrator();
       await orch.runAgent(record);
     });
 
@@ -256,7 +246,7 @@ describe('AgentOrchestrator context-window awareness', () => {
     const record = makeRecord({ id: 'g01-retry-01' });
 
     await withMockProvider(provider, MOCK_MODEL_LARGE, async () => {
-      const orch = AgentOrchestrator.getInstance();
+      const orch = getTestAgentOrchestrator();
       await orch.runAgent(record);
     });
 
@@ -275,7 +265,7 @@ describe('AgentOrchestrator context-window awareness', () => {
     const record = makeRecord({ id: 'g01-retry-fail-01' });
 
     await withMockProvider(provider, MOCK_MODEL_SMALL, async () => {
-      const orch = AgentOrchestrator.getInstance();
+      const orch = getTestAgentOrchestrator();
       await orch.runAgent(record);
     });
 
@@ -295,7 +285,7 @@ describe('AgentOrchestrator context-window awareness', () => {
     const record = makeRecord({ id: 'g01-auth-error-01' });
 
     await withMockProvider(provider, MOCK_MODEL_LARGE, async () => {
-      const orch = AgentOrchestrator.getInstance();
+      const orch = getTestAgentOrchestrator();
       await orch.runAgent(record);
     });
 
@@ -356,7 +346,7 @@ describe('AgentOrchestrator context-window awareness', () => {
     const record = makeRecord({ id: 'g01-precompact-01', task: longTask });
 
     await withMockProvider(provider, MOCK_MODEL_TINY, async () => {
-      const orch = AgentOrchestrator.getInstance();
+      const orch = getTestAgentOrchestrator();
       await orch.runAgent(record);
     });
 
@@ -387,7 +377,7 @@ describe('AgentOrchestrator context-window awareness', () => {
     };
 
     await withMockProvider(provider, MOCK_MODEL_LARGE, async () => {
-      const orch = AgentOrchestrator.getInstance();
+      const orch = getTestAgentOrchestrator();
       // @ts-expect-error — duck-typed mock for FeatureFlagManager
       orch.setFeatureFlagManager(mockFlagManager);
       await orch.runAgent(record);

@@ -26,405 +26,43 @@ import type {
   KnowledgeUsageRecord,
   KnowledgeUsageUpsertInput,
 } from './types.ts';
-
-function resolveDefaultKnowledgeDbPath(): string {
-  const runtime = globalThis as typeof globalThis & { __gvTestConfigDir?: string };
-  const baseDir = runtime.__gvTestConfigDir ?? join(homedir(), '.goodvibes', 'tui');
-  return join(baseDir, 'knowledge.sqlite');
-}
-
-function nowMs(): number {
-  return Date.now();
-}
-
-function stableText(value: string | undefined): string | null {
-  if (typeof value !== 'string') return null;
-  const trimmed = value.trim();
-  return trimmed.length > 0 ? trimmed : null;
-}
-
-function uniq(values: readonly string[] | undefined): string[] {
-  const seen = new Set<string>();
-  const result: string[] = [];
-  for (const value of values ?? []) {
-    const trimmed = value.trim();
-    if (!trimmed) continue;
-    if (seen.has(trimmed)) continue;
-    seen.add(trimmed);
-    result.push(trimmed);
-  }
-  return result;
-}
-
-function parseJsonValue<T>(value: unknown, fallback: T): T {
-  if (typeof value !== 'string') return fallback;
-  try {
-    return JSON.parse(value) as T;
-  } catch {
-    return fallback;
-  }
-}
-
-function createSchema(db: { run(sql: string): void }): void {
-  db.run(`
-    CREATE TABLE IF NOT EXISTS knowledge_sources (
-      id TEXT PRIMARY KEY,
-      connector_id TEXT NOT NULL,
-      source_type TEXT NOT NULL,
-      title TEXT,
-      source_uri TEXT,
-      canonical_uri TEXT,
-      summary TEXT,
-      description TEXT,
-      tags TEXT NOT NULL DEFAULT '[]',
-      folder_path TEXT,
-      status TEXT NOT NULL,
-      artifact_id TEXT,
-      content_hash TEXT,
-      last_crawled_at INTEGER,
-      crawl_error TEXT,
-      session_id TEXT,
-      metadata TEXT NOT NULL DEFAULT '{}',
-      created_at INTEGER NOT NULL,
-      updated_at INTEGER NOT NULL
-    )
-  `);
-  db.run(`CREATE INDEX IF NOT EXISTS idx_knowledge_sources_canonical_uri ON knowledge_sources(canonical_uri)`);
-  db.run(`CREATE INDEX IF NOT EXISTS idx_knowledge_sources_updated_at ON knowledge_sources(updated_at)`);
-  db.run(`
-    CREATE TABLE IF NOT EXISTS knowledge_nodes (
-      id TEXT PRIMARY KEY,
-      kind TEXT NOT NULL,
-      slug TEXT NOT NULL,
-      title TEXT NOT NULL,
-      summary TEXT,
-      aliases TEXT NOT NULL DEFAULT '[]',
-      status TEXT NOT NULL,
-      confidence INTEGER NOT NULL,
-      source_id TEXT,
-      metadata TEXT NOT NULL DEFAULT '{}',
-      created_at INTEGER NOT NULL,
-      updated_at INTEGER NOT NULL
-    )
-  `);
-  db.run(`CREATE UNIQUE INDEX IF NOT EXISTS idx_knowledge_nodes_kind_slug ON knowledge_nodes(kind, slug)`);
-  db.run(`CREATE INDEX IF NOT EXISTS idx_knowledge_nodes_updated_at ON knowledge_nodes(updated_at)`);
-  db.run(`
-    CREATE TABLE IF NOT EXISTS knowledge_edges (
-      id TEXT PRIMARY KEY,
-      from_kind TEXT NOT NULL,
-      from_id TEXT NOT NULL,
-      to_kind TEXT NOT NULL,
-      to_id TEXT NOT NULL,
-      relation TEXT NOT NULL,
-      weight REAL NOT NULL,
-      metadata TEXT NOT NULL DEFAULT '{}',
-      created_at INTEGER NOT NULL,
-      updated_at INTEGER NOT NULL
-    )
-  `);
-  db.run(`CREATE UNIQUE INDEX IF NOT EXISTS idx_knowledge_edges_unique ON knowledge_edges(from_kind, from_id, to_kind, to_id, relation)`);
-  db.run(`
-    CREATE TABLE IF NOT EXISTS knowledge_issues (
-      id TEXT PRIMARY KEY,
-      severity TEXT NOT NULL,
-      code TEXT NOT NULL,
-      message TEXT NOT NULL,
-      status TEXT NOT NULL,
-      source_id TEXT,
-      node_id TEXT,
-      metadata TEXT NOT NULL DEFAULT '{}',
-      created_at INTEGER NOT NULL,
-      updated_at INTEGER NOT NULL
-    )
-  `);
-  db.run(`CREATE INDEX IF NOT EXISTS idx_knowledge_issues_code ON knowledge_issues(code)`);
-  db.run(`
-    CREATE TABLE IF NOT EXISTS knowledge_extractions (
-      id TEXT PRIMARY KEY,
-      source_id TEXT NOT NULL,
-      artifact_id TEXT,
-      extractor_id TEXT NOT NULL,
-      format TEXT NOT NULL,
-      title TEXT,
-      summary TEXT,
-      excerpt TEXT,
-      sections TEXT NOT NULL DEFAULT '[]',
-      links TEXT NOT NULL DEFAULT '[]',
-      estimated_tokens INTEGER NOT NULL DEFAULT 0,
-      structure TEXT NOT NULL DEFAULT '{}',
-      metadata TEXT NOT NULL DEFAULT '{}',
-      created_at INTEGER NOT NULL,
-      updated_at INTEGER NOT NULL
-    )
-  `);
-  db.run(`CREATE UNIQUE INDEX IF NOT EXISTS idx_knowledge_extractions_source_id ON knowledge_extractions(source_id)`);
-  db.run(`CREATE INDEX IF NOT EXISTS idx_knowledge_extractions_format ON knowledge_extractions(format)`);
-  db.run(`
-    CREATE TABLE IF NOT EXISTS knowledge_job_runs (
-      id TEXT PRIMARY KEY,
-      job_id TEXT NOT NULL,
-      status TEXT NOT NULL,
-      mode TEXT NOT NULL,
-      requested_at INTEGER NOT NULL,
-      started_at INTEGER,
-      completed_at INTEGER,
-      error TEXT,
-      result TEXT NOT NULL DEFAULT '{}',
-      metadata TEXT NOT NULL DEFAULT '{}',
-      created_at INTEGER NOT NULL,
-      updated_at INTEGER NOT NULL
-    )
-  `);
-  db.run(`CREATE INDEX IF NOT EXISTS idx_knowledge_job_runs_job_id ON knowledge_job_runs(job_id)`);
-  db.run(`CREATE INDEX IF NOT EXISTS idx_knowledge_job_runs_requested_at ON knowledge_job_runs(requested_at)`);
-  db.run(`
-    CREATE TABLE IF NOT EXISTS knowledge_usage_records (
-      id TEXT PRIMARY KEY,
-      target_kind TEXT NOT NULL,
-      target_id TEXT NOT NULL,
-      usage_kind TEXT NOT NULL,
-      task TEXT,
-      session_id TEXT,
-      score REAL,
-      metadata TEXT NOT NULL DEFAULT '{}',
-      created_at INTEGER NOT NULL
-    )
-  `);
-  db.run(`CREATE INDEX IF NOT EXISTS idx_knowledge_usage_target ON knowledge_usage_records(target_kind, target_id)`);
-  db.run(`CREATE INDEX IF NOT EXISTS idx_knowledge_usage_created_at ON knowledge_usage_records(created_at)`);
-  db.run(`
-    CREATE TABLE IF NOT EXISTS knowledge_consolidation_candidates (
-      id TEXT PRIMARY KEY,
-      candidate_type TEXT NOT NULL,
-      status TEXT NOT NULL,
-      subject_kind TEXT NOT NULL,
-      subject_id TEXT NOT NULL,
-      title TEXT NOT NULL,
-      summary TEXT,
-      score REAL NOT NULL,
-      evidence TEXT NOT NULL DEFAULT '[]',
-      suggested_memory_class TEXT,
-      suggested_scope TEXT,
-      decided_at INTEGER,
-      decided_by TEXT,
-      metadata TEXT NOT NULL DEFAULT '{}',
-      created_at INTEGER NOT NULL,
-      updated_at INTEGER NOT NULL
-    )
-  `);
-  db.run(`CREATE INDEX IF NOT EXISTS idx_knowledge_candidates_subject ON knowledge_consolidation_candidates(subject_kind, subject_id)`);
-  db.run(`CREATE INDEX IF NOT EXISTS idx_knowledge_candidates_status ON knowledge_consolidation_candidates(status)`);
-  db.run(`
-    CREATE TABLE IF NOT EXISTS knowledge_consolidation_reports (
-      id TEXT PRIMARY KEY,
-      kind TEXT NOT NULL,
-      title TEXT NOT NULL,
-      summary TEXT NOT NULL,
-      highlights TEXT NOT NULL DEFAULT '[]',
-      metrics TEXT NOT NULL DEFAULT '{}',
-      metadata TEXT NOT NULL DEFAULT '{}',
-      created_at INTEGER NOT NULL,
-      updated_at INTEGER NOT NULL
-    )
-  `);
-  db.run(`CREATE INDEX IF NOT EXISTS idx_knowledge_reports_kind ON knowledge_consolidation_reports(kind)`);
-  db.run(`
-    CREATE TABLE IF NOT EXISTS knowledge_schedules (
-      id TEXT PRIMARY KEY,
-      job_id TEXT NOT NULL,
-      label TEXT NOT NULL,
-      enabled INTEGER NOT NULL,
-      schedule TEXT NOT NULL,
-      last_run_at INTEGER,
-      next_run_at INTEGER,
-      metadata TEXT NOT NULL DEFAULT '{}',
-      created_at INTEGER NOT NULL,
-      updated_at INTEGER NOT NULL
-    )
-  `);
-  db.run(`CREATE INDEX IF NOT EXISTS idx_knowledge_schedules_job_id ON knowledge_schedules(job_id)`);
-}
-
-function mapSourceRow(columns: string[], values: unknown[]): KnowledgeSourceRecord {
-  const row = Object.fromEntries(columns.map((column, index) => [column, values[index]]));
-  return {
-    id: String(row.id),
-    connectorId: String(row.connector_id),
-    sourceType: String(row.source_type) as KnowledgeSourceRecord['sourceType'],
-    ...(stableText(row.title as string | undefined) ? { title: String(row.title) } : {}),
-    ...(stableText(row.source_uri as string | undefined) ? { sourceUri: String(row.source_uri) } : {}),
-    ...(stableText(row.canonical_uri as string | undefined) ? { canonicalUri: String(row.canonical_uri) } : {}),
-    ...(stableText(row.summary as string | undefined) ? { summary: String(row.summary) } : {}),
-    ...(stableText(row.description as string | undefined) ? { description: String(row.description) } : {}),
-    tags: parseJsonValue<string[]>(row.tags, []),
-    ...(stableText(row.folder_path as string | undefined) ? { folderPath: String(row.folder_path) } : {}),
-    status: String(row.status) as KnowledgeSourceRecord['status'],
-    ...(stableText(row.artifact_id as string | undefined) ? { artifactId: String(row.artifact_id) } : {}),
-    ...(stableText(row.content_hash as string | undefined) ? { contentHash: String(row.content_hash) } : {}),
-    ...(typeof row.last_crawled_at === 'number' ? { lastCrawledAt: row.last_crawled_at } : {}),
-    ...(stableText(row.crawl_error as string | undefined) ? { crawlError: String(row.crawl_error) } : {}),
-    ...(stableText(row.session_id as string | undefined) ? { sessionId: String(row.session_id) } : {}),
-    metadata: parseJsonValue<Record<string, unknown>>(row.metadata, {}),
-    createdAt: Number(row.created_at),
-    updatedAt: Number(row.updated_at),
-  };
-}
-
-function mapNodeRow(columns: string[], values: unknown[]): KnowledgeNodeRecord {
-  const row = Object.fromEntries(columns.map((column, index) => [column, values[index]]));
-  return {
-    id: String(row.id),
-    kind: String(row.kind) as KnowledgeNodeRecord['kind'],
-    slug: String(row.slug),
-    title: String(row.title),
-    ...(stableText(row.summary as string | undefined) ? { summary: String(row.summary) } : {}),
-    aliases: parseJsonValue<string[]>(row.aliases, []),
-    status: String(row.status) as KnowledgeNodeRecord['status'],
-    confidence: Number(row.confidence),
-    ...(stableText(row.source_id as string | undefined) ? { sourceId: String(row.source_id) } : {}),
-    metadata: parseJsonValue<Record<string, unknown>>(row.metadata, {}),
-    createdAt: Number(row.created_at),
-    updatedAt: Number(row.updated_at),
-  };
-}
-
-function mapEdgeRow(columns: string[], values: unknown[]): KnowledgeEdgeRecord {
-  const row = Object.fromEntries(columns.map((column, index) => [column, values[index]]));
-  return {
-    id: String(row.id),
-    fromKind: String(row.from_kind) as KnowledgeEdgeRecord['fromKind'],
-    fromId: String(row.from_id),
-    toKind: String(row.to_kind) as KnowledgeEdgeRecord['toKind'],
-    toId: String(row.to_id),
-    relation: String(row.relation),
-    weight: Number(row.weight),
-    metadata: parseJsonValue<Record<string, unknown>>(row.metadata, {}),
-    createdAt: Number(row.created_at),
-    updatedAt: Number(row.updated_at),
-  };
-}
-
-function mapIssueRow(columns: string[], values: unknown[]): KnowledgeIssueRecord {
-  const row = Object.fromEntries(columns.map((column, index) => [column, values[index]]));
-  return {
-    id: String(row.id),
-    severity: String(row.severity) as KnowledgeIssueRecord['severity'],
-    code: String(row.code),
-    message: String(row.message),
-    status: String(row.status) as KnowledgeIssueRecord['status'],
-    ...(stableText(row.source_id as string | undefined) ? { sourceId: String(row.source_id) } : {}),
-    ...(stableText(row.node_id as string | undefined) ? { nodeId: String(row.node_id) } : {}),
-    metadata: parseJsonValue<Record<string, unknown>>(row.metadata, {}),
-    createdAt: Number(row.created_at),
-    updatedAt: Number(row.updated_at),
-  };
-}
-
-function mapExtractionRow(columns: string[], values: unknown[]): KnowledgeExtractionRecord {
-  const row = Object.fromEntries(columns.map((column, index) => [column, values[index]]));
-  return {
-    id: String(row.id),
-    sourceId: String(row.source_id),
-    ...(stableText(row.artifact_id as string | undefined) ? { artifactId: String(row.artifact_id) } : {}),
-    extractorId: String(row.extractor_id),
-    format: String(row.format) as KnowledgeExtractionRecord['format'],
-    ...(stableText(row.title as string | undefined) ? { title: String(row.title) } : {}),
-    ...(stableText(row.summary as string | undefined) ? { summary: String(row.summary) } : {}),
-    ...(stableText(row.excerpt as string | undefined) ? { excerpt: String(row.excerpt) } : {}),
-    sections: parseJsonValue<string[]>(row.sections, []),
-    links: parseJsonValue<string[]>(row.links, []),
-    estimatedTokens: Number(row.estimated_tokens),
-    structure: parseJsonValue<Record<string, unknown>>(row.structure, {}),
-    metadata: parseJsonValue<Record<string, unknown>>(row.metadata, {}),
-    createdAt: Number(row.created_at),
-    updatedAt: Number(row.updated_at),
-  };
-}
-
-function mapJobRunRow(columns: string[], values: unknown[]): KnowledgeJobRunRecord {
-  const row = Object.fromEntries(columns.map((column, index) => [column, values[index]]));
-  return {
-    id: String(row.id),
-    jobId: String(row.job_id),
-    status: String(row.status) as KnowledgeJobRunRecord['status'],
-    mode: String(row.mode) as KnowledgeJobRunRecord['mode'],
-    requestedAt: Number(row.requested_at),
-    ...(typeof row.started_at === 'number' ? { startedAt: row.started_at } : {}),
-    ...(typeof row.completed_at === 'number' ? { completedAt: row.completed_at } : {}),
-    ...(stableText(row.error as string | undefined) ? { error: String(row.error) } : {}),
-    result: parseJsonValue<Record<string, unknown>>(row.result, {}),
-    metadata: parseJsonValue<Record<string, unknown>>(row.metadata, {}),
-  };
-}
-
-function mapUsageRow(columns: string[], values: unknown[]): KnowledgeUsageRecord {
-  const row = Object.fromEntries(columns.map((column, index) => [column, values[index]]));
-  return {
-    id: String(row.id),
-    targetKind: String(row.target_kind) as KnowledgeUsageRecord['targetKind'],
-    targetId: String(row.target_id),
-    usageKind: String(row.usage_kind) as KnowledgeUsageRecord['usageKind'],
-    ...(stableText(row.task as string | undefined) ? { task: String(row.task) } : {}),
-    ...(stableText(row.session_id as string | undefined) ? { sessionId: String(row.session_id) } : {}),
-    ...(typeof row.score === 'number' ? { score: Number(row.score) } : {}),
-    metadata: parseJsonValue<Record<string, unknown>>(row.metadata, {}),
-    createdAt: Number(row.created_at),
-  };
-}
-
-function mapCandidateRow(columns: string[], values: unknown[]): KnowledgeConsolidationCandidateRecord {
-  const row = Object.fromEntries(columns.map((column, index) => [column, values[index]]));
-  return {
-    id: String(row.id),
-    candidateType: String(row.candidate_type) as KnowledgeConsolidationCandidateRecord['candidateType'],
-    status: String(row.status) as KnowledgeConsolidationCandidateRecord['status'],
-    subjectKind: String(row.subject_kind) as KnowledgeConsolidationCandidateRecord['subjectKind'],
-    subjectId: String(row.subject_id),
-    title: String(row.title),
-    ...(stableText(row.summary as string | undefined) ? { summary: String(row.summary) } : {}),
-    score: Number(row.score),
-    evidence: parseJsonValue<string[]>(row.evidence, []),
-    ...(stableText(row.suggested_memory_class as string | undefined) ? { suggestedMemoryClass: String(row.suggested_memory_class) } : {}),
-    ...(stableText(row.suggested_scope as string | undefined) ? { suggestedScope: String(row.suggested_scope) } : {}),
-    ...(typeof row.decided_at === 'number' ? { decidedAt: Number(row.decided_at) } : {}),
-    ...(stableText(row.decided_by as string | undefined) ? { decidedBy: String(row.decided_by) } : {}),
-    metadata: parseJsonValue<Record<string, unknown>>(row.metadata, {}),
-    createdAt: Number(row.created_at),
-    updatedAt: Number(row.updated_at),
-  };
-}
-
-function mapReportRow(columns: string[], values: unknown[]): KnowledgeConsolidationReportRecord {
-  const row = Object.fromEntries(columns.map((column, index) => [column, values[index]]));
-  return {
-    id: String(row.id),
-    kind: String(row.kind) as KnowledgeConsolidationReportRecord['kind'],
-    title: String(row.title),
-    summary: String(row.summary),
-    highlights: parseJsonValue<string[]>(row.highlights, []),
-    metrics: parseJsonValue<Record<string, number>>(row.metrics, {}),
-    metadata: parseJsonValue<Record<string, unknown>>(row.metadata, {}),
-    createdAt: Number(row.created_at),
-    updatedAt: Number(row.updated_at),
-  };
-}
-
-function mapScheduleRow(columns: string[], values: unknown[]): KnowledgeScheduleRecord {
-  const row = Object.fromEntries(columns.map((column, index) => [column, values[index]]));
-  return {
-    id: String(row.id),
-    jobId: String(row.job_id),
-    label: String(row.label),
-    enabled: Number(row.enabled) === 1,
-    schedule: parseJsonValue<KnowledgeScheduleRecord['schedule']>(row.schedule, { kind: 'every', intervalMs: 86_400_000 }),
-    ...(typeof row.last_run_at === 'number' ? { lastRunAt: Number(row.last_run_at) } : {}),
-    ...(typeof row.next_run_at === 'number' ? { nextRunAt: Number(row.next_run_at) } : {}),
-    metadata: parseJsonValue<Record<string, unknown>>(row.metadata, {}),
-    createdAt: Number(row.created_at),
-    updatedAt: Number(row.updated_at),
-  };
-}
+import {
+  createSchema,
+  nowMs,
+  resolveDefaultKnowledgeDbPath,
+  stableText,
+  uniq,
+} from './store-schema.ts';
+import {
+  edgesForKnowledgeStore,
+  getKnowledgeConsolidationCandidate,
+  getKnowledgeConsolidationCandidateBySubject,
+  getKnowledgeConsolidationReport,
+  getKnowledgeExtraction,
+  getKnowledgeExtractionBySourceId,
+  getKnowledgeIssue,
+  getKnowledgeItem,
+  getKnowledgeJobRun,
+  getKnowledgeNode,
+  getKnowledgeNodeByKindAndSlug,
+  getKnowledgeSchedule,
+  getKnowledgeSource,
+  getKnowledgeSourceByCanonicalUri,
+  getKnowledgeStoreStatus,
+  getKnowledgeUsageRecord,
+  listKnowledgeConsolidationCandidates,
+  listKnowledgeConsolidationReports,
+  listKnowledgeEdges,
+  listKnowledgeExtractions,
+  listKnowledgeIssues,
+  listKnowledgeJobRuns,
+  listKnowledgeNodes,
+  listKnowledgeSchedules,
+  listKnowledgeSources,
+  listKnowledgeUsageRecords,
+  type KnowledgeStoreReadView,
+} from './store-read.ts';
+import { loadKnowledgeStoreSnapshot } from './store-load.ts';
 
 export interface KnowledgeStoreConfig {
   readonly dbPath?: string;
@@ -442,8 +80,6 @@ function resolveKnowledgeDbPath(config: KnowledgeStoreConfig = {}): string {
 }
 
 export class KnowledgeStore {
-  private static active: KnowledgeStore | null = null;
-
   private readonly sqlite: SQLiteStore;
   private readonly dbPath: string;
   private ready = false;
@@ -463,19 +99,6 @@ export class KnowledgeStore {
     this.dbPath = resolveKnowledgeDbPath(config);
     this.sqlite = new SQLiteStore(this.dbPath);
     void this.init();
-    KnowledgeStore.active = this;
-  }
-
-  static getActive(config: KnowledgeStoreConfig = {}): KnowledgeStore {
-    const requestedPath = resolveKnowledgeDbPath(config);
-    if (!KnowledgeStore.active || KnowledgeStore.active.dbPath !== requestedPath) {
-      KnowledgeStore.active = new KnowledgeStore({ ...config, dbPath: requestedPath });
-    }
-    return KnowledgeStore.active;
-  }
-
-  static resetActiveForTesting(): void {
-    KnowledgeStore.active = null;
   }
 
   get isReady(): boolean {
@@ -484,6 +107,10 @@ export class KnowledgeStore {
 
   get storagePath(): string {
     return this.dbPath;
+  }
+
+  private asReadView(): KnowledgeStoreReadView {
+    return this as unknown as KnowledgeStoreReadView;
   }
 
   async init(): Promise<void> {
@@ -498,55 +125,31 @@ export class KnowledgeStore {
   }
 
   status(): KnowledgeStatus {
-    return {
-      ready: this.ready,
-      storagePath: this.dbPath,
-      sourceCount: this.sources.size,
-      nodeCount: this.nodes.size,
-      edgeCount: this.edges.size,
-      issueCount: this.issues.size,
-      extractionCount: this.extractions.size,
-      jobRunCount: this.jobRuns.size,
-      usageCount: this.usageRecords.size,
-      candidateCount: this.consolidationCandidates.size,
-      reportCount: this.consolidationReports.size,
-      scheduleCount: this.schedules.size,
-    };
+    return getKnowledgeStoreStatus(this.asReadView());
   }
 
   listSources(limit = 100): KnowledgeSourceRecord[] {
-    return [...this.sources.values()]
-      .sort((a, b) => b.updatedAt - a.updatedAt || a.id.localeCompare(b.id))
-      .slice(0, Math.max(1, limit));
+    return listKnowledgeSources(this.asReadView(), limit);
   }
 
   listNodes(limit = 100): KnowledgeNodeRecord[] {
-    return [...this.nodes.values()]
-      .sort((a, b) => b.updatedAt - a.updatedAt || a.id.localeCompare(b.id))
-      .slice(0, Math.max(1, limit));
+    return listKnowledgeNodes(this.asReadView(), limit);
   }
 
   listEdges(): KnowledgeEdgeRecord[] {
-    return [...this.edges.values()];
+    return listKnowledgeEdges(this.asReadView());
   }
 
   listIssues(limit = 100): KnowledgeIssueRecord[] {
-    return [...this.issues.values()]
-      .sort((a, b) => b.updatedAt - a.updatedAt || a.id.localeCompare(b.id))
-      .slice(0, Math.max(1, limit));
+    return listKnowledgeIssues(this.asReadView(), limit);
   }
 
   listExtractions(limit = 100): KnowledgeExtractionRecord[] {
-    return [...this.extractions.values()]
-      .sort((a, b) => b.updatedAt - a.updatedAt || a.id.localeCompare(b.id))
-      .slice(0, Math.max(1, limit));
+    return listKnowledgeExtractions(this.asReadView(), limit);
   }
 
   listJobRuns(limit = 100, jobId?: string): KnowledgeJobRunRecord[] {
-    return [...this.jobRuns.values()]
-      .filter((run) => !jobId || run.jobId === jobId)
-      .sort((a, b) => (b.requestedAt - a.requestedAt) || a.id.localeCompare(b.id))
-      .slice(0, Math.max(1, limit));
+    return listKnowledgeJobRuns(this.asReadView(), limit, jobId);
   }
 
   listUsageRecords(limit = 100, input: {
@@ -554,14 +157,7 @@ export class KnowledgeStore {
     readonly targetId?: string;
     readonly usageKind?: KnowledgeUsageRecord['usageKind'];
   } = {}): KnowledgeUsageRecord[] {
-    return [...this.usageRecords.values()]
-      .filter((record) => (
-        (!input.targetKind || record.targetKind === input.targetKind)
-        && (!input.targetId || record.targetId === input.targetId)
-        && (!input.usageKind || record.usageKind === input.usageKind)
-      ))
-      .sort((a, b) => b.createdAt - a.createdAt || a.id.localeCompare(b.id))
-      .slice(0, Math.max(1, limit));
+    return listKnowledgeUsageRecords(this.asReadView(), limit, input);
   }
 
   listConsolidationCandidates(limit = 100, input: {
@@ -569,61 +165,47 @@ export class KnowledgeStore {
     readonly subjectKind?: KnowledgeConsolidationCandidateRecord['subjectKind'];
     readonly subjectId?: string;
   } = {}): KnowledgeConsolidationCandidateRecord[] {
-    return [...this.consolidationCandidates.values()]
-      .filter((record) => (
-        (!input.status || record.status === input.status)
-        && (!input.subjectKind || record.subjectKind === input.subjectKind)
-        && (!input.subjectId || record.subjectId === input.subjectId)
-      ))
-      .sort((a, b) => b.score - a.score || b.updatedAt - a.updatedAt || a.id.localeCompare(b.id))
-      .slice(0, Math.max(1, limit));
+    return listKnowledgeConsolidationCandidates(this.asReadView(), limit, input);
   }
 
   listConsolidationReports(limit = 100): KnowledgeConsolidationReportRecord[] {
-    return [...this.consolidationReports.values()]
-      .sort((a, b) => b.createdAt - a.createdAt || a.id.localeCompare(b.id))
-      .slice(0, Math.max(1, limit));
+    return listKnowledgeConsolidationReports(this.asReadView(), limit);
   }
 
   listSchedules(limit = 100): KnowledgeScheduleRecord[] {
-    return [...this.schedules.values()]
-      .sort((a, b) => a.label.localeCompare(b.label) || a.id.localeCompare(b.id))
-      .slice(0, Math.max(1, limit));
+    return listKnowledgeSchedules(this.asReadView(), limit);
   }
 
   getSource(id: string): KnowledgeSourceRecord | null {
-    return this.sources.get(id) ?? null;
+    return getKnowledgeSource(this.asReadView(), id);
   }
 
   getNode(id: string): KnowledgeNodeRecord | null {
-    return this.nodes.get(id) ?? null;
+    return getKnowledgeNode(this.asReadView(), id);
   }
 
   getIssue(id: string): KnowledgeIssueRecord | null {
-    return this.issues.get(id) ?? null;
+    return getKnowledgeIssue(this.asReadView(), id);
   }
 
   getExtraction(id: string): KnowledgeExtractionRecord | null {
-    return this.extractions.get(id) ?? null;
+    return getKnowledgeExtraction(this.asReadView(), id);
   }
 
   getExtractionBySourceId(sourceId: string): KnowledgeExtractionRecord | null {
-    for (const extraction of this.extractions.values()) {
-      if (extraction.sourceId === sourceId) return extraction;
-    }
-    return null;
+    return getKnowledgeExtractionBySourceId(this.asReadView(), sourceId);
   }
 
   getJobRun(id: string): KnowledgeJobRunRecord | null {
-    return this.jobRuns.get(id) ?? null;
+    return getKnowledgeJobRun(this.asReadView(), id);
   }
 
   getUsageRecord(id: string): KnowledgeUsageRecord | null {
-    return this.usageRecords.get(id) ?? null;
+    return getKnowledgeUsageRecord(this.asReadView(), id);
   }
 
   getConsolidationCandidate(id: string): KnowledgeConsolidationCandidateRecord | null {
-    return this.consolidationCandidates.get(id) ?? null;
+    return getKnowledgeConsolidationCandidate(this.asReadView(), id);
   }
 
   getConsolidationCandidateBySubject(
@@ -631,75 +213,31 @@ export class KnowledgeStore {
     subjectId: string,
     candidateType: KnowledgeConsolidationCandidateRecord['candidateType'],
   ): KnowledgeConsolidationCandidateRecord | null {
-    for (const candidate of this.consolidationCandidates.values()) {
-      if (candidate.subjectKind === subjectKind && candidate.subjectId === subjectId && candidate.candidateType === candidateType) {
-        return candidate;
-      }
-    }
-    return null;
+    return getKnowledgeConsolidationCandidateBySubject(this.asReadView(), subjectKind, subjectId, candidateType);
   }
 
   getConsolidationReport(id: string): KnowledgeConsolidationReportRecord | null {
-    return this.consolidationReports.get(id) ?? null;
+    return getKnowledgeConsolidationReport(this.asReadView(), id);
   }
 
   getSchedule(id: string): KnowledgeScheduleRecord | null {
-    return this.schedules.get(id) ?? null;
+    return getKnowledgeSchedule(this.asReadView(), id);
   }
 
   getSourceByCanonicalUri(canonicalUri: string): KnowledgeSourceRecord | null {
-    for (const source of this.sources.values()) {
-      if (source.canonicalUri === canonicalUri) return source;
-    }
-    return null;
+    return getKnowledgeSourceByCanonicalUri(this.asReadView(), canonicalUri);
   }
 
   getNodeByKindAndSlug(kind: KnowledgeNodeRecord['kind'], slug: string): KnowledgeNodeRecord | null {
-    for (const node of this.nodes.values()) {
-      if (node.kind === kind && node.slug === slug) return node;
-    }
-    return null;
+    return getKnowledgeNodeByKindAndSlug(this.asReadView(), kind, slug);
   }
 
   edgesFor(kind: KnowledgeEdgeRecord['fromKind'] | KnowledgeEdgeRecord['toKind'], id: string): KnowledgeEdgeRecord[] {
-    return [...this.edges.values()].filter((edge) => (
-      (edge.fromKind === kind && edge.fromId === id)
-      || (edge.toKind === kind && edge.toId === id)
-    ));
+    return edgesForKnowledgeStore(this.asReadView(), kind, id);
   }
 
   getItem(id: string): KnowledgeItemView | null {
-    const source = this.getSource(id);
-    const node = this.getNode(id);
-    const issue = this.getIssue(id);
-    if (!source && !node && !issue) return null;
-    const relatedEdges = this.edgesFor(source ? 'source' : 'node', id);
-    const linkedSources: KnowledgeSourceRecord[] = [];
-    const linkedNodes: KnowledgeNodeRecord[] = [];
-    for (const edge of relatedEdges) {
-      const otherKind = source
-        ? edge.fromId === source.id && edge.fromKind === 'source'
-          ? edge.toKind
-          : edge.fromKind
-        : edge.fromId === node?.id && edge.fromKind === 'node'
-          ? edge.toKind
-          : edge.fromKind;
-      const otherId = source
-        ? edge.fromId === source.id && edge.fromKind === 'source'
-          ? edge.toId
-          : edge.fromId
-        : edge.fromId === node?.id && edge.fromKind === 'node'
-          ? edge.toId
-          : edge.fromId;
-      if (otherKind === 'source') {
-        const linked = this.getSource(otherId);
-        if (linked) linkedSources.push(linked);
-      } else if (otherKind === 'node') {
-        const linked = this.getNode(otherId);
-        if (linked) linkedNodes.push(linked);
-      }
-    }
-    return { source: source ?? undefined, node: node ?? undefined, issue: issue ?? undefined, relatedEdges, linkedSources, linkedNodes };
+    return getKnowledgeItem(this.asReadView(), id);
   }
 
   async upsertSource(input: KnowledgeSourceUpsertInput): Promise<KnowledgeSourceRecord> {
@@ -994,6 +532,8 @@ export class KnowledgeStore {
         ...(existing?.metadata ?? {}),
         ...(input.metadata ?? {}),
       },
+      createdAt: existing?.createdAt ?? now,
+      updatedAt: now,
     };
     this.sqlite.run(`
       INSERT OR REPLACE INTO knowledge_job_runs (
@@ -1203,106 +743,27 @@ export class KnowledgeStore {
 
   private async initialize(): Promise<void> {
     await this.sqlite.init(createSchema);
-    this.loadSources();
-    this.loadNodes();
-    this.loadEdges();
-    this.loadIssues();
-    this.loadExtractions();
-    this.loadJobRuns();
-    this.loadUsageRecords();
-    this.loadConsolidationCandidates();
-    this.loadConsolidationReports();
-    this.loadSchedules();
-    this.ready = true;
-  }
-
-  private loadSources(): void {
+    const snapshot = loadKnowledgeStoreSnapshot(this.sqlite);
     this.sources.clear();
-    const rows = this.sqlite.exec('SELECT * FROM knowledge_sources');
-    for (const row of rows[0]?.values ?? []) {
-      const record = mapSourceRow(rows[0]!.columns, row);
-      this.sources.set(record.id, record);
-    }
-  }
-
-  private loadNodes(): void {
+    for (const record of snapshot.sources) this.sources.set(record.id, record);
     this.nodes.clear();
-    const rows = this.sqlite.exec('SELECT * FROM knowledge_nodes');
-    for (const row of rows[0]?.values ?? []) {
-      const record = mapNodeRow(rows[0]!.columns, row);
-      this.nodes.set(record.id, record);
-    }
-  }
-
-  private loadEdges(): void {
+    for (const record of snapshot.nodes) this.nodes.set(record.id, record);
     this.edges.clear();
-    const rows = this.sqlite.exec('SELECT * FROM knowledge_edges');
-    for (const row of rows[0]?.values ?? []) {
-      const record = mapEdgeRow(rows[0]!.columns, row);
-      this.edges.set(record.id, record);
-    }
-  }
-
-  private loadIssues(): void {
+    for (const record of snapshot.edges) this.edges.set(record.id, record);
     this.issues.clear();
-    const rows = this.sqlite.exec('SELECT * FROM knowledge_issues');
-    for (const row of rows[0]?.values ?? []) {
-      const record = mapIssueRow(rows[0]!.columns, row);
-      this.issues.set(record.id, record);
-    }
-  }
-
-  private loadExtractions(): void {
+    for (const record of snapshot.issues) this.issues.set(record.id, record);
     this.extractions.clear();
-    const rows = this.sqlite.exec('SELECT * FROM knowledge_extractions');
-    for (const row of rows[0]?.values ?? []) {
-      const record = mapExtractionRow(rows[0]!.columns, row);
-      this.extractions.set(record.id, record);
-    }
-  }
-
-  private loadJobRuns(): void {
+    for (const record of snapshot.extractions) this.extractions.set(record.id, record);
     this.jobRuns.clear();
-    const rows = this.sqlite.exec('SELECT * FROM knowledge_job_runs');
-    for (const row of rows[0]?.values ?? []) {
-      const record = mapJobRunRow(rows[0]!.columns, row);
-      this.jobRuns.set(record.id, record);
-    }
-  }
-
-  private loadUsageRecords(): void {
+    for (const record of snapshot.jobRuns) this.jobRuns.set(record.id, record);
     this.usageRecords.clear();
-    const rows = this.sqlite.exec('SELECT * FROM knowledge_usage_records');
-    for (const row of rows[0]?.values ?? []) {
-      const record = mapUsageRow(rows[0]!.columns, row);
-      this.usageRecords.set(record.id, record);
-    }
-  }
-
-  private loadConsolidationCandidates(): void {
+    for (const record of snapshot.usageRecords) this.usageRecords.set(record.id, record);
     this.consolidationCandidates.clear();
-    const rows = this.sqlite.exec('SELECT * FROM knowledge_consolidation_candidates');
-    for (const row of rows[0]?.values ?? []) {
-      const record = mapCandidateRow(rows[0]!.columns, row);
-      this.consolidationCandidates.set(record.id, record);
-    }
-  }
-
-  private loadConsolidationReports(): void {
+    for (const record of snapshot.consolidationCandidates) this.consolidationCandidates.set(record.id, record);
     this.consolidationReports.clear();
-    const rows = this.sqlite.exec('SELECT * FROM knowledge_consolidation_reports');
-    for (const row of rows[0]?.values ?? []) {
-      const record = mapReportRow(rows[0]!.columns, row);
-      this.consolidationReports.set(record.id, record);
-    }
-  }
-
-  private loadSchedules(): void {
+    for (const record of snapshot.consolidationReports) this.consolidationReports.set(record.id, record);
     this.schedules.clear();
-    const rows = this.sqlite.exec('SELECT * FROM knowledge_schedules');
-    for (const row of rows[0]?.values ?? []) {
-      const record = mapScheduleRow(rows[0]!.columns, row);
-      this.schedules.set(record.id, record);
-    }
+    for (const record of snapshot.schedules) this.schedules.set(record.id, record);
+    this.ready = true;
   }
 }

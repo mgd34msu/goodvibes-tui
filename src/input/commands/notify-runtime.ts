@@ -1,4 +1,5 @@
 import type { CommandRegistry } from '../command-registry.ts';
+import { requireWebhookNotifier } from './runtime-services.ts';
 
 export function registerNotifyRuntimeCommands(registry: CommandRegistry): void {
   registry.register({
@@ -8,9 +9,9 @@ export function registerNotifyRuntimeCommands(registry: CommandRegistry): void {
     usage: 'add <url> | remove <url> | list | clear | test',
     argsHint: 'add|remove|list|clear|test',
     async handler(args, ctx) {
-      const { WebhookNotifier, getWebhookNotifier } = await import('../../integrations/webhooks.ts');
       const notifications = ctx.configManager.getCategory('notifications');
       const urls: string[] = Array.isArray(notifications.webhookUrls) ? [...notifications.webhookUrls] : [];
+      const notifier = requireWebhookNotifier(ctx);
       const sub = args[0];
 
       if (!sub || sub === 'list') {
@@ -35,7 +36,7 @@ export function registerNotifyRuntimeCommands(registry: CommandRegistry): void {
         }
         urls.push(url);
         ctx.configManager.mergeCategory('notifications', { webhookUrls: urls });
-        getWebhookNotifier()?.setUrls(urls);
+        notifier.setUrls(urls);
         ctx.print(`Webhook added: ${url}`);
         return;
       }
@@ -52,14 +53,14 @@ export function registerNotifyRuntimeCommands(registry: CommandRegistry): void {
           return;
         }
         ctx.configManager.mergeCategory('notifications', { webhookUrls: next });
-        getWebhookNotifier()?.setUrls(next);
+        notifier.setUrls(next);
         ctx.print(`Webhook removed: ${url}`);
         return;
       }
 
       if (sub === 'clear') {
         ctx.configManager.mergeCategory('notifications', { webhookUrls: [] });
-        getWebhookNotifier()?.setUrls([]);
+        notifier.setUrls([]);
         ctx.print('All webhook URLs cleared.');
         return;
       }
@@ -70,7 +71,7 @@ export function registerNotifyRuntimeCommands(registry: CommandRegistry): void {
           return;
         }
         ctx.print(`Testing ${urls.length} webhook${urls.length !== 1 ? 's' : ''}...`);
-        const notifier = getWebhookNotifier() ?? WebhookNotifier.fromConfig(urls);
+        notifier.setUrls(urls);
         const results = await notifier.test();
         ctx.print(results.map((r) => r.ok ? `  [ok] ${r.url}` : `  [fail] ${r.url} — ${r.error ?? 'unknown error'}`).join('\n'));
         return;

@@ -14,11 +14,9 @@ describe('runtime/network inbound TLS', () => {
     root = mkdtempSync(join(tmpdir(), 'gv-network-inbound-'));
     configDir = join(root, '.goodvibes', 'tui');
     mkdirSync(configDir, { recursive: true });
-    ConfigManager.setTestMode(configDir);
   });
 
   afterEach(() => {
-    ConfigManager.setTestMode(undefined);
     rmSync(root, { recursive: true, force: true });
   });
 
@@ -27,7 +25,7 @@ describe('runtime/network inbound TLS', () => {
     mkdirSync(certDir, { recursive: true });
     writeFileSync(join(certDir, 'fullchain.pem'), 'CERT\n', 'utf-8');
     writeFileSync(join(certDir, 'privkey.pem'), 'KEY\n', 'utf-8');
-    const config = new ConfigManager();
+    const config = new ConfigManager({ configDir, workingDir: root });
     config.set('controlPlane.tls.mode', 'direct');
 
     const snapshot = inspectInboundTls(config, 'controlPlane');
@@ -41,7 +39,7 @@ describe('runtime/network inbound TLS', () => {
   });
 
   test('reports proxy mode without requiring local certs', () => {
-    const config = new ConfigManager();
+    const config = new ConfigManager({ configDir, workingDir: root });
     config.set('controlPlane.tls.mode', 'proxy');
     config.set('controlPlane.trustProxy', true);
 
@@ -62,7 +60,7 @@ describe('runtime/network inbound TLS', () => {
     writeFileSync(certFile, 'CERT\n', 'utf-8');
     writeFileSync(keyFile, 'KEY\n', 'utf-8');
     if (process.platform !== 'win32') chmodSync(keyFile, 0o644);
-    const config = new ConfigManager();
+    const config = new ConfigManager({ configDir, workingDir: root });
     config.set('httpListener.tls.mode', 'direct');
     config.set('httpListener.tls.certFile', certFile);
     config.set('httpListener.tls.keyFile', keyFile);

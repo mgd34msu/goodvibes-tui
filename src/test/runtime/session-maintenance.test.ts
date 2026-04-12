@@ -1,6 +1,8 @@
 import { beforeEach, describe, expect, test } from 'bun:test';
-import { configManager } from '../../config/index.ts';
+import { createTestConfigManager } from '../helpers/test-managers.ts';
 import { evaluateSessionMaintenance, formatSessionMaintenanceLines } from '../../runtime/session-maintenance.ts';
+
+const configManager = createTestConfigManager();
 
 describe('session maintenance', () => {
   beforeEach(() => {
@@ -11,6 +13,7 @@ describe('session maintenance', () => {
 
   test('suggests compaction under high context pressure', () => {
     const status = evaluateSessionMaintenance({
+      configManager,
       currentTokens: 82_000,
       contextWindow: 100_000,
       messageCount: 28,
@@ -40,6 +43,7 @@ describe('session maintenance', () => {
   test('formats guided lines with reasons and next steps', () => {
     configManager.setDynamic('behavior.guidanceMode', 'guided');
     const status = evaluateSessionMaintenance({
+      configManager,
       currentTokens: 60_000,
       contextWindow: 100_000,
       messageCount: 30,

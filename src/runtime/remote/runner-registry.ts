@@ -1,7 +1,7 @@
 import { mkdirSync } from 'node:fs';
 import { readFile, writeFile } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
-import { AgentManager } from '../../tools/agent/index.ts';
+import type { AgentManager } from '../../tools/agent/index.ts';
 import type { AgentRecord } from '../../tools/agent/manager.ts';
 import type { RuntimeStore } from '../store/index.ts';
 import type { AcpConnection } from '../store/domains/acp.ts';
@@ -180,20 +180,10 @@ function buildArtifactFromStore(
 }
 
 export class RemoteRunnerRegistry {
-  private static instance: RemoteRunnerRegistry | null = null;
   private readonly contracts = new Map<string, RemoteRunnerContract>();
   private readonly artifacts = new Map<string, RemoteExecutionArtifact>();
   private readonly pools = new Map<string, RemoteRunnerPool>();
-
-  static getInstance(): RemoteRunnerRegistry {
-    if (!RemoteRunnerRegistry.instance) {
-      RemoteRunnerRegistry.instance = new RemoteRunnerRegistry();
-    }
-    return RemoteRunnerRegistry.instance;
-  }
-
-  static resetInstance(): void {
-    RemoteRunnerRegistry.instance = null;
+  constructor(private readonly agentManager: Pick<AgentManager, 'getStatus' | 'list'>) {
   }
 
   private resolveConnection(agentId: string, store?: RuntimeStore): AcpConnection | undefined {
@@ -201,7 +191,7 @@ export class RemoteRunnerRegistry {
   }
 
   upsertContractForAgent(agentId: string, store?: RuntimeStore): RemoteRunnerContract | null {
-    const agent = AgentManager.getInstance().getStatus(agentId);
+    const agent = this.agentManager.getStatus(agentId);
     if (!agent) return null;
     const contract = buildContract(agent, this.resolveConnection(agentId, store), this.contracts.get(agentId) ?? undefined);
     this.contracts.set(agentId, contract);
@@ -298,7 +288,7 @@ export class RemoteRunnerRegistry {
   }
 
   captureArtifactForAgent(agentId: string, store?: RuntimeStore): RemoteExecutionArtifact | null {
-    const agent = AgentManager.getInstance().getStatus(agentId);
+    const agent = this.agentManager.getStatus(agentId);
     if (!agent) return null;
     const connection = this.resolveConnection(agentId, store);
     const contract = this.upsertContractForAgent(agentId, store) ?? buildContract(agent, connection);
@@ -409,7 +399,7 @@ export class RemoteRunnerRegistry {
   }
 
   ensureContractsFromStore(store?: RuntimeStore): void {
-    for (const agent of AgentManager.getInstance().list()) {
+    for (const agent of this.agentManager.list()) {
       if (agent.orchestrationGraphId || agent.parentAgentId || store?.getState().acp.connections.has(agent.id)) {
         this.upsertContractForAgent(agent.id, store);
       }
@@ -423,28 +413,23 @@ export class RemoteRunnerRegistry {
   }
 }
 
-export function getRemoteRunnerRegistry(): RemoteRunnerRegistry {
-  return RemoteRunnerRegistry.getInstance();
-}
-
-export function _resetRemoteRunnerRegistryForTesting(): void {
-  RemoteRunnerRegistry.resetInstance();
-}
-
 export async function exportRemoteArtifactForAgent(
+  registry: RemoteRunnerRegistry,
   agentId: string,
   store?: RuntimeStore,
-  explicitPath?: string,
+  path?: string,
 ): Promise<{ artifact: RemoteExecutionArtifact; path: string } | null> {
-  const registry = getRemoteRunnerRegistry();
   const artifact = registry.captureArtifactForAgent(agentId, store);
   if (!artifact) return null;
-  return registry.exportArtifact(artifact.id, explicitPath);
+  return registry.exportArtifact(artifact.id, path);
 }
 
-export async function importRemoteArtifact(path: string): Promise<RemoteExecutionArtifact> {
+export async function importRemoteArtifact(
+  registry: RemoteRunnerRegistry,
+  path: string,
+): Promise<RemoteExecutionArtifact> {
   try {
-    return await getRemoteRunnerRegistry().importArtifact(path);
+    return await registry.importArtifact(path);
   } catch (error) {
     logger.debug('RemoteRunnerRegistry.importArtifact failed', { path, error: String(error) });
     throw error;

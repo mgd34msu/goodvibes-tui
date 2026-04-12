@@ -1,18 +1,19 @@
 import { ServiceRegistry } from '../../config/service-registry.ts';
 import type { ConfigManager } from '../../config/manager.ts';
-import { getPanelManager } from '../../panels/panel-manager.ts';
 import { evaluateSessionMaintenance, formatSessionMaintenanceLines } from '../../runtime/session-maintenance.ts';
-import { sessionMemoryStore } from '../../core/session-memory.ts';
 import { estimateConversationTokens } from '../../core/context-compaction.ts';
-import { getContextWindowForModel } from '../../providers/model-limits.ts';
 import type { CommandRegistry } from '../command-registry.ts';
 import { buildSetupReviewSnapshot } from './local-setup-review.ts';
 import { buildProviderAccountSnapshot } from '../../runtime/provider-accounts/registry.ts';
-import { getLocalUserAuthManager } from '../../runtime/local-auth.ts';
 import { getSettingsControlPlaneSnapshot } from '../../runtime/settings/control-plane.ts';
-import { getRemoteSupervisor } from '../../runtime/remote/index.ts';
 import { listPersistedWorktreeMeta, summarizeWorktreeOwnership } from '../../runtime/worktree/registry.ts';
 import { checkRecoveryFile, readLastSessionPointer } from '../../runtime/session-persistence.ts';
+import {
+  openCommandPanel,
+  requireLocalUserAuthManager,
+  requireServiceRegistry,
+  requireSessionMemoryStore,
+} from './runtime-services.ts';
 
 function renderSandboxHealthSummary(configManager: ConfigManager): string[] {
   const backend = String(configManager.get('sandbox.vmBackend') ?? 'local');
@@ -38,18 +39,12 @@ export function registerHealthRuntimeCommands(registry: CommandRegistry): void {
       const sub = (args[0] ?? 'review').toLowerCase();
 
       if (sub === 'open' || sub === 'panel' || sub === 'provider') {
-        if (ctx.showPanel) ctx.showPanel('provider-health');
-        else {
-          const panelManager = getPanelManager();
-          panelManager.open('provider-health');
-          panelManager.show();
-          ctx.renderRequest();
-        }
+        openCommandPanel(ctx, 'provider-health');
         return;
       }
 
       if (sub === 'services') {
-        const registry = new ServiceRegistry();
+        const registry = requireServiceRegistry(ctx);
         const all = registry.getAll();
         const keys = Object.keys(all);
         const inspections = await Promise.all(keys.map((name) => registry.inspect(name)));
@@ -80,7 +75,12 @@ export function registerHealthRuntimeCommands(registry: CommandRegistry): void {
       }
 
       if (sub === 'accounts') {
-        const accounts = await buildProviderAccountSnapshot();
+        const accounts = await buildProviderAccountSnapshot({
+          providerRegistry: ctx.providerRegistry,
+          serviceRegistry: ctx.serviceRegistry,
+          subscriptionManager: ctx.subscriptionManager,
+          secretsManager: ctx.secretsManager,
+        });
         ctx.print([
           'Health Review: Accounts',
           `  providers: ${accounts.providers.length}`,
@@ -98,7 +98,7 @@ export function registerHealthRuntimeCommands(registry: CommandRegistry): void {
       }
 
       if (sub === 'auth') {
-        const auth = getLocalUserAuthManager().inspect();
+        const auth = requireLocalUserAuthManager(ctx).inspect();
         ctx.print([
           'Health Review: Local Auth',
           `  users: ${auth.userCount}`,
@@ -168,7 +168,7 @@ export function registerHealthRuntimeCommands(registry: CommandRegistry): void {
       }
 
       if (sub === 'remote') {
-        const snapshot = ctx.runtimeStore ? getRemoteSupervisor().getSnapshot(ctx.runtimeStore) : null;
+        const snapshot = ctx.runtimeStore && ctx.remoteSupervisor ? ctx.remoteSupervisor.getSnapshot(ctx.runtimeStore) : null;
         if (!snapshot) {
           ctx.print('Health Review: Remote\n  runtime store unavailable');
           return;
@@ -259,10 +259,11 @@ export function registerHealthRuntimeCommands(registry: CommandRegistry): void {
           ? ctx.conversationManager.getMessagesForLLM()
           : [];
         const maintenance = evaluateSessionMaintenance({
+          configManager: ctx.configManager,
           currentTokens: estimateConversationTokens(llmMessages),
-          contextWindow: currentModel ? getContextWindowForModel(currentModel) : 0,
+          contextWindow: currentModel ? ctx.providerRegistry.getContextWindowForModel(currentModel) : 0,
           messageCount: llmMessages.length,
-          sessionMemoryCount: sessionMemoryStore.list().length,
+          sessionMemoryCount: requireSessionMemoryStore(ctx).list().length,
           session: ctx.runtimeStore?.getState().session,
         });
         ctx.print([
@@ -307,7 +308,7 @@ export function registerHealthRuntimeCommands(registry: CommandRegistry): void {
           ));
           lines.push('  verify: /health settings');
         } else if (domain === 'auth') {
-          const auth = getLocalUserAuthManager().inspect();
+          const auth = requireLocalUserAuthManager(ctx).inspect();
           lines.push('  domain: auth');
           lines.push(...(
             auth.bootstrapCredentialPresent
@@ -384,17 +385,23 @@ export function registerHealthRuntimeCommands(registry: CommandRegistry): void {
       const llmMessages = typeof ctx.conversationManager.getMessagesForLLM === 'function'
         ? ctx.conversationManager.getMessagesForLLM()
         : [];
-      const contextWindow = currentModel ? getContextWindowForModel(currentModel) : 0;
+      const contextWindow = currentModel ? ctx.providerRegistry.getContextWindowForModel(currentModel) : 0;
       const maintenance = evaluateSessionMaintenance({
+        configManager: ctx.configManager,
         currentTokens: estimateConversationTokens(llmMessages),
         contextWindow,
         messageCount: llmMessages.length,
-        sessionMemoryCount: sessionMemoryStore.list().length,
+        sessionMemoryCount: requireSessionMemoryStore(ctx).list().length,
         session,
       });
 
       const snapshot = await buildSetupReviewSnapshot(ctx);
-      const accountSnapshot = await buildProviderAccountSnapshot();
+      const accountSnapshot = await buildProviderAccountSnapshot({
+        providerRegistry: ctx.providerRegistry,
+        serviceRegistry: ctx.serviceRegistry,
+        subscriptionManager: ctx.subscriptionManager,
+        secretsManager: ctx.secretsManager,
+      });
       const settingsSnapshot = getSettingsControlPlaneSnapshot(ctx.configManager);
       if (sub === 'setup') {
         ctx.print([
@@ -416,7 +423,7 @@ export function registerHealthRuntimeCommands(registry: CommandRegistry): void {
         `  account issues: ${accountSnapshot.issueCount}`,
         `  settings conflicts: ${settingsSnapshot.conflicts.length}`,
         `  managed locks: ${settingsSnapshot.managedLockCount}`,
-        `  local auth users: ${getLocalUserAuthManager().inspect().userCount}`,
+        `  local auth users: ${requireLocalUserAuthManager(ctx).inspect().userCount}`,
         `  remote runners: ${snapshot.remoteRunnerCount}`,
         ...renderSandboxHealthSummary(ctx.configManager),
         '',

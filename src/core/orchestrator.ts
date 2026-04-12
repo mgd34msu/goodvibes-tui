@@ -4,56 +4,33 @@ import type { ToolCall, ToolResult } from '../types/tools.ts';
 import { PermissionError, ProviderError, ToolError, isNonTransientProviderFailure } from '../types/errors.ts';
 import type { HookEvent, HookResult } from '../hooks/types.ts';
 import { formatProviderError } from '../utils/error-display.ts';
-import { providerRegistry } from '../providers/registry.ts';
 import type { ModelDefinition } from '../providers/registry.ts';
-import type { LLMProvider, StreamDelta, ContentPart } from '../providers/interface.ts';
-import { configManager, DEFAULT_CONFIG } from '../config/index.ts';
+import type { ContentPart } from '../providers/interface.ts';
 import { notifyCompletion } from '../utils/notify.ts';
 import { logger } from '../utils/logger.ts';
 import type { PermissionManager } from '../permissions/manager.ts';
 import type { AcpManager } from '../acp/manager.ts';
 import type { SubagentTask } from '../acp/protocol.ts';
-import { planManager } from './plan-manager-instance.ts';
 import { ConsecutiveErrorBreaker } from './circuit-breaker.ts';
 import type { ExecutionPlan, PlanItem } from './execution-plan.ts';
 import { classifyIntent } from './intent-classifier.ts';
-import { getTokenLimitsForModel, getContextWindowForModel } from '../providers/model-limits.ts';
-import { estimateConversationTokens, estimateTokens } from './context-compaction.ts';
-import { sessionMemoryStore } from './session-memory.ts';
-import { sessionLineageTracker } from './session-lineage.ts';
-import { getCatalog } from '../providers/model-catalog.ts';
-import { recordUsage } from '../providers/favorites.ts';
+import { estimateConversationTokens } from './context-compaction.ts';
+import { SessionLineageTracker } from './session-lineage.ts';
 import { EventReplayQueue } from './event-replay.ts';
 import type { SystemMessageRouter } from './system-message-router.ts';
 import { AgentManager } from '../tools/agent/index.ts';
 import { WrfcController } from '../agents/wrfc-controller.ts';
 import { THINKING_SPINNER_FRAMES } from '../renderer/progress.ts';
 import { randomUUID, createHash } from 'node:crypto';
-import { cacheHitTracker } from '../providers/cache-strategy.ts';
-import { helperModel } from '../config/helper-model.ts';
-import { idempotencyStore } from '../runtime/idempotency/index.ts';
+import { CacheHitTracker } from '../providers/cache-strategy.ts';
+import { IdempotencyStore } from '../runtime/idempotency/index.ts';
 import { type ReconciliationReason } from './tool-reconciliation.ts';
 import type { FeatureFlagManager } from '../runtime/feature-flags/manager.ts';
-import { adaptivePlanner } from './adaptive-planner-instance.ts';
 import type { RuntimeEventBus } from '../runtime/events/index.ts';
+import { HelperModel } from '../config/helper-model.ts';
 import {
-  emitOpsCacheMetrics,
-  emitOpsHelperUsage,
-  emitToolExecuting,
-  emitToolFailed,
-  emitToolPermissioned,
-  emitToolReconciled,
-  emitToolReceived,
-  emitToolSucceeded,
-  emitLlmResponseReceived,
-  emitPlanStrategySelected,
-  emitPreflightFail,
-  emitPreflightOk,
-  emitStreamDelta,
   emitStreamEnd,
-  emitStreamStart,
   emitTurnCancel,
-  emitTurnCompleted,
   emitTurnError,
   emitTurnSubmitted,
 } from '../runtime/emitters/index.ts';
@@ -68,13 +45,22 @@ import {
   handlePostTurnContextMaintenance,
 } from './orchestrator-context-runtime.ts';
 import {
-  emitMalformedToolUseWarning,
-  handleFinalResponseOutcome,
-  handleToolResponseOutcome,
+  createEmitterContext,
+  estimateFreshTurnInputTokens,
+  getCacheHitTracker,
+  getIdempotencyStore,
+  getSessionLineageTracker,
+  normalizeUsage,
+  requireConfigManager,
+  requireProviderRegistry,
+  type OrchestratorCoreServices,
+} from './orchestrator-runtime.ts';
+import {
   type ChatResponseWithReasoning,
   maybeEmitAdaptivePlannerDecision,
   prepareConversationForTurn,
 } from './orchestrator-turn-helpers.ts';
+import { executeOrchestratorTurnLoop } from './orchestrator-turn-loop.ts';
 
 /** Minimal interface for hook dispatch — allows any compatible implementation */
 interface HookDispatcherLike {
@@ -146,6 +132,12 @@ export class Orchestrator {
   /** Cleanup function returned by the active replay queue attachment. */
   private detachReplay: (() => void) | null = null;
   private readonly runtimeBus: RuntimeEventBus | null;
+  private readonly agentManager: Pick<AgentManager, 'list' | 'spawn'>;
+  private readonly wrfcController: Pick<WrfcController, 'listChains'>;
+  private coreServices: OrchestratorCoreServices = {};
+  private readonly ownedSessionLineageTracker = new SessionLineageTracker();
+  private readonly ownedIdempotencyStore = new IdempotencyStore();
+  private readonly ownedCacheHitTracker = new CacheHitTracker();
 
   /**
    * Optional feature flag manager.
@@ -167,47 +159,6 @@ export class Orchestrator {
   private readonly requestRender: () => void;
   private systemMessageRouter: Pick<SystemMessageRouter, 'low'> | null = null;
 
-  private normalizeUsage(
-    usage: Awaited<ReturnType<LLMProvider['chat']>>['usage'],
-  ): Awaited<ReturnType<LLMProvider['chat']>>['usage'] {
-    const cacheReadTokens = usage.cacheReadTokens ?? 0;
-    const hasExplicitCacheBreakout = Object.prototype.hasOwnProperty.call(usage, 'cacheWriteTokens');
-    const freshInputTokens = hasExplicitCacheBreakout
-      ? usage.inputTokens
-      : Math.max(0, usage.inputTokens - cacheReadTokens);
-    return {
-      ...usage,
-      inputTokens: freshInputTokens,
-    };
-  }
-
-  private estimateFreshTurnInputTokens(
-    currentEstimatedTokens: number,
-    text: string,
-    content?: ContentPart[],
-  ): number {
-    const explicitContentTokens = content?.reduce((sum, part) => {
-      if (part.type === 'text') return sum + estimateTokens(part.text);
-      return sum;
-    }, 0) ?? 0;
-    const currentTurnPayloadTokens = Math.max(explicitContentTokens, estimateTokens(text));
-
-    if (this.lastInputTokens <= 0) {
-      return Math.max(currentEstimatedTokens, currentTurnPayloadTokens);
-    }
-
-    const deltaFromPreviousContext = currentEstimatedTokens - this.lastInputTokens;
-    if (deltaFromPreviousContext > 0) {
-      return Math.max(deltaFromPreviousContext, currentTurnPayloadTokens);
-    }
-
-    if (currentEstimatedTokens < Math.floor(this.lastInputTokens * 0.8)) {
-      return Math.max(currentEstimatedTokens, currentTurnPayloadTokens);
-    }
-
-    return currentTurnPayloadTokens;
-  }
-
   constructor(
     private conversation: ConversationManager,
     private getViewportHeight: () => number,
@@ -219,6 +170,13 @@ export class Orchestrator {
     flagManager: FeatureFlagManager | null = null,
     requestRender: (() => void) | null = null,
     runtimeBus: RuntimeEventBus | null = null,
+    services: {
+      readonly agentManager: Pick<AgentManager, 'list' | 'spawn'>;
+      readonly wrfcController: Pick<WrfcController, 'listChains'>;
+    } = {
+      agentManager: new AgentManager(),
+      wrfcController: { listChains: () => [] },
+    },
   ) {
     this.replayQueue = new EventReplayQueue();
     this.detachReplay = runtimeBus
@@ -227,13 +185,14 @@ export class Orchestrator {
     this.flagManager = flagManager;
     this.requestRender = requestRender ?? (() => {});
     this.runtimeBus = runtimeBus;
+    this.agentManager = services.agentManager;
+    this.wrfcController = services.wrfcController;
   }
 
-  private emitterContext(turnId: string): import('../runtime/emitters/index.ts').EmitterContext {
-    return {
-      sessionId: this.sessionId,
-      traceId: `${this.sessionId}:${turnId}`,
-      source: 'orchestrator',
+  public setCoreServices(services: OrchestratorCoreServices): void {
+    this.coreServices = {
+      ...this.coreServices,
+      ...services,
     };
   }
 
@@ -356,7 +315,7 @@ export class Orchestrator {
     }
 
     // Set the original task on the first user message (idempotent — subsequent calls are no-ops)
-    sessionLineageTracker.setOriginalTask(text.slice(0, 200));
+    getSessionLineageTracker(this.coreServices, this.ownedSessionLineageTracker).setOriginalTask(text.slice(0, 200));
 
     await this.runTurn(text, content);
 
@@ -394,6 +353,8 @@ export class Orchestrator {
 
   private async runTurn(text: string, content?: ContentPart[]): Promise<void> {
     const turnStartTime = Date.now();
+    const configManager = requireConfigManager(this.coreServices);
+    const providerRegistry = requireProviderRegistry(this.coreServices);
 
     // --- Submission key — per-turn idempotency fence ---
     // Generates a stable, deterministic key for this turn using a SHA-256 hash
@@ -410,6 +371,7 @@ export class Orchestrator {
       .update(`${this.sessionId}:${this.conversation.getMessageCount()}:${text.slice(0, 512)}`)
       .digest('hex')
       .slice(0, 16); // 16-char prefix is sufficient for in-process dedup
+    const idempotencyStore = getIdempotencyStore(this.coreServices, this.ownedIdempotencyStore);
     const submissionKey = idempotencyStore.generateKey({
       sessionId: this.sessionId,
       turnId,
@@ -430,7 +392,7 @@ export class Orchestrator {
     // We just let it proceed; the prior record will be overwritten.
 
     if (this.runtimeBus) {
-      emitTurnSubmitted(this.runtimeBus, this.emitterContext(turnId), { turnId, prompt: text });
+      emitTurnSubmitted(this.runtimeBus, createEmitterContext(this.sessionId, turnId), { turnId, prompt: text });
     }
 
     // Adaptive Execution Planner.
@@ -440,391 +402,81 @@ export class Orchestrator {
     maybeEmitAdaptivePlannerDecision(
       text,
       this.flagManager?.isEnabled('adaptive-execution-planner') ?? false,
+      this.coreServices.adaptivePlanner ?? null,
       this.runtimeBus,
-      (id) => this.emitterContext(id),
+      (id) => createEmitterContext(this.sessionId, id),
       turnId,
     );
     // ────────────────────────────────────────────────────────────────────────
 
     // Pre-turn plan injection: if an active plan exists, inject its current state into
     // the conversation so the LLM can refer to it and update item statuses.
-    const preTurnPlan = prepareConversationForTurn(this.conversation, text, content, this.sessionId);
+    const preTurnPlan = prepareConversationForTurn(
+      this.conversation,
+      providerRegistry,
+      text,
+      content,
+      this.sessionId,
+      this.coreServices.planManager ?? null,
+    );
 
     this.turnStartMessageCount = this.conversation.getMessageCount();
     this.scrollToEnd(this.getViewportHeight());
 
     const initialEstimatedTokens = estimateConversationTokens(this.conversation.getMessagesForLLM());
-    this.startThinking(this.estimateFreshTurnInputTokens(initialEstimatedTokens, text, content));
+    this.startThinking(estimateFreshTurnInputTokens(this.lastInputTokens, initialEstimatedTokens, text, content));
 
     try {
-      const model = providerRegistry.getCurrentModel();
-      const provider: LLMProvider = model.provider
-        ? providerRegistry.get(model.provider)
-        : providerRegistry.getForModel(model.id);
-      const toolDefinitions = this.toolRegistry.getToolDefinitions();
-      const streamEnabled = configManager.get('display.stream') as boolean;
-
-      let continueLoop = true;
-      const circuitBreaker = new ConsecutiveErrorBreaker();
-      while (continueLoop) {
-        // Wire up streaming delta handler when streaming is enabled
-        let streamAccumulated = '';
-        let reasoningAccumulated = '';
-        let streamSessionStarted = false;
-        const onDelta = (delta: StreamDelta) => {
-              if (delta.content) {
-                streamAccumulated += delta.content;
-                if (streamEnabled) {
-                  this.conversation.updateStreamingBlock(streamAccumulated);
-                }
-              }
-              if (delta.reasoning) {
-                reasoningAccumulated += delta.reasoning;
-              }
-              if (delta.content || delta.reasoning) {
-                this.streamingOutputTokens += Math.max(
-                  1,
-                  estimateTokens(delta.content ?? delta.reasoning ?? ''),
-                );
-              }
-              if (this.runtimeBus) {
-                emitStreamDelta(this.runtimeBus, this.emitterContext(turnId), {
-                  turnId,
-                  content: delta.content ?? '',
-                  accumulated: streamAccumulated,
-                  ...(delta.reasoning !== undefined ? { reasoning: delta.reasoning } : {}),
-                  ...(delta.toolCalls !== undefined ? { toolCalls: delta.toolCalls } : {}),
-                });
-              }
-              this.requestRender();
-            }
-
-        // ── Context window pre-flight check ─────────────────────────────────
-        // Before calling the provider, verify the request fits within the model's
-        // context window. Auto-compact if enabled and threshold exceeded, otherwise
-        // surface a clear error with token counts and suggest alternatives.
-        // NOTE: Pre-flight compaction (compact-then-retry) and post-turn compaction
-        // (compact after a successful turn, lines ~497+) share the same underlying
-        // conversation.compact() mechanism but serve different triggers.
-        const preflightResult = await this.checkContextWindowPreflight(turnId, model);
-        if (preflightResult === 'error') {
-          // Error message already added to conversation; clean up streaming block
-          if (streamEnabled) {
-            this.isStreaming = false;
-            this.conversation.finalizeStreamingBlock();
-          }
-          if (this.runtimeBus) {
-            emitStreamEnd(this.runtimeBus, this.emitterContext(turnId), { turnId });
-          }
-          if (this.runtimeBus) {
-            emitPreflightFail(this.runtimeBus, this.emitterContext(turnId), {
-              turnId,
-              reason: 'context window preflight failed',
-              stopReason: 'context_overflow',
-            });
-          }
-          this._turnFailed = true;
-          continueLoop = false;
-          break;
-        }
-        // preflightResult === 'ok' or 'compacted' — proceed with chat call
-        if (this.runtimeBus) {
-          emitPreflightOk(this.runtimeBus, this.emitterContext(turnId), { turnId });
-        }
-
-        this.streamingInputTokens = this.estimateFreshTurnInputTokens(
-          estimateConversationTokens(this.conversation.getMessagesForLLM()),
-          text,
-          content,
-        );
-
-        if (streamEnabled) {
-          this.isStreaming = true;
-          this.conversation.startStreamingBlock();
-        }
-        if (this.runtimeBus) {
-          emitStreamStart(this.runtimeBus, this.emitterContext(turnId), { turnId });
-        }
-        streamSessionStarted = true;
-
-        const tokenLimits = getTokenLimitsForModel(model);
-
-        // Pre:llm:chat hook
-        if (this.hookDispatcher) {
-          const preEvent: HookEvent = {
-            path: 'Pre:llm:chat',
-            phase: 'Pre',
-            category: 'llm',
-            specific: 'chat',
-            sessionId: this.sessionId,
-            timestamp: Date.now(),
-            payload: { model: model.id, provider: model.provider, messageCount: this.conversation.getMessagesForLLM().length },
-          };
-          const preResult = await this.hookDispatcher.fire(preEvent);
-          if (preResult.decision === 'deny') {
-            this.conversation.addSystemMessage(preResult.reason ?? 'LLM call blocked by hook');
-            if (this.runtimeBus) {
-              emitTurnError(this.runtimeBus, this.emitterContext(turnId), {
-                turnId,
-                error: preResult.reason ?? 'LLM call blocked by hook',
-                stopReason: 'hook_denied',
-              });
-            }
-            this._turnFailed = true;
-            continueLoop = false;
-            break;
-          }
-        }
-
-        let response: Awaited<ReturnType<typeof provider.chat>>;
-        try {
-          response = await provider.chat({
-            model: model.id,
-            messages: this.conversation.getMessagesForLLM(),
-            tools: toolDefinitions.length > 0 ? toolDefinitions : undefined,
-            systemPrompt: this.getSystemPrompt(),
-            maxTokens: tokenLimits.maxOutputTokens,
-            reasoningEffort: (() => {
-              const configured = configManager.get('provider.reasoningEffort') as string | undefined;
-              if (configured) return configured as 'instant' | 'low' | 'medium' | 'high';
-              return model.capabilities.reasoning ? 'medium' : undefined;
-            })(),
-            signal: this.abortController?.signal,
-            onDelta,
-          });
-        } catch (chatErr) {
-          // Clean up streaming block on error
-          if (streamEnabled) {
-            this.isStreaming = false;
-            this.conversation.finalizeStreamingBlock();
-          }
-          if (streamSessionStarted && this.runtimeBus) {
-            emitStreamEnd(this.runtimeBus, this.emitterContext(turnId), { turnId });
-          }
-          // Intercept 429 exhaustion for synthetic paid/subscription models and show actionable UX
-          if (chatErr instanceof ProviderError && chatErr.statusCode === 429 && model.provider === 'synthetic' && model.tier !== 'free') {
-            this.conversation.addSystemMessage(
-              `All providers for ${model.displayName} are currently exhausted.\n` +
-              `Options:\n` +
-              `  • Wait a few minutes for the rate limit to reset and retry\n` +
-              `  • Switch to a different model with /model\n` +
-              `  • Switch to a free model via /model and selecting the free tier`
-            );
-            if (this.runtimeBus) {
-              emitTurnError(this.runtimeBus, this.emitterContext(turnId), {
-                turnId,
-                error: 'All providers for the selected synthetic model are exhausted',
-                stopReason: 'provider_exhausted',
-              });
-            }
-            this._turnFailed = true;
-            this.requestRender();
-            continueLoop = false;
-            break;
-          }
-          // Fail:llm:chat hook (fire-and-forget)
-          if (this.hookDispatcher) {
-            this.hookDispatcher.fire({
-              path: 'Fail:llm:chat',
-              phase: 'Fail',
-              category: 'llm',
-              specific: 'chat',
-              sessionId: this.sessionId,
-              timestamp: Date.now(),
-              payload: { model: model.id, provider: model.provider, error: chatErr instanceof Error ? chatErr.message : String(chatErr) },
-            }).catch((err: unknown) => { logger.debug('Fail:llm:chat hook error', { error: String(err) }); });
-          }
-          throw chatErr;
-        }
-
-        if (streamEnabled) {
-          this.isStreaming = false;
-          this.conversation.finalizeStreamingBlock();
-        }
-        if (streamSessionStarted && this.runtimeBus) {
-          emitStreamEnd(this.runtimeBus, this.emitterContext(turnId), { turnId });
-        }
-
-        response = {
-          ...response,
-          usage: this.normalizeUsage(response.usage),
-        };
-
-        void recordUsage(model.id);
-        this.usage.input += response.usage.inputTokens;
-        this.usage.output += response.usage.outputTokens;
-        this.usage.cacheRead += response.usage.cacheReadTokens ?? 0;
-        this.usage.cacheWrite += response.usage.cacheWriteTokens ?? 0;
-
-        // Emit cache metrics event
-        const cacheMetrics = cacheHitTracker.getMetrics();
-        if (cacheMetrics.turns > 0) {
-          if (this.runtimeBus) {
-            emitOpsCacheMetrics(this.runtimeBus, this.emitterContext(turnId), {
-              hitRate: cacheMetrics.hitRate,
-              cacheReadTokens: cacheMetrics.cacheReadTokens,
-              cacheWriteTokens: cacheMetrics.cacheWriteTokens,
-              totalInputTokens: cacheMetrics.totalInputTokens,
-              turns: cacheMetrics.turns,
-            });
-          }
-        }
-
-        // Track helper model usage
-        // Cumulative lifetime totals (not per-turn deltas) — consumers can diff successive events
-        const helperUsage = helperModel.getUsage();
-        if (helperUsage.calls > 0) {
-          if (this.runtimeBus) {
-            emitOpsHelperUsage(this.runtimeBus, this.emitterContext(turnId), {
-              inputTokens: helperUsage.inputTokens,
-              outputTokens: helperUsage.outputTokens,
-              calls: helperUsage.calls,
-            });
-          }
-        }
-
-        // Warn on low cache hit rate (after enough data)
-        // configManager.get() is generic (get<K>(key: K): ConfigValue<K>), so no cast needed
-        const hitRateThreshold = configManager.get('cache.hitRateWarningThreshold');
-        if (
-          cacheMetrics.turns >= 5 &&
-          cacheMetrics.hitRate < hitRateThreshold &&
-          configManager.get('cache.monitorHitRate')
-        ) {
-          const pct = (cacheMetrics.hitRate * 100).toFixed(0);
-          logger.info(`[Cache] Low hit rate: ${pct}% over ${cacheMetrics.turns} turns`);
-        }
-
-        this.lastRequestInputTokens = response.usage.inputTokens;
-        this.lastInputTokens = response.usage.inputTokens
-          + (response.usage.cacheReadTokens ?? 0)
-          + (response.usage.cacheWriteTokens ?? 0);
-
-        if (this.runtimeBus) {
-          emitLlmResponseReceived(this.runtimeBus, this.emitterContext(turnId), {
-            turnId,
-            provider: model.provider,
-            model: model.id,
-            content: response.content,
-            toolCallCount: response.toolCalls.length,
-            inputTokens: response.usage.inputTokens,
-            outputTokens: response.usage.outputTokens,
-            cacheReadTokens: response.usage.cacheReadTokens,
-            cacheWriteTokens: response.usage.cacheWriteTokens,
-          });
-        }
-
-        // Post:llm:chat hook (fire-and-forget)
-        if (this.hookDispatcher) {
-          this.hookDispatcher.fire({
-            path: 'Post:llm:chat',
-            phase: 'Post',
-            category: 'llm',
-            specific: 'chat',
-            sessionId: this.sessionId,
-            timestamp: Date.now(),
-            payload: { model: model.id, provider: model.provider, inputTokens: response.usage.inputTokens, outputTokens: response.usage.outputTokens, toolCallCount: response.toolCalls.length },
-          }).catch((err: unknown) => { logger.debug('Post:llm:chat hook error', { error: String(err) }); });
-        }
-
-        // Gather reasoning/thinking content from stream or response
-        const reasoningForMsg = reasoningAccumulated || undefined;
-        const reasoningSummaryForMsg = response.reasoningSummary || undefined;
-
-        // ── Stop-reason completeness check ─────────────────────────────────────
-        // Detect malformed provider responses: stopReason claims 'tool_use' but
-        // no tool calls were returned. Reconcile immediately so the LLM receives
-        // a synthetic error result on the next turn instead of an orphaned
-        // tool_use block.
-        if (response.stopReason === 'tool_use' && response.toolCalls.length === 0) {
-          emitMalformedToolUseWarning({
-            conversation: this.conversation,
-            runtimeBus: this.runtimeBus,
-            emitterContext: (id) => this.emitterContext(id),
-            turnId,
-            isReconciliationEnabled: this.isReconciliationEnabled(),
-          });
-        }
-
-        if (response.toolCalls.length > 0) {
-          const enrichedResponse: ChatResponseWithReasoning = {
-            ...response,
-            reasoning: reasoningForMsg,
-            reasoningSummary: reasoningSummaryForMsg,
-          };
-          const results = await handleToolResponseOutcome({
-            conversation: this.conversation,
-            runtimeBus: this.runtimeBus,
-            emitterContext: (id) => this.emitterContext(id),
-            turnId,
-            response: enrichedResponse,
-            executeToolCalls: (id, calls) => this.executeToolCalls(id, calls),
-            setPendingToolCalls: (calls) => { this._pendingToolCalls = calls; },
-            messageQueueLength: this.messageQueue.length,
-            requestRender: this.requestRender,
-            sessionId: this.sessionId,
-          });
-
-          // --- Consecutive error circuit breaker ---
-          // Count failures in this batch of tool results
-          const allFailed = results.results.length > 0 && results.results.every(r => r.success === false);
-          if (allFailed) {
-            const cbResult = circuitBreaker.recordAllFailed();
-            logger.warn(`Orchestrator: consecutive all-error turn ${circuitBreaker.consecutiveErrors}`);
-            if (cbResult === 'break') {
-              // Log when circuit breaker trips so it's visible in logs
-              logger.warn(`Orchestrator: circuit breaker tripped at ${circuitBreaker.consecutiveErrors} consecutive all-error turns`);
-              this.conversation.addSystemMessage(
-                `CIRCUIT BREAKER: You have made ${circuitBreaker.consecutiveErrors} consecutive turns where ALL tool calls failed. ` +
-                `The loop is stopping to prevent an infinite failure cycle. ` +
-                `Please reassess your approach and try a completely different strategy.`
-              );
-              if (this.runtimeBus) {
-                emitTurnError(this.runtimeBus, this.emitterContext(turnId), {
-                  turnId,
-                  error: 'Consecutive all-failed tool turns tripped the circuit breaker',
-                  stopReason: 'tool_loop_circuit_breaker',
-                });
-              }
-              this._turnFailed = true;
-              continueLoop = false;
-            } else if (cbResult === 'warn') {
-              this.conversation.addSystemMessage(
-                `WARNING: You have made ${circuitBreaker.consecutiveErrors} consecutive tool calls that ALL failed. ` +
-                `Stop attempting the same approach. Describe what you're trying to do and what's going wrong, ` +
-                `then try a completely different strategy.`
-              );
-            }
-          } else if (results.results.length > 0) {
-            // At least one success — reset the counter
-            circuitBreaker.recordSuccess();
-          }
-          continueLoop = results.continueLoop;
-        } else {
-          const enrichedResponse: ChatResponseWithReasoning = {
-            ...response,
-            reasoning: reasoningForMsg,
-            reasoningSummary: reasoningSummaryForMsg,
-          };
-          continueLoop = handleFinalResponseOutcome({
-            conversation: this.conversation,
-            runtimeBus: this.runtimeBus,
-            emitterContext: (id) => this.emitterContext(id),
-            turnId,
-            response: enrichedResponse,
-            preTurnPlan,
-            requestRender: this.requestRender,
-            setAutoSpawnTimeout: (timeout) => { this.autoSpawnTimeout = timeout; },
-            autoSpawnTimeoutMs: AUTO_SPAWN_FALLBACK_DELAY_MS,
-            sessionId: this.sessionId,
-          });
-        }
-      }
+      await executeOrchestratorTurnLoop({
+        conversation: this.conversation,
+        toolRegistry: this.toolRegistry,
+        getSystemPrompt: this.getSystemPrompt,
+        getAbortSignal: () => this.abortController?.signal,
+        hookDispatcher: this.hookDispatcher,
+        requestRender: this.requestRender,
+        runtimeBus: this.runtimeBus,
+        agentManager: this.agentManager,
+        configManager,
+        providerRegistry,
+        favoritesStore: this.coreServices.favoritesStore,
+        cacheHitTracker: getCacheHitTracker(this.coreServices, this.ownedCacheHitTracker),
+        helperModel: new HelperModel({ configManager, providerRegistry }),
+        sessionId: this.sessionId,
+        preTurnPlan,
+        planManager: this.coreServices.planManager ?? null,
+        text,
+        content,
+        turnId,
+        emitterContext: (id) => createEmitterContext(this.sessionId, id),
+        executeToolCalls: (id, calls) => this.executeToolCalls(id, calls),
+        checkContextWindowPreflight: (id, model) => this.checkContextWindowPreflight(id, model),
+        normalizeUsage,
+        estimateFreshTurnInputTokens: (currentEstimatedTokens, nextText, nextContent) =>
+          estimateFreshTurnInputTokens(this.lastInputTokens, currentEstimatedTokens, nextText, nextContent),
+        getMessageQueueLength: () => this.messageQueue.length,
+        isReconciliationEnabled: () => this.isReconciliationEnabled(),
+        setPendingToolCalls: (calls) => { this._pendingToolCalls = calls; },
+        setAutoSpawnTimeout: (timeout) => { this.autoSpawnTimeout = timeout; },
+        setStreamingActive: (value) => { this.isStreaming = value; },
+        setStreamingInputTokens: (value) => { this.streamingInputTokens = value; },
+        addStreamingOutputTokens: (value) => { this.streamingOutputTokens += value; },
+        setLastRequestInputTokens: (value) => { this.lastRequestInputTokens = value; },
+        setLastInputTokens: (value) => { this.lastInputTokens = value; },
+        markTurnFailed: () => { this._turnFailed = true; },
+        usage: this.usage,
+      });
 
       await handlePostTurnContextMaintenance({
         conversation: this.conversation,
+        agentManager: this.agentManager,
+        wrfcController: this.wrfcController,
+        planManager: this.coreServices.planManager ?? null,
+        sessionMemoryStore: this.coreServices.sessionMemoryStore ?? null,
+        configManager,
+        providerRegistry,
+        sessionLineageTracker: getSessionLineageTracker(this.coreServices, this.ownedSessionLineageTracker),
         runtimeBus: this.runtimeBus,
-        emitterContext: (id) => this.emitterContext(id),
+        emitterContext: (id) => createEmitterContext(this.sessionId, id),
         hookDispatcher: this.hookDispatcher,
         sessionId: this.sessionId,
         requestRender: this.requestRender,
@@ -840,7 +492,7 @@ export class Orchestrator {
           this.isStreaming = false;
           this.conversation.finalizeStreamingBlock();
           if (this.runtimeBus) {
-            emitStreamEnd(this.runtimeBus, this.emitterContext(turnId), { turnId });
+            emitStreamEnd(this.runtimeBus, createEmitterContext(this.sessionId, turnId), { turnId });
           }
         }
         // Remove any partial LLM response, keep user message but mark it cancelled
@@ -848,7 +500,7 @@ export class Orchestrator {
         this.conversation.markLastUserMessageCancelled();
         this.conversation.addSystemMessage('[Response cancelled]');
         if (this.runtimeBus) {
-          emitTurnCancel(this.runtimeBus, this.emitterContext(turnId), {
+          emitTurnCancel(this.runtimeBus, createEmitterContext(this.sessionId, turnId), {
             turnId,
             reason: 'cancelled',
             stopReason: 'cancelled',
@@ -872,7 +524,7 @@ export class Orchestrator {
       }
       this._turnFailed = true;
       if (this.runtimeBus) {
-        emitTurnError(this.runtimeBus, this.emitterContext(turnId), {
+        emitTurnError(this.runtimeBus, createEmitterContext(this.sessionId, turnId), {
           turnId,
           error: error.message,
           stopReason: err instanceof ProviderError ? 'provider_error' : 'unexpected_error',
@@ -893,9 +545,9 @@ export class Orchestrator {
       // Failure: markFailed allows retry on the next submission.
       if (this.currentSubmissionKey) {
         if (this._turnFailed) {
-          idempotencyStore.markFailed(this.currentSubmissionKey);
+          getIdempotencyStore(this.coreServices, this.ownedIdempotencyStore).markFailed(this.currentSubmissionKey);
         } else {
-          idempotencyStore.markComplete(this.currentSubmissionKey);
+          getIdempotencyStore(this.coreServices, this.ownedIdempotencyStore).markComplete(this.currentSubmissionKey);
         }
         this.currentSubmissionKey = null;
         this._turnFailed = false;
@@ -942,30 +594,25 @@ export class Orchestrator {
     turnId: string,
     model: ModelDefinition,
   ): Promise<'ok' | 'compacted' | 'error'> {
+    const configManager = requireConfigManager(this.coreServices);
+    const providerRegistry = requireProviderRegistry(this.coreServices);
     return checkContextWindowPreflight({
       conversation: this.conversation,
       requestRender: this.requestRender,
       hookDispatcher: this.hookDispatcher,
+      configManager,
+      providerRegistry,
       sessionId: this.sessionId,
+      agentManager: this.agentManager,
+      wrfcController: this.wrfcController,
+      planManager: this.coreServices.planManager ?? null,
+      sessionMemoryStore: this.coreServices.sessionMemoryStore ?? null,
+      sessionLineageTracker: getSessionLineageTracker(this.coreServices, this.ownedSessionLineageTracker),
       runtimeBus: this.runtimeBus,
-      emitterContext: (id) => this.emitterContext(id),
+      emitterContext: (id) => createEmitterContext(this.sessionId, id),
       isCompacting: this.isCompacting,
       setIsCompacting: (value) => { this.isCompacting = value; },
     }, turnId, model);
-  }
-
-  /**
-   * Emit a user-facing error message when a request exceeds the model's context window,
-   * including specific token counts and suggestions for alternative models.
-   */
-  private emitContextOverflowError(
-    turnId: string,
-    estimatedTokens: number,
-    contextWindow: number,
-    modelDisplayName: string,
-    tier?: 'free' | 'paid' | 'subscription',
-  ): void {
-    emitContextOverflowError(this.conversation, this.requestRender, turnId, estimatedTokens, contextWindow, modelDisplayName, tier);
   }
 
   /**
@@ -976,7 +623,19 @@ export class Orchestrator {
     plan: ExecutionPlan,
     items: PlanItem[],
   ): string[] {
-    return autoSpawnPendingItems(this.conversation, plan, items, this.runtimeBus, this.emitterContext(turnId));
+    const configManager = requireConfigManager(this.coreServices);
+    const providerRegistry = requireProviderRegistry(this.coreServices);
+    return autoSpawnPendingItems(
+      this.conversation,
+      plan,
+      items,
+      this.agentManager,
+      configManager,
+      providerRegistry,
+      this.runtimeBus,
+      createEmitterContext(this.sessionId, turnId),
+      this.coreServices.planManager ?? null,
+    );
   }
 
   /**
@@ -1011,7 +670,7 @@ export class Orchestrator {
     reconcileUnresolvedToolCalls({
       conversation: this.conversation,
       runtimeBus: this.runtimeBus,
-      emitterContext: (id) => this.emitterContext(id),
+      emitterContext: (id) => createEmitterContext(this.sessionId, id),
       isReconciliationEnabled: () => this.isReconciliationEnabled(),
       currentSubmissionKey: this.currentSubmissionKey,
       pendingToolCalls: this._pendingToolCalls,
@@ -1026,7 +685,7 @@ export class Orchestrator {
       hookDispatcher: this.hookDispatcher,
       runtimeBus: this.runtimeBus,
       sessionId: this.sessionId,
-      emitterContext: (id) => this.emitterContext(id),
+      emitterContext: (id) => createEmitterContext(this.sessionId, id),
     }, turnId, calls);
   }
 }

@@ -15,7 +15,10 @@ import { FilePreviewPanel } from '../../panels/file-preview-panel.ts';
 import { OpsStrategyPanel } from '../../panels/ops-strategy-panel.ts';
 import { AgentLogsPanel } from '../../panels/agent-logs-panel.ts';
 import { AgentInspectorPanel } from '../../panels/agent-inspector-panel.ts';
-import { AgentManager } from '../../tools/agent/index.ts';
+import { SessionManager } from '../../sessions/manager.ts';
+import { SessionMemoryStore } from '../../core/session-memory.ts';
+import { AdaptivePlanner } from '../../core/adaptive-planner.ts';
+import { createTestProviderRegistry } from '../helpers/test-managers.ts';
 
 function linesText(lines: Line[]): string {
   return lines.map((line) => line.map((cell) => cell.char ?? ' ').join('')).join('\n');
@@ -25,16 +28,43 @@ function createRuntimeBusStub(): RuntimeEventBus {
   return new RuntimeEventBus();
 }
 
+function createWrfcPanel(runtimeBus: RuntimeEventBus): WrfcPanel {
+  return new WrfcPanel(runtimeBus, {
+    controller: {
+      listChains: () => [],
+    },
+  });
+}
+
+function createAgentLogsPanel(runtimeBus: RuntimeEventBus): AgentLogsPanel {
+  return new AgentLogsPanel(runtimeBus, {
+    agentManager: {
+      list: () => [],
+    },
+  });
+}
+
+function createAgentInspectorPanel(): AgentInspectorPanel {
+  return new AgentInspectorPanel({
+    agentManager: {
+      list: () => [],
+      getStatus: () => null,
+    },
+    agentMessageBus: {
+      getMessages: () => [],
+    },
+  });
+}
+
 describe('workspace panel migrations', () => {
   let runtimeBus: RuntimeEventBus;
 
   beforeEach(() => {
     runtimeBus = createRuntimeBusStub();
-    AgentManager.resetInstance();
   });
 
   test('ProviderStatsPanel renders shared workspace empty state cleanly', () => {
-    const panel = new ProviderStatsPanel(runtimeBus);
+    const panel = new ProviderStatsPanel(runtimeBus, undefined, createTestProviderRegistry());
     const lines = panel.render(80, 20);
     expect(lines).toHaveLength(20);
     expect(lines.every((line) => line.length === 80)).toBe(true);
@@ -52,7 +82,7 @@ describe('workspace panel migrations', () => {
   });
 
   test('SessionBrowserPanel renders shared workspace empty state cleanly', () => {
-    const panel = new SessionBrowserPanel();
+    const panel = new SessionBrowserPanel(new SessionManager());
     const lines = panel.render(80, 20);
     expect(lines).toHaveLength(20);
     expect(lines.every((line) => line.length === 80)).toBe(true);
@@ -61,7 +91,7 @@ describe('workspace panel migrations', () => {
   });
 
   test('SessionBrowserPanel supports explicit search focus from top navigation', () => {
-    const panel = new SessionBrowserPanel();
+    const panel = new SessionBrowserPanel(new SessionManager());
     panel.handleInput('up');
     panel.handleInput('r');
     const text = linesText(panel.render(80, 20));
@@ -79,7 +109,7 @@ describe('workspace panel migrations', () => {
   });
 
   test('ContextVisualizerPanel renders shared workspace empty state cleanly', () => {
-    const panel = new ContextVisualizerPanel(runtimeBus);
+    const panel = new ContextVisualizerPanel(runtimeBus, new SessionMemoryStore());
     const lines = panel.render(80, 20);
     expect(lines).toHaveLength(20);
     expect(lines.every((line) => line.length === 80)).toBe(true);
@@ -112,7 +142,7 @@ describe('workspace panel migrations', () => {
   });
 
   test('WrfcPanel renders shared workspace empty state cleanly', () => {
-    const panel = new WrfcPanel(runtimeBus);
+    const panel = createWrfcPanel(runtimeBus);
     const lines = panel.render(80, 20);
     expect(lines).toHaveLength(20);
     expect(lines.every((line) => line.length === 80)).toBe(true);
@@ -155,7 +185,7 @@ describe('workspace panel migrations', () => {
   });
 
   test('OpsStrategyPanel renders shared workspace empty state cleanly', () => {
-    const panel = new OpsStrategyPanel(runtimeBus);
+    const panel = new OpsStrategyPanel(runtimeBus, new AdaptivePlanner());
     const lines = panel.render(80, 20);
     expect(lines).toHaveLength(20);
     expect(lines.every((line) => line.length === 80)).toBe(true);
@@ -164,7 +194,7 @@ describe('workspace panel migrations', () => {
   });
 
   test('AgentLogsPanel renders shared workspace empty state cleanly', () => {
-    const panel = new AgentLogsPanel(runtimeBus);
+    const panel = createAgentLogsPanel(runtimeBus);
     const lines = panel.render(80, 20);
     expect(lines).toHaveLength(20);
     expect(lines.every((line) => line.length === 80)).toBe(true);
@@ -173,7 +203,7 @@ describe('workspace panel migrations', () => {
   });
 
   test('AgentInspectorPanel renders shared workspace empty state cleanly', () => {
-    const panel = new AgentInspectorPanel();
+    const panel = createAgentInspectorPanel();
     const lines = panel.render(80, 20);
     expect(lines).toHaveLength(20);
     expect(lines.every((line) => line.length === 80)).toBe(true);

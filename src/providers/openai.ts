@@ -16,8 +16,12 @@ import {
   extractTextToolCalls,
 } from './tool-formats.ts';
 import type { OpenAIToolCall } from './tool-formats.ts';
-import { cacheHitTracker } from './cache-strategy.ts';
+import type { CacheHitTracker } from './cache-strategy.ts';
 import { extractOpenAIStreamTextDelta } from './openai-stream-delta.ts';
+
+const NOOP_CACHE_HIT_TRACKER: Pick<CacheHitTracker, 'recordTurn'> = {
+  recordTurn: () => {},
+};
 
 /**
  * OpenAIProvider — wraps the official `openai` npm package.
@@ -29,9 +33,11 @@ export class OpenAIProvider implements LLMProvider {
 
   private client: OpenAI;
   private readonly embeddingModel = 'text-embedding-3-small';
+  private readonly cacheHitTracker: Pick<CacheHitTracker, 'recordTurn'>;
 
-  constructor(apiKey: string) {
+  constructor(apiKey: string, cacheHitTracker: Pick<CacheHitTracker, 'recordTurn'> = NOOP_CACHE_HIT_TRACKER) {
     this.client = new OpenAI({ apiKey });
+    this.cacheHitTracker = cacheHitTracker;
   }
 
   async chat(params: ChatRequest): Promise<ChatResponse> {
@@ -133,7 +139,7 @@ export class OpenAIProvider implements LLMProvider {
         }
       }
 
-      cacheHitTracker.recordTurn({
+      this.cacheHitTracker.recordTurn({
         inputTokens,
         cacheReadTokens,
       });

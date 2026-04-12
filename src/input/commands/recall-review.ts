@@ -73,7 +73,7 @@ export function handleRecallExplain(args: string[], context: CommandContext): vo
     context.print('[recall] Usage: /recall explain <task description...> [--scope <write-scope> ...]');
     return;
   }
-  const injections = selectKnowledgeForTask(task, scopeValues);
+  const injections = selectKnowledgeForTask(registry, task, scopeValues);
   if (injections.length === 0) {
     context.print('[recall] No reviewed project knowledge was selected for that task.');
     return;

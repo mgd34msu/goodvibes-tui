@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import { createRuntimeStore } from '../../runtime/store/index.ts';
 import { CockpitPanel } from '../../panels/cockpit-panel.ts';
 import type { Line } from '../../types/grid.ts';
-import { getPolicyRuntimeState, resetPolicyRuntimeStateForTests } from '../../runtime/permissions/policy-runtime.ts';
+import { PolicyRuntimeState } from '../../runtime/permissions/policy-runtime.ts';
 import { ForensicsRegistry } from '../../runtime/forensics/registry.ts';
 import { ApiTokenAuditor } from '../../security/token-audit.ts';
 
@@ -15,9 +15,8 @@ function linesText(lines: Line[]): string {
 
 describe('CockpitPanel', () => {
   test('renders policy preflight posture when policy runtime is wired', () => {
-    resetPolicyRuntimeStateForTests();
     const store = createRuntimeStore();
-    const policyState = getPolicyRuntimeState();
+    const policyState = new PolicyRuntimeState();
     policyState.recordPreflightReview({
       generatedAt: new Date().toISOString(),
       status: 'warn',

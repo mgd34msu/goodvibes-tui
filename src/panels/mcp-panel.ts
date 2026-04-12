@@ -1,7 +1,7 @@
 import type { Line } from '../types/grid.ts';
 import { createEmptyLine } from '../types/grid.ts';
 import { BasePanel } from './base-panel.ts';
-import { mcpRegistry, type McpRegistry } from '../mcp/registry.ts';
+import type { McpRegistry } from '../mcp/registry.ts';
 import type { McpDecisionRecord } from '../runtime/mcp/types.ts';
 import { truncateDisplay } from '../utils/terminal-width.ts';
 import {
@@ -65,7 +65,7 @@ export class McpPanel extends BasePanel {
   private selectedIndex = 0;
   private scrollOffset = 0;
 
-  public constructor(registry: McpRegistry = mcpRegistry) {
+  public constructor(registry: McpRegistry) {
     super('mcp', 'MCP', 'Z', 'monitoring');
     this.registry = registry;
   }

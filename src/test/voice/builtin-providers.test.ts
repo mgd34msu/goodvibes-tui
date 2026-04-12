@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { ensureBuiltinVoiceProviders, VoiceProviderRegistry, VoiceService } from '../../voice/index.ts';
+import { resetTestRuntimeServices } from '../helpers/runtime-services.ts';
 
 const BUILTIN_VOICE_ENV_KEYS = [
   'OPENAI_API_KEY',
@@ -40,7 +41,7 @@ describe('builtin voice providers', () => {
   let originalFetch: typeof globalThis.fetch;
 
   beforeEach(() => {
-    VoiceProviderRegistry.resetActiveForTesting();
+    resetTestRuntimeServices();
     for (const key of BUILTIN_VOICE_ENV_KEYS) {
       originalEnv.set(key, process.env[key]);
       delete process.env[key];
@@ -49,7 +50,7 @@ describe('builtin voice providers', () => {
   });
 
   afterEach(() => {
-    VoiceProviderRegistry.resetActiveForTesting();
+    resetTestRuntimeServices();
     for (const key of BUILTIN_VOICE_ENV_KEYS) {
       const original = originalEnv.get(key);
       if (original === undefined) delete process.env[key];

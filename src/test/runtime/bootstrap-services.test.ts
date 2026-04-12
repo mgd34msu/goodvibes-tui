@@ -51,6 +51,7 @@ describe('startExternalServices', () => {
       enable: daemonEnable,
       start: daemonStart,
       stop: daemonStop,
+      listRecentControlPlaneEvents: mock(() => []),
     }));
     const listenerFactory = mock((_dispatcher: HookDispatcher, _userAuth: object) => ({
       enable: listenerEnable,
@@ -88,6 +89,7 @@ describe('startExternalServices', () => {
       enable: mock(() => true),
       start: mock(async () => {}),
       stop: mock(async () => {}),
+      listRecentControlPlaneEvents: mock(() => []),
     }));
     const listenerFactory = mock(() => ({
       enable: mock(() => true),
@@ -126,6 +128,7 @@ describe('startExternalServices', () => {
             throw new Error('listen EADDRINUSE: Address already in use 127.0.0.1:3421');
           }),
           stop: mock(async () => {}),
+          listRecentControlPlaneEvents: mock(() => []),
         }),
         createHttpListener: () => ({
           enable: mock(() => true),
@@ -153,6 +156,7 @@ describe('startExternalServices', () => {
           enable: mock(() => true),
           start: daemonStart,
           stop: mock(async () => {}),
+          listRecentControlPlaneEvents: mock(() => []),
         }),
         createHttpListener: () => ({
           enable: mock(() => true),
@@ -181,6 +185,7 @@ describe('startExternalServices', () => {
           enable: mock(() => true),
           start: daemonStart,
           stop: mock(async () => {}),
+          listRecentControlPlaneEvents: mock(() => []),
         }),
       },
     );
@@ -207,6 +212,7 @@ describe('startExternalServices', () => {
           enable: mock(() => true),
           start: daemonStart,
           stop: mock(async () => {}),
+          listRecentControlPlaneEvents: mock(() => []),
         }),
         createHttpListener: () => ({
           enable: mock(() => true),
@@ -243,6 +249,7 @@ describe('startExternalServices', () => {
           enable: mock(() => true),
           start: mock(async () => {}),
           stop: mock(async () => {}),
+          listRecentControlPlaneEvents: mock(() => []),
         }),
         createHttpListener: () => ({
           enable: mock(() => true),

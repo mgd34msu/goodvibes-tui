@@ -1,6 +1,7 @@
-import { configManager, getWorkingDirectory } from '../config/index.ts';
+import type { ConfigManager } from '../config/manager.ts';
+import { getWorkingDirectory } from '../config/index.ts';
 import { logger } from '../utils/logger.ts';
-import { providerRegistry } from '../providers/registry.ts';
+import type { ProviderRegistry } from '../providers/registry.ts';
 import { autoRegisterProviders } from '../providers/auto-register.ts';
 import { scan, loadPersistedProviders, persistProviders, removePersistedProviders, scanMcpServers } from '../discovery/index.ts';
 import type { MutableRuntimeState } from './context.ts';
@@ -8,24 +9,27 @@ import type { SystemMessageRouter } from '../core/system-message-router.ts';
 import type { McpRegistry } from '../mcp/registry.ts';
 
 type BackgroundProviderRegistrationOptions = {
+  configManager: ConfigManager;
+  providerRegistry: ProviderRegistry;
   runtime: MutableRuntimeState;
   requestRender: () => void;
-  restoreSavedModel: (savedModel: string, savedProvider: string, runtime: MutableRuntimeState) => void;
+  restoreSavedModel: (providerRegistry: ProviderRegistry, savedModel: string, savedProvider: string, runtime: MutableRuntimeState) => void;
   systemMessageRouter: SystemMessageRouter;
 };
 
 export function startBackgroundProviderRegistration(
   options: BackgroundProviderRegistrationOptions,
 ): void {
-  const { runtime, requestRender, restoreSavedModel, systemMessageRouter } = options;
+  const { configManager, providerRegistry, runtime, requestRender, restoreSavedModel, systemMessageRouter } = options;
 
-  autoRegisterProviders();
+  autoRegisterProviders(providerRegistry);
 
   const persisted = loadPersistedProviders();
   if (persisted.length > 0) {
     try {
       providerRegistry.registerDiscoveredProviders(persisted);
       restoreSavedModel(
+        providerRegistry,
         configManager.get('provider.model') as string,
         configManager.get('provider.provider') as string,
         runtime,
@@ -54,6 +58,7 @@ export function startBackgroundProviderRegistration(
       try {
         providerRegistry.registerDiscoveredProviders(result.servers);
         restoreSavedModel(
+          providerRegistry,
           configManager.get('provider.model') as string,
           configManager.get('provider.provider') as string,
           runtime,

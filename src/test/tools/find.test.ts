@@ -2,7 +2,9 @@ import { describe, test, expect, beforeEach, afterEach } from 'bun:test';
 import { join } from 'node:path';
 import { mkdir } from 'node:fs/promises';
 import { makeTempDir, writeTempFile } from '../setup.ts';
-import { findTool } from '../../tools/find/index.ts';
+import { createFindTool } from '../../tools/find/index.ts';
+
+let findTool: ReturnType<typeof createFindTool>;
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -24,6 +26,10 @@ function queryResult<T = Record<string, unknown>>(results: Record<string, unknow
 
 let dir: string;
 let cleanup: () => Promise<void>;
+
+beforeEach(() => {
+  findTool = createFindTool();
+});
 
 beforeEach(async () => {
   const tmp = await makeTempDir();

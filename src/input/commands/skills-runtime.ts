@@ -1,5 +1,4 @@
 import type { CommandRegistry } from '../command-registry.ts';
-import { getPanelManager } from '../../panels/panel-manager.ts';
 import { discoverSkills } from '../../panels/skills-panel.ts';
 import {
   installEcosystemCatalogEntry,
@@ -12,6 +11,7 @@ import {
   updateInstalledEcosystemEntry,
   upsertEcosystemCatalogEntry,
 } from '../../runtime/ecosystem/catalog.ts';
+import { requirePanelManager } from './runtime-services.ts';
 
 export function registerSkillsRuntimeCommands(registry: CommandRegistry): void {
   registry.register({
@@ -24,7 +24,7 @@ export function registerSkillsRuntimeCommands(registry: CommandRegistry): void {
       if (sub === 'open' || sub === 'panel') {
         if (ctx.showPanel) ctx.showPanel('skills');
         else {
-          const panelManager = getPanelManager();
+          const panelManager = requirePanelManager(ctx);
           panelManager.open('skills');
           panelManager.show();
           ctx.renderRequest();

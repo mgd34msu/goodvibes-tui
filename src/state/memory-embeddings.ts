@@ -1,4 +1,7 @@
-import { configManager, getConfiguredEmbeddingProviderId } from '../config/index.ts';
+import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
+import { join } from 'node:path';
+import { tmpdir } from 'node:os';
+import { ConfigManager, getConfiguredEmbeddingProviderId } from '../config/index.ts';
 import { logger } from '../utils/logger.ts';
 import { createBuiltinMemoryEmbeddingProviders } from './memory-embedding-http.ts';
 
@@ -52,6 +55,28 @@ export interface MemoryEmbeddingDoctorReport {
   readonly warnings: readonly string[];
 }
 
+export interface MemoryEmbeddingProviderRegistryOptions {
+  readonly configManager?: ConfigManager;
+}
+
+let fallbackConfigManager: ConfigManager | null = null;
+let fallbackConfigRoot: string | null = null;
+
+function createFallbackConfigManager(): ConfigManager {
+  if (fallbackConfigManager) return fallbackConfigManager;
+  fallbackConfigRoot = mkdtempSync(join(tmpdir(), 'gv-memory-embeddings-'));
+  const configDir = join(fallbackConfigRoot, '.goodvibes', 'tui');
+  mkdirSync(configDir, { recursive: true });
+  fallbackConfigManager = new ConfigManager({ configDir, workingDir: fallbackConfigRoot });
+  return fallbackConfigManager;
+}
+
+process.on('exit', () => {
+  if (fallbackConfigRoot) {
+    rmSync(fallbackConfigRoot, { recursive: true, force: true });
+  }
+});
+
 export function embedMemoryText(text: string, dims = DEFAULT_MEMORY_EMBEDDING_DIMS): Float32Array {
   const vector = new Float32Array(dims);
   const normalized = text.toLowerCase();
@@ -97,31 +122,20 @@ export function normalizeMemoryEmbeddingVector(vector: Float32Array | readonly n
 }
 
 export class MemoryEmbeddingProviderRegistry {
-  private static active: MemoryEmbeddingProviderRegistry | null = null;
   private readonly providers = new Map<string, MemoryEmbeddingProvider>();
   private activeProviderId = HASHED_MEMORY_EMBEDDING_PROVIDER.id;
+  private readonly configManager: ConfigManager;
 
-  constructor() {
+  constructor(options: MemoryEmbeddingProviderRegistryOptions = {}) {
+    this.configManager = options.configManager ?? createFallbackConfigManager();
     this.register(HASHED_MEMORY_EMBEDDING_PROVIDER, { replace: true });
     for (const provider of createBuiltinMemoryEmbeddingProviders()) {
       this.register(provider, { replace: true });
     }
-    const configuredDefault = getConfiguredEmbeddingProviderId().trim();
+    const configuredDefault = getConfiguredEmbeddingProviderId(this.configManager).trim();
     if (configuredDefault) {
       this.activeProviderId = configuredDefault;
     }
-    MemoryEmbeddingProviderRegistry.active = this;
-  }
-
-  static getActive(): MemoryEmbeddingProviderRegistry {
-    if (!MemoryEmbeddingProviderRegistry.active) {
-      MemoryEmbeddingProviderRegistry.active = new MemoryEmbeddingProviderRegistry();
-    }
-    return MemoryEmbeddingProviderRegistry.active;
-  }
-
-  static resetActiveForTesting(): void {
-    MemoryEmbeddingProviderRegistry.active = null;
   }
 
   register(provider: MemoryEmbeddingProvider, options: { readonly replace?: boolean; readonly makeDefault?: boolean } = {}): () => void {
@@ -134,7 +148,7 @@ export class MemoryEmbeddingProviderRegistry {
     this.providers.set(id, registered);
     if (options.makeDefault) {
       this.activeProviderId = id;
-      persistDefaultEmbeddingProviderId(id);
+      persistDefaultEmbeddingProviderId(this.configManager, id);
     }
     return () => {
       if (this.providers.get(id) === registered) this.unregister(id);
@@ -149,7 +163,7 @@ export class MemoryEmbeddingProviderRegistry {
   setDefaultProvider(id: string): void {
     if (!this.providers.has(id)) throw new Error(`Unknown memory embedding provider: ${id}`);
     this.activeProviderId = id;
-    persistDefaultEmbeddingProviderId(id);
+    persistDefaultEmbeddingProviderId(this.configManager, id);
   }
 
   getDefaultProvider(): MemoryEmbeddingProvider {
@@ -262,7 +276,7 @@ export class MemoryEmbeddingProviderRegistry {
   }
 }
 
-function persistDefaultEmbeddingProviderId(providerId: string): void {
+function persistDefaultEmbeddingProviderId(configManager: ConfigManager, providerId: string): void {
   try {
     configManager.set('provider.embeddingProvider', providerId, { bypassManagedLock: true });
   } catch {

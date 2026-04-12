@@ -21,6 +21,19 @@ import {
   type MemoryEmbeddingDoctorReport,
 } from './memory-embeddings.ts';
 import { logger } from '../utils/logger.ts';
+import {
+  clampConfidence,
+  createSchema,
+  isReviewCandidate,
+  isReviewFlagged,
+  normalizeReviewState,
+  normalizeScope,
+  recordMatchesPostSqlFilter,
+  reviewQueueScore,
+  rowToRecord,
+  safeParseJson,
+  scoreRecord,
+} from './memory-store-helpers.ts';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -161,6 +174,7 @@ export interface MemorySemanticSearchResult {
 export interface MemoryStoreOptions {
   enableVectorIndex?: boolean;
   vectorDbPath?: string;
+  embeddingRegistry?: MemoryEmbeddingProviderRegistry;
 }
 
 export interface MemoryDoctorReport {
@@ -169,179 +183,7 @@ export interface MemoryDoctorReport {
   readonly checkedAt: number;
 }
 
-// ── Internal schema helper ────────────────────────────────────────────────────
-
-function createSchema(db: { run(sql: string): void; exec(sql: string, params?: (string | number)[]): Array<{ columns: string[]; values: unknown[][] }> }): void {
-  db.run('PRAGMA foreign_keys = ON');
-
-  db.run(`
-    CREATE TABLE IF NOT EXISTS memory_records (
-      id         TEXT PRIMARY KEY,
-      scope      TEXT NOT NULL DEFAULT 'project',
-      cls        TEXT NOT NULL,
-      summary    TEXT NOT NULL,
-      detail     TEXT,
-      tags       TEXT NOT NULL DEFAULT '[]',
-      provenance TEXT NOT NULL DEFAULT '[]',
-      created_at INTEGER NOT NULL,
-      updated_at INTEGER NOT NULL
-    )
-  `);
-
-  db.run(`
-    CREATE TABLE IF NOT EXISTS memory_links (
-      from_id  TEXT NOT NULL,
-      to_id    TEXT NOT NULL,
-      relation TEXT NOT NULL,
-      created_at INTEGER NOT NULL,
-      PRIMARY KEY (from_id, to_id, relation),
-      FOREIGN KEY(from_id) REFERENCES memory_records(id) ON DELETE CASCADE,
-      FOREIGN KEY(to_id) REFERENCES memory_records(id) ON DELETE CASCADE
-    )
-  `);
-
-  db.run(`CREATE INDEX IF NOT EXISTS idx_memory_cls ON memory_records(cls)`);
-  db.run(`CREATE INDEX IF NOT EXISTS idx_memory_scope ON memory_records(scope)`);
-  db.run(`CREATE INDEX IF NOT EXISTS idx_memory_created ON memory_records(created_at)`);
-
-  ensureColumn(db, 'memory_records', 'scope TEXT NOT NULL DEFAULT \'project\'', 'scope');
-  ensureColumn(db, 'memory_records', 'review_state TEXT NOT NULL DEFAULT \'fresh\'', 'review_state');
-  ensureColumn(db, 'memory_records', 'confidence INTEGER NOT NULL DEFAULT 60', 'confidence');
-  ensureColumn(db, 'memory_records', 'reviewed_at INTEGER', 'reviewed_at');
-  ensureColumn(db, 'memory_records', 'reviewed_by TEXT', 'reviewed_by');
-  ensureColumn(db, 'memory_records', 'stale_reason TEXT', 'stale_reason');
-}
-
-function ensureColumn(
-  db: { run(sql: string): void; exec(sql: string, params?: (string | number)[]): Array<{ columns: string[]; values: unknown[][] }> },
-  table: string,
-  columnSql: string,
-  columnName: string,
-): void {
-  const rows = db.exec(`PRAGMA table_info(${table})`);
-  const existing = new Set<string>();
-  if (rows[0]) {
-    const nameIndex = rows[0].columns.indexOf('name');
-    for (const value of rows[0].values) {
-      if (nameIndex >= 0) {
-        existing.add(String(value[nameIndex]));
-      }
-    }
-  }
-  if (!existing.has(columnName)) {
-    db.run(`ALTER TABLE ${table} ADD COLUMN ${columnSql}`);
-  }
-}
-
-// ── MemoryRegistry — panel-observable counter ─────────────────────────────────
-
-/**
- * MemoryRegistry — thin observable wrapper around the MemoryStore.
- * Panels subscribe via listeners; commands push/retrieve through this.
- */
-export class MemoryRegistry {
-  private store: MemoryStore;
-  private listeners: Array<() => void> = [];
-
-  constructor(store: MemoryStore) {
-    this.store = store;
-  }
-
-  getStore(): MemoryStore {
-    return this.store;
-  }
-
-  subscribe(fn: () => void): () => void {
-    this.listeners.push(fn);
-    return () => {
-      this.listeners = this.listeners.filter(l => l !== fn);
-    };
-  }
-
-  private notify(): void {
-    for (const fn of this.listeners) fn();
-  }
-
-  async add(opts: MemoryAddOptions): Promise<MemoryRecord> {
-    const record = await this.store.add(opts);
-    this.notify();
-    return record;
-  }
-
-  search(filter: MemorySearchFilter = {}): MemoryRecord[] {
-    return this.store.search(filter);
-  }
-
-  searchSemantic(filter: MemorySearchFilter = {}): MemorySemanticSearchResult[] {
-    return this.store.searchSemantic(filter);
-  }
-
-  rebuildVectors(): MemoryVectorStats {
-    return this.store.rebuildVectorIndex();
-  }
-
-  async rebuildVectorsAsync(): Promise<MemoryVectorStats> {
-    return this.store.rebuildVectorIndexAsync();
-  }
-
-  vectorStats(): MemoryVectorStats {
-    return this.store.vectorStats();
-  }
-
-  async doctor(): Promise<MemoryDoctorReport> {
-    return this.store.doctor();
-  }
-
-  reviewQueue(limit = 10): MemoryRecord[] {
-    return this.store.reviewQueue(limit);
-  }
-
-  exportBundle(filter: MemorySearchFilter = {}): MemoryBundle {
-    return this.store.exportBundle(filter);
-  }
-
-  async importBundle(bundle: MemoryBundle): Promise<MemoryImportResult> {
-    const result = await this.store.importBundle(bundle);
-    this.notify();
-    return result;
-  }
-
-  get(id: string): MemoryRecord | null {
-    return this.store.get(id);
-  }
-
-  async link(fromId: string, toId: string, relation: string): Promise<MemoryLink | null> {
-    const link = await this.store.link(fromId, toId, relation);
-    if (link) this.notify();
-    return link;
-  }
-
-  linksFor(id: string): MemoryLink[] {
-    return this.store.linksFor(id);
-  }
-
-  update(id: string, patch: { scope?: MemoryScope; summary?: string; detail?: string; tags?: string[] }): MemoryRecord | null {
-    const record = this.store.update(id, patch);
-    if (record) this.notify();
-    return record;
-  }
-
-  review(id: string, patch: MemoryReviewPatch): MemoryRecord | null {
-    const record = this.store.review(id, patch);
-    if (record) this.notify();
-    return record;
-  }
-
-  delete(id: string): boolean {
-    const removed = this.store.delete(id);
-    if (removed) this.notify();
-    return removed;
-  }
-
-  getAll(): MemoryRecord[] {
-    return this.store.search({});
-  }
-}
+export { MemoryRegistry } from './memory-registry.ts';
 
 // ── MemoryStore ───────────────────────────────────────────────────────────────
 
@@ -350,12 +192,18 @@ export class MemoryStore {
   private vectorIndex: SqliteVecMemoryIndex | null;
   private ready = false;
   private rebuildVectorIndexPromise: Promise<MemoryVectorStats> | null = null;
+  private readonly embeddingRegistry: MemoryEmbeddingProviderRegistry;
 
   constructor(dbPath?: string, options: MemoryStoreOptions = {}) {
     this.sqlite = new SQLiteStore(dbPath);
+    this.embeddingRegistry = options.embeddingRegistry ?? new MemoryEmbeddingProviderRegistry();
     this.vectorIndex = options.enableVectorIndex === false
       ? null
-      : new SqliteVecMemoryIndex(options.vectorDbPath ?? resolveMemoryVectorDbPath(dbPath));
+      : new SqliteVecMemoryIndex(
+          options.vectorDbPath ?? resolveMemoryVectorDbPath(dbPath),
+          undefined,
+          this.embeddingRegistry,
+        );
   }
 
   async init(): Promise<void> {
@@ -434,7 +282,7 @@ export class MemoryStore {
     );
 
     if (!rows.length || !rows[0].values.length) return null;
-    return this.rowToRecord(rows[0].columns, rows[0].values[0]);
+    return rowToRecord(rows[0].columns, rows[0].values[0]);
   }
 
   /** Search records with an optional filter. */
@@ -496,7 +344,7 @@ export class MemoryStore {
 
     if (!rows.length) return [];
 
-    let records = rows[0].values.map(v => this.rowToRecord(rows[0].columns, v));
+    let records = rows[0].values.map(v => rowToRecord(rows[0].columns, v));
 
     if (filter.minConfidence !== undefined) {
       records = records.filter((record) => record.confidence >= filter.minConfidence!);
@@ -802,7 +650,12 @@ export class MemoryStore {
 
   rebuildVectorIndex(): MemoryVectorStats {
     if (!this.ready) return this.vectorStats();
-    const records = this.allRecords();
+    const rows = this.sqlite.exec(
+      `SELECT id, scope, cls, summary, detail, tags, provenance, review_state, confidence, reviewed_at, reviewed_by, stale_reason, created_at, updated_at
+         FROM memory_records
+         ORDER BY updated_at DESC, created_at DESC`,
+    );
+    const records = rows.length ? rows[0].values.map((value) => rowToRecord(rows[0].columns, value)) : [];
     this.vectorIndex?.sync(records);
     return this.vectorStats();
   }
@@ -812,7 +665,12 @@ export class MemoryStore {
     if (!this.rebuildVectorIndexPromise) {
       this.rebuildVectorIndexPromise = (async () => {
         try {
-          const records = this.allRecords();
+          const rows = this.sqlite.exec(
+            `SELECT id, scope, cls, summary, detail, tags, provenance, review_state, confidence, reviewed_at, reviewed_by, stale_reason, created_at, updated_at
+               FROM memory_records
+               ORDER BY updated_at DESC, created_at DESC`,
+          );
+          const records = rows.length ? rows[0].values.map((value) => rowToRecord(rows[0].columns, value)) : [];
           if (this.vectorIndex?.syncAsync) {
             await this.vectorIndex.syncAsync(records, { force: true });
           } else {
@@ -844,7 +702,7 @@ export class MemoryStore {
   async doctor(): Promise<MemoryDoctorReport> {
     return {
       vector: this.vectorStats(),
-      embeddings: await MemoryEmbeddingProviderRegistry.getActive().doctor(),
+      embeddings: await this.embeddingRegistry.doctor(),
       checkedAt: Date.now(),
     };
   }
@@ -861,198 +719,9 @@ export class MemoryStore {
 
   // ── Private helpers ──────────────────────────────────────────────────────────
 
-  private rowToRecord(columns: string[], values: unknown[]): MemoryRecord {
-    const get = (col: string) => values[columns.indexOf(col)];
-
-    const tagsRaw = get('tags');
-    const provRaw  = get('provenance');
-
-    return {
-      id:         String(get('id')),
-      scope:      normalizeScope(get('scope')),
-      cls:        String(get('cls')) as MemoryClass,
-      summary:    String(get('summary')),
-      detail:     get('detail') != null ? String(get('detail')) : undefined,
-      tags:       Array.isArray(tagsRaw) ? tagsRaw : safeParseJson<string[]>(String(tagsRaw), []),
-      provenance: Array.isArray(provRaw) ? provRaw : safeParseJson<ProvenanceLink[]>(String(provRaw), []),
-      reviewState: normalizeReviewState(get('review_state')),
-      confidence: clampConfidence(Number(get('confidence') ?? 60)),
-      reviewedAt: get('reviewed_at') != null ? Number(get('reviewed_at')) : undefined,
-      reviewedBy: get('reviewed_by') != null ? String(get('reviewed_by')) : undefined,
-      staleReason: get('stale_reason') != null ? String(get('stale_reason')) : undefined,
-      createdAt:  Number(get('created_at')),
-      updatedAt:  Number(get('updated_at')),
-    };
-  }
-
-  private allRecords(): MemoryRecord[] {
-    const rows = this.sqlite.exec(
-      `SELECT id, scope, cls, summary, detail, tags, provenance, review_state, confidence, reviewed_at, reviewed_by, stale_reason, created_at, updated_at
-         FROM memory_records
-         ORDER BY updated_at DESC, created_at DESC`,
-    );
-    if (!rows.length) return [];
-    return rows[0].values.map(v => this.rowToRecord(rows[0].columns, v));
-  }
-
   private persist(): void {
     void this.save().catch((err) => {
       logger.debug('MemoryStore: autosave failed', { error: err instanceof Error ? err.message : String(err) });
     });
-  }
-}
-
-function normalizeReviewState(value: unknown): MemoryReviewState {
-  switch (String(value ?? 'fresh')) {
-    case 'reviewed':
-    case 'stale':
-    case 'contradicted':
-      return String(value) as MemoryReviewState;
-    default:
-      return 'fresh';
-  }
-}
-
-function normalizeScope(value: unknown): MemoryScope {
-  switch (String(value ?? 'project')) {
-    case 'session':
-    case 'team':
-      return String(value) as MemoryScope;
-    default:
-      return 'project';
-  }
-}
-
-function clampConfidence(value: number): number {
-  if (!Number.isFinite(value)) return 60;
-  return Math.max(0, Math.min(100, Math.round(value)));
-}
-
-function isReviewFlagged(record: MemoryRecord): boolean {
-  return record.reviewState === 'stale' || record.reviewState === 'contradicted' || record.confidence < 70 || !record.reviewedAt;
-}
-
-function isReviewCandidate(record: MemoryRecord): boolean {
-  return record.reviewState !== 'reviewed' || record.confidence < 80 || !record.reviewedAt;
-}
-
-function reviewQueueScore(record: MemoryRecord): number {
-  let score = 0;
-  switch (record.reviewState) {
-    case 'contradicted':
-      score += 120;
-      break;
-    case 'stale':
-      score += 100;
-      break;
-    case 'fresh':
-      score += 60;
-      break;
-    case 'reviewed':
-      score += 10;
-      break;
-  }
-  if (!record.reviewedAt) score += 30;
-  if (record.confidence < 80) score += 80 - record.confidence;
-  const ageDays = Math.max(0, (Date.now() - record.updatedAt) / 86400000);
-  score += Math.min(ageDays, 30);
-  return score;
-}
-
-function scoreRecord(record: MemoryRecord, filter: MemorySearchFilter): number {
-  let score = 0;
-  const ageMinutes = Math.max(0, (Date.now() - record.updatedAt) / 60000);
-  score += Math.max(0, 360 - ageMinutes) / 10;
-  score += record.confidence / 5;
-
-  switch (record.reviewState) {
-    case 'reviewed':
-      score += 30;
-      break;
-    case 'fresh':
-      score += 10;
-      break;
-    case 'stale':
-      score -= 40;
-      break;
-    case 'contradicted':
-      score -= 60;
-      break;
-  }
-
-  if (filter.query) {
-    const q = filter.query.trim().toLowerCase();
-    const haystack = [
-      record.summary,
-      record.detail ?? '',
-      record.tags.join(' '),
-      record.provenance.map((p) => `${p.kind}:${p.ref} ${p.label ?? ''}`).join(' '),
-    ].join(' ').toLowerCase();
-    for (const token of q.split(/\s+/).filter(Boolean)) {
-      if (haystack.includes(token)) {
-        score += 12;
-      }
-    }
-  }
-
-  score += Math.min(record.provenance.length, 4) * 2;
-  score += Math.min(record.tags.length, 4);
-  return score;
-}
-
-function recordMatchesPostSqlFilter(record: MemoryRecord, filter: MemorySearchFilter): boolean {
-  if (filter.scope && record.scope !== filter.scope) return false;
-  if (filter.cls && record.cls !== filter.cls) return false;
-  if (filter.since && record.createdAt < filter.since) return false;
-  if (filter.reviewState) {
-    const states = Array.isArray(filter.reviewState) ? filter.reviewState : [filter.reviewState];
-    if (!states.includes(record.reviewState)) return false;
-  }
-  if (filter.minConfidence !== undefined && record.confidence < filter.minConfidence) return false;
-  if (filter.tags?.length) {
-    for (const tag of filter.tags) {
-      if (!record.tags.includes(tag)) return false;
-    }
-  }
-  if (filter.provenanceKinds?.length) {
-    const allowed = new Set(filter.provenanceKinds);
-    if (!record.provenance.some((link) => allowed.has(link.kind))) return false;
-  }
-  if (filter.staleOnly && !isReviewFlagged(record)) return false;
-  return true;
-}
-
-function safeParseJson<T>(raw: string, fallback: T): T {
-  try {
-    return JSON.parse(raw) as T;
-  } catch {
-    return fallback;
-  }
-}
-
-// ── Singleton factory ─────────────────────────────────────────────────────────
-
-let _store: MemoryStore | undefined;
-let _registry: MemoryRegistry | undefined;
-
-export function getMemoryStore(dbPath?: string): MemoryStore {
-  if (!_store) {
-    _store = new MemoryStore(dbPath);
-  }
-  return _store;
-}
-
-export function getMemoryRegistry(dbPath?: string): MemoryRegistry {
-  if (!_registry) {
-    _registry = new MemoryRegistry(getMemoryStore(dbPath));
-  }
-  return _registry;
-}
-
-export function _resetMemoryRegistryForTesting(): void {
-  _registry = undefined;
-  if (_store) {
-    _store.close();
-    _store = undefined;
   }
 }

@@ -5,18 +5,16 @@ import {
   SecurityPanel as SecurityDiagnosticsPanel,
   type SecurityPanelSnapshot,
 } from '../runtime/diagnostics/panels/security.ts';
-import {
-  getTokenAuditor,
-  type ApiTokenAuditor,
-  type TokenAuditResult,
+import type {
+  ApiTokenAuditor,
+  TokenAuditResult,
 } from '../security/token-audit.ts';
 import type { PolicyRuntimeState } from '../runtime/permissions/policy-runtime.ts';
 import { buildMcpAttackPathReview } from '../runtime/mcp/index.ts';
 import type { McpDecisionRecord, McpSecuritySnapshot } from '../runtime/mcp/types.ts';
 import type { RuntimeStore } from '../runtime/store/index.ts';
 import type { ForensicsRegistry } from '../runtime/forensics/registry.ts';
-import { mcpRegistry } from '../mcp/registry.ts';
-import { pluginManager, type PluginManagerObserver, type PluginStatus } from '../plugins/manager.ts';
+import type { PluginManagerObserver, PluginStatus } from '../plugins/manager.ts';
 import { buildEmptyState, buildGuidanceLine, buildPanelLine, buildPanelWorkspace, resolveScrollablePanelSection, DEFAULT_PANEL_PALETTE, type PanelWorkspaceSection } from './polish.ts';
 
 const C = {
@@ -68,6 +66,19 @@ interface McpSecuritySource {
   listRecentSecurityDecisions(limit?: number): McpDecisionRecord[];
 }
 
+const EMPTY_MCP_SECURITY_SOURCE: McpSecuritySource = {
+  listRecentSecurityDecisions() {
+    return [];
+  },
+};
+
+function isPluginManagerObserver(value: unknown): value is PluginManagerObserver {
+  return typeof value === 'object'
+    && value !== null
+    && 'subscribe' in value
+    && typeof (value as { subscribe?: unknown }).subscribe === 'function';
+}
+
 export class SecurityPanel extends BasePanel {
   private readonly diagnostics: SecurityDiagnosticsPanel;
   private readonly policyState?: PolicyRuntimeState;
@@ -82,23 +93,68 @@ export class SecurityPanel extends BasePanel {
   private readonly pluginUnsub: (() => void) | null;
 
   public constructor(
-    auditor: ApiTokenAuditor = getTokenAuditor(),
+    plugins: PluginManagerObserver,
+    auditor?: ApiTokenAuditor,
     policyState?: PolicyRuntimeState,
     store?: RuntimeStore,
     forensicsRegistry?: ForensicsRegistry,
-    plugins: PluginManagerObserver = pluginManager,
-    mcpSource: McpSecuritySource = mcpRegistry,
+    mcpSource?: McpSecuritySource,
+  );
+  public constructor(
+    auditor: ApiTokenAuditor,
+    policyState: PolicyRuntimeState | undefined,
+    store: RuntimeStore | undefined,
+    forensicsRegistry: ForensicsRegistry | undefined,
+    plugins: PluginManagerObserver,
+    mcpSource?: McpSecuritySource,
+  );
+  public constructor(
+    first: PluginManagerObserver | ApiTokenAuditor,
+    second?: ApiTokenAuditor | PolicyRuntimeState,
+    third?: PolicyRuntimeState | RuntimeStore,
+    fourth?: RuntimeStore | ForensicsRegistry,
+    fifth?: ForensicsRegistry | PluginManagerObserver,
+    sixth?: McpSecuritySource,
   ) {
     super('security', 'Security', 'U', 'monitoring');
+    let plugins: PluginManagerObserver;
+    let auditor: ApiTokenAuditor | undefined;
+    let policyState: PolicyRuntimeState | undefined;
+    let store: RuntimeStore | undefined;
+    let forensicsRegistry: ForensicsRegistry | undefined;
+
+    if (isPluginManagerObserver(first)) {
+      plugins = first;
+      auditor = second as ApiTokenAuditor | undefined;
+      policyState = third as PolicyRuntimeState | undefined;
+      store = fourth as RuntimeStore | undefined;
+      forensicsRegistry = fifth as ForensicsRegistry | undefined;
+    } else {
+      auditor = first;
+      policyState = second as PolicyRuntimeState | undefined;
+      store = third as RuntimeStore | undefined;
+      forensicsRegistry = fourth as ForensicsRegistry | undefined;
+      if (!fifth || !isPluginManagerObserver(fifth)) {
+        throw new Error('SecurityPanel requires a plugin manager observer');
+      }
+      plugins = fifth;
+    }
+
+    if (!plugins || !isPluginManagerObserver(plugins)) {
+      throw new Error('SecurityPanel requires a plugin manager observer');
+    }
+    if (!auditor) {
+      throw new Error('SecurityPanel requires a token auditor');
+    }
     this.diagnostics = new SecurityDiagnosticsPanel(auditor);
     this.policyState = policyState;
     this.store = store;
     this.forensicsRegistry = forensicsRegistry;
     this.plugins = plugins;
-    this.mcpSource = mcpSource;
-    this.policyUnsub = policyState ? policyState.subscribe(() => this.markDirty()) : null;
-    this.storeUnsub = store ? store.subscribe(() => this.markDirty()) : null;
-    this.forensicsUnsub = forensicsRegistry ? forensicsRegistry.subscribe(() => this.markDirty()) : null;
+    this.mcpSource = sixth ?? EMPTY_MCP_SECURITY_SOURCE;
+    this.policyUnsub = this.policyState ? this.policyState.subscribe(() => this.markDirty()) : null;
+    this.storeUnsub = this.store ? this.store.subscribe(() => this.markDirty()) : null;
+    this.forensicsUnsub = this.forensicsRegistry ? this.forensicsRegistry.subscribe(() => this.markDirty()) : null;
     this.pluginUnsub = plugins.subscribe(() => this.markDirty());
   }
 

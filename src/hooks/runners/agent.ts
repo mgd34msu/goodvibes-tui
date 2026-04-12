@@ -14,7 +14,11 @@ import { AgentManager } from '../../tools/agent/index.ts';
  * completed immediately and returns a success result.  When real background
  * execution is wired the status polling loop below will take effect.
  */
-export async function run(hook: HookDefinition, event: HookEvent): Promise<HookResult> {
+export async function run(
+  hook: HookDefinition,
+  event: HookEvent,
+  manager: Pick<AgentManager, 'spawn' | 'getStatus' | 'cancel'> = new AgentManager(),
+): Promise<HookResult> {
   const promptTemplate = hook.prompt;
   if (promptTemplate == null) {
     return { ok: false, error: 'agent hook missing "prompt" field' };
@@ -22,8 +26,6 @@ export async function run(hook: HookDefinition, event: HookEvent): Promise<HookR
 
   const task = promptTemplate.replaceAll('$ARGUMENTS', JSON.stringify(event));
   const timeoutMs = (hook.timeout ?? 60) * 1000;
-  const manager = AgentManager.getInstance();
-
   logger.debug('agent hook: spawning agent', {
     event: event.path,
     timeoutMs,

@@ -14,12 +14,9 @@
 import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
 import {
   SyntheticProvider,
-  _setSyntheticCatalogForTest,
-  _resetSyntheticCatalog,
-  _setSyntheticProviderLookupForTest,
 } from '../../providers/synthetic.ts';
 import type { CanonicalModel } from '../../providers/synthetic.ts';
-import { _setEntriesForTest } from '../../providers/model-benchmarks.ts';
+import type { BenchmarkEntry } from '../../providers/model-benchmarks.ts';
 import { ProviderError } from '../../types/errors.ts';
 import type { ChatRequest, ChatResponse, LLMProvider } from '../../providers/interface.ts';
 
@@ -204,6 +201,20 @@ const CATALOG_FAILOVER: CanonicalModel[] = [
 // ---------------------------------------------------------------------------
 
 const registryMap = new Map<string, LLMProvider>();
+let catalogModels: CanonicalModel[] = [];
+let benchmarkEntries = new Map<string, BenchmarkEntry>();
+
+function makeSyntheticProvider(): SyntheticProvider {
+  return new SyntheticProvider({
+    resolveProvider: (name: string) => {
+      const provider = registryMap.get(name);
+      if (!provider) throw new Error(`Provider not found: ${name}`);
+      return provider;
+    },
+    getCatalogModels: () => catalogModels,
+    getBenchmarks: (modelName: string) => benchmarkEntries.get(modelName),
+  });
+}
 
 // ---------------------------------------------------------------------------
 // Test lifecycle
@@ -214,20 +225,15 @@ const originalEnv = { ...process.env };
 beforeEach(() => {
   process.env = { ...originalEnv };
   registryMap.clear();
-  _setEntriesForTest([]);
-  _setSyntheticProviderLookupForTest((name: string): LLMProvider => {
-    const provider = registryMap.get(name);
-    if (!provider) throw new Error(`Provider not found: ${name}`);
-    return provider;
-  });
+  catalogModels = [];
+  benchmarkEntries = new Map();
 });
 
 afterEach(() => {
   process.env = originalEnv;
   registryMap.clear();
-  _resetSyntheticCatalog();
-  _setEntriesForTest([]);
-  _setSyntheticProviderLookupForTest(null);
+  catalogModels = [];
+  benchmarkEntries = new Map();
 });
 
 // ---------------------------------------------------------------------------
@@ -236,33 +242,33 @@ afterEach(() => {
 
 describe('tier isolation', () => {
   it('free model only uses free-tier backends', async () => {
-    _setSyntheticCatalogForTest(CATALOG_TIER_ISOLATION);
+    catalogModels = CATALOG_TIER_ISOLATION;
     // Clear env and set only HF_TOKEN — ensures huggingface is keyed, nvidia is not
     process.env = { HF_TOKEN: 'hf-test-key' };
     registryMap.set('huggingface', mockOk('huggingface'));
 
-    const provider = new SyntheticProvider();
+    const provider = makeSyntheticProvider();
     const response = await provider.chat({ ...DUMMY_REQUEST, model: 'free-model-a' });
     expect(response.content).toBe('huggingface/ok');
   });
 
   it('paid model uses only paid-tier backends', async () => {
-    _setSyntheticCatalogForTest(CATALOG_TIER_ISOLATION);
+    catalogModels = CATALOG_TIER_ISOLATION;
     process.env = { OPENAI_API_KEY: 'sk-test' };
     registryMap.set('openai', mockOk('openai'));
 
-    const provider = new SyntheticProvider();
+    const provider = makeSyntheticProvider();
     const response = await provider.chat({ ...DUMMY_REQUEST, model: 'paid-model-a' });
     expect(response.content).toBe('openai/ok');
   });
 
   it('free model does NOT fall over to paid backend even if paid has keys', async () => {
-    _setSyntheticCatalogForTest(CATALOG_TIER_ISOLATION);
+    catalogModels = CATALOG_TIER_ISOLATION;
     // Clear ALL env vars and only set the paid key, so free-tier backends have no keys
     process.env = { OPENAI_API_KEY: 'sk-test' };
     registryMap.set('openai', mockOk('openai'));
 
-    const provider = new SyntheticProvider();
+    const provider = makeSyntheticProvider();
     await expect(
       provider.chat({ ...DUMMY_REQUEST, model: 'free-model-a' }),
     ).rejects.toThrow('No API keys configured for any provider offering free-model-a');
@@ -275,33 +281,33 @@ describe('tier isolation', () => {
 
 describe('key filtering', () => {
   it('skips backends that lack a configured API key', async () => {
-    _setSyntheticCatalogForTest(CATALOG_TIER_ISOLATION);
+    catalogModels = CATALOG_TIER_ISOLATION;
     // Clear env and set only NVIDIA key — ensures nvidia is keyed, huggingface is not
     process.env = { NVIDIA_API_KEY: 'nv-test-key' };
     registryMap.set('nvidia', mockOk('nvidia'));
 
-    const provider = new SyntheticProvider();
+    const provider = makeSyntheticProvider();
     const response = await provider.chat({ ...DUMMY_REQUEST, model: 'free-model-a' });
     expect(response.content).toBe('nvidia/ok');
   });
 
   it('throws clear error when zero backends have keys', async () => {
-    _setSyntheticCatalogForTest(CATALOG_NO_KEYS);
+    catalogModels = CATALOG_NO_KEYS;
     // LOCKED_API_KEY not set
 
-    const provider = new SyntheticProvider();
+    const provider = makeSyntheticProvider();
     await expect(
       provider.chat({ ...DUMMY_REQUEST, model: 'locked-model' }),
     ).rejects.toThrow('No API keys configured for any provider offering locked-model');
   });
 
   it('backends with empty envVars (no key required) are always included', async () => {
-    _setSyntheticCatalogForTest(CATALOG_SORT_ORDER);
+    catalogModels = CATALOG_SORT_ORDER;
     registryMap.set('large-ctx', mockOk('large-ctx'));
     registryMap.set('medium-ctx', mockOk('medium-ctx'));
     registryMap.set('small-ctx', mockOk('small-ctx'));
 
-    const provider = new SyntheticProvider();
+    const provider = makeSyntheticProvider();
     // Should succeed because envVars: [] means no key required
     const response = await provider.chat({ ...DUMMY_REQUEST, model: 'sort-test-model' });
     // large-ctx has the highest context window, so it should be tried first
@@ -315,7 +321,7 @@ describe('key filtering', () => {
 
 describe('backend sort order (context desc)', () => {
   it('tries backend with largest context window first', async () => {
-    _setSyntheticCatalogForTest(CATALOG_SORT_ORDER);
+    catalogModels = CATALOG_SORT_ORDER;
     let firstCalled: string | null = null;
 
     const makeMock = (name: string): LLMProvider => ({
@@ -331,13 +337,13 @@ describe('backend sort order (context desc)', () => {
     registryMap.set('medium-ctx', makeMock('medium-ctx'));
     registryMap.set('small-ctx', makeMock('small-ctx'));
 
-    const provider = new SyntheticProvider();
+    const provider = makeSyntheticProvider();
     await provider.chat({ ...DUMMY_REQUEST, model: 'sort-test-model' });
     expect(firstCalled as unknown as string).toBe('large-ctx');
   });
 
   it('uses maxOutputTokens as tiebreaker when contextWindow is equal', async () => {
-    _setSyntheticCatalogForTest([
+    catalogModels = [
       {
         id: 'tie-model',
         tier: 'free',
@@ -348,7 +354,7 @@ describe('backend sort order (context desc)', () => {
         backendCount: 2,
         keyedBackendCount: 2,
       },
-    ]);
+    ];
 
     let firstCalled: string | null = null;
     const makeMock = (name: string): LLMProvider => ({
@@ -363,7 +369,7 @@ describe('backend sort order (context desc)', () => {
     registryMap.set('low-output', makeMock('low-output'));
     registryMap.set('high-output', makeMock('high-output'));
 
-    const provider = new SyntheticProvider();
+    const provider = makeSyntheticProvider();
     await provider.chat({ ...DUMMY_REQUEST, model: 'tie-model' });
     expect(firstCalled as unknown as string).toBe('high-output');
   });
@@ -375,9 +381,9 @@ describe('backend sort order (context desc)', () => {
 
 describe('zero-key error message', () => {
   it('error message names the model', async () => {
-    _setSyntheticCatalogForTest(CATALOG_NO_KEYS);
+    catalogModels = CATALOG_NO_KEYS;
 
-    const provider = new SyntheticProvider();
+    const provider = makeSyntheticProvider();
     let thrown: Error | null = null;
     try {
       await provider.chat({ ...DUMMY_REQUEST, model: 'locked-model' });
@@ -391,9 +397,9 @@ describe('zero-key error message', () => {
   });
 
   it('unknown model throws different error', async () => {
-    _setSyntheticCatalogForTest([]);
+    catalogModels = [];
 
-    const provider = new SyntheticProvider();
+    const provider = makeSyntheticProvider();
     await expect(
       provider.chat({ ...DUMMY_REQUEST, model: 'does-not-exist' }),
     ).rejects.toThrow('Unknown synthetic model: does-not-exist');
@@ -406,36 +412,42 @@ describe('zero-key error message', () => {
 
 describe('best-free synthetic model', () => {
   it('resolves to the highest SWE-bench scored free model with keys', async () => {
-    _setSyntheticCatalogForTest(CATALOG_BEST_FREE);
+    catalogModels = CATALOG_BEST_FREE;
 
     // Inject benchmark data: high-score-model has SWE=0.9, low-score-model has SWE=0.3
-    _setEntriesForTest([
-      {
-        modelId: 'low-score-model',
-        name: 'Low Score Model',
-        organization: 'test',
-        benchmarks: { swe: 0.3, gpqa: 0.3 },
-      },
-      {
-        modelId: 'high-score-model',
-        name: 'High Score Model',
-        organization: 'test',
-        benchmarks: { swe: 0.9, gpqa: 0.9 },
-      },
+    benchmarkEntries = new Map([
+      [
+        'low-score-model',
+        {
+          modelId: 'low-score-model',
+          name: 'Low Score Model',
+          organization: 'test',
+          benchmarks: { swe: 0.3, gpqa: 0.3 },
+        },
+      ],
+      [
+        'high-score-model',
+        {
+          modelId: 'high-score-model',
+          name: 'High Score Model',
+          organization: 'test',
+          benchmarks: { swe: 0.9, gpqa: 0.9 },
+        },
+      ],
     ]);
 
     // Both providers have no key requirement (envVars: [])
     registryMap.set('provider-a', mockOk('provider-a'));
     registryMap.set('provider-b', mockOk('provider-b'));
 
-    const provider = new SyntheticProvider();
+    const provider = makeSyntheticProvider();
     const response = await provider.chat({ ...DUMMY_REQUEST, model: 'best-free' });
     // provider-b backs high-score-model — should be selected
     expect(response.content).toBe('provider-b/ok');
   });
 
   it('throws when no free models have keys', async () => {
-    _setSyntheticCatalogForTest([
+    catalogModels = [
       {
         id: 'keyed-free-model',
         tier: 'free',
@@ -445,16 +457,16 @@ describe('best-free synthetic model', () => {
         backendCount: 1,
         keyedBackendCount: 0,
       },
-    ]);
+    ];
 
-    const provider = new SyntheticProvider();
+    const provider = makeSyntheticProvider();
     await expect(
       provider.chat({ ...DUMMY_REQUEST, model: 'best-free' }),
     ).rejects.toThrow('No API keys configured for any provider offering free models');
   });
 
   it('falls back to model without benchmark data when it is the only keyed option', async () => {
-    _setSyntheticCatalogForTest([
+    catalogModels = [
       {
         id: 'no-benchmark-model',
         tier: 'free',
@@ -464,11 +476,11 @@ describe('best-free synthetic model', () => {
         backendCount: 1,
         keyedBackendCount: 1,
       },
-    ]);
-    _setEntriesForTest([]); // no benchmark data
+    ];
+    benchmarkEntries = new Map(); // no benchmark data
     registryMap.set('provider-c', mockOk('provider-c'));
 
-    const provider = new SyntheticProvider();
+    const provider = makeSyntheticProvider();
     const response = await provider.chat({ ...DUMMY_REQUEST, model: 'best-free' });
     expect(response.content).toBe('provider-c/ok');
   });
@@ -480,56 +492,56 @@ describe('best-free synthetic model', () => {
 
 describe('failover within tier', () => {
   it('falls over to next backend when first is rate-limited', async () => {
-    _setSyntheticCatalogForTest(CATALOG_FAILOVER);
+    catalogModels = CATALOG_FAILOVER;
     registryMap.set('rate-limited-provider', mockRateLimit('rate-limited-provider'));
     registryMap.set('ok-provider', mockOk('ok-provider'));
 
-    const provider = new SyntheticProvider();
+    const provider = makeSyntheticProvider();
     const response = await provider.chat({ ...DUMMY_REQUEST, model: 'failover-model' });
     expect(response.content).toBe('ok-provider/ok');
   });
 
   it('does NOT fall over for 400 Bad Request (malformed request)', async () => {
-    _setSyntheticCatalogForTest(CATALOG_FAILOVER);
+    catalogModels = CATALOG_FAILOVER;
     // 400 Bad Request means the request itself is malformed — re-throw immediately, no failover
     registryMap.set('rate-limited-provider', mockClientError('rate-limited-provider', 'bad request', 400));
     registryMap.set('ok-provider', mockOk('ok-provider'));
 
-    const provider = new SyntheticProvider();
+    const provider = makeSyntheticProvider();
     await expect(
       provider.chat({ ...DUMMY_REQUEST, model: 'failover-model' }),
     ).rejects.toThrow('bad request');
   });
 
   it('fails over on 401 auth errors (provider-specific, not malformed request)', async () => {
-    _setSyntheticCatalogForTest(CATALOG_FAILOVER);
+    catalogModels = CATALOG_FAILOVER;
     // 401 Unauthorized is provider-specific — invalid key for this backend, try next
     registryMap.set('rate-limited-provider', mockClientError('rate-limited-provider', 'unauthorized', 401));
     registryMap.set('ok-provider', mockOk('ok-provider'));
 
-    const provider = new SyntheticProvider();
+    const provider = makeSyntheticProvider();
     const response = await provider.chat({ ...DUMMY_REQUEST, model: 'failover-model' });
     expect(response.content).toBe('ok-provider/ok');
   });
 
   it('fails over on 403 billing/forbidden errors (provider-specific)', async () => {
-    _setSyntheticCatalogForTest(CATALOG_FAILOVER);
+    catalogModels = CATALOG_FAILOVER;
     // 403 Forbidden (e.g. insufficient balance) is provider-specific — failover to next backend
     registryMap.set('rate-limited-provider', mockClientError('rate-limited-provider', 'insufficient balance', 403));
     registryMap.set('ok-provider', mockOk('ok-provider'));
 
-    const provider = new SyntheticProvider();
+    const provider = makeSyntheticProvider();
     const response = await provider.chat({ ...DUMMY_REQUEST, model: 'failover-model' });
     expect(response.content).toBe('ok-provider/ok');
   });
 
   it('throws 429 when all backends are rate-limited', async () => {
-    _setSyntheticCatalogForTest(CATALOG_FAILOVER);
+    catalogModels = CATALOG_FAILOVER;
     // Use fast rate-limit mocks (retry-after: 1s) so auto-wait completes in ~1.1s
     registryMap.set('rate-limited-provider', mockRateLimitFast('rate-limited-provider'));
     registryMap.set('ok-provider', mockRateLimitFast('ok-provider'));
 
-    const provider = new SyntheticProvider();
+    const provider = makeSyntheticProvider();
     let thrown: ProviderError | null = null;
     try {
       await provider.chat({ ...DUMMY_REQUEST, model: 'failover-model' });
@@ -543,33 +555,33 @@ describe('failover within tier', () => {
   }, 5000);
 
   it('fails over on 500 server errors', async () => {
-    _setSyntheticCatalogForTest(CATALOG_FAILOVER);
+    catalogModels = CATALOG_FAILOVER;
     // 500 is a transient server error — should failover to next backend
     registryMap.set('rate-limited-provider', mockServerError('rate-limited-provider', 'server error', 500));
     registryMap.set('ok-provider', mockOk('ok-provider'));
 
-    const provider = new SyntheticProvider();
+    const provider = makeSyntheticProvider();
     const response = await provider.chat({ ...DUMMY_REQUEST, model: 'failover-model' });
     expect(response.content).toBe('ok-provider/ok');
   });
 
   it('fails over on network errors (plain Error, not ProviderError)', async () => {
-    _setSyntheticCatalogForTest(CATALOG_FAILOVER);
+    catalogModels = CATALOG_FAILOVER;
     // Plain Error (e.g. ECONNREFUSED) is a transient error — should failover to next backend
     registryMap.set('rate-limited-provider', mockNetworkError('rate-limited-provider', 'ECONNREFUSED'));
     registryMap.set('ok-provider', mockOk('ok-provider'));
 
-    const provider = new SyntheticProvider();
+    const provider = makeSyntheticProvider();
     const response = await provider.chat({ ...DUMMY_REQUEST, model: 'failover-model' });
     expect(response.content).toBe('ok-provider/ok');
   });
 
   it('skips unavailable providers (registry miss) and tries next', async () => {
-    _setSyntheticCatalogForTest(CATALOG_FAILOVER);
+    catalogModels = CATALOG_FAILOVER;
     // rate-limited-provider not in registry (simulates provider not registered)
     registryMap.set('ok-provider', mockOk('ok-provider'));
 
-    const provider = new SyntheticProvider();
+    const provider = makeSyntheticProvider();
     const response = await provider.chat({ ...DUMMY_REQUEST, model: 'failover-model' });
     expect(response.content).toBe('ok-provider/ok');
   });

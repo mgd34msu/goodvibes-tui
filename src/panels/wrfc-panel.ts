@@ -1,6 +1,6 @@
 import type { Line } from '../types/grid.ts';
 import type { WrfcChain, WrfcState, QualityGateResult } from '../agents/wrfc-types.ts';
-import { WrfcController } from '../agents/wrfc-controller.ts';
+import type { WrfcController } from '../agents/wrfc-controller.ts';
 import { BasePanel } from './base-panel.ts';
 import type { RuntimeEventBus, WorkflowEvent } from '../runtime/events/index.ts';
 import {
@@ -119,15 +119,21 @@ export function truncate(s: string, max: number): string {
 // ---------------------------------------------------------------------------
 // Panel
 // ---------------------------------------------------------------------------
+export interface WrfcPanelDeps {
+  readonly controller: Pick<WrfcController, 'listChains'>;
+}
+
 export class WrfcPanel extends BasePanel {
   private chains: WrfcChain[] = [];
   private selectedIndex = 0;
   private scrollOffset = 0;
   private expandedChainIds = new Set<string>();
   private unsubscribers: Array<() => void> = [];
-  private controller: WrfcController | null = null;
 
-  constructor(private readonly runtimeBus: RuntimeEventBus) {
+  constructor(
+    private readonly runtimeBus: RuntimeEventBus,
+    private readonly deps: WrfcPanelDeps,
+  ) {
     super('wrfc', 'WRFC', 'W', 'agent');
     this.subscribeToEvents();
     this.syncFromController();
@@ -454,11 +460,8 @@ export class WrfcPanel extends BasePanel {
 
   private syncFromController(): void {
     try {
-      if (!this.controller) {
-        this.controller = WrfcController.getInstance();
-      }
       // Sort: active first (by createdAt desc), then completed
-      const all = this.controller.listChains();
+      const all = this.deps.controller.listChains();
       const active   = all.filter(c => !['passed', 'failed'].includes(c.state));
       const done     = all.filter(c =>  ['passed', 'failed'].includes(c.state));
       active.sort((a, b) => b.createdAt - a.createdAt);

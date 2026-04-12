@@ -11,7 +11,6 @@ import { createSearxngSearchProvider } from './providers/searxng.ts';
 import { createTavilySearchProvider } from './providers/tavily.ts';
 
 export class WebSearchProviderRegistry {
-  private static active: WebSearchProviderRegistry | null = null;
   private readonly providers = new Map<string, WebSearchProvider>();
 
   constructor() {
@@ -22,18 +21,6 @@ export class WebSearchProviderRegistry {
     this.register(createFirecrawlSearchProvider(), { replace: true });
     this.register(createTavilySearchProvider(), { replace: true });
     this.register(createPerplexitySearchProvider(), { replace: true });
-    WebSearchProviderRegistry.active = this;
-  }
-
-  static getActive(): WebSearchProviderRegistry {
-    if (!WebSearchProviderRegistry.active) {
-      WebSearchProviderRegistry.active = new WebSearchProviderRegistry();
-    }
-    return WebSearchProviderRegistry.active;
-  }
-
-  static resetActiveForTesting(): void {
-    WebSearchProviderRegistry.active = null;
   }
 
   register(provider: WebSearchProvider, options: { readonly replace?: boolean } = {}): () => void {

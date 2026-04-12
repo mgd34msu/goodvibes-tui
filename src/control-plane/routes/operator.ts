@@ -6,6 +6,7 @@ export async function dispatchOperatorRoutes(
     DaemonApiRouteHandlers,
     | 'getStatus'
     | 'getControlPlaneSnapshot'
+    | 'getOperatorContract'
     | 'getControlPlaneWeb'
     | 'getControlPlaneRecentEvents'
     | 'getControlPlaneMessages'
@@ -164,6 +165,7 @@ export async function dispatchOperatorRoutes(
 
   if (pathname === '/status' && method === 'GET') return handlers.getStatus();
   if (pathname === '/api/control-plane' && method === 'GET') return handlers.getControlPlaneSnapshot();
+  if (pathname === '/api/control-plane/contract' && method === 'GET') return handlers.getOperatorContract();
   if (pathname === '/api/control-plane/web' && method === 'GET') return handlers.getControlPlaneWeb();
   if (pathname === '/api/control-plane/recent-events' && method === 'GET') {
     const limit = Number(url.searchParams.get('limit') ?? 100);

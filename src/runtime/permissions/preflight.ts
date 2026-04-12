@@ -1,4 +1,4 @@
-import type { GoodVibesConfig } from '../../config/index.ts';
+import type { GoodVibesConfig, DeepReadonly } from '../../config/index.ts';
 import type { PolicyLintFinding } from './lint.ts';
 import type { McpServerRole, McpTrustMode } from '../mcp/types.ts';
 
@@ -41,7 +41,7 @@ function summarize(status: PolicyPreflightStatus, issues: readonly PolicyPreflig
 }
 
 export function buildPolicyPreflightReview(params: {
-  config: Readonly<GoodVibesConfig>;
+  config: DeepReadonly<GoodVibesConfig>;
   lintFindings: readonly PolicyLintFinding[];
   mcpServers: readonly PolicyPreflightServer[];
 }): PolicyPreflightReview {

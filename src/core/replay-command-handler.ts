@@ -8,13 +8,13 @@
  *   /replay diff             — run diff mode and report mismatches
  *   /replay export <path>    — export replay report to a JSON file
  *
- * The handler delegates to the `DeterministicReplayEngine` singleton
- * and the `LocalLedgerExporter` instance for ledger access.
+ * The handler delegates to an injected `DeterministicReplayEngine`
+ * and an optional ledger reader for run access.
  *
  * Returns a human-readable result string to display in the conversation.
  */
 
-import { getReplayEngine } from './deterministic-replay.ts';
+import type { DeterministicReplayEngine } from './deterministic-replay.ts';
 import { logger } from '../utils/logger.ts';
 
 export interface ReplayCommandResult {
@@ -22,6 +22,10 @@ export interface ReplayCommandResult {
   output: string;
   /** Whether the command succeeded. */
   ok: boolean;
+}
+
+export interface ReplayCommandDeps {
+  replayEngine: DeterministicReplayEngine;
 }
 
 /**
@@ -33,6 +37,7 @@ export interface ReplayCommandResult {
  *                     handler reports that no ledger is configured.
  */
 export function handleReplayCommand(
+  deps: ReplayCommandDeps,
   subcommand: string,
   args: string[],
   ledger?: {
@@ -40,7 +45,7 @@ export function handleReplayCommand(
     listRunIds: () => string[];
   },
 ): ReplayCommandResult {
-  const engine = getReplayEngine();
+  const engine = deps.replayEngine;
 
   switch (subcommand.toLowerCase()) {
     case 'load': {

@@ -7,7 +7,6 @@ import {
   applyOutboundTlsToFetchInit,
   createNetworkFetch,
   inspectOutboundTls,
-  resetGlobalNetworkTransportForTesting,
 } from '../../../runtime/network/index.ts';
 
 describe('runtime/network outbound TLS', () => {
@@ -18,18 +17,14 @@ describe('runtime/network outbound TLS', () => {
     root = mkdtempSync(join(tmpdir(), 'gv-network-outbound-'));
     configDir = join(root, '.goodvibes', 'tui');
     mkdirSync(configDir, { recursive: true });
-    ConfigManager.setTestMode(configDir);
-    resetGlobalNetworkTransportForTesting();
   });
 
   afterEach(() => {
-    resetGlobalNetworkTransportForTesting();
-    ConfigManager.setTestMode(undefined);
     rmSync(root, { recursive: true, force: true });
   });
 
   test('defaults to Bun bundled trust roots', () => {
-    const config = new ConfigManager();
+    const config = new ConfigManager({ configDir, workingDir: root });
     const snapshot = inspectOutboundTls(config);
     expect(snapshot.mode).toBe('bundled');
     expect(snapshot.effectiveCaStrategy).toBe('bun-default');
@@ -41,7 +36,7 @@ describe('runtime/network outbound TLS', () => {
     mkdirSync(certDir, { recursive: true });
     const caPath = join(certDir, 'corp-root.pem');
     writeFileSync(caPath, '-----BEGIN CERTIFICATE-----\ncorp\n-----END CERTIFICATE-----\n', 'utf-8');
-    const config = new ConfigManager();
+    const config = new ConfigManager({ configDir, workingDir: root });
     config.set('network.outboundTls.mode', 'bundled+custom');
     config.set('network.outboundTls.customCaFile', caPath);
 
@@ -53,14 +48,14 @@ describe('runtime/network outbound TLS', () => {
   });
 
   test('throws when custom-only trust is enabled without any CA material', () => {
-    const config = new ConfigManager();
+    const config = new ConfigManager({ configDir, workingDir: root });
     config.set('network.outboundTls.mode', 'custom');
 
     expect(() => applyOutboundTlsToFetchInit('https://api.example.test', {}, config)).toThrow(/custom CA/i);
   });
 
   test('allows insecure localhost only for loopback HTTPS targets', () => {
-    const config = new ConfigManager();
+    const config = new ConfigManager({ configDir, workingDir: root });
     config.set('network.outboundTls.allowInsecureLocalhost', true);
 
     const localInit = applyOutboundTlsToFetchInit('https://127.0.0.1:8443', {}, config);
@@ -75,7 +70,7 @@ describe('runtime/network outbound TLS', () => {
     mkdirSync(certDir, { recursive: true });
     const caPath = join(certDir, 'internal.pem');
     writeFileSync(caPath, '-----BEGIN CERTIFICATE-----\ncorp\n-----END CERTIFICATE-----\n', 'utf-8');
-    const config = new ConfigManager();
+    const config = new ConfigManager({ configDir, workingDir: root });
     config.set('network.outboundTls.mode', 'custom');
     config.set('network.outboundTls.customCaFile', caPath);
     const calls: Array<RequestInit & { tls?: { ca?: unknown } }> = [];

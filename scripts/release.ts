@@ -3,13 +3,14 @@ import { join } from 'path';
 import { execSync } from 'child_process';
 
 /**
- * Release script — bumps patch version, updates CHANGELOG, creates git tag.
+ * Release script — bumps version, updates CHANGELOG, creates git tag.
  *
- * CRITICAL: Only bumps patch version. Never bumps minor or major without
- * explicit user instruction and manual invocation with --minor or --major flags.
+ * Defaults to patch bumps. Minor/major require explicit flags.
  *
  * Usage:
  *   bun run scripts/release.ts              # patch bump (0.9.10 → 0.9.11)
+ *   bun run scripts/release.ts --minor      # minor bump (0.9.10 → 0.10.0)
+ *   bun run scripts/release.ts --major      # major bump (0.9.10 → 1.0.0)
  *   bun run scripts/release.ts --dry-run    # preview without writing
  *
  * What it does:
@@ -24,6 +25,16 @@ import { execSync } from 'child_process';
 const args = process.argv.slice(2);
 const DRY_RUN = args.includes('--dry-run');
 const SKIP_VALIDATION = args.includes('--skip-validation');
+const bumpMode = args.includes('--major')
+  ? 'major'
+  : args.includes('--minor')
+    ? 'minor'
+    : 'patch';
+
+if (args.includes('--major') && args.includes('--minor')) {
+  console.error('Error: choose only one of --minor or --major.');
+  process.exit(1);
+}
 
 const root = process.cwd();
 
@@ -34,10 +45,13 @@ function run(cmd: string, opts: { silent?: boolean } = {}): string {
   }
   try {
     return execSync(cmd, { cwd: root, encoding: 'utf8', stdio: opts.silent ? 'pipe' : 'inherit' });
-  } catch (err: any) {
+  } catch (error: unknown) {
     console.error(`\nCommand failed: ${cmd}`);
-    if (err.stdout) console.error(err.stdout);
-    if (err.stderr) console.error(err.stderr);
+    if (typeof error === 'object' && error !== null) {
+      const commandError = error as { stdout?: string | Uint8Array; stderr?: string | Uint8Array };
+      if (commandError.stdout) console.error(String(commandError.stdout));
+      if (commandError.stderr) console.error(String(commandError.stderr));
+    }
     process.exit(1);
   }
 }
@@ -82,9 +96,11 @@ if (parts.length !== 3 || parts.some(isNaN)) {
 
 const [major, minor, patch] = parts;
 
-// CRITICAL: Only patch bumps are allowed from this script.
-// Minor/major bumps require explicit manual intervention.
-const next = `${major}.${minor}.${patch + 1}`;
+const next = bumpMode === 'major'
+  ? `${major + 1}.0.0`
+  : bumpMode === 'minor'
+    ? `${major}.${minor + 1}.0`
+    : `${major}.${minor}.${patch + 1}`;
 
 console.log(`\nRelease: ${current} → ${next}`);
 if (DRY_RUN) console.log('(dry-run mode — no files will be written)\n');
@@ -169,7 +185,7 @@ console.log(`\n[6/6] Creating git commit and tag v${next}...`);
 const tag = `v${next}`;
 const commitMsg = `chore: release ${tag}`;
 
-run(`git add package.json src/version.ts CHANGELOG.md`);
+run(`git add package.json src/version.ts README.md CHANGELOG.md`);
 run(`git commit -m "${commitMsg}"`);
 run(`git tag -a ${tag} -m "Release ${tag}"`);
 

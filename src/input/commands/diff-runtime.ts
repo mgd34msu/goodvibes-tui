@@ -1,5 +1,6 @@
 import { join } from 'path';
 import type { CommandRegistry } from '../command-registry.ts';
+import { requirePanelManager, requireSessionChangeTracker } from './runtime-services.ts';
 
 async function enrichSemanticDiff(
   panel: InstanceType<typeof import('../../panels/diff-panel.ts').DiffPanel>,
@@ -52,11 +53,9 @@ export function registerDiffRuntimeCommands(registry: CommandRegistry): void {
     usage: '[session|head|working|staged|<git-ref>]',
     argsHint: '[session|head|working|staged|<ref>]',
     async handler(args, ctx) {
-      const { getPanelManager } = await import('../../panels/panel-manager.ts');
       const { DiffPanel } = await import('../../panels/diff-panel.ts');
-      const { getChangedFiles } = await import('../../sessions/change-tracker.ts');
 
-      const pm = getPanelManager();
+      const pm = requirePanelManager(ctx);
       let panel = pm.getAllOpen().find(p => p.id === 'diff');
       if (!panel) {
         try {
@@ -130,7 +129,7 @@ export function registerDiffRuntimeCommands(registry: CommandRegistry): void {
         }
         case 'session':
         default: {
-          const sessionFiles = getChangedFiles();
+          const sessionFiles = requireSessionChangeTracker(ctx).getChangedFiles();
           if (sessionFiles.length > 0) {
             ctx.print(`Loading session diff (${sessionFiles.length} file${sessionFiles.length === 1 ? '' : 's'} changed this session)...`);
             await diffPanel.showFileDiffs(sessionFiles, 'HEAD');

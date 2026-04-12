@@ -5,6 +5,7 @@ import { join } from 'path';
 import { GitService } from '../../git/service.ts';
 import { HookDispatcher } from '../../hooks/dispatcher.ts';
 import type { HookEvent } from '../../hooks/types.ts';
+import { getTestGitService, resetTestGitServices } from '../helpers/runtime-services.ts';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -655,7 +656,7 @@ describe('GitService', () => {
   });
 
   // -------------------------------------------------------------------------
-  // Static utilities (isGitRepo, initRepo, clearInstance)
+  // Static utilities
   // -------------------------------------------------------------------------
 
   describe('static utilities', () => {
@@ -692,45 +693,10 @@ describe('GitService', () => {
       expect(result.success).toBe(true);
     });
 
-    test('clearInstance removes the cached singleton so a fresh one is created', () => {
-      const a = GitService.getInstance(tmpDir);
-      GitService.clearInstance(tmpDir);
-      const b = GitService.getInstance(tmpDir);
-      expect(a).not.toBe(b);
-      b.dispose();
-    });
-  });
-
-  // -------------------------------------------------------------------------
-  // Singleton
-  // -------------------------------------------------------------------------
-
-  describe('singleton', () => {
-    test('getInstance returns the same instance for the same cwd', () => {
-      const a = GitService.getInstance(tmpDir);
-      const b = GitService.getInstance(tmpDir);
-      expect(a).toBe(b);
-      a.dispose();
-    });
-
-    test('getInstance returns different instances for different cwds', () => {
-      const dir2 = makeTempRepo();
-      try {
-        const a = GitService.getInstance(tmpDir);
-        const b = GitService.getInstance(dir2);
-        expect(a).not.toBe(b);
-        a.dispose();
-        b.dispose();
-      } finally {
-        rmSync(dir2, { recursive: true, force: true });
-      }
-    });
-
-    test('dispose removes instance from singleton registry', () => {
-      const a = GitService.getInstance(tmpDir);
-      a.dispose();
-      const b = GitService.getInstance(tmpDir);
-      // After dispose, a new instance is created
+    test('helper cache reset yields a fresh GitService for the same cwd', () => {
+      const a = getTestGitService(tmpDir);
+      resetTestGitServices(tmpDir);
+      const b = getTestGitService(tmpDir);
       expect(a).not.toBe(b);
       b.dispose();
     });

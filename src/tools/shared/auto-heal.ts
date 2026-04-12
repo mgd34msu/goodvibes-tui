@@ -16,8 +16,8 @@ import { writeFileSync, readFileSync, unlinkSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, extname } from 'node:path';
 import { randomBytes } from 'node:crypto';
-import { configManager } from '../../config/index.ts';
-import { toolLLM } from '../../config/tool-llm.ts';
+import type { ConfigManager } from '../../config/manager.ts';
+import type { ToolLLM } from '../../config/tool-llm.ts';
 import { logger } from '../../utils/logger.ts';
 
 /** Result of an auto-heal attempt. */
@@ -31,27 +31,15 @@ export interface HealResult {
  * AutoHealer — attempts to fix content with validation errors via a staged pipeline.
  *
  * Usage:
- *   const healer = AutoHealer.getInstance();
+ *   const healer = new AutoHealer();
  *   const result = await healer.heal(filePath, content, errors);
  *   if (result.healed) { // use result.content }
  */
 export class AutoHealer {
-  private static _instance: AutoHealer | undefined;
-
-  private constructor() {}
-
-  /** Singleton accessor. */
-  static getInstance(): AutoHealer {
-    if (!AutoHealer._instance) {
-      AutoHealer._instance = new AutoHealer();
-    }
-    return AutoHealer._instance;
-  }
-
-  /** Reset singleton (used in tests). */
-  static _reset(): void {
-    AutoHealer._instance = undefined;
-  }
+  constructor(
+    private readonly configManager: Pick<ConfigManager, 'get'>,
+    private readonly toolLLM: Pick<ToolLLM, 'chat'>,
+  ) {}
 
   /**
    * Attempt to auto-heal content with validation errors.
@@ -64,7 +52,7 @@ export class AutoHealer {
   async heal(filePath: string, content: string, errors: string[]): Promise<HealResult> {
     try {
       // Config gate: only run when tools.autoHeal is enabled
-      if (!configManager.get('tools.autoHeal')) {
+      if (!this.configManager.get('tools.autoHeal')) {
         return { healed: false, content };
       }
 
@@ -223,7 +211,7 @@ export class AutoHealer {
         `Return ONLY the corrected file content, no explanation, no markdown fences.`,
       ].join('\n');
 
-      const response = await toolLLM.chat(prompt, {
+      const response = await this.toolLLM.chat(prompt, {
         maxTokens: 4096,
         systemPrompt: 'You are a code repair tool. Output only the corrected file content with no additional text or markdown.',
       });
@@ -291,6 +279,3 @@ export class AutoHealer {
     }
   }
 }
-
-/** Singleton instance — import and use everywhere. */
-export const autoHealer: AutoHealer = AutoHealer.getInstance();

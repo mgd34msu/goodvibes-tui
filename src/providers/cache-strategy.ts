@@ -255,21 +255,4 @@ export class CacheHitTracker {
       turns: 0,
     };
   }
-
-  /**
-   * Reset the singleton instance metrics for test isolation.
-   * Call this in beforeEach/afterEach to prevent cross-test state leakage.
-   */
-  static _reset(): void {
-    cacheHitTracker.reset();
-  }
 }
-
-/** Singleton cache hit tracker. */
-export const cacheHitTracker = new CacheHitTracker();
-
-/**
- * Reset the singleton cache hit tracker for test isolation.
- * Import in test files: `import { _resetForTest } from './cache-strategy.ts'`
- */
-export const _resetForTest = CacheHitTracker._reset;

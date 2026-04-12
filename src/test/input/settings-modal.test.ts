@@ -7,7 +7,7 @@ import { join } from 'path';
 import { tmpdir } from 'os';
 import { SettingsModal, SETTINGS_CATEGORIES } from '../../input/settings-modal.ts';
 import { ConfigManager } from '../../config/manager.ts';
-import { _resetSubscriptionManagerForTesting, getSubscriptionManager } from '../../config/subscriptions.ts';
+import { SubscriptionManager } from '../../config/subscriptions.ts';
 import { createFeatureFlagManager } from '../../runtime/feature-flags/manager.ts';
 import type { FeatureFlagManager } from '../../runtime/feature-flags/manager.ts';
 import type { McpRegistry } from '../../mcp/registry.ts';
@@ -34,6 +34,7 @@ describe('SettingsModal', () => {
   let ffm: FeatureFlagManager;
   let modal: SettingsModal;
   let mcpRegistry: McpRegistry;
+  let subscriptionManager: SubscriptionManager;
 
   beforeEach(() => {
     tmpDir = makeTmpDir();
@@ -45,6 +46,7 @@ describe('SettingsModal', () => {
     });
     ffm = createFeatureFlagManager();
     modal = new SettingsModal();
+    subscriptionManager = new SubscriptionManager(join(tmpDir, '.goodvibes', 'tui', 'subscriptions.json'));
     mcpRegistry = {
       listServerSecurity: () => [
         {
@@ -60,11 +62,9 @@ describe('SettingsModal', () => {
       setServerTrustMode: () => {},
     } as unknown as McpRegistry;
     mkdirSync(join(tmpDir, '.goodvibes', 'tui'), { recursive: true });
-    _resetSubscriptionManagerForTesting();
   });
 
   afterEach(() => {
-    _resetSubscriptionManagerForTesting();
     process.chdir(originalCwd);
     if (originalHome === undefined) delete process.env.HOME;
     else process.env.HOME = originalHome;
@@ -76,7 +76,7 @@ describe('SettingsModal', () => {
   });
 
   test('open() activates modal and loads config groups', () => {
-    modal.open(cm, ffm, mcpRegistry);
+    modal.open(cm, ffm, subscriptionManager, mcpRegistry);
     expect(modal.active).toBe(true);
     expect(modal.categoryIndex).toBe(0);
     expect(modal.selectedIndex).toBe(0);
@@ -84,7 +84,7 @@ describe('SettingsModal', () => {
   });
 
   test('open() populates all categories', () => {
-    modal.open(cm, ffm, mcpRegistry);
+    modal.open(cm, ffm, subscriptionManager, mcpRegistry);
     for (const cat of SETTINGS_CATEGORIES) {
       if (cat === 'flags') {
         expect(Array.isArray(modal.flagEntries)).toBe(true);
@@ -97,25 +97,25 @@ describe('SettingsModal', () => {
   });
 
   test('currentCategory returns correct category', () => {
-    modal.open(cm, ffm, mcpRegistry);
+    modal.open(cm, ffm, subscriptionManager, mcpRegistry);
     expect(modal.currentCategory).toBe(SETTINGS_CATEGORIES[0]);
   });
 
   test('nextCategory cycles through categories', () => {
-    modal.open(cm, ffm, mcpRegistry);
+    modal.open(cm, ffm, subscriptionManager, mcpRegistry);
     const initial = modal.categoryIndex;
     modal.nextCategory();
     expect(modal.categoryIndex).toBe((initial + 1) % SETTINGS_CATEGORIES.length);
   });
 
   test('prevCategory cycles backwards', () => {
-    modal.open(cm, ffm, mcpRegistry);
+    modal.open(cm, ffm, subscriptionManager, mcpRegistry);
     modal.prevCategory();
     expect(modal.categoryIndex).toBe(SETTINGS_CATEGORIES.length - 1);
   });
 
   test('nextCategory resets selectedIndex to 0', () => {
-    modal.open(cm, ffm, mcpRegistry);
+    modal.open(cm, ffm, subscriptionManager, mcpRegistry);
     modal.moveDown();
     modal.moveDown();
     modal.nextCategory();
@@ -123,21 +123,21 @@ describe('SettingsModal', () => {
   });
 
   test('moveDown increments selectedIndex', () => {
-    modal.open(cm, ffm, mcpRegistry);
+    modal.open(cm, ffm, subscriptionManager, mcpRegistry);
     const before = modal.selectedIndex;
     modal.moveDown();
     expect(modal.selectedIndex).toBe(before + 1);
   });
 
   test('moveUp wraps around to last item', () => {
-    modal.open(cm, ffm, mcpRegistry);
+    modal.open(cm, ffm, subscriptionManager, mcpRegistry);
     modal.moveUp();
     const len = modal.currentItems.length;
     expect(modal.selectedIndex).toBe(len - 1);
   });
 
   test('getSelected returns the selected SettingEntry', () => {
-    modal.open(cm, ffm, mcpRegistry);
+    modal.open(cm, ffm, subscriptionManager, mcpRegistry);
     const entry = modal.getSelected();
     expect(entry).not.toBeNull();
     expect(entry!.setting).toBeDefined();
@@ -145,7 +145,7 @@ describe('SettingsModal', () => {
   });
 
   test('activateSelected toggles boolean setting', () => {
-    modal.open(cm, ffm, mcpRegistry);
+    modal.open(cm, ffm, subscriptionManager, mcpRegistry);
     const items = modal.currentItems;
     const boolIdx = items.findIndex((entry) => entry.setting.key === 'display.stream');
     expect(boolIdx).toBeGreaterThanOrEqual(0);
@@ -160,7 +160,7 @@ describe('SettingsModal', () => {
   });
 
   test('activateSelected enters editingMode for string setting', () => {
-    modal.open(cm, ffm, mcpRegistry);
+    modal.open(cm, ffm, subscriptionManager, mcpRegistry);
     // Navigate to a string setting (display.theme)
     const items = modal.currentItems;
     const strIdx = items.findIndex(e => e.setting.type === 'string');
@@ -173,7 +173,7 @@ describe('SettingsModal', () => {
   });
 
   test('editChar appends to editBuffer', () => {
-    modal.open(cm, ffm, mcpRegistry);
+    modal.open(cm, ffm, subscriptionManager, mcpRegistry);
     const items = modal.currentItems;
     const strIdx = items.findIndex(e => e.setting.type === 'string');
     for (let i = 0; i < strIdx; i++) modal.moveDown();
@@ -184,7 +184,7 @@ describe('SettingsModal', () => {
   });
 
   test('editBackspace removes last char', () => {
-    modal.open(cm, ffm, mcpRegistry);
+    modal.open(cm, ffm, subscriptionManager, mcpRegistry);
     const items = modal.currentItems;
     const strIdx = items.findIndex(e => e.setting.type === 'string');
     for (let i = 0; i < strIdx; i++) modal.moveDown();
@@ -195,7 +195,7 @@ describe('SettingsModal', () => {
   });
 
   test('cancelEdit exits editingMode without saving', () => {
-    modal.open(cm, ffm, mcpRegistry);
+    modal.open(cm, ffm, subscriptionManager, mcpRegistry);
     const items = modal.currentItems;
     const strIdx = items.findIndex(e => e.setting.type === 'string');
     for (let i = 0; i < strIdx; i++) modal.moveDown();
@@ -210,7 +210,7 @@ describe('SettingsModal', () => {
   });
 
   test('commitEdit saves string value', () => {
-    modal.open(cm, ffm, mcpRegistry);
+    modal.open(cm, ffm, subscriptionManager, mcpRegistry);
     // Go to provider category which has model (string)
     while (modal.currentCategory !== 'provider') modal.nextCategory();
     const items = modal.currentItems;
@@ -224,7 +224,7 @@ describe('SettingsModal', () => {
   });
 
   test('close() deactivates modal and clears editing state', () => {
-    modal.open(cm, ffm, mcpRegistry);
+    modal.open(cm, ffm, subscriptionManager, mcpRegistry);
     modal.editingMode = true;
     modal.editBuffer = 'partial';
     modal.close();
@@ -234,7 +234,7 @@ describe('SettingsModal', () => {
   });
 
   test('navigating categories does not change settings in other categories', () => {
-    modal.open(cm, ffm, mcpRegistry);
+    modal.open(cm, ffm, subscriptionManager, mcpRegistry);
     modal.nextCategory();
     const items = modal.currentItems;
     expect(items.length).toBeGreaterThan(0);
@@ -244,7 +244,7 @@ describe('SettingsModal', () => {
   });
 
   test('editingMode blocks category and direction navigation', () => {
-    modal.open(cm, ffm, mcpRegistry);
+    modal.open(cm, ffm, subscriptionManager, mcpRegistry);
     modal.editingMode = true;
     const catBefore = modal.categoryIndex;
     const idxBefore = modal.selectedIndex;
@@ -257,14 +257,14 @@ describe('SettingsModal', () => {
   });
 
   test('mcp category loads registered servers', () => {
-    modal.open(cm, ffm, mcpRegistry);
+    modal.open(cm, ffm, subscriptionManager, mcpRegistry);
     while (modal.currentCategory !== 'mcp') modal.nextCategory();
     expect(modal.mcpEntries.length).toBe(1);
     expect(modal.getSelectedMcp()?.name).toBe('docs-server');
   });
 
   test('subscriptions category requires confirmation before sign out', () => {
-    const manager = getSubscriptionManager();
+    const manager = subscriptionManager;
     const started = manager.beginOAuthLogin('openai', {
       authUrl: 'https://auth.openai.test/authorize',
       tokenUrl: 'https://auth.openai.test/token',
@@ -282,7 +282,7 @@ describe('SettingsModal', () => {
     });
     void started;
 
-    modal.open(cm, ffm, mcpRegistry);
+    modal.open(cm, ffm, subscriptionManager, mcpRegistry);
     while (modal.currentCategory !== 'subscriptions') modal.nextCategory();
     expect(modal.subscriptionEntries.some((entry) => entry.provider === 'openai' && entry.state === 'active')).toBe(true);
 
@@ -294,10 +294,10 @@ describe('SettingsModal', () => {
 
     modal.activateSelected();
     expect(modal.subscriptionLogoutConfirmationTarget).toBe('openai');
-    expect(getSubscriptionManager().get('openai')).not.toBeNull();
+    expect(subscriptionManager.get('openai')).not.toBeNull();
 
     modal.activateSelected();
-    expect(getSubscriptionManager().get('openai')).toBeNull();
+    expect(subscriptionManager.get('openai')).toBeNull();
   });
 
   test('mcp trust mode requires explicit allow-all confirmation', () => {
@@ -319,7 +319,7 @@ describe('SettingsModal', () => {
       },
     } as unknown as McpRegistry;
 
-    modal.open(cm, ffm, mcpRegistry);
+    modal.open(cm, ffm, subscriptionManager, mcpRegistry);
     while (modal.currentCategory !== 'mcp') modal.nextCategory();
     modal.activateSelected();
     expect(modal.editingMode).toBe(true);

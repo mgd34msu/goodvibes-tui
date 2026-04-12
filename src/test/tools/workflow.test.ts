@@ -1,6 +1,6 @@
-import { describe, test, expect, beforeEach } from 'bun:test';
+import { describe, test, expect, beforeEach, afterEach } from 'bun:test';
+import { createWorkflowServices, createWorkflowTool } from '../../tools/workflow/index.ts';
 import {
-  workflowTool,
   WorkflowManager,
   TriggerManager,
   ScheduleManager,
@@ -12,20 +12,26 @@ import {
 // ---------------------------------------------------------------------------
 
 async function run(args: Record<string, unknown>) {
-  const result = await workflowTool.execute(args);
+  const result = await tool.execute(args);
   if (!result.success) throw new Error(result.error ?? 'workflow tool failed');
   return JSON.parse(result.output!) as Record<string, unknown>;
 }
 
 async function runMayFail(args: Record<string, unknown>) {
-  return workflowTool.execute(args);
+  return tool.execute(args);
 }
 
+let services = createWorkflowServices();
+let tool = createWorkflowTool(services);
+
 beforeEach(() => {
-  // Reset singletons between tests so state doesn't bleed
-  WorkflowManager._resetForTest();
-  TriggerManager._resetForTest();
-  ScheduleManager._resetForTest();
+  services.scheduleManager.destroy();
+  services = createWorkflowServices();
+  tool = createWorkflowTool(services);
+});
+
+afterEach(() => {
+  services.scheduleManager.destroy();
 });
 
 // ---------------------------------------------------------------------------
@@ -174,7 +180,7 @@ describe('mode: transition', () => {
   });
 
   test('review can transition to both revision and complete', async () => {
-    const wm = WorkflowManager.getInstance();
+    const wm = services.workflowManager;
     const instance = wm.start('wrfc', 'test');
     // Walk to review state
     wm.transition(instance.id, 'plan');
@@ -304,7 +310,7 @@ describe('mode: triggers', () => {
       triggerDefinition: { event: 'Post:tool:*', action: 'log' },
     });
     await run({ mode: 'triggers', triggerAction: 'disable', triggerId: added.id as string });
-    const tm = TriggerManager.getInstance();
+    const tm = services.triggerManager;
     const trigger = tm.list()[0];
     expect(trigger.enabled).toBe(false);
   });
@@ -317,7 +323,7 @@ describe('mode: triggers', () => {
     });
     await run({ mode: 'triggers', triggerAction: 'disable', triggerId: added.id as string });
     await run({ mode: 'triggers', triggerAction: 'enable', triggerId: added.id as string });
-    const tm = TriggerManager.getInstance();
+    const tm = services.triggerManager;
     const trigger = tm.list()[0];
     expect(trigger.enabled).toBe(true);
   });

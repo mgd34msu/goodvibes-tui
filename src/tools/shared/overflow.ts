@@ -1,11 +1,10 @@
 import { mkdirSync, writeFileSync, readFileSync, readdirSync, unlinkSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { logger } from '../../utils/logger.ts';
-import { getToolResultMaxChars } from '../../providers/model-limits.ts';
 
 // ─── Constants ─────────────────────────────────────────────────────────────
 
-const DEFAULT_MAX_CHARS = 50_000; // fallback only — runtime uses getToolResultMaxChars()
+export const DEFAULT_MAX_CHARS = 50_000;
 const OVERFLOW_DIR = '.goodvibes/.overflow';
 
 // ─── Retention Policy ───────────────────────────────────────────────────────
@@ -354,7 +353,7 @@ export class OverflowHandler {
    * On overflow: delegates to active backend and returns typed ref.
    */
   handle(content: string, options?: OverflowOptions): OverflowResult {
-    const maxChars = options?.maxChars ?? getToolResultMaxChars();
+    const maxChars = options?.maxChars ?? DEFAULT_MAX_CHARS;
 
     if (content.length <= maxChars) {
       return { content };
@@ -412,16 +411,11 @@ export class OverflowHandler {
 /**
  * overflowCleanup — operator-facing cleanup command.
  *
- * Prunes overflow entries from the singleton handler.
+ * Prunes overflow entries from the provided overflow handler.
  * Suitable for scripted operator invocations (e.g. CLI, cron).
  */
-export function overflowCleanup(policy?: RetentionPolicyConfig): { beforeCount: number } {
-  const beforeCount = overflowHandler.list().length;
-  overflowHandler.cleanup(policy);
+export function overflowCleanup(handler: OverflowHandler, policy?: RetentionPolicyConfig): { beforeCount: number } {
+  const beforeCount = handler.list().length;
+  handler.cleanup(policy);
   return { beforeCount };
 }
-
-// ─── Singleton ───────────────────────────────────────────────────────────────
-
-/** Module-level singleton. Defaults to the file backend at process.cwd(). */
-export const overflowHandler = new OverflowHandler();

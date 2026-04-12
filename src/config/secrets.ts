@@ -555,16 +555,3 @@ export class SecretsManager {
     writeFileSync(filePath, `${JSON.stringify(payload, null, 2)}\n`, 'utf-8');
   }
 }
-
-let _secretsManager: SecretsManager | undefined;
-
-export function getSecretsManager(options?: SecretsManagerOptions): SecretsManager {
-  if (!_secretsManager || options) {
-    _secretsManager = new SecretsManager(options);
-  }
-  return _secretsManager;
-}
-
-export function _resetSecretsManagerForTesting(): void {
-  _secretsManager = undefined;
-}

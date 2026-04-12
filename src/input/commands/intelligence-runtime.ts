@@ -1,10 +1,10 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import type { CommandContext, CommandRegistry } from '../command-registry.ts';
-import { getPanelManager } from '../../panels/panel-manager.ts';
 import { CodeIntelligence } from '../../intelligence/facade.ts';
 import type { DocumentSymbol } from '../../intelligence/lsp/protocol.ts';
 import type { SymbolInfo } from '../../intelligence/tree-sitter/queries.ts';
+import { openCommandPanel } from './runtime-services.ts';
 
 function resolveTargetPath(pathArg: string): string {
   return resolve(process.cwd(), pathArg);
@@ -55,17 +55,11 @@ export function registerIntelligenceRuntimeCommands(registry: CommandRegistry): 
     async handler(args, ctx) {
       const sub = (args[0] ?? 'review').toLowerCase();
       if (sub === 'panel' || sub === 'open') {
-        if (ctx.showPanel) ctx.showPanel('intelligence');
-        else {
-          const panelManager = getPanelManager();
-          panelManager.open('intelligence');
-          panelManager.show();
-          ctx.renderRequest();
-        }
+        openCommandPanel(ctx, 'intelligence');
         return;
       }
 
-      const intelligence = CodeIntelligence.getInstance();
+      const intelligence = new CodeIntelligence();
       const state = ctx.runtimeStore?.getState().intelligence;
       if (!state) {
         ctx.print('Intelligence Review\n  runtime store unavailable');

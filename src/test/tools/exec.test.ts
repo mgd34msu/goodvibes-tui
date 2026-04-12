@@ -1,8 +1,9 @@
-import { describe, test, expect, beforeEach, afterEach } from 'bun:test';
+import { describe, test, expect, beforeEach } from 'bun:test';
 import { mkdtempSync, writeFileSync, existsSync, mkdirSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { execTool, _resetProcessManager } from '../../tools/exec/index.ts';
+import { createExecTool } from '../../tools/exec/index.ts';
+import { ProcessManager } from '../../tools/shared/process-manager.ts';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -19,12 +20,10 @@ function makeTmpDir(): string {
   return mkdtempSync(join(tmpdir(), 'exec-test-'));
 }
 
-beforeEach(() => {
-  _resetProcessManager();
-});
+let execTool: ReturnType<typeof createExecTool>;
 
-afterEach(() => {
-  _resetProcessManager();
+beforeEach(() => {
+  execTool = createExecTool(new ProcessManager());
 });
 
 // ---------------------------------------------------------------------------
@@ -249,6 +248,7 @@ describe('exec tool — background mode', () => {
     expect(typeof out.process_id).toBe('string');
     expect(typeof out.pid).toBe('number');
     expect((out.pid as number)).toBeGreaterThan(0);
+    await execTool.execute({ commands: [{ cmd: `bg_stop ${out.process_id as string}` }] });
   });
 
   test('bg_status returns running status', async () => {

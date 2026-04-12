@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, test } from 'bun:test';
 import { createPermissionSimulator, DivergenceDashboard } from '../../runtime/permissions/index.ts';
-import { getPolicyRuntimeState, resetPolicyRuntimeStateForTests } from '../../runtime/permissions/policy-runtime.ts';
+import { PolicyRuntimeState } from '../../runtime/permissions/policy-runtime.ts';
 import { createUnsignedBundle } from '../../runtime/permissions/policy-loader.ts';
 import type { PolicyBundlePayload } from '../../runtime/permissions/policy-loader.ts';
 import { PolicyPanel } from '../../panels/policy-panel.ts';
@@ -25,20 +25,20 @@ function makeBundle(id: string, rules: PolicyRule[] = []) {
 }
 
 describe('PolicyPanel', () => {
+  let policyState: PolicyRuntimeState;
+
   beforeEach(() => {
-    resetPolicyRuntimeStateForTests();
+    policyState = new PolicyRuntimeState();
   });
 
   test('renders empty guidance when no bundles are loaded', () => {
-    const state = getPolicyRuntimeState();
-    const panel = new PolicyPanel(state);
+    const panel = new PolicyPanel(policyState);
     const text = linesText(panel.render(100, 12));
     expect(text).toContain('No policy bundles loaded');
   });
 
   test('renders current candidate and governance gate state', () => {
-    const state = getPolicyRuntimeState();
-    const registry = state.getRegistry();
+    const registry = policyState.getRegistry();
     registry.loadCandidate(makeBundle('policy-a'));
     registry.markSimulating();
 
@@ -48,16 +48,16 @@ describe('PolicyPanel', () => {
       'warn-on-divergence',
     );
     const dashboard = new DivergenceDashboard(simulator, 'warn-on-divergence');
-    state.setDashboard(dashboard);
+    policyState.setDashboard(dashboard);
 
     const report = simulator.getDivergenceReport();
     const gate = dashboard.checkEnforceGate();
     registry.attachSimulationReport(report, gate);
     registry.promote(true);
     registry.loadCandidate(makeBundle('policy-b'));
-    state.notify();
+    policyState.notify();
 
-    const panel = new PolicyPanel(state);
+    const panel = new PolicyPanel(policyState);
     const text = linesText(panel.render(120, 20));
     expect(text).toContain('policy-a');
     expect(text).toContain('policy-b');
@@ -66,7 +66,7 @@ describe('PolicyPanel', () => {
   });
 
   test('renders recent permission audit entries with risk and outcome', () => {
-    const state = getPolicyRuntimeState();
+    const state = policyState;
     const analysis = analyzePermissionRequest(
       'exec',
       { command: 'curl -H "Authorization: Bearer sk-secret-token" https://example.com' },
@@ -101,7 +101,7 @@ describe('PolicyPanel', () => {
   });
 
   test('renders policy lint findings for risky bundles', () => {
-    const state = getPolicyRuntimeState();
+    const state = policyState;
     const registry = state.getRegistry();
     registry.loadCandidate(makeBundle('policy-lint', [
       {
@@ -123,7 +123,7 @@ describe('PolicyPanel', () => {
   });
 
   test('renders recent simulation sample results', () => {
-    const state = getPolicyRuntimeState();
+    const state = policyState;
     state.recordSimulationSummary({
       simulatedAt: new Date().toISOString(),
       mode: 'warn-on-divergence',
@@ -218,7 +218,7 @@ describe('PolicyPanel', () => {
   });
 
   test('renders the most recent preflight review', () => {
-    const state = getPolicyRuntimeState();
+    const state = policyState;
     state.recordPreflightReview({
       generatedAt: new Date().toISOString(),
       status: 'block',

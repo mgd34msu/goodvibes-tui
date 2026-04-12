@@ -8,11 +8,12 @@ import { resolveAndValidatePath } from '../../utils/path-safety.ts';
 import { FileStateCache } from '../../state/file-cache.ts';
 import { ProjectIndex } from '../../state/project-index.ts';
 import { FileUndoManager } from '../../state/file-undo.ts';
-import { configManager } from '../../config/index.ts';
-import { autoHealer } from '../shared/auto-heal.ts';
+import type { ConfigManager } from '../../config/manager.ts';
+import type { ToolLLM } from '../../config/tool-llm.ts';
+import { AutoHealer } from '../shared/auto-heal.ts';
 import { isNotebookFile } from '../../utils/notebook.ts';
 import { logger } from '../../utils/logger.ts';
-import { recordChange } from '../../sessions/change-tracker.ts';
+import type { SessionChangeTracker } from '../../sessions/change-tracker.ts';
 
 // ---------------------------------------------------------------------------
 // Result types
@@ -317,6 +318,9 @@ export function createWriteTool(options?: {
   fileCache?: FileStateCache;
   projectIndex?: ProjectIndex;
   fileUndoManager?: FileUndoManager;
+  configManager?: Pick<ConfigManager, 'get'>;
+  toolLLM?: Pick<ToolLLM, 'chat'>;
+  changeTracker?: Pick<SessionChangeTracker, 'recordChange'>;
 }): Tool {
   const definition: ToolDefinition = {
     name: 'write',
@@ -423,7 +427,7 @@ export function createWriteTool(options?: {
           let content = outcome.result._content ?? '';
 
           // Auto-heal: if file is JS/TS and auto-heal is enabled, run syntax check
-          if (configManager.get('tools.autoHeal')) {
+          if (options?.configManager?.get('tools.autoHeal')) {
             const ext = extname(outcome.result.resolved_path).toLowerCase();
             const isJsTs = ['.js', '.ts', '.jsx', '.tsx', '.mjs', '.cjs'].includes(ext);
             if (isJsTs) {
@@ -433,7 +437,9 @@ export function createWriteTool(options?: {
                 transpiler.transformSync(content);
               } catch (syntaxErr) {
                 const syntaxErrors = [String(syntaxErr)];
-                const healResult = await autoHealer.heal(outcome.result.resolved_path, content, syntaxErrors);
+                const healResult = options.toolLLM && options.configManager
+                  ? await new AutoHealer(options.configManager, options.toolLLM).heal(outcome.result.resolved_path, content, syntaxErrors)
+                  : { healed: false, content };
                 if (healResult.healed) {
                   logger.debug('write tool: auto-heal succeeded', {
                     path: outcome.result.resolved_path,
@@ -502,7 +508,7 @@ export function createWriteTool(options?: {
             mode: outcome.result.mode_applied,
           });
           // Track for /diff session change view
-          recordChange(outcome.result.resolved_path);
+          options?.changeTracker?.recordChange(outcome.result.resolved_path);
         }
       }
 

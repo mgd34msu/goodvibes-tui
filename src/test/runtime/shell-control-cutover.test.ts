@@ -577,7 +577,7 @@ describe('GC-ARCH-004: shell control cutover enforcement', () => {
     expect(violations).toHaveLength(0);
   });
 
-  test('replay engine does not emit replay events through the legacy singleton bus', () => {
+  test('replay engine does not emit replay events through the legacy global bus path', () => {
     const relPath = 'src/core/deterministic-replay.ts';
     const absPath = join(projectRoot, relPath);
     const content = readFileSync(absPath, 'utf8');
@@ -594,7 +594,7 @@ describe('GC-ARCH-004: shell control cutover enforcement', () => {
     if (violations.length > 0) {
       throw new Error(
         [
-          'GC-ARCH-004 violation: replay engine reintroduced legacy singleton replay event emission.',
+          'GC-ARCH-004 violation: replay engine reintroduced legacy global replay event emission.',
           'Use the replay engine subscription model directly instead.',
           '',
           'Violations:',

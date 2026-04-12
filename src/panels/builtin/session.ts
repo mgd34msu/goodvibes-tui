@@ -1,0 +1,62 @@
+import type { PanelManager } from '../panel-manager.ts';
+import { SessionBrowserPanel } from '../session-browser-panel.ts';
+import { DocsPanel } from '../docs-panel.ts';
+import { PanelListPanel } from '../panel-list-panel.ts';
+import { SystemMessagesPanel } from '../system-messages-panel.ts';
+import { TokenBudgetPanel } from '../token-budget-panel.ts';
+import type { ResolvedBuiltinPanelDeps } from './shared.ts';
+
+export function registerSessionPanels(manager: PanelManager, deps: ResolvedBuiltinPanelDeps): void {
+  manager.registerType({
+    id: 'sessions',
+    name: 'Sessions',
+    icon: 'H',
+    category: 'session',
+    description: 'Browse, search, and resume past conversation sessions',
+    factory: () => new SessionBrowserPanel(deps.sessionManager, deps.resumeSession),
+  });
+
+  manager.registerType({
+    id: 'docs',
+    name: 'Docs',
+    icon: '?',
+    category: 'session',
+    description: 'Tool list, model capabilities, and keyboard shortcut reference',
+    factory: () => new DocsPanel(deps.toolRegistry, deps.providerRegistry),
+  });
+
+  manager.registerType({
+    id: 'panel-list',
+    name: 'Panel List',
+    icon: 'L',
+    category: 'session',
+    description: 'Browse all registered panels grouped by category, with open/closed status and Enter-to-open',
+    factory: () => new PanelListPanel(manager, deps.panelHealthMonitor),
+  });
+
+  const systemMessagesPanel = deps.systemMessagesPanel ?? new SystemMessagesPanel(deps.configManager, deps.panelHealthMonitor);
+
+  manager.registerType({
+    id: 'system-messages',
+    name: 'System Messages',
+    icon: 'J',
+    category: 'monitoring',
+    description: 'Operational system messages routed away from the main conversation (scans, discovery, plugin events, tool status)',
+    factory: () => systemMessagesPanel,
+  });
+
+  manager.registerType({
+    id: 'tokens',
+    name: 'Tokens',
+    icon: 'K',
+    category: 'monitoring',
+    description: 'Token budget tracker: per-turn and cumulative usage with context window gauge',
+    factory: () => {
+      const panel = new TokenBudgetPanel(deps.sessionMemoryStore);
+      if (deps.orchestrator && deps.getCtxWindow) {
+        panel.wire(deps.orchestrator, deps.getCtxWindow, deps.runtimeStore);
+      }
+      return panel;
+    },
+  });
+}

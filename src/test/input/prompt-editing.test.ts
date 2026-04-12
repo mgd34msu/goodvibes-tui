@@ -4,6 +4,7 @@ import { SelectionManager } from '../../input/selection.ts';
 import { CommandRegistry } from '../../input/command-registry.ts';
 import { AutocompleteEngine } from '../../input/autocomplete.ts';
 import { InfiniteBuffer } from '../../core/history.ts';
+import { createDefaultUiRuntimeServices } from '../helpers/ui-services.ts';
 import type { UndoState } from '../../input/handler-prompt-buffer.ts';
 
 type InputHandlerTestAccess = {
@@ -25,7 +26,7 @@ function asTestAccess(input: InputHandler): InputHandlerTestAccess {
 function makeInput(): InputHandler {
   const sel = new SelectionManager();
   const history = new InfiniteBuffer();
-  const ih = new InputHandler(() => {}, sel, () => 0, () => 20, () => history, () => {}, () => {});
+  const ih = new InputHandler(() => {}, sel, () => 0, () => 20, () => history, () => {}, () => {}, createDefaultUiRuntimeServices());
   ih.setContentWidth(80);
   return ih;
 }
@@ -86,6 +87,33 @@ describe('saveUndoState', () => {
       saveUndo(ih);
     }
     expect(getUndoStack(ih).length).toBe(MAX);
+  });
+});
+
+describe('feed render ordering', () => {
+  test('render callbacks observe the committed prompt state for typed text', () => {
+    const sel = new SelectionManager();
+    const history = new InfiniteBuffer();
+    const renders: string[] = [];
+    let input!: InputHandler;
+    input = new InputHandler(
+      () => {
+        renders.push(input.prompt);
+      },
+      sel,
+      () => 0,
+      () => 20,
+      () => history,
+      () => {},
+      () => {},
+      createDefaultUiRuntimeServices(),
+    );
+    input.setContentWidth(80);
+
+    input.feed('a');
+
+    expect(input.prompt).toBe('a');
+    expect(renders.at(-1)).toBe('a');
   });
 });
 

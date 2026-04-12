@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import type { ArtifactReference } from '../artifacts/index.ts';
+import type { ArtifactReference, ArtifactStore } from '../artifacts/index.ts';
 import { ChannelDeliveryRouter, RouteBindingManager } from '../channels/index.ts';
 import { ConfigManager } from '../config/manager.ts';
 import { ServiceRegistry } from '../config/service-registry.ts';
@@ -108,17 +108,19 @@ export class AutomationDeliveryManager {
   constructor(config: {
     readonly serviceRegistry?: ServiceRegistry;
     readonly configManager?: ConfigManager;
-    readonly routeBindings?: RouteBindingManager;
+    readonly routeBindings: RouteBindingManager;
     readonly deliveryRouter?: ChannelDeliveryRouter;
+    readonly artifactStore?: ArtifactStore;
     readonly runtimeStore?: RuntimeStore;
     readonly runtimeBus?: RuntimeEventBus;
-  } = {}) {
+  }) {
     this.serviceRegistry = config.serviceRegistry ?? new ServiceRegistry();
     this.configManager = config.configManager ?? new ConfigManager();
-    this.routeBindings = config.routeBindings ?? RouteBindingManager.getInstance();
+    this.routeBindings = config.routeBindings;
     this.deliveryRouter = config.deliveryRouter ?? new ChannelDeliveryRouter({
       configManager: this.configManager,
       serviceRegistry: this.serviceRegistry,
+      ...(config.artifactStore ? { artifactStore: config.artifactStore } : {}),
     });
     if (config.runtimeStore) this.runtimeDispatch = createDomainDispatch(config.runtimeStore);
     this.runtimeBus = config.runtimeBus ?? null;
@@ -134,6 +136,14 @@ export class AutomationDeliveryManager {
     if (config.runtimeBus) {
       this.runtimeBus = config.runtimeBus;
     }
+  }
+
+  getDeliveryRouter(): ChannelDeliveryRouter {
+    return this.deliveryRouter;
+  }
+
+  setControlPlaneGateway(gateway: import('../control-plane/gateway.ts').ControlPlaneGateway | null): void {
+    this.deliveryRouter.setControlPlaneGateway(gateway);
   }
 
   async deliverJobRun(job: AutomationJob, run: AutomationRun): Promise<readonly AutomationDeliveryAttempt[]> {

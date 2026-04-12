@@ -1,4 +1,4 @@
-import { configManager } from '../../config/index.ts';
+import type { ConfigManager } from '../../config/manager.ts';
 
 export type OrchestrationSpawnMode = 'manual-batch' | 'plan-auto' | 'recursive-child';
 
@@ -14,6 +14,7 @@ export type OrchestrationSpawnDecision = {
 };
 
 export function evaluateOrchestrationSpawn(input: {
+  configManager: Pick<ConfigManager, 'get'>;
   mode: OrchestrationSpawnMode;
   activeAgents: number;
   requestedDepth?: number;
@@ -23,9 +24,9 @@ export function evaluateOrchestrationSpawn(input: {
     maxDepth?: number;
   };
 }): OrchestrationSpawnDecision {
-  const maxAgents = input.overrides?.maxAgents ?? ((configManager.get('orchestration.maxActiveAgents') as number | null) ?? 8);
-  const maxDepth = input.overrides?.maxDepth ?? ((configManager.get('orchestration.maxDepth') as number | null) ?? 0);
-  const recursionEnabled = input.overrides?.recursionEnabled ?? ((configManager.get('orchestration.recursionEnabled') as boolean | null) ?? false);
+  const maxAgents = input.overrides?.maxAgents ?? ((input.configManager.get('orchestration.maxActiveAgents') as number | null) ?? 8);
+  const maxDepth = input.overrides?.maxDepth ?? ((input.configManager.get('orchestration.maxDepth') as number | null) ?? 0);
+  const recursionEnabled = input.overrides?.recursionEnabled ?? ((input.configManager.get('orchestration.recursionEnabled') as boolean | null) ?? false);
   const requestedDepth = input.requestedDepth ?? 0;
   const availableSlots = Math.max(0, maxAgents - input.activeAgents);
 

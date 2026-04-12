@@ -1,8 +1,7 @@
 import { resolve } from 'path';
-import { pluginManager, type PluginStatus } from '../../plugins/manager.ts';
+import type { PluginStatus } from '../../plugins/manager.ts';
 import { PLUGINS_DIR, getPluginDirectories } from '../../plugins/loader.ts';
 import type { CommandRegistry } from '../command-registry.ts';
-import { getPanelManager } from '../../panels/panel-manager.ts';
 import {
   installEcosystemCatalogEntry,
   listInstalledEcosystemEntries,
@@ -23,16 +22,15 @@ export function registerIntegrationRuntimeCommands(registry: CommandRegistry): v
     usage: 'list | dirs | inspect <name> | review | installed | catalog-review <id> | publish-local <id> <path> <summary...> | unpublish <id> | install <id> [project|user] | update <id> [project|user] | uninstall <id> [project|user] | enable <name> | disable <name> | reload',
     argsHint: 'list | dirs | inspect | review | installed | catalog-review | publish-local | unpublish | install | update | uninstall | enable | disable | reload',
     async handler(args, ctx) {
+      const pluginManager = ctx.pluginManager;
+      if (!pluginManager) {
+        ctx.print('Plugin manager is not available in this runtime.');
+        return;
+      }
       const sub = args[0];
 
       if (!sub || sub === 'open' || sub === 'panel') {
         if (ctx.showPanel) ctx.showPanel('plugins');
-        else {
-          const panelManager = getPanelManager();
-          panelManager.open('plugins');
-          panelManager.show();
-          ctx.renderRequest();
-        }
         return;
       }
 

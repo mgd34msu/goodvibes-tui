@@ -1,32 +1,16 @@
-import { ConversationManager } from '../core/conversation.ts';
-import { AgentMessageBus } from './message-bus.ts';
 import { ToolRegistry } from '../tools/registry.ts';
-import { getProviderRegistry, getModelRegistry } from '../providers/registry.ts';
+import type { ConfigManager } from '../config/manager.ts';
+import type { ProviderRegistry } from '../providers/registry.ts';
 import { registerAllTools } from '../tools/index.ts';
 import { registerChannelAgentTools } from '../tools/channel/agent-tools.ts';
-import { ChannelPluginRegistry } from '../channels/index.ts';
+import { AgentMessageBus } from './message-bus.ts';
+import type { ChannelPluginRegistry } from '../channels/index.ts';
 import { logger } from '../utils/logger.ts';
-import { ConsecutiveErrorBreaker } from '../core/circuit-breaker.ts';
-import { isRateLimitOrQuotaError, isContextSizeExceededError } from '../types/errors.ts';
 import { FileStateCache } from '../state/file-cache.ts';
 import { ProjectIndex } from '../state/project-index.ts';
-import { AgentSession } from './session.ts';
-import { ArchetypeLoader } from './archetypes.ts';
 import type { AgentRecord } from '../tools/agent/index.ts';
-import type { LLMProvider, StreamDelta } from '../providers/interface.ts';
-import type { ToolResult } from '../types/tools.ts';
-import { existsSync, readFileSync } from 'node:fs';
-import { ProcessManager } from '../tools/shared/process-manager.ts';
-import { join } from 'node:path';
-import { getContextWindowForModel } from '../providers/model-limits.ts';
-import { getProviderOptimizer } from '../providers/optimizer.ts';
-import {
-  estimateTokens,
-  estimateConversationTokens,
-  compactSmallWindow,
-} from '../core/context-compaction.ts';
-import { buildKnowledgeInjectionPrompt, selectKnowledgeForTask } from '../state/index.ts';
-import { buildCuratedKnowledgePromptSync } from '../knowledge/index.ts';
+import type { ToolLLM } from '../config/tool-llm.ts';
+import type { LLMProvider } from '../providers/interface.ts';
 import type { FeatureFlagManager } from '../runtime/feature-flags/manager.ts';
 import type { RuntimeEventBus } from '../runtime/events/index.ts';
 import {
@@ -41,127 +25,55 @@ import {
   emitOrchestrationNodeFailed,
   emitOrchestrationNodeProgress,
 } from '../runtime/emitters/index.ts';
+import { runAgentTask, type AgentOrchestratorRunContext } from './orchestrator-runner.ts';
+export { summarizeToolArgs } from './orchestrator-utils.ts';
 
-// ---------------------------------------------------------------------------
-// Network error detection
-// ---------------------------------------------------------------------------
-
-/**
- * Returns true if the error looks like a transient network failure that
- * may resolve on its own (dropped connection, DNS hiccup, etc.).
- * These are distinct from API-level errors (4xx / 5xx) which should not
- * be silently retried at this layer.
- */
-function isNetworkError(err: unknown): boolean {
-  if (!(err instanceof Error)) return false;
-  const msg = err.message.toLowerCase();
-  return (
-    msg.includes('fetch failed') ||
-    msg.includes('econnrefused') ||
-    msg.includes('enotfound') ||
-    msg.includes('network error') ||
-    msg.includes('network timeout') ||
-    msg.includes('networkerror') ||
-    msg.includes('econnreset') ||
-    msg.includes('etimedout') ||
-    msg.includes('socket hang up') ||
-    msg.includes('dns') ||
-    msg.includes('connection lost') ||
-    msg.includes('epipe') ||
-    msg.includes('ehostunreach')
-  );
-}
-
-/** Backoff delays (ms) for agent-level network retries — longer than the
- *  provider-level retries because we are waiting for the network to recover. */
-const NETWORK_RETRY_DELAYS_MS = [5_000, 10_000, 20_000, 40_000, 60_000];
-
-/** Delay between rate-limit retries (ms). Each failed agent waits this long before retrying. */
-const RATE_LIMIT_RETRY_DELAY_MS = 60_000;
-const RATE_LIMIT_MAX_RETRIES = 3;
-
-// ---------------------------------------------------------------------------
-// Context window awareness constants
-// ---------------------------------------------------------------------------
-
-/**
- * Fraction of context window at which pre-call compaction is triggered.
- * 0.85 = compact when estimated usage exceeds 85% of available window.
- */
-const CONTEXT_COMPACT_THRESHOLD = 0.85;
-
-/**
- * Minimum context window size (tokens) below which we skip LLM-based
- * compaction and only do rule-based truncation.
- * Matches SMALL_WINDOW_THRESHOLD from context-compaction.ts (12_000).
- */
-const MIN_WINDOW_FOR_LLM_COMPACT = 12_000;
-
-
-
-// ---------------------------------------------------------------------------
-// Tool args summarizer
-// ---------------------------------------------------------------------------
-
-/**
- * Summarize tool call arguments into a brief display string for progress labels.
- * Extracts the most informative single string arg (path, cmd, etc.) and
- * truncates to 30 characters.
- */
-export function summarizeToolArgs(args: Record<string, unknown>): string {
-  // Extract the most informative single arg
-  for (const key of ['path', 'file', 'cmd', 'pattern', 'url', 'query']) {
-    const val = args[key];
-    if (typeof val === 'string' && val.length > 0) {
-      const trimmed = val.length > 30 ? val.slice(0, 27) + '\u2026' : val;
-      return ` \u2014 ${trimmed}`;
-    }
-  }
-  // Fallback: first string value found
-  for (const val of Object.values(args)) {
-    if (typeof val === 'string' && val.length > 0) {
-      const trimmed = val.length > 30 ? val.slice(0, 27) + '\u2026' : val;
-      return ` \u2014 ${trimmed}`;
-    }
-  }
-  return '';
-}
-
-// ---------------------------------------------------------------------------
-// AgentOrchestrator
-// ---------------------------------------------------------------------------
+type AgentOrchestratorToolDeps = {
+  readonly fileCache: FileStateCache;
+  readonly projectIndex: ProjectIndex;
+  readonly fileUndoManager?: import('../state/file-undo.ts').FileUndoManager;
+  readonly modeManager?: import('../state/mode-manager.ts').ModeManager;
+  readonly processManager?: import('../tools/shared/process-manager.ts').ProcessManager;
+  readonly webSearchService?: import('../web-search/index.ts').WebSearchService;
+  readonly channelRegistry?: import('../channels/index.ts').ChannelPluginRegistry | null;
+  readonly remoteRunnerRegistry?: import('../runtime/remote/index.ts').RemoteRunnerRegistry;
+  readonly knowledgeService?: import('../knowledge/index.ts').KnowledgeService;
+  readonly memoryRegistry?: import('../state/index.ts').MemoryRegistry;
+  readonly archetypeLoader?: import('./archetypes.ts').ArchetypeLoader;
+  readonly configManager?: ConfigManager;
+  readonly providerRegistry?: ProviderRegistry;
+  readonly providerOptimizer?: import('../providers/optimizer.ts').ProviderOptimizer;
+  readonly toolLLM?: ToolLLM;
+  readonly serviceRegistry?: import('../config/service-registry.ts').ServiceRegistry;
+  readonly featureFlags?: Pick<FeatureFlagManager, 'isEnabled'> | null;
+  readonly overflowHandler?: import('../tools/shared/overflow.ts').OverflowHandler;
+  readonly sandboxSessionRegistry: import('../runtime/sandbox/session-registry.ts').SandboxSessionRegistry;
+};
 
 /**
  * AgentOrchestrator — runs AgentRecord tasks in-process.
  *
- * Each agent gets its own ConversationManager and a scoped ToolRegistry
- * containing only the tools listed in record.tools. The execution loop
- * mirrors the main Orchestrator: send prompt → receive response → execute
- * tools → loop until no more tool calls.
+ * Each agent gets its own scoped ToolRegistry containing only the tools
+ * listed in record.tools. The execution loop itself now lives in
+ * `orchestrator-runner.ts`; this class owns shared registry/state wiring.
  */
-const MAX_TURNS = 50;
-
 export class AgentOrchestrator {
-  private static instance: AgentOrchestrator | null = null;
   private fullRegistry: ToolRegistry | null = null;
   private fullRegistryChannelVersion = -2;
-  private fileCache: FileStateCache | null = null;
-  private projectIndex: ProjectIndex | null = null;
-  private projectContextCache: string | null | undefined = undefined; // undefined = not cached, null = no context
+  private toolDeps: AgentOrchestratorToolDeps | null = null;
   private featureFlagManager: FeatureFlagManager | null = null;
   private runtimeBus: RuntimeEventBus | null = null;
+  private readonly channelRegistry: ChannelPluginRegistry | null;
+  private readonly messageBus: import('./message-bus.ts').AgentMessageBus;
 
-  /** Singleton accessor. */
-  static getInstance(): AgentOrchestrator {
-    if (!AgentOrchestrator.instance) {
-      AgentOrchestrator.instance = new AgentOrchestrator();
-    }
-    return AgentOrchestrator.instance;
-  }
-
-  /** Reset the singleton — for testing only. */
-  static resetInstance(): void {
-    AgentOrchestrator.instance = null;
+  constructor(config: {
+    channelRegistry?: ChannelPluginRegistry | null;
+    messageBus: import('./message-bus.ts').AgentMessageBus;
+  } = {
+    messageBus: new AgentMessageBus(),
+  }) {
+    this.channelRegistry = config.channelRegistry ?? null;
+    this.messageBus = config.messageBus;
   }
 
   setRuntimeBus(runtimeBus: RuntimeEventBus | null): void {
@@ -271,8 +183,51 @@ export class AgentOrchestrator {
     });
   }
 
+  /**
+   * Inject shared file-cache and project-index so agent tools share state with main session.
+   * Call once during application startup, before any agents are spawned.
+   */
+  setDependencies(toolDeps: AgentOrchestratorToolDeps): void {
+    this.toolDeps = toolDeps;
+    this.fullRegistry = null;
+    this.fullRegistryChannelVersion = -2;
+  }
+
+  /** Lazily build and cache the full ToolRegistry. */
+  private getFullRegistry(): ToolRegistry {
+    const channelVersion = this.channelRegistry?.getVersion() ?? -1;
+    if (!this.fullRegistry || this.fullRegistryChannelVersion !== channelVersion) {
+      if (!this.toolDeps?.configManager || !this.toolDeps?.providerRegistry || !this.toolDeps?.toolLLM) {
+        throw new Error('AgentOrchestrator requires configManager, providerRegistry, and toolLLM dependencies before tool registration');
+      }
+      this.fullRegistry = new ToolRegistry();
+      registerAllTools(this.fullRegistry, this.toolDeps);
+      registerChannelAgentTools(this.fullRegistry, this.toolDeps?.channelRegistry ?? this.channelRegistry);
+      this.fullRegistryChannelVersion = channelVersion;
+    }
+    return this.fullRegistry;
+  }
+
+  /**
+   * Build a ToolRegistry containing only the tools whose names appear in
+   * the allowedNames list. Filters the provided full registry into a fresh
+   * scoped registry.
+   */
+  private buildScopedRegistry(allowedNames: string[], fullRegistry: ToolRegistry): ToolRegistry {
+    const allowed = new Set(allowedNames.filter((n) => n !== 'agent'));
+
+    const scopedRegistry = new ToolRegistry();
+    for (const tool of fullRegistry.list()) {
+      if (allowed.has(tool.definition.name)) {
+        scopedRegistry.register(tool);
+      }
+    }
+
+    return scopedRegistry;
+  }
+
   private resolveProviderForRecord(
-    providerRegistry: ReturnType<typeof getProviderRegistry>,
+    providerRegistry: Pick<ProviderRegistry, 'getCurrentModel' | 'getForModel' | 'get' | 'listModels'>,
     record: AgentRecord,
     currentModel: { id: string; provider: string },
   ): { provider: LLMProvider; modelId: string; requestedModelId: string } {
@@ -314,7 +269,7 @@ export class AgentOrchestrator {
   }
 
   private resolveChatModelId(
-    providerRegistry: ReturnType<typeof getProviderRegistry>,
+    providerRegistry: Pick<ProviderRegistry, 'listModels'>,
     requestedModelId: string,
     providerOverride?: string,
   ): string {
@@ -332,7 +287,7 @@ export class AgentOrchestrator {
   }
 
   private resolveFallbackModelRoutes(
-    providerRegistry: ReturnType<typeof getProviderRegistry>,
+    providerRegistry: Pick<ProviderRegistry, 'listModels' | 'getForModel'>,
     record: AgentRecord,
     primaryRequestedModelId: string,
   ): Array<{ provider: LLMProvider; modelId: string; requestedModelId: string }> {
@@ -361,968 +316,40 @@ export class AgentOrchestrator {
     return routes;
   }
 
-  private applyContextWindowAwareness(
-    record: AgentRecord,
-    modelId: string,
-    modelWindow: number,
-    conversation: ConversationManager,
-    systemPrompt: string,
-    toolTokens: number,
-    turn: number,
-  ): string {
-    if (!(this.featureFlagManager?.isEnabled('agent-context-window-awareness') ?? true)) {
-      return systemPrompt;
-    }
-
-    if (modelWindow === 0) {
-      logger.debug(`[agent-context-window-awareness] Context window is 0/unknown for model ${modelId}, skipping context validation`);
-      return systemPrompt;
-    }
-
-    const messages = conversation.getMessagesForLLM();
-    const msgTokens = estimateConversationTokens(messages);
-    const sysTokens = estimateTokens(systemPrompt);
-    const totalEstimate = msgTokens + sysTokens + toolTokens;
-    const threshold = Math.floor(modelWindow * CONTEXT_COMPACT_THRESHOLD);
-
-    if (totalEstimate <= threshold) {
-      return systemPrompt;
-    }
-
-    logger.warn(
-      `[AgentOrchestrator] context-window awareness: estimated ${totalEstimate} tokens exceeds ${threshold} (${Math.round(CONTEXT_COMPACT_THRESHOLD * 100)}% of ${modelWindow}) - compacting`,
-      { agentId: record.id, turn, msgTokens, sysTokens, toolTokens, contextWindow: modelWindow },
-    );
-    record.progress = `Turn ${turn} · Compacting context…`;
-
-    if (modelWindow <= MIN_WINDOW_FOR_LLM_COMPACT) {
-      conversation.replaceMessagesForLLM(compactSmallWindow(messages));
-    } else {
-      conversation.replaceMessagesForLLM(compactSmallWindow(messages, Math.max(10, Math.floor(messages.length / 2))));
-    }
-
-    const remainingAfterMsgs = modelWindow - estimateConversationTokens(conversation.getMessagesForLLM()) - toolTokens;
-    const currentSysTokens = estimateTokens(systemPrompt);
-    if (currentSysTokens > remainingAfterMsgs * CONTEXT_COMPACT_THRESHOLD) {
-      logger.warn(
-        `[AgentOrchestrator] context-window awareness: system prompt (${currentSysTokens} tokens) too large for remaining window (${remainingAfterMsgs}) - applying layered trim`,
-        { agentId: record.id },
-      );
-      return this.buildLayeredSystemPrompt(record, remainingAfterMsgs);
-    }
-
-    return systemPrompt;
+  private createRunContext(): AgentOrchestratorRunContext {
+    return {
+      runtimeBus: this.runtimeBus,
+      featureFlagManager: this.featureFlagManager,
+      emitterContext: (agentId) => this.emitterContext(agentId),
+      emitAgentProgress: (recordId, progress) => this.emitAgentProgress(recordId, progress),
+      emitOrchestrationProgress: (record, progress) => this.emitOrchestrationProgress(record, progress),
+      emitAgentStarted: (recordId) => this.emitAgentStarted(recordId),
+      emitAgentCancelledEvent: (recordId, reason) => this.emitAgentCancelledEvent(recordId, reason),
+      emitOrchestrationCancelled: (record, reason) => this.emitOrchestrationCancelled(record, reason),
+      emitAgentFailedEvent: (recordId, error, durationMs) => this.emitAgentFailedEvent(recordId, error, durationMs),
+      emitOrchestrationFailed: (record, error) => this.emitOrchestrationFailed(record, error),
+      emitAgentCompletedEvent: (recordId, durationMs, output, toolCallsMade) =>
+        this.emitAgentCompletedEvent(recordId, durationMs, output, toolCallsMade),
+      emitOrchestrationCompleted: (record, output) => this.emitOrchestrationCompleted(record, output),
+      emitStreamDelta: (recordId, content, accumulated) => this.emitStreamDelta(recordId, content, accumulated),
+      processManager: this.toolDeps?.processManager,
+      messageBus: this.messageBus,
+      knowledgeService: this.toolDeps?.knowledgeService,
+      memoryRegistry: this.toolDeps?.memoryRegistry,
+      archetypeLoader: this.toolDeps?.archetypeLoader,
+      providerOptimizer: this.toolDeps?.providerOptimizer,
+      providerRegistry: this.toolDeps!.providerRegistry!,
+      getFullRegistry: () => this.getFullRegistry(),
+      buildScopedRegistry: (allowedNames, fullRegistry) => this.buildScopedRegistry(allowedNames, fullRegistry),
+      resolveProviderForRecord: (providerRegistry, record, currentModel) =>
+        this.resolveProviderForRecord(providerRegistry, record, currentModel),
+      resolveFallbackModelRoutes: (providerRegistry, record, primaryRequestedModelId) =>
+        this.resolveFallbackModelRoutes(providerRegistry, record, primaryRequestedModelId),
+    };
   }
 
-  /**
-   * Run an agent task described by the given record.
-   * Updates record status, toolCallCount, progress, and error in-place.
-   * Never throws — all errors are captured into record.error.
-   */
+  /** Run an agent task described by the given record. */
   async runAgent(record: AgentRecord): Promise<void> {
-    record.status = 'running';
-    record.progress = 'Initialising…';
-    record.usage = {
-      inputTokens: record.usage?.inputTokens ?? 0,
-      outputTokens: record.usage?.outputTokens ?? 0,
-      cacheReadTokens: record.usage?.cacheReadTokens ?? 0,
-      cacheWriteTokens: record.usage?.cacheWriteTokens ?? 0,
-      ...(record.usage?.reasoningTokens !== undefined ? { reasoningTokens: record.usage.reasoningTokens } : {}),
-      llmCallCount: record.usage?.llmCallCount ?? 0,
-      turnCount: record.usage?.turnCount ?? 0,
-      reasoningSummaryCount: record.usage?.reasoningSummaryCount ?? 0,
-    };
-    this.emitAgentStarted(record.id);
-    this.emitAgentProgress(record.id, record.progress);
-    this.emitOrchestrationProgress(record, record.progress);
-
-    let session: AgentSession | null = null;
-    let conversation: ConversationManager | null = null;
-    const preAgentProcessIds = new Set(ProcessManager.getInstance().list().map(p => p.id));
-
-    try {
-      const providerRegistry = getProviderRegistry();
-      // --- Resolve model and provider ---
-      const currentModel = providerRegistry.getCurrentModel();
-      const primaryRoute = this.resolveProviderForRecord(providerRegistry, record, currentModel);
-      let activeRoute = primaryRoute;
-      let fallbackRouteIndex = 0;
-      const fallbackRoutes = this.resolveFallbackModelRoutes(providerRegistry, record, primaryRoute.requestedModelId);
-      const modelId = primaryRoute.modelId;
-
-      session = new AgentSession(record.id, modelId, record.provider ?? currentModel.provider ?? 'unknown');
-      session.appendMessage({ type: 'session_config', template: record.template, task: record.task, tools: record.tools, model: modelId, provider: record.provider ?? 'unknown', timestamp: new Date().toISOString() });
-
-      // --- Build scoped tool registry ---
-      const toolRegistry = this.buildScopedRegistry(record.tools, this.getFullRegistry());
-      const toolDefinitions = toolRegistry.getToolDefinitions();
-
-      // --- Tool token cost (computed once, used per turn in the context check) ---
-      const toolTokens = toolDefinitions.length > 0
-        ? estimateTokens(JSON.stringify(toolDefinitions))
-        : 0;
-
-      // --- Conversation ---
-      conversation = new ConversationManager(() => 80); // default terminal width for agent conversation
-      conversation.addUserMessage(record.task);
-
-      // --- System prompt ---
-      // Declared as `let` so context-window awareness can rebuild with fewer layers.
-      let systemPrompt = this.buildSystemPrompt(record);
-
-      // --- Turn loop ---
-      let continueLoop = true;
-      let turn = 0;
-      record.progress = 'Turn 1 · Thinking…';
-      this.emitAgentProgress(record.id, record.progress);
-      this.emitOrchestrationProgress(record, record.progress);
-
-      // --- Loop detection ---
-      const callHistory: string[] = [];
-      const LOOP_SYSTEM_THRESHOLD = 3;
-      const LOOP_USER_THRESHOLD = 5;
-      const CALL_HISTORY_WINDOW = 20;
-
-      // --- Consecutive error circuit breaker ---
-      const circuitBreaker = new ConsecutiveErrorBreaker();
-
-      while (continueLoop) {
-        if ((record as { status: string }).status === 'cancelled') {
-          record.completedAt = Date.now();
-          this.emitAgentCancelledEvent(record.id, 'Agent cancelled');
-          this.cleanupLeakedProcesses(preAgentProcessIds);
-          if (session) {
-            session.appendMessage({ type: 'session_end', status: 'cancelled', turn, timestamp: new Date().toISOString() });
-            await this.disposeSession(session);
-          }
-          return;
-        }
-        if (++turn > MAX_TURNS) {
-          // Capture last assistant response before failing
-          const lastMessages = conversation.getMessagesForLLM();
-          const lastAssistant = [...lastMessages].reverse().find(m => m.role === 'assistant');
-          if (lastAssistant) {
-            record.fullOutput = typeof lastAssistant.content === 'string' ? lastAssistant.content : '';
-          }
-          record.status = 'failed';
-          record.error = `Exceeded maximum turn limit (${MAX_TURNS})`;
-          if (session) {
-            session.appendMessage({ type: 'session_end', status: 'max_turns_exceeded', turn, timestamp: new Date().toISOString() });
-            await this.disposeSession(session);
-          }
-          // Notify WRFC so the chain is not orphaned in 'engineering' state
-          this.emitAgentFailedEvent(record.id, record.error, Date.now() - record.startedAt);
-          return;
-        }
-        session.appendMessage({ type: 'llm_request', turn, messageCount: conversation.getMessagesForLLM().length, timestamp: new Date().toISOString() });
-        // Retrieve any pending messages for this agent and inject them as user messages
-        const bus = AgentMessageBus.getInstance();
-        const pending = bus.getMessages(record.id);
-        for (const msg of pending) {
-          // Inject as user message so LLM responds to inter-agent communication
-          const kindLabel = msg.kind[0]!.toUpperCase() + msg.kind.slice(1);
-          conversation.addUserMessage(`[${kindLabel} from ${msg.from}]: ${msg.content}`);
-        }
-        // --- Context-window pre-check ---
-        // Before calling provider.chat(), estimate total token usage and compact
-        // messages or trim the system prompt when approaching the context limit.
-        if (this.featureFlagManager?.isEnabled('agent-context-window-awareness') ?? true) {
-          const modelDef = getModelRegistry().find(
-            (m) =>
-              m.id === activeRoute.modelId ||
-              m.registryKey === activeRoute.modelId ||
-              m.id === activeRoute.requestedModelId ||
-              m.registryKey === activeRoute.requestedModelId,
-          ) ?? providerRegistry.getCurrentModel();
-          const contextWindow = getContextWindowForModel(modelDef);
-          systemPrompt = this.applyContextWindowAwareness(
-            record,
-            activeRoute.modelId,
-            contextWindow,
-            conversation,
-            systemPrompt,
-            toolTokens,
-            turn,
-          );
-        }
-
-        // --- Network-aware retry around the LLM call ---
-        // provider.chat() already has short provider-level retries (~30s total).
-        // This outer loop waits for the network to come back (up to ~2.5 min
-        // of additional wait) before giving up and failing the agent.
-        let response: Awaited<ReturnType<LLMProvider['chat']>>;
-        {
-          let networkAttempt = 0;
-          let rateLimitAttempt = 0;
-          let contextRetried = false;
-          // eslint-disable-next-line no-constant-condition
-          while (true) {
-            // Reset streaming state for this retry attempt
-            let streamAccumulated = '';
-            record.streamingContent = undefined;
-
-            const onDelta = (delta: StreamDelta) => {
-              if (delta.content) {
-                streamAccumulated += delta.content;
-                record.streamingContent = streamAccumulated;
-                const snippet = streamAccumulated.length > 100
-                  ? '...' + streamAccumulated.slice(-97)
-                  : streamAccumulated;
-                record.progress = snippet.replace(/\n/g, ' ').trim() || 'Streaming...';
-              }
-              this.emitStreamDelta(record.id, delta.content ?? '', streamAccumulated);
-            };
-
-            try {
-              response = await activeRoute.provider.chat({
-                model: activeRoute.modelId,
-                messages: conversation.getMessagesForLLM(),
-                tools: toolDefinitions.length > 0 ? toolDefinitions : undefined,
-                systemPrompt,
-                ...(record.reasoningEffort ? { reasoningEffort: record.reasoningEffort } : {}),
-                onDelta,
-              });
-              break; // success — exit retry loop
-            } catch (chatErr) {
-              if (
-                isContextSizeExceededError(chatErr) &&
-                !contextRetried &&
-                (this.featureFlagManager?.isEnabled('agent-context-window-awareness') ?? true)
-              ) {
-                // Context size exceeded; compact messages and retry once.
-                contextRetried = true;
-                logger.warn(
-                  `[AgentOrchestrator] context-window awareness: context size exceeded on turn ${turn} - emergency compaction and retry`,
-                  { agentId: record.id, error: chatErr instanceof Error ? chatErr.message : String(chatErr) },
-                );
-                record.progress = `Turn ${turn} · Context exceeded, compacting…`;
-                this.emitAgentProgress(record.id, record.progress);
-                this.emitOrchestrationProgress(record, record.progress);
-                const currentMessages = conversation.getMessagesForLLM();
-                const compacted = compactSmallWindow(
-                  currentMessages,
-                  Math.max(5, Math.floor(currentMessages.length / 3)),
-                );
-                conversation.replaceMessagesForLLM(compacted);
-                // Also strip system prompt to bare minimum
-                systemPrompt = this.buildLayeredSystemPrompt(record, 0);
-              } else if (fallbackRouteIndex < fallbackRoutes.length) {
-                const previousRoute = activeRoute;
-                activeRoute = fallbackRoutes[fallbackRouteIndex++]!;
-                const reason = chatErr instanceof Error ? chatErr.message : String(chatErr);
-                logger.warn('[AgentOrchestrator] switching to fallback model', {
-                  agentId: record.id,
-                  from: previousRoute.requestedModelId,
-                  to: activeRoute.requestedModelId,
-                  reason,
-                });
-                getProviderOptimizer().recordFallbackTransition(previousRoute.requestedModelId, activeRoute.requestedModelId, reason);
-                record.progress = `Model fallback → ${activeRoute.requestedModelId}`;
-                this.emitAgentProgress(record.id, record.progress);
-                this.emitOrchestrationProgress(record, record.progress);
-              } else if (isNetworkError(chatErr) && networkAttempt < NETWORK_RETRY_DELAYS_MS.length) {
-                const delayMs = NETWORK_RETRY_DELAYS_MS[networkAttempt]!;
-                const delaySec = Math.round(delayMs / 1000);
-                logger.warn(
-                  `Agent ${record.id}: network error on turn ${turn}, retrying in ${delaySec}s (attempt ${networkAttempt + 1}/${NETWORK_RETRY_DELAYS_MS.length})`,
-                  { error: chatErr instanceof Error ? chatErr.message : String(chatErr) },
-                );
-                record.progress = `Network error, retrying in ${delaySec}s…`;
-                this.emitAgentProgress(record.id, record.progress);
-                this.emitOrchestrationProgress(record, record.progress);
-                networkAttempt++;
-                await new Promise<void>((resolve) => setTimeout(resolve, delayMs));
-                if ((record as { status: string }).status === 'cancelled') {
-                  throw new Error('Agent cancelled during network retry');
-                }
-              } else if (isRateLimitOrQuotaError(chatErr) && rateLimitAttempt < RATE_LIMIT_MAX_RETRIES) {
-                const delaySec = Math.round(RATE_LIMIT_RETRY_DELAY_MS / 1000);
-                logger.warn(
-                  `Agent ${record.id}: rate limited on turn ${turn}, retrying in ${delaySec}s (attempt ${rateLimitAttempt + 1}/${RATE_LIMIT_MAX_RETRIES})`,
-                  { error: chatErr instanceof Error ? chatErr.message : String(chatErr) },
-                );
-                record.progress = `Rate limited, retrying in ${delaySec}s…`;
-                this.emitAgentProgress(record.id, record.progress);
-                this.emitOrchestrationProgress(record, record.progress);
-                rateLimitAttempt++;
-                await new Promise<void>((resolve) => setTimeout(resolve, RATE_LIMIT_RETRY_DELAY_MS));
-                if ((record as { status: string }).status === 'cancelled') {
-                  throw new Error('Agent cancelled during rate limit retry');
-                }
-              } else {
-                // Not a network/rate-limit/context error, or all retries exhausted — re-throw
-                // to let the outer catch handle it and fail the agent.
-                throw chatErr;
-              }
-            }
-          }
-          record.streamingContent = undefined;
-          record.progress = `Turn ${turn} · Thinking…`;
-        }
-
-	        session.appendMessage({ type: 'llm_response', turn, contentLength: response.content.length, toolCallCount: response.toolCalls.length, usage: response.usage, timestamp: new Date().toISOString() });
-	        record.usage = {
-	          inputTokens: (record.usage?.inputTokens ?? 0) + response.usage.inputTokens,
-	          outputTokens: (record.usage?.outputTokens ?? 0) + response.usage.outputTokens,
-	          cacheReadTokens: (record.usage?.cacheReadTokens ?? 0) + (response.usage.cacheReadTokens ?? 0),
-	          cacheWriteTokens: (record.usage?.cacheWriteTokens ?? 0) + (response.usage.cacheWriteTokens ?? 0),
-	          ...(record.usage?.reasoningTokens !== undefined ? { reasoningTokens: record.usage.reasoningTokens } : {}),
-	          llmCallCount: (record.usage?.llmCallCount ?? 0) + 1,
-	          turnCount: (record.usage?.turnCount ?? 0) + 1,
-	          reasoningSummaryCount: (record.usage?.reasoningSummaryCount ?? 0) + (response.reasoningSummary ? 1 : 0),
-	        };
-
-	        if (response.toolCalls.length > 0) {
-	          conversation.addAssistantMessage(response.content, { toolCalls: response.toolCalls, usage: response.usage });
-          const results = await this.executeToolCalls(
-            response.toolCalls,
-            toolRegistry,
-            session,
-            turn,
-            record,
-            callHistory,
-            CALL_HISTORY_WINDOW,
-          );
-          conversation.addToolResults(results);
-
-          // --- Consecutive error circuit breaker ---
-          const allFailed = results.length > 0 && results.every(r => r.success === false);
-          if (allFailed) {
-            const cbResult = circuitBreaker.recordAllFailed();
-            logger.warn(`Agent ${record.id}: consecutive all-error turn ${circuitBreaker.consecutiveErrors}`);
-            if (cbResult === 'break') {
-              // Use addSystemMessage for consistency with core orchestrator
-              // (system messages are preferable to user messages for internal control signals)
-              conversation.addSystemMessage(
-                `CIRCUIT BREAKER: You have made ${circuitBreaker.consecutiveErrors} consecutive turns where ALL tool calls failed. ` +
-                `The agent loop is stopping to prevent an infinite failure cycle. ` +
-                `Report what you were trying to do and what errors you encountered.`
-              );
-              record.status = 'failed';
-              record.error = `Circuit breaker tripped after ${circuitBreaker.consecutiveErrors} consecutive all-error turns`;
-              record.completedAt = Date.now();
-              continueLoop = false;
-            } else if (cbResult === 'warn') {
-              conversation.addSystemMessage(
-                `You have made ${circuitBreaker.consecutiveErrors} consecutive tool calls that ALL failed. ` +
-                `Stop attempting the same approach. Describe what you're trying to do and what's going wrong, ` +
-                `then try a completely different strategy.`
-              );
-            }
-          } else if (results.length > 0) {
-            // At least one success — reset the counter
-            circuitBreaker.recordSuccess();
-          }
-
-          // --- Loop detection: nudge if any signature repeats ---
-          const sigCounts = new Map<string, { count: number; toolName: string }>();
-          for (const sig of callHistory) {
-            const name = sig.slice(0, sig.indexOf('::'));
-            const entry = sigCounts.get(sig);
-            if (entry) {
-              entry.count++;
-            } else {
-              sigCounts.set(sig, { count: 1, toolName: name });
-            }
-          }
-          // Find worst offender
-          let worstCount = 0;
-          let worstTool = '';
-          for (const [_sig, { count, toolName }] of sigCounts) {
-            if (count > worstCount) {
-              worstCount = count;
-              worstTool = toolName;
-            }
-          }
-          if (worstCount >= LOOP_USER_THRESHOLD) {
-            logger.warn(`Agent ${record.id}: loop detected — ${worstTool} called ${worstCount} times with identical args`);
-            conversation.addUserMessage(
-              `You are repeating the same tool call. ${worstTool} has been called ${worstCount} times with identical arguments and results. Do NOT call ${worstTool} with these arguments again. Identify what you were trying to accomplish and take a different action.`,
-            );
-          } else if (worstCount >= LOOP_SYSTEM_THRESHOLD) {
-            logger.warn(`Agent ${record.id}: possible loop — ${worstTool} called ${worstCount} times with identical args`);
-            conversation.addSystemMessage(
-              `You have already executed this exact call (${worstTool}) ${worstCount} times with identical arguments. The results from your previous calls are already in your conversation history. Review them and proceed to the next step.`,
-            );
-          }
-          record.progress = `Turn ${turn} · Thinking…`;
-        } else {
-          // Final response — no more tool calls
-          conversation.addAssistantMessage(response.content, { usage: response.usage });
-          record.fullOutput = response.content;
-          record.progress = response.content.slice(0, 200) || 'Done.';
-          continueLoop = false;
-        }
-      }
-
-      await this.finalizeAgentRun(record, session, preAgentProcessIds);
-    } catch (err) {
-      await this.handleAgentRunFailure(record, conversation, session, preAgentProcessIds, err);
-    }
-  }
-
-  // ---------------------------------------------------------------------------
-  // Private helpers
-  // ---------------------------------------------------------------------------
-
-  /** 
-   * Inject shared file-cache and project-index so agent tools share state with main session.
-   * Call once during application startup, before any agents are spawned.
-   */
-  setDependencies(fileCache: FileStateCache, projectIndex: ProjectIndex): void {
-    this.fileCache = fileCache;
-    this.projectIndex = projectIndex;
-    this.fullRegistry = null; // invalidate cached registry so it rebuilds with new deps
-    this.fullRegistryChannelVersion = -2;
-  }
-
-  /** Lazily build and cache the full ToolRegistry. */
-  private getFullRegistry(): ToolRegistry {
-    const channelRegistry = ChannelPluginRegistry.getActive();
-    const channelVersion = channelRegistry?.getVersion() ?? -1;
-    if (!this.fullRegistry || this.fullRegistryChannelVersion !== channelVersion) {
-      this.fullRegistry = new ToolRegistry();
-      if ((this.fileCache == null) !== (this.projectIndex == null)) {
-        logger.warn('AgentOrchestrator: partial deps — both fileCache and projectIndex should be set together');
-      }
-      const deps = this.fileCache && this.projectIndex
-        ? { fileCache: this.fileCache, projectIndex: this.projectIndex }
-        : undefined;
-      registerAllTools(this.fullRegistry, deps);
-      registerChannelAgentTools(this.fullRegistry, channelRegistry);
-      this.fullRegistryChannelVersion = channelVersion;
-    }
-    return this.fullRegistry;
-  }
-
-  /**
-   * Build a ToolRegistry containing only the tools whose names appear in
-   * the allowedNames list. Filters the provided full registry into a fresh
-   * scoped registry.
-   */
-  private buildScopedRegistry(allowedNames: string[], fullRegistry: ToolRegistry): ToolRegistry {
-    // Filter to only the allowed tools (excluding 'agent' to prevent recursion)
-    const allowed = new Set(allowedNames.filter((n) => n !== 'agent'));
-
-    const scopedRegistry = new ToolRegistry();
-    for (const tool of fullRegistry.list()) {
-      if (allowed.has(tool.definition.name)) {
-        scopedRegistry.register(tool);
-      }
-    }
-
-    return scopedRegistry;
-  }
-
-  /** Build a layered system prompt: base + archetype + project context + conventions.
-   * Layers 3 (project context) and 4 (conventions) are omitted when their key appears in skipLayers.
-   */
-  buildSystemPrompt(record: AgentRecord, skipLayers?: Set<string>): string {
-    const parts: string[] = [];
-
-    // --- Layer 1: Base instructions ---
-    // Build tool descriptions for only the tools this agent has
-    const toolDescriptions: Record<string, string> = {
-      read: 'read files (supports extract modes: content, outline, symbols, lines)',
-      write: 'create new files (auto-creates parent directories)',
-      edit: 'find-and-replace in existing files (supports exact, fuzzy, regex matching)',
-      find: 'search files by glob pattern, content regex, or symbol extraction',
-      exec: 'run shell commands (build, test, lint, install)',
-      analyze: 'code analysis (impact, dependencies, dead code, security, coverage)',
-      inspect: 'project structure, API routes, database schema, components',
-      state: 'read/write session state and persistent memory',
-      fetch: 'HTTP requests with extraction modes (json, markdown, text, code blocks)',
-      workflow: 'manage workflow state machines, triggers, and scheduled tasks',
-      registry: 'discover and inspect available skills, agents, and tools',
-    };
-
-    const toolLines = record.tools
-      .filter(t => t !== 'agent')
-      .map(t => toolDescriptions[t] ? `- ${t} — ${toolDescriptions[t]}` : `- ${t}`)
-      .join('\n');
-
-    const toolNames = record.tools.filter(t => t !== 'agent').join(', ');
-    parts.push(`You are an autonomous agent in goodvibes-tui. Complete your task fully. No human is monitoring you — never ask questions, never wait for guidance. If something is ambiguous, make the best choice and continue.
-
-## Tools
-You have access to: ${toolNames}
-${toolLines}
-
-If MCP tools are available (e.g., context7 for library documentation), use them for research before guessing at API usage.
-
-## Rules
-1. Understand before editing. Never modify a file without first reading or searching its content to know what you're changing.
-2. Write-local, read-global. Only create/modify files within the working directory. Read anything for context.
-3. Validate after changes. Run typecheck/lint/test when the project supports them.
-4. No mocks, no placeholders. Every implementation must be production-ready with proper error handling and types.
-5. No narration. Don't explain your process or repeat the task.
-
-## Recovery
-When something fails or you need to learn how a library/framework works:
-1. Try with your own knowledge
-2. Search for documentation via the context7 MCP tool (resolve-library-id then query-docs) if available
-3. Read relevant source files, configs, or local docs for context
-4. Try an alternative approach
-If repeated attempts fail, report the failure clearly and move on. Do not loop indefinitely.
-
-## Logging
-Use the state tool (mode: memory) to record decisions and failures to .goodvibes/memory/ when you make significant choices or encounter errors worth preventing in future runs.
-
-## Output
-When complete, report only:
-- Summary: 1-2 sentences
-- Changes: files created/modified
-- Decisions: choices made + rationale
-- Issues: problems encountered
-- Uncertainties: anything the caller should verify
-
-## Structured Output
-You MUST end your final message with a JSON completion report inside a \`\`\`json block.
-The report format depends on your role:
-
-**Engineer:**
-\`\`\`json
-{
-  "version": 1,
-  "archetype": "engineer",
-  "wrfcId": "<wrfc-id from context, or null>",
-  "summary": "1-2 sentence summary",
-  "gatheredContext": ["critical file, symbol, or constraint learned before editing"],
-  "plannedActions": ["specific edit or write planned before execution"],
-  "appliedChanges": ["concrete change that was actually implemented"],
-  "filesCreated": ["path/to/new/file.ts"],
-  "filesModified": ["path/to/changed/file.ts"],
-  "filesDeleted": [],
-  "decisions": [{"what": "chose X", "why": "because Y"}],
-  "issues": ["issue description"],
-  "uncertainties": ["thing to verify"]
-}
-\`\`\`
-
-**Reviewer:**
-\`\`\`json
-{
-  "version": 1,
-  "archetype": "reviewer",
-  "wrfcId": "<wrfc-id>",
-  "summary": "review summary",
-  "score": 9.5,
-  "passed": true,
-  "dimensions": [{"name": "Correctness", "score": 1.0, "maxScore": 1.0, "issues": []}],
-  "issues": [{"severity": "minor", "description": "...", "file": "...", "line": 10, "pointValue": 0.1}]
-}
-\`\`\`
-
-**Tester:**
-\`\`\`json
-{
-  "version": 1,
-  "archetype": "tester",
-  "wrfcId": "<wrfc-id>",
-  "summary": "testing summary",
-  "testsWritten": ["test/file.test.ts"],
-  "testsPassed": 10,
-  "testsFailed": 0,
-  "coverage": {"lines": 95, "branches": 88, "functions": 92},
-  "failures": []
-}
-\`\`\`
-
-**Other archetypes:**
-\`\`\`json
-{
-  "version": 1,
-  "archetype": "<your-archetype>",
-  "wrfcId": "<wrfc-id>",
-  "summary": "what was accomplished",
-  "result": "detailed result"
-}
-\`\`\``);
-
-    // --- Layer 2: Archetype overlay ---
-    const archetype = ArchetypeLoader.getInstance().loadArchetype(record.template);
-    if (archetype?.systemPrompt) {
-      parts.push(archetype.systemPrompt);
-    } else {
-      // Fallback: minimal role description from built-in templates
-      const roleDescriptions: Record<string, string> = {
-        engineer: '## Role: Engineer\nFull-stack implementation agent. Build production-ready features with error handling, type safety, input validation, and security. Follow existing project patterns.\n\nEngineer execution protocol:\n1. Gather: read the necessary files, symbols, and constraints before editing.\n2. Plan: decide the exact writes and tool actions before making changes.\n3. Apply: perform the smallest correct set of edits and validations.\n\nYour final message MUST include a structured EngineerReport JSON block with gatheredContext, plannedActions, and appliedChanges (see Structured Output section).\n\nWill NOT do: architecture planning, code review, test writing, deployment.',
-        reviewer: '## Role: Reviewer\nCode review and quality assessment agent. Evaluate code for correctness, security, performance, and adherence to project conventions. Produce structured pass/fail assessments with specific issues.\n\nYour final message MUST include a structured ReviewerReport JSON block (see Structured Output section).\n\nWill NOT do: implementation, deployment, testing.',
-        tester: '## Role: Tester\nTest writing and execution agent. Write comprehensive tests, run test suites, and report coverage. Ensure edge cases are covered.\n\nYour final message MUST include a structured TesterReport JSON block (see Structured Output section).\n\nWill NOT do: implementation, architecture, deployment.',
-        researcher: '## Role: Researcher\nCodebase exploration and analysis agent. Investigate code structure, trace data flows, find patterns, and report findings. Answer questions about how the code works.\n\nWill NOT do: implementation, testing, deployment.',
-        general: '## Role: General\nGeneral-purpose agent. Complete the assigned task using the tools available.',
-      };
-      const roleDesc = roleDescriptions[record.template] ?? roleDescriptions.general;
-      parts.push(roleDesc);
-    }
-
-    // --- Layer 3: Project context ---
-    if (!skipLayers?.has('project')) {
-      const projectContext = this.buildProjectContext();
-      if (projectContext) {
-        parts.push(projectContext);
-      }
-    }
-
-    // --- Layer 4: Conventions ---
-    if (!skipLayers?.has('conventions')) {
-      const conventions = this.loadConventions();
-      if (conventions) {
-        parts.push(conventions);
-      }
-    }
-
-    const knowledgeInjections =
-      record.knowledgeInjections && record.knowledgeInjections.length > 0
-        ? record.knowledgeInjections
-        : selectKnowledgeForTask(record.task, record.writeScope ?? []);
-    record.knowledgeInjections = knowledgeInjections;
-    const knowledgePrompt = buildKnowledgeInjectionPrompt(knowledgeInjections);
-    if (knowledgePrompt) {
-      parts.push(knowledgePrompt);
-    }
-    const curatedKnowledgePrompt = buildCuratedKnowledgePromptSync(record.task, record.writeScope ?? []);
-    if (curatedKnowledgePrompt) {
-      parts.push(curatedKnowledgePrompt);
-    }
-
-    if (record.context?.trim()) {
-      parts.push(`## Context\n${record.context.trim()}`);
-    }
-
-    // --- Layer 5: Task ---
-    parts.push(`## Task\n${record.task}`);
-
-    return parts.join('\n\n');
-  }
-
-  /**
-   * Build a system prompt with progressively fewer layers based on token budget.
-   * Layer order (dropped last to first when space is tight):
-   *   Layer 5: Task (always included)
-   *   Layer 1: Base instructions (always included)
-   *   Layer 2: Archetype overlay (always included)
-   *   Layer 3: Project context (dropped first when tight)
-   *   Layer 4: Conventions (dropped first when tightest)
-   *
-   * When remainingTokens is 0, returns the minimal prompt (layers 1+2+5 only).
-   */
-  private buildLayeredSystemPrompt(record: AgentRecord, remainingTokens: number): string {
-    // Always include base instructions + archetype + task
-    const base = this.buildSystemPrompt(record);
-    if (remainingTokens === 0) {
-      // Emergency: strip to task-only minimal prompt
-      logger.warn('[AgentOrchestrator] context-window awareness: emergency system prompt - base layers only', { agentId: record.id });
-      const parts: string[] = [];
-      const toolNames = record.tools.filter(t => t !== 'agent').join(', ');
-      parts.push(`You are an autonomous agent. Complete your task. Tools: ${toolNames}.`);
-      parts.push(`## Task\n${record.task}`);
-      return parts.join('\n\n');
-    }
-    const baseTokens = estimateTokens(base);
-    if (baseTokens <= remainingTokens) {
-      return base; // Full prompt fits — return as-is
-    }
-
-    // Try without conventions
-    const noConventions = this.buildSystemPrompt(record, new Set(['conventions']));
-    const noConvTokens = estimateTokens(noConventions);
-    if (noConvTokens <= remainingTokens) {
-      logger.info('[AgentOrchestrator] context-window awareness: system prompt trimmed - dropped conventions layer', { agentId: record.id });
-      return noConventions;
-    }
-
-    // Try without conventions AND project context
-    const noContext = this.buildSystemPrompt(record, new Set(['conventions', 'project']));
-    const noContextTokens = estimateTokens(noContext);
-    if (noContextTokens <= remainingTokens) {
-      logger.info('[AgentOrchestrator] context-window awareness: system prompt trimmed - dropped conventions + project context', { agentId: record.id });
-      return noContext;
-    }
-
-    // Final fallback: truncate the reduced prompt to fit
-    const targetChars = remainingTokens * 4; // rough chars from tokens
-    const truncated = noContext.length > targetChars
-      ? noContext.slice(0, targetChars) + '\n[...system prompt truncated to fit context window]'
-      : noContext;
-    logger.warn('[AgentOrchestrator] context-window awareness: system prompt hard-truncated to fit context window', { agentId: record.id, chars: truncated.length });
-    return truncated;
-  }
-
-
-  /** Build project context from package.json and filesystem markers. */
-  private buildProjectContext(): string | null {
-    if (this.projectContextCache !== undefined) return this.projectContextCache;
-    try {
-      const cwd = process.cwd();
-      const lines: string[] = ['## Project', `- Directory: ${cwd}`];
-
-      // Detect project type and package manager
-      const pkgPath = join(cwd, 'package.json');
-      if (existsSync(pkgPath)) {
-        try {
-          const pkg = JSON.parse(readFileSync(pkgPath, 'utf-8'));
-          if (pkg.name) lines.push(`- Name: ${pkg.name}`);
-
-          // Package manager
-          if (existsSync(join(cwd, 'bun.lockb')) || existsSync(join(cwd, 'bun.lock'))) lines.push('- Package manager: bun');
-          else if (existsSync(join(cwd, 'yarn.lock'))) lines.push('- Package manager: yarn');
-          else if (existsSync(join(cwd, 'pnpm-lock.yaml'))) lines.push('- Package manager: pnpm');
-          else lines.push('- Package manager: npm');
-
-          // TypeScript
-          lines.push(`- TypeScript: ${existsSync(join(cwd, 'tsconfig.json')) ? 'yes' : 'no'}`);
-
-          // Test framework
-          const allDeps = { ...(pkg.dependencies ?? {}), ...(pkg.devDependencies ?? {}) };
-          if (allDeps['vitest']) lines.push('- Test framework: vitest');
-          else if (allDeps['jest']) lines.push('- Test framework: jest');
-          else if (pkg.scripts?.test === 'bun test' || pkg.scripts?.test?.startsWith('bun test ')) lines.push('- Test framework: bun:test');
-
-          // Scripts
-          const scriptNames = Object.keys(pkg.scripts ?? {}).slice(0, 10);
-          if (scriptNames.length > 0) {
-            lines.push(`- Available scripts: ${scriptNames.join(', ')}`);
-          }
-        } catch {
-          lines.push('- Type: nodejs (package.json unreadable)');
-        }
-      } else if (existsSync(join(cwd, 'Cargo.toml'))) {
-        lines.push('- Type: rust');
-      } else if (existsSync(join(cwd, 'go.mod'))) {
-        lines.push('- Type: go');
-      } else if (existsSync(join(cwd, 'pyproject.toml')) || existsSync(join(cwd, 'requirements.txt'))) {
-        lines.push('- Type: python');
-      }
-
-      // Entry points
-      const entryPoints: string[] = [];
-      for (const ep of ['src/index.ts', 'src/main.ts', 'src/index.js', 'index.ts', 'index.js']) {
-        if (existsSync(join(cwd, ep))) entryPoints.push(ep);
-      }
-      if (entryPoints.length > 0) {
-        lines.push(`- Entry points: ${entryPoints.join(', ')}`);
-      }
-
-      this.projectContextCache = lines.join('\n');
-      return this.projectContextCache;
-    } catch {
-      this.projectContextCache = null;
-      return null;
-    }
-  }
-
-  /** Load project conventions from .goodvibes/GOODVIBES.md, truncated to ~200 tokens. */
-  private loadConventions(): string | null {
-    try {
-      const candidates = [
-        join(process.cwd(), '.goodvibes', 'GOODVIBES.md'),
-        join(process.cwd(), 'GOODVIBES.md'),
-      ];
-      for (const path of candidates) {
-        if (existsSync(path)) {
-          const content = readFileSync(path, 'utf-8');
-          // Truncate to ~800 chars
-          const truncated = content.length > 800
-            ? content.slice(0, 800) + '\n[...truncated]'
-            : content;
-          return `## Conventions\n${truncated}`;
-        }
-      }
-      return null;
-    } catch {
-      return null;
-    }
-  }
-
-  private cleanupLeakedProcesses(preAgentProcessIds: Set<string>): void {
-    const pm = ProcessManager.getInstance();
-    for (const p of pm.list()) {
-      if (!preAgentProcessIds.has(p.id)) {
-        pm.stop(p.id);
-      }
-    }
-  }
-
-  private async disposeSession(session: AgentSession): Promise<void> {
-    try {
-      await session.dispose();
-    } catch {
-      // non-fatal
-    }
-  }
-
-  private async executeToolCalls(
-    toolCalls: Awaited<ReturnType<LLMProvider['chat']>>['toolCalls'],
-    toolRegistry: ToolRegistry,
-    session: AgentSession,
-    turn: number,
-    record: AgentRecord,
-    callHistory: string[],
-    callHistoryWindow: number,
-  ): Promise<ToolResult[]> {
-    const results: ToolResult[] = [];
-
-    for (const originalCall of toolCalls) {
-      const call = { ...originalCall, arguments: { ...originalCall.arguments } };
-      const argsSummary = summarizeToolArgs(call.arguments as Record<string, unknown>);
-      record.progress = `Turn ${turn} · ${call.name}${argsSummary}`;
-      record.toolCallCount++;
-      this.emitAgentProgress(record.id, record.progress);
-      this.emitOrchestrationProgress(record, record.progress);
-
-      if (call.name === 'exec' || call.name === 'precision_exec') {
-        call.arguments = structuredClone(call.arguments);
-        const execArgs = call.arguments as Record<string, unknown>;
-        if (Array.isArray(execArgs.commands)) {
-          for (const cmd of execArgs.commands as Record<string, unknown>[]) {
-            cmd.background = false;
-            if (!cmd.timeout_ms) cmd.timeout_ms = 600_000;
-          }
-        }
-        if (!execArgs.timeout_ms) execArgs.timeout_ms = 600_000;
-      }
-
-      const callSig = `${call.name}::${JSON.stringify(call.arguments)}`;
-      try {
-        const result = await toolRegistry.execute(call.id, call.name, call.arguments);
-        results.push({ ...result, callId: call.id });
-        session.appendMessage({
-          type: 'tool_execution',
-          turn,
-          toolName: call.name,
-          toolCallId: call.id,
-          success: result.success !== false,
-          args: JSON.stringify(call.arguments).slice(0, 500),
-          resultPreview: (result.output ?? result.error ?? '').slice(0, 500),
-          timestamp: new Date().toISOString(),
-        });
-      } catch (err) {
-        const toolErr = err instanceof Error ? err.message : String(err);
-        results.push({
-          callId: call.id,
-          success: false,
-          error: toolErr,
-        });
-        session.appendMessage({
-          type: 'tool_execution',
-          turn,
-          toolName: call.name,
-          toolCallId: call.id,
-          success: false,
-          args: JSON.stringify(call.arguments).slice(0, 500),
-          resultPreview: toolErr.slice(0, 500),
-          timestamp: new Date().toISOString(),
-        });
-      }
-
-      callHistory.push(callSig);
-      if (callHistory.length > callHistoryWindow) callHistory.shift();
-    }
-
-    return results;
-  }
-
-  private async finalizeAgentRun(
-    record: AgentRecord,
-    session: AgentSession | null,
-    preAgentProcessIds: Set<string>,
-  ): Promise<void> {
-    const statusAfterLoop = (record as { status: string }).status;
-    if (statusAfterLoop !== 'failed' && statusAfterLoop !== 'cancelled') {
-      record.status = 'completed';
-    }
-    record.completedAt = Date.now();
-    this.cleanupLeakedProcesses(preAgentProcessIds);
-
-    if (this.runtimeBus && record.status !== 'failed' && statusAfterLoop !== 'cancelled') {
-      this.emitAgentCompletedEvent(
-        record.id,
-        (record.completedAt ?? Date.now()) - record.startedAt,
-        record.fullOutput ?? '',
-        record.toolCallCount,
-      );
-      this.emitOrchestrationCompleted(record, record.fullOutput ?? '');
-    }
-
-    if (record.status === 'failed') {
-      this.emitAgentFailedEvent(
-        record.id,
-        record.error ?? 'Circuit breaker tripped',
-        Date.now() - record.startedAt,
-      );
-      this.emitOrchestrationFailed(record, record.error ?? 'Circuit breaker tripped');
-      logger.error(`Agent ${record.id} circuit-breaker terminated`, { error: record.error, toolCallCount: record.toolCallCount });
-      session?.appendMessage({
-        type: 'session_end',
-        status: 'failed',
-        error: record.error,
-        toolCallCount: record.toolCallCount,
-        durationMs: Date.now() - record.startedAt,
-        timestamp: new Date().toISOString(),
-      });
-    } else if (statusAfterLoop === 'cancelled') {
-      this.emitAgentCancelledEvent(record.id, 'Agent cancelled');
-      this.emitOrchestrationCancelled(record, 'Agent cancelled');
-      logger.info(`Agent ${record.id} cancelled (detected post-loop)`, { toolCallCount: record.toolCallCount });
-      session?.appendMessage({
-        type: 'session_end',
-        status: 'cancelled',
-        toolCallCount: record.toolCallCount,
-        durationMs: Date.now() - record.startedAt,
-        timestamp: new Date().toISOString(),
-      });
-    } else {
-      logger.info(`Agent ${record.id} completed`, { toolCallCount: record.toolCallCount });
-      session?.appendMessage({
-        type: 'session_end',
-        status: 'completed',
-        toolCallCount: record.toolCallCount,
-        durationMs: Date.now() - record.startedAt,
-        timestamp: new Date().toISOString(),
-      });
-    }
-
-    if (session) {
-      await this.disposeSession(session);
-    }
-  }
-
-  private async handleAgentRunFailure(
-    record: AgentRecord,
-    conversation: ConversationManager | null,
-    session: AgentSession | null,
-    preAgentProcessIds: Set<string>,
-    err: unknown,
-  ): Promise<void> {
-    const message = err instanceof Error ? err.message : String(err);
-    if (conversation) {
-      const lastMessages = conversation.getMessagesForLLM();
-      const lastAssistant = [...lastMessages].reverse().find((m) => m.role === 'assistant');
-      if (lastAssistant) {
-        record.fullOutput = typeof lastAssistant.content === 'string' ? lastAssistant.content : '';
-      }
-    }
-    record.status = 'failed';
-    record.error = message;
-    record.completedAt = Date.now();
-    this.cleanupLeakedProcesses(preAgentProcessIds);
-    this.emitAgentFailedEvent(record.id, message, Date.now() - record.startedAt);
-    this.emitOrchestrationFailed(record, message);
-    logger.error(`Agent ${record.id} failed`, { error: message });
-    if (session) {
-      session.appendMessage({
-        type: 'session_end',
-        status: 'failed',
-        error: message,
-        toolCallCount: record.toolCallCount,
-        durationMs: Date.now() - record.startedAt,
-        timestamp: new Date().toISOString(),
-      });
-      await this.disposeSession(session);
-    }
+    await runAgentTask(this.createRunContext(), record);
   }
 }
-
-/** Module-level singleton — import and use everywhere. */
-export const agentOrchestrator = AgentOrchestrator.getInstance();

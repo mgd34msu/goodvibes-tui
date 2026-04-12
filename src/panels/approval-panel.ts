@@ -10,7 +10,7 @@ import {
   resolvePrimaryScrollableSection,
   type PanelWorkspaceSection,
 } from './polish.ts';
-import { getPolicyRuntimeState } from '../runtime/permissions/policy-runtime.ts';
+import type { PolicyRuntimeState } from '../runtime/permissions/policy-runtime.ts';
 import { buildPermissionRuleSuggestions } from '../runtime/permissions/rule-suggestions.ts';
 
 const C = {
@@ -33,9 +33,11 @@ const APPROVAL_ROWS = [
 export class ApprovalPanel extends BasePanel {
   private selectedIndex = 0;
   private scrollOffset = 0;
+  private readonly policyRuntimeState: Pick<PolicyRuntimeState, 'getSnapshot'>;
 
-  public constructor() {
+  public constructor(policyRuntimeState: Pick<PolicyRuntimeState, 'getSnapshot'>) {
     super('approval', 'Approval', 'A', 'monitoring');
+    this.policyRuntimeState = policyRuntimeState;
   }
 
   public handleInput(key: string): boolean {
@@ -72,7 +74,7 @@ export class ApprovalPanel extends BasePanel {
 
   public render(width: number, height: number): Line[] {
     this.needsRender = false;
-    const policySnapshot = getPolicyRuntimeState().getSnapshot();
+    const policySnapshot = this.policyRuntimeState.getSnapshot();
     const postureLines = [
       buildKeyValueLine(width, [
         { label: 'why prompted', value: 'risk summary', valueColor: C.value },

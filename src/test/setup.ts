@@ -5,7 +5,6 @@ import { mkdtemp, rm, mkdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { LLMProvider, ChatRequest, ChatResponse } from '../providers/interface.ts';
 import type { ToolCall } from '../types/tools.ts';
-import { ConfigManager } from '../config/manager.ts';
 
 // ---------------------------------------------------------------------------
 // Mock LLM Provider
@@ -56,20 +55,16 @@ export class MockLLMProvider implements LLMProvider {
 // ---------------------------------------------------------------------------
 
 /**
- * Redirect ConfigManager's config file to a temp directory for the duration
- * of a test suite. Returns a cleanup function that restores the default path.
+ * Create a temp config directory for tests that need explicit configDir wiring.
+ * Returns the directory plus an async cleanup function.
  *
  * Usage in a test file:
- *   const cleanup = await setupConfigTestMode();
+ *   const { configDir, cleanup } = await setupTestConfigDir();
  *   afterAll(cleanup);
  */
-export async function setupConfigTestMode(): Promise<() => Promise<void>> {
+export async function setupTestConfigDir(): Promise<{ configDir: string; cleanup: () => Promise<void> }> {
   const { dir, cleanup } = await makeTempDir();
-  ConfigManager.setTestMode(dir);
-  return async () => {
-    ConfigManager.setTestMode(undefined);
-    await cleanup();
-  };
+  return { configDir: dir, cleanup };
 }
 
 // ---------------------------------------------------------------------------

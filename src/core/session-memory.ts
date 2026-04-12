@@ -59,5 +59,3 @@ export class SessionMemoryStore {
     this.memories = [];
   }
 }
-
-export const sessionMemoryStore = new SessionMemoryStore();

@@ -286,26 +286,3 @@ export class PanelHealthMonitor {
     track.cleanWindows = 0;
   }
 }
-
-
-/**
- * Module-level singleton for convenience.
- * The renderer and panel manager share this instance at runtime.
- */
-let _sharedMonitor: PanelHealthMonitor | null = null;
-
-export function getSharedPanelHealthMonitor(): PanelHealthMonitor {
-  if (!_sharedMonitor) {
-    _sharedMonitor = new PanelHealthMonitor();
-  }
-  return _sharedMonitor;
-}
-
-/**
- * Reset the shared monitor instance (for tests).
- *
- * @internal Not part of the public API. Tests only.
- */
-export function resetSharedPanelHealthMonitor(): void {
-  _sharedMonitor = null;
-}

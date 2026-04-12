@@ -1,6 +1,6 @@
-import { getSecretsManager } from '../../config/secrets.ts';
+import { SecretsManager } from '../../config/secrets.ts';
 import { ServiceRegistry } from '../../config/service-registry.ts';
-import { getSubscriptionManager, type ProviderSubscription } from '../../config/subscriptions.ts';
+import { SubscriptionManager, type ProviderSubscription } from '../../config/subscriptions.ts';
 import { getSubscriptionProviderConfig } from '../../config/subscription-providers.ts';
 
 export type AuthInspectionFreshness = 'healthy' | 'expiring' | 'expired' | 'pending' | 'available' | 'unconfigured';
@@ -41,7 +41,7 @@ function determineFreshness(subscription: ProviderSubscription | null, pending: 
 
 export async function inspectProviderAuth(provider: string): Promise<ProviderAuthInspection> {
   const services = new ServiceRegistry();
-  const manager = getSubscriptionManager();
+  const manager = new SubscriptionManager();
   const service = services.get(provider);
   const resolved = getSubscriptionProviderConfig(provider, service);
   const subscription = manager.get(provider);
@@ -92,8 +92,8 @@ export async function inspectProviderAuth(provider: string): Promise<ProviderAut
 }
 
 export async function buildAuthInspectionSnapshot(): Promise<AuthInspectionSnapshot> {
-  const secrets = await getSecretsManager().list();
-  const subscriptions = getSubscriptionManager();
+  const secrets = await new SecretsManager().list();
+  const subscriptions = new SubscriptionManager();
   const services = new ServiceRegistry().getAll();
   const providerIds = new Set<string>([
     ...Object.values(services)

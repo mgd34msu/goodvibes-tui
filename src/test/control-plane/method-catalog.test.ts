@@ -1,5 +1,21 @@
 import { describe, expect, test } from 'bun:test';
 import { GatewayMethodCatalog } from '../../control-plane/index.ts';
+import { buildOperatorContract } from '../../control-plane/operator-contract.ts';
+
+function schemaProperty(schema: unknown, ...path: string[]): unknown {
+  let current: unknown = schema;
+  for (const segment of path) {
+    if (typeof current !== 'object' || current === null) {
+      return undefined;
+    }
+    const record = current as Record<string, unknown>;
+    const properties = record.properties as Record<string, unknown> | undefined;
+    const items = record.items as Record<string, unknown> | undefined;
+    const itemProperties = items?.properties as Record<string, unknown> | undefined;
+    current = properties?.[segment] ?? itemProperties?.[segment] ?? record[segment];
+  }
+  return current;
+}
 
 describe('GatewayMethodCatalog', () => {
   test('lists built-in gateway methods', () => {
@@ -78,5 +94,43 @@ describe('GatewayMethodCatalog', () => {
 
     unregister();
     expect(catalog.get('plugin.test.echo')).toBeNull();
+  });
+
+  test('exposes structured operator contract payloads instead of generic objects', () => {
+    const catalog = new GatewayMethodCatalog();
+    const contract = buildOperatorContract(catalog);
+
+    expect(contract.product.id).toBe('goodvibes');
+    expect(contract.operator.methods).toHaveLength(catalog.list().length);
+    expect(contract.operator.events).toHaveLength(catalog.listEvents().length);
+    expect(contract.operator.schemaCoverage.methods).toBe(catalog.list().length);
+
+    expect(schemaProperty(catalog.get('control.contract')?.outputSchema, 'contract', 'product', 'id')).toBeDefined();
+    expect(schemaProperty(catalog.get('control.contract')?.outputSchema, 'contract', 'operator', 'methods', 'id')).toBeDefined();
+    expect(schemaProperty(catalog.get('control.contract')?.outputSchema, 'contract', 'operator', 'events', 'id')).toBeDefined();
+
+    expect(schemaProperty(catalog.get('control.methods.list')?.outputSchema, 'methods', 'id')).toBeDefined();
+    expect(schemaProperty(catalog.get('control.methods.get')?.outputSchema, 'method', 'id')).toBeDefined();
+    expect(schemaProperty(catalog.get('control.events.catalog')?.outputSchema, 'events', 'id')).toBeDefined();
+    expect(schemaProperty(catalog.get('control.messages.list')?.outputSchema, 'messages', 'attachments', 'artifactId')).toBeDefined();
+    expect(schemaProperty(catalog.get('control.clients.list')?.outputSchema, 'clients', 'surface')).toBeDefined();
+
+    expect(schemaProperty(catalog.get('panels.list')?.outputSchema, 'panels', 'id')).toBeDefined();
+    expect(schemaProperty(catalog.get('surfaces.list')?.outputSchema, 'surfaces', 'id')).toBeDefined();
+    expect(schemaProperty(catalog.get('routes.bindings.list')?.outputSchema, 'bindings', 'id')).toBeDefined();
+
+    expect(schemaProperty(catalog.get('channels.status')?.outputSchema, 'channels', 'id')).toBeDefined();
+    expect(schemaProperty(catalog.get('channels.capabilities.list')?.outputSchema, 'capabilities', 'id')).toBeDefined();
+    expect(schemaProperty(catalog.get('channels.tools.list')?.outputSchema, 'tools', 'id')).toBeDefined();
+    expect(schemaProperty(catalog.get('channels.actions.list')?.outputSchema, 'actions', 'id')).toBeDefined();
+    expect(schemaProperty(catalog.get('channels.repairs.list')?.outputSchema, 'actions', 'id')).toBeDefined();
+    expect(schemaProperty(catalog.get('channels.policies.list')?.outputSchema, 'policies', 'surface')).toBeDefined();
+    expect(schemaProperty(catalog.get('channels.policies.audit')?.outputSchema, 'audit', 'id')).toBeDefined();
+    expect(schemaProperty(catalog.get('channels.directory.query')?.outputSchema, 'entries', 'id')).toBeDefined();
+
+    expect(schemaProperty(catalog.get('voice.providers.list')?.outputSchema, 'providers', 'id')).toBeDefined();
+    expect(schemaProperty(catalog.get('voice.voices.list')?.outputSchema, 'voices', 'id')).toBeDefined();
+    expect(schemaProperty(catalog.get('web_search.providers.list')?.outputSchema, 'providers', 'id')).toBeDefined();
+    expect(schemaProperty(catalog.get('media.providers.list')?.outputSchema, 'providers', 'id')).toBeDefined();
   });
 });

@@ -1,6 +1,6 @@
 import type { RuntimeStore } from '../store/index.ts';
 import type { AcpConnection } from '../store/domains/acp.ts';
-import { getRemoteRunnerRegistry } from './runner-registry.ts';
+import { RemoteRunnerRegistry } from './runner-registry.ts';
 import type { RemoteRunnerContract, RemoteRunnerPool } from './types.ts';
 import { deriveRemoteCapabilities, type RemoteCapabilitySnapshot } from './capabilities.ts';
 import { deriveRemoteHeartbeat, type RemoteHeartbeatSnapshot } from './heartbeat.ts';
@@ -22,12 +22,13 @@ function stateIsDegraded(state: string): boolean {
 }
 
 export class RemoteSupervisor {
+  constructor(private readonly remoteRegistry: RemoteRunnerRegistry) {}
+
   public getSnapshot(store: RuntimeStore): RemoteSupervisorSnapshot {
-    const remoteRegistry = getRemoteRunnerRegistry();
-    remoteRegistry.ensureContractsFromStore(store);
+    this.remoteRegistry.ensureContractsFromStore(store);
     const state = store.getState();
-    const pools = remoteRegistry.listPools();
-    const contracts = remoteRegistry.listContracts();
+    const pools = this.remoteRegistry.listPools();
+    const contracts = this.remoteRegistry.listContracts();
     const connections = [...state.acp.connections.values()];
     const runnerIds = new Set<string>([
       ...connections.map((connection) => connection.agentId),
@@ -66,17 +67,4 @@ export class RemoteSupervisor {
       recovery,
     });
   }
-}
-
-let _remoteSupervisor: RemoteSupervisor | null = null;
-
-export function getRemoteSupervisor(): RemoteSupervisor {
-  if (_remoteSupervisor === null) {
-    _remoteSupervisor = new RemoteSupervisor();
-  }
-  return _remoteSupervisor;
-}
-
-export function resetRemoteSupervisorForTesting(): void {
-  _remoteSupervisor = null;
 }

@@ -7,6 +7,12 @@ import type { CommandRegistry } from '../input/command-registry.ts';
 import type { ProviderRegistry } from '../providers/registry.ts';
 import type { ToolRegistry } from '../tools/registry.ts';
 import type { RuntimeEventBus } from '../runtime/events/index.ts';
+import type { GatewayMethodCatalog } from '../control-plane/index.ts';
+import type { ChannelDeliveryRouter, ChannelPluginRegistry } from '../channels/index.ts';
+import type { MemoryEmbeddingProviderRegistry } from '../state/index.ts';
+import type { VoiceProviderRegistry } from '../voice/index.ts';
+import type { MediaProviderRegistry } from '../media/index.ts';
+import type { WebSearchProviderRegistry } from '../web-search/index.ts';
 
 /** Directory where users place plugin folders. */
 export const PLUGINS_DIR = join(homedir(), '.goodvibes', 'tui', 'plugins');
@@ -149,6 +155,13 @@ export interface PluginLoaderDeps {
   commandRegistry: CommandRegistry;
   providerRegistry: ProviderRegistry;
   toolRegistry: ToolRegistry;
+  gatewayMethods: GatewayMethodCatalog;
+  channelRegistry: ChannelPluginRegistry;
+  channelDeliveryRouter: ChannelDeliveryRouter;
+  memoryEmbeddingRegistry: MemoryEmbeddingProviderRegistry;
+  voiceProviderRegistry: VoiceProviderRegistry;
+  mediaProviderRegistry: MediaProviderRegistry;
+  webSearchProviderRegistry: WebSearchProviderRegistry;
   /** Returns plugin-specific config given a plugin name. */
   getPluginConfig(name: string): Record<string, unknown>;
   /** Returns whether a plugin is enabled in persistent state. */
@@ -228,6 +241,13 @@ export async function loadPlugin(
       commandRegistry: deps.commandRegistry,
       providerRegistry: deps.providerRegistry,
       toolRegistry: deps.toolRegistry,
+      gatewayMethods: deps.gatewayMethods,
+      channelRegistry: deps.channelRegistry,
+      channelDeliveryRouter: deps.channelDeliveryRouter,
+      memoryEmbeddingRegistry: deps.memoryEmbeddingRegistry,
+      voiceProviderRegistry: deps.voiceProviderRegistry,
+      mediaProviderRegistry: deps.mediaProviderRegistry,
+      webSearchProviderRegistry: deps.webSearchProviderRegistry,
       pluginConfig: deps.getPluginConfig(manifest.name),
       cleanup: loaded.cleanup,
     };

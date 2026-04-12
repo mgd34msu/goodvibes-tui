@@ -6,7 +6,7 @@
  * when a file is marked as modified.
  *
  * Usage:
- *   const graph = ImportGraph.getInstance();
+ *   const graph = new ImportGraph();
  *   await graph.build(projectRoot);
  *   const affected = graph.findDependents('/abs/path/to/file.ts');
  */
@@ -134,8 +134,6 @@ function collectSourceFiles(dir: string, results: string[] = []): string[] {
 // ---------------------------------------------------------------------------
 
 export class ImportGraph {
-  private static _instance: ImportGraph | null = null;
-
   /** Forward map: file → files it imports */
   private imports: ImportsMap = new Map();
 
@@ -149,13 +147,6 @@ export class ImportGraph {
   private dirty = true;
 
   constructor() {}
-
-  static getInstance(): ImportGraph {
-    if (!ImportGraph._instance) {
-      ImportGraph._instance = new ImportGraph();
-    }
-    return ImportGraph._instance;
-  }
 
   /**
    * Mark the graph as stale. Call this whenever a file has been modified

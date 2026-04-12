@@ -99,12 +99,12 @@ export class SqliteVecMemoryIndex {
   private enabled = false;
   private available = false;
   private error: string | undefined;
-  private readonly embeddingRegistry = MemoryEmbeddingProviderRegistry.getActive();
   private static readonly rebuildBatchSize = 25;
 
   constructor(
     private readonly dbPath: string,
     private readonly dimensions = MEMORY_VECTOR_DIMS,
+    private readonly embeddingRegistry: MemoryEmbeddingProviderRegistry = new MemoryEmbeddingProviderRegistry(),
   ) {}
 
   init(): void {

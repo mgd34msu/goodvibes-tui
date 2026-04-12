@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import { ChannelPluginRegistry } from '../../channels/index.ts';
-import { channelTool } from '../../tools/channel/index.ts';
+import { createChannelTool } from '../../tools/channel/index.ts';
 
 describe('channel tool', () => {
   test('lists channel capabilities and accounts from the active registry', async () => {
@@ -84,6 +84,7 @@ describe('channel tool', () => {
       }],
     });
 
+    const channelTool = createChannelTool(registry);
     const accounts = await channelTool.execute({ mode: 'accounts' });
     expect(accounts.success).toBe(true);
     expect(accounts.output).toContain('acct-1');
@@ -134,6 +135,7 @@ describe('channel tool', () => {
       capabilities: ['ingress'],
     });
 
+    const channelTool = createChannelTool(registry);
     const missingSurface = await channelTool.execute({ mode: 'directory' });
     expect(missingSurface.success).toBe(false);
     expect(missingSurface.error).toContain('requires "surface"');

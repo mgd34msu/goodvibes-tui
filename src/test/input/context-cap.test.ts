@@ -3,18 +3,20 @@
  * InputHandler key routing for the contextCap mode.
  */
 import { describe, test, expect, beforeEach, afterEach } from 'bun:test';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { ModelPickerModal } from '../../input/model-picker.ts';
 import {
-  getProviderRegistry,
-  getModelRegistry,
-  _resetProviderRegistryForTesting,
   type ModelDefinition,
+  ProviderRegistry,
 } from '../../providers/registry.ts';
-import {
-  _setCatalogForTesting,
-  _resetForTest,
-  type PricingCatalog,
-} from '../../providers/model-catalog.ts';
+import { ConfigManager } from '../../config/manager.ts';
+import { SubscriptionManager } from '../../config/subscriptions.ts';
+import { CacheHitTracker } from '../../providers/cache-strategy.ts';
+import { ProviderCapabilityRegistry } from '../../providers/capabilities.ts';
+import { FavoritesStore } from '../../providers/favorites.ts';
+import { BenchmarkStore } from '../../providers/model-benchmarks.ts';
 import type { DiscoveredServer } from '../../discovery/scanner.ts';
 
 // ---------------------------------------------------------------------------
@@ -52,10 +54,64 @@ function makeCloudModel(overrides: Partial<ModelDefinition> = {}): ModelDefiniti
   };
 }
 
-const MINIMAL_CATALOG: PricingCatalog = {
-  fetchedAt: Date.now(),
-  models: [],
-};
+interface PickerHarness {
+  readonly rootDir: string;
+  readonly favoritesStore: FavoritesStore;
+  readonly benchmarkStore: BenchmarkStore;
+  readonly providerRegistry: ProviderRegistry;
+  cleanup(): void;
+}
+
+function createPickerHarness(): PickerHarness {
+  const rootDir = mkdtempSync(join(tmpdir(), 'gv-context-cap-'));
+  const configDir = join(rootDir, 'config');
+  const dataDir = join(rootDir, 'provider-data');
+  const subscriptionsPath = join(rootDir, 'subscriptions.json');
+  mkdirSync(configDir, { recursive: true });
+  mkdirSync(dataDir, { recursive: true });
+
+  const favoritesStore = new FavoritesStore({ dir: dataDir });
+  const benchmarkStore = new BenchmarkStore({ dir: dataDir });
+  writeFileSync(favoritesStore.getPath(), JSON.stringify({ pinned: [], history: [] }, null, 2));
+  writeFileSync(
+    benchmarkStore.getCachePath(),
+    JSON.stringify({ version: 1 as const, fetchedAt: Date.now(), ttlMs: 86_400_000, entries: [] }, null, 2),
+  );
+  benchmarkStore.initBenchmarks();
+
+  const providerRegistry = new ProviderRegistry({
+    configManager: new ConfigManager({ configDir }),
+    subscriptionManager: new SubscriptionManager(subscriptionsPath),
+    capabilityRegistry: new ProviderCapabilityRegistry(),
+    cacheHitTracker: new CacheHitTracker(),
+    favoritesStore,
+    benchmarkStore,
+  });
+
+  return {
+    rootDir,
+    favoritesStore,
+    benchmarkStore,
+    providerRegistry,
+    cleanup: () => {
+      rmSync(rootDir, { recursive: true, force: true });
+    },
+  };
+}
+
+let harness: PickerHarness;
+
+function createPicker(): ModelPickerModal {
+  return new ModelPickerModal(harness.favoritesStore, harness.benchmarkStore, harness.providerRegistry);
+}
+
+beforeEach(() => {
+  harness = createPickerHarness();
+});
+
+afterEach(() => {
+  harness?.cleanup();
+});
 
 // ---------------------------------------------------------------------------
 // ModelPickerModal — enterContextCapMode
@@ -65,7 +121,7 @@ describe('ModelPickerModal — enterContextCapMode', () => {
   let picker: ModelPickerModal;
 
   beforeEach(() => {
-    picker = new ModelPickerModal();
+    picker = createPicker();
   });
 
   test('transitions mode to contextCap', () => {
@@ -102,7 +158,7 @@ describe('ModelPickerModal — appendContextCapChar', () => {
   let picker: ModelPickerModal;
 
   beforeEach(() => {
-    picker = new ModelPickerModal();
+    picker = createPicker();
     picker.enterContextCapMode(makeLocalModel());
   });
 
@@ -121,7 +177,7 @@ describe('ModelPickerModal — appendContextCapChar', () => {
 
   test('accepts all digit characters 0-9', () => {
     for (const d of '0123456789') {
-      const p = new ModelPickerModal();
+      const p = createPicker();
       p.enterContextCapMode(makeLocalModel());
       p.appendContextCapChar(d);
       expect(p.contextCapQuery).toBe(d);
@@ -149,7 +205,7 @@ describe('ModelPickerModal — deleteContextCapChar', () => {
   let picker: ModelPickerModal;
 
   beforeEach(() => {
-    picker = new ModelPickerModal();
+    picker = createPicker();
     picker.enterContextCapMode(makeLocalModel());
   });
 
@@ -180,18 +236,13 @@ describe('ModelPickerModal — deleteContextCapChar', () => {
 // ---------------------------------------------------------------------------
 
 describe('ProviderRegistry — setModelContextCap', () => {
-  beforeEach(() => {
-    _resetProviderRegistryForTesting();
-    _setCatalogForTesting(MINIMAL_CATALOG);
-  });
+  let registry: ProviderRegistry;
 
-  afterEach(() => {
-    _resetProviderRegistryForTesting();
-    _resetForTest();
+  beforeEach(() => {
+    registry = harness.providerRegistry;
   });
 
   test('updates contextWindow for a discovered model', () => {
-    const registry = getProviderRegistry();
     // Inject a discovered server — the registry creates ModelDefinition entries from it
     const server: DiscoveredServer = {
       name: 'ollama',
@@ -205,13 +256,12 @@ describe('ProviderRegistry — setModelContextCap', () => {
     registry.registerDiscoveredProviders([server]);
 
     registry.setModelContextCap('ollama:qwen3-local', 32768);
-    const updated = getModelRegistry().find(m => m.registryKey === 'ollama:qwen3-local');
+    const updated = registry.listModels().find((m) => m.registryKey === 'ollama:qwen3-local');
     expect(updated?.contextWindow).toBe(32768);
     expect(updated?.contextWindowProvenance).toBe('configured_cap');
   });
 
   test('does not throw when model is not found', () => {
-    const registry = getProviderRegistry();
     expect(() => registry.setModelContextCap('nonexistent:model', 8192)).not.toThrow();
   });
 });
@@ -224,7 +274,7 @@ describe('ModelPickerModal — isLocalModel', () => {
   let picker: ModelPickerModal;
 
   beforeEach(() => {
-    picker = new ModelPickerModal();
+    picker = createPicker();
   });
 
   test('returns true for models with contextWindowProvenance set', () => {
@@ -276,7 +326,7 @@ describe('ModelPickerModal — contextCap Enter scenarios', () => {
   const local = makeLocalModel();
 
   beforeEach(() => {
-    picker = new ModelPickerModal();
+    picker = createPicker();
     picker.enterContextCapMode(local);
   });
 
@@ -333,7 +383,7 @@ describe('ModelPickerModal — Escape from contextCap resets state', () => {
   let picker: ModelPickerModal;
 
   beforeEach(() => {
-    picker = new ModelPickerModal();
+    picker = createPicker();
   });
 
   test('Escape clears contextCapQuery and returns to model mode', () => {

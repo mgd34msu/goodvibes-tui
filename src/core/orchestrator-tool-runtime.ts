@@ -18,12 +18,11 @@ import {
 } from '../runtime/emitters/index.ts';
 import { buildSyntheticResult, detectUnresolvedToolCalls, type ReconciliationReason } from './tool-reconciliation.ts';
 import { logger } from '../utils/logger.ts';
-import { configManager, DEFAULT_CONFIG } from '../config/index.ts';
-import { AgentManager } from '../tools/agent/index.ts';
+import type { ConfigManager } from '../config/manager.ts';
+import type { AgentManager } from '../tools/agent/index.ts';
 import type { AgentInput } from '../tools/agent/schema.ts';
-import type { ExecutionPlan, PlanItem } from './execution-plan.ts';
-import { planManager } from './plan-manager-instance.ts';
-import { providerRegistry } from '../providers/registry.ts';
+import type { ExecutionPlan, ExecutionPlanManager, PlanItem } from './execution-plan.ts';
+import type { ProviderRegistry } from '../providers/registry.ts';
 import { evaluateOrchestrationSpawn } from '../runtime/orchestration/spawn-policy.ts';
 
 type HookDispatcherLike = {
@@ -351,10 +350,13 @@ export function autoSpawnPendingItems(
   conversation: { addSystemMessage: (message: string) => void },
   plan: ExecutionPlan,
   items: PlanItem[],
+  agentManager: Pick<AgentManager, 'list' | 'spawn'>,
+  configManager: Pick<ConfigManager, 'get'>,
+  providerRegistry: Pick<ProviderRegistry, 'getCurrentModel'>,
   runtimeBus: RuntimeEventBus | null = null,
   emitterContext: import('../runtime/emitters/index.ts').EmitterContext | null = null,
+  planManager: Pick<ExecutionPlanManager, 'updateItem'> | null = null,
 ): string[] {
-  const agentManager = AgentManager.getInstance();
   const currentModel = providerRegistry.getCurrentModel();
   const graphId = `plan:${plan.id}`;
   const ctx = runtimeBus && emitterContext
@@ -374,6 +376,7 @@ export function autoSpawnPendingItems(
 
   let running = agentManager.list().filter(a => a.status === 'running' || a.status === 'pending').length;
   const spawnDecision = evaluateOrchestrationSpawn({
+    configManager,
     mode: 'plan-auto',
     activeAgents: running,
     requestedDepth: 1,
@@ -406,6 +409,7 @@ export function autoSpawnPendingItems(
     }
 
     const decision = evaluateOrchestrationSpawn({
+      configManager,
       mode: 'plan-auto',
       activeAgents: running,
       requestedDepth: 1,
@@ -442,7 +446,7 @@ export function autoSpawnPendingItems(
           agentId: agentRecord.id,
         });
       }
-      planManager.updateItem(plan.id, item.id, 'in_progress', agentRecord.id);
+      planManager?.updateItem(plan.id, item.id, 'in_progress', agentRecord.id);
       spawned.push(item.description);
       running++;
       logger.info('Orchestrator: Auto-spawned agent for plan item', {

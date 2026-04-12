@@ -6,8 +6,8 @@ import type { Line } from '../types/grid.ts';
 import { BasePanel } from './base-panel.ts';
 import type { RuntimeEventBus } from '../runtime/events/index.ts';
 import type { RuntimeStore } from '../runtime/store/index.ts';
-import { sessionMemoryStore } from '../core/session-memory.ts';
-import { evaluateSessionMaintenance } from '../runtime/session-maintenance.ts';
+import { SessionMemoryStore } from '../core/session-memory.ts';
+import { evaluateSessionMaintenance } from './session-maintenance.ts';
 import {
   buildEmptyState,
   buildGuidanceLine,
@@ -40,14 +40,17 @@ function formatK(n: number): string {
 export class ContextVisualizerPanel extends BasePanel {
   private snapshot: ContextSnapshot = { input: 0, limit: 0 };
   private unsubs: Array<() => void> = [];
+  private readonly sessionMemoryStore: SessionMemoryStore;
 
   constructor(
     private runtimeBus: RuntimeEventBus,
+    sessionMemoryStore: SessionMemoryStore,
     private getUsage?: () => { input: number; output: number; cacheRead: number; cacheWrite: number; model?: string },
     private contextLimit?: number,
     private runtimeStore?: RuntimeStore,
   ) {
     super('context', 'Context', 'C', 'ai');
+    this.sessionMemoryStore = sessionMemoryStore;
   }
 
   override onActivate(): void {
@@ -162,7 +165,7 @@ export class ContextVisualizerPanel extends BasePanel {
     const status = evaluateSessionMaintenance({
       currentTokens: this.snapshot.input,
       contextWindow: this.snapshot.limit,
-      sessionMemoryCount: sessionMemoryStore.list().length,
+      sessionMemoryCount: this.sessionMemoryStore.list().length,
       session: this.runtimeStore?.getState().session,
     });
     const lines: Line[] = [
