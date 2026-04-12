@@ -128,10 +128,6 @@ export class ApprovalBroker {
       metadata: input.metadata ?? {},
       audit: [buildAudit('created', 'approval-broker', 'service')],
     };
-    this.approvals.set(approval.id, approval);
-    await this.persist();
-    this.publish(approval);
-
     const pendingDecision = new Promise<PermissionPromptDecision>((resolve) => {
       const timer = input.timeoutMs && input.timeoutMs > 0
         ? setTimeout(() => {
@@ -140,6 +136,19 @@ export class ApprovalBroker {
         : undefined;
       this.pendingResolvers.set(approval.id, { resolve, timer });
     });
+    this.approvals.set(approval.id, approval);
+    try {
+      await this.persist();
+    } catch (error) {
+      const pending = this.pendingResolvers.get(approval.id);
+      if (pending) {
+        if (pending.timer) clearTimeout(pending.timer);
+        this.pendingResolvers.delete(approval.id);
+      }
+      this.approvals.delete(approval.id);
+      throw error;
+    }
+    this.publish(approval);
 
     if (input.localPrompt) {
       void input.localPrompt(input.request)
