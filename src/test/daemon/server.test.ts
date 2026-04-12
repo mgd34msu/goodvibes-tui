@@ -1,5 +1,5 @@
 import { describe, test, expect, beforeEach, afterEach, mock } from 'bun:test';
-import { createHmac } from 'node:crypto';
+import { createHmac, randomUUID } from 'node:crypto';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -1391,9 +1391,10 @@ describe('DaemonServer', () => {
     await daemon.start();
 
     const broker = runtimeServices.approvalBroker;
+    const approvalCallId = `call-approval-test-${randomUUID().slice(0, 8)}`;
     const pendingDecision = broker.requestApproval({
       request: {
-        callId: 'call-approval-test',
+        callId: approvalCallId,
         tool: 'write',
         args: { path: '/tmp/demo.txt' },
         category: 'write',
@@ -1409,12 +1410,16 @@ describe('DaemonServer', () => {
       sessionId: 'sess-approval',
     });
 
+    for (let i = 0; i < 50 && !broker.listApprovals().some((entry) => entry.callId === approvalCallId); i += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+
     const approvals = await fetch('http://127.0.0.1:39421/api/approvals', {
       headers: { Authorization: `Bearer ${TEST_TOKEN}` },
     });
     expect(approvals.status).toBe(200);
     const approvalsBody = await approvals.json() as { approvals: Array<{ id: string; callId: string; status: string }> };
-    const approval = approvalsBody.approvals.find((entry) => entry.callId === 'call-approval-test');
+    const approval = approvalsBody.approvals.find((entry) => entry.callId === approvalCallId);
     expect(approval).toBeDefined();
     expect(approval?.status).toBe('pending');
 
@@ -2641,9 +2646,10 @@ describe('DaemonServer', () => {
       await daemon.start();
 
       const broker = runtimeServices.approvalBroker;
-      broker.requestApproval({
+      const approvalCallId = `call-slack-approval-${randomUUID().slice(0, 8)}`;
+      const pendingApproval = broker.requestApproval({
         request: {
-          callId: 'call-slack-approval',
+          callId: approvalCallId,
           tool: 'exec',
           args: { cmd: 'git status' },
           category: 'execute',
@@ -2659,7 +2665,12 @@ describe('DaemonServer', () => {
         sessionId: 'sess-slack-approval',
         routeId: 'route-slack-approval',
       });
-      const approval = broker.listApprovals().find((entry) => entry.callId === 'call-slack-approval');
+
+      let approval = broker.listApprovals().find((entry) => entry.callId === approvalCallId);
+      for (let i = 0; i < 50 && !approval; i += 1) {
+        await new Promise((resolve) => setTimeout(resolve, 10));
+        approval = broker.listApprovals().find((entry) => entry.callId === approvalCallId);
+      }
       expect(approval).toBeDefined();
 
       const payloadObject = {
@@ -2690,6 +2701,7 @@ describe('DaemonServer', () => {
         await new Promise((resolve) => setTimeout(resolve, 20));
       }
       expect(broker.getApproval(approval!.id)?.status).toBe('approved');
+      await expect(pendingApproval).resolves.toEqual(expect.objectContaining({ approved: true }));
     } finally {
       if (previousSigningSecret === undefined) {
         delete process.env.SLACK_SIGNING_SECRET;
