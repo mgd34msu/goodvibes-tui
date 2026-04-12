@@ -1,41 +1,53 @@
-import { describe, test, expect, beforeEach, afterEach, spyOn } from 'bun:test';
-import { agentTool } from '../../tools/agent/index.ts';
-import { AgentManager } from '../../tools/agent/index.ts';
+import { describe, test, expect, beforeEach, spyOn } from 'bun:test';
+import { createAgentTool, AgentManager } from '../../tools/agent/index.ts';
 import { AgentMessageBus } from '../../agents/message-bus.ts';
 import { RuntimeEventBus } from '../../runtime/events/index.ts';
-import { configManager } from '../../config/index.ts';
+import { ConfigManager } from '../../config/manager.ts';
 import type { OrchestrationEvent } from '../../runtime/events/orchestration.ts';
+import { join } from 'node:path';
+import { tmpdir } from 'node:os';
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
+function makeAgentHarness() {
+  const configDir = join(tmpdir(), `gv-agent-test-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+  const configManager = new ConfigManager({ configDir });
+  const manager = new AgentManager({
+    messageBus: new AgentMessageBus(),
+    configManager,
+  });
+  const messageBus = new AgentMessageBus();
+  const agentTool = createAgentTool({
+    manager,
+    messageBus,
+    configManager,
+  });
+  return { agentTool, manager, messageBus, configManager };
+}
+
+let harness = makeAgentHarness();
+
 async function runAgent(args: Record<string, unknown>) {
-  const result = await agentTool.execute(args);
+  const result = await harness.agentTool.execute(args);
   if (!result.success) throw new Error(result.error ?? 'agent tool failed');
   return JSON.parse(result.output!) as Record<string, unknown>;
 }
 
 async function runAgentMayFail(args: Record<string, unknown>) {
-  return agentTool.execute(args);
+  return harness.agentTool.execute(args);
 }
 
 // ---------------------------------------------------------------------------
-// Setup: reset singleton between tests
+// Setup: reset shared test helper state between tests
 // ---------------------------------------------------------------------------
 
 beforeEach(() => {
-  AgentManager.resetInstance();
-  AgentMessageBus.resetInstance();
-  configManager.set('orchestration.maxActiveAgents', 8);
-  configManager.set('orchestration.maxDepth', 1);
-  configManager.set('orchestration.recursionEnabled', true);
-});
-
-afterEach(() => {
-  configManager.set('orchestration.maxActiveAgents', 8);
-  configManager.set('orchestration.maxDepth', 0);
-  configManager.set('orchestration.recursionEnabled', false);
+  harness = makeAgentHarness();
+  harness.configManager.set('orchestration.maxActiveAgents', 8);
+  harness.configManager.set('orchestration.maxDepth', 1);
+  harness.configManager.set('orchestration.recursionEnabled', true);
 });
 
 // ---------------------------------------------------------------------------
@@ -45,7 +57,7 @@ afterEach(() => {
 describe('spawn mode', () => {
   test('cohort spawn emits orchestration graph events on the runtime bus', () => {
     const bus = new RuntimeEventBus();
-    const manager = AgentManager.getInstance();
+    const manager = harness.manager;
     manager.setRuntimeBus(bus);
     const seen: string[] = [];
 
@@ -234,7 +246,7 @@ describe('spawn mode', () => {
       restrictTools: true,
     });
 
-    configManager.set('orchestration.recursionEnabled', false);
+    harness.configManager.set('orchestration.recursionEnabled', false);
     const result = await runAgentMayFail({
       mode: 'spawn',
       task: 'Blocked child',
@@ -250,7 +262,7 @@ describe('spawn mode', () => {
 
   test('grandchild spawn is blocked when depth exceeds policy and emits recursion guard evidence', () => {
     const bus = new RuntimeEventBus();
-    const manager = AgentManager.getInstance();
+    const manager = harness.manager;
     manager.setRuntimeBus(bus);
     const seen: string[] = [];
 
@@ -296,7 +308,7 @@ describe('spawn mode', () => {
 
   test('cohort spawn emits orchestration node contracts on the runtime bus', () => {
     const bus = new RuntimeEventBus();
-    const manager = AgentManager.getInstance();
+    const manager = harness.manager;
     manager.setRuntimeBus(bus);
     const payloads: Array<Record<string, unknown>> = [];
 
@@ -336,8 +348,8 @@ describe('spawn mode', () => {
   });
 
   test('cancel subtree cancels the root and all descendants', () => {
-    const manager = AgentManager.getInstance();
-    configManager.set('orchestration.maxDepth', 2);
+    const manager = harness.manager;
+    harness.configManager.set('orchestration.maxDepth', 2);
     const parent = manager.spawn({
       mode: 'spawn',
       task: 'Stuck task',
@@ -377,7 +389,7 @@ describe('spawn mode', () => {
   });
 
   test('cancel graph cancels all agents in the target graph only', () => {
-    const manager = AgentManager.getInstance();
+    const manager = harness.manager;
     const alphaA = manager.spawn({ mode: 'spawn', task: 'Stuck task', template: 'engineer', tools: ['read'], restrictTools: true, cohort: 'alpha' });
     const alphaB = manager.spawn({ mode: 'spawn', task: 'Stuck task', template: 'engineer', tools: ['read'], restrictTools: true, cohort: 'alpha' });
     const beta = manager.spawn({ mode: 'spawn', task: 'Stuck task', template: 'engineer', tools: ['read'], restrictTools: true, cohort: 'beta' });
@@ -476,7 +488,7 @@ describe('cancel mode', () => {
     const agentId = spawned.agentId as string;
 
     // Simulate completion by directly mutating the manager record.
-    const manager = AgentManager.getInstance();
+    const manager = harness.manager;
     const record = manager.getStatus(agentId);
     if (record) {
       record.status = 'completed';
@@ -720,7 +732,7 @@ describe('wait mode', () => {
     const agentId = spawned.agentId as string;
 
     // Manually mark as completed
-    const manager = AgentManager.getInstance();
+    const manager = harness.manager;
     const record = manager.getStatus(agentId);
     if (record) {
       record.status = 'completed';
@@ -781,7 +793,7 @@ describe('wait mode', () => {
     const spawned = await runAgent({ mode: 'spawn', task: 'Stuck task' });
     const agentId = spawned.agentId as string;
 
-    const manager = AgentManager.getInstance();
+    const manager = harness.manager;
     const originalRecord = manager.getStatus(agentId);
 
     // On first call return the record (initial existence check passes),
@@ -823,7 +835,7 @@ describe('message mode', () => {
 
     await runAgent({ mode: 'message', agentId, message: 'Check the bus' });
 
-    const bus = AgentMessageBus.getInstance();
+    const bus = harness.messageBus;
     const msgs = bus.getMessages(agentId);
     expect(msgs.some((m) => m.content === 'Check the bus')).toBe(true);
     expect(msgs.find((m) => m.content === 'Check the bus')?.from).toBe('orchestrator');

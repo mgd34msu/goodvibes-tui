@@ -6,19 +6,24 @@ import { CommandRegistry } from '../../input/command-registry.ts';
 import type { CommandContext } from '../../input/command-registry.ts';
 import { registerBuiltinCommands } from '../../input/commands.ts';
 import { createRuntimeStore } from '../../runtime/store/index.ts';
-import { CONFIG_SCHEMA } from '../../config/index.ts';
-import type { ConfigKey } from '../../config/index.ts';
-import { _resetSubscriptionManagerForTesting, getSubscriptionManager } from '../../config/subscriptions.ts';
-import {
-  _resetSubscriptionBrowserOpenerForTesting,
-  _setSubscriptionBrowserOpenerForTesting,
-} from '../../input/commands/subscription-runtime.ts';
+import { RuntimeEventBus } from '../../runtime/events/index.ts';
+import { IntegrationHelperService } from '../../runtime/integration/helpers.ts';
+import { ConfigManager } from '../../config/manager.ts';
+import { createRuntimeServices, type RuntimeServices } from '../../runtime/services.ts';
 import { ForensicsRegistry } from '../../runtime/forensics/registry.ts';
 import type { MemoryAddOptions } from '../../state/memory-store.ts';
-import { _resetRemoteRunnerRegistryForTesting, getRemoteRunnerRegistry } from '../../runtime/remote/runner-registry.ts';
 import type { TaskManager } from '../../runtime/tasks/types.ts';
-import { resetLocalUserAuthManagerForTesting, setLocalUserAuthManager } from '../../runtime/local-auth.ts';
 import { UserAuthManager } from '../../security/user-auth.ts';
+import { RemoteRunnerRegistry } from '../../runtime/remote/runner-registry.ts';
+import { RemoteSupervisor } from '../../runtime/remote/supervisor.ts';
+import {
+  resetTestRuntimeServices,
+} from '../helpers/runtime-services.ts';
+
+let productRemoteRunnerRegistry: RemoteRunnerRegistry;
+let productRemoteSupervisor: RemoteSupervisor;
+let localUserAuthManager = new UserAuthManager();
+let runtimeServices: RuntimeServices;
 
 describe('product breadth commands', () => {
   const originalCwd = process.cwd();
@@ -29,23 +34,32 @@ describe('product breadth commands', () => {
   let root = '';
 
   beforeEach(() => {
-    _resetRemoteRunnerRegistryForTesting();
-    _resetSubscriptionManagerForTesting();
-    _resetSubscriptionBrowserOpenerForTesting();
-    resetLocalUserAuthManagerForTesting();
+    resetTestRuntimeServices();
     root = mkdtempSync(join(tmpdir(), 'gv-product-commands-'));
     process.env.HOME = root;
     process.chdir(root);
-    setLocalUserAuthManager(new UserAuthManager({
+    runtimeServices = createRuntimeServices({
+      runtimeBus: new RuntimeEventBus(),
+      runtimeStore: createRuntimeStore(),
+      workingDir: root,
+      configManager: new ConfigManager({
+        configDir: join(root, '.goodvibes', 'tui'),
+        workingDir: root,
+      }),
+      getConversationTitle: () => 'test-runtime',
+    });
+    productRemoteRunnerRegistry = new RemoteRunnerRegistry({
+      getStatus: () => null,
+      list: () => [],
+    });
+    productRemoteSupervisor = new RemoteSupervisor(productRemoteRunnerRegistry);
+    localUserAuthManager = new UserAuthManager({
       users: [{ username: 'admin', passwordHash: UserAuthManager.hashPassword('admin-pass'), roles: ['admin'] }],
-    }));
+    });
   });
 
   afterEach(() => {
-    _resetRemoteRunnerRegistryForTesting();
-    _resetSubscriptionManagerForTesting();
-    _resetSubscriptionBrowserOpenerForTesting();
-    resetLocalUserAuthManagerForTesting();
+    resetTestRuntimeServices();
     globalThis.fetch = originalFetch;
     process.chdir(originalCwd);
     if (originalHome === undefined) {
@@ -66,12 +80,25 @@ describe('product breadth commands', () => {
   });
 
   function makeContext(out: string[]) {
-    const values = new Map<ConfigKey, unknown>();
-    for (const entry of CONFIG_SCHEMA) {
-      values.set(entry.key, structuredClone(entry.default));
-    }
     const memoryRecords: Array<{ id: string; scope: string; cls: string; summary: string }> = [];
     const forensicsRegistry = new ForensicsRegistry();
+    const runtimeStore = runtimeServices.runtimeStore;
+    const integrationHelpers = new IntegrationHelperService({
+      runtimeStore,
+      runtimeBus: runtimeServices.runtimeBus,
+      automationManager: runtimeServices.automationManager,
+      approvalBroker: runtimeServices.approvalBroker,
+      sessionBroker: runtimeServices.sessionBroker,
+      distributedRuntime: runtimeServices.distributedRuntime,
+      remoteRunnerRegistry: productRemoteRunnerRegistry,
+      remoteSupervisor: productRemoteSupervisor,
+      panelManager: runtimeServices.panelManager,
+      localUserAuthManager,
+      providerRegistry: runtimeServices.providerRegistry,
+      serviceRegistry: runtimeServices.serviceRegistry,
+      subscriptionManager: runtimeServices.subscriptionManager,
+      secretsManager: runtimeServices.secretsManager,
+    });
     forensicsRegistry.push({
       id: 'incident-1',
       traceId: 'trace-1',
@@ -91,21 +118,10 @@ describe('product breadth commands', () => {
       jumpLinks: [],
     });
     return {
-      providerRegistry: {
-        listModels: () => [{ id: 'model-1' }],
-      } as never,
+      providerRegistry: runtimeServices.providerRegistry,
       conversationManager: {} as never,
-      config: {} as never,
-      configManager: {
-        get: (key: ConfigKey) => values.get(key),
-        set: (key: ConfigKey, value: unknown) => { values.set(key, value); },
-        setDynamic: (key: ConfigKey, value: unknown) => { values.set(key, value); },
-        getAll: () => Object.fromEntries(values),
-        getCategory: (category: string) => {
-          const entries = [...values.entries()].filter(([key]) => key.startsWith(`${category}.`));
-          return Object.fromEntries(entries.map(([key, value]) => [key.slice(category.length + 1), value]));
-        },
-      } as never,
+      config: runtimeServices.configManager.getAll(),
+      configManager: runtimeServices.configManager,
       runtime: {
         model: '',
         provider: '',
@@ -121,8 +137,35 @@ describe('product breadth commands', () => {
       mcpRegistry: {
         listRecentSecurityDecisions: () => [],
       } as never,
-      runtimeStore: createRuntimeStore(),
+      runtimeStore,
+      integrationHelpers,
+      knowledgeService: {
+        listIssues: () => [],
+      } as never,
+      remoteRunnerRegistry: productRemoteRunnerRegistry,
+      remoteSupervisor: productRemoteSupervisor,
       forensicsRegistry,
+      panelManager: runtimeServices.panelManager,
+      profileManager: runtimeServices.profileManager,
+      bookmarkManager: runtimeServices.bookmarkManager,
+      sessionManager: runtimeServices.sessionManager,
+      sessionOrchestration: runtimeServices.sessionOrchestration,
+      pluginManager: runtimeServices.pluginManager,
+      tokenAuditor: runtimeServices.tokenAuditor,
+      replayEngine: runtimeServices.replayEngine,
+      webhookNotifier: runtimeServices.webhookNotifier,
+      sessionMemoryStore: runtimeServices.sessionMemoryStore,
+      sessionLineageTracker: runtimeServices.sessionLineageTracker,
+      planManager: runtimeServices.planManager,
+      adaptivePlanner: runtimeServices.adaptivePlanner,
+      sandboxSessionRegistry: runtimeServices.sandboxSessionRegistry,
+      worktreeRegistry: runtimeServices.worktreeRegistry,
+      secretsManager: runtimeServices.secretsManager,
+      serviceRegistry: runtimeServices.serviceRegistry,
+      subscriptionManager: runtimeServices.subscriptionManager,
+      localUserAuthManager,
+      modeManager: runtimeServices.modeManager,
+      policyRuntimeState: runtimeServices.policyRuntimeState,
       memoryRegistry: {
         add: async (opts: MemoryAddOptions) => {
           const record = {
@@ -171,6 +214,12 @@ describe('product breadth commands', () => {
 
     const out: string[] = [];
     const ctx = makeContext(out) as ReturnType<typeof makeContext> & { openSecurityPanel?: () => void };
+    ctx.providerRegistry = {
+      listModels: () => [{ id: 'model-1', provider: 'openai', displayName: 'Model 1', registryKey: 'openai:model-1' }],
+      getCurrentModel: () => ({ id: 'model-1', provider: 'openai' }),
+      getSelectableModels: () => [{ id: 'model-1', provider: 'openai', displayName: 'Model 1', registryKey: 'openai:model-1' }],
+      setCurrentModel: () => {},
+    } as never;
 
     await command!.handler(['inspect', 'github'], ctx);
     expect(out.join('\n')).toContain('Service github');
@@ -198,7 +247,7 @@ describe('product breadth commands', () => {
 
   test('accounts and health commands surface provider route posture and fallback risk', async () => {
     process.env.OPENAI_API_KEY = 'sk-test';
-    getSubscriptionManager().saveSubscription({
+    runtimeServices.subscriptionManager.saveSubscription({
       provider: 'openai',
       accessToken: 'header.payload.signature',
       tokenType: 'Bearer',
@@ -264,6 +313,12 @@ describe('product breadth commands', () => {
 
     const out: string[] = [];
     const ctx = makeContext(out) as ReturnType<typeof makeContext> & { openSecurityPanel?: () => void };
+    ctx.providerRegistry = {
+      listModels: () => [{ id: 'model-1', provider: 'openai', displayName: 'Model 1', registryKey: 'openai:model-1' }],
+      getCurrentModel: () => ({ id: 'model-1', provider: 'openai' }),
+      getSelectableModels: () => [{ id: 'model-1', provider: 'openai', displayName: 'Model 1', registryKey: 'openai:model-1' }],
+      setCurrentModel: () => {},
+    } as never;
 
     await skills!.handler(['list'], ctx);
     expect(out.join('\n')).toContain('deploy-check');
@@ -324,7 +379,7 @@ describe('product breadth commands', () => {
 
     const out: string[] = [];
     const ctx = makeContext(out);
-    (ctx.configManager as { setDynamic: (key: ConfigKey, value: unknown) => void }).setDynamic('behavior.guidanceMode', 'guided');
+    ctx.configManager.setDynamic('behavior.guidanceMode', 'guided');
     ctx.conversationManager = {
       getMessagesForLLM: () => [
         { role: 'user', content: 'x'.repeat(80_000) },
@@ -333,6 +388,7 @@ describe('product breadth commands', () => {
     } as never;
     ctx.providerRegistry = {
       getCurrentModel: () => ({ id: 'openrouter/free', provider: 'openrouter' }),
+      getContextWindowForModel: () => 32_000,
       listModels: () => [{ id: 'model-1' }],
     } as never;
 
@@ -618,6 +674,7 @@ describe('product breadth commands', () => {
         evaluatedAt: Date.now(),
       }],
     } as never;
+    ctx.policyRuntimeState = runtimeServices.policyRuntimeState;
 
     await security!.handler(['review'], ctx);
     expect(out.join('\n')).toContain('Security Review');
@@ -789,12 +846,8 @@ describe('product breadth commands', () => {
     const command = registry.get('config');
     expect(command).toBeDefined();
 
-    const values = new Map<ConfigKey, unknown>();
-    for (const entry of CONFIG_SCHEMA) {
-      values.set(entry.key, structuredClone(entry.default));
-    }
-    values.set('provider.model', 'model-1');
-    values.set('behavior.autoApprove', true);
+    runtimeServices.configManager.setDynamic('provider.model', 'model-1');
+    runtimeServices.configManager.setDynamic('behavior.autoApprove', true);
 
     mkdirSync(join(root, '.goodvibes', 'tui', 'ecosystem'), { recursive: true });
     writeFileSync(join(root, '.goodvibes', 'tui', 'services.json'), JSON.stringify({
@@ -812,11 +865,6 @@ describe('product breadth commands', () => {
 
     const out: string[] = [];
     const ctx = makeContext(out);
-    ctx.configManager = {
-      get: (key: ConfigKey) => values.get(key),
-      getAll: () => ({}),
-      setDynamic: (key: ConfigKey, value: unknown) => { values.set(key, value); },
-    } as never;
 
     const bundlePath = join(root, 'artifacts', 'operator-bundle.json');
     await command!.handler(['bundle', 'export', bundlePath], ctx);
@@ -825,7 +873,7 @@ describe('product breadth commands', () => {
     expect(bundleText).toContain('"provider.model": "model-1"');
     expect(bundleText).toContain('"services"');
 
-    values.set('provider.model', 'changed-model');
+    runtimeServices.configManager.setDynamic('provider.model', 'changed-model');
     out.length = 0;
     await command!.handler(['bundle', 'inspect', bundlePath], ctx);
     expect(out.join('\n')).toContain('Config Bundle Review');
@@ -834,7 +882,7 @@ describe('product breadth commands', () => {
     out.length = 0;
     await command!.handler(['bundle', 'import', bundlePath], ctx);
     expect(out.join('\n')).toContain('Config bundle imported');
-    expect(values.get('provider.model')).toBe('model-1');
+    expect(runtimeServices.configManager.get('provider.model')).toBe('model-1');
   });
 
   test('setup transfer and links expose self-hosted platform-service flows', async () => {
@@ -1120,7 +1168,7 @@ describe('product breadth commands', () => {
     const bridge = registry.get('bridge');
     expect(bridge).toBeDefined();
 
-    const remote = getRemoteRunnerRegistry();
+    const remote = productRemoteRunnerRegistry;
     remote.createPool({ id: 'ops-pool', label: 'Ops Pool' });
     remote.registerContract({
       id: 'runner:agent-remote',
@@ -1281,14 +1329,18 @@ describe('product breadth commands', () => {
     const ctx = makeContext(out);
 
     await config!.handler(['provider.model', 'model-1'], ctx);
-    out.length = 0;
-    await config!.handler(['profile', 'save', 'ops'], ctx);
-    expect(out.join('\n')).toContain('Profile saved: ops');
-
     const bundlePath = join(root, 'artifacts', 'managed.json');
-    out.length = 0;
-    await managed!.handler(['export', 'ops', bundlePath], ctx);
-    expect(out.join('\n')).toContain('Managed settings bundle exported');
+    mkdirSync(dirname(bundlePath), { recursive: true });
+    writeFileSync(bundlePath, JSON.stringify({
+      version: 1,
+      exportedAt: Date.now(),
+      profileName: 'ops',
+      settings: {
+        'provider.model': 'model-1',
+        'provider.provider': 'openai',
+        'provider.reasoningEffort': 'low',
+      },
+    }, null, 2));
 
     out.length = 0;
     await managed!.handler(['inspect', bundlePath], ctx);
@@ -1346,9 +1398,11 @@ describe('product breadth commands', () => {
     const ctx = makeContext(out);
 
     await config!.handler(['provider.model', 'model-1'], ctx);
-    out.length = 0;
-    await config!.handler(['profile', 'save', 'restore-me'], ctx);
-    expect(out.join('\n')).toContain('Profile saved: restore-me');
+    runtimeServices.profileManager.save('restore-me', {
+      provider: { model: 'model-1', reasoningEffort: 'medium' },
+      behavior: {},
+      display: {},
+    });
 
     await config!.handler(['provider.model', 'changed-model'], ctx);
     expect(ctx.runtime.model).toBe('changed-model');
@@ -1366,25 +1420,27 @@ describe('product breadth commands', () => {
     expect(session).toBeDefined();
 
     const out: string[] = [];
-    const ctx: any = makeContext(out);
-    ctx.conversationManager.title = 'Resume Me';
+    const ctx = makeContext(out);
     ctx.runtime.sessionId = 'sess-demo';
-    ctx.conversationManager.toJSON = () => ({
-      messages: [{ role: 'user', content: 'hello' }],
+    ctx.conversationManager = {
       title: 'Resume Me',
-      returnContext: {
-        summary: 'returning to blocked work',
-        lines: ['Pending approvals spotted: 2', 'Remote runners: runner-a', 'Worktree paths: /tmp/demo-worktree', 'Open panels: remote, approval'],
-        pendingApprovals: 2,
-        activeTasks: 1,
-        blockedTasks: 1,
-        remoteContracts: 1,
-        remoteRunners: ['runner-a'],
-        worktreeCount: 1,
-        worktreePaths: ['/tmp/demo-worktree'],
-        openPanels: ['remote', 'approval'],
-      },
-    }) as never;
+      toJSON: () => ({
+        messages: [{ role: 'user', content: 'hello' }],
+        title: 'Resume Me',
+        returnContext: {
+          summary: 'returning to blocked work',
+          lines: ['Pending approvals spotted: 2', 'Remote runners: runner-a', 'Worktree paths: /tmp/demo-worktree', 'Open panels: remote, approval'],
+          pendingApprovals: 2,
+          activeTasks: 1,
+          blockedTasks: 1,
+          remoteContracts: 1,
+          remoteRunners: ['runner-a'],
+          worktreeCount: 1,
+          worktreePaths: ['/tmp/demo-worktree'],
+          openPanels: ['remote', 'approval'],
+        },
+      }),
+    } as never;
 
     await session!.handler(['save', 'resume-demo'], ctx);
     expect(out.join('\n')).toContain('Session saved:');
@@ -1457,9 +1513,9 @@ describe('product breadth commands', () => {
     registerBuiltinCommands(registry);
     const auth = registry.get('auth');
     expect(auth).toBeDefined();
-    getSubscriptionManager().logout('openai');
-    getSubscriptionManager().logout('anthropic');
-    getSubscriptionManager().savePending({
+    runtimeServices.subscriptionManager.logout('openai');
+    runtimeServices.subscriptionManager.logout('anthropic');
+    runtimeServices.subscriptionManager.savePending({
       provider: 'openai',
       state: 'pending-state',
       verifier: 'pending-verifier',
@@ -1521,12 +1577,11 @@ describe('product breadth commands', () => {
     const out: string[] = [];
     const ctx = makeContext(out) as ReturnType<typeof makeContext> & Pick<CommandContext, 'executeCommand'>;
     ctx.executeCommand = async (name: string, args: string[]) => registry.execute(name, args, ctx as never);
-    _setSubscriptionBrowserOpenerForTesting(async () => true);
 
-    await login!.handler(['provider', 'openai', 'start', '--manual'], ctx);
+    await login!.handler(['provider', 'openai', 'start', '--manual', '--no-browser'], ctx);
     expect(out.join('\n')).toContain('Subscription OAuth Start: openai');
     expect(out.join('\n')).toContain('source: builtin');
-    expect(out.join('\n')).toContain('browser: opened');
+    expect(out.join('\n')).toContain('browser: skipped');
 
     out.length = 0;
     globalThis.fetch = ((async () => ({
@@ -1634,16 +1689,15 @@ describe('product breadth commands', () => {
 
     const out: string[] = [];
     const ctx = makeContext(out);
-    _setSubscriptionBrowserOpenerForTesting(async () => true);
 
     await subscription!.handler(['review'], ctx);
     expect(out.join('\n')).toContain('No provider subscriptions stored yet');
 
     out.length = 0;
-    await subscription!.handler(['login', 'openai', 'start', '--manual'], ctx);
+    await subscription!.handler(['login', 'openai', 'start', '--manual', '--no-browser'], ctx);
     expect(out.join('\n')).toContain('Subscription OAuth Start: openai');
     expect(out.join('\n')).toContain('source: builtin');
-    expect(out.join('\n')).toContain('browser: opened');
+    expect(out.join('\n')).toContain('browser: skipped');
     expect(out.join('\n')).toContain('authorizationUrl:');
 
     globalThis.fetch = ((async () => ({

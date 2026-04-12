@@ -1,7 +1,7 @@
 import { BasePanel } from './base-panel.ts';
 import type { Line } from '../types/grid.ts';
 import type { RuntimeEventBus, ProviderEvent, TurnEvent } from '../runtime/events/index.ts';
-import { providerRegistry } from '../providers/registry.ts';
+import { ProviderRegistry } from '../providers/registry.ts';
 import {
   buildEmptyState,
   buildKeyValueLine,
@@ -62,6 +62,7 @@ export class ProviderStatsPanel extends BasePanel {
   constructor(
     private readonly runtimeBus: RuntimeEventBus,
     private readonly requestRender: () => void = () => {},
+    private readonly providerRegistry: ProviderRegistry,
   ) {
     super('providers', 'Providers', 'R', 'monitoring');
     this._subscribe();
@@ -187,7 +188,7 @@ export class ProviderStatsPanel extends BasePanel {
   // -------------------------------------------------------------------------
 
   override render(width: number, height: number): Line[] {
-    const allProviders = providerRegistry.listModels().map(m => m.provider);
+    const allProviders = this.providerRegistry.listModels().map(m => m.provider);
     const knownProviders = [...new Set(allProviders)];
 
     if (knownProviders.length === 0) {

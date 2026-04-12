@@ -60,7 +60,10 @@ export class AutomationService {
     this.legacyStore = config.legacyStore ?? new PersistentStore<LegacySchedulerSnapshot>(
       resolveAutomationStorePath('schedules.json', configManager),
     );
-    this.manager = config.manager ?? AutomationManager.getInstance();
+    if (!config.manager) {
+      throw new Error('AutomationService requires an explicit AutomationManager instance');
+    }
+    this.manager = config.manager;
   }
 
   async start(): Promise<void> {

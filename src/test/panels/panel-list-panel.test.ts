@@ -11,8 +11,8 @@
 import { describe, test, expect, beforeEach, afterEach } from 'bun:test';
 import type { Line } from '../../types/grid.ts';
 import { PanelListPanel } from '../../panels/panel-list-panel.ts';
-import { getPanelManager } from '../../panels/panel-manager.ts';
-import type { PanelRegistration } from '../../panels/types.ts';
+import { PanelManager } from '../../panels/panel-manager.ts';
+import type { Panel, PanelRegistration } from '../../panels/types.ts';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -62,7 +62,7 @@ function makeReg(overrides: Partial<PanelRegistration> & { id: string }): PanelR
 
 describe('PanelListPanel', () => {
   let panel: PanelListPanel;
-  const mgr = getPanelManager();
+  const mgr = new PanelManager();
 
   // Register a small set of panels before each test so _buildEntries has data.
   beforeEach(() => {
@@ -72,7 +72,7 @@ describe('PanelListPanel', () => {
     mgr.registerType(makeReg({ id: 'beta',  name: 'Beta Panel',  category: 'development', description: 'The beta panel' }));
     mgr.registerType(makeReg({ id: 'gamma', name: 'Gamma Panel', category: 'session',     description: 'The gamma panel' }));
     mgr.registerType(makeReg({ id: 'delta', name: 'Delta Panel', category: 'session',     description: 'A unique tag: xyz' }));
-    panel = new PanelListPanel();
+    panel = new PanelListPanel(mgr);
     panel.onActivate();
   });
 
@@ -319,18 +319,18 @@ describe('PanelListPanel', () => {
     test('b opens the selected panel in the bottom pane', () => {
       panel.handleInput('B');
       expect(mgr.isBottomPaneVisible()).toBe(true);
-      expect(mgr.getBottomPane().panels.map(p => p.id)).toContain('alpha');
+      expect(mgr.getBottomPane().panels.map((p: Panel) => p.id)).toContain('alpha');
     });
 
     test('t opens the selected panel in the top pane', () => {
       panel.handleInput('T');
-      expect(mgr.getTopPane().panels.map(p => p.id)).toContain('alpha');
+      expect(mgr.getTopPane().panels.map((p: Panel) => p.id)).toContain('alpha');
     });
 
     test('m moves an open selected panel to the other pane', () => {
       panel.handleInput('T');
       panel.handleInput('M');
-      expect(mgr.getBottomPane().panels.map(p => p.id)).toContain('alpha');
+      expect(mgr.getBottomPane().panels.map((p: Panel) => p.id)).toContain('alpha');
     });
 
     test('s toggles bottom-pane visibility', () => {
@@ -435,7 +435,7 @@ describe('PanelListPanel', () => {
 
       const result = panel.handleInput('return');
       expect(result).toBe(true);
-      const openIds = mgr.getAllOpen().map(p => p.id);
+      const openIds = mgr.getAllOpen().map((p: Panel) => p.id);
       expect(openIds).toContain(OPENABLE_ID);
     });
 
@@ -452,7 +452,7 @@ describe('PanelListPanel', () => {
 
       const result = panel.handleInput('enter');
       expect(result).toBe(true);
-      const openIds = mgr.getAllOpen().map(p => p.id);
+      const openIds = mgr.getAllOpen().map((p: Panel) => p.id);
       expect(openIds).toContain(OPENABLE_ID);
     });
 

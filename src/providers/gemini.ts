@@ -16,10 +16,13 @@ import {
   fromGeminiParts,
 } from './tool-formats.ts';
 import type { GeminiPart } from './tool-formats.ts';
-import { cacheHitTracker } from './cache-strategy.ts';
+import type { CacheHitTracker } from './cache-strategy.ts';
 
 const GEMINI_API_BASE = 'https://generativelanguage.googleapis.com/v1beta';
 const GEMINI_CACHE_TTL_SECONDS = 3600;
+const NOOP_CACHE_HIT_TRACKER: Pick<CacheHitTracker, 'recordTurn'> = {
+  recordTurn: () => {},
+};
 
 interface GeminiCandidate {
   content: { parts: GeminiPart[]; role: string };
@@ -49,6 +52,7 @@ export class GeminiProvider implements LLMProvider {
 
   private readonly apiKey: string;
   private readonly embeddingModel = 'gemini-embedding-001';
+  private readonly cacheHitTracker: Pick<CacheHitTracker, 'recordTurn'>;
 
   /** Active cached content resource name (e.g., "cachedContents/abc123") */
   private cachedContentName: string | null = null;
@@ -59,8 +63,9 @@ export class GeminiProvider implements LLMProvider {
   /** Hashes known to be below the 32K cache minimum — skip API call */
   private uncacheableHashes = new Set<string>();
 
-  constructor(apiKey: string) {
+  constructor(apiKey: string, cacheHitTracker: Pick<CacheHitTracker, 'recordTurn'> = NOOP_CACHE_HIT_TRACKER) {
     this.apiKey = apiKey;
+    this.cacheHitTracker = cacheHitTracker;
   }
 
   private computeCacheHash(
@@ -333,7 +338,7 @@ export class GeminiProvider implements LLMProvider {
         this.thoughtSignatures.clear();
       }
 
-      cacheHitTracker.recordTurn({
+      this.cacheHitTracker.recordTurn({
         inputTokens,
         cacheReadTokens,
       });

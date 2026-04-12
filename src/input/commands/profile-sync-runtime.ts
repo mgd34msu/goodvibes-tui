@@ -1,9 +1,9 @@
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import type { CommandRegistry } from '../command-registry.ts';
-import { getProfileManager } from '../../profiles/manager.ts';
 import type { ProfileBundleEntry, ProfileSyncBundle } from '../../runtime/sandbox/types.ts';
 import { recordSettingsSyncEvent, recordSettingsSyncFailure } from '../../runtime/settings/control-plane.ts';
+import { requireProfileManager } from './runtime-services.ts';
 
 function inspectProfileSyncBundle(bundle: ProfileSyncBundle): string {
   return [
@@ -20,8 +20,9 @@ export function registerProfileSyncRuntimeCommands(registry: CommandRegistry): v
     description: 'Export, import, and inspect profile sync bundles',
     usage: '[list|export <path>|inspect <path>|import <path> [prefix]]',
     handler(args, ctx) {
+      const controlPlaneConfigDir = ctx.configManager.getControlPlaneConfigDir();
       const sub = args[0] ?? 'list';
-      const pm = getProfileManager();
+      const pm = requireProfileManager(ctx);
       if (sub === 'list') {
         const profiles = pm.list();
         ctx.print(
@@ -61,7 +62,7 @@ export function registerProfileSyncRuntimeCommands(registry: CommandRegistry): v
           path: targetPath,
           timestamp: Date.now(),
           detail: `${profiles.length} profiles exported`,
-        });
+        }, controlPlaneConfigDir);
         ctx.print(`Profile sync bundle exported to ${targetPath}`);
         return;
       }
@@ -85,12 +86,12 @@ export function registerProfileSyncRuntimeCommands(registry: CommandRegistry): v
           path: targetPath,
           timestamp: Date.now(),
           detail: `${bundle.profiles.length} profiles imported${prefix ? ` with prefix ${prefix}` : ''}`,
-        });
+        }, controlPlaneConfigDir);
         ctx.print(`Profile sync bundle imported from ${targetPath}`);
         return;
       }
 
-      recordSettingsSyncFailure('profiles', `unsupported subcommand: ${sub}`);
+      recordSettingsSyncFailure('profiles', `unsupported subcommand: ${sub}`, controlPlaneConfigDir);
       ctx.print('Usage: /profilesync [list|export <path>|inspect <path>|import <path> [prefix]]');
     },
   });

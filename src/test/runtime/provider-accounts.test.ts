@@ -2,27 +2,26 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { _resetServiceRegistryForTesting } from '../../config/service-registry.ts';
-import { _resetSubscriptionManagerForTesting, getSubscriptionManager } from '../../config/subscriptions.ts';
 import { buildProviderAccountSnapshot } from '../../runtime/provider-accounts/registry.ts';
+import { createTestManagers } from '../helpers/test-managers.ts';
+import { ServiceRegistry } from '../../config/service-registry.ts';
+import { SecretsManager } from '../../config/secrets.ts';
 
 describe('provider account snapshot', () => {
   const originalHome = process.env.HOME;
   const originalOpenAiKey = process.env.OPENAI_API_KEY;
   const originalCwd = process.cwd();
   let root = '';
+  let testManagers = createTestManagers();
 
   beforeEach(() => {
-    _resetSubscriptionManagerForTesting();
-    _resetServiceRegistryForTesting();
+    testManagers = createTestManagers();
     root = mkdtempSync(join(tmpdir(), 'gv-provider-accounts-'));
     process.env.HOME = root;
     process.chdir(root);
   });
 
   afterEach(() => {
-    _resetSubscriptionManagerForTesting();
-    _resetServiceRegistryForTesting();
     process.chdir(originalCwd);
     if (originalHome === undefined) delete process.env.HOME;
     else process.env.HOME = originalHome;
@@ -32,7 +31,7 @@ describe('provider account snapshot', () => {
 
   test('marks expired subscription fallback to API key explicitly', async () => {
     process.env.OPENAI_API_KEY = 'sk-test';
-    getSubscriptionManager().saveSubscription({
+    testManagers.subscriptionManager.saveSubscription({
       provider: 'openai',
       accessToken: 'header.payload.signature',
       tokenType: 'Bearer',
@@ -43,7 +42,16 @@ describe('provider account snapshot', () => {
       updatedAt: Date.now() - 10_000,
     });
 
-    const snapshot = await buildProviderAccountSnapshot();
+    const serviceRegistry = new ServiceRegistry(join(root, '.goodvibes', 'tui', 'services.json'), {
+      secretsManager: new SecretsManager({ projectRoot: root, globalHome: root }),
+      subscriptionManager: testManagers.subscriptionManager,
+    });
+    const snapshot = await buildProviderAccountSnapshot({
+      providerRegistry: testManagers.providerRegistry,
+      serviceRegistry,
+      subscriptionManager: testManagers.subscriptionManager,
+      secretsManager: new SecretsManager({ projectRoot: root, globalHome: root }),
+    });
     const openai = snapshot.providers.find((entry) => entry.providerId === 'openai');
     expect(openai).toBeDefined();
     expect(openai?.preferredRoute).toBe('subscription');
@@ -71,7 +79,16 @@ describe('provider account snapshot', () => {
       },
     }, null, 2));
 
-    const snapshot = await buildProviderAccountSnapshot();
+    const serviceRegistry = new ServiceRegistry(join(root, '.goodvibes', 'tui', 'services.json'), {
+      secretsManager: new SecretsManager({ projectRoot: root, globalHome: root }),
+      subscriptionManager: testManagers.subscriptionManager,
+    });
+    const snapshot = await buildProviderAccountSnapshot({
+      providerRegistry: testManagers.providerRegistry,
+      serviceRegistry,
+      subscriptionManager: testManagers.subscriptionManager,
+      secretsManager: new SecretsManager({ projectRoot: root, globalHome: root }),
+    });
     const provider = snapshot.providers.find((entry) => entry.providerId === 'test-provider');
     expect(provider).toBeDefined();
     expect(provider?.oauthReady).toBe(true);

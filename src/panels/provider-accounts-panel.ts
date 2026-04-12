@@ -14,7 +14,20 @@ import {
   resolvePrimaryScrollableSection,
   type PanelWorkspaceSection,
 } from './polish.ts';
-import { buildProviderAccountSnapshot, type ProviderAccountRecord } from '../runtime/provider-accounts/registry.ts';
+import { ServiceRegistry } from '../config/service-registry.ts';
+import { SubscriptionManager } from '../config/subscriptions.ts';
+import { ProviderRegistry } from '../providers/registry.ts';
+import {
+  buildProviderAccountSnapshot,
+  type ProviderAccountRecord,
+  type ProviderAccountSnapshot,
+} from './provider-account-snapshot.ts';
+
+export interface ProviderAccountsPanelDeps {
+  readonly providerRegistry: ProviderRegistry;
+  readonly serviceRegistry: ServiceRegistry;
+  readonly subscriptionManager: SubscriptionManager;
+}
 
 const C = {
   ...DEFAULT_PANEL_PALETTE,
@@ -26,9 +39,15 @@ export class ProviderAccountsPanel extends BasePanel {
   private loading = false;
   private selectedIndex = 0;
   private scrollOffset = 0;
+  private readonly providerRegistry: ProviderRegistry;
+  private readonly serviceRegistry: ServiceRegistry;
+  private readonly subscriptionManager: SubscriptionManager;
 
-  public constructor() {
+  public constructor(deps: ProviderAccountsPanelDeps) {
     super('accounts', 'Accounts', 'Q', 'monitoring');
+    this.providerRegistry = deps.providerRegistry;
+    this.serviceRegistry = deps.serviceRegistry;
+    this.subscriptionManager = deps.subscriptionManager;
     void this.refresh();
   }
 
@@ -58,11 +77,19 @@ export class ProviderAccountsPanel extends BasePanel {
   private async refresh(): Promise<void> {
     this.loading = true;
     this.markDirty();
-    const snapshot = await buildProviderAccountSnapshot();
+    const snapshot = await this.buildSnapshot();
     this.records = [...snapshot.providers];
     this.selectedIndex = Math.min(this.selectedIndex, Math.max(0, this.records.length - 1));
     this.loading = false;
     this.markDirty();
+  }
+
+  private async buildSnapshot(): Promise<ProviderAccountSnapshot> {
+    return buildProviderAccountSnapshot({
+      providerRegistry: this.providerRegistry,
+      serviceRegistry: this.serviceRegistry,
+      subscriptionManager: this.subscriptionManager,
+    });
   }
 
   public render(width: number, height: number): Line[] {

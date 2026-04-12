@@ -2,8 +2,8 @@ import { BasePanel } from './base-panel.ts';
 import { createEmptyLine, createStyledCell, type Line } from '../types/grid.ts';
 import type { Orchestrator } from '../core/orchestrator.ts';
 import type { RuntimeStore } from '../runtime/store/index.ts';
-import { sessionMemoryStore } from '../core/session-memory.ts';
-import { evaluateSessionMaintenance } from '../runtime/session-maintenance.ts';
+import { SessionMemoryStore } from '../core/session-memory.ts';
+import { evaluateSessionMaintenance } from './session-maintenance.ts';
 import {
   buildEmptyState,
   buildGuidanceLine,
@@ -96,9 +96,11 @@ export class TokenBudgetPanel extends BasePanel {
   private orchestrator: Orchestrator | null = null;
   private getContextWindow: (() => number) | null = null;
   private runtimeStore: RuntimeStore | null = null;
+  private readonly sessionMemoryStore: SessionMemoryStore;
 
-  constructor() {
+  constructor(sessionMemoryStore: SessionMemoryStore) {
     super('tokens', 'Tokens', 'T', 'monitoring');
+    this.sessionMemoryStore = sessionMemoryStore;
   }
 
   // ---------------------------------------------------------------------------
@@ -256,7 +258,7 @@ export class TokenBudgetPanel extends BasePanel {
       currentTokens: this.lastInputTokens,
       contextWindow: this.contextWindow,
       messageCount: this.runtimeStore?.getState().conversation.totalTurns,
-      sessionMemoryCount: sessionMemoryStore.list().length,
+      sessionMemoryCount: this.sessionMemoryStore.list().length,
       session: this.runtimeStore?.getState().session,
     });
 

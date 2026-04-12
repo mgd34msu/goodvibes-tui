@@ -1,7 +1,6 @@
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import type { CommandRegistry } from '../command-registry.ts';
-import { getProfileManager } from '../../profiles/manager.ts';
 import { profileDataToConfigSnapshot } from '../../profiles/shape.ts';
 import { CONFIG_SCHEMA, type ConfigKey } from '../../config/index.ts';
 import { CONFIG_KEYS } from '../../config/schema.ts';
@@ -18,6 +17,7 @@ import {
   setManagedSettingLock,
   stageManagedSettingsBundle,
 } from '../../runtime/settings/control-plane.ts';
+import { requireProfileManager } from './runtime-services.ts';
 
 function buildConfigSnapshot(
   manager: { get: (key: ConfigKey) => unknown },
@@ -39,8 +39,9 @@ export function registerManagedRuntimeCommands(registry: CommandRegistry): void 
     description: 'Export, inspect, and apply managed settings bundles',
     usage: '[review|staged|rollback-history|export <profile> <path>|inspect <path>|stage <path>|apply <path> [key ...]|apply-staged [key ...]|rollback <token>|lock <key> <source> <reason...>|unlock <key>]',
     handler(args, ctx) {
+      const controlPlaneConfigDir = ctx.configManager.getControlPlaneConfigDir();
       const sub = args[0] ?? 'review';
-      const pm = getProfileManager();
+      const pm = requireProfileManager(ctx);
       if (sub === 'review') {
         const profiles = pm.list();
         const snapshot = getSettingsControlPlaneSnapshot(ctx.configManager);
@@ -81,7 +82,7 @@ export function registerManagedRuntimeCommands(registry: CommandRegistry): void 
           ctx.print('Usage: /managed lock <key> <source> <reason...>');
           return;
         }
-        setManagedSettingLock(key, source, reason, ctx.configManager.getControlPlaneConfigDir());
+        setManagedSettingLock(key, source, reason, controlPlaneConfigDir);
         ctx.print(`Managed lock recorded for ${key}.`);
         return;
       }
@@ -92,7 +93,7 @@ export function registerManagedRuntimeCommands(registry: CommandRegistry): void 
           ctx.print('Usage: /managed unlock <key>');
           return;
         }
-        ctx.print(clearManagedSettingLock(key, ctx.configManager.getControlPlaneConfigDir()) ? `Managed lock cleared for ${key}.` : `No managed lock found for ${key}.`);
+        ctx.print(clearManagedSettingLock(key, controlPlaneConfigDir) ? `Managed lock cleared for ${key}.` : `No managed lock found for ${key}.`);
         return;
       }
 
@@ -119,7 +120,7 @@ export function registerManagedRuntimeCommands(registry: CommandRegistry): void 
           path: targetPath,
           timestamp: Date.now(),
           detail: `${Object.keys(bundle.settings).length} settings exported from ${profileName}`,
-        });
+        }, controlPlaneConfigDir);
         ctx.print(`Managed settings bundle exported to ${targetPath}`);
         return;
       }
@@ -138,7 +139,7 @@ export function registerManagedRuntimeCommands(registry: CommandRegistry): void 
           ctx.runtime.reasoningEffort = ctx.configManager.get('provider.reasoningEffort') as string;
           ctx.print(`Staged managed settings applied (${result.appliedCount} changes, rollback ${result.rollbackToken}${result.remainingCount > 0 ? `, ${result.remainingCount} still staged` : ''}).`);
         } catch (error) {
-          recordSettingsSyncFailure('managed', (error as Error).message);
+          recordSettingsSyncFailure('managed', (error as Error).message, controlPlaneConfigDir);
           ctx.print((error as Error).message);
         }
         return;
@@ -157,7 +158,7 @@ export function registerManagedRuntimeCommands(registry: CommandRegistry): void 
           ctx.runtime.reasoningEffort = ctx.configManager.get('provider.reasoningEffort') as string;
           ctx.print(`Managed rollback ${token} restored ${restored} setting(s).`);
         } catch (error) {
-          recordSettingsSyncFailure('managed', (error as Error).message);
+          recordSettingsSyncFailure('managed', (error as Error).message, controlPlaneConfigDir);
           ctx.print((error as Error).message);
         }
         return;
@@ -198,7 +199,7 @@ export function registerManagedRuntimeCommands(registry: CommandRegistry): void 
         return;
       }
 
-      recordSettingsSyncFailure('managed', `unsupported subcommand: ${sub}`);
+      recordSettingsSyncFailure('managed', `unsupported subcommand: ${sub}`, controlPlaneConfigDir);
       ctx.print('Usage: /managed [review|staged|rollback-history|export <profile> <path>|inspect <path>|stage <path>|apply <path> [key ...]|apply-staged [key ...]|rollback <token>|lock <key> <source> <reason...>|unlock <key>]');
     },
   });

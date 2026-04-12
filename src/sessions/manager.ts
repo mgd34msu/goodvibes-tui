@@ -385,13 +385,3 @@ export class SessionManager {
       || 'session';
   }
 }
-
-/**
- * Lazy singleton accessor for SessionManager.
- * Avoids re-instantiation on every command invocation.
- */
-let _instance: SessionManager | undefined;
-export function getSessionManager(): SessionManager {
-  if (!_instance) _instance = new SessionManager();
-  return _instance;
-}

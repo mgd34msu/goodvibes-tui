@@ -39,51 +39,19 @@ const OBSERVED_DOMAINS = [
   'ops',
 ] as const;
 
-let currentContext: OpsRuntimeContextState | null = null;
 const scopedContext = new AsyncLocalStorage<OpsRuntimeContextState | null>();
 
-export function setOpsRuntimeContext(config: OpsRuntimeContextConfig): void {
-  currentContext?.detach();
-
+function createOpsRuntimeContextState(config: OpsRuntimeContextConfig): OpsRuntimeContextState {
   const now = config.now ?? Date.now;
   const unsubs = OBSERVED_DOMAINS.map((domain) =>
     config.runtimeBus.onDomain(domain, (envelope) => {
-      if (!currentContext) return;
-      currentContext.lastEventAt = envelope.ts;
+      state.lastEventAt = envelope.ts;
       if (envelope.type === 'SESSION_RECOVERY_FAILED') {
-        currentContext.sessionRecoveryFailedAt = envelope.ts;
-        currentContext.sessionRecoveryFailedCount += 1;
+        state.sessionRecoveryFailedAt = envelope.ts;
+        state.sessionRecoveryFailedCount += 1;
       }
     }));
 
-  currentContext = {
-    runtimeBus: config.runtimeBus,
-    store: config.store,
-    recoveryFilePath: config.recoveryFilePath,
-    lastSessionPointerPath: config.lastSessionPointerPath,
-    now,
-    lastEventAt: now(),
-    sessionRecoveryFailedCount: 0,
-    detach: () => {
-      for (const unsub of unsubs) unsub();
-    },
-  };
-}
-
-export function clearOpsRuntimeContextForTests(): void {
-  currentContext?.detach();
-  currentContext = null;
-}
-
-export function getOpsRuntimeContext(): OpsRuntimeContextState | null {
-  return scopedContext.getStore() ?? currentContext;
-}
-
-export async function withOpsRuntimeContext<T>(
-  config: OpsRuntimeContextConfig,
-  fn: () => Promise<T> | T,
-): Promise<T> {
-  const now = config.now ?? Date.now;
   const state: OpsRuntimeContextState = {
     runtimeBus: config.runtimeBus,
     store: config.store,
@@ -96,14 +64,14 @@ export async function withOpsRuntimeContext<T>(
       for (const unsub of unsubs) unsub();
     },
   };
-  const unsubs = OBSERVED_DOMAINS.map((domain) =>
-    config.runtimeBus.onDomain(domain, (envelope) => {
-      state.lastEventAt = envelope.ts;
-      if (envelope.type === 'SESSION_RECOVERY_FAILED') {
-        state.sessionRecoveryFailedAt = envelope.ts;
-        state.sessionRecoveryFailedCount += 1;
-      }
-    }));
+  return state;
+}
+
+export async function withOpsRuntimeContext<T>(
+  config: OpsRuntimeContextConfig,
+  fn: () => Promise<T> | T,
+): Promise<T> {
+  const state = createOpsRuntimeContextState(config);
   try {
     return await scopedContext.run(state, fn);
   } finally {

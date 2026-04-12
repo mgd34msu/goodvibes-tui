@@ -1,16 +1,10 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
-import type { CommandRegistry } from '../command-registry.ts';
-import { getSecretsManager } from '../../config/secrets.ts';
-import { ServiceRegistry } from '../../config/service-registry.ts';
-import { pluginManager } from '../../plugins/manager.ts';
+import type { CommandContext, CommandRegistry } from '../command-registry.ts';
 import { listInstalledEcosystemEntries, loadEcosystemCatalog } from '../../runtime/ecosystem/catalog.ts';
-import {
-  getRemoteRunnerRegistry,
-  importRemoteArtifact,
-} from '../../runtime/remote/runner-registry.ts';
 import { BUILTIN_SUITES } from '../../runtime/eval/suites.ts';
+import { requireSecretsManager, requireServiceRegistry } from './runtime-services.ts';
 
 interface TrustReviewBundle {
   readonly version: 1;
@@ -58,24 +52,15 @@ interface ReleaseBundle {
   };
 }
 
-let serviceRegistrySingleton: ServiceRegistry | null = null;
-
-function getServiceRegistry(): ServiceRegistry {
-  if (!serviceRegistrySingleton) {
-    serviceRegistrySingleton = new ServiceRegistry();
-  }
-  return serviceRegistrySingleton;
-}
-
 function countByMode<T extends string>(values: readonly T[], mode: T): number {
   return values.filter((value) => value === mode).length;
 }
 
-function buildTrustReviewBundle(ctx: Parameters<NonNullable<CommandRegistry['register']>>[0]['handler'] extends (args: string[], context: infer C) => unknown ? C : never): Promise<TrustReviewBundle> {
+function buildTrustReviewBundle(ctx: CommandContext): Promise<TrustReviewBundle> {
   return (async () => {
-    const secretKeys = await getSecretsManager().list();
-    const services = Object.keys(getServiceRegistry().getAll()).sort((a, b) => a.localeCompare(b));
-    const plugins = pluginManager.list();
+    const secretKeys = await requireSecretsManager(ctx).list();
+    const services = Object.keys(requireServiceRegistry(ctx).getAll()).sort((a, b) => a.localeCompare(b));
+    const plugins = ctx.pluginManager?.list() ?? [];
     const mcpServers = [...(ctx.runtimeStore?.getState().mcp.servers.values() ?? [])];
     return {
       version: 1,
@@ -127,7 +112,7 @@ function inspectTrustBundle(path: string): string {
 }
 
 function buildReleaseBundle(ctx: Parameters<NonNullable<CommandRegistry['register']>>[0]['handler'] extends (args: string[], context: infer C) => unknown ? C : never): ReleaseBundle {
-  const remoteRegistry = getRemoteRunnerRegistry();
+  const remoteRegistry = ctx.remoteRunnerRegistry;
   const incidents = ctx.forensicsRegistry?.getAll() ?? [];
   return {
     version: 1,
@@ -140,9 +125,9 @@ function buildReleaseBundle(ctx: Parameters<NonNullable<CommandRegistry['registe
     evalSuites: Object.keys(BUILTIN_SUITES),
     incidentCount: incidents.length,
     remote: {
-      pools: remoteRegistry.listPools().length,
-      contracts: remoteRegistry.listContracts().length,
-      artifacts: remoteRegistry.listArtifacts().length,
+      pools: remoteRegistry?.listPools().length ?? 0,
+      contracts: remoteRegistry?.listContracts().length ?? 0,
+      artifacts: remoteRegistry?.listArtifacts().length ?? 0,
     },
     ecosystem: {
       pluginCatalog: loadEcosystemCatalog('plugin').length,
@@ -205,7 +190,11 @@ export function registerProductRuntimeCommands(registry: CommandRegistry): void 
     description: 'Review and operate self-hosted bridge and remote runner flows',
     usage: '[status|pools|assign <pool> <runner>|runner <id>|review <artifactId>|export <artifactId> [path]|import <path>]',
     async handler(args, ctx) {
-      const remoteRegistry = getRemoteRunnerRegistry();
+      if (!ctx.remoteRunnerRegistry) {
+        ctx.print('Remote runner registry is not available in this runtime.');
+        return;
+      }
+      const remoteRegistry = ctx.remoteRunnerRegistry;
       const sub = args[0] ?? 'status';
       if (sub === 'status') {
         remoteRegistry.ensureContractsFromStore(ctx.runtimeStore);
@@ -290,7 +279,7 @@ export function registerProductRuntimeCommands(registry: CommandRegistry): void 
           ctx.print('Usage: /bridge import <path>');
           return;
         }
-        const artifact = await importRemoteArtifact(resolve(process.cwd(), pathArg));
+        const artifact = await remoteRegistry.importArtifact(resolve(process.cwd(), pathArg));
         ctx.print(`Imported remote bridge artifact ${artifact.id} for runner ${artifact.runnerId}.`);
         return;
       }

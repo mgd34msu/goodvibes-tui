@@ -1,8 +1,6 @@
 import { describe, test, expect, beforeEach } from 'bun:test';
 import {
   ProviderCapabilityRegistry,
-  getCapabilityRegistry,
-  _resetCapabilityRegistryForTesting,
   RouteRejectionCode,
   type RouteRejectionDetail,
   type ProviderCapability,
@@ -43,7 +41,6 @@ describe('ProviderCapabilityRegistry.getCapability — merge order', () => {
   let registry: ProviderCapabilityRegistry;
 
   beforeEach(() => {
-    _resetCapabilityRegistryForTesting();
     registry = new ProviderCapabilityRegistry();
   });
 
@@ -182,7 +179,6 @@ describe('ProviderCapabilityRegistry.getRouteExplanation', () => {
   let registry: ProviderCapabilityRegistry;
 
   beforeEach(() => {
-    _resetCapabilityRegistryForTesting();
     registry = new ProviderCapabilityRegistry();
   });
 
@@ -312,26 +308,5 @@ describe('ProviderCapabilityRegistry.getRouteExplanation', () => {
     expect(codes).toContain(RouteRejectionCode.NO_PARALLEL_TOOLS);
     expect(codes).toContain(RouteRejectionCode.NO_JSON_MODE);
     expect(codes).toContain(RouteRejectionCode.OUTPUT_TOO_SMALL);
-  });
-});
-
-// ---------------------------------------------------------------------------
-// Singleton management
-// ---------------------------------------------------------------------------
-
-describe('getCapabilityRegistry / _resetCapabilityRegistryForTesting', () => {
-  test('getCapabilityRegistry returns the same singleton on repeated calls', () => {
-    _resetCapabilityRegistryForTesting();
-    const r1 = getCapabilityRegistry();
-    const r2 = getCapabilityRegistry();
-    expect(r1).toBe(r2);
-  });
-
-  test('_resetCapabilityRegistryForTesting returns a fresh instance', () => {
-    _resetCapabilityRegistryForTesting();
-    const r1 = getCapabilityRegistry();
-    _resetCapabilityRegistryForTesting();
-    const r2 = getCapabilityRegistry();
-    expect(r1).not.toBe(r2);
   });
 });

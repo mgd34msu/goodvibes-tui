@@ -3,9 +3,6 @@ import type { HookDispatcher } from '../hooks/dispatcher.ts';
 import type { HookEvent } from '../hooks/types.ts';
 import { logger } from '../utils/logger.ts';
 
-/** Singleton instances keyed by cwd */
-const instances = new Map<string, GitService>();
-
 /**
  * GitService — Wraps simple-git with hook emission on all mutating operations.
  *
@@ -375,34 +372,6 @@ export class GitService {
     });
   }
 
-  // ---------------------------------------------------------------------------
-  // Singleton
-  // ---------------------------------------------------------------------------
-
-  /**
-   * Get a singleton GitService for the given directory.
-   * No hooks are registered on singleton instances — use the constructor
-   * directly when you need hook support.
-   */
-  static getInstance(cwd?: string): GitService {
-    const key = cwd ?? process.cwd();
-    let instance = instances.get(key);
-    if (!instance) {
-      instance = new GitService(key);
-      instances.set(key, instance);
-    }
-    return instance;
-  }
-
-  /**
-   * Remove a cached singleton instance so a fresh one is created on next
-   * getInstance() call. Use after git init to pick up the new repository.
-   */
-  static clearInstance(cwd?: string): void {
-    const key = cwd ?? process.cwd();
-    instances.delete(key);
-  }
-
   /**
    * Initialize a new git repository at the given path using Bun.spawnSync.
    * Returns true on success, false on failure.
@@ -411,9 +380,6 @@ export class GitService {
     const dir = cwd ?? process.cwd();
     const result = Bun.spawnSync(['git', 'init', dir]);
     if (result.exitCode === 0) {
-      // Bust the singleton cache so the next getInstance() call creates a fresh
-      // GitService bound to the newly-initialised repo.
-      GitService.clearInstance(dir);
       return { success: true };
     }
     const stderr = result.stderr ? new TextDecoder().decode(result.stderr) : 'unknown error';
@@ -443,9 +409,8 @@ export class GitService {
     return this.cwd;
   }
 
-  /** Remove this instance from the singleton registry and release resources. */
+  /** Release resources tied to this git client instance. */
   dispose(): void {
-    instances.delete(this.cwd);
     logger.debug('GitService disposed', { cwd: this.cwd });
   }
 }

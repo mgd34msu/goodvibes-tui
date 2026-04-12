@@ -44,8 +44,6 @@ interface DiskFormat {
  * Disk format: v4 tree (see DiskFormat above).
  */
 export class ProjectIndex {
-  private static _instance: ProjectIndex | undefined;
-
   private readonly indexPath: string;
   private readonly projectRoot: string;
   readonly baseDir: string;
@@ -54,30 +52,10 @@ export class ProjectIndex {
   private createdAt: string = new Date().toISOString();
   private loaded = false;
 
-  private constructor(baseDir?: string) {
+  constructor(baseDir?: string) {
     this.projectRoot = baseDir ?? process.cwd();
     this.baseDir = this.projectRoot;
     this.indexPath = join(this.projectRoot, '.goodvibes', 'project-index.json');
-  }
-
-  // ---------------------------------------------------------------------------
-  // Singleton
-  // ---------------------------------------------------------------------------
-
-  static getInstance(baseDir?: string): ProjectIndex {
-    if (ProjectIndex._instance) {
-      if (baseDir && baseDir !== ProjectIndex._instance.baseDir) {
-        logger.debug('ProjectIndex.getInstance called with different baseDir, ignoring', { existing: ProjectIndex._instance.baseDir, requested: baseDir });
-      }
-      return ProjectIndex._instance;
-    }
-    ProjectIndex._instance = new ProjectIndex(baseDir);
-    return ProjectIndex._instance;
-  }
-
-  /** Reset the singleton — for testing only. */
-  static _resetInstance(): void {
-    ProjectIndex._instance = undefined;
   }
 
   // ---------------------------------------------------------------------------
@@ -315,5 +293,4 @@ function buildTree(files: Map<string, number>): TreeDir {
   }
   return root;
 }
-
 

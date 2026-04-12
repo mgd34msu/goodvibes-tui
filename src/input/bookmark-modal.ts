@@ -5,7 +5,7 @@
  * selected index, scroll offset, and pending action.
  */
 
-import { getBookmarkManager, type BookmarkEntry } from '../bookmarks/manager.ts';
+import type { BookmarkEntry, BookmarkManager } from '../bookmarks/manager.ts';
 
 // ---------------------------------------------------------------------------
 // BookmarkModal
@@ -22,14 +22,12 @@ export class BookmarkModal {
   /** Max visible list rows. */
   public visibleRows = BookmarkModal.DEFAULT_VISIBLE_ROWS;
 
-  private bookmarkManager!: ReturnType<typeof getBookmarkManager>;
-  // Note: bookmarkManager is initialized lazily in open() to pick up any state changes
+  public constructor(private readonly bookmarkManager: BookmarkManager) {}
 
   /**
    * open - Load current bookmarks and show the modal.
    */
   open(): void {
-    this.bookmarkManager = getBookmarkManager();
     this.entries = this.bookmarkManager.list();
     this.selectedIndex = 0;
     this.scrollOffset = 0;

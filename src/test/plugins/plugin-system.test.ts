@@ -6,7 +6,7 @@
  * Dynamic import (loadPlugin) is tested with real Bun TS imports
  * pointing at fixture files written to /tmp.
  */
-import { describe, test, expect, beforeEach, afterEach, mock } from 'bun:test';
+import { describe, test, expect, beforeEach, afterEach } from 'bun:test';
 import { existsSync, mkdirSync, rmSync, writeFileSync } from 'fs';
 import { join } from 'path';
 import { RuntimeEventBus, createEventEnvelope } from '../../runtime/events/index.ts';
@@ -16,6 +16,11 @@ import type { ModelDefinition, ProviderRegistry } from '../../providers/registry
 import type { ToolRegistry } from '../../tools/registry.ts';
 import type { LoadedPlugin, PluginLoaderDeps } from '../../plugins/loader.ts';
 import type { PluginAPIContext } from '../../plugins/api.ts';
+import { ChannelDeliveryRouter, ChannelPluginRegistry } from '../../channels/index.ts';
+import { GatewayMethodCatalog } from '../../control-plane/index.ts';
+import { MediaProviderRegistry } from '../../media/index.ts';
+import { MemoryEmbeddingProviderRegistry } from '../../state/index.ts';
+import { VoiceProviderRegistry } from '../../voice/index.ts';
 import { WebSearchProviderRegistry } from '../../web-search/index.ts';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -126,8 +131,36 @@ function makeFakeDeps(): PluginLoaderDeps {
     commandRegistry: makeFakeCommandRegistry() as unknown as CommandRegistry,
     providerRegistry: makeFakeProviderRegistry() as unknown as ProviderRegistry,
     toolRegistry: makeFakeToolRegistry() as unknown as ToolRegistry,
+    gatewayMethods: new GatewayMethodCatalog({ includeBuiltins: false }),
+    channelRegistry: new ChannelPluginRegistry(),
+    channelDeliveryRouter: new ChannelDeliveryRouter({ strategies: [] }),
+    memoryEmbeddingRegistry: new MemoryEmbeddingProviderRegistry(),
+    voiceProviderRegistry: new VoiceProviderRegistry(),
+    mediaProviderRegistry: new MediaProviderRegistry(),
+    webSearchProviderRegistry: new WebSearchProviderRegistry(),
     getPluginConfig: (_name: string) => ({}),
     isEnabled: (_name: string) => true,
+  };
+}
+
+function makePluginApiContext(overrides: Partial<PluginAPIContext> = {}): PluginAPIContext {
+  const deps = makeFakeDeps();
+  return {
+    pluginName: 'my-plugin',
+    runtimeBus: deps.runtimeBus,
+    commandRegistry: deps.commandRegistry,
+    providerRegistry: deps.providerRegistry,
+    toolRegistry: deps.toolRegistry,
+    gatewayMethods: deps.gatewayMethods,
+    channelRegistry: deps.channelRegistry,
+    channelDeliveryRouter: deps.channelDeliveryRouter,
+    memoryEmbeddingRegistry: deps.memoryEmbeddingRegistry,
+    voiceProviderRegistry: deps.voiceProviderRegistry,
+    mediaProviderRegistry: deps.mediaProviderRegistry,
+    webSearchProviderRegistry: deps.webSearchProviderRegistry,
+    pluginConfig: {},
+    cleanup: [],
+    ...overrides,
   };
 }
 
@@ -144,7 +177,7 @@ function createLoadedPlugin(overrides: Partial<LoadedPlugin> = {}): LoadedPlugin
 function getPluginManagerTestAccess(
   managerCtor: typeof import('../../plugins/manager.ts').PluginManager,
 ): PluginManagerTestAccess {
-  return managerCtor.getInstance() as unknown as PluginManagerTestAccess;
+  return new managerCtor() as unknown as PluginManagerTestAccess;
 }
 
 // ─── discoverPlugins ──────────────────────────────────────────────────────────
@@ -422,15 +455,12 @@ describe('createPluginAPI', () => {
     const { createPluginAPI } = await import('../../plugins/api.ts');
     const cmdReg = makeFakeCommandRegistry();
     const cleanup: Array<() => void> = [];
-    const ctx: PluginAPIContext = {
-      pluginName: 'my-plugin',
-      runtimeBus: makeFakeRuntimeBus(),
+    const ctx = makePluginApiContext({
       commandRegistry: cmdReg as unknown as CommandRegistry,
       providerRegistry: makeFakeProviderRegistry() as unknown as ProviderRegistry,
       toolRegistry: makeFakeToolRegistry() as unknown as ToolRegistry,
-      pluginConfig: {},
       cleanup,
-    };
+    });
     const api = createPluginAPI(ctx);
     api.registerCommand('hello', 'Say hello', async () => {});
 
@@ -446,15 +476,12 @@ describe('createPluginAPI', () => {
     const { createPluginAPI } = await import('../../plugins/api.ts');
     const toolReg = makeFakeToolRegistry();
     const cleanup: Array<() => void> = [];
-    const ctx: PluginAPIContext = {
-      pluginName: 'my-plugin',
-      runtimeBus: makeFakeRuntimeBus(),
+    const ctx = makePluginApiContext({
       commandRegistry: makeFakeCommandRegistry() as unknown as CommandRegistry,
       providerRegistry: makeFakeProviderRegistry() as unknown as ProviderRegistry,
       toolRegistry: toolReg as unknown as ToolRegistry,
-      pluginConfig: {},
       cleanup,
-    };
+    });
     const api = createPluginAPI(ctx);
     api.registerTool('my-tool', { description: 'A tool' }, async () => ({ success: true }));
 
@@ -466,15 +493,12 @@ describe('createPluginAPI', () => {
   test('registerTool skips duplicate registrations', async () => {
     const { createPluginAPI } = await import('../../plugins/api.ts');
     const toolReg = makeFakeToolRegistry();
-    const ctx: PluginAPIContext = {
-      pluginName: 'my-plugin',
-      runtimeBus: makeFakeRuntimeBus(),
+    const ctx = makePluginApiContext({
       commandRegistry: makeFakeCommandRegistry() as unknown as CommandRegistry,
       providerRegistry: makeFakeProviderRegistry() as unknown as ProviderRegistry,
       toolRegistry: toolReg as unknown as ToolRegistry,
-      pluginConfig: {},
       cleanup: [],
-    };
+    });
     const api = createPluginAPI(ctx);
     api.registerTool('dup', {}, async () => ({ success: true }));
     api.registerTool('dup', {}, async () => ({ success: true }));
@@ -485,15 +509,13 @@ describe('createPluginAPI', () => {
     const { createPluginAPI } = await import('../../plugins/api.ts');
     const bus = makeFakeRuntimeBus();
     const cleanup: Array<() => void> = [];
-    const ctx: PluginAPIContext = {
-      pluginName: 'my-plugin',
+    const ctx = makePluginApiContext({
       runtimeBus: bus,
       commandRegistry: makeFakeCommandRegistry() as unknown as CommandRegistry,
       providerRegistry: makeFakeProviderRegistry() as unknown as ProviderRegistry,
       toolRegistry: makeFakeToolRegistry() as unknown as ToolRegistry,
-      pluginConfig: {},
       cleanup,
-    };
+    });
     const api = createPluginAPI(ctx);
     let received = false;
     const unsub = api.onEvent('SESSION_STARTED', () => { received = true; });
@@ -527,15 +549,13 @@ describe('createPluginAPI', () => {
 
   test('getConfig reads from pluginConfig', async () => {
     const { createPluginAPI } = await import('../../plugins/api.ts');
-    const ctx: PluginAPIContext = {
-      pluginName: 'my-plugin',
-      runtimeBus: makeFakeRuntimeBus(),
+    const ctx = makePluginApiContext({
       commandRegistry: makeFakeCommandRegistry() as unknown as CommandRegistry,
       providerRegistry: makeFakeProviderRegistry() as unknown as ProviderRegistry,
       toolRegistry: makeFakeToolRegistry() as unknown as ToolRegistry,
       pluginConfig: { apiKey: 'abc123', timeout: 30 },
       cleanup: [],
-    };
+    });
     const api = createPluginAPI(ctx);
     expect(api.getConfig('apiKey')).toBe('abc123');
     expect(api.getConfig('timeout')).toBe(30);
@@ -544,15 +564,12 @@ describe('createPluginAPI', () => {
 
   test('registerProvider returns Promise', async () => {
     const { createPluginAPI } = await import('../../plugins/api.ts');
-    const ctx: PluginAPIContext = {
-      pluginName: 'my-plugin',
-      runtimeBus: makeFakeRuntimeBus(),
+    const ctx = makePluginApiContext({
       commandRegistry: makeFakeCommandRegistry() as unknown as CommandRegistry,
       providerRegistry: makeFakeProviderRegistry() as unknown as ProviderRegistry,
       toolRegistry: makeFakeToolRegistry() as unknown as ToolRegistry,
-      pluginConfig: {},
       cleanup: [],
-    };
+    });
     const api = createPluginAPI(ctx);
     const result = api.registerProvider('test-provider', {
       baseURL: 'http://localhost:8080/v1',
@@ -569,15 +586,12 @@ describe('createPluginAPI', () => {
     const { createPluginAPI } = await import('../../plugins/api.ts');
     const cleanup: Array<() => void> = [];
     const providerRegistry = makeFakeProviderRegistry();
-    const ctx: PluginAPIContext = {
-      pluginName: 'my-plugin',
-      runtimeBus: makeFakeRuntimeBus(),
+    const ctx = makePluginApiContext({
       commandRegistry: makeFakeCommandRegistry() as unknown as CommandRegistry,
       providerRegistry: providerRegistry as unknown as ProviderRegistry,
       toolRegistry: makeFakeToolRegistry() as unknown as ToolRegistry,
-      pluginConfig: {},
       cleanup,
-    };
+    });
     const api = createPluginAPI(ctx);
     api.registerProviderInstance({
       provider: {
@@ -608,25 +622,23 @@ describe('createPluginAPI', () => {
 
   test('registers extension SDK contributions for gateway, memory, voice, and media domains', async () => {
     const { createPluginAPI } = await import('../../plugins/api.ts');
-    const { GatewayMethodCatalog } = await import('../../control-plane/index.ts');
-    const { MemoryEmbeddingProviderRegistry } = await import('../../state/index.ts');
-    const { VoiceProviderRegistry } = await import('../../voice/index.ts');
-    const { MediaProviderRegistry } = await import('../../media/index.ts');
-    new GatewayMethodCatalog({ includeBuiltins: false });
-    new MemoryEmbeddingProviderRegistry();
-    new VoiceProviderRegistry();
-    new MediaProviderRegistry();
-    new WebSearchProviderRegistry();
+    const gatewayMethods = new GatewayMethodCatalog({ includeBuiltins: false });
+    const memoryEmbeddingRegistry = new MemoryEmbeddingProviderRegistry();
+    const voiceProviderRegistry = new VoiceProviderRegistry();
+    const mediaProviderRegistry = new MediaProviderRegistry();
+    const webSearchProviderRegistry = new WebSearchProviderRegistry();
     const cleanup: Array<() => void> = [];
-    const ctx: PluginAPIContext = {
-      pluginName: 'my-plugin',
-      runtimeBus: makeFakeRuntimeBus(),
+    const ctx = makePluginApiContext({
       commandRegistry: makeFakeCommandRegistry() as unknown as CommandRegistry,
       providerRegistry: makeFakeProviderRegistry() as unknown as ProviderRegistry,
       toolRegistry: makeFakeToolRegistry() as unknown as ToolRegistry,
-      pluginConfig: {},
+      gatewayMethods,
+      memoryEmbeddingRegistry,
+      voiceProviderRegistry,
+      mediaProviderRegistry,
+      webSearchProviderRegistry,
       cleanup,
-    };
+    });
     const api = createPluginAPI(ctx);
 
     api.registerGatewayMethod({
@@ -663,13 +675,13 @@ describe('createPluginAPI', () => {
       },
     });
 
-    expect(GatewayMethodCatalog.getActive().get('plugin.my-plugin.echo')).not.toBeNull();
-    expect(MemoryEmbeddingProviderRegistry.getActive().get('plugin-embeddings')).not.toBeNull();
-    expect(VoiceProviderRegistry.getActive().get('plugin-voice')).not.toBeNull();
-    expect(MediaProviderRegistry.getActive().get('plugin-media')).not.toBeNull();
-    expect(WebSearchProviderRegistry.getActive().get('plugin-search')).not.toBeNull();
+    expect(gatewayMethods.get('plugin.my-plugin.echo')).not.toBeNull();
+    expect(memoryEmbeddingRegistry.get('plugin-embeddings')).not.toBeNull();
+    expect(voiceProviderRegistry.get('plugin-voice')).not.toBeNull();
+    expect(mediaProviderRegistry.get('plugin-media')).not.toBeNull();
+    expect(webSearchProviderRegistry.get('plugin-search')).not.toBeNull();
     for (const fn of cleanup) fn();
-    expect(GatewayMethodCatalog.getActive().get('plugin.my-plugin.echo')).toBeNull();
+    expect(gatewayMethods.get('plugin.my-plugin.echo')).toBeNull();
   });
 });
 
@@ -678,8 +690,7 @@ describe('createPluginAPI', () => {
 describe('PluginManager', () => {
   test('enable returns error for unknown plugin name', async () => {
     const { PluginManager } = await import('../../plugins/manager.ts');
-    // Use a fresh instance by bypassing singleton for testability
-    // The singleton approach means we test the singleton directly.
+    // Use a fresh instance directly so the test owns the plugin manager lifecycle.
     const manager = getPluginManagerTestAccess(PluginManager);
     const result = await manager.enable('nonexistent-plugin-xyz');
     expect(result.ok).toBe(false);

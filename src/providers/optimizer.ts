@@ -10,11 +10,11 @@
  */
 
 import {
-  getCapabilityRegistry,
+  ProviderCapabilityRegistry,
   type RequestProfile,
   type RouteExplanation,
 } from './capabilities.ts';
-import { getProviderRegistry, type ModelDefinition } from './registry.ts';
+import type { ModelDefinition, ProviderRegistry } from './registry.ts';
 import type { ProviderHealthRecord } from '../runtime/store/domains/provider-health.ts';
 
 // ---------------------------------------------------------------------------
@@ -93,8 +93,17 @@ export class ProviderOptimizer {
   private readonly _fallbackLog: FallbackTransition[] = [];
   private static readonly MAX_LOG_ENTRIES = 200;
   private readonly _clock: () => number;
+  private readonly registry: Pick<ProviderRegistry, 'getCurrentModel' | 'getSelectableModels' | 'explainRoute'>;
+  private readonly capabilityRegistry: ProviderCapabilityRegistry;
 
-  constructor(enabled: boolean = false, clock: () => number = Date.now) {
+  constructor(
+    registry: Pick<ProviderRegistry, 'getCurrentModel' | 'getSelectableModels' | 'explainRoute'>,
+    capabilityRegistry: ProviderCapabilityRegistry,
+    enabled = false,
+    clock: () => number = Date.now,
+  ) {
+    this.registry = registry;
+    this.capabilityRegistry = capabilityRegistry;
     this._enabled = enabled;
     this._clock = clock;
   }
@@ -191,14 +200,12 @@ export class ProviderOptimizer {
   ): RouteDecision | null {
     if (!this._enabled) return null;
 
-    const capReg = getCapabilityRegistry();
-    const provReg = getProviderRegistry();
-    const candidates = provReg.getSelectableModels();
+    const candidates = this.registry.getSelectableModels();
     const allCandidates: RouteExplanation[] = [];
 
     // Pinned mode — evaluate only the pinned target
     if (this._mode === 'pinned' && this._pinnedProvider && this._pinnedModel) {
-      const explanation = capReg.getRouteExplanation(
+      const explanation = this.capabilityRegistry.getRouteExplanation(
         this._pinnedProvider,
         this._pinnedModel,
         profile,
@@ -228,7 +235,7 @@ export class ProviderOptimizer {
         }
       }
 
-      const explanation = capReg.getRouteExplanation(
+      const explanation = this.capabilityRegistry.getRouteExplanation(
         model.provider,
         model.id,
         profile,
@@ -272,9 +279,8 @@ export class ProviderOptimizer {
    * @param profile - Optional request profile; defaults to empty (no requirements).
    */
   explainCurrentRoute(profile: RequestProfile = {}): RouteExplanation {
-    const provReg = getProviderRegistry();
-    const current = provReg.getCurrentModel();
-    return provReg.explainRoute(current.registryKey ?? `${current.provider}:${current.id}`, profile);
+    const current = this.registry.getCurrentModel();
+    return this.registry.explainRoute(current.registryKey ?? `${current.provider}:${current.id}`, profile);
   }
 
   // -------------------------------------------------------------------------
@@ -289,7 +295,7 @@ export class ProviderOptimizer {
       modelId: 'none',
       summary: 'No selectable models available in registry.',
       rejections: [] as import('./capabilities.ts').RouteRejectionDetail[],
-      capability: getCapabilityRegistry().getCapability('unknown', 'unknown'),
+      capability: this.capabilityRegistry.getCapability('unknown', 'unknown'),
     };
   }
 
@@ -305,9 +311,7 @@ export class ProviderOptimizer {
    * @param profile - Capability requirements to test against.
    */
   testFallback(profile: RequestProfile = {}): FallbackTestResult {
-    const capReg = getCapabilityRegistry();
-    const provReg = getProviderRegistry();
-    const candidates = provReg.getSelectableModels();
+    const candidates = this.registry.getSelectableModels();
 
     const chain: Array<{
       position: number;
@@ -319,7 +323,7 @@ export class ProviderOptimizer {
 
     let position = 0;
     for (const model of candidates) {
-      const explanation = capReg.getRouteExplanation(model.provider, model.id, profile);
+      const explanation = this.capabilityRegistry.getRouteExplanation(model.provider, model.id, profile);
       chain.push({
         position,
         providerId: model.provider,
@@ -374,29 +378,4 @@ export class ProviderOptimizer {
   clearFallbackLog(): void {
     this._fallbackLog.splice(0);
   }
-}
-
-// ---------------------------------------------------------------------------
-// Singleton
-// ---------------------------------------------------------------------------
-
-let _optimizer: ProviderOptimizer | undefined;
-
-/**
- * Returns the process-level singleton `ProviderOptimizer`.
- * Instantiated lazily on first call. Starts disabled.
- */
-export function getProviderOptimizer(): ProviderOptimizer {
-  if (!_optimizer) {
-    _optimizer = new ProviderOptimizer(false);
-  }
-  return _optimizer;
-}
-
-/**
- * Reset the singleton — for testing only.
- * @internal
- */
-export function _resetProviderOptimizerForTesting(): void {
-  _optimizer = undefined;
 }

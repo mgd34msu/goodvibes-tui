@@ -9,7 +9,9 @@ import { DEFAULT_MEMORY_EMBEDDING_DIMS, MemoryEmbeddingProviderRegistry } from '
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
-import { unlinkSync, existsSync } from 'node:fs';
+import { unlinkSync, existsSync, mkdirSync, mkdtempSync, rmSync } from 'node:fs';
+import { resetTestRuntimeServices } from '../helpers/runtime-services.ts';
+import { ConfigManager } from '../../config/manager.ts';
 
 function tempDbPath(): string {
   return join(tmpdir(), `memory-test-${randomUUID()}.db`);
@@ -24,17 +26,27 @@ function cleanupDbPair(dbPath: string): void {
 describe('MemoryStore', () => {
   let store: MemoryStore;
   let dbPath: string;
+  let configRoot: string;
+  let configDir: string;
+  let configManager: ConfigManager;
+  let embeddingRegistry: MemoryEmbeddingProviderRegistry;
 
   beforeEach(async () => {
     dbPath = tempDbPath();
-    store = new MemoryStore(dbPath);
+    configRoot = mkdtempSync(join(tmpdir(), 'memory-config-'));
+    configDir = join(configRoot, '.goodvibes', 'tui');
+    mkdirSync(configDir, { recursive: true });
+    configManager = new ConfigManager({ configDir, workingDir: configRoot });
+    embeddingRegistry = new MemoryEmbeddingProviderRegistry({ configManager });
+    store = new MemoryStore(dbPath, { embeddingRegistry });
     await store.init();
   });
 
   afterEach(() => {
     store.close();
     cleanupDbPair(dbPath);
-    MemoryEmbeddingProviderRegistry.resetActiveForTesting();
+    rmSync(configRoot, { recursive: true, force: true });
+    resetTestRuntimeServices();
   });
 
   describe('add', () => {
@@ -164,8 +176,12 @@ describe('MemoryStore', () => {
     });
 
     it('rebuilds vectors asynchronously through a provider-backed embedding path', async () => {
-      MemoryEmbeddingProviderRegistry.resetActiveForTesting();
-      const registry = new MemoryEmbeddingProviderRegistry();
+      resetTestRuntimeServices();
+      const asyncConfigRoot = mkdtempSync(join(tmpdir(), 'memory-config-'));
+      const asyncConfigDir = join(asyncConfigRoot, '.goodvibes', 'tui');
+      mkdirSync(asyncConfigDir, { recursive: true });
+      const configManager = new ConfigManager({ configDir: asyncConfigDir, workingDir: asyncConfigRoot });
+      const registry = new MemoryEmbeddingProviderRegistry({ configManager });
       let embedCalls = 0;
       registry.register({
         id: 'async-test',
@@ -182,7 +198,7 @@ describe('MemoryStore', () => {
       }, { makeDefault: true });
 
       const asyncDbPath = tempDbPath();
-      const asyncStore = new MemoryStore(asyncDbPath);
+      const asyncStore = new MemoryStore(asyncDbPath, { embeddingRegistry: registry });
       await asyncStore.init();
       await asyncStore.add({ cls: 'fact', summary: 'Provider-backed rebuild target' });
 
@@ -194,7 +210,8 @@ describe('MemoryStore', () => {
       } finally {
         asyncStore.close();
         cleanupDbPair(asyncDbPath);
-        MemoryEmbeddingProviderRegistry.resetActiveForTesting();
+        rmSync(asyncConfigRoot, { recursive: true, force: true });
+        resetTestRuntimeServices();
       }
     });
   });
@@ -376,10 +393,19 @@ describe('MemoryRegistry', () => {
   let store: MemoryStore;
   let registry: MemoryRegistry;
   let dbPath: string;
+  let configRoot: string;
+  let configDir: string;
+  let configManager: ConfigManager;
+  let embeddingRegistry: MemoryEmbeddingProviderRegistry;
 
   beforeEach(async () => {
     dbPath = tempDbPath();
-    store = new MemoryStore(dbPath);
+    configRoot = mkdtempSync(join(tmpdir(), 'memory-registry-config-'));
+    configDir = join(configRoot, '.goodvibes', 'tui');
+    mkdirSync(configDir, { recursive: true });
+    configManager = new ConfigManager({ configDir, workingDir: configRoot });
+    embeddingRegistry = new MemoryEmbeddingProviderRegistry({ configManager });
+    store = new MemoryStore(dbPath, { embeddingRegistry });
     await store.init();
     registry = new MemoryRegistry(store);
   });
@@ -387,6 +413,7 @@ describe('MemoryRegistry', () => {
   afterEach(() => {
     store.close();
     cleanupDbPair(dbPath);
+    rmSync(configRoot, { recursive: true, force: true });
   });
 
   it('notifies listeners on add', async () => {

@@ -67,8 +67,6 @@ function commandAllowed(command: string, allowedCommands: readonly string[]): bo
 }
 
 export class ChannelPolicyManager {
-  private static instance: ChannelPolicyManager | null = null;
-
   private readonly store: PersistentStore<ChannelPolicySnapshot>;
   private readonly policies = new Map<ChannelSurface, ChannelPolicyRecord>();
   private readonly audit: ChannelPolicyAuditRecord[] = [];
@@ -76,17 +74,6 @@ export class ChannelPolicyManager {
 
   constructor(store?: PersistentStore<ChannelPolicySnapshot>) {
     this.store = store ?? new PersistentStore<ChannelPolicySnapshot>(STORE_PATH);
-  }
-
-  static getInstance(): ChannelPolicyManager {
-    if (!ChannelPolicyManager.instance) {
-      ChannelPolicyManager.instance = new ChannelPolicyManager();
-    }
-    return ChannelPolicyManager.instance;
-  }
-
-  static resetInstance(): void {
-    ChannelPolicyManager.instance = null;
   }
 
   async start(): Promise<void> {

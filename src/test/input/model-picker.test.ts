@@ -1,11 +1,20 @@
 /**
  * Tests for ModelPickerModal state class.
  */
-import { describe, test, expect, beforeEach } from 'bun:test';
+import { describe, test, expect, beforeEach, afterEach } from 'bun:test';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { ModelPickerModal, detectFamily, tierToCategoryFilter, POPULAR_PROVIDERS } from '../../input/model-picker.ts';
 import type { CategoryFilter, PickerMode } from '../../input/model-picker.ts';
 import type { ModelDefinition } from '../../providers/registry.ts';
-import { _setEntriesForTest } from '../../providers/model-benchmarks.ts';
+import { ProviderRegistry } from '../../providers/registry.ts';
+import { ConfigManager } from '../../config/manager.ts';
+import { SubscriptionManager } from '../../config/subscriptions.ts';
+import { CacheHitTracker } from '../../providers/cache-strategy.ts';
+import { ProviderCapabilityRegistry } from '../../providers/capabilities.ts';
+import { FavoritesStore } from '../../providers/favorites.ts';
+import { BenchmarkStore, type BenchmarkEntry } from '../../providers/model-benchmarks.ts';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -45,6 +54,60 @@ const REASONING_MODEL = makeModel({
 
 const ALL_MODELS = [FREE_MODEL, FREE_MODEL_2, PREMIUM_MODEL, REASONING_MODEL];
 
+interface PickerHarness {
+  readonly rootDir: string;
+  readonly favoritesStore: FavoritesStore;
+  readonly benchmarkStore: BenchmarkStore;
+  readonly providerRegistry: ProviderRegistry;
+  cleanup(): void;
+}
+
+function writeBenchmarksCache(entries: BenchmarkEntry[], benchmarkStore: BenchmarkStore): void {
+  writeFileSync(
+    benchmarkStore.getCachePath(),
+    JSON.stringify({
+      version: 1 as const,
+      fetchedAt: Date.now(),
+      ttlMs: 86_400_000,
+      entries,
+    }, null, 2),
+  );
+}
+
+function createPickerHarness(): PickerHarness {
+  const rootDir = mkdtempSync(join(tmpdir(), 'gv-model-picker-'));
+  const configDir = join(rootDir, 'config');
+  const dataDir = join(rootDir, 'provider-data');
+  const subscriptionsPath = join(rootDir, 'subscriptions.json');
+  mkdirSync(configDir, { recursive: true });
+  mkdirSync(dataDir, { recursive: true });
+
+  const favoritesStore = new FavoritesStore({ dir: dataDir });
+  const benchmarkStore = new BenchmarkStore({ dir: dataDir });
+  writeFileSync(favoritesStore.getPath(), JSON.stringify({ pinned: [], history: [] }, null, 2));
+  writeBenchmarksCache([], benchmarkStore);
+  benchmarkStore.initBenchmarks();
+
+  const providerRegistry = new ProviderRegistry({
+    configManager: new ConfigManager({ configDir }),
+    subscriptionManager: new SubscriptionManager(subscriptionsPath),
+    capabilityRegistry: new ProviderCapabilityRegistry(),
+    cacheHitTracker: new CacheHitTracker(),
+    favoritesStore,
+    benchmarkStore,
+  });
+
+  return {
+    rootDir,
+    favoritesStore,
+    benchmarkStore,
+    providerRegistry,
+    cleanup: () => rmSync(rootDir, { recursive: true, force: true }),
+  };
+}
+
+let harness: PickerHarness;
+
 // ---------------------------------------------------------------------------
 // Suite
 // ---------------------------------------------------------------------------
@@ -53,7 +116,12 @@ describe('ModelPickerModal', () => {
   let picker: ModelPickerModal;
 
   beforeEach(() => {
-    picker = new ModelPickerModal();
+    harness = createPickerHarness();
+    picker = new ModelPickerModal(harness.favoritesStore, harness.benchmarkStore, harness.providerRegistry);
+  });
+
+  afterEach(() => {
+    harness?.cleanup();
   });
 
   // ── Initial state ──────────────────────────────────────────────────────────
@@ -578,12 +646,17 @@ describe('ModelPickerModal', () => {
   describe('benchmark sort (Stage 5)', () => {
     beforeEach(() => {
       picker.models = ALL_MODELS;
-      // Inject benchmark data for sorting tests
-      _setEntriesForTest([
+      writeBenchmarksCache([
         { modelId: 'free-1', name: 'free-1', organization: 'test', benchmarks: { swe: 0.8, gpqa: 0.7 } },
         { modelId: 'premium-1', name: 'premium-1', organization: 'test', benchmarks: { swe: 0.9, gpqa: 0.85 } },
         { modelId: 'reasoning-1', name: 'reasoning-1', organization: 'test', benchmarks: { swe: 0.95, gpqa: 0.9 } },
-      ]);
+      ], harness.benchmarkStore);
+      harness.benchmarkStore.initBenchmarks();
+    });
+
+    afterEach(() => {
+      writeBenchmarksCache([], harness.benchmarkStore);
+      harness.benchmarkStore.initBenchmarks();
     });
 
     test('cycleBenchmarkSort cycles none → composite → swe → gpqa → none', () => {

@@ -4,6 +4,7 @@ import { homedir } from 'node:os';
 import type { Line } from '../types/grid.ts';
 import { createEmptyLine } from '../types/grid.ts';
 import { BasePanel } from './base-panel.ts';
+import type { PanelHealthMonitor } from '../runtime/perf/panel-health-monitor.ts';
 import {
   buildEmptyState,
   buildPanelLine,
@@ -54,6 +55,7 @@ export interface SkillRecord {
 export interface SkillsPanelOptions {
   cwd?: string;
   homeDir?: string;
+  panelHealthMonitor?: PanelHealthMonitor;
 }
 
 function parseFrontmatter(content: string): Record<string, string> {
@@ -216,7 +218,7 @@ export class SkillsPanel extends BasePanel {
   private cacheDirty = true;
 
   public constructor(options: SkillsPanelOptions = {}) {
-    super('skills', 'Skills', 'K', 'monitoring');
+    super('skills', 'Skills', 'K', 'monitoring', options.panelHealthMonitor);
     this.cwd = options.cwd ?? process.cwd();
     this.homeDir = options.homeDir ?? homedir();
   }

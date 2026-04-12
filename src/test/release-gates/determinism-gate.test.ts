@@ -10,7 +10,7 @@
  */
 
 import { describe, test, expect } from 'bun:test';
-import { IdempotencyStore, idempotencyStore } from '../../runtime/idempotency/index.ts';
+import { IdempotencyStore } from '../../runtime/idempotency/index.ts';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -196,22 +196,15 @@ describe('determinism gate: failed operation retry', () => {
 });
 
 // ---------------------------------------------------------------------------
-// 5. Global store singleton: shared instance exists
+// 5. Explicit store instance sanity
 // ---------------------------------------------------------------------------
 
-describe('determinism gate: singleton store', () => {
-  test('idempotencyStore singleton is exported and functional', () => {
-    expect(idempotencyStore).toBeDefined();
-    expect(typeof idempotencyStore.generateKey).toBe('function');
-    expect(typeof idempotencyStore.checkAndRecord).toBe('function');
-    expect(typeof idempotencyStore.markComplete).toBe('function');
-    expect(typeof idempotencyStore.markFailed).toBe('function');
-  });
-
-  test('singleton generates consistent keys', () => {
-    const ctx = { sessionId: 'singleton-sess', turnId: 'singleton-turn', callId: 'singleton-call' };
-    const k1 = idempotencyStore.generateKey(ctx);
-    const k2 = idempotencyStore.generateKey(ctx);
+describe('determinism gate: explicit store instance', () => {
+  test('fresh store instances are usable and deterministic', () => {
+    const store = new IdempotencyStore();
+    const ctx = { sessionId: 'shared-sess', turnId: 'shared-turn', callId: 'shared-call' };
+    const k1 = store.generateKey(ctx);
+    const k2 = store.generateKey(ctx);
     expect(k1).toBe(k2);
   });
 });

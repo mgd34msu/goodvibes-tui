@@ -39,13 +39,13 @@ describe('SessionPickerModal', () => {
   });
 
   test('starts inactive', () => {
-    modal = new SessionPickerModal();
+    modal = new SessionPickerModal(sm);
     expect(modal.active).toBe(false);
   });
 
   test('open() on empty dir shows empty sessions', () => {
     // Override the internal SessionManager by testing with no sessions
-    modal = new SessionPickerModal();
+    modal = new SessionPickerModal(sm);
     // The modal uses getSessionManager() which points to cwd, so just test the interface
     modal.active = true;
     modal.sessions = [];
@@ -55,7 +55,7 @@ describe('SessionPickerModal', () => {
   });
 
   test('navigation wraps around (moveUp from 0 → last)', () => {
-    modal = new SessionPickerModal();
+    modal = new SessionPickerModal(sm);
     modal.sessions = [
       { name: 'a', title: 'A', model: '', provider: '', timestamp: 1, messageCount: 2, filePath: '/a' },
       { name: 'b', title: 'B', model: '', provider: '', timestamp: 2, messageCount: 3, filePath: '/b' },
@@ -66,7 +66,7 @@ describe('SessionPickerModal', () => {
   });
 
   test('moveDown increments selectedIndex', () => {
-    modal = new SessionPickerModal();
+    modal = new SessionPickerModal(sm);
     modal.sessions = [
       { name: 'a', title: 'A', model: '', provider: '', timestamp: 1, messageCount: 2, filePath: '/a' },
       { name: 'b', title: 'B', model: '', provider: '', timestamp: 2, messageCount: 3, filePath: '/b' },
@@ -77,7 +77,7 @@ describe('SessionPickerModal', () => {
   });
 
   test('moveDown wraps around', () => {
-    modal = new SessionPickerModal();
+    modal = new SessionPickerModal(sm);
     modal.sessions = [
       { name: 'a', title: 'A', model: '', provider: '', timestamp: 1, messageCount: 2, filePath: '/a' },
     ];
@@ -87,7 +87,7 @@ describe('SessionPickerModal', () => {
   });
 
   test('getSelected returns the current session', () => {
-    modal = new SessionPickerModal();
+    modal = new SessionPickerModal(sm);
     modal.sessions = [
       { name: 'a', title: 'A', model: '', provider: '', timestamp: 1, messageCount: 2, filePath: '/a' },
       { name: 'b', title: 'B', model: '', provider: '', timestamp: 2, messageCount: 3, filePath: '/b' },
@@ -100,7 +100,7 @@ describe('SessionPickerModal', () => {
 
   test('deleteSelected removes session file and refreshes list', () => {
     sm.save('mysession', [{ role: 'user', content: 'hi' }], META);
-    modal = new SessionPickerModal();
+    modal = new SessionPickerModal(sm);
     // Directly inject the session manager by testing with real data
     // We need to replace modal's sessions list with what sm.list() returns
     const sessions = sm.list();
@@ -118,7 +118,7 @@ describe('SessionPickerModal', () => {
   });
 
   test('moving selection clears pending delete confirmation', () => {
-    modal = new SessionPickerModal();
+    modal = new SessionPickerModal(sm);
     modal.sessions = [
       { name: 'a', title: 'A', model: '', provider: '', timestamp: 1, messageCount: 2, filePath: '/a' },
       { name: 'b', title: 'B', model: '', provider: '', timestamp: 2, messageCount: 3, filePath: '/b' },
@@ -131,7 +131,7 @@ describe('SessionPickerModal', () => {
   });
 
   test('close() deactivates modal', () => {
-    modal = new SessionPickerModal();
+    modal = new SessionPickerModal(sm);
     modal.active = true;
     modal.statusMessage = 'some message';
     modal.close();
@@ -140,7 +140,7 @@ describe('SessionPickerModal', () => {
   });
 
   test('no navigation when sessions list is empty', () => {
-    modal = new SessionPickerModal();
+    modal = new SessionPickerModal(sm);
     modal.sessions = [];
     modal.selectedIndex = 0;
     modal.moveUp();

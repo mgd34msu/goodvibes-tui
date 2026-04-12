@@ -19,25 +19,14 @@ export interface FileOperation {
 }
 
 // ---------------------------------------------------------------------------
-// FileUndoManager singleton
+// FileUndoManager
 // ---------------------------------------------------------------------------
 
 const MAX_STACK_SIZE = 50;
 
 export class FileUndoManager {
-  private static _instance: FileUndoManager | undefined;
-
   private undoStack: FileOperation[] = [];
   private redoStack: FileOperation[] = [];
-
-  private constructor() {}
-
-  static getInstance(): FileUndoManager {
-    if (!FileUndoManager._instance) {
-      FileUndoManager._instance = new FileUndoManager();
-    }
-    return FileUndoManager._instance;
-  }
 
   // ---------------------------------------------------------------------------
   // Snapshot — called by write/edit tools after a successful write
@@ -147,12 +136,5 @@ export class FileUndoManager {
   clear(): void {
     this.undoStack = [];
     this.redoStack = [];
-  }
-
-  // ---------------------------------------------------------------------------
-  // Testing: reset singleton (only for tests)
-  // ---------------------------------------------------------------------------
-  static _resetForTest(): void {
-    FileUndoManager._instance = undefined;
   }
 }

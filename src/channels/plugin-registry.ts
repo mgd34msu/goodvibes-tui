@@ -84,20 +84,10 @@ export interface ChannelPlugin {
 }
 
 export class ChannelPluginRegistry {
-  private static active: ChannelPluginRegistry | null = null;
-
   private readonly plugins = new Map<string, ChannelPlugin>();
   private readonly pluginsBySurface = new Map<ChannelSurface, ChannelPlugin>();
   private readonly pluginsByPath = new Map<string, ChannelPlugin>();
   private version = 0;
-
-  constructor() {
-    ChannelPluginRegistry.active = this;
-  }
-
-  static getActive(): ChannelPluginRegistry | null {
-    return ChannelPluginRegistry.active;
-  }
 
   register(plugin: ChannelPlugin): void {
     const existingById = this.plugins.get(plugin.id);

@@ -3,10 +3,11 @@ import { AgentManager } from '../../tools/agent/index.ts';
 import { AgentMessageBus } from '../../agents/message-bus.ts';
 import type { AgentRecord } from '../../tools/agent/index.ts';
 import type { StreamDelta } from '../../providers/interface.ts';
+import { getTestAgentManager, resetTestRuntimeServices } from '../helpers/runtime-services.ts';
 
 beforeEach(() => {
-  AgentManager.resetInstance();
-  AgentMessageBus.resetInstance();
+  resetTestRuntimeServices();
+  resetTestRuntimeServices();
 });
 
 // ---------------------------------------------------------------------------
@@ -15,14 +16,14 @@ beforeEach(() => {
 
 describe('AgentRecord streamingContent field', () => {
   test('streamingContent is undefined by default after spawn', () => {
-    const am = AgentManager.getInstance();
+    const am = getTestAgentManager();
     const rec = am.spawn({ mode: 'spawn', task: 'Stuck task', template: 'general', tools: [] });
     // 'Stuck task' bypasses the orchestrator (test hook in AgentManager.spawn)
     expect(rec.streamingContent).toBeUndefined();
   });
 
   test('streamingContent can be set on AgentRecord', () => {
-    const am = AgentManager.getInstance();
+    const am = getTestAgentManager();
     const rec = am.spawn({ mode: 'spawn', task: 'Stuck task', template: 'general', tools: [] });
     const live = am.getStatus(rec.id)!;
     live.streamingContent = 'Hello from streaming';
@@ -30,7 +31,7 @@ describe('AgentRecord streamingContent field', () => {
   });
 
   test('streamingContent can be cleared (set to undefined)', () => {
-    const am = AgentManager.getInstance();
+    const am = getTestAgentManager();
     const rec = am.spawn({ mode: 'spawn', task: 'Stuck task', template: 'general', tools: [] });
     const live = am.getStatus(rec.id)!;
     live.streamingContent = 'some content';
@@ -40,7 +41,7 @@ describe('AgentRecord streamingContent field', () => {
   });
 
   test('streamingContent accepts multi-line content', () => {
-    const am = AgentManager.getInstance();
+    const am = getTestAgentManager();
     const rec = am.spawn({ mode: 'spawn', task: 'Stuck task', template: 'general', tools: [] });
     const live = am.getStatus(rec.id)!;
     live.streamingContent = 'Line one\nLine two\nLine three';
@@ -100,7 +101,7 @@ function makeAccumulator(record: AgentRecord) {
 
 describe('StreamDelta accumulation pattern', () => {
   test('accumulates content across multiple deltas', () => {
-    const am = AgentManager.getInstance();
+    const am = getTestAgentManager();
     const rec = am.spawn({ mode: 'spawn', task: 'Stuck task', template: 'general', tools: [] });
     const live = am.getStatus(rec.id)!;
     const { onDelta, getAccumulated } = makeAccumulator(live);
@@ -114,7 +115,7 @@ describe('StreamDelta accumulation pattern', () => {
   });
 
   test('ignores deltas with no content', () => {
-    const am = AgentManager.getInstance();
+    const am = getTestAgentManager();
     const rec = am.spawn({ mode: 'spawn', task: 'Stuck task', template: 'general', tools: [] });
     const live = am.getStatus(rec.id)!;
     const { onDelta, getAccumulated } = makeAccumulator(live);
@@ -129,7 +130,7 @@ describe('StreamDelta accumulation pattern', () => {
   });
 
   test('sets streamingContent to accumulated string after each delta', () => {
-    const am = AgentManager.getInstance();
+    const am = getTestAgentManager();
     const rec = am.spawn({ mode: 'spawn', task: 'Stuck task', template: 'general', tools: [] });
     const live = am.getStatus(rec.id)!;
     const { onDelta } = makeAccumulator(live);
@@ -142,7 +143,7 @@ describe('StreamDelta accumulation pattern', () => {
   });
 
   test('streamingContent reflects full accumulated text (not just last delta)', () => {
-    const am = AgentManager.getInstance();
+    const am = getTestAgentManager();
     const rec = am.spawn({ mode: 'spawn', task: 'Stuck task', template: 'general', tools: [] });
     const live = am.getStatus(rec.id)!;
     const { onDelta } = makeAccumulator(live);
@@ -162,7 +163,7 @@ describe('StreamDelta accumulation pattern', () => {
 
 describe('progress truncation logic', () => {
   test('progress shows full text when accumulated <= 100 chars', () => {
-    const am = AgentManager.getInstance();
+    const am = getTestAgentManager();
     const rec = am.spawn({ mode: 'spawn', task: 'Stuck task', template: 'general', tools: [] });
     const live = am.getStatus(rec.id)!;
     const { onDelta } = makeAccumulator(live);
@@ -174,7 +175,7 @@ describe('progress truncation logic', () => {
   });
 
   test('progress uses ellipsis prefix when accumulated > 100 chars', () => {
-    const am = AgentManager.getInstance();
+    const am = getTestAgentManager();
     const rec = am.spawn({ mode: 'spawn', task: 'Stuck task', template: 'general', tools: [] });
     const live = am.getStatus(rec.id)!;
     const { onDelta } = makeAccumulator(live);
@@ -190,7 +191,7 @@ describe('progress truncation logic', () => {
   });
 
   test('progress truncates to last 97 chars with ... prefix for long text', () => {
-    const am = AgentManager.getInstance();
+    const am = getTestAgentManager();
     const rec = am.spawn({ mode: 'spawn', task: 'Stuck task', template: 'general', tools: [] });
     const live = am.getStatus(rec.id)!;
     const { onDelta } = makeAccumulator(live);
@@ -208,7 +209,7 @@ describe('progress truncation logic', () => {
   });
 
   test('progress replaces newlines with spaces', () => {
-    const am = AgentManager.getInstance();
+    const am = getTestAgentManager();
     const rec = am.spawn({ mode: 'spawn', task: 'Stuck task', template: 'general', tools: [] });
     const live = am.getStatus(rec.id)!;
     const { onDelta } = makeAccumulator(live);
@@ -221,7 +222,7 @@ describe('progress truncation logic', () => {
   });
 
   test('progress defaults to Streaming... when content trims to empty', () => {
-    const am = AgentManager.getInstance();
+    const am = getTestAgentManager();
     const rec = am.spawn({ mode: 'spawn', task: 'Stuck task', template: 'general', tools: [] });
     const live = am.getStatus(rec.id)!;
     const { onDelta } = makeAccumulator(live);
@@ -233,7 +234,7 @@ describe('progress truncation logic', () => {
   });
 
   test('progress at exactly 100 chars is not truncated', () => {
-    const am = AgentManager.getInstance();
+    const am = getTestAgentManager();
     const rec = am.spawn({ mode: 'spawn', task: 'Stuck task', template: 'general', tools: [] });
     const live = am.getStatus(rec.id)!;
     const { onDelta } = makeAccumulator(live);
@@ -246,7 +247,7 @@ describe('progress truncation logic', () => {
   });
 
   test('multiple delta chunks accumulate before truncation threshold is applied', () => {
-    const am = AgentManager.getInstance();
+    const am = getTestAgentManager();
     const rec = am.spawn({ mode: 'spawn', task: 'Stuck task', template: 'general', tools: [] });
     const live = am.getStatus(rec.id)!;
     const { onDelta } = makeAccumulator(live);

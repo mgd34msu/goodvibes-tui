@@ -1,5 +1,4 @@
 import type { CommandContext, SlashCommand } from '../command-registry.ts';
-import { KnowledgeService } from '../../knowledge/index.ts';
 
 function readFlag(args: string[], name: string): string | undefined {
   const index = args.indexOf(name);
@@ -20,10 +19,6 @@ function positionalArgs(args: string[], valuedFlags: readonly string[] = []): st
   });
 }
 
-function getKnowledgeService(context: CommandContext): KnowledgeService {
-  return KnowledgeService.getActive({ configManager: context.configManager });
-}
-
 export const knowledgeCommand: SlashCommand = {
   name: 'knowledge',
   aliases: ['know', 'kb'],
@@ -31,7 +26,11 @@ export const knowledgeCommand: SlashCommand = {
   usage: '<subcommand> [args]',
   argsHint: 'status|ingest-url|import-bookmarks|import-urls|list|search|get|queue|candidates|reports|schedules|lint|packet|explain|reindex|consolidate',
   handler: async (args: string[], context: CommandContext): Promise<void> => {
-    const service = getKnowledgeService(context);
+    const service = context.knowledgeService;
+    if (!service) {
+      context.print('[knowledge] Knowledge service is not available in this runtime.');
+      return;
+    }
     if (args.length === 0 && context.openKnowledgePanel) {
       context.openKnowledgePanel();
       return;

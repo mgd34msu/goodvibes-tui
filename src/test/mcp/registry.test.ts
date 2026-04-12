@@ -5,6 +5,7 @@ import { join } from 'path';
 import { mkdirSync, writeFileSync, rmSync, existsSync } from 'fs';
 import { tmpdir } from 'os';
 import { SandboxSessionRegistry } from '../../runtime/sandbox/session-registry.ts';
+import { createHookDispatcher } from '../../hooks/index.ts';
 
 // Minimal stub MCP server script for registry tests
 const STUB_SCRIPT = /* js */ `
@@ -36,45 +37,49 @@ function stubServerConfig(name: string): McpServerConfig {
   return { name, command: 'bun', args: ['--eval', STUB_SCRIPT] };
 }
 
+function createRegistry(): McpRegistry {
+  return new McpRegistry({ hookDispatcher: createHookDispatcher(), sandboxSessions: new SandboxSessionRegistry() });
+}
+
 // ---------------------------------------------------------------------------
 // Registry — no servers
 // ---------------------------------------------------------------------------
 describe('McpRegistry — empty state', () => {
   test('serverNames is empty by default', () => {
-    const registry = new McpRegistry();
+    const registry = createRegistry();
     expect(registry.serverNames).toEqual([]);
   });
 
   test('listAllTools() returns empty array with no servers', async () => {
-    const registry = new McpRegistry();
+    const registry = createRegistry();
     const tools = await registry.listAllTools();
     expect(tools).toEqual([]);
   });
 
   test('callTool() throws for invalid qualified name', async () => {
-    const registry = new McpRegistry();
+    const registry = createRegistry();
     await expect(registry.callTool('bad-name', {})).rejects.toThrow('invalid qualified tool name');
   });
 
   test('callTool() throws for missing server', async () => {
-    const registry = new McpRegistry();
+    const registry = createRegistry();
     await expect(registry.callTool('mcp:ghost:tool', {})).rejects.toThrow("no server named 'ghost'");
   });
 
   test('getToolSchema() returns null for unknown qualified name', async () => {
-    const registry = new McpRegistry();
+    const registry = createRegistry();
     const schema = await registry.getToolSchema('mcp:ghost:tool');
     expect(schema).toBeNull();
   });
 
   test('getToolSchema() returns null for malformed name', async () => {
-    const registry = new McpRegistry();
+    const registry = createRegistry();
     const schema = await registry.getToolSchema('not-mcp-format');
     expect(schema).toBeNull();
   });
 
   test('disconnectAll() is safe with no servers', async () => {
-    const registry = new McpRegistry();
+    const registry = createRegistry();
     await expect(registry.disconnectAll()).resolves.toBeUndefined();
   });
 });
@@ -84,7 +89,7 @@ describe('McpRegistry — empty state', () => {
 // ---------------------------------------------------------------------------
 describe('McpRegistry — qualified name parsing', () => {
   test('getClient() returns undefined for unknown server', () => {
-    const registry = new McpRegistry();
+    const registry = createRegistry();
     expect(registry.getClient('unknown')).toBeUndefined();
   });
 });
@@ -100,14 +105,14 @@ describe('McpRegistry — with stub server', () => {
   });
 
   test('connectServer() registers a server', async () => {
-    registry = new McpRegistry();
+    registry = createRegistry();
     await registry.connectServer(stubServerConfig('alpha'));
     expect(registry.serverNames).toContain('alpha');
     expect(registry.listServerSecurity()[0]?.trustMode).toBe('ask-on-risk');
   });
 
   test('connectServer() can route MCP startup through the sandbox session backend', async () => {
-    registry = new McpRegistry();
+    registry = createRegistry();
     const sandboxSessions = new SandboxSessionRegistry();
     const configManager = {
       get(key: string) {
@@ -135,7 +140,7 @@ describe('McpRegistry — with stub server', () => {
   });
 
   test('hybrid MCP isolation uses dedicated sessions for higher-risk servers', async () => {
-    registry = new McpRegistry();
+    registry = createRegistry();
     const sandboxSessions = new SandboxSessionRegistry();
     const configManager = {
       get(key: string) {
@@ -165,7 +170,7 @@ describe('McpRegistry — with stub server', () => {
   });
 
   test('getClient() returns the McpClient after connecting', async () => {
-    registry = new McpRegistry();
+    registry = createRegistry();
     await registry.connectServer(stubServerConfig('beta'));
     const client = registry.getClient('beta');
     expect(client).toBeDefined();
@@ -173,7 +178,7 @@ describe('McpRegistry — with stub server', () => {
   });
 
   test('listAllTools() returns tools with qualified names', async () => {
-    registry = new McpRegistry();
+    registry = createRegistry();
     await registry.connectServer(stubServerConfig('myserver'));
     const tools = await registry.listAllTools();
     expect(tools).toHaveLength(1);
@@ -184,7 +189,7 @@ describe('McpRegistry — with stub server', () => {
   });
 
   test('listAllTools() aggregates tools from multiple servers', async () => {
-    registry = new McpRegistry();
+    registry = createRegistry();
     await registry.connectServer(stubServerConfig('srv-a'));
     await registry.connectServer(stubServerConfig('srv-b'));
     const tools = await registry.listAllTools();
@@ -194,7 +199,7 @@ describe('McpRegistry — with stub server', () => {
   });
 
   test('getToolSchema() returns full schema for a registered tool', async () => {
-    registry = new McpRegistry();
+    registry = createRegistry();
     await registry.connectServer(stubServerConfig('schema-srv'));
     const schema = await registry.getToolSchema('mcp:schema-srv:greet');
     expect(schema).not.toBeNull();
@@ -203,21 +208,21 @@ describe('McpRegistry — with stub server', () => {
   });
 
   test('callTool() executes a tool by qualified name', async () => {
-    registry = new McpRegistry();
+    registry = createRegistry();
     await registry.connectServer(stubServerConfig('call-srv'));
     const result = await registry.callTool('mcp:call-srv:greet', { name: 'Alice' });
     expect(result).toBeDefined();
   });
 
   test('callTool() denies when server trust mode is blocked', async () => {
-    registry = new McpRegistry();
+    registry = createRegistry();
     await registry.connectServer(stubServerConfig('blocked-srv'));
     registry.setServerTrustMode('blocked-srv', 'blocked');
     await expect(registry.callTool('mcp:blocked-srv:greet', {})).rejects.toThrow('denied');
   });
 
   test('quarantineSchema() blocks calls until an operator approves an override', async () => {
-    registry = new McpRegistry();
+    registry = createRegistry();
     await registry.connectServer(stubServerConfig('quarantine-srv'));
     registry.quarantineSchema('quarantine-srv', 'operator_flagged', 'unexpected deploy surface');
     expect(registry.listServerSecurity()[0]?.schemaFreshness).toBe('quarantined');
@@ -231,19 +236,19 @@ describe('McpRegistry — with stub server', () => {
   });
 
   test('connectServer() is idempotent (skips duplicate name)', async () => {
-    registry = new McpRegistry();
+    registry = createRegistry();
     await registry.connectServer(stubServerConfig('dup-srv'));
     await registry.connectServer(stubServerConfig('dup-srv')); // second call should be no-op
     expect(registry.serverNames.filter((n) => n === 'dup-srv')).toHaveLength(1);
   });
 
   test('disconnectAll() removes all clients', async () => {
-    registry = new McpRegistry();
+    registry = createRegistry();
     await registry.connectServer(stubServerConfig('x'));
     await registry.connectServer(stubServerConfig('y'));
     await registry.disconnectAll();
     expect(registry.serverNames).toHaveLength(0);
-    registry = new McpRegistry(); // avoid double-disconnect in afterEach
+    registry = createRegistry(); // avoid double-disconnect in afterEach
   });
 });
 
@@ -263,7 +268,7 @@ describe('McpRegistry — connectAll from file', () => {
     tmpDir = join(tmpdir(), `mcp-reg-${Date.now()}`);
     mkdirSync(join(tmpDir, '.goodvibes'), { recursive: true });
     writeFileSync(join(tmpDir, '.goodvibes', 'mcp.json'), JSON.stringify({ servers: [] }));
-    registry = new McpRegistry();
+    registry = createRegistry();
     await registry.connectAll(tmpDir);
     expect(registry.serverNames).toHaveLength(0);
   });
@@ -271,7 +276,7 @@ describe('McpRegistry — connectAll from file', () => {
   test('connectAll() with missing config file connects nothing', async () => {
     tmpDir = join(tmpdir(), `mcp-reg-${Date.now()}`);
     mkdirSync(tmpDir, { recursive: true });
-    registry = new McpRegistry();
+    registry = createRegistry();
     await registry.connectAll(tmpDir);
     expect(registry.serverNames).toHaveLength(0);
   });

@@ -6,12 +6,12 @@
  * ModelPickerEntry objects ready for UI consumption.
  */
 import type { ModelDefinition } from '../../../providers/registry.ts';
+import type { ProviderRegistry } from '../../../providers/registry.ts';
+import type { BenchmarkStore } from '../../../providers/model-benchmarks.ts';
 import type { ProviderHealthDomainState, ProviderHealthRecord } from '../../store/domains/provider-health.ts';
 import type { ModelDomainState } from '../../store/domains/model.ts';
 import { detectFamily, tierToCategoryFilter } from '../../../input/model-picker.ts';
-import { getBenchmarks, getQualityTier, getQualityTierFromScore, compositeScore } from '../../../providers/model-benchmarks.ts';
-import { getSyntheticModelInfoFromCatalog } from '../../../providers/model-catalog.ts';
-import { getContextWindowForModel } from '../../../providers/model-limits.ts';
+import { getQualityTier, getQualityTierFromScore, compositeScore } from '../../../providers/model-benchmarks.ts';
 import type {
   ModelPickerEntry,
   ModelPickerGroup,
@@ -77,9 +77,13 @@ function buildCapabilityFlags(model: ModelDefinition): CapabilityFlags {
  * Derive quality tier and benchmark score for a model.
  * Handles synthetic models (catalog-backed composite scores) and standard models.
  */
-function buildQualityInfo(model: ModelDefinition): { qualityTier?: string; benchmarkScore?: number } {
+function buildQualityInfo(
+  model: ModelDefinition,
+  benchmarkStore: Pick<BenchmarkStore, 'getBenchmarks'>,
+  providerRegistry: Pick<ProviderRegistry, 'getSyntheticModelInfoFromCatalog'>,
+): { qualityTier?: string; benchmarkScore?: number } {
   if (model.provider === 'synthetic') {
-    const info = getSyntheticModelInfoFromCatalog(model.id);
+    const info = providerRegistry.getSyntheticModelInfoFromCatalog(model.id);
     if (info?.bestCompositeScore != null) {
       return {
         qualityTier: getQualityTierFromScore(info.bestCompositeScore),
@@ -89,7 +93,7 @@ function buildQualityInfo(model: ModelDefinition): { qualityTier?: string; bench
     return {};
   }
 
-  const benchmarks = getBenchmarks(model.id) ?? getBenchmarks(model.displayName);
+  const benchmarks = benchmarkStore.getBenchmarks(model.id) ?? benchmarkStore.getBenchmarks(model.displayName);
   if (!benchmarks) return {};
 
   return {
@@ -129,13 +133,15 @@ export function enrichModelEntries(
   healthState: ProviderHealthDomainState,
   modelState: ModelDomainState,
   pinnedIds: ReadonlySet<string>,
+  benchmarkStore: Pick<BenchmarkStore, 'getBenchmarks'>,
+  providerRegistry: Pick<ProviderRegistry, 'getSyntheticModelInfoFromCatalog' | 'getContextWindowForModel'>,
 ): ModelPickerEntry[] {
   const fallbackPositions = buildFallbackPositionMap(modelState);
 
   const entries: ModelPickerEntry[] = models.map((model) => {
     const record = healthState.providers.get(model.provider);
     const health = buildHealthContext(record);
-    const { qualityTier, benchmarkScore } = buildQualityInfo(model);
+    const { qualityTier, benchmarkScore } = buildQualityInfo(model, benchmarkStore, providerRegistry);
     const isProviderDegraded =
       health.status === 'degraded' || health.status === 'rate_limited';
     const isProviderUnavailable =
@@ -144,7 +150,7 @@ export function enrichModelEntries(
     const fallbackPosition = fallbackPositions.get(model.id);
 
     // Resolve effective context window and determine display source label.
-    const effectiveContextWindow = getContextWindowForModel(model);
+    const effectiveContextWindow = providerRegistry.getContextWindowForModel(model);
     // Determine source: custom/local providers carry provenance on ModelDefinition;
     // for catalog models, if getContextWindowForModel returned more than the
     // static contextWindow it came from OpenRouter, else it's the registry value.

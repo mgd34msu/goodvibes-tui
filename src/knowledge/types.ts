@@ -174,6 +174,8 @@ export interface KnowledgeJobRunRecord {
   readonly error?: string;
   readonly result: Record<string, unknown>;
   readonly metadata: Record<string, unknown>;
+  readonly createdAt: number;
+  readonly updatedAt: number;
 }
 
 export interface KnowledgeUsageRecord {

@@ -1,8 +1,69 @@
-import { describe, expect, test } from 'bun:test';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { describe, expect, test, beforeEach, afterEach } from 'bun:test';
+import { ConfigManager } from '../../config/manager.ts';
+import { SubscriptionManager } from '../../config/subscriptions.ts';
 import { handleSelectionModalToken } from '../../input/handler-modal-routes.ts';
 import { handleModelPickerToken } from '../../input/handler-picker-routes.ts';
 import { SelectionModal } from '../../input/selection-modal.ts';
 import { ModelPickerModal } from '../../input/model-picker.ts';
+import { CacheHitTracker } from '../../providers/cache-strategy.ts';
+import { ProviderCapabilityRegistry } from '../../providers/capabilities.ts';
+import { FavoritesStore } from '../../providers/favorites.ts';
+import { BenchmarkStore } from '../../providers/model-benchmarks.ts';
+import { ProviderRegistry } from '../../providers/registry.ts';
+
+interface PickerHarness {
+  readonly favoritesStore: FavoritesStore;
+  readonly benchmarkStore: BenchmarkStore;
+  readonly providerRegistry: ProviderRegistry;
+  cleanup(): void;
+}
+
+function createPickerHarness(): PickerHarness {
+  const rootDir = mkdtempSync(join(tmpdir(), 'gv-modal-search-focus-'));
+  const configDir = join(rootDir, 'config');
+  const dataDir = join(rootDir, 'provider-data');
+  const subscriptionsPath = join(rootDir, 'subscriptions.json');
+  mkdirSync(configDir, { recursive: true });
+  mkdirSync(dataDir, { recursive: true });
+
+  const favoritesStore = new FavoritesStore({ dir: dataDir });
+  const benchmarkStore = new BenchmarkStore({ dir: dataDir });
+  writeFileSync(favoritesStore.getPath(), JSON.stringify({ pinned: [], history: [] }, null, 2));
+  writeFileSync(
+    benchmarkStore.getCachePath(),
+    JSON.stringify({ version: 1 as const, fetchedAt: Date.now(), ttlMs: 86_400_000, entries: [] }, null, 2),
+  );
+  benchmarkStore.initBenchmarks();
+
+  const providerRegistry = new ProviderRegistry({
+    configManager: new ConfigManager({ configDir }),
+    subscriptionManager: new SubscriptionManager(subscriptionsPath),
+    capabilityRegistry: new ProviderCapabilityRegistry(),
+    cacheHitTracker: new CacheHitTracker(),
+    favoritesStore,
+    benchmarkStore,
+  });
+
+  return {
+    favoritesStore,
+    benchmarkStore,
+    providerRegistry,
+    cleanup: () => rmSync(rootDir, { recursive: true, force: true }),
+  };
+}
+
+let harness: PickerHarness;
+
+beforeEach(() => {
+  harness = createPickerHarness();
+});
+
+afterEach(() => {
+  harness?.cleanup();
+});
 
 describe('modal search focus routing', () => {
   test('selection modal keeps typable custom actions active until search is focused', () => {
@@ -61,7 +122,7 @@ describe('modal search focus routing', () => {
   });
 
   test('model picker keeps group hotkey active until search is focused', () => {
-    const picker = new ModelPickerModal();
+    const picker = new ModelPickerModal(harness.favoritesStore, harness.benchmarkStore, harness.providerRegistry);
     picker.openAllModels([
       {
         id: 'gpt-1',

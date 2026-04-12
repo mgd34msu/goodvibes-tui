@@ -139,8 +139,6 @@ function toClientDescriptor(record: ControlPlaneClientRecord): ControlPlaneClien
 }
 
 export class ControlPlaneGateway {
-  private static active: ControlPlaneGateway | null = null;
-
   private runtimeBus: RuntimeEventBus | null;
   private dispatch: DomainDispatch | null;
   private readonly serverConfig: ControlPlaneServerConfig;
@@ -168,11 +166,6 @@ export class ControlPlaneGateway {
         connectionState: this.serverConfig.enabled ? 'disconnected' : 'disabled',
       }, 'control-plane.gateway.init');
     }
-    ControlPlaneGateway.active = this;
-  }
-
-  static getActive(): ControlPlaneGateway | null {
-    return ControlPlaneGateway.active;
   }
 
   attachRuntime(config: {

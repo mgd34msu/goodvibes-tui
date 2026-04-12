@@ -1,9 +1,11 @@
 import { describe, expect, test } from 'bun:test';
 import { DEFAULT_CONFIG } from '../../config/index.ts';
 import { ConversationManager } from '../../core/conversation.ts';
+import type { CommandContext } from '../../input/command-registry.ts';
 import { GLYPHS } from '../../renderer/ui-primitives.ts';
 import { getOverlayWidthClass } from '../../renderer/overlay-viewport.ts';
 import { wireShellUiOpeners } from '../../shell/ui-openers.ts';
+import { createTestManagers } from '../helpers/test-managers.ts';
 
 describe('UI roadmap gate', () => {
   test('locks the canonical Unicode primitive set', () => {
@@ -40,6 +42,7 @@ describe('UI roadmap gate', () => {
   });
 
   test('opens and focuses panels through the shared shell opener path', () => {
+    const testManagers = createTestManagers();
     const input = {
       panelFocused: false,
       modalOpened: () => {},
@@ -54,7 +57,7 @@ describe('UI roadmap gate', () => {
       profilePickerModal: { open: () => {} },
       settingsModal: { open: () => {} },
       sessionPickerModal: { open: () => {} },
-    } as any;
+    } as unknown as Parameters<typeof wireShellUiOpeners>[0]['input'];
     let visible = false;
     const panelManager = {
       isVisible: () => visible,
@@ -67,17 +70,19 @@ describe('UI roadmap gate', () => {
       setSplashSuppressed: () => {},
       rebuildHistory: () => {},
     } as never;
-    const commandContext = {} as any;
+    const commandContext = {} as CommandContext;
 
     wireShellUiOpeners({
       commandContext,
       input,
       panelManager,
       conversation,
+      configManager: testManagers.configManager,
       providerRegistry: { getSelectableModels: () => [], listModels: () => [] } as never,
       runtime: { model: 'gpt-5.4', provider: 'openai' } as never,
       featureFlags: {} as never,
       mcpRegistry: {} as never,
+      subscriptionManager: testManagers.subscriptionManager,
       getConfiguredProviderIds: () => [],
       getPinned: async () => [],
       render: () => {},

@@ -1,6 +1,6 @@
 import type { ConversationMessageSnapshot, ConversationTitleSource } from '../core/conversation.ts';
-import { helperModel } from '../config/helper-model.ts';
-import { configManager } from '../config/index.ts';
+import type { HelperModel } from '../config/helper-model.ts';
+import type { ConfigManager } from '../config/manager.ts';
 
 export type ReturnContextMode = 'off' | 'local' | 'assisted';
 
@@ -42,6 +42,8 @@ export interface PersistedSessionContext {
   readonly returnContext?: SessionReturnContextSummary;
 }
 
+type ReturnContextConfig = Pick<ConfigManager, 'get'>;
+
 export function buildPersistedSessionContext(
   messages: readonly ConversationMessageSnapshot[],
   titleSource?: ConversationTitleSource,
@@ -67,7 +69,7 @@ function textContent(message: ConversationMessageSnapshot | undefined): string {
     .join(' ');
 }
 
-export function getReturnContextMode(): ReturnContextMode {
+export function getReturnContextMode(configManager: ReturnContextConfig): ReturnContextMode {
   return (configManager.get('behavior.returnContextMode') as ReturnContextMode | undefined) ?? 'off';
 }
 
@@ -152,9 +154,11 @@ export function buildLocalReturnContextSummary(
 }
 
 export async function maybeAssistReturnContextSummary(
+  configManager: ReturnContextConfig,
+  helperModel: Pick<HelperModel, 'chat'>,
   summary: SessionReturnContextSummary,
 ): Promise<SessionReturnContextSummary> {
-  if (getReturnContextMode() !== 'assisted') return summary;
+  if (getReturnContextMode(configManager) !== 'assisted') return summary;
 
   const enabled = configManager.get('helper.enabled') as boolean | undefined;
   if (!enabled) return summary;

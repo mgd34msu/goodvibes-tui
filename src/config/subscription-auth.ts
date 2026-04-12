@@ -1,10 +1,10 @@
 import { getBuiltinSubscriptionProvider } from './subscription-providers.ts';
-import { getSubscriptionManager } from './subscriptions.ts';
+import { SubscriptionManager } from './subscriptions.ts';
 import { refreshOpenAICodexToken } from './openai-codex-auth.ts';
 
 export async function resolveSubscriptionAccessToken(provider: string): Promise<string | null> {
+  const manager = new SubscriptionManager();
   if (provider === 'openai') {
-    const manager = getSubscriptionManager();
     const existing = manager.get('openai');
     if (!existing) return null;
     if (typeof existing.expiresAt === 'number' && Date.now() + 60_000 >= existing.expiresAt) {
@@ -25,5 +25,5 @@ export async function resolveSubscriptionAccessToken(provider: string): Promise<
   }
   const builtin = getBuiltinSubscriptionProvider(provider);
   if (!builtin) return null;
-  return getSubscriptionManager().resolveAccessToken(provider, builtin.oauth);
+  return manager.resolveAccessToken(provider, builtin.oauth);
 }

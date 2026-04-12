@@ -7,17 +7,20 @@
  */
 
 import { describe, test, expect, beforeEach, afterEach } from 'bun:test';
-import { PermissionManager } from '../../permissions/manager.ts';
+import { join } from 'node:path';
+import { tmpdir } from 'node:os';
 import { PermissionPromptUI, type PermissionPromptRequest } from '../../permissions/prompt.ts';
 import { analyzePermissionRequest } from '../../permissions/analysis.ts';
-import { configManager } from '../../config/index.ts';
+import { ConfigManager } from '../../config/manager.ts';
+import { createPermissionConfigReader, PermissionManager } from '../../permissions/manager.ts';
 import { DaemonServer } from '../../daemon/server.ts';
 import { HttpListener } from '../../daemon/http-listener.ts';
 import { UserAuthManager } from '../../security/user-auth.ts';
 import { SpawnTokenManager } from '../../security/spawn-tokens.ts';
+import { PolicyRuntimeState } from '../../runtime/permissions/policy-runtime.ts';
 import { resolveAndValidatePath } from '../../utils/path-safety.ts';
-import type { PermissionMode } from '../../config/schema.ts';
-import { resetSettingsControlPlaneForTesting } from '../../runtime/settings/control-plane.ts';
+import { resetTestSpawnTokenManagers } from '../helpers/runtime-services.ts';
+import { resetSettingsControlPlaneStore } from '../helpers/settings-control-plane.ts';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -27,10 +30,15 @@ function makeManager(
   handler: (request: PermissionPromptRequest) => Promise<{ approved: boolean; remember?: boolean }> = async () => ({ approved: true }),
 ): { requests: PermissionPromptRequest[]; mgr: PermissionManager } {
   const requests: PermissionPromptRequest[] = [];
-  const mgr = new PermissionManager(async (request) => {
-    requests.push(request);
-    return handler(request);
-  });
+  const policyRuntimeState = new PolicyRuntimeState();
+  const mgr = new PermissionManager(
+    async (request) => {
+      requests.push(request);
+      return handler(request);
+    },
+    createPermissionConfigReader(configManager),
+    policyRuntimeState,
+  );
   return { requests, mgr };
 }
 
@@ -44,21 +52,17 @@ function makeUserAuth(): UserAuthManager {
 // Setup / teardown — force autoApprove=false and prompt mode for all tests
 // ---------------------------------------------------------------------------
 
-let savedAutoApprove: boolean;
-let savedMode: PermissionMode;
+let configManager: ConfigManager;
 
 beforeEach(() => {
-  resetSettingsControlPlaneForTesting();
-  savedAutoApprove = configManager.get('behavior.autoApprove') as boolean ?? false;
-  savedMode = configManager.get('permissions.mode') ?? 'prompt';
+  configManager = new ConfigManager({ configDir: join(tmpdir(), `gv-permission-audit-${Date.now()}-${Math.random().toString(36).slice(2)}`) });
+  resetSettingsControlPlaneStore(configManager);
   configManager.set('behavior.autoApprove', false);
   configManager.set('permissions.mode', 'prompt');
 });
 
 afterEach(() => {
-  resetSettingsControlPlaneForTesting();
-  configManager.set('behavior.autoApprove', savedAutoApprove);
-  configManager.set('permissions.mode', savedMode);
+  resetSettingsControlPlaneStore(configManager);
 });
 
 // ---------------------------------------------------------------------------
@@ -198,8 +202,8 @@ describe('Danger-gated features check config before enabling', () => {
   });
 
   describe('recursive orchestration policy — SpawnTokenManager.canSpawn', () => {
-    beforeEach(() => SpawnTokenManager.resetInstance());
-    afterEach(() => SpawnTokenManager.resetInstance());
+    beforeEach(() => resetTestSpawnTokenManagers());
+    afterEach(() => resetTestSpawnTokenManagers());
 
     test('canSpawn returns allowed=false when recursionEnabled=false', () => {
       const stm = new SpawnTokenManager('test-session');
@@ -301,8 +305,10 @@ describe('Path traversal protection via resolveAndValidatePath', () => {
   });
 
   test('resolveAndValidatePath is used by exec tool (import exists)', async () => {
-    const { execTool } = await import('../../tools/exec/index.ts');
-    expect(typeof execTool).toBe('object');
+    const { createExecTool } = await import('../../tools/exec/index.ts');
+    const { ProcessManager } = await import('../../tools/shared/process-manager.ts');
+    const execTool = createExecTool(new ProcessManager());
+    expect(typeof execTool.execute).toBe('function');
   });
 });
 

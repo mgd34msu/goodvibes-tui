@@ -1,6 +1,6 @@
 import type { HookDefinition, HookResult, HookEvent } from '../types.ts';
 import { logger } from '../../utils/logger.ts';
-import { toolLLM } from '../../config/tool-llm.ts';
+import type { ToolLLM } from '../../config/tool-llm.ts';
 
 /**
  * Prompt hook runner — sends event data to an LLM via ToolLLM.
@@ -11,7 +11,14 @@ import { toolLLM } from '../../config/tool-llm.ts';
  * JSON object.  If the response is not valid JSON (or is empty)
  * the hook returns `{ ok: true }` (fire-and-forget semantics).
  */
-export async function run(hook: HookDefinition, event: HookEvent): Promise<HookResult> {
+export async function run(
+  hook: HookDefinition,
+  event: HookEvent,
+  toolLLM: Pick<ToolLLM, 'chat'> | null,
+): Promise<HookResult> {
+  if (!toolLLM) {
+    return { ok: false, error: 'prompt hook runner is not configured in this runtime' };
+  }
   const promptTemplate = hook.prompt;
   if (!promptTemplate) {
     return { ok: false, error: 'prompt hook missing "prompt" field' };

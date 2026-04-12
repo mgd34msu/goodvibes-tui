@@ -1,10 +1,9 @@
 import type { CommandRegistry } from '../command-registry.ts';
 import type { SelectionItem } from '../selection-modal.ts';
-import { getKeybindingsManager } from '../keybindings.ts';
 import { EFFORT_DESCRIPTIONS } from '../../providers/effort-levels.ts';
 import { REASONING_BUDGET_MAP } from '../../providers/interface.ts';
-import { recordUsage } from '../../providers/favorites.ts';
 import { executeWriteQuit } from './quit-shared.ts';
+import { requireKeybindingsManager } from './runtime-services.ts';
 
 export function registerShellCoreCommands(registry: CommandRegistry): void {
   registry.register({
@@ -35,7 +34,7 @@ export function registerShellCoreCommands(registry: CommandRegistry): void {
           ctx.configManager.set('provider.model', def.id);
           ctx.configManager.set('provider.provider', def.provider);
           ctx.print(`Switched to model: ${def.displayName} (${def.provider})`);
-          void recordUsage(def.id);
+          void ctx.favoritesStore?.recordUsage(def.id);
         } catch (e) {
           ctx.print(`Error: ${(e as Error).message}`);
         }
@@ -74,7 +73,7 @@ export function registerShellCoreCommands(registry: CommandRegistry): void {
     aliases: ['kb'],
     description: 'List current keyboard bindings and their config file path',
     handler(_args, ctx) {
-      const km = getKeybindingsManager();
+      const km = requireKeybindingsManager(ctx);
       const all = km.getAll();
       const lines: string[] = [
         `Keybindings config: ${km.getConfigPath()}`,

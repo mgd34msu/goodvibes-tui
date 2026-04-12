@@ -25,6 +25,8 @@ import { ToolRegistry } from '../../tools/registry.ts';
 import type { ReconciliationEvent } from '../../core/tool-reconciliation.ts';
 import { createEventEnvelope } from '../../runtime/events/envelope.ts';
 import { RuntimeEventBus, type ToolEvent } from '../../runtime/events/index.ts';
+import { PolicyRuntimeState } from '../../runtime/permissions/policy-runtime.ts';
+import { createTestConfigManager } from '../helpers/test-managers.ts';
 
 // ---------------------------------------------------------------------------
 // Unit tests for reconciliation helpers
@@ -157,9 +159,11 @@ describe('Orchestrator tool result reconciliation', () => {
   async function buildOrchestrator() {
     const { Orchestrator } = await import('../../core/orchestrator.ts');
     const { ConversationManager } = await import('../../core/conversation.ts');
-    const { PermissionManager } = await import('../../permissions/manager.ts');
-    const cm = new ConversationManager(() => 80);
-    const pm = new PermissionManager(async () => ({ approved: true }));
+    const { PermissionManager, createPermissionConfigReader } = await import('../../permissions/manager.ts');
+    const configManager = createTestConfigManager();
+    const cm = new ConversationManager(() => 80, configManager);
+    const policyRuntimeState = new PolicyRuntimeState();
+    const pm = new PermissionManager(async () => ({ approved: true }), createPermissionConfigReader(configManager), policyRuntimeState);
     const orch = new Orchestrator(cm, () => 24, () => {}, toolRegistry, pm, () => '', null, null, null, runtimeBus);
     return { orch, cm, pm, runtimeBus };
   }
@@ -337,11 +341,12 @@ describe('Orchestrator tool result reconciliation', () => {
   test('isReconciliationEnabled returns false when flag is disabled in manager', async () => {
     const { Orchestrator } = await import('../../core/orchestrator.ts');
     const { ConversationManager } = await import('../../core/conversation.ts');
-    const { PermissionManager } = await import('../../permissions/manager.ts');
+    const { PermissionManager, createPermissionConfigReader } = await import('../../permissions/manager.ts');
     const { createFeatureFlagManager } = await import('../../runtime/feature-flags/manager.ts');
-
-    const cm = new ConversationManager(() => 80);
-    const pm = new PermissionManager(async () => ({ approved: true }));
+    const configManager = createTestConfigManager();
+    const cm = new ConversationManager(() => 80, configManager);
+    const policyRuntimeState = new PolicyRuntimeState();
+    const pm = new PermissionManager(async () => ({ approved: true }), createPermissionConfigReader(configManager), policyRuntimeState);
     const flagManager = createFeatureFlagManager();
     flagManager.disable('tool-result-reconciliation');
 
@@ -357,11 +362,12 @@ describe('Orchestrator tool result reconciliation', () => {
   test('reconcileUnresolvedToolCalls does NOT emit event when flag is disabled', async () => {
     const { Orchestrator } = await import('../../core/orchestrator.ts');
     const { ConversationManager } = await import('../../core/conversation.ts');
-    const { PermissionManager } = await import('../../permissions/manager.ts');
+    const { PermissionManager, createPermissionConfigReader } = await import('../../permissions/manager.ts');
     const { createFeatureFlagManager } = await import('../../runtime/feature-flags/manager.ts');
-
-    const cm = new ConversationManager(() => 80);
-    const pm = new PermissionManager(async () => ({ approved: true }));
+    const configManager = createTestConfigManager();
+    const cm = new ConversationManager(() => 80, configManager);
+    const policyRuntimeState = new PolicyRuntimeState();
+    const pm = new PermissionManager(async () => ({ approved: true }), createPermissionConfigReader(configManager), policyRuntimeState);
     const flagManager = createFeatureFlagManager();
     flagManager.disable('tool-result-reconciliation');
 

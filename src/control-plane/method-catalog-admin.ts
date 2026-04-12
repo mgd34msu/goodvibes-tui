@@ -1,5 +1,17 @@
 import type { GatewayMethodDescriptor } from './method-catalog-shared.ts';
-import { GENERIC_OBJECT_SCHEMA,EMPTY_OBJECT_SCHEMA,STRING_SCHEMA,objectSchema,listOutputSchema,entityOutputSchema,bodyEnvelopeSchema,methodDescriptor } from './method-catalog-shared.ts';
+import { EMPTY_OBJECT_SCHEMA,STRING_SCHEMA,objectSchema,listOutputSchema,entityOutputSchema,bodyEnvelopeSchema,methodDescriptor } from './method-catalog-shared.ts';
+import {
+  CONFIG_SET_OUTPUT_SCHEMA,
+  CONFIG_SNAPSHOT_SCHEMA,
+  LOCAL_AUTH_USER_SCHEMA,
+  LOCAL_AUTH_BOOTSTRAP_DELETE_OUTPUT_SCHEMA,
+  LOCAL_AUTH_DELETE_OUTPUT_SCHEMA,
+  LOCAL_AUTH_SESSION_REVOKE_OUTPUT_SCHEMA,
+  LOCAL_AUTH_STATUS_SCHEMA,
+  LOCAL_AUTH_ROTATE_PASSWORD_OUTPUT_SCHEMA,
+  PANEL_OPEN_OUTPUT_SCHEMA,
+  PANEL_SNAPSHOT_SCHEMA,
+} from './operator-contract-schemas.ts';
 
 export const builtinGatewayAdminMethodDescriptors: readonly GatewayMethodDescriptor[] = [
   methodDescriptor({
@@ -11,7 +23,7 @@ export const builtinGatewayAdminMethodDescriptors: readonly GatewayMethodDescrip
     access: 'admin',
     http: { method: 'GET', path: '/api/local-auth' },
     inputSchema: EMPTY_OBJECT_SCHEMA,
-    outputSchema: GENERIC_OBJECT_SCHEMA,
+    outputSchema: LOCAL_AUTH_STATUS_SCHEMA,
   }),
   methodDescriptor({
     id: 'local_auth.users.create',
@@ -25,7 +37,7 @@ export const builtinGatewayAdminMethodDescriptors: readonly GatewayMethodDescrip
       username: STRING_SCHEMA,
       password: STRING_SCHEMA,
     }, ['username', 'password']),
-    outputSchema: entityOutputSchema('user'),
+    outputSchema: entityOutputSchema('user', LOCAL_AUTH_USER_SCHEMA),
   }),
   methodDescriptor({
     id: 'local_auth.users.delete',
@@ -36,7 +48,7 @@ export const builtinGatewayAdminMethodDescriptors: readonly GatewayMethodDescrip
     access: 'admin',
     http: { method: 'DELETE', path: '/api/local-auth/users/{username}' },
     inputSchema: objectSchema({ username: STRING_SCHEMA }, ['username']),
-    outputSchema: GENERIC_OBJECT_SCHEMA,
+    outputSchema: LOCAL_AUTH_DELETE_OUTPUT_SCHEMA,
     dangerous: true,
   }),
   methodDescriptor({
@@ -48,7 +60,7 @@ export const builtinGatewayAdminMethodDescriptors: readonly GatewayMethodDescrip
     access: 'admin',
     http: { method: 'POST', path: '/api/local-auth/users/{username}/password' },
     inputSchema: bodyEnvelopeSchema({ password: STRING_SCHEMA }, ['password']),
-    outputSchema: GENERIC_OBJECT_SCHEMA,
+    outputSchema: LOCAL_AUTH_ROTATE_PASSWORD_OUTPUT_SCHEMA,
   }),
   methodDescriptor({
     id: 'local_auth.sessions.delete',
@@ -59,7 +71,7 @@ export const builtinGatewayAdminMethodDescriptors: readonly GatewayMethodDescrip
     access: 'admin',
     http: { method: 'DELETE', path: '/api/local-auth/sessions/{sessionId}' },
     inputSchema: objectSchema({ sessionId: STRING_SCHEMA }, ['sessionId']),
-    outputSchema: GENERIC_OBJECT_SCHEMA,
+    outputSchema: LOCAL_AUTH_SESSION_REVOKE_OUTPUT_SCHEMA,
     dangerous: true,
   }),
   methodDescriptor({
@@ -71,7 +83,7 @@ export const builtinGatewayAdminMethodDescriptors: readonly GatewayMethodDescrip
     access: 'admin',
     http: { method: 'DELETE', path: '/api/local-auth/bootstrap-file' },
     inputSchema: EMPTY_OBJECT_SCHEMA,
-    outputSchema: GENERIC_OBJECT_SCHEMA,
+    outputSchema: LOCAL_AUTH_BOOTSTRAP_DELETE_OUTPUT_SCHEMA,
     dangerous: true,
   }),
   methodDescriptor({
@@ -82,7 +94,7 @@ export const builtinGatewayAdminMethodDescriptors: readonly GatewayMethodDescrip
     scopes: ['read:panels'],
     http: { method: 'GET', path: '/api/panels' },
     inputSchema: EMPTY_OBJECT_SCHEMA,
-    outputSchema: listOutputSchema('panels'),
+    outputSchema: listOutputSchema('panels', PANEL_SNAPSHOT_SCHEMA),
   }),
   methodDescriptor({
     id: 'panels.open',
@@ -95,7 +107,7 @@ export const builtinGatewayAdminMethodDescriptors: readonly GatewayMethodDescrip
       id: STRING_SCHEMA,
       pane: STRING_SCHEMA,
     }, ['id']),
-    outputSchema: GENERIC_OBJECT_SCHEMA,
+    outputSchema: PANEL_OPEN_OUTPUT_SCHEMA,
   }),
   methodDescriptor({
     id: 'config.get',
@@ -106,7 +118,7 @@ export const builtinGatewayAdminMethodDescriptors: readonly GatewayMethodDescrip
     access: 'admin',
     http: { method: 'GET', path: '/config' },
     inputSchema: EMPTY_OBJECT_SCHEMA,
-    outputSchema: GENERIC_OBJECT_SCHEMA,
+    outputSchema: CONFIG_SNAPSHOT_SCHEMA,
   }),
   methodDescriptor({
     id: 'config.set',
@@ -119,6 +131,6 @@ export const builtinGatewayAdminMethodDescriptors: readonly GatewayMethodDescrip
     inputSchema: bodyEnvelopeSchema({
       key: STRING_SCHEMA,
     }, ['key']),
-    outputSchema: GENERIC_OBJECT_SCHEMA,
+    outputSchema: CONFIG_SET_OUTPUT_SCHEMA,
   }),
 ];

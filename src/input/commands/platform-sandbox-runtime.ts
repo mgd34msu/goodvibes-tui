@@ -1,7 +1,7 @@
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import type { CommandRegistry } from '../command-registry.ts';
-import { getPanelManager } from '../../panels/panel-manager.ts';
+import { requirePanelManager } from './runtime-services.ts';
 import {
   getSandboxPreset,
   inspectSandboxBundle,
@@ -97,7 +97,7 @@ export function registerPlatformSandboxRuntimeCommands(registry: CommandRegistry
       if (sub === 'open' || sub === 'panel') {
         if (ctx.showPanel) ctx.showPanel('sandbox');
         else {
-          const panelManager = getPanelManager();
+          const panelManager = requirePanelManager(ctx);
           panelManager.open('sandbox');
           panelManager.show();
         }

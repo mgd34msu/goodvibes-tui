@@ -8,8 +8,7 @@
  * configurable; callers can also request an immediate snapshot via
  * getSnapshot().
  */
-import type { PanelHealthState } from '../../perf/panel-contracts.ts';
-import { getSharedPanelHealthMonitor } from '../../perf/panel-health-monitor.ts';
+import type { PanelHealthMonitor } from '../../perf/panel-health-monitor.ts';
 import type { PanelResourceEntry, PanelResourceSnapshot } from '../types.ts';
 
 /** Default poll interval in milliseconds. */
@@ -30,11 +29,13 @@ const HEALTH_ORDER: Record<string, number> = {
  */
 export class PanelResourcesPanel {
   private readonly _pollIntervalMs: number;
+  private readonly _monitor: PanelHealthMonitor;
   private _current: PanelResourceSnapshot;
   private _timerId: ReturnType<typeof setInterval> | null = null;
   private readonly _subscribers = new Set<() => void>();
 
-  constructor(pollIntervalMs: number = DEFAULT_POLL_INTERVAL_MS) {
+  constructor(monitor: PanelHealthMonitor, pollIntervalMs: number = DEFAULT_POLL_INTERVAL_MS) {
+    this._monitor = monitor;
     this._pollIntervalMs = pollIntervalMs;
     this._current = this._buildSnapshot(Date.now());
   }
@@ -98,11 +99,10 @@ export class PanelResourcesPanel {
   // ---------------------------------------------------------------------------
 
   private _buildSnapshot(capturedAt: number): PanelResourceSnapshot {
-    const monitor = getSharedPanelHealthMonitor();
-    const healthStates = monitor.getAllHealth();
+    const healthStates = this._monitor.getAllHealth();
 
     const panels: PanelResourceEntry[] = healthStates.map((h) => {
-      const contract = monitor.getContract(h.panelId);
+      const contract = this._monitor.getContract(h.panelId);
       return {
         panelId: h.panelId,
         throttleStatus: h.throttleStatus,

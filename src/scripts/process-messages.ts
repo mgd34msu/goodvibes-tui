@@ -26,7 +26,7 @@ function main() {
   try {
     const raw = readFileSync(MESSAGE_FILE, { encoding: 'utf-8' });
     const msgs = parseMessages(raw);
-    const bus = AgentMessageBus.getInstance();
+    const bus = new AgentMessageBus();
     for (const m of msgs) {
       bus.broadcast('system', m);
       console.log(`Broadcasted: ${m}`);

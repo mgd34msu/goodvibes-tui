@@ -3,17 +3,17 @@
  */
 import { describe, test, expect, beforeEach } from 'bun:test';
 import { BookmarkModal } from '../../input/bookmark-modal.ts';
-import { getBookmarkManager } from '../../bookmarks/manager.ts';
+import { createTestManagers } from '../helpers/test-managers.ts';
 import { renderBookmarkModal } from '../../renderer/bookmark-modal.ts';
 import { lineToString, linesToText } from '../setup.ts';
 
 const W = 120;
+const bookmarkManager = createTestManagers().bookmarkManager;
 
 function seedBookmarks(count: number): void {
-  const bm = getBookmarkManager();
-  bm.clear();
+  bookmarkManager.clear();
   for (let i = 0; i < count; i++) {
-    bm.toggle(`key_${i}`, `block_label_${i}`);
+    bookmarkManager.toggle(`key_${i}`, `block_label_${i}`);
   }
 }
 
@@ -21,8 +21,8 @@ describe('renderBookmarkModal', () => {
   let modal: BookmarkModal;
 
   beforeEach(() => {
-    getBookmarkManager().clear();
-    modal = new BookmarkModal();
+    bookmarkManager.clear();
+    modal = new BookmarkModal(bookmarkManager);
   });
 
   test('returns an array of Lines', () => {

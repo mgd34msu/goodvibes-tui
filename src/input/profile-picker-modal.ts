@@ -5,7 +5,7 @@
  * and handles load/delete/save actions.
  */
 
-import { getProfileManager, type ProfileInfo, type ProfileData } from '../profiles/manager.ts';
+import type { ProfileInfo, ProfileData, ProfileManager } from '../profiles/manager.ts';
 import { logger } from '../utils/logger.ts';
 import type { ConfigManager } from '../config/manager.ts';
 import type { ConfigKey } from '../config/schema.ts';
@@ -57,12 +57,13 @@ export class ProfilePickerModal {
   /** Last status message (success/error feedback). */
   public statusMessage = '';
 
+  public constructor(private readonly profileManager: ProfileManager) {}
+
   /**
    * Open the modal, loading profiles from ProfileManager.
    */
   open(): void {
-    const manager = getProfileManager();
-    this.profiles = manager.list();
+    this.profiles = this.profileManager.list();
     this.selectedIndex = 0;
     this.scrollOffset = 0;
     this.statusMessage = '';
@@ -108,8 +109,7 @@ export class ProfilePickerModal {
     if (!profile) return false;
 
     try {
-      const manager = getProfileManager();
-      const { data } = manager.load(profile.name);
+      const { data } = this.profileManager.load(profile.name);
 
       // Apply display settings using validated key list
       if (data.display) {
@@ -154,14 +154,13 @@ export class ProfilePickerModal {
     }
 
     try {
-      const manager = getProfileManager();
-      const deleted = manager.delete(profile.name);
+      const deleted = this.profileManager.delete(profile.name);
       if (!deleted) {
         this.statusMessage = `Profile not found: ${profile.name}`;
         this.deleteConfirmationTarget = null;
         return false;
       }
-      this.profiles = manager.list();
+      this.profiles = this.profileManager.list();
       if (this.selectedIndex >= this.profiles.length) {
         this.selectedIndex = Math.max(0, this.profiles.length - 1);
       }
@@ -196,11 +195,10 @@ export class ProfilePickerModal {
         behavior: { ...all.behavior },
       };
 
-      const manager = getProfileManager();
-      manager.save(name, data);
+      this.profileManager.save(name, data);
 
       // Reload list
-      this.profiles = manager.list();
+      this.profiles = this.profileManager.list();
       this.statusMessage = `Saved profile: ${name}`;
       this._clampScroll();
       return true;

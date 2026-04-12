@@ -1,45 +1,36 @@
 import { dirname, join, resolve } from 'node:path';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import type { CommandContext } from '../command-registry.ts';
-import { ServiceRegistry } from '../../config/service-registry.ts';
 import { discoverSkills } from '../../panels/skills-panel.ts';
-import { getRemoteRunnerRegistry } from '../../runtime/remote/index.ts';
 import { buildSandboxReview, isRunningInWsl } from '../../runtime/sandbox/manager.ts';
 import { renderQemuWrapperTemplate } from '../../runtime/sandbox/qemu-wrapper-template.ts';
-import { pluginManager } from '../../plugins/manager.ts';
 import { getPluginDirectories } from '../../plugins/loader.ts';
-import { getSubscriptionManager } from '../../config/subscriptions.ts';
 import { listBuiltinSubscriptionProviders } from '../../config/subscription-providers.ts';
 import type { SetupReviewSnapshot } from './local-setup-transfer.ts';
-
-let serviceRegistry: ServiceRegistry | undefined;
-
-function getServiceRegistry(): ServiceRegistry {
-  if (!serviceRegistry) serviceRegistry = new ServiceRegistry();
-  return serviceRegistry;
-}
+import { requireServiceRegistry, requireSubscriptionManager } from './runtime-services.ts';
 
 export async function buildSetupReviewSnapshot(ctx: CommandContext): Promise<SetupReviewSnapshot> {
-  const services = Object.keys(getServiceRegistry().getAll()).sort((a, b) => a.localeCompare(b));
-  const serviceConfigs = getServiceRegistry().getAll();
+  const serviceRegistry = requireServiceRegistry(ctx);
+  const services = Object.keys(serviceRegistry.getAll()).sort((a, b) => a.localeCompare(b));
+  const serviceConfigs = serviceRegistry.getAll();
   const serviceIssues: string[] = [];
   for (const name of services) {
-    const inspection = await getServiceRegistry().inspect(name);
+    const inspection = await serviceRegistry.inspect(name);
     if (!inspection?.hasPrimaryCredential) {
       serviceIssues.push(`${name}: missing primary credential`);
     }
   }
 
   const skills = discoverSkills();
-  const plugins = pluginManager.list();
+  const plugins = ctx.pluginManager?.list() ?? [];
   const runtimeState = ctx.runtimeStore?.getState();
   const mcpServers = [...(runtimeState?.mcp.servers.values() ?? [])];
   const pluginDirectories = getPluginDirectories();
   const providerCount = ctx.providerRegistry.listModels().length;
-  const remoteRunnerCount = getRemoteRunnerRegistry().listContracts().length;
+  const remoteRunnerCount = ctx.remoteRunnerRegistry?.listContracts().length ?? 0;
   const oauthProviderCount = Object.values(serviceConfigs).filter((service) => service.authType === 'oauth' && service.oauth).length;
   const builtinSubscriptionProviderCount = listBuiltinSubscriptionProviders().length;
-  const subscriptionManager = getSubscriptionManager();
+  const subscriptionManager = requireSubscriptionManager(ctx);
   const activeSubscriptionCount = subscriptionManager.list().length;
   const pendingSubscriptionCount = subscriptionManager.listPending().length;
   const sandboxReplIsolation = String(ctx.configManager.get('sandbox.replIsolation'));

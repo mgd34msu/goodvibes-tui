@@ -1,12 +1,13 @@
 import type { Line } from '../types/grid.ts';
 import type { Panel, PanelCategory } from './types.ts';
 import type { PanelResourceContract, PanelHealthState } from '../runtime/perf/panel-contracts.ts';
-import { getSharedPanelHealthMonitor } from '../runtime/perf/panel-health-monitor.ts';
+import type { PanelHealthMonitor } from '../runtime/perf/panel-health-monitor.ts';
 
 export abstract class BasePanel implements Panel {
   public needsRender = true;
   public isTransient = false;
   public isPinned = false;
+  protected readonly panelHealthMonitor?: PanelHealthMonitor;
 
   /**
    * Optional resource contract for this panel.
@@ -20,7 +21,7 @@ export abstract class BasePanel implements Panel {
    * Read-only from outside the monitor.
    */
   public get healthState(): Readonly<PanelHealthState> | undefined {
-    return getSharedPanelHealthMonitor().getHealth(this.id);
+    return this.panelHealthMonitor?.getHealth(this.id);
   }
 
   constructor(
@@ -28,7 +29,10 @@ export abstract class BasePanel implements Panel {
     public readonly name: string,
     public readonly icon: string,
     public readonly category: PanelCategory,
-  ) {}
+    panelHealthMonitor?: PanelHealthMonitor,
+  ) {
+    this.panelHealthMonitor = panelHealthMonitor;
+  }
 
   onActivate(): void { this.needsRender = true; }
   onDeactivate(): void {}
@@ -55,7 +59,7 @@ export abstract class BasePanel implements Panel {
    * ```
    */
   protected canRenderNow(now: number = Date.now()): boolean {
-    return getSharedPanelHealthMonitor().canRender(this.id, now);
+    return this.panelHealthMonitor?.canRender(this.id, now) ?? true;
   }
 
   /**
@@ -63,6 +67,6 @@ export abstract class BasePanel implements Panel {
    * Call this at the end of render() after measuring wall-clock cost.
    */
   protected reportRenderDuration(durationMs: number, now: number = Date.now()): void {
-    getSharedPanelHealthMonitor().recordRender(this.id, durationMs, now);
+    this.panelHealthMonitor?.recordRender(this.id, durationMs, now);
   }
 }

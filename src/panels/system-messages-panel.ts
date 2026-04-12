@@ -5,6 +5,7 @@
 
 import { BasePanel } from './base-panel.ts';
 import type { Line } from '../types/grid.ts';
+import type { PanelHealthMonitor } from '../runtime/perf/panel-health-monitor.ts';
 import {
   buildBodyText,
   buildDetailBlock,
@@ -18,7 +19,7 @@ import {
   DEFAULT_PANEL_PALETTE,
   type PanelWorkspaceSection,
 } from './polish.ts';
-import { getConfigSnapshot } from '../config/index.ts';
+import { ConfigManager } from '../config/manager.ts';
 
 const MAX_MESSAGES = 500;
 
@@ -51,9 +52,11 @@ export class SystemMessagesPanel extends BasePanel {
   private _messages: SystemMessageEntry[] = [];
   private _lastVisibleIdx = 0;
   private _scrollOffset = 0;
+  private readonly configManager: ConfigManager;
 
-  constructor() {
-    super('system-messages', 'System Messages', 'J', 'monitoring');
+  constructor(configManager: ConfigManager, panelHealthMonitor?: PanelHealthMonitor) {
+    super('system-messages', 'System Messages', 'J', 'monitoring', panelHealthMonitor);
+    this.configManager = configManager;
   }
 
   push(text: string, priority: SystemMessagePriority): void {
@@ -140,7 +143,7 @@ export class SystemMessagesPanel extends BasePanel {
 
     const highCount = this._messages.filter((entry) => entry.priority === 'high').length;
     const lowCount = this._messages.length - highCount;
-    const ui = getConfigSnapshot().ui;
+    const ui = this.configManager.getRaw().ui;
     const postureLines = [
       buildKeyValueLine(width, [
         { label: 'messages', value: String(this._messages.length), valueColor: C.value },

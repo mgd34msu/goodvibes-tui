@@ -1,8 +1,7 @@
 import type { CommandRegistry } from '../command-registry.ts';
-import { planManager } from '../../core/plan-manager-instance.ts';
 import { classifyIntent } from '../../core/intent-classifier.ts';
-import { sessionLineageTracker } from '../../core/session-lineage.ts';
 import { handlePlanCommand } from '../../core/plan-command-handler.ts';
+import { requireAdaptivePlanner, requirePlanManager, requireSessionLineageTracker } from './runtime-services.ts';
 
 export function registerPlanningRuntimeCommands(registry: CommandRegistry): void {
   registry.register({
@@ -11,9 +10,12 @@ export function registerPlanningRuntimeCommands(registry: CommandRegistry): void
     usage: '[list | show <id> | mode | explain | override <strategy> | status | clear | <task description>]',
     argsHint: '[list|show|mode|explain|override|status|clear|<task>]',
     handler(args, ctx) {
+      const planManager = requirePlanManager(ctx);
+      const adaptivePlanner = requireAdaptivePlanner(ctx);
+      const sessionLineageTracker = requireSessionLineageTracker(ctx);
       const plannerSubs = ['mode', 'explain', 'override', 'status', 'clear'];
       if (args.length > 0 && plannerSubs.includes(args[0].toLowerCase())) {
-        const result = handlePlanCommand(args[0], args.slice(1));
+        const result = handlePlanCommand({ adaptivePlanner, runtimeBus: ctx.runtimeBus }, args[0], args.slice(1));
         ctx.print(result.output);
         return;
       }

@@ -1,6 +1,8 @@
 import { describe, test, expect, beforeEach } from 'bun:test';
 import { ConversationManager } from '../../core/conversation.ts';
 import { RuntimeEventBus, createEventEnvelope, type TurnEvent } from '../../runtime/events/index.ts';
+import { PolicyRuntimeState } from '../../runtime/permissions/policy-runtime.ts';
+import { createTestConfigManager } from '../helpers/test-managers.ts';
 
 // ---------------------------------------------------------------------------
 // ConversationManager streaming block lifecycle
@@ -10,7 +12,7 @@ describe('ConversationManager streaming block lifecycle', () => {
   let cm: ConversationManager;
 
   beforeEach(() => {
-    cm = new ConversationManager(() => 80);
+    cm = new ConversationManager(() => 80, createTestConfigManager());
   });
 
   test('startStreamingBlock adds an empty assistant message', () => {
@@ -175,10 +177,12 @@ describe('Orchestrator: abort during streaming cleanup', () => {
   async function buildOrchestrator() {
     const { Orchestrator } = await import('../../core/orchestrator.ts');
     const { ConversationManager } = await import('../../core/conversation.ts');
-    const { PermissionManager } = await import('../../permissions/manager.ts');
+    const { PermissionManager, createPermissionConfigReader } = await import('../../permissions/manager.ts');
     const { ToolRegistry } = await import('../../tools/registry.ts');
-    const cm = new ConversationManager(() => 80);
-    const pm = new PermissionManager(async () => ({ approved: true }));
+    const configManager = createTestConfigManager();
+    const cm = new ConversationManager(() => 80, configManager);
+    const policyRuntimeState = new PolicyRuntimeState();
+    const pm = new PermissionManager(async () => ({ approved: true }), createPermissionConfigReader(configManager), policyRuntimeState);
     const tr = new ToolRegistry();
     const orch = new Orchestrator(cm, () => 24, () => {}, tr, pm);
     return { orch, cm };

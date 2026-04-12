@@ -3,8 +3,8 @@ import { join } from 'node:path';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import ts from 'typescript';
-import { configManager } from '../../config/index.ts';
-import { getSandboxSessionRegistry } from '../../runtime/sandbox/session-registry.ts';
+import type { ConfigManager } from '../../config/manager.ts';
+import type { SandboxSessionRegistry } from '../../runtime/sandbox/session-registry.ts';
 import { executeSandboxCommand } from '../../runtime/sandbox/backend.ts';
 import type { SandboxLaunchPlan } from '../../runtime/sandbox/types.ts';
 import type { Tool } from '../../types/tools.ts';
@@ -53,14 +53,12 @@ function mapRuntimeToSandboxProfile(runtime: NonNullable<ReplToolInput['runtime'
   }
 }
 
-async function evalJavaScript(expression: string, bindings: Record<string, unknown>): Promise<string> {
-  return evalJavaScriptInSandbox(expression, bindings, LOCAL_EXEC_PLAN);
-}
-
 async function evalJavaScriptInSandbox(
   expression: string,
   bindings: Record<string, unknown>,
   launchPlan: SandboxLaunchPlan,
+  configManager: ConfigManager,
+  sandboxSessionRegistry: SandboxSessionRegistry,
   sessionId?: string,
 ): Promise<string> {
   const payload = JSON.stringify({ expression, bindings });
@@ -74,7 +72,7 @@ const value = eval(payload.expression);
 process.stdout.write(typeof value === 'string' ? value : JSON.stringify(value));
 `;
   const result = sessionId
-    ? getSandboxSessionRegistry().execute(sessionId, process.execPath, ['-e', runner], configManager, {
+    ? sandboxSessionRegistry.execute(sessionId, process.execPath, ['-e', runner], configManager, {
         timeoutMs: 1000,
         env: {
           ...process.env,
@@ -97,6 +95,8 @@ process.stdout.write(typeof value === 'string' ? value : JSON.stringify(value));
 async function evalTypeScript(
   expression: string,
   bindings: Record<string, unknown>,
+  configManager: ConfigManager,
+  sandboxSessionRegistry: SandboxSessionRegistry,
   launchPlan: SandboxLaunchPlan = LOCAL_EXEC_PLAN,
   sessionId?: string,
 ): Promise<string> {
@@ -106,10 +106,16 @@ async function evalTypeScript(
       module: ts.ModuleKind.ES2022,
     },
   }).outputText;
-  return evalJavaScriptInSandbox(transpiled, bindings, launchPlan, sessionId);
+  return evalJavaScriptInSandbox(transpiled, bindings, launchPlan, configManager, sandboxSessionRegistry, sessionId);
 }
 
-function evalPython(expression: string, launchPlan: SandboxLaunchPlan = LOCAL_EXEC_PLAN, sessionId?: string): string {
+function evalPython(
+  expression: string,
+  configManager: ConfigManager,
+  sandboxSessionRegistry: SandboxSessionRegistry,
+  launchPlan: SandboxLaunchPlan = LOCAL_EXEC_PLAN,
+  sessionId?: string,
+): string {
   const tempRoot = mkdtempSync(join(tmpdir(), 'gv-repl-py-'));
   const venvPath = join(tempRoot, 'venv');
   const pythonLaunchPlan = launchPlan.backend === 'local' ? {
@@ -117,7 +123,7 @@ function evalPython(expression: string, launchPlan: SandboxLaunchPlan = LOCAL_EX
     workspaceRoot: tempRoot,
   } : launchPlan;
   const create = sessionId
-    ? getSandboxSessionRegistry().execute(sessionId, 'python3', ['-m', 'venv', venvPath], configManager, { cwd: tempRoot })
+    ? sandboxSessionRegistry.execute(sessionId, 'python3', ['-m', 'venv', venvPath], configManager, { cwd: tempRoot })
     : executeSandboxCommand(pythonLaunchPlan, 'python3', ['-m', 'venv', venvPath], { cwd: tempRoot });
   if (create.status !== 0) {
     rmSync(tempRoot, { recursive: true, force: true });
@@ -125,7 +131,7 @@ function evalPython(expression: string, launchPlan: SandboxLaunchPlan = LOCAL_EX
   }
   const pythonBin = join(venvPath, 'bin', 'python');
   const run = sessionId
-    ? getSandboxSessionRegistry().execute(sessionId, pythonBin, ['-I', '-S', '-c', `import json\nresult = (${expression})\nprint(json.dumps(result))`], configManager, {
+    ? sandboxSessionRegistry.execute(sessionId, pythonBin, ['-I', '-S', '-c', `import json\nresult = (${expression})\nprint(json.dumps(result))`], configManager, {
         cwd: tempRoot,
         timeoutMs: 5000,
       })
@@ -142,6 +148,8 @@ function evalPython(expression: string, launchPlan: SandboxLaunchPlan = LOCAL_EX
 
 async function evalSql(
   expression: string,
+  configManager: ConfigManager,
+  sandboxSessionRegistry: SandboxSessionRegistry,
   launchPlan: SandboxLaunchPlan = LOCAL_EXEC_PLAN,
   sessionId?: string,
 ): Promise<string> {
@@ -156,7 +164,7 @@ const rows = db.query(payload.expression).all();
 process.stdout.write(JSON.stringify(rows));
 `;
   const result = sessionId
-    ? getSandboxSessionRegistry().execute(sessionId, process.execPath, ['-e', script], configManager, {
+    ? sandboxSessionRegistry.execute(sessionId, process.execPath, ['-e', script], configManager, {
         timeoutMs: 5000,
         env: {
           ...process.env,
@@ -176,7 +184,13 @@ process.stdout.write(JSON.stringify(rows));
   return result.stdout.trim();
 }
 
-function evalGraphql(expression: string, launchPlan: SandboxLaunchPlan = LOCAL_EXEC_PLAN, sessionId?: string): string {
+function evalGraphql(
+  expression: string,
+  configManager: ConfigManager,
+  sandboxSessionRegistry: SandboxSessionRegistry,
+  launchPlan: SandboxLaunchPlan = LOCAL_EXEC_PLAN,
+  sessionId?: string,
+): string {
   const payload = JSON.stringify({ expression });
   const script = `
 const payload = JSON.parse(process.env.GV_REPL_PAYLOAD ?? '{}');
@@ -191,7 +205,7 @@ process.stdout.write(JSON.stringify({
 }));
 `;
   const result = sessionId
-    ? getSandboxSessionRegistry().execute(sessionId, process.execPath, ['-e', script], configManager, {
+    ? sandboxSessionRegistry.execute(sessionId, process.execPath, ['-e', script], configManager, {
         timeoutMs: 2000,
         env: {
           ...process.env,
@@ -211,8 +225,12 @@ process.stdout.write(JSON.stringify({
   return result.stdout.trim();
 }
 
-export const replTool: Tool = {
-  definition: {
+export function createReplTool(
+  configManager: ConfigManager,
+  sandboxSessionRegistry: SandboxSessionRegistry,
+): Tool {
+  return {
+    definition: {
     name: 'repl',
     description: 'Evaluate bounded JavaScript, TypeScript, Python, SQL, and GraphQL snippets through controlled sandbox profiles.',
     parameters: REPL_TOOL_SCHEMA.parameters,
@@ -220,7 +238,7 @@ export const replTool: Tool = {
     concurrency: 'serial',
   },
 
-  async execute(args: Record<string, unknown>) {
+    async execute(args: Record<string, unknown>) {
     if (!args || typeof args !== 'object' || typeof args.mode !== 'string') {
       return { success: false, error: 'Invalid args: mode is required.' };
     }
@@ -232,8 +250,8 @@ export const replTool: Tool = {
     }
 
     if (!input.expression) return { success: false, error: 'eval requires expression.' };
-    const runtime = input.runtime ?? 'javascript';
-    const sandboxSession = await getSandboxSessionRegistry().start(
+      const runtime = input.runtime ?? 'javascript';
+    const sandboxSession = await sandboxSessionRegistry.start(
       mapRuntimeToSandboxProfile(runtime),
       `repl:${runtime}`,
       configManager,
@@ -242,19 +260,19 @@ export const replTool: Tool = {
       let rendered = '';
       switch (runtime) {
         case 'javascript':
-          rendered = await evalJavaScriptInSandbox(input.expression, input.bindings ?? {}, sandboxSession.launchPlan ?? LOCAL_EXEC_PLAN, sandboxSession.id);
+          rendered = await evalJavaScriptInSandbox(input.expression, input.bindings ?? {}, sandboxSession.launchPlan ?? LOCAL_EXEC_PLAN, configManager, sandboxSessionRegistry, sandboxSession.id);
           break;
         case 'typescript':
-          rendered = await evalTypeScript(input.expression, input.bindings ?? {}, sandboxSession.launchPlan ?? LOCAL_EXEC_PLAN, sandboxSession.id);
+          rendered = await evalTypeScript(input.expression, input.bindings ?? {}, configManager, sandboxSessionRegistry, sandboxSession.launchPlan ?? LOCAL_EXEC_PLAN, sandboxSession.id);
           break;
         case 'python':
-          rendered = evalPython(input.expression, sandboxSession.launchPlan ?? LOCAL_EXEC_PLAN, sandboxSession.id);
+          rendered = evalPython(input.expression, configManager, sandboxSessionRegistry, sandboxSession.launchPlan ?? LOCAL_EXEC_PLAN, sandboxSession.id);
           break;
         case 'sql':
-          rendered = await evalSql(input.expression, sandboxSession.launchPlan ?? LOCAL_EXEC_PLAN, sandboxSession.id);
+          rendered = await evalSql(input.expression, configManager, sandboxSessionRegistry, sandboxSession.launchPlan ?? LOCAL_EXEC_PLAN, sandboxSession.id);
           break;
         case 'graphql':
-          rendered = evalGraphql(input.expression, sandboxSession.launchPlan ?? LOCAL_EXEC_PLAN, sandboxSession.id);
+          rendered = evalGraphql(input.expression, configManager, sandboxSessionRegistry, sandboxSession.launchPlan ?? LOCAL_EXEC_PLAN, sandboxSession.id);
           break;
       }
       saveHistory([...history, {
@@ -279,5 +297,6 @@ export const replTool: Tool = {
       }]);
       return { success: false, error: String(error) };
     }
-  },
-};
+    },
+  };
+}

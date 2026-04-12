@@ -1,8 +1,11 @@
 import type { Tool } from '../../types/tools.ts';
-import { mcpRegistry } from '../../mcp/registry.ts';
+import type { McpDecisionRecord } from '../../runtime/mcp/types.ts';
+import type { McpRegistry } from '../../mcp/registry.ts';
 import { MCP_TOOL_SCHEMA, type McpToolInput } from './schema.ts';
 
-function summarizeServer(server: ReturnType<typeof mcpRegistry.listServerSecurity>[number]) {
+type McpServerSecurity = ReturnType<McpRegistry['listServerSecurity']>[number];
+
+function summarizeServer(server: McpServerSecurity) {
   return {
     name: server.name,
     connected: server.connected,
@@ -13,7 +16,7 @@ function summarizeServer(server: ReturnType<typeof mcpRegistry.listServerSecurit
   };
 }
 
-function previewServer(server: ReturnType<typeof mcpRegistry.listServerSecurity>[number]) {
+function previewServer(server: McpServerSecurity) {
   return {
     ...summarizeServer(server),
     allowedPathCount: server.allowedPaths.length,
@@ -24,7 +27,7 @@ function previewServer(server: ReturnType<typeof mcpRegistry.listServerSecurity>
   };
 }
 
-function summarizeDecision(decision: ReturnType<typeof mcpRegistry.listRecentSecurityDecisions>[number]) {
+function summarizeDecision(decision: McpDecisionRecord) {
   return {
     serverName: decision.serverName,
     toolName: decision.toolName,
@@ -34,16 +37,17 @@ function summarizeDecision(decision: ReturnType<typeof mcpRegistry.listRecentSec
   };
 }
 
-export const mcpTool: Tool = {
-  definition: {
-    name: 'mcp',
-    description: 'Inspect MCP servers, tools, schemas, and trust state.',
-    parameters: MCP_TOOL_SCHEMA.parameters,
-    sideEffects: ['state'],
-    concurrency: 'serial',
-  },
+export function createMcpTool(mcpRegistry: McpRegistry): Tool {
+  return {
+    definition: {
+      name: 'mcp',
+      description: 'Inspect MCP servers, tools, schemas, and trust state.',
+      parameters: MCP_TOOL_SCHEMA.parameters,
+      sideEffects: ['state'],
+      concurrency: 'serial',
+    },
 
-  async execute(args: Record<string, unknown>) {
+    async execute(args: Record<string, unknown>) {
     if (!args || typeof args !== 'object' || typeof args.mode !== 'string') {
       return { success: false, error: 'Invalid args: mode is required.' };
     }
@@ -180,6 +184,7 @@ export const mcpTool: Tool = {
       return { success: true, output: JSON.stringify({ serverName: input.serverName, role: input.role }) };
     }
 
-    return { success: false, error: `Unknown mode: ${input.mode}` };
-  },
-};
+      return { success: false, error: `Unknown mode: ${input.mode}` };
+    },
+  };
+}

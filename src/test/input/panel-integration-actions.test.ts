@@ -3,15 +3,18 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { handlePanelIntegrationAction } from '../../input/handler.ts';
-import { getPanelManager } from '../../panels/panel-manager.ts';
 import { FileExplorerPanel } from '../../panels/file-explorer-panel.ts';
 import { FilePreviewPanel } from '../../panels/file-preview-panel.ts';
 import { SymbolOutlinePanel } from '../../panels/symbol-outline-panel.ts';
 import { ApprovalPanel } from '../../panels/approval-panel.ts';
+import { PolicyRuntimeState } from '../../runtime/permissions/policy-runtime.ts';
+import { createTestManagers } from '../helpers/test-managers.ts';
+
+let panelManager = createTestManagers().panelManager;
 
 describe('panel integration actions', () => {
   afterEach(() => {
-    getPanelManager().destroyAll();
+    panelManager.destroyAll();
     mock.restore();
   });
 
@@ -20,7 +23,7 @@ describe('panel integration actions', () => {
     const filePath = join(root, 'demo.ts');
     writeFileSync(filePath, 'export function alpha() {}\nexport const beta = 1;\n');
 
-    const panelManager = getPanelManager();
+    panelManager = createTestManagers().panelManager;
     panelManager.registerType({
       id: 'preview',
       name: 'Preview',
@@ -44,7 +47,7 @@ describe('panel integration actions', () => {
     const explorer = new FileExplorerPanel(root);
     explorer.onActivate();
 
-    expect(handlePanelIntegrationAction(explorer, 'enter')).toBe(true);
+    expect(handlePanelIntegrationAction(panelManager, explorer, 'enter')).toBe(true);
 
     const preview = panelManager.getPanel('preview');
     expect(preview).toBeInstanceOf(FilePreviewPanel);
@@ -62,7 +65,7 @@ describe('panel integration actions', () => {
     const filePath = join(root, 'demo.ts');
     writeFileSync(filePath, 'export function alpha() {}\nexport function beta() {}\n');
 
-    const panelManager = getPanelManager();
+    panelManager = createTestManagers().panelManager;
     panelManager.registerType({
       id: 'preview',
       name: 'Preview',
@@ -79,7 +82,7 @@ describe('panel integration actions', () => {
     symbols.loadFile(filePath, 'export function alpha() {}\nexport function beta() {}\n');
     symbols.handleInput('down');
 
-    expect(handlePanelIntegrationAction(symbols, 'enter')).toBe(true);
+    expect(handlePanelIntegrationAction(panelManager, symbols, 'enter')).toBe(true);
     expect(preview.getCurrentFilePath()).toBe(filePath);
     expect(preview.getScrollOffset()).toBe(1);
 
@@ -88,10 +91,10 @@ describe('panel integration actions', () => {
 
   test('approval enter executes the selected review command', async () => {
     const executeCommand = mock(async () => true);
-    const panel = new ApprovalPanel();
+    const panel = new ApprovalPanel(new PolicyRuntimeState());
     panel.handleInput('down');
 
-    expect(handlePanelIntegrationAction(panel, 'enter', { executeCommand } as never)).toBe(true);
+    expect(handlePanelIntegrationAction(panelManager, panel, 'enter', { executeCommand } as never)).toBe(true);
     expect(executeCommand).toHaveBeenCalledWith('approval', ['review', 'file']);
   });
 });

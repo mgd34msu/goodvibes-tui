@@ -1,19 +1,16 @@
 import type { ConversationManager } from './conversation.ts';
-import type { ModelDefinition } from '../providers/registry.ts';
-import { providerRegistry } from '../providers/registry.ts';
-import { configManager } from '../config/index.ts';
+import type { ConfigManager } from '../config/manager.ts';
+import type { ModelDefinition, ProviderRegistry } from '../providers/registry.ts';
 import { logger } from '../utils/logger.ts';
-import { getCatalog } from '../providers/model-catalog.ts';
 import { estimateConversationTokens, COMPACTION_BUFFER_TOKENS, SMALL_WINDOW_THRESHOLD, compactSmallWindow, shouldAutoCompact } from './context-compaction.ts';
 import type { CompactionContext } from './context-compaction.ts';
-import { sessionMemoryStore } from './session-memory.ts';
-import { sessionLineageTracker } from './session-lineage.ts';
-import { AgentManager } from '../tools/agent/index.ts';
-import { WrfcController } from '../agents/wrfc-controller.ts';
-import { planManager } from './plan-manager-instance.ts';
+import type { SessionMemoryStore } from './session-memory.ts';
+import type { SessionLineageTracker } from './session-lineage.ts';
+import type { AgentManager } from '../tools/agent/index.ts';
+import type { WrfcController } from '../agents/wrfc-controller.ts';
+import type { ExecutionPlanManager } from './execution-plan.ts';
 import type { RuntimeEventBus } from '../runtime/events/index.ts';
 import { emitOpsContextWarning } from '../runtime/emitters/index.ts';
-import { getContextWindowForModel } from '../providers/model-limits.ts';
 import type { HookEvent, HookResult } from '../hooks/types.ts';
 
 type HookDispatcherLike = {
@@ -22,11 +19,48 @@ type HookDispatcherLike = {
 
 type EmitterContextFactory = (turnId: string) => import('../runtime/emitters/index.ts').EmitterContext;
 
+type CatalogTier = 'free' | 'paid' | 'subscription';
+
+function normalizeCatalogTier(tier: ModelDefinition['tier']): CatalogTier | undefined {
+  if (tier === 'free') return 'free';
+  if (tier === 'subscription') return 'subscription';
+  if (tier === 'standard' || tier === 'premium') return 'paid';
+  return undefined;
+}
+
+function findLargerContextModels(
+  providerRegistry: Pick<ProviderRegistry, 'listModels' | 'getContextWindowForModel'>,
+  minContext: number,
+  tier?: CatalogTier,
+  limit = 3,
+): Array<{ id: string; displayName: string; context: number }> {
+  return providerRegistry
+    .listModels()
+      .filter((model) => model.selectable)
+      .map((model) => ({
+        id: model.id,
+        displayName: model.displayName,
+        context: providerRegistry.getContextWindowForModel(model),
+        tier: normalizeCatalogTier(model.tier),
+      }))
+    .filter((model) => model.context > minContext && (tier === undefined || model.tier === tier))
+    .sort((a, b) => b.context - a.context)
+    .slice(0, limit)
+    .map(({ id, displayName, context }) => ({ id, displayName, context }));
+}
+
 export type PreflightDeps = {
   conversation: ConversationManager;
   requestRender: () => void;
   hookDispatcher: HookDispatcherLike | null;
+  configManager: Pick<ConfigManager, 'get'>;
+  providerRegistry: ProviderRegistry;
+  sessionLineageTracker: Pick<SessionLineageTracker, 'getEntries' | 'getCompactionCount'>;
   sessionId: string;
+  agentManager: Pick<AgentManager, 'list'>;
+  wrfcController: Pick<WrfcController, 'listChains'>;
+  planManager: Pick<ExecutionPlanManager, 'getActive'> | null;
+  sessionMemoryStore: Pick<SessionMemoryStore, 'list'> | null;
   runtimeBus: RuntimeEventBus | null;
   emitterContext: EmitterContextFactory;
   isCompacting: boolean;
@@ -38,9 +72,8 @@ export async function checkContextWindowPreflight(
   turnId: string,
   model: ModelDefinition,
 ): Promise<'ok' | 'compacted' | 'error'> {
-  const catalog = getCatalog();
-  const catalogModel = catalog.getModel(model.id);
-  const contextWindow = catalogModel?.context ?? getContextWindowForModel(model);
+  const contextWindow = deps.providerRegistry.getContextWindowForModel(model);
+  const tier = normalizeCatalogTier(model.tier);
 
   if (contextWindow <= 0) return 'ok';
 
@@ -48,7 +81,7 @@ export async function checkContextWindowPreflight(
   const estimatedTokens = estimateConversationTokens(messages);
   if (estimatedTokens <= contextWindow) return 'ok';
 
-  const threshold = configManager.get('behavior.autoCompactThreshold') as number;
+  const threshold = deps.configManager.get('behavior.autoCompactThreshold') as number;
   const autoCompactEnabled = threshold > 0;
 
   if (autoCompactEnabled && !deps.isCompacting) {
@@ -87,18 +120,18 @@ export async function checkContextWindowPreflight(
     try {
       const preflightCtx: CompactionContext = {
         messages,
-        sessionMemories: sessionMemoryStore.list(),
-        lineageEntries: sessionLineageTracker.getEntries(),
-        agents: AgentManager.getInstance().list().filter(a => a.status === 'running' || a.status === 'pending'),
-        wrfcChains: WrfcController.getInstance().listChains(),
-        activePlan: planManager.getActive(deps.sessionId),
-        compactionCount: sessionLineageTracker.getCompactionCount(),
+        sessionMemories: deps.sessionMemoryStore?.list() ?? [],
+        lineageEntries: deps.sessionLineageTracker.getEntries(),
+        agents: deps.agentManager.list().filter(a => a.status === 'running' || a.status === 'pending'),
+        wrfcChains: deps.wrfcController.listChains(),
+        activePlan: deps.planManager?.getActive(deps.sessionId) ?? null,
+        compactionCount: deps.sessionLineageTracker.getCompactionCount(),
         contextWindow,
         trigger: 'auto',
         extractionModelId: model.id,
         extractionProvider: model.provider,
       };
-      await deps.conversation.compact(providerRegistry, model.id, 'auto', model.provider, preflightCtx);
+      await deps.conversation.compact(deps.providerRegistry, model.id, 'auto', model.provider, preflightCtx);
       deps.conversation.addSystemMessage('Context compacted. Retrying request...');
       if (deps.hookDispatcher) {
         deps.hookDispatcher.fire({
@@ -142,7 +175,8 @@ export async function checkContextWindowPreflight(
       estimatedTokens,
       contextWindow,
       model.displayName,
-      catalogModel?.tier,
+      deps.providerRegistry,
+      tier,
     );
     return 'error';
   }
@@ -154,7 +188,8 @@ export async function checkContextWindowPreflight(
     estimatedTokens,
     contextWindow,
     model.displayName,
-    catalogModel?.tier,
+    deps.providerRegistry,
+    tier,
   );
   return 'error';
 }
@@ -166,12 +201,12 @@ export function emitContextOverflowError(
   estimatedTokens: number,
   contextWindow: number,
   modelDisplayName: string,
-  tier?: 'free' | 'paid' | 'subscription',
+  providerRegistry: Pick<ProviderRegistry, 'listModels' | 'getContextWindowForModel'>,
+  tier?: CatalogTier,
 ): void {
   const requestK = Math.round(estimatedTokens / 1000);
   const contextK = Math.round(contextWindow / 1000);
-  const catalog = getCatalog();
-  const alternatives = catalog.findLargerContextModels(contextWindow, tier, 3);
+  const alternatives = findLargerContextModels(providerRegistry, contextWindow, tier, 3);
 
   let msg =
     `Request (~${requestK}K tokens) exceeds ${modelDisplayName} context window (${contextK}K). ` +
@@ -195,9 +230,16 @@ export function emitContextOverflowError(
 
 export type PostTurnContextDeps = {
   conversation: ConversationManager;
+  agentManager: Pick<AgentManager, 'list'>;
+  wrfcController: Pick<WrfcController, 'listChains'>;
+  planManager: Pick<ExecutionPlanManager, 'getActive'> | null;
+  sessionMemoryStore: Pick<SessionMemoryStore, 'list'> | null;
   runtimeBus: RuntimeEventBus | null;
   emitterContext: EmitterContextFactory;
   hookDispatcher: HookDispatcherLike | null;
+  configManager: Pick<ConfigManager, 'get'>;
+  providerRegistry: ProviderRegistry;
+  sessionLineageTracker: Pick<SessionLineageTracker, 'getEntries' | 'getCompactionCount'>;
   sessionId: string;
   requestRender: () => void;
   isCompacting: boolean;
@@ -211,13 +253,13 @@ export async function handlePostTurnContextMaintenance(
   turnId: string,
   totalTokens: number,
 ): Promise<void> {
-  const currentModel = providerRegistry.getCurrentModel();
-  const maxTokens = getContextWindowForModel(currentModel);
+  const currentModel = deps.providerRegistry.getCurrentModel();
+  const maxTokens = deps.providerRegistry.getContextWindowForModel(currentModel);
   if (maxTokens <= 0) return;
 
   const usagePct = Math.round((totalTokens / maxTokens) * 100);
-  const configuredThreshold = configManager.get('behavior.autoCompactThreshold') as number;
-  const warningsEnabled = configManager.get('behavior.staleContextWarnings') as boolean;
+  const configuredThreshold = deps.configManager.get('behavior.autoCompactThreshold') as number;
+  const warningsEnabled = deps.configManager.get('behavior.staleContextWarnings') as boolean;
   const autoCompactEnabled = configuredThreshold > 0;
   const bracket = Math.floor(usagePct / 10) * 10;
 
@@ -284,19 +326,19 @@ export async function handlePostTurnContextMaintenance(
       } else if (!skipAutoCompact) {
         const compactionCtx: CompactionContext = {
           messages: currentMsgs,
-          sessionMemories: sessionMemoryStore.list(),
-          lineageEntries: sessionLineageTracker.getEntries(),
-          agents: AgentManager.getInstance().list().filter(a => a.status === 'running' || a.status === 'pending'),
-          wrfcChains: WrfcController.getInstance().listChains(),
-          activePlan: planManager.getActive(deps.sessionId),
-          compactionCount: sessionLineageTracker.getCompactionCount(),
+          sessionMemories: deps.sessionMemoryStore?.list() ?? [],
+          lineageEntries: deps.sessionLineageTracker.getEntries(),
+          agents: deps.agentManager.list().filter(a => a.status === 'running' || a.status === 'pending'),
+          wrfcChains: deps.wrfcController.listChains(),
+          activePlan: deps.planManager?.getActive(deps.sessionId) ?? null,
+          compactionCount: deps.sessionLineageTracker.getCompactionCount(),
           contextWindow: maxTokens,
           trigger: 'auto',
           extractionModelId: currentModel.id,
           extractionProvider: currentModel.provider,
         };
         void deps.conversation.compact(
-          providerRegistry,
+          deps.providerRegistry,
           currentModel.id,
           'auto',
           currentModel.provider,

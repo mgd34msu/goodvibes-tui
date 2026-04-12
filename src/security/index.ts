@@ -2,7 +2,7 @@ export { SpawnTokenManager } from './spawn-tokens.ts';
 export type { SpawnToken, OrchestrationPolicyConfig } from './spawn-tokens.ts';
 export { UserAuthManager } from './user-auth.ts';
 export type { AuthUser, AuthSession } from './user-auth.ts';
-export { ApiTokenAuditor, getTokenAuditor, _resetTokenAuditorForTesting } from './token-audit.ts';
+export { ApiTokenAuditor } from './token-audit.ts';
 export type {
   ApiTokenMetadata,
   TokenScopePolicy,

@@ -98,8 +98,6 @@ export type {
 export { PolicyRegistry } from './policy-registry.ts';
 export {
   PolicyRuntimeState,
-  getPolicyRuntimeState,
-  resetPolicyRuntimeStateForTests,
 } from './policy-runtime.ts';
 export type {
   BundleLifecycleState,

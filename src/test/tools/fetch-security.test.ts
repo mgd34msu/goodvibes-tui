@@ -10,8 +10,8 @@
  *   - Sanitizer mode determinism
  */
 
-import { describe, it, expect, mock, beforeEach, afterEach } from 'bun:test';
-import { createFeatureFlagManager, FeatureFlagManager } from '../../runtime/feature-flags/manager.ts';
+import { describe, it, expect } from 'bun:test';
+import { createFeatureFlagManager } from '../../runtime/feature-flags/manager.ts';
 import {
   applySanitizer,
   resolveSanitizeMode,
@@ -23,12 +23,15 @@ import {
   TRUST_TIER_EVENTS,
   type TrustTierConfig,
 } from '../../tools/fetch/trust-tiers.ts';
-import { fetchTool } from '../../tools/fetch/index.ts';
+import { createFetchTool } from '../../tools/fetch/index.ts';
 
-afterEach(() => {
-  FeatureFlagManager.resetInstance();
-  mock.restore();
-});
+function createFetchHarness() {
+  const featureFlags = createFeatureFlagManager();
+  return {
+    featureFlags,
+    fetchTool: createFetchTool({ featureFlags }),
+  };
+}
 
 // ---------------------------------------------------------------------------
 // Sanitizer conformance tests
@@ -466,9 +469,8 @@ describe('extractHostname', () => {
 
 describe('fetchOne pipeline — SSRF blocked pre-request (integration)', () => {
   it('blocks internal IP (10.0.0.1) before any HTTP request is made', async () => {
-    const manager = createFeatureFlagManager();
-    manager.enable('fetch-sanitization');
-    FeatureFlagManager.setInstance(manager);
+    const { featureFlags, fetchTool } = createFetchHarness();
+    featureFlags.enable('fetch-sanitization');
 
     // Patch global fetch to ensure it is never called for a blocked host
     const originalFetch = globalThis.fetch;
@@ -498,6 +500,7 @@ describe('fetchOne pipeline — SSRF blocked pre-request (integration)', () => {
 
 describe('fetchOne pipeline — unknown host upgraded from none to safe-text (integration)', () => {
   it('upgrades sanitization from none to safe-text for unknown host', async () => {
+    const { fetchTool } = createFetchHarness();
     const originalFetch = globalThis.fetch;
     (globalThis as Record<string, unknown>)['fetch'] = async (): Promise<Response> => {
       return new Response('<script>evil()</script><p>Safe content</p>', {
@@ -532,6 +535,7 @@ describe('fetchOne pipeline — unknown host upgraded from none to safe-text (in
 
 describe('fetchOne pipeline — trusted host allows none mode (integration)', () => {
   it('trusted host preserves none sanitization mode and returns raw content', async () => {
+    const { fetchTool } = createFetchHarness();
     const originalFetch = globalThis.fetch;
     const rawContent = '<script>trusted_script()</script><p>Trusted content</p>';
     (globalThis as Record<string, unknown>)['fetch'] = async (): Promise<Response> => {

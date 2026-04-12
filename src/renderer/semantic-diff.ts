@@ -235,7 +235,7 @@ export async function computeSemanticDiff(
     return { symbols: [], imports, totalChanges: imports.length };
   }
 
-  const svc = TreeSitterService.getInstance();
+  const svc = new TreeSitterService();
 
   try {
     await svc.initialize();

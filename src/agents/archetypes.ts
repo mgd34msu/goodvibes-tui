@@ -212,8 +212,6 @@ function validateArchetype(archetype: Omit<AgentArchetype, 'validationIssues'>):
  *  - Falls back to built-in templates when no .md file is found.
  */
 export class ArchetypeLoader {
-  private static instance: ArchetypeLoader | null = null;
-
   /** Map from archetype name -> AgentArchetype (may be partially loaded) */
   private cache = new Map<string, AgentArchetype>();
   /** Map from archetype name -> raw markdown body (lazy) */
@@ -226,19 +224,6 @@ export class ArchetypeLoader {
   constructor(dir?: string) {
     // Default: .goodvibes/agents/ relative to process.cwd()
     this.dir = dir ?? join(process.cwd(), '.goodvibes', 'agents');
-  }
-
-  /** Singleton accessor. */
-  static getInstance(): ArchetypeLoader {
-    if (!ArchetypeLoader.instance) {
-      ArchetypeLoader.instance = new ArchetypeLoader();
-    }
-    return ArchetypeLoader.instance;
-  }
-
-  /** Reset the singleton — for testing only. */
-  static resetInstance(): void {
-    ArchetypeLoader.instance = null;
   }
 
   // -------------------------------------------------------------------------

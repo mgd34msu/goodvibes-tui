@@ -25,16 +25,6 @@ export class TreeSitterService {
   private initPromise: Promise<void> | null = null;
   private languages: Map<string, Language> = new Map();
   private treeCache: Map<string, CacheEntry> = new Map();
-  private static instance: TreeSitterService | null = null;
-
-  /** Get or create the singleton instance. */
-  static getInstance(): TreeSitterService {
-    if (!TreeSitterService.instance) {
-      TreeSitterService.instance = new TreeSitterService();
-    }
-    return TreeSitterService.instance;
-  }
-
   /**
    * Initialize the WASM module. Safe to call multiple times — only runs once.
    * Must be called before parse() will work.
@@ -185,7 +175,7 @@ export class TreeSitterService {
   }
 
   /**
-   * Free all resources. Resets the singleton so it can be re-initialized.
+   * Free all resources held by this service instance.
    */
   dispose(): void {
     for (const entry of this.treeCache.values()) {
@@ -199,6 +189,5 @@ export class TreeSitterService {
     }
     this.initialized = false;
     this.initPromise = null;
-    TreeSitterService.instance = null;
   }
 }

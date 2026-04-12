@@ -4,8 +4,9 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { OpenAICodexProvider } from '../../providers/openai-codex.ts';
 import { OpenAIProvider } from '../../providers/openai.ts';
-import { _resetSubscriptionManagerForTesting, getSubscriptionManager } from '../../config/subscriptions.ts';
-import { _resetProviderRegistryForTesting, getProviderRegistry } from '../../providers/registry.ts';
+import { createTestManagers } from '../helpers/test-managers.ts';
+
+const testManagers = createTestManagers();
 
 function makeJwt(payload: Record<string, unknown>): string {
   const header = Buffer.from(JSON.stringify({ alg: 'RS256', typ: 'JWT' })).toString('base64url');
@@ -23,14 +24,10 @@ describe('OpenAI subscription-backed Codex path', () => {
     process.env.HOME = root;
     process.chdir(root);
     mkdirSync(join(root, '.goodvibes', 'tui'), { recursive: true });
-    _resetSubscriptionManagerForTesting();
-    _resetProviderRegistryForTesting();
   });
 
   afterEach(() => {
     mock.restore();
-    _resetSubscriptionManagerForTesting();
-    _resetProviderRegistryForTesting();
     process.chdir(originalCwd);
     if (originalHome === undefined) delete process.env.HOME;
     else process.env.HOME = originalHome;
@@ -43,7 +40,7 @@ describe('OpenAI subscription-backed Codex path', () => {
         chatgpt_account_id: 'acct_123',
       },
     });
-    getSubscriptionManager().saveSubscription({
+    testManagers.subscriptionManager.saveSubscription({
       provider: 'openai',
       accessToken: token,
       tokenType: 'bearer',
@@ -52,10 +49,7 @@ describe('OpenAI subscription-backed Codex path', () => {
       createdAt: Date.now(),
       updatedAt: Date.now(),
     });
-    _resetSubscriptionManagerForTesting();
-    _resetProviderRegistryForTesting();
-
-    const provider = getProviderRegistry().get('openai');
+    const provider = testManagers.providerRegistry.get('openai');
     expect(provider.name).toBe('openai-subscriber');
   });
 

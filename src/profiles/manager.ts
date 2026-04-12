@@ -161,13 +161,3 @@ export class ProfileManager {
 function resolveGoodVibesHome(): string {
   return process.env.HOME || homedir();
 }
-
-/** Lazy singleton. */
-let _instance: ProfileManager | undefined;
-export function getProfileManager(): ProfileManager {
-  const defaultProfilesDir = join(resolveGoodVibesHome(), '.goodvibes', 'tui', 'profiles');
-  if (!_instance || _instance.storagePath !== defaultProfilesDir) {
-    _instance = new ProfileManager(defaultProfilesDir);
-  }
-  return _instance;
-}

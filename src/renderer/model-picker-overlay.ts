@@ -2,8 +2,7 @@ import { type Line } from '../types/grid.ts';
 import { fitDisplay, getDisplayWidth, truncateDisplay } from '../utils/terminal-width.ts';
 import type { ModelPickerModal } from '../input/model-picker.ts';
 import { EFFORT_DESCRIPTIONS } from '../providers/effort-levels.ts';
-import { getBenchmarks, getQualityTier, getQualityTierFromScore } from '../providers/model-benchmarks.ts';
-import { getSyntheticModelInfoFromCatalog } from '../providers/model-catalog.ts';
+import { getQualityTier, getQualityTierFromScore } from '../providers/model-benchmarks.ts';
 import {
   createOverlayBoxLayout,
   createOverlayContentLine,
@@ -166,7 +165,7 @@ export function renderModelPickerOverlay(
         const indicator = isSelected ? `${OVERLAY_GLYPHS.selected} ` : '  ';
 
         // Pre-compute synthetic info once per model (avoid 3 separate lookups per frame)
-        const synthInfo = model.provider === 'synthetic' ? getSyntheticModelInfoFromCatalog(model.id) : null;
+        const synthInfo = model.provider === 'synthetic' ? picker.getSyntheticModelInfo(model.id) : null;
 
         // Quality tier badge: [S] / [A] / [B] / [C]
         let tier: string | null = null;
@@ -175,7 +174,7 @@ export function renderModelPickerOverlay(
             tier = getQualityTierFromScore(synthInfo.bestCompositeScore);
           }
         } else {
-          const bData = getBenchmarks(model.id) ?? getBenchmarks(model.displayName);
+          const bData = picker.getBenchmarkEntry(model);
           tier = bData ? getQualityTier(bData.benchmarks) : null;
         }
         const tierBadge = tier ? `[${tier}]` : '   ';

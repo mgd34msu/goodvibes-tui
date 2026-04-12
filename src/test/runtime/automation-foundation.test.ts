@@ -7,22 +7,16 @@ import { createRuntimeStore } from '../../runtime/store/index.ts';
 import { createFeatureFlagManager } from '../../runtime/feature-flags/index.ts';
 
 describe('automation/control-plane foundation', () => {
-  const originalHome = process.env.HOME;
-  const originalCwd = process.cwd();
   let root = '';
+  let configDir = '';
 
   beforeEach(() => {
     root = mkdtempSync(join(tmpdir(), 'gv-automation-foundation-'));
-    process.env.HOME = root;
-    process.chdir(root);
-    ConfigManager.setTestMode(join(root, '.goodvibes', 'tui'));
+    configDir = join(root, '.goodvibes', 'tui');
   });
 
   afterEach(() => {
-    ConfigManager.setTestMode(undefined);
-    process.chdir(originalCwd);
-    if (originalHome === undefined) delete process.env.HOME;
-    else process.env.HOME = originalHome;
+    configDir = '';
   });
 
   test('initial runtime store includes automation, routes, control-plane, and watcher domains', () => {
@@ -40,7 +34,7 @@ describe('automation/control-plane foundation', () => {
   });
 
   test('config manager supports deep surface settings and reset for nested keys', () => {
-    const config = new ConfigManager({ workingDir: root, configDir: join(root, '.goodvibes', 'tui') });
+    const config = new ConfigManager({ configDir });
 
     expect(config.get('surfaces.slack.enabled')).toBe(false);
     expect(config.get('automation.maxConcurrentRuns')).toBe(4);

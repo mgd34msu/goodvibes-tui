@@ -6,11 +6,10 @@
  */
 import type { Playbook, DiagnosticCheckResult } from '../types.ts';
 import { safeCheck } from '../safe-check.ts';
-import { getOpsRuntimeContext } from '../runtime-context.ts';
 import type { OpsRuntimeContextState } from '../runtime-context.ts';
 
 export function createStuckTurnPlaybook(
-  getRuntimeContext: () => OpsRuntimeContextState | null = getOpsRuntimeContext,
+  getRuntimeContext: () => OpsRuntimeContextState | null = () => null,
 ): Playbook {
   return {
   id: 'stuck-turn',

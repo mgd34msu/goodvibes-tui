@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { ArtifactStore } from '../../artifacts/index.ts';
 import { knowledgeCommand } from '../../input/commands/knowledge.ts';
 import { KnowledgeService, KnowledgeStore } from '../../knowledge/index.ts';
-import { _resetMemoryRegistryForTesting } from '../../state/index.ts';
+import { MemoryRegistry, MemoryStore } from '../../state/index.ts';
 
 let server: ReturnType<typeof Bun.serve>;
 let baseUrl = '';
@@ -29,21 +29,35 @@ afterAll(() => {
 describe('knowledgeCommand', () => {
   let printed: string[];
   let root: string;
+  let memoryStore: MemoryStore;
+  let memoryRegistry: MemoryRegistry;
 
   beforeEach(() => {
     printed = [];
     root = mkdtempSync(join(tmpdir(), 'gv-knowledge-command-'));
-    ArtifactStore.resetActiveForTesting();
-    KnowledgeStore.resetActiveForTesting();
-    KnowledgeService.resetActiveForTesting();
-    _resetMemoryRegistryForTesting();
+    memoryStore = new MemoryStore(join(root, 'memory.sqlite'));
+    memoryRegistry = new MemoryRegistry(memoryStore);
   });
 
   test('ingests a URL and renders a packet', async () => {
+    const artifactStore = new ArtifactStore({
+      configManager: {
+        getControlPlaneConfigDir: () => root,
+      },
+    });
+    const knowledgeStore = new KnowledgeStore({
+      configManager: {
+        getControlPlaneConfigDir: () => root,
+      },
+    });
+    await memoryStore.init();
+    const knowledgeService = new KnowledgeService(knowledgeStore, artifactStore, undefined, { memoryRegistry });
+
     await knowledgeCommand.handler(['ingest-url', `${baseUrl}/docs`, '--tags', 'example,docs'], {
       providerRegistry: {} as never,
       conversationManager: {} as never,
       config: {} as never,
+      knowledgeService,
       configManager: {
         getControlPlaneConfigDir: () => root,
       } as never,
@@ -69,6 +83,7 @@ describe('knowledgeCommand', () => {
       providerRegistry: {} as never,
       conversationManager: {} as never,
       config: {} as never,
+      knowledgeService,
       configManager: {
         getControlPlaneConfigDir: () => root,
       } as never,

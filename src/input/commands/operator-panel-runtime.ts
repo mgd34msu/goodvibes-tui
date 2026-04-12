@@ -1,5 +1,5 @@
 import type { CommandRegistry } from '../command-registry.ts';
-import { getPanelManager } from '../../panels/panel-manager.ts';
+import { requirePanelManager } from './runtime-services.ts';
 
 export function registerOperatorPanelCommand(registry: CommandRegistry): void {
   registry.register({
@@ -9,7 +9,7 @@ export function registerOperatorPanelCommand(registry: CommandRegistry): void {
     usage: '[open <id> [top|bottom]|close <id>|list|toggle|move <top|bottom|other> [id]|focus <top|bottom|toggle>|split [show|hide|toggle]|width <left|right|reset>|height <up|down|reset>]',
     argsHint: '<open|close|list|toggle|move|focus|split|width|height> [id]',
     handler(args, ctx) {
-      const pm = getPanelManager();
+      const pm = requirePanelManager(ctx);
       const sub = args[0]?.toLowerCase() ?? '';
       if (!sub || sub === 'toggle') {
         try {

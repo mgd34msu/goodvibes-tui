@@ -455,19 +455,3 @@ export class ApiTokenAuditor {
     return this._tokens.get(id);
   }
 }
-
-// ---------------------------------------------------------------------------
-// Singleton
-// ---------------------------------------------------------------------------
-
-let _tokenAuditor: ApiTokenAuditor | undefined;
-
-export function getTokenAuditor(): ApiTokenAuditor {
-  if (!_tokenAuditor) _tokenAuditor = new ApiTokenAuditor({ managed: false });
-  return _tokenAuditor;
-}
-
-/** Reset singleton — for testing only. */
-export function _resetTokenAuditorForTesting(): void {
-  _tokenAuditor = undefined;
-}

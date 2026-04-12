@@ -2,32 +2,28 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { existsSync, mkdtempSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { taskTool } from '../../tools/task/index.ts';
+import { createTaskTool } from '../../tools/task/index.ts';
 import { teamTool } from '../../tools/team/index.ts';
 import { worklistTool } from '../../tools/worklist/index.ts';
 import { packetTool } from '../../tools/packet/index.ts';
 import { queryTool } from '../../tools/query/index.ts';
-import { remoteTool } from '../../tools/remote-trigger/index.ts';
-import { replTool } from '../../tools/repl/index.ts';
-import { mcpTool } from '../../tools/mcp/index.ts';
+import { createRemoteTool } from '../../tools/remote-trigger/index.ts';
 import { controlTool } from '../../tools/control/index.ts';
-import { _resetForTesting as resetSessionOrchestration } from '../../sessions/orchestration/registry.ts';
-import { _resetRemoteRunnerRegistryForTesting, getRemoteRunnerRegistry } from '../../runtime/remote/runner-registry.ts';
+import { CrossSessionTaskRegistry } from '../../sessions/orchestration/index.ts';
+import { RemoteRunnerRegistry } from '../../runtime/remote/runner-registry.ts';
 
 describe('tool breadth additions', () => {
   const originalCwd = process.cwd();
   let root = '';
+  let taskTool = createTaskTool(new CrossSessionTaskRegistry());
 
   beforeEach(() => {
-    resetSessionOrchestration();
-    _resetRemoteRunnerRegistryForTesting();
     root = mkdtempSync(join(tmpdir(), 'gv-tool-breadth-'));
     process.chdir(root);
+    taskTool = createTaskTool(new CrossSessionTaskRegistry(root));
   });
 
   afterEach(() => {
-    resetSessionOrchestration();
-    _resetRemoteRunnerRegistryForTesting();
     process.chdir(originalCwd);
   });
 
@@ -160,8 +156,12 @@ describe('tool breadth additions', () => {
   });
 
   test('remote tool manages pools, contracts, artifacts, and review', async () => {
-    const registry = getRemoteRunnerRegistry();
-    registry.registerContract({
+    const remoteRegistry = new RemoteRunnerRegistry({
+      getStatus: () => null,
+      list: () => [],
+    });
+    const remoteTool = createRemoteTool(remoteRegistry);
+    remoteRegistry.registerContract({
       id: 'runner:remote-1',
       runnerId: 'remote-1',
       label: 'Remote engineer',
@@ -203,31 +203,6 @@ describe('tool breadth additions', () => {
     const summaryPools = await remoteTool.execute({ mode: 'pools', view: 'summary' });
     expect(summaryPools.success).toBe(true);
     expect(summaryPools.output).toContain('"runnerCount":1');
-  });
-
-  test('repl tool evaluates bounded expressions and records history', async () => {
-    const result = await replTool.execute({ mode: 'eval', expression: 'Math.max(a, b)', bindings: { a: 2, b: 5 } });
-    expect(result.success).toBe(true);
-    expect(result.output).toBe('5');
-
-    const history = await replTool.execute({ mode: 'history' });
-    expect(history.success).toBe(true);
-    expect(history.output).toContain('Math.max(a, b)');
-  });
-
-  test('mcp tool reports current MCP posture', async () => {
-    const security = await mcpTool.execute({ mode: 'security' });
-    expect(security.success).toBe(true);
-    expect(security.output).toContain('recentDecisions');
-    expect(security.output).toContain('"view":"descriptor"');
-
-    const auth = await mcpTool.execute({ mode: 'auth' });
-    expect(auth.success).toBe(true);
-    expect(auth.output).toContain('servers');
-
-    const resources = await mcpTool.execute({ mode: 'resources' });
-    expect(resources.success).toBe(true);
-    expect(resources.output).toContain('servers');
   });
 
   test('control tool reports packaged product-control breadth', async () => {

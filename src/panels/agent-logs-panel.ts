@@ -2,8 +2,7 @@ import { readFileSync, existsSync, watch, type FSWatcher } from 'fs';
 import type { Line } from '../types/grid.ts';
 import { createEmptyLine, createStyledCell } from '../types/grid.ts';
 import { BasePanel } from './base-panel.ts';
-import { AgentManager } from '../tools/agent/index.ts';
-import type { AgentRecord } from '../tools/agent/index.ts';
+import type { AgentManager, AgentRecord } from '../tools/agent/index.ts';
 import type { RuntimeEventBus, AgentEvent } from '../runtime/events/index.ts';
 import {
   buildEmptyState,
@@ -27,6 +26,10 @@ import {
 // ---------------------------------------------------------------------------
 
 const POLL_INTERVAL_MS = 500;
+
+export interface AgentLogsPanelDeps {
+  readonly agentManager: Pick<AgentManager, 'list'>;
+}
 
 
 // ---------------------------------------------------------------------------
@@ -55,7 +58,7 @@ export class AgentLogsPanel extends BasePanel {
   private unsubs: Array<() => void> = [];
   private runtimeBus: RuntimeEventBus;
 
-  constructor(runtimeBus: RuntimeEventBus) {
+  constructor(runtimeBus: RuntimeEventBus, private readonly deps: AgentLogsPanelDeps) {
     super('agent-logs', 'Agents', 'A', 'agent');
     this.runtimeBus = runtimeBus;
   }
@@ -340,7 +343,7 @@ export class AgentLogsPanel extends BasePanel {
 
   private _refreshAgents(): void {
     const prev = this._selectedAgent();
-    this.agents = AgentManager.getInstance().list()
+    this.agents = this.deps.agentManager.list()
       .sort((a, b) => b.startedAt - a.startedAt); // newest first
 
     // Try to keep same agent selected

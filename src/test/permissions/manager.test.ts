@@ -1,12 +1,15 @@
 import { describe, test, expect, beforeEach, afterEach } from 'bun:test';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { PermissionManager } from '../../permissions/manager.ts';
-import { configManager, getConfigSnapshot } from '../../config/index.ts';
+import { ConfigManager } from '../../config/manager.ts';
 import type { PermissionPromptRequest, PermissionPromptDecision } from '../../permissions/prompt.ts';
-import { getPolicyRuntimeState, resetPolicyRuntimeStateForTests } from '../../runtime/permissions/policy-runtime.ts';
+import { PolicyRuntimeState } from '../../runtime/permissions/policy-runtime.ts';
 import { createUnsignedBundle } from '../../runtime/permissions/policy-loader.ts';
 import type { PolicyBundlePayload } from '../../runtime/permissions/policy-loader.ts';
 import type { PolicyRule } from '../../runtime/permissions/types.ts';
-import { resetSettingsControlPlaneForTesting } from '../../runtime/settings/control-plane.ts';
+import { createPermissionConfigReader } from '../../permissions/manager.ts';
+import { resetSettingsControlPlaneStore } from '../helpers/settings-control-plane.ts';
 
 // behavior.autoApprove reflects the --no-worries-just-vibes flag.
 // In the test environment (no CLI flag), it is false.
@@ -15,17 +18,20 @@ import { resetSettingsControlPlaneForTesting } from '../../runtime/settings/cont
 
 describe('PermissionManager', () => {
   let manager: PermissionManager;
+  let configManager: ConfigManager;
   let savedMode: string;
   let savedAutoApprove: boolean;
   let requests: PermissionPromptRequest[];
   let decisions: PermissionPromptDecision[];
+  let policyRuntimeState: PolicyRuntimeState;
 
   beforeEach(() => {
-    resetPolicyRuntimeStateForTests();
-    resetSettingsControlPlaneForTesting();
+    configManager = new ConfigManager({ configDir: join(tmpdir(), `gv-permissions-${Date.now()}-${Math.random().toString(36).slice(2)}`) });
+    resetSettingsControlPlaneStore(configManager);
+    policyRuntimeState = new PolicyRuntimeState();
     // Snapshot current config state
-    savedMode = getConfigSnapshot().permissions.mode ?? 'prompt';
-    savedAutoApprove = getConfigSnapshot().behavior.autoApprove ?? false;
+    savedMode = configManager.get('permissions.mode') ?? 'prompt';
+    savedAutoApprove = configManager.get('behavior.autoApprove') ?? false;
     // Isolate: reset to default permission state so tests are deterministic
     configManager.set('permissions.mode', 'prompt');
     configManager.set('behavior.autoApprove', false);
@@ -34,12 +40,11 @@ describe('PermissionManager', () => {
     manager = new PermissionManager(async (request) => {
       requests.push(request);
       return decisions.shift() ?? { approved: true };
-    });
+    }, createPermissionConfigReader(configManager), policyRuntimeState);
   });
 
   afterEach(() => {
-    resetPolicyRuntimeStateForTests();
-    resetSettingsControlPlaneForTesting();
+    resetSettingsControlPlaneStore(configManager);
     // Restore config state after each test
     configManager.set('permissions.mode', savedMode as 'prompt' | 'allow-all' | 'custom');
     configManager.set('behavior.autoApprove', savedAutoApprove);
@@ -153,7 +158,7 @@ describe('PermissionManager', () => {
 
   describe('check - permission prompt for non-read tools (autoApprove=false)', () => {
     test('emits permission:request event for write category when autoApprove=false', async () => {
-      if (getConfigSnapshot().behavior.autoApprove) {
+      if (configManager.get('behavior.autoApprove')) {
         // Skip assertion path — flag is set, no event fires
         const result = await manager.check('write', { path: 'file.txt' });
         expect(result).toBe(true);
@@ -169,7 +174,7 @@ describe('PermissionManager', () => {
     });
 
     test('resolving with false denies the operation', async () => {
-      if (getConfigSnapshot().behavior.autoApprove) {
+      if (configManager.get('behavior.autoApprove')) {
         const result = await manager.check('exec', { command: 'echo hi' });
         expect(result).toBe(true);
         return;
@@ -184,7 +189,7 @@ describe('PermissionManager', () => {
     });
 
     test('permission:request event includes tool name and category', async () => {
-      if (getConfigSnapshot().behavior.autoApprove) {
+      if (configManager.get('behavior.autoApprove')) {
         await manager.check('write', { path: 'test.ts' });
         return;
       }
@@ -269,7 +274,7 @@ describe('PermissionManager', () => {
         commandPrefixes: ['rm'],
       };
       const payload: PolicyBundlePayload = { version: 1, rules: [rule] };
-      const registry = getPolicyRuntimeState().getRegistry();
+      const registry = policyRuntimeState.getRegistry();
       registry.loadCandidate(createUnsignedBundle('policy-deny-rm', payload));
       registry.markSimulating();
       registry.attachSimulationReport(
@@ -301,7 +306,7 @@ describe('PermissionManager', () => {
         commandPrefixes: ['npm test'],
       };
       const payload: PolicyBundlePayload = { version: 1, rules: [rule] };
-      const registry = getPolicyRuntimeState().getRegistry();
+      const registry = policyRuntimeState.getRegistry();
       registry.loadCandidate(createUnsignedBundle('policy-allow-npm-test', payload));
       registry.markSimulating();
       registry.attachSimulationReport(
@@ -324,7 +329,7 @@ describe('PermissionManager', () => {
 
   describe('session approval cache', () => {
     test('caches approval when remember=true — only 1 prompt for 2 identical calls', async () => {
-      if (getConfigSnapshot().behavior.autoApprove) {
+      if (configManager.get('behavior.autoApprove')) {
         // autoApprove skips prompts; cache logic isn't exercised
         await manager.check('write', { path: 'cached.ts' });
         await manager.check('write', { path: 'cached.ts' });
@@ -341,7 +346,7 @@ describe('PermissionManager', () => {
     });
 
     test('different paths get separate cache entries — up to 2 prompts', async () => {
-      if (getConfigSnapshot().behavior.autoApprove) {
+      if (configManager.get('behavior.autoApprove')) {
         await manager.check('write', { path: 'file-a.ts' });
         await manager.check('write', { path: 'file-b.ts' });
         return;
@@ -357,7 +362,7 @@ describe('PermissionManager', () => {
     });
 
     test('cached denial is returned without prompting again', async () => {
-      if (getConfigSnapshot().behavior.autoApprove) {
+      if (configManager.get('behavior.autoApprove')) {
         // autoApprove=true means the denial path can't be reached
         return;
       }

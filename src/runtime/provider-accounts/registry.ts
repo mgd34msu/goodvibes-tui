@@ -1,8 +1,9 @@
 import { listBuiltinSubscriptionProviders } from '../../config/subscription-providers.ts';
-import { getServiceRegistry } from '../../config/service-registry.ts';
-import { getSubscriptionManager } from '../../config/subscriptions.ts';
+import { ServiceRegistry } from '../../config/service-registry.ts';
+import { SubscriptionManager } from '../../config/subscriptions.ts';
 import { resolveApiKeys } from '../../config/index.ts';
-import { getProviderRegistry } from '../../providers/registry.ts';
+import type { SecretsManager } from '../../config/secrets.ts';
+import type { ProviderRegistry } from '../../providers/registry.ts';
 import type { ProviderRuntimeMetadata } from '../../providers/interface.ts';
 import { decodeJwtPayload } from '../auth/oauth-core.ts';
 
@@ -52,6 +53,13 @@ export interface ProviderAccountSnapshot {
   readonly issueCount: number;
 }
 
+export interface ProviderAccountSnapshotDeps {
+  readonly providerRegistry: Pick<ProviderRegistry, 'listModels' | 'getCurrentModel' | 'getRegistered'>;
+  readonly serviceRegistry?: Pick<ServiceRegistry, 'getAll' | 'inspect'>;
+  readonly subscriptionManager?: Pick<SubscriptionManager, 'list' | 'listPending' | 'get' | 'getPending'>;
+  readonly secretsManager?: Pick<SecretsManager, 'get'>;
+}
+
 function builtinWindowsForProvider(providerId: string): readonly ProviderUsageWindow[] {
   if (providerId === 'openai') {
     return [
@@ -90,16 +98,19 @@ function determineSubscriptionFreshness(expiresAt?: number): ProviderAuthFreshne
   return 'healthy';
 }
 
-export async function buildProviderAccountSnapshot(): Promise<ProviderAccountSnapshot> {
-  const providerRegistry = getProviderRegistry();
+export async function buildProviderAccountSnapshot(
+  deps: ProviderAccountSnapshotDeps,
+): Promise<ProviderAccountSnapshot> {
+  const providerRegistry = deps.providerRegistry;
   const allModels = providerRegistry.listModels();
   const currentModel = providerRegistry.getCurrentModel?.();
-  const apiKeys = await resolveApiKeys();
-  const subscriptions = getSubscriptionManager();
+  const apiKeys = await resolveApiKeys(deps.secretsManager);
+  const subscriptions = deps.subscriptionManager ?? new SubscriptionManager();
   const builtinSubscriptionProviders = new Set(listBuiltinSubscriptionProviders().map((entry) => entry.provider));
-  const serviceRegistry = getServiceRegistry();
-  const services = Object.values(serviceRegistry.getAll());
-  const serviceInspections = await Promise.all(Object.keys(serviceRegistry.getAll()).map(async (name) => ({
+  const serviceRegistry = deps.serviceRegistry ?? new ServiceRegistry();
+  const serviceConfigs = serviceRegistry.getAll();
+  const services = Object.values(serviceConfigs);
+  const serviceInspections = await Promise.all(Object.keys(serviceConfigs).map(async (name) => ({
     name,
     inspection: await serviceRegistry.inspect(name),
   })));

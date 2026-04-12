@@ -5,7 +5,7 @@ import type { ConversationManager } from '../core/conversation.ts';
 import type { PermissionCategory } from '../permissions/manager.ts';
 import type { ContentPart } from '../providers/interface.ts';
 import type { CommandContext } from './command-registry.ts';
-import { getBookmarkManager } from '../bookmarks/manager.ts';
+import type { BookmarkManager } from '../bookmarks/manager.ts';
 import { resolveAndValidatePath } from '../utils/path-safety.ts';
 import { analyzePermissionRequest } from '../permissions/analysis.ts';
 import { logger } from '../utils/logger.ts';
@@ -251,6 +251,7 @@ export function handleBookmark(
   conversationManager: ConversationManager | null,
   getScrollTop: () => number,
   requestRender: () => void,
+  bookmarkManager: BookmarkManager,
 ): void {
   if (!conversationManager) return;
   const lineIndex = getScrollTop();
@@ -260,9 +261,8 @@ export function handleBookmark(
     requestRender();
     return;
   }
-  const bm = getBookmarkManager();
   const label = `${nearest.type}: ${nearest.rawContent.slice(0, 40).replace(/\n/g, ' ')}`;
-  const added = bm.toggle(nearest.collapseKey, label);
+  const added = bookmarkManager.toggle(nearest.collapseKey, label);
   const msg = added
     ? `[Bookmarked: ${nearest.collapseKey}]`
     : `[Bookmark removed: ${nearest.collapseKey}]`;
@@ -274,6 +274,7 @@ export function handleBlockSave(
   conversationManager: ConversationManager | null,
   getScrollTop: () => number,
   requestRender: () => void,
+  bookmarkManager: BookmarkManager,
 ): void {
   if (!conversationManager) return;
   const lineIndex = getScrollTop();
@@ -286,8 +287,7 @@ export function handleBlockSave(
   const nearest = conversationManager.findNearestBlock(lineIndex);
   const label = nearest?.type ?? 'block';
   try {
-    const bm = getBookmarkManager();
-    const filePath = bm.saveToFile(content, label);
+    const filePath = bookmarkManager.saveToFile(content, label);
     const homePath = process.env.HOME || process.env.USERPROFILE || '';
     const displayPath = homePath ? filePath.replace(homePath, '~') : filePath;
     conversationManager.log(`[Saved to: ${displayPath}]`, { fg: '#22c55e' });

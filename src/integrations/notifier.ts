@@ -5,7 +5,7 @@ import { DiscordIntegration } from './discord.ts';
 import { DeliveryQueue } from './delivery.ts';
 import type { DeliveryQueueConfig, IntegrationQueueStatus } from './delivery.ts';
 import { snapshotQueueStatus } from './delivery.ts';
-import { getServiceRegistry } from '../config/service-registry.ts';
+import { ServiceRegistry } from '../config/service-registry.ts';
 
 // ---------------------------------------------------------------------------
 // Notifier
@@ -40,7 +40,7 @@ export class Notifier {
    * Create a Notifier pre-wired from configured services and environment variables.
    */
   static async fromConfig(): Promise<Notifier> {
-    const registry = getServiceRegistry();
+    const registry = new ServiceRegistry();
     const [
       slackWebhookFromService,
       slackTokenFromService,

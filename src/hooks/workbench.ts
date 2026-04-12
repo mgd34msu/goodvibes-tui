@@ -1,12 +1,12 @@
 import { existsSync, mkdirSync, readFileSync } from 'node:fs';
 import { writeFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
-import { configManager } from '../config/index.ts';
 import { logger } from '../utils/logger.ts';
-import { getHookDispatcher } from './index.ts';
 import { getHookPointContract } from './contracts.ts';
 import { matchesEventPath, matchesMatcher } from './matcher.ts';
+import type { HookDispatcher } from './dispatcher.ts';
 import type { HookChain, HookDefinition, HookEvent, HookResult, HookType, HooksConfig } from './types.ts';
+import type { ConfigManager } from '../config/manager.ts';
 
 export interface HookAuthoringAction {
   readonly kind: 'load' | 'save' | 'reload' | 'scaffold-hook' | 'scaffold-chain' | 'remove' | 'toggle' | 'simulate' | 'export' | 'import' | 'inspect';
@@ -37,6 +37,12 @@ export interface HookConfigInspection {
   readonly patterns: readonly string[];
 }
 
+export interface HookWorkbenchOptions {
+  readonly hookDispatcher: Pick<HookDispatcher, 'clear' | 'loadFromFile'>;
+  readonly configManager: Pick<ConfigManager, 'get'>;
+  readonly hooksFilePathResolver?: () => string;
+}
+
 const EMPTY_CONFIG: HooksConfig = Object.freeze({ hooks: {}, chains: [] });
 
 function cloneConfig(config: HooksConfig): HooksConfig {
@@ -62,23 +68,18 @@ function ensureConfigShape(parsed: unknown): HooksConfig {
 }
 
 export class HookWorkbench {
-  private static instance: HookWorkbench | null = null;
   private managedConfig: HooksConfig = cloneConfig(EMPTY_CONFIG);
   private recentActions: HookAuthoringAction[] = [];
   private lastSimulation: HookSimulationResult | null = null;
   private lastLoadedPath: string | null = null;
 
-  static getInstance(): HookWorkbench {
-    if (!HookWorkbench.instance) HookWorkbench.instance = new HookWorkbench();
-    return HookWorkbench.instance;
-  }
-
-  static resetInstance(): void {
-    HookWorkbench.instance = null;
-  }
+  constructor(
+    private readonly hookDispatcher: Pick<HookDispatcher, 'clear' | 'loadFromFile'>,
+    private readonly hooksFilePathResolver: () => string,
+  ) {}
 
   getHooksFilePath(): string {
-    return resolve(process.cwd(), configManager.get('tools.hooksFile') as string);
+    return this.hooksFilePathResolver();
   }
 
   getManagedConfig(): HooksConfig {
@@ -142,9 +143,8 @@ export class HookWorkbench {
 
   async loadAndApplyManagedHooks(path = this.getHooksFilePath()): Promise<void> {
     this.loadManagedConfig(path);
-    const dispatcher = getHookDispatcher();
-    dispatcher.clear();
-    dispatcher.loadFromFile(path);
+    this.hookDispatcher.clear();
+    this.hookDispatcher.loadFromFile(path);
     this.recordAction({ kind: 'reload', target: path, timestamp: Date.now(), detail: 'dispatcher refreshed' });
   }
 
@@ -344,10 +344,9 @@ export class HookWorkbench {
   }
 }
 
-export function getHookWorkbench(): HookWorkbench {
-  return HookWorkbench.getInstance();
-}
-
-export function _resetHookWorkbenchForTesting(): void {
-  HookWorkbench.resetInstance();
+export function createHookWorkbench(options: HookWorkbenchOptions): HookWorkbench {
+  return new HookWorkbench(
+    options.hookDispatcher,
+    options.hooksFilePathResolver ?? (() => resolve(process.cwd(), options.configManager.get('tools.hooksFile') as string)),
+  );
 }

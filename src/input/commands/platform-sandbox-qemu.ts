@@ -1,7 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import type { CommandContext } from '../command-registry.ts';
-import { getSandboxSessionRegistry } from '../../runtime/sandbox/session-registry.ts';
 import {
   applySandboxQemuSetupManifest,
   bootstrapSandboxQemuSetupBundle,
@@ -13,7 +12,11 @@ import {
 
 export async function handleSandboxQemuCommand(args: string[], ctx: CommandContext): Promise<boolean> {
   const sub = (args[1] ?? '').toLowerCase();
-  const sessions = getSandboxSessionRegistry();
+  const sessions = ctx.sandboxSessionRegistry;
+  if (!sessions) {
+    ctx.print('Sandbox session registry is not wired into this runtime.');
+    return true;
+  }
   if (sub === 'setup') {
     const dirArg = args[2];
     if (!dirArg) {

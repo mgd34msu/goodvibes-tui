@@ -16,27 +16,6 @@ import type { RuntimeEventBus, AgentEvent, WorkflowEvent } from '../runtime/even
  *   const notifier = new WebhookNotifier(['https://ntfy.sh/my-topic']);
  *   notifier.attachToRuntimeBus(runtimeBus);
  */
-// ---------------------------------------------------------------------------
-// Module-level singleton — wired at startup, accessible to command handlers
-// ---------------------------------------------------------------------------
-
-let _liveNotifier: WebhookNotifier | null = null;
-
-/**
- * Set the live WebhookNotifier instance after runtime wiring.
- * The /notify test command uses this to send test pings through the active instance.
- */
-export function setWebhookNotifier(notifier: WebhookNotifier): void {
-  _liveNotifier = notifier;
-}
-
-/**
- * Get the live WebhookNotifier instance, or null if not yet initialized.
- */
-export function getWebhookNotifier(): WebhookNotifier | null {
-  return _liveNotifier;
-}
-
 export class WebhookNotifier {
   private urls: string[];
   private unsubscribers: Array<() => void> = [];

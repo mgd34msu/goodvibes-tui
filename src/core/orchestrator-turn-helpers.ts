@@ -1,17 +1,18 @@
 import type { ConversationManager } from './conversation.ts';
-import { providerRegistry } from '../providers/registry.ts';
+import type { ConfigManager } from '../config/manager.ts';
 import type { ContentPart, LLMProvider } from '../providers/interface.ts';
-import { configManager } from '../config/index.ts';
+import type { ProviderRegistry } from '../providers/registry.ts';
 import { classifyIntent } from './intent-classifier.ts';
-import { adaptivePlanner } from './adaptive-planner-instance.ts';
 import { logger } from '../utils/logger.ts';
-import { planManager } from './plan-manager-instance.ts';
+import type { AdaptivePlanner } from './adaptive-planner.ts';
 import type { ExecutionPlan, PlanItem } from './execution-plan.ts';
+import type { ExecutionPlanManager } from './execution-plan.ts';
 import type { RuntimeEventBus } from '../runtime/events/index.ts';
 import { emitPlanStrategySelected, emitToolReconciled, emitTurnCompleted } from '../runtime/emitters/index.ts';
 import { buildSyntheticResult } from './tool-reconciliation.ts';
 import { autoSpawnPendingItems } from './orchestrator-tool-runtime.ts';
 import type { ToolCall, ToolResult } from '../types/tools.ts';
+import type { AgentManager } from '../tools/agent/index.ts';
 
 type EmitterContextFactory = (turnId: string) => import('../runtime/emitters/index.ts').EmitterContext;
 export type ChatResponseWithReasoning = Awaited<ReturnType<LLMProvider['chat']>> & {
@@ -22,11 +23,13 @@ export type ChatResponseWithReasoning = Awaited<ReturnType<LLMProvider['chat']>>
 export function maybeEmitAdaptivePlannerDecision(
   text: string,
   flagEnabled: boolean,
+  adaptivePlanner: Pick<AdaptivePlanner, 'select'> | null,
   runtimeBus: RuntimeEventBus | null,
   emitterContext: EmitterContextFactory,
   turnId: string,
 ): void {
   if (!flagEnabled) return;
+  if (!adaptivePlanner) return;
   const classification = classifyIntent(text);
   const plannerInputs = {
     riskScore: 0.3,
@@ -48,12 +51,14 @@ export function maybeEmitAdaptivePlannerDecision(
 
 export function prepareConversationForTurn(
   conversation: ConversationManager,
+  providerRegistry: Pick<ProviderRegistry, 'getCurrentModel'>,
   text: string,
   content: ContentPart[] | undefined,
   sessionId?: string,
+  planManager: Pick<ExecutionPlanManager, 'getActive' | 'toMarkdown'> | null = null,
 ): ExecutionPlan | null {
-  const preTurnPlan = planManager.getActive(sessionId);
-  if (preTurnPlan) {
+  const preTurnPlan = planManager?.getActive(sessionId) ?? null;
+  if (preTurnPlan && planManager) {
     const planMd = planManager.toMarkdown(preTurnPlan);
     conversation.addSystemMessage(
       `## Current Execution Plan\n${planMd}\n\nRefer to this plan. Update item statuses as you complete work.`
@@ -78,7 +83,7 @@ export function prepareConversationForTurn(
     conversation.addUserMessage(content ?? text);
   }
 
-  const activePlan = planManager.getActive(sessionId);
+  const activePlan = planManager?.getActive(sessionId) ?? null;
   if (!activePlan) {
     const classification = classifyIntent(text);
     if (classification.intent === 'project' && classification.confidence > 0.5) {
@@ -96,6 +101,10 @@ export function prepareConversationForTurn(
 
 export async function handleToolResponseOutcome(args: {
   conversation: ConversationManager;
+  agentManager: Pick<AgentManager, 'list' | 'spawn'>;
+  planManager: Pick<ExecutionPlanManager, 'getActive' | 'getSummary' | 'getNextItems' | 'updateItem'> | null;
+  configManager: Pick<ConfigManager, 'get'>;
+  providerRegistry: Pick<ProviderRegistry, 'getCurrentModel'>;
   runtimeBus: RuntimeEventBus | null;
   emitterContext: EmitterContextFactory;
   turnId: string;
@@ -112,8 +121,8 @@ export async function handleToolResponseOutcome(args: {
     reasoningContent: args.response.reasoning || undefined,
     reasoningSummary: args.response.reasoningSummary || undefined,
     usage: args.response.usage,
-    model: providerRegistry.getCurrentModel().displayName,
-    provider: providerRegistry.getCurrentModel().provider,
+    model: args.providerRegistry.getCurrentModel().displayName,
+    provider: args.providerRegistry.getCurrentModel().provider,
   });
 
   const results = await args.executeToolCalls(args.turnId, args.response.toolCalls);
@@ -123,7 +132,7 @@ export async function handleToolResponseOutcome(args: {
   const allImages = (results as Array<ToolResult & { _images?: Array<{ path: string; base64: string; mediaType: string; description: string }> }>)
     .filter(r => Array.isArray(r._images) && r._images.length > 0)
     .flatMap(r => r._images!);
-  if (allImages.length > 0 && providerRegistry.getCurrentModel().capabilities.multimodal) {
+  if (allImages.length > 0 && args.providerRegistry.getCurrentModel().capabilities.multimodal) {
     const imageParts: ContentPart[] = [
       { type: 'text', text: '[Images from read tool results]' },
       ...allImages.map(img => ({ type: 'image' as const, data: img.base64, mediaType: img.mediaType })),
@@ -138,17 +147,22 @@ export async function handleToolResponseOutcome(args: {
 
   if (spawnedAgents || args.messageQueueLength > 0) {
     if (spawnedAgents) {
-      const activePlan = planManager.getActive(args.sessionId);
+      const planManager = args.planManager;
+      const activePlan = planManager?.getActive(args.sessionId) ?? null;
       if (activePlan) {
-        const summary = planManager.getSummary(activePlan);
-        const nextItems = planManager.getNextItems(activePlan);
+        const summary = planManager?.getSummary(activePlan) ?? '';
+        const nextItems = planManager?.getNextItems(activePlan) ?? [];
         if (nextItems.length > 0) {
           const autoSpawnedDescs = autoSpawnPendingItems(
             args.conversation,
             activePlan,
             nextItems,
+            args.agentManager,
+            args.configManager,
+            args.providerRegistry,
             args.runtimeBus,
             args.emitterContext(args.turnId),
+            planManager,
           );
           if (autoSpawnedDescs.length > 0) {
             args.conversation.addSystemMessage(
@@ -179,7 +193,7 @@ export async function handleToolResponseOutcome(args: {
     return { continueLoop: false, results };
   }
 
-  if (planManager.getActive(args.sessionId)) {
+  if (args.planManager?.getActive(args.sessionId)) {
     args.conversation.addSystemMessage(
       'Update the execution plan to reflect completed work. Mark items as COMPLETE or IN_PROGRESS with the agent ID.'
     );
@@ -190,6 +204,10 @@ export async function handleToolResponseOutcome(args: {
 
 export function handleFinalResponseOutcome(args: {
   conversation: ConversationManager;
+  agentManager: Pick<AgentManager, 'list' | 'spawn'>;
+  planManager: Pick<ExecutionPlanManager, 'parseFromMarkdown' | 'replaceItems' | 'load' | 'save' | 'getActive' | 'getNextItems' | 'updateItem'> | null;
+  configManager: Pick<ConfigManager, 'get'>;
+  providerRegistry: Pick<ProviderRegistry, 'getCurrentModel'>;
   runtimeBus: RuntimeEventBus | null;
   emitterContext: EmitterContextFactory;
   turnId: string;
@@ -204,8 +222,8 @@ export function handleFinalResponseOutcome(args: {
     reasoningContent: args.response.reasoning || undefined,
     reasoningSummary: args.response.reasoningSummary || undefined,
     usage: args.response.usage,
-    model: providerRegistry.getCurrentModel().displayName,
-    provider: providerRegistry.getCurrentModel().provider,
+    model: args.providerRegistry.getCurrentModel().displayName,
+    provider: args.providerRegistry.getCurrentModel().provider,
   });
   if (args.runtimeBus) {
     emitTurnCompleted(args.runtimeBus, args.emitterContext(args.turnId), {
@@ -215,7 +233,8 @@ export function handleFinalResponseOutcome(args: {
     });
   }
 
-  if (args.preTurnPlan && args.preTurnPlan.awaitingPlan === true && args.response.content.includes('## Phase')) {
+  const planManager = args.planManager;
+  if (args.preTurnPlan && args.preTurnPlan.awaitingPlan === true && args.response.content.includes('## Phase') && planManager) {
     const parsed = planManager.parseFromMarkdown(args.response.content);
     if (parsed.items && parsed.items.length > 0) {
       planManager.replaceItems(args.preTurnPlan.id, parsed.items);
@@ -232,8 +251,12 @@ export function handleFinalResponseOutcome(args: {
             args.conversation,
             updatedPlan,
             nextItems,
+            args.agentManager,
+            args.configManager,
+            args.providerRegistry,
             args.runtimeBus,
             args.emitterContext(args.turnId),
+            planManager,
           );
           if (spawned.length > 0) {
             args.conversation.addSystemMessage(
@@ -255,23 +278,27 @@ export function handleFinalResponseOutcome(args: {
     }
   }
 
-  const pendingPlan = planManager.getActive(args.sessionId);
+  const pendingPlan = planManager?.getActive(args.sessionId) ?? null;
   if (pendingPlan) {
-    const pendingItems = planManager.getNextItems(pendingPlan);
+    const pendingItems = planManager?.getNextItems(pendingPlan) ?? [];
     if (pendingItems.length > 0) {
       args.setAutoSpawnTimeout(setTimeout(() => {
         args.setAutoSpawnTimeout(null);
-        const stillActivePlan = planManager.getActive(args.sessionId);
+        const stillActivePlan = planManager?.getActive(args.sessionId) ?? null;
         if (!stillActivePlan) return;
-        const stillPending = planManager.getNextItems(stillActivePlan);
+        const stillPending = planManager?.getNextItems(stillActivePlan) ?? [];
         if (stillPending.length === 0) return;
 
         const spawned = autoSpawnPendingItems(
           args.conversation,
           stillActivePlan,
           stillPending,
+          args.agentManager,
+          args.configManager,
+          args.providerRegistry,
           args.runtimeBus,
           args.emitterContext(args.turnId),
+          planManager,
         );
         if (spawned.length > 0) {
           args.conversation.addSystemMessage(
@@ -288,13 +315,14 @@ export function handleFinalResponseOutcome(args: {
 
 export function emitMalformedToolUseWarning(args: {
   conversation: ConversationManager;
+  providerRegistry: Pick<ProviderRegistry, 'getCurrentModel'>;
   runtimeBus: RuntimeEventBus | null;
   emitterContext: EmitterContextFactory;
   turnId: string;
   isReconciliationEnabled: boolean;
 }): void {
   logger.warn('Orchestrator: provider reported stopReason=tool_use but returned no tool calls (malformed response)', {
-    model: providerRegistry.getCurrentModel().id,
+    model: args.providerRegistry.getCurrentModel().id,
     stopReason: 'tool_use',
   });
   if (args.isReconciliationEnabled) {

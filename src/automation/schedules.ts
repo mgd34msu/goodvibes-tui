@@ -27,17 +27,12 @@ export type AutomationScheduleDefinition =
 export type AutomationScheduleKind = AutomationScheduleDefinition['kind'];
 
 const EVERY_PATTERN = /^(\d+(?:\.\d+)?)(ms|s|m|h|d)$/;
-let cronHelper: TaskScheduler | undefined;
-const STAGGER_OFFSET_CACHE_MAX = 1_000;
-const STAGGER_OFFSET_CACHE = new Map<string, number>();
+const CRON_HELPER_STATE_PATH = '.goodvibes/tui/.automation-cron-helper.json';
 
 export const DEFAULT_TOP_OF_HOUR_STAGGER_MS = 5 * 60 * 1_000;
 
-function getCronHelper(): TaskScheduler {
-  if (!cronHelper) {
-    cronHelper = new TaskScheduler('.goodvibes/tui/.automation-cron-helper.json');
-  }
-  return cronHelper;
+function createCronHelper(): TaskScheduler {
+  return new TaskScheduler(CRON_HELPER_STATE_PATH);
 }
 
 function ensurePositiveFinite(value: number, label: string): void {
@@ -128,17 +123,8 @@ export function resolveAutomationCronStaggerMs(schedule: AutomationCronSchedule)
 
 export function resolveStableAutomationCronOffsetMs(stableId: string | undefined, staggerMs: number): number {
   if (!stableId || staggerMs <= 1) return 0;
-  const cacheKey = `${staggerMs}:${stableId}`;
-  const cached = STAGGER_OFFSET_CACHE.get(cacheKey);
-  if (cached !== undefined) return cached;
   const digest = createHash('sha256').update(stableId).digest();
-  const offset = digest.readUInt32BE(0) % staggerMs;
-  if (STAGGER_OFFSET_CACHE.size >= STAGGER_OFFSET_CACHE_MAX) {
-    const first = STAGGER_OFFSET_CACHE.keys().next();
-    if (!first.done) STAGGER_OFFSET_CACHE.delete(first.value);
-  }
-  STAGGER_OFFSET_CACHE.set(cacheKey, offset);
-  return offset;
+  return digest.readUInt32BE(0) % staggerMs;
 }
 
 export function validateSchedule(schedule: AutomationScheduleDefinition): void {
@@ -162,7 +148,7 @@ export function validateSchedule(schedule: AutomationScheduleDefinition): void {
       if (schedule.staggerMs !== undefined && normalizeCronStaggerMs(schedule.staggerMs) === undefined) {
         throw new Error('schedule.staggerMs must be a finite number when provided');
       }
-      getCronHelper().getNextRun(schedule.expression, new Date(), schedule.timezone);
+      createCronHelper().getNextRun(schedule.expression, new Date(), schedule.timezone);
       break;
   }
 }
@@ -198,7 +184,7 @@ export function normalizeCronSchedule(expression: string, timezone?: string, sta
 }
 
 function getNextCronOccurrence(schedule: AutomationCronSchedule, fromMs: number): number {
-  return getCronHelper().getNextRun(schedule.expression, new Date(fromMs), schedule.timezone).getTime();
+  return createCronHelper().getNextRun(schedule.expression, new Date(fromMs), schedule.timezone).getTime();
 }
 
 export function getNextAutomationOccurrence(

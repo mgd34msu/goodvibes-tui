@@ -18,6 +18,7 @@ import {
 } from '../../intelligence/tree-sitter/queries.ts';
 import { existsSync } from 'fs';
 import { join } from 'path';
+import { getTestTreeSitterService } from '../helpers/runtime-services.ts';
 
 // ---------------------------------------------------------------------------
 // Environment probes
@@ -181,13 +182,6 @@ describe('TreeSitterService', () => {
   test('starts with empty cache and no loaded languages', () => {
     expect(svc.cacheSize).toBe(0);
     expect(svc.loadedLanguages).toEqual([]);
-  });
-
-  test('singleton: getInstance returns same instance', () => {
-    const a = TreeSitterService.getInstance();
-    const b = TreeSitterService.getInstance();
-    expect(a).toBe(b);
-    a.dispose(); // reset singleton
   });
 
   test('dispose() clears cache', () => {

@@ -12,10 +12,13 @@ import type { PermissionPromptRequest } from '../../permissions/prompt.ts';
 import type { AutomationJob } from '../../automation/jobs.ts';
 import type { AutomationRun } from '../../automation/runs.ts';
 import type { AutomationRouteBinding } from '../../automation/routes.ts';
+import { AutomationRouteStore } from '../../automation/store/routes.ts';
+import { RouteBindingManager } from '../../channels/route-manager.ts';
 import type { AutomationDeliveryAttempt } from '../../automation/delivery.ts';
 import type { WatcherRecord } from '../../runtime/store/domains/watchers.ts';
 import type { ControlPlaneClientRecord } from '../../runtime/store/domains/control-plane.ts';
 import { PersistentStore } from '../../state/persistent-store.ts';
+import { getTestApprovalBroker, getTestSessionBroker, resetTestRuntimeServices } from '../helpers/runtime-services.ts';
 
 function linesText(lines: ReturnType<AutomationControlPanel['render']>): string {
   return lines.map((line) => line.map((cell) => cell.char ?? ' ').join('').trimEnd()).join('\n');
@@ -153,14 +156,20 @@ describe('control-plane operator panels', () => {
     (ApprovalBroker as unknown as { instance: ApprovalBroker | null }).instance = new ApprovalBroker(
       new PersistentStore(join(root, 'approvals.json')) as never,
     );
+    const routeBindings = new RouteBindingManager({
+      store: new AutomationRouteStore(join(root, 'routes.json')),
+    });
     (SharedSessionBroker as unknown as { instance: SharedSessionBroker | null }).instance = new SharedSessionBroker({
       store: new PersistentStore(join(root, 'sessions.json')) as never,
+      routeBindings,
+      agentStatusProvider: { getStatus: () => null },
+      messageSender: { send: () => false },
     });
   });
 
   afterEach(() => {
-    ApprovalBroker.resetInstance();
-    SharedSessionBroker.resetInstance();
+    resetTestRuntimeServices();
+    resetTestRuntimeServices();
     rmSync(root, { recursive: true, force: true });
   });
 
@@ -222,7 +231,7 @@ describe('control-plane operator panels', () => {
     const gateway = new ControlPlaneGateway({ runtimeStore: store, server: { enabled: true, host: '127.0.0.1', port: 3421 } });
     gateway.publishEvent('session-update', { sessionId: 'session-shared', status: 'open' });
 
-    const sessionBroker = SharedSessionBroker.getInstance();
+    const sessionBroker = getTestSessionBroker();
     await sessionBroker.start();
     await sessionBroker.createSession({
       id: 'session-shared',
@@ -236,7 +245,7 @@ describe('control-plane operator panels', () => {
       },
     });
 
-    const broker = ApprovalBroker.getInstance();
+    const broker = getTestApprovalBroker();
     const request: PermissionPromptRequest = {
       callId: 'call-approval-1',
       tool: 'exec',
@@ -259,12 +268,16 @@ describe('control-plane operator panels', () => {
     });
     await new Promise((resolve) => setTimeout(resolve, 5));
 
-    const panel = new ControlPlanePanel(store);
+    const panel = new ControlPlanePanel(store, {
+      approvalBroker: broker,
+      sessionBroker,
+      getRecentEvents: (limit) => gateway.listRecentEvents(limit),
+    });
     const text = linesText(panel.render(110, 30));
     expect(text).toContain('Control Plane');
     expect(text).toContain('Web Console');
     expect(text).toContain('exec');
     expect(text).toContain('Shared session');
-    expect(text).toContain('approval-update');
+    expect(text).toContain('session-update');
   });
 });

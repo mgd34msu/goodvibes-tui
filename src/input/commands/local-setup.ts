@@ -3,9 +3,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import type { CommandRegistry, CommandContext } from '../command-registry.ts';
 import type { ConfigKey } from '../../config/index.ts';
 import { CONFIG_SCHEMA } from '../../config/index.ts';
-import { getPanelManager } from '../../panels/panel-manager.ts';
 import { listHookPointContracts } from '../../hooks/index.ts';
-import { getRemoteRunnerRegistry } from '../../runtime/remote/index.ts';
 import { isRunningInWsl } from '../../runtime/sandbox/manager.ts';
 import { renderQemuWrapperTemplate } from '../../runtime/sandbox/qemu-wrapper-template.ts';
 import type { SetupTransferBundle } from './local-setup-transfer.ts';
@@ -17,6 +15,7 @@ import {
   parseSetupLink,
 } from './local-setup-transfer.ts';
 import { buildSetupReviewSnapshot, exportSetupSupportBundle, renderSetupSandboxReview } from './local-setup-review.ts';
+import { requirePanelManager } from './runtime-services.ts';
 
 export function registerLocalSetupCommands(registry: CommandRegistry): void {
   registry.register({
@@ -101,7 +100,7 @@ export function registerLocalSetupCommands(registry: CommandRegistry): void {
       }
 
       if (sub === 'remote') {
-        const runners = getRemoteRunnerRegistry().listContracts();
+        const runners = ctx.remoteRunnerRegistry?.listContracts() ?? [];
         ctx.print([
           'Startup Remote',
           `  runner contracts: ${snapshot.remoteRunnerCount}`,
@@ -152,8 +151,8 @@ export function registerLocalSetupCommands(registry: CommandRegistry): void {
         }
         const targetDir = exportSetupSupportBundle(dirArg, snapshot);
         writeFileSync(join(targetDir, 'remote-summary.json'), JSON.stringify({
-          runners: getRemoteRunnerRegistry().listContracts(),
-          artifacts: getRemoteRunnerRegistry().listArtifacts().map((artifact) => ({
+          runners: ctx.remoteRunnerRegistry?.listContracts() ?? [],
+          artifacts: (ctx.remoteRunnerRegistry?.listArtifacts() ?? []).map((artifact) => ({
             id: artifact.id,
             runnerId: artifact.runnerId,
             status: artifact.task.status,
@@ -267,7 +266,7 @@ export function registerLocalSetupCommands(registry: CommandRegistry): void {
         if (parsed.surface === 'tasks') {
           if (ctx.showPanel) ctx.showPanel('tasks');
           else {
-            const panelManager = getPanelManager();
+            const panelManager = requirePanelManager(ctx);
             panelManager.open('tasks');
             panelManager.show();
             ctx.renderRequest();

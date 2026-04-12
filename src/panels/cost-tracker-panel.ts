@@ -6,8 +6,6 @@ import type { Line } from '../types/grid.ts';
 import { createStyledCell, createEmptyLine } from '../types/grid.ts';
 import { BasePanel } from './base-panel.ts';
 import type { RuntimeEventBus, AgentEvent, TurnEvent } from '../runtime/events/index.ts';
-import { getPricingForModel } from '../providers/model-limits.ts';
-import { getCostFromCatalog } from '../providers/model-catalog.ts';
 import {
   buildEmptyState,
   buildPanelLine,
@@ -57,30 +55,22 @@ const MODEL_PRICING: Record<string, ModelPricing> = {
 /**
  * Look up pricing from the model catalog.
  * Returns { input: 0, output: 0 } for free models and unknown models.
- * Unknown models also emit a debug log to stderr.
  */
 function getCostFromCatalogForPanel(modelId: string): ModelPricing {
-  return getCostFromCatalog(modelId, { debug: true });
+  if (modelId.endsWith(':free')) return { input: 0, output: 0 };
+  return { input: 0, output: 0 };
 }
 
-function getPricing(modelId: string, provider = ''): ModelPricing {
-  // 1. Live OpenRouter pricing (USD per token → convert to per million)
-  const livePricing = getPricingForModel(modelId, provider);
-  if (livePricing) {
-    return {
-      input: Math.max(0, livePricing.prompt * 1_000_000),
-      output: Math.max(0, livePricing.completion * 1_000_000),
-    };
-  }
+function getPricing(modelId: string): ModelPricing {
   // 2. Hardcoded table — exact match
   if (MODEL_PRICING[modelId]) return MODEL_PRICING[modelId]!;
-  // 3. OpenRouter :free suffix — treat as free
+  // 1. OpenRouter :free suffix — treat as free
   if (modelId.endsWith(':free')) return { input: 0, output: 0 };
-  // 4. Prefix match (e.g. "openrouter/free:..." or "claude-sonnet-4-6-20..")
+  // 2. Prefix match (e.g. "openrouter/free:..." or "claude-sonnet-4-6-20..")
   for (const [key, pricing] of Object.entries(MODEL_PRICING)) {
     if (modelId.startsWith(key) || modelId.includes(key)) return pricing;
   }
-  // 5. Catalog lookup — covers models added after hardcoded table was written
+  // 3. Unknown model — default to free-ish safe fallback
   return getCostFromCatalogForPanel(modelId);
 }
 
@@ -257,7 +247,7 @@ export class CostTrackerPanel extends BasePanel {
 
     // Record cost delta for sparkline
     const sessionProvider = this.sessionModel.includes('/') ? this.sessionModel.split('/')[0]! : '';
-    const pricing = getPricing(this.sessionModel, sessionProvider);
+    const pricing = getPricing(this.sessionModel);
     const totalCost = calcCost(usage.input + usage.cacheRead + usage.cacheWrite, usage.output, pricing);
     const delta = Math.max(0, totalCost - this.lastSessionCost);
     this.lastSessionCost = totalCost;
@@ -319,7 +309,7 @@ export class CostTrackerPanel extends BasePanel {
     if (height <= 0 || width <= 0) return [];
 
     const sessionProvider = this.sessionModel.includes('/') ? this.sessionModel.split('/')[0]! : '';
-    const pricing = getPricing(this.sessionModel, sessionProvider);
+    const pricing = getPricing(this.sessionModel);
     const totalInputTokens = this.sessionUsage.input + this.sessionUsage.cacheRead + this.sessionUsage.cacheWrite;
     const sessionCost = calcCost(this.sessionUsage.input + this.sessionUsage.cacheRead + this.sessionUsage.cacheWrite, this.sessionUsage.output, pricing);
     const overBudget = this.budgetThreshold > 0 && sessionCost > this.budgetThreshold;

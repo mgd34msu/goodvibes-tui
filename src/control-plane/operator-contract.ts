@@ -1,0 +1,266 @@
+import type { GatewayEventDescriptor, GatewayMethodCatalog, GatewayMethodDescriptor } from './method-catalog.ts';
+import {
+  BOOLEAN_SCHEMA,
+  JSON_OBJECT_SCHEMA,
+  METHOD_DESCRIPTOR_SCHEMA,
+  EVENT_DESCRIPTOR_SCHEMA,
+  NUMBER_SCHEMA,
+  STRING_SCHEMA,
+  arraySchema,
+  objectSchema,
+} from './method-catalog-shared.ts';
+import { VERSION } from '../version.ts';
+
+const OPERATOR_CONTRACT_VERSION = 1;
+const OPERATOR_WS_PATH = '/api/control-plane/ws';
+const OPERATOR_EVENTS_PATH = '/api/control-plane/events';
+const OPERATOR_METHODS_PATH = '/api/control-plane/methods';
+const OPERATOR_EVENTS_CATALOG_PATH = '/api/control-plane/events/catalog';
+const PEER_CONTRACT_PATH = '/api/remote/node-host/contract';
+const PEER_CONTRACT_ALIAS_PATHS = ['/api/remote/device/contract'];
+
+export interface OperatorContractManifest {
+  readonly version: number;
+  readonly product: {
+    readonly id: string;
+    readonly surface: string;
+    readonly version: string;
+  };
+  readonly auth: {
+    readonly modes: readonly string[];
+    readonly login: {
+      readonly method: string;
+      readonly path: string;
+      readonly requestSchema: Record<string, unknown>;
+      readonly responseSchema: Record<string, unknown>;
+    };
+    readonly bearer: {
+      readonly header: string;
+      readonly queryParameters: readonly string[];
+    };
+  };
+  readonly transports: {
+    readonly http: {
+      readonly statusPath: string;
+      readonly methodsPath: string;
+      readonly eventsCatalogPath: string;
+    };
+    readonly sse: {
+      readonly path: string;
+      readonly query: {
+        readonly domains: string;
+      };
+    };
+    readonly websocket: {
+      readonly path: string;
+      readonly clientFrames: readonly { readonly type: string; readonly fields?: readonly string[] }[];
+      readonly serverFrames: readonly { readonly type: string; readonly fields?: readonly string[] }[];
+    };
+  };
+  readonly operator: {
+    readonly methods: readonly GatewayMethodDescriptor[];
+    readonly events: readonly GatewayEventDescriptor[];
+    readonly schemaCoverage: {
+      readonly methods: number;
+      readonly typedInputs: number;
+      readonly genericInputs: number;
+      readonly typedOutputs: number;
+      readonly genericOutputs: number;
+    };
+    readonly eventCoverage: {
+      readonly events: number;
+      readonly withDomains: number;
+      readonly withWireEvents: number;
+    };
+  };
+  readonly peer: {
+    readonly contractPath: string;
+    readonly aliasPaths: readonly string[];
+    readonly relationship: string;
+  };
+}
+
+interface OperatorSchemaCoverage {
+  readonly methods: number;
+  readonly typedInputs: number;
+  readonly genericInputs: number;
+  readonly typedOutputs: number;
+  readonly genericOutputs: number;
+}
+
+interface OperatorEventCoverage {
+  readonly events: number;
+  readonly withDomains: number;
+  readonly withWireEvents: number;
+}
+
+const OPERATOR_CONTRACT_FRAME_SCHEMA = objectSchema({
+  type: STRING_SCHEMA,
+  fields: arraySchema(STRING_SCHEMA),
+}, ['type']);
+
+export const OPERATOR_CONTRACT_SCHEMA = objectSchema({
+  version: NUMBER_SCHEMA,
+  product: objectSchema({
+    id: STRING_SCHEMA,
+    surface: STRING_SCHEMA,
+    version: STRING_SCHEMA,
+  }, ['id', 'surface', 'version']),
+  auth: objectSchema({
+    modes: arraySchema(STRING_SCHEMA),
+    login: objectSchema({
+      method: STRING_SCHEMA,
+      path: STRING_SCHEMA,
+      requestSchema: JSON_OBJECT_SCHEMA,
+      responseSchema: JSON_OBJECT_SCHEMA,
+    }, ['method', 'path', 'requestSchema', 'responseSchema']),
+    bearer: objectSchema({
+      header: STRING_SCHEMA,
+      queryParameters: arraySchema(STRING_SCHEMA),
+    }, ['header', 'queryParameters']),
+  }, ['modes', 'login', 'bearer']),
+  transports: objectSchema({
+    http: objectSchema({
+      statusPath: STRING_SCHEMA,
+      methodsPath: STRING_SCHEMA,
+      eventsCatalogPath: STRING_SCHEMA,
+    }, ['statusPath', 'methodsPath', 'eventsCatalogPath']),
+    sse: objectSchema({
+      path: STRING_SCHEMA,
+      query: objectSchema({
+        domains: STRING_SCHEMA,
+      }, ['domains']),
+    }, ['path', 'query']),
+    websocket: objectSchema({
+      path: STRING_SCHEMA,
+      clientFrames: arraySchema(OPERATOR_CONTRACT_FRAME_SCHEMA),
+      serverFrames: arraySchema(OPERATOR_CONTRACT_FRAME_SCHEMA),
+    }, ['path', 'clientFrames', 'serverFrames']),
+  }, ['http', 'sse', 'websocket']),
+  operator: objectSchema({
+    methods: arraySchema(METHOD_DESCRIPTOR_SCHEMA),
+    events: arraySchema(EVENT_DESCRIPTOR_SCHEMA),
+    schemaCoverage: objectSchema({
+      methods: NUMBER_SCHEMA,
+      typedInputs: NUMBER_SCHEMA,
+      genericInputs: NUMBER_SCHEMA,
+      typedOutputs: NUMBER_SCHEMA,
+      genericOutputs: NUMBER_SCHEMA,
+    }, ['methods', 'typedInputs', 'genericInputs', 'typedOutputs', 'genericOutputs']),
+    eventCoverage: objectSchema({
+      events: NUMBER_SCHEMA,
+      withDomains: NUMBER_SCHEMA,
+      withWireEvents: NUMBER_SCHEMA,
+    }, ['events', 'withDomains', 'withWireEvents']),
+  }, ['methods', 'events', 'schemaCoverage', 'eventCoverage']),
+  peer: objectSchema({
+    contractPath: STRING_SCHEMA,
+    aliasPaths: arraySchema(STRING_SCHEMA),
+    relationship: STRING_SCHEMA,
+  }, ['contractPath', 'aliasPaths', 'relationship']),
+}, ['version', 'product', 'auth', 'transports', 'operator', 'peer']);
+
+function isGenericObjectSchema(schema: Record<string, unknown> | undefined): boolean {
+  return Boolean(schema && schema.type === 'object' && !Object.hasOwn(schema, 'properties'));
+}
+
+function summarizeSchemaCoverage(methods: readonly GatewayMethodDescriptor[]): OperatorSchemaCoverage {
+  let genericInputs = 0;
+  let genericOutputs = 0;
+  for (const method of methods) {
+    if (isGenericObjectSchema(method.inputSchema)) genericInputs += 1;
+    if (isGenericObjectSchema(method.outputSchema)) genericOutputs += 1;
+  }
+  return {
+    methods: methods.length,
+    typedInputs: methods.length - genericInputs,
+    genericInputs,
+    typedOutputs: methods.length - genericOutputs,
+    genericOutputs,
+  };
+}
+
+function summarizeEventCoverage(events: readonly GatewayEventDescriptor[]): OperatorEventCoverage {
+  return {
+    events: events.length,
+    withDomains: events.filter((event) => (event.domains?.length ?? 0) > 0).length,
+    withWireEvents: events.filter((event) => (event.wireEvents?.length ?? 0) > 0).length,
+  };
+}
+
+export function buildOperatorContract(catalog: GatewayMethodCatalog): OperatorContractManifest {
+  const methods = catalog.list();
+  const events = catalog.listEvents();
+  return {
+    version: OPERATOR_CONTRACT_VERSION,
+    product: {
+      id: 'goodvibes',
+      surface: 'operator',
+      version: VERSION,
+    },
+    auth: {
+      modes: ['shared-bearer', 'session-login'],
+      login: {
+        method: 'POST',
+        path: '/login',
+        requestSchema: objectSchema({
+          username: STRING_SCHEMA,
+          password: STRING_SCHEMA,
+        }, ['username', 'password']),
+        responseSchema: objectSchema({
+          authenticated: BOOLEAN_SCHEMA,
+          token: STRING_SCHEMA,
+          username: STRING_SCHEMA,
+          expiresAt: NUMBER_SCHEMA,
+        }, ['authenticated', 'token', 'username', 'expiresAt']),
+      },
+      bearer: {
+        header: 'Authorization: Bearer <token>',
+        queryParameters: ['token', 'access_token'],
+      },
+    },
+    transports: {
+      http: {
+        statusPath: '/status',
+        methodsPath: OPERATOR_METHODS_PATH,
+        eventsCatalogPath: OPERATOR_EVENTS_CATALOG_PATH,
+      },
+      sse: {
+        path: OPERATOR_EVENTS_PATH,
+        query: {
+          domains: 'comma-separated runtime domains',
+        },
+      },
+      websocket: {
+        path: OPERATOR_WS_PATH,
+        clientFrames: [
+          { type: 'ping' },
+          { type: 'auth', fields: ['token?', 'domains?', 'label?', 'capabilities?'] },
+          { type: 'subscribe', fields: ['domains'] },
+          { type: 'unsubscribe', fields: ['domains'] },
+          { type: 'call', fields: ['id?', 'methodId?', 'method?', 'path?', 'query?', 'body?'] },
+        ],
+        serverFrames: [
+          { type: 'event', fields: ['event', 'payload'] },
+          { type: 'pong', fields: ['ts'] },
+          { type: 'auth', fields: ['ok', 'clientId?', 'principalId?', 'error?'] },
+          { type: 'subscribed', fields: ['clientId', 'domains'] },
+          { type: 'unsubscribed', fields: ['clientId', 'domains'] },
+          { type: 'response', fields: ['id', 'ok', 'status', 'body'] },
+          { type: 'error', fields: ['error'] },
+        ],
+      },
+    },
+    operator: {
+      methods,
+      events,
+      schemaCoverage: summarizeSchemaCoverage(methods),
+      eventCoverage: summarizeEventCoverage(events),
+    },
+    peer: {
+      contractPath: PEER_CONTRACT_PATH,
+      aliasPaths: PEER_CONTRACT_ALIAS_PATHS,
+      relationship: 'paired device and node-host peers use a separate peer contract surface',
+    },
+  };
+}

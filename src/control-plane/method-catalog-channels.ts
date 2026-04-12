@@ -1,5 +1,33 @@
 import type { GatewayMethodDescriptor } from './method-catalog-shared.ts';
-import { GENERIC_OBJECT_SCHEMA,EMPTY_OBJECT_SCHEMA,STRING_SCHEMA,BOOLEAN_SCHEMA,NUMBER_SCHEMA,objectSchema,listOutputSchema,methodDescriptor,runtimeEventId } from './method-catalog-shared.ts';
+import { EMPTY_OBJECT_SCHEMA,STRING_SCHEMA,BOOLEAN_SCHEMA,NUMBER_SCHEMA,arraySchema,objectSchema,listOutputSchema,bodyEnvelopeSchema,methodDescriptor,runtimeEventId } from './method-catalog-shared.ts';
+import { JSON_OBJECT_SCHEMA } from './operator-contract-schemas-shared.ts';
+import {
+  CHANNEL_ACCOUNT_ACTION_OUTPUT_SCHEMA,
+  CHANNEL_ACCOUNTS_OUTPUT_SCHEMA,
+  CHANNEL_ACCOUNT_ENTITY_OUTPUT_SCHEMA,
+  CHANNEL_ALLOWLIST_EDIT_RESULT_SCHEMA,
+  CHANNEL_ALLOWLIST_RESOLUTION_SCHEMA,
+  CHANNEL_AUTHORIZE_OUTPUT_SCHEMA,
+  CHANNEL_CAPABILITY_SCHEMA,
+  CHANNEL_DOCTOR_REPORT_SCHEMA,
+  CHANNEL_DIRECTORY_ENTRY_SCHEMA,
+  CHANNEL_LIFECYCLE_STATE_SCHEMA,
+  CHANNEL_OPERATOR_ACTION_OUTPUT_SCHEMA,
+  CHANNEL_OPERATOR_ACTION_SCHEMA,
+  CHANNEL_POLICY_AUDIT_SCHEMA,
+  CHANNEL_POLICY_SCHEMA,
+  CHANNEL_SETUP_SCHEMA_SCHEMA,
+  CHANNEL_STATUS_LIST_OUTPUT_SCHEMA,
+  CHANNEL_TARGET_RESOLVE_OUTPUT_SCHEMA,
+  CHANNEL_TOOL_SCHEMA,
+  CHANNEL_TOOL_ACTION_OUTPUT_SCHEMA,
+  CHANNEL_REPAIR_ACTION_SCHEMA,
+  TOOL_DEFINITION_SCHEMA,
+  REMOVE_WITH_ID_OUTPUT_SCHEMA,
+  SERVICE_STATUS_SCHEMA,
+  WATCHER_LIST_OUTPUT_SCHEMA,
+  WATCHER_RECORD_SCHEMA,
+} from './operator-contract-schemas.ts';
 
 export const builtinGatewayChannelMethodDescriptors: readonly GatewayMethodDescriptor[] = [
   methodDescriptor({
@@ -10,7 +38,7 @@ export const builtinGatewayChannelMethodDescriptors: readonly GatewayMethodDescr
     scopes: ['read:channels'],
     http: { method: 'GET', path: '/api/channels/accounts' },
     inputSchema: EMPTY_OBJECT_SCHEMA,
-    outputSchema: listOutputSchema('accounts'),
+    outputSchema: CHANNEL_ACCOUNTS_OUTPUT_SCHEMA,
   }),
   methodDescriptor({
     id: 'channels.accounts.surface.list',
@@ -20,7 +48,7 @@ export const builtinGatewayChannelMethodDescriptors: readonly GatewayMethodDescr
     scopes: ['read:channels'],
     http: { method: 'GET', path: '/api/channels/accounts/{surface}' },
     inputSchema: objectSchema({ surface: STRING_SCHEMA }, ['surface']),
-    outputSchema: listOutputSchema('accounts'),
+    outputSchema: CHANNEL_ACCOUNTS_OUTPUT_SCHEMA,
   }),
   methodDescriptor({
     id: 'channels.accounts.get',
@@ -33,7 +61,7 @@ export const builtinGatewayChannelMethodDescriptors: readonly GatewayMethodDescr
       surface: STRING_SCHEMA,
       accountId: STRING_SCHEMA,
     }, ['surface', 'accountId']),
-    outputSchema: GENERIC_OBJECT_SCHEMA,
+    outputSchema: CHANNEL_ACCOUNT_ENTITY_OUTPUT_SCHEMA,
   }),
   methodDescriptor({
     id: 'channels.setup.get',
@@ -43,7 +71,7 @@ export const builtinGatewayChannelMethodDescriptors: readonly GatewayMethodDescr
     scopes: ['read:channels'],
     http: { method: 'GET', path: '/api/channels/setup/{surface}' },
     inputSchema: objectSchema({ surface: STRING_SCHEMA }, ['surface']),
-    outputSchema: GENERIC_OBJECT_SCHEMA,
+    outputSchema: CHANNEL_SETUP_SCHEMA_SCHEMA,
   }),
   methodDescriptor({
     id: 'channels.doctor.get',
@@ -53,7 +81,7 @@ export const builtinGatewayChannelMethodDescriptors: readonly GatewayMethodDescr
     scopes: ['read:channels'],
     http: { method: 'GET', path: '/api/channels/doctor/{surface}' },
     inputSchema: objectSchema({ surface: STRING_SCHEMA }, ['surface']),
-    outputSchema: GENERIC_OBJECT_SCHEMA,
+    outputSchema: CHANNEL_DOCTOR_REPORT_SCHEMA,
   }),
   methodDescriptor({
     id: 'channels.repairs.list',
@@ -63,7 +91,7 @@ export const builtinGatewayChannelMethodDescriptors: readonly GatewayMethodDescr
     scopes: ['read:channels'],
     http: { method: 'GET', path: '/api/channels/repair-actions/{surface}' },
     inputSchema: objectSchema({ surface: STRING_SCHEMA }, ['surface']),
-    outputSchema: listOutputSchema('actions'),
+    outputSchema: listOutputSchema('actions', CHANNEL_REPAIR_ACTION_SCHEMA),
   }),
   methodDescriptor({
     id: 'channels.lifecycle.get',
@@ -73,7 +101,7 @@ export const builtinGatewayChannelMethodDescriptors: readonly GatewayMethodDescr
     scopes: ['read:channels'],
     http: { method: 'GET', path: '/api/channels/lifecycle/{surface}' },
     inputSchema: objectSchema({ surface: STRING_SCHEMA }, ['surface']),
-    outputSchema: GENERIC_OBJECT_SCHEMA,
+    outputSchema: CHANNEL_LIFECYCLE_STATE_SCHEMA,
   }),
   methodDescriptor({
     id: 'channels.lifecycle.migrate',
@@ -83,8 +111,11 @@ export const builtinGatewayChannelMethodDescriptors: readonly GatewayMethodDescr
     scopes: ['write:channels'],
     access: 'admin',
     http: { method: 'POST', path: '/api/channels/lifecycle/{surface}/migrate' },
-    inputSchema: GENERIC_OBJECT_SCHEMA,
-    outputSchema: GENERIC_OBJECT_SCHEMA,
+    inputSchema: bodyEnvelopeSchema({
+      accountId: STRING_SCHEMA,
+      metadata: JSON_OBJECT_SCHEMA,
+    }),
+    outputSchema: CHANNEL_LIFECYCLE_STATE_SCHEMA,
   }),
   methodDescriptor({
     id: 'channels.accounts.action.default',
@@ -94,8 +125,11 @@ export const builtinGatewayChannelMethodDescriptors: readonly GatewayMethodDescr
     scopes: ['write:channels'],
     access: 'admin',
     http: { method: 'POST', path: '/api/channels/accounts/{surface}/actions/{action}' },
-    inputSchema: GENERIC_OBJECT_SCHEMA,
-    outputSchema: GENERIC_OBJECT_SCHEMA,
+    inputSchema: bodyEnvelopeSchema({
+      accountId: STRING_SCHEMA,
+      metadata: JSON_OBJECT_SCHEMA,
+    }),
+    outputSchema: CHANNEL_ACCOUNT_ACTION_OUTPUT_SCHEMA,
   }),
   methodDescriptor({
     id: 'channels.accounts.action.named',
@@ -105,8 +139,11 @@ export const builtinGatewayChannelMethodDescriptors: readonly GatewayMethodDescr
     scopes: ['write:channels'],
     access: 'admin',
     http: { method: 'POST', path: '/api/channels/accounts/{surface}/{accountId}/actions/{action}' },
-    inputSchema: GENERIC_OBJECT_SCHEMA,
-    outputSchema: GENERIC_OBJECT_SCHEMA,
+    inputSchema: bodyEnvelopeSchema({
+      accountId: STRING_SCHEMA,
+      metadata: JSON_OBJECT_SCHEMA,
+    }),
+    outputSchema: CHANNEL_ACCOUNT_ACTION_OUTPUT_SCHEMA,
   }),
   methodDescriptor({
     id: 'channels.capabilities.list',
@@ -116,7 +153,7 @@ export const builtinGatewayChannelMethodDescriptors: readonly GatewayMethodDescr
     scopes: ['read:channels'],
     http: { method: 'GET', path: '/api/channels/capabilities' },
     inputSchema: EMPTY_OBJECT_SCHEMA,
-    outputSchema: listOutputSchema('capabilities'),
+    outputSchema: listOutputSchema('capabilities', CHANNEL_CAPABILITY_SCHEMA),
   }),
   methodDescriptor({
     id: 'channels.capabilities.surface.list',
@@ -126,7 +163,7 @@ export const builtinGatewayChannelMethodDescriptors: readonly GatewayMethodDescr
     scopes: ['read:channels'],
     http: { method: 'GET', path: '/api/channels/capabilities/{surface}' },
     inputSchema: objectSchema({ surface: STRING_SCHEMA }, ['surface']),
-    outputSchema: listOutputSchema('capabilities'),
+    outputSchema: listOutputSchema('capabilities', CHANNEL_CAPABILITY_SCHEMA),
   }),
   methodDescriptor({
     id: 'channels.tools.list',
@@ -136,7 +173,7 @@ export const builtinGatewayChannelMethodDescriptors: readonly GatewayMethodDescr
     scopes: ['read:channels'],
     http: { method: 'GET', path: '/api/channels/tools' },
     inputSchema: EMPTY_OBJECT_SCHEMA,
-    outputSchema: listOutputSchema('tools'),
+    outputSchema: listOutputSchema('tools', CHANNEL_TOOL_SCHEMA),
   }),
   methodDescriptor({
     id: 'channels.tools.surface.list',
@@ -146,7 +183,7 @@ export const builtinGatewayChannelMethodDescriptors: readonly GatewayMethodDescr
     scopes: ['read:channels'],
     http: { method: 'GET', path: '/api/channels/tools/{surface}' },
     inputSchema: objectSchema({ surface: STRING_SCHEMA }, ['surface']),
-    outputSchema: listOutputSchema('tools'),
+    outputSchema: listOutputSchema('tools', CHANNEL_TOOL_SCHEMA),
   }),
   methodDescriptor({
     id: 'channels.tools.invoke',
@@ -156,8 +193,11 @@ export const builtinGatewayChannelMethodDescriptors: readonly GatewayMethodDescr
     scopes: ['write:channels'],
     access: 'admin',
     http: { method: 'POST', path: '/api/channels/tools/{surface}/{toolId}' },
-    inputSchema: GENERIC_OBJECT_SCHEMA,
-    outputSchema: GENERIC_OBJECT_SCHEMA,
+    inputSchema: bodyEnvelopeSchema({
+      accountId: STRING_SCHEMA,
+      metadata: JSON_OBJECT_SCHEMA,
+    }),
+    outputSchema: CHANNEL_TOOL_ACTION_OUTPUT_SCHEMA,
   }),
   methodDescriptor({
     id: 'channels.agent_tools.list',
@@ -167,7 +207,7 @@ export const builtinGatewayChannelMethodDescriptors: readonly GatewayMethodDescr
     scopes: ['read:channels'],
     http: { method: 'GET', path: '/api/channels/agent-tools' },
     inputSchema: EMPTY_OBJECT_SCHEMA,
-    outputSchema: listOutputSchema('tools'),
+    outputSchema: listOutputSchema('tools', TOOL_DEFINITION_SCHEMA),
   }),
   methodDescriptor({
     id: 'channels.agent_tools.surface.list',
@@ -177,7 +217,7 @@ export const builtinGatewayChannelMethodDescriptors: readonly GatewayMethodDescr
     scopes: ['read:channels'],
     http: { method: 'GET', path: '/api/channels/agent-tools/{surface}' },
     inputSchema: objectSchema({ surface: STRING_SCHEMA }, ['surface']),
-    outputSchema: listOutputSchema('tools'),
+    outputSchema: listOutputSchema('tools', TOOL_DEFINITION_SCHEMA),
   }),
   methodDescriptor({
     id: 'channels.actions.list',
@@ -187,7 +227,7 @@ export const builtinGatewayChannelMethodDescriptors: readonly GatewayMethodDescr
     scopes: ['read:channels'],
     http: { method: 'GET', path: '/api/channels/actions' },
     inputSchema: EMPTY_OBJECT_SCHEMA,
-    outputSchema: listOutputSchema('actions'),
+    outputSchema: listOutputSchema('actions', CHANNEL_OPERATOR_ACTION_SCHEMA),
   }),
   methodDescriptor({
     id: 'channels.actions.surface.list',
@@ -197,7 +237,7 @@ export const builtinGatewayChannelMethodDescriptors: readonly GatewayMethodDescr
     scopes: ['read:channels'],
     http: { method: 'GET', path: '/api/channels/actions/{surface}' },
     inputSchema: objectSchema({ surface: STRING_SCHEMA }, ['surface']),
-    outputSchema: listOutputSchema('actions'),
+    outputSchema: listOutputSchema('actions', CHANNEL_OPERATOR_ACTION_SCHEMA),
   }),
   methodDescriptor({
     id: 'channels.actions.invoke',
@@ -207,8 +247,11 @@ export const builtinGatewayChannelMethodDescriptors: readonly GatewayMethodDescr
     scopes: ['write:channels'],
     access: 'admin',
     http: { method: 'POST', path: '/api/channels/actions/{surface}/{actionId}' },
-    inputSchema: GENERIC_OBJECT_SCHEMA,
-    outputSchema: GENERIC_OBJECT_SCHEMA,
+    inputSchema: bodyEnvelopeSchema({
+      accountId: STRING_SCHEMA,
+      metadata: JSON_OBJECT_SCHEMA,
+    }),
+    outputSchema: CHANNEL_OPERATOR_ACTION_OUTPUT_SCHEMA,
   }),
   methodDescriptor({
     id: 'channels.targets.resolve',
@@ -218,8 +261,19 @@ export const builtinGatewayChannelMethodDescriptors: readonly GatewayMethodDescr
     scopes: ['write:channels'],
     access: 'admin',
     http: { method: 'POST', path: '/api/channels/targets/{surface}/resolve' },
-    inputSchema: GENERIC_OBJECT_SCHEMA,
-    outputSchema: GENERIC_OBJECT_SCHEMA,
+    inputSchema: bodyEnvelopeSchema({
+      target: STRING_SCHEMA,
+      input: STRING_SCHEMA,
+      query: STRING_SCHEMA,
+      accountId: STRING_SCHEMA,
+      preferredKind: STRING_SCHEMA,
+      threadId: STRING_SCHEMA,
+      sessionId: STRING_SCHEMA,
+      createIfMissing: BOOLEAN_SCHEMA,
+      live: BOOLEAN_SCHEMA,
+      metadata: JSON_OBJECT_SCHEMA,
+    }),
+    outputSchema: CHANNEL_TARGET_RESOLVE_OUTPUT_SCHEMA,
   }),
   methodDescriptor({
     id: 'channels.authorize',
@@ -229,8 +283,14 @@ export const builtinGatewayChannelMethodDescriptors: readonly GatewayMethodDescr
     scopes: ['write:channels'],
     access: 'admin',
     http: { method: 'POST', path: '/api/channels/authorize/{surface}' },
-    inputSchema: GENERIC_OBJECT_SCHEMA,
-    outputSchema: GENERIC_OBJECT_SCHEMA,
+    inputSchema: bodyEnvelopeSchema({
+      actionId: STRING_SCHEMA,
+      actorId: STRING_SCHEMA,
+      accountId: STRING_SCHEMA,
+      target: STRING_SCHEMA,
+      metadata: JSON_OBJECT_SCHEMA,
+    }, ['actionId']),
+    outputSchema: CHANNEL_AUTHORIZE_OUTPUT_SCHEMA,
   }),
   methodDescriptor({
     id: 'channels.allowlist.resolve',
@@ -240,8 +300,16 @@ export const builtinGatewayChannelMethodDescriptors: readonly GatewayMethodDescr
     scopes: ['write:channels'],
     access: 'admin',
     http: { method: 'POST', path: '/api/channels/allowlist/{surface}/resolve' },
-    inputSchema: GENERIC_OBJECT_SCHEMA,
-    outputSchema: GENERIC_OBJECT_SCHEMA,
+    inputSchema: bodyEnvelopeSchema({
+      add: arraySchema(STRING_SCHEMA),
+      remove: arraySchema(STRING_SCHEMA),
+      groupId: STRING_SCHEMA,
+      channelId: STRING_SCHEMA,
+      workspaceId: STRING_SCHEMA,
+      kind: STRING_SCHEMA,
+      metadata: JSON_OBJECT_SCHEMA,
+    }),
+    outputSchema: CHANNEL_ALLOWLIST_RESOLUTION_SCHEMA,
   }),
   methodDescriptor({
     id: 'channels.allowlist.edit',
@@ -251,8 +319,16 @@ export const builtinGatewayChannelMethodDescriptors: readonly GatewayMethodDescr
     scopes: ['write:channels'],
     access: 'admin',
     http: { method: 'POST', path: '/api/channels/allowlist/{surface}/edit' },
-    inputSchema: GENERIC_OBJECT_SCHEMA,
-    outputSchema: GENERIC_OBJECT_SCHEMA,
+    inputSchema: bodyEnvelopeSchema({
+      add: arraySchema(STRING_SCHEMA),
+      remove: arraySchema(STRING_SCHEMA),
+      groupId: STRING_SCHEMA,
+      channelId: STRING_SCHEMA,
+      workspaceId: STRING_SCHEMA,
+      kind: STRING_SCHEMA,
+      metadata: JSON_OBJECT_SCHEMA,
+    }),
+    outputSchema: CHANNEL_ALLOWLIST_EDIT_RESULT_SCHEMA,
   }),
   methodDescriptor({
     id: 'channels.policies.list',
@@ -262,7 +338,7 @@ export const builtinGatewayChannelMethodDescriptors: readonly GatewayMethodDescr
     scopes: ['read:channels'],
     http: { method: 'GET', path: '/api/channels/policies' },
     inputSchema: EMPTY_OBJECT_SCHEMA,
-    outputSchema: listOutputSchema('policies'),
+    outputSchema: listOutputSchema('policies', CHANNEL_POLICY_SCHEMA),
   }),
   methodDescriptor({
     id: 'channels.policies.update',
@@ -272,8 +348,23 @@ export const builtinGatewayChannelMethodDescriptors: readonly GatewayMethodDescr
     scopes: ['write:channels'],
     access: 'admin',
     http: { method: 'POST', path: '/api/channels/policies/{surface}' },
-    inputSchema: GENERIC_OBJECT_SCHEMA,
-    outputSchema: GENERIC_OBJECT_SCHEMA,
+    inputSchema: bodyEnvelopeSchema({
+      enabled: BOOLEAN_SCHEMA,
+      requireMention: BOOLEAN_SCHEMA,
+      allowDirectMessages: BOOLEAN_SCHEMA,
+      allowGroupMessages: BOOLEAN_SCHEMA,
+      allowThreadMessages: BOOLEAN_SCHEMA,
+      dmPolicy: STRING_SCHEMA,
+      groupPolicy: STRING_SCHEMA,
+      allowTextCommandsWithoutMention: BOOLEAN_SCHEMA,
+      allowlistUserIds: arraySchema(STRING_SCHEMA),
+      allowlistChannelIds: arraySchema(STRING_SCHEMA),
+      allowlistGroupIds: arraySchema(STRING_SCHEMA),
+      allowedCommands: arraySchema(STRING_SCHEMA),
+      groupPolicies: arraySchema(JSON_OBJECT_SCHEMA),
+      metadata: JSON_OBJECT_SCHEMA,
+    }),
+    outputSchema: CHANNEL_POLICY_SCHEMA,
   }),
   methodDescriptor({
     id: 'channels.policies.audit',
@@ -283,7 +374,7 @@ export const builtinGatewayChannelMethodDescriptors: readonly GatewayMethodDescr
     scopes: ['read:channels'],
     http: { method: 'GET', path: '/api/channels/policies/audit' },
     inputSchema: objectSchema({ limit: NUMBER_SCHEMA }),
-    outputSchema: listOutputSchema('audit'),
+    outputSchema: listOutputSchema('audit', CHANNEL_POLICY_AUDIT_SCHEMA),
   }),
   methodDescriptor({
     id: 'channels.status',
@@ -293,7 +384,7 @@ export const builtinGatewayChannelMethodDescriptors: readonly GatewayMethodDescr
     scopes: ['read:channels'],
     http: { method: 'GET', path: '/api/channels/status' },
     inputSchema: EMPTY_OBJECT_SCHEMA,
-    outputSchema: listOutputSchema('channels'),
+    outputSchema: CHANNEL_STATUS_LIST_OUTPUT_SCHEMA,
   }),
   methodDescriptor({
     id: 'channels.directory.query',
@@ -310,7 +401,7 @@ export const builtinGatewayChannelMethodDescriptors: readonly GatewayMethodDescr
       limit: NUMBER_SCHEMA,
       live: BOOLEAN_SCHEMA,
     }, ['surface']),
-    outputSchema: listOutputSchema('entries'),
+    outputSchema: listOutputSchema('entries', CHANNEL_DIRECTORY_ENTRY_SCHEMA),
   }),
   methodDescriptor({
     id: 'watchers.list',
@@ -321,7 +412,7 @@ export const builtinGatewayChannelMethodDescriptors: readonly GatewayMethodDescr
     http: { method: 'GET', path: '/api/watchers' },
     events: [runtimeEventId('watchers')],
     inputSchema: EMPTY_OBJECT_SCHEMA,
-    outputSchema: listOutputSchema('watchers'),
+    outputSchema: WATCHER_LIST_OUTPUT_SCHEMA,
   }),
   methodDescriptor({
     id: 'watchers.create',
@@ -332,8 +423,23 @@ export const builtinGatewayChannelMethodDescriptors: readonly GatewayMethodDescr
     access: 'admin',
     http: { method: 'POST', path: '/api/watchers' },
     events: [runtimeEventId('watchers')],
-    inputSchema: GENERIC_OBJECT_SCHEMA,
-    outputSchema: GENERIC_OBJECT_SCHEMA,
+    inputSchema: bodyEnvelopeSchema({
+      id: STRING_SCHEMA,
+      label: STRING_SCHEMA,
+      kind: STRING_SCHEMA,
+      sourceId: STRING_SCHEMA,
+      sourceKind: STRING_SCHEMA,
+      intervalMs: NUMBER_SCHEMA,
+      metadata: JSON_OBJECT_SCHEMA,
+      url: STRING_SCHEMA,
+      method: STRING_SCHEMA,
+      path: STRING_SCHEMA,
+      endpoint: STRING_SCHEMA,
+      address: STRING_SCHEMA,
+      headers: JSON_OBJECT_SCHEMA,
+      run: STRING_SCHEMA,
+    }, ['label']),
+    outputSchema: WATCHER_RECORD_SCHEMA,
   }),
   methodDescriptor({
     id: 'watchers.patch',
@@ -344,8 +450,24 @@ export const builtinGatewayChannelMethodDescriptors: readonly GatewayMethodDescr
     access: 'admin',
     http: { method: 'PATCH', path: '/api/watchers/{watcherId}' },
     events: [runtimeEventId('watchers')],
-    inputSchema: GENERIC_OBJECT_SCHEMA,
-    outputSchema: GENERIC_OBJECT_SCHEMA,
+    inputSchema: bodyEnvelopeSchema({
+      watcherId: STRING_SCHEMA,
+      label: STRING_SCHEMA,
+      kind: STRING_SCHEMA,
+      sourceId: STRING_SCHEMA,
+      sourceKind: STRING_SCHEMA,
+      enabled: BOOLEAN_SCHEMA,
+      intervalMs: NUMBER_SCHEMA,
+      metadata: JSON_OBJECT_SCHEMA,
+      url: STRING_SCHEMA,
+      method: STRING_SCHEMA,
+      path: STRING_SCHEMA,
+      endpoint: STRING_SCHEMA,
+      address: STRING_SCHEMA,
+      headers: JSON_OBJECT_SCHEMA,
+      run: STRING_SCHEMA,
+    }),
+    outputSchema: WATCHER_RECORD_SCHEMA,
   }),
   methodDescriptor({
     id: 'watchers.delete',
@@ -357,7 +479,7 @@ export const builtinGatewayChannelMethodDescriptors: readonly GatewayMethodDescr
     http: { method: 'DELETE', path: '/api/watchers/{watcherId}' },
     events: [runtimeEventId('watchers')],
     inputSchema: objectSchema({ watcherId: STRING_SCHEMA }, ['watcherId']),
-    outputSchema: GENERIC_OBJECT_SCHEMA,
+    outputSchema: REMOVE_WITH_ID_OUTPUT_SCHEMA,
     dangerous: true,
   }),
   methodDescriptor({
@@ -370,7 +492,7 @@ export const builtinGatewayChannelMethodDescriptors: readonly GatewayMethodDescr
     http: { method: 'POST', path: '/api/watchers/{watcherId}/start' },
     events: [runtimeEventId('watchers')],
     inputSchema: objectSchema({ watcherId: STRING_SCHEMA }, ['watcherId']),
-    outputSchema: GENERIC_OBJECT_SCHEMA,
+    outputSchema: WATCHER_RECORD_SCHEMA,
   }),
   methodDescriptor({
     id: 'watchers.stop',
@@ -382,7 +504,7 @@ export const builtinGatewayChannelMethodDescriptors: readonly GatewayMethodDescr
     http: { method: 'POST', path: '/api/watchers/{watcherId}/stop' },
     events: [runtimeEventId('watchers')],
     inputSchema: objectSchema({ watcherId: STRING_SCHEMA }, ['watcherId']),
-    outputSchema: GENERIC_OBJECT_SCHEMA,
+    outputSchema: WATCHER_RECORD_SCHEMA,
   }),
   methodDescriptor({
     id: 'watchers.run',
@@ -394,7 +516,7 @@ export const builtinGatewayChannelMethodDescriptors: readonly GatewayMethodDescr
     http: { method: 'POST', path: '/api/watchers/{watcherId}/run' },
     events: [runtimeEventId('watchers')],
     inputSchema: objectSchema({ watcherId: STRING_SCHEMA }, ['watcherId']),
-    outputSchema: GENERIC_OBJECT_SCHEMA,
+    outputSchema: WATCHER_RECORD_SCHEMA,
   }),
   methodDescriptor({
     id: 'services.status',
@@ -404,7 +526,7 @@ export const builtinGatewayChannelMethodDescriptors: readonly GatewayMethodDescr
     scopes: ['read:services'],
     http: { method: 'GET', path: '/api/service/status' },
     inputSchema: EMPTY_OBJECT_SCHEMA,
-    outputSchema: GENERIC_OBJECT_SCHEMA,
+    outputSchema: SERVICE_STATUS_SCHEMA,
   }),
   methodDescriptor({
     id: 'services.install',
@@ -415,7 +537,7 @@ export const builtinGatewayChannelMethodDescriptors: readonly GatewayMethodDescr
     access: 'admin',
     http: { method: 'POST', path: '/api/service/install' },
     inputSchema: EMPTY_OBJECT_SCHEMA,
-    outputSchema: GENERIC_OBJECT_SCHEMA,
+    outputSchema: SERVICE_STATUS_SCHEMA,
   }),
   methodDescriptor({
     id: 'services.start',
@@ -426,7 +548,7 @@ export const builtinGatewayChannelMethodDescriptors: readonly GatewayMethodDescr
     access: 'admin',
     http: { method: 'POST', path: '/api/service/start' },
     inputSchema: EMPTY_OBJECT_SCHEMA,
-    outputSchema: GENERIC_OBJECT_SCHEMA,
+    outputSchema: SERVICE_STATUS_SCHEMA,
   }),
   methodDescriptor({
     id: 'services.stop',
@@ -437,7 +559,7 @@ export const builtinGatewayChannelMethodDescriptors: readonly GatewayMethodDescr
     access: 'admin',
     http: { method: 'POST', path: '/api/service/stop' },
     inputSchema: EMPTY_OBJECT_SCHEMA,
-    outputSchema: GENERIC_OBJECT_SCHEMA,
+    outputSchema: SERVICE_STATUS_SCHEMA,
   }),
   methodDescriptor({
     id: 'services.restart',
@@ -448,7 +570,7 @@ export const builtinGatewayChannelMethodDescriptors: readonly GatewayMethodDescr
     access: 'admin',
     http: { method: 'POST', path: '/api/service/restart' },
     inputSchema: EMPTY_OBJECT_SCHEMA,
-    outputSchema: GENERIC_OBJECT_SCHEMA,
+    outputSchema: SERVICE_STATUS_SCHEMA,
   }),
   methodDescriptor({
     id: 'services.uninstall',
@@ -459,7 +581,7 @@ export const builtinGatewayChannelMethodDescriptors: readonly GatewayMethodDescr
     access: 'admin',
     http: { method: 'POST', path: '/api/service/uninstall' },
     inputSchema: EMPTY_OBJECT_SCHEMA,
-    outputSchema: GENERIC_OBJECT_SCHEMA,
+    outputSchema: SERVICE_STATUS_SCHEMA,
     dangerous: true,
   }),
 ];

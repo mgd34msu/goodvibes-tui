@@ -1,19 +1,14 @@
-import { afterEach, describe, expect, test } from 'bun:test';
+import { describe, expect, test } from 'bun:test';
 import { randomUUID } from 'crypto';
 import { mkdirSync, rmSync, writeFileSync } from 'fs';
 import { join } from 'path';
 
 import { RuntimeEventBus, createEventEnvelope } from '../../../runtime/events/index.ts';
 import { createRuntimeStore } from '../../../runtime/store/index.ts';
-import { clearOpsRuntimeContextForTests } from '../../../runtime/ops/runtime-context.ts';
 import { createStuckTurnPlaybook } from '../../../runtime/ops/playbooks/stuck-turn.ts';
 import { createSessionUnrecoverablePlaybook } from '../../../runtime/ops/playbooks/session-unrecoverable.ts';
 
 describe('ops playbook runtime context', () => {
-  afterEach(() => {
-    clearOpsRuntimeContextForTests();
-  });
-
   test('stuck-turn checks inspect live conversation state', async () => {
     const bus = new RuntimeEventBus();
     const store = createRuntimeStore();

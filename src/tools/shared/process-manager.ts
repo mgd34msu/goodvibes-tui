@@ -1,5 +1,5 @@
 /**
- * ProcessManager — shared singleton for tracking background processes.
+ * ProcessManager — tracks background processes for a single GoodVibes runtime.
  *
  * Extracted from tools/exec/index.ts so that other modules (UI, agent system,
  * live-tail) can query running processes without importing the exec tool.
@@ -33,26 +33,9 @@ export interface BgCommandResult {
 // ─── ProcessManager ───────────────────────────────────────────────────────────
 
 export class ProcessManager {
-  private static _instance: ProcessManager | null = null;
-
   private _counter = 0;
   private _processes = new Map<string, BackgroundProcess>();
   private _procs = new Map<string, ReturnType<typeof Bun.spawn>>();
-
-  private constructor() {}
-
-  /** Get the shared singleton instance. */
-  static getInstance(): ProcessManager {
-    if (!ProcessManager._instance) {
-      ProcessManager._instance = new ProcessManager();
-    }
-    return ProcessManager._instance;
-  }
-
-  /** Replace the singleton with a fresh instance. Exposed for testing only. */
-  static resetInstance(): void {
-    ProcessManager._instance = new ProcessManager();
-  }
 
   // ─── Private helpers ────────────────────────────────────────────────────────
 

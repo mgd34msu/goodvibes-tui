@@ -72,11 +72,9 @@ export interface PluginManagerObserver {
 const DEFAULT_STATE: PluginState = { enabled: {}, config: {}, trust: {}, quarantine: {} };
 
 /**
- * PluginManager — Singleton that orchestrates plugin discovery, loading, and persistence.
+ * PluginManager — orchestrates plugin discovery, loading, and persistence.
  */
 export class PluginManager {
-  private static _instance: PluginManager | undefined;
-
   private plugins = new Map<string, LoadedPlugin>();
   private state: PluginState = { ...DEFAULT_STATE, enabled: {}, config: {}, trust: {}, quarantine: {} };
   private deps: PluginLoaderDeps | undefined;
@@ -87,14 +85,7 @@ export class PluginManager {
   private readonly quarantineEngine = new PluginQuarantineEngine();
   private readonly subscribers = new Set<() => void>();
 
-  private constructor() {}
-
-  static getInstance(): PluginManager {
-    if (!PluginManager._instance) {
-      PluginManager._instance = new PluginManager();
-    }
-    return PluginManager._instance;
-  }
+  constructor() {}
 
   /**
    * init — Must be called once at startup with application dependencies.
@@ -463,6 +454,3 @@ export class PluginManager {
   }
 
 }
-
-/** Module-level singleton accessor. */
-export const pluginManager = PluginManager.getInstance();

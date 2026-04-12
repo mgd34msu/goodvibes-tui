@@ -48,39 +48,13 @@ export function uriToPath(uri: string): string {
 // CodeIntelligence
 // ---------------------------------------------------------------------------
 
-/** Singleton instance. */
-let _instance: CodeIntelligence | null = null;
-
 export class CodeIntelligence {
   private treeSitter: TreeSitterService;
   private lsp: LspService;
 
-  private constructor(treeSitter?: TreeSitterService, lsp?: LspService) {
-    this.treeSitter = treeSitter ?? TreeSitterService.getInstance();
-    this.lsp = lsp ?? LspService.getInstance();
-  }
-
-  // -------------------------------------------------------------------------
-  // Factories
-  // -------------------------------------------------------------------------
-
-  /** Get (or create) the singleton instance. */
-  static getInstance(): CodeIntelligence {
-    if (!_instance) {
-      _instance = new CodeIntelligence();
-    }
-    return _instance;
-  }
-
-  /**
-   * Create an isolated instance for testing.
-   * Bypasses the singleton so tests don't share state.
-   */
-  static createForTesting(
-    treeSitter: TreeSitterService,
-    lsp: LspService,
-  ): CodeIntelligence {
-    return new CodeIntelligence(treeSitter, lsp);
+  constructor(treeSitter?: TreeSitterService, lsp?: LspService) {
+    this.treeSitter = treeSitter ?? new TreeSitterService();
+    this.lsp = lsp ?? new LspService();
   }
 
   // -------------------------------------------------------------------------
@@ -120,13 +94,10 @@ export class CodeIntelligence {
     // LspService has no async init; LSP servers are started on demand.
   }
 
-  /** Shutdown all services and clear the singleton. */
+  /** Shutdown all owned services for this facade instance. */
   async dispose(): Promise<void> {
     try { await this.lsp.shutdown(); } catch (err) { logger.debug('LSP shutdown error', { error: String(err) }); }
     try { this.treeSitter.dispose(); } catch (err) { logger.debug('TreeSitter dispose error', { error: String(err) }); }
-    if (_instance === this) {
-      _instance = null;
-    }
   }
 
   // -------------------------------------------------------------------------

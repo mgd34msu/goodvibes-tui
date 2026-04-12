@@ -3,6 +3,10 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { AutomationJobStore, AutomationRouteStore, AutomationRunStore, AutomationService, AutomationSourceStore } from '../../automation/index.ts';
+import { AutomationManager } from '../../automation/manager.ts';
+import { RouteBindingManager } from '../../channels/route-manager.ts';
+import { SharedSessionBroker } from '../../control-plane/session-broker.ts';
+import { PersistentStore } from '../../state/persistent-store.ts';
 import type { AutomationJob } from '../../automation/jobs.ts';
 import type { AutomationRouteBinding } from '../../automation/routes.ts';
 import type { AutomationSourceRecord } from '../../automation/sources.ts';
@@ -18,12 +22,29 @@ describe('automation service', () => {
     rmSync(root, { recursive: true, force: true });
   });
 
+  function createManager(): AutomationManager {
+    const routeBindings = new RouteBindingManager({
+      store: new AutomationRouteStore(join(root, `bindings-${Date.now()}-${Math.random().toString(16).slice(2)}.json`)),
+    });
+    const sessionBroker = new SharedSessionBroker({
+      store: new PersistentStore(join(root, `sessions-${Date.now()}-${Math.random().toString(16).slice(2)}.json`)) as never,
+      routeBindings,
+      agentStatusProvider: { getStatus: () => null },
+      messageSender: { send: () => false },
+    });
+    return new AutomationManager({
+      routeBindings,
+      sessionBroker,
+    });
+  }
+
   function createService(): AutomationService {
     return new AutomationService({
       jobs: new AutomationJobStore(join(root, 'jobs.json')),
       runs: new AutomationRunStore(join(root, 'runs.json')),
       routes: new AutomationRouteStore(join(root, 'routes.json')),
       sources: new AutomationSourceStore(join(root, 'sources.json')),
+      manager: createManager(),
     });
   }
 

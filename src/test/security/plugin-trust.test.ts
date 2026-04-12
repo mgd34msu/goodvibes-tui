@@ -420,7 +420,7 @@ describe('security: PluginQuarantineEngine', () => {
 
 // ── PluginManager layer: trust + quarantine integration ───────────────────────
 //
-// PluginManager is a singleton with filesystem-dependent discovery. These tests
+// PluginManager discovery is filesystem-dependent. These tests
 // exercise the trust/quarantine delegation through the underlying engines in a
 // coordinated integration scenario that mirrors PluginManager's internal logic.
 

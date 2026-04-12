@@ -1,4 +1,4 @@
-import { afterAll, afterEach, beforeEach, describe, expect, test } from 'bun:test';
+import { beforeEach, describe, expect, test } from 'bun:test';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -12,38 +12,23 @@ import { SharedSessionBroker } from '../../control-plane/session-broker.ts';
 import { PersistentStore } from '../../state/persistent-store.ts';
 import type { LegacySchedulerSnapshot } from '../../automation/migration.ts';
 import { AgentManager } from '../../tools/agent/index.ts';
-import { _resetAgentExecutorForTest, _setAgentExecutorForTest } from '../../tools/agent/manager.ts';
 
-_setAgentExecutorForTest({
+const testAgentExecutor = {
   async runAgent() {
     return new Promise<void>(() => {});
   },
-});
-
-afterAll(() => {
-  _resetAgentExecutorForTest();
-});
+};
 
 describe('AutomationManager target semantics', () => {
   let root = '';
 
   beforeEach(() => {
     root = mkdtempSync(join(tmpdir(), 'gv-automation-targets-'));
-    AgentManager.resetInstance();
-    SharedSessionBroker.resetInstance();
-    RouteBindingManager.resetInstance();
-  });
-
-  afterEach(() => {
-    AgentManager.getInstance().clear();
-    AgentManager.resetInstance();
-    SharedSessionBroker.resetInstance();
-    RouteBindingManager.resetInstance();
-    AutomationManager.resetInstance();
   });
 
   function buildManager(spawnTask?: (prompt: string) => string) {
     const liveAgents = new Map<string, 'pending' | 'running' | 'completed' | 'failed' | 'cancelled'>();
+    const agentManager = new AgentManager({ executor: testAgentExecutor });
     const routeBindings = new RouteBindingManager({
       store: new AutomationRouteStore(join(root, 'automation-routes.json')),
     });
@@ -72,6 +57,7 @@ describe('AutomationManager target semantics', () => {
     });
     return {
       manager,
+      agentManager,
       routeBindings,
       sessionBroker,
       setLiveAgent(agentId: string, status: 'pending' | 'running' | 'completed' | 'failed' | 'cancelled' = 'pending') {
@@ -221,13 +207,13 @@ describe('AutomationManager target semantics', () => {
 
   test('forwards to a live agent instead of spawning a new one when the target session is active', async () => {
     let spawnCount = 0;
-    const { manager, sessionBroker, setLiveAgent } = buildManager(() => {
+    const { manager, agentManager, sessionBroker, setLiveAgent } = buildManager(() => {
       spawnCount += 1;
       return `spawned-${spawnCount}`;
     });
 
     await manager.start();
-    const liveAgent = AgentManager.getInstance().spawn({
+    const liveAgent = agentManager.spawn({
       mode: 'spawn',
       task: 'Keep the shared session active',
     });

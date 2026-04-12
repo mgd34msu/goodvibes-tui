@@ -2,6 +2,7 @@ import type { Line } from '../types/grid.ts';
 import type { ConversationManager } from '../core/conversation.ts';
 import type { CommandRegistry } from '../input/command-registry.ts';
 import type { InputHandler } from '../input/handler.ts';
+import type { KeybindingsManager } from '../input/keybindings.ts';
 import { renderFilePickerOverlay } from './file-picker-overlay.ts';
 import { MODEL_PICKER_CHROME_LINES, renderModelPickerOverlay } from './model-picker-overlay.ts';
 import { renderSelectionModalOverlay } from './selection-modal-overlay.ts';
@@ -23,6 +24,7 @@ export interface ConversationOverlayContext {
   readonly input: InputHandler;
   readonly conversation: ConversationManager;
   readonly commandRegistry: CommandRegistry;
+  readonly keybindingsManager: KeybindingsManager;
   readonly conversationWidth: number;
   readonly viewportHeight: number;
   readonly contextWindow?: number;
@@ -32,7 +34,7 @@ export function applyConversationOverlays(
   viewport: Line[],
   context: ConversationOverlayContext,
 ): Line[] {
-  const { input, conversation, commandRegistry, conversationWidth, viewportHeight, contextWindow } = context;
+  const { input, conversation, commandRegistry, keybindingsManager, conversationWidth, viewportHeight, contextWindow } = context;
   let next = viewport;
   const bottomDockInset = 1 + (input.searchManager.active || input.historySearch.active ? 1 : 0);
 
@@ -101,12 +103,12 @@ export function applyConversationOverlays(
   }
 
   if (input.helpOverlayActive) {
-    const lines = renderHelpOverlay(conversationWidth, commandRegistry.getAll(), input.helpScrollOffset, viewportHeight);
+    const lines = renderHelpOverlay(conversationWidth, keybindingsManager, commandRegistry.getAll(), input.helpScrollOffset, viewportHeight);
     next = replaceViewportWithOverlay(lines, conversationWidth, viewportHeight);
   }
 
   if (input.shortcutsOverlayActive) {
-    const lines = renderShortcutsOverlay(conversationWidth, input.shortcutsScrollOffset, viewportHeight);
+    const lines = renderShortcutsOverlay(conversationWidth, keybindingsManager, input.shortcutsScrollOffset, viewportHeight);
     next = replaceViewportWithOverlay(lines, conversationWidth, viewportHeight);
   }
 

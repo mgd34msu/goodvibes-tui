@@ -83,23 +83,7 @@ export interface MediaProviderDescriptor {
 }
 
 export class MediaProviderRegistry {
-  private static active: MediaProviderRegistry | null = null;
   private readonly providers = new Map<string, MediaProvider>();
-
-  constructor() {
-    MediaProviderRegistry.active = this;
-  }
-
-  static getActive(): MediaProviderRegistry {
-    if (!MediaProviderRegistry.active) {
-      MediaProviderRegistry.active = new MediaProviderRegistry();
-    }
-    return MediaProviderRegistry.active;
-  }
-
-  static resetActiveForTesting(): void {
-    MediaProviderRegistry.active = null;
-  }
 
   register(provider: MediaProvider, options: { readonly replace?: boolean } = {}): () => void {
     const id = provider.id.trim();

@@ -1,4 +1,4 @@
-import { configManager } from '../config/index.ts';
+import type { ConfigManager } from '../config/manager.ts';
 import type { SessionDomainState } from './store/domains/session.ts';
 
 export type GuidanceMode = 'off' | 'minimal' | 'guided';
@@ -27,6 +27,7 @@ export interface SessionMaintenanceStatus {
 }
 
 export interface SessionMaintenanceInput {
+  readonly configManager: Pick<ConfigManager, 'get'>;
   readonly currentTokens: number;
   readonly contextWindow: number;
   readonly messageCount?: number;
@@ -34,7 +35,7 @@ export interface SessionMaintenanceInput {
   readonly session?: Partial<SessionDomainState>;
 }
 
-export function getGuidanceMode(): GuidanceMode {
+export function getGuidanceMode(configManager: Pick<ConfigManager, 'get'>): GuidanceMode {
   return (configManager.get('behavior.guidanceMode') as GuidanceMode | undefined) ?? 'minimal';
 }
 
@@ -59,8 +60,8 @@ function formatAge(ts: number | undefined): string {
 }
 
 export function evaluateSessionMaintenance(input: SessionMaintenanceInput): SessionMaintenanceStatus {
-  const guidanceMode = getGuidanceMode();
-  const thresholdPct = Math.max(0, Number(configManager.get('behavior.autoCompactThreshold') ?? 0));
+  const guidanceMode = getGuidanceMode(input.configManager);
+  const thresholdPct = Math.max(0, Number(input.configManager.get('behavior.autoCompactThreshold') ?? 0));
   const autoCompactEnabled = thresholdPct > 0;
   const currentTokens = Math.max(0, input.currentTokens);
   const contextWindow = Math.max(0, input.contextWindow);
@@ -70,7 +71,7 @@ export function evaluateSessionMaintenance(input: SessionMaintenanceInput): Sess
   const compactionCount = Math.max(0, input.session?.lineage?.filter((entry) => entry.branchReason === 'compaction').length ?? 0);
   const lastCompactedAt = input.session?.lastCompactedAt;
   const messageCount = Math.max(0, input.messageCount ?? 0);
-  const warningsEnabled = Boolean(configManager.get('behavior.staleContextWarnings'));
+  const warningsEnabled = Boolean(input.configManager.get('behavior.staleContextWarnings'));
   const staleByMessageGrowth =
     (input.session?.compactionMessageCount ?? 0) > 0
       ? messageCount - (input.session?.compactionMessageCount ?? 0) >= 12

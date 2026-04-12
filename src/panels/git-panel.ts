@@ -138,7 +138,7 @@ export class GitPanel extends BasePanel {
 
   private async refresh(isRetry = false): Promise<void> {
     try {
-      const git = GitService.getInstance();
+      const git = new GitService();
       const [statusResult, branchResult, logEntries] = await Promise.all([
         git.status(),
         git.branch(),
@@ -324,7 +324,7 @@ export class GitPanel extends BasePanel {
     if (!item || item.kind !== 'file') return;
 
     try {
-      const git = GitService.getInstance();
+      const git = new GitService();
       const raw = await git.diffFile(item.entry.path, item.entry.staged);
       this.expandedDiff = raw ? raw.split('\n') : ['(no diff available)'];
       this.scrollOffset = 0;

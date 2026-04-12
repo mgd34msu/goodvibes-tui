@@ -3,15 +3,16 @@
  */
 import { describe, test, expect, beforeEach } from 'bun:test';
 import { BookmarkModal } from '../../input/bookmark-modal.ts';
-import { getBookmarkManager } from '../../bookmarks/manager.ts';
+import { createTestManagers } from '../helpers/test-managers.ts';
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
+let bookmarkManager = createTestManagers().bookmarkManager;
+
 function seedBookmarks(count: number): void {
-  const bm = getBookmarkManager();
-  bm.clear();
+  const bm = bookmarkManager;
   for (let i = 0; i < count; i++) {
     bm.toggle(`key_${i}`, `label_${i}`);
   }
@@ -25,8 +26,9 @@ describe('BookmarkModal', () => {
   let modal: BookmarkModal;
 
   beforeEach(() => {
-    getBookmarkManager().clear();
-    modal = new BookmarkModal();
+    bookmarkManager = createTestManagers().bookmarkManager;
+    bookmarkManager.clear();
+    modal = new BookmarkModal(bookmarkManager);
   });
 
   describe('open()', () => {

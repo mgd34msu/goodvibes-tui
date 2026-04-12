@@ -13,7 +13,6 @@
  */
 
 import type { SlashCommand, CommandContext } from '../command-registry.ts';
-import { getProviderOptimizer } from '../../providers/optimizer.ts';
 import type { RouteExplanation } from '../../providers/capabilities.ts';
 import type { FallbackTestResult, FallbackTransition } from '../../providers/optimizer.ts';
 
@@ -27,6 +26,14 @@ function fmtBool(value: boolean): string {
 
 function fmtTs(epochMs: number): string {
   return new Date(epochMs).toISOString().replace('T', ' ').slice(0, 19);
+}
+
+function requireProviderOptimizer(context: CommandContext) {
+  if (!context.providerOptimizer) {
+    context.print('[provider] Provider optimizer is not wired into this runtime.');
+    return null;
+  }
+  return context.providerOptimizer;
 }
 
 function fmtExplanation(expl: RouteExplanation, context: CommandContext): void {
@@ -64,7 +71,8 @@ function handleRoute(
   args: string[],
   context: CommandContext,
 ): void {
-  const optimizer = getProviderOptimizer();
+  const optimizer = requireProviderOptimizer(context);
+  if (!optimizer) return;
   const sub = args[0];
 
   if (sub !== 'auto' && sub !== 'manual') {
@@ -102,7 +110,8 @@ function handleExplainRoute(
   _args: string[],
   context: CommandContext,
 ): void {
-  const optimizer = getProviderOptimizer();
+  const optimizer = requireProviderOptimizer(context);
+  if (!optimizer) return;
   const provReg = context.providerRegistry;
 
   let currentModel;
@@ -153,7 +162,8 @@ function handlePin(
   args: string[],
   context: CommandContext,
 ): void {
-  const optimizer = getProviderOptimizer();
+  const optimizer = requireProviderOptimizer(context);
+  if (!optimizer) return;
   const target = args[0];
 
   if (!target) {
@@ -220,7 +230,8 @@ function handleFallbackTest(
   args: string[],
   context: CommandContext,
 ): void {
-  const optimizer = getProviderOptimizer();
+  const optimizer = requireProviderOptimizer(context);
+  if (!optimizer) return;
   const sub = args[0];
 
   if (sub !== 'test') {
@@ -321,7 +332,8 @@ export const providerCommand: SlashCommand = {
         break;
 
       default: {
-        const optimizer = getProviderOptimizer();
+        const optimizer = requireProviderOptimizer(context);
+        if (!optimizer) return;
         const lines = [
           'Usage: /provider <subcommand>',
           '  route auto|manual              — Set optimizer routing mode',

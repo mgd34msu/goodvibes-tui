@@ -1,7 +1,6 @@
 import type { Line } from '../types/grid.ts';
 import { createEmptyLine } from '../types/grid.ts';
 import { BasePanel } from './base-panel.ts';
-import { pluginManager } from '../plugins/manager.ts';
 import type { PluginManagerObserver, PluginStatus } from '../plugins/manager.ts';
 import {
   buildEmptyState,
@@ -54,7 +53,7 @@ export class PluginsPanel extends BasePanel {
   private selectedIndex = 0;
   private scrollOffset = 0;
 
-  public constructor(manager: PluginManagerObserver = pluginManager) {
+  public constructor(manager: PluginManagerObserver) {
     super('plugins', 'Plugins', 'P', 'monitoring');
     this.manager = manager;
     this.unsub = manager.subscribe(() => this.markDirty());

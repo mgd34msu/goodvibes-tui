@@ -20,7 +20,7 @@ export function registerGitRuntimeCommands(registry: CommandRegistry): void {
         ctx.print(`Initialized git repository in ${cwd}`);
       }
 
-      const git = GitService.getInstance(cwd);
+      const git = new GitService(cwd);
       switch (sub) {
         case 'status': {
           try {

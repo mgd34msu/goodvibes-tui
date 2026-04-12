@@ -2,6 +2,7 @@ import { ArchetypeLoader } from '../../agents/archetypes.ts';
 import { AgentOrchestrator } from '../../agents/orchestrator.ts';
 import { AgentMessageBus } from '../../agents/message-bus.ts';
 import { WrfcController } from '../../agents/wrfc-controller.ts';
+import { ConfigManager } from '../../config/manager.ts';
 import type { RuntimeEventBus } from '../../runtime/events/index.ts';
 import {
   emitAgentSpawning,
@@ -16,24 +17,16 @@ import { evaluateOrchestrationSpawn } from '../../runtime/orchestration/spawn-po
 import { logger } from '../../utils/logger.ts';
 import type { AgentInput } from './schema.ts';
 
-type AgentExecutor = {
+export type AgentExecutor = {
   runAgent(record: AgentRecord): Promise<void>;
 };
 
-const defaultAgentExecutor: AgentExecutor = {
-  runAgent(record: AgentRecord): Promise<void> {
-    return AgentOrchestrator.getInstance().runAgent(record);
-  },
-};
-
-let agentExecutor: AgentExecutor = defaultAgentExecutor;
-
-export function _setAgentExecutorForTest(executor: AgentExecutor): void {
-  agentExecutor = executor;
-}
-
-export function _resetAgentExecutorForTest(): void {
-  agentExecutor = defaultAgentExecutor;
+export interface AgentManagerDependencies {
+  readonly archetypeLoader?: Pick<ArchetypeLoader, 'loadArchetype'>;
+  readonly messageBus?: Pick<AgentMessageBus, 'registerAgent'>;
+  readonly wrfcController?: Pick<WrfcController, 'createChain'> | null;
+  readonly executor?: AgentExecutor | null;
+  readonly configManager?: Pick<ConfigManager, 'get'>;
 }
 
 export const AGENT_TEMPLATES: Record<string, { description: string; defaultTools: string[] }> = {
@@ -113,20 +106,21 @@ export interface AgentRecord {
 }
 
 export class AgentManager {
-  private static instance: AgentManager | null = null;
   private agents = new Map<string, AgentRecord>();
   private runtimeBus: RuntimeEventBus | null = null;
   private orchestrationGraphs = new Set<string>();
+  private readonly archetypeLoader: Pick<ArchetypeLoader, 'loadArchetype'>;
+  private readonly messageBus: Pick<AgentMessageBus, 'registerAgent'>;
+  private wrfcController: Pick<WrfcController, 'createChain'> | null;
+  private executor: AgentExecutor | null;
+  private readonly configManager: Pick<ConfigManager, 'get'>;
 
-  static getInstance(): AgentManager {
-    if (!AgentManager.instance) {
-      AgentManager.instance = new AgentManager();
-    }
-    return AgentManager.instance;
-  }
-
-  static resetInstance(): void {
-    AgentManager.instance = null;
+  constructor(deps: AgentManagerDependencies = {}) {
+    this.archetypeLoader = deps.archetypeLoader ?? new ArchetypeLoader();
+    this.messageBus = deps.messageBus ?? new AgentMessageBus();
+    this.wrfcController = deps.wrfcController ?? null;
+    this.executor = deps.executor ?? null;
+    this.configManager = deps.configManager ?? new ConfigManager();
   }
 
   setRuntimeBus(runtimeBus: RuntimeEventBus | null): void {
@@ -172,8 +166,7 @@ export class AgentManager {
     }
     const template = input.template ?? 'general';
 
-    const archetypeLoader = ArchetypeLoader.getInstance();
-    const archetype = archetypeLoader.loadArchetype(template);
+    const archetype = this.archetypeLoader.loadArchetype(template);
     const templateDef = AGENT_TEMPLATES[template] ?? AGENT_TEMPLATES.general;
     const defaultTools = archetype ? archetype.tools : templateDef.defaultTools;
     if (input.restrictTools && (!input.tools || input.tools.length === 0)) {
@@ -196,6 +189,7 @@ export class AgentManager {
     const orchestrationDepth = parentRecord ? parentRecord.orchestrationDepth + 1 : 0;
     const activeAgents = this.list().filter((agent) => agent.status === 'pending' || agent.status === 'running').length;
     const spawnDecision = evaluateOrchestrationSpawn({
+      configManager: this.configManager,
       mode: input.parentAgentId ? 'recursive-child' : 'manual-batch',
       activeAgents,
       requestedDepth: orchestrationDepth,
@@ -265,7 +259,7 @@ export class AgentManager {
     };
 
     this.agents.set(id, record);
-    AgentMessageBus.getInstance().registerAgent({
+    this.messageBus.registerAgent({
       agentId: id,
       template,
       parentAgentId: input.parentAgentId,
@@ -342,18 +336,23 @@ export class AgentManager {
 
     if (!input.dangerously_disable_wrfc) {
       try {
-        const wrfcController = WrfcController.getInstance();
-        wrfcController.createChain(record);
+        this.wrfcController?.createChain(record);
       } catch (error) {
         logger.error('Failed to create WRFC chain', { agentId: id, error: String(error) });
       }
     }
 
-    agentExecutor.runAgent(record).catch((error) => {
+    if (this.executor) {
+      this.executor.runAgent(record).catch((error) => {
+        record.status = 'failed';
+        record.error = error instanceof Error ? error.message : String(error);
+        record.completedAt = Date.now();
+      });
+    } else {
       record.status = 'failed';
-      record.error = error instanceof Error ? error.message : String(error);
+      record.error = 'Agent executor is not configured';
       record.completedAt = Date.now();
-    });
+    }
 
     return record;
   }
@@ -426,7 +425,6 @@ export class AgentManager {
   clear(): void {
     this.agents.clear();
     this.orchestrationGraphs.clear();
-    AgentMessageBus.resetInstance();
   }
 
   exportState(): AgentRecord[] {
@@ -444,5 +442,13 @@ export class AgentManager {
       if (record.status === 'running' || record.status === 'pending') continue;
       this.agents.set(record.id, record);
     }
+  }
+
+  setExecutor(executor: AgentExecutor | null): void {
+    this.executor = executor;
+  }
+
+  setWrfcController(wrfcController: Pick<WrfcController, 'createChain'> | null): void {
+    this.wrfcController = wrfcController;
   }
 }

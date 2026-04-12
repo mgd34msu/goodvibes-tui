@@ -7,7 +7,7 @@ import {
   type ServiceInspection,
   type ServiceConnectionTestResult,
 } from '../config/service-registry.ts';
-import { getSubscriptionManager } from '../config/subscriptions.ts';
+import { SubscriptionManager } from '../config/subscriptions.ts';
 import {
   buildEmptyState,
   buildPanelLine,
@@ -53,9 +53,8 @@ function statusColor(entry: ServicePanelEntry): string {
   return C.dim;
 }
 
-function authSummary(config: ServiceConfig): string {
+function authSummary(config: ServiceConfig, manager: SubscriptionManager): string {
   const provider = config.providerId ?? config.name;
-  const manager = getSubscriptionManager();
   const hasActiveSubscription = manager.get(provider) != null;
   const hasOverride = manager.getAccessToken(provider) != null;
   switch (config.authType) {
@@ -74,14 +73,19 @@ function authSummary(config: ServiceConfig): string {
 
 export class ServicesPanel extends BasePanel {
   private readonly registry: ServiceRegistry;
+  private readonly subscriptionManager: SubscriptionManager;
   private entries: ServicePanelEntry[] = [];
   private selectedIndex = 0;
   private scrollOffset = 0;
   private loading = false;
 
-  public constructor(registry: ServiceRegistry = new ServiceRegistry()) {
+  public constructor(
+    registry: ServiceRegistry,
+    subscriptionManager: SubscriptionManager,
+  ) {
     super('services', 'Services', 'V', 'monitoring');
     this.registry = registry;
+    this.subscriptionManager = subscriptionManager;
     void this.refresh();
   }
 
@@ -194,7 +198,7 @@ export class ServicesPanel extends BasePanel {
         ['  State: ', C.label],
         [statusLabel(selected), statusColor(selected)],
         ['  Auth: ', C.label],
-        [authSummary(inspect.config), C.info],
+        [authSummary(inspect.config, this.subscriptionManager), C.info],
       ]),
       buildPanelLine(width, [
         ['  Primary credential: ', C.label],
@@ -237,7 +241,7 @@ export class ServicesPanel extends BasePanel {
             [' ', C.label, bg],
             [entry.name.padEnd(16), C.value, bg],
             [` ${statusLabel(entry).padEnd(12)}`, statusColor(entry), bg],
-            [` ${authSummary(entry.inspection.config).padEnd(18)}`, C.info, bg],
+            [` ${authSummary(entry.inspection.config, this.subscriptionManager).padEnd(18)}`, C.info, bg],
             [` ${entry.inspection.config.baseUrl ?? '(no baseUrl)'}`, C.dim, bg],
           ]);
         }),

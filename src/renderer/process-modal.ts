@@ -1,9 +1,9 @@
 import { type Line } from '../types/grid.ts';
 import { ModalFactory } from './modal-factory.ts';
 import { formatDuration } from './modal-utils.ts';
-import { ProcessManager } from '../tools/shared/process-manager.ts';
-import { AgentManager, type AgentRecord } from '../tools/agent/index.ts';
-import { WrfcController } from '../agents/wrfc-controller.ts';
+import type { ProcessManager } from '../tools/shared/process-manager.ts';
+import type { AgentManager, AgentRecord } from '../tools/agent/index.ts';
+import type { WrfcController } from '../agents/wrfc-controller.ts';
 import { getOverlaySurfaceMetrics, getStableOverlayContentRows } from './overlay-viewport.ts';
 import { getVisibleWindow } from './surface-layout.ts';
 
@@ -31,12 +31,18 @@ const MAX_LABEL_LENGTH = 80;
 /** Border and margin width subtracted from terminal width to get modal content width. */
 const MODAL_BORDER_WIDTH = 8;
 
+export interface ProcessModalDeps {
+  readonly agentManager: Pick<AgentManager, 'list' | 'getStatus' | 'cancel'>;
+  readonly processManager: Pick<ProcessManager, 'list' | 'getStatus' | 'stop'>;
+  readonly wrfcController: Pick<WrfcController, 'getChain'>;
+}
+
 /** Build a display label for an agent based on its task and template. */
-function buildAgentLabel(rec: AgentRecord): string {
+function buildAgentLabel(rec: AgentRecord, deps: ProcessModalDeps): string {
   const task = rec.task;
 
   // Look up the original task from the WRFC chain if available
-  const originalTask = getChainTask(rec.wrfcId);
+  const originalTask = getChainTask(rec.wrfcId, deps);
 
   // WRFC Review agent
   if (task.startsWith('WRFC Review Request')) {
@@ -68,10 +74,10 @@ function buildAgentLabel(rec: AgentRecord): string {
 }
 
 /** Get the original task description from a WRFC chain. */
-function getChainTask(wrfcId: string | undefined): string | null {
+function getChainTask(wrfcId: string | undefined, deps: Pick<ProcessModalDeps, 'wrfcController'>): string | null {
   if (!wrfcId) return null;
   try {
-    const chain = WrfcController.getInstance().getChain(wrfcId);
+    const chain = deps.wrfcController.getChain(wrfcId);
     return chain?.task ?? null;
   } catch { return null; }
 }
@@ -104,6 +110,8 @@ export class ProcessModal {
   private refreshTimer: ReturnType<typeof setInterval> | null = null;
   private onRefresh: (() => void) | null = null;
 
+  constructor(private readonly deps: ProcessModalDeps) {}
+
   /** Set a callback to trigger re-render on timer tick. */
   setOnRefresh(fn: () => void): void {
     this.onRefresh = fn;
@@ -128,9 +136,9 @@ export class ProcessModal {
     }
   }
 
-  /** Rebuild entries from live singletons. */
+  /** Rebuild entries from the currently owned runtime services. */
   refresh(): void {
-    const manager = AgentManager.getInstance();
+    const manager = this.deps.agentManager;
     if (typeof manager?.list !== 'function') return; // Guard against test mock pollution
     const now = Date.now();
     const result: ProcessEntry[] = [];
@@ -145,7 +153,7 @@ export class ProcessModal {
       }
       result.push({
         id: a.id,
-        label: buildAgentLabel(a),
+        label: buildAgentLabel(a, this.deps),
         type: 'agent',
         status: a.status,
         elapsedMs: now - a.startedAt,
@@ -154,7 +162,7 @@ export class ProcessModal {
     }
 
     // Background exec processes — only show running
-    const pm = ProcessManager.getInstance();
+    const pm = this.deps.processManager;
     for (const p of pm.list()) {
       if (p.status.startsWith('done')) continue;
       const startTime = pm.getStatus(p.id)?.startTime ?? now;
@@ -198,9 +206,9 @@ export class ProcessModal {
     if (!entry) return false;
 
     if (entry.type === 'exec') {
-      return ProcessManager.getInstance().stop(entry.id);
+      return this.deps.processManager.stop(entry.id);
     } else {
-      return AgentManager.getInstance().cancel(entry.id);
+      return this.deps.agentManager.cancel(entry.id);
     }
   }
 }

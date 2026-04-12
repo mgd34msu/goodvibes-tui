@@ -1,7 +1,7 @@
 export { HookDispatcher } from './dispatcher.ts';
 export { ChainEngine } from './chain-engine.ts';
-export { HookActivityTracker, getHookActivityTracker } from './activity.ts';
-export { getHookWorkbench, _resetHookWorkbenchForTesting } from './workbench.ts';
+export { HookActivityTracker } from './activity.ts';
+export { HookWorkbench, createHookWorkbench } from './workbench.ts';
 export type {
   HookPhase,
   HookCategory,
@@ -17,16 +17,22 @@ export type {
 export type { HookActivityRecord } from './activity.ts';
 export type { HookAuthoringAction, HookSimulationResult } from './workbench.ts';
 export type { HookExecutionMode, HookAuthority, HookPointContract } from './contracts.ts';
+import type { AgentManager } from '../tools/agent/index.ts';
 export {
   listHookPointContracts,
   getHookPointContract,
   parseHookPath,
 } from './contracts.ts';
 
+import { HookActivityTracker } from './activity.ts';
 import { HookDispatcher } from './dispatcher.ts';
 
-let _hookDispatcher: HookDispatcher | undefined;
-export function getHookDispatcher(): HookDispatcher {
-  if (!_hookDispatcher) _hookDispatcher = new HookDispatcher();
-  return _hookDispatcher;
+export function createHookDispatcher(config: {
+  readonly agentManager?: Pick<AgentManager, 'spawn' | 'getStatus' | 'cancel'>;
+  readonly activityTracker?: HookActivityTracker;
+} = {}): HookDispatcher {
+  return new HookDispatcher(
+    { agentManager: config.agentManager },
+    config.activityTracker,
+  );
 }

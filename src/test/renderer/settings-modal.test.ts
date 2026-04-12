@@ -7,7 +7,7 @@ import { join } from 'path';
 import { tmpdir } from 'os';
 import { SettingsModal, SETTINGS_CATEGORIES } from '../../input/settings-modal.ts';
 import { ConfigManager } from '../../config/manager.ts';
-import { _resetSubscriptionManagerForTesting } from '../../config/subscriptions.ts';
+import { SubscriptionManager } from '../../config/subscriptions.ts';
 import { createFeatureFlagManager } from '../../runtime/feature-flags/manager.ts';
 import type { FeatureFlagManager } from '../../runtime/feature-flags/manager.ts';
 import type { McpRegistry } from '../../mcp/registry.ts';
@@ -30,6 +30,7 @@ describe('renderSettingsModal', () => {
   let ffm: FeatureFlagManager;
   let modal: SettingsModal;
   let mcpRegistry: McpRegistry;
+  let subscriptionManager: SubscriptionManager;
 
   beforeEach(() => {
     tmpDir = makeTmpDir();
@@ -38,6 +39,7 @@ describe('renderSettingsModal', () => {
     cm = new ConfigManager({ workingDir: tmpDir });
     ffm = createFeatureFlagManager();
     modal = new SettingsModal();
+    subscriptionManager = new SubscriptionManager(join(tmpDir, '.goodvibes', 'tui', 'subscriptions.json'));
     mcpRegistry = {
       listServerSecurity: () => [
         {
@@ -68,12 +70,10 @@ describe('renderSettingsModal', () => {
       },
       pending: {},
     }, null, 2));
-    _resetSubscriptionManagerForTesting();
-    modal.open(cm, ffm, mcpRegistry);
+    modal.open(cm, ffm, subscriptionManager, mcpRegistry);
   });
 
   afterEach(() => {
-    _resetSubscriptionManagerForTesting();
     process.chdir(originalCwd);
     if (originalHome === undefined) delete process.env.HOME;
     else process.env.HOME = originalHome;

@@ -12,6 +12,7 @@ import { ProjectIndex } from '../../state/project-index.ts';
 import { ModeManager } from '../../state/mode-manager.ts';
 import { HookDispatcher } from '../../hooks/dispatcher.ts';
 import { createStateTool } from '../../tools/state/index.ts';
+import { getTestProjectIndex, resetTestProjectIndexes } from '../helpers/runtime-services.ts';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -84,13 +85,13 @@ describe('StateTool', () => {
     tmpDir = makeTmpDir();
     // Use tmpDir as the KVState base so session files land in isolation.
     kvState = new KVState(undefined, tmpDir);
-    ProjectIndex._resetInstance();
-    projectIndex = ProjectIndex.getInstance(PROJECT_ROOT);
+    resetTestProjectIndexes();
+    projectIndex = getTestProjectIndex(PROJECT_ROOT);
     tool = createStateTool(kvState, projectIndex);
   });
 
   afterEach(() => {
-    ProjectIndex._resetInstance();
+    resetTestProjectIndexes();
     if (existsSync(tmpDir)) rmSync(tmpDir, { recursive: true, force: true });
   });
 
@@ -591,13 +592,8 @@ describe('StateTool', () => {
     let modeTool: ReturnType<typeof createStateTool>;
 
     beforeEach(() => {
-      ModeManager.resetInstance();
-      modeMgr = ModeManager.getInstance();
+      modeMgr = new ModeManager();
       modeTool = createStateTool(kvState, projectIndex, undefined, modeMgr);
-    });
-
-    afterEach(() => {
-      ModeManager.resetInstance();
     });
 
     test('mode get returns current mode name and verbosityDefaults', async () => {
@@ -670,14 +666,10 @@ describe('StateTool', () => {
       expect(res.error).toContain('modeName');
     });
 
-    test('mode uses ModeManager singleton when none provided', async () => {
-      ModeManager.resetInstance();
-      const singleton = ModeManager.getInstance();
-      singleton.setMode('justvibes');
-      const noMgrTool = createStateTool(kvState, projectIndex);
-      const res = await run<StateModeGetOutput>(noMgrTool, { mode: 'mode', modeAction: 'get' });
+    test('mode uses the provided ModeManager instance', async () => {
+      modeMgr.setMode('justvibes');
+      const res = await run<StateModeGetOutput>(modeTool, { mode: 'mode', modeAction: 'get' });
       expect(res.parsed.name).toBe('justvibes');
-      ModeManager.resetInstance();
     });
   });
 

@@ -1,8 +1,7 @@
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import type { CommandRegistry } from '../command-registry.ts';
-import { getSecretsManager } from '../../config/secrets.ts';
-import { buildIntegrationHelperReview } from '../../runtime/integration/helpers.ts';
+import { requireSecretsManager } from './runtime-services.ts';
 
 interface SecureStorageBundle {
   readonly version: 1;
@@ -61,7 +60,7 @@ export function registerPlatformServicesRuntimeCommands(registry: CommandRegistr
     description: 'Review secure storage posture and export portable storage metadata bundles',
     usage: '[review|list|delete <key>|bundle export <path>|bundle inspect <path>]',
     async handler(args, ctx) {
-      const manager = getSecretsManager();
+      const manager = requireSecretsManager(ctx);
       const sub = args[0] ?? 'review';
       const review = await manager.inspect();
       const storedKeys = await manager.list();
@@ -134,7 +133,11 @@ export function registerPlatformServicesRuntimeCommands(registry: CommandRegistr
     usage: '[review|bundle export <path>|bundle inspect <path>]',
     handler(args, ctx) {
       const sub = args[0] ?? 'review';
-      const review = buildIntegrationHelperReview();
+      const review = ctx.integrationHelpers?.buildReview();
+      if (!review) {
+        ctx.print('Integration helper service unavailable in this runtime.');
+        return;
+      }
       if (sub === 'review') {
         ctx.print([
           'Integration Helper Review',

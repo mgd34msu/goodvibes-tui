@@ -7,13 +7,11 @@
  * deterministic.
  */
 
-import { describe, test, expect, beforeEach } from 'bun:test';
-import {
-  ProviderOptimizer,
-  _resetProviderOptimizerForTesting,
-} from '../../providers/optimizer.ts';
-import { _resetCapabilityRegistryForTesting } from '../../providers/capabilities.ts';
-import { _resetProviderRegistryForTesting } from '../../providers/registry.ts';
+import { describe, test, expect } from 'bun:test';
+import type { ProviderRegistry, ModelDefinition } from '../../providers/registry.ts';
+import type { LLMProvider } from '../../providers/interface.ts';
+import { ProviderCapabilityRegistry } from '../../providers/capabilities.ts';
+import { ProviderOptimizer } from '../../providers/optimizer.ts';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -28,9 +26,73 @@ function makeClock(start = 1_000_000) {
   };
 }
 
-function makeOptimizer(enabled = false, clock?: () => number) {
-  const c = clock ?? (() => 0);
-  return new ProviderOptimizer(enabled, c);
+function makeModelDefinition(overrides: Partial<ModelDefinition> = {}): ModelDefinition {
+  return {
+    id: 'test-model',
+    provider: 'test-provider',
+    registryKey: 'test-provider:test-model',
+    displayName: 'Test Model',
+    description: 'Test model',
+    capabilities: {
+      toolCalling: false,
+      codeEditing: false,
+      reasoning: false,
+      multimodal: false,
+    },
+    contextWindow: 8_192,
+    selectable: true,
+    ...overrides,
+  };
+}
+
+type TestRegistry = Pick<ProviderRegistry, 'getCurrentModel' | 'getSelectableModels' | 'explainRoute'>;
+
+function makeProviderStub(model: ModelDefinition): LLMProvider {
+  return {
+    name: model.provider,
+    models: [model.id],
+    async chat() {
+      throw new Error('not used in optimizer tests');
+    },
+  };
+}
+
+function makeOptimizer(options: {
+  enabled?: boolean;
+  clock?: () => number;
+  models?: ModelDefinition[];
+  currentModelIndex?: number;
+} = {}) {
+  const models = options.models ?? [];
+  const currentModelIndex = options.currentModelIndex ?? 0;
+  const capabilityRegistry = new ProviderCapabilityRegistry();
+  const registry: TestRegistry = {
+    getCurrentModel: () => {
+      if (models.length === 0) {
+        return makeModelDefinition({
+          id: 'none',
+          provider: 'none',
+          registryKey: 'none:none',
+          displayName: 'None',
+          description: 'No selectable models',
+          selectable: false,
+        });
+      }
+      return models[Math.min(currentModelIndex, models.length - 1)]!;
+    },
+    getSelectableModels: () => models.filter((model) => model.selectable),
+    explainRoute: (modelId, profile) => {
+      const def = models.find((model) => model.registryKey === modelId || model.id === modelId);
+      if (def) {
+        return capabilityRegistry.getRouteExplanation(def.provider, def.id, profile, {
+          ...makeProviderStub(def),
+        });
+      }
+      return capabilityRegistry.getRouteExplanation('unknown', modelId, profile);
+    },
+  };
+  const c = options.clock ?? (() => 0);
+  return new ProviderOptimizer(registry, capabilityRegistry, options.enabled ?? false, c);
 }
 
 // ---------------------------------------------------------------------------
@@ -114,12 +176,12 @@ describe('ProviderOptimizer — pin / unpin', () => {
 
 describe('ProviderOptimizer — selectRoute disabled', () => {
   test('returns null when disabled regardless of mode', () => {
-    const opt = makeOptimizer(false);
+    const opt = makeOptimizer({ enabled: false });
     expect(opt.selectRoute({})).toBeNull();
   });
 
   test('setEnabled(false) disables after enable', () => {
-    const opt = makeOptimizer(true);
+    const opt = makeOptimizer({ enabled: true });
     opt.setEnabled(false);
     expect(opt.enabled).toBe(false);
     expect(opt.selectRoute({})).toBeNull();
@@ -131,15 +193,9 @@ describe('ProviderOptimizer — selectRoute disabled', () => {
 // ---------------------------------------------------------------------------
 
 describe('ProviderOptimizer — selectRoute enabled', () => {
-  beforeEach(() => {
-    _resetProviderOptimizerForTesting();
-    _resetCapabilityRegistryForTesting();
-    _resetProviderRegistryForTesting();
-  });
-
   test('returns a RouteDecision when enabled with no candidates', () => {
     const clock = makeClock();
-    const opt = makeOptimizer(true, clock.now);
+    const opt = makeOptimizer({ enabled: true, clock: clock.now });
     // No models in registry → fallback explanation with decidedAt from clock
     const decision = opt.selectRoute({});
     // With empty registry we get a decision with providerId 'none'
@@ -153,7 +209,7 @@ describe('ProviderOptimizer — selectRoute enabled', () => {
 
   test('pinned mode returns pinned target in decision', () => {
     const clock = makeClock(2_000_000);
-    const opt = makeOptimizer(true, clock.now);
+    const opt = makeOptimizer({ enabled: true, clock: clock.now });
     opt.pin('test-provider', 'test-model');
     const decision = opt.selectRoute({});
     expect(decision).not.toBeNull();
@@ -167,7 +223,7 @@ describe('ProviderOptimizer — selectRoute enabled', () => {
 
   test('decidedAt uses injected clock, not wall time', () => {
     const clock = makeClock(9_000_000);
-    const opt = makeOptimizer(true, clock.now);
+    const opt = makeOptimizer({ enabled: true, clock: clock.now });
     const decision = opt.selectRoute({});
     expect(decision?.decidedAt).toBe(9_000_000);
   });
@@ -188,7 +244,7 @@ describe('ProviderOptimizer — fallback log bounded at 200 entries', () => {
 
   test('log trims oldest entries when exceeding 200', () => {
     const clock = makeClock();
-    const opt = makeOptimizer(false, clock.now);
+    const opt = makeOptimizer({ clock: clock.now });
     for (let i = 0; i < 210; i++) {
       clock.tick(1);
       opt.recordFallbackTransition(`provider-${i}`, 'fallback', `reason-${i}`);
@@ -208,7 +264,7 @@ describe('ProviderOptimizer — fallback log bounded at 200 entries', () => {
 
   test('recordFallbackTransition captures all fields', () => {
     const clock = makeClock(5_000);
-    const opt = makeOptimizer(false, clock.now);
+    const opt = makeOptimizer({ clock: clock.now });
     opt.recordFallbackTransition('provider-a', 'provider-b', 'timeout');
     const entry = opt.fallbackLog[0];
     expect(entry.from).toBe('provider-a');
@@ -223,15 +279,9 @@ describe('ProviderOptimizer — fallback log bounded at 200 entries', () => {
 // ---------------------------------------------------------------------------
 
 describe('ProviderOptimizer — testFallback', () => {
-  beforeEach(() => {
-    _resetProviderOptimizerForTesting();
-    _resetCapabilityRegistryForTesting();
-    _resetProviderRegistryForTesting();
-  });
-
   test('returns FallbackTestResult with empty registry', () => {
     const clock = makeClock(3_000_000);
-    const opt = makeOptimizer(false, clock.now);
+    const opt = makeOptimizer({ clock: clock.now });
     const result = opt.testFallback({});
     expect(result.totalCount).toBe(0);
     expect(result.viableCount).toBe(0);
@@ -241,14 +291,14 @@ describe('ProviderOptimizer — testFallback', () => {
 
   test('testedAt uses injected clock', () => {
     const clock = makeClock(7_777_777);
-    const opt = makeOptimizer(false, clock.now);
+    const opt = makeOptimizer({ clock: clock.now });
     const result = opt.testFallback();
     expect(result.testedAt).toBe(7_777_777);
   });
 
   test('works regardless of enabled state', () => {
     // testFallback is always operational
-    const opt = makeOptimizer(false);
+    const opt = makeOptimizer();
     const resultOff = opt.testFallback();
     opt.setEnabled(true);
     const resultOn = opt.testFallback();
@@ -261,14 +311,10 @@ describe('ProviderOptimizer — testFallback', () => {
 // ---------------------------------------------------------------------------
 
 describe('ProviderOptimizer — explainCurrentRoute', () => {
-  beforeEach(() => {
-    _resetProviderOptimizerForTesting();
-    _resetCapabilityRegistryForTesting();
-    _resetProviderRegistryForTesting();
-  });
-
   test('returns a RouteExplanation for the current model', () => {
-    const opt = makeOptimizer(false);
+    const opt = makeOptimizer({
+      models: [makeModelDefinition()],
+    });
     // explainCurrentRoute always works regardless of enabled state;
     // it reads the current model from the provider registry.
     const expl = opt.explainCurrentRoute();
@@ -285,17 +331,17 @@ describe('ProviderOptimizer — explainCurrentRoute', () => {
 
 describe('ProviderOptimizer — setEnabled', () => {
   test('starts disabled when constructed with false', () => {
-    const opt = makeOptimizer(false);
+    const opt = makeOptimizer();
     expect(opt.enabled).toBe(false);
   });
 
   test('starts enabled when constructed with true', () => {
-    const opt = makeOptimizer(true);
+    const opt = makeOptimizer({ enabled: true });
     expect(opt.enabled).toBe(true);
   });
 
   test('setEnabled toggles state', () => {
-    const opt = makeOptimizer(false);
+    const opt = makeOptimizer();
     opt.setEnabled(true);
     expect(opt.enabled).toBe(true);
     opt.setEnabled(false);

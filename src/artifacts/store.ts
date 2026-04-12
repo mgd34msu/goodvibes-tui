@@ -78,8 +78,6 @@ function filenameFromUrl(input: string): string | undefined {
 }
 
 export class ArtifactStore {
-  private static active: ArtifactStore | null = null;
-
   private readonly rootDir: string;
   private readonly records = new Map<string, ArtifactRecord>();
   private readonly maxBytes: number;
@@ -97,22 +95,6 @@ export class ArtifactStore {
     this.blockedHosts = [...(config.blockedHosts ?? [])];
     mkdirSync(this.rootDir, { recursive: true });
     this.loadExisting();
-    ArtifactStore.active = this;
-  }
-
-  static getActive(config: ArtifactStoreConfig = {}): ArtifactStore {
-    if (!config.rootDir && !config.configManager && ArtifactStore.active) {
-      return ArtifactStore.active;
-    }
-    const requestedRoot = resolveArtifactRootDir(config);
-    if (!ArtifactStore.active || ArtifactStore.active.rootDir !== requestedRoot) {
-      ArtifactStore.active = new ArtifactStore({ ...config, rootDir: requestedRoot });
-    }
-    return ArtifactStore.active;
-  }
-
-  static resetActiveForTesting(): void {
-    ArtifactStore.active = null;
   }
 
   get storagePath(): string {

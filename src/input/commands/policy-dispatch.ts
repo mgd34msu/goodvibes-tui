@@ -6,17 +6,21 @@ import {
   runPolicySimulationScenarios,
 } from '../../runtime/permissions/index.ts';
 import { DivergenceDashboard } from '../../runtime/permissions/divergence-dashboard.ts';
-import { getPolicyRuntimeState } from '../../runtime/permissions/policy-runtime.ts';
+import type { PolicyRuntimeState } from '../../runtime/permissions/policy-runtime.ts';
 import { createUnsignedBundle } from '../../runtime/permissions/policy-loader.ts';
 import type { PolicyBundlePayload } from '../../runtime/permissions/policy-loader.ts';
 import type { PolicyRule, PermissionsConfig, DivergenceStats } from '../../runtime/permissions/types.ts';
 
-function getPolicyState() {
-  return getPolicyRuntimeState();
+function getPolicyState(ctx?: CommandContext): PolicyRuntimeState {
+  const policyRuntimeState = ctx?.policyRuntimeState;
+  if (!policyRuntimeState) {
+    throw new Error('Policy runtime state is not available in this runtime.');
+  }
+  return policyRuntimeState;
 }
 
 function getRegistry(ctx?: CommandContext) {
-  return ctx?.policyRegistry ?? getPolicyState().getRegistry();
+  return ctx?.policyRegistry ?? getPolicyState(ctx).getRegistry();
 }
 
 function fmtRate(rate: number): string {
@@ -34,7 +38,7 @@ function bundleSummary(
 
 async function handleLoad(args: string[], context: CommandContext): Promise<void> {
   const registry = getRegistry(context);
-  const policyState = getPolicyState();
+  const policyState = getPolicyState(context);
   const bundleId = args[0] ?? `policy-candidate-${Date.now()}`;
   const ruleCount = Math.max(0, parseInt(args[1] ?? '0', 10));
   const rules: PolicyRule[] = [];
@@ -70,7 +74,7 @@ async function handleLoad(args: string[], context: CommandContext): Promise<void
 
 async function handleSimulate(args: string[], context: CommandContext): Promise<void> {
   const registry = getRegistry(context);
-  const policyState = getPolicyState();
+  const policyState = getPolicyState(context);
   const candidate = registry.getCandidate();
   const current = registry.getCurrent();
   if (!candidate) {
@@ -142,7 +146,7 @@ async function handleDiff(_args: string[], context: CommandContext): Promise<voi
     context.print('  [~] Changed rules:');
     for (const c of diff.changed) context.print(`      ~ ${c.ruleId}`);
   }
-  const dashboard = getPolicyState().getDashboard();
+  const dashboard = getPolicyState(context).getDashboard();
   if (dashboard) {
     const snap = dashboard.getSnapshot();
     const report = snap.report;
@@ -188,7 +192,7 @@ async function handleLint(_args: string[], context: CommandContext): Promise<voi
 
 async function handlePreflight(_args: string[], context: CommandContext): Promise<void> {
   const registry = getRegistry(context);
-  const policyState = getPolicyState();
+  const policyState = getPolicyState(context);
   const current = registry.getCurrent();
   const candidate = registry.getCandidate();
   const lintFindings = [
@@ -218,7 +222,7 @@ async function handlePreflight(_args: string[], context: CommandContext): Promis
 
 async function handlePromote(args: string[], context: CommandContext): Promise<void> {
   const registry = getRegistry(context);
-  const policyState = getPolicyState();
+  const policyState = getPolicyState(context);
   const force = args.includes('--force');
   if (force) {
     context.print('[policy] WARNING: --force bypasses the divergence gate. This is not safe for production use.');
@@ -242,7 +246,7 @@ async function handlePromote(args: string[], context: CommandContext): Promise<v
 
 async function handleRollback(_args: string[], context: CommandContext): Promise<void> {
   const registry = getRegistry(context);
-  const policyState = getPolicyState();
+  const policyState = getPolicyState(context);
   const result = registry.rollback();
   if (!result.ok) {
     context.print(`[policy] Rollback failed: ${result.error}`);
@@ -258,7 +262,7 @@ async function handleRollback(_args: string[], context: CommandContext): Promise
 
 async function handleStatus(_args: string[], context: CommandContext): Promise<void> {
   const registry = getRegistry(context);
-  const policyState = getPolicyState();
+  const policyState = getPolicyState(context);
   const current = registry.getCurrent();
   const candidate = registry.getCandidate();
   const history = registry.getHistory();

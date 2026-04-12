@@ -1,7 +1,6 @@
 import { resolve } from 'node:path';
 import type { CommandContext } from '../command-registry.ts';
 import { inspectSandboxSessionArtifact, listSandboxProfiles, renderSandboxSessions } from '../../runtime/sandbox/manager.ts';
-import { getSandboxSessionRegistry } from '../../runtime/sandbox/session-registry.ts';
 
 const SANDBOX_PROFILE_IDS = [
   'eval-js',
@@ -18,7 +17,11 @@ function findSandboxProfile(configManager: CommandContext['configManager'], prof
 }
 
 export async function handleSandboxSessionCommand(args: string[], ctx: CommandContext): Promise<boolean> {
-  const sessions = getSandboxSessionRegistry();
+  const sessions = ctx.sandboxSessionRegistry;
+  if (!sessions) {
+    ctx.print('Sandbox session registry is not wired into this runtime.');
+    return true;
+  }
   const mode = (args[1] ?? 'list').toLowerCase();
   if (mode === 'list') {
     ctx.print(renderSandboxSessions(sessions.list()));

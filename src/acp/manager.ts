@@ -11,6 +11,7 @@ import type { SubagentInfo, SubagentResult, SubagentTask } from './protocol.ts';
 import type { PermissionRequestHandler } from '../permissions/prompt.ts';
 import type { RuntimeEventBus } from '../runtime/events/index.ts';
 import { emitAgentSpawning } from '../runtime/emitters/index.ts';
+import type { HookDispatcher } from '../hooks/index.ts';
 
 /**
  * Command used to spawn subagent processes.
@@ -44,14 +45,17 @@ export class AcpManager {
   private agentCmd: string[];
   private readonly requestPermission?: PermissionRequestHandler;
   private readonly runtimeBus: RuntimeEventBus | null;
+  private readonly hookDispatcher: Pick<HookDispatcher, 'fire'> | null;
 
   constructor(
     permissionOrLegacyBus?: PermissionRequestHandler | { emit?: unknown },
     runtimeBus: RuntimeEventBus | null = null,
+    hookDispatcher: Pick<HookDispatcher, 'fire'> | null = null,
   ) {
     this.agentCmd = resolveAgentCommand();
     this.requestPermission = typeof permissionOrLegacyBus === 'function' ? permissionOrLegacyBus : undefined;
     this.runtimeBus = runtimeBus;
+    this.hookDispatcher = hookDispatcher;
   }
 
   /**
@@ -60,7 +64,14 @@ export class AcpManager {
    */
   async spawn(task: SubagentTask): Promise<string> {
     const id = randomUUID();
-    const conn = new AcpConnection(id, task, this.agentCmd, this.requestPermission, this.runtimeBus);
+    const conn = new AcpConnection(
+      id,
+      task,
+      this.agentCmd,
+      this.requestPermission,
+      this.runtimeBus,
+      this.hookDispatcher,
+    );
     this.connections.set(id, conn);
 
     if (this.runtimeBus) {

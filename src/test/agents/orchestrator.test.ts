@@ -1,14 +1,15 @@
 import { describe, test, expect, beforeEach, afterEach, mock } from 'bun:test';
+import { existsSync, rmSync, unlinkSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { AgentOrchestrator, summarizeToolArgs } from '../../agents/orchestrator.ts';
 import type { AgentRecord } from '../../tools/agent/index.ts';
 import type { LLMProvider, ChatRequest, ChatResponse } from '../../providers/interface.ts';
-import { getProviderRegistry, _resetProviderRegistryForTesting } from '../../providers/registry.ts';
-import type { ProviderRegistry } from '../../providers/registry.ts';
-import { getMemoryStore, getMemoryRegistry, _resetMemoryRegistryForTesting } from '../../state/index.ts';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { FileStateCache } from '../../state/file-cache.ts';
+import { MemoryRegistry, MemoryStore } from '../../state/index.ts';
+import { ProjectIndex } from '../../state/project-index.ts';
 import { randomUUID } from 'node:crypto';
-import { existsSync, unlinkSync } from 'node:fs';
+import { getTestRuntimeServices, resetTestRuntimeServices } from '../helpers/runtime-services.ts';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -68,13 +69,14 @@ const MOCK_MODEL = {
 
 /**
  * Return the actual ProviderRegistry instance that the proxy delegates to.
- *
- * `providerRegistry` is a Proxy with a get-only trap -- property assignments
- * on it target an empty object and are invisible to the registry.  We must
- * patch the underlying instance returned by `getProviderRegistry()` instead.
  */
-function getActualRegistry(): ProviderRegistry {
-  return getProviderRegistry();
+let testProviderRegistry: ReturnType<typeof getTestRuntimeServices>['providerRegistry'] | null = null;
+
+function getActualRegistry() {
+  if (!testProviderRegistry) {
+    throw new Error('testProviderRegistry not initialized');
+  }
+  return testProviderRegistry;
 }
 
 /**
@@ -101,8 +103,14 @@ async function withMockProvider<T>(provider: LLMProvider, fn: () => Promise<T>):
 
 describe('AgentOrchestrator', () => {
   let memoryDbPath: string;
+  let projectIndexRoot: string;
   const repoRoot = join(import.meta.dir, '..', '..', '..');
   const originalCwd = process.cwd();
+  let orchestratorRuntime: ReturnType<typeof getTestRuntimeServices>;
+  let memoryStore: MemoryStore;
+  let memoryRegistry: MemoryRegistry;
+  let fileCache: FileStateCache;
+  let projectIndex: ProjectIndex;
 
   async function getSystemPrompt(record: AgentRecord): Promise<string> {
     // eslint-disable-next-line prefer-const
@@ -130,19 +138,53 @@ describe('AgentOrchestrator', () => {
 
   let orchestrator: AgentOrchestrator;
 
-  beforeEach(() => {
+  beforeEach(async () => {
     process.chdir(repoRoot);
-    AgentOrchestrator.resetInstance();
-    _resetProviderRegistryForTesting();
-    _resetMemoryRegistryForTesting();
-    orchestrator = new AgentOrchestrator();
+    resetTestRuntimeServices();
+    orchestratorRuntime = getTestRuntimeServices();
     memoryDbPath = join(tmpdir(), `agent-orchestrator-${randomUUID()}.db`);
+    projectIndexRoot = join(tmpdir(), `agent-orchestrator-project-${randomUUID()}`);
+    memoryStore = new MemoryStore(memoryDbPath);
+    memoryRegistry = new MemoryRegistry(memoryStore);
+    fileCache = new FileStateCache();
+    projectIndex = new ProjectIndex(projectIndexRoot);
+    await Promise.all([
+      memoryStore.init(),
+      projectIndex.load(),
+    ]);
+    testProviderRegistry = orchestratorRuntime.providerRegistry;
+    orchestrator = new AgentOrchestrator();
+    orchestrator.setRuntimeBus(orchestratorRuntime.runtimeBus);
+    orchestrator.setFeatureFlagManager(orchestratorRuntime.featureFlags);
+    orchestrator.setDependencies({
+      fileCache,
+      projectIndex,
+      fileUndoManager: orchestratorRuntime.fileUndoManager,
+      modeManager: orchestratorRuntime.modeManager,
+      processManager: orchestratorRuntime.processManager,
+      webSearchService: orchestratorRuntime.webSearchService,
+      channelRegistry: orchestratorRuntime.channelPlugins,
+      remoteRunnerRegistry: orchestratorRuntime.remoteRunnerRegistry,
+      knowledgeService: orchestratorRuntime.knowledgeService,
+      memoryRegistry,
+      archetypeLoader: orchestratorRuntime.archetypeLoader,
+      configManager: orchestratorRuntime.configManager,
+      providerRegistry: orchestratorRuntime.providerRegistry,
+      providerOptimizer: orchestratorRuntime.providerOptimizer,
+      toolLLM: orchestratorRuntime.toolLLM,
+      serviceRegistry: orchestratorRuntime.serviceRegistry,
+      featureFlags: orchestratorRuntime.featureFlags,
+      overflowHandler: orchestratorRuntime.overflowHandler,
+      sandboxSessionRegistry: orchestratorRuntime.sandboxSessionRegistry,
+    });
   });
 
-  afterEach(() => {
+  afterEach(async () => {
     process.chdir(originalCwd);
-    _resetMemoryRegistryForTesting();
+    memoryStore?.close();
+    await projectIndex?.dispose();
     if (existsSync(memoryDbPath)) unlinkSync(memoryDbPath);
+    if (existsSync(projectIndexRoot)) rmSync(projectIndexRoot, { recursive: true, force: true });
   });
 
   // -------------------------------------------------------------------------
@@ -324,10 +366,7 @@ describe('AgentOrchestrator', () => {
     });
 
     test('injects relevant reviewed project knowledge and records the sources', async () => {
-      const store = getMemoryStore(memoryDbPath);
-      await store.init();
-      getMemoryRegistry(memoryDbPath);
-      await store.add({
+      await memoryRegistry.add({
         cls: 'runbook',
         summary: 'Use targeted runtime edits for orchestration store changes',
         detail: 'Prefer src/runtime/store paths when adjusting graph-node behavior.',
@@ -650,20 +689,4 @@ describe('AgentOrchestrator', () => {
     });
   });
 
-  describe('singleton', () => {
-    test('getInstance returns the same instance each time', () => {
-      AgentOrchestrator.resetInstance();
-      const a = AgentOrchestrator.getInstance();
-      const b = AgentOrchestrator.getInstance();
-      expect(a).toBe(b);
-    });
-
-    test('resetInstance clears the singleton', () => {
-      AgentOrchestrator.resetInstance();
-      const a = AgentOrchestrator.getInstance();
-      AgentOrchestrator.resetInstance();
-      const b = AgentOrchestrator.getInstance();
-      expect(a).not.toBe(b);
-    });
-  });
 });

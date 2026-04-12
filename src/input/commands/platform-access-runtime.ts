@@ -3,12 +3,10 @@ import { homedir } from 'node:os';
 import { dirname, resolve } from 'node:path';
 import type { CommandRegistry } from '../command-registry.ts';
 import { VERSION } from '../../version.ts';
-import { getProfileManager } from '../../profiles/manager.ts';
-import { getSecretsManager } from '../../config/secrets.ts';
-import { getSubscriptionManager } from '../../config/subscriptions.ts';
 import { listBuiltinSubscriptionProviders } from '../../config/subscription-providers.ts';
 import { handleLocalAuthCommand } from './local-auth-runtime.ts';
 import { buildAuthInspectionSnapshot, inspectProviderAuth } from '../../runtime/auth/inspection.ts';
+import { requireProfileManager, requireSecretsManager, requireSubscriptionManager } from './runtime-services.ts';
 
 interface InstallBundle {
   readonly version: 1;
@@ -138,8 +136,8 @@ export function registerPlatformAccessRuntimeCommands(registry: CommandRegistry)
     async handler(args, ctx) {
       const sub = args[0] ?? 'review';
       if (sub === 'review') {
-        const profiles = getProfileManager().list();
-        const secretKeys = await getSecretsManager().list();
+        const profiles = requireProfileManager(ctx).list();
+        const secretKeys = await requireSecretsManager(ctx).list();
         ctx.print([
           'Install Review',
           `  version: ${VERSION}`,
@@ -158,8 +156,8 @@ export function registerPlatformAccessRuntimeCommands(registry: CommandRegistry)
         }
         const targetPath = resolve(process.cwd(), pathArg!);
         if (mode === 'export') {
-          const profiles = getProfileManager().list();
-          const secretKeys = await getSecretsManager().list();
+          const profiles = requireProfileManager(ctx).list();
+          const secretKeys = await requireSecretsManager(ctx).list();
           const bundle: InstallBundle = {
             version: 1,
             exportedAt: Date.now(),
@@ -197,7 +195,7 @@ export function registerPlatformAccessRuntimeCommands(registry: CommandRegistry)
     usage: '[review|channel <stable|preview>|bundle export <path>|bundle inspect <path>]',
     handler(args, ctx) {
       const sub = args[0] ?? 'review';
-      const subscriptions = getSubscriptionManager();
+      const subscriptions = requireSubscriptionManager(ctx);
       const builtinProviders = listBuiltinSubscriptionProviders().map((entry) => entry.provider);
       const sandboxProfile = [
         `${ctx.configManager.get('sandbox.replIsolation')}`,
@@ -345,8 +343,8 @@ export function registerPlatformAccessRuntimeCommands(registry: CommandRegistry)
         }
         const targetPath = resolve(process.cwd(), pathArg!);
         if (mode === 'export') {
-          const secretKeys = await getSecretsManager().list();
-          const subscriptions = getSubscriptionManager();
+          const secretKeys = await requireSecretsManager(ctx).list();
+          const subscriptions = requireSubscriptionManager(ctx);
           const bundle: AuthReviewBundle = {
             version: 1,
             exportedAt: Date.now(),
@@ -394,7 +392,7 @@ export function registerPlatformAccessRuntimeCommands(registry: CommandRegistry)
           ctx.print('Auth login response did not include a session token.');
           return;
         }
-        await getSecretsManager().set(secretKey, body.token);
+        await requireSecretsManager(ctx).set(secretKey, body.token);
         ctx.print(`Stored ${target} session token in secure storage as ${secretKey}.`);
         return;
       }

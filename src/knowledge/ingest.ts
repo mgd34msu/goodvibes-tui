@@ -1,12 +1,6 @@
 import { readFile } from 'node:fs/promises';
 import { ArtifactStore } from '../artifacts/index.ts';
 import type { ArtifactDescriptor } from '../artifacts/types.ts';
-import { getMemoryRegistry } from '../state/index.ts';
-import type {
-  MemoryClass,
-  MemoryRecord,
-  MemoryScope,
-} from '../state/index.ts';
 import type { RuntimeEventBus } from '../runtime/events/index.ts';
 import {
   emitKnowledgeCompileCompleted,

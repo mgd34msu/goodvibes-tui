@@ -1,5 +1,6 @@
 import { describe, test, expect, beforeEach } from 'bun:test';
 import { TaskScheduler } from '../../scheduler/scheduler.ts';
+import { getTestTaskScheduler, resetTestTaskScheduler } from '../helpers/runtime-services.ts';
 
 // ---------------------------------------------------------------------------
 // Cron parser — tested indirectly via getNextRun
@@ -9,7 +10,7 @@ describe('Cron parser', () => {
   let scheduler: TaskScheduler;
 
   beforeEach(() => {
-    TaskScheduler.resetInstance();
+    resetTestTaskScheduler();
     scheduler = new TaskScheduler();
   });
 
@@ -88,7 +89,7 @@ describe('computeNextRun — dayOfMonth/dayOfWeek OR logic', () => {
   let scheduler: TaskScheduler;
 
   beforeEach(() => {
-    TaskScheduler.resetInstance();
+    resetTestTaskScheduler();
     scheduler = new TaskScheduler();
   });
 
@@ -148,7 +149,7 @@ describe('computeNextRun basic cases', () => {
   let scheduler: TaskScheduler;
 
   beforeEach(() => {
-    TaskScheduler.resetInstance();
+    resetTestTaskScheduler();
     scheduler = new TaskScheduler();
   });
 
@@ -187,7 +188,7 @@ describe('Task lifecycle', () => {
   let scheduler: TaskScheduler;
 
   beforeEach(() => {
-    TaskScheduler.resetInstance();
+    resetTestTaskScheduler();
     // Use in-memory store path that won't write to real disk
     scheduler = new TaskScheduler('/tmp/gv-scheduler-test-' + Math.random().toString(36).slice(2) + '.json');
   });
@@ -250,18 +251,18 @@ describe('Task lifecycle', () => {
     expect(scheduler.setEnabled('nope', true)).toBe(false);
   });
 
-  test('getInstance() returns same instance', () => {
-    const a = TaskScheduler.getInstance();
-    const b = TaskScheduler.getInstance();
+  test('test helper reuses the same scheduler until reset', () => {
+    const a = getTestTaskScheduler();
+    const b = getTestTaskScheduler();
     expect(a).toBe(b);
-    TaskScheduler.resetInstance();
+    resetTestTaskScheduler();
   });
 
-  test('getInstance(storePath) uses provided storePath', () => {
-    const path = '/tmp/gv-test-singleton-' + Math.random().toString(36).slice(2) + '.json';
-    const inst = TaskScheduler.getInstance(path);
+  test('test helper accepts an explicit storePath', () => {
+    const path = '/tmp/gv-test-scheduler-' + Math.random().toString(36).slice(2) + '.json';
+    const inst = getTestTaskScheduler(path);
     expect(inst).toBeInstanceOf(TaskScheduler);
-    TaskScheduler.resetInstance();
+    resetTestTaskScheduler();
   });
 
   test('runNow reschedules task after execution (even on failure)', async () => {

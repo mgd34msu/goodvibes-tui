@@ -1,9 +1,14 @@
 import { type Line } from '../types/grid.ts';
 import { ModalFactory } from './modal-factory.ts';
-import { ProcessManager } from '../tools/shared/process-manager.ts';
-import { AgentManager } from '../tools/agent/index.ts';
+import type { ProcessManager } from '../tools/shared/process-manager.ts';
+import type { AgentManager } from '../tools/agent/index.ts';
 import type { ProcessEntry } from './process-modal.ts';
 import { getOverlaySurfaceMetrics, getStableOverlayContentRows } from './overlay-viewport.ts';
+
+export interface LiveTailModalDeps {
+  readonly agentManager: Pick<AgentManager, 'cancel' | 'getStatus'>;
+  readonly processManager: Pick<ProcessManager, 'stop' | 'getOutput'>;
+}
 
 // ─── LiveTailModal ────────────────────────────────────────────────────────────
 
@@ -19,6 +24,8 @@ export class LiveTailModal {
 
   /** Number of lines scrolled up from the bottom (0 = at bottom). */
   public scrollOffset = 0;
+
+  constructor(private readonly deps: LiveTailModalDeps) {}
 
   open(entry: ProcessEntry): void {
     this.entry = entry;
@@ -48,9 +55,9 @@ export class LiveTailModal {
     if (!this.entry) return false;
 
     if (this.entry.type === 'exec') {
-      return ProcessManager.getInstance().stop(this.entry.id);
+      return this.deps.processManager.stop(this.entry.id);
     } else {
-      return AgentManager.getInstance().cancel(this.entry.id);
+      return this.deps.agentManager.cancel(this.entry.id);
     }
   }
 
@@ -59,13 +66,13 @@ export class LiveTailModal {
     if (!this.entry) return '';
 
     if (this.entry.type === 'exec') {
-      const out = ProcessManager.getInstance().getOutput(this.entry.id);
+      const out = this.deps.processManager.getOutput(this.entry.id);
       if (!out) return '';
       const combined = [out.stdout, out.stderr].filter(Boolean).join('\n').trim();
       return combined || '(no output yet)';
     } else {
       // For agents, show progress note and status
-      const rec = AgentManager.getInstance().getStatus(this.entry.id);
+      const rec = this.deps.agentManager.getStatus(this.entry.id);
       if (!rec) return '(process not found)';
       const parts: string[] = [
         `Task: ${rec.task}`,

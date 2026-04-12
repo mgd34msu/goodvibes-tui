@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
+import type { ArtifactStore } from '../../artifacts/index.ts';
 import { ensureBuiltinMediaProviders, MediaProviderRegistry } from '../../media/index.ts';
+import type { ProviderRegistry } from '../../providers/registry.ts';
 
 const BUILTIN_MEDIA_ENV_KEYS = [
   'BYTEPLUS_API_KEY',
@@ -14,20 +16,42 @@ const BUILTIN_MEDIA_ENV_KEYS = [
   'COMFY_BASE_URL',
 ] as const;
 
+function makeImageModelRegistry(): Pick<ProviderRegistry, 'getCurrentModel' | 'getForModel' | 'listModels'> {
+  return {
+    listModels: () => [],
+    getCurrentModel: () => ({
+      id: 'stub-model',
+      provider: 'stub',
+      registryKey: 'stub:stub-model',
+      displayName: 'Stub Model',
+      description: 'Stub multimodal model',
+      capabilities: { toolCalling: false, codeEditing: false, reasoning: false, multimodal: true },
+      contextWindow: 8_192,
+      selectable: true,
+    }),
+    getForModel: () => {
+      throw new Error('Stub registry does not resolve models');
+    },
+  };
+}
+
 describe('builtin media generation providers', () => {
   const originalEnv = new Map<string, string | undefined>();
+  const artifactStore: Pick<ArtifactStore, 'readContent'> = {
+    async readContent() {
+      throw new Error('artifact reads are not used in this suite');
+    },
+  };
 
   beforeEach(() => {
-    MediaProviderRegistry.resetActiveForTesting();
-    for (const key of BUILTIN_MEDIA_ENV_KEYS) {
+        for (const key of BUILTIN_MEDIA_ENV_KEYS) {
       originalEnv.set(key, process.env[key]);
       delete process.env[key];
     }
   });
 
   afterEach(() => {
-    MediaProviderRegistry.resetActiveForTesting();
-    for (const key of BUILTIN_MEDIA_ENV_KEYS) {
+        for (const key of BUILTIN_MEDIA_ENV_KEYS) {
       const original = originalEnv.get(key);
       if (original === undefined) delete process.env[key];
       else process.env[key] = original;
@@ -36,7 +60,7 @@ describe('builtin media generation providers', () => {
 
   test('registers builtin image-understanding and generation providers together', async () => {
     const registry = new MediaProviderRegistry();
-    ensureBuiltinMediaProviders(registry);
+    ensureBuiltinMediaProviders(registry, artifactStore, makeImageModelRegistry());
 
     const ids = new Set(registry.list().map((provider) => provider.id));
     expect(ids.has('builtin:image-understanding')).toBe(true);
@@ -59,7 +83,7 @@ describe('builtin media generation providers', () => {
     process.env['COMFY_BASE_URL'] = 'http://127.0.0.1:8188';
 
     const registry = new MediaProviderRegistry();
-    ensureBuiltinMediaProviders(registry);
+    ensureBuiltinMediaProviders(registry, artifactStore, makeImageModelRegistry());
     const statuses = await registry.status();
 
     expect(statuses.find((entry) => entry.id === 'byteplus')?.configured).toBe(true);

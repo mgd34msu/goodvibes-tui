@@ -3,6 +3,7 @@ import { handleSelectionModalToken, handleSettingsModalToken } from '../../input
 import { SettingsModal } from '../../input/settings-modal.ts';
 import { ConfigManager } from '../../config/manager.ts';
 import { createFeatureFlagManager } from '../../runtime/feature-flags/manager.ts';
+import { SubscriptionManager } from '../../config/subscriptions.ts';
 import { join } from 'path';
 import { tmpdir } from 'os';
 import { mkdirSync, rmSync } from 'fs';
@@ -231,8 +232,14 @@ describe('modal space actions', () => {
     mkdirSync(dir, { recursive: true });
     try {
       const cm = new ConfigManager({ workingDir: dir, configDir: join(dir, '.goodvibes', 'tui') });
+      const subscriptionManager = new SubscriptionManager(join(dir, '.goodvibes', 'tui', 'subscriptions.json'));
       const modal = new SettingsModal();
-      modal.open(cm, createFeatureFlagManager(), { listServerSecurity: () => [], setServerTrustMode: () => {} } as never);
+      modal.open(
+        cm,
+        createFeatureFlagManager(),
+        subscriptionManager,
+        { listServerSecurity: () => [], setServerTrustMode: () => {} } as never,
+      );
       const idx = modal.currentItems.findIndex((entry) => entry.setting.key === 'display.stream');
       for (let i = 0; i < idx; i++) modal.moveDown();
       const before = cm.get('display.stream') as boolean;
@@ -277,8 +284,14 @@ describe('modal space actions', () => {
     mkdirSync(dir, { recursive: true });
     try {
       const cm = new ConfigManager({ workingDir: dir, configDir: join(dir, '.goodvibes', 'tui') });
+      const subscriptionManager = new SubscriptionManager(join(dir, '.goodvibes', 'tui', 'subscriptions.json'));
       const modal = new SettingsModal();
-      modal.open(cm, createFeatureFlagManager(), { listServerSecurity: () => [], setServerTrustMode: () => {} } as never);
+      modal.open(
+        cm,
+        createFeatureFlagManager(),
+        subscriptionManager,
+        { listServerSecurity: () => [], setServerTrustMode: () => {} } as never,
+      );
 
       const streamIdx = modal.currentItems.findIndex((entry) => entry.setting.key === 'display.stream');
       for (let i = 0; i < streamIdx; i++) modal.moveDown();

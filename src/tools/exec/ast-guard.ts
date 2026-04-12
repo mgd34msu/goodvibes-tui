@@ -19,43 +19,12 @@ import { evaluateCommandAST, DEFAULT_ALLOWED_CLASSES } from '../../runtime/permi
 import { normalizeCommand } from '../../runtime/permissions/normalization/index.ts';
 import type { CompoundVerdict } from '../../runtime/permissions/normalization/verdict.ts';
 import type { CommandClassification } from '../../runtime/permissions/normalization/types.ts';
+import type { FeatureFlagManager } from '../../runtime/feature-flags/index.ts';
 
-// ── Feature flag integration ───────────────────────────────────────────────────
+type FlagManagerLike = Pick<FeatureFlagManager, 'isEnabled'>;
 
-/**
- * Module-level cached flag manager. Populated on first successful resolution.
- * `null` means "not yet resolved or unavailable"; `false` means "permanently unavailable".
- */
-type FlagManagerLike = { isEnabled(id: string): boolean };
-let _flagManager: FlagManagerLike | false | null = null;
-
-/**
- * Lazily resolves the FeatureFlagManager singleton via dynamic import.
- * Uses a module-level cache so the import is attempted at most once per process.
- */
-async function resolveFlagManager(): Promise<FlagManagerLike | null> {
-  if (_flagManager !== null) return _flagManager || null;
-  try {
-    const mod = await import('../../runtime/feature-flags/manager.ts');
-    const mgr = (mod.FeatureFlagManager as { getInstance?: () => FlagManagerLike } | undefined)?.getInstance?.() ?? null;
-    _flagManager = mgr ?? false;
-    return mgr;
-  } catch {
-    _flagManager = false;
-    return null;
-  }
-}
-
-/**
- * Thin adapter: checks the runtime feature flag manager if available.
- * Falls back to `false` (disabled) when the manager is not initialised.
- *
- * We import lazily via dynamic import to avoid circular dependency between
- * tools and runtime. The manager is resolved once and cached at module level.
- */
-async function isASTNormalizationEnabled(): Promise<boolean> {
-  const manager = await resolveFlagManager();
-  return manager?.isEnabled('shell-ast-normalization') ?? false;
+function isASTNormalizationEnabled(flagManager?: FlagManagerLike | null): boolean {
+  return flagManager?.isEnabled('shell-ast-normalization') ?? false;
 }
 
 // ── Allowed classification set ─────────────────────────────────────────────────
@@ -170,8 +139,9 @@ function astGuard(
 export async function guardExecCommand(
   command: string,
   allowedClasses: ReadonlySet<CommandClassification> = DEFAULT_ALLOWED_CLASSES,
+  flagManager?: FlagManagerLike | null,
 ): Promise<ASTGuardResult> {
-  if (await isASTNormalizationEnabled()) {
+  if (isASTNormalizationEnabled(flagManager)) {
     return astGuard(command, allowedClasses);
   }
   return baselineGuard(command);

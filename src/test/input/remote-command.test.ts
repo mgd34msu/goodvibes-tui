@@ -3,21 +3,57 @@ import { existsSync, mkdtempSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { CommandRegistry } from '../../input/command-registry.ts';
+import type { CommandContext } from '../../input/command-registry.ts';
 import { registerBuiltinCommands } from '../../input/commands.ts';
 import { AgentManager } from '../../tools/agent/index.ts';
 import { createRuntimeStore } from '../../runtime/store/index.ts';
-import { _resetRemoteRunnerRegistryForTesting } from '../../runtime/remote/index.ts';
+import {
+  getTestAgentManager,
+  getTestRemoteRunnerRegistry,
+  getTestRemoteSupervisor,
+  resetTestRuntimeServices,
+} from '../helpers/runtime-services.ts';
+
+function createRemoteCommandContext(
+  store: ReturnType<typeof createRuntimeStore>,
+  out: string[],
+  overrides: Partial<CommandContext> = {},
+): CommandContext {
+  return {
+    providerRegistry: {} as never,
+    conversationManager: {} as never,
+    config: {} as never,
+    configManager: {} as never,
+    runtime: {
+      model: '',
+      provider: '',
+      debugMode: false,
+      systemPrompt: '',
+      reasoningEffort: '',
+      sessionId: 'sess-remote-command',
+    },
+    renderRequest: () => {},
+    print: (text: string) => { out.push(text); },
+    exit: () => {},
+    toolRegistry: {} as never,
+    mcpRegistry: {} as never,
+    runtimeStore: store,
+    remoteRunnerRegistry: getTestRemoteRunnerRegistry(),
+    remoteSupervisor: getTestRemoteSupervisor(),
+    agentManager: getTestAgentManager(),
+    ...overrides,
+  };
+}
 
 describe('remote command', () => {
   test('exports and imports remote review artifacts through the command surface', async () => {
-    AgentManager.resetInstance();
-    _resetRemoteRunnerRegistryForTesting();
+    resetTestRuntimeServices();
     const registry = new CommandRegistry();
     registerBuiltinCommands(registry);
     const remote = registry.get('remote');
     expect(remote).toBeDefined();
 
-    const manager = AgentManager.getInstance();
+    const manager = getTestAgentManager();
     const agent = manager.spawn({
       mode: 'spawn',
       task: 'Export remote review artifact',
@@ -54,26 +90,7 @@ describe('remote command', () => {
     const dir = mkdtempSync(join(tmpdir(), 'gv-remote-cmd-'));
     const path = join(dir, 'review-artifact.json');
 
-    const ctx = {
-      providerRegistry: {} as never,
-      conversationManager: {} as never,
-      config: {} as never,
-      configManager: {} as never,
-      runtime: {
-        model: '',
-        provider: '',
-        debugMode: false,
-        systemPrompt: '',
-        reasoningEffort: '',
-        sessionId: 'sess-remote-command',
-      },
-      renderRequest: () => {},
-      print: (text: string) => { out.push(text); },
-      exit: () => {},
-      toolRegistry: {} as never,
-      mcpRegistry: {} as never,
-      runtimeStore: store,
-    };
+    const ctx = createRemoteCommandContext(store, out);
 
     await remote!.handler(['export', agent.id, path], ctx);
     expect(existsSync(path)).toBe(true);
@@ -85,8 +102,7 @@ describe('remote command', () => {
   });
 
   test('dispatches a self-hosted remote runner and can rerun imported work locally', async () => {
-    AgentManager.resetInstance();
-    _resetRemoteRunnerRegistryForTesting();
+    resetTestRuntimeServices();
     const registry = new CommandRegistry();
     registerBuiltinCommands(registry);
     const remote = registry.get('remote');
@@ -96,29 +112,11 @@ describe('remote command', () => {
     const spawn = mock(async () => 'remote-runner-1');
     const out: string[] = [];
 
-    const ctx = {
-      providerRegistry: {} as never,
-      conversationManager: {} as never,
-      config: {} as never,
-      configManager: {} as never,
-      runtime: {
-        model: '',
-        provider: '',
-        debugMode: false,
-        systemPrompt: '',
-        reasoningEffort: '',
-        sessionId: 'sess-remote-command',
-      },
-      renderRequest: () => {},
-      print: (text: string) => { out.push(text); },
-      exit: () => {},
-      toolRegistry: {} as never,
-      mcpRegistry: {} as never,
-      runtimeStore: store,
+    const ctx = createRemoteCommandContext(store, out, {
       acpManager: {
         spawn,
       } as never,
-    };
+    });
 
     await remote!.handler(['dispatch', 'researcher', 'Inspect', 'deployment', 'logs'], ctx);
     expect(spawn).toHaveBeenCalledTimes(1);
@@ -175,8 +173,7 @@ describe('remote command', () => {
   });
 
   test('renders remote setup guidance and exports reusable environment snippets', async () => {
-    AgentManager.resetInstance();
-    _resetRemoteRunnerRegistryForTesting();
+    resetTestRuntimeServices();
     const registry = new CommandRegistry();
     registerBuiltinCommands(registry);
     const remote = registry.get('remote');
@@ -187,28 +184,11 @@ describe('remote command', () => {
     const dir = mkdtempSync(join(tmpdir(), 'gv-remote-env-'));
     const envPath = join(dir, 'remote-env.sh');
 
-    const ctx = {
-      providerRegistry: {} as never,
-      conversationManager: {} as never,
-      config: {} as never,
+    const ctx = createRemoteCommandContext(store, out, {
       configManager: {
         getCategory: () => ({ daemon: false, httpListener: false }),
       } as never,
-      runtime: {
-        model: '',
-        provider: '',
-        debugMode: false,
-        systemPrompt: '',
-        reasoningEffort: '',
-        sessionId: 'sess-remote-command',
-      },
-      renderRequest: () => {},
-      print: (text: string) => { out.push(text); },
-      exit: () => {},
-      toolRegistry: {} as never,
-      mcpRegistry: {} as never,
-      runtimeStore: store,
-    };
+    });
 
     await remote!.handler(['setup'], ctx);
     expect(out.join('\n')).toContain('Remote Setup Review');
@@ -243,8 +223,7 @@ describe('remote command', () => {
   });
 
   test('manages remote runner pools and pool-aware dispatch from the command surface', async () => {
-    AgentManager.resetInstance();
-    _resetRemoteRunnerRegistryForTesting();
+    resetTestRuntimeServices();
     const registry = new CommandRegistry();
     registerBuiltinCommands(registry);
     const remote = registry.get('remote');
@@ -253,10 +232,7 @@ describe('remote command', () => {
     const store = createRuntimeStore();
     const spawn = mock(async () => 'remote-runner-pool-1');
     const out: string[] = [];
-    const ctx = {
-      providerRegistry: {} as never,
-      conversationManager: {} as never,
-      config: {} as never,
+    const ctx = createRemoteCommandContext(store, out, {
       configManager: {
         getCategory: () => ({ daemon: false, httpListener: false }),
       } as never,
@@ -268,16 +244,10 @@ describe('remote command', () => {
         reasoningEffort: '',
         sessionId: 'sess-remote-pool',
       },
-      renderRequest: () => {},
-      print: (text: string) => { out.push(text); },
-      exit: () => {},
-      toolRegistry: {} as never,
-      mcpRegistry: {} as never,
-      runtimeStore: store,
       acpManager: {
         spawn,
       } as never,
-    };
+    });
 
     await remote!.handler(['pool', 'create', 'ops', 'Ops Pool'], ctx);
     expect(out.join('\n')).toContain('Created remote runner pool ops');
@@ -298,8 +268,7 @@ describe('remote command', () => {
   });
 
   test('teleport command exports, inspects, and imports portable remote-session bundles', async () => {
-    AgentManager.resetInstance();
-    _resetRemoteRunnerRegistryForTesting();
+    resetTestRuntimeServices();
     const registry = new CommandRegistry();
     registerBuiltinCommands(registry);
     const teleport = registry.get('teleport');
@@ -308,11 +277,7 @@ describe('remote command', () => {
     const store = createRuntimeStore();
     const out: string[] = [];
     const dir = mkdtempSync(join(tmpdir(), 'gv-teleport-cmd-'));
-    const ctx = {
-      providerRegistry: {} as never,
-      conversationManager: {} as never,
-      config: {} as never,
-      configManager: {} as never,
+    const ctx = createRemoteCommandContext(store, out, {
       runtime: {
         model: '',
         provider: '',
@@ -321,13 +286,7 @@ describe('remote command', () => {
         reasoningEffort: '',
         sessionId: 'sess-teleport-command',
       },
-      renderRequest: () => {},
-      print: (text: string) => { out.push(text); },
-      exit: () => {},
-      toolRegistry: {} as never,
-      mcpRegistry: {} as never,
-      runtimeStore: store,
-    };
+    });
     store.setState((state) => ({
       ...state,
       acp: {

@@ -1,4 +1,3 @@
-import { getPanelManager } from '../../panels/panel-manager.ts';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import {
@@ -19,6 +18,7 @@ import {
 import { type ConfigKey } from '../../config/index.ts';
 import { CONFIG_KEYS } from '../../config/schema.ts';
 import type { CommandRegistry } from '../command-registry.ts';
+import { openCommandPanel } from './runtime-services.ts';
 
 export function registerSettingsSyncRuntimeCommands(registry: CommandRegistry): void {
   registry.register({
@@ -27,15 +27,10 @@ export function registerSettingsSyncRuntimeCommands(registry: CommandRegistry): 
     description: 'Review sync posture, export/import settings-sync bundles, and open the settings sync workspace',
     usage: '[review|panel|show <key>|staged|conflicts|resolve <key> <local|synced>|failures|rollback-history|export <path>|inspect <path>|pull <path>|push <path>|lock <key> <source> <reason...>|unlock <key>]',
     handler(args, ctx) {
+      const controlPlaneConfigDir = ctx.configManager.getControlPlaneConfigDir();
       const sub = (args[0] ?? 'review').toLowerCase();
       if (sub === 'panel' || sub === 'open') {
-        if (ctx.showPanel) ctx.showPanel('settings-sync');
-        else {
-          const panelManager = getPanelManager();
-          panelManager.open('settings-sync');
-          panelManager.show();
-          ctx.renderRequest();
-        }
+        openCommandPanel(ctx, 'settings-sync');
         return;
       }
       if (sub === 'show') {
@@ -117,7 +112,7 @@ export function registerSettingsSyncRuntimeCommands(registry: CommandRegistry): 
           path: targetPath,
           timestamp: Date.now(),
           detail: `${Object.keys(bundle.settings).length} settings exported`,
-        });
+        }, controlPlaneConfigDir);
         ctx.print(`Settings sync bundle exported to ${targetPath}`);
         return;
       }
@@ -144,7 +139,7 @@ export function registerSettingsSyncRuntimeCommands(registry: CommandRegistry): 
           const result = applySettingsSyncBundle(ctx.configManager, bundle, sourcePath);
           ctx.print(`Settings sync bundle pulled from ${sourcePath} (${result.appliedCount} applied, ${result.conflictCount} conflicts).`);
         } catch (error) {
-          recordSettingsSyncFailure('settings-sync', (error as Error).message);
+          recordSettingsSyncFailure('settings-sync', (error as Error).message, controlPlaneConfigDir);
           ctx.print((error as Error).message);
         }
         return;
@@ -157,7 +152,7 @@ export function registerSettingsSyncRuntimeCommands(registry: CommandRegistry): 
           ctx.print('Usage: /settingssync lock <config-key> <source> <reason...>');
           return;
         }
-        setManagedSettingLock(key, source, reason, ctx.configManager.getControlPlaneConfigDir());
+        setManagedSettingLock(key, source, reason, controlPlaneConfigDir);
         ctx.print(`Managed lock recorded for ${key}.`);
         return;
       }
@@ -167,7 +162,7 @@ export function registerSettingsSyncRuntimeCommands(registry: CommandRegistry): 
           ctx.print('Usage: /settingssync unlock <config-key>');
           return;
         }
-        ctx.print(clearManagedSettingLock(key, ctx.configManager.getControlPlaneConfigDir()) ? `Managed lock cleared for ${key}.` : `No managed lock found for ${key}.`);
+        ctx.print(clearManagedSettingLock(key, controlPlaneConfigDir) ? `Managed lock cleared for ${key}.` : `No managed lock found for ${key}.`);
         return;
       }
       ctx.print(formatSettingsControlPlaneReview(ctx.configManager).join('\n'));

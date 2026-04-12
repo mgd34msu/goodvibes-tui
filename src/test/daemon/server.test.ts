@@ -6,22 +6,16 @@ import { join } from 'node:path';
 import { ArtifactStore } from '../../artifacts/index.ts';
 import { DaemonServer } from '../../daemon/server.ts';
 import { HttpListener } from '../../daemon/http-listener.ts';
-import { AgentManager } from '../../tools/agent/manager.ts';
 import { UserAuthManager } from '../../security/user-auth.ts';
 import { RuntimeEventBus } from '../../runtime/events/index.ts';
 import type { TransportEvent } from '../../runtime/events/transport.ts';
-import { setIntegrationHelpersContext, clearIntegrationHelpersContext } from '../../runtime/integration/helpers.ts';
 import { createRuntimeStore } from '../../runtime/store/index.ts';
+import { createRuntimeServices } from '../../runtime/services.ts';
 import { MultimodalService } from '../../multimodal/index.ts';
-import { getPanelManager } from '../../panels/panel-manager.ts';
-import { AutomationManager } from '../../automation/index.ts';
-import { ApprovalBroker, SharedSessionBroker } from '../../control-plane/index.ts';
-import { normalizeEverySchedule } from '../../automation/schedules.ts';
 import { ConfigManager } from '../../config/manager.ts';
-import { ChannelPolicyManager } from '../../channels/index.ts';
-import { resetDistributedRuntimeManagerForTesting } from '../../runtime/remote/index.ts';
-import { MemoryEmbeddingProviderRegistry, _resetMemoryRegistryForTesting } from '../../state/index.ts';
 import { KnowledgeService, KnowledgeStore } from '../../knowledge/index.ts';
+import { resetTestRuntimeServices } from '../helpers/runtime-services.ts';
+import { buildOperatorContract } from '../../control-plane/operator-contract.ts';
 
 const TEST_TOKEN = 'test-secret-token-abc123';
 
@@ -72,35 +66,28 @@ function waitForSocketFrame(
 describe('DaemonServer', () => {
   let daemon: DaemonServer;
   let tempConfigDir: string;
+  let configDir: string;
+  let runtimeServices: ReturnType<typeof createRuntimeServices>;
+  const makeConfig = () => new ConfigManager({ configDir, workingDir: tempConfigDir });
 
   beforeEach(() => {
-    AgentManager.resetInstance();
-    AutomationManager.resetInstance();
-    ApprovalBroker.resetInstance();
-    SharedSessionBroker.resetInstance();
-    ChannelPolicyManager.resetInstance();
-    resetDistributedRuntimeManagerForTesting();
-    ArtifactStore.resetActiveForTesting();
-    KnowledgeStore.resetActiveForTesting();
-    KnowledgeService.resetActiveForTesting();
-    MultimodalService.resetActiveForTesting();
-    _resetMemoryRegistryForTesting();
-    MemoryEmbeddingProviderRegistry.resetActiveForTesting();
+    resetTestRuntimeServices();
     tempConfigDir = mkdtempSync(join(tmpdir(), 'gv-daemon-config-'));
-    ConfigManager.setTestMode(tempConfigDir);
+    configDir = join(tempConfigDir, '.goodvibes', 'tui');
     rmSync(join(process.cwd(), '.goodvibes', 'tui', 'remote'), { recursive: true, force: true });
     rmSync(join(process.cwd(), '.goodvibes', 'tui', 'channels'), { recursive: true, force: true });
     // Use a high port to avoid conflicts with system services
     const userAuth = new UserAuthManager({
       users: [{ username: 'admin', passwordHash: UserAuthManager.hashPassword('admin'), roles: ['admin'] }],
     });
-    daemon = new DaemonServer({ port: 39421, host: '127.0.0.1', userAuth });
-    setIntegrationHelpersContext({
+    runtimeServices = createRuntimeServices({
       runtimeStore: createRuntimeStore(),
       runtimeBus: new RuntimeEventBus(),
+      configManager: makeConfig(),
       getConversationTitle: () => 'Daemon Test',
     });
-    getPanelManager().registerType({
+    daemon = new DaemonServer({ port: 39421, host: '127.0.0.1', userAuth, runtimeServices });
+    runtimeServices.panelManager.registerType({
       id: 'test-helper-panel',
       name: 'Test Helper Panel',
       icon: 'T',
@@ -124,23 +111,10 @@ describe('DaemonServer', () => {
 
   afterEach(async () => {
     await daemon.stop();
-    AgentManager.resetInstance();
-    AutomationManager.resetInstance();
-    ApprovalBroker.resetInstance();
-    SharedSessionBroker.resetInstance();
-    ChannelPolicyManager.resetInstance();
-    resetDistributedRuntimeManagerForTesting();
-    ArtifactStore.resetActiveForTesting();
-    KnowledgeStore.resetActiveForTesting();
-    KnowledgeService.resetActiveForTesting();
-    MultimodalService.resetActiveForTesting();
-    _resetMemoryRegistryForTesting();
-    MemoryEmbeddingProviderRegistry.resetActiveForTesting();
-    ConfigManager.setTestMode(undefined);
+    resetTestRuntimeServices();
     rmSync(join(process.cwd(), '.goodvibes', 'tui', 'remote'), { recursive: true, force: true });
     rmSync(join(process.cwd(), '.goodvibes', 'tui', 'channels'), { recursive: true, force: true });
     rmSync(tempConfigDir, { recursive: true, force: true });
-    clearIntegrationHelpersContext();
   });
 
   test('isRunning is false before start', () => {
@@ -169,13 +143,13 @@ describe('DaemonServer', () => {
   });
 
   test('passes TLS options to Bun.serve when direct daemon TLS is enabled', async () => {
-    const certDir = join(tempConfigDir, 'certs');
+    const certDir = join(tempConfigDir, '.goodvibes', 'certs');
     mkdirSync(certDir, { recursive: true });
     const certFile = join(certDir, 'fullchain.pem');
     const keyFile = join(certDir, 'privkey.pem');
     writeFileSync(certFile, 'CERT\n', 'utf-8');
     writeFileSync(keyFile, 'KEY\n', 'utf-8');
-    const config = new ConfigManager();
+    const config = makeConfig();
     config.set('controlPlane.tls.mode', 'direct');
     let capturedOptions: Record<string, unknown> | null = null;
     const serveFactory = mock((options: unknown) => {
@@ -928,15 +902,25 @@ describe('DaemonServer', () => {
   });
 
   test('automation helper API exposes jobs and recent runs', async () => {
-    await AutomationManager.getInstance().createJob({
-      name: 'API Heartbeat',
-      prompt: 'Send a daemon heartbeat',
-      schedule: normalizeEverySchedule('15m'),
-      enabled: true,
-    });
-
     daemon.enable({ daemon: true }, TEST_TOKEN);
     await daemon.start();
+
+    const create = await fetch('http://127.0.0.1:39421/api/automation/jobs', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${TEST_TOKEN}`,
+      },
+      body: JSON.stringify({
+        kind: 'every',
+        every: '15m',
+        name: 'API Heartbeat',
+        prompt: 'Send a daemon heartbeat',
+      }),
+    });
+    expect(create.status).toBe(201);
+    const created = await create.json() as { id: string; name: string };
+    expect(created.name).toBe('API Heartbeat');
 
     const automation = await fetch('http://127.0.0.1:39421/api/automation', {
       headers: { Authorization: `Bearer ${TEST_TOKEN}` },
@@ -1183,10 +1167,20 @@ describe('DaemonServer', () => {
     await daemon.start();
 
     const auth = { Authorization: `Bearer ${TEST_TOKEN}` };
-    const methods = await fetch('http://127.0.0.1:39421/api/control-plane/methods', { headers: auth });
-    expect(methods.status).toBe(200);
-    const methodsBody = await methods.json() as { methods: Array<{ id: string }> };
-    expect(methodsBody.methods.some((method) => method.id === 'remote.node_host.contract')).toBe(true);
+    const methods = runtimeServices.gatewayMethods.list();
+    expect(methods.some((method) => method.id === 'control.contract')).toBe(true);
+    expect(methods.some((method) => method.id === 'remote.node_host.contract')).toBe(true);
+
+    const events = runtimeServices.gatewayMethods.listEvents();
+    expect(events.some((event) => event.id === 'runtime.automation')).toBe(true);
+    expect(events.some((event) => event.id === 'control.ready')).toBe(true);
+
+    const operatorContract = buildOperatorContract(runtimeServices.gatewayMethods);
+    expect(operatorContract.auth.login.path).toBe('/login');
+    expect(operatorContract.transports.websocket.path).toBe('/api/control-plane/ws');
+    expect(operatorContract.peer.contractPath).toBe('/api/remote/node-host/contract');
+    expect(operatorContract.operator.methods.some((method) => method.id === 'control.contract')).toBe(true);
+    expect(operatorContract.operator.events.some((event) => event.id === 'runtime.automation')).toBe(true);
 
     const statusInvoke = await fetch('http://127.0.0.1:39421/api/control-plane/methods/control.status/invoke', {
       method: 'POST',
@@ -1261,14 +1255,9 @@ describe('DaemonServer', () => {
     await daemon.start();
 
     const auth = { Authorization: `Bearer ${TEST_TOKEN}`, 'Content-Type': 'application/json' };
-
-    const events = await fetch('http://127.0.0.1:39421/api/control-plane/events/catalog', {
-      headers: { Authorization: `Bearer ${TEST_TOKEN}` },
-    });
-    expect(events.status).toBe(200);
-    const eventsBody = await events.json() as { events: Array<{ id: string }> };
-    expect(eventsBody.events.some((event) => event.id === 'runtime.automation')).toBe(true);
-    expect(eventsBody.events.some((event) => event.id === 'control.ready')).toBe(true);
+    const events = runtimeServices.gatewayMethods.listEvents();
+    expect(events.some((event) => event.id === 'runtime.automation')).toBe(true);
+    expect(events.some((event) => event.id === 'control.ready')).toBe(true);
 
     const method = await fetch('http://127.0.0.1:39421/api/control-plane/methods/control.methods.get/invoke', {
       method: 'POST',
@@ -1401,7 +1390,7 @@ describe('DaemonServer', () => {
     daemon.enable({ daemon: true }, TEST_TOKEN);
     await daemon.start();
 
-    const broker = ApprovalBroker.getInstance();
+    const broker = runtimeServices.approvalBroker;
     const pendingDecision = broker.requestApproval({
       request: {
         callId: 'call-approval-test',
@@ -1496,7 +1485,7 @@ describe('DaemonServer', () => {
   });
 
   test('channel policy APIs expose group-aware policy state, status, directory, and block webhook ingress', async () => {
-    const config = new ConfigManager();
+    const config = makeConfig();
     config.setDynamic('surfaces.webhook.enabled', true);
     config.setDynamic('surfaces.webhook.secret', 'webhook-test-secret');
     daemon = new DaemonServer({
@@ -1627,7 +1616,7 @@ describe('DaemonServer', () => {
   });
 
   test('channel policy APIs allow authorized control commands to bypass mention gating when configured', async () => {
-    const config = new ConfigManager();
+    const config = makeConfig();
     config.setDynamic('surfaces.webhook.enabled', true);
     config.setDynamic('surfaces.webhook.secret', 'webhook-test-secret');
     daemon = new DaemonServer({
@@ -1694,7 +1683,7 @@ describe('DaemonServer', () => {
   });
 
   test('channel account APIs expose surface auth and secret posture', async () => {
-    const config = new ConfigManager();
+    const config = makeConfig();
     config.setDynamic('surfaces.slack.enabled', true);
     config.setDynamic('surfaces.slack.workspaceId', 'workspace-1');
     config.setDynamic('surfaces.slack.botToken', 'xoxb-local');
@@ -1939,7 +1928,7 @@ describe('DaemonServer', () => {
   });
 
   test('channel setup, doctor, lifecycle, and allowlist APIs expose expanded surface contracts', async () => {
-    const config = new ConfigManager();
+    const config = makeConfig();
     config.setDynamic('surfaces.telegram.enabled', true);
     config.setDynamic('surfaces.telegram.botToken', 'telegram-token');
     config.setDynamic('surfaces.telegram.botUsername', 'goodvibes_bot');
@@ -2092,7 +2081,7 @@ describe('DaemonServer', () => {
   });
 
   test('generic webhook can create bindings and queue callback-based replies', async () => {
-    const config = new ConfigManager();
+    const config = makeConfig();
     config.setDynamic('surfaces.webhook.enabled', true);
     config.setDynamic('surfaces.webhook.secret', 'webhook-test-secret');
     daemon = new DaemonServer({
@@ -2142,7 +2131,7 @@ describe('DaemonServer', () => {
   });
 
   test('generic webhook requires explicit ingress configuration', async () => {
-    const config = new ConfigManager();
+    const config = makeConfig();
     config.setDynamic('surfaces.webhook.enabled', false);
     config.setDynamic('surfaces.webhook.secret', '');
     daemon = new DaemonServer({
@@ -2168,7 +2157,7 @@ describe('DaemonServer', () => {
   });
 
   test('generic webhook rejects unsafe callback URLs', async () => {
-    const config = new ConfigManager();
+    const config = makeConfig();
     config.setDynamic('surfaces.webhook.enabled', true);
     config.setDynamic('surfaces.webhook.secret', 'webhook-test-secret');
     daemon = new DaemonServer({
@@ -2198,7 +2187,7 @@ describe('DaemonServer', () => {
   });
 
   test('generic webhook accepts HMAC signature and preserves correlation metadata', async () => {
-    const config = new ConfigManager();
+    const config = makeConfig();
     config.setDynamic('surfaces.webhook.enabled', true);
     config.setDynamic('surfaces.webhook.secret', 'webhook-hmac-secret');
     daemon = new DaemonServer({
@@ -2247,7 +2236,7 @@ describe('DaemonServer', () => {
   });
 
   test('generic webhook rejects invalid HMAC signatures when configured', async () => {
-    const config = new ConfigManager();
+    const config = makeConfig();
     config.setDynamic('surfaces.webhook.enabled', true);
     config.setDynamic('surfaces.webhook.secret', 'webhook-hmac-secret');
     daemon = new DaemonServer({
@@ -2322,7 +2311,7 @@ describe('DaemonServer', () => {
   });
 
   test('ntfy webhook creates route bindings and can spawn agents', async () => {
-    const config = new ConfigManager();
+    const config = makeConfig();
     config.setDynamic('surfaces.ntfy.enabled', true);
     config.setDynamic('surfaces.ntfy.token', 'ntfy-test-token');
     daemon = new DaemonServer({
@@ -2361,7 +2350,7 @@ describe('DaemonServer', () => {
   });
 
   test('ntfy webhook rejects invalid ingress tokens', async () => {
-    const config = new ConfigManager();
+    const config = makeConfig();
     config.setDynamic('surfaces.ntfy.enabled', true);
     config.setDynamic('surfaces.ntfy.token', 'ntfy-test-token');
     daemon = new DaemonServer({
@@ -2390,7 +2379,7 @@ describe('DaemonServer', () => {
   });
 
   test('telegram and Google Chat webhook ingress create route bindings and queue agents', async () => {
-    const config = new ConfigManager();
+    const config = makeConfig();
     config.setDynamic('surfaces.telegram.enabled', true);
     config.setDynamic('surfaces.telegram.botUsername', 'goodvibes_bot');
     config.setDynamic('surfaces.googleChat.enabled', true);
@@ -2453,7 +2442,7 @@ describe('DaemonServer', () => {
   });
 
   test('signal, WhatsApp, and iMessage ingress paths queue work and expose verification flows', async () => {
-    const config = new ConfigManager();
+    const config = makeConfig();
     config.setDynamic('surfaces.signal.enabled', true);
     config.setDynamic('surfaces.signal.token', 'signal-bridge-token');
     config.setDynamic('surfaces.signal.account', '+15550001111');
@@ -2542,7 +2531,7 @@ describe('DaemonServer', () => {
   });
 
   test('msteams, BlueBubbles, Mattermost, and Matrix ingress paths queue work and persist route bindings', async () => {
-    const config = new ConfigManager();
+    const config = makeConfig();
     config.setDynamic('surfaces.msteams.enabled', true);
     config.setDynamic('surfaces.msteams.appId', 'teams-app-id');
     config.setDynamic('surfaces.msteams.appPassword', 'teams-app-password');
@@ -2651,8 +2640,8 @@ describe('DaemonServer', () => {
       daemon.enable({ daemon: true }, TEST_TOKEN);
       await daemon.start();
 
-      const broker = ApprovalBroker.getInstance();
-      const decisionPromise = broker.requestApproval({
+      const broker = runtimeServices.approvalBroker;
+      broker.requestApproval({
         request: {
           callId: 'call-slack-approval',
           tool: 'exec',
@@ -2670,7 +2659,6 @@ describe('DaemonServer', () => {
         sessionId: 'sess-slack-approval',
         routeId: 'route-slack-approval',
       });
-      await new Promise((resolve) => setTimeout(resolve, 5));
       const approval = broker.listApprovals().find((entry) => entry.callId === 'call-slack-approval');
       expect(approval).toBeDefined();
 
@@ -2698,9 +2686,9 @@ describe('DaemonServer', () => {
       expect(res.status).toBe(200);
       const body = await res.json() as { text: string };
       expect(body.text).toContain(`Approval approved: ${approval!.id}`);
-
-      const decision = await decisionPromise;
-      expect(decision.approved).toBe(true);
+      for (let i = 0; i < 50 && broker.getApproval(approval!.id)?.status !== 'approved'; i += 1) {
+        await new Promise((resolve) => setTimeout(resolve, 20));
+      }
       expect(broker.getApproval(approval!.id)?.status).toBe('approved');
     } finally {
       if (previousSigningSecret === undefined) {
@@ -2781,10 +2769,11 @@ describe('HttpListener', () => {
   let listener: HttpListener;
   let userAuth: UserAuthManager;
   let tempConfigDir: string;
+  let configDir: string;
 
   beforeEach(() => {
     tempConfigDir = mkdtempSync(join(tmpdir(), 'gv-listener-config-'));
-    ConfigManager.setTestMode(tempConfigDir);
+    configDir = join(tempConfigDir, '.goodvibes', 'tui');
     userAuth = new UserAuthManager({
       users: [{ username: 'admin', passwordHash: UserAuthManager.hashPassword('admin'), roles: ['admin'] }],
     });
@@ -2793,7 +2782,6 @@ describe('HttpListener', () => {
 
   afterEach(async () => {
     await listener.stop();
-    ConfigManager.setTestMode(undefined);
     rmSync(tempConfigDir, { recursive: true, force: true });
   });
 
@@ -2823,13 +2811,13 @@ describe('HttpListener', () => {
   });
 
   test('passes TLS options to Bun.serve when direct listener TLS is enabled', async () => {
-    const certDir = join(tempConfigDir, 'certs');
+    const certDir = join(tempConfigDir, '.goodvibes', 'certs');
     mkdirSync(certDir, { recursive: true });
     const certFile = join(certDir, 'fullchain.pem');
     const keyFile = join(certDir, 'privkey.pem');
     writeFileSync(certFile, 'CERT\n', 'utf-8');
     writeFileSync(keyFile, 'KEY\n', 'utf-8');
-    const config = new ConfigManager();
+    const config = new ConfigManager({ configDir, workingDir: tempConfigDir });
     config.set('httpListener.tls.mode', 'direct');
     let capturedOptions: Record<string, unknown> | null = null;
     const serveFactory = mock((options: unknown) => {

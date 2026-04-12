@@ -2,10 +2,13 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { _resetSecretsManagerForTesting } from '../../config/secrets.ts';
-import { _resetServiceRegistryForTesting } from '../../config/service-registry.ts';
-import { _resetSubscriptionManagerForTesting } from '../../config/subscriptions.ts';
-import { _resetProviderRegistryForTesting, getProviderRegistry } from '../../providers/registry.ts';
+import { ConfigManager } from '../../config/manager.ts';
+import { FavoritesStore } from '../../providers/favorites.ts';
+import { SubscriptionManager } from '../../config/subscriptions.ts';
+import { BenchmarkStore } from '../../providers/model-benchmarks.ts';
+import { ProviderCapabilityRegistry } from '../../providers/capabilities.ts';
+import { CacheHitTracker } from '../../providers/cache-strategy.ts';
+import { ProviderRegistry } from '../../providers/registry.ts';
 
 const CLEAN_ENV_KEYS = [
   'AWS_BEARER_TOKEN_BEDROCK',
@@ -27,6 +30,7 @@ describe('provider runtime expansion', () => {
   const originalHome = process.env.HOME;
   const originalEnv = new Map<string, string | undefined>();
   let tempHome = '';
+  let providerRegistry: ProviderRegistry;
 
   beforeEach(() => {
     tempHome = mkdtempSync(join(tmpdir(), 'gv-provider-expansion-'));
@@ -35,10 +39,18 @@ describe('provider runtime expansion', () => {
       originalEnv.set(key, process.env[key]);
       delete process.env[key];
     }
-    _resetSecretsManagerForTesting();
-    _resetServiceRegistryForTesting();
-    _resetSubscriptionManagerForTesting();
-    _resetProviderRegistryForTesting();
+    const configManager = new ConfigManager({ configDir: join(tempHome, '.goodvibes', 'tui') });
+    const subscriptionManager = new SubscriptionManager(join(tempHome, '.goodvibes', 'tui', 'subscriptions.json'));
+    const favoritesStore = new FavoritesStore({ dir: join(tempHome, '.goodvibes', 'tui') });
+    const benchmarkStore = new BenchmarkStore({ dir: join(tempHome, '.goodvibes', 'tui') });
+    providerRegistry = new ProviderRegistry({
+      configManager,
+      subscriptionManager,
+      capabilityRegistry: new ProviderCapabilityRegistry(),
+      cacheHitTracker: new CacheHitTracker(),
+      favoritesStore,
+      benchmarkStore,
+    });
   });
 
   afterEach(() => {
@@ -47,17 +59,12 @@ describe('provider runtime expansion', () => {
       if (original === undefined) delete process.env[key];
       else process.env[key] = original;
     }
-    _resetSecretsManagerForTesting();
-    _resetServiceRegistryForTesting();
-    _resetSubscriptionManagerForTesting();
-    _resetProviderRegistryForTesting();
     if (originalHome === undefined) delete process.env.HOME;
     else process.env.HOME = originalHome;
   });
 
   test('registers all approved builtin provider and gateway integrations', () => {
-    const registry = getProviderRegistry();
-    const providerIds = new Set(registry.listProviders().map((provider) => provider.name));
+    const providerIds = new Set(providerRegistry.listProviders().map((provider) => provider.name));
     for (const providerId of [
       'amazon-bedrock',
       'amazon-bedrock-mantle',
@@ -88,46 +95,43 @@ describe('provider runtime expansion', () => {
   });
 
   test('resolves builtin provider aliases through the registry', () => {
-    const registry = getProviderRegistry();
-    expect(registry.getRegistered('copilot').name).toBe('github-copilot');
-    expect(registry.getRegistered('azure-openai').name).toBe('microsoft-foundry');
-    expect(registry.getRegistered('dashscope').name).toBe('qwen');
-    expect(registry.getRegistered('volcano-engine').name).toBe('volcengine');
-    expect(registry.getRegistered('x-ai').name).toBe('xai');
-    expect(registry.getRegistered('z-ai').name).toBe('zai');
-    expect(registry.getRegistered('cloudflare-gateway').name).toBe('cloudflare-ai-gateway');
-    expect(registry.getRegistered('ai-gateway').name).toBe('vercel-ai-gateway');
+    expect(providerRegistry.getRegistered('copilot').name).toBe('github-copilot');
+    expect(providerRegistry.getRegistered('azure-openai').name).toBe('microsoft-foundry');
+    expect(providerRegistry.getRegistered('dashscope').name).toBe('qwen');
+    expect(providerRegistry.getRegistered('volcano-engine').name).toBe('volcengine');
+    expect(providerRegistry.getRegistered('x-ai').name).toBe('xai');
+    expect(providerRegistry.getRegistered('z-ai').name).toBe('zai');
+    expect(providerRegistry.getRegistered('cloudflare-gateway').name).toBe('cloudflare-ai-gateway');
+    expect(providerRegistry.getRegistered('ai-gateway').name).toBe('vercel-ai-gateway');
   });
 
   test('surfaces runtime auth and policy metadata for new custom and gateway providers', async () => {
-    const registry = getProviderRegistry();
-
-    const bedrockProvider = registry.getRegistered('amazon-bedrock');
+    const bedrockProvider = providerRegistry.getRegistered('amazon-bedrock');
     expect(bedrockProvider.describeRuntime).toBeDefined();
     const bedrockRuntime = await bedrockProvider.describeRuntime!();
     expect(bedrockRuntime.auth?.routes?.some((route) => route.route === 'anonymous')).toBe(true);
     expect(bedrockRuntime.policy?.streamProtocol).toBe('anthropic-sdk-stream');
 
-    const vertexProvider = registry.getRegistered('anthropic-vertex');
+    const vertexProvider = providerRegistry.getRegistered('anthropic-vertex');
     expect(vertexProvider.describeRuntime).toBeDefined();
     const vertexRuntime = await vertexProvider.describeRuntime!();
     expect(vertexRuntime.auth?.routes?.some((route) => route.route === 'anonymous')).toBe(true);
     expect(vertexRuntime.policy?.streamProtocol).toBe('anthropic-sdk-stream');
 
-    const copilotProvider = registry.getRegistered('github-copilot');
+    const copilotProvider = providerRegistry.getRegistered('github-copilot');
     expect(copilotProvider.describeRuntime).toBeDefined();
     const copilotRuntime = await copilotProvider.describeRuntime!();
     expect(copilotRuntime.auth?.envVars).toContain('GH_TOKEN');
     expect(copilotRuntime.models?.aliases).toContain('copilot');
 
-    const litellmProvider = registry.getRegistered('litellm');
+    const litellmProvider = providerRegistry.getRegistered('litellm');
     expect(litellmProvider.describeRuntime).toBeDefined();
     const litellmRuntime = await litellmProvider.describeRuntime!();
     expect(litellmRuntime.auth?.mode).toBe('anonymous');
     expect(litellmRuntime.auth?.configured).toBe(true);
     expect(litellmRuntime.auth?.routes?.some((route) => route.route === 'anonymous')).toBe(true);
 
-    const xaiProvider = registry.getRegistered('xai');
+    const xaiProvider = providerRegistry.getRegistered('xai');
     expect(xaiProvider.describeRuntime).toBeDefined();
     const xaiRuntime = await xaiProvider.describeRuntime!();
     expect(xaiRuntime.models?.defaultModel).toBe('grok-4');

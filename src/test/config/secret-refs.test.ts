@@ -8,8 +8,8 @@ import {
   resolveSecretRef,
   type SecretCommandRunner,
 } from '../../config/secret-refs.ts';
-import { SecretsManager, _resetSecretsManagerForTesting } from '../../config/secrets.ts';
-import { ServiceRegistry, _resetServiceRegistryForTesting } from '../../config/service-registry.ts';
+import { SecretsManager } from '../../config/secrets.ts';
+import { ServiceRegistry } from '../../config/service-registry.ts';
 
 function makeTmpDir(): string {
   const dir = join(tmpdir(), `gv-secret-refs-test-${process.pid}-${Math.random().toString(36).slice(2)}`);
@@ -26,8 +26,6 @@ describe('secret refs', () => {
 
   beforeEach(() => {
     tmpDir = makeTmpDir();
-    _resetSecretsManagerForTesting();
-    _resetServiceRegistryForTesting();
   });
 
   afterEach(() => {
@@ -36,8 +34,6 @@ describe('secret refs', () => {
     delete process.env.GV_VAULTWARDEN_SERVER;
     delete process.env.GV_BWS_TOKEN;
     rmSync(tmpDir, { recursive: true, force: true });
-    _resetSecretsManagerForTesting();
-    _resetServiceRegistryForTesting();
   });
 
   test('normalizes first-class provider refs', () => {

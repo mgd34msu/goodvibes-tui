@@ -17,6 +17,10 @@ import type { RuntimeStore } from './store/index.ts';
 import type { RuntimeEventBus } from './events/index.ts';
 import type { FeatureFlagManager } from './feature-flags/index.ts';
 import type { SessionSnapshot } from './session-persistence.ts';
+import type { RuntimeServices } from './services.ts';
+import type { PanelHealthMonitor } from './perf/panel-health-monitor.ts';
+import type { WorktreeRegistry } from './worktree/registry.ts';
+import type { SandboxSessionRegistry } from './sandbox/session-registry.ts';
 
 /**
  * Mutable runtime state that may be changed by slash commands or model-picker events.
@@ -41,6 +45,8 @@ export interface MutableRuntimeState {
 export interface BootstrapOptions {
   /** Override working directory (default: process.cwd()) */
   workingDir?: string;
+  /** Explicit app-owned config manager for this runtime instance. */
+  configManager?: import('../config/manager.ts').ConfigManager;
   /**
    * Callback invoked when the app should exit.
    * If provided, commandContext.exit is wired during bootstrap.
@@ -69,6 +75,11 @@ export interface RuntimeContext {
   store: RuntimeStore;
 
   /**
+   * App-scoped runtime services graph shared across adapters and shells.
+   */
+  services: RuntimeServices;
+
+  /**
    * Feature flag and kill-switch manager.
    * Gates runtime subsystems and release controls.
    */
@@ -87,8 +98,17 @@ export interface RuntimeContext {
 
   // ── Provider ────────────────────────────────────────────────────────
 
-  /** Global provider registry (singleton, imported directly in consumers). */
+  /** Shared provider registry owned by the runtime services graph. */
   providerRegistry: ProviderRegistry;
+
+  /** Shared panel-health monitor owned by the runtime services graph. */
+  panelHealthMonitor: PanelHealthMonitor;
+
+  /** Shared worktree registry owned by the runtime services graph. */
+  worktreeRegistry: WorktreeRegistry;
+
+  /** Shared sandbox session registry owned by the runtime services graph. */
+  sandboxSessionRegistry: SandboxSessionRegistry;
 
   // ── Infrastructure ──────────────────────────────────────────────────
 

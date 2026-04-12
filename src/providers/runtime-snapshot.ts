@@ -1,6 +1,6 @@
 import type { ProviderRuntimeMetadata } from './interface.ts';
-import { getCostFromCatalog } from './model-catalog.ts';
-import { getProviderRegistry, type ModelDefinition } from './registry.ts';
+import type { ModelDefinition, ProviderRegistry } from './registry.ts';
+import type { LLMProvider } from './interface.ts';
 
 export interface ProviderModelSnapshot {
   readonly id: string;
@@ -33,8 +33,11 @@ export interface ProviderUsageSnapshot {
   readonly usage: NonNullable<ProviderRuntimeMetadata['usage']>;
 }
 
-function toModelSnapshot(model: ModelDefinition): ProviderModelSnapshot {
-  const cost = getCostFromCatalog(model.id);
+function toModelSnapshot(
+  model: ModelDefinition,
+  providerRegistry: Pick<ProviderRegistry, 'getCostFromCatalog'>,
+): ProviderModelSnapshot {
+  const cost = providerRegistry.getCostFromCatalog(model.id);
   return {
     id: model.id,
     registryKey: model.registryKey,
@@ -54,9 +57,11 @@ function toModelSnapshot(model: ModelDefinition): ProviderModelSnapshot {
   };
 }
 
-async function buildSnapshotForProvider(providerId: string): Promise<ProviderRuntimeSnapshot | null> {
-  const providerRegistry = getProviderRegistry();
-  let provider;
+async function buildSnapshotForProvider(
+  providerRegistry: Pick<ProviderRegistry, 'getRegistered' | 'getCurrentModel' | 'listModels' | 'getCostFromCatalog'>,
+  providerId: string,
+): Promise<ProviderRuntimeSnapshot | null> {
+  let provider: LLMProvider;
   try {
     provider = providerRegistry.getRegistered(providerId);
   } catch {
@@ -73,7 +78,7 @@ async function buildSnapshotForProvider(providerId: string): Promise<ProviderRun
   const models = providerRegistry
     .listModels()
     .filter((model) => model.provider === providerId)
-    .map(toModelSnapshot);
+    .map((model) => toModelSnapshot(model, providerRegistry));
   return {
     providerId,
     active: currentModel.provider === providerId,
@@ -83,19 +88,25 @@ async function buildSnapshotForProvider(providerId: string): Promise<ProviderRun
   };
 }
 
-export async function listProviderRuntimeSnapshots(): Promise<readonly ProviderRuntimeSnapshot[]> {
-  const providerRegistry = getProviderRegistry();
-  const snapshots = await Promise.all(providerRegistry.listProviders().map((provider) => buildSnapshotForProvider(provider.name)));
+export async function listProviderRuntimeSnapshots(
+  providerRegistry: Pick<ProviderRegistry, 'listProviders' | 'getRegistered' | 'getCurrentModel' | 'listModels' | 'getCostFromCatalog'>,
+): Promise<readonly ProviderRuntimeSnapshot[]> {
+  const snapshots = await Promise.all(providerRegistry.listProviders().map((provider) => buildSnapshotForProvider(providerRegistry, provider.name)));
   return snapshots.filter((snapshot): snapshot is ProviderRuntimeSnapshot => snapshot != null);
 }
 
-export async function getProviderRuntimeSnapshot(providerId: string): Promise<ProviderRuntimeSnapshot | null> {
-  return buildSnapshotForProvider(providerId);
+export async function getProviderRuntimeSnapshot(
+  providerRegistry: Pick<ProviderRegistry, 'getRegistered' | 'getCurrentModel' | 'listModels' | 'getCostFromCatalog'>,
+  providerId: string,
+): Promise<ProviderRuntimeSnapshot | null> {
+  return buildSnapshotForProvider(providerRegistry, providerId);
 }
 
-export async function getProviderUsageSnapshot(providerId: string): Promise<ProviderUsageSnapshot | null> {
-  const providerRegistry = getProviderRegistry();
-  const snapshot = await buildSnapshotForProvider(providerId);
+export async function getProviderUsageSnapshot(
+  providerRegistry: Pick<ProviderRegistry, 'getRegistered' | 'getCurrentModel' | 'listModels' | 'getCostFromCatalog'>,
+  providerId: string,
+): Promise<ProviderUsageSnapshot | null> {
+  const snapshot = await buildSnapshotForProvider(providerRegistry, providerId);
   if (!snapshot) return null;
   const currentModel = providerRegistry.getCurrentModel();
   const usage = snapshot.runtime.usage ?? {

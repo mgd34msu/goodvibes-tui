@@ -1,6 +1,4 @@
 import type { InputToken } from '../core/tokenizer.ts';
-import { getPanelManager } from '../panels/panel-manager.ts';
-import { getKeybindingsManager } from './keybindings.ts';
 import type { BlockMeta, ConversationManager } from '../core/conversation.ts';
 import type { InputHistory } from './input-history.ts';
 import type { ContentPart } from '../providers/interface.ts';
@@ -9,8 +7,12 @@ import type { AutocompleteEngine } from './autocomplete.ts';
 import type { SelectionManager } from './selection.ts';
 import type { WrappedPromptInfo } from './handler-prompt-buffer.ts';
 import { cleanupMarkerRegistry, expandPrompt, findMarkerAtPos, registerPaste } from './handler-content-actions.ts';
+import type { PanelManager } from '../panels/panel-manager.ts';
+import type { KeybindingsManager } from './keybindings.ts';
 
 export type PanelFocusRouteState = {
+  panelManager: PanelManager;
+  keybindingsManager: KeybindingsManager;
   panelFocused: boolean;
   commandMode: boolean;
   searchActive: boolean;
@@ -33,7 +35,7 @@ export function handlePanelFocusToken(state: PanelFocusRouteState, token: InputT
     !state.searchActive &&
     !state.autocompleteActive
   ) {
-    const pm = getPanelManager();
+    const pm = state.panelManager;
     if (pm.isVisible() && pm.getAllOpen().length > 0) {
       if (panelFocused) {
         if (pm.isBottomPaneVisible()) {
@@ -59,7 +61,7 @@ export function handlePanelFocusToken(state: PanelFocusRouteState, token: InputT
       state.requestRender();
       return { handled: true, panelFocused };
     }
-    const kb = getKeybindingsManager();
+    const kb = state.keybindingsManager;
     if (kb.matches('panel-tab-next', token)) {
       state.cyclePanelTab('next');
       return { handled: true, panelFocused };
@@ -69,14 +71,14 @@ export function handlePanelFocusToken(state: PanelFocusRouteState, token: InputT
       return { handled: true, panelFocused };
     }
     if (kb.matches('panel-close-all', token)) {
-      const pm = getPanelManager();
+      const pm = state.panelManager;
       for (const p of pm.getAllOpen()) pm.close(p.id);
       panelFocused = false;
       state.requestRender();
       return { handled: true, panelFocused };
     }
     if (kb.matches('panel-close', token)) {
-      const pm = getPanelManager();
+      const pm = state.panelManager;
       const active = pm.getActivePanel();
       if (active) {
         pm.close(active.id);
@@ -87,7 +89,7 @@ export function handlePanelFocusToken(state: PanelFocusRouteState, token: InputT
       state.requestRender();
       return { handled: true, panelFocused };
     }
-    const activePanel = getPanelManager().getActive();
+    const activePanel = state.panelManager.getActive();
     if (activePanel?.handleInput) {
       const consumed = activePanel.handleInput(token.logicalName);
       if (consumed) {
@@ -104,7 +106,7 @@ export function handlePanelFocusToken(state: PanelFocusRouteState, token: InputT
       state.requestRender();
       return { handled: true, panelFocused };
     }
-    const activePanel = getPanelManager().getActive();
+    const activePanel = state.panelManager.getActive();
     if (activePanel?.handleInput) {
       for (const ch of token.value) {
         activePanel.handleInput(ch);

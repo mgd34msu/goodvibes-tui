@@ -13,8 +13,9 @@
 
 import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
 import { estimateConversationTokens } from '../../core/context-compaction.ts';
-import { getCatalog, type ModelCatalog, type CatalogModelEntry } from '../../providers/model-catalog.ts';
+import { createModelCatalog, type ModelCatalog, type CatalogModelEntry } from '../../providers/model-catalog.ts';
 import type { ProviderMessage } from '../../providers/interface.ts';
+import { createTestProviderRegistry } from '../helpers/test-managers.ts';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -62,35 +63,35 @@ describe('estimateConversationTokens (validation foundation)', () => {
 // ModelCatalog interface (getCatalog)
 // ---------------------------------------------------------------------------
 
-describe('getCatalog()', () => {
+describe('createModelCatalog()', () => {
   it('returns an object implementing ModelCatalog', () => {
-    const catalog = getCatalog();
+    const catalog = createModelCatalog(createTestProviderRegistry());
     expect(typeof catalog.getModel).toBe('function');
     expect(typeof catalog.findLargerContextModels).toBe('function');
   });
 
   it('getModel returns null for an unknown model ID', () => {
-    const catalog = getCatalog();
+    const catalog = createModelCatalog(createTestProviderRegistry());
     const result = catalog.getModel('totally-unknown-model-xyz-999');
     expect(result).toBeNull();
   });
 
   it('findLargerContextModels returns array (possibly empty) for large minContext', () => {
-    const catalog = getCatalog();
+    const catalog = createModelCatalog(createTestProviderRegistry());
     // Using a very large context window that likely has no alternatives
     const results = catalog.findLargerContextModels(10_000_000);
     expect(Array.isArray(results)).toBe(true);
   });
 
   it('findLargerContextModels respects limit parameter', () => {
-    const catalog = getCatalog();
+    const catalog = createModelCatalog(createTestProviderRegistry());
     // minContext = 0 should return many models; limit = 2 caps the result
     const results = catalog.findLargerContextModels(0, undefined, 2);
     expect(results.length).toBeLessThanOrEqual(2);
   });
 
   it('findLargerContextModels returns models sorted by context descending', () => {
-    const catalog = getCatalog();
+    const catalog = createModelCatalog(createTestProviderRegistry());
     const results = catalog.findLargerContextModels(0, undefined, 5);
     for (let i = 1; i < results.length; i++) {
       expect(results[i - 1].context).toBeGreaterThanOrEqual(results[i].context);
@@ -98,7 +99,7 @@ describe('getCatalog()', () => {
   });
 
   it('findLargerContextModels only includes models with context > minContext', () => {
-    const catalog = getCatalog();
+    const catalog = createModelCatalog(createTestProviderRegistry());
     const minContext = 100_000;
     const results = catalog.findLargerContextModels(minContext, undefined, 10);
     for (const model of results) {

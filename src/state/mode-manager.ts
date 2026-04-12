@@ -102,30 +102,15 @@ export const HITL_OPERATOR: HITLModeDefinition = {
 const HITL_PRESETS: HITLModeDefinition[] = [HITL_QUIET, HITL_BALANCED, HITL_OPERATOR];
 
 // ---------------------------------------------------------------------------
-// ModeManager singleton
+// ModeManager
 // ---------------------------------------------------------------------------
 
 export class ModeManager {
-  private static instance: ModeManager | undefined;
-
   private currentMode: ModePreset = 'default';
   private modes: ModeDefinition[] = [...BUILT_IN_MODES];
 
   private hitlMode: HITLMode = 'balanced';
   private domainOverrides: Map<string, DomainVerbosity> = new Map();
-
-  private constructor() {}
-
-  static getInstance(): ModeManager {
-    if (!ModeManager.instance) {
-      ModeManager.instance = new ModeManager();
-    }
-    return ModeManager.instance;
-  }
-
-  static resetInstance(): void {
-    ModeManager.instance = undefined;
-  }
 
   // -------------------------------------------------------------------------
   // Precision tool verbosity mode API

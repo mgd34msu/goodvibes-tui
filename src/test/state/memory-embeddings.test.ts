@@ -7,32 +7,27 @@ import {
   HASHED_MEMORY_EMBEDDING_PROVIDER,
   MemoryEmbeddingProviderRegistry,
 } from '../../state/index.ts';
-import { ConfigManager, _resetConfigManagerForTesting } from '../../config/index.ts';
+import { ConfigManager } from '../../config/manager.ts';
 
 describe('MemoryEmbeddingProviderRegistry', () => {
   let previousHome: string | undefined;
-  let previousTestMode: string | undefined;
+  let configManager: ConfigManager;
   let tempRoot = '';
 
   beforeEach(() => {
     previousHome = process.env.HOME;
-    previousTestMode = ConfigManager.getTestMode();
     tempRoot = mkdtempSync(join(tmpdir(), 'gv-memory-embeddings-'));
     process.env.HOME = tempRoot;
-    ConfigManager.setTestMode(join(tempRoot, '.goodvibes', 'tui'));
-    _resetConfigManagerForTesting();
+    configManager = new ConfigManager({ configDir: join(tempRoot, '.goodvibes', 'tui') });
   });
 
   afterEach(() => {
-    _resetConfigManagerForTesting();
-    ConfigManager.setTestMode(previousTestMode);
-    MemoryEmbeddingProviderRegistry.resetActiveForTesting();
     if (previousHome === undefined) delete process.env.HOME;
     else process.env.HOME = previousHome;
   });
 
   test('keeps hashed local embeddings as the default sqlite-vec-compatible provider', async () => {
-    const registry = new MemoryEmbeddingProviderRegistry();
+    const registry = new MemoryEmbeddingProviderRegistry({ configManager });
     const doctor = await registry.doctor();
     const providerIds = registry.list().map((provider) => provider.id);
 
@@ -62,7 +57,7 @@ describe('MemoryEmbeddingProviderRegistry', () => {
   });
 
   test('can register custom providers and switch the active provider', async () => {
-    const registry = new MemoryEmbeddingProviderRegistry();
+    const registry = new MemoryEmbeddingProviderRegistry({ configManager });
     registry.register({
       id: 'test-sync',
       label: 'Test Sync',

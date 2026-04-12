@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, mock, test } from 'bun:test';
 import { wireShellUiOpeners } from '../../shell/ui-openers.ts';
+import { createTestManagers } from '../helpers/test-managers.ts';
 
 describe('wireShellUiOpeners', () => {
   let commandContext: Record<string, unknown>;
@@ -7,8 +8,10 @@ describe('wireShellUiOpeners', () => {
   let panelManager: Record<string, unknown>;
   let conversation: Record<string, unknown>;
   let render: ReturnType<typeof mock>;
+  let testManagers = createTestManagers();
 
   beforeEach(() => {
+    testManagers = createTestManagers();
     commandContext = {};
     input = {
       panelFocused: false,
@@ -33,10 +36,12 @@ describe('wireShellUiOpeners', () => {
       input: input as never,
       panelManager: panelManager as never,
       conversation: conversation as never,
+      configManager: testManagers.configManager,
       providerRegistry: {} as never,
       runtime: {} as never,
       featureFlags: {} as never,
       mcpRegistry: {} as never,
+      subscriptionManager: testManagers.subscriptionManager,
       getConfiguredProviderIds: () => [],
       getPinned: async () => [],
       render,

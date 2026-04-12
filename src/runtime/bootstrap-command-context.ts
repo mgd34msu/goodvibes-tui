@@ -1,34 +1,84 @@
-import { configManager, getConfigSnapshot } from '../config/index.ts';
+import { getConfigSnapshot } from '../config/index.ts';
+import type { ConfigManager } from '../config/manager.ts';
 import type { ConversationManager } from '../core/conversation.ts';
-import { getPanelManager } from '../panels/panel-manager.ts';
+import type { PanelManager } from '../panels/panel-manager.ts';
 import type { ProviderRegistry } from '../providers/registry.ts';
 import type { MutableRuntimeState } from './context.ts';
 import type { CommandContext } from '../input/command-registry.ts';
+import type { KeybindingsManager } from '../input/keybindings.ts';
 import type { PermissionRequestHandler } from '../permissions/prompt.ts';
 import type { ToolRegistry } from '../tools/registry.ts';
 import type { ForensicsRegistry } from './forensics/index.ts';
 import type { PolicyRuntimeState } from './permissions/policy-runtime.ts';
-import { FileUndoManager } from '../state/file-undo.ts';
+import type { FileUndoManager } from '../state/file-undo.ts';
 import { logger } from '../utils/logger.ts';
 import type { McpRegistry } from '../mcp/registry.ts';
 import type { RuntimeStore } from '../runtime/store/index.ts';
 import type { MemoryRegistry } from '../state/memory-store.ts';
+import type { IntegrationHelperService } from './integration/helpers.ts';
+import type { AutomationManager } from '../automation/index.ts';
+import type { KnowledgeService } from '../knowledge/index.ts';
+import type { AgentManager } from '../tools/agent/index.ts';
+import type { ModeManager } from '../state/mode-manager.ts';
+import type { RemoteRunnerRegistry, RemoteSupervisor } from './remote/index.ts';
+import type { PluginManager } from '../plugins/manager.ts';
+import type { HookWorkbench } from '../hooks/workbench.ts';
+import type { PanelHealthMonitor } from './perf/panel-health-monitor.ts';
+import type { WorktreeRegistry } from './worktree/registry.ts';
+import type { SandboxSessionRegistry } from './sandbox/session-registry.ts';
+import type { RuntimeEventBus } from './events/index.ts';
 
 export type CreateBootstrapCommandContextOptions = {
+  configManager: ConfigManager;
   providerRegistry: ProviderRegistry;
   conversation: ConversationManager;
   runtime: MutableRuntimeState;
   requestRender: () => void;
+  keybindingsManager?: KeybindingsManager;
   requestPermission: PermissionRequestHandler;
   toolRegistry: ToolRegistry;
   mcpRegistry: McpRegistry;
   forensicsRegistry: ForensicsRegistry;
   policyRuntimeState: PolicyRuntimeState;
   runtimeStore: RuntimeStore;
+  runtimeBus?: RuntimeEventBus;
+  fileUndoManager: FileUndoManager;
   memoryRegistry?: MemoryRegistry;
+  integrationHelpers?: IntegrationHelperService;
+  automationManager?: AutomationManager;
+  knowledgeService?: KnowledgeService;
+  providerOptimizer?: import('../providers/optimizer.ts').ProviderOptimizer;
+  pluginManager?: PluginManager;
+  hookWorkbench?: HookWorkbench;
+  agentManager?: AgentManager;
+  modeManager?: ModeManager;
+  remoteRunnerRegistry?: RemoteRunnerRegistry;
+  remoteSupervisor?: RemoteSupervisor;
+  sessionManager?: import('../sessions/manager.ts').SessionManager;
+  profileManager?: import('../profiles/manager.ts').ProfileManager;
+  bookmarkManager?: import('../bookmarks/manager.ts').BookmarkManager;
+  favoritesStore?: import('../providers/favorites.ts').FavoritesStore;
+  benchmarkStore?: import('../providers/model-benchmarks.ts').BenchmarkStore;
+  subscriptionManager?: import('../config/subscriptions.ts').SubscriptionManager;
+  secretsManager?: import('../config/secrets.ts').SecretsManager;
+  serviceRegistry?: import('../config/service-registry.ts').ServiceRegistry;
+  localUserAuthManager?: import('../security/user-auth.ts').UserAuthManager;
+  tokenAuditor?: import('../security/token-audit.ts').ApiTokenAuditor;
+  replayEngine?: import('../core/deterministic-replay.ts').DeterministicReplayEngine;
+  webhookNotifier?: import('../integrations/webhooks.ts').WebhookNotifier;
+  sessionMemoryStore?: import('../core/session-memory.ts').SessionMemoryStore;
+  changeTracker?: import('../sessions/change-tracker.ts').SessionChangeTracker;
+  planManager?: import('../core/execution-plan.ts').ExecutionPlanManager;
+  adaptivePlanner?: import('../core/adaptive-planner.ts').AdaptivePlanner;
+  sessionOrchestration?: import('../sessions/orchestration/index.ts').CrossSessionTaskRegistry;
+  panelManager: PanelManager;
+  panelHealthMonitor: PanelHealthMonitor;
+  worktreeRegistry: WorktreeRegistry;
+  sandboxSessionRegistry: SandboxSessionRegistry;
   loadSystemPrompt: () => string;
   activatePlan: (planId: string, task: string) => void;
   completeModelSelectionSideEffect?: () => void;
+  sessionLineageTracker?: import('../core/session-lineage.ts').SessionLineageTracker;
 };
 
 function unwiredShellAction(name: string): never {
@@ -42,33 +92,69 @@ export function createBootstrapCommandContext(
 ): CommandContext {
   const {
     providerRegistry,
+    configManager,
     conversation,
     runtime,
     requestRender,
+    keybindingsManager,
     requestPermission,
     toolRegistry,
     mcpRegistry,
     forensicsRegistry,
     policyRuntimeState,
     runtimeStore,
+    runtimeBus,
+    fileUndoManager,
     memoryRegistry,
+    integrationHelpers,
+    automationManager,
+    knowledgeService,
+    providerOptimizer,
+    pluginManager,
+    hookWorkbench,
+    agentManager,
+    modeManager,
+    remoteRunnerRegistry,
+    remoteSupervisor,
+    sessionManager,
+    profileManager,
+    bookmarkManager,
+    favoritesStore,
+    benchmarkStore,
+    subscriptionManager,
+    secretsManager,
+    serviceRegistry,
+    localUserAuthManager,
+    tokenAuditor,
+    replayEngine,
+    webhookNotifier,
+    sessionMemoryStore,
+    sessionLineageTracker,
+    changeTracker,
+    planManager,
+    adaptivePlanner,
+    sessionOrchestration,
+    panelManager,
+    panelHealthMonitor,
+    worktreeRegistry,
+    sandboxSessionRegistry,
     loadSystemPrompt,
     activatePlan,
     completeModelSelectionSideEffect,
   } = options;
 
   const showPanel = (panelId: string, pane?: 'top' | 'bottom') => {
-    const pm = getPanelManager();
-    pm.open(panelId, pane);
-    pm.show();
+    panelManager.open(panelId, pane);
+    panelManager.show();
     requestRender();
   };
 
   const context: CommandContext = {
     providerRegistry,
     conversationManager: conversation,
-    config: getConfigSnapshot(),
+    config: getConfigSnapshot(configManager),
     configManager,
+    keybindingsManager,
     runtime,
     renderRequest: requestRender,
     submitInput: () => {
@@ -125,11 +211,13 @@ export function createBootstrapCommandContext(
     },
     reloadSystemPrompt: loadSystemPrompt,
     showPanel,
+    panelManager,
     toolRegistry,
     mcpRegistry,
-    fileUndoManager: FileUndoManager.getInstance(),
+    fileUndoManager,
     forensicsRegistry,
     policyRegistry: policyRuntimeState.getRegistry(),
+    policyRuntimeState,
     openForensicsPanel: () => {
       (context.showPanel ?? showPanel)('forensics');
     },
@@ -167,7 +255,39 @@ export function createBootstrapCommandContext(
       (context.showPanel ?? showPanel)('subscription');
     },
     runtimeStore,
+    runtimeBus,
     memoryRegistry,
+    integrationHelpers,
+    automationManager,
+    knowledgeService,
+    providerOptimizer,
+    pluginManager,
+    hookWorkbench,
+    agentManager,
+    modeManager,
+    remoteRunnerRegistry,
+    remoteSupervisor,
+    sessionManager,
+    profileManager,
+    bookmarkManager,
+    favoritesStore,
+    benchmarkStore,
+    subscriptionManager,
+    secretsManager,
+    serviceRegistry,
+    localUserAuthManager,
+    tokenAuditor,
+    replayEngine,
+    webhookNotifier,
+    sessionMemoryStore,
+    sessionLineageTracker,
+    changeTracker,
+    planManager,
+    adaptivePlanner,
+    sessionOrchestration,
+    panelHealthMonitor,
+    worktreeRegistry,
+    sandboxSessionRegistry,
   };
 
   return context;

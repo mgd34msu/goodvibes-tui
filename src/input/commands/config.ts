@@ -1,9 +1,9 @@
 import type { CommandRegistry } from '../command-registry.ts';
 import { CONFIG_SCHEMA, type ConfigKey } from '../../config/index.ts';
-import { getProfileManager } from '../../profiles/manager.ts';
 import { configSnapshotToProfileData, profileDataToConfigSnapshot } from '../../profiles/shape.ts';
 import { dirname, join, resolve } from 'node:path';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { requireProfileManager } from './runtime-services.ts';
 
 interface ConfigBundle {
   readonly schemaVersion: 'v1';
@@ -118,7 +118,7 @@ export function registerConfigCommand(registry: CommandRegistry): void {
       if (args[0] === 'profile') {
         const sub = args[1];
         const profileName = args[2];
-        const pm = getProfileManager();
+        const pm = requireProfileManager(ctx);
         const currentConfig = cm.getAll();
 
         if (!sub || sub === 'list') {

@@ -1,11 +1,11 @@
 /**
  * Phased wrapper for the fetch tool.
  *
- * Delegates entirely to the existing `fetchTool` singleton and adds the
+ * Delegates to a freshly constructed fetch tool instance and adds the
  * PhasedTool metadata required by the phased executor.
  */
 import { asPhasedTool } from '../../runtime/tools/adapter.ts';
-import { fetchTool } from './index.ts';
+import { createFetchTool } from './index.ts';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -27,8 +27,8 @@ const NETWORK_EXECUTE_TIMEOUT_MS = 30_000;
  * phaseTimeouts : `{ executing: 30000 }` — overrides the default timeout for
  *   the executing phase to allow for slow network responses.
  *
- * @returns A PhasedTool that delegates execution to `fetchTool`.
+ * @returns A PhasedTool that delegates execution to an owned fetch tool instance.
  */
 export function createPhasedFetchTool() {
-  return asPhasedTool(fetchTool, { category: 'network', cancellable: true, phaseTimeouts: { executing: NETWORK_EXECUTE_TIMEOUT_MS } });
+  return asPhasedTool(createFetchTool(), { category: 'network', cancellable: true, phaseTimeouts: { executing: NETWORK_EXECUTE_TIMEOUT_MS } });
 }

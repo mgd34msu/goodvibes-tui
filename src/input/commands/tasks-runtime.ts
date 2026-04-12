@@ -1,7 +1,7 @@
 import type { CommandRegistry } from '../command-registry.ts';
 import type { RuntimeTask, TaskLifecycleState } from '../../runtime/store/domains/tasks.ts';
-import { getPanelManager } from '../../panels/panel-manager.ts';
 import { reviewWorktreeAttachments } from '../../runtime/worktree/registry.ts';
+import { requirePanelManager } from './runtime-services.ts';
 
 function sortRuntimeTasks(tasks: RuntimeTask[]): RuntimeTask[] {
   const statusOrder: TaskLifecycleState[] = ['running', 'queued', 'blocked', 'failed', 'completed', 'cancelled'];
@@ -37,7 +37,7 @@ export function registerTasksRuntimeCommands(registry: CommandRegistry): void {
       if (args.length === 0) {
         if (ctx.showPanel) ctx.showPanel('tasks');
         else {
-          const panelManager = getPanelManager();
+          const panelManager = requirePanelManager(ctx);
           panelManager.open('tasks');
           panelManager.show();
           ctx.renderRequest();

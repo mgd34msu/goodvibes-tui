@@ -33,7 +33,7 @@ describe('ProfilePickerModal', () => {
     tmpDir = makeTmpDir();
     pm = new ProfileManager(join(tmpDir, 'profiles'));
     cm = new ConfigManager({ workingDir: tmpDir });
-    modal = new ProfilePickerModal();
+    modal = new ProfilePickerModal(pm);
   });
 
   afterEach(() => {

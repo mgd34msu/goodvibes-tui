@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { ServiceRegistry } from '../../config/service-registry.ts';
-import { _resetSubscriptionManagerForTesting, getSubscriptionManager } from '../../config/subscriptions.ts';
+import { SubscriptionManager } from '../../config/subscriptions.ts';
 import { ServicesPanel } from '../../panels/services-panel.ts';
 import type { Line } from '../../types/grid.ts';
 
@@ -20,6 +20,7 @@ describe('ServicesPanel', () => {
   let root: string;
   let filePath: string;
   let registry: ServiceRegistry;
+  let subscriptionManager: SubscriptionManager;
 
   beforeEach(() => {
     root = mkdtempSync(join(tmpdir(), 'gv-services-panel-'));
@@ -41,14 +42,13 @@ describe('ServicesPanel', () => {
     process.env.SLACK_WEBHOOK_URL = 'https://hooks.slack.test/example';
     process.env.SLACK_SIGNING_SECRET = 'secret';
     registry = new ServiceRegistry(filePath);
-    _resetSubscriptionManagerForTesting();
+    subscriptionManager = new SubscriptionManager();
   });
 
   afterEach(() => {
     delete process.env.SLACK_BOT_TOKEN;
     delete process.env.SLACK_WEBHOOK_URL;
     delete process.env.SLACK_SIGNING_SECRET;
-    _resetSubscriptionManagerForTesting();
     process.chdir(originalCwd);
     if (originalHome === undefined) delete process.env.HOME;
     else process.env.HOME = originalHome;
@@ -57,7 +57,7 @@ describe('ServicesPanel', () => {
   });
 
   test('renders configured service details', async () => {
-    const panel = new ServicesPanel(registry);
+    const panel = new ServicesPanel(registry, subscriptionManager);
     await new Promise((resolve) => setTimeout(resolve, 0));
     const text = linesText(panel.render(120, 14));
     expect(text).toContain('Service Control Room');
@@ -72,7 +72,7 @@ describe('ServicesPanel', () => {
     globalThis.fetch = fetchMock as unknown as typeof fetch;
 
     try {
-      const panel = new ServicesPanel(registry);
+      const panel = new ServicesPanel(registry, subscriptionManager);
       await new Promise((resolve) => setTimeout(resolve, 0));
       expect(panel.handleInput('t')).toBe(true);
       await new Promise((resolve) => setTimeout(resolve, 0));
@@ -101,8 +101,8 @@ describe('ServicesPanel', () => {
         },
       },
     }), 'utf-8');
-    _resetSubscriptionManagerForTesting();
-    getSubscriptionManager().saveSubscription({
+    subscriptionManager = new SubscriptionManager();
+    subscriptionManager.saveSubscription({
       provider: 'openai',
       accessToken: 'oauth-openai-token',
       tokenType: 'Bearer',
@@ -112,7 +112,7 @@ describe('ServicesPanel', () => {
       updatedAt: Date.now(),
     });
     registry = new ServiceRegistry(filePath);
-    const panel = new ServicesPanel(registry);
+    const panel = new ServicesPanel(registry, subscriptionManager);
     await new Promise((resolve) => setTimeout(resolve, 0));
     const text = linesText(panel.render(120, 14));
     expect(text).toContain('oauth(active)');

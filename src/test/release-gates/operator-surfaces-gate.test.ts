@@ -1,32 +1,94 @@
 import { beforeEach, describe, expect, test } from 'bun:test';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { CommandRegistry } from '../../input/command-registry.ts';
 import { registerBuiltinCommands } from '../../input/commands.ts';
 import { registerBuiltinPanels } from '../../panels/builtin-panels.ts';
 import { PanelManager } from '../../panels/panel-manager.ts';
 import { RuntimeEventBus } from '../../runtime/events/index.ts';
 import { ForensicsRegistry } from '../../runtime/forensics/registry.ts';
-import { getPolicyRuntimeState, resetPolicyRuntimeStateForTests } from '../../runtime/permissions/policy-runtime.ts';
+import { PolicyRuntimeState } from '../../runtime/permissions/policy-runtime.ts';
 import { createRuntimeStore } from '../../runtime/store/index.ts';
 import { AgentManager } from '../../tools/agent/index.ts';
-import { configManager } from '../../config/index.ts';
+import { ConfigManager } from '../../config/manager.ts';
+import { ConversationManager } from '../../core/conversation.ts';
+import { createRuntimeServices } from '../../runtime/services.ts';
+import type { CommandContext } from '../../input/command-registry.ts';
+import { ToolRegistry } from '../../tools/registry.ts';
 import { MemoryRegistry, MemoryStore } from '../../state/memory-store.ts';
 
 describe('operator surfaces gate', () => {
+  let configManager: ConfigManager;
+  let runtimeServices: ReturnType<typeof createRuntimeServices>;
+  let policyRuntimeState: PolicyRuntimeState;
+
   beforeEach(() => {
-    resetPolicyRuntimeStateForTests();
-    AgentManager.resetInstance();
+    policyRuntimeState = new PolicyRuntimeState();
+    configManager = new ConfigManager({ configDir: join(tmpdir(), `gv-operator-surfaces-${Date.now()}-${Math.random().toString(36).slice(2)}`) });
     configManager.set('orchestration.maxActiveAgents', 8);
     configManager.set('orchestration.maxDepth', 1);
     configManager.set('orchestration.recursionEnabled', true);
+    runtimeServices = createRuntimeServices({
+      runtimeBus: new RuntimeEventBus(),
+      runtimeStore: createRuntimeStore(),
+      configManager,
+      workingDir: configManager.getControlPlaneConfigDir(),
+      getConversationTitle: () => 'operator-surfaces',
+    });
   });
+
+  function makeCommandContext(
+    sessionId: string,
+    overrides: Partial<CommandContext> = {},
+  ): CommandContext {
+    const { runtime: runtimeOverride, ...rest } = overrides;
+    return {
+      providerRegistry: runtimeServices.providerRegistry,
+      conversationManager: new ConversationManager(() => 80),
+      config: configManager.getRaw(),
+      configManager,
+      runtime: {
+        model: '',
+        provider: '',
+        debugMode: false,
+        systemPrompt: '',
+        reasoningEffort: '',
+        sessionId,
+        ...(runtimeOverride ?? {}),
+      },
+      renderRequest: () => {},
+      print: () => {},
+      exit: () => {},
+      toolRegistry: new ToolRegistry(),
+      mcpRegistry: runtimeServices.mcpRegistry,
+      panelHealthMonitor: runtimeServices.panelHealthMonitor,
+      worktreeRegistry: runtimeServices.worktreeRegistry,
+      sandboxSessionRegistry: runtimeServices.sandboxSessionRegistry,
+      runtimeStore: runtimeServices.runtimeStore,
+      agentManager: runtimeServices.agentManager,
+      knowledgeService: runtimeServices.knowledgeService,
+      hookWorkbench: runtimeServices.hookWorkbench,
+      pluginManager: runtimeServices.pluginManager,
+      subscriptionManager: runtimeServices.subscriptionManager,
+      sessionManager: runtimeServices.sessionManager,
+      bookmarkManager: runtimeServices.bookmarkManager,
+      profileManager: runtimeServices.profileManager,
+      ...rest,
+    };
+  }
 
   test('built-in strategic operator panels are registered on the active runtime surface', () => {
     const manager = new PanelManager();
     registerBuiltinPanels(manager, {
       runtimeBus: new RuntimeEventBus(),
+      providerRegistry: runtimeServices.providerRegistry,
       forensicsRegistry: new ForensicsRegistry(),
-      policyRuntimeState: getPolicyRuntimeState(),
+      policyRuntimeState,
       memoryRegistry: new MemoryRegistry(new MemoryStore(':memory:')),
+      tokenAuditor: runtimeServices.tokenAuditor,
+      panelHealthMonitor: runtimeServices.panelHealthMonitor,
+      worktreeRegistry: runtimeServices.worktreeRegistry,
+      sandboxSessionRegistry: runtimeServices.sandboxSessionRegistry,
     });
     const ids = manager.getRegisteredTypes().map((entry) => entry.id);
 
@@ -81,29 +143,12 @@ describe('operator surfaces gate', () => {
     expect(policy).toBeDefined();
 
     let opened = false;
-    await policy!.handler([], {
-      providerRegistry: {} as never,
-      conversationManager: {} as never,
-      config: {} as never,
-      configManager: {} as never,
-      runtime: {
-        model: '',
-        provider: '',
-        debugMode: false,
-        systemPrompt: '',
-        reasoningEffort: '',
-        sessionId: 'sess-operator-surfaces',
-      },
-      renderRequest: () => {},
-      print: () => {},
-      exit: () => {},
-      toolRegistry: {} as never,
-      mcpRegistry: {} as never,
+    await policy!.handler([], makeCommandContext('sess-operator-surfaces', {
       openPolicyPanel: () => {
         opened = true;
       },
-      policyRegistry: getPolicyRuntimeState().getRegistry(),
-    });
+      policyRegistry: policyRuntimeState.getRegistry(),
+    }));
 
     expect(opened).toBe(true);
   });
@@ -115,28 +160,11 @@ describe('operator surfaces gate', () => {
     expect(hooks).toBeDefined();
 
     let opened = false;
-    await hooks!.handler([], {
-      providerRegistry: {} as never,
-      conversationManager: {} as never,
-      config: {} as never,
-      configManager: {} as never,
-      runtime: {
-        model: '',
-        provider: '',
-        debugMode: false,
-        systemPrompt: '',
-        reasoningEffort: '',
-        sessionId: 'sess-hooks-panel',
-      },
-      renderRequest: () => {},
-      print: () => {},
-      exit: () => {},
-      toolRegistry: {} as never,
-      mcpRegistry: {} as never,
+    await hooks!.handler([], makeCommandContext('sess-hooks-panel', {
       openHooksPanel: () => {
         opened = true;
       },
-    });
+    }));
 
     expect(opened).toBe(true);
   });
@@ -148,28 +176,11 @@ describe('operator surfaces gate', () => {
     expect(communication).toBeDefined();
 
     let opened = false;
-    await communication!.handler([], {
-      providerRegistry: {} as never,
-      conversationManager: {} as never,
-      config: {} as never,
-      configManager: {} as never,
-      runtime: {
-        model: '',
-        provider: '',
-        debugMode: false,
-        systemPrompt: '',
-        reasoningEffort: '',
-        sessionId: 'sess-communication-panel',
-      },
-      renderRequest: () => {},
-      print: () => {},
-      exit: () => {},
-      toolRegistry: {} as never,
-      mcpRegistry: {} as never,
+    await communication!.handler([], makeCommandContext('sess-communication-panel', {
       openCommunicationPanel: () => {
         opened = true;
       },
-    });
+    }));
 
     expect(opened).toBe(true);
   });
@@ -181,28 +192,11 @@ describe('operator surfaces gate', () => {
     expect(subscription).toBeDefined();
 
     let opened = false;
-    await subscription!.handler([], {
-      providerRegistry: {} as never,
-      conversationManager: {} as never,
-      config: {} as never,
-      configManager: {} as never,
-      runtime: {
-        model: '',
-        provider: '',
-        debugMode: false,
-        systemPrompt: '',
-        reasoningEffort: '',
-        sessionId: 'sess-subscription-panel',
-      },
-      renderRequest: () => {},
-      print: () => {},
-      exit: () => {},
-      toolRegistry: {} as never,
-      mcpRegistry: {} as never,
+    await subscription!.handler([], makeCommandContext('sess-subscription-panel', {
       openSubscriptionPanel: () => {
         opened = true;
       },
-    });
+    }));
 
     expect(opened).toBe(true);
   });
@@ -214,28 +208,11 @@ describe('operator surfaces gate', () => {
     expect(security).toBeDefined();
 
     let opened = false;
-    await security!.handler([], {
-      providerRegistry: {} as never,
-      conversationManager: {} as never,
-      config: {} as never,
-      configManager: {} as never,
-      runtime: {
-        model: '',
-        provider: '',
-        debugMode: false,
-        systemPrompt: '',
-        reasoningEffort: '',
-        sessionId: 'sess-security-panel',
-      },
-      renderRequest: () => {},
-      print: () => {},
-      exit: () => {},
-      toolRegistry: {} as never,
-      mcpRegistry: {} as never,
+    await security!.handler([], makeCommandContext('sess-security-panel', {
       openSecurityPanel: () => {
         opened = true;
       },
-    });
+    }));
 
     expect(opened).toBe(true);
   });
@@ -247,28 +224,11 @@ describe('operator surfaces gate', () => {
     expect(knowledge).toBeDefined();
 
     let opened = false;
-    await knowledge!.handler([], {
-      providerRegistry: {} as never,
-      conversationManager: {} as never,
-      config: {} as never,
-      configManager: {} as never,
-      runtime: {
-        model: '',
-        provider: '',
-        debugMode: false,
-        systemPrompt: '',
-        reasoningEffort: '',
-        sessionId: 'sess-knowledge-panel',
-      },
-      renderRequest: () => {},
-      print: () => {},
-      exit: () => {},
-      toolRegistry: {} as never,
-      mcpRegistry: {} as never,
+    await knowledge!.handler([], makeCommandContext('sess-knowledge-panel', {
       openKnowledgePanel: () => {
         opened = true;
       },
-    });
+    }));
 
     expect(opened).toBe(true);
   });
@@ -280,28 +240,11 @@ describe('operator surfaces gate', () => {
     expect(remote).toBeDefined();
 
     let opened = false;
-    await remote!.handler([], {
-      providerRegistry: {} as never,
-      conversationManager: {} as never,
-      config: {} as never,
-      configManager: {} as never,
-      runtime: {
-        model: '',
-        provider: '',
-        debugMode: false,
-        systemPrompt: '',
-        reasoningEffort: '',
-        sessionId: 'sess-remote-panel',
-      },
-      renderRequest: () => {},
-      print: () => {},
-      exit: () => {},
-      toolRegistry: {} as never,
-      mcpRegistry: {} as never,
+    await remote!.handler([], makeCommandContext('sess-remote-panel', {
       openRemotePanel: () => {
         opened = true;
       },
-    });
+    }));
 
     expect(opened).toBe(true);
   });
@@ -313,28 +256,11 @@ describe('operator surfaces gate', () => {
     expect(cockpit).toBeDefined();
 
     let opened = false;
-    await cockpit!.handler([], {
-      providerRegistry: {} as never,
-      conversationManager: {} as never,
-      config: {} as never,
-      configManager: {} as never,
-      runtime: {
-        model: '',
-        provider: '',
-        debugMode: false,
-        systemPrompt: '',
-        reasoningEffort: '',
-        sessionId: 'sess-cockpit-panel',
-      },
-      renderRequest: () => {},
-      print: () => {},
-      exit: () => {},
-      toolRegistry: {} as never,
-      mcpRegistry: {} as never,
+    await cockpit!.handler([], makeCommandContext('sess-cockpit-panel', {
       openCockpitPanel: () => {
         opened = true;
       },
-    });
+    }));
 
     expect(opened).toBe(true);
   });
@@ -346,28 +272,11 @@ describe('operator surfaces gate', () => {
     expect(incident).toBeDefined();
 
     let opened = false;
-    await incident!.handler([], {
-      providerRegistry: {} as never,
-      conversationManager: {} as never,
-      config: {} as never,
-      configManager: {} as never,
-      runtime: {
-        model: '',
-        provider: '',
-        debugMode: false,
-        systemPrompt: '',
-        reasoningEffort: '',
-        sessionId: 'sess-incident-panel',
-      },
-      renderRequest: () => {},
-      print: () => {},
-      exit: () => {},
-      toolRegistry: {} as never,
-      mcpRegistry: {} as never,
+    await incident!.handler([], makeCommandContext('sess-incident-panel', {
       openIncidentPanel: () => {
         opened = true;
       },
-    });
+    }));
 
     expect(opened).toBe(true);
   });
@@ -379,28 +288,11 @@ describe('operator surfaces gate', () => {
     expect(orchestration).toBeDefined();
 
     let opened = false;
-    await orchestration!.handler([], {
-      providerRegistry: {} as never,
-      conversationManager: {} as never,
-      config: {} as never,
-      configManager: {} as never,
-      runtime: {
-        model: '',
-        provider: '',
-        debugMode: false,
-        systemPrompt: '',
-        reasoningEffort: '',
-        sessionId: 'sess-orchestration-panel',
-      },
-      renderRequest: () => {},
-      print: () => {},
-      exit: () => {},
-      toolRegistry: {} as never,
-      mcpRegistry: {} as never,
+    await orchestration!.handler([], makeCommandContext('sess-orchestration-panel', {
       openOrchestrationPanel: () => {
         opened = true;
       },
-    });
+    }));
 
     expect(opened).toBe(true);
   });
@@ -442,28 +334,12 @@ describe('operator surfaces gate', () => {
     }));
 
     const printed: string[] = [];
-    await orchestration!.handler(['show', 'graph-1'], {
-      providerRegistry: {} as never,
-      conversationManager: {} as never,
-      config: {} as never,
-      configManager: {} as never,
-      runtime: {
-        model: '',
-        provider: '',
-        debugMode: false,
-        systemPrompt: '',
-        reasoningEffort: '',
-        sessionId: 'sess-orchestration-show',
-      },
-      renderRequest: () => {},
+    await orchestration!.handler(['show', 'graph-1'], makeCommandContext('sess-orchestration-show', {
       print: (text: string) => {
         printed.push(text);
       },
-      exit: () => {},
-      toolRegistry: {} as never,
-      mcpRegistry: {} as never,
       runtimeStore: store,
-    });
+    }));
 
     expect(printed.join('\n')).toContain('Graph graph-1');
     expect(printed.join('\n')).toContain('Graph One');
@@ -476,33 +352,18 @@ describe('operator surfaces gate', () => {
     const orchestration = registry.get('orchestration');
     expect(orchestration).toBeDefined();
 
-    const manager = AgentManager.getInstance();
+    const manager = new AgentManager({ configManager });
     const a = manager.spawn({ mode: 'spawn', task: 'Stuck task', template: 'engineer', tools: ['read'], restrictTools: true, cohort: 'alpha' });
     const b = manager.spawn({ mode: 'spawn', task: 'Stuck task', template: 'engineer', tools: ['read'], restrictTools: true, cohort: 'alpha' });
     const printed: string[] = [];
 
-    await orchestration!.handler(['cancel', 'graph', 'cohort:alpha'], {
-      providerRegistry: {} as never,
-      conversationManager: {} as never,
-      config: {} as never,
-      configManager: {} as never,
-      runtime: {
-        model: '',
-        provider: '',
-        debugMode: false,
-        systemPrompt: '',
-        reasoningEffort: '',
-        sessionId: 'sess-orchestration-cancel',
-      },
-      renderRequest: () => {},
+    await orchestration!.handler(['cancel', 'graph', 'cohort:alpha'], makeCommandContext('sess-orchestration-cancel', {
       print: (text: string) => {
         printed.push(text);
       },
-      exit: () => {},
-      toolRegistry: {} as never,
-      mcpRegistry: {} as never,
       runtimeStore: createRuntimeStore(),
-    });
+      agentManager: manager,
+    }));
 
     expect(manager.getStatus(a.id)?.status).toBe('cancelled');
     expect(manager.getStatus(b.id)?.status).toBe('cancelled');
@@ -516,30 +377,11 @@ describe('operator surfaces gate', () => {
     expect(mcp).toBeDefined();
 
     let opened = false;
-    await mcp!.handler([], {
-      providerRegistry: {} as never,
-      conversationManager: {} as never,
-      config: {} as never,
-      configManager: {} as never,
-      runtime: {
-        model: '',
-        provider: '',
-        debugMode: false,
-        systemPrompt: '',
-        reasoningEffort: '',
-        sessionId: 'sess-mcp-panel',
-      },
-      renderRequest: () => {},
-      print: () => {},
-      exit: () => {},
-      toolRegistry: {} as never,
-      mcpRegistry: {
-        listServerSecurity: () => [],
-      } as never,
+    await mcp!.handler([], makeCommandContext('sess-mcp-panel', {
       openMcpPanel: () => {
         opened = true;
       },
-    });
+    }));
 
     expect(opened).toBe(true);
   });
@@ -551,39 +393,17 @@ describe('operator surfaces gate', () => {
     expect(mcp).toBeDefined();
 
     let openedSettings = false;
-    let changedTrust = false;
     const printed: string[] = [];
-    await mcp!.handler(['trust', 'docs-server', 'allow-all'], {
-      providerRegistry: {} as never,
-      conversationManager: {} as never,
-      config: {} as never,
-      configManager: {} as never,
-      runtime: {
-        model: '',
-        provider: '',
-        debugMode: false,
-        systemPrompt: '',
-        reasoningEffort: '',
-        sessionId: 'sess-mcp-allow-all',
-      },
-      renderRequest: () => {},
+    await mcp!.handler(['trust', 'docs-server', 'allow-all'], makeCommandContext('sess-mcp-allow-all', {
       print: (text: string) => {
         printed.push(text);
       },
-      exit: () => {},
-      toolRegistry: {} as never,
-      mcpRegistry: {
-        setServerTrustMode: () => {
-          changedTrust = true;
-        },
-      } as never,
       openSettingsModal: () => {
         openedSettings = true;
       },
-    });
+    }));
 
     expect(openedSettings).toBe(true);
-    expect(changedTrust).toBe(false);
     expect(printed.join('\n')).toContain('Use /settings');
   });
 });

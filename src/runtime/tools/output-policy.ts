@@ -1,5 +1,5 @@
 import type { ToolResult } from '../../types/tools.ts';
-import { overflowHandler } from '../../tools/shared/overflow.ts';
+import { OverflowHandler } from '../../tools/shared/overflow.ts';
 import type { SpillBackendType } from '../../tools/shared/overflow.ts';
 
 // ─── Tool Class ─────────────────────────────────────────────────────────────
@@ -242,6 +242,7 @@ function truncate(content: string, maxBytes: number, mode: ToolOutputPolicy['tru
 export function applyOutputPolicy(
   result: ToolResult,
   policy: ToolOutputPolicy,
+  overflowHandler: OverflowHandler,
 ): { result: ToolResultWithAudit; audit: OutputPolicyResult } {
   const output = typeof result.output === 'string' ? result.output : '';
   const encoder = new TextEncoder();

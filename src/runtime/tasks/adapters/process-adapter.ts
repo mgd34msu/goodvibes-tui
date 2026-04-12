@@ -49,9 +49,9 @@ export class ProcessTaskAdapter {
 
   constructor(
     private readonly _store: RuntimeStore,
-    manager?: ProcessManager,
+    manager: ProcessManager,
   ) {
-    this._manager = manager ?? ProcessManager.getInstance();
+    this._manager = manager;
     this._dispatch = createDomainDispatch(_store);
   }
 

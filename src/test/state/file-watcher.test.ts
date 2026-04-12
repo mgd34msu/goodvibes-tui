@@ -6,6 +6,7 @@ import { FileWatcher } from '../../state/file-watcher.ts';
 import { FileStateCache } from '../../state/file-cache.ts';
 import { ProjectIndex } from '../../state/project-index.ts';
 import { HookDispatcher } from '../../hooks/dispatcher.ts';
+import { getTestProjectIndex, resetTestProjectIndexes } from '../helpers/runtime-services.ts';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -31,12 +32,12 @@ describe('FileWatcher', () => {
   beforeEach(() => {
     tmpDir = makeTmpDir();
     fileCache = new FileStateCache();
-    ProjectIndex._resetInstance();
-    projectIndex = ProjectIndex.getInstance(tmpDir);
+    resetTestProjectIndexes();
+    projectIndex = getTestProjectIndex(tmpDir);
   });
 
   afterEach(() => {
-    ProjectIndex._resetInstance();
+    resetTestProjectIndexes();
     try { rmSync(tmpDir, { recursive: true, force: true }); } catch { /* ignore */ }
   });
 

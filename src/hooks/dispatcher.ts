@@ -2,9 +2,11 @@ import { readFileSync, statSync } from 'fs';
 import type { HookDefinition, HookChain, HookEvent, HookResult } from './types.ts';
 import { matchesEventPath, matchesMatcher } from './matcher.ts';
 import { getHookPointContract } from './contracts.ts';
-import { getHookActivityTracker } from './activity.ts';
+import { HookActivityTracker } from './activity.ts';
 import { logger } from '../utils/logger.ts';
 import type { HooksConfig } from './types.ts';
+import type { AgentManager } from '../tools/agent/index.ts';
+import type { ToolLLM } from '../config/tool-llm.ts';
 import * as commandRunner from './runners/command.ts';
 import * as promptRunner from './runners/prompt.ts';
 import * as agentRunner from './runners/agent.ts';
@@ -13,14 +15,23 @@ import * as tsRunner from './runners/typescript.ts';
 import { fireTriggers } from '../workflow/trigger-executor.ts';
 import type { TriggerManagerLike } from '../workflow/trigger-executor.ts';
 
+type HookRunnerDeps = {
+  readonly agentManager?: Pick<AgentManager, 'spawn' | 'getStatus' | 'cancel'>;
+  readonly toolLLM?: Pick<ToolLLM, 'chat'>;
+};
+
 /** Global timeout: if cumulative hook time exceeds this, skip remaining */
 const GLOBAL_TIMEOUT_MS = 120_000;
 
-function runHook(hook: HookDefinition, event: HookEvent): Promise<HookResult> {
+function runHook(hook: HookDefinition, event: HookEvent, deps: HookRunnerDeps): Promise<HookResult> {
   switch (hook.type) {
     case 'command': return commandRunner.run(hook, event);
-    case 'prompt': return promptRunner.run(hook, event);
-    case 'agent': return agentRunner.run(hook, event);
+    case 'prompt': return promptRunner.run(hook, event, deps.toolLLM ?? null);
+    case 'agent':
+      if (!deps.agentManager) {
+        return Promise.resolve({ ok: false, error: 'agent hook runner is not configured in this runtime' });
+      }
+      return agentRunner.run(hook, event, deps.agentManager);
     case 'http': return httpRunner.run(hook, event);
     case 'ts': return tsRunner.run(hook, event);
     default:
@@ -32,6 +43,13 @@ export class HookDispatcher {
   private hooks = new Map<string, HookDefinition[]>();
   private chains: HookChain[] = [];
   private triggerManager: TriggerManagerLike | null = null;
+  private readonly runnerDeps: HookRunnerDeps;
+  private readonly activityTracker: HookActivityTracker;
+
+  constructor(runnerDeps: HookRunnerDeps = {}, activityTracker: HookActivityTracker = new HookActivityTracker()) {
+    this.runnerDeps = runnerDeps;
+    this.activityTracker = activityTracker;
+  }
 
   /** Attach a TriggerManager so hook events automatically fire matching triggers. */
   setTriggerManager(tm: TriggerManagerLike | null): void {
@@ -196,9 +214,9 @@ export class HookDispatcher {
       // Async hooks fire and forget
       if (hook.async) {
         const asyncStart = Date.now();
-        runHook(hook, event)
+        runHook(hook, event, this.runnerDeps)
           .then((result) => {
-            getHookActivityTracker().record(event, {
+            this.activityTracker.record(event, {
               pattern,
               hookName: hook.name,
               hookType: hook.type,
@@ -213,7 +231,7 @@ export class HookDispatcher {
               path: event.path,
               error: message,
             });
-            getHookActivityTracker().record(event, {
+            this.activityTracker.record(event, {
               pattern,
               hookName: hook.name,
               hookType: hook.type,
@@ -229,7 +247,7 @@ export class HookDispatcher {
       let result: HookResult;
       const hookStart = Date.now();
       try {
-        result = await runHook(hook, event);
+        result = await runHook(hook, event, this.runnerDeps);
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
         logger.error('HookDispatcher: hook threw unexpectedly', {
@@ -238,7 +256,7 @@ export class HookDispatcher {
         });
         result = { ok: false, error: message };
       }
-      getHookActivityTracker().record(event, {
+      this.activityTracker.record(event, {
         pattern,
         hookName: hook.name,
         hookType: hook.type,

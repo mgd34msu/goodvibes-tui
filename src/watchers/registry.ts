@@ -126,8 +126,6 @@ function sourceStatusFor(record: WatcherRecord, ts = now()): {
 }
 
 export class WatcherRegistry {
-  private static instance: WatcherRegistry | null = null;
-
   private readonly watchers = new Map<string, RegisteredWatcher>();
   private readonly timers = new Map<string, ReturnType<typeof setInterval>>();
   private readonly inFlight = new Set<string>();
@@ -138,21 +136,6 @@ export class WatcherRegistry {
 
   constructor(options: WatcherRegistryOptions = {}) {
     this.storePath = resolveWatcherStorePath(options.storePath);
-  }
-
-  static getInstance(): WatcherRegistry {
-    if (!WatcherRegistry.instance) {
-      WatcherRegistry.instance = new WatcherRegistry();
-    }
-    return WatcherRegistry.instance;
-  }
-
-  static resetInstance(): void {
-    if (!WatcherRegistry.instance) return;
-    for (const id of WatcherRegistry.instance.timers.keys()) {
-      WatcherRegistry.instance.stopWatcher(id, 'reset');
-    }
-    WatcherRegistry.instance = null;
   }
 
   attachRuntime(config: {

@@ -2,8 +2,9 @@ import { describe, expect, test } from 'bun:test';
 import { createRuntimeStore } from '../../runtime/store/index.ts';
 import { RemotePanel } from '../../panels/remote-panel.ts';
 import type { Line } from '../../types/grid.ts';
-import { AgentManager } from '../../tools/agent/index.ts';
-import { _resetRemoteRunnerRegistryForTesting, getRemoteRunnerRegistry } from '../../runtime/remote/index.ts';
+import { RemoteRunnerRegistry, RemoteSupervisor } from '../../runtime/remote/index.ts';
+import { createDefaultUiRuntimeServices } from '../helpers/ui-services.ts';
+import { getTestAgentManager, resetTestRuntimeServices } from '../helpers/runtime-services.ts';
 
 function linesText(lines: Line[]): string {
   return lines
@@ -12,11 +13,22 @@ function linesText(lines: Line[]): string {
     .join('\n');
 }
 
+function createRemotePanel(
+  store?: ReturnType<typeof createRuntimeStore>,
+  remoteRunnerRegistry = new RemoteRunnerRegistry(getTestAgentManager()),
+): RemotePanel {
+  const ui = createDefaultUiRuntimeServices();
+  return new RemotePanel(store, {
+    distributedRuntime: ui.distributedRuntime,
+    remoteRunnerRegistry,
+    remoteSupervisor: new RemoteSupervisor(remoteRunnerRegistry),
+  });
+}
+
 describe('RemotePanel', () => {
   test('renders runner contract and recent review artifact details', () => {
-    AgentManager.resetInstance();
-    _resetRemoteRunnerRegistryForTesting();
-    const manager = AgentManager.getInstance();
+    resetTestRuntimeServices();
+    const manager = getTestAgentManager();
     const agent = manager.spawn({
       mode: 'spawn',
       task: 'Inspect remote artifact panel',
@@ -53,10 +65,10 @@ describe('RemotePanel', () => {
         ]),
       },
     }));
-    const registry = getRemoteRunnerRegistry();
+    const registry = new RemoteRunnerRegistry(manager);
     registry.captureArtifactForAgent(agent.id, store);
 
-    const text = linesText(new RemotePanel(store).render(140, 22));
+    const text = linesText(createRemotePanel(store, registry).render(140, 22));
     expect(text).toContain('runner contracts');
     expect(text).toContain('review artifacts');
     expect(text).toContain('Contract:');
@@ -65,7 +77,7 @@ describe('RemotePanel', () => {
   });
 
   test('renders empty guidance without a runtime store', () => {
-    const text = linesText(new RemotePanel().render(120, 12));
+    const text = linesText(createRemotePanel().render(120, 12));
     expect(text).toContain('Remote Control Room');
     expect(text).toContain('Runtime store not wired');
     expect(text).toContain('/remote setup');
@@ -113,7 +125,7 @@ describe('RemotePanel', () => {
       },
     }));
 
-    const panel = new RemotePanel(store);
+    const panel = createRemotePanel(store);
     expect(panel.handleInput('down')).toBe(true);
     const text = linesText(panel.render(140, 18));
     expect(text).toContain('daemon');
@@ -127,9 +139,8 @@ describe('RemotePanel', () => {
   });
 
   test('can switch to contract browsing when no active connection is selected', () => {
-    AgentManager.resetInstance();
-    _resetRemoteRunnerRegistryForTesting();
-    const manager = AgentManager.getInstance();
+    resetTestRuntimeServices();
+    const manager = getTestAgentManager();
     const agent = manager.spawn({
       mode: 'spawn',
       task: 'Inspect remote contracts',
@@ -139,11 +150,11 @@ describe('RemotePanel', () => {
     });
 
     const store = createRuntimeStore();
-    const registry = getRemoteRunnerRegistry();
+    const registry = new RemoteRunnerRegistry(manager);
     registry.ensureContractsFromStore(store);
     registry.upsertContractForAgent(agent.id, store);
 
-    const panel = new RemotePanel(store);
+    const panel = createRemotePanel(store, registry);
     expect(panel.handleInput('tab')).toBe(true);
     const text = linesText(panel.render(140, 20));
     expect(text).toContain('focus=contracts');

@@ -8,6 +8,7 @@ import { describe, test, expect } from 'bun:test';
 import { PermissionManager } from '../../permissions/manager.ts';
 import type { PermissionPromptRequest } from '../../permissions/prompt.ts';
 import type { GoodVibesConfig, PermissionAction } from '../../config/schema.ts';
+import { PolicyRuntimeState } from '../../runtime/permissions/policy-runtime.ts';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -57,11 +58,12 @@ function createConfigState(overrides: Partial<GoodVibesConfig['permissions']> = 
 
 function makeStack(config = createConfigState()) {
   const requests: PermissionPromptRequest[] = [];
+  const policyRuntimeState = new PolicyRuntimeState();
   const pm = new PermissionManager(async (request) => {
     requests.push(request);
     return { approved: true };
-  }, config);
-  return { pm, requests, config };
+  }, config, policyRuntimeState);
+  return { pm, requests, config, policyRuntimeState };
 }
 
 // ---------------------------------------------------------------------------

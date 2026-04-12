@@ -2,32 +2,37 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { _resetHookWorkbenchForTesting, getHookWorkbench, getHookDispatcher } from '../../hooks/index.ts';
+import {
+  getTestHookDispatcher,
+  getTestHookWorkbench,
+  resetTestRuntimeServices,
+} from '../helpers/runtime-services.ts';
 
 describe('HookWorkbench', () => {
   let dir: string;
 
   beforeEach(() => {
     dir = mkdtempSync(join(tmpdir(), 'gv-hook-workbench-'));
-    _resetHookWorkbenchForTesting();
-    getHookDispatcher().clear();
+    resetTestRuntimeServices();
+    getTestHookDispatcher().clear();
   });
 
   afterEach(() => {
-    getHookDispatcher().clear();
+    getTestHookDispatcher().clear();
+    resetTestRuntimeServices();
   });
 
   test('scaffolds managed hooks and chains, saves them, and simulates matches', async () => {
     const filePath = join(dir, 'hooks.json');
-    const workbench = getHookWorkbench();
+    const workbench = getTestHookWorkbench();
     workbench.loadManagedConfig(filePath);
     workbench.scaffoldHook('guard-edit', 'Pre:tool:*', 'command');
     workbench.scaffoldChain('edit-review-loop', ['Post:tool:edit', 'Fail:tool:edit']);
     await workbench.saveManagedConfig(filePath);
     await workbench.loadAndApplyManagedHooks(filePath);
 
-    expect(getHookDispatcher().listHooks().length).toBe(1);
-    expect(getHookDispatcher().getChains().length).toBe(1);
+    expect(getTestHookDispatcher().listHooks().length).toBe(1);
+    expect(getTestHookDispatcher().getChains().length).toBe(1);
 
     const simulation = workbench.simulate('Pre:tool:edit');
     expect(simulation.matchedHooks.length).toBe(1);

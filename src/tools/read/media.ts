@@ -292,7 +292,7 @@ export function getImageMetadata(buffer: Buffer, ext: string): ImageMetadata {
 }
 
 // ---------------------------------------------------------------------------
-// Sharp singleton
+// Sharp runtime bridge
 // ---------------------------------------------------------------------------
 
 /**
@@ -310,29 +310,25 @@ interface SharpInstance {
 
 type SharpFactory = (input: Buffer) => SharpInstance;
 
-let _sharp: SharpFactory | null | undefined = undefined;
-
 /**
- * Lazy-load sharp with caching.
+ * Lazy-load sharp.
  * Returns the sharp factory function on success, null if unavailable.
  */
 export async function tryLoadSharp(): Promise<SharpFactory | null> {
-  if (_sharp !== undefined) return _sharp;
   try {
     const dynamicImport = new Function('specifier', 'return import(specifier)') as (specifier: string) => Promise<unknown>;
     const mod = await dynamicImport('sharp');
     if (typeof mod === 'function') {
-      _sharp = mod as SharpFactory;
+      return mod as SharpFactory;
     } else if (typeof mod === 'object' && mod !== null && 'default' in mod && typeof mod.default === 'function') {
-      _sharp = mod.default as SharpFactory;
+      return mod.default as SharpFactory;
     } else {
       throw new Error('sharp module did not expose a callable factory');
     }
   } catch (err) {
     logger.debug('[media] sharp not available — image resizing/conversion disabled', { error: (err as Error).message });
-    _sharp = null;
+    return null;
   }
-  return _sharp;
 }
 
 // ---------------------------------------------------------------------------

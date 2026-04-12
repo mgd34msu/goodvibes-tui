@@ -6,9 +6,13 @@ import { SchedulePanel } from '../../panels/schedule-panel.ts';
 import { AutomationManager } from '../../automation/index.ts';
 import { normalizeCronSchedule } from '../../automation/schedules.ts';
 import { AutomationJobStore } from '../../automation/store/jobs.ts';
+import { AutomationRouteStore } from '../../automation/store/routes.ts';
 import { AutomationRunStore } from '../../automation/store/runs.ts';
+import { RouteBindingManager } from '../../channels/route-manager.ts';
+import { SharedSessionBroker } from '../../control-plane/session-broker.ts';
 import { PersistentStore } from '../../state/persistent-store.ts';
 import type { LegacySchedulerSnapshot } from '../../automation/migration.ts';
+import { resetTestRuntimeServices } from '../helpers/runtime-services.ts';
 
 function linesText(lines: ReturnType<SchedulePanel['render']>): string {
   return lines.map((line) => line.map((cell) => cell.char ?? ' ').join('').trimEnd()).join('\n');
@@ -22,31 +26,42 @@ describe('SchedulePanel', () => {
   beforeEach(() => {
     root = mkdtempSync(join(tmpdir(), 'gv-schedule-panel-'));
     process.chdir(root);
-    AutomationManager.resetInstance();
+    resetTestRuntimeServices();
+    const routeBindings = new RouteBindingManager({
+      store: new AutomationRouteStore(join(root, 'routes.json')),
+    });
+    const sessionBroker = new SharedSessionBroker({
+      store: new PersistentStore(join(root, 'sessions.json')) as never,
+      routeBindings,
+      agentStatusProvider: { getStatus: () => null },
+      messageSender: { send: () => false },
+    });
     manager = new AutomationManager({
       jobStore: new AutomationJobStore(join(root, 'automation-jobs.json')),
       runStore: new AutomationRunStore(join(root, 'automation-runs.json')),
       legacyStore: new PersistentStore<LegacySchedulerSnapshot>(join(root, 'legacy.json')),
+      routeBindings,
+      sessionBroker,
       spawnTask: () => 'agent-schedule-panel-test',
     });
     (AutomationManager as unknown as { instance: AutomationManager | null }).instance = manager;
   });
 
   afterEach(() => {
-    AutomationManager.resetInstance();
+    resetTestRuntimeServices();
     process.chdir(originalCwd);
     rmSync(root, { recursive: true, force: true });
   });
 
   test('renders empty guidance when no scheduled tasks exist', () => {
-    const panel = new SchedulePanel();
+    const panel = new SchedulePanel(manager);
     panel.onActivate();
     const text = linesText(panel.render(90, 20));
     expect(text).toContain('No scheduled tasks');
   });
 
   test('renders scheduled task rows through the shared workspace path', () => {
-    const panel = new SchedulePanel();
+    const panel = new SchedulePanel(manager);
     return manager.createJob({
       name: 'Daily Sweep',
       prompt: 'Run a daily repo sweep',

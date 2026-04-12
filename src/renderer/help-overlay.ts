@@ -7,7 +7,7 @@
 import { type Line } from '../types/grid.ts';
 import { ModalFactory } from './modal-factory.ts';
 import type { SlashCommand } from '../input/command-registry.ts';
-import { getKeybindingsManager } from '../input/keybindings.ts';
+import type { KeybindingsManager } from '../input/keybindings.ts';
 import { getOverlaySurfaceMetrics } from './overlay-viewport.ts';
 import { getVisibleWindow } from './surface-layout.ts';
 
@@ -32,12 +32,12 @@ function toModalSections(rows: readonly string[]): import('./modal-factory.ts').
  */
 export function renderHelpOverlay(
   width: number,
+  keybindingsManager: KeybindingsManager,
   commands?: SlashCommand[],
   scrollOffset = 0,
   viewportHeight = process.stdout.rows || 24,
 ): Line[] {
-  const km = getKeybindingsManager();
-  const kb = (action: Parameters<typeof km.getComboLabel>[0]) => km.getComboLabel(action);
+  const kb = (action: Parameters<typeof keybindingsManager.getComboLabel>[0]) => keybindingsManager.getComboLabel(action);
 
   const hasCommand = (name: string): boolean => Boolean(commands?.some((command) => command.name === name || (command.aliases ?? []).includes(name)));
 
@@ -163,18 +163,17 @@ export function renderHelpOverlay(
  */
 export function renderShortcutsOverlay(
   width: number,
+  keybindingsManager: KeybindingsManager,
   scrollOffset = 0,
   viewportHeight = process.stdout.rows || 24,
 ): Line[] {
-  const km = getKeybindingsManager();
-
   function row(key: string, desc: string): string {
     const keyCol = key.length > 20 ? key.slice(0, 19) + '\u2026' : key.padEnd(20);
     return `  ${keyCol}  ${desc}`;
   }
 
   // Helper: get the label for a bindable action, falling back to literal string.
-  const kb = (action: Parameters<typeof km.getComboLabel>[0]) => km.getComboLabel(action);
+  const kb = (action: Parameters<typeof keybindingsManager.getComboLabel>[0]) => keybindingsManager.getComboLabel(action);
 
   const allRows: string[] = [
     '  Navigation',

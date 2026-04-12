@@ -4,18 +4,19 @@ import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { ConversationManager } from '../../core/conversation.ts';
 import { Orchestrator } from '../../core/orchestrator.ts';
-import { configManager } from '../../config/index.ts';
-import { PermissionManager } from '../../permissions/manager.ts';
-import { getProviderRegistry } from '../../providers/registry.ts';
-import type { ProviderRegistry } from '../../providers/registry.ts';
+import { PermissionManager, createPermissionConfigReader } from '../../permissions/manager.ts';
 import type { ChatRequest, ChatResponse, LLMProvider } from '../../providers/interface.ts';
 import { RuntimeEventBus } from '../../runtime/events/index.ts';
 import { createDomainDispatch, createRuntimeStore } from '../../runtime/store/index.ts';
 import { ToolRegistry } from '../../tools/registry.ts';
 import { ForensicsCollector } from '../../runtime/forensics/collector.ts';
 import { ForensicsRegistry } from '../../runtime/forensics/registry.ts';
+import { PolicyRuntimeState } from '../../runtime/permissions/policy-runtime.ts';
 import { ProviderError } from '../../types/errors.ts';
 import type { HookResult } from '../../hooks/types.ts';
+import { createTestManagers } from '../helpers/test-managers.ts';
+
+const testManagers = createTestManagers();
 
 const DEFAULT_MODEL = {
   id: 'mock-model',
@@ -40,7 +41,7 @@ async function withMockProvider<T>(
   fn: () => Promise<T>,
   model = DEFAULT_MODEL,
 ): Promise<T> {
-  const reg: ProviderRegistry = getProviderRegistry();
+  const reg = testManagers.providerRegistry;
   const origGet = reg.get.bind(reg);
   const origGetForModel = reg.getForModel.bind(reg);
   const origGetCurrentModel = reg.getCurrentModel.bind(reg);
@@ -58,14 +59,16 @@ async function withMockProvider<T>(
 
 function buildHarness(options: { hookResult?: HookResult } = {}) {
   mkdirSync(join(homedir(), '.goodvibes', 'tui'), { recursive: true });
+  const configManager = testManagers.configManager;
   const runtimeBus = new RuntimeEventBus();
   const store = createRuntimeStore();
   const dispatch = createDomainDispatch(store);
   const registry = new ForensicsRegistry();
   const collector = new ForensicsCollector(runtimeBus, registry);
   const toolRegistry = new ToolRegistry();
-  const conversation = new ConversationManager(() => 80);
-  const permissions = new PermissionManager(async () => ({ approved: true }));
+  const conversation = new ConversationManager(() => 80, configManager);
+  const policyRuntimeState = new PolicyRuntimeState();
+  const permissions = new PermissionManager(async () => ({ approved: true }), createPermissionConfigReader(configManager), policyRuntimeState);
   const hookDispatcher = options.hookResult
     ? { fire: mock(async () => options.hookResult!) }
     : null;
@@ -85,11 +88,16 @@ function buildHarness(options: { hookResult?: HookResult } = {}) {
     () => {},
     runtimeBus,
   );
+  orchestrator.setCoreServices({
+    providerRegistry: testManagers.providerRegistry,
+    configManager,
+  });
 
   return { runtimeBus, store, registry, collector, orchestrator };
 }
 
 describe('runtime substrate gate', () => {
+  const configManager = testManagers.configManager;
   const savedStream = configManager.get('display.stream') as boolean;
   const realDateNow = Date.now;
   let fakeNow = 1_800_000_000_000;

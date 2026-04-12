@@ -2,7 +2,7 @@ import type { Line } from '../types/grid.ts';
 import { createEmptyLine } from '../types/grid.ts';
 import { BasePanel } from './base-panel.ts';
 import { ServiceRegistry } from '../config/service-registry.ts';
-import { getSubscriptionManager, type ProviderSubscription, type PendingSubscriptionLogin } from '../config/subscriptions.ts';
+import { SubscriptionManager, type ProviderSubscription, type PendingSubscriptionLogin } from '../config/subscriptions.ts';
 import { listBuiltinSubscriptionProviders } from '../config/subscription-providers.ts';
 import {
   buildDetailBlock,
@@ -58,14 +58,19 @@ function statusColor(status: ReturnType<typeof statusOf>): string {
 
 export class SubscriptionPanel extends BasePanel {
   private readonly serviceRegistry: ServiceRegistry;
+  private readonly subscriptionManager: SubscriptionManager;
   private rows: SubscriptionRow[] = [];
   private selectedIndex = 0;
   private scrollOffset = 0;
   private logoutConfirmationTarget: string | null = null;
 
-  public constructor(serviceRegistry: ServiceRegistry = new ServiceRegistry()) {
+  public constructor(
+    serviceRegistry: ServiceRegistry,
+    subscriptionManager: SubscriptionManager,
+  ) {
     super('subscription', 'Subscriptions', 'B', 'monitoring');
     this.serviceRegistry = serviceRegistry;
+    this.subscriptionManager = subscriptionManager;
   }
 
   public override onActivate(): void {
@@ -95,7 +100,7 @@ export class SubscriptionPanel extends BasePanel {
         this.markDirty();
         return true;
       }
-      getSubscriptionManager().logout(selected.provider);
+      this.subscriptionManager.logout(selected.provider);
       this.logoutConfirmationTarget = null;
       this.refresh();
       this.markDirty();
@@ -111,7 +116,7 @@ export class SubscriptionPanel extends BasePanel {
   }
 
   private refresh(): void {
-    const manager = getSubscriptionManager();
+    const manager = this.subscriptionManager;
     const services = this.serviceRegistry.getAll();
     const builtinProviders = listBuiltinSubscriptionProviders();
     const providers = new Set<string>([

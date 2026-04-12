@@ -4,17 +4,16 @@ import type { LLMProvider } from '../providers/interface.ts';
 import type { ToolRegistry } from '../tools/registry.ts';
 import type { ToolDefinition } from '../types/tools.ts';
 import type { RuntimeEventBus, AnyRuntimeEvent, RuntimeEventPayload } from '../runtime/events/index.ts';
-import { GatewayMethodCatalog, type GatewayMethodDescriptor, type GatewayMethodHandler } from '../control-plane/index.ts';
+import type { GatewayMethodCatalog, GatewayMethodDescriptor, GatewayMethodHandler } from '../control-plane/index.ts';
 import {
-  ChannelDeliveryRouter,
-  ChannelPluginRegistry,
   type ChannelDeliveryStrategy,
   type ChannelPlugin,
 } from '../channels/index.ts';
-import { MemoryEmbeddingProviderRegistry, type MemoryEmbeddingProvider } from '../state/index.ts';
-import { VoiceProviderRegistry, type VoiceProvider } from '../voice/index.ts';
-import { MediaProviderRegistry, type MediaProvider } from '../media/index.ts';
-import { WebSearchProviderRegistry, type WebSearchProvider } from '../web-search/index.ts';
+import type { ChannelDeliveryRouter, ChannelPluginRegistry } from '../channels/index.ts';
+import type { MemoryEmbeddingProvider, MemoryEmbeddingProviderRegistry } from '../state/index.ts';
+import type { VoiceProvider, VoiceProviderRegistry } from '../voice/index.ts';
+import type { MediaProvider, MediaProviderRegistry } from '../media/index.ts';
+import type { WebSearchProvider, WebSearchProviderRegistry } from '../web-search/index.ts';
 import { logger } from '../utils/logger.ts';
 
 /**
@@ -163,6 +162,13 @@ export interface PluginAPIContext {
   commandRegistry: CommandRegistry;
   providerRegistry: ProviderRegistry;
   toolRegistry: ToolRegistry;
+  gatewayMethods: GatewayMethodCatalog;
+  channelRegistry: ChannelPluginRegistry;
+  channelDeliveryRouter: ChannelDeliveryRouter;
+  memoryEmbeddingRegistry: MemoryEmbeddingProviderRegistry;
+  voiceProviderRegistry: VoiceProviderRegistry;
+  mediaProviderRegistry: MediaProviderRegistry;
+  webSearchProviderRegistry: WebSearchProviderRegistry;
   /** Plugin-specific config key-value pairs from plugins.json state. */
   pluginConfig: Record<string, unknown>;
   /** Collect cleanup callbacks so the manager can teardown on disable/reload. */
@@ -301,11 +307,10 @@ export function createPluginAPI(ctx: PluginAPIContext): PluginAPI {
     },
 
     registerGatewayMethod(descriptor, handler) {
-      const catalog = GatewayMethodCatalog.getActive();
       const methodId = descriptor.id.startsWith(`plugin.${ctx.pluginName}.`)
         ? descriptor.id
         : `plugin.${ctx.pluginName}.${descriptor.id}`;
-      const unregister = catalog.register({
+      const unregister = ctx.gatewayMethods.register({
         ...descriptor,
         id: methodId,
         source: 'plugin',
@@ -316,8 +321,7 @@ export function createPluginAPI(ctx: PluginAPIContext): PluginAPI {
     },
 
     registerChannelPlugin(plugin) {
-      const registry = ChannelPluginRegistry.getActive();
-      if (!registry) throw new Error('Channel plugin registry is not active');
+      const registry = ctx.channelRegistry;
       registry.register(plugin);
       ctx.cleanup.push(() => {
         if (registry.get(plugin.id) === plugin) registry.unregister(plugin.id);
@@ -326,8 +330,7 @@ export function createPluginAPI(ctx: PluginAPIContext): PluginAPI {
     },
 
     registerDeliveryStrategy(strategy, options = {}) {
-      const router = ChannelDeliveryRouter.getActive();
-      if (!router) throw new Error('Channel delivery router is not active');
+      const router = ctx.channelDeliveryRouter;
       router.registerStrategy(strategy, options);
       ctx.cleanup.push(() => {
         router.unregisterStrategy(strategy.id);
@@ -336,25 +339,25 @@ export function createPluginAPI(ctx: PluginAPIContext): PluginAPI {
     },
 
     registerMemoryEmbeddingProvider(provider, options = {}) {
-      const unregister = MemoryEmbeddingProviderRegistry.getActive().register(provider, options);
+      const unregister = ctx.memoryEmbeddingRegistry.register(provider, options);
       ctx.cleanup.push(unregister);
       logger.info(`[plugin:${ctx.pluginName}] Registered memory embedding provider '${provider.id}'`);
     },
 
     registerVoiceProvider(provider, options = {}) {
-      const unregister = VoiceProviderRegistry.getActive().register(provider, options);
+      const unregister = ctx.voiceProviderRegistry.register(provider, options);
       ctx.cleanup.push(unregister);
       logger.info(`[plugin:${ctx.pluginName}] Registered voice provider '${provider.id}'`);
     },
 
     registerMediaProvider(provider, options = {}) {
-      const unregister = MediaProviderRegistry.getActive().register(provider, options);
+      const unregister = ctx.mediaProviderRegistry.register(provider, options);
       ctx.cleanup.push(unregister);
       logger.info(`[plugin:${ctx.pluginName}] Registered media provider '${provider.id}'`);
     },
 
     registerWebSearchProvider(provider, options = {}) {
-      const unregister = WebSearchProviderRegistry.getActive().register(provider, options);
+      const unregister = ctx.webSearchProviderRegistry.register(provider, options);
       ctx.cleanup.push(unregister);
       logger.info(`[plugin:${ctx.pluginName}] Registered web search provider '${provider.id}'`);
     },

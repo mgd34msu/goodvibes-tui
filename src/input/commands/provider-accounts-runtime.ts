@@ -1,6 +1,6 @@
 import type { CommandRegistry } from '../command-registry.ts';
-import { getPanelManager } from '../../panels/panel-manager.ts';
 import { buildProviderAccountSnapshot } from '../../runtime/provider-accounts/registry.ts';
+import { openCommandPanel } from './runtime-services.ts';
 
 export function registerProviderAccountsRuntimeCommands(registry: CommandRegistry): void {
   registry.register({
@@ -11,16 +11,15 @@ export function registerProviderAccountsRuntimeCommands(registry: CommandRegistr
     async handler(args, ctx) {
       const sub = (args[0] ?? 'review').toLowerCase();
       if (sub === 'panel' || sub === 'open') {
-        if (ctx.showPanel) ctx.showPanel('accounts');
-        else {
-          const panelManager = getPanelManager();
-          panelManager.open('accounts');
-          panelManager.show();
-          ctx.renderRequest();
-        }
+        openCommandPanel(ctx, 'accounts');
         return;
       }
-      const snapshot = await buildProviderAccountSnapshot();
+      const snapshot = await buildProviderAccountSnapshot({
+        providerRegistry: ctx.providerRegistry,
+        serviceRegistry: ctx.serviceRegistry,
+        subscriptionManager: ctx.subscriptionManager,
+        secretsManager: ctx.secretsManager,
+      });
       if (sub === 'routes') {
         const providerId = args[1];
         const record = snapshot.providers.find((entry) => entry.providerId === providerId);

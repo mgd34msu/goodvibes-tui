@@ -2,7 +2,8 @@ import type { Line } from '../types/grid.ts';
 import { createEmptyLine } from '../types/grid.ts';
 import { BasePanel } from './base-panel.ts';
 import type { RuntimeStore } from '../runtime/store/index.ts';
-import { ApprovalBroker, ControlPlaneGateway, SharedSessionBroker } from '../control-plane/index.ts';
+import type { ApprovalBroker, SharedSessionBroker } from '../control-plane/index.ts';
+import type { ControlPlaneRecentEvent } from '../control-plane/gateway.ts';
 import { truncateDisplay } from '../utils/terminal-width.ts';
 import {
   buildEmptyState,
@@ -26,6 +27,15 @@ const C = {
   selectBg: '#0f172a',
 } as const;
 
+type ControlPlaneApprovalBroker = Pick<ApprovalBroker, 'subscribe' | 'listApprovals'>;
+type ControlPlaneSessionBroker = Pick<SharedSessionBroker, 'listSessions'>;
+
+export interface ControlPlanePanelDeps {
+  readonly approvalBroker: ControlPlaneApprovalBroker;
+  readonly sessionBroker: ControlPlaneSessionBroker;
+  readonly getRecentEvents: (limit: number) => readonly ControlPlaneRecentEvent[];
+}
+
 function formatTime(value?: number): string {
   if (!value) return 'n/a';
   return new Date(value).toLocaleString();
@@ -40,16 +50,22 @@ function connectionColor(state: string): string {
 
 export class ControlPlanePanel extends BasePanel {
   private readonly store?: RuntimeStore;
+  private readonly approvalBroker: ControlPlaneApprovalBroker;
+  private readonly sessionBroker: ControlPlaneSessionBroker;
+  private readonly getRecentEvents: (limit: number) => readonly ControlPlaneRecentEvent[];
   private readonly unsubStore: (() => void) | null;
   private readonly unsubApprovals: (() => void) | null;
   private selectedIndex = 0;
   private scrollOffset = 0;
 
-  public constructor(store?: RuntimeStore) {
+  public constructor(store: RuntimeStore | undefined, deps: ControlPlanePanelDeps) {
     super('control-plane', 'Control Plane', 'C', 'monitoring');
     this.store = store;
+    this.approvalBroker = deps.approvalBroker;
+    this.sessionBroker = deps.sessionBroker;
+    this.getRecentEvents = deps.getRecentEvents;
     this.unsubStore = store ? store.subscribe(() => this.markDirty()) : null;
-    this.unsubApprovals = ApprovalBroker.getInstance().subscribe(() => this.markDirty());
+    this.unsubApprovals = this.approvalBroker.subscribe(() => this.markDirty());
   }
 
   public override onDestroy(): void {
@@ -107,9 +123,9 @@ export class ControlPlanePanel extends BasePanel {
 
     const state = this.store.getState();
     const control = state.controlPlane;
-    const approvals = ApprovalBroker.getInstance().listApprovals(6);
-    const sessions = SharedSessionBroker.getInstance().listSessions(6);
-    const recentEvents = ControlPlaneGateway.getActive()?.listRecentEvents(6) ?? [];
+    const approvals = this.approvalBroker.listApprovals(6);
+    const sessions = this.sessionBroker.listSessions(6);
+    const recentEvents = this.getRecentEvents(6);
     const clients = this.clients();
 
     const summarySection: PanelWorkspaceSection = {

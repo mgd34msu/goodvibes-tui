@@ -1,12 +1,15 @@
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
+import { beforeEach, describe, expect, test } from 'bun:test';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { ConfigManager } from '../../config/manager.ts';
 import { PersistentStore } from '../../state/persistent-store.ts';
 import { AutomationManager } from '../../automation/manager.ts';
+import { AutomationRouteStore } from '../../automation/store/routes.ts';
 import { AutomationJobStore } from '../../automation/store/jobs.ts';
 import { AutomationRunStore } from '../../automation/store/runs.ts';
+import { RouteBindingManager } from '../../channels/route-manager.ts';
+import { SharedSessionBroker } from '../../control-plane/session-broker.ts';
 import {
   DEFAULT_TOP_OF_HOUR_STAGGER_MS,
   normalizeCronSchedule,
@@ -15,26 +18,43 @@ import {
 } from '../../automation/schedules.ts';
 import type { LegacySchedulerSnapshot } from '../../automation/migration.ts';
 import { AgentManager } from '../../tools/agent/index.ts';
-import { _resetAgentExecutorForTest, _setAgentExecutorForTest } from '../../tools/agent/manager.ts';
 
-_setAgentExecutorForTest({
+const testAgentExecutor = {
   async runAgent() {
     return new Promise<void>(() => {});
   },
-});
+};
 
 describe('AutomationManager', () => {
   let root = '';
 
+  function createManager(config: {
+    readonly jobStore?: AutomationJobStore;
+    readonly runStore?: AutomationRunStore;
+    readonly legacyStore?: PersistentStore<LegacySchedulerSnapshot>;
+    readonly spawnTask?: ConstructorParameters<typeof AutomationManager>[0]['spawnTask'];
+    readonly cancelTask?: ConstructorParameters<typeof AutomationManager>[0]['cancelTask'];
+    readonly agentStatusProvider?: ConstructorParameters<typeof AutomationManager>[0]['agentStatusProvider'];
+    readonly configManager?: ConfigManager;
+  } = {}): AutomationManager {
+    const routeBindings = new RouteBindingManager({
+      store: new AutomationRouteStore(join(root, `routes-${Date.now()}-${Math.random().toString(16).slice(2)}.json`)),
+    });
+    const sessionBroker = new SharedSessionBroker({
+      store: new PersistentStore(join(root, `sessions-${Date.now()}-${Math.random().toString(16).slice(2)}.json`)) as never,
+      routeBindings,
+      agentStatusProvider: { getStatus: () => null },
+      messageSender: { send: () => false },
+    });
+    return new AutomationManager({
+      routeBindings,
+      sessionBroker,
+      ...config,
+    });
+  }
+
   beforeEach(() => {
     root = mkdtempSync(join(tmpdir(), 'gv-automation-manager-'));
-    AgentManager.resetInstance();
-  });
-
-  afterEach(() => {
-    AgentManager.getInstance().clear();
-    AgentManager.resetInstance();
-    AutomationManager.resetInstance();
   });
 
   test('migrates legacy scheduler data when automation stores are empty', async () => {
@@ -57,7 +77,7 @@ describe('AutomationManager', () => {
       history: [],
     });
 
-    const manager = new AutomationManager({
+    const manager = createManager({
       jobStore: new AutomationJobStore(join(root, 'automation-jobs.json')),
       runStore: new AutomationRunStore(join(root, 'automation-runs.json')),
       legacyStore,
@@ -75,7 +95,7 @@ describe('AutomationManager', () => {
 
   test('creates jobs, toggles enablement, and records manual runs', async () => {
     let spawnCount = 0;
-    const manager = new AutomationManager({
+    const manager = createManager({
       jobStore: new AutomationJobStore(join(root, 'automation-jobs.json')),
       runStore: new AutomationRunStore(join(root, 'automation-runs.json')),
       legacyStore: new PersistentStore<LegacySchedulerSnapshot>(join(root, 'legacy.json')),
@@ -129,7 +149,7 @@ describe('AutomationManager', () => {
     configManager.set('automation.runHistoryLimit', 2);
 
     let spawnCount = 0;
-    const manager = new AutomationManager({
+    const manager = createManager({
       jobStore: new AutomationJobStore(join(root, 'automation-jobs.json')),
       runStore: new AutomationRunStore(join(root, 'automation-runs.json')),
       legacyStore: new PersistentStore<LegacySchedulerSnapshot>(join(root, 'legacy.json')),
@@ -157,10 +177,29 @@ describe('AutomationManager', () => {
   });
 
   test('persists local agent usage telemetry onto completed runs', async () => {
-    const manager = new AutomationManager({
+    const agentManager = new AgentManager({ executor: testAgentExecutor });
+    const manager = createManager({
       jobStore: new AutomationJobStore(join(root, 'automation-jobs.json')),
       runStore: new AutomationRunStore(join(root, 'automation-runs.json')),
       legacyStore: new PersistentStore<LegacySchedulerSnapshot>(join(root, 'legacy.json')),
+      agentStatusProvider: agentManager,
+      spawnTask: (input) => {
+        const record = agentManager.spawn({
+          mode: 'spawn',
+          task: input.prompt,
+          ...(input.modelId ? { model: input.modelId } : {}),
+          ...(input.modelProvider ? { provider: input.modelProvider } : {}),
+          ...(input.fallbackModels !== undefined ? { fallbackModels: [...input.fallbackModels] } : {}),
+          ...(input.template ? { template: input.template } : {}),
+          ...(input.reasoningEffort ? { reasoningEffort: input.reasoningEffort } : {}),
+          ...(input.toolAllowlist?.length ? { tools: [...input.toolAllowlist], restrictTools: true } : {}),
+          ...(input.context ? { context: input.context } : {}),
+        });
+        return record.id;
+      },
+      cancelTask: (agentId: string) => {
+        agentManager.cancel(agentId);
+      },
     });
 
     await manager.start();
@@ -174,7 +213,7 @@ describe('AutomationManager', () => {
     });
 
     const run = await manager.runNow(job.id);
-    const agent = AgentManager.getInstance().getStatus(run.agentId!);
+    const agent = agentManager.getStatus(run.agentId!);
     expect(agent).not.toBeNull();
     agent!.status = 'completed';
     agent!.completedAt = Date.now();
@@ -209,7 +248,7 @@ describe('AutomationManager', () => {
   });
 
   test('persists remote run telemetry from external completion updates', async () => {
-    const manager = new AutomationManager({
+    const manager = createManager({
       jobStore: new AutomationJobStore(join(root, 'automation-jobs.json')),
       runStore: new AutomationRunStore(join(root, 'automation-runs.json')),
       legacyStore: new PersistentStore<LegacySchedulerSnapshot>(join(root, 'legacy.json')),
@@ -265,7 +304,7 @@ describe('AutomationManager', () => {
     const now = new Date('2024-01-15T09:59:30Z').getTime();
     Date.now = () => now;
     try {
-      const manager = new AutomationManager({
+      const manager = createManager({
         jobStore: new AutomationJobStore(join(root, 'automation-jobs.json')),
         runStore: new AutomationRunStore(join(root, 'automation-runs.json')),
         legacyStore: new PersistentStore<LegacySchedulerSnapshot>(join(root, 'legacy.json')),
@@ -295,7 +334,7 @@ describe('AutomationManager', () => {
       reasoningEffort?: 'instant' | 'low' | 'medium' | 'high';
       context?: string;
     } | undefined;
-    const manager = new AutomationManager({
+    const manager = createManager({
       jobStore: new AutomationJobStore(join(root, 'automation-jobs.json')),
       runStore: new AutomationRunStore(join(root, 'automation-runs.json')),
       legacyStore: new PersistentStore<LegacySchedulerSnapshot>(join(root, 'legacy.json')),
@@ -332,7 +371,7 @@ describe('AutomationManager', () => {
 
   test('queues next-heartbeat jobs until heartbeat is triggered', async () => {
     let spawnCount = 0;
-    const manager = new AutomationManager({
+    const manager = createManager({
       jobStore: new AutomationJobStore(join(root, 'automation-jobs.json')),
       runStore: new AutomationRunStore(join(root, 'automation-runs.json')),
       legacyStore: new PersistentStore<LegacySchedulerSnapshot>(join(root, 'legacy.json')),
@@ -360,14 +399,5 @@ describe('AutomationManager', () => {
     expect(heartbeat.processed[0]?.jobId).toBe(job.id);
     expect(spawnCount).toBe(1);
     manager.stop();
-  });
-});
-
-afterEach(() => {
-  _resetAgentExecutorForTest();
-  _setAgentExecutorForTest({
-    async runAgent() {
-      return new Promise<void>(() => {});
-    },
   });
 });

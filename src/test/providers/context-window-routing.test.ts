@@ -6,7 +6,7 @@
  */
 import { describe, test, expect } from 'bun:test';
 import type { ModelDefinition } from '../../providers/registry.ts';
-import { getContextWindowForModel } from '../../providers/model-limits.ts';
+import { ModelLimitsService } from '../../providers/model-limits.ts';
 import { resolveContextWindow } from '../../providers/local-context-ingestion.ts';
 
 // ---------------------------------------------------------------------------
@@ -32,37 +32,44 @@ function makeModel(overrides: Partial<ModelDefinition> = {}): ModelDefinition {
   };
 }
 
+function makeModelLimitsService(): ModelLimitsService {
+  return new ModelLimitsService();
+}
+
 // ---------------------------------------------------------------------------
 // provider_api provenance is highest priority in getContextWindowForModel
 // ---------------------------------------------------------------------------
 
 describe('getContextWindowForModel — provider_api provenance', () => {
   test('uses contextWindow directly when provenance is provider_api', () => {
+    const modelLimitsService = makeModelLimitsService();
     const model = makeModel({
       contextWindow: 131_072,
       contextWindowProvenance: 'provider_api',
     });
     // Even without OpenRouter cache, the provider_api value should be used.
-    const result = getContextWindowForModel(model);
+    const result = modelLimitsService.getContextWindowForModel(model);
     expect(result).toBe(131_072);
   });
 
   test('uses contextWindow directly when provenance is provider_api (large context)', () => {
+    const modelLimitsService = makeModelLimitsService();
     const model = makeModel({
       contextWindow: 1_048_576,
       contextWindowProvenance: 'provider_api',
     });
-    const result = getContextWindowForModel(model);
+    const result = modelLimitsService.getContextWindowForModel(model);
     expect(result).toBe(1_048_576);
   });
 
   test('falls through to contextWindow when no provenance and no OpenRouter cache', () => {
+    const modelLimitsService = makeModelLimitsService();
     const model = makeModel({
       contextWindow: 16_384,
       // No contextWindowProvenance
     });
     // Without OpenRouter cache loaded, falls back to static value.
-    const result = getContextWindowForModel(model);
+    const result = modelLimitsService.getContextWindowForModel(model);
     expect(result).toBe(16_384);
   });
 });
@@ -73,6 +80,7 @@ describe('getContextWindowForModel — provider_api provenance', () => {
 
 describe('getContextWindowForModel — configured_cap and fallback', () => {
   test('configured_cap falls through to OpenRouter/registry path (not provider_api shortcut)', () => {
+    const modelLimitsService = makeModelLimitsService();
     const model = makeModel({
       contextWindow: 65_536,
       contextWindowProvenance: 'configured_cap',
@@ -80,16 +88,17 @@ describe('getContextWindowForModel — configured_cap and fallback', () => {
     // configured_cap does NOT trigger the provider_api shortcut.
     // It goes through the normal OpenRouter -> static path.
     // Since there is no OpenRouter cache in unit tests, falls back to contextWindow.
-    const result = getContextWindowForModel(model);
+    const result = modelLimitsService.getContextWindowForModel(model);
     expect(result).toBe(65_536);
   });
 
   test('fallback provenance falls through to registry value', () => {
+    const modelLimitsService = makeModelLimitsService();
     const model = makeModel({
       contextWindow: 8_192,
       contextWindowProvenance: 'fallback',
     });
-    const result = getContextWindowForModel(model);
+    const result = modelLimitsService.getContextWindowForModel(model);
     expect(result).toBe(8_192);
   });
 });
@@ -100,6 +109,7 @@ describe('getContextWindowForModel — configured_cap and fallback', () => {
 
 describe('resolveContextWindow + ModelDefinition integration', () => {
   test('building a ModelDefinition with provider_api provenance sets correct contextWindow', () => {
+    const modelLimitsService = makeModelLimitsService();
     const apiContextLength = 200_000;
     const configuredContextWindow = 32_768;
 
@@ -112,11 +122,12 @@ describe('resolveContextWindow + ModelDefinition integration', () => {
     });
 
     // getContextWindowForModel should return the API-reported value
-    const effective = getContextWindowForModel(model);
+    const effective = modelLimitsService.getContextWindowForModel(model);
     expect(effective).toBe(200_000);
   });
 
   test('building with fallback provenance still yields non-zero context window', () => {
+    const modelLimitsService = makeModelLimitsService();
     const resolved = resolveContextWindow('unknown-local-model', null, 0);
     expect(resolved.provenance).toBe('fallback');
     expect(resolved.tokens).toBeGreaterThan(0);
@@ -126,7 +137,7 @@ describe('resolveContextWindow + ModelDefinition integration', () => {
       contextWindowProvenance: resolved.provenance,
     });
 
-    const effective = getContextWindowForModel(model);
+    const effective = modelLimitsService.getContextWindowForModel(model);
     expect(effective).toBeGreaterThan(0);
   });
 });

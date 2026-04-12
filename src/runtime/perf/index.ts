@@ -39,8 +39,6 @@ export {
 } from './panel-contracts.ts';
 export {
   PanelHealthMonitor,
-  getSharedPanelHealthMonitor,
-  resetSharedPanelHealthMonitor,
 } from './panel-health-monitor.ts';
 
 import { PerfMonitor } from './monitor.ts';

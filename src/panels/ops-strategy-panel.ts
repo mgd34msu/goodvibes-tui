@@ -10,8 +10,7 @@
 import { BasePanel } from './base-panel.ts';
 import type { Line } from '../types/grid.ts';
 import type { RuntimeEventBus, PlannerEvent } from '../runtime/events/index.ts';
-import { adaptivePlanner } from '../core/adaptive-planner-instance.ts';
-import type { PlannerDecision, ExecutionStrategy } from '../core/adaptive-planner.ts';
+import { AdaptivePlanner, type PlannerDecision, type ExecutionStrategy } from '../core/adaptive-planner.ts';
 import {
   buildEmptyState,
   buildPanelLine,
@@ -45,9 +44,14 @@ export class OpsStrategyPanel extends BasePanel {
   private unsubscribers: Array<() => void> = [];
   private scrollOffset = 0;
   private history: PlannerDecision[] = [];
+  private readonly adaptivePlanner: AdaptivePlanner;
 
-  constructor(private readonly runtimeBus: RuntimeEventBus) {
+  constructor(
+    private readonly runtimeBus: RuntimeEventBus,
+    adaptivePlanner: AdaptivePlanner,
+  ) {
     super('ops', 'Ops', 'O', 'agent');
+    this.adaptivePlanner = adaptivePlanner;
   }
 
   override onActivate(): void {
@@ -95,9 +99,9 @@ export class OpsStrategyPanel extends BasePanel {
   }
 
   render(width: number, height: number): Line[] {
-    const latest   = adaptivePlanner.getLatest();
-    const mode     = adaptivePlanner.getMode();
-    const override = adaptivePlanner.getOverride();
+    const latest   = this.adaptivePlanner.getLatest();
+    const mode     = this.adaptivePlanner.getMode();
+    const override = this.adaptivePlanner.getOverride();
     const statusLines: Line[] = [
       buildPanelLine(width, [
         [' Mode ', DEFAULT_PANEL_PALETTE.label],
@@ -176,7 +180,7 @@ export class OpsStrategyPanel extends BasePanel {
   // -------------------------------------------------------------------------
 
   private _syncHistory(): void {
-    this.history = adaptivePlanner.getHistory(50);
+    this.history = this.adaptivePlanner.getHistory(50);
   }
 
   private _renderHistory(width: number): Line[] {

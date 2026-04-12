@@ -5,12 +5,12 @@ import type { GoodVibesConfig, ConfigKey, ConfigValue, ConfigSetting } from './s
 import { DEFAULT_CONFIG, CONFIG_SCHEMA } from './schema.ts';
 import { ConfigError } from '../types/errors.ts';
 import { logger } from '../utils/logger.ts';
-import { getHookDispatcher } from '../hooks/index.ts';
+import type { HookDispatcher } from '../hooks/index.ts';
 import type { HookEvent } from '../hooks/types.ts';
 import { getManagedSettingLock } from '../runtime/settings/control-plane.ts';
 
 /** Deep immutable type — prevents mutation of nested objects returned from getAll(). */
-type DeepReadonly<T> = {
+export type DeepReadonly<T> = {
   readonly [K in keyof T]: T[K] extends object ? DeepReadonly<T[K]> : T[K];
 };
 
@@ -76,27 +76,11 @@ export class ConfigManager {
   private readonly configDir: string;
   private readonly configPath: string;
   private readonly projectConfigPath: string;
-
-  /**
-   * Override the config directory for test isolation.
-   * Call before instantiating ConfigManager in tests.
-   * Resets on process exit or explicit call with undefined.
-   */
-  private static testConfigDir: string | undefined = undefined;
-
-  static setTestMode(tempDir: string | undefined): void {
-    ConfigManager.testConfigDir = tempDir;
-    const runtime = globalThis as typeof globalThis & { __gvTestConfigDir?: string };
-    runtime.__gvTestConfigDir = tempDir;
-  }
-
-  static getTestMode(): string | undefined {
-    return ConfigManager.testConfigDir;
-  }
+  private hookDispatcher: Pick<HookDispatcher, 'fire'> | null = null;
 
   constructor(overrides?: ConfigOverrides) {
     const configDirOverride = overrides?.configDir;
-    const base = configDirOverride ?? ConfigManager.testConfigDir ?? join(homedir(), '.goodvibes', 'tui');
+    const base = configDirOverride ?? join(homedir(), '.goodvibes', 'tui');
     this.configDir = base;
     this.configPath = join(base, 'settings.json');
     const projectRoot = overrides?.workingDir ?? process.cwd();
@@ -129,6 +113,10 @@ export class ConfigManager {
 
   getControlPlaneConfigDir(): string {
     return this.configDir;
+  }
+
+  attachHookDispatcher(hookDispatcher: Pick<HookDispatcher, 'fire'> | null): void {
+    this.hookDispatcher = hookDispatcher;
   }
 
   private resolvePath(
@@ -189,6 +177,7 @@ export class ConfigManager {
    * Best-effort: the hook dispatcher may not be initialised during startup.
    */
   private emitConfigHook(key: ConfigKey, previousValue: unknown, newValue: unknown): void {
+    if (!this.hookDispatcher) return;
     try {
       const event: HookEvent = {
         path: `Change:config:${key}`,
@@ -199,7 +188,7 @@ export class ConfigManager {
         timestamp: Date.now(),
         payload: { key, value: newValue, previousValue },
       };
-      getHookDispatcher()
+      this.hookDispatcher
         .fire(event)
         .catch(() => { /* ignore async errors */ });
     } catch {

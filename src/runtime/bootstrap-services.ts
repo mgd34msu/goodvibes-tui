@@ -1,16 +1,17 @@
 import type { HookDispatcher } from '../hooks/dispatcher.ts';
 import type { RuntimeEventBus } from './events/index.ts';
+import type { RuntimeServices } from './services.ts';
 import { DaemonServer } from '../daemon/server.ts';
 import { HttpListener } from '../daemon/http-listener.ts';
 import { UserAuthManager } from '../security/user-auth.ts';
 import { logger } from '../utils/logger.ts';
-import { getLocalUserAuthManager, setLocalUserAuthManager } from './local-auth.ts';
 import net from 'node:net';
 
 interface DaemonService {
   enable(config: { daemon: boolean }, token?: string): boolean;
   start(): Promise<void>;
   stop(): Promise<void>;
+  listRecentControlPlaneEvents(limit: number): readonly import('../control-plane/gateway.ts').ControlPlaneRecentEvent[];
 }
 
 interface HttpListenerService {
@@ -20,7 +21,7 @@ interface HttpListenerService {
 }
 
 interface ServiceFactories {
-  createDaemonServer?: (runtimeBus: RuntimeEventBus, userAuth: UserAuthManager) => DaemonService;
+  createDaemonServer?: (runtimeBus: RuntimeEventBus, userAuth: UserAuthManager, runtimeServices?: RuntimeServices) => DaemonService;
   createHttpListener?: (hookDispatcher: HookDispatcher, userAuth: UserAuthManager) => HttpListenerService;
   startupTimeoutMs?: number;
   probeDaemonPortInUse?: (host: string, port: number) => Promise<boolean>;
@@ -30,6 +31,7 @@ interface ServiceFactories {
 export interface ExternalServicesHandle {
   readonly daemonServer: DaemonService | null;
   readonly httpListener: HttpListenerService | null;
+  listRecentControlPlaneEvents(limit: number): readonly import('../control-plane/gateway.ts').ControlPlaneRecentEvent[];
   stop(): Promise<void>;
 }
 
@@ -99,11 +101,11 @@ export async function startExternalServices(
   runtimeBus: RuntimeEventBus,
   hookDispatcher: HookDispatcher,
   factories: ServiceFactories = {},
+  runtimeServices?: RuntimeServices,
 ): Promise<ExternalServicesHandle> {
-  const sharedUserAuth = getLocalUserAuthManager();
-  setLocalUserAuthManager(sharedUserAuth);
-  const createDaemonServer = factories.createDaemonServer ?? ((bus: RuntimeEventBus, userAuth: UserAuthManager): DaemonService =>
-    new DaemonServer({ runtimeBus: bus, userAuth }));
+  const sharedUserAuth = runtimeServices?.localUserAuthManager ?? new UserAuthManager();
+  const createDaemonServer = factories.createDaemonServer ?? ((bus: RuntimeEventBus, userAuth: UserAuthManager, services?: RuntimeServices): DaemonService =>
+    new DaemonServer({ runtimeBus: bus, userAuth, ...(services ? { runtimeServices: services } : {}) }));
   const createHttpListener = factories.createHttpListener ?? ((dispatcher: HookDispatcher, userAuth: UserAuthManager): HttpListenerService =>
     new HttpListener({ hookDispatcher: dispatcher, userAuth }));
   const startupTimeoutMs = factories.startupTimeoutMs ?? DEFAULT_SERVICE_START_TIMEOUT_MS;
@@ -124,7 +126,7 @@ export async function startExternalServices(
         port: daemonPort,
       });
     } else {
-      daemonServer = createDaemonServer(runtimeBus, sharedUserAuth);
+      daemonServer = createDaemonServer(runtimeBus, sharedUserAuth, runtimeServices);
       daemonServer.enable({ daemon: true });
       try {
         const service = daemonServer;
@@ -174,6 +176,9 @@ export async function startExternalServices(
   return {
     daemonServer,
     httpListener,
+    listRecentControlPlaneEvents(limit: number): readonly import('../control-plane/gateway.ts').ControlPlaneRecentEvent[] {
+      return daemonServer?.listRecentControlPlaneEvents(limit) ?? [];
+    },
     async stop(): Promise<void> {
       await Promise.allSettled([
         daemonServer?.stop(),

@@ -2,15 +2,7 @@ import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import type { CommandRegistry } from '../command-registry.ts';
 import type { SelectionAction, SelectionItem } from '../selection-modal.ts';
-import { ServiceRegistry } from '../../config/service-registry.ts';
-import { getPanelManager } from '../../panels/panel-manager.ts';
-
-let serviceRegistry: ServiceRegistry | undefined;
-
-function getServiceRegistry(): ServiceRegistry {
-  if (!serviceRegistry) serviceRegistry = new ServiceRegistry();
-  return serviceRegistry;
-}
+import { openCommandPanel, requireServiceRegistry } from './runtime-services.ts';
 
 export function registerServicesRuntimeCommands(registry: CommandRegistry): void {
   registry.register({
@@ -21,16 +13,10 @@ export function registerServicesRuntimeCommands(registry: CommandRegistry): void
     async handler(args, ctx) {
       const sub = args[0] ?? 'open';
       if (sub === 'open' || sub === 'panel') {
-        if (ctx.showPanel) ctx.showPanel('services');
-        else {
-          const panelManager = getPanelManager();
-          panelManager.open('services');
-          panelManager.show();
-          ctx.renderRequest();
-        }
+        openCommandPanel(ctx, 'services');
         return;
       }
-      const svcRegistry = getServiceRegistry();
+      const svcRegistry = requireServiceRegistry(ctx);
       const all = svcRegistry.getAll();
       const keys = Object.keys(all);
       if (sub === 'inspect') {

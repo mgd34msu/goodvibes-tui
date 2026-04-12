@@ -6,24 +6,14 @@
  * custom providers override catalog entries, discovered servers merge
  * correctly, and the registry handles an empty catalog gracefully.
  *
- * Uses _setCatalogForTesting to inject deterministic fixture data —
+ * Uses real catalog cache files to inject deterministic fixture data —
  * no network calls are made in tests.
  */
 
 import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
-import {
-  getModelRegistry,
-  getProviderRegistry,
-  _resetProviderRegistryForTesting,
-  type ModelDefinition,
-} from '../../providers/registry.ts';
-import {
-  getCatalogModelDefinitions,
-  _setCatalogForTesting,
-  _resetForTest,
-  type CatalogModel,
-  type PricingCatalog,
-} from '../../providers/model-catalog.ts';
+import type { CatalogModel, PricingCatalog } from '../../providers/model-catalog.ts';
+import { createTestManagers } from '../helpers/test-managers.ts';
+import { createProviderCacheFixture, writeModelCatalogCache } from '../helpers/provider-cache.ts';
 
 // ---------------------------------------------------------------------------
 // Test fixtures — deterministic, no network calls
@@ -52,22 +42,21 @@ const FIXTURE_CATALOG: PricingCatalog = {
   models: FIXTURE_MODELS,
 };
 
+const testManagers = createTestManagers();
+const providerRegistry = testManagers.providerRegistry;
+let cacheFixture: ReturnType<typeof createProviderCacheFixture>;
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
-/** Reset all module-level state before each test. */
-function reset() {
-  _resetForTest();
-  _resetProviderRegistryForTesting();
-  // Inject fixture data so tests are deterministic
-  _setCatalogForTesting(FIXTURE_CATALOG);
+function loadCatalog(models: CatalogModel[]): void {
+  writeModelCatalogCache(models, cacheFixture.homeDir, FIXTURE_CATALOG.fetchedAt);
+  providerRegistry.initCatalog();
 }
 
-function resetToEmpty() {
-  _resetForTest();
-  _resetProviderRegistryForTesting();
-  // Leave catalog empty — tests the empty catalog path
+function getCatalogModelDefinitions() {
+  return providerRegistry.getCatalogModelDefinitions();
 }
 
 // ---------------------------------------------------------------------------
@@ -75,8 +64,15 @@ function resetToEmpty() {
 // ---------------------------------------------------------------------------
 
 describe('getCatalogModelDefinitions', () => {
-  beforeEach(reset);
-  afterEach(() => { _resetForTest(); _resetProviderRegistryForTesting(); });
+  beforeEach(() => {
+    cacheFixture = createProviderCacheFixture('gv-registry-catalog-');
+    loadCatalog(FIXTURE_CATALOG.models);
+  });
+
+  afterEach(() => {
+    cacheFixture.restoreEnv();
+    cacheFixture.cleanup();
+  });
 
   it('returns a non-empty array of model definitions', () => {
     const defs = getCatalogModelDefinitions();
@@ -183,17 +179,24 @@ describe('getCatalogModelDefinitions', () => {
 // ---------------------------------------------------------------------------
 
 describe('getModelRegistry — catalog-sourced models', () => {
-  beforeEach(reset);
-  afterEach(() => { _resetForTest(); _resetProviderRegistryForTesting(); });
+  beforeEach(() => {
+    cacheFixture = createProviderCacheFixture('gv-registry-catalog-');
+    loadCatalog(FIXTURE_CATALOG.models);
+  });
+
+  afterEach(() => {
+    cacheFixture.restoreEnv();
+    cacheFixture.cleanup();
+  });
 
   it('returns a non-empty array', () => {
-    const models = getModelRegistry();
+    const models = providerRegistry.listModels();
     expect(Array.isArray(models)).toBe(true);
     expect(models.length).toBeGreaterThan(0);
   });
 
   it('returns catalog models when no custom providers are loaded', () => {
-    const registry = getModelRegistry();
+    const registry = providerRegistry.listModels();
     const catalogDefs = getCatalogModelDefinitions();
     // All catalog IDs should appear in the registry (minus any synthetic overrides)
     const registryIds = new Set(registry.map((m) => m.id));
@@ -216,7 +219,7 @@ describe('getModelRegistry — catalog-sourced models', () => {
   });
 
   it('all registry entries have required fields', () => {
-    const models = getModelRegistry();
+    const models = providerRegistry.listModels();
     for (const model of models) {
       expect(typeof model.id).toBe('string');
       expect(model.id.length).toBeGreaterThan(0);
@@ -229,14 +232,14 @@ describe('getModelRegistry — catalog-sourced models', () => {
   });
 
   it('registry contains no duplicate model IDs', () => {
-    const models = getModelRegistry();
+    const models = providerRegistry.listModels();
     const ids = models.map((m) => m.id);
     const uniqueIds = new Set(ids);
     expect(ids.length).toBe(uniqueIds.size);
   });
 
   it('selectable models are filterable', () => {
-    const models = getModelRegistry();
+    const models = providerRegistry.listModels();
     const selectable = models.filter((m) => m.selectable);
     expect(selectable.length).toBeGreaterThan(0);
   });
@@ -247,18 +250,25 @@ describe('getModelRegistry — catalog-sourced models', () => {
 // ---------------------------------------------------------------------------
 
 describe('getModelRegistry — discovered servers', () => {
-  beforeEach(reset);
-  afterEach(() => { _resetForTest(); _resetProviderRegistryForTesting(); });
+  beforeEach(() => {
+    cacheFixture = createProviderCacheFixture('gv-registry-catalog-');
+    loadCatalog(FIXTURE_CATALOG.models);
+  });
+
+  afterEach(() => {
+    cacheFixture.restoreEnv();
+    cacheFixture.cleanup();
+  });
 
   it('discovered models do not appear before registerDiscoveredProviders is called', () => {
     // After reset, discovered models should be empty
-    const models = getModelRegistry();
+    const models = providerRegistry.listModels();
     const discoveredModel = models.find((m) => m.id === 'local-test-model-xyz');
     expect(discoveredModel).toBeUndefined();
   });
 
   it('discovered servers are excluded when they conflict with catalog models', () => {
-    const models = getModelRegistry();
+    const models = providerRegistry.listModels();
     // Catalog model IDs should appear only once — not duplicated by a hypothetical
     // discovered server with the same ID
     const ids = models.map((m) => m.id);
@@ -272,15 +282,22 @@ describe('getModelRegistry — discovered servers', () => {
 // ---------------------------------------------------------------------------
 
 describe('getModelRegistry — empty catalog fallback', () => {
-  beforeEach(resetToEmpty);
-  afterEach(() => { _resetForTest(); _resetProviderRegistryForTesting(); });
+  beforeEach(() => {
+    cacheFixture = createProviderCacheFixture('gv-registry-catalog-');
+    loadCatalog([]);
+  });
+
+  afterEach(() => {
+    cacheFixture.restoreEnv();
+    cacheFixture.cleanup();
+  });
 
   it('registry does not throw when catalog is empty', () => {
-    expect(() => getModelRegistry()).not.toThrow();
+    expect(() => providerRegistry.listModels()).not.toThrow();
   });
 
   it('registry returns an array even when catalog is empty', () => {
-    const result = getModelRegistry();
+    const result = providerRegistry.listModels();
     expect(Array.isArray(result)).toBe(true);
   });
 
@@ -296,8 +313,15 @@ describe('getModelRegistry — empty catalog fallback', () => {
 // ---------------------------------------------------------------------------
 
 describe('Structural verification', () => {
-  beforeEach(reset);
-  afterEach(() => { _resetForTest(); _resetProviderRegistryForTesting(); });
+  beforeEach(() => {
+    cacheFixture = createProviderCacheFixture('gv-registry-catalog-');
+    loadCatalog(FIXTURE_CATALOG.models);
+  });
+
+  afterEach(() => {
+    cacheFixture.restoreEnv();
+    cacheFixture.cleanup();
+  });
 
   it('getCatalogModelDefinitions is the catalog source (not a static array)', () => {
     // Verify the function exists and is callable
@@ -308,7 +332,7 @@ describe('Structural verification', () => {
 
   it('getModelRegistry merge order: catalog models are lower priority than custom', () => {
     // After reset, registry contains catalog models
-    const models = getModelRegistry();
+    const models = providerRegistry.listModels();
     const catalogIds = new Set(getCatalogModelDefinitions().map((d) => d.id));
 
     // Custom models would override catalog — before any custom providers are loaded,
@@ -321,7 +345,7 @@ describe('Structural verification', () => {
   });
 
   it('registry returns catalog models with correct provider assignments', () => {
-    const models = getModelRegistry();
+    const models = providerRegistry.listModels();
     const catalogDefs = getCatalogModelDefinitions();
 
     for (const def of catalogDefs) {
@@ -339,25 +363,29 @@ describe('Structural verification', () => {
 // ---------------------------------------------------------------------------
 
 describe('ProviderRegistry.get() — alias resolution', () => {
-  beforeEach(reset);
-  afterEach(() => { _resetForTest(); _resetProviderRegistryForTesting(); });
+  beforeEach(() => {
+    cacheFixture = createProviderCacheFixture('gv-registry-catalog-');
+    loadCatalog(FIXTURE_CATALOG.models);
+  });
+
+  afterEach(() => {
+    cacheFixture.restoreEnv();
+    cacheFixture.cleanup();
+  });
 
   it('registry.get("inception") resolves via alias to the inceptionlabs provider', () => {
-    const registry = getProviderRegistry();
-    const provider = registry.get('inception');
+    const provider = providerRegistry.get('inception');
     expect(provider).toBeDefined();
     expect(provider.name).toBe('inceptionlabs');
   });
 
   it('registry.get("inceptionlabs") returns the inceptionlabs provider directly', () => {
-    const registry = getProviderRegistry();
-    const provider = registry.get('inceptionlabs');
+    const provider = providerRegistry.get('inceptionlabs');
     expect(provider).toBeDefined();
     expect(provider.name).toBe('inceptionlabs');
   });
 
   it('registry.get("nonexistent") throws', () => {
-    const registry = getProviderRegistry();
-    expect(() => registry.get('nonexistent')).toThrow();
+    expect(() => providerRegistry.get('nonexistent')).toThrow();
   });
 });

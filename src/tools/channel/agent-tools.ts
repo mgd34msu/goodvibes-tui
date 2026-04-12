@@ -3,7 +3,7 @@ import type { ToolRegistry } from '../registry.ts';
 
 export function registerChannelAgentTools(
   registry: ToolRegistry,
-  channelRegistry: ChannelPluginRegistry | null = ChannelPluginRegistry.getActive(),
+  channelRegistry: ChannelPluginRegistry | null,
 ): number {
   if (!channelRegistry) return 0;
   let registered = 0;

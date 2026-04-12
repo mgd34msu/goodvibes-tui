@@ -222,16 +222,3 @@ export class IdempotencyStore {
     }
   }
 }
-
-/**
- * Shared singleton IdempotencyStore for the default runtime.
- *
- * TTL defaults to 5 minutes. Callers requiring different TTLs should
- * construct their own `IdempotencyStore` instance.
- *
- * @remarks
- * This singleton is intended for single-runtime use only. Tests and isolated
- * subsystems should construct their own `IdempotencyStore` instance to avoid
- * cross-test state contamination.
- */
-export const idempotencyStore = new IdempotencyStore();

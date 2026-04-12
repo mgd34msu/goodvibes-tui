@@ -1,11 +1,11 @@
 /**
  * Phased wrapper for the find tool.
  *
- * Delegates entirely to the existing `findTool` singleton and adds the
+ * Delegates to a freshly constructed find tool instance and adds the
  * PhasedTool metadata required by the phased executor.
  */
 import { asPhasedTool } from '../../runtime/tools/adapter.ts';
-import { findTool } from './index.ts';
+import { createFindTool } from './index.ts';
 
 // ---------------------------------------------------------------------------
 // Factory
@@ -20,8 +20,8 @@ import { findTool } from './index.ts';
  * skipPhases : `['prehook', 'posthook']` — find needs no before/after hooks
  *   (no write audit trail, no cache invalidation).
  *
- * @returns A PhasedTool that delegates execution to `findTool`.
+ * @returns A PhasedTool that delegates execution to an owned find tool instance.
  */
 export function createPhasedFindTool() {
-  return asPhasedTool(findTool, { category: 'read', cancellable: true, skipPhases: ['prehook', 'posthook'] });
+  return asPhasedTool(createFindTool(), { category: 'read', cancellable: true, skipPhases: ['prehook', 'posthook'] });
 }

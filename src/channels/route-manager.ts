@@ -82,8 +82,6 @@ function deterministicRouteId(input: Pick<UpsertRouteBindingInput, 'surfaceKind'
 }
 
 export class RouteBindingManager {
-  private static instance: RouteBindingManager | null = null;
-
   private readonly store: AutomationRouteStore;
   private readonly bindings = new Map<string, AutomationRouteBinding>();
   private runtimeDispatch: DomainDispatch | null = null;
@@ -98,17 +96,6 @@ export class RouteBindingManager {
     this.store = config.store ?? new AutomationRouteStore();
     if (config.runtimeStore) this.runtimeDispatch = createDomainDispatch(config.runtimeStore);
     this.runtimeBus = config.runtimeBus ?? null;
-  }
-
-  static getInstance(): RouteBindingManager {
-    if (!RouteBindingManager.instance) {
-      RouteBindingManager.instance = new RouteBindingManager();
-    }
-    return RouteBindingManager.instance;
-  }
-
-  static resetInstance(): void {
-    RouteBindingManager.instance = null;
   }
 
   attachRuntime(config: {

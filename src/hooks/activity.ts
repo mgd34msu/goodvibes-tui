@@ -56,9 +56,3 @@ export class HookActivityTracker {
     this.records.length = 0;
   }
 }
-
-let _hookActivityTracker: HookActivityTracker | undefined;
-export function getHookActivityTracker(): HookActivityTracker {
-  if (!_hookActivityTracker) _hookActivityTracker = new HookActivityTracker();
-  return _hookActivityTracker;
-}

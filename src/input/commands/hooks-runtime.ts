@@ -1,5 +1,5 @@
 import type { CommandRegistry } from '../command-registry.ts';
-import { getHookWorkbench, listHookPointContracts } from '../../hooks/index.ts';
+import { listHookPointContracts } from '../../hooks/index.ts';
 
 export function registerHooksRuntimeCommands(registry: CommandRegistry): void {
   registry.register({
@@ -9,7 +9,11 @@ export function registerHooksRuntimeCommands(registry: CommandRegistry): void {
     usage: '[contracts [filter] | reload | scaffold <name> <match> <type> | chain <name> <event1,event2,...> | remove <name> | enable <name> | disable <name> | simulate <eventPath> | inspect <path> | import <path> [merge|replace] | export [path]]',
     argsHint: '[subcommand]',
     async handler(args, ctx) {
-      const workbench = getHookWorkbench();
+      const workbench = ctx.hookWorkbench;
+      if (!workbench) {
+        ctx.print('Hook workbench is not available in this runtime.');
+        return;
+      }
       if (args.length === 0 && ctx.openHooksPanel) {
         ctx.openHooksPanel();
         return;

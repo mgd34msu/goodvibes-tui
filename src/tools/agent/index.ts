@@ -1,9 +1,10 @@
 import type { Tool } from '../../types/tools.ts';
+import { ConfigManager } from '../../config/manager.ts';
 import { AGENT_TOOL_SCHEMA } from './schema.ts';
 import type { AgentInput } from './schema.ts';
-import { AgentMessageBus } from '../../agents/message-bus.ts';
 import { ArchetypeLoader } from '../../agents/archetypes.ts';
-import { WrfcController } from '../../agents/wrfc-controller.ts';
+import { AgentMessageBus } from '../../agents/message-bus.ts';
+import type { WrfcController } from '../../agents/wrfc-controller.ts';
 import { AGENT_TEMPLATES, AgentManager } from './manager.ts';
 import { evaluateOrchestrationSpawn } from '../../runtime/orchestration/spawn-policy.ts';
 export type { AgentRecord } from './manager.ts';
@@ -24,10 +25,18 @@ function summarizeWrfcEvent(event: Record<string, unknown>) {
   };
 }
 
-export const agentTool: Tool = {
-  definition: AGENT_TOOL_SCHEMA,
+export function createAgentTool(config: {
+  manager: AgentManager;
+  messageBus: Pick<AgentMessageBus, 'getMessages' | 'send'>;
+  wrfcController?: Pick<WrfcController, 'getWorkmap'>;
+  archetypeLoader?: Pick<ArchetypeLoader, 'loadArchetype'>;
+  configManager: Pick<ConfigManager, 'get'>;
+}): Tool {
+  const archetypeLoader = config.archetypeLoader ?? new ArchetypeLoader();
+  return {
+    definition: AGENT_TOOL_SCHEMA,
 
-  async execute(args: Record<string, unknown>): Promise<{ success: boolean; output?: string; error?: string }> {
+    async execute(args: Record<string, unknown>): Promise<{ success: boolean; output?: string; error?: string }> {
     // Validate required fields before casting
     if (!args || typeof args !== 'object') {
       return { success: false, error: 'Invalid args: expected an object' };
@@ -46,7 +55,7 @@ export const agentTool: Tool = {
       return { success: false, error: `Invalid mode: '${input.mode}'. Must be one of: ${validModes.join(', ')}` };
     }
 
-    const manager = AgentManager.getInstance();
+    const manager = config.manager;
 
     switch (input.mode) {
       case 'spawn': {
@@ -56,7 +65,6 @@ export const agentTool: Tool = {
 
         if (input.template && !AGENT_TEMPLATES[input.template]) {
           // Also allow custom archetypes loaded from .goodvibes/agents/*.md
-          const archetypeLoader = ArchetypeLoader.getInstance();
           const customArchetype = archetypeLoader.loadArchetype(input.template);
           if (!customArchetype || customArchetype.isCustom === false) {
             return {
@@ -193,8 +201,7 @@ export const agentTool: Tool = {
           return { success: false, error: `Unknown agent: '${input.agentId}'` };
         }
 
-        const bus = AgentMessageBus.getInstance();
-        const recentMessages = bus.getMessages(input.agentId).slice(-10);
+        const recentMessages = config.messageBus.getMessages(input.agentId).slice(-10);
         const duration =
           record.completedAt !== undefined
             ? record.completedAt - record.startedAt
@@ -383,8 +390,7 @@ export const agentTool: Tool = {
           return { success: false, error: `Unknown agent: '${input.agentId}'` };
         }
 
-        const bus = AgentMessageBus.getInstance();
-        const sent = bus.send('orchestrator', input.agentId, input.message, {
+        const sent = config.messageBus.send('orchestrator', input.agentId, input.message, {
           kind: input.kind ?? 'directive',
         });
         if (!sent) {
@@ -414,6 +420,7 @@ export const agentTool: Tool = {
         }
         const currentCount = manager.list().filter(a => a.status === 'pending' || a.status === 'running').length;
         const spawnDecision = evaluateOrchestrationSpawn({
+          configManager: config.configManager,
           mode: 'manual-batch',
           activeAgents: currentCount,
           requestedDepth: 0,
@@ -434,7 +441,6 @@ export const agentTool: Tool = {
           }
           // Validate template if provided
           if (taskDef.template && !AGENT_TEMPLATES[taskDef.template]) {
-            const archetypeLoader = ArchetypeLoader.getInstance();
             const customArchetype = archetypeLoader.loadArchetype(taskDef.template);
             if (!customArchetype || customArchetype.isCustom === false) {
               return {
@@ -533,7 +539,10 @@ export const agentTool: Tool = {
 
       case 'wrfc-chains': {
         try {
-          const workmap = WrfcController.getInstance().getWorkmap();
+          const workmap = config.wrfcController?.getWorkmap();
+          if (!workmap) {
+            return { success: false, error: 'WRFC controller is not configured in this runtime.' };
+          }
           const chains = workmap.listChains();
           const detail = input.detail ?? 'summary';
           return {
@@ -563,7 +572,10 @@ export const agentTool: Tool = {
           return { success: false, error: 'wrfc-history requires wrfcId' };
         }
         try {
-          const workmap = WrfcController.getInstance().getWorkmap();
+          const workmap = config.wrfcController?.getWorkmap();
+          if (!workmap) {
+            return { success: false, error: 'WRFC controller is not configured in this runtime.' };
+          }
           const events = workmap.read(input.wrfcId);
           const detail = input.detail ?? 'summary';
           return {
@@ -587,5 +599,12 @@ export const agentTool: Tool = {
         return { success: false, error: `Unhandled mode: '${input.mode}'` };
       }
     }
-  },
-};
+    },
+  };
+}
+
+export const agentTool = createAgentTool({
+  manager: new AgentManager(),
+  messageBus: new AgentMessageBus(),
+  configManager: new ConfigManager(),
+});

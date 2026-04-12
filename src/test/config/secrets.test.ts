@@ -2,7 +2,7 @@ import { describe, test, expect, beforeEach, afterEach } from 'bun:test';
 import { mkdirSync, rmSync, existsSync, readFileSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
-import { SecretsManager, _resetSecretsManagerForTesting } from '../../config/secrets.ts';
+import { SecretsManager } from '../../config/secrets.ts';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -31,12 +31,10 @@ describe('SecretsManager', () => {
     userHome = join(tmpDir, 'home');
     mkdirSync(projectRoot, { recursive: true });
     mkdirSync(userHome, { recursive: true });
-    _resetSecretsManagerForTesting();
   });
 
   afterEach(() => {
     rmSync(tmpDir, { recursive: true, force: true });
-    _resetSecretsManagerForTesting();
     // Clean up any env vars set during tests
     delete process.env['TEST_SECRET_KEY'];
     delete process.env['MY_API_KEY'];

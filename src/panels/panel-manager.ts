@@ -5,19 +5,6 @@
 import type { Panel, PanelRegistration, PanelCategory } from './types.ts';
 
 // ---------------------------------------------------------------------------
-// Singleton instance
-// ---------------------------------------------------------------------------
-
-let _instance: PanelManager | null = null;
-
-export function getPanelManager(): PanelManager {
-  if (!_instance) {
-    _instance = new PanelManager();
-  }
-  return _instance;
-}
-
-// ---------------------------------------------------------------------------
 // Pane
 // ---------------------------------------------------------------------------
 

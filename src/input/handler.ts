@@ -19,8 +19,6 @@ import { BookmarkModal } from './bookmark-modal.ts';
 import { SettingsModal } from './settings-modal.ts';
 import { SessionPickerModal } from './session-picker-modal.ts';
 import { ProfilePickerModal } from './profile-picker-modal.ts';
-import { getPanelManager } from '../panels/panel-manager.ts';
-import { getKeybindingsManager } from './keybindings.ts';
 import {
   IMAGE_EXTENSIONS,
   cleanupMarkerRegistry,
@@ -82,11 +80,11 @@ import {
   handleProcessModalToken,
 } from './handler-picker-routes.ts';
 import { handleGlobalShortcutToken } from './handler-shortcuts.ts';
+import { feedInputTokens } from './handler-feed.ts';
+import { handlePanelIntegrationAction as runPanelIntegrationAction } from './panel-integration-actions.ts';
 import type { Panel } from '../panels/types.ts';
-import { FileExplorerPanel } from '../panels/file-explorer-panel.ts';
-import { FilePreviewPanel } from '../panels/file-preview-panel.ts';
-import { SymbolOutlinePanel } from '../panels/symbol-outline-panel.ts';
-import { ApprovalPanel } from '../panels/approval-panel.ts';
+import type { UiRuntimeServices } from '../runtime/ui-services.ts';
+export { handlePanelIntegrationAction } from './panel-integration-actions.ts';
 
 /**
  * InputHandler - Owns prompt text, paste registry, and keyboard/mouse handling.
@@ -116,14 +114,14 @@ export class InputHandler {
   private commandContext: CommandContext | undefined = undefined;
   public autocomplete: AutocompleteEngine | null = null;
   public filePicker = new FilePickerModal();
-  public modelPicker = new ModelPickerModal();
+  public modelPicker: ModelPickerModal;
   public selectionModal = new SelectionModal();
   public searchManager = new SearchManager();
-  public processModal = new ProcessModal();
-  public liveTailModal = new LiveTailModal();
-  public agentDetailModal = new AgentDetailModal();
+  public processModal: ProcessModal;
+  public liveTailModal: LiveTailModal;
+  public agentDetailModal: AgentDetailModal;
   public contextInspectorModal = new ContextInspectorModal();
-  public bookmarkModal = new BookmarkModal();
+  public bookmarkModal: BookmarkModal;
   public blockActionsMenu = new BlockActionsMenu();
   public settingsModal = new SettingsModal();
 
@@ -133,8 +131,8 @@ export class InputHandler {
    */
   public modalStack: string[] = [];
   public modalReturnFocus: 'prompt' | 'panel' | 'indicator' = 'prompt';
-  public sessionPickerModal = new SessionPickerModal();
-  public profilePickerModal = new ProfilePickerModal();
+  public sessionPickerModal: SessionPickerModal;
+  public profilePickerModal: ProfilePickerModal;
   /** True when the help overlay is visible. */
   public helpOverlayActive = false;
   public helpScrollOffset = 0;
@@ -176,7 +174,43 @@ export class InputHandler {
     private getHistory: () => InfiniteBuffer,
     private scroll: (delta: number) => void,
     private exitApp: () => void,
-  ) {}
+    private readonly uiServices: Pick<UiRuntimeServices,
+      'agentManager'
+      | 'agentMessageBus'
+      | 'benchmarkStore'
+      | 'bookmarkManager'
+      | 'favoritesStore'
+      | 'keybindingsManager'
+      | 'panelManager'
+      | 'processManager'
+      | 'profileManager'
+      | 'providerRegistry'
+      | 'sessionManager'
+      | 'wrfcController'
+    >,
+  ) {
+    this.modelPicker = new ModelPickerModal(
+      uiServices.favoritesStore,
+      uiServices.benchmarkStore,
+      uiServices.providerRegistry,
+    );
+    this.processModal = new ProcessModal({
+      agentManager: uiServices.agentManager,
+      processManager: uiServices.processManager,
+      wrfcController: uiServices.wrfcController,
+    });
+    this.liveTailModal = new LiveTailModal({
+      agentManager: uiServices.agentManager,
+      processManager: uiServices.processManager,
+    });
+    this.agentDetailModal = new AgentDetailModal({
+      agentManager: uiServices.agentManager,
+      agentMessageBus: uiServices.agentMessageBus,
+    });
+    this.bookmarkModal = new BookmarkModal(uiServices.bookmarkManager);
+    this.sessionPickerModal = new SessionPickerModal(uiServices.sessionManager);
+    this.profilePickerModal = new ProfilePickerModal(uiServices.profileManager);
+  }
 
   /**
    * setHistory - Wire in the InputHistory instance.
@@ -287,14 +321,14 @@ export class InputHandler {
    * handleBookmark - Ctrl+B: Toggle bookmark on the nearest block.
    */
   private handleBookmark(): void {
-    handleBookmark(this.conversationManager, this.getScrollTop, this.requestRender);
+    handleBookmark(this.conversationManager, this.getScrollTop, this.requestRender, this.uiServices.bookmarkManager);
   }
 
   /**
    * handleBlockSave - Ctrl+S: Save nearest block content to a file.
    */
   private handleBlockSave(): void {
-    handleBlockSave(this.conversationManager, this.getScrollTop, this.requestRender);
+    handleBlockSave(this.conversationManager, this.getScrollTop, this.requestRender, this.uiServices.bookmarkManager);
   }
 
   /**
@@ -433,234 +467,114 @@ export class InputHandler {
    * feed - Process raw stdin data through the tokenizer.
    */
   public feed(data: string): void {
-    const tokens = this.tokenizer.feed(data);
-    const history = this.getHistory();
-    const vHeight = this.getViewportHeight();
-    const scrollTop = this.getScrollTop();
-    const lineCount = history.getLineCount();
+    const immediateRequestRender = this.requestRender;
+    let renderRequested = false;
+    let isFeeding = true;
+    const bufferedRequestRender = (): void => {
+      if (isFeeding) {
+        renderRequested = true;
+        return;
+      }
+      immediateRequestRender();
+    };
 
-    const kb = getKeybindingsManager();
-
-    for (const token of tokens) {
-
-      const modalRoute = handleModalTokenRoutes({
-        history,
-        searchShortcutMatch: token.type === 'key' && kb.matches('search', token),
+    this.requestRender = bufferedRequestRender;
+    try {
+      const context = {
+        prompt: this.prompt,
+        cursorPos: this.cursorPos,
+        commandMode: this.commandMode,
+        panelFocused: this.panelFocused,
+        indicatorFocused: this.indicatorFocused,
+        helpOverlayActive: this.helpOverlayActive,
+        helpScrollOffset: this.helpScrollOffset,
+        shortcutsOverlayActive: this.shortcutsOverlayActive,
+        shortcutsScrollOffset: this.shortcutsScrollOffset,
+        nextPasteId: this.nextPasteId,
+        nextImageId: this.nextImageId,
+        mouseDownRow: this.mouseDownRow,
+        mouseDownCol: this.mouseDownCol,
+        contentWidth: this.contentWidth,
+        pasteRegistry: this.pasteRegistry,
+        imageRegistry: this.imageRegistry,
+        selection: this.selection,
         selectionModal: this.selectionModal,
         selectionCallback: this.selectionCallback,
         bookmarkModal: this.bookmarkModal,
         settingsModal: this.settingsModal,
         sessionPickerModal: this.sessionPickerModal,
         profilePickerModal: this.profilePickerModal,
-        helpOverlayActive: this.helpOverlayActive,
-        helpScrollOffset: this.helpScrollOffset,
-        shortcutsOverlayActive: this.shortcutsOverlayActive,
-        shortcutsScrollOffset: this.shortcutsScrollOffset,
         historySearch: this.historySearch,
-        prompt: this.prompt,
-        cursorPos: this.cursorPos,
-        modelPicker: this.modelPicker,
-        modalStack: this.modalStack,
-        commandContext: this.commandContext,
-        getViewportHeight: this.getViewportHeight,
-        requestRender: this.requestRender,
-        handleEscape: () => this.handleEscape(),
-        liveTailModal: this.liveTailModal,
-        processModal: this.processModal,
-        agentDetailModal: this.agentDetailModal,
-        contextInspectorModal: this.contextInspectorModal,
-        modalOpened: (name) => this.modalOpened(name),
-        filePicker: this.filePicker,
-        imageRegistry: this.imageRegistry,
-        nextImageId: this.nextImageId,
-        saveUndoState: () => this.saveUndoState(),
-        ensureInputCursorVisible: () => this.ensureInputCursorVisible(),
-        formatFileSize,
-        mediaTypeFromExt,
-        imageExtensions: IMAGE_EXTENSIONS,
-        blockActionsMenu: this.blockActionsMenu,
-        executeBlockAction: (id) => this.executeBlockAction(id),
-        searchManager: this.searchManager,
-        scroll: this.scroll,
-        getScrollTop: this.getScrollTop,
-      }, token);
-      this.selectionCallback = modalRoute.selectionCallback;
-      this.helpOverlayActive = modalRoute.helpOverlayActive;
-      this.helpScrollOffset = modalRoute.helpScrollOffset;
-      this.shortcutsOverlayActive = modalRoute.shortcutsOverlayActive;
-      this.shortcutsScrollOffset = modalRoute.shortcutsScrollOffset;
-      this.prompt = modalRoute.prompt;
-      this.cursorPos = modalRoute.cursorPos;
-      this.nextImageId = modalRoute.nextImageId;
-      if (modalRoute.handled) {
-        continue;
-      }
-
-      // --- Tab: toggle keyboard focus between prompt and active panel ---
-      const panelRoute = handlePanelFocusToken({
-        panelFocused: this.panelFocused,
-        commandMode: this.commandMode,
-        searchActive: this.searchManager.active,
-        autocompleteActive: !!this.autocomplete?.isActive,
-        requestRender: this.requestRender,
-        handlePathCompletion: () => this.handlePathCompletion(),
-        cyclePanelTab: (direction) => this.cyclePanelTab(direction),
-        onPanelInputConsumed: (activePanel, key) => this.handlePanelIntegrationAction(activePanel, key),
-      }, token);
-      this.panelFocused = panelRoute.panelFocused;
-      if (panelRoute.handled) {
-        continue;
-      }
-
-      const indicatorRoute = handleIndicatorFocusToken({
-        indicatorFocused: this.indicatorFocused,
-        modalOpened: (name) => this.modalOpened(name),
-        processModal: this.processModal,
-        requestRender: this.requestRender,
-      }, token);
-      this.indicatorFocused = indicatorRoute.indicatorFocused;
-      if (indicatorRoute.handled) {
-        continue;
-      }
-
-      const textRoute = handlePromptTextToken({
-        prompt: this.prompt,
-        cursorPos: this.cursorPos,
-        commandMode: this.commandMode,
-        nextPasteId: this.nextPasteId,
-        nextImageId: this.nextImageId,
-        pasteRegistry: this.pasteRegistry,
-        imageRegistry: this.imageRegistry,
-        inputHistory: this.inputHistory,
         commandRegistry: this.commandRegistry,
         commandContext: this.commandContext,
         autocomplete: this.autocomplete,
         filePicker: this.filePicker,
-        modalOpened: (name) => this.modalOpened(name),
+        modelPicker: this.modelPicker,
+        processModal: this.processModal,
+        liveTailModal: this.liveTailModal,
+        agentDetailModal: this.agentDetailModal,
+        contextInspectorModal: this.contextInspectorModal,
+        blockActionsMenu: this.blockActionsMenu,
+        searchManager: this.searchManager,
+        modalStack: this.modalStack,
+        inputHistory: this.inputHistory,
+        conversationManager: this.conversationManager,
+        getHistory: this.getHistory,
+        getViewportHeight: this.getViewportHeight,
+        getScrollTop: this.getScrollTop,
+        scroll: this.scroll,
+        requestRender: bufferedRequestRender,
+        modalOpened: (name: string) => this.modalOpened(name),
+        handleEscape: () => this.handleEscape(),
+        handleCopy: () => this.handleCopy(),
+        handleCtrlC: () => this.handleCtrlC(),
+        handleBlockCopy: () => this.handleBlockCopy(),
+        handleBookmark: () => this.handleBookmark(),
+        handleBlockSave: () => this.handleBlockSave(),
+        handleDiffApply: () => this.handleDiffApply(),
+        handleUndo: () => this.handleUndo(),
+        handleRedo: () => this.handleRedo(),
+        handlePaste: () => this.handlePaste(),
         saveUndoState: () => this.saveUndoState(),
-        ensureInputCursorVisible: () => this.ensureInputCursorVisible(),
-        registerPaste: (content) => this.registerPaste(content),
-        requestRender: this.requestRender,
-      }, token);
-      if (textRoute.handled) {
-        this.prompt = textRoute.prompt;
-        this.cursorPos = textRoute.cursorPos;
-        this.commandMode = textRoute.commandMode;
-        continue;
-      } else if (token.type === 'key') {
-        const shortcutState = {
-          prompt: this.prompt,
-          cursorPos: this.cursorPos,
-          commandMode: this.commandMode,
-          autocomplete: this.autocomplete,
-          historySearch: this.historySearch,
-          searchManager: this.searchManager,
-          conversationManager: this.conversationManager,
-          commandContext: this.commandContext,
-          contentWidth: this.contentWidth,
-          getScrollTop: this.getScrollTop,
-          getWrappedPromptInfo: (contentWidth: number) => this.getWrappedPromptInfo(contentWidth),
-          saveUndoState: () => this.saveUndoState(),
-          requestRender: this.requestRender,
-          scroll: this.scroll,
-          ensureInputCursorVisible: () => this.ensureInputCursorVisible(),
-          handleCopy: () => this.handleCopy(),
-          handleCtrlC: () => this.handleCtrlC(),
-          handleBlockCopy: () => this.handleBlockCopy(),
-          handleBookmark: () => this.handleBookmark(),
-          handleBlockSave: () => this.handleBlockSave(),
-          handleDiffApply: () => this.handleDiffApply(),
-          handleUndo: () => this.handleUndo(),
-          handleRedo: () => this.handleRedo(),
-          handlePaste: () => this.handlePaste(),
-          handleEscape: () => this.handleEscape(),
-          cyclePanelTab: (direction: 'next' | 'prev') => this.cyclePanelTab(direction),
-        };
-        if (handleGlobalShortcutToken(shortcutState, token, vHeight)) {
-          this.prompt = shortcutState.prompt;
-          this.cursorPos = shortcutState.cursorPos;
-          this.commandMode = shortcutState.commandMode;
-          continue;
-        }
-
-        // --- Command mode routing ---
-        const commandState = {
-          commandMode: this.commandMode,
-          prompt: this.prompt,
-          cursorPos: this.cursorPos,
-          autocomplete: this.autocomplete,
-          modalStack: this.modalStack,
-          commandRegistry: this.commandRegistry,
-          commandContext: this.commandContext,
-          conversationManager: this.conversationManager,
-          requestRender: this.requestRender,
-          handleEscape: () => this.handleEscape(),
-          syncCommandMode: (active: boolean) => {
-            this.commandMode = active;
-          },
-        };
-        if (handleCommandModeToken(commandState, token)) {
-          this.commandMode = commandState.commandMode;
-          this.prompt = commandState.prompt;
-          this.cursorPos = commandState.cursorPos;
-          continue;
-        }
-
-        const keyRoute = handlePromptKeyToken({
-          prompt: this.prompt,
-          cursorPos: this.cursorPos,
-          commandMode: this.commandMode,
-          contentWidth: this.contentWidth,
-          inputHistory: this.inputHistory,
-          indicatorFocused: this.indicatorFocused,
-          conversationManager: this.conversationManager,
-          commandContext: this.commandContext,
-          autocomplete: this.autocomplete,
-          blockActionsMenu: { open: (block: BlockMeta) => this.blockActionsMenu.open(block) },
-          processModal: this.processModal,
-          modalOpened: (name) => this.modalOpened(name),
-          saveUndoState: () => this.saveUndoState(),
-          ensureInputCursorVisible: (width) => this.ensureInputCursorVisible(width),
-          getWrappedPromptInfo: (width) => this.getWrappedPromptInfo(width),
-          moveCursorVertical: (direction) => this.moveCursorVertical(direction),
-          handlePathCompletion: () => this.handlePathCompletion(),
-          handleBlockToggle: () => this.handleBlockToggle(),
-          findMarkerAtPos: (pos) => this.findMarkerAtPos(pos),
-          cleanupMarkerRegistry: (text) => this.cleanupMarkerRegistry(text),
-          expandPrompt: (text) => this.expandPrompt(text),
-          scroll: this.scroll,
-          exitApp: this.exitApp,
-          requestRender: this.requestRender,
-        }, token);
-        if (keyRoute.handled) {
-          this.prompt = keyRoute.prompt;
-          this.cursorPos = keyRoute.cursorPos;
-          this.commandMode = keyRoute.commandMode;
-          this.indicatorFocused = keyRoute.indicatorFocused;
-          continue;
-        }
-      } else if (token.type === 'mouse') {
-        const mouseRoute = handleMouseToken({
-          conversationManager: this.conversationManager,
-          selection: this.selection,
-          mouseDownRow: this.mouseDownRow,
-          mouseDownCol: this.mouseDownCol,
-          scrollTop,
-          viewportHeight: vHeight,
-          lineCount,
-          scroll: this.scroll,
-          requestRender: this.requestRender,
-          handlePaste: () => this.handlePaste(),
-          handleCopy: () => this.handleCopy(),
-        }, token);
-        this.mouseDownRow = mouseRoute.mouseDownRow;
-        this.mouseDownCol = mouseRoute.mouseDownCol;
-        if (mouseRoute.handled) {
-          continue;
-        }
-      }
+        ensureInputCursorVisible: (contentWidth?: number) => this.ensureInputCursorVisible(contentWidth),
+        registerPaste: (content: string) => this.registerPaste(content),
+        executeBlockAction: (id: string) => this.executeBlockAction(id),
+        cyclePanelTab: (direction: 'next' | 'prev') => this.cyclePanelTab(direction),
+        onPanelInputConsumed: (activePanel: Panel | null, key: string) => this.handlePanelIntegrationAction(activePanel, key),
+        panelManager: this.uiServices.panelManager,
+        keybindingsManager: this.uiServices.keybindingsManager,
+        getWrappedPromptInfo: (contentWidth: number) => this.getWrappedPromptInfo(contentWidth),
+        moveCursorVertical: (direction: -1 | 1) => this.moveCursorVertical(direction),
+        handlePathCompletion: () => this.handlePathCompletion(),
+        handleBlockToggle: () => this.handleBlockToggle(),
+        findMarkerAtPos: (pos: number) => this.findMarkerAtPos(pos),
+        cleanupMarkerRegistry: (text: string) => this.cleanupMarkerRegistry(text),
+        expandPrompt: (text: string) => this.expandPrompt(text),
+        exitApp: this.exitApp,
+      };
+      feedInputTokens(context, this.tokenizer.feed(data));
+      this.prompt = context.prompt;
+      this.cursorPos = context.cursorPos;
+      this.commandMode = context.commandMode;
+      this.panelFocused = context.panelFocused;
+      this.indicatorFocused = context.indicatorFocused;
+      this.helpOverlayActive = context.helpOverlayActive;
+      this.helpScrollOffset = context.helpScrollOffset;
+      this.shortcutsOverlayActive = context.shortcutsOverlayActive;
+      this.shortcutsScrollOffset = context.shortcutsScrollOffset;
+      this.selectionCallback = context.selectionCallback;
+      this.nextPasteId = context.nextPasteId;
+      this.nextImageId = context.nextImageId;
+      this.mouseDownRow = context.mouseDownRow;
+      this.mouseDownCol = context.mouseDownCol;
+    } finally {
+      isFeeding = false;
+      this.requestRender = immediateRequestRender;
     }
-    this.requestRender();
+
+    if (renderRequested) {
+      immediateRequestRender();
+    }
   }
 
   /**
@@ -830,7 +744,7 @@ export class InputHandler {
    * Breaks at spaces; words wider than maxW are force-broken.
    */
   private cyclePanelTab(direction: 'next' | 'prev'): void {
-    const pm = getPanelManager();
+    const pm = this.uiServices.panelManager;
     if (pm.isVisible()) {
       if (direction === 'next') pm.nextPanel();
       else pm.prevPanel();
@@ -839,81 +753,10 @@ export class InputHandler {
   }
 
   private handlePanelIntegrationAction(activePanel: Panel | null, key: string): void {
-    handlePanelIntegrationAction(activePanel, key, this.commandContext);
+    runPanelIntegrationAction(this.uiServices.panelManager, activePanel, key, this.commandContext);
   }
 
   private wordWrapLine(line: string, maxW: number): string[] {
     return wordWrapLine(line, maxW);
   }
-}
-
-function ensurePreviewPanel(): FilePreviewPanel | null {
-  const panelManager = getPanelManager();
-  const existing = panelManager.getPanel('preview');
-  if (existing instanceof FilePreviewPanel) {
-    const pane = panelManager.getPaneOf('preview');
-    panelManager.activateById('preview');
-    if (pane) panelManager.focusPane(pane);
-    return existing;
-  }
-  const targetPane: 'top' | 'bottom' = panelManager.isBottomPaneVisible()
-    ? (panelManager.getFocusedPane() === 'top' ? 'bottom' : 'top')
-    : 'bottom';
-  const opened = panelManager.open('preview', targetPane);
-  panelManager.show();
-  panelManager.focusPane(targetPane);
-  return opened instanceof FilePreviewPanel ? opened : null;
-}
-
-function syncSymbolOutlineFromPreview(previewPanel: FilePreviewPanel): void {
-  const panelManager = getPanelManager();
-  const symbols = panelManager.getPanel('symbols');
-  const filePath = previewPanel.getCurrentFilePath();
-  const source = previewPanel.getSource();
-  if (symbols instanceof SymbolOutlinePanel && filePath && source !== null) {
-    symbols.loadFile(filePath, source);
-  }
-}
-
-export function handlePanelIntegrationAction(
-  activePanel: Panel | null,
-  key: string,
-  commandContext?: CommandContext,
-): boolean {
-  if (!activePanel) return false;
-
-  if ((key === 'enter' || key === 'return' || key === 'right') && activePanel instanceof FileExplorerPanel) {
-    const filePath = activePanel.getFocusedFilePath();
-    if (!filePath) return false;
-    const previewPanel = ensurePreviewPanel();
-    if (!previewPanel) return false;
-    previewPanel.openFile(filePath);
-    syncSymbolOutlineFromPreview(previewPanel);
-    return true;
-  }
-
-  if ((key === 'enter' || key === 'return') && activePanel instanceof SymbolOutlinePanel) {
-    const location = activePanel.getSelectedLocation();
-    if (!location) return false;
-    const previewPanel = ensurePreviewPanel();
-    if (!previewPanel) return false;
-    if (previewPanel.getCurrentFilePath() !== location.path) {
-      previewPanel.openFile(location.path);
-      syncSymbolOutlineFromPreview(previewPanel);
-    }
-    previewPanel.goToLine(location.line);
-    return true;
-  }
-
-  if ((key === 'enter' || key === 'return') && activePanel instanceof ApprovalPanel) {
-    const command = activePanel.getSelectedCommand();
-    if (!command || !commandContext?.executeCommand) return false;
-    const parts = command.replace(/^\//, '').split(/\s+/).filter(Boolean);
-    const [name, ...args] = parts;
-    if (!name) return false;
-    void commandContext.executeCommand(name, args).catch(() => {});
-    return true;
-  }
-
-  return false;
 }

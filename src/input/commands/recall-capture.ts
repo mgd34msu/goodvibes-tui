@@ -6,8 +6,6 @@ import {
   buildPluginSecurityMemoryAddOptions,
   buildPolicyPreflightMemoryAddOptions,
 } from '../../state/memory-ingest.ts';
-import { getPolicyRuntimeState } from '../../runtime/permissions/policy-runtime.ts';
-import { pluginManager } from '../../plugins/manager.ts';
 import { VALID_CLASSES, VALID_SCOPES, isValidClass, isValidScope } from './recall-shared.ts';
 
 export async function handleRecallAdd(args: string[], context: CommandContext): Promise<void> {
@@ -73,6 +71,7 @@ export async function handleRecallAdd(args: string[], context: CommandContext): 
 
 export async function handleRecallCapture(args: string[], context: CommandContext): Promise<void> {
   const registry = context.memoryRegistry;
+  const pluginManager = context.pluginManager;
   if (!registry) {
     context.print('[recall] Memory registry not available.');
     return;
@@ -103,7 +102,7 @@ export async function handleRecallCapture(args: string[], context: CommandContex
   }
 
   if (target === 'policy') {
-    const review = getPolicyRuntimeState().getSnapshot().lastPreflightReview;
+    const review = context.policyRuntimeState?.getSnapshot().lastPreflightReview;
     if (!review) {
       context.print('[recall] No policy preflight review is available to capture.');
       return;
@@ -130,6 +129,10 @@ export async function handleRecallCapture(args: string[], context: CommandContex
   }
 
   if (target === 'plugin') {
+    if (!pluginManager) {
+      context.print('[recall] Plugin manager not available.');
+      return;
+    }
     const pluginName = args[1];
     if (!pluginName) {
       context.print('[recall] Usage: /recall capture plugin <name>');

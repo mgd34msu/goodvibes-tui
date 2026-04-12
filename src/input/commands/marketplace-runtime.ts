@@ -1,7 +1,6 @@
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import type { CommandRegistry } from '../command-registry.ts';
-import { getPanelManager } from '../../panels/panel-manager.ts';
 import {
   exportEcosystemCatalogBundle,
   importEcosystemCatalogBundle,
@@ -21,6 +20,7 @@ import {
   type EcosystemEntryKind,
 } from '../../runtime/ecosystem/catalog.ts';
 import { buildEcosystemRecommendations } from '../../runtime/ecosystem/recommendations.ts';
+import { openCommandPanel } from './runtime-services.ts';
 
 function resolveMarketplaceEntry(kind: EcosystemEntryKind, entryId: string): EcosystemCatalogEntry | null {
   return loadEcosystemCatalog(kind).find((candidate) => candidate.id === entryId) ?? null;
@@ -40,12 +40,7 @@ export function registerMarketplaceRuntimeCommands(registry: CommandRegistry): v
     handler(args, ctx) {
       const sub = args[0] ?? 'open';
       if (sub === 'open' || sub === 'panel') {
-        if (ctx.showPanel) ctx.showPanel('marketplace');
-        else {
-          const panelManager = getPanelManager();
-          panelManager.open('marketplace');
-          panelManager.show();
-        }
+        openCommandPanel(ctx, 'marketplace');
         return;
       }
       if (sub === 'overview') {

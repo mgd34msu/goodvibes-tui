@@ -12,7 +12,7 @@ import {
   resolvePrimaryScrollableSection,
   type PanelWorkspaceSection,
 } from './polish.ts';
-import { getLocalUserAuthManager } from '../runtime/local-auth.ts';
+import { UserAuthManager } from '../security/user-auth.ts';
 
 const C = {
   ...DEFAULT_PANEL_PALETTE,
@@ -29,13 +29,15 @@ function formatRoles(roles: readonly string[]): string {
 export class LocalAuthPanel extends BasePanel {
   private selectedIndex = 0;
   private scrollOffset = 0;
+  private readonly authManager: UserAuthManager;
 
-  public constructor() {
+  public constructor(authManager: UserAuthManager) {
     super('local-auth', 'Local Auth', 'U', 'monitoring');
+    this.authManager = authManager;
   }
 
   public handleInput(key: string): boolean {
-    const users = getLocalUserAuthManager().inspect().users;
+    const users = this.authManager.inspect().users;
     if (users.length === 0) return false;
     if (key === 'up' || key === 'k') {
       this.selectedIndex = Math.max(0, this.selectedIndex - 1);
@@ -54,7 +56,7 @@ export class LocalAuthPanel extends BasePanel {
     this.needsRender = false;
     const intro = 'Manage local daemon and HTTP-listener auth users, bootstrap state, and active sessions.';
     const footerLines = [buildPanelLine(width, [[' /auth local review  /auth local add-user  /auth local rotate-password  /auth local revoke-session ', C.dim]])];
-    const snapshot = getLocalUserAuthManager().inspect();
+    const snapshot = this.authManager.inspect();
     this.selectedIndex = Math.min(this.selectedIndex, Math.max(0, snapshot.users.length - 1));
     const selected = snapshot.users[this.selectedIndex];
     const issueMessages: string[] = [];

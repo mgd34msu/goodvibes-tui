@@ -1,4 +1,4 @@
-import { executeFetchInput } from '../tools/fetch/index.ts';
+import { FetchRuntimeService, type FetchRuntimeDeps } from '../tools/fetch/index.ts';
 import type { FetchExtractMode } from '../tools/fetch/schema.ts';
 import { WebSearchProviderRegistry } from './provider-registry.ts';
 import type {
@@ -50,22 +50,12 @@ function shapeResultForVerbosity(result: WebSearchResult, verbosity: WebSearchVe
 }
 
 export class WebSearchService {
-  private static active: WebSearchService | null = null;
+  private readonly fetchRuntime = new FetchRuntimeService();
 
-  constructor(private readonly registry = WebSearchProviderRegistry.getActive()) {
-    WebSearchService.active = this;
-  }
-
-  static getActive(): WebSearchService {
-    if (!WebSearchService.active) {
-      WebSearchService.active = new WebSearchService();
-    }
-    return WebSearchService.active;
-  }
-
-  static resetActiveForTesting(): void {
-    WebSearchService.active = null;
-  }
+  constructor(
+    private readonly registry: WebSearchProviderRegistry,
+    private readonly fetchDeps: FetchRuntimeDeps = {},
+  ) {}
 
   async getStatus(): Promise<WebSearchServiceStatus> {
     const providers = this.registry.list();
@@ -110,7 +100,7 @@ export class WebSearchService {
       .filter(({ result, index }) => index < evidenceTopN && (!result.evidence || result.evidence.length === 0));
     if (selectedIndexes.length === 0) return results;
 
-    const fetched = await executeFetchInput({
+    const fetched = await this.fetchRuntime.execute({
       urls: selectedIndexes.map(({ result }) => ({
         url: result.url,
         extract,
@@ -121,7 +111,7 @@ export class WebSearchService {
       sanitize_mode: 'safe-text',
       ...(request.trustedHosts ? { trusted_hosts: [...request.trustedHosts] } : {}),
       ...(request.blockedHosts ? { blocked_hosts: [...request.blockedHosts] } : {}),
-    });
+    }, this.fetchDeps);
 
     const evidenceByUrl = new Map<string, WebSearchEvidence>();
     for (const result of fetched.results ?? []) {

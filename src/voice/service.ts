@@ -17,22 +17,7 @@ export interface VoiceServiceStatus {
 }
 
 export class VoiceService {
-  private static active: VoiceService | null = null;
-
-  constructor(private readonly registry = VoiceProviderRegistry.getActive()) {
-    VoiceService.active = this;
-  }
-
-  static getActive(): VoiceService {
-    if (!VoiceService.active) {
-      VoiceService.active = new VoiceService();
-    }
-    return VoiceService.active;
-  }
-
-  static resetActiveForTesting(): void {
-    VoiceService.active = null;
-  }
+  constructor(private readonly registry: VoiceProviderRegistry) {}
 
   async getStatus(enabled: boolean): Promise<VoiceServiceStatus> {
     const providers = await this.registry.status();

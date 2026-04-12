@@ -34,7 +34,7 @@ import {
   emitTransportSyncing,
   emitTransportTerminalFailure,
 } from '../runtime/emitters/index.ts';
-import { getHookDispatcher } from '../hooks/index.ts';
+import type { HookDispatcher } from '../hooks/index.ts';
 import type { HookCategory, HookEventPath, HookPhase } from '../hooks/types.ts';
 
 /** Shape of an agent_message_chunk session update that carries text content. */
@@ -72,6 +72,7 @@ export class AcpConnection {
   private toolCallsMade = 0;
   private lastProgressText = '';
   private transportClosed = false;
+  private readonly hookDispatcher: Pick<HookDispatcher, 'fire'> | null;
 
   constructor(
     id: string,
@@ -79,11 +80,13 @@ export class AcpConnection {
     spawnCmd: string[],
     requestPermission: PermissionRequestHandler = async () => ({ approved: false, remember: false }),
     runtimeBus: RuntimeEventBus | null = null,
+    hookDispatcher: Pick<HookDispatcher, 'fire'> | null = null,
   ) {
     this.id = id;
     this.spawnCmd = spawnCmd;
     this.requestPermission = requestPermission;
     this.runtimeBus = runtimeBus;
+    this.hookDispatcher = hookDispatcher;
     this.info = {
       id,
       task: task.description,
@@ -331,8 +334,9 @@ export class AcpConnection {
   }
 
   private async fireTransportHook(specific: string, payload: Record<string, unknown>): Promise<void> {
+    if (!this.hookDispatcher) return;
     try {
-      await getHookDispatcher().fire({
+      await this.hookDispatcher.fire({
         path: `Lifecycle:transport:${specific}` as HookEventPath,
         phase: 'Lifecycle' as HookPhase,
         category: 'transport' as HookCategory,

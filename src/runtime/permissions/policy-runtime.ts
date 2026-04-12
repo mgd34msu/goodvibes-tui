@@ -173,16 +173,3 @@ export class PolicyRuntimeState {
     }
   }
 }
-
-let _policyRuntimeState: PolicyRuntimeState | null = null;
-
-export function getPolicyRuntimeState(): PolicyRuntimeState {
-  if (_policyRuntimeState === null) {
-    _policyRuntimeState = new PolicyRuntimeState();
-  }
-  return _policyRuntimeState;
-}
-
-export function resetPolicyRuntimeStateForTests(): void {
-  _policyRuntimeState = null;
-}

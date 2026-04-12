@@ -6,7 +6,7 @@
  */
 
 import { unlinkSync } from 'node:fs';
-import { getSessionManager, type SessionInfo } from '../sessions/manager.ts';
+import type { SessionInfo, SessionManager } from '../sessions/manager.ts';
 import type { ConversationManager } from '../core/conversation.ts';
 
 // ---------------------------------------------------------------------------
@@ -24,12 +24,13 @@ export class SessionPickerModal {
   /** Last status message to show in the modal (e.g. error or success). */
   public statusMessage = '';
 
+  public constructor(private readonly sessionManager: SessionManager) {}
+
   /**
    * Open the modal, loading sessions from SessionManager.
    */
   open(): void {
-    const manager = getSessionManager();
-    this.sessions = manager.list();
+    this.sessions = this.sessionManager.list();
     this.selectedIndex = 0;
     this.scrollOffset = 0;
     this.statusMessage = '';
@@ -75,8 +76,7 @@ export class SessionPickerModal {
     if (!session) return false;
 
     try {
-      const manager = getSessionManager();
-      const { meta, messages } = manager.load(session.name);
+      const { meta, messages } = this.sessionManager.load(session.name);
       conversationManager.resetAll();
       conversationManager.fromJSON({ messages: messages as never[] });
       if (meta.title) conversationManager.title = meta.title;
@@ -106,8 +106,7 @@ export class SessionPickerModal {
       // Delete directly via filePath so it works with any session directory
       unlinkSync(session.filePath);
       // Reload list from the global session manager (removes the deleted entry)
-      const manager = getSessionManager();
-      this.sessions = manager.list();
+      this.sessions = this.sessionManager.list();
       // Adjust selection
       if (this.selectedIndex >= this.sessions.length) {
         this.selectedIndex = Math.max(0, this.sessions.length - 1);

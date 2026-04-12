@@ -748,46 +748,36 @@ export async function scanLocalhost(): Promise<ScanResult> {
  * Full scan: localhost first, then all /24 subnet IPs.
  * Returns merged, deduplicated results.
  */
-let _scanning = false;
-
 export async function scan(
   onProgress?: (completed: number, total: number) => void,
 ): Promise<ScanResult> {
-  if (_scanning) {
-    return { servers: [], scannedHosts: 0, scannedPorts: 0, durationMs: 0 };
-  }
-  _scanning = true;
   const start = Date.now();
-  try {
-    // Scan localhost first
-    const localhostServers = await scanHosts(['127.0.0.1']);
+  // Scan localhost first
+  const localhostServers = await scanHosts(['127.0.0.1']);
 
-    // Collect subnet IPs, excluding loopback
-    const subnetIPs = getLocalSubnets().filter((ip) => ip !== '127.0.0.1');
+  // Collect subnet IPs, excluding loopback
+  const subnetIPs = getLocalSubnets().filter((ip) => ip !== '127.0.0.1');
 
-    const subnetServers = subnetIPs.length > 0
-      ? await scanHosts(subnetIPs, onProgress)
-      : [];
+  const subnetServers = subnetIPs.length > 0
+    ? await scanHosts(subnetIPs, onProgress)
+    : [];
 
-    // Merge and deduplicate by host:port
-    const seen = new Set<string>();
-    const allServers: DiscoveredServer[] = [];
-    for (const server of [...localhostServers, ...subnetServers]) {
-      const key = `${server.host}:${server.port}`;
-      if (!seen.has(key)) {
-        seen.add(key);
-        allServers.push(server);
-      }
+  // Merge and deduplicate by host:port
+  const seen = new Set<string>();
+  const allServers: DiscoveredServer[] = [];
+  for (const server of [...localhostServers, ...subnetServers]) {
+    const key = `${server.host}:${server.port}`;
+    if (!seen.has(key)) {
+      seen.add(key);
+      allServers.push(server);
     }
-
-    const scannedHosts = 1 + subnetIPs.length;
-    return {
-      servers: allServers,
-      scannedHosts,
-      scannedPorts: KNOWN_PORTS.length,
-      durationMs: Date.now() - start,
-    };
-  } finally {
-    _scanning = false;
   }
+
+  const scannedHosts = 1 + subnetIPs.length;
+  return {
+    servers: allServers,
+    scannedHosts,
+    scannedPorts: KNOWN_PORTS.length,
+    durationMs: Date.now() - start,
+  };
 }

@@ -5,7 +5,9 @@ import { tmpdir } from 'node:os';
 import { PanelManager } from '../../panels/panel-manager.ts';
 import { registerBuiltinPanels } from '../../panels/builtin-panels.ts';
 import { SkillsPanel, discoverSkills } from '../../panels/skills-panel.ts';
-import type { RuntimeEventBus } from '../../runtime/events/index.ts';
+import { RuntimeEventBus } from '../../runtime/events/index.ts';
+import { createRuntimeServices } from '../../runtime/services.ts';
+import { createRuntimeStore } from '../../runtime/store/index.ts';
 import type { Line } from '../../types/grid.ts';
 
 function linesText(lines: Line[]): string {
@@ -46,7 +48,18 @@ describe('SkillsPanel', () => {
 
   test('is registered as a built-in panel', () => {
     const manager = new PanelManager();
-    registerBuiltinPanels(manager, { runtimeBus: {} as RuntimeEventBus });
+    const services = createRuntimeServices({
+      runtimeBus: new RuntimeEventBus(),
+      runtimeStore: createRuntimeStore(),
+    });
+    registerBuiltinPanels(manager, {
+      runtimeBus: new RuntimeEventBus(),
+      providerRegistry: services.providerRegistry,
+      tokenAuditor: services.tokenAuditor,
+      panelHealthMonitor: services.panelHealthMonitor,
+      worktreeRegistry: services.worktreeRegistry,
+      sandboxSessionRegistry: services.sandboxSessionRegistry,
+    });
     expect(manager.getRegisteredTypes().some((entry) => entry.id === 'skills')).toBe(true);
   });
 

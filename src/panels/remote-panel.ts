@@ -2,7 +2,9 @@ import type { Line } from '../types/grid.ts';
 import { createEmptyLine } from '../types/grid.ts';
 import { BasePanel } from './base-panel.ts';
 import type { RuntimeStore } from '../runtime/store/index.ts';
-import { getDistributedRuntimeManager, getRemoteRunnerRegistry, getRemoteSupervisor } from '../runtime/remote/index.ts';
+import type { DistributedRuntimeManager } from '../runtime/remote/distributed-runtime-manager.ts';
+import type { RemoteRunnerRegistry } from '../runtime/remote/runner-registry.ts';
+import type { RemoteSupervisor } from '../runtime/remote/supervisor.ts';
 import {
   buildDetailBlock,
   buildEmptyState,
@@ -53,6 +55,12 @@ function truncate(text: string, width: number): string {
   return truncateDisplay(text, width);
 }
 
+export interface RemotePanelDeps {
+  readonly distributedRuntime: Pick<DistributedRuntimeManager, 'getSnapshot'>;
+  readonly remoteRunnerRegistry: Pick<RemoteRunnerRegistry, 'listContracts' | 'ensureContractsFromStore' | 'listArtifacts' | 'listPools' | 'getContract'>;
+  readonly remoteSupervisor: Pick<RemoteSupervisor, 'getSnapshot'>;
+}
+
 export class RemotePanel extends BasePanel {
   private readonly store?: RuntimeStore;
   private readonly unsub: (() => void) | null;
@@ -60,7 +68,10 @@ export class RemotePanel extends BasePanel {
   private scrollOffset = 0;
   private browseMode: 'connections' | 'contracts' = 'connections';
 
-  public constructor(store?: RuntimeStore) {
+  public constructor(
+    store: RuntimeStore | undefined,
+    private readonly deps: RemotePanelDeps,
+  ) {
     super('remote', 'Remote', 'R', 'monitoring');
     this.store = store;
     this.unsub = store ? store.subscribe(() => this.markDirty()) : null;
@@ -72,7 +83,7 @@ export class RemotePanel extends BasePanel {
 
   public handleInput(key: string): boolean {
     const activeConnections = this.getActiveConnections();
-    const contracts = this.store ? getRemoteRunnerRegistry().listContracts() : [];
+    const contracts = this.store ? this.deps.remoteRunnerRegistry.listContracts() : [];
     const browseCount = this.browseMode === 'connections' && activeConnections.length > 0
       ? activeConnections.length
       : contracts.length;
@@ -143,13 +154,13 @@ export class RemotePanel extends BasePanel {
     const daemon = state.daemon;
     const acp = state.acp;
     const activeConnections = this.getActiveConnections();
-    const remoteRegistry = getRemoteRunnerRegistry();
-    const distributed = getDistributedRuntimeManager().getSnapshot() as {
+    const remoteRegistry = this.deps.remoteRunnerRegistry;
+    const distributed = this.deps.distributedRuntime.getSnapshot() as {
       pairRequests?: { pending?: number };
       peers?: { total?: number; connected?: number; nodes?: number; devices?: number };
       work?: { queued?: number; claimed?: number };
     };
-    const supervisor = getRemoteSupervisor().getSnapshot(this.store);
+    const supervisor = this.deps.remoteSupervisor.getSnapshot(this.store);
     remoteRegistry.ensureContractsFromStore(this.store);
     const artifactCount = remoteRegistry.listArtifacts().length;
     const pools = remoteRegistry.listPools();

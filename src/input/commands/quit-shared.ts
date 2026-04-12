@@ -131,7 +131,7 @@ export async function executeWriteQuit(
   }
 
   const repoRoot = options.getRepoRoot?.(cwd) ?? GitService.getRepoRoot(cwd) ?? cwd;
-  const git = options.gitFactory?.(repoRoot) ?? GitService.getInstance(repoRoot);
+  const git = options.gitFactory?.(repoRoot) ?? new GitService(repoRoot);
 
   try {
     ctx.print(`[wq] Staging changes in ${repoRoot}...`);

@@ -38,24 +38,12 @@ type MessageOptions = {
 const DEFAULT_TTL_MS = 5 * 60 * 1000;
 
 export class AgentMessageBus {
-  private static instance: AgentMessageBus | null = null;
   private messages = new Map<string, AgentMessage[]>();
   private subscriptions = new Map<string, Set<MessageCallback>>();
   private identities = new Map<string, AgentCommunicationMetadata>([
     ['orchestrator', { agentId: 'orchestrator', role: 'orchestrator' }],
   ]);
   private runtimeBus: RuntimeEventBus | null = null;
-
-  static getInstance(): AgentMessageBus {
-    if (!AgentMessageBus.instance) {
-      AgentMessageBus.instance = new AgentMessageBus();
-    }
-    return AgentMessageBus.instance;
-  }
-
-  static resetInstance(): void {
-    AgentMessageBus.instance = null;
-  }
 
   setRuntimeBus(runtimeBus: RuntimeEventBus | null): void {
     this.runtimeBus = runtimeBus;

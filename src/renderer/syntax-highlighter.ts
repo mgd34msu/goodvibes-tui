@@ -442,21 +442,13 @@ export class SyntaxHighlighter {
   private service: TreeSitterService;
   private cache: Map<string, HighlightedLine[]> = new Map();
   private pending: Set<string> = new Set();
-  private static instance: SyntaxHighlighter | null = null;
 
-  private constructor() {
-    this.service = TreeSitterService.getInstance();
+  constructor() {
+    this.service = new TreeSitterService();
     // Kick off WASM initialization in background
     this.service.initialize().catch((err: unknown) => {
       logger.warn('SyntaxHighlighter: background init failed', { error: String(err) });
     });
-  }
-
-  static getInstance(): SyntaxHighlighter {
-    if (!SyntaxHighlighter.instance) {
-      SyntaxHighlighter.instance = new SyntaxHighlighter();
-    }
-    return SyntaxHighlighter.instance;
   }
 
   /**
@@ -547,6 +539,3 @@ export class SyntaxHighlighter {
     return this.cache.size;
   }
 }
-
-/** Global singleton — import and use directly. */
-export const syntaxHighlighter = SyntaxHighlighter.getInstance();

@@ -18,10 +18,10 @@
  */
 
 import type { SlashCommand, CommandContext } from '../command-registry.ts';
-import { getSessionOrchestration } from '../../sessions/orchestration/index.ts';
 import type { CancellationScope, CrossSessionTaskRef } from '../../sessions/orchestration/index.ts';
 import { VALID_SCOPES } from '../../sessions/orchestration/index.ts';
 import { handleSessionWorkflowCommand } from './session-workflow.ts';
+import { requireSessionOrchestration } from './runtime-services.ts';
 
 // ── Argument parsing helpers ──────────────────────────────────────────────────
 
@@ -99,7 +99,7 @@ function handleLinkTask(args: string[], context: CommandContext): void {
   const dependsOnRaw = flagValue(args, '--depends-on');
   const label = flagValue(args, '--label');
 
-  const orchestration = context.sessionOrchestration ?? getSessionOrchestration();
+  const orchestration = requireSessionOrchestration(context);
 
   const ref: CrossSessionTaskRef = {
     sessionId,
@@ -143,7 +143,7 @@ function handleHandoff(args: string[], context: CommandContext): void {
     return;
   }
 
-  const orchestration = context.sessionOrchestration ?? getSessionOrchestration();
+  const orchestration = requireSessionOrchestration(context);
 
   const result = orchestration.initiateHandoff(
     { sessionId: fromSessionId, taskId },
@@ -173,7 +173,7 @@ function handleGraph(args: string[], context: CommandContext): void {
   const filterSession = flagValue(args, '--session');
   const format = flagValue(args, '--format') ?? 'text';
 
-  const orchestration = context.sessionOrchestration ?? getSessionOrchestration();
+  const orchestration = requireSessionOrchestration(context);
   const snap = orchestration.snapshot();
 
   const refs = Object.values(snap.refs);
@@ -280,7 +280,7 @@ function handleCancel(args: string[], context: CommandContext): void {
     return;
   }
 
-  const orchestration = context.sessionOrchestration ?? getSessionOrchestration();
+  const orchestration = requireSessionOrchestration(context);
 
   const result = orchestration.cancel({
     sessionId,

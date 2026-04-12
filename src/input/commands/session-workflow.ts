@@ -1,12 +1,13 @@
 import { randomBytes } from 'node:crypto';
 
 import type { CommandContext, CommandRegistry } from '../command-registry.ts';
-import { getSessionManager, type SessionMeta } from '../../sessions/manager.ts';
+import { type SessionMeta } from '../../sessions/manager.ts';
 import type { TranscriptEventKind } from '../../core/transcript-events/index.ts';
 import type { ConversationTitleSource } from '../../core/conversation.ts';
+import { HelperModel } from '../../config/helper-model.ts';
 import type { SessionReturnContextSummary } from '../../runtime/session-return-context.ts';
 import { formatReturnContextForDisplay, getReturnContextMode, maybeAssistReturnContextSummary } from '../../runtime/session-return-context.ts';
-import { getPanelManager } from '../../panels/panel-manager.ts';
+import { requirePanelManager, requireSessionManager } from './runtime-services.ts';
 
 function parseTranscriptKind(raw: string | undefined): TranscriptEventKind | 'all' {
   const normalized = (raw ?? 'all').toLowerCase().replace(/-/g, '_');
@@ -77,9 +78,9 @@ function buildTranscriptReviewLines(
   ];
 }
 
-function reopenPanelsFromReturnContext(summary: SessionReturnContextSummary | undefined): string[] {
+function reopenPanelsFromReturnContext(ctx: CommandContext, summary: SessionReturnContextSummary | undefined): string[] {
   if (!summary?.openPanels || summary.openPanels.length === 0) return [];
-  const panelManager = getPanelManager();
+  const panelManager = requirePanelManager(ctx);
   const reopened: string[] = [];
   for (const panelId of summary.openPanels.slice(0, 4)) {
     try {
@@ -142,7 +143,7 @@ function printSessionExport(
 }
 
 export async function handleSessionWorkflowCommand(args: string[], ctx: CommandContext): Promise<boolean> {
-  const sm = getSessionManager();
+  const sm = requireSessionManager(ctx);
   const sub = args[0];
 
   if (!sub) {
@@ -249,8 +250,9 @@ export async function handleSessionWorkflowCommand(args: string[], ctx: CommandC
       if (meta.provider) ctx.runtime.provider = meta.provider;
       ctx.renderRequest();
       ctx.print(`Resumed session: ${found.name}\n  Name: ${meta.title || '(untitled)'}\n  Messages: ${messages.length}\n  Model: ${meta.model || ctx.runtime.model}`);
-      const reopenedPanels = reopenPanelsFromReturnContext(meta.returnContext);
-      if (getReturnContextMode() !== 'off' && meta.returnContext) {
+      const reopenedPanels = reopenPanelsFromReturnContext(ctx, meta.returnContext);
+      const returnContextMode = getReturnContextMode(ctx.configManager);
+      if (returnContextMode !== 'off' && meta.returnContext) {
         for (const line of formatReturnContextForDisplay(meta.returnContext)) {
           ctx.print(`  ${line}`);
         }
@@ -263,8 +265,12 @@ export async function handleSessionWorkflowCommand(args: string[], ctx: CommandC
         if ((meta.returnContext.worktreePaths?.length ?? 0) > 0) {
           ctx.print(`  Worktree re-entry: /worktree review`);
         }
-        if (getReturnContextMode() === 'assisted') {
-          void maybeAssistReturnContextSummary(meta.returnContext).then((assisted) => {
+        if (returnContextMode === 'assisted') {
+          const helperModel = new HelperModel({
+            configManager: ctx.configManager,
+            providerRegistry: ctx.providerRegistry,
+          });
+          void maybeAssistReturnContextSummary(ctx.configManager, helperModel, meta.returnContext).then((assisted) => {
             if (!assisted.assistedNarrative) return;
             ctx.print(`  Assist: ${assisted.assistedNarrative}`);
             ctx.renderRequest();

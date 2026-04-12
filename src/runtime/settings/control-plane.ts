@@ -1,284 +1,63 @@
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
-import { homedir } from 'node:os';
 import type { ConfigManager } from '../../config/manager.ts';
 import { CONFIG_SCHEMA } from '../../config/index.ts';
 import type { ConfigKey } from '../../config/index.ts';
-import { getProfileManager } from '../../profiles/manager.ts';
+import { ProfileManager } from '../../profiles/manager.ts';
 import type { ManagedSettingsBundle } from '../sandbox/types.ts';
+import {
+  configSnapshot,
+  defaultStore,
+  getConfigControlPlaneDir,
+  inferRisk,
+  makeRollbackToken,
+  readStore,
+  sourcePriority,
+  toLayerRecord,
+  trimStore,
+  writeStore,
+  type ManagedBundleChange,
+  type ManagedRollbackRecord,
+  type ManagedSettingLock,
+  type ResolvedSettingEntry,
+  type ResolvedSettingLookup,
+  type SettingsConflictRecord,
+  type SettingsConflictResolution,
+  type SettingsControlPlaneSnapshot,
+  type SettingsControlPlaneStore,
+  type SettingsLayerRecord,
+  type SettingsSource,
+  type SettingsSyncBundle,
+  type SettingsSyncEvent,
+  type StagedManagedBundle,
+  type SyncSurface,
+} from './control-plane-store.ts';
 
-type SyncSurface = 'profiles' | 'managed' | 'settings-sync';
-type SyncDirection = 'export' | 'import' | 'apply' | 'pull' | 'push' | 'rollback';
-type SettingsSource = 'default' | 'local' | 'synced' | 'managed';
+export type {
+  ManagedBundleChange,
+  ManagedRollbackRecord,
+  ManagedSettingLock,
+  ResolvedSettingEntry,
+  ResolvedSettingLookup,
+  SettingsConflictRecord,
+  SettingsConflictResolution,
+  SettingsControlPlaneSnapshot,
+  SettingsLayerRecord,
+  SettingsSource,
+  SettingsSyncBundle,
+  SettingsSyncEvent,
+  StagedManagedBundle,
+};
 
-export interface SettingsSyncEvent {
-  readonly surface: SyncSurface;
-  readonly direction: SyncDirection;
-  readonly path: string;
-  readonly timestamp: number;
-  readonly detail: string;
+export function recordSettingsSyncEvent(event: SettingsSyncEvent, configDir?: string): void {
+  const store = readStore(configDir);
+  writeStore(trimStore({ ...store, events: [...store.events, event] }), configDir);
 }
 
-export interface ManagedSettingLock {
-  readonly key: ConfigKey;
-  readonly source: string;
-  readonly reason: string;
-  readonly updatedAt: number;
-}
-
-export interface SettingsLayerRecord {
-  readonly key: ConfigKey;
-  readonly value: unknown;
-  readonly source: Exclude<SettingsSource, 'default' | 'local'>;
-  readonly sourceLabel: string;
-  readonly detail: string;
-  readonly path?: string;
-  readonly updatedAt: number;
-  readonly locked?: boolean;
-}
-
-export interface SettingsConflictRecord {
-  readonly key: ConfigKey;
-  readonly localValue: unknown;
-  readonly incomingValue: unknown;
-  readonly source: Exclude<SettingsSource, 'default' | 'local'>;
-  readonly path: string;
-  readonly updatedAt: number;
-}
-
-export type SettingsConflictResolution = 'local' | 'synced';
-
-export interface ManagedBundleChange {
-  readonly key: ConfigKey;
-  readonly previousValue: unknown;
-  readonly nextValue: unknown;
-  readonly changed: boolean;
-  readonly locked: boolean;
-  readonly source: string;
-  readonly reason: string;
-}
-
-export interface StagedManagedBundle {
-  readonly id: string;
-  readonly profileName: string;
-  readonly path: string;
-  readonly importedAt: number;
-  readonly changeCount: number;
-  readonly risk: 'low' | 'medium' | 'high';
-  readonly changes: readonly ManagedBundleChange[];
-}
-
-export interface ManagedRollbackRecord {
-  readonly token: string;
-  readonly profileName: string;
-  readonly path: string;
-  readonly appliedAt: number;
-  readonly restoredKeys: readonly ConfigKey[];
-  readonly previousValues: Readonly<Partial<Record<ConfigKey, unknown>>>;
-}
-
-interface SettingsControlPlaneStore {
-  readonly version: 2;
-  readonly events: ReadonlyArray<SettingsSyncEvent>;
-  readonly managedLocks: ReadonlyArray<ManagedSettingLock>;
-  readonly failures: ReadonlyArray<{
-    readonly surface: SyncSurface;
-    readonly message: string;
-    readonly timestamp: number;
-  }>;
-  readonly syncedSettings: ReadonlyArray<SettingsLayerRecord>;
-  readonly managedSettings: ReadonlyArray<SettingsLayerRecord>;
-  readonly conflicts: ReadonlyArray<SettingsConflictRecord>;
-  readonly stagedManagedBundle?: StagedManagedBundle;
-  readonly rollbackHistory: ReadonlyArray<ManagedRollbackRecord>;
-}
-
-function getConfigControlPlaneDir(configManager?: ConfigManager): string | undefined {
-  const candidate = configManager as ConfigManager & { getControlPlaneConfigDir?: () => string } | undefined;
-  return typeof candidate?.getControlPlaneConfigDir === 'function'
-    ? candidate.getControlPlaneConfigDir()
-    : undefined;
-}
-
-export interface ResolvedSettingEntry {
-  readonly key: ConfigKey;
-  readonly category: string;
-  readonly effectiveValue: unknown;
-  readonly effectiveSource: SettingsSource;
-  readonly defaultValue: unknown;
-  readonly localValue: unknown;
-  readonly syncedValue?: unknown;
-  readonly managedValue?: unknown;
-  readonly overriddenSources: readonly SettingsSource[];
-  readonly locked: boolean;
-  readonly lockReason?: string;
-  readonly sourceLabel?: string;
-  readonly updatedAt?: number;
-  readonly conflict: boolean;
-}
-
-export interface SettingsControlPlaneSnapshot {
-  readonly liveKeyCount: number;
-  readonly profileCount: number;
-  readonly managedLockCount: number;
-  readonly resolvedCounts: Readonly<Record<SettingsSource, number>>;
-  readonly lastSync?: SettingsSyncEvent;
-  readonly recentEvents: ReadonlyArray<SettingsSyncEvent>;
-  readonly recentFailures: SettingsControlPlaneStore['failures'];
-  readonly managedLocks: ReadonlyArray<ManagedSettingLock>;
-  readonly conflicts: ReadonlyArray<SettingsConflictRecord>;
-  readonly stagedManagedBundle?: StagedManagedBundle;
-  readonly rollbackHistory: ReadonlyArray<ManagedRollbackRecord>;
-  readonly resolvedEntries: ReadonlyArray<ResolvedSettingEntry>;
-}
-
-export interface ResolvedSettingLookup {
-  readonly entry: ResolvedSettingEntry;
-  readonly lock?: ManagedSettingLock;
-  readonly syncedLayer?: SettingsLayerRecord;
-  readonly managedLayer?: SettingsLayerRecord;
-}
-
-export interface SettingsSyncBundle {
-  readonly version: 1;
-  readonly exportedAt: number;
-  readonly source: 'settings-sync';
-  readonly settings: Record<string, unknown>;
-}
-
-function getSettingsControlPath(configDir?: string): string {
-  const explicitDir = configDir?.trim();
-  if (explicitDir) return join(explicitDir, 'settings-sync.json');
-  const runtime = globalThis as typeof globalThis & { __gvTestConfigDir?: string };
-  const testConfigDir = runtime.__gvTestConfigDir?.trim();
-  if (testConfigDir) return join(testConfigDir, 'settings-sync.json');
-  return join(homedir(), '.goodvibes', 'tui', 'settings-sync.json');
-}
-
-function defaultStore(): SettingsControlPlaneStore {
-  return {
-    version: 2,
-    events: [],
-    managedLocks: [],
-    failures: [],
-    syncedSettings: [],
-    managedSettings: [],
-    conflicts: [],
-    rollbackHistory: [],
-  };
-}
-
-function migrateStore(raw: unknown): SettingsControlPlaneStore {
-  if (!raw || typeof raw !== 'object') return defaultStore();
-  const store = raw as Partial<SettingsControlPlaneStore> & { version?: number };
-  if (store.version === 2) {
-    return {
-      ...defaultStore(),
-      ...store,
-      events: Array.isArray(store.events) ? store.events : [],
-      managedLocks: Array.isArray(store.managedLocks) ? store.managedLocks : [],
-      failures: Array.isArray(store.failures) ? store.failures : [],
-      syncedSettings: Array.isArray(store.syncedSettings) ? store.syncedSettings : [],
-      managedSettings: Array.isArray(store.managedSettings) ? store.managedSettings : [],
-      conflicts: Array.isArray(store.conflicts) ? store.conflicts : [],
-      rollbackHistory: Array.isArray(store.rollbackHistory) ? store.rollbackHistory : [],
-    };
-  }
-  return {
-    ...defaultStore(),
-    events: Array.isArray(store.events) ? store.events : [],
-    managedLocks: Array.isArray(store.managedLocks) ? store.managedLocks : [],
-    failures: Array.isArray(store.failures) ? store.failures : [],
-  };
-}
-
-function readStore(configDir?: string): SettingsControlPlaneStore {
-  try {
-    return migrateStore(JSON.parse(readFileSync(getSettingsControlPath(configDir), 'utf-8')));
-  } catch {
-    return defaultStore();
-  }
-}
-
-function writeStore(store: SettingsControlPlaneStore, configDir?: string): void {
-  const path = getSettingsControlPath(configDir);
-  mkdirSync(dirname(path), { recursive: true });
-  writeFileSync(path, `${JSON.stringify(store, null, 2)}\n`, 'utf-8');
-}
-
-function trimStore(store: SettingsControlPlaneStore): SettingsControlPlaneStore {
-  return {
-    ...store,
-    events: store.events.slice(-60),
-    failures: store.failures.slice(-20),
-    conflicts: store.conflicts.slice(-40),
-    rollbackHistory: store.rollbackHistory.slice(-20),
-  };
-}
-
-function configSnapshot(configManager: ConfigManager): Record<ConfigKey, unknown> {
-  const snapshot = {} as Record<ConfigKey, unknown>;
-  for (const entry of CONFIG_SCHEMA) {
-    snapshot[entry.key] = structuredClone(configManager.get(entry.key));
-  }
-  return snapshot;
-}
-
-function sourcePriority(source: SettingsSource): number {
-  switch (source) {
-    case 'managed': return 3;
-    case 'synced': return 2;
-    case 'local': return 1;
-    case 'default': return 0;
-  }
-}
-
-function inferRisk(changes: readonly ManagedBundleChange[]): 'low' | 'medium' | 'high' {
-  if (changes.some((change) => change.key.startsWith('danger.') || change.key.startsWith('permissions.') || change.key.startsWith('sandbox.'))) {
-    return 'high';
-  }
-  if (changes.some((change) => change.key.startsWith('provider.') || change.key.startsWith('storage.') || change.key.startsWith('orchestration.'))) {
-    return 'medium';
-  }
-  return 'low';
-}
-
-function makeRollbackToken(): string {
-  return `managed-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
-}
-
-function toLayerRecord(
-  key: ConfigKey,
-  value: unknown,
-  source: Exclude<SettingsSource, 'default' | 'local'>,
-  sourceLabel: string,
-  detail: string,
-  path?: string,
-  locked?: boolean,
-): SettingsLayerRecord {
-  return {
-    key,
-    value: structuredClone(value),
-    source,
-    sourceLabel,
-    detail,
-    path,
-    updatedAt: Date.now(),
-    locked,
-  };
-}
-
-export function recordSettingsSyncEvent(event: SettingsSyncEvent): void {
-  const store = readStore();
-  writeStore(trimStore({ ...store, events: [...store.events, event] }));
-}
-
-export function recordSettingsSyncFailure(surface: SyncSurface, message: string): void {
-  const store = readStore();
+export function recordSettingsSyncFailure(surface: SyncSurface, message: string, configDir?: string): void {
+  const store = readStore(configDir);
   writeStore(trimStore({
     ...store,
     failures: [...store.failures, { surface, message, timestamp: Date.now() }],
-  }));
+  }), configDir);
 }
 
 export function isManagedSettingLocked(key: ConfigKey, configDir?: string): boolean {
@@ -312,10 +91,6 @@ export function clearManagedSettingLock(key: ConfigKey, configDir?: string): boo
     : entry);
   writeStore(trimStore({ ...store, managedLocks: nextLocks, managedSettings: nextManaged }), configDir);
   return true;
-}
-
-export function resetSettingsControlPlaneForTesting(configDir?: string): void {
-  writeStore(defaultStore(), configDir);
 }
 
 export function exportSettingsSyncBundle(configManager: ConfigManager): SettingsSyncBundle {
@@ -642,7 +417,7 @@ export function getSettingsControlPlaneSnapshot(configManager: ConfigManager): S
   for (const entry of resolvedEntries) resolvedCounts[entry.effectiveSource]++;
   return {
     liveKeyCount: CONFIG_SCHEMA.length,
-    profileCount: getProfileManager().list().length,
+    profileCount: new ProfileManager().list().length,
     managedLockCount: store.managedLocks.length,
     resolvedCounts,
     lastSync: store.events[store.events.length - 1],

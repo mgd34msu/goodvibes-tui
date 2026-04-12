@@ -1,0 +1,65 @@
+import type { DistributedNodeHostContract } from './distributed-runtime-types.ts';
+
+export function getDistributedNodeHostContract(): DistributedNodeHostContract {
+  return {
+    schemaVersion: 1,
+    transport: 'http-json',
+    basePath: '/api/remote',
+    peerKinds: ['node', 'device'],
+    workTypes: ['invoke', 'status.request', 'location.request', 'session.message', 'automation.run'],
+    scopes: ['remote:heartbeat', 'remote:pull', 'remote:complete'],
+    recommendedHeartbeatMs: 30_000,
+    recommendedWorkPullMs: 2_000,
+    endpoints: [
+      {
+        id: 'pair.request',
+        method: 'POST',
+        path: '/api/remote/pair/request',
+        auth: 'none',
+        description: 'Create a pending pair request and receive a challenge for operator approval.',
+      },
+      {
+        id: 'pair.verify',
+        method: 'POST',
+        path: '/api/remote/pair/verify',
+        auth: 'none',
+        description: 'Exchange an approved pair request and challenge for a scoped peer token.',
+      },
+      {
+        id: 'peer.heartbeat',
+        method: 'POST',
+        path: '/api/remote/heartbeat',
+        auth: 'bearer-peer-token',
+        requiredScope: 'remote:heartbeat',
+        description: 'Report peer liveness, capability, command, version, and client-mode metadata.',
+      },
+      {
+        id: 'work.pull',
+        method: 'POST',
+        path: '/api/remote/work/pull',
+        auth: 'bearer-peer-token',
+        requiredScope: 'remote:pull',
+        description: 'Claim queued work for the authenticated peer.',
+      },
+      {
+        id: 'work.complete',
+        method: 'POST',
+        path: '/api/remote/work/{workId}/complete',
+        auth: 'bearer-peer-token',
+        requiredScope: 'remote:complete',
+        description: 'Complete, fail, or cancel a claimed work item.',
+      },
+      {
+        id: 'operator.snapshot',
+        method: 'GET',
+        path: '/api/remote',
+        auth: 'bearer-operator-token',
+        description: 'Inspect distributed runtime pair requests, peers, work, and audit state.',
+      },
+    ],
+    workCompletionStatuses: ['completed', 'failed', 'cancelled'],
+    metadata: {
+      note: 'Node/device hosts are external processes. GoodVibes owns the pair/token/work protocol and can be controlled from web, channel, or daemon clients.',
+    },
+  };
+}

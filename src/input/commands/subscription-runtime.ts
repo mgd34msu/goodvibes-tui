@@ -1,14 +1,13 @@
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
-import type { CommandRegistry } from '../command-registry.ts';
+import type { CommandContext, CommandRegistry } from '../command-registry.ts';
 import { createOAuthLocalListener } from '../../config/oauth-local-listener.ts';
 import { beginOpenAICodexLogin, exchangeOpenAICodexCode } from '../../config/openai-codex-auth.ts';
-import { ServiceRegistry } from '../../config/service-registry.ts';
-import { getSubscriptionManager } from '../../config/subscriptions.ts';
 import type { OAuthProviderConfig, ProviderSubscription } from '../../config/subscriptions.ts';
 import { getSubscriptionProviderConfig, listAvailableSubscriptionProviders } from '../../config/subscription-providers.ts';
 import { inspectProviderAuth } from '../../runtime/auth/inspection.ts';
 import { openExternalUrl } from '../../utils/open-external.ts';
+import { requireServiceRegistry, requireSubscriptionManager } from './runtime-services.ts';
 
 interface SubscriptionBundle {
   readonly version: 1;
@@ -16,18 +15,9 @@ interface SubscriptionBundle {
   readonly subscriptions: readonly ProviderSubscription[];
 }
 
-let serviceRegistry: ServiceRegistry | undefined;
-let subscriptionBrowserOpener: (url: string) => Promise<boolean> = openExternalUrl;
-let subscriptionLocalListenerFactory: typeof createOAuthLocalListener = createOAuthLocalListener;
-
-function getServiceRegistry(): ServiceRegistry {
-  if (!serviceRegistry) serviceRegistry = new ServiceRegistry();
-  return serviceRegistry;
-}
-
-function buildReviewText(): string {
-  const subscriptions = getSubscriptionManager().list();
-  const available = listAvailableSubscriptionProviders(getServiceRegistry().getAll());
+function buildReviewText(ctx: CommandContext): string {
+  const subscriptions = requireSubscriptionManager(ctx).list();
+  const available = listAvailableSubscriptionProviders(requireServiceRegistry(ctx).getAll());
   if (subscriptions.length === 0) {
     return [
       'Subscription Review',
@@ -92,11 +82,11 @@ export function registerSubscriptionRuntimeCommands(registry: CommandRegistry): 
         return;
       }
       const sub = (args[0] ?? 'review').toLowerCase();
-      const manager = getSubscriptionManager();
-      const services = getServiceRegistry();
+      const manager = requireSubscriptionManager(ctx);
+      const services = requireServiceRegistry(ctx);
 
       if (sub === 'review' || sub === 'list') {
-        ctx.print(buildReviewText());
+        ctx.print(buildReviewText(ctx));
         return;
       }
 
@@ -190,7 +180,7 @@ export function registerSubscriptionRuntimeCommands(registry: CommandRegistry): 
             let listener: Awaited<ReturnType<typeof createOAuthLocalListener>> | null = null;
             if (!useManualMode) {
               try {
-                listener = await subscriptionLocalListenerFactory({
+                listener = await createOAuthLocalListener({
                   expectedState: started.state,
                   host: '127.0.0.1',
                   port: 1455,
@@ -202,7 +192,7 @@ export function registerSubscriptionRuntimeCommands(registry: CommandRegistry): 
             }
 
             const browserOpened = openBrowser
-              ? await subscriptionBrowserOpener(started.authorizationUrl)
+              ? await openExternalUrl(started.authorizationUrl)
               : false;
 
             if (listener && browserOpened) {
@@ -271,7 +261,7 @@ export function registerSubscriptionRuntimeCommands(registry: CommandRegistry): 
           let listener: Awaited<ReturnType<typeof createOAuthLocalListener>> | null = null;
 
           if (useLocalCallback && resolved.oauth.localCallback) {
-            listener = await subscriptionLocalListenerFactory({
+            listener = await createOAuthLocalListener({
               expectedState: '',
               host: resolved.oauth.localCallback.host,
               port: resolved.oauth.localCallback.port,
@@ -289,8 +279,8 @@ export function registerSubscriptionRuntimeCommands(registry: CommandRegistry): 
           }
 
           const browserOpened = openBrowser
-            ? await subscriptionBrowserOpener(started.authorizationUrl)
-            : false;
+              ? await openExternalUrl(started.authorizationUrl)
+              : false;
 
           const shouldAutoComplete = Boolean(listener) && (resolved.oauth.localCallback?.autoComplete ?? true) && browserOpened;
 
@@ -435,20 +425,4 @@ export function registerSubscriptionRuntimeCommands(registry: CommandRegistry): 
       ctx.print('Usage: /subscription [review|list|providers|inspect <provider>|login <provider> start [--no-browser] [--manual]|finish <code-or-url>|logout <provider>|bundle export <path>|bundle inspect <path>]');
     },
   });
-}
-
-export function _setSubscriptionBrowserOpenerForTesting(opener: (url: string) => Promise<boolean>): void {
-  subscriptionBrowserOpener = opener;
-}
-
-export function _resetSubscriptionBrowserOpenerForTesting(): void {
-  subscriptionBrowserOpener = openExternalUrl;
-}
-
-export function _setSubscriptionLocalListenerFactoryForTesting(factory: typeof createOAuthLocalListener): void {
-  subscriptionLocalListenerFactory = factory;
-}
-
-export function _resetSubscriptionLocalListenerFactoryForTesting(): void {
-  subscriptionLocalListenerFactory = createOAuthLocalListener;
 }

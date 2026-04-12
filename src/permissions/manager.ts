@@ -2,11 +2,12 @@ import { getConfigSnapshot, isAutoApproveEnabled } from '../config/index.ts';
 import type { PermissionAction, PermissionsToolConfig } from '../config/schema.ts';
 import type { PermissionRequestHandler } from './prompt.ts';
 import { analyzePermissionRequest } from './analysis.ts';
-import { getPolicyRuntimeState } from '../runtime/permissions/policy-runtime.ts';
+import type { PolicyRuntimeState } from '../runtime/permissions/policy-runtime.ts';
 import { LayeredPolicyEvaluator } from '../runtime/permissions/evaluator.ts';
 import type { PermissionDecision as LayeredPermissionDecision } from '../runtime/permissions/types.ts';
-import { getHookDispatcher } from '../hooks/index.ts';
+import type { HookDispatcher } from '../hooks/index.ts';
 import type { HookCategory, HookEventPath, HookPhase } from '../hooks/types.ts';
+import type { ConfigManager } from '../config/manager.ts';
 import type {
   PermissionCategory,
   PermissionCheckResult,
@@ -28,6 +29,15 @@ type PermissionConfigSnapshot = ReturnType<typeof getConfigSnapshot>;
 export interface PermissionConfigReader {
   isAutoApproveEnabled(): boolean;
   getSnapshot(): PermissionConfigSnapshot;
+}
+
+export function createPermissionConfigReader(
+  configManager: Pick<ConfigManager, 'get' | 'getRaw'>,
+): PermissionConfigReader {
+  return {
+    isAutoApproveEnabled: () => isAutoApproveEnabled(configManager),
+    getSnapshot: () => getConfigSnapshot(configManager),
+  };
 }
 
 /** Maps tool names to permission categories and config tool keys. */
@@ -83,16 +93,19 @@ export class PermissionManager {
   private sessionApprovals = new Map<string, boolean>();
   private readonly requestPermission: PermissionRequestHandler;
   private readonly configReader: PermissionConfigReader;
+  private readonly hookDispatcher: Pick<HookDispatcher, 'fire'> | null;
+  private readonly policyRuntimeState: Pick<PolicyRuntimeState, 'recordPermissionRequest' | 'recordPermissionDecision' | 'getRegistry'>;
 
   constructor(
     requestPermission: PermissionRequestHandler = async () => ({ approved: false, remember: false }),
-    configReader: PermissionConfigReader = {
-      isAutoApproveEnabled,
-      getSnapshot: getConfigSnapshot,
-    },
+    configReader: PermissionConfigReader,
+    policyRuntimeState: Pick<PolicyRuntimeState, 'recordPermissionRequest' | 'recordPermissionDecision' | 'getRegistry'>,
+    hookDispatcher: Pick<HookDispatcher, 'fire'> | null = null,
   ) {
     this.requestPermission = requestPermission;
     this.configReader = configReader;
+    this.policyRuntimeState = policyRuntimeState;
+    this.hookDispatcher = hookDispatcher;
   }
 
   /**
@@ -115,7 +128,7 @@ export class PermissionManager {
       category,
       analysis,
     });
-    getPolicyRuntimeState().recordPermissionRequest({
+    this.policyRuntimeState.recordPermissionRequest({
       callId,
       tool: toolName,
       category,
@@ -245,7 +258,7 @@ export class PermissionManager {
     args: Record<string, unknown>,
     mode: PermissionConfigSnapshot['permissions']['mode'],
   ): LayeredPermissionDecision {
-    const rules = getPolicyRuntimeState().getRegistry().getCurrent()?.rules ?? [];
+    const rules = this.policyRuntimeState.getRegistry().getCurrent()?.rules ?? [];
     const evaluator = new LayeredPolicyEvaluator({
       mode: mode === 'allow-all' ? 'allow-all' : mode === 'custom' ? 'custom' : 'default',
       rules,
@@ -293,7 +306,7 @@ export class PermissionManager {
     category: PermissionCategory,
     result: PermissionCheckResult,
   ): PermissionCheckResult {
-    getPolicyRuntimeState().recordPermissionDecision({
+    this.policyRuntimeState.recordPermissionDecision({
       callId,
       tool: toolName,
       category,
@@ -320,8 +333,9 @@ export class PermissionManager {
     specific: string,
     payload: Record<string, unknown>,
   ): Promise<void> {
+    if (!this.hookDispatcher) return;
     try {
-      await getHookDispatcher().fire({
+      await this.hookDispatcher.fire({
         path,
         phase,
         category,

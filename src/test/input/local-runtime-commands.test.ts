@@ -3,6 +3,12 @@ import { CommandRegistry } from '../../input/command-registry.ts';
 import { registerRemoteRuntimeCommands } from '../../input/commands/remote-runtime.ts';
 import { createRuntimeStore } from '../../runtime/store/index.ts';
 import { AgentManager } from '../../tools/agent/index.ts';
+import {
+  getTestAgentManager,
+  getTestRemoteRunnerRegistry,
+  getTestRemoteSupervisor,
+  resetTestRuntimeServices,
+} from '../helpers/runtime-services.ts';
 
 function makeContext(store = createRuntimeStore()) {
   const printed: string[] = [];
@@ -27,6 +33,9 @@ function makeContext(store = createRuntimeStore()) {
       toolRegistry: {} as never,
       mcpRegistry: {} as never,
       runtimeStore: store,
+      remoteRunnerRegistry: getTestRemoteRunnerRegistry(),
+      remoteSupervisor: getTestRemoteSupervisor(),
+      agentManager: getTestAgentManager(),
     },
   };
 }
@@ -66,8 +75,8 @@ describe('local runtime remote commands', () => {
   });
 
   test('cancels a remote agent through the normal agent manager path', async () => {
-    AgentManager.resetInstance();
-    const manager = AgentManager.getInstance();
+    resetTestRuntimeServices();
+    const manager = getTestAgentManager();
     const record = manager.spawn({ mode: 'spawn', task: 'Stuck task', template: 'general', tools: [], orchestrationNodeId: 'remote-node', orchestrationGraphId: 'graph-remote' });
 
     const registry = new CommandRegistry();

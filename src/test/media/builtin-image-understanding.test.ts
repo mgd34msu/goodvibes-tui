@@ -8,14 +8,36 @@ import {
   createLocalImageUnderstandingProvider,
   createOpenAIImageUnderstandingProvider,
 } from '../../media/builtin-image-understanding.ts';
-import { getProviderRegistry, _resetProviderRegistryForTesting } from '../../providers/registry.ts';
+import type { LLMProvider, ProviderMessage } from '../../providers/interface.ts';
+import type { ModelDefinition, ProviderRegistry } from '../../providers/registry.ts';
+
+type ImageModelRegistry = Pick<ProviderRegistry, 'getCurrentModel' | 'getForModel' | 'listModels'>;
+
+function makeImageModelRegistry(
+  models: ModelDefinition[],
+  providerLookup: Map<string, LLMProvider>,
+): ImageModelRegistry {
+  return {
+    listModels: () => models,
+    getCurrentModel: () => {
+      if (models.length === 0) {
+        throw new Error('No multimodal models configured');
+      }
+      return models[0]!;
+    },
+    getForModel: (_modelId: string, providerId?: string) => {
+      if (!providerId) throw new Error('Provider id is required');
+      const provider = providerLookup.get(providerId);
+      if (!provider) throw new Error(`Provider not found: ${providerId}`);
+      return provider;
+    },
+  };
+}
 
 describe('builtin image understanding provider', () => {
   const roots: string[] = [];
 
   afterEach(() => {
-    ArtifactStore.resetActiveForTesting();
-    _resetProviderRegistryForTesting();
     while (roots.length > 0) {
       rmSync(roots.pop()!, { recursive: true, force: true });
     }
@@ -32,17 +54,9 @@ describe('builtin image understanding provider', () => {
       metadata: { source: 'unit-test' },
     });
 
-    const registry = getProviderRegistry() as unknown as {
-      listModels: () => unknown[];
-      getCurrentModel: () => unknown;
-      getForModel: () => unknown;
-    };
-    const originalListModels = registry.listModels;
-    const originalGetCurrentModel = registry.getCurrentModel;
-    const originalGetForModel = registry.getForModel;
-    let capturedMessages: unknown[] = [];
-
-    registry.listModels = () => [{
+    let capturedMessages: ProviderMessage[] = [];
+    const providerLookup = new Map<string, LLMProvider>();
+    const registry = makeImageModelRegistry([{
       id: 'test-vision',
       registryKey: 'testvision:test-vision',
       provider: 'testvision',
@@ -51,45 +65,38 @@ describe('builtin image understanding provider', () => {
       capabilities: { toolCalling: false, codeEditing: false, reasoning: false, multimodal: true },
       contextWindow: 8192,
       selectable: true,
-    }];
-    registry.getCurrentModel = () => (registry.listModels() as Array<Record<string, unknown>>)[0];
-    registry.getForModel = () => ({
+    }], providerLookup);
+    providerLookup.set('testvision', {
       name: 'testvision',
       models: ['test-vision'],
-      async chat(params: { messages: unknown[] }) {
+      async chat(params) {
         capturedMessages = params.messages;
         return {
           content: '{"description":"A login form screenshot","text":"Sign in","labels":["ui","login"]}',
           toolCalls: [],
           usage: { inputTokens: 10, outputTokens: 8 },
-          stopReason: 'end' as const,
+          stopReason: 'end',
         };
       },
     });
 
-    try {
-      const provider = createBuiltinImageUnderstandingProvider();
-      const result = await provider.analyze!({
-        artifact: {
-          artifactId: created.id,
-          mimeType: 'application/octet-stream',
-          metadata: {},
-        },
-      });
+    const provider = createBuiltinImageUnderstandingProvider(registry, store);
+    const result = await provider.analyze!({
+      artifact: {
+        artifactId: created.id,
+        mimeType: 'application/octet-stream',
+        metadata: {},
+      },
+    });
 
-      expect(result.description).toBe('A login form screenshot');
-      expect(result.text).toBe('Sign in');
-      expect(result.labels).toEqual(['ui', 'login']);
-      expect(result.metadata.llmProviderId).toBe('testvision');
-      expect(result.metadata.modelId).toBe('test-vision');
-      const userMessage = capturedMessages[0] as { content: Array<{ type: string; mediaType?: string }> };
-      expect(userMessage.content[1]?.type).toBe('image');
-      expect(userMessage.content[1]?.mediaType).toBe('image/png');
-    } finally {
-      registry.listModels = originalListModels;
-      registry.getCurrentModel = originalGetCurrentModel;
-      registry.getForModel = originalGetForModel;
-    }
+    expect(result.description).toBe('A login form screenshot');
+    expect(result.text).toBe('Sign in');
+    expect(result.labels).toEqual(['ui', 'login']);
+    expect(result.metadata.llmProviderId).toBe('testvision');
+    expect(result.metadata.modelId).toBe('test-vision');
+    const userMessage = capturedMessages[0] as ProviderMessage & { content: Array<{ type: string; mediaType?: string }> };
+    expect(userMessage.content[1]?.type).toBe('image');
+    expect(userMessage.content[1]?.mediaType).toBe('image/png');
   });
 
   test('provider-scoped image understanding selects the matching provider family', async () => {
@@ -103,16 +110,8 @@ describe('builtin image understanding provider', () => {
       metadata: {},
     });
 
-    const registry = getProviderRegistry() as unknown as {
-      listModels: () => unknown[];
-      getCurrentModel: () => unknown;
-      getForModel: (id: string, providerId: string) => unknown;
-    };
-    const originalListModels = registry.listModels;
-    const originalGetCurrentModel = registry.getCurrentModel;
-    const originalGetForModel = registry.getForModel;
-
-    registry.listModels = () => [
+    const providerLookup = new Map<string, LLMProvider>();
+    const registry = makeImageModelRegistry([
       {
         id: 'gpt-vision',
         registryKey: 'openai:gpt-vision',
@@ -133,46 +132,54 @@ describe('builtin image understanding provider', () => {
         contextWindow: 8192,
         selectable: true,
       },
-    ];
-    registry.getCurrentModel = () => (registry.listModels() as Array<Record<string, unknown>>)[0];
-    registry.getForModel = (_id, providerId) => ({
-      name: providerId,
-      models: [providerId === 'openai' ? 'gpt-vision' : 'local-vision'],
+    ], providerLookup);
+    providerLookup.set('openai', {
+      name: 'openai',
+      models: ['gpt-vision'],
       async describeRuntime() {
         return {
-          policy: { local: providerId === 'lm-studio' },
+          policy: { local: false },
         };
       },
       async chat() {
         return {
-          content: providerId === 'openai'
-            ? '{"description":"openai selection","text":"","labels":["openai"]}'
-            : '{"description":"local selection","text":"","labels":["local"]}',
+          content: '{"description":"openai selection","text":"","labels":["openai"]}',
           toolCalls: [],
           usage: { inputTokens: 10, outputTokens: 4 },
-          stopReason: 'end' as const,
+          stopReason: 'end',
+        };
+      },
+    });
+    providerLookup.set('lm-studio', {
+      name: 'lm-studio',
+      models: ['local-vision'],
+      async describeRuntime() {
+        return {
+          policy: { local: true },
+        };
+      },
+      async chat() {
+        return {
+          content: '{"description":"local selection","text":"","labels":["local"]}',
+          toolCalls: [],
+          usage: { inputTokens: 10, outputTokens: 4 },
+          stopReason: 'end',
         };
       },
     });
 
-    try {
-      const openaiProvider = createOpenAIImageUnderstandingProvider();
-      const openaiResult = await openaiProvider.analyze!({
-        artifact: { artifactId: created.id, mimeType: 'image/png', metadata: {} },
-      });
-      expect(openaiResult.metadata.llmProviderId).toBe('openai');
-      expect(openaiResult.labels).toEqual(['openai']);
+    const openaiProvider = createOpenAIImageUnderstandingProvider(registry, store);
+    const openaiResult = await openaiProvider.analyze!({
+      artifact: { artifactId: created.id, mimeType: 'image/png', metadata: {} },
+    });
+    expect(openaiResult.metadata.llmProviderId).toBe('openai');
+    expect(openaiResult.labels).toEqual(['openai']);
 
-      const localProvider = createLocalImageUnderstandingProvider();
-      const localResult = await localProvider.analyze!({
-        artifact: { artifactId: created.id, mimeType: 'image/png', metadata: {} },
-      });
-      expect(localResult.metadata.llmProviderId).toBe('lm-studio');
-      expect(localResult.labels).toEqual(['local']);
-    } finally {
-      registry.listModels = originalListModels;
-      registry.getCurrentModel = originalGetCurrentModel;
-      registry.getForModel = originalGetForModel;
-    }
+    const localProvider = createLocalImageUnderstandingProvider(registry, store);
+    const localResult = await localProvider.analyze!({
+      artifact: { artifactId: created.id, mimeType: 'image/png', metadata: {} },
+    });
+    expect(localResult.metadata.llmProviderId).toBe('lm-studio');
+    expect(localResult.labels).toEqual(['local']);
   });
 });
