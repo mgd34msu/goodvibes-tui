@@ -4,6 +4,34 @@ All notable changes to GoodVibes TUI.
 
 ---
 
+## [0.17.3] — 2026-04-13
+
+### Explicit Intent Surfaces For Sessions, Routing, And Execution
+
+- Added explicit shared-session intent modeling for `submit`, `steer`, and `follow-up` flows, including durable input records, lifecycle-state tracking, correlation and causation IDs, explicit cancellation, and stable operator-surface semantics instead of inferring continuation behavior from session forwarding alone
+- Extended the operator/session and daemon runtime surfaces so session message submission, explicit steering, deferred follow-up, and spawned continuation work all carry one typed routing model with stable lifecycle events that are suitable for future SDK extraction
+- Added explicit execution-intent propagation across automation runs, task spawning, and agent records so risk class, approval posture, network policy, and filesystem policy travel through the runtime as deliberate semantics instead of implicit internal assumptions
+
+### Explicit Route, Artifact, Knowledge, And Provider Intent
+
+- Added typed route-binding semantics for `sessionPolicy`, `threadPolicy`, and `deliveryGuarantee` so automation and channel routing can express whether to create, bind, continue, detach, preserve, replace, or require existing conversation state instead of relying on route-manager defaults alone
+- Hardened artifact and knowledge intent surfaces with stable fetch-policy propagation and release gates so remote fetch posture, trust framing, and routed ingestion behavior stay aligned with the canonical operator contract and knowledge foundation artifacts
+- Tightened agent/provider routing semantics so WRFC and spawned-agent flows preserve explicit provider, model, helper, and execution metadata instead of falling back to broader inference paths
+
+### Release Gates And Verification
+
+- Added release-gate coverage for session intent state, route/execution intent schema stability, and knowledge/artifact intent behavior so the newly explicit foundation surfaces stay frozen and extractable
+- Updated the checked-in operator contract artifact and foundation-surface certification expectations to include the new explicit session, routing, and execution semantics
+
+### Verification
+
+- Foundation artifact export passes: `bun run foundation:artifacts`
+- Full typecheck passes: `bunx tsc --noEmit --pretty false`
+- Architecture gate passes: `bun run architecture:check`
+- Full test runner passes: `bun test` (`7047` pass, `0` fail)
+- Build passes: `bun run build`
+- Diff hygiene passes: `git diff --check`
+
 ## [0.17.2] — 2026-04-13
 
 ### Canonical Foundation Artifacts And Consumer Examples

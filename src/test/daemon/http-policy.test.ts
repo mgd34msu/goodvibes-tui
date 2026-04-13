@@ -69,6 +69,6 @@ describe('daemon http policy helpers', () => {
       configManager: { get: () => true },
       req: new Request('http://localhost/api'),
       requireElevatedAccess: () => null,
-    })).toEqual({ allowPrivateHosts: true });
+    })).toEqual({ allowPrivateHosts: true, fetchMode: 'allow-private-hosts' });
   });
 });

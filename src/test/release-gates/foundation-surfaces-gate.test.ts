@@ -77,13 +77,17 @@ describe('foundation surfaces gate', () => {
     ]);
     expect(sortedKeys(foundation.operator.sessions)).toEqual([
       'bindAgent',
+      'cancelInput',
       'close',
       'current',
       'ensureSession',
+      'followUpMessage',
       'get',
+      'inputs',
       'list',
       'messages',
       'reopen',
+      'steerMessage',
       'submitMessage',
     ]);
     expect(sortedKeys(foundation.operator.providers)).toEqual([

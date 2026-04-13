@@ -51,6 +51,8 @@ export const ARTIFACT_DESCRIPTOR_SCHEMA = objectSchema({
   createdAt: NUMBER_SCHEMA,
   expiresAt: NUMBER_SCHEMA,
   sourceUri: STRING_SCHEMA,
+  acquisitionMode: STRING_SCHEMA,
+  fetchMode: STRING_SCHEMA,
   metadata: METADATA_SCHEMA,
 }, ['id', 'kind', 'mimeType', 'sizeBytes', 'sha256', 'createdAt', 'metadata'], { additionalProperties: true });
 
@@ -65,6 +67,8 @@ export const ARTIFACT_ATTACHMENT_SCHEMA = objectSchema({
   createdAt: NUMBER_SCHEMA,
   expiresAt: NUMBER_SCHEMA,
   sourceUri: STRING_SCHEMA,
+  acquisitionMode: STRING_SCHEMA,
+  fetchMode: STRING_SCHEMA,
   contentPath: STRING_SCHEMA,
   contentUrl: STRING_SCHEMA,
   dataBase64: STRING_SCHEMA,

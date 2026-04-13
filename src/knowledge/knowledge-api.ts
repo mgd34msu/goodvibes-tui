@@ -1,4 +1,5 @@
 import type { KnowledgeService } from './service.ts';
+import type { ArtifactFetchMode } from '../artifacts/types.ts';
 import {
   buildKnowledgeInjectionPrompt,
   selectKnowledgeForTask,
@@ -18,6 +19,17 @@ import type {
 } from '../state/memory-store.ts';
 import type { MemoryVectorStats } from '../state/memory-vector-store.ts';
 import type { MemoryRegistry } from '../state/memory-registry.ts';
+export type { ArtifactFetchMode } from '../artifacts/types.ts';
+export type {
+  KnowledgeInjection,
+} from '../state/knowledge-injection.ts';
+export type {
+  KnowledgeInjectionIngestMode,
+  KnowledgeInjectionProvenance,
+  KnowledgeInjectionRetention,
+  KnowledgeInjectionTrustTier,
+  KnowledgeInjectionUseAs,
+} from './internal.ts';
 
 type UsageListInput = Parameters<KnowledgeService['listUsageRecords']>[1];
 type SourceQueryInput = Parameters<KnowledgeService['querySources']>[0];
@@ -42,6 +54,17 @@ type ConsolidationDecision = Parameters<KnowledgeService['decideConsolidationCan
 type ConsolidationDecisionInput = Parameters<KnowledgeService['decideConsolidationCandidate']>[2];
 type RunJobInput = Parameters<KnowledgeService['runJob']>[1];
 type CandidateListInput = Parameters<KnowledgeService['listConsolidationCandidates']>[1];
+type RemoteKnowledgeFetchMode = Extract<ArtifactFetchMode, 'public-only' | 'allow-private-hosts'>;
+
+export interface KnowledgeApiUrlIngestInput extends Omit<IngestUrlInput, 'allowPrivateHosts' | 'metadata'> {
+  readonly fetchMode?: RemoteKnowledgeFetchMode;
+  readonly metadata?: Record<string, unknown>;
+}
+
+export interface KnowledgeApiArtifactIngestInput extends Omit<IngestArtifactInput, 'allowPrivateHosts' | 'metadata'> {
+  readonly fetchMode?: RemoteKnowledgeFetchMode;
+  readonly metadata?: Record<string, unknown>;
+}
 
 export interface MemoryExplainResult {
   readonly injections: readonly KnowledgeInjection[];
@@ -140,8 +163,8 @@ export interface KnowledgeApi {
     register(connector: Parameters<KnowledgeService['registerConnector']>[0], options?: Parameters<KnowledgeService['registerConnector']>[1]): void;
   };
   readonly ingest: {
-    url(input: IngestUrlInput): ReturnType<KnowledgeService['ingestUrl']>;
-    artifact(input: IngestArtifactInput): ReturnType<KnowledgeService['ingestArtifact']>;
+    url(input: KnowledgeApiUrlIngestInput): ReturnType<KnowledgeService['ingestUrl']>;
+    artifact(input: KnowledgeApiArtifactIngestInput): ReturnType<KnowledgeService['ingestArtifact']>;
     bookmarksFile(input: ImportBookmarksInput): ReturnType<KnowledgeService['importBookmarksFromFile']>;
     urlsFile(input: ImportUrlsInput): ReturnType<KnowledgeService['importUrlsFromFile']>;
     bookmarkSeeds(input: BookmarkSeedsInput): ReturnType<KnowledgeService['ingestBookmarkSeeds']>;
@@ -208,6 +231,36 @@ export interface KnowledgeApi {
     ): ReturnType<KnowledgeService['decideConsolidationCandidate']>;
   };
   readonly memory?: MemoryApi;
+}
+
+function normalizeKnowledgeFetchMode(fetchMode: RemoteKnowledgeFetchMode | undefined): {
+  fetchMode?: RemoteKnowledgeFetchMode;
+  allowPrivateHosts?: boolean;
+} {
+  if (!fetchMode) return {};
+  return {
+    fetchMode,
+    allowPrivateHosts: fetchMode === 'allow-private-hosts',
+  };
+}
+
+function appendKnowledgeIntentMetadata(
+  metadata: Record<string, unknown> | undefined,
+  fetchMode: RemoteKnowledgeFetchMode | undefined,
+  ingestMode: 'url' | 'artifact',
+): Record<string, unknown> | undefined {
+  if (!metadata && !fetchMode) return {
+    knowledgeIntent: {
+      ingestMode,
+    },
+  };
+  return {
+    ...(metadata ?? {}),
+    knowledgeIntent: {
+      ingestMode,
+      ...(fetchMode ? { remoteFetchMode: fetchMode } : {}),
+    },
+  };
 }
 
 export function createMemoryApi(memoryRegistry: MemoryApiRegistry): MemoryApi {
@@ -294,8 +347,16 @@ export function createKnowledgeApi(
       ) => knowledgeService.registerConnector(connector, options),
     }),
     ingest: Object.freeze({
-      url: (input: IngestUrlInput) => knowledgeService.ingestUrl(input),
-      artifact: (input: IngestArtifactInput) => knowledgeService.ingestArtifact(input),
+      url: (input: KnowledgeApiUrlIngestInput) => knowledgeService.ingestUrl({
+        ...input,
+        ...normalizeKnowledgeFetchMode(input.fetchMode),
+        metadata: appendKnowledgeIntentMetadata(input.metadata, input.fetchMode, 'url'),
+      }),
+      artifact: (input: KnowledgeApiArtifactIngestInput) => knowledgeService.ingestArtifact({
+        ...input,
+        ...normalizeKnowledgeFetchMode(input.fetchMode),
+        metadata: appendKnowledgeIntentMetadata(input.metadata, input.fetchMode, 'artifact'),
+      }),
       bookmarksFile: (input: ImportBookmarksInput) => knowledgeService.importBookmarksFromFile(input),
       urlsFile: (input: ImportUrlsInput) => knowledgeService.importUrlsFromFile(input),
       bookmarkSeeds: (

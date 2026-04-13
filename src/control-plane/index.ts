@@ -25,12 +25,24 @@ export type {
   GatewayMethodTransport,
 } from './method-catalog.ts';
 export type {
-  SharedSessionRecord,
+  FindSharedSessionOptions,
   SharedSessionMessage,
   SharedSessionParticipant,
+  SharedSessionRecord,
   SharedSessionSubmission,
+  SteerSharedSessionMessageInput,
   SubmitSharedSessionMessageInput,
-} from './session-broker.ts';
+} from './session-types.ts';
+export type {
+  SharedSessionCompletion,
+  SharedSessionContinuationRequest,
+  SharedSessionContinuationResult,
+  SharedSessionHelperModelOverride,
+  SharedSessionInputIntent,
+  SharedSessionInputRecord,
+  SharedSessionInputState,
+  SharedSessionRoutingIntent,
+} from './session-intents.ts';
 export { SharedSessionBroker } from './session-broker.ts';
 export type {
   SharedApprovalRecord,

@@ -2,12 +2,15 @@
  * Execution-target types for automation jobs and runs.
  */
 
-import type { AutomationExecutionKind, AutomationSurfaceKind } from './types.ts';
+import type {
+  AutomationExecutionKind,
+  AutomationExecutionTargetKind,
+  AutomationSurfaceKind,
+  ProviderModelRoutingPolicy,
+} from './types.ts';
+import type { ExecutionIntent } from '../runtime/execution-intents.ts';
 
-export type AutomationSessionTargetKind =
-  | AutomationExecutionKind
-  | 'session'
-  | 'route';
+export type AutomationSessionTargetKind = AutomationExecutionTargetKind;
 
 export interface AutomationSessionTarget {
   readonly kind: AutomationSessionTargetKind;
@@ -55,6 +58,8 @@ export interface AutomationExecutionPolicy {
   readonly modelProvider?: string;
   readonly modelId?: string;
   readonly fallbackModels?: readonly string[];
+  readonly routing?: ProviderModelRoutingPolicy;
+  readonly executionIntent?: ExecutionIntent;
   readonly reasoningEffort?: 'instant' | 'low' | 'medium' | 'high';
   readonly thinking?: string;
   readonly wakeMode?: AutomationWakeMode;

@@ -1,105 +1,31 @@
 import { randomUUID } from 'node:crypto';
 import { PersistentStore } from '../state/persistent-store.ts';
 import { RouteBindingManager } from '../channels/index.ts';
-import type { AutomationSurfaceKind } from '../automation/types.ts';
 import type { AutomationRouteBinding } from '../automation/routes.ts';
-import { AgentManager } from '../tools/agent/index.ts';
-import { AgentMessageBus } from '../agents/message-bus.ts';
-
-type SharedSessionStatus = 'active' | 'closed';
-type SharedSessionMessageRole = 'user' | 'assistant' | 'system';
-
-export interface SharedSessionParticipant {
-  readonly surfaceKind: AutomationSurfaceKind;
-  readonly surfaceId: string;
-  readonly externalId?: string;
-  readonly userId?: string;
-  readonly displayName?: string;
-  readonly routeId?: string;
-  readonly lastSeenAt: number;
-}
-
-export interface SharedSessionMessage {
-  readonly id: string;
-  readonly sessionId: string;
-  readonly role: SharedSessionMessageRole;
-  readonly body: string;
-  readonly createdAt: number;
-  readonly surfaceKind?: AutomationSurfaceKind;
-  readonly surfaceId?: string;
-  readonly routeId?: string;
-  readonly agentId?: string;
-  readonly userId?: string;
-  readonly displayName?: string;
-  readonly metadata: Record<string, unknown>;
-}
-
-export interface SharedSessionRecord {
-  readonly id: string;
-  readonly title: string;
-  readonly status: SharedSessionStatus;
-  readonly createdAt: number;
-  readonly updatedAt: number;
-  readonly lastMessageAt?: number;
-  readonly closedAt?: number;
-  readonly messageCount: number;
-  readonly routeIds: readonly string[];
-  readonly surfaceKinds: readonly AutomationSurfaceKind[];
-  readonly participants: readonly SharedSessionParticipant[];
-  readonly activeAgentId?: string;
-  readonly lastAgentId?: string;
-  readonly lastError?: string;
-  readonly metadata: Record<string, unknown>;
-}
-
-export interface SharedSessionSubmission {
-  readonly session: SharedSessionRecord;
-  readonly userMessage: SharedSessionMessage;
-  readonly routeBinding?: AutomationRouteBinding;
-  readonly mode: 'spawn' | 'continued-live';
-  readonly task?: string;
-  readonly activeAgentId?: string;
-  readonly created: boolean;
-}
-
-interface SharedSessionStoreSnapshot extends Record<string, unknown> {
-  readonly sessions: readonly SharedSessionRecord[];
-  readonly messages: readonly SharedSessionMessage[];
-}
-
-export interface SubmitSharedSessionMessageInput {
-  readonly sessionId?: string;
-  readonly routeId?: string;
-  readonly surfaceKind: AutomationSurfaceKind;
-  readonly surfaceId: string;
-  readonly externalId?: string;
-  readonly threadId?: string;
-  readonly userId?: string;
-  readonly displayName?: string;
-  readonly title?: string;
-  readonly body: string;
-  readonly metadata?: Record<string, unknown>;
-}
-
-export interface FindSharedSessionOptions {
-  readonly surfaceKind?: AutomationSurfaceKind;
-  readonly routeId?: string;
-  readonly includeClosed?: boolean;
-}
-
-type SharedSessionAgentStatus = {
-  readonly id: string;
-  readonly status: 'pending' | 'running' | 'completed' | 'failed' | 'cancelled';
-};
-
-type SharedSessionAgentStatusProvider = {
-  getStatus(agentId: string): SharedSessionAgentStatus | null | undefined;
-};
-
-type SharedSessionMessageSender = {
-  send(fromId: string, toId: string, content: string, options?: { kind?: 'directive' }): boolean;
-};
-type SharedSessionEventPublisher = (event: string, payload: unknown) => void;
+import type { AutomationSurfaceKind } from '../automation/types.ts';
+import type {
+  SharedSessionCompletion,
+  SharedSessionContinuationRunner,
+  SharedSessionInputIntent,
+  SharedSessionInputRecord,
+} from './session-intents.ts';
+import type {
+  FindSharedSessionOptions,
+  SharedSessionMessage,
+  SharedSessionMessageRole,
+  SharedSessionParticipant,
+  SharedSessionRecord,
+  SharedSessionSubmission,
+  SteerSharedSessionMessageInput,
+  SubmitSharedSessionMessageInput,
+} from './session-types.ts';
+import {
+  dedupeSessionSurfaceKinds,
+  type SharedSessionAgentStatusProvider,
+  type SharedSessionEventPublisher,
+  type SharedSessionMessageSender,
+  type SharedSessionStoreSnapshot,
+} from './session-broker-internals.ts';
 
 const MAX_PERSISTED_MESSAGES = 2_000;
 const MAX_CONTINUATION_MESSAGES = 16;
@@ -112,10 +38,6 @@ function sortMessages(records: Iterable<SharedSessionMessage>): SharedSessionMes
   return [...records].sort((a, b) => a.createdAt - b.createdAt || a.id.localeCompare(b.id));
 }
 
-function dedupeSurfaceKinds(participants: readonly SharedSessionParticipant[]): AutomationSurfaceKind[] {
-  return [...new Set(participants.map((participant) => participant.surfaceKind))];
-}
-
 export class SharedSessionBroker {
   private readonly store: PersistentStore<SharedSessionStoreSnapshot>;
   private readonly routeBindings: RouteBindingManager;
@@ -123,7 +45,9 @@ export class SharedSessionBroker {
   private readonly messageSender: SharedSessionMessageSender;
   private readonly sessions = new Map<string, SharedSessionRecord>();
   private readonly messages = new Map<string, SharedSessionMessage[]>();
+  private readonly inputs = new Map<string, SharedSessionInputRecord[]>();
   private eventPublisher: SharedSessionEventPublisher | null = null;
+  private continuationRunner: SharedSessionContinuationRunner | null = null;
   private loaded = false;
 
   constructor(config: {
@@ -147,12 +71,17 @@ export class SharedSessionBroker {
     this.eventPublisher = publisher;
   }
 
+  setContinuationRunner(runner: SharedSessionContinuationRunner | null): void {
+    this.continuationRunner = runner;
+  }
+
   async start(): Promise<void> {
     if (this.loaded) return;
     await this.routeBindings.start();
     const snapshot = await this.store.load();
     this.sessions.clear();
     this.messages.clear();
+    this.inputs.clear();
     for (const session of snapshot?.sessions ?? []) {
       this.sessions.set(session.id, session);
     }
@@ -161,8 +90,16 @@ export class SharedSessionBroker {
       bucket.push(message);
       this.messages.set(message.sessionId, bucket);
     }
+    for (const input of snapshot?.inputs ?? []) {
+      const bucket = this.inputs.get(input.sessionId) ?? [];
+      bucket.push(input);
+      this.inputs.set(input.sessionId, bucket);
+    }
     for (const [sessionId, bucket] of this.messages.entries()) {
       this.messages.set(sessionId, sortMessages(bucket));
+    }
+    for (const [sessionId, bucket] of this.inputs.entries()) {
+      this.inputs.set(sessionId, [...bucket].sort((a, b) => a.createdAt - b.createdAt || a.id.localeCompare(b.id)));
     }
     this.loaded = true;
   }
@@ -217,6 +154,11 @@ export class SharedSessionBroker {
     return bucket.slice(-Math.max(1, limit));
   }
 
+  getInputs(sessionId: string, limit = 100): SharedSessionInputRecord[] {
+    const bucket = this.inputs.get(sessionId) ?? [];
+    return bucket.slice(-Math.max(1, limit));
+  }
+
   async createSession(input: {
     readonly id?: string;
     readonly title?: string;
@@ -239,6 +181,7 @@ export class SharedSessionBroker {
       lastMessageAt: undefined,
       closedAt: undefined,
       messageCount: 0,
+      pendingInputCount: 0,
       routeIds,
       surfaceKinds: participant ? [participant.surfaceKind] : input.routeBinding ? [input.routeBinding.surfaceKind] : [],
       participants,
@@ -302,80 +245,27 @@ export class SharedSessionBroker {
       updatedAt: Date.now(),
     };
     this.sessions.set(sessionId, updated);
+    const claimed = this.claimNextQueuedInput(sessionId, agentId);
     await this.persist();
     this.publishUpdate('session-agent-bound', updated);
+    if (claimed) {
+      this.publishInputLifecycleEvent('session-input-spawned', claimed, {
+        agentId,
+      });
+    }
     return updated;
   }
 
   async submitMessage(input: SubmitSharedSessionMessageInput): Promise<SharedSessionSubmission> {
-    await this.start();
+    return await this.handleIntent('submit', input, true);
+  }
 
-    const binding = await this.resolveBinding(input);
-    let session = input.sessionId ? this.sessions.get(input.sessionId) ?? undefined : undefined;
-    let created = false;
-    if (!session && binding?.sessionId) {
-      session = this.sessions.get(binding.sessionId) ?? undefined;
-    }
-    if (!session) {
-      const participant: SharedSessionParticipant = {
-        surfaceKind: input.surfaceKind,
-        surfaceId: input.surfaceId,
-        externalId: input.externalId,
-        userId: input.userId,
-        displayName: input.displayName,
-        routeId: binding?.id,
-        lastSeenAt: Date.now(),
-      };
-      session = await this.createSession({
-        title: input.title,
-        metadata: input.metadata,
-        routeBinding: binding ?? undefined,
-        participant,
-      });
-      created = true;
-    }
+  async steerMessage(input: SteerSharedSessionMessageInput): Promise<SharedSessionSubmission> {
+    return await this.handleIntent('steer', input, input.allowSpawnFallback === true);
+  }
 
-    const updatedSession = await this.attachParticipantAndRoute(session, input, binding ?? undefined);
-    const userMessage = await this.appendMessage(updatedSession.id, {
-      role: 'user',
-      body: input.body,
-      surfaceKind: input.surfaceKind,
-      surfaceId: input.surfaceId,
-      routeId: binding?.id,
-      userId: input.userId,
-      displayName: input.displayName,
-      metadata: input.metadata ?? {},
-    });
-
-    const activeAgentId = this.resolveActiveAgentId(updatedSession);
-    if (activeAgentId) {
-      const sent = this.messageSender.send('orchestrator', activeAgentId, input.body, { kind: 'directive' });
-      if (sent) {
-        this.publishUpdate('session-message-forwarded', {
-          sessionId: updatedSession.id,
-          agentId: activeAgentId,
-          messageId: userMessage.id,
-        });
-        return {
-          session: this.sessions.get(updatedSession.id)!,
-          userMessage,
-          routeBinding: binding ?? undefined,
-          mode: 'continued-live',
-          activeAgentId,
-          created,
-        };
-      }
-    }
-
-    const task = this.buildContinuationTask(updatedSession.id);
-    return {
-      session: this.sessions.get(updatedSession.id)!,
-      userMessage,
-      routeBinding: binding ?? undefined,
-      mode: 'spawn',
-      task,
-      created,
-    };
+  async followUpMessage(input: SubmitSharedSessionMessageInput): Promise<SharedSessionSubmission> {
+    return await this.handleIntent('follow-up', input, true);
   }
 
   async appendSystemMessage(sessionId: string, body: string, metadata: Record<string, unknown> = {}): Promise<SharedSessionMessage | null> {
@@ -387,7 +277,7 @@ export class SharedSessionBroker {
     });
   }
 
-  async completeAgent(sessionId: string, agentId: string, body: string, metadata: Record<string, unknown> = {}): Promise<SharedSessionRecord | null> {
+  async completeAgent(sessionId: string, agentId: string, body: string, metadata: Record<string, unknown> = {}): Promise<SharedSessionCompletion | null> {
     await this.start();
     const session = this.sessions.get(sessionId);
     if (!session) return null;
@@ -405,12 +295,43 @@ export class SharedSessionBroker {
       ...(metadata.status === 'failed' ? { lastError: body } : {}),
     };
     this.sessions.set(sessionId, updated);
+    const finalizedInputs = this.finalizeAgentInputs(
+      sessionId,
+      agentId,
+      metadata.status === 'failed' ? 'failed' : metadata.status === 'cancelled' ? 'cancelled' : 'completed',
+      metadata.status === 'failed' ? body : undefined,
+    );
     await this.persist();
     this.publishUpdate('session-agent-completed', {
       sessionId,
       agentId,
       status: metadata.status ?? 'completed',
     });
+    for (const finalized of finalizedInputs) {
+      this.publishInputLifecycleEvent(`session-input-${finalized.state}`, finalized, { agentId });
+    }
+    const continuation = await this.runQueuedFollowUp(sessionId);
+    return {
+      session: this.sessions.get(sessionId)!,
+      ...(continuation?.input ? { continuedInput: continuation.input } : {}),
+      ...(continuation?.agentId ? { continuedAgentId: continuation.agentId } : {}),
+    };
+  }
+
+  async cancelInput(sessionId: string, inputId: string): Promise<SharedSessionInputRecord | null> {
+    await this.start();
+    const updated = this.updateInput(sessionId, inputId, (entry) => {
+      if (entry.state !== 'queued') return entry;
+      return {
+        ...entry,
+        state: 'cancelled',
+        updatedAt: Date.now(),
+      };
+    });
+    if (!updated) return null;
+    this.refreshPendingInputCount(sessionId);
+    await this.persist();
+    this.publishInputLifecycleEvent('session-input-cancelled', updated);
     return updated;
   }
 
@@ -514,7 +435,7 @@ export class SharedSessionBroker {
       closedAt: existing.status === 'closed' ? undefined : existing.closedAt,
       routeIds: nextRouteIds,
       participants,
-      surfaceKinds: dedupeSurfaceKinds(participants),
+      surfaceKinds: dedupeSessionSurfaceKinds(participants),
       metadata: {
         ...existing.metadata,
       },
@@ -570,6 +491,9 @@ export class SharedSessionBroker {
     await this.store.persist({
       sessions: sortSessions(this.sessions.values()),
       messages: sortMessages(this.messages.values().flatMap((bucket) => bucket)).slice(-MAX_PERSISTED_MESSAGES),
+      inputs: [...this.inputs.values()]
+        .flatMap((bucket) => bucket)
+        .sort((a, b) => a.createdAt - b.createdAt || a.id.localeCompare(b.id)),
     });
   }
 
@@ -578,6 +502,296 @@ export class SharedSessionBroker {
       event,
       payload,
       createdAt: Date.now(),
+    });
+  }
+
+  private publishInputLifecycleEvent(
+    event: string,
+    input: SharedSessionInputRecord,
+    extra: Record<string, unknown> = {},
+  ): void {
+    this.publishUpdate(event, {
+      sessionId: input.sessionId,
+      inputId: input.id,
+      intent: input.intent,
+      state: input.state,
+      correlationId: input.correlationId,
+      causationId: input.causationId ?? null,
+      ...(input.activeAgentId ? { activeAgentId: input.activeAgentId } : {}),
+      ...extra,
+    });
+  }
+
+  private async handleIntent(
+    intent: SharedSessionInputIntent,
+    input: SubmitSharedSessionMessageInput,
+    allowSpawnFallback: boolean,
+  ): Promise<SharedSessionSubmission> {
+    await this.start();
+
+    const binding = await this.resolveBinding(input);
+    let session = input.sessionId ? this.sessions.get(input.sessionId) ?? undefined : undefined;
+    let created = false;
+    if (!session && binding?.sessionId) {
+      session = this.sessions.get(binding.sessionId) ?? undefined;
+    }
+    if (!session) {
+      const participant: SharedSessionParticipant = {
+        surfaceKind: input.surfaceKind,
+        surfaceId: input.surfaceId,
+        externalId: input.externalId,
+        userId: input.userId,
+        displayName: input.displayName,
+        routeId: binding?.id,
+        lastSeenAt: Date.now(),
+      };
+      session = await this.createSession({
+        title: input.title,
+        metadata: input.metadata,
+        routeBinding: binding ?? undefined,
+        participant,
+      });
+      created = true;
+    }
+
+    const updatedSession = await this.attachParticipantAndRoute(session, input, binding ?? undefined);
+    const userMessage = await this.appendMessage(updatedSession.id, {
+      role: 'user',
+      body: input.body,
+      surfaceKind: input.surfaceKind,
+      surfaceId: input.surfaceId,
+      routeId: binding?.id,
+      userId: input.userId,
+      displayName: input.displayName,
+      metadata: {
+        ...(input.metadata ?? {}),
+        sessionIntent: intent,
+      },
+    });
+    const queuedInput = this.recordInput(updatedSession.id, intent, input, binding?.id, userMessage.id);
+    this.publishInputLifecycleEvent('session-input-queued', queuedInput, {
+      messageId: userMessage.id,
+    });
+
+    const activeAgentId = this.resolveActiveAgentId(updatedSession);
+    if (intent !== 'follow-up' && activeAgentId) {
+      const sent = this.messageSender.send('orchestrator', activeAgentId, input.body, { kind: 'directive' });
+      if (sent) {
+        const delivered = this.updateInput(updatedSession.id, queuedInput.id, (entry) => ({
+          ...entry,
+          state: 'delivered',
+          activeAgentId,
+          updatedAt: Date.now(),
+        })) ?? queuedInput;
+        await this.persist();
+        this.publishInputLifecycleEvent('session-input-delivered', delivered, {
+          agentId: activeAgentId,
+          messageId: userMessage.id,
+        });
+        this.publishUpdate('session-message-forwarded', {
+          sessionId: updatedSession.id,
+          agentId: activeAgentId,
+          messageId: userMessage.id,
+          inputId: delivered.id,
+          intent,
+        });
+        return {
+          session: this.sessions.get(updatedSession.id)!,
+          userMessage,
+          routeBinding: binding ?? undefined,
+          input: delivered,
+          intent,
+          mode: 'continued-live',
+          state: delivered.state,
+          activeAgentId,
+          created,
+        };
+      }
+      if (intent === 'steer' && !allowSpawnFallback) {
+        const rejected = this.updateInput(updatedSession.id, queuedInput.id, (entry) => ({
+          ...entry,
+          state: 'rejected',
+          updatedAt: Date.now(),
+          error: 'No active agent accepted the steer request.',
+        })) ?? queuedInput;
+        await this.persist();
+        this.publishInputLifecycleEvent('session-input-rejected', rejected, {
+          messageId: userMessage.id,
+        });
+        return {
+          session: this.sessions.get(updatedSession.id)!,
+          userMessage,
+          routeBinding: binding ?? undefined,
+          input: rejected,
+          intent,
+          mode: 'rejected',
+          state: rejected.state,
+          created,
+        };
+      }
+    }
+
+    if (intent === 'follow-up' && activeAgentId) {
+      await this.persist();
+      this.publishInputLifecycleEvent('session-follow-up-queued', queuedInput, {
+        agentId: activeAgentId,
+        messageId: userMessage.id,
+      });
+      return {
+        session: this.sessions.get(updatedSession.id)!,
+        userMessage,
+        routeBinding: binding ?? undefined,
+        input: queuedInput,
+        intent,
+        mode: 'queued-follow-up',
+        state: queuedInput.state,
+        activeAgentId,
+        created,
+      };
+    }
+
+    await this.persist();
+    return {
+      session: this.sessions.get(updatedSession.id)!,
+      userMessage,
+      routeBinding: binding ?? undefined,
+      input: queuedInput,
+      intent,
+      mode: 'spawn',
+      state: queuedInput.state,
+      task: this.buildContinuationTask(updatedSession.id),
+      created,
+    };
+  }
+
+  private recordInput(
+    sessionId: string,
+    intent: SharedSessionInputIntent,
+    input: SubmitSharedSessionMessageInput,
+    routeId?: string,
+    causationId?: string,
+  ): SharedSessionInputRecord {
+    const id = `sin-${randomUUID().slice(0, 8)}`;
+    const entry: SharedSessionInputRecord = {
+      id,
+      sessionId,
+      intent,
+      state: 'queued',
+      correlationId: typeof input.metadata?.correlationId === 'string' ? input.metadata.correlationId : `session-input:${id}`,
+      ...(causationId ? { causationId } : {}),
+      body: input.body,
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+      routeId,
+      surfaceKind: input.surfaceKind,
+      surfaceId: input.surfaceId,
+      externalId: input.externalId,
+      threadId: input.threadId,
+      userId: input.userId,
+      displayName: input.displayName,
+      metadata: input.metadata ?? {},
+      routing: input.routing,
+    };
+    const bucket = this.inputs.get(sessionId) ?? [];
+    bucket.push(entry);
+    this.inputs.set(sessionId, bucket.sort((a, b) => a.createdAt - b.createdAt || a.id.localeCompare(b.id)));
+    this.refreshPendingInputCount(sessionId);
+    return entry;
+  }
+
+  private updateInput(
+    sessionId: string,
+    inputId: string,
+    transform: (input: SharedSessionInputRecord) => SharedSessionInputRecord,
+  ): SharedSessionInputRecord | null {
+    const bucket = this.inputs.get(sessionId);
+    if (!bucket) return null;
+    const index = bucket.findIndex((entry) => entry.id === inputId);
+    if (index < 0) return null;
+    const updated = transform(bucket[index]);
+    bucket[index] = updated;
+    this.inputs.set(sessionId, bucket);
+    this.refreshPendingInputCount(sessionId);
+    return updated;
+  }
+
+  private claimNextQueuedInput(sessionId: string, agentId: string): SharedSessionInputRecord | null {
+    const bucket = this.inputs.get(sessionId) ?? [];
+    const next = bucket.find((entry) => entry.state === 'queued');
+    if (!next) return null;
+    return this.updateInput(sessionId, next.id, (entry) => ({
+      ...entry,
+      state: 'spawned',
+      activeAgentId: agentId,
+      updatedAt: Date.now(),
+    }));
+  }
+
+  private finalizeAgentInputs(
+    sessionId: string,
+    agentId: string,
+    nextState: Extract<SharedSessionInputRecord['state'], 'completed' | 'failed' | 'cancelled'>,
+    error?: string,
+  ): SharedSessionInputRecord[] {
+    const bucket = this.inputs.get(sessionId);
+    if (!bucket) return [];
+    let changed = false;
+    const updatedInputs: SharedSessionInputRecord[] = [];
+    for (let index = 0; index < bucket.length; index += 1) {
+      const entry = bucket[index];
+      if (entry.activeAgentId !== agentId) continue;
+      if (entry.state !== 'delivered' && entry.state !== 'spawned') continue;
+      bucket[index] = {
+        ...entry,
+        state: nextState,
+        updatedAt: Date.now(),
+        ...(error ? { error } : {}),
+      };
+      updatedInputs.push(bucket[index]!);
+      changed = true;
+    }
+    if (changed) {
+      this.inputs.set(sessionId, bucket);
+      this.refreshPendingInputCount(sessionId);
+    }
+    return updatedInputs;
+  }
+
+  private async runQueuedFollowUp(sessionId: string): Promise<{ input: SharedSessionInputRecord; agentId: string } | null> {
+    if (!this.continuationRunner) return null;
+    const bucket = this.inputs.get(sessionId) ?? [];
+    const next = bucket.find((entry) => entry.intent === 'follow-up' && entry.state === 'queued');
+    if (!next) return null;
+    const routeBinding = next.routeId ? this.routeBindings.getBinding(next.routeId) : undefined;
+    const task = this.buildContinuationTask(sessionId);
+    const spawned = await this.continuationRunner({
+      sessionId,
+      input: next,
+      task,
+      routeBinding,
+    });
+    if (!spawned?.agentId) return null;
+    await this.bindAgent(sessionId, spawned.agentId);
+    const claimed = this.inputs.get(sessionId)?.find((entry) => entry.activeAgentId === spawned.agentId && entry.state === 'spawned') ?? null;
+    if (claimed) {
+      this.publishInputLifecycleEvent('session-follow-up-spawned', claimed, {
+        agentId: spawned.agentId,
+      });
+    }
+    await this.persist();
+    return claimed ? { input: claimed, agentId: spawned.agentId } : null;
+  }
+
+  private refreshPendingInputCount(sessionId: string): void {
+    const session = this.sessions.get(sessionId);
+    if (!session) return;
+    const pendingInputCount = (this.inputs.get(sessionId) ?? []).filter((entry) =>
+      entry.state === 'queued' || entry.state === 'delivered' || entry.state === 'spawned'
+    ).length;
+    this.sessions.set(sessionId, {
+      ...session,
+      pendingInputCount,
+      updatedAt: Date.now(),
     });
   }
 }

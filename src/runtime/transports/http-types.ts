@@ -1,10 +1,12 @@
 import type {
   ControlPlaneRecentEvent,
   SharedApprovalRecord,
+  SharedSessionInputRecord,
   SharedSessionMessage,
   SharedSessionRecord,
   SharedSessionSubmission,
 } from '../../control-plane/index.ts';
+import type { SteerSharedSessionMessageInput } from '../../control-plane/index.ts';
 import type { ProviderRuntimeSnapshot, ProviderUsageSnapshot } from '../../providers/runtime-snapshot.ts';
 import type {
   DistributedNodeHostContract,
@@ -62,10 +64,14 @@ export interface HttpTransportSessionsClient {
   list(limit?: number): Promise<readonly SharedSessionRecord[]>;
   get(sessionId: string): Promise<SharedSessionRecord | null>;
   messages(sessionId: string, limit?: number): Promise<readonly SharedSessionMessage[]>;
+  inputs(sessionId: string, limit?: number): Promise<readonly SharedSessionInputRecord[]>;
   ensureSession(input?: HttpSessionEnsureInput): Promise<SharedSessionRecord>;
   close(sessionId: string): Promise<SharedSessionRecord | null>;
   reopen(sessionId: string): Promise<SharedSessionRecord | null>;
   submitMessage(sessionId: string, input: HttpSessionMessageInput): Promise<SharedSessionSubmission>;
+  steerMessage(sessionId: string, input: HttpSteerSessionMessageInput): Promise<SharedSessionSubmission>;
+  followUpMessage(sessionId: string, input: HttpSessionMessageInput): Promise<SharedSessionSubmission>;
+  cancelInput(sessionId: string, inputId: string): Promise<SharedSessionInputRecord | null>;
 }
 
 export interface HttpTransportTasksClient {
@@ -180,12 +186,18 @@ export interface HttpSessionMessageInput {
   readonly title?: string;
   readonly routeId?: string;
   readonly metadata?: Record<string, unknown>;
+  readonly routing?: SteerSharedSessionMessageInput['routing'];
+}
+
+export interface HttpSteerSessionMessageInput extends HttpSessionMessageInput {
+  readonly allowSpawnFallback?: boolean;
 }
 
 export interface HttpTaskSubmitInput {
   readonly task: string;
   readonly model?: string;
   readonly tools?: readonly string[];
+  readonly routing?: HttpSessionMessageInput['routing'];
   readonly sessionId?: string;
   readonly routeId?: string;
   readonly surfaceKind?: string;

@@ -1,4 +1,11 @@
-import type { ControlPlaneRecentEvent, SharedApprovalRecord, SharedSessionMessage, SharedSessionRecord, SharedSessionSubmission } from '../../control-plane/index.ts';
+import type {
+  ControlPlaneRecentEvent,
+  SharedApprovalRecord,
+  SharedSessionInputRecord,
+  SharedSessionMessage,
+  SharedSessionRecord,
+  SharedSessionSubmission,
+} from '../../control-plane/index.ts';
 import type { RuntimeTask } from '../store/domains/tasks.ts';
 import type { ProviderRuntimeSnapshot, ProviderUsageSnapshot } from '../../providers/runtime-snapshot.ts';
 import type { DistributedNodeHostContract, DistributedPendingWork, DistributedPeerKind, DistributedPeerRecord, DistributedRuntimePairRequest } from '../remote/distributed-runtime-types.ts';
@@ -29,6 +36,7 @@ import type {
   HttpRemotePeerTokenResponse,
   HttpSessionEnsureInput,
   HttpSessionMessageInput,
+  HttpSteerSessionMessageInput,
   HttpTaskActionResponse,
   HttpTaskRetryResponse,
   HttpTaskSubmitInput,
@@ -190,6 +198,14 @@ function buildSessionMessageBody(input: HttpSessionMessageInput): Record<string,
     ...(input.title ? { title: input.title } : {}),
     ...(input.routeId ? { routeId: input.routeId } : {}),
     ...(input.metadata ? { metadata: input.metadata } : {}),
+    ...(input.routing ? { routing: input.routing } : {}),
+  };
+}
+
+function buildSteerSessionMessageBody(input: HttpSteerSessionMessageInput): Record<string, unknown> {
+  return {
+    ...buildSessionMessageBody(input),
+    ...(input.allowSpawnFallback === true ? { allowSpawnFallback: true } : {}),
   };
 }
 
@@ -198,6 +214,7 @@ function buildTaskSubmitBody(input: HttpTaskSubmitInput): Record<string, unknown
     task: input.task,
     ...(input.model ? { model: input.model } : {}),
     ...(input.tools ? { tools: [...input.tools] } : {}),
+    ...(input.routing ? { routing: input.routing } : {}),
     ...(input.sessionId ? { sessionId: input.sessionId } : {}),
     ...(input.routeId ? { routeId: input.routeId } : {}),
     ...(input.surfaceKind ? { surfaceKind: input.surfaceKind } : {}),
@@ -263,6 +280,12 @@ function createOperatorClient(
         const body = await requestJson<readonly SharedSessionMessage[] | { messages?: SharedSessionMessage[] }>(fetchImpl, url.toString(), createJsonRequestInit(token));
         return readArrayResponse<SharedSessionMessage>(body, 'messages');
       },
+      inputs: async (sessionId, limit = 100): Promise<readonly SharedSessionInputRecord[]> => {
+        const url = new URL(buildTransportUrl(paths.sessionsUrl, `${encodeURIComponent(sessionId)}/inputs`));
+        url.searchParams.set('limit', String(Math.max(1, Math.floor(limit))));
+        const body = await requestJson<readonly SharedSessionInputRecord[] | { inputs?: SharedSessionInputRecord[] }>(fetchImpl, url.toString(), createJsonRequestInit(token));
+        return readArrayResponse<SharedSessionInputRecord>(body, 'inputs');
+      },
       ensureSession: async (input: HttpSessionEnsureInput = {}): Promise<SharedSessionRecord> => {
         const body = await requestJson<{ session: SharedSessionRecord }>(fetchImpl, paths.sessionsUrl, createJsonRequestInit(token, buildSessionEnsureBody(input), 'POST'));
         return body.session;
@@ -280,6 +303,27 @@ function createOperatorClient(
         buildTransportUrl(paths.sessionsUrl, `${encodeURIComponent(sessionId)}/messages`),
         createJsonRequestInit(token, buildSessionMessageBody(input), 'POST'),
       ),
+      steerMessage: async (sessionId, input): Promise<SharedSessionSubmission> => await requestJson(
+        fetchImpl,
+        buildTransportUrl(paths.sessionsUrl, `${encodeURIComponent(sessionId)}/steer`),
+        createJsonRequestInit(token, buildSteerSessionMessageBody(input), 'POST'),
+      ),
+      followUpMessage: async (sessionId, input): Promise<SharedSessionSubmission> => await requestJson(
+        fetchImpl,
+        buildTransportUrl(paths.sessionsUrl, `${encodeURIComponent(sessionId)}/follow-up`),
+        createJsonRequestInit(token, buildSessionMessageBody(input), 'POST'),
+      ),
+      cancelInput: async (sessionId, inputId): Promise<SharedSessionInputRecord | null> => await requestJsonWithFallback<{ input?: SharedSessionInputRecord } | SharedSessionInputRecord>(
+        fetchImpl,
+        buildTransportUrl(paths.sessionsUrl, `${encodeURIComponent(sessionId)}/inputs/${encodeURIComponent(inputId)}/cancel`),
+        createJsonRequestInit(token, {}, 'POST'),
+      ).then((body) => {
+        if (!body) return null;
+        if (isRecord(body) && 'input' in body) {
+          return (body.input as SharedSessionInputRecord | undefined) ?? null;
+        }
+        return body as SharedSessionInputRecord;
+      }),
     },
     tasks: {
       snapshot: async (): Promise<UiTasksSnapshot> => {

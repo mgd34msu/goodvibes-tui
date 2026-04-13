@@ -315,7 +315,7 @@ describe('AgentOrchestrator', () => {
       }
     });
 
-    test('keeps concrete providers scoped even when a mismatched registry key is requested', async () => {
+    test('keeps explicitly concrete providers scoped even when a mismatched registry key is requested', async () => {
       const provider = makeMockProvider([{ content: 'Task done.' }]);
       const reg = getActualRegistry();
       const origGetForModel = reg.getForModel.bind(reg);
@@ -332,7 +332,11 @@ describe('AgentOrchestrator', () => {
         registryKey: 'openai:gpt-5.4',
       }));
       try {
-        const record = makeRecord({ model: 'abacus:gpt-5.4' });
+        const record = makeRecord({
+          model: 'abacus:gpt-5.4',
+          provider: 'openai',
+          routing: { providerSelection: 'concrete' },
+        });
         await orchestrator.runAgent(record);
         expect(record.status).toBe('completed');
         expect(seen[0]).toEqual({ modelId: 'gpt-5.4', provider: 'openai' });
@@ -342,7 +346,7 @@ describe('AgentOrchestrator', () => {
       }
     });
 
-    test('allows cross-provider registry keys when the selected provider is synthetic', async () => {
+    test('allows cross-provider registry keys when routing explicitly selects synthetic lookup', async () => {
       const provider = makeMockProvider([{ content: 'Task done.' }]);
       const reg = getActualRegistry();
       const origGetForModel = reg.getForModel.bind(reg);
@@ -354,15 +358,47 @@ describe('AgentOrchestrator', () => {
       });
       reg.getCurrentModel = mock(() => ({
         ...MOCK_MODEL,
-        id: 'best-coder',
-        provider: 'synthetic',
-        registryKey: 'synthetic:best-coder',
+        id: 'gpt-5.4',
+        provider: 'openai',
+        registryKey: 'openai:gpt-5.4',
       }));
       try {
-        const record = makeRecord({ model: 'abacus:gpt-5.4' });
+        const record = makeRecord({
+          model: 'abacus:gpt-5.4',
+          routing: { providerSelection: 'synthetic' },
+        });
         await orchestrator.runAgent(record);
         expect(record.status).toBe('completed');
         expect(seen[0]).toEqual({ modelId: 'abacus:gpt-5.4', provider: undefined });
+      } finally {
+        reg.getForModel = origGetForModel;
+        reg.getCurrentModel = origGetCurrentModel;
+      }
+    });
+
+    test('honors explicit unresolved-model fail policy instead of falling back to the current model', async () => {
+      const reg = getActualRegistry();
+      const origGetForModel = reg.getForModel.bind(reg);
+      const origGetCurrentModel = reg.getCurrentModel.bind(reg);
+      let callCount = 0;
+      reg.getForModel = mock((_modelId: string, _providerId?: string) => {
+        callCount += 1;
+        throw new Error('model not found');
+      });
+      reg.getCurrentModel = mock(() => ({
+        ...MOCK_MODEL,
+        id: 'gpt-5.4',
+        provider: 'openai',
+        registryKey: 'openai:gpt-5.4',
+      }));
+      try {
+        const record = makeRecord({
+          model: 'missing-model',
+          routing: { unresolvedModelPolicy: 'fail' },
+        });
+        await orchestrator.runAgent(record);
+        expect(record.status).toBe('failed');
+        expect(callCount).toBe(1);
       } finally {
         reg.getForModel = origGetForModel;
         reg.getCurrentModel = origGetCurrentModel;
@@ -398,6 +434,44 @@ describe('AgentOrchestrator', () => {
         expect(record.status).toBe('completed');
         expect(fallbackProvider.chat).toHaveBeenCalled();
         expect(record.fullOutput).toContain('Fallback used fallback-model');
+      } finally {
+        reg.getForModel = origGetForModel;
+        reg.getCurrentModel = origGetCurrentModel;
+      }
+    });
+
+    test('honors explicit provider failure policy when fallbacks are configured', async () => {
+      const primaryProvider: LLMProvider = {
+        name: 'primary',
+        models: ['primary-model'],
+        chat: mock(async () => {
+          throw new Error('primary unavailable');
+        }),
+      };
+      const fallbackProvider: LLMProvider = {
+        name: 'fallback',
+        models: ['fallback-model'],
+        chat: mock(async (): Promise<ChatResponse> => ({
+          content: 'Fallback used',
+          toolCalls: [],
+          usage: { inputTokens: 10, outputTokens: 5 },
+          stopReason: 'end',
+        })),
+      };
+      const reg = getActualRegistry();
+      const origGetForModel = reg.getForModel.bind(reg);
+      const origGetCurrentModel = reg.getCurrentModel.bind(reg);
+      reg.getForModel = mock((modelId: string) => modelId === 'fallback-model' ? fallbackProvider : primaryProvider);
+      reg.getCurrentModel = mock(() => ({ ...MOCK_MODEL, id: 'primary-model', provider: 'primary' }));
+      try {
+        const record = makeRecord({
+          model: 'primary-model',
+          fallbackModels: ['fallback-model'],
+          routing: { providerFailurePolicy: 'fail' },
+        });
+        await orchestrator.runAgent(record);
+        expect(record.status).toBe('failed');
+        expect(fallbackProvider.chat).not.toHaveBeenCalled();
       } finally {
         reg.getForModel = origGetForModel;
         reg.getCurrentModel = origGetCurrentModel;

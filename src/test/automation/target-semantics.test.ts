@@ -104,6 +104,8 @@ describe('AutomationManager target semantics', () => {
     expect(runA.sessionId).toBe(runB.sessionId);
     expect(runA.continuationMode).toBe('shared-session');
     expect(runB.continuationMode).toBe('shared-session');
+    expect(runA.executionIntent).toEqual({ mode: 'shared-session', targetKind: 'pinned' });
+    expect(runB.executionIntent).toEqual({ mode: 'shared-session', targetKind: 'pinned' });
     expect(persistedJob?.execution.target.pinnedSessionId).toBe(`auto-pin-${job.id}`);
     expect(prompts).toHaveLength(2);
     expect(prompts[0]).toContain('Continue the shared control-plane session');
@@ -144,10 +146,44 @@ describe('AutomationManager target semantics', () => {
 
     expect(run.routeId).toBe(binding.id);
     expect(run.sessionId).toBeDefined();
+    expect(run.executionIntent).toEqual({ mode: 'shared-session', targetKind: 'route' });
     expect(updatedBinding?.sessionId).toBe(run.sessionId);
     expect(updatedBinding?.jobId).toBe(job.id);
     expect(updatedBinding?.runId).toBe(run.id);
+    expect(updatedBinding?.sessionPolicy).toBe('create-or-bind');
+    expect(updatedBinding?.threadPolicy).toBe('preserve');
+    expect(updatedBinding?.deliveryGuarantee).toBe('best-effort');
     expect(sessionBroker.getSession(run.sessionId!)).not.toBeNull();
+  });
+
+  test('route bindings persist explicit session, thread, and delivery semantics', async () => {
+    const { routeBindings } = buildManager();
+
+    await routeBindings.start();
+    const binding = await routeBindings.upsertBinding({
+      kind: 'thread',
+      surfaceKind: 'discord',
+      surfaceId: 'surface:discord',
+      externalId: 'chan-1',
+      sessionPolicy: 'require-existing',
+      threadPolicy: 'detached',
+      deliveryGuarantee: 'at-least-once',
+      metadata: {},
+    });
+
+    expect(binding.sessionPolicy).toBe('require-existing');
+    expect(binding.threadPolicy).toBe('detached');
+    expect(binding.deliveryGuarantee).toBe('at-least-once');
+
+    const patched = await routeBindings.patchBinding(binding.id, {
+      sessionPolicy: 'continue-existing',
+      threadPolicy: 'replace',
+      deliveryGuarantee: 'best-effort',
+    });
+
+    expect(patched?.sessionPolicy).toBe('continue-existing');
+    expect(patched?.threadPolicy).toBe('replace');
+    expect(patched?.deliveryGuarantee).toBe('best-effort');
   });
 
   test('uses the current shared session when targeted', async () => {
@@ -181,6 +217,7 @@ describe('AutomationManager target semantics', () => {
 
     expect(run.sessionId).toBe(existingSession.id);
     expect(run.continuationMode).toBe('shared-session');
+    expect(run.executionIntent).toEqual({ mode: 'shared-session', targetKind: 'current' });
     expect(sessionBroker.getMessages(existingSession.id, 10)).toHaveLength(1);
   });
 
@@ -215,6 +252,7 @@ describe('AutomationManager target semantics', () => {
     expect(run.sessionId).toBe(existingSession.id);
     expect(run.target.kind).toBe('main');
     expect(run.continuationMode).toBe('shared-session');
+    expect(run.executionIntent).toEqual({ mode: 'shared-session', targetKind: 'main' });
     expect(sessionBroker.getMessages(existingSession.id, 10)).toHaveLength(1);
   });
 
@@ -259,6 +297,7 @@ describe('AutomationManager target semantics', () => {
 
     expect(run.continuationMode).toBe('continued-live');
     expect(run.agentId).toBe(liveAgent.id);
+    expect(run.executionIntent).toEqual({ mode: 'continued-live', targetKind: 'session' });
     expect(spawnCount).toBe(0);
     expect(sessionBroker.getMessages(session.id, 10)).toHaveLength(1);
   });

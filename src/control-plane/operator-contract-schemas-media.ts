@@ -11,8 +11,12 @@ import {
   GENERIC_LIST_SCHEMA,
   METADATA_SCHEMA,
   STRING_LIST_SCHEMA,
+  enumSchema,
   recordSchema,
 } from './operator-contract-schemas-shared.ts';
+
+export const ARTIFACT_ACQUISITION_MODE_SCHEMA = enumSchema(['inline-data', 'local-path', 'remote-fetch', 'unknown']);
+export const ARTIFACT_FETCH_MODE_SCHEMA = enumSchema(['not-applicable', 'public-only', 'allow-private-hosts', 'unknown']);
 
 const VOICE_PROVIDER_DESCRIPTOR_SCHEMA = objectSchema({
   id: STRING_SCHEMA,
@@ -165,6 +169,8 @@ const MEDIA_ARTIFACT_SCHEMA = objectSchema({
   filename: STRING_SCHEMA,
   sizeBytes: NUMBER_SCHEMA,
   sha256: STRING_SCHEMA,
+  acquisitionMode: ARTIFACT_ACQUISITION_MODE_SCHEMA,
+  fetchMode: ARTIFACT_FETCH_MODE_SCHEMA,
   metadata: METADATA_SCHEMA,
 }, ['mimeType', 'metadata']);
 

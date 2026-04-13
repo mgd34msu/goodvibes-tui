@@ -14,6 +14,7 @@ import {
 } from '../../runtime/emitters/index.ts';
 import type { OrchestrationTaskContract } from '../../runtime/events/index.ts';
 import { evaluateOrchestrationSpawn } from '../../runtime/orchestration/spawn-policy.ts';
+import type { ExecutionIntent } from '../../runtime/execution-intents.ts';
 import { logger } from '../../utils/logger.ts';
 import type { AgentInput } from './schema.ts';
 
@@ -59,6 +60,8 @@ export interface AgentRecord {
   model?: string;
   provider?: string;
   fallbackModels?: string[];
+  routing?: AgentInput['routing'];
+  executionIntent?: ExecutionIntent;
   reasoningEffort?: 'instant' | 'low' | 'medium' | 'high';
   context?: string;
   tools: string[];
@@ -228,6 +231,19 @@ export class AgentManager {
       model: input.model,
       provider: input.provider,
       fallbackModels: input.fallbackModels?.filter((model) => typeof model === 'string' && model.trim().length > 0).map((model) => model.trim()),
+      routing: input.routing
+        ? {
+            ...input.routing,
+            ...(input.routing.fallbackModels
+              ? {
+                  fallbackModels: input.routing.fallbackModels
+                    .filter((model) => typeof model === 'string' && model.trim().length > 0)
+                    .map((model) => model.trim()),
+                }
+              : {}),
+          }
+        : undefined,
+      executionIntent: input.executionIntent,
       reasoningEffort: input.reasoningEffort,
       context: input.context,
       tools,

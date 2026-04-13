@@ -20,6 +20,9 @@ export interface UpsertRouteBindingInput {
   readonly surfaceKind: AutomationRouteBinding['surfaceKind'];
   readonly surfaceId: string;
   readonly externalId: string;
+  readonly sessionPolicy?: AutomationRouteBinding['sessionPolicy'];
+  readonly threadPolicy?: AutomationRouteBinding['threadPolicy'];
+  readonly deliveryGuarantee?: AutomationRouteBinding['deliveryGuarantee'];
   readonly threadId?: string;
   readonly channelId?: string;
   readonly sessionId?: string;
@@ -30,6 +33,9 @@ export interface UpsertRouteBindingInput {
 }
 
 export interface PatchRouteBindingInput {
+  readonly sessionPolicy?: AutomationRouteBinding['sessionPolicy'];
+  readonly threadPolicy?: AutomationRouteBinding['threadPolicy'];
+  readonly deliveryGuarantee?: AutomationRouteBinding['deliveryGuarantee'];
   readonly threadId?: string;
   readonly channelId?: string;
   readonly sessionId?: string | null;
@@ -173,6 +179,9 @@ export class RouteBindingManager {
       surfaceKind: input.surfaceKind,
       surfaceId: input.surfaceId,
       externalId: input.externalId,
+      sessionPolicy: input.sessionPolicy ?? previous?.sessionPolicy ?? 'create-or-bind',
+      threadPolicy: input.threadPolicy ?? previous?.threadPolicy ?? 'preserve',
+      deliveryGuarantee: input.deliveryGuarantee ?? previous?.deliveryGuarantee ?? 'best-effort',
       threadId: input.threadId ?? previous?.threadId,
       channelId: input.channelId ?? previous?.channelId,
       sessionId: input.sessionId ?? previous?.sessionId,
@@ -202,7 +211,7 @@ export class RouteBindingManager {
           traceId: binding.id,
         }, {
           bindingId: binding.id,
-          changedFields: ['threadId', 'channelId', 'sessionId', 'jobId', 'runId', 'metadata'],
+          changedFields: ['sessionPolicy', 'threadPolicy', 'deliveryGuarantee', 'threadId', 'channelId', 'sessionId', 'jobId', 'runId', 'metadata'],
         });
       } else {
         emitRouteBindingCreated(this.runtimeBus, {
@@ -262,6 +271,9 @@ export class RouteBindingManager {
     if (!binding) return null;
     const updated: AutomationRouteBinding = {
       ...binding,
+      ...(patch.sessionPolicy !== undefined ? { sessionPolicy: patch.sessionPolicy } : {}),
+      ...(patch.threadPolicy !== undefined ? { threadPolicy: patch.threadPolicy } : {}),
+      ...(patch.deliveryGuarantee !== undefined ? { deliveryGuarantee: patch.deliveryGuarantee } : {}),
       ...(patch.threadId !== undefined ? { threadId: patch.threadId } : {}),
       ...(patch.channelId !== undefined ? { channelId: patch.channelId } : {}),
       ...(patch.sessionId !== undefined ? { sessionId: patch.sessionId ?? undefined } : {}),

@@ -15,7 +15,17 @@ export {
   uniqKnowledgeValues,
 } from './persistence.ts';
 export type { KnowledgeStoreSnapshot, KnowledgeStoreReadView } from './persistence.ts';
-export type { KnowledgeApi } from './knowledge-api.ts';
+export type {
+  KnowledgeApi,
+  KnowledgeApiArtifactIngestInput,
+  KnowledgeApiUrlIngestInput,
+  KnowledgeInjection,
+  KnowledgeInjectionIngestMode,
+  KnowledgeInjectionProvenance,
+  KnowledgeInjectionRetention,
+  KnowledgeInjectionTrustTier,
+  KnowledgeInjectionUseAs,
+} from './knowledge-api.ts';
 export { KnowledgeProjectionService } from './projections.ts';
 export { KnowledgeStore } from './store.ts';
 export { KnowledgeService, buildCuratedKnowledgePromptSync } from './service.ts';

@@ -9,6 +9,7 @@ import type { AutomationSessionTarget } from './session-targets.ts';
 import type { AutomationRunTrigger } from './types.ts';
 import type { ConfigManager } from '../config/manager.ts';
 import {
+  buildAutomationExecutionIntent,
   buildAutomationExecutionContext,
 } from './manager-runtime-helpers.ts';
 
@@ -21,6 +22,8 @@ export interface AutomationManagerExecutionContext {
     readonly modelId?: string;
     readonly modelProvider?: string;
     readonly fallbackModels?: readonly string[];
+    readonly routing?: AutomationRun['execution']['routing'];
+    readonly executionIntent?: AutomationRun['execution']['executionIntent'];
     readonly template?: string;
     readonly reasoningEffort?: AutomationRun['execution']['reasoningEffort'];
     readonly toolAllowlist?: readonly string[];
@@ -52,6 +55,7 @@ interface ResolvedAutomationExecution {
   readonly route?: AutomationRouteBinding;
   readonly agentId?: string;
   readonly target: AutomationSessionTarget;
+  readonly executionIntent: AutomationRun['executionIntent'];
   readonly updatedJob?: AutomationJob;
 }
 
@@ -97,6 +101,7 @@ export async function executeAutomationJob(
     routeId: resolved.route?.id,
     route: resolved.route,
     continuationMode: resolved.continuationMode,
+    executionIntent: resolved.executionIntent,
     deliveryIds: [],
     deliveryAttempts: undefined,
     modelId: effectiveJob.execution.modelId,
@@ -138,6 +143,8 @@ export async function executeAutomationJob(
       modelId: effectiveJob.execution.modelId,
       modelProvider: effectiveJob.execution.modelProvider,
       fallbackModels: effectiveJob.execution.fallbackModels,
+      routing: effectiveJob.execution.routing,
+      executionIntent: effectiveJob.execution.executionIntent,
       template: effectiveJob.execution.template,
       reasoningEffort: effectiveJob.execution.reasoningEffort,
       toolAllowlist: effectiveJob.execution.toolAllowlist,
@@ -215,6 +222,7 @@ export async function resolveAutomationExecution(
       continuationMode: 'spawn',
       route: resolveRouteForTarget(context, target, job),
       target,
+      executionIntent: buildAutomationExecutionIntent(target.kind, 'spawn'),
     };
   }
 
@@ -224,6 +232,7 @@ export async function resolveAutomationExecution(
       continuationMode: 'background',
       route: resolveRouteForTarget(context, target, job),
       target,
+      executionIntent: buildAutomationExecutionIntent(target.kind, 'background'),
     };
   }
 
@@ -389,6 +398,7 @@ export async function resolveAutomationExecution(
     continuationMode: 'spawn',
     route: resolveRouteForTarget(context, target, job),
     target,
+    executionIntent: buildAutomationExecutionIntent(target.kind, 'spawn'),
   };
 }
 
@@ -450,6 +460,10 @@ export function toResolvedExecution(
     route: submission.routeBinding,
     agentId: submission.activeAgentId,
     target: resolvedTarget,
+    executionIntent: buildAutomationExecutionIntent(
+      target.kind,
+      submission.mode === 'continued-live' ? 'continued-live' : 'shared-session',
+    ),
     updatedJob,
   };
 }

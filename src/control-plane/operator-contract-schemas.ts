@@ -28,6 +28,15 @@ const PROVIDER_AUTH_ROUTE_SCHEMA = enumSchema(['api-key', 'subscription', 'servi
 const PROVIDER_AUTH_FRESHNESS_SCHEMA = enumSchema(['healthy', 'expiring', 'expired', 'pending', 'unconfigured']);
 const MEMORY_EMBEDDING_STATE_SCHEMA = enumSchema(['healthy', 'degraded', 'disabled', 'unconfigured']);
 const NETWORK_HEALTH_SCHEMA = enumSchema(['healthy', 'degraded']);
+const SHARED_SESSION_INPUT_INTENT_SCHEMA = enumSchema(['submit', 'steer', 'follow-up']);
+const SHARED_SESSION_INPUT_STATE_SCHEMA = enumSchema(['queued', 'delivered', 'spawned', 'completed', 'cancelled', 'failed', 'rejected']);
+const SHARED_SESSION_MESSAGE_MODE_SCHEMA = enumSchema(['spawn', 'continued-live', 'queued-follow-up', 'rejected']);
+const PROVIDER_SELECTION_SCHEMA = enumSchema(['inherit-current', 'concrete', 'synthetic']);
+const UNRESOLVED_MODEL_POLICY_SCHEMA = enumSchema(['fallback-to-current', 'fail']);
+const PROVIDER_FAILURE_POLICY_SCHEMA = enumSchema(['ordered-fallbacks', 'fail']);
+const EXECUTION_RISK_CLASS_SCHEMA = enumSchema(['safe', 'elevated', 'dangerous']);
+const EXECUTION_NETWORK_POLICY_SCHEMA = enumSchema(['inherit', 'allow', 'deny', 'scoped']);
+const EXECUTION_FILESYSTEM_POLICY_SCHEMA = enumSchema(['inherit', 'workspace-write', 'read-only', 'isolated']);
 
 const CONTROL_PLANE_SERVER_CONFIG_SCHEMA = objectSchema({
   enabled: BOOLEAN_SCHEMA,
@@ -127,6 +136,7 @@ export const SHARED_SESSION_RECORD_SCHEMA = objectSchema({
   lastMessageAt: NUMBER_SCHEMA,
   closedAt: NUMBER_SCHEMA,
   messageCount: NUMBER_SCHEMA,
+  pendingInputCount: NUMBER_SCHEMA,
   routeIds: STRING_LIST_SCHEMA,
   surfaceKinds: STRING_LIST_SCHEMA,
   participants: arraySchema(SHARED_SESSION_PARTICIPANT_SCHEMA),
@@ -134,7 +144,51 @@ export const SHARED_SESSION_RECORD_SCHEMA = objectSchema({
   lastAgentId: STRING_SCHEMA,
   lastError: STRING_SCHEMA,
   metadata: METADATA_SCHEMA,
-}, ['id', 'title', 'status', 'createdAt', 'updatedAt', 'messageCount', 'routeIds', 'surfaceKinds', 'participants', 'metadata']);
+}, ['id', 'title', 'status', 'createdAt', 'updatedAt', 'messageCount', 'pendingInputCount', 'routeIds', 'surfaceKinds', 'participants', 'metadata']);
+
+export const SHARED_SESSION_ROUTING_INTENT_SCHEMA = objectSchema({
+  providerId: STRING_SCHEMA,
+  modelId: STRING_SCHEMA,
+  providerSelection: PROVIDER_SELECTION_SCHEMA,
+  unresolvedModelPolicy: UNRESOLVED_MODEL_POLICY_SCHEMA,
+  providerFailurePolicy: PROVIDER_FAILURE_POLICY_SCHEMA,
+  fallbackModels: STRING_LIST_SCHEMA,
+  helperModel: objectSchema({
+    providerId: STRING_SCHEMA,
+    modelId: STRING_SCHEMA,
+  }, ['providerId', 'modelId']),
+  executionIntent: objectSchema({
+    riskClass: EXECUTION_RISK_CLASS_SCHEMA,
+    requiresApproval: BOOLEAN_SCHEMA,
+    networkPolicy: EXECUTION_NETWORK_POLICY_SCHEMA,
+    filesystemPolicy: EXECUTION_FILESYSTEM_POLICY_SCHEMA,
+  }),
+  tools: STRING_LIST_SCHEMA,
+  reasoningEffort: enumSchema(['instant', 'low', 'medium', 'high']),
+});
+
+export const SHARED_SESSION_INPUT_RECORD_SCHEMA = objectSchema({
+  id: STRING_SCHEMA,
+  sessionId: STRING_SCHEMA,
+  intent: SHARED_SESSION_INPUT_INTENT_SCHEMA,
+  state: SHARED_SESSION_INPUT_STATE_SCHEMA,
+  correlationId: STRING_SCHEMA,
+  causationId: STRING_SCHEMA,
+  body: STRING_SCHEMA,
+  createdAt: NUMBER_SCHEMA,
+  updatedAt: NUMBER_SCHEMA,
+  routeId: STRING_SCHEMA,
+  surfaceKind: STRING_SCHEMA,
+  surfaceId: STRING_SCHEMA,
+  externalId: STRING_SCHEMA,
+  threadId: STRING_SCHEMA,
+  userId: STRING_SCHEMA,
+  displayName: STRING_SCHEMA,
+  activeAgentId: STRING_SCHEMA,
+  metadata: METADATA_SCHEMA,
+  routing: SHARED_SESSION_ROUTING_INTENT_SCHEMA,
+  error: STRING_SCHEMA,
+}, ['id', 'sessionId', 'intent', 'state', 'correlationId', 'body', 'createdAt', 'updatedAt', 'metadata']);
 
 export const SESSION_SNAPSHOT_SCHEMA = objectSchema({
   id: STRING_SCHEMA,
@@ -163,6 +217,11 @@ export const SHARED_SESSION_WITH_MESSAGES_SCHEMA = objectSchema({
   messages: arraySchema(SHARED_SESSION_MESSAGE_SCHEMA),
 }, ['session', 'messages']);
 
+export const SHARED_SESSION_WITH_INPUTS_SCHEMA = objectSchema({
+  session: SHARED_SESSION_RECORD_SCHEMA,
+  inputs: arraySchema(SHARED_SESSION_INPUT_RECORD_SCHEMA),
+}, ['session', 'inputs']);
+
 export const SHARED_SESSION_CREATE_OUTPUT_SCHEMA = objectSchema({
   session: SHARED_SESSION_RECORD_SCHEMA,
 }, ['session']);
@@ -170,9 +229,10 @@ export const SHARED_SESSION_CREATE_OUTPUT_SCHEMA = objectSchema({
 export const SHARED_SESSION_MESSAGE_CREATE_OUTPUT_SCHEMA = objectSchema({
   session: nullableSchema(SHARED_SESSION_RECORD_SCHEMA),
   message: SHARED_SESSION_MESSAGE_SCHEMA,
-  mode: STRING_SCHEMA,
+  input: SHARED_SESSION_INPUT_RECORD_SCHEMA,
+  mode: SHARED_SESSION_MESSAGE_MODE_SCHEMA,
   agentId: nullableSchema(STRING_SCHEMA),
-}, ['session', 'message', 'mode', 'agentId']);
+}, ['session', 'message', 'input', 'mode', 'agentId']);
 
 const TASK_RETRY_POLICY_SCHEMA = objectSchema({
   maxAttempts: NUMBER_SCHEMA,
@@ -234,6 +294,7 @@ export const TASK_CREATE_INPUT_SCHEMA = objectSchema({
   model: STRING_SCHEMA,
   tools: STRING_LIST_SCHEMA,
   provider: STRING_SCHEMA,
+  routing: SHARED_SESSION_ROUTING_INTENT_SCHEMA,
   sessionId: STRING_SCHEMA,
   routeId: STRING_SCHEMA,
   surfaceKind: STRING_SCHEMA,

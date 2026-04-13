@@ -1,4 +1,5 @@
 import type { ArtifactDescriptor } from '../artifacts/types.ts';
+import type { MemoryReviewState, ProvenanceLink } from '../state/memory-store.ts';
 import type { KnowledgePacket, KnowledgePacketDetail, KnowledgePacketItem } from './types.ts';
 import type { KnowledgeSourceType } from './types.ts';
 
@@ -24,6 +25,20 @@ export const SOURCE_REFRESH_WINDOWS_MS: Record<string, number> = {
 };
 export const LIGHT_CONSOLIDATION_THRESHOLD = 45;
 export const DEEP_CONSOLIDATION_AUTOPROMOTE_THRESHOLD = 72;
+export const KNOWLEDGE_INJECTION_TRUST_TIERS = ['reviewed', 'fresh', 'stale'] as const;
+export const KNOWLEDGE_INJECTION_USE_AS_VALUES = ['reference-material'] as const;
+export const KNOWLEDGE_INJECTION_RETENTION_VALUES = ['task-only'] as const;
+export const KNOWLEDGE_INJECTION_INGEST_MODES = ['keyword-ranked', 'semantic-ranked', 'hybrid-ranked'] as const;
+
+export type KnowledgeInjectionTrustTier = typeof KNOWLEDGE_INJECTION_TRUST_TIERS[number];
+export type KnowledgeInjectionUseAs = typeof KNOWLEDGE_INJECTION_USE_AS_VALUES[number];
+export type KnowledgeInjectionRetention = typeof KNOWLEDGE_INJECTION_RETENTION_VALUES[number];
+export type KnowledgeInjectionIngestMode = typeof KNOWLEDGE_INJECTION_INGEST_MODES[number];
+
+export interface KnowledgeInjectionProvenance {
+  readonly source: 'project-memory';
+  readonly links: readonly ProvenanceLink[];
+}
 
 export function tokenize(value: string): string[] {
   return value
@@ -39,6 +54,26 @@ export function slugify(value: string): string {
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '')
     .slice(0, 80) || 'item';
+}
+
+export function inferKnowledgeInjectionTrustTier(reviewState: MemoryReviewState): KnowledgeInjectionTrustTier {
+  switch (reviewState) {
+    case 'reviewed':
+      return 'reviewed';
+    case 'stale':
+      return 'stale';
+    case 'fresh':
+    case 'contradicted':
+      return 'fresh';
+  }
+}
+
+export function summarizeKnowledgeInjectionProvenance(provenance: KnowledgeInjectionProvenance): string {
+  if (provenance.links.length === 0) return provenance.source;
+  return [
+    provenance.source,
+    ...provenance.links.map((link) => `${link.kind}:${link.ref}${link.label ? ` (${link.label})` : ''}`),
+  ].join(', ');
 }
 
 export function canonicalizeUri(input: string): string | null {

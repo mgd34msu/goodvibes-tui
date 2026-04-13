@@ -1,4 +1,13 @@
-import type { ControlPlaneRecentEvent, SharedApprovalRecord, SharedSessionMessage, SharedSessionRecord, SharedSessionSubmission, SubmitSharedSessionMessageInput } from '../control-plane/index.ts';
+import type {
+  ControlPlaneRecentEvent,
+  SharedApprovalRecord,
+  SharedSessionInputRecord,
+  SharedSessionMessage,
+  SharedSessionRecord,
+  SharedSessionSubmission,
+  SteerSharedSessionMessageInput,
+  SubmitSharedSessionMessageInput,
+} from '../control-plane/index.ts';
 import type { RequestSharedApprovalInput } from '../control-plane/index.ts';
 import type { PermissionPromptDecision } from '../permissions/prompt.ts';
 import { buildAuthInspectionSnapshot, type AuthInspectionSnapshot } from './auth/inspection.ts';
@@ -25,11 +34,15 @@ export interface OperatorSessionsClient {
   list(limit?: number): readonly SharedSessionRecord[];
   get(sessionId: string): SharedSessionRecord | null;
   messages(sessionId: string, limit?: number): readonly SharedSessionMessage[];
+  inputs(sessionId: string, limit?: number): readonly SharedSessionInputRecord[];
   ensureSession(input?: OperatorSessionEnsureInput): Promise<SharedSessionRecord>;
   close(sessionId: string): Promise<SharedSessionRecord | null>;
   reopen(sessionId: string): Promise<SharedSessionRecord | null>;
   bindAgent(sessionId: string, agentId: string): Promise<SharedSessionRecord | null>;
   submitMessage(input: SubmitSharedSessionMessageInput): Promise<SharedSessionSubmission>;
+  steerMessage(input: SteerSharedSessionMessageInput): Promise<SharedSessionSubmission>;
+  followUpMessage(input: SubmitSharedSessionMessageInput): Promise<SharedSessionSubmission>;
+  cancelInput(sessionId: string, inputId: string): Promise<SharedSessionInputRecord | null>;
 }
 
 export interface OperatorTasksClient {
@@ -114,11 +127,15 @@ export function createOperatorClient(services: UiRuntimeServices): OperatorClien
     list: (limit = 100): readonly SharedSessionRecord[] => services.sessionBroker.listSessions(normalizeLimit(limit)),
     get: (sessionId: string): SharedSessionRecord | null => services.sessionBroker.getSession(sessionId),
     messages: (sessionId: string, limit = 100): readonly SharedSessionMessage[] => services.sessionBroker.getMessages(sessionId, normalizeLimit(limit)),
+    inputs: (sessionId: string, limit = 100): readonly SharedSessionInputRecord[] => services.sessionBroker.getInputs(sessionId, normalizeLimit(limit)),
     ensureSession: (input: Parameters<UiRuntimeServices['sessionBroker']['ensureSession']>[0] = {}): Promise<SharedSessionRecord> => services.sessionBroker.ensureSession(input),
     close: (sessionId: string): Promise<SharedSessionRecord | null> => services.sessionBroker.closeSession(sessionId),
     reopen: (sessionId: string): Promise<SharedSessionRecord | null> => services.sessionBroker.reopenSession(sessionId),
     bindAgent: (sessionId: string, agentId: string): Promise<SharedSessionRecord | null> => services.sessionBroker.bindAgent(sessionId, agentId),
     submitMessage: (input: SubmitSharedSessionMessageInput): Promise<SharedSessionSubmission> => services.sessionBroker.submitMessage(input),
+    steerMessage: (input: SteerSharedSessionMessageInput): Promise<SharedSessionSubmission> => services.sessionBroker.steerMessage(input),
+    followUpMessage: (input: SubmitSharedSessionMessageInput): Promise<SharedSessionSubmission> => services.sessionBroker.followUpMessage(input),
+    cancelInput: (sessionId: string, inputId: string): Promise<SharedSessionInputRecord | null> => services.sessionBroker.cancelInput(sessionId, inputId),
   } satisfies OperatorSessionsClient;
 
   const tasks = {
