@@ -278,6 +278,28 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
     agentStatusProvider: agentManager,
     messageSender: agentMessageBus,
   });
+  sessionBroker.setContinuationRunner(async ({ task, input }) => {
+    const record = agentManager.spawn({
+      mode: 'spawn',
+      task,
+      ...(input.routing?.modelId ? { model: input.routing.modelId } : {}),
+      ...(input.routing?.providerId ? { provider: input.routing.providerId } : {}),
+      ...(input.routing?.tools?.length ? { tools: [...input.routing.tools], restrictTools: true } : {}),
+      ...(input.routing
+        ? {
+            routing: {
+              providerSelection: input.routing.providerSelection ?? (input.routing.providerId ? 'concrete' : 'inherit-current'),
+              unresolvedModelPolicy: input.routing.unresolvedModelPolicy ?? 'fallback-to-current',
+              providerFailurePolicy: input.routing.providerFailurePolicy ?? 'ordered-fallbacks',
+              ...(input.routing.fallbackModels?.length ? { fallbackModels: [...input.routing.fallbackModels] } : {}),
+            },
+          }
+        : {}),
+      ...(input.routing?.reasoningEffort ? { reasoningEffort: input.routing.reasoningEffort } : {}),
+      context: `shared-session:${input.sessionId}`,
+    });
+    return { agentId: record.id };
+  });
   const artifactStore = new ArtifactStore({ configManager });
   const memoryEmbeddingRegistry = new MemoryEmbeddingProviderRegistry({ configManager });
   const memoryDbPath = join(workingDirectory, '.goodvibes', 'tui', 'memory.sqlite');
@@ -307,6 +329,8 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
         ...(input.modelId ? { model: input.modelId } : {}),
         ...(input.modelProvider ? { provider: input.modelProvider } : {}),
         ...(input.fallbackModels !== undefined ? { fallbackModels: [...input.fallbackModels] } : {}),
+        ...(input.routing ? { routing: input.routing } : {}),
+        ...(input.executionIntent ? { executionIntent: input.executionIntent } : {}),
         ...(input.template ? { template: input.template } : {}),
         ...(input.reasoningEffort ? { reasoningEffort: input.reasoningEffort } : {}),
         ...(input.toolAllowlist?.length ? { tools: [...input.toolAllowlist], restrictTools: true } : {}),

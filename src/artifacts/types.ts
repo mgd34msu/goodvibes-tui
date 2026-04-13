@@ -1,4 +1,9 @@
 export type ArtifactKind = 'file' | 'image' | 'audio' | 'video' | 'document' | 'archive' | 'data';
+export const ARTIFACT_ACQUISITION_MODES = ['inline-data', 'local-path', 'remote-fetch', 'unknown'] as const;
+export const ARTIFACT_FETCH_MODES = ['not-applicable', 'public-only', 'allow-private-hosts', 'unknown'] as const;
+
+export type ArtifactAcquisitionMode = typeof ARTIFACT_ACQUISITION_MODES[number];
+export type ArtifactFetchMode = typeof ARTIFACT_FETCH_MODES[number];
 
 export interface ArtifactDescriptor {
   readonly id: string;
@@ -10,6 +15,8 @@ export interface ArtifactDescriptor {
   readonly createdAt: number;
   readonly expiresAt?: number;
   readonly sourceUri?: string;
+  readonly acquisitionMode: ArtifactAcquisitionMode;
+  readonly fetchMode: ArtifactFetchMode;
   readonly metadata: Record<string, unknown>;
 }
 
@@ -42,6 +49,8 @@ export interface ArtifactCreateInput {
   readonly uri?: string;
   readonly sourceUri?: string;
   readonly retentionMs?: number;
+  readonly acquisitionMode?: ArtifactAcquisitionMode;
+  readonly fetchMode?: ArtifactFetchMode;
   readonly allowPrivateHosts?: boolean;
   readonly metadata?: Record<string, unknown>;
 }

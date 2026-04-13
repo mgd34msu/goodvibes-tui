@@ -4,15 +4,16 @@
 
 import type { AutomationDeliveryAttempt } from './delivery.ts';
 import type { AutomationExecutionPolicy, AutomationSessionTarget } from './session-targets.ts';
-import type { AutomationEntityBase, AutomationRunStatus } from './types.ts';
+import type {
+  AutomationEntityBase,
+  AutomationExecutionIntent,
+  AutomationExecutionMode,
+  AutomationRunStatus,
+} from './types.ts';
 import type { AutomationRouteBinding } from './routes.ts';
 import type { AutomationSourceRecord } from './sources.ts';
 
-export type AutomationRunContinuationMode =
-  | 'spawn'
-  | 'shared-session'
-  | 'continued-live'
-  | 'background';
+export type AutomationRunContinuationMode = AutomationExecutionMode;
 
 export interface AutomationRunUsageSummary {
   readonly inputTokens: number;
@@ -52,6 +53,7 @@ export interface AutomationRun extends AutomationEntityBase {
   readonly routeId?: string;
   readonly route?: AutomationRouteBinding;
   readonly continuationMode?: AutomationRunContinuationMode;
+  readonly executionIntent?: AutomationExecutionIntent;
   readonly deliveryIds: readonly string[];
   readonly deliveryAttempts?: readonly AutomationDeliveryAttempt[];
   readonly modelId?: string;

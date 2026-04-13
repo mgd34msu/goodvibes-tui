@@ -1695,6 +1695,12 @@
                 "sourceUri": {
                   "type": "string"
                 },
+                "acquisitionMode": {
+                  "type": "string"
+                },
+                "fetchMode": {
+                  "type": "string"
+                },
                 "metadata": {
                   "type": "object",
                   "additionalProperties": {
@@ -1804,6 +1810,12 @@
                   "type": "number"
                 },
                 "sourceUri": {
+                  "type": "string"
+                },
+                "acquisitionMode": {
+                  "type": "string"
+                },
+                "fetchMode": {
                   "type": "string"
                 },
                 "metadata": {
@@ -2524,6 +2536,34 @@
                   "continuationMode": {
                     "type": "string"
                   },
+                  "executionIntent": {
+                    "type": "object",
+                    "additionalProperties": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "number"
+                        },
+                        {
+                          "type": "boolean"
+                        },
+                        {
+                          "type": "null"
+                        },
+                        {
+                          "$ref": "$.operator.methods[17].outputSchema.properties.processed.items.properties.executionIntent"
+                        },
+                        {
+                          "type": "array",
+                          "items": {
+                            "$ref": "$.operator.methods[17].outputSchema.properties.processed.items.properties.executionIntent.additionalProperties"
+                          }
+                        }
+                      ]
+                    }
+                  },
                   "deliveryIds": {
                     "type": "array",
                     "items": {
@@ -3002,6 +3042,34 @@
               "type": "array",
               "items": {
                 "type": "string"
+              }
+            },
+            "executionIntent": {
+              "type": "object",
+              "additionalProperties": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "boolean"
+                  },
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "$ref": "$.operator.methods[19].inputSchema.properties.executionIntent"
+                  },
+                  {
+                    "type": "array",
+                    "items": {
+                      "$ref": "$.operator.methods[19].inputSchema.properties.executionIntent.additionalProperties"
+                    }
+                  }
+                ]
               }
             },
             "template": {
@@ -3924,6 +3992,34 @@
                 "type": "string"
               }
             },
+            "executionIntent": {
+              "type": "object",
+              "additionalProperties": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "boolean"
+                  },
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "$ref": "$.operator.methods[24].inputSchema.properties.executionIntent"
+                  },
+                  {
+                    "type": "array",
+                    "items": {
+                      "$ref": "$.operator.methods[24].inputSchema.properties.executionIntent.additionalProperties"
+                    }
+                  }
+                ]
+              }
+            },
             "template": {
               "type": "string"
             },
@@ -4691,6 +4787,34 @@
                 "continuationMode": {
                   "type": "string"
                 },
+                "executionIntent": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "boolean"
+                      },
+                      {
+                        "type": "null"
+                      },
+                      {
+                        "$ref": "$.operator.methods[28].outputSchema.properties.run.properties.executionIntent"
+                      },
+                      {
+                        "type": "array",
+                        "items": {
+                          "$ref": "$.operator.methods[28].outputSchema.properties.run.properties.executionIntent.additionalProperties"
+                        }
+                      }
+                    ]
+                  }
+                },
                 "deliveryIds": {
                   "type": "array",
                   "items": {
@@ -5082,6 +5206,34 @@
                 },
                 "continuationMode": {
                   "type": "string"
+                },
+                "executionIntent": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "boolean"
+                      },
+                      {
+                        "type": "null"
+                      },
+                      {
+                        "$ref": "$.operator.methods[29].outputSchema.properties.run.properties.executionIntent"
+                      },
+                      {
+                        "type": "array",
+                        "items": {
+                          "$ref": "$.operator.methods[29].outputSchema.properties.run.properties.executionIntent.additionalProperties"
+                        }
+                      }
+                    ]
+                  }
                 },
                 "deliveryIds": {
                   "type": "array",
@@ -5499,6 +5651,34 @@
                   "continuationMode": {
                     "type": "string"
                   },
+                  "executionIntent": {
+                    "type": "object",
+                    "additionalProperties": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "number"
+                        },
+                        {
+                          "type": "boolean"
+                        },
+                        {
+                          "type": "null"
+                        },
+                        {
+                          "$ref": "$.operator.methods[30].outputSchema.properties.runs.items.properties.executionIntent"
+                        },
+                        {
+                          "type": "array",
+                          "items": {
+                            "$ref": "$.operator.methods[30].outputSchema.properties.runs.items.properties.executionIntent.additionalProperties"
+                          }
+                        }
+                      ]
+                    }
+                  },
                   "deliveryIds": {
                     "type": "array",
                     "items": {
@@ -5891,6 +6071,34 @@
                 },
                 "continuationMode": {
                   "type": "string"
+                },
+                "executionIntent": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "boolean"
+                      },
+                      {
+                        "type": "null"
+                      },
+                      {
+                        "$ref": "$.operator.methods[31].outputSchema.properties.run.properties.executionIntent"
+                      },
+                      {
+                        "type": "array",
+                        "items": {
+                          "$ref": "$.operator.methods[31].outputSchema.properties.run.properties.executionIntent.additionalProperties"
+                        }
+                      }
+                    ]
+                  }
                 },
                 "deliveryIds": {
                   "type": "array",
@@ -7105,6 +7313,34 @@
                   },
                   "continuationMode": {
                     "type": "string"
+                  },
+                  "executionIntent": {
+                    "type": "object",
+                    "additionalProperties": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "number"
+                        },
+                        {
+                          "type": "boolean"
+                        },
+                        {
+                          "type": "null"
+                        },
+                        {
+                          "$ref": "$.operator.methods[36].outputSchema.properties.runs.items.properties.executionIntent"
+                        },
+                        {
+                          "type": "array",
+                          "items": {
+                            "$ref": "$.operator.methods[36].outputSchema.properties.runs.items.properties.executionIntent.additionalProperties"
+                          }
+                        }
+                      ]
+                    }
                   },
                   "deliveryIds": {
                     "type": "array",
@@ -14162,6 +14398,12 @@
                         "sourceUri": {
                           "type": "string"
                         },
+                        "acquisitionMode": {
+                          "type": "string"
+                        },
+                        "fetchMode": {
+                          "type": "string"
+                        },
                         "contentPath": {
                           "type": "string"
                         },
@@ -14873,6 +15115,12 @@
                           "type": "number"
                         },
                         "sourceUri": {
+                          "type": "string"
+                        },
+                        "acquisitionMode": {
+                          "type": "string"
+                        },
+                        "fetchMode": {
                           "type": "string"
                         },
                         "contentPath": {
@@ -20117,6 +20365,12 @@
                 "sourceUri": {
                   "type": "string"
                 },
+                "acquisitionMode": {
+                  "type": "string"
+                },
+                "fetchMode": {
+                  "type": "string"
+                },
                 "metadata": {
                   "type": "object",
                   "additionalProperties": {
@@ -22607,6 +22861,24 @@
                   "sha256": {
                     "type": "string"
                   },
+                  "acquisitionMode": {
+                    "type": "string",
+                    "enum": [
+                      "inline-data",
+                      "local-path",
+                      "remote-fetch",
+                      "unknown"
+                    ]
+                  },
+                  "fetchMode": {
+                    "type": "string",
+                    "enum": [
+                      "not-applicable",
+                      "public-only",
+                      "allow-private-hosts",
+                      "unknown"
+                    ]
+                  },
                   "metadata": {
                     "type": "object",
                     "additionalProperties": {
@@ -22895,6 +23167,24 @@
                 "sha256": {
                   "type": "string"
                 },
+                "acquisitionMode": {
+                  "type": "string",
+                  "enum": [
+                    "inline-data",
+                    "local-path",
+                    "remote-fetch",
+                    "unknown"
+                  ]
+                },
+                "fetchMode": {
+                  "type": "string",
+                  "enum": [
+                    "not-applicable",
+                    "public-only",
+                    "allow-private-hosts",
+                    "unknown"
+                  ]
+                },
                 "metadata": {
                   "type": "object",
                   "additionalProperties": {
@@ -23148,6 +23438,12 @@
                     "sourceUri": {
                       "type": "string"
                     },
+                    "acquisitionMode": {
+                      "type": "string"
+                    },
+                    "fetchMode": {
+                      "type": "string"
+                    },
                     "metadata": {
                       "type": "object",
                       "additionalProperties": {
@@ -23374,6 +23670,12 @@
                       "type": "number"
                     },
                     "sourceUri": {
+                      "type": "string"
+                    },
+                    "acquisitionMode": {
+                      "type": "string"
+                    },
+                    "fetchMode": {
                       "type": "string"
                     },
                     "metadata": {
@@ -23855,6 +24157,12 @@
                       "type": "number"
                     },
                     "sourceUri": {
+                      "type": "string"
+                    },
+                    "acquisitionMode": {
+                      "type": "string"
+                    },
+                    "fetchMode": {
                       "type": "string"
                     },
                     "metadata": {
@@ -29193,6 +29501,15 @@
             "externalId": {
               "type": "string"
             },
+            "sessionPolicy": {
+              "type": "string"
+            },
+            "threadPolicy": {
+              "type": "string"
+            },
+            "deliveryGuarantee": {
+              "type": "string"
+            },
             "threadId": {
               "type": "string"
             },
@@ -29264,6 +29581,15 @@
               "type": "string"
             },
             "externalId": {
+              "type": "string"
+            },
+            "sessionPolicy": {
+              "type": "string"
+            },
+            "threadPolicy": {
+              "type": "string"
+            },
+            "deliveryGuarantee": {
               "type": "string"
             },
             "threadId": {
@@ -29437,6 +29763,15 @@
                   "externalId": {
                     "type": "string"
                   },
+                  "sessionPolicy": {
+                    "type": "string"
+                  },
+                  "threadPolicy": {
+                    "type": "string"
+                  },
+                  "deliveryGuarantee": {
+                    "type": "string"
+                  },
                   "threadId": {
                     "type": "string"
                   },
@@ -29542,6 +29877,15 @@
             "bindingId": {
               "type": "string"
             },
+            "sessionPolicy": {
+              "type": "string"
+            },
+            "threadPolicy": {
+              "type": "string"
+            },
+            "deliveryGuarantee": {
+              "type": "string"
+            },
             "threadId": {
               "type": "string"
             },
@@ -29607,6 +29951,15 @@
               "type": "string"
             },
             "externalId": {
+              "type": "string"
+            },
+            "sessionPolicy": {
+              "type": "string"
+            },
+            "threadPolicy": {
+              "type": "string"
+            },
+            "deliveryGuarantee": {
               "type": "string"
             },
             "threadId": {
@@ -29736,6 +30089,15 @@
                     "type": "string"
                   },
                   "externalId": {
+                    "type": "string"
+                  },
+                  "sessionPolicy": {
+                    "type": "string"
+                  },
+                  "threadPolicy": {
+                    "type": "string"
+                  },
+                  "deliveryGuarantee": {
                     "type": "string"
                   },
                   "threadId": {
@@ -31015,6 +31377,9 @@
                 "messageCount": {
                   "type": "number"
                 },
+                "pendingInputCount": {
+                  "type": "number"
+                },
                 "routeIds": {
                   "type": "array",
                   "items": {
@@ -31107,6 +31472,7 @@
                 "createdAt",
                 "updatedAt",
                 "messageCount",
+                "pendingInputCount",
                 "routeIds",
                 "surfaceKinds",
                 "participants",
@@ -31187,6 +31553,9 @@
                   "type": "number"
                 },
                 "messageCount": {
+                  "type": "number"
+                },
+                "pendingInputCount": {
                   "type": "number"
                 },
                 "routeIds": {
@@ -31281,6 +31650,7 @@
                 "createdAt",
                 "updatedAt",
                 "messageCount",
+                "pendingInputCount",
                 "routeIds",
                 "surfaceKinds",
                 "participants",
@@ -31291,6 +31661,622 @@
           },
           "required": [
             "session"
+          ],
+          "additionalProperties": false
+        },
+        "invokable": true
+      },
+      {
+        "source": "builtin",
+        "transport": [
+          "http",
+          "ws"
+        ],
+        "access": "authenticated",
+        "id": "sessions.followUp",
+        "title": "Queue Shared Session Follow-Up",
+        "description": "Queue a deferred follow-up for a shared session so it runs after the current agent completes, or spawn immediately when the session is idle.",
+        "category": "sessions",
+        "scopes": [
+          "write:sessions"
+        ],
+        "http": {
+          "method": "POST",
+          "path": "/api/sessions/{sessionId}/follow-up"
+        },
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "body": {
+              "type": "string"
+            },
+            "surfaceKind": {
+              "type": "string"
+            },
+            "surfaceId": {
+              "type": "string"
+            },
+            "routing": {
+              "type": "object",
+              "properties": {
+                "providerId": {
+                  "type": "string"
+                },
+                "modelId": {
+                  "type": "string"
+                },
+                "providerSelection": {
+                  "type": "string",
+                  "enum": [
+                    "inherit-current",
+                    "concrete",
+                    "synthetic"
+                  ]
+                },
+                "unresolvedModelPolicy": {
+                  "type": "string",
+                  "enum": [
+                    "fallback-to-current",
+                    "fail"
+                  ]
+                },
+                "providerFailurePolicy": {
+                  "type": "string",
+                  "enum": [
+                    "ordered-fallbacks",
+                    "fail"
+                  ]
+                },
+                "fallbackModels": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "helperModel": {
+                  "type": "object",
+                  "properties": {
+                    "providerId": {
+                      "type": "string"
+                    },
+                    "modelId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "providerId",
+                    "modelId"
+                  ],
+                  "additionalProperties": false
+                },
+                "executionIntent": {
+                  "type": "object",
+                  "properties": {
+                    "riskClass": {
+                      "type": "string",
+                      "enum": [
+                        "safe",
+                        "elevated",
+                        "dangerous"
+                      ]
+                    },
+                    "requiresApproval": {
+                      "type": "boolean"
+                    },
+                    "networkPolicy": {
+                      "type": "string",
+                      "enum": [
+                        "inherit",
+                        "allow",
+                        "deny",
+                        "scoped"
+                      ]
+                    },
+                    "filesystemPolicy": {
+                      "type": "string",
+                      "enum": [
+                        "inherit",
+                        "workspace-write",
+                        "read-only",
+                        "isolated"
+                      ]
+                    }
+                  },
+                  "additionalProperties": false
+                },
+                "tools": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "reasoningEffort": {
+                  "type": "string",
+                  "enum": [
+                    "instant",
+                    "low",
+                    "medium",
+                    "high"
+                  ]
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "body"
+          ],
+          "additionalProperties": true
+        },
+        "outputSchema": {
+          "type": "object",
+          "properties": {
+            "session": {
+              "anyOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "active",
+                        "closed"
+                      ]
+                    },
+                    "createdAt": {
+                      "type": "number"
+                    },
+                    "updatedAt": {
+                      "type": "number"
+                    },
+                    "lastMessageAt": {
+                      "type": "number"
+                    },
+                    "closedAt": {
+                      "type": "number"
+                    },
+                    "messageCount": {
+                      "type": "number"
+                    },
+                    "pendingInputCount": {
+                      "type": "number"
+                    },
+                    "routeIds": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "surfaceKinds": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "participants": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "surfaceKind": {
+                            "type": "string"
+                          },
+                          "surfaceId": {
+                            "type": "string"
+                          },
+                          "externalId": {
+                            "type": "string"
+                          },
+                          "userId": {
+                            "type": "string"
+                          },
+                          "displayName": {
+                            "type": "string"
+                          },
+                          "routeId": {
+                            "type": "string"
+                          },
+                          "lastSeenAt": {
+                            "type": "number"
+                          }
+                        },
+                        "required": [
+                          "surfaceKind",
+                          "surfaceId",
+                          "lastSeenAt"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "activeAgentId": {
+                      "type": "string"
+                    },
+                    "lastAgentId": {
+                      "type": "string"
+                    },
+                    "lastError": {
+                      "type": "string"
+                    },
+                    "metadata": {
+                      "type": "object",
+                      "additionalProperties": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "number"
+                          },
+                          {
+                            "type": "boolean"
+                          },
+                          {
+                            "type": "null"
+                          },
+                          {
+                            "$ref": "$.operator.methods[170].outputSchema.properties.session.anyOf[0].properties.metadata"
+                          },
+                          {
+                            "type": "array",
+                            "items": {
+                              "$ref": "$.operator.methods[170].outputSchema.properties.session.anyOf[0].properties.metadata.additionalProperties"
+                            }
+                          }
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "title",
+                    "status",
+                    "createdAt",
+                    "updatedAt",
+                    "messageCount",
+                    "pendingInputCount",
+                    "routeIds",
+                    "surfaceKinds",
+                    "participants",
+                    "metadata"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "message": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "sessionId": {
+                  "type": "string"
+                },
+                "role": {
+                  "type": "string",
+                  "enum": [
+                    "user",
+                    "assistant",
+                    "system"
+                  ]
+                },
+                "body": {
+                  "type": "string"
+                },
+                "createdAt": {
+                  "type": "number"
+                },
+                "surfaceKind": {
+                  "type": "string"
+                },
+                "surfaceId": {
+                  "type": "string"
+                },
+                "routeId": {
+                  "type": "string"
+                },
+                "agentId": {
+                  "type": "string"
+                },
+                "userId": {
+                  "type": "string"
+                },
+                "displayName": {
+                  "type": "string"
+                },
+                "metadata": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "boolean"
+                      },
+                      {
+                        "type": "null"
+                      },
+                      {
+                        "$ref": "$.operator.methods[170].outputSchema.properties.message.properties.metadata"
+                      },
+                      {
+                        "type": "array",
+                        "items": {
+                          "$ref": "$.operator.methods[170].outputSchema.properties.message.properties.metadata.additionalProperties"
+                        }
+                      }
+                    ]
+                  }
+                }
+              },
+              "required": [
+                "id",
+                "sessionId",
+                "role",
+                "body",
+                "createdAt",
+                "metadata"
+              ],
+              "additionalProperties": false
+            },
+            "input": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "sessionId": {
+                  "type": "string"
+                },
+                "intent": {
+                  "type": "string",
+                  "enum": [
+                    "submit",
+                    "steer",
+                    "follow-up"
+                  ]
+                },
+                "state": {
+                  "type": "string",
+                  "enum": [
+                    "queued",
+                    "delivered",
+                    "spawned",
+                    "completed",
+                    "cancelled",
+                    "failed",
+                    "rejected"
+                  ]
+                },
+                "correlationId": {
+                  "type": "string"
+                },
+                "causationId": {
+                  "type": "string"
+                },
+                "body": {
+                  "type": "string"
+                },
+                "createdAt": {
+                  "type": "number"
+                },
+                "updatedAt": {
+                  "type": "number"
+                },
+                "routeId": {
+                  "type": "string"
+                },
+                "surfaceKind": {
+                  "type": "string"
+                },
+                "surfaceId": {
+                  "type": "string"
+                },
+                "externalId": {
+                  "type": "string"
+                },
+                "threadId": {
+                  "type": "string"
+                },
+                "userId": {
+                  "type": "string"
+                },
+                "displayName": {
+                  "type": "string"
+                },
+                "activeAgentId": {
+                  "type": "string"
+                },
+                "metadata": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "boolean"
+                      },
+                      {
+                        "type": "null"
+                      },
+                      {
+                        "$ref": "$.operator.methods[170].outputSchema.properties.input.properties.metadata"
+                      },
+                      {
+                        "type": "array",
+                        "items": {
+                          "$ref": "$.operator.methods[170].outputSchema.properties.input.properties.metadata.additionalProperties"
+                        }
+                      }
+                    ]
+                  }
+                },
+                "routing": {
+                  "type": "object",
+                  "properties": {
+                    "providerId": {
+                      "type": "string"
+                    },
+                    "modelId": {
+                      "type": "string"
+                    },
+                    "providerSelection": {
+                      "type": "string",
+                      "enum": [
+                        "inherit-current",
+                        "concrete",
+                        "synthetic"
+                      ]
+                    },
+                    "unresolvedModelPolicy": {
+                      "type": "string",
+                      "enum": [
+                        "fallback-to-current",
+                        "fail"
+                      ]
+                    },
+                    "providerFailurePolicy": {
+                      "type": "string",
+                      "enum": [
+                        "ordered-fallbacks",
+                        "fail"
+                      ]
+                    },
+                    "fallbackModels": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "helperModel": {
+                      "type": "object",
+                      "properties": {
+                        "providerId": {
+                          "type": "string"
+                        },
+                        "modelId": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "providerId",
+                        "modelId"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "executionIntent": {
+                      "type": "object",
+                      "properties": {
+                        "riskClass": {
+                          "type": "string",
+                          "enum": [
+                            "safe",
+                            "elevated",
+                            "dangerous"
+                          ]
+                        },
+                        "requiresApproval": {
+                          "type": "boolean"
+                        },
+                        "networkPolicy": {
+                          "type": "string",
+                          "enum": [
+                            "inherit",
+                            "allow",
+                            "deny",
+                            "scoped"
+                          ]
+                        },
+                        "filesystemPolicy": {
+                          "type": "string",
+                          "enum": [
+                            "inherit",
+                            "workspace-write",
+                            "read-only",
+                            "isolated"
+                          ]
+                        }
+                      },
+                      "additionalProperties": false
+                    },
+                    "tools": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "reasoningEffort": {
+                      "type": "string",
+                      "enum": [
+                        "instant",
+                        "low",
+                        "medium",
+                        "high"
+                      ]
+                    }
+                  },
+                  "additionalProperties": false
+                },
+                "error": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "sessionId",
+                "intent",
+                "state",
+                "correlationId",
+                "body",
+                "createdAt",
+                "updatedAt",
+                "metadata"
+              ],
+              "additionalProperties": false
+            },
+            "mode": {
+              "type": "string",
+              "enum": [
+                "spawn",
+                "continued-live",
+                "queued-follow-up",
+                "rejected"
+              ]
+            },
+            "agentId": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "session",
+            "message",
+            "input",
+            "mode",
+            "agentId"
           ],
           "additionalProperties": false
         },
@@ -31358,6 +32344,9 @@
                   "type": "number"
                 },
                 "messageCount": {
+                  "type": "number"
+                },
+                "pendingInputCount": {
                   "type": "number"
                 },
                 "routeIds": {
@@ -31433,12 +32422,12 @@
                         "type": "null"
                       },
                       {
-                        "$ref": "$.operator.methods[170].outputSchema.properties.session.properties.metadata"
+                        "$ref": "$.operator.methods[171].outputSchema.properties.session.properties.metadata"
                       },
                       {
                         "type": "array",
                         "items": {
-                          "$ref": "$.operator.methods[170].outputSchema.properties.session.properties.metadata.additionalProperties"
+                          "$ref": "$.operator.methods[171].outputSchema.properties.session.properties.metadata.additionalProperties"
                         }
                       }
                     ]
@@ -31452,6 +32441,7 @@
                 "createdAt",
                 "updatedAt",
                 "messageCount",
+                "pendingInputCount",
                 "routeIds",
                 "surfaceKinds",
                 "participants",
@@ -31519,12 +32509,12 @@
                           "type": "null"
                         },
                         {
-                          "$ref": "$.operator.methods[170].outputSchema.properties.messages.items.properties.metadata"
+                          "$ref": "$.operator.methods[171].outputSchema.properties.messages.items.properties.metadata"
                         },
                         {
                           "type": "array",
                           "items": {
-                            "$ref": "$.operator.methods[170].outputSchema.properties.messages.items.properties.metadata.additionalProperties"
+                            "$ref": "$.operator.methods[171].outputSchema.properties.messages.items.properties.metadata.additionalProperties"
                           }
                         }
                       ]
@@ -31546,6 +32536,671 @@
           "required": [
             "session",
             "messages"
+          ],
+          "additionalProperties": false
+        },
+        "invokable": true
+      },
+      {
+        "source": "builtin",
+        "transport": [
+          "http",
+          "ws"
+        ],
+        "access": "authenticated",
+        "id": "sessions.inputs.cancel",
+        "title": "Cancel Shared Session Input",
+        "description": "Cancel a queued shared-session input before it is delivered or spawned.",
+        "category": "sessions",
+        "scopes": [
+          "write:sessions"
+        ],
+        "http": {
+          "method": "POST",
+          "path": "/api/sessions/{sessionId}/inputs/{inputId}/cancel"
+        },
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "sessionId": {
+              "type": "string"
+            },
+            "inputId": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "sessionId",
+            "inputId"
+          ],
+          "additionalProperties": false
+        },
+        "outputSchema": {
+          "type": "object",
+          "properties": {
+            "input": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "sessionId": {
+                  "type": "string"
+                },
+                "intent": {
+                  "type": "string",
+                  "enum": [
+                    "submit",
+                    "steer",
+                    "follow-up"
+                  ]
+                },
+                "state": {
+                  "type": "string",
+                  "enum": [
+                    "queued",
+                    "delivered",
+                    "spawned",
+                    "completed",
+                    "cancelled",
+                    "failed",
+                    "rejected"
+                  ]
+                },
+                "correlationId": {
+                  "type": "string"
+                },
+                "causationId": {
+                  "type": "string"
+                },
+                "body": {
+                  "type": "string"
+                },
+                "createdAt": {
+                  "type": "number"
+                },
+                "updatedAt": {
+                  "type": "number"
+                },
+                "routeId": {
+                  "type": "string"
+                },
+                "surfaceKind": {
+                  "type": "string"
+                },
+                "surfaceId": {
+                  "type": "string"
+                },
+                "externalId": {
+                  "type": "string"
+                },
+                "threadId": {
+                  "type": "string"
+                },
+                "userId": {
+                  "type": "string"
+                },
+                "displayName": {
+                  "type": "string"
+                },
+                "activeAgentId": {
+                  "type": "string"
+                },
+                "metadata": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "boolean"
+                      },
+                      {
+                        "type": "null"
+                      },
+                      {
+                        "$ref": "$.operator.methods[172].outputSchema.properties.input.properties.metadata"
+                      },
+                      {
+                        "type": "array",
+                        "items": {
+                          "$ref": "$.operator.methods[172].outputSchema.properties.input.properties.metadata.additionalProperties"
+                        }
+                      }
+                    ]
+                  }
+                },
+                "routing": {
+                  "type": "object",
+                  "properties": {
+                    "providerId": {
+                      "type": "string"
+                    },
+                    "modelId": {
+                      "type": "string"
+                    },
+                    "providerSelection": {
+                      "type": "string",
+                      "enum": [
+                        "inherit-current",
+                        "concrete",
+                        "synthetic"
+                      ]
+                    },
+                    "unresolvedModelPolicy": {
+                      "type": "string",
+                      "enum": [
+                        "fallback-to-current",
+                        "fail"
+                      ]
+                    },
+                    "providerFailurePolicy": {
+                      "type": "string",
+                      "enum": [
+                        "ordered-fallbacks",
+                        "fail"
+                      ]
+                    },
+                    "fallbackModels": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "helperModel": {
+                      "type": "object",
+                      "properties": {
+                        "providerId": {
+                          "type": "string"
+                        },
+                        "modelId": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "providerId",
+                        "modelId"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "executionIntent": {
+                      "type": "object",
+                      "properties": {
+                        "riskClass": {
+                          "type": "string",
+                          "enum": [
+                            "safe",
+                            "elevated",
+                            "dangerous"
+                          ]
+                        },
+                        "requiresApproval": {
+                          "type": "boolean"
+                        },
+                        "networkPolicy": {
+                          "type": "string",
+                          "enum": [
+                            "inherit",
+                            "allow",
+                            "deny",
+                            "scoped"
+                          ]
+                        },
+                        "filesystemPolicy": {
+                          "type": "string",
+                          "enum": [
+                            "inherit",
+                            "workspace-write",
+                            "read-only",
+                            "isolated"
+                          ]
+                        }
+                      },
+                      "additionalProperties": false
+                    },
+                    "tools": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "reasoningEffort": {
+                      "type": "string",
+                      "enum": [
+                        "instant",
+                        "low",
+                        "medium",
+                        "high"
+                      ]
+                    }
+                  },
+                  "additionalProperties": false
+                },
+                "error": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "sessionId",
+                "intent",
+                "state",
+                "correlationId",
+                "body",
+                "createdAt",
+                "updatedAt",
+                "metadata"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "input"
+          ],
+          "additionalProperties": false
+        },
+        "invokable": true
+      },
+      {
+        "source": "builtin",
+        "transport": [
+          "http",
+          "ws"
+        ],
+        "access": "authenticated",
+        "id": "sessions.inputs.list",
+        "title": "List Shared Session Inputs",
+        "description": "Return explicit session inputs, including queued follow-ups and delivered steering requests.",
+        "category": "sessions",
+        "scopes": [
+          "read:sessions"
+        ],
+        "http": {
+          "method": "GET",
+          "path": "/api/sessions/{sessionId}/inputs"
+        },
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "sessionId": {
+              "type": "string"
+            },
+            "limit": {
+              "type": "number"
+            }
+          },
+          "required": [
+            "sessionId"
+          ],
+          "additionalProperties": false
+        },
+        "outputSchema": {
+          "type": "object",
+          "properties": {
+            "session": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "title": {
+                  "type": "string"
+                },
+                "status": {
+                  "type": "string",
+                  "enum": [
+                    "active",
+                    "closed"
+                  ]
+                },
+                "createdAt": {
+                  "type": "number"
+                },
+                "updatedAt": {
+                  "type": "number"
+                },
+                "lastMessageAt": {
+                  "type": "number"
+                },
+                "closedAt": {
+                  "type": "number"
+                },
+                "messageCount": {
+                  "type": "number"
+                },
+                "pendingInputCount": {
+                  "type": "number"
+                },
+                "routeIds": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "surfaceKinds": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "participants": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "surfaceKind": {
+                        "type": "string"
+                      },
+                      "surfaceId": {
+                        "type": "string"
+                      },
+                      "externalId": {
+                        "type": "string"
+                      },
+                      "userId": {
+                        "type": "string"
+                      },
+                      "displayName": {
+                        "type": "string"
+                      },
+                      "routeId": {
+                        "type": "string"
+                      },
+                      "lastSeenAt": {
+                        "type": "number"
+                      }
+                    },
+                    "required": [
+                      "surfaceKind",
+                      "surfaceId",
+                      "lastSeenAt"
+                    ],
+                    "additionalProperties": false
+                  }
+                },
+                "activeAgentId": {
+                  "type": "string"
+                },
+                "lastAgentId": {
+                  "type": "string"
+                },
+                "lastError": {
+                  "type": "string"
+                },
+                "metadata": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "boolean"
+                      },
+                      {
+                        "type": "null"
+                      },
+                      {
+                        "$ref": "$.operator.methods[173].outputSchema.properties.session.properties.metadata"
+                      },
+                      {
+                        "type": "array",
+                        "items": {
+                          "$ref": "$.operator.methods[173].outputSchema.properties.session.properties.metadata.additionalProperties"
+                        }
+                      }
+                    ]
+                  }
+                }
+              },
+              "required": [
+                "id",
+                "title",
+                "status",
+                "createdAt",
+                "updatedAt",
+                "messageCount",
+                "pendingInputCount",
+                "routeIds",
+                "surfaceKinds",
+                "participants",
+                "metadata"
+              ],
+              "additionalProperties": false
+            },
+            "inputs": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "sessionId": {
+                    "type": "string"
+                  },
+                  "intent": {
+                    "type": "string",
+                    "enum": [
+                      "submit",
+                      "steer",
+                      "follow-up"
+                    ]
+                  },
+                  "state": {
+                    "type": "string",
+                    "enum": [
+                      "queued",
+                      "delivered",
+                      "spawned",
+                      "completed",
+                      "cancelled",
+                      "failed",
+                      "rejected"
+                    ]
+                  },
+                  "correlationId": {
+                    "type": "string"
+                  },
+                  "causationId": {
+                    "type": "string"
+                  },
+                  "body": {
+                    "type": "string"
+                  },
+                  "createdAt": {
+                    "type": "number"
+                  },
+                  "updatedAt": {
+                    "type": "number"
+                  },
+                  "routeId": {
+                    "type": "string"
+                  },
+                  "surfaceKind": {
+                    "type": "string"
+                  },
+                  "surfaceId": {
+                    "type": "string"
+                  },
+                  "externalId": {
+                    "type": "string"
+                  },
+                  "threadId": {
+                    "type": "string"
+                  },
+                  "userId": {
+                    "type": "string"
+                  },
+                  "displayName": {
+                    "type": "string"
+                  },
+                  "activeAgentId": {
+                    "type": "string"
+                  },
+                  "metadata": {
+                    "type": "object",
+                    "additionalProperties": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "number"
+                        },
+                        {
+                          "type": "boolean"
+                        },
+                        {
+                          "type": "null"
+                        },
+                        {
+                          "$ref": "$.operator.methods[173].outputSchema.properties.inputs.items.properties.metadata"
+                        },
+                        {
+                          "type": "array",
+                          "items": {
+                            "$ref": "$.operator.methods[173].outputSchema.properties.inputs.items.properties.metadata.additionalProperties"
+                          }
+                        }
+                      ]
+                    }
+                  },
+                  "routing": {
+                    "type": "object",
+                    "properties": {
+                      "providerId": {
+                        "type": "string"
+                      },
+                      "modelId": {
+                        "type": "string"
+                      },
+                      "providerSelection": {
+                        "type": "string",
+                        "enum": [
+                          "inherit-current",
+                          "concrete",
+                          "synthetic"
+                        ]
+                      },
+                      "unresolvedModelPolicy": {
+                        "type": "string",
+                        "enum": [
+                          "fallback-to-current",
+                          "fail"
+                        ]
+                      },
+                      "providerFailurePolicy": {
+                        "type": "string",
+                        "enum": [
+                          "ordered-fallbacks",
+                          "fail"
+                        ]
+                      },
+                      "fallbackModels": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      },
+                      "helperModel": {
+                        "type": "object",
+                        "properties": {
+                          "providerId": {
+                            "type": "string"
+                          },
+                          "modelId": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "providerId",
+                          "modelId"
+                        ],
+                        "additionalProperties": false
+                      },
+                      "executionIntent": {
+                        "type": "object",
+                        "properties": {
+                          "riskClass": {
+                            "type": "string",
+                            "enum": [
+                              "safe",
+                              "elevated",
+                              "dangerous"
+                            ]
+                          },
+                          "requiresApproval": {
+                            "type": "boolean"
+                          },
+                          "networkPolicy": {
+                            "type": "string",
+                            "enum": [
+                              "inherit",
+                              "allow",
+                              "deny",
+                              "scoped"
+                            ]
+                          },
+                          "filesystemPolicy": {
+                            "type": "string",
+                            "enum": [
+                              "inherit",
+                              "workspace-write",
+                              "read-only",
+                              "isolated"
+                            ]
+                          }
+                        },
+                        "additionalProperties": false
+                      },
+                      "tools": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      },
+                      "reasoningEffort": {
+                        "type": "string",
+                        "enum": [
+                          "instant",
+                          "low",
+                          "medium",
+                          "high"
+                        ]
+                      }
+                    },
+                    "additionalProperties": false
+                  },
+                  "error": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id",
+                  "sessionId",
+                  "intent",
+                  "state",
+                  "correlationId",
+                  "body",
+                  "createdAt",
+                  "updatedAt",
+                  "metadata"
+                ],
+                "additionalProperties": false
+              }
+            }
+          },
+          "required": [
+            "session",
+            "inputs"
           ],
           "additionalProperties": false
         },
@@ -31707,6 +33362,9 @@
                   "messageCount": {
                     "type": "number"
                   },
+                  "pendingInputCount": {
+                    "type": "number"
+                  },
                   "routeIds": {
                     "type": "array",
                     "items": {
@@ -31780,12 +33438,12 @@
                           "type": "null"
                         },
                         {
-                          "$ref": "$.operator.methods[172].outputSchema.properties.sessions.items.properties.metadata"
+                          "$ref": "$.operator.methods[175].outputSchema.properties.sessions.items.properties.metadata"
                         },
                         {
                           "type": "array",
                           "items": {
-                            "$ref": "$.operator.methods[172].outputSchema.properties.sessions.items.properties.metadata.additionalProperties"
+                            "$ref": "$.operator.methods[175].outputSchema.properties.sessions.items.properties.metadata.additionalProperties"
                           }
                         }
                       ]
@@ -31799,6 +33457,7 @@
                   "createdAt",
                   "updatedAt",
                   "messageCount",
+                  "pendingInputCount",
                   "routeIds",
                   "surfaceKinds",
                   "participants",
@@ -31845,6 +33504,112 @@
             },
             "surfaceId": {
               "type": "string"
+            },
+            "routing": {
+              "type": "object",
+              "properties": {
+                "providerId": {
+                  "type": "string"
+                },
+                "modelId": {
+                  "type": "string"
+                },
+                "providerSelection": {
+                  "type": "string",
+                  "enum": [
+                    "inherit-current",
+                    "concrete",
+                    "synthetic"
+                  ]
+                },
+                "unresolvedModelPolicy": {
+                  "type": "string",
+                  "enum": [
+                    "fallback-to-current",
+                    "fail"
+                  ]
+                },
+                "providerFailurePolicy": {
+                  "type": "string",
+                  "enum": [
+                    "ordered-fallbacks",
+                    "fail"
+                  ]
+                },
+                "fallbackModels": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "helperModel": {
+                  "type": "object",
+                  "properties": {
+                    "providerId": {
+                      "type": "string"
+                    },
+                    "modelId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "providerId",
+                    "modelId"
+                  ],
+                  "additionalProperties": false
+                },
+                "executionIntent": {
+                  "type": "object",
+                  "properties": {
+                    "riskClass": {
+                      "type": "string",
+                      "enum": [
+                        "safe",
+                        "elevated",
+                        "dangerous"
+                      ]
+                    },
+                    "requiresApproval": {
+                      "type": "boolean"
+                    },
+                    "networkPolicy": {
+                      "type": "string",
+                      "enum": [
+                        "inherit",
+                        "allow",
+                        "deny",
+                        "scoped"
+                      ]
+                    },
+                    "filesystemPolicy": {
+                      "type": "string",
+                      "enum": [
+                        "inherit",
+                        "workspace-write",
+                        "read-only",
+                        "isolated"
+                      ]
+                    }
+                  },
+                  "additionalProperties": false
+                },
+                "tools": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "reasoningEffort": {
+                  "type": "string",
+                  "enum": [
+                    "instant",
+                    "low",
+                    "medium",
+                    "high"
+                  ]
+                }
+              },
+              "additionalProperties": false
             }
           },
           "required": [
@@ -31886,6 +33651,9 @@
                       "type": "number"
                     },
                     "messageCount": {
+                      "type": "number"
+                    },
+                    "pendingInputCount": {
                       "type": "number"
                     },
                     "routeIds": {
@@ -31961,12 +33729,12 @@
                             "type": "null"
                           },
                           {
-                            "$ref": "$.operator.methods[173].outputSchema.properties.session.anyOf[0].properties.metadata"
+                            "$ref": "$.operator.methods[176].outputSchema.properties.session.anyOf[0].properties.metadata"
                           },
                           {
                             "type": "array",
                             "items": {
-                              "$ref": "$.operator.methods[173].outputSchema.properties.session.anyOf[0].properties.metadata.additionalProperties"
+                              "$ref": "$.operator.methods[176].outputSchema.properties.session.anyOf[0].properties.metadata.additionalProperties"
                             }
                           }
                         ]
@@ -31980,6 +33748,7 @@
                     "createdAt",
                     "updatedAt",
                     "messageCount",
+                    "pendingInputCount",
                     "routeIds",
                     "surfaceKinds",
                     "participants",
@@ -32050,12 +33819,12 @@
                         "type": "null"
                       },
                       {
-                        "$ref": "$.operator.methods[173].outputSchema.properties.message.properties.metadata"
+                        "$ref": "$.operator.methods[176].outputSchema.properties.message.properties.metadata"
                       },
                       {
                         "type": "array",
                         "items": {
-                          "$ref": "$.operator.methods[173].outputSchema.properties.message.properties.metadata.additionalProperties"
+                          "$ref": "$.operator.methods[176].outputSchema.properties.message.properties.metadata.additionalProperties"
                         }
                       }
                     ]
@@ -32072,8 +33841,233 @@
               ],
               "additionalProperties": false
             },
+            "input": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "sessionId": {
+                  "type": "string"
+                },
+                "intent": {
+                  "type": "string",
+                  "enum": [
+                    "submit",
+                    "steer",
+                    "follow-up"
+                  ]
+                },
+                "state": {
+                  "type": "string",
+                  "enum": [
+                    "queued",
+                    "delivered",
+                    "spawned",
+                    "completed",
+                    "cancelled",
+                    "failed",
+                    "rejected"
+                  ]
+                },
+                "correlationId": {
+                  "type": "string"
+                },
+                "causationId": {
+                  "type": "string"
+                },
+                "body": {
+                  "type": "string"
+                },
+                "createdAt": {
+                  "type": "number"
+                },
+                "updatedAt": {
+                  "type": "number"
+                },
+                "routeId": {
+                  "type": "string"
+                },
+                "surfaceKind": {
+                  "type": "string"
+                },
+                "surfaceId": {
+                  "type": "string"
+                },
+                "externalId": {
+                  "type": "string"
+                },
+                "threadId": {
+                  "type": "string"
+                },
+                "userId": {
+                  "type": "string"
+                },
+                "displayName": {
+                  "type": "string"
+                },
+                "activeAgentId": {
+                  "type": "string"
+                },
+                "metadata": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "boolean"
+                      },
+                      {
+                        "type": "null"
+                      },
+                      {
+                        "$ref": "$.operator.methods[176].outputSchema.properties.input.properties.metadata"
+                      },
+                      {
+                        "type": "array",
+                        "items": {
+                          "$ref": "$.operator.methods[176].outputSchema.properties.input.properties.metadata.additionalProperties"
+                        }
+                      }
+                    ]
+                  }
+                },
+                "routing": {
+                  "type": "object",
+                  "properties": {
+                    "providerId": {
+                      "type": "string"
+                    },
+                    "modelId": {
+                      "type": "string"
+                    },
+                    "providerSelection": {
+                      "type": "string",
+                      "enum": [
+                        "inherit-current",
+                        "concrete",
+                        "synthetic"
+                      ]
+                    },
+                    "unresolvedModelPolicy": {
+                      "type": "string",
+                      "enum": [
+                        "fallback-to-current",
+                        "fail"
+                      ]
+                    },
+                    "providerFailurePolicy": {
+                      "type": "string",
+                      "enum": [
+                        "ordered-fallbacks",
+                        "fail"
+                      ]
+                    },
+                    "fallbackModels": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "helperModel": {
+                      "type": "object",
+                      "properties": {
+                        "providerId": {
+                          "type": "string"
+                        },
+                        "modelId": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "providerId",
+                        "modelId"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "executionIntent": {
+                      "type": "object",
+                      "properties": {
+                        "riskClass": {
+                          "type": "string",
+                          "enum": [
+                            "safe",
+                            "elevated",
+                            "dangerous"
+                          ]
+                        },
+                        "requiresApproval": {
+                          "type": "boolean"
+                        },
+                        "networkPolicy": {
+                          "type": "string",
+                          "enum": [
+                            "inherit",
+                            "allow",
+                            "deny",
+                            "scoped"
+                          ]
+                        },
+                        "filesystemPolicy": {
+                          "type": "string",
+                          "enum": [
+                            "inherit",
+                            "workspace-write",
+                            "read-only",
+                            "isolated"
+                          ]
+                        }
+                      },
+                      "additionalProperties": false
+                    },
+                    "tools": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "reasoningEffort": {
+                      "type": "string",
+                      "enum": [
+                        "instant",
+                        "low",
+                        "medium",
+                        "high"
+                      ]
+                    }
+                  },
+                  "additionalProperties": false
+                },
+                "error": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "sessionId",
+                "intent",
+                "state",
+                "correlationId",
+                "body",
+                "createdAt",
+                "updatedAt",
+                "metadata"
+              ],
+              "additionalProperties": false
+            },
             "mode": {
-              "type": "string"
+              "type": "string",
+              "enum": [
+                "spawn",
+                "continued-live",
+                "queued-follow-up",
+                "rejected"
+              ]
             },
             "agentId": {
               "anyOf": [
@@ -32089,6 +34083,7 @@
           "required": [
             "session",
             "message",
+            "input",
             "mode",
             "agentId"
           ],
@@ -32166,6 +34161,9 @@
                 "messageCount": {
                   "type": "number"
                 },
+                "pendingInputCount": {
+                  "type": "number"
+                },
                 "routeIds": {
                   "type": "array",
                   "items": {
@@ -32239,12 +34237,12 @@
                         "type": "null"
                       },
                       {
-                        "$ref": "$.operator.methods[174].outputSchema.properties.session.properties.metadata"
+                        "$ref": "$.operator.methods[177].outputSchema.properties.session.properties.metadata"
                       },
                       {
                         "type": "array",
                         "items": {
-                          "$ref": "$.operator.methods[174].outputSchema.properties.session.properties.metadata.additionalProperties"
+                          "$ref": "$.operator.methods[177].outputSchema.properties.session.properties.metadata.additionalProperties"
                         }
                       }
                     ]
@@ -32258,6 +34256,7 @@
                 "createdAt",
                 "updatedAt",
                 "messageCount",
+                "pendingInputCount",
                 "routeIds",
                 "surfaceKinds",
                 "participants",
@@ -32325,12 +34324,12 @@
                           "type": "null"
                         },
                         {
-                          "$ref": "$.operator.methods[174].outputSchema.properties.messages.items.properties.metadata"
+                          "$ref": "$.operator.methods[177].outputSchema.properties.messages.items.properties.metadata"
                         },
                         {
                           "type": "array",
                           "items": {
-                            "$ref": "$.operator.methods[174].outputSchema.properties.messages.items.properties.metadata.additionalProperties"
+                            "$ref": "$.operator.methods[177].outputSchema.properties.messages.items.properties.metadata.additionalProperties"
                           }
                         }
                       ]
@@ -32421,6 +34420,9 @@
                 "messageCount": {
                   "type": "number"
                 },
+                "pendingInputCount": {
+                  "type": "number"
+                },
                 "routeIds": {
                   "type": "array",
                   "items": {
@@ -32494,12 +34496,12 @@
                         "type": "null"
                       },
                       {
-                        "$ref": "$.operator.methods[175].outputSchema.properties.session.properties.metadata"
+                        "$ref": "$.operator.methods[178].outputSchema.properties.session.properties.metadata"
                       },
                       {
                         "type": "array",
                         "items": {
-                          "$ref": "$.operator.methods[175].outputSchema.properties.session.properties.metadata.additionalProperties"
+                          "$ref": "$.operator.methods[178].outputSchema.properties.session.properties.metadata.additionalProperties"
                         }
                       }
                     ]
@@ -32513,6 +34515,7 @@
                 "createdAt",
                 "updatedAt",
                 "messageCount",
+                "pendingInputCount",
                 "routeIds",
                 "surfaceKinds",
                 "participants",
@@ -32525,6 +34528,625 @@
             "session"
           ],
           "additionalProperties": true
+        },
+        "invokable": true
+      },
+      {
+        "source": "builtin",
+        "transport": [
+          "http",
+          "ws"
+        ],
+        "access": "authenticated",
+        "id": "sessions.steer",
+        "title": "Steer Shared Session",
+        "description": "Deliver a live steering message to the active agent for a shared session, optionally falling back to spawn when explicitly allowed.",
+        "category": "sessions",
+        "scopes": [
+          "write:sessions"
+        ],
+        "http": {
+          "method": "POST",
+          "path": "/api/sessions/{sessionId}/steer"
+        },
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "body": {
+              "type": "string"
+            },
+            "surfaceKind": {
+              "type": "string"
+            },
+            "surfaceId": {
+              "type": "string"
+            },
+            "routing": {
+              "type": "object",
+              "properties": {
+                "providerId": {
+                  "type": "string"
+                },
+                "modelId": {
+                  "type": "string"
+                },
+                "providerSelection": {
+                  "type": "string",
+                  "enum": [
+                    "inherit-current",
+                    "concrete",
+                    "synthetic"
+                  ]
+                },
+                "unresolvedModelPolicy": {
+                  "type": "string",
+                  "enum": [
+                    "fallback-to-current",
+                    "fail"
+                  ]
+                },
+                "providerFailurePolicy": {
+                  "type": "string",
+                  "enum": [
+                    "ordered-fallbacks",
+                    "fail"
+                  ]
+                },
+                "fallbackModels": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "helperModel": {
+                  "type": "object",
+                  "properties": {
+                    "providerId": {
+                      "type": "string"
+                    },
+                    "modelId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "providerId",
+                    "modelId"
+                  ],
+                  "additionalProperties": false
+                },
+                "executionIntent": {
+                  "type": "object",
+                  "properties": {
+                    "riskClass": {
+                      "type": "string",
+                      "enum": [
+                        "safe",
+                        "elevated",
+                        "dangerous"
+                      ]
+                    },
+                    "requiresApproval": {
+                      "type": "boolean"
+                    },
+                    "networkPolicy": {
+                      "type": "string",
+                      "enum": [
+                        "inherit",
+                        "allow",
+                        "deny",
+                        "scoped"
+                      ]
+                    },
+                    "filesystemPolicy": {
+                      "type": "string",
+                      "enum": [
+                        "inherit",
+                        "workspace-write",
+                        "read-only",
+                        "isolated"
+                      ]
+                    }
+                  },
+                  "additionalProperties": false
+                },
+                "tools": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "reasoningEffort": {
+                  "type": "string",
+                  "enum": [
+                    "instant",
+                    "low",
+                    "medium",
+                    "high"
+                  ]
+                }
+              },
+              "additionalProperties": false
+            },
+            "allowSpawnFallback": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "body"
+          ],
+          "additionalProperties": true
+        },
+        "outputSchema": {
+          "type": "object",
+          "properties": {
+            "session": {
+              "anyOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "active",
+                        "closed"
+                      ]
+                    },
+                    "createdAt": {
+                      "type": "number"
+                    },
+                    "updatedAt": {
+                      "type": "number"
+                    },
+                    "lastMessageAt": {
+                      "type": "number"
+                    },
+                    "closedAt": {
+                      "type": "number"
+                    },
+                    "messageCount": {
+                      "type": "number"
+                    },
+                    "pendingInputCount": {
+                      "type": "number"
+                    },
+                    "routeIds": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "surfaceKinds": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "participants": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "surfaceKind": {
+                            "type": "string"
+                          },
+                          "surfaceId": {
+                            "type": "string"
+                          },
+                          "externalId": {
+                            "type": "string"
+                          },
+                          "userId": {
+                            "type": "string"
+                          },
+                          "displayName": {
+                            "type": "string"
+                          },
+                          "routeId": {
+                            "type": "string"
+                          },
+                          "lastSeenAt": {
+                            "type": "number"
+                          }
+                        },
+                        "required": [
+                          "surfaceKind",
+                          "surfaceId",
+                          "lastSeenAt"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "activeAgentId": {
+                      "type": "string"
+                    },
+                    "lastAgentId": {
+                      "type": "string"
+                    },
+                    "lastError": {
+                      "type": "string"
+                    },
+                    "metadata": {
+                      "type": "object",
+                      "additionalProperties": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "number"
+                          },
+                          {
+                            "type": "boolean"
+                          },
+                          {
+                            "type": "null"
+                          },
+                          {
+                            "$ref": "$.operator.methods[179].outputSchema.properties.session.anyOf[0].properties.metadata"
+                          },
+                          {
+                            "type": "array",
+                            "items": {
+                              "$ref": "$.operator.methods[179].outputSchema.properties.session.anyOf[0].properties.metadata.additionalProperties"
+                            }
+                          }
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "title",
+                    "status",
+                    "createdAt",
+                    "updatedAt",
+                    "messageCount",
+                    "pendingInputCount",
+                    "routeIds",
+                    "surfaceKinds",
+                    "participants",
+                    "metadata"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "message": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "sessionId": {
+                  "type": "string"
+                },
+                "role": {
+                  "type": "string",
+                  "enum": [
+                    "user",
+                    "assistant",
+                    "system"
+                  ]
+                },
+                "body": {
+                  "type": "string"
+                },
+                "createdAt": {
+                  "type": "number"
+                },
+                "surfaceKind": {
+                  "type": "string"
+                },
+                "surfaceId": {
+                  "type": "string"
+                },
+                "routeId": {
+                  "type": "string"
+                },
+                "agentId": {
+                  "type": "string"
+                },
+                "userId": {
+                  "type": "string"
+                },
+                "displayName": {
+                  "type": "string"
+                },
+                "metadata": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "boolean"
+                      },
+                      {
+                        "type": "null"
+                      },
+                      {
+                        "$ref": "$.operator.methods[179].outputSchema.properties.message.properties.metadata"
+                      },
+                      {
+                        "type": "array",
+                        "items": {
+                          "$ref": "$.operator.methods[179].outputSchema.properties.message.properties.metadata.additionalProperties"
+                        }
+                      }
+                    ]
+                  }
+                }
+              },
+              "required": [
+                "id",
+                "sessionId",
+                "role",
+                "body",
+                "createdAt",
+                "metadata"
+              ],
+              "additionalProperties": false
+            },
+            "input": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "sessionId": {
+                  "type": "string"
+                },
+                "intent": {
+                  "type": "string",
+                  "enum": [
+                    "submit",
+                    "steer",
+                    "follow-up"
+                  ]
+                },
+                "state": {
+                  "type": "string",
+                  "enum": [
+                    "queued",
+                    "delivered",
+                    "spawned",
+                    "completed",
+                    "cancelled",
+                    "failed",
+                    "rejected"
+                  ]
+                },
+                "correlationId": {
+                  "type": "string"
+                },
+                "causationId": {
+                  "type": "string"
+                },
+                "body": {
+                  "type": "string"
+                },
+                "createdAt": {
+                  "type": "number"
+                },
+                "updatedAt": {
+                  "type": "number"
+                },
+                "routeId": {
+                  "type": "string"
+                },
+                "surfaceKind": {
+                  "type": "string"
+                },
+                "surfaceId": {
+                  "type": "string"
+                },
+                "externalId": {
+                  "type": "string"
+                },
+                "threadId": {
+                  "type": "string"
+                },
+                "userId": {
+                  "type": "string"
+                },
+                "displayName": {
+                  "type": "string"
+                },
+                "activeAgentId": {
+                  "type": "string"
+                },
+                "metadata": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "boolean"
+                      },
+                      {
+                        "type": "null"
+                      },
+                      {
+                        "$ref": "$.operator.methods[179].outputSchema.properties.input.properties.metadata"
+                      },
+                      {
+                        "type": "array",
+                        "items": {
+                          "$ref": "$.operator.methods[179].outputSchema.properties.input.properties.metadata.additionalProperties"
+                        }
+                      }
+                    ]
+                  }
+                },
+                "routing": {
+                  "type": "object",
+                  "properties": {
+                    "providerId": {
+                      "type": "string"
+                    },
+                    "modelId": {
+                      "type": "string"
+                    },
+                    "providerSelection": {
+                      "type": "string",
+                      "enum": [
+                        "inherit-current",
+                        "concrete",
+                        "synthetic"
+                      ]
+                    },
+                    "unresolvedModelPolicy": {
+                      "type": "string",
+                      "enum": [
+                        "fallback-to-current",
+                        "fail"
+                      ]
+                    },
+                    "providerFailurePolicy": {
+                      "type": "string",
+                      "enum": [
+                        "ordered-fallbacks",
+                        "fail"
+                      ]
+                    },
+                    "fallbackModels": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "helperModel": {
+                      "type": "object",
+                      "properties": {
+                        "providerId": {
+                          "type": "string"
+                        },
+                        "modelId": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "providerId",
+                        "modelId"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "executionIntent": {
+                      "type": "object",
+                      "properties": {
+                        "riskClass": {
+                          "type": "string",
+                          "enum": [
+                            "safe",
+                            "elevated",
+                            "dangerous"
+                          ]
+                        },
+                        "requiresApproval": {
+                          "type": "boolean"
+                        },
+                        "networkPolicy": {
+                          "type": "string",
+                          "enum": [
+                            "inherit",
+                            "allow",
+                            "deny",
+                            "scoped"
+                          ]
+                        },
+                        "filesystemPolicy": {
+                          "type": "string",
+                          "enum": [
+                            "inherit",
+                            "workspace-write",
+                            "read-only",
+                            "isolated"
+                          ]
+                        }
+                      },
+                      "additionalProperties": false
+                    },
+                    "tools": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "reasoningEffort": {
+                      "type": "string",
+                      "enum": [
+                        "instant",
+                        "low",
+                        "medium",
+                        "high"
+                      ]
+                    }
+                  },
+                  "additionalProperties": false
+                },
+                "error": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "sessionId",
+                "intent",
+                "state",
+                "correlationId",
+                "body",
+                "createdAt",
+                "updatedAt",
+                "metadata"
+              ],
+              "additionalProperties": false
+            },
+            "mode": {
+              "type": "string",
+              "enum": [
+                "spawn",
+                "continued-live",
+                "queued-follow-up",
+                "rejected"
+              ]
+            },
+            "agentId": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "session",
+            "message",
+            "input",
+            "mode",
+            "agentId"
+          ],
+          "additionalProperties": false
         },
         "invokable": true
       },
@@ -32594,11 +35216,11 @@
                   {
                     "type": "object",
                     "additionalProperties": {
-                      "$ref": "$.operator.methods[176].outputSchema.properties.conflicts.items"
+                      "$ref": "$.operator.methods[180].outputSchema.properties.conflicts.items"
                     }
                   },
                   {
-                    "$ref": "$.operator.methods[176].outputSchema.properties.conflicts"
+                    "$ref": "$.operator.methods[180].outputSchema.properties.conflicts"
                   }
                 ]
               }
@@ -32622,11 +35244,11 @@
                   {
                     "type": "object",
                     "additionalProperties": {
-                      "$ref": "$.operator.methods[176].outputSchema.properties.recentFailures.items"
+                      "$ref": "$.operator.methods[180].outputSchema.properties.recentFailures.items"
                     }
                   },
                   {
-                    "$ref": "$.operator.methods[176].outputSchema.properties.recentFailures"
+                    "$ref": "$.operator.methods[180].outputSchema.properties.recentFailures"
                   }
                 ]
               }
@@ -32648,12 +35270,12 @@
                     "type": "null"
                   },
                   {
-                    "$ref": "$.operator.methods[176].outputSchema.properties.stagedManagedBundle"
+                    "$ref": "$.operator.methods[180].outputSchema.properties.stagedManagedBundle"
                   },
                   {
                     "type": "array",
                     "items": {
-                      "$ref": "$.operator.methods[176].outputSchema.properties.stagedManagedBundle.additionalProperties"
+                      "$ref": "$.operator.methods[180].outputSchema.properties.stagedManagedBundle.additionalProperties"
                     }
                   }
                 ]
@@ -32678,11 +35300,11 @@
                   {
                     "type": "object",
                     "additionalProperties": {
-                      "$ref": "$.operator.methods[176].outputSchema.properties.rollbackHistory.items"
+                      "$ref": "$.operator.methods[180].outputSchema.properties.rollbackHistory.items"
                     }
                   },
                   {
-                    "$ref": "$.operator.methods[176].outputSchema.properties.rollbackHistory"
+                    "$ref": "$.operator.methods[180].outputSchema.properties.rollbackHistory"
                   }
                 ]
               }
@@ -32858,13 +35480,13 @@
                     {
                       "type": "object",
                       "additionalProperties": {
-                        "$ref": "$.operator.methods[177].outputSchema.properties.task.properties.result"
+                        "$ref": "$.operator.methods[181].outputSchema.properties.task.properties.result"
                       }
                     },
                     {
                       "type": "array",
                       "items": {
-                        "$ref": "$.operator.methods[177].outputSchema.properties.task.properties.result"
+                        "$ref": "$.operator.methods[181].outputSchema.properties.task.properties.result"
                       }
                     }
                   ]
@@ -32938,6 +35560,112 @@
             "provider": {
               "type": "string"
             },
+            "routing": {
+              "type": "object",
+              "properties": {
+                "providerId": {
+                  "type": "string"
+                },
+                "modelId": {
+                  "type": "string"
+                },
+                "providerSelection": {
+                  "type": "string",
+                  "enum": [
+                    "inherit-current",
+                    "concrete",
+                    "synthetic"
+                  ]
+                },
+                "unresolvedModelPolicy": {
+                  "type": "string",
+                  "enum": [
+                    "fallback-to-current",
+                    "fail"
+                  ]
+                },
+                "providerFailurePolicy": {
+                  "type": "string",
+                  "enum": [
+                    "ordered-fallbacks",
+                    "fail"
+                  ]
+                },
+                "fallbackModels": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "helperModel": {
+                  "type": "object",
+                  "properties": {
+                    "providerId": {
+                      "type": "string"
+                    },
+                    "modelId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "providerId",
+                    "modelId"
+                  ],
+                  "additionalProperties": false
+                },
+                "executionIntent": {
+                  "type": "object",
+                  "properties": {
+                    "riskClass": {
+                      "type": "string",
+                      "enum": [
+                        "safe",
+                        "elevated",
+                        "dangerous"
+                      ]
+                    },
+                    "requiresApproval": {
+                      "type": "boolean"
+                    },
+                    "networkPolicy": {
+                      "type": "string",
+                      "enum": [
+                        "inherit",
+                        "allow",
+                        "deny",
+                        "scoped"
+                      ]
+                    },
+                    "filesystemPolicy": {
+                      "type": "string",
+                      "enum": [
+                        "inherit",
+                        "workspace-write",
+                        "read-only",
+                        "isolated"
+                      ]
+                    }
+                  },
+                  "additionalProperties": false
+                },
+                "tools": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "reasoningEffort": {
+                  "type": "string",
+                  "enum": [
+                    "instant",
+                    "low",
+                    "medium",
+                    "high"
+                  ]
+                }
+              },
+              "additionalProperties": false
+            },
             "sessionId": {
               "type": "string"
             },
@@ -32982,12 +35710,12 @@
                     "type": "null"
                   },
                   {
-                    "$ref": "$.operator.methods[178].inputSchema.properties.metadata"
+                    "$ref": "$.operator.methods[182].inputSchema.properties.metadata"
                   },
                   {
                     "type": "array",
                     "items": {
-                      "$ref": "$.operator.methods[178].inputSchema.properties.metadata.additionalProperties"
+                      "$ref": "$.operator.methods[182].inputSchema.properties.metadata.additionalProperties"
                     }
                   }
                 ]
@@ -33214,13 +35942,13 @@
                     {
                       "type": "object",
                       "additionalProperties": {
-                        "$ref": "$.operator.methods[179].outputSchema.properties.task.properties.result"
+                        "$ref": "$.operator.methods[183].outputSchema.properties.task.properties.result"
                       }
                     },
                     {
                       "type": "array",
                       "items": {
-                        "$ref": "$.operator.methods[179].outputSchema.properties.task.properties.result"
+                        "$ref": "$.operator.methods[183].outputSchema.properties.task.properties.result"
                       }
                     }
                   ]
@@ -33554,13 +36282,13 @@
                     {
                       "type": "object",
                       "additionalProperties": {
-                        "$ref": "$.operator.methods[181].outputSchema.properties.task.properties.result"
+                        "$ref": "$.operator.methods[185].outputSchema.properties.task.properties.result"
                       }
                     },
                     {
                       "type": "array",
                       "items": {
-                        "$ref": "$.operator.methods[181].outputSchema.properties.task.properties.result"
+                        "$ref": "$.operator.methods[185].outputSchema.properties.task.properties.result"
                       }
                     }
                   ]
@@ -33811,12 +36539,12 @@
                     "type": "null"
                   },
                   {
-                    "$ref": "$.operator.methods[184].inputSchema.properties.metadata"
+                    "$ref": "$.operator.methods[188].inputSchema.properties.metadata"
                   },
                   {
                     "type": "array",
                     "items": {
-                      "$ref": "$.operator.methods[184].inputSchema.properties.metadata.additionalProperties"
+                      "$ref": "$.operator.methods[188].inputSchema.properties.metadata.additionalProperties"
                     }
                   }
                 ]
@@ -33866,12 +36594,12 @@
                     "type": "null"
                   },
                   {
-                    "$ref": "$.operator.methods[184].outputSchema.properties.metadata"
+                    "$ref": "$.operator.methods[188].outputSchema.properties.metadata"
                   },
                   {
                     "type": "array",
                     "items": {
-                      "$ref": "$.operator.methods[184].outputSchema.properties.metadata.additionalProperties"
+                      "$ref": "$.operator.methods[188].outputSchema.properties.metadata.additionalProperties"
                     }
                   }
                 ]
@@ -33963,12 +36691,12 @@
                           "type": "null"
                         },
                         {
-                          "$ref": "$.operator.methods[185].outputSchema.properties.providers.items.properties.metadata"
+                          "$ref": "$.operator.methods[189].outputSchema.properties.providers.items.properties.metadata"
                         },
                         {
                           "type": "array",
                           "items": {
-                            "$ref": "$.operator.methods[185].outputSchema.properties.providers.items.properties.metadata.additionalProperties"
+                            "$ref": "$.operator.methods[189].outputSchema.properties.providers.items.properties.metadata.additionalProperties"
                           }
                         }
                       ]
@@ -34041,12 +36769,12 @@
                     "type": "null"
                   },
                   {
-                    "$ref": "$.operator.methods[186].inputSchema.properties.audio"
+                    "$ref": "$.operator.methods[190].inputSchema.properties.audio"
                   },
                   {
                     "type": "array",
                     "items": {
-                      "$ref": "$.operator.methods[186].inputSchema.properties.audio.additionalProperties"
+                      "$ref": "$.operator.methods[190].inputSchema.properties.audio.additionalProperties"
                     }
                   }
                 ]
@@ -34078,12 +36806,12 @@
                     "type": "null"
                   },
                   {
-                    "$ref": "$.operator.methods[186].inputSchema.properties.metadata"
+                    "$ref": "$.operator.methods[190].inputSchema.properties.metadata"
                   },
                   {
                     "type": "array",
                     "items": {
-                      "$ref": "$.operator.methods[186].inputSchema.properties.metadata.additionalProperties"
+                      "$ref": "$.operator.methods[190].inputSchema.properties.metadata.additionalProperties"
                     }
                   }
                 ]
@@ -34148,12 +36876,12 @@
                     "type": "null"
                   },
                   {
-                    "$ref": "$.operator.methods[186].outputSchema.properties.metadata"
+                    "$ref": "$.operator.methods[190].outputSchema.properties.metadata"
                   },
                   {
                     "type": "array",
                     "items": {
-                      "$ref": "$.operator.methods[186].outputSchema.properties.metadata.additionalProperties"
+                      "$ref": "$.operator.methods[190].outputSchema.properties.metadata.additionalProperties"
                     }
                   }
                 ]
@@ -34225,12 +36953,12 @@
                     "type": "null"
                   },
                   {
-                    "$ref": "$.operator.methods[187].inputSchema.properties.metadata"
+                    "$ref": "$.operator.methods[191].inputSchema.properties.metadata"
                   },
                   {
                     "type": "array",
                     "items": {
-                      "$ref": "$.operator.methods[187].inputSchema.properties.metadata.additionalProperties"
+                      "$ref": "$.operator.methods[191].inputSchema.properties.metadata.additionalProperties"
                     }
                   }
                 ]
@@ -34286,12 +37014,12 @@
                         "type": "null"
                       },
                       {
-                        "$ref": "$.operator.methods[187].outputSchema.properties.audio.properties.metadata"
+                        "$ref": "$.operator.methods[191].outputSchema.properties.audio.properties.metadata"
                       },
                       {
                         "type": "array",
                         "items": {
-                          "$ref": "$.operator.methods[187].outputSchema.properties.audio.properties.metadata.additionalProperties"
+                          "$ref": "$.operator.methods[191].outputSchema.properties.audio.properties.metadata.additionalProperties"
                         }
                       }
                     ]
@@ -34322,12 +37050,12 @@
                     "type": "null"
                   },
                   {
-                    "$ref": "$.operator.methods[187].outputSchema.properties.metadata"
+                    "$ref": "$.operator.methods[191].outputSchema.properties.metadata"
                   },
                   {
                     "type": "array",
                     "items": {
-                      "$ref": "$.operator.methods[187].outputSchema.properties.metadata.additionalProperties"
+                      "$ref": "$.operator.methods[191].outputSchema.properties.metadata.additionalProperties"
                     }
                   }
                 ]
@@ -34407,12 +37135,12 @@
                           "type": "null"
                         },
                         {
-                          "$ref": "$.operator.methods[188].outputSchema.properties.voices.items.properties.metadata"
+                          "$ref": "$.operator.methods[192].outputSchema.properties.voices.items.properties.metadata"
                         },
                         {
                           "type": "array",
                           "items": {
-                            "$ref": "$.operator.methods[188].outputSchema.properties.voices.items.properties.metadata.additionalProperties"
+                            "$ref": "$.operator.methods[192].outputSchema.properties.voices.items.properties.metadata.additionalProperties"
                           }
                         }
                       ]
@@ -34494,12 +37222,12 @@
                     "type": "null"
                   },
                   {
-                    "$ref": "$.operator.methods[189].inputSchema.properties.metadata"
+                    "$ref": "$.operator.methods[193].inputSchema.properties.metadata"
                   },
                   {
                     "type": "array",
                     "items": {
-                      "$ref": "$.operator.methods[189].inputSchema.properties.metadata.additionalProperties"
+                      "$ref": "$.operator.methods[193].inputSchema.properties.metadata.additionalProperties"
                     }
                   }
                 ]
@@ -34537,12 +37265,12 @@
                     "type": "null"
                   },
                   {
-                    "$ref": "$.operator.methods[189].inputSchema.properties.headers"
+                    "$ref": "$.operator.methods[193].inputSchema.properties.headers"
                   },
                   {
                     "type": "array",
                     "items": {
-                      "$ref": "$.operator.methods[189].inputSchema.properties.headers.additionalProperties"
+                      "$ref": "$.operator.methods[193].inputSchema.properties.headers.additionalProperties"
                     }
                   }
                 ]
@@ -34610,12 +37338,12 @@
                         "type": "null"
                       },
                       {
-                        "$ref": "$.operator.methods[189].outputSchema.properties.source.properties.metadata"
+                        "$ref": "$.operator.methods[193].outputSchema.properties.source.properties.metadata"
                       },
                       {
                         "type": "array",
                         "items": {
-                          "$ref": "$.operator.methods[189].outputSchema.properties.source.properties.metadata.additionalProperties"
+                          "$ref": "$.operator.methods[193].outputSchema.properties.source.properties.metadata.additionalProperties"
                         }
                       }
                     ]
@@ -34671,12 +37399,12 @@
                     "type": "null"
                   },
                   {
-                    "$ref": "$.operator.methods[189].outputSchema.properties.metadata"
+                    "$ref": "$.operator.methods[193].outputSchema.properties.metadata"
                   },
                   {
                     "type": "array",
                     "items": {
-                      "$ref": "$.operator.methods[189].outputSchema.properties.metadata.additionalProperties"
+                      "$ref": "$.operator.methods[193].outputSchema.properties.metadata.additionalProperties"
                     }
                   }
                 ]
@@ -34830,12 +37558,12 @@
                               "type": "null"
                             },
                             {
-                              "$ref": "$.operator.methods[191].outputSchema.properties.watchers.items.properties.source.properties.metadata"
+                              "$ref": "$.operator.methods[195].outputSchema.properties.watchers.items.properties.source.properties.metadata"
                             },
                             {
                               "type": "array",
                               "items": {
-                                "$ref": "$.operator.methods[191].outputSchema.properties.watchers.items.properties.source.properties.metadata.additionalProperties"
+                                "$ref": "$.operator.methods[195].outputSchema.properties.watchers.items.properties.source.properties.metadata.additionalProperties"
                               }
                             }
                           ]
@@ -34891,12 +37619,12 @@
                           "type": "null"
                         },
                         {
-                          "$ref": "$.operator.methods[191].outputSchema.properties.watchers.items.properties.metadata"
+                          "$ref": "$.operator.methods[195].outputSchema.properties.watchers.items.properties.metadata"
                         },
                         {
                           "type": "array",
                           "items": {
-                            "$ref": "$.operator.methods[191].outputSchema.properties.watchers.items.properties.metadata.additionalProperties"
+                            "$ref": "$.operator.methods[195].outputSchema.properties.watchers.items.properties.metadata.additionalProperties"
                           }
                         }
                       ]
@@ -34984,12 +37712,12 @@
                     "type": "null"
                   },
                   {
-                    "$ref": "$.operator.methods[192].inputSchema.properties.metadata"
+                    "$ref": "$.operator.methods[196].inputSchema.properties.metadata"
                   },
                   {
                     "type": "array",
                     "items": {
-                      "$ref": "$.operator.methods[192].inputSchema.properties.metadata.additionalProperties"
+                      "$ref": "$.operator.methods[196].inputSchema.properties.metadata.additionalProperties"
                     }
                   }
                 ]
@@ -35027,12 +37755,12 @@
                     "type": "null"
                   },
                   {
-                    "$ref": "$.operator.methods[192].inputSchema.properties.headers"
+                    "$ref": "$.operator.methods[196].inputSchema.properties.headers"
                   },
                   {
                     "type": "array",
                     "items": {
-                      "$ref": "$.operator.methods[192].inputSchema.properties.headers.additionalProperties"
+                      "$ref": "$.operator.methods[196].inputSchema.properties.headers.additionalProperties"
                     }
                   }
                 ]
@@ -35097,12 +37825,12 @@
                         "type": "null"
                       },
                       {
-                        "$ref": "$.operator.methods[192].outputSchema.properties.source.properties.metadata"
+                        "$ref": "$.operator.methods[196].outputSchema.properties.source.properties.metadata"
                       },
                       {
                         "type": "array",
                         "items": {
-                          "$ref": "$.operator.methods[192].outputSchema.properties.source.properties.metadata.additionalProperties"
+                          "$ref": "$.operator.methods[196].outputSchema.properties.source.properties.metadata.additionalProperties"
                         }
                       }
                     ]
@@ -35158,12 +37886,12 @@
                     "type": "null"
                   },
                   {
-                    "$ref": "$.operator.methods[192].outputSchema.properties.metadata"
+                    "$ref": "$.operator.methods[196].outputSchema.properties.metadata"
                   },
                   {
                     "type": "array",
                     "items": {
-                      "$ref": "$.operator.methods[192].outputSchema.properties.metadata.additionalProperties"
+                      "$ref": "$.operator.methods[196].outputSchema.properties.metadata.additionalProperties"
                     }
                   }
                 ]
@@ -35268,12 +37996,12 @@
                         "type": "null"
                       },
                       {
-                        "$ref": "$.operator.methods[193].outputSchema.properties.source.properties.metadata"
+                        "$ref": "$.operator.methods[197].outputSchema.properties.source.properties.metadata"
                       },
                       {
                         "type": "array",
                         "items": {
-                          "$ref": "$.operator.methods[193].outputSchema.properties.source.properties.metadata.additionalProperties"
+                          "$ref": "$.operator.methods[197].outputSchema.properties.source.properties.metadata.additionalProperties"
                         }
                       }
                     ]
@@ -35329,12 +38057,12 @@
                     "type": "null"
                   },
                   {
-                    "$ref": "$.operator.methods[193].outputSchema.properties.metadata"
+                    "$ref": "$.operator.methods[197].outputSchema.properties.metadata"
                   },
                   {
                     "type": "array",
                     "items": {
-                      "$ref": "$.operator.methods[193].outputSchema.properties.metadata.additionalProperties"
+                      "$ref": "$.operator.methods[197].outputSchema.properties.metadata.additionalProperties"
                     }
                   }
                 ]
@@ -35439,12 +38167,12 @@
                         "type": "null"
                       },
                       {
-                        "$ref": "$.operator.methods[194].outputSchema.properties.source.properties.metadata"
+                        "$ref": "$.operator.methods[198].outputSchema.properties.source.properties.metadata"
                       },
                       {
                         "type": "array",
                         "items": {
-                          "$ref": "$.operator.methods[194].outputSchema.properties.source.properties.metadata.additionalProperties"
+                          "$ref": "$.operator.methods[198].outputSchema.properties.source.properties.metadata.additionalProperties"
                         }
                       }
                     ]
@@ -35500,12 +38228,12 @@
                     "type": "null"
                   },
                   {
-                    "$ref": "$.operator.methods[194].outputSchema.properties.metadata"
+                    "$ref": "$.operator.methods[198].outputSchema.properties.metadata"
                   },
                   {
                     "type": "array",
                     "items": {
-                      "$ref": "$.operator.methods[194].outputSchema.properties.metadata.additionalProperties"
+                      "$ref": "$.operator.methods[198].outputSchema.properties.metadata.additionalProperties"
                     }
                   }
                 ]
@@ -35610,12 +38338,12 @@
                         "type": "null"
                       },
                       {
-                        "$ref": "$.operator.methods[195].outputSchema.properties.source.properties.metadata"
+                        "$ref": "$.operator.methods[199].outputSchema.properties.source.properties.metadata"
                       },
                       {
                         "type": "array",
                         "items": {
-                          "$ref": "$.operator.methods[195].outputSchema.properties.source.properties.metadata.additionalProperties"
+                          "$ref": "$.operator.methods[199].outputSchema.properties.source.properties.metadata.additionalProperties"
                         }
                       }
                     ]
@@ -35671,12 +38399,12 @@
                     "type": "null"
                   },
                   {
-                    "$ref": "$.operator.methods[195].outputSchema.properties.metadata"
+                    "$ref": "$.operator.methods[199].outputSchema.properties.metadata"
                   },
                   {
                     "type": "array",
                     "items": {
-                      "$ref": "$.operator.methods[195].outputSchema.properties.metadata.additionalProperties"
+                      "$ref": "$.operator.methods[199].outputSchema.properties.metadata.additionalProperties"
                     }
                   }
                 ]
@@ -35887,12 +38615,12 @@
                           "type": "null"
                         },
                         {
-                          "$ref": "$.operator.methods[197].outputSchema.properties.results.items.properties.metadata"
+                          "$ref": "$.operator.methods[201].outputSchema.properties.results.items.properties.metadata"
                         },
                         {
                           "type": "array",
                           "items": {
-                            "$ref": "$.operator.methods[197].outputSchema.properties.results.items.properties.metadata.additionalProperties"
+                            "$ref": "$.operator.methods[201].outputSchema.properties.results.items.properties.metadata.additionalProperties"
                           }
                         }
                       ]
@@ -35941,12 +38669,12 @@
                                 "type": "null"
                               },
                               {
-                                "$ref": "$.operator.methods[197].outputSchema.properties.results.items.properties.evidence.items.properties.metadata"
+                                "$ref": "$.operator.methods[201].outputSchema.properties.results.items.properties.evidence.items.properties.metadata"
                               },
                               {
                                 "type": "array",
                                 "items": {
-                                  "$ref": "$.operator.methods[197].outputSchema.properties.results.items.properties.evidence.items.properties.metadata.additionalProperties"
+                                  "$ref": "$.operator.methods[201].outputSchema.properties.results.items.properties.evidence.items.properties.metadata.additionalProperties"
                                 }
                               }
                             ]
@@ -36034,12 +38762,12 @@
                         "type": "null"
                       },
                       {
-                        "$ref": "$.operator.methods[197].outputSchema.properties.instantAnswer.properties.metadata"
+                        "$ref": "$.operator.methods[201].outputSchema.properties.instantAnswer.properties.metadata"
                       },
                       {
                         "type": "array",
                         "items": {
-                          "$ref": "$.operator.methods[197].outputSchema.properties.instantAnswer.properties.metadata.additionalProperties"
+                          "$ref": "$.operator.methods[201].outputSchema.properties.instantAnswer.properties.metadata.additionalProperties"
                         }
                       }
                     ]
@@ -36070,12 +38798,12 @@
                     "type": "null"
                   },
                   {
-                    "$ref": "$.operator.methods[197].outputSchema.properties.metadata"
+                    "$ref": "$.operator.methods[201].outputSchema.properties.metadata"
                   },
                   {
                     "type": "array",
                     "items": {
-                      "$ref": "$.operator.methods[197].outputSchema.properties.metadata.additionalProperties"
+                      "$ref": "$.operator.methods[201].outputSchema.properties.metadata.additionalProperties"
                     }
                   }
                 ]
@@ -36137,12 +38865,12 @@
                     "type": "null"
                   },
                   {
-                    "$ref": "$.operator.methods[198].outputSchema.properties.summary"
+                    "$ref": "$.operator.methods[202].outputSchema.properties.summary"
                   },
                   {
                     "type": "array",
                     "items": {
-                      "$ref": "$.operator.methods[198].outputSchema.properties.summary.additionalProperties"
+                      "$ref": "$.operator.methods[202].outputSchema.properties.summary.additionalProperties"
                     }
                   }
                 ]
@@ -36167,11 +38895,11 @@
                   {
                     "type": "object",
                     "additionalProperties": {
-                      "$ref": "$.operator.methods[198].outputSchema.properties.records.items"
+                      "$ref": "$.operator.methods[202].outputSchema.properties.records.items"
                     }
                   },
                   {
-                    "$ref": "$.operator.methods[198].outputSchema.properties.records"
+                    "$ref": "$.operator.methods[202].outputSchema.properties.records"
                   }
                 ]
               }
@@ -37595,6 +40323,12 @@
                   "sourceUri": {
                     "type": "string"
                   },
+                  "acquisitionMode": {
+                    "type": "string"
+                  },
+                  "fetchMode": {
+                    "type": "string"
+                  },
                   "contentPath": {
                     "type": "string"
                   },
@@ -37691,10 +40425,10 @@
       }
     ],
     "schemaCoverage": {
-      "methods": 199,
-      "typedInputs": 199,
+      "methods": 203,
+      "typedInputs": 203,
       "genericInputs": 0,
-      "typedOutputs": 199,
+      "typedOutputs": 203,
       "genericOutputs": 0
     },
     "eventCoverage": {

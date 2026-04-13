@@ -2,7 +2,13 @@
  * Route binding types for external conversation and thread context.
  */
 
-import type { AutomationRouteKind, AutomationSurfaceKind } from './types.ts';
+import type {
+  AutomationDeliveryGuarantee,
+  AutomationRouteKind,
+  AutomationSessionPolicy,
+  AutomationSurfaceKind,
+  AutomationThreadPolicy,
+} from './types.ts';
 
 export interface AutomationRouteBinding {
   readonly id: string;
@@ -10,6 +16,9 @@ export interface AutomationRouteBinding {
   readonly surfaceKind: AutomationSurfaceKind;
   readonly surfaceId: string;
   readonly externalId: string;
+  readonly sessionPolicy?: AutomationSessionPolicy;
+  readonly threadPolicy?: AutomationThreadPolicy;
+  readonly deliveryGuarantee?: AutomationDeliveryGuarantee;
   readonly threadId?: string;
   readonly channelId?: string;
   readonly sessionId?: string;

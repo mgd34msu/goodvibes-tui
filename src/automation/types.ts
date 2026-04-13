@@ -42,7 +42,27 @@ export type AutomationSourceKind =
   | 'watcher'
   | 'migration';
 export type AutomationExecutionKind = 'isolated' | 'current' | 'pinned' | 'background' | 'main';
+export type AutomationExecutionTargetKind = AutomationExecutionKind | 'session' | 'route';
 export type AutomationDeliveryKind = 'none' | 'webhook' | 'surface' | 'integration' | 'link';
+export type ProviderRoutingSelection = 'inherit-current' | 'concrete' | 'synthetic';
+export type UnresolvedModelPolicy = 'fallback-to-current' | 'fail';
+export type ProviderFailurePolicy = 'ordered-fallbacks' | 'fail';
+export type AutomationExecutionMode = 'spawn' | 'shared-session' | 'continued-live' | 'background';
+export type AutomationSessionPolicy = 'create-or-bind' | 'continue-existing' | 'require-existing';
+export type AutomationThreadPolicy = 'preserve' | 'replace' | 'detached';
+export type AutomationDeliveryGuarantee = 'best-effort' | 'at-least-once';
+
+export interface ProviderModelRoutingPolicy {
+  readonly providerSelection?: ProviderRoutingSelection;
+  readonly unresolvedModelPolicy?: UnresolvedModelPolicy;
+  readonly providerFailurePolicy?: ProviderFailurePolicy;
+  readonly fallbackModels?: readonly string[];
+}
+
+export interface AutomationExecutionIntent {
+  readonly mode: AutomationExecutionMode;
+  readonly targetKind: AutomationExecutionTargetKind;
+}
 
 export interface AutomationEntityBase {
   readonly id: string;

@@ -234,14 +234,18 @@ export class DaemonHttpRouter {
         sessionBroker: {
           start: () => this.context.sessionBroker.start(),
           submitMessage: (input) => this.context.sessionBroker.submitMessage(input),
+          steerMessage: (input) => this.context.sessionBroker.steerMessage(input),
+          followUpMessage: (input) => this.context.sessionBroker.followUpMessage(input),
           bindAgent: async (sessionId, agentId) => {
             await this.context.sessionBroker.bindAgent(sessionId, agentId);
           },
           createSession: (input) => this.context.sessionBroker.createSession(input),
           getSession: (sessionId) => this.context.sessionBroker.getSession(sessionId),
           getMessages: (sessionId, limit) => this.context.sessionBroker.getMessages(sessionId, limit),
+          getInputs: (sessionId, limit) => this.context.sessionBroker.getInputs(sessionId, limit),
           closeSession: (sessionId) => this.context.sessionBroker.closeSession(sessionId),
           reopenSession: (sessionId) => this.context.sessionBroker.reopenSession(sessionId),
+          cancelInput: (sessionId, inputId) => this.context.sessionBroker.cancelInput(sessionId, inputId),
           completeAgent: async (sessionId, agentId, message, meta) => {
             await this.context.sessionBroker.completeAgent(sessionId, agentId, message, meta);
           },

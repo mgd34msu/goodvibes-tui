@@ -776,6 +776,7 @@ export class WrfcController {
       ...(sourceAgent?.model ? { model: sourceAgent.model } : {}),
       ...(sourceAgent?.provider ? { provider: sourceAgent.provider } : {}),
       ...(sourceAgent?.fallbackModels?.length ? { fallbackModels: [...sourceAgent.fallbackModels] } : {}),
+      ...(sourceAgent?.routing ? { routing: sourceAgent.routing } : {}),
       ...(sourceAgent?.reasoningEffort ? { reasoningEffort: sourceAgent.reasoningEffort } : {}),
       ...(dangerouslyDisableWrfc ? { dangerously_disable_wrfc: true } : {}),
     });

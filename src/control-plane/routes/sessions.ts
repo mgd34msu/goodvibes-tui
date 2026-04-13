@@ -11,6 +11,10 @@ export async function dispatchSessionRoutes(
     | 'reopenSharedSession'
     | 'getSharedSessionMessages'
     | 'postSharedSessionMessage'
+    | 'getSharedSessionInputs'
+    | 'postSharedSessionSteer'
+    | 'postSharedSessionFollowUp'
+    | 'cancelSharedSessionInput'
   >,
 ): Promise<Response | null> {
   const url = new URL(req.url);
@@ -33,6 +37,20 @@ export async function dispatchSessionRoutes(
   const sharedSessionMessagesMatch = pathname.match(/^\/api\/sessions\/([^/]+)\/messages$/);
   if (sharedSessionMessagesMatch && method === 'GET') return handlers.getSharedSessionMessages(sharedSessionMessagesMatch[1], url);
   if (sharedSessionMessagesMatch && method === 'POST') return handlers.postSharedSessionMessage(sharedSessionMessagesMatch[1], req);
+
+  const sharedSessionInputsMatch = pathname.match(/^\/api\/sessions\/([^/]+)\/inputs$/);
+  if (sharedSessionInputsMatch && method === 'GET') return handlers.getSharedSessionInputs(sharedSessionInputsMatch[1], url);
+
+  const sharedSessionSteerMatch = pathname.match(/^\/api\/sessions\/([^/]+)\/steer$/);
+  if (sharedSessionSteerMatch && method === 'POST') return handlers.postSharedSessionSteer(sharedSessionSteerMatch[1], req);
+
+  const sharedSessionFollowUpMatch = pathname.match(/^\/api\/sessions\/([^/]+)\/follow-up$/);
+  if (sharedSessionFollowUpMatch && method === 'POST') return handlers.postSharedSessionFollowUp(sharedSessionFollowUpMatch[1], req);
+
+  const sharedSessionCancelInputMatch = pathname.match(/^\/api\/sessions\/([^/]+)\/inputs\/([^/]+)\/cancel$/);
+  if (sharedSessionCancelInputMatch && method === 'POST') {
+    return handlers.cancelSharedSessionInput(sharedSessionCancelInputMatch[1], sharedSessionCancelInputMatch[2]);
+  }
 
   return null;
 }

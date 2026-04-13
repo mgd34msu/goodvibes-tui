@@ -14,8 +14,40 @@ import {
   JSON_VALUE_SCHEMA,
   METADATA_SCHEMA,
   STRING_LIST_SCHEMA,
+  enumSchema,
+  nullableSchema,
   recordSchema,
 } from './operator-contract-schemas-shared.ts';
+
+export const KNOWLEDGE_INJECTION_TRUST_TIER_SCHEMA = enumSchema(['reviewed', 'fresh', 'stale']);
+export const KNOWLEDGE_INJECTION_USE_AS_SCHEMA = enumSchema(['reference-material']);
+export const KNOWLEDGE_INJECTION_RETENTION_SCHEMA = enumSchema(['task-only']);
+export const KNOWLEDGE_INJECTION_INGEST_MODE_SCHEMA = enumSchema(['keyword-ranked', 'semantic-ranked', 'hybrid-ranked']);
+export const KNOWLEDGE_INJECTION_PROVENANCE_SCHEMA = objectSchema({
+  source: enumSchema(['project-memory']),
+  links: arraySchema(objectSchema({
+    kind: STRING_SCHEMA,
+    ref: STRING_SCHEMA,
+    label: STRING_SCHEMA,
+  }, ['kind', 'ref'], { additionalProperties: false })),
+}, ['source', 'links'], { additionalProperties: false });
+export const KNOWLEDGE_INJECTION_SCHEMA = objectSchema({
+  id: STRING_SCHEMA,
+  cls: STRING_SCHEMA,
+  summary: STRING_SCHEMA,
+  reason: STRING_SCHEMA,
+  confidence: NUMBER_SCHEMA,
+  reviewState: STRING_SCHEMA,
+  trustTier: KNOWLEDGE_INJECTION_TRUST_TIER_SCHEMA,
+  useAs: KNOWLEDGE_INJECTION_USE_AS_SCHEMA,
+  retention: KNOWLEDGE_INJECTION_RETENTION_SCHEMA,
+  provenance: KNOWLEDGE_INJECTION_PROVENANCE_SCHEMA,
+  ingestMode: KNOWLEDGE_INJECTION_INGEST_MODE_SCHEMA,
+}, ['id', 'cls', 'summary', 'reason', 'confidence', 'reviewState', 'trustTier', 'useAs', 'retention', 'provenance', 'ingestMode'], { additionalProperties: false });
+export const KNOWLEDGE_INJECTION_PROMPT_SCHEMA = objectSchema({
+  injections: arraySchema(KNOWLEDGE_INJECTION_SCHEMA),
+  prompt: nullableSchema(STRING_SCHEMA),
+}, ['injections'], { additionalProperties: true });
 
 const KNOWLEDGE_SOURCE_SCHEMA = objectSchema({
   id: STRING_SCHEMA,

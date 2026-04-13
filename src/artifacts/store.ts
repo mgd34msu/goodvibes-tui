@@ -6,9 +6,11 @@ import { logger } from '../utils/logger.ts';
 import { classifyHostTrustTier, extractHostname } from '../tools/fetch/trust-tiers.ts';
 import type { ConfigKey } from '../config/schema.ts';
 import type {
+  ArtifactAcquisitionMode,
   ArtifactAttachment,
   ArtifactCreateInput,
   ArtifactDescriptor,
+  ArtifactFetchMode,
   ArtifactRecord,
   ArtifactReference,
 } from './types.ts';
@@ -35,6 +37,7 @@ export interface ArtifactStoreConfig {
 const DEFAULT_ARTIFACT_MAX_BYTES = 10 * 1024 * 1024;
 const DEFAULT_ARTIFACT_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
 const DEFAULT_MAX_RETENTION_MS = 90 * 24 * 60 * 60 * 1000;
+const REMOTE_FETCH_MODES = new Set<ArtifactFetchMode>(['public-only', 'allow-private-hosts']);
 
 function resolveArtifactRootDir(config: ArtifactStoreConfig): string {
   const controlPlaneDir = typeof config.configManager?.getControlPlaneConfigDir === 'function'
@@ -74,6 +77,67 @@ function filenameFromUrl(input: string): string | undefined {
   } catch {
     return undefined;
   }
+}
+
+function normalizeExistingRecord(record: ArtifactRecord): ArtifactRecord {
+  const sourceUri = typeof record.sourceUri === 'string' ? record.sourceUri : undefined;
+  const legacyFetchMode = typeof record.metadata?.fetchMode === 'string' ? record.metadata.fetchMode : undefined;
+  const acquisitionMode = typeof record.acquisitionMode === 'string'
+    ? record.acquisitionMode
+    : typeof sourceUri === 'string' && /^https?:\/\//i.test(sourceUri)
+      ? 'remote-fetch'
+      : 'unknown';
+  const fetchMode = typeof record.fetchMode === 'string'
+    ? record.fetchMode
+    : legacyFetchMode === 'allow-private-hosts' || legacyFetchMode === 'public-only'
+      ? legacyFetchMode
+      : acquisitionMode === 'remote-fetch'
+        ? 'unknown'
+        : 'not-applicable';
+  return {
+    ...record,
+    acquisitionMode,
+    fetchMode,
+  };
+}
+
+function resolveArtifactIntent(input: ArtifactCreateInput): {
+  acquisitionMode: ArtifactAcquisitionMode;
+  fetchMode: ArtifactFetchMode;
+  allowPrivateHosts: boolean;
+} {
+  const hasRemoteUri = typeof input.uri === 'string' && input.uri.trim().length > 0;
+  const hasLocalPath = typeof input.path === 'string' && input.path.trim().length > 0;
+  const derivedAcquisitionMode: ArtifactAcquisitionMode = hasRemoteUri
+    ? 'remote-fetch'
+    : hasLocalPath
+      ? 'local-path'
+      : 'inline-data';
+  const acquisitionMode = input.acquisitionMode ?? derivedAcquisitionMode;
+  if (acquisitionMode !== 'unknown' && acquisitionMode !== derivedAcquisitionMode) {
+    throw new Error(`Artifact acquisitionMode "${acquisitionMode}" does not match the provided artifact input.`);
+  }
+
+  const derivedFetchMode: ArtifactFetchMode = derivedAcquisitionMode === 'remote-fetch'
+    ? input.allowPrivateHosts === true ? 'allow-private-hosts' : 'public-only'
+    : 'not-applicable';
+  const fetchMode = input.fetchMode ?? derivedFetchMode;
+
+  if (acquisitionMode === 'remote-fetch') {
+    if (!REMOTE_FETCH_MODES.has(fetchMode)) {
+      throw new Error('Remote artifact fetches require fetchMode "public-only" or "allow-private-hosts".');
+    }
+  } else if (fetchMode !== 'not-applicable' && fetchMode !== 'unknown') {
+    throw new Error('Non-remote artifact inputs require fetchMode "not-applicable" or "unknown".');
+  }
+
+  const allowPrivateHosts = fetchMode === 'allow-private-hosts'
+    || (fetchMode === 'unknown' && input.allowPrivateHosts === true);
+  return {
+    acquisitionMode,
+    fetchMode,
+    allowPrivateHosts,
+  };
 }
 
 export class ArtifactStore {
@@ -133,7 +197,8 @@ export class ArtifactStore {
   }
 
   async create(input: ArtifactCreateInput): Promise<ArtifactDescriptor> {
-    const resolved = await this.resolveInput(input);
+    const intent = resolveArtifactIntent(input);
+    const resolved = await this.resolveInput(input, intent);
     if (resolved.buffer.length > this.maxBytes) {
       throw new Error(`Artifact exceeds the ${this.maxBytes}-byte limit.`);
     }
@@ -158,6 +223,8 @@ export class ArtifactStore {
       createdAt: Date.now(),
       ...(retentionMs ? { expiresAt: Date.now() + retentionMs } : {}),
       ...(resolved.sourceUri ? { sourceUri: resolved.sourceUri } : {}),
+      acquisitionMode: intent.acquisitionMode,
+      fetchMode: intent.fetchMode,
       metadata: input.metadata ?? {},
       contentPath,
       metadataPath,
@@ -191,6 +258,8 @@ export class ArtifactStore {
       sizeBytes: record.sizeBytes,
       sha256: record.sha256,
       createdAt: record.createdAt,
+      acquisitionMode: record.acquisitionMode,
+      fetchMode: record.fetchMode,
       contentPath: relativeContentPath,
       ...(options.contentUrl ? { contentUrl: options.contentUrl } : {}),
     };
@@ -218,6 +287,8 @@ export class ArtifactStore {
       createdAt: record.createdAt,
       ...(typeof record.expiresAt === 'number' ? { expiresAt: record.expiresAt } : {}),
       ...(typeof record.sourceUri === 'string' ? { sourceUri: record.sourceUri } : {}),
+      acquisitionMode: record.acquisitionMode,
+      fetchMode: record.fetchMode,
       metadata: record.metadata,
     };
   }
@@ -228,7 +299,7 @@ export class ArtifactStore {
       if (!entry.endsWith('.json')) continue;
       const metadataPath = join(this.rootDir, entry);
       try {
-        const parsed = JSON.parse(readFileSync(metadataPath, 'utf-8')) as ArtifactRecord;
+        const parsed = normalizeExistingRecord(JSON.parse(readFileSync(metadataPath, 'utf-8')) as ArtifactRecord);
         if (!parsed?.id || typeof parsed.contentPath !== 'string' || !existsSync(parsed.contentPath)) continue;
         if (typeof parsed.expiresAt === 'number' && parsed.expiresAt <= Date.now()) {
           this.removeRecordFiles(parsed);
@@ -265,7 +336,14 @@ export class ArtifactStore {
     }
   }
 
-  private async resolveInput(input: ArtifactCreateInput): Promise<{
+  private async resolveInput(
+    input: ArtifactCreateInput,
+    intent: {
+      acquisitionMode: ArtifactAcquisitionMode;
+      fetchMode: ArtifactFetchMode;
+      allowPrivateHosts: boolean;
+    },
+  ): Promise<{
     buffer: Buffer;
     mimeType: string;
     filename: string;
@@ -311,7 +389,7 @@ export class ArtifactStore {
       };
     }
     if (typeof input.uri === 'string' && input.uri.trim().length > 0) {
-      return this.resolveRemoteInput(input.uri.trim(), input.mimeType, input.filename, Boolean(input.allowPrivateHosts));
+      return this.resolveRemoteInput(input.uri.trim(), input.mimeType, input.filename, intent.fetchMode, intent.allowPrivateHosts);
     }
     throw new Error('Artifact input requires dataBase64, text, path, or uri');
   }
@@ -320,6 +398,7 @@ export class ArtifactStore {
     uri: string,
     mimeTypeOverride?: string,
     filenameOverride?: string,
+    fetchMode: ArtifactFetchMode = 'public-only',
     allowPrivateHosts = false,
   ): Promise<{
     buffer: Buffer;
@@ -337,7 +416,7 @@ export class ArtifactStore {
       if (allowPrivateHosts && !this.allowPrivateHostFetches) {
         throw new Error('Private-host remote artifact fetches are disabled by config.');
       }
-      this.assertRemoteHostAllowed(current, allowPrivateHosts);
+      this.assertRemoteHostAllowed(current, fetchMode);
       const response = await fetch(current, {
         method: 'GET',
         redirect: 'manual',
@@ -387,7 +466,7 @@ export class ArtifactStore {
     }
   }
 
-  private assertRemoteHostAllowed(uri: string, allowPrivateHosts = false): void {
+  private assertRemoteHostAllowed(uri: string, fetchMode: ArtifactFetchMode): void {
     const hostname = extractHostname(uri);
     if (!hostname) {
       throw new Error(`Could not resolve artifact URI host: ${uri}`);
@@ -396,6 +475,7 @@ export class ArtifactStore {
       trustedHosts: [...this.trustedHosts],
       blockedHosts: [...this.blockedHosts],
     });
+    const allowPrivateHosts = fetchMode === 'allow-private-hosts';
     if (result.tier === 'blocked' && (!allowPrivateHosts || !result.isSsrf)) {
       throw new Error(`Artifact URI blocked by SSRF policy: ${result.reason}`);
     }

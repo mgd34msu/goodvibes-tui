@@ -25,21 +25,32 @@ function makeRecord(overrides: Partial<AgentRecord> = {}): AgentRecord {
 
 describe('next cycle certification gate', () => {
   test('knowledge prompt includes reviewed project knowledge with an explainable source trail', () => {
+    const knowledgeInjections: Parameters<typeof buildKnowledgeInjectionPrompt>[0] = [{
+      id: 'mem-gate-1',
+      cls: 'runbook',
+      summary: 'Use targeted runtime edits for orchestration store changes',
+      reason: 'matched write scope "src/runtime/store"',
+      confidence: 95,
+      reviewState: 'reviewed',
+      trustTier: 'reviewed',
+      useAs: 'reference-material',
+      retention: 'task-only',
+      provenance: {
+        source: 'project-memory',
+        links: [{ kind: 'file', ref: 'src/runtime/store' }],
+      },
+      ingestMode: 'keyword-ranked',
+    }];
     const record = makeRecord({
-      knowledgeInjections: [{
-        id: 'mem-gate-1',
-        cls: 'runbook',
-        summary: 'Use targeted runtime edits for orchestration store changes',
-        reason: 'matched write scope "src/runtime/store"',
-        confidence: 95,
-        reviewState: 'reviewed',
-      }],
+      knowledgeInjections: knowledgeInjections as unknown as AgentRecord['knowledgeInjections'],
     });
-    const knowledgePrompt = buildKnowledgeInjectionPrompt(record.knowledgeInjections ?? []);
+    const knowledgePrompt = buildKnowledgeInjectionPrompt(knowledgeInjections);
 
     expect(knowledgePrompt).toContain('Injected Project Knowledge');
-    expect(record.knowledgeInjections?.[0]?.summary).toContain('orchestration store');
-    expect(record.knowledgeInjections?.[0]?.reason).toContain('matched');
+    expect(knowledgePrompt).toContain('trust reviewed');
+    expect(knowledgePrompt).toContain('retention task-only');
+    expect(knowledgeInjections[0]?.summary).toContain('orchestration store');
+    expect(knowledgeInjections[0]?.reason).toContain('matched');
   });
 
   test('remote operator control uses a scoped command path and cancels the target agent only', () => {

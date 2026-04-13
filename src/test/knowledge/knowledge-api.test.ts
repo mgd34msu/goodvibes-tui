@@ -9,7 +9,9 @@ describe('KnowledgeApi', () => {
 
   test('groups status, connector, and query surfaces over the knowledge runtime', async () => {
     const runtimeServices = getTestRuntimeServices();
-    const api = createKnowledgeApi(runtimeServices.knowledgeService);
+    const api = createKnowledgeApi(runtimeServices.knowledgeService, {
+      memoryRegistry: runtimeServices.memoryRegistry,
+    });
 
     const status = await api.status.get();
     expect(status).toMatchObject({
@@ -30,6 +32,26 @@ describe('KnowledgeApi', () => {
       total: expect.any(Number),
       items: expect.any(Array),
     });
+
+    await runtimeServices.memoryRegistry.getStore().init();
+    await runtimeServices.memoryRegistry.add({
+      cls: 'runbook',
+      summary: 'Keep knowledge intent semantics explicit for foundation consumers.',
+      tags: ['knowledge', 'foundation'],
+      provenance: [{ kind: 'file', ref: 'src/knowledge/knowledge-api.ts' }],
+      review: { state: 'reviewed', confidence: 93 },
+    });
+    const explain = api.memory?.explain('update knowledge api', ['src/knowledge']);
+    expect(explain?.injections[0]).toMatchObject({
+      trustTier: 'reviewed',
+      useAs: 'reference-material',
+      retention: 'task-only',
+      provenance: {
+        source: 'project-memory',
+        links: [{ kind: 'file', ref: 'src/knowledge/knowledge-api.ts' }],
+      },
+    });
+    expect(explain?.prompt).toContain('Explicit semantics');
   });
 
   test('surfaces ingest, packets, projections, jobs, and consolidation through grouped domains', async () => {
@@ -44,8 +66,15 @@ describe('KnowledgeApi', () => {
       artifactId: artifact.id,
       title: 'Knowledge API Artifact',
       tags: ['sdk-ready'],
+      fetchMode: 'public-only',
     });
     expect(ingest.source.id).toBeTruthy();
+    expect(ingest.source.metadata).toMatchObject({
+      knowledgeIntent: {
+        ingestMode: 'artifact',
+        remoteFetchMode: 'public-only',
+      },
+    });
 
     const packet = await api.packets.build('knowledge api artifact', [], 5, { budgetLimit: 2_000 });
     expect(packet.items.length).toBeGreaterThan(0);

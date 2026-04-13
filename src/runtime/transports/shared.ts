@@ -42,6 +42,7 @@ export type DomainEventConnector = (
 ) => void | Promise<() => void>;
 
 const REMOTE_UI_DOMAINS: Record<keyof UiRuntimeEvents, RuntimeEventDomain> = {
+  sessions: 'session',
   turns: 'turn',
   tools: 'tools',
   providers: 'providers',
@@ -262,6 +263,7 @@ export function createRemoteUiRuntimeEvents(connect: DomainEventConnector): UiRu
   }
 
   return {
+    sessions: createFeed(REMOTE_UI_DOMAINS.sessions),
     turns: createFeed(REMOTE_UI_DOMAINS.turns),
     tools: createFeed(REMOTE_UI_DOMAINS.tools),
     providers: createFeed(REMOTE_UI_DOMAINS.providers),

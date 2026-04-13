@@ -140,6 +140,9 @@ export function createDaemonSystemRouteHandlers(
         surfaceKind: surfaceKind as import('../../automation/types.ts').AutomationSurfaceKind,
         surfaceId,
         externalId,
+        sessionPolicy: typeof body.sessionPolicy === 'string' ? body.sessionPolicy as import('../../automation/types.ts').AutomationSessionPolicy : undefined,
+        threadPolicy: typeof body.threadPolicy === 'string' ? body.threadPolicy as import('../../automation/types.ts').AutomationThreadPolicy : undefined,
+        deliveryGuarantee: typeof body.deliveryGuarantee === 'string' ? body.deliveryGuarantee as import('../../automation/types.ts').AutomationDeliveryGuarantee : undefined,
         threadId: typeof body.threadId === 'string' ? body.threadId : undefined,
         channelId: typeof body.channelId === 'string' ? body.channelId : undefined,
         sessionId: typeof body.sessionId === 'string' ? body.sessionId : undefined,
@@ -156,6 +159,9 @@ export function createDaemonSystemRouteHandlers(
       const body = await context.parseJsonBody(req);
       if (body instanceof Response) return body;
       const updated = await context.routeBindings.patchBinding(bindingId, {
+        ...(body.sessionPolicy !== undefined ? { sessionPolicy: typeof body.sessionPolicy === 'string' ? body.sessionPolicy as import('../../automation/types.ts').AutomationSessionPolicy : undefined } : {}),
+        ...(body.threadPolicy !== undefined ? { threadPolicy: typeof body.threadPolicy === 'string' ? body.threadPolicy as import('../../automation/types.ts').AutomationThreadPolicy : undefined } : {}),
+        ...(body.deliveryGuarantee !== undefined ? { deliveryGuarantee: typeof body.deliveryGuarantee === 'string' ? body.deliveryGuarantee as import('../../automation/types.ts').AutomationDeliveryGuarantee : undefined } : {}),
         ...(body.threadId !== undefined ? { threadId: typeof body.threadId === 'string' ? body.threadId : undefined } : {}),
         ...(body.channelId !== undefined ? { channelId: typeof body.channelId === 'string' ? body.channelId : undefined } : {}),
         ...(body.sessionId !== undefined ? { sessionId: body.sessionId === null ? null : typeof body.sessionId === 'string' ? body.sessionId : undefined } : {}),

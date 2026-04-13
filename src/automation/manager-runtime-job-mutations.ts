@@ -8,6 +8,7 @@ import {
   buildDefaultFailurePolicy,
   buildDefaultSource,
   computeNextRun,
+  normalizeProviderRoutingPolicy,
   normalizeOptionalString,
   normalizeStringList,
 } from './manager-runtime-helpers.ts';
@@ -107,6 +108,11 @@ export async function updateAutomationJobRecord(
     : undefined;
   const thinkingPatch = normalizeOptionalString(patch.thinking);
   const nextSchedule = patch.schedule ?? job.schedule;
+  const nextModelProvider = patch.provider ?? job.execution.modelProvider;
+  const nextFallbackModels = fallbackModelsPatch
+    ?? normalizeStringList(patch.routing?.fallbackModels)
+    ?? job.execution.fallbackModels
+    ?? job.execution.routing?.fallbackModels;
   const updated: AutomationJob = {
     ...job,
     name: patch.name ?? job.name,
@@ -120,8 +126,13 @@ export async function updateAutomationJobRecord(
       template: patch.template ?? job.execution.template,
       target: patch.target ?? job.execution.target,
       modelId: patch.model ?? job.execution.modelId,
-      modelProvider: patch.provider ?? job.execution.modelProvider,
-      fallbackModels: fallbackModelsPatch ?? job.execution.fallbackModels,
+      modelProvider: nextModelProvider,
+      fallbackModels: nextFallbackModels,
+      routing: normalizeProviderRoutingPolicy({
+        modelProvider: nextModelProvider,
+        fallbackModels: nextFallbackModels,
+        routing: patch.routing ?? job.execution.routing,
+      }),
       reasoningEffort: patch.reasoningEffort ?? job.execution.reasoningEffort,
       thinking: thinkingPatch ?? job.execution.thinking,
       wakeMode: patch.wakeMode ?? job.execution.wakeMode,

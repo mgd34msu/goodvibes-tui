@@ -1,4 +1,5 @@
 import type { ToolDefinition } from '../../types/tools.ts';
+import type { ExecutionIntent } from '../../runtime/execution-intents.ts';
 
 /**
  * JSON Schema for the agent tool's input.
@@ -58,6 +59,32 @@ export const AGENT_TOOL_SCHEMA: ToolDefinition = {
         type: 'array',
         items: { type: 'string' },
         description: 'Ordered fallback model IDs or registry keys to try if the primary model fails (mode: spawn).',
+      },
+      executionIntent: {
+        type: 'object',
+        properties: {
+          riskClass: {
+            type: 'string',
+            enum: ['safe', 'elevated', 'dangerous'],
+            description: 'Execution risk classification hint for downstream policy/evaluation surfaces.',
+          },
+          requiresApproval: {
+            type: 'boolean',
+            description: 'Whether the spawned agent should be treated as requiring approval-sensitive execution.',
+          },
+          networkPolicy: {
+            type: 'string',
+            enum: ['inherit', 'allow', 'deny', 'scoped'],
+            description: 'Requested network posture for downstream execution surfaces.',
+          },
+          filesystemPolicy: {
+            type: 'string',
+            enum: ['inherit', 'workspace-write', 'read-only', 'isolated'],
+            description: 'Requested filesystem posture for downstream execution surfaces.',
+          },
+        },
+        additionalProperties: false,
+        description: 'Explicit execution-intent hints for policy-aware runtimes (mode: spawn).',
       },
       reasoningEffort: {
         type: 'string',
@@ -146,6 +173,17 @@ export const AGENT_TOOL_SCHEMA: ToolDefinition = {
             model: { type: 'string', description: 'Model override.' },
             provider: { type: 'string', description: 'Provider override.' },
             fallbackModels: { type: 'array', items: { type: 'string' }, description: 'Ordered fallback model IDs or registry keys.' },
+            executionIntent: {
+              type: 'object',
+              properties: {
+                riskClass: { type: 'string', enum: ['safe', 'elevated', 'dangerous'], description: 'Execution risk classification hint.' },
+                requiresApproval: { type: 'boolean', description: 'Whether approval-sensitive execution is required.' },
+                networkPolicy: { type: 'string', enum: ['inherit', 'allow', 'deny', 'scoped'], description: 'Requested network posture.' },
+                filesystemPolicy: { type: 'string', enum: ['inherit', 'workspace-write', 'read-only', 'isolated'], description: 'Requested filesystem posture.' },
+              },
+              additionalProperties: false,
+              description: 'Explicit execution-intent hints for downstream runtimes.',
+            },
             reasoningEffort: { type: 'string', enum: ['instant', 'low', 'medium', 'high'], description: 'Reasoning effort override.' },
             tools: { type: 'array', items: { type: 'string' }, description: 'Tool subset.' },
             restrictTools: { type: 'boolean', description: 'If true, use ONLY the specified tools (override mode). Default: false.' },
@@ -204,6 +242,13 @@ export const AGENT_TOOL_SCHEMA: ToolDefinition = {
   },
 };
 
+export interface AgentProviderRoutingPolicy {
+  providerSelection?: 'inherit-current' | 'concrete' | 'synthetic';
+  unresolvedModelPolicy?: 'fallback-to-current' | 'fail';
+  providerFailurePolicy?: 'ordered-fallbacks' | 'fail';
+  fallbackModels?: readonly string[];
+}
+
 /** Input shape for the agent tool. */
 export interface AgentInput {
   mode: 'spawn' | 'batch-spawn' | 'status' | 'cancel' | 'list' | 'templates' | 'get' | 'budget' | 'plan' | 'wait' | 'message' | 'wrfc-chains' | 'wrfc-history' | 'cohort-status' | 'cohort-report';
@@ -213,6 +258,8 @@ export interface AgentInput {
   model?: string;
   provider?: string;
   fallbackModels?: string[];
+  routing?: AgentProviderRoutingPolicy;
+  executionIntent?: ExecutionIntent;
   reasoningEffort?: 'instant' | 'low' | 'medium' | 'high';
   tools?: string[];
   restrictTools?: boolean;
@@ -237,6 +284,8 @@ export interface AgentInput {
     model?: string;
     provider?: string;
     fallbackModels?: string[];
+    routing?: AgentProviderRoutingPolicy;
+    executionIntent?: ExecutionIntent;
     reasoningEffort?: 'instant' | 'low' | 'medium' | 'high';
     tools?: string[];
     restrictTools?: boolean;

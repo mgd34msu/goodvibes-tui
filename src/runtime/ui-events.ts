@@ -6,6 +6,7 @@ import type {
   ProviderEvent,
   RuntimeEventBus,
   RuntimeEventEnvelope,
+  SessionEvent,
   ToolEvent,
   TurnEvent,
   WorkflowEvent,
@@ -33,6 +34,7 @@ export interface UiEventFeed<TEvent extends AnyRuntimeEvent> {
 }
 
 export interface UiRuntimeEvents {
+  readonly sessions: UiEventFeed<SessionEvent>;
   readonly turns: UiEventFeed<TurnEvent>;
   readonly tools: UiEventFeed<ToolEvent>;
   readonly providers: UiEventFeed<ProviderEvent>;
@@ -65,6 +67,7 @@ function createUiEventFeed<TEvent extends AnyRuntimeEvent>(runtimeBus: RuntimeEv
 
 export function createUiRuntimeEvents(runtimeBus: RuntimeEventBus): UiRuntimeEvents {
   return {
+    sessions: createUiEventFeed<SessionEvent>(runtimeBus),
     turns: createUiEventFeed<TurnEvent>(runtimeBus),
     tools: createUiEventFeed<ToolEvent>(runtimeBus),
     providers: createUiEventFeed<ProviderEvent>(runtimeBus),

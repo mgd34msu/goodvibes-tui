@@ -250,6 +250,25 @@ export class DaemonServer {
       signWebhookPayload: (body, secret) => this.surfaceDeliveryHelper.signWebhookPayload(body, secret),
       handleApprovalAction: (approvalId, action, req) => this.handleApprovalAction(approvalId, action, req),
     });
+    this.sessionBroker.setContinuationRunner(async ({ sessionId, input, task, routeBinding }) => {
+      const spawned = this.trySpawnAgent({
+        mode: 'spawn',
+        task,
+        ...(input.routing?.modelId ? { model: input.routing.modelId } : {}),
+        ...(input.routing?.providerId ? { provider: input.routing.providerId } : {}),
+        ...(input.routing?.tools?.length ? { tools: [...input.routing.tools] } : {}),
+        context: `shared-session:${sessionId}`,
+      }, 'DaemonServer.sharedSessionFollowUp', sessionId);
+      if (spawned instanceof Response) {
+        return null;
+      }
+      this.surfaceDeliveryHelper.queueSurfaceReplyFromBinding(routeBinding, {
+        agentId: spawned.id,
+        task: input.body,
+        sessionId,
+      });
+      return { agentId: spawned.id };
+    });
     this.transportEventsHelper = new DaemonTransportEventsHelper({
       runtimeBus: this.runtimeBus,
       hookDispatcher: this.runtimeServices.hookDispatcher,
@@ -683,7 +702,6 @@ export class DaemonServer {
   ): Response {
     return this.httpRouter.recordApiResponse(req, path, response, clientKind);
   }
-
   private async handleApprovalAction(
     approvalId: string,
     action: 'claim' | 'approve' | 'deny' | 'cancel',
@@ -716,12 +734,7 @@ export class DaemonServer {
       ? this.recordApiResponse(req, `/api/approvals/${approvalId}/${action}`, Response.json({ approval }))
       : this.recordApiResponse(req, `/api/approvals/${approvalId}/${action}`, Response.json({ error: 'Unknown approval' }, { status: 404 }));
   }
-
-  private trySpawnAgent(
-    input: Parameters<AgentManager['spawn']>[0],
-    logLabel = 'DaemonServer',
-    sessionId?: string,
-  ): AgentRecord | Response {
+  private trySpawnAgent(input: Parameters<AgentManager['spawn']>[0], logLabel = 'DaemonServer', sessionId?: string): AgentRecord | Response {
     try {
       const spawnInput = Array.isArray((input as { tools?: readonly string[] }).tools)
         ? {
@@ -738,7 +751,6 @@ export class DaemonServer {
       return Response.json({ error: `Failed to spawn agent: ${message}` }, { status: 500 });
     }
   }
-
   private syncSpawnedAgentTask(record: AgentRecord, sessionId?: string): void {
     this.runtimeDispatch?.syncRuntimeTask({
       id: record.id,
@@ -754,7 +766,6 @@ export class DaemonServer {
       correlationId: sessionId,
     }, 'daemon.server.agent-spawn');
   }
-
   private syncFinishedAgentTask(record: AgentRecord): void {
     const status = record.status === 'completed'
       ? 'completed'
@@ -767,21 +778,15 @@ export class DaemonServer {
       error: record.error,
     }, 'daemon.server.agent-finish');
   }
-
-  private surfaceDeliveryEnabled(
-    surface: 'slack' | 'discord' | 'ntfy' | 'webhook' | 'telegram' | 'google-chat' | 'signal' | 'whatsapp' | 'imessage' | 'msteams' | 'bluebubbles' | 'mattermost' | 'matrix',
-  ): boolean {
+  private surfaceDeliveryEnabled(surface: 'slack' | 'discord' | 'ntfy' | 'webhook' | 'telegram' | 'google-chat' | 'signal' | 'whatsapp' | 'imessage' | 'msteams' | 'bluebubbles' | 'mattermost' | 'matrix'): boolean {
     return isSurfaceDeliveryEnabled(this.configManager, surface);
   }
-
   private async pollPendingSurfaceReplies(): Promise<void> {
     await this.surfaceDeliveryHelper.pollPendingSurfaceReplies((record) => this.syncFinishedAgentTask(record));
   }
-
   private trustProxyEnabled(): boolean {
     return this.tlsState?.trustProxy ?? Boolean(this.configManager.get('controlPlane.trustProxy'));
   }
-
   private signWebhookPayload(body: string, secret: string): string {
     return this.surfaceDeliveryHelper.signWebhookPayload(body, secret);
   }

@@ -30,8 +30,55 @@ interface DaemonRuntimeRouteContext {
       title?: string;
       body: string;
       metadata?: Record<string, unknown>;
+      routing?: import('../../control-plane/index.ts').SharedSessionRoutingIntent;
     }): Promise<{
-      mode: 'continued-live' | 'spawn' | 'spawn-new';
+      mode: 'continued-live' | 'spawn' | 'queued-follow-up' | 'rejected';
+      input: { id: string; routing?: import('../../control-plane/index.ts').SharedSessionRoutingIntent };
+      session: { id: string; status: string };
+      routeBinding?: import('../../automation/routes.ts').AutomationRouteBinding;
+      task?: string;
+      activeAgentId?: string | null;
+      userMessage?: unknown;
+    }>;
+    steerMessage(input: {
+      sessionId?: string;
+      routeId?: string;
+      surfaceKind: import('../../automation/types.ts').AutomationSurfaceKind;
+      surfaceId: string;
+      externalId?: string;
+      threadId?: string;
+      userId?: string;
+      displayName?: string;
+      title?: string;
+      body: string;
+      metadata?: Record<string, unknown>;
+      routing?: import('../../control-plane/index.ts').SharedSessionRoutingIntent;
+      allowSpawnFallback?: boolean;
+    }): Promise<{
+      mode: 'continued-live' | 'spawn' | 'queued-follow-up' | 'rejected';
+      input: { id: string; state: string; routing?: import('../../control-plane/index.ts').SharedSessionRoutingIntent };
+      session: { id: string; status: string };
+      routeBinding?: import('../../automation/routes.ts').AutomationRouteBinding;
+      task?: string;
+      activeAgentId?: string | null;
+      userMessage?: unknown;
+    }>;
+    followUpMessage(input: {
+      sessionId?: string;
+      routeId?: string;
+      surfaceKind: import('../../automation/types.ts').AutomationSurfaceKind;
+      surfaceId: string;
+      externalId?: string;
+      threadId?: string;
+      userId?: string;
+      displayName?: string;
+      title?: string;
+      body: string;
+      metadata?: Record<string, unknown>;
+      routing?: import('../../control-plane/index.ts').SharedSessionRoutingIntent;
+    }): Promise<{
+      mode: 'continued-live' | 'spawn' | 'queued-follow-up' | 'rejected';
+      input: { id: string; state: string; routing?: import('../../control-plane/index.ts').SharedSessionRoutingIntent };
       session: { id: string; status: string };
       routeBinding?: import('../../automation/routes.ts').AutomationRouteBinding;
       task?: string;
@@ -56,8 +103,10 @@ interface DaemonRuntimeRouteContext {
     }): Promise<{ id: string }>;
     getSession(sessionId: string): { id: string; status: string; messageCount: number; activeAgentId?: string } | null;
     getMessages(sessionId: string, limit: number): unknown[];
+    getInputs(sessionId: string, limit: number): unknown[];
     closeSession(sessionId: string): Promise<{ id: string } | null>;
     reopenSession(sessionId: string): Promise<{ id: string } | null>;
+    cancelInput(sessionId: string, inputId: string): Promise<unknown | null>;
     completeAgent(sessionId: string, agentId: string, message: string, meta: { status: string; routeId?: string }): Promise<void>;
   };
   readonly agentManager: {
@@ -81,7 +130,7 @@ interface DaemonRuntimeRouteContext {
     start(): Promise<void>;
     getBinding(id: string): import('../../automation/routes.ts').AutomationRouteBinding | undefined;
   };
-  readonly trySpawnAgent: (input: { mode: 'spawn'; task: string; model?: string; tools?: string[] | readonly string[]; provider?: string; context?: string }, logLabel: string, sessionId?: string) => import('../../tools/agent/index.ts').AgentRecord | Response;
+  readonly trySpawnAgent: (input: { mode: 'spawn'; task: string; model?: string; tools?: string[] | readonly string[]; provider?: string; context?: string; executionIntent?: import('../../runtime/execution-intents.ts').ExecutionIntent }, logLabel: string, sessionId?: string) => import('../../tools/agent/index.ts').AgentRecord | Response;
   readonly queueSurfaceReplyFromBinding: (binding: import('../../automation/routes.ts').AutomationRouteBinding | undefined, input: { readonly agentId: string; readonly task: string; readonly sessionId?: string; }) => void;
   readonly surfaceDeliveryEnabled: (surface: 'slack' | 'discord' | 'ntfy' | 'webhook' | 'telegram' | 'google-chat' | 'signal' | 'whatsapp' | 'imessage' | 'msteams' | 'bluebubbles' | 'mattermost' | 'matrix') => boolean;
   readonly syncSpawnedAgentTask: (record: import('../../tools/agent/index.ts').AgentRecord, sessionId?: string) => void;
@@ -114,7 +163,11 @@ export function createDaemonRuntimeRouteHandlers(
   | 'closeSharedSession'
   | 'reopenSharedSession'
   | 'getSharedSessionMessages'
+  | 'getSharedSessionInputs'
   | 'postSharedSessionMessage'
+  | 'postSharedSessionSteer'
+  | 'postSharedSessionFollowUp'
+  | 'cancelSharedSessionInput'
   | 'getRuntimeTask'
   | 'runtimeTaskAction'
   | 'getTaskStatus'
@@ -142,7 +195,11 @@ export function createDaemonRuntimeRouteHandlers(
     closeSharedSession: (sessionId) => handleSharedSessionLifecycle(context, sessionId, 'close'),
     reopenSharedSession: (sessionId) => handleSharedSessionLifecycle(context, sessionId, 'reopen'),
     getSharedSessionMessages: async (sessionId, url) => handleGetSharedSessionMessages(context, sessionId, url),
+    getSharedSessionInputs: async (sessionId, url) => handleGetSharedSessionInputs(context, sessionId, url),
     postSharedSessionMessage: (sessionId, request) => handlePostSharedSessionMessage(context, sessionId, request),
+    postSharedSessionSteer: (sessionId, request) => handlePostSharedSessionSteer(context, sessionId, request),
+    postSharedSessionFollowUp: (sessionId, request) => handlePostSharedSessionFollowUp(context, sessionId, request),
+    cancelSharedSessionInput: (sessionId, inputId) => handleCancelSharedSessionInput(context, sessionId, inputId),
     getRuntimeTask: (taskId) => handleGetRuntimeTask(context, taskId),
     runtimeTaskAction: (taskId, action, request) => handleRuntimeTaskAction(context, taskId, action, request),
     getTaskStatus: (agentId) => handleGetTaskStatus(context, agentId),
@@ -205,6 +262,7 @@ async function handlePostTask(context: DaemonRuntimeRouteContext, req: Request):
       title: typeof body.title === 'string' ? body.title : undefined,
       body: task.trim(),
       metadata: typeof body.metadata === 'object' && body.metadata !== null ? body.metadata as Record<string, unknown> : {},
+      ...(typeof body.routing === 'object' && body.routing !== null ? { routing: body.routing as import('../../control-plane/index.ts').SharedSessionRoutingIntent } : {}),
     });
 
     if (submission.mode === 'continued-live') {
@@ -213,14 +271,34 @@ async function handlePostTask(context: DaemonRuntimeRouteContext, req: Request):
         mode: submission.mode,
         sessionId: submission.session.id,
         agentId: submission.activeAgentId ?? null,
+        inputId: submission.input.id,
       }, { status: 202 }));
+    }
+    if (submission.mode === 'queued-follow-up') {
+      return context.recordApiResponse(req, '/task', Response.json({
+        acknowledged: true,
+        mode: submission.mode,
+        sessionId: submission.session.id,
+        agentId: submission.activeAgentId ?? null,
+        inputId: submission.input.id,
+      }, { status: 202 }));
+    }
+    if (submission.mode === 'rejected') {
+      return context.recordApiResponse(req, '/task', Response.json({
+        acknowledged: false,
+        mode: submission.mode,
+        sessionId: submission.session.id,
+        inputId: submission.input.id,
+      }, { status: 409 }));
     }
 
     const sessionSpawn = context.trySpawnAgent({
       mode: 'spawn',
       task: submission.task!,
-      ...(model !== undefined && { model }),
-      ...(tools !== undefined && { tools }),
+      ...(model !== undefined || submission.input.routing?.modelId ? { model: model ?? submission.input.routing?.modelId } : {}),
+      ...(tools !== undefined || submission.input.routing?.tools ? { tools: tools ?? [...(submission.input.routing?.tools ?? [])] } : {}),
+      ...(submission.input.routing?.providerId ? { provider: submission.input.routing.providerId } : {}),
+      ...(submission.input.routing?.executionIntent ? { executionIntent: submission.input.routing.executionIntent } : {}),
     }, 'DaemonServer.handlePostTask.sharedSession', submission.session.id);
     if (sessionSpawn instanceof Response) return sessionSpawn;
     await context.sessionBroker.bindAgent(submission.session.id, sessionSpawn.id);
@@ -243,6 +321,16 @@ async function handlePostTask(context: DaemonRuntimeRouteContext, req: Request):
     task,
     ...(model !== undefined && { model }),
     ...(tools !== undefined && { tools }),
+    ...(typeof body.routing === 'object'
+      && body.routing !== null
+      && typeof (body.routing as { executionIntent?: unknown }).executionIntent === 'object'
+      && (body.routing as { executionIntent?: unknown }).executionIntent !== null
+      ? {
+          executionIntent: (body.routing as {
+            executionIntent: import('../../runtime/execution-intents.ts').ExecutionIntent;
+          }).executionIntent,
+        }
+      : {}),
   }, 'DaemonServer', typeof body.sessionId === 'string' ? body.sessionId : undefined);
   if (spawnResult instanceof Response) return spawnResult;
   const record = spawnResult;
@@ -291,6 +379,19 @@ async function handleGetSharedSessionMessages(context: DaemonRuntimeRouteContext
   });
 }
 
+async function handleGetSharedSessionInputs(context: DaemonRuntimeRouteContext, sessionId: string, url: URL): Promise<Response> {
+  await context.sessionBroker.start();
+  const session = context.sessionBroker.getSession(sessionId);
+  if (!session) {
+    return Response.json({ error: 'Unknown shared session' }, { status: 404 });
+  }
+  const limit = Number(url.searchParams.get('limit') ?? 100);
+  return Response.json({
+    session,
+    inputs: context.sessionBroker.getInputs(sessionId, limit),
+  });
+}
+
 async function handlePostSharedSessionMessage(context: DaemonRuntimeRouteContext, sessionId: string, req: Request): Promise<Response> {
   const body = await context.parseJsonBody(req);
   if (body instanceof Response) return body;
@@ -304,47 +405,49 @@ async function handlePostSharedSessionMessage(context: DaemonRuntimeRouteContext
   if (!message) {
     return Response.json({ error: 'Missing shared session message body' }, { status: 400 });
   }
-  const submission = await context.sessionBroker.submitMessage({
-    sessionId,
-    surfaceKind: typeof body.surfaceKind === 'string' ? body.surfaceKind as import('../../automation/types.ts').AutomationSurfaceKind : 'web',
-    surfaceId: typeof body.surfaceId === 'string' ? body.surfaceId : 'surface:web',
-    externalId: typeof body.externalId === 'string' ? body.externalId : undefined,
-    threadId: typeof body.threadId === 'string' ? body.threadId : undefined,
-    userId: typeof body.userId === 'string' ? body.userId : undefined,
-    displayName: typeof body.displayName === 'string' ? body.displayName : undefined,
-    title: typeof body.title === 'string' ? body.title : undefined,
-    routeId: typeof body.routeId === 'string' ? body.routeId : undefined,
-    body: message,
-    metadata: typeof body.metadata === 'object' && body.metadata !== null ? body.metadata as Record<string, unknown> : {},
-  });
+  const submission = await context.sessionBroker.submitMessage(buildSharedSessionMessageInput(sessionId, body, message));
 
-  if (submission.mode === 'continued-live') {
-    return context.recordApiResponse(req, `/api/sessions/${sessionId}/messages`, Response.json({
-      session: submission.session,
-      message: submission.userMessage,
-      mode: submission.mode,
-      agentId: submission.activeAgentId ?? null,
-    }, { status: 202 }));
-  }
-
-  const spawnResult = context.trySpawnAgent({
-    mode: 'spawn',
-    task: submission.task!,
+  return await respondToSessionSubmission(context, req, submission, message, `/api/sessions/${sessionId}/messages`, 'DaemonServer.handlePostSharedSessionMessage', {
     context: `shared-session:${submission.session.id}`,
-  }, 'DaemonServer.handlePostSharedSessionMessage');
-  if (spawnResult instanceof Response) return spawnResult;
-  await context.sessionBroker.bindAgent(submission.session.id, spawnResult.id);
-  context.queueSurfaceReplyFromBinding(submission.routeBinding, {
-    agentId: spawnResult.id,
-    task: message,
-    sessionId: submission.session.id,
   });
-  return context.recordApiResponse(req, `/api/sessions/${sessionId}/messages`, Response.json({
-    session: context.sessionBroker.getSession(submission.session.id),
-    message: submission.userMessage,
-    mode: submission.mode,
-    agentId: spawnResult.id,
-  }, { status: 202 }));
+}
+
+async function handlePostSharedSessionSteer(context: DaemonRuntimeRouteContext, sessionId: string, req: Request): Promise<Response> {
+  const body = await context.parseJsonBody(req);
+  if (body instanceof Response) return body;
+  const message = readSharedSessionMessageBody(body);
+  if (!message) {
+    return Response.json({ error: 'Missing shared session steer body' }, { status: 400 });
+  }
+  const submission = await context.sessionBroker.steerMessage({
+    ...buildSharedSessionMessageInput(sessionId, body, message),
+    ...(body.allowSpawnFallback === true ? { allowSpawnFallback: true } : {}),
+  });
+  return await respondToSessionSubmission(context, req, submission, message, `/api/sessions/${sessionId}/steer`, 'DaemonServer.handlePostSharedSessionSteer', {
+    context: `shared-session:${submission.session.id}`,
+  });
+}
+
+async function handlePostSharedSessionFollowUp(context: DaemonRuntimeRouteContext, sessionId: string, req: Request): Promise<Response> {
+  const body = await context.parseJsonBody(req);
+  if (body instanceof Response) return body;
+  const message = readSharedSessionMessageBody(body);
+  if (!message) {
+    return Response.json({ error: 'Missing shared session follow-up body' }, { status: 400 });
+  }
+  const submission = await context.sessionBroker.followUpMessage(buildSharedSessionMessageInput(sessionId, body, message));
+  return await respondToSessionSubmission(context, req, submission, message, `/api/sessions/${sessionId}/follow-up`, 'DaemonServer.handlePostSharedSessionFollowUp', {
+    context: `shared-session:${submission.session.id}`,
+  });
+}
+
+async function handleCancelSharedSessionInput(context: DaemonRuntimeRouteContext, sessionId: string, inputId: string): Promise<Response> {
+  await context.sessionBroker.start();
+  const input = await context.sessionBroker.cancelInput(sessionId, inputId);
+  if (!input) {
+    return Response.json({ error: 'Unknown shared session input' }, { status: 404 });
+  }
+  return Response.json({ input });
 }
 
 function handleGetRuntimeTask(context: DaemonRuntimeRouteContext, taskId: string): Response {
@@ -353,6 +456,122 @@ function handleGetRuntimeTask(context: DaemonRuntimeRouteContext, taskId: string
     return Response.json({ error: 'Unknown runtime task' }, { status: 404 });
   }
   return Response.json({ task });
+}
+
+function readSharedSessionMessageBody(body: JsonBody): string {
+  return typeof body.message === 'string'
+    ? body.message.trim()
+    : typeof body.body === 'string'
+      ? body.body.trim()
+      : typeof body.text === 'string'
+        ? body.text.trim()
+        : '';
+}
+
+function buildSharedSessionMessageInput(
+  sessionId: string,
+  body: JsonBody,
+  message: string,
+): {
+  sessionId: string;
+  surfaceKind: import('../../automation/types.ts').AutomationSurfaceKind;
+  surfaceId: string;
+  externalId?: string;
+  threadId?: string;
+  userId?: string;
+  displayName?: string;
+  title?: string;
+  routeId?: string;
+  body: string;
+  metadata?: Record<string, unknown>;
+  routing?: import('../../control-plane/index.ts').SharedSessionRoutingIntent;
+} {
+  return {
+    sessionId,
+    surfaceKind: typeof body.surfaceKind === 'string' ? body.surfaceKind as import('../../automation/types.ts').AutomationSurfaceKind : 'web',
+    surfaceId: typeof body.surfaceId === 'string' ? body.surfaceId : 'surface:web',
+    ...(typeof body.externalId === 'string' ? { externalId: body.externalId } : {}),
+    ...(typeof body.threadId === 'string' ? { threadId: body.threadId } : {}),
+    ...(typeof body.userId === 'string' ? { userId: body.userId } : {}),
+    ...(typeof body.displayName === 'string' ? { displayName: body.displayName } : {}),
+    ...(typeof body.title === 'string' ? { title: body.title } : {}),
+    ...(typeof body.routeId === 'string' ? { routeId: body.routeId } : {}),
+    body: message,
+    ...(typeof body.metadata === 'object' && body.metadata !== null ? { metadata: body.metadata as Record<string, unknown> } : {}),
+    ...(typeof body.routing === 'object' && body.routing !== null ? { routing: body.routing as import('../../control-plane/index.ts').SharedSessionRoutingIntent } : {}),
+  };
+}
+
+async function respondToSessionSubmission(
+  context: DaemonRuntimeRouteContext,
+  req: Request,
+  submission: {
+    mode: 'continued-live' | 'spawn' | 'queued-follow-up' | 'rejected';
+    input: { id: string; state?: string; routing?: import('../../control-plane/index.ts').SharedSessionRoutingIntent };
+    session: { id: string; status: string };
+    routeBinding?: import('../../automation/routes.ts').AutomationRouteBinding;
+    task?: string;
+    activeAgentId?: string | null;
+    userMessage?: unknown;
+  },
+  taskText: string,
+  path: string,
+  logLabel: string,
+  spawnOptions: {
+    readonly context?: string;
+    readonly model?: string;
+    readonly provider?: string;
+    readonly tools?: readonly string[];
+    readonly executionIntent?: import('../../runtime/execution-intents.ts').ExecutionIntent;
+  } = {},
+): Promise<Response> {
+  if (submission.mode === 'continued-live' || submission.mode === 'queued-follow-up') {
+    return context.recordApiResponse(req, path, Response.json({
+      session: submission.session,
+      message: submission.userMessage ?? null,
+      input: submission.input,
+      mode: submission.mode,
+      agentId: submission.activeAgentId ?? null,
+    }, { status: 202 }));
+  }
+  if (submission.mode === 'rejected') {
+    return context.recordApiResponse(req, path, Response.json({
+      session: submission.session,
+      message: submission.userMessage ?? null,
+      input: submission.input,
+      mode: submission.mode,
+      }, { status: 409 }));
+  }
+
+  const spawnResult = context.trySpawnAgent({
+    mode: 'spawn',
+    task: submission.task!,
+    ...(spawnOptions.context ? { context: spawnOptions.context } : {}),
+    ...(spawnOptions.model ?? submission.input.routing?.modelId ? { model: spawnOptions.model ?? submission.input.routing?.modelId } : {}),
+    ...(spawnOptions.provider ?? submission.input.routing?.providerId ? { provider: spawnOptions.provider ?? submission.input.routing?.providerId } : {}),
+    ...(spawnOptions.tools ?? submission.input.routing?.tools ? { tools: [...(spawnOptions.tools ?? submission.input.routing?.tools ?? [])] } : {}),
+    ...(spawnOptions.executionIntent ?? submission.input.routing?.executionIntent
+      ? { executionIntent: spawnOptions.executionIntent ?? submission.input.routing?.executionIntent }
+      : {}),
+  }, logLabel, submission.session.id);
+  if (spawnResult instanceof Response) return spawnResult;
+  await context.sessionBroker.bindAgent(submission.session.id, spawnResult.id);
+  context.queueSurfaceReplyFromBinding(submission.routeBinding, {
+    agentId: spawnResult.id,
+    task: taskText,
+    sessionId: submission.session.id,
+  });
+  return context.recordApiResponse(req, path, Response.json({
+    session: context.sessionBroker.getSession(submission.session.id),
+    message: submission.userMessage ?? null,
+    input: {
+      ...submission.input,
+      state: 'spawned',
+      activeAgentId: spawnResult.id,
+    },
+    mode: submission.mode,
+    agentId: spawnResult.id,
+  }, { status: 202 }));
 }
 
 function handleRuntimeTaskAction(context: DaemonRuntimeRouteContext, taskId: string, action: string, _req: Request): Response {

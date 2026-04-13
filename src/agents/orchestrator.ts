@@ -29,6 +29,17 @@ import { splitModelRegistryKey } from '../providers/registry-helpers.ts';
 import { runAgentTask, type AgentOrchestratorRunContext } from './orchestrator-runner.ts';
 export { summarizeToolArgs } from './orchestrator-utils.ts';
 
+type AgentProviderRoutingPolicy = NonNullable<AgentRecord['routing']>;
+type ResolvedAgentProviderRouting = {
+  readonly requestedModelId: string;
+  readonly providerSelection: NonNullable<AgentProviderRoutingPolicy['providerSelection']>;
+  readonly unresolvedModelPolicy: NonNullable<AgentProviderRoutingPolicy['unresolvedModelPolicy']>;
+  readonly providerFailurePolicy: NonNullable<AgentProviderRoutingPolicy['providerFailurePolicy']>;
+  readonly providerId?: string;
+  readonly providerOverride?: string;
+  readonly fallbackModels: readonly string[];
+};
+
 type AgentOrchestratorToolDeps = {
   readonly fileCache: FileStateCache;
   readonly projectIndex: ProjectIndex;
@@ -234,22 +245,18 @@ export class AgentOrchestrator {
     record: AgentRecord,
     currentModel: { id: string; provider: string },
   ): { provider: LLMProvider; modelId: string; requestedModelId: string } {
-    const requestedModelId = record.model ?? currentModel.id;
-    const providerOverride = this.resolveProviderOverride(record, currentModel);
-    const scopedModelId = this.normalizeRequestedModelId(requestedModelId, providerOverride);
+    const routing = this.resolveProviderRouting(record, currentModel);
+    const scopedModelId = this.normalizeRequestedModelId(routing.requestedModelId, routing.providerOverride);
 
     try {
       return {
-        provider: providerRegistry.getForModel(scopedModelId, providerOverride),
-        modelId: this.resolveChatModelId(providerRegistry, scopedModelId, providerOverride),
+        provider: providerRegistry.getForModel(scopedModelId, routing.providerOverride),
+        modelId: this.resolveChatModelId(providerRegistry, scopedModelId, routing.providerOverride),
         requestedModelId: scopedModelId,
       };
     } catch (err) {
-      if (
-        requestedModelId !== currentModel.id
-        && (!providerOverride || currentModel.provider === providerOverride)
-      ) {
-        logger.debug(`[AgentOrchestrator] Requested model '${requestedModelId}' not found, falling back to '${currentModel.id}'`);
+      if (routing.requestedModelId !== currentModel.id && routing.unresolvedModelPolicy === 'fallback-to-current') {
+        logger.debug(`[AgentOrchestrator] Requested model '${routing.requestedModelId}' not found, falling back to '${currentModel.id}'`);
         try {
           return {
             provider: providerRegistry.getForModel(currentModel.id, currentModel.provider),
@@ -258,7 +265,7 @@ export class AgentOrchestrator {
           };
         } catch (fallbackErr) {
           throw new Error(
-            `Cannot resolve provider for model '${requestedModelId}' (${
+            `Cannot resolve provider for model '${routing.requestedModelId}' (${
               err instanceof Error ? err.message : String(err)
             }) or fallback '${currentModel.id}' (${
               fallbackErr instanceof Error ? fallbackErr.message : String(fallbackErr)
@@ -275,12 +282,52 @@ export class AgentOrchestrator {
     }
   }
 
-  private resolveProviderOverride(
+  private resolveProviderRouting(
     record: AgentRecord,
     currentModel: { id: string; provider: string },
-  ): string | undefined {
-    const scopedProvider = record.provider ?? currentModel.provider;
-    return scopedProvider !== 'synthetic' ? scopedProvider : undefined;
+  ): ResolvedAgentProviderRouting {
+    const requestedModelId = record.model ?? currentModel.id;
+    const fallbackModels = (
+      record.routing?.fallbackModels
+      ?? record.fallbackModels
+      ?? []
+    )
+      .filter((model): model is string => typeof model === 'string' && model.trim().length > 0)
+      .map((model) => model.trim());
+    const providerSelection = record.routing?.providerSelection ?? (
+      record.provider === 'synthetic'
+        ? 'synthetic'
+        : record.provider
+          ? 'concrete'
+          : 'inherit-current'
+    );
+    const providerId = record.provider;
+    const effectiveProviderId = providerSelection === 'synthetic'
+      ? undefined
+      : providerSelection === 'concrete'
+        ? (providerId ?? currentModel.provider)
+        : currentModel.provider;
+    const providerOverride = effectiveProviderId !== 'synthetic'
+      ? effectiveProviderId
+      : undefined;
+    const unresolvedModelPolicy = record.routing?.unresolvedModelPolicy ?? (
+      providerOverride && providerOverride !== currentModel.provider
+        ? 'fail'
+        : 'fallback-to-current'
+    );
+    return {
+      requestedModelId,
+      providerSelection,
+      unresolvedModelPolicy,
+      providerFailurePolicy: record.routing?.providerFailurePolicy ?? (
+        fallbackModels.length > 0
+          ? 'ordered-fallbacks'
+          : 'fail'
+      ),
+      providerId,
+      providerOverride,
+      fallbackModels,
+    };
   }
 
   private normalizeRequestedModelId(
@@ -320,19 +367,20 @@ export class AgentOrchestrator {
     currentModel: { id: string; provider: string },
     primaryRequestedModelId: string,
   ): Array<{ provider: LLMProvider; modelId: string; requestedModelId: string }> {
-    const fallbacks = record.fallbackModels ?? [];
-    if (fallbacks.length === 0) return [];
-    const providerOverride = this.resolveProviderOverride(record, currentModel);
+    const routing = this.resolveProviderRouting(record, currentModel);
+    if (routing.providerFailurePolicy !== 'ordered-fallbacks' || routing.fallbackModels.length === 0) {
+      return [];
+    }
     const seen = new Set([primaryRequestedModelId]);
     const routes: Array<{ provider: LLMProvider; modelId: string; requestedModelId: string }> = [];
-    for (const rawFallback of fallbacks) {
-      const requestedModelId = this.normalizeRequestedModelId(rawFallback.trim(), providerOverride);
+    for (const rawFallback of routing.fallbackModels) {
+      const requestedModelId = this.normalizeRequestedModelId(rawFallback, routing.providerOverride);
       if (!requestedModelId || seen.has(requestedModelId)) continue;
       seen.add(requestedModelId);
       try {
         routes.push({
-          provider: providerRegistry.getForModel(requestedModelId, providerOverride),
-          modelId: this.resolveChatModelId(providerRegistry, requestedModelId, providerOverride),
+          provider: providerRegistry.getForModel(requestedModelId, routing.providerOverride),
+          modelId: this.resolveChatModelId(providerRegistry, requestedModelId, routing.providerOverride),
           requestedModelId,
         });
       } catch (error) {

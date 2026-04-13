@@ -1,11 +1,18 @@
 import { ConfigManager } from '../config/manager.ts';
 import type { AgentRecord } from '../tools/agent/index.ts';
+import type { ExecutionIntent } from '../runtime/execution-intents.ts';
 import type { AutomationDeliveryPolicy } from './delivery.ts';
 import type { AutomationFailurePolicy } from './failures.ts';
 import type { AutomationJob } from './jobs.ts';
 import type { AutomationRun, AutomationRunTelemetry } from './runs.ts';
 import type { AutomationExecutionPolicy, AutomationExternalContentSource, AutomationSessionTarget, AutomationWakeMode } from './session-targets.ts';
 import type { AutomationSourceRecord } from './sources.ts';
+import type {
+  AutomationExecutionIntent,
+  AutomationExecutionMode,
+  AutomationExecutionTargetKind,
+  ProviderModelRoutingPolicy,
+} from './types.ts';
 import { getNextAutomationOccurrence } from './schedules.ts';
 
 export interface CreateAutomationJobInput {
@@ -17,6 +24,8 @@ export interface CreateAutomationJobInput {
   readonly provider?: string;
   readonly fallbackModels?: readonly string[];
   readonly fallbacks?: readonly string[];
+  readonly routing?: ProviderModelRoutingPolicy;
+  readonly executionIntent?: ExecutionIntent;
   readonly template?: string;
   readonly target?: AutomationSessionTarget;
   readonly reasoningEffort?: AutomationExecutionPolicy['reasoningEffort'];
@@ -43,6 +52,8 @@ export interface UpdateAutomationJobInput {
   readonly provider?: string;
   readonly fallbackModels?: readonly string[];
   readonly fallbacks?: readonly string[];
+  readonly routing?: ProviderModelRoutingPolicy;
+  readonly executionIntent?: ExecutionIntent;
   readonly template?: string;
   readonly target?: AutomationSessionTarget;
   readonly reasoningEffort?: AutomationExecutionPolicy['reasoningEffort'];
@@ -65,6 +76,8 @@ export interface SpawnAutomationTaskInput {
   readonly modelId?: string;
   readonly modelProvider?: string;
   readonly fallbackModels?: readonly string[];
+  readonly routing?: ProviderModelRoutingPolicy;
+  readonly executionIntent?: ExecutionIntent;
   readonly template?: string;
   readonly reasoningEffort?: AutomationExecutionPolicy['reasoningEffort'];
   readonly toolAllowlist?: readonly string[];
@@ -131,8 +144,53 @@ export function normalizeOptionalString(value: string | undefined): string | und
   return trimmed.length > 0 ? trimmed : undefined;
 }
 
+export function normalizeProviderRoutingPolicy(input: {
+  readonly provider?: string;
+  readonly modelProvider?: string;
+  readonly fallbackModels?: readonly string[];
+  readonly fallbacks?: readonly string[];
+  readonly routing?: ProviderModelRoutingPolicy;
+}): ProviderModelRoutingPolicy {
+  const providerId = input.modelProvider ?? input.provider;
+  const fallbackModels = normalizeStringList(
+    input.routing?.fallbackModels
+      ?? input.fallbackModels
+      ?? input.fallbacks,
+  );
+  return {
+    providerSelection: input.routing?.providerSelection ?? (
+      providerId === 'synthetic'
+        ? 'synthetic'
+        : providerId
+          ? 'concrete'
+          : 'inherit-current'
+    ),
+    ...(input.routing?.unresolvedModelPolicy
+      ? { unresolvedModelPolicy: input.routing.unresolvedModelPolicy }
+      : {}),
+    providerFailurePolicy: input.routing?.providerFailurePolicy ?? (
+      fallbackModels && fallbackModels.length > 0
+        ? 'ordered-fallbacks'
+        : 'fail'
+    ),
+    ...(fallbackModels !== undefined ? { fallbackModels } : {}),
+  };
+}
+
+export function buildAutomationExecutionIntent(
+  targetKind: AutomationExecutionTargetKind,
+  mode: AutomationExecutionMode | undefined,
+): AutomationExecutionIntent | undefined {
+  if (!mode) return undefined;
+  return { targetKind, mode };
+}
+
 export function buildDefaultExecution(input: CreateAutomationJobInput, configManager: ConfigManager): AutomationExecutionPolicy {
-  const fallbackModels = normalizeStringList(input.fallbackModels ?? input.fallbacks);
+  const fallbackModels = normalizeStringList(
+    input.fallbackModels
+      ?? input.fallbacks
+      ?? input.routing?.fallbackModels,
+  );
   const thinking = normalizeOptionalString(input.thinking);
   return {
     prompt: input.prompt,
@@ -144,6 +202,12 @@ export function buildDefaultExecution(input: CreateAutomationJobInput, configMan
     ...(input.model ? { modelId: input.model } : {}),
     ...(input.provider ? { modelProvider: input.provider } : {}),
     ...(fallbackModels !== undefined ? { fallbackModels } : {}),
+    routing: normalizeProviderRoutingPolicy({
+      provider: input.provider,
+      fallbackModels,
+      routing: input.routing,
+    }),
+    ...(input.executionIntent ? { executionIntent: input.executionIntent } : {}),
     ...(input.reasoningEffort ? { reasoningEffort: input.reasoningEffort } : {}),
     ...(thinking ? { thinking } : {}),
     ...(input.wakeMode ? { wakeMode: input.wakeMode } : {}),
@@ -225,6 +289,12 @@ export function normalizeJobRecord(job: AutomationJob, configManager: ConfigMana
       prompt: job.execution?.prompt ?? job.description ?? job.name,
       ...job.execution,
       target,
+      fallbackModels: job.execution?.fallbackModels ?? job.execution?.routing?.fallbackModels,
+      routing: normalizeProviderRoutingPolicy({
+        modelProvider: job.execution?.modelProvider,
+        fallbackModels: job.execution?.fallbackModels ?? job.execution?.routing?.fallbackModels,
+        routing: job.execution?.routing,
+      }),
     },
     delivery: buildDefaultDelivery(job.delivery),
     failure: buildDefaultFailurePolicy(configManager, job.failure),
@@ -249,8 +319,15 @@ export function normalizeRunRecord(run: AutomationRun, job?: AutomationJob): Aut
       prompt: run.execution?.prompt ?? job?.execution.prompt ?? job?.description ?? job?.name ?? '',
       ...run.execution,
       target: run.execution?.target ?? target,
+      fallbackModels: run.execution?.fallbackModels ?? run.execution?.routing?.fallbackModels ?? job?.execution.fallbackModels ?? job?.execution.routing?.fallbackModels,
+      routing: normalizeProviderRoutingPolicy({
+        modelProvider: run.execution?.modelProvider ?? job?.execution.modelProvider,
+        fallbackModels: run.execution?.fallbackModels ?? run.execution?.routing?.fallbackModels ?? job?.execution.fallbackModels ?? job?.execution.routing?.fallbackModels,
+        routing: run.execution?.routing ?? job?.execution.routing,
+      }),
     },
     attempt: run.attempt ?? 1,
+    executionIntent: run.executionIntent ?? buildAutomationExecutionIntent(target.kind, run.continuationMode),
     deliveryIds: run.deliveryIds ?? [],
     telemetry: normalizeRunTelemetry(run.telemetry, run),
   };

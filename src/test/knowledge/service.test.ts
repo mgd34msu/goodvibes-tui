@@ -84,6 +84,10 @@ describe('KnowledgeService', () => {
 
     const artifact = artifactStore.get(result.artifactId!);
     expect(artifact?.sourceUri).toBe(`${baseUrl}/docs/typescript`);
+    expect(artifact).toMatchObject({
+      acquisitionMode: 'remote-fetch',
+      fetchMode: 'allow-private-hosts',
+    });
 
     const nodes = service.listNodes(20);
     expect(nodes.some((node) => node.kind === 'domain' && node.title === '127.0.0.1')).toBe(true);
@@ -183,6 +187,10 @@ describe('KnowledgeService', () => {
     expect(result.source.sourceType).toBe('dataset');
     expect(result.extraction?.format).toBe('csv');
     expect(service.getSourceExtraction(result.source.id)?.sections).toContain('project');
+    expect(artifactStore.get(result.artifactId!)).toMatchObject({
+      acquisitionMode: 'local-path',
+      fetchMode: 'not-applicable',
+    });
     expect(events).toContain('KNOWLEDGE_INGEST_STARTED');
     expect(events).toContain('KNOWLEDGE_EXTRACTION_COMPLETED');
     expect(events).toContain('KNOWLEDGE_INGEST_COMPLETED');
